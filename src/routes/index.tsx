@@ -207,7 +207,7 @@ function Shell({ role, view, setView, onLogout, children }: {
 
   const menu = menus[role];
   return (
-    <div className="min-h-screen bg-background flex">
+    <div className="min-h-screen bg-background flex overflow-x-hidden">
       <aside className="hidden md:flex w-64 flex-col border-r bg-card">
         <div className="p-6"><Logo/></div>
         <nav className="flex-1 px-3 space-y-1">
@@ -925,7 +925,7 @@ function Mensagens() {
     <div>
       <h1 className="text-2xl md:text-3xl font-bold">Mensagens</h1>
       <p className="text-muted-foreground mt-1">Fale com seu médico entre as consultas</p>
-      <div className="mt-6 grid md:grid-cols-[280px_1fr] gap-4">
+      <div className="mt-6 grid md:grid-cols-[280px_1fr] gap-4 min-w-0">
         <div className="space-y-2">
           {conversas.map((k, i) => (
             <button key={k.n} onClick={() => setAtiva(i)}
@@ -950,7 +950,7 @@ function Mensagens() {
           ))}
         </div>
 
-        <div className="bg-card border rounded-2xl flex flex-col min-h-[420px]">
+        <div className="bg-card border rounded-2xl flex flex-col min-h-[420px] min-w-0">
           <div className="flex items-center gap-3 p-4 border-b">
             <div className="w-9 h-9 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-semibold text-sm">
               {c.n.split(" ")[1]?.[0] ?? c.n[0]}
