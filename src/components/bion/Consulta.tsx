@@ -3,8 +3,9 @@ import {
   Mic, MicOff, Camera, CameraOff, MonitorUp, Paperclip, PhoneOff, Clock, Wifi,
   MessageSquare, FileText, Download, Upload, Pill, Award,
 } from "lucide-react";
-import { useBion, type Role } from "@/lib/bion-types";
 import { useBion as useStore } from "@/lib/bion-store";
+
+type Role = "paciente" | "medico" | "admin";
 
 export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
   const { arquivos, adicionarArquivo, notificar } = useStore();
