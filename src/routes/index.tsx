@@ -185,21 +185,26 @@ function Shell({ role, view, setView, onLogout, children }: {
     paciente: [
       {icon: Home, label: "Início", view: "dashboard"},
       {icon: Calendar, label: "Agendar", view: "agendar"},
+      {icon: MessageSquare, label: "Mensagens", view: "mensagens"},
       {icon: FolderHeart, label: "Histórico", view: "historico"},
+      {icon: Bell, label: "Lembretes", view: "lembretes"},
       {icon: User, label: "Perfil", view: "paciente-perfil"},
     ],
     medico: [
       {icon: Home, label: "Início", view: "dashboard"},
       {icon: Calendar, label: "Agenda", view: "dashboard"},
+      {icon: MessageSquare, label: "Mensagens", view: "mensagens"},
       {icon: Users, label: "Pacientes", view: "historico"},
       {icon: User, label: "Meu perfil", view: "medico-perfil"},
     ],
     admin: [
       {icon: Home, label: "Painel", view: "dashboard"},
       {icon: Users, label: "Usuários", view: "historico"},
+      {icon: Bell, label: "Lembretes", view: "lembretes"},
       {icon: TrendingUp, label: "Relatórios", view: "dashboard"},
     ],
   };
+
   const menu = menus[role];
   return (
     <div className="min-h-screen bg-background flex">
