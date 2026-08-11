@@ -13,7 +13,8 @@ export const Route = createFileRoute("/")({ component: BionApp });
 type Role = "paciente" | "medico" | "admin";
 type View =
   | "landing" | "login" | "dashboard" | "agendar" | "sala-espera"
-  | "consulta" | "medico-perfil" | "paciente-perfil" | "historico";
+  | "consulta" | "medico-perfil" | "paciente-perfil" | "historico"
+  | "mensagens" | "lembretes";
 
 function BionApp() {
   const [view, setView] = useState<View>("landing");
@@ -34,9 +35,12 @@ function BionApp() {
       {view === "medico-perfil" && <MedicoPerfil />}
       {view === "paciente-perfil" && <PacientePerfil />}
       {view === "historico" && <Historico />}
+      {view === "mensagens" && <Mensagens />}
+      {view === "lembretes" && <Lembretes />}
     </Shell>
   );
 }
+
 
 /* ---------- Brand ---------- */
 function Logo({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
@@ -181,24 +185,29 @@ function Shell({ role, view, setView, onLogout, children }: {
     paciente: [
       {icon: Home, label: "Início", view: "dashboard"},
       {icon: Calendar, label: "Agendar", view: "agendar"},
+      {icon: MessageSquare, label: "Mensagens", view: "mensagens"},
       {icon: FolderHeart, label: "Histórico", view: "historico"},
+      {icon: Bell, label: "Lembretes", view: "lembretes"},
       {icon: User, label: "Perfil", view: "paciente-perfil"},
     ],
     medico: [
       {icon: Home, label: "Início", view: "dashboard"},
       {icon: Calendar, label: "Agenda", view: "dashboard"},
+      {icon: MessageSquare, label: "Mensagens", view: "mensagens"},
       {icon: Users, label: "Pacientes", view: "historico"},
       {icon: User, label: "Meu perfil", view: "medico-perfil"},
     ],
     admin: [
       {icon: Home, label: "Painel", view: "dashboard"},
       {icon: Users, label: "Usuários", view: "historico"},
+      {icon: Bell, label: "Lembretes", view: "lembretes"},
       {icon: TrendingUp, label: "Relatórios", view: "dashboard"},
     ],
   };
+
   const menu = menus[role];
   return (
-    <div className="min-h-screen bg-background flex">
+    <div className="min-h-screen bg-background flex overflow-x-hidden">
       <aside className="hidden md:flex w-64 flex-col border-r bg-card">
         <div className="p-6"><Logo/></div>
         <nav className="flex-1 px-3 space-y-1">
@@ -226,24 +235,41 @@ function Shell({ role, view, setView, onLogout, children }: {
         </div>
       </aside>
       <main className="flex-1 min-w-0">
-        <header className="h-16 border-b bg-card/60 backdrop-blur flex items-center gap-4 px-6 sticky top-0 z-10">
-          <button className="md:hidden p-2 -ml-2"><Menu className="w-5 h-5"/></button>
+        <header className="h-16 border-b bg-card/60 backdrop-blur flex items-center gap-4 px-4 md:px-6 sticky top-0 z-10">
           <div className="md:hidden"><Logo size="sm"/></div>
           <div className="hidden md:flex items-center gap-2 flex-1 max-w-md px-3 py-2 rounded-xl bg-muted">
             <Search className="w-4 h-4 text-muted-foreground"/>
             <input placeholder="Buscar..." className="bg-transparent outline-none text-sm flex-1"/>
           </div>
           <div className="ml-auto flex items-center gap-2">
-            <button className="p-2 rounded-lg hover:bg-muted relative">
+            <button onClick={() => setView("lembretes")} className="p-2 rounded-lg hover:bg-muted relative" title="Lembretes">
               <Bell className="w-5 h-5"/>
               <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full" style={{backgroundColor: "var(--accent)"}}/>
             </button>
+            <button onClick={onLogout} className="md:hidden p-2 rounded-lg hover:bg-muted" title="Sair">
+              <LogOut className="w-5 h-5"/>
+            </button>
           </div>
         </header>
-        <div className="p-6 md:p-8 max-w-6xl">{children}</div>
+        <div className="p-5 pb-28 md:p-8 md:pb-8 max-w-6xl">{children}</div>
       </main>
+
+      {/* Navegação mobile */}
+      <nav className="md:hidden fixed bottom-0 inset-x-0 z-20 bg-card border-t flex">
+        {menu.slice(0, 5).map(m => {
+          const active = view === m.view;
+          return (
+            <button key={m.label} onClick={() => setView(m.view)}
+              className={`flex-1 flex flex-col items-center gap-1 py-2.5 text-[11px] font-medium ${active?"text-primary":"text-muted-foreground"}`}>
+              <m.icon className="w-5 h-5"/>
+              {m.label}
+            </button>
+          );
+        })}
+      </nav>
     </div>
   );
+
 }
 
 /* ---------- Cards ---------- */
@@ -870,6 +896,142 @@ function Historico() {
           </Card>
         ))}
       </div>
+    </div>
+  );
+}
+
+/* ---------- Mensagens ---------- */
+function Mensagens() {
+  const conversas = [
+    {n: "Dra. Ana Ribeiro", e: "Clínica Geral", m: "Seus exames estão normais 🙂", h: "09:12", nao: 2, on: true},
+    {n: "Dr. Carlos Mendes", e: "Cardiologia", m: "Mantenha a medicação por 30 dias.", h: "Ontem", nao: 0, on: false},
+    {n: "Suporte BION", e: "Atendimento", m: "Como podemos ajudar você hoje?", h: "Seg", nao: 0, on: true},
+  ];
+  const [ativa, setAtiva] = useState(0);
+  const [texto, setTexto] = useState("");
+  const [msgs, setMsgs] = useState([
+    {eu: false, t: "Olá! Recebi o resultado do seu hemograma.", h: "09:05"},
+    {eu: false, t: "Está tudo dentro do esperado, sem alterações.", h: "09:06"},
+    {eu: true, t: "Que ótimo, obrigada doutora!", h: "09:10"},
+    {eu: false, t: "Seus exames estão normais 🙂", h: "09:12"},
+  ]);
+  const enviar = () => {
+    if (!texto.trim()) return;
+    setMsgs(m => [...m, {eu: true, t: texto.trim(), h: "agora"}]);
+    setTexto("");
+  };
+  const c = conversas[ativa]!;
+  return (
+    <div>
+      <h1 className="text-2xl md:text-3xl font-bold">Mensagens</h1>
+      <p className="text-muted-foreground mt-1">Fale com seu médico entre as consultas</p>
+      <div className="mt-6 grid md:grid-cols-[280px_1fr] gap-4 min-w-0">
+        <div className="space-y-2">
+          {conversas.map((k, i) => (
+            <button key={k.n} onClick={() => setAtiva(i)}
+              className={`w-full text-left bg-card border rounded-2xl p-3 flex items-center gap-3 transition ${i===ativa?"border-primary bg-primary-soft":"hover:border-primary"}`}>
+              <div className="relative">
+                <div className="w-10 h-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-semibold text-sm">
+                  {k.n.split(" ")[1]?.[0] ?? k.n[0]}
+                </div>
+                {k.on && <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-card" style={{backgroundColor:"var(--accent)"}}/>}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-semibold truncate">{k.n}</div>
+                <div className="text-xs text-muted-foreground truncate">{k.m}</div>
+              </div>
+              <div className="text-right">
+                <div className="text-[11px] text-muted-foreground">{k.h}</div>
+                {k.nao > 0 && (
+                  <span className="inline-block mt-1 text-[10px] font-bold text-accent-foreground rounded-full px-1.5" style={{backgroundColor:"var(--accent)"}}>{k.nao}</span>
+                )}
+              </div>
+            </button>
+          ))}
+        </div>
+
+        <div className="bg-card border rounded-2xl flex flex-col min-h-[420px] min-w-0">
+          <div className="flex items-center gap-3 p-4 border-b">
+            <div className="w-9 h-9 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-semibold text-sm">
+              {c.n.split(" ")[1]?.[0] ?? c.n[0]}
+            </div>
+            <div>
+              <div className="text-sm font-semibold">{c.n}</div>
+              <div className="text-xs text-muted-foreground">{c.e} • {c.on ? "online" : "offline"}</div>
+            </div>
+          </div>
+          <div className="flex-1 p-4 space-y-3 overflow-y-auto">
+            {msgs.map((m, i) => (
+              <div key={i} className={`flex ${m.eu ? "justify-end" : "justify-start"}`}>
+                <div className={`max-w-[80%] rounded-2xl px-3.5 py-2 text-sm ${m.eu ? "bg-primary text-primary-foreground" : "bg-muted"}`}>
+                  {m.t}
+                  <div className={`text-[10px] mt-1 ${m.eu ? "opacity-70" : "text-muted-foreground"}`}>{m.h}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="p-3 border-t flex items-center gap-2">
+            <button className="p-2 rounded-lg hover:bg-muted"><Paperclip className="w-4 h-4 text-muted-foreground"/></button>
+            <input value={texto} onChange={e => setTexto(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") enviar(); }}
+              placeholder="Escreva uma mensagem..."
+              className="flex-1 bg-muted rounded-xl px-3 py-2.5 text-sm outline-none"/>
+            <button onClick={enviar} className="px-4 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold">
+              Enviar
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Lembretes ---------- */
+function Lembretes() {
+  const [itens, setItens] = useState([
+    {t: "Losartana 50mg", d: "Todos os dias às 08:00", tipo: "Medicação", icon: Pill, feito: false},
+    {t: "Vitamina D", d: "Domingos às 10:00", tipo: "Medicação", icon: Pill, feito: true},
+    {t: "Retorno com Dr. Carlos", d: "12 de dezembro, 15:30", tipo: "Consulta", icon: Stethoscope, feito: false},
+    {t: "Exame de sangue em jejum", d: "20 de dezembro, 07:00", tipo: "Exame", icon: ClipboardList, feito: false},
+  ]);
+  const toggle = (i: number) =>
+    setItens(l => l.map((x, k) => (k === i ? { ...x, feito: !x.feito } : x)));
+  const pendentes = itens.filter(i => !i.feito).length;
+
+  return (
+    <div className="max-w-3xl">
+      <h1 className="text-2xl md:text-3xl font-bold">Lembretes</h1>
+      <p className="text-muted-foreground mt-1">
+        {pendentes} lembrete{pendentes === 1 ? "" : "s"} pendente{pendentes === 1 ? "" : "s"}
+      </p>
+
+      <div className="mt-6 space-y-2">
+        {itens.map((i, k) => (
+          <Card key={k} className={`flex items-center gap-4 ${i.feito ? "opacity-55" : ""}`}>
+            <div className="w-11 h-11 rounded-xl bg-primary-soft flex items-center justify-center shrink-0">
+              <i.icon className="w-5 h-5 text-primary"/>
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className={`font-semibold ${i.feito ? "line-through" : ""}`}>{i.t}</div>
+              <div className="text-sm text-muted-foreground flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5"/> {i.d}
+              </div>
+              <span className="inline-block mt-2 text-[11px] font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                {i.tipo}
+              </span>
+            </div>
+            <button onClick={() => toggle(k)}
+              className={`w-9 h-9 rounded-full border-2 flex items-center justify-center transition ${i.feito ? "bg-accent border-transparent" : "border-border hover:border-primary"}`}
+              title={i.feito ? "Marcar como pendente" : "Marcar como concluído"}>
+              <Check className={`w-4 h-4 ${i.feito ? "text-accent-foreground" : "text-muted-foreground"}`}/>
+            </button>
+          </Card>
+        ))}
+      </div>
+
+      <button className="mt-4 w-full flex items-center justify-center gap-2 py-3 rounded-2xl border-2 border-dashed text-sm font-semibold text-muted-foreground hover:border-primary hover:text-primary transition">
+        <Plus className="w-4 h-4"/> Criar novo lembrete
+      </button>
     </div>
   );
 }
