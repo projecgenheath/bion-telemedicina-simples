@@ -7,6 +7,11 @@ import {
   Star, Award, Globe, ArrowRight, Check, Heart, Sparkles, LogOut, Home,
   FolderHeart, Menu,
 } from "lucide-react";
+import { BionProvider, useBion } from "@/lib/bion-store";
+import { Consulta } from "@/components/bion/Consulta";
+import { Notificacoes } from "@/components/bion/Notificacoes";
+import { AgendaConsultas } from "@/components/bion/AgendaConsultas";
+import { Arquivos } from "@/components/bion/Arquivos";
 
 export const Route = createFileRoute("/")({ component: BionApp });
 
@@ -14,9 +19,17 @@ type Role = "paciente" | "medico" | "admin";
 type View =
   | "landing" | "login" | "dashboard" | "agendar" | "sala-espera"
   | "consulta" | "medico-perfil" | "paciente-perfil" | "historico"
-  | "mensagens" | "lembretes";
+  | "mensagens" | "lembretes" | "notificacoes" | "consultas";
 
 function BionApp() {
+  return (
+    <BionProvider>
+      <BionRoot />
+    </BionProvider>
+  );
+}
+
+function BionRoot() {
   const [view, setView] = useState<View>("landing");
   const [role, setRole] = useState<Role>("paciente");
 
@@ -31,7 +44,9 @@ function BionApp() {
       {view === "dashboard" && role === "admin" && <AdminDashboard />}
       {view === "agendar" && <Agendar onDone={() => setView("dashboard")} />}
       {view === "sala-espera" && <SalaEspera onEnter={() => setView("consulta")} />}
-      {view === "consulta" && <Consulta onEnd={() => setView("dashboard")} />}
+      {view === "consulta" && <Consulta onEnd={() => setView("dashboard")} role={role} />}
+      {view === "notificacoes" && <Notificacoes />}
+      {view === "consultas" && <MinhasConsultas perfil={role === "medico" ? "medico" : "paciente"} />}
       {view === "medico-perfil" && <MedicoPerfil />}
       {view === "paciente-perfil" && <PacientePerfil />}
       {view === "historico" && <Historico />}
@@ -185,16 +200,18 @@ function Shell({ role, view, setView, onLogout, children }: {
     paciente: [
       {icon: Home, label: "Início", view: "dashboard"},
       {icon: Calendar, label: "Agendar", view: "agendar"},
+      {icon: Clock, label: "Consultas", view: "consultas"},
       {icon: MessageSquare, label: "Mensagens", view: "mensagens"},
       {icon: FolderHeart, label: "Histórico", view: "historico"},
-      {icon: Bell, label: "Lembretes", view: "lembretes"},
+      {icon: Bell, label: "Notificações", view: "notificacoes"},
       {icon: User, label: "Perfil", view: "paciente-perfil"},
     ],
     medico: [
       {icon: Home, label: "Início", view: "dashboard"},
-      {icon: Calendar, label: "Agenda", view: "dashboard"},
+      {icon: Calendar, label: "Agenda", view: "consultas"},
       {icon: MessageSquare, label: "Mensagens", view: "mensagens"},
       {icon: Users, label: "Pacientes", view: "historico"},
+      {icon: Bell, label: "Notificações", view: "notificacoes"},
       {icon: User, label: "Meu perfil", view: "medico-perfil"},
     ],
     admin: [
@@ -242,10 +259,7 @@ function Shell({ role, view, setView, onLogout, children }: {
             <input placeholder="Buscar..." className="bg-transparent outline-none text-sm flex-1"/>
           </div>
           <div className="ml-auto flex items-center gap-2">
-            <button onClick={() => setView("lembretes")} className="p-2 rounded-lg hover:bg-muted relative" title="Lembretes">
-              <Bell className="w-5 h-5"/>
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full" style={{backgroundColor: "var(--accent)"}}/>
-            </button>
+            <SinoNotificacoes onClick={() => setView("notificacoes")}/>
             <button onClick={onLogout} className="md:hidden p-2 rounded-lg hover:bg-muted" title="Sair">
               <LogOut className="w-5 h-5"/>
             </button>
@@ -270,6 +284,31 @@ function Shell({ role, view, setView, onLogout, children }: {
     </div>
   );
 
+}
+
+function SinoNotificacoes({ onClick }: { onClick: () => void }) {
+  const { naoLidas } = useBion();
+  return (
+    <button onClick={onClick} className="p-2 rounded-lg hover:bg-muted relative" title="Notificações">
+      <Bell className="w-5 h-5"/>
+      {naoLidas > 0 && (
+        <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold text-primary-foreground flex items-center justify-center"
+          style={{backgroundColor: "var(--accent)"}}>{naoLidas}</span>
+      )}
+    </button>
+  );
+}
+
+function MinhasConsultas({ perfil }: { perfil: "paciente" | "medico" }) {
+  return (
+    <div className="max-w-3xl">
+      <h1 className="text-3xl font-bold">{perfil === "medico" ? "Agenda" : "Minhas consultas"}</h1>
+      <p className="text-muted-foreground mt-1">
+        {perfil === "medico" ? "Cancelamentos e remarcações aparecem aqui automaticamente" : "Cancele ou remarque quando precisar"}
+      </p>
+      <div className="mt-6"><AgendaConsultas perfil={perfil}/></div>
+    </div>
+  );
 }
 
 /* ---------- Cards ---------- */
@@ -709,80 +748,6 @@ function SalaEspera({ onEnter }: { onEnter: ()=>void }) {
   );
 }
 
-/* ---------- Consulta ---------- */
-function Consulta({ onEnd }: { onEnd: ()=>void }) {
-  return (
-    <div className="-m-6 md:-m-8 h-[calc(100vh-4rem)] bg-slate-900 flex flex-col text-white">
-      {/* Top */}
-      <div className="h-14 px-6 flex items-center gap-4 border-b border-white/10">
-        <div className="w-9 h-9 rounded-full bg-primary flex items-center justify-center font-semibold text-sm">MS</div>
-        <div>
-          <div className="text-sm font-semibold">Marina Silva</div>
-          <div className="text-xs text-white/60">32 anos</div>
-        </div>
-        <div className="ml-auto flex items-center gap-4 text-sm">
-          <div className="flex items-center gap-2"><Clock className="w-4 h-4"/> 04:22</div>
-          <div className="flex items-center gap-2"><Wifi className="w-4 h-4" style={{color: "var(--accent)"}}/> HD</div>
-        </div>
-      </div>
-
-      {/* Body */}
-      <div className="flex-1 flex overflow-hidden">
-        <div className="flex-1 flex flex-col p-4 gap-4">
-          <div className="flex-1 relative rounded-2xl bg-gradient-to-br from-slate-700 to-slate-800 flex items-center justify-center">
-            <div className="w-24 h-24 rounded-full bg-white/10 flex items-center justify-center text-2xl font-bold">MS</div>
-            <div className="absolute bottom-3 left-3 text-xs px-2 py-1 rounded bg-black/50">Marina Silva</div>
-            <div className="absolute top-3 right-3 w-40 h-28 rounded-xl bg-slate-600 border border-white/20 flex items-center justify-center text-xs">
-              Você
-            </div>
-          </div>
-          {/* Bottom bar */}
-          <div className="flex items-center justify-center gap-2 flex-wrap">
-            {[Mic, Camera, MonitorUp, Paperclip, Pill, ClipboardList, Award].map((I, i) => (
-              <button key={i} className="w-11 h-11 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center">
-                <I className="w-4 h-4"/>
-              </button>
-            ))}
-            <button onClick={onEnd} className="ml-2 h-11 px-5 rounded-full bg-red-500 hover:bg-red-600 flex items-center gap-2 text-sm font-semibold">
-              <PhoneOff className="w-4 h-4"/> Encerrar
-            </button>
-          </div>
-        </div>
-
-        {/* Sidebar */}
-        <div className="hidden lg:flex w-80 border-l border-white/10 flex-col">
-          <div className="flex border-b border-white/10 text-sm">
-            {["Prontuário","Histórico","Exames"].map((t, i) => (
-              <button key={t} className={`flex-1 py-3 font-medium ${i===0?"border-b-2 border-primary text-white":"text-white/60"}`}>{t}</button>
-            ))}
-          </div>
-          <div className="flex-1 overflow-auto p-4 text-sm space-y-3">
-            <div>
-              <div className="text-white/60 text-xs uppercase tracking-wide">Queixa principal</div>
-              <div className="mt-1">Cefaleia recorrente há 3 semanas</div>
-            </div>
-            <div>
-              <div className="text-white/60 text-xs uppercase tracking-wide">Alergias</div>
-              <div className="mt-1">Dipirona</div>
-            </div>
-            <div>
-              <div className="text-white/60 text-xs uppercase tracking-wide">Medicamentos</div>
-              <div className="mt-1">Losartana 50mg</div>
-            </div>
-            <textarea placeholder="Anotações da consulta..." className="w-full mt-4 p-3 rounded-xl bg-white/5 border border-white/10 text-white placeholder:text-white/40 outline-none" rows={6}/>
-          </div>
-          <div className="p-3 border-t border-white/10">
-            <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/5">
-              <MessageSquare className="w-4 h-4 text-white/60"/>
-              <input placeholder="Mensagem no chat..." className="flex-1 bg-transparent outline-none text-sm placeholder:text-white/40"/>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 /* ---------- Perfis ---------- */
 function MedicoPerfil() {
   return (
@@ -882,7 +847,14 @@ function Historico() {
     <div className="max-w-3xl">
       <h1 className="text-3xl font-bold">Histórico</h1>
       <p className="text-muted-foreground mt-1">Todos os seus documentos e consultas</p>
-      <div className="mt-6 space-y-2">
+
+      <div className="mt-6">
+        <div className="font-semibold text-lg mb-3">Exames e arquivos</div>
+        <Arquivos perfil="paciente"/>
+      </div>
+
+      <div className="mt-8 font-semibold text-lg">Registros clínicos</div>
+      <div className="mt-3 space-y-2">
         {items.map((i,k)=>(
           <Card key={k} className="flex items-center gap-4 hover:border-primary transition cursor-pointer">
             <div className="w-11 h-11 rounded-xl bg-primary-soft flex items-center justify-center">
