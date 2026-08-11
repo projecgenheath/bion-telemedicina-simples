@@ -235,24 +235,41 @@ function Shell({ role, view, setView, onLogout, children }: {
         </div>
       </aside>
       <main className="flex-1 min-w-0">
-        <header className="h-16 border-b bg-card/60 backdrop-blur flex items-center gap-4 px-6 sticky top-0 z-10">
-          <button className="md:hidden p-2 -ml-2"><Menu className="w-5 h-5"/></button>
+        <header className="h-16 border-b bg-card/60 backdrop-blur flex items-center gap-4 px-4 md:px-6 sticky top-0 z-10">
           <div className="md:hidden"><Logo size="sm"/></div>
           <div className="hidden md:flex items-center gap-2 flex-1 max-w-md px-3 py-2 rounded-xl bg-muted">
             <Search className="w-4 h-4 text-muted-foreground"/>
             <input placeholder="Buscar..." className="bg-transparent outline-none text-sm flex-1"/>
           </div>
           <div className="ml-auto flex items-center gap-2">
-            <button className="p-2 rounded-lg hover:bg-muted relative">
+            <button onClick={() => setView("lembretes")} className="p-2 rounded-lg hover:bg-muted relative" title="Lembretes">
               <Bell className="w-5 h-5"/>
               <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full" style={{backgroundColor: "var(--accent)"}}/>
             </button>
+            <button onClick={onLogout} className="md:hidden p-2 rounded-lg hover:bg-muted" title="Sair">
+              <LogOut className="w-5 h-5"/>
+            </button>
           </div>
         </header>
-        <div className="p-6 md:p-8 max-w-6xl">{children}</div>
+        <div className="p-5 pb-28 md:p-8 md:pb-8 max-w-6xl">{children}</div>
       </main>
+
+      {/* Navegação mobile */}
+      <nav className="md:hidden fixed bottom-0 inset-x-0 z-20 bg-card border-t flex">
+        {menu.slice(0, 5).map(m => {
+          const active = view === m.view;
+          return (
+            <button key={m.label} onClick={() => setView(m.view)}
+              className={`flex-1 flex flex-col items-center gap-1 py-2.5 text-[11px] font-medium ${active?"text-primary":"text-muted-foreground"}`}>
+              <m.icon className="w-5 h-5"/>
+              {m.label}
+            </button>
+          );
+        })}
+      </nav>
     </div>
   );
+
 }
 
 /* ---------- Cards ---------- */
