@@ -13,7 +13,8 @@ export const Route = createFileRoute("/")({ component: BionApp });
 type Role = "paciente" | "medico" | "admin";
 type View =
   | "landing" | "login" | "dashboard" | "agendar" | "sala-espera"
-  | "consulta" | "medico-perfil" | "paciente-perfil" | "historico";
+  | "consulta" | "medico-perfil" | "paciente-perfil" | "historico"
+  | "mensagens" | "lembretes";
 
 function BionApp() {
   const [view, setView] = useState<View>("landing");
@@ -34,9 +35,12 @@ function BionApp() {
       {view === "medico-perfil" && <MedicoPerfil />}
       {view === "paciente-perfil" && <PacientePerfil />}
       {view === "historico" && <Historico />}
+      {view === "mensagens" && <Mensagens />}
+      {view === "lembretes" && <Lembretes />}
     </Shell>
   );
 }
+
 
 /* ---------- Brand ---------- */
 function Logo({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
