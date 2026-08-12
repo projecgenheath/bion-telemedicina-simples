@@ -24,6 +24,16 @@ export type Arquivo = {
   consulta: string;
 };
 
+export type Documento = {
+  id: string;
+  tipo: "receita" | "atestado";
+  titulo: string;
+  medico: string;
+  paciente: string;
+  conteudo: string;
+  data: string;
+};
+
 export type NotifTipo = "lembrete" | "mensagem" | "receita" | "agenda" | "exame";
 
 export type Notificacao = {
@@ -53,6 +63,21 @@ const arquivosIniciais: Arquivo[] = [
   { id: "a2", nome: "receita-losartana.pdf", tipo: "Receita", tamanhoKb: 120, enviadoPor: "medico", data: "12 Nov 2025", consulta: "Clínica Geral — Dra. Ana Ribeiro" },
 ];
 
+const documentosIniciais: Documento[] = [
+  {
+    id: "d1", tipo: "receita", titulo: "Receita — Losartana 50mg",
+    medico: "Dra. Ana Ribeiro", paciente: "Marina Silva",
+    conteudo: "Losartana 50mg — 1 comprimido ao dia, pela manhã, por 30 dias.",
+    data: "12 Nov 2025",
+  },
+  {
+    id: "d2", tipo: "atestado", titulo: "Atestado — 2 dias de afastamento",
+    medico: "Dr. Carlos Mendes", paciente: "Marina Silva",
+    conteudo: "Atesto, para os devidos fins, afastamento das atividades por 2 (dois) dias a partir desta data.",
+    data: "28 Out 2025",
+  },
+];
+
 const notificacoesIniciais: Notificacao[] = [
   { id: "n1", tipo: "lembrete", titulo: "Hora do medicamento", texto: "Losartana 50mg — tomar agora.", hora: "08:00", lida: false },
   { id: "n2", tipo: "mensagem", titulo: "Mensagem da Dra. Ana Ribeiro", texto: "Seus exames estão normais 🙂", hora: "09:12", lida: false },
@@ -64,7 +89,9 @@ type Store = {
   consultas: Consulta[];
   arquivos: Arquivo[];
   notificacoes: Notificacao[];
+  documentos: Documento[];
   naoLidas: number;
+  emitirDocumento: (d: Omit<Documento, "id" | "data">) => void;
   cancelarConsulta: (id: string, motivo: string) => void;
   remarcarConsulta: (id: string, data: string, hora: string) => void;
   adicionarConsulta: (c: Omit<Consulta, "id" | "status">) => void;
@@ -80,6 +107,7 @@ export function BionProvider({ children }: { children: ReactNode }) {
   const [consultas, setConsultas] = useState<Consulta[]>(consultasIniciais);
   const [arquivos, setArquivos] = useState<Arquivo[]>(arquivosIniciais);
   const [notificacoes, setNotificacoes] = useState<Notificacao[]>(notificacoesIniciais);
+  const [documentos, setDocumentos] = useState<Documento[]>(documentosIniciais);
 
   const notificar = useCallback((n: Omit<Notificacao, "id" | "hora" | "lida">) => {
     setNotificacoes((prev) => [{ ...n, id: uid(), hora: agora(), lida: false }, ...prev]);
@@ -135,6 +163,16 @@ export function BionProvider({ children }: { children: ReactNode }) {
     });
   }, [notificar]);
 
+  const emitirDocumento = useCallback((d: Omit<Documento, "id" | "data">) => {
+    const data = new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" });
+    setDocumentos((prev) => [{ ...d, id: uid(), data }, ...prev]);
+    notificar({
+      tipo: "receita",
+      titulo: d.tipo === "receita" ? "Receita disponível" : "Atestado disponível",
+      texto: `${d.titulo} — emitido por ${d.medico}. Já pode ser baixado.`,
+    });
+  }, [notificar]);
+
   const marcarLida = useCallback((id: string) => {
     setNotificacoes((prev) => prev.map((n) => (n.id === id ? { ...n, lida: true } : n)));
   }, []);
@@ -148,7 +186,9 @@ export function BionProvider({ children }: { children: ReactNode }) {
       consultas,
       arquivos,
       notificacoes,
+      documentos,
       naoLidas: notificacoes.filter((n) => !n.lida).length,
+      emitirDocumento,
       cancelarConsulta,
       remarcarConsulta,
       adicionarConsulta,
@@ -157,7 +197,7 @@ export function BionProvider({ children }: { children: ReactNode }) {
       marcarLida,
       marcarTodasLidas,
     }),
-    [consultas, arquivos, notificacoes, cancelarConsulta, remarcarConsulta, adicionarConsulta, adicionarArquivo, notificar, marcarLida, marcarTodasLidas],
+    [consultas, arquivos, notificacoes, documentos, emitirDocumento, cancelarConsulta, remarcarConsulta, adicionarConsulta, adicionarArquivo, notificar, marcarLida, marcarTodasLidas],
   );
 
   return <BionContext.Provider value={value}>{children}</BionContext.Provider>;
