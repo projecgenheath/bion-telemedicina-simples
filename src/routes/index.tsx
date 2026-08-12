@@ -12,6 +12,7 @@ import { Consulta } from "@/components/bion/Consulta";
 import { Notificacoes } from "@/components/bion/Notificacoes";
 import { AgendaConsultas } from "@/components/bion/AgendaConsultas";
 import { Arquivos } from "@/components/bion/Arquivos";
+import { Usuarios } from "@/components/bion/Usuarios";
 
 export const Route = createFileRoute("/")({ component: BionApp });
 
@@ -19,7 +20,7 @@ type Role = "paciente" | "medico" | "admin";
 type View =
   | "landing" | "login" | "dashboard" | "agendar" | "sala-espera"
   | "consulta" | "medico-perfil" | "paciente-perfil" | "historico"
-  | "mensagens" | "lembretes" | "notificacoes" | "consultas";
+  | "mensagens" | "lembretes" | "notificacoes" | "consultas" | "usuarios";
 
 function BionApp() {
   return (
@@ -52,6 +53,7 @@ function BionRoot() {
       {view === "historico" && <Historico />}
       {view === "mensagens" && <Mensagens />}
       {view === "lembretes" && <Lembretes />}
+      {view === "usuarios" && <Usuarios />}
     </Shell>
   );
 }
@@ -216,7 +218,7 @@ function Shell({ role, view, setView, onLogout, children }: {
     ],
     admin: [
       {icon: Home, label: "Painel", view: "dashboard"},
-      {icon: Users, label: "Usuários", view: "historico"},
+      {icon: Users, label: "Usuários", view: "usuarios"},
       {icon: Bell, label: "Lembretes", view: "lembretes"},
       {icon: TrendingUp, label: "Relatórios", view: "dashboard"},
     ],
