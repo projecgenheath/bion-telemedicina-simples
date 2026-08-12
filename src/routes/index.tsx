@@ -12,6 +12,7 @@ import { Consulta } from "@/components/bion/Consulta";
 import { Notificacoes } from "@/components/bion/Notificacoes";
 import { AgendaConsultas } from "@/components/bion/AgendaConsultas";
 import { Arquivos } from "@/components/bion/Arquivos";
+import { Usuarios } from "@/components/bion/Usuarios";
 
 export const Route = createFileRoute("/")({ component: BionApp });
 
@@ -19,7 +20,7 @@ type Role = "paciente" | "medico" | "admin";
 type View =
   | "landing" | "login" | "dashboard" | "agendar" | "sala-espera"
   | "consulta" | "medico-perfil" | "paciente-perfil" | "historico"
-  | "mensagens" | "lembretes" | "notificacoes" | "consultas";
+  | "mensagens" | "lembretes" | "notificacoes" | "consultas" | "usuarios";
 
 function BionApp() {
   return (
@@ -52,6 +53,7 @@ function BionRoot() {
       {view === "historico" && <Historico />}
       {view === "mensagens" && <Mensagens />}
       {view === "lembretes" && <Lembretes />}
+      {view === "usuarios" && <Usuarios />}
     </Shell>
   );
 }
@@ -216,7 +218,7 @@ function Shell({ role, view, setView, onLogout, children }: {
     ],
     admin: [
       {icon: Home, label: "Painel", view: "dashboard"},
-      {icon: Users, label: "Usuários", view: "historico"},
+      {icon: Users, label: "Usuários", view: "usuarios"},
       {icon: Bell, label: "Lembretes", view: "lembretes"},
       {icon: TrendingUp, label: "Relatórios", view: "dashboard"},
     ],
@@ -571,9 +573,15 @@ function AdminDashboard() {
 
 /* ---------- Agendar ---------- */
 function Agendar({ onDone }: { onDone: ()=>void }) {
+  const { adicionarConsulta, notificar } = useBion();
   const [step, setStep] = useState(0);
+  const [esp, setEsp] = useState("");
+  const [doc, setDoc] = useState<{n:string;cr:string;v:string;r:number}|null>(null);
+  const [dia, setDia] = useState("");
+  const [hora, setHora] = useState("");
   const steps = ["Especialidade","Médico","Data","Horário","Motivo","Pagamento","Confirmação"];
   const next = () => setStep(s => Math.min(s+1, steps.length-1));
+  const voltar = () => setStep(s => Math.max(s-1, 0));
   const specs = ["Clínica Geral","Dermatologia","Cardiologia","Pediatria","Psicologia","Ortopedia"];
   const docs = [
     {n: "Dra. Ana Ribeiro", cr: "CRM 12345", v: "R$ 150", r: 4.9},
@@ -581,6 +589,22 @@ function Agendar({ onDone }: { onDone: ()=>void }) {
     {n: "Dra. Julia Lima", cr: "CRM 34567", v: "R$ 160", r: 5.0},
   ];
   const times = ["09:00","10:00","11:00","14:00","15:30","16:30"];
+
+  const confirmar = () => {
+    adicionarConsulta({
+      medico: doc?.n ?? "Dra. Ana Ribeiro",
+      especialidade: esp || "Clínica Geral",
+      paciente: "Marina Silva",
+      data: dia || "15 Nov",
+      hora: hora || "15:30",
+    });
+    notificar({
+      tipo: "agenda",
+      titulo: "Consulta agendada",
+      texto: `${doc?.n ?? "Dra. Ana Ribeiro"} — ${dia || "15 Nov"} às ${hora || "15:30"}. Pagamento aprovado.`,
+    });
+    next();
+  };
 
   return (
     <div className="max-w-3xl mx-auto">
@@ -590,13 +614,16 @@ function Agendar({ onDone }: { onDone: ()=>void }) {
         <div className="mt-4 h-1.5 rounded-full bg-muted overflow-hidden">
           <div className="h-full bg-primary transition-all" style={{width: `${((step+1)/steps.length)*100}%`}}/>
         </div>
+        {step > 0 && step < 6 && (
+          <button onClick={voltar} className="mt-3 text-sm text-muted-foreground hover:text-primary">← Voltar</button>
+        )}
       </div>
 
       <Card className="p-8">
         {step === 0 && (
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
             {specs.map(s => (
-              <button key={s} onClick={next} className="p-4 rounded-xl border hover:border-primary hover:bg-primary-soft transition text-left">
+              <button key={s} onClick={() => { setEsp(s); next(); }} className="p-4 rounded-xl border hover:border-primary hover:bg-primary-soft transition text-left">
                 <Stethoscope className="w-5 h-5 text-primary mb-2"/>
                 <div className="font-medium">{s}</div>
               </button>
@@ -606,7 +633,7 @@ function Agendar({ onDone }: { onDone: ()=>void }) {
         {step === 1 && (
           <div className="space-y-3">
             {docs.map(d => (
-              <button key={d.n} onClick={next} className="w-full p-4 rounded-xl border hover:border-primary transition flex items-center gap-4 text-left">
+              <button key={d.n} onClick={() => { setDoc(d); next(); }} className="w-full p-4 rounded-xl border hover:border-primary transition flex items-center gap-4 text-left">
                 <div className="w-14 h-14 rounded-full bg-primary-soft flex items-center justify-center text-primary font-semibold">
                   {d.n.split(" ").slice(-2).map(w=>w[0]).join("")}
                 </div>
@@ -626,7 +653,7 @@ function Agendar({ onDone }: { onDone: ()=>void }) {
         {step === 2 && (
           <div className="grid grid-cols-4 md:grid-cols-7 gap-2">
             {Array.from({length: 14}).map((_,i)=>(
-              <button key={i} onClick={next} className="p-3 rounded-xl border hover:border-primary hover:bg-primary-soft transition text-center">
+              <button key={i} onClick={() => { setDia(`${15+i} Nov`); next(); }} className="p-3 rounded-xl border hover:border-primary hover:bg-primary-soft transition text-center">
                 <div className="text-xs text-muted-foreground">{["Seg","Ter","Qua","Qui","Sex","Sáb","Dom"][i%7]}</div>
                 <div className="font-semibold mt-1">{15+i}</div>
               </button>
@@ -636,7 +663,7 @@ function Agendar({ onDone }: { onDone: ()=>void }) {
         {step === 3 && (
           <div className="grid grid-cols-3 md:grid-cols-4 gap-2">
             {times.map(t => (
-              <button key={t} onClick={next} className="p-3 rounded-xl border hover:border-primary hover:bg-primary-soft transition font-medium">
+              <button key={t} onClick={() => { setHora(t); next(); }} className="p-3 rounded-xl border hover:border-primary hover:bg-primary-soft transition font-medium">
                 {t}
               </button>
             ))}
@@ -653,9 +680,11 @@ function Agendar({ onDone }: { onDone: ()=>void }) {
         )}
         {step === 5 && (
           <div className="space-y-4">
-            <div className="p-4 rounded-xl bg-muted">
-              <div className="flex justify-between text-sm"><span>Consulta</span><span>R$ 150,00</span></div>
-              <div className="flex justify-between font-bold mt-2 pt-2 border-t"><span>Total</span><span>R$ 150,00</span></div>
+            <div className="p-4 rounded-xl bg-muted text-sm space-y-1">
+              <div className="flex justify-between"><span className="text-muted-foreground">Médico</span><span className="font-medium">{doc?.n ?? "Dra. Ana Ribeiro"}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Especialidade</span><span className="font-medium">{esp || "Clínica Geral"}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Quando</span><span className="font-medium">{dia || "15 Nov"} às {hora || "15:30"}</span></div>
+              <div className="flex justify-between font-bold mt-2 pt-2 border-t"><span>Total</span><span>{doc?.v ?? "R$ 150"},00</span></div>
             </div>
             <div className="space-y-2">
               {["Pix (aprovação imediata)","Cartão de crédito","Boleto"].map((m,i)=>(
@@ -665,7 +694,7 @@ function Agendar({ onDone }: { onDone: ()=>void }) {
                 </label>
               ))}
             </div>
-            <button onClick={next} className="w-full py-3.5 rounded-xl text-primary-foreground font-semibold" style={{backgroundColor: "var(--accent)"}}>Confirmar pagamento</button>
+            <button onClick={confirmar} className="w-full py-3.5 rounded-xl text-primary-foreground font-semibold" style={{backgroundColor: "var(--accent)"}}>Confirmar pagamento</button>
           </div>
         )}
         {step === 6 && (
@@ -674,8 +703,8 @@ function Agendar({ onDone }: { onDone: ()=>void }) {
               <Check className="w-8 h-8" style={{color: "var(--accent)"}}/>
             </div>
             <h2 className="text-2xl font-bold mt-4">Consulta agendada!</h2>
-            <p className="text-muted-foreground mt-2">Dra. Ana Ribeiro • 15 Nov, 15:30</p>
-            <p className="text-sm text-muted-foreground mt-1">Enviamos os detalhes para seu e-mail.</p>
+            <p className="text-muted-foreground mt-2">{doc?.n ?? "Dra. Ana Ribeiro"} • {dia || "15 Nov"}, {hora || "15:30"}</p>
+            <p className="text-sm text-muted-foreground mt-1">Já aparece em "Minhas consultas" e na agenda do médico.</p>
             <button onClick={onDone} className="mt-6 px-6 py-3 rounded-xl bg-primary text-primary-foreground font-semibold">
               Voltar ao início
             </button>
@@ -685,6 +714,7 @@ function Agendar({ onDone }: { onDone: ()=>void }) {
     </div>
   );
 }
+
 
 /* ---------- Sala de Espera ---------- */
 function SalaEspera({ onEnter }: { onEnter: ()=>void }) {
