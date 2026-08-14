@@ -32,6 +32,10 @@ export type Documento = {
   paciente: string;
   conteudo: string;
   data: string;
+  medicamento?: string;
+  posologia?: string;
+  duracao?: string;
+  observacoes?: string;
 };
 
 export type NotifTipo = "lembrete" | "mensagem" | "receita" | "agenda" | "exame";
@@ -69,12 +73,15 @@ const documentosIniciais: Documento[] = [
     medico: "Dra. Ana Ribeiro", paciente: "Marina Silva",
     conteudo: "Losartana 50mg — 1 comprimido ao dia, pela manhã, por 30 dias.",
     data: "12 Nov 2025",
+    medicamento: "Losartana 50mg", posologia: "1 comprimido ao dia, pela manhã", duracao: "30 dias",
+    observacoes: "Medir pressão arterial 2x por semana.",
   },
   {
     id: "d2", tipo: "atestado", titulo: "Atestado — 2 dias de afastamento",
     medico: "Dr. Carlos Mendes", paciente: "Marina Silva",
     conteudo: "Atesto, para os devidos fins, afastamento das atividades por 2 (dois) dias a partir desta data.",
     data: "28 Out 2025",
+    duracao: "2 dias", observacoes: "CID informado ao paciente mediante consentimento.",
   },
 ];
 
