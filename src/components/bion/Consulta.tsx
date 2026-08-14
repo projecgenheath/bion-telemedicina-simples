@@ -8,7 +8,7 @@ import { useBion as useStore } from "@/lib/bion-store";
 type Role = "paciente" | "medico" | "admin";
 
 export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
-  const { arquivos, adicionarArquivo, notificar } = useStore();
+  const { arquivos, adicionarArquivo, emitirDocumento } = useStore();
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -150,10 +150,10 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
             </CtrlBtn>
             {role === "medico" && (
               <>
-                <CtrlBtn active onClick={() => notificar({ tipo: "receita", titulo: "Receita disponível", texto: "A receita da consulta já está no histórico do paciente." })} label="Emitir receita">
+                <CtrlBtn active onClick={() => emitirDocumento({ tipo: "receita", titulo: "Receita — Losartana 50mg", medico: "Dra. Ana Ribeiro", paciente: "Marina Silva", conteudo: "Losartana 50mg — 1 comprimido ao dia, pela manhã, por 30 dias." })} label="Emitir receita">
                   <Pill className="w-4 h-4" />
                 </CtrlBtn>
-                <CtrlBtn active onClick={() => notificar({ tipo: "receita", titulo: "Atestado emitido", texto: "Atestado de 2 dias disponível para download." })} label="Emitir atestado">
+                <CtrlBtn active onClick={() => emitirDocumento({ tipo: "atestado", titulo: "Atestado — 2 dias de afastamento", medico: "Dra. Ana Ribeiro", paciente: "Marina Silva", conteudo: "Atesto afastamento das atividades por 2 (dois) dias a partir desta data." })} label="Emitir atestado">
                   <Award className="w-4 h-4" />
                 </CtrlBtn>
               </>

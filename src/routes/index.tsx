@@ -13,6 +13,7 @@ import { Notificacoes } from "@/components/bion/Notificacoes";
 import { AgendaConsultas } from "@/components/bion/AgendaConsultas";
 import { Arquivos } from "@/components/bion/Arquivos";
 import { Usuarios } from "@/components/bion/Usuarios";
+import { Receitas } from "@/components/bion/Receitas";
 
 export const Route = createFileRoute("/")({ component: BionApp });
 
@@ -20,7 +21,7 @@ type Role = "paciente" | "medico" | "admin";
 type View =
   | "landing" | "login" | "dashboard" | "agendar" | "sala-espera"
   | "consulta" | "medico-perfil" | "paciente-perfil" | "historico"
-  | "mensagens" | "lembretes" | "notificacoes" | "consultas" | "usuarios";
+  | "mensagens" | "lembretes" | "notificacoes" | "consultas" | "usuarios" | "receitas";
 
 function BionApp() {
   return (
@@ -54,6 +55,7 @@ function BionRoot() {
       {view === "mensagens" && <Mensagens />}
       {view === "lembretes" && <Lembretes />}
       {view === "usuarios" && <Usuarios />}
+      {view === "receitas" && <Receitas perfil={role === "medico" ? "medico" : "paciente"} />}
     </Shell>
   );
 }
@@ -204,6 +206,7 @@ function Shell({ role, view, setView, onLogout, children }: {
       {icon: Calendar, label: "Agendar", view: "agendar"},
       {icon: Clock, label: "Consultas", view: "consultas"},
       {icon: MessageSquare, label: "Mensagens", view: "mensagens"},
+      {icon: Pill, label: "Receitas", view: "receitas"},
       {icon: FolderHeart, label: "Histórico", view: "historico"},
       {icon: Bell, label: "Notificações", view: "notificacoes"},
       {icon: User, label: "Perfil", view: "paciente-perfil"},
@@ -212,6 +215,7 @@ function Shell({ role, view, setView, onLogout, children }: {
       {icon: Home, label: "Início", view: "dashboard"},
       {icon: Calendar, label: "Agenda", view: "consultas"},
       {icon: MessageSquare, label: "Mensagens", view: "mensagens"},
+      {icon: Pill, label: "Receitas", view: "receitas"},
       {icon: Users, label: "Pacientes", view: "historico"},
       {icon: Bell, label: "Notificações", view: "notificacoes"},
       {icon: User, label: "Meu perfil", view: "medico-perfil"},
