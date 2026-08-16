@@ -99,7 +99,8 @@ export function gerarProntuarioPDF(opts: {
     linha("", "Nenhum documento disponível.");
   }
   opts.documentos.forEach((d) => {
-    espaco(60);
+    // mantém o bloco do documento inteiro na mesma página
+    espaco(60 + (d.observacoes ? 40 : 0) + (d.posologia ? 26 : 0) + 40);
     doc.setFillColor(241, 246, 255);
     doc.roundedRect(L, y - 12, W - L * 2, 4, 2, 2, "F");
     linha("", `${d.tipo === "receita" ? "Receita" : "Atestado"} • ${d.data}`, true);
