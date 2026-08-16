@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { Pill, Award, Stethoscope, FileText, Eye } from "lucide-react";
+import { Pill, Award, Stethoscope, FileText, Eye, Download } from "lucide-react";
+import { gerarProntuarioPDF } from "@/lib/prontuario-pdf";
 import { useBion, type Documento } from "@/lib/bion-store";
 import { VisualizadorDoc, dataDoc } from "./Receitas";
 
@@ -17,7 +18,7 @@ const ICONES = { receita: Pill, atestado: Award, consulta: Stethoscope, exame: F
 const ROTULOS = { receita: "Receita", atestado: "Atestado", consulta: "Consulta", exame: "Exame" };
 
 export function Prontuario() {
-  const { documentos, consultas, arquivos } = useBion();
+  const { documentosVisiveis: documentos, consultas, arquivos, sessao } = useBion();
   const [filtro, setFiltro] = useState<"todos" | Evento["tipo"]>("todos");
   const [visualizando, setVisualizando] = useState<number | null>(null);
 
@@ -66,8 +67,18 @@ export function Prontuario() {
 
   return (
     <div className="max-w-3xl">
-      <h1 className="text-3xl font-bold">Prontuário</h1>
-      <p className="text-muted-foreground mt-1">Receitas, atestados, exames e consultas em uma linha do tempo única.</p>
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-3xl font-bold">Prontuário</h1>
+          <p className="text-muted-foreground mt-1">Receitas, atestados, exames e consultas em uma linha do tempo única.</p>
+        </div>
+        <button
+          onClick={() => gerarProntuarioPDF({ paciente: sessao.nome, documentos, medicamentos })}
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-primary-foreground font-medium"
+          style={{ backgroundColor: "var(--accent)" }}>
+          <Download className="w-4 h-4" /> Baixar PDF
+        </button>
+      </div>
 
       <div className="mt-6 bg-card border rounded-2xl p-5">
         <div className="font-semibold flex items-center gap-2"><Pill className="w-4 h-4 text-primary" /> Medicamentos em uso</div>
