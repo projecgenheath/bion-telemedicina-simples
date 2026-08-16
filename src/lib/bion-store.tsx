@@ -85,6 +85,15 @@ const documentosIniciais: Documento[] = [
   },
 ];
 
+const documentosOutros: Documento[] = [
+  {
+    id: "d3", tipo: "receita", titulo: "Receita — Dipirona 500mg",
+    medico: "Dra. Julia Lima", paciente: "João Pereira",
+    conteudo: "Dipirona 500mg — 1 comprimido a cada 8 horas em caso de dor.",
+    data: "05 Nov 2025", medicamento: "Dipirona 500mg", posologia: "1 comprimido a cada 8h", duracao: "5 dias",
+  },
+];
+
 const notificacoesIniciais: Notificacao[] = [
   { id: "n1", tipo: "lembrete", titulo: "Hora do medicamento", texto: "Losartana 50mg — tomar agora.", hora: "08:00", lida: false },
   { id: "n2", tipo: "mensagem", titulo: "Mensagem da Dra. Ana Ribeiro", texto: "Seus exames estão normais 🙂", hora: "09:12", lida: false },
@@ -92,7 +101,13 @@ const notificacoesIniciais: Notificacao[] = [
   { id: "n4", tipo: "agenda", titulo: "Consulta confirmada", texto: "Dra. Ana Ribeiro — hoje às 14:30.", hora: "Ontem", lida: true },
 ];
 
+export type Sessao = { role: "paciente" | "medico" | "admin"; nome: string };
+
 type Store = {
+  sessao: Sessao;
+  setSessao: (s: Sessao) => void;
+  /** Documentos que o usuário logado tem permissão de ver */
+  documentosVisiveis: Documento[];
   consultas: Consulta[];
   arquivos: Arquivo[];
   notificacoes: Notificacao[];
@@ -114,7 +129,8 @@ export function BionProvider({ children }: { children: ReactNode }) {
   const [consultas, setConsultas] = useState<Consulta[]>(consultasIniciais);
   const [arquivos, setArquivos] = useState<Arquivo[]>(arquivosIniciais);
   const [notificacoes, setNotificacoes] = useState<Notificacao[]>(notificacoesIniciais);
-  const [documentos, setDocumentos] = useState<Documento[]>(documentosIniciais);
+  const [documentos, setDocumentos] = useState<Documento[]>([...documentosIniciais, ...documentosOutros]);
+  const [sessao, setSessao] = useState<Sessao>({ role: "paciente", nome: "Marina Silva" });
 
   const notificar = useCallback((n: Omit<Notificacao, "id" | "hora" | "lida">) => {
     setNotificacoes((prev) => [{ ...n, id: uid(), hora: agora(), lida: false }, ...prev]);
@@ -188,12 +204,28 @@ export function BionProvider({ children }: { children: ReactNode }) {
     setNotificacoes((prev) => prev.map((n) => ({ ...n, lida: true })));
   }, []);
 
+  // Controle de acesso: paciente vê apenas o próprio prontuário; médico vê
+  // apenas documentos que ele emitiu para pacientes com atendimento vinculado.
+  const documentosVisiveis = useMemo(() => {
+    if (sessao.role === "paciente") return documentos.filter((d) => d.paciente === sessao.nome);
+    if (sessao.role === "medico") {
+      const pacientesVinculados = new Set(
+        consultas.filter((c) => c.medico === sessao.nome).map((c) => c.paciente),
+      );
+      return documentos.filter((d) => d.medico === sessao.nome && pacientesVinculados.has(d.paciente));
+    }
+    return [];
+  }, [documentos, consultas, sessao]);
+
   const value = useMemo<Store>(
     () => ({
       consultas,
       arquivos,
       notificacoes,
       documentos,
+      sessao,
+      setSessao,
+      documentosVisiveis,
       naoLidas: notificacoes.filter((n) => !n.lida).length,
       emitirDocumento,
       cancelarConsulta,
@@ -204,7 +236,7 @@ export function BionProvider({ children }: { children: ReactNode }) {
       marcarLida,
       marcarTodasLidas,
     }),
-    [consultas, arquivos, notificacoes, documentos, emitirDocumento, cancelarConsulta, remarcarConsulta, adicionarConsulta, adicionarArquivo, notificar, marcarLida, marcarTodasLidas],
+    [consultas, arquivos, notificacoes, documentos, sessao, documentosVisiveis, emitirDocumento, cancelarConsulta, remarcarConsulta, adicionarConsulta, adicionarArquivo, notificar, marcarLida, marcarTodasLidas],
   );
 
   return <BionContext.Provider value={value}>{children}</BionContext.Provider>;

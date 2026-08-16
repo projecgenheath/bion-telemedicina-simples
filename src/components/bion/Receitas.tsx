@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Pill, Award, Download, Plus, Search, X, ChevronLeft, ChevronRight, Eye } from "lucide-react";
 import { useBion, type Documento } from "@/lib/bion-store";
 
@@ -112,7 +112,7 @@ export function dataDoc(d: Documento) {
 }
 
 export function Receitas({ perfil }: { perfil: "paciente" | "medico" }) {
-  const { documentos, emitirDocumento } = useBion();
+  const { documentosVisiveis: documentos, emitirDocumento, sessao } = useBion();
   const [aberto, setAberto] = useState(false);
   const [tipo, setTipo] = useState<"receita" | "atestado">("receita");
   const [titulo, setTitulo] = useState("");
@@ -130,8 +130,12 @@ export function Receitas({ perfil }: { perfil: "paciente" | "medico" }) {
   const [de, setDe] = useState("");
   const [ate, setAte] = useState("");
   const [visualizando, setVisualizando] = useState<number | null>(null);
+  const PAGINA = 5;
+  const [limite, setLimite] = useState(PAGINA);
 
   const medicos = useMemo(() => Array.from(new Set(documentos.map((d) => d.medico))), [documentos]);
+
+  useEffect(() => { setLimite(PAGINA); }, [busca, fTipo, fMedico, de, ate]);
 
   const filtrados = useMemo(() => {
     const q = busca.trim().toLowerCase();
@@ -146,7 +150,9 @@ export function Receitas({ perfil }: { perfil: "paciente" | "medico" }) {
     });
   }, [documentos, busca, fTipo, fMedico, de, ate]);
 
-  const limpar = () => { setBusca(""); setFTipo("todos"); setFMedico("todos"); setDe(""); setAte(""); };
+  const visiveis = useMemo(() => filtrados.slice(0, limite), [filtrados, limite]);
+
+  const limpar = () => { setLimite(PAGINA); setBusca(""); setFTipo("todos"); setFMedico("todos"); setDe(""); setAte(""); };
   const filtroAtivo = busca || fTipo !== "todos" || fMedico !== "todos" || de || ate;
 
   const salvar = () => {
@@ -163,7 +169,7 @@ export function Receitas({ perfil }: { perfil: "paciente" | "medico" }) {
     emitirDocumento({
       tipo,
       titulo: `${tipo === "receita" ? "Receita" : "Atestado"} — ${titulo.trim()}`,
-      medico: "Dra. Ana Ribeiro",
+      medico: sessao.role === "medico" ? sessao.nome : "Dra. Ana Ribeiro",
       paciente: "Marina Silva",
       conteudo: conteudo.trim(),
       ...(tipo === "receita" ? { medicamento: medicamento.trim(), posologia: posologia.trim() } : {}),
@@ -280,7 +286,7 @@ export function Receitas({ perfil }: { perfil: "paciente" | "medico" }) {
           </label>
         </div>
         <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <span>{filtrados.length} documento(s)</span>
+          <span>Exibindo {Math.min(limite, filtrados.length)} de {filtrados.length} documento(s)</span>
           {filtroAtivo ? <button onClick={limpar} className="underline">Limpar filtros</button> : null}
         </div>
       </div>
@@ -291,7 +297,7 @@ export function Receitas({ perfil }: { perfil: "paciente" | "medico" }) {
             Nenhum documento encontrado com esses filtros.
           </div>
         )}
-        {filtrados.map((d, i) => {
+        {visiveis.map((d, i) => {
           const Icon = d.tipo === "receita" ? Pill : Award;
           return (
             <div key={d.id} className="bg-card border rounded-2xl p-4 flex items-start gap-4">
@@ -316,8 +322,15 @@ export function Receitas({ perfil }: { perfil: "paciente" | "medico" }) {
         })}
       </div>
 
+      {limite < filtrados.length && (
+        <button onClick={() => setLimite((l) => l + PAGINA)}
+          className="mt-4 w-full py-3 rounded-2xl border font-medium text-sm hover:bg-muted">
+          Carregar mais ({filtrados.length - limite} restantes)
+        </button>
+      )}
+
       {visualizando !== null && (
-        <VisualizadorDoc docs={filtrados} index={visualizando} onIndex={setVisualizando} onClose={() => setVisualizando(null)} />
+        <VisualizadorDoc docs={visiveis} index={visualizando} onIndex={setVisualizando} onClose={() => setVisualizando(null)} />
       )}
     </div>
   );
