@@ -14,6 +14,7 @@ import { AgendaConsultas } from "@/components/bion/AgendaConsultas";
 import { Arquivos } from "@/components/bion/Arquivos";
 import { Usuarios } from "@/components/bion/Usuarios";
 import { Receitas } from "@/components/bion/Receitas";
+import { Prontuario } from "@/components/bion/Prontuario";
 
 export const Route = createFileRoute("/")({ component: BionApp });
 
@@ -21,7 +22,7 @@ type Role = "paciente" | "medico" | "admin";
 type View =
   | "landing" | "login" | "dashboard" | "agendar" | "sala-espera"
   | "consulta" | "medico-perfil" | "paciente-perfil" | "historico"
-  | "mensagens" | "lembretes" | "notificacoes" | "consultas" | "usuarios" | "receitas";
+  | "mensagens" | "lembretes" | "notificacoes" | "consultas" | "usuarios" | "receitas" | "prontuario";
 
 function BionApp() {
   return (
@@ -55,6 +56,7 @@ function BionRoot() {
       {view === "mensagens" && <Mensagens />}
       {view === "lembretes" && <Lembretes />}
       {view === "usuarios" && <Usuarios />}
+      {view === "prontuario" && <Prontuario />}
       {view === "receitas" && <Receitas perfil={role === "medico" ? "medico" : "paciente"} />}
     </Shell>
   );
@@ -207,6 +209,7 @@ function Shell({ role, view, setView, onLogout, children }: {
       {icon: Clock, label: "Consultas", view: "consultas"},
       {icon: MessageSquare, label: "Mensagens", view: "mensagens"},
       {icon: Pill, label: "Receitas", view: "receitas"},
+      {icon: ClipboardList, label: "Prontuário", view: "prontuario"},
       {icon: FolderHeart, label: "Histórico", view: "historico"},
       {icon: Bell, label: "Notificações", view: "notificacoes"},
       {icon: User, label: "Perfil", view: "paciente-perfil"},
