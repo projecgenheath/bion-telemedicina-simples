@@ -35,10 +35,12 @@ function BionApp() {
 function BionRoot() {
   const [view, setView] = useState<View>("landing");
   const [role, setRole] = useState<Role>("paciente");
+  const { setSessao } = useBion();
+  const nomes: Record<Role, string> = { paciente: "Marina Silva", medico: "Dra. Ana Ribeiro", admin: "Administrador" };
 
   if (view === "landing") return <Landing onEnter={() => setView("login")} />;
   if (view === "login")
-    return <Login onLogin={(r) => { setRole(r); setView("dashboard"); }} />;
+    return <Login onLogin={(r) => { setRole(r); setSessao({ role: r, nome: nomes[r] }); setView("dashboard"); }} />;
 
   return (
     <Shell role={role} view={view} setView={setView} onLogout={() => setView("landing")}>
