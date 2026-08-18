@@ -277,6 +277,18 @@ export function BionProvider({ children }: { children: ReactNode }) {
     return consentimentos.filter((c) => c.quem === sessao.nome);
   }, [consentimentos, sessao]);
 
+  const avaliarConsulta = useCallback(
+    (a: Omit<Avaliacao, "id" | "quando">) => {
+      setAvaliacoes((prev) => [{ ...a, id: uid(), quando: new Date().toLocaleString("pt-BR") }, ...prev]);
+      notificar({
+        tipo: "agenda",
+        titulo: "Avaliação enviada",
+        texto: `Você avaliou ${a.medico} com ${a.nota} estrela(s). Obrigado pelo retorno!`,
+      });
+    },
+    [notificar],
+  );
+
   const value = useMemo<Store>(
     () => ({
       consultas,
