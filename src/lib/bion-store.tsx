@@ -132,6 +132,10 @@ type Store = {
   notificar: (n: Omit<Notificacao, "id" | "hora" | "lida">) => void;
   marcarLida: (id: string) => void;
   marcarTodasLidas: () => void;
+  consentimentos: Consentimento[];
+  /** Consentimentos referentes ao paciente/usuário da sessão atual */
+  consentimentosVisiveis: Consentimento[];
+  registrarConsentimento: (c: Omit<Consentimento, "id" | "quando" | "quem" | "perfil">) => Consentimento;
 };
 
 const BionContext = createContext<Store | null>(null);
