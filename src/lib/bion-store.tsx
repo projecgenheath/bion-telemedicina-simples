@@ -279,8 +279,11 @@ export function BionProvider({ children }: { children: ReactNode }) {
       notificar,
       marcarLida,
       marcarTodasLidas,
+      consentimentos,
+      consentimentosVisiveis,
+      registrarConsentimento,
     }),
-    [consultas, arquivos, notificacoes, documentos, sessao, documentosVisiveis, emitirDocumento, cancelarConsulta, remarcarConsulta, adicionarConsulta, adicionarArquivo, notificar, marcarLida, marcarTodasLidas],
+    [consultas, arquivos, notificacoes, documentos, sessao, documentosVisiveis, emitirDocumento, cancelarConsulta, remarcarConsulta, adicionarConsulta, adicionarArquivo, notificar, marcarLida, marcarTodasLidas, consentimentos, consentimentosVisiveis, registrarConsentimento],
   );
 
   return <BionContext.Provider value={value}>{children}</BionContext.Provider>;
