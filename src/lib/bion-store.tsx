@@ -103,6 +103,16 @@ const notificacoesIniciais: Notificacao[] = [
 
 export type Sessao = { role: "paciente" | "medico" | "admin"; nome: string };
 
+export type Avaliacao = {
+  id: string;
+  paciente: string;
+  medico: string;
+  especialidade: string;
+  nota: number; // 1-5
+  comentario?: string;
+  quando: string;
+};
+
 export type Consentimento = {
   id: string;
   paciente: string;
