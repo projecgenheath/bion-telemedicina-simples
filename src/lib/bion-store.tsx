@@ -132,6 +132,8 @@ type Store = {
   notificar: (n: Omit<Notificacao, "id" | "hora" | "lida">) => void;
   marcarLida: (id: string) => void;
   marcarTodasLidas: () => void;
+  avaliacoes: Avaliacao[];
+  avaliarConsulta: (a: Omit<Avaliacao, "id" | "quando">) => void;
   consentimentos: Consentimento[];
   /** Consentimentos referentes ao paciente/usuário da sessão atual */
   consentimentosVisiveis: Consentimento[];
