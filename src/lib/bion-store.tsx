@@ -146,6 +146,7 @@ export function BionProvider({ children }: { children: ReactNode }) {
   const [notificacoes, setNotificacoes] = useState<Notificacao[]>(notificacoesIniciais);
   const [documentos, setDocumentos] = useState<Documento[]>([...documentosIniciais, ...documentosOutros]);
   const [sessao, setSessao] = useState<Sessao>({ role: "paciente", nome: "Marina Silva" });
+  const [consentimentos, setConsentimentos] = useState<Consentimento[]>([]);
 
   const notificar = useCallback((n: Omit<Notificacao, "id" | "hora" | "lida">) => {
     setNotificacoes((prev) => [{ ...n, id: uid(), hora: agora(), lida: false }, ...prev]);
