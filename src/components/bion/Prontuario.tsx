@@ -18,9 +18,11 @@ const ICONES = { receita: Pill, atestado: Award, consulta: Stethoscope, exame: F
 const ROTULOS = { receita: "Receita", atestado: "Atestado", consulta: "Consulta", exame: "Exame" };
 
 export function Prontuario() {
-  const { documentosVisiveis: documentos, consultas, arquivos, sessao } = useBion();
+  const { documentosVisiveis: documentos, consultas, arquivos, sessao, consentimentosVisiveis, registrarConsentimento } = useBion();
   const [filtro, setFiltro] = useState<"todos" | Evento["tipo"]>("todos");
   const [visualizando, setVisualizando] = useState<number | null>(null);
+  const [consentAberto, setConsentAberto] = useState(false);
+  const [aceite, setAceite] = useState(false);
 
   const docs = useMemo(() => documentos, [documentos]);
 
