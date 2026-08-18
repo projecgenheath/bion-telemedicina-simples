@@ -103,6 +103,17 @@ const notificacoesIniciais: Notificacao[] = [
 
 export type Sessao = { role: "paciente" | "medico" | "admin"; nome: string };
 
+export type Consentimento = {
+  id: string;
+  paciente: string;
+  quem: string;
+  perfil: Sessao["role"];
+  finalidade: string;
+  documentos: number;
+  quando: string;
+  aceito: boolean;
+};
+
 type Store = {
   sessao: Sessao;
   setSessao: (s: Sessao) => void;
