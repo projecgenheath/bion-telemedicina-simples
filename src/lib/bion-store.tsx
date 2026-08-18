@@ -103,6 +103,17 @@ const notificacoesIniciais: Notificacao[] = [
 
 export type Sessao = { role: "paciente" | "medico" | "admin"; nome: string };
 
+export type Consentimento = {
+  id: string;
+  paciente: string;
+  quem: string;
+  perfil: Sessao["role"];
+  finalidade: string;
+  documentos: number;
+  quando: string;
+  aceito: boolean;
+};
+
 type Store = {
   sessao: Sessao;
   setSessao: (s: Sessao) => void;
@@ -121,6 +132,10 @@ type Store = {
   notificar: (n: Omit<Notificacao, "id" | "hora" | "lida">) => void;
   marcarLida: (id: string) => void;
   marcarTodasLidas: () => void;
+  consentimentos: Consentimento[];
+  /** Consentimentos referentes ao paciente/usuário da sessão atual */
+  consentimentosVisiveis: Consentimento[];
+  registrarConsentimento: (c: Omit<Consentimento, "id" | "quando" | "quem" | "perfil">) => Consentimento;
 };
 
 const BionContext = createContext<Store | null>(null);
@@ -131,6 +146,7 @@ export function BionProvider({ children }: { children: ReactNode }) {
   const [notificacoes, setNotificacoes] = useState<Notificacao[]>(notificacoesIniciais);
   const [documentos, setDocumentos] = useState<Documento[]>([...documentosIniciais, ...documentosOutros]);
   const [sessao, setSessao] = useState<Sessao>({ role: "paciente", nome: "Marina Silva" });
+  const [consentimentos, setConsentimentos] = useState<Consentimento[]>([]);
 
   const notificar = useCallback((n: Omit<Notificacao, "id" | "hora" | "lida">) => {
     setNotificacoes((prev) => [{ ...n, id: uid(), hora: agora(), lida: false }, ...prev]);
@@ -217,6 +233,34 @@ export function BionProvider({ children }: { children: ReactNode }) {
     return [];
   }, [documentos, consultas, sessao]);
 
+  const registrarConsentimento = useCallback(
+    (c: Omit<Consentimento, "id" | "quando" | "quem" | "perfil">) => {
+      const registro: Consentimento = {
+        ...c,
+        id: uid(),
+        quem: sessao.nome,
+        perfil: sessao.role,
+        quando: new Date().toLocaleString("pt-BR"),
+      };
+      setConsentimentos((prev) => [registro, ...prev]);
+      notificar({
+        tipo: "receita",
+        titulo: registro.aceito ? "Consentimento registrado" : "Consentimento recusado",
+        texto: registro.aceito
+          ? `${registro.quem} autorizou a geração do prontuário em PDF (${registro.documentos} documento(s)).`
+          : `${registro.quem} recusou o consentimento para gerar o prontuário em PDF.`,
+      });
+      return registro;
+    },
+    [sessao, notificar],
+  );
+
+  const consentimentosVisiveis = useMemo(() => {
+    if (sessao.role === "admin") return consentimentos;
+    if (sessao.role === "paciente") return consentimentos.filter((c) => c.paciente === sessao.nome);
+    return consentimentos.filter((c) => c.quem === sessao.nome);
+  }, [consentimentos, sessao]);
+
   const value = useMemo<Store>(
     () => ({
       consultas,
@@ -235,8 +279,11 @@ export function BionProvider({ children }: { children: ReactNode }) {
       notificar,
       marcarLida,
       marcarTodasLidas,
+      consentimentos,
+      consentimentosVisiveis,
+      registrarConsentimento,
     }),
-    [consultas, arquivos, notificacoes, documentos, sessao, documentosVisiveis, emitirDocumento, cancelarConsulta, remarcarConsulta, adicionarConsulta, adicionarArquivo, notificar, marcarLida, marcarTodasLidas],
+    [consultas, arquivos, notificacoes, documentos, sessao, documentosVisiveis, emitirDocumento, cancelarConsulta, remarcarConsulta, adicionarConsulta, adicionarArquivo, notificar, marcarLida, marcarTodasLidas, consentimentos, consentimentosVisiveis, registrarConsentimento],
   );
 
   return <BionContext.Provider value={value}>{children}</BionContext.Provider>;
