@@ -103,6 +103,16 @@ const notificacoesIniciais: Notificacao[] = [
 
 export type Sessao = { role: "paciente" | "medico" | "admin"; nome: string };
 
+export type Avaliacao = {
+  id: string;
+  paciente: string;
+  medico: string;
+  especialidade: string;
+  nota: number; // 1-5
+  comentario?: string;
+  quando: string;
+};
+
 export type Consentimento = {
   id: string;
   paciente: string;
@@ -132,6 +142,8 @@ type Store = {
   notificar: (n: Omit<Notificacao, "id" | "hora" | "lida">) => void;
   marcarLida: (id: string) => void;
   marcarTodasLidas: () => void;
+  avaliacoes: Avaliacao[];
+  avaliarConsulta: (a: Omit<Avaliacao, "id" | "quando">) => void;
   consentimentos: Consentimento[];
   /** Consentimentos referentes ao paciente/usuário da sessão atual */
   consentimentosVisiveis: Consentimento[];
@@ -147,6 +159,10 @@ export function BionProvider({ children }: { children: ReactNode }) {
   const [documentos, setDocumentos] = useState<Documento[]>([...documentosIniciais, ...documentosOutros]);
   const [sessao, setSessao] = useState<Sessao>({ role: "paciente", nome: "Marina Silva" });
   const [consentimentos, setConsentimentos] = useState<Consentimento[]>([]);
+  const [avaliacoes, setAvaliacoes] = useState<Avaliacao[]>([
+    { id: "av1", paciente: "Marina Silva", medico: "Dra. Julia Lima", especialidade: "Dermatologia", nota: 5, comentario: "Atendimento muito atencioso.", quando: "28/10/2025 10:40" },
+    { id: "av2", paciente: "João Pereira", medico: "Dra. Ana Ribeiro", especialidade: "Clínica Geral", nota: 4, quando: "05/11/2025 16:20" },
+  ]);
 
   const notificar = useCallback((n: Omit<Notificacao, "id" | "hora" | "lida">) => {
     setNotificacoes((prev) => [{ ...n, id: uid(), hora: agora(), lida: false }, ...prev]);
@@ -261,6 +277,18 @@ export function BionProvider({ children }: { children: ReactNode }) {
     return consentimentos.filter((c) => c.quem === sessao.nome);
   }, [consentimentos, sessao]);
 
+  const avaliarConsulta = useCallback(
+    (a: Omit<Avaliacao, "id" | "quando">) => {
+      setAvaliacoes((prev) => [{ ...a, id: uid(), quando: new Date().toLocaleString("pt-BR") }, ...prev]);
+      notificar({
+        tipo: "agenda",
+        titulo: "Avaliação enviada",
+        texto: `Você avaliou ${a.medico} com ${a.nota} estrela(s). Obrigado pelo retorno!`,
+      });
+    },
+    [notificar],
+  );
+
   const value = useMemo<Store>(
     () => ({
       consultas,
@@ -282,8 +310,10 @@ export function BionProvider({ children }: { children: ReactNode }) {
       consentimentos,
       consentimentosVisiveis,
       registrarConsentimento,
+      avaliacoes,
+      avaliarConsulta,
     }),
-    [consultas, arquivos, notificacoes, documentos, sessao, documentosVisiveis, emitirDocumento, cancelarConsulta, remarcarConsulta, adicionarConsulta, adicionarArquivo, notificar, marcarLida, marcarTodasLidas, consentimentos, consentimentosVisiveis, registrarConsentimento],
+    [consultas, arquivos, notificacoes, documentos, sessao, documentosVisiveis, emitirDocumento, cancelarConsulta, remarcarConsulta, adicionarConsulta, adicionarArquivo, notificar, marcarLida, marcarTodasLidas, consentimentos, consentimentosVisiveis, registrarConsentimento, avaliacoes, avaliarConsulta],
   );
 
   return <BionContext.Provider value={value}>{children}</BionContext.Provider>;
