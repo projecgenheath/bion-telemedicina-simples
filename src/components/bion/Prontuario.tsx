@@ -75,7 +75,7 @@ export function Prontuario() {
           <p className="text-muted-foreground mt-1">Receitas, atestados, exames e consultas em uma linha do tempo única.</p>
         </div>
         <button
-          onClick={() => gerarProntuarioPDF({ paciente: sessao.nome, documentos, medicamentos })}
+          onClick={() => { setAceite(false); setConsentAberto(true); }}
           className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-primary-foreground font-medium"
           style={{ backgroundColor: "var(--accent)" }}>
           <Download className="w-4 h-4" /> Baixar PDF
