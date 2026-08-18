@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Pill, Award, Stethoscope, FileText, Eye, Download } from "lucide-react";
+import { Pill, Award, Stethoscope, FileText, Eye, Download, ShieldCheck, X, History } from "lucide-react";
 import { gerarProntuarioPDF } from "@/lib/prontuario-pdf";
 import { useBion, type Documento } from "@/lib/bion-store";
 import { VisualizadorDoc, dataDoc } from "./Receitas";
