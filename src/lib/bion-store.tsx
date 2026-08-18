@@ -232,6 +232,34 @@ export function BionProvider({ children }: { children: ReactNode }) {
     return [];
   }, [documentos, consultas, sessao]);
 
+  const registrarConsentimento = useCallback(
+    (c: Omit<Consentimento, "id" | "quando" | "quem" | "perfil">) => {
+      const registro: Consentimento = {
+        ...c,
+        id: uid(),
+        quem: sessao.nome,
+        perfil: sessao.role,
+        quando: new Date().toLocaleString("pt-BR"),
+      };
+      setConsentimentos((prev) => [registro, ...prev]);
+      notificar({
+        tipo: "receita",
+        titulo: registro.aceito ? "Consentimento registrado" : "Consentimento recusado",
+        texto: registro.aceito
+          ? `${registro.quem} autorizou a geração do prontuário em PDF (${registro.documentos} documento(s)).`
+          : `${registro.quem} recusou o consentimento para gerar o prontuário em PDF.`,
+      });
+      return registro;
+    },
+    [sessao, notificar],
+  );
+
+  const consentimentosVisiveis = useMemo(() => {
+    if (sessao.role === "admin") return consentimentos;
+    if (sessao.role === "paciente") return consentimentos.filter((c) => c.paciente === sessao.nome);
+    return consentimentos.filter((c) => c.quem === sessao.nome);
+  }, [consentimentos, sessao]);
+
   const value = useMemo<Store>(
     () => ({
       consultas,
