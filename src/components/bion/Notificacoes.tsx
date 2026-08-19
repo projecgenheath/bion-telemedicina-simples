@@ -18,7 +18,7 @@ const rotulo: Record<NotifTipo, string> = {
 };
 
 export function Notificacoes() {
-  const { notificacoes, naoLidas, marcarLida, marcarTodasLidas } = useBion();
+  const { notificacoesVisiveis: notificacoes, naoLidas, marcarLida, marcarTodasLidas } = useBion();
 
   return (
     <div className="max-w-3xl">
