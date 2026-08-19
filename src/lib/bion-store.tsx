@@ -10,6 +10,7 @@ export type Consulta = {
   data: string; // "Hoje" | "14 Dez"
   hora: string; // "14:30"
   status: ApptStatus;
+  ts: number; // timestamp para filtros de período
   remarcada?: boolean;
   motivoCancelamento?: string;
 };
@@ -42,6 +43,8 @@ export type NotifTipo = "lembrete" | "mensagem" | "receita" | "agenda" | "exame"
 
 export type Notificacao = {
   id: string;
+  /** perfil destinatário; ausente = todos */
+  para?: Sessao["role"];
   tipo: NotifTipo;
   titulo: string;
   texto: string;
@@ -55,11 +58,14 @@ const uid = () => `id-${++seq}-${Math.random().toString(36).slice(2, 7)}`;
 const agora = () =>
   new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 
+const DIA = 86400000;
+const diasAtras = (n: number) => Date.now() - n * DIA;
+
 const consultasIniciais: Consulta[] = [
-  { id: "c1", medico: "Dra. Ana Ribeiro", especialidade: "Clínica Geral", paciente: "Marina Silva", data: "Hoje", hora: "14:30", status: "confirmada" },
-  { id: "c2", medico: "Dr. Carlos Mendes", especialidade: "Cardiologia", paciente: "Marina Silva", data: "12 Dez", hora: "15:30", status: "confirmada" },
-  { id: "c3", medico: "Dra. Ana Ribeiro", especialidade: "Clínica Geral", paciente: "João Pereira", data: "Hoje", hora: "16:00", status: "confirmada" },
-  { id: "c4", medico: "Dra. Julia Lima", especialidade: "Dermatologia", paciente: "Marina Silva", data: "28 Out", hora: "10:00", status: "concluida" },
+  { id: "c1", ts: diasAtras(0), medico: "Dra. Ana Ribeiro", especialidade: "Clínica Geral", paciente: "Marina Silva", data: "Hoje", hora: "14:30", status: "confirmada" },
+  { id: "c2", ts: diasAtras(3), medico: "Dr. Carlos Mendes", especialidade: "Cardiologia", paciente: "Marina Silva", data: "12 Dez", hora: "15:30", status: "confirmada" },
+  { id: "c3", ts: diasAtras(0), medico: "Dra. Ana Ribeiro", especialidade: "Clínica Geral", paciente: "João Pereira", data: "Hoje", hora: "16:00", status: "confirmada" },
+  { id: "c4", ts: diasAtras(45), medico: "Dra. Julia Lima", especialidade: "Dermatologia", paciente: "Marina Silva", data: "28 Out", hora: "10:00", status: "concluida" },
 ];
 
 const arquivosIniciais: Arquivo[] = [
@@ -111,6 +117,7 @@ export type Avaliacao = {
   nota: number; // 1-5
   comentario?: string;
   quando: string;
+  ts: number;
 };
 
 export type Consentimento = {
@@ -134,16 +141,17 @@ type Store = {
   notificacoes: Notificacao[];
   documentos: Documento[];
   naoLidas: number;
+  notificacoesVisiveis: Notificacao[];
   emitirDocumento: (d: Omit<Documento, "id" | "data">) => void;
   cancelarConsulta: (id: string, motivo: string) => void;
   remarcarConsulta: (id: string, data: string, hora: string) => void;
-  adicionarConsulta: (c: Omit<Consulta, "id" | "status">) => void;
+  adicionarConsulta: (c: Omit<Consulta, "id" | "status" | "ts">) => void;
   adicionarArquivo: (a: Omit<Arquivo, "id" | "data">) => void;
   notificar: (n: Omit<Notificacao, "id" | "hora" | "lida">) => void;
   marcarLida: (id: string) => void;
   marcarTodasLidas: () => void;
   avaliacoes: Avaliacao[];
-  avaliarConsulta: (a: Omit<Avaliacao, "id" | "quando">) => void;
+  avaliarConsulta: (a: Omit<Avaliacao, "id" | "quando" | "ts">) => void;
   consentimentos: Consentimento[];
   /** Consentimentos referentes ao paciente/usuário da sessão atual */
   consentimentosVisiveis: Consentimento[];
@@ -160,8 +168,8 @@ export function BionProvider({ children }: { children: ReactNode }) {
   const [sessao, setSessao] = useState<Sessao>({ role: "paciente", nome: "Marina Silva" });
   const [consentimentos, setConsentimentos] = useState<Consentimento[]>([]);
   const [avaliacoes, setAvaliacoes] = useState<Avaliacao[]>([
-    { id: "av1", paciente: "Marina Silva", medico: "Dra. Julia Lima", especialidade: "Dermatologia", nota: 5, comentario: "Atendimento muito atencioso.", quando: "28/10/2025 10:40" },
-    { id: "av2", paciente: "João Pereira", medico: "Dra. Ana Ribeiro", especialidade: "Clínica Geral", nota: 4, quando: "05/11/2025 16:20" },
+    { id: "av1", paciente: "Marina Silva", medico: "Dra. Julia Lima", especialidade: "Dermatologia", nota: 5, comentario: "Atendimento muito atencioso.", quando: "28/10/2025 10:40", ts: diasAtras(45) },
+    { id: "av2", paciente: "João Pereira", medico: "Dra. Ana Ribeiro", especialidade: "Clínica Geral", nota: 4, quando: "05/11/2025 16:20", ts: diasAtras(20) },
   ]);
 
   const notificar = useCallback((n: Omit<Notificacao, "id" | "hora" | "lida">) => {
@@ -204,8 +212,8 @@ export function BionProvider({ children }: { children: ReactNode }) {
     });
   }, [notificar]);
 
-  const adicionarConsulta = useCallback((c: Omit<Consulta, "id" | "status">) => {
-    setConsultas((prev) => [{ ...c, id: uid(), status: "confirmada" }, ...prev]);
+  const adicionarConsulta = useCallback((c: Omit<Consulta, "id" | "status" | "ts">) => {
+    setConsultas((prev) => [{ ...c, id: uid(), status: "confirmada", ts: Date.now() }, ...prev]);
   }, []);
 
   const adicionarArquivo = useCallback((a: Omit<Arquivo, "id" | "data">) => {
@@ -278,15 +286,31 @@ export function BionProvider({ children }: { children: ReactNode }) {
   }, [consentimentos, sessao]);
 
   const avaliarConsulta = useCallback(
-    (a: Omit<Avaliacao, "id" | "quando">) => {
-      setAvaliacoes((prev) => [{ ...a, id: uid(), quando: new Date().toLocaleString("pt-BR") }, ...prev]);
+    (a: Omit<Avaliacao, "id" | "quando" | "ts">) => {
+      setAvaliacoes((prev) => [
+        { ...a, id: uid(), quando: new Date().toLocaleString("pt-BR"), ts: Date.now() },
+        ...prev,
+      ]);
       notificar({
         tipo: "agenda",
         titulo: "Avaliação enviada",
         texto: `Você avaliou ${a.medico} com ${a.nota} estrela(s). Obrigado pelo retorno!`,
+        para: "paciente",
+      });
+      // Feedback em tempo real para o médico avaliado
+      notificar({
+        tipo: "mensagem",
+        titulo: "Nova avaliação recebida",
+        texto: `${a.paciente} avaliou o atendimento de ${a.especialidade} com ${a.nota} estrela(s).${a.comentario ? ` “${a.comentario}”` : ""}`,
+        para: "medico",
       });
     },
     [notificar],
+  );
+
+  const notificacoesVisiveis = useMemo(
+    () => notificacoes.filter((n) => !n.para || n.para === sessao.role),
+    [notificacoes, sessao],
   );
 
   const value = useMemo<Store>(
@@ -298,7 +322,8 @@ export function BionProvider({ children }: { children: ReactNode }) {
       sessao,
       setSessao,
       documentosVisiveis,
-      naoLidas: notificacoes.filter((n) => !n.lida).length,
+      naoLidas: notificacoesVisiveis.filter((n) => !n.lida).length,
+      notificacoesVisiveis,
       emitirDocumento,
       cancelarConsulta,
       remarcarConsulta,
@@ -313,7 +338,7 @@ export function BionProvider({ children }: { children: ReactNode }) {
       avaliacoes,
       avaliarConsulta,
     }),
-    [consultas, arquivos, notificacoes, documentos, sessao, documentosVisiveis, emitirDocumento, cancelarConsulta, remarcarConsulta, adicionarConsulta, adicionarArquivo, notificar, marcarLida, marcarTodasLidas, consentimentos, consentimentosVisiveis, registrarConsentimento, avaliacoes, avaliarConsulta],
+    [consultas, arquivos, notificacoes, notificacoesVisiveis, documentos, sessao, documentosVisiveis, emitirDocumento, cancelarConsulta, remarcarConsulta, adicionarConsulta, adicionarArquivo, notificar, marcarLida, marcarTodasLidas, consentimentos, consentimentosVisiveis, registrarConsentimento, avaliacoes, avaliarConsulta],
   );
 
   return <BionContext.Provider value={value}>{children}</BionContext.Provider>;
