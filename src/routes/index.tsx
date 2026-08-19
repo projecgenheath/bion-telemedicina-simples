@@ -15,6 +15,8 @@ import { Arquivos } from "@/components/bion/Arquivos";
 import { Usuarios } from "@/components/bion/Usuarios";
 import { Receitas } from "@/components/bion/Receitas";
 import { Prontuario } from "@/components/bion/Prontuario";
+import { Relatorios } from "@/components/bion/Relatorios";
+import { AvaliacaoModal } from "@/components/bion/Avaliacao";
 
 export const Route = createFileRoute("/")({ component: BionApp });
 
@@ -22,7 +24,8 @@ type Role = "paciente" | "medico" | "admin";
 type View =
   | "landing" | "login" | "dashboard" | "agendar" | "sala-espera"
   | "consulta" | "medico-perfil" | "paciente-perfil" | "historico"
-  | "mensagens" | "lembretes" | "notificacoes" | "consultas" | "usuarios" | "receitas" | "prontuario";
+  | "mensagens" | "lembretes" | "notificacoes" | "consultas" | "usuarios" | "receitas" | "prontuario"
+  | "relatorios";
 
 function BionApp() {
   return (
@@ -36,6 +39,7 @@ function BionRoot() {
   const [view, setView] = useState<View>("landing");
   const [role, setRole] = useState<Role>("paciente");
   const { setSessao } = useBion();
+  const [avaliar, setAvaliar] = useState(false);
   const nomes: Record<Role, string> = { paciente: "Marina Silva", medico: "Dra. Ana Ribeiro", admin: "Administrador" };
 
   if (view === "landing") return <Landing onEnter={() => setView("login")} />;
@@ -49,7 +53,15 @@ function BionRoot() {
       {view === "dashboard" && role === "admin" && <AdminDashboard />}
       {view === "agendar" && <Agendar onDone={() => setView("dashboard")} />}
       {view === "sala-espera" && <SalaEspera onEnter={() => setView("consulta")} />}
-      {view === "consulta" && <Consulta onEnd={() => setView("dashboard")} role={role} />}
+      {view === "consulta" && (
+        <Consulta
+          onEnd={() => {
+            if (role === "paciente") setAvaliar(true);
+            setView("dashboard");
+          }}
+          role={role}
+        />
+      )}
       {view === "notificacoes" && <Notificacoes />}
       {view === "consultas" && <MinhasConsultas perfil={role === "medico" ? "medico" : "paciente"} />}
       {view === "medico-perfil" && <MedicoPerfil />}
@@ -60,6 +72,10 @@ function BionRoot() {
       {view === "usuarios" && <Usuarios />}
       {view === "prontuario" && <Prontuario />}
       {view === "receitas" && <Receitas perfil={role === "medico" ? "medico" : "paciente"} />}
+      {view === "relatorios" && <Relatorios />}
+      {avaliar && (
+        <AvaliacaoModal medico="Dra. Ana Ribeiro" especialidade="Clínica Geral" onClose={() => setAvaliar(false)} />
+      )}
     </Shell>
   );
 }
@@ -229,7 +245,7 @@ function Shell({ role, view, setView, onLogout, children }: {
       {icon: Home, label: "Painel", view: "dashboard"},
       {icon: Users, label: "Usuários", view: "usuarios"},
       {icon: Bell, label: "Lembretes", view: "lembretes"},
-      {icon: TrendingUp, label: "Relatórios", view: "dashboard"},
+      {icon: TrendingUp, label: "Relatórios", view: "relatorios"},
     ],
   };
 
