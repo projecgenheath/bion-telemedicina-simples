@@ -8,14 +8,26 @@ type Evento = {
   id: string;
   quando: string;
   ordem: number;
-  tipo: "receita" | "atestado" | "consulta" | "exame";
+  tipo: "receita" | "atestado" | "consulta" | "exame" | "exame_solicitado";
   titulo: string;
   detalhe: string;
   doc?: Documento;
 };
 
-const ICONES = { receita: Pill, atestado: Award, consulta: Stethoscope, exame: FileText };
-const ROTULOS = { receita: "Receita", atestado: "Atestado", consulta: "Consulta", exame: "Exame" };
+const ICONES = {
+  receita: Pill,
+  atestado: Award,
+  consulta: Stethoscope,
+  exame: FileText,
+  exame_solicitado: FileText,
+};
+const ROTULOS = {
+  receita: "Receita",
+  atestado: "Atestado",
+  consulta: "Consulta",
+  exame: "Exame",
+  exame_solicitado: "Pedido de Exame",
+};
 
 export function Prontuario() {
   const { documentosVisiveis: documentos, consultas, arquivos, sessao, consentimentosVisiveis, registrarConsentimento } = useBion();
@@ -97,10 +109,10 @@ export function Prontuario() {
       </div>
 
       <div className="mt-6 flex gap-2 flex-wrap">
-        {(["todos", "receita", "atestado", "exame", "consulta"] as const).map((t) => (
+        {(["todos", "receita", "atestado", "exame", "consulta", "exame_solicitado"] as const).map((t) => (
           <button key={t} onClick={() => setFiltro(t)}
             className={`px-3.5 py-1.5 rounded-full text-sm font-medium border ${filtro === t ? "bg-primary-soft text-primary border-transparent" : "text-muted-foreground"}`}>
-            {t === "todos" ? "Tudo" : `${ROTULOS[t]}s`}
+            {t === "todos" ? "Tudo" : t === "exame_solicitado" ? "Pedidos de Exame" : `${ROTULOS[t]}s`}
           </button>
         ))}
       </div>

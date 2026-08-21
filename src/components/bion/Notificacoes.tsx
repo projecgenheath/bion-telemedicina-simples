@@ -1,12 +1,23 @@
-import { Bell, Check, MessageSquare, Pill, Calendar, ClipboardList, CheckCheck } from "lucide-react";
+import {
+  Bell,
+  Check,
+  MessageSquare,
+  Pill,
+  Calendar,
+  ClipboardList,
+  CheckCheck,
+  LifeBuoy,
+  type LucideIcon,
+} from "lucide-react";
 import { useBion, type NotifTipo } from "@/lib/bion-store";
 
-const iconePorTipo: Record<NotifTipo, any> = {
+const iconePorTipo: Record<NotifTipo, LucideIcon> = {
   lembrete: Bell,
   mensagem: MessageSquare,
   receita: Pill,
   agenda: Calendar,
   exame: ClipboardList,
+  suporte: LifeBuoy,
 };
 
 const rotulo: Record<NotifTipo, string> = {
@@ -15,6 +26,7 @@ const rotulo: Record<NotifTipo, string> = {
   receita: "Receita",
   agenda: "Agenda",
   exame: "Exame",
+  suporte: "Suporte",
 };
 
 export function Notificacoes() {

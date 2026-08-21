@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { Pill, Award, Download, Plus, Search, X, ChevronLeft, ChevronRight, Eye } from "lucide-react";
+import { Pill, Award, Download, Plus, Search, X, ChevronLeft, ChevronRight, Eye, FileText } from "lucide-react";
 import { useBion, type Documento } from "@/lib/bion-store";
+import { gerarDocumentoPDF } from "@/lib/receita-pdf";
 
 export function docTexto(d: Documento) {
   const linhas = [
@@ -23,6 +24,10 @@ export function docTexto(d: Documento) {
 }
 
 export function baixarDoc(d: Documento) {
+  gerarDocumentoPDF(d);
+}
+
+export function baixarDocTxt(d: Documento) {
   const blob = new Blob([docTexto(d)], { type: "text/plain;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -77,17 +82,24 @@ export function VisualizadorDoc({ docs, index, onIndex, onClose }: {
           </div>
         </div>
 
-        <div className="p-4 border-t flex items-center gap-2">
+        <div className="p-4 border-t flex items-center gap-2 flex-wrap">
           <button disabled={index === 0} onClick={() => onIndex(index - 1)}
             className="p-2.5 rounded-xl border disabled:opacity-40" aria-label="Anterior"><ChevronLeft className="w-4 h-4" /></button>
           <button disabled={index >= docs.length - 1} onClick={() => onIndex(index + 1)}
             className="p-2.5 rounded-xl border disabled:opacity-40" aria-label="Próximo"><ChevronRight className="w-4 h-4" /></button>
           <span className="text-xs text-muted-foreground">{index + 1} de {docs.length}</span>
-          <button onClick={() => baixarDoc(d)}
-            className="ml-auto flex items-center gap-2 px-4 py-2.5 rounded-xl text-primary-foreground font-semibold"
-            style={{ backgroundColor: "var(--accent)" }}>
-            <Download className="w-4 h-4" /> Baixar
-          </button>
+          <div className="ml-auto flex items-center gap-2">
+            <button onClick={() => baixarDocTxt(d)}
+              className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl border text-xs font-medium hover:bg-muted"
+              title="Baixar em formato texto simples">
+              <FileText className="w-3.5 h-3.5" /> TXT
+            </button>
+            <button onClick={() => baixarDoc(d)}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-primary-foreground text-sm font-semibold shadow-sm hover:opacity-90 transition"
+              style={{ backgroundColor: "var(--accent)" }}>
+              <Download className="w-4 h-4" /> Baixar PDF Timbrado
+            </button>
+          </div>
         </div>
       </div>
     </div>
