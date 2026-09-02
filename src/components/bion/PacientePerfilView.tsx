@@ -1,7 +1,17 @@
 import { useState } from "react";
 import {
-  User, ShieldCheck, Heart, AlertTriangle, Pill, Edit3, Save, Phone, Mail,
-  Calendar, FileText, Check
+  User,
+  ShieldCheck,
+  Heart,
+  AlertTriangle,
+  Pill,
+  Edit3,
+  Save,
+  Phone,
+  Mail,
+  Calendar,
+  FileText,
+  Check,
 } from "lucide-react";
 import { useBion } from "@/lib/bion-store";
 
@@ -45,11 +55,17 @@ export function PacientePerfilView() {
       <div className="bg-card border rounded-3xl p-6 md:p-8 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
         <div className="flex items-center gap-5">
           <div className="w-20 h-20 md:w-24 md:h-24 rounded-3xl bg-primary text-primary-foreground flex items-center justify-center text-3xl font-extrabold shadow-sm shrink-0">
-            {pacientePerfil.nome.split(" ").slice(-2).map((w) => w[0]).join("")}
+            {pacientePerfil.nome
+              .split(" ")
+              .slice(-2)
+              .map((w) => w[0])
+              .join("")}
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-2xl md:text-3xl font-extrabold text-foreground">{pacientePerfil.nome}</h1>
+              <h1 className="text-2xl md:text-3xl font-extrabold text-foreground">
+                {pacientePerfil.nome}
+              </h1>
               <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-accent-soft text-emerald-700">
                 Verificado
               </span>
@@ -227,7 +243,10 @@ export function PacientePerfilView() {
           </div>
           <div className="space-y-2">
             {pacientePerfil.medicamentos.map((med, i) => (
-              <div key={i} className="p-3 rounded-2xl bg-muted/60 border text-xs font-semibold flex items-center gap-2">
+              <div
+                key={i}
+                className="p-3 rounded-2xl bg-muted/60 border text-xs font-semibold flex items-center gap-2"
+              >
                 <Pill className="w-3.5 h-3.5 text-primary shrink-0" />
                 <span>{med}</span>
               </div>

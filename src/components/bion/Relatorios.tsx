@@ -1,6 +1,14 @@
 import { useMemo, useState } from "react";
 import {
-  CalendarCheck, XCircle, Star, FileText, TrendingUp, Users, Download, ChevronDown, ChevronUp,
+  CalendarCheck,
+  XCircle,
+  Star,
+  FileText,
+  TrendingUp,
+  Users,
+  Download,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { useBion, type Avaliacao, type Consulta } from "@/lib/bion-store";
 import { jsPDF } from "jspdf";
@@ -35,7 +43,8 @@ function Metrica({
       type="button"
       onClick={onClick}
       disabled={!onClick}
-      className={`text-left bg-card border rounded-2xl p-4 transition ${onClick ? "hover:border-primary cursor-pointer" : ""} ${ativo ? "border-primary ring-2 ring-primary/20" : ""}`}>
+      className={`text-left bg-card border rounded-2xl p-4 transition ${onClick ? "hover:border-primary cursor-pointer" : ""} ${ativo ? "border-primary ring-2 ring-primary/20" : ""}`}
+    >
       <div className="w-10 h-10 rounded-xl bg-primary-soft flex items-center justify-center">
         <Icon className="w-4.5 h-4.5 text-primary" />
       </div>
@@ -62,7 +71,7 @@ function csvLinha(campos: (string | number)[]) {
 type Drill = null | "consultas" | "canceladas" | "concluidas" | "avaliacoes";
 
 export function Relatorios() {
-  const { consultas, documentos, avaliacoes, arquivos, consentimentos } = useBion();
+  const { consultas, documentos, avaliacoes, arquivos, consentimentos, registrarAudit } = useBion();
 
   const [periodo, setPeriodo] = useState<PeriodoKey>("todos");
   const [especialidade, setEspecialidade] = useState("todas");
@@ -71,7 +80,9 @@ export function Relatorios() {
 
   const opcoes = useMemo(() => {
     const esp = [...new Set(consultas.map((c) => c.especialidade))].sort();
-    const med = [...new Set([...consultas.map((c) => c.medico), ...avaliacoes.map((a) => a.medico)])].sort();
+    const med = [
+      ...new Set([...consultas.map((c) => c.medico), ...avaliacoes.map((a) => a.medico)]),
+    ].sort();
     return { esp, med };
   }, [consultas, avaliacoes]);
 
@@ -156,16 +167,40 @@ export function Relatorios() {
     linhas.push(csvLinha(["Arquivos trocados", arquivos.length]));
     linhas.push(csvLinha(["Consentimentos", consentimentos.length]));
     linhas.push("");
-    linhas.push(csvLinha(["Consultas — paciente", "médico", "especialidade", "data", "hora", "status"]));
+    linhas.push(
+      csvLinha(["Consultas — paciente", "médico", "especialidade", "data", "hora", "status"]),
+    );
     consultasFiltradas.forEach((c) =>
       linhas.push(csvLinha([c.paciente, c.medico, c.especialidade, c.data, c.hora, c.status])),
     );
     linhas.push("");
-    linhas.push(csvLinha(["Avaliações — paciente", "médico", "especialidade", "nota", "comentário", "quando"]));
-    avaliacoesFiltradas.forEach((a) =>
-      linhas.push(csvLinha([a.paciente, a.medico, a.especialidade, a.nota, a.comentario ?? "", a.quando])),
+    linhas.push(
+      csvLinha([
+        "Avaliações — paciente",
+        "médico",
+        "especialidade",
+        "nota",
+        "comentário",
+        "quando",
+      ]),
     );
-    baixar(`bion-relatorio-${Date.now()}.csv`, "\uFEFF" + linhas.join("\n"), "text/csv;charset=utf-8");
+    avaliacoesFiltradas.forEach((a) =>
+      linhas.push(
+        csvLinha([a.paciente, a.medico, a.especialidade, a.nota, a.comentario ?? "", a.quando]),
+      ),
+    );
+    baixar(
+      `bion-relatorio-${Date.now()}.csv`,
+      "\uFEFF" + linhas.join("\n"),
+      "text/csv;charset=utf-8",
+    );
+    registrarAudit({
+      acao: "RELATORIO_CSV_EXPORTADO",
+      categoria: "admin",
+      severidade: "info",
+      entidade: "relatorio",
+      detalhes: `Relatório CSV exportado — ${filtroTexto}`,
+    });
   };
 
   const exportarPDF = () => {
@@ -205,11 +240,17 @@ export function Relatorios() {
     };
 
     secao("Indicadores");
-    linha(`Consultas: ${dados.total} (concluídas: ${dados.concluidas}, canceladas: ${dados.canceladas})`);
+    linha(
+      `Consultas: ${dados.total} (concluídas: ${dados.concluidas}, canceladas: ${dados.canceladas})`,
+    );
     linha(`Taxa de cancelamento: ${dados.taxaCancelamento}%`);
-    linha(`Satisfação média: ${dados.media ? dados.media.toFixed(1) : "—"} (${avaliacoesFiltradas.length} avaliação(ões))`);
+    linha(
+      `Satisfação média: ${dados.media ? dados.media.toFixed(1) : "—"} (${avaliacoesFiltradas.length} avaliação(ões))`,
+    );
     linha(`Pacientes ativos: ${dados.pacientes}`);
-    linha(`Documentos: ${documentos.length} • Arquivos: ${arquivos.length} • Consentimentos: ${consentimentos.length}`);
+    linha(
+      `Documentos: ${documentos.length} • Arquivos: ${arquivos.length} • Consentimentos: ${consentimentos.length}`,
+    );
     y += 8;
 
     secao("Consultas por especialidade");
@@ -227,7 +268,9 @@ export function Relatorios() {
     secao("Avaliações");
     if (!avaliacoesFiltradas.length) linha("Nenhuma avaliação no período.");
     avaliacoesFiltradas.forEach((a) =>
-      linha(`${a.quando} — ${a.medico} (${a.especialidade}) • ${a.nota}/5 • ${a.paciente}${a.comentario ? ` — "${a.comentario}"` : ""}`),
+      linha(
+        `${a.quando} — ${a.medico} (${a.especialidade}) • ${a.nota}/5 • ${a.paciente}${a.comentario ? ` — "${a.comentario}"` : ""}`,
+      ),
     );
 
     const paginas = doc.getNumberOfPages();
@@ -237,6 +280,13 @@ export function Relatorios() {
       doc.text(`BION • página ${i} de ${paginas}`, L, alt - 30);
     }
     doc.save(`bion-relatorio-${Date.now()}.pdf`);
+    registrarAudit({
+      acao: "RELATORIO_PDF_EXPORTADO",
+      categoria: "admin",
+      severidade: "info",
+      entidade: "relatorio",
+      detalhes: `Relatório PDF exportado (${paginas} página(s)) — ${filtroTexto}`,
+    });
   };
 
   const abrir = (d: Drill) => setDrill((atual) => (atual === d ? null : d));
@@ -256,17 +306,22 @@ export function Relatorios() {
         <div>
           <h1 className="text-3xl font-bold">Relatórios</h1>
           <p className="text-muted-foreground mt-1">
-            Indicadores em tempo real. Filtre e clique nos cartões para ver o detalhe por trás de cada número.
+            Indicadores em tempo real. Filtre e clique nos cartões para ver o detalhe por trás de
+            cada número.
           </p>
         </div>
         <div className="flex gap-2">
-          <button onClick={exportarCSV} className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl border text-sm font-medium hover:bg-muted">
+          <button
+            onClick={exportarCSV}
+            className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl border text-sm font-medium hover:bg-muted"
+          >
             <Download className="w-4 h-4" /> CSV
           </button>
           <button
             onClick={exportarPDF}
             className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-primary-foreground text-sm font-medium"
-            style={{ backgroundColor: "var(--accent)" }}>
+            style={{ backgroundColor: "var(--accent)" }}
+          >
             <Download className="w-4 h-4" /> PDF
           </button>
         </div>
@@ -277,10 +332,16 @@ export function Relatorios() {
           <span className="text-muted-foreground text-xs">Período</span>
           <select
             value={periodo}
-            onChange={(e) => { setPeriodo(e.target.value as PeriodoKey); setDrill(null); }}
-            className="mt-1 w-full rounded-xl border bg-background px-3 py-2.5 text-sm">
+            onChange={(e) => {
+              setPeriodo(e.target.value as PeriodoKey);
+              setDrill(null);
+            }}
+            className="mt-1 w-full rounded-xl border bg-background px-3 py-2.5 text-sm"
+          >
             {PERIODOS.map((p) => (
-              <option key={p.k} value={p.k}>{p.label}</option>
+              <option key={p.k} value={p.k}>
+                {p.label}
+              </option>
             ))}
           </select>
         </label>
@@ -288,29 +349,73 @@ export function Relatorios() {
           <span className="text-muted-foreground text-xs">Especialidade</span>
           <select
             value={especialidade}
-            onChange={(e) => { setEspecialidade(e.target.value); setDrill(null); }}
-            className="mt-1 w-full rounded-xl border bg-background px-3 py-2.5 text-sm">
+            onChange={(e) => {
+              setEspecialidade(e.target.value);
+              setDrill(null);
+            }}
+            className="mt-1 w-full rounded-xl border bg-background px-3 py-2.5 text-sm"
+          >
             <option value="todas">Todas</option>
-            {opcoes.esp.map((e) => <option key={e} value={e}>{e}</option>)}
+            {opcoes.esp.map((e) => (
+              <option key={e} value={e}>
+                {e}
+              </option>
+            ))}
           </select>
         </label>
         <label className="text-sm">
           <span className="text-muted-foreground text-xs">Médico</span>
           <select
             value={medico}
-            onChange={(e) => { setMedico(e.target.value); setDrill(null); }}
-            className="mt-1 w-full rounded-xl border bg-background px-3 py-2.5 text-sm">
+            onChange={(e) => {
+              setMedico(e.target.value);
+              setDrill(null);
+            }}
+            className="mt-1 w-full rounded-xl border bg-background px-3 py-2.5 text-sm"
+          >
             <option value="todos">Todos</option>
-            {opcoes.med.map((m) => <option key={m} value={m}>{m}</option>)}
+            {opcoes.med.map((m) => (
+              <option key={m} value={m}>
+                {m}
+              </option>
+            ))}
           </select>
         </label>
       </div>
 
       <div className="mt-4 grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Metrica icon={CalendarCheck} label="Consultas" valor={String(dados.total)} detalhe={`${dados.concluidas} concluída(s)`} onClick={() => abrir("consultas")} ativo={drill === "consultas"} />
-        <Metrica icon={XCircle} label="Taxa de cancelamento" valor={`${dados.taxaCancelamento}%`} detalhe={`${dados.canceladas} cancelada(s)`} onClick={() => abrir("canceladas")} ativo={drill === "canceladas"} />
-        <Metrica icon={Star} label="Satisfação média" valor={dados.media ? dados.media.toFixed(1) : "—"} detalhe={`${avaliacoesFiltradas.length} avaliação(ões)`} onClick={() => abrir("avaliacoes")} ativo={drill === "avaliacoes"} />
-        <Metrica icon={Users} label="Pacientes ativos" valor={String(dados.pacientes)} detalhe="com consulta registrada" onClick={() => abrir("concluidas")} ativo={drill === "concluidas"} />
+        <Metrica
+          icon={CalendarCheck}
+          label="Consultas"
+          valor={String(dados.total)}
+          detalhe={`${dados.concluidas} concluída(s)`}
+          onClick={() => abrir("consultas")}
+          ativo={drill === "consultas"}
+        />
+        <Metrica
+          icon={XCircle}
+          label="Taxa de cancelamento"
+          valor={`${dados.taxaCancelamento}%`}
+          detalhe={`${dados.canceladas} cancelada(s)`}
+          onClick={() => abrir("canceladas")}
+          ativo={drill === "canceladas"}
+        />
+        <Metrica
+          icon={Star}
+          label="Satisfação média"
+          valor={dados.media ? dados.media.toFixed(1) : "—"}
+          detalhe={`${avaliacoesFiltradas.length} avaliação(ões)`}
+          onClick={() => abrir("avaliacoes")}
+          ativo={drill === "avaliacoes"}
+        />
+        <Metrica
+          icon={Users}
+          label="Pacientes ativos"
+          valor={String(dados.pacientes)}
+          detalhe="com consulta registrada"
+          onClick={() => abrir("concluidas")}
+          ativo={drill === "concluidas"}
+        />
       </div>
 
       {drill && (
@@ -319,59 +424,112 @@ export function Relatorios() {
             <div className="font-semibold">
               {drill === "avaliacoes" ? "Avaliações detalhadas" : "Consultas detalhadas"}
             </div>
-            <button onClick={() => setDrill(null)} className="text-sm text-muted-foreground inline-flex items-center gap-1">
+            <button
+              onClick={() => setDrill(null)}
+              className="text-sm text-muted-foreground inline-flex items-center gap-1"
+            >
               Fechar <ChevronUp className="w-4 h-4" />
             </button>
           </div>
           <div className="mt-3 space-y-2">
-            {drill === "avaliacoes"
-              ? (avaliacoesFiltradas.length === 0
-                  ? <p className="text-sm text-muted-foreground">Nenhum registro para os filtros atuais.</p>
-                  : avaliacoesFiltradas.map((a: Avaliacao) => (
-                      <div key={a.id} className="rounded-xl border p-3">
-                        <div className="flex items-center justify-between gap-3 text-sm">
-                          <span className="font-medium truncate">{a.medico} • {a.especialidade}</span>
-                          <span className="flex items-center gap-1 shrink-0">
-                            <Star className="w-3.5 h-3.5 text-primary fill-primary" /> {a.nota}
-                          </span>
-                        </div>
-                        <div className="text-xs text-muted-foreground mt-0.5">{a.paciente} • {a.quando}</div>
-                        {a.comentario && <div className="text-sm mt-1">“{a.comentario}”</div>}
-                      </div>
-                    )))
-              : (listaDrill.length === 0
-                  ? <p className="text-sm text-muted-foreground">Nenhum registro para os filtros atuais.</p>
-                  : listaDrill.map((c) => (
-                      <div key={c.id} className="rounded-xl border p-3 flex items-center justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="font-medium text-sm truncate">{c.paciente} • {c.especialidade}</div>
-                          <div className="text-xs text-muted-foreground">{c.medico} • {c.data} às {c.hora}</div>
-                        </div>
-                        <span className="text-xs px-2 py-1 rounded-full bg-muted shrink-0">{c.status}</span>
-                      </div>
-                    )))}
+            {drill === "avaliacoes" ? (
+              avaliacoesFiltradas.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  Nenhum registro para os filtros atuais.
+                </p>
+              ) : (
+                avaliacoesFiltradas.map((a: Avaliacao) => (
+                  <div key={a.id} className="rounded-xl border p-3">
+                    <div className="flex items-center justify-between gap-3 text-sm">
+                      <span className="font-medium truncate">
+                        {a.medico} • {a.especialidade}
+                      </span>
+                      <span className="flex items-center gap-1 shrink-0">
+                        <Star className="w-3.5 h-3.5 text-primary fill-primary" /> {a.nota}
+                      </span>
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-0.5">
+                      {a.paciente} • {a.quando}
+                    </div>
+                    {a.comentario && <div className="text-sm mt-1">“{a.comentario}”</div>}
+                  </div>
+                ))
+              )
+            ) : listaDrill.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Nenhum registro para os filtros atuais.
+              </p>
+            ) : (
+              listaDrill.map((c) => (
+                <div
+                  key={c.id}
+                  className="rounded-xl border p-3 flex items-center justify-between gap-3"
+                >
+                  <div className="min-w-0">
+                    <div className="font-medium text-sm truncate">
+                      {c.paciente} • {c.especialidade}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {c.medico} • {c.data} às {c.hora}
+                    </div>
+                  </div>
+                  <span className="text-xs px-2 py-1 rounded-full bg-muted shrink-0">
+                    {c.status}
+                  </span>
+                </div>
+              ))
+            )}
           </div>
         </div>
       )}
 
       <div className="mt-4 grid sm:grid-cols-3 gap-4">
-        <Metrica icon={FileText} label="Documentos emitidos" valor={String(documentos.length)} detalhe="receitas e atestados" />
-        <Metrica icon={TrendingUp} label="Arquivos trocados" valor={String(arquivos.length)} detalhe="exames e anexos" />
-        <Metrica icon={FileText} label="Consentimentos" valor={String(consentimentos.length)} detalhe="registros de acesso ao PDF" />
+        <Metrica
+          icon={FileText}
+          label="Documentos emitidos"
+          valor={String(documentos.length)}
+          detalhe="receitas e atestados"
+        />
+        <Metrica
+          icon={TrendingUp}
+          label="Arquivos trocados"
+          valor={String(arquivos.length)}
+          detalhe="exames e anexos"
+        />
+        <Metrica
+          icon={FileText}
+          label="Consentimentos"
+          valor={String(consentimentos.length)}
+          detalhe="registros de acesso ao PDF"
+        />
       </div>
 
       <div className="mt-6 bg-card border rounded-2xl p-5">
         <div className="font-semibold">Consultas por especialidade</div>
         <div className="mt-4 space-y-3">
-          {dados.especialidades.length === 0 && <p className="text-sm text-muted-foreground">Sem dados para os filtros atuais.</p>}
+          {dados.especialidades.length === 0 && (
+            <p className="text-sm text-muted-foreground">Sem dados para os filtros atuais.</p>
+          )}
           {dados.especialidades.map(([esp, n]) => (
-            <button key={esp} onClick={() => { setEspecialidade(esp); setDrill("consultas"); }} className="w-full text-left">
+            <button
+              key={esp}
+              onClick={() => {
+                setEspecialidade(esp);
+                setDrill("consultas");
+              }}
+              className="w-full text-left"
+            >
               <div className="flex justify-between text-sm">
-                <span className="inline-flex items-center gap-1">{esp} <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" /></span>
+                <span className="inline-flex items-center gap-1">
+                  {esp} <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
+                </span>
                 <span className="text-muted-foreground">{n}</span>
               </div>
               <div className="mt-1 h-2 rounded-full bg-muted overflow-hidden">
-                <div className="h-full rounded-full bg-primary" style={{ width: `${(n / maxEsp) * 100}%` }} />
+                <div
+                  className="h-full rounded-full bg-primary"
+                  style={{ width: `${(n / maxEsp) * 100}%` }}
+                />
               </div>
             </button>
           ))}
@@ -381,18 +539,26 @@ export function Relatorios() {
       <div className="mt-4 bg-card border rounded-2xl p-5">
         <div className="font-semibold">Desempenho por médico</div>
         <div className="mt-3 space-y-2">
-          {dados.medicos.length === 0 && <p className="text-sm text-muted-foreground">Sem dados para os filtros atuais.</p>}
+          {dados.medicos.length === 0 && (
+            <p className="text-sm text-muted-foreground">Sem dados para os filtros atuais.</p>
+          )}
           {dados.medicos.map(([m, v]) => (
             <button
               key={m}
-              onClick={() => { setMedico(m); setDrill("consultas"); }}
-              className="w-full rounded-xl border p-3 flex items-center justify-between gap-3 text-left hover:border-primary">
+              onClick={() => {
+                setMedico(m);
+                setDrill("consultas");
+              }}
+              className="w-full rounded-xl border p-3 flex items-center justify-between gap-3 text-left hover:border-primary"
+            >
               <div className="min-w-0">
                 <div className="font-medium truncate">{m}</div>
                 <div className="text-xs text-muted-foreground">{v.total} consulta(s)</div>
               </div>
               <div className="flex items-center gap-1 text-sm shrink-0">
-                <Star className={`w-4 h-4 ${v.n ? "text-primary fill-primary" : "text-muted-foreground"}`} />
+                <Star
+                  className={`w-4 h-4 ${v.n ? "text-primary fill-primary" : "text-muted-foreground"}`}
+                />
                 {v.n ? (v.soma / v.n).toFixed(1) : "—"}
               </div>
             </button>
@@ -403,7 +569,9 @@ export function Relatorios() {
       <div className="mt-4 bg-card border rounded-2xl p-5">
         <div className="font-semibold">Avaliações recentes</div>
         <div className="mt-3 space-y-2">
-          {avaliacoesFiltradas.length === 0 && <p className="text-sm text-muted-foreground">Nenhuma avaliação no período.</p>}
+          {avaliacoesFiltradas.length === 0 && (
+            <p className="text-sm text-muted-foreground">Nenhuma avaliação no período.</p>
+          )}
           {avaliacoesFiltradas.slice(0, 8).map((a) => (
             <div key={a.id} className="rounded-xl border p-3">
               <div className="flex items-center gap-1 text-sm font-medium">
@@ -412,8 +580,12 @@ export function Relatorios() {
                 ))}
                 <span className="ml-2 text-muted-foreground font-normal text-xs">{a.quando}</span>
               </div>
-              <div className="text-sm mt-1">{a.medico} • {a.especialidade}</div>
-              {a.comentario && <div className="text-sm text-muted-foreground mt-1">“{a.comentario}”</div>}
+              <div className="text-sm mt-1">
+                {a.medico} • {a.especialidade}
+              </div>
+              {a.comentario && (
+                <div className="text-sm text-muted-foreground mt-1">“{a.comentario}”</div>
+              )}
             </div>
           ))}
         </div>

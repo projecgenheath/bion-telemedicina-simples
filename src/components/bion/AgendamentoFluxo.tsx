@@ -1,18 +1,68 @@
 import { useState } from "react";
+import { toast } from "sonner";
 import {
-  Stethoscope, Calendar, Clock, Star, ChevronRight, ChevronLeft, Check,
-  CreditCard, QrCode, FileText, Upload, Trash2, ShieldCheck, Heart, Sparkles,
-  Search, Info, ArrowRight, UserCheck, AlertCircle, Copy, CheckCheck
+  Stethoscope,
+  Calendar,
+  Clock,
+  Star,
+  ChevronRight,
+  ChevronLeft,
+  Check,
+  CreditCard,
+  QrCode,
+  FileText,
+  Upload,
+  Trash2,
+  ShieldCheck,
+  Heart,
+  Sparkles,
+  Search,
+  Info,
+  ArrowRight,
+  UserCheck,
+  AlertCircle,
+  Copy,
+  CheckCheck,
 } from "lucide-react";
 import { useBion, type Medico } from "@/lib/bion-store";
 
 const ESPECIALIDADES = [
-  { id: "clinica", nome: "Clínica Geral", desc: "Check-ups, sintomas gerais, receitas e atestados", icone: Stethoscope },
-  { id: "cardio", nome: "Cardiologia", desc: "Pressão arterial, coração, prevenção e arritmias", icone: Heart },
-  { id: "dermato", nome: "Dermatologia", desc: "Pele, cabelos, unhas, acne e alergias", icone: Sparkles },
-  { id: "pediatria", nome: "Pediatria", desc: "Saúde e desenvolvimento infantil e bebês", icone: UserCheck },
-  { id: "psico", nome: "Psicologia", desc: "Terapia online, ansiedade, estresse e suporte emocional", icone: Stethoscope },
-  { id: "ortopedia", nome: "Ortopedia", desc: "Dores articulares, postura, coluna e lesões", icone: Stethoscope },
+  {
+    id: "clinica",
+    nome: "Clínica Geral",
+    desc: "Check-ups, sintomas gerais, receitas e atestados",
+    icone: Stethoscope,
+  },
+  {
+    id: "cardio",
+    nome: "Cardiologia",
+    desc: "Pressão arterial, coração, prevenção e arritmias",
+    icone: Heart,
+  },
+  {
+    id: "dermato",
+    nome: "Dermatologia",
+    desc: "Pele, cabelos, unhas, acne e alergias",
+    icone: Sparkles,
+  },
+  {
+    id: "pediatria",
+    nome: "Pediatria",
+    desc: "Saúde e desenvolvimento infantil e bebês",
+    icone: UserCheck,
+  },
+  {
+    id: "psico",
+    nome: "Psicologia",
+    desc: "Terapia online, ansiedade, estresse e suporte emocional",
+    icone: Stethoscope,
+  },
+  {
+    id: "ortopedia",
+    nome: "Ortopedia",
+    desc: "Dores articulares, postura, coluna e lesões",
+    icone: Stethoscope,
+  },
 ];
 
 const SINTOMAS_RAPIDOS = [
@@ -42,7 +92,9 @@ export function AgendamentoFluxo({
   const [horaSelecionada, setHoraSelecionada] = useState("14:30");
   const [motivoTexto, setMotivoTexto] = useState("");
   const [sintomasEscolhidos, setSintomasEscolhidos] = useState<string[]>([]);
-  const [arquivosAnexados, setArquivosAnexados] = useState<{ nome: string; tamanhoKb: number; tipo: string }[]>([]);
+  const [arquivosAnexados, setArquivosAnexados] = useState<
+    { nome: string; tamanhoKb: number; tipo: string }[]
+  >([]);
   const [metodoPagamento, setMetodoPagamento] = useState<"pix" | "cartao" | "boleto">("pix");
   const [pixCopiado, setPixCopiado] = useState(false);
   const [cartaoNumero, setCartaoNumero] = useState("");
@@ -65,7 +117,7 @@ export function AgendamentoFluxo({
   ];
 
   const medicosFiltrados = medicos.filter(
-    (m) => m.status === "ativo" && (!especialidade || m.especialidade === especialidade)
+    (m) => m.status === "ativo" && (!especialidade || m.especialidade === especialidade),
   );
 
   const proximoPasso = () => setStep((s) => Math.min(s + 1, steps.length - 1));
@@ -73,7 +125,7 @@ export function AgendamentoFluxo({
 
   const toggleSintoma = (sintoma: string) => {
     setSintomasEscolhidos((prev) =>
-      prev.includes(sintoma) ? prev.filter((s) => s !== sintoma) : [...prev, sintoma]
+      prev.includes(sintoma) ? prev.filter((s) => s !== sintoma) : [...prev, sintoma],
     );
   };
 
@@ -93,7 +145,8 @@ export function AgendamentoFluxo({
   };
 
   const copiarChavePix = () => {
-    const chave = "00020126580014br.gov.bcb.pix0136bion-telemedicina-pay-987655204000053039865802BR5925BION TELEMEDICINA SA6009SAO PAULO62070503***6304A1B2";
+    const chave =
+      "00020126580014br.gov.bcb.pix0136bion-telemedicina-pay-987655204000053039865802BR5925BION TELEMEDICINA SA6009SAO PAULO62070503***6304A1B2";
     navigator.clipboard?.writeText(chave).catch(() => {});
     setPixCopiado(true);
     setTimeout(() => setPixCopiado(false), 2500);
@@ -106,10 +159,10 @@ export function AgendamentoFluxo({
       setProcessandoPagamento(false);
 
       const med = medicoSelecionado ?? medicosFiltrados[0] ?? medicos[0];
-      const motivoCompleto = [
-        ...sintomasEscolhidos,
-        motivoTexto.trim() ? motivoTexto.trim() : "",
-      ].filter(Boolean).join(" • ") || "Consulta de rotina";
+      const motivoCompleto =
+        [...sintomasEscolhidos, motivoTexto.trim() ? motivoTexto.trim() : ""]
+          .filter(Boolean)
+          .join(" • ") || "Consulta de rotina";
 
       adicionarConsulta({
         medico: med.nome,
@@ -147,6 +200,10 @@ export function AgendamentoFluxo({
         para: "medico",
       });
 
+      toast.success("Pagamento aprovado! Consulta confirmada", {
+        description: `${med.nome} — ${dataSelecionada} às ${horaSelecionada}`,
+      });
+
       proximoPasso();
     }, 900);
   };
@@ -156,7 +213,20 @@ export function AgendamentoFluxo({
     const d = new Date();
     d.setDate(d.getDate() + i);
     const diaNum = d.getDate();
-    const meses = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+    const meses = [
+      "Jan",
+      "Fev",
+      "Mar",
+      "Abr",
+      "Mai",
+      "Jun",
+      "Jul",
+      "Ago",
+      "Set",
+      "Out",
+      "Nov",
+      "Dez",
+    ];
     const sem = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"][d.getDay()];
     const rotulo = i === 0 ? "Hoje" : i === 1 ? "Amanhã" : `${diaNum} ${meses[d.getMonth()]}`;
     return { rotulo, sem, diaNum, mes: meses[d.getMonth()] };
@@ -204,7 +274,9 @@ export function AgendamentoFluxo({
             {ESPECIALIDADES.map((esp) => {
               const Icon = esp.icone;
               const isSelected = especialidade === esp.nome;
-              const count = medicos.filter((m) => m.especialidade === esp.nome && m.status === "ativo").length;
+              const count = medicos.filter(
+                (m) => m.especialidade === esp.nome && m.status === "ativo",
+              ).length;
               return (
                 <button
                   key={esp.id}
@@ -240,7 +312,9 @@ export function AgendamentoFluxo({
       {step === 1 && (
         <div className="space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2 text-sm text-muted-foreground">
-            <span>Médicos especialistas em <strong className="text-foreground">{especialidade}</strong>:</span>
+            <span>
+              Médicos especialistas em <strong className="text-foreground">{especialidade}</strong>:
+            </span>
             <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-accent-soft text-emerald-700">
               {medicosFiltrados.length} profissionais online
             </span>
@@ -254,7 +328,11 @@ export function AgendamentoFluxo({
               >
                 <div className="flex items-start gap-4 flex-1 min-w-0">
                   <div className="w-16 h-16 rounded-2xl bg-primary text-primary-foreground flex items-center justify-center font-bold text-xl shrink-0 shadow-sm">
-                    {med.nome.split(" ").slice(-2).map((w) => w[0]).join("")}
+                    {med.nome
+                      .split(" ")
+                      .slice(-2)
+                      .map((w) => w[0])
+                      .join("")}
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
@@ -272,7 +350,10 @@ export function AgendamentoFluxo({
                     </div>
                     <div className="flex flex-wrap gap-1.5 mt-2">
                       {med.subespecialidades.slice(0, 3).map((sub) => (
-                        <span key={sub} className="text-[11px] px-2 py-0.5 rounded-lg bg-muted text-muted-foreground">
+                        <span
+                          key={sub}
+                          className="text-[11px] px-2 py-0.5 rounded-lg bg-muted text-muted-foreground"
+                        >
                           {sub}
                         </span>
                       ))}
@@ -333,11 +414,15 @@ export function AgendamentoFluxo({
                       : "bg-card hover:border-primary hover:bg-primary-soft"
                   }`}
                 >
-                  <span className={`text-xs ${isSelected ? "text-primary-foreground/80" : "text-muted-foreground"}`}>
+                  <span
+                    className={`text-xs ${isSelected ? "text-primary-foreground/80" : "text-muted-foreground"}`}
+                  >
                     {d.sem}
                   </span>
                   <span className="text-2xl font-extrabold">{d.diaNum}</span>
-                  <span className={`text-[11px] font-semibold ${isSelected ? "text-primary-foreground" : "text-primary"}`}>
+                  <span
+                    className={`text-[11px] font-semibold ${isSelected ? "text-primary-foreground" : "text-primary"}`}
+                  >
                     {d.rotulo === "Hoje" ? "Hoje" : d.mes}
                   </span>
                 </button>
@@ -384,22 +469,24 @@ export function AgendamentoFluxo({
                 Tarde / Noite
               </div>
               <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5">
-                {["14:00", "14:30", "15:00", "15:30", "16:00", "16:30", "17:00", "18:00"].map((h) => (
-                  <button
-                    key={h}
-                    onClick={() => {
-                      setHoraSelecionada(h);
-                      proximoPasso();
-                    }}
-                    className={`py-3 rounded-xl border text-sm font-bold transition ${
-                      horaSelecionada === h
-                        ? "bg-primary text-primary-foreground border-primary shadow-sm"
-                        : "hover:border-primary hover:bg-primary-soft"
-                    }`}
-                  >
-                    {h}
-                  </button>
-                ))}
+                {["14:00", "14:30", "15:00", "15:30", "16:00", "16:30", "17:00", "18:00"].map(
+                  (h) => (
+                    <button
+                      key={h}
+                      onClick={() => {
+                        setHoraSelecionada(h);
+                        proximoPasso();
+                      }}
+                      className={`py-3 rounded-xl border text-sm font-bold transition ${
+                        horaSelecionada === h
+                          ? "bg-primary text-primary-foreground border-primary shadow-sm"
+                          : "hover:border-primary hover:bg-primary-soft"
+                      }`}
+                    >
+                      {h}
+                    </button>
+                  ),
+                )}
               </div>
             </div>
           </div>
@@ -467,7 +554,8 @@ export function AgendamentoFluxo({
       {step === 5 && (
         <div className="space-y-6">
           <div className="text-sm text-muted-foreground">
-            Anexe fotos de exames anteriores ou receitas para o médico analisar antes ou durante a consulta:
+            Anexe fotos de exames anteriores ou receitas para o médico analisar antes ou durante a
+            consulta:
           </div>
 
           <div className="bg-card border rounded-3xl p-6 space-y-4">
@@ -482,7 +570,9 @@ export function AgendamentoFluxo({
               <div className="w-14 h-14 rounded-2xl bg-primary-soft flex items-center justify-center text-primary mb-3">
                 <Upload className="w-6 h-6" />
               </div>
-              <div className="font-bold text-sm text-foreground">Clique para enviar arquivos ou fotos</div>
+              <div className="font-bold text-sm text-foreground">
+                Clique para enviar arquivos ou fotos
+              </div>
               <div className="text-xs text-muted-foreground mt-1">PDF, PNG, JPG de até 25MB</div>
             </label>
 
@@ -538,11 +628,15 @@ export function AgendamentoFluxo({
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Agendamento</span>
-                <span>{dataSelecionada}, às {horaSelecionada}</span>
+                <span>
+                  {dataSelecionada}, às {horaSelecionada}
+                </span>
               </div>
               <div className="pt-2 border-t flex justify-between items-center">
                 <span className="font-bold text-base">Valor Total</span>
-                <span className="text-2xl font-extrabold text-primary">R$ {medicoAtual.valor},00</span>
+                <span className="text-2xl font-extrabold text-primary">
+                  R$ {medicoAtual.valor},00
+                </span>
               </div>
             </div>
 
@@ -584,7 +678,8 @@ export function AgendamentoFluxo({
                     Aprovação Imediata em Segundos
                   </div>
                   <p className="text-xs text-muted-foreground mt-1 max-w-sm mx-auto">
-                    Abra o app do seu banco, escolha <strong>Pix Copia e Cola</strong> ou aponte a câmera para o QR Code.
+                    Abra o app do seu banco, escolha <strong>Pix Copia e Cola</strong> ou aponte a
+                    câmera para o QR Code.
                   </p>
                 </div>
 
@@ -598,7 +693,11 @@ export function AgendamentoFluxo({
                     onClick={copiarChavePix}
                     className="px-4 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-bold flex items-center gap-1 hover:opacity-90 transition shrink-0"
                   >
-                    {pixCopiado ? <CheckCheck className="w-3.5 h-3.5 text-emerald-300" /> : <Copy className="w-3.5 h-3.5" />}
+                    {pixCopiado ? (
+                      <CheckCheck className="w-3.5 h-3.5 text-emerald-300" />
+                    ) : (
+                      <Copy className="w-3.5 h-3.5" />
+                    )}
                     {pixCopiado ? "Copiado!" : "Copiar"}
                   </button>
                 </div>
@@ -652,7 +751,8 @@ export function AgendamentoFluxo({
                 <FileText className="w-8 h-8 text-primary mx-auto" />
                 <div className="font-bold text-sm">Boleto Bancário Digital</div>
                 <p className="text-xs text-muted-foreground">
-                  O boleto é compensado em até 1 dia útil. O link de acesso à sala de espera será liberado após a compensação.
+                  O boleto é compensado em até 1 dia útil. O link de acesso à sala de espera será
+                  liberado após a compensação.
                 </p>
               </div>
             )}
@@ -693,7 +793,11 @@ export function AgendamentoFluxo({
               Consulta Agendada!
             </h2>
             <p className="text-sm text-muted-foreground mt-2 max-w-md mx-auto">
-              Sua teleconsulta com <strong>{medicoAtual.nome}</strong> está confirmada para <strong>{dataSelecionada} às {horaSelecionada}</strong>.
+              Sua teleconsulta com <strong>{medicoAtual.nome}</strong> está confirmada para{" "}
+              <strong>
+                {dataSelecionada} às {horaSelecionada}
+              </strong>
+              .
             </p>
           </div>
 
@@ -704,7 +808,9 @@ export function AgendamentoFluxo({
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Código de Confirmação:</span>
-              <span className="font-mono font-bold text-primary">BION-{Math.random().toString(36).substring(2, 8).toUpperCase()}</span>
+              <span className="font-mono font-bold text-primary">
+                BION-{Math.random().toString(36).substring(2, 8).toUpperCase()}
+              </span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Exames anexados:</span>
@@ -732,29 +838,46 @@ export function AgendamentoFluxo({
 
       {/* Modal de Detalhes do Médico */}
       {medicoModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setMedicoModal(null)}>
-          <div className="bg-card border rounded-3xl max-w-lg w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setMedicoModal(null)}
+        >
+          <div
+            className="bg-card border rounded-3xl max-w-lg w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-start gap-4">
               <div className="w-16 h-16 rounded-2xl bg-primary text-primary-foreground flex items-center justify-center font-bold text-2xl shrink-0">
-                {medicoModal.nome.split(" ").slice(-2).map((w) => w[0]).join("")}
+                {medicoModal.nome
+                  .split(" ")
+                  .slice(-2)
+                  .map((w) => w[0])
+                  .join("")}
               </div>
               <div className="flex-1 min-w-0">
                 <h3 className="text-xl font-bold">{medicoModal.nome}</h3>
-                <p className="text-sm text-muted-foreground">{medicoModal.especialidade} • {medicoModal.crm}</p>
+                <p className="text-sm text-muted-foreground">
+                  {medicoModal.especialidade} • {medicoModal.crm}
+                </p>
                 <div className="flex items-center gap-2 mt-1 text-xs text-amber-500 font-bold">
-                  <Star className="w-3.5 h-3.5 fill-amber-500" /> {medicoModal.avaliacao} ({medicoModal.numAvaliacoes} avaliações)
+                  <Star className="w-3.5 h-3.5 fill-amber-500" /> {medicoModal.avaliacao} (
+                  {medicoModal.numAvaliacoes} avaliações)
                 </div>
               </div>
             </div>
 
             <div className="space-y-3 text-xs">
               <div>
-                <div className="font-bold text-muted-foreground uppercase">Sobre o especialista</div>
+                <div className="font-bold text-muted-foreground uppercase">
+                  Sobre o especialista
+                </div>
                 <p className="text-foreground mt-1 leading-relaxed">{medicoModal.bio}</p>
               </div>
 
               <div>
-                <div className="font-bold text-muted-foreground uppercase">Formação & Experiência</div>
+                <div className="font-bold text-muted-foreground uppercase">
+                  Formação & Experiência
+                </div>
                 <p className="text-foreground mt-1">{medicoModal.formacao}</p>
                 <p className="text-muted-foreground mt-0.5">{medicoModal.experiencia}</p>
               </div>

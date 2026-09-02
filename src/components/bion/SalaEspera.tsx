@@ -1,12 +1,25 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  Camera, CameraOff, Mic, MicOff, Wifi, Video, ShieldCheck, CheckCircle2,
-  Clock, AlertCircle, RefreshCw, Volume2, Sparkles, User, Star
+  Camera,
+  CameraOff,
+  Mic,
+  MicOff,
+  Wifi,
+  Video,
+  ShieldCheck,
+  CheckCircle2,
+  Clock,
+  AlertCircle,
+  RefreshCw,
+  Volume2,
+  Sparkles,
+  User,
+  Star,
 } from "lucide-react";
 import { useBion } from "@/lib/bion-store";
 
 export function SalaEspera({ onEnter }: { onEnter: () => void }) {
-  const { consultas } = useBion();
+  const { consultas, registrarAudit } = useBion();
   const proximaConsulta = consultas.find((c) => c.status === "confirmada") ?? consultas[0];
   const medicoNome = proximaConsulta?.medico ?? "Dra. Ana Ribeiro";
   const medicoInfo = {
@@ -24,6 +37,7 @@ export function SalaEspera({ onEnter }: { onEnter: () => void }) {
   const [camAtiva, setCamAtiva] = useState(true);
   const [micAtivo, setMicAtivo] = useState(true);
   const [nivelAudio, setNivelAudio] = useState(65);
+  const [barrasAudio, setBarrasAudio] = useState<number[]>(Array(8).fill(15));
   const [statusRede, setStatusRede] = useState<"testando" | "excelente" | "boa">("excelente");
   const [ping, setPing] = useState(18);
   const [erroCamera, setErroCamera] = useState<string | null>(null);
@@ -46,7 +60,9 @@ export function SalaEspera({ onEnter }: { onEnter: () => void }) {
         }
 
         try {
-          const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+          const AudioContextClass =
+            window.AudioContext ||
+            (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
           const ctx = new AudioContextClass();
           audioContextRef.current = ctx;
           const source = ctx.createMediaStreamSource(stream);
@@ -65,6 +81,14 @@ export function SalaEspera({ onEnter }: { onEnter: () => void }) {
             }
             const avg = sum / dataArray.length;
             setNivelAudio(Math.min(100, Math.max(15, Math.round((avg / 128) * 100))));
+            const porBarra = Math.max(1, Math.floor(dataArray.length / 8));
+            setBarrasAudio(
+              Array.from({ length: 8 }, (_, b) => {
+                let acc = 0;
+                for (let i = 0; i < porBarra; i++) acc += dataArray[b * porBarra + i] ?? 0;
+                return Math.min(100, Math.max(12, Math.round((acc / porBarra / 200) * 100)));
+              }),
+            );
             animFrame = requestAnimationFrame(updateVolume);
           };
           updateVolume();
@@ -74,7 +98,9 @@ export function SalaEspera({ onEnter }: { onEnter: () => void }) {
       })
       .catch(() => {
         if (!cancelado) {
-          setErroCamera("Câmera não detectada ou permissão negada. O teste continuará em modo simulado.");
+          setErroCamera(
+            "Câmera não detectada ou permissão negada. O teste continuará em modo simulado.",
+          );
         }
       });
 
@@ -138,12 +164,16 @@ export function SalaEspera({ onEnter }: { onEnter: () => void }) {
         <div className="flex items-center gap-3 bg-card border px-4 py-2.5 rounded-2xl shadow-sm">
           <div className="text-right">
             <div className="text-xs text-muted-foreground">Início previsto</div>
-            <div className="text-sm font-bold text-foreground">{proximaConsulta?.hora ?? "14:30"}</div>
+            <div className="text-sm font-bold text-foreground">
+              {proximaConsulta?.hora ?? "14:30"}
+            </div>
           </div>
           <div className="w-px h-8 bg-border" />
           <div className="text-left">
             <div className="text-xs text-muted-foreground">Contagem</div>
-            <div className="text-lg font-mono font-extrabold text-primary">{formatarTempo(tempoRestante)}</div>
+            <div className="text-lg font-mono font-extrabold text-primary">
+              {formatarTempo(tempoRestante)}
+            </div>
           </div>
         </div>
       </div>
@@ -186,11 +216,14 @@ export function SalaEspera({ onEnter }: { onEnter: () => void }) {
               <div className="flex items-center gap-2 bg-black/60 backdrop-blur px-3 py-1.5 rounded-full text-xs text-white border border-white/10">
                 <Volume2 className="w-3.5 h-3.5 text-emerald-400" />
                 <span>Nível de voz:</span>
-                <div className="w-16 h-1.5 rounded-full bg-white/20 overflow-hidden">
-                  <div
-                    className="h-full bg-emerald-400 transition-all duration-75"
-                    style={{ width: `${nivelAudio}%` }}
-                  />
+                <div className="flex items-end gap-[3px] h-4">
+                  {barrasAudio.map((v, i) => (
+                    <div
+                      key={i}
+                      className="w-1 rounded-full bg-emerald-400 transition-all duration-75"
+                      style={{ height: `${Math.max(15, v)}%` }}
+                    />
+                  ))}
                 </div>
               </div>
 
@@ -198,7 +231,9 @@ export function SalaEspera({ onEnter }: { onEnter: () => void }) {
                 <button
                   onClick={toggleCam}
                   className={`w-10 h-10 rounded-full flex items-center justify-center transition border ${
-                    camAtiva ? "bg-white/20 hover:bg-white/30 border-white/20 text-white" : "bg-red-500 hover:bg-red-600 border-transparent text-white"
+                    camAtiva
+                      ? "bg-white/20 hover:bg-white/30 border-white/20 text-white"
+                      : "bg-red-500 hover:bg-red-600 border-transparent text-white"
                   }`}
                   title={camAtiva ? "Desativar Câmera" : "Ativar Câmera"}
                 >
@@ -207,7 +242,9 @@ export function SalaEspera({ onEnter }: { onEnter: () => void }) {
                 <button
                   onClick={toggleMic}
                   className={`w-10 h-10 rounded-full flex items-center justify-center transition border ${
-                    micAtivo ? "bg-white/20 hover:bg-white/30 border-white/20 text-white" : "bg-red-500 hover:bg-red-600 border-transparent text-white"
+                    micAtivo
+                      ? "bg-white/20 hover:bg-white/30 border-white/20 text-white"
+                      : "bg-red-500 hover:bg-red-600 border-transparent text-white"
                   }`}
                   title={micAtivo ? "Desativar Microfone" : "Ativar Microfone"}
                 >
@@ -225,7 +262,9 @@ export function SalaEspera({ onEnter }: { onEnter: () => void }) {
               </div>
               <div className="flex-1 min-w-0">
                 <div className="text-xs text-muted-foreground">Vídeo</div>
-                <div className="text-sm font-semibold truncate">{camAtiva ? "Pronto" : "Desligado"}</div>
+                <div className="text-sm font-semibold truncate">
+                  {camAtiva ? "Pronto" : "Desligado"}
+                </div>
               </div>
               <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
             </div>
@@ -236,7 +275,9 @@ export function SalaEspera({ onEnter }: { onEnter: () => void }) {
               </div>
               <div className="flex-1 min-w-0">
                 <div className="text-xs text-muted-foreground">Microfone</div>
-                <div className="text-sm font-semibold truncate">{micAtivo ? "Captando" : "Mudo"}</div>
+                <div className="text-sm font-semibold truncate">
+                  {micAtivo ? "Captando" : "Mudo"}
+                </div>
               </div>
               <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
             </div>
@@ -265,19 +306,31 @@ export function SalaEspera({ onEnter }: { onEnter: () => void }) {
           <div className="bg-card border rounded-3xl p-6 shadow-sm space-y-5">
             <div className="flex items-start gap-4">
               <div className="w-16 h-16 rounded-2xl bg-primary text-primary-foreground flex items-center justify-center text-2xl font-bold shrink-0 shadow-sm">
-                {medicoInfo?.nome.split(" ").slice(-2).map((w) => w[0]).join("") ?? "DR"}
+                {medicoInfo?.nome
+                  .split(" ")
+                  .slice(-2)
+                  .map((w) => w[0])
+                  .join("") ?? "DR"}
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-accent-soft" style={{ color: "var(--accent)" }}>
+                  <span
+                    className="text-xs font-semibold px-2 py-0.5 rounded-full bg-accent-soft"
+                    style={{ color: "var(--accent)" }}
+                  >
                     Médico Online
                   </span>
                   <span className="flex items-center text-xs font-bold text-amber-500 gap-0.5">
                     <Star className="w-3 h-3 fill-amber-500" /> {medicoInfo?.avaliacao ?? 4.9}
                   </span>
                 </div>
-                <h3 className="text-lg font-bold text-foreground mt-1 truncate">{proximaConsulta?.medico ?? "Dra. Ana Ribeiro"}</h3>
-                <p className="text-sm text-muted-foreground">{proximaConsulta?.especialidade ?? "Clínica Geral"} • {medicoInfo?.crm ?? "CRM 12345 SP"}</p>
+                <h3 className="text-lg font-bold text-foreground mt-1 truncate">
+                  {proximaConsulta?.medico ?? "Dra. Ana Ribeiro"}
+                </h3>
+                <p className="text-sm text-muted-foreground">
+                  {proximaConsulta?.especialidade ?? "Clínica Geral"} •{" "}
+                  {medicoInfo?.crm ?? "CRM 12345 SP"}
+                </p>
               </div>
             </div>
 
@@ -292,7 +345,9 @@ export function SalaEspera({ onEnter }: { onEnter: () => void }) {
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Horário</span>
-                <span className="font-semibold">{proximaConsulta?.data}, {proximaConsulta?.hora}</span>
+                <span className="font-semibold">
+                  {proximaConsulta?.data}, {proximaConsulta?.hora}
+                </span>
               </div>
             </div>
 
@@ -317,7 +372,17 @@ export function SalaEspera({ onEnter }: { onEnter: () => void }) {
             </div>
 
             <button
-              onClick={onEnter}
+              onClick={() => {
+                registrarAudit({
+                  acao: "CONSULTA_INICIADA",
+                  categoria: "consulta",
+                  severidade: "info",
+                  entidade: "consulta",
+                  entidadeId: proximaConsulta?.id,
+                  detalhes: `Entrada na sala de consulta com ${medicoNome}`,
+                });
+                onEnter();
+              }}
               className="w-full py-4 rounded-2xl text-primary-foreground font-bold text-base shadow-lg shadow-emerald-500/20 hover:opacity-95 active:scale-[0.99] transition flex items-center justify-center gap-2"
               style={{ backgroundColor: "var(--accent)" }}
             >
@@ -325,7 +390,8 @@ export function SalaEspera({ onEnter }: { onEnter: () => void }) {
             </button>
 
             <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground text-center">
-              <ShieldCheck className="w-4 h-4 text-primary" /> Atendimento protegido por criptografia de ponta a ponta
+              <ShieldCheck className="w-4 h-4 text-primary" /> Atendimento protegido por
+              criptografia de ponta a ponta
             </div>
           </div>
         </div>

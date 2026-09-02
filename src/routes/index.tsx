@@ -1,11 +1,47 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 import {
-  Activity, Calendar, Video, FileText, MessageSquare, User, Bell, Search,
-  Stethoscope, Shield, Clock, ChevronRight, Plus, Users, TrendingUp,
-  Wifi, Mic, Camera, MonitorUp, Paperclip, PhoneOff, Pill, ClipboardList,
-  Star, Award, Globe, ArrowRight, Check, Heart, Sparkles, LogOut, Home,
-  FolderHeart, Menu, LifeBuoy, Bot, AlertCircle, Trash2, ArrowUpRight
+  Activity,
+  Calendar,
+  Video,
+  FileText,
+  MessageSquare,
+  User,
+  Bell,
+  Search,
+  Stethoscope,
+  Shield,
+  Clock,
+  ChevronRight,
+  Plus,
+  Users,
+  TrendingUp,
+  Wifi,
+  Mic,
+  Camera,
+  MonitorUp,
+  Paperclip,
+  PhoneOff,
+  Pill,
+  ClipboardList,
+  Star,
+  Award,
+  Globe,
+  ArrowRight,
+  Check,
+  Heart,
+  Sparkles,
+  LogOut,
+  Home,
+  FolderHeart,
+  Menu,
+  LifeBuoy,
+  Bot,
+  AlertCircle,
+  Trash2,
+  ArrowUpRight,
+  FileSearch,
 } from "lucide-react";
 import { BionProvider, useBion, type Sessao } from "@/lib/bion-store";
 import { Consulta } from "@/components/bion/Consulta";
@@ -24,6 +60,8 @@ import { Usuarios } from "@/components/bion/Usuarios";
 import { Receitas } from "@/components/bion/Receitas";
 import { Prontuario } from "@/components/bion/Prontuario";
 import { Relatorios } from "@/components/bion/Relatorios";
+import { HistoricoClinico } from "@/components/bion/HistoricoClinico";
+import { AuditTrail } from "@/components/bion/AuditTrail";
 
 export const Route = createFileRoute("/")({ component: BionApp });
 
@@ -48,7 +86,8 @@ type View =
   | "relatorios"
   | "suporte"
   | "bion-ia"
-  | "avaliacoes";
+  | "avaliacoes"
+  | "auditoria";
 
 function BionApp() {
   return (
@@ -77,12 +116,7 @@ function BionRoot() {
   if (view === "login") return <Login onLogin={handleLogin} />;
 
   return (
-    <Shell
-      role={sessao.role}
-      view={view}
-      setView={setView}
-      onLogout={() => setView("landing")}
-    >
+    <Shell role={sessao.role} view={view} setView={setView} onLogout={() => setView("landing")}>
       {view === "dashboard" && sessao.role === "paciente" && <PacienteDashboard go={setView} />}
       {view === "dashboard" && sessao.role === "medico" && <MedicoDashboard go={setView} />}
       {view === "dashboard" && sessao.role === "admin" && <AdminDashboard go={setView} />}
@@ -105,7 +139,9 @@ function BionRoot() {
         />
       )}
       {view === "notificacoes" && <Notificacoes />}
-      {view === "consultas" && <MinhasConsultas perfil={sessao.role === "medico" ? "medico" : "paciente"} />}
+      {view === "consultas" && (
+        <MinhasConsultas perfil={sessao.role === "medico" ? "medico" : "paciente"} />
+      )}
       {view === "medico-perfil" && <MedicoPerfilView />}
       {view === "paciente-perfil" && <PacientePerfilView />}
       {view === "historico" && <Historico />}
@@ -113,11 +149,14 @@ function BionRoot() {
       {view === "lembretes" && <Lembretes />}
       {view === "usuarios" && <Usuarios />}
       {view === "prontuario" && <Prontuario />}
-      {view === "receitas" && <Receitas perfil={sessao.role === "medico" ? "medico" : "paciente"} />}
+      {view === "receitas" && (
+        <Receitas perfil={sessao.role === "medico" ? "medico" : "paciente"} />
+      )}
       {view === "relatorios" && <Relatorios />}
       {view === "suporte" && <ChamadosSuporte />}
       {view === "bion-ia" && <BionIA />}
       {view === "avaliacoes" && <MinhasAvaliacoes />}
+      {view === "auditoria" && <AuditTrail />}
 
       {posConsultaModalAberto && (
         <PosConsultaModal
@@ -137,7 +176,9 @@ function Logo({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
   return (
     <div className={`font-extrabold tracking-tight ${sizes[size]} flex items-center gap-2.5`}>
       <div className="relative shrink-0">
-        <div className={`${iconSizes[size]} rounded-2xl bg-primary flex items-center justify-center shadow-md`}>
+        <div
+          className={`${iconSizes[size]} rounded-2xl bg-primary flex items-center justify-center shadow-md`}
+        >
           <Heart className="w-4 h-4 text-primary-foreground fill-primary-foreground" />
         </div>
         <div className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-accent border-2 border-background" />
@@ -173,7 +214,9 @@ function Landing({ onEnter }: { onEnter: () => void }) {
           <div className="space-y-6">
             <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-accent-soft text-accent text-xs font-bold">
               <Sparkles className="w-4 h-4" style={{ color: "var(--accent)" }} />
-              <span style={{ color: "var(--accent)" }}>A telemedicina mais simples e humanizada do Brasil</span>
+              <span style={{ color: "var(--accent)" }}>
+                A telemedicina mais simples e humanizada do Brasil
+              </span>
             </div>
 
             <h1 className="text-4xl md:text-6xl font-black tracking-tight leading-[1.08]">
@@ -181,7 +224,8 @@ function Landing({ onEnter }: { onEnter: () => void }) {
             </h1>
 
             <p className="text-base md:text-lg text-muted-foreground max-w-lg leading-relaxed">
-              Marque consultas, converse com médicos especialistas em vídeo HD e receba receitas, exames e atestados assinados digitalmente sem sair de casa.
+              Marque consultas, converse com médicos especialistas em vídeo HD e receba receitas,
+              exames e atestados assinados digitalmente sem sair de casa.
             </p>
 
             <div className="flex flex-wrap gap-3 pt-2">
@@ -200,9 +244,15 @@ function Landing({ onEnter }: { onEnter: () => void }) {
             </div>
 
             <div className="pt-6 border-t flex items-center gap-6 text-xs text-muted-foreground font-medium flex-wrap">
-              <div className="flex items-center gap-1.5"><Shield className="w-4 h-4 text-primary" /> 100% LGPD & CFM</div>
-              <div className="flex items-center gap-1.5"><Check className="w-4 h-4 text-emerald-500" /> Assinatura ICP-Brasil</div>
-              <div className="flex items-center gap-1.5"><Star className="w-4 h-4 text-amber-500 fill-amber-500" /> 4.9/5 de Avaliação</div>
+              <div className="flex items-center gap-1.5">
+                <Shield className="w-4 h-4 text-primary" /> 100% LGPD & CFM
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Check className="w-4 h-4 text-emerald-500" /> Assinatura ICP-Brasil
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Star className="w-4 h-4 text-amber-500 fill-amber-500" /> 4.9/5 de Avaliação
+              </div>
             </div>
           </div>
 
@@ -223,7 +273,9 @@ function Landing({ onEnter }: { onEnter: () => void }) {
               </div>
 
               <div className="bg-muted/60 p-4 rounded-2xl space-y-2 text-xs">
-                <div className="text-muted-foreground font-medium">Próximo horário para consulta:</div>
+                <div className="text-muted-foreground font-medium">
+                  Próximo horário para consulta:
+                </div>
                 <div className="text-2xl font-extrabold text-primary">Hoje, às 14:30</div>
                 <div className="text-muted-foreground flex items-center gap-1">
                   <Clock className="w-3.5 h-3.5" /> Duração média: 30 minutos
@@ -245,11 +297,26 @@ function Landing({ onEnter }: { onEnter: () => void }) {
       {/* 3 Pilares */}
       <section className="max-w-6xl mx-auto w-full px-6 pb-16 grid md:grid-cols-3 gap-6">
         {[
-          { icon: Calendar, t: "Agendamento em 1 Minuto", d: "Escolha especialidade, médico e pague com Pix instantâneo." },
-          { icon: Video, t: "Videoconsulta em HD", d: "Sala com testes de câmera, microfone e sem instalar nada." },
-          { icon: FileText, t: "Documentos com Validade", d: "Receitas e atestados aceitos em qualquer farmácia ou empresa." },
+          {
+            icon: Calendar,
+            t: "Agendamento em 1 Minuto",
+            d: "Escolha especialidade, médico e pague com Pix instantâneo.",
+          },
+          {
+            icon: Video,
+            t: "Videoconsulta em HD",
+            d: "Sala com testes de câmera, microfone e sem instalar nada.",
+          },
+          {
+            icon: FileText,
+            t: "Documentos com Validade",
+            d: "Receitas e atestados aceitos em qualquer farmácia ou empresa.",
+          },
         ].map((f, i) => (
-          <div key={i} className="p-6 rounded-3xl border bg-card hover:shadow-md transition space-y-3">
+          <div
+            key={i}
+            className="p-6 rounded-3xl border bg-card hover:shadow-md transition space-y-3"
+          >
             <div className="w-12 h-12 rounded-2xl bg-primary-soft flex items-center justify-center text-primary">
               <f.icon className="w-6 h-6" />
             </div>
@@ -294,7 +361,9 @@ function Login({ onLogin }: { onLogin: (r: Role) => void }) {
                 key={r}
                 onClick={() => trocarAba(r)}
                 className={`py-2 rounded-xl text-xs font-bold capitalize transition ${
-                  tab === r ? "bg-card shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
+                  tab === r
+                    ? "bg-card shadow-sm text-foreground"
+                    : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 {r === "medico" ? "Médico" : r === "admin" ? "Admin" : "Paciente"}
@@ -304,7 +373,9 @@ function Login({ onLogin }: { onLogin: (r: Role) => void }) {
 
           <div className="space-y-3">
             <div>
-              <label className="text-[11px] font-bold text-muted-foreground block mb-1">E-mail, CPF ou CRM</label>
+              <label className="text-[11px] font-bold text-muted-foreground block mb-1">
+                E-mail, CPF ou CRM
+              </label>
               <input
                 value={identificador}
                 onChange={(e) => setIdentificador(e.target.value)}
@@ -313,7 +384,9 @@ function Login({ onLogin }: { onLogin: (r: Role) => void }) {
               />
             </div>
             <div>
-              <label className="text-[11px] font-bold text-muted-foreground block mb-1">Senha de Acesso</label>
+              <label className="text-[11px] font-bold text-muted-foreground block mb-1">
+                Senha de Acesso
+              </label>
               <input
                 type="password"
                 value={senha}
@@ -328,16 +401,20 @@ function Login({ onLogin }: { onLogin: (r: Role) => void }) {
             onClick={() => onLogin(tab)}
             className="w-full py-4 rounded-2xl bg-primary text-primary-foreground font-bold text-sm shadow-md hover:opacity-90 transition active:scale-[0.99]"
           >
-            Entrar como {tab === "medico" ? "Médico" : tab === "admin" ? "Administrador" : "Paciente"}
+            Entrar como{" "}
+            {tab === "medico" ? "Médico" : tab === "admin" ? "Administrador" : "Paciente"}
           </button>
 
           <div className="flex items-center justify-between text-xs text-muted-foreground pt-1">
-            <button className="hover:text-primary transition font-medium">Esqueci minha senha</button>
+            <button className="hover:text-primary transition font-medium">
+              Esqueci minha senha
+            </button>
             <button className="hover:text-primary transition font-medium">Criar nova conta</button>
           </div>
 
           <div className="pt-4 border-t flex items-center justify-center gap-1.5 text-xs text-muted-foreground text-center">
-            <Shield className="w-3.5 h-3.5 text-primary" /> Acesso autenticado com criptografia de ponta a ponta
+            <Shield className="w-3.5 h-3.5 text-primary" /> Acesso autenticado com criptografia de
+            ponta a ponta
           </div>
         </div>
       </div>
@@ -361,7 +438,10 @@ function Shell({
 }) {
   const { sessao, setSessao } = useBion();
 
-  const menus: Record<Role, { icon: any; label: string; view: View }[]> = {
+  const menus: Record<
+    Role,
+    { icon: React.ComponentType<{ className?: string }>; label: string; view: View }[]
+  > = {
     paciente: [
       { icon: Home, label: "Início", view: "dashboard" },
       { icon: Calendar, label: "Agendar", view: "agendar" },
@@ -391,6 +471,7 @@ function Shell({
       { icon: Home, label: "Painel Geral", view: "dashboard" },
       { icon: Users, label: "Usuários & CRM", view: "usuarios" },
       { icon: TrendingUp, label: "Relatórios & PDF", view: "relatorios" },
+      { icon: FileSearch, label: "Auditoria", view: "auditoria" },
       { icon: LifeBuoy, label: "Chamados Suporte", view: "suporte" },
       { icon: Bell, label: "Lembretes", view: "lembretes" },
     ],
@@ -439,7 +520,11 @@ function Shell({
         <div className="p-3 border-t">
           <div className="flex items-center gap-3 p-2 rounded-2xl bg-muted/60">
             <div className="w-9 h-9 rounded-xl bg-primary text-primary-foreground flex items-center justify-center font-bold text-xs shadow-sm">
-              {sessao.nome.split(" ").slice(-2).map((w) => w[0]).join("")}
+              {sessao.nome
+                .split(" ")
+                .slice(-2)
+                .map((w) => w[0])
+                .join("")}
             </div>
             <div className="flex-1 min-w-0">
               <div className="text-xs font-bold truncate">{sessao.nome}</div>
@@ -497,9 +582,7 @@ function Shell({
         </header>
 
         {/* Conteúdo da Página */}
-        <div className="p-4 md:p-8 pb-28 md:pb-12 max-w-6xl w-full mx-auto flex-1">
-          {children}
-        </div>
+        <div className="p-4 md:p-8 pb-28 md:pb-12 max-w-6xl w-full mx-auto flex-1">{children}</div>
       </main>
 
       {/* Navegação Mobile Inferior */}
@@ -564,17 +647,69 @@ function MinhasConsultas({ perfil }: { perfil: "paciente" | "medico" }) {
 }
 
 /* ---------- Paciente Dashboard ---------- */
+function ContagemRegressiva({ alvo }: { alvo: number }) {
+  const calcRestante = (a: number) => a - Date.now();
+  const [restante, setRestante] = useState(() => Math.max(0, calcRestante(alvo)));
+
+  useEffect(() => {
+    const i = setInterval(() => setRestante(calcRestante(alvo)), 1000);
+    return () => clearInterval(i);
+  }, [alvo]);
+
+  if (restante <= 0) {
+    return (
+      <span className="font-extrabold text-sm px-3 py-1.5 rounded-xl bg-emerald-400 text-emerald-950">
+        A consulta já começou!
+      </span>
+    );
+  }
+
+  const totalSeg = Math.floor(restante / 1000);
+  const d = Math.floor(totalSeg / 86400);
+  const h = Math.floor((totalSeg % 86400) / 3600);
+  const m = Math.floor((totalSeg % 3600) / 60);
+  const s = totalSeg % 60;
+
+  const bloco = (v: number, r: string) => (
+    <div className="flex flex-col items-center min-w-[52px]">
+      <div className="text-2xl font-extrabold tabular-nums leading-none">
+        {String(v).padStart(2, "0")}
+      </div>
+      <div className="text-[9px] font-bold uppercase tracking-wider opacity-75 mt-1">{r}</div>
+    </div>
+  );
+
+  return (
+    <div className="flex items-center gap-2">
+      {d > 0 && (
+        <>
+          {bloco(d, d === 1 ? "dia" : "dias")}
+          <div className="text-xl font-thin opacity-60 pb-3">:</div>
+        </>
+      )}
+      {bloco(h, "horas")}
+      <div className="text-xl font-thin opacity-60 pb-3">:</div>
+      {bloco(m, "min")}
+      <div className="text-xl font-thin opacity-60 pb-3">:</div>
+      {bloco(s, "seg")}
+    </div>
+  );
+}
+
 function PacienteDashboard({ go }: { go: (v: View) => void }) {
-  const { consultas, documentos, lembretes, alternarLembrete } = useBion();
+  const { sessao, consultas, documentos, lembretes, alternarLembrete } = useBion();
   const proxima = consultas.find((c) => c.status === "confirmada") ?? consultas[0];
   const totalReceitas = documentos.filter((d) => d.tipo === "receita").length;
   const totalAtestados = documentos.filter((d) => d.tipo === "atestado").length;
+  const primeiroNome = sessao.nome.split(" ")[0];
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-extrabold tracking-tight">Olá, Marina 👋</h1>
-        <p className="text-muted-foreground mt-1">Como está sua saúde hoje? Veja sua agenda e cuidados ativos.</p>
+        <h1 className="text-3xl font-extrabold tracking-tight">Olá, {primeiroNome} 👋</h1>
+        <p className="text-muted-foreground mt-1">
+          Como está sua saúde hoje? Veja sua agenda e cuidados ativos.
+        </p>
       </div>
 
       {/* Card da Próxima Consulta */}
@@ -591,8 +726,11 @@ function PacienteDashboard({ go }: { go: (v: View) => void }) {
               <div className="text-sm font-medium opacity-90">
                 {proxima.especialidade} • {proxima.data}, às {proxima.hora}
               </div>
-              <div className="flex items-center gap-2 text-xs font-semibold opacity-90 pt-1">
-                <Clock className="w-4 h-4" /> Sala de espera liberada para testes
+              <div className="flex flex-col gap-2 pt-1">
+                <div className="text-[10px] font-bold uppercase tracking-wider opacity-80 flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5" /> Início da consulta em
+                </div>
+                <ContagemRegressiva alvo={proxima.ts} />
               </div>
             </div>
 
@@ -621,7 +759,9 @@ function PacienteDashboard({ go }: { go: (v: View) => void }) {
             <Plus className="w-6 h-6" style={{ color: "var(--accent)" }} />
           </div>
           <div className="font-extrabold text-lg text-foreground">Agendar Consulta</div>
-          <div className="text-xs text-muted-foreground mt-1">Especialistas com atendimento no mesmo dia</div>
+          <div className="text-xs text-muted-foreground mt-1">
+            Especialistas com atendimento no mesmo dia
+          </div>
         </button>
 
         <button
@@ -632,7 +772,9 @@ function PacienteDashboard({ go }: { go: (v: View) => void }) {
             <Bot className="w-6 h-6" />
           </div>
           <div className="font-extrabold text-lg text-foreground">BION Saúde IA</div>
-          <div className="text-xs text-muted-foreground mt-1">Tire dúvidas de receitas e preparo de exames</div>
+          <div className="text-xs text-muted-foreground mt-1">
+            Tire dúvidas de receitas e preparo de exames
+          </div>
         </button>
 
         <button
@@ -643,7 +785,9 @@ function PacienteDashboard({ go }: { go: (v: View) => void }) {
             <Pill className="w-6 h-6" />
           </div>
           <div className="font-extrabold text-lg text-foreground">Receitas & Atestados</div>
-          <div className="text-xs text-muted-foreground mt-1">{totalReceitas} receitas e {totalAtestados} atestados assinados</div>
+          <div className="text-xs text-muted-foreground mt-1">
+            {totalReceitas} receitas e {totalAtestados} atestados assinados
+          </div>
         </button>
       </div>
 
@@ -654,7 +798,10 @@ function PacienteDashboard({ go }: { go: (v: View) => void }) {
             <div className="font-extrabold text-base text-foreground flex items-center gap-2">
               <Pill className="w-4 h-4 text-primary" /> Lembretes de Medicação
             </div>
-            <button onClick={() => go("lembretes")} className="text-xs font-bold text-primary hover:underline">
+            <button
+              onClick={() => go("lembretes")}
+              className="text-xs font-bold text-primary hover:underline"
+            >
               Ver todos
             </button>
           </div>
@@ -668,7 +815,9 @@ function PacienteDashboard({ go }: { go: (v: View) => void }) {
                 }`}
               >
                 <div className="min-w-0">
-                  <div className={`font-bold text-xs ${l.feito ? "line-through" : ""}`}>{l.titulo}</div>
+                  <div className={`font-bold text-xs ${l.feito ? "line-through" : ""}`}>
+                    {l.titulo}
+                  </div>
                   <div className="text-[11px] text-muted-foreground mt-0.5">
                     {l.horario} • {l.frequencia}
                   </div>
@@ -692,17 +841,25 @@ function PacienteDashboard({ go }: { go: (v: View) => void }) {
             <div className="font-extrabold text-base text-foreground flex items-center gap-2">
               <Clock className="w-4 h-4 text-primary" /> Consultas Recentes
             </div>
-            <button onClick={() => go("consultas")} className="text-xs font-bold text-primary hover:underline">
+            <button
+              onClick={() => go("consultas")}
+              className="text-xs font-bold text-primary hover:underline"
+            >
               Histórico completo
             </button>
           </div>
 
           <div className="space-y-2.5">
             {consultas.slice(0, 3).map((c) => (
-              <div key={c.id} className="p-3 rounded-2xl bg-muted/50 border flex items-center justify-between gap-3 text-xs">
+              <div
+                key={c.id}
+                className="p-3 rounded-2xl bg-muted/50 border flex items-center justify-between gap-3 text-xs"
+              >
                 <div>
                   <div className="font-bold text-foreground">{c.medico}</div>
-                  <div className="text-muted-foreground">{c.especialidade} • {c.data}, {c.hora}</div>
+                  <div className="text-muted-foreground">
+                    {c.especialidade} • {c.data}, {c.hora}
+                  </div>
                 </div>
                 <span className="px-2.5 py-1 rounded-full text-[11px] font-bold capitalize bg-accent-soft text-emerald-700">
                   {c.status}
@@ -718,18 +875,34 @@ function PacienteDashboard({ go }: { go: (v: View) => void }) {
 
 /* ---------- Médico Dashboard ---------- */
 function MedicoDashboard({ go }: { go: (v: View) => void }) {
-  const { consultas, avaliacoes } = useBion();
+  const { sessao, consultas, avaliacoes } = useBion();
   const consultasHoje = consultas.filter((c) => c.data === "Hoje");
   const mediaNotas = avaliacoes.length
     ? (avaliacoes.reduce((s, a) => s + a.nota, 0) / avaliacoes.length).toFixed(1)
     : "4.9";
 
+  const faturamentoMes = useMemo(() => {
+    const umMesAtras = Date.now() - 30 * 86400000;
+    const total = consultas
+      .filter((c) => c.ts >= umMesAtras && c.status === "concluida")
+      .reduce((s, c) => s + (Number((c.valor ?? "").replace(/\D/g, "")) || 0), 0);
+    const base = 18000;
+    return `R$ ${(base + total).toLocaleString("pt-BR")}`;
+  }, [consultas]);
+
+  const pacientesUnicos = useMemo(
+    () => 140 + new Set(consultas.map((c) => c.paciente)).size,
+    [consultas],
+  );
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-extrabold tracking-tight">Bom dia, Dra. Ana Ribeiro 🩺</h1>
-          <p className="text-muted-foreground mt-1">Sua agenda de teleatendimentos está sincronizada para hoje.</p>
+          <h1 className="text-3xl font-extrabold tracking-tight">Bom dia, {sessao.nome} 🩺</h1>
+          <p className="text-muted-foreground mt-1">
+            Sua agenda de teleatendimentos está sincronizada para hoje.
+          </p>
         </div>
         <button
           onClick={() => go("consulta")}
@@ -754,7 +927,7 @@ function MedicoDashboard({ go }: { go: (v: View) => void }) {
           <div className="w-10 h-10 rounded-2xl bg-accent-soft flex items-center justify-center text-emerald-700 mb-3">
             <Users className="w-5 h-5" />
           </div>
-          <div className="text-2xl font-extrabold">142</div>
+          <div className="text-2xl font-extrabold">{pacientesUnicos}</div>
           <div className="text-xs text-muted-foreground mt-0.5">Pacientes atendidos</div>
         </div>
 
@@ -762,7 +935,7 @@ function MedicoDashboard({ go }: { go: (v: View) => void }) {
           <div className="w-10 h-10 rounded-2xl bg-primary-soft flex items-center justify-center text-primary mb-3">
             <TrendingUp className="w-5 h-5" />
           </div>
-          <div className="text-2xl font-extrabold">R$ 21.300</div>
+          <div className="text-2xl font-extrabold">{faturamentoMes}</div>
           <div className="text-xs text-muted-foreground mt-0.5">Faturamento do mês</div>
         </div>
 
@@ -780,7 +953,9 @@ function MedicoDashboard({ go }: { go: (v: View) => void }) {
         <div className="lg:col-span-8 space-y-6">
           <div className="bg-card border rounded-3xl p-6 shadow-sm space-y-4">
             <div className="flex items-center justify-between">
-              <div className="font-extrabold text-base text-foreground">Próximo Paciente em Espera</div>
+              <div className="font-extrabold text-base text-foreground">
+                Próximo Paciente em Espera
+              </div>
               <span className="text-xs font-bold px-3 py-1 rounded-full bg-accent-soft text-emerald-700">
                 Na Sala Virtual
               </span>
@@ -794,7 +969,9 @@ function MedicoDashboard({ go }: { go: (v: View) => void }) {
                 <div>
                   <h3 className="font-bold text-base">Marina Silva</h3>
                   <p className="text-xs text-muted-foreground">32 anos • Teleconsulta de Retorno</p>
-                  <p className="text-xs text-primary font-medium mt-0.5">Motivo: Revisão de exames e pressão</p>
+                  <p className="text-xs text-primary font-medium mt-0.5">
+                    Motivo: Revisão de exames e pressão
+                  </p>
                 </div>
               </div>
 
@@ -810,7 +987,10 @@ function MedicoDashboard({ go }: { go: (v: View) => void }) {
           <div className="bg-card border rounded-3xl p-6 shadow-sm space-y-4">
             <div className="flex items-center justify-between">
               <div className="font-extrabold text-base text-foreground">Agenda do Dia</div>
-              <button onClick={() => go("consultas")} className="text-xs font-bold text-primary hover:underline">
+              <button
+                onClick={() => go("consultas")}
+                className="text-xs font-bold text-primary hover:underline"
+              >
                 Ver calendário
               </button>
             </div>
@@ -825,7 +1005,9 @@ function MedicoDashboard({ go }: { go: (v: View) => void }) {
                 <div
                   key={i}
                   className={`flex items-center justify-between p-3.5 rounded-2xl border text-xs ${
-                    a.now ? "bg-primary-soft border-primary/40 font-semibold text-primary" : "bg-card"
+                    a.now
+                      ? "bg-primary-soft border-primary/40 font-semibold text-primary"
+                      : "bg-card"
                   }`}
                 >
                   <div className="flex items-center gap-3">
@@ -892,17 +1074,20 @@ function MedicoDashboard({ go }: { go: (v: View) => void }) {
 
 /* ---------- Admin Dashboard ---------- */
 function AdminDashboard({ go }: { go: (v: View) => void }) {
-  const { medicos, tickets } = useBion();
+  const { medicos, tickets, auditLogs } = useBion();
   const medicosAtivos = medicos.filter((m) => m.status === "ativo").length;
   const medicosPendentes = medicos.filter((m) => m.status === "pendente").length;
   const ticketsAbertos = tickets.filter((t) => t.status !== "resolvido").length;
+  const eventos24h = auditLogs.filter((l) => Date.now() - l.ts < 86400000).length;
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-extrabold tracking-tight">Painel Administrativo BION 🛡️</h1>
-          <p className="text-muted-foreground mt-1">Visão geral em tempo real da operação, médicos e faturamento.</p>
+          <p className="text-muted-foreground mt-1">
+            Visão geral em tempo real da operação, médicos e faturamento.
+          </p>
         </div>
         <button
           onClick={() => go("relatorios")}
@@ -944,10 +1129,15 @@ function AdminDashboard({ go }: { go: (v: View) => void }) {
           <div className="text-[10px] text-amber-700 font-bold mt-0.5">Tempo méd: 6 min</div>
         </div>
 
-        <div className="bg-card border rounded-3xl p-4 shadow-sm">
-          <div className="text-xs text-muted-foreground font-medium">Satisfação Geral</div>
-          <div className="text-2xl font-extrabold text-amber-500 mt-1">4.9/5</div>
-          <div className="text-[10px] text-muted-foreground mt-0.5">NPS 94</div>
+        <div
+          className="bg-card border rounded-3xl p-4 shadow-sm cursor-pointer hover:border-primary transition"
+          onClick={() => go("auditoria")}
+        >
+          <div className="text-xs text-muted-foreground font-medium">Sat. Geral / Auditoria</div>
+          <div className="text-2xl font-extrabold text-foreground mt-1 text-primary">
+            {eventos24h}
+          </div>
+          <div className="text-[10px] text-muted-foreground mt-0.5">Eventos em 24h</div>
         </div>
       </div>
 
@@ -955,8 +1145,13 @@ function AdminDashboard({ go }: { go: (v: View) => void }) {
       <div className="grid md:grid-cols-2 gap-6">
         <div className="bg-card border rounded-3xl p-6 shadow-sm space-y-4">
           <div className="flex items-center justify-between">
-            <div className="font-extrabold text-base text-foreground">Distribuição por Especialidade</div>
-            <button onClick={() => go("relatorios")} className="text-xs font-bold text-primary hover:underline">
+            <div className="font-extrabold text-base text-foreground">
+              Distribuição por Especialidade
+            </div>
+            <button
+              onClick={() => go("relatorios")}
+              className="text-xs font-bold text-primary hover:underline"
+            >
               Detalhar
             </button>
           </div>
@@ -971,7 +1166,9 @@ function AdminDashboard({ go }: { go: (v: View) => void }) {
               <div key={i} className="space-y-1">
                 <div className="flex justify-between text-xs font-medium">
                   <span>{s.n}</span>
-                  <span className="text-muted-foreground">{s.v} ({s.p}%)</span>
+                  <span className="text-muted-foreground">
+                    {s.v} ({s.p}%)
+                  </span>
                 </div>
                 <div className="h-2 rounded-full bg-muted overflow-hidden">
                   <div className="h-full rounded-full bg-primary" style={{ width: `${s.p}%` }} />
@@ -1015,6 +1212,20 @@ function AdminDashboard({ go }: { go: (v: View) => void }) {
               </div>
               <ChevronRight className="w-5 h-5 text-muted-foreground" />
             </button>
+            <button
+              onClick={() => go("auditoria")}
+              className="w-full p-4 rounded-2xl bg-muted/60 hover:bg-muted border text-left transition flex items-center justify-between"
+            >
+              <div>
+                <div className="font-bold text-sm text-foreground flex items-center gap-2">
+                  <FileSearch className="w-4 h-4 text-primary" /> Trilha de Auditoria
+                </div>
+                <div className="text-xs text-muted-foreground mt-0.5">
+                  {eventos24h} eventos registrados nas últimas 24h.
+                </div>
+              </div>
+              <ChevronRight className="w-5 h-5 text-muted-foreground" />
+            </button>
           </div>
         </div>
       </div>
@@ -1025,14 +1236,8 @@ function AdminDashboard({ go }: { go: (v: View) => void }) {
 /* ---------- Histórico Unificado ---------- */
 function Historico() {
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-3xl font-extrabold tracking-tight">Histórico Clínico & Exames</h1>
-        <p className="text-muted-foreground mt-1">Todos os documentos, laudos e exames anexados ao longo do tempo.</p>
-      </div>
-      <div className="space-y-4">
-        <Arquivos perfil="paciente" />
-      </div>
+    <div className="max-w-5xl mx-auto space-y-6">
+      <HistoricoClinico />
     </div>
   );
 }
@@ -1040,9 +1245,30 @@ function Historico() {
 /* ---------- Mensagens entre Consultas ---------- */
 function Mensagens() {
   const conversas = [
-    { n: "Dra. Ana Ribeiro", e: "Clínica Geral", m: "Seus exames estão normais 🙂", h: "09:12", nao: 2, on: true },
-    { n: "Dr. Carlos Mendes", e: "Cardiologia", m: "Mantenha a medicação por 30 dias.", h: "Ontem", nao: 0, on: false },
-    { n: "Suporte BION", e: "Atendimento", m: "Como podemos ajudar você hoje?", h: "Seg", nao: 0, on: true },
+    {
+      n: "Dra. Ana Ribeiro",
+      e: "Clínica Geral",
+      m: "Seus exames estão normais 🙂",
+      h: "09:12",
+      nao: 2,
+      on: true,
+    },
+    {
+      n: "Dr. Carlos Mendes",
+      e: "Cardiologia",
+      m: "Mantenha a medicação por 30 dias.",
+      h: "Ontem",
+      nao: 0,
+      on: false,
+    },
+    {
+      n: "Suporte BION",
+      e: "Atendimento",
+      m: "Como podemos ajudar você hoje?",
+      h: "Seg",
+      nao: 0,
+      on: true,
+    },
   ];
   const [ativa, setAtiva] = useState(0);
   const [texto, setTexto] = useState("");
@@ -1050,13 +1276,21 @@ function Mensagens() {
     { eu: false, t: "Olá Marina! Recebi o resultado do seu hemograma.", h: "09:05" },
     { eu: false, t: "Está tudo dentro do esperado, sem alterações importantes.", h: "09:06" },
     { eu: true, t: "Que ótimo, muito obrigada doutora!", h: "09:10" },
-    { eu: false, t: "Seus exames estão normais 🙂 Lembre-se de tomar a medicação pela manhã.", h: "09:12" },
+    {
+      eu: false,
+      t: "Seus exames estão normais 🙂 Lembre-se de tomar a medicação pela manhã.",
+      h: "09:12",
+    },
   ]);
   const enviar = () => {
     if (!texto.trim()) return;
     setMsgs((m) => [
       ...m,
-      { eu: true, t: texto.trim(), h: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) },
+      {
+        eu: true,
+        t: texto.trim(),
+        h: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
+      },
     ]);
     setTexto("");
   };
@@ -1066,7 +1300,9 @@ function Mensagens() {
     <div className="max-w-4xl mx-auto space-y-6">
       <div>
         <h1 className="text-3xl font-extrabold tracking-tight">Mensagens & Orientações</h1>
-        <p className="text-muted-foreground mt-1">Fale diretamente com seu médico especialista entre as consultas.</p>
+        <p className="text-muted-foreground mt-1">
+          Fale diretamente com seu médico especialista entre as consultas.
+        </p>
       </div>
 
       <div className="grid md:grid-cols-[280px_1fr] gap-4 min-w-0">
@@ -1116,7 +1352,9 @@ function Mensagens() {
             </div>
             <div>
               <div className="text-xs font-bold">{c.n}</div>
-              <div className="text-[11px] text-muted-foreground">{c.e} • {c.on ? "Online" : "Offline"}</div>
+              <div className="text-[11px] text-muted-foreground">
+                {c.e} • {c.on ? "Online" : "Offline"}
+              </div>
             </div>
           </div>
 
@@ -1125,11 +1363,15 @@ function Mensagens() {
               <div key={i} className={`flex ${m.eu ? "justify-end" : "justify-start"}`}>
                 <div
                   className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-xs shadow-xs ${
-                    m.eu ? "bg-primary text-primary-foreground rounded-tr-xs" : "bg-muted text-foreground rounded-tl-xs"
+                    m.eu
+                      ? "bg-primary text-primary-foreground rounded-tr-xs"
+                      : "bg-muted text-foreground rounded-tl-xs"
                   }`}
                 >
                   <p className="leading-relaxed">{m.t}</p>
-                  <div className={`text-[10px] mt-1 text-right ${m.eu ? "opacity-75" : "text-muted-foreground"}`}>
+                  <div
+                    className={`text-[10px] mt-1 text-right ${m.eu ? "opacity-75" : "text-muted-foreground"}`}
+                  >
                     {m.h}
                   </div>
                 </div>
@@ -1178,6 +1420,9 @@ function Lembretes() {
       tipo,
       frequencia,
     });
+    toast.success("Lembrete criado", {
+      description: `"${titulo.trim()}" às ${horario} • ${frequencia}`,
+    });
     setTitulo("");
     setModalNovo(false);
   };
@@ -1190,7 +1435,8 @@ function Lembretes() {
         <div>
           <h1 className="text-3xl font-extrabold tracking-tight">Lembretes & Alarmes de Saúde</h1>
           <p className="text-muted-foreground mt-1">
-            {pendentes} lembrete{pendentes === 1 ? "" : "s"} pendente{pendentes === 1 ? "" : "s"} para hoje
+            {pendentes} lembrete{pendentes === 1 ? "" : "s"} pendente{pendentes === 1 ? "" : "s"}{" "}
+            para hoje
           </p>
         </div>
         <button
@@ -1215,10 +1461,14 @@ function Lembretes() {
             </div>
 
             <div className="flex-1 min-w-0">
-              <div className={`font-bold text-sm text-foreground ${l.feito ? "line-through" : ""}`}>{l.titulo}</div>
+              <div className={`font-bold text-sm text-foreground ${l.feito ? "line-through" : ""}`}>
+                {l.titulo}
+              </div>
               <div className="text-xs text-muted-foreground flex items-center gap-2 mt-0.5">
                 <Clock className="w-3.5 h-3.5" /> {l.horario} • {l.frequencia}
-                <span className="px-2 py-0.5 rounded-lg bg-muted text-[10px] font-bold">{l.tipo}</span>
+                <span className="px-2 py-0.5 rounded-lg bg-muted text-[10px] font-bold">
+                  {l.tipo}
+                </span>
               </div>
             </div>
 
@@ -1226,14 +1476,19 @@ function Lembretes() {
               <button
                 onClick={() => alternarLembrete(l.id)}
                 className={`w-9 h-9 rounded-xl border flex items-center justify-center transition ${
-                  l.feito ? "bg-emerald-500 text-white border-transparent" : "border-border hover:border-primary"
+                  l.feito
+                    ? "bg-emerald-500 text-white border-transparent"
+                    : "border-border hover:border-primary"
                 }`}
                 title={l.feito ? "Marcar como pendente" : "Marcar como tomado/concluído"}
               >
                 <Check className="w-4 h-4" />
               </button>
               <button
-                onClick={() => removerLembrete(l.id)}
+                onClick={() => {
+                  removerLembrete(l.id);
+                  toast.info("Lembrete removido");
+                }}
                 className="p-2 rounded-xl text-muted-foreground hover:text-red-500 hover:bg-muted transition"
                 title="Excluir"
               >
@@ -1283,7 +1538,7 @@ function Lembretes() {
                   <label className="font-bold block mb-1">Tipo</label>
                   <select
                     value={tipo}
-                    onChange={(e) => setTipo(e.target.value as any)}
+                    onChange={(e) => setTipo(e.target.value as typeof tipo)}
                     className="w-full px-3 py-2 rounded-xl border bg-background"
                   >
                     <option value="Medicação">Medicação</option>

@@ -1,15 +1,43 @@
 import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 import {
-  Mic, MicOff, Camera, CameraOff, MonitorUp, Paperclip, PhoneOff, Clock, Wifi,
-  MessageSquare, FileText, Download, Upload, Pill, Award, Sparkles, Check,
-  Send, Bot, AlertCircle, X, Shield, Plus
+  Mic,
+  MicOff,
+  Camera,
+  CameraOff,
+  MonitorUp,
+  Paperclip,
+  PhoneOff,
+  Clock,
+  Wifi,
+  MessageSquare,
+  FileText,
+  Download,
+  Upload,
+  Pill,
+  Award,
+  Sparkles,
+  Check,
+  Send,
+  Bot,
+  AlertCircle,
+  X,
+  Shield,
+  Plus,
 } from "lucide-react";
 import { useBion as useStore, type Documento } from "@/lib/bion-store";
 
 type Role = "paciente" | "medico" | "admin";
 
 export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
-  const { arquivos, adicionarArquivo, emitirDocumento, concluirConsulta, consultas } = useStore();
+  const {
+    arquivos,
+    adicionarArquivo,
+    emitirDocumento,
+    concluirConsulta,
+    consultas,
+    registrarAudit,
+  } = useStore();
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -23,19 +51,24 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
 
   // Anotações médicas do prontuário
   const [anotacoes, setAnotacoes] = useState(
-    "Paciente em bom estado geral, lúcida e orientada. Relata controle adequado da pressão arterial com uso regular de Losartana 50mg. Queixa de cefaleia tensional leve ocasional."
+    "Paciente em bom estado geral, lúcida e orientada. Relata controle adequado da pressão arterial com uso regular de Losartana 50mg. Queixa de cefaleia tensional leve ocasional.",
   );
 
   // Chat na chamada
   const [chatMsgs, setChatMsgs] = useState([
     { de: "Dra. Ana Ribeiro", texto: "Olá Marina! Como você está hoje?", hora: "14:30" },
-    { de: "Marina Silva", texto: "Boa tarde doutora! Estou bem, vim para a revisão dos exames.", hora: "14:30" },
+    {
+      de: "Marina Silva",
+      texto: "Boa tarde doutora! Estou bem, vim para a revisão dos exames.",
+      hora: "14:30",
+    },
   ]);
   const [chatInput, setChatInput] = useState("");
 
   // Modais de Emissão
   const [modalReceita, setModalReceita] = useState(false);
   const [modalAtestado, setModalAtestado] = useState(false);
+  const [modalExame, setModalExame] = useState(false);
 
   // Form Receita
   const [recTitulo, setRecTitulo] = useState("Receita — Losartana 50mg");
@@ -47,13 +80,31 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
   // Form Atestado
   const [atestDias, setAtestDias] = useState("2");
   const [atestCid, setAtestCid] = useState("R51 (Cefaleia)");
-  const [atestObs, setAtestObs] = useState("Afastamento das atividades laborais para recuperação clínica.");
+  const [atestObs, setAtestObs] = useState(
+    "Afastamento das atividades laborais para recuperação clínica.",
+  );
+
+  // Form Exame
+  const [exameNome, setExameNome] = useState("Hemograma Completo");
+  const [exameUrgencia, setExameUrgencia] = useState("Rotina");
+  const [exameObs, setExameObs] = useState(
+    "Jejum de 8h recomendado. Levar documento e carteirinha do convênio.",
+  );
 
   // Transcrição IA em Tempo Real
   const [transcricoes, setTranscricoes] = useState([
-    { autor: "Dra. Ana Ribeiro", fala: "Boa tarde, Marina. Como você tem passado desde o último atendimento?" },
-    { autor: "Marina Silva", fala: "Boa tarde, doutora. A pressão tem ficado em torno de 12 por 8, mas tive um pouco de dor de cabeça ontem." },
-    { autor: "Dra. Ana Ribeiro", fala: "Excelente o controle pressórico. Vamos manter a Losartana e orientar hidratação adequada." },
+    {
+      autor: "Dra. Ana Ribeiro",
+      fala: "Boa tarde, Marina. Como você tem passado desde o último atendimento?",
+    },
+    {
+      autor: "Marina Silva",
+      fala: "Boa tarde, doutora. A pressão tem ficado em torno de 12 por 8, mas tive um pouco de dor de cabeça ontem.",
+    },
+    {
+      autor: "Dra. Ana Ribeiro",
+      fala: "Excelente o controle pressórico. Vamos manter a Losartana e orientar hidratação adequada.",
+    },
   ]);
 
   useEffect(() => {
@@ -105,6 +156,13 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
     try {
       const display = await navigator.mediaDevices.getDisplayMedia({ video: true });
       setCompartilhando(true);
+      registrarAudit({
+        acao: "CONSULTA_TELA_COMPARTILHADA",
+        categoria: "consulta",
+        severidade: "info",
+        entidade: "consulta",
+        detalhes: "Compartilhamento de tela iniciado durante consulta",
+      });
       if (videoRef.current) videoRef.current.srcObject = display;
       display.getVideoTracks()[0]?.addEventListener("ended", () => {
         setCompartilhando(false);
@@ -124,7 +182,7 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
         tamanhoKb: Math.max(1, Math.round(f.size / 1024)),
         enviadoPor: role === "medico" ? "medico" : "paciente",
         consulta: "Consulta em andamento — Dra. Ana Ribeiro",
-      })
+      }),
     );
   };
 
@@ -146,7 +204,7 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
       `RESUMO AUTOMÁTICO IA (BION COPILOT):
 • Queixa Principal: Revisão periódica de hipertensão arterial.
 • Histórico Atual: Paciente feminina, 32 anos, faz uso regular de Losartana 50mg/dia. Pressão controlada (120x80 mmHg). Queixa eventual de cefaleia tensional leve.
-• Conduta: Manter posologia atual de Losartana. Emitida prescrição digital para 30 dias e atestado de 2 dias preventivo. Retorno agendado em 30 dias.`
+• Conduta: Manter posologia atual de Losartana. Emitida prescrição digital para 30 dias e atestado de 2 dias preventivo. Retorno agendado em 30 dias.`,
     );
   };
 
@@ -163,6 +221,9 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
       observacoes: recObs,
       conteudo: `${recMedicamento} — ${recPosologia} por ${recDuracao}. ${recObs}`,
     });
+    toast.success("Receita digital emitida", {
+      description: "Assinada e disponível no painel do paciente.",
+    });
     setModalReceita(false);
   };
 
@@ -178,7 +239,28 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
       observacoes: atestObs,
       conteudo: `Atesto para os devidos fins que a paciente necessita de afastamento por ${atestDias} dias. CID: ${atestCid}. ${atestObs}`,
     });
+    toast.success("Atestado emitido e assinado", {
+      description: "Documento já disponível no painel do paciente.",
+    });
     setModalAtestado(false);
+  };
+
+  const salvarExame = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!exameNome.trim()) return;
+    emitirDocumento({
+      tipo: "exame_solicitado",
+      titulo: `Solicitação de Exame — ${exameNome}`,
+      medico: "Dra. Ana Ribeiro",
+      paciente: "Marina Silva",
+      duracao: exameUrgencia,
+      observacoes: exameObs,
+      conteudo: `Solicita-se: ${exameNome} (urgência: ${exameUrgencia}). ${exameObs}`,
+    });
+    toast.success("Exame solicitado", {
+      description: "O pedido foi enviado ao painel do paciente.",
+    });
+    setModalExame(false);
   };
 
   const encerrar = () => {
@@ -200,10 +282,14 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
           </div>
           <div className="min-w-0">
             <div className="text-sm font-bold truncate flex items-center gap-2">
-              <span>{role === "medico" ? "Marina Silva (Paciente)" : "Dra. Ana Ribeiro (Médica)"}</span>
+              <span>
+                {role === "medico" ? "Marina Silva (Paciente)" : "Dra. Ana Ribeiro (Médica)"}
+              </span>
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
             </div>
-            <div className="text-xs text-slate-400">{role === "medico" ? "32 anos • Retorno" : "Clínica Geral • CRM 12345 SP"}</div>
+            <div className="text-xs text-slate-400">
+              {role === "medico" ? "32 anos • Retorno" : "Clínica Geral • CRM 12345 SP"}
+            </div>
           </div>
         </div>
 
@@ -231,7 +317,9 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
                 {role === "medico" ? "MS" : "AR"}
               </div>
               <div className="text-center">
-                <div className="text-lg font-bold">{role === "medico" ? "Marina Silva" : "Dra. Ana Ribeiro"}</div>
+                <div className="text-lg font-bold">
+                  {role === "medico" ? "Marina Silva" : "Dra. Ana Ribeiro"}
+                </div>
                 <div className="text-xs text-slate-400 mt-0.5">Áudio e vídeo conectados</div>
               </div>
             </div>
@@ -262,7 +350,9 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
             <button
               onClick={toggleMic}
               className={`w-12 h-12 rounded-2xl flex items-center justify-center transition shadow-md ${
-                micOn ? "bg-white/10 hover:bg-white/20 text-white" : "bg-red-500 text-white hover:bg-red-600"
+                micOn
+                  ? "bg-white/10 hover:bg-white/20 text-white"
+                  : "bg-red-500 text-white hover:bg-red-600"
               }`}
               title={micOn ? "Silenciar microfone" : "Ativar microfone"}
             >
@@ -272,7 +362,9 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
             <button
               onClick={toggleCam}
               className={`w-12 h-12 rounded-2xl flex items-center justify-center transition shadow-md ${
-                camOn ? "bg-white/10 hover:bg-white/20 text-white" : "bg-red-500 text-white hover:bg-red-600"
+                camOn
+                  ? "bg-white/10 hover:bg-white/20 text-white"
+                  : "bg-red-500 text-white hover:bg-red-600"
               }`}
               title={camOn ? "Desativar câmera" : "Ativar câmera"}
             >
@@ -282,7 +374,9 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
             <button
               onClick={toggleTela}
               className={`w-12 h-12 rounded-2xl flex items-center justify-center transition shadow-md ${
-                compartilhando ? "bg-primary text-primary-foreground" : "bg-white/10 hover:bg-white/20 text-white"
+                compartilhando
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-white/10 hover:bg-white/20 text-white"
               }`}
               title="Compartilhar tela"
             >
@@ -310,6 +404,12 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
                   className="px-4 h-12 rounded-2xl bg-primary text-primary-foreground text-xs font-bold flex items-center gap-1.5 transition shadow-md"
                 >
                   <Award className="w-4 h-4" /> Emitir Atestado
+                </button>
+                <button
+                  onClick={() => setModalExame(true)}
+                  className="px-4 h-12 rounded-2xl bg-violet-600/90 hover:bg-violet-600 text-white text-xs font-bold flex items-center gap-1.5 transition shadow-md"
+                >
+                  <FileText className="w-4 h-4" /> Solicitar Exame
                 </button>
               </>
             )}
@@ -350,7 +450,9 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
                 key={k}
                 onClick={() => setAba(k)}
                 className={`flex-1 py-3.5 transition text-center ${
-                  aba === k ? "border-b-2 border-primary text-white bg-white/5" : "text-slate-400 hover:text-white"
+                  aba === k
+                    ? "border-b-2 border-primary text-white bg-white/5"
+                    : "text-slate-400 hover:text-white"
                 }`}
               >
                 {t}
@@ -364,15 +466,21 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
             {aba === "prontuario" && (
               <div className="space-y-4">
                 <div className="bg-white/5 rounded-2xl p-3.5 space-y-2 border border-white/10">
-                  <div className="font-bold text-slate-300 uppercase tracking-wider text-[11px]">Dados do Paciente</div>
+                  <div className="font-bold text-slate-300 uppercase tracking-wider text-[11px]">
+                    Dados do Paciente
+                  </div>
                   <div className="text-slate-200">Marina Silva • 32 anos • Feminino</div>
-                  <div className="text-slate-400">Alergias: <strong className="text-amber-400">Dipirona</strong></div>
+                  <div className="text-slate-400">
+                    Alergias: <strong className="text-amber-400">Dipirona</strong>
+                  </div>
                   <div className="text-slate-400">Medicamentos: Losartana 50mg</div>
                 </div>
 
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="font-bold text-slate-300 uppercase tracking-wider text-[11px]">Evolução Clínica</span>
+                    <span className="font-bold text-slate-300 uppercase tracking-wider text-[11px]">
+                      Evolução Clínica
+                    </span>
                     {role === "medico" && (
                       <button
                         onClick={gerarResumoComIA}
@@ -406,12 +514,17 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
 
                 <div className="space-y-2">
                   {arquivos.map((a) => (
-                    <div key={a.id} className="p-3 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-between gap-3">
+                    <div
+                      key={a.id}
+                      className="p-3 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-between gap-3"
+                    >
                       <div className="flex items-center gap-2.5 min-w-0">
                         <FileText className="w-4 h-4 text-primary shrink-0" />
                         <div className="min-w-0">
                           <div className="font-bold text-white truncate">{a.nome}</div>
-                          <div className="text-[10px] text-slate-400">{a.tipo} • {a.tamanhoKb} KB</div>
+                          <div className="text-[10px] text-slate-400">
+                            {a.tipo} • {a.tamanhoKb} KB
+                          </div>
                         </div>
                       </div>
                       <button className="p-1.5 rounded-lg hover:bg-white/10 text-slate-400 hover:text-white">
@@ -431,7 +544,9 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
                     <div
                       key={idx}
                       className={`p-3 rounded-2xl text-xs space-y-1 ${
-                        m.de.includes("Ana") ? "bg-primary/20 border border-primary/30" : "bg-white/10"
+                        m.de.includes("Ana")
+                          ? "bg-primary/20 border border-primary/30"
+                          : "bg-white/10"
                       }`}
                     >
                       <div className="flex justify-between font-bold text-slate-300 text-[10px]">
@@ -475,7 +590,10 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
 
                 <div className="space-y-2.5">
                   {transcricoes.map((t, idx) => (
-                    <div key={idx} className="p-3 rounded-2xl bg-white/5 border border-white/10 text-xs space-y-1">
+                    <div
+                      key={idx}
+                      className="p-3 rounded-2xl bg-white/5 border border-white/10 text-xs space-y-1"
+                    >
                       <div className="font-bold text-primary text-[11px]">{t.autor}:</div>
                       <p className="text-slate-300 leading-relaxed italic">“{t.fala}”</p>
                     </div>
@@ -507,7 +625,11 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
               <h3 className="text-lg font-bold flex items-center gap-2">
                 <Pill className="w-5 h-5 text-primary" /> Emitir Receita Digital ICP-Brasil
               </h3>
-              <button type="button" onClick={() => setModalReceita(false)} className="text-muted-foreground">
+              <button
+                type="button"
+                onClick={() => setModalReceita(false)}
+                className="text-muted-foreground"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -587,7 +709,11 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
               <h3 className="text-lg font-bold flex items-center gap-2">
                 <Award className="w-5 h-5 text-primary" /> Emitir Atestado Médico Digital
               </h3>
-              <button type="button" onClick={() => setModalAtestado(false)} className="text-muted-foreground">
+              <button
+                type="button"
+                onClick={() => setModalAtestado(false)}
+                className="text-muted-foreground"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -633,6 +759,77 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
               className="w-full py-3 rounded-2xl bg-primary text-primary-foreground font-bold text-xs shadow-md"
             >
               Emitir e Assinar Atestado
+            </button>
+          </form>
+        </div>
+      )}
+
+      {/* Modal de Solicitação de Exame */}
+      {modalExame && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <form
+            onSubmit={salvarExame}
+            className="bg-card text-foreground border rounded-3xl max-w-lg w-full p-6 md:p-8 space-y-4 shadow-2xl"
+          >
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-bold flex items-center gap-2">
+                <FileText className="w-5 h-5 text-violet-500" /> Solicitar Exame Complementar
+              </h3>
+              <button
+                type="button"
+                onClick={() => setModalExame(false)}
+                className="text-muted-foreground"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="font-bold block mb-1">Exame</label>
+                <input
+                  value={exameNome}
+                  onChange={(e) => setExameNome(e.target.value)}
+                  placeholder="Ex: Hemograma Completo, Raio-X de Tórax, TGO/TGP"
+                  className="w-full px-3 py-2 rounded-xl border bg-background"
+                  required
+                />
+              </div>
+              <div>
+                <label className="font-bold block mb-1">Urgência</label>
+                <div className="flex gap-2">
+                  {["Rotina", "Prioritário", "Urgente"].map((u) => (
+                    <button
+                      key={u}
+                      type="button"
+                      onClick={() => setExameUrgencia(u)}
+                      className={`flex-1 py-2 rounded-xl border font-bold transition ${
+                        exameUrgencia === u
+                          ? "bg-violet-600 border-violet-600 text-white"
+                          : "hover:border-violet-500 text-muted-foreground"
+                      }`}
+                    >
+                      {u}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="font-bold block mb-1">Instruções de Preparo</label>
+                <textarea
+                  value={exameObs}
+                  onChange={(e) => setExameObs(e.target.value)}
+                  rows={3}
+                  className="w-full px-3 py-2 rounded-xl border bg-background"
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              className="w-full py-3 rounded-2xl bg-violet-600 hover:bg-violet-700 text-white font-bold text-xs shadow-md transition"
+            >
+              Enviar Solicitação ao Paciente
             </button>
           </form>
         </div>

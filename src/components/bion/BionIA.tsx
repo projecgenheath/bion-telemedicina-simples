@@ -1,7 +1,17 @@
 import { useState } from "react";
 import {
-  Sparkles, Send, Bot, User, Pill, ClipboardList, Stethoscope, AlertTriangle,
-  Lightbulb, CheckCircle2, Shield, RefreshCw
+  Sparkles,
+  Send,
+  Bot,
+  User,
+  Pill,
+  ClipboardList,
+  Stethoscope,
+  AlertTriangle,
+  Lightbulb,
+  CheckCircle2,
+  Shield,
+  RefreshCw,
 } from "lucide-react";
 import { useBion } from "@/lib/bion-store";
 
@@ -59,7 +69,7 @@ Copie e cole o código desejado no campo de emissão de atestado ou prontuário!
 };
 
 export function BionIA() {
-  const { sessao } = useBion();
+  const { sessao, registrarAudit } = useBion();
   const isMedico = sessao.role === "medico";
 
   const promptsSugeridos = isMedico
@@ -103,20 +113,51 @@ export function BionIA() {
     setMensagens((prev) => [...prev, novaMsgUsuario]);
     if (!textoEnviar) setEntrada("");
     setDigitando(true);
+    registrarAudit({
+      acao: "IA_CONSULTA_REALIZADA",
+      categoria: "sistema",
+      severidade: "info",
+      entidade: "bion-ia",
+      detalhes: `Consulta à IA: "${txt.trim().slice(0, 100)}"`,
+    });
 
     setTimeout(() => {
       const lower = txt.toLowerCase();
       let resposta = "";
 
-      if (lower.includes("losartana") || lower.includes("medicamento") || lower.includes("remédio") || lower.includes("tomar")) {
+      if (
+        lower.includes("losartana") ||
+        lower.includes("medicamento") ||
+        lower.includes("remédio") ||
+        lower.includes("tomar")
+      ) {
         resposta = RESPOSTAS_BASE.losartana!;
-      } else if (lower.includes("jejum") || lower.includes("exame") || lower.includes("sangue") || lower.includes("laborat")) {
+      } else if (
+        lower.includes("jejum") ||
+        lower.includes("exame") ||
+        lower.includes("sangue") ||
+        lower.includes("laborat")
+      ) {
         resposta = RESPOSTAS_BASE.jejum!;
-      } else if (lower.includes("atestado") || lower.includes("empresa") || lower.includes("cfm") || lower.includes("aceit")) {
+      } else if (
+        lower.includes("atestado") ||
+        lower.includes("empresa") ||
+        lower.includes("cfm") ||
+        lower.includes("aceit")
+      ) {
         resposta = RESPOSTAS_BASE.atestado!;
-      } else if (lower.includes("cid") || lower.includes("código") || lower.includes("diagnóstico")) {
+      } else if (
+        lower.includes("cid") ||
+        lower.includes("código") ||
+        lower.includes("diagnóstico")
+      ) {
         resposta = RESPOSTAS_BASE.cid!;
-      } else if (lower.includes("dor") || lower.includes("cabeça") || lower.includes("enxaqueca") || lower.includes("sintoma")) {
+      } else if (
+        lower.includes("dor") ||
+        lower.includes("cabeça") ||
+        lower.includes("enxaqueca") ||
+        lower.includes("sintoma")
+      ) {
         resposta = RESPOSTAS_BASE.dor!;
       } else {
         resposta = isMedico
@@ -161,7 +202,8 @@ export function BionIA() {
         {/* Banner informativo */}
         <div className="bg-muted/70 px-5 py-2.5 border-b flex items-center justify-between text-xs text-muted-foreground">
           <span className="flex items-center gap-2">
-            <Shield className="w-3.5 h-3.5 text-primary" /> Suas interações são confidenciais e protegidas pela LGPD.
+            <Shield className="w-3.5 h-3.5 text-primary" /> Suas interações são confidenciais e
+            protegidas pela LGPD.
           </span>
           <span className="font-semibold text-emerald-600">● IA Ativa</span>
         </div>
@@ -189,7 +231,9 @@ export function BionIA() {
                 <div className="whitespace-pre-wrap">{msg.texto}</div>
                 <div
                   className={`text-[10px] mt-2 text-right ${
-                    msg.remetente === "usuario" ? "text-primary-foreground/70" : "text-muted-foreground"
+                    msg.remetente === "usuario"
+                      ? "text-primary-foreground/70"
+                      : "text-muted-foreground"
                   }`}
                 >
                   {msg.hora}
@@ -197,7 +241,10 @@ export function BionIA() {
               </div>
 
               {msg.remetente === "usuario" && (
-                <div className="w-9 h-9 rounded-xl bg-accent text-accent-foreground flex items-center justify-center shrink-0 shadow-sm" style={{ backgroundColor: "var(--accent)" }}>
+                <div
+                  className="w-9 h-9 rounded-xl bg-accent text-accent-foreground flex items-center justify-center shrink-0 shadow-sm"
+                  style={{ backgroundColor: "var(--accent)" }}
+                >
                   <User className="w-5 h-5" />
                 </div>
               )}

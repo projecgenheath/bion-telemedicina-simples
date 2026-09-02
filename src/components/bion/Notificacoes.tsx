@@ -42,8 +42,10 @@ export function Notificacoes() {
           </p>
         </div>
         {naoLidas > 0 && (
-          <button onClick={marcarTodasLidas}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl border text-sm font-medium hover:border-primary hover:text-primary transition">
+          <button
+            onClick={marcarTodasLidas}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl border text-sm font-medium hover:border-primary hover:text-primary transition"
+          >
             <CheckCheck className="w-4 h-4" /> Marcar todas como lidas
           </button>
         )}
@@ -53,15 +55,24 @@ export function Notificacoes() {
         {notificacoes.map((n) => {
           const Icon = iconePorTipo[n.tipo];
           return (
-            <button key={n.id} onClick={() => marcarLida(n.id)}
-              className={`w-full text-left bg-card border rounded-2xl p-4 flex items-start gap-4 transition hover:border-primary ${n.lida ? "opacity-70" : ""}`}>
-              <div className={`w-11 h-11 shrink-0 rounded-xl flex items-center justify-center ${n.lida ? "bg-muted" : "bg-primary-soft"}`}>
+            <button
+              key={n.id}
+              onClick={() => marcarLida(n.id)}
+              className={`w-full text-left bg-card border rounded-2xl p-4 flex items-start gap-4 transition hover:border-primary ${n.lida ? "opacity-70" : ""}`}
+            >
+              <div
+                className={`w-11 h-11 shrink-0 rounded-xl flex items-center justify-center ${n.lida ? "bg-muted" : "bg-primary-soft"}`}
+              >
                 <Icon className={`w-5 h-5 ${n.lida ? "text-muted-foreground" : "text-primary"}`} />
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className={`font-semibold ${n.lida ? "" : "text-foreground"}`}>{n.titulo}</span>
-                  <span className="text-[11px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground">{rotulo[n.tipo]}</span>
+                  <span className={`font-semibold ${n.lida ? "" : "text-foreground"}`}>
+                    {n.titulo}
+                  </span>
+                  <span className="text-[11px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                    {rotulo[n.tipo]}
+                  </span>
                 </div>
                 <p className="text-sm text-muted-foreground mt-0.5">{n.texto}</p>
                 <div className="text-xs text-muted-foreground mt-1.5">{n.hora}</div>
@@ -69,7 +80,10 @@ export function Notificacoes() {
               {n.lida ? (
                 <Check className="w-4 h-4 text-muted-foreground shrink-0 mt-1" />
               ) : (
-                <span className="w-2.5 h-2.5 rounded-full shrink-0 mt-2" style={{ backgroundColor: "var(--accent)" }} />
+                <span
+                  className="w-2.5 h-2.5 rounded-full shrink-0 mt-2"
+                  style={{ backgroundColor: "var(--accent)" }}
+                />
               )}
             </button>
           );

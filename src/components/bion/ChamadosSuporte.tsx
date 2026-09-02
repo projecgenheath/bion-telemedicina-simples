@@ -1,7 +1,19 @@
 import { useState } from "react";
+import { toast } from "sonner";
 import {
-  LifeBuoy, MessageSquare, CheckCircle2, Clock, AlertCircle, Plus, Send,
-  Search, ShieldCheck, ChevronRight, X, User, Stethoscope
+  LifeBuoy,
+  MessageSquare,
+  CheckCircle2,
+  Clock,
+  AlertCircle,
+  Plus,
+  Send,
+  Search,
+  ShieldCheck,
+  ChevronRight,
+  X,
+  User,
+  Stethoscope,
 } from "lucide-react";
 import { useBion, type TicketSuporte } from "@/lib/bion-store";
 
@@ -10,7 +22,9 @@ export function ChamadosSuporte() {
   const isAdmin = sessao.role === "admin";
 
   const [busca, setBusca] = useState("");
-  const [filtroStatus, setFiltroStatus] = useState<"todos" | "aberto" | "em_andamento" | "resolvido">("todos");
+  const [filtroStatus, setFiltroStatus] = useState<
+    "todos" | "aberto" | "em_andamento" | "resolvido"
+  >("todos");
   const [ticketSelecionado, setTicketSelecionado] = useState<TicketSuporte | null>(null);
   const [respostaTexto, setRespostaTexto] = useState("");
   const [modalNovo, setModalNovo] = useState(false);
@@ -22,8 +36,9 @@ export function ChamadosSuporte() {
 
   const ticketsFiltrados = tickets.filter((t) => {
     const matchRole = isAdmin ? true : t.usuario === sessao.nome;
-    const matchBusca =
-      (t.assunto + t.mensagem + t.usuario).toLowerCase().includes(busca.toLowerCase());
+    const matchBusca = (t.assunto + t.mensagem + t.usuario)
+      .toLowerCase()
+      .includes(busca.toLowerCase());
     const matchStatus = filtroStatus === "todos" || t.status === filtroStatus;
     return matchRole && matchBusca && matchStatus;
   });
@@ -40,6 +55,10 @@ export function ChamadosSuporte() {
       mensagem: novaMensagem.trim(),
     });
 
+    toast.success("Chamado aberto com sucesso", {
+      description: "Nossa equipe responde em até 4 horas úteis.",
+    });
+
     setNovoAssunto("");
     setNovaMensagem("");
     setModalNovo(false);
@@ -48,16 +67,24 @@ export function ChamadosSuporte() {
   const enviarResposta = (id: string) => {
     if (!respostaTexto.trim()) return;
     responderTicket(id, respostaTexto.trim());
+    toast.success("Resposta enviada", {
+      description: "O chamado foi marcado como resolvido.",
+    });
     setRespostaTexto("");
     setTicketSelecionado((prev) =>
-      prev && prev.id === id ? { ...prev, status: "resolvido", resposta: respostaTexto.trim() } : prev
+      prev && prev.id === id
+        ? { ...prev, status: "resolvido", resposta: respostaTexto.trim() }
+        : prev,
     );
   };
 
   const statusBadges = {
     aberto: { label: "Aberto", bg: "bg-amber-500/15 text-amber-600 border-amber-500/30" },
     em_andamento: { label: "Em Análise", bg: "bg-primary-soft text-primary border-primary/30" },
-    resolvido: { label: "Resolvido", bg: "bg-emerald-500/15 text-emerald-600 border-emerald-500/30" },
+    resolvido: {
+      label: "Resolvido",
+      bg: "bg-emerald-500/15 text-emerald-600 border-emerald-500/30",
+    },
   };
 
   return (
@@ -108,7 +135,9 @@ export function ChamadosSuporte() {
               key={st}
               onClick={() => setFiltroStatus(st)}
               className={`px-3 py-1.5 rounded-xl text-xs font-bold capitalize transition shrink-0 ${
-                filtroStatus === st ? "bg-card shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
+                filtroStatus === st
+                  ? "bg-card shadow-sm text-foreground"
+                  : "text-muted-foreground hover:text-foreground"
               }`}
             >
               {st === "todos" ? "Todos" : statusBadges[st].label}
@@ -124,7 +153,8 @@ export function ChamadosSuporte() {
             <LifeBuoy className="w-10 h-10 mx-auto opacity-40 text-primary" />
             <div className="font-bold text-foreground">Nenhum chamado encontrado</div>
             <p className="text-xs max-w-sm mx-auto">
-              Não há solicitações pendentes no momento. Caso precise de ajuda, clique em "Abrir Novo Chamado".
+              Não há solicitações pendentes no momento. Caso precise de ajuda, clique em "Abrir Novo
+              Chamado".
             </p>
           </div>
         ) : (
@@ -137,12 +167,20 @@ export function ChamadosSuporte() {
               <div className="flex items-start justify-between gap-3 flex-wrap">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-2xl bg-primary-soft flex items-center justify-center text-primary font-bold shrink-0">
-                    {ticket.perfil === "medico" ? <Stethoscope className="w-5 h-5" /> : <User className="w-5 h-5" />}
+                    {ticket.perfil === "medico" ? (
+                      <Stethoscope className="w-5 h-5" />
+                    ) : (
+                      <User className="w-5 h-5" />
+                    )}
                   </div>
                   <div>
-                    <h3 className="font-bold text-base text-foreground leading-snug">{ticket.assunto}</h3>
+                    <h3 className="font-bold text-base text-foreground leading-snug">
+                      {ticket.assunto}
+                    </h3>
                     <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-2 flex-wrap">
-                      <span>{ticket.usuario} ({ticket.perfil})</span>
+                      <span>
+                        {ticket.usuario} ({ticket.perfil})
+                      </span>
                       <span>•</span>
                       <span>{ticket.data}</span>
                       <span>•</span>
@@ -166,8 +204,12 @@ export function ChamadosSuporte() {
                 <div className="mt-3 pt-3 border-t bg-muted/40 p-3 rounded-2xl flex items-start gap-2.5 text-xs">
                   <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
                   <div>
-                    <div className="font-bold text-foreground">Resposta da Equipe BION ({ticket.dataResposta ?? "Recente"}):</div>
-                    <div className="text-muted-foreground mt-0.5 leading-relaxed">{ticket.resposta}</div>
+                    <div className="font-bold text-foreground">
+                      Resposta da Equipe BION ({ticket.dataResposta ?? "Recente"}):
+                    </div>
+                    <div className="text-muted-foreground mt-0.5 leading-relaxed">
+                      {ticket.resposta}
+                    </div>
                   </div>
                 </div>
               )}
@@ -195,7 +237,9 @@ export function ChamadosSuporte() {
                 >
                   {statusBadges[ticketSelecionado.status].label}
                 </span>
-                <h3 className="text-xl font-bold mt-2 text-foreground">{ticketSelecionado.assunto}</h3>
+                <h3 className="text-xl font-bold mt-2 text-foreground">
+                  {ticketSelecionado.assunto}
+                </h3>
                 <div className="text-xs text-muted-foreground mt-1">
                   Aberto por <strong>{ticketSelecionado.usuario}</strong> • {ticketSelecionado.data}
                 </div>
@@ -221,7 +265,9 @@ export function ChamadosSuporte() {
                 <p className="text-foreground leading-relaxed whitespace-pre-wrap">
                   {ticketSelecionado.resposta}
                 </p>
-                <div className="text-[10px] text-muted-foreground">{ticketSelecionado.dataResposta}</div>
+                <div className="text-[10px] text-muted-foreground">
+                  {ticketSelecionado.dataResposta}
+                </div>
               </div>
             )}
 
@@ -303,7 +349,9 @@ export function ChamadosSuporte() {
               </div>
 
               <div>
-                <label className="text-xs font-bold text-foreground block mb-1.5">Mensagem detalhada</label>
+                <label className="text-xs font-bold text-foreground block mb-1.5">
+                  Mensagem detalhada
+                </label>
                 <textarea
                   value={novaMensagem}
                   onChange={(e) => setNovaMensagem(e.target.value)}

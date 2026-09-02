@@ -21,12 +21,23 @@ export function Arquivos({ perfil }: { perfil: "paciente" | "medico" }) {
 
   return (
     <div className="space-y-3">
-      <button onClick={() => fileRef.current?.click()}
-        className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl border border-dashed text-sm font-medium hover:border-primary hover:text-primary transition">
-        <Upload className="w-4 h-4" /> {perfil === "medico" ? "Anexar documento ao paciente" : "Enviar exame"}
+      <button
+        onClick={() => fileRef.current?.click()}
+        className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl border border-dashed text-sm font-medium hover:border-primary hover:text-primary transition"
+      >
+        <Upload className="w-4 h-4" />{" "}
+        {perfil === "medico" ? "Anexar documento ao paciente" : "Enviar exame"}
       </button>
-      <input ref={fileRef} type="file" multiple className="hidden"
-        onChange={(e) => { enviar(e.target.files); e.target.value = ""; }} />
+      <input
+        ref={fileRef}
+        type="file"
+        multiple
+        className="hidden"
+        onChange={(e) => {
+          enviar(e.target.files);
+          e.target.value = "";
+        }}
+      />
 
       {arquivos.map((a) => (
         <div key={a.id} className="bg-card border rounded-2xl p-4 flex items-center gap-4">
@@ -35,9 +46,15 @@ export function Arquivos({ perfil }: { perfil: "paciente" | "medico" }) {
           </div>
           <div className="flex-1 min-w-0">
             <div className="font-semibold truncate">{a.nome}</div>
-            <div className="text-sm text-muted-foreground truncate">{a.tipo} • {a.tamanhoKb} KB • {a.data}</div>
+            <div className="text-sm text-muted-foreground truncate">
+              {a.tipo} • {a.tamanhoKb} KB • {a.data}
+            </div>
             <div className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
-              {a.enviadoPor === "medico" ? <Stethoscope className="w-3.5 h-3.5" /> : <User className="w-3.5 h-3.5" />}
+              {a.enviadoPor === "medico" ? (
+                <Stethoscope className="w-3.5 h-3.5" />
+              ) : (
+                <User className="w-3.5 h-3.5" />
+              )}
               Enviado pelo {a.enviadoPor === "medico" ? "médico" : "paciente"} • {a.consulta}
             </div>
           </div>

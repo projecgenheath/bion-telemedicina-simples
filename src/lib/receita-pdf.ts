@@ -205,7 +205,11 @@ export function gerarDocumentoPDF(d: Documento) {
     L + 16,
     yAssinatura + 52,
   );
-  doc.text("Verifique a autenticidade deste documento em: https://bion.app/validar", L + 16, yAssinatura + 68);
+  doc.text(
+    "Verifique a autenticidade deste documento em: https://bion.app/validar",
+    L + 16,
+    yAssinatura + 68,
+  );
 
   // Rodapé da Página
   doc.setFont("helvetica", "normal");
@@ -218,6 +222,10 @@ export function gerarDocumentoPDF(d: Documento) {
     { align: "center" },
   );
 
-  const nomeArquivo = `${d.tipo}-${d.paciente.toLowerCase().replace(/\s+/g, "-")}-${d.titulo.replace(/[^\w\s-]/g, "").trim().replace(/\s+/g, "-").toLowerCase()}.pdf`;
+  const nomeArquivo = `${d.tipo}-${d.paciente.toLowerCase().replace(/\s+/g, "-")}-${d.titulo
+    .replace(/[^\w\s-]/g, "")
+    .trim()
+    .replace(/\s+/g, "-")
+    .toLowerCase()}.pdf`;
   doc.save(nomeArquivo);
 }

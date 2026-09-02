@@ -1,14 +1,26 @@
 import { useState } from "react";
 import {
-  Star, Stethoscope, Globe, Award, Calendar, Clock, Check, Edit3, Save,
-  ShieldCheck, Heart, User, Sparkles
+  Star,
+  Stethoscope,
+  Globe,
+  Award,
+  Calendar,
+  Clock,
+  Check,
+  Edit3,
+  Save,
+  ShieldCheck,
+  Heart,
+  User,
+  Sparkles,
 } from "lucide-react";
 import { useBion, type Medico } from "@/lib/bion-store";
 
 export function MedicoPerfilView({ medicoId }: { medicoId?: string }) {
   const { medicos, sessao, atualizarMedico, avaliacoes } = useBion();
 
-  const medico = medicos.find((m) => (medicoId ? m.id === medicoId : m.nome === sessao.nome)) ?? medicos[0];
+  const medico =
+    medicos.find((m) => (medicoId ? m.id === medicoId : m.nome === sessao.nome)) ?? medicos[0];
 
   const [editando, setEditando] = useState(false);
   const [valor, setValor] = useState(medico.valor);
@@ -31,7 +43,11 @@ export function MedicoPerfilView({ medicoId }: { medicoId?: string }) {
       <div className="bg-card border rounded-3xl p-6 md:p-8 shadow-sm relative overflow-hidden">
         <div className="flex flex-col md:flex-row items-start md:items-center gap-6">
           <div className="w-24 h-24 md:w-32 md:h-32 rounded-3xl bg-primary text-primary-foreground flex items-center justify-center text-4xl font-extrabold shadow-md shrink-0">
-            {medico.nome.split(" ").slice(-2).map((w) => w[0]).join("")}
+            {medico.nome
+              .split(" ")
+              .slice(-2)
+              .map((w) => w[0])
+              .join("")}
           </div>
 
           <div className="flex-1 min-w-0 space-y-2">
@@ -48,7 +64,8 @@ export function MedicoPerfilView({ medicoId }: { medicoId?: string }) {
 
             <div className="flex items-center gap-4 text-xs font-semibold text-muted-foreground flex-wrap pt-1">
               <span className="flex items-center gap-1 text-amber-500 font-bold">
-                <Star className="w-4 h-4 fill-amber-500" /> {medico.avaliacao} ({avaliacoesDoMedico.length || medico.numAvaliacoes} avaliações)
+                <Star className="w-4 h-4 fill-amber-500" /> {medico.avaliacao} (
+                {avaliacoesDoMedico.length || medico.numAvaliacoes} avaliações)
               </span>
               <span>•</span>
               <span className="flex items-center gap-1">
@@ -110,7 +127,10 @@ export function MedicoPerfilView({ medicoId }: { medicoId?: string }) {
           </div>
           <div className="flex flex-wrap gap-2">
             {medico.subespecialidades.map((sub) => (
-              <span key={sub} className="px-3 py-1 rounded-xl bg-primary-soft text-primary text-xs font-semibold">
+              <span
+                key={sub}
+                className="px-3 py-1 rounded-xl bg-primary-soft text-primary text-xs font-semibold"
+              >
                 {sub}
               </span>
             ))}
@@ -144,7 +164,10 @@ export function MedicoPerfilView({ medicoId }: { medicoId?: string }) {
           </div>
           <div className="grid grid-cols-3 gap-2">
             {medico.horariosDisponiveis.map((h) => (
-              <span key={h} className="p-2.5 rounded-xl border bg-muted/50 text-xs font-bold text-center">
+              <span
+                key={h}
+                className="p-2.5 rounded-xl border bg-muted/50 text-xs font-bold text-center"
+              >
                 {h}
               </span>
             ))}
@@ -157,14 +180,20 @@ export function MedicoPerfilView({ medicoId }: { medicoId?: string }) {
         <div className="flex items-center justify-between">
           <div>
             <h3 className="text-lg font-bold text-foreground">Depoimentos dos Pacientes</h3>
-            <p className="text-xs text-muted-foreground">Avaliações verificadas de consultas realizadas na BION</p>
+            <p className="text-xs text-muted-foreground">
+              Avaliações verificadas de consultas realizadas na BION
+            </p>
           </div>
-          <span className="text-xs font-bold text-primary">{avaliacoesDoMedico.length} avaliação(ões)</span>
+          <span className="text-xs font-bold text-primary">
+            {avaliacoesDoMedico.length} avaliação(ões)
+          </span>
         </div>
 
         <div className="space-y-3 pt-2">
           {avaliacoesDoMedico.length === 0 ? (
-            <p className="text-xs text-muted-foreground text-center py-4">Nenhum comentário recebido ainda.</p>
+            <p className="text-xs text-muted-foreground text-center py-4">
+              Nenhum comentário recebido ainda.
+            </p>
           ) : (
             avaliacoesDoMedico.map((av) => (
               <div key={av.id} className="p-4 rounded-2xl bg-muted/60 border text-xs space-y-1.5">
@@ -174,7 +203,9 @@ export function MedicoPerfilView({ medicoId }: { medicoId?: string }) {
                     <Star className="w-3.5 h-3.5 fill-amber-500" /> {av.nota}.0
                   </div>
                 </div>
-                {av.comentario && <p className="text-muted-foreground leading-relaxed italic">“{av.comentario}”</p>}
+                {av.comentario && (
+                  <p className="text-muted-foreground leading-relaxed italic">“{av.comentario}”</p>
+                )}
                 <div className="text-[10px] text-muted-foreground">{av.quando}</div>
               </div>
             ))

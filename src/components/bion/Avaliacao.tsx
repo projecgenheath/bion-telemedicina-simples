@@ -51,7 +51,8 @@ export function AvaliacaoModal({
               onClick={() => setNota(n)}
               onMouseEnter={() => setHover(n)}
               onMouseLeave={() => setHover(0)}
-              className="p-1">
+              className="p-1"
+            >
               <Star
                 className={`w-8 h-8 ${(hover || nota) >= n ? "text-primary fill-primary" : "text-muted-foreground"}`}
               />
@@ -76,7 +77,8 @@ export function AvaliacaoModal({
             onClick={enviar}
             disabled={nota < 1}
             className="px-4 py-2.5 rounded-xl text-primary-foreground text-sm font-medium disabled:opacity-50"
-            style={{ backgroundColor: "var(--accent)" }}>
+            style={{ backgroundColor: "var(--accent)" }}
+          >
             Enviar avaliação
           </button>
         </div>

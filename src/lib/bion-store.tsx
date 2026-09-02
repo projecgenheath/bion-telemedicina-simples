@@ -1,4 +1,13 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 
 export type ApptStatus = "confirmada" | "cancelada" | "concluida" | "em_espera";
 
@@ -142,14 +151,265 @@ export type Consentimento = {
   aceito: boolean;
 };
 
+export type AuditCategoria =
+  | "autenticacao"
+  | "consulta"
+  | "documento"
+  | "prontuario"
+  | "usuario"
+  | "admin"
+  | "suporte"
+  | "consentimento"
+  | "sistema";
+
+export type AuditSeveridade = "info" | "warning" | "critical";
+
+export type AuditLog = {
+  id: string;
+  ts: number;
+  acao: string;
+  categoria: AuditCategoria;
+  severidade: AuditSeveridade;
+  usuario: string;
+  role: Sessao["role"];
+  entidade?: string;
+  entidadeId?: string;
+  detalhes?: string;
+};
+
 let seq = 0;
 const uid = () => `id-${++seq}-${Math.random().toString(36).slice(2, 7)}`;
 
-const agora = () =>
-  new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+const agora = () => new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 
 const DIA = 86400000;
 const diasAtras = (n: number) => Date.now() - n * DIA;
+
+const auditLogsIniciais: AuditLog[] = [
+  {
+    id: "aud-1",
+    ts: diasAtras(28),
+    acao: "LOGIN",
+    categoria: "autenticacao",
+    severidade: "info",
+    usuario: "Marina Silva",
+    role: "paciente",
+    detalhes: "Login realizado com sucesso",
+  },
+  {
+    id: "aud-2",
+    ts: diasAtras(27),
+    acao: "CONSULTA_AGENDADA",
+    categoria: "consulta",
+    severidade: "info",
+    usuario: "Marina Silva",
+    role: "paciente",
+    entidade: "consulta",
+    entidadeId: "c1",
+    detalhes: "Agendamento com Dra. Ana Ribeiro — Clínica Geral",
+  },
+  {
+    id: "aud-3",
+    ts: diasAtras(25),
+    acao: "LOGIN",
+    categoria: "autenticacao",
+    severidade: "info",
+    usuario: "Dra. Ana Ribeiro",
+    role: "medico",
+    detalhes: "Login realizado com sucesso",
+  },
+  {
+    id: "aud-4",
+    ts: diasAtras(24),
+    acao: "PRONTUARIO_VISUALIZADO",
+    categoria: "prontuario",
+    severidade: "info",
+    usuario: "Dra. Ana Ribeiro",
+    role: "medico",
+    entidade: "prontuario",
+    detalhes: "Acesso ao prontuário de Marina Silva",
+  },
+  {
+    id: "aud-5",
+    ts: diasAtras(22),
+    acao: "CONSULTA_INICIADA",
+    categoria: "consulta",
+    severidade: "info",
+    usuario: "Marina Silva",
+    role: "paciente",
+    entidade: "consulta",
+    entidadeId: "c1",
+    detalhes: "Entrada na sala de consulta com Dra. Ana Ribeiro",
+  },
+  {
+    id: "aud-6",
+    ts: diasAtras(22),
+    acao: "DOCUMENTO_EMITIDO",
+    categoria: "documento",
+    severidade: "info",
+    usuario: "Dra. Ana Ribeiro",
+    role: "medico",
+    entidade: "documento",
+    detalhes: "Receita digital emitida para Marina Silva — Losartana 50mg",
+  },
+  {
+    id: "aud-7",
+    ts: diasAtras(20),
+    acao: "CONSENTIMENTO_REGISTRADO",
+    categoria: "consentimento",
+    severidade: "info",
+    usuario: "Marina Silva",
+    role: "paciente",
+    entidade: "consentimento",
+    detalhes: "Consentimento aceito para geração de PDF do prontuário (3 documentos)",
+  },
+  {
+    id: "aud-8",
+    ts: diasAtras(18),
+    acao: "PRONTUARIO_PDF_EXPORTADO",
+    categoria: "prontuario",
+    severidade: "warning",
+    usuario: "Marina Silva",
+    role: "paciente",
+    entidade: "prontuario",
+    detalhes: "PDF do prontuário exportado com 3 documentos",
+  },
+  {
+    id: "aud-9",
+    ts: diasAtras(15),
+    acao: "MEDICO_APROVADO",
+    categoria: "admin",
+    severidade: "critical",
+    usuario: "Admin BION",
+    role: "admin",
+    entidade: "medico",
+    entidadeId: "med-6",
+    detalhes: "CRM de Dr. Pedro Alves validado e ativado",
+  },
+  {
+    id: "aud-10",
+    ts: diasAtras(14),
+    acao: "LOGIN",
+    categoria: "autenticacao",
+    severidade: "info",
+    usuario: "Admin BION",
+    role: "admin",
+    detalhes: "Login administrativo realizado",
+  },
+  {
+    id: "aud-11",
+    ts: diasAtras(12),
+    acao: "CONSULTA_CANCELADA",
+    categoria: "consulta",
+    severidade: "warning",
+    usuario: "Marina Silva",
+    role: "paciente",
+    entidade: "consulta",
+    entidadeId: "c3",
+    detalhes: "Consulta com Dr. Carlos Mendes cancelada — Motivo: conflito de agenda",
+  },
+  {
+    id: "aud-12",
+    ts: diasAtras(10),
+    acao: "AVALIACAO_REGISTRADA",
+    categoria: "consulta",
+    severidade: "info",
+    usuario: "Beatriz Costa",
+    role: "paciente",
+    entidade: "avaliacao",
+    detalhes: "Avaliação 5 estrelas para Dr. Carlos Mendes",
+  },
+  {
+    id: "aud-13",
+    ts: diasAtras(8),
+    acao: "TICKET_CRIADO",
+    categoria: "suporte",
+    severidade: "info",
+    usuario: "Marina Silva",
+    role: "paciente",
+    entidade: "ticket",
+    detalhes: "Chamado aberto: Problema com câmera na consulta",
+  },
+  {
+    id: "aud-14",
+    ts: diasAtras(7),
+    acao: "TICKET_RESPONDIDO",
+    categoria: "suporte",
+    severidade: "info",
+    usuario: "Admin BION",
+    role: "admin",
+    entidade: "ticket",
+    detalhes: "Chamado respondido: orientações sobre permissões do navegador",
+  },
+  {
+    id: "aud-15",
+    ts: diasAtras(5),
+    acao: "MEDICO_SUSPENSO",
+    categoria: "admin",
+    severidade: "critical",
+    usuario: "Admin BION",
+    role: "admin",
+    entidade: "medico",
+    entidadeId: "med-6",
+    detalhes: "Dr. Pedro Alves suspenso por pendência documental",
+  },
+  {
+    id: "aud-16",
+    ts: diasAtras(3),
+    acao: "PERFIL_ATUALIZADO",
+    categoria: "usuario",
+    severidade: "info",
+    usuario: "Marina Silva",
+    role: "paciente",
+    entidade: "perfil",
+    detalhes: "Dados pessoais atualizados: telefone e convênio",
+  },
+  {
+    id: "aud-17",
+    ts: diasAtras(2),
+    acao: "RELATORIO_GERADO",
+    categoria: "admin",
+    severidade: "info",
+    usuario: "Admin BION",
+    role: "admin",
+    entidade: "relatorio",
+    detalhes: "Relatório mensal de consultas gerado",
+  },
+  {
+    id: "aud-18",
+    ts: diasAtras(1),
+    acao: "DOCUMENTO_PDF_BAIXADO",
+    categoria: "documento",
+    severidade: "info",
+    usuario: "Marina Silva",
+    role: "paciente",
+    entidade: "documento",
+    detalhes: "Download do PDF da receita — Losartana 50mg",
+  },
+  {
+    id: "aud-19",
+    ts: diasAtras(0.5),
+    acao: "IA_CONSULTA_REALIZADA",
+    categoria: "sistema",
+    severidade: "info",
+    usuario: "Marina Silva",
+    role: "paciente",
+    entidade: "bion-ia",
+    detalhes: "Consulta à IA sobre interações medicamentosas",
+  },
+  {
+    id: "aud-20",
+    ts: diasAtras(0.2),
+    acao: "CONSULTA_REMARCADA",
+    categoria: "consulta",
+    severidade: "warning",
+    usuario: "Marina Silva",
+    role: "paciente",
+    entidade: "consulta",
+    entidadeId: "c2",
+    detalhes: "Consulta com Dra. Julia Lima remarcada de 14 Dez para 18 Dez às 10:00",
+  },
+];
 
 const medicosIniciais: Medico[] = [
   {
@@ -161,7 +421,8 @@ const medicosIniciais: Medico[] = [
     valor: 150,
     avaliacao: 4.9,
     numAvaliacoes: 312,
-    formacao: "Graduação em Medicina pela USP (2012) • Residência em Clínica Médica pelo HC-FMUSP (2015)",
+    formacao:
+      "Graduação em Medicina pela USP (2012) • Residência em Clínica Médica pelo HC-FMUSP (2015)",
     experiencia: "12 anos de experiência em teleatendimento e gestão de pacientes crônicos.",
     idiomas: ["Português", "Inglês", "Espanhol"],
     bio: "Dedicada a um atendimento humanizado, empático e resolutivo. Acredito que a tecnologia deve aproximar médico e paciente.",
@@ -173,12 +434,19 @@ const medicosIniciais: Medico[] = [
     nome: "Dr. Carlos Mendes",
     crm: "CRM 23456 RJ",
     especialidade: "Cardiologia",
-    subespecialidades: ["Hipertensão", "Arritmias", "Prevenção Cardiovascular", "Acompanhamento Pós-Cirúrgico"],
+    subespecialidades: [
+      "Hipertensão",
+      "Arritmias",
+      "Prevenção Cardiovascular",
+      "Acompanhamento Pós-Cirúrgico",
+    ],
     valor: 180,
     avaliacao: 4.8,
     numAvaliacoes: 198,
-    formacao: "Graduação pela UFRJ (2010) • Especialização pelo Instituto Nacional de Cardiologia (INC)",
-    experiencia: "Mais de 14 anos cuidando da saúde do coração de milhares de pacientes em todo o Brasil.",
+    formacao:
+      "Graduação pela UFRJ (2010) • Especialização pelo Instituto Nacional de Cardiologia (INC)",
+    experiencia:
+      "Mais de 14 anos cuidando da saúde do coração de milhares de pacientes em todo o Brasil.",
     idiomas: ["Português", "Inglês"],
     bio: "Especialista em saúde cardiovascular preventiva e controle rigoroso de fatores de risco com acompanhamento próximo.",
     status: "ativo",
@@ -189,12 +457,18 @@ const medicosIniciais: Medico[] = [
     nome: "Dra. Julia Lima",
     crm: "CRM 34567 MG",
     especialidade: "Dermatologia",
-    subespecialidades: ["Acne e Rosácea", "Tricologia (Cabelos)", "Dermatologia Clínica", "Peles Sensíveis"],
+    subespecialidades: [
+      "Acne e Rosácea",
+      "Tricologia (Cabelos)",
+      "Dermatologia Clínica",
+      "Peles Sensíveis",
+    ],
     valor: 160,
     avaliacao: 5.0,
     numAvaliacoes: 245,
     formacao: "Medicina pela UFMG • Residência em Dermatologia pelo Hospital das Clínicas da UFMG",
-    experiencia: "Dermatologista com foco em avaliação fotográfica digital e prescrições individualizadas.",
+    experiencia:
+      "Dermatologista com foco em avaliação fotográfica digital e prescrições individualizadas.",
     idiomas: ["Português", "Francês", "Inglês"],
     bio: "A pele reflete nosso equilíbrio e bem-estar. Meu objetivo é descomplicar seu tratamento dermatológico.",
     status: "ativo",
@@ -205,11 +479,17 @@ const medicosIniciais: Medico[] = [
     nome: "Dr. Roberto Campos",
     crm: "CRM 45678 RS",
     especialidade: "Pediatria",
-    subespecialidades: ["Puericultura", "Desenvolvimento Infantil", "Alergias na Infância", "Nutrição Infantil"],
+    subespecialidades: [
+      "Puericultura",
+      "Desenvolvimento Infantil",
+      "Alergias na Infância",
+      "Nutrição Infantil",
+    ],
     valor: 160,
     avaliacao: 4.9,
     numAvaliacoes: 180,
-    formacao: "Graduação pela UFRGS • Título de Especialista pela Sociedade Brasileira de Pediatria",
+    formacao:
+      "Graduação pela UFRGS • Título de Especialista pela Sociedade Brasileira de Pediatria",
     experiencia: "10 anos acolhendo famílias e orientando pais em todas as fases de crescimento.",
     idiomas: ["Português", "Inglês"],
     bio: "Atendimento carinhoso e descomplicado para o bem-estar e saúde plena dos pequenos.",
@@ -221,7 +501,12 @@ const medicosIniciais: Medico[] = [
     nome: "Dra. Camila Torres",
     crm: "CRM 56789 PR",
     especialidade: "Psicologia",
-    subespecialidades: ["Terapia Cognitivo-Comportamental", "Ansiedade e Estresse", "Autoconhecimento", "Burnout"],
+    subespecialidades: [
+      "Terapia Cognitivo-Comportamental",
+      "Ansiedade e Estresse",
+      "Autoconhecimento",
+      "Burnout",
+    ],
     valor: 140,
     avaliacao: 4.9,
     numAvaliacoes: 320,
@@ -241,8 +526,10 @@ const medicosIniciais: Medico[] = [
     valor: 170,
     avaliacao: 4.7,
     numAvaliacoes: 110,
-    formacao: "Medicina pela UFBA • Membro da SBOT (Sociedade Brasileira de Ortopedia e Traumatologia)",
-    experiencia: "Orientação diagnóstica precisa e indicação dos melhores caminhos de fisioterapia e reabilitação.",
+    formacao:
+      "Medicina pela UFBA • Membro da SBOT (Sociedade Brasileira de Ortopedia e Traumatologia)",
+    experiencia:
+      "Orientação diagnóstica precisa e indicação dos melhores caminhos de fisioterapia e reabilitação.",
     idiomas: ["Português"],
     bio: "Focado em alívio da dor, mobilidade e melhora duradoura da qualidade de vida.",
     status: "ativo",
@@ -302,7 +589,8 @@ const consultasIniciais: Consulta[] = [
     motivoConsulta: "Avaliação de lesão de pele e alergia de contato.",
     valor: "R$ 160",
     pago: true,
-    resumoMedico: "Paciente compareceu com queixa de alergia de contato. Prescrito anti-histamínico e hidratação tópica.",
+    resumoMedico:
+      "Paciente compareceu com queixa de alergia de contato. Prescrito anti-histamínico e hidratação tópica.",
   },
 ];
 
@@ -356,7 +644,8 @@ const documentosIniciais: Documento[] = [
     titulo: "Atestado — 2 dias de afastamento",
     medico: "Dr. Carlos Mendes",
     paciente: "Marina Silva",
-    conteudo: "Atesto, para os devidos fins, que a paciente necessita de afastamento de suas atividades por 2 (dois) dias a partir desta data para recuperação clínica.",
+    conteudo:
+      "Atesto, para os devidos fins, que a paciente necessita de afastamento de suas atividades por 2 (dois) dias a partir desta data para recuperação clínica.",
     data: "28 Out 2025",
     duracao: "2 dias",
     cid: "R51 (Cefaleia)",
@@ -434,7 +723,8 @@ const ticketsIniciais: TicketSuporte[] = [
     mensagem: "Gostaria de saber se o QR Code do PDF é aceito em qualquer farmácia de São Paulo.",
     data: "Ontem às 16:30",
     status: "resolvido",
-    resposta: "Sim, Marina! Todas as nossas receitas possuem assinatura digital com padrão ICP-Brasil e QR Code válido em farmácias físicas e online.",
+    resposta:
+      "Sim, Marina! Todas as nossas receitas possuem assinatura digital com padrão ICP-Brasil e QR Code válido em farmácias físicas e online.",
     respondidoPor: "Suporte BION",
     dataResposta: "Ontem às 17:10",
   },
@@ -454,10 +744,12 @@ const ticketsIniciais: TicketSuporte[] = [
     perfil: "paciente",
     assunto: "Confirmação do pagamento Pix",
     categoria: "pagamento",
-    mensagem: "Fiz o pagamento via Pix mas a tela demorou 1 minuto para atualizar. A consulta está confirmada?",
+    mensagem:
+      "Fiz o pagamento via Pix mas a tela demorou 1 minuto para atualizar. A consulta está confirmada?",
     data: "Hoje às 11:00",
     status: "resolvido",
-    resposta: "Olá João! Verificamos aqui e seu Pix foi aprovado com sucesso. Sua consulta com a Dra. Ana Ribeiro está 100% confirmada para hoje às 16:00.",
+    resposta:
+      "Olá João! Verificamos aqui e seu Pix foi aprovado com sucesso. Sua consulta com a Dra. Ana Ribeiro está 100% confirmada para hoje às 16:00.",
     respondidoPor: "Suporte BION",
     dataResposta: "Hoje às 11:08",
   },
@@ -541,7 +833,9 @@ type Store = {
   avaliarConsulta: (a: Omit<Avaliacao, "id" | "quando" | "ts">) => void;
   consentimentos: Consentimento[];
   consentimentosVisiveis: Consentimento[];
-  registrarConsentimento: (c: Omit<Consentimento, "id" | "quando" | "quem" | "perfil">) => Consentimento;
+  registrarConsentimento: (
+    c: Omit<Consentimento, "id" | "quando" | "quem" | "perfil">,
+  ) => Consentimento;
   adicionarTicket: (t: Omit<TicketSuporte, "id" | "data" | "status">) => void;
   responderTicket: (id: string, resposta: string) => void;
   adicionarLembrete: (l: Omit<Lembrete, "id" | "feito">) => void;
@@ -551,6 +845,8 @@ type Store = {
   atualizarMedico: (id: string, dados: Partial<Medico>) => void;
   aprovarMedico: (id: string) => void;
   suspenderMedico: (id: string) => void;
+  auditLogs: AuditLog[];
+  registrarAudit: (log: Omit<AuditLog, "id" | "ts" | "usuario" | "role">) => void;
 };
 
 const BionContext = createContext<Store | null>(null);
@@ -564,8 +860,13 @@ export function BionProvider({ children }: { children: ReactNode }) {
   const [tickets, setTickets] = useState<TicketSuporte[]>(ticketsIniciais);
   const [lembretes, setLembretes] = useState<Lembrete[]>(lembretesIniciais);
   const [pacientePerfil, setPacientePerfil] = useState<PacientePerfil>(pacientePerfilInicial);
-  const [sessao, setSessao] = useState<Sessao>({ role: "paciente", nome: "Marina Silva", email: "marina.silva@email.com" });
+  const [sessao, setSessao] = useState<Sessao>({
+    role: "paciente",
+    nome: "Marina Silva",
+    email: "marina.silva@email.com",
+  });
   const [consentimentos, setConsentimentos] = useState<Consentimento[]>([]);
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>(auditLogsIniciais);
   const [avaliacoes, setAvaliacoes] = useState<Avaliacao[]>([
     {
       id: "av1",
@@ -573,7 +874,8 @@ export function BionProvider({ children }: { children: ReactNode }) {
       medico: "Dra. Julia Lima",
       especialidade: "Dermatologia",
       nota: 5,
-      comentario: "Atendimento maravilhoso! Muito atenciosa, explicou detalhadamente o tratamento da minha pele.",
+      comentario:
+        "Atendimento maravilhoso! Muito atenciosa, explicou detalhadamente o tratamento da minha pele.",
       pontualidade: 5,
       atencao: 5,
       clareza: 5,
@@ -586,7 +888,8 @@ export function BionProvider({ children }: { children: ReactNode }) {
       medico: "Dra. Ana Ribeiro",
       especialidade: "Clínica Geral",
       nota: 5,
-      comentario: "Excelente médica. Pontual, prestativa e a receita digital funcionou de primeira na farmácia.",
+      comentario:
+        "Excelente médica. Pontual, prestativa e a receita digital funcionou de primeira na farmácia.",
       pontualidade: 5,
       atencao: 5,
       clareza: 5,
@@ -599,7 +902,8 @@ export function BionProvider({ children }: { children: ReactNode }) {
       medico: "Dr. Carlos Mendes",
       especialidade: "Cardiologia",
       nota: 5,
-      comentario: "Ótimo cardiologista. Passou muita tranquilidade e orientações claras sobre exercícios e pressão.",
+      comentario:
+        "Ótimo cardiologista. Passou muita tranquilidade e orientações claras sobre exercícios e pressão.",
       pontualidade: 5,
       atencao: 5,
       clareza: 5,
@@ -626,6 +930,7 @@ export function BionProvider({ children }: { children: ReactNode }) {
         if (d.pacientePerfil) setPacientePerfil(d.pacientePerfil);
         if (Array.isArray(d.consentimentos)) setConsentimentos(d.consentimentos);
         if (Array.isArray(d.avaliacoes)) setAvaliacoes(d.avaliacoes);
+        if (Array.isArray(d.auditLogs)) setAuditLogs(d.auditLogs);
       }
     } catch {
       // fallback
@@ -651,105 +956,214 @@ export function BionProvider({ children }: { children: ReactNode }) {
           pacientePerfil,
           consentimentos,
           avaliacoes,
+          auditLogs,
         }),
       );
     } catch {
       // fallback
     }
-  }, [consultas, arquivos, notificacoes, documentos, medicos, tickets, lembretes, pacientePerfil, consentimentos, avaliacoes]);
+  }, [
+    consultas,
+    arquivos,
+    notificacoes,
+    documentos,
+    medicos,
+    tickets,
+    lembretes,
+    pacientePerfil,
+    consentimentos,
+    avaliacoes,
+    auditLogs,
+  ]);
 
   const notificar = useCallback((n: Omit<Notificacao, "id" | "hora" | "lida">) => {
     setNotificacoes((prev) => [{ ...n, id: uid(), hora: agora(), lida: false }, ...prev]);
   }, []);
 
-  const cancelarConsulta = useCallback((id: string, motivo: string) => {
-    setConsultas((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, status: "cancelada" as const, motivoCancelamento: motivo } : c)),
-    );
-    setConsultas((prev) => {
-      const c = prev.find((x) => x.id === id);
-      if (c) {
-        notificar({
-          tipo: "agenda",
-          titulo: "Consulta cancelada",
-          texto: `${c.medico} — ${c.data} às ${c.hora}. Motivo: ${motivo}`,
-        });
-      }
-      return prev;
-    });
-  }, [notificar]);
+  const sessaoRef = useRef(sessao);
+  sessaoRef.current = sessao;
 
-  const remarcarConsulta = useCallback((id: string, data: string, hora: string) => {
-    setConsultas((prev) =>
-      prev.map((c) =>
-        c.id === id ? { ...c, data, hora, status: "confirmada" as const, remarcada: true } : c,
-      ),
-    );
-    setConsultas((prev) => {
-      const c = prev.find((x) => x.id === id);
-      if (c) {
-        notificar({
-          tipo: "agenda",
-          titulo: "Consulta remarcada",
-          texto: `${c.medico} — novo horário: ${data} às ${hora}. A agenda foi atualizada.`,
-        });
-      }
-      return prev;
-    });
-  }, [notificar]);
-
-  const concluirConsulta = useCallback((id: string, resumo?: string) => {
-    setConsultas((prev) =>
-      prev.map((c) =>
-        c.id === id ? { ...c, status: "concluida" as const, resumoMedico: resumo ?? c.resumoMedico } : c,
-      ),
-    );
-    setConsultas((prev) => {
-      const c = prev.find((x) => x.id === id);
-      if (c) {
-        notificar({
-          tipo: "agenda",
-          titulo: "Consulta concluída",
-          texto: `Atendimento com ${c.medico} finalizado com sucesso. Acesse o resumo e documentos emitidos.`,
-          para: "paciente",
-        });
-      }
-      return prev;
-    });
-  }, [notificar]);
-
-  const adicionarConsulta = useCallback((c: Omit<Consulta, "id" | "status" | "ts">) => {
-    const novaConsulta: Consulta = {
-      ...c,
+  const registrarAudit = useCallback((log: Omit<AuditLog, "id" | "ts" | "usuario" | "role">) => {
+    const entry: AuditLog = {
+      ...log,
       id: uid(),
-      status: "confirmada",
       ts: Date.now(),
-      pago: true,
+      usuario: sessaoRef.current.nome,
+      role: sessaoRef.current.role,
     };
-    setConsultas((prev) => [novaConsulta, ...prev]);
+    setAuditLogs((prev) => [entry, ...prev]);
   }, []);
 
-  const adicionarArquivo = useCallback((a: Omit<Arquivo, "id" | "data">) => {
-    const data = new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" });
-    setArquivos((prev) => [{ ...a, id: uid(), data }, ...prev]);
-    notificar({
-      tipo: "exame",
-      titulo: a.enviadoPor === "paciente" ? "Exame enviado" : "Novo arquivo do médico",
-      texto: `${a.nome} adicionado ao histórico da consulta.`,
-    });
-  }, [notificar]);
+  const cancelarConsulta = useCallback(
+    (id: string, motivo: string) => {
+      setConsultas((prev) =>
+        prev.map((c) =>
+          c.id === id ? { ...c, status: "cancelada" as const, motivoCancelamento: motivo } : c,
+        ),
+      );
+      setConsultas((prev) => {
+        const c = prev.find((x) => x.id === id);
+        if (c) {
+          notificar({
+            tipo: "agenda",
+            titulo: "Consulta cancelada",
+            texto: `${c.medico} — ${c.data} às ${c.hora}. Motivo: ${motivo}`,
+          });
+          registrarAudit({
+            acao: "CONSULTA_CANCELADA",
+            categoria: "consulta",
+            severidade: "warning",
+            entidade: "consulta",
+            entidadeId: id,
+            detalhes: `Consulta com ${c.medico} cancelada — Motivo: ${motivo}`,
+          });
+        }
+        return prev;
+      });
+    },
+    [notificar, registrarAudit],
+  );
 
-  const emitirDocumento = useCallback((d: Omit<Documento, "id" | "data">) => {
-    const data = new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" });
-    const novoDoc: Documento = { ...d, id: uid(), data };
-    setDocumentos((prev) => [novoDoc, ...prev]);
-    notificar({
-      tipo: "receita",
-      titulo: d.tipo === "receita" ? "Receita digital disponível" : d.tipo === "atestado" ? "Atestado emitido" : "Solicitação de exames disponível",
-      texto: `${d.titulo} emitido por ${d.medico}. Assinado digitalmente com padrão ICP-Brasil.`,
-      para: "paciente",
-    });
-  }, [notificar]);
+  const remarcarConsulta = useCallback(
+    (id: string, data: string, hora: string) => {
+      setConsultas((prev) =>
+        prev.map((c) =>
+          c.id === id ? { ...c, data, hora, status: "confirmada" as const, remarcada: true } : c,
+        ),
+      );
+      setConsultas((prev) => {
+        const c = prev.find((x) => x.id === id);
+        if (c) {
+          notificar({
+            tipo: "agenda",
+            titulo: "Consulta remarcada",
+            texto: `${c.medico} — novo horário: ${data} às ${hora}. A agenda foi atualizada.`,
+          });
+          registrarAudit({
+            acao: "CONSULTA_REMARCADA",
+            categoria: "consulta",
+            severidade: "warning",
+            entidade: "consulta",
+            entidadeId: id,
+            detalhes: `Consulta com ${c.medico} remarcada para ${data} às ${hora}`,
+          });
+        }
+        return prev;
+      });
+    },
+    [notificar, registrarAudit],
+  );
+
+  const concluirConsulta = useCallback(
+    (id: string, resumo?: string) => {
+      setConsultas((prev) =>
+        prev.map((c) =>
+          c.id === id
+            ? { ...c, status: "concluida" as const, resumoMedico: resumo ?? c.resumoMedico }
+            : c,
+        ),
+      );
+      setConsultas((prev) => {
+        const c = prev.find((x) => x.id === id);
+        if (c) {
+          notificar({
+            tipo: "agenda",
+            titulo: "Consulta concluída",
+            texto: `Atendimento com ${c.medico} finalizado com sucesso. Acesse o resumo e documentos emitidos.`,
+            para: "paciente",
+          });
+          registrarAudit({
+            acao: "CONSULTA_CONCLUIDA",
+            categoria: "consulta",
+            severidade: "info",
+            entidade: "consulta",
+            entidadeId: id,
+            detalhes: `Consulta com ${c.medico} concluída${resumo ? ` — Resumo: ${resumo.slice(0, 100)}` : ""}`,
+          });
+        }
+        return prev;
+      });
+    },
+    [notificar, registrarAudit],
+  );
+
+  const adicionarConsulta = useCallback(
+    (c: Omit<Consulta, "id" | "status" | "ts">) => {
+      const novaConsulta: Consulta = {
+        ...c,
+        id: uid(),
+        status: "confirmada",
+        ts: Date.now(),
+        pago: true,
+      };
+      setConsultas((prev) => [novaConsulta, ...prev]);
+      registrarAudit({
+        acao: "CONSULTA_AGENDADA",
+        categoria: "consulta",
+        severidade: "info",
+        entidade: "consulta",
+        entidadeId: novaConsulta.id,
+        detalhes: `Agendamento com ${c.medico} — ${c.especialidade} em ${c.data} às ${c.hora}`,
+      });
+    },
+    [registrarAudit],
+  );
+
+  const adicionarArquivo = useCallback(
+    (a: Omit<Arquivo, "id" | "data">) => {
+      const data = new Date().toLocaleDateString("pt-BR", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      });
+      setArquivos((prev) => [{ ...a, id: uid(), data }, ...prev]);
+      notificar({
+        tipo: "exame",
+        titulo: a.enviadoPor === "paciente" ? "Exame enviado" : "Novo arquivo do médico",
+        texto: `${a.nome} adicionado ao histórico da consulta.`,
+      });
+      registrarAudit({
+        acao: "ARQUIVO_ENVIADO",
+        categoria: "documento",
+        severidade: "info",
+        entidade: "arquivo",
+        detalhes: `${a.nome} (${a.tipo}, ${a.tamanhoKb}KB) enviado por ${a.enviadoPor}`,
+      });
+    },
+    [notificar, registrarAudit],
+  );
+
+  const emitirDocumento = useCallback(
+    (d: Omit<Documento, "id" | "data">) => {
+      const data = new Date().toLocaleDateString("pt-BR", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      });
+      const novoDoc: Documento = { ...d, id: uid(), data };
+      setDocumentos((prev) => [novoDoc, ...prev]);
+      notificar({
+        tipo: "receita",
+        titulo:
+          d.tipo === "receita"
+            ? "Receita digital disponível"
+            : d.tipo === "atestado"
+              ? "Atestado emitido"
+              : "Solicitação de exames disponível",
+        texto: `${d.titulo} emitido por ${d.medico}. Assinado digitalmente com padrão ICP-Brasil.`,
+        para: "paciente",
+      });
+      registrarAudit({
+        acao: "DOCUMENTO_EMITIDO",
+        categoria: "documento",
+        severidade: "info",
+        entidade: "documento",
+        entidadeId: novoDoc.id,
+        detalhes: `${d.tipo === "receita" ? "Receita" : d.tipo === "atestado" ? "Atestado" : "Solicitação de exame"}: ${d.titulo} para ${d.paciente}`,
+      });
+    },
+    [notificar, registrarAudit],
+  );
 
   const marcarLida = useCallback((id: string) => {
     setNotificacoes((prev) => prev.map((n) => (n.id === id ? { ...n, lida: true } : n)));
@@ -765,7 +1179,9 @@ export function BionProvider({ children }: { children: ReactNode }) {
       const pacientesVinculados = new Set(
         consultas.filter((c) => c.medico === sessao.nome).map((c) => c.paciente),
       );
-      return documentos.filter((d) => d.medico === sessao.nome || pacientesVinculados.has(d.paciente));
+      return documentos.filter(
+        (d) => d.medico === sessao.nome || pacientesVinculados.has(d.paciente),
+      );
     }
     return documentos;
   }, [documentos, consultas, sessao]);
@@ -787,9 +1203,17 @@ export function BionProvider({ children }: { children: ReactNode }) {
           ? `${registro.quem} autorizou a geração do prontuário em PDF (${registro.documentos} documento(s)).`
           : `${registro.quem} recusou o consentimento para gerar o prontuário em PDF.`,
       });
+      registrarAudit({
+        acao: "CONSENTIMENTO_REGISTRADO",
+        categoria: "consentimento",
+        severidade: registro.aceito ? "info" : "warning",
+        entidade: "consentimento",
+        entidadeId: registro.id,
+        detalhes: `Consentimento ${registro.aceito ? "aceito" : "recusado"} para ${registro.finalidade} (${registro.documentos} documento(s))`,
+      });
       return registro;
     },
-    [sessao, notificar],
+    [sessao, notificar, registrarAudit],
   );
 
   const consentimentosVisiveis = useMemo(() => {
@@ -830,11 +1254,19 @@ export function BionProvider({ children }: { children: ReactNode }) {
       notificar({
         tipo: "mensagem",
         titulo: "Nova avaliação recebida",
-        texto: `${a.paciente} avaliou seu atendimento com ${a.nota} estrela(s).${a.comentario ? ` “${a.comentario}”` : ""}`,
+        texto: `${a.paciente} avaliou seu atendimento com ${a.nota} estrela(s).${a.comentario ? ` "${a.comentario}"` : ""}`,
         para: "medico",
       });
+
+      registrarAudit({
+        acao: "AVALIACAO_REGISTRADA",
+        categoria: "consulta",
+        severidade: "info",
+        entidade: "avaliacao",
+        detalhes: `Avaliação ${a.nota} estrela(s) para ${a.medico}${a.comentario ? ` — "${a.comentario.slice(0, 80)}"` : ""}`,
+      });
     },
-    [avaliacoes, notificar],
+    [avaliacoes, notificar, registrarAudit],
   );
 
   const notificacoesVisiveis = useMemo(
@@ -863,8 +1295,16 @@ export function BionProvider({ children }: { children: ReactNode }) {
         texto: `${t.usuario} abriu chamado sobre: ${t.assunto}`,
         para: "admin",
       });
+      registrarAudit({
+        acao: "TICKET_CRIADO",
+        categoria: "suporte",
+        severidade: "info",
+        entidade: "ticket",
+        entidadeId: novo.id,
+        detalhes: `Chamado "${t.assunto}" aberto por ${t.usuario} (${t.categoria})`,
+      });
     },
-    [notificar],
+    [notificar, registrarAudit],
   );
 
   const responderTicket = useCallback(
@@ -891,11 +1331,19 @@ export function BionProvider({ children }: { children: ReactNode }) {
             texto: `Seu chamado "${t.assunto}" foi respondido pela equipe de suporte BION.`,
             para: t.perfil,
           });
+          registrarAudit({
+            acao: "TICKET_RESPONDIDO",
+            categoria: "suporte",
+            severidade: "info",
+            entidade: "ticket",
+            entidadeId: id,
+            detalhes: `Chamado "${t.assunto}" respondido`,
+          });
         }
         return prev;
       });
     },
-    [notificar],
+    [notificar, registrarAudit],
   );
 
   const adicionarLembrete = useCallback(
@@ -908,8 +1356,16 @@ export function BionProvider({ children }: { children: ReactNode }) {
         texto: `${l.titulo} programado para ${l.horario} (${l.frequencia}).`,
         para: "paciente",
       });
+      registrarAudit({
+        acao: "LEMBRETE_CRIADO",
+        categoria: "sistema",
+        severidade: "info",
+        entidade: "lembrete",
+        entidadeId: novo.id,
+        detalhes: `Lembrete "${l.titulo}" — ${l.horario} (${l.frequencia})`,
+      });
     },
-    [notificar],
+    [notificar, registrarAudit],
   );
 
   const alternarLembrete = useCallback((id: string) => {
@@ -920,13 +1376,34 @@ export function BionProvider({ children }: { children: ReactNode }) {
     setLembretes((prev) => prev.filter((l) => l.id !== id));
   }, []);
 
-  const atualizarPacientePerfil = useCallback((p: Partial<PacientePerfil>) => {
-    setPacientePerfil((prev) => ({ ...prev, ...p }));
-  }, []);
+  const atualizarPacientePerfil = useCallback(
+    (p: Partial<PacientePerfil>) => {
+      setPacientePerfil((prev) => ({ ...prev, ...p }));
+      registrarAudit({
+        acao: "PERFIL_ATUALIZADO",
+        categoria: "usuario",
+        severidade: "info",
+        entidade: "perfil",
+        detalhes: `Dados atualizados: ${Object.keys(p).join(", ")}`,
+      });
+    },
+    [registrarAudit],
+  );
 
-  const atualizarMedico = useCallback((id: string, dados: Partial<Medico>) => {
-    setMedicos((prev) => prev.map((m) => (m.id === id ? { ...m, ...dados } : m)));
-  }, []);
+  const atualizarMedico = useCallback(
+    (id: string, dados: Partial<Medico>) => {
+      setMedicos((prev) => prev.map((m) => (m.id === id ? { ...m, ...dados } : m)));
+      registrarAudit({
+        acao: "MEDICO_ATUALIZADO",
+        categoria: "admin",
+        severidade: "info",
+        entidade: "medico",
+        entidadeId: id,
+        detalhes: `Dados atualizados: ${Object.keys(dados).join(", ")}`,
+      });
+    },
+    [registrarAudit],
+  );
 
   const aprovarMedico = useCallback(
     (id: string) => {
@@ -937,15 +1414,39 @@ export function BionProvider({ children }: { children: ReactNode }) {
         texto: `O cadastro do médico foi validado e ativado para teleconsultas.`,
         para: "admin",
       });
+      setMedicos((prev) => {
+        const m = prev.find((x) => x.id === id);
+        registrarAudit({
+          acao: "MEDICO_APROVADO",
+          categoria: "admin",
+          severidade: "critical",
+          entidade: "medico",
+          entidadeId: id,
+          detalhes: `CRM de ${m?.nome ?? id} validado e ativado`,
+        });
+        return prev;
+      });
     },
-    [notificar],
+    [notificar, registrarAudit],
   );
 
   const suspenderMedico = useCallback(
     (id: string) => {
       setMedicos((prev) => prev.map((m) => (m.id === id ? { ...m, status: "suspenso" } : m)));
+      setMedicos((prev) => {
+        const m = prev.find((x) => x.id === id);
+        registrarAudit({
+          acao: "MEDICO_SUSPENSO",
+          categoria: "admin",
+          severidade: "critical",
+          entidade: "medico",
+          entidadeId: id,
+          detalhes: `${m?.nome ?? id} suspenso da plataforma`,
+        });
+        return prev;
+      });
     },
-    [],
+    [registrarAudit],
   );
 
   const value = useMemo<Store>(
@@ -986,6 +1487,8 @@ export function BionProvider({ children }: { children: ReactNode }) {
       atualizarMedico,
       aprovarMedico,
       suspenderMedico,
+      auditLogs,
+      registrarAudit,
     }),
     [
       consultas,
@@ -1022,6 +1525,8 @@ export function BionProvider({ children }: { children: ReactNode }) {
       atualizarMedico,
       aprovarMedico,
       suspenderMedico,
+      auditLogs,
+      registrarAudit,
     ],
   );
 

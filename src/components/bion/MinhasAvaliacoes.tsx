@@ -20,7 +20,9 @@ export function MinhasAvaliacoes() {
     const corte = Date.now() - 30 * DIA;
     const recentes = minhas.filter((a) => a.ts >= corte);
     const antigas = minhas.filter((a) => a.ts < corte);
-    const mediaRec = recentes.length ? recentes.reduce((s, a) => s + a.nota, 0) / recentes.length : 0;
+    const mediaRec = recentes.length
+      ? recentes.reduce((s, a) => s + a.nota, 0) / recentes.length
+      : 0;
     const mediaAnt = antigas.length ? antigas.reduce((s, a) => s + a.nota, 0) / antigas.length : 0;
     const delta = recentes.length && antigas.length ? mediaRec - mediaAnt : 0;
 
@@ -65,11 +67,15 @@ export function MinhasAvaliacoes() {
         <div className="bg-card border rounded-2xl p-5">
           <div className="text-sm font-medium">Tendência (30 dias)</div>
           <div className="mt-2 flex items-center gap-2 text-2xl font-bold">
-            <TendIcon className="w-5 h-5" style={{ color: resumo.delta < -0.05 ? "#dc2626" : "var(--accent)" }} />
+            <TendIcon
+              className="w-5 h-5"
+              style={{ color: resumo.delta < -0.05 ? "#dc2626" : "var(--accent)" }}
+            />
             {resumo.delta ? `${resumo.delta > 0 ? "+" : ""}${resumo.delta.toFixed(1)}` : "estável"}
           </div>
           <div className="text-xs text-muted-foreground mt-1">
-            {resumo.recentes} avaliação(ões) recentes{resumo.recentes ? ` • média ${resumo.mediaRec.toFixed(1)}` : ""}
+            {resumo.recentes} avaliação(ões) recentes
+            {resumo.recentes ? ` • média ${resumo.mediaRec.toFixed(1)}` : ""}
           </div>
         </div>
         <div className="bg-card border rounded-2xl p-5">
@@ -79,7 +85,10 @@ export function MinhasAvaliacoes() {
               <div key={d.n} className="flex items-center gap-2 text-xs">
                 <span className="w-3 text-muted-foreground">{d.n}</span>
                 <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
-                  <div className="h-full rounded-full bg-primary" style={{ width: `${(d.q / maxQ) * 100}%` }} />
+                  <div
+                    className="h-full rounded-full bg-primary"
+                    style={{ width: `${(d.q / maxQ) * 100}%` }}
+                  />
                 </div>
                 <span className="w-4 text-right text-muted-foreground">{d.q}</span>
               </div>
@@ -93,7 +102,9 @@ export function MinhasAvaliacoes() {
         <div className="mt-4 flex items-end gap-3 h-32">
           {resumo.meses.map((m, i) => (
             <div key={i} className="flex-1 flex flex-col items-center gap-1.5">
-              <span className="text-[11px] text-muted-foreground">{m.media ? m.media.toFixed(1) : ""}</span>
+              <span className="text-[11px] text-muted-foreground">
+                {m.media ? m.media.toFixed(1) : ""}
+              </span>
               <div
                 className="w-full rounded-t-lg bg-primary/80"
                 style={{ height: `${(m.media / 5) * 100}%`, minHeight: m.media ? 6 : 2 }}
@@ -106,11 +117,18 @@ export function MinhasAvaliacoes() {
       </div>
 
       <div className="mt-6 flex gap-2 flex-wrap">
-        {([["todas", "Todas"], ["com-comentario", "Com comentário"], ["baixas", "Nota ≤ 3"]] as const).map(([k, t]) => (
+        {(
+          [
+            ["todas", "Todas"],
+            ["com-comentario", "Com comentário"],
+            ["baixas", "Nota ≤ 3"],
+          ] as const
+        ).map(([k, t]) => (
           <button
             key={k}
             onClick={() => setFiltro(k)}
-            className={`px-3.5 py-2 rounded-xl text-sm font-medium border ${filtro === k ? "bg-primary text-primary-foreground border-primary" : "hover:bg-muted"}`}>
+            className={`px-3.5 py-2 rounded-xl text-sm font-medium border ${filtro === k ? "bg-primary text-primary-foreground border-primary" : "hover:bg-muted"}`}
+          >
             {t}
           </button>
         ))}
@@ -127,11 +145,16 @@ export function MinhasAvaliacoes() {
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <div className="font-medium truncate">{a.paciente}</div>
-                <div className="text-xs text-muted-foreground">{a.especialidade} • {a.quando}</div>
+                <div className="text-xs text-muted-foreground">
+                  {a.especialidade} • {a.quando}
+                </div>
               </div>
               <div className="flex items-center gap-0.5 shrink-0">
                 {Array.from({ length: 5 }).map((_, i) => (
-                  <Star key={i} className={`w-4 h-4 ${i < a.nota ? "text-primary fill-primary" : "text-muted-foreground/40"}`} />
+                  <Star
+                    key={i}
+                    className={`w-4 h-4 ${i < a.nota ? "text-primary fill-primary" : "text-muted-foreground/40"}`}
+                  />
                 ))}
               </div>
             </div>
