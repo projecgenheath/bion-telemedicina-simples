@@ -106,7 +106,8 @@ type View =
   | "suporte"
   | "bion-ia"
   | "avaliacoes"
-  | "auditoria";
+  | "auditoria"
+  | "ajuda";
 
 function BionApp() {
   return (
@@ -176,6 +177,7 @@ function BionRoot() {
       {view === "bion-ia" && <BionIA />}
       {view === "avaliacoes" && <MinhasAvaliacoes />}
       {view === "auditoria" && <AuditTrail />}
+      {view === "ajuda" && <Ajuda perfil={sessao.role} />}
 
       {posConsultaModalAberto && (
         <PosConsultaModal
@@ -472,6 +474,7 @@ function Shell({
       { icon: Bell, label: "Lembretes", view: "lembretes" },
       { icon: Bot, label: "BION Saúde IA", view: "bion-ia" },
       { icon: LifeBuoy, label: "Suporte", view: "suporte" },
+      { icon: CircleHelp, label: "Ajuda & FAQ", view: "ajuda" },
       { icon: User, label: "Meu Perfil", view: "paciente-perfil" },
     ],
     medico: [
@@ -484,6 +487,7 @@ function Shell({
       { icon: MessageSquare, label: "Mensagens", view: "mensagens" },
       { icon: Bot, label: "BION Copilot IA", view: "bion-ia" },
       { icon: LifeBuoy, label: "Suporte", view: "suporte" },
+      { icon: CircleHelp, label: "Ajuda & FAQ", view: "ajuda" },
       { icon: User, label: "Meu Perfil", view: "medico-perfil" },
     ],
     admin: [
@@ -493,6 +497,7 @@ function Shell({
       { icon: FileSearch, label: "Auditoria", view: "auditoria" },
       { icon: LifeBuoy, label: "Chamados Suporte", view: "suporte" },
       { icon: Bell, label: "Lembretes", view: "lembretes" },
+      { icon: CircleHelp, label: "Ajuda & FAQ", view: "ajuda" },
     ],
   };
 
