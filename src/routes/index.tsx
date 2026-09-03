@@ -40,6 +40,7 @@ import {
   Bot,
   Trash2,
   FileSearch,
+  CircleHelp,
 } from "lucide-react";
 import { BionProvider, useBion, type Sessao } from "@/lib/bion-store";
 import { Consulta } from "@/components/bion/Consulta";
@@ -59,6 +60,7 @@ import { Prontuario } from "@/components/bion/Prontuario";
 import { Relatorios } from "@/components/bion/Relatorios";
 import { HistoricoClinico } from "@/components/bion/HistoricoClinico";
 import { AuditTrail } from "@/components/bion/AuditTrail";
+import { Ajuda } from "@/components/bion/Ajuda";
 
 export const Route = createFileRoute("/")({
   component: BionApp,
