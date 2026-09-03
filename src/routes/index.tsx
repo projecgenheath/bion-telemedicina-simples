@@ -38,9 +38,7 @@ import {
   Menu,
   LifeBuoy,
   Bot,
-  AlertCircle,
   Trash2,
-  ArrowUpRight,
   FileSearch,
 } from "lucide-react";
 import { BionProvider, useBion, type Sessao } from "@/lib/bion-store";
@@ -55,7 +53,6 @@ import { PacientePerfilView } from "@/components/bion/PacientePerfilView";
 import { MinhasAvaliacoes } from "@/components/bion/MinhasAvaliacoes";
 import { Notificacoes } from "@/components/bion/Notificacoes";
 import { AgendaConsultas } from "@/components/bion/AgendaConsultas";
-import { Arquivos } from "@/components/bion/Arquivos";
 import { Usuarios } from "@/components/bion/Usuarios";
 import { Receitas } from "@/components/bion/Receitas";
 import { Prontuario } from "@/components/bion/Prontuario";
@@ -63,7 +60,27 @@ import { Relatorios } from "@/components/bion/Relatorios";
 import { HistoricoClinico } from "@/components/bion/HistoricoClinico";
 import { AuditTrail } from "@/components/bion/AuditTrail";
 
-export const Route = createFileRoute("/")({ component: BionApp });
+export const Route = createFileRoute("/")({
+  component: BionApp,
+  head: () => ({
+    meta: [
+      { title: "BION — Consulta médica online em minutos" },
+      {
+        name: "description",
+        content:
+          "Agende, entre na sala e faça sua consulta por vídeo em minutos. Receitas, atestados e prontuário digital em um só lugar.",
+      },
+      { property: "og:title", content: "BION — Consulta médica online em minutos" },
+      {
+        property: "og:description",
+        content:
+          "Telemedicina simples e humanizada: agendamento rápido, vídeo em HD e documentos com validade legal.",
+      },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
+    ],
+  }),
+});
 
 type Role = "paciente" | "medico" | "admin";
 type View =
