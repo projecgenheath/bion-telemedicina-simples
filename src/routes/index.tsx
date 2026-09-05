@@ -61,6 +61,10 @@ import { Relatorios } from "@/components/bion/Relatorios";
 import { HistoricoClinico } from "@/components/bion/HistoricoClinico";
 import { AuditTrail } from "@/components/bion/AuditTrail";
 import { Ajuda } from "@/components/bion/Ajuda";
+import { TourGuiado } from "@/components/bion/TourGuiado";
+import { TemaToggle } from "@/components/bion/TemaToggle";
+import { PrivacidadePaciente } from "@/components/bion/PrivacidadePaciente";
+import { PrivacidadeAdmin } from "@/components/bion/PrivacidadeAdmin";
 
 export const Route = createFileRoute("/")({
   component: BionApp,
@@ -107,7 +111,8 @@ type View =
   | "bion-ia"
   | "avaliacoes"
   | "auditoria"
-  | "ajuda";
+  | "ajuda"
+  | "privacidade";
 
 function BionApp() {
   return (
@@ -178,6 +183,8 @@ function BionRoot() {
       {view === "avaliacoes" && <MinhasAvaliacoes />}
       {view === "auditoria" && <AuditTrail />}
       {view === "ajuda" && <Ajuda perfil={sessao.role} />}
+      {view === "privacidade" && sessao.role === "admin" && <PrivacidadeAdmin />}
+      {view === "privacidade" && sessao.role !== "admin" && <PrivacidadePaciente />}
 
       {posConsultaModalAberto && (
         <PosConsultaModal
@@ -475,6 +482,7 @@ function Shell({
       { icon: Bot, label: "BION Saúde IA", view: "bion-ia" },
       { icon: LifeBuoy, label: "Suporte", view: "suporte" },
       { icon: CircleHelp, label: "Ajuda & FAQ", view: "ajuda" },
+      { icon: Shield, label: "Privacidade", view: "privacidade" },
       { icon: User, label: "Meu Perfil", view: "paciente-perfil" },
     ],
     medico: [
@@ -498,6 +506,7 @@ function Shell({
       { icon: LifeBuoy, label: "Chamados Suporte", view: "suporte" },
       { icon: Bell, label: "Lembretes", view: "lembretes" },
       { icon: CircleHelp, label: "Ajuda & FAQ", view: "ajuda" },
+      { icon: Shield, label: "Privacidade & LGPD", view: "privacidade" },
     ],
   };
 
@@ -594,6 +603,7 @@ function Shell({
           </div>
 
           <div className="flex items-center gap-3">
+            <TemaToggle />
             <SinoNotificacoes onClick={() => setView("notificacoes")} />
             <button
               onClick={onLogout}
@@ -608,6 +618,8 @@ function Shell({
         {/* Conteúdo da Página */}
         <div className="p-4 md:p-8 pb-28 md:pb-12 max-w-6xl w-full mx-auto flex-1">{children}</div>
       </main>
+
+      <TourGuiado role={role} />
 
       {/* Navegação Mobile Inferior */}
       <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 bg-card border-t flex justify-around p-1 shadow-lg">

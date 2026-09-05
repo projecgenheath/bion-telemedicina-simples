@@ -847,6 +847,8 @@ type Store = {
   suspenderMedico: (id: string) => void;
   auditLogs: AuditLog[];
   registrarAudit: (log: Omit<AuditLog, "id" | "ts" | "usuario" | "role">) => void;
+  anonimizarPaciente: (nome: string) => void;
+  excluirDadosPaciente: (nome: string) => void;
 };
 
 const BionContext = createContext<Store | null>(null);
@@ -1449,6 +1451,42 @@ export function BionProvider({ children }: { children: ReactNode }) {
     [registrarAudit],
   );
 
+  const anonimizarPaciente = useCallback(
+    (nome: string) => {
+      const apelido = `Paciente Anonimizado ${uid().slice(-4).toUpperCase()}`;
+      setConsultas((prev) => prev.map((c) => (c.paciente === nome ? { ...c, paciente: apelido } : c)));
+      setDocumentos((prev) => prev.map((d) => (d.paciente === nome ? { ...d, paciente: apelido } : d)));
+      setAvaliacoes((prev) => prev.map((a) => (a.paciente === nome ? { ...a, paciente: apelido } : a)));
+      registrarAudit({
+        acao: "PACIENTE_ANONIMIZADO",
+        categoria: "admin",
+        severidade: "critical",
+        entidade: "paciente",
+        entidadeId: nome,
+        detalhes: `Dados identificáveis substituídos por ${apelido} (LGPD art. 12)`,
+      });
+    },
+    [registrarAudit],
+  );
+
+  const excluirDadosPaciente = useCallback(
+    (nome: string) => {
+      setConsultas((prev) => prev.filter((c) => c.paciente !== nome));
+      setDocumentos((prev) => prev.filter((d) => d.paciente !== nome));
+      setAvaliacoes((prev) => prev.filter((a) => a.paciente !== nome));
+      setConsentimentos((prev) => prev.filter((c) => c.paciente !== nome));
+      registrarAudit({
+        acao: "PACIENTE_DADOS_EXCLUIDOS",
+        categoria: "admin",
+        severidade: "critical",
+        entidade: "paciente",
+        entidadeId: nome,
+        detalhes: `Exclusão definitiva de consultas, documentos, avaliações e consentimentos de ${nome}`,
+      });
+    },
+    [registrarAudit],
+  );
+
   const value = useMemo<Store>(
     () => ({
       consultas,
@@ -1489,6 +1527,8 @@ export function BionProvider({ children }: { children: ReactNode }) {
       suspenderMedico,
       auditLogs,
       registrarAudit,
+      anonimizarPaciente,
+      excluirDadosPaciente,
     }),
     [
       consultas,
@@ -1527,6 +1567,8 @@ export function BionProvider({ children }: { children: ReactNode }) {
       suspenderMedico,
       auditLogs,
       registrarAudit,
+      anonimizarPaciente,
+      excluirDadosPaciente,
     ],
   );
 
