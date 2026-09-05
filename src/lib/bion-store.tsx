@@ -847,6 +847,8 @@ type Store = {
   suspenderMedico: (id: string) => void;
   auditLogs: AuditLog[];
   registrarAudit: (log: Omit<AuditLog, "id" | "ts" | "usuario" | "role">) => void;
+  anonimizarPaciente: (nome: string) => void;
+  excluirDadosPaciente: (nome: string) => void;
 };
 
 const BionContext = createContext<Store | null>(null);
