@@ -1527,6 +1527,8 @@ export function BionProvider({ children }: { children: ReactNode }) {
       suspenderMedico,
       auditLogs,
       registrarAudit,
+      anonimizarPaciente,
+      excluirDadosPaciente,
     }),
     [
       consultas,
@@ -1565,6 +1567,8 @@ export function BionProvider({ children }: { children: ReactNode }) {
       suspenderMedico,
       auditLogs,
       registrarAudit,
+      anonimizarPaciente,
+      excluirDadosPaciente,
     ],
   );
 
