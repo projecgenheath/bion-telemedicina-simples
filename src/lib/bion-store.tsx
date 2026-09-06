@@ -806,6 +806,70 @@ const pacientePerfilInicial: PacientePerfil = {
   altura: "1,68 m",
 };
 
+export type PacienteRegistro = {
+  id: string;
+  nome: string;
+  email: string;
+  telefone: string;
+  cpf: string;
+  idade: number;
+  genero: string;
+  convenio: string;
+  status: "ativo" | "inativo";
+  desde: string;
+};
+
+const pacientesIniciais: PacienteRegistro[] = [
+  {
+    id: "pa1",
+    nome: "Marina Silva",
+    email: "marina.silva@email.com",
+    telefone: "(11) 98765-4321",
+    cpf: "123.456.789-00",
+    idade: 32,
+    genero: "Feminino",
+    convenio: "Particular",
+    status: "ativo",
+    desde: "12/03/2025",
+  },
+  {
+    id: "pa2",
+    nome: "João Pereira",
+    email: "joao.pereira@email.com",
+    telefone: "(11) 97654-3210",
+    cpf: "234.567.890-11",
+    idade: 45,
+    genero: "Masculino",
+    convenio: "Unimed",
+    status: "ativo",
+    desde: "02/05/2025",
+  },
+  {
+    id: "pa3",
+    nome: "Carlos Souza",
+    email: "carlos.souza@email.com",
+    telefone: "(21) 99876-5432",
+    cpf: "345.678.901-22",
+    idade: 58,
+    genero: "Masculino",
+    convenio: "Bradesco Saúde",
+    status: "ativo",
+    desde: "19/06/2025",
+  },
+  {
+    id: "pa4",
+    nome: "Beatriz Almeida",
+    email: "beatriz.almeida@email.com",
+    telefone: "(31) 98111-2233",
+    cpf: "456.789.012-33",
+    idade: 27,
+    genero: "Feminino",
+    convenio: "Particular",
+    status: "inativo",
+    desde: "08/08/2025",
+  },
+];
+
 type Store = {
   sessao: Sessao;
   setSessao: (s: Sessao) => void;
@@ -849,6 +913,13 @@ type Store = {
   registrarAudit: (log: Omit<AuditLog, "id" | "ts" | "usuario" | "role">) => void;
   anonimizarPaciente: (nome: string) => void;
   excluirDadosPaciente: (nome: string) => void;
+  pacientes: PacienteRegistro[];
+  adicionarPaciente: (p: Omit<PacienteRegistro, "id" | "desde">) => void;
+  atualizarPaciente: (id: string, dados: Partial<PacienteRegistro>) => void;
+  excluirPaciente: (id: string) => void;
+  adicionarMedico: (m: Omit<Medico, "id" | "avaliacao" | "numAvaliacoes">) => void;
+  excluirMedico: (id: string) => void;
+  atualizarConsulta: (id: string, dados: Partial<Consulta>) => void;
 };
 
 const BionContext = createContext<Store | null>(null);
@@ -859,6 +930,7 @@ export function BionProvider({ children }: { children: ReactNode }) {
   const [notificacoes, setNotificacoes] = useState<Notificacao[]>(notificacoesIniciais);
   const [documentos, setDocumentos] = useState<Documento[]>(documentosIniciais);
   const [medicos, setMedicos] = useState<Medico[]>(medicosIniciais);
+  const [pacientes, setPacientes] = useState<PacienteRegistro[]>(pacientesIniciais);
   const [tickets, setTickets] = useState<TicketSuporte[]>(ticketsIniciais);
   const [lembretes, setLembretes] = useState<Lembrete[]>(lembretesIniciais);
   const [pacientePerfil, setPacientePerfil] = useState<PacientePerfil>(pacientePerfilInicial);
@@ -927,6 +999,7 @@ export function BionProvider({ children }: { children: ReactNode }) {
         if (Array.isArray(d.notificacoes)) setNotificacoes(d.notificacoes);
         if (Array.isArray(d.documentos)) setDocumentos(d.documentos);
         if (Array.isArray(d.medicos)) setMedicos(d.medicos);
+        if (Array.isArray(d.pacientes)) setPacientes(d.pacientes);
         if (Array.isArray(d.tickets)) setTickets(d.tickets);
         if (Array.isArray(d.lembretes)) setLembretes(d.lembretes);
         if (d.pacientePerfil) setPacientePerfil(d.pacientePerfil);
@@ -953,6 +1026,7 @@ export function BionProvider({ children }: { children: ReactNode }) {
           notificacoes,
           documentos,
           medicos,
+          pacientes,
           tickets,
           lembretes,
           pacientePerfil,
@@ -970,6 +1044,7 @@ export function BionProvider({ children }: { children: ReactNode }) {
     notificacoes,
     documentos,
     medicos,
+    pacientes,
     tickets,
     lembretes,
     pacientePerfil,
@@ -1487,6 +1562,129 @@ export function BionProvider({ children }: { children: ReactNode }) {
     [registrarAudit],
   );
 
+  const adicionarPaciente = useCallback(
+    (p: Omit<PacienteRegistro, "id" | "desde">) => {
+      const novo: PacienteRegistro = {
+        ...p,
+        id: uid(),
+        desde: new Date().toLocaleDateString("pt-BR"),
+      };
+      setPacientes((prev) => [novo, ...prev]);
+      registrarAudit({
+        acao: "PACIENTE_CRIADO",
+        categoria: "admin",
+        severidade: "info",
+        entidade: "paciente",
+        entidadeId: novo.id,
+        detalhes: `Paciente ${novo.nome} cadastrado`,
+      });
+    },
+    [registrarAudit],
+  );
+
+  const atualizarPaciente = useCallback(
+    (id: string, dados: Partial<PacienteRegistro>) => {
+      setPacientes((prev) =>
+        prev.map((p) => {
+          if (p.id !== id) return p;
+          const atualizado = { ...p, ...dados };
+          if (dados.nome && dados.nome !== p.nome) {
+            setConsultas((cs) =>
+              cs.map((c) => (c.paciente === p.nome ? { ...c, paciente: dados.nome! } : c)),
+            );
+            setDocumentos((ds) =>
+              ds.map((d) => (d.paciente === p.nome ? { ...d, paciente: dados.nome! } : d)),
+            );
+          }
+          return atualizado;
+        }),
+      );
+      registrarAudit({
+        acao: "PACIENTE_ATUALIZADO",
+        categoria: "admin",
+        severidade: "info",
+        entidade: "paciente",
+        entidadeId: id,
+        detalhes: `Campos atualizados: ${Object.keys(dados).join(", ")}`,
+      });
+    },
+    [registrarAudit],
+  );
+
+  const excluirPaciente = useCallback(
+    (id: string) => {
+      setPacientes((prev) => {
+        const alvo = prev.find((p) => p.id === id);
+        if (alvo) {
+          setConsultas((cs) => cs.filter((c) => c.paciente !== alvo.nome));
+          setDocumentos((ds) => ds.filter((d) => d.paciente !== alvo.nome));
+          setAvaliacoes((as) => as.filter((a) => a.paciente !== alvo.nome));
+          registrarAudit({
+            acao: "PACIENTE_EXCLUIDO",
+            categoria: "admin",
+            severidade: "critical",
+            entidade: "paciente",
+            entidadeId: id,
+            detalhes: `Cadastro de ${alvo.nome} removido junto com consultas e documentos`,
+          });
+        }
+        return prev.filter((p) => p.id !== id);
+      });
+    },
+    [registrarAudit],
+  );
+
+  const adicionarMedico = useCallback(
+    (m: Omit<Medico, "id" | "avaliacao" | "numAvaliacoes">) => {
+      const novo: Medico = { ...m, id: uid(), avaliacao: 0, numAvaliacoes: 0 };
+      setMedicos((prev) => [novo, ...prev]);
+      registrarAudit({
+        acao: "MEDICO_CRIADO",
+        categoria: "admin",
+        severidade: "info",
+        entidade: "medico",
+        entidadeId: novo.id,
+        detalhes: `Médico ${novo.nome} (${novo.crm}) cadastrado`,
+      });
+    },
+    [registrarAudit],
+  );
+
+  const excluirMedico = useCallback(
+    (id: string) => {
+      setMedicos((prev) => {
+        const alvo = prev.find((m) => m.id === id);
+        if (alvo) {
+          registrarAudit({
+            acao: "MEDICO_EXCLUIDO",
+            categoria: "admin",
+            severidade: "critical",
+            entidade: "medico",
+            entidadeId: id,
+            detalhes: `Cadastro de ${alvo.nome} removido da plataforma`,
+          });
+        }
+        return prev.filter((m) => m.id !== id);
+      });
+    },
+    [registrarAudit],
+  );
+
+  const atualizarConsulta = useCallback(
+    (id: string, dados: Partial<Consulta>) => {
+      setConsultas((prev) => prev.map((c) => (c.id === id ? { ...c, ...dados } : c)));
+      registrarAudit({
+        acao: "CONSULTA_ATUALIZADA",
+        categoria: "admin",
+        severidade: "info",
+        entidade: "consulta",
+        entidadeId: id,
+        detalhes: `Campos atualizados: ${Object.keys(dados).join(", ")}`,
+      });
+    },
+    [registrarAudit],
+  );
+
   const value = useMemo<Store>(
     () => ({
       consultas,
@@ -1529,6 +1727,13 @@ export function BionProvider({ children }: { children: ReactNode }) {
       registrarAudit,
       anonimizarPaciente,
       excluirDadosPaciente,
+      pacientes,
+      adicionarPaciente,
+      atualizarPaciente,
+      excluirPaciente,
+      adicionarMedico,
+      excluirMedico,
+      atualizarConsulta,
     }),
     [
       consultas,
@@ -1569,6 +1774,13 @@ export function BionProvider({ children }: { children: ReactNode }) {
       registrarAudit,
       anonimizarPaciente,
       excluirDadosPaciente,
+      pacientes,
+      adicionarPaciente,
+      atualizarPaciente,
+      excluirPaciente,
+      adicionarMedico,
+      excluirMedico,
+      atualizarConsulta,
     ],
   );
 
