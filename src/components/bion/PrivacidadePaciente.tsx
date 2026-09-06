@@ -11,7 +11,7 @@ export function PrivacidadePaciente() {
   const dadosColetados = [
     { rotulo: "Identificação", valor: `${pacientePerfil.nome} • CPF ${pacientePerfil.cpf}` },
     { rotulo: "Contato", valor: `${pacientePerfil.email} • ${pacientePerfil.telefone}` },
-    { rotulo: "Nascimento", valor: pacientePerfil.nascimento },
+    { rotulo: "Perfil", valor: `${pacientePerfil.idade} anos • ${pacientePerfil.genero}` },
     { rotulo: "Convênio", valor: pacientePerfil.convenio },
     {
       rotulo: "Dados de saúde",
