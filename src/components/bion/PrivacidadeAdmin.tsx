@@ -155,7 +155,7 @@ export function PrivacidadeAdmin() {
               <div className="flex-1 min-w-[180px]">
                 <div className="font-bold text-sm">{m.nome}</div>
                 <div className="text-xs text-muted-foreground mt-0.5">
-                  {m.especialidade} • CRM {m.crm} • status {m.status}
+                  {m.especialidade} • {m.crm} • status {m.status}
                 </div>
               </div>
               <span className="text-[10px] uppercase font-black tracking-widest text-muted-foreground">
