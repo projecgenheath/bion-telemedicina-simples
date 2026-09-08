@@ -27,11 +27,29 @@ export function MedicoPerfilView({ medicoId }: { medicoId?: string }) {
   const [bio, setBio] = useState(medico.bio);
   const [crm, setCrm] = useState(medico.crm);
   const [formacao, setFormacao] = useState(medico.formacao);
+  const [nome, setNome] = useState(medico.nome);
+  const [especialidade, setEspecialidade] = useState(medico.especialidade);
+  const [foto, setFoto] = useState(medico.foto ?? "");
 
   const avaliacoesDoMedico = avaliacoes.filter((a) => a.medico === medico.nome);
 
+  const lerFoto = (file?: File | null) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setFoto(String(reader.result));
+    reader.readAsDataURL(file);
+  };
+
   const salvar = () => {
-    atualizarMedico(medico.id, { valor, bio, crm, formacao });
+    atualizarMedico(medico.id, {
+      valor,
+      bio,
+      crm,
+      formacao,
+      nome: nome.trim() || medico.nome,
+      especialidade: especialidade.trim() || medico.especialidade,
+      foto: foto || undefined,
+    });
     setEditando(false);
   };
 
