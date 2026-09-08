@@ -27,11 +27,29 @@ export function MedicoPerfilView({ medicoId }: { medicoId?: string }) {
   const [bio, setBio] = useState(medico.bio);
   const [crm, setCrm] = useState(medico.crm);
   const [formacao, setFormacao] = useState(medico.formacao);
+  const [nome, setNome] = useState(medico.nome);
+  const [especialidade, setEspecialidade] = useState(medico.especialidade);
+  const [foto, setFoto] = useState(medico.foto ?? "");
 
   const avaliacoesDoMedico = avaliacoes.filter((a) => a.medico === medico.nome);
 
+  const lerFoto = (file?: File | null) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setFoto(String(reader.result));
+    reader.readAsDataURL(file);
+  };
+
   const salvar = () => {
-    atualizarMedico(medico.id, { valor, bio, crm, formacao });
+    atualizarMedico(medico.id, {
+      valor,
+      bio,
+      crm,
+      formacao,
+      nome: nome.trim() || medico.nome,
+      especialidade: especialidade.trim() || medico.especialidade,
+      foto: foto || undefined,
+    });
     setEditando(false);
   };
 
@@ -42,25 +60,80 @@ export function MedicoPerfilView({ medicoId }: { medicoId?: string }) {
       {/* Card Principal */}
       <div className="bg-card border rounded-3xl p-6 md:p-8 shadow-sm relative overflow-hidden">
         <div className="flex flex-col md:flex-row items-start md:items-center gap-6">
-          <div className="w-24 h-24 md:w-32 md:h-32 rounded-3xl bg-primary text-primary-foreground flex items-center justify-center text-4xl font-extrabold shadow-md shrink-0">
-            {medico.nome
-              .split(" ")
-              .slice(-2)
-              .map((w) => w[0])
-              .join("")}
+          <div className="shrink-0 space-y-2">
+            <div className="w-24 h-24 md:w-32 md:h-32 rounded-3xl bg-primary text-primary-foreground flex items-center justify-center text-4xl font-extrabold shadow-md overflow-hidden">
+              {(editando ? foto : medico.foto) ? (
+                <img
+                  src={editando ? foto : medico.foto}
+                  alt={`Foto de ${medico.nome}`}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                medico.nome
+                  .split(" ")
+                  .slice(-2)
+                  .map((w) => w[0])
+                  .join("")
+              )}
+            </div>
+            {editando && (
+              <label className="block text-[11px] font-bold text-primary cursor-pointer text-center">
+                Trocar foto
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => lerFoto(e.target.files?.[0])}
+                />
+              </label>
+            )}
           </div>
 
           <div className="flex-1 min-w-0 space-y-2">
             <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-2xl md:text-3xl font-extrabold text-foreground">{medico.nome}</h1>
+              {editando ? (
+                <input
+                  value={nome}
+                  onChange={(e) => setNome(e.target.value)}
+                  className="text-2xl font-extrabold text-foreground bg-background border rounded-xl px-3 py-1.5 outline-none focus:ring-2 focus:ring-primary/20 w-full"
+                />
+              ) : (
+                <h1 className="text-2xl md:text-3xl font-extrabold text-foreground">
+                  {medico.nome}
+                </h1>
+              )}
               <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-accent-soft text-emerald-700 flex items-center gap-1">
                 <ShieldCheck className="w-3.5 h-3.5" /> CRM Verificado
               </span>
             </div>
 
-            <p className="text-sm font-medium text-muted-foreground">
-              {medico.especialidade} • {medico.crm}
-            </p>
+            {editando ? (
+              <div className="grid sm:grid-cols-3 gap-2">
+                <input
+                  value={especialidade}
+                  onChange={(e) => setEspecialidade(e.target.value)}
+                  placeholder="Especialidade"
+                  className="text-xs bg-background border rounded-xl px-3 py-2 outline-none"
+                />
+                <input
+                  value={crm}
+                  onChange={(e) => setCrm(e.target.value)}
+                  placeholder="CRM"
+                  className="text-xs bg-background border rounded-xl px-3 py-2 outline-none"
+                />
+                <input
+                  type="number"
+                  value={valor}
+                  onChange={(e) => setValor(Number(e.target.value))}
+                  placeholder="Valor da consulta"
+                  className="text-xs bg-background border rounded-xl px-3 py-2 outline-none"
+                />
+              </div>
+            ) : (
+              <p className="text-sm font-medium text-muted-foreground">
+                {medico.especialidade} • {medico.crm}
+              </p>
+            )}
 
             <div className="flex items-center gap-4 text-xs font-semibold text-muted-foreground flex-wrap pt-1">
               <span className="flex items-center gap-1 text-amber-500 font-bold">
