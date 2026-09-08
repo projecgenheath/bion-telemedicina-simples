@@ -1278,6 +1278,48 @@ function AdminDashboard({ go }: { go: (v: View) => void }) {
               </div>
               <ChevronRight className="w-5 h-5 text-muted-foreground" />
             </button>
+            <button
+              onClick={() => go("admin-agendamentos")}
+              className="w-full p-4 rounded-2xl bg-muted/60 hover:bg-muted border text-left transition flex items-center justify-between"
+            >
+              <div>
+                <div className="font-bold text-sm text-foreground flex items-center gap-2">
+                  <Calendar className="w-4 h-4 text-primary" /> Gerenciar Agendamentos
+                </div>
+                <div className="text-xs text-muted-foreground mt-0.5">
+                  Ver, remarcar ou cancelar consultas de toda a plataforma.
+                </div>
+              </div>
+              <ChevronRight className="w-5 h-5 text-muted-foreground" />
+            </button>
+            <button
+              onClick={() => go("admin-pacientes")}
+              className="w-full p-4 rounded-2xl bg-muted/60 hover:bg-muted border text-left transition flex items-center justify-between"
+            >
+              <div>
+                <div className="font-bold text-sm text-foreground flex items-center gap-2">
+                  <Heart className="w-4 h-4 text-primary" /> Cadastro de Pacientes
+                </div>
+                <div className="text-xs text-muted-foreground mt-0.5">
+                  Cadastrar, editar e consultar o histórico de cada paciente.
+                </div>
+              </div>
+              <ChevronRight className="w-5 h-5 text-muted-foreground" />
+            </button>
+            <button
+              onClick={() => go("admin-medicos")}
+              className="w-full p-4 rounded-2xl bg-muted/60 hover:bg-muted border text-left transition flex items-center justify-between"
+            >
+              <div>
+                <div className="font-bold text-sm text-foreground flex items-center gap-2">
+                  <Stethoscope className="w-4 h-4 text-primary" /> Cadastro de Médicos
+                </div>
+                <div className="text-xs text-muted-foreground mt-0.5">
+                  Incluir novos profissionais e acompanhar avaliações.
+                </div>
+              </div>
+              <ChevronRight className="w-5 h-5 text-muted-foreground" />
+            </button>
           </div>
         </div>
       </div>
