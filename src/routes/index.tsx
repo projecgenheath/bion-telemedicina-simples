@@ -65,6 +65,10 @@ import { TourGuiado } from "@/components/bion/TourGuiado";
 import { TemaToggle } from "@/components/bion/TemaToggle";
 import { PrivacidadePaciente } from "@/components/bion/PrivacidadePaciente";
 import { PrivacidadeAdmin } from "@/components/bion/PrivacidadeAdmin";
+import { AdminPacientes } from "@/components/bion/AdminPacientes";
+import { AdminMedicos } from "@/components/bion/AdminMedicos";
+import { AdminAgendamentos } from "@/components/bion/AdminAgendamentos";
+import { MedicoPacientes } from "@/components/bion/MedicoPacientes";
 
 export const Route = createFileRoute("/")({
   component: BionApp,
@@ -112,7 +116,11 @@ type View =
   | "avaliacoes"
   | "auditoria"
   | "ajuda"
-  | "privacidade";
+  | "privacidade"
+  | "admin-pacientes"
+  | "admin-medicos"
+  | "admin-agendamentos"
+  | "medico-pacientes";
 
 function BionApp() {
   return (
@@ -182,6 +190,10 @@ function BionRoot() {
       {view === "bion-ia" && <BionIA />}
       {view === "avaliacoes" && <MinhasAvaliacoes />}
       {view === "auditoria" && <AuditTrail />}
+      {view === "admin-pacientes" && <AdminPacientes />}
+      {view === "admin-medicos" && <AdminMedicos />}
+      {view === "admin-agendamentos" && <AdminAgendamentos />}
+      {view === "medico-pacientes" && <MedicoPacientes />}
       {view === "ajuda" && <Ajuda perfil={sessao.role} />}
       {view === "privacidade" && sessao.role === "admin" && <PrivacidadeAdmin />}
       {view === "privacidade" && sessao.role !== "admin" && <PrivacidadePaciente />}
@@ -488,7 +500,8 @@ function Shell({
     medico: [
       { icon: Home, label: "Início", view: "dashboard" },
       { icon: Calendar, label: "Minha Agenda", view: "consultas" },
-      { icon: Users, label: "Pacientes", view: "historico" },
+      { icon: Users, label: "Pacientes", view: "medico-pacientes" },
+      { icon: FolderHeart, label: "Histórico Clínico", view: "historico" },
       { icon: Pill, label: "Receitas & Docs", view: "receitas" },
       { icon: ClipboardList, label: "Prontuários", view: "prontuario" },
       { icon: Star, label: "Minhas Avaliações", view: "avaliacoes" },
@@ -501,6 +514,9 @@ function Shell({
     admin: [
       { icon: Home, label: "Painel Geral", view: "dashboard" },
       { icon: Users, label: "Usuários & CRM", view: "usuarios" },
+      { icon: Heart, label: "Pacientes", view: "admin-pacientes" },
+      { icon: Stethoscope, label: "Médicos", view: "admin-medicos" },
+      { icon: Calendar, label: "Agendamentos", view: "admin-agendamentos" },
       { icon: TrendingUp, label: "Relatórios & PDF", view: "relatorios" },
       { icon: FileSearch, label: "Auditoria", view: "auditoria" },
       { icon: LifeBuoy, label: "Chamados Suporte", view: "suporte" },
