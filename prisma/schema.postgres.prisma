@@ -1,0 +1,210 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Papéis de acesso da plataforma BION
+// PACIENTE | MEDICO | ADMIN (string — SQLite não suporta enum nativo)
+
+model User {
+  id             String   @id @default(cuid())
+  nome           String
+  email          String   @unique
+  senhaHash      String
+  role           String   @default("PACIENTE") // PACIENTE | MEDICO | ADMIN
+  status         String   @default("ativo") // ativo | inativo | suspenso
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  sessoes              Sessao[]
+  perfilMedico         PerfilMedico?
+  perfilPaciente       PerfilPaciente?
+  consultasComoPaciente Consulta[]     @relation("ConsultaPaciente")
+  consultasComoMedico  Consulta[]     @relation("ConsultaMedico")
+  documentosEmitidos   Documento[]    @relation("DocumentoMedico")
+  documentosRecebidos  Documento[]    @relation("DocumentoPaciente")
+  arquivos             Arquivo[]
+  notificacoes         Notificacao[]
+  avaliacoes           Avaliacao[]    @relation("AvaliacaoPaciente")
+  avaliacoesRecebidas  Avaliacao[]    @relation("AvaliacaoMedico")
+  tickets              Ticket[]
+  lembretes            Lembrete[]
+  consentimentos       Consentimento[]
+  auditLogs            AuditLog[]
+}
+
+model Sessao {
+  id        String   @id // token opaco (32 bytes hex)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+model PerfilMedico {
+  id                  String  @id @default(cuid())
+  userId              String  @unique
+  user                User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  crm                 String
+  especialidade       String
+  subespecialidades   String  @default("[]") // JSON string[]
+  valor               Float   @default(150) // valor da consulta em reais
+  avaliacao           Float   @default(0)
+  numAvaliacoes       Int     @default(0)
+  formacao            String  @default("")
+  experiencia         String  @default("")
+  idiomas             String  @default("[]") // JSON string[]
+  bio                 String  @default("")
+  foto                String?
+  status              String  @default("ativo") // ativo | pendente | suspenso
+  horariosDisponiveis String  @default("[]") // JSON string[]
+}
+
+model PerfilPaciente {
+  id             String  @id @default(cuid())
+  userId         String  @unique
+  user           User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cpf            String  @default("")
+  telefone       String  @default("")
+  convenio       String  @default("Particular")
+  idade          Int     @default(0)
+  genero         String  @default("")
+  alergias       String  @default("[]") // JSON string[]
+  medicamentos   String  @default("[]") // JSON string[]
+  tipoSanguineo  String  @default("")
+  peso           String?
+  altura         String?
+}
+
+model Consulta {
+  id                 String   @id @default(cuid())
+  pacienteId         String
+  paciente           User     @relation("ConsultaPaciente", fields: [pacienteId], references: [id], onDelete: Cascade)
+  medicoId           String
+  medico             User     @relation("ConsultaMedico", fields: [medicoId], references: [id], onDelete: Cascade)
+  especialidade      String
+  dataInicio         DateTime
+  status             String   @default("confirmada") // confirmada | cancelada | concluida | em_espera
+  motivoConsulta     String?
+  motivoCancelamento String?
+  resumoMedico       String?
+  valor              Float    @default(0) // reais
+  pago               Boolean  @default(false)
+  remarcada          Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+model Documento {
+  id          String   @id @default(cuid())
+  tipo        String // receita | atestado | exame_solicitado
+  titulo      String
+  conteudo    String
+  medicoId    String
+  medico      User     @relation("DocumentoMedico", fields: [medicoId], references: [id], onDelete: Cascade)
+  pacienteId  String
+  paciente    User     @relation("DocumentoPaciente", fields: [pacienteId], references: [id], onDelete: Cascade)
+  medicamento String?
+  posologia   String?
+  duracao     String?
+  observacoes String?
+  cid         String?
+  createdAt   DateTime @default(now())
+}
+
+model Arquivo {
+  id         String   @id @default(cuid())
+  nome       String
+  tipo       String
+  tamanhoKb  Int
+  enviadoPor String // paciente | medico
+  usuarioId  String
+  usuario    User     @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  consulta  String   @default("")
+  createdAt  DateTime @default(now())
+}
+
+model Notificacao {
+  id        String   @id @default(cuid())
+  usuarioId String?
+  usuario   User?    @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  paraRole  String? // broadcast por papel: PACIENTE | MEDICO | ADMIN
+  tipo      String // lembrete | mensagem | receita | agenda | exame | suporte
+  titulo    String
+  texto     String
+  lida      Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model Avaliacao {
+  id            String   @id @default(cuid())
+  consultaId    String?
+  pacienteId    String
+  paciente      User     @relation("AvaliacaoPaciente", fields: [pacienteId], references: [id], onDelete: Cascade)
+  medicoId      String
+  medico        User     @relation("AvaliacaoMedico", fields: [medicoId], references: [id], onDelete: Cascade)
+  nota          Int // 1-5
+  comentario    String?
+  pontualidade  Int?
+  atencao       Int?
+  clareza       Int?
+  createdAt     DateTime @default(now())
+}
+
+model Ticket {
+  id            String   @id @default(cuid())
+  usuarioId     String
+  usuario       User     @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  perfil        String // paciente | medico
+  assunto       String
+  categoria     String // tecnico | pagamento | agendamento | outro
+  mensagem      String
+  status        String   @default("aberto") // aberto | em_andamento | resolvido
+  resposta      String?
+  respondidoPor String?
+  dataResposta  DateTime?
+  createdAt     DateTime @default(now())
+}
+
+model Lembrete {
+  id          String  @id @default(cuid())
+  usuarioId   String
+  usuario     User    @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  titulo      String
+  horario     String
+  tipo        String // Medicação | Consulta | Exame | Hidratação
+  frequencia  String
+  feito       Boolean @default(false)
+  medicamento String?
+}
+
+model Consentimento {
+  id          String   @id @default(cuid())
+  pacienteId  String?
+  paciente    User?    @relation(fields: [pacienteId], references: [id], onDelete: SetNull)
+  quem        String // nome de quem registrou
+  perfil      String // papel de quem registrou
+  finalidade  String
+  documentos  Int      @default(0)
+  aceito      Boolean
+  createdAt   DateTime @default(now())
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  acao       String
+  categoria  String // autenticacao | consulta | documento | prontuario | usuario | admin | suporte | consentimento | sistema
+  severidade String   @default("info") // info | warning | critical
+  usuarioId  String?
+  usuario    User?    @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
+  usuarioNome String
+  role       String
+  entidade   String?
+  entidadeId String?
+  detalhes   String?
+  createdAt  DateTime @default(now())
+}
