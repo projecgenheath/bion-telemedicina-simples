@@ -101,18 +101,66 @@ export function BionIA() {
   const [entrada, setEntrada] = useState("");
   const [digitando, setDigitando] = useState(false);
 
-  const enviarMensagem = (textoEnviar?: string) => {
-    const txt = textoEnviar ?? entrada;
-    if (!txt.trim()) return;
+  const respostaLocal = (txt: string): string => {
+    const lower = txt.toLowerCase();
+
+    if (
+      lower.includes("losartana") ||
+      lower.includes("medicamento") ||
+      lower.includes("remédio") ||
+      lower.includes("tomar")
+    ) {
+      return RESPOSTAS_BASE.losartana!;
+    }
+    if (
+      lower.includes("jejum") ||
+      lower.includes("exame") ||
+      lower.includes("sangue") ||
+      lower.includes("laborat")
+    ) {
+      return RESPOSTAS_BASE.jejum!;
+    }
+    if (
+      lower.includes("atestado") ||
+      lower.includes("empresa") ||
+      lower.includes("cfm") ||
+      lower.includes("aceit")
+    ) {
+      return RESPOSTAS_BASE.atestado!;
+    }
+    if (
+      lower.includes("cid") ||
+      lower.includes("código") ||
+      lower.includes("diagnóstico")
+    ) {
+      return RESPOSTAS_BASE.cid!;
+    }
+    if (
+      lower.includes("dor") ||
+      lower.includes("cabeça") ||
+      lower.includes("enxaqueca") ||
+      lower.includes("sintoma")
+    ) {
+      return RESPOSTAS_BASE.dor!;
+    }
+    return isMedico
+      ? `Compreendido, Dr(a). Na prática de telemedicina BION, recomenda-se registro detalhado na anamnese, confirmação de consentimento e inclusão de orientações claras com prazo de retorno. Se precisar do código CID ou modelo de prescrição, basta solicitar!`
+      : `Entendido! Para orientações específicas para o seu caso individual, você pode enviar uma mensagem direta para seu médico na aba **Mensagens** ou agendar uma teleconsulta de retorno em poucos minutos. Como posso ajudar com mais alguma dúvida de saúde?`;
+  };
+
+  const enviarMensagem = async (textoEnviar?: string) => {
+    const txt = (textoEnviar ?? entrada).trim();
+    if (!txt || digitando) return;
 
     const novaMsgUsuario: MensagemIA = {
       id: `usr-${Date.now()}`,
       remetente: "usuario",
-      texto: txt.trim(),
+      texto: txt,
       hora: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
     };
 
-    setMensagens((prev) => [...prev, novaMsgUsuario]);
+    const historico = [...mensagens, novaMsgUsuario].slice(-12);
+    setMensagens(historico);
     if (!textoEnviar) setEntrada("");
     setDigitando(true);
     registrarAudit({
@@ -120,63 +168,38 @@ export function BionIA() {
       categoria: "sistema",
       severidade: "info",
       entidade: "bion-ia",
-      detalhes: `Consulta à IA: "${txt.trim().slice(0, 100)}"`,
+      detalhes: `Consulta à IA: "${txt.slice(0, 100)}"`,
     });
 
-    setTimeout(() => {
-      const lower = txt.toLowerCase();
-      let resposta = "";
+    let resposta = "";
+    let offline = false;
+    try {
+      const res = await fetch("/api/bion-ia", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mensagens: historico.map((m) => ({ remetente: m.remetente, texto: m.texto })),
+        }),
+      });
+      const json = (await res.json().catch(() => null)) as { resposta?: string } | null;
+      resposta = json?.resposta ?? "";
+      if (!res.ok || !resposta) offline = true;
+    } catch {
+      offline = true;
+    }
+    if (offline) resposta = respostaLocal(txt);
 
-      if (
-        lower.includes("losartana") ||
-        lower.includes("medicamento") ||
-        lower.includes("remédio") ||
-        lower.includes("tomar")
-      ) {
-        resposta = RESPOSTAS_BASE.losartana!;
-      } else if (
-        lower.includes("jejum") ||
-        lower.includes("exame") ||
-        lower.includes("sangue") ||
-        lower.includes("laborat")
-      ) {
-        resposta = RESPOSTAS_BASE.jejum!;
-      } else if (
-        lower.includes("atestado") ||
-        lower.includes("empresa") ||
-        lower.includes("cfm") ||
-        lower.includes("aceit")
-      ) {
-        resposta = RESPOSTAS_BASE.atestado!;
-      } else if (
-        lower.includes("cid") ||
-        lower.includes("código") ||
-        lower.includes("diagnóstico")
-      ) {
-        resposta = RESPOSTAS_BASE.cid!;
-      } else if (
-        lower.includes("dor") ||
-        lower.includes("cabeça") ||
-        lower.includes("enxaqueca") ||
-        lower.includes("sintoma")
-      ) {
-        resposta = RESPOSTAS_BASE.dor!;
-      } else {
-        resposta = isMedico
-          ? `Compreendido, Dr(a). Na prática de telemedicina BION, recomenda-se registro detalhado na anamnese, confirmação de consentimento e inclusão de orientações claras com prazo de retorno. Se precisar do código CID ou modelo de prescrição, basta solicitar!`
-          : `Entendido! Para orientações específicas para o seu caso individual, você pode enviar uma mensagem direta para seu médico na aba **Mensagens** ou agendar uma teleconsulta de retorno em poucos minutos. Como posso ajudar com mais alguma dúvida de saúde?`;
-      }
+    const novaMsgIA: MensagemIA = {
+      id: `ia-${Date.now()}`,
+      remetente: "ia",
+      texto: offline
+        ? `${resposta}\n\n_(resposta do modo local — a IA em nuvem está temporariamente indisponível)_`
+        : resposta,
+      hora: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
+    };
 
-      const novaMsgIA: MensagemIA = {
-        id: `ia-${Date.now()}`,
-        remetente: "ia",
-        texto: resposta,
-        hora: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
-      };
-
-      setMensagens((prev) => [...prev, novaMsgIA]);
-      setDigitando(false);
-    }, 700);
+    setMensagens((prev) => [...prev, novaMsgIA]);
+    setDigitando(false);
   };
 
   return (

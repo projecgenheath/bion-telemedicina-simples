@@ -35,6 +35,8 @@ model User {
   lembretes            Lembrete[]
   consentimentos       Consentimento[]
   auditLogs            AuditLog[]
+  mensagensEnviadas    Mensagem[]     @relation("MensagemDe")
+  mensagensRecebidas   Mensagem[]     @relation("MensagemPara")
 }
 
 model Sessao {
@@ -97,6 +99,55 @@ model Consulta {
   remarcada          Boolean  @default(false)
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
+
+  // Telemedicina WebRTC (Fase 2)
+  sinaisSala    SinalSala[]
+  presencasSala PresencaSala[]
+}
+
+// Mensagens de sinalização WebRTC trocadas entre paciente e médico durante a teleconsulta.
+// Cada linha carrega um SDP (oferta/resposta), um ICE candidate, uma mensagem de chat
+// ou um sinal de controle (ex.: "outro lado encerrou"). Consumido = já entregue ao destinatário.
+model SinalSala {
+  id          String   @id @default(cuid())
+  consultaId  String
+  consulta    Consulta @relation(fields: [consultaId], references: [id], onDelete: Cascade)
+  deUsuarioId String
+  deRole      String // PACIENTE | MEDICO
+  tipo        String // oferta | resposta | candidato | chat | controle
+  payload     String // JSON (SDP, candidate, {texto}, {acao})
+  createdAt   DateTime @default(now())
+  consumido   Boolean  @default(false)
+
+  @@index([consultaId, consumido, createdAt])
+}
+
+// Presença em tempo real na sala: heartbeat a cada ciclo de polling (~1,5s).
+// Considera-se online quem fez ping nos últimos 12 segundos.
+model PresencaSala {
+  consultaId String
+  consulta   Consulta @relation(fields: [consultaId], references: [id], onDelete: Cascade)
+  usuarioId  String
+  papel      String // PACIENTE | MEDICO
+  ultimoPing DateTime @default(now())
+
+  @@id([consultaId, usuarioId])
+}
+
+// Mensageria assíncrona paciente ↔ médico (e suporte BION) entre as consultas.
+// "lida" controla o badge de não lidas por conversa (marcada quando o destinatário abre).
+model Mensagem {
+  id        String   @id @default(cuid())
+  deId      String
+  de        User     @relation("MensagemDe", fields: [deId], references: [id], onDelete: Cascade)
+  paraId    String
+  para      User     @relation("MensagemPara", fields: [paraId], references: [id], onDelete: Cascade)
+  texto     String
+  lida      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([deId, paraId, createdAt])
+  @@index([paraId, lida])
 }
 
 model Documento {
