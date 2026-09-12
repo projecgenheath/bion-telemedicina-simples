@@ -60,9 +60,11 @@ cp prisma/schema.postgres.prisma prisma/schema.prisma
 
 echo "==> 4/6 Atualizando .env..."
 # Remove linha DATABASE_URL ativa e insere a nova (antiga vai para comentário)
+# Sem aspas: o parser de .env do Prisma CLI não remove aspas e a URL falharia
+# com "the URL must start with the protocol postgresql://"
 grep -v '^DATABASE_URL=' .env > .env.tmp || true
 {
-  echo "DATABASE_URL=\"$URL\""
+  echo "DATABASE_URL=$URL"
   cat .env.tmp
 } > .env
 rm -f .env.tmp

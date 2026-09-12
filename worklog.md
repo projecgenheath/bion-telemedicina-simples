@@ -45,3 +45,22 @@ Stage Summary:
 - Projeto BION validado ponta a ponta: 32/32 rotas de API, 28/28 telas, 8/8 regressão Fase 4, lint/tipos limpos, zero erros de runtime.
 - main no GitHub = 3b5152c; backup-prototipo-original preservada (e2630f0).
 - Não foi encontrado nenhum bug de runtime — nenhum patch de código foi necessário nesta fase.
+
+---
+Task ID: supabase-reconexao
+Agent: Super Z (agente principal)
+Task: Reconectar o Supabase PostgreSQL para produção
+
+Work Log:
+- Diagnóstico: Supabase estava ativado desde 11/09, mas a Fase 4 alternou o dev para SQLite e a senha saiu do .env; senha não existia em nenhum arquivo do ambiente.
+- Senha fornecida pelo usuário continha caracteres especiais ({, <, /) — URL-encodada (%7B, %3C, %2F) na connection string do Session pooler.
+- Ativação via scripts/supabase_ativar.sh: conexão OK, schema trocado para PostgreSQL, .env atualizado.
+- Corrigidos 2 obstáculos durante a ativação: (1) o script gravava DATABASE_URL com aspas e o parser do Prisma CLI não as remove — fix no script (linha 67, sem aspas); (2) DATABASE_URL global do sandbox (file:...custom.db) vence o .env no CLI — resolvido com export explícito (já documentado no dev.sh).
+- db push: 16 tabelas criadas no Supabase (13,67s); seed executado (11 usuários, 6 médicos, 4 pacientes, 6 consultas...).
+- Validação: dev server no Postgres com login/bootstrap 200; auditoria completa 32/32 rotas nos 3 papéis contra o Postgres; seed final re-executado para deixar o banco de produção limpo (sem artefatos de teste).
+- supabase/README.md atualizado (status RECONECTADO 12/09 + aviso sobre DATABASE_URL global em sandboxes).
+
+Stage Summary:
+- BION rodando em produção no Supabase Postgres (sa-east-1, Session pooler 5432).
+- scripts/supabase_ativar.sh corrigido (aspas) — próximas ativações funcionam de primeira.
+- Banco demo limpo e consistente; contas demo inalteradas (senha bion123).
