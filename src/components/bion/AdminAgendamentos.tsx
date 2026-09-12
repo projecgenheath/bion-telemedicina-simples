@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Search, Pencil, X, CalendarX2, CalendarDays } from "lucide-react";
 import { toast } from "sonner";
 import { useBion, type Consulta } from "@/lib/bion-store";
+import { ModalBion } from "@/components/bion/ModalBion";
 
 const STATUS: { valor: Consulta["status"] | "todas"; label: string }[] = [
   { valor: "todas", label: "Todas" },
@@ -172,8 +173,16 @@ export function AdminAgendamentos() {
       </div>
 
       {editar && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center p-4">
-          <div className="bg-card border rounded-3xl w-full max-w-md p-6 space-y-4">
+        <ModalBion
+          aberto
+          onFechar={() => setEditar(null)}
+          titulo="Editar agendamento"
+          largura="max-w-lg"
+          sheet
+          overlay="bg-black/50"
+          foraFecha={false}
+        >
+          <div className="bg-card border rounded-3xl w-full max-w-md p-6 space-y-4 sm:my-6">
             <div className="flex items-center justify-between">
               <h3 className="font-extrabold text-foreground">Editar agendamento</h3>
               <button onClick={() => setEditar(null)} aria-label="Fechar">
@@ -217,12 +226,20 @@ export function AdminAgendamentos() {
               Salvar alterações
             </button>
           </div>
-        </div>
+        </ModalBion>
       )}
 
       {cancelando && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-          <div className="bg-card border rounded-3xl w-full max-w-sm p-6 space-y-4">
+        <ModalBion
+          aberto
+          onFechar={() => setCancelando(null)}
+          titulo="Cancelar consulta"
+          largura="max-w-sm"
+          overlay="bg-black/50"
+          foraFecha={false}
+          className="py-4"
+        >
+          <div className="bg-card border rounded-3xl w-full p-6 space-y-4">
             <h3 className="font-extrabold text-foreground text-center">Cancelar consulta?</h3>
             <p className="text-xs text-muted-foreground text-center">
               {cancelando.paciente} com {cancelando.medico} — {cancelando.data} às{" "}
@@ -254,7 +271,7 @@ export function AdminAgendamentos() {
               </button>
             </div>
           </div>
-        </div>
+        </ModalBion>
       )}
     </div>
   );

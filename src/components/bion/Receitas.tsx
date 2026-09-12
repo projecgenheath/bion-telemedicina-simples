@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { useBion, type Documento } from "@/lib/bion-store";
 import { gerarDocumentoPDF } from "@/lib/receita-pdf";
+import { ModalBion } from "@/components/bion/ModalBion";
 
 export function docTexto(d: Documento) {
   const linhas = [
@@ -72,14 +73,15 @@ export function VisualizadorDoc({
   if (!d) return null;
   const Icon = d.tipo === "receita" ? Pill : Award;
   return (
-    <div
-      className="fixed inset-0 z-50 bg-foreground/50 flex items-end sm:items-center justify-center p-0 sm:p-6"
-      onClick={onClose}
+    <ModalBion
+      aberto
+      onFechar={onClose}
+      titulo={d.titulo}
+      largura="max-w-2xl"
+      sheet
+      overlay="bg-foreground/50"
     >
-      <div
-        className="bg-card w-full sm:max-w-2xl rounded-t-3xl sm:rounded-3xl max-h-[92vh] flex flex-col"
-        onClick={(e) => e.stopPropagation()}
-      >
+      <div className="bg-card w-full sm:max-w-2xl rounded-t-3xl sm:rounded-3xl max-h-[88vh] flex flex-col sm:my-6">
         <div className="flex items-center gap-3 p-4 border-b">
           <div className="w-10 h-10 rounded-xl bg-primary-soft flex items-center justify-center shrink-0">
             <Icon className="w-5 h-5 text-primary" />
@@ -159,7 +161,7 @@ export function VisualizadorDoc({
           </div>
         </div>
       </div>
-    </div>
+    </ModalBion>
   );
 }
 

@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { gerarProntuarioPDF } from "@/lib/prontuario-pdf";
 import { useBion, type Documento } from "@/lib/bion-store";
+import { ModalBion } from "@/components/bion/ModalBion";
 import { VisualizadorDoc, dataDoc } from "./Receitas";
 
 type Evento = {
@@ -241,8 +242,16 @@ export function Prontuario() {
       </div>
 
       {consentAberto && (
-        <div className="fixed inset-0 z-50 bg-foreground/40 flex items-center justify-center p-4">
-          <div className="bg-card border rounded-2xl w-full max-w-md p-5">
+        <ModalBion
+          aberto
+          onFechar={() => setConsentAberto(false)}
+          titulo="Consentimento para gerar o PDF do prontuário"
+          largura="max-w-md"
+          overlay="bg-foreground/40"
+          foraFecha={false}
+          className="py-4"
+        >
+          <div className="bg-card border rounded-2xl w-full p-5">
             <div className="flex items-start justify-between gap-3">
               <div className="font-semibold flex items-center gap-2">
                 <ShieldCheck className="w-4 h-4 text-primary" /> Consentimento para gerar o PDF
@@ -313,7 +322,7 @@ export function Prontuario() {
               </button>
             </div>
           </div>
-        </div>
+        </ModalBion>
       )}
 
       {visualizando !== null && (

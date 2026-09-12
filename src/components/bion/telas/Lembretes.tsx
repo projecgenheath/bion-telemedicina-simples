@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useBion } from "@/lib/bion-store";
+import { ModalBion } from "@/components/bion/ModalBion";
 
 export function Lembretes() {
   const { lembretes, adicionarLembrete, alternarLembrete, removerLembrete } = useBion();
@@ -107,14 +108,16 @@ export function Lembretes() {
       </div>
 
       {modalNovo && (
-        <div
-          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
-          onClick={() => setModalNovo(false)}
+        <ModalBion
+          aberto
+          onFechar={() => setModalNovo(false)}
+          titulo="Novo Lembrete de Saúde"
+          largura="max-w-md"
+          className="py-4"
         >
           <form
             onSubmit={criarLembrete}
-            className="bg-card border rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
+            className="bg-card border rounded-3xl w-full p-6 space-y-4 shadow-2xl"
           >
             <h3 className="text-lg font-bold">Novo Lembrete de Saúde</h3>
 
@@ -182,7 +185,7 @@ export function Lembretes() {
               Salvar Lembrete
             </button>
           </form>
-        </div>
+        </ModalBion>
       )}
     </div>
   );

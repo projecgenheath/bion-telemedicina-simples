@@ -28,6 +28,7 @@ import {
   Plus,
 } from "lucide-react";
 import { useBion as useStore, type Documento } from "@/lib/bion-store";
+import { ModalBion } from "@/components/bion/ModalBion";
 import { useTeleconsulta } from "@/lib/use-teleconsulta";
 
 type Role = "paciente" | "medico" | "admin";
@@ -663,10 +664,18 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
 
       {/* Modal de Emissão de Receita */}
       {modalReceita && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+        <ModalBion
+          aberto
+          onFechar={() => setModalReceita(false)}
+          titulo="Emitir Receita Digital"
+          largura="max-w-lg"
+          overlay="bg-black/70 backdrop-blur-sm"
+          foraFecha={false}
+          className="py-4"
+        >
           <form
             onSubmit={salvarReceita}
-            className="bg-card text-foreground border rounded-3xl max-w-lg w-full p-6 md:p-8 space-y-4 shadow-2xl"
+            className="bg-card text-foreground border rounded-3xl w-full p-6 md:p-8 space-y-4 shadow-2xl max-h-[85vh] overflow-y-auto"
           >
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-bold flex items-center gap-2">
@@ -747,15 +756,23 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
               Assinar Digitalmente e Disponibilizar ao Paciente
             </button>
           </form>
-        </div>
+        </ModalBion>
       )}
 
       {/* Modal de Emissão de Atestado */}
       {modalAtestado && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+        <ModalBion
+          aberto
+          onFechar={() => setModalAtestado(false)}
+          titulo="Emitir Atestado Médico Digital"
+          largura="max-w-lg"
+          overlay="bg-black/70 backdrop-blur-sm"
+          foraFecha={false}
+          className="py-4"
+        >
           <form
             onSubmit={salvarAtestado}
-            className="bg-card text-foreground border rounded-3xl max-w-lg w-full p-6 md:p-8 space-y-4 shadow-2xl"
+            className="bg-card text-foreground border rounded-3xl w-full p-6 md:p-8 space-y-4 shadow-2xl max-h-[85vh] overflow-y-auto"
           >
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-bold flex items-center gap-2">
@@ -816,15 +833,23 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
               Emitir e Assinar Atestado
             </button>
           </form>
-        </div>
+        </ModalBion>
       )}
 
       {/* Modal de Solicitação de Exame */}
       {modalExame && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+        <ModalBion
+          aberto
+          onFechar={() => setModalExame(false)}
+          titulo="Solicitar Exame Complementar"
+          largura="max-w-lg"
+          overlay="bg-black/70 backdrop-blur-sm"
+          foraFecha={false}
+          className="py-4"
+        >
           <form
             onSubmit={salvarExame}
-            className="bg-card text-foreground border rounded-3xl max-w-lg w-full p-6 md:p-8 space-y-4 shadow-2xl"
+            className="bg-card text-foreground border rounded-3xl w-full p-6 md:p-8 space-y-4 shadow-2xl max-h-[85vh] overflow-y-auto"
           >
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-bold flex items-center gap-2">
@@ -889,7 +914,7 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
               Enviar Solicitação ao Paciente
             </button>
           </form>
-        </div>
+        </ModalBion>
       )}
     </div>
   );
