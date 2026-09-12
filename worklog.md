@@ -64,3 +64,18 @@ Stage Summary:
 - BION rodando em produção no Supabase Postgres (sa-east-1, Session pooler 5432).
 - scripts/supabase_ativar.sh corrigido (aspas) — próximas ativações funcionam de primeira.
 - Banco demo limpo e consistente; contas demo inalteradas (senha bion123).
+
+---
+Task ID: fix-deploy-vercel
+Agent: Super Z (agente principal)
+Task: Corrigir falha de build no deploy Vercel (prerender /notificacoes)
+
+Work Log:
+- Erro do Vercel: "Attempted to call useBion() from the server" ao pré-renderizar /(app)/notificacoes — o layout do grupo (app) é Client Component e 17 páginas wrapper eram Server Components; mix quebrado na geração estática do Next 16 + Turbopack.
+- Correção: padronizadas todas as 25 páginas de (app) como Client Components (uma diretiva "use client" no topo), além de src/app/page.tsx e not-found.tsx; criado scripts/normalizar_use_client.py para normalizar (evita duplicar diretivas).
+- Validação: bun run build local → 50/50 páginas estáticas geradas sem erro; standalone server.js presente; tsc --noEmit limpo; smoke test no navegador de /notificacoes autenticado renderizando dados reais do Supabase.
+- Commit 3c41a08 e push confirmado (main no GitHub).
+
+Stage Summary:
+- Build de produção passa localmente de ponta a ponta; pronto para redeploy no Vercel.
+- Pendências do lado do Vercel (orientadas ao usuário): adicionar DATABASE_URL (Session pooler do Supabase) nas env vars do projeto; a rota /api/bion-ia usa z-ai-web-dev-sdk — sem credenciais no Vercel, o frontend degrada para o modo local por palavras-chave (fallback já implementado).
