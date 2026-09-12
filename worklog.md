@@ -152,3 +152,24 @@ Stage Summary:
 - Todos os 20 modais do BION agora têm focus trap, ESC, aria-modal, trava de fundo e devolução de foco — padrão Radix Dialog com visual BION inalterado.
 - ModalBion é o componente canônico para novos modais.
 - Produção no Vercel revalidada com o código novo ao vivo.
+
+---
+Task ID: guardas-papel-historico
+Agent: Super Z (agente principal)
+Task: Corrigir vazamentos de papel reportados pelo usuário (paciente vendo "Histórico Clínico" de médico + conteúdo sem sentido para médico)
+
+Work Log:
+- Investigação: /historico (HistóricoClinico) é página de PACIENTE (gráficos pessoais de pressão/peso, alertas de saúde) mas estava no menu do médico e acessível ao admin via URL.
+- Causa raiz do relato: no mobile só as 5 primeiras entradas do menu viravam barra inferior — paciente não alcançava "Histórico" (6º item); médico tinha "Histórico Clínico" logo na barra. Paciente só via a página "no perfil de médico".
+- rotas.ts: guardas completas — SO_ADMIN += relatorios; SO_MEDICO += medico-perfil, avaliacoes; novo SO_PACIENTE = [agendar, sala-espera, paciente-perfil, historico]; novo SO_CLINICA = [consulta, consultas, receitas, prontuario] (bloqueia admin).
+- layout (app): aplica as 4 guardas com redirect a /painel.
+- AppShell: "Histórico Clínico" removido do menu do médico; barra mobile redesenhada (4 destaques por papel + aba "Mais" abrindo sheet Radix ModalBion com menu completo) — celular agora alcança TODAS as seções; aria-current nos botões.
+- Escopo de dados: filtros hardcoded "Marina Silva" → sessao.nome em HistoricoClinico (consultas+documentos), AgendaConsultas (paciente E médico) e PosConsultaModal (avaliação). João Pereira passou a ver as PRÓPRIAS consultas/histórico (antes: dados da Marina ou nada).
+- Receitas: formulário de emissão do médico ganha select "Paciente" (obrigatório, validado, dados da lista real de pacientes do store); antes gravava sempre "Marina Silva".
+- Consulta.tsx e MedicoDashboard mantêm cena demo scriptada (Marina↔Ana) — papel-apropriado, documentado como conteúdo de demonstração.
+- Validação: tsc ✓, eslint ✓, build 50 páginas ✓; runtime local (bun start + Supabase): médica sem Histórico no menu e redirecionada de /historico e /relatorios; /avaliacoes ok; admin redirecionado de /historico e /consultas, /relatorios ok; mobile 360px: 4 abas + Mais → Histórico alcançável; João com dados próprios; zero erros JS/console.
+
+Stage Summary:
+- Corrigida a classe de bugs papel/acesso: cada tela agora só abre para o papel certo (URL ou menu), o médico não vê mais página de paciente e qualquer paciente vê somente os próprios dados.
+- Navegação mobile completa (4 + Mais) elimina seções inalcançáveis no celular.
+- Evidências: download/evidencias-papeis/ (sheet Mais + histórico 360px).

@@ -30,7 +30,7 @@ export function PosConsultaModal({
   especialidade?: string;
   onClose: () => void;
 }) {
-  const { documentosVisiveis, avaliarConsulta } = useBion();
+  const { documentosVisiveis, avaliarConsulta, sessao } = useBion();
 
   const [nota, setNota] = useState(5);
   const [pontualidade, setPontualidade] = useState(5);
@@ -44,7 +44,7 @@ export function PosConsultaModal({
 
   const enviarAvaliacao = () => {
     avaliarConsulta({
-      paciente: "Marina Silva",
+      paciente: sessao.nome,
       medico,
       especialidade,
       nota,

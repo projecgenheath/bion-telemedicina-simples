@@ -241,14 +241,14 @@ function GraficoPeso() {
 }
 
 export function HistoricoClinico() {
-  const { consultas, documentos, arquivos } = useBion();
+  const { consultas, documentos, arquivos, sessao } = useBion();
   const [filtro, setFiltro] = useState<FiltroTipo>("tudo");
   const [busca, setBusca] = useState("");
   const [ativoId, setAtivoId] = useState<string | null>(null);
 
   const eventos: EventoTimeline[] = [
     ...consultas
-      .filter((c) => c.paciente === "Marina Silva")
+      .filter((c) => c.paciente === sessao.nome)
       .map((c) => ({
         id: c.id,
         tipo: "consulta" as const,
@@ -261,7 +261,7 @@ export function HistoricoClinico() {
         status: c.status,
       })),
     ...documentos
-      .filter((d) => d.paciente === "Marina Silva")
+      .filter((d) => d.paciente === sessao.nome)
       .map((d) => ({
         id: d.id,
         tipo: d.tipo === "receita" ? ("receita" as const) : ("atestado" as const),

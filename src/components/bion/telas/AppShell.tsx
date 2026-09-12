@@ -1,4 +1,5 @@
 "use client";
+import { useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import {
   Calendar,
@@ -21,12 +22,15 @@ import {
   Bot,
   FileSearch,
   CircleHelp,
+  LayoutGrid,
+  X,
 } from "lucide-react";
 import { useBion } from "@/lib/bion-store";
 import { urlDa, viewDoPath, type Role, type View } from "@/lib/rotas";
 import { Logo } from "@/components/bion/brand";
 import { TemaToggle } from "@/components/bion/TemaToggle";
 import { TourGuiado } from "@/components/bion/TourGuiado";
+import { ModalBion } from "@/components/bion/ModalBion";
 
 function Shell({
   role,
@@ -42,6 +46,7 @@ function Shell({
   children: React.ReactNode;
 }) {
   const { sessao } = useBion();
+  const [menuMobileAberto, setMenuMobileAberto] = useState(false);
 
   const menus: Record<
     Role,
@@ -66,7 +71,6 @@ function Shell({
       { icon: Home, label: "Início", view: "dashboard" },
       { icon: Calendar, label: "Minha Agenda", view: "consultas" },
       { icon: Users, label: "Pacientes", view: "medico-pacientes" },
-      { icon: FolderHeart, label: "Histórico Clínico", view: "historico" },
       { icon: Pill, label: "Receitas & Docs", view: "receitas" },
       { icon: ClipboardList, label: "Prontuários", view: "prontuario" },
       { icon: Star, label: "Minhas Avaliações", view: "avaliacoes" },
@@ -92,6 +96,18 @@ function Shell({
   };
 
   const menu = menus[role];
+
+  /* Barra mobile: 4 destaque + aba "Mais" (sheet com o menu completo).
+     Sem isso, no celular ficava impossível alcançar Histórico, Mensagens,
+     Perfil etc. — só as 5 primeiras entradas apareciam. */
+  const destaquesMobile: Record<Role, View[]> = {
+    paciente: ["dashboard", "agendar", "consultas", "prontuario"],
+    medico: ["dashboard", "consultas", "medico-pacientes", "prontuario"],
+    admin: ["dashboard", "usuarios", "admin-agendamentos", "auditoria"],
+  };
+  const barraMobile = destaquesMobile[role]
+    .map((v) => menu.find((m) => m.view === v))
+    .filter((m): m is (typeof menu)[number] => Boolean(m));
 
   const rotuloPerfil = { paciente: "Paciente", medico: "Médico", admin: "Administrador" }[role];
 
@@ -184,14 +200,18 @@ function Shell({
 
       <TourGuiado role={role} />
 
-      {/* Navegação Mobile Inferior */}
-      <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 bg-card border-t flex justify-around p-1 shadow-lg">
-        {menu.slice(0, 5).map((m) => {
+      {/* Navegação Mobile Inferior: 4 destaque + "Mais" (menu completo) */}
+      <nav
+        className="md:hidden fixed bottom-0 inset-x-0 z-30 bg-card border-t flex justify-around p-1 shadow-lg"
+        aria-label="Navegação principal"
+      >
+        {barraMobile.map((m) => {
           const active = view === m.view;
           return (
             <button
               key={m.label}
               onClick={() => setView(m.view)}
+              aria-current={active ? "page" : undefined}
               className={`flex-1 flex flex-col items-center gap-1 py-2 text-[10px] font-bold transition ${
                 active ? "text-primary" : "text-muted-foreground"
               }`}
@@ -201,7 +221,67 @@ function Shell({
             </button>
           );
         })}
+        <button
+          onClick={() => setMenuMobileAberto(true)}
+          aria-label="Abrir menu completo"
+          aria-expanded={menuMobileAberto}
+          className={`flex-1 flex flex-col items-center gap-1 py-2 text-[10px] font-bold transition ${
+            menuMobileAberto || !barraMobile.some((m) => m.view === view)
+              ? "text-primary"
+              : "text-muted-foreground"
+          }`}
+        >
+          <LayoutGrid className="w-5 h-5" />
+          <span>Mais</span>
+        </button>
       </nav>
+
+      {/* Sheet "Mais": menu completo acessível no celular */}
+      <ModalBion
+        aberto={menuMobileAberto}
+        onFechar={() => setMenuMobileAberto(false)}
+        titulo="Menu completo"
+        descricao={`Todas as seções disponíveis para o perfil ${rotuloPerfil.toLowerCase()}`}
+        sheet
+        largura="sm:max-w-md"
+        overlay="bg-black/50 backdrop-blur-sm"
+      >
+        <div className="rounded-t-3xl bg-card border-t p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-2xl">
+          <div className="flex items-center justify-between mb-4">
+            <div className="font-extrabold text-base">Menu completo</div>
+            <button
+              onClick={() => setMenuMobileAberto(false)}
+              aria-label="Fechar menu"
+              className="p-2 rounded-xl hover:bg-muted text-muted-foreground transition"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+            {menu.map((m) => {
+              const active = view === m.view;
+              return (
+                <button
+                  key={m.label}
+                  onClick={() => {
+                    setMenuMobileAberto(false);
+                    setView(m.view);
+                  }}
+                  aria-current={active ? "page" : undefined}
+                  className={`flex flex-col items-center gap-1.5 p-3 rounded-2xl text-[11px] font-bold text-center transition ${
+                    active
+                      ? "bg-primary-soft text-primary"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  }`}
+                >
+                  <m.icon className="w-5 h-5" />
+                  <span className="leading-tight">{m.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </ModalBion>
     </div>
   );
 }

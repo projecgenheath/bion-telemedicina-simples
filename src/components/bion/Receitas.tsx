@@ -183,9 +183,10 @@ export function dataDoc(d: Documento) {
 }
 
 export function Receitas({ perfil }: { perfil: "paciente" | "medico" }) {
-  const { documentosVisiveis: documentos, emitirDocumento, sessao, registrarAudit } = useBion();
+  const { documentosVisiveis: documentos, emitirDocumento, sessao, registrarAudit, pacientes } = useBion();
   const [aberto, setAberto] = useState(false);
   const [tipo, setTipo] = useState<"receita" | "atestado">("receita");
+  const [pacienteDoc, setPacienteDoc] = useState("");
   const [titulo, setTitulo] = useState("");
   const [conteudo, setConteudo] = useState("");
   const [medicamento, setMedicamento] = useState("");
@@ -248,6 +249,8 @@ export function Receitas({ perfil }: { perfil: "paciente" | "medico" }) {
 
   const salvar = () => {
     const e: Record<string, string> = {};
+    if (perfil === "medico" && !pacienteDoc)
+      e["pacienteDoc"] = "Selecione o paciente do documento.";
     if (titulo.trim().length < 3) e["titulo"] = "Informe um título com pelo menos 3 caracteres.";
     if (tipo === "receita" && medicamento.trim().length < 2)
       e["medicamento"] = "Informe o medicamento.";
@@ -268,7 +271,7 @@ export function Receitas({ perfil }: { perfil: "paciente" | "medico" }) {
       tipo,
       titulo: `${tipo === "receita" ? "Receita" : "Atestado"} — ${titulo.trim()}`,
       medico: sessao.role === "medico" ? sessao.nome : "Dra. Ana Ribeiro",
-      paciente: "Marina Silva",
+      paciente: perfil === "medico" ? pacienteDoc : sessao.nome,
       conteudo: conteudo.trim(),
       ...(tipo === "receita"
         ? { medicamento: medicamento.trim(), posologia: posologia.trim() }
@@ -276,6 +279,7 @@ export function Receitas({ perfil }: { perfil: "paciente" | "medico" }) {
       duracao: duracao.trim(),
       ...(observacoes.trim() ? { observacoes: observacoes.trim() } : {}),
     });
+    setPacienteDoc("");
     setTitulo("");
     setConteudo("");
     setMedicamento("");
@@ -321,6 +325,22 @@ export function Receitas({ perfil }: { perfil: "paciente" | "medico" }) {
               </button>
             ))}
           </div>
+
+          <Field label="Paciente" erro={erros["pacienteDoc"]}>
+            <select
+              aria-label="Paciente do documento"
+              value={pacienteDoc}
+              onChange={(e) => setPacienteDoc(e.target.value)}
+              className="w-full px-4 py-3 rounded-xl border bg-background"
+            >
+              <option value="">Selecione o paciente…</option>
+              {pacientes.map((p) => (
+                <option key={p.id} value={p.nome}>
+                  {p.nome}
+                </option>
+              ))}
+            </select>
+          </Field>
 
           <Field label="Título" erro={erros["titulo"]}>
             <input
