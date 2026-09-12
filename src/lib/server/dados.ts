@@ -215,6 +215,22 @@ export async function carregarDados(usuario: UsuarioSessao) {
     ? await db.auditLog.findMany({ orderBy: { createdAt: "desc" }, take: 300 })
     : [];
 
+  // Mensageria assíncrona: tudo que o usuário enviou ou recebeu
+  const mensagensRaw = await db.mensagem.findMany({
+    where: { OR: [{ deId: usuario.id }, { paraId: usuario.id }] },
+    include: {
+      de: { select: { nome: true } },
+      para: { select: { nome: true } },
+    },
+    orderBy: { createdAt: "asc" },
+  });
+
+  // Usuário de suporte (ADMIN) — contato "Suporte BION" nas conversas
+  const suporte = await db.user.findFirst({
+    where: { role: "ADMIN", status: "ativo" },
+    select: { id: true, nome: true },
+  });
+
   // Pacientes "visíveis": admin vê todos; médico vê vinculados por consultas
   let pacientesVisiveis = pacientesRaw;
   if (souMedico) {
@@ -355,6 +371,17 @@ export async function carregarDados(usuario: UsuarioSessao) {
       entidadeId: l.entidadeId ?? undefined,
       detalhes: l.detalhes ?? undefined,
     })),
+    mensagens: mensagensRaw.map((m) => ({
+      id: m.id,
+      deId: m.deId,
+      de: m.de.nome,
+      paraId: m.paraId,
+      para: m.para.nome,
+      texto: m.texto,
+      lida: m.lida,
+      createdAt: m.createdAt.toISOString(),
+    })),
+    suporte: { id: suporte?.id ?? null, nome: suporte?.nome ?? "Suporte BION" },
   };
 }
 

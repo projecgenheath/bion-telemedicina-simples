@@ -23,6 +23,8 @@ export type Consulta = {
   medico: string;
   especialidade: string;
   paciente: string;
+  medicoId?: string; // ids do servidor — usados pela mensageria e contactos
+  pacienteId?: string;
   data: string; // "Hoje" | "14 Dez"
   hora: string; // "14:30"
   status: ApptStatus;
@@ -63,6 +65,19 @@ export type Documento = {
 };
 
 export type NotifTipo = "lembrete" | "mensagem" | "receita" | "agenda" | "exame" | "suporte";
+
+export type Mensagem = {
+  id: string;
+  deId: string;
+  de: string;
+  paraId: string;
+  para: string;
+  texto: string;
+  lida: boolean;
+  minha: boolean;
+  quando: string; // "Hoje às 09:12" | "dd/mm/aaaa às hh:mm"
+  ts: number;
+};
 
 export type Notificacao = {
   id: string;
@@ -312,6 +327,11 @@ type EstadoFresco = {
     id: string; ts: number; acao: string; categoria: string; severidade: string;
     usuario: string; role: string; entidade?: string; entidadeId?: string; detalhes?: string;
   }[];
+  mensagens: {
+    id: string; deId: string; de: string; paraId: string; para: string;
+    texto: string; lida: boolean; createdAt: string;
+  }[];
+  suporte: { id: string | null; nome: string };
 };
 
 /* ==================================================================== */
@@ -324,6 +344,24 @@ const PERFIL_VAZIO: PacientePerfil = {
   nome: "", idade: 0, genero: "", cpf: "", email: "", telefone: "", convenio: "Particular",
   alergias: [], medicamentos: [], tipoSanguineo: "",
 };
+
+const SUPORTE_VAZIO = { id: null as string | null, nome: "Suporte BION" };
+
+const fmtMensagem = (m: {
+  id: string; deId: string; de: string; paraId: string; para: string;
+  texto: string; lida: boolean; createdAt: string;
+}): Mensagem => ({
+  id: m.id,
+  deId: m.deId,
+  de: m.de,
+  paraId: m.paraId,
+  para: m.para,
+  texto: m.texto,
+  lida: m.lida,
+  minha: false, // preenchido pelo chamador (precisa do id da sessão)
+  quando: fmtTicketData(m.createdAt),
+  ts: new Date(m.createdAt).getTime(),
+});
 
 async function api<T>(url: string, init?: RequestInit): Promise<T | null> {
   try {
@@ -364,6 +402,11 @@ type Store = {
   pacientePerfil: PacientePerfil;
   naoLidas: number;
   notificacoesVisiveis: Notificacao[];
+  mensagens: Mensagem[];
+  suporte: { id: string | null; nome: string };
+  naoLidasMensagens: number;
+  enviarMensagem: (paraId: string, texto: string) => void;
+  marcarConversaLida: (comUsuarioId: string) => void;
   emitirDocumento: (d: Omit<Documento, "id" | "data">) => void;
   cancelarConsulta: (id: string, motivo: string) => void;
   remarcarConsulta: (id: string, data: string, hora: string) => void;
@@ -422,6 +465,8 @@ export function BionProvider({ children }: { children: ReactNode }) {
   const [consentimentos, setConsentimentos] = useState<Consentimento[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [avaliacoes, setAvaliacoes] = useState<Avaliacao[]>([]);
+  const [mensagens, setMensagens] = useState<Mensagem[]>([]);
+  const [suporte, setSuporte] = useState<{ id: string | null; nome: string }>(SUPORTE_VAZIO);
   const [autenticado, setAutenticado] = useState(false);
   const [carregando, setCarregando] = useState(true);
 
@@ -462,6 +507,8 @@ export function BionProvider({ children }: { children: ReactNode }) {
         medico: c.medico,
         especialidade: c.especialidade,
         paciente: c.paciente,
+        medicoId: c.medicoId,
+        pacienteId: c.pacienteId,
         data: fmtCurta(c.dataInicio),
         hora: fmtHora(c.dataInicio),
         status: c.status as Consulta["status"],
@@ -564,6 +611,8 @@ export function BionProvider({ children }: { children: ReactNode }) {
         entidade: l.entidade, entidadeId: l.entidadeId, detalhes: l.detalhes,
       })),
     );
+    setMensagens(d.mensagens.map((m) => ({ ...fmtMensagem(m), minha: m.deId === d.usuario.id })));
+    if (d.suporte.id) setSuporte(d.suporte);
     if (d.pacientePerfil) setPacientePerfil(d.pacientePerfil);
   }, []);
 
@@ -583,6 +632,32 @@ export function BionProvider({ children }: { children: ReactNode }) {
       setCarregando(false);
     })();
   }, [aplicar]);
+
+  /** Busca silenciosa de mensagens (polling) — sem toast em caso de falha */
+  const buscarMensagens = useCallback(async () => {
+    try {
+      const res = await fetch("/api/mensagens", { headers: { "Content-Type": "application/json" } });
+      if (!res.ok) return;
+      const json = (await res.json()) as { mensagens?: Parameters<typeof fmtMensagem>[0][] } | null;
+      if (json?.mensagens) {
+        setMensagens(
+          json.mensagens.map((m) => ({
+            ...fmtMensagem(m),
+            minha: m.deId === sessaoRef.current.id,
+          })),
+        );
+      }
+    } catch {
+      // polling silencioso: rede instável não deve alarmar o usuário
+    }
+  }, []);
+
+  /** Polling de novas mensagens (~4s) enquanto autenticado */
+  useEffect(() => {
+    if (!autenticado) return;
+    const id = setInterval(() => void buscarMensagens(), 4000);
+    return () => clearInterval(id);
+  }, [autenticado, buscarMensagens]);
 
   /** Executa mutação na API e aplica o estado fresco retornado */
   const mutar = useCallback(
@@ -644,6 +719,8 @@ export function BionProvider({ children }: { children: ReactNode }) {
     setConsentimentos([]);
     setAuditLogs([]);
     setAvaliacoes([]);
+    setMensagens([]);
+    setSuporte(SUPORTE_VAZIO);
     setPacientePerfil(PERFIL_VAZIO);
   }, []);
 
@@ -1178,6 +1255,30 @@ export function BionProvider({ children }: { children: ReactNode }) {
     [mutar],
   );
 
+  const enviarMensagem = useCallback(
+    (paraId: string, texto: string) => {
+      const recorte = texto.trim().slice(0, 80);
+      void mutar("/api/mensagens", "POST", {
+        paraId,
+        texto,
+        notificacoes: [
+          {
+            tipo: "mensagem",
+            titulo: `Nova mensagem de ${sessaoRef.current.nome || "BION"}`,
+            texto: recorte.length < texto.trim().length ? `${recorte}…` : recorte,
+            usuarioId: paraId,
+          },
+        ],
+      });
+    },
+    [mutar],
+  );
+
+  const marcarConversaLida = useCallback(
+    (comUsuarioId: string) => void mutar("/api/mensagens", "PATCH", { comUsuarioId }),
+    [mutar],
+  );
+
   const value = useMemo<Store>(
     () => ({
       sessao,
@@ -1197,6 +1298,11 @@ export function BionProvider({ children }: { children: ReactNode }) {
       documentosVisiveis,
       naoLidas: notificacoesVisiveis.filter((n) => !n.lida).length,
       notificacoesVisiveis,
+      mensagens,
+      suporte,
+      naoLidasMensagens: mensagens.filter((m) => !m.minha && !m.lida).length,
+      enviarMensagem,
+      marcarConversaLida,
       emitirDocumento,
       cancelarConsulta,
       remarcarConsulta,
@@ -1236,6 +1342,7 @@ export function BionProvider({ children }: { children: ReactNode }) {
       sessao, autenticado, carregando, entrar, registrar, sair,
       consultas, arquivos, notificacoes, notificacoesVisiveis, documentos, medicos,
       tickets, lembretes, pacientePerfil, documentosVisiveis,
+      mensagens, suporte, enviarMensagem, marcarConversaLida,
       emitirDocumento, cancelarConsulta, remarcarConsulta, concluirConsulta,
       adicionarConsulta, adicionarArquivo, notificar, marcarLida, marcarTodasLidas,
       consentimentos, consentimentosVisiveis, registrarConsentimento, avaliacoes, avaliarConsulta,

@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
@@ -35,6 +35,8 @@ model User {
   lembretes            Lembrete[]
   consentimentos       Consentimento[]
   auditLogs            AuditLog[]
+  mensagensEnviadas    Mensagem[]     @relation("MensagemDe")
+  mensagensRecebidas   Mensagem[]     @relation("MensagemPara")
 }
 
 model Sessao {
@@ -130,6 +132,22 @@ model PresencaSala {
   ultimoPing DateTime @default(now())
 
   @@id([consultaId, usuarioId])
+}
+
+// Mensageria assíncrona paciente ↔ médico (e suporte BION) entre as consultas.
+// "lida" controla o badge de não lidas por conversa (marcada quando o destinatário abre).
+model Mensagem {
+  id        String   @id @default(cuid())
+  deId      String
+  de        User     @relation("MensagemDe", fields: [deId], references: [id], onDelete: Cascade)
+  paraId    String
+  para      User     @relation("MensagemPara", fields: [paraId], references: [id], onDelete: Cascade)
+  texto     String
+  lida      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([deId, paraId, createdAt])
+  @@index([paraId, lida])
 }
 
 model Documento {
