@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
+import { BionProvider } from "@/lib/bion-store";
 
 export const metadata: Metadata = {
   title: "BION — Consulta médica online em minutos",
@@ -28,7 +29,7 @@ export default function RootLayout({
   return (
     <html lang="pt-BR" suppressHydrationWarning>
       <body className="antialiased bg-background text-foreground">
-        {children}
+        <BionProvider>{children}</BionProvider>
         <Toaster position="top-center" richColors />
       </body>
     </html>

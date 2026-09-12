@@ -1,3 +1,5 @@
+"use client";
+
 import { useRef } from "react";
 import { FileText, Download, Upload, User, Stethoscope } from "lucide-react";
 import { useBion } from "@/lib/bion-store";

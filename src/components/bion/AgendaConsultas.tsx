@@ -1,3 +1,5 @@
+"use client";
+
 import { useState } from "react";
 import { toast } from "sonner";
 import { Calendar, Clock, Stethoscope, X, RefreshCw, AlertTriangle } from "lucide-react";

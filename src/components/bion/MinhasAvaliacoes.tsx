@@ -1,3 +1,5 @@
+"use client";
+
 import { useMemo, useState } from "react";
 import { Star, TrendingUp, TrendingDown, Minus, MessageSquare } from "lucide-react";
 import { useBion } from "@/lib/bion-store";

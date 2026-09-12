@@ -1,3 +1,5 @@
+"use client";
+
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Search, Stethoscope, User, Check, Ban, ShieldCheck } from "lucide-react";

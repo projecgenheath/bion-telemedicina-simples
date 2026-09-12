@@ -1,3 +1,5 @@
+"use client";
+
 import { useMemo, useState } from "react";
 import { Search, Pencil, X, CalendarX2, CalendarDays } from "lucide-react";
 import { toast } from "sonner";
