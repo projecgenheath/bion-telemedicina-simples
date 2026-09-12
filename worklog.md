@@ -134,3 +134,21 @@ Stage Summary:
 - Produção redeployada e revalidada de ponta a ponta com as correções ao vivo.
 - Evidências: download/evidencias-auditoria-frontend/ (33+ screenshots: telas, mobile 360px, dark mode).
 - Notas da auditoria: A11Y 9,5→(após fixes, pendente re-scan formal), Performance 9, Responsividade 10, Consistência 9, Runtime 10.
+
+---
+Task ID: modais-radix-dialog
+Agent: Super Z (agente principal)
+Task: Evoluir os 20 modais customizados para Radix Dialog (ModalBion)
+
+Work Log:
+- Criado src/components/bion/ModalBion.tsx: wrapper @radix-ui/react-dialog com identidade BION (modo centrado + modo bottom-sheet sm/md, overlay configurável, foraFecha configurável, DialogTitle sr-only).
+- 20 modais migrados em 15 arquivos: Consulta (3), AgendaConsultas, AgendamentoFluxo, Receitas (VisualizadorDoc reaproveitado pelo Prontuário), Prontuario, Avaliacao, PosConsultaModal, TourGuiado, Lembretes, ChamadosSuporte (2), AdminAgendamentos/AdminMedicos/AdminPacientes (6), PrivacidadeAdmin.
+- Comportamento preservado: 6 que fechavam no clique-fora mantiveram (foraFecha default true); 14 que não fechavam → foraFecha=false.
+- Bugs pegos na validação: (1) warning Radix "Missing Description" → aria-describedby={undefined} no Content; (2) sheet encolhia no desktop (shrink-wrap 566px vs 672px original) → sheet usa largura explícita + sm:w-full; (3) porta 3000 presa por processo renomeado next-server (pkill não pegava) → fuser -k 3000/tcp; (4) chunks em cache do browser serviam build velho → cache-bust por query param.
+- Validação local: tsc/eslint/build 50 páginas ✓; ESC fecha ✓; Tab preso dentro (5 tabs) ✓; clique-fora conforme config ✓; sheet 360px full-width colado no rodapé ✓; desktop centrado 672px exato ✓; sweep 16 telas 0 erros ✓.
+- Deploy: commit aad483c push main; produção validada (Tour abre com role=dialog, ESC fecha, Novo Lembrete com foco dentro + body pointer-events none, zero erros, zero warnings Radix).
+
+Stage Summary:
+- Todos os 20 modais do BION agora têm focus trap, ESC, aria-modal, trava de fundo e devolução de foco — padrão Radix Dialog com visual BION inalterado.
+- ModalBion é o componente canônico para novos modais.
+- Produção no Vercel revalidada com o código novo ao vivo.
