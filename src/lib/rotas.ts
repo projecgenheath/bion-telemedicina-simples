@@ -74,12 +74,25 @@ export function viewDoPath(p: string): View {
   return PATH_TO_VIEW[p] ?? "dashboard";
 }
 
-// Views restritas por papel (usadas na guarda do layout autenticado)
+/* ------------------------------------------------------------------ */
+/* Guardas de papel (usadas no layout autenticado)                     */
+/* ------------------------------------------------------------------ */
+
+/** Exclusivas do administrador (qualquer outro papel é redirecionado ao painel). */
 export const SO_ADMIN: View[] = [
   "usuarios",
   "admin-pacientes",
   "admin-medicos",
   "admin-agendamentos",
   "auditoria",
+  "relatorios",
 ];
-export const SO_MEDICO: View[] = ["medico-pacientes"];
+
+/** Exclusivas do médico. */
+export const SO_MEDICO: View[] = ["medico-pacientes", "medico-perfil", "avaliacoes"];
+
+/** Exclusivas do paciente (histórico clínico é a linha do tempo do PRÓPRIO paciente). */
+export const SO_PACIENTE: View[] = ["agendar", "sala-espera", "paciente-perfil", "historico"];
+
+/** Clínicas compartilhadas paciente+médico; o administrador não tem negócio nelas. */
+export const SO_CLINICA: View[] = ["consulta", "consultas", "receitas", "prontuario"];

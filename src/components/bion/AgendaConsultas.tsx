@@ -10,9 +10,9 @@ const DATAS = ["Hoje", "Amanhã", "12 Dez", "15 Dez", "18 Dez"];
 const HORAS = ["09:00", "10:00", "11:00", "14:00", "15:30", "16:30"];
 
 export function AgendaConsultas({ perfil }: { perfil: "paciente" | "medico" }) {
-  const { consultas } = useBion();
+  const { consultas, sessao } = useBion();
   const lista = consultas.filter((c) =>
-    perfil === "paciente" ? c.paciente === "Marina Silva" : c.medico === "Dra. Ana Ribeiro",
+    perfil === "paciente" ? c.paciente === sessao.nome : c.medico === sessao.nome,
   );
   const ativas = lista.filter((c) => c.status === "confirmada");
   const outras = lista.filter((c) => c.status !== "confirmada");
