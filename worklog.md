@@ -173,3 +173,21 @@ Stage Summary:
 - Corrigida a classe de bugs papel/acesso: cada tela agora só abre para o papel certo (URL ou menu), o médico não vê mais página de paciente e qualquer paciente vê somente os próprios dados.
 - Navegação mobile completa (4 + Mais) elimina seções inalcançáveis no celular.
 - Evidências: download/evidencias-papeis/ (sheet Mais + histórico 360px).
+
+---
+Task ID: videoconsulta-mobile
+Agent: Super Z (agente principal)
+Task: Redesenhar a sala de videoconsulta (usuário: "tela horrível" no celular)
+
+Work Log:
+- Diagnóstico: sala renderizava DENTRO do AppShell (header + bottom nav disputando espaço) e tinha sidebar fixa w-80 (320px) — num viewport de 360px o vídeo ficava com ~24-100px, texto empilhava na vertical.
+- (app)/layout.tsx: /consulta agora renderiza FORA do AppShell — tela cheia imersiva (sem header, sem nav inferior, sem Tour), guardas de auth/papel mantidos (SO_CLINICA já bloqueia admin).
+- Consulta.tsx responsivo: área interna vira coluna no celular (vídeo aspect-video full-width em cima, controles em faixa com scroll horizontal + safe-area, painel Prontuário/Exames/Chat/IA abaixo) e lado a lado no lg (comportamento desktop preservado); root min-h-[100dvh] / lg h-screen com scroll interno.
+- PiP local reduzido no mobile (w-28 h-20); botões shrink-0 para não amassar.
+- Nomes reais: cabeçalho/placeholder/prontuário usam a contraparte da consulta ATIVA do banco (paciente/médico/especialidade) com iniciais derivadas; card de dados usa idade/gênero do registro real quando existe (fallback cena demo).
+- Validação: tsc ✓, eslint ✓, build 50 páginas ✓; runtime local 360px médica (vídeo 336px=full-width, 0px overflow, abas ok, Encerrar → /painel) e paciente (sem botões clínicos ✓); desktop 1280px lado a lado preservado; zero erros console.
+- Evidências: download/evidencias-consulta/ (360px topo/chat/paciente + desktop).
+
+Stage Summary:
+- Sala de videoconsulta agora é imersiva e usável no celular (vídeo 16:9 full-width, controles roláveis, prontuário abaixo) e mantém o layout lado a lado no desktop.
+- Dados da sala (nomes/especialidade) vêm da consulta real do banco, não mais só da cena demo.
