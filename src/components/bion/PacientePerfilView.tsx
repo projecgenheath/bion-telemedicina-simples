@@ -110,6 +110,7 @@ export function PacientePerfilView() {
               <span className="text-muted-foreground">E-mail:</span>
               {editando ? (
                 <input
+                  aria-label="E-mail"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="px-2 py-1 rounded-lg border bg-background text-right"
@@ -123,6 +124,7 @@ export function PacientePerfilView() {
               <span className="text-muted-foreground">Telefone celular:</span>
               {editando ? (
                 <input
+                  aria-label="Telefone"
                   value={telefone}
                   onChange={(e) => setTelefone(e.target.value)}
                   className="px-2 py-1 rounded-lg border bg-background text-right"
@@ -136,6 +138,7 @@ export function PacientePerfilView() {
               <span className="text-muted-foreground">Modalidade / Convênio:</span>
               {editando ? (
                 <input
+                  aria-label="Convênio"
                   value={convenio}
                   onChange={(e) => setConvenio(e.target.value)}
                   className="px-2 py-1 rounded-lg border bg-background text-right"
@@ -170,6 +173,7 @@ export function PacientePerfilView() {
               <span className="text-muted-foreground">Peso corporal:</span>
               {editando ? (
                 <input
+                  aria-label="Peso (kg)"
                   value={peso}
                   onChange={(e) => setPeso(e.target.value)}
                   className="px-2 py-1 rounded-lg border bg-background text-right w-24"
@@ -183,6 +187,7 @@ export function PacientePerfilView() {
               <span className="text-muted-foreground">Altura:</span>
               {editando ? (
                 <input
+                  aria-label="Altura (cm)"
                   value={altura}
                   onChange={(e) => setAltura(e.target.value)}
                   className="px-2 py-1 rounded-lg border bg-background text-right w-24"
@@ -222,6 +227,7 @@ export function PacientePerfilView() {
           {editando && (
             <div className="flex gap-2 pt-2">
               <input
+                  aria-label="Nova alergia"
                 value={novaAlergia}
                 onChange={(e) => setNovaAlergia(e.target.value)}
                 placeholder="Adicionar alergia..."

@@ -124,6 +124,7 @@ export function ChamadosSuporte() {
         <div className="flex items-center gap-2 px-4 py-3 rounded-2xl bg-muted w-full sm:flex-1">
           <Search className="w-4 h-4 text-muted-foreground" />
           <input
+                  aria-label="Buscar"
             value={busca}
             onChange={(e) => setBusca(e.target.value)}
             placeholder="Buscar por assunto, usuário ou mensagem..."
@@ -163,8 +164,17 @@ export function ChamadosSuporte() {
           ticketsFiltrados.map((ticket) => (
             <div
               key={ticket.id}
+              role="button"
+              tabIndex={0}
+              aria-label={`Abrir chamado: ${ticket.assunto}`}
               onClick={() => setTicketSelecionado(ticket)}
-              className="bg-card border rounded-3xl p-5 hover:border-primary transition shadow-sm cursor-pointer space-y-3"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  setTicketSelecionado(ticket);
+                }
+              }}
+              className="bg-card border rounded-3xl p-5 hover:border-primary transition shadow-sm cursor-pointer space-y-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
             >
               <div className="flex items-start justify-between gap-3 flex-wrap">
                 <div className="flex items-center gap-3">
@@ -279,6 +289,7 @@ export function ChamadosSuporte() {
                   Responder ao Usuário:
                 </label>
                 <textarea
+                  aria-label="Responder ao Usuário"
                   value={respostaTexto}
                   onChange={(e) => setRespostaTexto(e.target.value)}
                   placeholder="Escreva a resposta e solução oficial para este chamado..."
@@ -328,6 +339,7 @@ export function ChamadosSuporte() {
               <div>
                 <label className="text-xs font-bold text-foreground block mb-1.5">Assunto</label>
                 <input
+                  aria-label="Assunto"
                   value={novoAssunto}
                   onChange={(e) => setNovoAssunto(e.target.value)}
                   placeholder="Ex: Dúvida com pagamento Pix ou download de receita"
@@ -355,6 +367,7 @@ export function ChamadosSuporte() {
                   Mensagem detalhada
                 </label>
                 <textarea
+                  aria-label="Mensagem detalhada"
                   value={novaMensagem}
                   onChange={(e) => setNovaMensagem(e.target.value)}
                   placeholder="Descreva o que aconteceu para resolvermos o mais rápido possível..."

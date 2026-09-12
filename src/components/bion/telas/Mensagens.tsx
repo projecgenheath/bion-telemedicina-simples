@@ -236,6 +236,7 @@ export function Mensagens() {
 
           <div className="p-3 border-t bg-card flex items-center gap-2">
             <input
+                  aria-label="Mensagem"
               value={texto}
               onChange={(e) => setTexto(e.target.value)}
               onKeyDown={(e) => {

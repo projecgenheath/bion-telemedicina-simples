@@ -534,6 +534,7 @@ export function AgendamentoFluxo({
                 Descreva com suas palavras o que você está sentindo:
               </label>
               <textarea
+                  aria-label="Descreva com suas palavras o que você está sentindo"
                 value={motivoTexto}
                 onChange={(e) => setMotivoTexto(e.target.value)}
                 placeholder="Exemplo: Estou com dor de cabeça forte há 3 dias acompanhada de cansaço e gostaria de renovar minha receita..."
@@ -687,6 +688,7 @@ export function AgendamentoFluxo({
 
                 <div className="flex items-center gap-2 max-w-md mx-auto">
                   <input
+                  aria-label="Chave Pix para copiar"
                     readOnly
                     value="00020126580014br.gov.bcb.pix0136bion-telemedicina-pay-987655204000053039865802BR5925BION..."
                     className="flex-1 px-3 py-2 text-xs rounded-xl border bg-muted font-mono"
@@ -710,12 +712,14 @@ export function AgendamentoFluxo({
             {metodoPagamento === "cartao" && (
               <div className="space-y-3">
                 <input
+                  aria-label="Número do cartão"
                   placeholder="Número do Cartão (0000 0000 0000 0000)"
                   value={cartaoNumero}
                   onChange={(e) => setCartaoNumero(e.target.value)}
                   className="w-full px-4 py-3 rounded-xl border text-sm bg-background outline-none"
                 />
                 <input
+                  aria-label="Nome impresso no cartão"
                   placeholder="Nome impresso no Cartão"
                   value={cartaoNome}
                   onChange={(e) => setCartaoNome(e.target.value)}
@@ -723,12 +727,14 @@ export function AgendamentoFluxo({
                 />
                 <div className="grid grid-cols-2 gap-3">
                   <input
+                  aria-label="Validade (MM/AA)"
                     placeholder="Validade (MM/AA)"
                     value={cartaoValidade}
                     onChange={(e) => setCartaoValidade(e.target.value)}
                     className="w-full px-4 py-3 rounded-xl border text-sm bg-background outline-none"
                   />
                   <input
+                  aria-label="CVV do cartão"
                     placeholder="CVV (3 dígitos)"
                     value={cartaoCVV}
                     onChange={(e) => setCartaoCVV(e.target.value)}

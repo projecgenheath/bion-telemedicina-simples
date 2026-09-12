@@ -462,6 +462,7 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
             </button>
 
             <input
+                  aria-label="Anexar arquivo"
               ref={fileRef}
               type="file"
               multiple
@@ -531,6 +532,7 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
                     )}
                   </div>
                   <textarea
+                  aria-label="Anotações da consulta"
                     value={anotacoes}
                     onChange={(e) => setAnotacoes(e.target.value)}
                     rows={8}
@@ -604,6 +606,7 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
 
                 <div className="flex gap-2 pt-2 border-t border-white/10">
                   <input
+                  aria-label="Mensagem no chat da consulta"
                     value={chatInput}
                     onChange={(e) => setChatInput(e.target.value)}
                     onKeyDown={(e) => {
@@ -682,6 +685,7 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
               <div>
                 <label className="font-bold block mb-1">Título da Receita</label>
                 <input
+                  aria-label="Título da Receita"
                   value={recTitulo}
                   onChange={(e) => setRecTitulo(e.target.value)}
                   className="w-full px-3 py-2 rounded-xl border bg-background"
@@ -693,6 +697,7 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
                 <div>
                   <label className="font-bold block mb-1">Medicamento & Dosagem</label>
                   <input
+                  aria-label="Medicamento & Dosagem"
                     value={recMedicamento}
                     onChange={(e) => setRecMedicamento(e.target.value)}
                     className="w-full px-3 py-2 rounded-xl border bg-background"
@@ -702,6 +707,7 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
                 <div>
                   <label className="font-bold block mb-1">Duração</label>
                   <input
+                  aria-label="Duração"
                     value={recDuracao}
                     onChange={(e) => setRecDuracao(e.target.value)}
                     className="w-full px-3 py-2 rounded-xl border bg-background"
@@ -713,6 +719,7 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
               <div>
                 <label className="font-bold block mb-1">Posologia (Modo de usar)</label>
                 <input
+                  aria-label="Posologia (modo de usar)"
                   value={recPosologia}
                   onChange={(e) => setRecPosologia(e.target.value)}
                   className="w-full px-3 py-2 rounded-xl border bg-background"
@@ -723,6 +730,7 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
               <div>
                 <label className="font-bold block mb-1">Observações ao Paciente</label>
                 <textarea
+                  aria-label="Observações ao Paciente"
                   value={recObs}
                   onChange={(e) => setRecObs(e.target.value)}
                   rows={2}
@@ -767,6 +775,7 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
                 <div>
                   <label className="font-bold block mb-1">Dias de Afastamento</label>
                   <input
+                  aria-label="Dias de Afastamento"
                     value={atestDias}
                     onChange={(e) => setAtestDias(e.target.value)}
                     type="number"
@@ -778,6 +787,7 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
                 <div>
                   <label className="font-bold block mb-1">CID-10</label>
                   <input
+                  aria-label="CID-10"
                     value={atestCid}
                     onChange={(e) => setAtestCid(e.target.value)}
                     className="w-full px-3 py-2 rounded-xl border bg-background"
@@ -789,6 +799,7 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
               <div>
                 <label className="font-bold block mb-1">Justificativa e Recomendações</label>
                 <textarea
+                  aria-label="Justificativa e Recomendações"
                   value={atestObs}
                   onChange={(e) => setAtestObs(e.target.value)}
                   rows={3}
@@ -832,6 +843,7 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
               <div>
                 <label className="font-bold block mb-1">Exame</label>
                 <input
+                  aria-label="Exame"
                   value={exameNome}
                   onChange={(e) => setExameNome(e.target.value)}
                   placeholder="Ex: Hemograma Completo, Raio-X de Tórax, TGO/TGP"
@@ -861,6 +873,7 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
               <div>
                 <label className="font-bold block mb-1">Instruções de Preparo</label>
                 <textarea
+                  aria-label="Instruções de Preparo"
                   value={exameObs}
                   onChange={(e) => setExameObs(e.target.value)}
                   rows={3}

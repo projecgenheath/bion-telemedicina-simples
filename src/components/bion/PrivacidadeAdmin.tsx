@@ -107,6 +107,7 @@ export function PrivacidadeAdmin() {
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <h2 className="font-bold">Dados por paciente</h2>
           <input
+                  aria-label="Buscar"
             value={busca}
             onChange={(e) => setBusca(e.target.value)}
             placeholder="Buscar paciente..."

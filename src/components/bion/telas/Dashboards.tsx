@@ -504,8 +504,17 @@ export function AdminDashboard({ go }: { go: (v: View) => void }) {
         </div>
 
         <div
-          className="bg-card border rounded-3xl p-4 shadow-sm cursor-pointer hover:border-primary transition"
+          role="button"
+          tabIndex={0}
+          aria-label="Ver auditoria geral"
+          className="bg-card border rounded-3xl p-4 shadow-sm cursor-pointer hover:border-primary transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
           onClick={() => go("auditoria")}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              go("auditoria");
+            }
+          }}
         >
           <div className="text-xs text-muted-foreground font-medium">Sat. Geral / Auditoria</div>
           <div className="text-2xl font-extrabold text-foreground mt-1 text-primary">
