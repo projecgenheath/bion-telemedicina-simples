@@ -79,3 +79,20 @@ Work Log:
 Stage Summary:
 - Build de produção passa localmente de ponta a ponta; pronto para redeploy no Vercel.
 - Pendências do lado do Vercel (orientadas ao usuário): adicionar DATABASE_URL (Session pooler do Supabase) nas env vars do projeto; a rota /api/bion-ia usa z-ai-web-dev-sdk — sem credenciais no Vercel, o frontend degrada para o modo local por palavras-chave (fallback já implementado).
+
+---
+Task ID: vercel-env-database-url
+Agent: Super Z (agente principal)
+Task: Diagnosticar erro em produção no Vercel (DATABASE_URL vazio)
+
+Work Log:
+- Screenshot do usuário: app no ar (bion-telemedicina-simples.vercel.app) com build passando, mas login exibe "Invalid prisma.user.findFirst() invocation: The environment variable DATABASE_URL resolved to an empty string".
+- Verificado: main no GitHub = 34380c2 (fix do prerender incluído) — Vercel está buildando o código correto.
+- Grep em src/: única dependência de env em runtime é DATABASE_URL (Prisma); rota de IA degrada para modo local sem credenciais (fallback já implementado).
+- Conclusão: falta APENAS configurar DATABASE_URL nas Environment Variables do projeto no Vercel + redeploy (env vars só valem para novos deployments).
+- Orientação enviada ao usuário: valor exato da connection string (senha URL-encodada: %7B %3C %2F) para colar no painel.
+
+Stage Summary:
+- Nenhuma mudança de código necessária — pendência é 100% configuração no painel Vercel.
+- Valor a configurar: postgresql://postgres.tnygegihboiyptrnmaqt:6f%7B2%3C1mF6Kl%2F@aws-0-sa-east-1.pooler.supabase.com:5432/postgres?sslmode=require
+- Após adicionar: Redeploy obrigatório (Deployments → Redeploy) e testar login com conta demo.
