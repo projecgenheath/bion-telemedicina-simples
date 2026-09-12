@@ -31,6 +31,7 @@ export function Arquivos({ perfil }: { perfil: "paciente" | "medico" }) {
         {perfil === "medico" ? "Anexar documento ao paciente" : "Enviar exame"}
       </button>
       <input
+                  aria-label="Anexar arquivo"
         ref={fileRef}
         type="file"
         multiple

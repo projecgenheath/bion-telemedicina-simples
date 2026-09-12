@@ -122,6 +122,7 @@ export function Lembretes() {
               <div>
                 <label className="font-bold block mb-1">Título / Medicamento</label>
                 <input
+                  aria-label="Título / Medicamento"
                   value={titulo}
                   onChange={(e) => setTitulo(e.target.value)}
                   placeholder="Ex: Losartana 50mg, Beber água, Medir Pressão"
@@ -134,6 +135,7 @@ export function Lembretes() {
                 <div>
                   <label className="font-bold block mb-1">Horário</label>
                   <input
+                  aria-label="Horário"
                     type="time"
                     value={horario}
                     onChange={(e) => setHorario(e.target.value)}

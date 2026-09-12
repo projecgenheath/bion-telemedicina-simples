@@ -102,6 +102,7 @@ export function Usuarios() {
         <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-muted flex-1 min-w-[220px]">
           <Search className="w-4 h-4 text-muted-foreground" />
           <input
+                  aria-label="Buscar"
             value={busca}
             onChange={(e) => setBusca(e.target.value)}
             placeholder="Buscar por nome, e-mail ou CRM..."

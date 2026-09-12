@@ -100,6 +100,7 @@ export function Login() {
                   Nome completo
                 </label>
                 <input
+                  aria-label="Nome completo"
                   value={nome}
                   onChange={(e) => setNome(e.target.value)}
                   placeholder="Seu nome completo"
@@ -111,6 +112,7 @@ export function Login() {
                   E-mail
                 </label>
                 <input
+                  aria-label="E-mail"
                   value={identificador}
                   onChange={(e) => setIdentificador(e.target.value)}
                   placeholder="seu@email.com"
@@ -124,6 +126,7 @@ export function Login() {
                     Senha
                   </label>
                   <input
+                  aria-label="Senha"
                     type="password"
                     value={senha}
                     onChange={(e) => setSenha(e.target.value)}
@@ -136,6 +139,7 @@ export function Login() {
                     Confirmar senha
                   </label>
                   <input
+                  aria-label="Confirmar senha"
                     type="password"
                     value={confirmaSenha}
                     onChange={(e) => setConfirmaSenha(e.target.value)}
@@ -169,6 +173,7 @@ export function Login() {
                     E-mail
                   </label>
                   <input
+                  aria-label="E-mail"
                     value={identificador}
                     onChange={(e) => setIdentificador(e.target.value)}
                     placeholder="Seu e-mail"
@@ -180,6 +185,7 @@ export function Login() {
                     Senha de Acesso
                   </label>
                   <input
+                  aria-label="Senha de Acesso"
                     type="password"
                     value={senha}
                     onChange={(e) => setSenha(e.target.value)}

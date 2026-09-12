@@ -143,6 +143,7 @@ export function AdminMedicos() {
       <div className="relative">
         <Search className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" />
         <input
+                  aria-label="Buscar"
           value={busca}
           onChange={(e) => setBusca(e.target.value)}
           placeholder="Buscar por nome, CRM ou especialidade"

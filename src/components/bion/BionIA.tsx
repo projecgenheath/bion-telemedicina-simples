@@ -308,6 +308,7 @@ export function BionIA() {
         {/* Campo de Entrada */}
         <div className="p-4 border-t bg-card flex items-center gap-3">
           <input
+                  aria-label="Sua pergunta para a BION IA"
             value={entrada}
             onChange={(e) => setEntrada(e.target.value)}
             onKeyDown={(e) => {

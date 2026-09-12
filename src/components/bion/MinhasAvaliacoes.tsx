@@ -71,7 +71,7 @@ export function MinhasAvaliacoes() {
           <div className="mt-2 flex items-center gap-2 text-2xl font-bold">
             <TendIcon
               className="w-5 h-5"
-              style={{ color: resumo.delta < -0.05 ? "#dc2626" : "var(--accent)" }}
+              style={{ color: resumo.delta < -0.05 ? "var(--destructive)" : "var(--accent)" }}
             />
             {resumo.delta ? `${resumo.delta > 0 ? "+" : ""}${resumo.delta.toFixed(1)}` : "estável"}
           </div>

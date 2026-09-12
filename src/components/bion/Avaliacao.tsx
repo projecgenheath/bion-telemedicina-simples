@@ -63,6 +63,7 @@ export function AvaliacaoModal({
         </div>
 
         <textarea
+                  aria-label="Comentário da avaliação"
           value={comentario}
           onChange={(e) => setComentario(e.target.value.slice(0, 500))}
           maxLength={500}

@@ -139,6 +139,7 @@ function Shell({
               onClick={onLogout}
               className="p-1.5 rounded-lg hover:bg-card text-muted-foreground hover:text-foreground transition"
               title="Sair"
+              aria-label="Sair da conta"
             >
               <LogOut className="w-4 h-4" />
             </button>
@@ -170,6 +171,7 @@ function Shell({
               onClick={onLogout}
               className="md:hidden p-2 rounded-xl hover:bg-muted text-muted-foreground"
               title="Sair"
+              aria-label="Sair da conta"
             >
               <LogOut className="w-5 h-5" />
             </button>
@@ -211,6 +213,7 @@ function SinoNotificacoes({ onClick }: { onClick: () => void }) {
       onClick={onClick}
       className="p-2.5 rounded-2xl hover:bg-muted relative text-muted-foreground hover:text-foreground transition"
       title="Notificações"
+      aria-label={`Notificações${naoLidas > 0 ? ` (${naoLidas} não lidas)` : ""}`}
     >
       <Bell className="w-5 h-5" />
       {naoLidas > 0 && (

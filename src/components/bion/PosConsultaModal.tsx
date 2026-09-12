@@ -197,6 +197,7 @@ export function PosConsultaModal({
             </div>
 
             <textarea
+                  aria-label="Comentário da avaliação"
               placeholder="Deixe um elogio ou comentário sobre o atendimento (opcional)..."
               value={comentario}
               onChange={(e) => setComentario(e.target.value)}

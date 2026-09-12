@@ -97,6 +97,7 @@ export function AdminAgendamentos() {
         <div className="relative flex-1">
           <Search className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <input
+                  aria-label="Buscar"
             value={busca}
             onChange={(e) => setBusca(e.target.value)}
             placeholder="Buscar por paciente, médico ou especialidade"
@@ -228,6 +229,7 @@ export function AdminAgendamentos() {
               {cancelando.hora}
             </p>
             <input
+                  aria-label="Motivo do cancelamento"
               value={motivo}
               onChange={(e) => setMotivo(e.target.value)}
               placeholder="Motivo do cancelamento"

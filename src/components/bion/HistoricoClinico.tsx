@@ -458,6 +458,7 @@ export function HistoricoClinico() {
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <input
+                  aria-label="Buscar"
             value={busca}
             onChange={(e) => setBusca(e.target.value)}
             placeholder="Buscar exame, medicamento, médico..."
@@ -504,8 +505,17 @@ export function HistoricoClinico() {
                         <Ic className={`w-4 h-4 ${cor.text}`} />
                       </div>
                       <div
+                        role="button"
+                        tabIndex={0}
+                        aria-label={`${aberto ? "Fechar" : "Abrir"} evento: ${ev.titulo}`}
                         onClick={() => setAtivoId(aberto ? null : ev.id)}
-                        className={`flex-1 bg-card border rounded-2xl p-4 shadow-xs hover:shadow-md transition cursor-pointer ${aberto ? "ring-2 ring-primary/30" : ""}`}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            setAtivoId(aberto ? null : ev.id);
+                          }
+                        }}
+                        className={`flex-1 bg-card border rounded-2xl p-4 shadow-xs hover:shadow-md transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${aberto ? "ring-2 ring-primary/30" : ""}`}
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div className="flex-1 min-w-0">

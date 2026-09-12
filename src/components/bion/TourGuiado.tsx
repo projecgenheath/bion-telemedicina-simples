@@ -127,6 +127,7 @@ export function TourGuiado({ role }: { role: Role }) {
             onClick={fechar}
             className="p-2 rounded-xl text-muted-foreground hover:bg-muted transition"
             title="Fechar"
+            aria-label="Fechar tour guiado"
           >
             <X className="w-4 h-4" />
           </button>

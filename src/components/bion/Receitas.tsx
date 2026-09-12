@@ -322,6 +322,7 @@ export function Receitas({ perfil }: { perfil: "paciente" | "medico" }) {
 
           <Field label="Título" erro={erros["titulo"]}>
             <input
+                  aria-label="Título da receita"
               value={titulo}
               onChange={(e) => setTitulo(e.target.value)}
               maxLength={80}
@@ -336,6 +337,7 @@ export function Receitas({ perfil }: { perfil: "paciente" | "medico" }) {
             <div className="grid sm:grid-cols-2 gap-3">
               <Field label="Medicamento" erro={erros["medicamento"]}>
                 <input
+                  aria-label="Medicamento e dosagem"
                   value={medicamento}
                   onChange={(e) => setMedicamento(e.target.value)}
                   maxLength={80}
@@ -345,6 +347,7 @@ export function Receitas({ perfil }: { perfil: "paciente" | "medico" }) {
               </Field>
               <Field label="Posologia" erro={erros["posologia"]}>
                 <input
+                  aria-label="Posologia (modo de usar)"
                   value={posologia}
                   onChange={(e) => setPosologia(e.target.value)}
                   maxLength={120}
@@ -360,6 +363,7 @@ export function Receitas({ perfil }: { perfil: "paciente" | "medico" }) {
             erro={erros["duracao"]}
           >
             <input
+                  aria-label="Duração"
               value={duracao}
               onChange={(e) => setDuracao(e.target.value)}
               maxLength={40}
@@ -370,6 +374,7 @@ export function Receitas({ perfil }: { perfil: "paciente" | "medico" }) {
 
           <Field label="Descrição" erro={erros["conteudo"]}>
             <textarea
+                  aria-label="Conteúdo da receita"
               value={conteudo}
               onChange={(e) => setConteudo(e.target.value)}
               rows={3}
@@ -381,6 +386,7 @@ export function Receitas({ perfil }: { perfil: "paciente" | "medico" }) {
 
           <Field label="Observações (opcional)" erro={erros["observacoes"]}>
             <textarea
+                  aria-label="Observações"
               value={observacoes}
               onChange={(e) => setObservacoes(e.target.value)}
               rows={2}
@@ -415,6 +421,7 @@ export function Receitas({ perfil }: { perfil: "paciente" | "medico" }) {
         <div className="relative">
           <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <input
+                  aria-label="Buscar"
             value={busca}
             onChange={(e) => setBusca(e.target.value)}
             maxLength={80}
