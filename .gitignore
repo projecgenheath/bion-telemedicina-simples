@@ -1,12 +1,2 @@
 skills/
 node_modules/
-.next/
-.env
-db/
-dev.log
-next-env.d.ts
-download/
-*.log
-upload/
-tsconfig.tsbuildinfo
-.env.sqlite.backup
