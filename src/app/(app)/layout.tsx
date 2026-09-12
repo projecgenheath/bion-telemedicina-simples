@@ -29,5 +29,9 @@ export default function LayoutAutenticado({ children }: { children: React.ReactN
 
   if (carregando || !autenticado) return <TelaCarregando />;
 
+  // Sala de videoconsulta é imersiva (tela cheia, como Meet/Zoom):
+  // sem cabeçalho, sem navegação inferior e sem tour por cima.
+  if (view === "consulta") return <>{children}</>;
+
   return <AppShell>{children}</AppShell>;
 }

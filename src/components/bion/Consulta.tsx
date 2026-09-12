@@ -41,10 +41,32 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
     concluirConsulta,
     consultas,
     registrarAudit,
+    sessao,
+    pacientes,
   } = useStore();
 
   // Consulta ativa real (banco) — define a sala WebRTC
   const consultaAtual = consultas.find((c) => c.status === "confirmada") ?? consultas[0];
+
+  // Contraparte da chamada: dados reais da consulta ativa (fallback: cena demo)
+  const contraparteNome =
+    role === "medico"
+      ? (consultaAtual?.paciente ?? "Marina Silva")
+      : (consultaAtual?.medico ?? "Dra. Ana Ribeiro");
+  const contraparteDetalhe =
+    role === "medico"
+      ? `${consultaAtual?.especialidade ?? "Clínica Geral"} • Retorno`
+      : `${consultaAtual?.especialidade ?? "Clínica Geral"} • Teleconsulta`;
+  const iniciais = (nome: string) =>
+    nome
+      .split(" ")
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((p) => p[0]!.toUpperCase())
+      .join("");
+  const dadosPaciente = pacientes.find(
+    (p) => p.nome === (role === "medico" ? contraparteNome : sessao.nome),
+  );
 
   // ── WebRTC REAL (Fase 2): mídia P2P + sinalização via banco ──
   const tele = useTeleconsulta(consultaAtual?.id);
@@ -268,23 +290,22 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
   };
 
   return (
-    <div className="-m-5 md:-m-8 min-h-[calc(100vh-4rem)] bg-slate-950 flex flex-col text-white">
+    <div className="min-h-[100dvh] lg:h-[100dvh] lg:overflow-hidden bg-slate-950 flex flex-col text-white">
       {/* Barra Superior */}
       <div className="h-16 px-4 md:px-6 flex items-center justify-between border-b border-white/10 bg-slate-900/90 backdrop-blur">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-2xl bg-primary flex items-center justify-center font-bold text-sm shadow-sm">
-            {role === "medico" ? "MS" : "AR"}
+            {iniciais(contraparteNome)}
           </div>
           <div className="min-w-0">
             <div className="text-sm font-bold truncate flex items-center gap-2">
               <span>
-                {role === "medico" ? "Marina Silva (Paciente)" : "Dra. Ana Ribeiro (Médica)"}
+                {contraparteNome}
+                {role === "medico" ? " (Paciente)" : " (Médica)"}
               </span>
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
             </div>
-            <div className="text-xs text-slate-400">
-              {role === "medico" ? "32 anos • Retorno" : "Clínica Geral • CRM 12345 SP"}
-            </div>
+            <div className="text-xs text-slate-400 truncate">{contraparteDetalhe}</div>
           </div>
         </div>
 
@@ -322,11 +343,11 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
         </div>
       </div>
 
-      {/* Área Principal de Vídeo e Sidebar */}
-      <div className="flex-1 flex overflow-hidden">
+      {/* Área Principal: vídeo em cima + painel embaixo no celular; lado a lado no desktop */}
+      <div className="flex-1 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden">
         {/* Painel do Vídeo */}
-        <div className="flex-1 flex flex-col p-3 md:p-5 gap-4 min-w-0">
-          <div className="flex-1 min-h-[320px] relative rounded-3xl overflow-hidden bg-gradient-to-br from-slate-800 via-slate-900 to-slate-950 border border-white/10 flex items-center justify-center shadow-2xl">
+        <div className="flex-1 flex flex-col p-3 lg:p-5 gap-4 min-w-0">
+          <div className="aspect-video lg:aspect-auto lg:flex-1 lg:min-h-[320px] w-full shrink-0 lg:shrink relative rounded-3xl overflow-hidden bg-gradient-to-br from-slate-800 via-slate-900 to-slate-950 border border-white/10 flex items-center justify-center shadow-2xl">
             {/* Feed Remoto REAL (WebRTC P2P) */}
             <video
               ref={videoRemotoRef}
@@ -339,11 +360,11 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
             {!remotoPronto && (
               <div className="flex flex-col items-center gap-4">
                 <div className="w-28 h-28 rounded-3xl bg-primary/20 border-2 border-primary/40 flex items-center justify-center text-4xl font-extrabold text-white shadow-xl">
-                  {role === "medico" ? "MS" : "AR"}
+                  {iniciais(contraparteNome)}
                 </div>
                 <div className="text-center">
                   <div className="text-lg font-bold">
-                    {role === "medico" ? "Marina Silva" : "Dra. Ana Ribeiro"}
+                    {contraparteNome}
                   </div>
                   <div className="text-xs text-slate-400 mt-0.5 flex items-center justify-center gap-2">
                     <span
@@ -364,7 +385,7 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
             )}
 
             {/* Picture-in-Picture Local */}
-            <div className="absolute top-4 right-4 w-36 h-28 md:w-52 md:h-36 rounded-2xl overflow-hidden bg-slate-900 border-2 border-white/20 shadow-2xl flex items-center justify-center text-xs">
+            <div className="absolute top-2.5 right-2.5 sm:top-4 sm:right-4 w-28 h-20 sm:w-36 sm:h-28 md:w-52 md:h-36 rounded-2xl overflow-hidden bg-slate-900 border-2 border-white/20 shadow-2xl flex items-center justify-center text-xs">
               <video
                 ref={videoLocalRef}
                 autoPlay
@@ -386,11 +407,11 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
             </div>
           </div>
 
-          {/* Barra de Controles Inferior */}
-          <div className="flex items-center justify-center gap-2 flex-wrap bg-slate-900/80 backdrop-blur p-3 rounded-2xl border border-white/10">
+          {/* Barra de Controles Inferior — rolagem horizontal no celular */}
+          <div className="flex items-center gap-2 overflow-x-auto sm:flex-wrap sm:justify-center bg-slate-900/80 backdrop-blur p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:pb-3 rounded-2xl border border-white/10">
             <button
               onClick={toggleMicLocal}
-              className={`w-12 h-12 rounded-2xl flex items-center justify-center transition shadow-md ${
+              className={`w-12 h-12 shrink-0 rounded-2xl flex items-center justify-center transition shadow-md ${
                 micAtivo
                   ? "bg-white/10 hover:bg-white/20 text-white"
                   : "bg-red-500 text-white hover:bg-red-600"
@@ -402,7 +423,7 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
 
             <button
               onClick={toggleCamLocal}
-              className={`w-12 h-12 rounded-2xl flex items-center justify-center transition shadow-md ${
+              className={`w-12 h-12 shrink-0 rounded-2xl flex items-center justify-center transition shadow-md ${
                 camAtivo
                   ? "bg-white/10 hover:bg-white/20 text-white"
                   : "bg-red-500 text-white hover:bg-red-600"
@@ -414,7 +435,7 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
 
             <button
               onClick={toggleTela}
-              className={`w-12 h-12 rounded-2xl flex items-center justify-center transition shadow-md ${
+              className={`w-12 h-12 shrink-0 rounded-2xl flex items-center justify-center transition shadow-md ${
                 compartilhando
                   ? "bg-primary text-primary-foreground"
                   : "bg-white/10 hover:bg-white/20 text-white"
@@ -426,7 +447,7 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
 
             <button
               onClick={() => fileRef.current?.click()}
-              className="w-12 h-12 rounded-2xl bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition shadow-md"
+              className="w-12 h-12 shrink-0 rounded-2xl bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition shadow-md"
               title="Enviar exame ou arquivo"
             >
               <Paperclip className="w-5 h-5" />
@@ -436,19 +457,19 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
               <>
                 <button
                   onClick={() => setModalReceita(true)}
-                  className="px-4 h-12 rounded-2xl bg-emerald-600/90 hover:bg-emerald-600 text-white text-xs font-bold flex items-center gap-1.5 transition shadow-md"
+                  className="px-4 h-12 shrink-0 rounded-2xl bg-emerald-600/90 hover:bg-emerald-600 text-white text-xs font-bold flex items-center gap-1.5 transition shadow-md"
                 >
                   <Pill className="w-4 h-4" /> Prescrever Receita
                 </button>
                 <button
                   onClick={() => setModalAtestado(true)}
-                  className="px-4 h-12 rounded-2xl bg-primary text-primary-foreground text-xs font-bold flex items-center gap-1.5 transition shadow-md"
+                  className="px-4 h-12 shrink-0 rounded-2xl bg-primary text-primary-foreground text-xs font-bold flex items-center gap-1.5 transition shadow-md"
                 >
                   <Award className="w-4 h-4" /> Emitir Atestado
                 </button>
                 <button
                   onClick={() => setModalExame(true)}
-                  className="px-4 h-12 rounded-2xl bg-violet-600/90 hover:bg-violet-600 text-white text-xs font-bold flex items-center gap-1.5 transition shadow-md"
+                  className="px-4 h-12 shrink-0 rounded-2xl bg-violet-600/90 hover:bg-violet-600 text-white text-xs font-bold flex items-center gap-1.5 transition shadow-md"
                 >
                   <FileText className="w-4 h-4" /> Solicitar Exame
                 </button>
@@ -457,7 +478,7 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
 
             <button
               onClick={encerrar}
-              className="px-6 h-12 rounded-2xl bg-red-600 hover:bg-red-700 text-white text-xs font-extrabold flex items-center gap-2 transition shadow-lg shadow-red-600/30"
+              className="px-6 h-12 shrink-0 rounded-2xl bg-red-600 hover:bg-red-700 text-white text-xs font-extrabold flex items-center gap-2 transition shadow-lg shadow-red-600/30"
             >
               <PhoneOff className="w-4 h-4" /> Encerrar Atendimento
             </button>
@@ -476,8 +497,8 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
           </div>
         </div>
 
-        {/* Sidebar Lateral */}
-        <div className="w-80 md:w-96 border-l border-white/10 bg-slate-900/95 flex flex-col min-w-0">
+        {/* Painel Lateral — abaixo do vídeo no celular, ao lado no desktop */}
+        <div className="w-full lg:w-96 lg:shrink-0 border-t lg:border-t-0 lg:border-l border-white/10 bg-slate-900/95 flex flex-col min-w-0">
           {/* Abas */}
           <div className="flex border-b border-white/10 text-xs font-bold">
             {(
@@ -503,7 +524,7 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
           </div>
 
           {/* Conteúdo das Abas */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-4 text-xs">
+          <div className="flex-1 lg:overflow-y-auto p-4 space-y-4 text-xs">
             {/* Aba Prontuário */}
             {aba === "prontuario" && (
               <div className="space-y-4">
@@ -511,7 +532,12 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
                   <div className="font-bold text-slate-300 uppercase tracking-wider text-[11px]">
                     Dados do Paciente
                   </div>
-                  <div className="text-slate-200">Marina Silva • 32 anos • Feminino</div>
+                  <div className="text-slate-200">
+                    {role === "medico" ? contraparteNome : sessao.nome} •{" "}
+                    {dadosPaciente
+                      ? `${dadosPaciente.idade} anos • ${dadosPaciente.genero}`
+                      : "32 anos • Feminino"}
+                  </div>
                   <div className="text-slate-400">
                     Alergias: <strong className="text-amber-400">Dipirona</strong>
                   </div>
