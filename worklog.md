@@ -96,3 +96,18 @@ Stage Summary:
 - Nenhuma mudança de código necessária — pendência é 100% configuração no painel Vercel.
 - Valor a configurar: postgresql://postgres.tnygegihboiyptrnmaqt:6f%7B2%3C1mF6Kl%2F@aws-0-sa-east-1.pooler.supabase.com:5432/postgres?sslmode=require
 - Após adicionar: Redeploy obrigatório (Deployments → Redeploy) e testar login com conta demo.
+
+---
+Task ID: vercel-producao-validada
+Agent: Super Z (agente principal)
+Task: Validar produção no Vercel após configuração da DATABASE_URL
+
+Work Log:
+- Usuário confirmou: env var adicionada + redeploy feito com sucesso ("Deu certo").
+- Smoke test contra https://bion-telemedicina-simples.vercel.app: POST /api/auth/login → HTTP 200 (Marina Silva, perfil paciente completo, dados reais do Supabase).
+- GET /api/bootstrap com cookie de sessão → HTTP 200, 15 coleções (consultas 3, documentos 3, notificacoes 4, medicos 6, lembretes 4...).
+
+Stage Summary:
+- BION em produção no Vercel 100% operacional contra Supabase (sa-east-1).
+- Deploy verde: build 50/50 páginas + login + bootstrap validados em produção.
+- Projeto fechado: dev (SQLite) e produção (Supabase) funcionando; contas demo ativas (senha bion123).
