@@ -18,6 +18,7 @@ import {
   Stethoscope,
 } from "lucide-react";
 import { useBion, type TicketSuporte } from "@/lib/bion-store";
+import { ModalBion } from "@/components/bion/ModalBion";
 
 export function ChamadosSuporte() {
   const { tickets, adicionarTicket, responderTicket, sessao } = useBion();
@@ -232,14 +233,14 @@ export function ChamadosSuporte() {
 
       {/* Modal de Detalhes / Resposta de Chamado */}
       {ticketSelecionado && (
-        <div
-          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
-          onClick={() => setTicketSelecionado(null)}
+        <ModalBion
+          aberto
+          onFechar={() => setTicketSelecionado(null)}
+          titulo={`Chamado: ${ticketSelecionado.assunto}`}
+          largura="max-w-xl"
+          className="py-4"
         >
-          <div
-            className="bg-card border rounded-3xl max-w-xl w-full p-6 md:p-8 space-y-5 shadow-2xl max-h-[90vh] overflow-y-auto"
-            onClick={(e) => e.stopPropagation()}
-          >
+          <div className="bg-card border rounded-3xl w-full p-6 md:p-8 space-y-5 shadow-2xl max-h-[85vh] overflow-y-auto">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <span
@@ -305,19 +306,21 @@ export function ChamadosSuporte() {
               </div>
             )}
           </div>
-        </div>
+        </ModalBion>
       )}
 
       {/* Modal de Abertura de Novo Chamado */}
       {modalNovo && (
-        <div
-          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
-          onClick={() => setModalNovo(false)}
+        <ModalBion
+          aberto
+          onFechar={() => setModalNovo(false)}
+          titulo="Abrir novo chamado de suporte"
+          largura="max-w-lg"
+          className="py-4"
         >
           <form
             onSubmit={enviarNovoChamado}
-            className="bg-card border rounded-3xl max-w-lg w-full p-6 md:p-8 space-y-5 shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
+            className="bg-card border rounded-3xl w-full p-6 md:p-8 space-y-5 shadow-2xl max-h-[85vh] overflow-y-auto"
           >
             <div className="flex items-center justify-between">
               <div>
@@ -386,7 +389,7 @@ export function ChamadosSuporte() {
               <Send className="w-4 h-4" /> Enviar Chamado
             </button>
           </form>
-        </div>
+        </ModalBion>
       )}
     </div>
   );

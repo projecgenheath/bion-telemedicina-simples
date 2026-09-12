@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Calendar, Video, FileText, Users, TrendingUp, Shield, Sparkles, X } from "lucide-react";
+import { ModalBion } from "@/components/bion/ModalBion";
 
 type Role = "paciente" | "medico" | "admin";
 
@@ -117,8 +118,16 @@ export function TourGuiado({ role }: { role: Role }) {
   const ultimo = i === lista.length - 1;
 
   return (
-    <div className="fixed inset-0 z-50 bg-foreground/50 backdrop-blur-sm flex items-end sm:items-center justify-center p-4">
-      <div className="bg-card border rounded-3xl shadow-2xl w-full max-w-md p-6 space-y-5">
+    <ModalBion
+      aberto
+      onFechar={fechar}
+      titulo={`Tour guiado — ${passo.titulo}`}
+      largura="max-w-md"
+      sheet
+      overlay="bg-foreground/50 backdrop-blur-sm"
+      foraFecha={false}
+    >
+      <div className="bg-card border rounded-3xl shadow-2xl w-full max-w-md p-6 space-y-5 sm:my-6">
         <div className="flex items-start justify-between gap-3">
           <div className="w-12 h-12 rounded-2xl bg-primary-soft text-primary flex items-center justify-center">
             <passo.icon className="w-6 h-6" />
@@ -174,6 +183,6 @@ export function TourGuiado({ role }: { role: Role }) {
           </div>
         </div>
       </div>
-    </div>
+    </ModalBion>
   );
 }

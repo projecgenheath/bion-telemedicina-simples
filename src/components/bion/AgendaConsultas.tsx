@@ -4,6 +4,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { Calendar, Clock, Stethoscope, X, RefreshCw, AlertTriangle } from "lucide-react";
 import { useBion, type Consulta } from "@/lib/bion-store";
+import { ModalBion } from "@/components/bion/ModalBion";
 
 const DATAS = ["Hoje", "Amanhã", "12 Dez", "15 Dez", "18 Dez"];
 const HORAS = ["09:00", "10:00", "11:00", "14:00", "15:30", "16:30"];
@@ -109,14 +110,16 @@ function LinhaConsulta({ c, perfil }: { c: Consulta; perfil: "paciente" | "medic
       )}
 
       {modal && (
-        <div
-          className="fixed inset-0 z-50 bg-black/40 flex items-end md:items-center justify-center p-0 md:p-4"
-          onClick={() => setModal(null)}
+        <ModalBion
+          aberto
+          onFechar={() => setModal(null)}
+          titulo={modal === "cancelar" ? "Cancelar consulta" : "Reagendar consulta"}
+          largura="max-w-md"
+          sheet
+          sheetAte="md"
+          overlay="bg-black/40"
         >
-          <div
-            className="bg-card w-full md:max-w-md rounded-t-3xl md:rounded-3xl p-6"
-            onClick={(e) => e.stopPropagation()}
-          >
+          <div className="bg-card w-full md:max-w-md rounded-t-3xl md:rounded-3xl p-6 md:my-6">
             {modal === "cancelar" ? (
               <>
                 <div className="w-12 h-12 rounded-2xl bg-destructive/10 flex items-center justify-center">
@@ -220,7 +223,7 @@ function LinhaConsulta({ c, perfil }: { c: Consulta; perfil: "paciente" | "medic
               </>
             )}
           </div>
-        </div>
+        </ModalBion>
       )}
     </div>
   );

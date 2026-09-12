@@ -18,6 +18,7 @@ import {
   Clock,
 } from "lucide-react";
 import { useBion, type Documento } from "@/lib/bion-store";
+import { ModalBion } from "@/components/bion/ModalBion";
 import { gerarDocumentoPDF } from "@/lib/receita-pdf";
 
 export function PosConsultaModal({
@@ -59,8 +60,16 @@ export function PosConsultaModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-      <div className="bg-card border rounded-3xl max-w-2xl w-full p-6 md:p-8 shadow-2xl space-y-6 my-auto">
+    <ModalBion
+      aberto
+      onFechar={onClose}
+      titulo="Consulta concluída — avalie seu atendimento"
+      largura="max-w-2xl"
+      overlay="bg-black/60 backdrop-blur-sm"
+      foraFecha={false}
+      className="py-6"
+    >
+      <div className="bg-card border rounded-3xl w-full p-6 md:p-8 shadow-2xl space-y-6 max-h-[85vh] overflow-y-auto">
         {/* Topo do Modal */}
         <div className="text-center space-y-2">
           <div
@@ -239,6 +248,6 @@ export function PosConsultaModal({
           </div>
         )}
       </div>
-    </div>
+    </ModalBion>
   );
 }

@@ -13,6 +13,7 @@ import {
   Database,
 } from "lucide-react";
 import { useBion } from "@/lib/bion-store";
+import { ModalBion } from "@/components/bion/ModalBion";
 
 type Acao = { tipo: "anonimizar" | "excluir"; paciente: string };
 
@@ -170,8 +171,16 @@ export function PrivacidadeAdmin() {
       </div>
 
       {acao && (
-        <div className="fixed inset-0 z-50 bg-foreground/50 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-card border rounded-3xl shadow-2xl w-full max-w-md p-6 space-y-4">
+        <ModalBion
+          aberto
+          onFechar={() => setAcao(null)}
+          titulo={`${acao.tipo === "anonimizar" ? "Anonimizar dados" : "Excluir dados"} de ${acao.paciente}`}
+          largura="max-w-md"
+          overlay="bg-foreground/50 backdrop-blur-sm"
+          foraFecha={false}
+          className="py-4"
+        >
+          <div className="bg-card border rounded-3xl shadow-2xl w-full p-6 space-y-4">
             <div className="w-12 h-12 rounded-2xl bg-destructive/10 text-destructive flex items-center justify-center">
               <AlertTriangle className="w-6 h-6" />
             </div>
@@ -199,7 +208,7 @@ export function PrivacidadeAdmin() {
               </button>
             </div>
           </div>
-        </div>
+        </ModalBion>
       )}
     </div>
   );

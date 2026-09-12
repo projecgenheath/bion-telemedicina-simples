@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Plus, Search, Pencil, Trash2, X, ArrowLeft, Star, Calendar } from "lucide-react";
 import { toast } from "sonner";
 import { useBion, type Medico } from "@/lib/bion-store";
+import { ModalBion } from "@/components/bion/ModalBion";
 
 type Form = Omit<Medico, "id" | "avaliacao" | "numAvaliacoes">;
 
@@ -200,8 +201,16 @@ export function AdminMedicos() {
       </div>
 
       {modal && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center p-4">
-          <div className="bg-card border rounded-3xl w-full max-w-lg p-6 space-y-4 max-h-[85vh] overflow-y-auto">
+        <ModalBion
+          aberto
+          onFechar={() => setModal(null)}
+          titulo={modal.id ? "Editar médico" : "Novo médico"}
+          largura="max-w-lg"
+          sheet
+          overlay="bg-black/50"
+          foraFecha={false}
+        >
+          <div className="bg-card border rounded-3xl w-full max-w-lg p-6 space-y-4 max-h-[85vh] overflow-y-auto sm:my-6">
             <div className="flex items-center justify-between">
               <h3 className="font-extrabold text-foreground">
                 {modal.id ? "Editar médico" : "Novo médico"}
@@ -297,12 +306,20 @@ export function AdminMedicos() {
               Salvar
             </button>
           </div>
-        </div>
+        </ModalBion>
       )}
 
       {confirmar && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-          <div className="bg-card border rounded-3xl w-full max-w-sm p-6 space-y-4 text-center">
+        <ModalBion
+          aberto
+          onFechar={() => setConfirmar(null)}
+          titulo="Excluir médico"
+          largura="max-w-sm"
+          overlay="bg-black/50"
+          foraFecha={false}
+          className="py-4"
+        >
+          <div className="bg-card border rounded-3xl w-full p-6 space-y-4 text-center">
             <h3 className="font-extrabold text-foreground">Excluir médico?</h3>
             <p className="text-xs text-muted-foreground">
               {confirmar.nome} será removido da plataforma. A ação fica registrada na auditoria.
@@ -326,7 +343,7 @@ export function AdminMedicos() {
               </button>
             </div>
           </div>
-        </div>
+        </ModalBion>
       )}
     </div>
   );

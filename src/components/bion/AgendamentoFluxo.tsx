@@ -27,6 +27,7 @@ import {
   CheckCheck,
 } from "lucide-react";
 import { useBion, type Medico } from "@/lib/bion-store";
+import { ModalBion } from "@/components/bion/ModalBion";
 
 const ESPECIALIDADES = [
   {
@@ -846,14 +847,14 @@ export function AgendamentoFluxo({
 
       {/* Modal de Detalhes do Médico */}
       {medicoModal && (
-        <div
-          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
-          onClick={() => setMedicoModal(null)}
+        <ModalBion
+          aberto
+          onFechar={() => setMedicoModal(null)}
+          titulo={`Detalhes do médico: ${medicoModal.nome}`}
+          largura="max-w-lg"
+          className="py-4"
         >
-          <div
-            className="bg-card border rounded-3xl max-w-lg w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto"
-            onClick={(e) => e.stopPropagation()}
-          >
+          <div className="bg-card border rounded-3xl w-full p-6 space-y-4 max-h-[85vh] overflow-y-auto">
             <div className="flex items-start gap-4">
               <div className="w-16 h-16 rounded-2xl bg-primary text-primary-foreground flex items-center justify-center font-bold text-2xl shrink-0">
                 {medicoModal.nome
@@ -925,7 +926,7 @@ export function AgendamentoFluxo({
               </button>
             </div>
           </div>
-        </div>
+        </ModalBion>
       )}
     </div>
   );

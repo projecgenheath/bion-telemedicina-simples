@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Star, X } from "lucide-react";
 import { useBion } from "@/lib/bion-store";
+import { ModalBion } from "@/components/bion/ModalBion";
 
 export function AvaliacaoModal({
   medico,
@@ -31,8 +32,16 @@ export function AvaliacaoModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-foreground/50 flex items-center justify-center p-4">
-      <div className="bg-card text-foreground border rounded-2xl w-full max-w-md p-5">
+    <ModalBion
+      aberto
+      onFechar={onClose}
+      titulo="Avaliar consulta"
+      largura="max-w-md"
+      overlay="bg-foreground/50"
+      foraFecha={false}
+      className="py-4"
+    >
+      <div className="bg-card text-foreground border rounded-2xl w-full p-5">
         <div className="flex items-start justify-between gap-3">
           <div>
             <div className="font-semibold text-lg">Como foi sua consulta?</div>
@@ -86,6 +95,6 @@ export function AvaliacaoModal({
           </button>
         </div>
       </div>
-    </div>
+    </ModalBion>
   );
 }

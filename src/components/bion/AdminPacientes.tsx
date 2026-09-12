@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Plus, Search, Pencil, Trash2, X, ClipboardList, Calendar, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 import { useBion, type PacienteRegistro } from "@/lib/bion-store";
+import { ModalBion } from "@/components/bion/ModalBion";
 
 type Form = Omit<PacienteRegistro, "id" | "desde">;
 
@@ -215,8 +216,16 @@ export function AdminPacientes() {
       </div>
 
       {modal && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center p-4">
-          <div className="bg-card border rounded-3xl w-full max-w-lg p-6 space-y-4 max-h-[85vh] overflow-y-auto">
+        <ModalBion
+          aberto
+          onFechar={() => setModal(null)}
+          titulo={modal.id ? "Editar paciente" : "Novo paciente"}
+          largura="max-w-lg"
+          sheet
+          overlay="bg-black/50"
+          foraFecha={false}
+        >
+          <div className="bg-card border rounded-3xl w-full max-w-lg p-6 space-y-4 max-h-[85vh] overflow-y-auto sm:my-6">
             <div className="flex items-center justify-between">
               <h3 className="font-extrabold text-foreground">
                 {modal.id ? "Editar paciente" : "Novo paciente"}
@@ -285,12 +294,20 @@ export function AdminPacientes() {
               Salvar
             </button>
           </div>
-        </div>
+        </ModalBion>
       )}
 
       {confirmar && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-          <div className="bg-card border rounded-3xl w-full max-w-sm p-6 space-y-4 text-center">
+        <ModalBion
+          aberto
+          onFechar={() => setConfirmar(null)}
+          titulo="Excluir paciente"
+          largura="max-w-sm"
+          overlay="bg-black/50"
+          foraFecha={false}
+          className="py-4"
+        >
+          <div className="bg-card border rounded-3xl w-full p-6 space-y-4 text-center">
             <h3 className="font-extrabold text-foreground">Excluir paciente?</h3>
             <p className="text-xs text-muted-foreground">
               {confirmar.nome} será removido do cadastro. Esta ação fica registrada na auditoria.
@@ -314,7 +331,7 @@ export function AdminPacientes() {
               </button>
             </div>
           </div>
-        </div>
+        </ModalBion>
       )}
     </div>
   );
