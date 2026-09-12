@@ -9,3 +9,4 @@ download/
 *.log
 upload/
 tsconfig.tsbuildinfo
+.env.sqlite.backup

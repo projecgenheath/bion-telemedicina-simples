@@ -1,9 +1,14 @@
 # Supabase — BION Telemedicina
 
-Status atual: **✅ ATIVADO em 11/09/2026** — o app roda no Postgres do Supabase
+Status atual: **✅ RECONECTADO em 12/09/2026** — o app roda no Postgres do Supabase
 (projeto `tnygegihboiyptrnmaqt`, região `sa-east-1`, conexão via Session pooler).
+Ativado pela 1ª vez em 11/09/2026; passou por SQLite durante a Fase 4 (dev local)
+e validado de volta no Postgres com auditoria completa (32/32 rotas, 3 papéis).
 
 > A senha do banco vive apenas no `.env` do servidor — nunca no Git.
+> ⚠️ Sandboxes/ambientes com `DATABASE_URL` global exportada: o valor do ambiente
+> **vence** o `.env` para o Prisma CLI. Use `bash scripts/dev.sh` (que força a
+> URL do `.env`) e, para comandos CLI, `export DATABASE_URL=...` explicitamente.
 > Resetável em *Project Settings → Database → Reset database password* (se trocar,
 > atualize a `DATABASE_URL` no `.env` e reinicie com `bash scripts/dev.sh`).
 
