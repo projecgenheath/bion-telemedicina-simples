@@ -1,3 +1,5 @@
+"use client";
+
 import { Usuarios } from "@/components/bion/Usuarios";
 
 export default function PaginaUsuarios() {
