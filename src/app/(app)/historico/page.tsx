@@ -1,3 +1,5 @@
+"use client";
+
 import { HistoricoClinico } from "@/components/bion/HistoricoClinico";
 
 export default function PaginaHistorico() {
