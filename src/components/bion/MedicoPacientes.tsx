@@ -127,7 +127,7 @@ export function MedicoPacientes() {
               <div key={a.id} className="p-4 rounded-2xl bg-muted/60 border text-xs space-y-1">
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-bold text-foreground">{a.medico}</span>
-                  <span className="flex items-center gap-1 text-amber-500 font-bold">
+                  <span className="flex items-center gap-1 text-amber-500 dark:text-amber-400 font-bold">
                     <Star className="w-3.5 h-3.5 fill-amber-500" /> {a.nota}.0
                   </span>
                 </div>

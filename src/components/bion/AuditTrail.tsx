@@ -42,9 +42,9 @@ const ROLES: { k: string; label: string }[] = [
 const POR_PAGINA = 20;
 
 function corSeveridade(s: AuditSeveridade) {
-  if (s === "critical") return "text-red-600 bg-red-50 border-red-200";
-  if (s === "warning") return "text-amber-600 bg-amber-50 border-amber-200";
-  return "text-blue-600 bg-blue-50 border-blue-200";
+  if (s === "critical") return "text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/60 border-red-200 dark:border-red-800";
+  if (s === "warning") return "text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/60 border-amber-200 dark:border-amber-800";
+  return "text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 border-blue-200 dark:border-blue-800";
 }
 
 function iconeSeveridade(s: AuditSeveridade) {

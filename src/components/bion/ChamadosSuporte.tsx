@@ -82,11 +82,11 @@ export function ChamadosSuporte() {
   };
 
   const statusBadges = {
-    aberto: { label: "Aberto", bg: "bg-amber-500/15 text-amber-600 border-amber-500/30" },
+    aberto: { label: "Aberto", bg: "bg-amber-500/15 dark:bg-amber-400/15 text-amber-600 dark:text-amber-400 border-amber-500/30" },
     em_andamento: { label: "Em Análise", bg: "bg-primary-soft text-primary border-primary/30" },
     resolvido: {
       label: "Resolvido",
-      bg: "bg-emerald-500/15 text-emerald-600 border-emerald-500/30",
+      bg: "bg-emerald-500/15 dark:bg-emerald-400/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30",
     },
   };
 
@@ -215,7 +215,7 @@ export function ChamadosSuporte() {
 
               {ticket.resposta && (
                 <div className="mt-3 pt-3 border-t bg-muted/40 p-3 rounded-2xl flex items-start gap-2.5 text-xs">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500 dark:text-emerald-400 shrink-0 mt-0.5" />
                   <div>
                     <div className="font-bold text-foreground">
                       Resposta da Equipe BION ({ticket.dataResposta ?? "Recente"}):
@@ -270,9 +270,9 @@ export function ChamadosSuporte() {
             </div>
 
             {ticketSelecionado.resposta && (
-              <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-xs space-y-1.5">
-                <div className="font-bold text-emerald-800 flex items-center gap-1.5">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+              <div className="p-4 rounded-2xl bg-emerald-500/10 dark:bg-emerald-400/10 border border-emerald-500/20 text-xs space-y-1.5">
+                <div className="font-bold text-emerald-800 dark:text-emerald-200 flex items-center gap-1.5">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                   Resposta enviada por {ticketSelecionado.respondidoPor ?? "Suporte BION"}
                 </div>
                 <p className="text-foreground leading-relaxed whitespace-pre-wrap">

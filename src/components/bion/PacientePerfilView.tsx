@@ -68,7 +68,7 @@ export function PacientePerfilView() {
               <h1 className="text-2xl md:text-3xl font-extrabold text-foreground">
                 {pacientePerfil.nome}
               </h1>
-              <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-accent-soft text-emerald-700">
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-accent-soft text-emerald-700 dark:text-emerald-300">
                 Verificado
               </span>
             </div>
@@ -150,7 +150,7 @@ export function PacientePerfilView() {
 
             <div className="flex justify-between items-center py-1">
               <span className="text-muted-foreground">Termos LGPD:</span>
-              <span className="font-semibold text-emerald-600 flex items-center gap-1">
+              <span className="font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
                 <Check className="w-3.5 h-3.5" /> Aceito em 2025
               </span>
             </div>
@@ -199,7 +199,7 @@ export function PacientePerfilView() {
 
             <div className="flex justify-between items-center py-1">
               <span className="text-muted-foreground">Status do Prontuário:</span>
-              <span className="font-semibold text-emerald-600">100% Atualizado</span>
+              <span className="font-semibold text-emerald-600 dark:text-emerald-400">100% Atualizado</span>
             </div>
           </div>
         </div>
@@ -207,13 +207,13 @@ export function PacientePerfilView() {
         {/* Alergias Conhecidas */}
         <div className="bg-card border rounded-3xl p-6 space-y-3 shadow-sm">
           <div className="font-bold text-sm text-foreground uppercase tracking-wider flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4 text-amber-500" /> Alergias & Intolerâncias
+            <AlertTriangle className="w-4 h-4 text-amber-500 dark:text-amber-400" /> Alergias & Intolerâncias
           </div>
           <div className="flex flex-wrap gap-2">
             {alergias.map((a) => (
               <span
                 key={a}
-                className="px-3 py-1 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-800 text-xs font-bold flex items-center gap-1.5"
+                className="px-3 py-1 rounded-xl bg-amber-500/10 dark:bg-amber-400/10 border border-amber-500/30 text-amber-800 dark:text-amber-200 text-xs font-bold flex items-center gap-1.5"
               >
                 {a}
                 {editando && (

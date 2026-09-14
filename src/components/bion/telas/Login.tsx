@@ -89,7 +89,7 @@ export function Login() {
             <p className="text-xs text-muted-foreground mt-1">
               {modoCadastro
                 ? "Cadastro gratuito para pacientes — comece em menos de 1 minuto."
-                : "Autenticação com senha protegida por bcrypt."}
+                : "Acesse suas consultas, receitas e prontuário em um só lugar."}
             </p>
           </div>
 
@@ -279,8 +279,8 @@ export function Login() {
           )}
 
           <div className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground text-center">
-            <Shield className="w-3.5 h-3.5 text-primary" /> Senhas protegidas com hash bcrypt e
-            sessão em cookie httpOnly
+            <Shield className="w-3.5 h-3.5 text-primary" /> Conexão segura e criptografada
+            para proteger seus dados de saúde
           </div>
           <div className="text-center">
             <button

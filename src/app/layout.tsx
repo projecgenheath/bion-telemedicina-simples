@@ -21,6 +21,10 @@ export const viewport: Viewport = {
   themeColor: "#2563eb",
 };
 
+// Aplica o tema salvo ANTES da primeira pintura para evitar flash branco (FOUC)
+// e permitir que landing/login também honrem o modo escuro.
+const SCRIPT_TEMA = `(function(){try{var t=localStorage.getItem("bion-tema");var e=t==="escuro"||(t===null&&window.matchMedia("(prefers-color-scheme: dark)").matches);if(e){document.documentElement.classList.add("dark")}}catch(r){}})();`;
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -28,6 +32,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="pt-BR" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: SCRIPT_TEMA }} />
+      </head>
       <body className="antialiased bg-background text-foreground">
         <BionProvider>{children}</BionProvider>
         <Toaster position="top-center" richColors />

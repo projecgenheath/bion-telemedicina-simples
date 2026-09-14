@@ -230,7 +230,7 @@ export function BionIA() {
             <Shield className="w-3.5 h-3.5 text-primary" /> Suas interações são confidenciais e
             protegidas pela LGPD.
           </span>
-          <span className="font-semibold text-emerald-600">● IA Ativa</span>
+          <span className="font-semibold text-emerald-600 dark:text-emerald-400">● IA Ativa</span>
         </div>
 
         {/* Mensagens */}

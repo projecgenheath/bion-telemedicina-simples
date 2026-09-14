@@ -49,7 +49,8 @@
   --secondary-foreground: oklch(0.25 0.05 250);
   --muted: oklch(0.965 0.01 240);
   --muted-foreground: oklch(0.5 0.03 250);
-  --accent: oklch(0.68 0.16 155);
+  /* L 0.68 → 0.52: verde com contraste AA (≥ 4.5:1) sobre branco */
+  --accent: oklch(0.52 0.15 155);
   --accent-foreground: oklch(1 0 0);
   --accent-soft: oklch(0.95 0.05 155);
   --destructive: oklch(0.6 0.22 25);

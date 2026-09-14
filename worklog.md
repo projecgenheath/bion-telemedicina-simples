@@ -191,3 +191,22 @@ Work Log:
 Stage Summary:
 - Sala de videoconsulta agora é imersiva e usável no celular (vídeo 16:9 full-width, controles roláveis, prontuário abaixo) e mantém o layout lado a lado no desktop.
 - Dados da sala (nomes/especialidade) vêm da consulta real do banco, não mais só da cena demo.
+
+---
+Task ID: auditoria-design-dark-a11y
+Agent: Super Z (agente principal)
+Task: Reaplicar as correções da auditoria de design/UI-UX (commit 07becad da sessão anterior, perdido num reset do sandbox antes do push) sobre o código atual
+
+Work Log:
+- Contexto: sandbox resetado apagou o commit local 07becad (23 arquivos) e os backups em download/; clone novo confirmou que as correções nunca chegaram ao origin. Reaplicadas integralmente sobre o HEAD atual (7c3ba0b).
+- Anti-FOUC: script inline no <head> do layout raiz aplica "bion-tema" (localStorage / prefers-color-scheme) antes da primeira pintura — mata o flash branco de 1-3s e agora landing/login também honram o modo escuro (antes só via TemaToggle dentro do app).
+- Contraste AA: --accent oklch(0.68→0.52 0.15 155) no claro (botões/badges verdes 2.69:1 → ~4.6:1).
+- 123 variantes dark: aplicadas via scripts/aplicar_dark_variants.py (token-exato, só dentro de string literals, idempotente) em 16 arquivos — mapeamento: text -700→-300 / -600→-400, bg -50→-950/60, bg -100→-900/50, translúcidos -500/N→-400/N, borders -200→-800; skip-list de combos autocontidos (dots de status, swatch do gráfico violet-400, estrelas âmbar). Mata os 25 fundos "*-50" que "brilhavam" no escuro e os badges 2.29:1.
+- Contraste no claro: text-emerald-400 e text-amber-400 (avisos clínicos em Consulta) viram -600 + dark:-400 (estrelas preservadas).
+- Microcopy/UX: landing com horário dinâmico (próximo slot em grade de 30 min, "Hoje/Amanhã, às HH:MM" via requestAnimationFrame — sem mismatch de hidratação e sem erro de lint); "1 médicos" → plural correto; 🎉 removido de contexto clínico (histórico de peso e notificações); login sem jargão técnico (bcrypt/httpOut → "Conexão segura e criptografada").
+- Dead code: tailwind.config.ts (órfão do Tailwind v4) removido; deps next-themes e tailwindcss-animate (não importadas) removidas do package.json + lockfile.
+- Validação: tsc ✓; eslint do código tocado ✓ (4 erros react-hooks pré-existentes do código novo permanecem, não bloqueiam build no Next 16); build de produção 50 páginas ✓; CSS compilado com 30 seletores dark: únicos ✓; standalone servindo / e /entrar com o script anti-FOUC no <head> ✓.
+
+Stage Summary:
+- Auditoria de design/aplicada e agora de fato no repositório: modo escuro estruturalmente correto (sem FOUC, sem páginas "impossíveis de escurecer"), contraste AA no token accent e nos badges, zero glow de fundos claros no dark.
+- Commit é source-only (src/ + package.json + lockfile + worklog), seguindo o padrão dos commits recentes; .next reconstruído fica apenas no working tree.

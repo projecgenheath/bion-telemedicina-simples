@@ -73,7 +73,7 @@ export function AdminMedicos() {
             {detalhe.especialidade} • {detalhe.crm} • R$ {detalhe.valor},00
           </p>
           <p className="text-xs text-muted-foreground flex items-center gap-1">
-            <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" /> {media.toFixed(1)} em{" "}
+            <Star className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400 fill-amber-500" /> {media.toFixed(1)} em{" "}
             {avs.length || detalhe.numAvaliacoes} avaliações
           </p>
         </div>
@@ -113,7 +113,7 @@ export function AdminMedicos() {
               <div key={a.id} className="p-3 rounded-2xl border bg-muted/40 text-xs space-y-1">
                 <div className="flex items-center justify-between">
                   <span className="font-bold text-foreground">{a.paciente}</span>
-                  <span className="text-amber-500 font-bold">{a.nota}.0</span>
+                  <span className="text-amber-500 dark:text-amber-400 font-bold">{a.nota}.0</span>
                 </div>
                 {a.comentario && <p className="text-muted-foreground italic">“{a.comentario}”</p>}
               </div>

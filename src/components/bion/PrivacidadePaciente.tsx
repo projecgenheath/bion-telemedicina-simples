@@ -57,11 +57,11 @@ export function PrivacidadePaciente() {
         </h2>
         <ul className="space-y-2 text-sm">
           <li className="flex gap-2 items-start">
-            <Check className="w-4 h-4 text-emerald-500 mt-0.5 shrink-0" />
+            <Check className="w-4 h-4 text-emerald-500 dark:text-emerald-400 mt-0.5 shrink-0" />
             Você vê 100% das suas receitas, atestados e exames.
           </li>
           <li className="flex gap-2 items-start">
-            <Check className="w-4 h-4 text-emerald-500 mt-0.5 shrink-0" />
+            <Check className="w-4 h-4 text-emerald-500 dark:text-emerald-400 mt-0.5 shrink-0" />
             Cada médico vê apenas os documentos das consultas que atendeu com você.
           </li>
           <li className="flex gap-2 items-start">
@@ -106,7 +106,7 @@ export function PrivacidadePaciente() {
                 <div
                   className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
                     c.aceito
-                      ? "bg-accent-soft text-emerald-700"
+                      ? "bg-accent-soft text-emerald-700 dark:text-emerald-300"
                       : "bg-destructive/10 text-destructive"
                   }`}
                 >
@@ -121,7 +121,7 @@ export function PrivacidadePaciente() {
                 </div>
                 <span
                   className={`text-[10px] font-black uppercase tracking-widest ${
-                    c.aceito ? "text-emerald-600" : "text-destructive"
+                    c.aceito ? "text-emerald-600 dark:text-emerald-400" : "text-destructive"
                   }`}
                 >
                   {c.aceito ? "Autorizado" : "Recusado"}
