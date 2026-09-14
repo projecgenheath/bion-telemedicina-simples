@@ -105,7 +105,7 @@ export function MedicoPerfilView({ medicoId }: { medicoId?: string }) {
                   {medico.nome}
                 </h1>
               )}
-              <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-accent-soft text-emerald-700 flex items-center gap-1">
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-accent-soft text-emerald-700 dark:text-emerald-300 flex items-center gap-1">
                 <ShieldCheck className="w-3.5 h-3.5" /> CRM Verificado
               </span>
             </div>
@@ -142,7 +142,7 @@ export function MedicoPerfilView({ medicoId }: { medicoId?: string }) {
             )}
 
             <div className="flex items-center gap-4 text-xs font-semibold text-muted-foreground flex-wrap pt-1">
-              <span className="flex items-center gap-1 text-amber-500 font-bold">
+              <span className="flex items-center gap-1 text-amber-500 dark:text-amber-400 font-bold">
                 <Star className="w-4 h-4 fill-amber-500" /> {medico.avaliacao} (
                 {avaliacoesDoMedico.length || medico.numAvaliacoes} avaliações)
               </span>
@@ -280,7 +280,7 @@ export function MedicoPerfilView({ medicoId }: { medicoId?: string }) {
               <div key={av.id} className="p-4 rounded-2xl bg-muted/60 border text-xs space-y-1.5">
                 <div className="flex items-center justify-between">
                   <span className="font-bold text-foreground">{av.paciente}</span>
-                  <div className="flex items-center gap-1 text-amber-500 font-bold">
+                  <div className="flex items-center gap-1 text-amber-500 dark:text-amber-400 font-bold">
                     <Star className="w-3.5 h-3.5 fill-amber-500" /> {av.nota}.0
                   </div>
                 </div>

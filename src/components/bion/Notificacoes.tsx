@@ -38,7 +38,7 @@ export function Notificacoes() {
         <div>
           <h1 className="text-3xl font-bold">Notificações</h1>
           <p className="text-muted-foreground mt-1">
-            {naoLidas > 0 ? `${naoLidas} não lida${naoLidas > 1 ? "s" : ""}` : "Tudo em dia 🎉"}
+            {naoLidas > 0 ? `${naoLidas} não lida${naoLidas > 1 ? "s" : ""}` : "Tudo em dia"}
           </p>
         </div>
         {naoLidas > 0 && (

@@ -301,7 +301,7 @@ export function AgendamentoFluxo({
                     <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{esp.desc}</p>
                   </div>
                   <div className="mt-4 pt-3 border-t flex items-center justify-between text-xs font-semibold text-primary">
-                    <span>{count} médicos disponíveis</span>
+                    <span>{count === 1 ? "1 médico disponível" : `${count} médicos disponíveis`}</span>
                     <ChevronRight className="w-4 h-4" />
                   </div>
                 </button>
@@ -318,7 +318,7 @@ export function AgendamentoFluxo({
             <span>
               Médicos especialistas em <strong className="text-foreground">{especialidade}</strong>:
             </span>
-            <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-accent-soft text-emerald-700">
+            <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-accent-soft text-emerald-700 dark:text-emerald-300">
               {medicosFiltrados.length} profissionais online
             </span>
           </div>
@@ -340,12 +340,12 @@ export function AgendamentoFluxo({
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <h3 className="font-bold text-base truncate">{med.nome}</h3>
-                      <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-accent-soft text-emerald-700">
+                      <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-accent-soft text-emerald-700 dark:text-emerald-300">
                         {med.crm}
                       </span>
                     </div>
                     <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
-                      <span className="flex items-center gap-0.5 text-amber-500 font-bold">
+                      <span className="flex items-center gap-0.5 text-amber-500 dark:text-amber-400 font-bold">
                         <Star className="w-3.5 h-3.5 fill-amber-500" /> {med.avaliacao}
                       </span>
                       <span>•</span>
@@ -677,8 +677,8 @@ export function AgendamentoFluxo({
                 </div>
 
                 <div>
-                  <div className="text-xs font-semibold text-emerald-600 flex items-center justify-center gap-1">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+                  <div className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 flex items-center justify-center gap-1">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 dark:bg-emerald-600 animate-ping" />
                     Aprovação Imediata em Segundos
                   </div>
                   <p className="text-xs text-muted-foreground mt-1 max-w-sm mx-auto">
@@ -795,7 +795,7 @@ export function AgendamentoFluxo({
           </div>
 
           <div>
-            <span className="text-xs font-bold uppercase tracking-wider text-emerald-600">
+            <span className="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
               Pagamento Aprovado com Sucesso
             </span>
             <h2 className="text-3xl font-extrabold tracking-tight mt-1 text-foreground">
@@ -868,7 +868,7 @@ export function AgendamentoFluxo({
                 <p className="text-sm text-muted-foreground">
                   {medicoModal.especialidade} • {medicoModal.crm}
                 </p>
-                <div className="flex items-center gap-2 mt-1 text-xs text-amber-500 font-bold">
+                <div className="flex items-center gap-2 mt-1 text-xs text-amber-500 dark:text-amber-400 font-bold">
                   <Star className="w-3.5 h-3.5 fill-amber-500" /> {medicoModal.avaliacao} (
                   {medicoModal.numAvaliacoes} avaliações)
                 </div>
