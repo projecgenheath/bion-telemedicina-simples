@@ -1,4 +1,5 @@
 "use client";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Calendar,
@@ -13,8 +14,23 @@ import {
 } from "lucide-react";
 import { Logo } from "@/components/bion/brand";
 
+// Próximo slot em grade de 30 min — evita dado estático falso na landing
+function calcularProximoSlot(): string {
+  const d = new Date();
+  const hoje = new Date();
+  d.setMinutes(d.getMinutes() + (30 - (d.getMinutes() % 30)), 0, 0);
+  const amanha = d.getDate() !== hoje.getDate();
+  const hhmm = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  return `${amanha ? "Amanhã" : "Hoje"}, às ${hhmm}`;
+}
+
 export function Landing() {
   const router = useRouter();
+  const [proximoSlot, setProximoSlot] = useState("hoje mesmo");
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setProximoSlot(calcularProximoSlot()));
+    return () => cancelAnimationFrame(id);
+  }, []);
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
       <header className="max-w-6xl mx-auto w-full px-6 py-6 flex items-center justify-between">
@@ -68,10 +84,10 @@ export function Landing() {
                 <Shield className="w-4 h-4 text-primary" /> 100% LGPD & CFM
               </div>
               <div className="flex items-center gap-1.5">
-                <Check className="w-4 h-4 text-emerald-500" /> Assinatura ICP-Brasil
+                <Check className="w-4 h-4 text-emerald-500 dark:text-emerald-400" /> Assinatura ICP-Brasil
               </div>
               <div className="flex items-center gap-1.5">
-                <Star className="w-4 h-4 text-amber-500 fill-amber-500" /> 4.9/5 de Avaliação
+                <Star className="w-4 h-4 text-amber-500 dark:text-amber-400 fill-amber-500" /> 4.9/5 de Avaliação
               </div>
             </div>
           </div>
@@ -87,7 +103,7 @@ export function Landing() {
                   <div className="font-bold text-base">Dra. Ana Ribeiro</div>
                   <div className="text-xs text-muted-foreground">Clínica Geral • CRM 12345 SP</div>
                 </div>
-                <span className="text-xs font-bold px-3 py-1 rounded-full bg-accent-soft text-emerald-700">
+                <span className="text-xs font-bold px-3 py-1 rounded-full bg-accent-soft text-emerald-700 dark:text-emerald-300">
                   Disponível Agora
                 </span>
               </div>
@@ -96,7 +112,7 @@ export function Landing() {
                 <div className="text-muted-foreground font-medium">
                   Próximo horário para consulta:
                 </div>
-                <div className="text-2xl font-extrabold text-primary">Hoje, às 14:30</div>
+                <div className="text-2xl font-extrabold text-primary">{proximoSlot}</div>
                 <div className="text-muted-foreground flex items-center gap-1">
                   <Clock className="w-3.5 h-3.5" /> Duração média: 30 minutos
                 </div>

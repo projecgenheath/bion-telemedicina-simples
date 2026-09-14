@@ -85,7 +85,7 @@ export function Lembretes() {
                 onClick={() => alternarLembrete(l.id)}
                 className={`w-9 h-9 rounded-xl border flex items-center justify-center transition ${
                   l.feito
-                    ? "bg-emerald-500 text-white border-transparent"
+                    ? "bg-emerald-500 dark:bg-emerald-600 text-white border-transparent"
                     : "border-border hover:border-primary"
                 }`}
                 title={l.feito ? "Marcar como pendente" : "Marcar como tomado/concluído"}

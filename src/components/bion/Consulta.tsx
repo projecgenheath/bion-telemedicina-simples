@@ -316,9 +316,9 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
           <div
             className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full border font-semibold ${
               statusSala === "conectado"
-                ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
+                ? "bg-emerald-500/10 dark:bg-emerald-400/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400"
                 : statusSala === "instavel"
-                  ? "bg-amber-500/10 border-amber-500/30 text-amber-400"
+                  ? "bg-amber-500/10 dark:bg-amber-400/10 border-amber-500/30 text-amber-600 dark:text-amber-400"
                   : "bg-white/5 border-white/10 text-slate-300"
             }`}
           >
@@ -414,7 +414,7 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
               className={`w-12 h-12 shrink-0 rounded-2xl flex items-center justify-center transition shadow-md ${
                 micAtivo
                   ? "bg-white/10 hover:bg-white/20 text-white"
-                  : "bg-red-500 text-white hover:bg-red-600"
+                  : "bg-red-500 dark:bg-red-600 text-white hover:bg-red-600"
               }`}
               title={micAtivo ? "Silenciar microfone" : "Ativar microfone"}
             >
@@ -426,7 +426,7 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
               className={`w-12 h-12 shrink-0 rounded-2xl flex items-center justify-center transition shadow-md ${
                 camAtivo
                   ? "bg-white/10 hover:bg-white/20 text-white"
-                  : "bg-red-500 text-white hover:bg-red-600"
+                  : "bg-red-500 dark:bg-red-600 text-white hover:bg-red-600"
               }`}
               title={camAtivo ? "Desativar câmera" : "Ativar câmera"}
             >
@@ -478,7 +478,7 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
 
             <button
               onClick={encerrar}
-              className="px-6 h-12 shrink-0 rounded-2xl bg-red-600 hover:bg-red-700 text-white text-xs font-extrabold flex items-center gap-2 transition shadow-lg shadow-red-600/30"
+              className="px-6 h-12 shrink-0 rounded-2xl bg-red-600 dark:bg-red-500 hover:bg-red-700 text-white text-xs font-extrabold flex items-center gap-2 transition shadow-lg shadow-red-600/30"
             >
               <PhoneOff className="w-4 h-4" /> Encerrar Atendimento
             </button>
@@ -539,7 +539,7 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
                       : "32 anos • Feminino"}
                   </div>
                   <div className="text-slate-400">
-                    Alergias: <strong className="text-amber-400">Dipirona</strong>
+                    Alergias: <strong className="text-amber-600 dark:text-amber-400">Dipirona</strong>
                   </div>
                   <div className="text-slate-400">Medicamentos: Losartana 50mg</div>
                 </div>
@@ -656,7 +656,7 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
             {aba === "ia" && (
               <div className="space-y-4">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="font-bold text-emerald-400 flex items-center gap-1.5">
+                  <span className="font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
                     Transcrição Ativa em Tempo Real
                   </span>
@@ -879,7 +879,7 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
           >
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-bold flex items-center gap-2">
-                <FileText className="w-5 h-5 text-violet-500" /> Solicitar Exame Complementar
+                <FileText className="w-5 h-5 text-violet-500 dark:text-violet-400" /> Solicitar Exame Complementar
               </h3>
               <button
                 type="button"
@@ -912,7 +912,7 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
                       onClick={() => setExameUrgencia(u)}
                       className={`flex-1 py-2 rounded-xl border font-bold transition ${
                         exameUrgencia === u
-                          ? "bg-violet-600 border-violet-600 text-white"
+                          ? "bg-violet-600 dark:bg-violet-500 border-violet-600 dark:border-violet-500 text-white"
                           : "hover:border-violet-500 text-muted-foreground"
                       }`}
                     >
@@ -935,7 +935,7 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
 
             <button
               type="submit"
-              className="w-full py-3 rounded-2xl bg-violet-600 hover:bg-violet-700 text-white font-bold text-xs shadow-md transition"
+              className="w-full py-3 rounded-2xl bg-violet-600 dark:bg-violet-500 hover:bg-violet-700 text-white font-bold text-xs shadow-md transition"
             >
               Enviar Solicitação ao Paciente
             </button>

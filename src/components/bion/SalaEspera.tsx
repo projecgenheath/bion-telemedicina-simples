@@ -241,7 +241,7 @@ export function SalaEspera({ onEnter }: { onEnter: () => void }) {
 
             <div className="absolute bottom-4 inset-x-4 flex items-center justify-between">
               <div className="flex items-center gap-2 bg-black/60 backdrop-blur px-3 py-1.5 rounded-full text-xs text-white border border-white/10">
-                <Volume2 className="w-3.5 h-3.5 text-emerald-400" />
+                <Volume2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
                 <span>Nível de voz:</span>
                 <div className="flex items-end gap-[3px] h-4">
                   {barrasAudio.map((v, i) => (
@@ -260,7 +260,7 @@ export function SalaEspera({ onEnter }: { onEnter: () => void }) {
                   className={`w-10 h-10 rounded-full flex items-center justify-center transition border ${
                     camAtiva
                       ? "bg-white/20 hover:bg-white/30 border-white/20 text-white"
-                      : "bg-red-500 hover:bg-red-600 border-transparent text-white"
+                      : "bg-red-500 dark:bg-red-600 hover:bg-red-600 border-transparent text-white"
                   }`}
                   title={camAtiva ? "Desativar Câmera" : "Ativar Câmera"}
                 >
@@ -271,7 +271,7 @@ export function SalaEspera({ onEnter }: { onEnter: () => void }) {
                   className={`w-10 h-10 rounded-full flex items-center justify-center transition border ${
                     micAtivo
                       ? "bg-white/20 hover:bg-white/30 border-white/20 text-white"
-                      : "bg-red-500 hover:bg-red-600 border-transparent text-white"
+                      : "bg-red-500 dark:bg-red-600 hover:bg-red-600 border-transparent text-white"
                   }`}
                   title={micAtivo ? "Desativar Microfone" : "Ativar Microfone"}
                 >
@@ -293,7 +293,7 @@ export function SalaEspera({ onEnter }: { onEnter: () => void }) {
                   {camAtiva ? "Pronto" : "Desligado"}
                 </div>
               </div>
-              <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+              <CheckCircle2 className="w-4 h-4 text-emerald-500 dark:text-emerald-400 shrink-0" />
             </div>
 
             <div className="bg-card border rounded-2xl p-3.5 flex items-center gap-3">
@@ -306,7 +306,7 @@ export function SalaEspera({ onEnter }: { onEnter: () => void }) {
                   {micAtivo ? "Captando" : "Mudo"}
                 </div>
               </div>
-              <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+              <CheckCircle2 className="w-4 h-4 text-emerald-500 dark:text-emerald-400 shrink-0" />
             </div>
 
             <div className="bg-card border rounded-2xl p-3.5 flex items-center gap-3">
@@ -349,10 +349,10 @@ export function SalaEspera({ onEnter }: { onEnter: () => void }) {
                   </span>
                   <span
                     className={`w-2 h-2 rounded-full animate-pulse ${
-                      medicoNaSala ? "bg-emerald-500" : "bg-slate-400"
+                      medicoNaSala ? "bg-emerald-500 dark:bg-emerald-600" : "bg-slate-400"
                     }`}
                   />
-                  <span className="flex items-center text-xs font-bold text-amber-500 gap-0.5">
+                  <span className="flex items-center text-xs font-bold text-amber-500 dark:text-amber-400 gap-0.5">
                     <Star className="w-3 h-3 fill-amber-500" /> {medicoInfo?.avaliacao ?? 4.9}
                   </span>
                 </div>
@@ -389,15 +389,15 @@ export function SalaEspera({ onEnter }: { onEnter: () => void }) {
               </div>
               <ul className="text-xs text-muted-foreground space-y-2">
                 <li className="flex items-center gap-2">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400 shrink-0" />
                   Use fones de ouvido para maior clareza e privacidade.
                 </li>
                 <li className="flex items-center gap-2">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400 shrink-0" />
                   Fique em um ambiente iluminado e silencioso.
                 </li>
                 <li className="flex items-center gap-2">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400 shrink-0" />
                   Tenha em mãos exames e nomes de medicamentos atuais.
                 </li>
               </ul>

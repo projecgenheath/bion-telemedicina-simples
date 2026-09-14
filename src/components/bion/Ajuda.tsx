@@ -170,7 +170,7 @@ export function Ajuda({ perfil }: { perfil: Perfil }) {
       {/* Guia de primeiros passos */}
       <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
         <div className="flex items-center gap-2">
-          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600">
+          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/10 dark:bg-emerald-400/10 text-emerald-600 dark:text-emerald-400">
             <Rocket className="h-5 w-5" />
           </span>
           <h2 className="text-base font-semibold text-foreground">{guia.titulo}</h2>

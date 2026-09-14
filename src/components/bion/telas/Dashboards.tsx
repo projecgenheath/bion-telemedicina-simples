@@ -199,7 +199,7 @@ export function PacienteDashboard({ go }: { go: (v: View) => void }) {
                 <button
                   onClick={() => alternarLembrete(l.id)}
                   className={`w-7 h-7 rounded-xl border flex items-center justify-center transition ${
-                    l.feito ? "bg-emerald-500 text-white border-transparent" : "border-border"
+                    l.feito ? "bg-emerald-500 dark:bg-emerald-600 text-white border-transparent" : "border-border"
                   }`}
                 >
                   <Check className="w-4 h-4" />
@@ -235,7 +235,7 @@ export function PacienteDashboard({ go }: { go: (v: View) => void }) {
                     {c.especialidade} • {c.data}, {c.hora}
                   </div>
                 </div>
-                <span className="px-2.5 py-1 rounded-full text-[11px] font-bold capitalize bg-accent-soft text-emerald-700">
+                <span className="px-2.5 py-1 rounded-full text-[11px] font-bold capitalize bg-accent-soft text-emerald-700 dark:text-emerald-300">
                   {c.status}
                 </span>
               </div>
@@ -298,7 +298,7 @@ export function MedicoDashboard({ go }: { go: (v: View) => void }) {
         </div>
 
         <div className="bg-card border rounded-3xl p-5 shadow-sm">
-          <div className="w-10 h-10 rounded-2xl bg-accent-soft flex items-center justify-center text-emerald-700 mb-3">
+          <div className="w-10 h-10 rounded-2xl bg-accent-soft flex items-center justify-center text-emerald-700 dark:text-emerald-300 mb-3">
             <Users className="w-5 h-5" />
           </div>
           <div className="text-2xl font-extrabold">{pacientesUnicos}</div>
@@ -314,7 +314,7 @@ export function MedicoDashboard({ go }: { go: (v: View) => void }) {
         </div>
 
         <div className="bg-card border rounded-3xl p-5 shadow-sm">
-          <div className="w-10 h-10 rounded-2xl bg-amber-500/15 flex items-center justify-center text-amber-600 mb-3">
+          <div className="w-10 h-10 rounded-2xl bg-amber-500/15 dark:bg-amber-400/15 flex items-center justify-center text-amber-600 dark:text-amber-400 mb-3">
             <Star className="w-5 h-5 fill-amber-500" />
           </div>
           <div className="text-2xl font-extrabold">{mediaNotas}</div>
@@ -330,7 +330,7 @@ export function MedicoDashboard({ go }: { go: (v: View) => void }) {
               <div className="font-extrabold text-base text-foreground">
                 Próximo Paciente em Espera
               </div>
-              <span className="text-xs font-bold px-3 py-1 rounded-full bg-accent-soft text-emerald-700">
+              <span className="text-xs font-bold px-3 py-1 rounded-full bg-accent-soft text-emerald-700 dark:text-emerald-300">
                 Na Sala Virtual
               </span>
             </div>
@@ -424,7 +424,7 @@ export function MedicoDashboard({ go }: { go: (v: View) => void }) {
                 className="w-full p-3.5 rounded-2xl bg-muted/60 hover:bg-muted border text-left transition flex items-center justify-between text-xs font-bold"
               >
                 <span className="flex items-center gap-2">
-                  <Star className="w-4 h-4 text-amber-500" /> Minhas Avaliações
+                  <Star className="w-4 h-4 text-amber-500 dark:text-amber-400" /> Minhas Avaliações
                 </span>
                 <ChevronRight className="w-4 h-4 text-muted-foreground" />
               </button>
@@ -476,13 +476,13 @@ export function AdminDashboard({ go }: { go: (v: View) => void }) {
         <div className="bg-card border rounded-3xl p-4 shadow-sm">
           <div className="text-xs text-muted-foreground font-medium">Médicos Ativos</div>
           <div className="text-2xl font-extrabold text-primary mt-1">{medicosAtivos}</div>
-          <div className="text-[10px] text-emerald-600 font-bold mt-0.5">CRM 100% verificado</div>
+          <div className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold mt-0.5">CRM 100% verificado</div>
         </div>
 
         <div className="bg-card border rounded-3xl p-4 shadow-sm">
           <div className="text-xs text-muted-foreground font-medium">Pacientes</div>
           <div className="text-2xl font-extrabold text-foreground mt-1">12.480</div>
-          <div className="text-[10px] text-emerald-600 font-bold mt-0.5">+14% este mês</div>
+          <div className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold mt-0.5">+14% este mês</div>
         </div>
 
         <div className="bg-card border rounded-3xl p-4 shadow-sm">
@@ -493,14 +493,14 @@ export function AdminDashboard({ go }: { go: (v: View) => void }) {
 
         <div className="bg-card border rounded-3xl p-4 shadow-sm">
           <div className="text-xs text-muted-foreground font-medium">Faturamento Mês</div>
-          <div className="text-2xl font-extrabold text-emerald-600 mt-1">R$ 384k</div>
+          <div className="text-2xl font-extrabold text-emerald-600 dark:text-emerald-400 mt-1">R$ 384k</div>
           <div className="text-[10px] text-muted-foreground mt-0.5">Taxa de repasse: 15%</div>
         </div>
 
         <div className="bg-card border rounded-3xl p-4 shadow-sm">
           <div className="text-xs text-muted-foreground font-medium">Chamados Suporte</div>
-          <div className="text-2xl font-extrabold text-amber-600 mt-1">{ticketsAbertos}</div>
-          <div className="text-[10px] text-amber-700 font-bold mt-0.5">Tempo méd: 6 min</div>
+          <div className="text-2xl font-extrabold text-amber-600 dark:text-amber-400 mt-1">{ticketsAbertos}</div>
+          <div className="text-[10px] text-amber-700 dark:text-amber-300 font-bold mt-0.5">Tempo méd: 6 min</div>
         </div>
 
         <div
