@@ -16,8 +16,8 @@ function urlPoolerTransacao(url: string | undefined): string | undefined {
     if (!u.hostname.includes('pooler.supabase.')) return url
     if (u.port === '5432' || u.port === '') u.port = '6543'
     u.searchParams.set('pgbouncer', 'true')
-    u.searchParams.set('connection_limit', '1')
-    u.searchParams.set('pool_timeout', '20')
+    u.searchParams.set('connection_limit', '5')
+    u.searchParams.set('pool_timeout', '30')
     if (!u.searchParams.has('sslmode')) u.searchParams.set('sslmode', 'require')
     return u.toString()
   } catch {

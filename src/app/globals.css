@@ -93,3 +93,130 @@
   --input: oklch(0.32 0.025 250);
   --ring: oklch(0.7 0.14 250);
 }
+
+/* ==================================================================== */
+/* App imersivo do paciente — liquid glass + degradê branco→azul marinho */
+/* (dark mode: preto absoluto mantendo o degradê para o azul marinho)    */
+/* ==================================================================== */
+
+.bp-shell {
+  height: 100dvh;
+  width: 100%;
+  overflow: hidden;
+  background: #ffffff; /* fallback */
+}
+
+/* Painéis laterais (perfil / documentos) */
+.bp-painel {
+  background: linear-gradient(180deg, #ffffff 0%, #eef4fb 60%, #e2ecf9 100%);
+}
+.dark .bp-painel {
+  background: linear-gradient(180deg, #000000 0%, #03080f 55%, #071224 100%);
+}
+
+/* Seção 1 — hero claro */
+.bp-secao-1 { background: linear-gradient(180deg, #ffffff 0%, #f2f6fc 100%); }
+.dark .bp-secao-1 { background: linear-gradient(180deg, #000000 0%, #050c19 100%); }
+
+/* Seção 2 — transição para o azul */
+.bp-secao-2 { background: linear-gradient(180deg, #f2f6fc 0%, #cddcf1 55%, #9db9de 100%); }
+.dark .bp-secao-2 { background: linear-gradient(180deg, #050c19 0%, #071731 55%, #0b2145 100%); }
+
+/* Seção 3 — azul marinho profundo */
+.bp-secao-3 { background: linear-gradient(180deg, #9db9de 0%, #35568f 30%, #10294f 70%, #0a1f44 100%); }
+.dark .bp-secao-3 { background: linear-gradient(180deg, #0b2145 0%, #0d2c5c 30%, #071e42 70%, #020a1a 100%); }
+
+/* Liquid glass sobre fundos claros */
+.bp-glass {
+  background: rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(20px) saturate(1.5);
+  -webkit-backdrop-filter: blur(20px) saturate(1.5);
+  border: 1px solid rgba(255, 255, 255, 0.75);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 12px 32px -8px rgba(10, 31, 68, 0.14);
+  border-radius: 1.5rem;
+}
+.dark .bp-glass {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.08) inset,
+    0 12px 32px -8px rgba(0, 0, 0, 0.55);
+}
+
+/* Liquid glass sobre fundo azul-marinho (seção 3) */
+.bp-glass-marinho {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(20px) saturate(1.4);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.18) inset,
+    0 12px 32px -8px rgba(2, 8, 26, 0.5);
+  border-radius: 1.5rem;
+}
+
+/* Botão primário do app do paciente */
+.bp-acao {
+  background: linear-gradient(135deg, #123e7d 0%, #0a1f44 100%);
+  color: #ffffff;
+  border-radius: 9999px;
+  font-weight: 600;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+  box-shadow: 0 8px 20px -6px rgba(10, 31, 68, 0.45);
+}
+.bp-acao:hover { transform: translateY(-1px); opacity: 0.96; }
+.bp-acao:active { transform: translateY(0); }
+.bp-acao:disabled { opacity: 0.5; transform: none; }
+
+/* Carrossel horizontal sem barra de rolagem visível */
+.bp-carrossel {
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.bp-carrossel::-webkit-scrollbar { display: none; }
+.bp-carrossel > * { scroll-snap-align: center; scroll-snap-stop: always; }
+
+/* Colunas verticais sem barra de rolagem */
+.bp-coluna {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  overscroll-behavior-y: contain;
+}
+.bp-coluna::-webkit-scrollbar { display: none; }
+
+/* Entrada de texto do app do paciente */
+.bp-entrada {
+  background: rgba(255, 255, 255, 0.75);
+  border: 1px solid rgba(10, 31, 68, 0.12);
+  border-radius: 9999px;
+  color: #0a1f44;
+}
+.bp-entrada::placeholder { color: rgba(10, 31, 68, 0.45); }
+.bp-entrada:focus {
+  outline: none;
+  border-color: rgba(18, 62, 125, 0.55);
+  box-shadow: 0 0 0 3px rgba(18, 62, 125, 0.14);
+}
+.dark .bp-entrada {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.14);
+  color: #f2f6fc;
+}
+.dark .bp-entrada::placeholder { color: rgba(242, 246, 252, 0.45); }
+.dark .bp-entrada:focus {
+  border-color: rgba(154, 193, 244, 0.55);
+  box-shadow: 0 0 0 3px rgba(154, 193, 244, 0.16);
+}
+
+/* Área segura em celulares com notch */
+.bp-safe-bottom { padding-bottom: max(1.5rem, env(safe-area-inset-bottom)); }
+.bp-safe-top { padding-top: max(1.25rem, env(safe-area-inset-top)); }
+
+@media print {
+  body * { visibility: hidden; }
+  .bp-impressao, .bp-impressao * { visibility: visible; }
+  .bp-impressao { position: absolute; inset: 0; padding: 2rem; background: #fff; color: #111; }
+}
