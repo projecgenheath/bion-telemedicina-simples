@@ -5,13 +5,8 @@
   "devFiles": [],
   "polyfillFiles": [],
   "lowPriorityFiles": [
-<<<<<<< Updated upstream
-    "static/wV1u-nPlyYqHa51cCx_63/_ssgManifest.js",
-    "static/wV1u-nPlyYqHa51cCx_63/_buildManifest.js"
-=======
-    "static/ECdqigyC-gByRntpwZl6A/_ssgManifest.js",
-    "static/ECdqigyC-gByRntpwZl6A/_buildManifest.js"
->>>>>>> Stashed changes
+    "static/Tq3_i3WvheUQWi4DxyvAP/_ssgManifest.js",
+    "static/Tq3_i3WvheUQWi4DxyvAP/_buildManifest.js"
   ],
   "rootMainFiles": []
 }

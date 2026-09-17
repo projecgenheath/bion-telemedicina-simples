@@ -1,0 +1,1365 @@
+     1→"use client";
+     2→
+     3→import {
+     4→  createContext,
+     5→  useCallback,
+     6→  useContext,
+     7→  useEffect,
+     8→  useMemo,
+     9→  useRef,
+    10→  useState,
+    11→  type ReactNode,
+    12→} from "react";
+    13→import { toast } from "sonner";
+    14→
+    15→/* ==================================================================== */
+    16→/* Tipos públicos — mesmas formas usadas por todos os componentes BION  */
+    17→/* ==================================================================== */
+    18→
+    19→export type ApptStatus = "confirmada" | "cancelada" | "concluida" | "em_espera";
+    20→
+    21→export type Consulta = {
+    22→  id: string;
+    23→  medico: string;
+    24→  especialidade: string;
+    25→  paciente: string;
+    26→  medicoId?: string; // ids do servidor — usados pela mensageria e contactos
+    27→  pacienteId?: string;
+    28→  data: string; // "Hoje" | "14 Dez"
+    29→  hora: string; // "14:30"
+    30→  status: ApptStatus;
+    31→  ts: number; // timestamp para filtros de período e contagem regressiva
+    32→  remarcada?: boolean;
+    33→  motivoCancelamento?: string;
+    34→  motivoConsulta?: string;
+    35→  valor?: string;
+    36→  pago?: boolean;
+    37→  resumoMedico?: string;
+    38→  dataISO?: string;
+    39→};
+    40→
+    41→export type Arquivo = {
+    42→  id: string;
+    43→  nome: string;
+    44→  tipo: string;
+    45→  tamanhoKb: number;
+    46→  enviadoPor: "paciente" | "medico";
+    47→  data: string;
+    48→  consulta: string;
+    49→  url?: string;
+    50→};
+    51→
+    52→export type Documento = {
+    53→  id: string;
+    54→  tipo: "receita" | "atestado" | "exame_solicitado";
+    55→  titulo: string;
+    56→  medico: string;
+    57→  paciente: string;
+    58→  conteudo: string;
+    59→  data: string;
+    60→  medicamento?: string;
+    61→  posologia?: string;
+    62→  duracao?: string;
+    63→  observacoes?: string;
+    64→  cid?: string;
+    65→};
+    66→
+    67→export type NotifTipo = "lembrete" | "mensagem" | "receita" | "agenda" | "exame" | "suporte";
+    68→
+    69→export type Mensagem = {
+    70→  id: string;
+    71→  deId: string;
+    72→  de: string;
+    73→  paraId: string;
+    74→  para: string;
+    75→  texto: string;
+    76→  lida: boolean;
+    77→  minha: boolean;
+    78→  quando: string; // "Hoje às 09:12" | "dd/mm/aaaa às hh:mm"
+    79→  ts: number;
+    80→};
+    81→
+    82→export type Notificacao = {
+    83→  id: string;
+    84→  /** perfil destinatário; ausente = todos */
+    85→  para?: Sessao["role"];
+    86→  tipo: NotifTipo;
+    87→  titulo: string;
+    88→  texto: string;
+    89→  hora: string;
+    90→  lida: boolean;
+    91→};
+    92→
+    93→export type Medico = {
+    94→  id: string;
+    95→  nome: string;
+    96→  crm: string;
+    97→  especialidade: string;
+    98→  subespecialidades: string[];
+    99→  valor: number;
+   100→  avaliacao: number;
+   101→  numAvaliacoes: number;
+   102→  formacao: string;
+   103→  experiencia: string;
+   104→  idiomas: string[];
+   105→  bio: string;
+   106→  foto?: string;
+   107→  status: "ativo" | "pendente" | "suspenso";
+   108→  horariosDisponiveis: string[];
+   109→};
+   110→
+   111→export type TicketSuporte = {
+   112→  id: string;
+   113→  usuario: string;
+   114→  perfil: "paciente" | "medico";
+   115→  assunto: string;
+   116→  categoria: "tecnico" | "pagamento" | "agendamento" | "outro";
+   117→  mensagem: string;
+   118→  data: string;
+   119→  status: "aberto" | "em_andamento" | "resolvido";
+   120→  resposta?: string;
+   121→  respondidoPor?: string;
+   122→  dataResposta?: string;
+   123→};
+   124→
+   125→export type Lembrete = {
+   126→  id: string;
+   127→  titulo: string;
+   128→  horario: string;
+   129→  tipo: "Medicação" | "Consulta" | "Exame" | "Hidratação";
+   130→  frequencia: string;
+   131→  feito: boolean;
+   132→  medicamento?: string;
+   133→};
+   134→
+   135→export type PacientePerfil = {
+   136→  nome: string;
+   137→  idade: number;
+   138→  genero: string;
+   139→  cpf: string;
+   140→  email: string;
+   141→  telefone: string;
+   142→  convenio: string;
+   143→  alergias: string[];
+   144→  medicamentos: string[];
+   145→  tipoSanguineo: string;
+   146→  peso?: string;
+   147→  altura?: string;
+   148→};
+   149→
+   150→export type Sessao = {
+   151→  id?: string;
+   152→  role: "paciente" | "medico" | "admin";
+   153→  nome: string;
+   154→  email?: string;
+   155→};
+   156→
+   157→export type Avaliacao = {
+   158→  id: string;
+   159→  paciente: string;
+   160→  medico: string;
+   161→  especialidade: string;
+   162→  nota: number; // 1-5
+   163→  comentario?: string;
+   164→  pontualidade?: number;
+   165→  atencao?: number;
+   166→  clareza?: number;
+   167→  quando: string;
+   168→  ts: number;
+   169→};
+   170→
+   171→export type Consentimento = {
+   172→  id: string;
+   173→  paciente: string;
+   174→  quem: string;
+   175→  perfil: Sessao["role"];
+   176→  finalidade: string;
+   177→  documentos: number;
+   178→  quando: string;
+   179→  aceito: boolean;
+   180→};
+   181→
+   182→export type AuditCategoria =
+   183→  | "autenticacao"
+   184→  | "consulta"
+   185→  | "documento"
+   186→  | "prontuario"
+   187→  | "usuario"
+   188→  | "admin"
+   189→  | "suporte"
+   190→  | "consentimento"
+   191→  | "sistema";
+   192→
+   193→export type AuditSeveridade = "info" | "warning" | "critical";
+   194→
+   195→export type AuditLog = {
+   196→  id: string;
+   197→  ts: number;
+   198→  acao: string;
+   199→  categoria: AuditCategoria;
+   200→  severidade: AuditSeveridade;
+   201→  usuario: string;
+   202→  role: Sessao["role"];
+   203→  entidade?: string;
+   204→  entidadeId?: string;
+   205→  detalhes?: string;
+   206→};
+   207→
+   208→export type PacienteRegistro = {
+   209→  id: string;
+   210→  nome: string;
+   211→  email: string;
+   212→  telefone: string;
+   213→  cpf: string;
+   214→  idade: number;
+   215→  genero: string;
+   216→  convenio: string;
+   217→  status: "ativo" | "inativo";
+   218→  desde: string;
+   219→};
+   220→
+   221→/* ==================================================================== */
+   222→/* Formatação (client-side, a partir dos timestamps enviados pela API)  */
+   223→/* ==================================================================== */
+   224→
+   225→const MESES = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+   226→
+   227→const mesmoDia = (a: Date, b: Date) =>
+   228→  a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+   229→
+   230→const fmtCurta = (iso: string) => {
+   231→  const d = new Date(iso);
+   232→  const hoje = new Date();
+   233→  const amanha = new Date();
+   234→  amanha.setDate(hoje.getDate() + 1);
+   235→  if (mesmoDia(d, hoje)) return "Hoje";
+   236→  if (mesmoDia(d, amanha)) return "Amanhã";
+   237→  return `${d.getDate()} ${MESES[d.getMonth()]}`;
+   238→};
+   239→
+   240→const fmtHora = (iso: string) =>
+   241→  new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+   242→
+   243→const fmtLonga = (iso: string) => {
+   244→  const d = new Date(iso);
+   245→  return `${String(d.getDate()).padStart(2, "0")} ${MESES[d.getMonth()]} ${d.getFullYear()}`;
+   246→};
+   247→
+   248→const fmtQuando = (iso: string) => {
+   249→  const d = new Date(iso);
+   250→  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()} ${fmtHora(iso)}`;
+   251→};
+   252→
+   253→const fmtTicketData = (iso: string) => {
+   254→  const d = new Date(iso);
+   255→  const hoje = new Date();
+   256→  const ontem = new Date();
+   257→  ontem.setDate(hoje.getDate() - 1);
+   258→  if (mesmoDia(d, hoje)) return `Hoje às ${fmtHora(iso)}`;
+   259→  if (mesmoDia(d, ontem)) return `Ontem às ${fmtHora(iso)}`;
+   260→  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()} às ${fmtHora(iso)}`;
+   261→};
+   262→
+   263→const fmtDataBR = (iso: string) => {
+   264→  const d = new Date(iso);
+   265→  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+   266→};
+   267→
+   268→const fmtValorBRL = (v: number) =>
+   269→  Number.isInteger(v) ? `R$ ${v}` : `R$ ${v.toFixed(2).replace(".", ",")}`;
+   270→
+   271→/* ==================================================================== */
+   272→/* Formas vindas da API (wire)                                          */
+   273→/* ==================================================================== */
+   274→
+   275→type EstadoFresco = {
+   276→  usuario: { id: string; nome: string; email: string; role: "PACIENTE" | "MEDICO" | "ADMIN" };
+   277→  pacientePerfil: {
+   278→    nome: string; idade: number; genero: string; cpf: string; email: string; telefone: string;
+   279→    convenio: string; alergias: string[]; medicamentos: string[]; tipoSanguineo: string;
+   280→    peso?: string; altura?: string;
+   281→  } | null;
+   282→  consultas: {
+   283→    id: string; medicoId: string; medico: string; pacienteId: string; paciente: string;
+   284→    especialidade: string; dataInicio: string; status: string;
+   285→    motivoConsulta?: string; motivoCancelamento?: string; resumoMedico?: string;
+   286→    valor: number; pago: boolean; remarcada?: boolean;
+   287→  }[];
+   288→  documentos: {
+   289→    id: string; tipo: string; titulo: string; conteudo: string; medico: string; paciente: string;
+   290→    medicamento?: string | null; posologia?: string | null; duracao?: string | null;
+   291→    observacoes?: string | null; cid?: string | null; createdAt: string;
+   292→  }[];
+   293→  arquivos: {
+   294→    id: string; nome: string; tipo: string; tamanhoKb: number; enviadoPor: string;
+   295→    consulta: string; createdAt: string;
+   296→  }[];
+   297→  notificacoes: {
+   298→    id: string; paraRole?: string | null; tipo: string; titulo: string; texto: string;
+   299→    lida: boolean; createdAt: string;
+   300→  }[];
+   301→  medicos: {
+   302→    id: string; nome: string; crm: string; especialidade: string; subespecialidades: string[];
+   303→    valor: number; avaliacao: number; numAvaliacoes: number; formacao: string; experiencia: string;
+   304→    idiomas: string[]; bio: string; foto?: string; status: string; horariosDisponiveis: string[];
+   305→  }[];
+   306→  pacientes: {
+   307→    id: string; nome: string; email: string; telefone: string; cpf: string; idade: number;
+   308→    genero: string; convenio: string; status: string; desde: string;
+   309→  }[];
+   310→  tickets: {
+   311→    id: string; usuario: string; perfil: string; assunto: string; categoria: string; mensagem: string;
+   312→    status: string; resposta?: string; respondidoPor?: string; dataResposta?: string; createdAt: string;
+   313→  }[];
+   314→  lembretes: {
+   315→    id: string; titulo: string; horario: string; tipo: string; frequencia: string;
+   316→    feito: boolean; medicamento?: string | null;
+   317→  }[];
+   318→  avaliacoes: {
+   319→    id: string; paciente: string; medico: string; especialidade: string; nota: number;
+   320→    comentario?: string; pontualidade?: number; atencao?: number; clareza?: number; createdAt: string;
+   321→  }[];
+   322→  consentimentos: {
+   323→    id: string; paciente: string; quem: string; perfil: string; finalidade: string;
+   324→    documentos: number; aceito: boolean; createdAt: string;
+   325→  }[];
+   326→  auditLogs: {
+   327→    id: string; ts: number; acao: string; categoria: string; severidade: string;
+   328→    usuario: string; role: string; entidade?: string; entidadeId?: string; detalhes?: string;
+   329→  }[];
+   330→  mensagens: {
+   331→    id: string; deId: string; de: string; paraId: string; para: string;
+   332→    texto: string; lida: boolean; createdAt: string;
+   333→  }[];
+   334→  suporte: { id: string | null; nome: string };
+   335→};
+   336→
+   337→/* ==================================================================== */
+   338→/* Infra do store                                                       */
+   339→/* ==================================================================== */
+   340→
+   341→const SESSAO_VAZIA: Sessao = { role: "paciente", nome: "", email: "" };
+   342→
+   343→const PERFIL_VAZIO: PacientePerfil = {
+   344→  nome: "", idade: 0, genero: "", cpf: "", email: "", telefone: "", convenio: "Particular",
+   345→  alergias: [], medicamentos: [], tipoSanguineo: "",
+   346→};
+   347→
+   348→const SUPORTE_VAZIO = { id: null as string | null, nome: "Suporte BION" };
+   349→
+   350→const fmtMensagem = (m: {
+   351→  id: string; deId: string; de: string; paraId: string; para: string;
+   352→  texto: string; lida: boolean; createdAt: string;
+   353→}): Mensagem => ({
+   354→  id: m.id,
+   355→  deId: m.deId,
+   356→  de: m.de,
+   357→  paraId: m.paraId,
+   358→  para: m.para,
+   359→  texto: m.texto,
+   360→  lida: m.lida,
+   361→  minha: false, // preenchido pelo chamador (precisa do id da sessão)
+   362→  quando: fmtTicketData(m.createdAt),
+   363→  ts: new Date(m.createdAt).getTime(),
+   364→});
+   365→
+   366→async function api<T>(url: string, init?: RequestInit): Promise<T | null> {
+   367→  try {
+   368→    const res = await fetch(url, {
+   369→      headers: { "Content-Type": "application/json" },
+   370→      ...init,
+   371→    });
+   372→    const json = res.status === 204 ? null : await res.json().catch(() => null);
+   373→    if (!res.ok) {
+   374→      const msg = (json as { erro?: string } | null)?.erro ?? "Não foi possível concluir a operação.";
+   375→      toast.error(msg);
+   376→      return null;
+   377→    }
+   378→    return json as T;
+   379→  } catch {
+   380→    toast.error("Falha de conexão com o servidor.");
+   381→    return null;
+   382→  }
+   383→}
+   384→
+   385→type RespostaAuth = { ok: boolean };
+   386→
+   387→type Store = {
+   388→  sessao: Sessao;
+   389→  autenticado: boolean;
+   390→  carregando: boolean;
+   391→  entrar: (email: string, senha: string) => Promise<RespostaAuth>;
+   392→  registrar: (nome: string, email: string, senha: string) => Promise<RespostaAuth>;
+   393→  sair: () => Promise<void>;
+   394→  documentosVisiveis: Documento[];
+   395→  consultas: Consulta[];
+   396→  arquivos: Arquivo[];
+   397→  notificacoes: Notificacao[];
+   398→  documentos: Documento[];
+   399→  medicos: Medico[];
+   400→  tickets: TicketSuporte[];
+   401→  lembretes: Lembrete[];
+   402→  pacientePerfil: PacientePerfil;
+   403→  naoLidas: number;
+   404→  notificacoesVisiveis: Notificacao[];
+   405→  mensagens: Mensagem[];
+   406→  suporte: { id: string | null; nome: string };
+   407→  naoLidasMensagens: number;
+   408→  enviarMensagem: (paraId: string, texto: string) => void;
+   409→  marcarConversaLida: (comUsuarioId: string) => void;
+   410→  emitirDocumento: (d: Omit<Documento, "id" | "data">) => void;
+   411→  cancelarConsulta: (id: string, motivo: string) => void;
+   412→  remarcarConsulta: (id: string, data: string, hora: string) => void;
+   413→  concluirConsulta: (id: string, resumo?: string) => void;
+   414→  adicionarConsulta: (c: Omit<Consulta, "id" | "status" | "ts">) => void;
+   415→  adicionarArquivo: (a: Omit<Arquivo, "id" | "data">) => void;
+   416→  notificar: (n: Omit<Notificacao, "id" | "hora" | "lida">) => void;
+   417→  marcarLida: (id: string) => void;
+   418→  marcarTodasLidas: () => void;
+   419→  avaliacoes: Avaliacao[];
+   420→  avaliarConsulta: (a: Omit<Avaliacao, "id" | "quando" | "ts">) => void;
+   421→  consentimentos: Consentimento[];
+   422→  consentimentosVisiveis: Consentimento[];
+   423→  registrarConsentimento: (
+   424→    c: Omit<Consentimento, "id" | "quando" | "quem" | "perfil">,
+   425→  ) => Consentimento;
+   426→  adicionarTicket: (t: Omit<TicketSuporte, "id" | "data" | "status">) => void;
+   427→  responderTicket: (id: string, resposta: string) => void;
+   428→  adicionarLembrete: (l: Omit<Lembrete, "id" | "feito">) => void;
+   429→  alternarLembrete: (id: string) => void;
+   430→  removerLembrete: (id: string) => void;
+   431→  atualizarPacientePerfil: (p: Partial<PacientePerfil>) => void;
+   432→  atualizarMedico: (id: string, dados: Partial<Medico>) => void;
+   433→  aprovarMedico: (id: string) => void;
+   434→  suspenderMedico: (id: string) => void;
+   435→  auditLogs: AuditLog[];
+   436→  registrarAudit: (log: Omit<AuditLog, "id" | "ts" | "usuario" | "role">) => void;
+   437→  anonimizarPaciente: (nome: string) => void;
+   438→  excluirDadosPaciente: (nome: string) => void;
+   439→  pacientes: PacienteRegistro[];
+   440→  adicionarPaciente: (p: Omit<PacienteRegistro, "id" | "desde">) => void;
+   441→  atualizarPaciente: (id: string, dados: Partial<PacienteRegistro>) => void;
+   442→  excluirPaciente: (id: string) => void;
+   443→  adicionarMedico: (m: Omit<Medico, "id" | "avaliacao" | "numAvaliacoes">) => void;
+   444→  excluirMedico: (id: string) => void;
+   445→  atualizarConsulta: (id: string, dados: Partial<Consulta>) => void;
+   446→};
+   447→
+   448→const BionContext = createContext<Store | null>(null);
+   449→
+   450→/* ==================================================================== */
+   451→/* Provider — dados vivem no banco (via API), não mais no localStorage  */
+   452→/* ==================================================================== */
+   453→
+   454→export function BionProvider({ children }: { children: ReactNode }) {
+   455→  const [consultas, setConsultas] = useState<Consulta[]>([]);
+   456→  const [arquivos, setArquivos] = useState<Arquivo[]>([]);
+   457→  const [notificacoes, setNotificacoes] = useState<Notificacao[]>([]);
+   458→  const [documentos, setDocumentos] = useState<Documento[]>([]);
+   459→  const [medicos, setMedicos] = useState<Medico[]>([]);
+   460→  const [pacientes, setPacientes] = useState<PacienteRegistro[]>([]);
+   461→  const [tickets, setTickets] = useState<TicketSuporte[]>([]);
+   462→  const [lembretes, setLembretes] = useState<Lembrete[]>([]);
+   463→  const [pacientePerfil, setPacientePerfil] = useState<PacientePerfil>(PERFIL_VAZIO);
+   464→  const [sessao, setSessaoState] = useState<Sessao>(SESSAO_VAZIA);
+   465→  const [consentimentos, setConsentimentos] = useState<Consentimento[]>([]);
+   466→  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
+   467→  const [avaliacoes, setAvaliacoes] = useState<Avaliacao[]>([]);
+   468→  const [mensagens, setMensagens] = useState<Mensagem[]>([]);
+   469→  const [suporte, setSuporte] = useState<{ id: string | null; nome: string }>(SUPORTE_VAZIO);
+   470→  const [autenticado, setAutenticado] = useState(false);
+   471→  const [carregando, setCarregando] = useState(true);
+   472→
+   473→  const sessaoRef = useRef(sessao);
+   474→  const consultasRef = useRef(consultas);
+   475→  const medicosRef = useRef(medicos);
+   476→  const pacientesRef = useRef(pacientes);
+   477→  const lembretesRef = useRef(lembretes);
+   478→
+   479→  useEffect(() => {
+   480→    sessaoRef.current = sessao;
+   481→  }, [sessao]);
+   482→  useEffect(() => {
+   483→    consultasRef.current = consultas;
+   484→  }, [consultas]);
+   485→  useEffect(() => {
+   486→    medicosRef.current = medicos;
+   487→  }, [medicos]);
+   488→  useEffect(() => {
+   489→    pacientesRef.current = pacientes;
+   490→  }, [pacientes]);
+   491→  useEffect(() => {
+   492→    lembretesRef.current = lembretes;
+   493→  }, [lembretes]);
+   494→
+   495→  /** Aplica o estado fresco vindo do servidor */
+   496→  const aplicar = useCallback((d: EstadoFresco | null) => {
+   497→    if (!d) return;
+   498→    setSessaoState({
+   499→      id: d.usuario.id,
+   500→      role: d.usuario.role.toLowerCase() as Sessao["role"],
+   501→      nome: d.usuario.nome,
+   502→      email: d.usuario.email,
+   503→    });
+   504→    setConsultas(
+   505→      d.consultas.map((c) => ({
+   506→        id: c.id,
+   507→        medico: c.medico,
+   508→        especialidade: c.especialidade,
+   509→        paciente: c.paciente,
+   510→        medicoId: c.medicoId,
+   511→        pacienteId: c.pacienteId,
+   512→        data: fmtCurta(c.dataInicio),
+   513→        hora: fmtHora(c.dataInicio),
+   514→        status: c.status as Consulta["status"],
+   515→        ts: new Date(c.dataInicio).getTime(),
+   516→        remarcada: c.remarcada,
+   517→        motivoCancelamento: c.motivoCancelamento,
+   518→        motivoConsulta: c.motivoConsulta,
+   519→        resumoMedico: c.resumoMedico,
+   520→        valor: fmtValorBRL(c.valor),
+   521→        pago: c.pago,
+   522→        dataISO: c.dataInicio,
+   523→      })),
+   524→    );
+   525→    setDocumentos(
+   526→      d.documentos.map((x) => ({
+   527→        id: x.id,
+   528→        tipo: x.tipo as Documento["tipo"],
+   529→        titulo: x.titulo,
+   530→        medico: x.medico,
+   531→        paciente: x.paciente,
+   532→        conteudo: x.conteudo,
+   533→        data: fmtLonga(x.createdAt),
+   534→        medicamento: x.medicamento ?? undefined,
+   535→        posologia: x.posologia ?? undefined,
+   536→        duracao: x.duracao ?? undefined,
+   537→        observacoes: x.observacoes ?? undefined,
+   538→        cid: x.cid ?? undefined,
+   539→      })),
+   540→    );
+   541→    setArquivos(
+   542→      d.arquivos.map((a) => ({
+   543→        id: a.id, nome: a.nome, tipo: a.tipo, tamanhoKb: a.tamanhoKb,
+   544→        enviadoPor: a.enviadoPor as Arquivo["enviadoPor"], data: fmtLonga(a.createdAt),
+   545→        consulta: a.consulta,
+   546→      })),
+   547→    );
+   548→    setNotificacoes(
+   549→      d.notificacoes.map((n) => ({
+   550→        id: n.id,
+   551→        para: (n.paraRole?.toLowerCase() || undefined) as Notificacao["para"],
+   552→        tipo: n.tipo as Notificacao["tipo"],
+   553→        titulo: n.titulo, texto: n.texto,
+   554→        hora: fmtTicketData(n.createdAt),
+   555→        lida: n.lida,
+   556→      })),
+   557→    );
+   558→    setMedicos(
+   559→      d.medicos.map((m) => ({
+   560→        id: m.id, nome: m.nome, crm: m.crm, especialidade: m.especialidade,
+   561→        subespecialidades: m.subespecialidades, valor: m.valor, avaliacao: m.avaliacao,
+   562→        numAvaliacoes: m.numAvaliacoes, formacao: m.formacao, experiencia: m.experiencia,
+   563→        idiomas: m.idiomas, bio: m.bio, foto: m.foto,
+   564→        status: m.status as Medico["status"], horariosDisponiveis: m.horariosDisponiveis,
+   565→      })),
+   566→    );
+   567→    setPacientes(
+   568→      d.pacientes.map((p) => ({
+   569→        id: p.id, nome: p.nome, email: p.email, telefone: p.telefone, cpf: p.cpf,
+   570→        idade: p.idade, genero: p.genero, convenio: p.convenio,
+   571→        status: p.status as PacienteRegistro["status"], desde: fmtDataBR(p.desde),
+   572→      })),
+   573→    );
+   574→    setTickets(
+   575→      d.tickets.map((t) => ({
+   576→        id: t.id, usuario: t.usuario, perfil: t.perfil as TicketSuporte["perfil"],
+   577→        assunto: t.assunto, categoria: t.categoria as TicketSuporte["categoria"],
+   578→        mensagem: t.mensagem, status: t.status as TicketSuporte["status"],
+   579→        data: fmtTicketData(t.createdAt), resposta: t.resposta,
+   580→        respondidoPor: t.respondidoPor, dataResposta: t.dataResposta ? fmtTicketData(t.dataResposta) : undefined,
+   581→      })),
+   582→    );
+   583→    setLembretes(
+   584→      d.lembretes.map((l) => ({
+   585→        id: l.id, titulo: l.titulo, horario: l.horario,
+   586→        tipo: l.tipo as Lembrete["tipo"], frequencia: l.frequencia, feito: l.feito,
+   587→        medicamento: l.medicamento ?? undefined,
+   588→      })),
+   589→    );
+   590→    setAvaliacoes(
+   591→      d.avaliacoes.map((a) => ({
+   592→        id: a.id, paciente: a.paciente, medico: a.medico, especialidade: a.especialidade,
+   593→        nota: a.nota, comentario: a.comentario, pontualidade: a.pontualidade,
+   594→        atencao: a.atencao, clareza: a.clareza, quando: fmtQuando(a.createdAt),
+   595→        ts: new Date(a.createdAt).getTime(),
+   596→      })),
+   597→    );
+   598→    setConsentimentos(
+   599→      d.consentimentos.map((c) => ({
+   600→        id: c.id, paciente: c.paciente, quem: c.quem,
+   601→        perfil: c.perfil as Sessao["role"], finalidade: c.finalidade,
+   602→        documentos: c.documentos, quando: fmtQuando(c.createdAt), aceito: c.aceito,
+   603→      })),
+   604→    );
+   605→    setAuditLogs(
+   606→      d.auditLogs.map((l) => ({
+   607→        id: l.id, ts: l.ts, acao: l.acao,
+   608→        categoria: l.categoria as AuditLog["categoria"],
+   609→        severidade: l.severidade as AuditLog["severidade"],
+   610→        usuario: l.usuario, role: l.role as Sessao["role"],
+   611→        entidade: l.entidade, entidadeId: l.entidadeId, detalhes: l.detalhes,
+   612→      })),
+   613→    );
+   614→    setMensagens(d.mensagens.map((m) => ({ ...fmtMensagem(m), minha: m.deId === d.usuario.id })));
+   615→    if (d.suporte.id) setSuporte(d.suporte);
+   616→    if (d.pacientePerfil) setPacientePerfil(d.pacientePerfil);
+   617→  }, []);
+   618→
+   619→  /** Carrega sessão + bootstrap ao montar */
+   620→  useEffect(() => {
+   621→    (async () => {
+   622→      const s = await api<{ autenticado: boolean; usuario?: { id: string; nome: string; email: string; role: string } }>(
+   623→        "/api/auth/sessao",
+   624→      );
+   625→      if (s?.autenticado && s.usuario) {
+   626→        const dados = await api<EstadoFresco>("/api/bootstrap");
+   627→        if (dados) {
+   628→          aplicar(dados);
+   629→          setAutenticado(true);
+   630→        }
+   631→      }
+   632→      setCarregando(false);
+   633→    })();
+   634→  }, [aplicar]);
+   635→
+   636→  /** Busca silenciosa de mensagens (polling) — sem toast em caso de falha */
+   637→  const buscarMensagens = useCallback(async () => {
+   638→    try {
+   639→      const res = await fetch("/api/mensagens", { headers: { "Content-Type": "application/json" } });
+   640→      if (!res.ok) return;
+   641→      const json = (await res.json()) as { mensagens?: Parameters<typeof fmtMensagem>[0][] } | null;
+   642→      if (json?.mensagens) {
+   643→        setMensagens(
+   644→          json.mensagens.map((m) => ({
+   645→            ...fmtMensagem(m),
+   646→            minha: m.deId === sessaoRef.current.id,
+   647→          })),
+   648→        );
+   649→      }
+   650→    } catch {
+   651→      // polling silencioso: rede instável não deve alarmar o usuário
+   652→    }
+   653→  }, []);
+   654→
+   655→  /** Polling de novas mensagens (~4s) enquanto autenticado */
+   656→  useEffect(() => {
+   657→    if (!autenticado) return;
+   658→    const id = setInterval(() => void buscarMensagens(), 4000);
+   659→    return () => clearInterval(id);
+   660→  }, [autenticado, buscarMensagens]);
+   661→
+   662→  /** Executa mutação na API e aplica o estado fresco retornado */
+   663→  const mutar = useCallback(
+   664→    async (url: string, method: string, corpo?: unknown): Promise<boolean> => {
+   665→      const dados = await api<EstadoFresco>(url, {
+   666→        method,
+   667→        ...(corpo !== undefined ? { body: JSON.stringify(corpo) } : {}),
+   668→      });
+   669→      if (!dados) return false;
+   670→      aplicar(dados);
+   671→      return true;
+   672→    },
+   673→    [aplicar],
+   674→  );
+   675→
+   676→  const entrar = useCallback(
+   677→    async (email: string, senha: string): Promise<RespostaAuth> => {
+   678→      const dados = await api<EstadoFresco>("/api/auth/login", {
+   679→        method: "POST",
+   680→        body: JSON.stringify({ email, senha }),
+   681→      });
+   682→      if (!dados) return { ok: false };
+   683→      aplicar(dados);
+   684→      setAutenticado(true);
+   685→      return { ok: true };
+   686→    },
+   687→    [aplicar],
+   688→  );
+   689→
+   690→  const registrar = useCallback(
+   691→    async (nome: string, email: string, senha: string): Promise<RespostaAuth> => {
+   692→      const dados = await api<EstadoFresco>("/api/auth/registro", {
+   693→        method: "POST",
+   694→        body: JSON.stringify({ nome, email, senha }),
+   695→      });
+   696→      if (!dados) return { ok: false };
+   697→      aplicar(dados);
+   698→      setAutenticado(true);
+   699→      return { ok: true };
+   700→    },
+   701→    [aplicar],
+   702→  );
+   703→
+   704→  const sair = useCallback(async () => {
+   705→    try {
+   706→      await fetch("/api/auth/logout", { method: "POST" });
+   707→    } catch {
+   708→      // mesmo sem rede, encerra a sessão local
+   709→    }
+   710→    setAutenticado(false);
+   711→    setSessaoState(SESSAO_VAZIA);
+   712→    setConsultas([]);
+   713→    setArquivos([]);
+   714→    setNotificacoes([]);
+   715→    setDocumentos([]);
+   716→    setPacientes([]);
+   717→    setTickets([]);
+   718→    setLembretes([]);
+   719→    setConsentimentos([]);
+   720→    setAuditLogs([]);
+   721→    setAvaliacoes([]);
+   722→    setMensagens([]);
+   723→    setSuporte(SUPORTE_VAZIO);
+   724→    setPacientePerfil(PERFIL_VAZIO);
+   725→  }, []);
+   726→
+   727→  const documentosVisiveis = useMemo(() => {
+   728→    if (sessao.role === "paciente") return documentos.filter((d) => d.paciente === sessao.nome);
+   729→    if (sessao.role === "medico") {
+   730→      const pacientesVinculados = new Set(
+   731→        consultas.filter((c) => c.medico === sessao.nome).map((c) => c.paciente),
+   732→      );
+   733→      return documentos.filter(
+   734→        (d) => d.medico === sessao.nome || pacientesVinculados.has(d.paciente),
+   735→      );
+   736→    }
+   737→    return documentos;
+   738→  }, [documentos, consultas, sessao]);
+   739→
+   740→  const notificacoesVisiveis = useMemo(
+   741→    () => notificacoes.filter((n) => !n.para || n.para === sessao.role),
+   742→    [notificacoes, sessao],
+   743→  );
+   744→
+   745→  const consentimentosVisiveis = useMemo(() => {
+   746→    if (sessao.role === "admin") return consentimentos;
+   747→    if (sessao.role === "paciente") return consentimentos.filter((c) => c.paciente === sessao.nome);
+   748→    return consentimentos.filter((c) => c.quem === sessao.nome);
+   749→  }, [consentimentos, sessao]);
+   750→
+   751→  const notificar = useCallback(
+   752→    (n: Omit<Notificacao, "id" | "hora" | "lida">) => {
+   753→      void mutar("/api/notificacoes", "POST", {
+   754→        tipo: n.tipo,
+   755→        titulo: n.titulo,
+   756→        texto: n.texto,
+   757→        para: n.para,
+   758→      });
+   759→    },
+   760→    [mutar],
+   761→  );
+   762→
+   763→  const registrarAudit = useCallback(
+   764→    (log: Omit<AuditLog, "id" | "ts" | "usuario" | "role">) => {
+   765→      void mutar("/api/auditoria", "POST", log);
+   766→    },
+   767→    [mutar],
+   768→  );
+   769→
+   770→  const marcarLida = useCallback(
+   771→    (id: string) => void mutar("/api/notificacoes", "PATCH", { id }),
+   772→    [mutar],
+   773→  );
+   774→
+   775→  const marcarTodasLidas = useCallback(
+   776→    () => void mutar("/api/notificacoes", "PATCH", { todas: true }),
+   777→    [mutar],
+   778→  );
+   779→
+   780→  const cancelarConsulta = useCallback(
+   781→    (id: string, motivo: string) => {
+   782→      const c = consultasRef.current.find((x) => x.id === id);
+   783→      void mutar(`/api/consultas/${id}`, "PATCH", {
+   784→        acao: "cancelar",
+   785→        motivo,
+   786→        notificacoes: [
+   787→          {
+   788→            tipo: "agenda",
+   789→            titulo: "Consulta cancelada",
+   790→            texto: `${c?.medico ?? "Consulta"} — ${c?.data ?? ""} às ${c?.hora ?? ""}. Motivo: ${motivo}`,
+   791→          },
+   792→        ],
+   793→        audit: {
+   794→          acao: "CONSULTA_CANCELADA",
+   795→          categoria: "consulta",
+   796→          severidade: "warning",
+   797→          detalhes: `Consulta com ${c?.medico ?? id} cancelada — Motivo: ${motivo}`,
+   798→        },
+   799→      });
+   800→    },
+   801→    [mutar],
+   802→  );
+   803→
+   804→  const remarcarConsulta = useCallback(
+   805→    (id: string, data: string, hora: string) => {
+   806→      const c = consultasRef.current.find((x) => x.id === id);
+   807→      void mutar(`/api/consultas/${id}`, "PATCH", {
+   808→        acao: "remarcar",
+   809→        data,
+   810→        hora,
+   811→        notificacoes: [
+   812→          {
+   813→            tipo: "agenda",
+   814→            titulo: "Consulta remarcada",
+   815→            texto: `${c?.medico ?? "Consulta"} — novo horário: ${data} às ${hora}. A agenda foi atualizada.`,
+   816→          },
+   817→        ],
+   818→        audit: {
+   819→          acao: "CONSULTA_REMARCADA",
+   820→          categoria: "consulta",
+   821→          severidade: "warning",
+   822→          detalhes: `Consulta com ${c?.medico ?? id} remarcada para ${data} às ${hora}`,
+   823→        },
+   824→      });
+   825→    },
+   826→    [mutar],
+   827→  );
+   828→
+   829→  const concluirConsulta = useCallback(
+   830→    (id: string, resumo?: string) => {
+   831→      const c = consultasRef.current.find((x) => x.id === id);
+   832→      void mutar(`/api/consultas/${id}`, "PATCH", {
+   833→        acao: "concluir",
+   834→        resumo,
+   835→        notificacoes: [
+   836→          {
+   837→            tipo: "agenda",
+   838→            titulo: "Consulta concluída",
+   839→            texto: `Atendimento com ${c?.medico ?? "o médico"} finalizado com sucesso. Acesse o resumo e documentos emitidos.`,
+   840→            para: "paciente",
+   841→          },
+   842→        ],
+   843→        audit: {
+   844→          acao: "CONSULTA_CONCLUIDA",
+   845→          categoria: "consulta",
+   846→          detalhes: `Consulta com ${c?.medico ?? id} concluída${resumo ? ` — Resumo: ${resumo.slice(0, 100)}` : ""}`,
+   847→        },
+   848→      });
+   849→    },
+   850→    [mutar],
+   851→  );
+   852→
+   853→  const adicionarConsulta = useCallback(
+   854→    (c: Omit<Consulta, "id" | "status" | "ts">) => {
+   855→      const medicoId = medicosRef.current.find((m) => m.nome === c.medico)?.id;
+   856→      if (!medicoId) {
+   857→        toast.error("Médico não encontrado para o agendamento.");
+   858→        return;
+   859→      }
+   860→      void mutar("/api/consultas", "POST", {
+   861→        medicoId,
+   862→        data: c.data,
+   863→        hora: c.hora,
+   864→        motivoConsulta: c.motivoConsulta,
+   865→        valor: c.valor,
+   866→        pago: c.pago ?? true,
+   867→        audit: {
+   868→          acao: "CONSULTA_AGENDADA",
+   869→          categoria: "consulta",
+   870→          detalhes: `Agendamento com ${c.medico} — ${c.especialidade} em ${c.data} às ${c.hora}`,
+   871→        },
+   872→      });
+   873→    },
+   874→    [mutar],
+   875→  );
+   876→
+   877→  const adicionarArquivo = useCallback(
+   878→    (a: Omit<Arquivo, "id" | "data">) => {
+   879→      void mutar("/api/arquivos", "POST", {
+   880→        nome: a.nome,
+   881→        tipo: a.tipo,
+   882→        tamanhoKb: a.tamanhoKb,
+   883→        enviadoPor: a.enviadoPor,
+   884→        consulta: a.consulta,
+   885→        notificacoes: [
+   886→          {
+   887→            tipo: "exame",
+   888→            titulo: a.enviadoPor === "paciente" ? "Exame enviado" : "Novo arquivo do médico",
+   889→            texto: `${a.nome} adicionado ao histórico da consulta.`,
+   890→          },
+   891→        ],
+   892→        audit: {
+   893→          acao: "ARQUIVO_ENVIADO",
+   894→          categoria: "documento",
+   895→          detalhes: `${a.nome} (${a.tipo}, ${a.tamanhoKb}KB) enviado por ${a.enviadoPor}`,
+   896→        },
+   897→      });
+   898→    },
+   899→    [mutar],
+   900→  );
+   901→
+   902→  const emitirDocumento = useCallback(
+   903→    (d: Omit<Documento, "id" | "data">) => {
+   904→      void mutar("/api/documentos", "POST", {
+   905→        tipo: d.tipo,
+   906→        titulo: d.titulo,
+   907→        conteudo: d.conteudo,
+   908→        paciente: d.paciente,
+   909→        medicamento: d.medicamento,
+   910→        posologia: d.posologia,
+   911→        duracao: d.duracao,
+   912→        observacoes: d.observacoes,
+   913→        cid: d.cid,
+   914→        notificacoes: [
+   915→          {
+   916→            tipo: "receita",
+   917→            titulo:
+   918→              d.tipo === "receita"
+   919→                ? "Receita digital disponível"
+   920→                : d.tipo === "atestado"
+   921→                  ? "Atestado emitido"
+   922→                  : "Solicitação de exames disponível",
+   923→            texto: `${d.titulo} emitido por ${d.medico}. Assinado digitalmente com padrão ICP-Brasil.`,
+   924→            para: "paciente",
+   925→          },
+   926→        ],
+   927→        audit: {
+   928→          acao: "DOCUMENTO_EMITIDO",
+   929→          categoria: "documento",
+   930→          detalhes: `${d.tipo === "receita" ? "Receita" : d.tipo === "atestado" ? "Atestado" : "Solicitação de exame"}: ${d.titulo} para ${d.paciente}`,
+   931→        },
+   932→      });
+   933→    },
+   934→    [mutar],
+   935→  );
+   936→
+   937→  const avaliarConsulta = useCallback(
+   938→    (a: Omit<Avaliacao, "id" | "quando" | "ts">) => {
+   939→      const medicoId = medicosRef.current.find((m) => m.nome === a.medico)?.id;
+   940→      if (!medicoId) {
+   941→        toast.error("Médico não encontrado para a avaliação.");
+   942→        return;
+   943→      }
+   944→      void mutar("/api/avaliacoes", "POST", {
+   945→        medicoId,
+   946→        nota: a.nota,
+   947→        comentario: a.comentario,
+   948→        pontualidade: a.pontualidade,
+   949→        atencao: a.atencao,
+   950→        clareza: a.clareza,
+   951→        notificacoes: [
+   952→          {
+   953→            tipo: "agenda",
+   954→            titulo: "Avaliação enviada",
+   955→            texto: `Você avaliou ${a.medico} com ${a.nota} estrela(s). Obrigado pelo retorno!`,
+   956→            para: "paciente",
+   957→          },
+   958→          {
+   959→            tipo: "mensagem",
+   960→            titulo: "Nova avaliação recebida",
+   961→            texto: `${a.paciente} avaliou seu atendimento com ${a.nota} estrela(s).${a.comentario ? ` "${a.comentario}"` : ""}`,
+   962→            para: "medico",
+   963→          },
+   964→        ],
+   965→        audit: {
+   966→          acao: "AVALIACAO_REGISTRADA",
+   967→          categoria: "consulta",
+   968→          detalhes: `Avaliação ${a.nota} estrela(s) para ${a.medico}${a.comentario ? ` — "${a.comentario.slice(0, 80)}"` : ""}`,
+   969→        },
+   970→      });
+   971→    },
+   972→    [mutar],
+   973→  );
+   974→
+   975→  const registrarConsentimento = useCallback(
+   976→    (c: Omit<Consentimento, "id" | "quando" | "quem" | "perfil">): Consentimento => {
+   977→      const registro: Consentimento = {
+   978→        ...c,
+   979→        id: `local-${Date.now()}`,
+   980→        quem: sessaoRef.current.nome,
+   981→        perfil: sessaoRef.current.role,
+   982→        quando: new Date().toLocaleString("pt-BR"),
+   983→      };
+   984→      void mutar("/api/consentimentos", "POST", {
+   985→        finalidade: c.finalidade,
+   986→        documentos: c.documentos,
+   987→        aceito: c.aceito,
+   988→        paciente: c.paciente,
+   989→        notificacoes: [
+   990→          {
+   991→            tipo: "receita",
+   992→            titulo: registro.aceito ? "Consentimento registrado" : "Consentimento recusado",
+   993→            texto: registro.aceito
+   994→              ? `${registro.quem} autorizou a geração do prontuário em PDF (${registro.documentos} documento(s)).`
+   995→              : `${registro.quem} recusou o consentimento para gerar o prontuário em PDF.`,
+   996→          },
+   997→        ],
+   998→        audit: {
+   999→          acao: "CONSENTIMENTO_REGISTRADO",
+  1000→          categoria: "consentimento",
+  1001→          severidade: registro.aceito ? "info" : "warning",
+  1002→          detalhes: `Consentimento ${registro.aceito ? "aceito" : "recusado"} para ${registro.finalidade} (${registro.documentos} documento(s))`,
+  1003→        },
+  1004→      });
+  1005→      return registro;
+  1006→    },
+  1007→    [mutar],
+  1008→  );
+  1009→
+  1010→  const adicionarTicket = useCallback(
+  1011→    (t: Omit<TicketSuporte, "id" | "data" | "status">) => {
+  1012→      void mutar("/api/tickets", "POST", {
+  1013→        assunto: t.assunto,
+  1014→        categoria: t.categoria,
+  1015→        mensagem: t.mensagem,
+  1016→        notificacoes: [
+  1017→          {
+  1018→            tipo: "suporte",
+  1019→            titulo: "Chamado aberto",
+  1020→            texto: `Seu chamado "${t.assunto}" foi recebido por nossa equipe. Resposta em até 15 minutos.`,
+  1021→            para: t.perfil,
+  1022→          },
+  1023→          {
+  1024→            tipo: "suporte",
+  1025→            titulo: "Novo chamado de suporte",
+  1026→            texto: `${t.usuario} abriu chamado sobre: ${t.assunto}`,
+  1027→            para: "admin",
+  1028→          },
+  1029→        ],
+  1030→        audit: {
+  1031→          acao: "TICKET_CRIADO",
+  1032→          categoria: "suporte",
+  1033→          detalhes: `Chamado "${t.assunto}" aberto por ${t.usuario} (${t.categoria})`,
+  1034→        },
+  1035→      });
+  1036→    },
+  1037→    [mutar],
+  1038→  );
+  1039→
+  1040→  const responderTicket = useCallback(
+  1041→    (id: string, resposta: string) => {
+  1042→      void mutar(`/api/tickets/${id}`, "PATCH", {
+  1043→        resposta,
+  1044→        audit: {
+  1045→          acao: "TICKET_RESPONDIDO",
+  1046→          categoria: "suporte",
+  1047→          detalhes: `Chamado respondido pela equipe de suporte`,
+  1048→        },
+  1049→      });
+  1050→    },
+  1051→    [mutar],
+  1052→  );
+  1053→
+  1054→  const adicionarLembrete = useCallback(
+  1055→    (l: Omit<Lembrete, "id" | "feito">) => {
+  1056→      void mutar("/api/lembretes", "POST", {
+  1057→        titulo: l.titulo,
+  1058→        horario: l.horario,
+  1059→        tipo: l.tipo,
+  1060→        frequencia: l.frequencia,
+  1061→        medicamento: l.medicamento,
+  1062→        notificacoes: [
+  1063→          {
+  1064→            tipo: "lembrete",
+  1065→            titulo: "Lembrete criado",
+  1066→            texto: `${l.titulo} programado para ${l.horario} (${l.frequencia}).`,
+  1067→            para: "paciente",
+  1068→          },
+  1069→        ],
+  1070→        audit: {
+  1071→          acao: "LEMBRETE_CRIADO",
+  1072→          categoria: "sistema",
+  1073→          detalhes: `Lembrete "${l.titulo}" — ${l.horario} (${l.frequencia})`,
+  1074→        },
+  1075→      });
+  1076→    },
+  1077→    [mutar],
+  1078→  );
+  1079→
+  1080→  const alternarLembrete = useCallback(
+  1081→    (id: string) => {
+  1082→      const l = lembretesRef.current.find((x) => x.id === id);
+  1083→      void mutar(`/api/lembretes/${id}`, "PATCH", { feito: !(l?.feito ?? false) });
+  1084→    },
+  1085→    [mutar],
+  1086→  );
+  1087→
+  1088→  const removerLembrete = useCallback(
+  1089→    (id: string) => void mutar(`/api/lembretes/${id}`, "DELETE"),
+  1090→    [mutar],
+  1091→  );
+  1092→
+  1093→  const atualizarPacientePerfil = useCallback(
+  1094→    (p: Partial<PacientePerfil>) => {
+  1095→      void mutar("/api/perfil", "PATCH", {
+  1096→        ...p,
+  1097→        audit: {
+  1098→          acao: "PERFIL_ATUALIZADO",
+  1099→          categoria: "usuario",
+  1100→          detalhes: `Dados atualizados: ${Object.keys(p).join(", ")}`,
+  1101→        },
+  1102→      });
+  1103→    },
+  1104→    [mutar],
+  1105→  );
+  1106→
+  1107→  const atualizarMedico = useCallback(
+  1108→    (id: string, dados: Partial<Medico>) => {
+  1109→      void mutar(`/api/medicos/${id}`, "PATCH", {
+  1110→        acao: "atualizar",
+  1111→        ...dados,
+  1112→        audit: {
+  1113→          acao: "MEDICO_ATUALIZADO",
+  1114→          categoria: "admin",
+  1115→          detalhes: `Dados atualizados: ${Object.keys(dados).join(", ")}`,
+  1116→        },
+  1117→      });
+  1118→    },
+  1119→    [mutar],
+  1120→  );
+  1121→
+  1122→  const aprovarMedico = useCallback(
+  1123→    (id: string) => {
+  1124→      void mutar(`/api/medicos/${id}`, "PATCH", {
+  1125→        acao: "aprovar",
+  1126→        notificacoes: [
+  1127→          {
+  1128→            tipo: "agenda",
+  1129→            titulo: "CRM Médico Aprovado",
+  1130→            texto: `O cadastro do médico foi validado e ativado para teleconsultas.`,
+  1131→            para: "admin",
+  1132→          },
+  1133→        ],
+  1134→      });
+  1135→    },
+  1136→    [mutar],
+  1137→  );
+  1138→
+  1139→  const suspenderMedico = useCallback(
+  1140→    (id: string) => void mutar(`/api/medicos/${id}`, "PATCH", { acao: "suspender" }),
+  1141→    [mutar],
+  1142→  );
+  1143→
+  1144→  const anonimizarPaciente = useCallback(
+  1145→    (nome: string) => {
+  1146→      const id = pacientesRef.current.find((p) => p.nome === nome)?.id;
+  1147→      if (!id) {
+  1148→        toast.error("Paciente não encontrado.");
+  1149→        return;
+  1150→      }
+  1151→      void mutar("/api/admin/lgpd", "POST", { acao: "anonimizar", pacienteId: id });
+  1152→    },
+  1153→    [mutar],
+  1154→  );
+  1155→
+  1156→  const excluirDadosPaciente = useCallback(
+  1157→    (nome: string) => {
+  1158→      const id = pacientesRef.current.find((p) => p.nome === nome)?.id;
+  1159→      if (!id) {
+  1160→        toast.error("Paciente não encontrado.");
+  1161→        return;
+  1162→      }
+  1163→      void mutar("/api/admin/lgpd", "POST", { acao: "excluir", pacienteId: id });
+  1164→    },
+  1165→    [mutar],
+  1166→  );
+  1167→
+  1168→  const adicionarPaciente = useCallback(
+  1169→    (p: Omit<PacienteRegistro, "id" | "desde">) => {
+  1170→      void mutar("/api/pacientes", "POST", {
+  1171→        nome: p.nome,
+  1172→        email: p.email,
+  1173→        telefone: p.telefone,
+  1174→        cpf: p.cpf,
+  1175→        idade: p.idade,
+  1176→        genero: p.genero,
+  1177→        convenio: p.convenio,
+  1178→        status: p.status,
+  1179→        audit: {
+  1180→          acao: "PACIENTE_CRIADO",
+  1181→          categoria: "admin",
+  1182→          detalhes: `Paciente ${p.nome} cadastrado`,
+  1183→        },
+  1184→      });
+  1185→    },
+  1186→    [mutar],
+  1187→  );
+  1188→
+  1189→  const atualizarPaciente = useCallback(
+  1190→    (id: string, dados: Partial<PacienteRegistro>) => {
+  1191→      void mutar(`/api/pacientes/${id}`, "PATCH", {
+  1192→        ...dados,
+  1193→        audit: {
+  1194→          acao: "PACIENTE_ATUALIZADO",
+  1195→          categoria: "admin",
+  1196→          detalhes: `Campos atualizados: ${Object.keys(dados).join(", ")}`,
+  1197→        },
+  1198→      });
+  1199→    },
+  1200→    [mutar],
+  1201→  );
+  1202→
+  1203→  const excluirPaciente = useCallback(
+  1204→    (id: string) => void mutar(`/api/pacientes/${id}`, "DELETE"),
+  1205→    [mutar],
+  1206→  );
+  1207→
+  1208→  const adicionarMedico = useCallback(
+  1209→    (m: Omit<Medico, "id" | "avaliacao" | "numAvaliacoes">) => {
+  1210→      void mutar("/api/medicos", "POST", {
+  1211→        nome: m.nome,
+  1212→        crm: m.crm,
+  1213→        especialidade: m.especialidade,
+  1214→        subespecialidades: m.subespecialidades,
+  1215→        valor: m.valor,
+  1216→        formacao: m.formacao,
+  1217→        experiencia: m.experiencia,
+  1218→        idiomas: m.idiomas,
+  1219→        bio: m.bio,
+  1220→        horariosDisponiveis: m.horariosDisponiveis,
+  1221→        status: m.status,
+  1222→        audit: {
+  1223→          acao: "MEDICO_CRIADO",
+  1224→          categoria: "admin",
+  1225→          detalhes: `Médico ${m.nome} (${m.crm}) cadastrado`,
+  1226→        },
+  1227→      });
+  1228→    },
+  1229→    [mutar],
+  1230→  );
+  1231→
+  1232→  const excluirMedico = useCallback(
+  1233→    (id: string) => void mutar(`/api/medicos/${id}`, "DELETE"),
+  1234→    [mutar],
+  1235→  );
+  1236→
+  1237→  const atualizarConsulta = useCallback(
+  1238→    (id: string, dados: Partial<Consulta>) => {
+  1239→      void mutar(`/api/consultas/${id}`, "PATCH", {
+  1240→        acao: "atualizar",
+  1241→        data: dados.data,
+  1242→        hora: dados.hora,
+  1243→        medico: dados.medico,
+  1244→        especialidade: dados.especialidade,
+  1245→        status: dados.status,
+  1246→        pago: dados.pago,
+  1247→        valor: dados.valor,
+  1248→        audit: {
+  1249→          acao: "CONSULTA_ATUALIZADA",
+  1250→          categoria: "admin",
+  1251→          detalhes: `Campos atualizados: ${Object.keys(dados).join(", ")}`,
+  1252→        },
+  1253→      });
+  1254→    },
+  1255→    [mutar],
+  1256→  );
+  1257→
+  1258→  const enviarMensagem = useCallback(
+  1259→    (paraId: string, texto: string) => {
+  1260→      const recorte = texto.trim().slice(0, 80);
+  1261→      void mutar("/api/mensagens", "POST", {
+  1262→        paraId,
+  1263→        texto,
+  1264→        notificacoes: [
+  1265→          {
+  1266→            tipo: "mensagem",
+  1267→            titulo: `Nova mensagem de ${sessaoRef.current.nome || "BION"}`,
+  1268→            texto: recorte.length < texto.trim().length ? `${recorte}…` : recorte,
+  1269→            usuarioId: paraId,
+  1270→          },
+  1271→        ],
+  1272→      });
+  1273→    },
+  1274→    [mutar],
+  1275→  );
+  1276→
+  1277→  const marcarConversaLida = useCallback(
+  1278→    (comUsuarioId: string) => void mutar("/api/mensagens", "PATCH", { comUsuarioId }),
+  1279→    [mutar],
+  1280→  );
+  1281→
+  1282→  const value = useMemo<Store>(
+  1283→    () => ({
+  1284→      sessao,
+  1285→      autenticado,
+  1286→      carregando,
+  1287→      entrar,
+  1288→      registrar,
+  1289→      sair,
+  1290→      consultas,
+  1291→      arquivos,
+  1292→      notificacoes,
+  1293→      documentos,
+  1294→      medicos,
+  1295→      tickets,
+  1296→      lembretes,
+  1297→      pacientePerfil,
+  1298→      documentosVisiveis,
+  1299→      naoLidas: notificacoesVisiveis.filter((n) => !n.lida).length,
+  1300→      notificacoesVisiveis,
+  1301→      mensagens,
+  1302→      suporte,
+  1303→      naoLidasMensagens: mensagens.filter((m) => !m.minha && !m.lida).length,
+  1304→      enviarMensagem,
+  1305→      marcarConversaLida,
+  1306→      emitirDocumento,
+  1307→      cancelarConsulta,
+  1308→      remarcarConsulta,
+  1309→      concluirConsulta,
+  1310→      adicionarConsulta,
+  1311→      adicionarArquivo,
+  1312→      notificar,
+  1313→      marcarLida,
+  1314→      marcarTodasLidas,
+  1315→      consentimentos,
+  1316→      consentimentosVisiveis,
+  1317→      registrarConsentimento,
+  1318→      avaliacoes,
+  1319→      avaliarConsulta,
+  1320→      adicionarTicket,
+  1321→      responderTicket,
+  1322→      adicionarLembrete,
+  1323→      alternarLembrete,
+  1324→      removerLembrete,
+  1325→      atualizarPacientePerfil,
+  1326→      atualizarMedico,
+  1327→      aprovarMedico,
+  1328→      suspenderMedico,
+  1329→      auditLogs,
+  1330→      registrarAudit,
+  1331→      anonimizarPaciente,
+  1332→      excluirDadosPaciente,
+  1333→      pacientes,
+  1334→      adicionarPaciente,
+  1335→      atualizarPaciente,
+  1336→      excluirPaciente,
+  1337→      adicionarMedico,
+  1338→      excluirMedico,
+  1339→      atualizarConsulta,
+  1340→    }),
+  1341→    [
+  1342→      sessao, autenticado, carregando, entrar, registrar, sair,
+  1343→      consultas, arquivos, notificacoes, notificacoesVisiveis, documentos, medicos,
+  1344→      tickets, lembretes, pacientePerfil, documentosVisiveis,
+  1345→      mensagens, suporte, enviarMensagem, marcarConversaLida,
+  1346→      emitirDocumento, cancelarConsulta, remarcarConsulta, concluirConsulta,
+  1347→      adicionarConsulta, adicionarArquivo, notificar, marcarLida, marcarTodasLidas,
+  1348→      consentimentos, consentimentosVisiveis, registrarConsentimento, avaliacoes, avaliarConsulta,
+  1349→      adicionarTicket, responderTicket, adicionarLembrete, alternarLembrete, removerLembrete,
+  1350→      atualizarPacientePerfil, atualizarMedico, aprovarMedico, suspenderMedico,
+  1351→      auditLogs, registrarAudit, anonimizarPaciente, excluirDadosPaciente,
+  1352→      pacientes, adicionarPaciente, atualizarPaciente, excluirPaciente,
+  1353→      adicionarMedico, excluirMedico, atualizarConsulta,
+  1354→    ],
+  1355→  );
+  1356→
+  1357→  return <BionContext.Provider value={value}>{children}</BionContext.Provider>;
+  1358→}
+  1359→
+  1360→export function useBion() {
+  1361→  const ctx = useContext(BionContext);
+  1362→  if (!ctx) throw new Error("useBion deve ser usado dentro de BionProvider");
+  1363→  return ctx;
+  1364→}
+  1365→
