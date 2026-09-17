@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense } from "react";
+import { Suspense, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useBion } from "@/lib/bion-store";
 import { AdminDashboard, MedicoDashboard, PacienteDashboard } from "@/components/bion/telas/Dashboards";
@@ -13,6 +13,11 @@ function ConteudoPainel() {
   const parametros = useSearchParams();
   const go = (v: View) => router.push(urlDa(v));
   const posConsulta = parametros.get("pos-consulta") === "1";
+
+  // O paciente agora tem app imersivo próprio em fullscreen
+  useEffect(() => {
+    if (sessao.role === "paciente") router.replace("/paciente");
+  }, [sessao.role, router]);
 
   return (
     <>

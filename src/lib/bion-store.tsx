@@ -145,6 +145,39 @@ export type PacientePerfil = {
   tipoSanguineo: string;
   peso?: string;
   altura?: string;
+  profissao?: string;
+  estadoCivil?: string;
+  comorbidades?: string[];
+  foto?: string;
+};
+
+// Medição do paciente (peso | altura | pa) — app imersivo, seção 2
+export type Medicao = {
+  id: string;
+  tipo: "peso" | "altura" | "pa";
+  valor1: number;
+  valor2?: number;
+  criadoEm: string; // ISO
+  quando: string; // rótulo curto ("12 Jan", "Hoje")
+};
+
+// Resultado de exame laboratorial lido pela BION IA ou cadastrado manualmente
+export type ItemExame = {
+  nome: string;
+  valor: number;
+  unidade?: string;
+  refMin?: number;
+  refMax?: number;
+};
+
+export type ExameLab = {
+  id: string;
+  titulo: string;
+  dataColeta: string; // ISO
+  itens: ItemExame[];
+  arquivoNome?: string;
+  origem: "bion-ia" | "manual";
+  quando: string; // rótulo curto
 };
 
 export type Sessao = {
@@ -274,10 +307,19 @@ const fmtValorBRL = (v: number) =>
 
 type EstadoFresco = {
   usuario: { id: string; nome: string; email: string; role: "PACIENTE" | "MEDICO" | "ADMIN" };
+  medicoes?: {
+    id: string; tipo: string; valor1: number; valor2?: number; criadoEm: string;
+  }[];
+  exames?: {
+    id: string; titulo: string; dataColeta: string;
+    itens: { nome: string; valor: number; unidade?: string; refMin?: number; refMax?: number }[];
+    arquivoNome?: string; origem: string; createdAt: string;
+  }[];
   pacientePerfil: {
     nome: string; idade: number; genero: string; cpf: string; email: string; telefone: string;
     convenio: string; alergias: string[]; medicamentos: string[]; tipoSanguineo: string;
-    peso?: string; altura?: string;
+    peso?: string; altura?: string; profissao?: string; estadoCivil?: string;
+    comorbidades?: string[]; foto?: string;
   } | null;
   consultas: {
     id: string; medicoId: string; medico: string; pacienteId: string; paciente: string;
@@ -382,7 +424,7 @@ async function api<T>(url: string, init?: RequestInit): Promise<T | null> {
   }
 }
 
-type RespostaAuth = { ok: boolean };
+type RespostaAuth = { ok: boolean; role?: Sessao["role"] };
 
 type Store = {
   sessao: Sessao;
@@ -391,6 +433,11 @@ type Store = {
   entrar: (email: string, senha: string) => Promise<RespostaAuth>;
   registrar: (nome: string, email: string, senha: string) => Promise<RespostaAuth>;
   sair: () => Promise<void>;
+  medicoes: Medicao[];
+  exames: ExameLab[];
+  registrarMedicao: (tipo: "peso" | "altura" | "pa", valor1: number, valor2?: number) => Promise<boolean>;
+  aplicarEstadoFresco: (d: unknown) => boolean;
+  excluirExame: (id: string) => void;
   documentosVisiveis: Documento[];
   consultas: Consulta[];
   arquivos: Arquivo[];
@@ -466,6 +513,8 @@ export function BionProvider({ children }: { children: ReactNode }) {
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [avaliacoes, setAvaliacoes] = useState<Avaliacao[]>([]);
   const [mensagens, setMensagens] = useState<Mensagem[]>([]);
+  const [medicoes, setMedicoes] = useState<Medicao[]>([]);
+  const [exames, setExames] = useState<ExameLab[]>([]);
   const [suporte, setSuporte] = useState<{ id: string | null; nome: string }>(SUPORTE_VAZIO);
   const [autenticado, setAutenticado] = useState(false);
   const [carregando, setCarregando] = useState(true);
@@ -612,6 +661,31 @@ export function BionProvider({ children }: { children: ReactNode }) {
       })),
     );
     setMensagens(d.mensagens.map((m) => ({ ...fmtMensagem(m), minha: m.deId === d.usuario.id })));
+    if (d.medicoes) {
+      setMedicoes(
+        d.medicoes.map((m) => ({
+          id: m.id,
+          tipo: m.tipo as Medicao["tipo"],
+          valor1: m.valor1,
+          valor2: m.valor2,
+          criadoEm: m.criadoEm,
+          quando: fmtCurta(m.criadoEm),
+        })),
+      );
+    }
+    if (d.exames) {
+      setExames(
+        d.exames.map((e) => ({
+          id: e.id,
+          titulo: e.titulo,
+          dataColeta: e.dataColeta,
+          itens: e.itens,
+          arquivoNome: e.arquivoNome,
+          origem: e.origem as ExameLab["origem"],
+          quando: fmtCurta(e.dataColeta),
+        })),
+      );
+    }
     if (d.suporte.id) setSuporte(d.suporte);
     if (d.pacientePerfil) setPacientePerfil(d.pacientePerfil);
   }, []);
@@ -682,7 +756,7 @@ export function BionProvider({ children }: { children: ReactNode }) {
       if (!dados) return { ok: false };
       aplicar(dados);
       setAutenticado(true);
-      return { ok: true };
+      return { ok: true, role: dados.usuario.role.toLowerCase() as Sessao["role"] };
     },
     [aplicar],
   );
@@ -696,7 +770,7 @@ export function BionProvider({ children }: { children: ReactNode }) {
       if (!dados) return { ok: false };
       aplicar(dados);
       setAutenticado(true);
-      return { ok: true };
+      return { ok: true, role: dados.usuario.role.toLowerCase() as Sessao["role"] };
     },
     [aplicar],
   );
@@ -720,9 +794,44 @@ export function BionProvider({ children }: { children: ReactNode }) {
     setAuditLogs([]);
     setAvaliacoes([]);
     setMensagens([]);
+    setMedicoes([]);
+    setExames([]);
     setSuporte(SUPORTE_VAZIO);
     setPacientePerfil(PERFIL_VAZIO);
   }, []);
+
+  /** Registra medição (peso/altura/PA) — devolve true se o servidor confirmou. */
+  const registrarMedicao = useCallback(
+    async (tipo: "peso" | "altura" | "pa", valor1: number, valor2?: number) => {
+      const ok = await mutar("/api/medicoes", "POST", {
+        tipo,
+        valor1,
+        ...(valor2 !== undefined ? { valor2 } : {}),
+        audit: {
+          acao: "MEDICAO_REGISTRADA",
+          categoria: "prontuario",
+          detalhes: `Medição de ${tipo}: ${valor1}${tipo === "pa" && valor2 ? `/${valor2}` : ""} (app do paciente)`,
+        },
+      });
+      return ok;
+    },
+    [mutar],
+  );
+
+  /** Aplica um estado fresco externo (ex.: resposta do upload de laudo pela IA). */
+  const aplicarEstadoFresco = useCallback(
+    (d: unknown) => {
+      if (!d || typeof d !== "object" || !("usuario" in (d as Record<string, unknown>))) return false;
+      aplicar(d as EstadoFresco);
+      return true;
+    },
+    [aplicar],
+  );
+
+  const excluirExame = useCallback(
+    (id: string) => void mutar("/api/exames", "DELETE", { id }),
+    [mutar],
+  );
 
   const documentosVisiveis = useMemo(() => {
     if (sessao.role === "paciente") return documentos.filter((d) => d.paciente === sessao.nome);
@@ -1331,6 +1440,7 @@ export function BionProvider({ children }: { children: ReactNode }) {
       anonimizarPaciente,
       excluirDadosPaciente,
       pacientes,
+      medicoes, exames, registrarMedicao, aplicarEstadoFresco, excluirExame,
       adicionarPaciente,
       atualizarPaciente,
       excluirPaciente,
@@ -1349,7 +1459,8 @@ export function BionProvider({ children }: { children: ReactNode }) {
       adicionarTicket, responderTicket, adicionarLembrete, alternarLembrete, removerLembrete,
       atualizarPacientePerfil, atualizarMedico, aprovarMedico, suspenderMedico,
       auditLogs, registrarAudit, anonimizarPaciente, excluirDadosPaciente,
-      pacientes, adicionarPaciente, atualizarPaciente, excluirPaciente,
+      pacientes, medicoes, exames, registrarMedicao, aplicarEstadoFresco, excluirExame,
+      adicionarPaciente, atualizarPaciente, excluirPaciente,
       adicionarMedico, excluirMedico, atualizarConsulta,
     ],
   );

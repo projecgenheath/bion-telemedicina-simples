@@ -43,7 +43,7 @@ export function Login() {
     setEnviando(false);
     if (r.ok) {
       toast.success("Bem-vindo(a) de volta!");
-      router.push("/painel");
+      router.push(r.role === "paciente" ? "/paciente" : "/painel");
     }
   };
 
@@ -70,7 +70,7 @@ export function Login() {
     setEnviando(false);
     if (r.ok) {
       toast.success("Conta criada com sucesso! Bem-vindo(a) ao BION.");
-      router.push("/painel");
+      router.push(r.role === "paciente" ? "/paciente" : "/painel");
     }
   };
 

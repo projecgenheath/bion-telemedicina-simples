@@ -37,6 +37,8 @@ model User {
   auditLogs            AuditLog[]
   mensagensEnviadas    Mensagem[]     @relation("MensagemDe")
   mensagensRecebidas   Mensagem[]     @relation("MensagemPara")
+  medicoes             Medicao[]
+  examesLaboratoriais  ExameLaboratorial[]
 }
 
 model Sessao {
@@ -80,6 +82,41 @@ model PerfilPaciente {
   tipoSanguineo  String  @default("")
   peso           String?
   altura         String?
+  profissao      String  @default("")
+  estadoCivil    String  @default("")
+  comorbidades   String  @default("[]") // JSON string[]
+  foto           String? // data URL (avatar do app do paciente)
+}
+
+// Histórico de medidas do paciente (app imersivo, seção 2).
+// tipo: "peso" (valor1 = kg) | "altura" (valor1 = cm) | "pa" (valor1 = sistólica, valor2 = diastólica)
+model Medicao {
+  id        String   @id @default(cuid())
+  usuarioId String
+  usuario   User     @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  tipo      String
+  valor1    Float
+  valor2    Float?
+  criadoEm  DateTime @default(now())
+
+  @@index([usuarioId, tipo, criadoEm])
+}
+
+// Resultados de exames laboratoriais extraídos de laudos enviados à BION IA
+// (PDF ou foto, com verificação do nome completo do paciente no documento).
+// itens: JSON [{ nome, valor, unidade, refMin, refMax }]
+model ExameLaboratorial {
+  id          String   @id @default(cuid())
+  usuarioId   String
+  usuario     User     @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  titulo      String // ex.: "Hemograma completo", "Glicemia em jejum"
+  dataColeta  DateTime
+  itens       String   @default("[]")
+  arquivoNome String?
+  origem      String   @default("bion-ia") // bion-ia | manual
+  createdAt   DateTime @default(now())
+
+  @@index([usuarioId, dataColeta])
 }
 
 model Consulta {

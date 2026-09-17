@@ -141,108 +141,123 @@ export async function carregarDados(usuario: UsuarioSessao) {
     }),
   ]);
 
+  // Dependências de visibilidade (1 query por papel, em paralelo)
+  const [idsPacientes, idsMedicos] = await Promise.all([
+    souMedico ? idsPacientesDoMedico(usuario.id) : Promise.resolve([] as string[]),
+    souPaciente ? idsMedicosDoPaciente(usuario.id) : Promise.resolve([] as string[]),
+  ]);
+
   // Visibilidade de documentos (espelha a lógica original do app)
-  let documentoWhere: Record<string, unknown> = {};
-  if (souPaciente) documentoWhere = { pacienteId: usuario.id };
-  if (souMedico) {
-    const ids = await idsPacientesDoMedico(usuario.id);
-    documentoWhere = { OR: [{ medicoId: usuario.id }, { pacienteId: { in: ids } }] };
-  }
-  const documentos = await db.documento.findMany({
-    where: documentoWhere,
-    include: {
-      medico: { select: { nome: true } },
-      paciente: { select: { nome: true } },
-    },
-    orderBy: { createdAt: "desc" },
-  });
+  const documentoWhere: Record<string, unknown> = souPaciente
+    ? { pacienteId: usuario.id }
+    : souMedico
+      ? { OR: [{ medicoId: usuario.id }, { pacienteId: { in: idsPacientes } }] }
+      : {};
 
   // Visibilidade de arquivos: próprios + trocados com médicos/pacientes vinculados
-  let arquivoWhere: Record<string, unknown> = {};
-  if (souPaciente) {
-    const idsMed = await idsMedicosDoPaciente(usuario.id);
-    arquivoWhere = { OR: [{ usuarioId: usuario.id }, { usuarioId: { in: idsMed } }] };
-  } else if (souMedico) {
-    const idsPac = await idsPacientesDoMedico(usuario.id);
-    arquivoWhere = { OR: [{ usuarioId: usuario.id }, { usuarioId: { in: idsPac } }] };
-  }
-  const arquivos = await db.arquivo.findMany({ where: arquivoWhere, orderBy: { createdAt: "desc" } });
-
-  const notificacoes = await db.notificacao.findMany({
-    where: {
-      OR: [{ usuarioId: usuario.id }, { paraRole: usuario.role }, { AND: [{ usuarioId: null }, { paraRole: null }] }],
-    },
-    orderBy: { createdAt: "desc" },
-  });
+  const arquivoWhere: Record<string, unknown> = souPaciente
+    ? { OR: [{ usuarioId: usuario.id }, { usuarioId: { in: idsMedicos } }] }
+    : souMedico
+      ? { OR: [{ usuarioId: usuario.id }, { usuarioId: { in: idsPacientes } }] }
+      : {};
 
   const avaliacaoWhere = souPaciente
     ? { pacienteId: usuario.id }
     : souMedico
       ? { medicoId: usuario.id }
       : {};
-  const avaliacoesRaw = await db.avaliacao.findMany({
-    where: avaliacaoWhere,
-    include: {
-      paciente: { select: { nome: true } },
-      medico: { select: { nome: true, perfilMedico: { select: { especialidade: true } } } },
-    },
-    orderBy: { createdAt: "desc" },
-  });
-
-  const tickets = await db.ticket.findMany({
-    where: souAdmin ? {} : { usuarioId: usuario.id },
-    include: { usuario: { select: { nome: true } } },
-    orderBy: { createdAt: "desc" },
-  });
-
-  const lembretes = await db.lembrete.findMany({
-    where: { usuarioId: usuario.id },
-    orderBy: { horario: "asc" },
-  });
 
   const consentimentoWhere = souAdmin
     ? {}
     : souPaciente
       ? { OR: [{ pacienteId: usuario.id }, { quem: usuario.nome }] }
       : { quem: usuario.nome };
-  const consentimentos = await db.consentimento.findMany({
-    where: consentimentoWhere,
-    include: { paciente: { select: { nome: true } } },
-    orderBy: { createdAt: "desc" },
-  });
 
-  const auditLogs = souAdmin
-    ? await db.auditLog.findMany({ orderBy: { createdAt: "desc" }, take: 300 })
-    : [];
+  // Todas as coleções independentes em paralelo (bootstrap rápido)
+  const [
+    documentos,
+    arquivos,
+    notificacoes,
+    avaliacoesRaw,
+    tickets,
+    lembretes,
+    consentimentos,
+    auditLogsRaw,
+    mensagensRaw,
+    suporte,
+    perfilPacienteRaw,
+    medicoes,
+    exames,
+  ] = await Promise.all([
+    db.documento.findMany({
+      where: documentoWhere,
+      include: {
+        medico: { select: { nome: true } },
+        paciente: { select: { nome: true } },
+      },
+      orderBy: { createdAt: "desc" },
+    }),
+    db.arquivo.findMany({ where: arquivoWhere, orderBy: { createdAt: "desc" } }),
+    db.notificacao.findMany({
+      where: {
+        OR: [{ usuarioId: usuario.id }, { paraRole: usuario.role }, { AND: [{ usuarioId: null }, { paraRole: null }] }],
+      },
+      orderBy: { createdAt: "desc" },
+    }),
+    db.avaliacao.findMany({
+      where: avaliacaoWhere,
+      include: {
+        paciente: { select: { nome: true } },
+        medico: { select: { nome: true, perfilMedico: { select: { especialidade: true } } } },
+      },
+      orderBy: { createdAt: "desc" },
+    }),
+    db.ticket.findMany({
+      where: souAdmin ? {} : { usuarioId: usuario.id },
+      include: { usuario: { select: { nome: true } } },
+      orderBy: { createdAt: "desc" },
+    }),
+    db.lembrete.findMany({
+      where: { usuarioId: usuario.id },
+      orderBy: { horario: "asc" },
+    }),
+    db.consentimento.findMany({
+      where: consentimentoWhere,
+      include: { paciente: { select: { nome: true } } },
+      orderBy: { createdAt: "desc" },
+    }),
+    souAdmin
+      ? db.auditLog.findMany({ orderBy: { createdAt: "desc" }, take: 300 })
+      : Promise.resolve([] as Awaited<ReturnType<typeof db.auditLog.findMany>>),
+    db.mensagem.findMany({
+      where: { OR: [{ deId: usuario.id }, { paraId: usuario.id }] },
+      include: {
+        de: { select: { nome: true } },
+        para: { select: { nome: true } },
+      },
+      orderBy: { createdAt: "asc" },
+    }),
+    db.user.findFirst({
+      where: { role: "ADMIN", status: "ativo" },
+      select: { id: true, nome: true },
+    }),
+    souPaciente
+      ? db.perfilPaciente.findUnique({ where: { userId: usuario.id }, include: { user: { select: { nome: true, email: true } } } })
+      : Promise.resolve(null),
+    souPaciente
+      ? db.medicao.findMany({ where: { usuarioId: usuario.id }, orderBy: { criadoEm: "asc" }, take: 200 })
+      : Promise.resolve([] as Awaited<ReturnType<typeof db.medicao.findMany>>),
+    souPaciente
+      ? db.exameLaboratorial.findMany({ where: { usuarioId: usuario.id }, orderBy: { dataColeta: "asc" }, take: 200 })
+      : Promise.resolve([] as Awaited<ReturnType<typeof db.exameLaboratorial.findMany>>),
+  ]);
 
-  // Mensageria assíncrona: tudo que o usuário enviou ou recebeu
-  const mensagensRaw = await db.mensagem.findMany({
-    where: { OR: [{ deId: usuario.id }, { paraId: usuario.id }] },
-    include: {
-      de: { select: { nome: true } },
-      para: { select: { nome: true } },
-    },
-    orderBy: { createdAt: "asc" },
-  });
-
-  // Usuário de suporte (ADMIN) — contato "Suporte BION" nas conversas
-  const suporte = await db.user.findFirst({
-    where: { role: "ADMIN", status: "ativo" },
-    select: { id: true, nome: true },
-  });
+  const auditLogs = auditLogsRaw;
 
   // Pacientes "visíveis": admin vê todos; médico vê vinculados por consultas
   let pacientesVisiveis = pacientesRaw;
-  if (souMedico) {
-    const ids = await idsPacientesDoMedico(usuario.id);
-    pacientesVisiveis = pacientesRaw.filter((p) => ids.includes(p.id));
-  } else if (souPaciente) {
-    pacientesVisiveis = [];
-  }
-
-  const perfilPacienteRaw = souPaciente
-    ? await db.perfilPaciente.findUnique({ where: { userId: usuario.id }, include: { user: { select: { nome: true, email: true } } } })
-    : null;
+  if (souMedico) pacientesVisiveis = pacientesRaw.filter((p) => idsPacientes.includes(p.id));
+  else if (souPaciente) pacientesVisiveis = [];
 
   return {
     usuario: { id: usuario.id, nome: usuario.nome, email: usuario.email, role: usuario.role },
@@ -260,8 +275,28 @@ export async function carregarDados(usuario: UsuarioSessao) {
           tipoSanguineo: perfilPacienteRaw.tipoSanguineo,
           peso: perfilPacienteRaw.peso ?? undefined,
           altura: perfilPacienteRaw.altura ?? undefined,
+          profissao: perfilPacienteRaw.profissao || undefined,
+          estadoCivil: perfilPacienteRaw.estadoCivil || undefined,
+          comorbidades: JSON.parse(perfilPacienteRaw.comorbidades || "[]") as string[],
+          foto: perfilPacienteRaw.foto ?? undefined,
         }
       : null,
+    medicoes: medicoes.map((m) => ({
+      id: m.id,
+      tipo: m.tipo,
+      valor1: m.valor1,
+      valor2: m.valor2 ?? undefined,
+      criadoEm: m.criadoEm.toISOString(),
+    })),
+    exames: exames.map((e) => ({
+      id: e.id,
+      titulo: e.titulo,
+      dataColeta: e.dataColeta.toISOString(),
+      itens: JSON.parse(e.itens || "[]") as { nome: string; valor: number; unidade: string; refMin?: number; refMax?: number }[],
+      arquivoNome: e.arquivoNome ?? undefined,
+      origem: e.origem,
+      createdAt: e.createdAt.toISOString(),
+    })),
     consultas: consultasRaw.map((c) => ({
       id: c.id,
       medicoId: c.medicoId,
