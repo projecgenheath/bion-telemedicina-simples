@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   Mic,
@@ -27,11 +27,27 @@ import {
   Shield,
   Plus,
 } from "lucide-react";
-import { useBion as useStore, type Documento } from "@/lib/bion-store";
+import { useBion as useStore, type AnamneseResumo } from "@/lib/bion-store";
 import { ModalBion } from "@/components/bion/ModalBion";
 import { useTeleconsulta } from "@/lib/use-teleconsulta";
 
 type Role = "paciente" | "medico" | "admin";
+
+/** Rótulos das etapas da anamnese (mesma ordem canônica da rota /api/anamnese). */
+const ROTULOS_ANAMNESE: Record<string, string> = {
+  identificacao: "Identificação",
+  queixa: "Queixa principal",
+  historia: "História da doença atual",
+  sistemas: "Revisão de sistemas",
+  antecedentes: "Antecedentes pessoais",
+  familia: "Antecedentes familiares",
+  habitos: "Hábitos e estilo de vida",
+  gineco: "História ginecológica/sexual",
+  psicossocial: "Aspectos psicossociais",
+  medicamentos: "Medicamentos",
+  documentos: "Documentos e exames",
+  fechamento: "Revisão e fechamento",
+};
 
 export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
   const {
@@ -43,10 +59,23 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
     registrarAudit,
     sessao,
     pacientes,
+    anamneses,
   } = useStore();
 
-  // Consulta ativa real (banco) — define a sala WebRTC
-  const consultaAtual = consultas.find((c) => c.status === "confirmada") ?? consultas[0];
+  // Consulta ativa real (banco) — define a sala WebRTC.
+  // Preferência: próxima confirmada futura (janela de 2h) → primeira confirmada → primeira da lista.
+  const consultaAtual = useMemo(() => {
+    const limite = Date.now() - 2 * 3_600_000;
+    const futura = consultas
+      .filter((c) => c.status === "confirmada" && c.ts >= limite)
+      .sort((a, b) => a.ts - b.ts)[0];
+    return futura ?? consultas.find((c) => c.status === "confirmada") ?? consultas[0];
+  }, [consultas]);
+
+  // Anamnese da consulta ativa (conduzida pela BION IA antes do atendimento)
+  const anamneseAtual: AnamneseResumo | undefined = anamneses.find(
+    (a) => a.consultaId === consultaAtual?.id,
+  );
 
   // Contraparte da chamada: dados reais da consulta ativa (fallback: cena demo)
   const contraparteNome =
@@ -93,7 +122,12 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
   const videoRemotoRef = useRef<HTMLVideoElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const [aba, setAba] = useState<"prontuario" | "exames" | "chat" | "ia">("prontuario");
+  const [aba, setAba] = useState<"prontuario" | "anamnese" | "exames" | "chat" | "ia">("prontuario");
+
+  // Se a consulta ativa tem anamnese da BION IA, abre na aba Anamnese quando ela surgir
+  useEffect(() => {
+    if (anamneseAtual) setAba((atual) => (atual === "prontuario" ? "anamnese" : atual));
+  }, [anamneseAtual?.id]);
   const [segundos, setSegundos] = useState(0);
 
   // srcObject imperativo: vídeo local (câmera) e remoto (P2P)
@@ -500,14 +534,15 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
         {/* Painel Lateral — abaixo do vídeo no celular, ao lado no desktop */}
         <div className="w-full lg:w-96 lg:shrink-0 border-t lg:border-t-0 lg:border-l border-white/10 bg-slate-900/95 flex flex-col min-w-0">
           {/* Abas */}
-          <div className="flex border-b border-white/10 text-xs font-bold">
+          <div className="flex border-b border-white/10 text-xs font-bold overflow-x-auto bp-coluna">
             {(
               [
                 ["prontuario", "Prontuário"],
+                ...(anamneseAtual ? [["anamnese", "Anamnese"]] : []),
                 ["exames", "Exames"],
                 ["chat", "Chat"],
                 ["ia", "IA Transcrição"],
-              ] as const
+              ] as (["prontuario", "Prontuário"] | ["anamnese", "Anamnese"] | ["exames", "Exames"] | ["chat", "Chat"] | ["ia", "IA Transcrição"])[]
             ).map(([k, t]) => (
               <button
                 key={k}
@@ -568,6 +603,65 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
                     className="w-full p-3 rounded-2xl bg-white/5 border border-white/10 text-white placeholder:text-slate-500 outline-none focus:border-primary text-xs leading-relaxed"
                   />
                 </div>
+              </div>
+            )}
+
+            {/* Aba Anamnese — coleta guiada pela BION IA antes do atendimento */}
+            {aba === "anamnese" && anamneseAtual && (
+              <div className="space-y-3">
+                <div className="bg-white/5 rounded-2xl p-3.5 border border-white/10">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="font-bold text-slate-300 uppercase tracking-wider text-[11px]">
+                      Anamnese · BION IA
+                    </div>
+                    <span
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                        anamneseAtual.status === "concluida"
+                          ? "bg-emerald-500/15 text-emerald-300"
+                          : "bg-amber-500/15 text-amber-300"
+                      }`}
+                    >
+                      {anamneseAtual.status === "concluida" ? "Concluída" : `Em andamento · ${anamneseAtual.etapa}`}
+                    </span>
+                  </div>
+                  <div className="text-slate-400 mt-1">
+                    Documentos anexados: {anamneseAtual.documentos.length || "nenhum"}
+                  </div>
+                </div>
+
+                {anamneseAtual.documentos.map((d, i) => (
+                  <div key={`${d.nome}-${i}`} className="bg-white/5 rounded-2xl p-3 border border-white/10 flex items-center gap-2.5">
+                    <FileText className="w-4 h-4 text-primary shrink-0" />
+                    <div className="min-w-0">
+                      <div className="font-bold text-white truncate">{d.nome}</div>
+                      <div className="text-[10px] text-slate-400 truncate">
+                        {d.exameImportado ? `Laudo laboratorial importado${d.resumo ? ` — ${d.resumo}` : ""}` : "Documento anexado na anamnese"}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+
+                {Object.entries(anamneseAtual.coleta).length === 0 ? (
+                  <p className="text-slate-400">
+                    A anamnese desta consulta ainda não tem dados coletados — eles aparecem aqui conforme o paciente conversa com a BION IA.
+                  </p>
+                ) : (
+                  Object.entries(anamneseAtual.coleta).map(([etapa, campos]) => (
+                    <div key={etapa} className="bg-white/5 rounded-2xl p-3.5 border border-white/10 space-y-1.5">
+                      <div className="font-bold text-slate-300 uppercase tracking-wider text-[11px]">
+                        {ROTULOS_ANAMNESE[etapa] ?? etapa}
+                      </div>
+                      {Object.entries(campos)
+                        .filter(([, v]) => v !== null && v !== undefined && v !== "" && !(Array.isArray(v) && v.length === 0))
+                        .map(([campo, v]) => (
+                          <div key={campo} className="text-slate-200">
+                            <span className="text-slate-400">{campo.replace(/_/g, " ")}: </span>
+                            {Array.isArray(v) ? v.join(", ") : String(v)}
+                          </div>
+                        ))}
+                    </div>
+                  ))
+                )}
               </div>
             )}
 

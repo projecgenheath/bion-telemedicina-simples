@@ -124,7 +124,7 @@ export async function carregarDados(usuario: UsuarioSessao) {
       ? { medicoId: usuario.id }
       : {};
 
-  const [consultasRaw, medicosRaw, pacientesRaw] = await Promise.all([
+  const [consultasRaw, medicosRaw, pacientesRaw, anamnesesRaw] = await Promise.all([
     db.consulta.findMany({
       where: consultaWhere,
       include: {
@@ -138,6 +138,16 @@ export async function carregarDados(usuario: UsuarioSessao) {
       where: { role: "PACIENTE" },
       include: { perfilPaciente: true },
       orderBy: { createdAt: "desc" },
+    }),
+    db.anamnese.findMany({
+      where: souPaciente
+        ? { usuarioId: usuario.id }
+        : souMedico
+          ? { consulta: { medicoId: usuario.id } }
+          : {},
+      include: { consulta: { include: { medico: { select: { nome: true } } } } },
+      orderBy: { updatedAt: "desc" },
+      take: 100,
     }),
   ]);
 
@@ -312,6 +322,17 @@ export async function carregarDados(usuario: UsuarioSessao) {
       valor: c.valor,
       pago: c.pago,
       remarcada: c.remarcada || undefined,
+    })),
+    anamneses: anamnesesRaw.map((a) => ({
+      id: a.id,
+      consultaId: a.consultaId,
+      medico: a.consulta.medico.nome,
+      especialidade: a.consulta.especialidade,
+      etapa: a.etapa,
+      status: a.status,
+      coleta: JSON.parse(a.coleta || "{}") as Record<string, unknown>,
+      documentos: JSON.parse(a.documentos || "[]") as { nome: string; tipo: string; exameImportado: boolean; resumo?: string }[],
+      updatedAt: a.updatedAt.toISOString(),
     })),
     documentos: documentos.map((doc) => ({
       id: doc.id,

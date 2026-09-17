@@ -22,6 +22,8 @@ export async function POST(req: NextRequest) {
       motivoConsulta?: string;
       valor?: string | number;
       pago?: boolean;
+      /** "pendente_anamnese": agendamento via BION IA — pago, aguardando anamnese. */
+      status?: string;
       notificacoes?: NotifPayload[];
       audit?: AuditPayload;
     };
@@ -34,18 +36,29 @@ export async function POST(req: NextRequest) {
       return Response.json({ erro: "Médico não encontrado." }, { status: 400 });
     }
 
+    // O paciente NÃO pode auto-confirmar: só aceitamos pendente_anamnese aqui.
+    // A confirmação real acontece só depois da anamnese concluída (rota /api/anamnese).
+    const status = body.status === "pendente_anamnese" ? "pendente_anamnese" : "confirmada";
+
     const consulta = await db.consulta.create({
       data: {
         pacienteId: usuario.id,
         medicoId: medico.id,
         especialidade: medico.perfilMedico?.especialidade ?? "Clínica Geral",
         dataInicio: parseDataHora(body.data, body.hora),
-        status: "confirmada",
+        status,
         valor: parseValor(body.valor),
         pago: body.pago ?? true,
         motivoConsulta: body.motivoConsulta?.trim() || "Consulta de rotina",
       },
     });
+
+    // Agendamento pela BION IA: cria a anamnese pendente que confirma a consulta
+    if (status === "pendente_anamnese") {
+      await db.anamnese.create({
+        data: { consultaId: consulta.id, usuarioId: usuario.id },
+      });
+    }
 
     await aplicarSideEffects(usuario, body.notificacoes, {
       ...(body.audit ?? {
@@ -58,7 +71,7 @@ export async function POST(req: NextRequest) {
     });
 
     const dados = await carregarDados(usuario);
-    return ok(dados);
+    return ok({ ...dados, consultaCriada: consulta.id });
   } catch (erro) {
     return falha(erro);
   }

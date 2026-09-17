@@ -368,12 +368,14 @@ export function HistoricoClinico() {
       concluida: "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300",
       cancelada: "bg-red-50 dark:bg-red-950/60 text-red-600 dark:text-red-400",
       em_espera: "bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300",
+      pendente_anamnese: "bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300",
     };
     const labels: Record<string, string> = {
       confirmada: "Confirmada",
       concluida: "Concluída",
       cancelada: "Cancelada",
       em_espera: "Em espera",
+      pendente_anamnese: "Pendente anamnese",
     };
     return (
       <span

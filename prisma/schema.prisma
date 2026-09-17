@@ -39,6 +39,7 @@ model User {
   mensagensRecebidas   Mensagem[]     @relation("MensagemPara")
   medicoes             Medicao[]
   examesLaboratoriais  ExameLaboratorial[]
+  anamneses            Anamnese[]
 }
 
 model Sessao {
@@ -127,7 +128,7 @@ model Consulta {
   medico             User     @relation("ConsultaMedico", fields: [medicoId], references: [id], onDelete: Cascade)
   especialidade      String
   dataInicio         DateTime
-  status             String   @default("confirmada") // confirmada | cancelada | concluida | em_espera
+  status             String   @default("confirmada") // confirmada | pendente_anamnese | cancelada | concluida | em_espera
   motivoConsulta     String?
   motivoCancelamento String?
   resumoMedico       String?
@@ -140,6 +141,30 @@ model Consulta {
   // Telemedicina WebRTC (Fase 2)
   sinaisSala    SinalSala[]
   presencasSala PresencaSala[]
+
+  // Anamnese conduzida pela BION IA (uma por consulta)
+  anamnese Anamnese?
+}
+
+// Anamnese guiada pela BION IA em formato storytelling, feita APÓS o pagamento.
+// A consulta nasce "pendente_anamnese" e só vira "confirmada" quando a anamnese
+// é concluída. coleta: JSON com os dados organizados por etapa (identificação,
+// queixa, HDA, sistemas, antecedentes, família, hábitos, gineco, psicossocial,
+// medicamentos). documentos: JSON [{ nome, tipo, exameImportado, resumo }].
+model Anamnese {
+  id         String   @id @default(cuid())
+  consultaId String   @unique
+  consulta   Consulta @relation(fields: [consultaId], references: [id], onDelete: Cascade)
+  usuarioId  String
+  usuario    User     @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  etapa      String   @default("identificacao")
+  status     String   @default("em_andamento") // em_andamento | concluida
+  coleta     String   @default("{}")
+  documentos String   @default("[]")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([usuarioId, status])
 }
 
 // Mensagens de sinalização WebRTC trocadas entre paciente e médico durante a teleconsulta.

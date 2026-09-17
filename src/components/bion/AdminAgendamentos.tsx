@@ -9,6 +9,7 @@ import { ModalBion } from "@/components/bion/ModalBion";
 const STATUS: { valor: Consulta["status"] | "todas"; label: string }[] = [
   { valor: "todas", label: "Todas" },
   { valor: "confirmada", label: "Confirmadas" },
+  { valor: "pendente_anamnese", label: "Pendentes de anamnese" },
   { valor: "em_espera", label: "Em espera" },
   { valor: "concluida", label: "Concluídas" },
   { valor: "cancelada", label: "Canceladas" },
