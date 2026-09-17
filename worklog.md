@@ -229,3 +229,33 @@ Stage Summary:
 - A env var DATABASE_URL no Vercel pode permanecer em 5432 (o código converte em runtime); opcionalmente atualizá-la para 6543 + pgbouncer=true&connection_limit=1.
 - Erros de banco agora viram mensagem amigável 503 em todas as rotas (sem vazamento técnico).
 - main = f7c9435 (sobre 8018851 de auditoria de design — integrada sem conflitos).
+
+---
+Task ID: app-imersivo-paciente
+Agent: Super Z (agente principal)
+Task: Refazer a experiência do paciente em fullscreen imersivo por gestos com BION IA (agendamento + leitura de laudos), documentos/mensagens na página 4, perfil completo e design liquid glass branco→azul-marinho (spec detalhada do usuário)
+
+Work Log:
+- Teste do SDK: chat.completions.create NÃO aceita imagens (code 1210, content.type ['text']) MAS zai.chat.completions.createVision aceita image_url e file_url (base64 data URLs) — validado com PNG e PDF real antes de implementar.
+- Schema (schema.prisma + espelho postgres; db push no Supabase, aditivo): PerfilPaciente += profissao/estadoCivil/comorbidades/foto; novos modelos Medicao (peso/altura/pa, valor1/valor2, índice por usuário+tipo+data) e ExameLaboratorial (titulo, dataColeta, itens JSON, arquivoNome, origem).
+- APIs novas: /api/medicoes (GET/POST com validação plausível + sync peso/altura do perfil), /api/exames (GET/POST/DELETE escopado), /api/bion-ia/exame (multipart → createVision extrai JSON estruturado → VERIFICAÇÃO DE NOME: normalização NFD+tokens, divergência bloqueia gravação e retorna motivo "nome_divergente"; dedupe por titulo+dataColeta; registra Arquivo no histórico + notificação + auditoria), /api/mensagens com regra 30 dias (paciente↔médico exige consulta não cancelada e Date.now() <= dataInicio+30d; 403 com mensagem clara), /api/perfil PATCH com campos novos.
+- Store: medicoes/exames no EstadoFresco+aplicar, registrarMedicao, excluirExame, aplicarEstadoFresco (usado pela resposta do upload), entrar/registrar devolvem role (redirect por papel).
+- Rotas: view "paciente-app" → /paciente em SO_PACIENTE; layout renderiza FORA do AppShell (como /consulta); /painel redireciona paciente→/paciente; Login redireciona por papel.
+- PacienteApp (fullscreen): carrossel 3 painéis (0 Perfil | 1 Principal | 2 Documentos) com snap-x + touch nativo + arraste de mouse + setas do teclado + indicador clicável; posiciona no painel central na montagem (fix: scroll inicial era 0).
+- Seção 1: saudação por hora + data, avatar→perfil, card próxima consulta (Sala aberta 30min antes → /sala-espera) ou convite de agendamento, barra "Pergunte à BION IA".
+- Seção 2: lembretes (pendentes de hoje), gráfico IMC (faixa 18.5–24.9), gráfico PA (sistólica/diastólica + faixa 70–120) — detalhes com formulários validados e histórico.
+- Seção 3 (azul-marinho profundo): exames agrupados por tipo com série histórica do 1º item, faixa de referência, resultados fora do intervalo marcados, botão "Enviar novo laudo".
+- ChatBion: LLM real (/api/bion-ia) + wizard determinístico de agendamento (especialidade→médico com valor/avaliação→7 dias→horários reais do médico→resumo→adicionarConsulta) + upload de laudo com resumo item a item; chips de atalho; detecção de intenção por palavras-chave.
+- PerfilPainel: foto com recorte central 256px (canvas→dataURL), dados pessoais/saúde com modo edição, chips de alergias/comorbidades/medicamentos, histórico de consultas, uploads da IA, pagamentos (valor/pago das consultas), Suporte/Termos, toggle Dark/Clean (mesma chave bion-tema), Sair.
+- DocumentosPainel: chips de consultas realizadas → documentos por janela temporal (medicoId + createdAt entre consulta-2d e +7d) + prontuário virtual (resumoMedico); visualizador com Imprimir (@media print .bp-impressao); mensagens por médico com status da janela de 30 dias, badge de não lidas, envio via enviarMensagem.
+- Design (globals.css): .bp-* tokens — gradientes por seção (claro: branco→#9db9de→#0a1f44; dark: #000→navy), .bp-glass/.bp-glass-marinho (blur+saturate+inset highlight), .bp-acao, .bp-entrada, .bp-carrossel/.bp-coluna (scrollbar oculta, snap), safe-areas, print.
+- Perf: carregarDados paralelizado (2 rodadas Promise.all; dependências de visibilidade resolvidas primeiro) — login local 38s→23s, bootstrap 35s+ (503 pool_timeout)→13.7s; db.ts connection_limit 1→5 e pool_timeout 30 (transação supabase).
+- Seed idempotente (scripts/seed_app_paciente.ts): Marina (12 medições, 5 exames, profissão etc.), João (6,1), Carlos (4,1) — executado no Supabase.
+- Validação: tsc ✓, eslint 0/0 ✓, build 61 rotas ✓; runtime local 390px: login→/paciente, seções 1-2-3 com dados, detalhe IMC atualiza peso/altura e recalcula, wizard completo criou Cardiologia c/ Dr. Carlos Amanhã 10:00 (apareceu no card), upload laudo "MARINA SILVA" → 3 grupos importados, laudo "JOAO PEREIRA" logado como Marina → bloqueado com motivo nome_divergente, 30 dias (Carlos 15 Set=200, Julia 29 Jul=403), visualizador de prontuário com Imprimir, dark mode preto absoluto mantendo degradê, console/erros de página limpos; regressão médica: login+bootstrap 200 com escopo correto.
+- Evidências: download/evidencias-app-paciente/ (11 screenshots: seções, detalhe IMC, chat, agendamento, perfil dark, exames dark, documentos, visualizador).
+
+Stage Summary:
+- Paciente agora tem app dedicado imersivo (sem menus): rolagem vertical nas 3 seções + gestos laterais para perfil e documentos, exatamente como especificado.
+- BION IA ganhou as duas funções-chave: agendar consultas (wizard com dados reais) e ler laudos PDF/foto atualizando a seção de exames — com trava de segurança por nome completo.
+- Janela de 30 dias para mensagens paciente↔médico validada no servidor.
+- main = 643b4ac; deploy Vercel disparado.
