@@ -1,0 +1,393 @@
+{
+  "version": 3,
+  "pages404": true,
+  "appType": "app",
+  "caseSensitive": false,
+  "basePath": "",
+  "redirects": [
+    {
+      "source": "/:path+/",
+      "destination": "/:path+",
+      "internal": true,
+      "priority": true,
+      "statusCode": 308,
+      "regex": "^(?:/((?:[^/]+?)(?:/(?:[^/]+?))*))/$"
+    }
+  ],
+  "headers": [],
+  "rewrites": {
+    "beforeFiles": [],
+    "afterFiles": [],
+    "fallback": []
+  },
+  "dynamicRoutes": [
+    {
+      "page": "/api/consultas/[id]",
+      "regex": "^/api/consultas/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/consultas/(?<nxtPid>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/api/lembretes/[id]",
+      "regex": "^/api/lembretes/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/lembretes/(?<nxtPid>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/api/medicos/[id]",
+      "regex": "^/api/medicos/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/medicos/(?<nxtPid>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/api/pacientes/[id]",
+      "regex": "^/api/pacientes/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/pacientes/(?<nxtPid>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/api/telemedicina/[consultaId]/sala",
+      "regex": "^/api/telemedicina/([^/]+?)/sala(?:/)?$",
+      "routeKeys": {
+        "nxtPconsultaId": "nxtPconsultaId"
+      },
+      "namedRegex": "^/api/telemedicina/(?<nxtPconsultaId>[^/]+?)/sala(?:/)?$"
+    },
+    {
+      "page": "/api/tickets/[id]",
+      "regex": "^/api/tickets/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/tickets/(?<nxtPid>[^/]+?)(?:/)?$"
+    }
+  ],
+  "staticRoutes": [
+    {
+      "page": "/",
+      "regex": "^/(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/(?:/)?$"
+    },
+    {
+      "page": "/_global-error",
+      "regex": "^/_global\\-error(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/_global\\-error(?:/)?$"
+    },
+    {
+      "page": "/_not-found",
+      "regex": "^/_not\\-found(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/_not\\-found(?:/)?$"
+    },
+    {
+      "page": "/admin-agendamentos",
+      "regex": "^/admin\\-agendamentos(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/admin\\-agendamentos(?:/)?$"
+    },
+    {
+      "page": "/admin-medicos",
+      "regex": "^/admin\\-medicos(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/admin\\-medicos(?:/)?$"
+    },
+    {
+      "page": "/admin-pacientes",
+      "regex": "^/admin\\-pacientes(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/admin\\-pacientes(?:/)?$"
+    },
+    {
+      "page": "/agendar",
+      "regex": "^/agendar(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/agendar(?:/)?$"
+    },
+    {
+      "page": "/ajuda",
+      "regex": "^/ajuda(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/ajuda(?:/)?$"
+    },
+    {
+      "page": "/api",
+      "regex": "^/api(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api(?:/)?$"
+    },
+    {
+      "page": "/api/admin/lgpd",
+      "regex": "^/api/admin/lgpd(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/admin/lgpd(?:/)?$"
+    },
+    {
+      "page": "/api/arquivos",
+      "regex": "^/api/arquivos(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/arquivos(?:/)?$"
+    },
+    {
+      "page": "/api/auditoria",
+      "regex": "^/api/auditoria(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/auditoria(?:/)?$"
+    },
+    {
+      "page": "/api/auth/login",
+      "regex": "^/api/auth/login(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/auth/login(?:/)?$"
+    },
+    {
+      "page": "/api/auth/logout",
+      "regex": "^/api/auth/logout(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/auth/logout(?:/)?$"
+    },
+    {
+      "page": "/api/auth/registro",
+      "regex": "^/api/auth/registro(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/auth/registro(?:/)?$"
+    },
+    {
+      "page": "/api/auth/sessao",
+      "regex": "^/api/auth/sessao(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/auth/sessao(?:/)?$"
+    },
+    {
+      "page": "/api/avaliacoes",
+      "regex": "^/api/avaliacoes(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/avaliacoes(?:/)?$"
+    },
+    {
+      "page": "/api/bion-ia",
+      "regex": "^/api/bion\\-ia(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/bion\\-ia(?:/)?$"
+    },
+    {
+      "page": "/api/bootstrap",
+      "regex": "^/api/bootstrap(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/bootstrap(?:/)?$"
+    },
+    {
+      "page": "/api/consentimentos",
+      "regex": "^/api/consentimentos(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/consentimentos(?:/)?$"
+    },
+    {
+      "page": "/api/consultas",
+      "regex": "^/api/consultas(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/consultas(?:/)?$"
+    },
+    {
+      "page": "/api/documentos",
+      "regex": "^/api/documentos(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/documentos(?:/)?$"
+    },
+    {
+      "page": "/api/lembretes",
+      "regex": "^/api/lembretes(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/lembretes(?:/)?$"
+    },
+    {
+      "page": "/api/medicos",
+      "regex": "^/api/medicos(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/medicos(?:/)?$"
+    },
+    {
+      "page": "/api/mensagens",
+      "regex": "^/api/mensagens(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/mensagens(?:/)?$"
+    },
+    {
+      "page": "/api/notificacoes",
+      "regex": "^/api/notificacoes(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/notificacoes(?:/)?$"
+    },
+    {
+      "page": "/api/pacientes",
+      "regex": "^/api/pacientes(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/pacientes(?:/)?$"
+    },
+    {
+      "page": "/api/perfil",
+      "regex": "^/api/perfil(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/perfil(?:/)?$"
+    },
+    {
+      "page": "/api/tickets",
+      "regex": "^/api/tickets(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/tickets(?:/)?$"
+    },
+    {
+      "page": "/auditoria",
+      "regex": "^/auditoria(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/auditoria(?:/)?$"
+    },
+    {
+      "page": "/avaliacoes",
+      "regex": "^/avaliacoes(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/avaliacoes(?:/)?$"
+    },
+    {
+      "page": "/bion-ia",
+      "regex": "^/bion\\-ia(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/bion\\-ia(?:/)?$"
+    },
+    {
+      "page": "/consulta",
+      "regex": "^/consulta(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/consulta(?:/)?$"
+    },
+    {
+      "page": "/consultas",
+      "regex": "^/consultas(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/consultas(?:/)?$"
+    },
+    {
+      "page": "/entrar",
+      "regex": "^/entrar(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/entrar(?:/)?$"
+    },
+    {
+      "page": "/historico",
+      "regex": "^/historico(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/historico(?:/)?$"
+    },
+    {
+      "page": "/lembretes",
+      "regex": "^/lembretes(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/lembretes(?:/)?$"
+    },
+    {
+      "page": "/medico-pacientes",
+      "regex": "^/medico\\-pacientes(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/medico\\-pacientes(?:/)?$"
+    },
+    {
+      "page": "/medico-perfil",
+      "regex": "^/medico\\-perfil(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/medico\\-perfil(?:/)?$"
+    },
+    {
+      "page": "/mensagens",
+      "regex": "^/mensagens(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/mensagens(?:/)?$"
+    },
+    {
+      "page": "/notificacoes",
+      "regex": "^/notificacoes(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/notificacoes(?:/)?$"
+    },
+    {
+      "page": "/painel",
+      "regex": "^/painel(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/painel(?:/)?$"
+    },
+    {
+      "page": "/perfil",
+      "regex": "^/perfil(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/perfil(?:/)?$"
+    },
+    {
+      "page": "/privacidade",
+      "regex": "^/privacidade(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/privacidade(?:/)?$"
+    },
+    {
+      "page": "/prontuario",
+      "regex": "^/prontuario(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/prontuario(?:/)?$"
+    },
+    {
+      "page": "/receitas",
+      "regex": "^/receitas(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/receitas(?:/)?$"
+    },
+    {
+      "page": "/relatorios",
+      "regex": "^/relatorios(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/relatorios(?:/)?$"
+    },
+    {
+      "page": "/sala-espera",
+      "regex": "^/sala\\-espera(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/sala\\-espera(?:/)?$"
+    },
+    {
+      "page": "/suporte",
+      "regex": "^/suporte(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/suporte(?:/)?$"
+    },
+    {
+      "page": "/usuarios",
+      "regex": "^/usuarios(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/usuarios(?:/)?$"
+    }
+  ],
+  "dataRoutes": [],
+  "rsc": {
+    "header": "rsc",
+    "varyHeader": "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch",
+    "prefetchHeader": "next-router-prefetch",
+    "didPostponeHeader": "x-nextjs-postponed",
+    "contentTypeHeader": "text/x-component",
+    "suffix": ".rsc",
+    "prefetchSegmentHeader": "next-router-segment-prefetch",
+    "prefetchSegmentSuffix": ".segment.rsc",
+    "prefetchSegmentDirSuffix": ".segments",
+    "clientParamParsing": false,
+    "dynamicRSCPrerender": false
+  },
+  "rewriteHeaders": {
+    "pathHeader": "x-nextjs-rewritten-path",
+    "queryHeader": "x-nextjs-rewritten-query"
+  }
+}

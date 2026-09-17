@@ -1,0 +1,17 @@
+{
+  "pages": {
+    "/_app": []
+  },
+  "devFiles": [],
+  "polyfillFiles": [],
+  "lowPriorityFiles": [
+<<<<<<< Updated upstream
+    "static/wV1u-nPlyYqHa51cCx_63/_ssgManifest.js",
+    "static/wV1u-nPlyYqHa51cCx_63/_buildManifest.js"
+=======
+    "static/ECdqigyC-gByRntpwZl6A/_ssgManifest.js",
+    "static/ECdqigyC-gByRntpwZl6A/_buildManifest.js"
+>>>>>>> Stashed changes
+  ],
+  "rootMainFiles": []
+}
