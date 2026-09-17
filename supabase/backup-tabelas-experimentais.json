@@ -1,0 +1,29 @@
+{
+  "nota": "Conteúdo capturado do diagnóstico de 11/09/2026 antes da substituição das tabelas antigas pelo schema BION (prisma db push --accept-data-loss). O script de backup não gravou o arquivo na época (pipe truncado). Os dados eram de um experimento de 02/09/2026 com o modelo antigo do protótipo (denormalizado) e linhas demo equivalentes às do seed atual — nada único foi perdido. O dataset completo da Fase 1 segue intacto em db/custom.db (SQLite, backup original).",
+  "geradoEm": "2026-09-02T22:54:00.000Z",
+  "arquivadoEm": "2026-09-11T00:00:00.000-03:00",
+  "tabelas_capturadas": {
+    "avaliacoes": {
+      "linhas": [
+        { "id": "av1", "paciente": "Marina Silva", "medico": "Dra. Julia Lima", "especialidade": "Dermatologia", "nota": 5, "comentario": "Atendimento maravilhoso! Muito atenciosa, explicou detalhadamente o tratamento da minha pele.", "pontualidade": 5, "atencao": 5, "clareza": 5, "quando": "28/08/2026 10:40", "ts": "1788339797435", "created_at": "2026-09-02T22:56:37.478Z" },
+        { "id": "av2", "paciente": "João Pereira", "medico": "Dra. Ana Ribeiro", "especialidade": "Clínica Geral", "nota": 5, "comentario": "Excelente médica, tirou todas as dúvidas e a receita digital chegou na hora por SMS e e-mail.", "pontualidade": 5, "atencao": 5, "clareza": 5, "quando": "30/08/2026 15:20", "ts": "1788359797435", "created_at": "2026-09-02T22:56:37.478Z" }
+      ]
+    },
+    "consultas": {
+      "linhas": [
+        { "id": "c1", "medico": "Dra. Ana Ribeiro", "especialidade": "Clínica Geral", "paciente": "Marina Silva", "data": "Hoje", "hora": "14:30", "status": "confirmada", "ts": "1788389679292", "remarcada": false, "motivo_consulta": "Acompanhamento de rotina e renovação de receita", "valor": "R$ 180", "pago": true, "created_at": "2026-09-02T22:54:39.327Z" },
+        { "id": "c2", "medico": "Dr. Carlos Mendes", "especialidade": "Cardiologia", "paciente": "Marina Silva", "data": "Amanhã", "hora": "10:30", "status": "confirmada", "ts": "1788476197523", "remarcada": false, "motivo_consulta": "Avaliação de risco cardiovascular e retorno de exames", "valor": "R$ 250", "pago": true, "created_at": "2026-09-02T22:56:37.583Z" }
+      ]
+    },
+    "tabelas_sem_linhas_ou_nao_capturadas": {
+      "arquivos": 0,
+      "audit_logs": 0,
+      "documentos": "2 linhas (não capturadas no log antes do corte)",
+      "lembretes": "não capturado",
+      "medicos": "não capturado",
+      "notificacoes": "não capturado",
+      "pacientes": 1,
+      "tickets": 1
+    }
+  }
+}
