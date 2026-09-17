@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { exigirPapel } from "@/lib/server/auth";
 import { carregarDados, aplicarSideEffects } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
+import { obterLLM } from "@/lib/server/llm";
 
 /**
  * BION IA — leitura de laudos de exames (PDF ou foto) para o app do paciente.
@@ -20,7 +21,7 @@ import { ok, falha } from "@/lib/server/http";
  */
 
 const LIMITE_BYTES = 10 * 1024 * 1024; // 10 MB
-const TIMEOUT_MS = 90_000;
+const TIMEOUT_MS = 55_000;
 
 type ItemExtraido = { nome: string; valor: number; unidade?: string; refMin?: number; refMax?: number };
 type LaudoExtraido = {
@@ -28,12 +29,6 @@ type LaudoExtraido = {
   dataColeta?: string;
   exames?: { titulo?: string; itens?: ItemExtraido[] }[];
 };
-
-let _zai: Awaited<ReturnType<typeof ZAI.create>> | null = null;
-async function getZai() {
-  if (!_zai) _zai = await ZAI.create();
-  return _zai;
-}
 
 function normalizarNome(v: string): string {
   return v
@@ -74,6 +69,8 @@ function extrairJson(texto: string): LaudoExtraido | null {
   }
 }
 
+export const maxDuration = 60;
+
 export async function POST(req: NextRequest) {
   try {
     const usuario = await exigirPapel("PACIENTE");
@@ -97,7 +94,34 @@ export async function POST(req: NextRequest) {
     const bytes = Buffer.from(await arquivo.arrayBuffer());
     const dataUrl = `data:${mime};base64,${bytes.toString("base64")}`;
 
-    const zai = await getZai();
+    // Sem LLM acessível (produção/Vercel): registra o arquivo no histórico e
+    // avisa com clareza — o documento segue disponível para o médico.
+    const clienteLlm = await obterLLM();
+    if (!clienteLlm) {
+      await db.arquivo.create({
+        data: {
+          nome: arquivo.name || "documento.pdf",
+          tipo: ehPdf ? "application/pdf" : mime,
+          tamanhoKb: Math.max(1, Math.round(arquivo.size / 1024)),
+          enviadoPor: "paciente",
+          usuarioId: usuario.id,
+          consulta: "BION IA",
+        },
+      });
+      return ok({
+        ok: true,
+        documentoRegistrado: true,
+        mensagem: `Documento **${arquivo.name || "anexo"}** recebido e registrado no seu histórico. Neste momento não consegui processar os valores automaticamente — o médico poderá visualizar o original na consulta. Se for um laudo laboratorial, tente reenviá-lo mais tarde para a extração automática.`,
+      });
+    }
+
+    const zai = clienteLlm.tipo === "sdk" ? clienteLlm.zai : null;
+    if (!zai) {
+      return Response.json(
+        { ok: false, motivo: "extracao_falhou", mensagem: "A leitura automática de laudos não está disponível agora. O documento pode ser anexado durante a anamnese ou enviado ao médico pela consulta." },
+        { status: 200 },
+      );
+    }
     // O endpoint /chat/completions/vision escolhe o modelo de visão padrão do
     // gateway quando "model" é omitido — comportamento validado em teste real.
     const corpoVision = {
