@@ -1,0 +1,16 @@
+{
+  "headers": {
+    "x-nextjs-stale-time": "300",
+    "x-nextjs-prerender": "1",
+    "x-next-cache-tags": "_N_T_/layout,_N_T_/(app)/layout,_N_T_/(app)/agendar/layout,_N_T_/(app)/agendar/page,_N_T_/agendar"
+  },
+  "segmentPaths": [
+    "/_tree",
+    "/_full",
+    "/!KGFwcCk/agendar/__PAGE__",
+    "/!KGFwcCk/agendar",
+    "/!KGFwcCk",
+    "/_index",
+    "/_head"
+  ]
+}
