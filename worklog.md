@@ -259,3 +259,21 @@ Stage Summary:
 - BION IA ganhou as duas funções-chave: agendar consultas (wizard com dados reais) e ler laudos PDF/foto atualizando a seção de exames — com trava de segurança por nome completo.
 - Janela de 30 dias para mensagens paciente↔médico validada no servidor.
 - main = 643b4ac; deploy Vercel disparado.
+
+---
+Task ID: validar-producao-paciente
+Agent: Super Z (agente principal)
+Task: Verificar e validar em produção o app imersivo do paciente (trabalho da sessão anterior, interrompida antes do relato ao usuário) + limpeza definitiva do rastreamento de artefatos
+
+Work Log:
+- Contexto: sessão anterior concluiu o redesign (643b4ac + worklog 77e5d2e + fix de deploy 5f90f4c "prisma generate no build") mas esgotou o contexto antes de reportar. Commits 856bce8/22d9c56 (checkpoints automáticos do sandbox) re-rastrearam .next/ porque o .gitignore nunca ganhou a entrada — a limpeza de 01f1042 foi desfeita silenciosamente.
+- Limpeza definitiva: .gitignore fixado com .next/, *.tsbuildinfo, tool-results/, dev.log, server.log; git rm -rfq --cached .next tool-results + tsbuildinfo; commit 33c4cef push 5f90f4c..33c4cef; local e remoto sincronizados (0/0).
+- Validação API produção: login marina HTTP 200 em 6,5s (pool 6543 saudável); bootstrap traz todas as features novas vivas — 13 medições (peso/altura/pa), 8 exames (vários origem "bion-ia"), perfil estendido (profissão/estado civil/comorbidades), 2 consultas "Agendamento pela BION IA", notificação "Exame importado pela BION IA", mensagens dentro da janela de 30 dias.
+- Validação visual produção (agent-browser 390px, https://bion-telemedicina-simples.vercel.app/paciente): seção 1 "Bom dia, Marina" + card próxima consulta (Cardiologia, Dr. Carlos Mendes, Amanhã 10:00, Confirmada) + barra BION IA; seção 2 lembretes (2 hoje) + gráfico IMC 23,9 + PA 117/75 com séries e faixas; seção 3 exames em azul-marinho profundo com cards por exame, gráfico histórico e "Enviar novo laudo — a IA confere seu nome no documento"; seção 4 documentos com chips de consulta; dark mode preto absoluto mantendo degradê, texto 100% legível; chat BION IA abre com chips "Agendar consulta"/"Enviar laudo de exame" e botão de anexo.
+- Zero erros de página e zero erros/warnings de console em produção.
+- Evidências: download/evidencias-paciente-prod/ (7 screenshots: 3 seções clean, documentos, dark x2, chat dark).
+
+Stage Summary:
+- App imersivo do paciente CONFIRMADO EM PRODUÇÃO: rolagem vertical 3 seções + gestos laterais (perfil/documentos), BION IA agendando e lendo laudos com trava de nome, janela de 30 dias nas mensagens, liquid glass branco→azul-marinho e dark preto absoluto.
+- Repositório permanentemente limpo de artefatos de build (.gitignore corrigido na raiz do problema).
+- main = 33c4cef (== origin/main).
