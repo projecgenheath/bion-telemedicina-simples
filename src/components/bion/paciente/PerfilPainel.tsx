@@ -273,7 +273,7 @@ export function PerfilPainel({ onSair }: { onSair: () => void }) {
               <li key={c.id} className="rounded-2xl bg-white/50 dark:bg-white/5 px-4 py-3 flex items-center justify-between gap-2">
                 <div className="min-w-0">
                   <div className="text-sm font-semibold text-[#0a1f44] dark:text-[#f2f6fc] truncate">{c.especialidade} · {c.medico}</div>
-                  <div className="text-xs opacity-60">{c.data} às {c.hora} · {c.status === "concluida" ? "Realizada" : c.status === "cancelada" ? "Cancelada" : c.status === "em_espera" ? "Aguardando" : "Confirmada"}</div>
+                  <div className="text-xs opacity-60">{c.data} às {c.hora} · {c.status === "concluida" ? "Realizada" : c.status === "cancelada" ? "Cancelada" : c.status === "em_espera" ? "Aguardando" : c.status === "pendente_anamnese" ? "Pendente anamnese" : "Confirmada"}</div>
                 </div>
                 <span className="text-xs font-bold shrink-0 text-[#0a1f44] dark:text-[#f2f6fc]">{c.valor}</span>
               </li>

@@ -14,6 +14,7 @@ import {
   Pill,
   Search,
   Sparkles,
+  Stethoscope,
   TrendingUp,
   Video,
 } from "lucide-react";
@@ -96,7 +97,7 @@ export function PacienteApp() {
   const proxima = useMemo(() => {
     const limite = Date.now() - 2 * 3_600_000;
     return consultas
-      .filter((c) => c.paciente === sessao.nome && ["confirmada", "em_espera"].includes(c.status) && c.ts >= limite)
+      .filter((c) => c.paciente === sessao.nome && ["confirmada", "em_espera", "pendente_anamnese"].includes(c.status) && c.ts >= limite)
       .sort((a, b) => a.ts - b.ts)[0];
   }, [consultas, sessao.nome]);
 
@@ -254,32 +255,50 @@ export function PacienteApp() {
             {/* Card: próxima consulta */}
             {proxima ? (
               <button
-                onClick={() => salaAberta && router.push("/sala-espera")}
+                onClick={() => {
+                  if (proxima.status === "pendente_anamnese") setChatAberto(true);
+                  else if (salaAberta) router.push("/sala-espera");
+                }}
                 className="bp-glass p-5 text-left w-full transition hover:shadow-xl"
-                aria-label={`Próxima consulta: ${proxima.especialidade} com ${proxima.medico}, ${proxima.data} às ${proxima.hora}${salaAberta ? ". Tocar para entrar na sala de espera" : ""}`}
+                aria-label={`Próxima consulta: ${proxima.especialidade} com ${proxima.medico}, ${proxima.data} às ${proxima.hora}${proxima.status === "pendente_anamnese" ? ". Toque para concluir a anamnese com a BION IA" : salaAberta ? ". Tocar para entrar na sala de espera" : ""}`}
               >
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-xs font-bold uppercase tracking-wider text-[#0a1f44]/50 dark:text-white/50">
                     Próxima consulta
                   </span>
-                  <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${salaAberta ? "bg-emerald-600 text-white" : "bg-[#0a1f44]/8 dark:bg-white/10"}`}>
-                    {salaAberta ? "Sala aberta" : "Confirmada"}
-                  </span>
+                  {proxima.status === "pendente_anamnese" ? (
+                    <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-amber-500/15 text-amber-700 dark:bg-amber-400/15 dark:text-amber-300">
+                      Pendente anamnese
+                    </span>
+                  ) : salaAberta ? (
+                    <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-600 text-white">Sala aberta</span>
+                  ) : (
+                    <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-[#0a1f44]/8 dark:bg-white/10">Confirmada</span>
+                  )}
                 </div>
                 <div className="text-xl font-bold">{proxima.especialidade}</div>
                 <div className="text-sm opacity-70">com {proxima.medico}</div>
-                <div className="mt-4 flex items-center justify-between">
-                  <span className="inline-flex items-center gap-2 text-sm font-bold">
-                    <CalendarClock className="w-4 h-4" /> {proxima.data} · {proxima.hora}
-                  </span>
-                  {salaAberta ? (
-                    <span className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-700 dark:text-emerald-300">
-                      <Video className="w-4 h-4" /> Entrar na sala
+                {proxima.status === "pendente_anamnese" ? (
+                  <div className="mt-4 flex items-center justify-between gap-3">
+                    <span className="text-xs font-semibold opacity-70">Conclua a anamnese para confirmar no agenda</span>
+                    <span className="inline-flex items-center gap-1.5 text-xs font-bold text-[#123e7d] dark:text-sky-300 shrink-0">
+                      <Sparkles className="w-4 h-4" /> Fazer anamnese
                     </span>
-                  ) : (
-                    <span className="text-xs opacity-50">A sala abre 30 min antes</span>
-                  )}
-                </div>
+                  </div>
+                ) : (
+                  <div className="mt-4 flex items-center justify-between">
+                    <span className="inline-flex items-center gap-2 text-sm font-bold">
+                      <CalendarClock className="w-4 h-4" /> {proxima.data} · {proxima.hora}
+                    </span>
+                    {salaAberta ? (
+                      <span className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-700 dark:text-emerald-300">
+                        <Video className="w-4 h-4" /> Entrar na sala
+                      </span>
+                    ) : (
+                      <span className="text-xs opacity-50">A sala abre 30 min antes</span>
+                    )}
+                  </div>
+                )}
               </button>
             ) : (
               <button onClick={() => setChatAberto(true)} className="bp-glass p-5 text-left w-full transition hover:shadow-xl">
@@ -293,10 +312,38 @@ export function PacienteApp() {
               </button>
             )}
 
+            {/* Card hero: BION IA — agendamento com anamnese */}
+            <button
+              onClick={() => setChatAberto(true)}
+              className="mt-4 w-full rounded-3xl p-5 text-left text-white relative overflow-hidden shadow-lg shadow-[#0a1f44]/25 transition hover:shadow-xl hover:-translate-y-0.5 bg-gradient-to-br from-[#14457f] via-[#123e7d] to-[#0a1f44]"
+              aria-label="Abrir a BION IA: agendar consulta, fazer anamnese ou perguntar"
+            >
+              <span aria-hidden className="absolute -right-8 -top-10 w-40 h-40 rounded-full bg-white/10 blur-2xl" />
+              <span aria-hidden className="absolute right-10 -bottom-10 w-28 h-28 rounded-full bg-sky-300/15 blur-2xl" />
+              <div className="relative flex items-center gap-3">
+                <span className="w-12 h-12 rounded-2xl bg-white/15 backdrop-blur inline-flex items-center justify-center shrink-0">
+                  <Sparkles className="w-6 h-6" />
+                </span>
+                <span className="flex-1 min-w-0">
+                  <span className="flex items-center gap-2">
+                    <span className="font-black text-base">BION IA</span>
+                    <span className="text-[10px] font-bold uppercase tracking-wider bg-white/15 rounded-full px-2 py-0.5">Seu agendamento</span>
+                  </span>
+                  <span className="block text-xs text-white/70 mt-0.5">Online agora · responde na hora</span>
+                </span>
+              </div>
+              <p className="relative text-sm text-white/85 mt-3 leading-relaxed">
+                Eu agendo sua consulta, cuido do pagamento e faço sua <strong className="font-bold text-white">anamnese</strong> — uma conversa tranquila para o médico já te conhecer antes do atendimento.
+              </p>
+              <span className="relative mt-4 inline-flex items-center gap-2 rounded-full bg-white text-[#0a1f44] text-sm font-bold pl-4 pr-5 py-3">
+                <Stethoscope className="w-4 h-4" /> Agendar consulta agora
+              </span>
+            </button>
+
             {/* Card: barra de pesquisa da BION IA */}
             <button
               onClick={() => setChatAberto(true)}
-              className="bp-glass mt-4 w-full flex items-center gap-3 px-5 py-4 text-left transition hover:shadow-xl"
+              className="bp-glass mt-3 w-full flex items-center gap-3 px-5 py-4 text-left transition hover:shadow-xl"
               aria-label="Perguntar à BION IA"
             >
               <Search className="w-5 h-5 text-[#0a1f44]/50 dark:text-white/50 shrink-0" />
