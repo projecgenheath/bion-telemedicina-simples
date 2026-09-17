@@ -235,7 +235,7 @@ function construirResumo(coleta: Record<string, Record<string, unknown>>, ctx: M
     .map(([etapa, dados]) => linhaResumo(etapa, dados))
     .filter(Boolean) as string[];
   const corpo = partes.length ? partes.join("\n\n") : "_Ainda sem dados registrados._";
-  return `Fechamos a parte principal da nossa conversa, ${ctx.primeiroNome}. Deixa eu confirmar o que anotei para o ${ctx.medico}:\n\n${corpo}\n\n**Tem mais alguma coisa que você acha importante me contar? Está tudo correto?** Se faltar qualquer detalhe, é só me dizer — e, quando estiver tudo certo, toque em **“Concluir anamnese e confirmar consulta”** ali embaixo.`;
+  return `Fechamos a parte principal da nossa conversa, ${ctx.primeiroNome}. Deixa eu confirmar o que anotei para ${ctx.medico}:\n\n${corpo}\n\n**Tem mais alguma coisa que você acha importante me contar? Está tudo correto?** Se faltar qualquer detalhe, é só me dizer — e, quando estiver tudo certo, toque em **“Concluir anamnese e confirmar consulta”** ali embaixo.`;
 }
 
 /* --------------------------- perguntas por etapa ----------------------- */
@@ -308,7 +308,7 @@ function perguntaDocumentos(): string {
 }
 
 function perguntaFechamento(ctx: MotorCtx): string {
-  return `Nossa conversa está quase pronta para o ${ctx.medico}. Tem **mais alguma coisa** que você acha importante contar — ou posso considerar fechada?`;
+  return `Nossa conversa está quase pronta para ${ctx.medico}. Tem **mais alguma coisa** que você acha importante contar — ou posso considerar fechada?`;
 }
 
 /* --------------------------- transição de etapa ------------------------ */
@@ -668,7 +668,7 @@ function etapaFechamento(mensagem: string, coleta: Record<string, Record<string,
   const t = normalizar(mensagem);
   if (mensagem.trim().length < 60 && /^(nao|n|nada|tudo certo|tudo ok|esta tudo|pronto|pode fechar|nao tenho nada)\b/.test(t)) {
     return {
-      resposta: `Então está tudo completo. Toque em **“Concluir anamnese e confirmar consulta”** ali embaixo — o ${ctx.medico} já recebe seu dossiê e a consulta sai da pendência no agenda.`,
+      resposta: `Então está tudo completo. Toque em **“Concluir anamnese e confirmar consulta”** ali embaixo — ${ctx.medico} já recebe seu dossiê e a consulta sai da pendência no agenda.`,
       etapa_concluida: false,
       coleta: { ...coleta, fechamento: { ...atual, _n: n + 1, confirmado: true } },
     };
