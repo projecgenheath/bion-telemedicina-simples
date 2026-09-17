@@ -30,7 +30,8 @@ export type View =
   | "admin-pacientes"
   | "admin-medicos"
   | "admin-agendamentos"
-  | "medico-pacientes";
+  | "medico-pacientes"
+  | "paciente-app";
 
 export const VIEW_TO_PATH: Record<View, string> = {
   landing: "/",
@@ -60,6 +61,7 @@ export const VIEW_TO_PATH: Record<View, string> = {
   "admin-medicos": "/admin-medicos",
   "admin-agendamentos": "/admin-agendamentos",
   "medico-pacientes": "/medico-pacientes",
+  "paciente-app": "/paciente",
 };
 
 export const PATH_TO_VIEW: Record<string, View> = Object.fromEntries(
@@ -92,7 +94,13 @@ export const SO_ADMIN: View[] = [
 export const SO_MEDICO: View[] = ["medico-pacientes", "medico-perfil", "avaliacoes"];
 
 /** Exclusivas do paciente (histórico clínico é a linha do tempo do PRÓPRIO paciente). */
-export const SO_PACIENTE: View[] = ["agendar", "sala-espera", "paciente-perfil", "historico"];
+export const SO_PACIENTE: View[] = [
+  "agendar",
+  "sala-espera",
+  "paciente-perfil",
+  "historico",
+  "paciente-app",
+];
 
 /** Clínicas compartilhadas paciente+médico; o administrador não tem negócio nelas. */
 export const SO_CLINICA: View[] = ["consulta", "consultas", "receitas", "prontuario"];

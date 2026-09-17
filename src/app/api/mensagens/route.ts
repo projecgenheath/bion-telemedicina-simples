@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
 
     const destinatario = await db.user.findUnique({
       where: { id: body.paraId },
-      select: { id: true, nome: true, status: true },
+      select: { id: true, nome: true, status: true, role: true },
     });
     if (!destinatario || destinatario.status !== "ativo") {
       return Response.json({ erro: "Destinatário não encontrado ou inativo." }, { status: 404 });
@@ -81,6 +81,31 @@ export async function POST(req: NextRequest) {
         { erro: "Você não pode enviar uma mensagem para si mesmo." },
         { status: 400 },
       );
+    }
+
+    // Paciente só conversa com médicos das PRÓPRIAS consultas (do agendamento
+    // até 30 dias depois da data da consulta) ou com o suporte BION.
+    if (usuario.role === "PACIENTE" && destinatario.role === "MEDICO") {
+      const consulta = await db.consulta.findFirst({
+        where: { pacienteId: usuario.id, medicoId: destinatario.id, status: { not: "cancelada" } },
+        orderBy: { dataInicio: "desc" },
+      });
+      const janelaDias = 30;
+      if (!consulta) {
+        return Response.json(
+          { erro: "Você pode enviar mensagens apenas a médicos com quem agendou consultas." },
+          { status: 403 },
+        );
+      }
+      const limite = consulta.dataInicio.getTime() + janelaDias * 86_400_000;
+      if (Date.now() > limite) {
+        return Response.json(
+          {
+            erro: `A conversa com ${destinatario.nome} se encerrou 30 dias após a consulta. Para novos assuntos, agende outra consulta.`,
+          },
+          { status: 403 },
+        );
+      }
     }
 
     await db.mensagem.create({

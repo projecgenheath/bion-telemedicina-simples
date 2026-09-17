@@ -16,6 +16,10 @@ type PerfilPacientePatch = {
   tipoSanguineo?: string;
   peso?: string;
   altura?: string;
+  profissao?: string;
+  estadoCivil?: string;
+  comorbidades?: string[];
+  foto?: string;
   audit?: AuditPayload;
 };
 
@@ -50,6 +54,12 @@ export async function PATCH(req: NextRequest) {
           ...(body.tipoSanguineo !== undefined ? { tipoSanguineo: body.tipoSanguineo } : {}),
           ...(body.peso !== undefined ? { peso: body.peso } : {}),
           ...(body.altura !== undefined ? { altura: body.altura } : {}),
+          ...(body.profissao !== undefined ? { profissao: body.profissao } : {}),
+          ...(body.estadoCivil !== undefined ? { estadoCivil: body.estadoCivil } : {}),
+          ...(body.comorbidades !== undefined
+            ? { comorbidades: JSON.stringify(body.comorbidades) }
+            : {}),
+          ...(body.foto !== undefined ? { foto: body.foto } : {}),
         },
       }),
     ]);
