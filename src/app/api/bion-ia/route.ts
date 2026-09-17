@@ -1,11 +1,12 @@
 import { NextRequest } from "next/server";
-import ZAI from "z-ai-web-dev-sdk";
 import { db } from "@/lib/db";
 import { exigirSessao } from "@/lib/server/auth";
 import { ok, falha } from "@/lib/server/http";
+import { chatCompleto } from "@/lib/server/llm";
+import { respostaLocal } from "@/lib/server/chat-local";
 
 /**
- * BION IA — assistente clínico com LLM real (backend apenas).
+ * BION IA — assistente clínico (backend apenas).
  *
  * POST { mensagens: { remetente: "usuario" | "ia"; texto: string }[] }
  * → { resposta: string }
@@ -13,18 +14,16 @@ import { ok, falha } from "@/lib/server/http";
  * O histórico vem do cliente (últimas ~12 mensagens). O enriquecimento de
  * contexto (papel, medicamentos, alergias, próximas consultas) é montado
  * AQUI no servidor a partir do banco — nunca confiar em dados do cliente.
+ *
+ * Quando o LLM não está acessível (produção/Vercel — o endpoint do SDK é
+ * interno do sandbox), responde com o motor local por intenções, que usa
+ * dados reais do banco e mantém a segurança clínica (alarme → SAMU 192).
  */
 
 const LIMITE_HISTORICO = 12;
-const TIMEOUT_MS = 45_000;
+const TIMEOUT_MS = 25_000;
 
 type MsgEntrada = { remetente: string; texto: string };
-
-let _zai: Awaited<ReturnType<typeof ZAI.create>> | null = null;
-async function getZai() {
-  if (!_zai) _zai = await ZAI.create();
-  return _zai;
-}
 
 async function montarContexto(
   usuario: { id: string; nome: string; role: "PACIENTE" | "MEDICO" | "ADMIN" },
@@ -105,23 +104,16 @@ export async function POST(req: NextRequest) {
       })),
     ];
 
-    const zai = await getZai();
-    const completion = (await Promise.race([
-      zai.chat.completions.create({ messages: mensagens, thinking: { type: "disabled" } }),
-      new Promise<null>((_, rejeita) => setTimeout(() => rejeita(new Error("timeout")), TIMEOUT_MS)),
-    ])) as Awaited<ReturnType<typeof zai.chat.completions.create>> | null;
-
-    const resposta = completion?.choices?.[0]?.message?.content?.trim();
-    if (!resposta) {
-      return Response.json({ erro: "A IA não conseguiu responder agora." }, { status: 503 });
+    // LLM quando acessível; fallback local determinístico quando não.
+    const respostaLlm = await chatCompleto(mensagens, TIMEOUT_MS);
+    if (respostaLlm) {
+      return ok({ resposta: respostaLlm });
     }
-
-    return ok({ resposta });
+    const resposta = await respostaLocal(usuario, historico);
+    return ok({ resposta, fonte: "local" });
   } catch (erro) {
-    // SDK indisponível/timeout: sinaliza ao cliente para usar o modo local
-    if ((erro as Error)?.message === "timeout") {
-      return Response.json({ erro: "A IA demorou demais para responder." }, { status: 504 });
-    }
     return falha(erro);
   }
 }
+
+export const maxDuration = 30;

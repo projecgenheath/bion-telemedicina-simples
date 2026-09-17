@@ -1,9 +1,10 @@
 import { NextRequest } from "next/server";
-import ZAI from "z-ai-web-dev-sdk";
 import { db } from "@/lib/db";
 import { exigirPapel } from "@/lib/server/auth";
 import { carregarDados, aplicarSideEffects } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
+import { chatCompleto } from "@/lib/server/llm";
+import { turnoMotor, ETAPAS_MOTOR, type MotorCtx } from "@/lib/server/anamnese-motor";
 
 /**
  * Anamnese guiada pela BION IA (storytelling clínico) — pós-pagamento.
@@ -11,17 +12,25 @@ import { ok, falha } from "@/lib/server/http";
  * A consulta nasce "pendente_anamnese" após o pagamento e só é CONFIRMADA
  * quando a anamnese é concluída aqui.
  *
- * POST  { consultaId, mensagem? }  → um turno da conversa (LLM real).
+ * POST  { consultaId, mensagem? }  → um turno da conversa.
  *        Sem mensagem = abertura da etapa atual (ou retomada).
  * PATCH { consultaId, acao: "concluir" }            → conclui anamnese e confirma a consulta.
  * PATCH { consultaId, acao: "documento", documento } → registra documento anexado durante a anamnese.
  *
- * Estilo obrigatório: conversa natural em storytelling (acolher → aprofundar →
- * avançar), NUNCA interrogatório. Uma pergunta por vez. A IA extrai dados
- * estruturados (JSON) e pode atualizar o perfil na etapa de identificação.
+ * Duplo motor:
+ *  1. LLM real (quando acessível — sandbox ou endpoint externo BION_LLM_*):
+ *     conversa livre com o prompt clínico completo;
+ *  2. Motor determinístico (src/lib/server/anamnese-motor.ts): conduz o
+ *     mesmo rito de storytelling SEM depender de LLM — garante que a
+ *     anamnese nunca fique bloqueada (o endpoint do SDK só existe na rede
+ *     do sandbox; na Vercel não há LLM).
+ *
+ * Estilo obrigatório nos dois caminhos: conversa natural (acolher →
+ * aprofundar → avançar), UMA pergunta por vez, NUNCA interrogatório,
+ * sinais de alarme → SAMU 192.
  */
 
-const TIMEOUT_MS = 45_000;
+const TIMEOUT_LLM_MS = 25_000;
 
 type MsgEntrada = { remetente: "usuario" | "ia"; texto: string };
 
@@ -43,20 +52,7 @@ type RespostaLLM = {
 };
 
 /** Ordem canônica das etapas da anamnese (roteiro clínico clássico). */
-const ETAPAS = [
-  "identificacao",
-  "queixa",
-  "historia",
-  "sistemas",
-  "antecedentes",
-  "familia",
-  "habitos",
-  "gineco",
-  "psicossocial",
-  "medicamentos",
-  "documentos",
-  "fechamento",
-] as const;
+const ETAPAS = ETAPAS_MOTOR;
 
 const ROTULO_ETAPA: Record<string, string> = {
   identificacao: "Identificação",
@@ -73,12 +69,6 @@ const ROTULO_ETAPA: Record<string, string> = {
   fechamento: "Revisão e fechamento",
 };
 
-let _zai: Awaited<ReturnType<typeof ZAI.create>> | null = null;
-async function getZai() {
-  if (!_zai) _zai = await ZAI.create();
-  return _zai;
-}
-
 function extrairJson(texto: string): RespostaLLM | null {
   const limpo = texto.replace(/```json/gi, "```").split("```").find((b) => b.trim().startsWith("{"));
   const bruto = limpo ?? texto;
@@ -92,12 +82,32 @@ function extrairJson(texto: string): RespostaLLM | null {
   }
 }
 
+/** Mescla a coleta do LLM (campos soltos) na etapa atual. */
 function mesclarColeta(atual: Coleta, etapa: string, novo: unknown): Coleta {
   if (!novo || typeof novo !== "object" || Array.isArray(novo)) return atual;
   return {
     ...atual,
     [etapa]: { ...(atual[etapa] ?? {}), ...(novo as Record<string, unknown>) },
   };
+}
+
+/** Mescla a coleta do motor (chaves = etapas, inclusive a semente da próxima). */
+function mesclarColetaMotor(atual: Coleta, novo: Coleta): Coleta {
+  const saida: Coleta = { ...atual };
+  for (const [etapa, dados] of Object.entries(novo)) {
+    saida[etapa] = { ...(saida[etapa] ?? {}), ...(dados as Record<string, unknown>) };
+  }
+  return saida;
+}
+
+/** Próxima etapa canônica; pula "gineco" quando não pertinente ao gênero. */
+function proximaEtapa(etapaAtual: string, genero: string): string {
+  const idx = ETAPAS.indexOf(etapaAtual as (typeof ETAPAS)[number]) + 1;
+  let proxima = ETAPAS[Math.min(idx, ETAPAS.length - 1)];
+  if (proxima === "gineco" && !String(genero).toLowerCase().startsWith("f")) {
+    proxima = "psicossocial";
+  }
+  return proxima;
 }
 
 const promptSistema = (ctx: {
@@ -153,34 +163,67 @@ FORMATO DE SAÍDA — responda EXCLUSIVAMENTE com um JSON válido, sem texto for
 - Nunca invente valores para a coleta: só registre o que o paciente disse.
 - "etapa_concluida": só true quando você já tiver o essencial da etapa atual E a conversa da etapa estiver fechada; o sistema então levará a conversa para a próxima etapa na sua próxima resposta.`;
 
-async function montarPerfil(usuarioId: string): Promise<string> {
+type PerfilDados = {
+  idade: number | null;
+  genero: string;
+  profissao: string;
+  estadoCivil: string;
+  telefone: string;
+  alergias: string[];
+  comorbidades: string[];
+  medicamentos: string[];
+  peso: string;
+  altura: string;
+  tipoSanguineo: string;
+  convenio: string;
+};
+
+async function montarPerfilDados(usuarioId: string): Promise<PerfilDados | null> {
   const p = await db.perfilPaciente.findUnique({
     where: { userId: usuarioId },
     include: { user: { select: { nome: true } } },
   });
-  if (!p) return "Perfil não preenchido — comece a identificação perguntando o básico.";
+  if (!p) return null;
   const lista = (v: string) => {
     try {
-      const arr = JSON.parse(v || "[]") as string[];
-      return arr.length ? arr.join(", ") : "—";
+      return (JSON.parse(v || "[]") as string[]) ?? [];
     } catch {
-      return "—";
+      return [];
     }
   };
+  return {
+    idade: p.idade ?? null,
+    genero: p.genero || "",
+    profissao: p.profissao || "",
+    estadoCivil: p.estadoCivil || "",
+    telefone: p.telefone || "",
+    alergias: lista(p.alergias),
+    comorbidades: lista(p.comorbidades),
+    medicamentos: lista(p.medicamentos),
+    peso: p.peso || "",
+    altura: p.altura || "",
+    tipoSanguineo: p.tipoSanguineo || "",
+    convenio: p.convenio || "",
+  };
+}
+
+function perfilParaPrompt(d: PerfilDados | null, nome: string): string {
+  if (!d) return "Perfil não preenchido — comece a identificação perguntando o básico.";
+  const lista = (v: string[]) => (v.length ? v.join(", ") : "—");
   return [
-    `Nome: ${p.user.nome}`,
-    `Idade: ${p.idade || "não informada"}`,
-    `Sexo: ${p.genero || "não informado"}`,
-    `Profissão: ${p.profissao || "não informada"}`,
-    `Estado civil: ${p.estadoCivil || "não informado"}`,
-    `Telefone: ${p.telefone || "não informado"}`,
-    `Alergias/intolerâncias: ${lista(p.alergias)}`,
-    `Comorbidades: ${lista(p.comorbidades)}`,
-    `Medicamentos em uso: ${lista(p.medicamentos)}`,
-    `Peso: ${p.peso ? `${p.peso} kg` : "não informado"}`,
-    `Altura: ${p.altura ? `${p.altura} cm` : "não informada"}`,
-    `Tipo sanguíneo: ${p.tipoSanguineo || "não informado"}`,
-    `Convênio: ${p.convenio || "Particular"}`,
+    `Nome: ${nome}`,
+    `Idade: ${d.idade || "não informada"}`,
+    `Sexo: ${d.genero || "não informado"}`,
+    `Profissão: ${d.profissao || "não informada"}`,
+    `Estado civil: ${d.estadoCivil || "não informado"}`,
+    `Telefone: ${d.telefone || "não informado"}`,
+    `Alergias/intolerâncias: ${lista(d.alergias)}`,
+    `Comorbidades: ${lista(d.comorbidades)}`,
+    `Medicamentos em uso: ${lista(d.medicamentos)}`,
+    `Peso: ${d.peso ? `${d.peso} kg` : "não informado"}`,
+    `Altura: ${d.altura ? `${d.altura} cm` : "não informada"}`,
+    `Tipo sanguíneo: ${d.tipoSanguineo || "não informado"}`,
+    `Convênio: ${d.convenio || "Particular"}`,
   ].join("\n");
 }
 
@@ -231,6 +274,8 @@ async function aplicarPerfilAtualizacoes(
   return aplicados;
 }
 
+export const maxDuration = 60;
+
 export async function POST(req: NextRequest) {
   try {
     const usuario = await exigirPapel("PACIENTE");
@@ -278,62 +323,88 @@ export async function POST(req: NextRequest) {
       .filter((m) => m?.texto?.trim() && ["usuario", "ia"].includes(m.remetente))
       .slice(-14);
 
-    const abertura = !mensagem;
-    const perfil = await montarPerfil(usuario.id);
+    const perfilDados = await montarPerfilDados(usuario.id);
 
     const quando = consulta.dataInicio.toLocaleDateString("pt-BR", { day: "numeric", month: "long" }) +
       " às " + consulta.dataInicio.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 
-    const instrucaoAbertura = abertura
-      ? coletaAtual && Object.keys(coletaAtual).length
-        ? "ABERTURA (retomada): o paciente voltou para continuar a anamnese. Acolha o retorno brevemente e retome EXATAMENTE a etapa atual com uma pergunta natural (não repita o que já foi coletado)."
-        : "ABERTURA: apresente-se em 1–2 frases, explique que a anamnese prepara o médico para a consulta (conversa tranquila, sem pressa) e entre na etapa de identificação: mostre os dados do perfil que você já tem e peça que confirme ou corrija."
-      : "";
+    /* -------- caminho 1: LLM real (quando o ambiente tiver acesso) -------- */
+    let parsed: RespostaLLM | null = null;
+    let viaMotor = false;
 
-    const mensagens = [
-      {
-        role: "assistant" as const,
-        content:
-          promptSistema({
-            nomePaciente: usuario.nome,
-            especialidade: consulta.especialidade,
-            medico: consulta.medico.nome,
-            quando,
-            etapa: etapaAtual,
-            coleta: coletaAtual,
-            perfil,
-          }) + (instrucaoAbertura ? `\n\n${instrucaoAbertura}` : ""),
-      },
-      ...historico.map((m) => ({
-        role: m.remetente === "usuario" ? ("user" as const) : ("assistant" as const),
-        content: m.texto.slice(0, 4000),
-      })),
-      { role: "user" as const, content: mensagem || "(iniciar/retomar etapa)" },
-    ];
+    // BION_MOTOR_LOCAL=1 força o motor determinístico (teste do comportamento
+    // de produção, onde não há LLM acessível).
+    const usarLlm = process.env.BION_MOTOR_LOCAL !== "1";
 
-    const zai = await getZai();
-    const completion = (await Promise.race([
-      zai.chat.completions.create({ messages: mensagens, thinking: { type: "disabled" } }),
-      new Promise<null>((_, rejeita) => setTimeout(() => rejeita(new Error("timeout")), TIMEOUT_MS)),
-    ])) as Awaited<ReturnType<typeof zai.chat.completions.create>> | null;
+    if (usarLlm && (historico.length > 0 || Boolean(mensagem))) {
+      const instrucaoAbertura = mensagem
+        ? ""
+        : coletaAtual && Object.keys(coletaAtual).length
+          ? "ABERTURA (retomada): o paciente voltou para continuar a anamnese. Acolha o retorno brevemente e retome EXATAMENTE a etapa atual com uma pergunta natural (não repita o que já foi coletado)."
+          : "";
+      if (mensagem || instrucaoAbertura) {
+        const mensagens = [
+          {
+            role: "assistant" as const,
+            content:
+              promptSistema({
+                nomePaciente: usuario.nome,
+                especialidade: consulta.especialidade,
+                medico: consulta.medico.nome,
+                quando,
+                etapa: etapaAtual,
+                coleta: coletaAtual,
+                perfil: perfilParaPrompt(perfilDados, usuario.nome),
+              }) + (instrucaoAbertura ? `\n\n${instrucaoAbertura}` : ""),
+          },
+          ...historico.map((m) => ({
+            role: m.remetente === "usuario" ? ("user" as const) : ("assistant" as const),
+            content: m.texto.slice(0, 4000),
+          })),
+          { role: "user" as const, content: mensagem || "(retomar etapa)" },
+        ];
+        const llmTexto = await chatCompleto(mensagens, TIMEOUT_LLM_MS);
+        parsed = llmTexto ? extrairJson(llmTexto) : null;
+      }
+    }
 
-    const bruto = completion?.choices?.[0]?.message?.content?.trim();
-    const parsed = bruto ? extrairJson(bruto) : null;
+    /* ------- caminho 2: motor determinístico (funciona em qualquer lugar) ------- */
+    if (!parsed) {
+      viaMotor = true;
+      const ctxMotor: MotorCtx = {
+        nomePaciente: usuario.nome,
+        primeiroNome: usuario.nome.split(" ")[0] ?? usuario.nome,
+        especialidade: consulta.especialidade,
+        medico: consulta.medico.nome,
+        quando,
+        genero: perfilDados?.genero ?? "",
+        perfil: {
+          idade: perfilDados?.idade ?? null,
+          profissao: perfilDados?.profissao || null,
+          estadoCivil: perfilDados?.estadoCivil || null,
+          telefone: perfilDados?.telefone || null,
+          alergias: perfilDados?.alergias ?? [],
+          comorbidades: perfilDados?.comorbidades ?? [],
+          medicamentos: perfilDados?.medicamentos ?? [],
+          peso: perfilDados?.peso ?? null,
+          altura: perfilDados?.altura ?? null,
+          tipoSanguineo: perfilDados?.tipoSanguineo || null,
+        },
+      };
+      parsed = turnoMotor({ mensagem, etapa: etapaAtual, coleta: coletaAtual, ctx: ctxMotor }) as RespostaLLM;
+    }
 
     const dados = await carregarDados(usuario);
 
-    // Fallback seguro: se a IA não devolveu JSON, devolve o texto cru sem avançar
-    const texto = parsed?.resposta?.trim() || bruto || "Tive um problema técnico para continuar a anamnese. Toque em enviar de novo, por favor.";
-    if (!parsed) {
-      return ok({ texto, etapa: etapaAtual, coleta: coletaAtual, etapa_concluida: false, dados });
-    }
+    const texto = parsed.resposta?.trim() || "Deixa eu organizar as ideias e a gente segue — pode repetir a última mensagem?";
 
     // Consolida coleta + avanço de etapa
-    const coletaNova = mesclarColeta(coletaAtual, etapaAtual, parsed.coleta);
+    const coletaNova = viaMotor
+      ? mesclarColetaMotor(coletaAtual, (parsed.coleta ?? {}) as Coleta)
+      : mesclarColeta(coletaAtual, etapaAtual, parsed.coleta);
     let etapaNova = etapaAtual;
     if (parsed.etapa_concluida && etapaAtual !== "fechamento") {
-      const idx = ETAPAS.indexOf(etapaAtual as (typeof ETAPAS)[number]) + 1;
-      etapaNova = ETAPAS[Math.min(idx, ETAPAS.length - 1)];
+      etapaNova = proximaEtapa(etapaAtual, perfilDados?.genero ?? "");
     }
 
     await db.anamnese.update({
@@ -357,9 +428,6 @@ export async function POST(req: NextRequest) {
       dados,
     });
   } catch (erro) {
-    if ((erro as Error)?.message === "timeout") {
-      return Response.json({ erro: "A IA demorou demais para responder. Tente novamente." }, { status: 504 });
-    }
     return falha(erro);
   }
 }
