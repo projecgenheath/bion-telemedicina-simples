@@ -3,6 +3,7 @@
 - Network:       http://0.0.0.0:3000
 
 ✓ Starting...
+<<<<<<< Updated upstream
 ✓ Ready in 82ms
 prisma:query SELECT "public"."User"."id", "public"."User"."nome", "public"."User"."email", "public"."User"."senhaHash", "public"."User"."role", "public"."User"."status", "public"."User"."createdAt", "public"."User"."updatedAt" FROM "public"."User" WHERE "public"."User"."email" = $1 LIMIT $2 OFFSET $3
 prisma:query INSERT INTO "public"."Sessao" ("id","userId","expiresAt","createdAt") VALUES ($1,$2,$3,$4) RETURNING "public"."Sessao"."id", "public"."Sessao"."userId", "public"."Sessao"."expiresAt", "public"."Sessao"."createdAt"
@@ -569,3 +570,6 @@ prisma:query SELECT "public"."Mensagem"."id", "public"."Mensagem"."deId", "publi
 prisma:query SELECT "public"."Sessao"."id", "public"."Sessao"."userId", "public"."Sessao"."expiresAt", "public"."Sessao"."createdAt" FROM "public"."Sessao" WHERE ("public"."Sessao"."id" = $1 AND 1=1) LIMIT $2 OFFSET $3
 prisma:query SELECT "public"."User"."id", "public"."User"."nome", "public"."User"."email", "public"."User"."senhaHash", "public"."User"."role", "public"."User"."status", "public"."User"."createdAt", "public"."User"."updatedAt" FROM "public"."User" WHERE "public"."User"."id" IN ($1) OFFSET $2
 prisma:query SELECT "public"."Mensagem"."id", "public"."Mensagem"."deId", "public"."Mensagem"."paraId", "public"."Mensagem"."texto", "public"."Mensagem"."lida", "public"."Mensagem"."createdAt" FROM "public"."Mensagem" WHERE ("public"."Mensagem"."deId" = $1 OR "public"."Mensagem"."paraId" = $2) ORDER BY "public"."Mensagem"."createdAt" ASC OFFSET $3
+=======
+✓ Ready in 81ms
+>>>>>>> Stashed changes

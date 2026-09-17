@@ -210,3 +210,22 @@ Work Log:
 Stage Summary:
 - Auditoria de design/aplicada e agora de fato no repositório: modo escuro estruturalmente correto (sem FOUC, sem páginas "impossíveis de escurecer"), contraste AA no token accent e nos badges, zero glow de fundos claros no dark.
 - Commit é source-only (src/ + package.json + lockfile + worklog), seguindo o padrão dos commits recentes; .next reconstruído fica apenas no working tree.
+
+---
+Task ID: fix-pool-supabase
+Agent: Super Z (agente principal)
+Task: Corrigir erro de login em produção "EMAXCONNSESSION max clients reached in session mode - pool_size: 15" (screenshot do usuário)
+
+Work Log:
+- Diagnóstico: DATABASE_URL em produção aponta para o Session Pooler do Supabase (porta 5432), cujo limite é 15 clientes. Cada instância serverless do Vercel mantém pool próprio do Prisma (default ~2xCPU+1 conexões) — com acessos simultâneos o pool esgota e prisma.user.findMany() falha na tela de login.
+- src/lib/db.ts: função urlPoolerTransacao() reescreve a URL em runtime — pooler.supabase.*:5432 → :6543 (Transaction Pooler, multiplexa clientes) + pgbouncer=true (desliga prepared statements, exigência do modo transação) + connection_limit=1 (1 conexão por instância) + pool_timeout=20; sslmode garantido. URLs SQLite (dev) e conexões diretas passam intactas; idempotente se a env já estiver em 6543. Global cache do Prisma agora em todos os ambientes; log de query só em dev (prod: error/warn).
+- src/lib/server/http.ts: falha() não vaza mais erros internos de infraestrutura — padrões EMAXCONN/max clients/Timed out fetching/Can't reach/ETIMEDOUT/ECONNREFUSED retornam 503 com mensagem amigável "sistema com muita procura".
+- Validação local (bun start + Supabase): tsc ✓, eslint ✓, build 50 páginas ✓; login marina 4x HTTP 200 sem erros de pool; sessao 2,3s (RTT sandbox→sa-east-1 por query, login=16 queries sequenciais ≈ 38s local — latência de rede do sandbox, não do fix); ss -tn confirma conexão ativa na porta 6543 (zero na 5432).
+- Integração: push rejeitado (remoto tinha 8018851 "Auditoria de design/UI-UX" de outro agente); rebase --onto FETCH_HEAD do fix sobre 8018851, tsc pós-merge ✓, push 8018851..f7c9435.
+- Produção: 4 logins seguidos marina HTTP 200 (~14s, latência conhecida serverless) + E2E login joão + bootstrap com cookie 200. Zero EMAXCONNSESSION.
+
+Stage Summary:
+- Causa raiz eliminada: produção usa Transaction Pooler (6543) com connection_limit=1 — o limite de 15 clientes do modo sessão não é mais atingido; erro do screenshot não deve recorrer.
+- A env var DATABASE_URL no Vercel pode permanecer em 5432 (o código converte em runtime); opcionalmente atualizá-la para 6543 + pgbouncer=true&connection_limit=1.
+- Erros de banco agora viram mensagem amigável 503 em todas as rotas (sem vazamento técnico).
+- main = f7c9435 (sobre 8018851 de auditoria de design — integrada sem conflitos).
