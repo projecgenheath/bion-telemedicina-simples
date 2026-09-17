@@ -681,7 +681,7 @@ export function ChatBion({ aberto, onFechar, aoEnviarExame }: { aberto: boolean;
         )}
 
         {/* Retomada: anamneses pendentes de consultas pagas */}
-        {mensagens.length === 1 && etapa === null && !anamneseAtiva && anamnesesPendentes.length > 0 && (
+        {mensagens.length > 0 && etapa === null && !anamneseAtiva && anamnesesPendentes.length > 0 && (
           <div className="flex flex-wrap gap-2">
             {anamnesesPendentes.map((a) => (
               <button
