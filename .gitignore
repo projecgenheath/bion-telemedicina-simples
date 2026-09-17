@@ -1,2 +1,7 @@
 skills/
 node_modules/
+.next/
+*.tsbuildinfo
+tool-results/
+dev.log
+server.log
