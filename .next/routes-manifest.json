@@ -180,6 +180,12 @@
       "namedRegex": "^/api/bion\\-ia(?:/)?$"
     },
     {
+      "page": "/api/bion-ia/exame",
+      "regex": "^/api/bion\\-ia/exame(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/bion\\-ia/exame(?:/)?$"
+    },
+    {
       "page": "/api/bootstrap",
       "regex": "^/api/bootstrap(?:/)?$",
       "routeKeys": {},
@@ -204,10 +210,22 @@
       "namedRegex": "^/api/documentos(?:/)?$"
     },
     {
+      "page": "/api/exames",
+      "regex": "^/api/exames(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/exames(?:/)?$"
+    },
+    {
       "page": "/api/lembretes",
       "regex": "^/api/lembretes(?:/)?$",
       "routeKeys": {},
       "namedRegex": "^/api/lembretes(?:/)?$"
+    },
+    {
+      "page": "/api/medicoes",
+      "regex": "^/api/medicoes(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/medicoes(?:/)?$"
     },
     {
       "page": "/api/medicos",
@@ -316,6 +334,12 @@
       "regex": "^/notificacoes(?:/)?$",
       "routeKeys": {},
       "namedRegex": "^/notificacoes(?:/)?$"
+    },
+    {
+      "page": "/paciente",
+      "regex": "^/paciente(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/paciente(?:/)?$"
     },
     {
       "page": "/painel",

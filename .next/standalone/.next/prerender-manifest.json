@@ -434,6 +434,30 @@
         "x-next-revalidate-tag-token"
       ]
     },
+    "/paciente": {
+      "experimentalBypassFor": [
+        {
+          "type": "header",
+          "key": "next-action"
+        },
+        {
+          "type": "header",
+          "key": "content-type",
+          "value": "multipart/form-data;.*"
+        }
+      ],
+      "initialRevalidateSeconds": false,
+      "srcRoute": "/paciente",
+      "dataRoute": "/paciente.rsc",
+      "allowHeader": [
+        "host",
+        "x-matched-path",
+        "x-prerender-revalidate",
+        "x-prerender-revalidate-if-generated",
+        "x-next-revalidated-tags",
+        "x-next-revalidate-tag-token"
+      ]
+    },
     "/painel": {
       "experimentalBypassFor": [
         {
@@ -702,14 +726,8 @@
   "dynamicRoutes": {},
   "notFoundRoutes": [],
   "preview": {
-<<<<<<< Updated upstream
-    "previewModeId": "9c1027098a44828b4cf92c870ed3791f",
-    "previewModeSigningKey": "1fba12821f32cd1a6aab6a44a92c30fb238e238546df34ba22ad362648e711da",
-    "previewModeEncryptionKey": "39cfa38bf07f008c27d212bf9458d416ff9e48b98f39c2f5da4a9054e3a03350"
-=======
-    "previewModeId": "06ca85dec1b8eae0aba3261cc7299f8d",
-    "previewModeSigningKey": "eacab75785ffd956e39da5a7e04a7dda3efcc249bf57ea670b01b7628aaec2e2",
-    "previewModeEncryptionKey": "787c62f7e3178a3d30401e7ba59c9c1aabbc6bee91f00784fc37a46c92fa974c"
->>>>>>> Stashed changes
+    "previewModeId": "91e367a82aa08ebaecb5f00b1a4b3034",
+    "previewModeSigningKey": "ab85b6c5a17d4bb53b9baf9e43cf00480405f4bdd4eae00c1715d27c1edb84ca",
+    "previewModeEncryptionKey": "f07d23c364ddd546365b3a1d89daef904fd17d3ca478d585b83a5918827408a4"
   }
 }

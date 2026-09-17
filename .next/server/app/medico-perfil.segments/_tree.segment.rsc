@@ -1,7 +1,2 @@
-<<<<<<< Updated upstream
-:HL["/_next/static/chunks/511e695ac026922f.css","style"]
-0:{"buildId":"wV1u-nPlyYqHa51cCx_63","tree":{"name":"","paramType":null,"paramKey":"","hasRuntimePrefetch":false,"slots":{"children":{"name":"(app)","paramType":null,"paramKey":"(app)","hasRuntimePrefetch":false,"slots":{"children":{"name":"medico-perfil","paramType":null,"paramKey":"medico-perfil","hasRuntimePrefetch":false,"slots":{"children":{"name":"__PAGE__","paramType":null,"paramKey":"__PAGE__","hasRuntimePrefetch":false,"slots":null,"isRootLayout":false}},"isRootLayout":false}},"isRootLayout":false}},"isRootLayout":true},"staleTime":300}
-=======
-:HL["/_next/static/chunks/ecad342a433a4ec3.css","style"]
-0:{"buildId":"ECdqigyC-gByRntpwZl6A","tree":{"name":"","paramType":null,"paramKey":"","hasRuntimePrefetch":false,"slots":{"children":{"name":"(app)","paramType":null,"paramKey":"(app)","hasRuntimePrefetch":false,"slots":{"children":{"name":"medico-perfil","paramType":null,"paramKey":"medico-perfil","hasRuntimePrefetch":false,"slots":{"children":{"name":"__PAGE__","paramType":null,"paramKey":"__PAGE__","hasRuntimePrefetch":false,"slots":null,"isRootLayout":false}},"isRootLayout":false}},"isRootLayout":false}},"isRootLayout":true},"staleTime":300}
->>>>>>> Stashed changes
+:HL["/_next/static/chunks/ee776f046f7742a5.css","style"]
+0:{"buildId":"Tq3_i3WvheUQWi4DxyvAP","tree":{"name":"","paramType":null,"paramKey":"","hasRuntimePrefetch":false,"slots":{"children":{"name":"(app)","paramType":null,"paramKey":"(app)","hasRuntimePrefetch":false,"slots":{"children":{"name":"medico-perfil","paramType":null,"paramKey":"medico-perfil","hasRuntimePrefetch":false,"slots":{"children":{"name":"__PAGE__","paramType":null,"paramKey":"__PAGE__","hasRuntimePrefetch":false,"slots":null,"isRootLayout":false}},"isRootLayout":false}},"isRootLayout":false}},"isRootLayout":true},"staleTime":300}
