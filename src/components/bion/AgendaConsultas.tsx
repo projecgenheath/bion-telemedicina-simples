@@ -76,16 +76,18 @@ function LinhaConsulta({ c, perfil }: { c: Consulta; perfil: "paciente" | "medic
           </div>
         </div>
         <span
-          className={`text-xs px-2.5 py-1 rounded-full shrink-0 ${cancelada ? "bg-destructive/10 text-destructive" : concluida ? "bg-muted text-muted-foreground" : "bg-accent-soft"}`}
-          style={!cancelada && !concluida ? { color: "var(--accent)" } : undefined}
+          className={`text-xs px-2.5 py-1 rounded-full shrink-0 ${cancelada ? "bg-destructive/10 text-destructive" : concluida ? "bg-muted text-muted-foreground" : c.status === "pendente_anamnese" ? "bg-amber-500/15 text-amber-600 dark:text-amber-400" : "bg-accent-soft"}`}
+          style={!cancelada && !concluida && c.status !== "pendente_anamnese" ? { color: "var(--accent)" } : undefined}
         >
           {cancelada
             ? "Cancelada"
             : concluida
               ? "Concluída"
-              : c.remarcada
-                ? "Remarcada"
-                : "Confirmada"}
+              : c.status === "pendente_anamnese"
+                ? "Pendente anamnese"
+                : c.remarcada
+                  ? "Remarcada"
+                  : "Confirmada"}
         </span>
       </div>
 

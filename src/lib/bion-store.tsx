@@ -16,7 +16,21 @@ import { toast } from "sonner";
 /* Tipos públicos — mesmas formas usadas por todos os componentes BION  */
 /* ==================================================================== */
 
-export type ApptStatus = "confirmada" | "cancelada" | "concluida" | "em_espera";
+export type ApptStatus = "confirmada" | "pendente_anamnese" | "cancelada" | "concluida" | "em_espera";
+
+/** Anamnese guiada pela BION IA (resumo sincronizado com o servidor). */
+export type AnamneseResumo = {
+  id: string;
+  consultaId: string;
+  medico: string;
+  especialidade: string;
+  etapa: string;
+  status: "em_andamento" | "concluida";
+  coleta: Record<string, Record<string, unknown>>;
+  documentos: { nome: string; tipo: string; exameImportado: boolean; resumo?: string }[];
+  atualizadaEm: string;
+  ts: number;
+};
 
 export type Consulta = {
   id: string;
@@ -315,6 +329,12 @@ type EstadoFresco = {
     itens: { nome: string; valor: number; unidade?: string; refMin?: number; refMax?: number }[];
     arquivoNome?: string; origem: string; createdAt: string;
   }[];
+  anamneses?: {
+    id: string; consultaId: string; medico: string; especialidade: string;
+    etapa: string; status: string; coleta: Record<string, Record<string, unknown>>;
+    documentos: { nome: string; tipo: string; exameImportado: boolean; resumo?: string }[];
+    updatedAt: string;
+  }[];
   pacientePerfil: {
     nome: string; idade: number; genero: string; cpf: string; email: string; telefone: string;
     convenio: string; alergias: string[]; medicamentos: string[]; tipoSanguineo: string;
@@ -435,6 +455,7 @@ type Store = {
   sair: () => Promise<void>;
   medicoes: Medicao[];
   exames: ExameLab[];
+  anamneses: AnamneseResumo[];
   registrarMedicao: (tipo: "peso" | "altura" | "pa", valor1: number, valor2?: number) => Promise<boolean>;
   aplicarEstadoFresco: (d: unknown) => boolean;
   excluirExame: (id: string) => void;
@@ -458,7 +479,9 @@ type Store = {
   cancelarConsulta: (id: string, motivo: string) => void;
   remarcarConsulta: (id: string, data: string, hora: string) => void;
   concluirConsulta: (id: string, resumo?: string) => void;
-  adicionarConsulta: (c: Omit<Consulta, "id" | "status" | "ts">) => void;
+  adicionarConsulta: (c: Omit<Consulta, "id" | "status" | "ts"> & { status?: "pendente_anamnese" }) => void;
+  concluirAnamnese: (consultaId: string) => Promise<boolean>;
+  registrarDocAnamnese: (consultaId: string, doc: { nome: string; tipo: string; exameImportado: boolean; resumo?: string }) => void;
   adicionarArquivo: (a: Omit<Arquivo, "id" | "data">) => void;
   notificar: (n: Omit<Notificacao, "id" | "hora" | "lida">) => void;
   marcarLida: (id: string) => void;
@@ -515,6 +538,7 @@ export function BionProvider({ children }: { children: ReactNode }) {
   const [mensagens, setMensagens] = useState<Mensagem[]>([]);
   const [medicoes, setMedicoes] = useState<Medicao[]>([]);
   const [exames, setExames] = useState<ExameLab[]>([]);
+  const [anamneses, setAnamneses] = useState<AnamneseResumo[]>([]);
   const [suporte, setSuporte] = useState<{ id: string | null; nome: string }>(SUPORTE_VAZIO);
   const [autenticado, setAutenticado] = useState(false);
   const [carregando, setCarregando] = useState(true);
@@ -686,6 +710,22 @@ export function BionProvider({ children }: { children: ReactNode }) {
         })),
       );
     }
+    if (d.anamneses) {
+      setAnamneses(
+        d.anamneses.map((a) => ({
+          id: a.id,
+          consultaId: a.consultaId,
+          medico: a.medico,
+          especialidade: a.especialidade,
+          etapa: a.etapa,
+          status: a.status as AnamneseResumo["status"],
+          coleta: a.coleta,
+          documentos: a.documentos,
+          atualizadaEm: fmtTicketData(a.updatedAt),
+          ts: new Date(a.updatedAt).getTime(),
+        })),
+      );
+    }
     if (d.suporte.id) setSuporte(d.suporte);
     if (d.pacientePerfil) setPacientePerfil(d.pacientePerfil);
   }, []);
@@ -796,6 +836,7 @@ export function BionProvider({ children }: { children: ReactNode }) {
     setMensagens([]);
     setMedicoes([]);
     setExames([]);
+    setAnamneses([]);
     setSuporte(SUPORTE_VAZIO);
     setPacientePerfil(PERFIL_VAZIO);
   }, []);
@@ -960,7 +1001,7 @@ export function BionProvider({ children }: { children: ReactNode }) {
   );
 
   const adicionarConsulta = useCallback(
-    (c: Omit<Consulta, "id" | "status" | "ts">) => {
+    (c: Omit<Consulta, "id" | "status" | "ts"> & { status?: "pendente_anamnese" }) => {
       const medicoId = medicosRef.current.find((m) => m.nome === c.medico)?.id;
       if (!medicoId) {
         toast.error("Médico não encontrado para o agendamento.");
@@ -973,12 +1014,29 @@ export function BionProvider({ children }: { children: ReactNode }) {
         motivoConsulta: c.motivoConsulta,
         valor: c.valor,
         pago: c.pago ?? true,
+        ...(c.status ? { status: c.status } : {}),
         audit: {
           acao: "CONSULTA_AGENDADA",
           categoria: "consulta",
-          detalhes: `Agendamento com ${c.medico} — ${c.especialidade} em ${c.data} às ${c.hora}`,
+          detalhes: `Agendamento com ${c.medico} — ${c.especialidade} em ${c.data} às ${c.hora}${c.status === "pendente_anamnese" ? " (via BION IA, aguardando anamnese)" : ""}`,
         },
       });
+    },
+    [mutar],
+  );
+
+  /** Conclui a anamnese e confirma a consulta (servidor notifica médico + paciente). */
+  const concluirAnamnese = useCallback(
+    async (consultaId: string) => {
+      return mutar("/api/anamnese", "PATCH", { consultaId, acao: "concluir" });
+    },
+    [mutar],
+  );
+
+  /** Registra um documento anexado durante a anamnese. */
+  const registrarDocAnamnese = useCallback(
+    (consultaId: string, doc: { nome: string; tipo: string; exameImportado: boolean; resumo?: string }) => {
+      void mutar("/api/anamnese", "PATCH", { consultaId, acao: "documento", documento: doc });
     },
     [mutar],
   );
@@ -1441,6 +1499,7 @@ export function BionProvider({ children }: { children: ReactNode }) {
       excluirDadosPaciente,
       pacientes,
       medicoes, exames, registrarMedicao, aplicarEstadoFresco, excluirExame,
+      anamneses, concluirAnamnese, registrarDocAnamnese,
       adicionarPaciente,
       atualizarPaciente,
       excluirPaciente,
@@ -1460,6 +1519,7 @@ export function BionProvider({ children }: { children: ReactNode }) {
       atualizarPacientePerfil, atualizarMedico, aprovarMedico, suspenderMedico,
       auditLogs, registrarAudit, anonimizarPaciente, excluirDadosPaciente,
       pacientes, medicoes, exames, registrarMedicao, aplicarEstadoFresco, excluirExame,
+      anamneses, concluirAnamnese, registrarDocAnamnese,
       adicionarPaciente, atualizarPaciente, excluirPaciente,
       adicionarMedico, excluirMedico, atualizarConsulta,
     ],
