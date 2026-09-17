@@ -326,3 +326,13 @@ Stage Summary:
 - A anamnese da BION IA agora funciona 100% em produção SEM depender de LLM: motor determinístico com o rito clínico de storytelling (12 etapas, OPQRST, alarme SAMU, documentos, resumo confirmado) assume automaticamente quando a IA generativa não é alcançável — e volta a ser usada sozinha se um LLM público for plugado via BION_LLM_*.
 - O erro do screenshot ("Não consegui iniciar a anamnese... conexão com a nuvem falhou") eliminado na raiz: produção nunca mais chama o endpoint inacessível (sonda memorizada), e o chat livre + upload de laudos também ganharam fallback funcional.
 - Consulta pendente da Marina no ar será retomável pelo chip "Continuar anamnese" e concluída na validação de produção.
+
+Work Log (validação de produção — complemento):
+- Deploy e115f95 + 7502d9c no ar. Produção validada por API e por navegador (390px):
+  (1) A anamnese TRAVADA do screenshot do usuário (cmu509qzj, Clínica Geral/Dra. Ana Ribeiro) foi retomada pelo motor e conduzida até o fim via API — consulta CONFIRMADA, anamnese concluída com coleta de 12 etapas (HDA: gradual, pressão, irradiação, 6/10, piora com telas/melhora no escuro);
+  (2) Chat livre em produção responde via motor local (fonte:"local") inclusive listando consultas reais do banco;
+  (3) Novo fluxo no navegador: wizard → resumo R$ 150 → Pix → Pagar → anamnese abriu em storytelling (1/12 Identificação com perfil da Marina lido do banco) → "Está certo, obrigada!" → avançou para 2/12 Queixa principal com acolhida + pergunta única.
+- Evidências: download/evidencias-fix-anamnese/ (4 screenshots de produção: chat com chips de retomada, tela de pagamento, abertura da anamnese, turno conversacional).
+
+Stage Summary:
+- Erro "Não consegui iniciar a anamnese — conexão com a nuvem falhou" ELIMINADO em produção: a BION IA conduz a anamnese completa sem depender de LLM, com rito clínico de storytelling preservado.
