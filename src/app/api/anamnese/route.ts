@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { exigirPapel } from "@/lib/server/auth";
 import { carregarDados, aplicarSideEffects } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
-import { chatComFonte, type AnonNomes } from "@/lib/server/llm";
+import { chatComFonte, type AnonNomes, type FonteLlm } from "@/lib/server/llm";
 import { turnoMotor, ETAPAS_MOTOR, type MotorCtx } from "@/lib/server/anamnese-motor";
 
 /**
@@ -354,7 +354,7 @@ export async function POST(req: NextRequest) {
     /* -------- caminho 1: IA generativa em cadeia (env → público → SDK) -------- */
     let parsed: RespostaLLM | null = null;
     let viaMotor = false;
-    let llmFonte: "env" | "publico" | "sdk" | null = null;
+    let llmFonte: FonteLlm | null = null;
 
     // BION_MOTOR_LOCAL=1 força o motor determinístico (teste do comportamento
     // de produção, onde não há LLM acessível).

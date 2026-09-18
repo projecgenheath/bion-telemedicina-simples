@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { exigirPapel } from "@/lib/server/auth";
 import { carregarDados, aplicarSideEffects } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
-import { obterLLM } from "@/lib/server/llm";
+import { obterLLM, visaoGemini } from "@/lib/server/llm";
 
 /**
  * BION IA — leitura de laudos de exames (PDF ou foto) para o app do paciente.
@@ -13,6 +13,7 @@ import { obterLLM } from "@/lib/server/llm";
  *
  * Fluxo de segurança (LGPD / integridade do prontuário):
  *  1. A IA transcreve o laudo e extrai o NOME COMPLETO do paciente impresso no documento;
+ *     visão em cadeia: GOOGLE GEMINI (API própria) → SDK do sandbox;
  *  2. O servidor compara o nome extraído com o nome da conta autenticada
  *     (comparação normalizada, tolerante a acentos/ordem/nomes do meio);
  *  3. Divergência → o exame NÃO é gravado e o paciente recebe um aviso claro;
@@ -22,6 +23,17 @@ import { obterLLM } from "@/lib/server/llm";
 
 const LIMITE_BYTES = 10 * 1024 * 1024; // 10 MB
 const TIMEOUT_MS = 55_000;
+
+const PROMPT_EXTRACAO = `Você é o extrator de laudos laboratoriais da BION Telemedicina. Analise o laudo anexo (PDF ou foto) e devolva EXCLUSIVAMENTE um JSON válido, sem texto fora dele, neste formato:
+{
+  "nomePaciente": "<nome COMPLETO do paciente impresso no laudo — campo 'Paciente', 'Nome' ou cabeçalho>",
+  "dataColeta": "<data de coleta/emissão do laudo no formato YYYY-MM-DD; se ausente use hoje: {HOJE}>",
+  "exames": [
+    { "titulo": "<nome do exame ou grupo, ex.: 'Hemograma completo', 'Glicemia em jejum'>",
+      "itens": [ { "nome": "<análise, ex.: Hemoglobina>", "valor": <número>, "unidade": "<ex.: mg/dL>", "refMin": <número ou omita>, "refMax": <número ou omita> } ] }
+  ]
+}
+Regras: agrupe análises relacionadas em um único exame quando pertencerem ao mesmo painel; converta valores para números (use ponto decimal; 7.200 → 7200); ignore textos sem valor numérico; NUNCA invente resultados que não estejam no documento.`;
 
 type ItemExtraido = { nome: string; valor: number; unidade?: string; refMin?: number; refMax?: number };
 type LaudoExtraido = {
@@ -93,6 +105,7 @@ export async function POST(req: NextRequest) {
 
     const bytes = Buffer.from(await arquivo.arrayBuffer());
     const dataUrl = `data:${mime};base64,${bytes.toString("base64")}`;
+    const base64Puro = bytes.toString("base64");
 
     // Sem LLM acessível (produção/Vercel): registra o arquivo no histórico e
     // avisa com clareza — o documento segue disponível para o médico.
@@ -115,50 +128,46 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const zai = clienteLlm.tipo === "sdk" ? clienteLlm.zai : null;
-    if (!zai) {
-      return Response.json(
-        { ok: false, motivo: "extracao_falhou", mensagem: "A leitura automática de laudos não está disponível agora. O documento pode ser anexado durante a anamnese ou enviado ao médico pela consulta." },
-        { status: 200 },
-      );
+    const promptExtracao = PROMPT_EXTRACAO.replace("{HOJE}", new Date().toISOString().slice(0, 10));
+    let texto = "";
+
+    if (clienteLlm.tipo === "gemini") {
+      // Canal preferencial: API própria do projeto (aceita foto e PDF nativamente).
+      texto = (await visaoGemini(mime, base64Puro, promptExtracao, TIMEOUT_MS)) ?? "";
+    } else {
+      const zai = clienteLlm.tipo === "sdk" ? clienteLlm.zai : null;
+      if (!zai) {
+        return Response.json(
+          { ok: false, motivo: "extracao_falhou", mensagem: "A leitura automática de laudos não está disponível agora. O documento pode ser anexado durante a anamnese ou enviado ao médico pela consulta." },
+          { status: 200 },
+        );
+      }
+      // O endpoint /chat/completions/vision escolhe o modelo de visão padrão do
+      // gateway quando "model" é omitido — comportamento validado em teste real.
+      const corpoVision = {
+        messages: [
+          {
+            role: "user" as const,
+            content: [
+              { type: "text" as const, text: promptExtracao },
+              ehPdf
+                ? { type: "file_url" as const, file_url: { url: dataUrl } }
+                : { type: "image_url" as const, image_url: { url: dataUrl } },
+            ],
+          },
+        ],
+        thinking: { type: "disabled" as const },
+      };
+
+      const completion = (await Promise.race([
+        zai.chat.completions.createVision(
+          corpoVision as Parameters<typeof zai.chat.completions.createVision>[0],
+        ),
+        new Promise<null>((_, rejeita) => setTimeout(() => rejeita(new Error("timeout")), TIMEOUT_MS)),
+      ])) as Awaited<ReturnType<typeof zai.chat.completions.createVision>> | null;
+      texto = completion?.choices?.[0]?.message?.content ?? "";
     }
-    // O endpoint /chat/completions/vision escolhe o modelo de visão padrão do
-    // gateway quando "model" é omitido — comportamento validado em teste real.
-    const corpoVision = {
-      messages: [
-        {
-          role: "user" as const,
-          content: [
-            {
-              type: "text" as const,
-              text: `Você é o extrator de laudos laboratoriais da BION Telemedicina. Analise o laudo anexo (PDF ou foto) e devolva EXCLUSIVAMENTE um JSON válido, sem texto fora dele, neste formato:
-{
-  "nomePaciente": "<nome COMPLETO do paciente impresso no laudo — campo 'Paciente', 'Nome' ou cabeçalho>",
-  "dataColeta": "<data de coleta/emissão do laudo no formato YYYY-MM-DD; se ausente use hoje: ${new Date().toISOString().slice(0, 10)}>",
-  "exames": [
-    { "titulo": "<nome do exame ou grupo, ex.: 'Hemograma completo', 'Glicemia em jejum'>",
-      "itens": [ { "nome": "<análise, ex.: Hemoglobina>", "valor": <número>, "unidade": "<ex.: mg/dL>", "refMin": <número ou omita>, "refMax": <número ou omita> } ] }
-  ]
-}
-Regras: agrupe análises relacionadas em um único exame quando pertencerem ao mesmo painel; converta valores para números (use ponto decimal; 7.200 → 7200); ignore textos sem valor numérico; NUNCA invente resultados que não estejam no documento.`,
-            },
-            ehPdf
-              ? { type: "file_url" as const, file_url: { url: dataUrl } }
-              : { type: "image_url" as const, image_url: { url: dataUrl } },
-          ],
-        },
-      ],
-      thinking: { type: "disabled" as const },
-    };
 
-    const completion = (await Promise.race([
-      zai.chat.completions.createVision(
-        corpoVision as Parameters<typeof zai.chat.completions.createVision>[0],
-      ),
-      new Promise<null>((_, rejeita) => setTimeout(() => rejeita(new Error("timeout")), TIMEOUT_MS)),
-    ])) as Awaited<ReturnType<typeof zai.chat.completions.createVision>> | null;
-
-    const texto = completion?.choices?.[0]?.message?.content ?? "";
     const laudo = extrairJson(texto);
     if (!laudo || !Array.isArray(laudo.exames)) {
       return Response.json(
