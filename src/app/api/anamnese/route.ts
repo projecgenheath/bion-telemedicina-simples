@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { exigirPapel } from "@/lib/server/auth";
 import { carregarDados, aplicarSideEffects } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
-import { chatCompleto } from "@/lib/server/llm";
+import { chatComFonte, type AnonNomes } from "@/lib/server/llm";
 import { turnoMotor, ETAPAS_MOTOR, type MotorCtx } from "@/lib/server/anamnese-motor";
 
 /**
@@ -18,19 +18,20 @@ import { turnoMotor, ETAPAS_MOTOR, type MotorCtx } from "@/lib/server/anamnese-m
  * PATCH { consultaId, acao: "documento", documento } → registra documento anexado durante a anamnese.
  *
  * Duplo motor:
- *  1. LLM real (quando acessível — sandbox ou endpoint externo BION_LLM_*):
- *     conversa livre com o prompt clínico completo;
+ *  1. IA generativa em cadeia (llm.ts): credenciais próprias → endpoint
+ *     público sem chave (nomes do paciente e do médico ANONIMIZADOS antes
+ *     do envio — LGPD) → SDK do sandbox — conversa livre com o prompt
+ *     clínico completo;
  *  2. Motor determinístico (src/lib/server/anamnese-motor.ts): conduz o
  *     mesmo rito de storytelling SEM depender de LLM — garante que a
- *     anamnese nunca fique bloqueada (o endpoint do SDK só existe na rede
- *     do sandbox; na Vercel não há LLM).
+ *     anamnese nunca fique bloqueada.
  *
  * Estilo obrigatório nos dois caminhos: conversa natural (acolher →
  * aprofundar → avançar), UMA pergunta por vez, NUNCA interrogatório,
  * sinais de alarme → SAMU 192.
  */
 
-const TIMEOUT_LLM_MS = 25_000;
+const TIMEOUT_LLM_MS = 32_000;
 
 type MsgEntrada = { remetente: "usuario" | "ia"; texto: string };
 
@@ -227,6 +228,28 @@ function perfilParaPrompt(d: PerfilDados | null, nome: string): string {
   ].join("\n");
 }
 
+/** Nomes que saem da conversa no canal público (LGPD) e seus substitutos neutros. */
+function anonNomes(
+  usuario: { nome: string },
+  medicoNome: string,
+  genero: string,
+): AnonNomes {
+  const tratoPaciente = genero.toLowerCase().startsWith("m") ? "o paciente" : "a paciente";
+  const lista: AnonNomes = [{ nome: usuario.nome, substituto: tratoPaciente }];
+  const primeiro = usuario.nome.split(" ")[0] ?? "";
+  if (primeiro.length >= 3 && primeiro !== usuario.nome) {
+    lista.push({ nome: primeiro, substituto: tratoPaciente });
+  }
+  if (medicoNome && medicoNome.length >= 3) {
+    lista.push({ nome: medicoNome, substituto: "o médico" });
+    const sobrenomeMedico = medicoNome.split(" ").slice(-1)[0] ?? "";
+    if (sobrenomeMedico.length >= 3 && sobrenomeMedico !== medicoNome) {
+      lista.push({ nome: sobrenomeMedico, substituto: "o médico" });
+    }
+  }
+  return lista;
+}
+
 /** Aplica correções de perfil ditas pelo paciente na identificação (com plausibilidade). */
 async function aplicarPerfilAtualizacoes(
   usuarioId: string,
@@ -328,9 +351,10 @@ export async function POST(req: NextRequest) {
     const quando = consulta.dataInicio.toLocaleDateString("pt-BR", { day: "numeric", month: "long" }) +
       " às " + consulta.dataInicio.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 
-    /* -------- caminho 1: LLM real (quando o ambiente tiver acesso) -------- */
+    /* -------- caminho 1: IA generativa em cadeia (env → público → SDK) -------- */
     let parsed: RespostaLLM | null = null;
     let viaMotor = false;
+    let llmFonte: "env" | "publico" | "sdk" | null = null;
 
     // BION_MOTOR_LOCAL=1 força o motor determinístico (teste do comportamento
     // de produção, onde não há LLM acessível).
@@ -363,8 +387,9 @@ export async function POST(req: NextRequest) {
           })),
           { role: "user" as const, content: mensagem || "(retomar etapa)" },
         ];
-        const llmTexto = await chatCompleto(mensagens, TIMEOUT_LLM_MS);
-        parsed = llmTexto ? extrairJson(llmTexto) : null;
+        const llmRes = await chatComFonte(mensagens, TIMEOUT_LLM_MS, anonNomes(usuario, consulta.medico.nome, perfilDados?.genero ?? ""));
+        llmFonte = llmRes.fonte;
+        parsed = llmRes.texto ? extrairJson(llmRes.texto) : null;
       }
     }
 
@@ -425,6 +450,7 @@ export async function POST(req: NextRequest) {
       coleta: coletaNova,
       perfilAtualizado,
       concluida: false,
+      fonte: viaMotor ? "local" : llmFonte,
       dados,
     });
   } catch (erro) {

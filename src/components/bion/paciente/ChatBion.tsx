@@ -32,6 +32,7 @@ type Msg = {
   remetente: "usuario" | "ia";
   texto: string;
   tipo?: "sucesso-agendamento" | "sucesso-exame" | "erro" | "anamnese";
+  fonte?: string;
 };
 type Etapa = null | "especialidade" | "medico" | "dia" | "hora" | "confirmar";
 
@@ -67,6 +68,7 @@ type RespostaAnamnese = {
   dados?: unknown;
   erro?: string;
   concluida?: boolean;
+  fonte?: string;
 };
 
 const DIAS_SEMANA = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
@@ -144,7 +146,7 @@ export function ChatBion({ aberto, onFechar, aoEnviarExame }: { aberto: boolean;
       if (!res.ok || !json.texto) throw new Error(json.erro ?? "Falha");
       if (json.dados) aplicarEstadoFresco(json.dados);
       const texto = json.texto + (json.perfilAtualizado?.length ? `\n\n**Perfil atualizado:** ${json.perfilAtualizado.join(", ")}.` : "");
-      setMensagens((m) => [...m, { remetente: "ia", texto, tipo: "anamnese" }]);
+      setMensagens((m) => [...m, { remetente: "ia", texto, tipo: "anamnese", fonte: json.fonte }]);
       histAnamneseRef.current.push({ remetente: "ia", texto: json.texto });
       setAnamneseAtiva((a) => (a ? { ...a, etapa: json.etapa ?? a.etapa } : a));
     } catch {
@@ -189,7 +191,7 @@ export function ChatBion({ aberto, onFechar, aoEnviarExame }: { aberto: boolean;
       const texto =
         json.texto +
         (json.perfilAtualizado?.length ? `\n\n**Perfil atualizado:** ${json.perfilAtualizado.join(", ")}.` : "");
-      setMensagens((m) => [...m, { remetente: "ia", texto, tipo: "anamnese" }]);
+      setMensagens((m) => [...m, { remetente: "ia", texto, tipo: "anamnese", fonte: json.fonte }]);
       histAnamneseRef.current.push({ remetente: "ia", texto: json.texto });
       setAnamneseAtiva((a) => (a ? { ...a, etapa: json.etapa ?? a.etapa } : a));
     } catch {
@@ -332,9 +334,9 @@ export function ChatBion({ aberto, onFechar, aoEnviarExame }: { aberto: boolean;
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ mensagens: historico.map((m) => ({ remetente: m.remetente === "usuario" ? "usuario" : "ia", texto: m.texto.replace(/\*\*/g, "") })) }),
       });
-      const json = (await res.json()) as { resposta?: string; erro?: string };
+      const json = (await res.json()) as { resposta?: string; fonte?: string; erro?: string };
       if (!res.ok || !json.resposta) throw new Error(json.erro ?? "Falha");
-      setMensagens((m) => [...m, { remetente: "ia", texto: json.resposta! }]);
+      setMensagens((m) => [...m, { remetente: "ia", texto: json.resposta!, fonte: json.fonte }]);
     } catch {
       setMensagens((m) => [
         ...m,
@@ -571,6 +573,11 @@ export function ChatBion({ aberto, onFechar, aoEnviarExame }: { aberto: boolean;
               }`}
             >
               {m.texto.split("**").map((parte, j) => (j % 2 === 1 ? <strong key={j}>{parte}</strong> : <span key={j}>{parte}</span>))}
+              {m.remetente === "ia" && m.fonte && (
+                <div className="text-[10px] mt-2 opacity-40" aria-hidden="true">
+                  {m.fonte === "local" ? "modo básico · sem IA generativa" : m.fonte === "publico" ? "IA generativa · nomes protegidos" : "IA generativa"}
+                </div>
+              )}
             </div>
           </div>
         ))}
