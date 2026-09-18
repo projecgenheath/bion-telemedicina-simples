@@ -396,3 +396,23 @@ Work Log:
 Stage Summary:
 - Integração Gemini COMPLETA no código (texto + visão de laudos PDF/foto) e no ar (1039343); ativação em produção depende apenas de BION_LLM_GEMINI_API_KEY na Vercel — pendência de ação do usuário (dashboard) ou token Vercel para eu configurar via API.
 - Fallback em dupla camada garante zero downtime: sem chave/geo-bloco/erro → público (LGPD) → SDK → motores locais.
+
+---
+Task ID: contrato-delta-mutacoes
+Agent: Super Z (agente principal)
+Task: "POST /api/consultas ↓ retorna apenas consulta criada; PATCH /api/notificacoes ↓ apenas notificação atualizada; POST /api/mensagens ↓ apenas mensagem criada" — padronizar as três mutações para resposta delta leve
+
+Work Log:
+- Diagnóstico: as três rotas devolviam carregarDados() (estado completo, ~15 queries) em toda mutação — marca-notificação-lida recarregava tudo. Especificação do usuário: responder APENAS a entidade afetada.
+- Servidor: (1) POST /api/consultas → { consulta, anamnese? (quando pendente_anamnese), consultaCriada (compat ChatBion), notificacoes?/audit? (efeitos criados, se houver) }; (2) PATCH /api/notificacoes → { notificacoes: linhas acabadas de marcar (pré-buscadas com o MESMO escopo do original; broadcast só via todas:true) }; (3) POST /api/mensagens → { mensagem } (create com include de/para).
+- dados.ts: aplicarSideEffects agora devolve EfeitosCriados { notificacoes (só as visíveis ao próprio usuário — mesma regra do where de carregarDados), audit }; registrarAudit devolve a linha criada (compat: callers que ignoram retorno não mudam).
+- Store: novo tipo DeltaWire + aplicarDelta() (upsert consulta, upsert anamnese, append mensagem com dedupe, merge de notificações lidas/novas, audit só p/ admin) — aceita também payload completo ("usuario" in d → aplicarEstadoFresco), então /api/anamnese e demais rotas não mudam. Migradas: adicionarConsulta, marcarLida, marcarTodasLidas, enviarMensagem. ChatBion.pagarEAgendar usa aplicarDelta(json); aplicarDelta exposto no Store.
+- Verificação ChatBion.tsx "corrompido": era artefato de exibição do sed/cat -A — node confirmou linhas íntegras; tsc passa no arquivo.
+- Incidentes de runtime local resolvidos: cliente Prisma precisou de generate + REBUILD após trocar schema p/ sqlite (build embarca o client); porta 3000 retida por servidor antigo — kill -9 pelo PID do ss -tlnp (lição prévia aplicada).
+- Validação LOCAL (SQLite+seed): tsc 0, eslint 0, build 0; API: mensagens→['mensagem'], PATCH {id}→1 linha lida, PATCH {todas}→ok, POST consultas→['anamnese','audit','consulta','consultaCriada'] com anamnese etapa identificacao amarrada à consulta.
+- Deploy db7dd67 (push 1039343..db7dd67). PRODUÇÃO (Vercel): login marina 200 (8,5s); mesmos 4 testes de contrato via API — todos delta puro; consulta pendente_anamnese "Amanhã 14:00" criada com anamnese amarrada.
+- E2E visual 390px (produção): wizard completo no chat (Clínica Geral → Dra. Ana → 24 Set → 10:00 → Pix → Pagar) → mensagem de reserva exibida → aplicarDelta aplicou a consulta (aparece na lista como "24 Set às 10:00 · Pendente anamnese") → anamnese abriu 1/12 Identificação com perfil pré-lido → confirmação "está certo" avançou para Queixa principal (2/12). Zero erros de página.
+- Evidências: download/evidencias-contrato-delta/ (01-pagamento-anamnese-delta.png, 02-anamnese-etapa2.png). Nota: abertura da anamnese veio do motor determinístico ("modo básico") — degradação prevista; turnos seguintes usam IA generativa quando o canal responde.
+
+Stage Summary:
+- Contrato delta ativo em produção nas três mutações: respostas leves (só a entidade afetada), sem recarregar ~15 coleções por operação; o store aplica o delta incrementalmente e continua aceitando o contrato completo das demais rotas (compatibilidade total, zero regressão nos fluxos: agendamento via wizard, pagamento, anamnese, notificações e mensagens testados E2E).
