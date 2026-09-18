@@ -464,25 +464,91 @@ export type AuditPayload = {
   detalhes?: string;
 };
 
-/** Cria notificações e log de auditoria enviados pelo cliente, com identidade validada no servidor. */
+/** Formas leves (wire) das entidades devolvidas como delta por mutações. */
+export type NotificacaoWire = {
+  id: string;
+  paraRole?: string | null;
+  tipo: string;
+  titulo: string;
+  texto: string;
+  lida: boolean;
+  createdAt: string;
+};
+
+export type AuditWire = {
+  id: string;
+  ts: number;
+  acao: string;
+  categoria: string;
+  severidade: string;
+  usuario: string;
+  role: string;
+  entidade?: string;
+  entidadeId?: string;
+  detalhes?: string;
+};
+
+export type EfeitosCriados = { notificacoes: NotificacaoWire[]; audit: AuditWire | null };
+
+/** Cria notificações e log de auditoria enviados pelo cliente, com identidade validada no servidor.
+ *  Devolve o que FOI CRIADO nesta chamada: as notificações visíveis ao próprio usuário
+ *  (para o delta da resposta) e a linha de auditoria. */
 export async function aplicarSideEffects(
   usuario: UsuarioSessao,
   notificacoes?: NotifPayload[],
   audit?: AuditPayload,
-): Promise<void> {
+): Promise<EfeitosCriados> {
+  const criadas: NotificacaoWire[] = [];
   if (notificacoes?.length) {
-    await db.notificacao.createMany({
-      data: notificacoes.map((n) => ({
-        tipo: n.tipo,
-        titulo: n.titulo,
-        texto: n.texto,
-        paraRole: n.para ? n.para.toUpperCase() : null,
-        usuarioId: n.usuarioId ?? null,
-      })),
-    });
+    for (const n of notificacoes) {
+      const row = await db.notificacao.create({
+        data: {
+          tipo: n.tipo,
+          titulo: n.titulo,
+          texto: n.texto,
+          paraRole: n.para ? n.para.toUpperCase() : null,
+          usuarioId: n.usuarioId ?? null,
+        },
+      });
+      // Só entra no delta se o PRÓPRIO usuário enxerga esta notificação
+      // (mesma regra do where de carregarDados).
+      const visivel =
+        row.usuarioId === usuario.id ||
+        row.paraRole === usuario.role ||
+        (!row.usuarioId && !row.paraRole);
+      if (visivel) {
+        criadas.push({
+          id: row.id,
+          paraRole: row.paraRole,
+          tipo: row.tipo,
+          titulo: row.titulo,
+          texto: row.texto,
+          lida: row.lida,
+          createdAt: row.createdAt.toISOString(),
+        });
+      }
+    }
   }
   if (audit) {
     const { registrarAudit } = await import("./auth");
-    await registrarAudit(usuario, audit);
+    const row = await registrarAudit(usuario, audit);
+    if (row) {
+      return {
+        notificacoes: criadas,
+        audit: {
+          id: row.id,
+          ts: row.createdAt.getTime(),
+          acao: row.acao,
+          categoria: row.categoria,
+          severidade: row.severidade,
+          usuario: row.usuarioNome,
+          role: row.role.toLowerCase(),
+          entidade: row.entidade ?? undefined,
+          entidadeId: row.entidadeId ?? undefined,
+          detalhes: row.detalhes ?? undefined,
+        },
+      };
+    }
   }
+  return { notificacoes: criadas, audit: null };
 }

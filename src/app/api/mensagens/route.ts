@@ -14,7 +14,7 @@ import { ok, falha } from "@/lib/server/http";
  *
  * GET    — payload leve ({ mensagens }) para polling do cliente (~4s).
  * POST   — envia mensagem: { paraId, texto, notificacoes?, audit? }.
- *          Devolve o estado fresco completo (mesmo contrato das demais mutações).
+ *          Contrato delta: devolve APENAS a mensagem criada.
  * PATCH  — marca conversa como lida: { comUsuarioId } → estado fresco.
  */
 
@@ -108,14 +108,32 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    await db.mensagem.create({
+    const msg = await db.mensagem.create({
       data: { deId: usuario.id, paraId: destinatario.id, texto },
+      include: {
+        de: { select: { nome: true } },
+        para: { select: { nome: true } },
+      },
     });
 
-    await aplicarSideEffects(usuario, body.notificacoes, body.audit);
+    const efeitos = await aplicarSideEffects(usuario, body.notificacoes, body.audit);
 
-    const dados = await carregarDados(usuario);
-    return ok(dados);
+    // Contrato delta: devolve APENAS a mensagem criada (+ efeitos colaterais
+    // criados, quando visíveis ao próprio usuário).
+    return ok({
+      mensagem: {
+        id: msg.id,
+        deId: msg.deId,
+        de: msg.de.nome,
+        paraId: msg.paraId,
+        para: msg.para.nome,
+        texto: msg.texto,
+        lida: msg.lida,
+        createdAt: msg.createdAt.toISOString(),
+      },
+      ...(efeitos.notificacoes.length ? { notificacoes: efeitos.notificacoes } : {}),
+      ...(efeitos.audit ? { audit: efeitos.audit } : {}),
+    });
   } catch (erro) {
     return falha(erro);
   }
