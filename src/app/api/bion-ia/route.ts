@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { exigirSessao } from "@/lib/server/auth";
 import { ok, falha } from "@/lib/server/http";
-import { chatCompleto } from "@/lib/server/llm";
+import { chatComFonte, type AnonNomes } from "@/lib/server/llm";
 import { respostaLocal } from "@/lib/server/chat-local";
 
 /**
@@ -15,9 +15,11 @@ import { respostaLocal } from "@/lib/server/chat-local";
  * contexto (papel, medicamentos, alergias, próximas consultas) é montado
  * AQUI no servidor a partir do banco — nunca confiar em dados do cliente.
  *
- * Quando o LLM não está acessível (produção/Vercel — o endpoint do SDK é
- * interno do sandbox), responde com o motor local por intenções, que usa
- * dados reais do banco e mantém a segurança clínica (alarme → SAMU 192).
+ * IA generativa em cadeia (llm.ts): credenciais próprias → endpoint público
+ * sem chave (com NOMES anonimizados antes do envio — LGPD) → SDK do sandbox.
+ * Quando nenhum canal responde, o motor local por intenções assume, usando
+ * dados reais do banco e mantendo a segurança clínica (alarme → SAMU 192).
+ * A resposta informa a `fonte` para o cliente exibir com transparência.
  */
 
 const LIMITE_HISTORICO = 12;
@@ -104,10 +106,17 @@ export async function POST(req: NextRequest) {
       })),
     ];
 
-    // LLM quando acessível; fallback local determinístico quando não.
-    const respostaLlm = await chatCompleto(mensagens, TIMEOUT_MS);
+    // IA generativa em cadeia; nomes reais são removidos no canal público.
+    const primeiroNome = usuario.nome.split(" ")[0] ?? "";
+    const anon: AnonNomes = [
+      { nome: usuario.nome, substituto: "(usuário BION)" },
+      ...(primeiroNome.length >= 3 && primeiroNome !== usuario.nome
+        ? [{ nome: primeiroNome, substituto: "(usuário BION)" }]
+        : []),
+    ];
+    const { texto: respostaLlm, fonte } = await chatComFonte(mensagens, TIMEOUT_MS, anon);
     if (respostaLlm) {
-      return ok({ resposta: respostaLlm });
+      return ok({ resposta: respostaLlm, fonte });
     }
     const resposta = await respostaLocal(usuario, historico);
     return ok({ resposta, fonte: "local" });
