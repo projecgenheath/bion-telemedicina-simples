@@ -4,41 +4,66 @@ import ZAI from "z-ai-web-dev-sdk";
  * Camada única de acesso à IA GENERATIVA para as rotas da BION IA.
  *
  * Cadeia de disponibilidade (na ordem):
- *  1. Credenciais próprias (env BION_LLM_BASE_URL + BION_LLM_API_KEY, API
- *     compatível com OpenAI) — canal confiável, dados completos;
- *  2. Endpoint público sem chave (Pollinations, OpenAI-compatible) — canal
- *     aberto usado por padrão na Vercel. POR SEGURANÇA (LGPD), os NOMES
- *     passados em `anon` são removidos das mensagens antes do envio;
- *  3. SDK do sandbox (internal-api.z.ai) — só existe dentro da rede do
+ *  1. GOOGLE GEMINI (API própria do projeto, chave embutida com override via
+ *     env BION_LLM_GEMINI_API_KEY) — canal confiável: dados completos, sem
+ *     anonimização, suporta texto e visão (fotos/PDFs de laudos);
+ *  2. Credenciais próprias genéricas (env BION_LLM_BASE_URL + BION_LLM_API_KEY,
+ *     API compatível com OpenAI) — canal confiável, dados completos;
+ *  3. Endpoint público sem chave (Pollinations, OpenAI-compatible) — canal
+ *     aberto de reserva. POR SEGURANÇA (LGPD), os NOMES passados em `anon`
+ *     são removidos das mensagens antes do envio;
+ *  4. SDK do sandbox (internal-api.z.ai) — só existe dentro da rede do
  *     sandbox; sonda curta com resultado memorizado por instância.
  *
  * `chatCompleto()` devolve string | null e `chatComFonte()` também informa
- * a fonte ("env" | "publico" | "sdk"). As rotas usam null como sinal para
- * acionar os motores locais determinísticos — a BION IA nunca fica muda.
+ * a fonte ("gemini" | "env" | "publico" | "sdk"). As rotas usam null como
+ * sinal para acionar os motores locais determinísticos — a BION IA nunca
+ * fica muda.
  */
 
 export type Msg = { role: "user" | "assistant"; content: string };
 
 export type AnonNomes = { nome: string; substituto: string }[];
 
-export type FonteLlm = "env" | "publico" | "sdk";
+export type FonteLlm = "gemini" | "env" | "publico" | "sdk";
 
 type ClienteEnv = { tipo: "env"; baseUrl: string; apiKey: string; model?: string };
 type ClienteSdk = { tipo: "sdk"; zai: Awaited<ReturnType<typeof ZAI.create>> };
-type Cliente = ClienteEnv | ClienteSdk;
+type Cliente = ClienteEnv | ClienteSdk | { tipo: "gemini" };
 
 type Resultado = { texto: string | null; fonte: FonteLlm | null };
 
 const SONDA_TIMEOUT_MS = 6_000;
-const COOLDOWN_PUBLICO_MS = 60_000;
+const COOLDOWN_FALHA_MS = 60_000;
 const PUBLICO_URL_PADRAO = "https://text.pollinations.ai/openai";
 const PUBLICO_MODEL_PADRAO = "openai-fast";
 
+/* --------------------------- GOOGLE GEMINI --------------------------- */
+
+/**
+ * Canal Gemini — API própria do projeto. A chave NUNCA vai no código
+ * (repositório público + push protection do GitHub): ela é lida da
+ * variável de ambiente BION_LLM_GEMINI_API_KEY, configurada na Vercel
+ * (Settings → Environment Variables) com override local via .env.
+ */
+const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
+const GEMINI_MODEL_PADRAO = "gemini-flash-latest";
+
 let _sdk: { cliente: ClienteSdk | null; verificado: boolean } = { cliente: null, verificado: false };
 let _publicoFalhaEm = 0;
+let _geminiFalhaEm = 0;
 
 const publicoHabilitado = () => process.env.BION_LLM_PUBLICO !== "0";
-const publicoEmCooldown = () => Date.now() - _publicoFalhaEm < COOLDOWN_PUBLICO_MS;
+const publicoEmCooldown = () => Date.now() - _publicoFalhaEm < COOLDOWN_FALHA_MS;
+
+const geminiHabilitado = () => process.env.BION_LLM_GEMINI !== "0";
+const geminiEmCooldown = () => Date.now() - _geminiFalhaEm < COOLDOWN_FALHA_MS;
+
+function geminiConfig() {
+  const apiKey = (process.env.BION_LLM_GEMINI_API_KEY || "").trim();
+  const model = (process.env.BION_LLM_GEMINI_MODEL || GEMINI_MODEL_PADRAO).trim();
+  return { apiKey, model };
+}
 
 function escapeRegExp(v: string) {
   return v.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -72,6 +97,113 @@ async function comPrazo<T>(promessa: Promise<T>, ms: number): Promise<T | null> 
   } catch {
     return null;
   }
+}
+
+type GeminiParte = { text?: string } | { inline_data: { mime_type: string; data: string } };
+
+type GeminiCorpo = {
+  systemInstruction?: { parts: { text: string }[] };
+  contents: { role: "user" | "model"; parts: GeminiParte[] }[];
+  generationConfig?: Record<string, unknown>;
+};
+
+type GeminiResposta = {
+  candidates?: { content?: { parts?: { text?: string }[] }; finishReason?: string }[];
+  promptFeedback?: { blockReason?: string };
+};
+
+function textoGemini(bruto: GeminiResposta | null): string {
+  const partes = bruto?.candidates?.[0]?.content?.parts ?? [];
+  return partes
+    .map((p) => p.text ?? "")
+    .join("")
+    .trim();
+}
+
+/** POST genérico ao generateContent; repetição sem thinkingConfig em 400. */
+async function geminiPost(
+  model: string,
+  apiKey: string,
+  corpo: GeminiCorpo,
+  prazo: number,
+): Promise<string | null> {
+  const url = `${GEMINI_BASE}/${model}:generateContent`;
+  const chamar = async (c: GeminiCorpo) =>
+    comPrazo(
+      fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-goog-api-key": apiKey },
+        body: JSON.stringify(c),
+      }).then(async (r) => {
+        if (!r.ok) throw new Error(`gemini HTTP ${r.status}`);
+        return (await r.json()) as GeminiResposta;
+      }),
+      restante(prazo),
+    ) as Promise<GeminiResposta | null>;
+
+  let bruto = await chamar(corpo);
+  if (!bruto && corpo.generationConfig?.thinkingConfig) {
+    const sem = { ...corpo, generationConfig: { ...corpo.generationConfig } };
+    delete sem.generationConfig.thinkingConfig;
+    bruto = await chamar(sem);
+  }
+  return textoGemini(bruto) || null;
+}
+
+/* ----------------------------- canal gemini ----------------------------- */
+
+/** Um turno de TEXTO no Gemini (mensagens[0] "assistant" vira systemInstruction). */
+async function chamarGemini(mensagens: Msg[], prazo: number): Promise<string | null> {
+  const { apiKey, model } = geminiConfig();
+  const sys = mensagens[0]?.role === "assistant" ? mensagens[0].content : null;
+  const resto = (sys ? mensagens.slice(1) : mensagens).map((m) => ({
+    role: m.role === "user" ? ("user" as const) : ("model" as const),
+    parts: [{ text: m.content }],
+  }));
+  return geminiPost(
+    model,
+    apiKey,
+    {
+      ...(sys ? { systemInstruction: { parts: [{ text: sys }] } } : {}),
+      contents: resto,
+      generationConfig: {
+        temperature: 0.7,
+        maxOutputTokens: 2048,
+        thinkingConfig: { thinkingBudget: 0 },
+      },
+    },
+    prazo,
+  );
+}
+
+/** VISÃO (foto ou PDF de laudo) no Gemini — devolve o texto extraído ou null. */
+export async function visaoGemini(
+  mime: string,
+  base64: string,
+  prompt: string,
+  timeoutMs: number,
+): Promise<string | null> {
+  if (!geminiHabilitado()) return null;
+  const { apiKey, model } = geminiConfig();
+  const prazo = Date.now() + Math.max(timeoutMs, 5_000);
+  return geminiPost(
+    model,
+    apiKey,
+    {
+      contents: [
+        {
+          role: "user",
+          parts: [{ text: prompt }, { inline_data: { mime_type: mime, data: base64 } }],
+        },
+      ],
+      generationConfig: {
+        temperature: 0.1,
+        maxOutputTokens: 8192,
+        thinkingConfig: { thinkingBudget: 0 },
+      },
+    },
+    prazo,
+  );
 }
 
 /* ------------------------------- canal env ------------------------------- */
@@ -164,27 +296,34 @@ async function chamarSdk(c: ClienteSdk, mensagens: Msg[], prazo: number): Promis
 /* ------------------------------ cadeia final ----------------------------- */
 
 /**
- * Um turno de IA generativa. Tenta env → público (anonimizado) → SDK e
- * devolve texto + fonte; texto null quando nenhum canal respondeu.
+ * Um turno de IA generativa. Tenta gemini → env → público (anonimizado) →
+ * SDK e devolve texto + fonte; texto null quando nenhum canal respondeu.
  */
 export async function chatComFonte(mensagens: Msg[], timeoutMs: number, anon?: AnonNomes): Promise<Resultado> {
   const prazo = Date.now() + Math.max(timeoutMs, 5_000);
 
-  // 1) credenciais próprias — confiável, sem anonimização
+  // 1) Google Gemini — API própria do projeto (dados completos)
+  if (geminiHabilitado() && geminiConfig().apiKey && !geminiEmCooldown()) {
+    const texto = await chamarGemini(mensagens, prazo);
+    if (texto) return { texto, fonte: "gemini" };
+    _geminiFalhaEm = Date.now();
+  }
+
+  // 2) credenciais próprias genéricas — confiável, sem anonimização
   const env = clienteEnv();
   if (env) {
     const texto = await chamarEnv(env, mensagens, prazo);
     if (texto) return { texto, fonte: "env" };
   }
 
-  // 2) endpoint público sem chave — anonimiza nomes antes de enviar
+  // 3) endpoint público sem chave — anonimiza nomes antes de enviar
   if (publicoHabilitado() && process.env.BION_LLM_FORCAR_SDK !== "1" && !publicoEmCooldown()) {
     const texto = await chamarPublico(anonimizarMensagens(mensagens, anon), prazo);
     if (texto) return { texto, fonte: "publico" };
     _publicoFalhaEm = Date.now();
   }
 
-  // 3) SDK do sandbox (sonda memorizada por instância)
+  // 4) SDK do sandbox (sonda memorizada por instância)
   const sdk = await tentarSdk();
   if (sdk) {
     const texto = await chamarSdk(sdk, mensagens, prazo);
@@ -199,8 +338,12 @@ export async function chatCompleto(mensagens: Msg[], timeoutMs: number, anon?: A
   return (await chatComFonte(mensagens, timeoutMs, anon)).texto;
 }
 
-/** Cliente para chamadas de VISÃO (createVision) — env ou SDK do sandbox. */
-export async function obterLLM(): Promise<ClienteEnv | ClienteSdk | null> {
+/**
+ * Cliente para chamadas de VISÃO (createVision) — Gemini (texto via
+ * `visaoGemini`), env genérico ou SDK do sandbox.
+ */
+export async function obterLLM(): Promise<Cliente | null> {
+  if (geminiHabilitado() && geminiConfig().apiKey && !geminiEmCooldown()) return { tipo: "gemini" };
   const env = clienteEnv();
   if (env) return env;
   return tentarSdk();
