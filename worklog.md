@@ -362,3 +362,19 @@ Stage Summary:
 - LGPD: no canal público os nomes do paciente/médico nunca saem da plataforma (anonimização no servidor); API própria opcional via BION_LLM_* para dados completos.
 - Transparência: cada resposta da IA exibe a fonte; degradação graciosa para motores locais garante que a BION IA nunca fique muda.
 - main = 2cf4faf (== origin/main).
+
+---
+Task ID: validar-ia-generativa-re.request
+Agent: Super Z (agente principal)
+Task: "Usar IA generativa" (reconfirmação) — validar que a IA generativa segue viva em produção
+
+Work Log:
+- Cadeia LLM confirmada intacta em src/lib/server/llm.ts (env→público com anon LGPD→SDK→local).
+- API produção: /api/auth/login marina HTTP 200 (6-9s); /api/bion-ia chat livre → fonte=publico, resposta natural contextual (9,8s); /api/anamnese turno real (consulta cmu52p73s…, etapa queixa) → fonte=publico, storytelling (acolheu + ecoou palavras + UMA pergunta), 24s.
+- Rótulo de transparência confirmado no código (ChatBion.tsx L578): "IA generativa · nomes protegidos" para fonte=publico.
+- Visual 390px dark (agent-browser): login → card BION IA acessível → chat → resposta generativa com rótulo visível + chips "Continuar anamnese" das 2 consultas pendentes; zero erros de console.
+- Push do commit de evidências pendente: e527962..da6b343 (screenshots da validação anterior); main == origin/main.
+- Evidências novas: download/evidencias-ia-generativa-2/ (01-secao1-card-bion-ia.png, 02-chat-ia-generativa-label.png).
+
+Stage Summary:
+- IA generativa CONFIRMADA ativa em produção: chat livre e anamnese respondem via canal público com anonimização LGPD; rótulo visível ao paciente; degradação para motor local apenas se a nuvem falhar. Nenhuma alteração de código foi necessária nesta passada — a implementação da sessão anterior (commit 2cf4faf) segue íntegra e no ar.
