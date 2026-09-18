@@ -396,6 +396,21 @@ type EstadoFresco = {
   suporte: { id: string | null; nome: string };
 };
 
+/**
+ * Delta de mutação — resposta leve das rotas que devolvem APENAS a entidade
+ * afetada (POST /api/consultas, PATCH /api/notificacoes, POST /api/mensagens).
+ * Qualquer campo ausente é simplesmente ignorado; um payload com `usuario`
+ * é tratado como estado fresco completo (contrato antigo, p/ compatibilidade).
+ */
+type DeltaWire = {
+  consulta?: EstadoFresco["consultas"][number];
+  anamnese?: NonNullable<EstadoFresco["anamneses"]>[number];
+  mensagem?: EstadoFresco["mensagens"][number];
+  notificacoes?: EstadoFresco["notificacoes"];
+  audit?: EstadoFresco["auditLogs"][number];
+  consultaCriada?: string;
+};
+
 /* ==================================================================== */
 /* Infra do store                                                       */
 /* ==================================================================== */
@@ -458,6 +473,8 @@ type Store = {
   anamneses: AnamneseResumo[];
   registrarMedicao: (tipo: "peso" | "altura" | "pa", valor1: number, valor2?: number) => Promise<boolean>;
   aplicarEstadoFresco: (d: unknown) => boolean;
+  /** Aplica delta de mutação (entidade única) vindo do servidor; compatível com estado fresco completo. */
+  aplicarDelta: (d: unknown) => boolean;
   excluirExame: (id: string) => void;
   documentosVisiveis: Documento[];
   consultas: Consulta[];
@@ -869,6 +886,120 @@ export function BionProvider({ children }: { children: ReactNode }) {
     [aplicar],
   );
 
+  /**
+   * Aplica um DELTA vindo do servidor (entidade única criada/atualizada).
+   * Compatível com o contrato antigo: se o payload traz `usuario`, é estado
+   * fresco completo e segue pelo caminho de sempre (`aplicar`).
+   */
+  const aplicarDelta = useCallback(
+    (d: unknown): boolean => {
+      if (!d || typeof d !== "object") return false;
+      if ("usuario" in d) {
+        return aplicarEstadoFresco(d);
+      }
+      const delta = d as DeltaWire;
+      if (delta.consulta) {
+        const c = delta.consulta;
+        const mapeada: Consulta = {
+          id: c.id,
+          medico: c.medico,
+          especialidade: c.especialidade,
+          paciente: c.paciente,
+          medicoId: c.medicoId,
+          pacienteId: c.pacienteId,
+          data: fmtCurta(c.dataInicio),
+          hora: fmtHora(c.dataInicio),
+          status: c.status as Consulta["status"],
+          ts: new Date(c.dataInicio).getTime(),
+          remarcada: c.remarcada,
+          motivoCancelamento: c.motivoCancelamento,
+          motivoConsulta: c.motivoConsulta,
+          resumoMedico: c.resumoMedico,
+          valor: fmtValorBRL(c.valor),
+          pago: c.pago,
+          dataISO: c.dataInicio,
+        };
+        setConsultas((prev) =>
+          prev.some((x) => x.id === mapeada.id)
+            ? prev.map((x) => (x.id === mapeada.id ? mapeada : x))
+            : [...prev, mapeada],
+        );
+      }
+      if (delta.anamnese) {
+        const a = delta.anamnese;
+        const mapeada: AnamneseResumo = {
+          id: a.id,
+          consultaId: a.consultaId,
+          medico: a.medico,
+          especialidade: a.especialidade,
+          etapa: a.etapa,
+          status: a.status as AnamneseResumo["status"],
+          coleta: a.coleta,
+          documentos: a.documentos,
+          atualizadaEm: fmtTicketData(a.updatedAt),
+          ts: new Date(a.updatedAt).getTime(),
+        };
+        setAnamneses((prev) =>
+          prev.some((x) => x.id === mapeada.id)
+            ? prev.map((x) => (x.id === mapeada.id ? mapeada : x))
+            : [mapeada, ...prev],
+        );
+      }
+      if (delta.mensagem) {
+        const m = {
+          ...fmtMensagem(delta.mensagem),
+          minha: delta.mensagem.deId === sessaoRef.current.id,
+        };
+        setMensagens((prev) => (prev.some((x) => x.id === m.id) ? prev : [...prev, m]));
+      }
+      if (delta.notificacoes?.length) {
+        const lidas = new Set(delta.notificacoes.filter((n) => n.lida).map((n) => n.id));
+        if (lidas.size) {
+          setNotificacoes((prev) =>
+            prev.map((n) => (lidas.has(n.id) ? { ...n, lida: true } : n)),
+          );
+        }
+        // Notificações novas criadas pela própria mutação (ainda não no estado)
+        const novas = delta.notificacoes.filter((n) => n.lida === false);
+        if (novas.length) {
+          setNotificacoes((prev) => {
+            const ids = new Set(prev.map((n) => n.id));
+            const adicionaveis = novas
+              .filter((n) => !ids.has(n.id))
+              .map((n) => ({
+                id: n.id,
+                para: (n.paraRole?.toLowerCase() || undefined) as Notificacao["para"],
+                tipo: n.tipo as Notificacao["tipo"],
+                titulo: n.titulo,
+                texto: n.texto,
+                hora: fmtTicketData(n.createdAt),
+                lida: n.lida,
+              }));
+            return adicionaveis.length ? [...adicionaveis, ...prev] : prev;
+          });
+        }
+      }
+      if (delta.audit && sessaoRef.current.role === "admin") {
+        const a = delta.audit;
+        const entrada: AuditLog = {
+          id: a.id,
+          ts: a.ts,
+          acao: a.acao,
+          categoria: a.categoria as AuditLog["categoria"],
+          severidade: a.severidade as AuditLog["severidade"],
+          usuario: a.usuario,
+          role: a.role as Sessao["role"],
+          entidade: a.entidade,
+          entidadeId: a.entidadeId,
+          detalhes: a.detalhes,
+        };
+        setAuditLogs((prev) => [entrada, ...prev.filter((x) => x.id !== entrada.id)]);
+      }
+      return true;
+    },
+    [aplicarEstadoFresco],
+  );
+
   const excluirExame = useCallback(
     (id: string) => void mutar("/api/exames", "DELETE", { id }),
     [mutar],
@@ -917,14 +1048,27 @@ export function BionProvider({ children }: { children: ReactNode }) {
     [mutar],
   );
 
+  /** Contrato delta: PATCH /api/notificacoes devolve APENAS a(s) notificação(ões) marcada(s). */
   const marcarLida = useCallback(
-    (id: string) => void mutar("/api/notificacoes", "PATCH", { id }),
-    [mutar],
+    async (id: string) => {
+      const d = await api<DeltaWire>("/api/notificacoes", {
+        method: "PATCH",
+        body: JSON.stringify({ id }),
+      });
+      aplicarDelta(d);
+    },
+    [aplicarDelta],
   );
 
   const marcarTodasLidas = useCallback(
-    () => void mutar("/api/notificacoes", "PATCH", { todas: true }),
-    [mutar],
+    async () => {
+      const d = await api<DeltaWire>("/api/notificacoes", {
+        method: "PATCH",
+        body: JSON.stringify({ todas: true }),
+      });
+      aplicarDelta(d);
+    },
+    [aplicarDelta],
   );
 
   const cancelarConsulta = useCallback(
@@ -1001,28 +1145,34 @@ export function BionProvider({ children }: { children: ReactNode }) {
   );
 
   const adicionarConsulta = useCallback(
-    (c: Omit<Consulta, "id" | "status" | "ts"> & { status?: "pendente_anamnese" }) => {
+    async (c: Omit<Consulta, "id" | "status" | "ts"> & { status?: "pendente_anamnese" }) => {
       const medicoId = medicosRef.current.find((m) => m.nome === c.medico)?.id;
       if (!medicoId) {
         toast.error("Médico não encontrado para o agendamento.");
         return;
       }
-      void mutar("/api/consultas", "POST", {
-        medicoId,
-        data: c.data,
-        hora: c.hora,
-        motivoConsulta: c.motivoConsulta,
-        valor: c.valor,
-        pago: c.pago ?? true,
-        ...(c.status ? { status: c.status } : {}),
-        audit: {
-          acao: "CONSULTA_AGENDADA",
-          categoria: "consulta",
-          detalhes: `Agendamento com ${c.medico} — ${c.especialidade} em ${c.data} às ${c.hora}${c.status === "pendente_anamnese" ? " (via BION IA, aguardando anamnese)" : ""}`,
-        },
+      // Contrato delta: POST /api/consultas devolve APENAS a consulta criada
+      // (+ anamnese quando pendente de anamnese + efeitos colaterais criados).
+      const d = await api<DeltaWire>("/api/consultas", {
+        method: "POST",
+        body: JSON.stringify({
+          medicoId,
+          data: c.data,
+          hora: c.hora,
+          motivoConsulta: c.motivoConsulta,
+          valor: c.valor,
+          pago: c.pago ?? true,
+          ...(c.status ? { status: c.status } : {}),
+          audit: {
+            acao: "CONSULTA_AGENDADA",
+            categoria: "consulta",
+            detalhes: `Agendamento com ${c.medico} — ${c.especialidade} em ${c.data} às ${c.hora}${c.status === "pendente_anamnese" ? " (via BION IA, aguardando anamnese)" : ""}`,
+          },
+        }),
       });
+      aplicarDelta(d);
     },
-    [mutar],
+    [aplicarDelta],
   );
 
   /** Conclui a anamnese e confirma a consulta (servidor notifica médico + paciente). */
@@ -1422,23 +1572,28 @@ export function BionProvider({ children }: { children: ReactNode }) {
     [mutar],
   );
 
+  /** Contrato delta: POST /api/mensagens devolve APENAS a mensagem criada. */
   const enviarMensagem = useCallback(
-    (paraId: string, texto: string) => {
+    async (paraId: string, texto: string) => {
       const recorte = texto.trim().slice(0, 80);
-      void mutar("/api/mensagens", "POST", {
-        paraId,
-        texto,
-        notificacoes: [
-          {
-            tipo: "mensagem",
-            titulo: `Nova mensagem de ${sessaoRef.current.nome || "BION"}`,
-            texto: recorte.length < texto.trim().length ? `${recorte}…` : recorte,
-            usuarioId: paraId,
-          },
-        ],
+      const d = await api<DeltaWire>("/api/mensagens", {
+        method: "POST",
+        body: JSON.stringify({
+          paraId,
+          texto,
+          notificacoes: [
+            {
+              tipo: "mensagem",
+              titulo: `Nova mensagem de ${sessaoRef.current.nome || "BION"}`,
+              texto: recorte.length < texto.trim().length ? `${recorte}…` : recorte,
+              usuarioId: paraId,
+            },
+          ],
+        }),
       });
+      aplicarDelta(d);
     },
-    [mutar],
+    [aplicarDelta],
   );
 
   const marcarConversaLida = useCallback(
@@ -1498,7 +1653,7 @@ export function BionProvider({ children }: { children: ReactNode }) {
       anonimizarPaciente,
       excluirDadosPaciente,
       pacientes,
-      medicoes, exames, registrarMedicao, aplicarEstadoFresco, excluirExame,
+      medicoes, exames, registrarMedicao, aplicarEstadoFresco, aplicarDelta, excluirExame,
       anamneses, concluirAnamnese, registrarDocAnamnese,
       adicionarPaciente,
       atualizarPaciente,
@@ -1518,7 +1673,7 @@ export function BionProvider({ children }: { children: ReactNode }) {
       adicionarTicket, responderTicket, adicionarLembrete, alternarLembrete, removerLembrete,
       atualizarPacientePerfil, atualizarMedico, aprovarMedico, suspenderMedico,
       auditLogs, registrarAudit, anonimizarPaciente, excluirDadosPaciente,
-      pacientes, medicoes, exames, registrarMedicao, aplicarEstadoFresco, excluirExame,
+      pacientes, medicoes, exames, registrarMedicao, aplicarEstadoFresco, aplicarDelta, excluirExame,
       anamneses, concluirAnamnese, registrarDocAnamnese,
       adicionarPaciente, atualizarPaciente, excluirPaciente,
       adicionarMedico, excluirMedico, atualizarConsulta,

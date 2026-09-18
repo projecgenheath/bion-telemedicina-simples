@@ -32,13 +32,32 @@ export async function POST(req: NextRequest) {
   }
 }
 
+/** PATCH — marca notificação(ões) como lida(s): { id } ou { todas: true }.
+ *  Contrato delta: devolve APENAS as notificações que acabaram de ser marcadas. */
 export async function PATCH(req: NextRequest) {
   try {
     const usuario = await exigirSessao();
     const body = (await req.json()) as { id?: string; todas?: boolean };
 
+    const paraWire = (r: {
+      id: string;
+      paraRole: string | null;
+      tipo: string;
+      titulo: string;
+      texto: string;
+      createdAt: Date;
+    }) => ({
+      id: r.id,
+      paraRole: r.paraRole,
+      tipo: r.tipo,
+      titulo: r.titulo,
+      texto: r.texto,
+      lida: true,
+      createdAt: r.createdAt.toISOString(),
+    });
+
     if (body.todas) {
-      await db.notificacao.updateMany({
+      const alvo = await db.notificacao.findMany({
         where: {
           lida: false,
           OR: [
@@ -47,17 +66,34 @@ export async function PATCH(req: NextRequest) {
             { AND: [{ usuarioId: null }, { paraRole: null }] },
           ],
         },
-        data: { lida: true },
+        orderBy: { createdAt: "desc" },
       });
-    } else if (body.id) {
-      await db.notificacao.updateMany({
-        where: { id: body.id, OR: [{ usuarioId: usuario.id }, { paraRole: usuario.role }] },
-        data: { lida: true },
-      });
+      if (alvo.length) {
+        await db.notificacao.updateMany({
+          where: { id: { in: alvo.map((n) => n.id) } },
+          data: { lida: true },
+        });
+      }
+      return ok({ notificacoes: alvo.map(paraWire) });
     }
 
-    const dados = await carregarDados(usuario);
-    return ok(dados);
+    if (body.id) {
+      // Mesma regra do original: dono da notificação ou destinatário por papel
+      // (linhas de transmissão ampla são marcadas apenas por { todas: true }).
+      const alvo = await db.notificacao.findFirst({
+        where: {
+          id: body.id,
+          lida: false,
+          OR: [{ usuarioId: usuario.id }, { paraRole: usuario.role }],
+        },
+      });
+      if (alvo) {
+        await db.notificacao.update({ where: { id: alvo.id }, data: { lida: true } });
+        return ok({ notificacoes: [paraWire(alvo)] });
+      }
+    }
+
+    return ok({ notificacoes: [] });
   } catch (erro) {
     return falha(erro);
   }
