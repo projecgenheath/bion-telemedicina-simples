@@ -94,7 +94,7 @@ export async function exigirPapel(...papeis: UsuarioSessao["role"][]): Promise<U
   return s;
 }
 
-/** Registra log de auditoria com identidade vinda da sessão (não confia no cliente) */
+/** Registra log de auditoria com identidade vinda da sessão (não confia no cliente). Devolve a linha criada (ou null). */
 export async function registrarAudit(
   usuario: UsuarioSessao | null,
   log: {
@@ -105,9 +105,9 @@ export async function registrarAudit(
     entidadeId?: string;
     detalhes?: string;
   },
-): Promise<void> {
+) {
   try {
-    await db.auditLog.create({
+    return await db.auditLog.create({
       data: {
         acao: log.acao,
         categoria: log.categoria,
@@ -122,5 +122,6 @@ export async function registrarAudit(
     });
   } catch {
     // auditoria nunca deve quebrar a operação principal
+    return null;
   }
 }

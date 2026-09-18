@@ -80,6 +80,7 @@ export function ChatBion({ aberto, onFechar, aoEnviarExame }: { aberto: boolean;
     consultas,
     anamneses,
     aplicarEstadoFresco,
+    aplicarDelta,
     concluirAnamnese,
     registrarDocAnamnese,
   } = useBion();
@@ -409,7 +410,8 @@ export function ChatBion({ aberto, onFechar, aoEnviarExame }: { aberto: boolean;
       });
       const json = (await res.json()) as { consultaCriada?: string; erro?: string } & Record<string, unknown>;
       if (!res.ok || !json.consultaCriada) throw new Error(json.erro ?? "Falha");
-      aplicarEstadoFresco(json);
+      // Contrato delta: resposta contém APENAS a consulta criada (+ anamnese).
+      aplicarDelta(json);
 
       const quando = rotuloQuando(dia, hora);
       setMensagens((m) => [
