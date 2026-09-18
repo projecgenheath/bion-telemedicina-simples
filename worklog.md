@@ -336,3 +336,29 @@ Work Log (validação de produção — complemento):
 
 Stage Summary:
 - Erro "Não consegui iniciar a anamnese — conexão com a nuvem falhou" ELIMINADO em produção: a BION IA conduz a anamnese completa sem depender de LLM, com rito clínico de storytelling preservado.
+
+---
+Task ID: ia-generativa-producao
+Agent: Super Z (agente principal)
+Task: "Quero AI generativa" — trazer IA generativa REAL de volta à BION IA em produção (o fix anterior trocara o LLM por motor determinístico porque o endpoint do SDK é interno do sandbox)
+
+Work Log:
+- Diagnóstico: internal-api.z.ai resolve para IPs privados 172.25.x.x (ALB aliyun cn-hongkong) — inalcançável da Vercel; credenciais do SDK são token de sessão. Conclusão: produção precisa de endpoint público.
+- Descoberta chave: Pollinations (text.pollinations.ai/openai, sem chave, OpenAI-compatible) funciona — HTTP 200, PT-BR de qualidade, e o formato JSON da anamnese sai válido (testado isoladamente: 5-20s).
+- llm.ts reescrito como cadeia: 1) BION_LLM_BASE_URL/API_KEY/MODEL (API própria, confiável, dados completos) → 2) canal público sem chave (PADRÃO ATIVO; BION_LLM_PUBLICO=0 desliga) com ANONIMIZAÇÃO LGPD dos nomes antes do envio + cooldown 60s pós-falha → 3) SDK do sandbox (sonda memorizada; BION_LLM_FORCAR_SDK=1 força). Novas funções chatComFonte() (texto+fonte) e anonimizarMensagens(); chatCompleto mantido como wrapper; obterLLM segue para visão (env→SDK).
+- /api/bion-ia: usa a cadeia com anon do nome do usuário; devolve fonte (env|publico|sdk|local).
+- /api/anamnese: chatComFonte com anonNomes() — paciente (nome completo + primeiro, trato por gênero) e médico (nome + sobrenome) substituídos por "a paciente"/"o médico" no canal público; TIMEOUT_LLM_MS 25→32s; resposta inclui fonte.
+- ChatBion: micro-etiqueta de transparência por resposta de IA ("IA generativa" / "IA generativa · nomes protegidos" / "modo básico · sem IA generativa").
+- tailwind.config.ts removido: legado Tailwind 3 não referenciado (TW4 usa @theme em globals.css); quebrava tsc após o lock atualizado remover tailwindcss-animate; bun.lock commitado em coerência com package.json.
+- .env.example documentado: cadeia completa, exemplos de APIs próprias (OpenAI/Z.ai/Groq), chaves do canal público e flags de teste.
+- Validação local (standalone + Supabase): tsc/eslint/build limpos; teste isolado scripts/teste-llm-generativo.ts (anonimização sem vazamento + JSON via público em 6,7s); login marina 200; chat livre → fonte=publico com resposta clínica contextual; turno de anamnese → fonte=publico com storytelling (eco das palavras, UMA pergunta); BION_LLM_FORCAR_SDK=1 → fonte=sdk.
+- Incidente evitado: EADDRINUSE no reteste — servidor antigo não morreu com fuser; kill por pid exato (ss -tlnp) antes de rebind (mesma lição do incidente /consulta anterior).
+- Deploy: commit 2cf4faf; push 95362e4..2cf4faf (o checkpoint havia pushado os commits do motor determinístico que estavam só locais — o "Erro" reportado antes pode derivar disso); redeploy Vercel confirmado.
+- Validação PRODUÇÃO: login marina HTTP 200 (8,2s); chat livre → fonte=publico com resposta citando a medicação real do perfil (Losartana 50 mg); turno de anamnese → fonte=publico, storytelling natural; visual 390px: badge "IA generativa · nomes protegidos" visível, dark mode perfeito, zero erros de página/console.
+- Evidências: download/evidencias-ia-generativa/ (01 clean, 02 dark).
+
+Stage Summary:
+- BION IA com IA generativa REAL em produção (sem configuração): chat livre e anamnese conversam de verdade, com contexto do banco (medicamentos, consultas) e segurança clínica preservada.
+- LGPD: no canal público os nomes do paciente/médico nunca saem da plataforma (anonimização no servidor); API própria opcional via BION_LLM_* para dados completos.
+- Transparência: cada resposta da IA exibe a fonte; degradação graciosa para motores locais garante que a BION IA nunca fique muda.
+- main = 2cf4faf (== origin/main).
