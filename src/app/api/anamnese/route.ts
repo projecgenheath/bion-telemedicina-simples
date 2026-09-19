@@ -40,6 +40,39 @@ const TIMEOUT_LLM_MS = 32_000;
 /** Janela da triagem: fecha 5 minutos antes do início da consulta. */
 const JANELA_TRIAGEM_MS = 5 * 60_000;
 
+/**
+ * Avanço de etapa IMPOSTO PELO SERVIDOR (a coleta não pode depender só do
+ * bom comportamento do LLM): contamos os turnos do usuário na etapa atual e
+ * avançamos quando o essencial já foi colhido — "historia" (OPQRST) merece
+ * mais rodadas; as demais etapas fecham rápido para a conversa fluir.
+ */
+const MAX_TURNOS_ETAPA: Record<string, number> = {
+  identificacao: 2,
+  queixa: 2,
+  historia: 5,
+  sistemas: 2,
+  antecedentes: 2,
+  familia: 2,
+  habitos: 2,
+  gineco: 3,
+  psicossocial: 2,
+  medicamentos: 2,
+  documentos: 2,
+  fechamento: 2,
+};
+
+/** Ponte curta do SERVIDOR ao forçar o avanço de etapa (uma pergunta, no estilo). */
+const ABERTURAS_ETAPA: Record<string, string> = {
+  sistemas: "Vamos ao panorama geral: mais algum sintoma pelo corpo — febre, enjoo, tontura, intestino, urina?",
+  antecedentes: "E da sua história de saúde: alguma doença, cirurgia ou internação anterior?",
+  familia: "Na sua família próxima, há casos de hipertensão, diabetes, doença do coração ou câncer?",
+  habitos: "Sobre o dia a dia: você fuma, consome álcool, faz atividade física e como está o sono?",
+  gineco: "Sobre sua saúde ginecológica: como está o ciclo, gestações e contracepção?",
+  psicossocial: "E como você está por dentro: humor, estresse, e isso já atrapalhou sua rotina?",
+  medicamentos: "Usa algum medicamento, vitamina ou chá hoje? Me diz nome e frequência.",
+  documentos: "Tem algum exame ou documento para mostrar ao médico — ou seguimos sem ele?",
+};
+
 type MsgEntrada = { remetente: "usuario" | "ia"; texto: string };
 
 type Coleta = Record<string, Record<string, unknown>>;
@@ -452,8 +485,21 @@ export async function POST(req: NextRequest) {
     const coletaNova = viaMotor
       ? mesclarColetaMotor(coletaAtual, (parsed.coleta ?? {}) as Coleta)
       : mesclarColeta(coletaAtual, etapaAtual, parsed.coleta);
+
+    // Contador de turnos do usuário na etapa (regra de avanço do SERVIDOR):
+    // mesmo que o LLM não sinalize o fim da etapa, ela avança ao atingir o
+    // teto — impede a conversa de girar em círculos na mesma fase.
+    const turnosEtapa = Number(coletaNova[etapaAtual]?._turnos ?? 0) + (mensagem ? 1 : 0);
+    if (coletaNova[etapaAtual]) {
+      coletaNova[etapaAtual] = { ...coletaNova[etapaAtual], _turnos: turnosEtapa };
+    } else {
+      coletaNova[etapaAtual] = { _turnos: turnosEtapa };
+    }
+
+    const teto = MAX_TURNOS_ETAPA[etapaAtual] ?? 3;
+    const etapaExaurida = turnosEtapa >= teto;
     let etapaNova = etapaAtual;
-    if (parsed.etapa_concluida && etapaAtual !== "fechamento") {
+    if ((Boolean(parsed.etapa_concluida) || etapaExaurida) && etapaAtual !== "fechamento") {
       etapaNova = proximaEtapa(etapaAtual, perfilDados?.genero ?? "");
     }
 
@@ -467,11 +513,22 @@ export async function POST(req: NextRequest) {
       perfilAtualizado = await aplicarPerfilAtualizacoes(usuario.id, parsed.perfil_atualizacoes);
     }
 
+    // Quando o SERVIDOR avança a etapa (e o texto do LLM ainda tratava a
+    // anterior), abrimos a nova etapa com a pergunta correspondente.
+    let textoFinal = texto;
+    if (etapaNova !== etapaAtual && viaMotor === false && !/^{/.test(texto)) {
+      const abertura =
+        etapaNova === "fechamento"
+          ? null // o resumo vem na próxima abertura sem mensagem
+          : ABERTURAS_ETAPA[etapaNova];
+      if (abertura) textoFinal = `${texto}\n\n${abertura}`;
+    }
+
     return ok({
-      texto,
+      texto: textoFinal,
       etapa: etapaNova,
       etapaAnterior: etapaAtual,
-      etapa_concluida: Boolean(parsed.etapa_concluida),
+      etapa_concluida: Boolean(parsed.etapa_concluida) || etapaExaurida,
       coleta: coletaNova,
       perfilAtualizado,
       concluida: false,
