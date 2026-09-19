@@ -224,7 +224,7 @@ const ROTULOS_CAMPO: Record<string, string> = {
 function linhaResumo(etapa: string, dados: Record<string, unknown>): string | null {
   if (etapa === "fechamento") return null;
   const pares = Object.entries(dados)
-    .filter(([k, v]) => k !== "_n" && k !== "_corr" && v !== null && v !== undefined && String(v).trim() && String(v) !== "não informado")
+    .filter(([k, v]) => k !== "_n" && k !== "_corr" && k !== "_turnos" && v !== null && v !== undefined && String(v).trim() && String(v) !== "não informado")
     .map(([k, v]) => `${ROTULOS_CAMPO[k] ?? k}: ${typeof v === "boolean" ? (v ? "sim" : "não") : String(v)}`);
   if (!pares.length) return null;
   return `**${ROTULOS[etapa] ?? etapa}** — ${pares.join(" · ")}`;
