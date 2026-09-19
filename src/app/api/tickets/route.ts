@@ -1,10 +1,11 @@
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { exigirSessao } from "@/lib/server/auth";
-import { carregarDados, aplicarSideEffects, type NotifPayload, type AuditPayload } from "@/lib/server/dados";
+import { carregarDados, aplicarSideEffects } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
 
-/** Abertura de chamado de suporte. */
+/** Abertura de chamado de suporte.
+ *  Notificações (autor + administração) e auditoria geradas PELO SERVIDOR. */
 export async function POST(req: NextRequest) {
   try {
     const usuario = await exigirSessao();
@@ -12,8 +13,6 @@ export async function POST(req: NextRequest) {
       assunto: string;
       categoria: string;
       mensagem: string;
-      notificacoes?: NotifPayload[];
-      audit?: AuditPayload;
     };
 
     if (!body.assunto?.trim() || !body.mensagem?.trim()) {
@@ -30,15 +29,30 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    await aplicarSideEffects(usuario, body.notificacoes, {
-      ...(body.audit ?? {
+    await aplicarSideEffects(
+      usuario,
+      [
+        {
+          tipo: "suporte",
+          titulo: "Chamado aberto",
+          texto: `Seu chamado "${ticket.assunto}" foi recebido por nossa equipe. Resposta em até 15 minutos.`,
+          usuarioId: usuario.id,
+        },
+        {
+          tipo: "suporte",
+          titulo: "Novo chamado de suporte",
+          texto: `${usuario.nome} (${ticket.perfil}) abriu chamado sobre: ${ticket.assunto}`,
+          para: "admin",
+        },
+      ],
+      {
         acao: "TICKET_CRIADO",
         categoria: "suporte",
-        detalhes: `Chamado "${body.assunto}" aberto por ${usuario.nome} (${body.categoria})`,
-      }),
-      entidade: "ticket",
-      entidadeId: ticket.id,
-    });
+        entidade: "ticket",
+        entidadeId: ticket.id,
+        detalhes: `Chamado "${ticket.assunto}" aberto por ${usuario.nome} (${ticket.categoria})`,
+      },
+    );
 
     const dados = await carregarDados(usuario);
     return ok(dados);

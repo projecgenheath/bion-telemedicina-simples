@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { exigirPapel } from "@/lib/server/auth";
-import { carregarDados, aplicarSideEffects, type AuditPayload } from "@/lib/server/dados";
+import { carregarDados, aplicarSideEffects } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
 
 type PerfilPacientePatch = {
@@ -20,7 +20,6 @@ type PerfilPacientePatch = {
   estadoCivil?: string;
   comorbidades?: string[];
   foto?: string;
-  audit?: AuditPayload;
 };
 
 /** Atualização do perfil do próprio paciente. */
@@ -64,15 +63,11 @@ export async function PATCH(req: NextRequest) {
       }),
     ]);
 
-    await aplicarSideEffects(
-      usuario,
-      undefined,
-      body.audit ?? {
-        acao: "PERFIL_ATUALIZADO",
-        categoria: "usuario",
-        detalhes: `Dados atualizados: ${Object.keys(body).filter((k) => k !== "audit").join(", ")}`,
-      },
-    );
+    await aplicarSideEffects(usuario, undefined, {
+      acao: "PERFIL_ATUALIZADO",
+      categoria: "usuario",
+      detalhes: `Dados atualizados: ${Object.keys(body).join(", ")}`,
+    });
 
     const dados = await carregarDados({ ...usuario, nome: body.nome?.trim() || usuario.nome });
     return ok(dados);

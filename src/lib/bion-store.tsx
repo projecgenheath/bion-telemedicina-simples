@@ -500,7 +500,6 @@ type Store = {
   concluirAnamnese: (consultaId: string) => Promise<boolean>;
   registrarDocAnamnese: (consultaId: string, doc: { nome: string; tipo: string; exameImportado: boolean; resumo?: string }) => void;
   adicionarArquivo: (a: Omit<Arquivo, "id" | "data">) => void;
-  notificar: (n: Omit<Notificacao, "id" | "hora" | "lida">) => void;
   marcarLida: (id: string) => void;
   marcarTodasLidas: () => void;
   avaliacoes: Avaliacao[];
@@ -858,18 +857,14 @@ export function BionProvider({ children }: { children: ReactNode }) {
     setPacientePerfil(PERFIL_VAZIO);
   }, []);
 
-  /** Registra medição (peso/altura/PA) — devolve true se o servidor confirmou. */
+  /** Registra medição (peso/altura/PA) — devolve true se o servidor confirmou.
+   *  Auditoria é gerada pelo servidor. */
   const registrarMedicao = useCallback(
     async (tipo: "peso" | "altura" | "pa", valor1: number, valor2?: number) => {
       const ok = await mutar("/api/medicoes", "POST", {
         tipo,
         valor1,
         ...(valor2 !== undefined ? { valor2 } : {}),
-        audit: {
-          acao: "MEDICAO_REGISTRADA",
-          categoria: "prontuario",
-          detalhes: `Medição de ${tipo}: ${valor1}${tipo === "pa" && valor2 ? `/${valor2}` : ""} (app do paciente)`,
-        },
       });
       return ok;
     },
@@ -1029,21 +1024,12 @@ export function BionProvider({ children }: { children: ReactNode }) {
     return consentimentos.filter((c) => c.quem === sessao.nome);
   }, [consentimentos, sessao]);
 
-  const notificar = useCallback(
-    (n: Omit<Notificacao, "id" | "hora" | "lida">) => {
-      void mutar("/api/notificacoes", "POST", {
-        tipo: n.tipo,
-        titulo: n.titulo,
-        texto: n.texto,
-        para: n.para,
-      });
-    },
-    [mutar],
-  );
-
+  /** Registro de eventos leves de interface (ex.: exportação de PDF).
+   *  O servidor só aceita ações da whitelist e força categoria/severidade —
+   *  por isso apenas acao/detalhes são enviados. */
   const registrarAudit = useCallback(
     (log: Omit<AuditLog, "id" | "ts" | "usuario" | "role">) => {
-      void mutar("/api/auditoria", "POST", log);
+      void mutar("/api/auditoria", "POST", { acao: log.acao, detalhes: log.detalhes });
     },
     [mutar],
   );
@@ -1071,77 +1057,38 @@ export function BionProvider({ children }: { children: ReactNode }) {
     [aplicarDelta],
   );
 
+  /** Contrato delta: PATCH /api/consultas/[id] devolve APENAS a consulta
+   *  atualizada; notificações e auditoria são geradas pelo servidor. */
+  const mutarConsultaDelta = useCallback(
+    async (id: string, corpo: Record<string, unknown>) => {
+      const d = await api<DeltaWire>(`/api/consultas/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(corpo),
+      });
+      aplicarDelta(d);
+    },
+    [aplicarDelta],
+  );
+
   const cancelarConsulta = useCallback(
     (id: string, motivo: string) => {
-      const c = consultasRef.current.find((x) => x.id === id);
-      void mutar(`/api/consultas/${id}`, "PATCH", {
-        acao: "cancelar",
-        motivo,
-        notificacoes: [
-          {
-            tipo: "agenda",
-            titulo: "Consulta cancelada",
-            texto: `${c?.medico ?? "Consulta"} — ${c?.data ?? ""} às ${c?.hora ?? ""}. Motivo: ${motivo}`,
-          },
-        ],
-        audit: {
-          acao: "CONSULTA_CANCELADA",
-          categoria: "consulta",
-          severidade: "warning",
-          detalhes: `Consulta com ${c?.medico ?? id} cancelada — Motivo: ${motivo}`,
-        },
-      });
+      void mutarConsultaDelta(id, { acao: "cancelar", motivo });
     },
-    [mutar],
+    [mutarConsultaDelta],
   );
 
   const remarcarConsulta = useCallback(
     (id: string, data: string, hora: string) => {
-      const c = consultasRef.current.find((x) => x.id === id);
-      void mutar(`/api/consultas/${id}`, "PATCH", {
-        acao: "remarcar",
-        data,
-        hora,
-        notificacoes: [
-          {
-            tipo: "agenda",
-            titulo: "Consulta remarcada",
-            texto: `${c?.medico ?? "Consulta"} — novo horário: ${data} às ${hora}. A agenda foi atualizada.`,
-          },
-        ],
-        audit: {
-          acao: "CONSULTA_REMARCADA",
-          categoria: "consulta",
-          severidade: "warning",
-          detalhes: `Consulta com ${c?.medico ?? id} remarcada para ${data} às ${hora}`,
-        },
-      });
+      void mutarConsultaDelta(id, { acao: "remarcar", data, hora });
     },
-    [mutar],
+    [mutarConsultaDelta],
   );
 
   const concluirConsulta = useCallback(
     (id: string, resumo?: string) => {
-      const c = consultasRef.current.find((x) => x.id === id);
-      void mutar(`/api/consultas/${id}`, "PATCH", {
-        acao: "concluir",
-        resumo,
-        notificacoes: [
-          {
-            tipo: "agenda",
-            titulo: "Consulta concluída",
-            texto: `Atendimento com ${c?.medico ?? "o médico"} finalizado com sucesso. Acesse o resumo e documentos emitidos.`,
-            para: "paciente",
-          },
-        ],
-        audit: {
-          acao: "CONSULTA_CONCLUIDA",
-          categoria: "consulta",
-          detalhes: `Consulta com ${c?.medico ?? id} concluída${resumo ? ` — Resumo: ${resumo.slice(0, 100)}` : ""}`,
-        },
-      });
+      void mutarConsultaDelta(id, { acao: "concluir", resumo });
     },
-    [mutar],
+    [mutarConsultaDelta],
   );
 
   const adicionarConsulta = useCallback(
@@ -1151,8 +1098,9 @@ export function BionProvider({ children }: { children: ReactNode }) {
         toast.error("Médico não encontrado para o agendamento.");
         return;
       }
-      // Contrato delta: POST /api/consultas devolve APENAS a consulta criada
-      // (+ anamnese quando pendente de anamnese + efeitos colaterais criados).
+      // Status e pagamento são decididos PELO SERVIDOR (sempre pendente_anamnese;
+      // confirmação de pagamento via gateway). Contrato delta: devolve apenas a
+      // consulta criada + anamnese + pagamento + efeitos.
       const d = await api<DeltaWire>("/api/consultas", {
         method: "POST",
         body: JSON.stringify({
@@ -1161,13 +1109,6 @@ export function BionProvider({ children }: { children: ReactNode }) {
           hora: c.hora,
           motivoConsulta: c.motivoConsulta,
           valor: c.valor,
-          pago: c.pago ?? true,
-          ...(c.status ? { status: c.status } : {}),
-          audit: {
-            acao: "CONSULTA_AGENDADA",
-            categoria: "consulta",
-            detalhes: `Agendamento com ${c.medico} — ${c.especialidade} em ${c.data} às ${c.hora}${c.status === "pendente_anamnese" ? " (via BION IA, aguardando anamnese)" : ""}`,
-          },
         }),
       });
       aplicarDelta(d);
@@ -1199,18 +1140,6 @@ export function BionProvider({ children }: { children: ReactNode }) {
         tamanhoKb: a.tamanhoKb,
         enviadoPor: a.enviadoPor,
         consulta: a.consulta,
-        notificacoes: [
-          {
-            tipo: "exame",
-            titulo: a.enviadoPor === "paciente" ? "Exame enviado" : "Novo arquivo do médico",
-            texto: `${a.nome} adicionado ao histórico da consulta.`,
-          },
-        ],
-        audit: {
-          acao: "ARQUIVO_ENVIADO",
-          categoria: "documento",
-          detalhes: `${a.nome} (${a.tipo}, ${a.tamanhoKb}KB) enviado por ${a.enviadoPor}`,
-        },
       });
     },
     [mutar],
@@ -1218,34 +1147,24 @@ export function BionProvider({ children }: { children: ReactNode }) {
 
   const emitirDocumento = useCallback(
     (d: Omit<Documento, "id" | "data">) => {
+      // Paciente identificado por ID (nunca por nome — homônimos existem).
+      const pacienteId =
+        pacientesRef.current.find((p) => p.nome === d.paciente)?.id ??
+        consultasRef.current.find((c) => c.paciente === d.paciente)?.pacienteId;
+      if (!pacienteId) {
+        toast.error("Paciente não encontrado para o documento.");
+        return;
+      }
       void mutar("/api/documentos", "POST", {
         tipo: d.tipo,
         titulo: d.titulo,
         conteudo: d.conteudo,
-        paciente: d.paciente,
+        pacienteId,
         medicamento: d.medicamento,
         posologia: d.posologia,
         duracao: d.duracao,
         observacoes: d.observacoes,
         cid: d.cid,
-        notificacoes: [
-          {
-            tipo: "receita",
-            titulo:
-              d.tipo === "receita"
-                ? "Receita digital disponível"
-                : d.tipo === "atestado"
-                  ? "Atestado emitido"
-                  : "Solicitação de exames disponível",
-            texto: `${d.titulo} emitido por ${d.medico}. Assinado digitalmente com padrão ICP-Brasil.`,
-            para: "paciente",
-          },
-        ],
-        audit: {
-          acao: "DOCUMENTO_EMITIDO",
-          categoria: "documento",
-          detalhes: `${d.tipo === "receita" ? "Receita" : d.tipo === "atestado" ? "Atestado" : "Solicitação de exame"}: ${d.titulo} para ${d.paciente}`,
-        },
       });
     },
     [mutar],
@@ -1265,25 +1184,6 @@ export function BionProvider({ children }: { children: ReactNode }) {
         pontualidade: a.pontualidade,
         atencao: a.atencao,
         clareza: a.clareza,
-        notificacoes: [
-          {
-            tipo: "agenda",
-            titulo: "Avaliação enviada",
-            texto: `Você avaliou ${a.medico} com ${a.nota} estrela(s). Obrigado pelo retorno!`,
-            para: "paciente",
-          },
-          {
-            tipo: "mensagem",
-            titulo: "Nova avaliação recebida",
-            texto: `${a.paciente} avaliou seu atendimento com ${a.nota} estrela(s).${a.comentario ? ` "${a.comentario}"` : ""}`,
-            para: "medico",
-          },
-        ],
-        audit: {
-          acao: "AVALIACAO_REGISTRADA",
-          categoria: "consulta",
-          detalhes: `Avaliação ${a.nota} estrela(s) para ${a.medico}${a.comentario ? ` — "${a.comentario.slice(0, 80)}"` : ""}`,
-        },
       });
     },
     [mutar],
@@ -1302,22 +1202,9 @@ export function BionProvider({ children }: { children: ReactNode }) {
         finalidade: c.finalidade,
         documentos: c.documentos,
         aceito: c.aceito,
-        paciente: c.paciente,
-        notificacoes: [
-          {
-            tipo: "receita",
-            titulo: registro.aceito ? "Consentimento registrado" : "Consentimento recusado",
-            texto: registro.aceito
-              ? `${registro.quem} autorizou a geração do prontuário em PDF (${registro.documentos} documento(s)).`
-              : `${registro.quem} recusou o consentimento para gerar o prontuário em PDF.`,
-          },
-        ],
-        audit: {
-          acao: "CONSENTIMENTO_REGISTRADO",
-          categoria: "consentimento",
-          severidade: registro.aceito ? "info" : "warning",
-          detalhes: `Consentimento ${registro.aceito ? "aceito" : "recusado"} para ${registro.finalidade} (${registro.documentos} documento(s))`,
-        },
+        ...(c.paciente
+          ? { pacienteId: pacientesRef.current.find((p) => p.nome === c.paciente)?.id }
+          : {}),
       });
       return registro;
     },
@@ -1330,25 +1217,6 @@ export function BionProvider({ children }: { children: ReactNode }) {
         assunto: t.assunto,
         categoria: t.categoria,
         mensagem: t.mensagem,
-        notificacoes: [
-          {
-            tipo: "suporte",
-            titulo: "Chamado aberto",
-            texto: `Seu chamado "${t.assunto}" foi recebido por nossa equipe. Resposta em até 15 minutos.`,
-            para: t.perfil,
-          },
-          {
-            tipo: "suporte",
-            titulo: "Novo chamado de suporte",
-            texto: `${t.usuario} abriu chamado sobre: ${t.assunto}`,
-            para: "admin",
-          },
-        ],
-        audit: {
-          acao: "TICKET_CRIADO",
-          categoria: "suporte",
-          detalhes: `Chamado "${t.assunto}" aberto por ${t.usuario} (${t.categoria})`,
-        },
       });
     },
     [mutar],
@@ -1356,14 +1224,7 @@ export function BionProvider({ children }: { children: ReactNode }) {
 
   const responderTicket = useCallback(
     (id: string, resposta: string) => {
-      void mutar(`/api/tickets/${id}`, "PATCH", {
-        resposta,
-        audit: {
-          acao: "TICKET_RESPONDIDO",
-          categoria: "suporte",
-          detalhes: `Chamado respondido pela equipe de suporte`,
-        },
-      });
+      void mutar(`/api/tickets/${id}`, "PATCH", { resposta });
     },
     [mutar],
   );
@@ -1376,19 +1237,6 @@ export function BionProvider({ children }: { children: ReactNode }) {
         tipo: l.tipo,
         frequencia: l.frequencia,
         medicamento: l.medicamento,
-        notificacoes: [
-          {
-            tipo: "lembrete",
-            titulo: "Lembrete criado",
-            texto: `${l.titulo} programado para ${l.horario} (${l.frequencia}).`,
-            para: "paciente",
-          },
-        ],
-        audit: {
-          acao: "LEMBRETE_CRIADO",
-          categoria: "sistema",
-          detalhes: `Lembrete "${l.titulo}" — ${l.horario} (${l.frequencia})`,
-        },
       });
     },
     [mutar],
@@ -1409,14 +1257,7 @@ export function BionProvider({ children }: { children: ReactNode }) {
 
   const atualizarPacientePerfil = useCallback(
     (p: Partial<PacientePerfil>) => {
-      void mutar("/api/perfil", "PATCH", {
-        ...p,
-        audit: {
-          acao: "PERFIL_ATUALIZADO",
-          categoria: "usuario",
-          detalhes: `Dados atualizados: ${Object.keys(p).join(", ")}`,
-        },
-      });
+      void mutar("/api/perfil", "PATCH", { ...p });
     },
     [mutar],
   );
@@ -1426,11 +1267,6 @@ export function BionProvider({ children }: { children: ReactNode }) {
       void mutar(`/api/medicos/${id}`, "PATCH", {
         acao: "atualizar",
         ...dados,
-        audit: {
-          acao: "MEDICO_ATUALIZADO",
-          categoria: "admin",
-          detalhes: `Dados atualizados: ${Object.keys(dados).join(", ")}`,
-        },
       });
     },
     [mutar],
@@ -1438,17 +1274,7 @@ export function BionProvider({ children }: { children: ReactNode }) {
 
   const aprovarMedico = useCallback(
     (id: string) => {
-      void mutar(`/api/medicos/${id}`, "PATCH", {
-        acao: "aprovar",
-        notificacoes: [
-          {
-            tipo: "agenda",
-            titulo: "CRM Médico Aprovado",
-            texto: `O cadastro do médico foi validado e ativado para teleconsultas.`,
-            para: "admin",
-          },
-        ],
-      });
+      void mutar(`/api/medicos/${id}`, "PATCH", { acao: "aprovar" });
     },
     [mutar],
   );
@@ -1493,11 +1319,6 @@ export function BionProvider({ children }: { children: ReactNode }) {
         genero: p.genero,
         convenio: p.convenio,
         status: p.status,
-        audit: {
-          acao: "PACIENTE_CRIADO",
-          categoria: "admin",
-          detalhes: `Paciente ${p.nome} cadastrado`,
-        },
       });
     },
     [mutar],
@@ -1505,14 +1326,7 @@ export function BionProvider({ children }: { children: ReactNode }) {
 
   const atualizarPaciente = useCallback(
     (id: string, dados: Partial<PacienteRegistro>) => {
-      void mutar(`/api/pacientes/${id}`, "PATCH", {
-        ...dados,
-        audit: {
-          acao: "PACIENTE_ATUALIZADO",
-          categoria: "admin",
-          detalhes: `Campos atualizados: ${Object.keys(dados).join(", ")}`,
-        },
-      });
+      void mutar(`/api/pacientes/${id}`, "PATCH", { ...dados });
     },
     [mutar],
   );
@@ -1536,11 +1350,6 @@ export function BionProvider({ children }: { children: ReactNode }) {
         bio: m.bio,
         horariosDisponiveis: m.horariosDisponiveis,
         status: m.status,
-        audit: {
-          acao: "MEDICO_CRIADO",
-          categoria: "admin",
-          detalhes: `Médico ${m.nome} (${m.crm}) cadastrado`,
-        },
       });
     },
     [mutar],
@@ -1553,43 +1362,30 @@ export function BionProvider({ children }: { children: ReactNode }) {
 
   const atualizarConsulta = useCallback(
     (id: string, dados: Partial<Consulta>) => {
-      void mutar(`/api/consultas/${id}`, "PATCH", {
+      // Médico identificado por ID (nunca por nome — homônimos existem).
+      const medicoId = dados.medico
+        ? medicosRef.current.find((m) => m.nome === dados.medico)?.id
+        : undefined;
+      void mutarConsultaDelta(id, {
         acao: "atualizar",
         data: dados.data,
         hora: dados.hora,
-        medico: dados.medico,
+        ...(medicoId ? { medicoId } : {}),
         especialidade: dados.especialidade,
         status: dados.status,
         pago: dados.pago,
         valor: dados.valor,
-        audit: {
-          acao: "CONSULTA_ATUALIZADA",
-          categoria: "admin",
-          detalhes: `Campos atualizados: ${Object.keys(dados).join(", ")}`,
-        },
       });
     },
-    [mutar],
+    [mutarConsultaDelta],
   );
 
   /** Contrato delta: POST /api/mensagens devolve APENAS a mensagem criada. */
   const enviarMensagem = useCallback(
     async (paraId: string, texto: string) => {
-      const recorte = texto.trim().slice(0, 80);
       const d = await api<DeltaWire>("/api/mensagens", {
         method: "POST",
-        body: JSON.stringify({
-          paraId,
-          texto,
-          notificacoes: [
-            {
-              tipo: "mensagem",
-              titulo: `Nova mensagem de ${sessaoRef.current.nome || "BION"}`,
-              texto: recorte.length < texto.trim().length ? `${recorte}…` : recorte,
-              usuarioId: paraId,
-            },
-          ],
-        }),
+        body: JSON.stringify({ paraId, texto }),
       });
       aplicarDelta(d);
     },
@@ -1631,7 +1427,6 @@ export function BionProvider({ children }: { children: ReactNode }) {
       concluirConsulta,
       adicionarConsulta,
       adicionarArquivo,
-      notificar,
       marcarLida,
       marcarTodasLidas,
       consentimentos,
@@ -1668,7 +1463,7 @@ export function BionProvider({ children }: { children: ReactNode }) {
       tickets, lembretes, pacientePerfil, documentosVisiveis,
       mensagens, suporte, enviarMensagem, marcarConversaLida,
       emitirDocumento, cancelarConsulta, remarcarConsulta, concluirConsulta,
-      adicionarConsulta, adicionarArquivo, notificar, marcarLida, marcarTodasLidas,
+      adicionarConsulta, adicionarArquivo, marcarLida, marcarTodasLidas,
       consentimentos, consentimentosVisiveis, registrarConsentimento, avaliacoes, avaliarConsulta,
       adicionarTicket, responderTicket, adicionarLembrete, alternarLembrete, removerLembrete,
       atualizarPacientePerfil, atualizarMedico, aprovarMedico, suspenderMedico,

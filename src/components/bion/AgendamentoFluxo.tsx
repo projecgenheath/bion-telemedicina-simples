@@ -86,7 +86,7 @@ export function AgendamentoFluxo({
   onDone: () => void;
   onGoToWaitingRoom: () => void;
 }) {
-  const { medicos, sessao, adicionarConsulta, adicionarArquivo, notificar } = useBion();
+  const { medicos, sessao, adicionarConsulta, adicionarArquivo } = useBion();
 
   const [step, setStep] = useState(0);
   const [especialidade, setEspecialidade] = useState("Clínica Geral");
@@ -175,7 +175,6 @@ export function AgendamentoFluxo({
         hora: horaSelecionada,
         motivoConsulta: motivoCompleto,
         valor: `R$ ${med.valor}`,
-        pago: true,
       });
 
       // Salva arquivos anexados no histórico
@@ -189,22 +188,8 @@ export function AgendamentoFluxo({
         });
       });
 
-      notificar({
-        tipo: "agenda",
-        titulo: "Consulta confirmada com sucesso!",
-        texto: `${med.nome} — ${dataSelecionada} às ${horaSelecionada}. Pagamento aprovado.`,
-        para: "paciente",
-      });
-
-      notificar({
-        tipo: "agenda",
-        titulo: "Novo paciente agendado",
-        texto: `${sessao.nome} agendou para ${dataSelecionada} às ${horaSelecionada}.`,
-        para: "medico",
-      });
-
-      toast.success("Pagamento aprovado! Consulta confirmada", {
-        description: `${med.nome} — ${dataSelecionada} às ${horaSelecionada}`,
+      toast.success("Pagamento aprovado! Consulta reservada", {
+        description: `${med.nome} — ${dataSelecionada} às ${horaSelecionada}. Complete a anamnese para confirmar.`,
       });
 
       proximoPasso();

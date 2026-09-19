@@ -2,7 +2,7 @@
 
 Plataforma completa de telemedicina: consultas por vídeo (WebRTC P2P), mensageria paciente↔médico, assistente de IA clínica, prontuário eletrônico, receitas/atestados em PDF, agendamento, lembretes, avaliações, suporte, auditoria e controles LGPD.
 
-**Stack:** Next.js 16 (App Router, Turbopack) · React 19 · TypeScript · Tailwind CSS · shadcn/ui · Prisma (SQLite em dev / PostgreSQL no Supabase) · z-ai-web-dev-sdk (LLM) · jsPDF.
+**Stack:** Next.js 16 (App Router, Turbopack) · React 19 · TypeScript · Tailwind CSS · shadcn/ui · Prisma + PostgreSQL (Supabase, banco oficial em todos os ambientes) · z-ai-web-dev-sdk (LLM) · jsPDF.
 
 ---
 
@@ -65,7 +65,8 @@ src/
     api/
       bootstrap/          # GET — estado completo do usuário (carga inicial)
       auth/               # login, logout, registro, sessão (bcrypt + cookie httpOnly + Sessao no banco)
-      consultas/          # POST criar · [id] PATCH cancelar/remarcar/concluir/atualizar
+      consultas/          # POST criar (status/pagamento decididos no servidor) · [id] PATCH
+      pagamentos/webhook/ # webhook do gateway de pagamento (HMAC-SHA256)
       telemedicina/[id]/sala/   # GET/POST — sinalização WebRTC (SDP, ICE, chat, controle)
       mensagens/          # GET/POST/PATCH — mensageria assíncrona
       bion-ia/            # POST — LLM com contexto clínico (backend-only)
@@ -74,28 +75,41 @@ src/
       pacientes/ medicos/ auditoria/ admin/lgpd/
   components/bion/        # telas e componentes de negócio
   lib/
-    server/               # auth (sessões, papéis, auditoria), dados (carregarDados/side-effects)
+    server/               # auth (sessões, papéis, auditoria), dados (carregarDados/side-effects), pagamentos
     use-teleconsulta.ts   # hook WebRTC completo (papéis fixos, reconexão, trickle ICE)
     bion-store.tsx        # store React (estado + mutações + polling)
     receita-pdf.ts / prontuario-pdf.ts
 prisma/
-  schema.prisma           # SQLite (dev local)
-  schema.postgres.prisma  # espelho PostgreSQL (Supabase)
+  schema.prisma           # schema ÚNICO — provider PostgreSQL (Supabase)
   seed.ts                 # contas demo + dados iniciais
-supabase/                 # migrations DDL e guia de ativação
+supabase/                 # guia de ativação do Supabase
 scripts/                  # testes E2E, auditoria de API, ativação Supabase, verificação em navegador
 ```
 
-**Padrão de API:** `GET /api/bootstrap` devolve o estado completo (consultas, mensagens, notificações, documentos, lembretes, avaliacoes, consentimentos, tickets, perfil…). Toda mutação (POST/PATCH/DELETE) valida no servidor, aplica side-effects (notificações + trilha de auditoria) e devolve o estado fresco — o cliente nunca calcula estado sozinho.
+**Padrão de API:** `GET /api/bootstrap` devolve o estado completo (consultas, mensagens, notificações, documentos, lembretes, avaliacoes, consentimentos, tickets, perfil…). Mutações frequentes respondem em DELTA (apenas a entidade criada/atualizada): `POST /api/consultas`, `PATCH /api/consultas/[id]`, `PATCH /api/notificacoes` e `POST /api/mensagens`. Notificações e trilha de auditoria são geradas PELO SERVIDOR a partir do evento real — o cliente não as envia.
 
-**Segurança:** senhas com bcrypt (custo 10), sessões opacas de 32 bytes no banco com cookie httpOnly (7 dias), autorização por papel em cada rota (`exigirPapel`), sala de teleconsulta restrita aos participantes 1:1 (403 para terceiros, inclusive admin), limites por minuto na sinalização, auditoria com identidade da sessão (não confia no cliente), mídia WebRTC cifrada (DTLS-SRTP).
+**Segurança:** senhas com bcrypt (custo 10), sessões opacas de 32 bytes no banco com cookie httpOnly (`secure` em produção, 7 dias) e revogação imediata quando a conta é desativada/suspensa, autorização por papel em cada rota (`exigirPapel`), sala de teleconsulta restrita aos participantes 1:1 (403 para terceiros, inclusive admin), limites por minuto na sinalização, auditoria com identidade da sessão (cliente só registra eventos leves de interface, via whitelist), pagamento confirmado exclusivamente no servidor (gateway simulado ou webhook assinado com HMAC — o cliente nunca define `pago`), status de consulta imposto pelo servidor (paciente nasce `pendente_anamnese`; só a conclusão da anamnese confirma), relacionamentos sempre por ID (nunca por nome), mídia WebRTC cifrada (DTLS-SRTP).
 
 ---
 
 ## Banco de dados
 
-- **Dev local (default):** SQLite em `db/custom.db` — `bun prisma db push && bun prisma/seed.ts`
-- **Produção (Supabase PostgreSQL):** já ativado e validado — ver `supabase/README.md` para trocar a `DATABASE_URL` e rodar `bash scripts/supabase_ativar.sh` (o `schema.postgres.prisma` é o espelho do schema com o modelo `Mensagem`).
+- **PostgreSQL (Supabase) é o banco oficial em todos os ambientes** — o `prisma/schema.prisma` é o schema único (provider `postgresql`). Não há mais alternância nem fallback SQLite.
+- **Produção:** ver `supabase/README.md` para trocar a `DATABASE_URL` e rodar `bash scripts/supabase_ativar.sh`.
+- **Local:** aponte o `.env` para o Session Pooler do Supabase e rode `bun prisma db push && bun prisma/seed.ts`.
+
+## Hardening (auditoria de produção)
+
+Regras importantes que o servidor impõe (o cliente não decide):
+
+1. **Sessão** — cookie `secure` em produção; sessão revogada na hora se a conta for desativada/suspensa.
+2. **Pagamento** — o cliente não envia `pago`; o servidor cria a cobrança (modelo `Pagamento`) e confirma via gateway simulado (demo) ou `POST /api/pagamentos/webhook` assinado com HMAC (`BION_PAGAMENTO_WEBHOOK_SECRET`). Idempotente.
+3. **Status da consulta** — criação pelo paciente nasce sempre `pendente_anamnese`; só a conclusão da anamnese (servidor) confirma. Remarcar não auto-confirma; `atualizar` (admin) valida status contra whitelist.
+4. **Notificações** — geradas pelo servidor a partir do evento real; `POST /api/notificacoes` foi removido (405).
+5. **Auditoria** — eventos críticos gerados pelo servidor; `POST /api/auditoria` só aceita eventos leves de interface via whitelist (categoria/severidade forçadas pelo servidor).
+6. **Identidade por ID** — documentos, consentimentos e troca de médico usam `pacienteId`/`medicoId`; lookups por nome foram removidos.
+
+**Roadmap (pós-hardening):** dividir `src/lib/bion-store.tsx` em módulos (consultas, mensagens, documentos…), migrar as demais mutações para resposta delta, sinalização WebRTC em WebSocket/Realtime + TURN para escala.
 
 ## Testes e verificação
 

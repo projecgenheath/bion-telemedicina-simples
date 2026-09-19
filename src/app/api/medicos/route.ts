@@ -1,12 +1,12 @@
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { exigirPapel, hashSenha } from "@/lib/server/auth";
-import { carregarDados, aplicarSideEffects, slugEmail, type NotifPayload, type AuditPayload } from "@/lib/server/dados";
+import { carregarDados, aplicarSideEffects, slugEmail } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
 
 const SENHA_PADRAO = "bion123";
 
-/** Cadastro de médico pela administração. */
+/** Cadastro de médico pela administração. Auditoria gerada PELO SERVIDOR. */
 export async function POST(req: NextRequest) {
   try {
     const admin = await exigirPapel("ADMIN");
@@ -22,8 +22,6 @@ export async function POST(req: NextRequest) {
       bio?: string;
       horariosDisponiveis?: string[];
       status?: string;
-      notificacoes?: NotifPayload[];
-      audit?: AuditPayload;
     };
 
     if (!body.nome?.trim() || !body.crm?.trim() || !body.especialidade?.trim()) {
@@ -60,14 +58,12 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    await aplicarSideEffects(admin, body.notificacoes, {
-      ...(body.audit ?? {
-        acao: "MEDICO_CRIADO",
-        categoria: "admin",
-        detalhes: `Médico ${body.nome} (${body.crm}) cadastrado`,
-      }),
+    await aplicarSideEffects(admin, undefined, {
+      acao: "MEDICO_CRIADO",
+      categoria: "admin",
       entidade: "medico",
       entidadeId: user.id,
+      detalhes: `Médico ${user.nome} (${body.crm}) cadastrado`,
     });
 
     const dados = await carregarDados(admin);

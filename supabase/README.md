@@ -17,7 +17,7 @@ e validado de volta no Postgres com auditoria completa (32/32 rotas, 3 papéis).
 | Item | Arquivo |
 |------|---------|
 | DDL completo das 13 tabelas (referência/rota manual) | `supabase/migrations/0001_init.sql` |
-| Schema Prisma já convertido para PostgreSQL | `prisma/schema.postgres.prisma` |
+| Schema Prisma oficial (provider PostgreSQL, schema único) | `prisma/schema.prisma` |
 | Script de ativação automática | `scripts/supabase_ativar.sh` |
 | Verificação pós-seed | `scripts/verificar_banco.ts` |
 | Config do CLI (equivalente a `supabase init`) | `supabase/config.toml` |

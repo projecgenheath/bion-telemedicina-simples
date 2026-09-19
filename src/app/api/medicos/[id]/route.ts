@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { exigirPapel } from "@/lib/server/auth";
-import { carregarDados, aplicarSideEffects, type NotifPayload, type AuditPayload } from "@/lib/server/dados";
+import { carregarDados, aplicarSideEffects } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
 
 type MedicoPatch = {
@@ -16,8 +16,6 @@ type MedicoPatch = {
   idiomas?: string[];
   bio?: string;
   horariosDisponiveis?: string[];
-  notificacoes?: NotifPayload[];
-  audit?: AuditPayload;
 };
 
 /** Ações administrativas sobre médicos: aprovar, suspender, editar e excluir. */
@@ -42,28 +40,46 @@ export async function PATCH(
 
     if (acao === "aprovar") {
       await db.perfilMedico.update({ where: { userId: id }, data: { status: "ativo" } });
-      await aplicarSideEffects(admin, body.notificacoes, {
-        ...(body.audit ?? {
+      await aplicarSideEffects(
+        admin,
+        [
+          {
+            tipo: "agenda",
+            titulo: "Cadastro aprovado",
+            texto: "Seu CRM foi validado e seu perfil está ativo para teleconsultas na BION.",
+            usuarioId: medico.id,
+          },
+        ],
+        {
           acao: "MEDICO_APROVADO",
           categoria: "admin",
           severidade: "critical",
+          entidade: "medico",
+          entidadeId: id,
           detalhes: `CRM de ${medico.nome} validado e ativado`,
-        }),
-        entidade: "medico",
-        entidadeId: id,
-      });
+        },
+      );
     } else if (acao === "suspender") {
       await db.perfilMedico.update({ where: { userId: id }, data: { status: "suspenso" } });
-      await aplicarSideEffects(admin, body.notificacoes, {
-        ...(body.audit ?? {
+      await aplicarSideEffects(
+        admin,
+        [
+          {
+            tipo: "agenda",
+            titulo: "Cadastro suspenso",
+            texto: "Seu perfil de médico foi suspenso. Entre em contato com o suporte.",
+            usuarioId: medico.id,
+          },
+        ],
+        {
           acao: "MEDICO_SUSPENSO",
           categoria: "admin",
           severidade: "critical",
+          entidade: "medico",
+          entidadeId: id,
           detalhes: `${medico.nome} suspenso da plataforma`,
-        }),
-        entidade: "medico",
-        entidadeId: id,
-      });
+        },
+      );
     } else {
       await db.$transaction([
         db.user.update({
@@ -89,14 +105,12 @@ export async function PATCH(
           },
         }),
       ]);
-      await aplicarSideEffects(admin, body.notificacoes, {
-        ...(body.audit ?? {
-          acao: "MEDICO_ATUALIZADO",
-          categoria: "admin",
-          detalhes: `Dados atualizados: ${Object.keys(body).filter((k) => k !== "acao" && k !== "notificacoes" && k !== "audit").join(", ")}`,
-        }),
+      await aplicarSideEffects(admin, undefined, {
+        acao: "MEDICO_ATUALIZADO",
+        categoria: "admin",
         entidade: "medico",
         entidadeId: id,
+        detalhes: `Médico ${medico.nome}: dados atualizados (${Object.keys(body).filter((k) => k !== "acao").join(", ")})`,
       });
     }
 
