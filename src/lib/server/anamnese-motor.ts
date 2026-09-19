@@ -668,7 +668,7 @@ function etapaFechamento(mensagem: string, coleta: Record<string, Record<string,
   const t = normalizar(mensagem);
   if (mensagem.trim().length < 60 && /^(nao|n|nada|tudo certo|tudo ok|esta tudo|pronto|pode fechar|nao tenho nada)\b/.test(t)) {
     return {
-      resposta: `Então está tudo completo. Toque em **“Concluir anamnese e confirmar consulta”** ali embaixo — ${ctx.medico} já recebe seu dossiê e a consulta sai da pendência no agenda.`,
+      resposta: `Então está tudo completo. Toque em **“Concluir triagem e enviar ao médico”** ali embaixo — ${ctx.medico} já recebe seu dossiê antes do atendimento.`,
       etapa_concluida: false,
       coleta: { ...coleta, fechamento: { ...atual, _n: n + 1, confirmado: true } },
     };
@@ -676,7 +676,7 @@ function etapaFechamento(mensagem: string, coleta: Record<string, Record<string,
   // Paciente acrescentou algo (ou pediu correção pontual)
   atual.complemento = `${atual.complemento ? `${atual.complemento} ` : ""}${mensagem.trim().slice(0, 500)}`.slice(0, 900);
   return {
-    resposta: `**Muito importante que você tenha contado isso** — registrei no fechamento.\n\nSe não falta mais nada, toque em **“Concluir anamnese e confirmar consulta”** ali embaixo.`,
+    resposta: `**Muito importante que você tenha contado isso** — registrei no fechamento.\n\nSe não falta mais nada, toque em **“Concluir triagem e enviar ao médico”** ali embaixo.`,
     etapa_concluida: false,
     coleta: { ...coleta, fechamento: { ...atual, _n: n + 1 } },
   };
@@ -705,15 +705,19 @@ export function turnoMotor({ mensagem, etapa, coleta, ctx }: MotorEntrada): Moto
   const t = mensagem.trim();
   const etapaValida = (ETAPAS_MOTOR as readonly string[]).includes(etapa) ? etapa : "identificacao";
 
-  // Retomada: paciente voltou ao chat sem digitar nada (botão "Continuar anamnese")
+  // Retomada: paciente voltou ao chat sem digitar nada (botão "Continuar triagem")
   if (!t) {
     const n = contador(coleta, etapaValida);
     const seed = Math.max(1, n);
     if (n > 0) {
+      // "historia" tem perguntas sequenciais (OPQRST): retoma pela que ficou
+      // em aberto conforme o contador. Demais etapas têm pergunta única.
       const reabertura =
         etapaValida === "fechamento"
           ? construirResumo(coleta, ctx)
-          : `Bem-vindo(a) de volta, ${ctx.primeiroNome}! Retomando de onde paramos: ${REABRIR_PERGUNTA[etapaValida](ctx)}`;
+          : etapaValida === "historia"
+            ? `Bem-vindo(a) de volta, ${ctx.primeiroNome}! Retomando de onde paramos: ${perguntaHistoria(Math.min(3, Math.max(0, n - 1)))}`
+            : `Bem-vindo(a) de volta, ${ctx.primeiroNome}! Retomando de onde paramos: ${REABRIR_PERGUNTA[etapaValida]?.(ctx) ?? "Me conta o que você quiser acrescentar."}`;
       return {
         resposta: reabertura,
         etapa_concluida: false,
