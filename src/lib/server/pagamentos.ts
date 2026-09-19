@@ -47,7 +47,15 @@ export async function criarCobranca(
   });
 }
 
-/** Confirma um pagamento (idempotente): marca confirmado e paga a consulta. */
+/**
+ * Confirma um pagamento (idempotente): marca confirmado e PAGA + CONFIRMA a consulta.
+ *
+ * Regra do produto: o pagamento é o que CONFIRMA a consulta no agenda —
+ * o servidor impõe isso aqui, valendo para o gateway simulado (demo) e para
+ * o webhook real. Status só muda se a consulta ainda estiver aguardando
+ * ("em_espera" ou legado "pendente_anamnese"); nunca reintroduz consultas
+ * canceladas/concluídas.
+ */
 export async function confirmarPagamento(pagamentoId: string, via: "webhook" | "simulado") {
   const p = await db.pagamento.findUnique({
     where: { id: pagamentoId },
@@ -55,12 +63,19 @@ export async function confirmarPagamento(pagamentoId: string, via: "webhook" | "
   });
   if (!p) return null;
   if (p.status === "confirmado") return p; // reentrega do webhook: no-op
+  const statusConsulta: "confirmada" | undefined =
+    p.consulta.status === "em_espera" || p.consulta.status === "pendente_anamnese"
+      ? "confirmada"
+      : undefined;
   await db.$transaction([
     db.pagamento.update({
       where: { id: p.id },
       data: { status: "confirmado", via, confirmadoEm: new Date() },
     }),
-    db.consulta.update({ where: { id: p.consultaId }, data: { pago: true } }),
+    db.consulta.update({
+      where: { id: p.consultaId },
+      data: { pago: true, ...(statusConsulta ? { status: statusConsulta } : {}) },
+    }),
   ]);
   return db.pagamento.findUnique({ where: { id: p.id } });
 }

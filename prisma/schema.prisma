@@ -128,7 +128,7 @@ model Consulta {
   medico             User     @relation("ConsultaMedico", fields: [medicoId], references: [id], onDelete: Cascade)
   especialidade      String
   dataInicio         DateTime
-  status             String   @default("confirmada") // confirmada | pendente_anamnese | cancelada | concluida | em_espera
+  status             String   @default("confirmada") // confirmada | em_espera | pendente_anamnese (legado) | cancelada | concluida
   motivoConsulta     String?
   motivoCancelamento String?
   resumoMedico       String?
@@ -165,9 +165,11 @@ model Pagamento {
   confirmadoEm DateTime?
 }
 
-// Anamnese guiada pela BION IA em formato storytelling, feita APÓS o pagamento.
-// A consulta nasce "pendente_anamnese" e só vira "confirmada" quando a anamnese
-// é concluída. coleta: JSON com os dados organizados por etapa (identificação,
+// Triagem (anamnese) guiada pela BION IA em formato storytelling, feita APÓS o
+// pagamento. O pagamento CONFIRMA a consulta; a triagem é obrigatória e fica
+// disponível da confirmação ATÉ 5 MINUTOS ANTES do horário da consulta (janela
+// imposta pelo servidor em /api/anamnese) e NÃO altera o status.
+// coleta: JSON com os dados organizados por etapa (identificação,
 // queixa, HDA, sistemas, antecedentes, família, hábitos, gineco, psicossocial,
 // medicamentos). documentos: JSON [{ nome, tipo, exameImportado, resumo }].
 model Anamnese {

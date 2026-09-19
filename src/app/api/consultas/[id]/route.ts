@@ -41,8 +41,8 @@ async function consultaWire(id: string) {
  * Ações sobre uma consulta — regras e eventos determinados PELO SERVIDOR:
  * - cancelar (paciente dono, médico dono ou admin)
  * - concluir (médico dono ou admin)
- * - remarcar (paciente dono ou admin) — consulta pendente_anamnese CONTINUA
- *   pendente (a anamnese continua necessária); nunca auto-confirma.
+ * - remarcar (paciente dono ou admin) — mantém o status: quem confirma a
+ *   consulta é o pagamento; remarcar nunca confirma nem desconfirma.
  * - atualizar (admin): medicoId (nunca nome), status com whitelist,
  *   pagamento segue trilha do módulo de pagamentos.
  *
@@ -130,9 +130,9 @@ export async function PATCH(
           return Response.json({ erro: "Informe a nova data e horário." }, { status: 400 });
         }
         data.dataInicio = parseDataHora(body.data, body.hora);
-        // Regra de status no SERVIDOR: pendente_anamnese continua pendente
-        // (a anamnese segue necessária); nunca auto-confirma.
-        data.status = consulta.status === "pendente_anamnese" ? "pendente_anamnese" : "confirmada";
+        // Regra de status no SERVIDOR: remarcar NÃO altera confirmação —
+        // quem confirma é o pagamento (confirmarPagamento). Legado
+        // "pendente_anamnese" permanece até a trilha de pagamento resolver.
         data.remarcada = true;
         const novoQuando = data.dataInicio.toLocaleDateString("pt-BR") +
           " às " + data.dataInicio.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
@@ -147,7 +147,7 @@ export async function PATCH(
         }
         audit.acao = "CONSULTA_REMARCADA";
         audit.severidade = "warning";
-        audit.detalhes = `Consulta ${consulta.especialidade} remarcada para ${novoQuando} (status mantido: ${data.status})`;
+        audit.detalhes = `Consulta ${consulta.especialidade} remarcada para ${novoQuando} (status mantido: ${consulta.status})`;
         break;
       }
       case "atualizar": {

@@ -1092,15 +1092,16 @@ export function BionProvider({ children }: { children: ReactNode }) {
   );
 
   const adicionarConsulta = useCallback(
-    async (c: Omit<Consulta, "id" | "status" | "ts"> & { status?: "pendente_anamnese" }) => {
+    async (c: Omit<Consulta, "id" | "status" | "ts">) => {
       const medicoId = medicosRef.current.find((m) => m.nome === c.medico)?.id;
       if (!medicoId) {
         toast.error("Médico não encontrado para o agendamento.");
         return;
       }
-      // Status e pagamento são decididos PELO SERVIDOR (sempre pendente_anamnese;
-      // confirmação de pagamento via gateway). Contrato delta: devolve apenas a
-      // consulta criada + anamnese + pagamento + efeitos.
+      // Status e pagamento são decididos PELO SERVIDOR: o pagamento confirma
+      // a consulta (gateway simulado no ato; webhook real depois) e a triagem
+      // (anamnese) fica disponível até 5 minutos antes do horário. Contrato
+      // delta: devolve apenas a consulta criada + anamnese + pagamento + efeitos.
       const d = await api<DeltaWire>("/api/consultas", {
         method: "POST",
         body: JSON.stringify({
@@ -1116,7 +1117,7 @@ export function BionProvider({ children }: { children: ReactNode }) {
     [aplicarDelta],
   );
 
-  /** Conclui a anamnese e confirma a consulta (servidor notifica médico + paciente). */
+  /** Conclui a triagem (anamnese) e envia ao médico (servidor notifica médico + paciente). */
   const concluirAnamnese = useCallback(
     async (consultaId: string) => {
       return mutar("/api/anamnese", "PATCH", { consultaId, acao: "concluir" });

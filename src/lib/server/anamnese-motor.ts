@@ -235,7 +235,7 @@ function construirResumo(coleta: Record<string, Record<string, unknown>>, ctx: M
     .map(([etapa, dados]) => linhaResumo(etapa, dados))
     .filter(Boolean) as string[];
   const corpo = partes.length ? partes.join("\n\n") : "_Ainda sem dados registrados._";
-  return `Fechamos a parte principal da nossa conversa, ${ctx.primeiroNome}. Deixa eu confirmar o que anotei para ${ctx.medico}:\n\n${corpo}\n\n**Tem mais alguma coisa que você acha importante me contar? Está tudo correto?** Se faltar qualquer detalhe, é só me dizer — e, quando estiver tudo certo, toque em **“Concluir anamnese e confirmar consulta”** ali embaixo.`;
+  return `Fechamos a parte principal da nossa conversa, ${ctx.primeiroNome}. Deixa eu confirmar o que anotei para ${ctx.medico}:\n\n${corpo}\n\n**Tem mais alguma coisa que você acha importante me contar? Está tudo correto?** Se faltar qualquer detalhe, é só me dizer — e, quando estiver tudo certo, toque em **“Concluir triagem e enviar ao médico”** ali embaixo.`;
 }
 
 /* --------------------------- perguntas por etapa ----------------------- */
