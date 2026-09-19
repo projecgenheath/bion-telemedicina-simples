@@ -164,7 +164,7 @@ export function ChatBion({ aberto, onFechar, aoEnviarExame }: { aberto: boolean;
     } catch {
       setMensagens((m) => [
         ...m,
-        { remetente: "ia", texto: "Não consegui iniciar a anamnese agora — a conexão com a nuvem falhou. Toque em “Continuar anamnese” em instantes.", tipo: "erro" },
+        { remetente: "ia", texto: "Não consegui iniciar a triagem agora — a conexão com a nuvem falhou. Toque em “Continuar triagem” em instantes.", tipo: "erro" },
       ]);
       setAnamneseAtiva(null);
     } finally {
@@ -175,7 +175,7 @@ export function ChatBion({ aberto, onFechar, aoEnviarExame }: { aberto: boolean;
   const retomarAnamnese = (a: AnamneseResumo) => {
     const c = consultas.find((x) => x.id === a.consultaId);
     if (!c) return;
-    setMensagens((m) => [...m, { remetente: "usuario", texto: "Quero continuar minha anamnese" }]);
+    setMensagens((m) => [...m, { remetente: "usuario", texto: "Quero continuar minha triagem" }]);
     void iniciarAnamnese(a.consultaId, {
       medico: a.medico,
       especialidade: a.especialidade,
