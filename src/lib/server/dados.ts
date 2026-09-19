@@ -57,16 +57,8 @@ export function parseDataHora(data: string, hora: string): Date {
 /* ------------------------------------------------------------------ */
 /* Resolução de relacionamentos                                        */
 /* ------------------------------------------------------------------ */
-
-export async function medicoIdPorNome(nome: string): Promise<string | null> {
-  const u = await db.user.findFirst({ where: { nome, role: "MEDICO" } });
-  return u?.id ?? null;
-}
-
-export async function pacienteIdPorNome(nome: string): Promise<string | null> {
-  const u = await db.user.findFirst({ where: { nome, role: "PACIENTE" } });
-  return u?.id ?? null;
-}
+/* Nota (hardening): relacionamentos usam IDs (medicoId/pacienteId).
+ * Nunca resolva usuários por nome — dois usuários podem ter o mesmo nome. */
 
 /** "R$ 150" | "150" | 150 → 150 (reais, float) */
 export function parseValor(v: unknown): number {

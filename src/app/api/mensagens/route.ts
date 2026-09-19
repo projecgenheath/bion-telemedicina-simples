@@ -1,19 +1,15 @@
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { exigirSessao } from "@/lib/server/auth";
-import {
-  carregarDados,
-  aplicarSideEffects,
-  type NotifPayload,
-  type AuditPayload,
-} from "@/lib/server/dados";
+import { aplicarSideEffects, carregarDados } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
 
 /**
  * Mensageria assíncrona BION (paciente ↔ médico, e suporte BION).
  *
  * GET    — payload leve ({ mensagens }) para polling do cliente (~4s).
- * POST   — envia mensagem: { paraId, texto, notificacoes?, audit? }.
+ * POST   — envia mensagem: { paraId, texto }. A notificação ao destinatário
+ *          é gerada PELO SERVIDOR a partir do evento real.
  *          Contrato delta: devolve APENAS a mensagem criada.
  * PATCH  — marca conversa como lida: { comUsuarioId } → estado fresco.
  */
@@ -54,8 +50,6 @@ export async function POST(req: NextRequest) {
     const body = (await req.json()) as {
       paraId?: string;
       texto?: string;
-      notificacoes?: NotifPayload[];
-      audit?: AuditPayload;
     };
 
     const texto = (body.texto ?? "").trim();
@@ -116,7 +110,21 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    const efeitos = await aplicarSideEffects(usuario, body.notificacoes, body.audit);
+    // Notificação gerada pelo SERVIDOR a partir do evento real (o cliente
+    // não define destinatário/título/conteúdo de notificações).
+    const recorte = texto.trim().slice(0, 80);
+    const efeitos = await aplicarSideEffects(
+      usuario,
+      [
+        {
+          tipo: "mensagem",
+          titulo: `Nova mensagem de ${usuario.nome || "BION"}`,
+          texto: recorte.length < texto.trim().length ? `${recorte}…` : recorte,
+          usuarioId: destinatario.id,
+        },
+      ],
+      undefined,
+    );
 
     // Contrato delta: devolve APENAS a mensagem criada (+ efeitos colaterais
     // criados, quando visíveis ao próprio usuário).

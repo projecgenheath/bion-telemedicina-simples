@@ -1,10 +1,11 @@
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { exigirPapel } from "@/lib/server/auth";
-import { carregarDados, aplicarSideEffects, type NotifPayload, type AuditPayload } from "@/lib/server/dados";
+import { carregarDados, aplicarSideEffects } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
 
-/** Registro de avaliação de consulta (apenas pacientes). */
+/** Registro de avaliação de consulta (apenas pacientes).
+ *  Notificações e auditoria geradas PELO SERVIDOR. */
 export async function POST(req: NextRequest) {
   try {
     const usuario = await exigirPapel("PACIENTE");
@@ -16,8 +17,6 @@ export async function POST(req: NextRequest) {
       pontualidade?: number;
       atencao?: number;
       clareza?: number;
-      notificacoes?: NotifPayload[];
-      audit?: AuditPayload;
     };
 
     const medico = await db.user.findFirst({
@@ -50,14 +49,29 @@ export async function POST(req: NextRequest) {
       data: { avaliacao: Number(novaMedia.toFixed(1)), numAvaliacoes: { increment: 1 } },
     });
 
-    await aplicarSideEffects(usuario, body.notificacoes, {
-      ...(body.audit ?? {
+    await aplicarSideEffects(
+      usuario,
+      [
+        {
+          tipo: "agenda",
+          titulo: "Avaliação enviada",
+          texto: `Você avaliou ${medico.nome} com ${nota} estrela(s). Obrigado pelo retorno!`,
+          usuarioId: usuario.id,
+        },
+        {
+          tipo: "mensagem",
+          titulo: "Nova avaliação recebida",
+          texto: `${usuario.nome} avaliou seu atendimento com ${nota} estrela(s).${body.comentario ? ` "${body.comentario.slice(0, 80)}"` : ""}`,
+          usuarioId: medico.id,
+        },
+      ],
+      {
         acao: "AVALIACAO_REGISTRADA",
         categoria: "consulta",
+        entidade: "avaliacao",
         detalhes: `Avaliação ${nota} estrela(s) para ${medico.nome}${body.comentario ? ` — "${body.comentario.slice(0, 80)}"` : ""}`,
-      }),
-      entidade: "avaliacao",
-    });
+      },
+    );
 
     const dados = await carregarDados(usuario);
     return ok(dados);

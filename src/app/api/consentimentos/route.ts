@@ -1,10 +1,12 @@
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { exigirSessao } from "@/lib/server/auth";
-import { carregarDados, aplicarSideEffects, pacienteIdPorNome, type NotifPayload, type AuditPayload } from "@/lib/server/dados";
+import { carregarDados, aplicarSideEffects } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
 
-/** Registro de consentimento LGPD. */
+/** Registro de consentimento LGPD.
+ *  Paciente identificado por ID (sessão do próprio; ou ID informado por
+ *  médico/admin — nunca por nome). Eventos gerados PELO SERVIDOR. */
 export async function POST(req: NextRequest) {
   try {
     const usuario = await exigirSessao();
@@ -12,16 +14,18 @@ export async function POST(req: NextRequest) {
       finalidade: string;
       documentos: number;
       aceito: boolean;
-      paciente?: string; // usado por médicos/admin ao registrar para um paciente
-      notificacoes?: NotifPayload[];
-      audit?: AuditPayload;
+      pacienteId?: string; // usado por médicos/admin ao registrar para um paciente
     };
 
     let pacienteId: string | null = null;
     if (usuario.role === "PACIENTE") {
       pacienteId = usuario.id;
-    } else if (body.paciente) {
-      pacienteId = await pacienteIdPorNome(body.paciente);
+    } else if (body.pacienteId) {
+      const paciente = await db.user.findFirst({
+        where: { id: body.pacienteId, role: "PACIENTE" },
+        select: { id: true },
+      });
+      pacienteId = paciente?.id ?? null;
     }
 
     const registro = await db.consentimento.create({
@@ -35,16 +39,27 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    await aplicarSideEffects(usuario, body.notificacoes, {
-      ...(body.audit ?? {
+    await aplicarSideEffects(
+      usuario,
+      [
+        {
+          tipo: "receita",
+          titulo: registro.aceito ? "Consentimento registrado" : "Consentimento recusado",
+          texto: registro.aceito
+            ? `${usuario.nome} autorizou a geração do prontuário em PDF (${registro.documentos} documento(s)).`
+            : `${usuario.nome} recusou o consentimento para gerar o prontuário em PDF.`,
+          usuarioId: pacienteId ?? usuario.id,
+        },
+      ],
+      {
         acao: "CONSENTIMENTO_REGISTRADO",
         categoria: "consentimento",
-        severidade: body.aceito ? "info" : "warning",
-        detalhes: `Consentimento ${body.aceito ? "aceito" : "recusado"} para ${registro.finalidade} (${registro.documentos} documento(s))`,
-      }),
-      entidade: "consentimento",
-      entidadeId: registro.id,
-    });
+        severidade: registro.aceito ? "info" : "warning",
+        entidade: "consentimento",
+        entidadeId: registro.id,
+        detalhes: `Consentimento ${registro.aceito ? "aceito" : "recusado"} por ${usuario.nome} para ${registro.finalidade} (${registro.documentos} documento(s))`,
+      },
+    );
 
     const dados = await carregarDados(usuario);
     return ok(dados);

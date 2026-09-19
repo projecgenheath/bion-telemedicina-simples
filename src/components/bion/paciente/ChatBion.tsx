@@ -399,13 +399,7 @@ export function ChatBion({ aberto, onFechar, aoEnviarExame }: { aberto: boolean;
           hora,
           motivoConsulta: `Agendamento pela BION IA — ${metodo === "pix" ? "Pix" : "Cartão"}`,
           valor: medicoRegistro?.valor ?? 0,
-          pago: true,
-          status: "pendente_anamnese",
-          audit: {
-            acao: "CONSULTA_AGENDADA",
-            categoria: "consulta",
-            detalhes: `Agendamento via BION IA com ${medico} — ${especialidade} em ${dia} às ${hora} (pago, aguardando anamnese)`,
-          },
+          metodo,
         }),
       });
       const json = (await res.json()) as { consultaCriada?: string; erro?: string } & Record<string, unknown>;

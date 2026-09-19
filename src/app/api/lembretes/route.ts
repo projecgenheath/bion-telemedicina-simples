@@ -1,10 +1,11 @@
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { exigirPapel } from "@/lib/server/auth";
-import { carregarDados, aplicarSideEffects, type NotifPayload, type AuditPayload } from "@/lib/server/dados";
+import { carregarDados, aplicarSideEffects } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
 
-/** Criação de lembretes de saúde (apenas pacientes). */
+/** Criação de lembretes de saúde (apenas pacientes).
+ *  Notificações e auditoria geradas PELO SERVIDOR. */
 export async function POST(req: NextRequest) {
   try {
     const usuario = await exigirPapel("PACIENTE");
@@ -14,8 +15,6 @@ export async function POST(req: NextRequest) {
       tipo: string;
       frequencia: string;
       medicamento?: string;
-      notificacoes?: NotifPayload[];
-      audit?: AuditPayload;
     };
 
     if (!body.titulo?.trim()) {
@@ -33,15 +32,24 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    await aplicarSideEffects(usuario, body.notificacoes, {
-      ...(body.audit ?? {
+    await aplicarSideEffects(
+      usuario,
+      [
+        {
+          tipo: "lembrete",
+          titulo: "Lembrete criado",
+          texto: `${lembrete.titulo} programado para ${lembrete.horario} (${lembrete.frequencia}).`,
+          usuarioId: usuario.id,
+        },
+      ],
+      {
         acao: "LEMBRETE_CRIADO",
         categoria: "sistema",
-        detalhes: `Lembrete "${body.titulo}" — ${body.horario} (${body.frequencia})`,
-      }),
-      entidade: "lembrete",
-      entidadeId: lembrete.id,
-    });
+        entidade: "lembrete",
+        entidadeId: lembrete.id,
+        detalhes: `Lembrete "${lembrete.titulo}" — ${lembrete.horario} (${lembrete.frequencia})`,
+      },
+    );
 
     const dados = await carregarDados(usuario);
     return ok(dados);
