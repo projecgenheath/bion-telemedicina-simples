@@ -440,3 +440,25 @@ Work Log:
 Stage Summary:
 - Regras da auditoria impostas pelo servidor: pagamento (cliente nunca define pago — gateway simulado ou webhook HMAC), status (paciente nasce pendente_anamnese; só anamnese concluída confirma), sessão revogada na desativação, notificações/auditoria geradas no servidor, relacionamentos por ID.
 - Banco oficial PostgreSQL/Supabase sem vestígios SQLite; segredos fora do git.
+
+---
+Task ID: triagem-pagamento-v2
+Agent: Super Z (agente principal)
+Task: Nova lógica de confirmação/triagem + reescrita do estilo da BION IA na anamnese
+
+Work Log:
+- Requisito do usuário: (1) BION IA da anamnese estava "ridiculamente horrível" — não storytelling, longa, sem sentido, sem saber se pergunta ou afirma (screenshot 18/09 20:13); (2) nova lógica: pagamento CONFIRMA a consulta e a triagem (anamnese) fica disponível logo após a confirmação até 5 MINUTOS ANTES do horário.
+- Servidor (pagamento confirma): confirmarPagamento() agora impõe pago=true + status=confirmada (quando em_espera ou legado pendente_anamnese) — vale para gateway simulado e webhook real. POST /api/consultas nasce "em_espera" e o pagamento confirma no ato; notificações "Consulta confirmada" + auditoria reescritas. Webhook (/api/pagamentos/webhook) notifica o paciente da confirmação. remarcar() não altera mais status.
+- Anamnese (janela imposta pelo servidor): POST /api/anamnese exige consulta paga e bloqueia (409) quando agora >= dataInicio - 5min; resposta traz disponivelAte. PATCH acao=concluir NÃO altera mais o status (exceto legado pendente_anamnese, confirmado para migrar registros antigos); notificações viraram "Triagem concluída"/"Triagem disponível".
+- Estilo da IA (prompt reescrito): máx. 3 frases curtas, TODA mensagem termina em UMA pergunta com "?", proibido empilhar dois interrogativos, eco curto com as palavras do paciente (nada de repetir o relato em tom de laudo), avanço generoso por etapa.
+- Avanço de etapa IMPOSTO PELO SERVIDOR: E2E revelou o LLM girando em círculos na etapa "historia" (nunca sinalizava etapa_concluida, misturava fases). coleta[etapa]._turnos conta turnos do usuário; teto por etapa (historia 5, demais 2, gineco 3) força avanço; ABERTURAS_ETAPA adiciona ponte curta no caminho LLM.
+- Bug real corrigido: retomada da triagem em "historia" → 500 "P[n] is not a function" (REABRIR_PERGUNTA sem a chave historia chamava undefined(ctx)). Agora retoma pela pergunta OPQRST em aberto conforme o contador, com fallback seguro.
+- Frontend: ChatBion com textos do novo fluxo (pagamento confirma → triagem até 5 min antes), filtro de retomada pela janela (triagemDisponivel: confirmada/legado + pago + janela aberta), guard de horários "Hoje" (<10 min), rótulos "Triagem". PacienteApp: badge/CTA "Triagem pendente" no card próxima consulta pela janela. bion-store: comentários e assinatura atualizados.
+- Validação: tsc OK, eslint OK, build OK, produção E2E — consulta nova → pagamento → confirmada + notificações; janela fechada → 409 correto; conversa LLM curta com UMA pergunta; fallback motor local transparente quando canal público oscilou; triagem completa até concluir (consulta permanece confirmada, anamnese concluida).
+- Deploy: push do commit e75fa33 não gerou deployment (webhook perdido — bundle antigo no ar por ~15 min); commit vazio 118e930 disparou o deploy; f5d1a4c entregou o avanço server-side.
+- Evidências em download/evidencias-triagem-2/ (01 home com CTA triagem, 02 chat janela, 03 home final, 04 saudação triagem).
+
+Stage Summary:
+- Fluxo oficial: pagamento confirma a consulta no agenda (servidor); triagem obrigatória disponível da confirmação até 5 min antes; concluir triagem não mexe no status.
+- BION IA da triagem: conversa curta estilo storytelling, sempre termina em UMA pergunta; avanço de etapa garantido pelo servidor com fallback determinístico.
+- Regressão encontrada e corrigida em produção: 500 na retomada no meio da HDA.
