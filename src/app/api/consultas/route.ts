@@ -15,8 +15,11 @@ import { ok, falha } from "@/lib/server/http";
  * Agendamento de nova consulta (apenas pacientes).
  *
  * Regras impostas PELO SERVIDOR (o cliente não decide):
- *  - status: sempre "pendente_anamnese" — a consulta só vira "confirmada"
- *    quando a anamnese é concluída (rota /api/anamnese).
+ *  - status: o PAGAMENTO é o que confirma a consulta. Nasce "em_espera"
+ *    (aguardando pagamento) e vira "confirmada" no ato do pagamento
+ *    (simulado confirma aqui; webhook, em /api/pagamentos/webhook).
+ *  - triagem (anamnese): obrigatória, disponível LOGO APÓS a confirmação
+ *    ATÉ 5 MINUTOS ANTES do horário — rota /api/anamnese. Não altera status.
  *  - pagamento: cliente não envia `pago`. O servidor cria a cobrança
  *    (Pagamento) e a confirma via gateway — simulado (demo) ou webhook
  *    assinado quando BION_PAGAMENTO_WEBHOOK_SECRET está configurado.
@@ -45,8 +48,9 @@ export async function POST(req: NextRequest) {
       return Response.json({ erro: "Médico não encontrado." }, { status: 400 });
     }
 
-    // Criação pelo paciente SEMPRE nasce pendente de anamnese (nunca confirmada).
-    const status = "pendente_anamnese";
+    // Criação pelo paciente nasce aguardando pagamento — o pagamento é
+    // o que CONFIRMA (abaixo, no gateway; ou no webhook real).
+    const status = "em_espera";
 
     const dataInicio = parseDataHora(body.data, body.hora);
     const consulta = await db.consulta.create({
@@ -92,13 +96,13 @@ export async function POST(req: NextRequest) {
       {
         tipo: "agenda",
         titulo: "Nova consulta agendada",
-        texto: `${usuario.nome} agendou ${consulta.especialidade} em ${body.data} às ${body.hora}. Anamnese pré-consulta disponível na aba da sala.`,
+        texto: `${usuario.nome} agendou ${consulta.especialidade} em ${body.data} às ${body.hora}. Triagem pré-consulta (BION IA) disponível até 5 minutos antes do horário.`,
         usuarioId: medico.id,
       },
       {
         tipo: "agenda",
         titulo: "Consulta reservada",
-        texto: `${consulta.especialidade} com ${medico.nome} — ${body.data} às ${body.hora}. Complete a anamnese para confirmar.`,
+        texto: `${consulta.especialidade} com ${medico.nome} — ${body.data} às ${body.hora}. Assim que o pagamento for confirmado, sua consulta entra no agenda e a triagem com a BION IA fica disponível até 5 minutos antes do horário.`,
         usuarioId: usuario.id,
       },
     ];
@@ -107,23 +111,35 @@ export async function POST(req: NextRequest) {
       categoria: "consulta",
       entidade: "consulta",
       entidadeId: consulta.id,
-      detalhes: `Agendamento com ${medico.nome} — ${consulta.especialidade} em ${body.data} às ${body.hora} (pendente_anamnese)`,
+      detalhes: `Agendamento com ${medico.nome} — ${consulta.especialidade} em ${body.data} às ${body.hora} (em_espera — aguardando pagamento)`,
     };
 
+    let statusFinal = status;
+
     if (modoGateway() === "simulado") {
-      // Demonstração: gateway simulado confirma no servidor.
+      // Demonstração: gateway simulado confirma no servidor — e o pagamento
+      // CONFIRMA a consulta (regra imposta aqui, não pelo navegador).
       const confirmado = await confirmarPagamento(cobranca.id, "simulado");
       if (confirmado) {
         pagoFinal = true;
         pagamento = paraWire(confirmado);
-        eventos.push({
-          tipo: "pagamento",
-          titulo: "Pagamento confirmado",
-          texto: `Pagamento de R$ ${pagamento.valor.toFixed(2).replace(".", ",")} (${pagamento.metodo === "pix" ? "Pix" : "Cartão"}) aprovado — consulta reservada.`,
-          usuarioId: usuario.id,
-        });
+        statusFinal = "confirmada";
+        eventos.push(
+          {
+            tipo: "pagamento",
+            titulo: "Pagamento confirmado",
+            texto: `Pagamento de R$ ${pagamento.valor.toFixed(2).replace(".", ",")} (${pagamento.metodo === "pix" ? "Pix" : "Cartão"}) aprovado.`,
+            usuarioId: usuario.id,
+          },
+          {
+            tipo: "agenda",
+            titulo: "Consulta confirmada",
+            texto: `${consulta.especialidade} com ${medico.nome} — ${body.data} às ${body.hora} está confirmada. Faça sua triagem com a BION IA até 5 minutos antes do horário.`,
+            usuarioId: usuario.id,
+          },
+        );
         audit.acao = "CONSULTA_AGENDADA_PAGA";
-        audit.detalhes = `Agendamento com ${medico.nome} — ${consulta.especialidade} em ${body.data} às ${body.hora} (pago via gateway simulado, pendente_anamnese)`;
+        audit.detalhes = `Agendamento com ${medico.nome} — ${consulta.especialidade} em ${body.data} às ${body.hora} (pago via gateway simulado — confirmada; triagem até 5 min antes)`;
       }
     }
 
@@ -138,7 +154,7 @@ export async function POST(req: NextRequest) {
         paciente: usuario.nome,
         especialidade: consulta.especialidade,
         dataInicio: dataInicio.toISOString(),
-        status: consulta.status,
+        status: statusFinal,
         motivoConsulta: consulta.motivoConsulta ?? undefined,
         motivoCancelamento: consulta.motivoCancelamento ?? undefined,
         valor: consulta.valor,

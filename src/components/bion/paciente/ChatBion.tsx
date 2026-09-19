@@ -20,10 +20,10 @@ import { MESES_AGENDA } from "./constantes";
 
 /**
  * BION IA do app do paciente — conversa livre (LLM real) + ações estruturadas:
- *  - Agendar consulta: wizard com PAGAMENTO; após pagar, a consulta fica
- *    "pendente_anamnese" e a IA conduz a ANAMNESE em storytelling (roteiro
- *    clínico em 12 etapas) — só depois dela a consulta é confirmada;
- *  - Durante a anamnese a IA pergunta por documentos/exames → caixa de upload
+ *  - Agendar consulta: wizard com PAGAMENTO; o pagamento CONFIRMA a consulta
+ *    no agenda e a BION IA conduz a TRIAGEM (anamnese) em storytelling —
+ *    disponível logo após a confirmação ATÉ 5 MINUTOS ANTES do horário;
+ *  - Durante a triagem a IA pergunta por documentos/exames → caixa de upload
  *    → leitura pela IA (laudos laboratoriais são processados e extraídos);
  *  - Enviar laudo avulso: PDF/foto lido com verificação de segurança do nome.
  */
@@ -36,7 +36,7 @@ type Msg = {
 };
 type Etapa = null | "especialidade" | "medico" | "dia" | "hora" | "confirmar";
 
-/** Etapas da anamnese — mesma ordem canônica da rota /api/anamnese. */
+/** Etapas da triagem — mesma ordem canônica da rota /api/anamnese. */
 const ETAPAS_ANAMNESE = [
   { id: "identificacao", rotulo: "Identificação" },
   { id: "queixa", rotulo: "Queixa principal" },
@@ -73,6 +73,17 @@ type RespostaAnamnese = {
 
 const DIAS_SEMANA = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 
+/** Janela da triagem: fecha 5 minutos antes do início da consulta (mesma regra do servidor). */
+const JANELA_TRIAGEM_MS = 5 * 60_000;
+
+/** Triagem disponível = consulta paga/confirmada e ainda faltam >5 min para o início. */
+function triagemDisponivel(c: { status: string; pago?: boolean; dataISO?: string; ts: number }): boolean {
+  if (!(c.status === "confirmada" || c.status === "pendente_anamnese")) return false;
+  if (c.pago === false) return false;
+  const inicio = c.dataISO ? new Date(c.dataISO).getTime() : c.ts;
+  return Date.now() < inicio - JANELA_TRIAGEM_MS;
+}
+
 export function ChatBion({ aberto, onFechar, aoEnviarExame }: { aberto: boolean; onFechar: () => void; aoEnviarExame?: () => void }) {
   const {
     sessao,
@@ -100,12 +111,12 @@ export function ChatBion({ aberto, onFechar, aoEnviarExame }: { aberto: boolean;
 
   const medicosAtivos = medicos.filter((m) => m.status === "ativo");
 
-  // Anamneses em andamento de consultas agendadas (para retomada)
+  // Triagens em andamento de consultas confirmadas dentro da janela (retomada)
   const anamnesesPendentes = anamneses
     .filter((a) => a.status === "em_andamento")
     .filter((a) => {
       const c = consultas.find((x) => x.id === a.consultaId);
-      return c && c.status === "pendente_anamnese";
+      return c && triagemDisponivel(c);
     });
 
   useEffect(() => {
@@ -113,7 +124,7 @@ export function ChatBion({ aberto, onFechar, aoEnviarExame }: { aberto: boolean;
       setMensagens([
         {
           remetente: "ia",
-          texto: `Olá, ${sessao.nome.split(" ")[0]}! Sou a BION IA. Eu **agendo suas consultas** — e, após o pagamento, faço sua **anamnese** com calma, para o médico já te conhecer antes do atendimento. Também tiro dúvidas de saúde e leio seus laudos (PDF ou foto). Como posso ajudar?`,
+          texto: `Olá, ${sessao.nome.split(" ")[0]}! Sou a BION IA. Eu **agendo suas consultas** — o pagamento já confirma no agenda, e eu faço sua **triagem** (anamnese) com calma, disponível até 5 minutos antes do horário, para o médico já te conhecer antes do atendimento. Também tiro dúvidas de saúde e leio seus laudos (PDF ou foto). Como posso ajudar?`,
         },
       ]);
     }
@@ -216,13 +227,13 @@ export function ChatBion({ aberto, onFechar, aoEnviarExame }: { aberto: boolean;
         ...m,
         {
           remetente: "ia",
-          texto: `Perfeito! Anamnese concluída e enviada para ${medico}. Sua consulta de **${especialidade}** (${quando}) está **confirmada** no agenda. Cuide-se e até lá!`,
+          texto: `Tudo pronto! Sua triagem foi enviada para ${medico}. Te vejo na consulta de **${especialidade}** (${quando}) — cuide-se!`,
           tipo: "sucesso-agendamento",
         },
       ]);
       histAnamneseRef.current = [];
       setAnamneseAtiva(null);
-      toast.success("Anamnese concluída — consulta confirmada.");
+      toast.success("Triagem concluída e enviada ao médico.");
     } catch {
       setMensagens((m) => [
         ...m,
@@ -378,7 +389,7 @@ export function ChatBion({ aberto, onFechar, aoEnviarExame }: { aberto: boolean;
     setEtapa("especialidade");
   };
 
-  /** Pagamento (simulado) + criação da consulta pendente de anamnese. */
+  /** Pagamento (simulado) + criação da consulta — o pagamento confirma no agenda. */
   const pagarEAgendar = async () => {
     const { medico, especialidade, dia, hora } = escolha;
     if (!medico || !especialidade || !dia || !hora || pagando) return;
@@ -412,7 +423,7 @@ export function ChatBion({ aberto, onFechar, aoEnviarExame }: { aberto: boolean;
         ...m,
         {
           remetente: "ia",
-          texto: `Pagamento de **R$ ${medicoRegistro?.valor ?? 0}** confirmado (metodo: ${metodo === "pix" ? "Pix" : "Cartão"}). Sua consulta de **${especialidade}** com ${medico} está **reservada** para ${quando} — e fica pendente até a anamnese terminar.\n\nVamos fazer sua anamnese agora? É uma **conversa tranquila, no seu ritmo**: eu já tenho seus dados do perfil, você confirma e me conta o que está sentindo. Com ela, o médico chega à consulta já sabendo da sua história.`,
+          texto: `Pagamento de **R$ ${medicoRegistro?.valor ?? 0}** confirmado (método: ${metodo === "pix" ? "Pix" : "Cartão"}). Sua consulta de **${especialidade}** com ${medico} está **confirmada** para ${quando}.\n\nAgora vamos fazer sua **triagem** — uma conversa tranquila, no seu ritmo, que fica disponível até **5 minutos antes** do horário. Eu já tenho seus dados do perfil; você confirma e me conta o que está sentindo, e o médico chega à consulta já sabendo da sua história.`,
           tipo: "anamnese",
         },
       ]);
@@ -489,7 +500,26 @@ export function ChatBion({ aberto, onFechar, aoEnviarExame }: { aberto: boolean;
     }
     if (etapa === "hora") {
       const medico = medicosAtivos.find((m) => m.nome === escolha.medico);
-      const horarios = medico?.horariosDisponiveis?.length ? medico.horariosDisponiveis : ["08:00", "09:00", "10:00", "14:00", "15:00", "16:00"];
+      let horarios = medico?.horariosDisponiveis?.length ? medico.horariosDisponiveis : ["08:00", "09:00", "10:00", "14:00", "15:00", "16:00"];
+      // "Hoje": só horários com folga suficiente para o pagamento + triagem (10 min)
+      if (escolha.dia === "Hoje") {
+        const agora = new Date(Date.now() + 10 * 60_000);
+        const limiteMin = agora.getHours() * 60 + agora.getMinutes();
+        horarios = horarios.filter((h) => {
+          const [hh, mm] = h.split(":").map(Number);
+          return hh * 60 + mm >= limiteMin;
+        });
+      }
+      if (!horarios.length) {
+        return {
+          titulo: "Horário",
+          opcoes: [{ rotulo: "Sem horários disponíveis hoje", valor: "" }],
+          escolher: () => {
+            setMensagens((m) => [...m, { remetente: "ia", texto: "Para hoje a janela de triagem já passou — escolha outro dia, por favor." }]);
+            setEtapa("dia");
+          },
+        };
+      }
       return {
         titulo: "Horário",
         opcoes: horarios.slice(0, 12).map((h) => ({ rotulo: h, valor: h })),
@@ -527,7 +557,7 @@ export function ChatBion({ aberto, onFechar, aoEnviarExame }: { aberto: boolean;
           <div className="flex-1 min-w-0">
             <div className="font-bold text-[#0a1f44] dark:text-[#f2f6fc]">BION IA</div>
             <div className="text-xs text-emerald-700 dark:text-emerald-300 font-medium">
-              {pensando || enviandoLaudo || pagando ? "Digitando…" : anamneseAtiva ? "Anamnese em andamento" : "Online · responde na hora"}
+              {pensando || enviandoLaudo || pagando ? "Digitando…" : anamneseAtiva ? "Triagem em andamento" : "Online · responde na hora"}
             </div>
           </div>
           <button onClick={onFechar} aria-label="Fechar conversa" className="rounded-full p-2.5 bp-glass text-[#0a1f44] dark:text-[#f2f6fc]">
@@ -545,12 +575,15 @@ export function ChatBion({ aberto, onFechar, aoEnviarExame }: { aberto: boolean;
               <div className="flex items-center justify-between text-[11px] font-semibold text-[#0a1f44]/60 dark:text-white/55">
                 <span className="inline-flex items-center gap-1.5">
                   <Stethoscope className="w-3.5 h-3.5" />
-                  Anamnese — {atual.rotulo}
+                  Triagem — {atual.rotulo}
                 </span>
                 <span>{idx + 1}/{ETAPAS_ANAMNESE.length}</span>
               </div>
               <div className="mt-1.5 h-1.5 rounded-full bg-[#0a1f44]/10 dark:bg-white/10 overflow-hidden">
                 <div className="h-full rounded-full bg-gradient-to-r from-[#123e7d] to-[#0a1f44] dark:from-sky-400 dark:to-sky-200 transition-all" style={{ width: `${pct}%` }} />
+              </div>
+              <div className="mt-1.5 text-[10px] text-[#0a1f44]/45 dark:text-white/40">
+                Disponível até 5 minutos antes da consulta ({anamneseAtiva.quando})
               </div>
             </div>
           );
@@ -644,7 +677,7 @@ export function ChatBion({ aberto, onFechar, aoEnviarExame }: { aberto: boolean;
                   Cancelar
                 </button>
               </div>
-              <p className="text-[11px] opacity-50 mt-2">Após o pagamento, sua consulta fica pendente até a conclusão da anamnese com a BION IA.</p>
+              <p className="text-[11px] opacity-50 mt-2">O pagamento confirma sua consulta no agenda, e a triagem com a BION IA fica disponível até 5 minutos antes do horário.</p>
             </div>
           );
         })()}
@@ -676,14 +709,14 @@ export function ChatBion({ aberto, onFechar, aoEnviarExame }: { aberto: boolean;
             <div className="flex items-center gap-2 text-sm font-bold text-[#0a1f44] dark:text-[#f2f6fc] mb-1">
               <BadgeCheck className="w-4 h-4" /> Tudo pronto para o médico
             </div>
-            <p className="text-xs opacity-60 mb-3">Ao concluir, sua consulta deixa de ficar pendente e é confirmada no agenda.</p>
+            <p className="text-xs opacity-60 mb-3">Ao concluir, o médico recebe sua triagem antes do atendimento.</p>
             <button onClick={() => void concluirAnamneseAgora()} className="bp-acao w-full py-3 text-sm inline-flex items-center justify-center gap-2">
-              <BadgeCheck className="w-4 h-4" /> Concluir anamnese e confirmar consulta
+              <BadgeCheck className="w-4 h-4" /> Concluir triagem e enviar ao médico
             </button>
           </div>
         )}
 
-        {/* Retomada: anamneses pendentes de consultas pagas */}
+        {/* Retomada: triagens em andamento de consultas confirmadas na janela */}
         {mensagens.length > 0 && etapa === null && !anamneseAtiva && anamnesesPendentes.length > 0 && (
           <div className="flex flex-wrap gap-2">
             {anamnesesPendentes.map((a) => (
@@ -693,7 +726,7 @@ export function ChatBion({ aberto, onFechar, aoEnviarExame }: { aberto: boolean;
                 className="rounded-full bg-emerald-600/10 border border-emerald-600/30 px-4 py-2.5 text-sm font-semibold text-emerald-700 dark:text-emerald-300 inline-flex items-center gap-1.5"
               >
                 <Stethoscope className="w-4 h-4" />
-                Continuar anamnese — {a.especialidade} com {a.medico}
+                Continuar triagem — {a.especialidade} com {a.medico}
               </button>
             ))}
           </div>

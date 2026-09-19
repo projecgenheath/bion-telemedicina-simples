@@ -46,7 +46,7 @@ const rotuloCurto = (iso: string) => {
 
 export function PacienteApp() {
   const router = useRouter();
-  const { sessao, pacientePerfil, consultas, lembretes, medicoes, exames, sair } = useBion();
+  const { sessao, pacientePerfil, consultas, anamneses, lembretes, medicoes, exames, sair } = useBion();
 
   const carrosselRef = useRef<HTMLDivElement>(null);
   const [painel, setPainel] = useState(1);
@@ -102,6 +102,15 @@ export function PacienteApp() {
   }, [consultas, sessao.nome]);
 
   const salaAberta = proxima ? Date.now() >= proxima.ts - 30 * 60_000 && Date.now() <= proxima.ts + 2 * 3_600_000 : false;
+
+  // Triagem (anamnese) pendente: consulta confirmada com triagem em andamento
+  // e janela ainda aberta (fecha 5 minutos antes do horário — regra do servidor).
+  const triagemPendente = proxima
+    ? anamneses.some((a) => a.consultaId === proxima.id && a.status === "em_andamento") &&
+      ["confirmada", "pendente_anamnese"].includes(proxima.status) &&
+      proxima.pago !== false &&
+      Date.now() < proxima.ts - 5 * 60_000
+    : false;
 
   const lembretesPendentes = lembretes.filter((l) => !l.feito);
 
@@ -256,19 +265,19 @@ export function PacienteApp() {
             {proxima ? (
               <button
                 onClick={() => {
-                  if (proxima.status === "pendente_anamnese") setChatAberto(true);
+                  if (triagemPendente) setChatAberto(true);
                   else if (salaAberta) router.push("/sala-espera");
                 }}
                 className="bp-glass p-5 text-left w-full transition hover:shadow-xl"
-                aria-label={`Próxima consulta: ${proxima.especialidade} com ${proxima.medico}, ${proxima.data} às ${proxima.hora}${proxima.status === "pendente_anamnese" ? ". Toque para concluir a anamnese com a BION IA" : salaAberta ? ". Tocar para entrar na sala de espera" : ""}`}
+                aria-label={`Próxima consulta: ${proxima.especialidade} com ${proxima.medico}, ${proxima.data} às ${proxima.hora}${triagemPendente ? ". Toque para fazer a triagem com a BION IA" : salaAberta ? ". Tocar para entrar na sala de espera" : ""}`}
               >
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-xs font-bold uppercase tracking-wider text-[#0a1f44]/50 dark:text-white/50">
                     Próxima consulta
                   </span>
-                  {proxima.status === "pendente_anamnese" ? (
+                  {triagemPendente ? (
                     <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-amber-500/15 text-amber-700 dark:bg-amber-400/15 dark:text-amber-300">
-                      Pendente anamnese
+                      Triagem pendente
                     </span>
                   ) : salaAberta ? (
                     <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-600 text-white">Sala aberta</span>
@@ -278,11 +287,11 @@ export function PacienteApp() {
                 </div>
                 <div className="text-xl font-bold">{proxima.especialidade}</div>
                 <div className="text-sm opacity-70">com {proxima.medico}</div>
-                {proxima.status === "pendente_anamnese" ? (
+                {triagemPendente ? (
                   <div className="mt-4 flex items-center justify-between gap-3">
-                    <span className="text-xs font-semibold opacity-70">Conclua a anamnese para confirmar no agenda</span>
+                    <span className="text-xs font-semibold opacity-70">Faça a triagem com a BION IA até 5 minutos antes do horário</span>
                     <span className="inline-flex items-center gap-1.5 text-xs font-bold text-[#123e7d] dark:text-sky-300 shrink-0">
-                      <Sparkles className="w-4 h-4" /> Fazer anamnese
+                      <Sparkles className="w-4 h-4" /> Fazer triagem
                     </span>
                   </div>
                 ) : (
@@ -333,7 +342,7 @@ export function PacienteApp() {
                 </span>
               </div>
               <p className="relative text-sm text-white/85 mt-3 leading-relaxed">
-                Eu agendo sua consulta, cuido do pagamento e faço sua <strong className="font-bold text-white">anamnese</strong> — uma conversa tranquila para o médico já te conhecer antes do atendimento.
+                Eu agendo sua consulta, cuido do pagamento e faço sua <strong className="font-bold text-white">triagem</strong> — uma conversa tranquila para o médico já te conhecer antes do atendimento.
               </p>
               <span className="relative mt-4 inline-flex items-center gap-2 rounded-full bg-white text-[#0a1f44] text-sm font-bold pl-4 pr-5 py-3">
                 <Stethoscope className="w-4 h-4" /> Agendar consulta agora
