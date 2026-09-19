@@ -416,3 +416,27 @@ Work Log:
 
 Stage Summary:
 - Contrato delta ativo em produção nas três mutações: respostas leves (só a entidade afetada), sem recarregar ~15 coleções por operação; o store aplica o delta incrementalmente e continua aceitando o contrato completo das demais rotas (compatibilidade total, zero regressão nos fluxos: agendamento via wizard, pagamento, anamnese, notificações e mensagens testados E2E).
+
+---
+Task ID: hardening-producao
+Agent: Super Z (agente principal)
+Task: Auditoria de produção — hardening: sessão, pagamento server-side (webhook), status de consulta, notificações/auditoria server-side, IDs em vez de nomes, banco oficial PostgreSQL
+
+Work Log:
+- Sessão: cookie `secure: NODE_ENV==="production"`; getSessao valida user.status!=="ativo" → purga sessões do usuário (revogação imediata de inativos/suspensos).
+- Pagamento: novo modelo Pagamento (consultaId único, valor, metodo, status, via, gatewayRef) — db push aditivo no Supabase; novo src/lib/server/pagamentos.ts (criarCobranca, confirmarPagamento idempotente, falharPagamento, modoGateway); nova rota POST /api/pagamentos/webhook com HMAC-SHA256 (x-bion-signature, BION_PAGAMENTO_WEBHOOK_SECRET; 503 sem segredo, 401 assinatura inválida, idempotente).
+- POST /api/consultas reescrito: cliente NÃO envia pago/status/audit/notificacoes — status SEMPRE pendente_anamnese; pago=false na criação; gateway simulado confirma no servidor quando não há segredo (modo demo); pagamento devolvido na resposta (+ consultaCriada compat ChatBion).
+- PATCH /api/consultas/[id]: remarcar mantém pendente_anamnese (nunca auto-confirma); atualizar só admin com whitelist de status e medicoId (fim do lookup por nome); cancelar/concluir/remarcar notificam as partes + audit compostos no servidor; resposta delta {consulta, notificacoes?, audit?}.
+- Notificações: TODAS as rotas (consultas, mensagens, arquivos, documentos, avaliações, lembretes, tickets×2, consentimentos, perfil, medições, pacientes×2, médicos×2) compõem notificações a partir do evento real; POST /api/notificacoes → 405.
+- Auditoria: rotas não leem body.audit; POST /api/auditoria com whitelist de 11 eventos leves de interface (categoria/severidade forçadas; 403 fora da lista; detalhes ≤300).
+- IDs: documentos/consentimentos exigem pacienteId; medicoIdPorNome/pacienteIdPorNome REMOVIDOS de dados.ts; store resolve IDs antes de enviar (emitirDocumento via pacientesRef/consultasRef; registrarConsentimento idem; atualizarConsulta medicoId).
+- Cliente: bion-store limpo — nenhum payload envia notificacoes/audit/pago/status; notificar() removido da store e do AgendamentoFluxo (mensagens de sucesso corrigidas para "reservada — complete a anamnese"); registrarAudit envia só {acao,detalhes}; cancelar/remarcar/concluir/atualizar consulta usam aplicarDelta (delta no PATCH).
+- Banco oficial: PostgreSQL/Supabase único — deletados prisma/schema.postgres.prisma, prisma/schema.sqlite.backup.prisma, tests/database-runtime-build.sh; supabase_ativar.sh sem troca de schema; README/.env.example atualizados; .env local apontado ao Supabase; .env DESSIDICIONADO do git (repo público) e ignorado.
+- Novo .env.example documenta BION_PAGAMENTO_WEBHOOK_SECRET (com o segredo, o simulado desliga e só o webhook confirma — pronto para gateway real).
+- Suíte E2E scripts/teste_hardening.ts (2 fases): FASE A 16/16 (status imposto, pago só server-side, notificação/audit forjadas ignoradas, atualizar 403 p/ paciente, remarcar mantém pendente, notificacoes 405, auditoria 403/200, sessão revogada p/ inativo + re-login após reativação, webhook 503); FASE B 8/8 (pago=false aguarda, 401 assinatura ruim, webhook assinado confirma + via=webhook, consulta paga, reentrega idempotente). 24/24 total.
+- Incidentes: processo órfão do setsid segurando a porta 3000 servia BUILD antigo (EADDRINUSE silencioso) — kill por pid do ss -tlnp; suíte com AbortSignal.timeout(45s) por lentidão do pool Supabase.
+- Commit 505d75a; push 7fa0f15..505d75a; tsc/eslint/build 0 erros; consultas de teste canceladas/limpas no Supabase.
+
+Stage Summary:
+- Regras da auditoria impostas pelo servidor: pagamento (cliente nunca define pago — gateway simulado ou webhook HMAC), status (paciente nasce pendente_anamnese; só anamnese concluída confirma), sessão revogada na desativação, notificações/auditoria geradas no servidor, relacionamentos por ID.
+- Banco oficial PostgreSQL/Supabase sem vestígios SQLite; segredos fora do git.
