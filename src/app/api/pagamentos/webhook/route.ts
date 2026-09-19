@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { db } from "@/lib/db";
 import {
   confirmarPagamento,
   falharPagamento,
@@ -54,12 +55,30 @@ export async function POST(req: NextRequest) {
     if (!p) {
       return Response.json({ erro: "Pagamento não encontrado." }, { status: 404 });
     }
+    // O pagamento CONFIRMOU a consulta (regra imposta no servidor): avisa o
+    // paciente e registra a trilha de auditoria server-side.
+    const consulta = await db.consulta.findUnique({
+      where: { id: p.consultaId },
+      include: { medico: { select: { nome: true } } },
+    });
+    if (consulta && consulta.status === "confirmada") {
+      const quando = consulta.dataInicio.toLocaleDateString("pt-BR") +
+        " às " + consulta.dataInicio.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+      await db.notificacao.create({
+        data: {
+          tipo: "agenda",
+          titulo: "Consulta confirmada",
+          texto: `Pagamento aprovado — ${consulta.especialidade} com ${consulta.medico.nome} (${quando}) está confirmada. Faça sua triagem com a BION IA até 5 minutos antes do horário.`,
+          usuarioId: consulta.pacienteId,
+        },
+      });
+    }
     await registrarAudit(null, {
       acao: "PAGAMENTO_CONFIRMADO",
       categoria: "pagamento",
       entidade: "pagamento",
       entidadeId: p.id,
-      detalhes: `Pagamento confirmado via webhook do gateway — consulta ${p.consultaId}`,
+      detalhes: `Pagamento confirmado via webhook do gateway — consulta ${p.consultaId} (status: confirmada)`,
     });
     return Response.json({ ok: true, pagamento: paraWire(p) });
   } catch {

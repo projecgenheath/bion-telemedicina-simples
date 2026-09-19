@@ -7,15 +7,19 @@ import { chatComFonte, type AnonNomes, type FonteLlm } from "@/lib/server/llm";
 import { turnoMotor, ETAPAS_MOTOR, type MotorCtx } from "@/lib/server/anamnese-motor";
 
 /**
- * Anamnese guiada pela BION IA (storytelling clínico) — pós-pagamento.
+ * Triagem pré-consulta guiada pela BION IA (storytelling clínico).
  *
- * A consulta nasce "pendente_anamnese" após o pagamento e só é CONFIRMADA
- * quando a anamnese é concluída aqui.
+ * FLUXO DO PRODUTO: o pagamento CONFIRMA a consulta (rota /api/consultas e
+ * webhook do gateway). A triagem é OBRIGATÓRIA e fica disponível LOGO APÓS
+ * a confirmação ATÉ 5 MINUTOS ANTES do horário da consulta — o servidor
+ * impõe a janela; concluir a triagem NÃO altera o status da consulta
+ * (exceto legado "pendente_anamnese", que é confirmado aqui para migrar
+ * registros antigos).
  *
  * POST  { consultaId, mensagem? }  → um turno da conversa.
  *        Sem mensagem = abertura da etapa atual (ou retomada).
- * PATCH { consultaId, acao: "concluir" }            → conclui anamnese e confirma a consulta.
- * PATCH { consultaId, acao: "documento", documento } → registra documento anexado durante a anamnese.
+ * PATCH { consultaId, acao: "concluir" }            → conclui a triagem e avisa o médico.
+ * PATCH { consultaId, acao: "documento", documento } → registra documento anexado durante a triagem.
  *
  * Duplo motor:
  *  1. IA generativa em cadeia (llm.ts): credenciais próprias → endpoint
@@ -24,14 +28,17 @@ import { turnoMotor, ETAPAS_MOTOR, type MotorCtx } from "@/lib/server/anamnese-m
  *     clínico completo;
  *  2. Motor determinístico (src/lib/server/anamnese-motor.ts): conduz o
  *     mesmo rito de storytelling SEM depender de LLM — garante que a
- *     anamnese nunca fique bloqueada.
+ *     triagem nunca fique bloqueada.
  *
- * Estilo obrigatório nos dois caminhos: conversa natural (acolher →
- * aprofundar → avançar), UMA pergunta por vez, NUNCA interrogatório,
- * sinais de alarme → SAMU 192.
+ * Estilo obrigatório nos dois caminhos: conversa natural e CURTA (acolher
+ * em uma frase → UMA pergunta objetiva), SEMPRE terminar em pergunta,
+ * NUNCA interrogatório nem monólogo, sinais de alarme → SAMU 192.
  */
 
 const TIMEOUT_LLM_MS = 32_000;
+
+/** Janela da triagem: fecha 5 minutos antes do início da consulta. */
+const JANELA_TRIAGEM_MS = 5 * 60_000;
 
 type MsgEntrada = { remetente: "usuario" | "ia"; texto: string };
 
@@ -119,31 +126,33 @@ const promptSistema = (ctx: {
   etapa: string;
   coleta: Coleta;
   perfil: string;
-}) => `Você é a BION IA, assistente clínica da plataforma de telemedicina BION. Neste momento você conduz a ANAMNESE PRÉ-CONSULTA de ${ctx.nomePaciente}, que pagou por uma consulta de ${ctx.especialidade} com ${ctx.medico}, marcada para ${ctx.quando}. A anamnese vai para o médico ANTES do atendimento — ela é o seu dossiê de abertura.
+}) => `Você é a BION IA, assistente clínica da plataforma de telemedicina BION. Você conduz a TRIAGEM PRÉ-CONSULTA de ${ctx.nomePaciente} — uma consulta de ${ctx.especialidade} com ${ctx.medico}, marcada para ${ctx.quando}. A consulta JÁ está confirmada e paga; seu papel é ouvir e organizar a história do paciente para o médico receber um dossiê pronto antes do atendimento.
 
 ETAPA ATUAL: ${ROTULO_ETAPA[ctx.etapa] ?? ctx.etapa} (índice interno: ${ctx.etapa})
 
 ROTEIRO COMPLETO (para você saber de onde veio e para onde vai — siga APENAS a etapa atual):
-1. identificacao — nome, idade, sexo, profissão, estado civil, naturalidade, alergias, comorbidades, peso, altura (apresente os dados do perfil e peça que confirme ou corrija).
+1. identificacao — apresente os dados do perfil em 1 frase e peça que confirme ou corrija (não desligue nomes de campos).
 2. queixa — o motivo da consulta, NAS PALAVRAS DO PACIENTE.
-3. historia — História da Doença Atual: cronologia (quando começou, súbito ou gradual), local e irradiação, característica (pontada, pressão, queimação), intensidade (0–10), contínuo ou intermitente, o que piora/melhora, sintomas associados, episódios prévios, medicação tentada e resultado. Para dor, use a lógica OPQRST espalhada ao longo da conversa.
-4. sistemas — revisão breve por aparelhos (geral, cardiovascular, respiratório, gastrointestinal, geniturinário, neurológico, musculoesquelético, dermatológico, endócrino) — apenas sintomas relevantes à queixa.
-5. antecedentes — doenças anteriores, cirurgias, internações, traumas, alergias, transfusões, vacinação, doenças crônicas.
-6. familia — hipertensão, diabetes, cardiopatias, câncer, doenças hereditárias/psiquiátricas na família próxima.
-7. habitos — tabagismo, álcool, outras substâncias, alimentação, atividade física, sono, trabalho/exposição, moradia.
-8. gineco — só se PERTINENTE (sexo/gênero/queixa): menarca/menopausa, ciclo, gestações, partos, contracepção, atividade sexual, ISTs — sempre com respeito. Se não pertinente, encerre a etapa imediatamente.
-9. psicossocial — humor, estresse, ansiedade, rede de apoio, impacto da queixa na rotina.
-10. medicamentos — nome, dose, frequência e há quanto tempo usa (prescritos, automedicação, fitoterápicos, suplementos).
-11. documentos — pergunte se ele tem algum EXAME OU DOCUMENTO que queira mostrar ao médico (a interface abre a caixa de upload; você só acolhe a resposta e encerra a etapa).
-12. fechamento — faça um RESUMO organizado e humanizado de tudo o que coletou (identificação, queixa, evolução, fatores associados e contexto) e pergunte: "Tem mais alguma coisa que você acha importante me contar? Está tudo correto?".
+3. historia — História da Doença Atual: cronologia (quando começou, súbito ou gradual), local e irradiação, característica (pontada, pressão, queimação), intensidade (0–10), o que piora/melhora, sintomas associados, medicação tentada. Para dor, use a lógica OPQRST espalhada em perguntas CURTAS e separadas.
+4. sistemas — uma pergunta só: "mais algum sintoma pelo corpo — febre, enjoo, tontura, intestino, urina?".
+5. antecedentes — doenças anteriores, cirurgias, internações, alergias importantes.
+6. familia — hipertensão, diabetes, cardiopatias, câncer na família próxima.
+7. habitos — tabagismo, álcool, atividade física, sono.
+8. gineco — só se PERTINENTE (sexo/gênero/queixa): ciclo, gestações, contracepção — sempre com respeito. Se não pertinente, encerre a etapa imediatamente.
+9. psicossocial — humor, estresse, impacto da queixa na rotina.
+10. medicamentos — nome, dose, frequência (incluindo vitaminas e chás).
+11. documentos — pergunte se ele tem EXAME OU DOCUMENTO para mostrar ao médico (a interface abre a caixa de upload; você só acolhe a resposta e encerra a etapa).
+12. fechamento — faça um RESUMO organizado em no máximo 8 linhas e pergunte: "Tem mais alguma coisa importante? Está tudo correto?".
 
-REGRAS DE ESTILO — STORYTELLING, NUNCA INTERROGATÓRIO:
-- Acolha primeiro: reconheça em 1–2 frases o que o paciente acabou de contar (empatia real, sem clichês robóticos).
-- UMA pergunta por mensagem (no máximo duas, quando naturalmente conectadas).
-- Converse como uma boa médica ouve: use as palavras do paciente, construa a linha temporal JUNTO dele.
+REGRAS DE ESTILO — CONVERSA CURTA DE PESSOA REAL, NUNCA FORMULÁRIO:
+- Máximo de 3 frases curtas por mensagem (o resumo do fechamento é a única exceção).
+- Toda mensagem TERMINA com UMA pergunta clara, terminada em "?". NUNCA termine apenas afirmando ou concordando — se não tem pergunta, é porque deve avançar de etapa.
+- UMA pergunta por vez. Jamais empilhe dois interrogativos diferentes na mesma frase ("e como você classificaria X, e o que faz piorar?" é PROIBIDO).
+- Eco curto: reconheça o que o paciente disse com as PRÓPRIAS palavras dele em até meia frase ("Dor no lado direito há três dias, entendi...") e vá direto à próxima pergunta. NUNCA repita o relato inteiro de forma clínica e robótica.
+- Fale como gente: frases de 8 a 18 palavras, zero jargão, zero tom de laudo.
 - Se o paciente já respondeu algo espontaneamente, NÃO pergunte de novo — registre e siga.
-- Repita o que entendeu quando a informação for densa ("Então foi na terça, depois do almoço...").
-- Respostas curtas: 2 a 5 frases, português do Brasil, Markdown leve (**negrito** apenas para destaques essenciais).
+- Avance rápido: conclua a etapa assim que o essencial for dito (a maioria fecha em 1–2 turnos; só "historia" pode ir até 4). Não exija precisão que o paciente claramente não tem.
+- Se o paciente disse "não sei" ou pediu para pular: aceite na hora, registre "não informado" e siga para o próximo ponto.
 - Sinais de alarme (dor no peito intensa, falta de ar, síncope, déficit neurológico, sangramentos, ideação suicida): interrompa o roteiro e oriente urgência presencial (SAMU 192).
 - Você não prescreve e não fecha diagnóstico.
 
@@ -155,14 +164,13 @@ ${JSON.stringify(ctx.coleta)}
 
 FORMATO DE SAÍDA — responda EXCLUSIVAMENTE com um JSON válido, sem texto fora dele:
 {
-  "resposta": "<sua mensagem em linguagem natural para o paciente>",
-  "etapa_concluida": <true quando a etapa atual tiver informação suficiente para avançar — a pergunta final da etapa já foi respondida; false quando você ainda está explorando/aguardando resposta>,
+  "resposta": "<sua mensagem em linguagem natural para o paciente — CURTA e terminando em pergunta>",
+  "etapa_concluida": <true quando o essencial da etapa já foi dito — seja generoso, não estique; false quando a pergunta que você acabou de fazer ainda está aguardando resposta>,
   "coleta": { "<campos extraídos desta etapa na resposta do paciente>" },
   "perfil_atualizacoes": { "peso": <número>, "altura": <número>, "profissao": "<texto>", "estadoCivil": "<texto>", "telefone": "<texto>" }
 }
 - "perfil_atualizacoes" só na etapa de identificação, e só com dados que o paciente EXPLICITAMENTE corrigiu (campo ausente ou igual ao perfil = omita).
-- Nunca invente valores para a coleta: só registre o que o paciente disse.
-- "etapa_concluida": só true quando você já tiver o essencial da etapa atual E a conversa da etapa estiver fechada; o sistema então levará a conversa para a próxima etapa na sua próxima resposta.`;
+- Nunca invente valores para a coleta: só registre o que o paciente disse.`;
 
 type PerfilDados = {
   idade: number | null;
@@ -315,8 +323,25 @@ export async function POST(req: NextRequest) {
     if (!consulta) {
       return Response.json({ erro: "Consulta não encontrada." }, { status: 404 });
     }
-    if (["cancelada", "concluida"].includes(consulta.status)) {
-      return Response.json({ erro: "Esta consulta não aceita mais anamnese." }, { status: 409 });
+    if (consulta.status === "cancelada" || consulta.status === "concluida") {
+      return Response.json({ erro: "Esta consulta não aceita mais triagem." }, { status: 409 });
+    }
+
+    // Janela da triagem IMPOSTA PELO SERVIDOR:
+    //  1. disponível logo após a CONFIRMAÇÃO (= pagamento aprovado);
+    //  2. fecha 5 minutos antes do horário da consulta.
+    if (!consulta.pago) {
+      return Response.json(
+        { erro: "O pagamento precisa estar confirmado para liberar sua triagem." },
+        { status: 402 },
+      );
+    }
+    const limiteTriagem = consulta.dataInicio.getTime() - JANELA_TRIAGEM_MS;
+    if (Date.now() >= limiteTriagem) {
+      return Response.json(
+        { erro: "A triagem fica disponível até 5 minutos antes da consulta — esta janela já foi encerrada." },
+        { status: 409 },
+      );
     }
 
     // Garante o registro da anamnese (idempotente)
@@ -328,7 +353,7 @@ export async function POST(req: NextRequest) {
     }
     if (anamnese.status === "concluida") {
       return ok({
-        texto: "Esta anamnese já foi concluída e enviada para o seu médico. Se precisar acrescentar algo, use as mensagens da consulta ou o card de documentos.",
+        texto: "Esta triagem já foi concluída e enviada para o seu médico. Se precisar acrescentar algo, use as mensagens da consulta ou o card de documentos.",
         etapa: anamnese.etapa,
         coleta: JSON.parse(anamnese.coleta || "{}"),
         etapa_concluida: true,
@@ -450,6 +475,8 @@ export async function POST(req: NextRequest) {
       coleta: coletaNova,
       perfilAtualizado,
       concluida: false,
+      // Janela de disponibilidade da triagem (para a UI exibir o prazo)
+      disponivelAte: new Date(limiteTriagem).toISOString(),
       fonte: viaMotor ? "local" : llmFonte,
       dados,
     });
@@ -496,7 +523,10 @@ export async function PATCH(req: NextRequest) {
       return ok(dados);
     }
 
-    // acao: concluir — anamnese pronta → consulta confirmada
+    // acao: concluir — triagem pronta → avisa médico e paciente.
+    // NÃO altera o status da consulta (o pagamento já a confirmou);
+    // apenas o LEGADO "pendente_anamnese" é confirmado aqui, para
+    // migrar registros antigos do fluxo anterior.
     if (anamnese.status === "concluida") {
       const dados = await carregarDados(usuario);
       return ok(dados);
@@ -507,7 +537,9 @@ export async function PATCH(req: NextRequest) {
 
     await db.$transaction([
       db.anamnese.update({ where: { id: anamnese.id }, data: { status: "concluida", etapa: "fechamento" } }),
-      db.consulta.update({ where: { id: consulta.id }, data: { status: "confirmada" } }),
+      ...(consulta.status === "pendente_anamnese"
+        ? [db.consulta.update({ where: { id: consulta.id }, data: { status: "confirmada" } })]
+        : []),
     ]);
 
     await aplicarSideEffects(
@@ -515,14 +547,14 @@ export async function PATCH(req: NextRequest) {
       [
         {
           tipo: "agenda",
-          titulo: "Anamnese concluída",
-          texto: `Sua consulta de ${consulta.especialidade} com ${consulta.medico.nome} (${quando}) está confirmada. Bom atendimento!`,
+          titulo: "Triagem concluída",
+          texto: `Sua triagem da consulta de ${consulta.especialidade} com ${consulta.medico.nome} (${quando}) foi enviada. Tudo pronto para o atendimento!`,
           para: "paciente",
         },
         {
           tipo: "agenda",
-          titulo: "Anamnese disponível",
-          texto: `${usuario.nome} concluiu a anamnese da consulta de ${quando}. Acesse a aba Anamnese na sala da consulta.`,
+          titulo: "Triagem disponível",
+          texto: `${usuario.nome} concluiu a triagem (anamnese) da consulta de ${quando}. Acesse a aba Anamnese na sala da consulta.`,
           para: "medico",
           usuarioId: consulta.medico.id,
         },
@@ -530,7 +562,7 @@ export async function PATCH(req: NextRequest) {
       {
         acao: "ANAMNESE_CONCLUIDA",
         categoria: "prontuario",
-        detalhes: `Anamnese da consulta ${consulta.id} (${consulta.especialidade} com ${consulta.medico.nome}) concluída — consulta confirmada`,
+        detalhes: `Triagem (anamnese) da consulta ${consulta.id} (${consulta.especialidade} com ${consulta.medico.nome}) concluída e enviada ao médico`,
       },
     );
 
