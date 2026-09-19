@@ -33,7 +33,8 @@ export async function criarSessao(userId: string): Promise<string> {
   jar.set(COOKIE_SESSAO, token, {
     httpOnly: true,
     sameSite: "lax",
-    secure: false, // ambiente de preview (http); em produção com HTTPS usar true
+    // Seguro em produção (HTTPS: Vercel/preview). Em dev local (http) fica false.
+    secure: process.env.NODE_ENV === "production",
     path: "/",
     expires: expiresAt,
   });
@@ -52,6 +53,12 @@ export async function getSessao(): Promise<UsuarioSessao | null> {
   if (!sessao) return null;
   if (sessao.expiresAt.getTime() < Date.now()) {
     await db.sessao.delete({ where: { id: token } }).catch(() => {});
+    return null;
+  }
+  // Sessão só vale para usuário ATIVO: contas inativas/suspensas perdem o
+  // acesso imediatamente, mesmo com cookie ainda válido.
+  if (sessao.user.status !== "ativo") {
+    await db.sessao.deleteMany({ where: { userId: sessao.user.id } }).catch(() => {});
     return null;
   }
   return {

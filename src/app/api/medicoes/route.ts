@@ -1,15 +1,15 @@
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { exigirPapel } from "@/lib/server/auth";
-import { carregarDados, aplicarSideEffects, type AuditPayload } from "@/lib/server/dados";
+import { carregarDados, aplicarSideEffects } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
 
 /**
  * Medições do paciente (app imersivo — peso, altura, pressão arterial).
  *
  * GET  — lista do próprio paciente.
- * POST — registra medição: { tipo: "peso" | "altura" | "pa", valor1, valor2?, audit? }.
- *        Sincroniza peso/altura atuais do perfil. Devolve estado fresco.
+ * POST — registra medição: { tipo: "peso" | "altura" | "pa", valor1, valor2? }.
+ *        Auditoria gerada PELO SERVIDOR. Sincroniza peso/altura do perfil.
  */
 const TIPOS = ["peso", "altura", "pa"] as const;
 
@@ -42,7 +42,6 @@ export async function POST(req: NextRequest) {
       tipo?: string;
       valor1?: number;
       valor2?: number;
-      audit?: AuditPayload;
     };
 
     const tipo = body.tipo ?? "";
@@ -87,15 +86,11 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    await aplicarSideEffects(
-      usuario,
-      undefined,
-      body.audit ?? {
-        acao: "MEDICAO_REGISTRADA",
-        categoria: "prontuario",
-        detalhes: `Medição de ${tipo}: ${body.valor1}${tipo === "pa" && body.valor2 ? `/${body.valor2}` : ""}`,
-      },
-    );
+    await aplicarSideEffects(usuario, undefined, {
+      acao: "MEDICAO_REGISTRADA",
+      categoria: "prontuario",
+      detalhes: `Medição de ${tipo}: ${body.valor1}${tipo === "pa" && body.valor2 ? `/${body.valor2}` : ""}`,
+    });
 
     const dados = await carregarDados(usuario);
     return ok(dados);

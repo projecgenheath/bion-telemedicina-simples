@@ -1,39 +1,29 @@
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { exigirSessao } from "@/lib/server/auth";
-import { carregarDados, type NotifPayload } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
 
 /**
- * POST   — cria notificação(ões) enviadas pelo cliente (comportamento do antigo notificar()).
- * PATCH  — marca notificação(ões) como lida(s): { id } ou { todas: true }.
+ * PATCH — marca notificação(ões) como lida(s): { id } ou { todas: true }.
+ * Contrato delta: devolve APENAS as notificações que acabaram de ser marcadas.
+ *
+ * POST foi REMOVIDO por segurança (hardening): o cliente não pode criar
+ * notificações arbitrando destinatário, título ou conteúdo — toda
+ * notificação é gerada pelo servidor a partir do evento real
+ * (ver rotas de mutação + src/lib/server/dados.ts).
  */
-export async function POST(req: NextRequest) {
+export async function POST() {
   try {
-    const usuario = await exigirSessao();
-    const body = (await req.json()) as NotifPayload | { lista: NotifPayload[] };
-    const lista = "lista" in body ? body.lista : [body];
-
-    if (lista.length) {
-      await db.notificacao.createMany({
-        data: lista.map((n) => ({
-          tipo: n.tipo,
-          titulo: n.titulo,
-          texto: n.texto,
-          paraRole: n.para ? n.para.toUpperCase() : null,
-          usuarioId: n.usuarioId ?? null,
-        })),
-      });
-    }
-    const dados = await carregarDados(usuario);
-    return ok(dados);
+    await exigirSessao();
+    return Response.json(
+      { erro: "Criação de notificações pelo cliente não é permitida. Eventos são gerados pelo servidor." },
+      { status: 405 },
+    );
   } catch (erro) {
     return falha(erro);
   }
 }
 
-/** PATCH — marca notificação(ões) como lida(s): { id } ou { todas: true }.
- *  Contrato delta: devolve APENAS as notificações que acabaram de ser marcadas. */
 export async function PATCH(req: NextRequest) {
   try {
     const usuario = await exigirSessao();

@@ -144,6 +144,25 @@ model Consulta {
 
   // Anamnese conduzida pela BION IA (uma por consulta)
   anamnese Anamnese?
+
+  // Pagamento (confirmado pelo servidor/gateway — nunca pelo cliente)
+  pagamento Pagamento?
+}
+
+// Cobrança da consulta. O CLIENTE NUNCA define `pago` — a confirmação vem do
+// servidor: webhook do gateway (assinado com HMAC) ou gateway simulado em
+// demonstração. status: pendente | confirmado | falhou.
+model Pagamento {
+  id           String    @id @default(cuid())
+  consultaId   String    @unique
+  consulta     Consulta  @relation(fields: [consultaId], references: [id], onDelete: Cascade)
+  valor        Float
+  metodo       String    @default("pix") // pix | cartao
+  status       String    @default("pendente") // pendente | confirmado | falhou
+  via          String    @default("webhook") // webhook | simulado
+  gatewayRef   String?
+  criadoEm     DateTime  @default(now())
+  confirmadoEm DateTime?
 }
 
 // Anamnese guiada pela BION IA em formato storytelling, feita APÓS o pagamento.

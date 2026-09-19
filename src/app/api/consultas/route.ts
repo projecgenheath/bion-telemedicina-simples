@@ -8,11 +8,23 @@ import {
   type NotifPayload,
   type AuditPayload,
 } from "@/lib/server/dados";
+import { criarCobranca, confirmarPagamento, modoGateway, paraWire } from "@/lib/server/pagamentos";
 import { ok, falha } from "@/lib/server/http";
 
-/** Agendamento de nova consulta (apenas pacientes).
- *  Contrato delta: devolve APENAS a consulta criada (mais a anamnese gerada
- *  quando o agendamento é pela BION IA e os efeitos colaterais criados). */
+/**
+ * Agendamento de nova consulta (apenas pacientes).
+ *
+ * Regras impostas PELO SERVIDOR (o cliente não decide):
+ *  - status: sempre "pendente_anamnese" — a consulta só vira "confirmada"
+ *    quando a anamnese é concluída (rota /api/anamnese).
+ *  - pagamento: cliente não envia `pago`. O servidor cria a cobrança
+ *    (Pagamento) e a confirma via gateway — simulado (demo) ou webhook
+ *    assinado quando BION_PAGAMENTO_WEBHOOK_SECRET está configurado.
+ *  - notificações e auditoria: compostas no servidor a partir do evento real.
+ *
+ * Contrato delta: devolve APENAS a consulta criada (+ anamnese, pagamento e
+ * efeitos colaterais gerados).
+ */
 export async function POST(req: NextRequest) {
   try {
     const usuario = await exigirPapel("PACIENTE");
@@ -22,11 +34,7 @@ export async function POST(req: NextRequest) {
       hora: string;
       motivoConsulta?: string;
       valor?: string | number;
-      pago?: boolean;
-      /** "pendente_anamnese": agendamento via BION IA — pago, aguardando anamnese. */
-      status?: string;
-      notificacoes?: NotifPayload[];
-      audit?: AuditPayload;
+      metodo?: "pix" | "cartao";
     };
 
     const medico = await db.user.findFirst({
@@ -37,9 +45,8 @@ export async function POST(req: NextRequest) {
       return Response.json({ erro: "Médico não encontrado." }, { status: 400 });
     }
 
-    // O paciente NÃO pode auto-confirmar: só aceitamos pendente_anamnese aqui.
-    // A confirmação real acontece só depois da anamnese concluída (rota /api/anamnese).
-    const status = body.status === "pendente_anamnese" ? "pendente_anamnese" : "confirmada";
+    // Criação pelo paciente SEMPRE nasce pendente de anamnese (nunca confirmada).
+    const status = "pendente_anamnese";
 
     const dataInicio = parseDataHora(body.data, body.hora);
     const consulta = await db.consulta.create({
@@ -50,54 +57,77 @@ export async function POST(req: NextRequest) {
         dataInicio,
         status,
         valor: parseValor(body.valor),
-        pago: body.pago ?? true,
+        pago: false, // só o gateway/servidor confirma
         motivoConsulta: body.motivoConsulta?.trim() || "Consulta de rotina",
       },
     });
 
     // Agendamento pela BION IA: cria a anamnese pendente que confirma a consulta
-    let anamnese: {
-      id: string;
-      consultaId: string;
-      medico: string;
-      especialidade: string;
-      etapa: string;
-      status: string;
-      coleta: Record<string, Record<string, unknown>>;
-      documentos: { nome: string; tipo: string; exameImportado: boolean; resumo?: string }[];
-      updatedAt: string;
-    } | null = null;
-    if (status === "pendente_anamnese") {
-      const a = await db.anamnese.create({
-        data: { consultaId: consulta.id, usuarioId: usuario.id },
-      });
-      anamnese = {
-        id: a.id,
-        consultaId: a.consultaId,
-        medico: medico.nome,
-        especialidade: consulta.especialidade,
-        etapa: a.etapa,
-        status: a.status,
-        coleta: JSON.parse(a.coleta || "{}") as Record<string, Record<string, unknown>>,
-        documentos: JSON.parse(a.documentos || "[]") as {
-          nome: string;
-          tipo: string;
-          exameImportado: boolean;
-          resumo?: string;
-        }[],
-        updatedAt: a.updatedAt.toISOString(),
-      };
-    }
+    const a = await db.anamnese.create({
+      data: { consultaId: consulta.id, usuarioId: usuario.id },
+    });
+    const anamnese = {
+      id: a.id,
+      consultaId: a.consultaId,
+      medico: medico.nome,
+      especialidade: consulta.especialidade,
+      etapa: a.etapa,
+      status: a.status,
+      coleta: JSON.parse(a.coleta || "{}") as Record<string, Record<string, unknown>>,
+      documentos: JSON.parse(a.documentos || "[]") as {
+        nome: string;
+        tipo: string;
+        exameImportado: boolean;
+        resumo?: string;
+      }[],
+      updatedAt: a.updatedAt.toISOString(),
+    };
 
-    const efeitos = await aplicarSideEffects(usuario, body.notificacoes, {
-      ...(body.audit ?? {
-        acao: "CONSULTA_AGENDADA",
-        categoria: "consulta",
-        detalhes: `Agendamento com ${medico.nome} — ${consulta.especialidade} em ${body.data} às ${body.hora}`,
-      }),
+    // Cobrança: o servidor decide a confirmação (gateway simulado ou webhook).
+    const metodo = body.metodo === "cartao" ? "cartao" : "pix";
+    const cobranca = await criarCobranca(consulta.id, consulta.valor, metodo);
+    let pagamento = paraWire(cobranca);
+    let pagoFinal = false;
+    const eventos: NotifPayload[] = [
+      {
+        tipo: "agenda",
+        titulo: "Nova consulta agendada",
+        texto: `${usuario.nome} agendou ${consulta.especialidade} em ${body.data} às ${body.hora}. Anamnese pré-consulta disponível na aba da sala.`,
+        usuarioId: medico.id,
+      },
+      {
+        tipo: "agenda",
+        titulo: "Consulta reservada",
+        texto: `${consulta.especialidade} com ${medico.nome} — ${body.data} às ${body.hora}. Complete a anamnese para confirmar.`,
+        usuarioId: usuario.id,
+      },
+    ];
+    const audit: AuditPayload = {
+      acao: "CONSULTA_AGENDADA",
+      categoria: "consulta",
       entidade: "consulta",
       entidadeId: consulta.id,
-    });
+      detalhes: `Agendamento com ${medico.nome} — ${consulta.especialidade} em ${body.data} às ${body.hora} (pendente_anamnese)`,
+    };
+
+    if (modoGateway() === "simulado") {
+      // Demonstração: gateway simulado confirma no servidor.
+      const confirmado = await confirmarPagamento(cobranca.id, "simulado");
+      if (confirmado) {
+        pagoFinal = true;
+        pagamento = paraWire(confirmado);
+        eventos.push({
+          tipo: "pagamento",
+          titulo: "Pagamento confirmado",
+          texto: `Pagamento de R$ ${pagamento.valor.toFixed(2).replace(".", ",")} (${pagamento.metodo === "pix" ? "Pix" : "Cartão"}) aprovado — consulta reservada.`,
+          usuarioId: usuario.id,
+        });
+        audit.acao = "CONSULTA_AGENDADA_PAGA";
+        audit.detalhes = `Agendamento com ${medico.nome} — ${consulta.especialidade} em ${body.data} às ${body.hora} (pago via gateway simulado, pendente_anamnese)`;
+      }
+    }
+
+    const efeitos = await aplicarSideEffects(usuario, eventos, audit);
 
     return ok({
       consulta: {
@@ -112,9 +142,10 @@ export async function POST(req: NextRequest) {
         motivoConsulta: consulta.motivoConsulta ?? undefined,
         motivoCancelamento: consulta.motivoCancelamento ?? undefined,
         valor: consulta.valor,
-        pago: consulta.pago,
+        pago: pagoFinal,
       },
-      ...(anamnese ? { anamnese } : {}),
+      anamnese,
+      pagamento,
       consultaCriada: consulta.id,
       ...(efeitos.notificacoes.length ? { notificacoes: efeitos.notificacoes } : {}),
       ...(efeitos.audit ? { audit: efeitos.audit } : {}),

@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { exigirPapel } from "@/lib/server/auth";
-import { carregarDados, aplicarSideEffects, type NotifPayload, type AuditPayload } from "@/lib/server/dados";
+import { carregarDados, aplicarSideEffects } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
 
 type PacientePatch = {
@@ -12,8 +12,6 @@ type PacientePatch = {
   genero?: string;
   convenio?: string;
   status?: string;
-  notificacoes?: NotifPayload[];
-  audit?: AuditPayload;
 };
 
 /** Edição de paciente pela administração (nome propaga para consultas/documentos via FK). */
@@ -59,14 +57,12 @@ export async function PATCH(
       }),
     ]);
 
-    await aplicarSideEffects(admin, body.notificacoes, {
-      ...(body.audit ?? {
-        acao: "PACIENTE_ATUALIZADO",
-        categoria: "admin",
-        detalhes: `Campos atualizados: ${Object.keys(body).filter((k) => k !== "notificacoes" && k !== "audit").join(", ")}`,
-      }),
+    await aplicarSideEffects(admin, undefined, {
+      acao: "PACIENTE_ATUALIZADO",
+      categoria: "admin",
       entidade: "paciente",
       entidadeId: id,
+      detalhes: `Paciente ${paciente.nome}: campos atualizados (${Object.keys(body).join(", ")})`,
     });
 
     const dados = await carregarDados(admin);

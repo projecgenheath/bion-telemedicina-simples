@@ -6,3 +6,8 @@ tool-results/
 dev.log
 server.log
 upload/
+
+# segredos locais (nunca versionar)
+.env
+.env.anterior.backup
+.env.sqlite.backup
