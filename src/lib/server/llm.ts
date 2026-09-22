@@ -11,7 +11,10 @@ import ZAI from "z-ai-web-dev-sdk";
  *     API compatível com OpenAI) — canal confiável, dados completos;
  *  3. Endpoint público sem chave (Pollinations, OpenAI-compatible) — canal
  *     aberto de reserva. POR SEGURANÇA (LGPD), os NOMES passados em `anon`
- *     são removidos das mensagens antes do envio;
+ *     são removidos das mensagens antes do envio. O tier anônimo serve o
+ *     modelo "gpt-oss" (model "openai-fast") — fraco para seguir roteiros;
+ *     por isso as rotas de triagem IMPÕEM o rito no servidor e usam este
+ *     canal apenas como reserva dos canais 1 e 2;
  *  4. SDK do sandbox (internal-api.z.ai) — só existe dentro da rede do
  *     sandbox; sonda curta com resultado memorizado por instância.
  *
