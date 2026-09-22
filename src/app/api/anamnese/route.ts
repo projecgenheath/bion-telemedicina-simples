@@ -539,7 +539,7 @@ export async function POST(req: NextRequest) {
       Boolean(parsed.perfil_atualizacoes) &&
       Object.keys(parsed.perfil_atualizacoes ?? {}).length > 0;
 
-    const etapaExaurida = turnosEtapa >= teto && !corrigiuPerfil;
+    const etapaExaurida = turnosEtapa >= teto && !corrigiuPerfil && !viaMotor;
     let etapaNova = etapaAtual;
     if ((Boolean(parsed.etapa_concluida) || etapaExaurida) && etapaAtual !== "fechamento" && !corrigiuPerfil) {
       etapaNova = proximaEtapa(etapaAtual, perfilDados?.genero ?? "");
