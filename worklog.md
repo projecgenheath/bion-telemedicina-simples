@@ -462,3 +462,24 @@ Stage Summary:
 - Fluxo oficial: pagamento confirma a consulta no agenda (servidor); triagem obrigatória disponível da confirmação até 5 min antes; concluir triagem não mexe no status.
 - BION IA da triagem: conversa curta estilo storytelling, sempre termina em UMA pergunta; avanço de etapa garantido pelo servidor com fallback determinístico.
 - Regressão encontrada e corrigida em produção: 500 na retomada no meio da HDA.
+
+---
+Task ID: triagem-anti-beco-sem-saida
+Agent: Super Z (agente principal)
+Task: Screenshot 22/09 12:21 — BION IA parou a triagem (atualizou o peso e não seguiu a conversa, beco sem saída "Onde podemos prosseguir?"); usuário corrigiu: o modelo não é "Gemma 4 31B"
+
+Work Log:
+- Diagnóstico do screenshot: (a) turno de correção de perfil ("Peso em 80 kg") na identificação avançava a etapa pelo TETO DE TURNOS no meio da correção → a resposta seguia falando de perfil ("outra alteração?") com header já em "Queixa 2/12" — pergunta ÓRFÃ; (b) o "Não" seguinte ia ao LLM com contexto órfão → resposta vaga com metaperguntas ("Tudo certo agora? ... Onde podemos prosseguir?") → paciente abandonava.
+- Motor (anamnese-motor.ts): contador unificado (_n/_turnos); nova perguntaRetomada() exportada — devolve a pergunta CERTA de qualquer etapa respeitando a coleta (posição na OPQRST, retomada curta da identificação, resumo no fechamento); retomada do motor agora usa a mesma função.
+- Rota /api/anamnese: correção de perfil NÃO fecha a identificação (corrigiuPerfil isenta do teto e do etapa_concluida do LLM); ponte OBRIGATÓRIA ao avançar etapa no caminho LLM (removerPerguntasFinais + perguntaRetomada, resumo completo já na ponte para o fechamento); GUARDA DE QUALIDADE sobre toda resposta LLM: sem "?" → acrescenta a pergunta certa; ≥3 interrogativos ou metaperguntas vagas ("podemos prosseguir", "tudo certo agora", "próximo passo") → substitui pela pergunta da etapa; >720 chars → encurta; fugaCurta (chips "Não sei informar"/"Pode pular"/"Voltar um pouco" e negações curtas "Não"/"Nada") tem resposta DETERMINÍSTICA do motor; ABERTURAS_ETAPA removida (substituída por perguntaRetomada); prompt anti-beco-sem-saída.
+- Teto de turnos restrito ao caminho LLM (etapaExaurida exige !viaMotor): o teste visual E2E expôs a rota forçando avanço em turno do MOTOR, órfãizando a pergunta dele; o motor tem pacing próprio (_n).
+- Canal público (llm.ts): Pollinations passou a responder HTTP 200 com texto de erro do provedor ("doesn't have enough credits... top up") — o código EXIBIA ao paciente como fala da IA (causa real junto com o gpt-oss do tier anônimo). RE_RESPOSTA_INVALIDA trata erro/ads do provedor como falha do canal → fallback.
+- Modelo esclarecido (usuário estava certo): o canal público serve gpt-oss via "openai-fast" — NÃO é um Gemma; documentado em llm.ts e .env.example; qualidade generativa real depende de BION_LLM_GEMINI_API_KEY na Vercel (canal Gemini já implementado).
+- UI: chips "Continuar triagem" com data/hora da consulta (3 triagens idênticas confundiam); sem duplicar "Perfil atualizado" quando o motor já informa.
+- Suíte teste_hardening.ts atualizada à lógica v2 (pagamento confirma → em_espera→confirmada; forjado "concluida" ignorado; remarcar preserva status+pago; webhook confirma) — FASE A 17/17 local.
+- Testes: scripts/teste-cenario-print.ts (cenário exato do screenshot) — TODOS OS CHECKS em produção; limpeza via scripts/limpar_cenario_print.ts (consultas/anamneses/pagamentos de teste removidos; peso da Marina restaurado para 66 kg).
+- Validação: tsc/eslint/build 0; deploy f9a8af4 + e36c517 + 30ee46f + a9b513f (remote reconciliado: 9ca9a08 duplicado como 8d2d15d no origin — rebase --onto).
+- E2E visual produção (390px dark, evidências download/evidencias-triagem-3/): 01 peso NÃO avança etapa; 02 "Não" → Queixa principal COM a pergunta real; 03 resposta generativa com eco + UMA pergunta; 04 chip determinístico → História (OPQRST) com ponte na mesma mensagem.
+
+Stage Summary:
+- A triagem NÃO tem mais beco sem saída: correção de perfil continua a etapa, "Não"/chips avançam com a pergunta real, avanço de etapa vem SEMPRE com a pergunta da etapa nova, e o servidor substitui resposta ruim do LLM pela pergunta certa. Canal público filtrado contra erros do provedor (gpt-oss, intermitente — cai para o motor determinístico). Próximo passo recomendado: configurar BION_LLM_GEMINI_API_KEY na Vercel para qualidade generativa plena (chat livre + triagem + laudos).
