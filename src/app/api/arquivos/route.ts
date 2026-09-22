@@ -13,7 +13,6 @@ export async function POST(req: NextRequest) {
       nome: string;
       tipo: string;
       tamanhoKb: number;
-      enviadoPor?: "paciente" | "medico";
       consulta?: string;
     };
 
@@ -23,12 +22,14 @@ export async function POST(req: NextRequest) {
 
     const arquivo = await db.arquivo.create({
       data: {
-        nome: body.nome,
-        tipo: body.tipo,
-        tamanhoKb: Math.max(0, Math.round(body.tamanhoKb || 0)),
-        enviadoPor: body.enviadoPor ?? (usuario.role === "MEDICO" ? "medico" : "paciente"),
+        nome: body.nome.trim().slice(0, 200),
+        tipo: body.tipo.trim().slice(0, 60),
+        tamanhoKb: Math.max(0, Math.min(20480, Math.round(body.tamanhoKb || 0))),
+        // HARDENING (V6): proveniência derivada do PAPEL DA SESSÃO — o cliente
+        // não define `enviadoPor` (paciente não se passa por médico).
+        enviadoPor: usuario.role === "MEDICO" ? "medico" : "paciente",
         usuarioId: usuario.id,
-        consulta: body.consulta ?? "",
+        consulta: body.consulta?.trim().slice(0, 160) ?? "",
       },
     });
 

@@ -77,28 +77,43 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Paciente só conversa com médicos das PRÓPRIAS consultas (do agendamento
-    // até 30 dias depois da data da consulta) ou com o suporte BION.
-    if (usuario.role === "PACIENTE" && destinatario.role === "MEDICO") {
-      const consulta = await db.consulta.findFirst({
-        where: { pacienteId: usuario.id, medicoId: destinatario.id, status: { not: "cancelada" } },
-        orderBy: { dataInicio: "desc" },
-      });
-      const janelaDias = 30;
-      if (!consulta) {
+    // HARDENING (V8): regra de relacionamento em TODOS os pares de papéis.
+    //  - Paciente ↔ médico: exigem vínculo de consulta (paciente tem janela de
+    //    30 dias após a consulta; o médico pode iniciar o contato profissional).
+    //  - Paciente→paciente e médico→médico: bloqueados (o produto não oferece;
+    //    IDs de médicos são públicos no diretório — sem a regra, qualquer um
+    //    spammaria qualquer um).
+    //  - Envolver ADMIN = suporte BION: permitido em ambos os sentidos.
+    if (usuario.role !== "ADMIN" && destinatario.role !== "ADMIN") {
+      if (usuario.role === destinatario.role) {
         return Response.json(
-          { erro: "Você pode enviar mensagens apenas a médicos com quem agendou consultas." },
+          { erro: "Esta conversa não é permitida na plataforma. Use o Suporte BION quando precisar." },
           { status: 403 },
         );
       }
-      const limite = consulta.dataInicio.getTime() + janelaDias * 86_400_000;
-      if (Date.now() > limite) {
+      const pacienteId = usuario.role === "PACIENTE" ? usuario.id : destinatario.id;
+      const medicoId = usuario.role === "MEDICO" ? usuario.id : destinatario.id;
+      const consulta = await db.consulta.findFirst({
+        where: { pacienteId, medicoId, status: { not: "cancelada" } },
+        orderBy: { dataInicio: "desc" },
+      });
+      if (!consulta) {
         return Response.json(
-          {
-            erro: `A conversa com ${destinatario.nome} se encerrou 30 dias após a consulta. Para novos assuntos, agende outra consulta.`,
-          },
+          { erro: "Você pode enviar mensagens apenas a pacientes/médicos com quem tem consultas." },
           { status: 403 },
         );
+      }
+      if (usuario.role === "PACIENTE") {
+        const janelaDias = 30;
+        const limite = consulta.dataInicio.getTime() + janelaDias * 86_400_000;
+        if (Date.now() > limite) {
+          return Response.json(
+            {
+              erro: `A conversa com ${destinatario.nome} se encerrou 30 dias após a consulta. Para novos assuntos, agende outra consulta.`,
+            },
+            { status: 403 },
+          );
+        }
       }
     }
 
