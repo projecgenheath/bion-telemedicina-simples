@@ -483,3 +483,37 @@ Work Log:
 
 Stage Summary:
 - A triagem NÃO tem mais beco sem saída: correção de perfil continua a etapa, "Não"/chips avançam com a pergunta real, avanço de etapa vem SEMPRE com a pergunta da etapa nova, e o servidor substitui resposta ruim do LLM pela pergunta certa. Canal público filtrado contra erros do provedor (gpt-oss, intermitente — cai para o motor determinístico). Próximo passo recomendado: configurar BION_LLM_GEMINI_API_KEY na Vercel para qualidade generativa plena (chat livre + triagem + laudos).
+
+---
+Task ID: hardening-autorizacao-ia-privacidade
+Agent: Super Z (agente principal)
+Task: Hardening item 2 (autorização — V1-V9 da auditoria) + correções finais da BION IA (eco da anonimização, perda do peso, contadores mistos motor/LLM)
+
+Work Log:
+- E2E produção do cenário do peso: 100% dos checks passando (continuidade da triagem já íntegra no deploy ca871e7). Modelo real esclarecido e DOCUMENTADO: tier anônimo do Pollinations serve APENAS GPT-OSS 20B (openai/openai-fast são aliases; catálogo consultado via /models) — NÃO existe Gemma; openai-large/mistral/gemini/llama/deepseek retornam 404 no tier anônimo; reasoning_effort=high quebra o canal (resposta vazia, 23s). Qualidade generativa plena depende de BION_LLM_GEMINI_API_KEY na Vercel (canal já implementado).
+- Descoberta em produção (teste_fonte_prod): resposta "Seu nome é a paciente, 32 anos..." — a anonimização LGPD substituía o nome TAMBÉM no prompt do sistema e o gpt-oss ECOAVA o substituto como nome. Fix em llm.ts: NOTA_DE_PRIVACIDADE anexada à mensagem de sistema no canal público (tratar como "você", jamais repetir marcadores).
+- Prompt da triagem sem nome inline ("TRIAGEM do usuário") — mantém nome no bloco de perfil (canais confiáveis personalizam).
+- Descoberta: LLM repetia "80 kg" mas não emitia perfil_atualizacoes (dado perdido). Fix: extrairPerfilDeterministico na rota — extratores do motor (peso/altura/telefone, agora exportados) preenchem perfil_atualizacoes na identificação quando o LLM omite; o que o LLM emitiu tem prioridade.
+- Descoberta (teste local com canal SDK): contadores divergentes entre caminhos — _n (motor, perguntas feitas) vs _turnos (rota, falas): um turno LLM entre turnos do motor deixava o contador parado e o motor REABRIA a etapa com pergunta órfã (o "Não" parava na identificação; o chip "Não sei informar" reabria a queixa). Fix: contador unificado max(_n, 1+_turnos) com guarda de zeros; teto da rota mantido em falas puras.
+- Semente _n=1 na ponte server-side (rota) espelhando o fecharComPonte do motor — LLM avança etapa e o próximo turno do motor NÃO repete a pergunta de abertura.
+- Guarda endurecida: ack aproveitável exige terminador .!?… (cabeça de pergunta órfã — "Em média, quanto tempo a dor dura" — é descartada; fim das mensagens com DUAS perguntas); 2+ interrogações na mesma etapa substituídas pela pergunta real; metaperguntas vagas ampliadas (posso/podemos continuar|seguir|prosseguir).
+- Hardening item 2 — auditoria de autorização completa (subagente Explore, 32 rotas): 1 ALTA (V1) + 3 MÉDIAS (V2-V4) + 4 BAIXAS (V5-V8) + 2 INFO (V9-V10). Corrigidos V1, V2, V3, V5, V6, V8, V9 (server-side, sem reescrita):
+  - V1 (ALTA): POST /api/consultas ignora body.valor — preço vem de perfilMedico.valor (paciente mandava R$ 1 e recebia consulta confirmada grátis).
+  - V2: avaliação exige consulta CONCLUÍDA do próprio paciente com o médico (consultaId forjado → 403; dedup por consulta → 409; notas clampadas 1-5; comentário ≤500).
+  - V3: documento clínico só para paciente com consulta não cancelada com o médico da sessão (fim da receita forjada em prontuário de terceiro); whitelist de tipo (receita/atestado/exame/exame_solicitado); limites de tamanho.
+  - V5: consentimento LGPD em nome de paciente exige vínculo assistencial (médico); admin isento.
+  - V6: enviadoPor do arquivo derivado do papel da sessão (paciente não se passa por médico); clamps de nome/tipo/consulta.
+  - V8: mensageria — PACIENTE↔PACIENTE e MÉDICO↔MÉDICO → 403; médico→paciente exige consulta (sem janela de 30 dias para o profissional); ADMIN = suporte liberado nos dois sentidos.
+  - V9: consentimentos do paciente casam por pacienteId (fim do casamento por nome — homônimos).
+  - V7 (broadcast lido por todos = schema) e V4 (senha padrão bion123 de contas criadas pelo admin — rota de troca de senha) documentados como pendência de produto, NÃO silenciados.
+- Suíte: teste_hardening.ts ganhou FASE C (--fase-c) com 13 checks de autorização — 30/30 no total (FASE A 17 + FASE C 13); scripts novos: teste-triagem-completa.ts (regressão adaptativa das 11 etapas — leitura da etapa e resposta certa a cada turno), teste_fonte_prod.ts, teste_llm_triagem_prod.ts, teste_canal_publico.sh, limpar_testes_hoje.ts, limpar_sessao_hardening2.ts.
+- tsconfig: scripts/ excluído do projeto TS (suítes standalone não poluem tsc).
+- Validação: tsc 0, eslint 0, build 0; regressão adaptativa local: TODAS as 11 etapas do rito + fechamento + PATCH concluir 200 + estado concluído; deploy e426245 validado em produção — V1 (valor=1 do cliente → cobrou 150 da tabela), cenário do print (TODOS OS CHECKS), caminho LLM/motor misto (peso aplicado, ponte, queixa), retomada pela UI (390px dark, chat com eco + UMA pergunta + chips).
+- Evidências: download/evidencias-hardening-2/ (01-paciente-home, 02-chat-triagem, 03-chat-retomada, 04-resposta-ia).
+- Limpeza: 9 consultas de teste + anamneses + pagamentos removidos do Supabase; medições/pesos de hoje removidos; perfil da Marina restaurado (66 kg); arquivos HARDENING_V6 removidos.
+
+Stage Summary:
+- Hardening de AUTORIZAÇÃO entregue: preço server-side, prova de atendimento na avaliação, vínculo assistencial em documento/consentimento, proveniência por sessão, mensageria com regra de relacionamento universal, visibilidade por ID.
+- BION IA da triagem sem os três defeitos de caminho misto: sem eco da anonimização ("Seu nome é a paciente" eliminado), sem perda de peso/altura ditados, sem reabertura de etapa — qualquer mistura LLM/falha/motor segue o rito com UMA pergunta real por vez.
+- Modelo real do canal público documentado no código (GPT-OSS 20B — o usuário estava certo: não é Gemma). Para qualidade generativa plena (e encerrar o gap de repetições ocasionais do gpt-oss), configurar BION_LLM_GEMINI_API_KEY na Vercel; motor determinístico garante o rito integral enquanto isso.
+- Pendências de produto registradas (V4 troca de senha, V7 leitura por usuário de broadcasts) — próximas na fila de hardening (8: performance/carregarDados, 9: telemedicina WebSocket+TURN).
