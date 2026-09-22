@@ -10,6 +10,7 @@ import { PrismaClient } from "@prisma/client";
 const db = new PrismaClient();
 const consultaId = process.argv[2];
 const PESO_ANTERIOR = "66";
+const PESO_TESTE = Number(process.argv[3] || 80);
 
 async function main() {
   if (!consultaId) throw new Error("informe o CONSULTA_ID");
@@ -27,12 +28,12 @@ async function main() {
   const meiaNoite = new Date();
   meiaNoite.setHours(0, 0, 0, 0);
   const medicoes = await db.medicao.deleteMany({
-    where: { usuarioId: marina.id, tipo: "peso", valor1: 80, criadoEm: { gte: meiaNoite } },
+    where: { usuarioId: marina.id, tipo: "peso", valor1: PESO_TESTE, criadoEm: { gte: meiaNoite } },
   });
   console.log(`medições de peso 80 de hoje removidas: ${medicoes.count}`);
 
   const perfil = await db.perfilPaciente.updateMany({
-    where: { userId: marina.id, peso: "80" },
+    where: { userId: marina.id, peso: String(PESO_TESTE) },
     data: { peso: PESO_ANTERIOR },
   });
   console.log(`perfil restaurado para ${PESO_ANTERIOR} kg: ${perfil.count}`);
