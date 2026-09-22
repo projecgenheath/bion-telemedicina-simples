@@ -169,10 +169,14 @@ export async function carregarDados(usuario: UsuarioSessao) {
       ? { medicoId: usuario.id }
       : {};
 
+  // HARDENING (V9): paciente vê SOMENTE consentimentos com o próprio ID —
+  // casar por `quem: nome` expunha registros de homônimos. O rótulo por nome
+  // permanece apenas para o médico que registrou (baixa sensibilidade;
+  // admin vê tudo).
   const consentimentoWhere = souAdmin
     ? {}
     : souPaciente
-      ? { OR: [{ pacienteId: usuario.id }, { quem: usuario.nome }] }
+      ? { pacienteId: usuario.id }
       : { quem: usuario.nome };
 
   // Todas as coleções independentes em paralelo (bootstrap rápido)

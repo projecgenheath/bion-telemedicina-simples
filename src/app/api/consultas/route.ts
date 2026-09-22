@@ -4,7 +4,6 @@ import { exigirPapel } from "@/lib/server/auth";
 import {
   aplicarSideEffects,
   parseDataHora,
-  parseValor,
   type NotifPayload,
   type AuditPayload,
 } from "@/lib/server/dados";
@@ -36,7 +35,6 @@ export async function POST(req: NextRequest) {
       data: string;
       hora: string;
       motivoConsulta?: string;
-      valor?: string | number;
       metodo?: "pix" | "cartao";
     };
 
@@ -52,6 +50,12 @@ export async function POST(req: NextRequest) {
     // o que CONFIRMA (abaixo, no gateway; ou no webhook real).
     const status = "em_espera";
 
+    // HARDENING (V1): o PREÇO é imposto pelo servidor (tabela do médico).
+    // O cliente não manda valor — um paciente malicioso podia agendar com
+    // valor 0 e receber consulta confirmada grátis. O perfilMedico do médico
+    // já veio carregado acima (valor padrão 150 no schema).
+    const valorConsulta = medico.perfilMedico?.valor ?? 150;
+
     const dataInicio = parseDataHora(body.data, body.hora);
     const consulta = await db.consulta.create({
       data: {
@@ -60,9 +64,9 @@ export async function POST(req: NextRequest) {
         especialidade: medico.perfilMedico?.especialidade ?? "Clínica Geral",
         dataInicio,
         status,
-        valor: parseValor(body.valor),
+        valor: valorConsulta,
         pago: false, // só o gateway/servidor confirma
-        motivoConsulta: body.motivoConsulta?.trim() || "Consulta de rotina",
+        motivoConsulta: body.motivoConsulta?.trim().slice(0, 300) || "Consulta de rotina",
       },
     });
 
