@@ -2,9 +2,11 @@
  * Teste E2E de hardening — regras impostas pelo servidor.
  *
  * Fase A (sem BION_PAGAMENTO_WEBHOOK_SECRET — gateway simulado):
- *   1. POST /api/consultas ignora pago/status/notificacoes/audit do cliente
+ *   1. POST /api/consultas ignora pago/status/notificacoes/audit do cliente —
+ *      o SERVIDOR decide: nasce em_espera e o gateway simulado confirma
+ *      (v2: pagamento CONFIRMA a consulta → status final "confirmada")
  *   2. PATCH atualizar por PACIENTE → 403
- *   3. PATCH remarcar mantém pendente_anamnese
+ *   3. PATCH remarcar não altera status nem pagamento (continua confirmada)
  *   4. POST /api/notificacoes → 405
  *   5. POST /api/auditoria fora da whitelist → 403; evento leve → 200
  *   6. Sessão de usuário desativado → 401 imediato
@@ -90,9 +92,9 @@ async function main() {
       hora: "10:00",
       motivoConsulta: "Teste de hardening",
       valor: "R$ 150",
-      // campos FORJADOS — devem ser ignorados:
+      // campos FORJADOS — devem ser ignorados (o servidor decide status/pagamento):
       pago: true,
-      status: "confirmada",
+      status: "concluida",
       notificacoes: [{ tipo: "agenda", titulo: "NOTIFICACAO_FORJADA", texto: "forjada" }],
       audit: { acao: "EVENTO_FORJADO", categoria: "admin", detalhes: "forjada" },
     });
@@ -102,7 +104,7 @@ async function main() {
       erro?: string;
     };
     verificar("criação 200 com consulta", criacao.status === 200 && !!cJ.consulta, JSON.stringify(cJ).slice(0, 200));
-    verificar("status imposto: pendente_anamnese (cliente pediu confirmada)", cJ.consulta?.status === "pendente_anamnese", cJ.consulta?.status);
+    verificar("status decidido pelo SERVIDOR: confirmada via pagamento (cliente pediu 'concluida')", cJ.consulta?.status === "confirmada", cJ.consulta?.status);
     verificar("pagamento confirmado pelo servidor (gateway simulado)", cJ.pagamento?.status === "confirmado" && cJ.pagamento?.via === "simulado", JSON.stringify(cJ.pagamento));
     verificar("pago=true só após confirmação server-side", cJ.consulta?.pago === true, String(cJ.consulta?.pago));
     const respTxt = JSON.stringify(criacao.json);
@@ -118,16 +120,17 @@ async function main() {
     });
     verificar("paciente não usa acao atualizar (403)", proibido.status === 403, String(proibido.status));
 
-    /* ---------- 3. remarcar mantém pendente_anamnese ---------- */
-    console.log("3) PATCH remarcar — não auto-confirma");
+    /* ---------- 3. remarcar não altera status nem pagamento ---------- */
+    console.log("3) PATCH remarcar — status decidido pelo servidor permanece");
     const remarcada = await req("PATCH", `/api/consultas/${consultaId}`, marina, {
       acao: "remarcar",
       data: "Amanhã",
       hora: "11:00",
     });
-    const rJ = remarcada.json as { consulta?: { status: string; remarcada?: boolean } };
+    const rJ = remarcada.json as { consulta?: { status: string; pago: boolean; remarcada?: boolean } };
     verificar("remarcação 200", remarcada.status === 200);
-    verificar("status continua pendente_anamnese", rJ.consulta?.status === "pendente_anamnese", rJ.consulta?.status);
+    verificar("status continua confirmada (remarcar não confirma nem cancela)", rJ.consulta?.status === "confirmada", rJ.consulta?.status);
+    verificar("pagamento preservado na remarcação", rJ.consulta?.pago === true, String(rJ.consulta?.pago));
 
     /* ---------- 4. POST /api/notificacoes → 405 ---------- */
     console.log("4) POST /api/notificacoes — bloqueado");
@@ -207,7 +210,7 @@ async function main() {
       consulta?: { id: string; pago: boolean; status: string };
       pagamento?: { id: string; status: string };
     };
-    verificar("consulta pendente_anamnese", cJ.consulta?.status === "pendente_anamnese", cJ.consulta?.status);
+    verificar("consulta em_espera (aguarda pagamento)", cJ.consulta?.status === "em_espera", cJ.consulta?.status);
     verificar("pago=false aguardando webhook", cJ.consulta?.pago === false, String(cJ.consulta?.pago));
     verificar("cobrança pendente", cJ.pagamento?.status === "pendente", cJ.pagamento?.status);
     const pagamentoId = cJ.pagamento!.id;
@@ -230,10 +233,11 @@ async function main() {
     verificar("via=webhook registrada", bJ.pagamento?.via === "webhook", bJ.pagamento?.via);
 
     const boot2 = (await req("GET", "/api/bootstrap", marina)).json as {
-      consultas: { id: string; pago: boolean }[];
+      consultas: { id: string; pago: boolean; status: string }[];
     };
     const consulta = boot2.consultas.find((c) => c.id === cJ.consulta!.id);
     verificar("consulta marcada como paga após webhook", consulta?.pago === true, String(consulta?.pago));
+    verificar("consulta CONFIRMADA após webhook (pagamento confirma)", consulta?.status === "confirmada", consulta?.status);
 
     console.log("11) Reentrega do webhook é idempotente");
     const deNovo = await req("POST", "/api/pagamentos/webhook", null, JSON.parse(corpo), {
