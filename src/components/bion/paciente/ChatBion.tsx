@@ -719,16 +719,20 @@ export function ChatBion({ aberto, onFechar, aoEnviarExame }: { aberto: boolean;
         {/* Retomada: triagens em andamento de consultas confirmadas na janela */}
         {mensagens.length > 0 && etapa === null && !anamneseAtiva && anamnesesPendentes.length > 0 && (
           <div className="flex flex-wrap gap-2">
-            {anamnesesPendentes.map((a) => (
-              <button
-                key={a.id}
-                onClick={() => retomarAnamnese(a)}
-                className="rounded-full bg-emerald-600/10 border border-emerald-600/30 px-4 py-2.5 text-sm font-semibold text-emerald-700 dark:text-emerald-300 inline-flex items-center gap-1.5"
-              >
-                <Stethoscope className="w-4 h-4" />
-                Continuar triagem — {a.especialidade} com {a.medico}
-              </button>
-            ))}
+            {anamnesesPendentes.map((a) => {
+              const c = consultas.find((x) => x.id === a.consultaId);
+              return (
+                <button
+                  key={a.id}
+                  onClick={() => retomarAnamnese(a)}
+                  className="rounded-full bg-emerald-600/10 border border-emerald-600/30 px-4 py-2.5 text-sm font-semibold text-emerald-700 dark:text-emerald-300 inline-flex items-center gap-1.5"
+                >
+                  <Stethoscope className="w-4 h-4" />
+                  Continuar triagem — {a.especialidade} com {a.medico}
+                  {c ? ` · ${c.data} às ${c.hora}` : ""}
+                </button>
+              );
+            })}
           </div>
         )}
 
