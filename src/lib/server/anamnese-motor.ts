@@ -86,6 +86,9 @@ const normalizar = (v: string) =>
     .toLowerCase()
     .trim();
 
+/** Normalização compartilhada (rota usa nos extratores determinísticos). */
+export const normalizarTexto = normalizar;
+
 const hash = (s: string) => [...s].reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 7);
 const pick = <T,>(arr: T[], semente: string): T => arr[hash(semente) % arr.length];
 
@@ -112,8 +115,15 @@ const eco = (texto: string, max = 90) => {
 const contador = (coleta: Record<string, Record<string, unknown>>, etapa: string) => {
   const c = coleta[etapa];
   if (!c) return 0;
-  if (typeof c._n === "number") return c._n;
-  return Number(c._turnos ?? 0);
+  const nMotor = Number(c._n ?? 0);
+  const turnos = Number(c._turnos ?? 0);
+  if (!nMotor && !turnos) return 0;
+  // Contador UNIFICADO: _n = perguntas feitas pelo motor; _turnos = falas do
+  // usuário contadas pela rota (inclui turnos do caminho LLM). A abertura da
+  // etapa (pergunta 1) vale sempre — e cada fala do usuário recebeu uma
+  // pergunta em resposta. Sem isso, turnos do LLM entre turnos do motor
+  // deixavam o contador parado e o motor reabria a etapa com pergunta órfã.
+  return Math.max(nMotor, 1 + turnos);
 };
 
 const naoSei = (t: string) => /(nao sei|não sei|nao lembro|não lembro|nao tenho certeza)/.test(t);
@@ -138,7 +148,9 @@ const MSG_ALARME = (sinal: string) =>
 
 /* --------------------------- extratores básicos ------------------------ */
 
-function extrairPeso(t: string): number | null {
+/** Extratores determinísticos — reutilizados pela rota como fallback quando o
+ * LLM não emite perfil_atualizacoes (o dado dito pelo paciente NUNCA se perde). */
+export function extrairPeso(t: string): number | null {
   const m =
     t.match(/(?:peso|quilos?|balan[çc]a|emagreci|engordei)[^\d]{0,15}(\d{2,3}(?:[.,]\d)?)/) ||
     t.match(/(\d{2,3}(?:[.,]\d)?)\s*(?:kg|quilos?)/);
@@ -147,14 +159,14 @@ function extrairPeso(t: string): number | null {
   return v >= 20 && v <= 400 ? Math.round(v * 10) / 10 : null;
 }
 
-function extrairAltura(t: string): number | null {
+export function extrairAltura(t: string): number | null {
   const m = t.match(/1[.,](\d{2})\s*(?:m|metros?|cm|cent[íi]metros)?/) || t.match(/(\d{3})\s*(?:cm|cent[íi]metros)/);
   if (!m) return null;
   const v = m[0].match(/1[.,]/) ? Number(`1${m[1]}`) : Number(m[1]);
   return v >= 50 && v <= 250 ? v : null;
 }
 
-function extrairTelefone(t: string): string | null {
+export function extrairTelefone(t: string): string | null {
   const m = t.match(/(\(?\d{2}\)?\s?9?\s?\d{4}[-\s]?\d{4})/);
   return m ? m[1].trim() : null;
 }

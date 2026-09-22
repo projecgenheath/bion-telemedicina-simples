@@ -18,12 +18,22 @@
  *  10. Webhook assinado (HMAC-SHA256) → confirma pagamento (pago=true)
  *  11. Reentrega do webhook → idempotente
  *
+ * Fase C (--fase-c — autorização/ownership, sem mutações sujas):
+ *  12. V1: POST /api/consultas ignora valor do cliente (preço do médico)
+ *  13. V2: avaliação sem consulta concluída → 403; consultaId de terceiro → 403;
+ *      nota fora da escala → 400
+ *  14. V3: médico emite documento para paciente sem vínculo → 403
+ *  15. V5: médico registra consentimento LGPD de paciente sem vínculo → 403
+ *  16. V6: proveniência do arquivo derivada da sessão (enviadoPor ignorado)
+ *  17. V8: paciente→paciente e médico→médico → 403; suporte (ADMIN) liberado
+ *
  * Uso: bun scripts/teste_hardening.ts http://127.0.0.1:3000
  */
 import crypto from "node:crypto";
 
 const BASE = process.argv[2] ?? "http://127.0.0.1:3000";
 const FASE_B = process.argv.includes("--com-segredo");
+const FASE_C = process.argv.includes("--fase-c");
 const SEGREDO = "segredo-teste-hardening-bion";
 const SENHA = "bion123";
 
@@ -249,6 +259,152 @@ async function main() {
       acao: "cancelar",
       motivo: "limpeza do teste de hardening (fase B)",
     });
+  }
+
+  if (FASE_C) {
+    /* ---------- FASE C: autorização / ownership ---------- */
+    const julia = await login("julia.lima@med.bion.app");
+
+    console.log("12) V1 — preço imposto pelo servidor (valor do cliente ignorado)");
+    const bootC = (await req("GET", "/api/bootstrap", marina)).json as {
+      medicos: { id: string; nome: string; status: string }[];
+    };
+    const medicoV1 = bootC.medicos.find((m) => m.status === "ativo");
+    if (!medicoV1) throw new Error("sem médico ativo");
+    const criacaoV1 = await req("POST", "/api/consultas", marina, {
+      medicoId: medicoV1.id,
+      data: "Amanhã",
+      hora: "23:30",
+      valor: 1, // tentativa de fraude: R$ 1
+    });
+    const cV1 = criacaoV1.json as { consulta?: { id: string; valor: number } };
+    verificar(
+      "valor do cliente (R$ 1) ignorado — preço vem da tabela do médico",
+      criacaoV1.status === 200 && !!cV1.consulta && cV1.consulta.valor !== 1 && cV1.consulta.valor > 50,
+      `valor=${cV1.consulta?.valor}`,
+    );
+    await req("PATCH", `/api/consultas/${cV1.consulta!.id}`, marina, {
+      acao: "cancelar",
+      motivo: "limpeza do teste V1",
+    });
+
+    console.log("13) V2 — avaliação exige prova de atendimento");
+    const bootM = (await req("GET", "/api/bootstrap", julia)).json as {
+      medicos: { id: string; nome: string }[];
+    };
+    const ana = bootM.medicos.find((m) => m.nome === "Dra. Ana Ribeiro");
+    const semVinculo = bootM.medicos.find(
+      (m) => m.nome === "Dr. Roberto Campos" || (m.nome !== "Dra. Ana Ribeiro" && m.nome !== "Dra. Julia Lima"),
+    );
+    if (!ana || !semVinculo) throw new Error("médicos do seed não encontrados");
+
+    // a) Marina NÃO tem consulta concluída com Roberto/Camila/Felipe → 403
+    const semProva = await req("POST", "/api/avaliacoes", marina, {
+      medicoId: semVinculo.id,
+      nota: 1,
+    });
+    verificar("avaliação sem consulta concluída → 403", semProva.status === 403, String(semProva.status));
+
+    // b) consultaId de TERCEIRO (do joao) → 403 (ownership)
+    const joaoBoot = (await req("GET", "/api/bootstrap", joao)).json as {
+      consultas: { id: string; status: string; medico: string }[];
+    };
+    const consultaDoJoao = joaoBoot.consultas.find((c) => c.status === "concluida");
+    if (consultaDoJoao) {
+      const forjada = await req("POST", "/api/avaliacoes", marina, {
+        medicoId: ana.id,
+        nota: 1,
+        consultaId: consultaDoJoao.id,
+      });
+      verificar("consultaId de terceiro → 403", forjada.status === 403, String(forjada.status));
+    } else {
+      console.log("  ⚠ joao sem consulta concluída no seed — teste de forja pulado");
+    }
+
+    // c) nota fora da escala → 400
+    const notaLouca = await req("POST", "/api/avaliacoes", marina, {
+      medicoId: ana.id,
+      nota: 999,
+    });
+    verificar("nota fora da escala → 400", notaLouca.status === 400, String(notaLouca.status));
+
+    console.log("14) V3 — documento só para paciente com vínculo assistencial");
+    const adminBoot = (await req("GET", "/api/bootstrap", admin)).json as {
+      pacientes: { id: string; email: string }[];
+    };
+    const joaoId = adminBoot.pacientes.find((p) => p.email === "joao.pereira@email.com")?.id;
+    verificar("id do joao resolvido pelo admin", !!joaoId);
+    if (joaoId) {
+      // joao NÃO tem consulta com julia (seed: joao tem com Ana e Carlos Mendes)
+      const docSemVinculo = await req("POST", "/api/documentos", julia, {
+        tipo: "receita",
+        titulo: "Receita sem vínculo",
+        conteudo: "Teste de hardening V3 — deve ser bloqueado",
+        pacienteId: joaoId,
+      });
+      verificar("documento para paciente sem vínculo → 403", docSemVinculo.status === 403, String(docSemVinculo.status));
+
+      const tipoRuim = await req("POST", "/api/documentos", julia, {
+        tipo: "contrato-violento",
+        titulo: "Fora da whitelist",
+        conteudo: "deve bloquear",
+        pacienteId: joaoId,
+      });
+      verificar("tipo fora da whitelist → 400", tipoRuim.status === 400, String(tipoRuim.status));
+    }
+
+    console.log("15) V5 — consentimento LGPD só com vínculo");
+    if (joaoId) {
+      const consSemVinculo = await req("POST", "/api/consentimentos", julia, {
+        finalidade: "Geração de prontuário em PDF",
+        documentos: 1,
+        aceito: true,
+        pacienteId: joaoId,
+      });
+      verificar("consentimento em nome de terceiro sem vínculo → 403", consSemVinculo.status === 403, String(consSemVinculo.status));
+    }
+
+    console.log("16) V6 — proveniência do arquivo vem da sessão");
+    const nomeTeste = `HARDENING_V6_${Date.now()}.pdf`;
+    const arq = await req("POST", "/api/arquivos", marina, {
+      nome: nomeTeste,
+      tipo: "application/pdf",
+      tamanhoKb: 10,
+      enviadoPor: "medico", // tentativa de forjar proveniência
+    });
+    const arqJ = arq.json as { arquivos?: { nome: string; enviadoPor: string }[] };
+    const criado = arqJ.arquivos?.find((a) => a.nome === nomeTeste);
+    verificar("arquivo criado (200)", arq.status === 200 && !!criado, JSON.stringify(arq.status));
+    verificar("enviadoPor forçado para 'paciente' (sessão)", criado?.enviadoPor === "paciente", criado?.enviadoPor);
+
+    console.log("17) V8 — regra de relacionamento em todos os pares");
+    // a) paciente→paciente (marina → joao)
+    if (joaoId) {
+      const p2p = await req("POST", "/api/mensagens", marina, {
+        paraId: joaoId,
+        texto: "teste paciente→paciente (deve bloquear)",
+      });
+      verificar("paciente→paciente → 403", p2p.status === 403, String(p2p.status));
+    }
+    // b) médico→médico (julia → ana)
+    const m2m = await req("POST", "/api/mensagens", julia, {
+      paraId: ana.id,
+      texto: "teste médico→médico (deve bloquear)",
+    });
+    verificar("médico→médico → 403", m2m.status === 403, String(m2m.status));
+    // c) suporte BION continua liberado (paciente → admin)
+    const adminPerfil = (await req("GET", "/api/bootstrap", admin)).json as {
+      suporte?: { id: string } | null;
+      usuarios?: { id: string; role: string }[];
+    };
+    const suporteId = adminPerfil.suporte?.id ?? adminPerfil.usuarios?.find((u) => u.role === "ADMIN")?.id;
+    if (suporteId) {
+      const suporte = await req("POST", "/api/mensagens", marina, {
+        paraId: suporteId,
+        texto: "Teste automatizado de suporte BION (hardening V8) — pode ignorar.",
+      });
+      verificar("paciente→suporte (ADMIN) continua 200", suporte.status === 200, String(suporte.status));
+    }
   }
 
   console.log(`\n=== RESULTADO: ${aprovados} aprovados, ${falhas} falhas ===\n`);
