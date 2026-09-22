@@ -245,6 +245,19 @@ async function chamarEnv(c: ClienteEnv, mensagens: Msg[], prazo: number): Promis
 
 /* ----------------------------- canal público ----------------------------- */
 
+/**
+ * Textos de ERRO do provedor gratuito vêm como resposta "válida" (HTTP 200) —
+ * muro de créditos, aviso de conta, publicidade. NUNCA podem chegar ao
+ * paciente como se fosse fala da BION IA: tratamos como falha do canal.
+ */
+const RE_RESPOSTA_INVALIDA =
+  /(doesn'?t have enough credits|top[- ]up|pollinations\.ai\/(top-up|quests)|enter\.pollinations\.ai|contact whoever runs|\*\*Ad\*\*|suporte da apikey|insufficient (credits|quota))/i;
+
+function respostaInvalida(texto: string | null | undefined): boolean {
+  if (!texto) return false;
+  return RE_RESPOSTA_INVALIDA.test(texto);
+}
+
 async function chamarPublico(mensagens: Msg[], prazo: number): Promise<string | null> {
   const url = (process.env.BION_LLM_PUBLICO_URL || PUBLICO_URL_PADRAO).trim();
   const model = (process.env.BION_LLM_PUBLICO_MODEL || PUBLICO_MODEL_PADRAO).trim();
@@ -259,7 +272,12 @@ async function chamarPublico(mensagens: Msg[], prazo: number): Promise<string | 
     }),
     restante(prazo),
   ) as { choices?: { message?: { content?: string } }[] } | null;
-  return bruto?.choices?.[0]?.message?.content?.trim() || null;
+  const texto = bruto?.choices?.[0]?.message?.content?.trim() || null;
+  if (respostaInvalida(texto)) {
+    console.warn("[llm] canal público devolveu texto de erro do provedor — tratado como falha.");
+    return null;
+  }
+  return texto;
 }
 
 /* ------------------------------- canal sdk ------------------------------- */
