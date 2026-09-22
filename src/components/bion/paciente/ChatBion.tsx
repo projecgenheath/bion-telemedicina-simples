@@ -157,7 +157,10 @@ export function ChatBion({ aberto, onFechar, aoEnviarExame }: { aberto: boolean;
       const json = (await res.json()) as RespostaAnamnese;
       if (!res.ok || !json.texto) throw new Error(json.erro ?? "Falha");
       if (json.dados) aplicarEstadoFresco(json.dados);
-      const texto = json.texto + (json.perfilAtualizado?.length ? `\n\n**Perfil atualizado:** ${json.perfilAtualizado.join(", ")}.` : "");
+      const sufixoPerfil = json.perfilAtualizado?.length && !json.texto.includes("Perfil atualizado")
+        ? `\n\n**Perfil atualizado:** ${json.perfilAtualizado.join(", ")}.`
+        : "";
+      const texto = json.texto + sufixoPerfil;
       setMensagens((m) => [...m, { remetente: "ia", texto, tipo: "anamnese", fonte: json.fonte }]);
       histAnamneseRef.current.push({ remetente: "ia", texto: json.texto });
       setAnamneseAtiva((a) => (a ? { ...a, etapa: json.etapa ?? a.etapa } : a));
@@ -200,9 +203,10 @@ export function ChatBion({ aberto, onFechar, aoEnviarExame }: { aberto: boolean;
       const json = (await res.json()) as RespostaAnamnese;
       if (!res.ok || !json.texto) throw new Error(json.erro ?? "Falha");
       if (json.dados) aplicarEstadoFresco(json.dados);
-      const texto =
-        json.texto +
-        (json.perfilAtualizado?.length ? `\n\n**Perfil atualizado:** ${json.perfilAtualizado.join(", ")}.` : "");
+      const sufixoPerfil = json.perfilAtualizado?.length && !json.texto.includes("Perfil atualizado")
+        ? `\n\n**Perfil atualizado:** ${json.perfilAtualizado.join(", ")}.`
+        : "";
+      const texto = json.texto + sufixoPerfil;
       setMensagens((m) => [...m, { remetente: "ia", texto, tipo: "anamnese", fonte: json.fonte }]);
       histAnamneseRef.current.push({ remetente: "ia", texto: json.texto });
       setAnamneseAtiva((a) => (a ? { ...a, etapa: json.etapa ?? a.etapa } : a));
