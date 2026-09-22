@@ -258,6 +258,25 @@ function respostaInvalida(texto: string | null | undefined): boolean {
   return RE_RESPOSTA_INVALIDA.test(texto);
 }
 
+/**
+ * No canal público os nomes reais viram substitutos neutros ("a paciente",
+ * "o médico"). Sem aviso, o modelo ECOA o substituto como se fosse nome —
+ * "Seu nome é a paciente" chegou a ser exibido ao paciente (bug real).
+ * Esta nota ensina o modelo a tratar a pessoa como "você" e a não repetir
+ * os marcadores. Aplicada na PRIMEIRA mensagem (instrução do sistema).
+ */
+const NOTA_PRIVACIDADE =
+  "\n\nNOTA DE PRIVACIDADE (obrigatória): os nomes reais foram removidos desta conversa por segurança. Você NÃO sabe o nome de quem fala contigo. Dirija-se a essa pessoa SEMPRE no tratamento \"você\" e NUNCA repita os marcadores de substituição (\"a paciente\", \"o paciente\", \"o médico\") como se fossem o nome dela. Exemplo correto: \"Confirmado, 80 kg. Está tudo certo?\" — jamais \"Seu nome é a paciente\".";
+
+function aplicarNotaPrivacidade(mensagens: Msg[]): Msg[] {
+  if (!mensagens.length) return mensagens;
+  const [primeira, ...resto] = mensagens;
+  if (primeira.role === "assistant") {
+    return [{ ...primeira, content: primeira.content + NOTA_PRIVACIDADE }, ...resto];
+  }
+  return [{ role: "assistant", content: NOTA_PRIVACIDADE.trim() }, ...mensagens];
+}
+
 async function chamarPublico(mensagens: Msg[], prazo: number): Promise<string | null> {
   const url = (process.env.BION_LLM_PUBLICO_URL || PUBLICO_URL_PADRAO).trim();
   const model = (process.env.BION_LLM_PUBLICO_MODEL || PUBLICO_MODEL_PADRAO).trim();
@@ -339,7 +358,9 @@ export async function chatComFonte(mensagens: Msg[], timeoutMs: number, anon?: A
 
   // 3) endpoint público sem chave — anonimiza nomes antes de enviar
   if (publicoHabilitado() && process.env.BION_LLM_FORCAR_SDK !== "1" && !publicoEmCooldown()) {
-    const texto = await chamarPublico(anonimizarMensagens(mensagens, anon), prazo);
+    const anonimizado = anonimizarMensagens(mensagens, anon);
+    const comNota = anon?.length ? aplicarNotaPrivacidade(anonimizado) : anonimizado;
+    const texto = await chamarPublico(comNota, prazo);
     if (texto) return { texto, fonte: "publico" };
     _publicoFalhaEm = Date.now();
   }

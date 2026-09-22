@@ -4,7 +4,16 @@ import { exigirPapel } from "@/lib/server/auth";
 import { carregarDados, aplicarSideEffects } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
 import { chatComFonte, type AnonNomes, type FonteLlm } from "@/lib/server/llm";
-import { turnoMotor, perguntaRetomada, ETAPAS_MOTOR, type MotorCtx } from "@/lib/server/anamnese-motor";
+import {
+  turnoMotor,
+  perguntaRetomada,
+  ETAPAS_MOTOR,
+  normalizarTexto,
+  extrairPeso,
+  extrairAltura,
+  extrairTelefone,
+  type MotorCtx,
+} from "@/lib/server/anamnese-motor";
 
 /**
  * Triagem pré-consulta guiada pela BION IA (storytelling clínico).
@@ -152,6 +161,29 @@ function mesclarColetaMotor(atual: Coleta, novo: Coleta): Coleta {
   return saida;
 }
 
+/**
+ * FALLBACK DETERMINÍSTICO de perfil: o LLM às vezes repete o dado dito
+ * ("peso em 80 kg") mas esquece de emitir perfil_atualizacoes — o dado se
+ * perde e a correção do paciente nunca chega ao prontuário. Os extratores
+ * do motor (mesmos regexes do caminho local) garantem peso/altura/telefone
+ * na etapa de identificação; o que o LLM emitiu explicitamente TEM prioridade.
+ */
+function extrairPerfilDeterministico(
+  mensagem: string,
+  atual: NonNullable<RespostaLLM["perfil_atualizacoes"]> | undefined,
+): NonNullable<RespostaLLM["perfil_atualizacoes"]> | undefined {
+  const saida: NonNullable<RespostaLLM["perfil_atualizacoes"]> = { ...(atual ?? {}) };
+  const t = normalizarTexto(mensagem);
+  if (!t) return Object.keys(saida).length ? saida : undefined;
+  const peso = extrairPeso(t);
+  if (peso !== null && saida.peso === undefined) saida.peso = peso;
+  const altura = extrairAltura(t);
+  if (altura !== null && saida.altura === undefined) saida.altura = altura;
+  const tel = extrairTelefone(mensagem);
+  if (tel && !saida.telefone) saida.telefone = tel;
+  return Object.keys(saida).length ? saida : undefined;
+}
+
 /** Próxima etapa canônica; pula "gineco" quando não pertinente ao gênero. */
 function proximaEtapa(etapaAtual: string, genero: string): string {
   const idx = ETAPAS.indexOf(etapaAtual as (typeof ETAPAS)[number]) + 1;
@@ -170,7 +202,7 @@ const promptSistema = (ctx: {
   etapa: string;
   coleta: Coleta;
   perfil: string;
-}) => `Você é a BION IA, assistente clínica da plataforma de telemedicina BION. Você conduz a TRIAGEM PRÉ-CONSULTA de ${ctx.nomePaciente} — uma consulta de ${ctx.especialidade} com ${ctx.medico}, marcada para ${ctx.quando}. A consulta JÁ está confirmada e paga; seu papel é ouvir e organizar a história do paciente para o médico receber um dossiê pronto antes do atendimento.
+}) => `Você é a BION IA, assistente clínica da plataforma de telemedicina BION. Você conduz a TRIAGEM PRÉ-CONSULTA do usuário — uma consulta de ${ctx.especialidade} com ${ctx.medico}, marcada para ${ctx.quando}. A consulta JÁ está confirmada e paga; seu papel é ouvir e organizar a história do paciente para o médico receber um dossiê pronto antes do atendimento. Dirija-se a quem fala contigo sempre como "você" — o nome dele está nos dados do perfil abaixo.
 
 ETAPA ATUAL: ${ROTULO_ETAPA[ctx.etapa] ?? ctx.etapa} (índice interno: ${ctx.etapa})
 
@@ -499,6 +531,13 @@ export async function POST(req: NextRequest) {
         const llmRes = await chatComFonte(mensagens, TIMEOUT_LLM_MS, anonNomes(usuario, consulta.medico.nome, perfilDados?.genero ?? ""));
         llmFonte = llmRes.fonte;
         parsed = llmRes.texto ? extrairJson(llmRes.texto) : null;
+
+        // FALLBACK DETERMINÍSTICO do perfil (só caminho LLM, só identificação):
+        // o motor já extrai por conta própria; aqui garantimos o mesmo rito
+        // quando o LLM responde mas não devolve perfil_atualizacoes.
+        if (parsed && mensagem && etapaAtual === "identificacao") {
+          parsed.perfil_atualizacoes = extrairPerfilDeterministico(mensagem, parsed.perfil_atualizacoes);
+        }
       }
     }
 
@@ -520,6 +559,8 @@ export async function POST(req: NextRequest) {
     // Contador de turnos do usuário na etapa (regra de avanço do SERVIDOR):
     // mesmo que o LLM não sinalize o fim da etapa, ela avança ao atingir o
     // teto — impede a conversa de girar em círculos na mesma fase.
+    // (_turnos = FALAS do usuário; o motor lê o mesmo fluxo como "perguntas
+    // feitas" com max(_n, 1 + _turnos) — ver anamnese-motor.contador.)
     const turnosEtapa = Number(coletaNova[etapaAtual]?._turnos ?? 0) + (mensagem ? 1 : 0);
     if (coletaNova[etapaAtual]) {
       coletaNova[etapaAtual] = { ...coletaNova[etapaAtual], _turnos: turnosEtapa };
@@ -543,6 +584,12 @@ export async function POST(req: NextRequest) {
     let etapaNova = etapaAtual;
     if ((Boolean(parsed.etapa_concluida) || etapaExaurida) && etapaAtual !== "fechamento" && !corrigiuPerfil) {
       etapaNova = proximaEtapa(etapaAtual, perfilDados?.genero ?? "");
+      // A ponte do SERVIDOR (guard abaixo) pergunta a etapa nova — semeia o
+      // contador dela, espelhando o fecharComPonte do motor, senão o próximo
+      // turno do motor reabre a etapa com a pergunta de abertura (repetição).
+      if (!coletaNova[etapaNova]?._n && !coletaNova[etapaNova]?._turnos) {
+        coletaNova[etapaNova] = { ...(coletaNova[etapaNova] ?? {}), _n: 1 };
+      }
     }
 
     await db.anamnese.update({
@@ -567,22 +614,36 @@ export async function POST(req: NextRequest) {
     let textoFinal = texto;
     if (!viaMotor) {
       const perguntaCerta = () => perguntaRetomada(etapaNova, coletaNova, ctxMotor);
+      // Ack aproveitável = texto antes da 1ª pergunta COM ao menos uma frase
+      // completa (terminador .!?…). Sem terminador, é cabeça de pergunta órfã
+      // (ex.: “Em média, quanto tempo a dor dura”) — descarta, senão o paciente
+      // recebe DUAS perguntas na mesma mensagem.
+      const ackUtil = (t: string) => {
+        const ack = removerPerguntasFinais(t);
+        return /[.!?…]/.test(ack) ? ack : "";
+      };
       if (etapaNova !== etapaAtual) {
-        const ack = /^\s*\{/.test(textoFinal) ? "" : removerPerguntasFinais(textoFinal);
+        const ack = /^\s*\{/.test(textoFinal) ? "" : ackUtil(textoFinal);
         textoFinal = ack ? `${ack}\n\n${perguntaCerta()}` : perguntaCerta();
       } else {
         const perguntas = (textoFinal.match(/\?/g) ?? []).length;
         const vagaMeta =
-          /(tudo certo agora|podemos prosseguir|onde (podemos|voce|você|quer) (prosseguir|continuar|seguir)|como (posso|podemos) (ajudar|prosseguir|continuar) agora|proximo passo|próximo passo)/.test(
+          /(tudo certo agora|podemos prosseguir|onde (podemos|voce|você|quer) (prosseguir|continuar|seguir)|como (posso|podemos) (ajudar|prosseguir|continuar) agora|(posso|podemos) (continuar|seguir|prosseguir)|pode continuar\?|proximo passo|próximo passo)/.test(
             textoFinal,
           );
         if (perguntas === 0) {
           textoFinal = `${textoFinal}\n\n${perguntaCerta()}`;
-        } else if ((perguntas >= 3 || vagaMeta) && etapaNova !== "fechamento") {
-          textoFinal = perguntaCerta();
+        } else if ((perguntas >= 2 || vagaMeta) && etapaNova !== "fechamento") {
+          // UMA pergunta por mensagem é regra do rito: 2+ interrogações (o LLM
+          // perguntou à frente) ou metapergunta vaga → mantém só o acolhimento
+          // completo e fecha com a pergunta REAL da etapa.
+          const ack = ackUtil(textoFinal);
+          const ackVago =
+            /(tudo certo agora|podemos prosseguir|(posso|podemos) (continuar|seguir|prosseguir)|proximo passo|próximo passo)/.test(ack);
+          textoFinal = !ack || ackVago ? perguntaCerta() : `${ack}\n\n${perguntaCerta()}`;
         } else if (textoFinal.length > 720 && etapaNova !== "fechamento") {
-          const ack = removerPerguntasFinais(textoFinal);
-          textoFinal = `${ack}\n\n${perguntaCerta()}`;
+          const ack = ackUtil(textoFinal);
+          textoFinal = ack ? `${ack}\n\n${perguntaCerta()}` : perguntaCerta();
         }
       }
     }

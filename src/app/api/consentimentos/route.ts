@@ -25,7 +25,24 @@ export async function POST(req: NextRequest) {
         where: { id: body.pacienteId, role: "PACIENTE" },
         select: { id: true },
       });
-      pacienteId = paciente?.id ?? null;
+      // HARDENING (V5): médico só registra consentimento EM NOME DE paciente
+      // com quem tem vínculo assistencial (consulta não cancelada) — impede
+      // registro LGPD forjado em conta de terceiro. Admin (operador) fica isento.
+      if (paciente) {
+        if (usuario.role === "MEDICO") {
+          const vinculo = await db.consulta.findFirst({
+            where: { medicoId: usuario.id, pacienteId: paciente.id, status: { not: "cancelada" } },
+            select: { id: true },
+          });
+          if (!vinculo) {
+            return Response.json(
+              { erro: "Você só pode registrar consentimento de pacientes com consulta agendada ou realizada com você." },
+              { status: 403 },
+            );
+          }
+        }
+        pacienteId = paciente.id;
+      }
     }
 
     const registro = await db.consentimento.create({
