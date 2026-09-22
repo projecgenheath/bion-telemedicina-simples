@@ -4,7 +4,7 @@ import { exigirPapel } from "@/lib/server/auth";
 import { carregarDados, aplicarSideEffects } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
 import { chatComFonte, type AnonNomes, type FonteLlm } from "@/lib/server/llm";
-import { turnoMotor, ETAPAS_MOTOR, type MotorCtx } from "@/lib/server/anamnese-motor";
+import { turnoMotor, perguntaRetomada, ETAPAS_MOTOR, type MotorCtx } from "@/lib/server/anamnese-motor";
 
 /**
  * Triagem pré-consulta guiada pela BION IA (storytelling clínico).
@@ -45,6 +45,9 @@ const JANELA_TRIAGEM_MS = 5 * 60_000;
  * bom comportamento do LLM): contamos os turnos do usuário na etapa atual e
  * avançamos quando o essencial já foi colhido — "historia" (OPQRST) merece
  * mais rodadas; as demais etapas fecham rápido para a conversa fluir.
+ * TURNOS COM CORREÇÃO DE PERFIL não contam para o fechamento da
+ * identificação (o paciente corrigiu o peso; a IA confirma e pergunta se
+ * há outra alteração — a etapa fecha só na resposta dele).
  */
 const MAX_TURNOS_ETAPA: Record<string, number> = {
   identificacao: 2,
@@ -61,17 +64,10 @@ const MAX_TURNOS_ETAPA: Record<string, number> = {
   fechamento: 2,
 };
 
-/** Ponte curta do SERVIDOR ao forçar o avanço de etapa (uma pergunta, no estilo). */
-const ABERTURAS_ETAPA: Record<string, string> = {
-  sistemas: "Vamos ao panorama geral: mais algum sintoma pelo corpo — febre, enjoo, tontura, intestino, urina?",
-  antecedentes: "E da sua história de saúde: alguma doença, cirurgia ou internação anterior?",
-  familia: "Na sua família próxima, há casos de hipertensão, diabetes, doença do coração ou câncer?",
-  habitos: "Sobre o dia a dia: você fuma, consome álcool, faz atividade física e como está o sono?",
-  gineco: "Sobre sua saúde ginecológica: como está o ciclo, gestações e contracepção?",
-  psicossocial: "E como você está por dentro: humor, estresse, e isso já atrapalhou sua rotina?",
-  medicamentos: "Usa algum medicamento, vitamina ou chá hoje? Me diz nome e frequência.",
-  documentos: "Tem algum exame ou documento para mostrar ao médico — ou seguimos sem ele?",
-};
+/** Ponte curta do SERVIDOR ao forçar o avanço de etapa: `perguntaRetomada()`
+ * (anamnese-motor.ts) devolve a pergunta certa de QUALQUER etapa respeitando
+ * o que já foi coletado — inclusive a posição dentro da OPQRST da "historia".
+ */
 
 type MsgEntrada = { remetente: "usuario" | "ia"; texto: string };
 
@@ -121,6 +117,21 @@ function extrairJson(texto: string): RespostaLLM | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * Remove o(s) interrogativo(s) do texto do LLM preservando o acolhimento —
+ * usado quando o SERVIDOR troca a pergunta órfã pela pergunta real da etapa
+ * nova (ex.: "Entendido, peso atualizado. Outra alteração?" + avanço →
+ * "Entendido, peso atualizado." + pergunta da queixa).
+ */
+function removerPerguntasFinais(t: string): string {
+  const texto = t.trim();
+  const qi = texto.indexOf("?");
+  if (qi < 0) return texto;
+  const antes = texto.slice(0, qi);
+  const corte = antes.match(/^([\s\S]*[.!?…])/);
+  return (corte ? corte[1] : antes).trim();
 }
 
 /** Mescla a coleta do LLM (campos soltos) na etapa atual. */
@@ -175,12 +186,14 @@ ROTEIRO COMPLETO (para você saber de onde veio e para onde vai — siga APENAS 
 9. psicossocial — humor, estresse, impacto da queixa na rotina.
 10. medicamentos — nome, dose, frequência (incluindo vitaminas e chás).
 11. documentos — pergunte se ele tem EXAME OU DOCUMENTO para mostrar ao médico (a interface abre a caixa de upload; você só acolhe a resposta e encerra a etapa).
-12. fechamento — faça um RESUMO organizado em no máximo 8 linhas e pergunte: "Tem mais alguma coisa importante? Está tudo correto?".
+12. fechamento — confirme o fechamento: "Tem mais alguma coisa importante? Está tudo correto?" (se um resumo organizado já foi enviado antes na conversa, NÃO o refaça inteiro — apenas confirme o que falta).
 
 REGRAS DE ESTILO — CONVERSA CURTA DE PESSOA REAL, NUNCA FORMULÁRIO:
 - Máximo de 3 frases curtas por mensagem (o resumo do fechamento é a única exceção).
 - Toda mensagem TERMINA com UMA pergunta clara, terminada em "?". NUNCA termine apenas afirmando ou concordando — se não tem pergunta, é porque deve avançar de etapa.
 - UMA pergunta por vez. Jamais empilhe dois interrogativos diferentes na mesma frase ("e como você classificaria X, e o que faz piorar?" é PROIBIDO).
+- PROIBIDO perguntar vagamente "Onde podemos prosseguir?", "Tudo certo agora?", "Qual o próximo passo?" — você SEMPRE sabe o próximo ponto do roteiro: faça a pergunta REAL da etapa atual. Nunca deixe o paciente sem saber o que responder.
+- Se a resposta do paciente não responde à sua pergunta (ex.: "não", "peso 80 kg"), registre o que for registrável e volte IMEDIATAMENTE à pergunta da etapa atual.
 - Eco curto: reconheça o que o paciente disse com as PRÓPRIAS palavras dele em até meia frase ("Dor no lado direito há três dias, entendi...") e vá direto à próxima pergunta. NUNCA repita o relato inteiro de forma clínica e robótica.
 - Fale como gente: frases de 8 a 18 palavras, zero jargão, zero tom de laudo.
 - Se o paciente já respondeu algo espontaneamente, NÃO pergunte de novo — registre e siga.
@@ -409,6 +422,44 @@ export async function POST(req: NextRequest) {
     const quando = consulta.dataInicio.toLocaleDateString("pt-BR", { day: "numeric", month: "long" }) +
       " às " + consulta.dataInicio.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 
+    // Contexto do motor determinístico — usado no caminho 2 E pelas garantias
+    // do SERVIDOR no caminho 1 (ponte de etapa e guarda de qualidade).
+    const ctxMotor: MotorCtx = {
+      nomePaciente: usuario.nome,
+      primeiroNome: usuario.nome.split(" ")[0] ?? usuario.nome,
+      especialidade: consulta.especialidade,
+      medico: consulta.medico.nome,
+      quando,
+      genero: perfilDados?.genero ?? "",
+      perfil: {
+        idade: perfilDados?.idade ?? null,
+        profissao: perfilDados?.profissao || null,
+        estadoCivil: perfilDados?.estadoCivil || null,
+        telefone: perfilDados?.telefone || null,
+        alergias: perfilDados?.alergias ?? [],
+        comorbidades: perfilDados?.comorbidades ?? [],
+        medicamentos: perfilDados?.medicamentos ?? [],
+        peso: perfilDados?.peso ?? null,
+        altura: perfilDados?.altura ?? null,
+        tipoSanguineo: perfilDados?.tipoSanguineo || null,
+      },
+    };
+
+    // Mensagens de ESCAPE (chips da interface e negações curtas) têm resposta
+    // DETERMINÍSTICA do motor — "Não sei informar", "Pode pular esta parte",
+    // "Voltar um pouco: quero corrigir algo" e um "não" seco SEMPRE seguem o
+    // rito (registram "não informado"/correção e fazem a pergunta seguinte).
+    // Deixar um LLM fraco interpretar essas fugas era a fonte real de beco
+    // sem saída na conversa (o paciente não sabia o que responder e saía).
+    const msgNorm = mensagem.toLowerCase().replace(/\s+/g, " ").trim();
+    const fugaCurta =
+      msgNorm.length > 0 &&
+      msgNorm.length <= 48 &&
+      (/^(nao|não|n)\s*[!.,?~—-]*$/.test(msgNorm) ||
+        /^(nao|não)\s+(sei|tenho|quero|lembro)(\s+(disso|informar|nada|mais))?\s*[!.,?]*$/.test(msgNorm) ||
+        /^(nada|nenhum|nenhuma)\s*[!.,?~—-]*$/.test(msgNorm) ||
+        /(nao sei informar|não sei informar|pode pular esta parte|pode pular essa parte|pode pular|pula essa|pula esta|passar essa|passar esta|voltar um pouco|quero corrigir algo)/.test(msgNorm));
+
     /* -------- caminho 1: IA generativa em cadeia (env → público → SDK) -------- */
     let parsed: RespostaLLM | null = null;
     let viaMotor = false;
@@ -418,7 +469,7 @@ export async function POST(req: NextRequest) {
     // de produção, onde não há LLM acessível).
     const usarLlm = process.env.BION_MOTOR_LOCAL !== "1";
 
-    if (usarLlm && (historico.length > 0 || Boolean(mensagem))) {
+    if (usarLlm && !fugaCurta && (historico.length > 0 || Boolean(mensagem))) {
       const instrucaoAbertura = mensagem
         ? ""
         : coletaAtual && Object.keys(coletaAtual).length
@@ -454,26 +505,6 @@ export async function POST(req: NextRequest) {
     /* ------- caminho 2: motor determinístico (funciona em qualquer lugar) ------- */
     if (!parsed) {
       viaMotor = true;
-      const ctxMotor: MotorCtx = {
-        nomePaciente: usuario.nome,
-        primeiroNome: usuario.nome.split(" ")[0] ?? usuario.nome,
-        especialidade: consulta.especialidade,
-        medico: consulta.medico.nome,
-        quando,
-        genero: perfilDados?.genero ?? "",
-        perfil: {
-          idade: perfilDados?.idade ?? null,
-          profissao: perfilDados?.profissao || null,
-          estadoCivil: perfilDados?.estadoCivil || null,
-          telefone: perfilDados?.telefone || null,
-          alergias: perfilDados?.alergias ?? [],
-          comorbidades: perfilDados?.comorbidades ?? [],
-          medicamentos: perfilDados?.medicamentos ?? [],
-          peso: perfilDados?.peso ?? null,
-          altura: perfilDados?.altura ?? null,
-          tipoSanguineo: perfilDados?.tipoSanguineo || null,
-        },
-      };
       parsed = turnoMotor({ mensagem, etapa: etapaAtual, coleta: coletaAtual, ctx: ctxMotor }) as RespostaLLM;
     }
 
@@ -497,9 +528,20 @@ export async function POST(req: NextRequest) {
     }
 
     const teto = MAX_TURNOS_ETAPA[etapaAtual] ?? 3;
-    const etapaExaurida = turnosEtapa >= teto;
+
+    // Correção de perfil NÃO fecha a identificação: o paciente corrigiu algo
+    // ("peso em 80 kg"), a IA confirma e pergunta se há outra alteração — a
+    // etapa só avança quando ele responde ("não" fecha com ponte para a queixa).
+    // Sem isso, o teto de turnos avançava no MEIO da correção e a pergunta da
+    // etapa nova nunca era feita (o paciente ficava sem saber o que responder).
+    const corrigiuPerfil =
+      etapaAtual === "identificacao" &&
+      Boolean(parsed.perfil_atualizacoes) &&
+      Object.keys(parsed.perfil_atualizacoes ?? {}).length > 0;
+
+    const etapaExaurida = turnosEtapa >= teto && !corrigiuPerfil;
     let etapaNova = etapaAtual;
-    if ((Boolean(parsed.etapa_concluida) || etapaExaurida) && etapaAtual !== "fechamento") {
+    if ((Boolean(parsed.etapa_concluida) || etapaExaurida) && etapaAtual !== "fechamento" && !corrigiuPerfil) {
       etapaNova = proximaEtapa(etapaAtual, perfilDados?.genero ?? "");
     }
 
@@ -513,22 +555,43 @@ export async function POST(req: NextRequest) {
       perfilAtualizado = await aplicarPerfilAtualizacoes(usuario.id, parsed.perfil_atualizacoes);
     }
 
-    // Quando o SERVIDOR avança a etapa (e o texto do LLM ainda tratava a
-    // anterior), abrimos a nova etapa com a pergunta correspondente.
+    // GARANTIA DO SERVIDOR sobre a resposta do LLM (o motor determinístico já
+    // é confiável):
+    //  1. Ao AVANÇAR de etapa, a resposta que ainda tratava a etapa anterior
+    //     (com pergunta órfã — "outra alteração no seu perfil?") ganha a
+    //     pergunta REAL da etapa nova, no ponto exato da coleta;
+    //  2. Em qualquer outro turno, resposta sem "?", com interrogatório
+    //     empilhado/vago ("Tudo certo agora? Onde podemos prosseguir?") ou
+    //     monólogo longo é substituída pela pergunta certa — a conversa NUNCA
+    //     fica sem um próximo ponto claro, mesmo com um LLM fraco.
     let textoFinal = texto;
-    if (etapaNova !== etapaAtual && viaMotor === false && !/^{/.test(texto)) {
-      const abertura =
-        etapaNova === "fechamento"
-          ? null // o resumo vem na próxima abertura sem mensagem
-          : ABERTURAS_ETAPA[etapaNova];
-      if (abertura) textoFinal = `${texto}\n\n${abertura}`;
+    if (!viaMotor) {
+      const perguntaCerta = () => perguntaRetomada(etapaNova, coletaNova, ctxMotor);
+      if (etapaNova !== etapaAtual) {
+        const ack = /^\s*\{/.test(textoFinal) ? "" : removerPerguntasFinais(textoFinal);
+        textoFinal = ack ? `${ack}\n\n${perguntaCerta()}` : perguntaCerta();
+      } else {
+        const perguntas = (textoFinal.match(/\?/g) ?? []).length;
+        const vagaMeta =
+          /(tudo certo agora|podemos prosseguir|onde (podemos|voce|você|quer) (prosseguir|continuar|seguir)|como (posso|podemos) (ajudar|prosseguir|continuar) agora|proximo passo|próximo passo)/.test(
+            textoFinal,
+          );
+        if (perguntas === 0) {
+          textoFinal = `${textoFinal}\n\n${perguntaCerta()}`;
+        } else if ((perguntas >= 3 || vagaMeta) && etapaNova !== "fechamento") {
+          textoFinal = perguntaCerta();
+        } else if (textoFinal.length > 720 && etapaNova !== "fechamento") {
+          const ack = removerPerguntasFinais(textoFinal);
+          textoFinal = `${ack}\n\n${perguntaCerta()}`;
+        }
+      }
     }
 
     return ok({
       texto: textoFinal,
       etapa: etapaNova,
       etapaAnterior: etapaAtual,
-      etapa_concluida: Boolean(parsed.etapa_concluida) || etapaExaurida,
+      etapa_concluida: corrigiuPerfil ? false : Boolean(parsed.etapa_concluida) || etapaExaurida,
       coleta: coletaNova,
       perfilAtualizado,
       concluida: false,

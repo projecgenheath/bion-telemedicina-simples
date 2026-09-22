@@ -104,8 +104,17 @@ const eco = (texto: string, max = 90) => {
   return frase.length > max ? `${frase.slice(0, max).trim()}…` : frase;
 };
 
-const contador = (coleta: Record<string, Record<string, unknown>>, etapa: string) =>
-  Number(coleta[etapa]?._n ?? 0);
+/**
+ * Contador da etapa: o motor escreve `_n` (sequência própria) e a rota
+ * `/api/anamnese` escreve `_turnos` (teto de turnos por etapa) — os dois
+ * convivem na coleta; aqui lemos o que existir, nessa ordem.
+ */
+const contador = (coleta: Record<string, Record<string, unknown>>, etapa: string) => {
+  const c = coleta[etapa];
+  if (!c) return 0;
+  if (typeof c._n === "number") return c._n;
+  return Number(c._turnos ?? 0);
+};
 
 const naoSei = (t: string) => /(nao sei|não sei|nao lembro|não lembro|nao tenho certeza)/.test(t);
 const pular = (t: string) => /(pode pular|pula essa|pula esta|passar essa|passar esta|proximo assunto|próximo assunto|deixa pra la|deixa para la)/.test(t);
@@ -698,6 +707,32 @@ const REABRIR_PERGUNTA: Record<string, (c: MotorCtx) => string> = {
 };
 
 /**
+ * A pergunta CORRETA para a etapa dada, respeitando o que já foi coletado.
+ * Usada:
+ *  - pelo motor (retomada sem mensagem — paciente voltou ao chat);
+ *  - pela rota `/api/anamnese` ao avançar de etapa (ponte obrigatória);
+ *  - pela rota para substituir resposta ruim do LLM (beco sem saída,
+ *    interrogatório empilhado, monólogo longo) pela pergunta real.
+ * Garantia central: a conversa NUNCA fica sem uma pergunta clara por perto.
+ */
+export function perguntaRetomada(
+  etapa: string,
+  coleta: Record<string, Record<string, unknown>>,
+  ctx: MotorCtx,
+): string {
+  const etapaValida = (ETAPAS_MOTOR as readonly string[]).includes(etapa) ? etapa : "identificacao";
+  const n = contador(coleta, etapaValida);
+  if (etapaValida === "fechamento") return construirResumo(coleta, ctx);
+  if (etapaValida === "historia") return perguntaHistoria(Math.min(3, Math.max(0, n - 1)));
+  if (etapaValida === "identificacao") {
+    return n >= 1
+      ? `Se os dados do seu perfil estão certos, me diz **“está certo”** — ou me conta o que mudou (peso, altura, profissão, telefone) que eu atualizo na hora.`
+      : perguntaIdentificacao(ctx);
+  }
+  return REABRIR_PERGUNTA[etapaValida]?.(ctx) ?? "Me conta o que você quiser acrescentar — estamos juntos nisso.";
+}
+
+/**
  * Um turno do motor. `mensagem === ""` abre (ou retoma) a etapa atual.
  * Sinais de alarme têm prioridade absoluta sobre o roteiro.
  */
@@ -708,20 +743,11 @@ export function turnoMotor({ mensagem, etapa, coleta, ctx }: MotorEntrada): Moto
   // Retomada: paciente voltou ao chat sem digitar nada (botão "Continuar triagem")
   if (!t) {
     const n = contador(coleta, etapaValida);
-    const seed = Math.max(1, n);
     if (n > 0) {
-      // "historia" tem perguntas sequenciais (OPQRST): retoma pela que ficou
-      // em aberto conforme o contador. Demais etapas têm pergunta única.
-      const reabertura =
-        etapaValida === "fechamento"
-          ? construirResumo(coleta, ctx)
-          : etapaValida === "historia"
-            ? `Bem-vindo(a) de volta, ${ctx.primeiroNome}! Retomando de onde paramos: ${perguntaHistoria(Math.min(3, Math.max(0, n - 1)))}`
-            : `Bem-vindo(a) de volta, ${ctx.primeiroNome}! Retomando de onde paramos: ${REABRIR_PERGUNTA[etapaValida]?.(ctx) ?? "Me conta o que você quiser acrescentar."}`;
       return {
-        resposta: reabertura,
+        resposta: `Bem-vindo(a) de volta, ${ctx.primeiroNome}! Retomando de onde paramos: ${perguntaRetomada(etapaValida, coleta, ctx)}`,
         etapa_concluida: false,
-        coleta: { ...coleta, [etapaValida]: { ...(coleta[etapaValida] ?? {}), _n: seed } },
+        coleta: { ...coleta, [etapaValida]: { ...(coleta[etapaValida] ?? {}), _n: Math.max(1, n) } },
       };
     }
     // Primeira abertura: delega ao handler da etapa (que faz a pergunta de abertura)
