@@ -123,28 +123,78 @@ function textoGemini(bruto: GeminiResposta | null): string {
     .trim();
 }
 
+/* ---- telemetria de tentativas (mesma requisição; usada pelo diagnóstico) ---- */
+
+export type RegistroGemini = {
+  rotulo: string;
+  status: number | null;
+  finish: string | null;
+  block: string | null;
+  ms: number;
+  textoLen: number;
+  erro: string | null;
+};
+
+let _registrosGemini: RegistroGemini[] = [];
+
+/** Registros da última chamada de chamarGemini NESTA instância (ler logo após). */
+export function registrosGemini(): RegistroGemini[] {
+  return _registrosGemini;
+}
+
 /** POST genérico ao generateContent; repetição sem thinkingConfig em 400. */
 async function geminiPost(
   model: string,
   apiKey: string,
   corpo: GeminiCorpo,
   prazo: number,
+  rotulo = "gemini",
 ): Promise<string | null> {
   const url = `${GEMINI_BASE}/${model}:generateContent`;
-  const chamar = async (c: GeminiCorpo) =>
-    comPrazo(
-      fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-goog-api-key": apiKey },
-        body: JSON.stringify(c),
-      }).then(async (r) => {
-        if (!r.ok) throw new Error(`gemini HTTP ${r.status}`);
-        return (await r.json()) as GeminiResposta;
-      }),
-      restante(prazo),
-    ) as Promise<GeminiResposta | null>;
+  const chamar = async (c: GeminiCorpo, rotuloTurno: string): Promise<GeminiResposta | null> => {
+    const inicio = Date.now();
+    try {
+      const bruto = (await Promise.race([
+        fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-goog-api-key": apiKey },
+          body: JSON.stringify(c),
+        }).then(async (r) => {
+          const j = (await r.json().catch(() => null)) as (GeminiResposta & { error?: { message?: string } }) | null;
+          _registrosGemini.push({
+            rotulo: rotuloTurno,
+            status: r.status,
+            finish: j?.candidates?.[0]?.finishReason ?? null,
+            block: j?.promptFeedback?.blockReason ?? null,
+            ms: Date.now() - inicio,
+            textoLen: r.ok ? textoGemini(j).length : 0,
+            erro: r.ok ? null : limpar(j?.error?.message ?? `HTTP ${r.status}`, apiKey),
+          });
+          if (!r.ok) throw new Error(`gemini HTTP ${r.status}`);
+          return j as GeminiResposta;
+        }),
+        new Promise<null>((_, rejeita) => setTimeout(() => rejeita(new Error("timeout")), restante(prazo))),
+      ])) as GeminiResposta | null;
+      return bruto;
+    } catch (e) {
+      // registro ausente = falha antes da resposta HTTP (timeout / rede)
+      const registrado = _registrosGemini.some((rg) => rg.rotulo === rotuloTurno);
+      if (!registrado) {
+        _registrosGemini.push({
+          rotulo: rotuloTurno,
+          status: null,
+          finish: null,
+          block: null,
+          ms: Date.now() - inicio,
+          textoLen: 0,
+          erro: limpar(e instanceof Error ? e.message : String(e), apiKey),
+        });
+      }
+      return null;
+    }
+  };
 
-  let bruto = await chamar(corpo);
+  let bruto = await chamar(corpo, rotulo);
   if (!bruto && corpo.generationConfig?.thinkingConfig) {
     const sem = { ...corpo, generationConfig: { ...corpo.generationConfig } };
     delete sem.generationConfig.thinkingConfig;
@@ -152,7 +202,7 @@ async function geminiPost(
     // thinkingConfig precisa de fôlego extra ou volta vazio (MAX_TOKENS).
     const teto = sem.generationConfig.maxOutputTokens;
     sem.generationConfig.maxOutputTokens = typeof teto === "number" ? Math.max(teto, 8192) : 8192;
-    bruto = await chamar(sem);
+    bruto = await chamar(sem, `${rotulo}-sem-thinking`);
   }
   return textoGemini(bruto) || null;
 }
@@ -162,6 +212,7 @@ async function geminiPost(
 /** Um turno de TEXTO no Gemini (mensagens[0] "assistant" vira systemInstruction). */
 async function chamarGemini(mensagens: Msg[], prazo: number): Promise<string | null> {
   const { apiKey, model } = geminiConfig();
+  _registrosGemini = [];
   const sys = mensagens[0]?.role === "assistant" ? mensagens[0].content : null;
   const resto = (sys ? mensagens.slice(1) : mensagens).map((m) => ({
     role: m.role === "user" ? ("user" as const) : ("model" as const),
@@ -444,6 +495,19 @@ export function estadoCanais(): EstadoCanais {
 }
 
 export type ProbeCanal = { canal: FonteLlm; ok: boolean; detalhe: string; ms: number };
+
+/**
+ * Reproduz uma chamada REAL ao canal Gemini com as mensagens informadas
+ * (mesmo caminho de chamarGemini, incluindo normalização de alternância) e
+ * devolve o texto + os registros de cada tentativa (status, finishReason,
+ * blockReason, ms). Usado pelo diagnóstico admin para enxergar POR QUE o
+ * Gemini falha em produção sem expor a chave.
+ */
+export async function diagnosticoGemini(mensagens: Msg[], timeoutMs = 25_000) {
+  const prazo = Date.now() + timeoutMs;
+  const texto = await chamarGemini(mensagens, prazo);
+  return { texto, registros: _registrosGemini };
+}
 
 /** Remove a chave da mensagem (defesa em profundidade: provedores não devem
  * ecoá-la, mas o texto de erro nunca pode devolvê-la ao painel). */
