@@ -11,3 +11,15 @@ upload/
 .env
 .env.anterior.backup
 .env.sqlite.backup
+
+# P0 segurança (2026-09): banco local, evidências, uploads e worklog interno
+# NUNCA devem voltar ao versionamento (histórico já purgado com git-filter-repo).
+db/*.db
+db/*.db-journal
+download/
+.zscripts/
+/worklog.md
+/*.png
+scripts/*.png
+.tmp-teste/
+.sanitizado/

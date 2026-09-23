@@ -26,8 +26,8 @@ export function TrocarSenhaObrigatoria() {
       toast.error("Informe a senha atual.");
       return;
     }
-    if (nova.length < 8 || nova.length > 64) {
-      toast.error("A nova senha deve ter entre 8 e 64 caracteres.");
+    if (nova.length < 10 || nova.length > 64) {
+      toast.error("A nova senha deve ter entre 10 e 64 caracteres.");
       return;
     }
     if (!/[A-Za-z]/.test(nova) || !/[0-9]/.test(nova)) {
@@ -88,7 +88,7 @@ export function TrocarSenhaObrigatoria() {
               value={nova}
               onChange={(e) => setNova(e.target.value)}
               autoComplete="new-password"
-              placeholder="Mínimo 8 caracteres, com letras e números"
+              placeholder="Mínimo 10 caracteres, com letras e números"
               className="h-11 rounded-xl border border-border bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground/50 outline-none focus:ring-2 focus:ring-primary/40"
             />
           </div>

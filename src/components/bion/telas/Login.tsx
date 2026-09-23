@@ -57,8 +57,8 @@ export function Login() {
       toast.error("Informe um e-mail válido.");
       return;
     }
-    if (senha.length < 6) {
-      toast.error("A senha deve ter pelo menos 6 caracteres.");
+    if (senha.length < 10) {
+      toast.error("A senha deve ter pelo menos 10 caracteres.");
       return;
     }
     if (senha !== confirmaSenha) {
@@ -130,7 +130,7 @@ export function Login() {
                     type="password"
                     value={senha}
                     onChange={(e) => setSenha(e.target.value)}
-                    placeholder="Mínimo 6 caracteres"
+                    placeholder="Mínimo 10 caracteres"
                     className="w-full px-4 py-3 rounded-2xl border text-sm bg-background outline-none focus:ring-2 focus:ring-primary/20"
                   />
                 </div>

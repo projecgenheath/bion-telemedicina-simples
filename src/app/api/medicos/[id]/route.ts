@@ -39,7 +39,12 @@ export async function PATCH(
     const acao = body.acao ?? "atualizar";
 
     if (acao === "aprovar") {
-      await db.perfilMedico.update({ where: { userId: id }, data: { status: "ativo" } });
+      // P1 (2026-09): aprovar também reativa o usuário (User.status) — a
+      // suspensão agora bloqueia em DOIS níveis (User.status + perfilMedico).
+      await db.$transaction([
+        db.user.update({ where: { id }, data: { status: "ativo" } }),
+        db.perfilMedico.update({ where: { userId: id }, data: { status: "ativo" } }),
+      ]);
       await aplicarSideEffects(
         admin,
         [
@@ -60,7 +65,16 @@ export async function PATCH(
         },
       );
     } else if (acao === "suspender") {
-      await db.perfilMedico.update({ where: { userId: id }, data: { status: "suspenso" } });
+      // P1 (2026-09): a suspensão antes mexia SÓ no perfilMedico.status — o
+      // User.status continuava "ativo", então login e getSessao seguiam
+      // aceitando o médico suspenso (o login checa User.status). Agora:
+      // (1) User.status = suspenso → getSessao/login bloqueiam e as sessões
+      // vivas são revogadas; (2) perfilMedico.status = suspenso (listagem).
+      await db.$transaction([
+        db.user.update({ where: { id }, data: { status: "suspenso" } }),
+        db.perfilMedico.update({ where: { userId: id }, data: { status: "suspenso" } }),
+        db.sessao.deleteMany({ where: { userId: id } }),
+      ]);
       await aplicarSideEffects(
         admin,
         [
@@ -129,17 +143,25 @@ export async function DELETE(
     const admin = await exigirPapel("ADMIN");
     const { id } = await params;
 
+    // P1 (2026-09): o DELETE de médico NÃO remove mais o cadastro (o nome do
+    // profissional integra prontuários e atendimentos passados). Passa a
+    // ARQUIVAR: usuário inativo (sem login/sessões) + perfil arquivado,
+    // preservando histórico e prontuário.
     const medico = await db.user.findFirst({ where: { id, role: "MEDICO" } });
     if (!medico) {
       return Response.json({ erro: "Médico não encontrado." }, { status: 404 });
     }
 
-    await db.user.delete({ where: { id } });
+    await db.$transaction([
+      db.user.update({ where: { id }, data: { status: "inativo" } }),
+      db.perfilMedico.update({ where: { userId: id }, data: { status: "arquivado" } }),
+      db.sessao.deleteMany({ where: { userId: id } }),
+    ]);
     await aplicarSideEffects(admin, undefined, {
-      acao: "MEDICO_EXCLUIDO",
+      acao: "MEDICO_ARQUIVADO",
       categoria: "admin",
       severidade: "critical",
-      detalhes: `Cadastro de ${medico.nome} removido da plataforma`,
+      detalhes: `Cadastro de ${medico.nome} arquivado; prontuário, consultas e documentos preservados`,
       entidade: "medico",
       entidadeId: id,
     });

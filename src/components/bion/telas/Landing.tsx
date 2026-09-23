@@ -84,7 +84,7 @@ export function Landing() {
                 <Shield className="w-4 h-4 text-primary" /> 100% LGPD & CFM
               </div>
               <div className="flex items-center gap-1.5">
-                <Check className="w-4 h-4 text-emerald-500 dark:text-emerald-400" /> Assinatura ICP-Brasil
+                <Check className="w-4 h-4 text-emerald-500 dark:text-emerald-400" /> Assinatura eletrônica + hash SHA-256
               </div>
               <div className="flex items-center gap-1.5">
                 <Star className="w-4 h-4 text-amber-500 dark:text-amber-400 fill-amber-500" /> 4.9/5 de Avaliação

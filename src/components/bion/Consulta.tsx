@@ -799,7 +799,7 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
           >
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-bold flex items-center gap-2">
-                <Pill className="w-5 h-5 text-primary" /> Emitir Receita Digital ICP-Brasil
+                <Pill className="w-5 h-5 text-primary" /> Emitir Receita Digital (assinatura eletrônica)
               </h3>
               <button
                 type="button"

@@ -85,10 +85,31 @@ export async function PATCH(req: NextRequest) {
         });
       }
       if (broadcasts.length) {
-        await db.notificacaoLeitura.createMany({
-          data: broadcasts.map((n) => ({ notificacaoId: n.id, usuarioId: usuario.id })),
-          skipDuplicates: true,
+        // Correção (2026-09): o conector SQLite (dev local) NÃO suporta
+        // `skipDuplicates` no createMany — qualquer invocação falhava com
+        // "Unknown argument". Filtramos as leituras já existentes ANTES e
+        // mantemos o skipDuplicates (Postgres/Supabase em produção).
+        const jaLidas = await db.notificacaoLeitura.findMany({
+          where: {
+            usuarioId: usuario.id,
+            notificacaoId: { in: broadcasts.map((n) => n.id) },
+          },
+          select: { notificacaoId: true },
         });
+        const lidasSet = new Set(jaLidas.map((l) => l.notificacaoId));
+        const faltantes = broadcasts.filter((n) => !lidasSet.has(n.id));
+        if (faltantes.length) {
+          // `skipDuplicates` só existe no runtime Postgres; o SQLite rejeita
+          // o argumento. O pré-filtro acima já garante idempotência aqui.
+          const urlBanco = (process.env.DATABASE_URL ?? "").trim().toLowerCase();
+          const suportaSkip = urlBanco.startsWith("postgres");
+          const args: {
+            data: { notificacaoId: string; usuarioId: string }[];
+            skipDuplicates?: boolean;
+          } = { data: faltantes.map((n) => ({ notificacaoId: n.id, usuarioId: usuario.id })) };
+          if (suportaSkip) args.skipDuplicates = true;
+          await db.notificacaoLeitura.createMany(args);
+        }
       }
       return ok({ notificacoes: alvo.map(paraWire) });
     }
