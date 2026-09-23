@@ -41,6 +41,8 @@ export async function POST(req: NextRequest) {
         email,
         senhaHash,
         role: "MEDICO",
+        // V4: nasce com senha padrão — troca obrigatória no primeiro acesso
+        precisaTrocarSenha: true,
         perfilMedico: {
           create: {
             crm: body.crm.trim(),

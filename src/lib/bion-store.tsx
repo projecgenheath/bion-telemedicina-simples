@@ -13,314 +13,92 @@ import {
 import { toast } from "sonner";
 
 /* ==================================================================== */
-/* Tipos públicos — mesmas formas usadas por todos os componentes BION  */
+/* Tipos públicos, formatação e constantes vazias vivem em bion-tipos.ts */
+/* (divisão do monólito — item 8 da auditoria). Reexportados abaixo para */
+/* que os imports existentes ("@/lib/bion-store") continuem funcionando. */
 /* ==================================================================== */
 
-export type ApptStatus = "confirmada" | "pendente_anamnese" | "cancelada" | "concluida" | "em_espera";
+import {
+  ApptStatus,
+  AnamneseResumo,
+  Arquivo,
+  AuditCategoria,
+  AuditLog,
+  AuditSeveridade,
+  Avaliacao,
+  Consentimento,
+  Consulta,
+  Documento,
+  ExameLab,
+  ItemExame,
+  Lembrete,
+  Medicao,
+  Medico,
+  Mensagem,
+  Notificacao,
+  NotifTipo,
+  PacientePerfil,
+  PacienteRegistro,
+  Sessao,
+  TicketSuporte,
+  SESSAO_VAZIA,
+  PERFIL_VAZIO,
+  SUPORTE_VAZIO,
+  fmtCurta,
+  fmtDataBR,
+  fmtHora,
+  fmtLonga,
+  fmtMensagem,
+  fmtQuando,
+  fmtTicketData,
+  fmtValorBRL,
+} from "./bion-tipos";
 
-/** Anamnese guiada pela BION IA (resumo sincronizado com o servidor). */
-export type AnamneseResumo = {
-  id: string;
-  consultaId: string;
-  medico: string;
-  especialidade: string;
-  etapa: string;
-  status: "em_andamento" | "concluida";
-  coleta: Record<string, Record<string, unknown>>;
-  documentos: { nome: string; tipo: string; exameImportado: boolean; resumo?: string }[];
-  atualizadaEm: string;
-  ts: number;
-};
+export type {
+  ApptStatus,
+  AnamneseResumo,
+  Arquivo,
+  AuditCategoria,
+  AuditLog,
+  AuditSeveridade,
+  Avaliacao,
+  Consentimento,
+  Consulta,
+  Documento,
+  ExameLab,
+  ItemExame,
+  Lembrete,
+  Medicao,
+  Medico,
+  Mensagem,
+  Notificacao,
+  NotifTipo,
+  PacientePerfil,
+  PacienteRegistro,
+  Sessao,
+  TicketSuporte,
+} from "./bion-tipos";
 
-export type Consulta = {
-  id: string;
-  medico: string;
-  especialidade: string;
-  paciente: string;
-  medicoId?: string; // ids do servidor — usados pela mensageria e contactos
-  pacienteId?: string;
-  data: string; // "Hoje" | "14 Dez"
-  hora: string; // "14:30"
-  status: ApptStatus;
-  ts: number; // timestamp para filtros de período e contagem regressiva
-  remarcada?: boolean;
-  motivoCancelamento?: string;
-  motivoConsulta?: string;
-  valor?: string;
-  pago?: boolean;
-  resumoMedico?: string;
-  dataISO?: string;
-};
-
-export type Arquivo = {
-  id: string;
-  nome: string;
-  tipo: string;
-  tamanhoKb: number;
-  enviadoPor: "paciente" | "medico";
-  data: string;
-  consulta: string;
-  url?: string;
-};
-
-export type Documento = {
-  id: string;
-  tipo: "receita" | "atestado" | "exame_solicitado";
-  titulo: string;
-  medico: string;
-  paciente: string;
-  conteudo: string;
-  data: string;
-  medicamento?: string;
-  posologia?: string;
-  duracao?: string;
-  observacoes?: string;
-  cid?: string;
-};
-
-export type NotifTipo = "lembrete" | "mensagem" | "receita" | "agenda" | "exame" | "suporte";
-
-export type Mensagem = {
-  id: string;
-  deId: string;
-  de: string;
-  paraId: string;
-  para: string;
-  texto: string;
-  lida: boolean;
-  minha: boolean;
-  quando: string; // "Hoje às 09:12" | "dd/mm/aaaa às hh:mm"
-  ts: number;
-};
-
-export type Notificacao = {
-  id: string;
-  /** perfil destinatário; ausente = todos */
-  para?: Sessao["role"];
-  tipo: NotifTipo;
-  titulo: string;
-  texto: string;
-  hora: string;
-  lida: boolean;
-};
-
-export type Medico = {
-  id: string;
-  nome: string;
-  crm: string;
-  especialidade: string;
-  subespecialidades: string[];
-  valor: number;
-  avaliacao: number;
-  numAvaliacoes: number;
-  formacao: string;
-  experiencia: string;
-  idiomas: string[];
-  bio: string;
-  foto?: string;
-  status: "ativo" | "pendente" | "suspenso";
-  horariosDisponiveis: string[];
-};
-
-export type TicketSuporte = {
-  id: string;
-  usuario: string;
-  perfil: "paciente" | "medico";
-  assunto: string;
-  categoria: "tecnico" | "pagamento" | "agendamento" | "outro";
-  mensagem: string;
-  data: string;
-  status: "aberto" | "em_andamento" | "resolvido";
-  resposta?: string;
-  respondidoPor?: string;
-  dataResposta?: string;
-};
-
-export type Lembrete = {
-  id: string;
-  titulo: string;
-  horario: string;
-  tipo: "Medicação" | "Consulta" | "Exame" | "Hidratação";
-  frequencia: string;
-  feito: boolean;
-  medicamento?: string;
-};
-
-export type PacientePerfil = {
-  nome: string;
-  idade: number;
-  genero: string;
-  cpf: string;
-  email: string;
-  telefone: string;
-  convenio: string;
-  alergias: string[];
-  medicamentos: string[];
-  tipoSanguineo: string;
-  peso?: string;
-  altura?: string;
-  profissao?: string;
-  estadoCivil?: string;
-  comorbidades?: string[];
-  foto?: string;
-};
-
-// Medição do paciente (peso | altura | pa) — app imersivo, seção 2
-export type Medicao = {
-  id: string;
-  tipo: "peso" | "altura" | "pa";
-  valor1: number;
-  valor2?: number;
-  criadoEm: string; // ISO
-  quando: string; // rótulo curto ("12 Jan", "Hoje")
-};
-
-// Resultado de exame laboratorial lido pela BION IA ou cadastrado manualmente
-export type ItemExame = {
-  nome: string;
-  valor: number;
-  unidade?: string;
-  refMin?: number;
-  refMax?: number;
-};
-
-export type ExameLab = {
-  id: string;
-  titulo: string;
-  dataColeta: string; // ISO
-  itens: ItemExame[];
-  arquivoNome?: string;
-  origem: "bion-ia" | "manual";
-  quando: string; // rótulo curto
-};
-
-export type Sessao = {
-  id?: string;
-  role: "paciente" | "medico" | "admin";
-  nome: string;
-  email?: string;
-};
-
-export type Avaliacao = {
-  id: string;
-  paciente: string;
-  medico: string;
-  especialidade: string;
-  nota: number; // 1-5
-  comentario?: string;
-  pontualidade?: number;
-  atencao?: number;
-  clareza?: number;
-  quando: string;
-  ts: number;
-};
-
-export type Consentimento = {
-  id: string;
-  paciente: string;
-  quem: string;
-  perfil: Sessao["role"];
-  finalidade: string;
-  documentos: number;
-  quando: string;
-  aceito: boolean;
-};
-
-export type AuditCategoria =
-  | "autenticacao"
-  | "consulta"
-  | "documento"
-  | "prontuario"
-  | "usuario"
-  | "admin"
-  | "suporte"
-  | "consentimento"
-  | "sistema";
-
-export type AuditSeveridade = "info" | "warning" | "critical";
-
-export type AuditLog = {
-  id: string;
-  ts: number;
-  acao: string;
-  categoria: AuditCategoria;
-  severidade: AuditSeveridade;
-  usuario: string;
-  role: Sessao["role"];
-  entidade?: string;
-  entidadeId?: string;
-  detalhes?: string;
-};
-
-export type PacienteRegistro = {
-  id: string;
-  nome: string;
-  email: string;
-  telefone: string;
-  cpf: string;
-  idade: number;
-  genero: string;
-  convenio: string;
-  status: "ativo" | "inativo";
-  desde: string;
-};
-
-/* ==================================================================== */
-/* Formatação (client-side, a partir dos timestamps enviados pela API)  */
-/* ==================================================================== */
-
-const MESES = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
-
-const mesmoDia = (a: Date, b: Date) =>
-  a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
-
-const fmtCurta = (iso: string) => {
-  const d = new Date(iso);
-  const hoje = new Date();
-  const amanha = new Date();
-  amanha.setDate(hoje.getDate() + 1);
-  if (mesmoDia(d, hoje)) return "Hoje";
-  if (mesmoDia(d, amanha)) return "Amanhã";
-  return `${d.getDate()} ${MESES[d.getMonth()]}`;
-};
-
-const fmtHora = (iso: string) =>
-  new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-
-const fmtLonga = (iso: string) => {
-  const d = new Date(iso);
-  return `${String(d.getDate()).padStart(2, "0")} ${MESES[d.getMonth()]} ${d.getFullYear()}`;
-};
-
-const fmtQuando = (iso: string) => {
-  const d = new Date(iso);
-  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()} ${fmtHora(iso)}`;
-};
-
-const fmtTicketData = (iso: string) => {
-  const d = new Date(iso);
-  const hoje = new Date();
-  const ontem = new Date();
-  ontem.setDate(hoje.getDate() - 1);
-  if (mesmoDia(d, hoje)) return `Hoje às ${fmtHora(iso)}`;
-  if (mesmoDia(d, ontem)) return `Ontem às ${fmtHora(iso)}`;
-  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()} às ${fmtHora(iso)}`;
-};
-
-const fmtDataBR = (iso: string) => {
-  const d = new Date(iso);
-  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
-};
-
-const fmtValorBRL = (v: number) =>
-  Number.isInteger(v) ? `R$ ${v}` : `R$ ${v.toFixed(2).replace(".", ",")}`;
+export {
+  fmtCurta,
+  fmtDataBR,
+  fmtHora,
+  fmtLonga,
+  fmtMensagem,
+  fmtQuando,
+  fmtTicketData,
+  fmtValorBRL,
+} from "./bion-tipos";
 
 /* ==================================================================== */
 /* Formas vindas da API (wire)                                          */
 /* ==================================================================== */
 
 type EstadoFresco = {
-  usuario: { id: string; nome: string; email: string; role: "PACIENTE" | "MEDICO" | "ADMIN" };
+  usuario: {
+    id: string; nome: string; email: string; role: "PACIENTE" | "MEDICO" | "ADMIN";
+    precisaTrocarSenha?: boolean; // V4 — troca obrigatória (contas criadas pelo admin)
+  };
   medicoes?: {
     id: string; tipo: string; valor1: number; valor2?: number; criadoEm: string;
   }[];
@@ -398,47 +176,28 @@ type EstadoFresco = {
 
 /**
  * Delta de mutação — resposta leve das rotas que devolvem APENAS a entidade
- * afetada (POST /api/consultas, PATCH /api/notificacoes, POST /api/mensagens).
- * Qualquer campo ausente é simplesmente ignorado; um payload com `usuario`
- * é tratado como estado fresco completo (contrato antigo, p/ compatibilidade).
+ * afetada (POST /api/consultas, PATCH /api/notificacoes, POST /api/mensagens,
+ * lembretes, medições, auditoria…). Qualquer campo ausente é simplesmente
+ * ignorado; um payload com `usuario` é tratado como estado fresco completo
+ * (contrato antigo, p/ compatibilidade).
  */
 type DeltaWire = {
   consulta?: EstadoFresco["consultas"][number];
   anamnese?: NonNullable<EstadoFresco["anamneses"]>[number];
   mensagem?: EstadoFresco["mensagens"][number];
+  mensagens?: EstadoFresco["mensagens"]; // recibos de leitura (PATCH /api/mensagens)
   notificacoes?: EstadoFresco["notificacoes"];
   audit?: EstadoFresco["auditLogs"][number];
   consultaCriada?: string;
+  lembrete?: EstadoFresco["lembretes"][number];
+  lembreteRemovido?: string;
+  medicao?: NonNullable<EstadoFresco["medicoes"]>[number];
+  perfilPaciente?: { peso?: string; altura?: string }; // sincronização peso/altura (POST /api/medicoes)
 };
 
 /* ==================================================================== */
 /* Infra do store                                                       */
 /* ==================================================================== */
-
-const SESSAO_VAZIA: Sessao = { role: "paciente", nome: "", email: "" };
-
-const PERFIL_VAZIO: PacientePerfil = {
-  nome: "", idade: 0, genero: "", cpf: "", email: "", telefone: "", convenio: "Particular",
-  alergias: [], medicamentos: [], tipoSanguineo: "",
-};
-
-const SUPORTE_VAZIO = { id: null as string | null, nome: "Suporte BION" };
-
-const fmtMensagem = (m: {
-  id: string; deId: string; de: string; paraId: string; para: string;
-  texto: string; lida: boolean; createdAt: string;
-}): Mensagem => ({
-  id: m.id,
-  deId: m.deId,
-  de: m.de,
-  paraId: m.paraId,
-  para: m.para,
-  texto: m.texto,
-  lida: m.lida,
-  minha: false, // preenchido pelo chamador (precisa do id da sessão)
-  quando: fmtTicketData(m.createdAt),
-  ts: new Date(m.createdAt).getTime(),
-});
 
 async function api<T>(url: string, init?: RequestInit): Promise<T | null> {
   try {
@@ -461,10 +220,15 @@ async function api<T>(url: string, init?: RequestInit): Promise<T | null> {
 
 type RespostaAuth = { ok: boolean; role?: Sessao["role"] };
 
+type RespostaSenha = { ok: boolean; erro?: string };
+
 type Store = {
   sessao: Sessao;
   autenticado: boolean;
   carregando: boolean;
+  /** V4 — conta criada pela administração: troca de senha obrigatória. */
+  precisaTrocarSenha: boolean;
+  trocarSenha: (senhaAtual: string, novaSenha: string) => Promise<RespostaSenha>;
   entrar: (email: string, senha: string) => Promise<RespostaAuth>;
   registrar: (nome: string, email: string, senha: string) => Promise<RespostaAuth>;
   sair: () => Promise<void>;
@@ -558,12 +322,17 @@ export function BionProvider({ children }: { children: ReactNode }) {
   const [suporte, setSuporte] = useState<{ id: string | null; nome: string }>(SUPORTE_VAZIO);
   const [autenticado, setAutenticado] = useState(false);
   const [carregando, setCarregando] = useState(true);
+  const [precisaTrocarSenha, setPrecisaTrocarSenha] = useState(false);
 
   const sessaoRef = useRef(sessao);
   const consultasRef = useRef(consultas);
   const medicosRef = useRef(medicos);
   const pacientesRef = useRef(pacientes);
   const lembretesRef = useRef(lembretes);
+  /** Polling incremental: createdAt da mensagem mais recente já conhecida. */
+  const ultimaMsgTsRef = useRef<string | null>(null);
+  /** Single-flight do bootstrap (evita duas cargas completas em montagens rápidas). */
+  const bootstrapEmAndamentoRef = useRef(false);
 
   useEffect(() => {
     sessaoRef.current = sessao;
@@ -590,6 +359,7 @@ export function BionProvider({ children }: { children: ReactNode }) {
       nome: d.usuario.nome,
       email: d.usuario.email,
     });
+    setPrecisaTrocarSenha(!!d.usuario.precisaTrocarSenha);
     setConsultas(
       d.consultas.map((c) => ({
         id: c.id,
@@ -701,6 +471,9 @@ export function BionProvider({ children }: { children: ReactNode }) {
       })),
     );
     setMensagens(d.mensagens.map((m) => ({ ...fmtMensagem(m), minha: m.deId === d.usuario.id })));
+    // Polling incremental: guarda o instante da mensagem mais recente
+    const tsMaximo = d.mensagens.reduce((acc, m) => (m.createdAt > acc ? m.createdAt : acc), "");
+    ultimaMsgTsRef.current = tsMaximo || null;
     if (d.medicoes) {
       setMedicoes(
         d.medicoes.map((m) => ({
@@ -746,10 +519,13 @@ export function BionProvider({ children }: { children: ReactNode }) {
     if (d.pacientePerfil) setPacientePerfil(d.pacientePerfil);
   }, []);
 
-  /** Carrega sessão + bootstrap ao montar */
+  /** Carrega sessão + bootstrap ao montar (single-flight: montagens rápidas
+   *  ou re-montagens do provider não disparam duas cargas completas). */
   useEffect(() => {
+    if (bootstrapEmAndamentoRef.current) return;
+    bootstrapEmAndamentoRef.current = true;
     (async () => {
-      const s = await api<{ autenticado: boolean; usuario?: { id: string; nome: string; email: string; role: string } }>(
+      const s = await api<{ autenticado: boolean; usuario?: { id: string; nome: string; email: string; role: string; precisaTrocarSenha?: boolean } }>(
         "/api/auth/sessao",
       );
       if (s?.autenticado && s.usuario) {
@@ -760,27 +536,59 @@ export function BionProvider({ children }: { children: ReactNode }) {
         }
       }
       setCarregando(false);
+      bootstrapEmAndamentoRef.current = false;
     })();
   }, [aplicar]);
 
-  /** Busca silenciosa de mensagens (polling) — sem toast em caso de falha */
+  /** Mescla mensagens no estado (novas por id, atualizações de recibo de
+   *  leitura) e avança o marcador do polling incremental. */
+  const mesclarMensagens = useCallback((rows: Parameters<typeof fmtMensagem>[0][]) => {
+    if (!rows.length) return;
+    setMensagens((prev) => {
+      const mapa = new Map(prev.map((m) => [m.id, m]));
+      for (const m of rows) {
+        mapa.set(m.id, { ...fmtMensagem(m), minha: m.deId === sessaoRef.current.id });
+      }
+      const arr = Array.from(mapa.values());
+      arr.sort((a, b) => a.ts - b.ts);
+      return arr;
+    });
+    const tsMaximo = rows.reduce((acc, m) => (m.createdAt > acc ? m.createdAt : acc), "");
+    if (tsMaximo) {
+      const atual = ultimaMsgTsRef.current;
+      ultimaMsgTsRef.current = !atual || tsMaximo > atual ? tsMaximo : atual;
+    }
+  }, []);
+
+  /** Polling de mensagens — INCREMENTAL: com ?desde= o servidor devolve apenas
+   *  mensagens novas ou com recibo de leitura atualizado (payload mínimo a
+   *  cada 4s em vez de recarregar a conversa inteira). Sem toast em falha. */
   const buscarMensagens = useCallback(async () => {
     try {
-      const res = await fetch("/api/mensagens", { headers: { "Content-Type": "application/json" } });
+      const desde = ultimaMsgTsRef.current;
+      const url = desde
+        ? `/api/mensagens?desde=${encodeURIComponent(desde)}`
+        : "/api/mensagens";
+      const res = await fetch(url, { headers: { "Content-Type": "application/json" } });
       if (!res.ok) return;
       const json = (await res.json()) as { mensagens?: Parameters<typeof fmtMensagem>[0][] } | null;
       if (json?.mensagens) {
-        setMensagens(
-          json.mensagens.map((m) => ({
-            ...fmtMensagem(m),
-            minha: m.deId === sessaoRef.current.id,
-          })),
-        );
+        if (desde) {
+          mesclarMensagens(json.mensagens);
+        } else {
+          // primeira varredura sem marcador — substitui (comportamento original)
+          setMensagens(
+            json.mensagens.map((m) => ({
+              ...fmtMensagem(m),
+              minha: m.deId === sessaoRef.current.id,
+            })),
+          );
+        }
       }
     } catch {
       // polling silencioso: rede instável não deve alarmar o usuário
     }
-  }, []);
+  }, [mesclarMensagens]);
 
   /** Polling de novas mensagens (~4s) enquanto autenticado */
   useEffect(() => {
@@ -838,6 +646,7 @@ export function BionProvider({ children }: { children: ReactNode }) {
       // mesmo sem rede, encerra a sessão local
     }
     setAutenticado(false);
+    setPrecisaTrocarSenha(false);
     setSessaoState(SESSAO_VAZIA);
     setConsultas([]);
     setArquivos([]);
@@ -855,20 +664,31 @@ export function BionProvider({ children }: { children: ReactNode }) {
     setAnamneses([]);
     setSuporte(SUPORTE_VAZIO);
     setPacientePerfil(PERFIL_VAZIO);
+    ultimaMsgTsRef.current = null;
   }, []);
 
-  /** Registra medição (peso/altura/PA) — devolve true se o servidor confirmou.
-   *  Auditoria é gerada pelo servidor. */
-  const registrarMedicao = useCallback(
-    async (tipo: "peso" | "altura" | "pa", valor1: number, valor2?: number) => {
-      const ok = await mutar("/api/medicoes", "POST", {
-        tipo,
-        valor1,
-        ...(valor2 !== undefined ? { valor2 } : {}),
-      });
-      return ok;
+  /** V4 — troca de senha autenticada (contas criadas pela administração
+   *  nascem com senha padrão; o app bloqueia até a troca). Ao concluir,
+   *  o flag local cai e o app é liberado sem novo login. */
+  const trocarSenha = useCallback(
+    async (senhaAtual: string, novaSenha: string): Promise<RespostaSenha> => {
+      try {
+        const res = await fetch("/api/auth/senha", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ senhaAtual, novaSenha }),
+        });
+        const json = (await res.json().catch(() => null)) as { erro?: string } | null;
+        if (!res.ok) {
+          return { ok: false, erro: json?.erro ?? "Não foi possível alterar a senha." };
+        }
+        setPrecisaTrocarSenha(false);
+        return { ok: true };
+      } catch {
+        return { ok: false, erro: "Falha de conexão com o servidor." };
+      }
     },
-    [mutar],
+    [],
   );
 
   /** Aplica um estado fresco externo (ex.: resposta do upload de laudo pela IA). */
@@ -946,6 +766,57 @@ export function BionProvider({ children }: { children: ReactNode }) {
           minha: delta.mensagem.deId === sessaoRef.current.id,
         };
         setMensagens((prev) => (prev.some((x) => x.id === m.id) ? prev : [...prev, m]));
+        // mantém o marcador do polling incremental adiantado
+        if (!ultimaMsgTsRef.current || delta.mensagem.createdAt > ultimaMsgTsRef.current) {
+          ultimaMsgTsRef.current = delta.mensagem.createdAt;
+        }
+      }
+      // Recibos de leitura (PATCH /api/mensagens) — atualiza "lida" por id
+      if (delta.mensagens?.length) {
+        const atualizadas = new Map(
+          delta.mensagens.map((m) => [m.id, { ...fmtMensagem(m), minha: m.deId === sessaoRef.current.id }]),
+        );
+        setMensagens((prev) => prev.map((m) => atualizadas.get(m.id) ?? m));
+      }
+      // Lembretes (contrato delta — POST/PATCH/DELETE /api/lembretes)
+      if (delta.lembrete) {
+        const l = delta.lembrete;
+        const mapeado: Lembrete = {
+          id: l.id,
+          titulo: l.titulo,
+          horario: l.horario,
+          tipo: l.tipo as Lembrete["tipo"],
+          frequencia: l.frequencia,
+          feito: l.feito,
+          medicamento: l.medicamento ?? undefined,
+        };
+        setLembretes((prev) =>
+          prev.some((x) => x.id === mapeado.id)
+            ? prev.map((x) => (x.id === mapeado.id ? mapeado : x))
+            : [...prev, mapeado],
+        );
+      }
+      if (delta.lembreteRemovido) {
+        const id = delta.lembreteRemovido;
+        setLembretes((prev) => prev.filter((x) => x.id !== id));
+      }
+      // Medição (contrato delta — POST /api/medicoes)
+      if (delta.medicao) {
+        const m = delta.medicao;
+        const mapeada: Medicao = {
+          id: m.id,
+          tipo: m.tipo as Medicao["tipo"],
+          valor1: m.valor1,
+          valor2: m.valor2,
+          criadoEm: m.criadoEm,
+          quando: fmtCurta(m.criadoEm),
+        };
+        setMedicoes((prev) => (prev.some((x) => x.id === mapeada.id) ? prev : [...prev, mapeada]));
+      }
+      // Peso/altura sincronizados no perfil pela medição
+      if (delta.perfilPaciente) {
+        const p = delta.perfilPaciente;
+        setPacientePerfil((prev) => ({ ...prev, ...(p.peso ? { peso: p.peso } : {}), ...(p.altura ? { altura: p.altura } : {}) }));
       }
       if (delta.notificacoes?.length) {
         const lidas = new Set(delta.notificacoes.filter((n) => n.lida).map((n) => n.id));
@@ -995,6 +866,26 @@ export function BionProvider({ children }: { children: ReactNode }) {
     [aplicarEstadoFresco],
   );
 
+  /** Registra medição (peso/altura/PA) — devolve true se o servidor confirmou.
+   *  Auditoria é gerada pelo servidor. Contrato delta: aplica a medição e o
+   *  peso/altura sincronizados sem recarregar o estado inteiro. */
+  const registrarMedicao = useCallback(
+    async (tipo: "peso" | "altura" | "pa", valor1: number, valor2?: number) => {
+      const d = await api<DeltaWire>("/api/medicoes", {
+        method: "POST",
+        body: JSON.stringify({
+          tipo,
+          valor1,
+          ...(valor2 !== undefined ? { valor2 } : {}),
+        }),
+      });
+      if (!d) return false;
+      aplicarDelta(d);
+      return true;
+    },
+    [aplicarDelta],
+  );
+
   const excluirExame = useCallback(
     (id: string) => void mutar("/api/exames", "DELETE", { id }),
     [mutar],
@@ -1026,12 +917,20 @@ export function BionProvider({ children }: { children: ReactNode }) {
 
   /** Registro de eventos leves de interface (ex.: exportação de PDF).
    *  O servidor só aceita ações da whitelist e força categoria/severidade —
-   *  por isso apenas acao/detalhes são enviados. */
+   *  por isso apenas acao/detalhes são enviados. Contrato delta: devolve
+   *  APENAS a linha criada (sem recarregar o app a cada exportação). */
   const registrarAudit = useCallback(
-    (log: Omit<AuditLog, "id" | "ts" | "usuario" | "role">) => {
-      void mutar("/api/auditoria", "POST", { acao: log.acao, detalhes: log.detalhes });
+    async (log: Omit<AuditLog, "id" | "ts" | "usuario" | "role">) => {
+      const d = await api<DeltaWire>("/api/auditoria", {
+        method: "POST",
+        body: JSON.stringify({
+          acao: log.acao,
+          detalhes: log.detalhes,
+        }),
+      });
+      if (d) aplicarDelta(d);
     },
-    [mutar],
+    [aplicarDelta],
   );
 
   /** Contrato delta: PATCH /api/notificacoes devolve APENAS a(s) notificação(ões) marcada(s). */
@@ -1232,28 +1131,45 @@ export function BionProvider({ children }: { children: ReactNode }) {
 
   const adicionarLembrete = useCallback(
     (l: Omit<Lembrete, "id" | "feito">) => {
-      void mutar("/api/lembretes", "POST", {
-        titulo: l.titulo,
-        horario: l.horario,
-        tipo: l.tipo,
-        frequencia: l.frequencia,
-        medicamento: l.medicamento,
-      });
+      void (async () => {
+        const d = await api<DeltaWire>("/api/lembretes", {
+          method: "POST",
+          body: JSON.stringify({
+            titulo: l.titulo,
+            horario: l.horario,
+            tipo: l.tipo,
+            frequencia: l.frequencia,
+            medicamento: l.medicamento,
+          }),
+        });
+        if (d) aplicarDelta(d);
+      })();
     },
-    [mutar],
+    [aplicarDelta],
   );
 
   const alternarLembrete = useCallback(
     (id: string) => {
       const l = lembretesRef.current.find((x) => x.id === id);
-      void mutar(`/api/lembretes/${id}`, "PATCH", { feito: !(l?.feito ?? false) });
+      void (async () => {
+        const d = await api<DeltaWire>(`/api/lembretes/${id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ feito: !(l?.feito ?? false) }),
+        });
+        if (d) aplicarDelta(d);
+      })();
     },
-    [mutar],
+    [aplicarDelta],
   );
 
   const removerLembrete = useCallback(
-    (id: string) => void mutar(`/api/lembretes/${id}`, "DELETE"),
-    [mutar],
+    (id: string) => {
+      void (async () => {
+        const d = await api<DeltaWire>(`/api/lembretes/${id}`, { method: "DELETE" });
+        if (d) aplicarDelta(d);
+      })();
+    },
+    [aplicarDelta],
   );
 
   const atualizarPacientePerfil = useCallback(
@@ -1393,9 +1309,19 @@ export function BionProvider({ children }: { children: ReactNode }) {
     [aplicarDelta],
   );
 
+  /** Contrato delta: PATCH /api/mensagens devolve APENAS as mensagens com
+   *  recibo de leitura atualizado — a conversa aberta não recarrega o app. */
   const marcarConversaLida = useCallback(
-    (comUsuarioId: string) => void mutar("/api/mensagens", "PATCH", { comUsuarioId }),
-    [mutar],
+    (comUsuarioId: string) => {
+      void (async () => {
+        const d = await api<DeltaWire>("/api/mensagens", {
+          method: "PATCH",
+          body: JSON.stringify({ comUsuarioId }),
+        });
+        if (d) aplicarDelta(d);
+      })();
+    },
+    [aplicarDelta],
   );
 
   const value = useMemo<Store>(
@@ -1403,6 +1329,8 @@ export function BionProvider({ children }: { children: ReactNode }) {
       sessao,
       autenticado,
       carregando,
+      precisaTrocarSenha,
+      trocarSenha,
       entrar,
       registrar,
       sair,
@@ -1459,7 +1387,7 @@ export function BionProvider({ children }: { children: ReactNode }) {
       atualizarConsulta,
     }),
     [
-      sessao, autenticado, carregando, entrar, registrar, sair,
+      sessao, autenticado, carregando, precisaTrocarSenha, trocarSenha, entrar, registrar, sair,
       consultas, arquivos, notificacoes, notificacoesVisiveis, documentos, medicos,
       tickets, lembretes, pacientePerfil, documentosVisiveis,
       mensagens, suporte, enviarMensagem, marcarConversaLida,

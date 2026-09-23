@@ -1,6 +1,5 @@
 import { NextRequest } from "next/server";
 import { exigirSessao, registrarAudit } from "@/lib/server/auth";
-import { carregarDados } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
 
 /**
@@ -41,16 +40,33 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    await registrarAudit(usuario, {
+    const linha = await registrarAudit(usuario, {
       acao: body.acao!,
       categoria: permitido.categoria,
       severidade: permitido.severidade,
       detalhes: body.detalhes?.slice(0, 300),
     });
 
-    // Reaproveita a resposta fresca para o cliente atualizar a trilha (se admin)
-    const dados = await carregarDados(usuario);
-    return ok(dados);
+    // Contrato delta: devolve APENAS a linha criada (a trilha do admin aplica
+    // no topo do estado — sem recarregar todo o app a cada exportação de PDF).
+    return ok(
+      linha
+        ? {
+            audit: {
+              id: linha.id,
+              ts: linha.createdAt.getTime(),
+              acao: linha.acao,
+              categoria: linha.categoria,
+              severidade: linha.severidade,
+              usuario: linha.usuarioNome,
+              role: linha.role.toLowerCase(),
+              entidade: linha.entidade ?? undefined,
+              entidadeId: linha.entidadeId ?? undefined,
+              detalhes: linha.detalhes ?? undefined,
+            },
+          }
+        : {},
+    );
   } catch (erro) {
     return falha(erro);
   }
