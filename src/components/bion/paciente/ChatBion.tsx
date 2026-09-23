@@ -608,7 +608,11 @@ export function ChatBion({ aberto, onFechar, aoEnviarExame }: { aberto: boolean;
               {m.texto.split("**").map((parte, j) => (j % 2 === 1 ? <strong key={j}>{parte}</strong> : <span key={j}>{parte}</span>))}
               {m.remetente === "ia" && m.fonte && (
                 <div className="text-[10px] mt-2 opacity-40" aria-hidden="true">
-                  {m.fonte === "local" ? "modo básico · sem IA generativa" : m.fonte === "publico" ? "IA generativa · nomes protegidos" : "IA generativa"}
+                  {m.fonte === "local"
+                    ? "modo básico · sem IA generativa"
+                    : m.fonte === "publico"
+                      ? "canal público · seus nomes foram removidos antes do envio (anonimização LGPD); ao continuar a conversa você consente com esse tratamento"
+                      : "IA generativa"}
                 </div>
               )}
             </div>

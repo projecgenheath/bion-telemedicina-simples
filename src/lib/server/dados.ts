@@ -6,7 +6,9 @@ import type { UsuarioSessao } from "./auth";
 /* Utilitários de data (rótulos do cliente: "Hoje", "Amanhã", "12 Dez") */
 /* ------------------------------------------------------------------ */
 
-const MESES = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+// P2 (2026-09): exportado para a validação estrita do agendamento
+// (POST /api/consultas) reusar a MESMA lista — sem risco de drift.
+export const MESES = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
 
 /**
  * Converte rótulos de data usados pela interface + hora "HH:MM" em Date.

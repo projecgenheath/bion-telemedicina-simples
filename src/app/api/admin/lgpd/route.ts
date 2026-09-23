@@ -3,11 +3,16 @@ import { db } from "@/lib/db";
 import { exigirPapel } from "@/lib/server/auth";
 import { carregarDados } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
+import { anonimizarPacienteCompleto } from "@/lib/server/lgpd";
 
 /**
  * Operações LGPD da administração (PrivacidadeAdmin):
- * - anonimizar: substitui dados identificáveis do paciente (art. 12 LGPD)
- * - excluir: remove definitivamente consultas, documentos, avaliações e consentimentos
+ * - anonimizar: substitui TODOS os dados identificáveis do paciente
+ *   (identidade, perfil, anamnese, mensagens, documentos, tickets, avaliações
+ *   e textos livres) — art. 12 LGPD.
+ * - excluir: P1 (2026-09) — NÃO destrói mais nada. Prontuário não pode ser
+ *   destruído (CFM); a operação virou sinônimo de anonimização completa +
+ *   arquivamento da conta (inativa, sem sessões, sem dados identificáveis).
  */
 export async function POST(req: NextRequest) {
   try {
@@ -24,37 +29,21 @@ export async function POST(req: NextRequest) {
       return Response.json({ erro: "Paciente não encontrado." }, { status: 404 });
     }
 
-    if (body.acao === "anonimizar") {
-      const apelido = `Paciente Anonimizado ${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
-      await db.$transaction([
-        db.user.update({
-          where: { id: paciente.id },
-          data: { nome: apelido, email: `anon-${apelido.slice(-4).toLowerCase()}@anon.bion.app`, status: "inativo" },
-        }),
-        db.perfilPaciente.updateMany({
-          where: { userId: paciente.id },
-          data: { cpf: "", telefone: "", alergias: "[]", medicamentos: "[]" },
-        }),
-      ]);
-      await (await import("@/lib/server/dados")).aplicarSideEffects(admin, undefined, {
-        acao: "PACIENTE_ANONIMIZADO",
-        categoria: "admin",
-        severidade: "critical",
-        detalhes: `Dados identificáveis substituídos por ${apelido} (LGPD art. 12)`,
-        entidade: "paciente",
-        entidadeId: paciente.id,
-      });
-    } else {
-      await db.user.delete({ where: { id: paciente.id } });
-      await (await import("@/lib/server/dados")).aplicarSideEffects(admin, undefined, {
-        acao: "PACIENTE_DADOS_EXCLUIDOS",
-        categoria: "admin",
-        severidade: "critical",
-        detalhes: `Exclusão definitiva de consultas, documentos, avaliações e consentimentos de ${paciente.nome}`,
-        entidade: "paciente",
-        entidadeId: paciente.id,
-      });
-    }
+    // As duas ações compartilham o mesmo fluxo seguro: anonimização completa
+    // sem destruição de prontuário.
+    const apelido = await anonimizarPacienteCompleto(paciente.id);
+    const { aplicarSideEffects } = await import("@/lib/server/dados");
+    await aplicarSideEffects(admin, undefined, {
+      acao: body.acao === "excluir" ? "PACIENTE_DADOS_ANONIMIZADOS_ARQUIVADOS" : "PACIENTE_ANONIMIZADO",
+      categoria: "admin",
+      severidade: "critical",
+      detalhes:
+        body.acao === "excluir"
+          ? `Solicitação de exclusão convertida em anonimização LGPD completa + arquivamento (${apelido}); prontuário preservado`
+          : `Dados identificáveis substituídos por ${apelido} — identidade, perfil, anamnese, mensagens, documentos, tickets e textos livres (LGPD art. 12)`,
+      entidade: "paciente",
+      entidadeId: paciente.id,
+    });
 
     const dados = await carregarDados(admin);
     return ok(dados);

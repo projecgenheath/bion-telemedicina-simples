@@ -21,3 +21,5 @@ download/
 /worklog.md
 /*.png
 scripts/*.png
+.tmp-teste/
+.sanitizado/
