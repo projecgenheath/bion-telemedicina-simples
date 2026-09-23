@@ -1,31 +1,46 @@
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { exigirSessao } from "@/lib/server/auth";
-import { aplicarSideEffects, carregarDados } from "@/lib/server/dados";
+import { aplicarSideEffects } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
 
 /**
  * Mensageria assíncrona BION (paciente ↔ médico, e suporte BION).
  *
- * GET    — payload leve ({ mensagens }) para polling do cliente (~4s).
- * POST   — envia mensagem: { paraId, texto }. A notificação ao destinatário
- *          é gerada PELO SERVIDOR a partir do evento real.
- *          Contrato delta: devolve APENAS a mensagem criada.
- * PATCH  — marca conversa como lida: { comUsuarioId } → estado fresco.
+ * GET   — payload leve ({ mensagens }) para polling do cliente (~4s).
+ *         Com ?desde=<ISO> devolve SOMENTE mensagens novas ou com recibo de
+ *         leitura atualizado desde então (polling incremental — o cliente
+ *         mescla por id; UpdatedAt do Mensagem move quando "lida" muda).
+ * POST  — envia mensagem: { paraId, texto }. A notificação ao destinatário
+ *         é gerada PELO SERVIDOR a partir do evento real.
+ *         Contrato delta: devolve APENAS a mensagem criada.
+ * PATCH — marca conversa como lida: { comUsuarioId } → contrato delta
+ *         ({ mensagens } atualizadas), sem recarregar o estado inteiro.
  */
 
 const MAX_TEXTO = 4000;
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
     const usuario = await exigirSessao();
+    const desdeParam = req.nextUrl.searchParams.get("desde");
+    const desde = desdeParam ? new Date(desdeParam) : null;
+    const valido = desde !== null && !Number.isNaN(desde.getTime());
     const mensagens = await db.mensagem.findMany({
-      where: { OR: [{ deId: usuario.id }, { paraId: usuario.id }] },
+      where: valido
+        ? {
+            AND: [
+              { OR: [{ deId: usuario.id }, { paraId: usuario.id }] },
+              { OR: [{ createdAt: { gt: desde! } }, { updatedAt: { gt: desde! } }] },
+            ],
+          }
+        : { OR: [{ deId: usuario.id }, { paraId: usuario.id }] },
       include: {
         de: { select: { nome: true } },
         para: { select: { nome: true } },
       },
       orderBy: { createdAt: "asc" },
+      ...(valido ? { take: 200 } : {}),
     });
     return ok({
       mensagens: mensagens.map((m) => ({
@@ -179,8 +194,29 @@ export async function PATCH(req: NextRequest) {
       });
     }
 
-    const dados = await carregarDados(usuario);
-    return ok(dados);
+    // Contrato delta: devolve APENAS as mensagens de minhas conversas
+    // atualizadas nesta varredura (recibos de leitura) — sem estado fresco.
+    const atualizadas = await db.mensagem.findMany({
+      where: { paraId: usuario.id, lida: true, updatedAt: { gte: new Date(Date.now() - 10_000) } },
+      include: {
+        de: { select: { nome: true } },
+        para: { select: { nome: true } },
+      },
+      orderBy: { updatedAt: "asc" },
+      take: 100,
+    });
+    return ok({
+      mensagens: atualizadas.map((m) => ({
+        id: m.id,
+        deId: m.deId,
+        de: m.de.nome,
+        paraId: m.paraId,
+        para: m.para.nome,
+        texto: m.texto,
+        lida: m.lida,
+        createdAt: m.createdAt.toISOString(),
+      })),
+    });
   } catch (erro) {
     return falha(erro);
   }

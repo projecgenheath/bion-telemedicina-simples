@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { exigirPapel } from "@/lib/server/auth";
-import { carregarDados, aplicarSideEffects } from "@/lib/server/dados";
+import { aplicarSideEffects } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
 
 /** Criação de lembretes de saúde (apenas pacientes).
@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    await aplicarSideEffects(
+    const efeitos = await aplicarSideEffects(
       usuario,
       [
         {
@@ -51,8 +51,20 @@ export async function POST(req: NextRequest) {
       },
     );
 
-    const dados = await carregarDados(usuario);
-    return ok(dados);
+    // Contrato delta: devolve APENAS o lembrete criado (+ efeitos colaterais).
+    return ok({
+      lembrete: {
+        id: lembrete.id,
+        titulo: lembrete.titulo,
+        horario: lembrete.horario,
+        tipo: lembrete.tipo,
+        frequencia: lembrete.frequencia,
+        feito: lembrete.feito,
+        medicamento: lembrete.medicamento,
+      },
+      ...(efeitos.notificacoes.length ? { notificacoes: efeitos.notificacoes } : {}),
+      ...(efeitos.audit ? { audit: efeitos.audit } : {}),
+    });
   } catch (erro) {
     return falha(erro);
   }

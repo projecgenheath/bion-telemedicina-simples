@@ -1,10 +1,10 @@
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { exigirPapel } from "@/lib/server/auth";
-import { carregarDados } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
 
-/** Marca/desmarca conclusão (PATCH) ou remove (DELETE) um lembrete do próprio usuário. */
+/** Marca/desmarca conclusão (PATCH) ou remove (DELETE) um lembrete do próprio usuário.
+ *  Contrato delta: devolve APENAS o lembrete afetado — sem estado fresco completo. */
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -19,9 +19,21 @@ export async function PATCH(
       return Response.json({ erro: "Lembrete não encontrado." }, { status: 404 });
     }
 
-    await db.lembrete.update({ where: { id }, data: { feito: !!body.feito } });
-    const dados = await carregarDados(usuario);
-    return ok(dados);
+    const atualizado = await db.lembrete.update({
+      where: { id },
+      data: { feito: !!body.feito },
+    });
+    return ok({
+      lembrete: {
+        id: atualizado.id,
+        titulo: atualizado.titulo,
+        horario: atualizado.horario,
+        tipo: atualizado.tipo,
+        frequencia: atualizado.frequencia,
+        feito: atualizado.feito,
+        medicamento: atualizado.medicamento,
+      },
+    });
   } catch (erro) {
     return falha(erro);
   }
@@ -41,8 +53,7 @@ export async function DELETE(
     }
 
     await db.lembrete.delete({ where: { id } });
-    const dados = await carregarDados(usuario);
-    return ok(dados);
+    return ok({ lembreteRemovido: id });
   } catch (erro) {
     return falha(erro);
   }

@@ -4,11 +4,12 @@ import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useBion } from "@/lib/bion-store";
 import { AppShell } from "@/components/bion/telas/AppShell";
+import { TrocarSenhaObrigatoria } from "@/components/bion/telas/TrocarSenhaObrigatoria";
 import { TelaCarregando } from "@/components/bion/brand";
 import { SO_ADMIN, SO_CLINICA, SO_MEDICO, SO_PACIENTE, viewDoPath } from "@/lib/rotas";
 
 export default function LayoutAutenticado({ children }: { children: React.ReactNode }) {
-  const { autenticado, carregando, sessao } = useBion();
+  const { autenticado, carregando, sessao, precisaTrocarSenha } = useBion();
   const router = useRouter();
   const pathname = usePathname();
   const view = viewDoPath(pathname);
@@ -28,6 +29,10 @@ export default function LayoutAutenticado({ children }: { children: React.ReactN
   }, [carregando, autenticado, view, sessao.role, router]);
 
   if (carregando || !autenticado) return <TelaCarregando />;
+
+  // V4 — conta criada pela administração: troca de senha obrigatória antes
+  // de qualquer navegação (a tela usa a própria sessão, já válida).
+  if (precisaTrocarSenha) return <TrocarSenhaObrigatoria />;
 
   // Sala de videoconsulta e o app imersivo do paciente são tela cheia
   // (sem cabeçalho, sem navegação inferior e sem tour por cima).

@@ -45,6 +45,8 @@ export async function POST(req: NextRequest) {
         senhaHash,
         role: "PACIENTE",
         status: body.status ?? "ativo",
+        // V4: nasce com senha padrão — troca obrigatória no primeiro acesso
+        precisaTrocarSenha: true,
         perfilPaciente: {
           create: {
             telefone: body.telefone ?? "",

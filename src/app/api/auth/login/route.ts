@@ -39,6 +39,7 @@ export async function POST(req: NextRequest) {
       nome: user.nome,
       email: user.email,
       role: user.role as "PACIENTE" | "MEDICO" | "ADMIN",
+      precisaTrocarSenha: user.precisaTrocarSenha,
     };
     await registrarAudit(usuario, {
       acao: "LOGIN",

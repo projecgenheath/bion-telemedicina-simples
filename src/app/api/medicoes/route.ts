@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { exigirPapel } from "@/lib/server/auth";
-import { carregarDados, aplicarSideEffects } from "@/lib/server/dados";
+import { aplicarSideEffects } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
 
 /**
@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
       return Response.json({ erro: "Altura fora do intervalo plausível (50–250 cm)." }, { status: 400 });
     }
 
-    await db.medicao.create({
+    const medicao = await db.medicao.create({
       data: {
         usuarioId: usuario.id,
         tipo,
@@ -74,26 +74,40 @@ export async function POST(req: NextRequest) {
     });
 
     // Sincroniza os valores atuais do perfil (peso/altura usados pelo app e pelo médico)
+    const perfilAtualizado: { peso?: string; altura?: string } = {};
     if (tipo === "peso") {
+      perfilAtualizado.peso = String(body.valor1);
       await db.perfilPaciente.updateMany({
         where: { userId: usuario.id },
         data: { peso: String(body.valor1) },
       });
     } else if (tipo === "altura") {
+      perfilAtualizado.altura = String(body.valor1);
       await db.perfilPaciente.updateMany({
         where: { userId: usuario.id },
         data: { altura: String(body.valor1) },
       });
     }
 
-    await aplicarSideEffects(usuario, undefined, {
+    const efeitos = await aplicarSideEffects(usuario, undefined, {
       acao: "MEDICAO_REGISTRADA",
       categoria: "prontuario",
       detalhes: `Medição de ${tipo}: ${body.valor1}${tipo === "pa" && body.valor2 ? `/${body.valor2}` : ""}`,
     });
 
-    const dados = await carregarDados(usuario);
-    return ok(dados);
+    // Contrato delta: devolve APENAS a medição criada + o valor do perfil
+    // sincronizado — sem recarregar o estado inteiro.
+    return ok({
+      medicao: {
+        id: medicao.id,
+        tipo: medicao.tipo,
+        valor1: medicao.valor1,
+        valor2: medicao.valor2 ?? undefined,
+        criadoEm: medicao.criadoEm.toISOString(),
+      },
+      ...(Object.keys(perfilAtualizado).length ? { perfilPaciente: perfilAtualizado } : {}),
+      ...(efeitos.notificacoes.length ? { notificacoes: efeitos.notificacoes } : {}),
+    });
   } catch (erro) {
     return falha(erro);
   }
