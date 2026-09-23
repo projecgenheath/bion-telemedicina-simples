@@ -7,6 +7,12 @@ import { ok, falha } from "@/lib/server/http";
  * PATCH — marca notificação(ões) como lida(s): { id } ou { todas: true }.
  * Contrato delta: devolve APENAS as notificações que acabaram de ser marcadas.
  *
+ * V7 — leitura POR USUÁRIO: notificações dirigidas (usuarioId preenchido)
+ * guardam "lida" na própria linha; BROADCASTS (usuarioId nulo, por papel ou
+ * globais) são linhas COMPARTILHADAS — o estado de leitura fica em
+ * NotificacaoLeitura, então marcar como lida NÃO apaga o badge dos demais
+ * destinatários.
+ *
  * POST foi REMOVIDO por segurança (hardening): o cliente não pode criar
  * notificações arbitrando destinatário, título ou conteúdo — toda
  * notificação é gerada pelo servidor a partir do evento real
@@ -46,39 +52,72 @@ export async function PATCH(req: NextRequest) {
       createdAt: r.createdAt.toISOString(),
     });
 
+    // Visibilidade = mesma regra do bootstrap (dados.ts): dirigidas ao usuário,
+    // broadcasts do seu papel e broadcasts globais.
+    const visiveis = [
+      { usuarioId: usuario.id },
+      { usuarioId: null, paraRole: usuario.role },
+      { usuarioId: null, paraRole: null },
+    ];
+
     if (body.todas) {
+      // Dirigidas não lidas + broadcasts ainda não lidos POR ESTE usuário
       const alvo = await db.notificacao.findMany({
         where: {
-          lida: false,
           OR: [
-            { usuarioId: usuario.id },
-            { paraRole: usuario.role },
-            { AND: [{ usuarioId: null }, { paraRole: null }] },
+            { usuarioId: usuario.id, lida: false },
+            {
+              usuarioId: null,
+              AND: [{ OR: visiveis.slice(1) }, { leituras: { none: { usuarioId: usuario.id } } }],
+            },
           ],
         },
         orderBy: { createdAt: "desc" },
       });
-      if (alvo.length) {
+
+      const dirigidas = alvo.filter((n) => n.usuarioId);
+      const broadcasts = alvo.filter((n) => n.usuarioId === null);
+
+      if (dirigidas.length) {
         await db.notificacao.updateMany({
-          where: { id: { in: alvo.map((n) => n.id) } },
+          where: { id: { in: dirigidas.map((n) => n.id) } },
           data: { lida: true },
+        });
+      }
+      if (broadcasts.length) {
+        await db.notificacaoLeitura.createMany({
+          data: broadcasts.map((n) => ({ notificacaoId: n.id, usuarioId: usuario.id })),
+          skipDuplicates: true,
         });
       }
       return ok({ notificacoes: alvo.map(paraWire) });
     }
 
     if (body.id) {
-      // Mesma regra do original: dono da notificação ou destinatário por papel
-      // (linhas de transmissão ampla são marcadas apenas por { todas: true }).
       const alvo = await db.notificacao.findFirst({
         where: {
           id: body.id,
-          lida: false,
-          OR: [{ usuarioId: usuario.id }, { paraRole: usuario.role }],
+          OR: [
+            { usuarioId: usuario.id, lida: false },
+            {
+              usuarioId: null,
+              AND: [{ OR: visiveis.slice(1) }, { leituras: { none: { usuarioId: usuario.id } } }],
+            },
+          ],
         },
       });
       if (alvo) {
-        await db.notificacao.update({ where: { id: alvo.id }, data: { lida: true } });
+        if (alvo.usuarioId) {
+          await db.notificacao.update({ where: { id: alvo.id }, data: { lida: true } });
+        } else {
+          await db.notificacaoLeitura.upsert({
+            where: {
+              notificacaoId_usuarioId: { notificacaoId: alvo.id, usuarioId: usuario.id },
+            },
+            create: { notificacaoId: alvo.id, usuarioId: usuario.id },
+            update: {},
+          });
+        }
         return ok({ notificacoes: [paraWire(alvo)] });
       }
     }

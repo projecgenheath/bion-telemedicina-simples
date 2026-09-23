@@ -1,9 +1,16 @@
-import { Shield, FileText, Check, X, User, Stethoscope, Lock, Clock } from "lucide-react";
+"use client";
+
+import { useState } from "react";
+import { Shield, FileText, Check, X, User, Stethoscope, Lock, Clock, KeyRound } from "lucide-react";
+import { toast } from "sonner";
 import { useBion } from "@/lib/bion-store";
 
 export function PrivacidadePaciente() {
-  const { pacientePerfil, documentosVisiveis, consentimentosVisiveis, consultas, sessao } =
+  const { pacientePerfil, documentosVisiveis, consentimentosVisiveis, consultas, sessao, trocarSenha } =
     useBion();
+  const [senhaAtual, setSenhaAtual] = useState("");
+  const [novaSenha, setNovaSenha] = useState("");
+  const [trocando, setTrocando] = useState(false);
 
   const minhasConsultas = consultas.filter((c) => c.paciente === sessao.nome);
   const medicosVinculados = Array.from(new Set(minhasConsultas.map((c) => c.medico)));
@@ -22,6 +29,28 @@ export function PrivacidadePaciente() {
       valor: `${minhasConsultas.length} consultas e ${documentosVisiveis.length} documentos médicos`,
     },
   ];
+
+  const submeterSenha = async () => {
+    if (trocando) return;
+    if (!senhaAtual || !novaSenha) {
+      toast.error("Preencha a senha atual e a nova senha.");
+      return;
+    }
+    if (novaSenha.length < 8 || !/[A-Za-z]/.test(novaSenha) || !/[0-9]/.test(novaSenha)) {
+      toast.error("A nova senha deve ter 8+ caracteres, com letras e números.");
+      return;
+    }
+    setTrocando(true);
+    const r = await trocarSenha(senhaAtual, novaSenha);
+    setTrocando(false);
+    if (r.ok) {
+      toast.success("Senha alterada com sucesso.");
+      setSenhaAtual("");
+      setNovaSenha("");
+    } else if (r.erro) {
+      toast.error(r.erro);
+    }
+  };
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -130,6 +159,42 @@ export function PrivacidadePaciente() {
             ))}
           </div>
         )}
+      </section>
+
+      <section className="bg-card border rounded-3xl p-6 space-y-4">
+        <h2 className="font-bold flex items-center gap-2">
+          <KeyRound className="w-4 h-4 text-primary" /> Segurança da conta
+        </h2>
+        <p className="text-sm text-muted-foreground">
+          Troque sua senha periodicamente. Ao confirmar, outras sessões abertas com esta conta são
+          encerradas automaticamente.
+        </p>
+        <div className="grid sm:grid-cols-2 gap-3">
+          <input
+            type="password"
+            value={senhaAtual}
+            onChange={(e) => setSenhaAtual(e.target.value)}
+            autoComplete="current-password"
+            placeholder="Senha atual"
+            className="h-11 rounded-xl border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-primary/40"
+          />
+          <input
+            type="password"
+            value={novaSenha}
+            onChange={(e) => setNovaSenha(e.target.value)}
+            autoComplete="new-password"
+            placeholder="Nova senha (8+ caracteres)"
+            className="h-11 rounded-xl border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-primary/40"
+          />
+        </div>
+        <button
+          type="button"
+          onClick={() => void submeterSenha()}
+          disabled={trocando}
+          className="h-10 px-5 rounded-xl bg-primary text-primary-foreground text-sm font-bold shadow-md transition-opacity hover:opacity-90 disabled:opacity-50"
+        >
+          {trocando ? "Salvando..." : "Alterar senha"}
+        </button>
       </section>
     </div>
   );
