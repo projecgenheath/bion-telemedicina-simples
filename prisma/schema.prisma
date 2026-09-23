@@ -3,7 +3,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  // AJUSTE LOCAL DE TESTE (sandbox): provider sqlite para rodar sem Supabase.
+  // ORIGINAL DO PROJETO: provider = "postgresql" (Supabase) — restaurar para deploy.
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
