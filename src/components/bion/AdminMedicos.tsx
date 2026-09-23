@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Plus, Search, Pencil, Trash2, X, ArrowLeft, Star, Calendar } from "lucide-react";
+import { Plus, Search, Pencil, Archive, X, ArrowLeft, Star, Calendar } from "lucide-react";
 import { toast } from "sonner";
 import { useBion, type Medico } from "@/lib/bion-store";
 import { ModalBion } from "@/components/bion/ModalBion";
@@ -188,9 +188,9 @@ export function AdminMedicos() {
               <button
                 onClick={() => setConfirmar(m)}
                 className="p-2 rounded-xl border text-destructive hover:bg-destructive/10"
-                aria-label={`Excluir ${m.nome}`}
+                aria-label={`Arquivar ${m.nome}`}
               >
-                <Trash2 className="w-4 h-4" />
+                <Archive className="w-4 h-4" />
               </button>
             </div>
           </div>
@@ -313,16 +313,18 @@ export function AdminMedicos() {
         <ModalBion
           aberto
           onFechar={() => setConfirmar(null)}
-          titulo="Excluir médico"
+          titulo="Arquivar médico"
           largura="max-w-sm"
           overlay="bg-black/50"
           foraFecha={false}
           className="py-4"
         >
           <div className="bg-card border rounded-3xl w-full p-6 space-y-4 text-center">
-            <h3 className="font-extrabold text-foreground">Excluir médico?</h3>
+            <h3 className="font-extrabold text-foreground">Arquivar médico?</h3>
             <p className="text-xs text-muted-foreground">
-              {confirmar.nome} será removido da plataforma. A ação fica registrada na auditoria.
+              {confirmar.nome} perderá o acesso (sem login) e sairá das listas ativas. Consultas,
+              prontuários e documentos já emitidos são PRESERVADOS — o nome do profissional integra
+              o histórico clínico. A ação fica registrada na auditoria.
             </p>
             <div className="flex gap-2">
               <button
@@ -334,12 +336,12 @@ export function AdminMedicos() {
               <button
                 onClick={() => {
                   excluirMedico(confirmar.id);
-                  toast.success("Médico excluído.");
+                  toast.success("Médico arquivado. Prontuário preservado.");
                   setConfirmar(null);
                 }}
                 className="flex-1 py-2.5 rounded-xl bg-destructive text-destructive-foreground text-xs font-bold"
               >
-                Excluir
+                Arquivar
               </button>
             </div>
           </div>

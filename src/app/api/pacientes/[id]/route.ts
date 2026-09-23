@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { exigirPapel } from "@/lib/server/auth";
 import { carregarDados, aplicarSideEffects } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
+import { anonimizarPacienteCompleto } from "@/lib/server/lgpd";
 
 type PacientePatch = {
   nome?: string;
@@ -72,7 +73,12 @@ export async function PATCH(
   }
 }
 
-/** Exclusão definitiva de paciente (cascata: consultas, documentos, avaliações). */
+/**
+ * P1 (2026-09) — o DELETE de paciente NÃO destrói mais o cadastro em cascata
+ * (prontuário não pode ser destruído — CFM). Passa a arquivar + anonimizar
+ * todos os dados identificáveis (LGPD art. 12), preservando o registro
+ * clínico despidos de identificadores.
+ */
 export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -86,12 +92,12 @@ export async function DELETE(
       return Response.json({ erro: "Paciente não encontrado." }, { status: 404 });
     }
 
-    await db.user.delete({ where: { id } });
+    const apelido = await anonimizarPacienteCompleto(id);
     await aplicarSideEffects(admin, undefined, {
-      acao: "PACIENTE_EXCLUIDO",
+      acao: "PACIENTE_ARQUIVADO_ANONIMIZADO",
       categoria: "admin",
       severidade: "critical",
-      detalhes: `Cadastro de ${paciente.nome} removido junto com consultas e documentos`,
+      detalhes: `Cadastro de ${paciente.nome} arquivado e anonimizado como ${apelido}; prontuário preservado (LGPD art. 12 / CFM)`,
       entidade: "paciente",
       entidadeId: id,
     });

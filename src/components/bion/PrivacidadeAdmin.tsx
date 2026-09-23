@@ -70,7 +70,7 @@ export function PrivacidadeAdmin() {
       toast.success("Dados anonimizados e registrados na auditoria.");
     } else {
       excluirDadosPaciente(acao.paciente);
-      toast.success("Dados excluídos definitivamente e registrados na auditoria.");
+      toast.success("Dados anonimizados e conta arquivada; prontuário preservado. Auditoria registrada.");
     }
     setAcao(null);
   };
@@ -141,7 +141,7 @@ export function PrivacidadeAdmin() {
                   onClick={() => setAcao({ tipo: "excluir", paciente: p.nome })}
                   className="px-4 py-2 rounded-xl bg-destructive/10 text-destructive text-xs font-bold hover:bg-destructive/20 transition flex items-center gap-1.5"
                 >
-                  <Trash2 className="w-3.5 h-3.5" /> Excluir
+                  <Trash2 className="w-3.5 h-3.5" /> Anonimizar e arquivar
                 </button>
               </div>
             ))}
@@ -174,7 +174,7 @@ export function PrivacidadeAdmin() {
         <ModalBion
           aberto
           onFechar={() => setAcao(null)}
-          titulo={`${acao.tipo === "anonimizar" ? "Anonimizar dados" : "Excluir dados"} de ${acao.paciente}`}
+          titulo={`${acao.tipo === "anonimizar" ? "Anonimizar dados" : "Anonimizar e arquivar"} — ${acao.paciente}`}
           largura="max-w-md"
           overlay="bg-foreground/50 backdrop-blur-sm"
           foraFecha={false}
@@ -185,12 +185,12 @@ export function PrivacidadeAdmin() {
               <AlertTriangle className="w-6 h-6" />
             </div>
             <h3 className="text-lg font-extrabold">
-              {acao.tipo === "anonimizar" ? "Anonimizar dados" : "Excluir dados"} de {acao.paciente}?
+              {acao.tipo === "anonimizar" ? "Anonimizar dados" : "Anonimizar e arquivar"} — {acao.paciente}?
             </h3>
             <p className="text-sm text-muted-foreground leading-relaxed">
               {acao.tipo === "anonimizar"
-                ? "O nome do paciente será substituído por um identificador anônimo em consultas, documentos e avaliações. As estatísticas continuam válidas."
-                : "Consultas, documentos, avaliações e consentimentos desse paciente serão removidos em definitivo. Esta ação não pode ser desfeita."}{" "}
+                ? "Identidade, perfil, anamnese, mensagens, documentos, tickets, avaliações e textos livres serão substituídos por um identificador anônimo (LGPD art. 12). O prontuário clínico permanece, sem vínculo com a pessoa, e as estatísticas continuam válidas."
+                : "Nada é destruído — prontuário não pode ser apagado (CFM). Todos os dados identificáveis (perfil, anamnese, mensagens, documentos, tickets e textos livres) viram um identificador anônimo e a conta é arquivada sem acesso. Esta ação não pode ser desfeita."}{" "}
               O registro ficará salvo na auditoria.
             </p>
             <div className="flex justify-end gap-2 pt-1">

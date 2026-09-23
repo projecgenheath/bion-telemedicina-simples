@@ -47,7 +47,7 @@ const RESPOSTAS_BASE: Record<string, string> = {
 
   atestado: `📄 **Regras e Validação de Atestados Médicos Digitais BION:**
 
-• Todos os atestados emitidos na plataforma contêm assinatura digital qualificada (padrão ICP-Brasil) e hash SHA-256 de validação.
+• Todos os atestados emitidos na plataforma carregam assinatura eletrônica (MP 2.200-2/2001) com hash SHA-256 de validação e QR Code de conferência. Não se trata de assinatura qualificada ICP-Brasil (com certificado digital).
 • São aceitos nacionalmente por empresas, órgãos públicos e instituições de ensino conforme as resoluções do CFM nº 2.299/2021 e nº 2.314/2022.
 • O empregador pode validar o documento escaneando o QR Code timbrado ou pelo portal de validação oficial.`,
 
