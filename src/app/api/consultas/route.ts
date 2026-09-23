@@ -4,11 +4,70 @@ import { exigirPapel } from "@/lib/server/auth";
 import {
   aplicarSideEffects,
   parseDataHora,
+  MESES,
   type NotifPayload,
   type AuditPayload,
 } from "@/lib/server/dados";
 import { criarCobranca, confirmarPagamento, modoGateway, paraWire } from "@/lib/server/pagamentos";
 import { ok, falha } from "@/lib/server/http";
+
+/**
+ * P2 (2026-09) — "agora" no fuso da clínica (America/Sao_Paulo), construído
+ * como Date de parede (mesma convenção do parseDataHora) para comparação
+ * correta independentemente do fuso do servidor (Vercel = UTC).
+ */
+function agoraFusoClinica(): Date {
+  const partes = new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(new Date());
+  const g = (t: string) => Number(partes.find((p) => p.type === t)?.value ?? "0");
+  return new Date(g("year"), g("month") - 1, g("day"), g("hour") % 24, g("minute"));
+}
+
+/** Ano/mês/dia formam uma data real do calendário. */
+function dataCalendarioValida(ano: number, mes: number, dia: number): boolean {
+  if (mes < 1 || mes > 12 || dia < 1 || ano < 2000 || ano > 2200) return false;
+  return dia <= new Date(ano, mes, 0).getDate();
+}
+
+/**
+ * P2 — validação ESTRITA de data/hora de agendamento. Aceita exatamente os
+ * formatos que o parseDataHora entende (ISO, DD/MM/AAAA, hoje/amanhã, "D Mes
+ * [AAAA]"), mas REJEITA o que antes era engolido como "hoje 09:00". Devolve
+ * mensagem de erro ou null.
+ */
+function validarDataHoraAgendamento(data: string, hora: string): string | null {
+  if (!/^([01]?\d|2[0-3]):[0-5]\d$/.test(hora)) {
+    return "Hora inválida — use o formato HH:MM (00:00–23:59).";
+  }
+  const rotulo = data.trim();
+  const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(rotulo);
+  const br = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(rotulo);
+  if (iso) {
+    if (!dataCalendarioValida(+iso[1], +iso[2], +iso[3])) {
+      return "Data inválida — confira dia, mês e ano.";
+    }
+  } else if (br) {
+    if (!dataCalendarioValida(+br[3], +br[2], +br[1])) {
+      return "Data inválida — confira dia, mês e ano.";
+    }
+  } else if (!/^(hoje|amanh[aã])$/i.test(rotulo)) {
+    const partes = rotulo.split(/\s+/);
+    const dia = /^\d{1,2}$/.test(partes[0] ?? "") ? parseInt(partes[0], 10) : NaN;
+    const mesIdx = MESES.findIndex((m) => m.toLowerCase() === (partes[1] ?? "").toLowerCase());
+    const anoOk = partes.length === 2 || (partes.length === 3 && /^\d{4}$/.test(partes[2]));
+    if (!Number.isFinite(dia) || mesIdx < 0 || !anoOk || !dataCalendarioValida(new Date().getFullYear(), mesIdx + 1, dia)) {
+      return "Data inválida — use AAAA-MM-DD, DD/MM/AAAA, hoje, amanhã ou \"D Mes AAAA\".";
+    }
+  }
+  return null;
+}
 
 /**
  * Agendamento de nova consulta (apenas pacientes).
@@ -53,6 +112,12 @@ export async function POST(req: NextRequest) {
       return Response.json({ erro: "Data e hora são obrigatórios." }, { status: 400 });
     }
 
+    // P2 — validação estrita de formato (data real do calendário, hora HH:MM).
+    const erroFormato = validarDataHoraAgendamento(body.data.trim(), body.hora.trim());
+    if (erroFormato) {
+      return Response.json({ erro: erroFormato }, { status: 400 });
+    }
+
     // Criação pelo paciente nasce aguardando pagamento — o pagamento é
     // o que CONFIRMA (abaixo, no gateway; ou no webhook real).
     const status = "em_espera";
@@ -64,6 +129,38 @@ export async function POST(req: NextRequest) {
     const valorConsulta = medico.perfilMedico?.valor ?? 150;
 
     const dataInicio = parseDataHora(body.data, body.hora);
+
+    // P2 — proibido agendar no passado (fuso da clínica, tolerância de 1 min).
+    if (dataInicio.getTime() < agoraFusoClinica().getTime() - 60_000) {
+      return Response.json(
+        { erro: "Não é possível agendar no passado — escolha uma data e hora futuras." },
+        { status: 400 },
+      );
+    }
+
+    // P2 — conflito de horário: mesmo médico (ou mesmo paciente) já possui
+    // consulta não cancelada neste exato horário.
+    const choqueMedico = await db.consulta.findFirst({
+      where: { medicoId: medico.id, dataInicio, status: { not: "cancelada" } },
+      select: { id: true },
+    });
+    if (choqueMedico) {
+      return Response.json(
+        { erro: "Este médico já possui uma consulta neste horário. Escolha outro horário." },
+        { status: 409 },
+      );
+    }
+    const choquePaciente = await db.consulta.findFirst({
+      where: { pacienteId: usuario.id, dataInicio, status: { not: "cancelada" } },
+      select: { id: true },
+    });
+    if (choquePaciente) {
+      return Response.json(
+        { erro: "Você já possui uma consulta neste horário. Escolha outro horário." },
+        { status: 409 },
+      );
+    }
+
     const consulta = await db.consulta.create({
       data: {
         pacienteId: usuario.id,

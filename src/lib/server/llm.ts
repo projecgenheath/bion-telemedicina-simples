@@ -56,7 +56,11 @@ let _sdk: { cliente: ClienteSdk | null; verificado: boolean } = { cliente: null,
 let _publicoFalhaEm = 0;
 let _geminiFalhaEm = 0;
 
-const publicoHabilitado = () => process.env.BION_LLM_PUBLICO !== "0";
+// P2 (2026-09): o canal público (sem chave, serviços de terceiros) passa a
+// nascer DESLIGADO por padrão — só ativa com BION_LLM_PUBLICO="1" explícito.
+// Quando ativo, o chat do paciente exibe a nota de consentimento (anonymização
+// LGPD dos nomes antes do envio).
+const publicoHabilitado = () => process.env.BION_LLM_PUBLICO === "1";
 const publicoEmCooldown = () => Date.now() - _publicoFalhaEm < COOLDOWN_FALHA_MS;
 
 const geminiHabilitado = () => process.env.BION_LLM_GEMINI !== "0";
