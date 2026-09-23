@@ -52,6 +52,7 @@ export async function POST(req: NextRequest) {
       nome: user.nome,
       email: user.email,
       role: "PACIENTE" as const,
+      precisaTrocarSenha: user.precisaTrocarSenha,
     };
     await registrarAudit(usuario, {
       acao: "CADASTRO_REALIZADO",

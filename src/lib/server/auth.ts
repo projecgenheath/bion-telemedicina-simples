@@ -12,6 +12,8 @@ export type UsuarioSessao = {
   nome: string;
   email: string;
   role: "PACIENTE" | "MEDICO" | "ADMIN";
+  /** V4: conta criada pela administração com senha padrão — troca obrigatória. */
+  precisaTrocarSenha: boolean;
 };
 
 /** Hash da senha com bcrypt (custo 10) */
@@ -66,6 +68,7 @@ export async function getSessao(): Promise<UsuarioSessao | null> {
     nome: sessao.user.nome,
     email: sessao.user.email,
     role: sessao.user.role as UsuarioSessao["role"],
+    precisaTrocarSenha: sessao.user.precisaTrocarSenha,
   };
 }
 
@@ -77,6 +80,12 @@ export async function destruirSessao(): Promise<void> {
     await db.sessao.deleteMany({ where: { id: token } });
   }
   jar.delete(COOKIE_SESSAO);
+}
+
+/** Token de sessão do cookie atual (para preservar a própria sessão ao revogar as demais). */
+export async function tokenSessaoAtual(): Promise<string | null> {
+  const jar = await cookies();
+  return jar.get(COOKIE_SESSAO)?.value ?? null;
 }
 
 /** Exige sessão válida; lança erro 401 caso contrário */

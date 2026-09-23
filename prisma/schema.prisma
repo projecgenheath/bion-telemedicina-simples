@@ -17,6 +17,9 @@ model User {
   senhaHash      String
   role           String   @default("PACIENTE") // PACIENTE | MEDICO | ADMIN
   status         String   @default("ativo") // ativo | inativo | suspenso
+  // V4: contas criadas pela administração nascem com senha padrão — troca
+  // obrigatória no primeiro acesso (liberada após POST /api/auth/senha).
+  precisaTrocarSenha Boolean @default(false)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -40,6 +43,7 @@ model User {
   medicoes             Medicao[]
   examesLaboratoriais  ExameLaboratorial[]
   anamneses            Anamnese[]
+  leiturasNotificacao  NotificacaoLeitura[]
 }
 
 model Sessao {
@@ -228,9 +232,13 @@ model Mensagem {
   texto     String
   lida      Boolean  @default(false)
   createdAt DateTime @default(now())
+  // Permite polling incremental: o cliente busca apenas mensagens novas ou
+  // com recibo de leitura atualizado desde a última varredura.
+  updatedAt DateTime @default(now()) @updatedAt
 
   @@index([deId, paraId, createdAt])
   @@index([paraId, lida])
+  @@index([updatedAt])
 }
 
 model Documento {
@@ -270,8 +278,28 @@ model Notificacao {
   tipo      String // lembrete | mensagem | receita | agenda | exame | suporte
   titulo    String
   texto     String
+  // "lida" é estado PRIVADO para notificações dirigidas (usuarioId preenchido).
+  // Em broadcasts (usuarioId nulo) a linha é COMPARTILHADA — o estado de
+  // leitura por usuário vive em NotificacaoLeitura (V7), então marcar como
+  // lida não apaga o badge dos demais destinatários.
   lida      Boolean  @default(false)
   createdAt DateTime @default(now())
+  leituras  NotificacaoLeitura[]
+}
+
+// V7 — leitura POR USUÁRIO de notificações de broadcast (usuarioId nulo).
+// Linha única compartilhada com "lida" global fazia um destinatário apagar
+// o badge de todos os demais.
+model NotificacaoLeitura {
+  id            String      @id @default(cuid())
+  notificacaoId String
+  notificacao   Notificacao @relation(fields: [notificacaoId], references: [id], onDelete: Cascade)
+  usuarioId     String
+  usuario       User        @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  lidaEm        DateTime    @default(now())
+
+  @@unique([notificacaoId, usuarioId])
+  @@index([usuarioId])
 }
 
 model Avaliacao {

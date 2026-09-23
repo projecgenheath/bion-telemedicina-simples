@@ -260,13 +260,32 @@ export async function carregarDados(usuario: UsuarioSessao) {
 
   const auditLogs = auditLogsRaw;
 
+  // V7 — leitura POR USUÁRIO de broadcasts: a linha é compartilhada, o estado
+  // "lida" mostrado a este usuário vem das NotificacaoLeitura dele. Para
+  // notificações dirigidas (usuarioId preenchido) o "lida" da própria linha
+  // continua valendo (privado por construção).
+  const idsBroadcast = notificacoes.filter((n) => n.usuarioId === null).map((n) => n.id);
+  const leiturasProprias = idsBroadcast.length
+    ? await db.notificacaoLeitura.findMany({
+        where: { usuarioId: usuario.id, notificacaoId: { in: idsBroadcast } },
+        select: { notificacaoId: true },
+      })
+    : [];
+  const lidasPorMim = new Set(leiturasProprias.map((l) => l.notificacaoId));
+
   // Pacientes "visíveis": admin vê todos; médico vê vinculados por consultas
   let pacientesVisiveis = pacientesRaw;
   if (souMedico) pacientesVisiveis = pacientesRaw.filter((p) => idsPacientes.includes(p.id));
   else if (souPaciente) pacientesVisiveis = [];
 
   return {
-    usuario: { id: usuario.id, nome: usuario.nome, email: usuario.email, role: usuario.role },
+    usuario: {
+      id: usuario.id,
+      nome: usuario.nome,
+      email: usuario.email,
+      role: usuario.role,
+      precisaTrocarSenha: usuario.precisaTrocarSenha,
+    },
     pacientePerfil: perfilPacienteRaw
       ? {
           nome: perfilPacienteRaw.user.nome,
@@ -345,7 +364,10 @@ export async function carregarDados(usuario: UsuarioSessao) {
       createdAt: doc.createdAt.toISOString(),
     })),
     arquivos,
-    notificacoes,
+    notificacoes: notificacoes.map((n) => ({
+      ...n,
+      lida: n.usuarioId ? n.lida : lidasPorMim.has(n.id),
+    })),
     medicos: medicosRaw.map((m) => ({
       id: m.userId,
       nome: m.user.nome,

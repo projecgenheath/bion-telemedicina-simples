@@ -11,6 +11,7 @@ export async function GET() {
       nome: sessao.nome,
       email: sessao.email,
       role: sessao.role,
+      precisaTrocarSenha: sessao.precisaTrocarSenha,
     },
   });
 }
