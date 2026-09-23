@@ -46,6 +46,13 @@ export async function POST(req: NextRequest) {
       return Response.json({ erro: "Médico não encontrado." }, { status: 400 });
     }
 
+    // Robustez: data e hora são obrigatórios — sem eles, parseDataHora
+    // silenciosamente criaria uma consulta "hoje às 09:00" (e o gateway
+    // simulado a confirmaria). Rejeita ANTES de criar cobrança.
+    if (!body.data?.trim() || !body.hora?.trim()) {
+      return Response.json({ erro: "Data e hora são obrigatórios." }, { status: 400 });
+    }
+
     // Criação pelo paciente nasce aguardando pagamento — o pagamento é
     // o que CONFIRMA (abaixo, no gateway; ou no webhook real).
     const status = "em_espera";
