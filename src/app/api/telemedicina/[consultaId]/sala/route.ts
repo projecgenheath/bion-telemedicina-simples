@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { exigirSessao, registrarAudit } from "@/lib/server/auth";
 import { ok, falha } from "@/lib/server/http";
+import { resolverIceServers } from "@/lib/server/ice";
 
 /**
  * Sinalização WebRTC da sala de teleconsulta (Fase 2 — vídeo real P2P).
@@ -10,20 +11,26 @@ import { ok, falha } from "@/lib/server/http";
  *      Heartbeat de presença + pull de sinais não consumidos vindos do outro
  *      participante (oferta/resposta SDP, ICE candidates, chat, controle).
  *      Cada GET marca os sinais entregues como consumidos (entrega única).
+ *      Também devolve `iceServers` (STUN/TURN) montados NO SERVIDOR —
+ *      credenciais de TURN nunca vão no bundle do cliente.
  *
  * POST /api/telemedicina/[consultaId]/sala
  *      Body: { acao: "sinal", tipo: "oferta"|"resposta"|"candidato"|"chat"|"controle", payload: string }
  *      Publica um sinal destinado ao outro participante da consulta.
+ *      tipo "candidato" aceita payload de UM candidato (objeto) OU um LOTE
+ *      (array de até MAX_CANDIDATOS_POR_LOTE) — micro-batch do cliente reduz
+ *      round trips de rede e consumo do rate limit durante o handshake.
  *
  * Segurança: apenas o paciente e o médico da consulta acessam a sala (403 para
  * qualquer outro papel, inclusive admin — sala é 1:1). Sinais só são aceitos
  * enquanto a consulta estiver ativa (confirmada | em_espera).
  */
 
-const JANELA_ONLINE_MS = 12_000; // presença válida por 12s (heartbeat ~1,5s)
+const JANELA_ONLINE_MS = 12_000; // presença válida por 12s
 const TAM_MAX_PAYLOAD = 64 * 1024; // 64KB por sinal (SDP/candidate são pequenos)
 const TIPOS_SINAL = ["oferta", "resposta", "candidato", "chat", "controle"] as const;
 const LIMITE_SINAIS_POR_MINUTO = 240;
+const MAX_CANDIDATOS_POR_LOTE = 24;
 
 type ErroComStatus = Error & { status?: number };
 
@@ -152,6 +159,7 @@ export async function GET(
       },
       eu: { id: usuario.id, nome: usuario.nome, papel },
       outroOnline: presencaOutro !== null,
+      iceServers: resolverIceServers(),
       sinais: sinaisPendentes,
     });
   } catch (erro) {
@@ -195,6 +203,35 @@ export async function POST(
     });
     if (recentes >= LIMITE_SINAIS_POR_MINUTO) {
       throw erroHttp(429, "Muitos sinais enviados. Tente novamente em instantes.");
+    }
+
+    // Lote de candidatos ICE: payload é um ARRAY — um POST, N linhas
+    // (menos round trips e menos consumo do rate limit no handshake).
+    if (body.tipo === "candidato") {
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(body.payload);
+      } catch {
+        throw erroHttp(400, "Payload do candidato não é JSON válido.");
+      }
+      const lote = Array.isArray(parsed) ? parsed : [parsed];
+      if (lote.length === 0) throw erroHttp(400, "Lista de candidatos vazia.");
+      if (lote.length > MAX_CANDIDATOS_POR_LOTE) {
+        throw erroHttp(400, `Lote de candidatos excede ${MAX_CANDIDATOS_POR_LOTE} itens.`);
+      }
+      if (lote.some((c) => typeof c !== "object" || c === null || Array.isArray(c))) {
+        throw erroHttp(400, "Candidato inválido no lote.");
+      }
+      await db.sinalSala.createMany({
+        data: lote.map((c) => ({
+          consultaId,
+          deUsuarioId: usuario.id,
+          deRole: papelDe(consulta, usuario.id),
+          tipo: "candidato",
+          payload: JSON.stringify(c),
+        })),
+      });
+      return ok({ ok: true, total: lote.length });
     }
 
     const sinal = await db.sinalSala.create({
