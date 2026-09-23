@@ -18,6 +18,7 @@ async function main() {
         { motivoConsulta: { contains: "Hardening" } },
         { motivoConsulta: { contains: "Teste webhook" } },
         { motivoConsulta: { contains: "limpeza do teste" } },
+        { motivoConsulta: { contains: "item 9" } },
       ],
     },
     select: { id: true, motivoConsulta: true, status: true },
