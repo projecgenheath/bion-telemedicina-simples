@@ -167,20 +167,29 @@ async function chamarGemini(mensagens: Msg[], prazo: number): Promise<string | n
     role: m.role === "user" ? ("user" as const) : ("model" as const),
     parts: [{ text: m.content }],
   }));
-  return geminiPost(
-    model,
-    apiKey,
-    {
-      ...(sys ? { systemInstruction: { parts: [{ text: sys }] } } : {}),
-      contents: resto,
-      generationConfig: {
-        temperature: 0.7,
-        maxOutputTokens: 2048,
-        thinkingConfig: { thinkingBudget: 0 },
-      },
+  const corpo: GeminiCorpo = {
+    ...(sys ? { systemInstruction: { parts: [{ text: sys }] } } : {}),
+    contents: resto,
+    generationConfig: {
+      temperature: 0.7,
+      maxOutputTokens: 2048,
+      thinkingConfig: { thinkingBudget: 0 },
     },
-    prazo,
-  );
+  };
+
+  // T1 (thinkingBudget 0) fica limitada a ~55% do prazo restante: se o modelo
+  // demorar/pensar além disso, a T2 (sem thinkingConfig, teto 8192) ainda tem
+  // tempo de responder dentro do prazo geral da cadeia.
+  const subprazo = Date.now() + Math.max(Math.round(restante(prazo) * 0.55), 6_000);
+  const texto1 = await geminiPost(model, apiKey, corpo, Math.min(prazo, subprazo));
+  if (texto1) return texto1;
+
+  const sem: GeminiCorpo = {
+    ...(sys ? { systemInstruction: { parts: [{ text: sys }] } } : {}),
+    contents: resto,
+    generationConfig: { temperature: 0.7, maxOutputTokens: 8192 },
+  };
+  return geminiPost(model, apiKey, sem, prazo);
 }
 
 /** VISÃO (foto ou PDF de laudo) no Gemini — devolve o texto extraído ou null. */
