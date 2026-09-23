@@ -148,6 +148,10 @@ async function geminiPost(
   if (!bruto && corpo.generationConfig?.thinkingConfig) {
     const sem = { ...corpo, generationConfig: { ...corpo.generationConfig } };
     delete sem.generationConfig.thinkingConfig;
+    // Modelos "thinking" gastam do teto com raciocínio interno: o retry sem
+    // thinkingConfig precisa de fôlego extra ou volta vazio (MAX_TOKENS).
+    const teto = sem.generationConfig.maxOutputTokens;
+    sem.generationConfig.maxOutputTokens = typeof teto === "number" ? Math.max(teto, 8192) : 8192;
     bruto = await chamar(sem);
   }
   return textoGemini(bruto) || null;
@@ -427,34 +431,47 @@ function limpar(detalhe: string, ...secretos: string[]): string {
  * recebe um pedido mínimo ("Responda apenas: ok"); o resultado diz se o
  * canal funciona DESTE runtime (chave válida + região suportada).
  */
-export async function probeCanais(timeoutMs = 12_000): Promise<ProbeCanal[]> {
+export async function probeCanais(timeoutMs = 20_000): Promise<ProbeCanal[]> {
   const prazo = Date.now() + timeoutMs;
   const resultados: ProbeCanal[] = [];
   const segredoGemini = geminiConfig().apiKey;
 
-  // 1) Gemini
+  // 1) Gemini — duas variantes: como o chat manda (thinkingBudget 0) e sem
+  //    thinkingConfig com teto alto (caminho do retry). finishReason na resposta
+  //    distingue "pensou e não sobrou texto" (MAX_TOKENS) de bloqueio de safety.
   if (geminiHabilitado() && segredoGemini) {
-    const inicio = Date.now();
-    try {
-      const { apiKey, model } = geminiConfig();
-      const r = await fetch(`${GEMINI_BASE}/${model}:generateContent`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-goog-api-key": apiKey },
-        body: JSON.stringify({
-          contents: [{ role: "user", parts: [{ text: "Responda apenas: ok" }] }],
-          generationConfig: { maxOutputTokens: 16 },
-        }),
-        signal: AbortSignal.timeout(Math.max(restante(prazo), 3_000)),
-      }).then(async (res) => ({ status: res.status, corpo: (await res.json().catch(() => null)) as GeminiResposta & { error?: { message?: string } } }));
-      if (r.status === 200) {
-        const t = textoGemini(r.corpo);
-        resultados.push({ canal: "gemini", ok: !!t, detalhe: t ? `resposta: ${t.slice(0, 40)}` : "HTTP 200 sem texto", ms: Date.now() - inicio });
-      } else {
-        const msg = (r.corpo as { error?: { message?: string } } | null)?.error?.message || `HTTP ${r.status}`;
-        resultados.push({ canal: "gemini", ok: false, detalhe: limpar(msg, segredoGemini), ms: Date.now() - inicio });
+    const { apiKey, model } = geminiConfig();
+    const conteudos: GeminiCorpo["contents"] = [{ role: "user", parts: [{ text: "Responda apenas: ok" }] }];
+    const variantes = [
+      { rotulo: "thinkingBudget0", corpo: { contents: conteudos, generationConfig: { temperature: 0.7, maxOutputTokens: 2048, thinkingConfig: { thinkingBudget: 0 } } } },
+      { rotulo: "sem-thinking-teto8192", corpo: { contents: conteudos, generationConfig: { maxOutputTokens: 8192 } } },
+    ];
+    for (const v of variantes) {
+      if (restante(prazo) <= 0) break;
+      const inicio = Date.now();
+      try {
+        const r = await fetch(`${GEMINI_BASE}/${model}:generateContent`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-goog-api-key": apiKey },
+          body: JSON.stringify(v.corpo),
+          signal: AbortSignal.timeout(Math.max(restante(prazo), 3_000)),
+        }).then(async (res) => ({ status: res.status, corpo: (await res.json().catch(() => null)) as (GeminiResposta & { error?: { message?: string } }) | null }));
+        if (r.status === 200) {
+          const cand = r.corpo?.candidates?.[0];
+          const t = textoGemini(r.corpo);
+          resultados.push({
+            canal: "gemini",
+            ok: !!t,
+            detalhe: `[${v.rotulo}] HTTP 200 finish=${cand?.finishReason ?? "?"} texto="${t.slice(0, 30) || "—"}"`,
+            ms: Date.now() - inicio,
+          });
+        } else {
+          const msg = r.corpo?.error?.message || `HTTP ${r.status}`;
+          resultados.push({ canal: "gemini", ok: false, detalhe: limpar(`[${v.rotulo}] ${msg}`, segredoGemini), ms: Date.now() - inicio });
+        }
+      } catch (e) {
+        resultados.push({ canal: "gemini", ok: false, detalhe: limpar(`[${v.rotulo}] ${e instanceof Error ? e.message : String(e)}`, segredoGemini), ms: Date.now() - inicio });
       }
-    } catch (e) {
-      resultados.push({ canal: "gemini", ok: false, detalhe: limpar(e instanceof Error ? e.message : String(e), segredoGemini), ms: Date.now() - inicio });
     }
   } else {
     resultados.push({ canal: "gemini", ok: false, detalhe: "não configurado — defina BION_LLM_GEMINI_API_KEY na Vercel e faça redeploy", ms: 0 });
