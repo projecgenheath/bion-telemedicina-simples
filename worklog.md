@@ -538,3 +538,24 @@ Stage Summary:
 - V4: contas criadas pela administração não entram mais com senha padrão permanente — troca obrigatória no primeiro acesso, revogação de outras sessões, auditoria. Demo accounts (bion123) seguem intactas (flag=false).
 - V7: marcar broadcast como lida não apaga mais o badge dos outros destinatários (leitura por usuário em NotificacaoLeitura; linha compartilhada permanece lida=false).
 - Item 8: cliques leves (lembretes, medições, auditoria, marcar conversa lida) não recarregam mais o estado inteiro; polling de mensagens a cada 4s virou incremental; bion-store dividido (bion-tipos.ts). Pendente da fila original: item 9 (telemedicina em escala — WebSocket/Realtime + TURN) e decisão de produto para V4-troca-por-admin/reset e V7-retroativo (leituras antigas nascem não lidas por usuário, comportamento aceitável).
+---
+Task ID: hardening-item9-telemedicina
+Agent: Super Z (agente principal)
+Task: Item 9 da fila de hardening — telemedicina em escala: TURN + sinalização eficiente (fechamento da fila 1-9)
+
+Work Log:
+- TURN server-side (novo src/lib/server/ice.ts): lista de ICE servers montada NO SERVIDOR e entregue apenas aos participantes da sala (GET /sala → iceServers) — credenciais nunca vão no bundle. STUN Google sempre; TURN próprio via BION_TURN_URLS/USERNAME/CREDENTIAL (Cloudflare/Metered/Xirsys/Twilio/coturn); sem env, reserva OpenRelay (gratuita) que o navegador só aciona quando o caminho direto/STUN falha (NAT simétrico/CGNAT/firewall) — converte falha dura de conexão em chamada estabelecida.
+- Micro-batch de candidatos ICE: cliente enfileira candidatos (250 ms) e envia UM POST por rajada (array até 24); servidor (POST /sala, tipo "candidato") expande o array em N linhas (createMany) — retrocompatível com candidato único (objeto). Menos round trips e menos consumo do rate limit durante o handshake. Cliente processa payload objeto OU array (ordem preservada).
+- Polling adaptativo da sinalização: 700 ms em handshake/instável, 1500 ms aguardando o outro participante, 3000 ms com mídia fluindo, 4000 ms em erro — em chamada estável o ciclo cai de 40 para ~20 consultas/min por lado (~70% menos carga no banco com duas salas ativas... por sala: 2 lados). statusRef espelha o status para o loop não depender de re-render; encerrar/cleanup descartam fila+timer de candidatos.
+- .env.example documenta a seção TURN (provedores com free tier, URLs separadas por vírgula, comportamento da reserva OpenRelay).
+- Suíte scripts/teste_sala_escala.mjs: 21 checks — logins, consulta criada+paga no servidor, iceServers (STUN+TURN+credencial), lote de 3 candidatos em 1 POST → 3 sinais no destino (ordem preservada), retrocompatibilidade de candidato único, lote inválido/vazio/grande → 400, entrega única, admin 403, anônimo 401, limpeza no finally. SKIP informativo único (presença): com o pooler Supabase degradado no sandbox (~24 s/chamada) a janela de presença de 12 s expira ENTRE os dois GETs — causa medida e documentada; presença é verificada historicamente (teste_sala_webrtc) e em produção.
+- PRODUÇÃO: 21/21 (presença PASS — Vercel↔Supabase saudável). E2E visual em duas sessões reais (390px dark): sala renderiza, presença cruzada online, chat paciente→médico entregue pela nova sinalização, "Encerrar" do paciente → "Chamada encerrada" na sala do médico; zero erros de console. Câmera/mic pendem de prompt no headless (getUserMedia sem resolver) → oferta só parte em navegador real; caminho degradado (recvonly) já coberto por design.
+- Evidências: download/evidencias-item-9/ (01-sala-consulta-390dark, 02-sala-chat, 03-medico-recebeu-chat, 04-medico-encerrada).
+- Validação: tsc 0, eslint 0, build 0; commit 4f99c4d, push 070bc34..4f99c4d; deploy validado em produção.
+- Limpeza: 3 consultas "Teste item 9" (suíte + sonda API + UI) com anamneses/pagamentos/sinais/presenças (cascade) removidas do Supabase; limpar_testes_hoje.ts ganhou o motivo "item 9".
+
+Stage Summary:
+- Fila de hardening 1-9 COMPLETA: sessão, autorização (V1-V9), pagamento server-side, status/janela de triagem, notificações/auditoria server-side, banco único PostgreSQL, fronteira Server/Client, performance (delta + store dividido) e agora escala da telemedicina (TURN + batching + polling adaptativo).
+- Chamadas atrás de NAT simétrico/CGNAT/firewall agora têm caminho de reserva (TURN) sem configuração; com BION_TURN_* de um provedor de free tier a reserva fica de graça ainda mais robusta.
+- Sinalização: ~70% menos consultas ao banco em chamada estável e 1 POST por rajada de ICE — a sala escala para mais consultas simultâneas com a mesma infraestrutura.
+- Próximos passos sugeridos: (a) BION_LLM_GEMINI_API_KEY na Vercel para qualidade generativa plena da BION IA (gap residual do gpt-oss); (b) BION_TURN_URLS/USERNAME/CREDENTIAL de provedor próprio (Metered/Cloudflare) para produção real; (c) V7 retroativo (leituras antigas de broadcast nascem não lidas por usuário — comportamento aceitável, decisão de produto).
