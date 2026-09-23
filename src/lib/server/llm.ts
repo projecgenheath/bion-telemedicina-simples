@@ -390,3 +390,92 @@ export async function obterLLM(): Promise<Cliente | null> {
   if (env) return env;
   return tentarSdk();
 }
+
+/* ---------------------------- diagnóstico (admin) ---------------------------- */
+
+export type EstadoCanais = {
+  gemini: { configurado: boolean; modelo: string };
+  env: { configurado: boolean; modelo: string | null };
+  publico: { ativo: boolean; modelo: string };
+};
+
+/** Estado de configuração dos canais — SOMENTE booleanos/modelos, nunca chaves. */
+export function estadoCanais(): EstadoCanais {
+  const gem = geminiConfig();
+  const env = clienteEnv();
+  return {
+    gemini: { configurado: geminiHabilitado() && !!gem.apiKey, modelo: gem.model },
+    env: { configurado: !!env, modelo: process.env.BION_LLM_MODEL?.trim() || null },
+    publico: { ativo: publicoHabilitado(), modelo: (process.env.BION_LLM_PUBLICO_MODEL || PUBLICO_MODEL_PADRAO).trim() },
+  };
+}
+
+export type ProbeCanal = { canal: FonteLlm; ok: boolean; detalhe: string; ms: number };
+
+/** Remove a chave da mensagem (defesa em profundidade: provedores não devem
+ * ecoá-la, mas o texto de erro nunca pode devolvê-la ao painel). */
+function limpar(detalhe: string, ...secretos: string[]): string {
+  let texto = detalhe;
+  for (const s of secretos) {
+    if (s && texto.includes(s)) texto = texto.split(s).join("***");
+  }
+  return texto.slice(0, 300);
+}
+
+/**
+ * Sonda ao vivo dos canais (chamada pelo diagnóstico admin). Cada canal
+ * recebe um pedido mínimo ("Responda apenas: ok"); o resultado diz se o
+ * canal funciona DESTE runtime (chave válida + região suportada).
+ */
+export async function probeCanais(timeoutMs = 12_000): Promise<ProbeCanal[]> {
+  const prazo = Date.now() + timeoutMs;
+  const resultados: ProbeCanal[] = [];
+  const segredoGemini = geminiConfig().apiKey;
+
+  // 1) Gemini
+  if (geminiHabilitado() && segredoGemini) {
+    const inicio = Date.now();
+    try {
+      const { apiKey, model } = geminiConfig();
+      const r = await fetch(`${GEMINI_BASE}/${model}:generateContent`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-goog-api-key": apiKey },
+        body: JSON.stringify({
+          contents: [{ role: "user", parts: [{ text: "Responda apenas: ok" }] }],
+          generationConfig: { maxOutputTokens: 16 },
+        }),
+        signal: AbortSignal.timeout(Math.max(restante(prazo), 3_000)),
+      }).then(async (res) => ({ status: res.status, corpo: (await res.json().catch(() => null)) as GeminiResposta & { error?: { message?: string } } }));
+      if (r.status === 200) {
+        const t = textoGemini(r.corpo);
+        resultados.push({ canal: "gemini", ok: !!t, detalhe: t ? `resposta: ${t.slice(0, 40)}` : "HTTP 200 sem texto", ms: Date.now() - inicio });
+      } else {
+        const msg = (r.corpo as { error?: { message?: string } } | null)?.error?.message || `HTTP ${r.status}`;
+        resultados.push({ canal: "gemini", ok: false, detalhe: limpar(msg, segredoGemini), ms: Date.now() - inicio });
+      }
+    } catch (e) {
+      resultados.push({ canal: "gemini", ok: false, detalhe: limpar(e instanceof Error ? e.message : String(e), segredoGemini), ms: Date.now() - inicio });
+    }
+  } else {
+    resultados.push({ canal: "gemini", ok: false, detalhe: "não configurado — defina BION_LLM_GEMINI_API_KEY na Vercel e faça redeploy", ms: 0 });
+  }
+
+  // 2) endpoint público (reserva) — só informa se está respondendo
+  if (publicoHabilitado()) {
+    const inicio = Date.now();
+    try {
+      const r = await chamarPublico(
+        [
+          { role: "assistant", content: "Você é um eco de teste." },
+          { role: "user", content: "Responda apenas: ok" },
+        ],
+        prazo,
+      );
+      resultados.push({ canal: "publico", ok: !!r, detalhe: r ? `resposta: ${r.slice(0, 40)}` : "sem resposta", ms: Date.now() - inicio });
+    } catch (e) {
+      resultados.push({ canal: "publico", ok: false, detalhe: e instanceof Error ? e.message : String(e), ms: Date.now() - inicio });
+    }
+  }
+
+  return resultados;
+}
