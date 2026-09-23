@@ -575,3 +575,22 @@ Work Log:
 Stage Summary:
 - Chave Gemini pronta para produção: usuário precisa adicionar BION_LLM_GEMINI_API_KEY (e opcionalmente BION_LLM_GEMINI_MODEL=gemini-flash-latest) nas Environment Variables da Vercel + Redeploy. Local (Brasil) já funciona com o .env atual.
 - Após o redeploy: teste /api/bion-ia em produção verificando fonte === "gemini" (triagem, chat livre e laudos passam a usar o canal confiável, encerrando o gap de qualidade do gpt-oss do tier público).
+
+---
+Task ID: gemini-ativacao-producao
+Agent: Super Z (principal)
+Task: Ativar Gemini em produção (validação da chave, telemetria dos canais, resolução de conflito com sessão paralela de segurança).
+
+Work Log:
+- Chave Gemini validada: no sandbox falha por bloqueio geográfico; na Vercel HTTP 200/STOP (probe). Envs confirmadas (BION_LLM_GEMINI_API_KEY + modelo gemini-flash-latest, via painel pelo usuário).
+- Ciclo de correções: (1) diagnóstico admin /api/bion-ia/diagnostico (GET estado, POST probe); (2) retry sem thinkingConfig com teto 8192 (modelos thinking esvaziam resposta); (3) rótulo "IA generativa · Google Gemini"; (4) T1 limitada a 55% do prazo; (5) normalização de alternância user/model (histórico com falas consecutivas da IA dava 400 silencioso); (6) telemetria por tentativa (status/finish/block/ms) + cenário de chat real no diagnóstico.
+- DESCUBERTA CRÍTICA: sessão paralela empurrou para o repo uma linha divergente (segurança P0/P1/P2: rate limit de login, senha 10+ com validarSenhaForte, LGPD completa, fuso America/Sao_Paulo nos agendamentos, canal público DESLIGADO por padrão = só BION_LLM_PUBLICO="1").
+- Merge completo das duas linhas (21 conflitos resolvidos: llm.ts = minha versão + política opt-in deles; 9 arquivos = versão deles com segurança; ChatBion = rótulo Gemini + aviso de consentimento deles; .env.example = TURN (meu) + P2 (deles); servidor_teste.sh = sanitizado deles). Corrigido prisma provider (sqlite da linha deles → postgresql).
+- Validações pós-merge: tsc/eslint/build limpos; local logins 200 (admin/paciente), 401 senha errada; diagnostico mostra publico.ativo=false; produção 200/200/401.
+- PRODUÇÃO HOJE: chat cai para motor local porque a chave free-tier está com COTA EXAURIDA (429 "You exceeded your current quota") — probe distingue: prompt pequeno com thinkingBudget0 = 200 STOP "ok"; payload grande/8192 = 429. Quota diária reseta; alternativa: billing no AI Studio ou nova chave. Cadeia degrada com segurança (público off por LGPD → SDK inalcançável na Vercel → motor local imposto pelo servidor).
+- Push final fast-forward: remoto contém as duas linhas + merge + fix de schema (commit a7cfe4c).
+
+Stage Summary:
+- BION IA: cadeia gemini→env→público(opt-in LGPD)→sdk→local operacional e OBSERVÁVEL (diagnóstico admin com telemetria por tentativa).
+- Gemini ativo e saudável em produção; hoje limitado por cota free-tier (429) — ação do usuário: aguardar reset diário ou habilitar billing.
+- Repositório reconciliado com o trabalho de segurança da sessão paralela; histórico único em main (a7cfe4c).
