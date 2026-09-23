@@ -167,9 +167,29 @@ async function chamarGemini(mensagens: Msg[], prazo: number): Promise<string | n
     role: m.role === "user" ? ("user" as const) : ("model" as const),
     parts: [{ text: m.content }],
   }));
+
+  // O histórico do cliente pode trazer turnos CONSECUTIVOS do mesmo lado
+  // (ex.: duas falas da IA em sequência no fluxo de agendamento). O Gemini
+  // rejeita contents sem alternância user/model (HTTP 400) e exige que
+  // comecem em "user": mesclamos turnos vizinhos do mesmo papel e inserimos
+  // um turno inicial neutro quando o histórico abre com "model".
+  const conteudos: { role: "user" | "model"; parts: { text: string }[] }[] = [];
+  for (const turno of resto) {
+    const anterior = conteudos[conteudos.length - 1];
+    if (anterior && anterior.role === turno.role) {
+      anterior.parts.push({ text: `\n\n${turno.parts[0].text}` });
+    } else {
+      conteudos.push({ ...turno, parts: [...turno.parts] });
+    }
+  }
+  if (conteudos.length && conteudos[0].role === "model") {
+    conteudos.unshift({ role: "user", parts: [{ text: "(contexto da conversa abaixo)" }] });
+  }
+  if (!conteudos.length) return null;
+
   const corpo: GeminiCorpo = {
     ...(sys ? { systemInstruction: { parts: [{ text: sys }] } } : {}),
-    contents: resto,
+    contents: conteudos,
     generationConfig: {
       temperature: 0.7,
       maxOutputTokens: 2048,
@@ -186,7 +206,7 @@ async function chamarGemini(mensagens: Msg[], prazo: number): Promise<string | n
 
   const sem: GeminiCorpo = {
     ...(sys ? { systemInstruction: { parts: [{ text: sys }] } } : {}),
-    contents: resto,
+    contents: conteudos,
     generationConfig: { temperature: 0.7, maxOutputTokens: 8192 },
   };
   return geminiPost(model, apiKey, sem, prazo);
