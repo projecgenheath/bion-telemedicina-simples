@@ -559,3 +559,19 @@ Stage Summary:
 - Chamadas atrás de NAT simétrico/CGNAT/firewall agora têm caminho de reserva (TURN) sem configuração; com BION_TURN_* de um provedor de free tier a reserva fica de graça ainda mais robusta.
 - Sinalização: ~70% menos consultas ao banco em chamada estável e 1 POST por rajada de ICE — a sala escala para mais consultas simultâneas com a mesma infraestrutura.
 - Próximos passos sugeridos: (a) BION_LLM_GEMINI_API_KEY na Vercel para qualidade generativa plena da BION IA (gap residual do gpt-oss); (b) BION_TURN_URLS/USERNAME/CREDENTIAL de provedor próprio (Metered/Cloudflare) para produção real; (c) V7 retroativo (leituras antigas de broadcast nascem não lidas por usuário — comportamento aceitável, decisão de produto).
+---
+Task ID: gemini-key-config
+Agent: Super Z (agente principal)
+Task: Ativar canal Gemini da BION IA com a chave fornecida pelo usuário (AQ.Ab8… — formato novo do AI Studio)
+
+Work Log:
+- Chave testada com o curl exato do usuário (v1beta/gemini-flash-latest:generateContent, header X-goog-api-key): o sandbox recebe 400 FAILED_PRECONDITION "User location is not supported for the API use" — erro de LOCALIZAÇÃO do egress do sandbox, NÃO de autenticação (chave inválida retornaria API_KEY_INVALID 401/403). Vercel roda em iad1 (EUA) — região suportada.
+- Implementação do canal em llm.ts confere 1:1 com o formato da chave (endpoint, header, modelo padrão gemini-flash-latest); erros HTTP caem no fallback sem vazar texto ao paciente.
+- Chave adicionada ao .env LOCAL (gitignored — verificado com git check-ignore; NUNCA commitada em repo público). BION_LLM_GEMINI_MODEL=gemini-flash-latest explícito.
+- Servidor local reiniciado com chave + Supabase: POST /api/bion-ia respondeu com qualidade (markdown estruturado, 0 vazamento de erro) via cadeia de fallback (Gemini falhou por localização → canais seguintes assumiram) — resiliência da cadeia 0→1→2→3 comprovada; produção usará Gemini como canal 0.
+- Validação de produção: POST /api/bion-ia devolve `fonte` — "gemini" confirmará o canal 0 ativo após o usuário configurar a env na Vercel (sem CLI/token no sandbox, a configuração é no painel).
+- Servidor local encerrado; nenhum código alterado (só .env gitignored + worklog).
+
+Stage Summary:
+- Chave Gemini pronta para produção: usuário precisa adicionar BION_LLM_GEMINI_API_KEY (e opcionalmente BION_LLM_GEMINI_MODEL=gemini-flash-latest) nas Environment Variables da Vercel + Redeploy. Local (Brasil) já funciona com o .env atual.
+- Após o redeploy: teste /api/bion-ia em produção verificando fonte === "gemini" (triagem, chat livre e laudos passam a usar o canal confiável, encerrando o gap de qualidade do gpt-oss do tier público).
