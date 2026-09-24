@@ -691,3 +691,22 @@ Stage Summary:
 - Restante da auditoria (FASES 2-4) documentado; pendências sugeridas: deltas nas rotas pesadas (carregarDados → entidade única), BionProvider fora do RootLayout, realtime p/ mensagens.
 
 - MEDIDA FINAL (pós 1c2251f): produção primário=gemini-3.6-flash, reserva=[3.8-flash, gemma-26B-A4B, flash-lite]. Cenário da paciente: 28,5s → 16,4s (imposto Gemma de 15,5s eliminado; resposta limpa, intenção de renovação respeitada). 2ª mensagem bateu teto (29,4s → fonte=local, resposta local correta e rotulada na UI): free-tier do Gemini em 429/saturação no fim do dia — latência restante é cota da Google, mitigável só com billing ou reset diário.
+
+---
+Task ID: auditoria-fase2-front
+Agent: Super Z (principal)
+Task: "Auditoria front-end" — FASE 2: deltas nas rotas pesadas (carregarDados → entidade única) + BionProvider fora do RootLayout.
+
+Work Log:
+- CONTRATO DELTA a 16 endpoints que devolviam carregarDados (estado fresco completo) a cada mutação: POST /api/documentos, /api/arquivos, /api/avaliacoes (+ delta.medico com a média atualizada), /api/consentimentos, /api/tickets (+PATCH [id]), /api/exames (POST/DELETE → exameRemovido), PATCH /api/perfil (perfilPacienteCompleto), POST /api/medicos, PATCH/DELETE /api/medicos/[id], POST /api/pacientes, PATCH/DELETE /api/pacientes/[id], POST /api/admin/lgpd, PATCH /api/anamnese (documento/concluir). Comportamento preservado: médico ARQUIVADO continua na listagem (delta.medico status arquivado), paciente anonimizado substitui o registro em posição.
+- ANAMNESE: cada turno do POST deixou de embutir `dados` (bootstrap inteiro ~20KB por mensagem da triagem); agora devolve texto + delta.anamnese + (se correção de perfil) delta.perfilPacienteCompleto. ChatBion passou a aplicar via aplicarDelta (3 call sites; laudo pela IA /api/bion-ia/exame segue estado fresco — rota rara, compatível).
+- FONTE ÚNICA DE FORMA: mapeadores wire no servidor (dados.ts: consultaWire/documentoWire/arquivoWire/avaliacaoWire/ticketWire/consentimentoWire/medicoWire/pacienteWire/exameWire/anamneseWire/perfilPacienteWire) reusados por carregarDados e pelas rotas delta; no cliente, mapeadores extraídos (mapConsulta…mapAnamnese) e reusados por aplicar() e aplicarDelta() — eliminar o drift era o risco estrutural apontado pela auditoria.
+- DELTAWIRE estendido: documento/arquivo/avaliacao/medico/paciente/ticket/consentimento/exame/exameRemovido/perfilPacienteCompleto. PATCH /api/perfil sincroniza sessao.nome no cliente (filtros por papel usam sessao.nome — ficariam stale após troca de nome).
+- BIONPROVIDER FORA DO ROOTLAYOUT: route group src/app/(bion) criado; entrar/ e (app)/ movidos para dentro (URLs inalteradas — build confirmou todas as rotas). Landing (/) não monta mais o store (17 estados) nem paga GET /api/auth/sessao; /entrar + área autenticada compartilham o MESMO provider → login→app sem remontagem/sem bootstrap duplicado.
+- VALIDAÇÃO: tsc/eslint/build limpos; local (SQLite temporário, schema revertido p/ postgres antes do commit): scripts/validar_fase2_deltas.ts 11/11 (login, lembretes 706B, tickets 804B, perfil 606B, consentimentos 810B, consultas 2153B, anamnese abertura 858B SEM 'dados', documento 710B, bootstrap íntegro) + validar_fase2_anamnese.ts 3/3 (documento 353B, concluir 1323B + consulta legado, repetição idempotente). Antes: cada mutação devolvia o estado completo (dezenas de KB; admin com 300 auditLogs).
+- COMMIT 0073698 (49 arquivos, +950/−407); push b0f5255..0073698; sem segredos no diff (scan).
+
+Stage Summary:
+- Toda mutação do app agora trafega APENAS a entidade afetada (~0,6-2KB) — a triagem por conversa deixou de carregar o app inteiro por turno.
+- Landing sem store; provider compartilhado entre login e app sem custo extra pós-login.
+- Próximo (FASE 3/4 sugerido): realtime p/ mensagens (websocket/SSE), revisão dos itens médios restantes da auditoria.
