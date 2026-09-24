@@ -557,18 +557,18 @@ export function ChatBion({ aberto, onFechar, aoEnviarExame }: { aberto: boolean;
       />
 
       {/* Cabeçalho */}
-      <header className="px-5 py-4 bp-safe-top border-b border-[#0a1f44]/8 dark:border-white/10">
+      <header className="px-5 py-4 bp-safe-top border-b border-bion-ink/8 dark:border-white/10">
         <div className="flex items-center gap-3">
-          <div className="w-11 h-11 rounded-full bg-gradient-to-br from-[#123e7d] to-[#0a1f44] text-white inline-flex items-center justify-center shrink-0">
+          <div className="w-11 h-11 rounded-full bg-gradient-to-br from-bion-sea to-bion-ink text-white inline-flex items-center justify-center shrink-0">
             <Sparkles className="w-5 h-5" />
           </div>
           <div className="flex-1 min-w-0">
-            <div className="font-bold text-[#0a1f44] dark:text-[#f2f6fc]">BION IA</div>
+            <div className="font-bold text-bion-ink dark:text-bion-paper">BION IA</div>
             <div className="text-xs text-emerald-700 dark:text-emerald-300 font-medium">
               {pensando || enviandoLaudo || pagando ? "Digitando…" : anamneseAtiva ? "Triagem em andamento" : "Online · responde na hora"}
             </div>
           </div>
-          <button onClick={onFechar} aria-label="Fechar conversa" className="rounded-full p-2.5 bp-glass text-[#0a1f44] dark:text-[#f2f6fc]">
+          <button onClick={onFechar} aria-label="Fechar conversa" className="rounded-full p-2.5 bp-glass text-bion-ink dark:text-bion-paper">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -580,17 +580,17 @@ export function ChatBion({ aberto, onFechar, aoEnviarExame }: { aberto: boolean;
           const pct = Math.round(((idx + 1) / ETAPAS_ANAMNESE.length) * 100);
           return (
             <div className="mt-3">
-              <div className="flex items-center justify-between text-[11px] font-semibold text-[#0a1f44]/60 dark:text-white/55">
+              <div className="flex items-center justify-between text-[11px] font-semibold text-bion-ink/60 dark:text-white/55">
                 <span className="inline-flex items-center gap-1.5">
                   <Stethoscope className="w-3.5 h-3.5" />
                   Triagem — {atual.rotulo}
                 </span>
                 <span>{idx + 1}/{ETAPAS_ANAMNESE.length}</span>
               </div>
-              <div className="mt-1.5 h-1.5 rounded-full bg-[#0a1f44]/10 dark:bg-white/10 overflow-hidden">
-                <div className="h-full rounded-full bg-gradient-to-r from-[#123e7d] to-[#0a1f44] dark:from-sky-400 dark:to-sky-200 transition-all" style={{ width: `${pct}%` }} />
+              <div className="mt-1.5 h-1.5 rounded-full bg-bion-ink/10 dark:bg-white/10 overflow-hidden">
+                <div className="h-full rounded-full bg-gradient-to-r from-bion-sea to-bion-ink dark:from-sky-400 dark:to-sky-200 transition-all" style={{ width: `${pct}%` }} />
               </div>
-              <div className="mt-1.5 text-[10px] text-[#0a1f44]/45 dark:text-white/40">
+              <div className="mt-1.5 text-[10px] text-bion-ink/45 dark:text-white/40">
                 Disponível até 5 minutos antes da consulta ({anamneseAtiva.quando})
               </div>
             </div>
@@ -606,7 +606,7 @@ export function ChatBion({ aberto, onFechar, aoEnviarExame }: { aberto: boolean;
               className={`max-w-[85%] px-4 py-3 text-sm leading-relaxed whitespace-pre-line ${
                 m.remetente === "usuario"
                   ? "bp-acao rounded-3xl rounded-br-md"
-                  : `bp-glass rounded-3xl rounded-bl-md text-[#0a1f44] dark:text-[#f2f6fc] ${m.tipo === "erro" ? "border-2 border-amber-500/60" : ""} ${m.tipo?.startsWith("sucesso") ? "border-2 border-emerald-500/60" : ""} ${m.tipo === "anamnese" ? "border-l-4 border-l-[#123e7d] dark:border-l-sky-300" : ""}`
+                  : `bp-glass rounded-3xl rounded-bl-md text-bion-ink dark:text-bion-paper ${m.tipo === "erro" ? "border-2 border-amber-500/60" : ""} ${m.tipo?.startsWith("sucesso") ? "border-2 border-emerald-500/60" : ""} ${m.tipo === "anamnese" ? "border-l-4 border-l-bion-sea dark:border-l-sky-300" : ""}`
               }`}
             >
               {m.texto.split("**").map((parte, j) => (j % 2 === 1 ? <strong key={j}>{parte}</strong> : <span key={j}>{parte}</span>))}
@@ -630,7 +630,7 @@ export function ChatBion({ aberto, onFechar, aoEnviarExame }: { aberto: boolean;
             <div className="bp-glass px-4 py-3 rounded-3xl rounded-bl-md">
               <div className="flex gap-1.5">
                 {[0, 1, 2].map((d) => (
-                  <span key={d} className="w-2 h-2 rounded-full bg-[#0a1f44]/40 dark:bg-white/40 animate-bounce" style={{ animationDelay: `${d * 0.15}s` }} />
+                  <span key={d} className="w-2 h-2 rounded-full bg-bion-ink/40 dark:bg-white/40 animate-bounce" style={{ animationDelay: `${d * 0.15}s` }} />
                 ))}
               </div>
             </div>
@@ -641,7 +641,7 @@ export function ChatBion({ aberto, onFechar, aoEnviarExame }: { aberto: boolean;
         {etapa === "confirmar" && (() => {
           const medicoRegistro = medicosAtivos.find((m) => m.nome === escolha.medico);
           return (
-            <div className="bp-glass p-5 text-[#0a1f44] dark:text-[#f2f6fc]">
+            <div className="bp-glass p-5 text-bion-ink dark:text-bion-paper">
               <div className="font-bold mb-2">Resumo do agendamento</div>
               <ul className="text-sm space-y-1 mb-4">
                 <li><strong>Especialidade:</strong> {escolha.especialidade}</li>
@@ -663,8 +663,8 @@ export function ChatBion({ aberto, onFechar, aoEnviarExame }: { aberto: boolean;
                     aria-pressed={metodo === m2.id}
                     className={`rounded-2xl border px-4 py-3 text-sm font-semibold transition ${
                       metodo === m2.id
-                        ? "border-[#123e7d] bg-[#123e7d]/10 dark:border-sky-300 dark:bg-sky-300/10"
-                        : "border-[#0a1f44]/15 dark:border-white/15"
+                        ? "border-bion-sea bg-bion-sea/10 dark:border-sky-300 dark:bg-sky-300/10"
+                        : "border-bion-ink/15 dark:border-white/15"
                     }`}
                   >
                     {m2.nome}
@@ -686,7 +686,7 @@ export function ChatBion({ aberto, onFechar, aoEnviarExame }: { aberto: boolean;
                     setMetodo(null);
                     setMensagens((m) => [...m, { remetente: "ia", texto: "Sem problemas — o agendamento foi cancelado, nada foi cobrado. Posso ajudar em outra coisa?" }]);
                   }}
-                  className="rounded-full border border-[#0a1f44]/20 dark:border-white/20 px-5 py-3 text-sm font-semibold text-[#0a1f44] dark:text-[#f2f6fc]"
+                  className="rounded-full border border-bion-ink/20 dark:border-white/20 px-5 py-3 text-sm font-semibold text-bion-ink dark:text-bion-paper"
                 >
                   Cancelar
                 </button>
@@ -699,7 +699,7 @@ export function ChatBion({ aberto, onFechar, aoEnviarExame }: { aberto: boolean;
         {/* Etapa documentos da anamnese: caixa de upload */}
         {anamneseAtiva?.etapa === "documentos" && (
           <div className="bp-glass p-4">
-            <div className="flex items-center gap-2 text-sm font-bold text-[#0a1f44] dark:text-[#f2f6fc] mb-1">
+            <div className="flex items-center gap-2 text-sm font-bold text-bion-ink dark:text-bion-paper mb-1">
               <FileUp className="w-4 h-4" /> Exame ou documento para o médico?
             </div>
             <p className="text-xs opacity-60 mb-3">Anexe PDF ou foto — a IA confere seu nome no documento antes de processar.</p>
@@ -709,7 +709,7 @@ export function ChatBion({ aberto, onFechar, aoEnviarExame }: { aberto: boolean;
               </button>
               <button
                 onClick={() => void enviarAnamnese("Não tenho nenhum documento para enviar.")}
-                className="rounded-full border border-[#0a1f44]/20 dark:border-white/20 px-4 py-3 text-sm font-semibold text-[#0a1f44] dark:text-[#f2f6fc]"
+                className="rounded-full border border-bion-ink/20 dark:border-white/20 px-4 py-3 text-sm font-semibold text-bion-ink dark:text-bion-paper"
               >
                 Não tenho
               </button>
@@ -720,7 +720,7 @@ export function ChatBion({ aberto, onFechar, aoEnviarExame }: { aberto: boolean;
         {/* Etapa fechamento: revisão e conclusão */}
         {anamneseAtiva?.etapa === "fechamento" && !pensando && (
           <div className="bp-glass p-4">
-            <div className="flex items-center gap-2 text-sm font-bold text-[#0a1f44] dark:text-[#f2f6fc] mb-1">
+            <div className="flex items-center gap-2 text-sm font-bold text-bion-ink dark:text-bion-paper mb-1">
               <BadgeCheck className="w-4 h-4" /> Tudo pronto para o médico
             </div>
             <p className="text-xs opacity-60 mb-3">Ao concluir, o médico recebe sua triagem antes do atendimento.</p>
@@ -754,7 +754,7 @@ export function ChatBion({ aberto, onFechar, aoEnviarExame }: { aberto: boolean;
         {opcoes && (
           <div className="bp-glass p-4">
             <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-bold uppercase tracking-wide text-[#0a1f44]/60 dark:text-[#f2f6fc]/60">{opcoes.titulo}</span>
+              <span className="text-xs font-bold uppercase tracking-wide text-bion-ink/60 dark:text-bion-paper/60">{opcoes.titulo}</span>
               {etapa !== "especialidade" && (
                 <button
                   onClick={() => {
@@ -765,7 +765,7 @@ export function ChatBion({ aberto, onFechar, aoEnviarExame }: { aberto: boolean;
                       setEscolha((c) => (volta === "especialidade" ? {} : volta === "medico" ? { especialidade: c.especialidade } : volta === "dia" ? { especialidade: c.especialidade, medico: c.medico } : { ...c, hora: undefined }));
                     }
                   }}
-                  className="text-xs font-semibold text-[#123e7d] dark:text-sky-300 inline-flex items-center gap-1"
+                  className="text-xs font-semibold text-bion-sea dark:text-sky-300 inline-flex items-center gap-1"
                 >
                   <ArrowLeft className="w-3 h-3" /> voltar
                 </button>
@@ -776,7 +776,7 @@ export function ChatBion({ aberto, onFechar, aoEnviarExame }: { aberto: boolean;
                 <button
                   key={o.valor}
                   onClick={() => opcoes.escolher(o.valor)}
-                  className="text-left rounded-2xl bg-white/60 dark:bg-white/8 border border-[#0a1f44]/10 dark:border-white/10 px-4 py-3 text-sm font-semibold text-[#0a1f44] dark:text-[#f2f6fc] hover:border-[#123e7d]/40 transition"
+                  className="text-left rounded-2xl bg-white/60 dark:bg-white/8 border border-bion-ink/10 dark:border-white/10 px-4 py-3 text-sm font-semibold text-bion-ink dark:text-bion-paper hover:border-bion-sea/40 transition"
                 >
                   <div className="flex items-center justify-between gap-1">
                     <span className="truncate">{o.rotulo}</span>
@@ -796,7 +796,7 @@ export function ChatBion({ aberto, onFechar, aoEnviarExame }: { aberto: boolean;
               <button
                 key={chip}
                 onClick={() => void enviarAnamnese(chip)}
-                className="shrink-0 rounded-full bg-[#123e7d]/10 dark:bg-sky-400/10 border border-[#123e7d]/25 dark:border-sky-300/25 px-4 py-2 text-xs font-semibold text-[#123e7d] dark:text-sky-300"
+                className="shrink-0 rounded-full bg-bion-sea/10 dark:bg-sky-400/10 border border-bion-sea/25 dark:border-sky-300/25 px-4 py-2 text-xs font-semibold text-bion-sea dark:text-sky-300"
               >
                 {chip}
               </button>
@@ -807,10 +807,10 @@ export function ChatBion({ aberto, onFechar, aoEnviarExame }: { aberto: boolean;
         {/* Chips iniciais quando só existe a saudação */}
         {mensagens.length === 1 && etapa === null && !anamneseAtiva && (
           <div className="flex flex-wrap gap-2">
-            <button onClick={iniciarAgendamento} className="rounded-full bg-[#123e7d]/10 dark:bg-sky-400/10 border border-[#123e7d]/25 dark:border-sky-300/25 px-4 py-2.5 text-sm font-semibold text-[#123e7d] dark:text-sky-300">
+            <button onClick={iniciarAgendamento} className="rounded-full bg-bion-sea/10 dark:bg-sky-400/10 border border-bion-sea/25 dark:border-sky-300/25 px-4 py-2.5 text-sm font-semibold text-bion-sea dark:text-sky-300">
               Agendar consulta
             </button>
-            <button onClick={iniciarExame} className="rounded-full bg-[#123e7d]/10 dark:bg-sky-400/10 border border-[#123e7d]/25 dark:border-sky-300/25 px-4 py-2.5 text-sm font-semibold text-[#123e7d] dark:text-sky-300">
+            <button onClick={iniciarExame} className="rounded-full bg-bion-sea/10 dark:bg-sky-400/10 border border-bion-sea/25 dark:border-sky-300/25 px-4 py-2.5 text-sm font-semibold text-bion-sea dark:text-sky-300">
               Enviar laudo de exame
             </button>
           </div>
@@ -834,14 +834,14 @@ export function ChatBion({ aberto, onFechar, aoEnviarExame }: { aberto: boolean;
             placeholder={anamneseAtiva ? "Conte com suas palavras…" : "Pergunte à BION IA…"}
             aria-label={anamneseAtiva ? "Resposta para a anamnese" : "Mensagem para a BION IA"}
             disabled={pensando || enviandoLaudo || (etapa !== null && !anamneseAtiva)}
-            className="flex-1 bg-transparent outline-none text-sm text-[#0a1f44] dark:text-[#f2f6fc] placeholder:text-[#0a1f44]/40 dark:placeholder:text-white/40 disabled:opacity-50"
+            className="flex-1 bg-transparent outline-none text-sm text-bion-ink dark:text-bion-paper placeholder:text-bion-ink/40 dark:placeholder:text-white/40 disabled:opacity-50"
           />
           {!anamneseAtiva && (
             <button
               onClick={iniciarExame}
               disabled={enviandoLaudo || etapa !== null}
               aria-label="Anexar laudo de exame"
-              className="p-2.5 rounded-full text-[#0a1f44]/60 dark:text-white/60 hover:bg-[#0a1f44]/5 dark:hover:bg-white/10 disabled:opacity-40"
+              className="p-2.5 rounded-full text-bion-ink/60 dark:text-white/60 hover:bg-bion-ink/5 dark:hover:bg-white/10 disabled:opacity-40"
             >
               <FileUp className="w-5 h-5" />
             </button>

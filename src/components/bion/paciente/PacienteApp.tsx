@@ -200,9 +200,11 @@ export function PacienteApp() {
   };
 
   return (
-    <div className="bp-shell text-[#0a1f44] dark:text-[#f2f6fc]">
+    <div className="bp-shell text-bion-ink dark:text-bion-paper">
       <div
         ref={carrosselRef}
+        role="group"
+        tabIndex={0}
         onScroll={aoRolar}
         onPointerDown={aoBaixarPonteiro}
         onPointerMove={aoMoverPonteiro}
@@ -233,7 +235,7 @@ export function PacienteApp() {
           {/* --- Seção 1: início --- */}
           <section className="bp-secao-1 min-h-[100svh] flex flex-col px-5 bp-safe-top pb-8" aria-label="Página inicial">
             <header className="flex items-center justify-between pt-2">
-              <div className="text-xs font-semibold uppercase tracking-wider text-[#0a1f44]/45 dark:text-white/40">
+              <div className="text-xs font-semibold uppercase tracking-wider text-bion-ink/45 dark:text-white/40">
                 {hoje}
               </div>
               <button
@@ -245,7 +247,7 @@ export function PacienteApp() {
                    
                   <img src={pacientePerfil.foto} alt="Seu perfil" className="w-full h-full object-cover" />
                 ) : (
-                  <span className="w-full h-full inline-flex items-center justify-center text-sm font-black text-[#0a1f44] dark:text-[#f2f6fc]">
+                  <span className="w-full h-full inline-flex items-center justify-center text-sm font-black text-bion-ink dark:text-bion-paper">
                     {iniciais}
                   </span>
                 )}
@@ -256,7 +258,7 @@ export function PacienteApp() {
               <h1 className="text-3xl font-black leading-tight">
                 {saudacao}, {sessao.nome.split(" ")[0]}
               </h1>
-              <p className="text-sm text-[#0a1f44]/55 dark:text-white/50 mt-1">
+              <p className="text-sm text-bion-ink/55 dark:text-white/50 mt-1">
                 Como você está se sentindo hoje?
               </p>
             </div>
@@ -272,7 +274,7 @@ export function PacienteApp() {
                 aria-label={`Próxima consulta: ${proxima.especialidade} com ${proxima.medico}, ${proxima.data} às ${proxima.hora}${triagemPendente ? ". Toque para fazer a triagem com a BION IA" : salaAberta ? ". Tocar para entrar na sala de espera" : ""}`}
               >
                 <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs font-bold uppercase tracking-wider text-[#0a1f44]/50 dark:text-white/50">
+                  <span className="text-xs font-bold uppercase tracking-wider text-bion-ink/50 dark:text-white/50">
                     Próxima consulta
                   </span>
                   {triagemPendente ? (
@@ -282,7 +284,7 @@ export function PacienteApp() {
                   ) : salaAberta ? (
                     <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-600 text-white">Sala aberta</span>
                   ) : (
-                    <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-[#0a1f44]/8 dark:bg-white/10">Confirmada</span>
+                    <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-bion-ink/8 dark:bg-white/10">Confirmada</span>
                   )}
                 </div>
                 <div className="text-xl font-bold">{proxima.especialidade}</div>
@@ -290,7 +292,7 @@ export function PacienteApp() {
                 {triagemPendente ? (
                   <div className="mt-4 flex items-center justify-between gap-3">
                     <span className="text-xs font-semibold opacity-70">Faça a triagem com a BION IA até 5 minutos antes do horário</span>
-                    <span className="inline-flex items-center gap-1.5 text-xs font-bold text-[#123e7d] dark:text-sky-300 shrink-0">
+                    <span className="inline-flex items-center gap-1.5 text-xs font-bold text-bion-sea dark:text-sky-300 shrink-0">
                       <Sparkles className="w-4 h-4" /> Fazer triagem
                     </span>
                   </div>
@@ -311,7 +313,7 @@ export function PacienteApp() {
               </button>
             ) : (
               <button onClick={() => setChatAberto(true)} className="bp-glass p-5 text-left w-full transition hover:shadow-xl">
-                <div className="text-xs font-bold uppercase tracking-wider text-[#0a1f44]/50 dark:text-white/50 mb-3">
+                <div className="text-xs font-bold uppercase tracking-wider text-bion-ink/50 dark:text-white/50 mb-3">
                   Consultas
                 </div>
                 <div className="text-xl font-bold">Nenhuma consulta agendada</div>
@@ -324,7 +326,7 @@ export function PacienteApp() {
             {/* Card hero: BION IA — agendamento com anamnese */}
             <button
               onClick={() => setChatAberto(true)}
-              className="mt-4 w-full rounded-3xl p-5 text-left text-white relative overflow-hidden shadow-lg shadow-[#0a1f44]/25 transition hover:shadow-xl hover:-translate-y-0.5 bg-gradient-to-br from-[#14457f] via-[#123e7d] to-[#0a1f44]"
+              className="mt-4 w-full rounded-3xl p-5 text-left text-white relative overflow-hidden shadow-lg shadow-bion-ink/25 transition hover:shadow-xl hover:-translate-y-0.5 bg-gradient-to-br from-bion-deep via-bion-sea to-bion-ink"
               aria-label="Abrir a BION IA: agendar consulta, fazer anamnese ou perguntar"
             >
               <span aria-hidden className="absolute -right-8 -top-10 w-40 h-40 rounded-full bg-white/10 blur-2xl" />
@@ -344,7 +346,7 @@ export function PacienteApp() {
               <p className="relative text-sm text-white/85 mt-3 leading-relaxed">
                 Eu agendo sua consulta, cuido do pagamento e faço sua <strong className="font-bold text-white">triagem</strong> — uma conversa tranquila para o médico já te conhecer antes do atendimento.
               </p>
-              <span className="relative mt-4 inline-flex items-center gap-2 rounded-full bg-white text-[#0a1f44] text-sm font-bold pl-4 pr-5 py-3">
+              <span className="relative mt-4 inline-flex items-center gap-2 rounded-full bg-white text-bion-ink text-sm font-bold pl-4 pr-5 py-3">
                 <Stethoscope className="w-4 h-4" /> Agendar consulta agora
               </span>
             </button>
@@ -355,8 +357,8 @@ export function PacienteApp() {
               className="bp-glass mt-3 w-full flex items-center gap-3 px-5 py-4 text-left transition hover:shadow-xl"
               aria-label="Perguntar à BION IA"
             >
-              <Search className="w-5 h-5 text-[#0a1f44]/50 dark:text-white/50 shrink-0" />
-              <span className="flex-1 text-sm text-[#0a1f44]/50 dark:text-white/50">
+              <Search className="w-5 h-5 text-bion-ink/50 dark:text-white/50 shrink-0" />
+              <span className="flex-1 text-sm text-bion-ink/50 dark:text-white/50">
                 Pergunte algo à BION IA…
               </span>
               <span className="bp-acao w-10 h-10 inline-flex items-center justify-center shrink-0">
@@ -364,7 +366,7 @@ export function PacienteApp() {
               </span>
             </button>
 
-            <div className="mt-auto pt-10 flex flex-col items-center gap-1 text-[#0a1f44]/40 dark:text-white/35">
+            <div className="mt-auto pt-10 flex flex-col items-center gap-1 text-bion-ink/40 dark:text-white/35">
               <span className="text-[11px] font-semibold">Saúde e exames abaixo</span>
               <ChevronDown className="w-5 h-5 animate-bounce" />
             </div>
@@ -373,7 +375,7 @@ export function PacienteApp() {
           {/* --- Seção 2: saúde --- */}
           <section className="bp-secao-2 px-5 py-8" aria-label="Saúde: lembretes, IMC e pressão arterial">
             <h2 className="text-2xl font-black mb-1">Sua saúde</h2>
-            <p className="text-sm text-[#0a1f44]/60 dark:text-white/50 mb-5">
+            <p className="text-sm text-bion-ink/60 dark:text-white/50 mb-5">
               Toque em um card para ver o histórico e atualizar.
             </p>
 
@@ -388,7 +390,7 @@ export function PacienteApp() {
                   <span className="inline-flex items-center gap-2 text-sm font-bold">
                     <Pill className="w-4 h-4" /> Lembretes de medicação
                   </span>
-                  <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-[#0a1f44]/8 dark:bg-white/10">
+                  <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-bion-ink/8 dark:bg-white/10">
                     {lembretesPendentes.length ? `${lembretesPendentes.length} hoje` : "Em dia"}
                   </span>
                 </div>
@@ -430,7 +432,7 @@ export function PacienteApp() {
                   <GraficoLinha
                     ariaLabel="Evolução do IMC"
                     altura={110}
-                    series={[{ pontos: serieImc, cor: "#123e7d", area: true }]}
+                    series={[{ pontos: serieImc, cor: "var(--bion-sea)", area: true }]}
                     refMin={18.5}
                     refMax={24.9}
                   />
@@ -470,9 +472,9 @@ export function PacienteApp() {
                     ariaLabel="Evolução da pressão arterial"
                     altura={110}
                     series={[
-                      { pontos: pas.map((p) => ({ valor: p.valor1, rotulo: rotuloCurto(p.criadoEm) })), cor: "#123e7d", area: true },
+                      { pontos: pas.map((p) => ({ valor: p.valor1, rotulo: rotuloCurto(p.criadoEm) })), cor: "var(--bion-sea)", area: true },
                       ...(pas.some((p) => p.valor2 !== undefined)
-                        ? [{ pontos: pas.map((p) => ({ valor: p.valor2 ?? p.valor1, rotulo: rotuloCurto(p.criadoEm) })), cor: "#c2410c" }]
+                        ? [{ pontos: pas.map((p) => ({ valor: p.valor2 ?? p.valor1, rotulo: rotuloCurto(p.criadoEm) })), cor: "var(--bion-alerta)" }]
                         : []),
                     ]}
                     refMin={70}
@@ -549,7 +551,7 @@ export function PacienteApp() {
                           ariaLabel={`Histórico gráfico de ${titulo}`}
                           altura={104}
                           corEixo="rgba(255,255,255,0.4)"
-                          series={[{ pontos: serieItem, cor: "#9ac1f4", area: true }]}
+                          series={[{ pontos: serieItem, cor: "var(--bion-sky)", area: true }]}
                           refMin={itemDestaque?.refMin}
                           refMax={itemDestaque?.refMax}
                         />
@@ -602,14 +604,14 @@ export function PacienteApp() {
             onClick={() => irPara(idx)}
             aria-label={`Ir para ${rotulo}`}
             aria-current={painel === idx ? "page" : undefined}
-            className={`h-2 rounded-full transition-all ${painel === idx ? "w-6 bg-[#123e7d] dark:bg-sky-300" : "w-2 bg-[#0a1f44]/25 dark:bg-white/30"}`}
+            className={`h-2 rounded-full transition-all ${painel === idx ? "w-6 bg-bion-sea dark:bg-sky-300" : "w-2 bg-bion-ink/25 dark:bg-white/30"}`}
           />
         ))}
         {painel !== 1 && (
           <button
             onClick={() => irPara(1)}
             aria-label="Voltar ao início"
-            className="pl-1 text-[#0a1f44]/60 dark:text-white/60"
+            className="pl-1 text-bion-ink/60 dark:text-white/60"
           >
             <ChevronLeft className="w-4 h-4" />
           </button>
@@ -617,7 +619,7 @@ export function PacienteApp() {
         {painel !== 1 && (
           <span className="sr-only">Use as setas do teclado para navegar</span>
         )}
-        {painel === 1 && <ChevronRight className="w-4 h-4 text-[#0a1f44]/30 dark:text-white/30" />}
+        {painel === 1 && <ChevronRight className="w-4 h-4 text-bion-ink/30 dark:text-white/30" />}
       </div>
 
       {/* Overlays */}

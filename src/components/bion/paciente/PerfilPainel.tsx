@@ -43,9 +43,9 @@ const INICIAIS = (nome: string) =>
 function Linha({ icone, rotulo, valor }: { icone: React.ReactNode; rotulo: string; valor: React.ReactNode }) {
   return (
     <div className="flex items-center gap-3 py-2.5">
-      <span className="text-[#0a1f44]/45 dark:text-[#f2f6fc]/45">{icone}</span>
-      <span className="text-sm text-[#0a1f44]/60 dark:text-[#f2f6fc]/60 w-28 shrink-0">{rotulo}</span>
-      <span className="text-sm font-semibold text-[#0a1f44] dark:text-[#f2f6fc] text-right flex-1">{valor || "—"}</span>
+      <span className="text-bion-ink/45 dark:text-bion-paper/45">{icone}</span>
+      <span className="text-sm text-bion-ink/60 dark:text-bion-paper/60 w-28 shrink-0">{rotulo}</span>
+      <span className="text-sm font-semibold text-bion-ink dark:text-bion-paper text-right flex-1">{valor || "—"}</span>
     </div>
   );
 }
@@ -142,7 +142,7 @@ export function PerfilPainel({ onSair }: { onSair: () => void }) {
     toast.success("Perfil atualizado.");
   };
 
-  const chip = "bg-[#0a1f44]/8 dark:bg-white/10 text-[#0a1f44] dark:text-[#f2f6fc]";
+  const chip = "bg-bion-ink/8 dark:bg-white/10 text-bion-ink dark:text-bion-paper";
 
   return (
     <div className="px-5 py-6 space-y-4 bp-safe-top pb-24">
@@ -165,7 +165,7 @@ export function PerfilPainel({ onSair }: { onSair: () => void }) {
              
             <img src={pacientePerfil.foto} alt={`Foto de ${sessao.nome}`} className="w-24 h-24 rounded-full object-cover border-4 border-white/80 dark:border-white/20 shadow-lg" />
           ) : (
-            <div className="w-24 h-24 rounded-full bg-gradient-to-br from-[#123e7d] to-[#0a1f44] text-white inline-flex items-center justify-center text-2xl font-black border-4 border-white/80 dark:border-white/20 shadow-lg">
+            <div className="w-24 h-24 rounded-full bg-gradient-to-br from-bion-sea to-bion-ink text-white inline-flex items-center justify-center text-2xl font-black border-4 border-white/80 dark:border-white/20 shadow-lg">
               {INICIAIS(sessao.nome)}
             </div>
           )}
@@ -177,14 +177,14 @@ export function PerfilPainel({ onSair }: { onSair: () => void }) {
             <Pencil className="w-4 h-4" />
           </button>
         </div>
-        <h2 className="mt-3 text-lg font-bold text-[#0a1f44] dark:text-[#f2f6fc]">{sessao.nome}</h2>
-        <p className="text-sm text-[#0a1f44]/60 dark:text-[#f2f6fc]/60">{sessao.email}</p>
+        <h2 className="mt-3 text-lg font-bold text-bion-ink dark:text-bion-paper">{sessao.nome}</h2>
+        <p className="text-sm text-bion-ink/60 dark:text-bion-paper/60">{sessao.email}</p>
       </div>
 
       {/* Dados pessoais */}
       <div className="bp-glass p-5">
         <div className="flex items-center justify-between mb-2">
-          <h3 className="text-sm font-bold text-[#0a1f44] dark:text-[#f2f6fc]">Dados pessoais</h3>
+          <h3 className="text-sm font-bold text-bion-ink dark:text-bion-paper">Dados pessoais</h3>
           <button
             onClick={() => {
               if (editando) void salvar();
@@ -201,7 +201,7 @@ export function PerfilPainel({ onSair }: { onSair: () => void }) {
               }
             }}
             disabled={salvando}
-            className="text-xs font-bold text-[#123e7d] dark:text-sky-300 inline-flex items-center gap-1 disabled:opacity-50"
+            className="text-xs font-bold text-bion-sea dark:text-sky-300 inline-flex items-center gap-1 disabled:opacity-50"
           >
             {editando ? <X className="w-3.5 h-3.5" /> : <Pencil className="w-3.5 h-3.5" />}
             {editando ? "Salvar" : "Editar"}
@@ -225,34 +225,34 @@ export function PerfilPainel({ onSair }: { onSair: () => void }) {
             </button>
           </div>
         ) : (
-          <div className="divide-y divide-[#0a1f44]/5 dark:divide-white/5">
+          <div className="divide-y divide-bion-ink/5 dark:divide-white/5">
             <Linha icone={<CalendarDays className="w-4 h-4" />} rotulo="Idade" valor={pacientePerfil?.idade ? `${pacientePerfil.idade} anos` : ""} />
             <Linha icone={<CircleUserRound className="w-4 h-4" />} rotulo="Sexo" valor={pacientePerfil?.genero} />
             <Linha icone={<Phone className="w-4 h-4" />} rotulo="Telefone" valor={pacientePerfil?.telefone} />
             <Linha icone={<Briefcase className="w-4 h-4" />} rotulo="Profissão" valor={pacientePerfil?.profissao} />
             <Linha icone={<HeartCrack className="w-4 h-4" />} rotulo="Estado civil" valor={pacientePerfil?.estadoCivil} />
             <div className="flex items-center gap-3 py-2.5">
-              <span className="text-[#0a1f44]/45 dark:text-[#f2f6fc]/45"><Droplets className="w-4 h-4" /></span>
-              <span className="text-sm text-[#0a1f44]/60 dark:text-[#f2f6fc]/60 w-28 shrink-0">Tipo sanguíneo</span>
-              <span className="text-sm font-semibold text-[#0a1f44] dark:text-[#f2f6fc] text-right flex-1">{pacientePerfil?.tipoSanguineo || "—"}</span>
+              <span className="text-bion-ink/45 dark:text-bion-paper/45"><Droplets className="w-4 h-4" /></span>
+              <span className="text-sm text-bion-ink/60 dark:text-bion-paper/60 w-28 shrink-0">Tipo sanguíneo</span>
+              <span className="text-sm font-semibold text-bion-ink dark:text-bion-paper text-right flex-1">{pacientePerfil?.tipoSanguineo || "—"}</span>
             </div>
             <div className="flex items-center gap-3 py-2.5">
-              <span className="text-[#0a1f44]/45 dark:text-[#f2f6fc]/45"><Activity className="w-4 h-4" /></span>
-              <span className="text-sm text-[#0a1f44]/60 dark:text-[#f2f6fc]/60 w-28 shrink-0">Alergias</span>
+              <span className="text-bion-ink/45 dark:text-bion-paper/45"><Activity className="w-4 h-4" /></span>
+              <span className="text-sm text-bion-ink/60 dark:text-bion-paper/60 w-28 shrink-0">Alergias</span>
               <div className="flex-1 flex justify-end">
                 <Chips itens={pacientePerfil?.alergias ?? []} cor="bg-amber-500/15 text-amber-800 dark:text-amber-300" />
               </div>
             </div>
             <div className="flex items-center gap-3 py-2.5">
-              <span className="text-[#0a1f44]/45 dark:text-[#f2f6fc]/45"><HeartCrack className="w-4 h-4" /></span>
-              <span className="text-sm text-[#0a1f44]/60 dark:text-[#f2f6fc]/60 w-28 shrink-0">Comorbidades</span>
+              <span className="text-bion-ink/45 dark:text-bion-paper/45"><HeartCrack className="w-4 h-4" /></span>
+              <span className="text-sm text-bion-ink/60 dark:text-bion-paper/60 w-28 shrink-0">Comorbidades</span>
               <div className="flex-1 flex justify-end">
                 <Chips itens={pacientePerfil?.comorbidades ?? []} cor="bg-red-500/10 text-red-800 dark:text-red-300" />
               </div>
             </div>
             <div className="flex items-center gap-3 py-2.5">
-              <span className="text-[#0a1f44]/45 dark:text-[#f2f6fc]/45"><Pill className="w-4 h-4" /></span>
-              <span className="text-sm text-[#0a1f44]/60 dark:text-[#f2f6fc]/60 w-28 shrink-0">Medicamentos</span>
+              <span className="text-bion-ink/45 dark:text-bion-paper/45"><Pill className="w-4 h-4" /></span>
+              <span className="text-sm text-bion-ink/60 dark:text-bion-paper/60 w-28 shrink-0">Medicamentos</span>
               <div className="flex-1 flex justify-end">
                 <Chips itens={pacientePerfil?.medicamentos ?? []} cor={chip} />
               </div>
@@ -264,7 +264,7 @@ export function PerfilPainel({ onSair }: { onSair: () => void }) {
 
       {/* Histórico de consultas */}
       <div className="bp-glass p-5">
-        <h3 className="text-sm font-bold text-[#0a1f44] dark:text-[#f2f6fc] mb-3">Histórico de consultas</h3>
+        <h3 className="text-sm font-bold text-bion-ink dark:text-bion-paper mb-3">Histórico de consultas</h3>
         {consultasDoPaciente.length === 0 ? (
           <p className="text-sm opacity-60">Nenhuma consulta ainda — agende pela BION IA.</p>
         ) : (
@@ -272,10 +272,10 @@ export function PerfilPainel({ onSair }: { onSair: () => void }) {
             {consultasDoPaciente.map((c) => (
               <li key={c.id} className="rounded-2xl bg-white/50 dark:bg-white/5 px-4 py-3 flex items-center justify-between gap-2">
                 <div className="min-w-0">
-                  <div className="text-sm font-semibold text-[#0a1f44] dark:text-[#f2f6fc] truncate">{c.especialidade} · {c.medico}</div>
+                  <div className="text-sm font-semibold text-bion-ink dark:text-bion-paper truncate">{c.especialidade} · {c.medico}</div>
                   <div className="text-xs opacity-60">{c.data} às {c.hora} · {c.status === "concluida" ? "Realizada" : c.status === "cancelada" ? "Cancelada" : c.status === "em_espera" ? "Aguardando" : c.status === "pendente_anamnese" ? "Pendente anamnese" : "Confirmada"}</div>
                 </div>
-                <span className="text-xs font-bold shrink-0 text-[#0a1f44] dark:text-[#f2f6fc]">{c.valor}</span>
+                <span className="text-xs font-bold shrink-0 text-bion-ink dark:text-bion-paper">{c.valor}</span>
               </li>
             ))}
           </ul>
@@ -284,7 +284,7 @@ export function PerfilPainel({ onSair }: { onSair: () => void }) {
 
       {/* Uploads na BION IA */}
       <div className="bp-glass p-5">
-        <h3 className="text-sm font-bold text-[#0a1f44] dark:text-[#f2f6fc] mb-1 flex items-center gap-2">
+        <h3 className="text-sm font-bold text-bion-ink dark:text-bion-paper mb-1 flex items-center gap-2">
           <FileUp className="w-4 h-4" /> Uploads na BION IA
         </h3>
         <p className="text-xs opacity-60 mb-3">{uploads.length} laudo(s) enviado(s) · {exames.length} grupo(s) de resultados ativos</p>
@@ -293,7 +293,7 @@ export function PerfilPainel({ onSair }: { onSair: () => void }) {
         ) : (
           <ul className="space-y-2">
             {uploads.map((a) => (
-              <li key={a.id} className="text-sm flex items-center justify-between gap-2 text-[#0a1f44] dark:text-[#f2f6fc]">
+              <li key={a.id} className="text-sm flex items-center justify-between gap-2 text-bion-ink dark:text-bion-paper">
                 <span className="truncate">{a.nome}</span>
                 <span className="text-xs opacity-60 shrink-0">{a.data} · {a.tamanhoKb} KB</span>
               </li>
@@ -304,7 +304,7 @@ export function PerfilPainel({ onSair }: { onSair: () => void }) {
 
       {/* Pagamentos */}
       <div className="bp-glass p-5">
-        <h3 className="text-sm font-bold text-[#0a1f44] dark:text-[#f2f6fc] mb-3 flex items-center gap-2">
+        <h3 className="text-sm font-bold text-bion-ink dark:text-bion-paper mb-3 flex items-center gap-2">
           <CreditCard className="w-4 h-4" /> Pagamentos de consultas
         </h3>
         {pagamentos.length === 0 ? (
@@ -313,7 +313,7 @@ export function PerfilPainel({ onSair }: { onSair: () => void }) {
           <ul className="space-y-2 max-h-56 overflow-y-auto bp-coluna">
             {pagamentos.map((c) => (
               <li key={c.id} className="text-sm flex items-center justify-between gap-2">
-                <span className="truncate text-[#0a1f44] dark:text-[#f2f6fc]">{c.especialidade} · {c.data}</span>
+                <span className="truncate text-bion-ink dark:text-bion-paper">{c.especialidade} · {c.data}</span>
                 <span className={`shrink-0 text-xs font-bold px-2.5 py-1 rounded-full ${c.pago ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" : "bg-amber-500/15 text-amber-700 dark:text-amber-300"}`}>
                   {c.pago ? "Pago" : "Pendente"} {c.valor ? `· ${c.valor}` : ""}
                 </span>
@@ -325,32 +325,32 @@ export function PerfilPainel({ onSair }: { onSair: () => void }) {
 
       {/* Preferências e acessos */}
       <div className="bp-glass p-5 space-y-1">
-        <h3 className="text-sm font-bold text-[#0a1f44] dark:text-[#f2f6fc] mb-2">Modo do app</h3>
-        <div className="grid grid-cols-2 gap-2 rounded-full bg-[#0a1f44]/5 dark:bg-white/5 p-1.5">
+        <h3 className="text-sm font-bold text-bion-ink dark:text-bion-paper mb-2">Modo do app</h3>
+        <div className="grid grid-cols-2 gap-2 rounded-full bg-bion-ink/5 dark:bg-white/5 p-1.5">
           <button
             onClick={() => alternarTema("claro")}
             aria-pressed={tema === "claro"}
-            className={`rounded-full py-2.5 text-sm font-semibold inline-flex items-center justify-center gap-2 transition ${tema === "claro" ? "bp-acao" : "text-[#0a1f44]/60 dark:text-white/60"}`}
+            className={`rounded-full py-2.5 text-sm font-semibold inline-flex items-center justify-center gap-2 transition ${tema === "claro" ? "bp-acao" : "text-bion-ink/60 dark:text-white/60"}`}
           >
             <Sun className="w-4 h-4" /> Clean
           </button>
           <button
             onClick={() => alternarTema("escuro")}
             aria-pressed={tema === "escuro"}
-            className={`rounded-full py-2.5 text-sm font-semibold inline-flex items-center justify-center gap-2 transition ${tema === "escuro" ? "bp-acao" : "text-[#0a1f44]/60 dark:text-white/60"}`}
+            className={`rounded-full py-2.5 text-sm font-semibold inline-flex items-center justify-center gap-2 transition ${tema === "escuro" ? "bp-acao" : "text-bion-ink/60 dark:text-white/60"}`}
           >
             <Moon className="w-4 h-4" /> Dark
           </button>
         </div>
 
         <button onClick={() => router.push("/suporte")} className="w-full flex items-center justify-between py-3 px-1 group" role="link">
-          <span className="text-sm font-semibold text-[#0a1f44] dark:text-[#f2f6fc] inline-flex items-center gap-2.5">
+          <span className="text-sm font-semibold text-bion-ink dark:text-bion-paper inline-flex items-center gap-2.5">
             <LifeBuoy className="w-4 h-4 opacity-60" /> Suporte
           </span>
           <ChevronRight className="w-4 h-4 opacity-40 group-hover:translate-x-0.5 transition" />
         </button>
         <button onClick={() => router.push("/privacidade")} className="w-full flex items-center justify-between py-3 px-1 group" role="link">
-          <span className="text-sm font-semibold text-[#0a1f44] dark:text-[#f2f6fc] inline-flex items-center gap-2.5">
+          <span className="text-sm font-semibold text-bion-ink dark:text-bion-paper inline-flex items-center gap-2.5">
             <ShieldCheck className="w-4 h-4 opacity-60" /> Termos e privacidade
           </span>
           <ChevronRight className="w-4 h-4 opacity-40 group-hover:translate-x-0.5 transition" />

@@ -77,13 +77,13 @@ function Envolver({
         <div className="mx-auto w-full max-w-xl px-5 bp-safe-top pb-16">
           <div className="flex items-start justify-between gap-4 pt-2">
             <div>
-              <h2 className="text-xl font-bold text-[#0a1f44] dark:text-[#f2f6fc]">{titulo}</h2>
-              <p className="text-sm text-[#0a1f44]/60 dark:text-[#f2f6fc]/60">{descricao}</p>
+              <h2 className="text-xl font-bold text-bion-ink dark:text-bion-paper">{titulo}</h2>
+              <p className="text-sm text-bion-ink/60 dark:text-bion-paper/60">{descricao}</p>
             </div>
             <button
               onClick={onFechar}
               aria-label="Fechar detalhe"
-              className="mt-1 rounded-full p-2.5 bp-glass text-[#0a1f44] dark:text-[#f2f6fc] shrink-0"
+              className="mt-1 rounded-full p-2.5 bp-glass text-bion-ink dark:text-bion-paper shrink-0"
             >
               <X className="w-5 h-5" />
             </button>
@@ -113,7 +113,7 @@ function FormMedicao({
       <div className="grid grid-cols-2 gap-3">
         {campos.map((c) => (
           <label key={c.id} className="block">
-            <span className="text-xs font-semibold text-[#0a1f44]/70 dark:text-[#f2f6fc]/70">{c.rotulo}</span>
+            <span className="text-xs font-semibold text-bion-ink/70 dark:text-bion-paper/70">{c.rotulo}</span>
             <input
               id={c.id}
               type="number"
@@ -192,14 +192,14 @@ function DetalheImc({ onFechar }: { onFechar: () => void }) {
       <div className="bp-glass p-5 text-center">
         {imcAtual ? (
           <>
-            <div className="text-4xl font-black text-[#0a1f44] dark:text-[#f2f6fc]">{imcAtual.toFixed(1)}</div>
+            <div className="text-4xl font-black text-bion-ink dark:text-bion-paper">{imcAtual.toFixed(1)}</div>
             <div className={`text-sm font-semibold mt-1 ${classe?.cor}`}>{classe?.rotulo}</div>
-            <div className="text-xs text-[#0a1f44]/60 dark:text-[#f2f6fc]/60 mt-1">
+            <div className="text-xs text-bion-ink/60 dark:text-bion-paper/60 mt-1">
               {pesoAtual} kg · {alturaAtual} cm
             </div>
           </>
         ) : (
-          <p className="text-sm text-[#0a1f44]/60 dark:text-[#f2f6fc]/60">
+          <p className="text-sm text-bion-ink/60 dark:text-bion-paper/60">
             Registre peso e altura para calcular seu IMC.
           </p>
         )}
@@ -207,12 +207,12 @@ function DetalheImc({ onFechar }: { onFechar: () => void }) {
 
       {serieImc.length > 1 && (
         <div className="bp-glass p-4">
-          <div className="flex items-center gap-2 text-sm font-semibold text-[#0a1f44] dark:text-[#f2f6fc] mb-2">
+          <div className="flex items-center gap-2 text-sm font-semibold text-bion-ink dark:text-bion-paper mb-2">
             <TrendingUp className="w-4 h-4" /> Evolução do IMC
           </div>
           <GraficoLinha
             ariaLabel="Gráfico da evolução do IMC"
-            series={[{ pontos: serieImc, cor: "#123e7d", area: true }]}
+            series={[{ pontos: serieImc, cor: "var(--bion-sea)", area: true }]}
             refMin={18.5}
             refMax={24.9}
           />
@@ -237,13 +237,13 @@ function DetalheImc({ onFechar }: { onFechar: () => void }) {
 
       {pesos.length > 0 && (
         <div className="bp-glass p-5">
-          <h3 className="text-sm font-bold text-[#0a1f44] dark:text-[#f2f6fc] mb-3">Histórico</h3>
+          <h3 className="text-sm font-bold text-bion-ink dark:text-bion-paper mb-3">Histórico</h3>
           <ul className="space-y-2 max-h-64 overflow-y-auto bp-coluna">
             {[...pesos].reverse().map((p) => {
               const altura = alturas.filter((a) => a.criadoEm <= p.criadoEm).at(-1)?.valor1;
               const imc = altura ? p.valor1 / Math.pow(altura / 100, 2) : null;
               return (
-                <li key={p.id} className="flex items-center justify-between text-sm text-[#0a1f44] dark:text-[#f2f6fc]">
+                <li key={p.id} className="flex items-center justify-between text-sm text-bion-ink dark:text-bion-paper">
                   <span className="flex items-center gap-2">
                     <Scale className="w-4 h-4 opacity-60" /> {rotuloCurto(p.criadoEm)}
                   </span>
@@ -277,34 +277,34 @@ function DetalhePa({ onFechar }: { onFechar: () => void }) {
       <div className="bp-glass p-5 text-center">
         {atual ? (
           <>
-            <div className="text-4xl font-black text-[#0a1f44] dark:text-[#f2f6fc]">
+            <div className="text-4xl font-black text-bion-ink dark:text-bion-paper">
               {atual.valor1}
               <span className="text-2xl opacity-60">/</span>
               {atual.valor2 ?? "—"}
             </div>
-            <div className="text-sm font-semibold mt-1 text-[#0a1f44]/70 dark:text-[#f2f6fc]/70">
+            <div className="text-sm font-semibold mt-1 text-bion-ink/70 dark:text-bion-paper/70">
               {classe?.rotulo} · mmHg
             </div>
           </>
         ) : (
-          <p className="text-sm text-[#0a1f44]/60 dark:text-[#f2f6fc]/60">Registre sua primeira medição.</p>
+          <p className="text-sm text-bion-ink/60 dark:text-bion-paper/60">Registre sua primeira medição.</p>
         )}
       </div>
 
       {pas.length > 1 && (
         <div className="bp-glass p-4">
-          <div className="flex items-center gap-2 text-sm font-semibold text-[#0a1f44] dark:text-[#f2f6fc] mb-2">
+          <div className="flex items-center gap-2 text-sm font-semibold text-bion-ink dark:text-bion-paper mb-2">
             <HeartPulse className="w-4 h-4" /> Evolução da pressão
           </div>
           <GraficoLinha
             ariaLabel="Gráfico da evolução da pressão arterial"
             series={[
-              { pontos: pas.map((p) => ({ valor: p.valor1, rotulo: rotuloCurto(p.criadoEm) })), cor: "#123e7d", area: true },
+              { pontos: pas.map((p) => ({ valor: p.valor1, rotulo: rotuloCurto(p.criadoEm) })), cor: "var(--bion-sea)", area: true },
               ...(pas.some((p) => p.valor2 !== undefined)
                 ? [
                     {
                       pontos: pas.map((p) => ({ valor: p.valor2 ?? p.valor1, rotulo: rotuloCurto(p.criadoEm) })),
-                      cor: "#c2410c",
+                      cor: "var(--bion-alerta)",
                     },
                   ]
                 : []),
@@ -312,9 +312,9 @@ function DetalhePa({ onFechar }: { onFechar: () => void }) {
             refMin={70}
             refMax={120}
           />
-          <div className="flex gap-4 justify-center text-xs text-[#0a1f44]/60 dark:text-[#f2f6fc]/60 mt-2">
-            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-[#123e7d] inline-block" /> Sistólica</span>
-            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-[#c2410c] inline-block" /> Diastólica</span>
+          <div className="flex gap-4 justify-center text-xs text-bion-ink/60 dark:text-bion-paper/60 mt-2">
+            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-bion-sea inline-block" /> Sistólica</span>
+            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-bion-alerta inline-block" /> Diastólica</span>
           </div>
         </div>
       )}
@@ -336,10 +336,10 @@ function DetalhePa({ onFechar }: { onFechar: () => void }) {
 
       {pas.length > 0 && (
         <div className="bp-glass p-5">
-          <h3 className="text-sm font-bold text-[#0a1f44] dark:text-[#f2f6fc] mb-3">Histórico</h3>
+          <h3 className="text-sm font-bold text-bion-ink dark:text-bion-paper mb-3">Histórico</h3>
           <ul className="space-y-2 max-h-64 overflow-y-auto bp-coluna">
             {[...pas].reverse().map((p) => (
-              <li key={p.id} className="flex items-center justify-between text-sm text-[#0a1f44] dark:text-[#f2f6fc]">
+              <li key={p.id} className="flex items-center justify-between text-sm text-bion-ink dark:text-bion-paper">
                 <span className="flex items-center gap-2">
                   <Activity className="w-4 h-4 opacity-60" /> {rotuloCurto(p.criadoEm)}
                 </span>
@@ -367,7 +367,7 @@ function DetalheLembretes({ onFechar }: { onFechar: () => void }) {
   return (
     <Envolver titulo="Lembretes de medicação" descricao={`Agenda de hoje e rotina completa · ${hoje}`} onFechar={onFechar}>
       <div className="bp-glass p-5 space-y-3">
-        <h3 className="text-sm font-bold text-[#0a1f44] dark:text-[#f2f6fc] flex items-center gap-2">
+        <h3 className="text-sm font-bold text-bion-ink dark:text-bion-paper flex items-center gap-2">
           <Pill className="w-4 h-4" /> Adicionar lembrete
         </h3>
         <input
@@ -418,9 +418,9 @@ function DetalheLembretes({ onFechar }: { onFechar: () => void }) {
       </div>
 
       <div className="bp-glass p-5">
-        <h3 className="text-sm font-bold text-[#0a1f44] dark:text-[#f2f6fc] mb-3">Rotina</h3>
+        <h3 className="text-sm font-bold text-bion-ink dark:text-bion-paper mb-3">Rotina</h3>
         {lembretes.length === 0 ? (
-          <p className="text-sm text-[#0a1f44]/60 dark:text-[#f2f6fc]/60">
+          <p className="text-sm text-bion-ink/60 dark:text-bion-paper/60">
             Nenhum lembrete ainda. Crie o primeiro acima.
           </p>
         ) : (
@@ -439,23 +439,23 @@ function DetalheLembretes({ onFechar }: { onFechar: () => void }) {
                     className={`w-7 h-7 rounded-full border-2 shrink-0 inline-flex items-center justify-center transition ${
                       l.feito
                         ? "bg-emerald-600 border-emerald-600 text-white"
-                        : "border-[#0a1f44]/30 dark:border-[#f2f6fc]/30 text-transparent"
+                        : "border-bion-ink/30 dark:border-bion-paper/30 text-transparent"
                     }`}
                   >
                     <Check className="w-4 h-4" />
                   </button>
                   <div className="flex-1 min-w-0">
-                    <div className={`text-sm font-semibold truncate ${l.feito ? "line-through opacity-50" : ""} text-[#0a1f44] dark:text-[#f2f6fc]`}>
+                    <div className={`text-sm font-semibold truncate ${l.feito ? "line-through opacity-50" : ""} text-bion-ink dark:text-bion-paper`}>
                       {l.titulo}
                     </div>
-                    <div className="text-xs text-[#0a1f44]/60 dark:text-[#f2f6fc]/60 flex items-center gap-1">
+                    <div className="text-xs text-bion-ink/60 dark:text-bion-paper/60 flex items-center gap-1">
                       <CalendarClock className="w-3 h-3" /> {l.horario} · {l.frequencia}
                     </div>
                   </div>
                   <button
                     onClick={() => removerLembrete(l.id)}
                     aria-label={`Remover ${l.titulo}`}
-                    className="p-2 rounded-full text-[#0a1f44]/50 dark:text-[#f2f6fc]/50 hover:text-red-600 dark:hover:text-red-400"
+                    className="p-2 rounded-full text-bion-ink/50 dark:text-bion-paper/50 hover:text-red-600 dark:hover:text-red-400"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>

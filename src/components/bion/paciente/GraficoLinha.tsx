@@ -84,13 +84,15 @@ export function GraficoLinha({ series, refMin, refMax, altura = 132, corEixo = "
           {s.area && s.pontos.length > 1 && (
             <path
               d={`${caminho(s.pontos)} L ${x(s.pontos.length - 1)} ${H - padBottom} L ${x(0)} ${H - padBottom} Z`}
-              fill={s.cor}
+              /* FASE 3: cor via style (aceita var(--bion-*)); atributos de
+                 apresentação SVG não resolvem custom properties. */
+              style={{ fill: s.cor }}
               opacity={0.12}
             />
           )}
-          <path d={caminho(s.pontos)} fill="none" stroke={s.cor} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+          <path d={caminho(s.pontos)} fill="none" style={{ stroke: s.cor }} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
           {s.pontos.map((p, i) => (
-            <circle key={i} cx={x(i)} cy={y(p.valor)} r="3" fill={s.cor} stroke="rgba(255,255,255,0.85)" strokeWidth="1" />
+            <circle key={i} cx={x(i)} cy={y(p.valor)} r="3" style={{ fill: s.cor }} stroke="rgba(255,255,255,0.85)" strokeWidth="1" />
           ))}
         </g>
       ))}

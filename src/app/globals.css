@@ -31,11 +31,31 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  /* FASE 3 (auditoria): identidade de marca do app do paciente — antes
+     espalhada como hex hardcoded em 6 arquivos (244 achados). Utilitários
+     gerados: text-bion-ink, bg-bion-paper, border-bion-sea, etc. (com
+     modificadores de opacidade: color-mix em runtime). */
+  --color-bion-ink: var(--bion-ink);       /* azul-marinho institucional */
+  --color-bion-paper: var(--bion-paper);   /* papel claro (texto no dark) */
+  --color-bion-sea: var(--bion-sea);       /* azul-mar gradiente */
+  --color-bion-deep: var(--bion-deep);     /* azul profundo (gradiente) */
+  --color-bion-sky: var(--bion-sky);       /* azul claro (gráficos área) */
+  --color-bion-night: var(--bion-night);   /* fundo escuro de painéis */
+  --color-bion-alerta: var(--bion-alerta); /* alerta (diastólica) */
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
 }
 
 :root {
   --radius: 0.875rem;
+  /* FASE 3: tokens de marca — valores canônicos (JS de gráficos consome via
+     var(--bion-*); classes Tailwind via utilitários bion-*). Sempre emitidos. */
+  --bion-ink: #0a1f44;
+  --bion-paper: #f2f6fc;
+  --bion-sea: #123e7d;
+  --bion-deep: #14457f;
+  --bion-sky: #9ac1f4;
+  --bion-night: #0b1424;
+  --bion-alerta: #c2410c;
   --background: oklch(0.99 0.005 240);
   --foreground: oklch(0.2 0.04 250);
   --card: oklch(1 0 0);

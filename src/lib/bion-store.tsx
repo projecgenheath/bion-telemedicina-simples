@@ -604,10 +604,44 @@ export function BionProvider({ children }: { children: ReactNode }) {
     }
   }, [mesclarMensagens]);
 
-  /** Polling de novas mensagens (~4s) enquanto autenticado */
+  /** FASE 3 (auditoria front) — tempo real via SSE. Enquanto o stream está
+   *  aberto, o polling de segurança abaixo NÃO dispara (tráfego ocioso cai de
+   *  ~15 req/min p/ ~1 reconexão/min). EventSource same-origin envia o cookie
+   *  de sessão; 401/queda → readyState sai de OPEN e o polling assume sozinho.
+   *  `open`/reconexão dispara uma varredura incremental imediata para fechar a
+   *  janela perdida durante a desconexão. */
+  const streamRef = useRef<EventSource | null>(null);
+
+  useEffect(() => {
+    if (!autenticado || typeof EventSource === "undefined") return;
+    const es = new EventSource("/api/mensagens/stream");
+    streamRef.current = es;
+    const aoMensagens = (ev: MessageEvent<string>) => {
+      try {
+        const dados = JSON.parse(ev.data) as {
+          mensagens?: Parameters<typeof mesclarMensagens>[0];
+        } | null;
+        if (dados?.mensagens?.length) mesclarMensagens(dados.mensagens);
+      } catch {
+        // payload inválido: ignora — polling de segurança cobre
+      }
+    };
+    es.addEventListener("mensagens", aoMensagens as EventListener);
+    const aoAbrir = () => void buscarMensagens();
+    es.addEventListener("open", aoAbrir);
+    return () => {
+      es.close();
+      streamRef.current = null;
+    };
+  }, [autenticado, mesclarMensagens, buscarMensagens]);
+
+  /** Rede de segurança do stream: só consulta quando o SSE NÃO está aberto
+   *  (navegador sem EventSource, 401 pós-revogação, rede instável). */
   useEffect(() => {
     if (!autenticado) return;
-    const id = setInterval(() => void buscarMensagens(), 4000);
+    const id = setInterval(() => {
+      if (streamRef.current?.readyState !== 1) void buscarMensagens();
+    }, 4000);
     return () => clearInterval(id);
   }, [autenticado, buscarMensagens]);
 
