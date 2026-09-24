@@ -54,7 +54,21 @@ export async function respostaLocal(
     return `O que você descreveu pode ser sinal de urgência, ${primeiro}. **Não espere** — ligue para o **SAMU 192** ou vá ao pronto-socorro mais próximo agora mesmo.\n\nDepois que estiver seguro, eu te ajudo com o que precisar por aqui.`;
   }
 
-  if (/^(oi|ola|olá|opa|bom dia|boa tarde|boa noite|hey|eai|e aí)/.test(t)) {
+  // RENOVAÇÃO DE RECEITA: intenção comum que antes caía em ramos errados
+  // ("oi" no início ativava o menu de saudação; "sem sintomas" ativava o
+  // ramo de sintomas) — a resposta ignorava o pedido (bug real 2026-09).
+  // Política clínica: prescrição sem avaliação não é permitida; o caminho
+  // seguro é a teleconsulta de reavaliação.
+  if (
+    /(renov\w*\s*(receita|prescri|remedio|medica)|receita\s*(medica|vencid|antig)|renovacao)/.test(t)
+  ) {
+    return `Para **renovar uma receita**, ${primeiro}, é necessária uma avaliação médica — nem que seja rápida: por segurança, nenhuma prescrição é emitida sem consulta.\n\nO caminho mais simples é uma **teleconsulta de reavaliação**: o médico revisa seu histórico e, se for o caso, emite a receita atualizada na hora.\n\nToque em **“Agendar consulta”** aqui embaixo que eu te guio no resto — e, se o remédio é de uso contínuo, mencione isso na anamnese.`;
+  }
+
+  // Saudação APENAS quando a mensagem é só a saudação — antes, qualquer
+  // mensagem começando com "oi" (ex.: "Oi! Quero renovar receita...") caía
+  // no menu genérico e ignorava o pedido.
+  if (/^(oi|ola|opa|hey|eai|e ai|bom dia|boa tarde|boa noite)[\s!.,:;?-]*(tudo bem|tudo bom|beleza)?[\s!.,:;?-]*$/.test(t)) {
     return `Olá, ${primeiro}! Sou a **BION IA**. Posso:\n• **Agendar sua consulta** (pagamento + anamnese guiada por mim)\n• **Ler seus laudos** em PDF ou foto\n• Tirar dúvidas sobre a plataforma e sua agenda\n\nO que você precisa hoje?`;
   }
 

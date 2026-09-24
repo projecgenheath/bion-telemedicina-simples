@@ -173,6 +173,7 @@ export function BionIA() {
 
     let resposta = "";
     let offline = false;
+    let fonte = "";
     try {
       const res = await fetch("/api/bion-ia", {
         method: "POST",
@@ -181,18 +182,21 @@ export function BionIA() {
           mensagens: historico.map((m) => ({ remetente: m.remetente, texto: m.texto })),
         }),
       });
-      const json = (await res.json().catch(() => null)) as { resposta?: string } | null;
+      const json = (await res.json().catch(() => null)) as { resposta?: string; fonte?: string } | null;
       resposta = json?.resposta ?? "";
+      fonte = json?.fonte ?? "";
       if (!res.ok || !resposta) offline = true;
     } catch {
       offline = true;
     }
     if (offline) resposta = respostaLocal(txt);
 
+    const modoLocal = offline || fonte === "local";
+
     const novaMsgIA: MensagemIA = {
       id: `ia-${Date.now()}`,
       remetente: "ia",
-      texto: offline
+      texto: modoLocal
         ? `${resposta}\n\n_(resposta do modo local — a IA em nuvem está temporariamente indisponível)_`
         : resposta,
       hora: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),

@@ -65,6 +65,20 @@ let _sdk: { cliente: ClienteSdk | null; verificado: boolean } = { cliente: null,
 let _publicoFalhaEm = 0;
 let _geminiFalhaEm = 0;
 
+/**
+ * DISJUNTOR DE ECO (família Gemma): o despejo de raciocínio é um comportamento
+ * PERSISTENTE do modelo hospedado (medido em produção em dias seguidos), não
+ * um erro transitório — cada tentativa custa ~9s de geração que a quarantena
+ * descarta, e o paciente esperaria esse tempo extra em TODA mensagem. Depois
+ * de um despejo confirmado, os modelos Gemma saem da cadeia por um ciclo;
+ * a primeira tentativa seguinte reavalia e, se a Google tiver corrigido, o
+ * Gemma volta a servir sozinho (sem mudança de código).
+ */
+const GEMMA_ECO_LIMITE = 1;
+const GEMMA_ECO_COOLDOWN_MS = 30 * 60_000;
+let _gemmaEcoSeguidos = 0;
+let _gemmaPuladoAte = 0;
+
 // P2 (2026-09): o canal público (sem chave, serviços de terceiros) passa a
 // nascer DESLIGADO por padrão — só ativa com BION_LLM_PUBLICO="1" explícito.
 // Quando ativo, o chat do paciente exibe a nota de consentimento (anonymização
@@ -88,7 +102,7 @@ function geminiConfig() {
  * 503/429 falham em ~250ms, então o custo é mínimo; o primeiro que responder
  * vence. Override via env BION_LLM_GEMINI_RESERVA="modelo-a,modelo-b".
  */
-const MODELOS_RESERVA_PADRAO = ["gemini-3.6-flash", "gemini-flash-lite-latest"];
+const MODELOS_RESERVA_PADRAO = ["gemini-3.6-flash", "gemini-3.8-flash", "gemini-flash-lite-latest"];
 
 function modelosReserva(): string[] {
   const extra = (process.env.BION_LLM_GEMINI_RESERVA || "")
@@ -246,7 +260,12 @@ async function geminiPost(
 /* ----------------------------- canal gemini ----------------------------- */
 
 /** Um turno de TEXTO no Gemini/Gemma (mensagens[0] "assistant" vira systemInstruction). */
-async function chamarGemini(mensagens: Msg[], prazo: number, modeloOverride?: string): Promise<string | null> {
+async function chamarGemini(
+  mensagens: Msg[],
+  prazo: number,
+  modeloOverride?: string,
+  opcoes?: { ignorarDisjuntor?: boolean },
+): Promise<string | null> {
   const { apiKey } = geminiConfig();
   _registrosGemini = [];
   const sys = mensagens[0]?.role === "assistant" ? mensagens[0].content : null;
@@ -298,9 +317,11 @@ async function chamarGemini(mensagens: Msg[], prazo: number, modeloOverride?: st
   const cadeia = modeloOverride
     ? [modeloOverride, ...cadeiaModelos().filter((m) => m !== modeloOverride)]
     : cadeiaModelos();
+  const ignorarDisjuntor = opcoes?.ignorarDisjuntor === true;
   for (const modelo of cadeia) {
     if (restante(prazo) <= 0) break;
     const ehGemma = /gemma/i.test(modelo);
+    if (ehGemma && !ignorarDisjuntor && Date.now() < _gemmaPuladoAte) continue; // disjuntor de eco
     const conteudosDoModelo = ehGemma ? conteudosGemma : conteudos;
 
     const corpo: GeminiCorpo = ehGemma
@@ -329,11 +350,28 @@ async function chamarGemini(mensagens: Msg[], prazo: number, modeloOverride?: st
     // responder em 17-19s e o 26B A4B pode ter cold start lento no free tier.
     const subprazo = Date.now() + Math.max(Math.round(restante(prazo) * (ehGemma ? 0.85 : 0.55)), 6_000);
     const texto1 = await geminiPost(modelo, apiKey, corpo, Math.min(prazo, subprazo), modelo);
-    if (texto1 && !textoComEcoRaciocinio(texto1)) return texto1;
-    // Gemma: o T1 JÁ é o caminho sem thinking (o 400 do thinkingConfig é
-    // evitado por construção) e um T2 idêntico só repetiria o mesmo despejo —
-    // próximo modelo da cadeia.
-    if (ehGemma) continue;
+    if (texto1 && !textoComEcoRaciocinio(texto1)) {
+      if (ehGemma) {
+        // Gemma limpo: desarma o disjuntor (a Google corrigiu o despejo).
+        _gemmaEcoSeguidos = 0;
+        _gemmaPuladoAte = 0;
+      }
+      return texto1;
+    }
+    if (ehGemma) {
+      if (texto1) {
+        // Despejo de raciocínio confirmado → arma o disjuntor (ver constantes).
+        _gemmaEcoSeguidos += 1;
+        if (_gemmaEcoSeguidos >= GEMMA_ECO_LIMITE) {
+          _gemmaPuladoAte = Date.now() + GEMMA_ECO_COOLDOWN_MS;
+          _gemmaEcoSeguidos = 0;
+        }
+      }
+      // Gemma: o T1 JÁ é o caminho sem thinking (o 400 do thinkingConfig é
+      // evitado por construção) e um T2 idêntico só repetiria o mesmo despejo —
+      // próximo modelo da cadeia.
+      continue;
+    }
 
     const sem: GeminiCorpo = {
       ...(sys && !ehGemma ? { systemInstruction: { parts: [{ text: sys }] } } : {}),
@@ -361,6 +399,7 @@ export async function visaoGemini(
     // Gemma rejeita thinkingConfig (400 medido em produção) — vai direto sem
     // o flag; os Gemini mantêm thinkingBudget 0 (resposta limpa de uma vez).
     const ehGemma = /gemma/i.test(modelo);
+    if (ehGemma && Date.now() < _gemmaPuladoAte) continue; // disjuntor de eco
     const texto = await geminiPost(
       modelo,
       apiKey,
@@ -436,20 +475,31 @@ function respostaInvalida(texto: string | null | undefined): boolean {
 
 /**
  * ECO DE RACIOCÍNIO (família Gemma 4): o modelo despeja a análise inteira no
- * texto ("* User's input...", rascunhos, "*Wait...", "Constraint Check") com
- * a resposta final embutida no meio — a API NÃO permite desligar isso
- * (thinkingBudget devolve 400 "not supported for this model") e a diretiva de
- * prompt não contém o eco. Isso NUNCA pode chegar ao paciente: tratamos como
- * falha do modelo e a cadeia cai para o próximo (mesmo padrão do canal
- * público). Quando a Google servir o Gemma 4 sem o despejo, ele volta a
- * passar automaticamente.
+ * texto ("* User's input...", "*   User prompt: ...", rascunhos "*Draft 1:",
+ * "*Refining...", checklists "Portuguese? Yes") com a resposta final embutida
+ * no meio — a API NÃO permite desligar isso (thinkingBudget devolve 400 "not
+ * supported for this model") e a diretiva de prompt não contém o eco. O 26B
+ * A4B usa variantes novas do despejo (User prompt / Draft / Refining / Persona
+ * constraints) que ESCAPAVAM do regex original e chegaram ao paciente.
+ * Isso NUNCA pode chegar ao paciente: tratamos como falha do modelo e a
+ * cadeia cai para o próximo (mesmo padrão do canal público). Quando a Google
+ * servir o Gemma 4 sem o despejo, ele volta a passar automaticamente.
  */
 const RE_ECO_RACIOCINIO =
-  /(\*\s*User'?s?\s*Input|User'?s?\s*input:|\*\s*Input:|Constraint Check|\*\s*Wait\b|\*\s*Acknowledge|\*\s*Constraint|Let me analyze)/i;
+  /(\*\s*User'?s?\s*Input|User'?s?\s*input:|\*\s*Input:|User\s+prompt\b|Draft\s*\d|Refining\b|Persona\s+constraints?|meta-commentary|Constraint Check|\*\s*Wait\b|\*\s*Acknowledge|\*\s*Constraint|Let me analyze)/i;
+
+/**
+ * Detector ESTRUTURAL: a 1ª linha do despejo é um marcador "*" rotulando o
+ * prompt citado entre aspas ("*   User prompt: \"...\""). Respostas legítimas
+ * da BION IA usam "•" (definido nas instruções) e não abrem com rótulo em
+ * inglês citando a fala do usuário.
+ */
+const RE_BULLET_PROMPT_CITADO = /^\*\s+[^:\n]{2,80}:\s*["“']/;
 
 function textoComEcoRaciocinio(texto: string | null | undefined): boolean {
   if (!texto) return false;
-  return RE_ECO_RACIOCINIO.test(texto);
+  if (RE_ECO_RACIOCINIO.test(texto)) return true;
+  return RE_BULLET_PROMPT_CITADO.test(texto.trimStart());
 }
 
 /**
@@ -615,7 +665,9 @@ export type ProbeCanal = { canal: FonteLlm; ok: boolean; detalhe: string; ms: nu
  */
 export async function diagnosticoGemini(mensagens: Msg[], timeoutMs = 25_000, modelo?: string) {
   const prazo = Date.now() + timeoutMs;
-  const texto = await chamarGemini(mensagens, prazo, modelo);
+  // ignorarDisjuntor: o diagnóstico precisa enxergar o Gemma REAL (inclusive
+  // o despejo) mesmo quando o chat está pulando os modelos Gemma.
+  const texto = await chamarGemini(mensagens, prazo, modelo, { ignorarDisjuntor: true });
   return { texto, registros: _registrosGemini };
 }
 
