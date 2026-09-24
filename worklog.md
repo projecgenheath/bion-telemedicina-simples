@@ -594,3 +594,20 @@ Stage Summary:
 - BION IA: cadeia gemini→env→público(opt-in LGPD)→sdk→local operacional e OBSERVÁVEL (diagnóstico admin com telemetria por tentativa).
 - Gemini ativo e saudável em produção; hoje limitado por cota free-tier (429) — ação do usuário: aguardar reset diário ou habilitar billing.
 - Repositório reconciliado com o trabalho de segurança da sessão paralela; histórico único em main (a7cfe4c).
+
+---
+Task ID: gemini-reserva-modelos
+Agent: Super Z (principal)
+Task: Responder "Está usando o Gemma 4 31B?" + corrigir 503 "high demand" do alias gemini-flash-latest em produção.
+
+Work Log:
+- Diagnóstico production-first: GET /api/bion-ia/diagnostico → gemini configurado (chave válida), modelo gemini-flash-latest; POST probe → 503 "This model is currently experiencing high demand" (erro mudou do 429 de cota de ontem para saturação de alias hoje).
+- Verificação de modelos: gemini-2.5-flash retorna 404 "no longer available to new users" com recomendação explícita da Google de usar gemini-3.6-flash (nova geração).
+- Implementação da CADEIA DE RESERVA DE MODELOS em llm.ts: chamarGemini, visaoGemini e probeCanais percorrem cadeiaModelos() = modelo configurado → reservas (gemini-3.6-flash, gemini-flash-lite-latest). 503/429 falham em ~250ms, custo ~zero; primeiro modelo que responde vence. Override via BION_LLM_GEMINI_RESERVA (CSV). estadoCanais() expõe "reserva"; probe emite um resultado POR modelo.
+- Validação: tsc/eslint/build limpos; smoke local (probe emite 3 linhas rotuladas por modelo; geobloqueio do sandbox esperado); commit 19b4991; push → deploy Vercel automático.
+- PRODUÇÃO VALIDADA: chat real respondeu com fonte="gemini"; telemetria: flash-latest 503 ×3 (rápido) → gemini-3.6-flash HTTP 200 finish=STOP, 6,3s. Cadeia de reserva operante de ponta a ponta.
+
+Stage Summary:
+- Resposta à pergunta: NUNCA houve "Gemma 4 31B" na stack — o rótulo gpt-oss visto antes é do tier público de reserva (Pollinations), hoje DESLIGADO por LGPD; em produção a BION IA responde via GOOGLE GEMINI (gemini-flash-latest, com reserva automática gemini-3.6-flash quando o alias satura).
+- Cadeia Gemini agora é resiliente a saturação de alias e cota free-tier sem intervenção; observável por modelo no diagnóstico admin.
+- Próximo passo opcional ao usuário: se quiser fixar outro modelo, basta BION_LLM_GEMINI_MODEL/BION_LLM_GEMINI_RESERVA na Vercel; billing no AI Studio eliminaría 429 de pico.
