@@ -51,15 +51,24 @@ const PUBLICO_MODEL_PADRAO = "openai-fast";
  */
 const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 /**
- * Padrão pedido pelo dono do produto: GEMMA 4 26B A4B (gemma-4-26b-a4b-it,
- * MoE ~26B totais / ~4B ativos, confirmado na ListModels desta chave em
- * 2026-09). A família Gemma na API do Gemini não aceita
- * systemInstruction/thinkingConfig (adaptado em chamarGemini). O 31B — primário
- * anterior — mostrou-se instável/lento no free tier (500s, 17-21s); o 26B A4B,
- * por ser MoE, é o Gemma 4 mais rápido da cadeia. Se estourar o prazo, a
- * reserva cai para o Gemini flash — a BION IA nunca fica muda.
+ * Histórico do primário: o dono pediu GEMMA 4 (31B, depois 26B A4B — MoE
+ * ~26B totais / ~4B ativos, confirmado na ListModels desta chave em 2026-09).
+ * Medição em produção (2026-09, dias seguidos): a família Gemma hospedada
+ * DESPEJA raciocínio no texto (thinkingConfig devolve 400, sem como desligar)
+ * e NUNCA passa da quarentena — como primário custava ~15s de espera por
+ * mensagem em instância fria do serverless antes de cair para o flash.
+ * Por isso o primário volta a ser o Gemini flash e o Gemma 26B A4B segue na
+ * RESERVA (disjuntor de eco o pula instantaneamente enquanto ele despejar).
+ * Devolva o primário a ele via BION_LLM_GEMINI_MODEL no dia em que a Google
+ * corrigir o despejo — o corpo Gemma (sem thinkingConfig, fold de system) já
+ * está implementado em chamarGemini/visaoGemini.
  */
-const GEMINI_MODEL_PADRAO = "gemma-4-26b-a4b-it";
+// Primário: gemini-3.6-flash — o Gemma 4 hospedado DESPEJA raciocínio no texto
+// (medido em produção em dias seguidos, formatos variados) e nunca passa da
+// quarentena: deixá-lo primeiro custava ~15s por instância fria (telemetria de
+// 2026-09-24). Ele segue na RESERVA e volta a ser primário via
+// BION_LLM_GEMINI_MODEL no momento em que a Google parar o despejo.
+const GEMINI_MODEL_PADRAO = "gemini-3.6-flash";
 
 let _sdk: { cliente: ClienteSdk | null; verificado: boolean } = { cliente: null, verificado: false };
 let _publicoFalhaEm = 0;
@@ -102,7 +111,10 @@ function geminiConfig() {
  * 503/429 falham em ~250ms, então o custo é mínimo; o primeiro que responder
  * vence. Override via env BION_LLM_GEMINI_RESERVA="modelo-a,modelo-b".
  */
-const MODELOS_RESERVA_PADRAO = ["gemini-3.6-flash", "gemini-3.8-flash", "gemini-flash-lite-latest"];
+// Reserva: 3.8-flash cobre a cota/saturação do 3.6; o Gemma 26B A4B fica na
+// frente do lite (só serve se passar da quarentena de eco — o disjuntor o
+// pula instantaneamente enquanto ele despejar raciocínio).
+const MODELOS_RESERVA_PADRAO = ["gemini-3.8-flash", "gemma-4-26b-a4b-it", "gemini-flash-lite-latest"];
 
 function modelosReserva(): string[] {
   const extra = (process.env.BION_LLM_GEMINI_RESERVA || "")

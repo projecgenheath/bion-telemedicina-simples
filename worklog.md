@@ -668,3 +668,25 @@ Stage Summary:
 - RESPOSTA SEM SENTIDO ELIMINADA: nenhum despejo (nem nas variantes novas) passa mais; fallback local com intenção correta para renovação; UI transparente sobre o modo local.
 - DEMORA: cada mensagem deixa de pagar ~9-10s do Gemma enquanto ele despeja (disjuntor); latência restante = o próprio flash da Google no free tier hoje (10-12s) — com billing, flash responde em ~2s; quando a Google corrigir o despejo do Gemma 4, ele volta sozinho como primário.
 - Lição: despejo do Gemma 4 muda de formato entre modelos/dias → quarentena agora cobre tokens + ESTRUTURA.
+
+---
+Task ID: auditoria-fase1-front
+Agent: Super Z (principal)
+Task: "Auditoria front-end" (21 itens) — FASE 1 (itens 1/3/5/17/21) + reconciliação de histórico perdida pelo force-push remoto.
+
+Work Log:
+- RECONCILIAÇÃO: fetch revelou force-push remoto (5ac61c0) SEM o disjuntor de eco (0 ocorrências no llm.ts remoto) — produção tinha REGREDIDO na correção da demora. Merge origin/main: llm.ts/chat-local.ts/BionIA.tsx pela linha local (disjuntor + quarentena estrutural + intenções de renovação); política de senha bion123456 + teleconsulta pela remota; .env.example união. Commit 5c38028.
+- SENHA DEMO QUEBRADA EM PRODUÇÃO: deploy 5ac61c0 exibia dica "bion123456" mas o banco só aceitava "bion123" (401 medido). Script scripts/alinhamento_senha_demo.ts (bcrypt.compare p/ achar quem ainda usa bion123 → hash bcrypt 10 de bion123456): 11/11 usuários demo atualizados no Supabase. Validação: 3 contas 200 com a nova, antiga 401.
+- HIGIENE (item 21): backup-pre-filter/ (custom.db SQLite com usuários, env.bak — só ambiente SQLite local sem segredo, repo-mirror.git — remote apontava p/ path local) desrastreado + .gitignore (commit 5bf0ba0). 28MB a menos no repo.
+- ITEM 1/3 (contrato): verificação EXAUSTIVA das 19 chamadas de mutar(): todas as rotas devolvem carregarDados (estado fresco) EXCETO /api/anamnese POST {texto,etapa} — que NÃO passa por mutar (a UI do chat chama direto). Conclusão: alegação de crash da auditoria era falsa HOJE, mas o risco estrutural era real → mutar() agora unificado em aplicarDelta (estado fresco → aplicar; delta → entidade única; forma desconhecida → ignorada sem quebrar). Interface do contexto + JSDoc atualizados.
+- ITEM 17 (nome→ID): store prefere IDs explícitos com fallback por nome: adicionarConsulta (c.medicoId), emitirDocumento (param pacienteIdExplicito), avaliarConsulta (medicoIdExplicito), LGPD anonimizar/excluir (pacienteIdExplicito — operações irreversíveis). AgendamentoFluxo passa medicoId do card selecionado; PrivacidadeAdmin resolve id do cadastro real (consultas.pacienteId + registro de pacientes).
+- BUG GRAVE EXTRA (item 14 na forma mais perigosa): Consulta.tsx emitia receita/atestado/exame com paciente "Marina Silva" e médica "Dra. Ana Ribeiro" HARDCODED — documento ia para a paciente errada. Agora: contraparte real da consulta + sessao.nome + consultaAtual.pacienteId explícito. Anotações do prontuário iniciam vazias (antes: texto de Losartana pré-preenchido virava resumoMedico real na conclusão); "Resumir com IA" falso virou "Inserir modelo de evolução" (estrutura sem conteúdo inventado); card do paciente sem alergia "Dipirona"/Losartana fake; aba de transcrição marcada como "demonstração".
+- ITEM 5 (dashboards): AdminDashboard 100% real (pacientes.length, consultas de hoje, faturamento do mês somando consultas pagas, satisfação média) — removidos 12.480/+14%/1.284/R$ 384k/"Tempo méd 6 min"/"47 em andamento"/"repasse 15%".
+- Validação: tsc/eslint limpos; build OK; servidor local (Supabase) — login 200, bootstrap com medicoId, delta de lembrete criado/removido (contrato delta íntegro). Commits 5c38028+5bf0ba0+99c146e; push 5ac61c0..99c146e (fast-forward).
+
+Stage Summary:
+- Produção re-adquiriu o disjuntor de eco (a força do remoto tinha regredido o fix da demora) e ganhou as correções FASE 1 da auditoria.
+- mutar() à prova de payloads não-estado; identidades por ID nas mutações; zero dados demo misturados com reais nas telas de emissão/administração.
+- Senha demo bion123456 agora VERDADEIRA no banco (tela↔banco coerentes); 11 contas alinhadas.
+- Restante da auditoria (FASES 2-4) documentado; pendências sugeridas: deltas nas rotas pesadas (carregarDados → entidade única), BionProvider fora do RootLayout, realtime p/ mensagens.
+
