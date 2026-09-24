@@ -51,10 +51,10 @@ verificar "senha 10+ letras+números → 200" "$([[ $C == 200 ]] && echo 1 || ec
 
 echo "=== 4. Sessões ==="
 C=$(code -c "$JAR_ADMIN" -X POST "$BASE/api/auth/login" -H 'Content-Type: application/json' \
-  -d '{"email":"admin@bion.app","senha":"bion123"}')
+  -d '{"email":"admin@bion.app","senha":"bion123456"}')
 verificar "login admin → 200" "$([[ $C == 200 ]] && echo 1 || echo 0)"
 C=$(code -c "$JAR_MARINA" -X POST "$BASE/api/auth/login" -H 'Content-Type: application/json' \
-  -d '{"email":"marina.silva@email.com","senha":"bion123"}')
+  -d '{"email":"marina.silva@email.com","senha":"bion123456"}')
 verificar "login marina → 200" "$([[ $C == 200 ]] && echo 1 || echo 0)"
 
 MEDICO_ID=$(python3 -c "
@@ -121,12 +121,12 @@ verificar "admin suspende médica → 200" "$([[ $C == 200 ]] && echo 1 || echo 
 JAR_J="$TMP/julia.jar"
 rm -f "$JAR_J"
 C=$(code -c "$JAR_J" -X POST "$BASE/api/auth/login" -H 'Content-Type: application/json' \
-  -d '{"email":"julia.lima@med.bion.app","senha":"bion123"}')
+  -d '{"email":"julia.lima@med.bion.app","senha":"bion123456"}')
 verificar "médica SUSPENSA → login 403" "$([[ $C == 403 ]] && echo 1 || echo 0)"
 C=$(code -b "$JAR_ADMIN" -X PATCH "$BASE/api/medicos/$JULIA_ID" -H 'Content-Type: application/json' -d '{"acao":"aprovar"}')
 verificar "admin reativa médica → 200" "$([[ $C == 200 ]] && echo 1 || echo 0)"
 C=$(code -c "$JAR_J" -X POST "$BASE/api/auth/login" -H 'Content-Type: application/json' \
-  -d '{"email":"julia.lima@med.bion.app","senha":"bion123"}')
+  -d '{"email":"julia.lima@med.bion.app","senha":"bion123456"}')
 verificar "médica reativada → login 200" "$([[ $C == 200 ]] && echo 1 || echo 0)"
 
 echo "=== 7. DELETE de médico → arquivamento (não destrói) ==="

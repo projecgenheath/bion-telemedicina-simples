@@ -35,7 +35,7 @@ const BASE = process.argv[2] ?? "http://127.0.0.1:3000";
 const FASE_B = process.argv.includes("--com-segredo");
 const FASE_C = process.argv.includes("--fase-c");
 const SEGREDO = "segredo-teste-hardening-bion";
-const SENHA = "bion123";
+const SENHA = "bion123456";
 
 let aprovados = 0;
 let falhas = 0;

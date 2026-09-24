@@ -20,7 +20,7 @@ async function login(email) {
   const res = await fetch(`${BASE}/api/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, senha: "bion123" }),
+    body: JSON.stringify({ email, senha: "bion123456" }),
   });
   if (res.status !== 200) throw new Error(`login ${email} → ${res.status}`);
   return cookieDe(res);

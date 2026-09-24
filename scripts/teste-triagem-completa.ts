@@ -6,7 +6,7 @@
  */
 const BASE = process.env.BASE_URL || "http://127.0.0.1:3000";
 const EMAIL = "marina.silva@email.com";
-const SENHA = "bion123";
+const SENHA = "bion123456";
 
 let cookie = "";
 let falhas = 0;

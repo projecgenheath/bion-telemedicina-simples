@@ -5,7 +5,7 @@
  */
 const BASE = process.env.BASE_URL || "https://bion-telemedicina-simples.vercel.app";
 const EMAIL = process.env.EMAIL || "marina.silva@email.com";
-const SENHA = process.env.SENHA || "bion123";
+const SENHA = process.env.SENHA || "bion123456";
 
 let cookie = "";
 

@@ -20,7 +20,7 @@
 import { PrismaClient } from "@prisma/client";
 
 const BASE = process.argv[2] ?? "http://127.0.0.1:3000";
-const SENHA_PADRAO = "bion123";
+const SENHA_PADRAO = "bion123456";
 const SENHA_NOVA = "BionTeste2026";
 
 const db = new PrismaClient();

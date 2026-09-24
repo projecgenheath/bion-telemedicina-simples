@@ -10,7 +10,7 @@
  */
 const BASE = process.env.BASE_URL || "http://localhost:3000";
 const EMAIL = process.env.EMAIL || "marina.silva@email.com";
-const SENHA = process.env.SENHA || "bion123";
+const SENHA = process.env.SENHA || "bion123456";
 
 let cookie = "";
 let falhas = 0;

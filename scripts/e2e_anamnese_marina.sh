@@ -6,7 +6,7 @@ BASE=http://127.0.0.1:3000
 JAR=/tmp/e2e-marina-cookies.txt
 rm -f "$JAR"
 
-curl -s -o /dev/null -c "$JAR" -X POST "$BASE/api/auth/login" -H "Content-Type: application/json" -d '{"email":"marina.silva@email.com","senha":"bion123"}'
+curl -s -o /dev/null -c "$JAR" -X POST "$BASE/api/auth/login" -H "Content-Type: application/json" -d '{"email":"marina.silva@email.com","senha":"bion123456"}'
 curl -s -b "$JAR" "$BASE/api/bootstrap" -o /tmp/e2e-m-boot.json
 MEDICO_ID=$(python3 -c "
 import json

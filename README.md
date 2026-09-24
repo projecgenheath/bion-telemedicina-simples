@@ -15,7 +15,7 @@ bash scripts/dev.sh        # sobe em http://localhost:3000
 
 O `scripts/dev.sh` garante que a `DATABASE_URL` do `.env` prevaleça sobre qualquer variável global do ambiente.
 
-### Contas demo (senha: `bion123`)
+### Contas demo (senha: `bion123456`)
 
 | Papel | E-mail |
 |---|---|

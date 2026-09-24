@@ -10,9 +10,9 @@ import { useBion } from "@/lib/bion-store";
 import { Logo } from "@/components/bion/brand";
 
 const CONTAS_DEMO: Record<Role, { email: string; senha: string }> = {
-  paciente: { email: "marina.silva@email.com", senha: "bion123" },
-  medico: { email: "ana.ribeiro@med.bion.app", senha: "bion123" },
-  admin: { email: "admin@bion.app", senha: "bion123" },
+  paciente: { email: "marina.silva@email.com", senha: "bion123456" },
+  medico: { email: "ana.ribeiro@med.bion.app", senha: "bion123456" },
+  admin: { email: "admin@bion.app", senha: "bion123456" },
 };
 
 export function Login() {
@@ -252,7 +252,7 @@ export function Login() {
           {!modoCadastro && (
             <div className="pt-3 border-t space-y-2">
               <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider text-center">
-                Contas de demonstração — senha: bion123
+                Contas de demonstração — senha: bion123456
               </div>
               <div className="grid grid-cols-3 gap-2">
                 {(
@@ -266,7 +266,7 @@ export function Login() {
                     key={r}
                     onClick={() => {
                       trocarAba(r);
-                      setSenha("bion123");
+                      setSenha("bion123456");
                     }}
                     className="px-2 py-2 rounded-xl border text-[10px] font-bold text-muted-foreground hover:border-primary hover:text-primary transition truncate"
                     title={email}
