@@ -304,8 +304,17 @@ async function chamarGemini(mensagens: Msg[], prazo: number, modeloOverride?: st
 
     const corpo: GeminiCorpo = ehGemma
       ? {
+          // Gemma 4 é modelo de RACIOCÍNIO: pedimos thinkingBudget 0 para a API
+          // despejar só a resposta final (sem isso o texto vem com a análise
+          // inteira — "* User's input...", rascunhos, "*Wait..."). Se a família
+          // rejeitar thinkingConfig (400), o retry interno do geminiPost repete
+          // sem thinkingConfig e o comportamento antigo (eco) prevalece.
           contents: conteudosDoModelo,
-          generationConfig: { temperature: 0.7, maxOutputTokens: 8192 },
+          generationConfig: {
+            temperature: 0.7,
+            maxOutputTokens: 2048,
+            thinkingConfig: { thinkingBudget: 0 },
+          },
         }
       : {
           ...(sys ? { systemInstruction: { parts: [{ text: sys }] } } : {}),
@@ -318,17 +327,14 @@ async function chamarGemini(mensagens: Msg[], prazo: number, modeloOverride?: st
         };
 
     // T1 (thinkingBudget 0) fica limitada a ~55% do prazo restante (Gemma,
-    // que não tem T2, recebe ~85% — o 31B está respondendo em 17-19s no free
-    // tier e precisa da janela cheia): se o modelo não couber, a T2 (sem
-    // thinkingConfig, teto 8192) ou os reservas ainda respondem no prazo geral.
+    // que não tem systemInstruction, recebe ~85% — o 31B sem thinking chegou
+    // a responder em 17-19s e precisa da janela cheia).
     const subprazo = Date.now() + Math.max(Math.round(restante(prazo) * (ehGemma ? 0.85 : 0.55)), 6_000);
     const texto1 = await geminiPost(modelo, apiKey, corpo, Math.min(prazo, subprazo), modelo);
     if (texto1) return texto1;
-    // Gemma não tem variante "sem-thinking" (nenhum thinkingConfig foi enviado).
-    if (ehGemma) continue;
 
     const sem: GeminiCorpo = {
-      ...(sys ? { systemInstruction: { parts: [{ text: sys }] } } : {}),
+      ...(sys && !ehGemma ? { systemInstruction: { parts: [{ text: sys }] } } : {}),
       contents: conteudosDoModelo,
       generationConfig: { temperature: 0.7, maxOutputTokens: 8192 },
     };
@@ -350,8 +356,6 @@ export async function visaoGemini(
   const prazo = Date.now() + Math.max(timeoutMs, 5_000);
   for (const modelo of cadeiaModelos()) {
     if (restante(prazo) <= 0) break;
-    // Gemma não aceita thinkingConfig.
-    const ehGemma = /gemma/i.test(modelo);
     const texto = await geminiPost(
       modelo,
       apiKey,
@@ -362,9 +366,7 @@ export async function visaoGemini(
             parts: [{ text: prompt }, { inline_data: { mime_type: mime, data: base64 } }],
           },
         ],
-        generationConfig: ehGemma
-          ? { temperature: 0.1, maxOutputTokens: 8192 }
-          : { temperature: 0.1, maxOutputTokens: 8192, thinkingConfig: { thinkingBudget: 0 } },
+        generationConfig: { temperature: 0.1, maxOutputTokens: 8192, thinkingConfig: { thinkingBudget: 0 } },
       },
       prazo,
       modelo,
@@ -654,9 +656,7 @@ export async function probeCanais(timeoutMs = 20_000): Promise<ProbeCanal[]> {
       const inicio = Date.now();
       let okModelo = false;
       let detalheModelo = "";
-      // Gemma não aceita thinkingConfig: só a variante sem-thinking faz sentido.
-      const variantesDoModelo = /gemma/i.test(modelo) ? variantes.slice(1) : variantes;
-      for (const v of variantesDoModelo) {
+      for (const v of variantes) {
         if (restante(prazo) <= 0) break;
         try {
           const r = await fetch(`${GEMINI_BASE}/${modelo}:generateContent`, {
