@@ -87,7 +87,7 @@ function geminiConfig() {
  * 503/429 falham em ~250ms, então o custo é mínimo; o primeiro que responder
  * vence. Override via env BION_LLM_GEMINI_RESERVA="modelo-a,modelo-b".
  */
-const MODELOS_RESERVA_PADRAO = ["gemma-4-26b-a4b-it", "gemini-3.6-flash", "gemini-flash-lite-latest"];
+const MODELOS_RESERVA_PADRAO = ["gemini-3.6-flash", "gemini-flash-lite-latest"];
 
 function modelosReserva(): string[] {
   const extra = (process.env.BION_LLM_GEMINI_RESERVA || "")
@@ -331,7 +331,10 @@ async function chamarGemini(mensagens: Msg[], prazo: number, modeloOverride?: st
     // a responder em 17-19s e precisa da janela cheia).
     const subprazo = Date.now() + Math.max(Math.round(restante(prazo) * (ehGemma ? 0.85 : 0.55)), 6_000);
     const texto1 = await geminiPost(modelo, apiKey, corpo, Math.min(prazo, subprazo), modelo);
-    if (texto1) return texto1;
+    if (texto1 && !textoComEcoRaciocinio(texto1)) return texto1;
+    // Gemma: o T1 já cobriu o caminho sem thinking (retry interno do 400 do
+    // thinkingConfig) e um T2 idêntico só repetiria o mesmo despejo — próximo modelo.
+    if (ehGemma) continue;
 
     const sem: GeminiCorpo = {
       ...(sys && !ehGemma ? { systemInstruction: { parts: [{ text: sys }] } } : {}),
@@ -339,7 +342,7 @@ async function chamarGemini(mensagens: Msg[], prazo: number, modeloOverride?: st
       generationConfig: { temperature: 0.7, maxOutputTokens: 8192 },
     };
     const texto2 = await geminiPost(modelo, apiKey, sem, prazo, `${modelo}-sem-thinking`);
-    if (texto2) return texto2;
+    if (texto2 && !textoComEcoRaciocinio(texto2)) return texto2;
   }
   return null;
 }
@@ -423,6 +426,24 @@ const RE_RESPOSTA_INVALIDA =
 function respostaInvalida(texto: string | null | undefined): boolean {
   if (!texto) return false;
   return RE_RESPOSTA_INVALIDA.test(texto);
+}
+
+/**
+ * ECO DE RACIOCÍNIO (família Gemma 4): o modelo despeja a análise inteira no
+ * texto ("* User's input...", rascunhos, "*Wait...", "Constraint Check") com
+ * a resposta final embutida no meio — a API NÃO permite desligar isso
+ * (thinkingBudget devolve 400 "not supported for this model") e a diretiva de
+ * prompt não contém o eco. Isso NUNCA pode chegar ao paciente: tratamos como
+ * falha do modelo e a cadeia cai para o próximo (mesmo padrão do canal
+ * público). Quando a Google servir o Gemma 4 sem o despejo, ele volta a
+ * passar automaticamente.
+ */
+const RE_ECO_RACIOCINIO =
+  /(\*\s*User'?s?\s*Input|User'?s?\s*input:|\*\s*Input:|Constraint Check|\*\s*Wait\b|\*\s*Acknowledge|\*\s*Constraint|Let me analyze)/i;
+
+function textoComEcoRaciocinio(texto: string | null | undefined): boolean {
+  if (!texto) return false;
+  return RE_ECO_RACIOCINIO.test(texto);
 }
 
 /**
@@ -668,8 +689,10 @@ export async function probeCanais(timeoutMs = 20_000): Promise<ProbeCanal[]> {
           if (r.status === 200) {
             const cand = r.corpo?.candidates?.[0];
             const t = textoGemini(r.corpo);
-            okModelo = !!t;
-            detalheModelo = `HTTP 200 finish=${cand?.finishReason ?? "?"} texto="${t.slice(0, 30) || "—"}" [${v.rotulo}]`;
+            // Eco de raciocínio (Gemma 4) não conta como sucesso — o probe
+            // precisa refletir o que de fato chegaria ao paciente.
+            okModelo = !!t && !textoComEcoRaciocinio(t);
+            detalheModelo = `HTTP 200 finish=${cand?.finishReason ?? "?"} texto="${t.slice(0, 30) || "—"}"${!!t && textoComEcoRaciocinio(t) ? " (eco de raciocínio — tratado como falha)" : ""} [${v.rotulo}]`;
             if (okModelo) break;
           } else {
             const msg = r.corpo?.error?.message || `HTTP ${r.status}`;
