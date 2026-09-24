@@ -94,7 +94,9 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
       .map((p) => p[0]!.toUpperCase())
       .join("");
   const dadosPaciente = pacientes.find(
-    (p) => p.nome === (role === "medico" ? contraparteNome : sessao.nome),
+    (p) =>
+      (role === "medico" ? p.id === consultaAtual?.pacienteId : p.nome === sessao.nome) ||
+      p.nome === (role === "medico" ? contraparteNome : sessao.nome),
   );
 
   // ── WebRTC REAL (Fase 2): mídia P2P + sinalização via banco ──
@@ -138,10 +140,9 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
     if (videoRemotoRef.current) videoRemotoRef.current.srcObject = streamRemotoRef.current;
   }, [streamRemotoRef, remotoPronto]);
 
-  // Anotações médicas do prontuário
-  const [anotacoes, setAnotacoes] = useState(
-    "Paciente em bom estado geral, lúcida e orientada. Relata controle adequado da pressão arterial com uso regular de Losartana 50mg. Queixa de cefaleia tensional leve ocasional.",
-  );
+  // Anotações médicas do prontuário — SEMPRE vazias ao iniciar (o resumo
+  // salvo na conclusão é o real da consulta; nada pré-preenchido de demo).
+  const [anotacoes, setAnotacoes] = useState("");
 
   // Chat na chamada (REAL — via sinalização WebRTC)
   const [chatInput, setChatInput] = useState("");
@@ -237,7 +238,9 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
         tipo: f.type.includes("image") ? "Imagem de exame" : "Documento PDF",
         tamanhoKb: Math.max(1, Math.round(f.size / 1024)),
         enviadoPor: role === "medico" ? "medico" : "paciente",
-        consulta: "Consulta em andamento — Dra. Ana Ribeiro",
+        consulta: consultaAtual
+          ? `Consulta em andamento — ${contraparteNome} / ${sessao.nome}`
+          : "Consulta em andamento",
       }),
     );
   };
@@ -248,28 +251,35 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
     setChatInput("");
   };
 
-  const gerarResumoComIA = () => {
+  // Insere um MODELO estruturado (sem conteúdo clínico inventado) que o
+  // médico preenche com os dados reais da consulta.
+  const inserirModeloResumo = () => {
     setAnotacoes(
-      `RESUMO AUTOMÁTICO IA (BION COPILOT):
-• Queixa Principal: Revisão periódica de hipertensão arterial.
-• Histórico Atual: Paciente feminina, 32 anos, faz uso regular de Losartana 50mg/dia. Pressão controlada (120x80 mmHg). Queixa eventual de cefaleia tensional leve.
-• Conduta: Manter posologia atual de Losartana. Emitida prescrição digital para 30 dias e atestado de 2 dias preventivo. Retorno agendado em 30 dias.`,
+      `EVOLUÇÃO CLÍNICA — ${contraparteNome} (${consultaAtual?.especialidade ?? "Consulta"})
+• Queixa principal: —
+• Histórico atual: —
+• Exame físico: —
+• Hipótese diagnóstica: —
+• Conduta: —`,
     );
   };
 
   const salvarReceita = (e: React.FormEvent) => {
     e.preventDefault();
-    emitirDocumento({
-      tipo: "receita",
-      titulo: recTitulo,
-      medico: "Dra. Ana Ribeiro",
-      paciente: "Marina Silva",
-      medicamento: recMedicamento,
-      posologia: recPosologia,
-      duracao: recDuracao,
-      observacoes: recObs,
-      conteudo: `${recMedicamento} — ${recPosologia} por ${recDuracao}. ${recObs}`,
-    });
+    emitirDocumento(
+      {
+        tipo: "receita",
+        titulo: recTitulo,
+        medico: sessao.nome,
+        paciente: contraparteNome,
+        medicamento: recMedicamento,
+        posologia: recPosologia,
+        duracao: recDuracao,
+        observacoes: recObs,
+        conteudo: `${recMedicamento} — ${recPosologia} por ${recDuracao}. ${recObs}`,
+      },
+      consultaAtual?.pacienteId,
+    );
     toast.success("Receita digital emitida", {
       description: "Assinada e disponível no painel do paciente.",
     });
@@ -278,16 +288,19 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
 
   const salvarAtestado = (e: React.FormEvent) => {
     e.preventDefault();
-    emitirDocumento({
-      tipo: "atestado",
-      titulo: `Atestado — ${atestDias} dias de afastamento`,
-      medico: "Dra. Ana Ribeiro",
-      paciente: "Marina Silva",
-      cid: atestCid,
-      duracao: `${atestDias} dias`,
-      observacoes: atestObs,
-      conteudo: `Atesto para os devidos fins que a paciente necessita de afastamento por ${atestDias} dias. CID: ${atestCid}. ${atestObs}`,
-    });
+    emitirDocumento(
+      {
+        tipo: "atestado",
+        titulo: `Atestado — ${atestDias} dias de afastamento`,
+        medico: sessao.nome,
+        paciente: contraparteNome,
+        cid: atestCid,
+        duracao: `${atestDias} dias`,
+        observacoes: atestObs,
+        conteudo: `Atesto para os devidos fins que a paciente necessita de afastamento por ${atestDias} dias. CID: ${atestCid}. ${atestObs}`,
+      },
+      consultaAtual?.pacienteId,
+    );
     toast.success("Atestado emitido e assinado", {
       description: "Documento já disponível no painel do paciente.",
     });
@@ -297,15 +310,18 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
   const salvarExame = (e: React.FormEvent) => {
     e.preventDefault();
     if (!exameNome.trim()) return;
-    emitirDocumento({
-      tipo: "exame_solicitado",
-      titulo: `Solicitação de Exame — ${exameNome}`,
-      medico: "Dra. Ana Ribeiro",
-      paciente: "Marina Silva",
-      duracao: exameUrgencia,
-      observacoes: exameObs,
-      conteudo: `Solicita-se: ${exameNome} (urgência: ${exameUrgencia}). ${exameObs}`,
-    });
+    emitirDocumento(
+      {
+        tipo: "exame_solicitado",
+        titulo: `Solicitação de Exame — ${exameNome}`,
+        medico: sessao.nome,
+        paciente: contraparteNome,
+        duracao: exameUrgencia,
+        observacoes: exameObs,
+        conteudo: `Solicita-se: ${exameNome} (urgência: ${exameUrgencia}). ${exameObs}`,
+      },
+      consultaAtual?.pacienteId,
+    );
     toast.success("Exame solicitado", {
       description: "O pedido foi enviado ao painel do paciente.",
     });
@@ -571,12 +587,14 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
                     {role === "medico" ? contraparteNome : sessao.nome} •{" "}
                     {dadosPaciente
                       ? `${dadosPaciente.idade} anos • ${dadosPaciente.genero}`
-                      : "32 anos • Feminino"}
+                      : "—"}
                   </div>
                   <div className="text-slate-400">
-                    Alergias: <strong className="text-amber-600 dark:text-amber-400">Dipirona</strong>
+                    Alergias: {dadosPaciente ? "ver prontuário" : "— não exibido nesta tela"}
                   </div>
-                  <div className="text-slate-400">Medicamentos: Losartana 50mg</div>
+                  <div className="text-slate-400">
+                    Medicamentos: {dadosPaciente ? "ver prontuário" : "— não exibido nesta tela"}
+                  </div>
                 </div>
 
                 <div className="space-y-2">
@@ -586,10 +604,10 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
                     </span>
                     {role === "medico" && (
                       <button
-                        onClick={gerarResumoComIA}
+                        onClick={inserirModeloResumo}
                         className="text-[11px] font-bold text-primary hover:underline flex items-center gap-1"
                       >
-                        <Sparkles className="w-3.5 h-3.5" /> Resumir com IA
+                        <Sparkles className="w-3.5 h-3.5" /> Inserir modelo de evolução
                       </button>
                     )}
                   </div>
@@ -754,6 +772,9 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
                     <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
                     Transcrição Ativa em Tempo Real
                   </span>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300">
+                    demonstração
+                  </span>
                 </div>
 
                 <div className="space-y-2.5">
@@ -770,10 +791,10 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
 
                 {role === "medico" && (
                   <button
-                    onClick={gerarResumoComIA}
+                    onClick={inserirModeloResumo}
                     className="w-full py-3 rounded-2xl bg-primary text-primary-foreground font-bold text-xs shadow-md hover:opacity-90 transition flex items-center justify-center gap-2"
                   >
-                    <Sparkles className="w-4 h-4" /> Transferir Síntese para o Prontuário
+                    <Sparkles className="w-4 h-4" /> Inserir modelo de evolução no prontuário
                   </button>
                 )}
               </div>

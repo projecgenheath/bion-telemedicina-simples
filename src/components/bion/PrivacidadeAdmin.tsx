@@ -15,10 +15,10 @@ import {
 import { useBion } from "@/lib/bion-store";
 import { ModalBion } from "@/components/bion/ModalBion";
 
-type Acao = { tipo: "anonimizar" | "excluir"; paciente: string };
+type Acao = { tipo: "anonimizar" | "excluir"; paciente: string; pacienteId?: string };
 
 export function PrivacidadeAdmin() {
-  const { consultas, documentos, medicos, avaliacoes, anonimizarPaciente, excluirDadosPaciente } =
+  const { consultas, documentos, medicos, avaliacoes, anonimizarPaciente, excluirDadosPaciente, pacientes: registroPacientes } =
     useBion();
   const [busca, setBusca] = useState("");
   const [acao, setAcao] = useState<Acao | null>(null);
@@ -26,16 +26,18 @@ export function PrivacidadeAdmin() {
   const pacientes = useMemo(() => {
     const mapa = new Map<
       string,
-      { nome: string; consultas: number; documentos: number; avaliacoes: number }
+      { id?: string; nome: string; consultas: number; documentos: number; avaliacoes: number }
     >();
     consultas.forEach((c) => {
       const at = mapa.get(c.paciente) ?? {
+        id: c.pacienteId,
         nome: c.paciente,
         consultas: 0,
         documentos: 0,
         avaliacoes: 0,
       };
       at.consultas += 1;
+      at.id = at.id ?? c.pacienteId;
       mapa.set(c.paciente, at);
     });
     documentos.forEach((d) => {
@@ -59,17 +61,22 @@ export function PrivacidadeAdmin() {
       mapa.set(a.paciente, at);
     });
     return Array.from(mapa.values())
+      .map((p) => ({
+        ...p,
+        // ID resolvido do cadastro real (operação LGPD é irreversível — nunca por nome)
+        id: p.id ?? registroPacientes.find((r) => r.nome === p.nome)?.id,
+      }))
       .filter((p) => p.nome.toLowerCase().includes(busca.toLowerCase()))
       .sort((a, b) => a.nome.localeCompare(b.nome));
-  }, [consultas, documentos, avaliacoes, busca]);
+  }, [consultas, documentos, avaliacoes, registroPacientes, busca]);
 
   const confirmar = () => {
     if (!acao) return;
     if (acao.tipo === "anonimizar") {
-      anonimizarPaciente(acao.paciente);
+      anonimizarPaciente(acao.paciente, acao.pacienteId);
       toast.success("Dados anonimizados e registrados na auditoria.");
     } else {
-      excluirDadosPaciente(acao.paciente);
+      excluirDadosPaciente(acao.paciente, acao.pacienteId);
       toast.success("Dados anonimizados e conta arquivada; prontuário preservado. Auditoria registrada.");
     }
     setAcao(null);
@@ -132,13 +139,13 @@ export function PrivacidadeAdmin() {
                   </div>
                 </div>
                 <button
-                  onClick={() => setAcao({ tipo: "anonimizar", paciente: p.nome })}
+                  onClick={() => setAcao({ tipo: "anonimizar", paciente: p.nome, pacienteId: p.id })}
                   className="px-4 py-2 rounded-xl border text-xs font-bold hover:bg-card transition flex items-center gap-1.5"
                 >
                   <EyeOff className="w-3.5 h-3.5" /> Anonimizar
                 </button>
                 <button
-                  onClick={() => setAcao({ tipo: "excluir", paciente: p.nome })}
+                  onClick={() => setAcao({ tipo: "excluir", paciente: p.nome, pacienteId: p.id })}
                   className="px-4 py-2 rounded-xl bg-destructive/10 text-destructive text-xs font-bold hover:bg-destructive/20 transition flex items-center gap-1.5"
                 >
                   <Trash2 className="w-3.5 h-3.5" /> Anonimizar e arquivar

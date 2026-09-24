@@ -256,7 +256,7 @@ type Store = {
   naoLidasMensagens: number;
   enviarMensagem: (paraId: string, texto: string) => void;
   marcarConversaLida: (comUsuarioId: string) => void;
-  emitirDocumento: (d: Omit<Documento, "id" | "data">) => void;
+  emitirDocumento: (d: Omit<Documento, "id" | "data">, pacienteIdExplicito?: string) => void;
   cancelarConsulta: (id: string, motivo: string) => void;
   remarcarConsulta: (id: string, data: string, hora: string) => void;
   concluirConsulta: (id: string, resumo?: string) => void;
@@ -267,7 +267,7 @@ type Store = {
   marcarLida: (id: string) => void;
   marcarTodasLidas: () => void;
   avaliacoes: Avaliacao[];
-  avaliarConsulta: (a: Omit<Avaliacao, "id" | "quando" | "ts">) => void;
+  avaliarConsulta: (a: Omit<Avaliacao, "id" | "quando" | "ts">, medicoIdExplicito?: string) => void;
   consentimentos: Consentimento[];
   consentimentosVisiveis: Consentimento[];
   registrarConsentimento: (
@@ -284,8 +284,8 @@ type Store = {
   suspenderMedico: (id: string) => void;
   auditLogs: AuditLog[];
   registrarAudit: (log: Omit<AuditLog, "id" | "ts" | "usuario" | "role">) => void;
-  anonimizarPaciente: (nome: string) => void;
-  excluirDadosPaciente: (nome: string) => void;
+  anonimizarPaciente: (nome: string, pacienteIdExplicito?: string) => void;
+  excluirDadosPaciente: (nome: string, pacienteIdExplicito?: string) => void;
   pacientes: PacienteRegistro[];
   adicionarPaciente: (p: Omit<PacienteRegistro, "id" | "desde">) => void;
   atualizarPaciente: (id: string, dados: Partial<PacienteRegistro>) => void;
@@ -597,20 +597,6 @@ export function BionProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(id);
   }, [autenticado, buscarMensagens]);
 
-  /** Executa mutação na API e aplica o estado fresco retornado */
-  const mutar = useCallback(
-    async (url: string, method: string, corpo?: unknown): Promise<boolean> => {
-      const dados = await api<EstadoFresco>(url, {
-        method,
-        ...(corpo !== undefined ? { body: JSON.stringify(corpo) } : {}),
-      });
-      if (!dados) return false;
-      aplicar(dados);
-      return true;
-    },
-    [aplicar],
-  );
-
   const entrar = useCallback(
     async (email: string, senha: string): Promise<RespostaAuth> => {
       const dados = await api<EstadoFresco>("/api/auth/login", {
@@ -866,6 +852,27 @@ export function BionProvider({ children }: { children: ReactNode }) {
     [aplicarEstadoFresco],
   );
 
+  /**
+   * Executa mutação na API e aplica a resposta ao store.
+   * Contrato UNIFICADO (auditoria FASE 1): a resposta pode ser estado fresco
+   * completo (tem `usuario` — carregarDados) OU delta (entidade única);
+   * `aplicarDelta` decide. Qualquer OUTRA forma (ex.: {texto, etapa} da
+   * triagem) é ignorada SEM quebrar o store — a mutação persistiu no
+   * servidor e o estado local é recarregado pelo bootstrap/polling.
+   */
+  const mutar = useCallback(
+    async (url: string, method: string, corpo?: unknown): Promise<boolean> => {
+      const dados = await api<unknown>(url, {
+        method,
+        ...(corpo !== undefined ? { body: JSON.stringify(corpo) } : {}),
+      });
+      if (!dados) return false;
+      aplicarDelta(dados);
+      return true;
+    },
+    [aplicarDelta],
+  );
+
   /** Registra medição (peso/altura/PA) — devolve true se o servidor confirmou.
    *  Auditoria é gerada pelo servidor. Contrato delta: aplica a medição e o
    *  peso/altura sincronizados sem recarregar o estado inteiro. */
@@ -992,7 +999,9 @@ export function BionProvider({ children }: { children: ReactNode }) {
 
   const adicionarConsulta = useCallback(
     async (c: Omit<Consulta, "id" | "status" | "ts">) => {
-      const medicoId = medicosRef.current.find((m) => m.nome === c.medico)?.id;
+      // Médico identificado por ID quando o chamador o tem (nunca por nome —
+      // homônimos existem); a busca por nome fica só como último recurso.
+      const medicoId = c.medicoId ?? medicosRef.current.find((m) => m.nome === c.medico)?.id;
       if (!medicoId) {
         toast.error("Médico não encontrado para o agendamento.");
         return;
@@ -1046,11 +1055,13 @@ export function BionProvider({ children }: { children: ReactNode }) {
   );
 
   const emitirDocumento = useCallback(
-    (d: Omit<Documento, "id" | "data">) => {
-      // Paciente identificado por ID (nunca por nome — homônimos existem).
+    (d: Omit<Documento, "id" | "data">, pacienteIdExplicito?: string) => {
+      // Paciente identificado por ID (nunca por nome — homônimos existem):
+      // 1º ID explícito do chamador, depois busca por nome (último recurso).
       const pacienteId =
-        pacientesRef.current.find((p) => p.nome === d.paciente)?.id ??
-        consultasRef.current.find((c) => c.paciente === d.paciente)?.pacienteId;
+        pacienteIdExplicito ??
+        consultasRef.current.find((c) => c.paciente === d.paciente)?.pacienteId ??
+        pacientesRef.current.find((p) => p.nome === d.paciente)?.id;
       if (!pacienteId) {
         toast.error("Paciente não encontrado para o documento.");
         return;
@@ -1071,8 +1082,9 @@ export function BionProvider({ children }: { children: ReactNode }) {
   );
 
   const avaliarConsulta = useCallback(
-    (a: Omit<Avaliacao, "id" | "quando" | "ts">) => {
-      const medicoId = medicosRef.current.find((m) => m.nome === a.medico)?.id;
+    (a: Omit<Avaliacao, "id" | "quando" | "ts">, medicoIdExplicito?: string) => {
+      // Médico por ID explícito do chamador; nome só como último recurso.
+      const medicoId = medicoIdExplicito ?? medicosRef.current.find((m) => m.nome === a.medico)?.id;
       if (!medicoId) {
         toast.error("Médico não encontrado para a avaliação.");
         return;
@@ -1201,9 +1213,11 @@ export function BionProvider({ children }: { children: ReactNode }) {
     [mutar],
   );
 
+  /** LGPD — operações IRREVERSÍVEIS: paciente SEMPRE por ID (nome só como
+   *  último recurso quando o chamador não tem o id). */
   const anonimizarPaciente = useCallback(
-    (nome: string) => {
-      const id = pacientesRef.current.find((p) => p.nome === nome)?.id;
+    (nome: string, pacienteIdExplicito?: string) => {
+      const id = pacienteIdExplicito ?? pacientesRef.current.find((p) => p.nome === nome)?.id;
       if (!id) {
         toast.error("Paciente não encontrado.");
         return;
@@ -1214,8 +1228,8 @@ export function BionProvider({ children }: { children: ReactNode }) {
   );
 
   const excluirDadosPaciente = useCallback(
-    (nome: string) => {
-      const id = pacientesRef.current.find((p) => p.nome === nome)?.id;
+    (nome: string, pacienteIdExplicito?: string) => {
+      const id = pacienteIdExplicito ?? pacientesRef.current.find((p) => p.nome === nome)?.id;
       if (!id) {
         toast.error("Paciente não encontrado.");
         return;

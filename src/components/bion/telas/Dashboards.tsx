@@ -448,11 +448,30 @@ export function MedicoDashboard({ go }: { go: (v: View) => void }) {
 
 /* ---------- Admin Dashboard ---------- */
 export function AdminDashboard({ go }: { go: (v: View) => void }) {
-  const { medicos, tickets, auditLogs } = useBion();
+  const { medicos, tickets, auditLogs, pacientes, consultas, avaliacoes } = useBion();
   const medicosAtivos = medicos.filter((m) => m.status === "ativo").length;
   const medicosPendentes = medicos.filter((m) => m.status === "pendente").length;
   const ticketsAbertos = tickets.filter((t) => t.status !== "resolvido").length;
   const eventos24h = auditLogs.filter((l) => Date.now() - l.ts < 86400000).length;
+  // Métricas REAIS derivadas do store (auditoria: nunca misturar demo com real)
+  const consultasHoje = consultas.filter((c) => {
+    const d = new Date(c.ts);
+    const hoje = new Date();
+    return d.toDateString() === hoje.toDateString();
+  }).length;
+  const inicioMes = new Date();
+  inicioMes.setDate(1);
+  inicioMes.setHours(0, 0, 0, 0);
+  const faturamentoMes = consultas
+    .filter((c) => c.pago && c.ts >= inicioMes.getTime())
+    .reduce((s, c) => {
+      const n = Number.parseFloat((c.valor ?? "").replace(/[^\d,]/g, "").replace(".", "").replace(",", "."));
+      return s + (Number.isFinite(n) ? n : 0);
+    }, 0);
+  const mediaAvaliacoes =
+    avaliacoes.length > 0
+      ? (avaliacoes.reduce((s, a) => s + a.nota, 0) / avaliacoes.length).toFixed(1)
+      : "—";
 
   return (
     <div className="space-y-6">
@@ -481,26 +500,28 @@ export function AdminDashboard({ go }: { go: (v: View) => void }) {
 
         <div className="bg-card border rounded-3xl p-4 shadow-sm">
           <div className="text-xs text-muted-foreground font-medium">Pacientes</div>
-          <div className="text-2xl font-extrabold text-foreground mt-1">12.480</div>
-          <div className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold mt-0.5">+14% este mês</div>
+          <div className="text-2xl font-extrabold text-foreground mt-1">{pacientes.length}</div>
+          <div className="text-[10px] text-muted-foreground font-bold mt-0.5">cadastro real</div>
         </div>
 
         <div className="bg-card border rounded-3xl p-4 shadow-sm">
           <div className="text-xs text-muted-foreground font-medium">Consultas Hoje</div>
-          <div className="text-2xl font-extrabold text-foreground mt-1">1.284</div>
-          <div className="text-[10px] text-primary font-bold mt-0.5">47 em andamento</div>
+          <div className="text-2xl font-extrabold text-foreground mt-1">{consultasHoje}</div>
+          <div className="text-[10px] text-primary font-bold mt-0.5">{consultas.length} na base</div>
         </div>
 
         <div className="bg-card border rounded-3xl p-4 shadow-sm">
           <div className="text-xs text-muted-foreground font-medium">Faturamento Mês</div>
-          <div className="text-2xl font-extrabold text-emerald-600 dark:text-emerald-400 mt-1">R$ 384k</div>
-          <div className="text-[10px] text-muted-foreground mt-0.5">Taxa de repasse: 15%</div>
+          <div className="text-2xl font-extrabold text-emerald-600 dark:text-emerald-400 mt-1">
+            {faturamentoMes.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 })}
+          </div>
+          <div className="text-[10px] text-muted-foreground mt-0.5">consultas pagas no mês</div>
         </div>
 
         <div className="bg-card border rounded-3xl p-4 shadow-sm">
           <div className="text-xs text-muted-foreground font-medium">Chamados Suporte</div>
           <div className="text-2xl font-extrabold text-amber-600 dark:text-amber-400 mt-1">{ticketsAbertos}</div>
-          <div className="text-[10px] text-amber-700 dark:text-amber-300 font-bold mt-0.5">Tempo méd: 6 min</div>
+          <div className="text-[10px] text-amber-700 dark:text-amber-300 font-bold mt-0.5">satisfação geral: {mediaAvaliacoes}</div>
         </div>
 
         <div

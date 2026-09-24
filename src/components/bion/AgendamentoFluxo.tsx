@@ -169,6 +169,7 @@ export function AgendamentoFluxo({
 
       adicionarConsulta({
         medico: med.nome,
+        medicoId: med.id,
         especialidade: med.especialidade,
         paciente: sessao.nome,
         data: dataSelecionada,
