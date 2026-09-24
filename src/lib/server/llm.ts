@@ -51,13 +51,14 @@ const PUBLICO_MODEL_PADRAO = "openai-fast";
  */
 const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 /**
- * Padrão pedido pelo dono do produto: GEMMA (o maior disponível na API).
- * "Gemma 4 31B" não existe na API do Gemini — o maior da família Gemma
- * liberado para chaves free-tier é o gemma-3-27b-it (27B, instrução).
- * Se o modelo falhar (404/cota), a cadeia de reserva cai para Gemini flash
- * automaticamente — a BION IA nunca fica muda.
+ * Padrão pedido pelo dono do produto: GEMMA 4 31B (gemma-4-31b-it, confirmado
+ * na ListModels desta chave em 2026-09). A família Gemma na API do Gemini não
+ * aceita systemInstruction/thinkingConfig (adaptado em chamarGemini). O 31B
+ * pode ter cold start lento (10-20s na primeira chamada); se estourar o prazo,
+ * a cadeia cai para o Gemma 4 26B A4B (MoE, mais rápido) e depois Gemini flash
+ * — a BION IA nunca fica muda.
  */
-const GEMINI_MODEL_PADRAO = "gemma-3-27b-it";
+const GEMINI_MODEL_PADRAO = "gemma-4-31b-it";
 
 let _sdk: { cliente: ClienteSdk | null; verificado: boolean } = { cliente: null, verificado: false };
 let _publicoFalhaEm = 0;
@@ -86,7 +87,7 @@ function geminiConfig() {
  * 503/429 falham em ~250ms, então o custo é mínimo; o primeiro que responder
  * vence. Override via env BION_LLM_GEMINI_RESERVA="modelo-a,modelo-b".
  */
-const MODELOS_RESERVA_PADRAO = ["gemini-3.6-flash", "gemini-flash-lite-latest"];
+const MODELOS_RESERVA_PADRAO = ["gemma-4-26b-a4b-it", "gemini-3.6-flash", "gemini-flash-lite-latest"];
 
 function modelosReserva(): string[] {
   const extra = (process.env.BION_LLM_GEMINI_RESERVA || "")
@@ -306,10 +307,11 @@ async function chamarGemini(mensagens: Msg[], prazo: number, modeloOverride?: st
           },
         };
 
-    // T1 (thinkingBudget 0) fica limitada a ~55% do prazo restante: se o modelo
-    // demorar/pensar além disso, a T2 (sem thinkingConfig, teto 8192) ainda tem
-    // tempo de responder dentro do prazo geral da cadeia.
-    const subprazo = Date.now() + Math.max(Math.round(restante(prazo) * 0.55), 6_000);
+    // T1 (thinkingBudget 0) fica limitada a ~55% do prazo restante (Gemma,
+    // que não tem T2, recebe ~75% por causa do cold start): se o modelo
+    // demorar/pensar além disso, a T2 (sem thinkingConfig, teto 8192) ou os
+    // reservas ainda têm tempo de responder dentro do prazo geral da cadeia.
+    const subprazo = Date.now() + Math.max(Math.round(restante(prazo) * (ehGemma ? 0.75 : 0.55)), 6_000);
     const texto1 = await geminiPost(modelo, apiKey, corpo, Math.min(prazo, subprazo), modelo);
     if (texto1) return texto1;
     // Gemma não tem variante "sem-thinking" (nenhum thinkingConfig foi enviado).
