@@ -50,7 +50,16 @@ const PUBLICO_MODEL_PADRAO = "openai-fast";
  * (Settings → Environment Variables) com override local via .env.
  */
 const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
-const GEMINI_MODEL_PADRAO = "gemini-flash-latest";
+/**
+ * Padrão pedido pelo dono do produto: GEMMA 4 26B A4B (gemma-4-26b-a4b-it,
+ * MoE ~26B totais / ~4B ativos, confirmado na ListModels desta chave em
+ * 2026-09). A família Gemma na API do Gemini não aceita
+ * systemInstruction/thinkingConfig (adaptado em chamarGemini). O 31B — primário
+ * anterior — mostrou-se instável/lento no free tier (500s, 17-21s); o 26B A4B,
+ * por ser MoE, é o Gemma 4 mais rápido da cadeia. Se estourar o prazo, a
+ * reserva cai para o Gemini flash — a BION IA nunca fica muda.
+ */
+const GEMINI_MODEL_PADRAO = "gemma-4-26b-a4b-it";
 
 let _sdk: { cliente: ClienteSdk | null; verificado: boolean } = { cliente: null, verificado: false };
 let _publicoFalhaEm = 0;
@@ -70,6 +79,29 @@ function geminiConfig() {
   const apiKey = (process.env.BION_LLM_GEMINI_API_KEY || "").trim();
   const model = (process.env.BION_LLM_GEMINI_MODEL || GEMINI_MODEL_PADRAO).trim();
   return { apiKey, model };
+}
+
+/**
+ * Reserva de MODELOS dentro do canal Gemini: o alias "latest" satura em picos
+ * de demanda (503 "high demand") e o free-tier sofre 429 de cota por modelo.
+ * Se o modelo configurado não responder, tentamos os reservas na sequência —
+ * 503/429 falham em ~250ms, então o custo é mínimo; o primeiro que responder
+ * vence. Override via env BION_LLM_GEMINI_RESERVA="modelo-a,modelo-b".
+ */
+const MODELOS_RESERVA_PADRAO = ["gemini-3.6-flash", "gemini-flash-lite-latest"];
+
+function modelosReserva(): string[] {
+  const extra = (process.env.BION_LLM_GEMINI_RESERVA || "")
+    .split(",")
+    .map((m) => m.trim())
+    .filter(Boolean);
+  return extra.length ? extra : MODELOS_RESERVA_PADRAO;
+}
+
+/** Cadeia completa: modelo configurado primeiro, depois os reservas (sem duplicatas). */
+function cadeiaModelos(): string[] {
+  const { model } = geminiConfig();
+  return [model, ...modelosReserva().filter((m) => m !== model)];
 }
 
 function escapeRegExp(v: string) {
@@ -127,60 +159,191 @@ function textoGemini(bruto: GeminiResposta | null): string {
     .trim();
 }
 
+/* ---- telemetria de tentativas (mesma requisição; usada pelo diagnóstico) ---- */
+
+export type RegistroGemini = {
+  rotulo: string;
+  status: number | null;
+  finish: string | null;
+  block: string | null;
+  ms: number;
+  textoLen: number;
+  erro: string | null;
+};
+
+let _registrosGemini: RegistroGemini[] = [];
+
+/** Registros da última chamada de chamarGemini NESTA instância (ler logo após). */
+export function registrosGemini(): RegistroGemini[] {
+  return _registrosGemini;
+}
+
 /** POST genérico ao generateContent; repetição sem thinkingConfig em 400. */
 async function geminiPost(
   model: string,
   apiKey: string,
   corpo: GeminiCorpo,
   prazo: number,
+  rotulo = "gemini",
 ): Promise<string | null> {
   const url = `${GEMINI_BASE}/${model}:generateContent`;
-  const chamar = async (c: GeminiCorpo) =>
-    comPrazo(
-      fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-goog-api-key": apiKey },
-        body: JSON.stringify(c),
-      }).then(async (r) => {
-        if (!r.ok) throw new Error(`gemini HTTP ${r.status}`);
-        return (await r.json()) as GeminiResposta;
-      }),
-      restante(prazo),
-    ) as Promise<GeminiResposta | null>;
+  const chamar = async (c: GeminiCorpo, rotuloTurno: string): Promise<GeminiResposta | null> => {
+    const inicio = Date.now();
+    try {
+      const bruto = (await Promise.race([
+        fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-goog-api-key": apiKey },
+          body: JSON.stringify(c),
+        }).then(async (r) => {
+          const j = (await r.json().catch(() => null)) as (GeminiResposta & { error?: { message?: string } }) | null;
+          _registrosGemini.push({
+            rotulo: rotuloTurno,
+            status: r.status,
+            finish: j?.candidates?.[0]?.finishReason ?? null,
+            block: j?.promptFeedback?.blockReason ?? null,
+            ms: Date.now() - inicio,
+            textoLen: r.ok ? textoGemini(j).length : 0,
+            erro: r.ok ? null : limpar(j?.error?.message ?? `HTTP ${r.status}`, apiKey),
+          });
+          if (!r.ok) throw new Error(`gemini HTTP ${r.status}`);
+          return j as GeminiResposta;
+        }),
+        new Promise<null>((_, rejeita) => setTimeout(() => rejeita(new Error("timeout")), restante(prazo))),
+      ])) as GeminiResposta | null;
+      return bruto;
+    } catch (e) {
+      // registro ausente = falha antes da resposta HTTP (timeout / rede)
+      const registrado = _registrosGemini.some((rg) => rg.rotulo === rotuloTurno);
+      if (!registrado) {
+        _registrosGemini.push({
+          rotulo: rotuloTurno,
+          status: null,
+          finish: null,
+          block: null,
+          ms: Date.now() - inicio,
+          textoLen: 0,
+          erro: limpar(e instanceof Error ? e.message : String(e), apiKey),
+        });
+      }
+      return null;
+    }
+  };
 
-  let bruto = await chamar(corpo);
+  let bruto = await chamar(corpo, rotulo);
   if (!bruto && corpo.generationConfig?.thinkingConfig) {
     const sem = { ...corpo, generationConfig: { ...corpo.generationConfig } };
     delete sem.generationConfig.thinkingConfig;
-    bruto = await chamar(sem);
+    // Modelos "thinking" gastam do teto com raciocínio interno: o retry sem
+    // thinkingConfig precisa de fôlego extra ou volta vazio (MAX_TOKENS).
+    const teto = sem.generationConfig.maxOutputTokens;
+    sem.generationConfig.maxOutputTokens = typeof teto === "number" ? Math.max(teto, 8192) : 8192;
+    bruto = await chamar(sem, `${rotulo}-sem-thinking`);
   }
   return textoGemini(bruto) || null;
 }
 
 /* ----------------------------- canal gemini ----------------------------- */
 
-/** Um turno de TEXTO no Gemini (mensagens[0] "assistant" vira systemInstruction). */
-async function chamarGemini(mensagens: Msg[], prazo: number): Promise<string | null> {
-  const { apiKey, model } = geminiConfig();
+/** Um turno de TEXTO no Gemini/Gemma (mensagens[0] "assistant" vira systemInstruction). */
+async function chamarGemini(mensagens: Msg[], prazo: number, modeloOverride?: string): Promise<string | null> {
+  const { apiKey } = geminiConfig();
+  _registrosGemini = [];
   const sys = mensagens[0]?.role === "assistant" ? mensagens[0].content : null;
   const resto = (sys ? mensagens.slice(1) : mensagens).map((m) => ({
     role: m.role === "user" ? ("user" as const) : ("model" as const),
     parts: [{ text: m.content }],
   }));
-  return geminiPost(
-    model,
-    apiKey,
-    {
-      ...(sys ? { systemInstruction: { parts: [{ text: sys }] } } : {}),
-      contents: resto,
-      generationConfig: {
-        temperature: 0.7,
-        maxOutputTokens: 2048,
-        thinkingConfig: { thinkingBudget: 0 },
-      },
-    },
-    prazo,
-  );
+
+  // O histórico do cliente pode trazer turnos CONSECUTIVOS do mesmo lado
+  // (ex.: duas falas da IA em sequência no fluxo de agendamento). O Gemini
+  // rejeita contents sem alternância user/model (HTTP 400) e exige que
+  // comecem em "user": mesclamos turnos vizinhos do mesmo papel e inserimos
+  // um turno inicial neutro quando o histórico abre com "model".
+  const conteudos: { role: "user" | "model"; parts: { text: string }[] }[] = [];
+  for (const turno of resto) {
+    const anterior = conteudos[conteudos.length - 1];
+    if (anterior && anterior.role === turno.role) {
+      anterior.parts.push({ text: `\n\n${turno.parts[0].text}` });
+    } else {
+      conteudos.push({ ...turno, parts: [...turno.parts] });
+    }
+  }
+  if (conteudos.length && conteudos[0].role === "model") {
+    conteudos.unshift({ role: "user", parts: [{ text: "(contexto da conversa abaixo)" }] });
+  }
+  if (!conteudos.length) return null;
+
+  // GEMMA: a família Gemma na API do Gemini NÃO aceita systemInstruction nem
+  // thinkingConfig — o prompt de sistema é fundido no primeiro turno "user",
+  // com ordem explícita de resposta direta (o Gemma 4 tende a ecoar o
+  // raciocínio — "The user wants..." — quando a instrução não é enfática).
+  const DIRETIVA_GEMMA =
+    "\n\n---\n\nIMPORTANTE (estilo de resposta): fale como a BION IA, em português, \n" +
+    "dirigindo-se diretamente à pessoa. Responda de imediato ao pedido do turno \n" +
+    "mais recente. NUNCA exiba raciocínio, análise, plano ou comentário sobre as \n" +
+    "instruções (nada de \"The user wants...\", \"Input:\", listas de análise). \n" +
+    "A primeira linha da resposta já é a fala da BION IA.";
+  const conteudosGemma = sys
+    ? conteudos.map((t, i) =>
+        i === 0 ? { role: t.role, parts: [{ text: `${sys}${DIRETIVA_GEMMA}\n\n---\n\n${t.parts[0].text}` }] } : t,
+      )
+    : conteudos.map((t, i) =>
+        i === 0 ? { role: t.role, parts: [{ text: `${DIRETIVA_GEMMA.trim()}\n\n${t.parts[0].text}` }] } : t,
+      );
+
+  // Cadeia de modelos: o configurado (ou o modelo do diagnóstico) primeiro;
+  // 503 "high demand"/429 de cota falham em ~250ms, então percorrer os reservas
+  // é quase grátis. O primeiro modelo que devolver texto vence.
+  const cadeia = modeloOverride
+    ? [modeloOverride, ...cadeiaModelos().filter((m) => m !== modeloOverride)]
+    : cadeiaModelos();
+  for (const modelo of cadeia) {
+    if (restante(prazo) <= 0) break;
+    const ehGemma = /gemma/i.test(modelo);
+    const conteudosDoModelo = ehGemma ? conteudosGemma : conteudos;
+
+    const corpo: GeminiCorpo = ehGemma
+      ? {
+          // Gemma: a API devolve 400 em thinkingConfig ("Thinking budget is
+          // not supported for this model" — medido em produção), então o corpo
+          // vai DIRETO sem thinkingConfig (economiza um round-trip de 400 por
+          // mensagem) e com teto 8192 (o Gemma 4 consome tokens com
+          // raciocínio interno). O eco que escapar é quarantado por
+          // textoComEcoRaciocinio e a cadeia cai para o próximo modelo.
+          contents: conteudosDoModelo,
+          generationConfig: { temperature: 0.7, maxOutputTokens: 8192 },
+        }
+      : {
+          ...(sys ? { systemInstruction: { parts: [{ text: sys }] } } : {}),
+          contents: conteudosDoModelo,
+          generationConfig: {
+            temperature: 0.7,
+            maxOutputTokens: 2048,
+            thinkingConfig: { thinkingBudget: 0 },
+          },
+        };
+
+    // T1 (thinkingBudget 0) fica limitada a ~55% do prazo restante; Gemma
+    // (sem systemInstruction) recebe ~85% — o 31B sem thinking chegou a
+    // responder em 17-19s e o 26B A4B pode ter cold start lento no free tier.
+    const subprazo = Date.now() + Math.max(Math.round(restante(prazo) * (ehGemma ? 0.85 : 0.55)), 6_000);
+    const texto1 = await geminiPost(modelo, apiKey, corpo, Math.min(prazo, subprazo), modelo);
+    if (texto1 && !textoComEcoRaciocinio(texto1)) return texto1;
+    // Gemma: o T1 JÁ é o caminho sem thinking (o 400 do thinkingConfig é
+    // evitado por construção) e um T2 idêntico só repetiria o mesmo despejo —
+    // próximo modelo da cadeia.
+    if (ehGemma) continue;
+
+    const sem: GeminiCorpo = {
+      ...(sys && !ehGemma ? { systemInstruction: { parts: [{ text: sys }] } } : {}),
+      contents: conteudosDoModelo,
+      generationConfig: { temperature: 0.7, maxOutputTokens: 8192 },
+    };
+    const texto2 = await geminiPost(modelo, apiKey, sem, prazo, `${modelo}-sem-thinking`);
+    if (texto2 && !textoComEcoRaciocinio(texto2)) return texto2;
+  }
+  return null;
 }
 
 /** VISÃO (foto ou PDF de laudo) no Gemini — devolve o texto extraído ou null. */
@@ -191,26 +354,35 @@ export async function visaoGemini(
   timeoutMs: number,
 ): Promise<string | null> {
   if (!geminiHabilitado()) return null;
-  const { apiKey, model } = geminiConfig();
+  const { apiKey } = geminiConfig();
   const prazo = Date.now() + Math.max(timeoutMs, 5_000);
-  return geminiPost(
-    model,
-    apiKey,
-    {
-      contents: [
-        {
-          role: "user",
-          parts: [{ text: prompt }, { inline_data: { mime_type: mime, data: base64 } }],
+  for (const modelo of cadeiaModelos()) {
+    if (restante(prazo) <= 0) break;
+    // Gemma rejeita thinkingConfig (400 medido em produção) — vai direto sem
+    // o flag; os Gemini mantêm thinkingBudget 0 (resposta limpa de uma vez).
+    const ehGemma = /gemma/i.test(modelo);
+    const texto = await geminiPost(
+      modelo,
+      apiKey,
+      {
+        contents: [
+          {
+            role: "user",
+            parts: [{ text: prompt }, { inline_data: { mime_type: mime, data: base64 } }],
+          },
+        ],
+        generationConfig: {
+          temperature: 0.1,
+          maxOutputTokens: 8192,
+          ...(ehGemma ? {} : { thinkingConfig: { thinkingBudget: 0 } }),
         },
-      ],
-      generationConfig: {
-        temperature: 0.1,
-        maxOutputTokens: 8192,
-        thinkingConfig: { thinkingBudget: 0 },
       },
-    },
-    prazo,
-  );
+      prazo,
+      modelo,
+    );
+    if (texto) return texto;
+  }
+  return null;
 }
 
 /* ------------------------------- canal env ------------------------------- */
@@ -260,6 +432,24 @@ const RE_RESPOSTA_INVALIDA =
 function respostaInvalida(texto: string | null | undefined): boolean {
   if (!texto) return false;
   return RE_RESPOSTA_INVALIDA.test(texto);
+}
+
+/**
+ * ECO DE RACIOCÍNIO (família Gemma 4): o modelo despeja a análise inteira no
+ * texto ("* User's input...", rascunhos, "*Wait...", "Constraint Check") com
+ * a resposta final embutida no meio — a API NÃO permite desligar isso
+ * (thinkingBudget devolve 400 "not supported for this model") e a diretiva de
+ * prompt não contém o eco. Isso NUNCA pode chegar ao paciente: tratamos como
+ * falha do modelo e a cadeia cai para o próximo (mesmo padrão do canal
+ * público). Quando a Google servir o Gemma 4 sem o despejo, ele volta a
+ * passar automaticamente.
+ */
+const RE_ECO_RACIOCINIO =
+  /(\*\s*User'?s?\s*Input|User'?s?\s*input:|\*\s*Input:|Constraint Check|\*\s*Wait\b|\*\s*Acknowledge|\*\s*Constraint|Let me analyze)/i;
+
+function textoComEcoRaciocinio(texto: string | null | undefined): boolean {
+  if (!texto) return false;
+  return RE_ECO_RACIOCINIO.test(texto);
 }
 
 /**
@@ -393,4 +583,153 @@ export async function obterLLM(): Promise<Cliente | null> {
   const env = clienteEnv();
   if (env) return env;
   return tentarSdk();
+}
+
+/* ---------------------------- diagnóstico (admin) ---------------------------- */
+
+export type EstadoCanais = {
+  gemini: { configurado: boolean; modelo: string; reserva: string[] };
+  env: { configurado: boolean; modelo: string | null };
+  publico: { ativo: boolean; modelo: string };
+};
+
+/** Estado de configuração dos canais — SOMENTE booleanos/modelos, nunca chaves. */
+export function estadoCanais(): EstadoCanais {
+  const gem = geminiConfig();
+  const env = clienteEnv();
+  return {
+    gemini: { configurado: geminiHabilitado() && !!gem.apiKey, modelo: gem.model, reserva: modelosReserva() },
+    env: { configurado: !!env, modelo: process.env.BION_LLM_MODEL?.trim() || null },
+    publico: { ativo: publicoHabilitado(), modelo: (process.env.BION_LLM_PUBLICO_MODEL || PUBLICO_MODEL_PADRAO).trim() },
+  };
+}
+
+export type ProbeCanal = { canal: FonteLlm; ok: boolean; detalhe: string; ms: number };
+
+/**
+ * Reproduz uma chamada REAL ao canal Gemini com as mensagens informadas
+ * (mesmo caminho de chamarGemini, incluindo normalização de alternância) e
+ * devolve o texto + os registros de cada tentativa (status, finishReason,
+ * blockReason, ms). Usado pelo diagnóstico admin para enxergar POR QUE o
+ * Gemini falha em produção sem expor a chave.
+ */
+export async function diagnosticoGemini(mensagens: Msg[], timeoutMs = 25_000, modelo?: string) {
+  const prazo = Date.now() + timeoutMs;
+  const texto = await chamarGemini(mensagens, prazo, modelo);
+  return { texto, registros: _registrosGemini };
+}
+
+export type ModeloDisponivel = { id: string; nome: string };
+
+/**
+ * Lista os modelos que ESTA chave tem acesso (ListModels da API do Gemini),
+ * filtrados para os que aceitam generateContent. Nunca expõe a chave. Usado
+ * pelo diagnóstico admin para descobrir quais Gemma/Gemini estão liberados.
+ */
+export async function listarModelosGemini(timeoutMs = 15_000): Promise<ModeloDisponivel[] | { erro: string }> {
+  const { apiKey } = geminiConfig();
+  if (!apiKey) return { erro: "sem chave BION_LLM_GEMINI_API_KEY" };
+  try {
+    const r = await fetch(`${GEMINI_BASE}?pageSize=1000`, {
+      headers: { "X-goog-api-key": apiKey },
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    const j = (await r.json().catch(() => null)) as
+      | { models?: { name?: string; displayName?: string; supportedGenerationMethods?: string[] }[]; error?: { message?: string } }
+      | null;
+    if (!r.ok) return { erro: limpar(j?.error?.message || `HTTP ${r.status}`, apiKey) };
+    return (j?.models ?? [])
+      .filter((m) => m.supportedGenerationMethods?.includes("generateContent"))
+      .map((m) => ({ id: (m.name || "").replace(/^models\//, ""), nome: m.displayName || "" }))
+      .sort((a, b) => a.id.localeCompare(b.id));
+  } catch (e) {
+    return { erro: limpar(e instanceof Error ? e.message : String(e), apiKey) };
+  }
+}
+
+/** Remove a chave da mensagem (defesa em profundidade: provedores não devem
+ * ecoá-la, mas o texto de erro nunca pode devolvê-la ao painel). */
+function limpar(detalhe: string, ...secretos: string[]): string {
+  let texto = detalhe;
+  for (const s of secretos) {
+    if (s && texto.includes(s)) texto = texto.split(s).join("***");
+  }
+  return texto.slice(0, 300);
+}
+
+/**
+ * Sonda ao vivo dos canais (chamada pelo diagnóstico admin). Cada canal
+ * recebe um pedido mínimo ("Responda apenas: ok"); o resultado diz se o
+ * canal funciona DESTE runtime (chave válida + região suportada).
+ */
+export async function probeCanais(timeoutMs = 20_000): Promise<ProbeCanal[]> {
+  const prazo = Date.now() + timeoutMs;
+  const resultados: ProbeCanal[] = [];
+  const segredoGemini = geminiConfig().apiKey;
+
+  // 1) Gemini — duas variantes: como o chat manda (thinkingBudget 0) e sem
+  //    thinkingConfig com teto alto (caminho do retry). finishReason na resposta
+  //    distingue "pensou e não sobrou texto" (MAX_TOKENS) de bloqueio de safety.
+  if (geminiHabilitado() && segredoGemini) {
+    const { apiKey } = geminiConfig();
+    const conteudos: GeminiCorpo["contents"] = [{ role: "user", parts: [{ text: "Responda apenas: ok" }] }];
+    const variantes = [
+      { rotulo: "thinkingBudget0", corpo: { contents: conteudos, generationConfig: { temperature: 0.7, maxOutputTokens: 2048, thinkingConfig: { thinkingBudget: 0 } } } },
+      { rotulo: "sem-thinking-teto8192", corpo: { contents: conteudos, generationConfig: { maxOutputTokens: 8192 } } },
+    ];
+    // Um resultado POR modelo da cadeia — mostra qual alias está vivo agora.
+    for (const modelo of cadeiaModelos()) {
+      if (restante(prazo) <= 0) break;
+      const inicio = Date.now();
+      let okModelo = false;
+      let detalheModelo = "";
+      for (const v of variantes) {
+        if (restante(prazo) <= 0) break;
+        try {
+          const r = await fetch(`${GEMINI_BASE}/${modelo}:generateContent`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "X-goog-api-key": apiKey },
+            body: JSON.stringify(v.corpo),
+            signal: AbortSignal.timeout(Math.max(restante(prazo), 3_000)),
+          }).then(async (res) => ({ status: res.status, corpo: (await res.json().catch(() => null)) as (GeminiResposta & { error?: { message?: string } }) | null }));
+          if (r.status === 200) {
+            const cand = r.corpo?.candidates?.[0];
+            const t = textoGemini(r.corpo);
+            // Eco de raciocínio (Gemma 4) não conta como sucesso — o probe
+            // precisa refletir o que de fato chegaria ao paciente.
+            okModelo = !!t && !textoComEcoRaciocinio(t);
+            detalheModelo = `HTTP 200 finish=${cand?.finishReason ?? "?"} texto="${t.slice(0, 30) || "—"}"${!!t && textoComEcoRaciocinio(t) ? " (eco de raciocínio — tratado como falha)" : ""} [${v.rotulo}]`;
+            if (okModelo) break;
+          } else {
+            const msg = r.corpo?.error?.message || `HTTP ${r.status}`;
+            detalheModelo = limpar(`${msg} [${v.rotulo}]`, segredoGemini);
+          }
+        } catch (e) {
+          detalheModelo = limpar(`${e instanceof Error ? e.message : String(e)} [${v.rotulo}]`, segredoGemini);
+        }
+      }
+      resultados.push({ canal: "gemini", ok: okModelo, detalhe: `[${modelo}] ${detalheModelo || "sem resposta"}`, ms: Date.now() - inicio });
+    }
+  } else {
+    resultados.push({ canal: "gemini", ok: false, detalhe: "não configurado — defina BION_LLM_GEMINI_API_KEY na Vercel e faça redeploy", ms: 0 });
+  }
+
+  // 2) endpoint público (reserva) — só informa se está respondendo
+  if (publicoHabilitado()) {
+    const inicio = Date.now();
+    try {
+      const r = await chamarPublico(
+        [
+          { role: "assistant", content: "Você é um eco de teste." },
+          { role: "user", content: "Responda apenas: ok" },
+        ],
+        prazo,
+      );
+      resultados.push({ canal: "publico", ok: !!r, detalhe: r ? `resposta: ${r.slice(0, 40)}` : "sem resposta", ms: Date.now() - inicio });
+    } catch (e) {
+      resultados.push({ canal: "publico", ok: false, detalhe: e instanceof Error ? e.message : String(e), ms: Date.now() - inicio });
+    }
+  }
+
+  return resultados;
 }
