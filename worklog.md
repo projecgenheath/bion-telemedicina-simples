@@ -611,3 +611,21 @@ Stage Summary:
 - Resposta à pergunta: NUNCA houve "Gemma 4 31B" na stack — o rótulo gpt-oss visto antes é do tier público de reserva (Pollinations), hoje DESLIGADO por LGPD; em produção a BION IA responde via GOOGLE GEMINI (gemini-flash-latest, com reserva automática gemini-3.6-flash quando o alias satura).
 - Cadeia Gemini agora é resiliente a saturação de alias e cota free-tier sem intervenção; observável por modelo no diagnóstico admin.
 - Próximo passo opcional ao usuário: se quiser fixar outro modelo, basta BION_LLM_GEMINI_MODEL/BION_LLM_GEMINI_RESERVA na Vercel; billing no AI Studio eliminaría 429 de pico.
+
+---
+Task ID: gemma4-31b-primario
+Agent: Super Z (principal)
+Task: "Configure para usar o Gemma 4 31B" — configurar o Gemma 4 31B como modelo da BION IA.
+
+Work Log:
+- Correção de premissa: "Gemma 4 31B" EXISTE — ListModels via produção (novo modo {listar:true} no diagnóstico admin) confirma gemma-4-31b-it e gemma-4-26b-a4b-it liberados para a chave; gemma-3-27b-it está aposentado (404 v1beta). Descoberta também de gemini-3.5/3.6/3.7/3.8-flash.
+- Suporte à família Gemma implementado em llm.ts: fold do systemInstruction no primeiro turno user (Gemma não aceita systemInstruction — mantido por segurança), override de modelo no diagnóstico ({modelo:"..."}), cadeia = gemma-4-31b-it primário.
+- Descobertas de comportamento (todas medidas em produção): (1) 31B instável no free tier — HTTP 500 rápido, timeouts de 19-21s, 1 sucesso em 17,7s; (2) thinkingConfig = 400 "Thinking budget is not supported for this model" (família não permite ocultar raciocínio); (3) sem thinking, o Gemma 4 DESPEJA o raciocínio no texto ("* User's input...", rascunhos, "*Wait...") com a resposta embutida — diretiva de prompt não contém o eco.
+- Proteções implementadas: RE_ECO_RACIOCINIO (quarantena do despejo — tratado como falha do modelo, cai para o próximo; o eco NUNCA chega ao paciente), Gemma pula T2 (retry interno do 400 já cobre), reserva padrão [gemini-3.6-flash, gemini-flash-lite-latest] (26B removido: "sucedia" com eco e rouba a janela do flash), probe marca "(eco de raciocínio — tratado como falha)".
+- Commits: f15046c (suporte Gemma + ListModels), f7255e5 (padrão gemma-4-31b-it), 7106570 (janela 85% + diretiva), 1ac35da (quarantena do eco). Tudo com tsc/eslint/build limpos e deploy verificado.
+- Validação final em produção: estado mostra modelo="gemma-4-31b-it"; chat real do paciente respondeu fonte="gemini" com texto limpo em PT-BR (servido pela reserva flash enquanto o 31B está instável); probe verdadeiro por modelo.
+
+Stage Summary:
+- Configuração ATENDIDA: gemma-4-31b-it é o modelo primário da BION IA (first da cadeia), exatamente como o dono pediu.
+- Realidade do free tier hoje: Gemma 4 não permite desligar o raciocínio (400) e o 31B está instável/lento (500s, 17-21s) — a quarantena garante que o paciente só receba texto limpo (Gemini 3.6 Flash serve enquanto isso).
+- Recuperação automática: quando o Gemma 4 parar de ecar raciocínio (ou com billing), ele volta a servir como primário sem mudança de código. Swap manual: BION_LLM_GEMINI_MODEL="gemini-3.6-flash" na Vercel.
