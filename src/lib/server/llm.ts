@@ -72,6 +72,29 @@ function geminiConfig() {
   return { apiKey, model };
 }
 
+/**
+ * Reserva de MODELOS dentro do canal Gemini: o alias "latest" satura em picos
+ * de demanda (503 "high demand") e o free-tier sofre 429 de cota por modelo.
+ * Se o modelo configurado não responder, tentamos os reservas na sequência —
+ * 503/429 falham em ~250ms, então o custo é mínimo; o primeiro que responder
+ * vence. Override via env BION_LLM_GEMINI_RESERVA="modelo-a,modelo-b".
+ */
+const MODELOS_RESERVA_PADRAO = ["gemini-3.6-flash", "gemini-flash-lite-latest"];
+
+function modelosReserva(): string[] {
+  const extra = (process.env.BION_LLM_GEMINI_RESERVA || "")
+    .split(",")
+    .map((m) => m.trim())
+    .filter(Boolean);
+  return extra.length ? extra : MODELOS_RESERVA_PADRAO;
+}
+
+/** Cadeia completa: modelo configurado primeiro, depois os reservas (sem duplicatas). */
+function cadeiaModelos(): string[] {
+  const { model } = geminiConfig();
+  return [model, ...modelosReserva().filter((m) => m !== model)];
+}
+
 function escapeRegExp(v: string) {
   return v.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -215,7 +238,7 @@ async function geminiPost(
 
 /** Um turno de TEXTO no Gemini (mensagens[0] "assistant" vira systemInstruction). */
 async function chamarGemini(mensagens: Msg[], prazo: number): Promise<string | null> {
-  const { apiKey, model } = geminiConfig();
+  const { apiKey } = geminiConfig();
   _registrosGemini = [];
   const sys = mensagens[0]?.role === "assistant" ? mensagens[0].content : null;
   const resto = (sys ? mensagens.slice(1) : mensagens).map((m) => ({
@@ -242,29 +265,38 @@ async function chamarGemini(mensagens: Msg[], prazo: number): Promise<string | n
   }
   if (!conteudos.length) return null;
 
-  const corpo: GeminiCorpo = {
-    ...(sys ? { systemInstruction: { parts: [{ text: sys }] } } : {}),
-    contents: conteudos,
-    generationConfig: {
-      temperature: 0.7,
-      maxOutputTokens: 2048,
-      thinkingConfig: { thinkingBudget: 0 },
-    },
-  };
+  // Cadeia de modelos: o configurado primeiro; 503 "high demand"/429 de cota
+  // falham em ~250ms, então percorrer os reservas é quase grátis. O primeiro
+  // modelo que devolver texto vence (telemetria rotulada por modelo).
+  for (const modelo of cadeiaModelos()) {
+    if (restante(prazo) <= 0) break;
 
-  // T1 (thinkingBudget 0) fica limitada a ~55% do prazo restante: se o modelo
-  // demorar/pensar além disso, a T2 (sem thinkingConfig, teto 8192) ainda tem
-  // tempo de responder dentro do prazo geral da cadeia.
-  const subprazo = Date.now() + Math.max(Math.round(restante(prazo) * 0.55), 6_000);
-  const texto1 = await geminiPost(model, apiKey, corpo, Math.min(prazo, subprazo));
-  if (texto1) return texto1;
+    const corpo: GeminiCorpo = {
+      ...(sys ? { systemInstruction: { parts: [{ text: sys }] } } : {}),
+      contents: conteudos,
+      generationConfig: {
+        temperature: 0.7,
+        maxOutputTokens: 2048,
+        thinkingConfig: { thinkingBudget: 0 },
+      },
+    };
 
-  const sem: GeminiCorpo = {
-    ...(sys ? { systemInstruction: { parts: [{ text: sys }] } } : {}),
-    contents: conteudos,
-    generationConfig: { temperature: 0.7, maxOutputTokens: 8192 },
-  };
-  return geminiPost(model, apiKey, sem, prazo);
+    // T1 (thinkingBudget 0) fica limitada a ~55% do prazo restante: se o modelo
+    // demorar/pensar além disso, a T2 (sem thinkingConfig, teto 8192) ainda tem
+    // tempo de responder dentro do prazo geral da cadeia.
+    const subprazo = Date.now() + Math.max(Math.round(restante(prazo) * 0.55), 6_000);
+    const texto1 = await geminiPost(modelo, apiKey, corpo, Math.min(prazo, subprazo), modelo);
+    if (texto1) return texto1;
+
+    const sem: GeminiCorpo = {
+      ...(sys ? { systemInstruction: { parts: [{ text: sys }] } } : {}),
+      contents: conteudos,
+      generationConfig: { temperature: 0.7, maxOutputTokens: 8192 },
+    };
+    const texto2 = await geminiPost(modelo, apiKey, sem, prazo, `${modelo}-sem-thinking`);
+    if (texto2) return texto2;
+  }
+  return null;
 }
 
 /** VISÃO (foto ou PDF de laudo) no Gemini — devolve o texto extraído ou null. */
@@ -275,26 +307,32 @@ export async function visaoGemini(
   timeoutMs: number,
 ): Promise<string | null> {
   if (!geminiHabilitado()) return null;
-  const { apiKey, model } = geminiConfig();
+  const { apiKey } = geminiConfig();
   const prazo = Date.now() + Math.max(timeoutMs, 5_000);
-  return geminiPost(
-    model,
-    apiKey,
-    {
-      contents: [
-        {
-          role: "user",
-          parts: [{ text: prompt }, { inline_data: { mime_type: mime, data: base64 } }],
+  for (const modelo of cadeiaModelos()) {
+    if (restante(prazo) <= 0) break;
+    const texto = await geminiPost(
+      modelo,
+      apiKey,
+      {
+        contents: [
+          {
+            role: "user",
+            parts: [{ text: prompt }, { inline_data: { mime_type: mime, data: base64 } }],
+          },
+        ],
+        generationConfig: {
+          temperature: 0.1,
+          maxOutputTokens: 8192,
+          thinkingConfig: { thinkingBudget: 0 },
         },
-      ],
-      generationConfig: {
-        temperature: 0.1,
-        maxOutputTokens: 8192,
-        thinkingConfig: { thinkingBudget: 0 },
       },
-    },
-    prazo,
-  );
+      prazo,
+      modelo,
+    );
+    if (texto) return texto;
+  }
+  return null;
 }
 
 /* ------------------------------- canal env ------------------------------- */
@@ -482,7 +520,7 @@ export async function obterLLM(): Promise<Cliente | null> {
 /* ---------------------------- diagnóstico (admin) ---------------------------- */
 
 export type EstadoCanais = {
-  gemini: { configurado: boolean; modelo: string };
+  gemini: { configurado: boolean; modelo: string; reserva: string[] };
   env: { configurado: boolean; modelo: string | null };
   publico: { ativo: boolean; modelo: string };
 };
@@ -492,7 +530,7 @@ export function estadoCanais(): EstadoCanais {
   const gem = geminiConfig();
   const env = clienteEnv();
   return {
-    gemini: { configurado: geminiHabilitado() && !!gem.apiKey, modelo: gem.model },
+    gemini: { configurado: geminiHabilitado() && !!gem.apiKey, modelo: gem.model, reserva: modelosReserva() },
     env: { configurado: !!env, modelo: process.env.BION_LLM_MODEL?.trim() || null },
     publico: { ativo: publicoHabilitado(), modelo: (process.env.BION_LLM_PUBLICO_MODEL || PUBLICO_MODEL_PADRAO).trim() },
   };
@@ -537,38 +575,42 @@ export async function probeCanais(timeoutMs = 20_000): Promise<ProbeCanal[]> {
   //    thinkingConfig com teto alto (caminho do retry). finishReason na resposta
   //    distingue "pensou e não sobrou texto" (MAX_TOKENS) de bloqueio de safety.
   if (geminiHabilitado() && segredoGemini) {
-    const { apiKey, model } = geminiConfig();
+    const { apiKey } = geminiConfig();
     const conteudos: GeminiCorpo["contents"] = [{ role: "user", parts: [{ text: "Responda apenas: ok" }] }];
     const variantes = [
       { rotulo: "thinkingBudget0", corpo: { contents: conteudos, generationConfig: { temperature: 0.7, maxOutputTokens: 2048, thinkingConfig: { thinkingBudget: 0 } } } },
       { rotulo: "sem-thinking-teto8192", corpo: { contents: conteudos, generationConfig: { maxOutputTokens: 8192 } } },
     ];
-    for (const v of variantes) {
+    // Um resultado POR modelo da cadeia — mostra qual alias está vivo agora.
+    for (const modelo of cadeiaModelos()) {
       if (restante(prazo) <= 0) break;
       const inicio = Date.now();
-      try {
-        const r = await fetch(`${GEMINI_BASE}/${model}:generateContent`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "X-goog-api-key": apiKey },
-          body: JSON.stringify(v.corpo),
-          signal: AbortSignal.timeout(Math.max(restante(prazo), 3_000)),
-        }).then(async (res) => ({ status: res.status, corpo: (await res.json().catch(() => null)) as (GeminiResposta & { error?: { message?: string } }) | null }));
-        if (r.status === 200) {
-          const cand = r.corpo?.candidates?.[0];
-          const t = textoGemini(r.corpo);
-          resultados.push({
-            canal: "gemini",
-            ok: !!t,
-            detalhe: `[${v.rotulo}] HTTP 200 finish=${cand?.finishReason ?? "?"} texto="${t.slice(0, 30) || "—"}"`,
-            ms: Date.now() - inicio,
-          });
-        } else {
-          const msg = r.corpo?.error?.message || `HTTP ${r.status}`;
-          resultados.push({ canal: "gemini", ok: false, detalhe: limpar(`[${v.rotulo}] ${msg}`, segredoGemini), ms: Date.now() - inicio });
+      let okModelo = false;
+      let detalheModelo = "";
+      for (const v of variantes) {
+        if (restante(prazo) <= 0) break;
+        try {
+          const r = await fetch(`${GEMINI_BASE}/${modelo}:generateContent`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "X-goog-api-key": apiKey },
+            body: JSON.stringify(v.corpo),
+            signal: AbortSignal.timeout(Math.max(restante(prazo), 3_000)),
+          }).then(async (res) => ({ status: res.status, corpo: (await res.json().catch(() => null)) as (GeminiResposta & { error?: { message?: string } }) | null }));
+          if (r.status === 200) {
+            const cand = r.corpo?.candidates?.[0];
+            const t = textoGemini(r.corpo);
+            okModelo = !!t;
+            detalheModelo = `HTTP 200 finish=${cand?.finishReason ?? "?"} texto="${t.slice(0, 30) || "—"}" [${v.rotulo}]`;
+            if (okModelo) break;
+          } else {
+            const msg = r.corpo?.error?.message || `HTTP ${r.status}`;
+            detalheModelo = limpar(`${msg} [${v.rotulo}]`, segredoGemini);
+          }
+        } catch (e) {
+          detalheModelo = limpar(`${e instanceof Error ? e.message : String(e)} [${v.rotulo}]`, segredoGemini);
         }
-      } catch (e) {
-        resultados.push({ canal: "gemini", ok: false, detalhe: limpar(`[${v.rotulo}] ${e instanceof Error ? e.message : String(e)}`, segredoGemini), ms: Date.now() - inicio });
       }
+      resultados.push({ canal: "gemini", ok: okModelo, detalhe: `[${modelo}] ${detalheModelo || "sem resposta"}`, ms: Date.now() - inicio });
     }
   } else {
     resultados.push({ canal: "gemini", ok: false, detalhe: "não configurado — defina BION_LLM_GEMINI_API_KEY na Vercel e faça redeploy", ms: 0 });
