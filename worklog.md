@@ -629,3 +629,23 @@ Stage Summary:
 - Configuração ATENDIDA: gemma-4-31b-it é o modelo primário da BION IA (first da cadeia), exatamente como o dono pediu.
 - Realidade do free tier hoje: Gemma 4 não permite desligar o raciocínio (400) e o 31B está instável/lento (500s, 17-21s) — a quarantena garante que o paciente só receba texto limpo (Gemini 3.6 Flash serve enquanto isso).
 - Recuperação automática: quando o Gemma 4 parar de ecar raciocínio (ou com billing), ele volta a servir como primário sem mudança de código. Swap manual: BION_LLM_GEMINI_MODEL="gemini-3.6-flash" na Vercel.
+
+---
+Task ID: gemma4-26b-a4b-primario
+Agent: Super Z (principal)
+Task: "Mude para o Gemma 4 26B A4B" — trocar o primário da BION IA para gemma-4-26b-a4b-it.
+
+Work Log:
+- ID confirmado por busca web (docs.cloud.google.com/philschmid/OpenRouter): gemma-4-26b-a4b-it, MoE ~26B totais/4B ativos, multimodal, 262K contexto; ListModels da sessão anterior já o confirmava liberado para esta chave.
+- Sandbox segue geo-bloqueado ("User location is not supported") — validação production-first como de costume.
+- llm.ts: GEMINI_MODEL_PADRAO gemma-4-31b-it → gemma-4-26b-a4b-it; comentários atualizados; corpo Gemma no chat agora vai DIRETO sem thinkingConfig (o 400 "Thinking budget is not supported" é evitado por construção — economiza um round-trip por mensagem; o teto sobe para 8192), mesmo ajuste em visaoGemini; lógica de cadeia/quarantena intacta (T2 continue para Gemma mantido).
+- .env.example: comentário do BION_LLM_GEMINI_MODEL atualizado para o 26B A4B.
+- Validação local: tsc/eslint/build limpos; servidor de produção local reiniciado (PID antigo prendia a porta 3000); GET diagnóstico mostrou modelo=gemma-4-26b-a4b-it; POST probe emitiu 3 linhas rotuladas por modelo (geobloqueio esperado).
+- Commit 0a6eab8 (subiu junto o 8bbc616, só worklog da sessão anterior); push → deploy Vercel automático.
+- PRODUÇÃO VALIDADA: estado = gemma-4-26b-a4b-it primário + reserva [gemini-3.6-flash, gemini-flash-lite-latest]. Probe real: 26B A4B HTTP 200 STOP em 1,9s MAS com eco ("*   Input: ...") → quarantena marcou como falha; 3.6-flash 200 "ok". Chat real do paciente: fonte="gemini", texto limpo em PT-BR. Telemetria de cenário chat-real: gemma-4-26b-a4b-it 200 STOP 9,3s/1730 chars (eco → quarantena) → gemini-3.6-flash 200 2,0s/169 chars serviu a resposta final.
+- gemini-flash-lite-latest: timeout isolado no probe (reserva de fundo; sem impacto).
+
+Stage Summary:
+- Configuração ATENDIDA: gemma-4-26b-a4b-it é o primário da BION IA (primeiro da cadeia), exatamente o pedido; é o Gemma 4 mais rápido (MoE 4B ativos; 1,9s no probe vs 17-21s/500s do 31B).
+- Realidade da API hoje: Gemma 4 hospedado despeja raciocínio no texto e o thinkingConfig devolve 400 — a quarantena garante que o paciente só receba texto limpo (reserva 3.6-flash serve enquanto isso); quando a Google corrigir o despejo, o 26B A4B passa a servir automaticamente, sem mudança de código.
+- Ganho estrutural desta sessão: mensagens Gemma sem round-trip de 400 (corpo direto sem thinkingConfig, chat e visão).
