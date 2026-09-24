@@ -690,3 +690,4 @@ Stage Summary:
 - Senha demo bion123456 agora VERDADEIRA no banco (tela↔banco coerentes); 11 contas alinhadas.
 - Restante da auditoria (FASES 2-4) documentado; pendências sugeridas: deltas nas rotas pesadas (carregarDados → entidade única), BionProvider fora do RootLayout, realtime p/ mensagens.
 
+- MEDIDA FINAL (pós 1c2251f): produção primário=gemini-3.6-flash, reserva=[3.8-flash, gemma-26B-A4B, flash-lite]. Cenário da paciente: 28,5s → 16,4s (imposto Gemma de 15,5s eliminado; resposta limpa, intenção de renovação respeitada). 2ª mensagem bateu teto (29,4s → fonte=local, resposta local correta e rotulada na UI): free-tier do Gemini em 429/saturação no fim do dia — latência restante é cota da Google, mitigável só com billing ou reset diário.
