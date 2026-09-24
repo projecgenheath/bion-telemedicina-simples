@@ -51,14 +51,15 @@ const PUBLICO_MODEL_PADRAO = "openai-fast";
  */
 const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 /**
- * Padrão pedido pelo dono do produto: GEMMA 4 31B (gemma-4-31b-it, confirmado
- * na ListModels desta chave em 2026-09). A família Gemma na API do Gemini não
- * aceita systemInstruction/thinkingConfig (adaptado em chamarGemini). O 31B
- * pode ter cold start lento (10-20s na primeira chamada); se estourar o prazo,
- * a cadeia cai para o Gemma 4 26B A4B (MoE, mais rápido) e depois Gemini flash
- * — a BION IA nunca fica muda.
+ * Padrão pedido pelo dono do produto: GEMMA 4 26B A4B (gemma-4-26b-a4b-it,
+ * MoE ~26B totais / ~4B ativos, confirmado na ListModels desta chave em
+ * 2026-09). A família Gemma na API do Gemini não aceita
+ * systemInstruction/thinkingConfig (adaptado em chamarGemini). O 31B — primário
+ * anterior — mostrou-se instável/lento no free tier (500s, 17-21s); o 26B A4B,
+ * por ser MoE, é o Gemma 4 mais rápido da cadeia. Se estourar o prazo, a
+ * reserva cai para o Gemini flash — a BION IA nunca fica muda.
  */
-const GEMINI_MODEL_PADRAO = "gemma-4-31b-it";
+const GEMINI_MODEL_PADRAO = "gemma-4-26b-a4b-it";
 
 let _sdk: { cliente: ClienteSdk | null; verificado: boolean } = { cliente: null, verificado: false };
 let _publicoFalhaEm = 0;
@@ -304,17 +305,14 @@ async function chamarGemini(mensagens: Msg[], prazo: number, modeloOverride?: st
 
     const corpo: GeminiCorpo = ehGemma
       ? {
-          // Gemma 4 é modelo de RACIOCÍNIO: pedimos thinkingBudget 0 para a API
-          // despejar só a resposta final (sem isso o texto vem com a análise
-          // inteira — "* User's input...", rascunhos, "*Wait..."). Se a família
-          // rejeitar thinkingConfig (400), o retry interno do geminiPost repete
-          // sem thinkingConfig e o comportamento antigo (eco) prevalece.
+          // Gemma: a API devolve 400 em thinkingConfig ("Thinking budget is
+          // not supported for this model" — medido em produção), então o corpo
+          // vai DIRETO sem thinkingConfig (economiza um round-trip de 400 por
+          // mensagem) e com teto 8192 (o Gemma 4 consome tokens com
+          // raciocínio interno). O eco que escapar é quarantado por
+          // textoComEcoRaciocinio e a cadeia cai para o próximo modelo.
           contents: conteudosDoModelo,
-          generationConfig: {
-            temperature: 0.7,
-            maxOutputTokens: 2048,
-            thinkingConfig: { thinkingBudget: 0 },
-          },
+          generationConfig: { temperature: 0.7, maxOutputTokens: 8192 },
         }
       : {
           ...(sys ? { systemInstruction: { parts: [{ text: sys }] } } : {}),
@@ -326,14 +324,15 @@ async function chamarGemini(mensagens: Msg[], prazo: number, modeloOverride?: st
           },
         };
 
-    // T1 (thinkingBudget 0) fica limitada a ~55% do prazo restante (Gemma,
-    // que não tem systemInstruction, recebe ~85% — o 31B sem thinking chegou
-    // a responder em 17-19s e precisa da janela cheia).
+    // T1 (thinkingBudget 0) fica limitada a ~55% do prazo restante; Gemma
+    // (sem systemInstruction) recebe ~85% — o 31B sem thinking chegou a
+    // responder em 17-19s e o 26B A4B pode ter cold start lento no free tier.
     const subprazo = Date.now() + Math.max(Math.round(restante(prazo) * (ehGemma ? 0.85 : 0.55)), 6_000);
     const texto1 = await geminiPost(modelo, apiKey, corpo, Math.min(prazo, subprazo), modelo);
     if (texto1 && !textoComEcoRaciocinio(texto1)) return texto1;
-    // Gemma: o T1 já cobriu o caminho sem thinking (retry interno do 400 do
-    // thinkingConfig) e um T2 idêntico só repetiria o mesmo despejo — próximo modelo.
+    // Gemma: o T1 JÁ é o caminho sem thinking (o 400 do thinkingConfig é
+    // evitado por construção) e um T2 idêntico só repetiria o mesmo despejo —
+    // próximo modelo da cadeia.
     if (ehGemma) continue;
 
     const sem: GeminiCorpo = {
@@ -359,6 +358,9 @@ export async function visaoGemini(
   const prazo = Date.now() + Math.max(timeoutMs, 5_000);
   for (const modelo of cadeiaModelos()) {
     if (restante(prazo) <= 0) break;
+    // Gemma rejeita thinkingConfig (400 medido em produção) — vai direto sem
+    // o flag; os Gemini mantêm thinkingBudget 0 (resposta limpa de uma vez).
+    const ehGemma = /gemma/i.test(modelo);
     const texto = await geminiPost(
       modelo,
       apiKey,
@@ -369,7 +371,11 @@ export async function visaoGemini(
             parts: [{ text: prompt }, { inline_data: { mime_type: mime, data: base64 } }],
           },
         ],
-        generationConfig: { temperature: 0.1, maxOutputTokens: 8192, thinkingConfig: { thinkingBudget: 0 } },
+        generationConfig: {
+          temperature: 0.1,
+          maxOutputTokens: 8192,
+          ...(ehGemma ? {} : { thinkingConfig: { thinkingBudget: 0 } }),
+        },
       },
       prazo,
       modelo,
