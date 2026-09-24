@@ -746,3 +746,22 @@ Work Log:
 Stage Summary:
 - FASE 3 100% VALIDADA EM PRODUÇÃO: tempo real ~1,5-5s (vs polling de 4s fixo), degradação graciosa garantida (stream→polling), zero regressão de contrato (payload reusado pelo mesmo mesclarMensagens).
 - FASES 1-3 da auditoria concluídas; FASE 4 (itens leves) a confirmar com o dono — relatório original perdido nos resets de contexto; único achado estático restante é falso positivo documentado (themeColor).
+
+---
+Task ID: auditoria-fase4-front
+Agent: Super Z (principal)
+Task: "Siga para a fase 4" — auditoria front: itens leves (polimento final).
+
+Work Log:
+- Relatório original (21 itens) perdido nos resets de contexto — FASE 4 reconstruída por varreduras frescas: auditoria estática (1 falso positivo restante), auditoria de inputs, dependências sem referência, TODOs/console em código de produção.
+- DEPENDÊNCIAS MORTAS (6 removidas): react-hook-form, @hookform/resolvers, zod, date-fns, sharp, tailwindcss-animate. Verificação exaustiva (src/ + scripts/ + prisma/ + examples/ + raiz): zero referências. react-hook-form só era importado por src/components/ui/form.tsx — template shadcn que NENHUM componente BION usa (deletado junto; confirmado que nada importa "@/components/ui/form"). sharp removido com segurança: next/image não é usado (rg vazio) e Next 15+ embute otimização própria. tw-animate-css MANTIDO (importado em globals.css); deps de infra (react-dom, @types/*, tailwindcss/postcss, eslint-config-next, bun-types) mantidas.
+- A11Y REAL (3 inputs): PrivacidadePaciente — 2 inputs de senha eram placeholder-only (agora aria-label "Senha atual"/"Nova senha"); PerfilPainel — input de foto oculto (inputFotoRef) ganhou aria-label "Selecionar foto de perfil".
+- SCANNER auditoria_inputs.py reescrito: (1) reconhece ASSOCIAÇÃO IMPLÍTICA — input dentro de <label>…</label> (HTML AAM) — 13 falsos positivos eliminados (AdminAgendamentos/AdminMedicos/AdminPacientes/AuditTrail/AgendamentoFluxo/DetalheMedicao usam <label><span>…</span><input/></label> corretamente); (2) fim de tag JSX consciente — varre aspas + profundidade de {}()[] para achar o '>' real (tags longas com arrow functions {(e) => …} não truncam mais a leitura de attrs — o aria-label do input de mensagem do DocumentosPainel, a 17 linhas do início da tag, agora é visto). Resultado: 18 → 0 achados reais.
+- console.* em produção revisados: apenas 3 server-side intencionais (http.ts: erro 500; llm.ts: avisos de canal público/SDK) — sem dados sensíveis (sem body/payload).
+- Validação: tsc/eslint/build limpos; auditoria estática = 1 falso positivo documentado (themeColor do viewport); inputs reais = 0. Sem segredos no diff.
+- Commit e5f302a; push 45bf845..e5f302a; deploy Vercel automático; smoke pós-deploy pendente no fechamento.
+
+Stage Summary:
+- AUDITORIA FRONT 4/4 FASES CONCLUÍDA: F1 (contrato mutar()/delta + IDs + higiene + dashboards reais), F2 (deltas nas rotas pesadas + provider fora do RootLayout), F3 (SSE tempo real + A11Y média + tokens de marca), F4 (deps mortas + a11y inputs + scanner honesto).
+- Estado final das varreduras: estática 1 (falso positivo documentado), inputs 0, console limpo, 6 deps a menos no install.
+- Dívida conhecida fora do escopo front: relatório original irrecuperável — se o dono tiver o texto, vale conferir se sobrou algum item específico não coberto pelas 4 fases.
