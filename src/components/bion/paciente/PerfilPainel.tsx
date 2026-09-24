@@ -151,6 +151,7 @@ export function PerfilPainel({ onSair }: { onSair: () => void }) {
         type="file"
         accept="image/*"
         className="hidden"
+        aria-label="Selecionar foto de perfil"
         onChange={(e) => {
           const f = e.target.files?.[0];
           if (f) aoEscolherFoto(f);

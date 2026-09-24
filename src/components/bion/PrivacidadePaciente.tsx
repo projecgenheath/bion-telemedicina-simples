@@ -176,6 +176,7 @@ export function PrivacidadePaciente() {
             onChange={(e) => setSenhaAtual(e.target.value)}
             autoComplete="current-password"
             placeholder="Senha atual"
+            aria-label="Senha atual"
             className="h-11 rounded-xl border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-primary/40"
           />
           <input
@@ -184,6 +185,7 @@ export function PrivacidadePaciente() {
             onChange={(e) => setNovaSenha(e.target.value)}
             autoComplete="new-password"
             placeholder="Nova senha (8+ caracteres)"
+            aria-label="Nova senha (8+ caracteres)"
             className="h-11 rounded-xl border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-primary/40"
           />
         </div>
