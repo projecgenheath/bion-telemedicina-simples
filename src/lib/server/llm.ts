@@ -274,12 +274,22 @@ async function chamarGemini(mensagens: Msg[], prazo: number, modeloOverride?: st
   if (!conteudos.length) return null;
 
   // GEMMA: a família Gemma na API do Gemini NÃO aceita systemInstruction nem
-  // thinkingConfig — o prompt de sistema é fundido no primeiro turno "user".
+  // thinkingConfig — o prompt de sistema é fundido no primeiro turno "user",
+  // com ordem explícita de resposta direta (o Gemma 4 tende a ecoar o
+  // raciocínio — "The user wants..." — quando a instrução não é enfática).
+  const DIRETIVA_GEMMA =
+    "\n\n---\n\nIMPORTANTE (estilo de resposta): fale como a BION IA, em português, \n" +
+    "dirigindo-se diretamente à pessoa. Responda de imediato ao pedido do turno \n" +
+    "mais recente. NUNCA exiba raciocínio, análise, plano ou comentário sobre as \n" +
+    "instruções (nada de \"The user wants...\", \"Input:\", listas de análise). \n" +
+    "A primeira linha da resposta já é a fala da BION IA.";
   const conteudosGemma = sys
     ? conteudos.map((t, i) =>
-        i === 0 ? { role: t.role, parts: [{ text: `${sys}\n\n---\n\n${t.parts[0].text}` }] } : t,
+        i === 0 ? { role: t.role, parts: [{ text: `${sys}${DIRETIVA_GEMMA}\n\n---\n\n${t.parts[0].text}` }] } : t,
       )
-    : conteudos;
+    : conteudos.map((t, i) =>
+        i === 0 ? { role: t.role, parts: [{ text: `${DIRETIVA_GEMMA.trim()}\n\n${t.parts[0].text}` }] } : t,
+      );
 
   // Cadeia de modelos: o configurado (ou o modelo do diagnóstico) primeiro;
   // 503 "high demand"/429 de cota falham em ~250ms, então percorrer os reservas
@@ -308,10 +318,10 @@ async function chamarGemini(mensagens: Msg[], prazo: number, modeloOverride?: st
         };
 
     // T1 (thinkingBudget 0) fica limitada a ~55% do prazo restante (Gemma,
-    // que não tem T2, recebe ~75% por causa do cold start): se o modelo
-    // demorar/pensar além disso, a T2 (sem thinkingConfig, teto 8192) ou os
-    // reservas ainda têm tempo de responder dentro do prazo geral da cadeia.
-    const subprazo = Date.now() + Math.max(Math.round(restante(prazo) * (ehGemma ? 0.75 : 0.55)), 6_000);
+    // que não tem T2, recebe ~85% — o 31B está respondendo em 17-19s no free
+    // tier e precisa da janela cheia): se o modelo não couber, a T2 (sem
+    // thinkingConfig, teto 8192) ou os reservas ainda respondem no prazo geral.
+    const subprazo = Date.now() + Math.max(Math.round(restante(prazo) * (ehGemma ? 0.85 : 0.55)), 6_000);
     const texto1 = await geminiPost(modelo, apiKey, corpo, Math.min(prazo, subprazo), modelo);
     if (texto1) return texto1;
     // Gemma não tem variante "sem-thinking" (nenhum thinkingConfig foi enviado).
