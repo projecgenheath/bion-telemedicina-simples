@@ -23,3 +23,8 @@ download/
 scripts/*.png
 .tmp-teste/
 .sanitizado/
+
+# ==== Backups e artefatos locais (nunca commitar) ====
+backup-pre-filter/
+*.db.bak
+env.bak
