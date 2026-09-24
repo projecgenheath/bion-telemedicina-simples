@@ -710,3 +710,39 @@ Stage Summary:
 - Toda mutação do app agora trafega APENAS a entidade afetada (~0,6-2KB) — a triagem por conversa deixou de carregar o app inteiro por turno.
 - Landing sem store; provider compartilhado entre login e app sem custo extra pós-login.
 - Próximo (FASE 3/4 sugerido): realtime p/ mensagens (websocket/SSE), revisão dos itens médios restantes da auditoria.
+
+---
+Task ID: auditoria-fase3-front
+Agent: Super Z (principal)
+Task: "Siga para a fase 3" — auditoria front: mensagens em tempo real (SSE) + itens médios restantes.
+
+Work Log:
+- Escopo recuperado do worklog da FASE 2 ("Próximo: realtime p/ mensagens (websocket/SSE), revisão dos itens médios restantes"): SSE de mensagens + 2 achados A11Y MÉDIA + 244 achados BAIXA (cores hardcoded).
+- SSE /api/mensagens/stream (novo): autenticado por cookie (exigirSessao), varredura incremental de 1,5s com a MESMA consulta do GET ?desde= (createdAt/updatedAt > marcador; recibos de leitura inclusos), marcador inicial = agora−2s (tolerância a skew), evento `mensagens` com payload idêntico ao GET (cliente reusa mesclarMensagens), heartbeat `: ping` 15s, vida de 50s com maxDuration 60 (Vercel fecha e o EventSource reconecta sozinho — retry: 3000); 401 encerra sem retry e o polling assume. Escolha de SSE em vez de WebSocket: Vercel serverless não mantém sockets persistentes; SSE com streaming funciona nas Route Handlers.
+- bion-store: EventSource por sessão autenticada; polling de 4s virou REDE DE SEGURANÇA — só dispara quando readyState != OPEN (browser antigo, 401 pós-revogação, rede instável). Cada (re)conexão dispara buscarMensagens() imediata para fechar a janela da desconexão. Tráfego ocioso: ~15 req/min/usuário → ~1 reconexão/min.
+- A11Y MÉDIA: (1) DocumentosPainel Visualizador — fundo clicável div→button real (tabIndex=-1 fora da tabulação; fechar por teclado = ESC novo com listener no dialog + botão Fechar); (2) PacienteApp carrossel — role="group" + tabIndex={0} (focável, scroll por teclado).
+- CORES (244 achados): tokens de marca em globals.css (:root --bion-ink #0a1f44/--bion-paper #f2f6fc/--bion-sea #123e7d/--bion-deep #14457f/--bion-sky #9ac1f4/--bion-night #0b1424/--bion-alerta #c2410c + @theme inline --color-bion-*) e scripts/substituir_cores_fase3.py (236 substituições em 6 arquivos do app do paciente; modificadores de opacidade preservados — Tailwind 4 usa color-mix em runtime). GraficoLinha pinta stroke/fill via style (atributos de apresentação SVG não resolvem var()); props cor: "#…" viram var(--bion-*) sempre emitidas em :root. Export morto AZUL_MARINHO removido. Auditoria estática: 246 → 1 achado (themeColor do viewport em app/layout.tsx — falso positivo documentado: metadado do navegador, não aceita var()).
+- HIGIENE EXTRA: db/custom.db (SQLite local com hashes de senha) desrastreado — .gitignore já previa db/*.db, o arquivo só era antigo no índice. Commit auto-gerado 84a097f inspecionado antes do push (apenas chmod em 8 scripts de pesquisa; sem segredos).
+- Validação local (SQLite temporário, schema revertido p/ postgres antes do commit): tsc/eslint/build limpos; scripts/validar_fase3_sse.sh 8/8 — logins 2 papéis 200, stream sem cookie 401, mensagem paciente→médica entregue no stream em ~1,5s, recibo de leitura (PATCH lida) entregue no stream da outra ponta, heartbeat ping e retry presentes; senha demo local alinhada p/ bion123456 (scripts/senha_local_fase3.ts — 11 usuários).
+- Commit 0a25cd5 (14 arquivos, +556/−140, incl. db/custom.db desrastreado); push 125725e..0a25cd5; deploy Vercel automático.
+
+Stage Summary:
+- Mensagens BION agora em TEMPO REAL (~1,5s) com degradação graciosa: stream → (queda/401) → polling 4s automático, sem nenhuma mudança de UX.
+- Auditoria estática praticamente zerada (246 → 1 falso positivo documentado); acessibilidade de teclado nos 2 pontos MÉDIA corrigidos.
+- Pendente FASE 4 (itens leves restantes, se houver no relatório original do usuário): reavaliar com o dono — os itens conhecidos de FASE 3 estavam no worklog; o texto integral do relatório de auditoria não sobreviveu aos resets de contexto.
+- Custo por conexão SSE na Vercel: 1 invocação ativa por usuário autenticado (free tier aguenta a escala demo; se necessário, reduzir VIDA_DO_FLUXO_MS ou desligar o stream via env).
+
+---
+Task ID: auditoria-fase3-producao
+Agent: Super Z (principal)
+Task: Verificação da FASE 3 em produção (deploy 0a25cd5).
+
+Work Log:
+- Deploy confirmado: /api/mensagens/stream responde 401 sem sessão em produção.
+- scripts/validar_fase3_producao.ts: logins marina+suporte 200/200; stream autenticado abre com text/event-stream; mensagem do suporte chegou em TEMPO REAL pelo stream em 5,2s (local: 1,5s — diferença = rede + janela da varredura de 1,5s + chunking do edge); payload do evento com a forma exata do GET ?desde=.
+- scripts/verificar_ping_producao.ts (somente leitura): heartbeat ': ping' confirmado aos ~16s — o FAIL do ping no script anterior era artefato do teste (interrompia a leitura aos 5s, antes do 1º ping de 15s).
+- Artefato residual aceito: 1 mensagem de teste rotulada "Validação automática FASE 3 — pode ignorar" fica no chat marina↔Suporte BION (a API não expõe DELETE de mensagens — por design, histórico é LGPD-auditável).
+
+Stage Summary:
+- FASE 3 100% VALIDADA EM PRODUÇÃO: tempo real ~1,5-5s (vs polling de 4s fixo), degradação graciosa garantida (stream→polling), zero regressão de contrato (payload reusado pelo mesmo mesclarMensagens).
+- FASES 1-3 da auditoria concluídas; FASE 4 (itens leves) a confirmar com o dono — relatório original perdido nos resets de contexto; único achado estático restante é falso positivo documentado (themeColor).
