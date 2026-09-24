@@ -65,7 +65,9 @@ type RespostaAnamnese = {
   etapa?: string;
   etapa_concluida?: boolean;
   perfilAtualizado?: string[];
-  dados?: unknown;
+  // Delta (auditoria FASE 2): entidades afetadas no turno (sem estado completo)
+  anamnese?: unknown;
+  perfilPacienteCompleto?: unknown;
   erro?: string;
   concluida?: boolean;
   fonte?: string;
@@ -156,7 +158,7 @@ export function ChatBion({ aberto, onFechar, aoEnviarExame }: { aberto: boolean;
       });
       const json = (await res.json()) as RespostaAnamnese;
       if (!res.ok || !json.texto) throw new Error(json.erro ?? "Falha");
-      if (json.dados) aplicarEstadoFresco(json.dados);
+      aplicarDelta(json);
       const sufixoPerfil = json.perfilAtualizado?.length && !json.texto.includes("Perfil atualizado")
         ? `\n\n**Perfil atualizado:** ${json.perfilAtualizado.join(", ")}.`
         : "";
@@ -202,7 +204,7 @@ export function ChatBion({ aberto, onFechar, aoEnviarExame }: { aberto: boolean;
       });
       const json = (await res.json()) as RespostaAnamnese;
       if (!res.ok || !json.texto) throw new Error(json.erro ?? "Falha");
-      if (json.dados) aplicarEstadoFresco(json.dados);
+      aplicarDelta(json);
       const sufixoPerfil = json.perfilAtualizado?.length && !json.texto.includes("Perfil atualizado")
         ? `\n\n**Perfil atualizado:** ${json.perfilAtualizado.join(", ")}.`
         : "";
@@ -285,6 +287,8 @@ export function ChatBion({ aberto, onFechar, aoEnviarExame }: { aberto: boolean;
       };
 
       if (json.ok && json.examesSalvos?.length) {
+        // Laudo pela IA ainda devolve estado fresco (rota pesada rara) —
+        // contrato compatível com aplicarEstadoFresco.
         if (json.dados) aplicarEstadoFresco(json.dados);
         const resumo = json.examesSalvos
           .map((e) => `• **${e.titulo}** — ${e.itens.slice(0, 4).map((i) => `${i.nome} ${i.valor}${i.unidade ?? ""}`).join(", ")}${e.itens.length > 4 ? "…" : ""}`)

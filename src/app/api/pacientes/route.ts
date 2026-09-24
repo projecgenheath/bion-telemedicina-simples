@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { exigirPapel, hashSenha } from "@/lib/server/auth";
-import { carregarDados, aplicarSideEffects, slugEmail } from "@/lib/server/dados";
+import { aplicarSideEffects, pacienteWire, slugEmail } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
 
 const SENHA_PADRAO = "bion123456"; // política P0: mínimo 10 chars
@@ -59,7 +59,9 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    await aplicarSideEffects(admin, undefined, {
+    // Contrato delta (auditoria FASE 2): devolve APENAS o paciente criado
+    // + auditoria — sem recarregar o estado inteiro do admin.
+    const efeitos = await aplicarSideEffects(admin, undefined, {
       acao: "PACIENTE_CRIADO",
       categoria: "admin",
       entidade: "paciente",
@@ -67,8 +69,12 @@ export async function POST(req: NextRequest) {
       detalhes: `Paciente ${user.nome} cadastrado`,
     });
 
-    const dados = await carregarDados(admin);
-    return ok(dados);
+    const criado = await db.user.findFirst({
+      where: { id: user.id },
+      include: { perfilPaciente: true },
+    });
+
+    return ok({ ...(criado ? { paciente: pacienteWire(criado) } : {}), ...efeitos });
   } catch (erro) {
     return falha(erro);
   }

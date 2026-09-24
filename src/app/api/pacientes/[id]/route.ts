@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { exigirPapel } from "@/lib/server/auth";
-import { carregarDados, aplicarSideEffects } from "@/lib/server/dados";
+import { aplicarSideEffects, pacienteWire } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
 import { anonimizarPacienteCompleto } from "@/lib/server/lgpd";
 
@@ -58,7 +58,9 @@ export async function PATCH(
       }),
     ]);
 
-    await aplicarSideEffects(admin, undefined, {
+    // Contrato delta (auditoria FASE 2): devolve APENAS o paciente atualizado
+    // + auditoria — sem recarregar o estado inteiro do admin.
+    const efeitosPatch = await aplicarSideEffects(admin, undefined, {
       acao: "PACIENTE_ATUALIZADO",
       categoria: "admin",
       entidade: "paciente",
@@ -66,8 +68,12 @@ export async function PATCH(
       detalhes: `Paciente ${paciente.nome}: campos atualizados (${Object.keys(body).join(", ")})`,
     });
 
-    const dados = await carregarDados(admin);
-    return ok(dados);
+    const atualizado = await db.user.findFirst({
+      where: { id },
+      include: { perfilPaciente: true },
+    });
+
+    return ok({ ...(atualizado ? { paciente: pacienteWire(atualizado) } : {}), ...efeitosPatch });
   } catch (erro) {
     return falha(erro);
   }
@@ -93,7 +99,10 @@ export async function DELETE(
     }
 
     const apelido = await anonimizarPacienteCompleto(id);
-    await aplicarSideEffects(admin, undefined, {
+    // Contrato delta (auditoria FASE 2): o registro (agora anonimizado/inativo)
+    // substitui o anterior na lista — mesmo efeito do estado fresco, sem
+    // recarregar o app inteiro.
+    const efeitos = await aplicarSideEffects(admin, undefined, {
       acao: "PACIENTE_ARQUIVADO_ANONIMIZADO",
       categoria: "admin",
       severidade: "critical",
@@ -102,8 +111,12 @@ export async function DELETE(
       entidadeId: id,
     });
 
-    const dados = await carregarDados(admin);
-    return ok(dados);
+    const anonimizado = await db.user.findFirst({
+      where: { id },
+      include: { perfilPaciente: true },
+    });
+
+    return ok({ ...(anonimizado ? { paciente: pacienteWire(anonimizado) } : {}), ...efeitos });
   } catch (erro) {
     return falha(erro);
   }

@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { exigirSessao } from "@/lib/server/auth";
-import { carregarDados, aplicarSideEffects } from "@/lib/server/dados";
+import { aplicarSideEffects, ticketWire } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
 
 /** Abertura de chamado de suporte.
@@ -27,9 +27,12 @@ export async function POST(req: NextRequest) {
         categoria: body.categoria || "outro",
         mensagem: body.mensagem.trim(),
       },
+      include: { usuario: { select: { nome: true } } },
     });
 
-    await aplicarSideEffects(
+    // Contrato delta (auditoria FASE 2): devolve APENAS o chamado criado
+    // + efeitos — sem recarregar o estado inteiro.
+    const efeitos = await aplicarSideEffects(
       usuario,
       [
         {
@@ -54,8 +57,7 @@ export async function POST(req: NextRequest) {
       },
     );
 
-    const dados = await carregarDados(usuario);
-    return ok(dados);
+    return ok({ ticket: ticketWire(ticket), ...efeitos });
   } catch (erro) {
     return falha(erro);
   }

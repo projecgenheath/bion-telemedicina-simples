@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { exigirPapel } from "@/lib/server/auth";
-import { carregarDados, aplicarSideEffects } from "@/lib/server/dados";
+import { aplicarSideEffects, avaliacaoWire, medicoWire } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
 
 /** Registro de avaliação de consulta (apenas pacientes).
@@ -100,7 +100,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    await db.avaliacao.create({
+    const avaliacao = await db.avaliacao.create({
       data: {
         consultaId: consultaVinculada.id,
         pacienteId: usuario.id,
@@ -110,6 +110,10 @@ export async function POST(req: NextRequest) {
         pontualidade: clampNota(body.pontualidade),
         atencao: clampNota(body.atencao),
         clareza: clampNota(body.clareza),
+      },
+      include: {
+        paciente: { select: { nome: true } },
+        medico: { select: { nome: true, perfilMedico: { select: { especialidade: true } } } },
       },
     });
 
@@ -121,7 +125,9 @@ export async function POST(req: NextRequest) {
       data: { avaliacao: Number(novaMedia.toFixed(1)), numAvaliacoes: { increment: 1 } },
     });
 
-    await aplicarSideEffects(
+    // Contrato delta (auditoria FASE 2): devolve APENAS a avaliação criada +
+    // o médico atualizado (nova média) + efeitos — sem recarregar o estado.
+    const efeitos = await aplicarSideEffects(
       usuario,
       [
         {
@@ -145,8 +151,16 @@ export async function POST(req: NextRequest) {
       },
     );
 
-    const dados = await carregarDados(usuario);
-    return ok(dados);
+    const perfilAtualizado = await db.perfilMedico.findUnique({
+      where: { userId: medico.id },
+      include: { user: { select: { id: true, nome: true } } },
+    });
+
+    return ok({
+      avaliacao: avaliacaoWire(avaliacao),
+      ...(perfilAtualizado ? { medico: medicoWire(perfilAtualizado) } : {}),
+      ...efeitos,
+    });
   } catch (erro) {
     return falha(erro);
   }

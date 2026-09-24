@@ -1,5 +1,6 @@
 import "server-only";
 import { db } from "@/lib/db";
+import type { Prisma } from "@prisma/client";
 import type { UsuarioSessao } from "./auth";
 
 /* ------------------------------------------------------------------ */
@@ -101,6 +102,229 @@ async function idsMedicosDoPaciente(pacienteId: string): Promise<string[]> {
     distinct: ["medicoId"],
   });
   return rows.map((r) => r.medicoId);
+}
+
+/* ------------------------------------------------------------------ */
+/* Mapeadores wire (FASE 2) — FONTE ÚNICA da forma das entidades:      */
+/* usados pelo carregarDados (bootstrap/estado fresco) E pelas         */
+/* respostas delta das mutações (rotas leves — auditoria front-end).   */
+/* ------------------------------------------------------------------ */
+
+export type ConsultaComNomes = Prisma.ConsultaGetPayload<{
+  include: { medico: { select: { nome: true } }; paciente: { select: { nome: true } } };
+}>;
+
+export function consultaWire(c: ConsultaComNomes) {
+  return {
+    id: c.id,
+    medicoId: c.medicoId,
+    medico: c.medico.nome,
+    pacienteId: c.pacienteId,
+    paciente: c.paciente.nome,
+    especialidade: c.especialidade,
+    dataInicio: c.dataInicio.toISOString(),
+    status: c.status,
+    motivoConsulta: c.motivoConsulta ?? undefined,
+    motivoCancelamento: c.motivoCancelamento ?? undefined,
+    resumoMedico: c.resumoMedico ?? undefined,
+    valor: c.valor,
+    pago: c.pago,
+    remarcada: c.remarcada || undefined,
+  };
+}
+
+export type DocumentoComNomes = Prisma.DocumentoGetPayload<{
+  include: { medico: { select: { nome: true } }; paciente: { select: { nome: true } } };
+}>;
+
+export function documentoWire(d: DocumentoComNomes) {
+  return {
+    id: d.id,
+    tipo: d.tipo,
+    titulo: d.titulo,
+    conteudo: d.conteudo,
+    medico: d.medico.nome,
+    paciente: d.paciente.nome,
+    medicamento: d.medicamento,
+    posologia: d.posologia,
+    duracao: d.duracao,
+    observacoes: d.observacoes,
+    cid: d.cid,
+    createdAt: d.createdAt.toISOString(),
+  };
+}
+
+export type ArquivoRow = Prisma.ArquivoGetPayload<Record<string, never>>;
+
+export function arquivoWire(a: ArquivoRow) {
+  return {
+    id: a.id,
+    nome: a.nome,
+    tipo: a.tipo,
+    tamanhoKb: a.tamanhoKb,
+    enviadoPor: a.enviadoPor,
+    consulta: a.consulta,
+    createdAt: a.createdAt.toISOString(),
+  };
+}
+
+export type AvaliacaoComNomes = Prisma.AvaliacaoGetPayload<{
+  include: {
+    paciente: { select: { nome: true } };
+    medico: { select: { nome: true; perfilMedico: { select: { especialidade: true } } } };
+  };
+}>;
+
+export function avaliacaoWire(a: AvaliacaoComNomes) {
+  return {
+    id: a.id,
+    paciente: a.paciente.nome,
+    medico: a.medico.nome,
+    especialidade: a.medico.perfilMedico?.especialidade ?? "",
+    nota: a.nota,
+    comentario: a.comentario ?? undefined,
+    pontualidade: a.pontualidade ?? undefined,
+    atencao: a.atencao ?? undefined,
+    clareza: a.clareza ?? undefined,
+    createdAt: a.createdAt.toISOString(),
+  };
+}
+
+export type TicketComUsuario = Prisma.TicketGetPayload<{
+  include: { usuario: { select: { nome: true } } };
+}>;
+
+export function ticketWire(t: TicketComUsuario) {
+  return {
+    id: t.id,
+    usuario: t.usuario.nome,
+    perfil: t.perfil,
+    assunto: t.assunto,
+    categoria: t.categoria,
+    mensagem: t.mensagem,
+    status: t.status,
+    resposta: t.resposta ?? undefined,
+    respondidoPor: t.respondidoPor ?? undefined,
+    dataResposta: t.dataResposta ? t.dataResposta.toISOString() : undefined,
+    createdAt: t.createdAt.toISOString(),
+  };
+}
+
+export type ConsentimentoComPaciente = Prisma.ConsentimentoGetPayload<{
+  include: { paciente: { select: { nome: true } } };
+}>;
+
+export function consentimentoWire(c: ConsentimentoComPaciente) {
+  return {
+    id: c.id,
+    paciente: c.paciente?.nome ?? c.quem,
+    quem: c.quem,
+    perfil: c.perfil.toLowerCase(),
+    finalidade: c.finalidade,
+    documentos: c.documentos,
+    aceito: c.aceito,
+    createdAt: c.createdAt.toISOString(),
+  };
+}
+
+export type PerfilMedicoComUser = Prisma.PerfilMedicoGetPayload<{
+  include: { user: { select: { id: true, nome: true } } };
+}>;
+
+export function medicoWire(m: PerfilMedicoComUser) {
+  return {
+    id: m.userId,
+    nome: m.user.nome,
+    crm: m.crm,
+    especialidade: m.especialidade,
+    subespecialidades: JSON.parse(m.subespecialidades || "[]") as string[],
+    valor: m.valor,
+    avaliacao: m.avaliacao,
+    numAvaliacoes: m.numAvaliacoes,
+    formacao: m.formacao,
+    experiencia: m.experiencia,
+    idiomas: JSON.parse(m.idiomas || "[]") as string[],
+    bio: m.bio,
+    foto: m.foto ?? undefined,
+    status: m.status,
+    horariosDisponiveis: JSON.parse(m.horariosDisponiveis || "[]") as string[],
+  };
+}
+
+export type UserComPerfilPaciente = Prisma.UserGetPayload<{
+  include: { perfilPaciente: true };
+}>;
+
+export function pacienteWire(p: UserComPerfilPaciente) {
+  return {
+    id: p.id,
+    nome: p.nome,
+    email: p.email,
+    telefone: p.perfilPaciente?.telefone ?? "",
+    cpf: p.perfilPaciente?.cpf ?? "",
+    idade: p.perfilPaciente?.idade ?? 0,
+    genero: p.perfilPaciente?.genero ?? "",
+    convenio: p.perfilPaciente?.convenio ?? "Particular",
+    status: p.status as "ativo" | "inativo",
+    desde: p.createdAt.toISOString(),
+  };
+}
+
+export type ExameRow = Prisma.ExameLaboratorialGetPayload<Record<string, never>>;
+
+export function exameWire(e: ExameRow) {
+  return {
+    id: e.id,
+    titulo: e.titulo,
+    dataColeta: e.dataColeta.toISOString(),
+    itens: JSON.parse(e.itens || "[]") as { nome: string; valor: number; unidade: string; refMin?: number; refMax?: number }[],
+    arquivoNome: e.arquivoNome ?? undefined,
+    origem: e.origem,
+    createdAt: e.createdAt.toISOString(),
+  };
+}
+
+export type AnamneseComConsulta = Prisma.AnamneseGetPayload<{
+  include: { consulta: { include: { medico: { select: { nome: true } } } } };
+}>;
+
+export function anamneseWire(a: AnamneseComConsulta) {
+  return {
+    id: a.id,
+    consultaId: a.consultaId,
+    medico: a.consulta.medico.nome,
+    especialidade: a.consulta.especialidade,
+    etapa: a.etapa,
+    status: a.status,
+    coleta: JSON.parse(a.coleta || "{}") as Record<string, unknown>,
+    documentos: JSON.parse(a.documentos || "[]") as { nome: string; tipo: string; exameImportado: boolean; resumo?: string }[],
+    updatedAt: a.updatedAt.toISOString(),
+  };
+}
+
+export type PerfilPacienteComUser = Prisma.PerfilPacienteGetPayload<{
+  include: { user: { select: { nome: true, email: true } } };
+}>;
+
+export function perfilPacienteWire(p: PerfilPacienteComUser) {
+  return {
+    nome: p.user.nome,
+    idade: p.idade,
+    genero: p.genero,
+    cpf: p.cpf,
+    email: p.user.email,
+    telefone: p.telefone,
+    convenio: p.convenio,
+    alergias: JSON.parse(p.alergias || "[]") as string[],
+    medicamentos: JSON.parse(p.medicamentos || "[]") as string[],
+    tipoSanguineo: p.tipoSanguineo,
+    peso: p.peso ?? undefined,
+    altura: p.altura ?? undefined,
+    profissao: p.profissao || undefined,
+    estadoCivil: p.estadoCivil || undefined,
+    comorbidades: JSON.parse(p.comorbidades || "[]") as string[],
+    foto: p.foto ?? undefined,
+  };
 }
 
 /**
@@ -288,26 +512,7 @@ export async function carregarDados(usuario: UsuarioSessao) {
       role: usuario.role,
       precisaTrocarSenha: usuario.precisaTrocarSenha,
     },
-    pacientePerfil: perfilPacienteRaw
-      ? {
-          nome: perfilPacienteRaw.user.nome,
-          idade: perfilPacienteRaw.idade,
-          genero: perfilPacienteRaw.genero,
-          cpf: perfilPacienteRaw.cpf,
-          email: perfilPacienteRaw.user.email,
-          telefone: perfilPacienteRaw.telefone,
-          convenio: perfilPacienteRaw.convenio,
-          alergias: JSON.parse(perfilPacienteRaw.alergias || "[]") as string[],
-          medicamentos: JSON.parse(perfilPacienteRaw.medicamentos || "[]") as string[],
-          tipoSanguineo: perfilPacienteRaw.tipoSanguineo,
-          peso: perfilPacienteRaw.peso ?? undefined,
-          altura: perfilPacienteRaw.altura ?? undefined,
-          profissao: perfilPacienteRaw.profissao || undefined,
-          estadoCivil: perfilPacienteRaw.estadoCivil || undefined,
-          comorbidades: JSON.parse(perfilPacienteRaw.comorbidades || "[]") as string[],
-          foto: perfilPacienteRaw.foto ?? undefined,
-        }
-      : null,
+    pacientePerfil: perfilPacienteRaw ? perfilPacienteWire(perfilPacienteRaw) : null,
     medicoes: medicoes.map((m) => ({
       id: m.id,
       tipo: m.tipo,
@@ -315,126 +520,21 @@ export async function carregarDados(usuario: UsuarioSessao) {
       valor2: m.valor2 ?? undefined,
       criadoEm: m.criadoEm.toISOString(),
     })),
-    exames: exames.map((e) => ({
-      id: e.id,
-      titulo: e.titulo,
-      dataColeta: e.dataColeta.toISOString(),
-      itens: JSON.parse(e.itens || "[]") as { nome: string; valor: number; unidade: string; refMin?: number; refMax?: number }[],
-      arquivoNome: e.arquivoNome ?? undefined,
-      origem: e.origem,
-      createdAt: e.createdAt.toISOString(),
-    })),
-    consultas: consultasRaw.map((c) => ({
-      id: c.id,
-      medicoId: c.medicoId,
-      medico: c.medico.nome,
-      pacienteId: c.pacienteId,
-      paciente: c.paciente.nome,
-      especialidade: c.especialidade,
-      dataInicio: c.dataInicio.toISOString(),
-      status: c.status,
-      motivoConsulta: c.motivoConsulta ?? undefined,
-      motivoCancelamento: c.motivoCancelamento ?? undefined,
-      resumoMedico: c.resumoMedico ?? undefined,
-      valor: c.valor,
-      pago: c.pago,
-      remarcada: c.remarcada || undefined,
-    })),
-    anamneses: anamnesesRaw.map((a) => ({
-      id: a.id,
-      consultaId: a.consultaId,
-      medico: a.consulta.medico.nome,
-      especialidade: a.consulta.especialidade,
-      etapa: a.etapa,
-      status: a.status,
-      coleta: JSON.parse(a.coleta || "{}") as Record<string, unknown>,
-      documentos: JSON.parse(a.documentos || "[]") as { nome: string; tipo: string; exameImportado: boolean; resumo?: string }[],
-      updatedAt: a.updatedAt.toISOString(),
-    })),
-    documentos: documentos.map((doc) => ({
-      id: doc.id,
-      tipo: doc.tipo,
-      titulo: doc.titulo,
-      conteudo: doc.conteudo,
-      medico: doc.medico.nome,
-      paciente: doc.paciente.nome,
-      medicamento: doc.medicamento,
-      posologia: doc.posologia,
-      duracao: doc.duracao,
-      observacoes: doc.observacoes,
-      cid: doc.cid,
-      createdAt: doc.createdAt.toISOString(),
-    })),
-    arquivos,
+    exames: exames.map((e) => exameWire(e)),
+    consultas: consultasRaw.map((c) => consultaWire(c)),
+    anamneses: anamnesesRaw.map((a) => anamneseWire(a)),
+    documentos: documentos.map((doc) => documentoWire(doc)),
+    arquivos: arquivos.map((a) => arquivoWire(a)),
     notificacoes: notificacoes.map((n) => ({
       ...n,
       lida: n.usuarioId ? n.lida : lidasPorMim.has(n.id),
     })),
-    medicos: medicosRaw.map((m) => ({
-      id: m.userId,
-      nome: m.user.nome,
-      crm: m.crm,
-      especialidade: m.especialidade,
-      subespecialidades: JSON.parse(m.subespecialidades || "[]") as string[],
-      valor: m.valor,
-      avaliacao: m.avaliacao,
-      numAvaliacoes: m.numAvaliacoes,
-      formacao: m.formacao,
-      experiencia: m.experiencia,
-      idiomas: JSON.parse(m.idiomas || "[]") as string[],
-      bio: m.bio,
-      foto: m.foto ?? undefined,
-      status: m.status,
-      horariosDisponiveis: JSON.parse(m.horariosDisponiveis || "[]") as string[],
-    })),
-    pacientes: pacientesVisiveis.map((p) => ({
-      id: p.id,
-      nome: p.nome,
-      email: p.email,
-      telefone: p.perfilPaciente?.telefone ?? "",
-      cpf: p.perfilPaciente?.cpf ?? "",
-      idade: p.perfilPaciente?.idade ?? 0,
-      genero: p.perfilPaciente?.genero ?? "",
-      convenio: p.perfilPaciente?.convenio ?? "Particular",
-      status: p.status as "ativo" | "inativo",
-      desde: p.createdAt.toISOString(),
-    })),
-    tickets: tickets.map((t) => ({
-      id: t.id,
-      usuario: t.usuario.nome,
-      perfil: t.perfil,
-      assunto: t.assunto,
-      categoria: t.categoria,
-      mensagem: t.mensagem,
-      status: t.status,
-      resposta: t.resposta ?? undefined,
-      respondidoPor: t.respondidoPor ?? undefined,
-      dataResposta: t.dataResposta ? t.dataResposta.toISOString() : undefined,
-      createdAt: t.createdAt.toISOString(),
-    })),
+    medicos: medicosRaw.map((m) => medicoWire(m)),
+    pacientes: pacientesVisiveis.map((p) => pacienteWire(p)),
+    tickets: tickets.map((t) => ticketWire(t)),
     lembretes,
-    avaliacoes: avaliacoesRaw.map((a) => ({
-      id: a.id,
-      paciente: a.paciente.nome,
-      medico: a.medico.nome,
-      especialidade: a.medico.perfilMedico?.especialidade ?? "",
-      nota: a.nota,
-      comentario: a.comentario ?? undefined,
-      pontualidade: a.pontualidade ?? undefined,
-      atencao: a.atencao ?? undefined,
-      clareza: a.clareza ?? undefined,
-      createdAt: a.createdAt.toISOString(),
-    })),
-    consentimentos: consentimentos.map((c) => ({
-      id: c.id,
-      paciente: c.paciente?.nome ?? c.quem,
-      quem: c.quem,
-      perfil: c.perfil.toLowerCase(),
-      finalidade: c.finalidade,
-      documentos: c.documentos,
-      aceito: c.aceito,
-      createdAt: c.createdAt.toISOString(),
-    })),
+    avaliacoes: avaliacoesRaw.map((a) => avaliacaoWire(a)),
+    consentimentos: consentimentos.map((c) => consentimentoWire(c)),
     auditLogs: auditLogs.map((l) => ({
       id: l.id,
       ts: l.createdAt.getTime(),

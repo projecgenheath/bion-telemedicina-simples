@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { exigirPapel } from "@/lib/server/auth";
-import { carregarDados, aplicarSideEffects } from "@/lib/server/dados";
+import { aplicarSideEffects, documentoWire } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
 
 /** Emissão de documento clínico (receita/atestado/exame) — apenas médicos.
@@ -75,10 +75,16 @@ export async function POST(req: NextRequest) {
         observacoes: body.observacoes?.trim().slice(0, 1000) || null,
         cid: body.cid?.trim().slice(0, 20) || null,
       },
+      include: {
+        medico: { select: { nome: true } },
+        paciente: { select: { nome: true } },
+      },
     });
 
     const rotulo = body.tipo === "receita" ? "Receita" : body.tipo === "atestado" ? "Atestado" : "Solicitação de exame";
-    await aplicarSideEffects(
+    // Contrato delta (auditoria FASE 2): devolve APENAS o documento criado
+    // + efeitos (notificação/auditoria) — sem recarregar o estado inteiro.
+    const efeitos = await aplicarSideEffects(
       usuario,
       [
         {
@@ -102,8 +108,7 @@ export async function POST(req: NextRequest) {
       },
     );
 
-    const dados = await carregarDados(usuario);
-    return ok(dados);
+    return ok({ documento: documentoWire(doc), ...efeitos });
   } catch (erro) {
     return falha(erro);
   }

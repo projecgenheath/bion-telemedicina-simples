@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { exigirPapel } from "@/lib/server/auth";
-import { carregarDados, aplicarSideEffects } from "@/lib/server/dados";
+import { aplicarSideEffects, ticketWire } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
 
 /** Resposta a chamado de suporte (apenas admin).
@@ -15,7 +15,10 @@ export async function PATCH(
     const { id } = await params;
     const body = (await req.json()) as { resposta: string };
 
-    const ticket = await db.ticket.findUnique({ where: { id } });
+    const ticket = await db.ticket.findUnique({
+      where: { id },
+      include: { usuario: { select: { nome: true } } },
+    });
     if (!ticket) {
       return Response.json({ erro: "Chamado não encontrado." }, { status: 404 });
     }
@@ -30,7 +33,9 @@ export async function PATCH(
       },
     });
 
-    await aplicarSideEffects(
+    // Contrato delta (auditoria FASE 2): devolve APENAS o chamado atualizado
+    // + efeitos — a lista do admin não recarrega o app inteiro.
+    const efeitos = await aplicarSideEffects(
       usuario,
       [
         {
@@ -49,8 +54,12 @@ export async function PATCH(
       },
     );
 
-    const dados = await carregarDados(usuario);
-    return ok(dados);
+    const atualizado = await db.ticket.findUnique({
+      where: { id },
+      include: { usuario: { select: { nome: true } } },
+    });
+
+    return ok({ ...(atualizado ? { ticket: ticketWire(atualizado) } : {}), ...efeitos });
   } catch (erro) {
     return falha(erro);
   }

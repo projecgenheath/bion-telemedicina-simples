@@ -177,9 +177,11 @@ type EstadoFresco = {
 /**
  * Delta de mutação — resposta leve das rotas que devolvem APENAS a entidade
  * afetada (POST /api/consultas, PATCH /api/notificacoes, POST /api/mensagens,
- * lembretes, medições, auditoria…). Qualquer campo ausente é simplesmente
- * ignorado; um payload com `usuario` é tratado como estado fresco completo
- * (contrato antigo, p/ compatibilidade).
+ * lembretes, medições, auditoria e — FASE 2 da auditoria — documentos,
+ * arquivos, avaliações, médicos, pacientes, tickets, consentimentos, exames,
+ * perfil e anamnese). Qualquer campo ausente é simplesmente ignorado; um
+ * payload com `usuario` é tratado como estado fresco completo (contrato
+ * antigo, p/ compatibilidade).
  */
 type DeltaWire = {
   consulta?: EstadoFresco["consultas"][number];
@@ -193,7 +195,156 @@ type DeltaWire = {
   lembreteRemovido?: string;
   medicao?: NonNullable<EstadoFresco["medicoes"]>[number];
   perfilPaciente?: { peso?: string; altura?: string }; // sincronização peso/altura (POST /api/medicoes)
+  // FASE 2 (auditoria front-end) — entidades únicas das rotas convertidas:
+  documento?: EstadoFresco["documentos"][number];
+  arquivo?: EstadoFresco["arquivos"][number];
+  avaliacao?: EstadoFresco["avaliacoes"][number];
+  medico?: EstadoFresco["medicos"][number];
+  paciente?: EstadoFresco["pacientes"][number];
+  ticket?: EstadoFresco["tickets"][number];
+  consentimento?: EstadoFresco["consentimentos"][number];
+  exame?: NonNullable<EstadoFresco["exames"]>[number];
+  exameRemovido?: string;
+  /** PATCH /api/perfil — perfil COMPLETO do paciente (inclui nome sincronizado na sessão). */
+  perfilPacienteCompleto?: NonNullable<EstadoFresco["pacientePerfil"]>;
 };
+
+/* ==================================================================== */
+/* Mapeadores wire → estado do cliente — FONTE ÚNICA usada por aplicar() */
+/* (estado fresco) e por aplicarDelta() (entidade única); garante que os */
+/* dois caminhos produzem SEMPRE a mesma forma no estado.                */
+/* ==================================================================== */
+
+const mapConsulta = (c: EstadoFresco["consultas"][number]): Consulta => ({
+  id: c.id,
+  medico: c.medico,
+  especialidade: c.especialidade,
+  paciente: c.paciente,
+  medicoId: c.medicoId,
+  pacienteId: c.pacienteId,
+  data: fmtCurta(c.dataInicio),
+  hora: fmtHora(c.dataInicio),
+  status: c.status as Consulta["status"],
+  ts: new Date(c.dataInicio).getTime(),
+  remarcada: c.remarcada,
+  motivoCancelamento: c.motivoCancelamento,
+  motivoConsulta: c.motivoConsulta,
+  resumoMedico: c.resumoMedico,
+  valor: fmtValorBRL(c.valor),
+  pago: c.pago,
+  dataISO: c.dataInicio,
+});
+
+const mapDocumento = (x: EstadoFresco["documentos"][number]): Documento => ({
+  id: x.id,
+  tipo: x.tipo as Documento["tipo"],
+  titulo: x.titulo,
+  medico: x.medico,
+  paciente: x.paciente,
+  conteudo: x.conteudo,
+  data: fmtLonga(x.createdAt),
+  medicamento: x.medicamento ?? undefined,
+  posologia: x.posologia ?? undefined,
+  duracao: x.duracao ?? undefined,
+  observacoes: x.observacoes ?? undefined,
+  cid: x.cid ?? undefined,
+});
+
+const mapArquivo = (a: EstadoFresco["arquivos"][number]): Arquivo => ({
+  id: a.id, nome: a.nome, tipo: a.tipo, tamanhoKb: a.tamanhoKb,
+  enviadoPor: a.enviadoPor as Arquivo["enviadoPor"], data: fmtLonga(a.createdAt),
+  consulta: a.consulta,
+});
+
+const mapNotificacao = (n: EstadoFresco["notificacoes"][number]): Notificacao => ({
+  id: n.id,
+  para: (n.paraRole?.toLowerCase() || undefined) as Notificacao["para"],
+  tipo: n.tipo as Notificacao["tipo"],
+  titulo: n.titulo, texto: n.texto,
+  hora: fmtTicketData(n.createdAt),
+  lida: n.lida,
+});
+
+const mapMedico = (m: EstadoFresco["medicos"][number]): Medico => ({
+  id: m.id, nome: m.nome, crm: m.crm, especialidade: m.especialidade,
+  subespecialidades: m.subespecialidades, valor: m.valor, avaliacao: m.avaliacao,
+  numAvaliacoes: m.numAvaliacoes, formacao: m.formacao, experiencia: m.experiencia,
+  idiomas: m.idiomas, bio: m.bio, foto: m.foto,
+  status: m.status as Medico["status"], horariosDisponiveis: m.horariosDisponiveis,
+});
+
+const mapPaciente = (p: EstadoFresco["pacientes"][number]): PacienteRegistro => ({
+  id: p.id, nome: p.nome, email: p.email, telefone: p.telefone, cpf: p.cpf,
+  idade: p.idade, genero: p.genero, convenio: p.convenio,
+  status: p.status as PacienteRegistro["status"], desde: fmtDataBR(p.desde),
+});
+
+const mapTicket = (t: EstadoFresco["tickets"][number]): TicketSuporte => ({
+  id: t.id, usuario: t.usuario, perfil: t.perfil as TicketSuporte["perfil"],
+  assunto: t.assunto, categoria: t.categoria as TicketSuporte["categoria"],
+  mensagem: t.mensagem, status: t.status as TicketSuporte["status"],
+  data: fmtTicketData(t.createdAt), resposta: t.resposta,
+  respondidoPor: t.respondidoPor, dataResposta: t.dataResposta ? fmtTicketData(t.dataResposta) : undefined,
+});
+
+const mapLembrete = (l: EstadoFresco["lembretes"][number]): Lembrete => ({
+  id: l.id, titulo: l.titulo, horario: l.horario,
+  tipo: l.tipo as Lembrete["tipo"], frequencia: l.frequencia, feito: l.feito,
+  medicamento: l.medicamento ?? undefined,
+});
+
+const mapAvaliacao = (a: EstadoFresco["avaliacoes"][number]): Avaliacao => ({
+  id: a.id, paciente: a.paciente, medico: a.medico, especialidade: a.especialidade,
+  nota: a.nota, comentario: a.comentario, pontualidade: a.pontualidade,
+  atencao: a.atencao, clareza: a.clareza, quando: fmtQuando(a.createdAt),
+  ts: new Date(a.createdAt).getTime(),
+});
+
+const mapConsentimento = (c: EstadoFresco["consentimentos"][number]): Consentimento => ({
+  id: c.id, paciente: c.paciente, quem: c.quem,
+  perfil: c.perfil as Sessao["role"], finalidade: c.finalidade,
+  documentos: c.documentos, quando: fmtQuando(c.createdAt), aceito: c.aceito,
+});
+
+const mapAudit = (l: EstadoFresco["auditLogs"][number]): AuditLog => ({
+  id: l.id, ts: l.ts, acao: l.acao,
+  categoria: l.categoria as AuditLog["categoria"],
+  severidade: l.severidade as AuditLog["severidade"],
+  usuario: l.usuario, role: l.role as Sessao["role"],
+  entidade: l.entidade, entidadeId: l.entidadeId, detalhes: l.detalhes,
+});
+
+const mapMedicao = (m: NonNullable<EstadoFresco["medicoes"]>[number]): Medicao => ({
+  id: m.id,
+  tipo: m.tipo as Medicao["tipo"],
+  valor1: m.valor1,
+  valor2: m.valor2,
+  criadoEm: m.criadoEm,
+  quando: fmtCurta(m.criadoEm),
+});
+
+const mapExame = (e: NonNullable<EstadoFresco["exames"]>[number]): ExameLab => ({
+  id: e.id,
+  titulo: e.titulo,
+  dataColeta: e.dataColeta,
+  itens: e.itens,
+  arquivoNome: e.arquivoNome,
+  origem: e.origem as ExameLab["origem"],
+  quando: fmtCurta(e.dataColeta),
+});
+
+const mapAnamnese = (a: NonNullable<EstadoFresco["anamneses"]>[number]): AnamneseResumo => ({
+  id: a.id,
+  consultaId: a.consultaId,
+  medico: a.medico,
+  especialidade: a.especialidade,
+  etapa: a.etapa,
+  status: a.status as AnamneseResumo["status"],
+  coleta: a.coleta,
+  documentos: a.documentos,
+  atualizadaEm: fmtTicketData(a.updatedAt),
+  ts: new Date(a.updatedAt).getTime(),
+});
 
 /* ==================================================================== */
 /* Infra do store                                                       */
@@ -360,161 +511,24 @@ export function BionProvider({ children }: { children: ReactNode }) {
       email: d.usuario.email,
     });
     setPrecisaTrocarSenha(!!d.usuario.precisaTrocarSenha);
-    setConsultas(
-      d.consultas.map((c) => ({
-        id: c.id,
-        medico: c.medico,
-        especialidade: c.especialidade,
-        paciente: c.paciente,
-        medicoId: c.medicoId,
-        pacienteId: c.pacienteId,
-        data: fmtCurta(c.dataInicio),
-        hora: fmtHora(c.dataInicio),
-        status: c.status as Consulta["status"],
-        ts: new Date(c.dataInicio).getTime(),
-        remarcada: c.remarcada,
-        motivoCancelamento: c.motivoCancelamento,
-        motivoConsulta: c.motivoConsulta,
-        resumoMedico: c.resumoMedico,
-        valor: fmtValorBRL(c.valor),
-        pago: c.pago,
-        dataISO: c.dataInicio,
-      })),
-    );
-    setDocumentos(
-      d.documentos.map((x) => ({
-        id: x.id,
-        tipo: x.tipo as Documento["tipo"],
-        titulo: x.titulo,
-        medico: x.medico,
-        paciente: x.paciente,
-        conteudo: x.conteudo,
-        data: fmtLonga(x.createdAt),
-        medicamento: x.medicamento ?? undefined,
-        posologia: x.posologia ?? undefined,
-        duracao: x.duracao ?? undefined,
-        observacoes: x.observacoes ?? undefined,
-        cid: x.cid ?? undefined,
-      })),
-    );
-    setArquivos(
-      d.arquivos.map((a) => ({
-        id: a.id, nome: a.nome, tipo: a.tipo, tamanhoKb: a.tamanhoKb,
-        enviadoPor: a.enviadoPor as Arquivo["enviadoPor"], data: fmtLonga(a.createdAt),
-        consulta: a.consulta,
-      })),
-    );
-    setNotificacoes(
-      d.notificacoes.map((n) => ({
-        id: n.id,
-        para: (n.paraRole?.toLowerCase() || undefined) as Notificacao["para"],
-        tipo: n.tipo as Notificacao["tipo"],
-        titulo: n.titulo, texto: n.texto,
-        hora: fmtTicketData(n.createdAt),
-        lida: n.lida,
-      })),
-    );
-    setMedicos(
-      d.medicos.map((m) => ({
-        id: m.id, nome: m.nome, crm: m.crm, especialidade: m.especialidade,
-        subespecialidades: m.subespecialidades, valor: m.valor, avaliacao: m.avaliacao,
-        numAvaliacoes: m.numAvaliacoes, formacao: m.formacao, experiencia: m.experiencia,
-        idiomas: m.idiomas, bio: m.bio, foto: m.foto,
-        status: m.status as Medico["status"], horariosDisponiveis: m.horariosDisponiveis,
-      })),
-    );
-    setPacientes(
-      d.pacientes.map((p) => ({
-        id: p.id, nome: p.nome, email: p.email, telefone: p.telefone, cpf: p.cpf,
-        idade: p.idade, genero: p.genero, convenio: p.convenio,
-        status: p.status as PacienteRegistro["status"], desde: fmtDataBR(p.desde),
-      })),
-    );
-    setTickets(
-      d.tickets.map((t) => ({
-        id: t.id, usuario: t.usuario, perfil: t.perfil as TicketSuporte["perfil"],
-        assunto: t.assunto, categoria: t.categoria as TicketSuporte["categoria"],
-        mensagem: t.mensagem, status: t.status as TicketSuporte["status"],
-        data: fmtTicketData(t.createdAt), resposta: t.resposta,
-        respondidoPor: t.respondidoPor, dataResposta: t.dataResposta ? fmtTicketData(t.dataResposta) : undefined,
-      })),
-    );
-    setLembretes(
-      d.lembretes.map((l) => ({
-        id: l.id, titulo: l.titulo, horario: l.horario,
-        tipo: l.tipo as Lembrete["tipo"], frequencia: l.frequencia, feito: l.feito,
-        medicamento: l.medicamento ?? undefined,
-      })),
-    );
-    setAvaliacoes(
-      d.avaliacoes.map((a) => ({
-        id: a.id, paciente: a.paciente, medico: a.medico, especialidade: a.especialidade,
-        nota: a.nota, comentario: a.comentario, pontualidade: a.pontualidade,
-        atencao: a.atencao, clareza: a.clareza, quando: fmtQuando(a.createdAt),
-        ts: new Date(a.createdAt).getTime(),
-      })),
-    );
-    setConsentimentos(
-      d.consentimentos.map((c) => ({
-        id: c.id, paciente: c.paciente, quem: c.quem,
-        perfil: c.perfil as Sessao["role"], finalidade: c.finalidade,
-        documentos: c.documentos, quando: fmtQuando(c.createdAt), aceito: c.aceito,
-      })),
-    );
-    setAuditLogs(
-      d.auditLogs.map((l) => ({
-        id: l.id, ts: l.ts, acao: l.acao,
-        categoria: l.categoria as AuditLog["categoria"],
-        severidade: l.severidade as AuditLog["severidade"],
-        usuario: l.usuario, role: l.role as Sessao["role"],
-        entidade: l.entidade, entidadeId: l.entidadeId, detalhes: l.detalhes,
-      })),
-    );
+    setConsultas(d.consultas.map(mapConsulta));
+    setDocumentos(d.documentos.map(mapDocumento));
+    setArquivos(d.arquivos.map(mapArquivo));
+    setNotificacoes(d.notificacoes.map(mapNotificacao));
+    setMedicos(d.medicos.map(mapMedico));
+    setPacientes(d.pacientes.map(mapPaciente));
+    setTickets(d.tickets.map(mapTicket));
+    setLembretes(d.lembretes.map(mapLembrete));
+    setAvaliacoes(d.avaliacoes.map(mapAvaliacao));
+    setConsentimentos(d.consentimentos.map(mapConsentimento));
+    setAuditLogs(d.auditLogs.map(mapAudit));
     setMensagens(d.mensagens.map((m) => ({ ...fmtMensagem(m), minha: m.deId === d.usuario.id })));
     // Polling incremental: guarda o instante da mensagem mais recente
     const tsMaximo = d.mensagens.reduce((acc, m) => (m.createdAt > acc ? m.createdAt : acc), "");
     ultimaMsgTsRef.current = tsMaximo || null;
-    if (d.medicoes) {
-      setMedicoes(
-        d.medicoes.map((m) => ({
-          id: m.id,
-          tipo: m.tipo as Medicao["tipo"],
-          valor1: m.valor1,
-          valor2: m.valor2,
-          criadoEm: m.criadoEm,
-          quando: fmtCurta(m.criadoEm),
-        })),
-      );
-    }
-    if (d.exames) {
-      setExames(
-        d.exames.map((e) => ({
-          id: e.id,
-          titulo: e.titulo,
-          dataColeta: e.dataColeta,
-          itens: e.itens,
-          arquivoNome: e.arquivoNome,
-          origem: e.origem as ExameLab["origem"],
-          quando: fmtCurta(e.dataColeta),
-        })),
-      );
-    }
-    if (d.anamneses) {
-      setAnamneses(
-        d.anamneses.map((a) => ({
-          id: a.id,
-          consultaId: a.consultaId,
-          medico: a.medico,
-          especialidade: a.especialidade,
-          etapa: a.etapa,
-          status: a.status as AnamneseResumo["status"],
-          coleta: a.coleta,
-          documentos: a.documentos,
-          atualizadaEm: fmtTicketData(a.updatedAt),
-          ts: new Date(a.updatedAt).getTime(),
-        })),
-      );
-    }
+    if (d.medicoes) setMedicoes(d.medicoes.map(mapMedicao));
+    if (d.exames) setExames(d.exames.map(mapExame));
+    if (d.anamneses) setAnamneses(d.anamneses.map(mapAnamnese));
     if (d.suporte.id) setSuporte(d.suporte);
     if (d.pacientePerfil) setPacientePerfil(d.pacientePerfil);
   }, []);
@@ -700,26 +714,7 @@ export function BionProvider({ children }: { children: ReactNode }) {
       }
       const delta = d as DeltaWire;
       if (delta.consulta) {
-        const c = delta.consulta;
-        const mapeada: Consulta = {
-          id: c.id,
-          medico: c.medico,
-          especialidade: c.especialidade,
-          paciente: c.paciente,
-          medicoId: c.medicoId,
-          pacienteId: c.pacienteId,
-          data: fmtCurta(c.dataInicio),
-          hora: fmtHora(c.dataInicio),
-          status: c.status as Consulta["status"],
-          ts: new Date(c.dataInicio).getTime(),
-          remarcada: c.remarcada,
-          motivoCancelamento: c.motivoCancelamento,
-          motivoConsulta: c.motivoConsulta,
-          resumoMedico: c.resumoMedico,
-          valor: fmtValorBRL(c.valor),
-          pago: c.pago,
-          dataISO: c.dataInicio,
-        };
+        const mapeada = mapConsulta(delta.consulta);
         setConsultas((prev) =>
           prev.some((x) => x.id === mapeada.id)
             ? prev.map((x) => (x.id === mapeada.id ? mapeada : x))
@@ -727,19 +722,7 @@ export function BionProvider({ children }: { children: ReactNode }) {
         );
       }
       if (delta.anamnese) {
-        const a = delta.anamnese;
-        const mapeada: AnamneseResumo = {
-          id: a.id,
-          consultaId: a.consultaId,
-          medico: a.medico,
-          especialidade: a.especialidade,
-          etapa: a.etapa,
-          status: a.status as AnamneseResumo["status"],
-          coleta: a.coleta,
-          documentos: a.documentos,
-          atualizadaEm: fmtTicketData(a.updatedAt),
-          ts: new Date(a.updatedAt).getTime(),
-        };
+        const mapeada = mapAnamnese(delta.anamnese);
         setAnamneses((prev) =>
           prev.some((x) => x.id === mapeada.id)
             ? prev.map((x) => (x.id === mapeada.id ? mapeada : x))
@@ -785,6 +768,88 @@ export function BionProvider({ children }: { children: ReactNode }) {
       if (delta.lembreteRemovido) {
         const id = delta.lembreteRemovido;
         setLembretes((prev) => prev.filter((x) => x.id !== id));
+      }
+      // FASE 2 (auditoria front-end) — entidades únicas das rotas convertidas.
+      // Coleções ordenadas por createdAt desc (documentos, arquivos, avaliações,
+      // tickets, consentimentos) recebem a entidade NO TOPO; substituição em
+      // posição quando o id já existe (atualização sem reordenar).
+      if (delta.documento) {
+        const mapeado = mapDocumento(delta.documento);
+        setDocumentos((prev) =>
+          prev.some((x) => x.id === mapeado.id)
+            ? prev.map((x) => (x.id === mapeado.id ? mapeado : x))
+            : [mapeado, ...prev],
+        );
+      }
+      if (delta.arquivo) {
+        const mapeado = mapArquivo(delta.arquivo);
+        setArquivos((prev) =>
+          prev.some((x) => x.id === mapeado.id)
+            ? prev.map((x) => (x.id === mapeado.id ? mapeado : x))
+            : [mapeado, ...prev],
+        );
+      }
+      if (delta.avaliacao) {
+        const mapeado = mapAvaliacao(delta.avaliacao);
+        setAvaliacoes((prev) =>
+          prev.some((x) => x.id === mapeado.id)
+            ? prev.map((x) => (x.id === mapeado.id ? mapeado : x))
+            : [mapeado, ...prev],
+        );
+      }
+      if (delta.medico) {
+        const mapeado = mapMedico(delta.medico);
+        setMedicos((prev) =>
+          prev.some((x) => x.id === mapeado.id)
+            ? prev.map((x) => (x.id === mapeado.id ? mapeado : x))
+            : [...prev, mapeado],
+        );
+      }
+      if (delta.paciente) {
+        const mapeado = mapPaciente(delta.paciente);
+        setPacientes((prev) =>
+          prev.some((x) => x.id === mapeado.id)
+            ? prev.map((x) => (x.id === mapeado.id ? mapeado : x))
+            : [...prev, mapeado],
+        );
+      }
+      if (delta.ticket) {
+        const mapeado = mapTicket(delta.ticket);
+        setTickets((prev) =>
+          prev.some((x) => x.id === mapeado.id)
+            ? prev.map((x) => (x.id === mapeado.id ? mapeado : x))
+            : [mapeado, ...prev],
+        );
+      }
+      if (delta.consentimento) {
+        const mapeado = mapConsentimento(delta.consentimento);
+        setConsentimentos((prev) =>
+          prev.some((x) => x.id === mapeado.id)
+            ? prev.map((x) => (x.id === mapeado.id ? mapeado : x))
+            : [mapeado, ...prev],
+        );
+      }
+      if (delta.exame) {
+        const mapeado = mapExame(delta.exame);
+        setExames((prev) =>
+          prev.some((x) => x.id === mapeado.id)
+            ? prev.map((x) => (x.id === mapeado.id ? mapeado : x))
+            : [...prev, mapeado],
+        );
+      }
+      if (delta.exameRemovido) {
+        const id = delta.exameRemovido;
+        setExames((prev) => prev.filter((x) => x.id !== id));
+      }
+      // PATCH /api/perfil — perfil COMPLETO + sincronização do nome na sessão
+      // (filtros por papel usam sessao.nome; sem isso ficariam stale após
+      // o paciente trocar o próprio nome).
+      if (delta.perfilPacienteCompleto) {
+        const completo = delta.perfilPacienteCompleto;
+        setPacientePerfil(completo);
+        setSessaoState((prev) =>
+          prev.role === "paciente" && prev.id ? { ...prev, nome: completo.nome } : prev,
+        );
       }
       // Medição (contrato delta — POST /api/medicoes)
       if (delta.medicao) {

@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { exigirPapel } from "@/lib/server/auth";
-import { carregarDados } from "@/lib/server/dados";
+import { pacienteWire } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
 import { anonimizarPacienteCompleto } from "@/lib/server/lgpd";
 
@@ -33,7 +33,9 @@ export async function POST(req: NextRequest) {
     // sem destruição de prontuário.
     const apelido = await anonimizarPacienteCompleto(paciente.id);
     const { aplicarSideEffects } = await import("@/lib/server/dados");
-    await aplicarSideEffects(admin, undefined, {
+    // Contrato delta (auditoria FASE 2): devolve APENAS o paciente
+    // (agora anonimizado) — a lista do admin substitui o registro em posição.
+    const efeitos = await aplicarSideEffects(admin, undefined, {
       acao: body.acao === "excluir" ? "PACIENTE_DADOS_ANONIMIZADOS_ARQUIVADOS" : "PACIENTE_ANONIMIZADO",
       categoria: "admin",
       severidade: "critical",
@@ -45,8 +47,12 @@ export async function POST(req: NextRequest) {
       entidadeId: paciente.id,
     });
 
-    const dados = await carregarDados(admin);
-    return ok(dados);
+    const anonimizado = await db.user.findFirst({
+      where: { id: paciente.id },
+      include: { perfilPaciente: true },
+    });
+
+    return ok({ ...(anonimizado ? { paciente: pacienteWire(anonimizado) } : {}), ...efeitos });
   } catch (erro) {
     return falha(erro);
   }

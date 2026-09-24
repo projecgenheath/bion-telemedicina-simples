@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { exigirPapel } from "@/lib/server/auth";
-import { carregarDados, aplicarSideEffects } from "@/lib/server/dados";
+import { aplicarSideEffects, perfilPacienteWire } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
 
 type PerfilPacientePatch = {
@@ -28,8 +28,8 @@ export async function PATCH(req: NextRequest) {
     const usuario = await exigirPapel("PACIENTE");
     const body = (await req.json()) as PerfilPacientePatch;
 
-    const perfil = await db.perfilPaciente.findUnique({ where: { userId: usuario.id } });
-    if (!perfil) {
+    const perfilAtual = await db.perfilPaciente.findUnique({ where: { userId: usuario.id } });
+    if (!perfilAtual) {
       return Response.json({ erro: "Perfil não encontrado." }, { status: 404 });
     }
 
@@ -63,14 +63,23 @@ export async function PATCH(req: NextRequest) {
       }),
     ]);
 
-    await aplicarSideEffects(usuario, undefined, {
+    // Contrato delta (auditoria FASE 2): devolve APENAS o perfil completo
+    // atualizado + auditoria — o nome novo sincroniza a sessão no cliente.
+    const efeitos = await aplicarSideEffects(usuario, undefined, {
       acao: "PERFIL_ATUALIZADO",
       categoria: "usuario",
       detalhes: `Dados atualizados: ${Object.keys(body).join(", ")}`,
     });
 
-    const dados = await carregarDados({ ...usuario, nome: body.nome?.trim() || usuario.nome });
-    return ok(dados);
+    const perfilFresco = await db.perfilPaciente.findUnique({
+      where: { userId: usuario.id },
+      include: { user: { select: { nome: true, email: true } } },
+    });
+
+    return ok({
+      ...(perfilFresco ? { perfilPacienteCompleto: perfilPacienteWire(perfilFresco) } : {}),
+      ...efeitos,
+    });
   } catch (erro) {
     return falha(erro);
   }

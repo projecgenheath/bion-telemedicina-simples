@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { exigirPapel } from "@/lib/server/auth";
-import { carregarDados, aplicarSideEffects } from "@/lib/server/dados";
+import { aplicarSideEffects, medicoWire, type EfeitosCriados } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
 
 type MedicoPatch = {
@@ -18,7 +18,9 @@ type MedicoPatch = {
   horariosDisponiveis?: string[];
 };
 
-/** Ações administrativas sobre médicos: aprovar, suspender, editar e excluir. */
+/** Ações administrativas sobre médicos: aprovar, suspender, editar e excluir.
+ *  Contrato delta (auditoria FASE 2): toda ação devolve APENAS o médico
+ *  atualizado + efeitos (notificações/auditoria) — sem recarregar o estado. */
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -37,6 +39,7 @@ export async function PATCH(
     }
 
     const acao = body.acao ?? "atualizar";
+    let efeitos: EfeitosCriados = { notificacoes: [], audit: null };
 
     if (acao === "aprovar") {
       // P1 (2026-09): aprovar também reativa o usuário (User.status) — a
@@ -45,7 +48,7 @@ export async function PATCH(
         db.user.update({ where: { id }, data: { status: "ativo" } }),
         db.perfilMedico.update({ where: { userId: id }, data: { status: "ativo" } }),
       ]);
-      await aplicarSideEffects(
+      efeitos = await aplicarSideEffects(
         admin,
         [
           {
@@ -75,7 +78,7 @@ export async function PATCH(
         db.perfilMedico.update({ where: { userId: id }, data: { status: "suspenso" } }),
         db.sessao.deleteMany({ where: { userId: id } }),
       ]);
-      await aplicarSideEffects(
+      efeitos = await aplicarSideEffects(
         admin,
         [
           {
@@ -119,7 +122,7 @@ export async function PATCH(
           },
         }),
       ]);
-      await aplicarSideEffects(admin, undefined, {
+      efeitos = await aplicarSideEffects(admin, undefined, {
         acao: "MEDICO_ATUALIZADO",
         categoria: "admin",
         entidade: "medico",
@@ -128,8 +131,12 @@ export async function PATCH(
       });
     }
 
-    const dados = await carregarDados(admin);
-    return ok(dados);
+    const perfil = await db.perfilMedico.findUnique({
+      where: { userId: id },
+      include: { user: { select: { id: true, nome: true } } },
+    });
+
+    return ok({ ...(perfil ? { medico: medicoWire(perfil) } : {}), ...efeitos });
   } catch (erro) {
     return falha(erro);
   }
@@ -157,7 +164,7 @@ export async function DELETE(
       db.perfilMedico.update({ where: { userId: id }, data: { status: "arquivado" } }),
       db.sessao.deleteMany({ where: { userId: id } }),
     ]);
-    await aplicarSideEffects(admin, undefined, {
+    const efeitos = await aplicarSideEffects(admin, undefined, {
       acao: "MEDICO_ARQUIVADO",
       categoria: "admin",
       severidade: "critical",
@@ -166,8 +173,14 @@ export async function DELETE(
       entidadeId: id,
     });
 
-    const dados = await carregarDados(admin);
-    return ok(dados);
+    // Comportamento idêntico ao estado fresco anterior: o médico ARQUIVADO
+    // continua na listagem (status "arquivado") — histórico preservado.
+    const perfil = await db.perfilMedico.findUnique({
+      where: { userId: id },
+      include: { user: { select: { id: true, nome: true } } },
+    });
+
+    return ok({ ...(perfil ? { medico: medicoWire(perfil) } : {}), ...efeitos });
   } catch (erro) {
     return falha(erro);
   }

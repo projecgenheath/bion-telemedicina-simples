@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { exigirSessao } from "@/lib/server/auth";
-import { carregarDados, aplicarSideEffects } from "@/lib/server/dados";
+import { aplicarSideEffects, consentimentoWire } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
 
 /** Registro de consentimento LGPD.
@@ -54,9 +54,12 @@ export async function POST(req: NextRequest) {
         documentos: Math.max(0, Math.round(body.documentos || 0)),
         aceito: !!body.aceito,
       },
+      include: { paciente: { select: { nome: true } } },
     });
 
-    await aplicarSideEffects(
+    // Contrato delta (auditoria FASE 2): devolve APENAS o consentimento criado
+    // + efeitos — sem recarregar o estado inteiro.
+    const efeitos = await aplicarSideEffects(
       usuario,
       [
         {
@@ -78,8 +81,7 @@ export async function POST(req: NextRequest) {
       },
     );
 
-    const dados = await carregarDados(usuario);
-    return ok(dados);
+    return ok({ consentimento: consentimentoWire(registro), ...efeitos });
   } catch (erro) {
     return falha(erro);
   }

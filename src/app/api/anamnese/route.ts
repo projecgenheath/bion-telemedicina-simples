@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { exigirPapel } from "@/lib/server/auth";
-import { carregarDados, aplicarSideEffects } from "@/lib/server/dados";
+import { aplicarSideEffects, anamneseWire, consultaWire, perfilPacienteWire } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
 import { chatComFonte, type AnonNomes, type FonteLlm } from "@/lib/server/llm";
 import {
@@ -547,8 +547,6 @@ export async function POST(req: NextRequest) {
       parsed = turnoMotor({ mensagem, etapa: etapaAtual, coleta: coletaAtual, ctx: ctxMotor }) as RespostaLLM;
     }
 
-    const dados = await carregarDados(usuario);
-
     const texto = parsed.resposta?.trim() || "Deixa eu organizar as ideias e a gente segue — pode repetir a última mensagem?";
 
     // Consolida coleta + avanço de etapa
@@ -601,6 +599,20 @@ export async function POST(req: NextRequest) {
     if (parsed.perfil_atualizacoes && etapaAtual === "identificacao") {
       perfilAtualizado = await aplicarPerfilAtualizacoes(usuario.id, parsed.perfil_atualizacoes);
     }
+
+    // Contrato delta (auditoria FASE 2): cada turno devolve o TEXTO da triagem
+    // + APENAS o que mudou (anamnese e, se houve correção, o perfil completo)
+    // — nada de recarregar o estado inteiro do app a cada mensagem da conversa.
+    const anamneseAtualizada = await db.anamnese.findUnique({
+      where: { id: anamnese.id },
+      include: { consulta: { include: { medico: { select: { nome: true } } } } },
+    });
+    const perfilFresco = perfilAtualizado.length
+      ? await db.perfilPaciente.findUnique({
+          where: { userId: usuario.id },
+          include: { user: { select: { nome: true, email: true } } },
+        })
+      : null;
 
     // GARANTIA DO SERVIDOR sobre a resposta do LLM (o motor determinístico já
     // é confiável):
@@ -659,7 +671,9 @@ export async function POST(req: NextRequest) {
       // Janela de disponibilidade da triagem (para a UI exibir o prazo)
       disponivelAte: new Date(limiteTriagem).toISOString(),
       fonte: viaMotor ? "local" : llmFonte,
-      dados,
+      // Delta (auditoria FASE 2): apenas as entidades afetadas neste turno
+      ...(anamneseAtualizada ? { anamnese: anamneseWire(anamneseAtualizada) } : {}),
+      ...(perfilFresco ? { perfilPacienteCompleto: perfilPacienteWire(perfilFresco) } : {}),
     });
   } catch (erro) {
     return falha(erro);
@@ -700,8 +714,12 @@ export async function PATCH(req: NextRequest) {
         resumo: doc.resumo?.slice(0, 500),
       });
       await db.anamnese.update({ where: { id: anamnese.id }, data: { documentos: JSON.stringify(lista) } });
-      const dados = await carregarDados(usuario);
-      return ok(dados);
+      // Contrato delta (auditoria FASE 2): devolve APENAS a anamnese atualizada.
+      const atualizada = await db.anamnese.findUnique({
+        where: { id: anamnese.id },
+        include: { consulta: { include: { medico: { select: { nome: true } } } } },
+      });
+      return ok({ ...(atualizada ? { anamnese: anamneseWire(atualizada) } : {}) });
     }
 
     // acao: concluir — triagem pronta → avisa médico e paciente.
@@ -709,8 +727,11 @@ export async function PATCH(req: NextRequest) {
     // apenas o LEGADO "pendente_anamnese" é confirmado aqui, para
     // migrar registros antigos do fluxo anterior.
     if (anamnese.status === "concluida") {
-      const dados = await carregarDados(usuario);
-      return ok(dados);
+      const atualizada = await db.anamnese.findUnique({
+        where: { id: anamnese.id },
+        include: { consulta: { include: { medico: { select: { nome: true } } } } },
+      });
+      return ok({ ...(atualizada ? { anamnese: anamneseWire(atualizada) } : {}) });
     }
 
     const quando = consulta.dataInicio.toLocaleDateString("pt-BR") +
@@ -723,7 +744,10 @@ export async function PATCH(req: NextRequest) {
         : []),
     ]);
 
-    await aplicarSideEffects(
+    // Contrato delta (auditoria FASE 2): devolve a anamnese concluída, a
+    // consulta (caso o legado tenha confirmado) e os efeitos — sem recarregar
+    // o estado inteiro do app.
+    const efeitos = await aplicarSideEffects(
       usuario,
       [
         {
@@ -747,8 +771,22 @@ export async function PATCH(req: NextRequest) {
       },
     );
 
-    const dados = await carregarDados(usuario);
-    return ok(dados);
+    const [atualizada, consultaFresca] = await Promise.all([
+      db.anamnese.findUnique({
+        where: { id: anamnese.id },
+        include: { consulta: { include: { medico: { select: { nome: true } } } } },
+      }),
+      db.consulta.findUnique({
+        where: { id: consulta.id },
+        include: { medico: { select: { nome: true } }, paciente: { select: { nome: true } } },
+      }),
+    ]);
+
+    return ok({
+      ...(atualizada ? { anamnese: anamneseWire(atualizada) } : {}),
+      ...(consultaFresca ? { consulta: consultaWire(consultaFresca) } : {}),
+      ...efeitos,
+    });
   } catch (erro) {
     return falha(erro);
   }

@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { exigirPapel } from "@/lib/server/auth";
-import { carregarDados, aplicarSideEffects } from "@/lib/server/dados";
+import { aplicarSideEffects, exameWire } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
 
 /**
@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
 
     const dataColeta = body.dataColeta ? new Date(body.dataColeta) : new Date();
 
-    await db.exameLaboratorial.create({
+    const exame = await db.exameLaboratorial.create({
       data: {
         usuarioId: usuario.id,
         titulo: titulo.slice(0, 120),
@@ -77,14 +77,15 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    await aplicarSideEffects(usuario, undefined, {
+    // Contrato delta (auditoria FASE 2): devolve APENAS o exame criado
+    // + auditoria — sem recarregar o estado inteiro.
+    const efeitos = await aplicarSideEffects(usuario, undefined, {
       acao: "EXAME_REGISTRADO",
       categoria: "prontuario",
       detalhes: `Exame "${titulo}" registrado manualmente (${itensValidos.length} resultados)`,
     });
 
-    const dados = await carregarDados(usuario);
-    return ok(dados);
+    return ok({ exame: exameWire(exame), ...efeitos });
   } catch (erro) {
     return falha(erro);
   }
@@ -98,11 +99,14 @@ export async function DELETE(req: NextRequest) {
       return Response.json({ erro: "Informe o exame a remover." }, { status: 400 });
     }
     // Exclusão escopada no próprio usuário (sem chance de remover de outro paciente)
-    await db.exameLaboratorial.deleteMany({
+    const removidos = await db.exameLaboratorial.deleteMany({
       where: { id: body.id, usuarioId: usuario.id },
     });
-    const dados = await carregarDados(usuario);
-    return ok(dados);
+    // Contrato delta (auditoria FASE 2): devolve APENAS o id removido —
+    // o cliente tira o exame do estado sem recarregar o app.
+    return ok({
+      ...(removidos.count > 0 ? { exameRemovido: body.id } : {}),
+    });
   } catch (erro) {
     return falha(erro);
   }
