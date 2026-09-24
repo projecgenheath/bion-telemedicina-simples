@@ -22,7 +22,7 @@ import {
 /**
  * V4 — Troca de senha autenticada.
  *
- * Contas criadas pela administração nascem com senha padrão (bion123) e o
+ * Contas criadas pela administração nascem com senha padrão (bion123456) e o
  * flag `precisaTrocarSenha` ativo — o app bloqueia o uso até a troca. A
  * senha escolhida substitui o hash, limpa o flag e REVOGA as demais sessões
  * do usuário (a sessão atual permanece válida).

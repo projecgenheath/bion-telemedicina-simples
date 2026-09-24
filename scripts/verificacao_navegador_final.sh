@@ -30,7 +30,7 @@ echo "== servidor no ar =="
 # --- cookie de sessão (login via API) ---------------------------------------
 CJAR=$(mktemp)
 curl -s -c "$CJAR" -X POST "$BASE/api/auth/login" -H "Content-Type: application/json" \
-  -d '{"email":"marina.silva@email.com","senha":"bion123"}' -o /dev/null
+  -d '{"email":"marina.silva@email.com","senha":"bion123456"}' -o /dev/null
 TOKEN=$(rg -o "bion_sessao\s+(\S+)" -r '$1' "$CJAR" | head -1)
 [ -n "$TOKEN" ] || { echo "ERRO: sem token"; exit 1; }
 nota "== sessão paciente obtida =="
@@ -80,7 +80,7 @@ visitar "15-ajuda"          "/ajuda"
 # --- 3. tela médica ----------------------------------------------------------
 CJAR2=$(mktemp)
 curl -s -c "$CJAR2" -X POST "$BASE/api/auth/login" -H "Content-Type: application/json" \
-  -d '{"email":"julia.lima@med.bion.app","senha":"bion123"}' -o /dev/null
+  -d '{"email":"julia.lima@med.bion.app","senha":"bion123456"}' -o /dev/null
 TOKEN2=$(rg -o "bion_sessao\s+(\S+)" -r '$1' "$CJAR2" | head -1)
 $AB cookies set bion_sessao "$TOKEN2" >/dev/null 2>&1
 visitar "16-painel-medico"    "/painel"
@@ -91,7 +91,7 @@ visitar "19-medico-perfil"    "/medico-perfil"
 # --- 4. tela admin -----------------------------------------------------------
 CJAR3=$(mktemp)
 curl -s -c "$CJAR3" -X POST "$BASE/api/auth/login" -H "Content-Type: application/json" \
-  -d '{"email":"admin@bion.app","senha":"bion123"}' -o /dev/null
+  -d '{"email":"admin@bion.app","senha":"bion123456"}' -o /dev/null
 TOKEN3=$(rg -o "bion_sessao\s+(\S+)" -r '$1' "$CJAR3" | head -1)
 $AB cookies set bion_sessao "$TOKEN3" >/dev/null 2>&1
 visitar "20-painel-admin"       "/painel"

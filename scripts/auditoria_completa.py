@@ -37,7 +37,7 @@ def marcar(nome, status, esperado=200, detalhe=""):
 
 # ══ PACIENTE (Marina) ══════════════════════════════════════════════════
 p = nova_sessao()
-s, d = req(p, "POST", "/api/auth/login", {"email": "marina.silva@email.com", "senha": "bion123"})
+s, d = req(p, "POST", "/api/auth/login", {"email": "marina.silva@email.com", "senha": "bion123456"})
 marcar("AUTH login paciente", s, 200, d.get("usuario", {}).get("nome", d.get("erro", "")))
 
 s, d = req(p, "GET", "/api/bootstrap")
@@ -109,7 +109,7 @@ else:
 
 # ══ MÉDICO (Júlia) ═════════════════════════════════════════════════════
 m = nova_sessao()
-s, d = req(m, "POST", "/api/auth/login", {"email": medico_email or "julia.lima@med.bion.app", "senha": "bion123"})
+s, d = req(m, "POST", "/api/auth/login", {"email": medico_email or "julia.lima@med.bion.app", "senha": "bion123456"})
 marcar("AUTH login médico", s, 200, d.get("usuario", {}).get("nome", d.get("erro", "")))
 s, d = req(m, "GET", "/api/bootstrap")
 marcar("BOOTSTRAP médico", s, 200, f"consultas={len(d.get('consultas', []))} pacientes={len(d.get('pacientes', []))}")
@@ -132,13 +132,13 @@ marcar("AVALIACOES avaliar consulta (paciente)", s, 200, f"total={len(d.get('ava
 
 # Sala deve rejeitar intruso (outro paciente)
 o = nova_sessao()
-req(o, "POST", "/api/auth/login", {"email": "joao.pereira@email.com", "senha": "bion123"})
+req(o, "POST", "/api/auth/login", {"email": "joao.pereira@email.com", "senha": "bion123456"})
 s, d = req(o, "GET", f"/api/telemedicina/{sala_id}/sala") if sala_id else (404, {})
 marcar("SALA rejeita não participante", s, 403, d.get("erro", ""))
 
 # ══ ADMIN ══════════════════════════════════════════════════════════════
 a = nova_sessao()
-s, d = req(a, "POST", "/api/auth/login", {"email": "admin@bion.app", "senha": "bion123"})
+s, d = req(a, "POST", "/api/auth/login", {"email": "admin@bion.app", "senha": "bion123456"})
 marcar("AUTH login admin", s, 200, d.get("usuario", {}).get("nome", d.get("erro", "")))
 s, d = req(a, "GET", "/api/bootstrap")
 marcar("BOOTSTRAP admin", s, 200, f"pacientes={len(d.get('pacientes', []))} tickets={len(d.get('tickets', []))} logs={len(d.get('logs', d.get('auditoria', [])))}")

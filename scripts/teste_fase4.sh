@@ -25,7 +25,7 @@ echo "== servidor no ar =="
 
 # --- 1. login paciente -----------------------------------------------------
 curl -s -c "$CJAR" -X POST "$BASE/api/auth/login" -H "Content-Type: application/json" \
-  -d '{"email":"marina.silva@email.com","senha":"bion123"}' -o /tmp/login.json
+  -d '{"email":"marina.silva@email.com","senha":"bion123456"}' -o /tmp/login.json
 echo "1. LOGIN           -> $(python3 -c "
 import json; d=json.load(open('/tmp/login.json'))
 u=d.get('usuario',{}); print(u.get('nome'), '/', u.get('role'), '/ mensagens:', len(d.get('mensagens',[])), '/ suporte:', d.get('suporte'))")"
@@ -68,7 +68,7 @@ print(len(d.get('mensagens',[])), 'mensagens no payload leve')")"
 # --- 5. login médico (outro cookie jar) e verifica recebimento --------------
 CJAR2=$(mktemp)
 curl -s -c "$CJAR2" -X POST "$BASE/api/auth/login" -H "Content-Type: application/json" \
-  -d "{\"email\":\"$MED_EMAIL\",\"senha\":\"bion123\"}" -o /tmp/login_med.json
+  -d "{\"email\":\"$MED_EMAIL\",\"senha\":\"bion123456\"}" -o /tmp/login_med.json
 curl -s -b "$CJAR2" "$BASE/api/mensagens" -o /tmp/poll_med.json
 echo "5. MÉDICO RECEBEU  -> $(python3 -c "
 import json; d=json.load(open('/tmp/poll_med.json'))

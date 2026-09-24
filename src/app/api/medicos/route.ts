@@ -4,7 +4,7 @@ import { exigirPapel, hashSenha } from "@/lib/server/auth";
 import { carregarDados, aplicarSideEffects, slugEmail } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
 
-const SENHA_PADRAO = "bion123";
+const SENHA_PADRAO = "bion123456"; // política P0: mínimo 10 chars
 
 /** Cadastro de médico pela administração. Auditoria gerada PELO SERVIDOR. */
 export async function POST(req: NextRequest) {

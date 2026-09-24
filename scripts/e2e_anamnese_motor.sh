@@ -9,7 +9,7 @@ rm -f "$JAR"
 echo "== login =="
 curl -s -o /tmp/e2e-login.json -w "login=%{http_code}\n" -c "$JAR" -X POST "$BASE/api/auth/login" \
   -H "Content-Type: application/json" \
-  -d '{"email":"joao.pereira@email.com","senha":"bion123"}'
+  -d '{"email":"joao.pereira@email.com","senha":"bion123456"}'
 
 echo "== bootstrap (medicoId) =="
 curl -s -b "$JAR" "$BASE/api/bootstrap" -o /tmp/e2e-boot.json

@@ -28,7 +28,7 @@ echo "== servidor no ar =="
 # --- cookie de sessão (login via API) ---------------------------------------
 CJAR=$(mktemp)
 curl -s -c "$CJAR" -X POST "$BASE/api/auth/login" -H "Content-Type: application/json" \
-  -d '{"email":"marina.silva@email.com","senha":"bion123"}' -o /dev/null
+  -d '{"email":"marina.silva@email.com","senha":"bion123456"}' -o /dev/null
 TOKEN=$(rg -o "bion_sessao\s+(\S+)" -r '$1' "$CJAR" | head -1)
 [ -n "$TOKEN" ] || { echo "ERRO: sem token"; exit 1; }
 echo "== token de sessão obtido =="

@@ -36,7 +36,7 @@ async function main() {
   await db.sessao.deleteMany();
   await db.user.deleteMany();
 
-  const senhaHash = await bcrypt.hash("bion123", 10);
+  const senhaHash = await bcrypt.hash("bion123456", 10); // 10+ chars: coerente com validarSenhaForte (política P0)
 
   console.log("Criando usuários...");
   const admin = await db.user.create({
@@ -303,7 +303,7 @@ async function main() {
   await db.consentimento.create({ data: { pacienteId: marina.id, quem: marina.nome, perfil: "PACIENTE", finalidade: "Geração de prontuário em PDF", documentos: 3, aceito: true, createdAt: em(-20, 12, 5) } });
 
   console.log("\n✅ Seed concluído!");
-  console.log("\nContas demo (senha: bion123):");
+  console.log("\nContas demo (senha: bion123456):");
   console.log("  Paciente: marina.silva@email.com");
   console.log("  Médico:   ana.ribeiro@med.bion.app");
   console.log("  Admin:    admin@bion.app");

@@ -6,7 +6,7 @@ const email = `teste.ui.${Date.now()}@bion.app`;
 const user = await db.user.create({
   data: {
     nome, email,
-    senhaHash: await bcrypt.hash("bion123", 10),
+    senhaHash: await bcrypt.hash("bion123456", 10),
     role: "PACIENTE",
     status: "ativo",
     precisaTrocarSenha: true,
