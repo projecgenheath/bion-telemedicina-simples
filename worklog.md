@@ -649,3 +649,22 @@ Stage Summary:
 - Configuração ATENDIDA: gemma-4-26b-a4b-it é o primário da BION IA (primeiro da cadeia), exatamente o pedido; é o Gemma 4 mais rápido (MoE 4B ativos; 1,9s no probe vs 17-21s/500s do 31B).
 - Realidade da API hoje: Gemma 4 hospedado despeja raciocínio no texto e o thinkingConfig devolve 400 — a quarantena garante que o paciente só receba texto limpo (reserva 3.6-flash serve enquanto isso); quando a Google corrigir o despejo, o 26B A4B passa a servir automaticamente, sem mudança de código.
 - Ganho estrutural desta sessão: mensagens Gemma sem round-trip de 400 (corpo direto sem thinkingConfig, chat e visão).
+
+---
+Task ID: bion-ia-demora-eco
+Agent: Super Z (principal)
+Task: "Muita demora no Bion IA chat, respostas sem sentido e perguntas sem sentido, a paciente só queria renovar receita, ela não tem sintoma nenhum" (screenshot não chegou ao servidor; problema reproduzido pela API).
+
+Work Log:
+- REPRODUÇÃO (produção): turno 1 do cenário real = 30,0s (teto maxDuration) → fonte="local" → menu genérico de saudação, ignorando o pedido — raiz da experiência relatada.
+- CAUSAS: (1) despejo de raciocínio do gemma-4-26b-a4b-it em NOVO formato ("*   User prompt: ...", "*Draft 1:", "*Refining...", "Persona constraints") ESCAPAVA da quarantena antiga e chegou ao paciente (capturado no diagnóstico: 1805 chars de análise em inglês com a resposta duplicada no fim); (2) cada mensagem pagava ~9-10s do attempt do Gemma que ia ser quarantado, e o 3.6-flash está lento hoje (12s+); (3) motor local: regex de saudação casava com QUALQUER mensagem que começasse com "oi" e o ramo de sintomas casava com "sem sintomas" — sem intenção de renovação de receita.
+- CORREÇÕES llm.ts: RE_ECO_RACIOCINIO ampliado (User prompt/Draft N/Refining/Persona constraints/meta-commentary) + detector ESTRUTURAL (1ª linha = marcador "*" rotulando prompt citado entre aspas); DISJUNTOR DE ECO: 1 despejo confirmado → modelos Gemma saem da cadeia por 30 min (auto-recuperação; clean desarma; diagnóstico com ignorarDisjuntor enxerga o Gemma real; visão também respeita); reserva padrão ganha gemini-3.8-flash (3.6 saturou hoje).
+- CORREÇÕES chat-local.ts: nova intenção RENOVAÇÃO DE RECEITA (política: prescrição exige consulta; orienta teleconsulta de reavaliação) executada ANTES da saudação; saudação restrita a mensagens puras ("Oi", "Oi, tudo bem?").
+- BionIA.tsx: UI agora marca respostas com fonte="local" com a nota "(resposta do modo local...)" — antes o paciente via a resposta do fallback como se fosse IA normal.
+- Validação: tsc/eslint/build limpos; regex testadas contra as DUAS amostras reais de dump de hoje (true) e respostas legítimas com "•" (false); scripts/teste_chat_local.ts — 6/6 PASS; commit 878e5da; push → deploy.
+- PRODUÇÃO: mensagem 1 = 25,3s fonte=gemini texto limpo PERSONALIZADO (citou Losartana 50mg, Vitamina D e consulta com Dra. Ana Ribeiro — contexto real do banco; despejo contido; disjuntor armado); mensagem 2 = 10,6s (Gemma pulado, flash direto). Estado: modelo gemma-4-26b-a4b-it + reserva [3.6-flash, 3.8-flash, flash-lite].
+
+Stage Summary:
+- RESPOSTA SEM SENTIDO ELIMINADA: nenhum despejo (nem nas variantes novas) passa mais; fallback local com intenção correta para renovação; UI transparente sobre o modo local.
+- DEMORA: cada mensagem deixa de pagar ~9-10s do Gemma enquanto ele despeja (disjuntor); latência restante = o próprio flash da Google no free tier hoje (10-12s) — com billing, flash responde em ~2s; quando a Google corrigir o despejo do Gemma 4, ele volta sozinho como primário.
+- Lição: despejo do Gemma 4 muda de formato entre modelos/dias → quarentena agora cobre tokens + ESTRUTURA.
