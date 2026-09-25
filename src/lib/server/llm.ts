@@ -438,7 +438,10 @@ function comporFala(continuacao: string, comPrefill: boolean): string {
         rotuloPrefill,
       );
       let comPrefill = true;
-      if (texto1 && texto1.trim().length < 20) texto1 = null; // só ecoou o prefill — inútil
+      if (texto1) {
+        texto1 = limparArtefatos(texto1) || null; // artefatos de ação nunca chegam ao eco/paciente
+        if (texto1 && texto1.length < 20) texto1 = null; // só ecoou o prefill — inútil
+      }
       if (!texto1) {
         const rejeitou = _registrosGemini.some((r) => r.rotulo === rotuloPrefill && r.status === 400);
         if (rejeitou && restante(prazo) > 3_000) {
@@ -450,7 +453,7 @@ function comporFala(continuacao: string, comPrefill: boolean): string {
         // Gemma limpo: desarma o disjuntor (a Google corrigiu o despejo).
         _gemmaEcoSeguidos = 0;
         _gemmaPuladoAte = 0;
-        return { texto: comporFala(texto1, comPrefill), modelo };
+        return { texto: repararRepeticoes(comporFala(texto1, comPrefill)), modelo };
       }
       if (texto1) {
         // Despejo de raciocínio confirmado → SANITIZA em vez de descartar:
@@ -460,7 +463,7 @@ function comporFala(continuacao: string, comPrefill: boolean): string {
         if (limpo) {
           _gemmaEcoSeguidos = 0;
           _gemmaPuladoAte = 0;
-          return { texto: comporFala(limpo, comPrefill), modelo };
+          return { texto: repararRepeticoes(comporFala(limpo, comPrefill)), modelo };
         }
         // Despejo insanitizável → arma o disjuntor (só tem efeito quando
         // há reserva na cadeia; ver condição do continue acima).
@@ -699,6 +702,46 @@ function statsPalavras(a: string, b: string): { jac: number; con: number } {
     jac: inter / (sa.size + sb.size - inter),
     con: inter / Math.min(sa.size, sb.size),
   };
+}
+
+/**
+ * Remove ARTEFATOS de ação do fim da resposta (real 2026-09-24 no
+ * multi-turno: o Gemma anexa um bloco ```json com "action_flow_id" depois da
+ * fala — às vezes malformado, com "thought" no meio). Nunca deve chegar ao
+ * paciente. Aplicar ANTES do detector de eco (o artefato não é eco).
+ */
+export function limparArtefatos(texto: string): string {
+  return texto
+    .replace(/\u0060{3}[\s\S]*$/, "") // fence ```... até o fim
+    .replace(/[{\[][^}]*?action_flow_id[\s\S]*$/, "") // JSON de ação (válido ou quebrado) até o fim
+    .trim();
+}
+
+/**
+ * Repara repetições ADJACENTES do modelo na continuação (real 2026-09-24:
+ * "que eu eu te guio", "é rápida e você rápida e você não..."). Colapsa
+ * n-gramas (1-4 palavras) repetidos em sequência, comparando sem acento,
+ * caixa ou pontuação; mantém a primeira ocorrência.
+ */
+export function repararRepeticoes(texto: string): string {
+  let palavras = texto.split(/\s+/).filter(Boolean);
+  const norma = (w: string) =>
+    w
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-zà-ú0-9]/g, "");
+  for (let n = 4; n >= 1; n--) {
+    for (let i = 0; i + 2 * n <= palavras.length; i++) {
+      const a = palavras.slice(i, i + n).map(norma).join("|");
+      const b = palavras.slice(i + n, i + 2 * n).map(norma).join("|");
+      if (a && a === b && norma(palavras[i]).length >= 1) {
+        palavras = [...palavras.slice(0, i + n), ...palavras.slice(i + 2 * n)];
+        i = -1; // recomeça a varredura deste n
+      }
+    }
+  }
+  return palavras.join(" ");
 }
 
 /**

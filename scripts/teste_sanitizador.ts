@@ -6,7 +6,7 @@
  *
  * Uso: bunx tsx scripts/teste_sanitizador.ts
  */
-import { extrairRespostaFinal } from "../src/lib/server/llm";
+import { extrairRespostaFinal, limparArtefatos, repararRepeticoes } from "../src/lib/server/llm";
 
 let passou = 0;
 let falhou = 0;
@@ -199,6 +199,22 @@ const dump16 = `*   The user asks to confirm her medication.
 ${A16}${B16}`;
 const r16 = extrairRespostaFinal(dump16);
 verificar("fronteira '!' corta a 1ª versão", r16 === A16, `got: ${r16?.slice(0, 150)}`);
+
+
+console.log("=== 17. Artefato JSON de ação + micro-repetições do multi-turno (produção diag v8) ===");
+const bruto17 = ` A receita é emitida pelo médico em uma **teleconsulta de reavaliação** — é rápida e você não e precisa estar com sintomas. Toque em **Agendar consulta** aqui embaixo que eu eu te guio no resto.
+
+\u0060\u0060\u0060json
+{
+  "action_flow_id":thought
+{
+  "action_flow_id": "agendar_consulta"
+}`;
+const limpo17 = limparArtefatos(bruto17);
+verificar("artefato JSON/fence removido", !limpo17.includes("action_flow_id") && !limpo17.includes("\u0060\u0060\u0060"), `got: ${limpo17.slice(-80)}`);
+const rep17 = repararRepeticoes(limpo17);
+verificar("'eu eu' colapsado", rep17.includes("que eu te guio") === true, `got: ${rep17.slice(-60)}`);
+verificar("texto legítimo não é danificado", repararRepeticoes("• Agende sua consulta e leia seus laudos") === "• Agende sua consulta e leia seus laudos");
 
 console.log(`\n=== RESULTADO: ${passou} PASS / ${falhou} FAIL ===`);
 process.exit(falhou ? 1 : 0);
