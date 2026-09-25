@@ -57,10 +57,13 @@ export async function respostaLocal(
   // RENOVAÇÃO DE RECEITA: intenção comum que antes caía em ramos errados
   // ("oi" no início ativava o menu de saudação; "sem sintomas" ativava o
   // ramo de sintomas) — a resposta ignorava o pedido (bug real 2026-09).
+  // {0,40}? cobre palavras entre o verbo e o objeto ("renovar MINHA receita",
+  // "renovação DA RECEITA antiga") — antes, só o adjacente casava e a
+  // mensagem caía no ramo de medicamentos (bug real 2026-09-24).
   // Política clínica: prescrição sem avaliação não é permitida; o caminho
   // seguro é a teleconsulta de reavaliação.
   if (
-    /(renov\w*\s*(receita|prescri|remedio|medica)|receita\s*(medica|vencid|antig)|renovacao)/.test(t)
+    /(renov\w*.{0,40}?(receita|prescri|remedio|medica)|receita\s*(medica|vencid|antig)|renovacao)/.test(t)
   ) {
     return `Para **renovar uma receita**, ${primeiro}, é necessária uma avaliação médica — nem que seja rápida: por segurança, nenhuma prescrição é emitida sem consulta.\n\nO caminho mais simples é uma **teleconsulta de reavaliação**: o médico revisa seu histórico e, se for o caso, emite a receita atualizada na hora.\n\nToque em **“Agendar consulta”** aqui embaixo que eu te guio no resto — e, se o remédio é de uso contínuo, mencione isso ao médico na consulta.`;
   }

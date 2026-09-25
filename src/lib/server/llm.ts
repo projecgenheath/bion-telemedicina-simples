@@ -295,7 +295,7 @@ async function chamarGemini(
   mensagens: Msg[],
   prazo: number,
   modeloOverride?: string,
-  opcoes?: { ignorarDisjuntor?: boolean },
+  opcoes?: { ignorarDisjuntor?: boolean; bruto?: boolean },
 ): Promise<{ texto: string | null; modelo: string | null }> {
   const { apiKey } = geminiConfig();
   _registrosGemini = [];
@@ -358,6 +358,10 @@ async function chamarGemini(
     ? [modeloOverride, ...cadeiaModelos().filter((m) => m !== modeloOverride)]
     : cadeiaModelos();
   const ignorarDisjuntor = opcoes?.ignorarDisjuntor === true;
+  // Modo diagnóstico: devolve o BRUTO quando o despejo é insanitizável, para
+  // o painel admin mostrar EXATAMENTE o que o modelo produziu (calibragem
+  // do sanitizador). Nunca usado no caminho do paciente.
+  const modoBruto = opcoes?.bruto === true;
   for (const modelo of cadeia) {
     if (restante(prazo) <= 0) break;
     const ehGemma = /gemma/i.test(modelo);
@@ -420,6 +424,7 @@ async function chamarGemini(
           _gemmaPuladoAte = Date.now() + GEMMA_ECO_COOLDOWN_MS;
           _gemmaEcoSeguidos = 0;
         }
+        if (modoBruto) return { texto: texto1, modelo }; // diagnóstico: ver o despejo cru
       }
       // Gemma: o T1 JÁ é o caminho sem thinking (o 400 do thinkingConfig é
       // evitado por construção) e um T2 idêntico só repetiria o mesmo despejo —
@@ -778,7 +783,9 @@ export async function diagnosticoGemini(mensagens: Msg[], timeoutMs = 25_000, mo
   const prazo = Date.now() + timeoutMs;
   // ignorarDisjuntor: o diagnóstico precisa enxergar o Gemma REAL (inclusive
   // o despejo) mesmo quando o chat está pulando os modelos Gemma.
-  const r = await chamarGemini(mensagens, prazo, modelo, { ignorarDisjuntor: true });
+  // bruto: quando o despejo é insanitizável, devolve o texto CRU para o painel
+  // admin calibrar o sanitizador (nunca vai ao paciente).
+  const r = await chamarGemini(mensagens, prazo, modelo, { ignorarDisjuntor: true, bruto: true });
   return { texto: r.texto, modelo: r.modelo, registros: _registrosGemini };
 }
 
