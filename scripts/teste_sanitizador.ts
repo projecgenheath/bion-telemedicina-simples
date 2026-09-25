@@ -173,5 +173,15 @@ const r13 = extrairRespostaFinal(dump13);
 const esperada13 = "Com certeza! A receita é emitida pelo médico em uma **teleconsulta de reavaliação** — é rápida e você não precisa estar com sintomas. Toque em **Agendar consulta** aqui embaixo que eu te guio no resto.";
 verificar("'Let's ensure' quebra o bloco", r13 === esperada13, `got: ${r13?.slice(0, 160)}`);
 
+
+console.log("=== 14. 'Final Polish:' + resposta citada e solta idênticas coladas, SEM marcador clássico (produção [2] v5) ===");
+const A14 = "Claro! A receita é emitida pelo médico em uma **teleconsulta de reavaliação**, que é rápida e ideal para uso contínuo. \n• Toque em **Agendar consulta** abaixo para escolher seu horário.";
+const dump14 = `Final Polish:
+${A14}"${A14}`;
+const r14 = extrairRespostaFinal(dump14);
+const esperada14 = A14;
+// trim() por linha remove espaço invisível antes do \n — comparar normalizado
+verificar("colagem detectada sem marcador inglês; resposta única", r14 === esperada14.replace(/ +\n/g, "\n"), `got: ${JSON.stringify(r14?.slice(0, 150))}`);
+
 console.log(`\n=== RESULTADO: ${passou} PASS / ${falhou} FAIL ===`);
 process.exit(falhou ? 1 : 0);

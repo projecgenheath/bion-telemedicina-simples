@@ -561,7 +561,7 @@ const RE_ECO_RACIOCINIO =
  * "Max 5 lines? Yes", "Language: PT-BR", "Lines: 3." — resposta final no fim.
  */
 const RE_LINHA_DESPEJO =
-  /^\s*[\*\->\s]*(?:\*\*)?\s*(?:user'?s?\s*(?:input|prompt|request|persona)|user\s+persona|input\s*:|user\s+prompt|prompt\s*:|prompt\s+analysis|draft\s*\d|draft\s+(?:the|a|an|my|final|short|new)\b|refining\b|refined\b|persona\s+constraint|constraint\s+check|constraint\s*\d?\s*:|confidence\s+score|final\s+(?:answer|response|draft|version)|refined\s+(?:response|answer|version)|answer\s*:|response\s*:|best\s+response|check\s+constraints?|directly\s+addressing|first\s+line\s+is|no\s+meta-talk|no\s+repetition|max\s+\d+\s+lines|language\s*:|tone\s*:|style\s*:|lines\s*:\s*\d|word\s+count|wait\b|acknowledge\b|let\s+me\b|let'?s\s+(?:refine|ensure|draft|write|check|make|create|start|craft|finalize|adjust|polish)|self[-\s]?correction|\(this\s+is\s+\d+\s+lines?\)|the\s+user\s+said|i\s+(?:will|'ll|should|need|can|must)\b|the\s+user\b|analy(?:ze|zing|sis)\b|checklist|step\s*\d|thought\b|thinking\b|note\s*:|goal\s*:|context\s*:|key\s+points?|plan\s*:|version\s*\d|option\s*\d|revision\b|evaluat|reviewing|first\s+draft|next\s+step|paraphras|clarif|format\s*:|requirements?\s*:|[^?\n]{2,60}\?\s*yes\b)/i;
+  /^\s*[\*\->\s]*(?:\*\*)?\s*(?:user'?s?\s*(?:input|prompt|request|persona)|user\s+persona|input\s*:|user\s+prompt|prompt\s*:|prompt\s+analysis|draft\s*\d|draft\s+(?:the|a|an|my|final|short|new)\b|refining\b|refined\b|persona\s+constraint|constraint\s+check|constraint\s*\d?\s*:|confidence\s+score|final\s+(?:answer|response|draft|version|polish|review|pass|output|check|touch)|refined\s+(?:response|answer|version)|answer\s*:|response\s*:|best\s+response|check\s+constraints?|directly\s+addressing|first\s+line\s+is|no\s+meta-talk|no\s+repetition|max\s+\d+\s+lines|language\s*:|tone\s*:|style\s*:|lines\s*:\s*\d|word\s+count|wait\b|acknowledge\b|let\s+me\b|let'?s\s+(?:refine|ensure|draft|write|check|make|create|start|craft|finalize|adjust|polish)|self[-\s]?correction|\(this\s+is\s+\d+\s+lines?\)|the\s+user\s+said|i\s+(?:will|'ll|should|need|can|must)\b|the\s+user\b|analy(?:ze|zing|sis)\b|checklist|step\s*\d|thought\b|thinking\b|note\s*:|goal\s*:|context\s*:|key\s+points?|plan\s*:|version\s*\d|option\s*\d|revision\b|evaluat|reviewing|first\s+draft|next\s+step|paraphras|clarif|format\s*:|requirements?\s*:|[^?\n]{2,60}\?\s*yes\b)/i;
 
 /**
  * Marcadores de RESPOSTA FINAL dentro do despejo — o corte é feito no ÚLTIMO
@@ -571,9 +571,45 @@ const RE_MARCADOR_FINAL =
   /(?:final\s+(?:answer|response|draft|version)|refined\s+(?:response|answer|version)|resposta\s+final|vers[\u00e3o]\s+final|best\s+response)\s*[:\-]?\s*/gi;
 
 /**
- * DESDUPLICAÇÃO: o Gemma às vezes COLA a resposta final repetida sem
- * separador (real 2026-09-24: "...restante.\"Com certeza! ... restante.").
- * Cobre citação seguida da mesma citação e texto inteiro espelhado.
+ * Detecta a MELHOR colagem em t: (1) exata X+X — menor ponto de repetição a
+ * partir da metade; (2) quase idêntica X+Y — compara metades em fronteiras de
+ * frase (". ", ".Maiúscula" e ".\"Maiúscula", o formato real do Gemma:
+ * resposta citada + resposta solta grudadas). Devolve o corte (fim da 1ª
+ * cópia, inclusivo) e a similaridade Jaccard das partes.
+ */
+function melhorCola(t: string): { corte: number; sim: number } | null {
+  if (t.length < 40) return null;
+  for (let i = Math.ceil(t.length / 2); i <= t.length - 20; i++) {
+    if (t.startsWith(t.slice(i))) return { corte: i, sim: 1 };
+  }
+  if (t.length < 200) return null;
+  let melhor: { corte: number; sim: number } | null = null;
+  const de = Math.floor(t.length * 0.35);
+  const ate = Math.floor(t.length * 0.85);
+  for (let s = de; s <= ate; s++) {
+    if (t[s - 1] !== ".") continue;
+    // depois do ponto: pula espaços/aspas de fechamento; precisa vir maiúscula
+    let j = s;
+    while (j < t.length && (t[j] === " " || t[j] === '"' || t[j] === "\u201d" || t[j] === "\u201c")) j++;
+    if (!/[A-ZÀ-Ú]/.test(t[j] ?? "")) continue;
+    const a = t.slice(0, s); // inclui o ponto final
+    const b = t.slice(j);
+    if (a.length < 80 || b.length < 80) continue;
+    const sim = similaridade(a, b);
+    if (!melhor || sim > melhor.sim) melhor = { corte: s, sim };
+  }
+  return melhor;
+}
+
+/** A um texto contém resposta colada/duplicada nela mesma? (sinal de despejo) */
+function temColagem(t: string): boolean {
+  const melhor = melhorCola(t.trim());
+  return !!melhor && melhor.sim >= 0.6;
+}
+
+/**
+ * Deduplica uma linha/bloco: se o texto contém resposta colada nela mesma
+ * (X+X ou X+Y quase idênticas), mantém só a primeira cópia.
  */
 function desduplicar(v: string): string {
   const t = v
@@ -581,43 +617,12 @@ function desduplicar(v: string): string {
     .replace(/^["\u201c]+/, "")
     .replace(/["\u201d]+$/, "")
     .trim();
-  if (t.length >= 40) {
-    // 1) cola exata X+X (ou "X"+X): menor ponto de repetição a partir da metade.
-    for (let i = Math.ceil(t.length / 2); i <= t.length - 20; i++) {
-      if (t.startsWith(t.slice(i))) {
-        return t
-          .slice(0, i)
-          .replace(/["\u201d]+$/, "")
-          .trim();
-      }
-    }
-    // 2) cola quase idêntica X+Y (real 2026-09-24: DUAS versões da mesma
-    //    resposta grudadas — "…no restante.Claro! A receita é emitida…").
-    //    Compara as metades em fronteiras de frase (inclusive COLADAS, sem
-    //    espaço: ".Claro!"); parecidas → 1ª metade.
-    if (t.length >= 200) {
-      let melhor: { corte: number; sim: number } | null = null;
-      const de = Math.floor(t.length * 0.35);
-      const ate = Math.floor(t.length * 0.85);
-      for (let s = de; s <= ate; s++) {
-        if (t[s - 1] !== ".") continue;
-        // fronteira: ". " (frase normal) ou ".Maiúscula" (resposta colada)
-        let inicioB: number;
-        if (t[s] === " ") {
-          inicioB = s + 1;
-        } else if (/[A-ZÀ-Ú]/.test(t[s] ?? "")) {
-          inicioB = s;
-        } else {
-          continue;
-        }
-        const a = t.slice(0, s); // inclui o ponto final
-        const b = t.slice(inicioB);
-        if (a.length < 80 || b.length < 80) continue;
-        const sim = similaridade(a, b);
-        if (!melhor || sim > melhor.sim) melhor = { corte: s, sim };
-      }
-      if (melhor && melhor.sim >= 0.6) return t.slice(0, melhor.corte).trim();
-    }
+  const melhor = melhorCola(t);
+  if (melhor && melhor.sim >= 0.6) {
+    return t
+      .slice(0, melhor.corte)
+      .replace(/["\u201d]+$/, "")
+      .trim();
   }
   return t;
 }
@@ -653,7 +658,11 @@ export function extrairRespostaFinal(texto: string | null | undefined): string |
   if (!texto) return null;
   const bruto = texto.trim();
   if (!bruto) return null;
-  if (!textoComEcoRaciocinio(bruto)) return bruto;
+  // Suspeita de despejo: marcadores clássicos de eco OU colagem da resposta
+  // nela mesma (X+Y — real 2026-09-24: "Final Polish:" + resposta citada e
+  // solta idênticas grudadas, sem nenhum marcador inglês). Resposta legítima
+  // da BION IA nunca se repete colada nela mesma.
+  if (!textoComEcoRaciocinio(bruto) && !temColagem(bruto)) return bruto;
 
   // 0) Padrão REAL do despejo (2026-09-24): a resposta final é o BLOCO de
   //    linhas no FIM (às vezes com a cauda duplicada colada). Caminha de
