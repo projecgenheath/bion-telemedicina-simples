@@ -143,5 +143,35 @@ const r10 = extrairRespostaFinal(dump10);
 const esperada10 = "Claro! Para renovar sua receita, você precisa realizar uma **teleconsulta de reavaliação** — é rápida e não exige que você esteja com sintomas. Toque em **Agendar consulta** aqui embaixo que eu te guio no resto.";
 verificar("'? Yes.' com aspas dentro quebra o bloco", r10 === esperada10, `got: ${r10?.slice(0, 120)}`);
 
+
+console.log("=== 11. Duas versões quase iguais da resposta COLADAS X+Y (produção [2] v4) ===");
+const A2 = "Claro! A receita é emitida pelo médico em uma **teleconsulta de reavaliação** — é rápida e específica para uso contínuo. \n• Toque em **Agendar consulta** para escolher o melhor horário e eu te guio no restante.";
+const Y2 = "Claro! A receita é emitida pelo médico em uma **teleconsulta de reavaliação** — é um atendimento rápido e específica para uso contínuo. \n• Toque em **Agendar consulta** para escolher o melhor horário e eu te guio no restante.";
+const dump11 = `*   The user wants to renew a continuous prescription without symptoms.
+    *   Draft the response: reevaluation teleconsultation path.
+    ${A2.replace(/\n/g, " ")}${Y2.replace(/\n/g, " ")}`;
+const r11 = extrairRespostaFinal(dump11);
+verificar("cola X+Y quase idêntica → 1ª versão", r11 === A2.replace(/\n/g, " "), `got: ${r11?.slice(0, 150)}`);
+
+console.log("=== 12. Scaffolds 'Let's refine', '(This is 3 lines)', 'Self-Correction' intercalados (produção [3] v4) ===");
+const dump12 = `Let's refine for maximum impact and brevity.
+Sim, a **Losartana 50mg (1x/dia)** está registrada no seu perfil como medicamento em uso.
+• Você pode conferir todos os seus dados e medicamentos na aba **Meu Perfil** da plataforma.
+(This is 3 lines).
+Self-Correction during drafting:* The user said "não quero marcar agora" — confirm without pushing.
+Sim, a **Losartana 50mg (1x/dia)** está registrada no seu perfil como medicamento em uso.
+• Você pode conferir todos os seus dados e medicamentos na aba **Meu Perfil** da plataforma.`;
+const r12 = extrairRespostaFinal(dump12);
+const esperada12 = "Sim, a **Losartana 50mg (1x/dia)** está registrada no seu perfil como medicamento em uso.\n• Você pode conferir todos os seus dados e medicamentos na aba **Meu Perfil** da plataforma.";
+verificar("scaffolds intercalados removidos, resposta única", r12 === esperada12, `got: ${r12?.slice(0, 160)}`);
+
+console.log("=== 13. 'Let's ensure it's concise.' no fim antes da resposta (produção [4] v4) ===");
+const dump13 = `*   The user asks about prescription renewal without symptoms.
+Let's ensure it's concise.
+Com certeza! A receita é emitida pelo médico em uma **teleconsulta de reavaliação** — é rápida e você não precisa estar com sintomas. Toque em **Agendar consulta** aqui embaixo que eu te guio no resto.`;
+const r13 = extrairRespostaFinal(dump13);
+const esperada13 = "Com certeza! A receita é emitida pelo médico em uma **teleconsulta de reavaliação** — é rápida e você não precisa estar com sintomas. Toque em **Agendar consulta** aqui embaixo que eu te guio no resto.";
+verificar("'Let's ensure' quebra o bloco", r13 === esperada13, `got: ${r13?.slice(0, 160)}`);
+
 console.log(`\n=== RESULTADO: ${passou} PASS / ${falhou} FAIL ===`);
 process.exit(falhou ? 1 : 0);

@@ -550,7 +550,7 @@ function respostaInvalida(texto: string | null | undefined): boolean {
  * servir o Gemma 4 sem o despejo, ele volta a passar automaticamente.
  */
 const RE_ECO_RACIOCINIO =
-  /(\*\s*User'?s?\s*Input|User'?s?\s*input:|\*\s*Input:|User\s+prompt\b|Draft\s*\d|Refining\b|Persona\s+constraints?|meta-commentary|Constraint Check|\*\s*Wait\b|\*\s*Acknowledge|\*\s*Constraint|Let me analyze|The\s+user\s+(wants?|is|asked?|asks?|needs?|provided?))/i;
+  /(\*\s*User'?s?\s*Input|User'?s?\s*input:|\*\s*Input:|User\s+prompt\b|Draft\s*\d|Refining\b|Persona\s+constraints?|meta-commentary|Constraint Check|\*\s*Wait\b|\*\s*Acknowledge|\*\s*Constraint|Let me analyze|Let'?s\s+(?:refine|ensure|draft|write|check|make|create|start|craft|finalize|adjust|polish)\b|Self[-\s]?correction|\(this\s+is\s+\d+\s+lines?\)|The\s+user\s+(wants?|is|asked?|asks?|said\b|needs?|provided?))/i;
 
 /**
  * Linha de SCAFFOLDING do despejo (rotulada em inglês, com bullets "*"/"-",
@@ -561,7 +561,7 @@ const RE_ECO_RACIOCINIO =
  * "Max 5 lines? Yes", "Language: PT-BR", "Lines: 3." — resposta final no fim.
  */
 const RE_LINHA_DESPEJO =
-  /^\s*[\*\->\s]*(?:\*\*)?\s*(?:user'?s?\s*(?:input|prompt|request|persona)|user\s+persona|input\s*:|user\s+prompt|prompt\s*:|prompt\s+analysis|draft\s*\d|refining\b|refined\b|persona\s+constraint|constraint\s+check|constraint\s*\d?\s*:|confidence\s+score|final\s+(?:answer|response|draft|version)|refined\s+(?:response|answer|version)|answer\s*:|response\s*:|best\s+response|check\s+constraints?|directly\s+addressing|first\s+line\s+is|no\s+meta-talk|no\s+repetition|max\s+\d+\s+lines|language\s*:|tone\s*:|style\s*:|lines\s*:\s*\d|word\s+count|wait\b|acknowledge\b|let\s+me\b|i\s+(?:will|'ll|should|need|can|must)\b|the\s+user\b|analy(?:ze|zing|sis)\b|checklist|step\s*\d|thought\b|thinking\b|note\s*:|goal\s*:|context\s*:|key\s+points?|plan\s*:|version\s*\d|option\s*\d|revision\b|evaluat|reviewing|first\s+draft|next\s+step|paraphras|clarif|format\s*:|requirements?\s*:|[^?\n]{2,60}\?\s*yes\b)/i;
+  /^\s*[\*\->\s]*(?:\*\*)?\s*(?:user'?s?\s*(?:input|prompt|request|persona)|user\s+persona|input\s*:|user\s+prompt|prompt\s*:|prompt\s+analysis|draft\s*\d|draft\s+(?:the|a|an|my|final|short|new)\b|refining\b|refined\b|persona\s+constraint|constraint\s+check|constraint\s*\d?\s*:|confidence\s+score|final\s+(?:answer|response|draft|version)|refined\s+(?:response|answer|version)|answer\s*:|response\s*:|best\s+response|check\s+constraints?|directly\s+addressing|first\s+line\s+is|no\s+meta-talk|no\s+repetition|max\s+\d+\s+lines|language\s*:|tone\s*:|style\s*:|lines\s*:\s*\d|word\s+count|wait\b|acknowledge\b|let\s+me\b|let'?s\s+(?:refine|ensure|draft|write|check|make|create|start|craft|finalize|adjust|polish)|self[-\s]?correction|\(this\s+is\s+\d+\s+lines?\)|the\s+user\s+said|i\s+(?:will|'ll|should|need|can|must)\b|the\s+user\b|analy(?:ze|zing|sis)\b|checklist|step\s*\d|thought\b|thinking\b|note\s*:|goal\s*:|context\s*:|key\s+points?|plan\s*:|version\s*\d|option\s*\d|revision\b|evaluat|reviewing|first\s+draft|next\s+step|paraphras|clarif|format\s*:|requirements?\s*:|[^?\n]{2,60}\?\s*yes\b)/i;
 
 /**
  * Marcadores de RESPOSTA FINAL dentro do despejo — o corte é feito no ÚLTIMO
@@ -581,9 +581,8 @@ function desduplicar(v: string): string {
     .replace(/^["\u201c]+/, "")
     .replace(/["\u201d]+$/, "")
     .trim();
-  // X+X (ou "X"+X): menor ponto de repetição a partir da metade — o texto
-  // termina com uma cópia do próprio começo → fica só a primeira metade.
   if (t.length >= 40) {
+    // 1) cola exata X+X (ou "X"+X): menor ponto de repetição a partir da metade.
     for (let i = Math.ceil(t.length / 2); i <= t.length - 20; i++) {
       if (t.startsWith(t.slice(i))) {
         return t
@@ -592,8 +591,55 @@ function desduplicar(v: string): string {
           .trim();
       }
     }
+    // 2) cola quase idêntica X+Y (real 2026-09-24: DUAS versões da mesma
+    //    resposta grudadas — "…no restante.Claro! A receita é emitida…").
+    //    Compara as metades em fronteiras de frase (inclusive COLADAS, sem
+    //    espaço: ".Claro!"); parecidas → 1ª metade.
+    if (t.length >= 200) {
+      let melhor: { corte: number; sim: number } | null = null;
+      const de = Math.floor(t.length * 0.35);
+      const ate = Math.floor(t.length * 0.85);
+      for (let s = de; s <= ate; s++) {
+        if (t[s - 1] !== ".") continue;
+        // fronteira: ". " (frase normal) ou ".Maiúscula" (resposta colada)
+        let inicioB: number;
+        if (t[s] === " ") {
+          inicioB = s + 1;
+        } else if (/[A-ZÀ-Ú]/.test(t[s] ?? "")) {
+          inicioB = s;
+        } else {
+          continue;
+        }
+        const a = t.slice(0, s); // inclui o ponto final
+        const b = t.slice(inicioB);
+        if (a.length < 80 || b.length < 80) continue;
+        const sim = similaridade(a, b);
+        if (!melhor || sim > melhor.sim) melhor = { corte: s, sim };
+      }
+      if (melhor && melhor.sim >= 0.6) return t.slice(0, melhor.corte).trim();
+    }
   }
   return t;
+}
+
+/** Jaccard de palavras de conteúdo (sem acento, ≥ 4 letras) entre dois textos. */
+function similaridade(a: string, b: string): number {
+  const palavras = (s: string) =>
+    new Set(
+      s
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-z\s]/g, " ")
+        .split(/\s+/)
+        .filter((w) => w.length > 3),
+    );
+  const sa = palavras(a);
+  const sb = palavras(b);
+  if (!sa.size || !sb.size) return 0;
+  let inter = 0;
+  for (const w of sa) if (sb.has(w)) inter++;
+  return inter / (sa.size + sb.size - inter);
 }
 
 /**
