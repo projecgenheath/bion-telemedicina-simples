@@ -831,3 +831,18 @@ Stage Summary:
 - Latência de produção resolvida na raiz: região gru1 (7x no app) + IA 3-8x mais rápida no caso típico e 2x no pior caso.
 - Chat BION IA: gemma-4-26b-a4b-it ÚNICO e confirmado por modelo na resposta; qualidade anti-anamnese mantida.
 - Limitação residual documentada: free tier do Gemma trava intermitentemente (>12s sem 1º token) — nesse cenário o paciente espera ~13s e recebe a resposta local correta; eliminate só com billing pago na Google.
+
+---
+Task ID: fase-4-fechamento
+Agent: Super Z (principal)
+Task: "Fase 4" — fechamento da FASE 4 da auditoria front: smoke pós-deploy (pendente no fechamento) + laudo final.
+
+Work Log:
+- Confirmado: código da FASE 4 já em produção (commit e5f302a — 6 deps mortas removidas, aria-labels em 3 inputs, scanner honesto); faltava o smoke pós-deploy prometido.
+- Reexecução das auditorias locais: estática = 1 achado (falso positivo documentado — themeColor #2563eb do viewport em app/layout.tsx); inputs = 0 reais (98 inputs, todos rotulados); zero referências às deps removidas (react-hook-form/@hookform/zod/date-fns/ui/form).
+- Smoke em produção (scripts/smoke_fase4_producao.sh, NOVO, somente leitura): landing 200; login 200; GET bootstrap/mensagens/medicoes 200; GET notificacoes/consultas/documentos 405 = rotas só de mutação (desenho da API — estado fresco vem do bootstrap); 5 telas do paciente (painel, mensagens, bion-ia, perfil, privacidade) renderizaram DADOS com ZERO erros de console; screenshots em download/evidencias-fase4-producao/.
+- Correção no script do smoke: a sintaxe do agent-browser é `cookies set` (a 1ª versão usou `set cookie` e o cookie não era aplicado — telas mostravam só o carregador); verificação visual dos PNGs (painel com dados reais da Marina; privacidade atrás do tour de boas-vindas = comportamento esperado em perfil novo).
+
+Stage Summary:
+- AUDITORIA FRONT 4/4 FASES FECHADAS E VALIDADAS EM PRODUÇÃO: F1 contrato mutar()/delta + higiene; F2 deltas + provider; F3 SSE + A11Y + tokens; F4 deps + a11y inputs + scanner. Único achado estático restante = falso positivo documentado.
+- Zero erros de runtime nas 5 telas em produção após a remoção das dependências — remoção segura confirmada em produção.
