@@ -561,7 +561,7 @@ const RE_ECO_RACIOCINIO =
  * "Max 5 lines? Yes", "Language: PT-BR", "Lines: 3." — resposta final no fim.
  */
 const RE_LINHA_DESPEJO =
-  /^\s*[\*\->\s]*(?:\*\*)?\s*(?:user'?s?\s*(?:input|prompt|request|persona)|user\s+persona|input\s*:|user\s+prompt|prompt\s*:|prompt\s+analysis|draft\s*\d|draft\s+(?:the|a|an|my|final|short|new)\b|refining\b|refined\b|persona\s+constraint|constraint\s+check|constraint\s*\d?\s*:|confidence\s+score|final\s+(?:answer|response|draft|version|polish|review|pass|output|check|touch)|refined\s+(?:response|answer|version)|answer\s*:|response\s*:|best\s+response|check\s+constraints?|directly\s+addressing|first\s+line\s+is|no\s+meta-talk|no\s+repetition|max\s+\d+\s+lines|language\s*:|tone\s*:|style\s*:|lines\s*:\s*\d|word\s+count|wait\b|acknowledge\b|let\s+me\b|let'?s\s+(?:refine|ensure|draft|write|check|make|create|start|craft|finalize|adjust|polish)|self[-\s]?correction|\(this\s+is\s+\d+\s+lines?\)|the\s+user\s+said|i\s+(?:will|'ll|should|need|can|must)\b|the\s+user\b|analy(?:ze|zing|sis)\b|checklist|step\s*\d|thought\b|thinking\b|note\s*:|goal\s*:|context\s*:|key\s+points?|plan\s*:|version\s*\d|option\s*\d|revision\b|evaluat|reviewing|first\s+draft|next\s+step|paraphras|clarif|format\s*:|requirements?\s*:|[^?\n]{2,60}\?\s*yes\b)/i;
+  /^\s*[\*\->\s]*(?:\*\*)?\s*(?:user'?s?\s*(?:input|prompt|request|persona)|user\s+persona|input\s*:|user\s+prompt|prompt\s*:|prompt\s+analysis|draft\s*\d|draft\s+(?:the|a|an|my|final|short|new)\b|refining\b|refined\b|persona\s+constraint|constraint\s+check|constraint\s*\d?\s*:|confidence\s+score|final\s+(?:answer|response|draft|version|polish|review|pass|output|check|touch|text)|refined\s+(?:response|answer|version)|answer\s*:|response\s*:|best\s+response|check\s+constraints?|directly\s+addressing|first\s+line\s+is|no\s+meta-talk|no\s+repetition|max\s+\d+\s+lines|language\s*:|tone\s*:|style\s*:|lines\s*:\s*\d|word\s+count|wait\b|acknowledge\b|let\s+me\b|let'?s\s+(?:refine|ensure|draft|write|check|make|create|start|craft|finalize|adjust|polish)|self[-\s]?correction|\(this\s+is\s+\d+\s+lines?\)|the\s+user\s+said|i\s+(?:will|'ll|should|need|can|must)\b|the\s+user\b|analy(?:ze|zing|sis)\b|checklist|step\s*\d|thought\b|thinking\b|note\s*:|goal\s*:|context\s*:|key\s+points?|plan\s*:|version\s*\d|option\s*\d|revision\b|evaluat|reviewing|first\s+draft|next\s+step|paraphras|clarif|format\s*:|requirements?\s*:|[^?\n]{2,60}\?\s*yes\b)/i;
 
 /**
  * Marcadores de RESPOSTA FINAL dentro do despejo — o corte é feito no ÚLTIMO
@@ -587,24 +587,30 @@ function melhorCola(t: string): { corte: number; sim: number } | null {
   const de = Math.floor(t.length * 0.35);
   const ate = Math.floor(t.length * 0.85);
   for (let s = de; s <= ate; s++) {
-    if (t[s - 1] !== ".") continue;
-    // depois do ponto: pula espaços/aspas de fechamento; precisa vir maiúscula
+    // fronteira de frase: "." "!" ou "?" (real 2026-09-24: "…disposição!Sim, …")
+    const pont = t[s - 1];
+    if (pont !== "." && pont !== "!" && pont !== "?") continue;
+    // depois: pula espaços/aspas de fechamento; precisa vir maiúscula
     let j = s;
     while (j < t.length && (t[j] === " " || t[j] === '"' || t[j] === "\u201d" || t[j] === "\u201c")) j++;
     if (!/[A-ZÀ-Ú]/.test(t[j] ?? "")) continue;
-    const a = t.slice(0, s); // inclui o ponto final
+    const a = t.slice(0, s); // inclui a pontuação final
     const b = t.slice(j);
     if (a.length < 80 || b.length < 80) continue;
-    const sim = similaridade(a, b);
-    if (!melhor || sim > melhor.sim) melhor = { corte: s, sim };
+    // Corte seguro: a 2ª metade precisa ser quase CONTIDA na 1ª (con ≥ 0.75)
+    // E haver sobreposição real (jac ≥ 0.4) — intro+bullets legítimos têm
+    // continência baixa e ficam protegidos.
+    const { jac, con } = statsPalavras(a, b);
+    if (con >= 0.75 && jac >= 0.4 && (!melhor || jac > melhor.sim)) {
+      melhor = { corte: s, sim: jac };
+    }
   }
   return melhor;
 }
 
 /** A um texto contém resposta colada/duplicada nela mesma? (sinal de despejo) */
 function temColagem(t: string): boolean {
-  const melhor = melhorCola(t.trim());
-  return !!melhor && melhor.sim >= 0.6;
+  return melhorCola(t.trim()) !== null;
 }
 
 /**
@@ -618,7 +624,7 @@ function desduplicar(v: string): string {
     .replace(/["\u201d]+$/, "")
     .trim();
   const melhor = melhorCola(t);
-  if (melhor && melhor.sim >= 0.6) {
+  if (melhor) {
     return t
       .slice(0, melhor.corte)
       .replace(/["\u201d]+$/, "")
@@ -627,8 +633,8 @@ function desduplicar(v: string): string {
   return t;
 }
 
-/** Jaccard de palavras de conteúdo (sem acento, ≥ 4 letras) entre dois textos. */
-function similaridade(a: string, b: string): number {
+/** Métricas de sobreposição de palavras de conteúdo (≥ 4 letras, sem acento). */
+function statsPalavras(a: string, b: string): { jac: number; con: number } {
   const palavras = (s: string) =>
     new Set(
       s
@@ -641,10 +647,13 @@ function similaridade(a: string, b: string): number {
     );
   const sa = palavras(a);
   const sb = palavras(b);
-  if (!sa.size || !sb.size) return 0;
+  if (!sa.size || !sb.size) return { jac: 0, con: 0 };
   let inter = 0;
   for (const w of sa) if (sb.has(w)) inter++;
-  return inter / (sa.size + sb.size - inter);
+  return {
+    jac: inter / (sa.size + sb.size - inter),
+    con: inter / Math.min(sa.size, sb.size),
+  };
 }
 
 /**

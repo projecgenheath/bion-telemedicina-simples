@@ -183,5 +183,22 @@ const esperada14 = A14;
 // trim() por linha remove espaço invisível antes do \n — comparar normalizado
 verificar("colagem detectada sem marcador inglês; resposta única", r14 === esperada14.replace(/ +\n/g, "\n"), `got: ${JSON.stringify(r14?.slice(0, 150))}`);
 
+
+console.log("=== 15. 'Final Text:*' antes da resposta (produção [2] v6) ===");
+const dump15 = `*   The user wants to renew a prescription without symptoms.
+Final Text:*
+Com certeza! A receita é emitida pelo médico em uma **teleconsulta de reavaliação** — é um atendimento rápido para uso contínuo. Toque em **Agendar consulta** para escolher o seu horário.`;
+const r15 = extrairRespostaFinal(dump15);
+const esperada15 = "Com certeza! A receita é emitida pelo médico em uma **teleconsulta de reavaliação** — é um atendimento rápido para uso contínuo. Toque em **Agendar consulta** para escolher o seu horário.";
+verificar("'Final Text:*' quebra o bloco", r15 === esperada15, `got: ${r15?.slice(0, 120)}`);
+
+console.log("=== 16. Colagem X+Y com fronteira '!' (produção [3] v6) ===");
+const A16 = "Sim, confirmo que a **Losartana 50mg (1x/dia)** consta no seu perfil como medicamento em uso. Se precisar de mais alguma informação ou quiser agendar sua renovação depois, estou à disposição!";
+const B16 = "Sim, confirmo que a **Losartana 50mg (1x/dia)** consta no seu perfil como medicamento em uso. Se precisar de qualquer outra informação, estou à disposição!";
+const dump16 = `*   The user asks to confirm her medication.
+${A16}${B16}`;
+const r16 = extrairRespostaFinal(dump16);
+verificar("fronteira '!' corta a 1ª versão", r16 === A16, `got: ${r16?.slice(0, 150)}`);
+
 console.log(`\n=== RESULTADO: ${passou} PASS / ${falhou} FAIL ===`);
 process.exit(falhou ? 1 : 0);
