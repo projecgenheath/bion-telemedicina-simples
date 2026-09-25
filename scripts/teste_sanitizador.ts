@@ -120,5 +120,28 @@ const rReal = extrairRespostaFinal(dumpReal);
 const respostaRealEsperada = "Com certeza! Para renovar sua receita, você precisa realizar uma **teleconsulta de reavaliação** — é um processo rápido e não exige sintomas. Toque em **Agendar consulta** aqui embaixo que eu te ajudo com o restante.";
 verificar("resposta única e limpa extraída do despejo real", rReal === respostaRealEsperada, `got: ${rReal?.slice(0, 120)}`);
 
+
+console.log("=== 9. Checklist '? Yes.' sem bullet + resposta duplicada colada (produção [3]) ===");
+const dump9 = `*   The user asks if Losartana is registered in her profile.
+    *   Check profile: Losartana 50mg (1x/dia) is in the medications list.
+    *   Checklist:
+        *   Markdown? Yes.
+        *   No preamble? Yes.
+        *   No reasoning/meta-talk? Yes.
+"Sim, Marina! A **Losartana 50mg (1x/dia)** está registrada no seu perfil como medicamento em uso."Sim, Marina! A **Losartana 50mg (1x/dia)** está registrada no seu perfil como medicamento em uso.`;
+const r9 = extrairRespostaFinal(dump9);
+const esperada9 = "Sim, Marina! A **Losartana 50mg (1x/dia)** está registrada no seu perfil como medicamento em uso.";
+verificar("checklist '? Yes.' quebrado + dedupe da cauda", r9 === esperada9, `got: ${r9?.slice(0, 120)}`);
+
+console.log("=== 10. 'Addressing user as \"você\"? Yes.' antes da resposta (produção [4]) ===");
+const dump10 = `*   User persona: BION IA.
+    *   Input: "Beleza, mas não quero marcar consulta agora."
+    *   The user wants confirmation about her medication.
+    *   Addressing user as "você"? Yes.
+Claro! Para renovar sua receita, você precisa realizar uma **teleconsulta de reavaliação** — é rápida e não exige que você esteja com sintomas. Toque em **Agendar consulta** aqui embaixo que eu te guio no resto.`;
+const r10 = extrairRespostaFinal(dump10);
+const esperada10 = "Claro! Para renovar sua receita, você precisa realizar uma **teleconsulta de reavaliação** — é rápida e não exige que você esteja com sintomas. Toque em **Agendar consulta** aqui embaixo que eu te guio no resto.";
+verificar("'? Yes.' com aspas dentro quebra o bloco", r10 === esperada10, `got: ${r10?.slice(0, 120)}`);
+
 console.log(`\n=== RESULTADO: ${passou} PASS / ${falhou} FAIL ===`);
 process.exit(falhou ? 1 : 0);

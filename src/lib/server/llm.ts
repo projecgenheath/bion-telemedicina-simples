@@ -550,7 +550,7 @@ function respostaInvalida(texto: string | null | undefined): boolean {
  * servir o Gemma 4 sem o despejo, ele volta a passar automaticamente.
  */
 const RE_ECO_RACIOCINIO =
-  /(\*\s*User'?s?\s*Input|User'?s?\s*input:|\*\s*Input:|User\s+prompt\b|Draft\s*\d|Refining\b|Persona\s+constraints?|meta-commentary|Constraint Check|\*\s*Wait\b|\*\s*Acknowledge|\*\s*Constraint|Let me analyze|The\s+user\s+(wants?|is|asked?|needs?|provided?))/i;
+  /(\*\s*User'?s?\s*Input|User'?s?\s*input:|\*\s*Input:|User\s+prompt\b|Draft\s*\d|Refining\b|Persona\s+constraints?|meta-commentary|Constraint Check|\*\s*Wait\b|\*\s*Acknowledge|\*\s*Constraint|Let me analyze|The\s+user\s+(wants?|is|asked?|asks?|needs?|provided?))/i;
 
 /**
  * Linha de SCAFFOLDING do despejo (rotulada em inglês, com bullets "*"/"-",
@@ -561,7 +561,7 @@ const RE_ECO_RACIOCINIO =
  * "Max 5 lines? Yes", "Language: PT-BR", "Lines: 3." — resposta final no fim.
  */
 const RE_LINHA_DESPEJO =
-  /^\s*[\*\->\s]*(?:\*\*)?\s*(?:user'?s?\s*(?:input|prompt|request|persona)|user\s+persona|input\s*:|user\s+prompt|prompt\s*:|prompt\s+analysis|draft\s*\d|refining\b|refined\b|persona\s+constraint|constraint\s+check|constraint\s*\d?\s*:|confidence\s+score|final\s+(?:answer|response|draft|version)|refined\s+(?:response|answer|version)|answer\s*:|response\s*:|best\s+response|check\s+constraints?|directly\s+addressing|first\s+line\s+is|no\s+meta-talk|no\s+repetition|max\s+\d+\s+lines|language\s*:|tone\s*:|style\s*:|lines\s*:\s*\d|word\s+count|wait\b|acknowledge\b|let\s+me\b|i\s+(?:will|'ll|should|need|can|must)\b|the\s+user\b|analy(?:ze|zing|sis)\b|checklist|step\s*\d|thought\b|thinking\b|note\s*:|goal\s*:|context\s*:|key\s+points?|plan\s*:|version\s*\d|option\s*\d|revision\b|evaluat|reviewing|first\s+draft|next\s+step|paraphras|clarif|format\s*:|requirements?\s*:)/i;
+  /^\s*[\*\->\s]*(?:\*\*)?\s*(?:user'?s?\s*(?:input|prompt|request|persona)|user\s+persona|input\s*:|user\s+prompt|prompt\s*:|prompt\s+analysis|draft\s*\d|refining\b|refined\b|persona\s+constraint|constraint\s+check|constraint\s*\d?\s*:|confidence\s+score|final\s+(?:answer|response|draft|version)|refined\s+(?:response|answer|version)|answer\s*:|response\s*:|best\s+response|check\s+constraints?|directly\s+addressing|first\s+line\s+is|no\s+meta-talk|no\s+repetition|max\s+\d+\s+lines|language\s*:|tone\s*:|style\s*:|lines\s*:\s*\d|word\s+count|wait\b|acknowledge\b|let\s+me\b|i\s+(?:will|'ll|should|need|can|must)\b|the\s+user\b|analy(?:ze|zing|sis)\b|checklist|step\s*\d|thought\b|thinking\b|note\s*:|goal\s*:|context\s*:|key\s+points?|plan\s*:|version\s*\d|option\s*\d|revision\b|evaluat|reviewing|first\s+draft|next\s+step|paraphras|clarif|format\s*:|requirements?\s*:|[^?\n]{2,60}\?\s*yes\b)/i;
 
 /**
  * Marcadores de RESPOSTA FINAL dentro do despejo — o corte é feito no ÚLTIMO
@@ -622,10 +622,14 @@ export function extrairRespostaFinal(texto: string | null | undefined): string |
       .trim();
     if (!nua) continue;
     if (RE_LINHA_DESPEJO.test(nua) || textoComEcoRaciocinio(nua)) break;
-    bloco.unshift(nua);
+    // Deduplica a linha individual (o Gemma cola a resposta repetida: X+X).
+    bloco.unshift(desduplicar(nua));
   }
   if (bloco.length) {
-    const candidato = desduplicar(bloco.join("\n"));
+    // Colapsa linhas repetidas (a mesma resposta pode vir em duas formas) e
+    // deduplica o bloco inteiro de novo — "A\nA" → "A".
+    const unicas = bloco.filter((l, i) => i === 0 || l !== bloco[i - 1]);
+    const candidato = desduplicar(unicas.join("\n"));
     if (candidato.length >= 20 && !textoComEcoRaciocinio(candidato)) return candidato;
   }
 
