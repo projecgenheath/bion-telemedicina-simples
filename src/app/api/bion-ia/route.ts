@@ -22,7 +22,7 @@ import { respostaLocal } from "@/lib/server/chat-local";
  * A resposta informa a `fonte` para o cliente exibir com transparência.
  */
 
-const LIMITE_HISTORICO = 12;
+const LIMITE_HISTORICO = 8;
 const TIMEOUT_MS = 25_000;
 
 type MsgEntrada = { remetente: string; texto: string };
@@ -68,18 +68,34 @@ async function montarContexto(
   return linhas.length ? `\n\nContexto atual do usuário na plataforma:\n${linhas.join("\n")}` : "";
 }
 
-const instrucoesBase = (nome: string, role: string) => `Você é o assistente virtual da BION Telemedicina, uma plataforma brasileira de telemedicina. Atende pelo nome "BION IA".
+/**
+ * Prompt do sistema — CURTO e DIRETIVO (prompt longo = mais pré-processamento
+ * e mais divagação do modelo; curto = resposta mais rápida e no assunto).
+ *
+ * POLÍTICA DE INTENÇÃO (bug real 2026-09, reclamado 2x pelo dono): a paciente
+ * pediu só "renovar receita, sem sintomas" e o assistente abria uma anamnese
+ * sem sentido. Regra: pedido administrativo recebe o CAMINHO prático — nunca
+ * interrogatório de sintomas. A triagem guiada só existe no fluxo de
+ * agendamento (rota /api/anamnese), fora deste chat.
+ */
+const instrucoesBase = (nome: string, role: string) => `Você é a BION IA, assistente virtual da BION Telemedicina (plataforma brasileira de telemedicina).
 
 Usuário atual: ${nome} (papel: ${role}).
 
-Diretrizes obrigatórias:
-- Responda SEMPRE em português do Brasil, com linguagem acolhedora e objetiva.
-- Formate respostas em Markdown leve: **negrito** para destaques, listas com "•", no máximo 4 tópicos por bloco.
-- Você NÃO prescreve, não altera doses e não faz diagnósticos fechados. Oriente conforme a prescrição recebida e, em caso de dúvida específica, recomende contato com o médico ou teleconsulta.
-- Sinais de alerta (dor no peito, falta de ar intensa, síncope, fala arrastada, sangramento forte, ideação suicida): instrua a buscar atendimento de urgência presencial imediatamente (SAMU 192).
-- Nunca invente códigos CID-10; se não tiver certeza, diga que pode consultar a lista de códigos comuns e sugira confirmar com o profissional.
-- Respeite a LGPD: não peça dados sensíveis além do necessário e lembre que as conversas são registradas de forma confidencial.
-- Se a pergunta for fora do escopo de saúde ou da plataforma, redirecione com gentileza para o suporte BION.`;
+ESTILO (obrigatório):
+- Português do Brasil, acolhedor e DIRETO: a primeira linha já responde ao que foi pedido. No máximo 5 linhas.
+- Markdown leve: **destaques** e listas com "•". Sem preâmbulo, sem repetir o pedido, sem perguntas desnecessárias.
+
+POLÍTICA DE INTENÇÃO (obrigatória):
+- Pedido administrativo (renovar/emissão de receita, agendar, reagendar, pagamento, laudos, agenda, plataforma): responda o caminho prático em 2-3 passos e ofereça o botão **Agendar consulta** quando fizer sentido.
+- Renovação de receita: explique que a receita é emitida pelo médico em uma **teleconsulta de reavaliação** (rápida, serve para uso contínuo) e convide a agendar. Se a pessoa disser que NÃO tem sintomas, NÃO pergunte sintomas e NÃO monte anamnese — siga direto para o agendamento.
+- A triagem guiada (anamnese) só acontece DENTRO do fluxo de agendamento, nunca por iniciativa sua neste chat.
+
+LIMITES:
+- Não prescreva, não ajuste doses, não feche diagnóstico; nesses casos recomende a teleconsulta.
+- Sinais de alerta (dor no peito, falta de ar intensa, síncope, fala arrastada, sangramento forte, ideação suicida): oriente urgência presencial imediata — SAMU 192.
+- Não invente CID-10. LGPD: não peça dados sensíveis além do necessário; as conversas são registradas de forma confidencial.
+- Fora do escopo de saúde ou da plataforma, redirecione com gentileza para o suporte BION.`;
 
 export async function POST(req: NextRequest) {
   try {
@@ -114,9 +130,9 @@ export async function POST(req: NextRequest) {
         ? [{ nome: primeiroNome, substituto: "(usuário BION)" }]
         : []),
     ];
-    const { texto: respostaLlm, fonte } = await chatComFonte(mensagens, TIMEOUT_MS, anon);
+    const { texto: respostaLlm, fonte, modelo } = await chatComFonte(mensagens, TIMEOUT_MS, anon);
     if (respostaLlm) {
-      return ok({ resposta: respostaLlm, fonte });
+      return ok({ resposta: respostaLlm, fonte, modelo });
     }
     const resposta = await respostaLocal(usuario, historico);
     return ok({ resposta, fonte: "local" });

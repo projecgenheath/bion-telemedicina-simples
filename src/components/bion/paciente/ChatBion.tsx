@@ -33,6 +33,7 @@ type Msg = {
   texto: string;
   tipo?: "sucesso-agendamento" | "sucesso-exame" | "erro" | "anamnese";
   fonte?: string;
+  modelo?: string;
 };
 type Etapa = null | "especialidade" | "medico" | "dia" | "hora" | "confirmar";
 
@@ -354,9 +355,9 @@ export function ChatBion({ aberto, onFechar, aoEnviarExame }: { aberto: boolean;
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ mensagens: historico.map((m) => ({ remetente: m.remetente === "usuario" ? "usuario" : "ia", texto: m.texto.replace(/\*\*/g, "") })) }),
       });
-      const json = (await res.json()) as { resposta?: string; fonte?: string; erro?: string };
+      const json = (await res.json()) as { resposta?: string; fonte?: string; modelo?: string; erro?: string };
       if (!res.ok || !json.resposta) throw new Error(json.erro ?? "Falha");
-      setMensagens((m) => [...m, { remetente: "ia", texto: json.resposta!, fonte: json.fonte }]);
+      setMensagens((m) => [...m, { remetente: "ia", texto: json.resposta!, fonte: json.fonte, modelo: json.modelo }]);
     } catch {
       setMensagens((m) => [
         ...m,
@@ -617,7 +618,9 @@ export function ChatBion({ aberto, onFechar, aoEnviarExame }: { aberto: boolean;
                     : m.fonte === "publico"
                       ? "canal público · seus nomes foram removidos antes do envio (anonimização LGPD); ao continuar a conversa você consente com esse tratamento"
                       : m.fonte === "gemini"
-                        ? "IA generativa · Google Gemini"
+                        ? /gemma/i.test(m.modelo ?? "")
+                          ? "IA generativa · Gemma 4 26B A4B"
+                          : "IA generativa · Google Gemini"
                         : "IA generativa"}
                 </div>
               )}

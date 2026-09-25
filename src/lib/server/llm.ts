@@ -3,25 +3,34 @@ import ZAI from "z-ai-web-dev-sdk";
 /**
  * Camada única de acesso à IA GENERATIVA para as rotas da BION IA.
  *
- * Cadeia de disponibilidade (na ordem):
- *  1. GOOGLE GEMINI (API própria do projeto, chave embutida com override via
- *     env BION_LLM_GEMINI_API_KEY) — canal confiável: dados completos, sem
- *     anonimização, suporta texto e visão (fotos/PDFs de laudos);
- *  2. Credenciais próprias genéricas (env BION_LLM_BASE_URL + BION_LLM_API_KEY,
- *     API compatível com OpenAI) — canal confiável, dados completos;
- *  3. Endpoint público sem chave (Pollinations, OpenAI-compatible) — canal
- *     aberto de reserva. POR SEGURANÇA (LGPD), os NOMES passados em `anon`
- *     são removidos das mensagens antes do envio. O tier anônimo serve o
- *     modelo "gpt-oss" (model "openai-fast") — fraco para seguir roteiros;
- *     por isso as rotas de triagem IMPÕEM o rito no servidor e usam este
- *     canal apenas como reserva dos canais 1 e 2;
- *  4. SDK do sandbox (internal-api.z.ai) — só existe dentro da rede do
- *     sandbox; sonda curta com resultado memorizado por instância.
+ * DECISÃO DO DONO (2026-09-24): o CHAT da BION IA usa SOMENTE o
+ * GEMMA 4 26B A4B (MoE ~26B totais / ~4B ativos) — sem Gemini flash na
+ * cadeia. Para viabilizar o modelo único:
+ *  • o despejo de raciocínio (eco) não é mais descartado: o SANITIZADOR
+ *    (extrairRespostaFinal) recupera a resposta final embutida no despejo;
+ *  • prompt do sistema curto e direto + temperatura 0.4 (menos divagação,
+ *    menos despejo, respostas mais rápidas);
+ *  • o disjuntor de eco só pula o Gemma quando HÁ reserva na cadeia
+ *    (BION_LLM_GEMINI_RESERVA) — com modelo único, pular = cair no motor
+ *    local, que é sempre pior do que tentar o Gemma de novo.
+ *
+ * Cadeia de disponibilidade do CHAT (na ordem):
+ *  1. GOOGLE GEMINI API — modelo gemma-4-26b-a4b-it (chave via env
+ *     BION_LLM_GEMINI_API_KEY; dados completos, sem anonimização);
+ *  2. Credenciais próprias genéricas (env BION_LLM_BASE_URL + BION_LLM_API_KEY);
+ *  3. Endpoint público sem chave (desligado por padrão — BION_LLM_PUBLICO=1
+ *     para ativar; nomes anonimizados antes do envio — LGPD);
+ *  4. SDK do sandbox (só existe dentro da rede do sandbox).
+ *  Nenhum canal respondendo → motores locais determinísticos por rota.
+ *
+ * A LEITURA DE LAUDOS (visão, fotos/PDFs) segue nos modelos Gemini flash
+ * (MODELOS_VISAO): extração estruturada de documentos não é o chat do
+ * paciente e não pode herdar o despejo de raciocínio do Gemma.
  *
  * `chatCompleto()` devolve string | null e `chatComFonte()` também informa
- * a fonte ("gemini" | "env" | "publico" | "sdk"). As rotas usam null como
- * sinal para acionar os motores locais determinísticos — a BION IA nunca
- * fica muda.
+ * a fonte ("gemini" | "env" | "publico" | "sdk") e o modelo exato que
+ * respondeu. As rotas usam null como sinal para acionar os motores locais
+ * determinísticos — a BION IA nunca fica muda.
  */
 
 export type Msg = { role: "user" | "assistant"; content: string };
@@ -34,7 +43,7 @@ type ClienteEnv = { tipo: "env"; baseUrl: string; apiKey: string; model?: string
 type ClienteSdk = { tipo: "sdk"; zai: Awaited<ReturnType<typeof ZAI.create>> };
 type Cliente = ClienteEnv | ClienteSdk | { tipo: "gemini" };
 
-type Resultado = { texto: string | null; fonte: FonteLlm | null };
+type Resultado = { texto: string | null; fonte: FonteLlm | null; modelo?: string | null };
 
 const SONDA_TIMEOUT_MS = 6_000;
 const COOLDOWN_FALHA_MS = 60_000;
@@ -53,22 +62,24 @@ const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 /**
  * Histórico do primário: o dono pediu GEMMA 4 (31B, depois 26B A4B — MoE
  * ~26B totais / ~4B ativos, confirmado na ListModels desta chave em 2026-09).
- * Medição em produção (2026-09, dias seguidos): a família Gemma hospedada
- * DESPEJA raciocínio no texto (thinkingConfig devolve 400, sem como desligar)
- * e NUNCA passa da quarentena — como primário custava ~15s de espera por
- * mensagem em instância fria do serverless antes de cair para o flash.
- * Por isso o primário volta a ser o Gemini flash e o Gemma 26B A4B segue na
- * RESERVA (disjuntor de eco o pula instantaneamente enquanto ele despejar).
- * Devolva o primário a ele via BION_LLM_GEMINI_MODEL no dia em que a Google
- * corrigir o despejo — o corpo Gemma (sem thinkingConfig, fold de system) já
- * está implementado em chamarGemini/visaoGemini.
+ * Houve um período com o Gemini flash como primário (o Gemma despejava
+ * raciocínio e a quarentena descartava a resposta inteira, custando ~15s por
+ * instância fria). Em 2026-09-24 o dono CONFIRMOU o Gemma 26B A4B como
+ * modelo ÚNICO do chat; o despejo passou a ser tratado pelo sanitizador
+ * (extrairRespostaFinal) e a quarentena só rejeita despejo insanitizável.
  */
-// Primário: gemini-3.6-flash — o Gemma 4 hospedado DESPEJA raciocínio no texto
-// (medido em produção em dias seguidos, formatos variados) e nunca passa da
-// quarentena: deixá-lo primeiro custava ~15s por instância fria (telemetria de
-// 2026-09-24). Ele segue na RESERVA e volta a ser primário via
-// BION_LLM_GEMINI_MODEL no momento em que a Google parar o despejo.
-const GEMINI_MODEL_PADRAO = "gemini-3.6-flash";
+// Primário do CHAT: gemma-4-26b-a4b-it — decisão explícita do dono
+// (2026-09-24): "quero que use somente ele". O despejo de raciocínio do
+// Gemma hospedado é tratado pelo sanitizador (extrairRespostaFinal) em vez
+// de descartar a resposta inteira; o modelo flash saiu da cadeia do chat.
+const GEMINI_MODEL_PADRAO = "gemma-4-26b-a4b-it";
+
+/**
+ * Cadeia da VISÃO (leitura de laudos em foto/PDF) — mantém os Gemini flash:
+ * extração estruturada de documentos exige resposta limpa e rápida; o Gemma
+ * despeja raciocínio no texto e destruiria a extração.
+ */
+const MODELOS_VISAO = ["gemini-3.6-flash", "gemini-3.8-flash", "gemini-flash-lite-latest"];
 
 let _sdk: { cliente: ClienteSdk | null; verificado: boolean } = { cliente: null, verificado: false };
 let _publicoFalhaEm = 0;
@@ -100,6 +111,9 @@ const geminiEmCooldown = () => Date.now() - _geminiFalhaEm < COOLDOWN_FALHA_MS;
 
 function geminiConfig() {
   const apiKey = (process.env.BION_LLM_GEMINI_API_KEY || "").trim();
+  // Override via env BION_LLM_GEMINI_MODEL: se houver um valor antigo na
+  // Vercel (ex.: gemini-3.6-flash), ele VENCE o padrão do código — o painel
+  // de diagnóstico (/api/bion-ia/diagnostico GET) mostra o modelo efetivo.
   const model = (process.env.BION_LLM_GEMINI_MODEL || GEMINI_MODEL_PADRAO).trim();
   return { apiKey, model };
 }
@@ -111,10 +125,11 @@ function geminiConfig() {
  * 503/429 falham em ~250ms, então o custo é mínimo; o primeiro que responder
  * vence. Override via env BION_LLM_GEMINI_RESERVA="modelo-a,modelo-b".
  */
-// Reserva: 3.8-flash cobre a cota/saturação do 3.6; o Gemma 26B A4B fica na
-// frente do lite (só serve se passar da quarentena de eco — o disjuntor o
-// pula instantaneamente enquanto ele despejar raciocínio).
-const MODELOS_RESERVA_PADRAO = ["gemini-3.8-flash", "gemma-4-26b-a4b-it", "gemini-flash-lite-latest"];
+// Reserva do CHAT: VAZIA por decisão do dono ("use somente ele") — o chat
+// roda só no gemma-4-26b-a4b-it. Se um dia o Gemma ficar indisponível
+// (cota/saturação), a resposta cai para o motor local da rota. Para voltar a
+// ter reservas sem mexer no código: BION_LLM_GEMINI_RESERVA="modelo-a,modelo-b".
+const MODELOS_RESERVA_PADRAO: string[] = [];
 
 function modelosReserva(): string[] {
   const extra = (process.env.BION_LLM_GEMINI_RESERVA || "")
@@ -271,13 +286,17 @@ async function geminiPost(
 
 /* ----------------------------- canal gemini ----------------------------- */
 
-/** Um turno de TEXTO no Gemini/Gemma (mensagens[0] "assistant" vira systemInstruction). */
+/**
+ * Um turno de TEXTO no Gemini/Gemma (mensagens[0] "assistant" vira
+ * systemInstruction). Devolve texto + o modelo que de fato respondeu (a UI
+ * exibe com transparência).
+ */
 async function chamarGemini(
   mensagens: Msg[],
   prazo: number,
   modeloOverride?: string,
   opcoes?: { ignorarDisjuntor?: boolean },
-): Promise<string | null> {
+): Promise<{ texto: string | null; modelo: string | null }> {
   const { apiKey } = geminiConfig();
   _registrosGemini = [];
   const sys = mensagens[0]?.role === "assistant" ? mensagens[0].content : null;
@@ -303,18 +322,27 @@ async function chamarGemini(
   if (conteudos.length && conteudos[0].role === "model") {
     conteudos.unshift({ role: "user", parts: [{ text: "(contexto da conversa abaixo)" }] });
   }
-  if (!conteudos.length) return null;
+  if (!conteudos.length) return { texto: null, modelo: null };
 
   // GEMMA: a família Gemma na API do Gemini NÃO aceita systemInstruction nem
   // thinkingConfig — o prompt de sistema é fundido no primeiro turno "user",
   // com ordem explícita de resposta direta (o Gemma 4 tende a ecoar o
   // raciocínio — "The user wants..." — quando a instrução não é enfática).
+  // O EXEMPLO de 1 turno âncora o formato (dumps medidos em produção mesmo
+  // com a diretiva verbal) e o teto de linhas acelera a resposta.
   const DIRETIVA_GEMMA =
-    "\n\n---\n\nIMPORTANTE (estilo de resposta): fale como a BION IA, em português, \n" +
-    "dirigindo-se diretamente à pessoa. Responda de imediato ao pedido do turno \n" +
-    "mais recente. NUNCA exiba raciocínio, análise, plano ou comentário sobre as \n" +
-    "instruções (nada de \"The user wants...\", \"Input:\", listas de análise). \n" +
-    "A primeira linha da resposta já é a fala da BION IA.";
+    "\n\n---\n\nIMPORTANTE (estilo de resposta, obrigatório): fale como a BION IA, em \n" +
+    "português do Brasil, dirigindo-se diretamente à pessoa (\"você\"). A PRIMEIRA \n" +
+    "linha da resposta já é a fala da BION IA respondendo ao pedido. NUNCA exiba \n" +
+    "raciocínio, análise, plano, rascunho, checklist ou comentário sobre as \n" +
+    "instruções (nada de \"The user wants...\", \"User's Input:\", \"User prompt:\", \n" +
+    "\"Draft\", \"Refining\", \"Final Answer:\", \"Constraint\", \"Let me analyze\"). \n" +
+    "NUNCA cite nem repita o pedido do usuário. No máximo 5 linhas.\n" +
+    '\nExemplo do estilo exato:\n' +
+    'Pedido: "quero renovar minha receita de remédio contínuo, não tenho sintomas"\n' +
+    'Resposta correta: "Claro! A receita é emitida pelo médico em uma **teleconsulta \n' +
+    'de reavaliação** — é rápida e você não precisa estar com sintomas. Toque em \n' +
+    '**Agendar consulta** aqui embaixo que eu te guio no resto."';
   const conteudosGemma = sys
     ? conteudos.map((t, i) =>
         i === 0 ? { role: t.role, parts: [{ text: `${sys}${DIRETIVA_GEMMA}\n\n---\n\n${t.parts[0].text}` }] } : t,
@@ -333,7 +361,10 @@ async function chamarGemini(
   for (const modelo of cadeia) {
     if (restante(prazo) <= 0) break;
     const ehGemma = /gemma/i.test(modelo);
-    if (ehGemma && !ignorarDisjuntor && Date.now() < _gemmaPuladoAte) continue; // disjuntor de eco
+    // Disjuntor de eco: só pula o Gemma quando HÁ outro modelo na cadeia —
+    // com modelo único (padrão atual), pular = cair no motor local, que é
+    // sempre pior do que tentar o Gemma (o sanitizador recupera o despejo).
+    if (ehGemma && !ignorarDisjuntor && Date.now() < _gemmaPuladoAte && cadeia.length > 1) continue;
     const conteudosDoModelo = ehGemma ? conteudosGemma : conteudos;
 
     const corpo: GeminiCorpo = ehGemma
@@ -342,10 +373,11 @@ async function chamarGemini(
           // not supported for this model" — medido em produção), então o corpo
           // vai DIRETO sem thinkingConfig (economiza um round-trip de 400 por
           // mensagem) e com teto 8192 (o Gemma 4 consome tokens com
-          // raciocínio interno). O eco que escapar é quarantado por
-          // textoComEcoRaciocinio e a cadeia cai para o próximo modelo.
+          // raciocínio interno). Temperatura 0.4: menos divagação → menos
+          // despejo e resposta mais curta (e mais rápida). O eco que escapar
+          // passa pelo sanitizador antes de descartar.
           contents: conteudosDoModelo,
-          generationConfig: { temperature: 0.7, maxOutputTokens: 8192 },
+          generationConfig: { temperature: 0.4, maxOutputTokens: 8192 },
         }
       : {
           ...(sys ? { systemInstruction: { parts: [{ text: sys }] } } : {}),
@@ -368,11 +400,21 @@ async function chamarGemini(
         _gemmaEcoSeguidos = 0;
         _gemmaPuladoAte = 0;
       }
-      return texto1;
+      return { texto: texto1, modelo };
     }
     if (ehGemma) {
       if (texto1) {
-        // Despejo de raciocínio confirmado → arma o disjuntor (ver constantes).
+        // Despejo de raciocínio confirmado → SANITIZA em vez de descartar:
+        // a resposta final do Gemma vem embutida no despejo (medido em
+        // produção: 2632 chars de despejo com a resposta correta dentro).
+        const limpo = extrairRespostaFinal(texto1);
+        if (limpo) {
+          _gemmaEcoSeguidos = 0;
+          _gemmaPuladoAte = 0;
+          return { texto: limpo, modelo };
+        }
+        // Despejo insanitizável → arma o disjuntor (só tem efeito quando
+        // há reserva na cadeia; ver condição do continue acima).
         _gemmaEcoSeguidos += 1;
         if (_gemmaEcoSeguidos >= GEMMA_ECO_LIMITE) {
           _gemmaPuladoAte = Date.now() + GEMMA_ECO_COOLDOWN_MS;
@@ -391,12 +433,17 @@ async function chamarGemini(
       generationConfig: { temperature: 0.7, maxOutputTokens: 8192 },
     };
     const texto2 = await geminiPost(modelo, apiKey, sem, prazo, `${modelo}-sem-thinking`);
-    if (texto2 && !textoComEcoRaciocinio(texto2)) return texto2;
+    if (texto2 && !textoComEcoRaciocinio(texto2)) return { texto: texto2, modelo };
   }
-  return null;
+  return { texto: null, modelo: null };
 }
 
-/** VISÃO (foto ou PDF de laudo) no Gemini — devolve o texto extraído ou null. */
+/**
+ * VISÃO (foto ou PDF de laudo) no Gemini — devolve o texto extraído ou null.
+ * Usa MODELOS_VISAO (família flash) e NÃO a cadeia do chat: extração de
+ * documentos exige resposta limpa e estruturada, e o Gemma despeja
+ * raciocínio no texto.
+ */
 export async function visaoGemini(
   mime: string,
   base64: string,
@@ -406,7 +453,7 @@ export async function visaoGemini(
   if (!geminiHabilitado()) return null;
   const { apiKey } = geminiConfig();
   const prazo = Date.now() + Math.max(timeoutMs, 5_000);
-  for (const modelo of cadeiaModelos()) {
+  for (const modelo of MODELOS_VISAO) {
     if (restante(prazo) <= 0) break;
     // Gemma rejeita thinkingConfig (400 medido em produção) — vai direto sem
     // o flag; os Gemini mantêm thinkingBudget 0 (resposta limpa de uma vez).
@@ -498,7 +545,59 @@ function respostaInvalida(texto: string | null | undefined): boolean {
  * servir o Gemma 4 sem o despejo, ele volta a passar automaticamente.
  */
 const RE_ECO_RACIOCINIO =
-  /(\*\s*User'?s?\s*Input|User'?s?\s*input:|\*\s*Input:|User\s+prompt\b|Draft\s*\d|Refining\b|Persona\s+constraints?|meta-commentary|Constraint Check|\*\s*Wait\b|\*\s*Acknowledge|\*\s*Constraint|Let me analyze)/i;
+  /(\*\s*User'?s?\s*Input|User'?s?\s*input:|\*\s*Input:|User\s+prompt\b|Draft\s*\d|Refining\b|Persona\s+constraints?|meta-commentary|Constraint Check|\*\s*Wait\b|\*\s*Acknowledge|\*\s*Constraint|Let me analyze|The\s+user\s+(wants?|is|asked?|needs?|provided?))/i;
+
+/**
+ * Linha de SCAFFOLDING do despejo (rotulada em inglês, às vezes com bullet
+ * "*" e/ou itáico "*"). A resposta legítima da BION IA é em português e usa
+ * "•" para listas e "**...**" para negrito — nunca abre com esses rótulos.
+ * Usada pelo sanitizador para remover o despejo linha a linha e recuperar a
+ * resposta final embutida (o despejo do Gemma SEMPRE termina na resposta).
+ */
+const RE_LINHA_DESPEJO =
+  /^\s*(?:[-*]\s*)?(?:\*\*)?\s*(?:user'?s?\s*(?:input|prompt|request)|input\s*:|user\s+prompt|prompt\s*:|prompt\s+analysis|draft\s*\d|refining\b|refined\b|persona\s+constraint|constraint\s+check|constraint(?:s)?\s*:|confidence\s+score|final\s+(?:answer|response|draft|version)|refined\s+(?:response|answer|version)|answer\s*:|response\s*:|best\s+response|wait\b|acknowledge\b|let\s+me\b|i\s+(?:will|'ll|should|need|can|must)\b|the\s+user\b|analy(?:ze|zing|sis)\b|checklist|step\s*\d|thought\b|thinking\b|note\s*:|goal\s*:|tone\s*:|context\s*:|key\s+points?|plan\s*:|version\s*\d|option\s*\d|revision\b|evaluat|reviewing|first\s+draft|next\s+step|paraphras|clarif|format\s*:|style\s*:|requirements?\s*:)/i;
+
+/**
+ * Marcadores de RESPOSTA FINAL dentro do despejo — o corte é feito no ÚLTIMO
+ * deles (o Gemma refina em rascunhos: Draft 1 → Refining → Final Answer).
+ */
+const RE_MARCADOR_FINAL =
+  /(?:final\s+(?:answer|response|draft|version)|refined\s+(?:response|answer|version)|resposta\s+final|vers[\u00e3o]\s+final|best\s+response)\s*[:\-]?\s*/gi;
+
+/**
+ * SANITIZADOR DE ECO (família Gemma): o modelo despeja o raciocínio e embute
+ * a resposta final no meio/fim. Em vez de descartar a resposta inteira
+ * (quarantena antiga — desperdiçava ~13s de geração por mensagem), extrai a
+ * parte que é de fato a fala da BION IA. Devolve null quando o texto não
+ * pode ser limpo com segurança (a cadeia então segue adiante).
+ */
+export function extrairRespostaFinal(texto: string | null | undefined): string | null {
+  if (!texto) return null;
+  const bruto = texto.trim();
+  if (!bruto) return null;
+  if (!textoComEcoRaciocinio(bruto)) return bruto;
+
+  // 1) Corte por marcador explícito de resposta final (última ocorrência).
+  const cortes = [...bruto.matchAll(RE_MARCADOR_FINAL)];
+  if (cortes.length) {
+    const ultimo = cortes[cortes.length - 1];
+    const pos = (ultimo.index ?? 0) + ultimo[0].length;
+    const candidato = bruto.slice(pos).trim();
+    if (candidato.length >= 20 && !textoComEcoRaciocinio(candidato)) return candidato;
+  }
+
+  // 2) Remoção linha a linha do scaffolding do despejo.
+  const linhas = bruto
+    .split("\n")
+    .filter((l) => !RE_LINHA_DESPEJO.test(l));
+  const candidato = linhas
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  if (candidato.length >= 20 && !textoComEcoRaciocinio(candidato)) return candidato;
+
+  return null;
+}
 
 /**
  * Detector ESTRUTURAL: a 1ª linha do despejo é um marcador "*" rotulando o
@@ -600,8 +699,8 @@ export async function chatComFonte(mensagens: Msg[], timeoutMs: number, anon?: A
 
   // 1) Google Gemini — API própria do projeto (dados completos)
   if (geminiHabilitado() && geminiConfig().apiKey && !geminiEmCooldown()) {
-    const texto = await chamarGemini(mensagens, prazo);
-    if (texto) return { texto, fonte: "gemini" };
+    const { texto, modelo } = await chamarGemini(mensagens, prazo);
+    if (texto) return { texto, fonte: "gemini", modelo };
     _geminiFalhaEm = Date.now();
   }
 
@@ -679,8 +778,8 @@ export async function diagnosticoGemini(mensagens: Msg[], timeoutMs = 25_000, mo
   const prazo = Date.now() + timeoutMs;
   // ignorarDisjuntor: o diagnóstico precisa enxergar o Gemma REAL (inclusive
   // o despejo) mesmo quando o chat está pulando os modelos Gemma.
-  const texto = await chamarGemini(mensagens, prazo, modelo, { ignorarDisjuntor: true });
-  return { texto, registros: _registrosGemini };
+  const r = await chamarGemini(mensagens, prazo, modelo, { ignorarDisjuntor: true });
+  return { texto: r.texto, modelo: r.modelo, registros: _registrosGemini };
 }
 
 export type ModeloDisponivel = { id: string; nome: string };
@@ -759,10 +858,12 @@ export async function probeCanais(timeoutMs = 20_000): Promise<ProbeCanal[]> {
           if (r.status === 200) {
             const cand = r.corpo?.candidates?.[0];
             const t = textoGemini(r.corpo);
-            // Eco de raciocínio (Gemma 4) não conta como sucesso — o probe
-            // precisa refletir o que de fato chegaria ao paciente.
-            okModelo = !!t && !textoComEcoRaciocinio(t);
-            detalheModelo = `HTTP 200 finish=${cand?.finishReason ?? "?"} texto="${t.slice(0, 30) || "—"}"${!!t && textoComEcoRaciocinio(t) ? " (eco de raciocínio — tratado como falha)" : ""} [${v.rotulo}]`;
+            // Eco de raciocínio (Gemma 4) com resposta recuperável conta como
+            // SUCESSO desde o sanitizador — o probe reflete o que de fato
+            // chegaria ao paciente (resposta final extraída do despejo).
+            const comEco = !!t && textoComEcoRaciocinio(t);
+            okModelo = !!t && (!comEco || !!extrairRespostaFinal(t));
+            detalheModelo = `HTTP 200 finish=${cand?.finishReason ?? "?"} texto="${t.slice(0, 30) || "—"}"${comEco ? (okModelo ? " (eco — resposta final extraída pelo sanitizador)" : " (eco insanitizável — tratado como falha)") : ""} [${v.rotulo}]`;
             if (okModelo) break;
           } else {
             const msg = r.corpo?.error?.message || `HTTP ${r.status}`;

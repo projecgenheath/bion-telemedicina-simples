@@ -62,7 +62,7 @@ export async function respostaLocal(
   if (
     /(renov\w*\s*(receita|prescri|remedio|medica)|receita\s*(medica|vencid|antig)|renovacao)/.test(t)
   ) {
-    return `Para **renovar uma receita**, ${primeiro}, é necessária uma avaliação médica — nem que seja rápida: por segurança, nenhuma prescrição é emitida sem consulta.\n\nO caminho mais simples é uma **teleconsulta de reavaliação**: o médico revisa seu histórico e, se for o caso, emite a receita atualizada na hora.\n\nToque em **“Agendar consulta”** aqui embaixo que eu te guio no resto — e, se o remédio é de uso contínuo, mencione isso na anamnese.`;
+    return `Para **renovar uma receita**, ${primeiro}, é necessária uma avaliação médica — nem que seja rápida: por segurança, nenhuma prescrição é emitida sem consulta.\n\nO caminho mais simples é uma **teleconsulta de reavaliação**: o médico revisa seu histórico e, se for o caso, emite a receita atualizada na hora.\n\nToque em **“Agendar consulta”** aqui embaixo que eu te guio no resto — e, se o remédio é de uso contínuo, mencione isso ao médico na consulta.`;
   }
 
   // Saudação APENAS quando a mensagem é só a saudação — antes, qualquer

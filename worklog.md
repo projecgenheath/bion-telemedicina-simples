@@ -765,3 +765,24 @@ Stage Summary:
 - AUDITORIA FRONT 4/4 FASES CONCLUÍDA: F1 (contrato mutar()/delta + IDs + higiene + dashboards reais), F2 (deltas nas rotas pesadas + provider fora do RootLayout), F3 (SSE tempo real + A11Y média + tokens de marca), F4 (deps mortas + a11y inputs + scanner honesto).
 - Estado final das varreduras: estática 1 (falso positivo documentado), inputs 0, console limpo, 6 deps a menos no install.
 - Dívida conhecida fora do escopo front: relatório original irrecuperável — se o dono tiver o texto, vale conferir se sobrou algum item específico não coberto pelas 4 fases.
+
+---
+Task ID: bion-ia-gemma-unico
+Agent: Super Z (principal)
+Task: "O modelo usado não é o gemma 4 26b, quero que use somente ele e deixe-o o mais rápido possível" + fim da anamnese sem sentido em pedidos de renovação de receita.
+
+Work Log:
+- Diagnóstico em PRODUÇÃO (scripts/diag_bion_ia_producao.ts, telemetria real via /api/bion-ia/diagnostico): (1) o Gemma 4 26B A4B hospedado CONTINUOU despejando raciocínio — 2632 chars de despejo com a resposta correta embutida, quarentena descartava tudo (~13s perdidos/mensagem); (2) gemini-3.6-flash (primário vigente) SOFRENDO 429 de cota intermitente ("You exceeded your current quota") — o chat caía para os reservas, inclusive flash-lite (fraco → "respostas sem fundamento"); (3) prompt sem política de intenção → LLM improvisava anamnese em pedido de renovação.
+- GEMMA ÚNICO no CHAT (decisão do dono): GEMINI_MODEL_PADRAO = "gemma-4-26b-a4b-it"; MODELOS_RESERVA_PADRAO vazio (flash FORA da cadeia do chat; volta via env BION_LLM_GEMINI_RESERVA sem mudar código). Reserva não usada = disjuntor de eco desativado na prática (só pula Gemma quando a cadeia tem >1 modelo — com modelo único, pular = cair no motor local, sempre pior).
+- SANITIZADOR DE ECO (extrairRespostaFinal, exportado): em vez de descartar a resposta com despejo, extrai a resposta final embutida — corte por marcador explícito ("* Final answer:"/refined, ÚLTIMA ocorrência) + remoção linha a linha do scaffolding inglês (RE_LINHA_DESPEJO) + re-checagem com o detector de eco (RE_ECO_RACIOCINIO ganhou "The user wants/is/asked/needs"). Despejo insanitizável → null → cadeia/local como antes. Teste unitário scripts/teste_sanitizador.ts: 11/11 PASS (despejos reais documentados + respostas limpas intactas + falso-positivo de palavra inglesa isolada).
+- VELOCIDADE: temperature 0.7→0.4 no Gemma (menos divagação/despejo), DIRETIVA_GEMMA com EXEMPLO 1-shot âncora do formato + teto de 5 linhas, prompt do sistema reescrito CURTO e diretivo (instrucoesBase), LIMITE_HISTORICO 12→8 (menos pré-processamento).
+- PROMPT ANTI-ANAMNESE (reclamação 2x): POLÍTICA DE INTENÇÃO no system prompt — pedido administrativo (renovar receita/agendar/pagamento/laudos) recebe o caminho prático em 2-3 passos; "Se a pessoa disser que NÃO tem sintomas, NÃO pergunte sintomas e NÃO monte anamnese"; triagem guiada só dentro do fluxo de agendamento. DIRETIVA_GEMMA com exemplo exato do pedido de renovação → resposta correta. Motor local (chat-local.ts): resposta de renovação sem citar "anamnese".
+- TRANSPARÊNCIA DE MODELO: chatComFonte/chamarGemini devolvem o modelo que respondeu; /api/bion-ia retorna `modelo`; ChatBion.tsx exibe "IA generativa · Gemma 4 26B A4B" no rodapé da mensagem (o dono CONFIRMA visualmente qual modelo respondeu).
+- VISÃO (laudos PDF/foto) preservada: visaoGemini usa MODELOS_VISAO = [3.6-flash, 3.8-flash, flash-lite] — extração estruturada de documento não pode herdar o despejo do Gemma. probeCanais atualizado: eco com resposta recuperável conta como SUCESSO (reflete o que chega ao paciente).
+- Validação: teste_sanitizador 11/11; tsc --noEmit limpo; eslint limpo; build 50/50; scan de segredos no diff e no commit auto-gerado e2216ff (apenas worklog da FASE 4 auditoria) — limpos.
+
+Stage Summary:
+- Chat da BION IA roda SOMENTE no gemma-4-26b-a4b-it (primário, sem reservas); despejo de raciocínio é recuperado pelo sanitizador em vez de descartar; resposta esperada em 1 tentativa (~5-13s) sem cascata de modelos.
+- Renovação de receita sem anamnese: política de intenção explícita no prompt (LLM) + no motor local; exemplo 1-shot âncora o formato.
+- Rodapé do chat mostra o modelo real — qualquer queda para outro modelo fica visível para o dono.
+- Pendência de config: SE o Vercel tiver BION_LLM_GEMINI_MODEL antigo (ex.: gemini-3.6-flash) nas env vars, ele vence o código — conferir em /api/bion-ia/diagnostico (GET) pós-deploy; validação de produção a seguir no fechamento.
