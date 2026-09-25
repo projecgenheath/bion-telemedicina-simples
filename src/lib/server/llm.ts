@@ -45,7 +45,7 @@ type Cliente = ClienteEnv | ClienteSdk | { tipo: "gemini" };
 
 type Resultado = { texto: string | null; fonte: FonteLlm | null; modelo?: string | null };
 
-const SONDA_TIMEOUT_MS = 6_000;
+const SONDA_TIMEOUT_MS = 4_000;
 const COOLDOWN_FALHA_MS = 60_000;
 const PUBLICO_URL_PADRAO = "https://text.pollinations.ai/openai";
 const PUBLICO_MODEL_PADRAO = "openai-fast";
@@ -923,11 +923,16 @@ export async function chatComFonte(mensagens: Msg[], timeoutMs: number, anon?: A
     _publicoFalhaEm = Date.now();
   }
 
-  // 4) SDK do sandbox (sonda memorizada por instância)
-  const sdk = await tentarSdk();
-  if (sdk) {
-    const texto = await chamarSdk(sdk, mensagens, prazo);
-    if (texto) return { texto, fonte: "sdk" };
+  // 4) SDK do sandbox (sonda memorizada por instância). SÓ se sobrar tempo
+  // de verdade: a sonda custa até 4s — gastar isso quando o prazo já está no
+  // fim atrasa a resposta local (medido em produção: msg do paciente esperou
+  // ~3s extras num canal que nunca responde fora do sandbox).
+  if (restante(prazo) > 5_000) {
+    const sdk = await tentarSdk();
+    if (sdk) {
+      const texto = await chamarSdk(sdk, mensagens, prazo);
+      if (texto) return { texto, fonte: "sdk" };
+    }
   }
 
   return { texto: null, fonte: null };

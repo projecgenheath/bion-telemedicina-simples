@@ -23,7 +23,13 @@ import { respostaLocal } from "@/lib/server/chat-local";
  */
 
 const LIMITE_HISTORICO = 8;
-const TIMEOUT_MS = 25_000;
+/**
+ * PRAZO TOTAL DA IA (medido em produção 2026-09-25): o Gemma responde bem em
+ * 4-8s (com prefill); quando TRAVA (free tier), não adianta esperar 21s — o
+ * paciente espera demais e ainda cai no motor local. 15s limita o pior caso
+ * (Gemma travado → local) a ~14s, mantendo folga para respostas reais de 8-12s.
+ */
+const TIMEOUT_MS = 15_000;
 
 type MsgEntrada = { remetente: string; texto: string };
 
