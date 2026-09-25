@@ -343,6 +343,24 @@ async function chamarGemini(
     'Resposta correta: "Claro! A receita é emitida pelo médico em uma **teleconsulta \n' +
     'de reavaliação** — é rápida e você não precisa estar com sintomas. Toque em \n' +
     '**Agendar consulta** aqui embaixo que eu te guio no resto."';
+
+/**
+ * PREFILL (velocidade): a chamada à API termina com um turno "model" já
+ * iniciando a fala ("Claro!") e o modelo apenas CONTINUA a frase — despejo
+ * antes do início da resposta fica impossível. Se o prefill for rejeitado
+ * pela API, a resposta vem inteira do modelo e o prefixo não é re-aplicado.
+ */
+const PREFILL_GEMMA = "Claro!";
+
+/** Remonta a fala da BION IA a partir da continuação do modelo. */
+function comporFala(continuacao: string, comPrefill: boolean): string {
+  const c = continuacao.trim();
+  if (!comPrefill || !c) return c;
+  if (/^(claro|ol[áa]|oi|sim)\b/i.test(c)) return c;
+  const maiuscula = c.charAt(0).toUpperCase() + c.slice(1);
+  return `${PREFILL_GEMMA} ${maiuscula}`;
+}
+
   const conteudosGemma = sys
     ? conteudos.map((t, i) =>
         i === 0 ? { role: t.role, parts: [{ text: `${sys}${DIRETIVA_GEMMA}\n\n---\n\n${t.parts[0].text}` }] } : t,
@@ -394,19 +412,46 @@ async function chamarGemini(
         };
 
     // T1 (thinkingBudget 0) fica limitada a ~55% do prazo restante; Gemma
-    // (sem systemInstruction) recebe ~85% — o 31B sem thinking chegou a
-    // responder em 17-19s e o 26B A4B pode ter cold start lento no free tier.
+    // (sem systemInstruction) recebe ~85% — com despejo, o 26B A4B demora
+    // 10-25s no free tier (o despejo É a latência).
     const subprazo = Date.now() + Math.max(Math.round(restante(prazo) * (ehGemma ? 0.85 : 0.55)), 6_000);
-    const texto1 = await geminiPost(modelo, apiKey, corpo, Math.min(prazo, subprazo), modelo);
-    if (texto1 && !textoComEcoRaciocinio(texto1)) {
-      if (ehGemma) {
+
+    if (!ehGemma) {
+      const texto1 = await geminiPost(modelo, apiKey, corpo, Math.min(prazo, subprazo), modelo);
+      if (texto1 && !textoComEcoRaciocinio(texto1)) return { texto: texto1, modelo };
+    } else {
+      // PREFILL (velocidade, 2026-09-24): fecha os contents com um turno
+      // "model" JÁ iniciando a fala da BION IA — o modelo CONTINUA uma resposta
+      // pronta, o que torna impossível o despejo de raciocínio ANTES dela e
+      // corta a latência (sem despejo ≈ 600-900 tokens a menos por mensagem).
+      // Se a API rejeitar turno final "model" (HTTP 400) ou devolver só um
+      // eco do prefill, repete sem o prefill (o custo do 400 é ~250ms).
+      const rotuloPrefill = `${modelo}-prefill`;
+      let texto1 = await geminiPost(
+        modelo,
+        apiKey,
+        {
+          contents: [...conteudosDoModelo, { role: "model" as const, parts: [{ text: PREFILL_GEMMA }] }],
+          generationConfig: { temperature: 0.4, maxOutputTokens: 8192 },
+        },
+        Math.min(prazo, subprazo),
+        rotuloPrefill,
+      );
+      let comPrefill = true;
+      if (texto1 && texto1.trim().length < 20) texto1 = null; // só ecoou o prefill — inútil
+      if (!texto1) {
+        const rejeitou = _registrosGemini.some((r) => r.rotulo === rotuloPrefill && r.status === 400);
+        if (rejeitou && restante(prazo) > 3_000) {
+          texto1 = await geminiPost(modelo, apiKey, corpo, Math.min(prazo, subprazo), modelo);
+          comPrefill = false;
+        }
+      }
+      if (texto1 && !textoComEcoRaciocinio(texto1)) {
         // Gemma limpo: desarma o disjuntor (a Google corrigiu o despejo).
         _gemmaEcoSeguidos = 0;
         _gemmaPuladoAte = 0;
+        return { texto: comporFala(texto1, comPrefill), modelo };
       }
-      return { texto: texto1, modelo };
-    }
-    if (ehGemma) {
       if (texto1) {
         // Despejo de raciocínio confirmado → SANITIZA em vez de descartar:
         // a resposta final do Gemma vem embutida no despejo (medido em
@@ -415,7 +460,7 @@ async function chamarGemini(
         if (limpo) {
           _gemmaEcoSeguidos = 0;
           _gemmaPuladoAte = 0;
-          return { texto: limpo, modelo };
+          return { texto: comporFala(limpo, comPrefill), modelo };
         }
         // Despejo insanitizável → arma o disjuntor (só tem efeito quando
         // há reserva na cadeia; ver condição do continue acima).
