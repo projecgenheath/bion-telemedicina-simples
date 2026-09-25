@@ -86,5 +86,39 @@ console.log("=== 7. Casos nulos/vazios ===");
 verificar("null → null", extrairRespostaFinal(null) === null);
 verificar("vazio → null", extrairRespostaFinal("   ") === null);
 
+
+console.log("=== 8. DESPEJO REAL capturado em produção 2026-09-24 (User persona + Constraints + Draft 1 aninhado + resposta duplicada colada) ===");
+const dumpReal = `*   User persona: BION IA (virtual assistant for BION Telemedicina).
+    *   Language: Brazilian Portuguese.
+    *   Tone: Direct, addressing the user ("você").
+    *   Constraint 1: Maximum 5 lines.
+    *   Constraint 2: First line must be the response itself.
+    *   Constraint 3: NO reasoning, analysis, plans, drafts, or meta-comments (no "The user wants...", "Draft", etc.).
+    *   Constraint 4: NEVER cite or repeat the user's request.
+    *   Input: "Olá! Quero renovar minha receita de remédio de uso contínuo. Não tenho sintoma nenhum."
+
+    *   The user wants to renew a continuous medication prescription without symptoms.
+    *   Context: Telemedicine.
+    *   Standard procedure in telemedicine for prescription renewal: A re-evaluation teleconsultation is needed.
+
+    *   *Draft 1:* Com certeza! Para renovar sua receita, você precisa realizar uma **teleconsulta de reavaliação**. É um processo rápido e feito sem a necessidade de sintomas. Basta clicar em **Agendar consulta** para começarmos.
+    *   *Check constraints:*
+        *   Directly addressing "você"? Yes.
+        *   First line is the response? Yes.
+        *   No meta-talk? Yes.
+        *   No repetition of request? Yes.
+        *   Max 5 lines? Yes (3 lines).
+        *   Language: PT-BR.
+
+    *   "Com certeza! Para renovar sua receita, você precisa realizar uma **teleconsulta de reavaliação** — é um processo rápido e não exige sintomas. Toque em **Agendar consulta** aqui embaixo que eu te ajudo com o restante."
+
+    *   Lines: 3.
+    *   Style: Matches the example provided.
+
+    "Com certeza! Para renovar sua receita, você precisa realizar uma **teleconsulta de reavaliação** — é um processo rápido e não exige sintomas. Toque em **Agendar consulta** aqui embaixo que eu te ajudo com o restante."Com certeza! Para renovar sua receita, você precisa realizar uma **teleconsulta de reavaliação** — é um processo rápido e não exige sintomas. Toque em **Agendar consulta** aqui embaixo que eu te ajudo com o restante.`;
+const rReal = extrairRespostaFinal(dumpReal);
+const respostaRealEsperada = "Com certeza! Para renovar sua receita, você precisa realizar uma **teleconsulta de reavaliação** — é um processo rápido e não exige sintomas. Toque em **Agendar consulta** aqui embaixo que eu te ajudo com o restante.";
+verificar("resposta única e limpa extraída do despejo real", rReal === respostaRealEsperada, `got: ${rReal?.slice(0, 120)}`);
+
 console.log(`\n=== RESULTADO: ${passou} PASS / ${falhou} FAIL ===`);
 process.exit(falhou ? 1 : 0);

@@ -553,14 +553,15 @@ const RE_ECO_RACIOCINIO =
   /(\*\s*User'?s?\s*Input|User'?s?\s*input:|\*\s*Input:|User\s+prompt\b|Draft\s*\d|Refining\b|Persona\s+constraints?|meta-commentary|Constraint Check|\*\s*Wait\b|\*\s*Acknowledge|\*\s*Constraint|Let me analyze|The\s+user\s+(wants?|is|asked?|needs?|provided?))/i;
 
 /**
- * Linha de SCAFFOLDING do despejo (rotulada em inglês, às vezes com bullet
- * "*" e/ou itáico "*"). A resposta legítima da BION IA é em português e usa
- * "•" para listas e "**...**" para negrito — nunca abre com esses rótulos.
- * Usada pelo sanitizador para remover o despejo linha a linha e recuperar a
- * resposta final embutida (o despejo do Gemma SEMPRE termina na resposta).
+ * Linha de SCAFFOLDING do despejo (rotulada em inglês, com bullets "*"/"-",
+ * às vezes aninhados como "*   *Draft 1:*" — o prefixo [\*\->\s]* come o run
+ * inteiro de marcadores). Despejo REAL de 2026-09-24 (capturado via
+ * diagnóstico admin): "User persona:", "Constraint 1:", "Input:", "The user
+ * wants...", "*Draft 1:*", "Check constraints:", "Directly addressing...",
+ * "Max 5 lines? Yes", "Language: PT-BR", "Lines: 3." — resposta final no fim.
  */
 const RE_LINHA_DESPEJO =
-  /^\s*(?:[-*]\s*)?(?:\*\*)?\s*(?:user'?s?\s*(?:input|prompt|request)|input\s*:|user\s+prompt|prompt\s*:|prompt\s+analysis|draft\s*\d|refining\b|refined\b|persona\s+constraint|constraint\s+check|constraint(?:s)?\s*:|confidence\s+score|final\s+(?:answer|response|draft|version)|refined\s+(?:response|answer|version)|answer\s*:|response\s*:|best\s+response|wait\b|acknowledge\b|let\s+me\b|i\s+(?:will|'ll|should|need|can|must)\b|the\s+user\b|analy(?:ze|zing|sis)\b|checklist|step\s*\d|thought\b|thinking\b|note\s*:|goal\s*:|tone\s*:|context\s*:|key\s+points?|plan\s*:|version\s*\d|option\s*\d|revision\b|evaluat|reviewing|first\s+draft|next\s+step|paraphras|clarif|format\s*:|style\s*:|requirements?\s*:)/i;
+  /^\s*[\*\->\s]*(?:\*\*)?\s*(?:user'?s?\s*(?:input|prompt|request|persona)|user\s+persona|input\s*:|user\s+prompt|prompt\s*:|prompt\s+analysis|draft\s*\d|refining\b|refined\b|persona\s+constraint|constraint\s+check|constraint\s*\d?\s*:|confidence\s+score|final\s+(?:answer|response|draft|version)|refined\s+(?:response|answer|version)|answer\s*:|response\s*:|best\s+response|check\s+constraints?|directly\s+addressing|first\s+line\s+is|no\s+meta-talk|no\s+repetition|max\s+\d+\s+lines|language\s*:|tone\s*:|style\s*:|lines\s*:\s*\d|word\s+count|wait\b|acknowledge\b|let\s+me\b|i\s+(?:will|'ll|should|need|can|must)\b|the\s+user\b|analy(?:ze|zing|sis)\b|checklist|step\s*\d|thought\b|thinking\b|note\s*:|goal\s*:|context\s*:|key\s+points?|plan\s*:|version\s*\d|option\s*\d|revision\b|evaluat|reviewing|first\s+draft|next\s+step|paraphras|clarif|format\s*:|requirements?\s*:)/i;
 
 /**
  * Marcadores de RESPOSTA FINAL dentro do despejo — o corte é feito no ÚLTIMO
@@ -568,6 +569,32 @@ const RE_LINHA_DESPEJO =
  */
 const RE_MARCADOR_FINAL =
   /(?:final\s+(?:answer|response|draft|version)|refined\s+(?:response|answer|version)|resposta\s+final|vers[\u00e3o]\s+final|best\s+response)\s*[:\-]?\s*/gi;
+
+/**
+ * DESDUPLICAÇÃO: o Gemma às vezes COLA a resposta final repetida sem
+ * separador (real 2026-09-24: "...restante.\"Com certeza! ... restante.").
+ * Cobre citação seguida da mesma citação e texto inteiro espelhado.
+ */
+function desduplicar(v: string): string {
+  const t = v
+    .trim()
+    .replace(/^["\u201c]+/, "")
+    .replace(/["\u201d]+$/, "")
+    .trim();
+  // X+X (ou "X"+X): menor ponto de repetição a partir da metade — o texto
+  // termina com uma cópia do próprio começo → fica só a primeira metade.
+  if (t.length >= 40) {
+    for (let i = Math.ceil(t.length / 2); i <= t.length - 20; i++) {
+      if (t.startsWith(t.slice(i))) {
+        return t
+          .slice(0, i)
+          .replace(/["\u201d]+$/, "")
+          .trim();
+      }
+    }
+  }
+  return t;
+}
 
 /**
  * SANITIZADOR DE ECO (família Gemma): o modelo despeja o raciocínio e embute
@@ -582,24 +609,39 @@ export function extrairRespostaFinal(texto: string | null | undefined): string |
   if (!bruto) return null;
   if (!textoComEcoRaciocinio(bruto)) return bruto;
 
+  // 0) Padrão REAL do despejo (2026-09-24): a resposta final é o BLOCO de
+  //    linhas no FIM (às vezes com a cauda duplicada colada). Caminha de
+  //    trás para frente enquanto as linhas forem conteúdo de resposta e
+  //    para no primeiro scaffolding/eco.
+  const linhas = bruto.split("\n").map((l) => l.trim()).filter(Boolean);
+  const bloco: string[] = [];
+  for (let i = linhas.length - 1; i >= 0 && bloco.length < 12; i--) {
+    const nua = linhas[i]
+      .replace(/^[\*\->\s]+/, "")
+      .replace(/^["\u201c]|["\u201d]$/g, "")
+      .trim();
+    if (!nua) continue;
+    if (RE_LINHA_DESPEJO.test(nua) || textoComEcoRaciocinio(nua)) break;
+    bloco.unshift(nua);
+  }
+  if (bloco.length) {
+    const candidato = desduplicar(bloco.join("\n"));
+    if (candidato.length >= 20 && !textoComEcoRaciocinio(candidato)) return candidato;
+  }
+
   // 1) Corte por marcador explícito de resposta final (última ocorrência).
   const cortes = [...bruto.matchAll(RE_MARCADOR_FINAL)];
   if (cortes.length) {
     const ultimo = cortes[cortes.length - 1];
     const pos = (ultimo.index ?? 0) + ultimo[0].length;
-    const candidato = bruto.slice(pos).trim();
+    const candidato = desduplicar(bruto.slice(pos).trim());
     if (candidato.length >= 20 && !textoComEcoRaciocinio(candidato)) return candidato;
   }
 
   // 2) Remoção linha a linha do scaffolding do despejo.
-  const linhas = bruto
-    .split("\n")
-    .filter((l) => !RE_LINHA_DESPEJO.test(l));
-  const candidato = linhas
-    .join("\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-  if (candidato.length >= 20 && !textoComEcoRaciocinio(candidato)) return candidato;
+  const restantes = linhas.filter((l) => !RE_LINHA_DESPEJO.test(l));
+  const candidato2 = desduplicar(restantes.join("\n").replace(/\n{3,}/g, "\n\n").trim());
+  if (candidato2.length >= 20 && !textoComEcoRaciocinio(candidato2)) return candidato2;
 
   return null;
 }
