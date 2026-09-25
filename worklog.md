@@ -786,3 +786,26 @@ Stage Summary:
 - Renovação de receita sem anamnese: política de intenção explícita no prompt (LLM) + no motor local; exemplo 1-shot âncora o formato.
 - Rodapé do chat mostra o modelo real — qualquer queda para outro modelo fica visível para o dono.
 - Pendência de config: SE o Vercel tiver BION_LLM_GEMINI_MODEL antigo (ex.: gemini-3.6-flash) nas env vars, ele vence o código — conferir em /api/bion-ia/diagnostico (GET) pós-deploy; validação de produção a seguir no fechamento.
+
+---
+Task ID: bion-ia-gemma-unico-producao
+Agent: Super Z (principal)
+Task: Calibragem do Gemma único em produção — sanitizador v2→v8, PREFILL de latência e validação E2E final.
+
+Work Log:
+- Diagnóstico admin agora devolve o DESPEJO CRU quando insanitizável (opções {bruto} em chamarGemini) — permitiu calibrar o sanitizador contra o formato real do modelo.
+- CICLOS DE CALIBRAGEM (cada um: dump real capturado → regex/sanitizador → teste unitário → deploy → validação):
+  v2: despejo real de 2005 chars ("User persona:", "Constraint 1:", "Input:", "The user wants", "*Draft 1:*" aninhado, checklists "? Yes.", resposta duplicada COLADA no fim) → corte por bloco final + remoção de scaffolding + dedup X+X. 12/12.
+  v3: checklists "? Yes." SEM bullet + "The user asks" no detector de eco (despejo sem marcador clássico passava intacto). 14/14.
+  v4/v5: dedup fuzzy X+Y (duas versões quase iguais da resposta coladas: "…restante.Claro! …") via Jaccard de palavras de conteúdo; scaffolds "Let's refine/ensure…", "(This is N lines)", "Self-Correction during drafting", "Draft the response" no detector/linha. 17/17.
+  v6/v7: colagem como SINAL de despejo (temColagem/melhorCola) — pega despejo SEM nenhum marcador ("Final Polish:" + resposta citada e solta idênticas); fronteiras . ! ?; corte por continência (con≥0.75 && jac≥0.4) protege intro+bullets legítimos; "Final Text:*". 20/20.
+  v8: PREFILL — contents termina com turno "model" ("Claro!") e o modelo só CONTINUA a fala: despejo pré-resposta fica impossível; latência do chat caiu de 15-25s para ~5s (diag multi-turno: 2,1s). Fallback automático sem prefill em HTTP 400/eco curto. limparArtefatos (bloco ```json "action_flow_id" anexado no multi-turno, às vezes malformado) + repararRepeticoes (n-gramas adjacentes colapsados: "que eu eu te", "rápida e você rápida e você"). 23/23.
+- VALIDAÇÃO FINAL EM PRODUÇÃO (scripts/validar_gemma_producao.ts): [1] modelo efetivo = gemma-4-26b-a4b-it, reserva vazia ✓; [2] chat real (mensagem exata da reclamação) 5,3s, fonte=gemini, modelo=gemma, resposta LIMPA no estilo-alvo, sem anamnese ✓; [3] multi-turno 16,5s, resposta limpa (confirma Losartana do perfil real, sem artefato) ✓; [4] probe extra com timeout transiente do free tier (não é o caminho do paciente). 10/11 PASS.
+- Nota de latência: free tier do Gemma hospedado oscila (2-17s por continuação com prefill); sem despejo, o teto caiu de ~25s+ para ~17s, com típico ~5s.
+- Scripts novos: diag_bion_ia_producao.ts, teste_sanitizador.ts (23/23), ver_dump_gemma.ts, validar_gemma_producao.ts, diag_multiturno.ts.
+
+Stage Summary:
+- BION IA roda SOMENTE no gemma-4-26b-a4b-it (decisão do dono), com prefill de velocidade, sanitizador de despejo calibrado com 6 dumps reais de produção e limpeza de artefatos/repetições.
+- Pedido de renovação de receita: NUNCA abre anamnese (política de intenção no prompt + exemplo 1-shot + motor local alinhado) — validado 3x em produção com a mensagem exata da reclamação.
+- Rodapé do chat exibe "IA generativa · Gemma 4 26B A4B" — o dono confirma visualmente o modelo em uso.
+- Commits: ba888e8 → 771656a → a4e012d → 0a5028d → 79162db → d16e168 → 9ff92aa → a5fab10 → 8878244 (todos push + deploy Vercel verdes).
