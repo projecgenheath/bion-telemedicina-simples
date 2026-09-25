@@ -352,6 +352,20 @@ async function chamarGemini(
  */
 const PREFILL_GEMMA = "Claro!";
 
+/**
+ * STOP SEQUENCES do prefill (velocidade, medido em produção 2026-09-25): com
+ * o prefill, a resposta é o INÍCIO da continuação — mas o Gemma segue gerando
+ * DEPOIS dela (rambla, réplicas, despejo de raciocínio, JSON de ação), e esse
+ * excesso é puro tempo de geração (3.681 chars gerados para 477 de resposta
+ * = 20,7s). Cortar a continuação nesses marcadores mata o excesso na fonte.
+ * Só valem em INÍCIO de linha/parágrafo — prosa legítima (pt-BR, bullets "•",
+ * negrito inline) nunca contém esses padrões; e como a resposta já veio
+ * antes, o corte da cauda não perde conteúdo. Aplicado SOMENTE na chamada
+ * com prefill: no retry sem prefill o texto inteiro é necessário para o
+ * sanitizador achar a resposta embutida no despejo.
+ */
+const PREFILL_STOPS = ["\n\n*", "\n*", "\n\n```", "\n\nUser", "\n\nDraft"];
+
 /** Remonta a fala da BION IA a partir da continuação do modelo. */
 function comporFala(continuacao: string, comPrefill: boolean): string {
   const c = continuacao.trim();
@@ -432,7 +446,10 @@ function comporFala(continuacao: string, comPrefill: boolean): string {
         apiKey,
         {
           contents: [...conteudosDoModelo, { role: "model" as const, parts: [{ text: PREFILL_GEMMA }] }],
-          generationConfig: { temperature: 0.4, maxOutputTokens: 8192 },
+          // Teto 1536: a resposta pedida é ≤ 5 linhas (~200 tokens); o resto
+          // era rambla pós-resposta (latência sem valor). Com o prefill + as
+          // stop sequences, o excesso morre na geração, não no sanitizador.
+          generationConfig: { temperature: 0.4, maxOutputTokens: 1536, stopSequences: PREFILL_STOPS },
         },
         Math.min(prazo, subprazo),
         rotuloPrefill,
