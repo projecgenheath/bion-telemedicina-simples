@@ -809,3 +809,25 @@ Stage Summary:
 - Pedido de renovação de receita: NUNCA abre anamnese (política de intenção no prompt + exemplo 1-shot + motor local alinhado) — validado 3x em produção com a mensagem exata da reclamação.
 - Rodapé do chat exibe "IA generativa · Gemma 4 26B A4B" — o dono confirma visualmente o modelo em uso.
 - Commits: ba888e8 → 771656a → a4e012d → 0a5028d → 79162db → d16e168 → 9ff92aa → a5fab10 → 8878244 (todos push + deploy Vercel verdes).
+
+---
+Task ID: latencia-producao
+Agent: Super Z (principal)
+Task: "Muita demora nesse carregamento" — diagnosticar e eliminar a lentidão em produção (app + chat da BION IA).
+
+Work Log:
+- Print do usuário não chegou ao servidor (upload/ manteve só screenshots antigos); diagnóstico seguiu por MEDIÇÃO direta em produção.
+- Medição inicial (scripts/medir_latencia_producao.ts, novo): login 8.349ms, bootstrap 5.923ms, IA msg1 6.453ms (gemma ok), IA msg2 23.694ms → motor local (Gemma travou até o timeout de 25s + sonda SDK 6s).
+- CAUSA RAIZ (header x-vercel-id: hkg1::iad1): functions da Vercel rodavam em iad1 (EUA/Virgínia) enquanto o Supabase está em sa-east-1 (São Paulo) — cada query ao banco cruzava o Atlântico 2x.
+- Fix 1 (vercel.json NOVO): "regions": ["gru1"] — functions movidas para São Paulo, ao lado do banco (x-vercel-id pós-deploy: hkg1::gru1 confirmado).
+- Fix 2 (bion-ia/route.ts): TIMEOUT_MS 25s → 15s — pior caso (Gemma travado) cai de ~24s para ~13,6s antes do motor local.
+- Fix 3 (llm.ts): sonda do SDK (canal 4) só roda se restante(prazo) > 5s (antes queimava até 6s num canal morto fora do sandbox); SONDA_TIMEOUT_MS 6s → 4s.
+- Fix 4 (llm.ts, medido: 3.681 chars gerados para 477 de resposta = 20,7s): stop sequences no prefill (PREFILL_STOPS = \n\n*, \n*, \n\n```, \n\nUser, \n\nDraft) + teto 1536 tokens — a rambla pós-resposta morre na geração; aplicado SÓ na chamada com prefill (retry sem prefill mantém texto integral para o sanitizador).
+- Validação: tsc OK, eslint OK, build OK (58 páginas), suíte sanitizador 23/23, commits 3d83c85 e cab7be0, push main OK, deploys Vercel verdes.
+- Medição final em produção: login 1.080-1.937ms (era 8.349), bootstrap 830-1.188ms (era 5.923), IA típica 2.090-2.848ms respondida por gemma-4-26b-a4b-it (era 6,5-24s); pior caso com Gemma travado ~13,6s → motor local com resposta correta (renovação → teleconsulta, sem anamnese).
+- validar_gemma_producao.ts: 9 PASS / 2 FAIL espúrios (fonte=gemini esperado caiu em cooldown de 60s por falha anterior do free tier; qualidade clínica 100% — sem interrogatório, caminho certo).
+
+Stage Summary:
+- Latência de produção resolvida na raiz: região gru1 (7x no app) + IA 3-8x mais rápida no caso típico e 2x no pior caso.
+- Chat BION IA: gemma-4-26b-a4b-it ÚNICO e confirmado por modelo na resposta; qualidade anti-anamnese mantida.
+- Limitação residual documentada: free tier do Gemma trava intermitentemente (>12s sem 1º token) — nesse cenário o paciente espera ~13s e recebe a resposta local correta; eliminate só com billing pago na Google.
