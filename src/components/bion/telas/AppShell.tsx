@@ -123,6 +123,7 @@ function Shell({
             const active = view === m.view;
             return (
               <button
+                type="button"
                 key={m.label}
                 onClick={() => setView(m.view)}
                 className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-xs font-bold transition ${
@@ -152,6 +153,7 @@ function Shell({
               <div className="text-[10px] text-muted-foreground capitalize truncate">{role}</div>
             </div>
             <button
+              type="button"
               onClick={onLogout}
               className="p-1.5 rounded-lg hover:bg-card text-muted-foreground hover:text-foreground transition"
               title="Sair"
@@ -184,6 +186,7 @@ function Shell({
             <TemaToggle />
             <SinoNotificacoes onClick={() => setView("notificacoes")} />
             <button
+              type="button"
               onClick={onLogout}
               className="md:hidden p-2 rounded-xl hover:bg-muted text-muted-foreground"
               title="Sair"
@@ -209,6 +212,7 @@ function Shell({
           const active = view === m.view;
           return (
             <button
+              type="button"
               key={m.label}
               onClick={() => setView(m.view)}
               aria-current={active ? "page" : undefined}
@@ -222,6 +226,7 @@ function Shell({
           );
         })}
         <button
+          type="button"
           onClick={() => setMenuMobileAberto(true)}
           aria-label="Abrir menu completo"
           aria-expanded={menuMobileAberto}
@@ -250,6 +255,7 @@ function Shell({
           <div className="flex items-center justify-between mb-4">
             <div className="font-extrabold text-base">Menu completo</div>
             <button
+              type="button"
               onClick={() => setMenuMobileAberto(false)}
               aria-label="Fechar menu"
               className="p-2 rounded-xl hover:bg-muted text-muted-foreground transition"
@@ -262,6 +268,7 @@ function Shell({
               const active = view === m.view;
               return (
                 <button
+                  type="button"
                   key={m.label}
                   onClick={() => {
                     setMenuMobileAberto(false);
@@ -290,6 +297,7 @@ function SinoNotificacoes({ onClick }: { onClick: () => void }) {
   const { naoLidas } = useBion();
   return (
     <button
+      type="button"
       onClick={onClick}
       className="p-2.5 rounded-2xl hover:bg-muted relative text-muted-foreground hover:text-foreground transition"
       title="Notificações"

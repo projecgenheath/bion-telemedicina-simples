@@ -1,10 +1,8 @@
 "use client";
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import type { Role } from "@/lib/rotas";
 import { useRouter } from "next/navigation";
-import {
-  Shield,
-} from "lucide-react";
+import { Shield } from "lucide-react";
 import { toast } from "sonner";
 import { useBion } from "@/lib/bion-store";
 import { Logo } from "@/components/bion/brand";
@@ -15,11 +13,18 @@ const CONTAS_DEMO: Record<Role, { email: string; senha: string }> = {
   admin: { email: "admin@bion.app", senha: "bion123456" },
 };
 
+/** Contas demo só em desenvolvimento ou com NEXT_PUBLIC_DEMO_LOGINS=1 */
+const DEMO_HABILITADO =
+  process.env.NEXT_PUBLIC_DEMO_LOGINS === "1" ||
+  process.env.NODE_ENV === "development";
+
 export function Login() {
   const router = useRouter();
   const { entrar, registrar } = useBion();
   const [tab, setTab] = useState<Role>("paciente");
-  const [identificador, setIdentificador] = useState("marina.silva@email.com");
+  const [identificador, setIdentificador] = useState(
+    DEMO_HABILITADO ? CONTAS_DEMO.paciente.email : "",
+  );
   const [senha, setSenha] = useState("");
   const [enviando, setEnviando] = useState(false);
   const [modoCadastro, setModoCadastro] = useState(false);
@@ -28,7 +33,9 @@ export function Login() {
 
   const trocarAba = (r: Role) => {
     setTab(r);
-    setIdentificador(CONTAS_DEMO[r].email);
+    if (DEMO_HABILITADO) {
+      setIdentificador(CONTAS_DEMO[r].email);
+    }
     setSenha("");
   };
 
@@ -74,6 +81,12 @@ export function Login() {
     }
   };
 
+  const onSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    if (modoCadastro) void submeterCadastro();
+    else void submeter();
+  };
+
   return (
     <div className="min-h-screen bg-primary-soft flex items-center justify-center p-4">
       <div className="w-full max-w-md space-y-6">
@@ -93,131 +106,173 @@ export function Login() {
             </p>
           </div>
 
-          {modoCadastro ? (
-            <div className="space-y-3">
-              <div>
-                <label className="text-[11px] font-bold text-muted-foreground block mb-1">
-                  Nome completo
-                </label>
-                <input
-                  aria-label="Nome completo"
-                  value={nome}
-                  onChange={(e) => setNome(e.target.value)}
-                  placeholder="Seu nome completo"
-                  className="w-full px-4 py-3 rounded-2xl border text-sm bg-background outline-none focus:ring-2 focus:ring-primary/20"
-                />
-              </div>
-              <div>
-                <label className="text-[11px] font-bold text-muted-foreground block mb-1">
-                  E-mail
-                </label>
-                <input
-                  aria-label="E-mail"
-                  value={identificador}
-                  onChange={(e) => setIdentificador(e.target.value)}
-                  placeholder="seu@email.com"
-                  type="email"
-                  className="w-full px-4 py-3 rounded-2xl border text-sm bg-background outline-none focus:ring-2 focus:ring-primary/20"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-[11px] font-bold text-muted-foreground block mb-1">
-                    Senha
-                  </label>
-                  <input
-                  aria-label="Senha"
-                    type="password"
-                    value={senha}
-                    onChange={(e) => setSenha(e.target.value)}
-                    placeholder="Mínimo 10 caracteres"
-                    className="w-full px-4 py-3 rounded-2xl border text-sm bg-background outline-none focus:ring-2 focus:ring-primary/20"
-                  />
-                </div>
-                <div>
-                  <label className="text-[11px] font-bold text-muted-foreground block mb-1">
-                    Confirmar senha
-                  </label>
-                  <input
-                  aria-label="Confirmar senha"
-                    type="password"
-                    value={confirmaSenha}
-                    onChange={(e) => setConfirmaSenha(e.target.value)}
-                    placeholder="Repita a senha"
-                    className="w-full px-4 py-3 rounded-2xl border text-sm bg-background outline-none focus:ring-2 focus:ring-primary/20"
-                  />
-                </div>
-              </div>
-            </div>
-          ) : (
-            <>
-              <div className="grid grid-cols-3 gap-2 p-1 bg-muted rounded-2xl">
-                {(["paciente", "medico", "admin"] as Role[]).map((r) => (
-                  <button
-                    key={r}
-                    onClick={() => trocarAba(r)}
-                    className={`py-2 rounded-xl text-xs font-bold capitalize transition ${
-                      tab === r
-                        ? "bg-card shadow-sm text-foreground"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    {r === "medico" ? "Médico" : r === "admin" ? "Admin" : "Paciente"}
-                  </button>
-                ))}
-              </div>
-
+          <form onSubmit={onSubmit} className="space-y-6" noValidate>
+            {modoCadastro ? (
               <div className="space-y-3">
                 <div>
-                  <label className="text-[11px] font-bold text-muted-foreground block mb-1">
+                  <label
+                    htmlFor="login-nome"
+                    className="text-xs font-bold text-muted-foreground block mb-1"
+                  >
+                    Nome completo
+                  </label>
+                  <input
+                    id="login-nome"
+                    name="name"
+                    autoComplete="name"
+                    value={nome}
+                    onChange={(e) => setNome(e.target.value)}
+                    placeholder="Seu nome completo"
+                    className="w-full px-4 py-3 rounded-2xl border text-sm bg-background outline-none focus:ring-2 focus:ring-primary/20"
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor="login-email-cadastro"
+                    className="text-xs font-bold text-muted-foreground block mb-1"
+                  >
                     E-mail
                   </label>
                   <input
-                  aria-label="E-mail"
+                    id="login-email-cadastro"
+                    name="email"
+                    type="email"
+                    autoComplete="email"
                     value={identificador}
                     onChange={(e) => setIdentificador(e.target.value)}
-                    placeholder="Seu e-mail"
+                    placeholder="seu@email.com"
                     className="w-full px-4 py-3 rounded-2xl border text-sm bg-background outline-none focus:ring-2 focus:ring-primary/20"
                   />
                 </div>
-                <div>
-                  <label className="text-[11px] font-bold text-muted-foreground block mb-1">
-                    Senha de Acesso
-                  </label>
-                  <input
-                  aria-label="Senha de Acesso"
-                    type="password"
-                    value={senha}
-                    onChange={(e) => setSenha(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && submeter()}
-                    placeholder="Digite sua senha"
-                    className="w-full px-4 py-3 rounded-2xl border text-sm bg-background outline-none focus:ring-2 focus:ring-primary/20"
-                  />
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label
+                      htmlFor="login-senha-cadastro"
+                      className="text-xs font-bold text-muted-foreground block mb-1"
+                    >
+                      Senha
+                    </label>
+                    <input
+                      id="login-senha-cadastro"
+                      name="new-password"
+                      type="password"
+                      autoComplete="new-password"
+                      value={senha}
+                      onChange={(e) => setSenha(e.target.value)}
+                      placeholder="Mínimo 10 caracteres"
+                      className="w-full px-4 py-3 rounded-2xl border text-sm bg-background outline-none focus:ring-2 focus:ring-primary/20"
+                    />
+                  </div>
+                  <div>
+                    <label
+                      htmlFor="login-confirma-senha"
+                      className="text-xs font-bold text-muted-foreground block mb-1"
+                    >
+                      Confirmar senha
+                    </label>
+                    <input
+                      id="login-confirma-senha"
+                      name="confirm-password"
+                      type="password"
+                      autoComplete="new-password"
+                      value={confirmaSenha}
+                      onChange={(e) => setConfirmaSenha(e.target.value)}
+                      placeholder="Repita a senha"
+                      className="w-full px-4 py-3 rounded-2xl border text-sm bg-background outline-none focus:ring-2 focus:ring-primary/20"
+                    />
+                  </div>
                 </div>
               </div>
-            </>
-          )}
+            ) : (
+              <>
+                <div
+                  className="grid grid-cols-3 gap-2 p-1 bg-muted rounded-2xl"
+                  role="tablist"
+                  aria-label="Tipo de conta"
+                >
+                  {(["paciente", "medico", "admin"] as Role[]).map((r) => (
+                    <button
+                      key={r}
+                      type="button"
+                      role="tab"
+                      aria-selected={tab === r}
+                      onClick={() => trocarAba(r)}
+                      className={`py-2 rounded-xl text-xs font-bold capitalize transition ${
+                        tab === r
+                          ? "bg-card shadow-sm text-foreground"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      {r === "medico" ? "Médico" : r === "admin" ? "Admin" : "Paciente"}
+                    </button>
+                  ))}
+                </div>
 
-          <button
-            onClick={modoCadastro ? submeterCadastro : submeter}
-            disabled={enviando}
-            className="w-full py-4 rounded-2xl bg-primary text-primary-foreground font-bold text-sm shadow-md hover:opacity-90 transition active:scale-[0.99] disabled:opacity-60"
-          >
-            {enviando
-              ? "Aguarde..."
-              : modoCadastro
-                ? "Criar minha conta"
-                : `Entrar como ${tab === "medico" ? "Médico" : tab === "admin" ? "Administrador" : "Paciente"}`}
-          </button>
+                <div className="space-y-3">
+                  <div>
+                    <label
+                      htmlFor="login-email"
+                      className="text-xs font-bold text-muted-foreground block mb-1"
+                    >
+                      E-mail
+                    </label>
+                    <input
+                      id="login-email"
+                      name="email"
+                      type="email"
+                      autoComplete="username"
+                      value={identificador}
+                      onChange={(e) => setIdentificador(e.target.value)}
+                      placeholder="Seu e-mail"
+                      className="w-full px-4 py-3 rounded-2xl border text-sm bg-background outline-none focus:ring-2 focus:ring-primary/20"
+                    />
+                  </div>
+                  <div>
+                    <label
+                      htmlFor="login-senha"
+                      className="text-xs font-bold text-muted-foreground block mb-1"
+                    >
+                      Senha de Acesso
+                    </label>
+                    <input
+                      id="login-senha"
+                      name="password"
+                      type="password"
+                      autoComplete="current-password"
+                      value={senha}
+                      onChange={(e) => setSenha(e.target.value)}
+                      placeholder="Digite sua senha"
+                      className="w-full px-4 py-3 rounded-2xl border text-sm bg-background outline-none focus:ring-2 focus:ring-primary/20"
+                    />
+                  </div>
+                </div>
+              </>
+            )}
+
+            <button
+              type="submit"
+              disabled={enviando}
+              className="w-full py-4 rounded-2xl bg-primary text-primary-foreground font-bold text-sm shadow-md hover:opacity-90 transition active:scale-[0.99] disabled:opacity-60"
+            >
+              {enviando
+                ? "Aguarde..."
+                : modoCadastro
+                  ? "Criar minha conta"
+                  : `Entrar como ${tab === "medico" ? "Médico" : tab === "admin" ? "Administrador" : "Paciente"}`}
+            </button>
+          </form>
 
           <div className="flex items-center justify-between text-xs text-muted-foreground pt-1">
             {modoCadastro ? (
               <button
+                type="button"
                 onClick={() => {
                   setModoCadastro(false);
                   setSenha("");
                   setConfirmaSenha("");
-                  setIdentificador(CONTAS_DEMO[tab].email);
+                  setIdentificador(
+                    DEMO_HABILITADO ? CONTAS_DEMO[tab].email : "",
+                  );
                 }}
                 className="hover:text-primary transition font-medium"
               >
@@ -225,9 +280,11 @@ export function Login() {
               </button>
             ) : (
               <button
+                type="button"
                 onClick={() =>
                   toast.info("Recuperação de senha", {
-                    description: "Contate o suporte BION pelo canal suporte@bion.app para redefinir sua senha.",
+                    description:
+                      "Contate o suporte BION pelo canal suporte@bion.app para redefinir sua senha.",
                   })
                 }
                 className="hover:text-primary transition font-medium"
@@ -237,6 +294,7 @@ export function Login() {
             )}
             {!modoCadastro && (
               <button
+                type="button"
                 onClick={() => {
                   setModoCadastro(true);
                   setIdentificador("");
@@ -249,9 +307,9 @@ export function Login() {
             )}
           </div>
 
-          {!modoCadastro && (
+          {!modoCadastro && DEMO_HABILITADO && (
             <div className="pt-3 border-t space-y-2">
-              <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider text-center">
+              <div className="text-xs font-bold text-muted-foreground uppercase tracking-wider text-center">
                 Contas de demonstração — senha: bion123456
               </div>
               <div className="grid grid-cols-3 gap-2">
@@ -264,11 +322,12 @@ export function Login() {
                 ).map(([r, email]) => (
                   <button
                     key={r}
+                    type="button"
                     onClick={() => {
                       trocarAba(r);
                       setSenha("bion123456");
                     }}
-                    className="px-2 py-2 rounded-xl border text-[10px] font-bold text-muted-foreground hover:border-primary hover:text-primary transition truncate"
+                    className="px-2 py-2 rounded-xl border text-xs font-bold text-muted-foreground hover:border-primary hover:text-primary transition truncate"
                     title={email}
                   >
                     {r === "medico" ? "Médica" : r === "admin" ? "Admin" : "Paciente"}
@@ -279,11 +338,12 @@ export function Login() {
           )}
 
           <div className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground text-center">
-            <Shield className="w-3.5 h-3.5 text-primary" /> Conexão segura e criptografada
-            para proteger seus dados de saúde
+            <Shield className="w-3.5 h-3.5 text-primary shrink-0" /> Conexão segura e
+            criptografada para proteger seus dados de saúde
           </div>
           <div className="text-center">
             <button
+              type="button"
               onClick={() => router.push("/")}
               className="text-xs text-muted-foreground hover:text-primary transition font-medium"
             >
