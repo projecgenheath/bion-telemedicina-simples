@@ -172,17 +172,17 @@ export function Mensagens() {
               </div>
               <div className="flex-1 min-w-0">
                 <div className="text-xs font-bold truncate">{contato.nome}</div>
-                <div className="text-[11px] text-muted-foreground truncate">
+                <div className="text-xs text-muted-foreground truncate">
                   {ultima ? ultima.texto : contato.suporte ? "Como podemos ajudar você hoje?" : "Comece a conversa"}
                 </div>
               </div>
               <div className="text-right shrink-0">
-                <div className="text-[10px] text-muted-foreground">
+                <div className="text-xs text-muted-foreground">
                   {ultima ? ultima.quando.replace(" às ", " ") : ""}
                 </div>
                 {naoLidas > 0 && (
                   <span
-                    className="inline-block mt-1 text-[10px] font-bold text-primary-foreground rounded-full px-1.5"
+                    className="inline-block mt-1 text-xs font-bold text-primary-foreground rounded-full px-1.5"
                     style={{ backgroundColor: "var(--accent)" }}
                   >
                     {naoLidas}
@@ -201,7 +201,7 @@ export function Mensagens() {
             </div>
             <div>
               <div className="text-xs font-bold">{c.nome}</div>
-              <div className="text-[11px] text-muted-foreground">{c.detalhe}</div>
+              <div className="text-xs text-muted-foreground">{c.detalhe}</div>
             </div>
           </div>
 
@@ -225,7 +225,7 @@ export function Mensagens() {
                 >
                   <p className="leading-relaxed whitespace-pre-wrap break-words">{m.texto}</p>
                   <div
-                    className={`text-[10px] mt-1 text-right ${m.minha ? "opacity-75" : "text-muted-foreground"}`}
+                    className={`text-xs mt-1 text-right ${m.minha ? "opacity-75" : "text-muted-foreground"}`}
                   >
                     {m.quando}
                   </div>
@@ -257,7 +257,7 @@ export function Mensagens() {
         </div>
       </div>
 
-      <p className="flex items-center justify-center gap-1.5 text-[11px] text-muted-foreground">
+      <p className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
         <ShieldCheck className="w-3.5 h-3.5" />
         Conversas registradas com trilha de auditoria e proteção LGPD.
       </p>

@@ -581,7 +581,7 @@ export function ChatBion({ aberto, onFechar, aoEnviarExame }: { aberto: boolean;
           const pct = Math.round(((idx + 1) / ETAPAS_ANAMNESE.length) * 100);
           return (
             <div className="mt-3">
-              <div className="flex items-center justify-between text-[11px] font-semibold text-bion-ink/60 dark:text-white/55">
+              <div className="flex items-center justify-between text-xs font-semibold text-bion-ink/60 dark:text-white/55">
                 <span className="inline-flex items-center gap-1.5">
                   <Stethoscope className="w-3.5 h-3.5" />
                   Triagem — {atual.rotulo}
@@ -591,7 +591,7 @@ export function ChatBion({ aberto, onFechar, aoEnviarExame }: { aberto: boolean;
               <div className="mt-1.5 h-1.5 rounded-full bg-bion-ink/10 dark:bg-white/10 overflow-hidden">
                 <div className="h-full rounded-full bg-gradient-to-r from-bion-sea to-bion-ink dark:from-sky-400 dark:to-sky-200 transition-all" style={{ width: `${pct}%` }} />
               </div>
-              <div className="mt-1.5 text-[10px] text-bion-ink/45 dark:text-white/40">
+              <div className="mt-1.5 text-xs text-bion-ink/45 dark:text-white/40">
                 Disponível até 5 minutos antes da consulta ({anamneseAtiva.quando})
               </div>
             </div>
@@ -612,7 +612,7 @@ export function ChatBion({ aberto, onFechar, aoEnviarExame }: { aberto: boolean;
             >
               {m.texto.split("**").map((parte, j) => (j % 2 === 1 ? <strong key={j}>{parte}</strong> : <span key={j}>{parte}</span>))}
               {m.remetente === "ia" && m.fonte && (
-                <div className="text-[10px] mt-2 opacity-40" aria-hidden="true">
+                <div className="text-xs mt-2 opacity-40" aria-hidden="true">
 {m.fonte === "local"
                     ? "modo básico · sem IA generativa"
                     : m.fonte === "publico"
@@ -694,7 +694,7 @@ export function ChatBion({ aberto, onFechar, aoEnviarExame }: { aberto: boolean;
                   Cancelar
                 </button>
               </div>
-              <p className="text-[11px] opacity-50 mt-2">O pagamento confirma sua consulta no agenda, e a triagem com a BION IA fica disponível até 5 minutos antes do horário.</p>
+              <p className="text-xs opacity-50 mt-2">O pagamento confirma sua consulta no agenda, e a triagem com a BION IA fica disponível até 5 minutos antes do horário.</p>
             </div>
           );
         })()}

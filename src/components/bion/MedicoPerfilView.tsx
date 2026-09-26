@@ -79,7 +79,7 @@ export function MedicoPerfilView({ medicoId }: { medicoId?: string }) {
               )}
             </div>
             {editando && (
-              <label className="block text-[11px] font-bold text-primary cursor-pointer text-center">
+              <label className="block text-xs font-bold text-primary cursor-pointer text-center">
                 Trocar foto
                 <input
                   type="file"
@@ -287,7 +287,7 @@ export function MedicoPerfilView({ medicoId }: { medicoId?: string }) {
                 {av.comentario && (
                   <p className="text-muted-foreground leading-relaxed italic">“{av.comentario}”</p>
                 )}
-                <div className="text-[10px] text-muted-foreground">{av.quando}</div>
+                <div className="text-xs text-muted-foreground">{av.quando}</div>
               </div>
             ))
           )}

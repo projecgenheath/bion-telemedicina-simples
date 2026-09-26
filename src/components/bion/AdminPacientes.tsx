@@ -128,7 +128,7 @@ export function AdminPacientes() {
             ))
           )}
           {avs.length > 0 && (
-            <p className="text-[11px] text-muted-foreground pt-1">
+            <p className="text-xs text-muted-foreground pt-1">
               {avs.length} avaliação(ões) enviada(s) por este paciente.
             </p>
           )}
@@ -175,7 +175,7 @@ export function AdminPacientes() {
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="font-bold text-sm text-foreground">{p.nome}</span>
                 <span
-                  className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${p.status === "ativo" ? "bg-accent-soft text-emerald-700" : "bg-muted text-muted-foreground"}`}
+                  className={`px-2 py-0.5 rounded-full text-xs font-bold ${p.status === "ativo" ? "bg-accent-soft text-emerald-700" : "bg-muted text-muted-foreground"}`}
                 >
                   {p.status}
                 </span>

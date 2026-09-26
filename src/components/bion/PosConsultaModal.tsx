@@ -114,7 +114,7 @@ export function PosConsultaModal({
                     </div>
                     <div className="min-w-0">
                       <div className="font-bold text-foreground truncate">{d.titulo}</div>
-                      <div className="text-muted-foreground text-[11px] truncate">
+                      <div className="text-muted-foreground text-xs truncate">
                         Assinado digitalmente • {d.data}
                       </div>
                     </div>
@@ -182,7 +182,7 @@ export function PosConsultaModal({
                 ] as const
               ).map((c) => (
                 <div key={c.label} className="p-2 rounded-xl bg-muted/40 border space-y-1">
-                  <span className="text-muted-foreground block text-[11px]">{c.label}</span>
+                  <span className="text-muted-foreground block text-xs">{c.label}</span>
                   <div className="flex justify-center gap-0.5">
                     {[1, 2, 3, 4, 5].map((n) => (
                       <button

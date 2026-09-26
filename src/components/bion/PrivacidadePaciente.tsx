@@ -71,7 +71,7 @@ export function PrivacidadePaciente() {
         <div className="grid sm:grid-cols-2 gap-3">
           {dadosColetados.map((d) => (
             <div key={d.rotulo} className="bg-muted/60 rounded-2xl p-4">
-              <div className="text-[10px] uppercase tracking-widest font-bold text-muted-foreground">
+              <div className="text-xs uppercase tracking-widest font-bold text-muted-foreground">
                 {d.rotulo}
               </div>
               <div className="text-sm font-semibold mt-1 break-words">{d.valor}</div>
@@ -149,7 +149,7 @@ export function PrivacidadePaciente() {
                   </div>
                 </div>
                 <span
-                  className={`text-[10px] font-black uppercase tracking-widest ${
+                  className={`text-xs font-black uppercase tracking-widest ${
                     c.aceito ? "text-emerald-600 dark:text-emerald-400" : "text-destructive"
                   }`}
                 >

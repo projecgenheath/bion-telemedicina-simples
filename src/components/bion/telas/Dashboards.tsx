@@ -49,7 +49,7 @@ function ContagemRegressiva({ alvo }: { alvo: number }) {
       <div className="text-2xl font-extrabold tabular-nums leading-none">
         {String(v).padStart(2, "0")}
       </div>
-      <div className="text-[9px] font-bold uppercase tracking-wider opacity-75 mt-1">{r}</div>
+      <div className="text-xs font-bold uppercase tracking-wider opacity-75 mt-1">{r}</div>
     </div>
   );
 
@@ -101,7 +101,7 @@ export function PacienteDashboard({ go }: { go: (v: View) => void }) {
                 {proxima.especialidade} • {proxima.data}, às {proxima.hora}
               </div>
               <div className="flex flex-col gap-2 pt-1">
-                <div className="text-[10px] font-bold uppercase tracking-wider opacity-80 flex items-center gap-1.5">
+                <div className="text-xs font-bold uppercase tracking-wider opacity-80 flex items-center gap-1.5">
                   <Clock className="w-3.5 h-3.5" /> Início da consulta em
                 </div>
                 <ContagemRegressiva alvo={proxima.ts} />
@@ -192,7 +192,7 @@ export function PacienteDashboard({ go }: { go: (v: View) => void }) {
                   <div className={`font-bold text-xs ${l.feito ? "line-through" : ""}`}>
                     {l.titulo}
                   </div>
-                  <div className="text-[11px] text-muted-foreground mt-0.5">
+                  <div className="text-xs text-muted-foreground mt-0.5">
                     {l.horario} • {l.frequencia}
                   </div>
                 </div>
@@ -235,7 +235,7 @@ export function PacienteDashboard({ go }: { go: (v: View) => void }) {
                     {c.especialidade} • {c.data}, {c.hora}
                   </div>
                 </div>
-                <span className="px-2.5 py-1 rounded-full text-[11px] font-bold capitalize bg-accent-soft text-emerald-700 dark:text-emerald-300">
+                <span className="px-2.5 py-1 rounded-full text-xs font-bold capitalize bg-accent-soft text-emerald-700 dark:text-emerald-300">
                   {c.status}
                 </span>
               </div>
@@ -388,15 +388,15 @@ export function MedicoDashboard({ go }: { go: (v: View) => void }) {
                     <span className="font-mono font-bold w-12">{a.h}</span>
                     <div>
                       <div className="text-foreground font-bold">{a.p}</div>
-                      <div className="text-muted-foreground text-[11px]">{a.m}</div>
+                      <div className="text-muted-foreground text-xs">{a.m}</div>
                     </div>
                   </div>
                   {a.now ? (
-                    <span className="px-2.5 py-0.5 rounded-full bg-primary text-primary-foreground text-[10px] font-extrabold">
+                    <span className="px-2.5 py-0.5 rounded-full bg-primary text-primary-foreground text-xs font-extrabold">
                       Agora
                     </span>
                   ) : (
-                    <span className="text-muted-foreground text-[11px]">Confirmado</span>
+                    <span className="text-muted-foreground text-xs">Confirmado</span>
                   )}
                 </div>
               ))}
@@ -495,19 +495,19 @@ export function AdminDashboard({ go }: { go: (v: View) => void }) {
         <div className="bg-card border rounded-3xl p-4 shadow-sm">
           <div className="text-xs text-muted-foreground font-medium">Médicos Ativos</div>
           <div className="text-2xl font-extrabold text-primary mt-1">{medicosAtivos}</div>
-          <div className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold mt-0.5">CRM 100% verificado</div>
+          <div className="text-xs text-emerald-600 dark:text-emerald-400 font-bold mt-0.5">CRM 100% verificado</div>
         </div>
 
         <div className="bg-card border rounded-3xl p-4 shadow-sm">
           <div className="text-xs text-muted-foreground font-medium">Pacientes</div>
           <div className="text-2xl font-extrabold text-foreground mt-1">{pacientes.length}</div>
-          <div className="text-[10px] text-muted-foreground font-bold mt-0.5">cadastro real</div>
+          <div className="text-xs text-muted-foreground font-bold mt-0.5">cadastro real</div>
         </div>
 
         <div className="bg-card border rounded-3xl p-4 shadow-sm">
           <div className="text-xs text-muted-foreground font-medium">Consultas Hoje</div>
           <div className="text-2xl font-extrabold text-foreground mt-1">{consultasHoje}</div>
-          <div className="text-[10px] text-primary font-bold mt-0.5">{consultas.length} na base</div>
+          <div className="text-xs text-primary font-bold mt-0.5">{consultas.length} na base</div>
         </div>
 
         <div className="bg-card border rounded-3xl p-4 shadow-sm">
@@ -515,13 +515,13 @@ export function AdminDashboard({ go }: { go: (v: View) => void }) {
           <div className="text-2xl font-extrabold text-emerald-600 dark:text-emerald-400 mt-1">
             {faturamentoMes.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 })}
           </div>
-          <div className="text-[10px] text-muted-foreground mt-0.5">consultas pagas no mês</div>
+          <div className="text-xs text-muted-foreground mt-0.5">consultas pagas no mês</div>
         </div>
 
         <div className="bg-card border rounded-3xl p-4 shadow-sm">
           <div className="text-xs text-muted-foreground font-medium">Chamados Suporte</div>
           <div className="text-2xl font-extrabold text-amber-600 dark:text-amber-400 mt-1">{ticketsAbertos}</div>
-          <div className="text-[10px] text-amber-700 dark:text-amber-300 font-bold mt-0.5">satisfação geral: {mediaAvaliacoes}</div>
+          <div className="text-xs text-amber-700 dark:text-amber-300 font-bold mt-0.5">satisfação geral: {mediaAvaliacoes}</div>
         </div>
 
         <div
@@ -541,7 +541,7 @@ export function AdminDashboard({ go }: { go: (v: View) => void }) {
           <div className="text-2xl font-extrabold text-foreground mt-1 text-primary">
             {eventos24h}
           </div>
-          <div className="text-[10px] text-muted-foreground mt-0.5">Eventos em 24h</div>
+          <div className="text-xs text-muted-foreground mt-0.5">Eventos em 24h</div>
         </div>
       </div>
 

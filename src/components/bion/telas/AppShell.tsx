@@ -113,6 +113,12 @@ function Shell({
 
   return (
     <div className="min-h-screen bg-background text-foreground flex overflow-x-hidden">
+      <a
+        href="#conteudo-principal"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[100] focus:px-4 focus:py-2.5 focus:rounded-xl focus:bg-primary focus:text-primary-foreground focus:text-sm focus:font-bold focus:shadow-lg"
+      >
+        Pular para o conteúdo
+      </a>
       {/* Sidebar Desktop */}
       <aside className="hidden md:flex w-64 flex-col border-r bg-card shrink-0">
         <div className="p-6">
@@ -150,7 +156,7 @@ function Shell({
             </div>
             <div className="flex-1 min-w-0">
               <div className="text-xs font-bold truncate">{sessao.nome}</div>
-              <div className="text-[10px] text-muted-foreground capitalize truncate">{role}</div>
+              <div className="text-xs text-muted-foreground capitalize truncate">{role}</div>
             </div>
             <button
               type="button"
@@ -177,7 +183,7 @@ function Shell({
           <div className="flex items-center gap-2 bg-muted/70 p-1.5 px-3 rounded-2xl">
             <Shield className="w-3.5 h-3.5 text-primary" />
             <span className="text-xs font-bold text-foreground hidden sm:inline">{sessao.nome}</span>
-            <span className="text-[10px] font-bold text-primary bg-primary-soft px-2 py-0.5 rounded-lg">
+            <span className="text-xs font-bold text-primary bg-primary-soft px-2 py-0.5 rounded-lg">
               {rotuloPerfil}
             </span>
           </div>
@@ -198,7 +204,13 @@ function Shell({
         </header>
 
         {/* Conteúdo da Página */}
-        <div className="p-4 md:p-8 pb-28 md:pb-12 max-w-6xl w-full mx-auto flex-1">{children}</div>
+        <div
+          id="conteudo-principal"
+          tabIndex={-1}
+          className="p-4 md:p-8 pb-28 md:pb-12 max-w-6xl w-full mx-auto flex-1 outline-none"
+        >
+          {children}
+        </div>
       </main>
 
       <TourGuiado role={role} />
@@ -216,7 +228,7 @@ function Shell({
               key={m.label}
               onClick={() => setView(m.view)}
               aria-current={active ? "page" : undefined}
-              className={`flex-1 flex flex-col items-center gap-1 py-2 text-[10px] font-bold transition ${
+              className={`flex-1 flex flex-col items-center gap-1 py-2 text-xs font-bold transition ${
                 active ? "text-primary" : "text-muted-foreground"
               }`}
             >
@@ -230,7 +242,7 @@ function Shell({
           onClick={() => setMenuMobileAberto(true)}
           aria-label="Abrir menu completo"
           aria-expanded={menuMobileAberto}
-          className={`flex-1 flex flex-col items-center gap-1 py-2 text-[10px] font-bold transition ${
+          className={`flex-1 flex flex-col items-center gap-1 py-2 text-xs font-bold transition ${
             menuMobileAberto || !barraMobile.some((m) => m.view === view)
               ? "text-primary"
               : "text-muted-foreground"
@@ -275,7 +287,7 @@ function Shell({
                     setView(m.view);
                   }}
                   aria-current={active ? "page" : undefined}
-                  className={`flex flex-col items-center gap-1.5 p-3 rounded-2xl text-[11px] font-bold text-center transition ${
+                  className={`flex flex-col items-center gap-1.5 p-3 rounded-2xl text-xs font-bold text-center transition ${
                     active
                       ? "bg-primary-soft text-primary"
                       : "text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -306,7 +318,7 @@ function SinoNotificacoes({ onClick }: { onClick: () => void }) {
       <Bell className="w-5 h-5" />
       {naoLidas > 0 && (
         <span
-          className="absolute top-1 right-1 min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-black text-primary-foreground flex items-center justify-center shadow-sm animate-pulse"
+          className="absolute top-1 right-1 min-w-[18px] h-[18px] px-1 rounded-full text-xs font-black text-primary-foreground flex items-center justify-center shadow-sm animate-pulse"
           style={{ backgroundColor: "var(--accent)" }}
         >
           {naoLidas}

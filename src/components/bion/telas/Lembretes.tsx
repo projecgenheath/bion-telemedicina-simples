@@ -74,7 +74,7 @@ export function Lembretes() {
               </div>
               <div className="text-xs text-muted-foreground flex items-center gap-2 mt-0.5">
                 <Clock className="w-3.5 h-3.5" /> {l.horario} • {l.frequencia}
-                <span className="px-2 py-0.5 rounded-lg bg-muted text-[10px] font-bold">
+                <span className="px-2 py-0.5 rounded-lg bg-muted text-xs font-bold">
                   {l.tipo}
                 </span>
               </div>

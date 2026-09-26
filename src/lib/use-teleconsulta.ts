@@ -330,7 +330,7 @@ export function useTeleconsulta(consultaId: string | undefined) {
       midiaResolvidaRef.current = true;
       if (!stream) {
         setErroMidia(
-          "Câmera e microfone indisponíveis (permissão negada ou dispositivo em uso). Você participará em modo de somente escuta e vídeo.",
+          "Não foi possível acessar câmera e microfone (permissão negada, bloqueada pelo navegador ou dispositivo em uso por outro app). A consulta continua; peça ao outro participante para confirmar o áudio.",
         );
         mudarStatus("aguardando");
         return;

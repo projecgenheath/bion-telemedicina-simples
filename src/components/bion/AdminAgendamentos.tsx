@@ -88,7 +88,7 @@ export function AdminAgendamentos() {
         ].map(([label, v]) => (
           <div key={String(label)} className="bg-card border rounded-2xl p-4">
             <div className="text-2xl font-extrabold text-foreground">{v}</div>
-            <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
+            <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
               {label}
             </div>
           </div>
@@ -128,11 +128,11 @@ export function AdminAgendamentos() {
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="font-bold text-sm text-foreground">{c.paciente}</span>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-primary-soft text-primary">
+                <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-primary-soft text-primary">
                   {c.status}
                 </span>
                 {c.remarcada && (
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-muted text-muted-foreground">
+                  <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-muted text-muted-foreground">
                     remarcada
                   </span>
                 )}
@@ -142,7 +142,7 @@ export function AdminAgendamentos() {
                 {c.especialidade}
               </p>
               {c.motivoCancelamento && (
-                <p className="text-[11px] text-destructive">Motivo: {c.motivoCancelamento}</p>
+                <p className="text-xs text-destructive">Motivo: {c.motivoCancelamento}</p>
               )}
             </div>
             <div className="flex items-center gap-2">

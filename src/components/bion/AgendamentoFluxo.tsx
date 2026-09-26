@@ -341,7 +341,7 @@ export function AgendamentoFluxo({
                       {med.subespecialidades.slice(0, 3).map((sub) => (
                         <span
                           key={sub}
-                          className="text-[11px] px-2 py-0.5 rounded-lg bg-muted text-muted-foreground"
+                          className="text-xs px-2 py-0.5 rounded-lg bg-muted text-muted-foreground"
                         >
                           {sub}
                         </span>
@@ -410,7 +410,7 @@ export function AgendamentoFluxo({
                   </span>
                   <span className="text-2xl font-extrabold">{d.diaNum}</span>
                   <span
-                    className={`text-[11px] font-semibold ${isSelected ? "text-primary-foreground" : "text-primary"}`}
+                    className={`text-xs font-semibold ${isSelected ? "text-primary-foreground" : "text-primary"}`}
                   >
                     {d.rotulo === "Hoje" ? "Hoje" : d.mes}
                   </span>

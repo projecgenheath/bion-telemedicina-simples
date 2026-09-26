@@ -104,7 +104,7 @@ export function MinhasAvaliacoes() {
         <div className="mt-4 flex items-end gap-3 h-32">
           {resumo.meses.map((m, i) => (
             <div key={i} className="flex-1 flex flex-col items-center gap-1.5">
-              <span className="text-[11px] text-muted-foreground">
+              <span className="text-xs text-muted-foreground">
                 {m.media ? m.media.toFixed(1) : ""}
               </span>
               <div
@@ -112,7 +112,7 @@ export function MinhasAvaliacoes() {
                 style={{ height: `${(m.media / 5) * 100}%`, minHeight: m.media ? 6 : 2 }}
                 title={`${m.q} avaliação(ões)`}
               />
-              <span className="text-[11px] text-muted-foreground capitalize">{m.rotulo}</span>
+              <span className="text-xs text-muted-foreground capitalize">{m.rotulo}</span>
             </div>
           ))}
         </div>

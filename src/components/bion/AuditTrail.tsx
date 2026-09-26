@@ -305,7 +305,7 @@ export function AuditTrail() {
               {c.label}
               {count > 0 && (
                 <span
-                  className={`ml-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+                  className={`ml-0.5 px-1.5 py-0.5 rounded-full text-xs font-bold ${
                     fCategoria === c.k ? "bg-primary-foreground/20" : "bg-muted"
                   }`}
                 >
@@ -450,7 +450,7 @@ export function AuditTrail() {
               <div className="flex flex-wrap items-center gap-2">
                 <span className="font-semibold text-sm">{l.acao.replace(/_/g, " ")}</span>
                 <span
-                  className={`px-2 py-0.5 rounded-full text-[10px] font-medium border ${corSeveridade(l.severidade)}`}
+                  className={`px-2 py-0.5 rounded-full text-xs font-medium border ${corSeveridade(l.severidade)}`}
                 >
                   {l.severidade === "critical"
                     ? "Crítico"
@@ -458,7 +458,7 @@ export function AuditTrail() {
                       ? "Aviso"
                       : "Info"}
                 </span>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-muted border">
+                <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-muted border">
                   {CATEGORIAS.find((c) => c.k === l.categoria)?.label ?? l.categoria}
                 </span>
               </div>

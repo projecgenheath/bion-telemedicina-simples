@@ -259,7 +259,7 @@ export function BionIA() {
               >
                 <div className="whitespace-pre-wrap">{msg.texto}</div>
                 <div
-                  className={`text-[10px] mt-2 text-right ${
+                  className={`text-xs mt-2 text-right ${
                     msg.remetente === "usuario"
                       ? "text-primary-foreground/70"
                       : "text-muted-foreground"
@@ -297,7 +297,7 @@ export function BionIA() {
 
         {/* Sugestões Rápidas */}
         <div className="px-5 py-2.5 border-t bg-muted/40 flex items-center gap-2 overflow-x-auto">
-          <span className="text-[11px] font-bold text-muted-foreground shrink-0">Sugestões:</span>
+          <span className="text-xs font-bold text-muted-foreground shrink-0">Sugestões:</span>
           {promptsSugeridos.map((p, i) => (
             <button
               key={i}

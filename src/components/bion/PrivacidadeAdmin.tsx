@@ -169,7 +169,7 @@ export function PrivacidadeAdmin() {
                   {m.especialidade} • {m.crm} • status {m.status}
                 </div>
               </div>
-              <span className="text-[10px] uppercase font-black tracking-widest text-muted-foreground">
+              <span className="text-xs uppercase font-black tracking-widest text-muted-foreground">
                 Dado profissional público
               </span>
             </div>

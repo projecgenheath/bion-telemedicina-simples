@@ -162,7 +162,7 @@ export function AdminMedicos() {
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="font-bold text-sm text-foreground">{m.nome}</span>
                 <span
-                  className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${m.status === "ativo" ? "bg-accent-soft text-emerald-700" : "bg-muted text-muted-foreground"}`}
+                  className={`px-2 py-0.5 rounded-full text-xs font-bold ${m.status === "ativo" ? "bg-accent-soft text-emerald-700" : "bg-muted text-muted-foreground"}`}
                 >
                   {m.status}
                 </span>

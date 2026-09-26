@@ -42,7 +42,7 @@
   --color-bion-sky: var(--bion-sky);       /* azul claro (gráficos área) */
   --color-bion-night: var(--bion-night);   /* fundo escuro de painéis */
   --color-bion-alerta: var(--bion-alerta); /* alerta (diastólica) */
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-inter), "Inter", ui-sans-serif, system-ui, sans-serif;
 }
 
 :root {
@@ -234,6 +234,18 @@
 /* Área segura em celulares com notch */
 .bp-safe-bottom { padding-bottom: max(1.5rem, env(safe-area-inset-bottom)); }
 .bp-safe-top { padding-top: max(1.25rem, env(safe-area-inset-top)); }
+
+/* Respeita preferência do sistema: menos animação / movimento */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
 
 @media print {
   body * { visibility: hidden; }

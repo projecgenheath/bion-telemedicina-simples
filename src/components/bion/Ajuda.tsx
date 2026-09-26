@@ -220,7 +220,7 @@ export function Ajuda({ perfil }: { perfil: Perfil }) {
                 aria-expanded={isOpen}
               >
                 <div className="min-w-0">
-                  <span className="mb-1 inline-block rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
+                  <span className="mb-1 inline-block rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-primary">
                     {f.categoria}
                   </span>
                   <p className="text-sm font-medium text-foreground">{f.pergunta}</p>

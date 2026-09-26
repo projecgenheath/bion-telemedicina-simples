@@ -278,13 +278,13 @@ export function PacienteApp() {
                     Próxima consulta
                   </span>
                   {triagemPendente ? (
-                    <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-amber-500/15 text-amber-700 dark:bg-amber-400/15 dark:text-amber-300">
+                    <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-amber-500/15 text-amber-700 dark:bg-amber-400/15 dark:text-amber-300">
                       Triagem pendente
                     </span>
                   ) : salaAberta ? (
-                    <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-600 text-white">Sala aberta</span>
+                    <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-600 text-white">Sala aberta</span>
                   ) : (
-                    <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-bion-ink/8 dark:bg-white/10">Confirmada</span>
+                    <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-bion-ink/8 dark:bg-white/10">Confirmada</span>
                   )}
                 </div>
                 <div className="text-xl font-bold">{proxima.especialidade}</div>
@@ -338,7 +338,7 @@ export function PacienteApp() {
                 <span className="flex-1 min-w-0">
                   <span className="flex items-center gap-2">
                     <span className="font-black text-base">BION IA</span>
-                    <span className="text-[10px] font-bold uppercase tracking-wider bg-white/15 rounded-full px-2 py-0.5">Seu agendamento</span>
+                    <span className="text-xs font-bold uppercase tracking-wider bg-white/15 rounded-full px-2 py-0.5">Seu agendamento</span>
                   </span>
                   <span className="block text-xs text-white/70 mt-0.5">Online agora · responde na hora</span>
                 </span>
@@ -367,7 +367,7 @@ export function PacienteApp() {
             </button>
 
             <div className="mt-auto pt-10 flex flex-col items-center gap-1 text-bion-ink/40 dark:text-white/35">
-              <span className="text-[11px] font-semibold">Saúde e exames abaixo</span>
+              <span className="text-xs font-semibold">Saúde e exames abaixo</span>
               <ChevronDown className="w-5 h-5 animate-bounce" />
             </div>
           </section>
@@ -390,7 +390,7 @@ export function PacienteApp() {
                   <span className="inline-flex items-center gap-2 text-sm font-bold">
                     <Pill className="w-4 h-4" /> Lembretes de medicação
                   </span>
-                  <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-bion-ink/8 dark:bg-white/10">
+                  <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-bion-ink/8 dark:bg-white/10">
                     {lembretesPendentes.length ? `${lembretesPendentes.length} hoje` : "Em dia"}
                   </span>
                 </div>
@@ -542,7 +542,7 @@ export function PacienteApp() {
                               {itemDestaque.valor}
                               <span className="text-xs font-semibold opacity-60 ml-1">{itemDestaque.unidade}</span>
                             </div>
-                            <div className="text-[11px] text-white/55 mt-0.5">{itemDestaque.nome}</div>
+                            <div className="text-xs text-white/55 mt-0.5">{itemDestaque.nome}</div>
                           </div>
                         )}
                       </div>

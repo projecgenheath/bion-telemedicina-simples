@@ -70,7 +70,7 @@ export function Notificacoes() {
                   <span className={`font-semibold ${n.lida ? "" : "text-foreground"}`}>
                     {n.titulo}
                   </span>
-                  <span className="text-[11px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
                     {rotulo[n.tipo]}
                   </span>
                 </div>

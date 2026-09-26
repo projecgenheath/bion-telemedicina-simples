@@ -134,7 +134,7 @@ export function MedicoPacientes() {
                 {a.comentario && (
                   <p className="text-muted-foreground italic">“{a.comentario}”</p>
                 )}
-                <div className="text-[10px] text-muted-foreground">{a.quando}</div>
+                <div className="text-xs text-muted-foreground">{a.quando}</div>
               </div>
             ))
           )}
@@ -184,7 +184,7 @@ export function MedicoPacientes() {
               </div>
               <div className="flex-1 min-w-0">
                 <div className="font-bold text-sm text-foreground truncate">{p.nome}</div>
-                <div className="text-[11px] text-muted-foreground truncate">
+                <div className="text-xs text-muted-foreground truncate">
                   {p.total} consulta(s) • última em {p.ultima?.data ?? "—"}
                 </div>
               </div>
@@ -210,7 +210,7 @@ function Metrica({
     <div className="bg-card border rounded-2xl p-4">
       <Icon className="w-4 h-4 text-primary" />
       <div className="text-2xl font-extrabold text-foreground mt-1">{valor}</div>
-      <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
+      <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
         {label}
       </div>
     </div>

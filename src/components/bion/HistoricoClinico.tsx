@@ -165,7 +165,7 @@ function GraficoPressao() {
           { l: "Tendência", v: "↓ Melhora", cls: "bg-muted/50 text-emerald-600 dark:text-emerald-400" },
         ].map((c) => (
           <div key={c.l} className={`rounded-xl p-2 ${c.cls}`}>
-            <div className="text-[10px] text-muted-foreground">{c.l}</div>
+            <div className="text-xs text-muted-foreground">{c.l}</div>
             <div className="text-sm font-extrabold">{c.v}</div>
           </div>
         ))}
@@ -379,7 +379,7 @@ export function HistoricoClinico() {
     };
     return (
       <span
-        className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${map[s] ?? "bg-muted text-muted-foreground"}`}
+        className={`text-xs font-bold px-2 py-0.5 rounded-full ${map[s] ?? "bg-muted text-muted-foreground"}`}
       >
         {labels[s] ?? s}
       </span>
@@ -450,7 +450,7 @@ export function HistoricoClinico() {
               <s.I className={`w-4 h-4 ${s.c}`} />
             </div>
             <div className="text-xl font-extrabold">{s.v}</div>
-            <div className="text-[11px] text-muted-foreground">{s.l}</div>
+            <div className="text-xs text-muted-foreground">{s.l}</div>
           </button>
         ))}
       </div>
@@ -488,7 +488,7 @@ export function HistoricoClinico() {
               <Calendar className="w-4 h-4 text-muted-foreground" />
               <span className="text-sm font-extrabold capitalize">{mes}</span>
               <div className="flex-1 border-t" />
-              <span className="text-[11px] text-muted-foreground">
+              <span className="text-xs text-muted-foreground">
                 {evs.length} evento{evs.length !== 1 ? "s" : ""}
               </span>
             </div>
@@ -525,7 +525,7 @@ export function HistoricoClinico() {
                               <span className="font-bold text-sm">{ev.titulo}</span>
                               {statusBadge(ev.status)}
                               <span
-                                className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${cor.bg} ${cor.text}`}
+                                className={`text-xs font-bold px-2 py-0.5 rounded-full ${cor.bg} ${cor.text}`}
                               >
                                 {ev.tipo}
                               </span>
@@ -535,7 +535,7 @@ export function HistoricoClinico() {
                             </div>
                           </div>
                           <div className="flex items-center gap-2 shrink-0">
-                            <span className="text-[11px] text-muted-foreground">{ev.data}</span>
+                            <span className="text-xs text-muted-foreground">{ev.data}</span>
                             <ChevronRight
                               className={`w-4 h-4 text-muted-foreground transition-transform ${aberto ? "rotate-90" : ""}`}
                             />

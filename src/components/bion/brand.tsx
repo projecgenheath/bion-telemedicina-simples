@@ -18,7 +18,7 @@ export function Logo({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
       </div>
       <div className="flex flex-col leading-none">
         <span className="text-primary tracking-tight">BION</span>
-        <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+        <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">
           Telemedicina
         </span>
       </div>

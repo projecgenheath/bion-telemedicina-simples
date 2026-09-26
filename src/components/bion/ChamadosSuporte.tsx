@@ -278,7 +278,7 @@ export function ChamadosSuporte() {
                 <p className="text-foreground leading-relaxed whitespace-pre-wrap">
                   {ticketSelecionado.resposta}
                 </p>
-                <div className="text-[10px] text-muted-foreground">
+                <div className="text-xs text-muted-foreground">
                   {ticketSelecionado.dataResposta}
                 </div>
               </div>

@@ -30,24 +30,10 @@ import {
 import { useBion as useStore, type AnamneseResumo } from "@/lib/bion-store";
 import { ModalBion } from "@/components/bion/ModalBion";
 import { useTeleconsulta } from "@/lib/use-teleconsulta";
+import { ROTULOS_ANAMNESE } from "@/components/bion/consulta/rotulos-anamnese";
+import { AlertaMidia } from "@/components/bion/consulta/AlertaMidia";
 
 type Role = "paciente" | "medico" | "admin";
-
-/** Rótulos das etapas da anamnese (mesma ordem canônica da rota /api/anamnese). */
-const ROTULOS_ANAMNESE: Record<string, string> = {
-  identificacao: "Identificação",
-  queixa: "Queixa principal",
-  historia: "História da doença atual",
-  sistemas: "Revisão de sistemas",
-  antecedentes: "Antecedentes pessoais",
-  familia: "Antecedentes familiares",
-  habitos: "Hábitos e estilo de vida",
-  gineco: "História ginecológica/sexual",
-  psicossocial: "Aspectos psicossociais",
-  medicamentos: "Medicamentos",
-  documentos: "Documentos e exames",
-  fechamento: "Revisão e fechamento",
-};
 
 export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
   const {
@@ -403,8 +389,9 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
               ref={videoRemotoRef}
               autoPlay
               playsInline
+              aria-label={`Vídeo de ${contraparteNome}`}
               className={`w-full h-full object-cover ${remotoPronto ? "" : "hidden"}`}
- />
+            />
 
             {/* Placeholder com estado real da sala */}
             {!remotoPronto && (
@@ -441,25 +428,29 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
                 autoPlay
                 muted
                 playsInline
+                aria-label="Sua câmera"
                 className={`w-full h-full object-cover mirror ${camAtivo ? "" : "hidden"}`}
               />
               {(!camAtivo || erroMidia) && (
                 <div className="flex flex-col items-center gap-1 text-slate-400 px-2 text-center">
                   <CameraOff className="w-5 h-5" />
-                  <span className="text-[10px] leading-tight">
-                    {erroMidia ? "Somente áudio/escuta" : "Câmera Desligada"}
+                  <span className="text-xs leading-tight">
+                    {erroMidia ? "Somente áudio/escuta" : "Câmera desligada"}
                   </span>
                 </div>
               )}
-              <span className="absolute bottom-1.5 left-1.5 text-[10px] font-bold px-2 py-0.5 rounded-md bg-black/70 backdrop-blur">
-                {compartilhando ? "Tela Compartilhada" : "Você"}
+              <span className="absolute bottom-1.5 left-1.5 text-xs font-bold px-2 py-0.5 rounded-md bg-black/70 backdrop-blur">
+                {compartilhando ? "Tela compartilhada" : "Você"}
               </span>
             </div>
           </div>
 
+          {erroMidia && <AlertaMidia mensagem={erroMidia} />}
+
           {/* Barra de Controles Inferior — rolagem horizontal no celular */}
           <div className="flex items-center gap-2 overflow-x-auto sm:flex-wrap sm:justify-center bg-slate-900/80 backdrop-blur p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:pb-3 rounded-2xl border border-white/10">
             <button
+              type="button"
               onClick={toggleMicLocal}
               className={`w-12 h-12 shrink-0 rounded-2xl flex items-center justify-center transition shadow-md ${
                 micAtivo
@@ -467,11 +458,14 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
                   : "bg-red-500 dark:bg-red-600 text-white hover:bg-red-600"
               }`}
               title={micAtivo ? "Silenciar microfone" : "Ativar microfone"}
+              aria-label={micAtivo ? "Silenciar microfone" : "Ativar microfone"}
+              aria-pressed={!micAtivo}
             >
               {micAtivo ? <Mic className="w-5 h-5" /> : <MicOff className="w-5 h-5" />}
             </button>
 
             <button
+              type="button"
               onClick={toggleCamLocal}
               className={`w-12 h-12 shrink-0 rounded-2xl flex items-center justify-center transition shadow-md ${
                 camAtivo
@@ -479,6 +473,8 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
                   : "bg-red-500 dark:bg-red-600 text-white hover:bg-red-600"
               }`}
               title={camAtivo ? "Desativar câmera" : "Ativar câmera"}
+              aria-label={camAtivo ? "Desativar câmera" : "Ativar câmera"}
+              aria-pressed={!camAtivo}
             >
               {camAtivo ? <Camera className="w-5 h-5" /> : <CameraOff className="w-5 h-5" />}
             </button>
@@ -580,7 +576,7 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
             {aba === "prontuario" && (
               <div className="space-y-4">
                 <div className="bg-white/5 rounded-2xl p-3.5 space-y-2 border border-white/10">
-                  <div className="font-bold text-slate-300 uppercase tracking-wider text-[11px]">
+                  <div className="font-bold text-slate-300 uppercase tracking-wider text-xs">
                     Dados do Paciente
                   </div>
                   <div className="text-slate-200">
@@ -599,13 +595,13 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
 
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="font-bold text-slate-300 uppercase tracking-wider text-[11px]">
+                    <span className="font-bold text-slate-300 uppercase tracking-wider text-xs">
                       Evolução Clínica
                     </span>
                     {role === "medico" && (
                       <button
                         onClick={inserirModeloResumo}
-                        className="text-[11px] font-bold text-primary hover:underline flex items-center gap-1"
+                        className="text-xs font-bold text-primary hover:underline flex items-center gap-1"
                       >
                         <Sparkles className="w-3.5 h-3.5" /> Inserir modelo de evolução
                       </button>
@@ -629,11 +625,11 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
               <div className="space-y-3">
                 <div className="bg-white/5 rounded-2xl p-3.5 border border-white/10">
                   <div className="flex items-center justify-between gap-2">
-                    <div className="font-bold text-slate-300 uppercase tracking-wider text-[11px]">
+                    <div className="font-bold text-slate-300 uppercase tracking-wider text-xs">
                       Anamnese · BION IA
                     </div>
                     <span
-                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                      className={`text-xs font-bold px-2 py-0.5 rounded-full ${
                         anamneseAtual.status === "concluida"
                           ? "bg-emerald-500/15 text-emerald-300"
                           : "bg-amber-500/15 text-amber-300"
@@ -652,7 +648,7 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
                     <FileText className="w-4 h-4 text-primary shrink-0" />
                     <div className="min-w-0">
                       <div className="font-bold text-white truncate">{d.nome}</div>
-                      <div className="text-[10px] text-slate-400 truncate">
+                      <div className="text-xs text-slate-400 truncate">
                         {d.exameImportado ? `Laudo laboratorial importado${d.resumo ? ` — ${d.resumo}` : ""}` : "Documento anexado na anamnese"}
                       </div>
                     </div>
@@ -666,7 +662,7 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
                 ) : (
                   Object.entries(anamneseAtual.coleta).map(([etapa, campos]) => (
                     <div key={etapa} className="bg-white/5 rounded-2xl p-3.5 border border-white/10 space-y-1.5">
-                      <div className="font-bold text-slate-300 uppercase tracking-wider text-[11px]">
+                      <div className="font-bold text-slate-300 uppercase tracking-wider text-xs">
                         {ROTULOS_ANAMNESE[etapa] ?? etapa}
                       </div>
                       {Object.entries(campos)
@@ -703,7 +699,7 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
                         <FileText className="w-4 h-4 text-primary shrink-0" />
                         <div className="min-w-0">
                           <div className="font-bold text-white truncate">{a.nome}</div>
-                          <div className="text-[10px] text-slate-400">
+                          <div className="text-xs text-slate-400">
                             {a.tipo} • {a.tamanhoKb} KB
                           </div>
                         </div>
@@ -728,7 +724,7 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
                         m.minha ? "bg-white/10" : "bg-primary/20 border border-primary/30"
                       }`}
                     >
-                      <div className="flex justify-between font-bold text-slate-300 text-[10px]">
+                      <div className="flex justify-between font-bold text-slate-300 text-xs">
                         <span>{m.minha ? "Você" : role === "medico" ? "Marina Silva" : "Dra. Ana Ribeiro"}</span>
                         <span>{m.hora}</span>
                       </div>
@@ -736,7 +732,7 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
                     </div>
                   ))}
                   {chatMsgs.length === 0 && (
-                    <div className="text-slate-500 text-center py-6 text-[11px]">
+                    <div className="text-slate-500 text-center py-6 text-xs">
                       Nenhuma mensagem ainda. As mensagens vão direto para o outro
                       participante da consulta.
                     </div>
@@ -772,7 +768,7 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
                     <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
                     Transcrição Ativa em Tempo Real
                   </span>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300">
+                  <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300">
                     demonstração
                   </span>
                 </div>
@@ -783,7 +779,7 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
                       key={idx}
                       className="p-3 rounded-2xl bg-white/5 border border-white/10 text-xs space-y-1"
                     >
-                      <div className="font-bold text-primary text-[11px]">{t.autor}:</div>
+                      <div className="font-bold text-primary text-xs">{t.autor}:</div>
                       <p className="text-slate-300 leading-relaxed italic">“{t.fala}”</p>
                     </div>
                   ))}
