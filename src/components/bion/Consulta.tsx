@@ -3,35 +3,22 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
-  Mic,
-  MicOff,
-  Camera,
-  CameraOff,
-  MonitorUp,
-  Paperclip,
-  PhoneOff,
-  Clock,
-  Wifi,
-  MessageSquare,
   FileText,
   Download,
   Upload,
   Pill,
   Award,
   Sparkles,
-  Check,
   Send,
-  Bot,
-  AlertCircle,
   X,
-  Shield,
-  Plus,
 } from "lucide-react";
 import { useBion as useStore, type AnamneseResumo } from "@/lib/bion-store";
 import { ModalBion } from "@/components/bion/ModalBion";
 import { useTeleconsulta } from "@/lib/use-teleconsulta";
 import { ROTULOS_ANAMNESE } from "@/components/bion/consulta/rotulos-anamnese";
-import { AlertaMidia } from "@/components/bion/consulta/AlertaMidia";
+import { ConsultaBarraSuperior } from "@/components/bion/consulta/BarraSuperior";
+import { ConsultaAreaVideo } from "@/components/bion/consulta/AreaVideo";
+import { ConsultaControlesMidia } from "@/components/bion/consulta/ControlesMidia";
 
 type Role = "paciente" | "medico" | "admin";
 
@@ -327,220 +314,47 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
 
   return (
     <div className="min-h-[100dvh] lg:h-[100dvh] lg:overflow-hidden bg-slate-950 flex flex-col text-white">
-      {/* Barra Superior */}
-      <div className="h-16 px-4 md:px-6 flex items-center justify-between border-b border-white/10 bg-slate-900/90 backdrop-blur">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-primary flex items-center justify-center font-bold text-sm shadow-sm">
-            {iniciais(contraparteNome)}
-          </div>
-          <div className="min-w-0">
-            <div className="text-sm font-bold truncate flex items-center gap-2">
-              <span>
-                {contraparteNome}
-                {role === "medico" ? " (Paciente)" : " (Médica)"}
-              </span>
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            </div>
-            <div className="text-xs text-slate-400 truncate">{contraparteDetalhe}</div>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-4 text-xs">
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 font-mono font-bold">
-            <Clock className="w-3.5 h-3.5 text-primary" /> {tempo}
-          </div>
-          <div
-            className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full border font-semibold ${
-              statusSala === "conectado"
-                ? "bg-emerald-500/10 dark:bg-emerald-400/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400"
-                : statusSala === "instavel"
-                  ? "bg-amber-500/10 dark:bg-amber-400/10 border-amber-500/30 text-amber-600 dark:text-amber-400"
-                  : "bg-white/5 border-white/10 text-slate-300"
-            }`}
-          >
-            <span
-              className={`w-2 h-2 rounded-full animate-pulse ${
-                statusSala === "conectado" ? "bg-emerald-400" : "bg-slate-400"
-              }`}
-            />
-            {statusSala === "conectado"
-              ? "P2P Conectado"
-              : statusSala === "instavel"
-                ? "Reconectando…"
-                : statusSala === "conectando-p2p"
-                  ? "Negociando mídia…"
-                  : statusSala === "encerrada"
-                    ? "Chamada encerrada"
-                    : "Sala aberta"}
-          </div>
-          <div className="hidden md:flex items-center gap-1 text-slate-400">
-            <Shield className="w-3.5 h-3.5 text-primary" /> Criptografia Ponta a Ponta (DTLS-SRTP)
-          </div>
-        </div>
-      </div>
+      <ConsultaBarraSuperior
+        contraparteNome={contraparteNome}
+        contraparteDetalhe={contraparteDetalhe}
+        role={role}
+        tempo={tempo}
+        statusSala={statusSala}
+        iniciais={iniciais}
+      />
 
       {/* Área Principal: vídeo em cima + painel embaixo no celular; lado a lado no desktop */}
       <div className="flex-1 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden">
         {/* Painel do Vídeo */}
         <div className="flex-1 flex flex-col p-3 lg:p-5 gap-4 min-w-0">
-          <div className="aspect-video lg:aspect-auto lg:flex-1 lg:min-h-[320px] w-full shrink-0 lg:shrink relative rounded-3xl overflow-hidden bg-gradient-to-br from-slate-800 via-slate-900 to-slate-950 border border-white/10 flex items-center justify-center shadow-2xl">
-            {/* Feed Remoto REAL (WebRTC P2P) */}
-            <video
-              ref={videoRemotoRef}
-              autoPlay
-              playsInline
-              aria-label={`Vídeo de ${contraparteNome}`}
-              className={`w-full h-full object-cover ${remotoPronto ? "" : "hidden"}`}
-            />
-
-            {/* Placeholder com estado real da sala */}
-            {!remotoPronto && (
-              <div className="flex flex-col items-center gap-4">
-                <div className="w-28 h-28 rounded-3xl bg-primary/20 border-2 border-primary/40 flex items-center justify-center text-4xl font-extrabold text-white shadow-xl">
-                  {iniciais(contraparteNome)}
-                </div>
-                <div className="text-center">
-                  <div className="text-lg font-bold">
-                    {contraparteNome}
-                  </div>
-                  <div className="text-xs text-slate-400 mt-0.5 flex items-center justify-center gap-2">
-                    <span
-                      className={`w-1.5 h-1.5 rounded-full animate-pulse ${
-                        outroOnline ? "bg-emerald-400" : "bg-slate-500"
-                      }`}
-                    />
-                    {statusSala === "encerrada"
-                      ? "Chamada encerrada"
-                      : statusSala === "conectando-p2p"
-                        ? "Negociando conexão segura…"
-                        : outroOnline
-                          ? "Na sala — conectando mídia…"
-                          : "Aguardando o outro participante entrar na sala"}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Picture-in-Picture Local */}
-            <div className="absolute top-2.5 right-2.5 sm:top-4 sm:right-4 w-28 h-20 sm:w-36 sm:h-28 md:w-52 md:h-36 rounded-2xl overflow-hidden bg-slate-900 border-2 border-white/20 shadow-2xl flex items-center justify-center text-xs">
-              <video
-                ref={videoLocalRef}
-                autoPlay
-                muted
-                playsInline
-                aria-label="Sua câmera"
-                className={`w-full h-full object-cover mirror ${camAtivo ? "" : "hidden"}`}
-              />
-              {(!camAtivo || erroMidia) && (
-                <div className="flex flex-col items-center gap-1 text-slate-400 px-2 text-center">
-                  <CameraOff className="w-5 h-5" />
-                  <span className="text-xs leading-tight">
-                    {erroMidia ? "Somente áudio/escuta" : "Câmera desligada"}
-                  </span>
-                </div>
-              )}
-              <span className="absolute bottom-1.5 left-1.5 text-xs font-bold px-2 py-0.5 rounded-md bg-black/70 backdrop-blur">
-                {compartilhando ? "Tela compartilhada" : "Você"}
-              </span>
-            </div>
-          </div>
-
-          {erroMidia && <AlertaMidia mensagem={erroMidia} />}
-
-          {/* Barra de Controles Inferior — rolagem horizontal no celular */}
-          <div className="flex items-center gap-2 overflow-x-auto sm:flex-wrap sm:justify-center bg-slate-900/80 backdrop-blur p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:pb-3 rounded-2xl border border-white/10">
-            <button
-              type="button"
-              onClick={toggleMicLocal}
-              className={`w-12 h-12 shrink-0 rounded-2xl flex items-center justify-center transition shadow-md ${
-                micAtivo
-                  ? "bg-white/10 hover:bg-white/20 text-white"
-                  : "bg-red-500 dark:bg-red-600 text-white hover:bg-red-600"
-              }`}
-              title={micAtivo ? "Silenciar microfone" : "Ativar microfone"}
-              aria-label={micAtivo ? "Silenciar microfone" : "Ativar microfone"}
-              aria-pressed={!micAtivo}
-            >
-              {micAtivo ? <Mic className="w-5 h-5" /> : <MicOff className="w-5 h-5" />}
-            </button>
-
-            <button
-              type="button"
-              onClick={toggleCamLocal}
-              className={`w-12 h-12 shrink-0 rounded-2xl flex items-center justify-center transition shadow-md ${
-                camAtivo
-                  ? "bg-white/10 hover:bg-white/20 text-white"
-                  : "bg-red-500 dark:bg-red-600 text-white hover:bg-red-600"
-              }`}
-              title={camAtivo ? "Desativar câmera" : "Ativar câmera"}
-              aria-label={camAtivo ? "Desativar câmera" : "Ativar câmera"}
-              aria-pressed={!camAtivo}
-            >
-              {camAtivo ? <Camera className="w-5 h-5" /> : <CameraOff className="w-5 h-5" />}
-            </button>
-
-            <button
-              onClick={toggleTela}
-              className={`w-12 h-12 shrink-0 rounded-2xl flex items-center justify-center transition shadow-md ${
-                compartilhando
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-white/10 hover:bg-white/20 text-white"
-              }`}
-              title="Compartilhar tela"
-            >
-              <MonitorUp className="w-5 h-5" />
-            </button>
-
-            <button
-              onClick={() => fileRef.current?.click()}
-              className="w-12 h-12 shrink-0 rounded-2xl bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition shadow-md"
-              title="Enviar exame ou arquivo"
-            >
-              <Paperclip className="w-5 h-5" />
-            </button>
-
-            {role === "medico" && (
-              <>
-                <button
-                  onClick={() => setModalReceita(true)}
-                  className="px-4 h-12 shrink-0 rounded-2xl bg-emerald-600/90 hover:bg-emerald-600 text-white text-xs font-bold flex items-center gap-1.5 transition shadow-md"
-                >
-                  <Pill className="w-4 h-4" /> Prescrever Receita
-                </button>
-                <button
-                  onClick={() => setModalAtestado(true)}
-                  className="px-4 h-12 shrink-0 rounded-2xl bg-primary text-primary-foreground text-xs font-bold flex items-center gap-1.5 transition shadow-md"
-                >
-                  <Award className="w-4 h-4" /> Emitir Atestado
-                </button>
-                <button
-                  onClick={() => setModalExame(true)}
-                  className="px-4 h-12 shrink-0 rounded-2xl bg-violet-600/90 hover:bg-violet-600 text-white text-xs font-bold flex items-center gap-1.5 transition shadow-md"
-                >
-                  <FileText className="w-4 h-4" /> Solicitar Exame
-                </button>
-              </>
-            )}
-
-            <button
-              onClick={encerrar}
-              className="px-6 h-12 shrink-0 rounded-2xl bg-red-600 dark:bg-red-500 hover:bg-red-700 text-white text-xs font-extrabold flex items-center gap-2 transition shadow-lg shadow-red-600/30"
-            >
-              <PhoneOff className="w-4 h-4" /> Encerrar Atendimento
-            </button>
-
-            <input
-                  aria-label="Anexar arquivo"
-              ref={fileRef}
-              type="file"
-              multiple
-              className="hidden"
-              onChange={(e) => {
-                enviarArquivo(e.target.files);
-                e.target.value = "";
-              }}
-            />
-          </div>
+          <ConsultaAreaVideo
+            videoRemotoRef={videoRemotoRef}
+            videoLocalRef={videoLocalRef}
+            remotoPronto={remotoPronto}
+            camAtivo={camAtivo}
+            erroMidia={erroMidia}
+            compartilhando={compartilhando}
+            contraparteNome={contraparteNome}
+            iniciais={iniciais}
+            statusSala={statusSala}
+            outroOnline={outroOnline}
+          />
+          <ConsultaControlesMidia
+            role={role}
+            micAtivo={micAtivo}
+            camAtivo={camAtivo}
+            compartilhando={compartilhando}
+            onToggleMic={toggleMicLocal}
+            onToggleCam={toggleCamLocal}
+            onToggleTela={toggleTela}
+            onAnexar={() => fileRef.current?.click()}
+            onReceita={() => setModalReceita(true)}
+            onAtestado={() => setModalAtestado(true)}
+            onExame={() => setModalExame(true)}
+            onEncerrar={encerrar}
+            fileRef={fileRef}
+            onArquivos={enviarArquivo}
+          />
         </div>
 
         {/* Painel Lateral — abaixo do vídeo no celular, ao lado no desktop */}

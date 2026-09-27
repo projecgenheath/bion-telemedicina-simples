@@ -28,56 +28,12 @@ import {
 } from "lucide-react";
 import { useBion, type Medico } from "@/lib/bion-store";
 import { ModalBion } from "@/components/bion/ModalBion";
-
-const ESPECIALIDADES = [
-  {
-    id: "clinica",
-    nome: "Clínica Geral",
-    desc: "Check-ups, sintomas gerais, receitas e atestados",
-    icone: Stethoscope,
-  },
-  {
-    id: "cardio",
-    nome: "Cardiologia",
-    desc: "Pressão arterial, coração, prevenção e arritmias",
-    icone: Heart,
-  },
-  {
-    id: "dermato",
-    nome: "Dermatologia",
-    desc: "Pele, cabelos, unhas, acne e alergias",
-    icone: Sparkles,
-  },
-  {
-    id: "pediatria",
-    nome: "Pediatria",
-    desc: "Saúde e desenvolvimento infantil e bebês",
-    icone: UserCheck,
-  },
-  {
-    id: "psico",
-    nome: "Psicologia",
-    desc: "Terapia online, ansiedade, estresse e suporte emocional",
-    icone: Stethoscope,
-  },
-  {
-    id: "ortopedia",
-    nome: "Ortopedia",
-    desc: "Dores articulares, postura, coluna e lesões",
-    icone: Stethoscope,
-  },
-];
-
-const SINTOMAS_RAPIDOS = [
-  "Dor de cabeça / Enxaqueca",
-  "Sintomas gripais / Febre",
-  "Renovação de receita de uso contínuo",
-  "Check-up geral de rotina",
-  "Avaliação de exames laboratoriais",
-  "Pressão alta / Palpitações",
-  "Alergia na pele / Coceira",
-  "Dor nas costas / Postura",
-];
+import {
+  ESPECIALIDADES,
+  SINTOMAS_RAPIDOS,
+  PASSOS_AGENDAMENTO,
+} from "@/components/bion/agendamento/constantes";
+import { AgendamentoBarraProgresso } from "@/components/bion/agendamento/BarraProgresso";
 
 export function AgendamentoFluxo({
   onDone,
@@ -108,16 +64,7 @@ export function AgendamentoFluxo({
   const [processandoPagamento, setProcessandoPagamento] = useState(false);
   const [medicoModal, setMedicoModal] = useState<Medico | null>(null);
 
-  const steps = [
-    "Especialidade",
-    "Médico",
-    "Data",
-    "Horário",
-    "Motivo & Sintomas",
-    "Anexar Exames",
-    "Pagamento",
-    "Confirmação",
-  ];
+  const steps = PASSOS_AGENDAMENTO;
 
   const medicosFiltrados = medicos.filter(
     (m) => m.status === "ativo" && (!especialidade || m.especialidade === especialidade),
@@ -225,33 +172,7 @@ export function AgendamentoFluxo({
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
-      {/* Barra de Progresso */}
-      <div className="bg-card border rounded-3xl p-6 shadow-sm">
-        <div className="flex items-center justify-between gap-2">
-          <div>
-            <span className="text-xs font-bold text-primary uppercase tracking-wider">
-              Passo {step + 1} de {steps.length}
-            </span>
-            <h1 className="text-2xl font-extrabold tracking-tight mt-0.5">{steps[step]}</h1>
-          </div>
-          {step > 0 && step < 7 && (
-            <button
-              onClick={passoAnterior}
-              className="flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground px-3 py-1.5 rounded-xl hover:bg-muted transition"
-            >
-              <ChevronLeft className="w-4 h-4" /> Voltar
-            </button>
-          )}
-        </div>
-
-        {/* Linha de progresso */}
-        <div className="mt-4 h-2 rounded-full bg-muted overflow-hidden">
-          <div
-            className="h-full bg-primary transition-all duration-300 rounded-full"
-            style={{ width: `${((step + 1) / steps.length) * 100}%` }}
-          />
-        </div>
-      </div>
+      <AgendamentoBarraProgresso step={step} steps={steps} onVoltar={passoAnterior} />
 
       {/* Passo 1: Especialidade */}
       {step === 0 && (
