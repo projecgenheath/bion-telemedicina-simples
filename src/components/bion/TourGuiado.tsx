@@ -132,7 +132,7 @@ export function TourGuiado({ role }: { role: Role }) {
           <div className="w-12 h-12 rounded-2xl bg-primary-soft text-primary flex items-center justify-center">
             <passo.icon className="w-6 h-6" />
           </div>
-          <button
+          <button type="button"
             onClick={fechar}
             className="p-2 rounded-xl text-muted-foreground hover:bg-muted transition"
             title="Fechar"
@@ -159,7 +159,7 @@ export function TourGuiado({ role }: { role: Role }) {
         </div>
 
         <div className="flex items-center justify-between gap-3 pt-1">
-          <button
+          <button type="button"
             onClick={fechar}
             className="text-xs font-bold text-muted-foreground hover:text-foreground transition px-2 py-2"
           >
@@ -167,14 +167,14 @@ export function TourGuiado({ role }: { role: Role }) {
           </button>
           <div className="flex gap-2">
             {i > 0 && (
-              <button
+              <button type="button"
                 onClick={() => setI((v) => v - 1)}
                 className="px-4 py-2.5 rounded-2xl border text-xs font-bold hover:bg-muted transition"
               >
                 Voltar
               </button>
             )}
-            <button
+            <button type="button"
               onClick={() => (ultimo ? fechar() : setI((v) => v + 1))}
               className="px-6 py-2.5 rounded-2xl bg-primary text-primary-foreground text-xs font-bold shadow-md hover:opacity-90 transition"
             >

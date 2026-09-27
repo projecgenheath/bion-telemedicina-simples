@@ -67,7 +67,7 @@ export function PassoData(p: AgendamentoCorpoProps) {
         {diasDisponiveis.map((d, i) => {
           const isSelected = dataSelecionada === d.rotulo;
           return (
-            <button
+            <button type="button"
               key={i}
               onClick={() => {
                 setDataSelecionada(d.rotulo);

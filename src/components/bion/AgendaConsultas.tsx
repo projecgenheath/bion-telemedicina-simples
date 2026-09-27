@@ -93,13 +93,13 @@ function LinhaConsulta({ c, perfil }: { c: Consulta; perfil: "paciente" | "medic
 
       {!cancelada && !concluida && (
         <div className="flex gap-2 mt-3">
-          <button
+          <button type="button"
             onClick={() => setModal("remarcar")}
             className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border text-sm font-medium hover:border-primary hover:text-primary transition"
           >
             <RefreshCw className="w-4 h-4" /> Remarcar
           </button>
-          <button
+          <button type="button"
             onClick={() => setModal("cancelar")}
             className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border text-sm font-medium text-destructive hover:bg-destructive/5 transition"
           >
@@ -148,13 +148,13 @@ function LinhaConsulta({ c, perfil }: { c: Consulta; perfil: "paciente" | "medic
                   ))}
                 </select>
                 <div className="flex gap-2 mt-6">
-                  <button
+                  <button type="button"
                     onClick={() => setModal(null)}
                     className="flex-1 py-3 rounded-xl border font-medium"
                   >
                     Voltar
                   </button>
-                  <button
+                  <button type="button"
                     onClick={() => {
                       cancelarConsulta(c.id, motivo);
                       toast.warning("Consulta cancelada", {
@@ -178,7 +178,7 @@ function LinhaConsulta({ c, perfil }: { c: Consulta; perfil: "paciente" | "medic
                   <div className="text-sm font-medium mb-2">Data</div>
                   <div className="flex flex-wrap gap-2">
                     {DATAS.map((d) => (
-                      <button
+                      <button type="button"
                         key={d}
                         onClick={() => setData(d)}
                         className={`px-3 py-2 rounded-xl border text-sm ${data === d ? "border-primary bg-primary-soft text-primary" : ""}`}
@@ -192,7 +192,7 @@ function LinhaConsulta({ c, perfil }: { c: Consulta; perfil: "paciente" | "medic
                   <div className="text-sm font-medium mb-2">Horário</div>
                   <div className="grid grid-cols-3 gap-2">
                     {HORAS.map((h) => (
-                      <button
+                      <button type="button"
                         key={h}
                         onClick={() => setHora(h)}
                         className={`py-2 rounded-xl border text-sm ${hora === h ? "border-primary bg-primary-soft text-primary" : ""}`}
@@ -203,13 +203,13 @@ function LinhaConsulta({ c, perfil }: { c: Consulta; perfil: "paciente" | "medic
                   </div>
                 </div>
                 <div className="flex gap-2 mt-6">
-                  <button
+                  <button type="button"
                     onClick={() => setModal(null)}
                     className="flex-1 py-3 rounded-xl border font-medium"
                   >
                     Voltar
                   </button>
-                  <button
+                  <button type="button"
                     onClick={() => {
                       remarcarConsulta(c.id, data, hora);
                       toast.success("Consulta remarcada", {

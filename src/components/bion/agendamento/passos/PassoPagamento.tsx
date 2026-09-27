@@ -91,7 +91,7 @@ export function PassoPagamento(p: AgendamentoCorpoProps) {
             { id: "cartao", label: "Cartão", icone: CreditCard },
             { id: "boleto", label: "Boleto", icone: FileText },
           ].map((tab) => (
-            <button
+            <button type="button"
               key={tab.id}
               onClick={() => setMetodoPagamento(tab.id as "pix" | "cartao" | "boleto")}
               className={`py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition ${
@@ -134,7 +134,7 @@ export function PassoPagamento(p: AgendamentoCorpoProps) {
                 value="00020126580014br.gov.bcb.pix0136bion-telemedicina-pay-987655204000053039865802BR5925BION..."
                 className="flex-1 px-3 py-2 text-xs rounded-xl border bg-muted font-mono"
               />
-              <button
+              <button type="button"
                 onClick={copiarChavePix}
                 className="px-4 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-bold flex items-center gap-1 hover:opacity-90 transition shrink-0"
               >
@@ -206,7 +206,7 @@ export function PassoPagamento(p: AgendamentoCorpoProps) {
           </div>
         )}
 
-        <button
+        <button type="button"
           disabled={processandoPagamento}
           onClick={finalizarAgendamento}
           className="w-full py-4 rounded-2xl text-primary-foreground font-bold text-base shadow-lg hover:opacity-90 active:scale-[0.99] transition flex items-center justify-center gap-2 disabled:opacity-50"

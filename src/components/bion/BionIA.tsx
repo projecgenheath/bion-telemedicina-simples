@@ -299,7 +299,7 @@ export function BionIA() {
         <div className="px-5 py-2.5 border-t bg-muted/40 flex items-center gap-2 overflow-x-auto">
           <span className="text-xs font-bold text-muted-foreground shrink-0">Sugestões:</span>
           {promptsSugeridos.map((p, i) => (
-            <button
+            <button type="button"
               key={i}
               onClick={() => enviarMensagem(p)}
               className="text-xs px-3 py-1.5 rounded-full bg-card border hover:border-primary hover:text-primary transition shrink-0 whitespace-nowrap"
@@ -325,7 +325,7 @@ export function BionIA() {
             }
             className="flex-1 bg-muted px-4 py-3 rounded-2xl text-sm outline-none focus:ring-2 focus:ring-primary/20 focus:bg-background border border-transparent focus:border-border transition"
           />
-          <button
+          <button type="button"
             onClick={() => enviarMensagem()}
             className="w-12 h-12 rounded-2xl bg-primary text-primary-foreground flex items-center justify-center hover:opacity-90 active:scale-95 transition shadow-sm shrink-0"
           >

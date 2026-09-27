@@ -170,7 +170,7 @@ export function PerfilPainel({ onSair }: { onSair: () => void }) {
               {INICIAIS(sessao.nome)}
             </div>
           )}
-          <button
+          <button type="button"
             onClick={() => inputFotoRef.current?.click()}
             aria-label="Alterar foto de perfil"
             className="absolute -bottom-1 -right-1 bp-acao w-9 h-9 inline-flex items-center justify-center !rounded-full"
@@ -186,7 +186,7 @@ export function PerfilPainel({ onSair }: { onSair: () => void }) {
       <div className="bp-glass p-5">
         <div className="flex items-center justify-between mb-2">
           <h3 className="text-sm font-bold text-bion-ink dark:text-bion-paper">Dados pessoais</h3>
-          <button
+          <button type="button"
             onClick={() => {
               if (editando) void salvar();
               else {
@@ -221,7 +221,7 @@ export function PerfilPainel({ onSair }: { onSair: () => void }) {
             <input value={form.alergias} onChange={(e) => setForm((f) => ({ ...f, alergias: e.target.value }))} placeholder="Alergias (separadas por vírgula)" aria-label="Alergias separadas por vírgula" className="bp-entrada w-full px-4 py-2.5 text-sm" />
             <input value={form.comorbidades} onChange={(e) => setForm((f) => ({ ...f, comorbidades: e.target.value }))} placeholder="Comorbidades (separadas por vírgula)" aria-label="Comorbidades separadas por vírgula" className="bp-entrada w-full px-4 py-2.5 text-sm" />
             <input value={form.medicamentos} onChange={(e) => setForm((f) => ({ ...f, medicamentos: e.target.value }))} placeholder="Medicamentos em uso (separados por vírgula)" aria-label="Medicamentos separados por vírgula" className="bp-entrada w-full px-4 py-2.5 text-sm" />
-            <button onClick={() => void salvar()} disabled={salvando} className="bp-acao w-full py-2.5 text-sm">
+            <button type="button" onClick={() => void salvar()} disabled={salvando} className="bp-acao w-full py-2.5 text-sm">
               {salvando ? "Salvando..." : "Salvar alterações"}
             </button>
           </div>
@@ -328,14 +328,14 @@ export function PerfilPainel({ onSair }: { onSair: () => void }) {
       <div className="bp-glass p-5 space-y-1">
         <h3 className="text-sm font-bold text-bion-ink dark:text-bion-paper mb-2">Modo do app</h3>
         <div className="grid grid-cols-2 gap-2 rounded-full bg-bion-ink/5 dark:bg-white/5 p-1.5">
-          <button
+          <button type="button"
             onClick={() => alternarTema("claro")}
             aria-pressed={tema === "claro"}
             className={`rounded-full py-2.5 text-sm font-semibold inline-flex items-center justify-center gap-2 transition ${tema === "claro" ? "bp-acao" : "text-bion-ink/60 dark:text-white/60"}`}
           >
             <Sun className="w-4 h-4" /> Clean
           </button>
-          <button
+          <button type="button"
             onClick={() => alternarTema("escuro")}
             aria-pressed={tema === "escuro"}
             className={`rounded-full py-2.5 text-sm font-semibold inline-flex items-center justify-center gap-2 transition ${tema === "escuro" ? "bp-acao" : "text-bion-ink/60 dark:text-white/60"}`}
@@ -344,13 +344,13 @@ export function PerfilPainel({ onSair }: { onSair: () => void }) {
           </button>
         </div>
 
-        <button onClick={() => router.push("/suporte")} className="w-full flex items-center justify-between py-3 px-1 group" role="link">
+        <button type="button" onClick={() => router.push("/suporte")} className="w-full flex items-center justify-between py-3 px-1 group" role="link">
           <span className="text-sm font-semibold text-bion-ink dark:text-bion-paper inline-flex items-center gap-2.5">
             <LifeBuoy className="w-4 h-4 opacity-60" /> Suporte
           </span>
           <ChevronRight className="w-4 h-4 opacity-40 group-hover:translate-x-0.5 transition" />
         </button>
-        <button onClick={() => router.push("/privacidade")} className="w-full flex items-center justify-between py-3 px-1 group" role="link">
+        <button type="button" onClick={() => router.push("/privacidade")} className="w-full flex items-center justify-between py-3 px-1 group" role="link">
           <span className="text-sm font-semibold text-bion-ink dark:text-bion-paper inline-flex items-center gap-2.5">
             <ShieldCheck className="w-4 h-4 opacity-60" /> Termos e privacidade
           </span>
@@ -358,7 +358,7 @@ export function PerfilPainel({ onSair }: { onSair: () => void }) {
         </button>
       </div>
 
-      <button
+      <button type="button"
         onClick={onSair}
         className="w-full rounded-full border-2 border-red-500/30 text-red-600 dark:text-red-400 py-3.5 text-sm font-bold inline-flex items-center justify-center gap-2 hover:bg-red-500/10 transition"
       >

@@ -100,14 +100,14 @@ export function PassoConfirmacao(p: AgendamentoCorpoProps) {
       </div>
 
       <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
-        <button
+        <button type="button"
           onClick={onGoToWaitingRoom}
           className="w-full sm:w-auto px-8 py-3.5 rounded-2xl text-primary-foreground font-bold text-sm shadow-md hover:opacity-90 transition flex items-center justify-center gap-2"
           style={{ backgroundColor: "var(--accent)" }}
         >
           Ir para Sala de Espera <ChevronRight className="w-4 h-4" />
         </button>
-        <button
+        <button type="button"
           onClick={onDone}
           className="w-full sm:w-auto px-8 py-3.5 rounded-2xl border font-bold text-sm hover:bg-muted transition"
         >

@@ -97,7 +97,7 @@ export function PassoAnexos(p: AgendamentoCorpoProps) {
                   <div className="truncate font-medium">{arq.nome}</div>
                   <span className="text-muted-foreground shrink-0">{arq.tamanhoKb} KB</span>
                 </div>
-                <button
+                <button type="button"
                   onClick={() => removerArquivo(idx)}
                   className="p-1.5 rounded-lg text-muted-foreground hover:text-red-500 hover:bg-card transition"
                 >
@@ -108,7 +108,7 @@ export function PassoAnexos(p: AgendamentoCorpoProps) {
           </div>
         )}
 
-        <button
+        <button type="button"
           onClick={proximoPasso}
           className="w-full py-3.5 rounded-2xl bg-primary text-primary-foreground font-bold text-sm shadow-md hover:opacity-90 transition flex items-center justify-center gap-2"
         >

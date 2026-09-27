@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MessageSquare, ShieldCheck } from "lucide-react";
+import { EstadoVazio } from "@/components/bion/ui/EstadoVazio";
 import { useBion } from "@/lib/bion-store";
 
 type Contato = {
@@ -124,15 +125,17 @@ export function Mensagens() {
             Fale diretamente com seu médico especialista entre as consultas.
           </p>
         </div>
-        <div className="bg-card border rounded-3xl p-10 text-center">
-          <MessageSquare className="w-10 h-10 mx-auto text-muted-foreground" />
-          <p className="mt-4 text-sm font-semibold">Nenhuma conversa disponível</p>
-          <p className="mt-1 text-xs text-muted-foreground max-w-sm mx-auto">
-            {sessao.role === "paciente"
-              ? "Assim que você agendar sua primeira consulta, seu médico aparecerá aqui para troca de mensagens."
-              : "Seus contatos aparecerão aqui conforme consultas e cadastros forem realizados na plataforma."}
-          </p>
-        </div>
+        <EstadoVazio
+          icone={MessageSquare}
+          titulo="Nenhuma conversa disponível"
+          descricao={
+            sessao.role === "paciente"
+              ? "Após a primeira consulta, você poderá conversar com o médico por aqui."
+              : sessao.role === "medico"
+                ? "Seus pacientes aparecerão aqui após o primeiro atendimento."
+                : "Não há usuários cadastrados para conversar."
+          }
+        />
       </div>
     );
   }
@@ -152,7 +155,7 @@ export function Mensagens() {
         {/* Lista de conversas */}
         <div className="space-y-2 md:max-h-[560px] md:overflow-y-auto md:pr-1">
           {conversas.map(({ contato, ultima, naoLidas, online }) => (
-            <button
+            <button type="button"
               key={contato.id}
               onClick={() => setAtivaId(contato.id)}
               className={`w-full text-left bg-card border rounded-2xl p-3 flex items-center gap-3 transition ${
@@ -246,7 +249,7 @@ export function Mensagens() {
               placeholder={`Mensagem para ${c.nome}...`}
               className="flex-1 bg-muted rounded-2xl px-4 py-2.5 text-xs outline-none focus:ring-2 focus:ring-primary/20"
             />
-            <button
+            <button type="button"
               onClick={enviar}
               disabled={!texto.trim()}
               className="px-5 py-2.5 rounded-2xl bg-primary text-primary-foreground text-xs font-bold hover:opacity-90 transition disabled:opacity-40"

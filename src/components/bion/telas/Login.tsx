@@ -30,6 +30,7 @@ export function Login() {
   const [modoCadastro, setModoCadastro] = useState(false);
   const [nome, setNome] = useState("");
   const [confirmaSenha, setConfirmaSenha] = useState("");
+  const [formErro, setFormErro] = useState<string | null>(null);
 
   const trocarAba = (r: Role) => {
     setTab(r);
@@ -42,42 +43,58 @@ export function Login() {
   const submeter = async () => {
     if (enviando) return;
     if (!identificador.trim() || !senha.trim()) {
-      toast.error("Preencha e-mail e senha.");
+      const msg = "Preencha e-mail e senha.";
+      setFormErro(msg);
+      toast.error(msg);
       return;
     }
+    setFormErro(null);
     setEnviando(true);
     const r = await entrar(identificador.trim(), senha);
     setEnviando(false);
     if (r.ok) {
       toast.success("Bem-vindo(a) de volta!");
       router.push(r.role === "paciente" ? "/paciente" : "/painel");
+    } else {
+      setFormErro("Não foi possível entrar. Verifique e-mail e senha.");
     }
   };
 
   const submeterCadastro = async () => {
     if (enviando) return;
     if (!nome.trim() || nome.trim().length < 3) {
-      toast.error("Informe seu nome completo.");
+      const msg = "Informe seu nome completo.";
+      setFormErro(msg);
+      toast.error(msg);
       return;
     }
     if (!identificador.trim().includes("@")) {
-      toast.error("Informe um e-mail válido.");
+      const msg = "Informe um e-mail válido.";
+      setFormErro(msg);
+      toast.error(msg);
       return;
     }
     if (senha.length < 10) {
-      toast.error("A senha deve ter pelo menos 10 caracteres.");
+      const msg = "A senha deve ter pelo menos 10 caracteres.";
+      setFormErro(msg);
+      toast.error(msg);
       return;
     }
     if (senha !== confirmaSenha) {
-      toast.error("As senhas não coincidem.");
+      const msg = "As senhas não coincidem.";
+      setFormErro(msg);
+      toast.error(msg);
       return;
     }
+    setFormErro(null);
     setEnviando(true);
     const r = await registrar(nome.trim(), identificador.trim(), senha);
     setEnviando(false);
     if (r.ok) {
       toast.success("Conta criada com sucesso! Bem-vindo(a) ao BION.");
       router.push(r.role === "paciente" ? "/paciente" : "/painel");
+    } else {
+      setFormErro("Não foi possível criar a conta. Tente novamente.");
     }
   };
 
@@ -247,6 +264,16 @@ export function Login() {
                   </div>
                 </div>
               </>
+            )}
+
+            {formErro && (
+              <div
+                role="alert"
+                aria-live="assertive"
+                className="rounded-2xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-xs font-semibold text-destructive"
+              >
+                {formErro}
+              </div>
             )}
 
             <button

@@ -74,7 +74,7 @@ export function PassoEspecialidade(p: AgendamentoCorpoProps) {
             (m) => m.especialidade === esp.nome && m.status === "ativo",
           ).length;
           return (
-            <button
+            <button type="button"
               key={esp.id}
               onClick={() => {
                 setEspecialidade(esp.nome);

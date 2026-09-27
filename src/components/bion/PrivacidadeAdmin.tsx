@@ -138,13 +138,13 @@ export function PrivacidadeAdmin() {
                     {p.consultas} consultas • {p.documentos} documentos • {p.avaliacoes} avaliações
                   </div>
                 </div>
-                <button
+                <button type="button"
                   onClick={() => setAcao({ tipo: "anonimizar", paciente: p.nome, pacienteId: p.id })}
                   className="px-4 py-2 rounded-xl border text-xs font-bold hover:bg-card transition flex items-center gap-1.5"
                 >
                   <EyeOff className="w-3.5 h-3.5" /> Anonimizar
                 </button>
-                <button
+                <button type="button"
                   onClick={() => setAcao({ tipo: "excluir", paciente: p.nome, pacienteId: p.id })}
                   className="px-4 py-2 rounded-xl bg-destructive/10 text-destructive text-xs font-bold hover:bg-destructive/20 transition flex items-center gap-1.5"
                 >
@@ -201,13 +201,13 @@ export function PrivacidadeAdmin() {
               O registro ficará salvo na auditoria.
             </p>
             <div className="flex justify-end gap-2 pt-1">
-              <button
+              <button type="button"
                 onClick={() => setAcao(null)}
                 className="px-5 py-2.5 rounded-2xl border text-xs font-bold hover:bg-muted transition"
               >
                 Cancelar
               </button>
-              <button
+              <button type="button"
                 onClick={confirmar}
                 className="px-5 py-2.5 rounded-2xl bg-destructive text-destructive-foreground text-xs font-bold shadow-md hover:opacity-90 transition"
               >

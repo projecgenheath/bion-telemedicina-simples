@@ -47,7 +47,7 @@ export function Lembretes() {
             para hoje
           </p>
         </div>
-        <button
+        <button type="button"
           onClick={() => setModalNovo(true)}
           className="px-5 py-3 rounded-2xl text-primary-foreground font-bold text-xs shadow-md hover:opacity-90 transition flex items-center gap-1.5 self-start sm:self-auto"
           style={{ backgroundColor: "var(--accent)" }}
@@ -81,7 +81,7 @@ export function Lembretes() {
             </div>
 
             <div className="flex items-center gap-2">
-              <button
+              <button type="button"
                 onClick={() => alternarLembrete(l.id)}
                 className={`w-9 h-9 rounded-xl border flex items-center justify-center transition ${
                   l.feito
@@ -92,7 +92,7 @@ export function Lembretes() {
               >
                 <Check className="w-4 h-4" />
               </button>
-              <button
+              <button type="button"
                 onClick={() => {
                   removerLembrete(l.id);
                   toast.info("Lembrete removido");

@@ -23,7 +23,7 @@ export function Arquivos({ perfil }: { perfil: "paciente" | "medico" }) {
 
   return (
     <div className="space-y-3">
-      <button
+      <button type="button"
         onClick={() => fileRef.current?.click()}
         className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl border border-dashed text-sm font-medium hover:border-primary hover:text-primary transition"
       >
@@ -61,7 +61,7 @@ export function Arquivos({ perfil }: { perfil: "paciente" | "medico" }) {
               Enviado pelo {a.enviadoPor === "medico" ? "médico" : "paciente"} • {a.consulta}
             </div>
           </div>
-          <button className="p-2 rounded-lg hover:bg-muted shrink-0" title="Baixar">
+          <button type="button" className="p-2 rounded-lg hover:bg-muted shrink-0" title="Baixar">
             <Download className="w-4 h-4 text-muted-foreground" />
           </button>
         </div>

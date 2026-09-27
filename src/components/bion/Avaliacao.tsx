@@ -49,14 +49,14 @@ export function AvaliacaoModal({
               {medico} • {especialidade}
             </p>
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted" aria-label="Fechar">
+          <button type="button" onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted" aria-label="Fechar">
             <X className="w-4 h-4 text-muted-foreground" />
           </button>
         </div>
 
         <div className="mt-5 flex justify-center gap-2">
           {[1, 2, 3, 4, 5].map((n) => (
-            <button
+            <button type="button"
               key={n}
               aria-label={`${n} estrela${n > 1 ? "s" : ""}`}
               onClick={() => setNota(n)}
@@ -82,10 +82,10 @@ export function AvaliacaoModal({
         />
 
         <div className="mt-4 flex justify-end gap-2">
-          <button onClick={onClose} className="px-4 py-2.5 rounded-xl border text-sm font-medium">
+          <button type="button" onClick={onClose} className="px-4 py-2.5 rounded-xl border text-sm font-medium">
             Agora não
           </button>
-          <button
+          <button type="button"
             onClick={enviar}
             disabled={nota < 1}
             className="px-4 py-2.5 rounded-xl text-primary-foreground text-sm font-medium disabled:opacity-50"

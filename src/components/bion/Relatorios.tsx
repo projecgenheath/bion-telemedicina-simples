@@ -313,13 +313,13 @@ export function Relatorios() {
           </p>
         </div>
         <div className="flex gap-2">
-          <button
+          <button type="button"
             onClick={exportarCSV}
             className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl border text-sm font-medium hover:bg-muted"
           >
             <Download className="w-4 h-4" /> CSV
           </button>
-          <button
+          <button type="button"
             onClick={exportarPDF}
             className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-primary-foreground text-sm font-medium"
             style={{ backgroundColor: "var(--accent)" }}
@@ -426,7 +426,7 @@ export function Relatorios() {
             <div className="font-semibold">
               {drill === "avaliacoes" ? "Avaliações detalhadas" : "Consultas detalhadas"}
             </div>
-            <button
+            <button type="button"
               onClick={() => setDrill(null)}
               className="text-sm text-muted-foreground inline-flex items-center gap-1"
             >
@@ -513,7 +513,7 @@ export function Relatorios() {
             <p className="text-sm text-muted-foreground">Sem dados para os filtros atuais.</p>
           )}
           {dados.especialidades.map(([esp, n]) => (
-            <button
+            <button type="button"
               key={esp}
               onClick={() => {
                 setEspecialidade(esp);
@@ -545,7 +545,7 @@ export function Relatorios() {
             <p className="text-sm text-muted-foreground">Sem dados para os filtros atuais.</p>
           )}
           {dados.medicos.map(([m, v]) => (
-            <button
+            <button type="button"
               key={m}
               onClick={() => {
                 setMedico(m);

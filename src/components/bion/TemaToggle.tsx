@@ -32,7 +32,7 @@ export function TemaToggle() {
   };
 
   return (
-    <button
+    <button type="button"
       onClick={alternar}
       className="p-2.5 rounded-2xl hover:bg-muted text-muted-foreground hover:text-foreground transition"
       title={escuro ? "Usar modo claro" : "Usar modo escuro"}

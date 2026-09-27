@@ -62,7 +62,7 @@ export function ConsultaPainelLateral({
           ["ia", "IA Transcrição"],
         ] as (["prontuario", "Prontuário"] | ["anamnese", "Anamnese"] | ["exames", "Exames"] | ["chat", "Chat"] | ["ia", "IA Transcrição"])[]
       ).map(([k, t]) => (
-        <button
+        <button type="button"
           key={k}
           onClick={() => setAba(k as Aba)}
           className={`flex-1 py-3.5 transition text-center ${
@@ -105,7 +105,7 @@ export function ConsultaPainelLateral({
                 Evolução Clínica
               </span>
               {role === "medico" && (
-                <button
+                <button type="button"
                   onClick={inserirModeloResumo}
                   className="text-xs font-bold text-primary hover:underline flex items-center gap-1"
                 >
@@ -188,7 +188,7 @@ export function ConsultaPainelLateral({
       {/* Aba Exames */}
       {aba === "exames" && (
         <div className="space-y-3">
-          <button
+          <button type="button"
             onClick={onAnexarExame}
             className="w-full py-3 rounded-2xl border border-dashed border-white/20 hover:border-primary text-slate-300 text-xs font-bold flex items-center justify-center gap-2 hover:bg-white/5 transition"
           >
@@ -210,7 +210,7 @@ export function ConsultaPainelLateral({
                     </div>
                   </div>
                 </div>
-                <button className="p-1.5 rounded-lg hover:bg-white/10 text-slate-400 hover:text-white">
+                <button type="button" className="p-1.5 rounded-lg hover:bg-white/10 text-slate-400 hover:text-white">
                   <Download className="w-3.5 h-3.5" />
                 </button>
               </div>
@@ -256,7 +256,7 @@ export function ConsultaPainelLateral({
               placeholder="Mensagem no chat da consulta..."
               className="flex-1 px-3 py-2 rounded-xl bg-white/10 border border-white/10 text-xs text-white outline-none focus:border-primary"
             />
-            <button
+            <button type="button"
               onClick={enviarChat}
               className="px-3 py-2 rounded-xl bg-primary text-primary-foreground font-bold"
             >
@@ -292,7 +292,7 @@ export function ConsultaPainelLateral({
           </div>
 
           {role === "medico" && (
-            <button
+            <button type="button"
               onClick={inserirModeloResumo}
               className="w-full py-3 rounded-2xl bg-primary text-primary-foreground font-bold text-xs shadow-md hover:opacity-90 transition flex items-center justify-center gap-2"
             >

@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import {
   Calendar,
@@ -111,8 +111,27 @@ function Shell({
 
   const rotuloPerfil = { paciente: "Paciente", medico: "Médico", admin: "Administrador" }[role];
 
+  const rotuloView =
+    menu.find((m) => m.view === view)?.label ??
+    ({
+      notificacoes: "Notificações",
+      dashboard: "Início",
+    } as Record<string, string>)[view] ??
+    "Página";
+
+  // SPA: ao trocar de tela, move o foco para o conteúdo e anuncia o título
+  useEffect(() => {
+    const el = document.getElementById("conteudo-principal");
+    if (el) {
+      el.focus({ preventScroll: true });
+    }
+  }, [view]);
+
   return (
     <div className="min-h-screen bg-background text-foreground flex overflow-x-hidden">
+      <div className="sr-only" aria-live="polite" aria-atomic="true">
+        {rotuloView}
+      </div>
       <a
         href="#conteudo-principal"
         className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[100] focus:px-4 focus:py-2.5 focus:rounded-xl focus:bg-primary focus:text-primary-foreground focus:text-sm focus:font-bold focus:shadow-lg"

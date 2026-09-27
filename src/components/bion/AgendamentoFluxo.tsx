@@ -287,7 +287,7 @@ export function AgendamentoFluxo({
                 <div className="text-xs text-muted-foreground">Valor por consulta</div>
                 <div className="text-xl font-extrabold text-primary">R$ {medicoModal.valor},00</div>
               </div>
-              <button
+              <button type="button"
                 onClick={() => {
                   setMedicoSelecionado(medicoModal);
                   setMedicoModal(null);

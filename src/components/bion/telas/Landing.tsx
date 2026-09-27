@@ -36,7 +36,7 @@ export function Landing() {
       <header className="max-w-6xl mx-auto w-full px-6 py-6 flex items-center justify-between">
         <Logo />
         <div className="flex items-center gap-3">
-          <button
+          <button type="button"
             onClick={() => router.push("/entrar")}
             className="px-6 py-2.5 rounded-full bg-primary text-primary-foreground font-bold text-sm hover:opacity-90 shadow-md transition"
           >
@@ -65,13 +65,13 @@ export function Landing() {
             </p>
 
             <div className="flex flex-wrap gap-3 pt-2">
-              <button
+              <button type="button"
                 onClick={() => router.push("/entrar")}
                 className="px-8 py-4 rounded-2xl bg-primary text-primary-foreground font-bold text-sm shadow-lg hover:opacity-90 transition flex items-center gap-2 active:scale-95"
               >
                 Começar Agora <ArrowRight className="w-4 h-4" />
               </button>
-              <button
+              <button type="button"
                 onClick={() => router.push("/entrar")}
                 className="px-6 py-4 rounded-2xl border font-bold text-sm hover:bg-muted transition"
               >
@@ -118,7 +118,7 @@ export function Landing() {
                 </div>
               </div>
 
-              <button
+              <button type="button"
                 onClick={() => router.push("/entrar")}
                 className="w-full py-4 rounded-2xl text-primary-foreground font-bold text-sm shadow-md hover:opacity-90 transition flex items-center justify-center gap-2"
                 style={{ backgroundColor: "var(--accent)" }}

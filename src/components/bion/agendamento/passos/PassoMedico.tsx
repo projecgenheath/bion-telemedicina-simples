@@ -115,13 +115,13 @@ export function PassoMedico(p: AgendamentoCorpoProps) {
                 <div className="text-xl font-extrabold text-primary">R$ {med.valor}</div>
               </div>
               <div className="flex gap-2">
-                <button
+                <button type="button"
                   onClick={() => setMedicoModal(med)}
                   className="px-3 py-2 rounded-xl border text-xs font-semibold hover:bg-muted transition"
                 >
                   Ver Perfil
                 </button>
-                <button
+                <button type="button"
                   onClick={() => {
                     setMedicoSelecionado(med);
                     proximoPasso();

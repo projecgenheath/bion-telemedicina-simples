@@ -47,7 +47,7 @@ export function MedicoPacientes() {
 
     return (
       <div className="max-w-4xl mx-auto space-y-6">
-        <button
+        <button type="button"
           onClick={() => setSelecionado(null)}
           className="flex items-center gap-1.5 text-xs font-bold text-muted-foreground hover:text-foreground transition"
         >
@@ -170,7 +170,7 @@ export function MedicoPacientes() {
           <Vazio texto="Nenhum paciente encontrado." />
         ) : (
           meusPacientes.map((p) => (
-            <button
+            <button type="button"
               key={p.nome}
               onClick={() => setSelecionado(p.nome)}
               className="w-full text-left bg-card border rounded-2xl p-4 flex items-center gap-4 hover:border-primary/50 transition"

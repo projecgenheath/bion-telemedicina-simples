@@ -109,7 +109,7 @@ export function PacienteDashboard({ go }: { go: (v: View) => void }) {
             </div>
 
             <div className="flex flex-col sm:flex-row gap-3">
-              <button
+              <button type="button"
                 onClick={() => go("sala-espera")}
                 className="px-6 py-3.5 rounded-2xl bg-white text-primary font-extrabold text-sm hover:bg-white/90 transition shadow-md flex items-center justify-center gap-2 active:scale-95"
               >
@@ -122,7 +122,7 @@ export function PacienteDashboard({ go }: { go: (v: View) => void }) {
 
       {/* Ações Rápidas */}
       <div className="grid md:grid-cols-3 gap-4">
-        <button
+        <button type="button"
           onClick={() => go("agendar")}
           className="bg-card border rounded-3xl p-6 text-left hover:border-primary transition shadow-sm group"
         >
@@ -138,7 +138,7 @@ export function PacienteDashboard({ go }: { go: (v: View) => void }) {
           </div>
         </button>
 
-        <button
+        <button type="button"
           onClick={() => go("bion-ia")}
           className="bg-card border rounded-3xl p-6 text-left hover:border-primary transition shadow-sm group"
         >
@@ -151,7 +151,7 @@ export function PacienteDashboard({ go }: { go: (v: View) => void }) {
           </div>
         </button>
 
-        <button
+        <button type="button"
           onClick={() => go("receitas")}
           className="bg-card border rounded-3xl p-6 text-left hover:border-primary transition shadow-sm group"
         >
@@ -172,7 +172,7 @@ export function PacienteDashboard({ go }: { go: (v: View) => void }) {
             <div className="font-extrabold text-base text-foreground flex items-center gap-2">
               <Pill className="w-4 h-4 text-primary" /> Lembretes de Medicação
             </div>
-            <button
+            <button type="button"
               onClick={() => go("lembretes")}
               className="text-xs font-bold text-primary hover:underline"
             >
@@ -196,7 +196,7 @@ export function PacienteDashboard({ go }: { go: (v: View) => void }) {
                     {l.horario} • {l.frequencia}
                   </div>
                 </div>
-                <button
+                <button type="button"
                   onClick={() => alternarLembrete(l.id)}
                   className={`w-7 h-7 rounded-xl border flex items-center justify-center transition ${
                     l.feito ? "bg-emerald-500 dark:bg-emerald-600 text-white border-transparent" : "border-border"
@@ -215,7 +215,7 @@ export function PacienteDashboard({ go }: { go: (v: View) => void }) {
             <div className="font-extrabold text-base text-foreground flex items-center gap-2">
               <Clock className="w-4 h-4 text-primary" /> Consultas Recentes
             </div>
-            <button
+            <button type="button"
               onClick={() => go("consultas")}
               className="text-xs font-bold text-primary hover:underline"
             >
@@ -278,7 +278,7 @@ export function MedicoDashboard({ go }: { go: (v: View) => void }) {
             Sua agenda de teleatendimentos está sincronizada para hoje.
           </p>
         </div>
-        <button
+        <button type="button"
           onClick={() => go("consulta")}
           className="px-6 py-3.5 rounded-2xl font-extrabold text-sm text-primary-foreground shadow-md hover:opacity-90 transition flex items-center gap-2 self-start sm:self-auto"
           style={{ backgroundColor: "var(--accent)" }}
@@ -349,7 +349,7 @@ export function MedicoDashboard({ go }: { go: (v: View) => void }) {
                 </div>
               </div>
 
-              <button
+              <button type="button"
                 onClick={() => go("consulta")}
                 className="w-full sm:w-auto px-6 py-3 rounded-xl bg-primary text-primary-foreground font-bold text-xs shadow hover:opacity-90 transition"
               >
@@ -361,7 +361,7 @@ export function MedicoDashboard({ go }: { go: (v: View) => void }) {
           <div className="bg-card border rounded-3xl p-6 shadow-sm space-y-4">
             <div className="flex items-center justify-between">
               <div className="font-extrabold text-base text-foreground">Agenda do Dia</div>
-              <button
+              <button type="button"
                 onClick={() => go("consultas")}
                 className="text-xs font-bold text-primary hover:underline"
               >
@@ -409,7 +409,7 @@ export function MedicoDashboard({ go }: { go: (v: View) => void }) {
           <div className="bg-card border rounded-3xl p-6 shadow-sm space-y-4">
             <div className="font-extrabold text-base text-foreground">Ferramentas Rápidas</div>
             <div className="space-y-2">
-              <button
+              <button type="button"
                 onClick={() => go("bion-ia")}
                 className="w-full p-3.5 rounded-2xl bg-muted/60 hover:bg-muted border text-left transition flex items-center justify-between text-xs font-bold"
               >
@@ -419,7 +419,7 @@ export function MedicoDashboard({ go }: { go: (v: View) => void }) {
                 <ChevronRight className="w-4 h-4 text-muted-foreground" />
               </button>
 
-              <button
+              <button type="button"
                 onClick={() => go("avaliacoes")}
                 className="w-full p-3.5 rounded-2xl bg-muted/60 hover:bg-muted border text-left transition flex items-center justify-between text-xs font-bold"
               >
@@ -429,7 +429,7 @@ export function MedicoDashboard({ go }: { go: (v: View) => void }) {
                 <ChevronRight className="w-4 h-4 text-muted-foreground" />
               </button>
 
-              <button
+              <button type="button"
                 onClick={() => go("receitas")}
                 className="w-full p-3.5 rounded-2xl bg-muted/60 hover:bg-muted border text-left transition flex items-center justify-between text-xs font-bold"
               >
@@ -482,7 +482,7 @@ export function AdminDashboard({ go }: { go: (v: View) => void }) {
             Visão geral em tempo real da operação, médicos e faturamento.
           </p>
         </div>
-        <button
+        <button type="button"
           onClick={() => go("relatorios")}
           className="px-6 py-3 rounded-2xl bg-primary text-primary-foreground font-bold text-sm shadow hover:opacity-90 transition flex items-center gap-2"
         >
@@ -552,7 +552,7 @@ export function AdminDashboard({ go }: { go: (v: View) => void }) {
             <div className="font-extrabold text-base text-foreground">
               Distribuição por Especialidade
             </div>
-            <button
+            <button type="button"
               onClick={() => go("relatorios")}
               className="text-xs font-bold text-primary hover:underline"
             >
@@ -587,7 +587,7 @@ export function AdminDashboard({ go }: { go: (v: View) => void }) {
             <div className="font-extrabold text-base text-foreground">Ações de Gestão Rápida</div>
           </div>
           <div className="space-y-3">
-            <button
+            <button type="button"
               onClick={() => go("usuarios")}
               className="w-full p-4 rounded-2xl bg-muted/60 hover:bg-muted border text-left transition flex items-center justify-between"
             >
@@ -602,7 +602,7 @@ export function AdminDashboard({ go }: { go: (v: View) => void }) {
               <ChevronRight className="w-5 h-5 text-muted-foreground" />
             </button>
 
-            <button
+            <button type="button"
               onClick={() => go("suporte")}
               className="w-full p-4 rounded-2xl bg-muted/60 hover:bg-muted border text-left transition flex items-center justify-between"
             >
@@ -616,7 +616,7 @@ export function AdminDashboard({ go }: { go: (v: View) => void }) {
               </div>
               <ChevronRight className="w-5 h-5 text-muted-foreground" />
             </button>
-            <button
+            <button type="button"
               onClick={() => go("auditoria")}
               className="w-full p-4 rounded-2xl bg-muted/60 hover:bg-muted border text-left transition flex items-center justify-between"
             >
@@ -630,7 +630,7 @@ export function AdminDashboard({ go }: { go: (v: View) => void }) {
               </div>
               <ChevronRight className="w-5 h-5 text-muted-foreground" />
             </button>
-            <button
+            <button type="button"
               onClick={() => go("admin-agendamentos")}
               className="w-full p-4 rounded-2xl bg-muted/60 hover:bg-muted border text-left transition flex items-center justify-between"
             >
@@ -644,7 +644,7 @@ export function AdminDashboard({ go }: { go: (v: View) => void }) {
               </div>
               <ChevronRight className="w-5 h-5 text-muted-foreground" />
             </button>
-            <button
+            <button type="button"
               onClick={() => go("admin-pacientes")}
               className="w-full p-4 rounded-2xl bg-muted/60 hover:bg-muted border text-left transition flex items-center justify-between"
             >
@@ -658,7 +658,7 @@ export function AdminDashboard({ go }: { go: (v: View) => void }) {
               </div>
               <ChevronRight className="w-5 h-5 text-muted-foreground" />
             </button>
-            <button
+            <button type="button"
               onClick={() => go("admin-medicos")}
               className="w-full p-4 rounded-2xl bg-muted/60 hover:bg-muted border text-left transition flex items-center justify-between"
             >

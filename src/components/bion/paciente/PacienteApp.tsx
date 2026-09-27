@@ -238,7 +238,7 @@ export function PacienteApp() {
               <div className="text-xs font-semibold uppercase tracking-wider text-bion-ink/45 dark:text-white/40">
                 {hoje}
               </div>
-              <button
+              <button type="button"
                 onClick={() => irPara(0)}
                 aria-label="Abrir perfil"
                 className="w-12 h-12 rounded-full overflow-hidden bp-glass shrink-0"
@@ -265,7 +265,7 @@ export function PacienteApp() {
 
             {/* Card: próxima consulta */}
             {proxima ? (
-              <button
+              <button type="button"
                 onClick={() => {
                   if (triagemPendente) setChatAberto(true);
                   else if (salaAberta) router.push("/sala-espera");
@@ -312,7 +312,7 @@ export function PacienteApp() {
                 )}
               </button>
             ) : (
-              <button onClick={() => setChatAberto(true)} className="bp-glass p-5 text-left w-full transition hover:shadow-xl">
+              <button type="button" onClick={() => setChatAberto(true)} className="bp-glass p-5 text-left w-full transition hover:shadow-xl">
                 <div className="text-xs font-bold uppercase tracking-wider text-bion-ink/50 dark:text-white/50 mb-3">
                   Consultas
                 </div>
@@ -324,7 +324,7 @@ export function PacienteApp() {
             )}
 
             {/* Card hero: BION IA — agendamento com anamnese */}
-            <button
+            <button type="button"
               onClick={() => setChatAberto(true)}
               className="mt-4 w-full rounded-3xl p-5 text-left text-white relative overflow-hidden shadow-lg shadow-bion-ink/25 transition hover:shadow-xl hover:-translate-y-0.5 bg-gradient-to-br from-bion-deep via-bion-sea to-bion-ink"
               aria-label="Abrir a BION IA: agendar consulta, fazer anamnese ou perguntar"
@@ -352,7 +352,7 @@ export function PacienteApp() {
             </button>
 
             {/* Card: barra de pesquisa da BION IA */}
-            <button
+            <button type="button"
               onClick={() => setChatAberto(true)}
               className="bp-glass mt-3 w-full flex items-center gap-3 px-5 py-4 text-left transition hover:shadow-xl"
               aria-label="Perguntar à BION IA"
@@ -381,7 +381,7 @@ export function PacienteApp() {
 
             <div className="space-y-4">
               {/* Lembretes */}
-              <button
+              <button type="button"
                 onClick={() => setDetalhe("lembretes")}
                 className="bp-glass p-5 w-full text-left transition hover:shadow-xl"
                 aria-label={`Lembretes de medicação: ${lembretesPendentes.length} pendente(s) de ${lembretes.length}. Abrir detalhes`}
@@ -415,7 +415,7 @@ export function PacienteApp() {
               </button>
 
               {/* IMC */}
-              <button
+              <button type="button"
                 onClick={() => setDetalhe("imc")}
                 className="bp-glass p-5 w-full text-left transition hover:shadow-xl"
                 aria-label={`Índice de massa corporal: ${imcAtual ? imcAtual.toFixed(1) : "sem dados"}. Abrir histórico e atualizar peso e altura`}
@@ -451,7 +451,7 @@ export function PacienteApp() {
               </button>
 
               {/* Pressão arterial */}
-              <button
+              <button type="button"
                 onClick={() => setDetalhe("pa")}
                 className="bp-glass p-5 w-full text-left transition hover:shadow-xl"
                 aria-label={`Pressão arterial: ${pas.at(-1) ? `${pas.at(-1)!.valor1}/${pas.at(-1)!.valor2 ?? "—"}` : "sem dados"}. Abrir histórico e registrar`}
@@ -496,7 +496,7 @@ export function PacienteApp() {
               Resultados importados automaticamente dos laudos que você envia à BION IA.
             </p>
 
-            <button
+            <button type="button"
               onClick={() => setChatAberto(true)}
               className="bp-glass-marinho w-full p-4 flex items-center gap-3 text-left mb-5 transition hover:shadow-xl"
               aria-label="Enviar novo laudo à BION IA"
@@ -599,7 +599,7 @@ export function PacienteApp() {
           { idx: 1, rotulo: "Início" },
           { idx: 2, rotulo: "Documentos" },
         ].map(({ idx, rotulo }) => (
-          <button
+          <button type="button"
             key={idx}
             onClick={() => irPara(idx)}
             aria-label={`Ir para ${rotulo}`}
@@ -608,7 +608,7 @@ export function PacienteApp() {
           />
         ))}
         {painel !== 1 && (
-          <button
+          <button type="button"
             onClick={() => irPara(1)}
             aria-label="Voltar ao início"
             className="pl-1 text-bion-ink/60 dark:text-white/60"

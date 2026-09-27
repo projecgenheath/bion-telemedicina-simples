@@ -110,7 +110,7 @@ export function ChamadosSuporte() {
         </div>
 
         {!isAdmin && (
-          <button
+          <button type="button"
             onClick={() => setModalNovo(true)}
             className="px-5 py-3 rounded-2xl text-primary-foreground font-bold text-sm shadow-md hover:opacity-90 transition flex items-center gap-2 self-start sm:self-auto"
             style={{ backgroundColor: "var(--accent)" }}
@@ -135,7 +135,7 @@ export function ChamadosSuporte() {
 
         <div className="flex gap-1.5 p-1.5 rounded-2xl bg-muted w-full sm:w-auto overflow-x-auto">
           {(["todos", "aberto", "em_andamento", "resolvido"] as const).map((st) => (
-            <button
+            <button type="button"
               key={st}
               onClick={() => setFiltroStatus(st)}
               className={`px-3 py-1.5 rounded-xl text-xs font-bold capitalize transition shrink-0 ${
@@ -257,7 +257,7 @@ export function ChamadosSuporte() {
                   Aberto por <strong>{ticketSelecionado.usuario}</strong> • {ticketSelecionado.data}
                 </div>
               </div>
-              <button
+              <button type="button"
                 onClick={() => setTicketSelecionado(null)}
                 className="p-2 rounded-xl hover:bg-muted text-muted-foreground"
               >
@@ -297,7 +297,7 @@ export function ChamadosSuporte() {
                   rows={4}
                   className="w-full px-4 py-3 rounded-2xl border text-xs bg-background outline-none focus:ring-2 focus:ring-primary/20"
                 />
-                <button
+                <button type="button"
                   onClick={() => enviarResposta(ticketSelecionado.id)}
                   className="w-full py-3 rounded-xl bg-primary text-primary-foreground font-bold text-xs shadow-md hover:opacity-90 transition flex items-center justify-center gap-2"
                 >

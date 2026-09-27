@@ -126,7 +126,7 @@ export function MinhasAvaliacoes() {
             ["baixas", "Nota ≤ 3"],
           ] as const
         ).map(([k, t]) => (
-          <button
+          <button type="button"
             key={k}
             onClick={() => setFiltro(k)}
             className={`px-3.5 py-2 rounded-xl text-sm font-medium border ${filtro === k ? "bg-primary text-primary-foreground border-primary" : "hover:bg-muted"}`}

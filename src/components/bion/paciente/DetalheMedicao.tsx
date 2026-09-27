@@ -80,7 +80,7 @@ function Envolver({
               <h2 className="text-xl font-bold text-bion-ink dark:text-bion-paper">{titulo}</h2>
               <p className="text-sm text-bion-ink/60 dark:text-bion-paper/60">{descricao}</p>
             </div>
-            <button
+            <button type="button"
               onClick={onFechar}
               aria-label="Fechar detalhe"
               className="mt-1 rounded-full p-2.5 bp-glass text-bion-ink dark:text-bion-paper shrink-0"
@@ -129,7 +129,7 @@ function FormMedicao({
           </label>
         ))}
       </div>
-      <button
+      <button type="button"
         onClick={() => {
           const nums: number[] = [];
           for (const c of campos) {
@@ -393,7 +393,7 @@ function DetalheLembretes({ onFechar }: { onFechar: () => void }) {
             className="bp-entrada w-full px-4 py-3 text-sm"
           />
         </div>
-        <button
+        <button type="button"
           onClick={() => {
             if (!titulo.trim() || !/^\d{1,2}:\d{2}$/.test(horario.trim())) {
               toast.error("Informe o nome e o horário (ex.: 08:00).");
@@ -432,7 +432,7 @@ function DetalheLembretes({ onFechar }: { onFechar: () => void }) {
                   key={l.id}
                   className="flex items-center gap-3 rounded-2xl bg-white/50 dark:bg-white/5 px-4 py-3"
                 >
-                  <button
+                  <button type="button"
                     onClick={() => alternarLembrete(l.id)}
                     aria-label={l.feito ? `Desmarcar ${l.titulo}` : `Marcar ${l.titulo} como tomado`}
                     aria-pressed={l.feito}
@@ -452,7 +452,7 @@ function DetalheLembretes({ onFechar }: { onFechar: () => void }) {
                       <CalendarClock className="w-3 h-3" /> {l.horario} · {l.frequencia}
                     </div>
                   </div>
-                  <button
+                  <button type="button"
                     onClick={() => removerLembrete(l.id)}
                     aria-label={`Remover ${l.titulo}`}
                     className="p-2 rounded-full text-bion-ink/50 dark:text-bion-paper/50 hover:text-red-600 dark:hover:text-red-400"

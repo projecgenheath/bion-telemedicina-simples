@@ -161,14 +161,14 @@ export function MedicoPerfilView({ medicoId }: { medicoId?: string }) {
           {isProprioMedico && (
             <div className="self-start md:self-auto">
               {editando ? (
-                <button
+                <button type="button"
                   onClick={salvar}
                   className="px-5 py-2.5 rounded-xl bg-primary text-primary-foreground font-bold text-xs shadow hover:opacity-90 transition flex items-center gap-1.5"
                 >
                   <Save className="w-4 h-4" /> Salvar Perfil
                 </button>
               ) : (
-                <button
+                <button type="button"
                   onClick={() => setEditando(true)}
                   className="px-5 py-2.5 rounded-xl border font-bold text-xs hover:bg-muted transition flex items-center gap-1.5"
                 >

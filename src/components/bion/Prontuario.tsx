@@ -122,7 +122,7 @@ export function Prontuario() {
             Receitas, atestados, exames e consultas em uma linha do tempo única.
           </p>
         </div>
-        <button
+        <button type="button"
           onClick={() => {
             setAceite(false);
             setConsentAberto(true);
@@ -157,7 +157,7 @@ export function Prontuario() {
       <div className="mt-6 flex gap-2 flex-wrap">
         {(["todos", "receita", "atestado", "exame", "consulta", "exame_solicitado"] as const).map(
           (t) => (
-            <button
+            <button type="button"
               key={t}
               onClick={() => setFiltro(t)}
               className={`px-3.5 py-1.5 rounded-full text-sm font-medium border ${filtro === t ? "bg-primary-soft text-primary border-transparent" : "text-muted-foreground"}`}
@@ -195,7 +195,7 @@ export function Prontuario() {
                   <div className="text-sm text-muted-foreground">{e.detalhe}</div>
                 </div>
                 {docIndex >= 0 && (
-                  <button
+                  <button type="button"
                     onClick={() => setVisualizando(docIndex)}
                     className="p-2 rounded-lg hover:bg-muted shrink-0"
                     title="Abrir documento"
@@ -256,7 +256,7 @@ export function Prontuario() {
               <div className="font-semibold flex items-center gap-2">
                 <ShieldCheck className="w-4 h-4 text-primary" /> Consentimento para gerar o PDF
               </div>
-              <button
+              <button type="button"
                 onClick={() => setConsentAberto(false)}
                 className="p-1.5 rounded-lg hover:bg-muted"
                 aria-label="Fechar"
@@ -282,7 +282,7 @@ export function Prontuario() {
               </span>
             </label>
             <div className="mt-5 flex justify-end gap-2">
-              <button
+              <button type="button"
                 onClick={() => {
                   registrarConsentimento({
                     paciente: sessao.nome,
@@ -296,7 +296,7 @@ export function Prontuario() {
               >
                 Recusar
               </button>
-              <button
+              <button type="button"
                 disabled={!aceite}
                 onClick={() => {
                   registrarConsentimento({

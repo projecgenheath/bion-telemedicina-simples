@@ -61,7 +61,7 @@ export function AdminMedicos() {
     const media = avs.length ? avs.reduce((s, a) => s + a.nota, 0) / avs.length : detalhe.avaliacao;
     return (
       <div className="max-w-4xl mx-auto space-y-5">
-        <button
+        <button type="button"
           onClick={() => setDetalhe(null)}
           className="flex items-center gap-1.5 text-xs font-bold text-primary"
         >
@@ -133,7 +133,7 @@ export function AdminMedicos() {
             Cadastre, edite e remova profissionais da plataforma.
           </p>
         </div>
-        <button
+        <button type="button"
           onClick={() => setModal({ form: { ...vazio } })}
           className="px-4 py-2.5 rounded-xl bg-primary text-primary-foreground text-xs font-bold flex items-center gap-1.5 shadow"
         >
@@ -172,20 +172,20 @@ export function AdminMedicos() {
               </p>
             </div>
             <div className="flex items-center gap-2">
-              <button
+              <button type="button"
                 onClick={() => setDetalhe(m)}
                 className="px-3 py-2 rounded-xl border text-xs font-bold hover:bg-muted"
               >
                 Histórico
               </button>
-              <button
+              <button type="button"
                 onClick={() => setModal({ id: m.id, form: { ...m } })}
                 className="p-2 rounded-xl border hover:bg-muted"
                 aria-label={`Editar ${m.nome}`}
               >
                 <Pencil className="w-4 h-4" />
               </button>
-              <button
+              <button type="button"
                 onClick={() => setConfirmar(m)}
                 className="p-2 rounded-xl border text-destructive hover:bg-destructive/10"
                 aria-label={`Arquivar ${m.nome}`}
@@ -215,7 +215,7 @@ export function AdminMedicos() {
               <h3 className="font-extrabold text-foreground">
                 {modal.id ? "Editar médico" : "Novo médico"}
               </h3>
-              <button onClick={() => setModal(null)} aria-label="Fechar">
+              <button type="button" onClick={() => setModal(null)} aria-label="Fechar">
                 <X className="w-5 h-5 text-muted-foreground" />
               </button>
             </div>
@@ -299,7 +299,7 @@ export function AdminMedicos() {
                 />
               </label>
             </div>
-            <button
+            <button type="button"
               onClick={salvar}
               className="w-full py-3 rounded-xl bg-primary text-primary-foreground font-bold text-sm"
             >
@@ -327,13 +327,13 @@ export function AdminMedicos() {
               o histórico clínico. A ação fica registrada na auditoria.
             </p>
             <div className="flex gap-2">
-              <button
+              <button type="button"
                 onClick={() => setConfirmar(null)}
                 className="flex-1 py-2.5 rounded-xl border text-xs font-bold"
               >
                 Cancelar
               </button>
-              <button
+              <button type="button"
                 onClick={() => {
                   excluirMedico(confirmar.id);
                   toast.success("Médico arquivado. Prontuário preservado.");

@@ -252,3 +252,16 @@
   .bp-impressao, .bp-impressao * { visibility: visible; }
   .bp-impressao { position: absolute; inset: 0; padding: 2rem; background: #fff; color: #111; }
 }
+
+/* Foco visível consistente (teclado) — não remove outline para mouse via :focus */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--color-ring, oklch(0.55 0.17 250));
+    outline-offset: 2px;
+  }
+  button:focus:not(:focus-visible),
+  a:focus:not(:focus-visible),
+  [role="button"]:focus:not(:focus-visible) {
+    outline: none;
+  }
+}

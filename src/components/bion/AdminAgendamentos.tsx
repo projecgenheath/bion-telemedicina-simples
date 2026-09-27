@@ -108,7 +108,7 @@ export function AdminAgendamentos() {
         </div>
         <div className="flex gap-2 overflow-x-auto">
           {STATUS.map((s) => (
-            <button
+            <button type="button"
               key={s.valor}
               onClick={() => setFiltro(s.valor)}
               className={`px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap border ${filtro === s.valor ? "bg-primary text-primary-foreground border-primary" : "hover:bg-muted"}`}
@@ -146,14 +146,14 @@ export function AdminAgendamentos() {
               )}
             </div>
             <div className="flex items-center gap-2">
-              <button
+              <button type="button"
                 onClick={() => abrirEdicao(c)}
                 className="px-3 py-2 rounded-xl border text-xs font-bold flex items-center gap-1.5 hover:bg-muted"
               >
                 <Pencil className="w-3.5 h-3.5" /> Editar
               </button>
               {c.status !== "cancelada" && (
-                <button
+                <button type="button"
                   onClick={() => {
                     setMotivo("");
                     setCancelando(c);
@@ -186,7 +186,7 @@ export function AdminAgendamentos() {
           <div className="bg-card border rounded-3xl w-full max-w-md p-6 space-y-4 sm:my-6">
             <div className="flex items-center justify-between">
               <h3 className="font-extrabold text-foreground">Editar agendamento</h3>
-              <button onClick={() => setEditar(null)} aria-label="Fechar">
+              <button type="button" onClick={() => setEditar(null)} aria-label="Fechar">
                 <X className="w-5 h-5 text-muted-foreground" />
               </button>
             </div>
@@ -220,7 +220,7 @@ export function AdminAgendamentos() {
                 ))}
               </select>
             </label>
-            <button
+            <button type="button"
               onClick={salvar}
               className="w-full py-3 rounded-xl bg-primary text-primary-foreground font-bold text-sm"
             >
@@ -254,13 +254,13 @@ export function AdminAgendamentos() {
               className="w-full p-2.5 rounded-xl border bg-background text-xs outline-none"
             />
             <div className="flex gap-2">
-              <button
+              <button type="button"
                 onClick={() => setCancelando(null)}
                 className="flex-1 py-2.5 rounded-xl border text-xs font-bold"
               >
                 Voltar
               </button>
-              <button
+              <button type="button"
                 onClick={() => {
                   cancelarConsulta(cancelando.id, motivo || "Cancelado pela administração");
                   toast.success("Consulta cancelada.");

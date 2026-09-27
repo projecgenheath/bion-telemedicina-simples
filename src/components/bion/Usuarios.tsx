@@ -111,7 +111,7 @@ export function Usuarios() {
         </div>
         <div className="flex gap-1 p-1 rounded-xl bg-muted">
           {(["todos", "medico", "paciente"] as const).map((f) => (
-            <button
+            <button type="button"
               key={f}
               onClick={() => setFiltro(f)}
               className={`px-3 py-1.5 rounded-lg text-sm font-medium capitalize ${filtro === f ? "bg-card shadow-sm" : "text-muted-foreground"}`}
@@ -144,7 +144,7 @@ export function Usuarios() {
             </span>
             <div className="flex gap-2">
               {p.situacao === "pendente" && (
-                <button
+                <button type="button"
                   onClick={() => mudar(p.id, "ativo")}
                   className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium text-primary-foreground"
                   style={{ backgroundColor: "var(--accent)" }}
@@ -153,7 +153,7 @@ export function Usuarios() {
                 </button>
               )}
               {p.situacao === "ativo" && (
-                <button
+                <button type="button"
                   onClick={() => mudar(p.id, "suspenso")}
                   className="flex items-center gap-1.5 px-3 py-2 rounded-xl border text-sm font-medium hover:border-destructive hover:text-destructive transition"
                 >
@@ -161,7 +161,7 @@ export function Usuarios() {
                 </button>
               )}
               {p.situacao === "suspenso" && (
-                <button
+                <button type="button"
                   onClick={() => mudar(p.id, "ativo")}
                   className="flex items-center gap-1.5 px-3 py-2 rounded-xl border text-sm font-medium hover:border-primary hover:text-primary transition"
                 >

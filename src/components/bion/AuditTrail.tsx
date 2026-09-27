@@ -270,13 +270,13 @@ export function AuditTrail() {
           </p>
         </div>
         <div className="flex gap-2">
-          <button
+          <button type="button"
             onClick={exportarCSV}
             className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl border text-sm font-medium hover:bg-muted"
           >
             <Download className="w-4 h-4" /> CSV
           </button>
-          <button
+          <button type="button"
             onClick={exportarPDF}
             className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-primary-foreground text-sm font-medium"
             style={{ backgroundColor: "var(--accent)" }}
@@ -290,7 +290,7 @@ export function AuditTrail() {
         {CATEGORIAS.map((c) => {
           const count = contadores[c.k] ?? 0;
           return (
-            <button
+            <button type="button"
               key={c.k}
               onClick={() => {
                 setFCategoria(fCategoria === c.k ? "todas" : c.k);
@@ -331,7 +331,7 @@ export function AuditTrail() {
             className="w-full pl-9 pr-3 py-2.5 rounded-xl border bg-background text-sm"
           />
         </div>
-        <button
+        <button type="button"
           onClick={() => setFiltrosAbertos(!filtrosAbertos)}
           className={`inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl border text-sm font-medium hover:bg-muted ${
             temFiltro ? "border-primary text-primary" : ""
@@ -341,7 +341,7 @@ export function AuditTrail() {
           {temFiltro && <span className="ml-0.5 w-2 h-2 rounded-full bg-primary" />}
         </button>
         {temFiltro && (
-          <button
+          <button type="button"
             onClick={limpar}
             className="inline-flex items-center gap-1 px-2.5 py-2.5 rounded-xl text-xs text-muted-foreground hover:bg-muted"
           >
@@ -492,7 +492,7 @@ export function AuditTrail() {
 
       {totalPaginas > 1 && (
         <div className="mt-4 flex items-center justify-center gap-3">
-          <button
+          <button type="button"
             disabled={pagina === 0}
             onClick={() => setPagina((p) => p - 1)}
             className="p-2 rounded-xl border hover:bg-muted disabled:opacity-40"
@@ -502,7 +502,7 @@ export function AuditTrail() {
           <span className="text-sm text-muted-foreground">
             Página {pagina + 1} de {totalPaginas}
           </span>
-          <button
+          <button type="button"
             disabled={pagina >= totalPaginas - 1}
             onClick={() => setPagina((p) => p + 1)}
             className="p-2 rounded-xl border hover:bg-muted disabled:opacity-40"

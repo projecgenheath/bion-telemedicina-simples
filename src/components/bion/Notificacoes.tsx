@@ -42,7 +42,7 @@ export function Notificacoes() {
           </p>
         </div>
         {naoLidas > 0 && (
-          <button
+          <button type="button"
             onClick={marcarTodasLidas}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl border text-sm font-medium hover:border-primary hover:text-primary transition"
           >
@@ -55,7 +55,7 @@ export function Notificacoes() {
         {notificacoes.map((n) => {
           const Icon = iconePorTipo[n.tipo];
           return (
-            <button
+            <button type="button"
               key={n.id}
               onClick={() => marcarLida(n.id)}
               className={`w-full text-left bg-card border rounded-2xl p-4 flex items-start gap-4 transition hover:border-primary ${n.lida ? "opacity-70" : ""}`}

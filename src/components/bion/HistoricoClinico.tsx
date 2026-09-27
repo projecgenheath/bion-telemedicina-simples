@@ -441,7 +441,7 @@ export function HistoricoClinico() {
             f: "atestados",
           },
         ].map((s) => (
-          <button
+          <button type="button"
             key={s.l}
             onClick={() => setFiltro(s.f === filtro ? "tudo" : (s.f as FiltroTipo))}
             className={`bg-card border rounded-2xl p-4 text-left shadow-sm hover:shadow-md transition ${filtro === s.f ? "ring-2 ring-primary/30" : ""}`}
@@ -469,7 +469,7 @@ export function HistoricoClinico() {
         </div>
         <div className="flex items-center gap-2 overflow-x-auto">
           {(["tudo", "consultas", "exames", "receitas", "atestados"] as FiltroTipo[]).map((f) => (
-            <button
+            <button type="button"
               key={f}
               onClick={() => setFiltro(f)}
               className={`px-3.5 py-2 rounded-xl text-xs font-bold capitalize whitespace-nowrap transition ${filtro === f ? "bg-primary text-primary-foreground shadow-sm" : "bg-card border hover:bg-muted text-muted-foreground"}`}
@@ -556,7 +556,7 @@ export function HistoricoClinico() {
                                 </div>
                               )}
                               {(ev.tipo === "receita" || ev.tipo === "atestado") && (
-                                <button
+                                <button type="button"
                                   className="flex items-center gap-1.5 text-xs font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 px-3 py-1.5 rounded-xl hover:bg-emerald-100 transition"
                                   onClick={(e) => e.stopPropagation()}
                                 >
@@ -564,7 +564,7 @@ export function HistoricoClinico() {
                                 </button>
                               )}
                               {ev.tipo === "exame" && (
-                                <button
+                                <button type="button"
                                   className="flex items-center gap-1.5 text-xs font-bold text-violet-700 dark:text-violet-300 bg-violet-50 dark:bg-violet-950/60 px-3 py-1.5 rounded-xl hover:bg-violet-100 transition"
                                   onClick={(e) => e.stopPropagation()}
                                 >

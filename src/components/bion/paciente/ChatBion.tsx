@@ -521,7 +521,7 @@ export function ChatBion({ aberto, onFechar, aoEnviarExame }: { aberto: boolean;
               {pensando || enviandoLaudo || pagando ? "Digitando…" : anamneseAtiva ? "Triagem em andamento" : "Online · responde na hora"}
             </div>
           </div>
-          <button onClick={onFechar} aria-label="Fechar conversa" className="rounded-full p-2.5 bp-glass text-bion-ink dark:text-bion-paper">
+          <button type="button" onClick={onFechar} aria-label="Fechar conversa" className="rounded-full p-2.5 bp-glass text-bion-ink dark:text-bion-paper">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -575,7 +575,7 @@ export function ChatBion({ aberto, onFechar, aoEnviarExame }: { aberto: boolean;
                   { id: "pix", nome: "Pix" },
                   { id: "cartao", nome: "Cartão" },
                 ] as const).map((m2) => (
-                  <button
+                  <button type="button"
                     key={m2.id}
                     onClick={() => setMetodo(m2.id)}
                     aria-pressed={metodo === m2.id}
@@ -590,14 +590,14 @@ export function ChatBion({ aberto, onFechar, aoEnviarExame }: { aberto: boolean;
                 ))}
               </div>
               <div className="flex gap-2">
-                <button
+                <button type="button"
                   onClick={() => void pagarEAgendar()}
                   disabled={!metodo || pagando}
                   className="bp-acao flex-1 py-3 text-sm inline-flex items-center justify-center gap-2 disabled:opacity-40"
                 >
                   <Lock className="w-4 h-4" /> Pagar R$ {medicoRegistro?.valor ?? 0} e agendar
                 </button>
-                <button
+                <button type="button"
                   onClick={() => {
                     setEtapa(null);
                     setEscolha({});
@@ -622,10 +622,10 @@ export function ChatBion({ aberto, onFechar, aoEnviarExame }: { aberto: boolean;
             </div>
             <p className="text-xs opacity-60 mb-3">Anexe PDF ou foto — a IA confere seu nome no documento antes de processar.</p>
             <div className="flex gap-2">
-              <button onClick={anexarDocumentoAnamnese} className="bp-acao flex-1 py-3 text-sm inline-flex items-center justify-center gap-2">
+              <button type="button" onClick={anexarDocumentoAnamnese} className="bp-acao flex-1 py-3 text-sm inline-flex items-center justify-center gap-2">
                 <FileUp className="w-4 h-4" /> Anexar documento
               </button>
-              <button
+              <button type="button"
                 onClick={() => void enviarAnamnese("Não tenho nenhum documento para enviar.")}
                 className="rounded-full border border-bion-ink/20 dark:border-white/20 px-4 py-3 text-sm font-semibold text-bion-ink dark:text-bion-paper"
               >
@@ -642,7 +642,7 @@ export function ChatBion({ aberto, onFechar, aoEnviarExame }: { aberto: boolean;
               <BadgeCheck className="w-4 h-4" /> Tudo pronto para o médico
             </div>
             <p className="text-xs opacity-60 mb-3">Ao concluir, o médico recebe sua triagem antes do atendimento.</p>
-            <button onClick={() => void concluirAnamneseAgora()} className="bp-acao w-full py-3 text-sm inline-flex items-center justify-center gap-2">
+            <button type="button" onClick={() => void concluirAnamneseAgora()} className="bp-acao w-full py-3 text-sm inline-flex items-center justify-center gap-2">
               <BadgeCheck className="w-4 h-4" /> Concluir triagem e enviar ao médico
             </button>
           </div>
@@ -654,7 +654,7 @@ export function ChatBion({ aberto, onFechar, aoEnviarExame }: { aberto: boolean;
             {anamnesesPendentes.map((a) => {
               const c = consultas.find((x) => x.id === a.consultaId);
               return (
-                <button
+                <button type="button"
                   key={a.id}
                   onClick={() => retomarAnamnese(a)}
                   className="rounded-full bg-emerald-600/10 border border-emerald-600/30 px-4 py-2.5 text-sm font-semibold text-emerald-700 dark:text-emerald-300 inline-flex items-center gap-1.5"
@@ -674,7 +674,7 @@ export function ChatBion({ aberto, onFechar, aoEnviarExame }: { aberto: boolean;
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs font-bold uppercase tracking-wide text-bion-ink/60 dark:text-bion-paper/60">{opcoes.titulo}</span>
               {etapa !== "especialidade" && (
-                <button
+                <button type="button"
                   onClick={() => {
                     const anterior: Record<string, Etapa> = { medico: "especialidade", dia: "medico", hora: "dia", confirmar: "hora" };
                     const volta = (etapa && anterior[etapa]) || null;
@@ -691,7 +691,7 @@ export function ChatBion({ aberto, onFechar, aoEnviarExame }: { aberto: boolean;
             </div>
             <div className="grid grid-cols-2 gap-2">
               {opcoes.opcoes.map((o) => (
-                <button
+                <button type="button"
                   key={o.valor}
                   onClick={() => opcoes.escolher(o.valor)}
                   className="text-left rounded-2xl bg-white/60 dark:bg-white/8 border border-bion-ink/10 dark:border-white/10 px-4 py-3 text-sm font-semibold text-bion-ink dark:text-bion-paper hover:border-bion-sea/40 transition"
@@ -711,7 +711,7 @@ export function ChatBion({ aberto, onFechar, aoEnviarExame }: { aberto: boolean;
         {anamneseAtiva && !pensando && !["documentos", "fechamento"].includes(anamneseAtiva.etapa) && (
           <div className="flex gap-2 overflow-x-auto bp-coluna">
             {["Não sei informar", "Pode pular esta parte", "Voltar um pouco: quero corrigir algo"].map((chip) => (
-              <button
+              <button type="button"
                 key={chip}
                 onClick={() => void enviarAnamnese(chip)}
                 className="shrink-0 rounded-full bg-bion-sea/10 dark:bg-sky-400/10 border border-bion-sea/25 dark:border-sky-300/25 px-4 py-2 text-xs font-semibold text-bion-sea dark:text-sky-300"
@@ -725,10 +725,10 @@ export function ChatBion({ aberto, onFechar, aoEnviarExame }: { aberto: boolean;
         {/* Chips iniciais quando só existe a saudação */}
         {mensagens.length === 1 && etapa === null && !anamneseAtiva && (
           <div className="flex flex-wrap gap-2">
-            <button onClick={iniciarAgendamento} className="rounded-full bg-bion-sea/10 dark:bg-sky-400/10 border border-bion-sea/25 dark:border-sky-300/25 px-4 py-2.5 text-sm font-semibold text-bion-sea dark:text-sky-300">
+            <button type="button" onClick={iniciarAgendamento} className="rounded-full bg-bion-sea/10 dark:bg-sky-400/10 border border-bion-sea/25 dark:border-sky-300/25 px-4 py-2.5 text-sm font-semibold text-bion-sea dark:text-sky-300">
               Agendar consulta
             </button>
-            <button onClick={iniciarExame} className="rounded-full bg-bion-sea/10 dark:bg-sky-400/10 border border-bion-sea/25 dark:border-sky-300/25 px-4 py-2.5 text-sm font-semibold text-bion-sea dark:text-sky-300">
+            <button type="button" onClick={iniciarExame} className="rounded-full bg-bion-sea/10 dark:bg-sky-400/10 border border-bion-sea/25 dark:border-sky-300/25 px-4 py-2.5 text-sm font-semibold text-bion-sea dark:text-sky-300">
               Enviar laudo de exame
             </button>
           </div>
@@ -755,7 +755,7 @@ export function ChatBion({ aberto, onFechar, aoEnviarExame }: { aberto: boolean;
             className="flex-1 bg-transparent outline-none text-sm text-bion-ink dark:text-bion-paper placeholder:text-bion-ink/40 dark:placeholder:text-white/40 disabled:opacity-50"
           />
           {!anamneseAtiva && (
-            <button
+            <button type="button"
               onClick={iniciarExame}
               disabled={enviandoLaudo || etapa !== null}
               aria-label="Anexar laudo de exame"
@@ -764,7 +764,7 @@ export function ChatBion({ aberto, onFechar, aoEnviarExame }: { aberto: boolean;
               <FileUp className="w-5 h-5" />
             </button>
           )}
-          <button
+          <button type="button"
             onClick={() => enviarComIntencao(entrada)}
             disabled={!entrada.trim() || pensando || enviandoLaudo || (etapa !== null && !anamneseAtiva)}
             aria-label="Enviar mensagem"

@@ -119,7 +119,7 @@ export function PosConsultaModal({
                       </div>
                     </div>
                   </div>
-                  <button
+                  <button type="button"
                     onClick={() => {
                       gerarDocumentoPDF(d);
                       toast.success("PDF baixado com sucesso");
@@ -215,13 +215,13 @@ export function PosConsultaModal({
             />
 
             <div className="flex gap-3">
-              <button
+              <button type="button"
                 onClick={onClose}
                 className="flex-1 py-3 rounded-xl border text-xs font-bold text-muted-foreground hover:bg-muted transition"
               >
                 Avaliar mais tarde
               </button>
-              <button
+              <button type="button"
                 onClick={enviarAvaliacao}
                 className="flex-1 py-3 rounded-xl text-primary-foreground text-xs font-bold shadow-md hover:opacity-90 transition"
                 style={{ backgroundColor: "var(--accent)" }}
@@ -239,7 +239,7 @@ export function PosConsultaModal({
             <p className="text-xs text-muted-foreground">
               Seu feedback foi entregue com sucesso e já está registrado na plataforma.
             </p>
-            <button
+            <button type="button"
               onClick={onClose}
               className="px-6 py-2.5 rounded-xl bg-primary text-primary-foreground font-bold text-xs shadow hover:opacity-90 transition"
             >

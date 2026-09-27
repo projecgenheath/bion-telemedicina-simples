@@ -255,7 +255,7 @@ export function SalaEspera({ onEnter }: { onEnter: () => void }) {
               </div>
 
               <div className="flex items-center gap-2">
-                <button
+                <button type="button"
                   onClick={toggleCam}
                   className={`w-10 h-10 rounded-full flex items-center justify-center transition border ${
                     camAtiva
@@ -266,7 +266,7 @@ export function SalaEspera({ onEnter }: { onEnter: () => void }) {
                 >
                   {camAtiva ? <Camera className="w-4 h-4" /> : <CameraOff className="w-4 h-4" />}
                 </button>
-                <button
+                <button type="button"
                   onClick={toggleMic}
                   className={`w-10 h-10 rounded-full flex items-center justify-center transition border ${
                     micAtivo
@@ -317,7 +317,7 @@ export function SalaEspera({ onEnter }: { onEnter: () => void }) {
                 <div className="text-xs text-muted-foreground">Conexão</div>
                 <div className="text-sm font-semibold truncate">{ping} ms (HD)</div>
               </div>
-              <button
+              <button type="button"
                 onClick={retestarConexao}
                 className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-primary transition"
                 title="Retestar rede"
@@ -403,7 +403,7 @@ export function SalaEspera({ onEnter }: { onEnter: () => void }) {
               </ul>
             </div>
 
-            <button
+            <button type="button"
               onClick={() => {
                 registrarAudit({
                   acao: "CONSULTA_INICIADA",

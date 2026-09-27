@@ -75,14 +75,14 @@ function Visualizador({
         <div className="flex items-start justify-between gap-3 mb-4">
           <h3 className="text-lg font-bold text-bion-ink dark:text-bion-paper">{titulo}</h3>
           <div className="flex gap-2 shrink-0">
-            <button
+            <button type="button"
               onClick={() => window.print()}
               aria-label="Imprimir documento"
               className="bp-acao px-4 py-2 text-xs inline-flex items-center gap-1.5"
             >
               <Printer className="w-4 h-4" /> Imprimir
             </button>
-            <button onClick={onFechar} aria-label="Fechar documento" className="rounded-full p-2 bg-bion-ink/5 dark:bg-white/10 text-bion-ink dark:text-bion-paper">
+            <button type="button" onClick={onFechar} aria-label="Fechar documento" className="rounded-full p-2 bg-bion-ink/5 dark:bg-white/10 text-bion-ink dark:text-bion-paper">
               <X className="w-4 h-4" />
             </button>
           </div>
@@ -213,7 +213,7 @@ export function DocumentosPainel() {
         ) : (
           <div className="flex gap-2 overflow-x-auto bp-coluna pb-1 -mx-1 px-1">
             {realizadas.map((c) => (
-              <button
+              <button type="button"
                 key={c.id}
                 onClick={() => setConsultaSelecionada(c.id)}
                 aria-pressed={consultaSelecionada === c.id}
@@ -250,13 +250,13 @@ export function DocumentosPainel() {
                       <div className="text-sm font-bold text-bion-ink dark:text-bion-paper">{d.titulo}</div>
                       <div className="text-xs opacity-60">{d.data}</div>
                     </div>
-                    <button
+                    <button type="button"
                       onClick={() => setVisualizando({ titulo: d.titulo, corpo: d.corpo })}
                       className="rounded-full border border-bion-sea/25 dark:border-sky-300/25 px-4 py-2 text-xs font-bold text-bion-sea dark:text-sky-300"
                     >
                       Ver
                     </button>
-                    <button
+                    <button type="button"
                       onClick={() => setVisualizando({ titulo: d.titulo, corpo: d.corpo })}
                       aria-label={`Imprimir ${d.titulo}`}
                       className="rounded-full p-2.5 bg-bion-ink/5 dark:bg-white/10 text-bion-ink dark:text-bion-paper"
@@ -281,7 +281,7 @@ export function DocumentosPainel() {
         {conversaAtiva && contatoAtivo ? (
           <div className="bp-glass overflow-hidden">
             <div className="flex items-center gap-3 px-4 py-3 border-b border-bion-ink/8 dark:border-white/10">
-              <button
+              <button type="button"
                 onClick={() => {
                   setConversaAtiva(null);
                 }}
@@ -332,7 +332,7 @@ export function DocumentosPainel() {
                 aria-label="Nova mensagem"
                 className="bp-entrada flex-1 px-4 py-3 text-sm disabled:opacity-50"
               />
-              <button
+              <button type="button"
                 onClick={() => {
                   if (!contatoAtivo.aberta) {
                     toast.error("A janela de 30 dias desta conversa já encerrou.");
@@ -359,7 +359,7 @@ export function DocumentosPainel() {
               </div>
             ) : (
               contatos.map((c) => (
-                <button
+                <button type="button"
                   key={c.id}
                   onClick={() => {
                     setConversaAtiva(c.id);
