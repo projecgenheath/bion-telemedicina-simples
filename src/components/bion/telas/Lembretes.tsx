@@ -7,6 +7,7 @@ import {
   Check,
   Trash2,
 } from "lucide-react";
+import { EstadoVazio } from "@/components/bion/ui/EstadoVazio";
 import { toast } from "sonner";
 import { useBion } from "@/lib/bion-store";
 import { ModalBion } from "@/components/bion/ModalBion";
@@ -57,6 +58,12 @@ export function Lembretes() {
       </div>
 
       <div className="space-y-2.5">
+        {lembretes.length === 0 && (
+          <EstadoVazio
+            titulo="Nenhum lembrete ainda"
+            descricao="Crie lembretes de medicamentos, exames ou consultas para não perder o horário."
+          />
+        )}
         {lembretes.map((l) => (
           <div
             key={l.id}

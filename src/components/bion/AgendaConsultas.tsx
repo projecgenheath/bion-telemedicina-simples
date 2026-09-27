@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { Calendar, Clock, Stethoscope, X, RefreshCw, AlertTriangle } from "lucide-react";
+import { EstadoVazio } from "@/components/bion/ui/EstadoVazio";
 import { useBion, type Consulta } from "@/lib/bion-store";
 import { ModalBion } from "@/components/bion/ModalBion";
 
@@ -20,9 +21,10 @@ export function AgendaConsultas({ perfil }: { perfil: "paciente" | "medico" }) {
   return (
     <div className="space-y-3">
       {ativas.length === 0 && (
-        <div className="bg-card border rounded-2xl p-6 text-center text-muted-foreground text-sm">
-          Nenhuma consulta agendada no momento.
-        </div>
+        <EstadoVazio
+          titulo="Nenhuma consulta agendada"
+          descricao="Quando você marcar uma teleconsulta, ela aparece aqui com data, horário e acesso à sala."
+        />
       )}
       {ativas.map((c) => (
         <LinhaConsulta key={c.id} c={c} perfil={perfil} />

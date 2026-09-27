@@ -1,8 +1,17 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useBion } from "@/lib/bion-store";
-import { Consulta } from "@/components/bion/Consulta";
+import { TelaCarregando } from "@/components/bion/brand";
+
+const Consulta = dynamic(
+  () => import("@/components/bion/Consulta").then((m) => m.Consulta),
+  {
+    ssr: false,
+    loading: () => <TelaCarregando texto="Preparando sala de consulta…" />,
+  },
+);
 
 export default function PaginaConsulta() {
   const router = useRouter();

@@ -28,7 +28,7 @@ export default function LayoutAutenticado({ children }: { children: React.ReactN
     else if (SO_CLINICA.includes(view) && sessao.role === "admin") router.replace("/painel");
   }, [carregando, autenticado, view, sessao.role, router]);
 
-  if (carregando || !autenticado) return <TelaCarregando />;
+  if (carregando || !autenticado) return <TelaCarregando comLista />;
 
   // V4 — conta criada pela administração: troca de senha obrigatória antes
   // de qualquer navegação (a tela usa a própria sessão, já válida).

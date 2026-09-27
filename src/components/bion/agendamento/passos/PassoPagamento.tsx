@@ -152,45 +152,81 @@ export function PassoPagamento(p: AgendamentoCorpoProps) {
         {/* Conteúdo do Cartão */}
         {metodoPagamento === "cartao" && (
           <div className="space-y-3">
-            <input
-              aria-label="Número do cartão"
-              placeholder="Número do Cartão (0000 0000 0000 0000)"
-              value={cartaoNumero}
-              onChange={(e) => setCartaoNumero(e.target.value)}
-              className="w-full px-4 py-3 rounded-xl border text-sm bg-background outline-none"
-            />
-            <input
-              aria-label="Nome impresso no cartão"
-              placeholder="Nome impresso no Cartão"
-              value={cartaoNome}
-              onChange={(e) => setCartaoNome(e.target.value)}
-              className="w-full px-4 py-3 rounded-xl border text-sm bg-background outline-none"
-            />
-            <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label htmlFor="ag-cartao-numero" className="text-xs font-bold text-muted-foreground block mb-1">
+                Número do cartão
+              </label>
               <input
-              aria-label="Validade (MM/AA)"
-                placeholder="Validade (MM/AA)"
-                value={cartaoValidade}
-                onChange={(e) => setCartaoValidade(e.target.value)}
-                className="w-full px-4 py-3 rounded-xl border text-sm bg-background outline-none"
-              />
-              <input
-              aria-label="CVV do cartão"
-                placeholder="CVV (3 dígitos)"
-                value={cartaoCVV}
-                onChange={(e) => setCartaoCVV(e.target.value)}
-                className="w-full px-4 py-3 rounded-xl border text-sm bg-background outline-none"
+                id="ag-cartao-numero"
+                name="cc-number"
+                autoComplete="cc-number"
+                inputMode="numeric"
+                placeholder="0000 0000 0000 0000"
+                value={cartaoNumero}
+                onChange={(e) => setCartaoNumero(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl border text-sm bg-background outline-none focus:ring-2 focus:ring-primary/20"
               />
             </div>
-            <select
-              value={cartaoParcelas}
-              onChange={(e) => setCartaoParcelas(e.target.value)}
-              className="w-full px-4 py-3 rounded-xl border text-sm bg-background outline-none"
-            >
-              <option value="1">1x de R$ {medicoAtual.valor},00 (à vista)</option>
-              <option value="2">2x de R$ {(medicoAtual.valor / 2).toFixed(2)} sem juros</option>
-              <option value="3">3x de R$ {(medicoAtual.valor / 3).toFixed(2)} sem juros</option>
-            </select>
+            <div>
+              <label htmlFor="ag-cartao-nome" className="text-xs font-bold text-muted-foreground block mb-1">
+                Nome impresso no cartão
+              </label>
+              <input
+                id="ag-cartao-nome"
+                name="cc-name"
+                autoComplete="cc-name"
+                placeholder="Como está no cartão"
+                value={cartaoNome}
+                onChange={(e) => setCartaoNome(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl border text-sm bg-background outline-none focus:ring-2 focus:ring-primary/20"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label htmlFor="ag-cartao-validade" className="text-xs font-bold text-muted-foreground block mb-1">
+                  Validade
+                </label>
+                <input
+                  id="ag-cartao-validade"
+                  name="cc-exp"
+                  autoComplete="cc-exp"
+                  placeholder="MM/AA"
+                  value={cartaoValidade}
+                  onChange={(e) => setCartaoValidade(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl border text-sm bg-background outline-none focus:ring-2 focus:ring-primary/20"
+                />
+              </div>
+              <div>
+                <label htmlFor="ag-cartao-cvv" className="text-xs font-bold text-muted-foreground block mb-1">
+                  CVV
+                </label>
+                <input
+                  id="ag-cartao-cvv"
+                  name="cc-csc"
+                  autoComplete="cc-csc"
+                  inputMode="numeric"
+                  placeholder="3 dígitos"
+                  value={cartaoCVV}
+                  onChange={(e) => setCartaoCVV(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl border text-sm bg-background outline-none focus:ring-2 focus:ring-primary/20"
+                />
+              </div>
+            </div>
+            <div>
+              <label htmlFor="ag-cartao-parcelas" className="text-xs font-bold text-muted-foreground block mb-1">
+                Parcelas
+              </label>
+              <select
+                id="ag-cartao-parcelas"
+                value={cartaoParcelas}
+                onChange={(e) => setCartaoParcelas(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl border text-sm bg-background outline-none focus:ring-2 focus:ring-primary/20"
+              >
+                <option value="1">1x de R$ {medicoAtual.valor},00 (à vista)</option>
+                <option value="2">2x de R$ {(medicoAtual.valor / 2).toFixed(2)} sem juros</option>
+                <option value="3">3x de R$ {(medicoAtual.valor / 3).toFixed(2)} sem juros</option>
+              </select>
+            </div>
           </div>
         )}
 

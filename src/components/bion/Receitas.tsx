@@ -14,6 +14,7 @@ import {
   Eye,
   FileText,
 } from "lucide-react";
+import { EstadoVazio } from "@/components/bion/ui/EstadoVazio";
 import { useBion, type Documento } from "@/lib/bion-store";
 import { gerarDocumentoPDF } from "@/lib/receita-pdf";
 import { ModalBion } from "@/components/bion/ModalBion";
@@ -506,9 +507,10 @@ export function Receitas({ perfil }: { perfil: "paciente" | "medico" }) {
 
       <div className="mt-4 space-y-2">
         {filtrados.length === 0 && (
-          <div className="bg-card border rounded-2xl p-8 text-center text-muted-foreground text-sm">
-            Nenhum documento encontrado com esses filtros.
-          </div>
+          <EstadoVazio
+            titulo="Nenhum documento encontrado"
+            descricao="Ajuste os filtros ou aguarde a emissão de receitas, atestados e pedidos de exame após a consulta."
+          />
         )}
         {visiveis.map((d, i) => {
           const Icon = d.tipo === "receita" ? Pill : Award;

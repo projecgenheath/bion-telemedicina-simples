@@ -22,7 +22,12 @@ import { useBion } from "@/lib/bion-store";
 import { MESES_AGENDA } from "./constantes";
 import { GraficoLinha, type PontoGrafico } from "./GraficoLinha";
 import { DetalheMedicao, type Detalhe } from "./DetalheMedicao";
-import { ChatBion } from "./ChatBion";
+import dynamic from "next/dynamic";
+
+const ChatBion = dynamic(
+  () => import("./ChatBion").then((m) => m.ChatBion),
+  { ssr: false, loading: () => null },
+);
 import { PerfilPainel } from "./PerfilPainel";
 import { DocumentosPainel } from "./DocumentosPainel";
 
