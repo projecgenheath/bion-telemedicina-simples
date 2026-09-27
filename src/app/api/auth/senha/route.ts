@@ -9,9 +9,9 @@ import {
 } from "@/lib/server/auth";
 import { ok, falha } from "@/lib/server/http";
 import {
-  limitar,
-  consultar,
-  resetar,
+  limitarAsync,
+  consultarAsync,
+  resetarAsync,
   obterIp,
   resposta429,
   validarSenhaForte,
@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
 
     // P0 — força bruta contra a senha atual também é bloqueada (por sessão+IP).
     const chaveFalhas = `senha:falha:${usuario.id}:${obterIp(req)}`;
-    if (consultar(chaveFalhas, JANELA_FALHAS_MS) >= MAX_FALHAS_SENHA) {
+    if ((await consultarAsync(chaveFalhas, JANELA_FALHAS_MS)) >= MAX_FALHAS_SENHA) {
       await registrarAudit(usuario, {
         acao: "TROCA_SENHA_BLOQUEADA_RATE_LIMIT",
         categoria: "autenticacao",
@@ -76,10 +76,10 @@ export async function POST(req: NextRequest) {
       return Response.json({ erro: "Usuário não encontrado." }, { status: 404 });
     }
     if (!(await verificarSenha(senhaAtual, user.senhaHash))) {
-      limitar(chaveFalhas, MAX_FALHAS_SENHA, JANELA_FALHAS_MS);
+      await limitarAsync(chaveFalhas, MAX_FALHAS_SENHA, JANELA_FALHAS_MS);
       return Response.json({ erro: "A senha atual está incorreta." }, { status: 401 });
     }
-    resetar(chaveFalhas);
+    await resetarAsync(chaveFalhas);
 
     await db.user.update({
       where: { id: usuario.id },

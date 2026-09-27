@@ -4,7 +4,7 @@ import { criarSessao, hashSenha, registrarAudit } from "@/lib/server/auth";
 import { carregarDados, slugEmail } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
 import {
-  limitar,
+  limitarAsync,
   obterIp,
   resposta429,
   validarSenhaForte,
@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
     };
 
     // P0 — anti-spam de contas: teto de auto-cadastro por IP por hora.
-    const teto = limitar(`registro:ip:${obterIp(req)}`, LIMITE_REGISTRO_IP_POR_HORA, 3_600_000);
+    const teto = await limitarAsync(`registro:ip:${obterIp(req)}`, LIMITE_REGISTRO_IP_POR_HORA, 3_600_000);
     if (!teto.permitido) {
       return resposta429(teto.restanteSeg);
     }

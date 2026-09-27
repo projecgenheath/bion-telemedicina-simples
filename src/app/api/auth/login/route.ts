@@ -4,9 +4,9 @@ import { criarSessao, verificarSenha, registrarAudit } from "@/lib/server/auth";
 import { carregarDados } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
 import {
-  limitar,
-  consultar,
-  resetar,
+  limitarAsync,
+  consultarAsync,
+  resetarAsync,
   obterIp,
   resposta429,
   LIMITE_LOGIN_IP_POR_MIN,
@@ -24,14 +24,14 @@ export async function POST(req: NextRequest) {
     // P0 — anti-força bruta: teto por IP + bloqueio por falhas acumuladas
     // (IP+e-mail). Sucesso reseta as falhas; só FALHAS contam para o bloqueio.
     const ip = obterIp(req);
-    const tetoIp = limitar(`login:ip:${ip}`, LIMITE_LOGIN_IP_POR_MIN, 60_000);
+    const tetoIp = await limitarAsync(`login:ip:${ip}`, LIMITE_LOGIN_IP_POR_MIN, 60_000);
     if (!tetoIp.permitido) {
       return resposta429(tetoIp.restanteSeg);
     }
 
     const emailNorm = email.trim().toLowerCase();
     const chaveFalhas = `login:falha:${ip}:${emailNorm}`;
-    if (consultar(chaveFalhas, JANELA_FALHAS_MS) >= MAX_FALHAS_LOGIN) {
+    if ((await consultarAsync(chaveFalhas, JANELA_FALHAS_MS)) >= MAX_FALHAS_LOGIN) {
       await registrarAudit(null, {
         acao: "LOGIN_BLOQUEADO_RATE_LIMIT",
         categoria: "autenticacao",
@@ -50,10 +50,10 @@ export async function POST(req: NextRequest) {
 
     // Mensagem genérica para não revelar se o e-mail existe
     if (!user || !(await verificarSenha(senha, user.senhaHash))) {
-      limitar(chaveFalhas, MAX_FALHAS_LOGIN, JANELA_FALHAS_MS);
+      await limitarAsync(chaveFalhas, MAX_FALHAS_LOGIN, JANELA_FALHAS_MS);
       return NextResponse.json({ erro: "E-mail ou senha incorretos." }, { status: 401 });
     }
-    resetar(chaveFalhas);
+    await resetarAsync(chaveFalhas);
 
     if (user.status === "inativo") {
       return NextResponse.json(

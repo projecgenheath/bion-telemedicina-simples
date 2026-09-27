@@ -122,8 +122,21 @@ export function verificarAssinaturaWebhook(corpo: string, assinatura: string | n
   return crypto.timingSafeEqual(a, b);
 }
 
-/** Modo atual do gateway: "webhook" quando um segredo está configurado
- *  (produção real — aguarda confirmação externa), senão "simulado" (demo). */
-export function modoGateway(): "webhook" | "simulado" {
-  return process.env.BION_PAGAMENTO_WEBHOOK_SECRET ? "webhook" : "simulado";
+/**
+ * Modo do gateway de pagamento (P0 fail-closed):
+ * - "webhook"     — BION_PAGAMENTO_WEBHOOK_SECRET definido; só confirma via HMAC
+ * - "simulado"    — demo/dev, ou produção com BION_PAGAMENTO_SIMULADO=1 explícito
+ * - "pendente"    — produção SEM secret e SEM flag de simulado: cria cobrança
+ *                   mas NUNCA auto-confirma (evita consulta "paga" de graça)
+ */
+export function modoGateway(): "webhook" | "simulado" | "pendente" {
+  if (process.env.BION_PAGAMENTO_WEBHOOK_SECRET?.trim()) return "webhook";
+  const forcarSimulado = process.env.BION_PAGAMENTO_SIMULADO === "1";
+  if (process.env.NODE_ENV === "production" && !forcarSimulado) return "pendente";
+  return "simulado";
+}
+
+/** True somente quando o servidor pode confirmar cobrança sem webhook (demo). */
+export function permiteConfirmacaoSimulada(): boolean {
+  return modoGateway() === "simulado";
 }

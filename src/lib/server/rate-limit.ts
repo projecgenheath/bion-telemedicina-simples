@@ -2,15 +2,12 @@ import "server-only";
 import type { NextRequest } from "next/server";
 
 /**
- * P0 (2026-09) — Rate limiting em memória (janela fixa) para as rotas de
- * autenticação: login, registro e troca de senha.
+ * Rate limiting — janela fixa.
  *
- * Objetivo: fechar o último vetor de comprometimento de conta de médico/admin
- * (força bruta / credential stuffing). Falhas de senha são acumuladas por
- * IP+identidade e bloqueiam a tentativa ANTES da verificação, com Retry-After.
- *
- * Escopo: instância única (dev/demo). Em produção multi-instância, trocar a
- * store em Map por um store compartilhado (Redis/Upstash) mantendo o contrato.
+ * Store:
+ *  1) Upstash Redis REST (UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN)
+ *     → compartilhado entre instâncias Vercel (recomendado em produção)
+ *  2) Fallback em memória (Map) — dev/demo / single-instance
  */
 
 type Janela = { inicio: number; contagem: number };
@@ -23,7 +20,6 @@ function janelaDe(chave: string, agora: number): Janela {
     j = { inicio: agora, contagem: 0 };
     janelas.set(chave, j);
     if (janelas.size > MAX_CHAVES) {
-      // Higiene: descarta janelas velhas (>= 1h) para não vazar memória.
       for (const [k, v] of janelas) {
         if (agora - v.inicio > 3_600_000) janelas.delete(k);
       }
@@ -34,7 +30,7 @@ function janelaDe(chave: string, agora: number): Janela {
 
 export type Veredito = { permitido: boolean; restanteSeg: number };
 
-/** Incrementa o contador da chave e diz se passou do teto da janela. */
+/** Incrementa o contador da chave (memória). Preferir `limitarAsync` em rotas. */
 export function limitar(chave: string, max: number, janelaMs: number): Veredito {
   const agora = Date.now();
   const j = janelaDe(chave, agora);
@@ -49,7 +45,7 @@ export function limitar(chave: string, max: number, janelaMs: number): Veredito 
   };
 }
 
-/** Consulta sem incrementar — usada para o bloqueio por falhas acumuladas. */
+/** Consulta sem incrementar — bloqueio por falhas acumuladas. */
 export function consultar(chave: string, janelaMs: number): number {
   const agora = Date.now();
   const j = janelas.get(chave);
@@ -57,12 +53,109 @@ export function consultar(chave: string, janelaMs: number): number {
   return j.contagem;
 }
 
-/** Zera a janela da chave (ex.: login/troca bem-sucedidos limpam as falhas). */
+/** Zera a janela da chave (login/troca bem-sucedidos). */
 export function resetar(chave: string): void {
   janelas.delete(chave);
 }
 
-/** IP do cliente atrás de proxy/gateway (Vercel, Caddy, nginx). */
+function upstashConfig(): { url: string; token: string } | null {
+  const url = process.env.UPSTASH_REDIS_REST_URL?.trim();
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN?.trim();
+  if (!url || !token) return null;
+  return { url, token };
+}
+
+/** INCR + EXPIRE (TTL = janela). Devolve contagem ou null se Redis indisponível. */
+async function redisIncr(chave: string, janelaMs: number): Promise<number | null> {
+  const cfg = upstashConfig();
+  if (!cfg) return null;
+  const ttlSec = Math.max(1, Math.ceil(janelaMs / 1000));
+  const redisKey = `bion:rl:${chave}`;
+  try {
+    const res = await fetch(`${cfg.url}/pipeline`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${cfg.token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify([
+        ["INCR", redisKey],
+        ["EXPIRE", redisKey, String(ttlSec), "NX"],
+      ]),
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { result?: unknown }[];
+    const incr = data?.[0]?.result;
+    return typeof incr === "number" ? incr : null;
+  } catch {
+    return null;
+  }
+}
+
+async function redisGet(chave: string): Promise<number | null> {
+  const cfg = upstashConfig();
+  if (!cfg) return null;
+  const redisKey = `bion:rl:${chave}`;
+  try {
+    const res = await fetch(`${cfg.url}/get/${encodeURIComponent(redisKey)}`, {
+      headers: { Authorization: `Bearer ${cfg.token}` },
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { result?: string | null };
+    if (data.result == null) return 0;
+    const n = Number(data.result);
+    return Number.isFinite(n) ? n : 0;
+  } catch {
+    return null;
+  }
+}
+
+async function redisDel(chave: string): Promise<void> {
+  const cfg = upstashConfig();
+  if (!cfg) return;
+  const redisKey = `bion:rl:${chave}`;
+  try {
+    await fetch(`${cfg.url}/del/${encodeURIComponent(redisKey)}`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${cfg.token}` },
+      cache: "no-store",
+    });
+  } catch {
+    /* ignora */
+  }
+}
+
+/**
+ * Limite com store compartilhada (Upstash) quando configurada; senão memória.
+ */
+export async function limitarAsync(
+  chave: string,
+  max: number,
+  janelaMs: number,
+): Promise<Veredito> {
+  const contagem = await redisIncr(chave, janelaMs);
+  if (contagem != null) {
+    return {
+      permitido: contagem <= max,
+      restanteSeg: Math.max(1, Math.ceil(janelaMs / 1000)),
+    };
+  }
+  return limitar(chave, max, janelaMs);
+}
+
+export async function consultarAsync(chave: string, janelaMs: number): Promise<number> {
+  const n = await redisGet(chave);
+  if (n != null) return n;
+  return consultar(chave, janelaMs);
+}
+
+export async function resetarAsync(chave: string): Promise<void> {
+  await redisDel(chave);
+  resetar(chave);
+}
+
 export function obterIp(req: NextRequest): string {
   const fwd = req.headers.get("x-forwarded-for");
   if (fwd) {
@@ -72,10 +165,6 @@ export function obterIp(req: NextRequest): string {
   return req.headers.get("x-real-ip")?.trim() || "desconhecido";
 }
 
-/**
- * Política de senha (P0): mínimo 10 caracteres, com letras e números.
- * Compartilhada por registro e troca de senha. Retorna mensagem de erro ou null.
- */
 export function validarSenhaForte(senha: string): string | null {
   if (senha.length < 10 || senha.length > 64) {
     return "A senha deve ter entre 10 e 64 caracteres.";
@@ -86,7 +175,6 @@ export function validarSenhaForte(senha: string): string | null {
   return null;
 }
 
-/** Resposta 429 padronizada, com Retry-After em segundos. */
 export function resposta429(
   restanteSeg: number,
   mensagem = "Muitas tentativas. Aguarde alguns minutos e tente novamente.",
@@ -97,18 +185,8 @@ export function resposta429(
   );
 }
 
-/* ------------------------------------------------------------------ */
-/* Política central (calibrada para não disparar nas suítes internas:  */
-/* teste_hardening e teste_v4_v7_delta fazem ~1 falha por execução).   */
-/* ------------------------------------------------------------------ */
-
-/** Teto bruto por IP no login (anti-flooding; força bruta é parada pelas falhas). */
 export const LIMITE_LOGIN_IP_POR_MIN = 150;
-/** Falhas de senha por IP+e-mail antes do bloqueio temporário. */
 export const MAX_FALHAS_LOGIN = 10;
-/** Janela do bloqueio por falhas (10 min). */
 export const JANELA_FALHAS_MS = 10 * 60_000;
-/** Auto-cadastro por IP por hora (anti-spam de contas). */
 export const LIMITE_REGISTRO_IP_POR_HORA = 10;
-/** Falhas de "senha atual" na troca de senha antes do bloqueio. */
 export const MAX_FALHAS_SENHA = 10;
