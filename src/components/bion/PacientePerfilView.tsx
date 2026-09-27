@@ -68,7 +68,7 @@ export function PacientePerfilView() {
               <h1 className="text-2xl md:text-3xl font-extrabold text-foreground">
                 {pacientePerfil.nome}
               </h1>
-              <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-accent-soft text-emerald-700 dark:text-emerald-300">
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-accent-soft text-emerald-800 dark:text-emerald-200">
                 Verificado
               </span>
             </div>
@@ -150,7 +150,7 @@ export function PacientePerfilView() {
 
             <div className="flex justify-between items-center py-1">
               <span className="text-muted-foreground">Termos LGPD:</span>
-              <span className="font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+              <span className="font-semibold text-emerald-700 dark:text-emerald-200 flex items-center gap-1">
                 <Check className="w-3.5 h-3.5" /> Aceito em 2025
               </span>
             </div>
@@ -199,7 +199,7 @@ export function PacientePerfilView() {
 
             <div className="flex justify-between items-center py-1">
               <span className="text-muted-foreground">Status do Prontuário:</span>
-              <span className="font-semibold text-emerald-600 dark:text-emerald-400">100% Atualizado</span>
+              <span className="font-semibold text-emerald-700 dark:text-emerald-200">100% Atualizado</span>
             </div>
           </div>
         </div>

@@ -13,6 +13,7 @@ import {
   Filter,
   X,
 } from "lucide-react";
+import { EstadoVazio } from "@/components/bion/ui/EstadoVazio";
 import {
   useBion,
   type AuditCategoria,
@@ -484,9 +485,10 @@ export function AuditTrail() {
         ))}
 
         {paginados.length === 0 && (
-          <div className="text-center py-12 text-muted-foreground text-sm">
-            Nenhum registro encontrado com os filtros aplicados.
-          </div>
+          <EstadoVazio
+            titulo="Nenhum registro encontrado"
+            descricao="Ajuste os filtros de categoria, período ou busca para ver eventos da trilha de auditoria."
+          />
         )}
       </div>
 

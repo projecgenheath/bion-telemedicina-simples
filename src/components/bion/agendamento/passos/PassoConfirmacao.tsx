@@ -67,7 +67,7 @@ export function PassoConfirmacao(p: AgendamentoCorpoProps) {
       </div>
 
       <div>
-        <span className="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+        <span className="text-xs font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-200">
           Pagamento Aprovado com Sucesso
         </span>
         <h2 className="text-3xl font-extrabold tracking-tight mt-1 text-foreground">

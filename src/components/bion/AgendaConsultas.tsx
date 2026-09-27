@@ -78,7 +78,7 @@ function LinhaConsulta({ c, perfil }: { c: Consulta; perfil: "paciente" | "medic
           </div>
         </div>
         <span
-          className={`text-xs px-2.5 py-1 rounded-full shrink-0 ${cancelada ? "bg-destructive/10 text-destructive" : concluida ? "bg-muted text-muted-foreground" : c.status === "pendente_anamnese" ? "bg-amber-500/15 text-amber-600 dark:text-amber-400" : "bg-accent-soft"}`}
+          className={`text-xs px-2.5 py-1 rounded-full shrink-0 ${cancelada ? "bg-destructive/10 text-destructive" : concluida ? "bg-muted text-muted-foreground" : c.status === "pendente_anamnese" ? "bg-amber-500/15 text-amber-800 dark:text-amber-200" : "bg-accent-soft"}`}
           style={!cancelada && !concluida && c.status !== "pendente_anamnese" ? { color: "var(--accent)" } : undefined}
         >
           {cancelada

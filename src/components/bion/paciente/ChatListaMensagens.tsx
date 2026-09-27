@@ -47,7 +47,7 @@ export function ChatListaMensagens({
               {[0, 1, 2].map((d) => (
                 <span
                   key={d}
-                  className="w-2 h-2 rounded-full bg-bion-ink/40 dark:bg-white/40 animate-bounce"
+                  className="w-2 h-2 rounded-full bg-bion-ink/40 dark:bg-white/40 motion-safe:animate-bounce"
                   style={{ animationDelay: `${d * 0.15}s` }}
                 />
               ))}

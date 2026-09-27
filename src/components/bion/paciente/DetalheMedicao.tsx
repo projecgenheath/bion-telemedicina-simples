@@ -33,7 +33,7 @@ const rotuloCurto = (iso: string) => {
 
 function classificarImc(imc: number): { rotulo: string; cor: string } {
   if (imc < 18.5) return { rotulo: "Abaixo do peso", cor: "text-sky-700 dark:text-sky-300" };
-  if (imc < 25) return { rotulo: "Peso normal", cor: "text-emerald-700 dark:text-emerald-300" };
+  if (imc < 25) return { rotulo: "Peso normal", cor: "text-emerald-800 dark:text-emerald-200" };
   if (imc < 30) return { rotulo: "Sobrepeso", cor: "text-amber-700 dark:text-amber-300" };
   return { rotulo: "Obesidade", cor: "text-red-700 dark:text-red-300" };
 }

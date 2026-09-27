@@ -315,7 +315,7 @@ export function PerfilPainel({ onSair }: { onSair: () => void }) {
             {pagamentos.map((c) => (
               <li key={c.id} className="text-sm flex items-center justify-between gap-2">
                 <span className="truncate text-bion-ink dark:text-bion-paper">{c.especialidade} · {c.data}</span>
-                <span className={`shrink-0 text-xs font-bold px-2.5 py-1 rounded-full ${c.pago ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" : "bg-amber-500/15 text-amber-700 dark:text-amber-300"}`}>
+                <span className={`shrink-0 text-xs font-bold px-2.5 py-1 rounded-full ${c.pago ? "bg-emerald-500/15 text-emerald-800 dark:text-emerald-200" : "bg-amber-500/15 text-amber-700 dark:text-amber-300"}`}>
                   {c.pago ? "Pago" : "Pendente"} {c.valor ? `· ${c.valor}` : ""}
                 </span>
               </li>

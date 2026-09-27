@@ -119,6 +119,16 @@ function Shell({
     } as Record<string, string>)[view] ??
     "Página";
 
+  // Fecha o menu mobile com Escape
+  useEffect(() => {
+    if (!menuMobileAberto) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMenuMobileAberto(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [menuMobileAberto]);
+
   // SPA: ao trocar de tela, move o foco para o conteúdo e anuncia o título
   useEffect(() => {
     const el = document.getElementById("conteudo-principal");

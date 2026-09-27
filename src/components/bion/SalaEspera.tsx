@@ -241,7 +241,7 @@ export function SalaEspera({ onEnter }: { onEnter: () => void }) {
 
             <div className="absolute bottom-4 inset-x-4 flex items-center justify-between">
               <div className="flex items-center gap-2 bg-black/60 backdrop-blur px-3 py-1.5 rounded-full text-xs text-white border border-white/10">
-                <Volume2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                <Volume2 className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-200" />
                 <span>Nível de voz:</span>
                 <div className="flex items-end gap-[3px] h-4">
                   {barrasAudio.map((v, i) => (

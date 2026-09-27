@@ -103,7 +103,7 @@
   --secondary: oklch(0.27 0.03 250);
   --secondary-foreground: oklch(0.96 0.01 240);
   --muted: oklch(0.27 0.025 250);
-  --muted-foreground: oklch(0.72 0.02 250);
+  --muted-foreground: oklch(0.80 0.02 250);
   --accent: oklch(0.72 0.15 155);
   --accent-foreground: oklch(0.17 0.03 250);
   --accent-soft: oklch(0.32 0.07 155);
@@ -264,4 +264,18 @@
   [role="button"]:focus:not(:focus-visible) {
     outline: none;
   }
+}
+
+/* Status badges — contraste legível no dark mode */
+.dark .badge-ok {
+  background-color: oklch(0.32 0.08 155);
+  color: oklch(0.92 0.06 155);
+}
+.dark .badge-warn {
+  background-color: oklch(0.35 0.09 85);
+  color: oklch(0.93 0.06 85);
+}
+.dark .badge-danger {
+  background-color: oklch(0.35 0.1 25);
+  color: oklch(0.94 0.05 25);
 }

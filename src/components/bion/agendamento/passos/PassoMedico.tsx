@@ -63,7 +63,7 @@ export function PassoMedico(p: AgendamentoCorpoProps) {
         <span>
           Médicos especialistas em <strong className="text-foreground">{especialidade}</strong>:
         </span>
-        <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-accent-soft text-emerald-700 dark:text-emerald-300">
+        <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-accent-soft text-emerald-800 dark:text-emerald-200">
           {medicosFiltrados.length} profissionais online
         </span>
       </div>
@@ -85,7 +85,7 @@ export function PassoMedico(p: AgendamentoCorpoProps) {
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 flex-wrap">
                   <h3 className="font-bold text-base truncate">{med.nome}</h3>
-                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-accent-soft text-emerald-700 dark:text-emerald-300">
+                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-accent-soft text-emerald-800 dark:text-emerald-200">
                     {med.crm}
                   </span>
                 </div>

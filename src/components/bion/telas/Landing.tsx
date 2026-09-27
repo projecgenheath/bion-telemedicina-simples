@@ -103,7 +103,7 @@ export function Landing() {
                   <div className="font-bold text-base">Dra. Ana Ribeiro</div>
                   <div className="text-xs text-muted-foreground">Clínica Geral • CRM 12345 SP</div>
                 </div>
-                <span className="text-xs font-bold px-3 py-1 rounded-full bg-accent-soft text-emerald-700 dark:text-emerald-300">
+                <span className="text-xs font-bold px-3 py-1 rounded-full bg-accent-soft text-emerald-800 dark:text-emerald-200">
                   Disponível Agora
                 </span>
               </div>

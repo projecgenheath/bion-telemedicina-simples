@@ -307,7 +307,7 @@ export function PacienteApp() {
                       <CalendarClock className="w-4 h-4" /> {proxima.data} · {proxima.hora}
                     </span>
                     {salaAberta ? (
-                      <span className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-700 dark:text-emerald-300">
+                      <span className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-800 dark:text-emerald-200">
                         <Video className="w-4 h-4" /> Entrar na sala
                       </span>
                     ) : (
@@ -373,7 +373,7 @@ export function PacienteApp() {
 
             <div className="mt-auto pt-10 flex flex-col items-center gap-1 text-bion-ink/40 dark:text-white/35">
               <span className="text-xs font-semibold">Saúde e exames abaixo</span>
-              <ChevronDown className="w-5 h-5 animate-bounce" />
+              <ChevronDown className="w-5 h-5 motion-safe:animate-bounce" />
             </div>
           </section>
 

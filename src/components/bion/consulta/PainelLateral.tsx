@@ -270,7 +270,7 @@ export function ConsultaPainelLateral({
       {aba === "ia" && (
         <div className="space-y-4">
           <div className="flex items-center justify-between text-xs">
-            <span className="font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+            <span className="font-bold text-emerald-700 dark:text-emerald-200 flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
               Transcrição Ativa em Tempo Real
             </span>

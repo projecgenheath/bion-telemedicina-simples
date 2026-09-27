@@ -517,7 +517,7 @@ export function ChatBion({ aberto, onFechar, aoEnviarExame }: { aberto: boolean;
           </div>
           <div className="flex-1 min-w-0">
             <div className="font-bold text-bion-ink dark:text-bion-paper">BION IA</div>
-            <div className="text-xs text-emerald-700 dark:text-emerald-300 font-medium">
+            <div className="text-xs text-emerald-800 dark:text-emerald-200 font-medium">
               {pensando || enviandoLaudo || pagando ? "Digitando…" : anamneseAtiva ? "Triagem em andamento" : "Online · responde na hora"}
             </div>
           </div>
@@ -657,7 +657,7 @@ export function ChatBion({ aberto, onFechar, aoEnviarExame }: { aberto: boolean;
                 <button type="button"
                   key={a.id}
                   onClick={() => retomarAnamnese(a)}
-                  className="rounded-full bg-emerald-600/10 border border-emerald-600/30 px-4 py-2.5 text-sm font-semibold text-emerald-700 dark:text-emerald-300 inline-flex items-center gap-1.5"
+                  className="rounded-full bg-emerald-600/10 border border-emerald-600/30 px-4 py-2.5 text-sm font-semibold text-emerald-800 dark:text-emerald-200 inline-flex items-center gap-1.5"
                 >
                   <Stethoscope className="w-4 h-4" />
                   Continuar triagem — {a.especialidade} com {a.medico}

@@ -39,7 +39,7 @@ type EventoTimeline = {
 const CORES: Record<string, { bg: string; text: string }> = {
   consulta: { bg: "bg-blue-50 dark:bg-blue-950/60", text: "text-blue-700 dark:text-blue-300" },
   exame: { bg: "bg-violet-50 dark:bg-violet-950/60", text: "text-violet-700 dark:text-violet-300" },
-  receita: { bg: "bg-emerald-50 dark:bg-emerald-950/60", text: "text-emerald-700 dark:text-emerald-300" },
+  receita: { bg: "bg-emerald-50 dark:bg-emerald-950/60", text: "text-emerald-800 dark:text-emerald-200" },
   atestado: { bg: "bg-amber-50 dark:bg-amber-950/60", text: "text-amber-700 dark:text-amber-300" },
   evento: { bg: "bg-rose-50 dark:bg-rose-950/60", text: "text-rose-700 dark:text-rose-300" },
 };
@@ -161,8 +161,8 @@ function GraficoPressao() {
       <div className="grid grid-cols-3 gap-2 text-center">
         {[
           { l: "Atual", v: "118/77", cls: "bg-muted/50 text-foreground" },
-          { l: "Meta", v: "120/80", cls: "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300" },
-          { l: "Tendência", v: "↓ Melhora", cls: "bg-muted/50 text-emerald-600 dark:text-emerald-400" },
+          { l: "Meta", v: "120/80", cls: "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-200" },
+          { l: "Tendência", v: "↓ Melhora", cls: "bg-muted/50 text-emerald-700 dark:text-emerald-200" },
         ].map((c) => (
           <div key={c.l} className={`rounded-xl p-2 ${c.cls}`}>
             <div className="text-xs text-muted-foreground">{c.l}</div>
@@ -231,7 +231,7 @@ function GraficoPeso() {
         <span>
           Início: <strong className="text-foreground">78.2 kg</strong>
         </span>
-        <span className="text-emerald-600 dark:text-emerald-400 font-bold">-3.4 kg em 6 meses</span>
+        <span className="text-emerald-700 dark:text-emerald-200 font-bold">-3.4 kg em 6 meses</span>
         <span>
           IMC: <strong className="text-foreground">24.1</strong> (Normal)
         </span>
@@ -365,7 +365,7 @@ export function HistoricoClinico() {
     if (!s) return null;
     const map: Record<string, string> = {
       confirmada: "bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300",
-      concluida: "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300",
+      concluida: "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-200",
       cancelada: "bg-red-50 dark:bg-red-950/60 text-red-600 dark:text-red-400",
       em_espera: "bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300",
       pendente_anamnese: "bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300",
@@ -428,7 +428,7 @@ export function HistoricoClinico() {
             l: "Receitas",
             v: totais.receitas,
             I: Pill,
-            c: "text-emerald-700 dark:text-emerald-300",
+            c: "text-emerald-800 dark:text-emerald-200",
             bg: "bg-emerald-50 dark:bg-emerald-950/60",
             f: "receitas",
           },
@@ -557,7 +557,7 @@ export function HistoricoClinico() {
                               )}
                               {(ev.tipo === "receita" || ev.tipo === "atestado") && (
                                 <button type="button"
-                                  className="flex items-center gap-1.5 text-xs font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 px-3 py-1.5 rounded-xl hover:bg-emerald-100 transition"
+                                  className="flex items-center gap-1.5 text-xs font-bold text-emerald-800 dark:text-emerald-200 bg-emerald-50 dark:bg-emerald-950/60 px-3 py-1.5 rounded-xl hover:bg-emerald-100 transition"
                                   onClick={(e) => e.stopPropagation()}
                                 >
                                   <Download className="w-3.5 h-3.5" /> Baixar PDF

@@ -135,7 +135,7 @@ export function PrivacidadePaciente() {
                 <div
                   className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
                     c.aceito
-                      ? "bg-accent-soft text-emerald-700 dark:text-emerald-300"
+                      ? "bg-accent-soft text-emerald-800 dark:text-emerald-200"
                       : "bg-destructive/10 text-destructive"
                   }`}
                 >
@@ -150,7 +150,7 @@ export function PrivacidadePaciente() {
                 </div>
                 <span
                   className={`text-xs font-black uppercase tracking-widest ${
-                    c.aceito ? "text-emerald-600 dark:text-emerald-400" : "text-destructive"
+                    c.aceito ? "text-emerald-700 dark:text-emerald-200" : "text-destructive"
                   }`}
                 >
                   {c.aceito ? "Autorizado" : "Recusado"}

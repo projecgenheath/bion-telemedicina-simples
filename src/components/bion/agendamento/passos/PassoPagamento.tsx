@@ -117,7 +117,7 @@ export function PassoPagamento(p: AgendamentoCorpoProps) {
             </div>
 
             <div>
-              <div className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 flex items-center justify-center gap-1">
+              <div className="text-xs font-semibold text-emerald-700 dark:text-emerald-200 flex items-center justify-center gap-1">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 dark:bg-emerald-600 animate-ping" />
                 Aprovação Imediata em Segundos
               </div>

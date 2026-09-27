@@ -51,7 +51,7 @@ export function ConsultaBarraSuperior({
         <div
           className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full border font-semibold ${
             statusSala === "conectado"
-              ? "bg-emerald-500/10 dark:bg-emerald-400/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400"
+              ? "bg-emerald-500/10 dark:bg-emerald-400/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-200"
               : statusSala === "instavel"
                 ? "bg-amber-500/10 dark:bg-amber-400/10 border-amber-500/30 text-amber-600 dark:text-amber-400"
                 : "bg-white/5 border-white/10 text-slate-300"

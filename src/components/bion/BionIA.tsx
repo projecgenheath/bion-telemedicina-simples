@@ -234,7 +234,7 @@ export function BionIA() {
             <Shield className="w-3.5 h-3.5 text-primary" /> Suas interações são confidenciais e
             protegidas pela LGPD.
           </span>
-          <span className="font-semibold text-emerald-600 dark:text-emerald-400">● IA Ativa</span>
+          <span className="font-semibold text-emerald-700 dark:text-emerald-200">● IA Ativa</span>
         </div>
 
         {/* Mensagens */}
@@ -286,9 +286,9 @@ export function BionIA() {
                 <Bot className="w-5 h-5" />
               </div>
               <div className="bg-muted border rounded-2xl px-4 py-2.5 text-xs text-muted-foreground flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-primary animate-bounce" />
-                <span className="w-2 h-2 rounded-full bg-primary animate-bounce [animation-delay:0.2s]" />
-                <span className="w-2 h-2 rounded-full bg-primary animate-bounce [animation-delay:0.4s]" />
+                <span className="w-2 h-2 rounded-full bg-primary motion-safe:animate-bounce" />
+                <span className="w-2 h-2 rounded-full bg-primary motion-safe:animate-bounce [animation-delay:0.2s]" />
+                <span className="w-2 h-2 rounded-full bg-primary motion-safe:animate-bounce [animation-delay:0.4s]" />
                 <span className="ml-1">BION IA pensando...</span>
               </div>
             </div>

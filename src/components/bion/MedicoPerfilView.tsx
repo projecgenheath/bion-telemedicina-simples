@@ -105,7 +105,7 @@ export function MedicoPerfilView({ medicoId }: { medicoId?: string }) {
                   {medico.nome}
                 </h1>
               )}
-              <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-accent-soft text-emerald-700 dark:text-emerald-300 flex items-center gap-1">
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-accent-soft text-emerald-800 dark:text-emerald-200 flex items-center gap-1">
                 <ShieldCheck className="w-3.5 h-3.5" /> CRM Verificado
               </span>
             </div>

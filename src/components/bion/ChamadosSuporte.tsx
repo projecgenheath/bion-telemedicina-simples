@@ -86,7 +86,7 @@ export function ChamadosSuporte() {
     em_andamento: { label: "Em Análise", bg: "bg-primary-soft text-primary border-primary/30" },
     resolvido: {
       label: "Resolvido",
-      bg: "bg-emerald-500/15 dark:bg-emerald-400/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30",
+      bg: "bg-emerald-500/15 dark:bg-emerald-400/15 text-emerald-700 dark:text-emerald-200 border-emerald-500/30",
     },
   };
 
@@ -272,7 +272,7 @@ export function ChamadosSuporte() {
             {ticketSelecionado.resposta && (
               <div className="p-4 rounded-2xl bg-emerald-500/10 dark:bg-emerald-400/10 border border-emerald-500/20 text-xs space-y-1.5">
                 <div className="font-bold text-emerald-800 dark:text-emerald-200 flex items-center gap-1.5">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                  <CheckCircle2 className="w-4 h-4 text-emerald-700 dark:text-emerald-200" />
                   Resposta enviada por {ticketSelecionado.respondidoPor ?? "Suporte BION"}
                 </div>
                 <p className="text-foreground leading-relaxed whitespace-pre-wrap">
