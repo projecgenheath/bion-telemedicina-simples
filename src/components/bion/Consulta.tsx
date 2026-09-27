@@ -373,6 +373,7 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
           enviarChat={enviarChat}
           onAnexarExame={() => fileRef.current?.click()}
         />
+      </div>
 
       {/* Modal de Emissão de Receita */}
       {modalReceita && (
