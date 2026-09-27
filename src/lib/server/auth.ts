@@ -26,11 +26,29 @@ export async function verificarSenha(senha: string, hash: string): Promise<boole
   return bcrypt.compare(senha, hash);
 }
 
-/** Cria uma sessão no banco e grava o cookie httpOnly */
+/** Máximo de sessões simultâneas por usuário (P1 — limita roubo de cookie / dispositivos). */
+const MAX_SESSOES_POR_USUARIO = 5;
+
+/** Cria uma sessão no banco e grava o cookie httpOnly.
+ *  Também remove sessões expiradas e, se passar do teto, as mais antigas. */
 export async function criarSessao(userId: string): Promise<string> {
   const token = crypto.randomBytes(32).toString("hex");
   const expiresAt = new Date(Date.now() + DURACAO_SESSAO_MS);
   await db.sessao.create({ data: { id: token, userId, expiresAt } });
+
+  // Higiene: expira antigas + mantém só as N mais recentes (inclui a nova).
+  const agora = new Date();
+  await db.sessao.deleteMany({ where: { userId, expiresAt: { lt: agora } } }).catch(() => {});
+  const vivas = await db.sessao.findMany({
+    where: { userId },
+    orderBy: { createdAt: "desc" },
+    select: { id: true },
+  });
+  if (vivas.length > MAX_SESSOES_POR_USUARIO) {
+    const excesso = vivas.slice(MAX_SESSOES_POR_USUARIO).map((s) => s.id);
+    await db.sessao.deleteMany({ where: { id: { in: excesso } } }).catch(() => {});
+  }
+
   const jar = await cookies();
   jar.set(COOKIE_SESSAO, token, {
     httpOnly: true,

@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { exigirSessao } from "@/lib/server/auth";
 import { aplicarSideEffects } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
+import { idCuid, isErro } from "@/lib/server/validar";
 
 /**
  * Mensageria assíncrona BION (paciente ↔ médico, e suporte BION).
@@ -68,7 +69,8 @@ export async function POST(req: NextRequest) {
     };
 
     const texto = (body.texto ?? "").trim();
-    if (!body.paraId || !texto) {
+    const paraId = idCuid(body.paraId, "Destinatário");
+    if (isErro(paraId) || !texto) {
       return Response.json({ erro: "Informe destinatário e mensagem." }, { status: 400 });
     }
     if (texto.length > MAX_TEXTO) {
@@ -79,7 +81,7 @@ export async function POST(req: NextRequest) {
     }
 
     const destinatario = await db.user.findUnique({
-      where: { id: body.paraId },
+      where: { id: paraId },
       select: { id: true, nome: true, status: true, role: true },
     });
     if (!destinatario || destinatario.status !== "ativo") {

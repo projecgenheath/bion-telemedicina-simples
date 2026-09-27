@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { criarSessao, verificarSenha, registrarAudit } from "@/lib/server/auth";
 import { carregarDados } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
+import { emailNorm, isErro } from "@/lib/server/validar";
 import {
   limitarAsync,
   consultarAsync,
@@ -16,10 +17,12 @@ import {
 
 export async function POST(req: NextRequest) {
   try {
-    const { email, senha } = (await req.json()) as { email?: string; senha?: string };
-    if (!email || !senha) {
+    const body = (await req.json()) as { email?: string; senha?: string };
+    const emailOk = emailNorm(body.email);
+    if (isErro(emailOk) || !body.senha) {
       return NextResponse.json({ erro: "Informe e-mail e senha." }, { status: 400 });
     }
+    const senha = body.senha;
 
     // P0 — anti-força bruta: teto por IP + bloqueio por falhas acumuladas
     // (IP+e-mail). Sucesso reseta as falhas; só FALHAS contam para o bloqueio.
@@ -29,14 +32,14 @@ export async function POST(req: NextRequest) {
       return resposta429(tetoIp.restanteSeg);
     }
 
-    const emailNorm = email.trim().toLowerCase();
-    const chaveFalhas = `login:falha:${ip}:${emailNorm}`;
+    const emailNormado = emailOk;
+    const chaveFalhas = `login:falha:${ip}:${emailNormado}`;
     if ((await consultarAsync(chaveFalhas, JANELA_FALHAS_MS)) >= MAX_FALHAS_LOGIN) {
       await registrarAudit(null, {
         acao: "LOGIN_BLOQUEADO_RATE_LIMIT",
         categoria: "autenticacao",
         severidade: "critical",
-        detalhes: `${MAX_FALHAS_LOGIN}+ falhas para ${emailNorm} no IP ${ip} — tentativas bloqueadas por 10 min`,
+        detalhes: `${MAX_FALHAS_LOGIN}+ falhas para ${emailNormado} no IP ${ip} — tentativas bloqueadas por 10 min`,
       });
       return resposta429(
         JANELA_FALHAS_MS / 1000,
@@ -45,7 +48,7 @@ export async function POST(req: NextRequest) {
     }
 
     const user = await db.user.findFirst({
-      where: { email: emailNorm },
+      where: { email: emailNormado },
     });
 
     // Mensagem genérica para não revelar se o e-mail existe
