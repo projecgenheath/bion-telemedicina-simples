@@ -279,3 +279,14 @@
   background-color: oklch(0.35 0.1 25);
   color: oklch(0.94 0.05 25);
 }
+
+/* Preferência de densidade / tamanho de texto */
+html.densidade-compacta {
+  font-size: 14px;
+}
+html.densidade-confortavel {
+  font-size: 16px;
+}
+html.densidade-grande {
+  font-size: 18px;
+}

@@ -68,7 +68,7 @@ export function ConsultaPainelLateral({
           className={`flex-1 py-3.5 transition text-center ${
             aba === k
               ? "border-b-2 border-primary text-white bg-white/5"
-              : "text-slate-400 hover:text-white"
+              : "text-slate-300 hover:text-white"
           }`}
         >
           {t}
@@ -91,10 +91,10 @@ export function ConsultaPainelLateral({
                 ? `${dadosPaciente.idade} anos • ${dadosPaciente.genero}`
                 : "—"}
             </div>
-            <div className="text-slate-400">
+            <div className="text-slate-300">
               Alergias: {dadosPaciente ? "ver prontuário" : "— não exibido nesta tela"}
             </div>
-            <div className="text-slate-400">
+            <div className="text-slate-300">
               Medicamentos: {dadosPaciente ? "ver prontuário" : "— não exibido nesta tela"}
             </div>
           </div>
@@ -120,7 +120,7 @@ export function ConsultaPainelLateral({
               rows={8}
               disabled={role !== "medico"}
               placeholder="Registre queixa, hipótese diagnóstica e conduta médica..."
-              className="w-full p-3 rounded-2xl bg-white/5 border border-white/10 text-white placeholder:text-slate-500 outline-none focus:border-primary text-xs leading-relaxed"
+              className="w-full p-3 rounded-2xl bg-white/5 border border-white/10 text-white placeholder:text-slate-400 outline-none focus:border-primary text-xs leading-relaxed"
             />
           </div>
         </div>
@@ -144,7 +144,7 @@ export function ConsultaPainelLateral({
                 {anamneseAtual.status === "concluida" ? "Concluída" : `Em andamento · ${anamneseAtual.etapa}`}
               </span>
             </div>
-            <div className="text-slate-400 mt-1">
+            <div className="text-slate-300 mt-1">
               Documentos anexados: {anamneseAtual.documentos.length || "nenhum"}
             </div>
           </div>
@@ -154,7 +154,7 @@ export function ConsultaPainelLateral({
               <FileText className="w-4 h-4 text-primary shrink-0" />
               <div className="min-w-0">
                 <div className="font-bold text-white truncate">{d.nome}</div>
-                <div className="text-xs text-slate-400 truncate">
+                <div className="text-xs text-slate-300 truncate">
                   {d.exameImportado ? `Laudo laboratorial importado${d.resumo ? ` — ${d.resumo}` : ""}` : "Documento anexado na anamnese"}
                 </div>
               </div>
@@ -162,7 +162,7 @@ export function ConsultaPainelLateral({
           ))}
 
           {Object.entries(anamneseAtual.coleta).length === 0 ? (
-            <p className="text-slate-400">
+            <p className="text-slate-300">
               A anamnese desta consulta ainda não tem dados coletados — eles aparecem aqui conforme o paciente conversa com a BION IA.
             </p>
           ) : (
@@ -175,7 +175,7 @@ export function ConsultaPainelLateral({
                   .filter(([, v]) => v !== null && v !== undefined && v !== "" && !(Array.isArray(v) && v.length === 0))
                   .map(([campo, v]) => (
                     <div key={campo} className="text-slate-200">
-                      <span className="text-slate-400">{campo.replace(/_/g, " ")}: </span>
+                      <span className="text-slate-300">{campo.replace(/_/g, " ")}: </span>
                       {Array.isArray(v) ? v.join(", ") : String(v)}
                     </div>
                   ))}
@@ -205,12 +205,12 @@ export function ConsultaPainelLateral({
                   <FileText className="w-4 h-4 text-primary shrink-0" />
                   <div className="min-w-0">
                     <div className="font-bold text-white truncate">{a.nome}</div>
-                    <div className="text-xs text-slate-400">
+                    <div className="text-xs text-slate-300">
                       {a.tipo} • {a.tamanhoKb} KB
                     </div>
                   </div>
                 </div>
-                <button type="button" className="p-1.5 rounded-lg hover:bg-white/10 text-slate-400 hover:text-white">
+                <button type="button" className="p-1.5 rounded-lg hover:bg-white/10 text-slate-300 hover:text-white">
                   <Download className="w-3.5 h-3.5" />
                 </button>
               </div>
@@ -238,7 +238,7 @@ export function ConsultaPainelLateral({
               </div>
             ))}
             {chatMsgs.length === 0 && (
-              <div className="text-slate-500 text-center py-6 text-xs">
+              <div className="text-slate-400 text-center py-6 text-xs">
                 Nenhuma mensagem ainda. As mensagens vão direto para o outro
                 participante da consulta.
               </div>

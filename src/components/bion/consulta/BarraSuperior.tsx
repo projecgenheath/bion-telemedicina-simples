@@ -40,7 +40,7 @@ export function ConsultaBarraSuperior({
             </span>
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
           </div>
-          <div className="text-xs text-slate-400 truncate">{contraparteDetalhe}</div>
+          <div className="text-xs text-slate-300 truncate">{contraparteDetalhe}</div>
         </div>
       </div>
 
@@ -72,7 +72,7 @@ export function ConsultaBarraSuperior({
                   ? "Chamada encerrada"
                   : "Sala aberta"}
         </div>
-        <div className="hidden md:flex items-center gap-1 text-slate-400">
+        <div className="hidden md:flex items-center gap-1 text-slate-300">
           <Shield className="w-3.5 h-3.5 text-primary" /> Criptografia Ponta a Ponta (DTLS-SRTP)
         </div>
       </div>

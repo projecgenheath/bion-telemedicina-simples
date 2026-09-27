@@ -85,6 +85,15 @@ export function PerfilPainel({ onSair }: { onSair: () => void }) {
       return "claro" as "claro" | "escuro";
     }
   });
+  const [densidade, setDensidade] = useState<"compacta" | "confortavel" | "grande">(() => {
+    if (typeof window === "undefined") return "confortavel";
+    try {
+      const d = localStorage.getItem("bion-densidade");
+      return d === "compacta" || d === "grande" ? d : "confortavel";
+    } catch {
+      return "confortavel";
+    }
+  });
 
   const consultasDoPaciente = useMemo(
     () => consultas.filter((c) => c.paciente === sessao.nome).sort((a, b) => b.ts - a.ts),
@@ -122,6 +131,18 @@ export function PerfilPainel({ onSair }: { onSair: () => void }) {
     document.documentElement.classList.toggle("dark", novo === "escuro");
     try {
       localStorage.setItem("bion-tema", novo === "escuro" ? "escuro" : "claro");
+    } catch {
+      /* ignora */
+    }
+  };
+
+  const aplicarDensidade = (novo: "compacta" | "confortavel" | "grande") => {
+    setDensidade(novo);
+    const root = document.documentElement;
+    root.classList.remove("densidade-compacta", "densidade-confortavel", "densidade-grande");
+    root.classList.add(`densidade-${novo}`);
+    try {
+      localStorage.setItem("bion-densidade", novo);
     } catch {
       /* ignora */
     }
@@ -342,6 +363,29 @@ export function PerfilPainel({ onSair }: { onSair: () => void }) {
           >
             <Moon className="w-4 h-4" /> Dark
           </button>
+        </div>
+
+        <h3 className="text-sm font-bold text-bion-ink dark:text-bion-paper mt-4 mb-2">Tamanho do texto</h3>
+        <div className="grid grid-cols-3 gap-1.5 rounded-2xl bg-bion-ink/5 dark:bg-white/5 p-1.5" role="group" aria-label="Densidade do texto">
+          {(
+            [
+              ["compacta", "Compacto"],
+              ["confortavel", "Padrão"],
+              ["grande", "Grande"],
+            ] as const
+          ).map(([id, rotulo]) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => aplicarDensidade(id)}
+              aria-pressed={densidade === id}
+              className={`rounded-xl py-2 text-xs font-semibold transition ${
+                densidade === id ? "bp-acao" : "text-bion-ink/60 dark:text-white/60"
+              }`}
+            >
+              {rotulo}
+            </button>
+          ))}
         </div>
 
         <button type="button" onClick={() => router.push("/suporte")} className="w-full flex items-center justify-between py-3 px-1 group" role="link">

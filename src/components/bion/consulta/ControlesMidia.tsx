@@ -1,6 +1,6 @@
 "use client";
 
-import type { RefObject } from "react";
+import { useEffect, type RefObject } from "react";
 import {
   Mic,
   MicOff,
@@ -45,7 +45,38 @@ export function ConsultaControlesMidia({
   fileRef: RefObject<HTMLInputElement | null>;
   onArquivos: (files: FileList | null) => void;
 }) {
+  useEffect(() => {
+    const emCampoEditavel = (el: EventTarget | null) => {
+      if (!(el instanceof HTMLElement)) return false;
+      const tag = el.tagName;
+      return (
+        tag === "INPUT" ||
+        tag === "TEXTAREA" ||
+        tag === "SELECT" ||
+        el.isContentEditable
+      );
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (emCampoEditavel(e.target)) return;
+      const k = e.key.toLowerCase();
+      if (k === "m") {
+        e.preventDefault();
+        onToggleMic();
+      } else if (k === "c") {
+        e.preventDefault();
+        onToggleCam();
+      } else if (k === "s") {
+        e.preventDefault();
+        onToggleTela();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onToggleMic, onToggleCam, onToggleTela]);
+
   return (
+    <div className="flex flex-col gap-2">
     <div className="flex items-center gap-2 overflow-x-auto sm:flex-wrap sm:justify-center bg-slate-900/80 backdrop-blur p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:pb-3 rounded-2xl border border-white/10">
       <button
         type="button"
@@ -146,6 +177,12 @@ export function ConsultaControlesMidia({
           e.target.value = "";
         }}
       />
+    </div>
+      <p className="text-center text-xs text-slate-300 px-2">
+        Atalhos: <kbd className="px-1.5 py-0.5 rounded bg-white/10 font-mono">M</kbd> microfone ·{" "}
+        <kbd className="px-1.5 py-0.5 rounded bg-white/10 font-mono">C</kbd> câmera ·{" "}
+        <kbd className="px-1.5 py-0.5 rounded bg-white/10 font-mono">S</kbd> tela
+      </p>
     </div>
   );
 }

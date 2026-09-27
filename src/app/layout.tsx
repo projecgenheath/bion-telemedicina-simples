@@ -29,7 +29,7 @@ export const viewport: Viewport = {
 
 // Aplica o tema salvo ANTES da primeira pintura para evitar flash branco (FOUC)
 // e permitir que landing/login também honrem o modo escuro.
-const SCRIPT_TEMA = `(function(){try{var t=localStorage.getItem("bion-tema");var e=t==="escuro"||(t===null&&window.matchMedia("(prefers-color-scheme: dark)").matches);if(e){document.documentElement.classList.add("dark")}}catch(r){}})();`;
+const SCRIPT_TEMA = `(function(){try{var t=localStorage.getItem("bion-tema");var e=t==="escuro"||(t===null&&window.matchMedia("(prefers-color-scheme: dark)").matches);if(e){document.documentElement.classList.add("dark")}var d=localStorage.getItem("bion-densidade");if(d==="compacta"||d==="grande"||d==="confortavel"){document.documentElement.classList.add("densidade-"+d)}else{document.documentElement.classList.add("densidade-confortavel")}}catch(r){}})();`;
 
 export default function RootLayout({
   children,
