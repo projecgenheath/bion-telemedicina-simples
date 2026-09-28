@@ -3,6 +3,8 @@ import { db } from "@/lib/db";
 import { exigirSessao, registrarAudit } from "@/lib/server/auth";
 import { ok, falha } from "@/lib/server/http";
 import { resolverIceServers } from "@/lib/server/ice";
+import { canalSalaConsulta } from "@/lib/supabase/realtime";
+import { broadcastCanal } from "@/lib/supabase/broadcast";
 
 /**
  * Sinalização WebRTC da sala de teleconsulta (Fase 2 — vídeo real P2P).
@@ -123,6 +125,11 @@ export async function GET(
         entidadeId: consultaId,
         detalhes: `Entrou na sala de teleconsulta (${papel.toLowerCase()})`,
       });
+      void broadcastCanal(canalSalaConsulta(consultaId), "presenca", {
+        usuarioId: usuario.id,
+        papel,
+        online: true,
+      });
     }
 
     const limiteOnline = new Date(Date.now() - JANELA_ONLINE_MS);
@@ -231,6 +238,13 @@ export async function POST(
           payload: JSON.stringify(c),
         })),
       });
+      // Realtime: lote de candidatos para o outro participante
+      void broadcastCanal(canalSalaConsulta(consultaId), "sinal", {
+        tipo: "candidato",
+        lote: true,
+        deUsuarioId: usuario.id,
+        payloads: lote.map((c) => JSON.stringify(c)),
+      });
       return ok({ ok: true, total: lote.length });
     }
 
@@ -243,6 +257,14 @@ export async function POST(
         payload: body.payload,
       },
       select: { id: true, createdAt: true },
+    });
+
+    void broadcastCanal(canalSalaConsulta(consultaId), "sinal", {
+      id: sinal.id,
+      tipo: body.tipo,
+      payload: body.payload,
+      deUsuarioId: usuario.id,
+      createdAt: sinal.createdAt.toISOString(),
     });
 
     // Controle de encerramento: registra no audit (o status da consulta em si

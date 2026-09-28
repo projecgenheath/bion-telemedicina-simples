@@ -87,6 +87,10 @@ export function useTeleconsulta(consultaId: string | undefined) {
   const displayStreamRef = useRef<MediaStream | null>(null);
   const statusRef = useRef<StatusSala>("conectando");
   const iceServersRef = useRef<RTCIceServer[]>(ICE_SERVERS_PADRAO);
+  /** IDs / fingerprints já processados (polling + Realtime sem duplicar). */
+  const sinaisVistosRef = useRef<Set<string>>(new Set());
+  /** Realtime ativo → polling mais espaçado. */
+  const realtimeOkRef = useRef(false);
   const filaCandidatosRef = useRef<RTCIceCandidateInit[]>([]);
   const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -228,6 +232,15 @@ export function useTeleconsulta(consultaId: string | undefined) {
   // ── Processamento dos sinais recebidos ─────────────────────────────────────
   const processarSinal = useCallback(
     async (sinal: SinalApi) => {
+      const chave = sinal.id || `${sinal.tipo}:${sinal.payload.slice(0, 80)}:${sinal.createdAt || ""}`;
+      if (sinaisVistosRef.current.has(chave)) return;
+      sinaisVistosRef.current.add(chave);
+      // limita memória
+      if (sinaisVistosRef.current.size > 400) {
+        const arr = [...sinaisVistosRef.current];
+        sinaisVistosRef.current = new Set(arr.slice(-200));
+      }
+
       let dado: unknown;
       try {
         dado = JSON.parse(sinal.payload);
@@ -371,15 +384,17 @@ export function useTeleconsulta(consultaId: string | undefined) {
     // Latência no handshake (700 ms), economia com mídia fluindo (3 s):
     // em chamada estável o ciclo cai de 40 para ~20 consultas/min por lado.
     const intervaloAtual = (): number => {
+      // Com Realtime, o polling vira só heartbeat/presença
+      const fator = realtimeOkRef.current ? 2.5 : 1;
       switch (statusRef.current) {
         case "conectado":
-          return INTERVALO_CONECTADO_MS;
+          return Math.round(INTERVALO_CONECTADO_MS * fator);
         case "aguardando":
-          return INTERVALO_AGUARDANDO_MS;
+          return Math.round(INTERVALO_AGUARDANDO_MS * (realtimeOkRef.current ? 1.5 : 1));
         case "encerrada":
           return INTERVALO_AGUARDANDO_MS;
         default: // conectando, conectando-p2p, instavel
-          return INTERVALO_HANDSHAKE_MS;
+          return realtimeOkRef.current ? INTERVALO_AGUARDANDO_MS : INTERVALO_HANDSHAKE_MS;
       }
     };
 
@@ -420,6 +435,80 @@ export function useTeleconsulta(consultaId: string | undefined) {
     };
      
   }, [consultaId, processarSinal, talvezCriarOferta]);
+
+  // ── Realtime Supabase: sinais da sala (complementa o polling) ──────────────
+  useEffect(() => {
+    if (!consultaId || !process.env.NEXT_PUBLIC_SUPABASE_URL) return;
+    let limpar: (() => void) | undefined;
+    let meuId: string | null = null;
+
+    (async () => {
+      try {
+        // Descobre meu id via um GET leve (já usado no ciclo; aqui só para filtrar eco)
+        const res = await fetch(`/api/telemedicina/${consultaId}/sala`, { cache: "no-store" });
+        if (res.ok) {
+          const d = (await res.json()) as RespostaSala;
+          meuId = d.eu?.id ?? null;
+        }
+        const { createSupabaseBrowserClient } = await import("@/lib/supabase/browser");
+        const { canalSalaConsulta } = await import("@/lib/supabase/realtime");
+        const sb = createSupabaseBrowserClient();
+        const canal = sb
+          .channel(canalSalaConsulta(consultaId))
+          .on("broadcast", { event: "sinal" }, ({ payload }) => {
+            if (!payload || typeof payload !== "object") return;
+            const p = payload as {
+              id?: string;
+              tipo?: string;
+              payload?: string;
+              deUsuarioId?: string;
+              createdAt?: string;
+              lote?: boolean;
+              payloads?: string[];
+            };
+            // Ignora eco dos próprios sinais
+            if (meuId && p.deUsuarioId === meuId) return;
+
+            if (p.lote && Array.isArray(p.payloads)) {
+              for (const pl of p.payloads) {
+                void processarSinal({
+                  id: `rt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                  tipo: "candidato",
+                  payload: pl,
+                  createdAt: new Date().toISOString(),
+                });
+              }
+              return;
+            }
+            if (!p.tipo || typeof p.payload !== "string") return;
+            void processarSinal({
+              id: p.id || `rt-${Date.now()}`,
+              tipo: p.tipo,
+              payload: p.payload,
+              createdAt: p.createdAt || new Date().toISOString(),
+            });
+          })
+          .on("broadcast", { event: "presenca" }, ({ payload }) => {
+            if (!payload || typeof payload !== "object") return;
+            const p = payload as { usuarioId?: string; online?: boolean };
+            if (meuId && p.usuarioId === meuId) return;
+            if (p.online) setOutroOnline(true);
+          })
+          .subscribe((status) => {
+            realtimeOkRef.current = status === "SUBSCRIBED";
+          });
+        limpar = () => {
+          realtimeOkRef.current = false;
+          void sb.removeChannel(canal);
+        };
+      } catch (e) {
+        console.warn("[Realtime] sala indisponível", e);
+        realtimeOkRef.current = false;
+      }
+    })();
+
+    return () => limpar?.();
+  }, [consultaId, processarSinal]);
 
   // ── Compartilhamento de tela (replaceTrack — sem renegociação) ─────────────
   const pararCompartilhamento = useCallback(() => {

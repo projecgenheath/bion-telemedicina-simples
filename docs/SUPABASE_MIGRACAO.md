@@ -36,3 +36,16 @@ DATABASE_URL=
 
 - `POST /api/mensagens` faz broadcast no canal `mensagens:user:{id}`
 - O store assina o canal quando autenticado (polling permanece como backup)
+
+
+## Realtime na teleconsulta
+
+- Canal `sala:consulta:{consultaId}` — eventos `sinal` e `presenca`
+- `use-teleconsulta` assina o canal; polling continua como heartbeat (mais lento com Realtime OK)
+- Sinais deduplicados entre polling e Realtime
+
+## RLS
+
+Arquivo: `supabase/migrations/20260928_rls_basico.sql`  
+Rodar no SQL Editor se quiser proteção no acesso direto com anon key.  
+A API Next (Prisma + DATABASE_URL) **não** é bloqueada pelo RLS.
