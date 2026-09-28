@@ -24,3 +24,15 @@ DATABASE_URL=
 3. npx prisma db push (coluna supabaseId)
 4. Storage: buckets ou garantirBuckets()
 5. Contas legadas: no 1º login com service role, migram para Auth
+
+
+## Storage (uploads)
+
+- UI **Arquivos** envia `multipart/form-data` para `POST /api/arquivos`
+- Com `SUPABASE_SERVICE_ROLE_KEY`, o blob vai ao bucket `documentos`
+- Download: `GET /api/arquivos?id=` → URL assinada (10 min)
+
+## Realtime (mensagens)
+
+- `POST /api/mensagens` faz broadcast no canal `mensagens:user:{id}`
+- O store assina o canal quando autenticado (polling permanece como backup)

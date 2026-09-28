@@ -254,6 +254,7 @@ const mapArquivo = (a: EstadoFresco["arquivos"][number]): Arquivo => ({
   id: a.id, nome: a.nome, tipo: a.tipo, tamanhoKb: a.tamanhoKb,
   enviadoPor: a.enviadoPor as Arquivo["enviadoPor"], data: fmtLonga(a.createdAt),
   consulta: a.consulta,
+  storagePath: (a as { storagePath?: string | null }).storagePath ?? null,
 });
 
 const mapNotificacao = (n: EstadoFresco["notificacoes"][number]): Notificacao => ({
@@ -414,7 +415,7 @@ type Store = {
   adicionarConsulta: (c: Omit<Consulta, "id" | "status" | "ts"> & { status?: "pendente_anamnese" }) => void;
   concluirAnamnese: (consultaId: string) => Promise<boolean>;
   registrarDocAnamnese: (consultaId: string, doc: { nome: string; tipo: string; exameImportado: boolean; resumo?: string }) => void;
-  adicionarArquivo: (a: Omit<Arquivo, "id" | "data">) => void;
+  adicionarArquivo: (a: Omit<Arquivo, "id" | "data"> & { file?: File }) => void;
   marcarLida: (id: string) => void;
   marcarTodasLidas: () => void;
   avaliacoes: Avaliacao[];
@@ -1141,7 +1142,35 @@ export function BionProvider({ children }: { children: ReactNode }) {
   );
 
   const adicionarArquivo = useCallback(
-    (a: Omit<Arquivo, "id" | "data">) => {
+    (a: Omit<Arquivo, "id" | "data"> & { file?: File }) => {
+      if (a.file) {
+        const fd = new FormData();
+        fd.append("file", a.file);
+        fd.append("nome", a.nome);
+        fd.append("tipo", a.tipo);
+        fd.append("consulta", a.consulta || "");
+        void (async () => {
+          try {
+            const res = await fetch("/api/arquivos", { method: "POST", body: fd, credentials: "include" });
+            const json = await res.json().catch(() => ({}));
+            if (!res.ok) {
+              toast.error(json?.erro || "Falha ao enviar arquivo");
+              return;
+            }
+            if (json?.arquivo) {
+              setArquivos((prev) => {
+                const row = mapArquivo(json.arquivo);
+                if (prev.some((x) => x.id === row.id)) return prev;
+                return [row, ...prev];
+              });
+              toast.success(json.arquivo.storagePath ? "Arquivo salvo no Storage" : "Arquivo registrado");
+            }
+          } catch {
+            toast.error("Falha de rede ao enviar arquivo");
+          }
+        })();
+        return;
+      }
       void mutar("/api/arquivos", "POST", {
         nome: a.nome,
         tipo: a.tipo,
@@ -1436,6 +1465,35 @@ export function BionProvider({ children }: { children: ReactNode }) {
     },
     [aplicarDelta],
   );
+
+  // Realtime Supabase: mensagens (broadcast) — complementa o polling
+  useEffect(() => {
+    if (!autenticado || !sessao.id) return;
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL) return;
+    let limpar: (() => void) | undefined;
+    (async () => {
+      try {
+        const { createSupabaseBrowserClient } = await import("@/lib/supabase/browser");
+        const { canalMensagensUsuario } = await import("@/lib/supabase/realtime");
+        const sb = createSupabaseBrowserClient();
+        const canal = sb
+          .channel(canalMensagensUsuario(sessao.id))
+          .on("broadcast", { event: "nova_mensagem" }, ({ payload }) => {
+            if (!payload || typeof payload !== "object") return;
+            const row = payload as Parameters<typeof fmtMensagem>[0];
+            if (!row?.id) return;
+            mesclarMensagens([row]);
+          })
+          .subscribe();
+        limpar = () => {
+          void sb.removeChannel(canal);
+        };
+      } catch (e) {
+        console.warn("[Realtime] mensagens indisponível", e);
+      }
+    })();
+    return () => limpar?.();
+  }, [autenticado, sessao.id, mesclarMensagens]);
 
   const value = useMemo<Store>(
     () => ({

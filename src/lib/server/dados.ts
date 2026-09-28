@@ -164,6 +164,7 @@ export function arquivoWire(a: ArquivoRow) {
     tamanhoKb: a.tamanhoKb,
     enviadoPor: a.enviadoPor,
     consulta: a.consulta,
+    storagePath: (a as { storagePath?: string | null }).storagePath ?? null,
     createdAt: a.createdAt.toISOString(),
   };
 }

@@ -51,6 +51,7 @@ export type Arquivo = {
   data: string;
   consulta: string;
   url?: string;
+  storagePath?: string | null;
 };
 
 export type Documento = {

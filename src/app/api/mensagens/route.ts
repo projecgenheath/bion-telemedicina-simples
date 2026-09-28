@@ -3,6 +3,8 @@ import { db } from "@/lib/db";
 import { exigirSessao } from "@/lib/server/auth";
 import { aplicarSideEffects } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
+import { canalMensagensUsuario } from "@/lib/supabase/realtime";
+import { broadcastCanal } from "@/lib/supabase/broadcast";
 import { idCuid, isErro } from "@/lib/server/validar";
 
 /**
@@ -141,6 +143,21 @@ export async function POST(req: NextRequest) {
         para: { select: { nome: true } },
       },
     });
+
+    // Realtime: avisa destinatário e remetente (outros devices)
+    const payloadRt = {
+      id: msg.id,
+      deId: msg.deId,
+      de: msg.de.nome,
+      paraId: msg.paraId,
+      para: msg.para.nome,
+      texto: msg.texto,
+      lida: msg.lida,
+      createdAt: msg.createdAt.toISOString(),
+    };
+    void broadcastCanal(canalMensagensUsuario(destinatario.id), "nova_mensagem", payloadRt);
+    void broadcastCanal(canalMensagensUsuario(usuario.id), "nova_mensagem", payloadRt);
+
 
     // Notificação gerada pelo SERVIDOR a partir do evento real (o cliente
     // não define destinatário/título/conteúdo de notificações).
