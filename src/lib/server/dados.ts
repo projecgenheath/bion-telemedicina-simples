@@ -1,4 +1,6 @@
 import "server-only";
+import { broadcastCanal } from "@/lib/supabase/broadcast";
+import { canalNotificacoes } from "@/lib/supabase/realtime";
 import { db } from "@/lib/db";
 import type { Prisma } from "@prisma/client";
 import type { UsuarioSessao } from "./auth";
@@ -663,16 +665,24 @@ export async function aplicarSideEffects(
         row.usuarioId === usuario.id ||
         row.paraRole === usuario.role ||
         (!row.usuarioId && !row.paraRole);
+      const wire = {
+        id: row.id,
+        paraRole: row.paraRole,
+        tipo: row.tipo,
+        titulo: row.titulo,
+        texto: row.texto,
+        lida: row.lida,
+        createdAt: row.createdAt.toISOString(),
+      };
       if (visivel) {
-        criadas.push({
-          id: row.id,
-          paraRole: row.paraRole,
-          tipo: row.tipo,
-          titulo: row.titulo,
-          texto: row.texto,
-          lida: row.lida,
-          createdAt: row.createdAt.toISOString(),
-        });
+        criadas.push(wire);
+      }
+      if (row.usuarioId) {
+        void broadcastCanal(
+          canalNotificacoes(row.usuarioId),
+          "nova_notificacao",
+          wire as unknown as Record<string, unknown>,
+        );
       }
     }
   }

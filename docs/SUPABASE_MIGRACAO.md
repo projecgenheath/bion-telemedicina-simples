@@ -49,3 +49,13 @@ DATABASE_URL=
 Arquivo: `supabase/migrations/20260928_rls_basico.sql`  
 Rodar no SQL Editor se quiser proteção no acesso direto com anon key.  
 A API Next (Prisma + DATABASE_URL) **não** é bloqueada pelo RLS.
+
+
+## Notificações Realtime
+
+- `aplicarSideEffects` faz broadcast em `notificacoes:user:{id}`
+- Store assina e mostra toast + lista
+
+## RLS completo
+
+`supabase/migrations/20260928_rls_completo.sql` — SELECT/INSERT/UPDATE por participante/dono.

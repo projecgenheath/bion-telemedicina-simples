@@ -1495,6 +1495,57 @@ export function BionProvider({ children }: { children: ReactNode }) {
     return () => limpar?.();
   }, [autenticado, sessao.id, mesclarMensagens]);
 
+  // Realtime Supabase: notificações dirigidas
+  useEffect(() => {
+    if (!autenticado || !sessao.id) return;
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL) return;
+    let limpar: (() => void) | undefined;
+    (async () => {
+      try {
+        const { createSupabaseBrowserClient } = await import("@/lib/supabase/browser");
+        const { canalNotificacoes } = await import("@/lib/supabase/realtime");
+        const sb = createSupabaseBrowserClient();
+        const canal = sb
+          .channel(canalNotificacoes(sessao.id))
+          .on("broadcast", { event: "nova_notificacao" }, ({ payload }) => {
+            if (!payload || typeof payload !== "object") return;
+            const n = payload as {
+              id?: string;
+              paraRole?: string | null;
+              tipo?: string;
+              titulo?: string;
+              texto?: string;
+              lida?: boolean;
+              createdAt?: string;
+            };
+            if (!n.id || !n.titulo) return;
+            setNotificacoes((prev) => {
+              if (prev.some((x) => x.id === n.id)) return prev;
+              const mapped = mapNotificacao({
+                id: n.id,
+                paraRole: n.paraRole ?? null,
+                tipo: n.tipo || "mensagem",
+                titulo: n.titulo,
+                texto: n.texto || "",
+                lida: !!n.lida,
+                createdAt: n.createdAt || new Date().toISOString(),
+              } as EstadoFresco["notificacoes"][number]);
+              return [mapped, ...prev];
+            });
+            toast.message(n.titulo, { description: n.texto?.slice(0, 120) });
+          })
+          .subscribe();
+        limpar = () => {
+          void sb.removeChannel(canal);
+        };
+      } catch (e) {
+        console.warn("[Realtime] notificações indisponível", e);
+      }
+    })();
+    return () => limpar?.();
+  }, [autenticado, sessao.id]);
+
+
   const value = useMemo<Store>(
     () => ({
       sessao,
