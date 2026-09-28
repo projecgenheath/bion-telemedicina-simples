@@ -1,3 +1,4 @@
+import { limparArtefatos, repararRepeticoes } from "@/lib/server/llm-sanitize";
 import ZAI from "z-ai-web-dev-sdk";
 
 /**
@@ -721,45 +722,10 @@ function statsPalavras(a: string, b: string): { jac: number; con: number } {
   };
 }
 
-/**
- * Remove ARTEFATOS de ação do fim da resposta (real 2026-09-24 no
- * multi-turno: o Gemma anexa um bloco ```json com "action_flow_id" depois da
- * fala — às vezes malformado, com "thought" no meio). Nunca deve chegar ao
- * paciente. Aplicar ANTES do detector de eco (o artefato não é eco).
- */
-export function limparArtefatos(texto: string): string {
-  return texto
-    .replace(/\u0060{3}[\s\S]*$/, "") // fence ```... até o fim
-    .replace(/[{\[][^}]*?action_flow_id[\s\S]*$/, "") // JSON de ação (válido ou quebrado) até o fim
-    .trim();
-}
+/** @deprecated importar de llm-sanitize — reexport para compat */
+export { limparArtefatos, repararRepeticoes } from "@/lib/server/llm-sanitize";
 
-/**
- * Repara repetições ADJACENTES do modelo na continuação (real 2026-09-24:
- * "que eu eu te guio", "é rápida e você rápida e você não..."). Colapsa
- * n-gramas (1-4 palavras) repetidos em sequência, comparando sem acento,
- * caixa ou pontuação; mantém a primeira ocorrência.
- */
-export function repararRepeticoes(texto: string): string {
-  let palavras = texto.split(/\s+/).filter(Boolean);
-  const norma = (w: string) =>
-    w
-      .toLowerCase()
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .replace(/[^a-zà-ú0-9]/g, "");
-  for (let n = 4; n >= 1; n--) {
-    for (let i = 0; i + 2 * n <= palavras.length; i++) {
-      const a = palavras.slice(i, i + n).map(norma).join("|");
-      const b = palavras.slice(i + n, i + 2 * n).map(norma).join("|");
-      if (a && a === b && norma(palavras[i]).length >= 1) {
-        palavras = [...palavras.slice(0, i + n), ...palavras.slice(i + 2 * n)];
-        i = -1; // recomeça a varredura deste n
-      }
-    }
-  }
-  return palavras.join(" ");
-}
+
 
 /**
  * SANITIZADOR DE ECO (família Gemma): o modelo despeja o raciocínio e embute

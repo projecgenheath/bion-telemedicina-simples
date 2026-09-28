@@ -255,13 +255,25 @@ export type UserComPerfilPaciente = Prisma.UserGetPayload<{
   include: { perfilPaciente: true };
 }>;
 
-export function pacienteWire(p: UserComPerfilPaciente) {
+/** Máscara de CPF para listagens clínicas (médico vê só finais). */
+function mascararCpf(cpf: string): string {
+  const d = cpf.replace(/\D/g, "");
+  if (d.length < 4) return cpf ? "***" : "";
+  return `***.***.***-${d.slice(-2)}`;
+}
+
+/**
+ * Wire de paciente na listagem.
+ * `mascarar: true` (médico) omite e-mail e mascara CPF — P2 minimização de PII.
+ */
+export function pacienteWire(p: UserComPerfilPaciente, opts?: { mascarar?: boolean }) {
+  const cpf = p.perfilPaciente?.cpf ?? "";
   return {
     id: p.id,
     nome: p.nome,
-    email: p.email,
+    email: opts?.mascarar ? "" : p.email,
     telefone: p.perfilPaciente?.telefone ?? "",
-    cpf: p.perfilPaciente?.cpf ?? "",
+    cpf: opts?.mascarar ? mascararCpf(cpf) : cpf,
     idade: p.perfilPaciente?.idade ?? 0,
     genero: p.perfilPaciente?.genero ?? "",
     convenio: p.perfilPaciente?.convenio ?? "Particular",
@@ -342,6 +354,12 @@ export async function carregarDados(usuario: UsuarioSessao) {
       ? { medicoId: usuario.id }
       : {};
 
+  // Dependências de visibilidade primeiro (evita carregar todos os pacientes).
+  const [idsPacientes, idsMedicos] = await Promise.all([
+    souMedico ? idsPacientesDoMedico(usuario.id) : Promise.resolve([] as string[]),
+    souPaciente ? idsMedicosDoPaciente(usuario.id) : Promise.resolve([] as string[]),
+  ]);
+
   const [consultasRaw, medicosRaw, pacientesRaw, anamnesesRaw] = await Promise.all([
     db.consulta.findMany({
       where: consultaWhere,
@@ -350,13 +368,29 @@ export async function carregarDados(usuario: UsuarioSessao) {
         paciente: { select: { nome: true } },
       },
       orderBy: { dataInicio: "asc" },
+      // P2: admin não baixa agenda infinita no bootstrap
+      ...(souAdmin ? { take: 500 } : {}),
     }),
-    db.perfilMedico.findMany({ include: { user: { select: { id: true, nome: true } } } }),
-    db.user.findMany({
-      where: { role: "PACIENTE" },
-      include: { perfilPaciente: true },
-      orderBy: { createdAt: "desc" },
+    // Diretório de médicos: paciente/médico só veem ativos; admin vê todos
+    db.perfilMedico.findMany({
+      ...(souAdmin ? {} : { where: { status: "ativo" as const } }),
+      include: { user: { select: { id: true, nome: true } } },
     }),
+    // P2: pacientes só no escopo do papel (admin=todos, médico=vinculados, paciente=[])
+    souAdmin
+      ? db.user.findMany({
+          where: { role: "PACIENTE" },
+          include: { perfilPaciente: true },
+          orderBy: { createdAt: "desc" },
+          take: 500,
+        })
+      : souMedico && idsPacientes.length > 0
+        ? db.user.findMany({
+            where: { role: "PACIENTE", id: { in: idsPacientes } },
+            include: { perfilPaciente: true },
+            orderBy: { createdAt: "desc" },
+          })
+        : Promise.resolve([] as UserComPerfilPaciente[]),
     db.anamnese.findMany({
       where: souPaciente
         ? { usuarioId: usuario.id }
@@ -367,12 +401,6 @@ export async function carregarDados(usuario: UsuarioSessao) {
       orderBy: { updatedAt: "desc" },
       take: 100,
     }),
-  ]);
-
-  // Dependências de visibilidade (1 query por papel, em paralelo)
-  const [idsPacientes, idsMedicos] = await Promise.all([
-    souMedico ? idsPacientesDoMedico(usuario.id) : Promise.resolve([] as string[]),
-    souPaciente ? idsMedicosDoPaciente(usuario.id) : Promise.resolve([] as string[]),
   ]);
 
   // Visibilidade de documentos (espelha a lógica original do app)
@@ -499,10 +527,8 @@ export async function carregarDados(usuario: UsuarioSessao) {
     : [];
   const lidasPorMim = new Set(leiturasProprias.map((l) => l.notificacaoId));
 
-  // Pacientes "visíveis": admin vê todos; médico vê vinculados por consultas
-  let pacientesVisiveis = pacientesRaw;
-  if (souMedico) pacientesVisiveis = pacientesRaw.filter((p) => idsPacientes.includes(p.id));
-  else if (souPaciente) pacientesVisiveis = [];
+  // Pacientes já vêm filtrados na query (P2)
+  const pacientesVisiveis = pacientesRaw;
 
   return {
     usuario: {
@@ -530,7 +556,7 @@ export async function carregarDados(usuario: UsuarioSessao) {
       lida: n.usuarioId ? n.lida : lidasPorMim.has(n.id),
     })),
     medicos: medicosRaw.map((m) => medicoWire(m)),
-    pacientes: pacientesVisiveis.map((p) => pacienteWire(p)),
+    pacientes: pacientesVisiveis.map((p) => pacienteWire(p, { mascarar: souMedico })),
     tickets: tickets.map((t) => ticketWire(t)),
     lembretes,
     avaliacoes: avaliacoesRaw.map((a) => avaliacaoWire(a)),
