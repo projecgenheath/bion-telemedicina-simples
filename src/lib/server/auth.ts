@@ -3,40 +3,40 @@ import { cookies } from "next/headers";
 import crypto from "crypto";
 import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { supabaseConfigurado, supabaseServiceRoleKey } from "@/lib/supabase/env";
+import { createClient } from "@supabase/supabase-js";
+import { supabaseAnonKey, supabaseUrl } from "@/lib/supabase/env";
 
 export const COOKIE_SESSAO = "bion_sessao";
-const DURACAO_SESSAO_MS = 7 * 24 * 60 * 60 * 1000; // 7 dias
+const DURACAO_SESSAO_MS = 7 * 24 * 60 * 60 * 1000;
 
 export type UsuarioSessao = {
   id: string;
   nome: string;
   email: string;
   role: "PACIENTE" | "MEDICO" | "ADMIN";
-  /** V4: conta criada pela administração com senha padrão — troca obrigatória. */
   precisaTrocarSenha: boolean;
+  /** Presente quando autenticado via Supabase Auth */
+  supabaseId?: string | null;
 };
 
-/** Hash da senha com bcrypt (custo 10) */
 export async function hashSenha(senha: string): Promise<string> {
   return bcrypt.hash(senha, 10);
 }
 
-/** Verifica a senha contra o hash armazenado */
 export async function verificarSenha(senha: string, hash: string): Promise<boolean> {
+  if (!hash || hash.startsWith("supabase:")) return false;
   return bcrypt.compare(senha, hash);
 }
 
-/** Máximo de sessões simultâneas por usuário (P1 — limita roubo de cookie / dispositivos). */
 const MAX_SESSOES_POR_USUARIO = 5;
 
-/** Cria uma sessão no banco e grava o cookie httpOnly.
- *  Também remove sessões expiradas e, se passar do teto, as mais antigas. */
-export async function criarSessao(userId: string): Promise<string> {
+/** Sessão legada (cookie Prisma) — fallback para contas ainda não migradas. */
+export async function criarSessaoLegada(userId: string): Promise<string> {
   const token = crypto.randomBytes(32).toString("hex");
   const expiresAt = new Date(Date.now() + DURACAO_SESSAO_MS);
   await db.sessao.create({ data: { id: token, userId, expiresAt } });
-
-  // Higiene: expira antigas + mantém só as N mais recentes (inclui a nova).
   const agora = new Date();
   await db.sessao.deleteMany({ where: { userId, expiresAt: { lt: agora } } }).catch(() => {});
   const vivas = await db.sessao.findMany({
@@ -48,12 +48,10 @@ export async function criarSessao(userId: string): Promise<string> {
     const excesso = vivas.slice(MAX_SESSOES_POR_USUARIO).map((s) => s.id);
     await db.sessao.deleteMany({ where: { id: { in: excesso } } }).catch(() => {});
   }
-
   const jar = await cookies();
   jar.set(COOKIE_SESSAO, token, {
     httpOnly: true,
     sameSite: "lax",
-    // Seguro em produção (HTTPS: Vercel/preview). Em dev local (http) fica false.
     secure: process.env.NODE_ENV === "production",
     path: "/",
     expires: expiresAt,
@@ -61,8 +59,66 @@ export async function criarSessao(userId: string): Promise<string> {
   return token;
 }
 
-/** Lê a sessão atual a partir do cookie e valida no banco */
+/** @deprecated use criarSessaoLegada — mantido para imports existentes */
+export async function criarSessao(userId: string): Promise<string> {
+  return criarSessaoLegada(userId);
+}
+
+function usuarioDeRow(user: {
+  id: string;
+  nome: string;
+  email: string;
+  role: string;
+  precisaTrocarSenha: boolean;
+  supabaseId?: string | null;
+  status: string;
+}): UsuarioSessao | null {
+  if (user.status !== "ativo") return null;
+  return {
+    id: user.id,
+    nome: user.nome,
+    email: user.email,
+    role: user.role as UsuarioSessao["role"],
+    precisaTrocarSenha: user.precisaTrocarSenha,
+    supabaseId: user.supabaseId,
+  };
+}
+
+/**
+ * Sessão atual: 1) Supabase Auth (JWT/cookie) 2) cookie legado bion_sessao.
+ */
 export async function getSessao(): Promise<UsuarioSessao | null> {
+  // 1) Supabase Auth
+  if (supabaseConfigurado()) {
+    try {
+      const supabase = await createSupabaseServerClient();
+      const { data } = await supabase.auth.getUser();
+      const authUser = data.user;
+      if (authUser?.email) {
+        let row =
+          (await db.user.findFirst({
+            where: { OR: [{ supabaseId: authUser.id }, { email: authUser.email.toLowerCase() }] },
+          })) ?? null;
+        if (row && !row.supabaseId) {
+          row = await db.user.update({
+            where: { id: row.id },
+            data: { supabaseId: authUser.id },
+          });
+        }
+        if (row) {
+          const u = usuarioDeRow(row);
+          if (u) return u;
+          // inativo: encerra auth supabase
+          await supabase.auth.signOut().catch(() => {});
+          return null;
+        }
+      }
+    } catch {
+      /* cai no legado */
+    }
+  }
+
+  // 2) Legado
   const jar = await cookies();
   const token = jar.get(COOKIE_SESSAO)?.value;
   if (!token) return null;
@@ -75,38 +131,35 @@ export async function getSessao(): Promise<UsuarioSessao | null> {
     await db.sessao.delete({ where: { id: token } }).catch(() => {});
     return null;
   }
-  // Sessão só vale para usuário ATIVO: contas inativas/suspensas perdem o
-  // acesso imediatamente, mesmo com cookie ainda válido.
   if (sessao.user.status !== "ativo") {
     await db.sessao.deleteMany({ where: { userId: sessao.user.id } }).catch(() => {});
     return null;
   }
-  return {
-    id: sessao.user.id,
-    nome: sessao.user.nome,
-    email: sessao.user.email,
-    role: sessao.user.role as UsuarioSessao["role"],
-    precisaTrocarSenha: sessao.user.precisaTrocarSenha,
-  };
+  return usuarioDeRow(sessao.user);
 }
 
-/** Remove a sessão atual (logout) */
 export async function destruirSessao(): Promise<void> {
+  if (supabaseConfigurado()) {
+    try {
+      const supabase = await createSupabaseServerClient();
+      await supabase.auth.signOut();
+    } catch {
+      /* ignora */
+    }
+  }
   const jar = await cookies();
   const token = jar.get(COOKIE_SESSAO)?.value;
   if (token) {
-    await db.sessao.deleteMany({ where: { id: token } });
+    await db.sessao.deleteMany({ where: { id: token } }).catch(() => {});
   }
   jar.delete(COOKIE_SESSAO);
 }
 
-/** Token de sessão do cookie atual (para preservar a própria sessão ao revogar as demais). */
 export async function tokenSessaoAtual(): Promise<string | null> {
   const jar = await cookies();
   return jar.get(COOKIE_SESSAO)?.value ?? null;
 }
 
-/** Exige sessão válida; lança erro 401 caso contrário */
 export async function exigirSessao(): Promise<UsuarioSessao> {
   const s = await getSessao();
   if (!s) {
@@ -117,7 +170,6 @@ export async function exigirSessao(): Promise<UsuarioSessao> {
   return s;
 }
 
-/** Exige papel específico; lança erro 403 caso contrário */
 export async function exigirPapel(...papeis: UsuarioSessao["role"][]): Promise<UsuarioSessao> {
   const s = await exigirSessao();
   if (!papeis.includes(s.role)) {
@@ -128,7 +180,6 @@ export async function exigirPapel(...papeis: UsuarioSessao["role"][]): Promise<U
   return s;
 }
 
-/** Registra log de auditoria com identidade vinda da sessão (não confia no cliente). Devolve a linha criada (ou null). */
 export async function registrarAudit(
   usuario: UsuarioSessao | null,
   log: {
@@ -155,7 +206,49 @@ export async function registrarAudit(
       },
     });
   } catch {
-    // auditoria nunca deve quebrar a operação principal
     return null;
   }
+}
+
+/**
+ * Garante usuário Prisma ligado ao Auth do Supabase (cadastro ou primeiro login).
+ */
+export async function garantirUsuarioPrismaDeAuth(opts: {
+  supabaseId: string;
+  email: string;
+  nome: string;
+  senhaHash?: string;
+}): Promise<{ id: string; nome: string; email: string; role: string; precisaTrocarSenha: boolean; status: string; supabaseId: string | null }> {
+  const email = opts.email.trim().toLowerCase();
+  const existente = await db.user.findFirst({
+    where: { OR: [{ supabaseId: opts.supabaseId }, { email }] },
+  });
+  if (existente) {
+    if (!existente.supabaseId) {
+      return db.user.update({
+        where: { id: existente.id },
+        data: { supabaseId: opts.supabaseId },
+      });
+    }
+    return existente;
+  }
+  return db.user.create({
+    data: {
+      supabaseId: opts.supabaseId,
+      nome: opts.nome.trim() || email.split("@")[0],
+      email,
+      senhaHash: opts.senhaHash ?? `supabase:${opts.supabaseId}`,
+      role: "PACIENTE",
+      perfilPaciente: { create: {} },
+    },
+  });
+}
+
+/** Admin client opcional (service role). */
+export function supabaseAdminOuNull() {
+  const key = supabaseServiceRoleKey();
+  if (!key || !supabaseConfigurado()) return null;
+  return createClient(supabaseUrl(), key, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
 }

@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { criarSessao, hashSenha, registrarAudit } from "@/lib/server/auth";
-import { carregarDados, slugEmail } from "@/lib/server/dados";
+import {
+  criarSessaoLegada,
+  hashSenha,
+  registrarAudit,
+  garantirUsuarioPrismaDeAuth,
+} from "@/lib/server/auth";
+import { carregarDados } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
 import {
   limitarAsync,
@@ -10,6 +15,8 @@ import {
   validarSenhaForte,
   LIMITE_REGISTRO_IP_POR_HORA,
 } from "@/lib/server/rate-limit";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { supabaseConfigurado } from "@/lib/supabase/env";
 
 export async function POST(req: NextRequest) {
   try {
@@ -20,22 +27,19 @@ export async function POST(req: NextRequest) {
       cpf?: string;
     };
 
-    // P0 — anti-spam de contas: teto de auto-cadastro por IP por hora.
-    const teto = await limitarAsync(`registro:ip:${obterIp(req)}`, LIMITE_REGISTRO_IP_POR_HORA, 3_600_000);
-    if (!teto.permitido) {
-      return resposta429(teto.restanteSeg);
-    }
+    const teto = await limitarAsync(
+      `registro:ip:${obterIp(req)}`,
+      LIMITE_REGISTRO_IP_POR_HORA,
+      3_600_000,
+    );
+    if (!teto.permitido) return resposta429(teto.restanteSeg);
 
     const nome = body.nome?.trim();
     const email = body.email?.trim().toLowerCase();
     const senha = body.senha ?? "";
 
-    // P0 — senha mínima 10 caracteres com letras e números (política única).
     const erroSenha = validarSenhaForte(senha);
-    if (erroSenha) {
-      return NextResponse.json({ erro: erroSenha }, { status: 400 });
-    }
-
+    if (erroSenha) return NextResponse.json({ erro: erroSenha }, { status: 400 });
     if (!nome || nome.length < 3) {
       return NextResponse.json({ erro: "Informe seu nome completo." }, { status: 400 });
     }
@@ -48,6 +52,66 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ erro: "Já existe uma conta com este e-mail." }, { status: 409 });
     }
 
+    // --- Supabase Auth (usuário aparece em Authentication → Users) ---
+    if (supabaseConfigurado()) {
+      const supabase = await createSupabaseServerClient();
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password: senha,
+        options: { data: { nome } },
+      });
+      if (error || !data.user) {
+        return NextResponse.json(
+          { erro: error?.message || "Não foi possível criar a conta no Supabase Auth." },
+          { status: 400 },
+        );
+      }
+
+      const senhaHash = await hashSenha(senha);
+      const row = await garantirUsuarioPrismaDeAuth({
+        supabaseId: data.user.id,
+        email,
+        nome,
+        senhaHash,
+      });
+      // CPF se enviado
+      if (body.cpf?.trim()) {
+        await db.perfilPaciente.upsert({
+          where: { userId: row.id },
+          create: { userId: row.id, cpf: body.cpf.trim() },
+          update: { cpf: body.cpf.trim() },
+        });
+      }
+
+      // Se o projeto exige confirmação de e-mail, pode não haver sessão ainda
+      if (!data.session) {
+        return NextResponse.json(
+          {
+            erro:
+              "Conta criada. Confirme o e-mail (se exigido no Supabase) e faça login.",
+            precisaConfirmarEmail: true,
+          },
+          { status: 201 },
+        );
+      }
+
+      const usuario = {
+        id: row.id,
+        nome: row.nome,
+        email: row.email,
+        role: "PACIENTE" as const,
+        precisaTrocarSenha: row.precisaTrocarSenha,
+        supabaseId: row.supabaseId,
+      };
+      await registrarAudit(usuario, {
+        acao: "CADASTRO_REALIZADO",
+        categoria: "autenticacao",
+        detalhes: `Novo paciente via Supabase Auth: ${nome}`,
+      });
+      return ok(await carregarDados(usuario));
+    }
+
+    // --- Fallback sem Supabase ---
     const senhaHash = await hashSenha(senha);
     const user = await db.user.create({
       data: {
@@ -58,8 +122,7 @@ export async function POST(req: NextRequest) {
         perfilPaciente: { create: { cpf: body.cpf?.trim() ?? "" } },
       },
     });
-
-    await criarSessao(user.id);
+    await criarSessaoLegada(user.id);
     const usuario = {
       id: user.id,
       nome: user.nome,
@@ -70,10 +133,9 @@ export async function POST(req: NextRequest) {
     await registrarAudit(usuario, {
       acao: "CADASTRO_REALIZADO",
       categoria: "autenticacao",
-      detalhes: `Novo paciente cadastrado: ${nome}`,
+      detalhes: `Novo paciente (legado): ${nome}`,
     });
-    const dados = await carregarDados(usuario);
-    return ok(dados);
+    return ok(await carregarDados(usuario));
   } catch (erro) {
     return falha(erro);
   }

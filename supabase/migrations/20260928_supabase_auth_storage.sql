@@ -1,0 +1,3 @@
+-- Coluna supabaseId aplicada via Prisma schema (npx prisma db push).
+-- Storage buckets: documentos (privado), avatares (publico) — via API ou Dashboard.
+-- Realtime: habilitar replication para Mensagem, Notificacao, SinalSala no Dashboard.

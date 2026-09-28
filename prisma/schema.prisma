@@ -12,6 +12,8 @@ datasource db {
 
 model User {
   id             String   @id @default(cuid())
+  /// ID do usuário no Supabase Auth (auth.users.id). Nulo = conta legada só Prisma.
+  supabaseId     String?  @unique
   nome           String
   email          String   @unique
   senhaHash      String
@@ -262,15 +264,17 @@ model Documento {
 }
 
 model Arquivo {
-  id         String   @id @default(cuid())
-  nome       String
-  tipo       String
-  tamanhoKb  Int
-  enviadoPor String // paciente | medico
-  usuarioId  String
-  usuario    User     @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
-  consulta  String   @default("")
-  createdAt  DateTime @default(now())
+  id          String   @id @default(cuid())
+  nome        String
+  tipo        String
+  tamanhoKb   Int
+  enviadoPor  String // paciente | medico
+  usuarioId   String
+  usuario     User     @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  consulta    String   @default("")
+  /// Path no bucket Supabase Storage (documentos), se houver upload real
+  storagePath String?
+  createdAt   DateTime @default(now())
 }
 
 model Notificacao {
