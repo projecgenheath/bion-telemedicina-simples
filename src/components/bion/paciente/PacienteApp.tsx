@@ -24,6 +24,7 @@ import {
 import { toast } from "sonner";
 import { useBion } from "@/lib/bion-store";
 import { MESES_AGENDA } from "./constantes";
+import { agendaLivreDoMedico, acharMedicoDaConsulta } from "./agenda-medico";
 import { GraficoLinha, type PontoGrafico } from "./GraficoLinha";
 import { DetalheMedicao, type Detalhe } from "./DetalheMedicao";
 import dynamic from "next/dynamic";
@@ -59,7 +60,7 @@ const rotuloCurto = (iso: string) => {
 
 export function PacienteApp() {
   const router = useRouter();
-  const { sessao, pacientePerfil, consultas, anamneses, lembretes, medicoes, exames, sair, cancelarConsulta, remarcarConsulta } = useBion();
+  const { sessao, pacientePerfil, consultas, anamneses, lembretes, medicoes, exames, sair, cancelarConsulta, remarcarConsulta, medicos } = useBion();
 
   const carrosselRef = useRef<HTMLDivElement>(null);
   const [painel, setPainel] = useState(1);
@@ -142,6 +143,23 @@ export function PacienteApp() {
   };
 
   const salaAberta = proxima ? janelaSala(proxima.ts) : false;
+
+  const consultaModal = modalConsulta ? consultas.find((c) => c.id === modalConsulta.id) : undefined;
+  const medicoModal = acharMedicoDaConsulta(consultaModal, medicos);
+  const agendaLivre = useMemo(
+    () =>
+      modalConsulta?.acao === "remarcar"
+        ? agendaLivreDoMedico(medicoModal, consultas, modalConsulta.id)
+        : [],
+    [modalConsulta, medicoModal, consultas],
+  );
+
+  useEffect(() => {
+    if (modalConsulta?.acao !== "remarcar" || !agendaLivre.length) return;
+    const dia = agendaLivre.find((d) => d.iso === novaData) ?? agendaLivre[0];
+    if (novaData !== dia.iso) setNovaData(dia.iso);
+    if (!dia.horarios.includes(novaHora)) setNovaHora(dia.horarios[0] ?? "");
+  }, [modalConsulta, agendaLivre, novaData, novaHora]);
 
   const abrirTriagem = (consultaId: string) => {
     const c = consultas.find((x) => x.id === consultaId);
@@ -848,37 +866,68 @@ export function PacienteApp() {
             ) : (
               <>
                 <h2 className="text-lg font-bold">Remarcar consulta</h2>
-                <p className="text-sm text-white/60 mt-1">Escolha a nova data e o horário.</p>
-                <label className="block text-xs font-bold mt-4 mb-1.5 text-white/80">Data</label>
-                <input
-                  type="date"
-                  value={novaData}
-                  onChange={(e) => setNovaData(e.target.value)}
-                  className="w-full rounded-xl border border-white/15 bg-zinc-900 p-3 text-sm text-white [color-scheme:dark]"
-                />
-                <label className="block text-xs font-bold mt-4 mb-1.5 text-white/80">Horário</label>
-                <input
-                  type="time"
-                  value={novaHora}
-                  onChange={(e) => setNovaHora(e.target.value)}
-                  className="w-full rounded-xl border border-white/15 bg-zinc-900 p-3 text-sm text-white [color-scheme:dark]"
-                />
+                <p className="text-sm text-white/60 mt-1">
+                  Horários livres na agenda de {consultaModal?.medico ?? "seu médico"}.
+                </p>
+                {agendaLivre.length === 0 ? (
+                  <p className="mt-4 text-sm text-amber-200">
+                    Não há vaga na agenda deste médico nos próximos 14 dias.
+                  </p>
+                ) : (
+                  <>
+                    <label className="block text-xs font-bold mt-4 mb-2 text-white/80">Data</label>
+                    <div className="flex gap-2 overflow-x-auto pb-1">
+                      {agendaLivre.map((d) => (
+                        <button
+                          key={d.iso}
+                          type="button"
+                          onClick={() => {
+                            setNovaData(d.iso);
+                            setNovaHora(d.horarios.includes(novaHora) ? novaHora : d.horarios[0]);
+                          }}
+                          className={`shrink-0 rounded-2xl px-3 py-2 text-left border ${
+                            novaData === d.iso ? "border-sky-400 bg-sky-400/15" : "border-white/10 bg-zinc-900"
+                          }`}
+                        >
+                          <span className="block text-sm font-bold">{d.rotulo}</span>
+                          <span className="block text-[11px] text-white/50">{d.sub}</span>
+                        </button>
+                      ))}
+                    </div>
+                    <label className="block text-xs font-bold mt-4 mb-2 text-white/80">Horário</label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {(agendaLivre.find((d) => d.iso === novaData)?.horarios ?? []).map((h) => (
+                        <button
+                          key={h}
+                          type="button"
+                          onClick={() => setNovaHora(h)}
+                          className={`py-2.5 rounded-xl text-sm font-semibold border ${
+                            novaHora === h ? "border-sky-400 bg-sky-400 text-zinc-950" : "border-white/10 bg-zinc-900"
+                          }`}
+                        >
+                          {h}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
                 <div className="flex gap-2 mt-5">
                   <button type="button" onClick={() => setModalConsulta(null)} className="flex-1 py-3 rounded-xl border border-white/15 text-sm font-semibold">
                     Voltar
                   </button>
                   <button
                     type="button"
+                    disabled={!novaData || !novaHora || agendaLivre.length === 0}
                     onClick={() => {
                       if (!novaData || !novaHora) {
-                        toast.error("Informe data e horário");
+                        toast.error("Escolha um horário da agenda do médico");
                         return;
                       }
                       remarcarConsulta(modalConsulta.id, novaData, novaHora);
                       toast.success("Consulta remarcada");
                       setModalConsulta(null);
                     }}
-                    className="flex-1 py-3 rounded-xl bg-sky-500 text-zinc-950 text-sm font-bold"
+                    className="flex-1 py-3 rounded-xl bg-sky-500 text-zinc-950 text-sm font-bold disabled:opacity-40"
                   >
                     Confirmar novo horário
                   </button>

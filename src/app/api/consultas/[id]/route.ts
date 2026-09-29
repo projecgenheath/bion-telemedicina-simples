@@ -130,6 +130,30 @@ export async function PATCH(
           return Response.json({ erro: "Informe a nova data e horário." }, { status: 400 });
         }
         data.dataInicio = parseDataHora(body.data, body.hora);
+        if (data.dataInicio.getTime() < Date.now() + 20 * 60_000) {
+          return Response.json({ erro: "Escolha um horário com pelo menos 20 minutos de antecedência." }, { status: 400 });
+        }
+        const perfilMedico = await db.perfilMedico.findUnique({ where: { userId: consulta.medicoId } });
+        let grade: string[] = [];
+        try {
+          grade = JSON.parse(perfilMedico?.horariosDisponiveis || "[]") as string[];
+        } catch {
+          grade = [];
+        }
+        if (grade.length && !grade.includes(body.hora)) {
+          return Response.json({ erro: "Esse horário não faz parte da agenda do médico." }, { status: 400 });
+        }
+        const conflito = await db.consulta.findFirst({
+          where: {
+            id: { not: consulta.id },
+            medicoId: consulta.medicoId,
+            status: { notIn: ["cancelada", "concluida"] },
+            dataInicio: data.dataInicio,
+          },
+        });
+        if (conflito) {
+          return Response.json({ erro: "Esse horário já está ocupado na agenda do médico." }, { status: 409 });
+        }
         // Regra de status no SERVIDOR: remarcar NÃO altera confirmação —
         // quem confirma é o pagamento (confirmarPagamento). Legado
         // "pendente_anamnese" permanece até a trilha de pagamento resolver.
