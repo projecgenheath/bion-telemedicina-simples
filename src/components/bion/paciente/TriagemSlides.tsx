@@ -49,28 +49,54 @@ export function TriagemSlides({
   quando: string;
   onFechar: () => void;
 }) {
-  const { aplicarDelta, pularAnamnese, concluirAnamnese } = useBion();
+  const { aplicarDelta, pularAnamnese, concluirAnamnese, anamneses } = useBion();
   const faixaRef = useRef<HTMLDivElement>(null);
   const gesto = useRef<{ x: number; y: number } | null>(null);
   const [indice, setIndice] = useState(0);
-  const [pergunta, setPergunta] = useState(DICAS.identificacao);
-  const [resposta, setResposta] = useState("");
+  const [rascunhos, setRascunhos] = useState<Record<string, string>>({});
   const [enviando, setEnviando] = useState(false);
   const [respondidos, setRespondidos] = useState<Record<string, string>>({});
   const [etapaServidor, setEtapaServidor] = useState("identificacao");
   const [pronta, setPronta] = useState(false);
 
+  const idxServidor = Math.max(0, ETAPAS_ANAMNESE.findIndex((e) => e.id === etapaServidor));
+
+  const textoColeta = (bloco: Record<string, unknown> | undefined) => {
+    if (!bloco) return "";
+    const pedaco = Object.entries(bloco)
+      .filter(([k, v]) => !k.startsWith("_") && typeof v === "string" && v.trim())
+      .map(([, v]) => String(v));
+    return pedaco[0] ?? "";
+  };
+
+  const hidratar = (etapa: string | undefined, coleta: Record<string, Record<string, unknown>> | undefined, concluida?: boolean) => {
+    if (etapa) setEtapaServidor(etapa);
+    if (concluida) setPronta(true);
+    const feitos: Record<string, string> = {};
+    for (const e of ETAPAS_ANAMNESE) {
+      const t = textoColeta(coleta?.[e.id]);
+      if (t) feitos[e.id] = t;
+    }
+    if (Object.keys(feitos).length) setRespondidos((r) => ({ ...feitos, ...r }));
+    const i = Math.max(0, ETAPAS_ANAMNESE.findIndex((e) => e.id === (etapa ?? "identificacao")));
+    setIndice(i < 0 ? 0 : i);
+    requestAnimationFrame(() => {
+      const el = faixaRef.current?.children[i < 0 ? 0 : i] as HTMLElement | undefined;
+      el?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+    });
+  };
+
   const aplicarRespostaApi = (json: RespostaAnamnese) => {
     aplicarDelta(json);
-    if (json.texto) {
-      const curta = json.texto.replace(/\*\*/g, "").split("\n").filter(Boolean).pop() ?? json.texto;
-      setPergunta(curta.length > 220 ? DICAS[json.etapa ?? "queixa"] ?? curta : curta);
-    }
-    if (json.etapa) setEtapaServidor(json.etapa);
-    if (json.concluida) setPronta(true);
-    const novoIdx = Math.max(0, ETAPAS_ANAMNESE.findIndex((e) => e.id === (json.etapa ?? etapaServidor)));
-    setIndice(novoIdx < 0 ? 0 : novoIdx);
+    const ana = json.anamnese as { etapa?: string; coleta?: Record<string, Record<string, unknown>>; status?: string } | undefined;
+    hidratar(json.etapa ?? ana?.etapa, ana?.coleta, json.concluida || ana?.status === "concluida");
   };
+
+  useEffect(() => {
+    const a = anamneses.find((x) => x.consultaId === consultaId);
+    if (a) hidratar(a.etapa, a.coleta, a.status === "concluida");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [consultaId]);
 
   useEffect(() => {
     let vivo = true;
@@ -99,9 +125,9 @@ export function TriagemSlides({
   const enviar = async (texto: string) => {
     const t = texto.trim();
     if (!t || enviando || pronta) return;
-    const etapaAtual = ETAPAS_ANAMNESE[indice]?.id ?? etapaServidor;
+    const etapaAtual = ETAPAS_ANAMNESE[idxServidor]?.id ?? etapaServidor;
     setRespondidos((r) => ({ ...r, [etapaAtual]: t }));
-    setResposta("");
+    setRascunhos((r) => ({ ...r, [etapaAtual]: "" }));
     setEnviando(true);
     try {
       const res = await fetch("/api/anamnese", {
@@ -147,10 +173,10 @@ export function TriagemSlides({
   };
 
   const etapa = ETAPAS_ANAMNESE[indice] ?? ETAPAS_ANAMNESE[0];
-  const progresso = useMemo(
-    () => Math.min(100, Math.round(((pronta ? ETAPAS_ANAMNESE.length : indice) / ETAPAS_ANAMNESE.length) * 100)),
-    [indice, pronta],
-  );
+  const progresso = useMemo(() => {
+    const n = pronta ? ETAPAS_ANAMNESE.length : Math.max(idxServidor, Object.keys(respondidos).length);
+    return Math.min(100, Math.round((n / ETAPAS_ANAMNESE.length) * 100));
+  }, [idxServidor, respondidos, pronta]);
 
   return (
     <div className="absolute inset-0 z-[70] flex flex-col bg-zinc-950 text-white" role="dialog" aria-modal="true" aria-label="Triagem">
@@ -223,7 +249,7 @@ export function TriagemSlides({
             </p>
             {respondidos[item.id] ? <p className="mt-3 text-sm text-white/55">Você: {respondidos[item.id]}</p> : null}
 
-            {i === indice && !pronta ? (
+            {i === idxServidor && !pronta ? (
               <>
                 <div className="mt-4 flex flex-wrap gap-2">
                   {(ATALHOS[item.id] ?? []).map((atalho) => (
@@ -239,13 +265,15 @@ export function TriagemSlides({
                   ))}
                 </div>
                 <textarea
-                  value={resposta}
-                  onChange={(e) => setResposta(e.target.value)}
+                  value={rascunhos[item.id] ?? ""}
+                  onChange={(e) => setRascunhos((r) => ({ ...r, [item.id]: e.target.value }))}
                   rows={3}
                   placeholder="Ou escreva aqui…"
                   className="mt-4 w-full rounded-2xl border border-white/15 bg-black/35 p-3 text-sm text-white placeholder:text-white/40"
                 />
               </>
+            ) : i > idxServidor && !pronta ? (
+              <p className="mt-4 text-sm text-white/45">Responda o card atual para chegar aqui.</p>
             ) : null}
 
             <div className="mt-auto pt-4 flex items-center gap-2">
@@ -256,12 +284,12 @@ export function TriagemSlides({
                 <button type="button" onClick={() => void concluir()} className="flex-1 rounded-2xl py-3 text-sm font-bold bg-emerald-400 text-zinc-950">
                   Enviar ao médico
                 </button>
-              ) : i === indice ? (
+              ) : i === idxServidor ? (
                 <>
                   <button type="button" onClick={() => void enviar("Pode pular esta etapa.")} className="text-xs font-semibold text-white/50 px-2">
                     Pular
                   </button>
-                  <button type="button" disabled={enviando || !resposta.trim()} onClick={() => void enviar(resposta)} className="flex-1 rounded-2xl py-3 text-sm font-bold bg-sky-400 text-zinc-950 disabled:opacity-40">
+                  <button type="button" disabled={enviando || !(rascunhos[item.id] ?? "").trim()} onClick={() => void enviar(rascunhos[item.id] ?? "")} className="flex-1 rounded-2xl py-3 text-sm font-bold bg-sky-400 text-zinc-950 disabled:opacity-40">
                     {enviando ? "Enviando…" : "Continuar"}
                   </button>
                 </>
