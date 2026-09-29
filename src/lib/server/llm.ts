@@ -906,10 +906,8 @@ export async function chatComFonte(
 
   // 1) Google Gemini — API própria (Gemma 4 26B no chat)
   if (geminiHabilitado() && geminiConfig().apiKey) {
+    _geminiFalhaEm = 0; // não bloquear saudação/turno seguinte por falha anterior nesta instância
     for (let tentativa = 0; tentativa <= retries; tentativa++) {
-      // Em retry ignora cooldown de falha recente (evita cair em 503 falso)
-      if (tentativa === 0 && geminiEmCooldown()) break;
-      if (tentativa > 0) _geminiFalhaEm = 0;
       const { texto, modelo } = await chamarGemini(mensagens, prazo);
       if (texto) return { texto, fonte: "gemini", modelo };
     }

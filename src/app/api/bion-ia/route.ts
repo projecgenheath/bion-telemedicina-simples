@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { exigirSessao } from "@/lib/server/auth";
 import { ok, falha } from "@/lib/server/http";
-import { chatComFonte, type AnonNomes } from "@/lib/server/llm";
+import { chatComFonte, registrosGemini, type AnonNomes } from "@/lib/server/llm";
 
 /**
  * BION IA — assistente clínico (backend apenas).
@@ -141,9 +141,20 @@ export async function POST(req: NextRequest) {
     if (respostaLlm) {
       return ok({ resposta: respostaLlm, fonte, modelo });
     }
+    const ultimo = registrosGemini().at(-1);
+    const motivo =
+      ultimo?.erro === "timeout"
+        ? "O modelo demorou demais para responder."
+        : ultimo?.status === 429
+          ? "A cota da API do Gemma esgotou neste minuto."
+          : ultimo?.status === 403 || ultimo?.status === 401
+            ? "A chave da API do Gemma foi recusada."
+            : ultimo?.status && ultimo.status >= 400
+              ? `O Gemma devolveu HTTP ${ultimo.status}.`
+              : "O Gemma não devolveu texto utilizável.";
     return Response.json(
       {
-        erro: "A BION IA está um pouco sobrecarregada agora. Aguarde alguns segundos e envie de novo — não usamos respostas automáticas locais neste chat.",
+        erro: `${motivo} Tente de novo em alguns segundos — este chat não usa resposta local.`,
         fonte: null,
       },
       { status: 503 },
