@@ -210,8 +210,7 @@ function textoGemini(bruto: GeminiResposta | null): string {
     return uteis.map((p) => p.text ?? "").join("").trim();
   }
   // Fallback: só thought — tenta achar fala final em PT-BR entre aspas
-  const pensamento = partes.map((p) => p.text ?? "").join("
-");
+  const pensamento = partes.map((p) => p.text ?? "").join("\n");
   const aspas = [...pensamento.matchAll(/"([^"]{20,400})"/g)].map((m) => m[1]);
   const candidatos = aspas.filter((s) => /[áàâãéêíóôõúçÁÀÂÃÉÊÍÓÔÕÚÇ]|você|dor|descanse|procure|agende/i.test(s));
   if (candidatos.length) return candidatos[candidatos.length - 1].trim();
