@@ -363,10 +363,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { sessao, sair } = useBion();
   const router = useRouter();
   const pathname = usePathname();
-  const view = viewDoPath(pathname);
+  const path = (pathname || "/").split("?")[0].replace(/\/+$/, "") || "/";
+  const view = viewDoPath(path);
 
-  // Defesa: paciente nunca vê o shell legado (sidebar / abas antigas).
-  if (sessao.role === "paciente") {
+  // Defesa: paciente e sala/consulta nunca veem o shell legado.
+  if (
+    sessao.role === "paciente" ||
+    path === "/consulta" ||
+    path === "/sala-espera" ||
+    path === "/paciente" ||
+    path.startsWith("/consulta/")
+  ) {
     return <>{children}</>;
   }
 

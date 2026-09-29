@@ -73,7 +73,8 @@ export function urlDa(v: View): string {
 }
 
 export function viewDoPath(p: string): View {
-  return PATH_TO_VIEW[p] ?? "dashboard";
+  const limpo = (p || "/").split("?")[0].replace(/\/+$/, "") || "/";
+  return PATH_TO_VIEW[limpo] ?? "dashboard";
 }
 
 /* ------------------------------------------------------------------ */

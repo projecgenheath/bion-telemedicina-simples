@@ -12,7 +12,16 @@ export default function LayoutAutenticado({ children }: { children: React.ReactN
   const { autenticado, carregando, sessao, precisaTrocarSenha } = useBion();
   const router = useRouter();
   const pathname = usePathname();
-  const view = viewDoPath(pathname);
+  const path = (pathname || "/").split("?")[0].replace(/\/+$/, "") || "/";
+  const view = viewDoPath(path);
+  const rotaTelaCheia =
+    path === "/paciente" ||
+    path === "/consulta" ||
+    path === "/sala-espera" ||
+    path === "/suporte" ||
+    path === "/privacidade" ||
+    path === "/ajuda" ||
+    path.startsWith("/consulta/");
 
   // Sem sessão → tela de entrada
   useEffect(() => {
@@ -20,13 +29,7 @@ export default function LayoutAutenticado({ children }: { children: React.ReactN
   }, [carregando, autenticado, router]);
 
   const destinoPaciente = sessao.role === "paciente";
-  const telaCheiaPaciente =
-    view === "consulta" ||
-    view === "paciente-app" ||
-    view === "sala-espera" ||
-    view === "suporte" ||
-    view === "privacidade" ||
-    view === "ajuda";
+  const telaCheiaPaciente = rotaTelaCheia;
 
   // Guarda de papel: cada tela exclusiva só abre para o papel correto
   useEffect(() => {
@@ -48,13 +51,10 @@ export default function LayoutAutenticado({ children }: { children: React.ReactN
   if (precisaTrocarSenha) return <TrocarSenhaObrigatoria />;
 
   // Paciente: nunca monta o AppShell antigo (sidebar/abas) — nem por um frame.
-  if (destinoPaciente) {
-    if (telaCheiaPaciente) return <>{children}</>;
+  if (destinoPaciente || rotaTelaCheia) {
+    if (telaCheiaPaciente || rotaTelaCheia) return <>{children}</>;
     return <TelaCarregando texto="Abrindo seu app…" />;
   }
-
-  // Sala de videoconsulta é tela cheia também para médico.
-  if (view === "consulta" || view === "sala-espera") return <>{children}</>;
 
   return <AppShell>{children}</AppShell>;
 }
