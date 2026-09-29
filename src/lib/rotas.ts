@@ -25,6 +25,7 @@ export type View =
   | "bion-ia"
   | "avaliacoes"
   | "auditoria"
+  | "llm-monitor"
   | "ajuda"
   | "privacidade"
   | "admin-pacientes"
@@ -55,6 +56,7 @@ export const VIEW_TO_PATH: Record<View, string> = {
   "bion-ia": "/bion-ia",
   avaliacoes: "/avaliacoes",
   auditoria: "/auditoria",
+  "llm-monitor": "/llm-monitor",
   ajuda: "/ajuda",
   privacidade: "/privacidade",
   "admin-pacientes": "/admin-pacientes",
@@ -88,6 +90,7 @@ export const SO_ADMIN: View[] = [
   "admin-medicos",
   "admin-agendamentos",
   "auditoria",
+  "llm-monitor",
   "relatorios",
 ];
 

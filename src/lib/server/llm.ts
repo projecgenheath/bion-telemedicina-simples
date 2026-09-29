@@ -1,4 +1,5 @@
 import { limparArtefatos, repararRepeticoes } from "@/lib/server/llm-sanitize";
+import { registrarTurnoLlm } from "@/lib/server/llm-monitor";
 import ZAI from "z-ai-web-dev-sdk";
 
 /**
@@ -898,6 +899,22 @@ export async function chatComFonte(
   anon?: AnonNomes,
   opcoes?: OpcoesChat,
 ): Promise<Resultado> {
+  const inicio = Date.now();
+  const devolver = (r: Resultado): Resultado => {
+    const ultimo = _registrosGemini.at(-1);
+    registrarTurnoLlm({
+      ts: Date.now(),
+      ok: Boolean(r.texto),
+      ms: Date.now() - inicio,
+      fonte: r.fonte,
+      modelo: r.modelo ?? null,
+      textoLen: r.texto?.length ?? 0,
+      http: ultimo?.status ?? null,
+      finish: ultimo?.finish ?? null,
+      erro: r.texto ? null : ultimo?.erro ?? "sem texto",
+    });
+    return r;
+  };
   const prazo = Date.now() + Math.max(timeoutMs, 5_000);
   const retries = Math.max(0, Math.min(3, opcoes?.retries ?? 0));
   const somente = opcoes?.somenteGemini === true;
@@ -907,20 +924,20 @@ export async function chatComFonte(
     _geminiFalhaEm = 0; // não bloquear saudação/turno seguinte por falha anterior nesta instância
     for (let tentativa = 0; tentativa <= retries; tentativa++) {
       const { texto, modelo } = await chamarGemini(mensagens, prazo);
-      if (texto) return { texto, fonte: "gemini", modelo };
+      if (texto) return devolver({ texto, fonte: "gemini", modelo });
     }
     _geminiFalhaEm = Date.now();
   }
 
   if (somente) {
-    return { texto: null, fonte: null };
+    return devolver({ texto: null, fonte: null });
   }
 
   // 2) credenciais próprias genéricas
   const env = clienteEnv();
   if (env) {
     const texto = await chamarEnv(env, mensagens, prazo);
-    if (texto) return { texto, fonte: "env" };
+    if (texto) return devolver({ texto, fonte: "env" });
   }
 
   // 3) endpoint público (desligado por padrão)
@@ -928,7 +945,7 @@ export async function chatComFonte(
     const anonimizado = anonimizarMensagens(mensagens, anon);
     const comNota = anon?.length ? aplicarNotaPrivacidade(anonimizado) : anonimizado;
     const texto = await chamarPublico(comNota, prazo);
-    if (texto) return { texto, fonte: "publico" };
+    if (texto) return devolver({ texto, fonte: "publico" });
     _publicoFalhaEm = Date.now();
   }
 
@@ -937,11 +954,11 @@ export async function chatComFonte(
     const sdk = await tentarSdk();
     if (sdk) {
       const texto = await chamarSdk(sdk, mensagens, prazo);
-      if (texto) return { texto, fonte: "sdk" };
+      if (texto) return devolver({ texto, fonte: "sdk" });
     }
   }
 
-  return { texto: null, fonte: null };
+  return devolver({ texto: null, fonte: null });
 }
 
 /** Compatibilidade: só o texto (ou null). */

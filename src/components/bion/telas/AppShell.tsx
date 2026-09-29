@@ -23,6 +23,7 @@ import {
   FileSearch,
   CircleHelp,
   LayoutGrid,
+  Gauge,
   X,
 } from "lucide-react";
 import { useBion } from "@/lib/bion-store";
@@ -88,6 +89,7 @@ function Shell({
       { icon: Calendar, label: "Agendamentos", view: "admin-agendamentos" },
       { icon: TrendingUp, label: "Relatórios & PDF", view: "relatorios" },
       { icon: FileSearch, label: "Auditoria", view: "auditoria" },
+      { icon: Gauge, label: "Monitor LLM", view: "llm-monitor" },
       { icon: LifeBuoy, label: "Chamados Suporte", view: "suporte" },
       { icon: Bell, label: "Lembretes", view: "lembretes" },
       { icon: CircleHelp, label: "Ajuda & FAQ", view: "ajuda" },
