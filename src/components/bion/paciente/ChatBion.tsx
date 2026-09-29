@@ -148,7 +148,21 @@ export function ChatBion({
       especialidade: a.especialidade,
       quando: `${c.data} às ${c.hora}`,
     });
+    onFechar();
   };
+
+  // A triagem NÃO acontece neste chat — se algo ainda ativar o modo antigo, abre os cards.
+  useEffect(() => {
+    if (!anamneseAtiva) return;
+    aoAbrirTriagem?.({
+      consultaId: anamneseAtiva.consultaId,
+      medico: anamneseAtiva.medico,
+      especialidade: anamneseAtiva.especialidade,
+      quando: anamneseAtiva.quando,
+    });
+    setAnamneseAtiva(null);
+    onFechar();
+  }, [anamneseAtiva, aoAbrirTriagem, onFechar]);
 
   const enviarAnamnese = async (textoEntrada: string) => {
     const t = textoEntrada.trim();
@@ -378,7 +392,13 @@ export function ChatBion({
     const t = texto.trim();
     if (!t) return;
     if (anamneseAtiva) {
-      void enviarAnamnese(t);
+      aoAbrirTriagem?.({
+        consultaId: anamneseAtiva.consultaId,
+        medico: anamneseAtiva.medico,
+        especialidade: anamneseAtiva.especialidade,
+        quando: anamneseAtiva.quando,
+      });
+      onFechar();
       return;
     }
     if (!interpretarIntencao(t)) void enviar(t);
@@ -565,7 +585,7 @@ export function ChatBion({
           <div className="flex-1 min-w-0">
             <div className="font-bold text-bion-ink dark:text-bion-paper">BION IA</div>
             <div className="text-xs text-emerald-800 dark:text-emerald-200 font-medium">
-              {pensando || enviandoLaudo || pagando ? "Digitando…" : anamneseAtiva ? "Triagem em andamento" : "Online · responde na hora"}
+              {pensando || enviandoLaudo || pagando ? "Digitando…" : "Online · responde na hora"}
             </div>
           </div>
           <button type="button" onClick={onFechar} aria-label="Fechar conversa" className="rounded-full p-2.5 bp-glass text-bion-ink dark:text-bion-paper">
@@ -573,29 +593,6 @@ export function ChatBion({
           </button>
         </div>
 
-        {/* Progresso da anamnese */}
-        {anamneseAtiva && (() => {
-          const idx = Math.max(0, ETAPAS_ANAMNESE.findIndex((e) => e.id === anamneseAtiva.etapa));
-          const atual = ETAPAS_ANAMNESE[idx] ?? ETAPAS_ANAMNESE[0];
-          const pct = Math.round(((idx + 1) / ETAPAS_ANAMNESE.length) * 100);
-          return (
-            <div className="mt-3">
-              <div className="flex items-center justify-between text-xs font-semibold text-bion-ink/60 dark:text-white/55">
-                <span className="inline-flex items-center gap-1.5">
-                  <Stethoscope className="w-3.5 h-3.5" />
-                  Triagem — {atual.rotulo}
-                </span>
-                <span>{idx + 1}/{ETAPAS_ANAMNESE.length}</span>
-              </div>
-              <div className="mt-1.5 h-1.5 rounded-full bg-bion-ink/10 dark:bg-white/10 overflow-hidden">
-                <div className="h-full rounded-full bg-gradient-to-r from-bion-sea to-bion-ink dark:from-sky-400 dark:to-sky-200 transition-all" style={{ width: `${pct}%` }} />
-              </div>
-              <div className="mt-1.5 text-xs text-bion-ink/45 dark:text-white/40">
-                Disponível até 5 minutos antes da consulta ({anamneseAtiva.quando})
-              </div>
-            </div>
-          );
-        })()}
       </header>
 
       {/* Mensagens */}
