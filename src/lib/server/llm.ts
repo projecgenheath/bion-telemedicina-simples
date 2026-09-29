@@ -203,20 +203,30 @@ type GeminiResposta = {
  * Preferimos partes NÃO-thought; se só houver thought, tentamos a última
  * sentença em português embutida no raciocínio.
  */
+function falaEmPortugues(texto: string): string {
+  const limpo = texto.replace(/\*+/g, " ").replace(/\s+/g, " ").trim();
+  const frases = limpo.split(/(?<=[.!?])\s+/).map((s) => s.trim()).filter((s) => s.length >= 8);
+  const pt = frases.filter((s) =>
+    /[áàâãéêíóôõúçÁÀÂÃÉÊÍÓÔÕÚÇ]|\b(você|seu|sua|olá|oi|boa|noite|dia|tarde|posso|vamos|consulta|médico|triagem)\b/i.test(s)
+    && !/constraint|user says|the system|option \d/i.test(s),
+  );
+  if (pt.length) return pt.slice(-2).join(" ").trim();
+  return "";
+}
+
 function textoGemini(bruto: GeminiResposta | null): string {
   const partes = bruto?.candidates?.[0]?.content?.parts ?? [];
   const uteis = partes.filter((p) => !p.thought && (p.text ?? "").trim());
   if (uteis.length) {
-    // Uma parte só: evita colar dois rascunhos (Option 1 + Option 2).
     const textos = uteis.map((p) => (p.text ?? "").trim()).filter(Boolean);
-    return (textos[0] ?? "").trim();
+    const visivel = (textos[textos.length - 1] ?? "").trim();
+    if (visivel.length >= 2) return visivel;
   }
-  // Fallback: só thought — tenta achar fala final em PT-BR entre aspas
   const pensamento = partes.map((p) => p.text ?? "").join("\n");
-  const aspas = [...pensamento.matchAll(/"([^"]{20,400})"/g)].map((m) => m[1]);
-  const candidatos = aspas.filter((s) => /[áàâãéêíóôõúçÁÀÂÃÉÊÍÓÔÕÚÇ]|você|dor|descanse|procure|agende/i.test(s));
+  const aspas = [...pensamento.matchAll(/"([^"]{8,400})"/g)].map((m) => m[1]);
+  const candidatos = aspas.filter((s) => /[áàâãéêíóôõúçÁÀÂÃÉÊÍÓÔÕÚÇ]|você|olá|oi|boa /i.test(s));
   if (candidatos.length) return candidatos[candidatos.length - 1].trim();
-  return "";
+  return falaEmPortugues(pensamento);
 }
 
 /* ---- telemetria de tentativas (mesma requisição; usada pelo diagnóstico) ---- */
@@ -432,7 +442,7 @@ function comporFala(continuacao: string, comPrefill: boolean): string {
           // despejo e resposta mais curta (e mais rápida). O eco que escapar
           // passa pelo sanitizador antes de descartar.
           contents: conteudosDoModelo,
-          generationConfig: { temperature: 0.3, maxOutputTokens: 768 },
+          generationConfig: { temperature: 0.3, maxOutputTokens: 4096 },
         }
       : {
           ...(sys ? { systemInstruction: { parts: [{ text: sys }] } } : {}),
@@ -462,8 +472,7 @@ function comporFala(continuacao: string, comPrefill: boolean): string {
           contents: conteudosDoModelo,
           generationConfig: {
             temperature: 0.3,
-            maxOutputTokens: 768,
-            stopSequences: ["\n\n*", "\n*", "\n\nOption", "\nOption ", "\nDraft"],
+            maxOutputTokens: 4096,
           },
         },
         Math.min(prazo, subprazo),
