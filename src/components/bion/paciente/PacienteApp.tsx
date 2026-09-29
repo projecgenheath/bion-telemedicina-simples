@@ -299,7 +299,7 @@ export function PacienteApp() {
         {/* ============================= PRINCIPAL ============================ */}
         <div className="w-full h-full shrink-0 overflow-y-auto bp-coluna" aria-label="Início, saúde e exames">
           {/* --- Seção 1: início --- */}
-          <section className="bp-secao-1 min-h-[100svh] flex flex-col px-5 bp-safe-top pb-8" aria-label="Página inicial">
+          <section className="bp-secao-1 min-h-[100svh] flex flex-col px-5 bp-safe-top pb-28" aria-label="Página inicial">
             <header className="flex items-center justify-between pt-2">
               <div className="text-xs font-semibold uppercase tracking-wider text-bion-ink/45 dark:text-white/40">
                 {hoje}
@@ -775,8 +775,9 @@ export function PacienteApp() {
         </div>
       </div>
 
-      {/* Indicador de painéis (também navegação acessível) */}
-      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 rounded-full bp-glass px-3 py-2">
+      {/* Indicador de painéis — some quando há overlay para não cobrir cards */}
+      {!(chatAberto || triagemSlide || modalConsulta || detalhe) ? (
+      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 rounded-full bg-zinc-950/80 text-white backdrop-blur px-3 py-2 pointer-events-auto">
         {[
           { idx: 0, rotulo: "Perfil" },
           { idx: 1, rotulo: "Início" },
@@ -802,8 +803,9 @@ export function PacienteApp() {
         {painel !== 1 && (
           <span className="sr-only">Use as setas do teclado para navegar</span>
         )}
-        {painel === 1 && <ChevronRight className="w-4 h-4 text-bion-ink/30 dark:text-white/30" />}
+        {painel === 1 && <ChevronRight className="w-4 h-4 text-white/40" />}
       </div>
+      ) : null}
 
       {/* Overlays */}
       <DetalheMedicao detalhe={detalhe} onFechar={() => setDetalhe(null)} />

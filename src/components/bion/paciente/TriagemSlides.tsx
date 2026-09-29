@@ -222,7 +222,7 @@ export function TriagemSlides({
         })}
       </div>
 
-      <div className="mt-auto shrink-0 border-t border-white/10 bg-zinc-950 px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
+      <div className="shrink-0 border-t border-white/10 bg-zinc-950 px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
         <div className="flex items-center justify-between mb-3">
           <button
             type="button"
