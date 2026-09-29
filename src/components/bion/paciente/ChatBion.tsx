@@ -43,12 +43,12 @@ export function ChatBion({
   aberto,
   onFechar,
   aoEnviarExame,
-  iniciarTriagemConsultaId,
+  aoAbrirTriagem,
 }: {
   aberto: boolean;
   onFechar: () => void;
   aoEnviarExame?: () => void;
-  iniciarTriagemConsultaId?: string | null;
+  aoAbrirTriagem?: (info: { consultaId: string; medico: string; especialidade: string; quando: string }) => void;
 }) {
   const {
     sessao,
@@ -139,29 +139,11 @@ export function ChatBion({
     }
   };
 
-  const autoTriagemRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (!aberto) {
-      autoTriagemRef.current = null;
-      return;
-    }
-    const id = iniciarTriagemConsultaId;
-    if (!id || autoTriagemRef.current === id) return;
-    const c = consultas.find((x) => x.id === id);
-    if (!c) return;
-    autoTriagemRef.current = id;
-    void iniciarAnamnese(id, {
-      medico: c.medico,
-      especialidade: c.especialidade,
-      quando: rotuloQuando(c.data, c.hora),
-      avisoPrevio: `Vamos à triagem da consulta de **${c.especialidade}** com ${c.medico} (${c.data} às ${c.hora}). É opcional — você pode pular quando quiser.`,
-    });
-  }, [aberto, iniciarTriagemConsultaId, consultas]);
-
   const retomarAnamnese = (a: AnamneseResumo) => {
     const c = consultas.find((x) => x.id === a.consultaId);
     if (!c) return;
-    void iniciarAnamnese(a.consultaId, {
+    aoAbrirTriagem?.({
+      consultaId: a.consultaId,
       medico: a.medico,
       especialidade: a.especialidade,
       quando: `${c.data} às ${c.hora}`,
@@ -442,14 +424,19 @@ export function ChatBion({
         ...m,
         {
           remetente: "ia",
-          texto: `Pagamento de **R$ ${medicoRegistro?.valor ?? 0}** confirmado (método: ${metodo === "pix" ? "Pix" : "Cartão"}). Sua consulta de **${especialidade}** com ${medico} está **confirmada** para ${quando}.\n\nAgora vamos fazer sua **triagem** — uma conversa tranquila, no seu ritmo, que fica disponível até **5 minutos antes** do horário. Eu já tenho seus dados do perfil; você confirma e me conta o que está sentindo, e o médico chega à consulta já sabendo da sua história.`,
-          tipo: "anamnese",
+          texto: `Pagamento confirmado. Sua consulta de **${especialidade}** com ${medico} está marcada para ${quando}. A triagem é opcional e abre em cards — fora deste chat.`,
+          tipo: "sucesso-agendamento",
         },
       ]);
       setEtapa(null);
       setEscolha({});
       setMetodo(null);
-      await iniciarAnamnese(json.consultaCriada!, { medico, especialidade, quando });
+      aoAbrirTriagem?.({
+        consultaId: json.consultaCriada!,
+        medico,
+        especialidade,
+        quando,
+      });
     } catch {
       setMensagens((m) => [
         ...m,

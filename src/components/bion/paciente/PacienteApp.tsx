@@ -33,6 +33,10 @@ const ChatBion = dynamic(
   () => import("./ChatBion").then((m) => m.ChatBion),
   { ssr: false, loading: () => null },
 );
+const TriagemSlides = dynamic(
+  () => import("./TriagemSlides").then((m) => m.TriagemSlides),
+  { ssr: false, loading: () => null },
+);
 import { PerfilPainel } from "./PerfilPainel";
 import { DocumentosPainel } from "./DocumentosPainel";
 
@@ -63,6 +67,12 @@ export function PacienteApp() {
   const [detalhe, setDetalhe] = useState<Detalhe>(null);
   const [chatAberto, setChatAberto] = useState(false);
   const [triagemConsultaId, setTriagemConsultaId] = useState<string | null>(null);
+  const [triagemSlide, setTriagemSlide] = useState<{
+    consultaId: string;
+    medico: string;
+    especialidade: string;
+    quando: string;
+  } | null>(null);
   const [listaConsultasAberta, setListaConsultasAberta] = useState(false);
   const [modalConsulta, setModalConsulta] = useState<{ id: string; acao: "cancelar" | "remarcar" } | null>(null);
   const [motivoCancel, setMotivoCancel] = useState("");
@@ -152,8 +162,16 @@ export function PacienteApp() {
   }, [modalConsulta, agendaLivre, novaData, novaHora]);
 
   const abrirTriagem = (consultaId: string) => {
+    const c = consultas.find((x) => x.id === consultaId);
+    if (!c) return;
     setTriagemConsultaId(consultaId);
-    setChatAberto(true);
+    setChatAberto(false);
+    setTriagemSlide({
+      consultaId,
+      medico: c.medico,
+      especialidade: c.especialidade,
+      quando: `${c.data} · ${c.hora}`,
+    });
   };
 
   const entrarSala = (ts: number) => {
@@ -759,7 +777,7 @@ export function PacienteApp() {
       </div>
 
       {/* Indicador de painéis — some quando há overlay para não cobrir cards */}
-      {!(chatAberto || modalConsulta || detalhe) ? (
+      {!(chatAberto || triagemSlide || modalConsulta || detalhe) ? (
       <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 rounded-full bg-zinc-950/80 text-white backdrop-blur px-3 py-2 pointer-events-auto">
         {[
           { idx: 0, rotulo: "Perfil" },
@@ -794,12 +812,24 @@ export function PacienteApp() {
       <DetalheMedicao detalhe={detalhe} onFechar={() => setDetalhe(null)} />
       <ChatBion
         aberto={chatAberto}
-        onFechar={() => {
+        onFechar={() => setChatAberto(false)}
+        aoAbrirTriagem={(info) => {
           setChatAberto(false);
-          setTriagemConsultaId(null);
+          setTriagemSlide(info);
         }}
-        iniciarTriagemConsultaId={triagemConsultaId}
       />
+      {triagemSlide ? (
+        <TriagemSlides
+          consultaId={triagemSlide.consultaId}
+          medico={triagemSlide.medico}
+          especialidade={triagemSlide.especialidade}
+          quando={triagemSlide.quando}
+          onFechar={() => {
+            setTriagemSlide(null);
+            setTriagemConsultaId(null);
+          }}
+        />
+      ) : null}
 
       {modalConsulta ? (
         <div className="fixed inset-0 z-[80] flex items-end justify-center" role="dialog" aria-modal="true">
