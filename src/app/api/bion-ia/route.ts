@@ -26,7 +26,7 @@ const LIMITE_HISTORICO = 8;
  * paciente espera demais e ainda cai no motor local. 15s limita o pior caso
  * (Gemma travado → local) a ~14s, mantendo folga para respostas reais de 8-12s.
  */
-const TIMEOUT_MS = 18_000;
+const TIMEOUT_MS = 40_000;
 
 type MsgEntrada = { remetente: string; texto: string };
 
