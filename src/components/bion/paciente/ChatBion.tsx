@@ -43,12 +43,12 @@ export function ChatBion({
   aberto,
   onFechar,
   aoEnviarExame,
-  iniciarTriagemConsultaId,
+  aoAbrirTriagem,
 }: {
   aberto: boolean;
   onFechar: () => void;
   aoEnviarExame?: () => void;
-  iniciarTriagemConsultaId?: string | null;
+  aoAbrirTriagem?: (info: { consultaId: string; medico: string; especialidade: string; quando: string }) => void;
 }) {
   const {
     sessao,
@@ -139,34 +139,16 @@ export function ChatBion({
     }
   };
 
-  const autoTriagemRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (!aberto) {
-      autoTriagemRef.current = null;
-      return;
-    }
-    const id = iniciarTriagemConsultaId;
-    if (!id || autoTriagemRef.current === id) return;
-    const c = consultas.find((x) => x.id === id);
-    if (!c) return;
-    autoTriagemRef.current = id;
-    void iniciarAnamnese(id, {
-      medico: c.medico,
-      especialidade: c.especialidade,
-      quando: rotuloQuando(c.data, c.hora),
-      avisoPrevio: `Vamos à triagem da consulta de **${c.especialidade}** com ${c.medico} (${c.data} às ${c.hora}). É opcional — você pode pular quando quiser.`,
-    });
-  }, [aberto, iniciarTriagemConsultaId, consultas]);
-
   const retomarAnamnese = (a: AnamneseResumo) => {
     const c = consultas.find((x) => x.id === a.consultaId);
     if (!c) return;
-    setMensagens((m) => [...m, { remetente: "usuario", texto: "Quero continuar minha triagem" }]);
-    void iniciarAnamnese(a.consultaId, {
+    aoAbrirTriagem?.({
+      consultaId: a.consultaId,
       medico: a.medico,
       especialidade: a.especialidade,
       quando: `${c.data} às ${c.hora}`,
     });
+    onFechar();
   };
 
   const enviarAnamnese = async (textoEntrada: string) => {
@@ -450,7 +432,13 @@ export function ChatBion({
       setEtapa(null);
       setEscolha({});
       setMetodo(null);
-      await iniciarAnamnese(json.consultaCriada!, { medico, especialidade, quando });
+      aoAbrirTriagem?.({
+        consultaId: json.consultaCriada!,
+        medico,
+        especialidade,
+        quando,
+      });
+      onFechar();
     } catch {
       setMensagens((m) => [
         ...m,
