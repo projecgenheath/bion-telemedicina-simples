@@ -21,7 +21,7 @@ export default function PaginaConsulta() {
       role={sessao.role}
       onEnd={() =>
         router.replace(
-          sessao.role === "paciente" ? "/painel?pos-consulta=1" : "/painel",
+          sessao.role === "paciente" ? "/paciente" : "/painel",
         )
       }
     />

@@ -21,7 +21,12 @@ export default function LayoutAutenticado({ children }: { children: React.ReactN
 
   const destinoPaciente = sessao.role === "paciente";
   const telaCheiaPaciente =
-    view === "consulta" || view === "paciente-app" || view === "sala-espera";
+    view === "consulta" ||
+    view === "paciente-app" ||
+    view === "sala-espera" ||
+    view === "suporte" ||
+    view === "privacidade" ||
+    view === "ajuda";
 
   // Guarda de papel: cada tela exclusiva só abre para o papel correto
   useEffect(() => {

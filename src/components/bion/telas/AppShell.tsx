@@ -364,6 +364,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const view = viewDoPath(pathname);
+
+  // Defesa: paciente nunca vê o shell legado (sidebar / abas antigas).
+  if (sessao.role === "paciente") {
+    return <>{children}</>;
+  }
+
   const go = (v: View) => router.push(urlDa(v));
   const handleLogout = async () => {
     await sair();
