@@ -158,9 +158,12 @@ export function TriagemSlides({
     return Math.min(100, Math.round((n / ETAPAS_ANAMNESE.length) * 100));
   }, [respondidos]);
 
+  const etapaVisivel = ETAPAS_ANAMNESE[indice] ?? ETAPAS_ANAMNESE[0];
+  const atalhos = ATALHOS[etapaVisivel.id] ?? [];
+
   return (
     <div className="fixed inset-0 z-[70] flex flex-col bg-zinc-950 text-white" role="dialog" aria-modal="true" aria-label="Triagem">
-      <header className="px-4 pt-3 pb-2 flex items-center gap-3">
+      <header className="px-4 pt-3 pb-2 flex items-center gap-3 shrink-0">
         <button type="button" onClick={onFechar} className="rounded-full p-2 bg-white/10" aria-label="Fechar triagem">
           <X className="w-5 h-5" />
         </button>
@@ -176,7 +179,7 @@ export function TriagemSlides({
         </button>
       </header>
 
-      <div className="px-4 pb-3">
+      <div className="px-4 pb-2 shrink-0">
         <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
           <div className="h-full bg-sky-400 transition-all" style={{ width: `${pronta ? 100 : progresso}%` }} />
         </div>
@@ -187,23 +190,22 @@ export function TriagemSlides({
 
       <div
         ref={faixaRef}
-        className="flex-1 overflow-x-auto overflow-y-hidden snap-x snap-mandatory flex gap-3 px-4 pb-3"
+        className="shrink-0 overflow-x-auto snap-x snap-mandatory flex gap-3 px-4 py-2"
         onScroll={(e) => {
           const el = e.currentTarget;
-          const i = Math.round(el.scrollLeft / Math.max(1, el.clientWidth * 0.85));
+          const i = Math.round(el.scrollLeft / Math.max(1, el.clientWidth * 0.88));
           if (i !== indice && i >= 0 && i < ETAPAS_ANAMNESE.length) setIndice(i);
         }}
       >
         {ETAPAS_ANAMNESE.map((etapa, i) => {
           const ativo = i === indice;
           const feito = Boolean(respondidos[etapa.id]);
-          const bloqueado = i > idxServidor + 1;
           return (
             <article
               key={etapa.id}
-              className={`snap-center shrink-0 w-[85vw] max-w-sm h-full rounded-3xl border p-5 flex flex-col ${
+              className={`snap-center shrink-0 w-[86vw] max-w-sm rounded-3xl border p-5 ${
                 ativo ? "border-sky-400/50 bg-zinc-900" : "border-white/10 bg-zinc-900/70"
-              } ${bloqueado ? "opacity-50" : ""}`}
+              }`}
             >
               <div className="flex items-center justify-between mb-3">
                 <span className="text-[11px] font-bold uppercase tracking-wider text-sky-300">
@@ -214,80 +216,80 @@ export function TriagemSlides({
               <p className="text-base font-semibold leading-snug">
                 {i === idxServidor ? pergunta : DICAS[etapa.id]}
               </p>
-              {feito ? (
-                <p className="mt-3 text-sm text-white/60">Sua resposta: {respondidos[etapa.id]}</p>
-              ) : null}
-              {i === idxServidor && !pronta ? (
-                <>
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {(ATALHOS[etapa.id] ?? []).map((atalho) => (
-                      <button
-                        key={atalho}
-                        type="button"
-                        disabled={enviando}
-                        onClick={() => void enviar(atalho)}
-                        className="rounded-full px-3 py-1.5 text-xs font-semibold bg-white/10 border border-white/10"
-                      >
-                        {atalho}
-                      </button>
-                    ))}
-                  </div>
-                  <textarea
-                    value={resposta}
-                    onChange={(e) => setResposta(e.target.value)}
-                    rows={3}
-                    placeholder="Ou escreva com suas palavras…"
-                    className="mt-4 w-full rounded-2xl border border-white/15 bg-black/40 p-3 text-sm text-white placeholder:text-white/35"
-                  />
-                </>
-              ) : null}
-              <div className="mt-auto pt-4 flex items-center justify-between gap-2">
-                <button
-                  type="button"
-                  disabled={i === 0}
-                  onClick={() => irPara(Math.max(0, i - 1))}
-                  className="rounded-full p-2 bg-white/10 disabled:opacity-30"
-                  aria-label="Card anterior"
-                >
-                  <ArrowLeft className="w-4 h-4" />
-                </button>
-                {i === idxServidor && !pronta ? (
-                  <div className="flex gap-2">
-                    <button type="button" onClick={pularEtapa} className="text-xs font-semibold text-white/50">
-                      Pular etapa
-                    </button>
-                    <button
-                      type="button"
-                      disabled={enviando || !resposta.trim()}
-                      onClick={() => void enviar(resposta)}
-                      className="rounded-full px-4 py-2 text-xs font-bold bg-sky-400 text-zinc-950 disabled:opacity-40"
-                    >
-                      {enviando ? "Enviando…" : "Continuar"}
-                    </button>
-                  </div>
-                ) : i === ETAPAS_ANAMNESE.length - 1 || pronta ? (
-                  <button
-                    type="button"
-                    onClick={() => void concluir()}
-                    className="rounded-full px-4 py-2 text-xs font-bold bg-emerald-400 text-zinc-950"
-                  >
-                    Enviar ao médico
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    disabled={bloqueado}
-                    onClick={() => irPara(Math.min(ETAPAS_ANAMNESE.length - 1, i + 1))}
-                    className="rounded-full p-2 bg-white/10 disabled:opacity-30"
-                    aria-label="Próximo card"
-                  >
-                    <ArrowRight className="w-4 h-4" />
-                  </button>
-                )}
-              </div>
+              {feito ? <p className="mt-3 text-sm text-white/60">Sua resposta: {respondidos[etapa.id]}</p> : null}
             </article>
           );
         })}
+      </div>
+
+      <div className="mt-auto shrink-0 border-t border-white/10 bg-zinc-950 px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
+        <div className="flex items-center justify-between mb-3">
+          <button
+            type="button"
+            disabled={indice === 0}
+            onClick={() => irPara(indice - 1)}
+            className="rounded-full p-2 bg-white/10 disabled:opacity-30"
+            aria-label="Card anterior"
+          >
+            <ArrowLeft className="w-4 h-4" />
+          </button>
+          <span className="text-xs text-white/45">{etapaVisivel.rotulo}</span>
+          <button
+            type="button"
+            disabled={indice >= ETAPAS_ANAMNESE.length - 1}
+            onClick={() => irPara(indice + 1)}
+            className="rounded-full p-2 bg-white/10 disabled:opacity-30"
+            aria-label="Próximo card"
+          >
+            <ArrowRight className="w-4 h-4" />
+          </button>
+        </div>
+
+        {pronta ? (
+          <button
+            type="button"
+            onClick={() => void concluir()}
+            className="w-full rounded-2xl py-3 text-sm font-bold bg-emerald-400 text-zinc-950"
+          >
+            Enviar ao médico
+          </button>
+        ) : (
+          <>
+            <div className="flex flex-wrap gap-2 mb-3">
+              {atalhos.map((atalho) => (
+                <button
+                  key={atalho}
+                  type="button"
+                  disabled={enviando}
+                  onClick={() => void enviar(atalho)}
+                  className="rounded-full px-3 py-2 text-xs font-semibold bg-white/10 border border-white/15"
+                >
+                  {atalho}
+                </button>
+              ))}
+            </div>
+            <textarea
+              value={resposta}
+              onChange={(e) => setResposta(e.target.value)}
+              rows={3}
+              placeholder="Escreva sua resposta…"
+              className="w-full rounded-2xl border border-white/15 bg-zinc-900 p-3 text-sm text-white placeholder:text-white/40"
+            />
+            <div className="flex gap-2 mt-3">
+              <button type="button" onClick={pularEtapa} className="px-3 py-3 text-xs font-semibold text-white/55">
+                Pular etapa
+              </button>
+              <button
+                type="button"
+                disabled={enviando || !resposta.trim()}
+                onClick={() => void enviar(resposta)}
+                className="flex-1 rounded-2xl py-3 text-sm font-bold bg-sky-400 text-zinc-950 disabled:opacity-40"
+              >
+                {enviando ? "Enviando…" : "Responder e continuar"}
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
