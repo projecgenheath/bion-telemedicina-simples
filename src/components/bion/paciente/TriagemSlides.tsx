@@ -217,7 +217,9 @@ export function TriagemSlides({
               {respondidos[item.id] ? <Check className="w-4 h-4 text-emerald-400" /> : <Sparkles className="w-4 h-4 text-white/30" />}
             </div>
             <p className="text-[17px] font-semibold leading-snug">
-              {i === indice ? (pronta ? "Tudo certo. Envie ao médico quando quiser." : pergunta) : DICAS[item.id]}
+              {pronta && i === ETAPAS_ANAMNESE.length - 1
+                ? "Tudo certo. Envie ao médico quando quiser."
+                : DICAS[item.id]}
             </p>
             {respondidos[item.id] ? <p className="mt-3 text-sm text-white/55">Você: {respondidos[item.id]}</p> : null}
 
