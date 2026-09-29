@@ -12,7 +12,9 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:reset": "prisma migrate reset",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "seed": "bun prisma/seed.ts",
+    "seed:auth": "node scripts/sync-demo-auth.mjs"
   },
   "dependencies": {
     "@prisma/client": "^6.11.1",

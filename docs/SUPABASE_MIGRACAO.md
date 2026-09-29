@@ -65,3 +65,23 @@ A API Next (Prisma + DATABASE_URL) **não** é bloqueada pelo RLS.
 
 `POST /api/auth/senha` valida a senha atual (bcrypt ou Auth), atualiza no
 **Supabase Auth** (`updateUser` / admin) e espelha o hash no Prisma.
+
+
+## Seed e Auth
+
+```bash
+# Seed completo (Prisma + Auth se SERVICE_ROLE existir)
+npm run seed
+
+# Só vincular usuários existentes ao Auth (sem apagar dados)
+npm run seed:auth
+```
+
+Na Vercel, além de URL e anon key, é **obrigatório** para Auth admin / Storage / seed:
+
+```
+SUPABASE_SERVICE_ROLE_KEY=eyJ...   # Project Settings → API → service_role
+```
+
+Sem essa chave: login legado bcrypt ainda funciona; cadastros novos exigem anon key
+funcionando no `signUp` do browser/servidor.

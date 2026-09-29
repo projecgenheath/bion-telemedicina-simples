@@ -12,6 +12,55 @@ const db = new PrismaClient();
 const MESES = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
 const DIA = 86400000;
 
+/** Provisiona usuário no Supabase Auth e grava supabaseId no Prisma (opcional). */
+async function vincularSupabaseAuth(
+  userId: string,
+  email: string,
+  nome: string,
+  senha: string,
+): Promise<void> {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+  if (!url || !key) return;
+
+  try {
+    const { createClient } = await import("@supabase/supabase-js");
+    const admin = createClient(url, key, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+
+    // Tenta criar; se já existir, busca por e-mail
+    let authId: string | null = null;
+    const created = await admin.auth.admin.createUser({
+      email,
+      password: senha,
+      email_confirm: true,
+      user_metadata: { nome },
+    });
+    if (created.data.user) {
+      authId = created.data.user.id;
+    } else {
+      const list = await admin.auth.admin.listUsers({ page: 1, perPage: 200 });
+      const found = list.data.users?.find((u) => u.email?.toLowerCase() === email.toLowerCase());
+      if (found) {
+        authId = found.id;
+        // Garante senha demo no Auth
+        await admin.auth.admin.updateUserById(found.id, { password: senha, email_confirm: true });
+      } else if (created.error) {
+        console.warn(`  [Auth] ${email}: ${created.error.message}`);
+      }
+    }
+
+    if (authId) {
+      await db.user.update({ where: { id: userId }, data: { supabaseId: authId } });
+      console.log(`  [Auth] ${email} → ${authId.slice(0, 8)}…`);
+    }
+  } catch (e) {
+    console.warn(`  [Auth] falha ao vincular ${email}:`, e instanceof Error ? e.message : e);
+  }
+}
+
+
 /** Data/hora local de hoje+deslocamento (ex.: em(-45, 10, 0) = 45 dias atrás às 10:00) */
 function em(dias: number, hora = 10, minuto = 0): Date {
   const d = new Date();
@@ -301,6 +350,17 @@ async function main() {
 
   console.log("Criando consentimento de exemplo...");
   await db.consentimento.create({ data: { pacienteId: marina.id, quem: marina.nome, perfil: "PACIENTE", finalidade: "Geração de prontuário em PDF", documentos: 3, aceito: true, createdAt: em(-20, 12, 5) } });
+
+  // Supabase Auth: provisiona contas demo se SERVICE_ROLE estiver configurada
+  const SENHA_DEMO = "bion123456";
+  console.log("\nVinculando contas ao Supabase Auth (se SERVICE_ROLE configurada)...");
+  const todos = await db.user.findMany({ select: { id: true, email: true, nome: true } });
+  for (const u of todos) {
+    await vincularSupabaseAuth(u.id, u.email, u.nome, SENHA_DEMO);
+  }
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()) {
+    console.log("  (pulado — defina SUPABASE_SERVICE_ROLE_KEY para criar em Authentication → Users)");
+  }
 
   console.log("\n✅ Seed concluído!");
   console.log("\nContas demo (senha: bion123456):");
