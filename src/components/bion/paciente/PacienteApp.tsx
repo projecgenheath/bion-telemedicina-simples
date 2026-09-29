@@ -782,21 +782,28 @@ export function PacienteApp() {
       />
 
       {modalConsulta ? (
-        <div className="fixed inset-0 z-[60] bg-black/50 flex items-end sm:items-center justify-center p-4" role="dialog" aria-modal="true">
-          <div className="bp-glass w-full max-w-md p-5">
+        <div className="fixed inset-0 z-[80] flex items-end justify-center" role="dialog" aria-modal="true">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/80"
+            aria-label="Fechar"
+            onClick={() => setModalConsulta(null)}
+          />
+          <div className="relative w-full max-w-lg rounded-t-3xl bg-zinc-950 text-white border-t border-white/10 px-5 pt-3 pb-8 shadow-[0_-12px_40px_rgba(0,0,0,0.55)]">
+            <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-white/25" aria-hidden />
             {modalConsulta.acao === "cancelar" ? (
               <>
                 <h2 className="text-lg font-bold">Cancelar consulta?</h2>
-                <p className="text-sm opacity-70 mt-1">O médico será avisado. Informe um motivo, se quiser.</p>
+                <p className="text-sm text-white/60 mt-1">O médico será avisado. Informe um motivo, se quiser.</p>
                 <textarea
                   value={motivoCancel}
                   onChange={(e) => setMotivoCancel(e.target.value)}
-                  className="mt-3 w-full rounded-xl border bg-transparent p-3 text-sm"
+                  className="mt-3 w-full rounded-xl border border-white/15 bg-zinc-900 p-3 text-sm text-white placeholder:text-white/40"
                   rows={3}
                   placeholder="Motivo (opcional)"
                 />
-                <div className="flex gap-2 mt-4">
-                  <button type="button" onClick={() => setModalConsulta(null)} className="flex-1 py-3 rounded-xl border text-sm font-semibold">
+                <div className="flex gap-2 mt-5">
+                  <button type="button" onClick={() => setModalConsulta(null)} className="flex-1 py-3 rounded-xl border border-white/15 text-sm font-semibold">
                     Voltar
                   </button>
                   <button
@@ -806,7 +813,7 @@ export function PacienteApp() {
                       toast.success("Consulta cancelada");
                       setModalConsulta(null);
                     }}
-                    className="flex-1 py-3 rounded-xl bg-destructive text-destructive-foreground text-sm font-semibold"
+                    className="flex-1 py-3 rounded-xl bg-red-600 text-white text-sm font-semibold"
                   >
                     Confirmar cancelamento
                   </button>
@@ -815,23 +822,23 @@ export function PacienteApp() {
             ) : (
               <>
                 <h2 className="text-lg font-bold">Remarcar consulta</h2>
-                <p className="text-sm opacity-70 mt-1">Escolha a nova data e o horário.</p>
-                <label className="block text-xs font-bold mt-3 mb-1">Data</label>
+                <p className="text-sm text-white/60 mt-1">Escolha a nova data e o horário.</p>
+                <label className="block text-xs font-bold mt-4 mb-1.5 text-white/80">Data</label>
                 <input
                   type="date"
                   value={novaData}
                   onChange={(e) => setNovaData(e.target.value)}
-                  className="w-full rounded-xl border bg-transparent p-3 text-sm"
+                  className="w-full rounded-xl border border-white/15 bg-zinc-900 p-3 text-sm text-white [color-scheme:dark]"
                 />
-                <label className="block text-xs font-bold mt-3 mb-1">Horário</label>
+                <label className="block text-xs font-bold mt-4 mb-1.5 text-white/80">Horário</label>
                 <input
                   type="time"
                   value={novaHora}
                   onChange={(e) => setNovaHora(e.target.value)}
-                  className="w-full rounded-xl border bg-transparent p-3 text-sm"
+                  className="w-full rounded-xl border border-white/15 bg-zinc-900 p-3 text-sm text-white [color-scheme:dark]"
                 />
-                <div className="flex gap-2 mt-4">
-                  <button type="button" onClick={() => setModalConsulta(null)} className="flex-1 py-3 rounded-xl border text-sm font-semibold">
+                <div className="flex gap-2 mt-5">
+                  <button type="button" onClick={() => setModalConsulta(null)} className="flex-1 py-3 rounded-xl border border-white/15 text-sm font-semibold">
                     Voltar
                   </button>
                   <button
@@ -845,7 +852,7 @@ export function PacienteApp() {
                       toast.success("Consulta remarcada");
                       setModalConsulta(null);
                     }}
-                    className="flex-1 py-3 rounded-xl bg-primary text-primary-foreground text-sm font-semibold"
+                    className="flex-1 py-3 rounded-xl bg-sky-500 text-zinc-950 text-sm font-bold"
                   >
                     Confirmar novo horário
                   </button>
