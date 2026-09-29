@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, Check, Sparkles, X } from "lucide-react";
 import { toast } from "sonner";
 import { useBion } from "@/lib/bion-store";
@@ -50,6 +50,8 @@ export function TriagemSlides({
   onFechar: () => void;
 }) {
   const { aplicarDelta, pularAnamnese, concluirAnamnese } = useBion();
+  const faixaRef = useRef<HTMLDivElement>(null);
+  const gesto = useRef<{ x: number; y: number } | null>(null);
   const [indice, setIndice] = useState(0);
   const [pergunta, setPergunta] = useState(DICAS.identificacao);
   const [resposta, setResposta] = useState("");
@@ -135,6 +137,15 @@ export function TriagemSlides({
     }
   };
 
+  const irPara = (i: number) => {
+    const n = Math.max(0, Math.min(ETAPAS_ANAMNESE.length - 1, i));
+    setIndice(n);
+    requestAnimationFrame(() => {
+      const el = faixaRef.current?.children[n] as HTMLElement | undefined;
+      el?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+    });
+  };
+
   const etapa = ETAPAS_ANAMNESE[indice] ?? ETAPAS_ANAMNESE[0];
   const progresso = useMemo(
     () => Math.min(100, Math.round(((pronta ? ETAPAS_ANAMNESE.length : indice) / ETAPAS_ANAMNESE.length) * 100)),
@@ -168,65 +179,101 @@ export function TriagemSlides({
         </div>
       </div>
 
-      <div className="flex-1 px-4 pb-4 flex flex-col min-h-0">
-        <article className="flex-1 min-h-0 rounded-3xl border border-sky-400/40 bg-zinc-900 p-5 flex flex-col overflow-y-auto">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-sky-300">
-              {String(indice + 1).padStart(2, "0")} · {etapa.rotulo}
-            </span>
-            {respondidos[etapa.id] ? <Check className="w-4 h-4 text-emerald-400" /> : <Sparkles className="w-4 h-4 text-white/30" />}
-          </div>
-          <p className="text-[17px] font-semibold leading-snug">{pronta ? "Tudo certo. Envie ao médico quando quiser." : pergunta}</p>
-          {respondidos[etapa.id] ? <p className="mt-3 text-sm text-white/55">Você: {respondidos[etapa.id]}</p> : null}
+      <div
+        ref={faixaRef}
+        className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden snap-x snap-mandatory flex gap-3 px-4 pb-4 touch-pan-x"
+        style={{ WebkitOverflowScrolling: "touch" }}
+        onScroll={(e) => {
+          const el = e.currentTarget;
+          const card = el.children[0] as HTMLElement | undefined;
+          const passo = (card?.offsetWidth ?? el.clientWidth) + 12;
+          const i = Math.round(el.scrollLeft / Math.max(1, passo));
+          if (i !== indice && i >= 0 && i < ETAPAS_ANAMNESE.length) setIndice(i);
+        }}
+        onPointerDown={(e) => {
+          if ((e.target as HTMLElement).closest("textarea, input, button")) return;
+          gesto.current = { x: e.clientX, y: e.clientY };
+        }}
+        onPointerUp={(e) => {
+          if (!gesto.current) return;
+          const dx = e.clientX - gesto.current.x;
+          const dy = e.clientY - gesto.current.y;
+          gesto.current = null;
+          if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy)) return;
+          irPara(indice + (dx < 0 ? 1 : -1));
+        }}
+      >
+        {ETAPAS_ANAMNESE.map((item, i) => (
+          <article
+            key={item.id}
+            className={`snap-center shrink-0 w-[86vw] max-w-md h-full rounded-3xl border p-5 flex flex-col ${
+              i === indice ? "border-sky-400/50 bg-zinc-900" : "border-white/10 bg-zinc-900/80"
+            }`}
+          >
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-sky-300">
+                {String(i + 1).padStart(2, "0")} · {item.rotulo}
+              </span>
+              {respondidos[item.id] ? <Check className="w-4 h-4 text-emerald-400" /> : <Sparkles className="w-4 h-4 text-white/30" />}
+            </div>
+            <p className="text-[17px] font-semibold leading-snug">
+              {i === indice ? (pronta ? "Tudo certo. Envie ao médico quando quiser." : pergunta) : DICAS[item.id]}
+            </p>
+            {respondidos[item.id] ? <p className="mt-3 text-sm text-white/55">Você: {respondidos[item.id]}</p> : null}
 
-          {!pronta ? (
-            <>
-              <div className="mt-4 flex flex-wrap gap-2">
-                {(ATALHOS[etapa.id] ?? []).map((atalho) => (
-                  <button
-                    key={atalho}
-                    type="button"
-                    disabled={enviando}
-                    onClick={() => void enviar(atalho)}
-                    className="rounded-full px-3 py-2 text-xs font-semibold bg-white/10 border border-white/15"
-                  >
-                    {atalho}
-                  </button>
-                ))}
-              </div>
-              <textarea
-                value={resposta}
-                onChange={(e) => setResposta(e.target.value)}
-                rows={3}
-                placeholder="Ou escreva aqui…"
-                className="mt-4 w-full rounded-2xl border border-white/15 bg-black/35 p-3 text-sm text-white placeholder:text-white/40"
-              />
-            </>
-          ) : null}
-
-          <div className="mt-auto pt-4 flex items-center gap-2">
-            <button type="button" disabled={indice === 0} onClick={() => setIndice((i) => Math.max(0, i - 1))} className="rounded-full p-2.5 bg-white/10 disabled:opacity-30" aria-label="Anterior">
-              <ArrowLeft className="w-4 h-4" />
-            </button>
-            {pronta || indice === ETAPAS_ANAMNESE.length - 1 ? (
-              <button type="button" onClick={() => void concluir()} className="flex-1 rounded-2xl py-3 text-sm font-bold bg-emerald-400 text-zinc-950">
-                Enviar ao médico
-              </button>
-            ) : (
+            {i === indice && !pronta ? (
               <>
-                <button type="button" onClick={() => void enviar("Pode pular esta etapa.")} className="text-xs font-semibold text-white/50 px-2">
-                  Pular
-                </button>
-                <button type="button" disabled={enviando || !resposta.trim()} onClick={() => void enviar(resposta)} className="flex-1 rounded-2xl py-3 text-sm font-bold bg-sky-400 text-zinc-950 disabled:opacity-40">
-                  {enviando ? "Enviando…" : "Continuar"}
-                </button>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {(ATALHOS[item.id] ?? []).map((atalho) => (
+                    <button
+                      key={atalho}
+                      type="button"
+                      disabled={enviando}
+                      onClick={() => void enviar(atalho)}
+                      className="rounded-full px-3 py-2 text-xs font-semibold bg-white/10 border border-white/15"
+                    >
+                      {atalho}
+                    </button>
+                  ))}
+                </div>
+                <textarea
+                  value={resposta}
+                  onChange={(e) => setResposta(e.target.value)}
+                  rows={3}
+                  placeholder="Ou escreva aqui…"
+                  className="mt-4 w-full rounded-2xl border border-white/15 bg-black/35 p-3 text-sm text-white placeholder:text-white/40"
+                />
               </>
-            )}
-            <button type="button" disabled={indice >= ETAPAS_ANAMNESE.length - 1} onClick={() => setIndice((i) => Math.min(ETAPAS_ANAMNESE.length - 1, i + 1))} className="rounded-full p-2.5 bg-white/10 disabled:opacity-30" aria-label="Próximo">
-              <ArrowRight className="w-4 h-4" />
-            </button>
-          </div>
-        </article>
+            ) : null}
+
+            <div className="mt-auto pt-4 flex items-center gap-2">
+              <button type="button" disabled={i === 0} onClick={() => irPara(i - 1)} className="rounded-full p-2.5 bg-white/10 disabled:opacity-30" aria-label="Anterior">
+                <ArrowLeft className="w-4 h-4" />
+              </button>
+              {pronta || i === ETAPAS_ANAMNESE.length - 1 ? (
+                <button type="button" onClick={() => void concluir()} className="flex-1 rounded-2xl py-3 text-sm font-bold bg-emerald-400 text-zinc-950">
+                  Enviar ao médico
+                </button>
+              ) : i === indice ? (
+                <>
+                  <button type="button" onClick={() => void enviar("Pode pular esta etapa.")} className="text-xs font-semibold text-white/50 px-2">
+                    Pular
+                  </button>
+                  <button type="button" disabled={enviando || !resposta.trim()} onClick={() => void enviar(resposta)} className="flex-1 rounded-2xl py-3 text-sm font-bold bg-sky-400 text-zinc-950 disabled:opacity-40">
+                    {enviando ? "Enviando…" : "Continuar"}
+                  </button>
+                </>
+              ) : (
+                <button type="button" onClick={() => irPara(i)} className="flex-1 rounded-2xl py-3 text-sm font-bold bg-white/10">
+                  Abrir este card
+                </button>
+              )}
+              <button type="button" disabled={i >= ETAPAS_ANAMNESE.length - 1} onClick={() => irPara(i + 1)} className="rounded-full p-2.5 bg-white/10 disabled:opacity-30" aria-label="Próximo">
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
+          </article>
+        ))}
       </div>
     </div>
   );
