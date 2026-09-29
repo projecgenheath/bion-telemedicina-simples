@@ -17,7 +17,11 @@ import {
   Stethoscope,
   TrendingUp,
   Video,
+  RefreshCw,
+  X,
+  ChevronUp,
 } from "lucide-react";
+import { toast } from "sonner";
 import { useBion } from "@/lib/bion-store";
 import { MESES_AGENDA } from "./constantes";
 import { GraficoLinha, type PontoGrafico } from "./GraficoLinha";
@@ -51,12 +55,18 @@ const rotuloCurto = (iso: string) => {
 
 export function PacienteApp() {
   const router = useRouter();
-  const { sessao, pacientePerfil, consultas, anamneses, lembretes, medicoes, exames, sair } = useBion();
+  const { sessao, pacientePerfil, consultas, anamneses, lembretes, medicoes, exames, sair, cancelarConsulta, remarcarConsulta } = useBion();
 
   const carrosselRef = useRef<HTMLDivElement>(null);
   const [painel, setPainel] = useState(1);
   const [detalhe, setDetalhe] = useState<Detalhe>(null);
   const [chatAberto, setChatAberto] = useState(false);
+  const [triagemConsultaId, setTriagemConsultaId] = useState<string | null>(null);
+  const [listaConsultasAberta, setListaConsultasAberta] = useState(false);
+  const [modalConsulta, setModalConsulta] = useState<{ id: string; acao: "cancelar" | "remarcar" } | null>(null);
+  const [motivoCancel, setMotivoCancel] = useState("");
+  const [novaData, setNovaData] = useState("");
+  const [novaHora, setNovaHora] = useState("09:00");
   const arrastandoRef = useRef(false);
   const inicioArrasteX = useRef(0);
   const inicioArrasteScroll = useRef(0);
@@ -99,23 +109,39 @@ export function PacienteApp() {
 
   /* ------------------------------- dados --------------------------------- */
 
-  const proxima = useMemo(() => {
+  const proximas = useMemo(() => {
     const limite = Date.now() - 2 * 3_600_000;
     return consultas
       .filter((c) => c.paciente === sessao.nome && ["confirmada", "em_espera", "pendente_anamnese"].includes(c.status) && c.ts >= limite)
-      .sort((a, b) => a.ts - b.ts)[0];
+      .sort((a, b) => a.ts - b.ts);
   }, [consultas, sessao.nome]);
 
-  const salaAberta = proxima ? Date.now() >= proxima.ts - 30 * 60_000 && Date.now() <= proxima.ts + 2 * 3_600_000 : false;
+  const proxima = proximas[0];
 
-  // Triagem (anamnese) pendente: consulta confirmada com triagem em andamento
-  // e janela ainda aberta (fecha 5 minutos antes do horário — regra do servidor).
-  const triagemPendente = proxima
-    ? anamneses.some((a) => a.consultaId === proxima.id && a.status === "em_andamento") &&
-      ["confirmada", "pendente_anamnese"].includes(proxima.status) &&
-      proxima.pago !== false &&
-      Date.now() < proxima.ts - 5 * 60_000
-    : false;
+  const janelaSala = (ts: number) => Date.now() >= ts - 30 * 60_000 && Date.now() <= ts + 2 * 3_600_000;
+  const janelaTriagem = (c: { ts: number; pago?: boolean; status: string }) =>
+    ["confirmada", "pendente_anamnese"].includes(c.status) &&
+    c.pago !== false &&
+    Date.now() < c.ts - 5 * 60_000;
+
+  const statusTriagem = (consultaId: string) => {
+    const a = anamneses.find((x) => x.consultaId === consultaId);
+    if (a?.status === "concluida") return "feita" as const;
+    if (a?.status === "em_andamento") return "andamento" as const;
+    return "nao_iniciada" as const;
+  };
+
+  const salaAberta = proxima ? janelaSala(proxima.ts) : false;
+
+  const abrirTriagem = (consultaId: string) => {
+    setTriagemConsultaId(consultaId);
+    setChatAberto(true);
+  };
+
+  const entrarSala = (ts: number) => {
+    if (janelaSala(ts)) router.push("/consulta");
+    else router.push("/sala-espera");
+  };
 
   const lembretesPendentes = lembretes.filter((l) => !l.feito);
 
@@ -270,52 +296,94 @@ export function PacienteApp() {
 
             {/* Card: próxima consulta */}
             {proxima ? (
-              <button type="button"
-                onClick={() => {
-                  if (triagemPendente) setChatAberto(true);
-                  else if (salaAberta) router.push("/sala-espera");
-                }}
-                className="bp-glass p-5 text-left w-full transition hover:shadow-xl"
-                aria-label={`Próxima consulta: ${proxima.especialidade} com ${proxima.medico}, ${proxima.data} às ${proxima.hora}${triagemPendente ? ". Toque para fazer a triagem com a BION IA" : salaAberta ? ". Tocar para entrar na sala de espera" : ""}`}
-              >
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs font-bold uppercase tracking-wider text-bion-ink/50 dark:text-white/50">
-                    Próxima consulta
-                  </span>
-                  {triagemPendente ? (
-                    <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-amber-500/15 text-amber-700 dark:bg-amber-400/15 dark:text-amber-300">
-                      Triagem pendente
+              <div className="bp-glass p-5 w-full">
+                <button
+                  type="button"
+                  onClick={() => entrarSala(proxima.ts)}
+                  className="text-left w-full"
+                  aria-label={`Próxima consulta: ${proxima.especialidade} com ${proxima.medico}. Toque para ${salaAberta ? "entrar na sala" : "abrir a sala de espera"}`}
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-xs font-bold uppercase tracking-wider text-bion-ink/50 dark:text-white/50">
+                      Próxima consulta
                     </span>
-                  ) : salaAberta ? (
-                    <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-600 text-white">Sala aberta</span>
-                  ) : (
-                    <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-bion-ink/8 dark:bg-white/10">Confirmada</span>
-                  )}
+                    <span className="flex items-center gap-1.5">
+                      {statusTriagem(proxima.id) === "feita" ? (
+                        <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-600/15 text-emerald-800 dark:text-emerald-200">
+                          Triagem feita
+                        </span>
+                      ) : statusTriagem(proxima.id) === "andamento" ? (
+                        <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-300">
+                          Triagem em andamento
+                        </span>
+                      ) : janelaTriagem(proxima) ? (
+                        <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-sky-500/15 text-sky-800 dark:text-sky-200">
+                          Triagem disponível
+                        </span>
+                      ) : null}
+                      {salaAberta ? (
+                        <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-600 text-white">Sala aberta</span>
+                      ) : (
+                        <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-bion-ink/8 dark:bg-white/10">Confirmada</span>
+                      )}
+                    </span>
+                  </div>
+                  <div className="text-xl font-bold">{proxima.especialidade}</div>
+                  <div className="text-sm opacity-70">com {proxima.medico}</div>
+                  <div className="mt-3 inline-flex items-center gap-2 text-sm font-bold">
+                    <CalendarClock className="w-4 h-4" /> {proxima.data} · {proxima.hora}
+                  </div>
+                </button>
+
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => entrarSala(proxima.ts)}
+                    className={`inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-bold ${salaAberta ? "bg-emerald-600 text-white" : "bg-bion-ink/8 dark:bg-white/10"}`}
+                  >
+                    <Video className="w-3.5 h-3.5" />
+                    {salaAberta ? "Entrar na sala" : "Abrir sala de espera"}
+                  </button>
+                  {statusTriagem(proxima.id) !== "feita" && janelaTriagem(proxima) ? (
+                    <button
+                      type="button"
+                      onClick={() => abrirTriagem(proxima.id)}
+                      className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-bold bg-sky-600/15 text-sky-900 dark:text-sky-200"
+                    >
+                      <Sparkles className="w-3.5 h-3.5" />
+                      {statusTriagem(proxima.id) === "andamento" ? "Continuar triagem" : "Fazer triagem"}
+                    </button>
+                  ) : statusTriagem(proxima.id) === "feita" ? (
+                    <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-semibold opacity-70">
+                      Triagem enviada ao médico
+                    </span>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNovaData("");
+                      setNovaHora("09:00");
+                      setModalConsulta({ id: proxima.id, acao: "remarcar" });
+                    }}
+                    className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-bold bg-bion-ink/8 dark:bg-white/10"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" /> Remarcar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMotivoCancel("");
+                      setModalConsulta({ id: proxima.id, acao: "cancelar" });
+                    }}
+                    className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-bold text-destructive bg-destructive/10"
+                  >
+                    <X className="w-3.5 h-3.5" /> Cancelar
+                  </button>
                 </div>
-                <div className="text-xl font-bold">{proxima.especialidade}</div>
-                <div className="text-sm opacity-70">com {proxima.medico}</div>
-                {triagemPendente ? (
-                  <div className="mt-4 flex items-center justify-between gap-3">
-                    <span className="text-xs font-semibold opacity-70">Faça a triagem com a BION IA até 5 minutos antes do horário</span>
-                    <span className="inline-flex items-center gap-1.5 text-xs font-bold text-bion-sea dark:text-sky-300 shrink-0">
-                      <Sparkles className="w-4 h-4" /> Fazer triagem
-                    </span>
-                  </div>
-                ) : (
-                  <div className="mt-4 flex items-center justify-between">
-                    <span className="inline-flex items-center gap-2 text-sm font-bold">
-                      <CalendarClock className="w-4 h-4" /> {proxima.data} · {proxima.hora}
-                    </span>
-                    {salaAberta ? (
-                      <span className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-800 dark:text-emerald-200">
-                        <Video className="w-4 h-4" /> Entrar na sala
-                      </span>
-                    ) : (
-                      <span className="text-xs opacity-50">A sala abre 30 min antes</span>
-                    )}
-                  </div>
-                )}
-              </button>
+                {!salaAberta ? (
+                  <p className="text-xs opacity-50 mt-3">A sala de teleatendimento abre 30 min antes do horário.</p>
+                ) : null}
+              </div>
             ) : (
               <button type="button" onClick={() => setChatAberto(true)} className="bp-glass p-5 text-left w-full transition hover:shadow-xl">
                 <div className="text-xs font-bold uppercase tracking-wider text-bion-ink/50 dark:text-white/50 mb-3">
@@ -327,6 +395,81 @@ export function PacienteApp() {
                 </div>
               </button>
             )}
+
+            {proximas.length > 0 ? (
+              <button
+                type="button"
+                onClick={() => setListaConsultasAberta((v) => !v)}
+                className="bp-glass mt-3 w-full px-5 py-3.5 flex items-center justify-between text-left"
+                aria-expanded={listaConsultasAberta}
+              >
+                <span>
+                  <span className="block text-xs font-bold uppercase tracking-wider opacity-50">Agenda</span>
+                  <span className="text-sm font-bold">
+                    {proximas.length === 1 ? "1 consulta agendada" : `${proximas.length} consultas agendadas`}
+                  </span>
+                </span>
+                {listaConsultasAberta ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+              </button>
+            ) : null}
+
+            {listaConsultasAberta ? (
+              <div className="mt-2 space-y-2">
+                {proximas.map((c) => {
+                  const st = statusTriagem(c.id);
+                  const aberta = janelaSala(c.ts);
+                  return (
+                    <div key={c.id} className="bp-glass p-4">
+                      <button type="button" onClick={() => entrarSala(c.ts)} className="text-left w-full">
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <div className="font-bold">{c.especialidade}</div>
+                            <div className="text-xs opacity-70">com {c.medico}</div>
+                            <div className="text-xs font-semibold mt-1">
+                              {c.data} · {c.hora}
+                            </div>
+                          </div>
+                          <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-bion-ink/8 dark:bg-white/10 shrink-0">
+                            {st === "feita" ? "Triagem feita" : st === "andamento" ? "Triagem em andamento" : janelaTriagem(c) ? "Triagem disponível" : "Confirmada"}
+                          </span>
+                        </div>
+                      </button>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <button type="button" onClick={() => entrarSala(c.ts)} className="inline-flex items-center gap-1 rounded-full px-2.5 py-1.5 text-[11px] font-bold bg-bion-ink/8 dark:bg-white/10">
+                          <Video className="w-3 h-3" /> {aberta ? "Entrar" : "Sala de espera"}
+                        </button>
+                        {st !== "feita" && janelaTriagem(c) ? (
+                          <button type="button" onClick={() => abrirTriagem(c.id)} className="inline-flex items-center gap-1 rounded-full px-2.5 py-1.5 text-[11px] font-bold bg-sky-600/15">
+                            <Sparkles className="w-3 h-3" /> {st === "andamento" ? "Continuar triagem" : "Fazer triagem"}
+                          </button>
+                        ) : null}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setNovaData("");
+                            setNovaHora("09:00");
+                            setModalConsulta({ id: c.id, acao: "remarcar" });
+                          }}
+                          className="inline-flex items-center gap-1 rounded-full px-2.5 py-1.5 text-[11px] font-bold bg-bion-ink/8 dark:bg-white/10"
+                        >
+                          <RefreshCw className="w-3 h-3" /> Remarcar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMotivoCancel("");
+                            setModalConsulta({ id: c.id, acao: "cancelar" });
+                          }}
+                          className="inline-flex items-center gap-1 rounded-full px-2.5 py-1.5 text-[11px] font-bold text-destructive bg-destructive/10"
+                        >
+                          <X className="w-3 h-3" /> Cancelar
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : null}
 
             {/* Card hero: BION IA — agendamento com anamnese */}
             <button type="button"
@@ -629,7 +772,89 @@ export function PacienteApp() {
 
       {/* Overlays */}
       <DetalheMedicao detalhe={detalhe} onFechar={() => setDetalhe(null)} />
-      <ChatBion aberto={chatAberto} onFechar={() => setChatAberto(false)} />
+      <ChatBion
+        aberto={chatAberto}
+        onFechar={() => {
+          setChatAberto(false);
+          setTriagemConsultaId(null);
+        }}
+        iniciarTriagemConsultaId={triagemConsultaId}
+      />
+
+      {modalConsulta ? (
+        <div className="fixed inset-0 z-[60] bg-black/50 flex items-end sm:items-center justify-center p-4" role="dialog" aria-modal="true">
+          <div className="bp-glass w-full max-w-md p-5">
+            {modalConsulta.acao === "cancelar" ? (
+              <>
+                <h2 className="text-lg font-bold">Cancelar consulta?</h2>
+                <p className="text-sm opacity-70 mt-1">O médico será avisado. Informe um motivo, se quiser.</p>
+                <textarea
+                  value={motivoCancel}
+                  onChange={(e) => setMotivoCancel(e.target.value)}
+                  className="mt-3 w-full rounded-xl border bg-transparent p-3 text-sm"
+                  rows={3}
+                  placeholder="Motivo (opcional)"
+                />
+                <div className="flex gap-2 mt-4">
+                  <button type="button" onClick={() => setModalConsulta(null)} className="flex-1 py-3 rounded-xl border text-sm font-semibold">
+                    Voltar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      cancelarConsulta(modalConsulta.id, motivoCancel || "Cancelado pelo paciente");
+                      toast.success("Consulta cancelada");
+                      setModalConsulta(null);
+                    }}
+                    className="flex-1 py-3 rounded-xl bg-destructive text-destructive-foreground text-sm font-semibold"
+                  >
+                    Confirmar cancelamento
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <h2 className="text-lg font-bold">Remarcar consulta</h2>
+                <p className="text-sm opacity-70 mt-1">Escolha a nova data e o horário.</p>
+                <label className="block text-xs font-bold mt-3 mb-1">Data</label>
+                <input
+                  type="date"
+                  value={novaData}
+                  onChange={(e) => setNovaData(e.target.value)}
+                  className="w-full rounded-xl border bg-transparent p-3 text-sm"
+                />
+                <label className="block text-xs font-bold mt-3 mb-1">Horário</label>
+                <input
+                  type="time"
+                  value={novaHora}
+                  onChange={(e) => setNovaHora(e.target.value)}
+                  className="w-full rounded-xl border bg-transparent p-3 text-sm"
+                />
+                <div className="flex gap-2 mt-4">
+                  <button type="button" onClick={() => setModalConsulta(null)} className="flex-1 py-3 rounded-xl border text-sm font-semibold">
+                    Voltar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!novaData || !novaHora) {
+                        toast.error("Informe data e horário");
+                        return;
+                      }
+                      remarcarConsulta(modalConsulta.id, novaData, novaHora);
+                      toast.success("Consulta remarcada");
+                      setModalConsulta(null);
+                    }}
+                    className="flex-1 py-3 rounded-xl bg-primary text-primary-foreground text-sm font-semibold"
+                  >
+                    Confirmar novo horário
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

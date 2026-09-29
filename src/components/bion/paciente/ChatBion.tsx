@@ -39,7 +39,17 @@ import { ChatListaMensagens } from "./ChatListaMensagens";
  *  - Enviar laudo avulso: PDF/foto lido com verificação de segurança do nome.
  */
 
-export function ChatBion({ aberto, onFechar, aoEnviarExame }: { aberto: boolean; onFechar: () => void; aoEnviarExame?: () => void }) {
+export function ChatBion({
+  aberto,
+  onFechar,
+  aoEnviarExame,
+  iniciarTriagemConsultaId,
+}: {
+  aberto: boolean;
+  onFechar: () => void;
+  aoEnviarExame?: () => void;
+  iniciarTriagemConsultaId?: string | null;
+}) {
   const {
     sessao,
     medicos,
@@ -90,8 +100,6 @@ export function ChatBion({ aberto, onFechar, aoEnviarExame }: { aberto: boolean;
     fimRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [mensagens, etapa, pensando, anamneseAtiva]);
 
-  if (!aberto) return null;
-
   /* ------------------------------ anamnese ------------------------------ */
 
   const rotuloQuando = (data: string, hora: string) => `${data} às ${hora}`;
@@ -130,6 +138,25 @@ export function ChatBion({ aberto, onFechar, aoEnviarExame }: { aberto: boolean;
       setPensando(false);
     }
   };
+
+  const autoTriagemRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!aberto) {
+      autoTriagemRef.current = null;
+      return;
+    }
+    const id = iniciarTriagemConsultaId;
+    if (!id || autoTriagemRef.current === id) return;
+    const c = consultas.find((x) => x.id === id);
+    if (!c) return;
+    autoTriagemRef.current = id;
+    void iniciarAnamnese(id, {
+      medico: c.medico,
+      especialidade: c.especialidade,
+      quando: rotuloQuando(c.data, c.hora),
+      avisoPrevio: `Vamos à triagem da consulta de **${c.especialidade}** com ${c.medico} (${c.data} às ${c.hora}). É opcional — você pode pular quando quiser.`,
+    });
+  }, [aberto, iniciarTriagemConsultaId, consultas]);
 
   const retomarAnamnese = (a: AnamneseResumo) => {
     const c = consultas.find((x) => x.id === a.consultaId);
@@ -527,6 +554,8 @@ export function ChatBion({ aberto, onFechar, aoEnviarExame }: { aberto: boolean;
   };
 
   const opcoes = opcoesEtapas();
+
+  if (!aberto) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bp-painel" role="dialog" aria-modal="true" aria-label="Conversa com a BION IA">
