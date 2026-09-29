@@ -48,6 +48,7 @@ export function ChatBion({ aberto, onFechar, aoEnviarExame }: { aberto: boolean;
     aplicarEstadoFresco,
     aplicarDelta,
     concluirAnamnese,
+    pularAnamnese,
     registrarDocAnamnese,
   } = useBion();
 
@@ -79,7 +80,7 @@ export function ChatBion({ aberto, onFechar, aoEnviarExame }: { aberto: boolean;
       setMensagens([
         {
           remetente: "ia",
-          texto: `Olá, ${sessao.nome.split(" ")[0]}! Sou a BION IA. Eu **agendo suas consultas** — o pagamento já confirma no agenda, e eu faço sua **triagem** (anamnese) com calma, disponível até 5 minutos antes do horário, para o médico já te conhecer antes do atendimento. Também tiro dúvidas de saúde e leio seus laudos (PDF ou foto). Como posso ajudar?`,
+          texto: `Olá, ${sessao.nome.split(" ")[0]}! Sou a BION IA. Eu **agendo suas consultas** — o pagamento já confirma no agenda. A **triagem** (anamnese) é **opcional**, pode ser feita aqui com a BION IA (ou no modo local) até 5 minutos antes do horário, para o médico já te conhecer — você também pode pular. Também tiro dúvidas de saúde e leio seus laudos (PDF ou foto). Como posso ajudar?`,
         },
       ]);
     }
@@ -197,6 +198,34 @@ export function ChatBion({ aberto, onFechar, aoEnviarExame }: { aberto: boolean;
       setMensagens((m) => [
         ...m,
         { remetente: "ia", texto: "Não consegui concluir agora por um problema de conexão. Tente novamente em instantes.", tipo: "erro" },
+      ]);
+    } finally {
+      setPensando(false);
+    }
+  };
+
+  const pularAnamneseAgora = async (consultaId?: string) => {
+    const id = consultaId || anamneseAtiva?.consultaId;
+    if (!id || pensando) return;
+    setPensando(true);
+    try {
+      const okFeito = await pularAnamnese(id);
+      if (!okFeito) throw new Error("falha");
+      setMensagens((m) => [
+        ...m,
+        {
+          remetente: "ia",
+          texto: "Tudo bem — a triagem é **opcional**. Sua consulta segue confirmada. Se quiser fazer a triagem depois (até 5 minutos antes do horário), é só tocar em **Continuar triagem**.",
+          tipo: "sucesso-agendamento",
+        },
+      ]);
+      histAnamneseRef.current = [];
+      setAnamneseAtiva(null);
+      toast.message("Triagem dispensada — consulta mantida.");
+    } catch {
+      setMensagens((m) => [
+        ...m,
+        { remetente: "ia", texto: "Não consegui registrar agora. Tente novamente em instantes.", tipo: "erro" },
       ]);
     } finally {
       setPensando(false);
@@ -609,7 +638,7 @@ export function ChatBion({ aberto, onFechar, aoEnviarExame }: { aberto: boolean;
                   Cancelar
                 </button>
               </div>
-              <p className="text-xs opacity-50 mt-2">O pagamento confirma sua consulta no agenda, e a triagem com a BION IA fica disponível até 5 minutos antes do horário.</p>
+              <p className="text-xs opacity-50 mt-2">O pagamento confirma sua consulta. A triagem é opcional e fica disponível até 5 minutos antes do horário.</p>
             </div>
           );
         })()}
@@ -645,17 +674,22 @@ export function ChatBion({ aberto, onFechar, aoEnviarExame }: { aberto: boolean;
             <button type="button" onClick={() => void concluirAnamneseAgora()} className="bp-acao w-full py-3 text-sm inline-flex items-center justify-center gap-2">
               <BadgeCheck className="w-4 h-4" /> Concluir triagem e enviar ao médico
             </button>
+            <button type="button" onClick={() => void pularAnamneseAgora()} className="w-full mt-2 py-2 text-xs text-muted-foreground underline">
+              Pular triagem (opcional)
+            </button>
           </div>
         )}
 
         {/* Retomada: triagens em andamento de consultas confirmadas na janela */}
         {mensagens.length > 0 && etapa === null && !anamneseAtiva && anamnesesPendentes.length > 0 && (
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-col gap-2">
+            <p className="text-xs opacity-60">Triagem opcional — ajuda o médico, mas você pode pular.</p>
+            <div className="flex flex-wrap gap-2">
             {anamnesesPendentes.map((a) => {
               const c = consultas.find((x) => x.id === a.consultaId);
               return (
+                <div key={a.id} className="flex flex-wrap gap-2 items-center">
                 <button type="button"
-                  key={a.id}
                   onClick={() => retomarAnamnese(a)}
                   className="rounded-full bg-emerald-600/10 border border-emerald-600/30 px-4 py-2.5 text-sm font-semibold text-emerald-800 dark:text-emerald-200 inline-flex items-center gap-1.5"
                 >
@@ -663,8 +697,16 @@ export function ChatBion({ aberto, onFechar, aoEnviarExame }: { aberto: boolean;
                   Continuar triagem — {a.especialidade} com {a.medico}
                   {c ? ` · ${c.data} às ${c.hora}` : ""}
                 </button>
+                <button type="button"
+                  onClick={() => void pularAnamneseAgora(a.consultaId)}
+                  className="rounded-full bg-muted border px-3 py-2 text-xs font-medium text-muted-foreground hover:bg-muted/80"
+                >
+                  Pular triagem
+                </button>
+                </div>
               );
             })}
+            </div>
           </div>
         )}
 

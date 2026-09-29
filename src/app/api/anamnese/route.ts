@@ -18,12 +18,11 @@ import {
 /**
  * Triagem pré-consulta guiada pela BION IA (storytelling clínico).
  *
- * FLUXO DO PRODUTO: o pagamento CONFIRMA a consulta (rota /api/consultas e
- * webhook do gateway). A triagem é OBRIGATÓRIA e fica disponível LOGO APÓS
- * a confirmação ATÉ 5 MINUTOS ANTES do horário da consulta — o servidor
- * impõe a janela; concluir a triagem NÃO altera o status da consulta
- * (exceto legado "pendente_anamnese", que é confirmado aqui para migrar
- * registros antigos).
+ * FLUXO DO PRODUTO: o pagamento CONFIRMA a consulta. A triagem (anamnese)
+ * é OPCIONAL e RECOMENDADA — pode ser feita com motor LOCAL (sem LLM) ou
+ * com a BION IA (Gemma). Disponível após confirmação até 5 min antes do
+ * horário. O paciente pode PULAR a triagem (acao: "pular") sem bloquear
+ * a consulta. Concluir NÃO altera status (exceto legado pendente_anamnese).
  *
  * POST  { consultaId, mensagem? }  → um turno da conversa.
  *        Sem mensagem = abertura da etapa atual (ou retomada).
@@ -498,10 +497,13 @@ export async function POST(req: NextRequest) {
     let llmFonte: FonteLlm | null = null;
 
     // BION_MOTOR_LOCAL=1 força o motor determinístico (teste do comportamento
-    // de produção, onde não há LLM acessível).
-    const usarLlm = process.env.BION_MOTOR_LOCAL !== "1";
+    // Preferência 2026-09-29: motor LOCAL é o caminho padrão da triagem
+    // (funciona sem Gemma/API). LLM só se body.modo === "ia" ou BION_ANAMNESE_LLM=1.
+    const tentarLlm =
+      process.env.BION_MOTOR_LOCAL !== "1" &&
+      (process.env.BION_ANAMNESE_LLM === "1" || (body as { modo?: string }).modo === "ia");
 
-    if (usarLlm && !fugaCurta && (historico.length > 0 || Boolean(mensagem))) {
+    if (tentarLlm && !fugaCurta && (historico.length > 0 || Boolean(mensagem))) {
       const instrucaoAbertura = mensagem
         ? ""
         : coletaAtual && Object.keys(coletaAtual).length
@@ -720,6 +722,56 @@ export async function PATCH(req: NextRequest) {
         include: { consulta: { include: { medico: { select: { nome: true } } } } },
       });
       return ok({ ...(atualizada ? { anamnese: anamneseWire(atualizada) } : {}) });
+    }
+
+    // acao: pular — triagem OPCIONAL; paciente opta por não fazer agora.
+    if (body.acao === "pular") {
+      if (anamnese.status === "concluida") {
+        const atualizada = await db.anamnese.findUnique({
+          where: { id: anamnese.id },
+          include: { consulta: { include: { medico: { select: { nome: true } } } } },
+        });
+        return ok({ pulada: true, ...(atualizada ? { anamnese: anamneseWire(atualizada) } : {}) });
+      }
+      await db.$transaction([
+        db.anamnese.update({
+          where: { id: anamnese.id },
+          data: { status: "concluida", etapa: "fechamento", coleta: anamnese.coleta || "{}" },
+        }),
+        ...(consulta.status === "pendente_anamnese"
+          ? [db.consulta.update({ where: { id: consulta.id }, data: { status: "confirmada" } })]
+          : []),
+      ]);
+      const efeitos = await aplicarSideEffects(
+        usuario,
+        [
+          {
+            tipo: "agenda",
+            titulo: "Triagem dispensada",
+            texto: `Você optou por não fazer a triagem agora. Sua consulta de ${consulta.especialidade} segue confirmada.`,
+            para: "paciente",
+          },
+        ],
+        {
+          acao: "ANAMNESE_PULADA",
+          categoria: "prontuario",
+          detalhes: `Paciente pulou triagem da consulta ${consulta.id}`,
+        },
+      );
+      const atualizada = await db.anamnese.findUnique({
+        where: { id: anamnese.id },
+        include: { consulta: { include: { medico: { select: { nome: true } } } } },
+      });
+      const consultaFresca = await db.consulta.findUnique({
+        where: { id: consulta.id },
+        include: { medico: { select: { nome: true } }, paciente: { select: { nome: true } } },
+      });
+      return ok({
+        pulada: true,
+        ...(atualizada ? { anamnese: anamneseWire(atualizada) } : {}),
+        ...(consultaFresca ? { consulta: consultaWire(consultaFresca) } : {}),
+        ...efeitos,
+      });
     }
 
     // acao: concluir — triagem pronta → avisa médico e paciente.

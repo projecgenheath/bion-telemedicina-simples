@@ -414,6 +414,7 @@ type Store = {
   concluirConsulta: (id: string, resumo?: string) => void;
   adicionarConsulta: (c: Omit<Consulta, "id" | "status" | "ts"> & { status?: "pendente_anamnese" }) => void;
   concluirAnamnese: (consultaId: string) => Promise<boolean>;
+  pularAnamnese: (consultaId: string) => Promise<boolean>;
   registrarDocAnamnese: (consultaId: string, doc: { nome: string; tipo: string; exameImportado: boolean; resumo?: string }) => void;
   adicionarArquivo: (a: Omit<Arquivo, "id" | "data"> & { file?: File }) => void;
   marcarLida: (id: string) => void;
@@ -1133,6 +1134,13 @@ export function BionProvider({ children }: { children: ReactNode }) {
     [mutar],
   );
 
+  const pularAnamnese = useCallback(
+    async (consultaId: string) => {
+      return mutar("/api/anamnese", "PATCH", { consultaId, acao: "pular" });
+    },
+    [mutar],
+  );
+
   /** Registra um documento anexado durante a anamnese. */
   const registrarDocAnamnese = useCallback(
     (consultaId: string, doc: { nome: string; tipo: string; exameImportado: boolean; resumo?: string }) => {
@@ -1600,7 +1608,7 @@ export function BionProvider({ children }: { children: ReactNode }) {
       excluirDadosPaciente,
       pacientes,
       medicoes, exames, registrarMedicao, aplicarEstadoFresco, aplicarDelta, excluirExame,
-      anamneses, concluirAnamnese, registrarDocAnamnese,
+      anamneses, concluirAnamnese, pularAnamnese, registrarDocAnamnese,
       adicionarPaciente,
       atualizarPaciente,
       excluirPaciente,
@@ -1620,7 +1628,7 @@ export function BionProvider({ children }: { children: ReactNode }) {
       atualizarPacientePerfil, atualizarMedico, aprovarMedico, suspenderMedico,
       auditLogs, registrarAudit, anonimizarPaciente, excluirDadosPaciente,
       pacientes, medicoes, exames, registrarMedicao, aplicarEstadoFresco, aplicarDelta, excluirExame,
-      anamneses, concluirAnamnese, registrarDocAnamnese,
+      anamneses, concluirAnamnese, pularAnamnese, registrarDocAnamnese,
       adicionarPaciente, atualizarPaciente, excluirPaciente,
       adicionarMedico, excluirMedico, atualizarConsulta,
     ],

@@ -189,16 +189,33 @@ type GeminiCorpo = {
 };
 
 type GeminiResposta = {
-  candidates?: { content?: { parts?: { text?: string }[] }; finishReason?: string }[];
+  candidates?: {
+    content?: { parts?: { text?: string; thought?: boolean }[] };
+    finishReason?: string;
+  }[];
   promptFeedback?: { blockReason?: string };
 };
 
+/**
+ * Extrai texto ÚTIL da resposta Gemini/Gemma.
+ * Gemma 4 devolve partes com thought:true (raciocínio interno) — se juntarmos
+ * essas partes, o sanitizador vê só eco em inglês e a BION IA "não funciona".
+ * Preferimos partes NÃO-thought; se só houver thought, tentamos a última
+ * sentença em português embutida no raciocínio.
+ */
 function textoGemini(bruto: GeminiResposta | null): string {
   const partes = bruto?.candidates?.[0]?.content?.parts ?? [];
-  return partes
-    .map((p) => p.text ?? "")
-    .join("")
-    .trim();
+  const uteis = partes.filter((p) => !p.thought && (p.text ?? "").trim());
+  if (uteis.length) {
+    return uteis.map((p) => p.text ?? "").join("").trim();
+  }
+  // Fallback: só thought — tenta achar fala final em PT-BR entre aspas
+  const pensamento = partes.map((p) => p.text ?? "").join("
+");
+  const aspas = [...pensamento.matchAll(/"([^"]{20,400})"/g)].map((m) => m[1]);
+  const candidatos = aspas.filter((s) => /[áàâãéêíóôõúçÁÀÂÃÉÊÍÓÔÕÚÇ]|você|dor|descanse|procure|agende/i.test(s));
+  if (candidatos.length) return candidatos[candidatos.length - 1].trim();
+  return "";
 }
 
 /* ---- telemetria de tentativas (mesma requisição; usada pelo diagnóstico) ---- */
@@ -414,7 +431,7 @@ function comporFala(continuacao: string, comPrefill: boolean): string {
           // despejo e resposta mais curta (e mais rápida). O eco que escapar
           // passa pelo sanitizador antes de descartar.
           contents: conteudosDoModelo,
-          generationConfig: { temperature: 0.4, maxOutputTokens: 8192 },
+          generationConfig: { temperature: 0.3, maxOutputTokens: 16384 },
         }
       : {
           ...(sys ? { systemInstruction: { parts: [{ text: sys }] } } : {}),
