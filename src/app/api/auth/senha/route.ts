@@ -6,6 +6,7 @@ import {
   verificarSenha,
   tokenSessaoAtual,
   registrarAudit,
+  supabaseAdminOuNull,
 } from "@/lib/server/auth";
 import { ok, falha } from "@/lib/server/http";
 import {
@@ -18,16 +19,14 @@ import {
   MAX_FALHAS_SENHA,
   JANELA_FALHAS_MS,
 } from "@/lib/server/rate-limit";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { supabaseConfigurado } from "@/lib/supabase/env";
 
 /**
- * V4 — Troca de senha autenticada.
- *
- * Contas criadas pela administração nascem com senha padrão (bion123456) e o
- * flag `precisaTrocarSenha` ativo — o app bloqueia o uso até a troca. A
- * senha escolhida substitui o hash, limpa o flag e REVOGA as demais sessões
- * do usuário (a sessão atual permanece válida).
- *
- * POST { senhaAtual, novaSenha } → 200 { mensagem }
+ * Troca de senha autenticada.
+ * - Atualiza hash Prisma (legado / fallback)
+ * - Se houver Supabase Auth, atualiza a senha no Auth (fonte da verdade do login)
+ * - Revoga sessões legadas extras
  */
 export async function POST(req: NextRequest) {
   try {
@@ -44,7 +43,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // P0 — política única de senha: mínimo 10 caracteres, letras e números.
     const erroSenha = validarSenhaForte(novaSenha);
     if (erroSenha) {
       return Response.json({ erro: erroSenha }, { status: 400 });
@@ -56,7 +54,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // P0 — força bruta contra a senha atual também é bloqueada (por sessão+IP).
     const chaveFalhas = `senha:falha:${usuario.id}:${obterIp(req)}`;
     if ((await consultarAsync(chaveFalhas, JANELA_FALHAS_MS)) >= MAX_FALHAS_SENHA) {
       await registrarAudit(usuario, {
@@ -75,18 +72,65 @@ export async function POST(req: NextRequest) {
     if (!user) {
       return Response.json({ erro: "Usuário não encontrado." }, { status: 404 });
     }
-    if (!(await verificarSenha(senhaAtual, user.senhaHash))) {
+
+    // Valida senha atual: bcrypt legado OU Supabase Auth
+    let senhaOk = await verificarSenha(senhaAtual, user.senhaHash);
+    if (!senhaOk && supabaseConfigurado() && user.email) {
+      try {
+        const supabase = await createSupabaseServerClient();
+        const { error } = await supabase.auth.signInWithPassword({
+          email: user.email,
+          password: senhaAtual,
+        });
+        senhaOk = !error;
+      } catch {
+        senhaOk = false;
+      }
+    }
+
+    if (!senhaOk) {
       await limitarAsync(chaveFalhas, MAX_FALHAS_SENHA, JANELA_FALHAS_MS);
       return Response.json({ erro: "A senha atual está incorreta." }, { status: 401 });
     }
     await resetarAsync(chaveFalhas);
 
+    // 1) Supabase Auth (preferencial)
+    if (supabaseConfigurado()) {
+      try {
+        const supabase = await createSupabaseServerClient();
+        const { error: updErr } = await supabase.auth.updateUser({ password: novaSenha });
+        if (updErr) {
+          // Fallback: admin API se o usuário estiver linkado
+          const admin = supabaseAdminOuNull();
+          if (admin && user.supabaseId) {
+            const { error: adminErr } = await admin.auth.admin.updateUserById(user.supabaseId, {
+              password: novaSenha,
+            });
+            if (adminErr) {
+              return Response.json(
+                { erro: adminErr.message || "Não foi possível atualizar a senha no Auth." },
+                { status: 400 },
+              );
+            }
+          } else {
+            return Response.json(
+              { erro: updErr.message || "Não foi possível atualizar a senha no Auth." },
+              { status: 400 },
+            );
+          }
+        }
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "Falha ao atualizar senha no Supabase.";
+        return Response.json({ erro: msg }, { status: 500 });
+      }
+    }
+
+    // 2) Espelho Prisma (login legado / migração)
     await db.user.update({
       where: { id: usuario.id },
       data: { senhaHash: await hashSenha(novaSenha), precisaTrocarSenha: false },
     });
 
-    // Revoga TODAS as outras sessões (a atual permanece — o usuário continua navegando)
     const tokenAtual = await tokenSessaoAtual();
     await db.sessao.deleteMany({
       where: { userId: usuario.id, ...(tokenAtual ? { id: { not: tokenAtual } } : {}) },
@@ -96,7 +140,9 @@ export async function POST(req: NextRequest) {
       acao: "SENHA_ALTERADA",
       categoria: "autenticacao",
       severidade: "info",
-      detalhes: "Senha alterada pelo próprio usuário; demais sessões revogadas",
+      detalhes: supabaseConfigurado()
+        ? "Senha alterada no Supabase Auth + Prisma; demais sessões legadas revogadas"
+        : "Senha alterada (Prisma); demais sessões revogadas",
     });
 
     return ok({ mensagem: "Senha alterada com sucesso." });

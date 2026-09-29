@@ -59,3 +59,9 @@ A API Next (Prisma + DATABASE_URL) **não** é bloqueada pelo RLS.
 ## RLS completo
 
 `supabase/migrations/20260928_rls_completo.sql` — SELECT/INSERT/UPDATE por participante/dono.
+
+
+## Troca de senha
+
+`POST /api/auth/senha` valida a senha atual (bcrypt ou Auth), atualiza no
+**Supabase Auth** (`updateUser` / admin) e espelha o hash no Prisma.
