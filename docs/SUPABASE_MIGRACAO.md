@@ -1,5 +1,43 @@
 # Migração BION → Supabase
 
+## Status: código concluído
+
+O app usa Supabase para:
+
+| Serviço | Implementação |
+|---------|----------------|
+| **Postgres** | Prisma + `DATABASE_URL` |
+| **Auth** | `signUp` / `signIn` / troca de senha; `User.supabaseId` |
+| **Storage** | buckets `documentos` / `avatares`; upload/download |
+| **Realtime** | mensagens, sala de teleconsulta, notificações |
+| **Edge Functions** | `supabase/functions/pagamento-webhook` (opcional) |
+| **RLS** | SQL em `supabase/migrations/` (aplicar no SQL Editor) |
+
+## Checklist final (Dashboard / Vercel)
+
+1. [x] `NEXT_PUBLIC_SUPABASE_URL` + `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+2. [ ] **`SUPABASE_SERVICE_ROLE_KEY`** na Vercel (Project Settings → API → service_role)
+3. [ ] `npx prisma db push` (colunas `supabaseId`, `storagePath`, índices)
+4. [ ] Auth → Email ativo; em dev desligar Confirm email se quiser
+5. [ ] `npm run seed:auth` (vincular demos ao Auth) **ou** novo cadastro no app
+6. [ ] (Opcional) SQL `20260928_rls_completo.sql`
+7. [ ] (Opcional) Deploy Edge Function do webhook
+
+```bash
+npm run verificar:supabase   # checa envs
+npm run seed:auth            # com SERVICE_ROLE
+```
+
+## Contas demo
+
+Senha: `bion123456`  
+Paciente: `marina.silva@email.com` · Médico: `ana.ribeiro@med.bion.app` · Admin: `admin@bion.app`
+
+
+---
+
+# Migração BION → Supabase
+
 ## Status
 
 | Peça | Status |
