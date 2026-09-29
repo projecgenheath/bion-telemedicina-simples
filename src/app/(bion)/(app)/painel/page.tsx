@@ -3,7 +3,8 @@
 import { Suspense, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useBion } from "@/lib/bion-store";
-import { AdminDashboard, MedicoDashboard, PacienteDashboard } from "@/components/bion/telas/Dashboards";
+import { AdminDashboard, MedicoDashboard } from "@/components/bion/telas/Dashboards";
+import { TelaCarregando } from "@/components/bion/brand";
 import { PosConsultaModal } from "@/components/bion/PosConsultaModal";
 import { urlDa, type View } from "@/lib/rotas";
 
@@ -19,9 +20,12 @@ function ConteudoPainel() {
     if (sessao.role === "paciente") router.replace("/paciente");
   }, [sessao.role, router]);
 
+  if (sessao.role === "paciente") {
+    return <TelaCarregando texto="Abrindo seu app…" />;
+  }
+
   return (
     <>
-      {sessao.role === "paciente" && <PacienteDashboard go={go} />}
       {sessao.role === "medico" && <MedicoDashboard go={go} />}
       {sessao.role === "admin" && <AdminDashboard go={go} />}
 

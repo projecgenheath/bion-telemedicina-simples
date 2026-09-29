@@ -19,14 +19,22 @@ export default function LayoutAutenticado({ children }: { children: React.ReactN
     if (!carregando && !autenticado) router.replace("/entrar");
   }, [carregando, autenticado, router]);
 
+  const destinoPaciente = sessao.role === "paciente";
+  const telaCheiaPaciente =
+    view === "consulta" || view === "paciente-app" || view === "sala-espera";
+
   // Guarda de papel: cada tela exclusiva só abre para o papel correto
   useEffect(() => {
     if (carregando || !autenticado) return;
+    if (destinoPaciente && !telaCheiaPaciente) {
+      router.replace("/paciente");
+      return;
+    }
     if (SO_ADMIN.includes(view) && sessao.role !== "admin") router.replace("/painel");
     else if (SO_MEDICO.includes(view) && sessao.role !== "medico") router.replace("/painel");
     else if (SO_PACIENTE.includes(view) && sessao.role !== "paciente") router.replace("/painel");
     else if (SO_CLINICA.includes(view) && sessao.role === "admin") router.replace("/painel");
-  }, [carregando, autenticado, view, sessao.role, router]);
+  }, [carregando, autenticado, view, sessao.role, router, destinoPaciente, telaCheiaPaciente]);
 
   if (carregando || !autenticado) return <TelaCarregando comLista />;
 
@@ -34,9 +42,14 @@ export default function LayoutAutenticado({ children }: { children: React.ReactN
   // de qualquer navegação (a tela usa a própria sessão, já válida).
   if (precisaTrocarSenha) return <TrocarSenhaObrigatoria />;
 
-  // Sala de videoconsulta e o app imersivo do paciente são tela cheia
-  // (sem cabeçalho, sem navegação inferior e sem tour por cima).
-  if (view === "consulta" || view === "paciente-app") return <>{children}</>;
+  // Paciente: nunca monta o AppShell antigo (sidebar/abas) — nem por um frame.
+  if (destinoPaciente) {
+    if (telaCheiaPaciente) return <>{children}</>;
+    return <TelaCarregando texto="Abrindo seu app…" />;
+  }
+
+  // Sala de videoconsulta é tela cheia também para médico.
+  if (view === "consulta" || view === "sala-espera") return <>{children}</>;
 
   return <AppShell>{children}</AppShell>;
 }
