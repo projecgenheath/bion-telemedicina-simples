@@ -207,7 +207,9 @@ function textoGemini(bruto: GeminiResposta | null): string {
   const partes = bruto?.candidates?.[0]?.content?.parts ?? [];
   const uteis = partes.filter((p) => !p.thought && (p.text ?? "").trim());
   if (uteis.length) {
-    return uteis.map((p) => p.text ?? "").join("").trim();
+    // Uma parte só: evita colar dois rascunhos (Option 1 + Option 2).
+    const textos = uteis.map((p) => (p.text ?? "").trim()).filter(Boolean);
+    return (textos[0] ?? "").trim();
   }
   // Fallback: só thought — tenta achar fala final em PT-BR entre aspas
   const pensamento = partes.map((p) => p.text ?? "").join("\n");
@@ -354,7 +356,7 @@ async function chamarGemini(
     "raciocínio, análise, plano, rascunho, checklist ou comentário sobre as \n" +
     "instruções (nada de \"The user wants...\", \"User's Input:\", \"User prompt:\", \n" +
     "\"Draft\", \"Refining\", \"Final Answer:\", \"Constraint\", \"Let me analyze\"). \n" +
-    "NUNCA cite nem repita o pedido do usuário. No máximo 5 linhas.\n" +
+    "NUNCA cite nem repita o pedido do usuário. No máximo 5 linhas. Gere UMA única fala — sem segunda versão, sem 'Option 2', sem repetir o menu.\n" +
     '\nExemplo do estilo exato:\n' +
     'Pedido: "quero renovar minha receita de remédio contínuo, não tenho sintomas"\n' +
     'Resposta correta: "Claro! A receita é emitida pelo médico em uma **teleconsulta \n' +
@@ -430,7 +432,7 @@ function comporFala(continuacao: string, comPrefill: boolean): string {
           // despejo e resposta mais curta (e mais rápida). O eco que escapar
           // passa pelo sanitizador antes de descartar.
           contents: conteudosDoModelo,
-          generationConfig: { temperature: 0.3, maxOutputTokens: 4096 },
+          generationConfig: { temperature: 0.3, maxOutputTokens: 768 },
         }
       : {
           ...(sys ? { systemInstruction: { parts: [{ text: sys }] } } : {}),
@@ -451,37 +453,26 @@ function comporFala(continuacao: string, comPrefill: boolean): string {
       const texto1 = await geminiPost(modelo, apiKey, corpo, Math.min(prazo, subprazo), modelo);
       if (texto1 && !textoComEcoRaciocinio(texto1)) return { texto: texto1, modelo };
     } else {
-      // PREFILL (velocidade, 2026-09-24): fecha os contents com um turno
-      // "model" JÁ iniciando a fala da BION IA — o modelo CONTINUA uma resposta
-      // pronta, o que torna impossível o despejo de raciocínio ANTES dela e
-      // corta a latência (sem despejo ≈ 600-900 tokens a menos por mensagem).
-      // Se a API rejeitar turno final "model" (HTTP 400) ou devolver só um
-      // eco do prefill, repete sem o prefill (o custo do 400 é ~250ms).
-      const rotuloPrefill = `${modelo}-prefill`;
+      // Sem prefill: o "Claro!" + 2ª geração colava duas falas e atrasava.
+      // Uma chamada, teto baixo, stop no início de rascunho.
       let texto1 = await geminiPost(
         modelo,
         apiKey,
         {
-          contents: [...conteudosDoModelo, { role: "model" as const, parts: [{ text: PREFILL_GEMMA }] }],
-          // Teto 1536: a resposta pedida é ≤ 5 linhas (~200 tokens); o resto
-          // era rambla pós-resposta (latência sem valor). Com o prefill + as
-          // stop sequences, o excesso morre na geração, não no sanitizador.
-          generationConfig: { temperature: 0.35, maxOutputTokens: 2048, stopSequences: PREFILL_STOPS },
+          contents: conteudosDoModelo,
+          generationConfig: {
+            temperature: 0.3,
+            maxOutputTokens: 768,
+            stopSequences: ["\n\n*", "\n*", "\n\nOption", "\nOption ", "\nDraft"],
+          },
         },
         Math.min(prazo, subprazo),
-        rotuloPrefill,
+        modelo,
       );
-      let comPrefill = true;
+      const comPrefill = false;
       if (texto1) {
-        texto1 = limparArtefatos(texto1) || null; // artefatos de ação nunca chegam ao eco/paciente
-        if (texto1 && texto1.length < 20) texto1 = null; // só ecoou o prefill — inútil
-      }
-      if (!texto1) {
-        const rejeitou = _registrosGemini.some((r) => r.rotulo === rotuloPrefill && r.status === 400);
-        if (rejeitou && restante(prazo) > 3_000) {
-          texto1 = await geminiPost(modelo, apiKey, corpo, Math.min(prazo, subprazo), modelo);
-          comPrefill = false;
-        }
+        texto1 = limparArtefatos(texto1) || null;
+        if (texto1 && texto1.length < 8) texto1 = null;
       }
       if (texto1 && !textoComEcoRaciocinio(texto1)) {
         // Gemma limpo: desarma o disjuntor (a Google corrigiu o despejo).

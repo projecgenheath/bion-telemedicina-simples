@@ -26,7 +26,7 @@ const LIMITE_HISTORICO = 8;
  * paciente espera demais e ainda cai no motor local. 15s limita o pior caso
  * (Gemma travado → local) a ~14s, mantendo folga para respostas reais de 8-12s.
  */
-const TIMEOUT_MS = 28_000;
+const TIMEOUT_MS = 18_000;
 
 type MsgEntrada = { remetente: string; texto: string };
 
@@ -136,7 +136,7 @@ export async function POST(req: NextRequest) {
     // somenteGemini: não gasta tempo em público/SDK; sem fallback local.
     const { texto: respostaLlm, fonte, modelo } = await chatComFonte(mensagens, TIMEOUT_MS, anon, {
       somenteGemini: true,
-      retries: 2,
+      retries: 1,
     });
     if (respostaLlm) {
       return ok({ resposta: respostaLlm, fonte, modelo });
