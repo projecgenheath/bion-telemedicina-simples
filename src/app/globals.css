@@ -120,10 +120,24 @@
 /* ==================================================================== */
 
 .bp-shell {
+  position: relative;
   height: 100dvh;
   width: 100%;
   overflow: hidden;
   background: #ffffff; /* fallback */
+}
+@media (min-width: 768px) {
+  body:has(.bp-shell) {
+    background: #0a1220;
+  }
+  .bp-shell {
+    max-width: 430px;
+    margin-left: auto;
+    margin-right: auto;
+    border-left: 1px solid rgba(255, 255, 255, 0.08);
+    border-right: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35), 0 24px 80px rgba(0, 0, 0, 0.45);
+  }
 }
 
 /* Painéis laterais (perfil / documentos) */

@@ -60,7 +60,7 @@ function Visualizador({
   }, [onFechar]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label={`Documento: ${titulo}`}>
+    <div className="absolute inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label={`Documento: ${titulo}`}>
       {/* A11Y: fundo clicável agora é button real (tabIndex=-1 o mantém fora
           da ordem de tabulação — fechar por teclado é papel do ESC/botão). */}
       <button

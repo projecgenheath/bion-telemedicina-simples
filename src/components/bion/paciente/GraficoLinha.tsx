@@ -52,7 +52,7 @@ export function GraficoLinha({ series, refMin, refMax, altura = 132, corEixo = "
   return (
     <svg
       viewBox={`0 0 ${W} ${H}`}
-      className="w-full h-auto"
+      className="w-full h-auto min-h-[120px] max-h-48"
       role="img"
       aria-label={ariaLabel}
       preserveAspectRatio="xMidYMid meet"

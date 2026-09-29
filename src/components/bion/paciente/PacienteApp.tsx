@@ -237,34 +237,7 @@ export function PacienteApp() {
       .map((p) => p[0]?.toUpperCase())
       .join("") || "?";
 
-  /* -------------------------- arraste com mouse -------------------------- */
-
-  const aoBaixarPonteiro = (e: React.PointerEvent) => {
-    if (e.pointerType !== "mouse") return;
-    const el = carrosselRef.current;
-    if (!el) return;
-    arrastandoRef.current = true;
-    moveuArrasteRef.current = false;
-    inicioArrasteX.current = e.clientX;
-    inicioArrasteScroll.current = el.scrollLeft;
-  };
-  const aoMoverPonteiro = (e: React.PointerEvent) => {
-    if (!arrastandoRef.current) return;
-    const el = carrosselRef.current;
-    if (!el) return;
-    const dx = e.clientX - inicioArrasteX.current;
-    if (Math.abs(dx) > 6) moveuArrasteRef.current = true;
-    el.scrollLeft = inicioArrasteScroll.current - dx;
-  };
-  const aoSoltarPonteiro = () => {
-    if (!arrastandoRef.current) return;
-    arrastandoRef.current = false;
-    const el = carrosselRef.current;
-    if (el && moveuArrasteRef.current) {
-      const idx = Math.round(el.scrollLeft / el.clientWidth);
-      el.scrollTo({ left: idx * el.clientWidth, behavior: "smooth" });
-    }
-  };
+  /* Arraste com mouse no desktop quebrava clique de botão ao trocar de painel. */
 
   return (
     <div className="bp-shell text-bion-ink dark:text-bion-paper">
@@ -273,22 +246,11 @@ export function PacienteApp() {
         role="group"
         tabIndex={0}
         onScroll={aoRolar}
-        onPointerDown={aoBaixarPonteiro}
-        onPointerMove={aoMoverPonteiro}
-        onPointerUp={aoSoltarPonteiro}
-        onPointerLeave={aoSoltarPonteiro}
-        onClickCapture={(e) => {
-          if (moveuArrasteRef.current) {
-            e.preventDefault();
-            e.stopPropagation();
-            moveuArrasteRef.current = false;
-          }
-        }}
-        className="bp-carrossel flex h-full overflow-x-auto"
+        className={`bp-carrossel flex h-full overflow-x-auto ${chatAberto || triagemSlide || modalConsulta || detalhe ? "pointer-events-none" : ""}`}
         aria-label="Painéis do app: perfil, início e documentos (arraste para os lados)"
       >
         {/* ============================== PERFIL ============================== */}
-        <div className="w-full h-full shrink-0 bp-painel overflow-y-auto bp-coluna" aria-label="Perfil">
+        <div className="flex-[0_0_100%] w-full min-w-full h-full bp-painel overflow-y-auto bp-coluna" aria-label="Perfil">
           <PerfilPainel
             onSair={async () => {
               await sair();
@@ -298,7 +260,7 @@ export function PacienteApp() {
         </div>
 
         {/* ============================= PRINCIPAL ============================ */}
-        <div className="w-full h-full shrink-0 overflow-y-auto bp-coluna" aria-label="Início, saúde e exames">
+        <div className="flex-[0_0_100%] w-full min-w-full h-full overflow-y-auto bp-coluna" aria-label="Início, saúde e exames">
           {/* --- Seção 1: início --- */}
           <section className="bp-secao-1 min-h-[100svh] flex flex-col px-5 bp-safe-top pb-28" aria-label="Página inicial">
             <header className="flex items-center justify-between pt-2">
@@ -771,14 +733,14 @@ export function PacienteApp() {
         </div>
 
         {/* ====================== PÁGINA 4: DOCUMENTOS ======================== */}
-        <div className="w-full h-full shrink-0 bp-painel overflow-y-auto bp-coluna" aria-label="Documentos e mensagens">
+        <div className="flex-[0_0_100%] w-full min-w-full h-full bp-painel overflow-y-auto bp-coluna" aria-label="Documentos e mensagens">
           <DocumentosPainel />
         </div>
       </div>
 
       {/* Indicador de painéis — some quando há overlay para não cobrir cards */}
       {!(chatAberto || triagemSlide || modalConsulta || detalhe) ? (
-      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 rounded-full bg-zinc-950/80 text-white backdrop-blur px-3 py-2 pointer-events-auto">
+      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 rounded-full bg-zinc-950/80 text-white backdrop-blur px-3 py-2 pointer-events-auto">
         {[
           { idx: 0, rotulo: "Perfil" },
           { idx: 1, rotulo: "Início" },
@@ -832,7 +794,7 @@ export function PacienteApp() {
       ) : null}
 
       {modalConsulta ? (
-        <div className="fixed inset-0 z-[80] flex items-end justify-center" role="dialog" aria-modal="true">
+        <div className="absolute inset-0 z-[80] flex items-end justify-center" role="dialog" aria-modal="true">
           <button
             type="button"
             className="absolute inset-0 bg-black/80"

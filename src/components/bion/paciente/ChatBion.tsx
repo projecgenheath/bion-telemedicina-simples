@@ -564,7 +564,7 @@ export function ChatBion({
   if (!aberto) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bp-painel" role="dialog" aria-modal="true" aria-label="Conversa com a BION IA">
+    <div className="absolute inset-0 z-50 flex flex-col bp-painel" role="dialog" aria-modal="true" aria-label="Conversa com a BION IA">
       <input
         ref={inputArquivoRef}
         type="file"
