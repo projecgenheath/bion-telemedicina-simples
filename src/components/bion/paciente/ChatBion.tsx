@@ -80,7 +80,7 @@ export function ChatBion({ aberto, onFechar, aoEnviarExame }: { aberto: boolean;
       setMensagens([
         {
           remetente: "ia",
-          texto: `Olá, ${sessao.nome.split(" ")[0]}! Sou a BION IA. Eu **agendo suas consultas** — o pagamento já confirma no agenda. A **triagem** (anamnese) é **opcional**, pode ser feita aqui com a BION IA (ou no modo local) até 5 minutos antes do horário, para o médico já te conhecer — você também pode pular. Também tiro dúvidas de saúde e leio seus laudos (PDF ou foto). Como posso ajudar?`,
+          texto: `Olá, ${sessao.nome.split(" ")[0]}! Sou a BION IA. Eu **agendo suas consultas** — o pagamento já confirma no agenda. A **triagem** (anamnese) é **opcional**, pode ser feita aqui (motor de triagem local, opcional) até 5 minutos antes do horário, para o médico já te conhecer — você também pode pular. Também tiro dúvidas de saúde e leio seus laudos (PDF ou foto). Como posso ajudar?`,
         },
       ]);
     }
@@ -339,10 +339,13 @@ export function ChatBion({ aberto, onFechar, aoEnviarExame }: { aberto: boolean;
       const json = (await res.json()) as { resposta?: string; fonte?: string; modelo?: string; erro?: string };
       if (!res.ok || !json.resposta) throw new Error(json.erro ?? "Falha");
       setMensagens((m) => [...m, { remetente: "ia", texto: json.resposta!, fonte: json.fonte, modelo: json.modelo }]);
-    } catch {
+    } catch (e) {
+      const msg = e instanceof Error && e.message && e.message !== "Falha"
+        ? e.message
+        : "A BION IA está sobrecarregada ou a rede falhou. Aguarde e tente de novo — não usamos modo local neste chat.";
       setMensagens((m) => [
         ...m,
-        { remetente: "ia", texto: "Não consegui responder agora — a conexão com a nuvem falhou. Tente novamente em instantes.", tipo: "erro" },
+        { remetente: "ia", texto: msg, tipo: "erro" },
       ]);
     } finally {
       setPensando(false);

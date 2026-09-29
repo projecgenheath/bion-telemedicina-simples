@@ -3,7 +3,6 @@ import { db } from "@/lib/db";
 import { exigirSessao } from "@/lib/server/auth";
 import { ok, falha } from "@/lib/server/http";
 import { chatComFonte, type AnonNomes } from "@/lib/server/llm";
-import { respostaLocal } from "@/lib/server/chat-local";
 
 /**
  * BION IA — assistente clínico (backend apenas).
@@ -15,11 +14,9 @@ import { respostaLocal } from "@/lib/server/chat-local";
  * contexto (papel, medicamentos, alergias, próximas consultas) é montado
  * AQUI no servidor a partir do banco — nunca confiar em dados do cliente.
  *
- * IA generativa em cadeia (llm.ts): credenciais próprias → endpoint público
- * sem chave (com NOMES anonimizados antes do envio — LGPD) → SDK do sandbox.
- * Quando nenhum canal responde, o motor local por intenções assume, usando
- * dados reais do banco e mantendo a segurança clínica (alarme → SAMU 192).
- * A resposta informa a `fonte` para o cliente exibir com transparência.
+ * IA generativa SOMENTE via Gemma 4 26B (Google API). Motor local NÃO é
+ * usado neste chat — só na triagem (/api/anamnese). Se o modelo falhar,
+ * devolvemos erro amigável para o paciente tentar de novo.
  */
 
 const LIMITE_HISTORICO = 8;
@@ -29,7 +26,7 @@ const LIMITE_HISTORICO = 8;
  * paciente espera demais e ainda cai no motor local. 15s limita o pior caso
  * (Gemma travado → local) a ~14s, mantendo folga para respostas reais de 8-12s.
  */
-const TIMEOUT_MS = 15_000;
+const TIMEOUT_MS = 28_000;
 
 type MsgEntrada = { remetente: string; texto: string };
 
@@ -136,15 +133,24 @@ export async function POST(req: NextRequest) {
         ? [{ nome: primeiroNome, substituto: "(usuário BION)" }]
         : []),
     ];
-    const { texto: respostaLlm, fonte, modelo } = await chatComFonte(mensagens, TIMEOUT_MS, anon);
+    // somenteGemini: não gasta tempo em público/SDK; sem fallback local.
+    const { texto: respostaLlm, fonte, modelo } = await chatComFonte(mensagens, TIMEOUT_MS, anon, {
+      somenteGemini: true,
+      retries: 2,
+    });
     if (respostaLlm) {
       return ok({ resposta: respostaLlm, fonte, modelo });
     }
-    const resposta = await respostaLocal(usuario, historico);
-    return ok({ resposta, fonte: "local" });
+    return Response.json(
+      {
+        erro: "A BION IA está um pouco sobrecarregada agora. Aguarde alguns segundos e envie de novo — não usamos respostas automáticas locais neste chat.",
+        fonte: null,
+      },
+      { status: 503 },
+    );
   } catch (erro) {
     return falha(erro);
   }
 }
 
-export const maxDuration = 30;
+export const maxDuration = 60;

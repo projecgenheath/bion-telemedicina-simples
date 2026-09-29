@@ -172,8 +172,6 @@ export function BionIA() {
     });
 
     let resposta = "";
-    let offline = false;
-    let fonte = "";
     try {
       const res = await fetch("/api/bion-ia", {
         method: "POST",
@@ -182,23 +180,26 @@ export function BionIA() {
           mensagens: historico.map((m) => ({ remetente: m.remetente, texto: m.texto })),
         }),
       });
-      const json = (await res.json().catch(() => null)) as { resposta?: string; fonte?: string } | null;
+      const json = (await res.json().catch(() => null)) as {
+        resposta?: string;
+        fonte?: string;
+        erro?: string;
+      } | null;
       resposta = json?.resposta ?? "";
-      fonte = json?.fonte ?? "";
-      if (!res.ok || !resposta) offline = true;
+      if (!res.ok || !resposta) {
+        resposta =
+          json?.erro ||
+          "A BION IA está um pouco sobrecarregada agora. Aguarde alguns segundos e envie de novo.";
+      }
     } catch {
-      offline = true;
+      resposta =
+        "Não consegui falar com a BION IA agora (rede). Tente novamente em instantes — não usamos respostas locais neste chat.";
     }
-    if (offline) resposta = respostaLocal(txt);
-
-    const modoLocal = offline || fonte === "local";
 
     const novaMsgIA: MensagemIA = {
       id: `ia-${Date.now()}`,
       remetente: "ia",
-      texto: modoLocal
-        ? `${resposta}\n\n_(resposta do modo local — a IA em nuvem está temporariamente indisponível)_`
-        : resposta,
+      texto: resposta,
       hora: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
     };
 

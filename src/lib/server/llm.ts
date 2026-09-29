@@ -47,7 +47,7 @@ type Cliente = ClienteEnv | ClienteSdk | { tipo: "gemini" };
 type Resultado = { texto: string | null; fonte: FonteLlm | null; modelo?: string | null };
 
 const SONDA_TIMEOUT_MS = 4_000;
-const COOLDOWN_FALHA_MS = 60_000;
+const COOLDOWN_FALHA_MS = 12_000;
 const PUBLICO_URL_PADRAO = "https://text.pollinations.ai/openai";
 const PUBLICO_MODEL_PADRAO = "openai-fast";
 
@@ -96,7 +96,7 @@ let _geminiFalhaEm = 0;
  * Gemma volta a servir sozinho (sem mudança de código).
  */
 const GEMMA_ECO_LIMITE = 1;
-const GEMMA_ECO_COOLDOWN_MS = 30 * 60_000;
+const GEMMA_ECO_COOLDOWN_MS = 2 * 60_000;
 let _gemmaEcoSeguidos = 0;
 let _gemmaPuladoAte = 0;
 
@@ -431,7 +431,7 @@ function comporFala(continuacao: string, comPrefill: boolean): string {
           // despejo e resposta mais curta (e mais rápida). O eco que escapar
           // passa pelo sanitizador antes de descartar.
           contents: conteudosDoModelo,
-          generationConfig: { temperature: 0.3, maxOutputTokens: 16384 },
+          generationConfig: { temperature: 0.3, maxOutputTokens: 4096 },
         }
       : {
           ...(sys ? { systemInstruction: { parts: [{ text: sys }] } } : {}),
@@ -467,7 +467,7 @@ function comporFala(continuacao: string, comPrefill: boolean): string {
           // Teto 1536: a resposta pedida é ≤ 5 linhas (~200 tokens); o resto
           // era rambla pós-resposta (latência sem valor). Com o prefill + as
           // stop sequences, o excesso morre na geração, não no sanitizador.
-          generationConfig: { temperature: 0.4, maxOutputTokens: 1536, stopSequences: PREFILL_STOPS },
+          generationConfig: { temperature: 0.35, maxOutputTokens: 2048, stopSequences: PREFILL_STOPS },
         },
         Math.min(prazo, subprazo),
         rotuloPrefill,
@@ -897,24 +897,47 @@ async function chamarSdk(c: ClienteSdk, mensagens: Msg[], prazo: number): Promis
  * Um turno de IA generativa. Tenta gemini → env → público (anonimizado) →
  * SDK e devolve texto + fonte; texto null quando nenhum canal respondeu.
  */
-export async function chatComFonte(mensagens: Msg[], timeoutMs: number, anon?: AnonNomes): Promise<Resultado> {
-  const prazo = Date.now() + Math.max(timeoutMs, 5_000);
+export type OpcoesChat = {
+  /** Só Gemini/Gemma (+ env se houver). Não tenta público nem SDK (mais rápido). */
+  somenteGemini?: boolean;
+  /** Tentativas extras no canal Gemini se a primeira falhar (padrão 0). */
+  retries?: number;
+};
 
-  // 1) Google Gemini — API própria do projeto (dados completos)
-  if (geminiHabilitado() && geminiConfig().apiKey && !geminiEmCooldown()) {
-    const { texto, modelo } = await chamarGemini(mensagens, prazo);
-    if (texto) return { texto, fonte: "gemini", modelo };
+export async function chatComFonte(
+  mensagens: Msg[],
+  timeoutMs: number,
+  anon?: AnonNomes,
+  opcoes?: OpcoesChat,
+): Promise<Resultado> {
+  const prazo = Date.now() + Math.max(timeoutMs, 5_000);
+  const retries = Math.max(0, Math.min(3, opcoes?.retries ?? 0));
+  const somente = opcoes?.somenteGemini === true;
+
+  // 1) Google Gemini — API própria (Gemma 4 26B no chat)
+  if (geminiHabilitado() && geminiConfig().apiKey) {
+    for (let tentativa = 0; tentativa <= retries; tentativa++) {
+      // Em retry ignora cooldown de falha recente (evita cair em 503 falso)
+      if (tentativa === 0 && geminiEmCooldown()) break;
+      if (tentativa > 0) _geminiFalhaEm = 0;
+      const { texto, modelo } = await chamarGemini(mensagens, prazo);
+      if (texto) return { texto, fonte: "gemini", modelo };
+    }
     _geminiFalhaEm = Date.now();
   }
 
-  // 2) credenciais próprias genéricas — confiável, sem anonimização
+  if (somente) {
+    return { texto: null, fonte: null };
+  }
+
+  // 2) credenciais próprias genéricas
   const env = clienteEnv();
   if (env) {
     const texto = await chamarEnv(env, mensagens, prazo);
     if (texto) return { texto, fonte: "env" };
   }
 
-  // 3) endpoint público sem chave — anonimiza nomes antes de enviar
+  // 3) endpoint público (desligado por padrão)
   if (publicoHabilitado() && process.env.BION_LLM_FORCAR_SDK !== "1" && !publicoEmCooldown()) {
     const anonimizado = anonimizarMensagens(mensagens, anon);
     const comNota = anon?.length ? aplicarNotaPrivacidade(anonimizado) : anonimizado;
@@ -923,10 +946,7 @@ export async function chatComFonte(mensagens: Msg[], timeoutMs: number, anon?: A
     _publicoFalhaEm = Date.now();
   }
 
-  // 4) SDK do sandbox (sonda memorizada por instância). SÓ se sobrar tempo
-  // de verdade: a sonda custa até 4s — gastar isso quando o prazo já está no
-  // fim atrasa a resposta local (medido em produção: msg do paciente esperou
-  // ~3s extras num canal que nunca responde fora do sandbox).
+  // 4) SDK sandbox só se sobrar tempo
   if (restante(prazo) > 5_000) {
     const sdk = await tentarSdk();
     if (sdk) {
