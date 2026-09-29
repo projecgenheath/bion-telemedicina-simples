@@ -360,18 +360,7 @@ async function chamarGemini(
   // O EXEMPLO de 1 turno âncora o formato (dumps medidos em produção mesmo
   // com a diretiva verbal) e o teto de linhas acelera a resposta.
   const DIRETIVA_GEMMA =
-    "\n\n---\n\nIMPORTANTE (estilo de resposta, obrigatório): fale como a BION IA, em \n" +
-    "português do Brasil, dirigindo-se diretamente à pessoa (\"você\"). A PRIMEIRA \n" +
-    "linha da resposta já é a fala da BION IA respondendo ao pedido. NUNCA exiba \n" +
-    "raciocínio, análise, plano, rascunho, checklist ou comentário sobre as \n" +
-    "instruções (nada de \"The user wants...\", \"User's Input:\", \"User prompt:\", \n" +
-    "\"Draft\", \"Refining\", \"Final Answer:\", \"Constraint\", \"Let me analyze\"). \n" +
-    "NUNCA cite nem repita o pedido do usuário. No máximo 5 linhas. Gere UMA única fala — sem segunda versão, sem 'Option 2', sem repetir o menu.\n" +
-    '\nExemplo do estilo exato:\n' +
-    'Pedido: "quero renovar minha receita de remédio contínuo, não tenho sintomas"\n' +
-    'Resposta correta: "Claro! A receita é emitida pelo médico em uma **teleconsulta \n' +
-    'de reavaliação** — é rápida e você não precisa estar com sintomas. Toque em \n' +
-    '**Agendar consulta** aqui embaixo que eu te guio no resto."';
+    "\nResponda já na primeira linha, PT-BR, no máximo 4 frases. Sem raciocínio em inglês.\n";
 
 /**
  * PREFILL (velocidade): a chamada à API termina com um turno "model" já
@@ -442,7 +431,7 @@ function comporFala(continuacao: string, comPrefill: boolean): string {
           // despejo e resposta mais curta (e mais rápida). O eco que escapar
           // passa pelo sanitizador antes de descartar.
           contents: conteudosDoModelo,
-          generationConfig: { temperature: 0.3, maxOutputTokens: 4096 },
+          generationConfig: { temperature: 0.3, maxOutputTokens: 1024 },
         }
       : {
           ...(sys ? { systemInstruction: { parts: [{ text: sys }] } } : {}),
@@ -472,7 +461,7 @@ function comporFala(continuacao: string, comPrefill: boolean): string {
           contents: conteudosDoModelo,
           generationConfig: {
             temperature: 0.3,
-            maxOutputTokens: 4096,
+            maxOutputTokens: 1024,
           },
         },
         Math.min(prazo, subprazo),

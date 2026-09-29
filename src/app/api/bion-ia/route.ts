@@ -19,14 +19,14 @@ import { chatComFonte, registrosGemini, type AnonNomes } from "@/lib/server/llm"
  * devolvemos erro amigável para o paciente tentar de novo.
  */
 
-const LIMITE_HISTORICO = 8;
+const LIMITE_HISTORICO = 4;
 /**
  * PRAZO TOTAL DA IA (medido em produção 2026-09-25): o Gemma responde bem em
  * 4-8s (com prefill); quando TRAVA (free tier), não adianta esperar 21s — o
  * paciente espera demais e ainda cai no motor local. 15s limita o pior caso
  * (Gemma travado → local) a ~14s, mantendo folga para respostas reais de 8-12s.
  */
-const TIMEOUT_MS = 40_000;
+const TIMEOUT_MS = 20_000;
 
 type MsgEntrada = { remetente: string; texto: string };
 
@@ -81,24 +81,8 @@ async function montarContexto(
  * interrogatório de sintomas. A triagem guiada só existe no fluxo de
  * agendamento (rota /api/anamnese), fora deste chat.
  */
-const instrucoesBase = (nome: string, role: string) => `Você é a BION IA, assistente virtual da BION Telemedicina (plataforma brasileira de telemedicina).
-
-Usuário atual: ${nome} (papel: ${role}).
-
-ESTILO (obrigatório):
-- Português do Brasil, acolhedor e DIRETO: a primeira linha já responde ao que foi pedido. No máximo 5 linhas.
-- Markdown leve: **destaques** e listas com "•". Sem preâmbulo, sem repetir o pedido, sem perguntas desnecessárias.
-
-POLÍTICA DE INTENÇÃO (obrigatória):
-- Pedido administrativo (renovar/emissão de receita, agendar, reagendar, pagamento, laudos, agenda, plataforma): responda o caminho prático em 2-3 passos e ofereça o botão **Agendar consulta** quando fizer sentido.
-- Renovação de receita: explique que a receita é emitida pelo médico em uma **teleconsulta de reavaliação** (rápida, serve para uso contínuo) e convide a agendar. Se a pessoa disser que NÃO tem sintomas, NÃO pergunte sintomas e NÃO monte anamnese — siga direto para o agendamento.
-- A triagem guiada (anamnese) só acontece DENTRO do fluxo de agendamento, nunca por iniciativa sua neste chat.
-
-LIMITES:
-- Não prescreva, não ajuste doses, não feche diagnóstico; nesses casos recomende a teleconsulta.
-- Sinais de alerta (dor no peito, falta de ar intensa, síncope, fala arrastada, sangramento forte, ideação suicida): oriente urgência presencial imediata — SAMU 192.
-- Não invente CID-10. LGPD: não peça dados sensíveis além do necessário; as conversas são registradas de forma confidencial.
-- Fora do escopo de saúde ou da plataforma, redirecione com gentileza para o suporte BION.`;
+const instrucoesBase = (nome: string, role: string) =>
+  `Você é a BION IA. Fale com ${nome} (${role}) em PT-BR, 1 a 4 frases, direto. Não prescreva. Urgência: SAMU 192. Triagem não é neste chat.`;
 
 export async function POST(req: NextRequest) {
   try {
@@ -107,13 +91,16 @@ export async function POST(req: NextRequest) {
 
     const historico = (body.mensagens ?? [])
       .filter((m) => (m?.texto ?? "").trim() && ["usuario", "ia"].includes(m.remetente))
+      .filter((m) => m.texto.length < 500)
       .slice(-LIMITE_HISTORICO);
 
     if (!historico.length) {
       return Response.json({ erro: "Nenhuma mensagem recebida." }, { status: 400 });
     }
 
-    const contexto = await montarContexto(usuario);
+    const ultima = (body.mensagens ?? []).at(-1)?.texto?.trim() ?? "";
+    const saudacao = /^(oi|ol[áa]|boa\s+(noite|tarde|dia)|e a[ií]|hey)[\s!.?]*$/i.test(ultima);
+    const contexto = saudacao ? "" : await montarContexto(usuario);
     const mensagens = [
       {
         role: "assistant" as const,
@@ -136,7 +123,7 @@ export async function POST(req: NextRequest) {
     // somenteGemini: não gasta tempo em público/SDK; sem fallback local.
     const { texto: respostaLlm, fonte, modelo } = await chatComFonte(mensagens, TIMEOUT_MS, anon, {
       somenteGemini: true,
-      retries: 1,
+      retries: 0,
     });
     if (respostaLlm) {
       return ok({ resposta: respostaLlm, fonte, modelo });
