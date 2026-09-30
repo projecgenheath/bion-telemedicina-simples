@@ -5,9 +5,11 @@ import type { Msg } from "./chat-bion-types";
 export function ChatListaMensagens({
   mensagens,
   pensando,
+  segundosEspera = 0,
 }: {
   mensagens: Msg[];
   pensando: boolean;
+  segundosEspera?: number;
 }) {
   return (
     <>
@@ -23,17 +25,9 @@ export function ChatListaMensagens({
             {m.texto.split("**").map((parte, j) =>
               j % 2 === 1 ? <strong key={j}>{parte}</strong> : <span key={j}>{parte}</span>,
             )}
-            {m.remetente === "ia" && m.fonte && (
+            {m.remetente === "ia" && m.fonte === "gemini" && (
               <div className="text-xs mt-2 opacity-40" aria-hidden="true">
-                {m.fonte === "local"
-                  ? "modo básico · sem IA generativa"
-                  : m.fonte === "publico"
-                    ? "canal público · seus nomes foram removidos antes do envio (anonimização LGPD); ao continuar a conversa você consente com esse tratamento"
-                    : m.fonte === "gemini"
-                      ? /gemma/i.test(m.modelo ?? "")
-                        ? "IA generativa · Gemma 4 26B A4B"
-                        : "IA generativa · Google Gemini"
-                      : "IA generativa"}
+                {/gemma/i.test(m.modelo ?? "") ? "Gemma 4 26B" : "Gemini"}
               </div>
             )}
           </div>
@@ -43,14 +37,19 @@ export function ChatListaMensagens({
       {pensando && (
         <div className="flex justify-start" aria-live="polite" aria-label="BION está digitando">
           <div className="bp-glass px-4 py-3 rounded-3xl rounded-bl-md">
-            <div className="flex gap-1.5">
-              {[0, 1, 2].map((d) => (
-                <span
-                  key={d}
-                  className="w-2 h-2 rounded-full bg-bion-ink/40 dark:bg-white/40 motion-safe:animate-bounce"
-                  style={{ animationDelay: `${d * 0.15}s` }}
-                />
-              ))}
+            <div className="flex items-center gap-3">
+              <div className="flex gap-1.5">
+                {[0, 1, 2].map((d) => (
+                  <span
+                    key={d}
+                    className="w-2 h-2 rounded-full bg-bion-ink/40 dark:bg-white/40 motion-safe:animate-bounce"
+                    style={{ animationDelay: `${d * 0.15}s` }}
+                  />
+                ))}
+              </div>
+              <span className="text-xs opacity-55">
+                {segundosEspera > 2 ? `Pensando… ${segundosEspera}s` : "Digitando…"}
+              </span>
             </div>
           </div>
         </div>

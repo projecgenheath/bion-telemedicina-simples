@@ -63,6 +63,8 @@ export function ChatBion({
   } = useBion();
 
   const [mensagens, setMensagens] = useState<Msg[]>([]);
+  const [segundosEspera, setSegundosEspera] = useState(0);
+  const [ultimaFalha, setUltimaFalha] = useState<string | null>(null);
   const [entrada, setEntrada] = useState("");
   const [pensando, setPensando] = useState(false);
   const [etapa, setEtapa] = useState<Etapa>(null);
@@ -90,7 +92,7 @@ export function ChatBion({
       setMensagens([
         {
           remetente: "ia",
-          texto: `Olá, ${sessao.nome.split(" ")[0]}! Sou a BION IA. Eu **agendo suas consultas** — o pagamento já confirma no agenda. A **triagem** (anamnese) é **opcional**, pode ser feita aqui (motor de triagem local, opcional) até 5 minutos antes do horário, para o médico já te conhecer — você também pode pular. Também tiro dúvidas de saúde e leio seus laudos (PDF ou foto). Como posso ajudar?`,
+          texto: `Olá, ${sessao.nome.split(" ")[0]}! Sou a **BION IA**. Posso agendar consulta, ler um laudo (PDF ou foto) e tirar dúvidas de saúde. A **triagem** é opcional e fica no card da consulta, não neste chat. Como posso ajudar?`,
         },
       ]);
     }
@@ -98,7 +100,16 @@ export function ChatBion({
 
   useEffect(() => {
     fimRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [mensagens, etapa, pensando, anamneseAtiva]);
+  }, [mensagens, etapa, pensando, anamneseAtiva, segundosEspera]);
+
+  useEffect(() => {
+    if (!pensando) {
+      setSegundosEspera(0);
+      return;
+    }
+    const id = setInterval(() => setSegundosEspera((s) => s + 1), 1000);
+    return () => clearInterval(id);
+  }, [pensando]);
 
   /* ------------------------------ anamnese ------------------------------ */
 
@@ -352,6 +363,8 @@ export function ChatBion({
     setMensagens(historico);
     setEntrada("");
     setPensando(true);
+    setUltimaFalha(null);
+    setSegundosEspera(0);
     try {
       const res = await fetch("/api/bion-ia", {
         method: "POST",
@@ -364,7 +377,8 @@ export function ChatBion({
     } catch (e) {
       const msg = e instanceof Error && e.message && e.message !== "Falha"
         ? e.message
-        : "A BION IA está sobrecarregada ou a rede falhou. Aguarde e tente de novo — não usamos modo local neste chat.";
+        : "A BION IA não respondeu agora. Toque em Tentar de novo.";
+      setUltimaFalha(t);
       setMensagens((m) => [
         ...m,
         { remetente: "ia", texto: msg, tipo: "erro" },
@@ -597,7 +611,16 @@ export function ChatBion({
 
       {/* Mensagens */}
       <div className="flex-1 overflow-y-auto bp-coluna px-5 py-4 space-y-3">
-        <ChatListaMensagens mensagens={mensagens} pensando={pensando} />
+        <ChatListaMensagens mensagens={mensagens} pensando={pensando} segundosEspera={segundosEspera} />
+        {ultimaFalha && !pensando ? (
+          <button
+            type="button"
+            onClick={() => void enviar(ultimaFalha)}
+            className="rounded-full px-4 py-2 text-sm font-semibold bg-amber-500/15 text-amber-200 border border-amber-400/30 w-fit"
+          >
+            Tentar de novo
+          </button>
+        ) : null}
 
         {/* Confirmação + pagamento do agendamento */}
         {etapa === "confirmar" && (() => {
