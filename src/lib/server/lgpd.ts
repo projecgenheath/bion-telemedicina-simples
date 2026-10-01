@@ -79,33 +79,51 @@ type ArquivoMin = {
   usuarioId: string;
   consulta: string;
   storagePath: string | null;
+  createdAt: Date;
 };
 
-/** Vínculos que indicam conteúdo clínico (consulta, laudo importado, etc.). */
+/** Termos que indicam conteúdo clínico. Só servem para PRESERVAR — nunca
+ *  são critério para apagar. */
 const TERMOS_CLINICOS =
   /exame|laudo|resultado|receita|atestado|prontu|cl[ií]nic|bion ia|consulta|anamnese/i;
 
 /**
- * Regra (conservadora — na dúvida, PRESERVA, pois prontuário não pode ser
- * destruído). Um arquivo só é "pessoal" (removível) se TODAS valerem:
- *  - foi enviado pelo próprio paciente (usuarioId = paciente, enviadoPor = paciente);
- *  - não está ligado a consulta nem à BION IA (`consulta` vazio ou "Envio avulso");
- *  - tipo/nome não indicam conteúdo clínico (exame, laudo, receita...);
- *  - não foi importado como exame (ExameLaboratorial.arquivoNome) nem
- *    anexado à anamnese (Anamnese.documentos).
- * Arquivos enviados por médico ou ligados ao paciente por outra pessoa são
- * sempre clínicos.
+ * Regra (revisão clínica do PR #4 — na dúvida, PRESERVA: prontuário não pode
+ * ser destruído). Um arquivo só é "pessoal" (apagável) se TODAS valerem:
+ *  1. foi enviado pelo próprio paciente (usuarioId = paciente E enviadoPor = "paciente");
+ *  2. o paciente NUNCA teve consulta (qualquer status, inclusive futura ou
+ *     cancelada) OU o arquivo foi enviado DEPOIS da última consulta dele
+ *     (`ultimaConsulta` = maior dataInicio/createdAt entre as consultas);
+ *  3. não está ligado a consulta nem à BION IA (`consulta` vazio ou "Envio avulso");
+ *  4. não foi importado como exame (ExameLaboratorial.arquivoNome) nem
+ *     anexado à anamnese (Anamnese.documentos).
+ * Critério extra só para PRESERVAR: tipo/nome com termo clínico (exame,
+ * laudo, receita...). Nome/tipo NUNCA tornam um arquivo apagável.
+ * Data inválida ou ausente => preserva. Arquivos enviados por médico ou
+ * ligados ao paciente por outra pessoa são sempre clínicos.
  */
 export function arquivoEhPessoal(
   a: ArquivoMin,
   pacienteId: string,
   nomesClinicos: Set<string>,
+  ultimaConsulta: Date | null,
 ): boolean {
+  // 1) só o que o próprio paciente enviou
   if (a.usuarioId !== pacienteId || a.enviadoPor !== "paciente") return false;
+  // 2) nunca teve consulta, ou enviado depois da última consulta
+  if (ultimaConsulta) {
+    const enviadoEm = a.createdAt instanceof Date ? a.createdAt.getTime() : NaN;
+    const corte = ultimaConsulta.getTime();
+    if (Number.isNaN(enviadoEm) || Number.isNaN(corte)) return false;
+    if (!(enviadoEm > corte)) return false;
+  }
+  // 3) sem vínculo com consulta / BION IA
   const vinculo = a.consulta.trim().toLowerCase();
   if (vinculo !== "" && vinculo !== "envio avulso") return false;
-  if (TERMOS_CLINICOS.test(a.tipo) || TERMOS_CLINICOS.test(a.nome)) return false;
+  // 4) não importado como exame nem anexado à anamnese
   if (nomesClinicos.has(a.nome.trim().toLowerCase())) return false;
+  // extra (só preserva): termo clínico no tipo/nome
+  if (TERMOS_CLINICOS.test(a.tipo) || TERMOS_CLINICOS.test(a.nome)) return false;
   return true;
 }
 
@@ -227,12 +245,37 @@ export async function anonimizarPacienteCompleto(pacienteId: string): Promise<Re
     where: {
       OR: [{ usuarioId: pacienteId }, ...(idsPorPacienteId.length ? [{ id: { in: idsPorPacienteId } }] : [])],
     },
-    select: { id: true, nome: true, tipo: true, enviadoPor: true, usuarioId: true, consulta: true, storagePath: true },
+    select: {
+      id: true,
+      nome: true,
+      tipo: true,
+      enviadoPor: true,
+      usuarioId: true,
+      consulta: true,
+      storagePath: true,
+      createdAt: true,
+    },
   });
-  const [exames, anamneses] = await Promise.all([
+  const [exames, anamneses, consultasAgg] = await Promise.all([
     db.exameLaboratorial.findMany({ where: { usuarioId: pacienteId }, select: { arquivoNome: true } }),
     db.anamnese.findMany({ where: { usuarioId: pacienteId }, select: { documentos: true } }),
+    // Qualquer status (inclusive cancelada/futura): marco mais conservador.
+    db.consulta.aggregate({
+      where: { pacienteId },
+      _count: { _all: true },
+      _max: { dataInicio: true, createdAt: true },
+    }),
   ]);
+  const ultimaConsulta: Date | null =
+    consultasAgg._count._all === 0
+      ? null
+      : (() => {
+          const marcos = [consultasAgg._max.dataInicio, consultasAgg._max.createdAt]
+            .map((d) => d?.getTime() ?? Number.NaN)
+            .filter((t) => Number.isFinite(t));
+          // Sem marco válido => Date inválida => arquivoEhPessoal preserva tudo.
+          return new Date(marcos.length ? Math.max(...marcos) : Number.NaN);
+        })();
   const nomesClinicos = new Set<string>(
     [
       ...exames.map((e) => e.arquivoNome ?? ""),
@@ -241,7 +284,7 @@ export async function anonimizarPacienteCompleto(pacienteId: string): Promise<Re
       .map((n) => n.trim().toLowerCase())
       .filter(Boolean),
   );
-  const pessoais = arquivos.filter((a) => arquivoEhPessoal(a, pacienteId, nomesClinicos));
+  const pessoais = arquivos.filter((a) => arquivoEhPessoal(a, pacienteId, nomesClinicos, ultimaConsulta));
 
   // ---- (a) Supabase Auth e (b) Storage — antes do banco (ver cabeçalho) ----
   let loginSupabaseRemovido = false;
