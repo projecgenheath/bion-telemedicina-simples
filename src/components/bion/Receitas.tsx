@@ -101,7 +101,7 @@ export function VisualizadorDoc({
         <div className="p-5 overflow-y-auto">
           <div className="rounded-2xl border bg-background p-5 space-y-3">
             <div className="text-xs uppercase tracking-wide text-muted-foreground">
-              Documento digital assinado
+              Documento digital (sem assinatura ICP-Brasil)
             </div>
             <div className="grid sm:grid-cols-2 gap-3 text-sm">
               <Campo label="Paciente" valor={d.paciente} />

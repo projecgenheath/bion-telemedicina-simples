@@ -95,7 +95,7 @@ export async function POST(req: NextRequest) {
               : body.tipo === "atestado"
                 ? "Atestado emitido"
                 : "Solicitação de exames disponível",
-          texto: `${rotulo} emitido por ${usuario.nome}. Assinado digitalmente (assinatura eletrônica — MP 2.200-2/2001) com hash SHA-256 de verificação.`,
+          texto: `${rotulo} emitido por ${usuario.nome}. Documento eletrônico sem assinatura digital ICP-Brasil.`,
           usuarioId: paciente.id,
         },
       ],
