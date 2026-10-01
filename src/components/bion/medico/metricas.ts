@@ -308,4 +308,5 @@ export const ROTULO_STATUS: Record<Consulta["status"], string> = {
   pendente_anamnese: "Confirmada",
   cancelada: "Cancelada",
   concluida: "Concluída",
+  aguardando_reagendamento: "Aguardando reagendamento",
 };

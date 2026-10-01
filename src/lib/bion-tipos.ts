@@ -6,7 +6,14 @@
 /* os imports existentes (`@/lib/bion-store`) seguem funcionando.        */
 /* ==================================================================== */
 
-export type ApptStatus = "confirmada" | "pendente_anamnese" | "cancelada" | "concluida" | "em_espera";
+export type ApptStatus =
+  | "confirmada"
+  | "pendente_anamnese"
+  | "cancelada"
+  | "concluida"
+  | "em_espera"
+  // médico cancelou o dia ou houve falha técnica: o paciente escolhe remarcar ou reembolso integral
+  | "aguardando_reagendamento";
 
 /** Anamnese guiada pela BION IA (resumo sincronizado com o servidor). */
 export type AnamneseResumo = {

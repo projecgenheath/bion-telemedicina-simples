@@ -47,6 +47,7 @@ model User {
   examesLaboratoriais  ExameLaboratorial[]
   anamneses            Anamnese[]
   leiturasNotificacao  NotificacaoLeitura[]
+  repasses             Repasse[]      @relation("RepasseMedico")
 }
 
 model Sessao {
@@ -139,7 +140,7 @@ model Consulta {
   medico             User     @relation("ConsultaMedico", fields: [medicoId], references: [id], onDelete: Cascade)
   especialidade      String
   dataInicio         DateTime
-  status             String   @default("confirmada") // confirmada | em_espera | pendente_anamnese (legado) | cancelada | concluida
+  status             String   @default("confirmada") // confirmada | em_espera | pendente_anamnese (legado) | aguardando_reagendamento | cancelada | concluida
   motivoConsulta     String?
   motivoCancelamento String?
   resumoMedico       String?
@@ -158,6 +159,10 @@ model Consulta {
 
   // Pagamento (confirmado pelo servidor/gateway — nunca pelo cliente)
   pagamento Pagamento?
+
+  // Fase financeira: histórico de cancelamentos/remarcações e repasse
+  eventos     EventoConsulta[]
+  repasseItem RepasseItem?
 }
 
 // Cobrança da consulta. O CLIENTE NUNCA define `pago` — a confirmação vem do
@@ -174,6 +179,8 @@ model Pagamento {
   gatewayRef   String?
   criadoEm     DateTime  @default(now())
   confirmadoEm DateTime?
+
+  reembolsos Reembolso[]
 }
 
 // Triagem (anamnese) guiada pela BION IA em formato storytelling, feita APÓS o
@@ -404,4 +411,95 @@ model IdentificacaoCofre {
 
   @@index([cpfHash])
   @@index([nomeHash])
+}
+
+// =====================================================================
+// Fase financeira (regras em src/lib/server/financeiro.ts)
+// Valores novos em CENTAVOS (Int). `valor Float` antigo segue como está e é
+// convertido na leitura. Todas as tabelas: RLS ligado, sem policies e sem
+// grants (só o servidor, via Prisma, lê e grava).
+// =====================================================================
+
+// Histórico imutável de mudanças da consulta. Gravado SÓ pelo servidor, na
+// MESMA transação da alteração da Consulta.
+// tipo: cancelada | remarcada | falha_tecnica
+// por: paciente | medico | sistema | admin
+// motivo: pedido_paciente | agenda_cancelada | falha_tecnica | admin
+// dataAnterior: data/hora que estava marcada ANTES da mudança (base da multa).
+model EventoConsulta {
+  id            String    @id @default(cuid())
+  consultaId    String
+  consulta      Consulta  @relation(fields: [consultaId], references: [id], onDelete: Cascade)
+  tipo          String
+  por           String
+  atorId        String?
+  em            DateTime  @default(now())
+  dataAnterior  DateTime
+  dataNova      DateTime?
+  motivo        String
+  multaCentavos Int?
+
+  @@index([consultaId, em])
+  @@index([dataAnterior])
+  @@index([em])
+}
+
+// Devolução (total ou parcial) de um Pagamento.
+// status: solicitado | aprovado | processado | negado | falhou
+// Só UM reembolso ATIVO (solicitado | aprovado | processado) por pagamento:
+// garantido no servidor e por índice único parcial na migração SQL.
+model Reembolso {
+  id            String    @id @default(cuid())
+  pagamentoId   String
+  pagamento     Pagamento @relation(fields: [pagamentoId], references: [id], onDelete: Cascade)
+  valorCentavos Int
+  multaCentavos Int       @default(0)
+  motivo        String
+  status        String    @default("solicitado")
+  gatewayRef    String?
+  solicitadoPor String
+  criadoEm      DateTime  @default(now())
+  processadoEm  DateTime?
+
+  @@index([pagamentoId, status])
+  @@index([status, criadoEm])
+}
+
+// Repasse mensal ao médico. competencia: "AAAA-MM" (mês de Brasília).
+// status: aberto | fechado | pago
+model Repasse {
+  id                 String        @id @default(cuid())
+  medicoId           String
+  medico             User          @relation("RepasseMedico", fields: [medicoId], references: [id], onDelete: Restrict)
+  competencia        String
+  brutoCentavos      Int           @default(0)
+  taxasCentavos      Int           @default(0)
+  reembolsosCentavos Int           @default(0)
+  multasCentavos     Int           @default(0)
+  liquidoCentavos    Int           @default(0)
+  status             String        @default("aberto")
+  criadoEm           DateTime      @default(now())
+  fechadoEm          DateTime?
+  pagoEm             DateTime?
+  itens              RepasseItem[]
+
+  @@unique([medicoId, competencia])
+  @@index([competencia, status])
+}
+
+// Uma consulta entra em no máximo UM repasse.
+model RepasseItem {
+  id                 String   @id @default(cuid())
+  repasseId          String
+  repasse            Repasse  @relation(fields: [repasseId], references: [id], onDelete: Cascade)
+  consultaId         String   @unique
+  consulta           Consulta @relation(fields: [consultaId], references: [id], onDelete: Restrict)
+  brutoCentavos      Int
+  taxasCentavos      Int      @default(0)
+  reembolsosCentavos Int      @default(0)
+  multasCentavos     Int      @default(0)
+  liquidoCentavos    Int
+  criadoEm           DateTime @default(now())
+
+  @@index([repasseId])
 }

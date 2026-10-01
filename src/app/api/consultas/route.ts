@@ -10,6 +10,7 @@ import {
 } from "@/lib/server/dados";
 import { criarCobranca, confirmarPagamento, modoGateway, paraWire } from "@/lib/server/pagamentos";
 import { ok, falha } from "@/lib/server/http";
+import { STATUS_LIBERAM_HORARIO } from "@/lib/server/financeiro";
 import { partesNoFuso } from "@/lib/server/fuso";
 
 /** Ano/mês/dia formam uma data real do calendário. */
@@ -123,9 +124,9 @@ export async function POST(req: NextRequest) {
     }
 
     // P2 — conflito de horário: mesmo médico (ou mesmo paciente) já possui
-    // consulta não cancelada neste exato horário.
+    // consulta que ainda ocupa este exato horário (ver STATUS_LIBERAM_HORARIO).
     const choqueMedico = await db.consulta.findFirst({
-      where: { medicoId: medico.id, dataInicio, status: { not: "cancelada" } },
+      where: { medicoId: medico.id, dataInicio, status: { notIn: STATUS_LIBERAM_HORARIO } },
       select: { id: true },
     });
     if (choqueMedico) {
@@ -135,7 +136,7 @@ export async function POST(req: NextRequest) {
       );
     }
     const choquePaciente = await db.consulta.findFirst({
-      where: { pacienteId: usuario.id, dataInicio, status: { not: "cancelada" } },
+      where: { pacienteId: usuario.id, dataInicio, status: { notIn: STATUS_LIBERAM_HORARIO } },
       select: { id: true },
     });
     if (choquePaciente) {
