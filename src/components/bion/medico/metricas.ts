@@ -15,7 +15,7 @@ export const STATUS_ATIVOS: Consulta["status"][] = ["confirmada", "em_espera", "
 
 /**
  * "R$ 150,50" → 150.5 · "R$ 1.234,56" → 1234.56 · "R$ 150" → 150 · 150 → 150.
- * (O MedicoDashboard antigo usava `replace(/\D/g, "")` e lia "R$ 150,50" como 15050.)
+ * (O painel clássico, já removido, usava `replace(/\D/g, "")` e lia "R$ 150,50" como 15050.)
  */
 export function parseValorBRL(v: string | number | null | undefined): number {
   if (typeof v === "number") return Number.isFinite(v) ? v : 0;

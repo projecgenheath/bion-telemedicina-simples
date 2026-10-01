@@ -7,7 +7,6 @@ import {
   Camera,
   ChevronRight,
   FileText,
-  History,
   LifeBuoy,
   LogOut,
   Moon,
@@ -200,7 +199,7 @@ export function PerfilMedicoPainel({
   const tituloGrupo = "px-4 pt-3 pb-1 text-xs font-bold uppercase tracking-wider text-bion-ink/75 dark:text-bion-paper/75";
 
   return (
-    <div className="bm-painel h-full overflow-y-auto bp-coluna bp-safe-top px-5 pt-8 pb-8" aria-labelledby="bm-perfil-titulo">
+    <div className="bm-painel h-full overflow-y-auto bp-coluna bp-safe-top px-5 pt-8 pb-20" aria-labelledby="bm-perfil-titulo">
       <h2 id="bm-perfil-titulo" className="sr-only">
         Meu perfil
       </h2>
@@ -290,12 +289,6 @@ export function PerfilMedicoPainel({
       </section>
 
       <div className={`${grupo} mt-4`}>
-        <Linha
-          icone={<History className="w-4 h-4" />}
-          titulo="Versão clássica"
-          detalhe="Painel anterior do médico"
-          onClick={() => router.push("/painel?legado=1")}
-        />
         <button type="button" onClick={encerrar} className="w-full flex items-center gap-3 px-4 py-3 text-red-700 dark:text-red-300">
           <span className="w-9 h-9 rounded-xl inline-flex items-center justify-center bg-red-500/10 shrink-0">
             <LogOut className="w-4 h-4" />
@@ -304,7 +297,6 @@ export function PerfilMedicoPainel({
         </button>
       </div>
 
-      <p className="mt-6 text-center text-xs text-white/90">Arraste para a esquerda (ou tecla →) para voltar ao início</p>
     </div>
   );
 }

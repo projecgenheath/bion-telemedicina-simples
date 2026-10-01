@@ -20,7 +20,7 @@ export function TelaGestao({
   const horarios = medico ? [...medico.horariosDisponiveis].sort() : [];
 
   return (
-    <section className="bm-tela bm-tela-2 flex flex-col px-5 pt-10 pb-6" aria-labelledby="bm-t2-titulo">
+    <section className="bm-tela bm-tela-2 flex flex-col px-5 pt-10 pb-20" aria-labelledby="bm-t2-titulo">
       <h2 id="bm-t2-titulo" className="text-2xl font-black text-white">
         Gestão
       </h2>

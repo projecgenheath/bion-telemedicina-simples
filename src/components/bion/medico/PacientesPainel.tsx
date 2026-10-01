@@ -57,7 +57,7 @@ export function PacientesPainel({
         </label>
       </div>
 
-      <div className="flex-1 overflow-y-auto bp-coluna px-5 pb-6">
+      <div className="flex-1 overflow-y-auto bp-coluna px-5 pb-20">
         {listaPacientes.length === 0 ? (
           <div className="bp-glass p-6 text-center mt-4">
             <Users className="w-8 h-8 mx-auto opacity-70" aria-hidden />

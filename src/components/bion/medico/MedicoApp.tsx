@@ -160,7 +160,7 @@ export function MedicoApp() {
         </div>
       </div>
 
-      <IndicadorTelas painel={painel} secao={secao} onPainel={irPara} onSecao={irSecao} />
+      <IndicadorTelas painel={painel} secao={secao} onPainel={irPara} onSecao={irSecao} oculto={bloqueado} />
       {dica.visivel && !bloqueado ? <DicaGestos onDispensar={dica.dispensar} /> : null}
 
       {medico ? (
