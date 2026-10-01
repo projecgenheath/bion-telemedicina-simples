@@ -18,6 +18,7 @@ import { useTeleconsulta } from "@/lib/use-teleconsulta";
 import { ConsultaBarraSuperior } from "@/components/bion/consulta/BarraSuperior";
 import { ConsultaAreaVideo } from "@/components/bion/consulta/AreaVideo";
 import { ConsultaControlesMidia } from "@/components/bion/consulta/ControlesMidia";
+import { ConsultaPainelLateral } from "@/components/bion/consulta/PainelLateral";
 
 type Role = "paciente" | "medico" | "admin";
 
@@ -49,15 +50,12 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
     (a) => a.consultaId === consultaAtual?.id,
   );
 
-  // Contraparte da chamada: dados reais da consulta ativa (fallback: cena demo)
+  // Contraparte da chamada: dados reais da consulta ativa (sem nomes demo)
   const contraparteNome =
     role === "medico"
-      ? (consultaAtual?.paciente ?? "Marina Silva")
-      : (consultaAtual?.medico ?? "Dra. Ana Ribeiro");
-  const contraparteDetalhe =
-    role === "medico"
-      ? `${consultaAtual?.especialidade ?? "Clínica Geral"} • Retorno`
-      : `${consultaAtual?.especialidade ?? "Clínica Geral"} • Teleconsulta`;
+      ? (consultaAtual?.paciente ?? "Paciente")
+      : (consultaAtual?.medico ?? "Médico(a)");
+  const contraparteDetalhe = `${consultaAtual?.especialidade ?? "Consulta"} • Teleconsulta`;
   const iniciais = (nome: string) =>
     nome
       .split(" ")
@@ -124,42 +122,54 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
   const [modalAtestado, setModalAtestado] = useState(false);
   const [modalExame, setModalExame] = useState(false);
 
+  // Formulários de emissão — SEMPRE vazios: nada clínico pré-preenchido
+  // (um clique em "emitir" não pode gerar receita/atestado/exame fictício).
   // Form Receita
-  const [recTitulo, setRecTitulo] = useState("Receita — Losartana 50mg");
-  const [recMedicamento, setRecMedicamento] = useState("Losartana 50mg");
-  const [recPosologia, setRecPosologia] = useState("1 comprimido ao dia, pela manhã");
-  const [recDuracao, setRecDuracao] = useState("30 dias");
-  const [recObs, setRecObs] = useState("Medir pressão arterial 2x por semana.");
+  const [recTitulo, setRecTitulo] = useState("");
+  const [recMedicamento, setRecMedicamento] = useState("");
+  const [recPosologia, setRecPosologia] = useState("");
+  const [recDuracao, setRecDuracao] = useState("");
+  const [recObs, setRecObs] = useState("");
 
   // Form Atestado
-  const [atestDias, setAtestDias] = useState("2");
-  const [atestCid, setAtestCid] = useState("R51 (Cefaleia)");
-  const [atestObs, setAtestObs] = useState(
-    "Afastamento das atividades laborais para recuperação clínica.",
-  );
+  const [atestDias, setAtestDias] = useState("");
+  const [atestCid, setAtestCid] = useState("");
+  const [atestObs, setAtestObs] = useState("");
 
   // Form Exame
-  const [exameNome, setExameNome] = useState("Hemograma Completo");
+  const [exameNome, setExameNome] = useState("");
   const [exameUrgencia, setExameUrgencia] = useState("Rotina");
-  const [exameObs, setExameObs] = useState(
-    "Jejum de 8h recomendado. Levar documento e carteirinha do convênio.",
-  );
+  const [exameObs, setExameObs] = useState("");
 
-  // Transcrição IA em Tempo Real
-  const [transcricoes, setTranscricoes] = useState([
-    {
-      autor: "Dra. Ana Ribeiro",
-      fala: "Boa tarde, Marina. Como você tem passado desde o último atendimento?",
-    },
-    {
-      autor: "Marina Silva",
-      fala: "Boa tarde, doutora. A pressão tem ficado em torno de 12 por 8, mas tive um pouco de dor de cabeça ontem.",
-    },
-    {
-      autor: "Dra. Ana Ribeiro",
-      fala: "Excelente o controle pressórico. Vamos manter a Losartana e orientar hidratação adequada.",
-    },
-  ]);
+  const limparReceita = () => {
+    setRecTitulo("");
+    setRecMedicamento("");
+    setRecPosologia("");
+    setRecDuracao("");
+    setRecObs("");
+  };
+  const limparAtestado = () => {
+    setAtestDias("");
+    setAtestCid("");
+    setAtestObs("");
+  };
+  const limparExame = () => {
+    setExameNome("");
+    setExameUrgencia("Rotina");
+    setExameObs("");
+  };
+
+  /** Emissão só com consulta ativa e paciente identificado (por ID). */
+  const pacienteIdAtual = role === "medico" ? consultaAtual?.pacienteId : undefined;
+  const podeEmitir = () => {
+    if (!consultaAtual || !pacienteIdAtual) {
+      toast.error("Nenhuma consulta ativa identificada", {
+        description: "Não foi possível identificar o paciente desta consulta. Documento não emitido.",
+      });
+      return false;
+    }
+    return true;
+  };
 
   // ── Mídia obtida pelo hook useTeleconsulta (getUserMedia + P2P) ──
 
@@ -238,75 +248,96 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
 
   const salvarReceita = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!recMedicamento.trim() || !recPosologia.trim() || !recDuracao.trim()) return;
+    if (!podeEmitir()) return;
+    const medicamento = recMedicamento.trim();
+    const obs = recObs.trim();
     emitirDocumento(
       {
         tipo: "receita",
-        titulo: recTitulo,
+        titulo: recTitulo.trim() || `Receita — ${medicamento}`,
         medico: sessao.nome,
         paciente: contraparteNome,
-        medicamento: recMedicamento,
-        posologia: recPosologia,
-        duracao: recDuracao,
-        observacoes: recObs,
-        conteudo: `${recMedicamento} — ${recPosologia} por ${recDuracao}. ${recObs}`,
+        medicamento,
+        posologia: recPosologia.trim(),
+        duracao: recDuracao.trim(),
+        observacoes: obs,
+        conteudo: `${medicamento} — ${recPosologia.trim()} por ${recDuracao.trim()}.${obs ? ` ${obs}` : ""}`,
       },
-      consultaAtual?.pacienteId,
+      pacienteIdAtual,
     );
-    toast.success("Receita digital emitida", {
-      description: "Assinada e disponível no painel do paciente.",
+    toast.success("Receita emitida", {
+      description: "Disponível no painel do paciente. Documento sem assinatura digital ICP-Brasil.",
     });
+    limparReceita();
     setModalReceita(false);
   };
 
   const salvarAtestado = (e: React.FormEvent) => {
     e.preventDefault();
+    const dias = parseInt(atestDias, 10);
+    if (!Number.isFinite(dias) || dias < 1 || !atestObs.trim()) return;
+    if (!podeEmitir()) return;
+    const cid = atestCid.trim();
+    const obs = atestObs.trim();
+    const rotuloDias = `${dias} ${dias === 1 ? "dia" : "dias"}`;
     emitirDocumento(
       {
         tipo: "atestado",
-        titulo: `Atestado — ${atestDias} dias de afastamento`,
+        titulo: `Atestado — ${rotuloDias} de afastamento`,
         medico: sessao.nome,
         paciente: contraparteNome,
-        cid: atestCid,
-        duracao: `${atestDias} dias`,
-        observacoes: atestObs,
-        conteudo: `Atesto para os devidos fins que a paciente necessita de afastamento por ${atestDias} dias. CID: ${atestCid}. ${atestObs}`,
+        cid: cid || undefined,
+        duracao: rotuloDias,
+        observacoes: obs,
+        conteudo: `Atesto para os devidos fins que o(a) paciente necessita de afastamento por ${rotuloDias}.${cid ? ` CID: ${cid}.` : ""} ${obs}`,
       },
-      consultaAtual?.pacienteId,
+      pacienteIdAtual,
     );
-    toast.success("Atestado emitido e assinado", {
-      description: "Documento já disponível no painel do paciente.",
+    toast.success("Atestado emitido", {
+      description: "Disponível no painel do paciente. Documento sem assinatura digital ICP-Brasil.",
     });
+    limparAtestado();
     setModalAtestado(false);
   };
 
   const salvarExame = (e: React.FormEvent) => {
     e.preventDefault();
     if (!exameNome.trim()) return;
+    if (!podeEmitir()) return;
     emitirDocumento(
       {
         tipo: "exame_solicitado",
-        titulo: `Solicitação de Exame — ${exameNome}`,
+        titulo: `Solicitação de Exame — ${exameNome.trim()}`,
         medico: sessao.nome,
         paciente: contraparteNome,
         duracao: exameUrgencia,
-        observacoes: exameObs,
-        conteudo: `Solicita-se: ${exameNome} (urgência: ${exameUrgencia}). ${exameObs}`,
+        observacoes: exameObs.trim(),
+        conteudo: `Solicita-se: ${exameNome.trim()} (urgência: ${exameUrgencia}).${exameObs.trim() ? ` ${exameObs.trim()}` : ""}`,
       },
-      consultaAtual?.pacienteId,
+      pacienteIdAtual,
     );
     toast.success("Exame solicitado", {
       description: "O pedido foi enviado ao painel do paciente.",
     });
+    limparExame();
     setModalExame(false);
   };
 
   const encerrar = () => {
     // WebRTC real: avisa o outro participante e libera mídia/stream/PC
     encerrarChamada();
-    const consultaAlvo = consultas.find((c) => c.status === "confirmada");
-    // Concluir consulta é papel do médico (paciente só encerra a chamada)
-    if (consultaAlvo && role === "medico") {
-      concluirConsulta(consultaAlvo.id, anotacoes);
+    // Concluir consulta é papel do médico (paciente só encerra a chamada).
+    // C4: conclui SEMPRE a consulta desta sala (a mesma usada no WebRTC) —
+    // nunca "a primeira confirmada da lista", que pode ser de outro paciente.
+    if (role === "medico" && consultaAtual) {
+      if (consultaAtual.status === "confirmada") {
+        concluirConsulta(consultaAtual.id, anotacoes);
+      } else {
+        toast.info("Chamada encerrada", {
+          description: "A consulta não foi marcada como concluída porque não está confirmada.",
+        });
+      }
     }
     onEnd();
   };
@@ -372,6 +403,7 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
           setChatInput={setChatInput}
           enviarChat={enviarChat}
           onAnexarExame={() => fileRef.current?.click()}
+          inserirModeloResumo={inserirModeloResumo}
         />
       </div>
 
@@ -380,7 +412,7 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
         <ModalBion
           aberto
           onFechar={() => setModalReceita(false)}
-          titulo="Emitir Receita Digital"
+          titulo="Emitir Receita"
           largura="max-w-lg"
           overlay="bg-black/70 backdrop-blur-sm"
           foraFecha={false}
@@ -392,7 +424,7 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
           >
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-bold flex items-center gap-2">
-                <Pill className="w-5 h-5 text-primary" /> Emitir Receita Digital (assinatura eletrônica)
+                <Pill className="w-5 h-5 text-primary" /> Emitir Receita
               </h3>
               <button
                 type="button"
@@ -405,13 +437,13 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
 
             <div className="space-y-3 text-xs">
               <div>
-                <label className="font-bold block mb-1">Título da Receita</label>
+                <label className="font-bold block mb-1">Título da Receita (opcional)</label>
                 <input
                   aria-label="Título da Receita"
                   value={recTitulo}
                   onChange={(e) => setRecTitulo(e.target.value)}
+                  placeholder="Padrão: Receita — <medicamento>"
                   className="w-full px-3 py-2 rounded-xl border bg-background"
-                  required
                 />
               </div>
 
@@ -422,6 +454,7 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
                   aria-label="Medicamento & Dosagem"
                     value={recMedicamento}
                     onChange={(e) => setRecMedicamento(e.target.value)}
+                    placeholder="Nome, concentração e forma"
                     className="w-full px-3 py-2 rounded-xl border bg-background"
                     required
                   />
@@ -432,6 +465,7 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
                   aria-label="Duração"
                     value={recDuracao}
                     onChange={(e) => setRecDuracao(e.target.value)}
+                    placeholder="Ex.: 7 dias, uso contínuo"
                     className="w-full px-3 py-2 rounded-xl border bg-background"
                     required
                   />
@@ -444,6 +478,7 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
                   aria-label="Posologia (modo de usar)"
                   value={recPosologia}
                   onChange={(e) => setRecPosologia(e.target.value)}
+                  placeholder="Dose, via, frequência e horário"
                   className="w-full px-3 py-2 rounded-xl border bg-background"
                   required
                 />
@@ -466,7 +501,7 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
               className="w-full py-3 rounded-2xl text-primary-foreground font-bold text-xs shadow-md"
               style={{ backgroundColor: "var(--accent)" }}
             >
-              Assinar Digitalmente e Disponibilizar ao Paciente
+              Emitir e Disponibilizar ao Paciente
             </button>
           </form>
         </ModalBion>
@@ -477,7 +512,7 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
         <ModalBion
           aberto
           onFechar={() => setModalAtestado(false)}
-          titulo="Emitir Atestado Médico Digital"
+          titulo="Emitir Atestado Médico"
           largura="max-w-lg"
           overlay="bg-black/70 backdrop-blur-sm"
           foraFecha={false}
@@ -489,7 +524,7 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
           >
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-bold flex items-center gap-2">
-                <Award className="w-5 h-5 text-primary" /> Emitir Atestado Médico Digital
+                <Award className="w-5 h-5 text-primary" /> Emitir Atestado Médico
               </h3>
               <button
                 type="button"
@@ -515,13 +550,13 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
                   />
                 </div>
                 <div>
-                  <label className="font-bold block mb-1">CID-10</label>
+                  <label className="font-bold block mb-1">CID-10 (opcional)</label>
                   <input
                   aria-label="CID-10"
                     value={atestCid}
                     onChange={(e) => setAtestCid(e.target.value)}
+                    placeholder="Somente com autorização do paciente"
                     className="w-full px-3 py-2 rounded-xl border bg-background"
-                    required
                   />
                 </div>
               </div>
@@ -543,7 +578,7 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
               type="submit"
               className="w-full py-3 rounded-2xl bg-primary text-primary-foreground font-bold text-xs shadow-md"
             >
-              Emitir e Assinar Atestado
+              Emitir Atestado
             </button>
           </form>
         </ModalBion>
