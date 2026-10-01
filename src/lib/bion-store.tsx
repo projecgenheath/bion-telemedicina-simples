@@ -411,8 +411,9 @@ type Store = {
   enviarMensagem: (paraId: string, texto: string) => void;
   marcarConversaLida: (comUsuarioId: string) => void;
   emitirDocumento: (d: Omit<Documento, "id" | "data">, pacienteIdExplicito?: string) => void;
-  cancelarConsulta: (id: string, motivo: string) => void;
-  remarcarConsulta: (id: string, data: string, hora: string) => void;
+  /** Resolvem `true` só quando o servidor aceitou (erros já viram toast em `api`). */
+  cancelarConsulta: (id: string, motivo: string) => Promise<boolean>;
+  remarcarConsulta: (id: string, data: string, hora: string) => Promise<boolean>;
   concluirConsulta: (id: string, resumo?: string) => void;
   adicionarConsulta: (c: Omit<Consulta, "id" | "status" | "ts"> & { status?: "pendente_anamnese" }) => void;
   concluirAnamnese: (consultaId: string) => Promise<boolean>;
@@ -1127,21 +1128,18 @@ export function BionProvider({ children }: { children: ReactNode }) {
         body: JSON.stringify(corpo),
       });
       aplicarDelta(d);
+      return d !== null;
     },
     [aplicarDelta],
   );
 
   const cancelarConsulta = useCallback(
-    (id: string, motivo: string) => {
-      void mutarConsultaDelta(id, { acao: "cancelar", motivo });
-    },
+    (id: string, motivo: string) => mutarConsultaDelta(id, { acao: "cancelar", motivo }),
     [mutarConsultaDelta],
   );
 
   const remarcarConsulta = useCallback(
-    (id: string, data: string, hora: string) => {
-      void mutarConsultaDelta(id, { acao: "remarcar", data, hora });
-    },
+    (id: string, data: string, hora: string) => mutarConsultaDelta(id, { acao: "remarcar", data, hora }),
     [mutarConsultaDelta],
   );
 

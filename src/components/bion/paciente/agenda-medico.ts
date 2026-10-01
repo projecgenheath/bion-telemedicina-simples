@@ -41,7 +41,7 @@ export function agendaLivreDoMedico(
       .filter(
         (c) =>
           c.id !== excluirConsultaId &&
-          !["cancelada", "concluida"].includes(c.status) &&
+          !["cancelada", "concluida", "aguardando_reagendamento"].includes(c.status) &&
           (medico ? eDoMedico(c, medico) : true),
       )
       .map((c) => chaveSlot(c.dataISO ?? c.ts, c.hora)),

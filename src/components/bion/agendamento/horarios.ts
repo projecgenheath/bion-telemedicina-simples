@@ -31,7 +31,7 @@ export function diasDoAgendamento(
 ): DiaAgendamento[] {
   const ocupadosPaciente = new Set(
     consultasDoPaciente
-      .filter((c) => !["cancelada", "concluida"].includes(c.status))
+      .filter((c) => !["cancelada", "concluida", "aguardando_reagendamento"].includes(c.status))
       .map((c) => `${isoDia(c.dataISO ?? c.ts)}|${c.hora}`),
   );
   return agenda
