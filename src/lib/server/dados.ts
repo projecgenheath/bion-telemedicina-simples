@@ -97,15 +97,6 @@ async function idsPacientesDoMedico(medicoId: string): Promise<string[]> {
   return rows.map((r) => r.pacienteId);
 }
 
-async function idsMedicosDoPaciente(pacienteId: string): Promise<string[]> {
-  const rows = await db.consulta.findMany({
-    where: { pacienteId },
-    select: { medicoId: true },
-    distinct: ["medicoId"],
-  });
-  return rows.map((r) => r.medicoId);
-}
-
 /* ------------------------------------------------------------------ */
 /* Mapeadores wire (FASE 2) — FONTE ÚNICA da forma das entidades:      */
 /* usados pelo carregarDados (bootstrap/estado fresco) E pelas         */
@@ -358,10 +349,7 @@ export async function carregarDados(usuario: UsuarioSessao) {
       : {};
 
   // Dependências de visibilidade primeiro (evita carregar todos os pacientes).
-  const [idsPacientes, idsMedicos] = await Promise.all([
-    souMedico ? idsPacientesDoMedico(usuario.id) : Promise.resolve([] as string[]),
-    souPaciente ? idsMedicosDoPaciente(usuario.id) : Promise.resolve([] as string[]),
-  ]);
+  const idsPacientes = souMedico ? await idsPacientesDoMedico(usuario.id) : ([] as string[]);
 
   const [consultasRaw, medicosRaw, pacientesRaw, anamnesesRaw] = await Promise.all([
     db.consulta.findMany({
@@ -413,9 +401,13 @@ export async function carregarDados(usuario: UsuarioSessao) {
       ? { OR: [{ medicoId: usuario.id }, { pacienteId: { in: idsPacientes } }] }
       : {};
 
-  // Visibilidade de arquivos: próprios + trocados com médicos/pacientes vinculados
+  // Visibilidade de arquivos: próprios + trocados com pacientes vinculados.
+  // A3 (auditoria 2026-09): o PACIENTE vê só os PRÓPRIOS uploads. `Arquivo`
+  // não tem destinatário (usuarioId = quem enviou), então "arquivos dos meus
+  // médicos" incluía os enviados a OUTROS pacientes (vazamento LGPD). O
+  // download desses arquivos já era negado ao paciente em GET /api/arquivos.
   const arquivoWhere: Record<string, unknown> = souPaciente
-    ? { OR: [{ usuarioId: usuario.id }, { usuarioId: { in: idsMedicos } }] }
+    ? { usuarioId: usuario.id }
     : souMedico
       ? { OR: [{ usuarioId: usuario.id }, { usuarioId: { in: idsPacientes } }] }
       : {};
