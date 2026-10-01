@@ -7,6 +7,8 @@ set -uo pipefail
 cd "$(dirname "$0")/.."
 
 BASE="https://bion-telemedicina-simples.vercel.app"
+# Credenciais lidas do ambiente (nunca no código — repo público).
+SENHA="${BION_TESTE_SENHA:?defina BION_TESTE_SENHA (senha da conta de teste)}"
 AB="agent-browser"
 EVID="/home/z/my-project/download/evidencias-fase4-producao"
 mkdir -p "$EVID"
@@ -22,7 +24,7 @@ code=$(curl -s -o /dev/null -w "%{http_code}" "$BASE/" --max-time 15)
 CJAR=$(mktemp)
 code=$(curl -s -c "$CJAR" -o /dev/null -w "%{http_code}" -X POST "$BASE/api/auth/login" \
   -H "Content-Type: application/json" \
-  -d '{"email":"marina.silva@email.com","senha":"bion123456"}' --max-time 20)
+  -d "{\"email\":\"marina.silva@email.com\",\"senha\":\"$SENHA\"}" --max-time 20)
 [ "$code" = "200" ] && ok "login paciente HTTP $code" || { falha "login HTTP $code"; exit 1; }
 TOKEN=$(rg -o "bion_sessao\s+(\S+)" -r '$1' "$CJAR" | head -1)
 [ -n "$TOKEN" ] && ok "cookie de sessão obtido" || { falha "sem cookie de sessão"; exit 1; }

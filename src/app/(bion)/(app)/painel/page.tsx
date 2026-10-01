@@ -14,13 +14,16 @@ function ConteudoPainel() {
   const parametros = useSearchParams();
   const go = (v: View) => router.push(urlDa(v));
   const posConsulta = parametros.get("pos-consulta") === "1";
+  // Médico: app novo em /medico; o painel clássico segue em /painel?legado=1.
+  const medicoNovo = sessao.role === "medico" && parametros.get("legado") !== "1";
 
   // O paciente agora tem app imersivo próprio em fullscreen
   useEffect(() => {
     if (sessao.role === "paciente") router.replace("/paciente");
-  }, [sessao.role, router]);
+    else if (medicoNovo) router.replace("/medico");
+  }, [sessao.role, medicoNovo, router]);
 
-  if (sessao.role === "paciente") {
+  if (sessao.role === "paciente" || medicoNovo) {
     return <TelaCarregando texto="Abrindo seu app…" />;
   }
 

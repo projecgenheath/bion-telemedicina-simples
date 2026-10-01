@@ -11,6 +11,7 @@ import {
   Trash2,
   Copy,
   CheckCheck,
+  ArrowRight,
 } from "lucide-react";
 import type { AgendamentoCorpoProps } from "@/components/bion/agendamento/types";
 

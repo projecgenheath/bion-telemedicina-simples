@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { dataIsoClinica } from "@/lib/server/fuso";
 import ZAI from "z-ai-web-dev-sdk";
 import { db } from "@/lib/db";
 import { exigirPapel } from "@/lib/server/auth";
@@ -118,6 +119,7 @@ export async function POST(req: NextRequest) {
           tamanhoKb: Math.max(1, Math.round(arquivo.size / 1024)),
           enviadoPor: "paciente",
           usuarioId: usuario.id,
+          pacienteId: usuario.id, // A3: destinatário = o próprio paciente
           consulta: "BION IA",
         },
       });
@@ -128,7 +130,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const promptExtracao = PROMPT_EXTRACAO.replace("{HOJE}", new Date().toISOString().slice(0, 10));
+    const promptExtracao = PROMPT_EXTRACAO.replace("{HOJE}", dataIsoClinica()); // dia em São Paulo, não em UTC
     let texto = "";
 
     if (clienteLlm.tipo === "gemini") {
@@ -216,6 +218,7 @@ export async function POST(req: NextRequest) {
         tamanhoKb: Math.max(1, Math.round(arquivo.size / 1024)),
         enviadoPor: "paciente",
         usuarioId: usuario.id,
+        pacienteId: usuario.id, // A3: destinatário = o próprio paciente
         consulta: "BION IA",
       },
     });

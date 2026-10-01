@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { quandoClinica } from "@/lib/server/fuso";
 import { db } from "@/lib/db";
 import { exigirPapel } from "@/lib/server/auth";
 import { aplicarSideEffects, anamneseWire, consultaWire, perfilPacienteWire } from "@/lib/server/dados";
@@ -14,6 +15,10 @@ import {
   extrairTelefone,
   type MotorCtx,
 } from "@/lib/server/anamnese-motor";
+import { validarTelefone } from "@/lib/server/validar-perfil";
+import { dataNascimentoParaIso, idadeDeNascimento } from "@/lib/idade";
+import { anonimizarMensagensIa } from "@/lib/server/anonimizar-ia";
+import { alturaCanonica, formatarAltura, formatarPeso, lerAlturaCm, lerPesoKg, medidaCanonica, pesoCanonico } from "@/lib/medidas-paciente";
 
 /**
  * Triagem pré-consulta guiada pela BION IA (storytelling clínico).
@@ -201,7 +206,7 @@ const promptSistema = (ctx: {
   etapa: string;
   coleta: Coleta;
   perfil: string;
-}) => `Você é a BION IA, assistente clínica da plataforma de telemedicina BION. Você conduz a TRIAGEM PRÉ-CONSULTA do usuário — uma consulta de ${ctx.especialidade} com ${ctx.medico}, marcada para ${ctx.quando}. A consulta JÁ está confirmada e paga; seu papel é ouvir e organizar a história do paciente para o médico receber um dossiê pronto antes do atendimento. Dirija-se a quem fala contigo sempre como "você" — o nome dele está nos dados do perfil abaixo.
+}) => `Você é a BION IA, assistente clínica da plataforma de telemedicina BION. Você conduz a TRIAGEM PRÉ-CONSULTA do usuário — uma consulta de ${ctx.especialidade} com ${ctx.medico}, marcada para ${ctx.quando}. A consulta JÁ está confirmada e paga; seu papel é ouvir e organizar a história do paciente para o médico receber um dossiê pronto antes do atendimento. Dirija-se a quem fala contigo sempre como "você" — por privacidade, o nome e os contatos do paciente NÃO são informados a você (não pergunte por eles).
 
 ETAPA ATUAL: ${ROTULO_ETAPA[ctx.etapa] ?? ctx.etapa} (índice interno: ${ctx.etapa})
 
@@ -278,7 +283,11 @@ async function montarPerfilDados(usuarioId: string): Promise<PerfilDados | null>
     }
   };
   return {
-    idade: p.idade ?? null,
+    // M4: idade pela data de nascimento quando houver (a data em si NÃO vai ao prompt).
+    idade: (() => {
+      const iso = dataNascimentoParaIso(p.dataNascimento);
+      return (iso ? idadeDeNascimento(iso) : null) ?? p.idade ?? null;
+    })(),
     genero: p.genero || "",
     profissao: p.profissao || "",
     estadoCivil: p.estadoCivil || "",
@@ -286,28 +295,30 @@ async function montarPerfilDados(usuarioId: string): Promise<PerfilDados | null>
     alergias: lista(p.alergias),
     comorbidades: lista(p.comorbidades),
     medicamentos: lista(p.medicamentos),
-    peso: p.peso || "",
-    altura: p.altura || "",
+    // M3: legado ("62 kg", "1,68 m") normalizado para kg / cm.
+    peso: pesoCanonico(p.peso) ?? "",
+    altura: alturaCanonica(p.altura) ?? "",
     tipoSanguineo: p.tipoSanguineo || "",
     convenio: p.convenio || "",
   };
 }
 
-function perfilParaPrompt(d: PerfilDados | null, nome: string): string {
+// M6: sem identificadores diretos (nome, telefone, CPF, e-mail, data de
+// nascimento) — só o necessário para a triagem clínica.
+function perfilParaPrompt(d: PerfilDados | null): string {
   if (!d) return "Perfil não preenchido — comece a identificação perguntando o básico.";
   const lista = (v: string[]) => (v.length ? v.join(", ") : "—");
   return [
-    `Nome: ${nome}`,
     `Idade: ${d.idade || "não informada"}`,
     `Sexo: ${d.genero || "não informado"}`,
     `Profissão: ${d.profissao || "não informada"}`,
     `Estado civil: ${d.estadoCivil || "não informado"}`,
-    `Telefone: ${d.telefone || "não informado"}`,
+    `Telefone: ${d.telefone ? "cadastrado (número não enviado à IA)" : "não informado"}`,
     `Alergias/intolerâncias: ${lista(d.alergias)}`,
     `Comorbidades: ${lista(d.comorbidades)}`,
     `Medicamentos em uso: ${lista(d.medicamentos)}`,
-    `Peso: ${d.peso ? `${d.peso} kg` : "não informado"}`,
-    `Altura: ${d.altura ? `${d.altura} cm` : "não informada"}`,
+    `Peso: ${formatarPeso(d.peso) || "não informado"}`,
+    `Altura: ${formatarAltura(d.altura) || "não informada"}`,
     `Tipo sanguíneo: ${d.tipoSanguineo || "não informado"}`,
     `Convênio: ${d.convenio || "Particular"}`,
   ].join("\n");
@@ -344,8 +355,11 @@ async function aplicarPerfilAtualizacoes(
   const aplicados: string[] = [];
   const dadosPerfil: Record<string, string> = {};
 
-  if (typeof up.telefone === "string" && up.telefone.trim()) {
-    dadosPerfil.telefone = up.telefone.trim().slice(0, 40);
+  // M4: telefone vindo da IA/extração passa pela mesma validação do perfil
+  // (DDD + número, gravado normalizado); inválido é ignorado.
+  const tel = typeof up.telefone === "string" ? validarTelefone(up.telefone) : null;
+  if (tel?.ok && tel.valor) {
+    dadosPerfil.telefone = tel.valor;
     aplicados.push("telefone");
   }
   if (typeof up.profissao === "string" && up.profissao.trim()) {
@@ -357,22 +371,23 @@ async function aplicarPerfilAtualizacoes(
     aplicados.push("estado civil");
   }
 
-  const peso = Number(up.peso);
-  if (Number.isFinite(peso) && peso >= 20 && peso <= 400) {
+  // M3: leitura tolerante ("80", "80 kg", "1,68 m") e gravação canônica (kg / cm).
+  const peso = lerPesoKg(up.peso);
+  if (peso !== null) {
     const ultimo = await db.medicao.findFirst({ where: { usuarioId, tipo: "peso" }, orderBy: { criadoEm: "desc" } });
     if (!ultimo || ultimo.valor1 !== peso) {
       await db.medicao.create({ data: { usuarioId, tipo: "peso", valor1: peso } });
     }
-    dadosPerfil.peso = String(peso);
+    dadosPerfil.peso = medidaCanonica(peso);
     aplicados.push(`peso ${peso} kg`);
   }
-  const altura = Number(up.altura);
-  if (Number.isFinite(altura) && altura >= 50 && altura <= 250) {
+  const altura = lerAlturaCm(up.altura);
+  if (altura !== null) {
     const ultimo = await db.medicao.findFirst({ where: { usuarioId, tipo: "altura" }, orderBy: { criadoEm: "desc" } });
     if (!ultimo || ultimo.valor1 !== altura) {
       await db.medicao.create({ data: { usuarioId, tipo: "altura", valor1: altura } });
     }
-    dadosPerfil.altura = String(altura);
+    dadosPerfil.altura = medidaCanonica(altura);
     aplicados.push(`altura ${altura} cm`);
   }
 
@@ -450,8 +465,7 @@ export async function POST(req: NextRequest) {
 
     const perfilDados = await montarPerfilDados(usuario.id);
 
-    const quando = consulta.dataInicio.toLocaleDateString("pt-BR", { day: "numeric", month: "long" }) +
-      " às " + consulta.dataInicio.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+    const quando = quandoClinica(consulta.dataInicio, { day: "numeric", month: "long" });
 
     // Contexto do motor determinístico — usado no caminho 2 E pelas garantias
     // do SERVIDOR no caminho 1 (ponte de etapa e guarda de qualidade).
@@ -521,7 +535,7 @@ export async function POST(req: NextRequest) {
                 quando,
                 etapa: etapaAtual,
                 coleta: coletaAtual,
-                perfil: perfilParaPrompt(perfilDados, usuario.nome),
+                perfil: perfilParaPrompt(perfilDados),
               }) + (instrucaoAbertura ? `\n\n${instrucaoAbertura}` : ""),
           },
           ...historico.map((m) => ({
@@ -530,7 +544,22 @@ export async function POST(req: NextRequest) {
           })),
           { role: "user" as const, content: mensagem || "(retomar etapa)" },
         ];
-        const llmRes = await chatComFonte(mensagens, TIMEOUT_LLM_MS, anonNomes(usuario, consulta.medico.nome, perfilDados?.genero ?? ""));
+        // M6: identificadores diretos do paciente saem de todo o texto (prompt
+        // e mensagens digitadas) para QUALQUER canal de IA. A extração
+        // determinística de telefone/peso/altura usa a `mensagem` original.
+        const idsPerfil = await db.perfilPaciente.findUnique({
+          where: { userId: usuario.id },
+          select: { cpf: true, telefone: true, dataNascimento: true },
+        });
+        const mensagensIa = anonimizarMensagensIa(mensagens, {
+          nome: usuario.nome,
+          email: usuario.email,
+          cpf: idsPerfil?.cpf,
+          telefone: idsPerfil?.telefone,
+          dataNascimento: dataNascimentoParaIso(idsPerfil?.dataNascimento),
+          substitutoNome: (perfilDados?.genero ?? "").toLowerCase().startsWith("m") ? "o paciente" : "a paciente",
+        });
+        const llmRes = await chatComFonte(mensagensIa, TIMEOUT_LLM_MS, anonNomes(usuario, consulta.medico.nome, perfilDados?.genero ?? ""));
         llmFonte = llmRes.fonte;
         parsed = llmRes.texto ? extrairJson(llmRes.texto) : null;
 
@@ -786,8 +815,7 @@ export async function PATCH(req: NextRequest) {
       return ok({ ...(atualizada ? { anamnese: anamneseWire(atualizada) } : {}) });
     }
 
-    const quando = consulta.dataInicio.toLocaleDateString("pt-BR") +
-      " às " + consulta.dataInicio.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+    const quando = quandoClinica(consulta.dataInicio);
 
     await db.$transaction([
       db.anamnese.update({ where: { id: anamnese.id }, data: { status: "concluida", etapa: "fechamento" } }),

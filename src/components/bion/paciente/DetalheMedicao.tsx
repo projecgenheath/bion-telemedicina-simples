@@ -15,6 +15,7 @@ import {
   X,
 } from "lucide-react";
 import { useBion } from "@/lib/bion-store";
+import { calcularImc, formatarAltura, formatarPeso, lerAlturaCm, lerPesoKg } from "@/lib/medidas-paciente";
 import { GraficoLinha } from "./GraficoLinha";
 
 /**
@@ -102,7 +103,8 @@ function FormMedicao({
   rotuloBotao,
 }: {
   campos: { id: string; rotulo: string; placeholder: string; min: number; max: number; passo: number }[];
-  aoSalvar: (valores: number[]) => void;
+  /** M1: devolve true só quando o servidor confirmou — aí o formulário é limpo. */
+  aoSalvar: (valores: number[]) => Promise<boolean>;
   enviando: boolean;
   rotuloBotao: string;
 }) {
@@ -130,7 +132,8 @@ function FormMedicao({
         ))}
       </div>
       <button type="button"
-        onClick={() => {
+        onClick={async () => {
+          if (enviando) return;
           const nums: number[] = [];
           for (const c of campos) {
             const n = Number((valores[c.id] ?? "").replace(",", "."));
@@ -140,8 +143,8 @@ function FormMedicao({
             }
             nums.push(n);
           }
-          aoSalvar(nums);
-          setValores({});
+          // M1: em falha os valores digitados continuam no formulário.
+          if (await aoSalvar(nums)) setValores({});
         }}
         disabled={enviando}
         className="bp-acao w-full mt-4 py-3 text-sm inline-flex items-center justify-center gap-2"
@@ -168,8 +171,9 @@ function DetalheImc({ onFechar }: { onFechar: () => void }) {
     [medicoes],
   );
 
-  const alturaAtual = alturas.at(-1)?.valor1 ?? Number((pacientePerfil?.altura ?? "").replace(",", ".")) ?? undefined;
-  const pesoAtual = pesos.at(-1)?.valor1 ?? Number((pacientePerfil?.peso ?? "").replace(",", ".")) ?? undefined;
+  // M3: perfil lido de forma tolerante (legado "62 kg" / "1,68 m") em kg / cm.
+  const alturaAtual = alturas.at(-1)?.valor1 ?? lerAlturaCm(pacientePerfil?.altura) ?? undefined;
+  const pesoAtual = pesos.at(-1)?.valor1 ?? lerPesoKg(pacientePerfil?.peso) ?? undefined;
 
   const serieImc = useMemo(() => {
     return pesos
@@ -184,7 +188,7 @@ function DetalheImc({ onFechar }: { onFechar: () => void }) {
       .slice(-12);
   }, [pesos, alturas, alturaAtual]);
 
-  const imcAtual = pesoAtual && alturaAtual ? pesoAtual / Math.pow(alturaAtual / 100, 2) : null;
+  const imcAtual = calcularImc(pesoAtual, alturaAtual);
   const classe = imcAtual ? classificarImc(imcAtual) : null;
 
   return (
@@ -195,7 +199,7 @@ function DetalheImc({ onFechar }: { onFechar: () => void }) {
             <div className="text-4xl font-black text-bion-ink dark:text-bion-paper">{imcAtual.toFixed(1)}</div>
             <div className={`text-sm font-semibold mt-1 ${classe?.cor}`}>{classe?.rotulo}</div>
             <div className="text-xs text-bion-ink/60 dark:text-bion-paper/60 mt-1">
-              {pesoAtual} kg · {alturaAtual} cm
+              {formatarPeso(pesoAtual)} · {formatarAltura(alturaAtual)}
             </div>
           </>
         ) : (
@@ -225,11 +229,17 @@ function DetalheImc({ onFechar }: { onFechar: () => void }) {
           { id: "altura", rotulo: "Altura (cm)", placeholder: alturaAtual ? String(alturaAtual) : "170", min: 50, max: 250, passo: 1 },
         ]}
         aoSalvar={async ([peso, altura]) => {
+          // M1: sucesso só quando o servidor confirmou as duas medições.
           setEnviando(true);
           const okPeso = await registrarMedicao("peso", peso);
-          const okAltura = await registrarMedicao("altura", altura);
+          const okAltura = okPeso ? await registrarMedicao("altura", altura) : false;
           setEnviando(false);
-          if (okPeso || okAltura) toast.success("Medições atualizadas.");
+          if (okPeso && okAltura) {
+            toast.success("Medições atualizadas.");
+            return true;
+          }
+          if (okPeso) toast.warning("O peso foi salvo, mas a altura não. Tente salvar a altura de novo.");
+          return false;
         }}
         enviando={enviando}
         rotuloBotao="Atualizar peso e altura"
@@ -329,6 +339,7 @@ function DetalhePa({ onFechar }: { onFechar: () => void }) {
           const ok = await registrarMedicao("pa", sis, dia);
           setEnviando(false);
           if (ok) toast.success("Pressão registrada.");
+          return ok;
         }}
         enviando={enviando}
         rotuloBotao="Registrar pressão"

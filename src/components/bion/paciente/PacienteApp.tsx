@@ -20,11 +20,18 @@ import {
   RefreshCw,
   X,
   ChevronUp,
+  Undo2,
 } from "lucide-react";
-import { toast } from "sonner";
 import { useBion } from "@/lib/bion-store";
+import { fmtCurta, fmtHora, fmtTicketData, type Consulta } from "@/lib/bion-tipos";
+import { toast } from "sonner";
+import { calcularImc, lerAlturaCm, lerPesoKg } from "@/lib/medidas-paciente";
 import { MESES_AGENDA } from "./constantes";
-import { agendaLivreDoMedico, acharMedicoDaConsulta } from "./agenda-medico";
+import { acharMedicoDaConsulta } from "./agenda-medico";
+import { CancelarRemarcarSheet, type AcaoSheet } from "./CancelarRemarcarSheet";
+import { fmtCentavos, rotuloReembolso, usePreviaCancelamento } from "./usePreviaCancelamento";
+import { desistirRemarcacao, iniciarRemarcacaoComMulta, useRecarregarEstado } from "./useRemarcacaoComMulta";
+import { EtiquetaStatus, PedirReembolsoSheet } from "./PedirReembolsoSheet";
 import { GraficoLinha, type PontoGrafico } from "./GraficoLinha";
 import { DetalheMedicao, type Detalhe } from "./DetalheMedicao";
 import dynamic from "next/dynamic";
@@ -60,7 +67,7 @@ const rotuloCurto = (iso: string) => {
 
 export function PacienteApp() {
   const router = useRouter();
-  const { sessao, pacientePerfil, consultas, anamneses, lembretes, medicoes, exames, sair, cancelarConsulta, remarcarConsulta, medicos } = useBion();
+  const { sessao, pacientePerfil, consultas, anamneses, lembretes, medicoes, exames, sair, medicos } = useBion();
 
   const carrosselRef = useRef<HTMLDivElement>(null);
   const [painel, setPainel] = useState(1);
@@ -74,10 +81,8 @@ export function PacienteApp() {
     quando: string;
   } | null>(null);
   const [listaConsultasAberta, setListaConsultasAberta] = useState(false);
-  const [modalConsulta, setModalConsulta] = useState<{ id: string; acao: "cancelar" | "remarcar" } | null>(null);
-  const [motivoCancel, setMotivoCancel] = useState("");
-  const [novaData, setNovaData] = useState("");
-  const [novaHora, setNovaHora] = useState("09:00");
+  const [modalConsulta, setModalConsulta] = useState<{ id: string; acao: AcaoSheet } | null>(null);
+  const [reembolsoConsultaId, setReembolsoConsultaId] = useState<string | null>(null);
   const arrastandoRef = useRef(false);
   const inicioArrasteX = useRef(0);
   const inicioArrasteScroll = useRef(0);
@@ -129,6 +134,46 @@ export function PacienteApp() {
 
   const proxima = proximas[0];
 
+  /** Médico cancelou o dia (ou falha técnica): o paciente escolhe remarcar ou reembolso integral. */
+  const aguardandoReagendamento = useMemo(
+    () =>
+      consultas
+        .filter((c) => c.paciente === sessao.nome && c.status === "aguardando_reagendamento")
+        .sort((a, b) => a.ts - b.ts),
+    [consultas, sessao.nome],
+  );
+
+  /** Remarcação com multa reservada (nova data aguardando pagamento; a data original segue valendo). */
+  const comRemarcacaoPendente = useMemo(
+    () =>
+      consultas.filter(
+        (c) =>
+          c.paciente === sessao.nome &&
+          c.remarcacaoPendente?.status === "pendente" &&
+          new Date(c.remarcacaoPendente.expiraEm).getTime() > Date.now(),
+      ),
+    [consultas, sessao.nome],
+  );
+
+  /** Canceladas e pagas dos últimos 60 dias: acompanham o status do reembolso (máx. 3). */
+  /** Faltas pagas dos últimos 30 dias (máx. 3): pedido manual de reembolso em até 7 dias. */
+  const faltasRecentes = useMemo(() => {
+    const limite = Date.now() - 30 * 86_400_000;
+    return consultas
+      .filter((c) => c.paciente === sessao.nome && c.falta && c.pago && c.ts >= limite)
+      .sort((a, b) => b.ts - a.ts)
+      .slice(0, 3);
+  }, [consultas, sessao.nome]);
+  const consultaReembolso = reembolsoConsultaId ? consultas.find((c) => c.id === reembolsoConsultaId) : undefined;
+
+  const canceladasComPagamento = useMemo(() => {
+    const limite = Date.now() - 60 * 86_400_000;
+    return consultas
+      .filter((c) => c.paciente === sessao.nome && c.status === "cancelada" && c.pago && c.ts >= limite)
+      .sort((a, b) => b.ts - a.ts)
+      .slice(0, 3);
+  }, [consultas, sessao.nome]);
+
   const janelaSala = (ts: number) => Date.now() >= ts - 30 * 60_000 && Date.now() <= ts + 2 * 3_600_000;
   const janelaTriagem = (c: { ts: number; pago?: boolean; status: string }) =>
     ["confirmada", "pendente_anamnese"].includes(c.status) &&
@@ -146,20 +191,6 @@ export function PacienteApp() {
 
   const consultaModal = modalConsulta ? consultas.find((c) => c.id === modalConsulta.id) : undefined;
   const medicoModal = acharMedicoDaConsulta(consultaModal, medicos);
-  const agendaLivre = useMemo(
-    () =>
-      modalConsulta?.acao === "remarcar"
-        ? agendaLivreDoMedico(medicoModal, consultas, modalConsulta.id)
-        : [],
-    [modalConsulta, medicoModal, consultas],
-  );
-
-  useEffect(() => {
-    if (modalConsulta?.acao !== "remarcar" || !agendaLivre.length) return;
-    const dia = agendaLivre.find((d) => d.iso === novaData) ?? agendaLivre[0];
-    if (novaData !== dia.iso) setNovaData(dia.iso);
-    if (!dia.horarios.includes(novaHora)) setNovaHora(dia.horarios[0] ?? "");
-  }, [modalConsulta, agendaLivre, novaData, novaHora]);
 
   const abrirTriagem = (consultaId: string) => {
     const c = consultas.find((x) => x.id === consultaId);
@@ -194,10 +225,13 @@ export function PacienteApp() {
     [medicoes],
   );
 
-  const alturaAtual =
-    alturas.at(-1)?.valor1 ?? Number((pacientePerfil?.altura ?? "").replace(",", ".")) ?? undefined;
-  const pesoAtual = pesos.at(-1)?.valor1 ?? Number((pacientePerfil?.peso ?? "").replace(",", ".")) ?? undefined;
-  const imcAtual = pesoAtual && alturaAtual ? pesoAtual / Math.pow(alturaAtual / 100, 2) : null;
+  // M3: perfil lido de forma tolerante (legado "62 kg" / "1,68 m") em kg / cm.
+  const alturaAtual = useMemo(
+    () => alturas.at(-1)?.valor1 ?? lerAlturaCm(pacientePerfil?.altura) ?? undefined,
+    [alturas, pacientePerfil?.altura],
+  );
+  const pesoAtual = pesos.at(-1)?.valor1 ?? lerPesoKg(pacientePerfil?.peso) ?? undefined;
+  const imcAtual = calcularImc(pesoAtual, alturaAtual);
 
   const serieImc: PontoGrafico[] = useMemo(
     () =>
@@ -246,7 +280,7 @@ export function PacienteApp() {
         role="group"
         tabIndex={0}
         onScroll={aoRolar}
-        className={`bp-carrossel flex h-full overflow-x-auto ${chatAberto || triagemSlide || modalConsulta || detalhe ? "pointer-events-none" : ""}`}
+        className={`bp-carrossel flex h-full overflow-x-auto ${chatAberto || triagemSlide || modalConsulta || consultaReembolso || detalhe ? "pointer-events-none" : ""}`}
         aria-label="Painéis do app: perfil, início e documentos (arraste para os lados)"
       >
         {/* ============================== PERFIL ============================== */}
@@ -291,6 +325,25 @@ export function PacienteApp() {
                 Como você está se sentindo hoje?
               </p>
             </div>
+
+            {/* Cards: médico cancelou — remarcar ou reembolso integral, sem multa */}
+            {aguardandoReagendamento.map((c) => (
+              <CardAguardandoReagendamento
+                key={c.id}
+                consulta={c}
+                onRemarcar={() => setModalConsulta({ id: c.id, acao: "remarcar" })}
+                onReembolso={() => setModalConsulta({ id: c.id, acao: "reembolso" })}
+              />
+            ))}
+
+            {/* Cards: nova data reservada aguardando pagamento da multa */}
+            {comRemarcacaoPendente.map((c) => (
+              <CardRemarcacaoPendente
+                key={c.id}
+                consulta={c}
+                onContinuar={() => setModalConsulta({ id: c.id, acao: "remarcar" })}
+              />
+            ))}
 
             {/* Card: próxima consulta */}
             {proxima ? (
@@ -358,21 +411,14 @@ export function PacienteApp() {
                   ) : null}
                   <button
                     type="button"
-                    onClick={() => {
-                      setNovaData("");
-                      setNovaHora("09:00");
-                      setModalConsulta({ id: proxima.id, acao: "remarcar" });
-                    }}
+                    onClick={() => setModalConsulta({ id: proxima.id, acao: "remarcar" })}
                     className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-bold bg-bion-ink/8 dark:bg-white/10"
                   >
                     <RefreshCw className="w-3.5 h-3.5" /> Remarcar
                   </button>
                   <button
                     type="button"
-                    onClick={() => {
-                      setMotivoCancel("");
-                      setModalConsulta({ id: proxima.id, acao: "cancelar" });
-                    }}
+                    onClick={() => setModalConsulta({ id: proxima.id, acao: "cancelar" })}
                     className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-bold text-destructive bg-destructive/10"
                   >
                     <X className="w-3.5 h-3.5" /> Cancelar
@@ -443,21 +489,14 @@ export function PacienteApp() {
                         ) : null}
                         <button
                           type="button"
-                          onClick={() => {
-                            setNovaData("");
-                            setNovaHora("09:00");
-                            setModalConsulta({ id: c.id, acao: "remarcar" });
-                          }}
+                          onClick={() => setModalConsulta({ id: c.id, acao: "remarcar" })}
                           className="inline-flex items-center gap-1 rounded-full px-2.5 py-1.5 text-[11px] font-bold bg-bion-ink/8 dark:bg-white/10"
                         >
                           <RefreshCw className="w-3 h-3" /> Remarcar
                         </button>
                         <button
                           type="button"
-                          onClick={() => {
-                            setMotivoCancel("");
-                            setModalConsulta({ id: c.id, acao: "cancelar" });
-                          }}
+                          onClick={() => setModalConsulta({ id: c.id, acao: "cancelar" })}
                           className="inline-flex items-center gap-1 rounded-full px-2.5 py-1.5 text-[11px] font-bold text-destructive bg-destructive/10"
                         >
                           <X className="w-3 h-3" /> Cancelar
@@ -468,6 +507,16 @@ export function PacienteApp() {
                 })}
               </div>
             ) : null}
+
+            {/* Status do reembolso das consultas canceladas (some se não houver reembolso) */}
+            {/* Faltas: pedido manual de reembolso (prazo de 7 dias) e status do pedido */}
+            {faltasRecentes.map((c) => (
+              <CardFalta key={c.id} consulta={c} onAbrir={() => setReembolsoConsultaId(c.id)} />
+            ))}
+
+            {canceladasComPagamento.map((c) => (
+              <CardReembolso key={c.id} consulta={c} />
+            ))}
 
             {/* Card hero: BION IA — agendamento com anamnese */}
             <button type="button"
@@ -739,7 +788,7 @@ export function PacienteApp() {
       </div>
 
       {/* Indicador de painéis — some quando há overlay para não cobrir cards */}
-      {!(chatAberto || triagemSlide || modalConsulta || detalhe) ? (
+      {!(chatAberto || triagemSlide || modalConsulta || consultaReembolso || detalhe) ? (
       <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 rounded-full bg-zinc-950/80 text-white backdrop-blur px-3 py-2 pointer-events-auto">
         {[
           { idx: 0, rotulo: "Perfil" },
@@ -793,118 +842,224 @@ export function PacienteApp() {
         />
       ) : null}
 
-      {modalConsulta ? (
-        <div className="absolute inset-0 z-[80] flex items-end justify-center" role="dialog" aria-modal="true">
+      {modalConsulta && consultaModal ? (
+        <CancelarRemarcarSheet
+          key={`${modalConsulta.id}-${modalConsulta.acao}`}
+          consulta={consultaModal}
+          acao={modalConsulta.acao}
+          medico={medicoModal}
+          consultas={consultas}
+          onFechar={() => setModalConsulta(null)}
+          onPagarMulta={iniciarRemarcacaoComMulta}
+        />
+      ) : null}
+
+      {consultaReembolso ? (
+        <PedirReembolsoSheet
+          key={consultaReembolso.id}
+          consulta={consultaReembolso}
+          onFechar={() => setReembolsoConsultaId(null)}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Cards da fase financeira                                            */
+/* ------------------------------------------------------------------ */
+
+function CardAguardandoReagendamento({
+  consulta,
+  onRemarcar,
+  onReembolso,
+}: {
+  consulta: Consulta;
+  onRemarcar: () => void;
+  onReembolso: () => void;
+}) {
+  return (
+    <div className="bp-glass p-5 w-full mb-3 border border-amber-500/40" role="group" aria-label={`Consulta de ${consulta.especialidade} cancelada pelo médico: escolha remarcar ou reembolso integral`}>
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-xs font-bold uppercase tracking-wider text-bion-ink/50 dark:text-white/50">Ação necessária</span>
+        <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-300">
+          Aguardando reagendamento
+        </span>
+      </div>
+      <div className="text-xl font-bold">{consulta.especialidade}</div>
+      <div className="text-sm opacity-70">com {consulta.medico}</div>
+      <div className="mt-2 inline-flex items-center gap-2 text-sm font-semibold opacity-60 line-through">
+        <CalendarClock className="w-4 h-4" /> {consulta.data} · {consulta.hora}
+      </div>
+      <p className="text-sm mt-3 leading-relaxed">
+        O médico cancelou — escolha remarcar ou reembolso integral, <strong className="font-bold">sem multa</strong>.
+      </p>
+      <div className="mt-4 flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={onRemarcar}
+          className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-bold bg-bion-ink text-white dark:bg-white dark:text-bion-ink"
+        >
+          <RefreshCw className="w-3.5 h-3.5" /> Remarcar sem multa
+        </button>
+        {consulta.pago !== false ? (
           <button
             type="button"
-            className="absolute inset-0 bg-black/80"
-            aria-label="Fechar"
-            onClick={() => setModalConsulta(null)}
-          />
-          <div className="relative w-full max-w-lg rounded-t-3xl bg-zinc-950 text-white border-t border-white/10 px-5 pt-3 pb-8 shadow-[0_-12px_40px_rgba(0,0,0,0.55)]">
-            <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-white/25" aria-hidden />
-            {modalConsulta.acao === "cancelar" ? (
-              <>
-                <h2 className="text-lg font-bold">Cancelar consulta?</h2>
-                <p className="text-sm text-white/60 mt-1">O médico será avisado. Informe um motivo, se quiser.</p>
-                <textarea
-                  value={motivoCancel}
-                  onChange={(e) => setMotivoCancel(e.target.value)}
-                  className="mt-3 w-full rounded-xl border border-white/15 bg-zinc-900 p-3 text-sm text-white placeholder:text-white/40"
-                  rows={3}
-                  placeholder="Motivo (opcional)"
-                />
-                <div className="flex gap-2 mt-5">
-                  <button type="button" onClick={() => setModalConsulta(null)} className="flex-1 py-3 rounded-xl border border-white/15 text-sm font-semibold">
-                    Voltar
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      cancelarConsulta(modalConsulta.id, motivoCancel || "Cancelado pelo paciente");
-                      toast.success("Consulta cancelada");
-                      setModalConsulta(null);
-                    }}
-                    className="flex-1 py-3 rounded-xl bg-red-600 text-white text-sm font-semibold"
-                  >
-                    Confirmar cancelamento
-                  </button>
-                </div>
-              </>
-            ) : (
-              <>
-                <h2 className="text-lg font-bold">Remarcar consulta</h2>
-                <p className="text-sm text-white/60 mt-1">
-                  Horários livres na agenda de {consultaModal?.medico ?? "seu médico"}.
-                </p>
-                {agendaLivre.length === 0 ? (
-                  <p className="mt-4 text-sm text-amber-200">
-                    Não há vaga na agenda deste médico nos próximos 14 dias.
-                  </p>
-                ) : (
-                  <>
-                    <label className="block text-xs font-bold mt-4 mb-2 text-white/80">Data</label>
-                    <div className="flex gap-2 overflow-x-auto pb-1">
-                      {agendaLivre.map((d) => (
-                        <button
-                          key={d.iso}
-                          type="button"
-                          onClick={() => {
-                            setNovaData(d.iso);
-                            setNovaHora(d.horarios.includes(novaHora) ? novaHora : d.horarios[0]);
-                          }}
-                          className={`shrink-0 rounded-2xl px-3 py-2 text-left border ${
-                            novaData === d.iso ? "border-sky-400 bg-sky-400/15" : "border-white/10 bg-zinc-900"
-                          }`}
-                        >
-                          <span className="block text-sm font-bold">{d.rotulo}</span>
-                          <span className="block text-[11px] text-white/50">{d.sub}</span>
-                        </button>
-                      ))}
-                    </div>
-                    <label className="block text-xs font-bold mt-4 mb-2 text-white/80">Horário</label>
-                    <div className="grid grid-cols-3 gap-2">
-                      {(agendaLivre.find((d) => d.iso === novaData)?.horarios ?? []).map((h) => (
-                        <button
-                          key={h}
-                          type="button"
-                          onClick={() => setNovaHora(h)}
-                          className={`py-2.5 rounded-xl text-sm font-semibold border ${
-                            novaHora === h ? "border-sky-400 bg-sky-400 text-zinc-950" : "border-white/10 bg-zinc-900"
-                          }`}
-                        >
-                          {h}
-                        </button>
-                      ))}
-                    </div>
-                  </>
-                )}
-                <div className="flex gap-2 mt-5">
-                  <button type="button" onClick={() => setModalConsulta(null)} className="flex-1 py-3 rounded-xl border border-white/15 text-sm font-semibold">
-                    Voltar
-                  </button>
-                  <button
-                    type="button"
-                    disabled={!novaData || !novaHora || agendaLivre.length === 0}
-                    onClick={() => {
-                      if (!novaData || !novaHora) {
-                        toast.error("Escolha um horário da agenda do médico");
-                        return;
-                      }
-                      remarcarConsulta(modalConsulta.id, novaData, novaHora);
-                      toast.success("Consulta remarcada");
-                      setModalConsulta(null);
-                    }}
-                    className="flex-1 py-3 rounded-xl bg-sky-500 text-zinc-950 text-sm font-bold disabled:opacity-40"
-                  >
-                    Confirmar novo horário
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
+            onClick={onReembolso}
+            className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-bold bg-emerald-600/15 text-emerald-800 dark:text-emerald-200"
+          >
+            <Undo2 className="w-3.5 h-3.5" /> Reembolso integral
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function CardReembolso({ consulta }: { consulta: Consulta }) {
+  const { previa } = usePreviaCancelamento(consulta.id, consulta.status);
+  const r = previa?.reembolso;
+  if (!r) return null;
+  const rotulo = rotuloReembolso(r.status);
+  const cor =
+    rotulo.tom === "ok"
+      ? "bg-emerald-600/15 text-emerald-800 dark:text-emerald-200"
+      : rotulo.tom === "erro"
+        ? "bg-destructive/10 text-destructive"
+        : "bg-sky-500/15 text-sky-800 dark:text-sky-200";
+  return (
+    <div className="bp-glass mt-3 w-full px-5 py-4" aria-label={`Reembolso da consulta de ${consulta.especialidade}: ${rotulo.texto}`}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <span className="block text-xs font-bold uppercase tracking-wider opacity-50">Consulta cancelada</span>
+          <span className="block text-sm font-bold truncate">
+            {consulta.especialidade} · {consulta.data} {consulta.hora}
+          </span>
         </div>
-      ) : null}
+        <span className={`text-[10px] font-bold px-2 py-1 rounded-full shrink-0 ${cor}`}>{rotulo.texto}</span>
+      </div>
+      <p className="text-xs opacity-70 mt-2">
+        Valor do reembolso: <strong className="font-bold">{fmtCentavos(r.valorCentavos)}</strong>
+        {r.multaCentavos > 0 ? ` (multa de ${fmtCentavos(r.multaCentavos)} descontada)` : ""}
+        {r.processadoEm ? ` · concluído em ${fmtTicketData(r.processadoEm)}` : ` · solicitado em ${fmtTicketData(r.criadoEm)}`}
+      </p>
+    </div>
+  );
+}
+
+function CardRemarcacaoPendente({ consulta, onContinuar }: { consulta: Consulta; onContinuar: () => void }) {
+  const recarregarEstado = useRecarregarEstado();
+  const [confirmando, setConfirmando] = useState(false);
+  const [enviando, setEnviando] = useState(false);
+  const r = consulta.remarcacaoPendente;
+  if (!r) return null;
+  const novaData = `${fmtCurta(r.novaData)} às ${fmtHora(r.novaData)}`;
+
+  const desistir = async () => {
+    if (!confirmando) {
+      setConfirmando(true);
+      return;
+    }
+    setEnviando(true);
+    const res = await desistirRemarcacao(consulta.id);
+    if (res.ok) {
+      await recarregarEstado();
+      toast.success(`Remarcação desfeita — a consulta continua em ${consulta.data} às ${consulta.hora}`);
+    } else {
+      toast.error(res.erro ?? "Não foi possível desistir da remarcação.");
+    }
+    setEnviando(false);
+    setConfirmando(false);
+  };
+
+  return (
+    <div className="bp-glass p-5 w-full mb-3 border border-sky-500/40" role="group" aria-label={`Remarcação de ${consulta.especialidade} aguardando pagamento da multa`}>
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-xs font-bold uppercase tracking-wider text-bion-ink/50 dark:text-white/50">Remarcação</span>
+        <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-sky-500/15 text-sky-800 dark:text-sky-200">
+          Aguardando pagamento
+        </span>
+      </div>
+      <div className="text-xl font-bold">{consulta.especialidade}</div>
+      <div className="text-sm opacity-70">com {consulta.medico}</div>
+      <p className="text-sm mt-3 leading-relaxed">
+        Nova data <strong className="font-bold">{novaData}</strong> reservada, aguardando pagamento da multa de{" "}
+        <strong className="font-bold">{fmtCentavos(r.multaCentavos)}</strong> até {fmtHora(r.expiraEm)}.
+      </p>
+      <p className="text-xs opacity-60 mt-1 inline-flex items-center gap-1.5">
+        <CalendarClock className="w-3.5 h-3.5" /> Vale a data original até o pagamento: {consulta.data} · {consulta.hora}
+      </p>
+      <div className="mt-4 flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={onContinuar}
+          className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-bold bg-bion-ink text-white dark:bg-white dark:text-bion-ink"
+        >
+          <RefreshCw className="w-3.5 h-3.5" /> Continuar pagamento
+        </button>
+        <button
+          type="button"
+          onClick={() => void desistir()}
+          disabled={enviando}
+          className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-bold text-destructive bg-destructive/10 disabled:opacity-40"
+        >
+          <X className="w-3.5 h-3.5" /> {confirmando ? "Confirmar desistência" : "Desistir"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function CardFalta({ consulta, onAbrir }: { consulta: Consulta; onAbrir: () => void }) {
+  const pedido = consulta.reembolsoManual;
+  const prazo = consulta.podePedirAte;
+  const prazoAberto = !!prazo && Date.now() < new Date(prazo).getTime();
+  // Sem pedido e fora do prazo: nada a fazer — o card some.
+  if (!pedido && !prazoAberto) return null;
+
+  return (
+    <div className="bp-glass mt-3 w-full px-5 py-4" role="group" aria-label={`Falta na consulta de ${consulta.especialidade}`}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <span className="block text-xs font-bold uppercase tracking-wider opacity-50">
+            {pedido ? "Pedido de reembolso" : "Consulta não realizada"}
+          </span>
+          <span className="block text-sm font-bold truncate">
+            {consulta.especialidade} · {consulta.data} {consulta.hora}
+          </span>
+        </div>
+        {pedido ? <EtiquetaStatus status={pedido.status} claro /> : null}
+      </div>
+      {pedido ? (
+        <>
+          {pedido.status === "negado" && pedido.respostaAdmin ? (
+            <p className="text-xs opacity-80 mt-2">
+              <strong className="font-bold">Resposta da equipe:</strong> {pedido.respostaAdmin}
+            </p>
+          ) : null}
+          <button
+            type="button"
+            onClick={onAbrir}
+            className="mt-3 inline-flex items-center gap-1 rounded-full px-2.5 py-1.5 text-[11px] font-bold bg-bion-ink/8 dark:bg-white/10"
+          >
+            <FileText className="w-3 h-3" /> Ver detalhes
+          </button>
+        </>
+      ) : (
+        <>
+          <p className="text-sm mt-2 leading-relaxed">
+            Você não entrou na consulta de {consulta.data} às {consulta.hora}. Se teve um motivo, pode pedir reembolso até{" "}
+            <strong className="font-bold">{fmtTicketData(prazo!)}</strong>.
+          </p>
+          <button
+            type="button"
+            onClick={onAbrir}
+            className="mt-3 inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-bold bg-bion-ink text-white dark:bg-white dark:text-bion-ink"
+          >
+            <Undo2 className="w-3.5 h-3.5" /> Pedir reembolso
+          </button>
+        </>
+      )}
     </div>
   );
 }

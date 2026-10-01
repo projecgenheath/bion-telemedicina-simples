@@ -9,7 +9,12 @@
  * Uso: bunx tsx scripts/medir_latencia_producao.ts
  */
 const BASE = "https://bion-telemedicina-simples.vercel.app";
-const SENHA = "bion123456";
+// Credencial lida do ambiente (nunca no código — repo público).
+const SENHA = process.env.BION_TESTE_SENHA?.trim() ?? "";
+if (!SENHA) {
+  console.error("Defina BION_TESTE_SENHA (senha da conta de teste) para rodar este script.");
+  process.exit(1);
+}
 
 async function cronometrar(nome: string, fn: () => Promise<number | string>) {
   const t0 = Date.now();

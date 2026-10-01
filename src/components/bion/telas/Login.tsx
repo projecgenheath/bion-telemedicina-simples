@@ -7,10 +7,12 @@ import { toast } from "sonner";
 import { useBion } from "@/lib/bion-store";
 import { Logo } from "@/components/bion/brand";
 
-const CONTAS_DEMO: Record<Role, { email: string; senha: string }> = {
-  paciente: { email: "marina.silva@email.com", senha: "bion123456" },
-  medico: { email: "ana.ribeiro@med.bion.app", senha: "bion123456" },
-  admin: { email: "admin@bion.app", senha: "bion123456" },
+// Só os e-mails das contas demo: a senha NUNCA vai para o bundle do cliente
+// (repo público). Ela é definida no seed via SEED_DEMO_PASSWORD/SEED_ADMIN_PASSWORD.
+const CONTAS_DEMO: Record<Role, { email: string }> = {
+  paciente: { email: "marina.silva@email.com" },
+  medico: { email: "ana.ribeiro@med.bion.app" },
+  admin: { email: "admin@bion.app" },
 };
 
 /** Contas demo só em desenvolvimento ou com NEXT_PUBLIC_DEMO_LOGINS=1 */
@@ -54,7 +56,7 @@ export function Login() {
     setEnviando(false);
     if (r.ok) {
       toast.success("Bem-vindo(a) de volta!");
-      router.replace(r.role === "paciente" ? "/paciente" : "/painel");
+      router.replace(r.role === "paciente" ? "/paciente" : r.role === "medico" ? "/medico" : "/painel");
     } else {
       setFormErro("Não foi possível entrar. Verifique e-mail e senha.");
     }
@@ -92,7 +94,7 @@ export function Login() {
     setEnviando(false);
     if (r.ok) {
       toast.success("Conta criada com sucesso! Bem-vindo(a) ao BION.");
-      router.replace(r.role === "paciente" ? "/paciente" : "/painel");
+      router.replace(r.role === "paciente" ? "/paciente" : r.role === "medico" ? "/medico" : "/painel");
     } else {
       setFormErro("Não foi possível criar a conta. Tente novamente.");
     }
@@ -337,7 +339,7 @@ export function Login() {
           {!modoCadastro && DEMO_HABILITADO && (
             <div className="pt-3 border-t space-y-2">
               <div className="text-xs font-bold text-muted-foreground uppercase tracking-wider text-center">
-                Contas de demonstração — senha: bion123456
+                Contas de demonstração (ambiente de testes)
               </div>
               <div className="grid grid-cols-3 gap-2">
                 {(
@@ -350,10 +352,7 @@ export function Login() {
                   <button
                     key={r}
                     type="button"
-                    onClick={() => {
-                      trocarAba(r);
-                      setSenha("bion123456");
-                    }}
+                    onClick={() => trocarAba(r)}
                     className="px-2 py-2 rounded-xl border text-xs font-bold text-muted-foreground hover:border-primary hover:text-primary transition truncate"
                     title={email}
                   >

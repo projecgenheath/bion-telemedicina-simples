@@ -1,5 +1,6 @@
 import { jsPDF } from "jspdf";
 import type { Documento } from "@/lib/bion-store";
+import { formatarDataNascimento, idadeDeNascimento } from "@/lib/idade";
 
 export type MedicamentoUso = {
   nome: string;
@@ -11,10 +12,40 @@ export type MedicamentoUso = {
 const AZUL: [number, number, number] = [24, 92, 200];
 const CINZA: [number, number, number] = [110, 120, 135];
 
+const anos = (n: number) => `${n} ${n === 1 ? "ano" : "anos"}`;
+
+/**
+ * Linha de identificação com nascimento e idade (M4).
+ * - Com data válida: "Data de nascimento: DD/MM/AAAA (N anos)" — a data é
+ *   lida como dia de calendário (sem fuso) e a idade é calculada para o "hoje"
+ *   de America/Sao_Paulo.
+ * - Sem data: a idade legada do perfil ("Idade: N anos"), se houver.
+ * - Sem nenhum dos dois: null (a linha é omitida).
+ */
+export function linhaNascimentoProntuario(
+  dataNascimento: string | null | undefined,
+  idadeLegada: number | null | undefined,
+  agora: Date = new Date(),
+): string | null {
+  const data = formatarDataNascimento(dataNascimento);
+  if (data) {
+    const idade = idadeDeNascimento(dataNascimento as string, agora);
+    return idade === null ? `Data de nascimento: ${data}` : `Data de nascimento: ${data} (${anos(idade)})`;
+  }
+  if (typeof idadeLegada === "number" && Number.isFinite(idadeLegada) && idadeLegada > 0) {
+    return `Idade: ${anos(idadeLegada)}`;
+  }
+  return null;
+}
+
 export function gerarProntuarioPDF(opts: {
   paciente: string;
   documentos: Documento[];
   medicamentos: MedicamentoUso[];
+  /** "YYYY-MM-DD" do perfil do paciente, ou null/ausente. */
+  dataNascimento?: string | null;
+  /** Idade do perfil (legado), usada só quando não há data de nascimento. */
+  idade?: number | null;
 }) {
   const doc = new jsPDF({ unit: "pt", format: "a4" });
   const L = 48;
@@ -71,6 +102,11 @@ export function gerarProntuarioPDF(opts: {
   y += 18;
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
+  const nascimento = linhaNascimentoProntuario(opts.dataNascimento, opts.idade);
+  if (nascimento) {
+    doc.text(nascimento, L, y);
+    y += 14;
+  }
   doc.setTextColor(...CINZA);
   doc.text(
     `Emitido em ${new Date().toLocaleString("pt-BR")} • ${opts.documentos.length} documento(s)`,

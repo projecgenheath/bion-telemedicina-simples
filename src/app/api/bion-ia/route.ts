@@ -1,8 +1,11 @@
 import { NextRequest } from "next/server";
+import { quandoClinica } from "@/lib/server/fuso";
 import { db } from "@/lib/db";
 import { exigirSessao } from "@/lib/server/auth";
 import { ok, falha } from "@/lib/server/http";
 import { chatComFonte, registrosGemini, type AnonNomes } from "@/lib/server/llm";
+import { anonimizarMensagensIa, type IdentificadoresPaciente } from "@/lib/server/anonimizar-ia";
+import { dataNascimentoParaIso } from "@/lib/idade";
 
 /**
  * BION IA — assistente clínico (backend apenas).
@@ -53,7 +56,7 @@ async function montarContexto(
     if (proximas.length) {
       const rotulos = proximas.map(
         (c) =>
-          `${c.especialidade} com ${c.medico.nome} em ${c.dataInicio.toLocaleDateString("pt-BR")} às ${c.dataInicio.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`,
+          `${c.especialidade} com ${c.medico.nome} em ${quandoClinica(c.dataInicio)}`,
       );
       linhas.push(`Próximas consultas confirmadas: ${rotulos.join("; ")}.`);
     }
@@ -81,8 +84,32 @@ async function montarContexto(
  * interrogatório de sintomas. A triagem guiada só existe no fluxo de
  * agendamento (rota /api/anamnese), fora deste chat.
  */
-const instrucoesBase = (nome: string, role: string) =>
-  `Você é a BION IA. Fale com ${nome} (${role}) em PT-BR, 1 a 4 frases, direto. Não prescreva. Urgência: SAMU 192. Triagem não é neste chat.`;
+// M6: o nome do usuário NÃO vai mais no prompt (identificador direto).
+const instrucoesBase = (role: string) =>
+  `Você é a BION IA. Fale com o usuário (${role}) em PT-BR, tratando-o por "você", 1 a 4 frases, direto. Não prescreva. Urgência: SAMU 192. Triagem não é neste chat.`;
+
+/**
+ * M6: identificadores diretos do usuário (nome, e-mail e, para paciente, CPF,
+ * telefone e data de nascimento) para remover do texto enviado à IA externa.
+ */
+async function identificadoresDoUsuario(usuario: {
+  id: string;
+  nome: string;
+  email: string;
+  role: string;
+}): Promise<IdentificadoresPaciente> {
+  const ids: IdentificadoresPaciente = {
+    nome: usuario.nome,
+    email: usuario.email,
+    substitutoNome: usuario.role === "PACIENTE" ? "o paciente" : "o usuário",
+  };
+  if (usuario.role !== "PACIENTE") return ids;
+  const p = await db.perfilPaciente.findUnique({
+    where: { userId: usuario.id },
+    select: { cpf: true, telefone: true, dataNascimento: true },
+  });
+  return p ? { ...ids, cpf: p.cpf, telefone: p.telefone, dataNascimento: dataNascimentoParaIso(p.dataNascimento) } : ids;
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -101,16 +128,21 @@ export async function POST(req: NextRequest) {
     const ultima = (body.mensagens ?? []).at(-1)?.texto?.trim() ?? "";
     const saudacao = /^(oi|ol[áa]|boa\s+(noite|tarde|dia)|e a[ií]|hey)[\s!.?]*$/i.test(ultima);
     const contexto = saudacao ? "" : await montarContexto(usuario);
-    const mensagens = [
-      {
-        role: "assistant" as const,
-        content: instrucoesBase(usuario.nome, usuario.role) + contexto,
-      },
-      ...historico.map((m) => ({
-        role: m.remetente === "usuario" ? ("user" as const) : ("assistant" as const),
-        content: m.texto.trim().slice(0, 4000),
-      })),
-    ];
+    // M6: identificadores diretos saem de TODO o texto (prompt + histórico
+    // digitado) antes de qualquer canal de IA — não só no canal público.
+    const mensagens = anonimizarMensagensIa(
+      [
+        {
+          role: "assistant" as const,
+          content: instrucoesBase(usuario.role) + contexto,
+        },
+        ...historico.map((m) => ({
+          role: m.remetente === "usuario" ? ("user" as const) : ("assistant" as const),
+          content: m.texto.trim().slice(0, 4000),
+        })),
+      ],
+      await identificadoresDoUsuario(usuario),
+    );
 
     // IA generativa em cadeia; nomes reais são removidos no canal público.
     const primeiroNome = usuario.nome.split(" ")[0] ?? "";

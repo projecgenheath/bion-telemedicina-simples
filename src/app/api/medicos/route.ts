@@ -3,8 +3,8 @@ import { db } from "@/lib/db";
 import { exigirPapel, hashSenha } from "@/lib/server/auth";
 import { aplicarSideEffects, medicoWire, slugEmail } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
-
-const SENHA_PADRAO = "bion123456"; // política P0: mínimo 10 chars
+import { gerarSenhaTemporaria, sufixoAleatorio } from "@/lib/server/senha-temporaria";
+import { emailNorm, isErro } from "@/lib/server/validar";
 
 /** Cadastro de médico pela administração. Auditoria gerada PELO SERVIDOR. */
 export async function POST(req: NextRequest) {
@@ -12,6 +12,8 @@ export async function POST(req: NextRequest) {
     const admin = await exigirPapel("ADMIN");
     const body = (await req.json()) as {
       nome: string;
+      /** Opcional: e-mail real do médico. Sem ele, gera um login não adivinhável. */
+      email?: string;
       crm: string;
       especialidade: string;
       subespecialidades?: string[];
@@ -28,20 +30,37 @@ export async function POST(req: NextRequest) {
       return Response.json({ erro: "Nome, CRM e especialidade são obrigatórios." }, { status: 400 });
     }
 
-    let email = slugEmail(body.nome, "med.bion.app");
-    let tentativa = 1;
-    while (await db.user.findUnique({ where: { email } })) {
-      email = slugEmail(body.nome, "med.bion.app").replace("@", `${++tentativa}@`);
+    // Auditoria admin (C2): o login não pode mais ser adivinhado pelo nome
+    // ("nome.sobrenome@med.bion.app"). Usa o e-mail real, se informado, ou
+    // um e-mail gerado com sufixo aleatório.
+    let email: string;
+    if (body.email?.trim()) {
+      const emailOk = emailNorm(body.email);
+      if (isErro(emailOk)) {
+        return Response.json({ erro: "Informe um e-mail válido do médico." }, { status: 400 });
+      }
+      email = emailOk;
+      if (await db.user.findUnique({ where: { email } })) {
+        return Response.json({ erro: "Já existe uma conta com este e-mail." }, { status: 409 });
+      }
+    } else {
+      do {
+        email = slugEmail(body.nome, "med.bion.app").replace("@", `.${sufixoAleatorio()}@`);
+      } while (await db.user.findUnique({ where: { email } }));
     }
 
-    const senhaHash = await hashSenha(SENHA_PADRAO);
+    // Auditoria admin (C2): senha temporária ALEATÓRIA por conta (antes era
+    // uma senha fixa pública). Devolvida uma única vez ao admin, abaixo.
+    const senhaTemporaria = gerarSenhaTemporaria();
+    const senhaHash = await hashSenha(senhaTemporaria);
     const user = await db.user.create({
       data: {
         nome: body.nome.trim(),
         email,
         senhaHash,
         role: "MEDICO",
-        // V4: nasce com senha padrão — troca obrigatória no primeiro acesso
+        // V4: nasce com senha temporária — troca obrigatória no primeiro acesso
+        // (bloqueada no servidor por exigirSessao enquanto pendente)
         precisaTrocarSenha: true,
         perfilMedico: {
           create: {
@@ -75,7 +94,13 @@ export async function POST(req: NextRequest) {
       include: { user: { select: { id: true, nome: true } } },
     });
 
-    return ok({ ...(perfil ? { medico: medicoWire(perfil) } : {}), ...efeitos });
+    // `credenciais` só existe NESTA resposta (não é persistida em texto puro
+    // nem gravada na auditoria): a UI mostra uma vez para o admin repassar.
+    return ok({
+      ...(perfil ? { medico: medicoWire(perfil) } : {}),
+      ...efeitos,
+      credenciais: { email, senhaTemporaria },
+    });
   } catch (erro) {
     return falha(erro);
   }

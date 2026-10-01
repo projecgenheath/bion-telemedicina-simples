@@ -1,5 +1,6 @@
 "use client";
 
+import { formatarDataNascimento } from "@/lib/idade";
 import { useMemo, useState } from "react";
 import {
   ArrowLeft,
@@ -16,39 +17,50 @@ import { useBion } from "@/lib/bion-store";
 export function MedicoPacientes() {
   const { consultas, documentos, avaliacoes, pacientes, sessao } = useBion();
   const [busca, setBusca] = useState("");
-  const [selecionado, setSelecionado] = useState<string | null>(null);
+  // Chave do paciente selecionado: o id quando existe (homônimos existem);
+  // "nome:<nome>" só para consultas antigas sem pacienteId.
+  const [chaveSelecionada, setChaveSelecionada] = useState<string | null>(null);
+
+  const minhas = useMemo(
+    () =>
+      consultas.filter((c) => (c.medicoId && sessao.id ? c.medicoId === sessao.id : c.medico === sessao.nome)),
+    [consultas, sessao.id, sessao.nome],
+  );
 
   const meusPacientes = useMemo(() => {
-    const nomes = new Set(
-      consultas.filter((c) => c.medico === sessao.nome).map((c) => c.paciente),
-    );
-    const lista = Array.from(nomes);
-    return lista
-      .filter((n) => n.toLowerCase().includes(busca.toLowerCase()))
-      .map((nome) => {
-        const doPaciente = consultas.filter((c) => c.medico === sessao.nome && c.paciente === nome);
-        const registro = pacientes.find((p) => p.nome === nome);
+    const porChave = new Map<string, string>();
+    for (const c of minhas) porChave.set(chavePaciente(c), c.paciente);
+    return Array.from(porChave.entries())
+      .filter(([, nome]) => nome.toLowerCase().includes(busca.toLowerCase()))
+      .map(([chave, nome]) => {
+        const doPaciente = minhas.filter((c) => chavePaciente(c) === chave);
+        const registro = chave.startsWith("nome:") ? undefined : pacientes.find((p) => p.id === chave);
         return {
+          chave,
           nome,
           registro,
           total: doPaciente.length,
           ultima: doPaciente.sort((a, b) => b.ts - a.ts)[0],
         };
       });
-  }, [consultas, pacientes, busca, sessao.nome]);
+  }, [minhas, pacientes, busca]);
 
-  if (selecionado) {
-    const consultasPaciente = consultas
-      .filter((c) => c.paciente === selecionado)
+  const atual = chaveSelecionada ? meusPacientes.find((p) => p.chave === chaveSelecionada) : undefined;
+  const selecionado = atual?.nome ?? null;
+
+  if (chaveSelecionada && selecionado) {
+    const consultasPaciente = minhas
+      .filter((c) => chavePaciente(c) === chaveSelecionada)
       .sort((a, b) => b.ts - a.ts);
     const docsPaciente = documentos.filter((d) => d.paciente === selecionado);
     const avalsPaciente = avaliacoes.filter((a) => a.paciente === selecionado);
-    const registro = pacientes.find((p) => p.nome === selecionado);
+    // Documentos e avaliações ainda só trazem o nome do paciente.
+    const registro = atual?.registro;
 
     return (
       <div className="max-w-4xl mx-auto space-y-6">
         <button type="button"
-          onClick={() => setSelecionado(null)}
+          onClick={() => setChaveSelecionada(null)}
           className="flex items-center gap-1.5 text-xs font-bold text-muted-foreground hover:text-foreground transition"
         >
           <ArrowLeft className="w-4 h-4" /> Voltar para a lista
@@ -66,7 +78,11 @@ export function MedicoPacientes() {
             <h1 className="text-xl md:text-2xl font-extrabold text-foreground">{selecionado}</h1>
             <p className="text-xs text-muted-foreground">
               {registro
-                ? `${registro.idade} anos • ${registro.genero} • ${registro.convenio}`
+                ? `${registro.idade} anos${
+                    formatarDataNascimento(registro.dataNascimento)
+                      ? ` (nasc. ${formatarDataNascimento(registro.dataNascimento)})`
+                      : ""
+                  } • ${registro.genero} • ${registro.convenio}`
                 : "Paciente atendido na BION"}
             </p>
           </div>
@@ -171,8 +187,8 @@ export function MedicoPacientes() {
         ) : (
           meusPacientes.map((p) => (
             <button type="button"
-              key={p.nome}
-              onClick={() => setSelecionado(p.nome)}
+              key={p.chave}
+              onClick={() => setChaveSelecionada(p.chave)}
               className="w-full text-left bg-card border rounded-2xl p-4 flex items-center gap-4 hover:border-primary/50 transition"
             >
               <div className="w-11 h-11 rounded-xl bg-primary-soft text-primary flex items-center justify-center font-extrabold shrink-0">
@@ -238,4 +254,8 @@ function Bloco({
 
 function Vazio({ texto }: { texto: string }) {
   return <p className="text-xs text-muted-foreground text-center py-4">{texto}</p>;
+}
+
+function chavePaciente(c: { pacienteId?: string; paciente: string }) {
+  return c.pacienteId ?? `nome:${c.paciente}`;
 }

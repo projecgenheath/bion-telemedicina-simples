@@ -15,7 +15,17 @@ bash scripts/dev.sh        # sobe em http://localhost:3000
 
 O `scripts/dev.sh` garante que a `DATABASE_URL` do `.env` prevaleça sobre qualquer variável global do ambiente.
 
-### Contas demo (senha: `bion123456`)
+### Contas demo (somente banco local/descartável)
+
+As senhas **não ficam mais no repositório**. O seed exige variáveis de ambiente e se
+recusa a rodar em produção ou contra o projeto Supabase de produção:
+
+```bash
+BION_PERMITIR_SEED=1 SEED_ADMIN_PASSWORD='<senha-forte-admin>' SEED_DEMO_PASSWORD='<senha-forte-demo>' bun prisma/seed.ts
+```
+
+`SEED_ADMIN_PASSWORD` vale para `admin@bion.app`; `SEED_DEMO_PASSWORD` para as demais contas
+(10–64 caracteres, letras e números). Veja `.env.example`.
 
 | Papel | E-mail |
 |---|---|
@@ -96,7 +106,7 @@ scripts/                  # testes E2E, auditoria de API, ativação Supabase, v
 
 - **PostgreSQL (Supabase) é o banco oficial em todos os ambientes** — o `prisma/schema.prisma` é o schema único (provider `postgresql`). Não há mais alternância nem fallback SQLite.
 - **Produção:** ver `supabase/README.md` para trocar a `DATABASE_URL` e rodar `bash scripts/supabase_ativar.sh`.
-- **Local:** aponte o `.env` para o Session Pooler do Supabase e rode `bun prisma db push && bun prisma/seed.ts`.
+- **Local:** aponte o `.env` para um banco **descartável** e rode `bun prisma db push` e o seed (com as variáveis acima). O seed **apaga todas as tabelas** e é bloqueado em produção.
 
 ## Hardening (auditoria de produção)
 

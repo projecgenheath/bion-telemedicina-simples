@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   Stethoscope,
@@ -27,6 +27,8 @@ import {
   CheckCheck,
 } from "lucide-react";
 import { useBion, type Medico } from "@/lib/bion-store";
+import { agendaLivreDoMedico } from "@/components/bion/paciente/agenda-medico";
+import { diasDoAgendamento, selecaoValida } from "@/components/bion/agendamento/horarios";
 import { ModalBion } from "@/components/bion/ModalBion";
 import {
   ESPECIALIDADES,
@@ -43,13 +45,15 @@ export function AgendamentoFluxo({
   onDone: () => void;
   onGoToWaitingRoom: () => void;
 }) {
-  const { medicos, sessao, adicionarConsulta, adicionarArquivo } = useBion();
+  const { medicos, consultas, sessao, adicionarConsulta, adicionarArquivo } = useBion();
 
   const [step, setStep] = useState(0);
   const [especialidade, setEspecialidade] = useState("Clínica Geral");
   const [medicoSelecionado, setMedicoSelecionado] = useState<Medico | null>(null);
-  const [dataSelecionada, setDataSelecionada] = useState("Hoje");
-  const [horaSelecionada, setHoraSelecionada] = useState("14:30");
+  // Escolha do paciente: dia pela chave ISO (fuso da clínica) — o rótulo
+  // "Hoje"/"Amanhã" muda de significado na virada do dia, o ISO não.
+  const [diaEscolhidoIso, setDiaEscolhidoIso] = useState("");
+  const [horaEscolhida, setHoraEscolhida] = useState("");
   const [motivoTexto, setMotivoTexto] = useState("");
   const [sintomasEscolhidos, setSintomasEscolhidos] = useState<string[]>([]);
   const [arquivosAnexados, setArquivosAnexados] = useState<
@@ -64,12 +68,73 @@ export function AgendamentoFluxo({
   const [cartaoParcelas, setCartaoParcelas] = useState("1");
   const [processandoPagamento, setProcessandoPagamento] = useState(false);
   const [medicoModal, setMedicoModal] = useState<Medico | null>(null);
+  // Data/hora "congeladas" enquanto o servidor processa e depois de confirmada:
+  // a consulta criada passa a ocupar o slot e a seleção derivada ficaria vazia.
+  const [selecaoCongelada, setSelecaoCongelada] = useState<{ data: string; hora: string } | null>(
+    null,
+  );
+  // Relógio de 1 minuto: horários que passam a ficar no passado somem da lista.
+  const [minutoAtual, setMinutoAtual] = useState(() => Math.floor(Date.now() / 60_000));
+  useEffect(() => {
+    const id = setInterval(() => setMinutoAtual(Math.floor(Date.now() / 60_000)), 60_000);
+    return () => clearInterval(id);
+  }, []);
+
+  // adicionarConsulta não devolve sucesso/erro (em erro o store mostra a
+  // mensagem do servidor e não cria nada). Para saber se a consulta foi de
+  // fato criada, comparamos a lista de consultas após o próximo commit.
+  const consultasRef = useRef(consultas);
+  const aguardandoCommitRef = useRef<Array<() => void>>([]);
+  const [, forcarRender] = useReducer((n: number) => n + 1, 0);
+  useEffect(() => {
+    consultasRef.current = consultas;
+    const pendentes = aguardandoCommitRef.current;
+    aguardandoCommitRef.current = [];
+    pendentes.forEach((resolver) => resolver());
+  });
+  const proximoCommit = () =>
+    new Promise<void>((resolver) => {
+      aguardandoCommitRef.current.push(resolver);
+      forcarRender();
+    });
 
   const steps = PASSOS_AGENDAMENTO;
 
   const medicosFiltrados = medicos.filter(
     (m) => m.status === "ativo" && (!especialidade || m.especialidade === especialidade),
   );
+
+  const medicoAtual = medicoSelecionado ?? medicosFiltrados[0] ?? medicos[0];
+
+  // Agenda LIVRE do médico no fuso da clínica (horariosDisponiveis do médico,
+  // sem horários passados nem já ocupados por consultas conhecidas no cliente)
+  // e sem horários em que o próprio paciente já tem consulta. Outras reservas
+  // de outros pacientes só o servidor conhece: o 409 dele continua valendo.
+  const diasDisponiveis = useMemo(
+    () => diasDoAgendamento(agendaLivreDoMedico(medicoAtual, consultas), consultas),
+    [medicoAtual, consultas, minutoAtual],
+  );
+
+  // Seleção efetiva: se o dia saiu da agenda ou a hora não está mais livre
+  // nele (troca de médico/especialidade, virada do dia, vaga ocupada), a
+  // escolha é descartada e o paciente escolhe de novo.
+  const selecao = selecaoValida(diasDisponiveis, diaEscolhidoIso, horaEscolhida);
+  // Rótulo enviado ao servidor: "Hoje" | "Amanhã" | "D Mês" (parseDataHora).
+  const dataSelecionada = selecaoCongelada?.data ?? selecao.dia?.rotulo ?? "";
+  const horaSelecionada = selecaoCongelada?.hora ?? selecao.hora;
+
+  const setDataSelecionada = (rotulo: string) => {
+    setDiaEscolhidoIso(diasDisponiveis.find((d) => d.rotulo === rotulo)?.iso ?? "");
+  };
+  const setHoraSelecionada = (hora: string) => setHoraEscolhida(hora);
+
+  const escolherMedico = (m: Medico | null) => {
+    if (m?.id !== medicoSelecionado?.id) {
+      setDiaEscolhidoIso("");
+      setHoraEscolhida("");
+    }
+    setMedicoSelecionado(m);
+  };
 
   const proximoPasso = () => setStep((s) => Math.min(s + 1, steps.length - 1));
   const passoAnterior = () => setStep((s) => Math.max(s - 1, 0));
@@ -103,73 +168,86 @@ export function AgendamentoFluxo({
     setTimeout(() => setPixCopiado(false), 2500);
   };
 
-  const finalizarAgendamento = () => {
+  const finalizarAgendamento = async () => {
+    if (processandoPagamento) return;
+
+    const med = medicoAtual;
+    if (!med) {
+      toast.error("Escolha um médico para continuar.");
+      setStep(1);
+      return;
+    }
+    if (!selecao.dia || !selecao.hora) {
+      toast.error("Esse horário não está mais disponível", {
+        description: "Escolha outro dia ou horário livre na agenda do médico.",
+      });
+      setStep(selecao.dia ? 3 : 2);
+      return;
+    }
+
+    const data = selecao.dia.rotulo;
+    const hora = selecao.hora;
+    const motivoCompleto =
+      [...sintomasEscolhidos, motivoTexto.trim() ? motivoTexto.trim() : ""]
+        .filter(Boolean)
+        .join(" • ") || "Consulta de rotina";
+
     setProcessandoPagamento(true);
+    setSelecaoCongelada({ data, hora });
+    const idsAntes = new Set(consultasRef.current.map((c) => c.id));
 
-    setTimeout(() => {
+    try {
+      await Promise.resolve(
+        adicionarConsulta({
+          medico: med.nome,
+          medicoId: med.id,
+          especialidade: med.especialidade,
+          paciente: sessao.nome,
+          data,
+          hora,
+          motivoConsulta: motivoCompleto,
+          valor: `R$ ${med.valor}`,
+        }),
+      );
+      await proximoCommit();
+    } finally {
       setProcessandoPagamento(false);
+    }
 
-      const med = medicoSelecionado ?? medicosFiltrados[0] ?? medicos[0];
-      const motivoCompleto =
-        [...sintomasEscolhidos, motivoTexto.trim() ? motivoTexto.trim() : ""]
-          .filter(Boolean)
-          .join(" • ") || "Consulta de rotina";
+    const criada = consultasRef.current.find(
+      (c) => !idsAntes.has(c.id) && (c.medicoId ? c.medicoId === med.id : c.medico === med.nome),
+    );
 
-      adicionarConsulta({
-        medico: med.nome,
-        medicoId: med.id,
-        especialidade: med.especialidade,
-        paciente: sessao.nome,
-        data: dataSelecionada,
-        hora: horaSelecionada,
-        motivoConsulta: motivoCompleto,
-        valor: `R$ ${med.valor}`,
+    if (!criada) {
+      // Servidor recusou (ex.: 409 horário já ocupado, horário no passado) ou
+      // falha de rede: o store já mostrou a mensagem do servidor. Nada foi
+      // reservado nem cobrado — volta para a escolha de horário.
+      setSelecaoCongelada(null);
+      setHoraEscolhida("");
+      toast.error("Consulta não reservada", {
+        description: "Nenhum pagamento foi confirmado. Escolha outro horário e tente novamente.",
       });
+      setStep(3);
+      return;
+    }
 
-      // Salva arquivos anexados no histórico
-      arquivosAnexados.forEach((a) => {
-        adicionarArquivo({
-          nome: a.nome,
-          tipo: a.tipo,
-          tamanhoKb: a.tamanhoKb,
-          enviadoPor: "paciente",
-          consulta: `${med.especialidade} — ${med.nome}`,
-        });
+    // Salva arquivos anexados no histórico (só com a consulta criada)
+    arquivosAnexados.forEach((a) => {
+      adicionarArquivo({
+        nome: a.nome,
+        tipo: a.tipo,
+        tamanhoKb: a.tamanhoKb,
+        enviadoPor: "paciente",
+        consulta: `${med.especialidade} — ${med.nome}`,
       });
+    });
 
-      toast.success("Pagamento aprovado! Consulta reservada", {
-        description: `${med.nome} — ${dataSelecionada} às ${horaSelecionada}. Complete a anamnese para confirmar.`,
-      });
+    toast.success("Pagamento aprovado! Consulta reservada", {
+      description: `${med.nome} — ${data} às ${hora}. Complete a anamnese para confirmar.`,
+    });
 
-      proximoPasso();
-    }, 900);
+    setStep(steps.length - 1);
   };
-
-  // Gerador de datas dos próximos 14 dias
-  const diasDisponiveis = Array.from({ length: 14 }).map((_, i) => {
-    const d = new Date();
-    d.setDate(d.getDate() + i);
-    const diaNum = d.getDate();
-    const meses = [
-      "Jan",
-      "Fev",
-      "Mar",
-      "Abr",
-      "Mai",
-      "Jun",
-      "Jul",
-      "Ago",
-      "Set",
-      "Out",
-      "Nov",
-      "Dez",
-    ];
-    const sem = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"][d.getDay()];
-    const rotulo = i === 0 ? "Hoje" : i === 1 ? "Amanhã" : `${diaNum} ${meses[d.getMonth()]}`;
-    return { rotulo, sem, diaNum, mes: meses[d.getMonth()] };
-  });
-
-  const medicoAtual = medicoSelecionado ?? medicosFiltrados[0] ?? medicos[0];
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -182,7 +260,7 @@ export function AgendamentoFluxo({
         medicos={medicos}
         medicosFiltrados={medicosFiltrados}
         medicoSelecionado={medicoSelecionado}
-        setMedicoSelecionado={setMedicoSelecionado}
+        setMedicoSelecionado={escolherMedico}
         setMedicoModal={setMedicoModal}
         proximoPasso={proximoPasso}
         dataSelecionada={dataSelecionada}
@@ -190,6 +268,7 @@ export function AgendamentoFluxo({
         horaSelecionada={horaSelecionada}
         setHoraSelecionada={setHoraSelecionada}
         diasDisponiveis={diasDisponiveis}
+        irParaPasso={setStep}
         motivoTexto={motivoTexto}
         setMotivoTexto={setMotivoTexto}
         sintomasEscolhidos={sintomasEscolhidos}
@@ -289,7 +368,7 @@ export function AgendamentoFluxo({
               </div>
               <button type="button"
                 onClick={() => {
-                  setMedicoSelecionado(medicoModal);
+                  escolherMedico(medicoModal);
                   setMedicoModal(null);
                   proximoPasso();
                 }}

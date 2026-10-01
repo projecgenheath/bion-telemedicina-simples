@@ -1,9 +1,13 @@
 import "server-only";
+import { instanteNoFuso, partesNoFuso } from "./fuso";
 import { broadcastCanal } from "@/lib/supabase/broadcast";
 import { canalNotificacoes } from "@/lib/supabase/realtime";
 import { db } from "@/lib/db";
 import type { Prisma } from "@prisma/client";
 import type { UsuarioSessao } from "./auth";
+import { whereArquivosVisiveis } from "./arquivos-acesso";
+import { alturaCanonica, pesoCanonico } from "@/lib/medidas-paciente";
+import { dataNascimentoParaIso, idadeDeNascimento } from "@/lib/idade";
 
 /* ------------------------------------------------------------------ */
 /* Utilitários de data (rótulos do cliente: "Hoje", "Amanhã", "12 Dez") */
@@ -16,47 +20,55 @@ export const MESES = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out
 /**
  * Converte rótulos de data usados pela interface + hora "HH:MM" em Date.
  * Aceita: "Hoje", "Amanhã", "12 Dez", "12 Dez 2026", "2025-12-18", "18/12/2025".
+ *
+ * Fuso (2026-09): data e hora são horário de parede de America/Sao_Paulo,
+ * independente do fuso do processo (Vercel = UTC). "Hoje"/"Amanhã" também são
+ * relativos ao dia em São Paulo. Ex.: ("2026-10-01", "14:00") → 2026-10-01T17:00:00.000Z.
+ * `agora` só existe para teste.
  */
-export function parseDataHora(data: string, hora: string): Date {
-  const d = new Date();
-  d.setSeconds(0, 0);
+export function parseDataHora(data: string, hora: string, agora: Date = new Date()): Date {
+  const [hhBruto, mmBruto] = (hora || "09:00").split(":").map((n) => parseInt(n, 10));
+  const hh = Number.isFinite(hhBruto) ? hhBruto : 9;
+  const mm = Number.isFinite(mmBruto) ? mmBruto : 0;
 
-  const [hh, mm] = (hora || "09:00").split(":").map((n) => parseInt(n, 10));
-  d.setHours(Number.isFinite(hh) ? hh : 9, Number.isFinite(mm) ? mm : 0);
+  const hoje = partesNoFuso(agora);
+  let ano = hoje.ano;
+  let mes = hoje.mes; // 1–12
+  let dia = hoje.dia;
 
   const rotulo = (data || "").trim();
   const lower = rotulo.toLowerCase();
 
   if (lower === "hoje") {
-    // mantém a data de hoje
+    // mantém a data de hoje (em São Paulo)
   } else if (lower === "amanhã" || lower === "amanha") {
-    d.setDate(d.getDate() + 1);
+    dia += 1; // normalizado por instanteNoFuso (Date.UTC)
   } else if (/^\d{4}-\d{2}-\d{2}$/.test(rotulo)) {
-    const [y, m, dd] = rotulo.split("-").map((n) => parseInt(n, 10));
-    d.setFullYear(y, m - 1, dd);
+    [ano, mes, dia] = rotulo.split("-").map((n) => parseInt(n, 10));
   } else if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(rotulo)) {
-    const [dd, m, y] = rotulo.split("/").map((n) => parseInt(n, 10));
-    d.setFullYear(y, m - 1, dd);
+    [dia, mes, ano] = rotulo.split("/").map((n) => parseInt(n, 10));
   } else {
     // "12 Dez" ou "12 Dez 2026"
     const partes = rotulo.split(/\s+/);
     if (partes.length >= 2) {
-      const dia = parseInt(partes[0], 10);
+      const d = parseInt(partes[0], 10);
       const mesIdx = MESES.findIndex((m) => m.toLowerCase() === partes[1]?.toLowerCase());
-      if (Number.isFinite(dia) && mesIdx >= 0) {
-        let ano = d.getFullYear();
+      if (Number.isFinite(d) && mesIdx >= 0) {
+        let a = hoje.ano;
         if (partes[2] && /^\d{4}$/.test(partes[2])) {
-          ano = parseInt(partes[2], 10);
+          a = parseInt(partes[2], 10);
         } else {
           // se a data ficaria muito no passado, assume próximo ano
-          const tentativa = new Date(ano, mesIdx, dia, d.getHours(), d.getMinutes());
-          if (tentativa.getTime() < Date.now() - 7 * 86400000) ano += 1;
+          const tentativa = instanteNoFuso(a, mesIdx + 1, d, hh, mm);
+          if (tentativa.getTime() < agora.getTime() - 7 * 86400000) a += 1;
         }
-        d.setFullYear(ano, mesIdx, dia);
+        ano = a;
+        mes = mesIdx + 1;
+        dia = d;
       }
     }
   }
-  return d;
+  return instanteNoFuso(ano, mes, dia, hh, mm);
 }
 
 /* ------------------------------------------------------------------ */
@@ -97,15 +109,6 @@ async function idsPacientesDoMedico(medicoId: string): Promise<string[]> {
   return rows.map((r) => r.pacienteId);
 }
 
-async function idsMedicosDoPaciente(pacienteId: string): Promise<string[]> {
-  const rows = await db.consulta.findMany({
-    where: { pacienteId },
-    select: { medicoId: true },
-    distinct: ["medicoId"],
-  });
-  return rows.map((r) => r.medicoId);
-}
-
 /* ------------------------------------------------------------------ */
 /* Mapeadores wire (FASE 2) — FONTE ÚNICA da forma das entidades:      */
 /* usados pelo carregarDados (bootstrap/estado fresco) E pelas         */
@@ -116,7 +119,51 @@ export type ConsultaComNomes = Prisma.ConsultaGetPayload<{
   include: { medico: { select: { nome: true } }; paciente: { select: { nome: true } } };
 }>;
 
-export function consultaWire(c: ConsultaComNomes) {
+/** Prazo (dias corridos depois da consulta) para o paciente pedir reembolso de uma falta. */
+export const REEMBOLSO_MANUAL_PRAZO_DIAS = 7;
+
+/** Até quando o paciente pode pedir reembolso de uma falta. */
+export function prazoReembolsoManual(dataInicio: Date): Date {
+  return new Date(dataInicio.getTime() + REEMBOLSO_MANUAL_PRAZO_DIAS * 24 * 3600_000);
+}
+
+/** Includes para o wire saber se houve falta e qual o pedido manual de reembolso. */
+export const includeFaltaWire = { where: { tipo: "falta_paciente" }, select: { id: true }, take: 1 } as const;
+export const includePagamentoReembolsoWire = {
+  select: {
+    reembolsos: {
+      where: { origem: "manual" },
+      select: { status: true, respostaAdmin: true },
+      orderBy: { criadoEm: "desc" as const },
+      take: 1,
+    },
+  },
+} as const;
+
+type ExtrasReembolsoWire = {
+  eventos?: { id: string }[];
+  pagamento?: { reembolsos?: { status: string; respostaAdmin: string | null }[] } | null;
+};
+
+/** Reserva de remarcação paga (RemarcacaoPendente) — só os campos do wire. */
+type ReservaRemarcacaoRow = { novaData: Date; expiraEm: Date; multaCentavos: number; status: string };
+
+/** Include das reservas VIGENTES (pendente e dentro do prazo) para o wire. */
+export function includeReservaVigente(agora: Date = new Date()) {
+  return {
+    where: { status: "pendente", expiraEm: { gt: agora } },
+    select: { novaData: true, expiraEm: true, multaCentavos: true, status: true },
+    orderBy: { criadoEm: "desc" as const },
+    take: 1,
+  };
+}
+
+export function consultaWire(c: ConsultaComNomes & { remarcacoes?: ReservaRemarcacaoRow[] } & ExtrasReembolsoWire) {
+  const falta = Boolean(c.eventos?.length);
+  const pedido = c.pagamento?.reembolsos?.[0];
+  // Remarcação com multa aguardando pagamento: a data que vale continua sendo
+  // dataInicio; novaData fica "reservada" até o pagamento ser aprovado.
+  const reserva = c.remarcacoes?.find((r) => r.status === "pendente" && r.expiraEm.getTime() > Date.now());
   return {
     id: c.id,
     medicoId: c.medicoId,
@@ -132,6 +179,18 @@ export function consultaWire(c: ConsultaComNomes) {
     valor: c.valor,
     pago: c.pago,
     remarcada: c.remarcada || undefined,
+    remarcacaoPendente: reserva
+      ? {
+          novaData: reserva.novaData.toISOString(),
+          expiraEm: reserva.expiraEm.toISOString(),
+          multaCentavos: reserva.multaCentavos,
+          status: "pendente" as const,
+        }
+      : null,
+    // Falta do paciente: sem reembolso automático; ele pode pedir até podePedirAte.
+    falta,
+    reembolsoManual: pedido ? { status: pedido.status, respostaAdmin: pedido.respostaAdmin } : null,
+    podePedirAte: falta ? prazoReembolsoManual(c.dataInicio).toISOString() : null,
   };
 }
 
@@ -167,6 +226,7 @@ export function arquivoWire(a: ArquivoRow) {
     enviadoPor: a.enviadoPor,
     consulta: a.consulta,
     storagePath: (a as { storagePath?: string | null }).storagePath ?? null,
+    pacienteId: a.pacienteId ?? null,
     createdAt: a.createdAt.toISOString(),
   };
 }
@@ -268,6 +328,8 @@ function mascararCpf(cpf: string): string {
 /**
  * Wire de paciente na listagem.
  * `mascarar: true` (médico) omite e-mail e mascara CPF — P2 minimização de PII.
+ * A data de nascimento vai para o médico: a lista dele já vem restrita aos
+ * pacientes vinculados (idsPacientesDoMedico), e o dado é clínico (idade exata).
  */
 export function pacienteWire(p: UserComPerfilPaciente, opts?: { mascarar?: boolean }) {
   const cpf = p.perfilPaciente?.cpf ?? "";
@@ -277,7 +339,9 @@ export function pacienteWire(p: UserComPerfilPaciente, opts?: { mascarar?: boole
     email: opts?.mascarar ? "" : p.email,
     telefone: p.perfilPaciente?.telefone ?? "",
     cpf: opts?.mascarar ? mascararCpf(cpf) : cpf,
-    idade: p.perfilPaciente?.idade ?? 0,
+    idade: p.perfilPaciente ? idadeDoPerfil(p.perfilPaciente) : 0,
+    /** M4: "YYYY-MM-DD" (dia de calendário) ou null. Também vai para o médico vinculado. */
+    dataNascimento: dataNascimentoParaIso(p.perfilPaciente?.dataNascimento),
     genero: p.perfilPaciente?.genero ?? "",
     convenio: p.perfilPaciente?.convenio ?? "Particular",
     status: p.status as "ativo" | "inativo",
@@ -321,10 +385,18 @@ export type PerfilPacienteComUser = Prisma.PerfilPacienteGetPayload<{
   include: { user: { select: { nome: true, email: true } } };
 }>;
 
+/** M4: idade calculada pela data de nascimento (America/Sao_Paulo); sem data, a idade legada. */
+function idadeDoPerfil(p: { idade: number; dataNascimento: Date | null }): number {
+  const iso = dataNascimentoParaIso(p.dataNascimento);
+  return (iso ? idadeDeNascimento(iso) : null) ?? p.idade;
+}
+
 export function perfilPacienteWire(p: PerfilPacienteComUser) {
   return {
     nome: p.user.nome,
-    idade: p.idade,
+    idade: idadeDoPerfil(p),
+    /** M4: "YYYY-MM-DD" (dia de calendário) ou null. */
+    dataNascimento: dataNascimentoParaIso(p.dataNascimento),
     genero: p.genero,
     cpf: p.cpf,
     email: p.user.email,
@@ -333,8 +405,9 @@ export function perfilPacienteWire(p: PerfilPacienteComUser) {
     alergias: JSON.parse(p.alergias || "[]") as string[],
     medicamentos: JSON.parse(p.medicamentos || "[]") as string[],
     tipoSanguineo: p.tipoSanguineo,
-    peso: p.peso ?? undefined,
-    altura: p.altura ?? undefined,
+    // M3: valores legados ("62 kg", "1,68 m") saem no formato canônico (kg/cm).
+    peso: pesoCanonico(p.peso),
+    altura: alturaCanonica(p.altura),
     profissao: p.profissao || undefined,
     estadoCivil: p.estadoCivil || undefined,
     comorbidades: JSON.parse(p.comorbidades || "[]") as string[],
@@ -358,10 +431,7 @@ export async function carregarDados(usuario: UsuarioSessao) {
       : {};
 
   // Dependências de visibilidade primeiro (evita carregar todos os pacientes).
-  const [idsPacientes, idsMedicos] = await Promise.all([
-    souMedico ? idsPacientesDoMedico(usuario.id) : Promise.resolve([] as string[]),
-    souPaciente ? idsMedicosDoPaciente(usuario.id) : Promise.resolve([] as string[]),
-  ]);
+  const idsPacientes = souMedico ? await idsPacientesDoMedico(usuario.id) : ([] as string[]);
 
   const [consultasRaw, medicosRaw, pacientesRaw, anamnesesRaw] = await Promise.all([
     db.consulta.findMany({
@@ -369,6 +439,9 @@ export async function carregarDados(usuario: UsuarioSessao) {
       include: {
         medico: { select: { nome: true } },
         paciente: { select: { nome: true } },
+        remarcacoes: includeReservaVigente(),
+        eventos: includeFaltaWire,
+        pagamento: includePagamentoReembolsoWire,
       },
       orderBy: { dataInicio: "asc" },
       // P2: admin não baixa agenda infinita no bootstrap
@@ -413,12 +486,11 @@ export async function carregarDados(usuario: UsuarioSessao) {
       ? { OR: [{ medicoId: usuario.id }, { pacienteId: { in: idsPacientes } }] }
       : {};
 
-  // Visibilidade de arquivos: próprios + trocados com médicos/pacientes vinculados
-  const arquivoWhere: Record<string, unknown> = souPaciente
-    ? { OR: [{ usuarioId: usuario.id }, { usuarioId: { in: idsMedicos } }] }
-    : souMedico
-      ? { OR: [{ usuarioId: usuario.id }, { usuarioId: { in: idsPacientes } }] }
-      : {};
+  // Visibilidade de arquivos — A3/A4: MESMA regra do download
+  // (GET /api/arquivos), via helper único. Paciente: enviados por ele OU
+  // destinados a ele (Arquivo.pacienteId). Médico: próprios, enviados por
+  // paciente vinculado OU destinados a paciente vinculado. Admin: todos.
+  const arquivoWhere = whereArquivosVisiveis(usuario);
 
   const avaliacaoWhere = souPaciente
     ? { pacienteId: usuario.id }

@@ -124,6 +124,10 @@ type EstadoFresco = {
     especialidade: string; dataInicio: string; status: string;
     motivoConsulta?: string; motivoCancelamento?: string; resumoMedico?: string;
     valor: number; pago: boolean; remarcada?: boolean;
+    remarcacaoPendente?: Consulta["remarcacaoPendente"];
+    falta?: boolean;
+    reembolsoManual?: Consulta["reembolsoManual"];
+    podePedirAte?: string | null;
   }[];
   documentos: {
     id: string; tipo: string; titulo: string; conteudo: string; medico: string; paciente: string;
@@ -132,7 +136,7 @@ type EstadoFresco = {
   }[];
   arquivos: {
     id: string; nome: string; tipo: string; tamanhoKb: number; enviadoPor: string;
-    consulta: string; createdAt: string;
+    consulta: string; createdAt: string; pacienteId?: string | null;
   }[];
   notificacoes: {
     id: string; paraRole?: string | null; tipo: string; titulo: string; texto: string;
@@ -145,6 +149,7 @@ type EstadoFresco = {
   }[];
   pacientes: {
     id: string; nome: string; email: string; telefone: string; cpf: string; idade: number;
+    dataNascimento?: string | null;
     genero: string; convenio: string; status: string; desde: string;
   }[];
   tickets: {
@@ -233,6 +238,10 @@ const mapConsulta = (c: EstadoFresco["consultas"][number]): Consulta => ({
   valor: fmtValorBRL(c.valor),
   pago: c.pago,
   dataISO: c.dataInicio,
+  remarcacaoPendente: c.remarcacaoPendente ?? null,
+  falta: c.falta ?? false,
+  reembolsoManual: c.reembolsoManual ?? null,
+  podePedirAte: c.podePedirAte ?? null,
 });
 
 const mapDocumento = (x: EstadoFresco["documentos"][number]): Documento => ({
@@ -255,6 +264,7 @@ const mapArquivo = (a: EstadoFresco["arquivos"][number]): Arquivo => ({
   enviadoPor: a.enviadoPor as Arquivo["enviadoPor"], data: fmtLonga(a.createdAt),
   consulta: a.consulta,
   storagePath: (a as { storagePath?: string | null }).storagePath ?? null,
+  pacienteId: a.pacienteId ?? null,
 });
 
 const mapNotificacao = (n: EstadoFresco["notificacoes"][number]): Notificacao => ({
@@ -276,7 +286,7 @@ const mapMedico = (m: EstadoFresco["medicos"][number]): Medico => ({
 
 const mapPaciente = (p: EstadoFresco["pacientes"][number]): PacienteRegistro => ({
   id: p.id, nome: p.nome, email: p.email, telefone: p.telefone, cpf: p.cpf,
-  idade: p.idade, genero: p.genero, convenio: p.convenio,
+  idade: p.idade, dataNascimento: p.dataNascimento ?? null, genero: p.genero, convenio: p.convenio,
   status: p.status as PacienteRegistro["status"], desde: fmtDataBR(p.desde),
 });
 
@@ -409,14 +419,21 @@ type Store = {
   enviarMensagem: (paraId: string, texto: string) => void;
   marcarConversaLida: (comUsuarioId: string) => void;
   emitirDocumento: (d: Omit<Documento, "id" | "data">, pacienteIdExplicito?: string) => void;
-  cancelarConsulta: (id: string, motivo: string) => void;
-  remarcarConsulta: (id: string, data: string, hora: string) => void;
+  /** Resolvem `true` só quando o servidor aceitou (erros já viram toast em `api`). */
+  cancelarConsulta: (id: string, motivo: string) => Promise<boolean>;
+  remarcarConsulta: (id: string, data: string, hora: string) => Promise<boolean>;
   concluirConsulta: (id: string, resumo?: string) => void;
-  adicionarConsulta: (c: Omit<Consulta, "id" | "status" | "ts"> & { status?: "pendente_anamnese" }) => void;
+  /** Resolve true quando o servidor criou a consulta; false em erro (o toast já foi mostrado). */
+  adicionarConsulta: (c: Omit<Consulta, "id" | "status" | "ts"> & { status?: "pendente_anamnese" }) => Promise<boolean>;
   concluirAnamnese: (consultaId: string) => Promise<boolean>;
   pularAnamnese: (consultaId: string) => Promise<boolean>;
   registrarDocAnamnese: (consultaId: string, doc: { nome: string; tipo: string; exameImportado: boolean; resumo?: string }) => void;
-  adicionarArquivo: (a: Omit<Arquivo, "id" | "data"> & { file?: File }) => void;
+  /**
+   * A3: médico deve informar o destinatário — `pacienteId` e/ou `consultaId`
+   * (o servidor deriva/valida). Sem nenhum, o arquivo fica sem destinatário
+   * (visível só a quem enviou e ao admin). Paciente: ignorado (sempre ele).
+   */
+  adicionarArquivo: (a: Omit<Arquivo, "id" | "data"> & { file?: File; consultaId?: string }) => void;
   marcarLida: (id: string) => void;
   marcarTodasLidas: () => void;
   avaliacoes: Avaliacao[];
@@ -431,16 +448,19 @@ type Store = {
   adicionarLembrete: (l: Omit<Lembrete, "id" | "feito">) => void;
   alternarLembrete: (id: string) => void;
   removerLembrete: (id: string) => void;
-  atualizarPacientePerfil: (p: Partial<PacientePerfil>) => void;
+  /** A2: resolve `true` só quando o servidor confirmou (erros já viram toast em `api`). */
+  atualizarPacientePerfil: (p: Partial<PacientePerfil>) => Promise<boolean>;
   atualizarMedico: (id: string, dados: Partial<Medico>) => void;
   aprovarMedico: (id: string) => void;
   suspenderMedico: (id: string) => void;
   auditLogs: AuditLog[];
   registrarAudit: (log: Omit<AuditLog, "id" | "ts" | "usuario" | "role">) => void;
-  anonimizarPaciente: (nome: string, pacienteIdExplicito?: string) => void;
-  excluirDadosPaciente: (nome: string, pacienteIdExplicito?: string) => void;
+  /** LGPD — irreversível: SEMPRE por id (nunca por nome). true = servidor confirmou. */
+  anonimizarPaciente: (pacienteId: string) => Promise<boolean>;
+  excluirDadosPaciente: (pacienteId: string) => Promise<boolean>;
   pacientes: PacienteRegistro[];
-  adicionarPaciente: (p: Omit<PacienteRegistro, "id" | "desde">) => void;
+  /** Resolve true quando a conta foi criada; false em erro (o toast já foi mostrado). */
+  adicionarPaciente: (p: Omit<PacienteRegistro, "id" | "desde">) => Promise<boolean>;
   atualizarPaciente: (id: string, dados: Partial<PacienteRegistro>) => void;
   excluirPaciente: (id: string) => void;
   adicionarMedico: (m: Omit<Medico, "id" | "avaliacao" | "numAvaliacoes">) => void;
@@ -544,7 +564,19 @@ export function BionProvider({ children }: { children: ReactNode }) {
       const s = await api<{ autenticado: boolean; usuario?: { id: string; nome: string; email: string; role: string; precisaTrocarSenha?: boolean } }>(
         "/api/auth/sessao",
       );
-      if (s?.autenticado && s.usuario) {
+      if (s?.autenticado && s.usuario?.precisaTrocarSenha) {
+        // Auditoria admin (C2): com troca de senha pendente o servidor recusa
+        // o bootstrap (403). Abre direto a tela de troca; os dados são
+        // carregados em trocarSenha() após o sucesso.
+        setSessaoState({
+          id: s.usuario.id,
+          role: s.usuario.role.toLowerCase() as Sessao["role"],
+          nome: s.usuario.nome,
+          email: s.usuario.email,
+        });
+        setPrecisaTrocarSenha(true);
+        setAutenticado(true);
+      } else if (s?.autenticado && s.usuario) {
         const dados = await api<EstadoFresco>("/api/bootstrap");
         if (dados) {
           aplicar(dados);
@@ -615,7 +647,8 @@ export function BionProvider({ children }: { children: ReactNode }) {
   const streamRef = useRef<EventSource | null>(null);
 
   useEffect(() => {
-    if (!autenticado || typeof EventSource === "undefined") return;
+    // Com troca de senha pendente o servidor responde 403 (auditoria C2).
+    if (!autenticado || precisaTrocarSenha || typeof EventSource === "undefined") return;
     const es = new EventSource("/api/mensagens/stream");
     streamRef.current = es;
     const aoMensagens = (ev: MessageEvent<string>) => {
@@ -635,17 +668,17 @@ export function BionProvider({ children }: { children: ReactNode }) {
       es.close();
       streamRef.current = null;
     };
-  }, [autenticado, mesclarMensagens, buscarMensagens]);
+  }, [autenticado, precisaTrocarSenha, mesclarMensagens, buscarMensagens]);
 
   /** Rede de segurança do stream: só consulta quando o SSE NÃO está aberto
    *  (navegador sem EventSource, 401 pós-revogação, rede instável). */
   useEffect(() => {
-    if (!autenticado) return;
+    if (!autenticado || precisaTrocarSenha) return;
     const id = setInterval(() => {
       if (streamRef.current?.readyState !== 1) void buscarMensagens();
     }, 4000);
     return () => clearInterval(id);
-  }, [autenticado, buscarMensagens]);
+  }, [autenticado, precisaTrocarSenha, buscarMensagens]);
 
   const entrar = useCallback(
     async (email: string, senha: string): Promise<RespostaAuth> => {
@@ -719,12 +752,16 @@ export function BionProvider({ children }: { children: ReactNode }) {
           return { ok: false, erro: json?.erro ?? "Não foi possível alterar a senha." };
         }
         setPrecisaTrocarSenha(false);
+        // Liberado pelo servidor: carrega o estado que ficou bloqueado (403)
+        // enquanto a troca estava pendente.
+        const dados = await api<EstadoFresco>("/api/bootstrap");
+        if (dados) aplicar(dados);
         return { ok: true };
       } catch {
         return { ok: false, erro: "Falha de conexão com o servidor." };
       }
     },
-    [],
+    [aplicar],
   );
 
   /** Aplica um estado fresco externo (ex.: resposta do upload de laudo pela IA). */
@@ -974,6 +1011,34 @@ export function BionProvider({ children }: { children: ReactNode }) {
     [aplicarDelta],
   );
 
+  /** Auditoria admin (C2): cadastro pelo admin devolve UMA vez as credenciais
+   *  temporárias (senha aleatória). Exibe ao admin para repasse e descarta —
+   *  nada fica guardado no estado do app. */
+  const criarContaComCredenciais = useCallback(
+    async (url: string, corpo: Record<string, unknown>): Promise<boolean> => {
+      const dados = await api<Record<string, unknown> & {
+        credenciais?: { email: string; senhaTemporaria: string };
+      }>(url, { method: "POST", body: JSON.stringify(corpo) });
+      if (!dados) return false;
+      const { credenciais, ...delta } = dados;
+      aplicarDelta(delta);
+      if (credenciais) {
+        const texto = `Login: ${credenciais.email}\nSenha temporária: ${credenciais.senhaTemporaria}`;
+        toast.success("Conta criada — anote a senha temporária (exibida só agora)", {
+          description: `Login: ${credenciais.email} • Senha temporária: ${credenciais.senhaTemporaria}`,
+          duration: Infinity,
+          closeButton: true,
+          action: {
+            label: "Copiar",
+            onClick: () => void navigator.clipboard?.writeText(texto).catch(() => {}),
+          },
+        });
+      }
+      return true;
+    },
+    [aplicarDelta],
+  );
+
   /** Registra medição (peso/altura/PA) — devolve true se o servidor confirmou.
    *  Auditoria é gerada pelo servidor. Contrato delta: aplica a medição e o
    *  peso/altura sincronizados sem recarregar o estado inteiro. */
@@ -1073,21 +1138,19 @@ export function BionProvider({ children }: { children: ReactNode }) {
         body: JSON.stringify(corpo),
       });
       aplicarDelta(d);
+      return d !== null;
     },
     [aplicarDelta],
   );
 
   const cancelarConsulta = useCallback(
-    (id: string, motivo: string) => {
-      void mutarConsultaDelta(id, { acao: "cancelar", motivo });
-    },
+    (id: string, motivo: string) => mutarConsultaDelta(id, { acao: "cancelar", motivo }),
     [mutarConsultaDelta],
   );
 
+  // Com multa (≤24 h) o servidor responde 402 { usar: "remarcacao" }: `api` mostra o toast e devolve false.
   const remarcarConsulta = useCallback(
-    (id: string, data: string, hora: string) => {
-      void mutarConsultaDelta(id, { acao: "remarcar", data, hora });
-    },
+    (id: string, data: string, hora: string) => mutarConsultaDelta(id, { acao: "remarcar", data, hora }),
     [mutarConsultaDelta],
   );
 
@@ -1099,13 +1162,13 @@ export function BionProvider({ children }: { children: ReactNode }) {
   );
 
   const adicionarConsulta = useCallback(
-    async (c: Omit<Consulta, "id" | "status" | "ts">) => {
+    async (c: Omit<Consulta, "id" | "status" | "ts">): Promise<boolean> => {
       // Médico identificado por ID quando o chamador o tem (nunca por nome —
       // homônimos existem); a busca por nome fica só como último recurso.
       const medicoId = c.medicoId ?? medicosRef.current.find((m) => m.nome === c.medico)?.id;
       if (!medicoId) {
         toast.error("Médico não encontrado para o agendamento.");
-        return;
+        return false;
       }
       // Status e pagamento são decididos PELO SERVIDOR: o pagamento confirma
       // a consulta (gateway simulado no ato; webhook real depois) e a triagem
@@ -1121,7 +1184,9 @@ export function BionProvider({ children }: { children: ReactNode }) {
           valor: c.valor,
         }),
       });
+      if (!d) return false;
       aplicarDelta(d);
+      return true;
     },
     [aplicarDelta],
   );
@@ -1150,13 +1215,15 @@ export function BionProvider({ children }: { children: ReactNode }) {
   );
 
   const adicionarArquivo = useCallback(
-    (a: Omit<Arquivo, "id" | "data"> & { file?: File }) => {
+    (a: Omit<Arquivo, "id" | "data"> & { file?: File; consultaId?: string }) => {
       if (a.file) {
         const fd = new FormData();
         fd.append("file", a.file);
         fd.append("nome", a.nome);
         fd.append("tipo", a.tipo);
         fd.append("consulta", a.consulta || "");
+        if (a.pacienteId) fd.append("pacienteId", a.pacienteId);
+        if (a.consultaId) fd.append("consultaId", a.consultaId);
         void (async () => {
           try {
             const res = await fetch("/api/arquivos", { method: "POST", body: fd, credentials: "include" });
@@ -1185,6 +1252,8 @@ export function BionProvider({ children }: { children: ReactNode }) {
         tamanhoKb: a.tamanhoKb,
         enviadoPor: a.enviadoPor,
         consulta: a.consulta,
+        ...(a.pacienteId ? { pacienteId: a.pacienteId } : {}),
+        ...(a.consultaId ? { consultaId: a.consultaId } : {}),
       });
     },
     [mutar],
@@ -1321,9 +1390,7 @@ export function BionProvider({ children }: { children: ReactNode }) {
   );
 
   const atualizarPacientePerfil = useCallback(
-    (p: Partial<PacientePerfil>) => {
-      void mutar("/api/perfil", "PATCH", { ...p });
-    },
+    (p: Partial<PacientePerfil>) => mutar("/api/perfil", "PATCH", { ...p }),
     [mutar],
   );
 
@@ -1349,46 +1416,33 @@ export function BionProvider({ children }: { children: ReactNode }) {
     [mutar],
   );
 
-  /** LGPD — operações IRREVERSÍVEIS: paciente SEMPRE por ID (nome só como
-   *  último recurso quando o chamador não tem o id). */
+  /** LGPD — operações IRREVERSÍVEIS: paciente SEMPRE por ID. Não há mais
+   *  fallback por nome (homônimos levariam a anonimizar a pessoa errada). */
   const anonimizarPaciente = useCallback(
-    (nome: string, pacienteIdExplicito?: string) => {
-      const id = pacienteIdExplicito ?? pacientesRef.current.find((p) => p.nome === nome)?.id;
-      if (!id) {
-        toast.error("Paciente não encontrado.");
-        return;
-      }
-      void mutar("/api/admin/lgpd", "POST", { acao: "anonimizar", pacienteId: id });
-    },
+    (pacienteId: string) => mutar("/api/admin/lgpd", "POST", { acao: "anonimizar", pacienteId }),
     [mutar],
   );
 
   const excluirDadosPaciente = useCallback(
-    (nome: string, pacienteIdExplicito?: string) => {
-      const id = pacienteIdExplicito ?? pacientesRef.current.find((p) => p.nome === nome)?.id;
-      if (!id) {
-        toast.error("Paciente não encontrado.");
-        return;
-      }
-      void mutar("/api/admin/lgpd", "POST", { acao: "excluir", pacienteId: id });
-    },
+    (pacienteId: string) => mutar("/api/admin/lgpd", "POST", { acao: "excluir", pacienteId }),
     [mutar],
   );
 
   const adicionarPaciente = useCallback(
-    (p: Omit<PacienteRegistro, "id" | "desde">) => {
-      void mutar("/api/pacientes", "POST", {
+    (p: Omit<PacienteRegistro, "id" | "desde">) =>
+      criarContaComCredenciais("/api/pacientes", {
         nome: p.nome,
         email: p.email,
         telefone: p.telefone,
         cpf: p.cpf,
         idade: p.idade,
+        // "YYYY-MM-DD" ou null; o servidor valida e grava como data pura.
+        dataNascimento: p.dataNascimento ?? null,
         genero: p.genero,
         convenio: p.convenio,
         status: p.status,
-      });
-    },
-    [mutar],
+      }),
+    [criarContaComCredenciais],
   );
 
   const atualizarPaciente = useCallback(
@@ -1405,7 +1459,7 @@ export function BionProvider({ children }: { children: ReactNode }) {
 
   const adicionarMedico = useCallback(
     (m: Omit<Medico, "id" | "avaliacao" | "numAvaliacoes">) => {
-      void mutar("/api/medicos", "POST", {
+      void criarContaComCredenciais("/api/medicos", {
         nome: m.nome,
         crm: m.crm,
         especialidade: m.especialidade,
@@ -1419,7 +1473,7 @@ export function BionProvider({ children }: { children: ReactNode }) {
         status: m.status,
       });
     },
-    [mutar],
+    [criarContaComCredenciais],
   );
 
   const excluirMedico = useCallback(

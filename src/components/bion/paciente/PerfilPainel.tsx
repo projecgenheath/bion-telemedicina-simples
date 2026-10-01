@@ -25,12 +25,17 @@ import {
   X,
 } from "lucide-react";
 import { useBion } from "@/lib/bion-store";
+import { formatarAltura, formatarPeso } from "@/lib/medidas-paciente";
+import { formatarDataNascimento, hojeIsoSaoPaulo, idadeDeNascimento, type ComDataNascimento } from "@/lib/idade";
 
 /**
  * Painel do perfil (gesto esquerda → direita): foto, dados pessoais e de
  * saúde, histórico de consultas, uploads na BION IA, pagamentos, suporte,
  * termos e alternância Dark/Clean.
  */
+
+/** Limite do arquivo ORIGINAL antes do recorte para 256×256 (o servidor valida o resultado). */
+const FOTO_ORIGINAL_MAX_BYTES = 15 * 1024 * 1024;
 
 const INICIAIS = (nome: string) =>
   nome
@@ -67,9 +72,14 @@ export function PerfilPainel({ onSair }: { onSair: () => void }) {
   const { pacientePerfil, sessao, consultas, arquivos, exames, atualizarPacientePerfil } = useBion();
   const router = useRouter();
   const inputFotoRef = useRef<HTMLInputElement>(null);
+  // M4: data de nascimento ("YYYY-MM-DD" do payload; o tipo do store não a declara).
+  const dataNascimento = (pacientePerfil as (typeof pacientePerfil & ComDataNascimento) | undefined)?.dataNascimento ?? "";
+  const idadeExibida = (dataNascimento ? idadeDeNascimento(dataNascimento) : null) ?? pacientePerfil?.idade ?? 0;
   const [editando, setEditando] = useState(false);
   const [salvando, setSalvando] = useState(false);
+  const [enviandoFoto, setEnviandoFoto] = useState(false);
   const [form, setForm] = useState({
+    dataNascimento,
     telefone: pacientePerfil?.telefone ?? "",
     profissao: pacientePerfil?.profissao ?? "",
     estadoCivil: pacientePerfil?.estadoCivil ?? "",
@@ -105,21 +115,45 @@ export function PerfilPainel({ onSair }: { onSair: () => void }) {
   );
   const pagamentos = consultasDoPaciente.filter((c) => c.status !== "cancelada");
 
+  // A2: valida o arquivo antes de ler, trata falhas de leitura e só
+  // confirma o sucesso depois que o servidor aceitou a foto.
   const aoEscolherFoto = (arquivo: File) => {
+    if (enviandoFoto) return;
+    if (!/^image\/(jpeg|png|webp)$/i.test(arquivo.type)) {
+      toast.error("Escolha uma imagem (JPG, PNG ou WebP).");
+      return;
+    }
+    if (arquivo.size > FOTO_ORIGINAL_MAX_BYTES) {
+      toast.error("Imagem muito grande. Escolha uma foto de até 15 MB.");
+      return;
+    }
+    const falhaLeitura = () => {
+      setEnviandoFoto(false);
+      toast.error("Não foi possível ler esta imagem. Tente outra foto.");
+    };
+    setEnviandoFoto(true);
     const reader = new FileReader();
+    reader.onerror = falhaLeitura;
     reader.onload = () => {
       const img = new Image();
+      img.onerror = falhaLeitura;
       img.onload = () => {
         const canvas = document.createElement("canvas");
         const tamanho = 256;
         canvas.width = tamanho;
         canvas.height = tamanho;
         const ctx = canvas.getContext("2d");
-        if (!ctx) return;
+        if (!ctx || !img.width || !img.height) {
+          falhaLeitura();
+          return;
+        }
         const lado = Math.min(img.width, img.height);
         ctx.drawImage(img, (img.width - lado) / 2, (img.height - lado) / 2, lado, lado, 0, 0, tamanho, tamanho);
-        atualizarPacientePerfil({ foto: canvas.toDataURL("image/jpeg", 0.82) });
-        toast.success("Foto de perfil atualizada.");
+        void (async () => {
+          const ok = await atualizarPacientePerfil({ foto: canvas.toDataURL("image/jpeg", 0.82) });
+          setEnviandoFoto(false);
+          if (ok) toast.success("Foto de perfil atualizada.");
+        })();
       };
       img.src = reader.result as string;
     };
@@ -148,19 +182,45 @@ export function PerfilPainel({ onSair }: { onSair: () => void }) {
     }
   };
 
+  // A2: aguarda a resposta do servidor. Em erro (toast vem de `api`), o modo
+  // de edição continua aberto com o que foi digitado. Envia só os campos
+  // alterados — dado legado fora do formato novo (A1) não bloqueia o resto.
   const salvar = async () => {
-    setSalvando(true);
-    atualizarPacientePerfil({
+    if (salvando) return;
+    const lista = (v: string) => v.split(",").map((s) => s.trim()).filter(Boolean);
+    const novo = {
+      dataNascimento: form.dataNascimento || null,
       telefone: form.telefone.trim(),
       profissao: form.profissao.trim(),
       estadoCivil: form.estadoCivil,
-      alergias: form.alergias.split(",").map((s) => s.trim()).filter(Boolean),
-      comorbidades: form.comorbidades.split(",").map((s) => s.trim()).filter(Boolean),
-      medicamentos: form.medicamentos.split(",").map((s) => s.trim()).filter(Boolean),
-    });
+      alergias: lista(form.alergias),
+      comorbidades: lista(form.comorbidades),
+      medicamentos: lista(form.medicamentos),
+    };
+    const atual = {
+      dataNascimento: dataNascimento || null,
+      telefone: pacientePerfil?.telefone ?? "",
+      profissao: pacientePerfil?.profissao ?? "",
+      estadoCivil: pacientePerfil?.estadoCivil ?? "",
+      alergias: pacientePerfil?.alergias ?? [],
+      comorbidades: pacientePerfil?.comorbidades ?? [],
+      medicamentos: pacientePerfil?.medicamentos ?? [],
+    };
+    const alterado = (Object.keys(novo) as (keyof typeof novo)[]).filter(
+      (k) => JSON.stringify(novo[k]) !== JSON.stringify(atual[k]),
+    );
+    if (!alterado.length) {
+      setEditando(false);
+      return;
+    }
+    const patch = Object.fromEntries(alterado.map((k) => [k, novo[k]])) as Partial<typeof novo>;
+    setSalvando(true);
+    const ok = await atualizarPacientePerfil(patch);
     setSalvando(false);
-    setEditando(false);
-    toast.success("Perfil atualizado.");
+    if (ok) {
+      setEditando(false);
+      toast.success("Perfil atualizado.");
+    }
   };
 
   const chip = "bg-bion-ink/8 dark:bg-white/10 text-bion-ink dark:text-bion-paper";
@@ -170,7 +230,7 @@ export function PerfilPainel({ onSair }: { onSair: () => void }) {
       <input
         ref={inputFotoRef}
         type="file"
-        accept="image/*"
+        accept="image/jpeg,image/png,image/webp"
         className="hidden"
         aria-label="Selecionar foto de perfil"
         onChange={(e) => {
@@ -193,8 +253,10 @@ export function PerfilPainel({ onSair }: { onSair: () => void }) {
           )}
           <button type="button"
             onClick={() => inputFotoRef.current?.click()}
-            aria-label="Alterar foto de perfil"
-            className="absolute -bottom-1 -right-1 bp-acao w-9 h-9 inline-flex items-center justify-center !rounded-full"
+            disabled={enviandoFoto}
+            aria-busy={enviandoFoto}
+            aria-label={enviandoFoto ? "Enviando foto de perfil" : "Alterar foto de perfil"}
+            className="absolute -bottom-1 -right-1 bp-acao w-9 h-9 inline-flex items-center justify-center !rounded-full disabled:opacity-60"
           >
             <Pencil className="w-4 h-4" />
           </button>
@@ -212,6 +274,7 @@ export function PerfilPainel({ onSair }: { onSair: () => void }) {
               if (editando) void salvar();
               else {
                 setForm({
+                  dataNascimento,
                   telefone: pacientePerfil?.telefone ?? "",
                   profissao: pacientePerfil?.profissao ?? "",
                   estadoCivil: pacientePerfil?.estadoCivil ?? "",
@@ -231,8 +294,12 @@ export function PerfilPainel({ onSair }: { onSair: () => void }) {
         </div>
         {editando ? (
           <div className="space-y-3 pt-1">
-            <input value={form.telefone} onChange={(e) => setForm((f) => ({ ...f, telefone: e.target.value }))} placeholder="Telefone" aria-label="Telefone" className="bp-entrada w-full px-4 py-2.5 text-sm" />
-            <input value={form.profissao} onChange={(e) => setForm((f) => ({ ...f, profissao: e.target.value }))} placeholder="Profissão" aria-label="Profissão" className="bp-entrada w-full px-4 py-2.5 text-sm" />
+            <label className="block">
+              <span className="text-xs font-semibold text-bion-ink/70 dark:text-bion-paper/70">Data de nascimento</span>
+              <input type="date" value={form.dataNascimento} onChange={(e) => setForm((f) => ({ ...f, dataNascimento: e.target.value }))} min="1900-01-01" max={hojeIsoSaoPaulo()} autoComplete="bday" className="bp-entrada mt-1 w-full px-4 py-2.5 text-sm" />
+            </label>
+            <input value={form.telefone} onChange={(e) => setForm((f) => ({ ...f, telefone: e.target.value }))} placeholder="Telefone" aria-label="Telefone" type="tel" inputMode="tel" autoComplete="tel" maxLength={25} className="bp-entrada w-full px-4 py-2.5 text-sm" />
+            <input value={form.profissao} onChange={(e) => setForm((f) => ({ ...f, profissao: e.target.value }))} placeholder="Profissão" aria-label="Profissão" maxLength={80} className="bp-entrada w-full px-4 py-2.5 text-sm" />
             <select value={form.estadoCivil} onChange={(e) => setForm((f) => ({ ...f, estadoCivil: e.target.value }))} aria-label="Estado civil" className="bp-entrada w-full px-4 py-2.5 text-sm">
               <option value="">Estado civil…</option>
               {["Solteiro(a)", "Casado(a)", "Divorciado(a)", "Viúvo(a)", "União estável"].map((o) => (
@@ -248,7 +315,8 @@ export function PerfilPainel({ onSair }: { onSair: () => void }) {
           </div>
         ) : (
           <div className="divide-y divide-bion-ink/5 dark:divide-white/5">
-            <Linha icone={<CalendarDays className="w-4 h-4" />} rotulo="Idade" valor={pacientePerfil?.idade ? `${pacientePerfil.idade} anos` : ""} />
+            <Linha icone={<CalendarDays className="w-4 h-4" />} rotulo="Nascimento" valor={formatarDataNascimento(dataNascimento)} />
+            <Linha icone={<CalendarDays className="w-4 h-4" />} rotulo="Idade" valor={dataNascimento || idadeExibida > 0 ? `${idadeExibida} ${idadeExibida === 1 ? "ano" : "anos"}` : ""} />
             <Linha icone={<CircleUserRound className="w-4 h-4" />} rotulo="Sexo" valor={pacientePerfil?.genero} />
             <Linha icone={<Phone className="w-4 h-4" />} rotulo="Telefone" valor={pacientePerfil?.telefone} />
             <Linha icone={<Briefcase className="w-4 h-4" />} rotulo="Profissão" valor={pacientePerfil?.profissao} />
@@ -279,7 +347,7 @@ export function PerfilPainel({ onSair }: { onSair: () => void }) {
                 <Chips itens={pacientePerfil?.medicamentos ?? []} cor={chip} />
               </div>
             </div>
-            <Linha icone={<Scale className="w-4 h-4" />} rotulo="Peso / Altura" valor={pacientePerfil?.peso ? `${pacientePerfil.peso} kg · ${pacientePerfil.altura ?? "?"} cm` : ""} />
+            <Linha icone={<Scale className="w-4 h-4" />} rotulo="Peso / Altura" valor={[formatarPeso(pacientePerfil?.peso), formatarAltura(pacientePerfil?.altura)].filter(Boolean).join(" · ")} />
           </div>
         )}
       </div>

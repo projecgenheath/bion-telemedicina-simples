@@ -5,6 +5,7 @@ import { Search, Pencil, X, CalendarX2, CalendarDays } from "lucide-react";
 import { toast } from "sonner";
 import { useBion, type Consulta } from "@/lib/bion-store";
 import { ModalBion } from "@/components/bion/ModalBion";
+import { AdminReembolsos } from "@/components/bion/AdminReembolsos";
 
 const STATUS: { valor: Consulta["status"] | "todas"; label: string }[] = [
   { valor: "todas", label: "Todas" },
@@ -94,6 +95,8 @@ export function AdminAgendamentos() {
           </div>
         ))}
       </div>
+
+      <AdminReembolsos />
 
       <div className="flex flex-col md:flex-row gap-3">
         <div className="relative flex-1">

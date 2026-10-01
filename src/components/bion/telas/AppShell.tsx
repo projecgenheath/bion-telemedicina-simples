@@ -66,7 +66,6 @@ function Shell({
       { icon: LifeBuoy, label: "Suporte", view: "suporte" },
       { icon: CircleHelp, label: "Ajuda & FAQ", view: "ajuda" },
       { icon: Shield, label: "Privacidade", view: "privacidade" },
-      { icon: User, label: "Meu Perfil", view: "paciente-perfil" },
     ],
     medico: [
       { icon: Home, label: "Início", view: "dashboard" },

@@ -12,7 +12,7 @@ export default function PaginaEntrar() {
 
   useEffect(() => {
     if (carregando || !autenticado) return;
-    router.replace(sessao.role === "paciente" ? "/paciente" : "/painel");
+    router.replace(sessao.role === "paciente" ? "/paciente" : sessao.role === "medico" ? "/medico" : "/painel");
   }, [carregando, autenticado, sessao.role, router]);
 
   if (carregando) return <TelaCarregando />;

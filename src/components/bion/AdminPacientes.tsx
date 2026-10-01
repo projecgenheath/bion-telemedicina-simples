@@ -5,8 +5,10 @@ import { Plus, Search, Pencil, Trash2, X, ClipboardList, Calendar, ArrowLeft } f
 import { toast } from "sonner";
 import { useBion, type PacienteRegistro } from "@/lib/bion-store";
 import { ModalBion } from "@/components/bion/ModalBion";
+import { formatarDataNascimento, hojeIsoSaoPaulo, idadeDeNascimento } from "@/lib/idade";
 
-type Form = Omit<PacienteRegistro, "id" | "desde">;
+/** `dataNascimento` no formulário: "YYYY-MM-DD" ou "" (sem data). */
+type Form = Omit<PacienteRegistro, "id" | "desde" | "dataNascimento"> & { dataNascimento: string };
 
 const vazio: Form = {
   nome: "",
@@ -14,16 +16,58 @@ const vazio: Form = {
   telefone: "",
   cpf: "",
   idade: 30,
+  dataNascimento: "",
   genero: "Feminino",
   convenio: "Particular",
   status: "ativo",
 };
 
+/**
+ * Idade exibida: calculada pela data de nascimento (dia de calendário, hoje em
+ * America/Sao_Paulo); sem data (cadastro legado), o campo `idade` gravado.
+ */
+function idadeExibida(p: { idade: number; dataNascimento?: string | null }): number {
+  return (p.dataNascimento ? idadeDeNascimento(p.dataNascimento) : null) ?? p.idade;
+}
+
+/** "DD/MM/AAAA" sem conversão de fuso, ou "" se não houver data. */
+function nascimento(p: { dataNascimento?: string | null }): string {
+  return formatarDataNascimento(p.dataNascimento);
+}
+
+/** Campos que o admin pode alterar na edição (o e-mail/login não muda por aqui). */
+const CAMPOS_EDITAVEIS = ["nome", "telefone", "cpf", "idade", "dataNascimento", "genero", "convenio", "status"] as const;
+
+type Resposta = { ok: true; dados: Record<string, unknown> } | { ok: false; erro: string };
+
+/**
+ * Chamada direta às rotas do admin (POST/PATCH /api/pacientes) para poder
+ * enviar `dataNascimento` e manter o formulário aberto quando o servidor
+ * recusa (400 CPF/telefone/data inválidos, 409 CPF/e-mail duplicado). O delta
+ * devolvido é aplicado com `aplicarDelta` do store, como nas outras mutações.
+ */
+async function enviarPaciente(url: string, method: "POST" | "PATCH", corpo: Record<string, unknown>): Promise<Resposta> {
+  try {
+    const res = await fetch(url, {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(corpo),
+    });
+    const json = (await res.json().catch(() => null)) as Record<string, unknown> | null;
+    if (!res.ok) {
+      const erro = typeof json?.erro === "string" ? json.erro : "Não foi possível concluir a operação.";
+      return { ok: false, erro };
+    }
+    return { ok: true, dados: json ?? {} };
+  } catch {
+    return { ok: false, erro: "Falha de conexão com o servidor." };
+  }
+}
+
 export function AdminPacientes() {
   const {
     pacientes,
-    adicionarPaciente,
-    atualizarPaciente,
+    aplicarDelta,
     excluirPaciente,
     consultas,
     documentos,
@@ -34,6 +78,7 @@ export function AdminPacientes() {
   const [modal, setModal] = useState<{ id?: string; form: Form } | null>(null);
   const [detalhe, setDetalhe] = useState<PacienteRegistro | null>(null);
   const [confirmar, setConfirmar] = useState<PacienteRegistro | null>(null);
+  const [salvando, setSalvando] = useState(false);
 
   const lista = useMemo(
     () =>
@@ -43,21 +88,77 @@ export function AdminPacientes() {
     [pacientes, busca],
   );
 
-  const salvar = () => {
-    if (!modal) return;
+  const salvar = async () => {
+    if (!modal || salvando) return;
     const f = modal.form;
     if (!f.nome.trim() || !f.email.trim()) {
       toast.error("Preencha nome e e-mail.");
       return;
     }
-    if (modal.id) {
-      atualizarPaciente(modal.id, f);
-      toast.success("Paciente atualizado.");
-    } else {
-      adicionarPaciente(f);
-      toast.success("Paciente cadastrado.");
+
+    setSalvando(true);
+    try {
+      if (modal.id) {
+        // Edição: envia só o que mudou (data vazia => null limpa a data).
+        const original = pacientes.find((p) => p.id === modal.id);
+        const corpo: Record<string, unknown> = {};
+        for (const campo of CAMPOS_EDITAVEIS) {
+          const novo = campo === "dataNascimento" ? f.dataNascimento || null : f[campo];
+          const antigo = campo === "dataNascimento" ? (original?.dataNascimento ?? null) : original?.[campo];
+          if (novo !== antigo) corpo[campo] = novo;
+        }
+        if (Object.keys(corpo).length === 0) {
+          toast.info("Nenhuma alteração para salvar.");
+          setModal(null);
+          return;
+        }
+        const r = await enviarPaciente(`/api/pacientes/${modal.id}`, "PATCH", corpo);
+        if (!r.ok) {
+          toast.error(r.erro);
+          return; // formulário continua aberto para corrigir
+        }
+        aplicarDelta(r.dados);
+        toast.success("Paciente atualizado.");
+      } else {
+        const r = await enviarPaciente("/api/pacientes", "POST", {
+          nome: f.nome,
+          email: f.email,
+          telefone: f.telefone,
+          cpf: f.cpf,
+          idade: f.idade,
+          ...(f.dataNascimento ? { dataNascimento: f.dataNascimento } : {}),
+          genero: f.genero,
+          convenio: f.convenio,
+          status: f.status,
+        });
+        if (!r.ok) {
+          toast.error(r.erro);
+          return;
+        }
+        // Auditoria admin (C2): credenciais temporárias exibidas UMA vez e descartadas.
+        const { credenciais, ...delta } = r.dados as {
+          credenciais?: { email: string; senhaTemporaria: string };
+        } & Record<string, unknown>;
+        aplicarDelta(delta);
+        if (credenciais) {
+          const texto = `Login: ${credenciais.email}\nSenha temporária: ${credenciais.senhaTemporaria}`;
+          toast.success("Conta criada — anote a senha temporária (exibida só agora)", {
+            description: `Login: ${credenciais.email} • Senha temporária: ${credenciais.senhaTemporaria}`,
+            duration: Infinity,
+            closeButton: true,
+            action: {
+              label: "Copiar",
+              onClick: () => void navigator.clipboard?.writeText(texto).catch(() => {}),
+            },
+          });
+        } else {
+          toast.success("Paciente cadastrado.");
+        }
+      }
+      setModal(null);
+    } finally {
+      setSalvando(false);
     }
-    setModal(null);
   };
 
   if (detalhe) {
@@ -79,8 +180,9 @@ export function AdminPacientes() {
             {detalhe.email} • {detalhe.telefone} • {detalhe.cpf}
           </p>
           <p className="text-xs text-muted-foreground">
-            {detalhe.idade} anos • {detalhe.genero} • {detalhe.convenio} • paciente desde{" "}
-            {detalhe.desde}
+            {idadeExibida(detalhe)} anos
+            {nascimento(detalhe) ? ` (nasc. ${nascimento(detalhe)})` : ""} • {detalhe.genero} •{" "}
+            {detalhe.convenio} • paciente desde {detalhe.desde}
           </p>
         </div>
 
@@ -183,6 +285,10 @@ export function AdminPacientes() {
               <p className="text-xs text-muted-foreground truncate">
                 {p.email} • {p.telefone} • {p.convenio}
               </p>
+              <p className="text-xs text-muted-foreground truncate">
+                {idadeExibida(p)} anos
+                {nascimento(p) ? ` • nasc. ${nascimento(p)}` : " • data de nascimento não informada"}
+              </p>
             </div>
             <div className="flex items-center gap-2">
               <button type="button"
@@ -192,7 +298,22 @@ export function AdminPacientes() {
                 Histórico
               </button>
               <button type="button"
-                onClick={() => setModal({ id: p.id, form: { ...p } })}
+                onClick={() =>
+                  setModal({
+                    id: p.id,
+                    form: {
+                      nome: p.nome,
+                      email: p.email,
+                      telefone: p.telefone,
+                      cpf: p.cpf,
+                      idade: p.idade,
+                      dataNascimento: p.dataNascimento ?? "",
+                      genero: p.genero,
+                      convenio: p.convenio,
+                      status: p.status,
+                    },
+                  })
+                }
                 className="p-2 rounded-xl border hover:bg-muted"
                 aria-label={`Editar ${p.nome}`}
               >
@@ -252,23 +373,52 @@ export function AdminPacientes() {
                     onChange={(e) =>
                       setModal({ ...modal, form: { ...modal.form, [campo]: e.target.value } })
                     }
-                    className="w-full p-2.5 rounded-xl border bg-background outline-none focus:ring-2 focus:ring-primary/20"
+                    disabled={campo === "email" && !!modal.id}
+                    title={
+                      campo === "email" && modal.id ? "O e-mail (login) não é alterado por aqui." : undefined
+                    }
+                    className="w-full p-2.5 rounded-xl border bg-background outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-60"
                   />
                 </label>
               ))}
               <label className="text-xs font-semibold space-y-1">
-                <span className="text-muted-foreground">Idade</span>
+                <span className="text-muted-foreground">Data de nascimento (opcional)</span>
                 <input
-                  type="number"
-                  value={modal.form.idade}
+                  type="date"
+                  value={modal.form.dataNascimento}
+                  max={hojeIsoSaoPaulo()}
                   onChange={(e) =>
-                    setModal({
-                      ...modal,
-                      form: { ...modal.form, idade: Number(e.target.value) || 0 },
-                    })
+                    setModal({ ...modal, form: { ...modal.form, dataNascimento: e.target.value } })
                   }
                   className="w-full p-2.5 rounded-xl border bg-background outline-none"
                 />
+              </label>
+              <label className="text-xs font-semibold space-y-1">
+                <span className="text-muted-foreground">
+                  Idade{modal.form.dataNascimento ? " (calculada pela data de nascimento)" : ""}
+                </span>
+                {modal.form.dataNascimento ? (
+                  <input
+                    type="number"
+                    value={idadeDeNascimento(modal.form.dataNascimento) ?? ""}
+                    readOnly
+                    className="w-full p-2.5 rounded-xl border bg-muted/40 outline-none"
+                  />
+                ) : (
+                  <input
+                    type="number"
+                    min={0}
+                    max={130}
+                    value={modal.form.idade}
+                    onChange={(e) =>
+                      setModal({
+                        ...modal,
+                        form: { ...modal.form, idade: Number(e.target.value) || 0 },
+                      })
+                    }
+                    className="w-full p-2.5 rounded-xl border bg-background outline-none"
+                  />
+                )}
               </label>
               <label className="text-xs font-semibold space-y-1">
                 <span className="text-muted-foreground">Status</span>
@@ -288,10 +438,11 @@ export function AdminPacientes() {
               </label>
             </div>
             <button type="button"
-              onClick={salvar}
-              className="w-full py-3 rounded-xl bg-primary text-primary-foreground font-bold text-sm"
+              onClick={() => void salvar()}
+              disabled={salvando}
+              className="w-full py-3 rounded-xl bg-primary text-primary-foreground font-bold text-sm disabled:opacity-60"
             >
-              Salvar
+              {salvando ? "Salvando…" : "Salvar"}
             </button>
           </div>
         </ModalBion>

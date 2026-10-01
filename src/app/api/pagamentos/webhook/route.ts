@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { quandoClinica } from "@/lib/server/fuso";
 import { db } from "@/lib/db";
 import {
   confirmarPagamento,
@@ -7,6 +8,7 @@ import {
   verificarAssinaturaWebhook,
 } from "@/lib/server/pagamentos";
 import { registrarAudit } from "@/lib/server/auth";
+import { aprovarMultaRemarcacao, falharMultaRemarcacao } from "@/lib/server/financeiro";
 
 /**
  * Webhook do gateway de pagamento (server-to-server).
@@ -16,6 +18,8 @@ import { registrarAudit } from "@/lib/server/auth";
  * Sem segredo configurado, o endpoint fica desativado (503).
  *
  * Payload: { evento: "pagamento.confirmado" | "pagamento.falhou", pagamentoId, gatewayRef? }
+ *       ou { evento: "multa.confirmada" | "multa.falhou", remarcacaoId, gatewayRef? }
+ *       (multa de remarcação com ≤24 h — ver src/lib/server/financeiro.ts)
  * Idempotente: reentregas não duplicam efeitos.
  */
 export async function POST(req: NextRequest) {
@@ -33,7 +37,46 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const body = JSON.parse(corpo) as { evento?: string; pagamentoId?: string; gatewayRef?: string };
+    const body = JSON.parse(corpo) as {
+      evento?: string;
+      pagamentoId?: string;
+      remarcacaoId?: string;
+      gatewayRef?: string;
+    };
+
+    if (body.evento === "multa.confirmada" || body.evento === "multa.falhou") {
+      if (!body.remarcacaoId) {
+        return Response.json({ erro: "remarcacaoId obrigatório." }, { status: 400 });
+      }
+      if (body.evento === "multa.falhou") {
+        const r = await falharMultaRemarcacao(body.remarcacaoId, "webhook");
+        if (!r) return Response.json({ erro: "Remarcação não encontrada." }, { status: 404 });
+        await registrarAudit(null, {
+          acao: "MULTA_REMARCACAO_FALHOU",
+          categoria: "pagamento",
+          severidade: "warning",
+          entidade: "consulta",
+          entidadeId: r.consultaId,
+          detalhes: `Gateway reportou falha na multa da remarcação ${r.id}; consulta mantida na data original`,
+        });
+        return Response.json({ ok: true, status: r.status });
+      }
+      const res = await aprovarMultaRemarcacao(body.remarcacaoId, "webhook", body.gatewayRef);
+      if (!res) return Response.json({ erro: "Remarcação não encontrada." }, { status: 404 });
+      if (!res.jaProcessada) {
+        await registrarAudit(null, {
+          acao: res.aplicada ? "CONSULTA_REMARCADA_MULTA_PAGA" : "MULTA_REMARCACAO_REEMBOLSADA",
+          categoria: "pagamento",
+          severidade: res.aplicada ? "info" : "warning",
+          entidade: "consulta",
+          entidadeId: res.remarcacao.consultaId,
+          detalhes: res.aplicada
+            ? `Multa paga; consulta remarcada para ${quandoClinica(res.remarcacao.novaData)}`
+            : `Multa paga com a reserva já cancelada/expirada ou horário ocupado; consulta não movida, multa em reembolso automático`,
+        });
+      }
+      return Response.json({ ok: true, aplicada: res.aplicada, status: res.remarcacao.status });
+    }
     if (!body.pagamentoId) {
       return Response.json({ erro: "pagamentoId obrigatório." }, { status: 400 });
     }
@@ -62,8 +105,7 @@ export async function POST(req: NextRequest) {
       include: { medico: { select: { nome: true } } },
     });
     if (consulta && consulta.status === "confirmada") {
-      const quando = consulta.dataInicio.toLocaleDateString("pt-BR") +
-        " às " + consulta.dataInicio.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+      const quando = quandoClinica(consulta.dataInicio);
       await db.notificacao.create({
         data: {
           tipo: "agenda",

@@ -1,4 +1,5 @@
 import { MESES_AGENDA } from "./constantes";
+import { diaFusoClinica, instanteFusoClinica, partesFusoClinica } from "@/lib/bion-tipos";
 import type { Consulta, Medico } from "@/lib/bion-tipos";
 
 const DIAS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
@@ -11,16 +12,19 @@ export type DiaAgenda = {
   horarios: string[];
 };
 
-function isoDia(d: Date) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+/** Chave YYYY-MM-DD do dia no fuso da clínica (não no do navegador). */
+export function isoDia(tsOuIso: number | string) {
+  const p = partesFusoClinica(tsOuIso);
+  return `${p.ano}-${String(p.mes + 1).padStart(2, "0")}-${String(p.dia).padStart(2, "0")}`;
 }
 
 function chaveSlot(tsOuIso: number | string, hora: string) {
-  const d = typeof tsOuIso === "number" ? new Date(tsOuIso) : new Date(tsOuIso);
-  return `${isoDia(d)}|${hora}`;
+  return `${isoDia(tsOuIso)}|${hora}`;
+}
+
+/** Mesma consulta do médico: por id; nome só para registros antigos sem medicoId. */
+function eDoMedico(c: Consulta, medico: Medico) {
+  return c.medicoId ? c.medicoId === medico.id : c.medico === medico.nome;
 }
 
 export function agendaLivreDoMedico(
@@ -37,30 +41,26 @@ export function agendaLivreDoMedico(
       .filter(
         (c) =>
           c.id !== excluirConsultaId &&
-          !["cancelada", "concluida"].includes(c.status) &&
-          (medico ? c.medicoId === medico.id || c.medico === medico.nome : true),
+          !["cancelada", "concluida", "aguardando_reagendamento"].includes(c.status) &&
+          (medico ? eDoMedico(c, medico) : true),
       )
       .map((c) => chaveSlot(c.dataISO ?? c.ts, c.hora)),
   );
 
   const dias: DiaAgenda[] = [];
   for (let i = 0; i < horizonteDias; i++) {
-    const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    d.setDate(d.getDate() + i);
-    const iso = isoDia(d);
+    const d = diaFusoClinica(i);
     const horarios = horasBase.filter((h) => {
       const [hh, mm] = h.split(":").map(Number);
-      const ts = new Date(d);
-      ts.setHours(hh || 0, mm || 0, 0, 0);
-      if (ts.getTime() < agora) return false;
-      return !ocupados.has(`${iso}|${h}`);
+      const ts = instanteFusoClinica(d.ano, d.mes, d.dia, hh || 0, mm || 0);
+      if (ts < agora) return false;
+      return !ocupados.has(`${d.iso}|${h}`);
     });
     if (!horarios.length) continue;
     dias.push({
-      iso,
-      rotulo: i === 0 ? "Hoje" : i === 1 ? "Amanhã" : `${d.getDate()} ${MESES_AGENDA[d.getMonth()]}`,
-      sub: DIAS[d.getDay()],
+      iso: d.iso,
+      rotulo: i === 0 ? "Hoje" : i === 1 ? "Amanhã" : `${d.dia} ${MESES_AGENDA[d.mes]}`,
+      sub: DIAS[d.semana],
       horarios,
     });
   }

@@ -1,5 +1,6 @@
 "use client";
 
+import { formatarDataNascimento } from "@/lib/idade";
 import {
   FileText,
   Download,
@@ -20,7 +21,7 @@ export type ConsultaPainelLateralProps = {
   anamneseAtual?: AnamneseResumo;
   contraparteNome: string;
   sessaoNome: string;
-  dadosPaciente?: { idade?: number | string; genero?: string } | null;
+  dadosPaciente?: { idade?: number | string; dataNascimento?: string | null; genero?: string } | null;
   anotacoes: string;
   setAnotacoes: (v: string) => void;
   arquivos: { id?: string; nome: string; tipo?: string; tamanhoKb?: number; enviadoPor?: string }[];
@@ -29,6 +30,8 @@ export type ConsultaPainelLateralProps = {
   setChatInput: (v: string) => void;
   enviarChat: () => void;
   onAnexarExame: () => void;
+  /** Insere o modelo estruturado de evolução (sem conteúdo clínico). */
+  inserirModeloResumo: () => void;
 };
 
 export function ConsultaPainelLateral({
@@ -47,9 +50,10 @@ export function ConsultaPainelLateral({
   setChatInput,
   enviarChat,
   onAnexarExame,
+  inserirModeloResumo,
 }: ConsultaPainelLateralProps) {
+  // Painel Lateral — abaixo do vídeo no celular, ao lado no desktop
   return (
-  {/* Painel Lateral — abaixo do vídeo no celular, ao lado no desktop */}
   <div className="w-full lg:w-96 lg:shrink-0 border-t lg:border-t-0 lg:border-l border-white/10 bg-slate-900/95 flex flex-col min-w-0">
     {/* Abas */}
     <div className="flex border-b border-white/10 text-xs font-bold overflow-x-auto bp-coluna">
@@ -88,7 +92,11 @@ export function ConsultaPainelLateral({
             <div className="text-slate-200">
               {role === "medico" ? contraparteNome : sessaoNome} •{" "}
               {dadosPaciente
-                ? `${dadosPaciente.idade} anos • ${dadosPaciente.genero}`
+                ? `${dadosPaciente.idade} anos${
+                    formatarDataNascimento(dadosPaciente.dataNascimento)
+                      ? ` (nasc. ${formatarDataNascimento(dadosPaciente.dataNascimento)})`
+                      : ""
+                  } • ${dadosPaciente.genero}`
                 : "—"}
             </div>
             <div className="text-slate-300">
@@ -231,7 +239,7 @@ export function ConsultaPainelLateral({
                 }`}
               >
                 <div className="flex justify-between font-bold text-slate-300 text-xs">
-                  <span>{m.minha ? "Você" : role === "medico" ? "Marina Silva" : "Dra. Ana Ribeiro"}</span>
+                  <span>{m.minha ? "Você" : contraparteNome}</span>
                   <span>{m.hora}</span>
                 </div>
                 <p className="text-white leading-relaxed">{m.texto}</p>
@@ -269,26 +277,15 @@ export function ConsultaPainelLateral({
       {/* Aba IA Transcrição */}
       {aba === "ia" && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between text-xs">
-            <span className="font-bold text-emerald-700 dark:text-emerald-200 flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              Transcrição Ativa em Tempo Real
-            </span>
-            <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300">
-              demonstração
-            </span>
-          </div>
-
-          <div className="space-y-2.5">
-            {transcricoes.map((t, idx) => (
-              <div
-                key={idx}
-                className="p-3 rounded-2xl bg-white/5 border border-white/10 text-xs space-y-1"
-              >
-                <div className="font-bold text-primary text-xs">{t.autor}:</div>
-                <p className="text-slate-300 leading-relaxed italic">“{t.fala}”</p>
-              </div>
-            ))}
+          <div className="bg-white/5 rounded-2xl p-3.5 border border-white/10 space-y-1.5">
+            <div className="font-bold text-slate-300 uppercase tracking-wider text-xs">
+              Transcrição automática
+            </div>
+            <p className="text-slate-300 leading-relaxed">
+              A transcrição automática da consulta ainda não está disponível.
+              Nada é gravado nem transcrito nesta sala — registre a evolução
+              clínica manualmente na aba Prontuário.
+            </p>
           </div>
 
           {role === "medico" && (
@@ -303,7 +300,5 @@ export function ConsultaPainelLateral({
       )}
     </div>
   </div>
-  </div>
-
   );
 }

@@ -32,7 +32,8 @@ model User {
   consultasComoMedico  Consulta[]     @relation("ConsultaMedico")
   documentosEmitidos   Documento[]    @relation("DocumentoMedico")
   documentosRecebidos  Documento[]    @relation("DocumentoPaciente")
-  arquivos             Arquivo[]
+  arquivos             Arquivo[]      @relation("ArquivoUsuario")
+  arquivosRecebidos    Arquivo[]      @relation("ArquivoPaciente")
   notificacoes         Notificacao[]
   avaliacoes           Avaliacao[]    @relation("AvaliacaoPaciente")
   avaliacoesRecebidas  Avaliacao[]    @relation("AvaliacaoMedico")
@@ -46,6 +47,7 @@ model User {
   examesLaboratoriais  ExameLaboratorial[]
   anamneses            Anamnese[]
   leiturasNotificacao  NotificacaoLeitura[]
+  repasses             Repasse[]      @relation("RepasseMedico")
 }
 
 model Sessao {
@@ -85,7 +87,8 @@ model PerfilPaciente {
   cpf            String  @default("")
   telefone       String  @default("")
   convenio       String  @default("Particular")
-  idade          Int     @default(0)
+  idade          Int     @default(0) // legado: só para quem ainda não informou dataNascimento
+  dataNascimento DateTime? @db.Date
   genero         String  @default("")
   alergias       String  @default("[]") // JSON string[]
   medicamentos   String  @default("[]") // JSON string[]
@@ -137,7 +140,7 @@ model Consulta {
   medico             User     @relation("ConsultaMedico", fields: [medicoId], references: [id], onDelete: Cascade)
   especialidade      String
   dataInicio         DateTime
-  status             String   @default("confirmada") // confirmada | em_espera | pendente_anamnese (legado) | cancelada | concluida
+  status             String   @default("confirmada") // confirmada | em_espera | pendente_anamnese (legado) | aguardando_reagendamento | cancelada | concluida
   motivoConsulta     String?
   motivoCancelamento String?
   resumoMedico       String?
@@ -156,6 +159,11 @@ model Consulta {
 
   // Pagamento (confirmado pelo servidor/gateway — nunca pelo cliente)
   pagamento Pagamento?
+
+  // Fase financeira: histórico de cancelamentos/remarcações e repasse
+  eventos     EventoConsulta[]
+  repasseItem RepasseItem?
+  remarcacoes RemarcacaoPendente[]
 }
 
 // Cobrança da consulta. O CLIENTE NUNCA define `pago` — a confirmação vem do
@@ -172,6 +180,8 @@ model Pagamento {
   gatewayRef   String?
   criadoEm     DateTime  @default(now())
   confirmadoEm DateTime?
+
+  reembolsos Reembolso[]
 }
 
 // Triagem (anamnese) guiada pela BION IA em formato storytelling, feita APÓS o
@@ -269,12 +279,21 @@ model Arquivo {
   tipo        String
   tamanhoKb   Int
   enviadoPor  String // paciente | medico
+  /// Quem ENVIOU o arquivo (paciente ou médico).
   usuarioId   String
-  usuario     User     @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  usuario     User     @relation("ArquivoUsuario", fields: [usuarioId], references: [id], onDelete: Cascade)
+  /// Paciente a quem o arquivo pertence/destina (A3). Upload de paciente = ele
+  /// mesmo; upload de médico = paciente com quem o médico tem consulta.
+  /// Nulo = legado sem destinatário identificável (só o remetente/admin veem).
+  /// Migração: supabase/migrations/20260930_arquivo_paciente_id.sql
+  pacienteId  String?
+  paciente    User?    @relation("ArquivoPaciente", fields: [pacienteId], references: [id], onDelete: SetNull)
   consulta    String   @default("")
   /// Path no bucket Supabase Storage (documentos), se houver upload real
   storagePath String?
   createdAt   DateTime @default(now())
+
+  @@index([pacienteId])
 }
 
 model Notificacao {
@@ -376,4 +395,150 @@ model AuditLog {
   entidadeId String?
   detalhes   String?
   createdAt  DateTime @default(now())
+}
+
+// Cofre de identificação (LGPD art. 16, I + Lei 13.787/2018): identificação
+// mínima (nome, CPF, data de nascimento) do paciente ANONIMIZADO, cifrada com
+// AES-256-GCM (chave BION_COFRE_CHAVE, só no servidor), para reidentificar o
+// prontuário preservado por obrigação legal. Busca exata por HMAC-SHA256.
+// `userId` é String simples SEM @relation de propósito (não altera o model User).
+model IdentificacaoCofre {
+  id            String   @id @default(cuid())
+  userId        String   @unique // id do User (paciente) anonimizado
+  dadosCifrados String // "v1:iv:tag:ciphertext" (base64)
+  cpfHash       String? // HMAC-SHA256 do CPF só com dígitos
+  nomeHash      String? // HMAC-SHA256 do nome sem acento, minúsculo
+  createdAt     DateTime @default(now())
+
+  @@index([cpfHash])
+  @@index([nomeHash])
+}
+
+// =====================================================================
+// Fase financeira (regras em src/lib/server/financeiro.ts)
+// Valores novos em CENTAVOS (Int). `valor Float` antigo segue como está e é
+// convertido na leitura. Todas as tabelas: RLS ligado, sem policies e sem
+// grants (só o servidor, via Prisma, lê e grava).
+// =====================================================================
+
+// Histórico imutável de mudanças da consulta. Gravado SÓ pelo servidor, na
+// MESMA transação da alteração da Consulta.
+// tipo: cancelada | remarcada | falha_tecnica | falta_paciente
+// por: paciente | medico | sistema | admin
+// motivo: pedido_paciente | agenda_cancelada | falha_tecnica | admin | reagendamento | falta_paciente
+// dataAnterior: data/hora que estava marcada ANTES da mudança (base da multa).
+model EventoConsulta {
+  id            String    @id @default(cuid())
+  consultaId    String
+  consulta      Consulta  @relation(fields: [consultaId], references: [id], onDelete: Cascade)
+  tipo          String
+  por           String
+  atorId        String?
+  em            DateTime  @default(now())
+  dataAnterior  DateTime
+  dataNova      DateTime?
+  motivo        String
+  multaCentavos Int?
+
+  @@index([consultaId, em])
+  @@index([dataAnterior])
+  @@index([em])
+}
+
+// Devolução (total ou parcial) de um Pagamento da consulta OU da multa paga
+// numa RemarcacaoPendente que não pôde ser aplicada (exatamente um dos dois).
+// status: em_analise | solicitado | aprovado | processado | negado | falhou
+// origem: automatico (regras de cancelamento) | manual (paciente pede pelo
+// suporte numa falta; começa em em_analise e o admin aprova ou nega).
+// Só UM reembolso ATIVO (em_analise | solicitado | aprovado | processado) por pagamento:
+// garantido no servidor e por índice único parcial na migração SQL.
+model Reembolso {
+  id            String              @id @default(cuid())
+  pagamentoId   String?
+  pagamento     Pagamento?          @relation(fields: [pagamentoId], references: [id], onDelete: Cascade)
+  remarcacaoId  String?             @unique
+  remarcacao    RemarcacaoPendente? @relation(fields: [remarcacaoId], references: [id], onDelete: Cascade)
+  valorCentavos Int
+  multaCentavos Int       @default(0)
+  motivo        String
+  status        String    @default("solicitado")
+  gatewayRef    String?
+  solicitadoPor String
+  criadoEm      DateTime  @default(now())
+  processadoEm  DateTime?
+  origem        String    @default("automatico")
+  justificativa String?
+  respostaAdmin String?
+  decididoPor   String?
+  decididoEm    DateTime?
+
+  @@index([pagamentoId, status])
+  @@index([status, criadoEm])
+  @@index([origem, status, criadoEm])
+}
+
+// Repasse mensal ao médico. competencia: "AAAA-MM" (mês de Brasília).
+// status: aberto | fechado | pago
+model Repasse {
+  id                 String        @id @default(cuid())
+  medicoId           String
+  medico             User          @relation("RepasseMedico", fields: [medicoId], references: [id], onDelete: Restrict)
+  competencia        String
+  brutoCentavos      Int           @default(0)
+  taxasCentavos      Int           @default(0)
+  reembolsosCentavos Int           @default(0)
+  multasCentavos     Int           @default(0)
+  liquidoCentavos    Int           @default(0)
+  status             String        @default("aberto")
+  criadoEm           DateTime      @default(now())
+  fechadoEm          DateTime?
+  pagoEm             DateTime?
+  itens              RepasseItem[]
+
+  @@unique([medicoId, competencia])
+  @@index([competencia, status])
+}
+
+// Uma consulta entra em no máximo UM repasse.
+model RepasseItem {
+  id                 String   @id @default(cuid())
+  repasseId          String
+  repasse            Repasse  @relation(fields: [repasseId], references: [id], onDelete: Cascade)
+  consultaId         String   @unique
+  consulta           Consulta @relation(fields: [consultaId], references: [id], onDelete: Restrict)
+  brutoCentavos      Int
+  taxasCentavos      Int      @default(0)
+  reembolsosCentavos Int      @default(0)
+  multasCentavos     Int      @default(0)
+  liquidoCentavos    Int
+  criadoEm           DateTime @default(now())
+
+  @@index([repasseId])
+}
+
+// Remarcação do PACIENTE com multa (≤24 h da data de referência): a nova data
+// fica RESERVADA até a multa ser paga. Aprovada → a consulta muda de data (na
+// mesma transação, com EventoConsulta). Falhou/expirou/cancelada → a consulta
+// fica na data original. Expiração verificada na leitura (expiraEm < agora).
+// A cobrança da multa vive aqui (o Pagamento é 1:1 com a consulta).
+// status: pendente | aprovada | expirada | falhou | cancelada
+// Só UMA pendente por consulta (índice único parcial na migração SQL).
+model RemarcacaoPendente {
+  id            String     @id @default(cuid())
+  consultaId    String
+  consulta      Consulta   @relation(fields: [consultaId], references: [id], onDelete: Cascade)
+  novaData      DateTime
+  multaCentavos Int
+  status        String     @default("pendente")
+  metodo        String     @default("pix") // pix | cartao
+  via           String?    // webhook | simulado
+  gatewayRef    String?
+  solicitadoPor String
+  expiraEm      DateTime
+  criadoEm      DateTime   @default(now())
+  aprovadoEm    DateTime?
+  reembolso     Reembolso?
+
+  @@index([consultaId, status])
+  @@index([novaData, status])
 }

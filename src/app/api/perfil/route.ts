@@ -3,72 +3,93 @@ import { db } from "@/lib/db";
 import { exigirPapel } from "@/lib/server/auth";
 import { aplicarSideEffects, perfilPacienteWire } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
+import { cpfPodeSerAlterado, validarFotoPerfil, validarPatchPerfil } from "@/lib/server/validar-perfil";
+import { dataNascimentoParaIso, idadeDeNascimento } from "@/lib/idade";
+import { cpfEmUsoPorOutroPaciente, ERRO_CPF_BLOQUEADO, ERRO_CPF_EM_USO } from "@/lib/server/cpf-paciente";
 
-type PerfilPacientePatch = {
-  nome?: string;
-  cpf?: string;
-  telefone?: string;
-  convenio?: string;
-  idade?: number;
-  genero?: string;
-  alergias?: string[];
-  medicamentos?: string[];
-  tipoSanguineo?: string;
-  peso?: string;
-  altura?: string;
-  profissao?: string;
-  estadoCivil?: string;
-  comorbidades?: string[];
-  foto?: string;
-};
+/** Teto do corpo (texto JSON). Folga para a foto de perfil (~150 KB em base64). */
+const CORPO_MAX_CHARS = 300_000;
 
 /** Atualização do perfil do próprio paciente. */
 export async function PATCH(req: NextRequest) {
   try {
     const usuario = await exigirPapel("PACIENTE");
-    const body = (await req.json()) as PerfilPacientePatch;
+
+    // A1: corpo lido com teto de tamanho e JSON validado (antes: `as` cego).
+    const bruto = await req.text();
+    if (bruto.length > CORPO_MAX_CHARS) {
+      return Response.json({ erro: "Dados enviados excedem o tamanho permitido." }, { status: 413 });
+    }
+    let corpo: unknown;
+    try {
+      corpo = JSON.parse(bruto);
+    } catch {
+      return Response.json({ erro: "Corpo da requisição inválido." }, { status: 400 });
+    }
+
+    const validacao = validarPatchPerfil(corpo);
+    if (!validacao.ok) {
+      return Response.json({ erro: validacao.erro, campo: validacao.campo }, { status: 400 });
+    }
+    const { nome, perfil, campos } = validacao.valor;
+
+    // A2: foto validada no servidor (data URL JPEG/PNG/WebP, assinatura
+    // binária coerente, ≤ ~150 KB). Antes aceitava qualquer string.
+    const fotoBruta = (corpo as Record<string, unknown>).foto;
+    let foto: string | null | undefined;
+    if (fotoBruta !== undefined) {
+      const rf = validarFotoPerfil(fotoBruta);
+      if (!rf.ok) {
+        return Response.json({ erro: rf.erro, campo: rf.campo }, { status: 400 });
+      }
+      foto = rf.valor;
+      campos.push("foto");
+    }
+
+    if (!campos.length) {
+      return Response.json({ erro: "Nenhum campo válido para atualizar." }, { status: 400 });
+    }
 
     const perfilAtual = await db.perfilPaciente.findUnique({ where: { userId: usuario.id } });
     if (!perfilAtual) {
       return Response.json({ erro: "Perfil não encontrado." }, { status: 404 });
     }
 
+    // M4: com data de nascimento gravada, a idade é DERIVADA — um `idade`
+    // enviado sozinho é substituído pela idade calculada.
+    if (perfil.idade !== undefined && perfil.dataNascimento === undefined) {
+      const iso = dataNascimentoParaIso(perfilAtual.dataNascimento);
+      const calculada = iso ? idadeDeNascimento(iso) : null;
+      if (calculada !== null) perfil.idade = calculada;
+    }
+
+    // M4: CPF travado depois do primeiro valor VÁLIDO (correção só pelo
+    // suporte/admin) e único entre pacientes. Perfil sem CPF ou com valor
+    // legado inválido pode definir uma vez.
+    if (perfil.cpf !== undefined) {
+      if (!cpfPodeSerAlterado(perfilAtual.cpf, perfil.cpf)) {
+        return Response.json({ erro: ERRO_CPF_BLOQUEADO, campo: "cpf" }, { status: 409 });
+      }
+      if (perfil.cpf && (await cpfEmUsoPorOutroPaciente(perfil.cpf, usuario.id))) {
+        return Response.json({ erro: ERRO_CPF_EM_USO, campo: "cpf" }, { status: 409 });
+      }
+    }
+
     await db.$transaction([
-      db.user.update({
-        where: { id: usuario.id },
-        data: body.nome ? { nome: body.nome.trim() } : {},
-      }),
+      ...(nome !== undefined ? [db.user.update({ where: { id: usuario.id }, data: { nome } })] : []),
       db.perfilPaciente.update({
         where: { userId: usuario.id },
-        data: {
-          ...(body.cpf !== undefined ? { cpf: body.cpf } : {}),
-          ...(body.telefone !== undefined ? { telefone: body.telefone } : {}),
-          ...(body.convenio !== undefined ? { convenio: body.convenio } : {}),
-          ...(body.idade !== undefined ? { idade: body.idade } : {}),
-          ...(body.genero !== undefined ? { genero: body.genero } : {}),
-          ...(body.alergias !== undefined ? { alergias: JSON.stringify(body.alergias) } : {}),
-          ...(body.medicamentos !== undefined
-            ? { medicamentos: JSON.stringify(body.medicamentos) }
-            : {}),
-          ...(body.tipoSanguineo !== undefined ? { tipoSanguineo: body.tipoSanguineo } : {}),
-          ...(body.peso !== undefined ? { peso: body.peso } : {}),
-          ...(body.altura !== undefined ? { altura: body.altura } : {}),
-          ...(body.profissao !== undefined ? { profissao: body.profissao } : {}),
-          ...(body.estadoCivil !== undefined ? { estadoCivil: body.estadoCivil } : {}),
-          ...(body.comorbidades !== undefined
-            ? { comorbidades: JSON.stringify(body.comorbidades) }
-            : {}),
-          ...(body.foto !== undefined ? { foto: body.foto } : {}),
-        },
+        data: { ...perfil, ...(foto !== undefined ? { foto } : {}) },
       }),
     ]);
 
     // Contrato delta (auditoria FASE 2): devolve APENAS o perfil completo
     // atualizado + auditoria — o nome novo sincroniza a sessão no cliente.
+    // A1: a auditoria lista só os campos ACEITOS (não as chaves cruas do cliente).
     const efeitos = await aplicarSideEffects(usuario, undefined, {
       acao: "PERFIL_ATUALIZADO",
       categoria: "usuario",
-      detalhes: `Dados atualizados: ${Object.keys(body).join(", ")}`,
+      detalhes: `Dados atualizados: ${campos.join(", ")}`,
     });
 
     const perfilFresco = await db.perfilPaciente.findUnique({

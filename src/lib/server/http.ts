@@ -17,12 +17,25 @@ const DB_INDISPONIVEL = [
   " Too many connections",
 ];
 
-/** Converte erros lançados pelos helpers (401/403) e erros genéricos em respostas JSON. */
+/** Mensagem genérica para falhas inesperadas (o detalhe fica só no log do servidor). */
+export const ERRO_INTERNO_PADRAO = "Erro interno. Tente novamente.";
+
+/**
+ * Converte erros lançados pelos helpers (401/403/404/409…) e erros genéricos
+ * em respostas JSON.
+ *
+ * M2 (auditoria perfil do paciente): erro SEM `status` explícito é falha
+ * inesperada (Prisma, bug, rede) — a mensagem interna (nomes de modelo/campo,
+ * trechos de query) NÃO vai mais ao cliente: responde a mensagem genérica e
+ * registra o detalhe só no log. Erros lançados de propósito com `status`
+ * (ex.: `err.status = 404`) continuam com a própria mensagem.
+ */
 export function falha(erro: unknown) {
   const e = erro as Error & { status?: number };
-  const status = e?.status ?? 500;
+  const statusExplicito = typeof e?.status === "number";
+  const status = statusExplicito ? (e.status as number) : 500;
   if (status >= 500) console.error("[API]", erro);
-  const msg = e?.message ?? "Erro interno";
+  const msg = e?.message ?? "";
   if (status >= 500 && DB_INDISPONIVEL.some((p) => msg.includes(p))) {
     return NextResponse.json(
       {
@@ -31,6 +44,9 @@ export function falha(erro: unknown) {
       },
       { status: 503 },
     );
+  }
+  if (!statusExplicito || !msg) {
+    return NextResponse.json({ erro: ERRO_INTERNO_PADRAO }, { status });
   }
   return NextResponse.json({ erro: msg }, { status });
 }
