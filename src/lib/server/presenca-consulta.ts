@@ -225,8 +225,12 @@ const selectAvaliada = {
   updatedAt: true,
 } as const;
 
-/** Filtro das consultas que já passaram da carência e ainda não têm desfecho de presença. */
-function filtroPendentes(agora: Date) {
+/**
+ * Filtro das consultas que já passaram da carência e ainda não têm desfecho
+ * de presença (exportado para o teste). Mesmos limites para médico, paciente
+ * e sala: INICIO_DETECCAO, JANELA_RETROATIVA_DIAS e STATUS_AVALIAVEIS.
+ */
+export function filtroPendentes(agora: Date) {
   const limiteRecente = new Date(agora.getTime() - JANELA_RETROATIVA_DIAS * 86_400_000);
   return {
     status: { in: STATUS_AVALIAVEIS },
@@ -245,10 +249,13 @@ export async function verificarPresencaConsulta(consultaId: string, agora: Date 
   return avaliarConsulta(c, agora);
 }
 
-/** Consultas passadas do médico (chamado pelo bootstrap da sessão do médico). */
-export async function verificarPresencasDoMedico(medicoId: string, agora: Date = new Date()) {
+/** Dono das consultas avaliadas no bootstrap (ids de User — Consulta.medicoId/pacienteId apontam para User.id). */
+export type DonoConsultas = { medicoId: string } | { pacienteId: string };
+
+/** Consultas passadas de um médico OU de um paciente (até MAX_POR_CHAMADA por chamada). */
+async function verificarPresencasDe(dono: DonoConsultas, agora: Date) {
   const lista = await db.consulta.findMany({
-    where: { medicoId, ...filtroPendentes(agora) },
+    where: { ...dono, ...filtroPendentes(agora) },
     select: selectAvaliada,
     orderBy: { dataInicio: "asc" },
     take: MAX_POR_CHAMADA,
@@ -259,6 +266,20 @@ export async function verificarPresencasDoMedico(medicoId: string, agora: Date =
     if (tipo) gravados.push({ consultaId: c.id, tipo });
   }
   return gravados;
+}
+
+/** Consultas passadas do médico (chamado pelo bootstrap da sessão do médico). */
+export async function verificarPresencasDoMedico(medicoId: string, agora: Date = new Date()) {
+  return verificarPresencasDe({ medicoId }, agora);
+}
+
+/**
+ * Consultas passadas do paciente (chamado pelo bootstrap da sessão do
+ * paciente): se o médico não abrir mais o app, o paciente ainda vê o
+ * desfecho (falta / falha técnica) na mesma requisição.
+ */
+export async function verificarPresencasDoPaciente(pacienteId: string, agora: Date = new Date()) {
+  return verificarPresencasDe({ pacienteId }, agora);
 }
 
 /* Throttle por instância para a sala (heartbeat a cada ~1,5 s). */
@@ -290,5 +311,14 @@ export async function verificarPresencasDoMedicoSemFalhar(medicoId: string) {
     await verificarPresencasDoMedico(medicoId);
   } catch (e) {
     console.error("[presenca-consulta] falha ao verificar as presenças do médico", medicoId, e);
+  }
+}
+
+/** Idem para o bootstrap do paciente. Nunca lança. */
+export async function verificarPresencasDoPacienteSemFalhar(pacienteId: string) {
+  try {
+    await verificarPresencasDoPaciente(pacienteId);
+  } catch (e) {
+    console.error("[presenca-consulta] falha ao verificar as presenças do paciente", pacienteId, e);
   }
 }

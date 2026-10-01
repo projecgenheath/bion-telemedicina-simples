@@ -5,7 +5,15 @@
  *   bun --conditions=react-server src/lib/server/presenca-consulta.teste.ts
  * Nada toca o banco: só a função pura.
  */
-import { CARENCIA_APOS_INICIO_MIN, QUEDA_MIN, classificarPresenca } from "./presenca-consulta";
+import {
+  CARENCIA_APOS_INICIO_MIN,
+  INICIO_DETECCAO,
+  JANELA_RETROATIVA_DIAS,
+  QUEDA_MIN,
+  STATUS_AVALIAVEIS,
+  classificarPresenca,
+  filtroPendentes,
+} from "./presenca-consulta";
 
 let ok = 0;
 let falhas = 0;
@@ -66,6 +74,26 @@ igual(
   classificarPresenca({ ...base, ultimoPingMedico: min(30), ultimoPingPaciente: min(10) }).motivo.includes("paciente caiu"),
   true,
 );
+
+// Filtro (o mesmo para médico, paciente e sala)
+{
+  const agoraCedo = new Date("2026-10-03T12:00:00.000Z");
+  const f = filtroPendentes(agoraCedo);
+  igual("filtro: status avaliáveis", f.status.in, STATUS_AVALIAVEIS);
+  igual("filtro: não retroativo antes do corte", f.dataInicio.gte.toISOString(), INICIO_DETECCAO.toISOString());
+  igual(
+    "filtro: só depois da carência",
+    f.dataInicio.lte.toISOString(),
+    new Date(agoraCedo.getTime() - CARENCIA_APOS_INICIO_MIN * 60_000).toISOString(),
+  );
+  igual("filtro: sem falta nem falha", f.eventos.none.tipo.in, ["falta_paciente", "falha_tecnica"]);
+  const agoraTarde = new Date("2026-11-20T12:00:00.000Z");
+  igual(
+    "filtro: janela retroativa depois do corte",
+    filtroPendentes(agoraTarde).dataInicio.gte.toISOString(),
+    new Date(agoraTarde.getTime() - JANELA_RETROATIVA_DIAS * 86_400_000).toISOString(),
+  );
+}
 
 console.log(`\n${ok} ok, ${falhas} falha(s)`);
 if (falhas) process.exit(1);
