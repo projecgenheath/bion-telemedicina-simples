@@ -11,6 +11,8 @@ import {
   Trash2,
   AlertTriangle,
   Database,
+  Lock,
+  Search,
 } from "lucide-react";
 import { useBion } from "@/lib/bion-store";
 import { ModalBion } from "@/components/bion/ModalBion";
@@ -32,6 +34,23 @@ type PacienteLgpd = {
 
 type Acao = { tipo: "anonimizar" | "excluir"; paciente: PacienteLgpd };
 
+/** Resultado da busca no cofre de identificação (somente admin, auditado). */
+type ResultadoCofre = {
+  pacienteId: string;
+  pseudonimo: string | null;
+  status: string | null;
+  cadastradoEm: string | null;
+  guardadoNoCofreEm: string;
+  identificacao: { nome: string; cpf: string; dataNascimento: string | null } | null;
+  erroDecifrar: boolean;
+  historico: {
+    contagem: Record<"consultas" | "documentos" | "exames" | "anamneses" | "medicoes" | "arquivos", number>;
+    consultas: { id: string; data: string; especialidade: string; medico: string; status: string }[];
+    documentos: { id: string; tipo: string; titulo: string; data: string }[];
+    exames: { id: string; titulo: string; data: string }[];
+  };
+};
+
 const fmtData = (iso: string) => {
   const d = new Date(iso);
   return Number.isNaN(d.getTime()) ? "—" : d.toLocaleDateString("pt-BR");
@@ -48,6 +67,49 @@ export function PrivacidadeAdmin() {
   const [carregando, setCarregando] = useState(false);
   const [codigo, setCodigo] = useState("");
   const [enviando, setEnviando] = useState(false);
+
+  // ---- Busca no cofre (ordem judicial) ----
+  const [cofreCriterio, setCofreCriterio] = useState<"cpf" | "nome">("cpf");
+  const [cofreTermo, setCofreTermo] = useState("");
+  const [cofreMotivo, setCofreMotivo] = useState("");
+  const [cofreBuscando, setCofreBuscando] = useState(false);
+  const [cofreResultados, setCofreResultados] = useState<ResultadoCofre[] | null>(null);
+  const [historicoAberto, setHistoricoAberto] = useState<string | null>(null);
+  const cofrePronto = cofreTermo.trim().length >= 3 && cofreMotivo.trim().length >= 5 && !cofreBuscando;
+
+  const buscarCofre = async () => {
+    if (!cofrePronto) return;
+    setCofreBuscando(true);
+    setHistoricoAberto(null);
+    try {
+      const res = await fetch("/api/admin/lgpd/cofre/busca", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ [cofreCriterio]: cofreTermo.trim(), motivo: cofreMotivo.trim() }),
+      });
+      const json = (await res.json().catch(() => null)) as
+        | { resultados?: ResultadoCofre[]; erro?: string }
+        | null;
+      if (!res.ok) {
+        toast.error(json?.erro ?? "Não foi possível consultar o cofre.");
+        return;
+      }
+      setCofreResultados(json?.resultados ?? []);
+      toast.message("Consulta ao cofre registrada na auditoria.");
+    } catch {
+      toast.error("Falha de conexão com o servidor.");
+    } finally {
+      setCofreBuscando(false);
+    }
+  };
+
+  const limparCofre = () => {
+    setCofreResultados(null);
+    setCofreTermo("");
+    setCofreMotivo("");
+    setHistoricoAberto(null);
+  };
 
   const carregar = useCallback(async (termo: string) => {
     setCarregando(true);
@@ -193,6 +255,134 @@ export function PrivacidadeAdmin() {
             ))}
           </div>
         )}
+      </div>
+
+      <div className="bg-card border rounded-3xl p-6 space-y-4">
+        <div>
+          <h2 className="font-bold flex items-center gap-2">
+            <Lock className="w-4 h-4 text-primary" /> Busca no cofre (ordem judicial)
+          </h2>
+          <p className="text-xs text-muted-foreground mt-1">
+            Reidentifica um paciente ANONIMIZADO por obrigação legal (ordem judicial, ofício, pedido
+            do titular). Busca exata por CPF ou nome completo. Toda consulta é registrada na
+            auditoria com seu usuário e o motivo; não repita o CPF ou o nome no motivo.
+          </p>
+        </div>
+        <div className="grid sm:grid-cols-[auto,1fr] gap-2">
+          <select
+            aria-label="Critério da busca no cofre"
+            value={cofreCriterio}
+            onChange={(e) => setCofreCriterio(e.target.value as "cpf" | "nome")}
+            className="px-3 py-2.5 rounded-2xl border bg-background text-sm"
+          >
+            <option value="cpf">CPF</option>
+            <option value="nome">Nome completo</option>
+          </select>
+          <input
+            aria-label="Termo da busca no cofre"
+            value={cofreTermo}
+            onChange={(e) => setCofreTermo(e.target.value)}
+            placeholder={cofreCriterio === "cpf" ? "000.000.000-00" : "Nome completo exato"}
+            autoComplete="off"
+            className="px-4 py-2.5 rounded-2xl border bg-background text-sm"
+          />
+        </div>
+        <textarea
+          aria-label="Motivo da consulta ao cofre"
+          value={cofreMotivo}
+          onChange={(e) => setCofreMotivo(e.target.value)}
+          placeholder="Motivo obrigatório — ex.: Processo nº 0000000-00.0000.0.00.0000 / Ofício nº ..."
+          rows={2}
+          maxLength={300}
+          className="w-full px-4 py-2.5 rounded-2xl border bg-background text-sm"
+        />
+        <div className="flex justify-end gap-2">
+          {cofreResultados && (
+            <button type="button"
+              onClick={limparCofre}
+              className="px-4 py-2 rounded-xl border text-xs font-bold hover:bg-muted transition"
+            >
+              Limpar
+            </button>
+          )}
+          <button type="button"
+            disabled={!cofrePronto}
+            onClick={() => void buscarCofre()}
+            className="px-4 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-bold flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Search className="w-3.5 h-3.5" /> {cofreBuscando ? "Buscando..." : "Buscar no cofre"}
+          </button>
+        </div>
+
+        {cofreResultados && cofreResultados.length === 0 && (
+          <p className="text-sm text-muted-foreground">Nenhum registro encontrado no cofre.</p>
+        )}
+        {cofreResultados?.map((r) => (
+          <div key={r.pacienteId} className="bg-muted/60 rounded-2xl p-4 space-y-2 text-xs">
+            <div className="font-mono break-all">id {r.pacienteId}</div>
+            {r.erroDecifrar || !r.identificacao ? (
+              <div className="text-destructive font-bold">
+                Não foi possível descriptografar (chave diferente ou registro adulterado).
+              </div>
+            ) : (
+              <dl className="grid grid-cols-[auto,1fr] gap-x-3 gap-y-1">
+                <dt className="font-bold">Nome</dt>
+                <dd>{r.identificacao.nome}</dd>
+                <dt className="font-bold">CPF</dt>
+                <dd>{r.identificacao.cpf || "—"}</dd>
+                <dt className="font-bold">Nascimento</dt>
+                <dd>{r.identificacao.dataNascimento ?? "—"}</dd>
+              </dl>
+            )}
+            <div className="text-muted-foreground">
+              Pseudônimo: {r.pseudonimo ?? "—"} • cadastro {r.cadastradoEm ? fmtData(r.cadastradoEm) : "—"} •
+              no cofre desde {fmtData(r.guardadoNoCofreEm)}
+            </div>
+            <div className="text-muted-foreground">
+              Histórico preservado: {r.historico.contagem.consultas} consultas •{" "}
+              {r.historico.contagem.anamneses} anamneses • {r.historico.contagem.exames} exames •{" "}
+              {r.historico.contagem.documentos} documentos • {r.historico.contagem.medicoes} medições •{" "}
+              {r.historico.contagem.arquivos} arquivos
+            </div>
+            <button type="button"
+              onClick={() => setHistoricoAberto(historicoAberto === r.pacienteId ? null : r.pacienteId)}
+              className="px-3 py-1.5 rounded-xl border font-bold hover:bg-card transition"
+            >
+              {historicoAberto === r.pacienteId ? "Fechar histórico" : "Abrir histórico"}
+            </button>
+            {historicoAberto === r.pacienteId && (
+              <div className="space-y-2 pt-1">
+                <div>
+                  <div className="font-bold">Consultas</div>
+                  {r.historico.consultas.length === 0 ? "—" : r.historico.consultas.map((c) => (
+                    <div key={c.id}>
+                      {fmtData(c.data)} • {c.especialidade} • {c.medico} • {c.status}{" "}
+                      <span className="font-mono text-muted-foreground">({c.id})</span>
+                    </div>
+                  ))}
+                </div>
+                <div>
+                  <div className="font-bold">Documentos clínicos</div>
+                  {r.historico.documentos.length === 0 ? "—" : r.historico.documentos.map((d) => (
+                    <div key={d.id}>
+                      {fmtData(d.data)} • {d.tipo} • {d.titulo}{" "}
+                      <span className="font-mono text-muted-foreground">({d.id})</span>
+                    </div>
+                  ))}
+                </div>
+                <div>
+                  <div className="font-bold">Exames</div>
+                  {r.historico.exames.length === 0 ? "—" : r.historico.exames.map((e) => (
+                    <div key={e.id}>
+                      {fmtData(e.data)} • {e.titulo}{" "}
+                      <span className="font-mono text-muted-foreground">({e.id})</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
       </div>
 
       <div className="bg-card border rounded-3xl p-6 space-y-3">

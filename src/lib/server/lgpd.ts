@@ -4,6 +4,13 @@ import { db } from "@/lib/db";
 import { supabaseServiceRoleKey } from "@/lib/supabase/env";
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
 import { BUCKET_DOCUMENTOS } from "@/lib/supabase/storage";
+import {
+  cifrarIdentificacao,
+  exigirChaveCofre,
+  extrairDataNascimento,
+  hashCpf,
+  hashNome,
+} from "@/lib/server/cofre";
 
 /**
  * Anonimização LGPD (art. 12 / art. 16) de um paciente, feita pela administração.
@@ -30,7 +37,10 @@ import { BUCKET_DOCUMENTOS } from "@/lib/supabase/storage";
  * Ordem (para ser IDEMPOTENTE e permitir nova tentativa após falha):
  *   a) Supabase Auth (remove o usuário; "não encontrado" = já removido);
  *   b) Storage (remove só objetos pessoais; remover o que não existe é ok);
- *   c) Postgres numa transação.
+ *   c) Postgres numa transação — incluindo o COFRE de identificação
+ *      (nome, CPF, data de nascimento cifrados; ver src/lib/server/cofre.ts),
+ *      gravado ANTES/junto da pseudonimização, de forma atômica.
+ * Sem `BION_COFRE_CHAVE` válida a operação recusa com 503 antes de tudo.
  * Se (a) ou (b) falhar, NADA é alterado no banco e o erro sobe (502/503) —
  * o admin pode repetir. Rodar de novo numa conta já anonimizada reaproveita o
  * pseudônimo e conclui o que tiver faltado.
@@ -229,6 +239,8 @@ export async function anonimizarPacienteCompleto(pacienteId: string): Promise<Re
     include: { perfilPaciente: true },
   });
   if (!paciente) throw erroStatus("Paciente não encontrado.", 404);
+  // Cofre obrigatório: sem chave, recusa (503) antes de qualquer alteração.
+  exigirChaveCofre();
 
   const jaEstavaAnonimizado = estaAnonimizado(paciente);
   let apelido = paciente.nome;
@@ -258,7 +270,7 @@ export async function anonimizarPacienteCompleto(pacienteId: string): Promise<Re
   });
   const [exames, anamneses, consultasAgg] = await Promise.all([
     db.exameLaboratorial.findMany({ where: { usuarioId: pacienteId }, select: { arquivoNome: true } }),
-    db.anamnese.findMany({ where: { usuarioId: pacienteId }, select: { documentos: true } }),
+    db.anamnese.findMany({ where: { usuarioId: pacienteId }, select: { documentos: true, coleta: true } }),
     // Qualquer status (inclusive cancelada/futura): marco mais conservador.
     db.consulta.aggregate({
       where: { pacienteId },
@@ -285,6 +297,21 @@ export async function anonimizarPacienteCompleto(pacienteId: string): Promise<Re
       .filter(Boolean),
   );
   const pessoais = arquivos.filter((a) => arquivoEhPessoal(a, pacienteId, nomesClinicos, ultimaConsulta));
+
+  // ---- Cofre: identificação real cifrada (só na 1ª anonimização — numa
+  //      reexecução o nome/CPF reais já não existem no cadastro) ----
+  const registroCofre = jaEstavaAnonimizado
+    ? null
+    : {
+        userId: pacienteId,
+        dadosCifrados: cifrarIdentificacao(pacienteId, {
+          nome: paciente.nome,
+          cpf: paciente.perfilPaciente?.cpf ?? "",
+          dataNascimento: extrairDataNascimento(anamneses.map((a) => a.coleta)),
+        }),
+        cpfHash: hashCpf(paciente.perfilPaciente?.cpf ?? ""),
+        nomeHash: hashNome(paciente.nome),
+      };
 
   // ---- (a) Supabase Auth e (b) Storage — antes do banco (ver cabeçalho) ----
   let loginSupabaseRemovido = false;
@@ -331,6 +358,16 @@ export async function anonimizarPacienteCompleto(pacienteId: string): Promise<Re
 
   await db.$transaction(
     async (tx) => {
+      // 0) Cofre de identificação — mesma transação da pseudonimização:
+      //    ou os dois acontecem, ou nenhum. Não sobrescreve registro existente.
+      if (registroCofre) {
+        await tx.identificacaoCofre.upsert({
+          where: { userId: pacienteId },
+          create: registroCofre,
+          update: {},
+        });
+      }
+
       // 1) Identidade / login: nome, e-mail, senha inutilizada, sem vínculo com o Auth.
       await tx.user.update({
         where: { id: pacienteId },
