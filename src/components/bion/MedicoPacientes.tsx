@@ -1,5 +1,6 @@
 "use client";
 
+import { formatarDataNascimento } from "@/lib/idade";
 import { useMemo, useState } from "react";
 import {
   ArrowLeft,
@@ -66,7 +67,11 @@ export function MedicoPacientes() {
             <h1 className="text-xl md:text-2xl font-extrabold text-foreground">{selecionado}</h1>
             <p className="text-xs text-muted-foreground">
               {registro
-                ? `${registro.idade} anos • ${registro.genero} • ${registro.convenio}`
+                ? `${registro.idade} anos${
+                    formatarDataNascimento(registro.dataNascimento)
+                      ? ` (nasc. ${formatarDataNascimento(registro.dataNascimento)})`
+                      : ""
+                  } • ${registro.genero} • ${registro.convenio}`
                 : "Paciente atendido na BION"}
             </p>
           </div>

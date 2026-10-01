@@ -145,6 +145,7 @@ type EstadoFresco = {
   }[];
   pacientes: {
     id: string; nome: string; email: string; telefone: string; cpf: string; idade: number;
+    dataNascimento?: string | null;
     genero: string; convenio: string; status: string; desde: string;
   }[];
   tickets: {
@@ -277,7 +278,7 @@ const mapMedico = (m: EstadoFresco["medicos"][number]): Medico => ({
 
 const mapPaciente = (p: EstadoFresco["pacientes"][number]): PacienteRegistro => ({
   id: p.id, nome: p.nome, email: p.email, telefone: p.telefone, cpf: p.cpf,
-  idade: p.idade, genero: p.genero, convenio: p.convenio,
+  idade: p.idade, dataNascimento: p.dataNascimento ?? null, genero: p.genero, convenio: p.convenio,
   status: p.status as PacienteRegistro["status"], desde: fmtDataBR(p.desde),
 });
 

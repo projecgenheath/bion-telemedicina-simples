@@ -252,6 +252,8 @@ export type PacienteRegistro = {
   telefone: string;
   cpf: string;
   idade: number;
+  /** "YYYY-MM-DD" (dia de calendário, sem fuso) ou null se não preenchida. */
+  dataNascimento?: string | null;
   genero: string;
   convenio: string;
   status: "ativo" | "inativo";

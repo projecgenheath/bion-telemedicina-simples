@@ -1,5 +1,6 @@
 "use client";
 
+import { formatarDataNascimento } from "@/lib/idade";
 import {
   FileText,
   Download,
@@ -20,7 +21,7 @@ export type ConsultaPainelLateralProps = {
   anamneseAtual?: AnamneseResumo;
   contraparteNome: string;
   sessaoNome: string;
-  dadosPaciente?: { idade?: number | string; genero?: string } | null;
+  dadosPaciente?: { idade?: number | string; dataNascimento?: string | null; genero?: string } | null;
   anotacoes: string;
   setAnotacoes: (v: string) => void;
   arquivos: { id?: string; nome: string; tipo?: string; tamanhoKb?: number; enviadoPor?: string }[];
@@ -91,7 +92,11 @@ export function ConsultaPainelLateral({
             <div className="text-slate-200">
               {role === "medico" ? contraparteNome : sessaoNome} •{" "}
               {dadosPaciente
-                ? `${dadosPaciente.idade} anos • ${dadosPaciente.genero}`
+                ? `${dadosPaciente.idade} anos${
+                    formatarDataNascimento(dadosPaciente.dataNascimento)
+                      ? ` (nasc. ${formatarDataNascimento(dadosPaciente.dataNascimento)})`
+                      : ""
+                  } • ${dadosPaciente.genero}`
                 : "—"}
             </div>
             <div className="text-slate-300">
