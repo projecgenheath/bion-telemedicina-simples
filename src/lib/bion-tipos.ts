@@ -56,6 +56,8 @@ export type Consulta = {
   reembolsoManual?: { status: string; respostaAdmin: string | null } | null;
   // Fim do prazo (ISO) para pedir reembolso de uma falta; null sem falta.
   podePedirAte?: string | null;
+  // Só em aguardando_reagendamento: médico cancelou, falha técnica ou o médico não compareceu.
+  motivoReagendamento?: "medico_cancelou" | "falha_tecnica" | "falta_medico" | null;
 };
 
 export type Arquivo = {

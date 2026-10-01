@@ -128,6 +128,7 @@ type EstadoFresco = {
     falta?: boolean;
     reembolsoManual?: Consulta["reembolsoManual"];
     podePedirAte?: string | null;
+    motivoReagendamento?: Consulta["motivoReagendamento"];
   }[];
   documentos: {
     id: string; tipo: string; titulo: string; conteudo: string; medico: string; paciente: string;
@@ -242,6 +243,7 @@ const mapConsulta = (c: EstadoFresco["consultas"][number]): Consulta => ({
   falta: c.falta ?? false,
   reembolsoManual: c.reembolsoManual ?? null,
   podePedirAte: c.podePedirAte ?? null,
+  motivoReagendamento: c.motivoReagendamento ?? null,
 });
 
 const mapDocumento = (x: EstadoFresco["documentos"][number]): Documento => ({

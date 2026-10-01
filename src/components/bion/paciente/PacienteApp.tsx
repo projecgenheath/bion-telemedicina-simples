@@ -46,6 +46,7 @@ const TriagemSlides = dynamic(
 );
 import { PerfilPainel } from "./PerfilPainel";
 import { DocumentosPainel } from "./DocumentosPainel";
+import { fraseMotivoReagendamento, rotuloMotivoReagendamento } from "./motivo-reagendamento";
 
 /**
  * App imersivo do paciente — fullscreen, sem menu e sem botões de navegação.
@@ -134,7 +135,7 @@ export function PacienteApp() {
 
   const proxima = proximas[0];
 
-  /** Médico cancelou o dia (ou falha técnica): o paciente escolhe remarcar ou reembolso integral. */
+  /** Médico cancelou, falha técnica ou o médico não compareceu: o paciente escolhe remarcar ou reembolso integral. */
   const aguardandoReagendamento = useMemo(
     () =>
       consultas
@@ -326,7 +327,7 @@ export function PacienteApp() {
               </p>
             </div>
 
-            {/* Cards: médico cancelou — remarcar ou reembolso integral, sem multa */}
+            {/* Cards: aguardando reagendamento (motivo no cartão) — remarcar ou reembolso integral, sem multa */}
             {aguardandoReagendamento.map((c) => (
               <CardAguardandoReagendamento
                 key={c.id}
@@ -879,7 +880,7 @@ function CardAguardandoReagendamento({
   onReembolso: () => void;
 }) {
   return (
-    <div className="bp-glass p-5 w-full mb-3 border border-amber-500/40" role="group" aria-label={`Consulta de ${consulta.especialidade} cancelada pelo médico: escolha remarcar ou reembolso integral`}>
+    <div className="bp-glass p-5 w-full mb-3 border border-amber-500/40" role="group" aria-label={`Consulta de ${consulta.especialidade}: ${rotuloMotivoReagendamento(consulta.motivoReagendamento)}. Escolha remarcar ou reembolso integral`}>
       <div className="flex items-center justify-between mb-3">
         <span className="text-xs font-bold uppercase tracking-wider text-bion-ink/50 dark:text-white/50">Ação necessária</span>
         <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-300">
@@ -892,7 +893,7 @@ function CardAguardandoReagendamento({
         <CalendarClock className="w-4 h-4" /> {consulta.data} · {consulta.hora}
       </div>
       <p className="text-sm mt-3 leading-relaxed">
-        O médico cancelou — escolha remarcar ou reembolso integral, <strong className="font-bold">sem multa</strong>.
+        {fraseMotivoReagendamento(consulta.motivoReagendamento)}. Escolha remarcar ou reembolso integral, <strong className="font-bold">sem multa</strong>.
       </p>
       <div className="mt-4 flex flex-wrap gap-2">
         <button
