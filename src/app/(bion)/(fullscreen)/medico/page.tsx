@@ -8,8 +8,7 @@ import { MedicoApp } from "@/components/bion/medico/MedicoApp";
 
 /**
  * App imersivo do MÉDICO (fullscreen). O layout (fullscreen) só garante
- * autenticação; o papel é conferido aqui. A versão clássica continua em
- * /painel?legado=1.
+ * autenticação; o papel é conferido aqui. Não há mais versão clássica.
  */
 export default function PaginaMedico() {
   const { sessao } = useBion();

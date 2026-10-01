@@ -61,13 +61,6 @@
 /* Barra inferior dedicada aos pontos de página: o conteúdo rolável termina
    ACIMA dela, então nada fica escondido sob o indicador. Inclui a área
    segura (home indicator do iPhone). */
-.bm-barra {
-  height: calc(2.75rem + env(safe-area-inset-bottom));
-  padding-bottom: env(safe-area-inset-bottom);
-  background: #0a1f44;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-}
-.dark .bm-barra { background: #020a1a; }
 
 /* Superfície de sobreposição (conversa, suporte, prontuário) */
 .bm-sobreposicao { background: linear-gradient(180deg, #ffffff 0%, #f3f7fd 70%, #e6eef9 100%); }

@@ -34,7 +34,7 @@ export function TelaInicio({
   const reservaProxima = proxima ? reservaVigente(proxima, agora) : null;
 
   return (
-    <section className="bm-tela bm-tela-1 flex flex-col px-5 bp-safe-top pb-6" aria-labelledby="bm-t1-titulo">
+    <section className="bm-tela bm-tela-1 flex flex-col px-5 bp-safe-top pb-20" aria-labelledby="bm-t1-titulo">
       <header className="flex items-center justify-between pt-2">
         <div className="text-xs font-semibold uppercase tracking-wider text-bion-ink/70 dark:text-bion-paper/70 first-letter:uppercase">
           {dataHoje}
