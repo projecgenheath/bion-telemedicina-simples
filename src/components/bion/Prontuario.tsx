@@ -13,6 +13,7 @@ import {
   History,
 } from "lucide-react";
 import { gerarProntuarioPDF } from "@/lib/prontuario-pdf";
+import type { ComDataNascimento } from "@/lib/idade";
 import { useBion, type Documento } from "@/lib/bion-store";
 import { ModalBion } from "@/components/bion/ModalBion";
 import { VisualizadorDoc, dataDoc } from "./Receitas";
@@ -51,7 +52,14 @@ export function Prontuario() {
     consentimentosVisiveis,
     registrarConsentimento,
     registrarAudit,
+    pacientePerfil,
   } = useBion();
+  // M4: nascimento/idade só no prontuário do PRÓPRIO paciente ("YYYY-MM-DD" do
+  // payload; o tipo do store não declara o campo — mesmo padrão do PerfilPainel).
+  const perfilProprio =
+    sessao.role === "paciente"
+      ? (pacientePerfil as (typeof pacientePerfil & ComDataNascimento) | undefined)
+      : undefined;
   const [filtro, setFiltro] = useState<"todos" | Evento["tipo"]>("todos");
   const [visualizando, setVisualizando] = useState<number | null>(null);
   const [consentAberto, setConsentAberto] = useState(false);
@@ -305,7 +313,13 @@ export function Prontuario() {
                     documentos: documentos.length,
                     aceito: true,
                   });
-                  gerarProntuarioPDF({ paciente: sessao.nome, documentos, medicamentos });
+                  gerarProntuarioPDF({
+                    paciente: sessao.nome,
+                    documentos,
+                    medicamentos,
+                    dataNascimento: perfilProprio?.dataNascimento ?? null,
+                    idade: perfilProprio?.idade ?? null,
+                  });
                   registrarAudit({
                     acao: "PRONTUARIO_PDF_EXPORTADO",
                     categoria: "prontuario",

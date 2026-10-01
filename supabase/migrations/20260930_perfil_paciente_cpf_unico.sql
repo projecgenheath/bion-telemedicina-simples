@@ -18,9 +18,11 @@
 --    (o script `db:push` usa --accept-data-loss). Depois de qualquer
 --    db push, confira se o índice continua existindo e rode este arquivo de
 --    novo (é idempotente).
--- 3) As rotas do admin (/api/pacientes, /api/pacientes/[id]) ainda gravam
---    CPF sem validar; com o índice, um CPF repetido nelas vira erro 500
---    genérico (M2) em vez de gravar duplicado.
+-- 3) Desde o PR #10, as rotas do admin (/api/pacientes, /api/pacientes/[id])
+--    também validam CPF, telefone e data de nascimento
+--    (src/lib/server/validar-paciente-admin.ts) e respondem 409 para CPF
+--    repetido — tanto na checagem da aplicação quanto se este índice
+--    disparar (P2002) numa corrida.
 
 -- Verificação (rodar ANTES; precisa voltar zero linhas):
 -- SELECT regexp_replace("cpf", '\D', '', 'g') AS cpf_digitos, count(*) AS qtd,
