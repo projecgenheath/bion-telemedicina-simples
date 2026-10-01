@@ -68,7 +68,8 @@ export type MotivoEvento =
   | "falha_tecnica"
   | "admin"
   | "reagendamento"
-  | "falta_paciente";
+  | "falta_paciente"
+  | "falta_medico";
 
 /* ---------- Dinheiro ----------------------------------------------- */
 
@@ -246,22 +247,36 @@ export async function criarReembolsoSeDevido(
  * Idempotente: só age se a consulta ainda não está encerrada e ainda não tem
  * evento falha_tecnica; senão devolve null e não grava nada.
  */
-export async function aplicarFalhaTecnica(tx: Prisma.TransactionClient, consultaId: string) {
+/**
+ * Falha técnica (ou falta do médico, com `motivo: "falta_medico"`): paga vai
+ * para aguardando_reagendamento, não paga é cancelada. Idempotente: não faz
+ * nada se a consulta já tiver falta_paciente ou falha_tecnica, ou se já
+ * estiver encerrada. O motivo "falta_medico" só deve ser usado após aprovação
+ * da regra pelo Alisson.
+ */
+export async function aplicarFalhaTecnica(
+  tx: Prisma.TransactionClient,
+  consultaId: string,
+  opcoes: { motivo?: "falha_tecnica" | "falta_medico" } = {},
+) {
+  const motivo = opcoes.motivo ?? "falha_tecnica";
   const consulta = await tx.consulta.findUnique({
     where: { id: consultaId },
     select: { id: true, status: true, pago: true, dataInicio: true },
   });
   if (!consulta) return null;
   const jaTem = await tx.eventoConsulta.findFirst({
-    where: { consultaId, tipo: "falha_tecnica" },
+    where: { consultaId, tipo: { in: ["falha_tecnica", "falta_paciente"] } },
     select: { id: true },
   });
   if (jaTem) return null;
   const novoStatus = consulta.pago ? "aguardando_reagendamento" : "cancelada";
+  const motivoTexto =
+    motivo === "falta_medico" ? "O médico não compareceu à consulta" : "Falha técnica: a consulta não aconteceu";
   // Atômico: se outra requisição encerrou a consulta no meio, não faz nada.
   const { count } = await tx.consulta.updateMany({
     where: { id: consultaId, status: { notIn: ["cancelada", "concluida", "aguardando_reagendamento"] } },
-    data: { status: novoStatus },
+    data: novoStatus === "cancelada" ? { status: novoStatus, motivoCancelamento: motivoTexto } : { status: novoStatus },
   });
   if (count === 0) return null;
   const evento = await registrarEvento(tx, {
@@ -270,7 +285,7 @@ export async function aplicarFalhaTecnica(tx: Prisma.TransactionClient, consulta
     por: "sistema",
     atorId: null,
     dataAnterior: consulta.dataInicio,
-    motivo: "falha_tecnica",
+    motivo,
     multaCentavos: 0,
   });
   await cancelarReservasPendentes(tx, consultaId);
