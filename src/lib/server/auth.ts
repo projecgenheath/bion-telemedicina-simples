@@ -158,6 +158,21 @@ export async function tokenSessaoAtual(): Promise<string | null> {
 }
 
 export async function exigirSessao(): Promise<UsuarioSessao> {
+  const s = await exigirSessaoPermitindoTrocaSenha();
+  bloquearSeTrocaSenhaPendente(s);
+  return s;
+}
+
+/* ------------------------------------------------------------------ */
+/* Troca obrigatória de senha — bloqueio NO SERVIDOR (auditoria C2)    */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Sessão válida SEM checar `precisaTrocarSenha`. Use APENAS na rota de troca
+ * de senha (/api/auth/senha); todas as demais passam por exigirSessao/
+ * exigirPapel, que recusam a conta enquanto a troca estiver pendente.
+ */
+export async function exigirSessaoPermitindoTrocaSenha(): Promise<UsuarioSessao> {
   const s = await getSessao();
   if (!s) {
     const err = new Error("Não autenticado") as Error & { status?: number };
@@ -165,6 +180,16 @@ export async function exigirSessao(): Promise<UsuarioSessao> {
     throw err;
   }
   return s;
+}
+
+/** 403 enquanto a conta (criada pela administração) não trocar a senha temporária. */
+export function bloquearSeTrocaSenhaPendente(s: UsuarioSessao): void {
+  if (!s.precisaTrocarSenha) return;
+  const err = new Error(
+    "Troca de senha obrigatória: defina uma nova senha antes de continuar.",
+  ) as Error & { status?: number };
+  err.status = 403;
+  throw err;
 }
 
 export async function exigirPapel(...papeis: UsuarioSessao["role"][]): Promise<UsuarioSessao> {
