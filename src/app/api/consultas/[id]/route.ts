@@ -4,6 +4,8 @@ import { exigirSessao } from "@/lib/server/auth";
 import {
   aplicarSideEffects,
   consultaWire as consultaWireComum,
+  includeFaltaWire,
+  includePagamentoReembolsoWire,
   includeReservaVigente,
   parseDataHora,
   parseValor,
@@ -55,6 +57,8 @@ async function consultaWire(id: string) {
       medico: { select: { nome: true } },
       paciente: { select: { nome: true } },
       remarcacoes: includeReservaVigente(),
+      eventos: includeFaltaWire,
+      pagamento: includePagamentoReembolsoWire,
     },
   });
   return c ? consultaWireComum(c) : null;

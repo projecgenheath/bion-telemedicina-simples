@@ -423,9 +423,9 @@ model IdentificacaoCofre {
 
 // Histórico imutável de mudanças da consulta. Gravado SÓ pelo servidor, na
 // MESMA transação da alteração da Consulta.
-// tipo: cancelada | remarcada | falha_tecnica
+// tipo: cancelada | remarcada | falha_tecnica | falta_paciente
 // por: paciente | medico | sistema | admin
-// motivo: pedido_paciente | agenda_cancelada | falha_tecnica | admin | reagendamento
+// motivo: pedido_paciente | agenda_cancelada | falha_tecnica | admin | reagendamento | falta_paciente
 // dataAnterior: data/hora que estava marcada ANTES da mudança (base da multa).
 model EventoConsulta {
   id            String    @id @default(cuid())
@@ -447,8 +447,10 @@ model EventoConsulta {
 
 // Devolução (total ou parcial) de um Pagamento da consulta OU da multa paga
 // numa RemarcacaoPendente que não pôde ser aplicada (exatamente um dos dois).
-// status: solicitado | aprovado | processado | negado | falhou
-// Só UM reembolso ATIVO (solicitado | aprovado | processado) por pagamento:
+// status: em_analise | solicitado | aprovado | processado | negado | falhou
+// origem: automatico (regras de cancelamento) | manual (paciente pede pelo
+// suporte numa falta; começa em em_analise e o admin aprova ou nega).
+// Só UM reembolso ATIVO (em_analise | solicitado | aprovado | processado) por pagamento:
 // garantido no servidor e por índice único parcial na migração SQL.
 model Reembolso {
   id            String              @id @default(cuid())
@@ -464,9 +466,15 @@ model Reembolso {
   solicitadoPor String
   criadoEm      DateTime  @default(now())
   processadoEm  DateTime?
+  origem        String    @default("automatico")
+  justificativa String?
+  respostaAdmin String?
+  decididoPor   String?
+  decididoEm    DateTime?
 
   @@index([pagamentoId, status])
   @@index([status, criadoEm])
+  @@index([origem, status, criadoEm])
 }
 
 // Repasse mensal ao médico. competencia: "AAAA-MM" (mês de Brasília).

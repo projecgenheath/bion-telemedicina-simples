@@ -2,7 +2,7 @@ import "server-only";
 import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { partesNoFuso, quandoClinica } from "@/lib/server/fuso";
-import { parseDataHora } from "@/lib/server/dados";
+import { REEMBOLSO_MANUAL_PRAZO_DIAS, parseDataHora, prazoReembolsoManual } from "@/lib/server/dados";
 
 /* ------------------------------------------------------------------ */
 /* Fase financeira: regras ÚNICAS de multa, reembolso e repasse.       */
@@ -52,12 +52,23 @@ export const STATUS_LIBERAM_HORARIO = ["cancelada", "concluida", "aguardando_rea
 /** Status que ficam fora do faturamento líquido. */
 export const STATUS_FORA_DO_FATURAMENTO = ["cancelada", "aguardando_reagendamento"];
 /** Status de reembolso que bloqueiam um novo pedido para o mesmo pagamento. */
-export const REEMBOLSO_STATUS_ATIVOS = ["solicitado", "aprovado", "processado"];
+export const REEMBOLSO_STATUS_ATIVOS = ["em_analise", "solicitado", "aprovado", "processado"];
+/** Prazo (dias corridos depois da consulta) para pedir reembolso de uma falta (definido em dados.ts). */
+export { REEMBOLSO_MANUAL_PRAZO_DIAS };
+/** Tamanho aceito da justificativa do pedido manual. */
+export const JUSTIFICATIVA_MIN = 10;
+export const JUSTIFICATIVA_MAX = 1000;
 
 export type PorEvento = "paciente" | "medico" | "sistema" | "admin";
-export type TipoEvento = "cancelada" | "remarcada" | "falha_tecnica";
+export type TipoEvento = "cancelada" | "remarcada" | "falha_tecnica" | "falta_paciente";
 /** reagendamento: paciente escolheu nova data para consulta em aguardando_reagendamento (sem multa; recomeça a contagem). */
-export type MotivoEvento = "pedido_paciente" | "agenda_cancelada" | "falha_tecnica" | "admin" | "reagendamento";
+export type MotivoEvento =
+  | "pedido_paciente"
+  | "agenda_cancelada"
+  | "falha_tecnica"
+  | "admin"
+  | "reagendamento"
+  | "falta_paciente";
 
 /* ---------- Dinheiro ----------------------------------------------- */
 
@@ -221,6 +232,136 @@ export async function criarReembolsoSeDevido(
       solicitadoPor: params.solicitadoPor,
     },
   });
+}
+
+/* ---------- Reembolso manual (falta do paciente) ------------------- */
+// Regras do Alisson (01/10): na falta não há reembolso automático e o médico
+// recebe; o paciente pode pedir em até REEMBOLSO_MANUAL_PRAZO_DIAS com
+// justificativa, e o admin aprova ou nega (negado é definitivo). Aprovado:
+// a consulta sai do repasse — o médico devolve a parte dele e o app os 10%.
+
+/** Até quando o paciente pode pedir reembolso de uma falta. */
+export { prazoReembolsoManual };
+
+type ReembolsoManualRow = {
+  id: string;
+  status: string;
+  valorCentavos: number;
+  justificativa: string | null;
+  respostaAdmin: string | null;
+  criadoEm: Date;
+  decididoEm: Date | null;
+};
+
+export function reembolsoManualWire(r: ReembolsoManualRow) {
+  return {
+    id: r.id,
+    status: r.status,
+    valorCentavos: r.valorCentavos,
+    justificativa: r.justificativa ?? "",
+    respostaAdmin: r.respostaAdmin,
+    criadoEm: r.criadoEm.toISOString(),
+    decididoEm: r.decididoEm ? r.decididoEm.toISOString() : null,
+  };
+}
+
+type Falha = { ok: false; erro: string; status: number };
+
+/** Paciente pede reembolso de uma consulta marcada como falta. */
+export async function pedirReembolsoManual(params: {
+  consultaId: string;
+  pacienteId: string;
+  justificativa: string;
+  agora?: Date;
+}): Promise<{ ok: true; reembolso: ReembolsoManualRow } | Falha> {
+  const agora = params.agora ?? new Date();
+  const justificativa = params.justificativa.trim();
+  if (justificativa.length < JUSTIFICATIVA_MIN || justificativa.length > JUSTIFICATIVA_MAX) {
+    return {
+      ok: false,
+      erro: `Escreva uma justificativa entre ${JUSTIFICATIVA_MIN} e ${JUSTIFICATIVA_MAX} caracteres.`,
+      status: 400,
+    };
+  }
+  const consulta = await db.consulta.findUnique({
+    where: { id: params.consultaId },
+    include: {
+      pagamento: true,
+      eventos: { where: { tipo: "falta_paciente" }, select: { id: true }, take: 1 },
+    },
+  });
+  if (!consulta) return { ok: false, erro: "Consulta não encontrada.", status: 404 };
+  if (consulta.pacienteId !== params.pacienteId) return { ok: false, erro: "Acesso negado.", status: 403 };
+  if (!consulta.eventos.length) {
+    return { ok: false, erro: "O reembolso pelo app é só para consultas marcadas como falta.", status: 409 };
+  }
+  const pagamento = consulta.pagamento;
+  if (!consulta.pago || !pagamento || pagamento.status !== "confirmado") {
+    return { ok: false, erro: "Esta consulta não tem pagamento confirmado.", status: 409 };
+  }
+  if (agora.getTime() > prazoReembolsoManual(consulta.dataInicio).getTime()) {
+    return {
+      ok: false,
+      erro: `O prazo de ${REEMBOLSO_MANUAL_PRAZO_DIAS} dias para pedir reembolso já terminou.`,
+      status: 409,
+    };
+  }
+  const existente = await db.reembolso.findFirst({
+    where: {
+      pagamentoId: pagamento.id,
+      OR: [{ origem: "manual" }, { status: { in: REEMBOLSO_STATUS_ATIVOS } }],
+    },
+  });
+  if (existente) {
+    return { ok: false, erro: "Já existe um pedido de reembolso para esta consulta.", status: 409 };
+  }
+  const criado = await db.reembolso
+    .create({
+      data: {
+        pagamentoId: pagamento.id,
+        valorCentavos: reaisParaCentavos(pagamento.valor),
+        multaCentavos: 0,
+        motivo: "falta_paciente",
+        status: "em_analise",
+        origem: "manual",
+        justificativa,
+        solicitadoPor: params.pacienteId,
+      },
+    })
+    .catch((e: unknown) => {
+      // Clique duplo: os índices únicos parciais barram o 2º pedido.
+      if ((e as { code?: string }).code === "P2002") return null;
+      throw e;
+    });
+  if (!criado) return { ok: false, erro: "Já existe um pedido de reembolso para esta consulta.", status: 409 };
+  return { ok: true, reembolso: criado };
+}
+
+/** Admin aprova ou nega um pedido manual em análise. */
+export async function decidirReembolsoManual(params: {
+  reembolsoId: string;
+  adminId: string;
+  decisao: "aprovar" | "negar";
+  resposta?: string;
+}): Promise<{ ok: true; reembolso: ReembolsoManualRow & { pagamentoId: string | null } } | Falha> {
+  const resposta = (params.resposta ?? "").trim().slice(0, JUSTIFICATIVA_MAX);
+  if (params.decisao === "negar" && resposta.length < JUSTIFICATIVA_MIN) {
+    return { ok: false, erro: "Para negar, explique o motivo ao paciente (mínimo de 10 caracteres).", status: 400 };
+  }
+  // updateMany com status no where: duas decisões ao mesmo tempo não passam.
+  const res = await db.reembolso.updateMany({
+    where: { id: params.reembolsoId, origem: "manual", status: "em_analise" },
+    data: {
+      status: params.decisao === "aprovar" ? "aprovado" : "negado",
+      respostaAdmin: resposta || null,
+      decididoPor: params.adminId,
+      decididoEm: new Date(),
+    },
+  });
+  const r = await db.reembolso.findUnique({ where: { id: params.reembolsoId } });
+  if (!r || r.origem !== "manual") return { ok: false, erro: "Pedido de reembolso não encontrado.", status: 404 };
+  if (res.count === 0) return { ok: false, erro: "Este pedido já foi decidido.", status: 409 };
+  return { ok: true, reembolso: r };
 }
 
 /* ---------- Remarcação com multa (reserva + cobrança) -------------- */

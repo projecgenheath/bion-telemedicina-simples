@@ -119,6 +119,32 @@ export type ConsultaComNomes = Prisma.ConsultaGetPayload<{
   include: { medico: { select: { nome: true } }; paciente: { select: { nome: true } } };
 }>;
 
+/** Prazo (dias corridos depois da consulta) para o paciente pedir reembolso de uma falta. */
+export const REEMBOLSO_MANUAL_PRAZO_DIAS = 7;
+
+/** Até quando o paciente pode pedir reembolso de uma falta. */
+export function prazoReembolsoManual(dataInicio: Date): Date {
+  return new Date(dataInicio.getTime() + REEMBOLSO_MANUAL_PRAZO_DIAS * 24 * 3600_000);
+}
+
+/** Includes para o wire saber se houve falta e qual o pedido manual de reembolso. */
+export const includeFaltaWire = { where: { tipo: "falta_paciente" }, select: { id: true }, take: 1 } as const;
+export const includePagamentoReembolsoWire = {
+  select: {
+    reembolsos: {
+      where: { origem: "manual" },
+      select: { status: true, respostaAdmin: true },
+      orderBy: { criadoEm: "desc" as const },
+      take: 1,
+    },
+  },
+} as const;
+
+type ExtrasReembolsoWire = {
+  eventos?: { id: string }[];
+  pagamento?: { reembolsos?: { status: string; respostaAdmin: string | null }[] } | null;
+};
+
 /** Reserva de remarcação paga (RemarcacaoPendente) — só os campos do wire. */
 type ReservaRemarcacaoRow = { novaData: Date; expiraEm: Date; multaCentavos: number; status: string };
 
@@ -132,7 +158,9 @@ export function includeReservaVigente(agora: Date = new Date()) {
   };
 }
 
-export function consultaWire(c: ConsultaComNomes & { remarcacoes?: ReservaRemarcacaoRow[] }) {
+export function consultaWire(c: ConsultaComNomes & { remarcacoes?: ReservaRemarcacaoRow[] } & ExtrasReembolsoWire) {
+  const falta = Boolean(c.eventos?.length);
+  const pedido = c.pagamento?.reembolsos?.[0];
   // Remarcação com multa aguardando pagamento: a data que vale continua sendo
   // dataInicio; novaData fica "reservada" até o pagamento ser aprovado.
   const reserva = c.remarcacoes?.find((r) => r.status === "pendente" && r.expiraEm.getTime() > Date.now());
@@ -159,6 +187,10 @@ export function consultaWire(c: ConsultaComNomes & { remarcacoes?: ReservaRemarc
           status: "pendente" as const,
         }
       : null,
+    // Falta do paciente: sem reembolso automático; ele pode pedir até podePedirAte.
+    falta,
+    reembolsoManual: pedido ? { status: pedido.status, respostaAdmin: pedido.respostaAdmin } : null,
+    podePedirAte: falta ? prazoReembolsoManual(c.dataInicio).toISOString() : null,
   };
 }
 
@@ -408,6 +440,8 @@ export async function carregarDados(usuario: UsuarioSessao) {
         medico: { select: { nome: true } },
         paciente: { select: { nome: true } },
         remarcacoes: includeReservaVigente(),
+        eventos: includeFaltaWire,
+        pagamento: includePagamentoReembolsoWire,
       },
       orderBy: { dataInicio: "asc" },
       // P2: admin não baixa agenda infinita no bootstrap

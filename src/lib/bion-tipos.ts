@@ -50,6 +50,12 @@ export type Consulta = {
   // Remarcação com multa aguardando pagamento: dataISO continua valendo;
   // novaData fica reservada até expiraEm (ISO). null/ausente = nenhuma.
   remarcacaoPendente?: { novaData: string; expiraEm: string; multaCentavos: number; status: "pendente" } | null;
+  // Falta do paciente (evento falta_paciente): sem reembolso automático.
+  falta?: boolean;
+  // Pedido manual de reembolso (status: em_analise | aprovado | negado | processado | falhou).
+  reembolsoManual?: { status: string; respostaAdmin: string | null } | null;
+  // Fim do prazo (ISO) para pedir reembolso de uma falta; null sem falta.
+  podePedirAte?: string | null;
 };
 
 export type Arquivo = {
