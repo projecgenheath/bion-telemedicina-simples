@@ -125,6 +125,9 @@ type EstadoFresco = {
     motivoConsulta?: string; motivoCancelamento?: string; resumoMedico?: string;
     valor: number; pago: boolean; remarcada?: boolean;
     remarcacaoPendente?: Consulta["remarcacaoPendente"];
+    falta?: boolean;
+    reembolsoManual?: Consulta["reembolsoManual"];
+    podePedirAte?: string | null;
   }[];
   documentos: {
     id: string; tipo: string; titulo: string; conteudo: string; medico: string; paciente: string;
@@ -236,6 +239,9 @@ const mapConsulta = (c: EstadoFresco["consultas"][number]): Consulta => ({
   pago: c.pago,
   dataISO: c.dataInicio,
   remarcacaoPendente: c.remarcacaoPendente ?? null,
+  falta: c.falta ?? false,
+  reembolsoManual: c.reembolsoManual ?? null,
+  podePedirAte: c.podePedirAte ?? null,
 });
 
 const mapDocumento = (x: EstadoFresco["documentos"][number]): Documento => ({
