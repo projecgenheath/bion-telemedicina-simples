@@ -437,8 +437,9 @@ type Store = {
   suspenderMedico: (id: string) => void;
   auditLogs: AuditLog[];
   registrarAudit: (log: Omit<AuditLog, "id" | "ts" | "usuario" | "role">) => void;
-  anonimizarPaciente: (nome: string, pacienteIdExplicito?: string) => void;
-  excluirDadosPaciente: (nome: string, pacienteIdExplicito?: string) => void;
+  /** LGPD — irreversível: SEMPRE por id (nunca por nome). true = servidor confirmou. */
+  anonimizarPaciente: (pacienteId: string) => Promise<boolean>;
+  excluirDadosPaciente: (pacienteId: string) => Promise<boolean>;
   pacientes: PacienteRegistro[];
   adicionarPaciente: (p: Omit<PacienteRegistro, "id" | "desde">) => void;
   atualizarPaciente: (id: string, dados: Partial<PacienteRegistro>) => void;
@@ -1349,29 +1350,15 @@ export function BionProvider({ children }: { children: ReactNode }) {
     [mutar],
   );
 
-  /** LGPD — operações IRREVERSÍVEIS: paciente SEMPRE por ID (nome só como
-   *  último recurso quando o chamador não tem o id). */
+  /** LGPD — operações IRREVERSÍVEIS: paciente SEMPRE por ID. Não há mais
+   *  fallback por nome (homônimos levariam a anonimizar a pessoa errada). */
   const anonimizarPaciente = useCallback(
-    (nome: string, pacienteIdExplicito?: string) => {
-      const id = pacienteIdExplicito ?? pacientesRef.current.find((p) => p.nome === nome)?.id;
-      if (!id) {
-        toast.error("Paciente não encontrado.");
-        return;
-      }
-      void mutar("/api/admin/lgpd", "POST", { acao: "anonimizar", pacienteId: id });
-    },
+    (pacienteId: string) => mutar("/api/admin/lgpd", "POST", { acao: "anonimizar", pacienteId }),
     [mutar],
   );
 
   const excluirDadosPaciente = useCallback(
-    (nome: string, pacienteIdExplicito?: string) => {
-      const id = pacienteIdExplicito ?? pacientesRef.current.find((p) => p.nome === nome)?.id;
-      if (!id) {
-        toast.error("Paciente não encontrado.");
-        return;
-      }
-      void mutar("/api/admin/lgpd", "POST", { acao: "excluir", pacienteId: id });
-    },
+    (pacienteId: string) => mutar("/api/admin/lgpd", "POST", { acao: "excluir", pacienteId }),
     [mutar],
   );
 
