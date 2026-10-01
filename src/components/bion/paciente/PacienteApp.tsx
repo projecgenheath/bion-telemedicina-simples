@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useBion } from "@/lib/bion-store";
+import { calcularImc, lerAlturaCm, lerPesoKg } from "@/lib/medidas-paciente";
 import { MESES_AGENDA } from "./constantes";
 import { agendaLivreDoMedico, acharMedicoDaConsulta } from "./agenda-medico";
 import { GraficoLinha, type PontoGrafico } from "./GraficoLinha";
@@ -194,10 +195,13 @@ export function PacienteApp() {
     [medicoes],
   );
 
-  const alturaAtual =
-    alturas.at(-1)?.valor1 ?? Number((pacientePerfil?.altura ?? "").replace(",", ".")) ?? undefined;
-  const pesoAtual = pesos.at(-1)?.valor1 ?? Number((pacientePerfil?.peso ?? "").replace(",", ".")) ?? undefined;
-  const imcAtual = pesoAtual && alturaAtual ? pesoAtual / Math.pow(alturaAtual / 100, 2) : null;
+  // M3: perfil lido de forma tolerante (legado "62 kg" / "1,68 m") em kg / cm.
+  const alturaAtual = useMemo(
+    () => alturas.at(-1)?.valor1 ?? lerAlturaCm(pacientePerfil?.altura) ?? undefined,
+    [alturas, pacientePerfil?.altura],
+  );
+  const pesoAtual = pesos.at(-1)?.valor1 ?? lerPesoKg(pacientePerfil?.peso) ?? undefined;
+  const imcAtual = calcularImc(pesoAtual, alturaAtual);
 
   const serieImc: PontoGrafico[] = useMemo(
     () =>

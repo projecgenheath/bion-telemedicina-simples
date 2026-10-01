@@ -14,6 +14,7 @@ import {
   extrairTelefone,
   type MotorCtx,
 } from "@/lib/server/anamnese-motor";
+import { alturaCanonica, formatarAltura, formatarPeso, lerAlturaCm, lerPesoKg, medidaCanonica, pesoCanonico } from "@/lib/medidas-paciente";
 
 /**
  * Triagem pré-consulta guiada pela BION IA (storytelling clínico).
@@ -286,8 +287,9 @@ async function montarPerfilDados(usuarioId: string): Promise<PerfilDados | null>
     alergias: lista(p.alergias),
     comorbidades: lista(p.comorbidades),
     medicamentos: lista(p.medicamentos),
-    peso: p.peso || "",
-    altura: p.altura || "",
+    // M3: legado ("62 kg", "1,68 m") normalizado para kg / cm.
+    peso: pesoCanonico(p.peso) ?? "",
+    altura: alturaCanonica(p.altura) ?? "",
     tipoSanguineo: p.tipoSanguineo || "",
     convenio: p.convenio || "",
   };
@@ -306,8 +308,8 @@ function perfilParaPrompt(d: PerfilDados | null, nome: string): string {
     `Alergias/intolerâncias: ${lista(d.alergias)}`,
     `Comorbidades: ${lista(d.comorbidades)}`,
     `Medicamentos em uso: ${lista(d.medicamentos)}`,
-    `Peso: ${d.peso ? `${d.peso} kg` : "não informado"}`,
-    `Altura: ${d.altura ? `${d.altura} cm` : "não informada"}`,
+    `Peso: ${formatarPeso(d.peso) || "não informado"}`,
+    `Altura: ${formatarAltura(d.altura) || "não informada"}`,
     `Tipo sanguíneo: ${d.tipoSanguineo || "não informado"}`,
     `Convênio: ${d.convenio || "Particular"}`,
   ].join("\n");
@@ -357,22 +359,23 @@ async function aplicarPerfilAtualizacoes(
     aplicados.push("estado civil");
   }
 
-  const peso = Number(up.peso);
-  if (Number.isFinite(peso) && peso >= 20 && peso <= 400) {
+  // M3: leitura tolerante ("80", "80 kg", "1,68 m") e gravação canônica (kg / cm).
+  const peso = lerPesoKg(up.peso);
+  if (peso !== null) {
     const ultimo = await db.medicao.findFirst({ where: { usuarioId, tipo: "peso" }, orderBy: { criadoEm: "desc" } });
     if (!ultimo || ultimo.valor1 !== peso) {
       await db.medicao.create({ data: { usuarioId, tipo: "peso", valor1: peso } });
     }
-    dadosPerfil.peso = String(peso);
+    dadosPerfil.peso = medidaCanonica(peso);
     aplicados.push(`peso ${peso} kg`);
   }
-  const altura = Number(up.altura);
-  if (Number.isFinite(altura) && altura >= 50 && altura <= 250) {
+  const altura = lerAlturaCm(up.altura);
+  if (altura !== null) {
     const ultimo = await db.medicao.findFirst({ where: { usuarioId, tipo: "altura" }, orderBy: { criadoEm: "desc" } });
     if (!ultimo || ultimo.valor1 !== altura) {
       await db.medicao.create({ data: { usuarioId, tipo: "altura", valor1: altura } });
     }
-    dadosPerfil.altura = String(altura);
+    dadosPerfil.altura = medidaCanonica(altura);
     aplicados.push(`altura ${altura} cm`);
   }
 

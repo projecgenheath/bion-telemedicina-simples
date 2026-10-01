@@ -25,6 +25,7 @@ import {
   X,
 } from "lucide-react";
 import { useBion } from "@/lib/bion-store";
+import { formatarAltura, formatarPeso } from "@/lib/medidas-paciente";
 
 /**
  * Painel do perfil (gesto esquerda → direita): foto, dados pessoais e de
@@ -333,7 +334,7 @@ export function PerfilPainel({ onSair }: { onSair: () => void }) {
                 <Chips itens={pacientePerfil?.medicamentos ?? []} cor={chip} />
               </div>
             </div>
-            <Linha icone={<Scale className="w-4 h-4" />} rotulo="Peso / Altura" valor={pacientePerfil?.peso ? `${pacientePerfil.peso} kg · ${pacientePerfil.altura ?? "?"} cm` : ""} />
+            <Linha icone={<Scale className="w-4 h-4" />} rotulo="Peso / Altura" valor={[formatarPeso(pacientePerfil?.peso), formatarAltura(pacientePerfil?.altura)].filter(Boolean).join(" · ")} />
           </div>
         )}
       </div>

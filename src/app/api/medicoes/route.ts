@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { exigirPapel } from "@/lib/server/auth";
 import { aplicarSideEffects } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
+import { medidaCanonica } from "@/lib/medidas-paciente";
 
 /**
  * Medições do paciente (app imersivo — peso, altura, pressão arterial).
@@ -73,20 +74,13 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // Sincroniza os valores atuais do perfil (peso/altura usados pelo app e pelo médico)
+    // Sincroniza os valores atuais do perfil (peso/altura usados pelo app e pelo médico).
+    // M3: formato canônico (kg / cm, ponto decimal, sem unidade).
     const perfilAtualizado: { peso?: string; altura?: string } = {};
-    if (tipo === "peso") {
-      perfilAtualizado.peso = String(body.valor1);
-      await db.perfilPaciente.updateMany({
-        where: { userId: usuario.id },
-        data: { peso: String(body.valor1) },
-      });
-    } else if (tipo === "altura") {
-      perfilAtualizado.altura = String(body.valor1);
-      await db.perfilPaciente.updateMany({
-        where: { userId: usuario.id },
-        data: { altura: String(body.valor1) },
-      });
+    if (tipo === "peso") perfilAtualizado.peso = medidaCanonica(body.valor1);
+    else if (tipo === "altura") perfilAtualizado.altura = medidaCanonica(body.valor1);
+    if (Object.keys(perfilAtualizado).length) {
+      await db.perfilPaciente.updateMany({ where: { userId: usuario.id }, data: perfilAtualizado });
     }
 
     const efeitos = await aplicarSideEffects(usuario, undefined, {

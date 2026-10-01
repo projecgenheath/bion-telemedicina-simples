@@ -9,6 +9,15 @@ import {
   validarPatchPerfil,
   validarTelefone,
 } from "../src/lib/server/validar-perfil";
+import {
+  alturaCanonica,
+  calcularImc,
+  formatarAltura,
+  formatarPeso,
+  lerAlturaCm,
+  lerPesoKg,
+  pesoCanonico,
+} from "../src/lib/medidas-paciente";
 
 let passou = 0;
 let falhou = 0;
@@ -62,6 +71,51 @@ verificar("tipo sanguíneo inválido → erro", !validarPatchPerfil({ tipoSangui
   const r = validarPatchPerfil({ peso: "", altura: 165 });
   verificar("peso '' → null, altura número → string", r.ok && r.valor.perfil.peso === null && r.valor.perfil.altura === "165", r);
 }
+
+// --- M3: peso/altura (leitura tolerante, gravação canônica kg/cm) ---
+for (const [entrada, esperado] of [
+  [62, 62], ["62", 62], ["62 kg", 62], ["62kg", 62], ["62,5", 62.5], ["62.5 kg", 62.5], [" 62,54 Kg ", 62.5], ["62 quilos", 62],
+] as const) {
+  verificar(`lerPesoKg(${JSON.stringify(entrada)}) = ${esperado}`, lerPesoKg(entrada) === esperado, lerPesoKg(entrada));
+}
+for (const entrada of ["", "abc", "62 lb", "5", "999", "-62", null, undefined, Number.NaN, "62 kg kg"]) {
+  verificar(`lerPesoKg(${JSON.stringify(entrada)}) = null`, lerPesoKg(entrada) === null, lerPesoKg(entrada));
+}
+for (const [entrada, esperado] of [
+  [168, 168], ["168", 168], ["168 cm", 168], ["168cm", 168], ["1,68", 168], ["1,68 m", 168], ["1.68m", 168], ["1,685", 168.5], ["2 metros", 200],
+] as const) {
+  verificar(`lerAlturaCm(${JSON.stringify(entrada)}) = ${esperado}`, lerAlturaCm(entrada) === esperado, lerAlturaCm(entrada));
+}
+for (const entrada of ["", "alto", "1,68 kg", "16800", "30", "3,5", null, "1,68 m cm"]) {
+  verificar(`lerAlturaCm(${JSON.stringify(entrada)}) = null`, lerAlturaCm(entrada) === null, lerAlturaCm(entrada));
+}
+verificar("legado '62 kg' → canônico '62'", pesoCanonico("62 kg") === "62");
+verificar("legado '1,68 m' → canônico '168'", alturaCanonica("1,68 m") === "168");
+verificar("legado inválido → undefined", pesoCanonico("muito") === undefined && alturaCanonica(null) === undefined);
+verificar("exibe '62 kg' (unidade 1x)", formatarPeso("62 kg") === "62 kg", formatarPeso("62 kg"));
+verificar("exibe '62,5 kg'", formatarPeso("62.5") === "62,5 kg", formatarPeso("62.5"));
+verificar("exibe '168 cm' a partir de '1,68 m'", formatarAltura("1,68 m") === "168 cm", formatarAltura("1,68 m"));
+verificar("exibe '' para vazio", formatarPeso(undefined) === "" && formatarAltura("") === "");
+{
+  const imc = calcularImc(lerPesoKg("62 kg"), lerAlturaCm("1,68 m"));
+  verificar("IMC 62 kg / 1,68 m ≈ 22,0", imc !== null && Math.abs(imc - 21.97) < 0.01, imc);
+  verificar("IMC com altura '1,68' (sem unidade) não vira 219.671", (calcularImc(62, lerAlturaCm("1,68")) ?? 0) < 30);
+  verificar("IMC sem altura → null", calcularImc(62, null) === null);
+  verificar("IMC NaN → null", calcularImc(Number.NaN, 168) === null);
+}
+{
+  const r = validarPatchPerfil({ peso: "62 kg", altura: "1,68 m" });
+  verificar("PATCH grava canônico (62 / 168)", r.ok && r.valor.perfil.peso === "62" && r.valor.perfil.altura === "168", r);
+}
+{
+  const r = validarPatchPerfil({ peso: "62,5", altura: "168 cm" });
+  verificar("PATCH grava canônico (62.5 / 168)", r.ok && r.valor.perfil.peso === "62.5" && r.valor.perfil.altura === "168", r);
+}
+verificar("PATCH peso fora da faixa → erro", !validarPatchPerfil({ peso: "5" }).ok);
+verificar("PATCH altura absurda → erro", !validarPatchPerfil({ altura: "16800" }).ok);
+verificar("PATCH peso texto → erro", !validarPatchPerfil({ peso: "setenta" }).ok);
+verificar("PATCH peso objeto → erro", !validarPatchPerfil({ peso: { kg: 62 } }).ok);
+verificar("PATCH altura null limpa", (() => { const r = validarPatchPerfil({ altura: null }); return r.ok && r.valor.perfil.altura === null; })());
 {
   const r = validarPatchPerfil({ convenio: "  " });
   verificar("convênio vazio → Particular", r.ok && r.valor.perfil.convenio === "Particular", r);

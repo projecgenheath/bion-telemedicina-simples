@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import type { Prisma } from "@prisma/client";
 import type { UsuarioSessao } from "./auth";
 import { whereArquivosVisiveis } from "./arquivos-acesso";
+import { alturaCanonica, pesoCanonico } from "@/lib/medidas-paciente";
 
 /* ------------------------------------------------------------------ */
 /* Utilitários de data (rótulos do cliente: "Hoje", "Amanhã", "12 Dez") */
@@ -326,8 +327,9 @@ export function perfilPacienteWire(p: PerfilPacienteComUser) {
     alergias: JSON.parse(p.alergias || "[]") as string[],
     medicamentos: JSON.parse(p.medicamentos || "[]") as string[],
     tipoSanguineo: p.tipoSanguineo,
-    peso: p.peso ?? undefined,
-    altura: p.altura ?? undefined,
+    // M3: valores legados ("62 kg", "1,68 m") saem no formato canônico (kg/cm).
+    peso: pesoCanonico(p.peso),
+    altura: alturaCanonica(p.altura),
     profissao: p.profissao || undefined,
     estadoCivil: p.estadoCivil || undefined,
     comorbidades: JSON.parse(p.comorbidades || "[]") as string[],

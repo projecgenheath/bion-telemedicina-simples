@@ -15,6 +15,7 @@ import {
   X,
 } from "lucide-react";
 import { useBion } from "@/lib/bion-store";
+import { calcularImc, formatarAltura, formatarPeso, lerAlturaCm, lerPesoKg } from "@/lib/medidas-paciente";
 import { GraficoLinha } from "./GraficoLinha";
 
 /**
@@ -170,8 +171,9 @@ function DetalheImc({ onFechar }: { onFechar: () => void }) {
     [medicoes],
   );
 
-  const alturaAtual = alturas.at(-1)?.valor1 ?? Number((pacientePerfil?.altura ?? "").replace(",", ".")) ?? undefined;
-  const pesoAtual = pesos.at(-1)?.valor1 ?? Number((pacientePerfil?.peso ?? "").replace(",", ".")) ?? undefined;
+  // M3: perfil lido de forma tolerante (legado "62 kg" / "1,68 m") em kg / cm.
+  const alturaAtual = alturas.at(-1)?.valor1 ?? lerAlturaCm(pacientePerfil?.altura) ?? undefined;
+  const pesoAtual = pesos.at(-1)?.valor1 ?? lerPesoKg(pacientePerfil?.peso) ?? undefined;
 
   const serieImc = useMemo(() => {
     return pesos
@@ -186,7 +188,7 @@ function DetalheImc({ onFechar }: { onFechar: () => void }) {
       .slice(-12);
   }, [pesos, alturas, alturaAtual]);
 
-  const imcAtual = pesoAtual && alturaAtual ? pesoAtual / Math.pow(alturaAtual / 100, 2) : null;
+  const imcAtual = calcularImc(pesoAtual, alturaAtual);
   const classe = imcAtual ? classificarImc(imcAtual) : null;
 
   return (
@@ -197,7 +199,7 @@ function DetalheImc({ onFechar }: { onFechar: () => void }) {
             <div className="text-4xl font-black text-bion-ink dark:text-bion-paper">{imcAtual.toFixed(1)}</div>
             <div className={`text-sm font-semibold mt-1 ${classe?.cor}`}>{classe?.rotulo}</div>
             <div className="text-xs text-bion-ink/60 dark:text-bion-paper/60 mt-1">
-              {pesoAtual} kg · {alturaAtual} cm
+              {formatarPeso(pesoAtual)} · {formatarAltura(alturaAtual)}
             </div>
           </>
         ) : (

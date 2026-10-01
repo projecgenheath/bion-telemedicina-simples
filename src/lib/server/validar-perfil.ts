@@ -14,6 +14,26 @@
  * `bun scripts/teste_validar_perfil.ts`.
  */
 
+import {
+  FAIXA_ALTURA_CM,
+  FAIXA_PESO_KG,
+  lerAlturaCm,
+  lerPesoKg,
+  medidaCanonica,
+} from "@/lib/medidas-paciente";
+
+// M3: leitura/normalização de peso e altura (isomórfica — também usada na UI).
+export {
+  alturaCanonica,
+  calcularImc,
+  formatarAltura,
+  formatarPeso,
+  lerAlturaCm,
+  lerPesoKg,
+  medidaCanonica,
+  pesoCanonico,
+} from "@/lib/medidas-paciente";
+
 export type PerfilPacienteUpdate = {
   cpf?: string;
   telefone?: string;
@@ -134,16 +154,37 @@ function validarLista(v: unknown, campo: string, rotulo: string): ResultadoValid
   return { ok: true, valor: JSON.stringify(itens) };
 }
 
-/** Peso/altura: texto curto ou número; null/"" limpa. (Formato canônico é tema do achado M3.) */
-function validarMedida(v: unknown, campo: string, rotulo: string): ResultadoValidacao<string | null> {
+/**
+ * M3 — Peso/altura: leitura tolerante ("62", "62 kg", "62,5"; "168", "168 cm",
+ * "1,68", "1,68 m") e gravação no formato CANÔNICO (kg / cm, ponto decimal,
+ * sem unidade — ver src/lib/medidas-paciente.ts). null/"" limpa.
+ */
+function validarMedida(v: unknown, campo: "peso" | "altura"): ResultadoValidacao<string | null> {
   if (v === null) return { ok: true, valor: null };
-  if (typeof v === "number") {
-    if (!Number.isFinite(v) || v < 0) return falhaCampo(campo, `${rotulo} inválido.`);
-    return { ok: true, valor: String(v) };
+  if (typeof v === "string") {
+    if (v.length > LIMITES.medidaMax) return falhaCampo(campo, campo === "peso" ? "Peso inválido." : "Altura inválida.");
+    if (v.trim() === "") return { ok: true, valor: null };
+  } else if (typeof v !== "number") {
+    return falhaCampo(campo, campo === "peso" ? "Peso deve ser um número." : "Altura deve ser um número.");
   }
-  const t = texto(v, campo, rotulo, LIMITES.medidaMax);
-  if (!t.ok) return t;
-  return { ok: true, valor: t.valor === "" ? null : t.valor };
+  if (campo === "peso") {
+    const kg = lerPesoKg(v);
+    if (kg === null) {
+      return falhaCampo(
+        "peso",
+        `Peso inválido. Informe em kg, entre ${FAIXA_PESO_KG.min} e ${FAIXA_PESO_KG.max} (ex.: 62 ou 62,5).`,
+      );
+    }
+    return { ok: true, valor: medidaCanonica(kg) };
+  }
+  const cm = lerAlturaCm(v);
+  if (cm === null) {
+    return falhaCampo(
+      "altura",
+      `Altura inválida. Informe em cm (ex.: 168) ou em metros (ex.: 1,68), entre ${FAIXA_ALTURA_CM.min} e ${FAIXA_ALTURA_CM.max} cm.`,
+    );
+  }
+  return { ok: true, valor: medidaCanonica(cm) };
 }
 
 function ehObjetoSimples(v: unknown): v is Record<string, unknown> {
@@ -230,12 +271,9 @@ export function validarPatchPerfil(corpo: unknown): ResultadoValidacao<PatchPerf
     campos.push("tipoSanguineo");
   }
 
-  for (const [campo, rotulo] of [
-    ["peso", "Peso"],
-    ["altura", "Altura"],
-  ] as const) {
+  for (const campo of ["peso", "altura"] as const) {
     if (corpo[campo] === undefined) continue;
-    const r = validarMedida(corpo[campo], campo, rotulo);
+    const r = validarMedida(corpo[campo], campo);
     if (!r.ok) return r;
     perfil[campo] = r.valor;
     campos.push(campo);
