@@ -431,7 +431,8 @@ type Store = {
   adicionarLembrete: (l: Omit<Lembrete, "id" | "feito">) => void;
   alternarLembrete: (id: string) => void;
   removerLembrete: (id: string) => void;
-  atualizarPacientePerfil: (p: Partial<PacientePerfil>) => void;
+  /** A2: resolve `true` só quando o servidor confirmou (erros já viram toast em `api`). */
+  atualizarPacientePerfil: (p: Partial<PacientePerfil>) => Promise<boolean>;
   atualizarMedico: (id: string, dados: Partial<Medico>) => void;
   aprovarMedico: (id: string) => void;
   suspenderMedico: (id: string) => void;
@@ -1321,9 +1322,7 @@ export function BionProvider({ children }: { children: ReactNode }) {
   );
 
   const atualizarPacientePerfil = useCallback(
-    (p: Partial<PacientePerfil>) => {
-      void mutar("/api/perfil", "PATCH", { ...p });
-    },
+    (p: Partial<PacientePerfil>) => mutar("/api/perfil", "PATCH", { ...p }),
     [mutar],
   );
 

@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { exigirPapel } from "@/lib/server/auth";
 import { aplicarSideEffects, perfilPacienteWire } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
-import { validarPatchPerfil } from "@/lib/server/validar-perfil";
+import { validarFotoPerfil, validarPatchPerfil } from "@/lib/server/validar-perfil";
 
 /** Teto do corpo (texto JSON). Folga para a foto de perfil (~150 KB em base64). */
 const CORPO_MAX_CHARS = 300_000;
@@ -31,14 +31,16 @@ export async function PATCH(req: NextRequest) {
     }
     const { nome, perfil, campos } = validacao.valor;
 
-    // foto: tratada à parte (formato/tamanho validados no achado A2)
+    // A2: foto validada no servidor (data URL JPEG/PNG/WebP, assinatura
+    // binária coerente, ≤ ~150 KB). Antes aceitava qualquer string.
     const fotoBruta = (corpo as Record<string, unknown>).foto;
     let foto: string | null | undefined;
     if (fotoBruta !== undefined) {
-      if (fotoBruta !== null && typeof fotoBruta !== "string") {
-        return Response.json({ erro: "Foto inválida.", campo: "foto" }, { status: 400 });
+      const rf = validarFotoPerfil(fotoBruta);
+      if (!rf.ok) {
+        return Response.json({ erro: rf.erro, campo: rf.campo }, { status: 400 });
       }
-      foto = fotoBruta || null;
+      foto = rf.valor;
       campos.push("foto");
     }
 

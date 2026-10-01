@@ -2,7 +2,13 @@
  * Teste unitário dos validadores do PATCH /api/perfil (achados A1/A2).
  * Uso: bun scripts/teste_validar_perfil.ts   (ou: bunx tsx scripts/teste_validar_perfil.ts)
  */
-import { validarCpf, validarPatchPerfil, validarTelefone } from "../src/lib/server/validar-perfil";
+import {
+  FOTO_MAX_CHARS,
+  validarCpf,
+  validarFotoPerfil,
+  validarPatchPerfil,
+  validarTelefone,
+} from "../src/lib/server/validar-perfil";
 
 let passou = 0;
 let falhou = 0;
@@ -78,6 +84,21 @@ verificar("telefone +55 ok", validarTelefone("+55 11 91234-5678").ok);
 verificar("telefone curto → erro", !validarTelefone("1234").ok);
 verificar("telefone com letras → erro", !validarTelefone("ligar 1191234-5678").ok);
 verificar("telefone vazio limpa", validarTelefone("").ok);
+
+// --- foto (A2) ---
+const JPEG_MIN = "data:image/jpeg;base64," + Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 0x10, 0x4a, 0x46, 0x49, 0x46, 0, 1]).toString("base64");
+const PNG_MIN = "data:image/png;base64," + Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0x0d]).toString("base64");
+verificar("foto JPEG válida", validarFotoPerfil(JPEG_MIN).ok);
+verificar("foto PNG válida", validarFotoPerfil(PNG_MIN).ok);
+verificar("foto null remove", (() => { const r = validarFotoPerfil(null); return r.ok && r.valor === null; })());
+verificar("foto '' remove", (() => { const r = validarFotoPerfil(""); return r.ok && r.valor === null; })());
+verificar("foto número → erro", !validarFotoPerfil(1).ok);
+verificar("foto URL externa → erro", !validarFotoPerfil("https://evil.example/x.png").ok);
+verificar("foto javascript: → erro", !validarFotoPerfil("javascript:alert(1)").ok);
+verificar("foto svg → erro", !validarFotoPerfil("data:image/svg+xml;base64,PHN2Zz4=").ok);
+verificar("foto MIME mentindo (PNG declarado como JPEG) → erro", !validarFotoPerfil(PNG_MIN.replace("image/png", "image/jpeg")).ok);
+verificar("foto texto em base64 → erro", !validarFotoPerfil("data:image/jpeg;base64," + Buffer.from("<html>oi</html>").toString("base64")).ok);
+verificar("foto acima do limite → erro", !validarFotoPerfil(JPEG_MIN + "A".repeat(FOTO_MAX_CHARS)).ok);
 
 console.log(`\n${passou} ok, ${falhou} falha(s)`);
 if (falhou) process.exit(1);

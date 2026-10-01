@@ -257,3 +257,43 @@ export function validarPatchPerfil(corpo: unknown): ResultadoValidacao<PatchPerf
 
   return { ok: true, valor: { ...(nome !== undefined ? { nome } : {}), perfil, campos } };
 }
+
+/* ------------------------------------------------------------------ */
+/* A2 — foto de perfil (data URL gravada em PerfilPaciente.foto)        */
+/* ------------------------------------------------------------------ */
+
+/** ~150 KB binários. O cliente envia JPEG 256×256 (tipicamente 10–40 KB). */
+export const FOTO_MAX_CHARS = 200_000;
+
+const RE_FOTO = /^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/]+={0,2})$/;
+
+function assinaturaConfere(mime: string, bytes: Uint8Array): boolean {
+  const comeca = (...b: number[]) => b.every((x, i) => bytes[i] === x);
+  if (mime === "jpeg") return comeca(0xff, 0xd8, 0xff);
+  if (mime === "png") return comeca(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a);
+  if (mime === "webp") {
+    // "RIFF" .... "WEBP"
+    return comeca(0x52, 0x49, 0x46, 0x46) && bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50;
+  }
+  return false;
+}
+
+/**
+ * Foto: `null` ou "" remove; caso contrário exige data URL base64 de
+ * JPEG/PNG/WebP, até FOTO_MAX_CHARS, com assinatura binária coerente com o
+ * MIME declarado (impede gravar texto/HTML/URL externa no campo).
+ */
+export function validarFotoPerfil(v: unknown): ResultadoValidacao<string | null> {
+  if (v === null || v === "") return { ok: true, valor: null };
+  if (typeof v !== "string") return falhaCampo("foto", "Foto inválida.");
+  if (v.length > FOTO_MAX_CHARS) {
+    return falhaCampo("foto", "Foto muito grande. Envie uma imagem menor (máx. ~150 KB).");
+  }
+  const m = RE_FOTO.exec(v);
+  if (!m) return falhaCampo("foto", "Foto inválida. Use JPG, PNG ou WebP.");
+  const bytes = Buffer.from(m[2], "base64");
+  if (bytes.length < 12 || !assinaturaConfere(m[1], bytes)) {
+    return falhaCampo("foto", "Foto inválida. Use JPG, PNG ou WebP.");
+  }
+  return { ok: true, valor: v };
+}
