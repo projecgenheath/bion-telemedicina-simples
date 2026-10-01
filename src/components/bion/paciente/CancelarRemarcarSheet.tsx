@@ -15,6 +15,12 @@ import { fmtCentavos, usePreviaCancelamento, type PreviaAcao, type PreviaCancela
  * "sem multa até …" em Brasília) e respeita podeCancelar/podeRemarcar.
  * Só fecha e mostra sucesso quando o store confirma que o servidor aceitou.
  *
+ * Remarcar com multa (≤24 h): decisão do Alisson — o paciente paga a multa
+ * (50%) pelo app e a nova data só é confirmada após o pagamento aprovado; sem
+ * pagamento, a consulta fica na data original. Por isso, com multa, esta tela
+ * NUNCA chama `remarcarConsulta` (o servidor atual remarcaria sem cobrar): usa
+ * `onPagarMulta`; sem ele, o botão fica desabilitado ("em breve").
+ *
  * "reembolso": consulta em aguardando_reagendamento (médico cancelou o dia).
  * O servidor trata o cancelamento do paciente nesse status como isento de
  * multa e com reembolso integral automático (ação "cancelar").
@@ -27,9 +33,25 @@ type Props = {
   medico: Medico | undefined;
   consultas: Consulta[];
   onFechar: () => void;
+  /**
+   * Ponto ÚNICO de integração do pagamento da multa de remarcação (≤24 h).
+   * TODO(PR de pagamentos do Admin): ligar aqui o endpoint/gateway da multa —
+   * cobrar `multaCentavos`, e o servidor só remarca para `data`/`hora` depois
+   * que o pagamento for aprovado. Devolve true quando a cobrança foi criada.
+   * Enquanto não for passado, a remarcação com multa fica desabilitada.
+   */
+  onPagarMulta?: (pedido: PedidoPagamentoMulta) => Promise<boolean>;
 };
 
-export function CancelarRemarcarSheet({ consulta, acao, medico, consultas, onFechar }: Props) {
+export type PedidoPagamentoMulta = {
+  consultaId: string;
+  /** Nova data/hora escolhida (dia YYYY-MM-DD e HH:MM no fuso de Brasília). */
+  data: string;
+  hora: string;
+  multaCentavos: number;
+};
+
+export function CancelarRemarcarSheet({ consulta, acao, medico, consultas, onFechar, onPagarMulta }: Props) {
   const { cancelarConsulta, remarcarConsulta } = useBion();
   const { previa, carregando, erro, recarregar } = usePreviaCancelamento(consulta.id, consulta.status);
   const [motivo, setMotivo] = useState("");
@@ -55,6 +77,10 @@ export function CancelarRemarcarSheet({ consulta, acao, medico, consultas, onFec
 
   const permitido = previa ? (acao === "remarcar" ? previa.podeRemarcar : previa.podeCancelar) : false;
   const prontoParaConfirmar = !!previa && permitido && !carregando && !enviando;
+  /** Multa de remarcação: exige pagamento pelo app antes de confirmar a nova data. */
+  const multaRemarcar = acao === "remarcar" && previa ? previa.remarcar.multaCentavos : 0;
+  const exigePagamento = multaRemarcar > 0;
+  const pagamentoIndisponivel = exigePagamento && !onPagarMulta;
 
   const confirmarCancelamento = async () => {
     if (!prontoParaConfirmar) return;
@@ -74,6 +100,22 @@ export function CancelarRemarcarSheet({ consulta, acao, medico, consultas, onFec
     if (!prontoParaConfirmar) return;
     if (!dataEscolhida || !horaEscolhida) {
       toast.error("Escolha um horário da agenda do médico");
+      return;
+    }
+    if (exigePagamento) {
+      // Nunca remarca direto com multa: a data só muda após o pagamento aprovado.
+      if (!onPagarMulta) return;
+      setEnviando(true);
+      const criado = await onPagarMulta({
+        consultaId: consulta.id,
+        data: dataEscolhida,
+        hora: horaEscolhida,
+        multaCentavos: multaRemarcar,
+      });
+      setEnviando(false);
+      if (!criado) return;
+      toast.success("Pagamento iniciado — a nova data será confirmada após a aprovação");
+      onFechar();
       return;
     }
     setEnviando(true);
@@ -187,12 +229,18 @@ export function CancelarRemarcarSheet({ consulta, acao, medico, consultas, onFec
           {acao === "remarcar" ? (
             <button
               type="button"
-              disabled={!prontoParaConfirmar || !dataEscolhida || !horaEscolhida || agendaLivre.length === 0}
+              disabled={
+                !prontoParaConfirmar || pagamentoIndisponivel || !dataEscolhida || !horaEscolhida || agendaLivre.length === 0
+              }
               onClick={() => void confirmarRemarcacao()}
               className="flex-1 py-3 rounded-xl bg-sky-500 text-zinc-950 text-sm font-bold disabled:opacity-40 inline-flex items-center justify-center gap-2"
             >
               {enviando ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-              {previa && previa.remarcar.multaCentavos > 0 ? "Remarcar com multa" : "Confirmar novo horário"}
+              {pagamentoIndisponivel
+                ? "Pagamento da multa pelo app em breve"
+                : exigePagamento
+                  ? `Pagar multa de ${fmtCentavos(multaRemarcar)}`
+                  : "Confirmar novo horário"}
             </button>
           ) : (
             <button
@@ -281,6 +329,21 @@ function BlocoPrevia({
     );
   }
 
+  if (p.multaCentavos > 0 && acao === "remarcar") {
+    return (
+      <div className="mt-4 rounded-2xl border border-amber-400/30 bg-amber-500/10 p-4 text-sm" role="alert">
+        <p className="font-bold text-amber-100 inline-flex items-start gap-2">
+          <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+          Para confirmar a nova data, é preciso pagar a multa de {fmtCentavos(p.multaCentavos)} ({multaPct}%) pelo app.
+        </p>
+        <p className="text-white/75 mt-1">A consulta continua na data original até o pagamento ser aprovado.</p>
+        <p className="text-white/60 mt-2 text-xs">
+          Remarcações com {janelaHoras} h ou menos de antecedência têm multa. O prazo sem multa terminou em {p.semMultaAteTexto}.
+        </p>
+      </div>
+    );
+  }
+
   if (p.multaCentavos > 0) {
     return (
       <div className="mt-4 rounded-2xl border border-amber-400/30 bg-amber-500/10 p-4 text-sm" role="alert">
@@ -289,15 +352,12 @@ function BlocoPrevia({
           Será aplicada uma multa de {fmtCentavos(p.multaCentavos)} ({multaPct}%).
         </p>
         <p className="text-white/70 mt-1">
-          {acao === "remarcar" ? "Remarcações" : "Cancelamentos"} feitos com {janelaHoras} h ou menos de antecedência têm multa. O prazo sem multa terminou em {p.semMultaAteTexto}.
+          Cancelamentos feitos com {janelaHoras} h ou menos de antecedência têm multa. O prazo sem multa terminou em {p.semMultaAteTexto}.
         </p>
         {acao === "cancelar" && p.pago ? (
           <p className="text-white/80 mt-2">
             Valor a ser reembolsado: <strong className="text-white">{fmtCentavos(p.reembolsoCentavos)}</strong> de {fmtCentavos(p.valorCentavos)}.
           </p>
-        ) : null}
-        {acao === "remarcar" ? (
-          <p className="text-white/60 mt-2 text-xs">Os detalhes sobre a multa serão informados pela BION após a remarcação.</p>
         ) : null}
       </div>
     );
