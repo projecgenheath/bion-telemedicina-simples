@@ -8,11 +8,12 @@ import {
   agendaDoDia,
   consultasCancelaveisDoDia,
   ehDoMedico,
-  idsFalhaTecnica,
+  desfechosSistema,
   reservaVigente,
   reservasNoDia,
   rotuloStatusMedico,
   STATUS_ATIVOS,
+  type DesfechoSistema,
   diaDaConsulta,
   horaClinica,
   textoReservaPendente,
@@ -100,8 +101,8 @@ export function AgendaDoDia({ medico, onExecutando }: { medico: Medico; onExecut
   const hojeIso = diaFusoClinica(0).iso;
   const diaPassado = dia < hojeIso;
 
-  // Falhas técnicas do dia escolhido (eventos do servidor; a falta já vem no bootstrap).
-  const [falhasTecnicas, setFalhasTecnicas] = useState<ReadonlySet<string>>(() => new Set());
+  // Falhas técnicas / faltas do médico do dia escolhido (eventos do servidor; a falta já vem no bootstrap).
+  const [desfechos, setDesfechos] = useState<ReadonlyMap<string, DesfechoSistema>>(() => new Map());
   const versaoDia = useMemo(
     () =>
       minhas
@@ -119,7 +120,7 @@ export function AgendaDoDia({ medico, onExecutando }: { medico: Medico; onExecut
     fetch(url, { headers: { "Content-Type": "application/json" }, signal: ctrl.signal })
       .then(async (res) => {
         const json = (await res.json().catch(() => null)) as { eventos?: EventoMedico[] } | null;
-        if (!ctrl.signal.aborted && res.ok && json?.eventos) setFalhasTecnicas(idsFalhaTecnica(json.eventos));
+        if (!ctrl.signal.aborted && res.ok && json?.eventos) setDesfechos(desfechosSistema(json.eventos));
       })
       .catch(() => {
         /* sem os eventos, a agenda mostra só o status */
@@ -255,7 +256,7 @@ export function AgendaDoDia({ medico, onExecutando }: { medico: Medico; onExecut
       ) : (
         <ul className="space-y-1.5" aria-label={`Horários de ${rotuloDia}`}>
           {slots.map((s) => (
-            <LinhaSlot key={s.hora} slot={s} agora={agora} falhasTecnicas={falhasTecnicas} />
+            <LinhaSlot key={s.hora} slot={s} agora={agora} desfechos={desfechos} />
           ))}
         </ul>
       )}
@@ -382,7 +383,7 @@ const ROTULO_SLOT: Record<SlotAgenda["estado"], string> = {
   encerrada: "Liberado",
 };
 
-function LinhaSlot({ slot, agora, falhasTecnicas }: { slot: SlotAgenda; agora: number; falhasTecnicas: ReadonlySet<string> }) {
+function LinhaSlot({ slot, agora, desfechos }: { slot: SlotAgenda; agora: number; desfechos: ReadonlyMap<string, DesfechoSistema> }) {
   const cor =
     slot.estado === "ocupado"
       ? "bg-bion-sea text-white dark:bg-sky-300 dark:text-zinc-950"
@@ -396,7 +397,7 @@ function LinhaSlot({ slot, agora, falhasTecnicas }: { slot: SlotAgenda; agora: n
         <span className={`text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full shrink-0 ${cor}`}>{ROTULO_SLOT[slot.estado]}</span>
         <span className="text-sm truncate min-w-0">
           {slot.consultas.length
-            ? slot.consultas.map((c) => `${c.paciente} (${rotuloStatusMedico(c, falhasTecnicas)})`).join(" · ")
+            ? slot.consultas.map((c) => `${c.paciente} (${rotuloStatusMedico(c, desfechos)})`).join(" · ")
             : slot.reservadoPor
               ? `Remarcação de ${slot.reservadoPor.paciente}`
               : ""}

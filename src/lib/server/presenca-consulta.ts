@@ -19,6 +19,10 @@ import { REEMBOLSO_MANUAL_PRAZO_DIAS } from "@/lib/server/dados";
 /*    conectado caiu e a chamada não seguiu, OU quando NINGUÉM conseguiu */
 /*    entrar. Gravada por aplicarFalhaTecnica (financeiro.ts, do Admin): */
 /*    paga → aguardando_reagendamento; não paga → cancelada.             */
+/*  - falta do médico (regra aprovada pelo Alisson): o paciente entrou e */
+/*    o médico nunca entrou, em consulta PAGA → mesmo tratamento da      */
+/*    falha técnica: aplicarFalhaTecnica com motivo "falta_medico"       */
+/*    (evento tipo falha_tecnica, motivo falta_medico). Não paga: nada.  */
 /* Os dois eventos nunca convivem na mesma consulta.                     */
 /* ------------------------------------------------------------------ */
 
@@ -48,7 +52,8 @@ export type Classificacao =
   | { resultado: "aguardar"; motivo: string }
   | { resultado: "sem_evento"; motivo: string }
   | { resultado: "falta_paciente"; motivo: string }
-  | { resultado: "falha_tecnica"; motivo: string };
+  | { resultado: "falha_tecnica"; motivo: string }
+  | { resultado: "falta_medico"; motivo: string };
 
 /**
  * Classificação PURA (sem banco), testada em presenca-consulta.teste.ts.
@@ -83,8 +88,10 @@ export function classificarPresenca(p: {
     return { resultado: "falta_paciente", motivo: "O médico esteve na sala e o paciente não entrou." };
   }
   if (!medico && paciente) {
-    // Não é falta do paciente nem falha técnica pela regra: fica para o admin.
-    return { resultado: "sem_evento", motivo: "O paciente esteve na sala e o médico não entrou." };
+    // Falta do médico: mesmo tratamento da falha técnica, só em consulta paga
+    // (não paga: nada a devolver nem remarcar — combinado com o Admin).
+    if (!p.pago) return { resultado: "sem_evento", motivo: "Consulta não paga: o paciente esteve na sala e o médico não entrou." };
+    return { resultado: "falta_medico", motivo: "O paciente esteve na sala e o médico não entrou." };
   }
   // Os dois entraram: só é falha se alguém caiu e o outro ficou esperando.
   if (p.encerradaPeloBotao) return { resultado: "sem_evento", motivo: "A chamada foi encerrada pelo botão." };
@@ -115,16 +122,29 @@ type ConsultaAvaliada = {
 };
 
 /** Auditoria do evento gravado pelo sistema (aparece para o admin em /auditoria). */
-function dadosAudit(c: ConsultaAvaliada, tipo: "falta_paciente" | "falha_tecnica", motivo: string) {
+type Desfecho = "falta_paciente" | "falha_tecnica" | "falta_medico";
+
+const ROTULO_DESFECHO: Record<Desfecho, string> = {
+  falta_paciente: "Falta do paciente",
+  falha_tecnica: "Falha técnica",
+  falta_medico: "Falta do médico",
+};
+
+function dadosAudit(c: ConsultaAvaliada, tipo: Desfecho, motivo: string) {
   return {
-    acao: tipo === "falta_paciente" ? "CONSULTA_FALTA_PACIENTE" : "CONSULTA_FALHA_TECNICA",
+    acao:
+      tipo === "falta_paciente"
+        ? "CONSULTA_FALTA_PACIENTE"
+        : tipo === "falta_medico"
+          ? "CONSULTA_FALTA_MEDICO"
+          : "CONSULTA_FALHA_TECNICA",
     categoria: "consulta",
     severidade: "warning",
     usuarioNome: "Sistema BION",
     role: "sistema",
     entidade: "consulta",
     entidadeId: c.id,
-    detalhes: `${tipo === "falta_paciente" ? "Falta do paciente" : "Falha técnica"} registrada automaticamente — ${c.especialidade} (${quandoClinica(c.dataInicio)}). ${motivo}`,
+    detalhes: `${ROTULO_DESFECHO[tipo]} registrada automaticamente — ${c.especialidade} (${quandoClinica(c.dataInicio)}). ${motivo}`,
   };
 }
 
@@ -133,11 +153,13 @@ function dadosAudit(c: ConsultaAvaliada, tipo: "falta_paciente" | "falha_tecnica
  * - trava a consulta com updateMany condicionado ao status e ao updatedAt
  *   lidos (outra requisição que mexeu nela no meio faz esta desistir);
  * - não grava se já existe falta_paciente OU falha_tecnica;
- * - falha técnica passa por aplicarFalhaTecnica (que tem a própria checagem).
+ * - falha técnica e falta do médico passam por aplicarFalhaTecnica (que tem
+ *   a própria checagem); a falta do médico grava evento falha_tecnica com
+ *   motivo "falta_medico".
  */
 async function gravarClassificacao(c: ConsultaAvaliada, cl: Classificacao) {
-  if (cl.resultado !== "falta_paciente" && cl.resultado !== "falha_tecnica") return null;
-  const tipo = cl.resultado;
+  if (cl.resultado === "aguardar" || cl.resultado === "sem_evento") return null;
+  const tipo: Desfecho = cl.resultado;
   try {
     return await db.$transaction(async (tx) => {
       const { count } = await tx.consulta.updateMany({
@@ -170,16 +192,18 @@ async function gravarClassificacao(c: ConsultaAvaliada, cl: Classificacao) {
           },
         });
       } else {
-        const r = await aplicarFalhaTecnica(tx, c.id);
+        const faltaMedico = tipo === "falta_medico";
+        const r = await aplicarFalhaTecnica(tx, c.id, { motivo: faltaMedico ? "falta_medico" : "falha_tecnica" });
         if (!r) throw new SemAlteracao();
+        const causa = faltaMedico ? "porque o médico não entrou na sala" : "por falha técnica";
         await tx.notificacao.create({
           data: {
             tipo: "agenda",
-            titulo: "Falha técnica na consulta",
+            titulo: faltaMedico ? "O médico não compareceu" : "Falha técnica na consulta",
             texto:
               r.status === "aguardando_reagendamento"
-                ? `A consulta de ${c.especialidade} (${quandoClinica(c.dataInicio)}) não pôde acontecer por falha técnica. Escolha no app: remarcar sem custo ou reembolso integral.`
-                : `A consulta de ${c.especialidade} (${quandoClinica(c.dataInicio)}) não pôde acontecer por falha técnica e foi cancelada, sem custo.`,
+                ? `A consulta de ${c.especialidade} (${quandoClinica(c.dataInicio)}) não pôde acontecer ${causa}. Escolha no app: remarcar sem custo ou reembolso integral.`
+                : `A consulta de ${c.especialidade} (${quandoClinica(c.dataInicio)}) não pôde acontecer ${causa} e foi cancelada, sem custo.`,
             usuarioId: c.pacienteId,
           },
         });

@@ -56,8 +56,15 @@ igual("médico na sala, paciente nunca entrou: falta", r({ ultimoPingMedico: min
 igual("falta também sem pagamento", r({ pago: false, ultimoPingMedico: min(15) }), "falta_paciente");
 igual("paciente saiu antes do horário, médico esperou: falta", r({ ultimoPingMedico: min(15), ultimoPingPaciente: min(-20) }), "falta_paciente");
 
-// Médico não entrou: não é falta do paciente nem falha técnica
-igual("só o paciente entrou: sem evento", r({ ultimoPingPaciente: min(15) }), "sem_evento");
+// Médico não entrou (paciente entrou): falta do médico só em consulta paga
+igual("só o paciente entrou (paga): falta do médico", r({ ultimoPingPaciente: min(15) }), "falta_medico");
+igual("só o paciente entrou (não paga): sem evento", r({ pago: false, ultimoPingPaciente: min(15) }), "sem_evento");
+igual(
+  "médico só antes do horário, paciente esperou: falta do médico",
+  r({ ultimoPingMedico: min(-15), ultimoPingPaciente: min(20) }),
+  "falta_medico",
+);
+igual("falta do médico espera a carência", r({ agora: min(30), ultimoPingPaciente: min(15) }), "aguardar");
 
 // Os dois entraram
 igual("os dois até o fim: sem evento", r({ ultimoPingMedico: min(25), ultimoPingPaciente: min(25) }), "sem_evento");
