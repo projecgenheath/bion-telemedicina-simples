@@ -310,3 +310,215 @@ export const ROTULO_STATUS: Record<Consulta["status"], string> = {
   concluida: "Concluída",
   aguardando_reagendamento: "Aguardando reagendamento",
 };
+
+/* ------------------------------------------------------------------ */
+/* Remarcações/cancelamentos do PACIENTE (GET /api/medico/eventos)     */
+/* ------------------------------------------------------------------ */
+
+/** Evento de consulta como chega de GET /api/medico/eventos (datas ISO). */
+export type EventoMedico = {
+  consultaId: string;
+  tipo: string; // "cancelada" | "remarcada" | "falha_tecnica"
+  por: string; // "paciente" | "medico" | "sistema" | "admin"
+  motivo: string;
+  em: string;
+  dataAnterior: string;
+  dataNova: string | null;
+};
+
+export type AcoesPacienteHoje = {
+  /** Consultas de hoje que o paciente remarcou (ids distintos). */
+  remarcadas: number;
+  /** Consultas de hoje que o paciente cancelou (ids distintos). */
+  canceladas: number;
+  /** Consultas distintas com qualquer uma das duas ações. */
+  total: number;
+};
+
+/**
+ * Quantas consultas de HOJE (fuso da clínica, pela data ORIGINAL =
+ * `dataAnterior` do evento) o PACIENTE remarcou ou cancelou.
+ * Não contam:
+ *  - eventos do médico, do sistema ou do admin;
+ *  - `motivo = "reagendamento"` (o paciente só escolheu nova data depois de
+ *    o médico/sistema cancelar);
+ *  - o cancelamento do paciente que é a RESPOSTA a um cancelamento do
+ *    médico/sistema (consulta em "aguardando_reagendamento": o evento anterior
+ *    da mesma consulta é um cancelamento que não foi do paciente) — é a
+ *    escolha do reembolso integral, não uma desistência.
+ * Reserva de remarcação ainda não paga não gera evento, então não conta.
+ */
+export function contarAcoesPacienteHoje(eventos: EventoMedico[], agora: number): AcoesPacienteHoje {
+  const hoje = isoDia(agora);
+  const porConsulta = new Map<string, EventoMedico[]>();
+  for (const e of eventos) {
+    const lista = porConsulta.get(e.consultaId) ?? [];
+    lista.push(e);
+    porConsulta.set(e.consultaId, lista);
+  }
+  const remarcadas = new Set<string>();
+  const canceladas = new Set<string>();
+  for (const [consultaId, lista] of porConsulta) {
+    const ordenados = [...lista].sort((a, b) => Date.parse(a.em) - Date.parse(b.em));
+    ordenados.forEach((e, i) => {
+      if (e.por !== "paciente" || e.motivo === "reagendamento") return;
+      if (e.tipo !== "remarcada" && e.tipo !== "cancelada") return;
+      if (isoDia(e.dataAnterior) !== hoje) return;
+      const anterior = ordenados[i - 1];
+      const respostaAoMedico =
+        e.tipo === "cancelada" && anterior && anterior.por !== "paciente" && anterior.tipo !== "remarcada";
+      if (respostaAoMedico) return;
+      (e.tipo === "remarcada" ? remarcadas : canceladas).add(consultaId);
+    });
+  }
+  return { remarcadas: remarcadas.size, canceladas: canceladas.size, total: new Set([...remarcadas, ...canceladas]).size };
+}
+
+/* ------------------------------------------------------------------ */
+/* Reserva de remarcação pendente + agenda do dia                      */
+/* ------------------------------------------------------------------ */
+
+/** Reserva de remarcação que ainda segura o horário (pendente e antes de expiraEm). */
+export function reservaVigente(c: Consulta, agora: number): NonNullable<Consulta["remarcacaoPendente"]> | null {
+  const r = c.remarcacaoPendente;
+  if (!r || r.status !== "pendente") return null;
+  const expira = Date.parse(r.expiraEm);
+  return Number.isFinite(expira) && expira > agora ? r : null;
+}
+
+const fmtDiaHora = new Intl.DateTimeFormat("pt-BR", {
+  timeZone: "America/Sao_Paulo",
+  day: "2-digit",
+  month: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+});
+const fmtSoHora = new Intl.DateTimeFormat("pt-BR", {
+  timeZone: "America/Sao_Paulo",
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+});
+
+/** "02/10 às 15:00" (fuso da clínica). */
+export function diaHoraClinica(iso: string | number): string {
+  const p = fmtDiaHora.formatToParts(new Date(iso));
+  const g = (t: Intl.DateTimeFormatPartTypes) => p.find((x) => x.type === t)?.value ?? "";
+  return `${g("day")}/${g("month")} às ${g("hour")}:${g("minute")}`;
+}
+/** "15:00" (fuso da clínica). */
+export const horaClinica = (iso: string | number) => fmtSoHora.format(new Date(iso));
+
+/** Texto da reserva pendente exibido na agenda do médico. */
+export function textoReservaPendente(r: NonNullable<Consulta["remarcacaoPendente"]>): string {
+  return `Novo horário reservado, aguardando pagamento: ${diaHoraClinica(r.novaData)} (até ${horaClinica(r.expiraEm)})`;
+}
+
+export type SlotAgenda = {
+  hora: string;
+  /** livre: horário da grade sem consulta; ocupado: consulta ativa; reservado: novo horário de uma remarcação aguardando pagamento. */
+  estado: "livre" | "ocupado" | "reservado" | "encerrada";
+  /** Consulta neste horário (qualquer status) — a data ORIGINAL continua valendo. */
+  consultas: Consulta[];
+  /** Consulta cuja remarcação (ainda não paga) reservou este horário. */
+  reservadoPor?: Consulta;
+  expiraEm?: string;
+};
+
+/**
+ * Agenda de um dia (YYYY-MM-DD, fuso da clínica): horários da grade +
+ * horários das consultas do dia + horários reservados por remarcações
+ * pendentes (vigentes) que caem neste dia. A consulta com reserva fica no
+ * horário ORIGINAL (vale até o pagamento); o novo horário aparece como
+ * "reservado". Reserva expirada é ignorada (o horário volta a ficar livre).
+ */
+export function agendaDoDia(consultas: Consulta[], iso: string, grade: string[], agora: number): SlotAgenda[] {
+  const slots = new Map<string, SlotAgenda>();
+  const slot = (hora: string) => {
+    let s = slots.get(hora);
+    if (!s) {
+      s = { hora, estado: "livre", consultas: [] };
+      slots.set(hora, s);
+    }
+    return s;
+  };
+  for (const h of grade) if (HORA_RE.test(h)) slot(h);
+  for (const c of consultas) {
+    if (diaDaConsulta(c) === iso) {
+      const s = slot(horaClinica(c.dataISO ?? c.ts));
+      s.consultas.push(c);
+    }
+    const r = reservaVigente(c, agora);
+    if (r && isoDia(r.novaData) === iso) {
+      const s = slot(horaClinica(r.novaData));
+      s.reservadoPor = c;
+      s.expiraEm = r.expiraEm;
+    }
+  }
+  for (const s of slots.values()) {
+    if (s.consultas.some((c) => STATUS_ATIVOS.includes(c.status))) s.estado = "ocupado";
+    else if (s.reservadoPor) s.estado = "reservado";
+    else if (s.consultas.length) s.estado = "encerrada";
+  }
+  return [...slots.values()].sort((a, b) => paraMin(a.hora) - paraMin(b.hora));
+}
+
+/**
+ * Consultas que "Cancelar agenda do dia" cancela: do dia escolhido, com
+ * status ativo (não cancelada, concluída nem aguardando reagendamento) e que
+ * AINDA NÃO COMEÇARAM (uma consulta de hoje que já passou não é cancelada
+ * retroativamente). Em ordem de horário.
+ */
+export function consultasCancelaveisDoDia(consultas: Consulta[], iso: string, agora: number): Consulta[] {
+  return consultas
+    .filter((c) => diaDaConsulta(c) === iso && STATUS_ATIVOS.includes(c.status) && c.ts > agora)
+    .sort((a, b) => a.ts - b.ts);
+}
+
+/** Reservas vigentes de remarcação (de outras consultas) com novo horário neste dia. */
+export function reservasNoDia(consultas: Consulta[], iso: string, agora: number): Consulta[] {
+  return consultas.filter((c) => {
+    const r = reservaVigente(c, agora);
+    return !!r && isoDia(r.novaData) === iso;
+  });
+}
+
+/* ------------------------------------------------------------------ */
+/* Receita líquida (GET /api/medico/receita)                           */
+/* ------------------------------------------------------------------ */
+
+export type ReceitaDia = {
+  dia: string; // YYYY-MM-DD (São Paulo)
+  /** Líquido das consultas: bruto − comissão − taxa do gateway (sem multas). */
+  liquidoCentavos: number;
+  brutoCentavos: number;
+  comissaoCentavos: number;
+  taxaCentavos: number;
+  /** Parte do médico (50%) nas multas pagas pelo paciente. */
+  multasMedicoCentavos: number;
+  /** Receita do médico no dia = liquidoCentavos + multasMedicoCentavos. */
+  totalCentavos: number;
+  consultas: number;
+};
+
+export type RespostaReceita = {
+  de: string;
+  ate: string;
+  dias: ReceitaDia[];
+  totais: Omit<ReceitaDia, "dia">;
+  regra: { comissaoPct: number; multaParteMedicoPct: number };
+};
+
+export const fmtCentavos = (centavos: number) => fmtBRL(centavos / 100);
+
+export type PontoReceita = { iso: string; rotulo: string; centavos: number; qtd: number };
+
+/** Pontos do gráfico (um por dia do intervalo, na ordem; dias sem receita = 0). */
+export function pontosReceita(r: RespostaReceita | null): PontoReceita[] {
+  if (!r) return [];
+  return r.dias.map((d) => {
+    const [, mes, dia] = d.dia.split("-");
+    return { iso: d.dia, rotulo: `${dia}/${mes}`, centavos: d.totalCentavos, qtd: d.consultas };
+  });
+}
