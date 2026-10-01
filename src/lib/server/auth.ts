@@ -240,7 +240,10 @@ export async function garantirUsuarioPrismaDeAuth(opts: {
         severidade: "critical",
         entidade: "usuario",
         entidadeId: porEmail.id,
-        detalhes: `Auth ${opts.supabaseId} tentou vincular-se a ${email} sem prova da senha legada${porEmail.supabaseId ? " (conta já vinculada a outro Auth)" : ""}`,
+        // Sem e-mail/PII em `detalhes`: a conta-alvo fica só em entidadeId.
+        detalhes: porEmail.supabaseId
+          ? "Vínculo recusado: conta já vinculada a outro Auth"
+          : "Vínculo recusado: sem prova da senha legada",
       });
       const err = new Error(
         "Não foi possível vincular esta conta. Entre em contato com o suporte.",
