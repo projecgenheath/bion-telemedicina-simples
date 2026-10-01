@@ -1,6 +1,8 @@
 import "server-only";
 import type { Prisma } from "@prisma/client";
+import { db } from "@/lib/db";
 import { partesNoFuso, quandoClinica } from "@/lib/server/fuso";
+import { parseDataHora } from "@/lib/server/dados";
 
 /* ------------------------------------------------------------------ */
 /* Fase financeira: regras ÚNICAS de multa, reembolso e repasse.       */
@@ -25,6 +27,12 @@ export const COMISSAO_APP_PCT = 10;
 export const MULTA_PARTE_MEDICO_PCT = 50;
 /** Reembolso automático: nasce aprovado e segue para o gateway, sem o admin aprovar. */
 export const REEMBOLSO_AUTOMATICO = true;
+/**
+ * Remarcação com multa: o paciente paga a multa pelo app e a nova data só vale
+ * depois do pagamento aprovado. Enquanto isso o novo horário fica reservado
+ * por este tempo; depois expira e o horário volta a ficar livre.
+ */
+export const RESERVA_REMARCACAO_MIN = 15;
 
 /** A taxa do gateway sai do lado do médico (líquido = valor − comissão − taxa). */
 export const TAXA_GATEWAY_NO_LIQUIDO = true;
@@ -48,7 +56,8 @@ export const REEMBOLSO_STATUS_ATIVOS = ["solicitado", "aprovado", "processado"];
 
 export type PorEvento = "paciente" | "medico" | "sistema" | "admin";
 export type TipoEvento = "cancelada" | "remarcada" | "falha_tecnica";
-export type MotivoEvento = "pedido_paciente" | "agenda_cancelada" | "falha_tecnica" | "admin";
+/** reagendamento: paciente escolheu nova data para consulta em aguardando_reagendamento (sem multa; recomeça a contagem). */
+export type MotivoEvento = "pedido_paciente" | "agenda_cancelada" | "falha_tecnica" | "admin" | "reagendamento";
 
 /* ---------- Dinheiro ----------------------------------------------- */
 
@@ -87,12 +96,14 @@ export function competenciaDe(instante: Date): string {
 
 /* ---------- Multa -------------------------------------------------- */
 
-type EventoParaMulta = { por: string; em: Date; dataAnterior: Date };
+type EventoParaMulta = { por: string; em: Date; dataAnterior: Date; motivo?: string };
 
 /**
  * Data que vale para a janela da multa.
  * Com MULTA_RECOMECA_APOS_EVENTO_NAO_PACIENTE: a data que estava marcada na
  * 1ª mudança do paciente depois do último evento que não foi do paciente.
+ * O reagendamento (paciente escolhe data depois de o médico/sistema cancelar)
+ * também recomeça a contagem: a referência passa a ser a data escolhida nele.
  * Sem evento que se aplique: a data atual da consulta.
  */
 export function dataOriginalParaMulta(eventos: EventoParaMulta[], dataAtual: Date): Date {
@@ -101,7 +112,7 @@ export function dataOriginalParaMulta(eventos: EventoParaMulta[], dataAtual: Dat
   if (!MULTA_RECOMECA_APOS_EVENTO_NAO_PACIENTE) return ordenados[0]?.dataAnterior ?? dataAtual;
   let inicio = 0;
   ordenados.forEach((e, i) => {
-    if (e.por !== "paciente") inicio = i + 1;
+    if (e.por !== "paciente" || e.motivo === "reagendamento") inicio = i + 1;
   });
   const primeiroDoPaciente = ordenados.slice(inicio).find((e) => e.por === "paciente");
   return primeiroDoPaciente?.dataAnterior ?? dataAtual;
@@ -185,7 +196,13 @@ export async function registrarEvento(
  */
 export async function criarReembolsoSeDevido(
   tx: Prisma.TransactionClient,
-  params: { consultaId: string; valorCentavos: number; multaCentavos: number; motivo: MotivoEvento; solicitadoPor: string },
+  params: {
+    consultaId: string;
+    valorCentavos: number;
+    multaCentavos: number;
+    motivo: MotivoEvento | "multa_remarcacao_nao_aplicada";
+    solicitadoPor: string;
+  },
 ) {
   if (params.valorCentavos <= 0) return null;
   const pagamento = await tx.pagamento.findUnique({ where: { consultaId: params.consultaId } });
@@ -204,4 +221,210 @@ export async function criarReembolsoSeDevido(
       solicitadoPor: params.solicitadoPor,
     },
   });
+}
+
+/* ---------- Remarcação com multa (reserva + cobrança) -------------- */
+
+type ReservaMin = { status: string; expiraEm: Date };
+
+/** Reserva que ainda segura o horário (pendente e dentro do prazo). */
+export function reservaVigente(r: ReservaMin, agora: Date = new Date()): boolean {
+  return r.status === "pendente" && r.expiraEm.getTime() > agora.getTime();
+}
+
+/** Filtro Prisma das reservas vigentes. */
+export function filtroReservaVigente(agora: Date = new Date()) {
+  return { status: "pendente", expiraEm: { gt: agora } } as const;
+}
+
+/**
+ * Há uma reserva vigente de OUTRA consulta do mesmo médico neste horário?
+ * Usado na checagem de conflito ao agendar e ao remarcar.
+ */
+export async function horarioReservado(medicoId: string, dataInicio: Date, excetoConsultaId?: string) {
+  const r = await db.remarcacaoPendente.findFirst({
+    where: {
+      ...filtroReservaVigente(),
+      novaData: dataInicio,
+      consulta: { medicoId, ...(excetoConsultaId ? { id: { not: excetoConsultaId } } : {}) },
+    },
+    select: { id: true },
+  });
+  return !!r;
+}
+
+/**
+ * Cancela, na transação da Consulta, a reserva pendente dela (cancelamento
+ * por qualquer pessoa ou remarcação pelo admin). O polling do paciente vê
+ * "cancelada" e o horário reservado é liberado na hora.
+ */
+export async function cancelarReservasPendentes(tx: Prisma.TransactionClient, consultaId: string) {
+  return tx.remarcacaoPendente.updateMany({ where: { consultaId, status: "pendente" }, data: { status: "cancelada" } });
+}
+
+/** Início e fim (exclusivo) do dia civil em São Paulo (UTC-3, sem horário de verão) que contém `d`. */
+export function diaSaoPaulo(d: Date): { inicio: Date; fim: Date } {
+  const OFFSET = 3 * 3600_000;
+  const local = new Date(d.getTime() - OFFSET);
+  const inicio = new Date(Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate()) + OFFSET);
+  return { inicio, fim: new Date(inicio.getTime() + 24 * 3600_000) };
+}
+
+/**
+ * Médico cancelou a agenda do dia: reservas pendentes de OUTRAS consultas dele
+ * cuja novaData cai nesse dia também caem (senão o pagamento aprovado depois
+ * moveria a consulta para um dia que o médico cancelou).
+ */
+export async function cancelarReservasDoDia(tx: Prisma.TransactionClient, medicoId: string, dia: Date) {
+  const { inicio, fim } = diaSaoPaulo(dia);
+  return tx.remarcacaoPendente.updateMany({
+    where: { status: "pendente", novaData: { gte: inicio, lt: fim }, consulta: { medicoId } },
+    data: { status: "cancelada" },
+  });
+}
+
+export function remarcacaoWire(r: {
+  id: string;
+  novaData: Date;
+  multaCentavos: number;
+  status: string;
+  metodo: string;
+  via: string | null;
+  expiraEm: Date;
+  criadoEm: Date;
+  aprovadoEm: Date | null;
+}) {
+  const agora = new Date();
+  // Expiração verificada na leitura: passou do prazo = expirada.
+  const status = r.status === "pendente" && !reservaVigente(r, agora) ? "expirada" : r.status;
+  return {
+    id: r.id,
+    novaData: r.novaData.toISOString(),
+    novaDataTexto: quandoClinica(r.novaData),
+    multaCentavos: r.multaCentavos,
+    status,
+    metodo: r.metodo,
+    via: r.via,
+    expiraEm: r.expiraEm.toISOString(),
+    criadoEm: r.criadoEm.toISOString(),
+    aprovadoEm: r.aprovadoEm?.toISOString() ?? null,
+  };
+}
+
+/**
+ * Multa da remarcação APROVADA pelo gateway (webhook) ou pelo modo simulado.
+ * Idempotente. Numa transação só:
+ * - reserva vigente → consulta muda para novaData, EventoConsulta "remarcada"
+ *   por paciente com a multa, reserva "aprovada";
+ * - reserva já cancelada/expirada ou consulta encerrada → a consulta NÃO se
+ *   move e a multa paga volta automaticamente como Reembolso.
+ * Também recusa (e devolve a multa) se o horário foi ocupado no meio tempo.
+ */
+export async function aprovarMultaRemarcacao(remarcacaoId: string, via: "webhook" | "simulado", gatewayRef?: string) {
+  return db.$transaction(async (tx) => {
+    const r = await tx.remarcacaoPendente.findUnique({ where: { id: remarcacaoId }, include: { consulta: true } });
+    if (!r) return null;
+    if (r.status === "aprovada") return { remarcacao: r, aplicada: true, jaProcessada: true };
+    const agora = new Date();
+    const c = r.consulta;
+    const encerrada = c.status === "cancelada" || c.status === "concluida" || c.status === "aguardando_reagendamento";
+    let aplicavel = (r.status === "pendente" || r.status === "expirada") && reservaVigente({ ...r, status: "pendente" }, agora) && !encerrada;
+    if (aplicavel) {
+      const ocupado = await tx.consulta.findFirst({
+        where: { id: { not: c.id }, medicoId: c.medicoId, dataInicio: r.novaData, status: { notIn: STATUS_LIBERAM_HORARIO } },
+        select: { id: true },
+      });
+      if (ocupado) aplicavel = false;
+    }
+
+    if (aplicavel) {
+      await tx.consulta.update({ where: { id: c.id }, data: { dataInicio: r.novaData, remarcada: true } });
+      await registrarEvento(tx, {
+        consultaId: c.id,
+        tipo: "remarcada",
+        por: "paciente",
+        atorId: r.solicitadoPor,
+        dataAnterior: c.dataInicio,
+        dataNova: r.novaData,
+        motivo: "pedido_paciente",
+        multaCentavos: r.multaCentavos,
+      });
+      const atual = await tx.remarcacaoPendente.update({
+        where: { id: r.id },
+        data: { status: "aprovada", aprovadoEm: agora, via, gatewayRef: gatewayRef ?? r.gatewayRef },
+      });
+      return { remarcacao: atual, aplicada: true, jaProcessada: false };
+    }
+
+    // Pago, mas não dá mais para aplicar: devolve a multa.
+    const atual = await tx.remarcacaoPendente.update({
+      where: { id: r.id },
+      data: {
+        status: r.status === "pendente" ? "expirada" : r.status,
+        via,
+        gatewayRef: gatewayRef ?? r.gatewayRef,
+      },
+    });
+    const existente = await tx.reembolso.findUnique({ where: { remarcacaoId: r.id } });
+    if (!existente) {
+      await tx.reembolso.create({
+        data: {
+          remarcacaoId: r.id,
+          valorCentavos: r.multaCentavos,
+          multaCentavos: 0,
+          motivo: "multa_remarcacao_nao_aplicada",
+          status: REEMBOLSO_AUTOMATICO ? "aprovado" : "solicitado",
+          solicitadoPor: "sistema",
+        },
+      });
+    }
+    return { remarcacao: atual, aplicada: false, jaProcessada: false };
+  });
+}
+
+/** Gateway reportou falha na multa: a consulta fica na data original. */
+export async function falharMultaRemarcacao(remarcacaoId: string, via: "webhook" | "simulado") {
+  const r = await db.remarcacaoPendente.findUnique({ where: { id: remarcacaoId } });
+  if (!r || r.status !== "pendente") return r;
+  return db.remarcacaoPendente.update({ where: { id: r.id }, data: { status: "falhou", via } });
+}
+
+/**
+ * Valida a nova data/hora de uma remarcação (mesma regra para o PATCH
+ * "remarcar" e para a remarcação com multa): antecedência de 20 min, grade do
+ * médico, consulta que ocupa o horário e reserva vigente de outra consulta.
+ */
+export async function validarNovoHorario(
+  consulta: { id: string; medicoId: string },
+  data: string | undefined,
+  hora: string | undefined,
+): Promise<{ ok: true; dataInicio: Date } | { ok: false; erro: string; status: number }> {
+  if (!data || !hora) return { ok: false, erro: "Informe a nova data e horário.", status: 400 };
+  const dataInicio = parseDataHora(data, hora);
+  if (dataInicio.getTime() < Date.now() + 20 * 60_000) {
+    return { ok: false, erro: "Escolha um horário com pelo menos 20 minutos de antecedência.", status: 400 };
+  }
+  const perfilMedico = await db.perfilMedico.findUnique({ where: { userId: consulta.medicoId } });
+  let grade: string[] = [];
+  try {
+    grade = JSON.parse(perfilMedico?.horariosDisponiveis || "[]") as string[];
+  } catch {
+    grade = [];
+  }
+  if (grade.length && !grade.includes(hora)) {
+    return { ok: false, erro: "Esse horário não faz parte da agenda do médico.", status: 400 };
+  }
+  const conflito = await db.consulta.findFirst({
+    where: {
+      id: { not: consulta.id },
+      medicoId: consulta.medicoId,
+      status: { notIn: STATUS_LIBERAM_HORARIO },
+      dataInicio,
+    },
+    select: { id: true },
+  });
+  if (conflito || (await horarioReservado(consulta.medicoId, dataInicio, consulta.id))) {
+    return { ok: false, erro: "Esse horário já está ocupado na agenda do médico.", status: 409 };
+  }
+  return { ok: true, dataInicio };
 }

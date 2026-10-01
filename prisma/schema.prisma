@@ -163,6 +163,7 @@ model Consulta {
   // Fase financeira: histórico de cancelamentos/remarcações e repasse
   eventos     EventoConsulta[]
   repasseItem RepasseItem?
+  remarcacoes RemarcacaoPendente[]
 }
 
 // Cobrança da consulta. O CLIENTE NUNCA define `pago` — a confirmação vem do
@@ -424,7 +425,7 @@ model IdentificacaoCofre {
 // MESMA transação da alteração da Consulta.
 // tipo: cancelada | remarcada | falha_tecnica
 // por: paciente | medico | sistema | admin
-// motivo: pedido_paciente | agenda_cancelada | falha_tecnica | admin
+// motivo: pedido_paciente | agenda_cancelada | falha_tecnica | admin | reagendamento
 // dataAnterior: data/hora que estava marcada ANTES da mudança (base da multa).
 model EventoConsulta {
   id            String    @id @default(cuid())
@@ -444,14 +445,17 @@ model EventoConsulta {
   @@index([em])
 }
 
-// Devolução (total ou parcial) de um Pagamento.
+// Devolução (total ou parcial) de um Pagamento da consulta OU da multa paga
+// numa RemarcacaoPendente que não pôde ser aplicada (exatamente um dos dois).
 // status: solicitado | aprovado | processado | negado | falhou
 // Só UM reembolso ATIVO (solicitado | aprovado | processado) por pagamento:
 // garantido no servidor e por índice único parcial na migração SQL.
 model Reembolso {
-  id            String    @id @default(cuid())
-  pagamentoId   String
-  pagamento     Pagamento @relation(fields: [pagamentoId], references: [id], onDelete: Cascade)
+  id            String              @id @default(cuid())
+  pagamentoId   String?
+  pagamento     Pagamento?          @relation(fields: [pagamentoId], references: [id], onDelete: Cascade)
+  remarcacaoId  String?             @unique
+  remarcacao    RemarcacaoPendente? @relation(fields: [remarcacaoId], references: [id], onDelete: Cascade)
   valorCentavos Int
   multaCentavos Int       @default(0)
   motivo        String
@@ -502,4 +506,31 @@ model RepasseItem {
   criadoEm           DateTime @default(now())
 
   @@index([repasseId])
+}
+
+// Remarcação do PACIENTE com multa (≤24 h da data de referência): a nova data
+// fica RESERVADA até a multa ser paga. Aprovada → a consulta muda de data (na
+// mesma transação, com EventoConsulta). Falhou/expirou/cancelada → a consulta
+// fica na data original. Expiração verificada na leitura (expiraEm < agora).
+// A cobrança da multa vive aqui (o Pagamento é 1:1 com a consulta).
+// status: pendente | aprovada | expirada | falhou | cancelada
+// Só UMA pendente por consulta (índice único parcial na migração SQL).
+model RemarcacaoPendente {
+  id            String     @id @default(cuid())
+  consultaId    String
+  consulta      Consulta   @relation(fields: [consultaId], references: [id], onDelete: Cascade)
+  novaData      DateTime
+  multaCentavos Int
+  status        String     @default("pendente")
+  metodo        String     @default("pix") // pix | cartao
+  via           String?    // webhook | simulado
+  gatewayRef    String?
+  solicitadoPor String
+  expiraEm      DateTime
+  criadoEm      DateTime   @default(now())
+  aprovadoEm    DateTime?
+  reembolso     Reembolso?
+
+  @@index([consultaId, status])
+  @@index([novaData, status])
 }

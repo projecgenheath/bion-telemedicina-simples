@@ -10,7 +10,7 @@ import {
 } from "@/lib/server/dados";
 import { criarCobranca, confirmarPagamento, modoGateway, paraWire } from "@/lib/server/pagamentos";
 import { ok, falha } from "@/lib/server/http";
-import { STATUS_LIBERAM_HORARIO } from "@/lib/server/financeiro";
+import { STATUS_LIBERAM_HORARIO, horarioReservado } from "@/lib/server/financeiro";
 import { partesNoFuso } from "@/lib/server/fuso";
 
 /** Ano/mês/dia formam uma data real do calendário. */
@@ -129,7 +129,7 @@ export async function POST(req: NextRequest) {
       where: { medicoId: medico.id, dataInicio, status: { notIn: STATUS_LIBERAM_HORARIO } },
       select: { id: true },
     });
-    if (choqueMedico) {
+    if (choqueMedico || (await horarioReservado(medico.id, dataInicio))) {
       return Response.json(
         { erro: "Este médico já possui uma consulta neste horário. Escolha outro horário." },
         { status: 409 },

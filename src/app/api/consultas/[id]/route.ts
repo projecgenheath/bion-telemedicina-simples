@@ -1,19 +1,29 @@
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { exigirSessao } from "@/lib/server/auth";
-import { aplicarSideEffects, parseDataHora, parseValor, type NotifPayload, type AuditPayload } from "@/lib/server/dados";
+import {
+  aplicarSideEffects,
+  consultaWire as consultaWireComum,
+  includeReservaVigente,
+  parseDataHora,
+  parseValor,
+  type NotifPayload,
+  type AuditPayload,
+} from "@/lib/server/dados";
 import { quandoClinica } from "@/lib/server/fuso";
 import { criarCobranca, confirmarPagamento, falharPagamento } from "@/lib/server/pagamentos";
 import { ok, falha } from "@/lib/server/http";
 import {
-  STATUS_LIBERAM_HORARIO,
   calcularMulta,
+  cancelarReservasDoDia,
+  cancelarReservasPendentes,
   criarReembolsoSeDevido,
   reaisParaCentavos,
   registrarEvento,
   type MotivoEvento,
   type PorEvento,
   type TipoEvento,
+  validarNovoHorario,
 } from "@/lib/server/financeiro";
 
 type Acao = "cancelar" | "concluir" | "remarcar" | "atualizar";
@@ -44,25 +54,10 @@ async function consultaWire(id: string) {
     include: {
       medico: { select: { nome: true } },
       paciente: { select: { nome: true } },
+      remarcacoes: includeReservaVigente(),
     },
   });
-  if (!c) return null;
-  return {
-    id: c.id,
-    medicoId: c.medicoId,
-    medico: c.medico.nome,
-    pacienteId: c.pacienteId,
-    paciente: c.paciente.nome,
-    especialidade: c.especialidade,
-    dataInicio: c.dataInicio.toISOString(),
-    status: c.status,
-    motivoConsulta: c.motivoConsulta ?? undefined,
-    motivoCancelamento: c.motivoCancelamento ?? undefined,
-    resumoMedico: c.resumoMedico ?? undefined,
-    valor: c.valor,
-    pago: c.pago,
-    remarcada: c.remarcada || undefined,
-  };
+  return c ? consultaWireComum(c) : null;
 }
 
 /**
@@ -97,6 +92,8 @@ export async function PATCH(
     const body = (await req.json()) as {
       acao: Acao;
       motivo?: string;
+      /** Médico: true quando o cancelamento faz parte de "cancelar agenda do dia". */
+      cancelarDia?: boolean;
       resumo?: string;
       data?: string;
       hora?: string;
@@ -128,7 +125,7 @@ export async function PATCH(
     let evento: EventoPendente | null = null;
     let reembolso: ReembolsoPendente | null = null;
     const eventosAnteriores = () =>
-      db.eventoConsulta.findMany({ where: { consultaId: id }, select: { por: true, em: true, dataAnterior: true } });
+      db.eventoConsulta.findMany({ where: { consultaId: id }, select: { por: true, em: true, dataAnterior: true, motivo: true } });
 
     switch (body.acao) {
       case "cancelar": {
@@ -193,34 +190,9 @@ export async function PATCH(
         if (!ehDonoPaciente && !ehAdmin) {
           return Response.json({ erro: "Apenas o paciente ou admin podem remarcar." }, { status: 403 });
         }
-        if (!body.data || !body.hora) {
-          return Response.json({ erro: "Informe a nova data e horário." }, { status: 400 });
-        }
-        data.dataInicio = parseDataHora(body.data, body.hora);
-        if (data.dataInicio.getTime() < Date.now() + 20 * 60_000) {
-          return Response.json({ erro: "Escolha um horário com pelo menos 20 minutos de antecedência." }, { status: 400 });
-        }
-        const perfilMedico = await db.perfilMedico.findUnique({ where: { userId: consulta.medicoId } });
-        let grade: string[] = [];
-        try {
-          grade = JSON.parse(perfilMedico?.horariosDisponiveis || "[]") as string[];
-        } catch {
-          grade = [];
-        }
-        if (grade.length && !grade.includes(body.hora)) {
-          return Response.json({ erro: "Esse horário não faz parte da agenda do médico." }, { status: 400 });
-        }
-        const conflito = await db.consulta.findFirst({
-          where: {
-            id: { not: consulta.id },
-            medicoId: consulta.medicoId,
-            status: { notIn: STATUS_LIBERAM_HORARIO },
-            dataInicio: data.dataInicio,
-          },
-        });
-        if (conflito) {
-          return Response.json({ erro: "Esse horário já está ocupado na agenda do médico." }, { status: 409 });
-        }
+        const horario = await validarNovoHorario(consulta, body.data, body.hora);
+        if (!horario.ok) return Response.json({ erro: horario.erro }, { status: horario.status });
+        data.dataInicio = horario.dataInicio;
         // Regra de status no SERVIDOR: remarcar NÃO altera confirmação —
         // quem confirma é o pagamento (confirmarPagamento). Legado
         // "pendente_anamnese" permanece até a trilha de pagamento resolver.
@@ -234,10 +206,27 @@ export async function PATCH(
           por === "paciente"
             ? calcularMulta({ consulta, eventos: await eventosAnteriores(), por }).multaCentavos
             : 0;
+        // Multa > 0: a nova data só vale depois de a multa ser paga
+        // (POST /api/consultas/[id]/remarcacao). Aqui nunca muda sem pagar.
+        if (multaRemarcar > 0) {
+          return Response.json(
+            {
+              erro: "Remarcar faltando 24 h ou menos tem multa: pague a multa para confirmar a nova data.",
+              multaCentavos: multaRemarcar,
+              usar: "remarcacao",
+            },
+            { status: 402 },
+          );
+        }
         evento = {
           tipo: "remarcada",
           por,
-          motivo: por === "admin" ? "admin" : "pedido_paciente",
+          motivo:
+            por === "admin"
+              ? "admin"
+              : consulta.status === "aguardando_reagendamento"
+                ? "reagendamento"
+                : "pedido_paciente",
           dataAnterior: consulta.dataInicio,
           dataNova: data.dataInicio,
           multaCentavos: multaRemarcar,
@@ -316,6 +305,14 @@ export async function PATCH(
     await db.$transaction(async (tx) => {
       await tx.consulta.update({ where: { id }, data });
       if (ev) await registrarEvento(tx, { consultaId: id, atorId: usuario.id, ...ev });
+      // Cancelamento (qualquer pessoa) ou mudança de data por outra via:
+      // a reserva de remarcação paga perde a validade na mesma transação.
+      if (data.status === "cancelada" || data.status === "aguardando_reagendamento" || ev?.tipo === "remarcada") {
+        await cancelarReservasPendentes(tx, id);
+      }
+      if (por === "medico" && body.acao === "cancelar" && body.cancelarDia) {
+        await cancelarReservasDoDia(tx, consulta.medicoId, consulta.dataInicio);
+      }
       if (re) await criarReembolsoSeDevido(tx, { consultaId: id, solicitadoPor: usuario.id, ...re });
     });
     const efeitos = await aplicarSideEffects(usuario, eventos, audit);

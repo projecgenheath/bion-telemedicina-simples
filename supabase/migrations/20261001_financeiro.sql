@@ -1,5 +1,5 @@
 -- =====================================================================
--- BION — Fase financeira: eventos de consulta, reembolsos e repasses
+-- BION — Fase financeira: eventos, reembolsos, repasses e remarcação paga
 -- =====================================================================
 -- NÃO aplicada automaticamente. Revise e aplique MANUALMENTE, depois do
 -- backup e das migrações anteriores da corrente (inclusive
@@ -32,7 +32,8 @@ CREATE TABLE IF NOT EXISTS public."EventoConsulta" (
 
 CREATE TABLE IF NOT EXISTS public."Reembolso" (
     "id" TEXT NOT NULL,
-    "pagamentoId" TEXT NOT NULL,
+    "pagamentoId" TEXT,
+    "remarcacaoId" TEXT,
     "valorCentavos" INTEGER NOT NULL,
     "multaCentavos" INTEGER NOT NULL DEFAULT 0,
     "motivo" TEXT NOT NULL,
@@ -76,11 +77,30 @@ CREATE TABLE IF NOT EXISTS public."RepasseItem" (
     CONSTRAINT "RepasseItem_pkey" PRIMARY KEY ("id")
 );
 
+CREATE TABLE IF NOT EXISTS public."RemarcacaoPendente" (
+    "id" TEXT NOT NULL,
+    "consultaId" TEXT NOT NULL,
+    "novaData" TIMESTAMP(3) NOT NULL,
+    "multaCentavos" INTEGER NOT NULL,
+    "status" TEXT NOT NULL DEFAULT 'pendente',
+    "metodo" TEXT NOT NULL DEFAULT 'pix',
+    "via" TEXT,
+    "gatewayRef" TEXT,
+    "solicitadoPor" TEXT NOT NULL,
+    "expiraEm" TIMESTAMP(3) NOT NULL,
+    "criadoEm" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "aprovadoEm" TIMESTAMP(3),
+
+    CONSTRAINT "RemarcacaoPendente_pkey" PRIMARY KEY ("id")
+);
+
 CREATE INDEX IF NOT EXISTS "EventoConsulta_consultaId_em_idx" ON public."EventoConsulta"("consultaId", "em");
 
 CREATE INDEX IF NOT EXISTS "EventoConsulta_dataAnterior_idx" ON public."EventoConsulta"("dataAnterior");
 
 CREATE INDEX IF NOT EXISTS "EventoConsulta_em_idx" ON public."EventoConsulta"("em");
+
+CREATE UNIQUE INDEX IF NOT EXISTS "Reembolso_remarcacaoId_key" ON public."Reembolso"("remarcacaoId");
 
 CREATE INDEX IF NOT EXISTS "Reembolso_pagamentoId_status_idx" ON public."Reembolso"("pagamentoId", "status");
 
@@ -94,12 +114,20 @@ CREATE UNIQUE INDEX IF NOT EXISTS "RepasseItem_consultaId_key" ON public."Repass
 
 CREATE INDEX IF NOT EXISTS "RepasseItem_repasseId_idx" ON public."RepasseItem"("repasseId");
 
+CREATE INDEX IF NOT EXISTS "RemarcacaoPendente_consultaId_status_idx" ON public."RemarcacaoPendente"("consultaId", "status");
+
+CREATE INDEX IF NOT EXISTS "RemarcacaoPendente_novaData_status_idx" ON public."RemarcacaoPendente"("novaData", "status");
+
 DO $$ BEGIN
   ALTER TABLE public."EventoConsulta" ADD CONSTRAINT "EventoConsulta_consultaId_fkey" FOREIGN KEY ("consultaId") REFERENCES public."Consulta"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 DO $$ BEGIN
   ALTER TABLE public."Reembolso" ADD CONSTRAINT "Reembolso_pagamentoId_fkey" FOREIGN KEY ("pagamentoId") REFERENCES public."Pagamento"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  ALTER TABLE public."Reembolso" ADD CONSTRAINT "Reembolso_remarcacaoId_fkey" FOREIGN KEY ("remarcacaoId") REFERENCES public."RemarcacaoPendente"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 DO $$ BEGIN
@@ -114,6 +142,10 @@ DO $$ BEGIN
   ALTER TABLE public."RepasseItem" ADD CONSTRAINT "RepasseItem_consultaId_fkey" FOREIGN KEY ("consultaId") REFERENCES public."Consulta"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
+DO $$ BEGIN
+  ALTER TABLE public."RemarcacaoPendente" ADD CONSTRAINT "RemarcacaoPendente_consultaId_fkey" FOREIGN KEY ("consultaId") REFERENCES public."Consulta"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
 -- Validação dos domínios (o servidor também valida).
 DO $$ BEGIN
   ALTER TABLE public."EventoConsulta" ADD CONSTRAINT "EventoConsulta_tipo_check"
@@ -121,13 +153,19 @@ DO $$ BEGIN
   ALTER TABLE public."EventoConsulta" ADD CONSTRAINT "EventoConsulta_por_check"
     CHECK ("por" IN ('paciente', 'medico', 'sistema', 'admin'));
   ALTER TABLE public."EventoConsulta" ADD CONSTRAINT "EventoConsulta_motivo_check"
-    CHECK ("motivo" IN ('pedido_paciente', 'agenda_cancelada', 'falha_tecnica', 'admin'));
+    CHECK ("motivo" IN ('pedido_paciente', 'agenda_cancelada', 'falha_tecnica', 'admin', 'reagendamento'));
   ALTER TABLE public."EventoConsulta" ADD CONSTRAINT "EventoConsulta_multa_check"
     CHECK ("multaCentavos" IS NULL OR "multaCentavos" >= 0);
   ALTER TABLE public."Reembolso" ADD CONSTRAINT "Reembolso_status_check"
     CHECK ("status" IN ('solicitado', 'aprovado', 'processado', 'negado', 'falhou'));
   ALTER TABLE public."Reembolso" ADD CONSTRAINT "Reembolso_valores_check"
     CHECK ("valorCentavos" >= 0 AND "multaCentavos" >= 0);
+  ALTER TABLE public."Reembolso" ADD CONSTRAINT "Reembolso_origem_check"
+    CHECK (("pagamentoId" IS NULL) <> ("remarcacaoId" IS NULL));
+  ALTER TABLE public."RemarcacaoPendente" ADD CONSTRAINT "RemarcacaoPendente_status_check"
+    CHECK ("status" IN ('pendente', 'aprovada', 'expirada', 'falhou', 'cancelada'));
+  ALTER TABLE public."RemarcacaoPendente" ADD CONSTRAINT "RemarcacaoPendente_multa_check"
+    CHECK ("multaCentavos" > 0);
   ALTER TABLE public."Repasse" ADD CONSTRAINT "Repasse_status_check"
     CHECK ("status" IN ('aberto', 'fechado', 'pago'));
   ALTER TABLE public."Repasse" ADD CONSTRAINT "Repasse_competencia_check"
@@ -140,21 +178,28 @@ CREATE UNIQUE INDEX IF NOT EXISTS "Reembolso_pagamentoId_ativo_key"
   ON public."Reembolso" ("pagamentoId")
   WHERE "status" IN ('solicitado', 'aprovado', 'processado');
 
+-- Só UMA remarcação pendente por consulta.
+CREATE UNIQUE INDEX IF NOT EXISTS "RemarcacaoPendente_consultaId_pendente_key"
+  ON public."RemarcacaoPendente" ("consultaId")
+  WHERE "status" = 'pendente';
+
 -- Deny-by-default: RLS sem policies + nenhum privilégio para os papéis da API.
 ALTER TABLE public."EventoConsulta" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public."Reembolso"      ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public."Repasse"        ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public."RepasseItem"    ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public."RemarcacaoPendente" ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON TABLE public."EventoConsulta" FROM anon, authenticated;
 REVOKE ALL ON TABLE public."Reembolso"      FROM anon, authenticated;
 REVOKE ALL ON TABLE public."Repasse"        FROM anon, authenticated;
 REVOKE ALL ON TABLE public."RepasseItem"    FROM anon, authenticated;
+REVOKE ALL ON TABLE public."RemarcacaoPendente" FROM anon, authenticated;
 
 COMMIT;
 
 -- Verificação:
 --   SELECT relname, relrowsecurity FROM pg_class
---    WHERE relname IN ('EventoConsulta','Reembolso','Repasse','RepasseItem');      -- todos true
+--    WHERE relname IN ('EventoConsulta','Reembolso','Repasse','RepasseItem','RemarcacaoPendente');      -- todos true
 --   SELECT table_name, grantee, privilege_type FROM information_schema.role_table_grants
---    WHERE table_name IN ('EventoConsulta','Reembolso','Repasse','RepasseItem')
+--    WHERE table_name IN ('EventoConsulta','Reembolso','Repasse','RepasseItem','RemarcacaoPendente')
 --      AND grantee IN ('anon','authenticated');                                      -- vazio

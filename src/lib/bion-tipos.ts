@@ -47,6 +47,9 @@ export type Consulta = {
   pago?: boolean;
   resumoMedico?: string;
   dataISO?: string;
+  // Remarcação com multa aguardando pagamento: dataISO continua valendo;
+  // novaData fica reservada até expiraEm (ISO). null/ausente = nenhuma.
+  remarcacaoPendente?: { novaData: string; expiraEm: string; multaCentavos: number; status: "pendente" } | null;
 };
 
 export type Arquivo = {
