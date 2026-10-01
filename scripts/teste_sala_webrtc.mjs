@@ -10,17 +10,24 @@
  *   7. segurança: admin recebe 403; sem cookie recebe 401; payload inválido 400
  */
 const BASE = process.env.BASE_URL || "http://localhost:3000";
+// Credencial lida do ambiente (nunca no código — repo público).
+const SENHA = process.env.BION_TESTE_SENHA?.trim() ?? "";
+const SENHA_ADMIN = process.env.BION_TESTE_SENHA_ADMIN?.trim() ?? "";
+if (!SENHA || !SENHA_ADMIN) {
+  console.error("Defina BION_TESTE_SENHA e BION_TESTE_SENHA_ADMIN para rodar este script.");
+  process.exit(1);
+}
 
 function cookieDe(res) {
   const raw = res.headers.get("set-cookie") || "";
   return raw.split(";")[0];
 }
 
-async function login(email) {
+async function login(email, senha = SENHA) {
   const res = await fetch(`${BASE}/api/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, senha: "bion123456" }),
+    body: JSON.stringify({ email, senha }),
   });
   if (res.status !== 200) throw new Error(`login ${email} → ${res.status}`);
   return cookieDe(res);
@@ -49,7 +56,7 @@ function ok(nome, cond, extra = "") {
   // 1) Logins
   const cookiePaciente = await login("marina.silva@email.com");
   const cookieMedico = await login("ana.ribeiro@med.bion.app");
-  const cookieAdmin = await login("admin@bion.app");
+  const cookieAdmin = await login("admin@bion.app", SENHA_ADMIN);
   ok("logins paciente/médico/admin", !!cookiePaciente && !!cookieMedico && !!cookieAdmin);
 
   // 2) Consulta confirmada do paciente
