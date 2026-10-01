@@ -4,7 +4,7 @@ import { CalendarClock, CalendarDays, ChevronDown, Info, RefreshCw, Video, XCirc
 import { useRouter } from "next/navigation";
 import { partesFusoClinica } from "@/lib/bion-tipos";
 import { ContagemRegressiva } from "../ContagemRegressiva";
-import { iniciais, ROTULO_STATUS, salaAberta, saudacao } from "../metricas";
+import { iniciais, reservaVigente, ROTULO_STATUS, salaAberta, saudacao, textoReservaPendente } from "../metricas";
 import type { DadosMedico } from "../useDadosMedico";
 
 const primeiroNome = (nome: string) => nome.split(" ").filter(Boolean)[0] ?? "";
@@ -20,7 +20,7 @@ export function TelaInicio({
   onAbrirPacientes: () => void;
 }) {
   const router = useRouter();
-  const { sessao, medico, proxima, hoje, agora } = dados;
+  const { sessao, medico, proxima, hoje, agora, acoesPaciente, acoesPacienteEstado } = dados;
   const dataHoje = new Intl.DateTimeFormat("pt-BR", {
     timeZone: "America/Sao_Paulo",
     weekday: "long",
@@ -31,6 +31,7 @@ export function TelaInicio({
   const tratamento = /^dra\.?\s/i.test(sessao.nome) ? "Dra." : /^dr\.?\s/i.test(sessao.nome) ? "Dr." : "";
   const aberta = proxima ? salaAberta(proxima.ts, agora) : false;
   const p = proxima ? partesFusoClinica(proxima.ts) : null;
+  const reservaProxima = proxima ? reservaVigente(proxima, agora) : null;
 
   return (
     <section className="bm-tela bm-tela-1 flex flex-col px-5 bp-safe-top pb-6" aria-labelledby="bm-t1-titulo">
@@ -90,6 +91,11 @@ export function TelaInicio({
               {proxima.data} · {proxima.hora}
               {proxima.motivoConsulta ? ` · ${proxima.motivoConsulta}` : ""}
             </div>
+            {reservaProxima ? (
+              <p className="mt-2 text-xs font-semibold rounded-xl px-3 py-2 bg-amber-500/15 text-amber-900 dark:text-amber-100">
+                {textoReservaPendente(reservaProxima)}
+              </p>
+            ) : null}
             <button
               type="button"
               disabled={!aberta}
@@ -138,30 +144,52 @@ export function TelaInicio({
         ) : null}
       </button>
 
-      {/* (c) Remarcadas e canceladas */}
-      <div className="bp-glass p-5 mt-3">
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <span className="text-xs font-bold uppercase tracking-wider text-bion-ink/75 dark:text-bion-paper/75 inline-flex items-center gap-1.5">
-              <RefreshCw className="w-4 h-4" /> Remarcadas
-            </span>
-            <div className="text-3xl font-black tabular-nums mt-1">{hoje.remarcadas.length}</div>
+      {/* (c) Remarcadas e canceladas PELO PACIENTE hoje (GET /api/medico/eventos) */}
+      <div className="bp-glass p-5 mt-3" aria-busy={acoesPacienteEstado.carregando}>
+        {acoesPaciente ? (
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <span className="text-xs font-bold uppercase tracking-wider text-bion-ink/75 dark:text-bion-paper/75 inline-flex items-center gap-1.5">
+                <RefreshCw className="w-4 h-4" aria-hidden /> Remarcadas
+              </span>
+              <div className="text-3xl font-black tabular-nums mt-1">{acoesPaciente.remarcadas}</div>
+            </div>
+            <div>
+              <span className="text-xs font-bold uppercase tracking-wider text-bion-ink/75 dark:text-bion-paper/75 inline-flex items-center gap-1.5">
+                <XCircle className="w-4 h-4" aria-hidden /> Canceladas
+              </span>
+              <div className="text-3xl font-black tabular-nums mt-1">{acoesPaciente.canceladas}</div>
+            </div>
           </div>
-          <div>
-            <span className="text-xs font-bold uppercase tracking-wider text-bion-ink/75 dark:text-bion-paper/75 inline-flex items-center gap-1.5">
-              <XCircle className="w-4 h-4" /> Canceladas
-            </span>
-            <div className="text-3xl font-black tabular-nums mt-1">{hoje.canceladas.length}</div>
+        ) : acoesPacienteEstado.erro ? (
+          <div role="alert">
+            <p className="text-sm font-semibold text-red-700 dark:text-red-300">
+              Remarcadas e canceladas: {acoesPacienteEstado.erro}
+            </p>
+            <button
+              type="button"
+              onClick={acoesPacienteEstado.recarregar}
+              className="mt-2 text-sm font-bold text-bion-sea dark:text-sky-300 underline underline-offset-2"
+            >
+              Tentar de novo
+            </button>
           </div>
-        </div>
+        ) : (
+          <div role="status" className="grid grid-cols-2 gap-3">
+            <div className="h-14 rounded-xl bg-bion-ink/10 dark:bg-white/10 motion-safe:animate-pulse" aria-hidden />
+            <div className="h-14 rounded-xl bg-bion-ink/10 dark:bg-white/10 motion-safe:animate-pulse" aria-hidden />
+            <span className="sr-only">Carregando remarcadas e canceladas…</span>
+          </div>
+        )}
         <p className="mt-3 text-xs text-bion-ink/70 dark:text-bion-paper/70 inline-flex gap-1.5">
           <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" aria-hidden />
-          Contam as consultas com data de hoje. Uma consulta de hoje remarcada para outro dia ainda não aparece aqui.
+          Consultas marcadas para hoje que o paciente remarcou ou cancelou. Cancelamentos feitos por você, novas datas
+          escolhidas depois de um cancelamento seu e remarcações ainda não pagas não contam.
         </p>
       </div>
 
       <div className="mt-auto pt-8 flex flex-col items-center gap-1 text-white/90" aria-hidden>
-        <span className="text-xs font-semibold">Faturamento e agenda abaixo</span>
+        <span className="text-xs font-semibold">Receita e agenda abaixo</span>
         <ChevronDown className="w-5 h-5 motion-safe:animate-bounce" />
       </div>
     </section>

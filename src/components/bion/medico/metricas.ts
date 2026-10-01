@@ -6,7 +6,7 @@
  * Regra do redesign: nada de número inventado. Se não há dado, o chamador
  * mostra estado vazio.
  */
-import { diaFusoClinica, partesFusoClinica } from "@/lib/bion-tipos";
+import { partesFusoClinica } from "@/lib/bion-tipos";
 import type { Consulta, PacienteRegistro } from "@/lib/bion-tipos";
 import { isoDia } from "@/components/bion/paciente/agenda-medico";
 
@@ -79,41 +79,6 @@ export function resumoHoje(consultas: Consulta[], agora: number): ResumoHoje {
     remarcadas: agendadas.filter((c) => c.remarcada),
     canceladas: doDia.filter((c) => c.status === "cancelada"),
   };
-}
-
-export type PontoFaturamento = { iso: string; rotulo: string; valor: number; qtd: number };
-
-/**
- * Faturamento BRUTO dos últimos `dias` dias (incluindo hoje): soma do valor
- * das consultas PAGAS e não canceladas, pela data da consulta.
- * (A data real do pagamento e estornos não chegam ao médico — Fase 4.)
- */
-export function serieFaturamento(consultas: Consulta[], dias = 30): {
-  pontos: PontoFaturamento[];
-  total: number;
-  qtd: number;
-} {
-  const pontos: PontoFaturamento[] = [];
-  const indice = new Map<string, PontoFaturamento>();
-  for (let i = dias - 1; i >= 0; i--) {
-    const d = diaFusoClinica(-i);
-    const p = { iso: d.iso, rotulo: `${String(d.dia).padStart(2, "0")}/${String(d.mes + 1).padStart(2, "0")}`, valor: 0, qtd: 0 };
-    pontos.push(p);
-    indice.set(d.iso, p);
-  }
-  let total = 0;
-  let qtd = 0;
-  for (const c of consultas) {
-    if (!c.pago || c.status === "cancelada") continue;
-    const p = indice.get(diaDaConsulta(c));
-    if (!p) continue;
-    const v = parseValorBRL(c.valor);
-    p.valor += v;
-    p.qtd += 1;
-    total += v;
-    qtd += 1;
-  }
-  return { pontos, total: Math.round(total * 100) / 100, qtd };
 }
 
 /** Consultas concluídas nos últimos 30 dias (base do "atendimentos no mês" do perfil). */

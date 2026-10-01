@@ -6,7 +6,7 @@ import { EmBreve } from "../sheets/SheetMedico";
 import { fmtBRL } from "../metricas";
 import type { DadosMedico } from "../useDadosMedico";
 
-/** Tela 2 — faturamento (30 dias) + preço/promoções + agenda. */
+/** Tela 2 — receita líquida (30 dias) + preço/promoções + agenda. */
 export function TelaGestao({
   dados,
   onAbrirPreco,
@@ -16,7 +16,7 @@ export function TelaGestao({
   onAbrirPreco: () => void;
   onAbrirAgenda: () => void;
 }) {
-  const { medico, faturamento } = dados;
+  const { medico, receita } = dados;
   const horarios = medico ? [...medico.horariosDisponiveis].sort() : [];
 
   return (
@@ -24,9 +24,9 @@ export function TelaGestao({
       <h2 id="bm-t2-titulo" className="text-2xl font-black text-white">
         Gestão
       </h2>
-      <p className="text-sm text-white/85 mb-5">Faturamento, preço e agenda.</p>
+      <p className="text-sm text-white/85 mb-5">Receita líquida, preço e agenda.</p>
 
-      <CardFaturamento {...faturamento} />
+      <CardFaturamento {...receita} />
 
       {medico ? (
         <>
