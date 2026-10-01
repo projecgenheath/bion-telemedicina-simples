@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { FilePlus2, Send } from "lucide-react";
 import { useBion, type Documento } from "@/lib/bion-store";
 import { formatarDataNascimento, idadeDeNascimento } from "@/lib/idade";
-import { ROTULO_STATUS, type PacienteDoMedico } from "./metricas";
+import { rotuloStatusMedico, type PacienteDoMedico } from "./metricas";
 import { TelaSobreposta } from "./TelaSobreposta";
 import { TriagemPaciente } from "./TriagemPaciente";
 import { ProntuarioPaciente } from "./ProntuarioPaciente";
@@ -189,7 +189,7 @@ export function ConversaPaciente({
               <p className="text-sm text-bion-ink/75 dark:text-bion-paper/75">Dados cadastrais indisponíveis para este paciente.</p>
             )}
             <dl className="grid grid-cols-2 gap-x-4 gap-y-2 mt-3 pt-3 border-t border-bion-ink/10 dark:border-white/10">
-              <Info r="Consulta" v={ref ? `${ref.data} às ${ref.hora} · ${ROTULO_STATUS[ref.status]}` : ""} />
+              <Info r="Consulta" v={ref ? `${ref.data} às ${ref.hora} · ${rotuloStatusMedico(ref)}` : ""} />
               <Info r="Pagamento" v={ref ? (ref.pago ? "Pago" : "Pendente") : ""} />
               <Info r="Triagem" v={anamneseRef ? (anamneseRef.status === "concluida" ? "Concluída" : "Em andamento") : "Não iniciada"} />
               <Info r="Motivo" v={ref?.motivoConsulta ?? ""} />

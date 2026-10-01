@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { MessageCircle, Search, Users } from "lucide-react";
-import { iniciais, ROTULO_STATUS, type PacienteDoMedico } from "./metricas";
+import { iniciais, rotuloStatusMedico, type PacienteDoMedico } from "./metricas";
 import type { DadosMedico } from "./useDadosMedico";
 
 const normalizar = (s: string) =>
@@ -74,7 +74,7 @@ export function PacientesPainel({
               const linha = p.proxima
                 ? `Próxima: ${p.proxima.data} às ${p.proxima.hora}`
                 : ref
-                  ? `Última: ${ref.data} · ${ROTULO_STATUS[ref.status]}`
+                  ? `Última: ${ref.data} · ${rotuloStatusMedico(ref)}`
                   : "";
               return (
                 <li key={p.chave}>

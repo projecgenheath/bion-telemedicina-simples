@@ -4,7 +4,7 @@ import { Download, FileText, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import type { Arquivo, Consulta, Documento } from "@/lib/bion-store";
 import { gerarDocumentoPDF } from "@/lib/receita-pdf";
-import { ROTULO_STATUS } from "./metricas";
+import { rotuloStatusMedico } from "./metricas";
 import { EmBreve } from "./sheets/SheetMedico";
 
 const ROTULO_DOC: Record<Documento["tipo"], string> = {
@@ -79,7 +79,7 @@ export function ProntuarioPaciente({
                 <span className="text-sm font-bold">
                   {c.data} às {c.hora}
                 </span>
-                <span className="text-xs font-bold">{ROTULO_STATUS[c.status]}</span>
+                <span className="text-xs font-bold">{rotuloStatusMedico(c)}</span>
               </div>
               {c.motivoConsulta ? <p className="text-sm mt-1">Motivo: {c.motivoConsulta}</p> : null}
               {c.resumoMedico ? (
