@@ -4,6 +4,7 @@ import { canalNotificacoes } from "@/lib/supabase/realtime";
 import { db } from "@/lib/db";
 import type { Prisma } from "@prisma/client";
 import type { UsuarioSessao } from "./auth";
+import { whereArquivosVisiveis } from "./arquivos-acesso";
 
 /* ------------------------------------------------------------------ */
 /* Utilitários de data (rótulos do cliente: "Hoje", "Amanhã", "12 Dez") */
@@ -97,15 +98,6 @@ async function idsPacientesDoMedico(medicoId: string): Promise<string[]> {
   return rows.map((r) => r.pacienteId);
 }
 
-async function idsMedicosDoPaciente(pacienteId: string): Promise<string[]> {
-  const rows = await db.consulta.findMany({
-    where: { pacienteId },
-    select: { medicoId: true },
-    distinct: ["medicoId"],
-  });
-  return rows.map((r) => r.medicoId);
-}
-
 /* ------------------------------------------------------------------ */
 /* Mapeadores wire (FASE 2) — FONTE ÚNICA da forma das entidades:      */
 /* usados pelo carregarDados (bootstrap/estado fresco) E pelas         */
@@ -167,6 +159,7 @@ export function arquivoWire(a: ArquivoRow) {
     enviadoPor: a.enviadoPor,
     consulta: a.consulta,
     storagePath: (a as { storagePath?: string | null }).storagePath ?? null,
+    pacienteId: a.pacienteId ?? null,
     createdAt: a.createdAt.toISOString(),
   };
 }
@@ -358,10 +351,7 @@ export async function carregarDados(usuario: UsuarioSessao) {
       : {};
 
   // Dependências de visibilidade primeiro (evita carregar todos os pacientes).
-  const [idsPacientes, idsMedicos] = await Promise.all([
-    souMedico ? idsPacientesDoMedico(usuario.id) : Promise.resolve([] as string[]),
-    souPaciente ? idsMedicosDoPaciente(usuario.id) : Promise.resolve([] as string[]),
-  ]);
+  const idsPacientes = souMedico ? await idsPacientesDoMedico(usuario.id) : ([] as string[]);
 
   const [consultasRaw, medicosRaw, pacientesRaw, anamnesesRaw] = await Promise.all([
     db.consulta.findMany({
@@ -413,12 +403,11 @@ export async function carregarDados(usuario: UsuarioSessao) {
       ? { OR: [{ medicoId: usuario.id }, { pacienteId: { in: idsPacientes } }] }
       : {};
 
-  // Visibilidade de arquivos: próprios + trocados com médicos/pacientes vinculados
-  const arquivoWhere: Record<string, unknown> = souPaciente
-    ? { OR: [{ usuarioId: usuario.id }, { usuarioId: { in: idsMedicos } }] }
-    : souMedico
-      ? { OR: [{ usuarioId: usuario.id }, { usuarioId: { in: idsPacientes } }] }
-      : {};
+  // Visibilidade de arquivos — A3/A4: MESMA regra do download
+  // (GET /api/arquivos), via helper único. Paciente: enviados por ele OU
+  // destinados a ele (Arquivo.pacienteId). Médico: próprios, enviados por
+  // paciente vinculado OU destinados a paciente vinculado. Admin: todos.
+  const arquivoWhere = whereArquivosVisiveis(usuario);
 
   const avaliacaoWhere = souPaciente
     ? { pacienteId: usuario.id }

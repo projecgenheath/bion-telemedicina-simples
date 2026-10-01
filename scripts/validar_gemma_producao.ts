@@ -13,7 +13,12 @@
  * Uso: bunx tsx scripts/validar_gemma_producao.ts
  */
 const BASE = "https://bion-telemedicina-simples.vercel.app";
-const SENHA = "bion123456";
+// Credencial lida do ambiente (nunca no código — repo público).
+const SENHA = process.env.BION_TESTE_SENHA?.trim() ?? "";
+if (!SENHA) {
+  console.error("Defina BION_TESTE_SENHA (senha da conta de teste) para rodar este script.");
+  process.exit(1);
+}
 
 let passou = 0;
 let falhou = 0;

@@ -16,46 +16,59 @@ import {
   User,
   Sparkles,
 } from "lucide-react";
+import { toast } from "sonner";
 import { useBion, type Medico } from "@/lib/bion-store";
+
+/** Limite da foto de perfil (o servidor recusa data URLs maiores). */
+const FOTO_MAX_BYTES = 500 * 1024;
 
 export function MedicoPerfilView({ medicoId }: { medicoId?: string }) {
   const { medicos, sessao, atualizarMedico, avaliacoes } = useBion();
 
+  // Identificação por ID (nunca por nome — homônimos); nome só se a sessão
+  // ainda não trouxe o id.
   const medico =
-    medicos.find((m) => (medicoId ? m.id === medicoId : m.nome === sessao.nome)) ?? medicos[0];
+    medicos.find((m) =>
+      medicoId ? m.id === medicoId : sessao.id ? m.id === sessao.id : m.nome === sessao.nome,
+    ) ?? medicos[0];
 
   const [editando, setEditando] = useState(false);
   const [valor, setValor] = useState(medico.valor);
   const [bio, setBio] = useState(medico.bio);
-  const [crm, setCrm] = useState(medico.crm);
   const [formacao, setFormacao] = useState(medico.formacao);
-  const [nome, setNome] = useState(medico.nome);
-  const [especialidade, setEspecialidade] = useState(medico.especialidade);
   const [foto, setFoto] = useState(medico.foto ?? "");
 
   const avaliacoesDoMedico = avaliacoes.filter((a) => a.medico === medico.nome);
 
   const lerFoto = (file?: File | null) => {
     if (!file) return;
+    if (!/^image\/(png|jpe?g|webp)$/.test(file.type) || file.size > FOTO_MAX_BYTES) {
+      toast.error("Foto inválida", { description: "Use PNG, JPEG ou WebP com até 500 KB." });
+      return;
+    }
     const reader = new FileReader();
     reader.onload = () => setFoto(String(reader.result));
     reader.readAsDataURL(file);
   };
 
+  // Autoedição do médico: só campos permitidos pelo servidor
+  // (PATCH /api/medicos/:id). Nome, CRM e especialidade são do administrador.
   const salvar = () => {
+    if (!Number.isFinite(valor) || valor < 1 || valor > 5000) {
+      toast.error("Valor inválido", { description: "Informe um valor entre R$ 1 e R$ 5.000." });
+      return;
+    }
     atualizarMedico(medico.id, {
       valor,
       bio,
-      crm,
       formacao,
-      nome: nome.trim() || medico.nome,
-      especialidade: especialidade.trim() || medico.especialidade,
-      foto: foto || undefined,
+      ...(foto && foto !== medico.foto ? { foto } : {}),
     });
     setEditando(false);
   };
 
-  const isProprioMedico = sessao.role === "medico" && sessao.nome === medico.nome;
+  const isProprioMedico =
+    sessao.role === "medico" && (sessao.id ? sessao.id === medico.id : sessao.nome === medico.nome);
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -83,7 +96,7 @@ export function MedicoPerfilView({ medicoId }: { medicoId?: string }) {
                 Trocar foto
                 <input
                   type="file"
-                  accept="image/*"
+                  accept="image/png,image/jpeg,image/webp"
                   className="hidden"
                   onChange={(e) => lerFoto(e.target.files?.[0])}
                 />
@@ -93,42 +106,27 @@ export function MedicoPerfilView({ medicoId }: { medicoId?: string }) {
 
           <div className="flex-1 min-w-0 space-y-2">
             <div className="flex items-center gap-2 flex-wrap">
-              {editando ? (
-                <input
-                  aria-label="Nome do médico"
-                  value={nome}
-                  onChange={(e) => setNome(e.target.value)}
-                  className="text-2xl font-extrabold text-foreground bg-background border rounded-xl px-3 py-1.5 outline-none focus:ring-2 focus:ring-primary/20 w-full"
-                />
-              ) : (
-                <h1 className="text-2xl md:text-3xl font-extrabold text-foreground">
-                  {medico.nome}
-                </h1>
-              )}
+              <h1 className="text-2xl md:text-3xl font-extrabold text-foreground">
+                {medico.nome}
+              </h1>
               <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-accent-soft text-emerald-800 dark:text-emerald-200 flex items-center gap-1">
                 <ShieldCheck className="w-3.5 h-3.5" /> CRM Verificado
               </span>
             </div>
 
             {editando ? (
-              <div className="grid sm:grid-cols-3 gap-2">
-                <input
-                  aria-label="Especialidade"
-                  value={especialidade}
-                  onChange={(e) => setEspecialidade(e.target.value)}
-                  placeholder="Especialidade"
-                  className="text-xs bg-background border rounded-xl px-3 py-2 outline-none"
-                />
-                <input
-                  aria-label="CRM"
-                  value={crm}
-                  onChange={(e) => setCrm(e.target.value)}
-                  placeholder="CRM"
-                  className="text-xs bg-background border rounded-xl px-3 py-2 outline-none"
-                />
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-muted-foreground">
+                  {medico.especialidade} • {medico.crm}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Nome, CRM e especialidade são alterados pelo administrador.
+                </p>
                 <input
                   aria-label="Valor da consulta (R$)"
                   type="number"
+                  min={1}
+                  max={5000}
                   value={valor}
                   onChange={(e) => setValor(Number(e.target.value))}
                   placeholder="Valor da consulta"

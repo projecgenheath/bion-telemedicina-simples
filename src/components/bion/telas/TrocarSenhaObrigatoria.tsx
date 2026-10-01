@@ -8,9 +8,10 @@ import { useBion } from "@/lib/bion-store";
 /**
  * V4 — Troca de senha OBRIGATÓRIA no primeiro acesso.
  *
- * Contas criadas pela administração nascem com senha padrão (bion123456) e o
- * flag `precisaTrocarSenha` ativo. O gate em (app)/layout.tsx impede qualquer
- * navegação até que a senha seja trocada — a rota /api/auth/senha valida a
+ * Contas criadas pela administração nascem com uma senha temporária ALEATÓRIA
+ * (exibida uma única vez ao admin) e o flag `precisaTrocarSenha` ativo. O gate
+ * em (app)/layout.tsx impede a navegação e o SERVIDOR bloqueia as APIs (403
+ * TROCA_SENHA_OBRIGATORIA) até a troca — a rota /api/auth/senha valida a
  * senha atual, aplica a nova e revoga as demais sessões do usuário.
  */
 export function TrocarSenhaObrigatoria() {
@@ -74,7 +75,7 @@ export function TrocarSenhaObrigatoria() {
               value={senhaAtual}
               onChange={(e) => setSenhaAtual(e.target.value)}
               autoComplete="current-password"
-              placeholder="bion123456"
+              placeholder="Senha temporária recebida"
               className="h-11 rounded-xl border border-border bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground/50 outline-none focus:ring-2 focus:ring-primary/40"
             />
           </div>
