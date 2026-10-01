@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { quandoClinica } from "@/lib/server/fuso";
 import { db } from "@/lib/db";
 import {
   confirmarPagamento,
@@ -62,8 +63,7 @@ export async function POST(req: NextRequest) {
       include: { medico: { select: { nome: true } } },
     });
     if (consulta && consulta.status === "confirmada") {
-      const quando = consulta.dataInicio.toLocaleDateString("pt-BR") +
-        " às " + consulta.dataInicio.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+      const quando = quandoClinica(consulta.dataInicio);
       await db.notificacao.create({
         data: {
           tipo: "agenda",

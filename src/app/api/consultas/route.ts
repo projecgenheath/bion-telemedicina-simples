@@ -10,25 +10,7 @@ import {
 } from "@/lib/server/dados";
 import { criarCobranca, confirmarPagamento, modoGateway, paraWire } from "@/lib/server/pagamentos";
 import { ok, falha } from "@/lib/server/http";
-
-/**
- * P2 (2026-09) — "agora" no fuso da clínica (America/Sao_Paulo), construído
- * como Date de parede (mesma convenção do parseDataHora) para comparação
- * correta independentemente do fuso do servidor (Vercel = UTC).
- */
-function agoraFusoClinica(): Date {
-  const partes = new Intl.DateTimeFormat("pt-BR", {
-    timeZone: "America/Sao_Paulo",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).formatToParts(new Date());
-  const g = (t: string) => Number(partes.find((p) => p.type === t)?.value ?? "0");
-  return new Date(g("year"), g("month") - 1, g("day"), g("hour") % 24, g("minute"));
-}
+import { partesNoFuso } from "@/lib/server/fuso";
 
 /** Ano/mês/dia formam uma data real do calendário. */
 function dataCalendarioValida(ano: number, mes: number, dia: number): boolean {
@@ -62,7 +44,7 @@ function validarDataHoraAgendamento(data: string, hora: string): string | null {
     const dia = /^\d{1,2}$/.test(partes[0] ?? "") ? parseInt(partes[0], 10) : NaN;
     const mesIdx = MESES.findIndex((m) => m.toLowerCase() === (partes[1] ?? "").toLowerCase());
     const anoOk = partes.length === 2 || (partes.length === 3 && /^\d{4}$/.test(partes[2]));
-    if (!Number.isFinite(dia) || mesIdx < 0 || !anoOk || !dataCalendarioValida(new Date().getFullYear(), mesIdx + 1, dia)) {
+    if (!Number.isFinite(dia) || mesIdx < 0 || !anoOk || !dataCalendarioValida(partes[2] ? +partes[2] : partesNoFuso(new Date()).ano, mesIdx + 1, dia)) {
       return "Data inválida — use AAAA-MM-DD, DD/MM/AAAA, hoje, amanhã ou \"D Mes AAAA\".";
     }
   }
@@ -130,8 +112,10 @@ export async function POST(req: NextRequest) {
 
     const dataInicio = parseDataHora(body.data, body.hora);
 
-    // P2 — proibido agendar no passado (fuso da clínica, tolerância de 1 min).
-    if (dataInicio.getTime() < agoraFusoClinica().getTime() - 60_000) {
+    // P2 — proibido agendar no passado (tolerância de 1 min). Fuso: dataInicio
+    // já é o instante real (parseDataHora interpreta em São Paulo), então
+    // compara direto com o agora real; sem "agora de parede" falso.
+    if (dataInicio.getTime() < Date.now() - 60_000) {
       return Response.json(
         { erro: "Não é possível agendar no passado — escolha uma data e hora futuras." },
         { status: 400 },

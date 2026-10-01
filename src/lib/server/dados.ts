@@ -1,4 +1,5 @@
 import "server-only";
+import { instanteNoFuso, partesNoFuso } from "./fuso";
 import { broadcastCanal } from "@/lib/supabase/broadcast";
 import { canalNotificacoes } from "@/lib/supabase/realtime";
 import { db } from "@/lib/db";
@@ -16,47 +17,55 @@ export const MESES = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out
 /**
  * Converte rótulos de data usados pela interface + hora "HH:MM" em Date.
  * Aceita: "Hoje", "Amanhã", "12 Dez", "12 Dez 2026", "2025-12-18", "18/12/2025".
+ *
+ * Fuso (2026-09): data e hora são horário de parede de America/Sao_Paulo,
+ * independente do fuso do processo (Vercel = UTC). "Hoje"/"Amanhã" também são
+ * relativos ao dia em São Paulo. Ex.: ("2026-10-01", "14:00") → 2026-10-01T17:00:00.000Z.
+ * `agora` só existe para teste.
  */
-export function parseDataHora(data: string, hora: string): Date {
-  const d = new Date();
-  d.setSeconds(0, 0);
+export function parseDataHora(data: string, hora: string, agora: Date = new Date()): Date {
+  const [hhBruto, mmBruto] = (hora || "09:00").split(":").map((n) => parseInt(n, 10));
+  const hh = Number.isFinite(hhBruto) ? hhBruto : 9;
+  const mm = Number.isFinite(mmBruto) ? mmBruto : 0;
 
-  const [hh, mm] = (hora || "09:00").split(":").map((n) => parseInt(n, 10));
-  d.setHours(Number.isFinite(hh) ? hh : 9, Number.isFinite(mm) ? mm : 0);
+  const hoje = partesNoFuso(agora);
+  let ano = hoje.ano;
+  let mes = hoje.mes; // 1–12
+  let dia = hoje.dia;
 
   const rotulo = (data || "").trim();
   const lower = rotulo.toLowerCase();
 
   if (lower === "hoje") {
-    // mantém a data de hoje
+    // mantém a data de hoje (em São Paulo)
   } else if (lower === "amanhã" || lower === "amanha") {
-    d.setDate(d.getDate() + 1);
+    dia += 1; // normalizado por instanteNoFuso (Date.UTC)
   } else if (/^\d{4}-\d{2}-\d{2}$/.test(rotulo)) {
-    const [y, m, dd] = rotulo.split("-").map((n) => parseInt(n, 10));
-    d.setFullYear(y, m - 1, dd);
+    [ano, mes, dia] = rotulo.split("-").map((n) => parseInt(n, 10));
   } else if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(rotulo)) {
-    const [dd, m, y] = rotulo.split("/").map((n) => parseInt(n, 10));
-    d.setFullYear(y, m - 1, dd);
+    [dia, mes, ano] = rotulo.split("/").map((n) => parseInt(n, 10));
   } else {
     // "12 Dez" ou "12 Dez 2026"
     const partes = rotulo.split(/\s+/);
     if (partes.length >= 2) {
-      const dia = parseInt(partes[0], 10);
+      const d = parseInt(partes[0], 10);
       const mesIdx = MESES.findIndex((m) => m.toLowerCase() === partes[1]?.toLowerCase());
-      if (Number.isFinite(dia) && mesIdx >= 0) {
-        let ano = d.getFullYear();
+      if (Number.isFinite(d) && mesIdx >= 0) {
+        let a = hoje.ano;
         if (partes[2] && /^\d{4}$/.test(partes[2])) {
-          ano = parseInt(partes[2], 10);
+          a = parseInt(partes[2], 10);
         } else {
           // se a data ficaria muito no passado, assume próximo ano
-          const tentativa = new Date(ano, mesIdx, dia, d.getHours(), d.getMinutes());
-          if (tentativa.getTime() < Date.now() - 7 * 86400000) ano += 1;
+          const tentativa = instanteNoFuso(a, mesIdx + 1, d, hh, mm);
+          if (tentativa.getTime() < agora.getTime() - 7 * 86400000) a += 1;
         }
-        d.setFullYear(ano, mesIdx, dia);
+        ano = a;
+        mes = mesIdx + 1;
+        dia = d;
       }
     }
   }
-  return d;
+  return instanteNoFuso(ano, mes, dia, hh, mm);
 }
 
 /* ------------------------------------------------------------------ */

@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { exigirSessao } from "@/lib/server/auth";
 import { aplicarSideEffects, parseDataHora, parseValor, type NotifPayload, type AuditPayload } from "@/lib/server/dados";
+import { quandoClinica } from "@/lib/server/fuso";
 import { criarCobranca, confirmarPagamento, falharPagamento } from "@/lib/server/pagamentos";
 import { ok, falha } from "@/lib/server/http";
 
@@ -84,8 +85,7 @@ export async function PATCH(
     const data: Parameters<typeof db.consulta.update>[0]["data"] = {};
     const eventos: NotifPayload[] = [];
     const audit: AuditPayload = { acao: "", categoria: "consulta", entidade: "consulta", entidadeId: id };
-    const quando = consulta.dataInicio.toLocaleDateString("pt-BR") +
-      " às " + consulta.dataInicio.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+    const quando = quandoClinica(consulta.dataInicio);
 
     switch (body.acao) {
       case "cancelar": {
@@ -158,8 +158,7 @@ export async function PATCH(
         // quem confirma é o pagamento (confirmarPagamento). Legado
         // "pendente_anamnese" permanece até a trilha de pagamento resolver.
         data.remarcada = true;
-        const novoQuando = data.dataInicio.toLocaleDateString("pt-BR") +
-          " às " + data.dataInicio.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+        const novoQuando = quandoClinica(data.dataInicio);
         for (const destino of [consulta.pacienteId, consulta.medicoId]) {
           if (destino === usuario.id && !ehAdmin) continue;
           eventos.push({
