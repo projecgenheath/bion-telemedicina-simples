@@ -127,12 +127,12 @@ export function MedicoApp() {
   const painelCls = "flex-[0_0_100%] w-full min-w-full h-full";
 
   return (
-    <div className="bp-shell bm-app text-bion-ink dark:text-bion-paper">
+    <div className="bp-shell bm-app flex flex-col text-bion-ink dark:text-bion-paper">
       <div
         ref={carrosselRef}
         onScroll={aoRolarCarrossel}
         inert={bloqueado}
-        className={`bp-carrossel bm-carrossel flex h-full overflow-x-auto ${bloqueado ? "pointer-events-none" : ""}`}
+        className={`bp-carrossel bm-carrossel flex flex-1 min-h-0 overflow-x-auto ${bloqueado ? "pointer-events-none" : ""}`}
         aria-label="Áreas do app do médico"
       >
         <div className={painelCls} aria-label="Meu perfil" role="region">
@@ -160,9 +160,7 @@ export function MedicoApp() {
         </div>
       </div>
 
-      {sobreposicao === null ? (
-        <IndicadorTelas painel={painel} secao={secao} onPainel={irPara} onSecao={irSecao} />
-      ) : null}
+      <IndicadorTelas painel={painel} secao={secao} onPainel={irPara} onSecao={irSecao} />
       {dica.visivel && !bloqueado ? <DicaGestos onDispensar={dica.dispensar} /> : null}
 
       {medico ? (

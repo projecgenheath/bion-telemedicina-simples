@@ -33,7 +33,7 @@ export function TelaInicio({
   const p = proxima ? partesFusoClinica(proxima.ts) : null;
 
   return (
-    <section className="bm-tela bm-tela-1 flex flex-col px-5 bp-safe-top pb-24" aria-labelledby="bm-t1-titulo">
+    <section className="bm-tela bm-tela-1 flex flex-col px-5 bp-safe-top pb-6" aria-labelledby="bm-t1-titulo">
       <header className="flex items-center justify-between pt-2">
         <div className="text-xs font-semibold uppercase tracking-wider text-bion-ink/70 dark:text-bion-paper/70 first-letter:uppercase">
           {dataHoje}
@@ -160,7 +160,7 @@ export function TelaInicio({
         </p>
       </div>
 
-      <div className="mt-auto pt-8 flex flex-col items-center gap-1 text-bion-ink/70 dark:text-bion-paper/70" aria-hidden>
+      <div className="mt-auto pt-8 flex flex-col items-center gap-1 text-white/90" aria-hidden>
         <span className="text-xs font-semibold">Faturamento e agenda abaixo</span>
         <ChevronDown className="w-5 h-5 motion-safe:animate-bounce" />
       </div>

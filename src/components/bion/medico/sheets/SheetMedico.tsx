@@ -32,7 +32,7 @@ export function SheetMedico({
       largura="md:max-w-[430px]"
       overlay="bg-black/70"
     >
-      <div className="bm-sheet max-h-[88dvh] overflow-y-auto bp-coluna px-5 pt-3 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+      <div className="bm-sheet max-h-[88dvh] overflow-y-auto bp-coluna px-5 pt-3 pb-[calc(1.5rem+env(safe-area-inset-bottom))]">
         <div className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-bion-ink/20 dark:bg-white/25 md:hidden" aria-hidden />
         <div className="flex items-start justify-between gap-3 mb-4">
           <div className="min-w-0">

@@ -21,11 +21,7 @@ export function IndicadorTelas({
 }) {
   return (
     <>
-      <nav
-        key={`p-${painel}`}
-        aria-label="Páginas"
-        className="bm-indicador absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1 rounded-full bg-zinc-950/75 px-2 py-1.5 backdrop-blur"
-      >
+      <nav aria-label="Páginas" className="bm-barra shrink-0 z-20 flex items-center justify-center gap-1">
         {PAINEIS.map((r, i) => (
           <button
             key={r}
@@ -43,7 +39,7 @@ export function IndicadorTelas({
         <nav
           key={`s-${secao}`}
           aria-label="Seções do início"
-          className="bm-indicador absolute right-1.5 top-1/2 -translate-y-1/2 z-20 flex flex-col items-center gap-0.5 rounded-full bg-zinc-950/60 px-0.5 py-1.5 backdrop-blur"
+          className="bm-indicador absolute right-1 top-[calc(50%-1.375rem)] -translate-y-1/2 z-20 flex flex-col items-center rounded-full bg-zinc-950/60 py-1 backdrop-blur"
         >
           {SECOES.map((r, i) => (
             <button
@@ -52,7 +48,7 @@ export function IndicadorTelas({
               onClick={() => onSecao(i)}
               aria-label={`Ir para ${r}`}
               aria-current={secao === i ? "true" : undefined}
-              className="p-1"
+              className="px-[3px] py-1"
             >
               <span className={`block w-1.5 rounded-full transition-all ${secao === i ? "h-5 bg-sky-300" : "h-1.5 bg-white/45"}`} />
             </button>
@@ -88,7 +84,7 @@ export function DicaGestos({ onDispensar }: { onDispensar: () => void }) {
   return (
     <div
       role="status"
-      className="absolute left-4 right-4 bottom-16 z-30 rounded-3xl bg-zinc-950/90 text-white p-4 backdrop-blur shadow-2xl"
+      className="absolute left-4 right-4 bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-30 rounded-3xl bg-zinc-950/90 text-white p-4 backdrop-blur shadow-2xl"
     >
       <div className="flex items-start gap-3">
         <Hand className="w-5 h-5 mt-0.5 shrink-0 text-sky-300" aria-hidden />

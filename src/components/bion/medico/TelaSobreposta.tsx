@@ -88,7 +88,7 @@ export function TelaSobreposta({
         </div>
         {acoes}
       </header>
-      <div className="flex-1 overflow-y-auto bp-coluna">{children}</div>
+      <div className={`flex-1 overflow-y-auto bp-coluna ${rodape ? "" : "pb-[env(safe-area-inset-bottom)]"}`}>{children}</div>
       {rodape ? <div className="shrink-0 bp-safe-bottom border-t border-bion-ink/10 dark:border-white/10">{rodape}</div> : null}
     </div>
   );

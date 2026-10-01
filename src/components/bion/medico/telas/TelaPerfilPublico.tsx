@@ -35,7 +35,7 @@ export function TelaPerfilPublico({
   const comentarios = avaliacoes.filter((a) => a.comentario?.trim()).slice(0, 3);
 
   return (
-    <section className="bm-tela bm-tela-3 flex flex-col px-5 pt-10 pb-24 text-white" aria-labelledby="bm-t3-titulo">
+    <section className="bm-tela bm-tela-3 flex flex-col px-5 pt-10 pb-8 text-white" aria-labelledby="bm-t3-titulo">
       <h2 id="bm-t3-titulo" className="text-2xl font-black">
         Seu perfil público
       </h2>

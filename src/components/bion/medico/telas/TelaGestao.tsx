@@ -20,11 +20,11 @@ export function TelaGestao({
   const horarios = medico ? [...medico.horariosDisponiveis].sort() : [];
 
   return (
-    <section className="bm-tela bm-tela-2 flex flex-col px-5 pt-10 pb-24" aria-labelledby="bm-t2-titulo">
-      <h2 id="bm-t2-titulo" className="text-2xl font-black">
+    <section className="bm-tela bm-tela-2 flex flex-col px-5 pt-10 pb-6" aria-labelledby="bm-t2-titulo">
+      <h2 id="bm-t2-titulo" className="text-2xl font-black text-white">
         Gestão
       </h2>
-      <p className="text-sm text-bion-ink/75 dark:text-bion-paper/75 mb-5">Faturamento, preço e agenda.</p>
+      <p className="text-sm text-white/85 mb-5">Faturamento, preço e agenda.</p>
 
       <CardFaturamento {...faturamento} />
 
@@ -87,7 +87,7 @@ export function TelaGestao({
         </div>
       )}
 
-      <div className="mt-auto pt-8 flex flex-col items-center gap-1 text-bion-ink/75 dark:text-bion-paper/75" aria-hidden>
+      <div className="mt-auto pt-8 flex flex-col items-center gap-1 text-white/90" aria-hidden>
         <span className="text-xs font-semibold">Seu perfil público abaixo</span>
         <ChevronDown className="w-5 h-5 motion-safe:animate-bounce" />
       </div>

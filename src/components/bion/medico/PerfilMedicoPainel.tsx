@@ -195,9 +195,12 @@ export function PerfilMedicoPainel({
   };
 
   const grupo = "bp-glass divide-y divide-bion-ink/10 dark:divide-white/10 overflow-hidden";
+  // Títulos de seção ficam DENTRO dos cards: o fundo do painel escurece
+  // para o marinho e texto escuro solto perderia contraste.
+  const tituloGrupo = "px-4 pt-3 pb-1 text-xs font-bold uppercase tracking-wider text-bion-ink/75 dark:text-bion-paper/75";
 
   return (
-    <div className="bm-painel h-full overflow-y-auto bp-coluna bp-safe-top px-5 pt-8 pb-16" aria-labelledby="bm-perfil-titulo">
+    <div className="bm-painel h-full overflow-y-auto bp-coluna bp-safe-top px-5 pt-8 pb-8" aria-labelledby="bm-perfil-titulo">
       <h2 id="bm-perfil-titulo" className="sr-only">
         Meu perfil
       </h2>
@@ -243,22 +246,28 @@ export function PerfilMedicoPainel({
         )}
       </div>
 
-      <h3 className="mt-6 mb-2 text-xs font-bold uppercase tracking-wider text-bion-ink/75 dark:text-bion-paper/75">Dados pessoais</h3>
-      <div className={grupo}>
+      <section className={`${grupo} mt-6`} aria-labelledby="bm-pf-dados">
+        <h3 id="bm-pf-dados" className={tituloGrupo}>
+          Dados pessoais
+        </h3>
         {["Telefone", "Data de nascimento", "Sexo"].map((t) => (
           <Linha key={t} icone={<Type className="w-4 h-4" />} titulo={t} direita={<EmBreve />} />
         ))}
-      </div>
+      </section>
 
-      <h3 className="mt-5 mb-2 text-xs font-bold uppercase tracking-wider text-bion-ink/75 dark:text-bion-paper/75">Conta</h3>
-      <div className={grupo}>
+      <section className={`${grupo} mt-4`} aria-labelledby="bm-pf-conta">
+        <h3 id="bm-pf-conta" className={tituloGrupo}>
+          Conta
+        </h3>
         <Linha icone={<Wallet className="w-4 h-4" />} titulo="Repasses" detalhe="Valores a receber e extratos" direita={<EmBreve />} />
         <Linha icone={<LifeBuoy className="w-4 h-4" />} titulo="Suporte" detalhe="Abrir e acompanhar chamados" onClick={onAbrirSuporte} />
         <Linha icone={<FileText className="w-4 h-4" />} titulo="Termos e ajuda" detalhe="Termos de uso e perguntas frequentes" onClick={onAbrirTermos} />
-      </div>
+      </section>
 
-      <h3 className="mt-5 mb-2 text-xs font-bold uppercase tracking-wider text-bion-ink/75 dark:text-bion-paper/75">Aparência</h3>
-      <div className="bp-glass p-4 space-y-3">
+      <section className="bp-glass p-4 pt-3 space-y-3 mt-4" aria-labelledby="bm-pf-aparencia">
+        <h3 id="bm-pf-aparencia" className="text-xs font-bold uppercase tracking-wider text-bion-ink/75 dark:text-bion-paper/75">
+          Aparência
+        </h3>
         <Segmentado<Tema>
           rotulo="Tema"
           valor={tema}
@@ -278,9 +287,9 @@ export function PerfilMedicoPainel({
             { v: "grande", r: "A+" },
           ]}
         />
-      </div>
+      </section>
 
-      <div className={`${grupo} mt-5`}>
+      <div className={`${grupo} mt-4`}>
         <Linha
           icone={<History className="w-4 h-4" />}
           titulo="Versão clássica"
@@ -295,7 +304,7 @@ export function PerfilMedicoPainel({
         </button>
       </div>
 
-      <p className="mt-6 text-center text-xs text-bion-ink/70 dark:text-bion-paper/70">Arraste para a esquerda (ou tecla →) para voltar ao início</p>
+      <p className="mt-6 text-center text-xs text-white/90">Arraste para a esquerda (ou tecla →) para voltar ao início</p>
     </div>
   );
 }
