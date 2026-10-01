@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { quandoClinica } from "@/lib/server/fuso";
 import { db } from "@/lib/db";
 import { exigirSessao } from "@/lib/server/auth";
 import { ok, falha } from "@/lib/server/http";
@@ -55,7 +56,7 @@ async function montarContexto(
     if (proximas.length) {
       const rotulos = proximas.map(
         (c) =>
-          `${c.especialidade} com ${c.medico.nome} em ${c.dataInicio.toLocaleDateString("pt-BR")} às ${c.dataInicio.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`,
+          `${c.especialidade} com ${c.medico.nome} em ${quandoClinica(c.dataInicio)}`,
       );
       linhas.push(`Próximas consultas confirmadas: ${rotulos.join("; ")}.`);
     }

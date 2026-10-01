@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { exigirPapel } from "@/lib/server/auth";
 import { aplicarSideEffects, pacienteWire } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
-import { anonimizarPacienteCompleto } from "@/lib/server/lgpd";
+import { anonimizarPacienteCompleto, estaAnonimizado } from "@/lib/server/lgpd";
 
 type PacientePatch = {
   nome?: string;
@@ -28,6 +28,14 @@ export async function PATCH(
     const paciente = await db.user.findFirst({ where: { id, role: "PACIENTE" } });
     if (!paciente) {
       return Response.json({ erro: "Paciente não encontrado." }, { status: 404 });
+    }
+    // LGPD: conta anonimizada é definitiva — não pode ser reativada nem
+    // re-identificada (nome/CPF/telefone) pela edição.
+    if (estaAnonimizado(paciente)) {
+      return Response.json(
+        { erro: "Conta anonimizada (LGPD): não pode ser reativada nem editada." },
+        { status: 409 },
+      );
     }
 
     await db.$transaction([
@@ -81,9 +89,9 @@ export async function PATCH(
 
 /**
  * P1 (2026-09) — o DELETE de paciente NÃO destrói mais o cadastro em cascata
- * (prontuário não pode ser destruído — CFM). Passa a arquivar + anonimizar
- * todos os dados identificáveis (LGPD art. 12), preservando o registro
- * clínico despidos de identificadores.
+ * (prontuário não pode ser destruído — CFM / Lei 13.787/2018). Passa a
+ * arquivar + anonimizar cadastro/login (LGPD art. 12), preservando o registro
+ * clínico pseudonimizado. Ver src/lib/server/lgpd.ts.
  */
 export async function DELETE(
   _req: NextRequest,
@@ -98,7 +106,7 @@ export async function DELETE(
       return Response.json({ erro: "Paciente não encontrado." }, { status: 404 });
     }
 
-    const apelido = await anonimizarPacienteCompleto(id);
+    const r = await anonimizarPacienteCompleto(id);
     // Contrato delta (auditoria FASE 2): o registro (agora anonimizado/inativo)
     // substitui o anterior na lista — mesmo efeito do estado fresco, sem
     // recarregar o app inteiro.
@@ -106,7 +114,11 @@ export async function DELETE(
       acao: "PACIENTE_ARQUIVADO_ANONIMIZADO",
       categoria: "admin",
       severidade: "critical",
-      detalhes: `Cadastro de ${paciente.nome} arquivado e anonimizado como ${apelido}; prontuário preservado (LGPD art. 12 / CFM)`,
+      // Só o id — o nome real não vai para a auditoria (LGPD).
+      detalhes:
+        `Cadastro do paciente id ${id} arquivado e anonimizado; ` +
+        `${r.arquivosPessoaisRemovidos} arquivo(s) pessoal(is) removido(s); ` +
+        `prontuário preservado (LGPD art. 12 / Lei 13.787/2018)`,
       entidade: "paciente",
       entidadeId: id,
     });

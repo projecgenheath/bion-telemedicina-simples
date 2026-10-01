@@ -19,7 +19,7 @@ O app usa Supabase para:
 2. [ ] **`SUPABASE_SERVICE_ROLE_KEY`** na Vercel (Project Settings → API → service_role)
 3. [ ] `npx prisma db push` (colunas `supabaseId`, `storagePath`, índices)
 4. [ ] Auth → Email ativo; em dev desligar Confirm email se quiser
-5. [ ] `npm run seed:auth` (vincular demos ao Auth) **ou** novo cadastro no app
+5. [ ] (Só em projeto descartável) `npm run seed:auth` — exige `BION_PERMITIR_SYNC_DEMO=1`, `SEED_ADMIN_PASSWORD` e `SEED_DEMO_PASSWORD`; **redefine senhas de todos os usuários** e é bloqueado em produção
 6. [ ] (Opcional) SQL `20260928_rls_completo.sql`
 7. [ ] (Opcional) Deploy Edge Function do webhook
 
@@ -30,7 +30,7 @@ npm run seed:auth            # com SERVICE_ROLE
 
 ## Contas demo
 
-Senha: `bion123456`  
+Senhas: definidas por `SEED_DEMO_PASSWORD` (admin: `SEED_ADMIN_PASSWORD`) — nunca no repositório.  
 Paciente: `marina.silva@email.com` · Médico: `ana.ribeiro@med.bion.app` · Admin: `admin@bion.app`
 
 

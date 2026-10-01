@@ -7,6 +7,24 @@ const CINZA_ESCURO: [number, number, number] = [30, 41, 59];
 const CINZA_MEDIO: [number, number, number] = [100, 116, 139];
 const CINZA_CLARO: [number, number, number] = [241, 245, 249];
 
+/**
+ * Identificador aleatório criptograficamente seguro para esta via do PDF
+ * (substitui o antigo Math.random()). NÃO é uma chave de validação de
+ * assinatura: não existe endpoint público de verificação.
+ */
+function gerarIdentificadorVia(): string {
+  const c = globalThis.crypto;
+  if (c && typeof c.randomUUID === "function") return c.randomUUID().toUpperCase();
+  if (c && typeof c.getRandomValues === "function") {
+    const b = c.getRandomValues(new Uint8Array(16));
+    b[6] = (b[6] & 0x0f) | 0x40;
+    b[8] = (b[8] & 0x3f) | 0x80;
+    const h = Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
+    return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`.toUpperCase();
+  }
+  throw new Error("Gerador aleatório seguro indisponível neste navegador.");
+}
+
 export function gerarDocumentoPDF(d: Documento) {
   const doc = new jsPDF({ unit: "pt", format: "a4" });
   const L = 48;
@@ -176,39 +194,37 @@ export function gerarDocumentoPDF(d: Documento) {
     y += linhasObs.length * 14 + 20;
   }
 
-  // Bloco de Assinatura e Validação Digital
+  // Bloco de identificação do documento.
+  // C5: este PDF é gerado no navegador e NÃO tem assinatura digital
+  // (nem ICP-Brasil, nem hash verificável). Não alegar o contrário.
   const yAssinatura = Math.max(y + 30, H - 190);
+  const larguraBloco = W - L * 2 - 32;
 
   doc.setFillColor(248, 250, 252);
   doc.setDrawColor(226, 232, 240);
-  doc.roundedRect(L, yAssinatura, W - L * 2, 85, 6, 6, "FD");
+  doc.roundedRect(L, yAssinatura, W - L * 2, 95, 6, 6, "FD");
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9);
   doc.setTextColor(...corDestaque);
-  doc.text("ASSINATURA DIGITAL CERTIFICADA", L + 16, yAssinatura + 20);
+  doc.text("DOCUMENTO SEM ASSINATURA DIGITAL ICP-BRASIL", L + 16, yAssinatura + 20);
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
   doc.setTextColor(...CINZA_ESCURO);
-  doc.text(
-    `Documento assinado digitalmente por ${d.medico} em conformidade com a legislação de telemedicina e CFM.`,
-    L + 16,
-    yAssinatura + 36,
+  const linhasAviso = doc.splitTextToSize(
+    `Emitido por ${d.medico} na plataforma BION. Este PDF não contém assinatura digital qualificada (ICP-Brasil) e não substitui a via assinada pelo médico quando exigida (por exemplo, por farmácias ou para medicamentos controlados).`,
+    larguraBloco,
   );
+  doc.text(linhasAviso, L + 16, yAssinatura + 35);
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8.5);
   doc.setTextColor(...CINZA_MEDIO);
   doc.text(
-    `Chave de Validação: ${Math.random().toString(36).substring(2, 10).toUpperCase()}-${Date.now().toString(36).toUpperCase()}`,
+    `Identificador desta via: ${gerarIdentificadorVia()}`,
     L + 16,
-    yAssinatura + 52,
-  );
-  doc.text(
-    "Verifique a autenticidade deste documento em: https://bion.app/validar",
-    L + 16,
-    yAssinatura + 68,
+    yAssinatura + 35 + linhasAviso.length * 12 + 6,
   );
 
   // Rodapé da Página
@@ -216,7 +232,7 @@ export function gerarDocumentoPDF(d: Documento) {
   doc.setFontSize(8);
   doc.setTextColor(...CINZA_MEDIO);
   doc.text(
-    "BION Tecnologia em Saúde Ltda • CNPJ 00.000.000/0001-00 • Telemedicina e Saúde Digital",
+    "BION Telemedicina • Documento gerado eletronicamente pela plataforma",
     W / 2,
     H - 30,
     { align: "center" },

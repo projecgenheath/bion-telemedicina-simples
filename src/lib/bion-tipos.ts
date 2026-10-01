@@ -264,45 +264,98 @@ export type PacienteRegistro = {
 
 const MESES = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 
-const mesmoDia = (a: Date, b: Date) =>
-  a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+/**
+ * A6 — fuso único de exibição: todas as datas/horas da interface são
+ * formatadas em America/Sao_Paulo, independentemente do fuso do navegador
+ * (médico viajando, VPN, máquina em UTC etc.).
+ */
+export const FUSO_CLINICA = "America/Sao_Paulo";
+
+type PartesData = { ano: number; mes: number; dia: number; hora: number; minuto: number };
+
+const fmtPartes = new Intl.DateTimeFormat("en-US", {
+  timeZone: FUSO_CLINICA,
+  year: "numeric",
+  month: "numeric",
+  day: "numeric",
+  hour: "numeric",
+  minute: "numeric",
+  hourCycle: "h23",
+});
+
+/** Ano/mês(0-11)/dia/hora/minuto do instante no fuso da clínica. */
+export function partesFusoClinica(d: Date | string | number): PartesData {
+  const data = d instanceof Date ? d : new Date(d);
+  if (Number.isNaN(data.getTime())) return { ano: NaN, mes: NaN, dia: NaN, hora: NaN, minuto: NaN };
+  const p = fmtPartes.formatToParts(data);
+  const g = (t: Intl.DateTimeFormatPartTypes) => Number(p.find((x) => x.type === t)?.value ?? "0");
+  return { ano: g("year"), mes: g("month") - 1, dia: g("day"), hora: g("hour") % 24, minuto: g("minute") };
+}
+
+/** Instante (ms) de um horário de parede no fuso da clínica (mes 0-11). */
+export function instanteFusoClinica(ano: number, mes: number, dia: number, hora = 0, minuto = 0): number {
+  const comoUtc = Date.UTC(ano, mes, dia, hora, minuto);
+  const p = partesFusoClinica(comoUtc);
+  const desvio = Date.UTC(p.ano, p.mes, p.dia, p.hora, p.minuto) - comoUtc;
+  return comoUtc - desvio;
+}
+
+/** Dia "hoje + n" no fuso da clínica: partes, chave YYYY-MM-DD e dia da semana (0=Dom). */
+export function diaFusoClinica(n: number) {
+  const hoje = partesFusoClinica(Date.now());
+  const meioDia = instanteFusoClinica(hoje.ano, hoje.mes, hoje.dia, 12) + n * 86_400_000;
+  const p = partesFusoClinica(meioDia);
+  const iso = `${p.ano}-${String(p.mes + 1).padStart(2, "0")}-${String(p.dia).padStart(2, "0")}`;
+  return { ...p, iso, semana: new Date(Date.UTC(p.ano, p.mes, p.dia)).getUTCDay() };
+}
+
+const mesmoDia = (a: PartesData, b: PartesData) =>
+  a.ano === b.ano && a.mes === b.mes && a.dia === b.dia;
+
+/** Partes do dia "agora + n dias" no fuso da clínica. */
+const diaRelativo = (n: number) => partesFusoClinica(Date.now() + n * 86_400_000);
+
+const dd = (n: number) => String(n).padStart(2, "0");
+const invalida = (iso: string) => Number.isNaN(new Date(iso).getTime());
 
 export const fmtCurta = (iso: string) => {
-  const d = new Date(iso);
-  const hoje = new Date();
-  const amanha = new Date();
-  amanha.setDate(hoje.getDate() + 1);
-  if (mesmoDia(d, hoje)) return "Hoje";
-  if (mesmoDia(d, amanha)) return "Amanhã";
-  return `${d.getDate()} ${MESES[d.getMonth()]}`;
+  if (invalida(iso)) return "—";
+  const d = partesFusoClinica(iso);
+  if (mesmoDia(d, diaRelativo(0))) return "Hoje";
+  if (mesmoDia(d, diaRelativo(1))) return "Amanhã";
+  return `${d.dia} ${MESES[d.mes]}`;
 };
 
-export const fmtHora = (iso: string) =>
-  new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+export const fmtHora = (iso: string) => {
+  if (invalida(iso)) return "—";
+  const d = partesFusoClinica(iso);
+  return `${dd(d.hora)}:${dd(d.minuto)}`;
+};
 
 export const fmtLonga = (iso: string) => {
-  const d = new Date(iso);
-  return `${String(d.getDate()).padStart(2, "0")} ${MESES[d.getMonth()]} ${d.getFullYear()}`;
+  if (invalida(iso)) return "—";
+  const d = partesFusoClinica(iso);
+  return `${dd(d.dia)} ${MESES[d.mes]} ${d.ano}`;
 };
 
 export const fmtQuando = (iso: string) => {
-  const d = new Date(iso);
-  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()} ${fmtHora(iso)}`;
+  if (invalida(iso)) return "—";
+  const d = partesFusoClinica(iso);
+  return `${dd(d.dia)}/${dd(d.mes + 1)}/${d.ano} ${fmtHora(iso)}`;
 };
 
 export const fmtTicketData = (iso: string) => {
-  const d = new Date(iso);
-  const hoje = new Date();
-  const ontem = new Date();
-  ontem.setDate(hoje.getDate() - 1);
-  if (mesmoDia(d, hoje)) return `Hoje às ${fmtHora(iso)}`;
-  if (mesmoDia(d, ontem)) return `Ontem às ${fmtHora(iso)}`;
-  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()} às ${fmtHora(iso)}`;
+  if (invalida(iso)) return "—";
+  const d = partesFusoClinica(iso);
+  if (mesmoDia(d, diaRelativo(0))) return `Hoje às ${fmtHora(iso)}`;
+  if (mesmoDia(d, diaRelativo(-1))) return `Ontem às ${fmtHora(iso)}`;
+  return `${dd(d.dia)}/${dd(d.mes + 1)}/${d.ano} às ${fmtHora(iso)}`;
 };
 
 export const fmtDataBR = (iso: string) => {
-  const d = new Date(iso);
-  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+  if (invalida(iso)) return "—";
+  const d = partesFusoClinica(iso);
+  return `${dd(d.dia)}/${dd(d.mes + 1)}/${d.ano}`;
 };
 
 export const fmtValorBRL = (v: number) =>

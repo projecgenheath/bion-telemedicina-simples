@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { quandoClinica } from "@/lib/server/fuso";
 
 /**
  * Respostas locais da BION IA (sem LLM) — usadas como fallback quando o
@@ -35,7 +36,7 @@ function proximasConsultas(usuarioId: string): Promise<string> {
         ? cs
             .map(
               (c) =>
-                `• **${c.especialidade}** com ${c.medico.nome} — ${c.dataInicio.toLocaleDateString("pt-BR")} às ${c.dataInicio.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`,
+                `• **${c.especialidade}** com ${c.medico.nome} — ${quandoClinica(c.dataInicio)}`,
             )
             .join("\n")
         : "",

@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { instanteNoFuso } from "@/lib/server/fuso";
 import { db } from "@/lib/db";
 import { exigirPapel } from "@/lib/server/auth";
 import { aplicarSideEffects, exameWire } from "@/lib/server/dados";
@@ -57,7 +58,14 @@ export async function POST(req: NextRequest) {
       return Response.json({ erro: "Nenhum resultado válido informado." }, { status: 400 });
     }
 
-    const dataColeta = body.dataColeta ? new Date(body.dataColeta) : new Date();
+    // Fuso: "AAAA-MM-DD" puro seria meia-noite UTC (= dia anterior em São
+    // Paulo); data sem hora vira meio-dia no fuso da clínica.
+    const soData = typeof body.dataColeta === "string" ? /^(\d{4})-(\d{2})-(\d{2})$/.exec(body.dataColeta) : null;
+    const dataColeta = soData
+      ? instanteNoFuso(+soData[1], +soData[2], +soData[3], 12, 0)
+      : body.dataColeta
+        ? new Date(body.dataColeta)
+        : new Date();
 
     const exame = await db.exameLaboratorial.create({
       data: {

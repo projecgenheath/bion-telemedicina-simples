@@ -70,10 +70,10 @@ Se também retornar erro de permissão, use a Rota 1.
 2. Backup de `schema.prisma` e `.env` (SQLite)
 3. Troca o datasource para PostgreSQL
 4. `prisma generate` + `prisma db push` (cria as 13 tabelas)
-5. `bun prisma/seed.ts` — popula com os dados demo (datas relativas frescas: "hoje", "amanhã")
+5. `bun prisma/seed.ts` — popula com os dados demo (datas relativas frescas: "hoje", "amanhã"). **Somente em banco descartável:** exige `BION_PERMITIR_SEED=1`, `SEED_ADMIN_PASSWORD` e `SEED_DEMO_PASSWORD` e aborta em produção
 6. Verifica as contagens (`scripts/verificar_banco.ts`)
 
-Contas demo após o seed (senha `bion123`):
+Contas demo após o seed (senhas de `SEED_DEMO_PASSWORD`; admin: `SEED_ADMIN_PASSWORD`):
 - Paciente: `marina.silva@email.com`
 - Médico: `ana.ribeiro@med.bion.app`
 - Admin: `admin@bion.app`

@@ -444,8 +444,9 @@ type Store = {
   suspenderMedico: (id: string) => void;
   auditLogs: AuditLog[];
   registrarAudit: (log: Omit<AuditLog, "id" | "ts" | "usuario" | "role">) => void;
-  anonimizarPaciente: (nome: string, pacienteIdExplicito?: string) => void;
-  excluirDadosPaciente: (nome: string, pacienteIdExplicito?: string) => void;
+  /** LGPD — irreversível: SEMPRE por id (nunca por nome). true = servidor confirmou. */
+  anonimizarPaciente: (pacienteId: string) => Promise<boolean>;
+  excluirDadosPaciente: (pacienteId: string) => Promise<boolean>;
   pacientes: PacienteRegistro[];
   adicionarPaciente: (p: Omit<PacienteRegistro, "id" | "desde">) => void;
   atualizarPaciente: (id: string, dados: Partial<PacienteRegistro>) => void;
@@ -551,7 +552,19 @@ export function BionProvider({ children }: { children: ReactNode }) {
       const s = await api<{ autenticado: boolean; usuario?: { id: string; nome: string; email: string; role: string; precisaTrocarSenha?: boolean } }>(
         "/api/auth/sessao",
       );
-      if (s?.autenticado && s.usuario) {
+      if (s?.autenticado && s.usuario?.precisaTrocarSenha) {
+        // Auditoria admin (C2): com troca de senha pendente o servidor recusa
+        // o bootstrap (403). Abre direto a tela de troca; os dados são
+        // carregados em trocarSenha() após o sucesso.
+        setSessaoState({
+          id: s.usuario.id,
+          role: s.usuario.role.toLowerCase() as Sessao["role"],
+          nome: s.usuario.nome,
+          email: s.usuario.email,
+        });
+        setPrecisaTrocarSenha(true);
+        setAutenticado(true);
+      } else if (s?.autenticado && s.usuario) {
         const dados = await api<EstadoFresco>("/api/bootstrap");
         if (dados) {
           aplicar(dados);
@@ -622,7 +635,8 @@ export function BionProvider({ children }: { children: ReactNode }) {
   const streamRef = useRef<EventSource | null>(null);
 
   useEffect(() => {
-    if (!autenticado || typeof EventSource === "undefined") return;
+    // Com troca de senha pendente o servidor responde 403 (auditoria C2).
+    if (!autenticado || precisaTrocarSenha || typeof EventSource === "undefined") return;
     const es = new EventSource("/api/mensagens/stream");
     streamRef.current = es;
     const aoMensagens = (ev: MessageEvent<string>) => {
@@ -642,17 +656,17 @@ export function BionProvider({ children }: { children: ReactNode }) {
       es.close();
       streamRef.current = null;
     };
-  }, [autenticado, mesclarMensagens, buscarMensagens]);
+  }, [autenticado, precisaTrocarSenha, mesclarMensagens, buscarMensagens]);
 
   /** Rede de segurança do stream: só consulta quando o SSE NÃO está aberto
    *  (navegador sem EventSource, 401 pós-revogação, rede instável). */
   useEffect(() => {
-    if (!autenticado) return;
+    if (!autenticado || precisaTrocarSenha) return;
     const id = setInterval(() => {
       if (streamRef.current?.readyState !== 1) void buscarMensagens();
     }, 4000);
     return () => clearInterval(id);
-  }, [autenticado, buscarMensagens]);
+  }, [autenticado, precisaTrocarSenha, buscarMensagens]);
 
   const entrar = useCallback(
     async (email: string, senha: string): Promise<RespostaAuth> => {
@@ -726,12 +740,16 @@ export function BionProvider({ children }: { children: ReactNode }) {
           return { ok: false, erro: json?.erro ?? "Não foi possível alterar a senha." };
         }
         setPrecisaTrocarSenha(false);
+        // Liberado pelo servidor: carrega o estado que ficou bloqueado (403)
+        // enquanto a troca estava pendente.
+        const dados = await api<EstadoFresco>("/api/bootstrap");
+        if (dados) aplicar(dados);
         return { ok: true };
       } catch {
         return { ok: false, erro: "Falha de conexão com o servidor." };
       }
     },
-    [],
+    [aplicar],
   );
 
   /** Aplica um estado fresco externo (ex.: resposta do upload de laudo pela IA). */
@@ -976,6 +994,34 @@ export function BionProvider({ children }: { children: ReactNode }) {
       });
       if (!dados) return false;
       aplicarDelta(dados);
+      return true;
+    },
+    [aplicarDelta],
+  );
+
+  /** Auditoria admin (C2): cadastro pelo admin devolve UMA vez as credenciais
+   *  temporárias (senha aleatória). Exibe ao admin para repasse e descarta —
+   *  nada fica guardado no estado do app. */
+  const criarContaComCredenciais = useCallback(
+    async (url: string, corpo: Record<string, unknown>): Promise<boolean> => {
+      const dados = await api<Record<string, unknown> & {
+        credenciais?: { email: string; senhaTemporaria: string };
+      }>(url, { method: "POST", body: JSON.stringify(corpo) });
+      if (!dados) return false;
+      const { credenciais, ...delta } = dados;
+      aplicarDelta(delta);
+      if (credenciais) {
+        const texto = `Login: ${credenciais.email}\nSenha temporária: ${credenciais.senhaTemporaria}`;
+        toast.success("Conta criada — anote a senha temporária (exibida só agora)", {
+          description: `Login: ${credenciais.email} • Senha temporária: ${credenciais.senhaTemporaria}`,
+          duration: Infinity,
+          closeButton: true,
+          action: {
+            label: "Copiar",
+            onClick: () => void navigator.clipboard?.writeText(texto).catch(() => {}),
+          },
+        });
+      }
       return true;
     },
     [aplicarDelta],
@@ -1358,35 +1404,21 @@ export function BionProvider({ children }: { children: ReactNode }) {
     [mutar],
   );
 
-  /** LGPD — operações IRREVERSÍVEIS: paciente SEMPRE por ID (nome só como
-   *  último recurso quando o chamador não tem o id). */
+  /** LGPD — operações IRREVERSÍVEIS: paciente SEMPRE por ID. Não há mais
+   *  fallback por nome (homônimos levariam a anonimizar a pessoa errada). */
   const anonimizarPaciente = useCallback(
-    (nome: string, pacienteIdExplicito?: string) => {
-      const id = pacienteIdExplicito ?? pacientesRef.current.find((p) => p.nome === nome)?.id;
-      if (!id) {
-        toast.error("Paciente não encontrado.");
-        return;
-      }
-      void mutar("/api/admin/lgpd", "POST", { acao: "anonimizar", pacienteId: id });
-    },
+    (pacienteId: string) => mutar("/api/admin/lgpd", "POST", { acao: "anonimizar", pacienteId }),
     [mutar],
   );
 
   const excluirDadosPaciente = useCallback(
-    (nome: string, pacienteIdExplicito?: string) => {
-      const id = pacienteIdExplicito ?? pacientesRef.current.find((p) => p.nome === nome)?.id;
-      if (!id) {
-        toast.error("Paciente não encontrado.");
-        return;
-      }
-      void mutar("/api/admin/lgpd", "POST", { acao: "excluir", pacienteId: id });
-    },
+    (pacienteId: string) => mutar("/api/admin/lgpd", "POST", { acao: "excluir", pacienteId }),
     [mutar],
   );
 
   const adicionarPaciente = useCallback(
     (p: Omit<PacienteRegistro, "id" | "desde">) => {
-      void mutar("/api/pacientes", "POST", {
+      void criarContaComCredenciais("/api/pacientes", {
         nome: p.nome,
         email: p.email,
         telefone: p.telefone,
@@ -1397,7 +1429,7 @@ export function BionProvider({ children }: { children: ReactNode }) {
         status: p.status,
       });
     },
-    [mutar],
+    [criarContaComCredenciais],
   );
 
   const atualizarPaciente = useCallback(
@@ -1414,7 +1446,7 @@ export function BionProvider({ children }: { children: ReactNode }) {
 
   const adicionarMedico = useCallback(
     (m: Omit<Medico, "id" | "avaliacao" | "numAvaliacoes">) => {
-      void mutar("/api/medicos", "POST", {
+      void criarContaComCredenciais("/api/medicos", {
         nome: m.nome,
         crm: m.crm,
         especialidade: m.especialidade,
@@ -1428,7 +1460,7 @@ export function BionProvider({ children }: { children: ReactNode }) {
         status: m.status,
       });
     },
-    [mutar],
+    [criarContaComCredenciais],
   );
 
   const excluirMedico = useCallback(
