@@ -56,7 +56,7 @@ export function Login() {
     setEnviando(false);
     if (r.ok) {
       toast.success("Bem-vindo(a) de volta!");
-      router.replace(r.role === "paciente" ? "/paciente" : "/painel");
+      router.replace(r.role === "paciente" ? "/paciente" : r.role === "medico" ? "/medico" : "/painel");
     } else {
       setFormErro("Não foi possível entrar. Verifique e-mail e senha.");
     }
@@ -94,7 +94,7 @@ export function Login() {
     setEnviando(false);
     if (r.ok) {
       toast.success("Conta criada com sucesso! Bem-vindo(a) ao BION.");
-      router.replace(r.role === "paciente" ? "/paciente" : "/painel");
+      router.replace(r.role === "paciente" ? "/paciente" : r.role === "medico" ? "/medico" : "/painel");
     } else {
       setFormErro("Não foi possível criar a conta. Tente novamente.");
     }
