@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import {
-  exigirSessao,
+  exigirSessaoPermitindoTrocaSenha,
   hashSenha,
   verificarSenha,
   tokenSessaoAtual,
@@ -30,7 +30,8 @@ import { supabaseConfigurado } from "@/lib/supabase/env";
  */
 export async function POST(req: NextRequest) {
   try {
-    const usuario = await exigirSessao();
+    // Única rota (junto de sessao/logout) liberada com troca de senha pendente.
+    const usuario = await exigirSessaoPermitindoTrocaSenha();
     const body = (await req.json()) as { senhaAtual?: string; novaSenha?: string };
 
     const senhaAtual = body.senhaAtual ?? "";

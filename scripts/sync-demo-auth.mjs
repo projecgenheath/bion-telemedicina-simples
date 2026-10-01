@@ -1,16 +1,55 @@
 /**
  * Vincula usuários Prisma existentes ao Supabase Auth (sem apagar dados).
  *
+ * ⚠️ REDEFINE a senha no Supabase Auth de TODOS os usuários do banco alvo —
+ * só use em banco local/descartável. Nunca em produção.
+ *
  * Uso:
+ *   BION_PERMITIR_SYNC_DEMO=1 SEED_ADMIN_PASSWORD=... SEED_DEMO_PASSWORD=... \
  *   SUPABASE_SERVICE_ROLE_KEY=... NEXT_PUBLIC_SUPABASE_URL=... DATABASE_URL=... \
  *     node scripts/sync-demo-auth.mjs
  *
- * Senha aplicada no Auth: bion123456 (contas demo) ou SENHA_DEMO env.
+ * Senhas aplicadas no Auth: SEED_ADMIN_PASSWORD (role ADMIN) e
+ * SEED_DEMO_PASSWORD (demais). Ambas obrigatórias — nenhuma senha no código.
  */
 import { createClient } from "@supabase/supabase-js";
 import { PrismaClient } from "@prisma/client";
 
-const SENHA = process.env.SENHA_DEMO || "bion123456";
+/** Refs/hosts do projeto de PRODUÇÃO (extensível via BION_PRODUCAO_REFS="a,b"). */
+const REFS_PRODUCAO = [
+  "tnygegihboiyptrnmaqt",
+  ...(process.env.BION_PRODUCAO_REFS ?? "").split(",").map((s) => s.trim()).filter(Boolean),
+];
+
+function abortar(msg) {
+  console.error(`\n⛔ sync-demo-auth abortado: ${msg}\n`);
+  process.exit(1);
+}
+
+if (process.env.NODE_ENV === "production" || process.env.VERCEL_ENV === "production") {
+  abortar("NODE_ENV/VERCEL_ENV = production. Este script redefine senhas e nunca roda em produção.");
+}
+{
+  const alvos = [process.env.DATABASE_URL ?? "", process.env.NEXT_PUBLIC_SUPABASE_URL ?? ""];
+  const ref = REFS_PRODUCAO.find((r) => alvos.some((a) => a.includes(r)));
+  if (ref) abortar(`DATABASE_URL/NEXT_PUBLIC_SUPABASE_URL aponta para o projeto de produção (${ref}).`);
+}
+if (process.env.BION_PERMITIR_SYNC_DEMO !== "1") {
+  abortar("defina BION_PERMITIR_SYNC_DEMO=1 para confirmar que o projeto alvo é descartável.");
+}
+
+function senhaDeEnv(nome) {
+  const v = process.env[nome]?.trim() ?? "";
+  if (!v) abortar(`variável ${nome} não definida (senhas não ficam mais no código).`);
+  if (v.length < 10 || v.length > 64 || !/[A-Za-z]/.test(v) || !/[0-9]/.test(v)) {
+    abortar(`${nome} deve ter 10–64 caracteres, com letras e números.`);
+  }
+  if (v === "bion123456") abortar(`${nome} não pode ser a antiga senha demo pública.`);
+  return v;
+}
+
+const SENHA_ADMIN = senhaDeEnv("SEED_ADMIN_PASSWORD");
+const SENHA_DEMO = senhaDeEnv("SEED_DEMO_PASSWORD");
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
 
@@ -26,12 +65,13 @@ const admin = createClient(url, key, {
 
 async function main() {
   const users = await db.user.findMany({
-    select: { id: true, email: true, nome: true, supabaseId: true },
+    select: { id: true, email: true, nome: true, supabaseId: true, role: true },
     orderBy: { createdAt: "asc" },
   });
   console.log(`Usuários Prisma: ${users.length}`);
 
   for (const u of users) {
+    const SENHA = u.role === "ADMIN" ? SENHA_ADMIN : SENHA_DEMO;
     try {
       let authId = u.supabaseId;
       if (!authId) {

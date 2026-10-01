@@ -94,17 +94,14 @@ export async function getSessao(): Promise<UsuarioSessao | null> {
       const supabase = await createSupabaseServerClient();
       const { data } = await supabase.auth.getUser();
       const authUser = data.user;
-      if (authUser?.email) {
-        let row =
-          (await db.user.findFirst({
-            where: { OR: [{ supabaseId: authUser.id }, { email: authUser.email.toLowerCase() }] },
-          })) ?? null;
-        if (row && !row.supabaseId) {
-          row = await db.user.update({
-            where: { id: row.id },
-            data: { supabaseId: authUser.id },
-          });
-        }
+      if (authUser?.id) {
+        // A5 (auditoria 2026-09): a sessão Supabase só resolve para o usuário
+        // JÁ vinculado por supabaseId. Antes, casava por e-mail e vinculava
+        // na hora — quem criasse no Auth (anon key, "Confirm email" desligado)
+        // uma conta com o e-mail de um usuário legado herdava essa conta.
+        // O vínculo de contas legadas agora só acontece no login, com prova
+        // da senha legada (garantirUsuarioPrismaDeAuth).
+        const row = await db.user.findUnique({ where: { supabaseId: authUser.id } });
         if (row) {
           const u = usuarioDeRow(row);
           if (u) return u;
@@ -161,6 +158,21 @@ export async function tokenSessaoAtual(): Promise<string | null> {
 }
 
 export async function exigirSessao(): Promise<UsuarioSessao> {
+  const s = await exigirSessaoPermitindoTrocaSenha();
+  bloquearSeTrocaSenhaPendente(s);
+  return s;
+}
+
+/* ------------------------------------------------------------------ */
+/* Troca obrigatória de senha — bloqueio NO SERVIDOR (auditoria C2)    */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Sessão válida SEM checar `precisaTrocarSenha`. Use APENAS na rota de troca
+ * de senha (/api/auth/senha); todas as demais passam por exigirSessao/
+ * exigirPapel, que recusam a conta enquanto a troca estiver pendente.
+ */
+export async function exigirSessaoPermitindoTrocaSenha(): Promise<UsuarioSessao> {
   const s = await getSessao();
   if (!s) {
     const err = new Error("Não autenticado") as Error & { status?: number };
@@ -168,6 +180,16 @@ export async function exigirSessao(): Promise<UsuarioSessao> {
     throw err;
   }
   return s;
+}
+
+/** 403 enquanto a conta (criada pela administração) não trocar a senha temporária. */
+export function bloquearSeTrocaSenhaPendente(s: UsuarioSessao): void {
+  if (!s.precisaTrocarSenha) return;
+  const err = new Error(
+    "Troca de senha obrigatória: defina uma nova senha antes de continuar.",
+  ) as Error & { status?: number };
+  err.status = 403;
+  throw err;
 }
 
 export async function exigirPapel(...papeis: UsuarioSessao["role"][]): Promise<UsuarioSessao> {
@@ -218,19 +240,46 @@ export async function garantirUsuarioPrismaDeAuth(opts: {
   email: string;
   nome: string;
   senhaHash?: string;
+  /**
+   * A5: senha (texto) que o usuário acabou de usar no login. Só com ela uma
+   * conta legada (mesmo e-mail, supabaseId nulo) é vinculada — e apenas se
+   * bater com o hash bcrypt legado.
+   */
+  senhaParaVincular?: string;
 }): Promise<{ id: string; nome: string; email: string; role: string; precisaTrocarSenha: boolean; status: string; supabaseId: string | null }> {
   const email = opts.email.trim().toLowerCase();
-  const existente = await db.user.findFirst({
-    where: { OR: [{ supabaseId: opts.supabaseId }, { email }] },
-  });
-  if (existente) {
-    if (!existente.supabaseId) {
-      return db.user.update({
-        where: { id: existente.id },
-        data: { supabaseId: opts.supabaseId },
+  const porId = await db.user.findUnique({ where: { supabaseId: opts.supabaseId } });
+  if (porId) return porId;
+
+  const porEmail = await db.user.findUnique({ where: { email } });
+  if (porEmail) {
+    // A5: antes vinculava (ou devolvia) a conta só pelo e-mail.
+    const podeVincular =
+      !porEmail.supabaseId &&
+      !!opts.senhaParaVincular &&
+      (await verificarSenha(opts.senhaParaVincular, porEmail.senhaHash));
+    if (!podeVincular) {
+      await registrarAudit(null, {
+        acao: "VINCULO_AUTH_RECUSADO",
+        categoria: "autenticacao",
+        severidade: "critical",
+        entidade: "usuario",
+        entidadeId: porEmail.id,
+        // Sem e-mail/PII em `detalhes`: a conta-alvo fica só em entidadeId.
+        detalhes: porEmail.supabaseId
+          ? "Vínculo recusado: conta já vinculada a outro Auth"
+          : "Vínculo recusado: sem prova da senha legada",
       });
+      const err = new Error(
+        "Não foi possível vincular esta conta. Entre em contato com o suporte.",
+      ) as Error & { status?: number };
+      err.status = 409;
+      throw err;
     }
-    return existente;
+    return db.user.update({
+      where: { id: porEmail.id },
+      data: { supabaseId: opts.supabaseId },
+    });
   }
   return db.user.create({
     data: {

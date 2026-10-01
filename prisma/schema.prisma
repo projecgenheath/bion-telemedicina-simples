@@ -32,7 +32,8 @@ model User {
   consultasComoMedico  Consulta[]     @relation("ConsultaMedico")
   documentosEmitidos   Documento[]    @relation("DocumentoMedico")
   documentosRecebidos  Documento[]    @relation("DocumentoPaciente")
-  arquivos             Arquivo[]
+  arquivos             Arquivo[]      @relation("ArquivoUsuario")
+  arquivosRecebidos    Arquivo[]      @relation("ArquivoPaciente")
   notificacoes         Notificacao[]
   avaliacoes           Avaliacao[]    @relation("AvaliacaoPaciente")
   avaliacoesRecebidas  Avaliacao[]    @relation("AvaliacaoMedico")
@@ -269,12 +270,21 @@ model Arquivo {
   tipo        String
   tamanhoKb   Int
   enviadoPor  String // paciente | medico
+  /// Quem ENVIOU o arquivo (paciente ou médico).
   usuarioId   String
-  usuario     User     @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  usuario     User     @relation("ArquivoUsuario", fields: [usuarioId], references: [id], onDelete: Cascade)
+  /// Paciente a quem o arquivo pertence/destina (A3). Upload de paciente = ele
+  /// mesmo; upload de médico = paciente com quem o médico tem consulta.
+  /// Nulo = legado sem destinatário identificável (só o remetente/admin veem).
+  /// Migração: supabase/migrations/20260930_arquivo_paciente_id.sql
+  pacienteId  String?
+  paciente    User?    @relation("ArquivoPaciente", fields: [pacienteId], references: [id], onDelete: SetNull)
   consulta    String   @default("")
   /// Path no bucket Supabase Storage (documentos), se houver upload real
   storagePath String?
   createdAt   DateTime @default(now())
+
+  @@index([pacienteId])
 }
 
 model Notificacao {

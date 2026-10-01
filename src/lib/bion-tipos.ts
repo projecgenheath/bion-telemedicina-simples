@@ -52,6 +52,8 @@ export type Arquivo = {
   consulta: string;
   url?: string;
   storagePath?: string | null;
+  /** A3: paciente destinatário (null = legado sem destinatário identificado). */
+  pacienteId?: string | null;
 };
 
 export type Documento = {
