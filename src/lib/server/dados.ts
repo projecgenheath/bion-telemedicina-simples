@@ -271,8 +271,9 @@ function mascararCpf(cpf: string): string {
 
 /**
  * Wire de paciente na listagem.
- * `mascarar: true` (médico) omite e-mail e data de nascimento e mascara CPF —
- * P2 minimização de PII.
+ * `mascarar: true` (médico) omite e-mail e mascara CPF — P2 minimização de PII.
+ * A data de nascimento vai para o médico: a lista dele já vem restrita aos
+ * pacientes vinculados (idsPacientesDoMedico), e o dado é clínico (idade exata).
  */
 export function pacienteWire(p: UserComPerfilPaciente, opts?: { mascarar?: boolean }) {
   const cpf = p.perfilPaciente?.cpf ?? "";
@@ -283,8 +284,8 @@ export function pacienteWire(p: UserComPerfilPaciente, opts?: { mascarar?: boole
     telefone: p.perfilPaciente?.telefone ?? "",
     cpf: opts?.mascarar ? mascararCpf(cpf) : cpf,
     idade: p.perfilPaciente ? idadeDoPerfil(p.perfilPaciente) : 0,
-    /** M4: "YYYY-MM-DD" (dia de calendário) ou null; null quando mascarado. */
-    dataNascimento: opts?.mascarar ? null : dataNascimentoParaIso(p.perfilPaciente?.dataNascimento),
+    /** M4: "YYYY-MM-DD" (dia de calendário) ou null. Também vai para o médico vinculado. */
+    dataNascimento: dataNascimentoParaIso(p.perfilPaciente?.dataNascimento),
     genero: p.perfilPaciente?.genero ?? "",
     convenio: p.perfilPaciente?.convenio ?? "Particular",
     status: p.status as "ativo" | "inativo",
