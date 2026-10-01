@@ -234,6 +234,49 @@ export async function criarReembolsoSeDevido(
   });
 }
 
+/* ---------- Falha técnica (detectada pelo sistema) ---------------- */
+// Regra do Alisson: falha técnica não tem multa e segue o mesmo caminho do
+// cancelamento pelo médico. Consulta paga vai para "aguardando_reagendamento"
+// (o paciente escolhe reembolso integral ou remarcar sem multa); sem
+// pagamento confirmado, vai para "cancelada". Nenhum reembolso é criado aqui:
+// ele nasce quando o paciente escolhe "Reembolso integral" no cartão.
+
+/**
+ * Aplica a falha técnica na consulta, dentro da transação de quem detectou.
+ * Idempotente: só age se a consulta ainda não está encerrada e ainda não tem
+ * evento falha_tecnica; senão devolve null e não grava nada.
+ */
+export async function aplicarFalhaTecnica(tx: Prisma.TransactionClient, consultaId: string) {
+  const consulta = await tx.consulta.findUnique({
+    where: { id: consultaId },
+    select: { id: true, status: true, pago: true, dataInicio: true },
+  });
+  if (!consulta) return null;
+  const jaTem = await tx.eventoConsulta.findFirst({
+    where: { consultaId, tipo: "falha_tecnica" },
+    select: { id: true },
+  });
+  if (jaTem) return null;
+  const novoStatus = consulta.pago ? "aguardando_reagendamento" : "cancelada";
+  // Atômico: se outra requisição encerrou a consulta no meio, não faz nada.
+  const { count } = await tx.consulta.updateMany({
+    where: { id: consultaId, status: { notIn: ["cancelada", "concluida", "aguardando_reagendamento"] } },
+    data: { status: novoStatus },
+  });
+  if (count === 0) return null;
+  const evento = await registrarEvento(tx, {
+    consultaId,
+    tipo: "falha_tecnica",
+    por: "sistema",
+    atorId: null,
+    dataAnterior: consulta.dataInicio,
+    motivo: "falha_tecnica",
+    multaCentavos: 0,
+  });
+  await cancelarReservasPendentes(tx, consultaId);
+  return { status: novoStatus, evento };
+}
+
 /* ---------- Reembolso manual (falta do paciente) ------------------- */
 // Regras do Alisson (01/10): na falta não há reembolso automático e o médico
 // recebe; o paciente pode pedir em até REEMBOLSO_MANUAL_PRAZO_DIAS com
