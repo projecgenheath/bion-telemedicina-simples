@@ -127,8 +127,31 @@ export function prazoReembolsoManual(dataInicio: Date): Date {
   return new Date(dataInicio.getTime() + REEMBOLSO_MANUAL_PRAZO_DIAS * 24 * 3600_000);
 }
 
-/** Includes para o wire saber se houve falta e qual o pedido manual de reembolso. */
-export const includeFaltaWire = { where: { tipo: "falta_paciente" }, select: { id: true }, take: 1 } as const;
+/**
+ * Includes para o wire: se houve falta do paciente e, para consultas em
+ * aguardando_reagendamento, o motivo (evento mais recente: médico cancelou,
+ * falha técnica ou falta do médico).
+ */
+export const includeFaltaWire = {
+  where: { tipo: { in: ["falta_paciente", "falha_tecnica", "cancelada"] } },
+  select: { tipo: true, motivo: true },
+  orderBy: { em: "desc" },
+  take: 20,
+} satisfies Prisma.EventoConsultaFindManyArgs;
+
+export type MotivoReagendamento = "medico_cancelou" | "falha_tecnica" | "falta_medico";
+
+/** Por que a consulta está em aguardando_reagendamento (eventos em ordem decrescente). */
+export function motivoReagendamentoDe(
+  status: string,
+  eventos: { tipo: string; motivo: string }[],
+): MotivoReagendamento | null {
+  if (status !== "aguardando_reagendamento") return null;
+  const ev = eventos.find((e) => e.tipo === "falha_tecnica" || e.tipo === "cancelada");
+  if (!ev) return null;
+  if (ev.tipo === "falha_tecnica") return ev.motivo === "falta_medico" ? "falta_medico" : "falha_tecnica";
+  return ev.motivo === "agenda_cancelada" ? "medico_cancelou" : null;
+}
 export const includePagamentoReembolsoWire = {
   select: {
     reembolsos: {
@@ -141,7 +164,7 @@ export const includePagamentoReembolsoWire = {
 } as const;
 
 type ExtrasReembolsoWire = {
-  eventos?: { id: string }[];
+  eventos?: { tipo: string; motivo: string }[];
   pagamento?: { reembolsos?: { status: string; respostaAdmin: string | null }[] } | null;
 };
 
@@ -159,7 +182,7 @@ export function includeReservaVigente(agora: Date = new Date()) {
 }
 
 export function consultaWire(c: ConsultaComNomes & { remarcacoes?: ReservaRemarcacaoRow[] } & ExtrasReembolsoWire) {
-  const falta = Boolean(c.eventos?.length);
+  const falta = Boolean(c.eventos?.some((e) => e.tipo === "falta_paciente"));
   const pedido = c.pagamento?.reembolsos?.[0];
   // Remarcação com multa aguardando pagamento: a data que vale continua sendo
   // dataInicio; novaData fica "reservada" até o pagamento ser aprovado.
@@ -191,6 +214,8 @@ export function consultaWire(c: ConsultaComNomes & { remarcacoes?: ReservaRemarc
     falta,
     reembolsoManual: pedido ? { status: pedido.status, respostaAdmin: pedido.respostaAdmin } : null,
     podePedirAte: falta ? prazoReembolsoManual(c.dataInicio).toISOString() : null,
+    // Só em aguardando_reagendamento: por que o paciente precisa remarcar ou pedir reembolso.
+    motivoReagendamento: motivoReagendamentoDe(c.status, c.eventos ?? []),
   };
 }
 

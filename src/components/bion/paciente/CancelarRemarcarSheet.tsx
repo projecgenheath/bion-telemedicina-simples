@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { useBion } from "@/lib/bion-store";
 import { fmtHora, type Consulta, type Medico } from "@/lib/bion-tipos";
 import { agendaLivreDoMedico } from "./agenda-medico";
+import { fraseMotivoReagendamento } from "./motivo-reagendamento";
 import { fmtCentavos, usePreviaCancelamento, type PreviaAcao, type PreviaCancelamento } from "./usePreviaCancelamento";
 import {
   STATUS_TERMINAIS,
@@ -34,7 +35,7 @@ import {
  * status (polling ~3 s) até aprovada/expirada/falhou/cancelada. Sem
  * `onPagarMulta`, o botão fica desabilitado.
  *
- * "reembolso": consulta em aguardando_reagendamento (médico cancelou o dia).
+ * "reembolso": consulta em aguardando_reagendamento (médico cancelou, falha técnica ou falta do médico).
  * O servidor trata o cancelamento do paciente nesse status como isento de
  * multa e com reembolso integral automático (ação "cancelar").
  */
@@ -205,7 +206,7 @@ export function CancelarRemarcarSheet({ consulta, acao, medico, consultas, onFec
           <>
             <h2 id="titulo-sheet-consulta" className="text-lg font-bold">Reembolso integral</h2>
             <p className="text-sm text-white/60 mt-1">
-              {consulta.especialidade} com {consulta.medico}. O médico cancelou este horário — a consulta será encerrada e o valor pago volta para você, sem multa.
+              {consulta.especialidade} com {consulta.medico}. {fraseMotivoReagendamento(consulta.motivoReagendamento)}. A consulta será encerrada e o valor pago volta para você, sem multa.
             </p>
           </>
         ) : (
@@ -229,7 +230,14 @@ export function CancelarRemarcarSheet({ consulta, acao, medico, consultas, onFec
           />
         ) : (
         <>
-        <BlocoPrevia acao={acao} previa={previa} carregando={carregando} erro={erro} onTentarDeNovo={recarregar} />
+        <BlocoPrevia
+          acao={acao}
+          previa={previa}
+          carregando={carregando}
+          erro={erro}
+          onTentarDeNovo={recarregar}
+          motivoReagendamento={consulta.motivoReagendamento}
+        />
 
         {acao === "remarcar" ? (
           permitido ? (
@@ -491,12 +499,14 @@ function BlocoPrevia({
   carregando,
   erro,
   onTentarDeNovo,
+  motivoReagendamento,
 }: {
   acao: AcaoSheet;
   previa: PreviaCancelamento | null;
   carregando: boolean;
   erro: string | null;
   onTentarDeNovo: () => void;
+  motivoReagendamento?: Consulta["motivoReagendamento"];
 }) {
   if (carregando && !previa) {
     return (
@@ -535,7 +545,7 @@ function BlocoPrevia({
   if (acao === "reembolso" || p.isencao === "aguardando_reagendamento") {
     return (
       <div className="mt-4 rounded-2xl border border-emerald-400/25 bg-emerald-500/10 p-4 text-sm">
-        <p className="font-bold text-emerald-100">Sem multa — o médico cancelou este horário.</p>
+        <p className="font-bold text-emerald-100">Sem multa. {fraseMotivoReagendamento(motivoReagendamento)}.</p>
         {acao !== "remarcar" && p.pago ? (
           <p className="text-white/75 mt-1">
             Reembolso integral: <strong className="text-white">{fmtCentavos(p.reembolsoCentavos)}</strong>. O reembolso é automático, sem necessidade de aprovação.
