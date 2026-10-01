@@ -423,7 +423,8 @@ type Store = {
   cancelarConsulta: (id: string, motivo: string) => Promise<boolean>;
   remarcarConsulta: (id: string, data: string, hora: string) => Promise<boolean>;
   concluirConsulta: (id: string, resumo?: string) => void;
-  adicionarConsulta: (c: Omit<Consulta, "id" | "status" | "ts"> & { status?: "pendente_anamnese" }) => void;
+  /** Resolve true quando o servidor criou a consulta; false em erro (o toast já foi mostrado). */
+  adicionarConsulta: (c: Omit<Consulta, "id" | "status" | "ts"> & { status?: "pendente_anamnese" }) => Promise<boolean>;
   concluirAnamnese: (consultaId: string) => Promise<boolean>;
   pularAnamnese: (consultaId: string) => Promise<boolean>;
   registrarDocAnamnese: (consultaId: string, doc: { nome: string; tipo: string; exameImportado: boolean; resumo?: string }) => void;
@@ -458,7 +459,8 @@ type Store = {
   anonimizarPaciente: (pacienteId: string) => Promise<boolean>;
   excluirDadosPaciente: (pacienteId: string) => Promise<boolean>;
   pacientes: PacienteRegistro[];
-  adicionarPaciente: (p: Omit<PacienteRegistro, "id" | "desde">) => void;
+  /** Resolve true quando a conta foi criada; false em erro (o toast já foi mostrado). */
+  adicionarPaciente: (p: Omit<PacienteRegistro, "id" | "desde">) => Promise<boolean>;
   atualizarPaciente: (id: string, dados: Partial<PacienteRegistro>) => void;
   excluirPaciente: (id: string) => void;
   adicionarMedico: (m: Omit<Medico, "id" | "avaliacao" | "numAvaliacoes">) => void;
@@ -1160,13 +1162,13 @@ export function BionProvider({ children }: { children: ReactNode }) {
   );
 
   const adicionarConsulta = useCallback(
-    async (c: Omit<Consulta, "id" | "status" | "ts">) => {
+    async (c: Omit<Consulta, "id" | "status" | "ts">): Promise<boolean> => {
       // Médico identificado por ID quando o chamador o tem (nunca por nome —
       // homônimos existem); a busca por nome fica só como último recurso.
       const medicoId = c.medicoId ?? medicosRef.current.find((m) => m.nome === c.medico)?.id;
       if (!medicoId) {
         toast.error("Médico não encontrado para o agendamento.");
-        return;
+        return false;
       }
       // Status e pagamento são decididos PELO SERVIDOR: o pagamento confirma
       // a consulta (gateway simulado no ato; webhook real depois) e a triagem
@@ -1182,7 +1184,9 @@ export function BionProvider({ children }: { children: ReactNode }) {
           valor: c.valor,
         }),
       });
+      if (!d) return false;
       aplicarDelta(d);
+      return true;
     },
     [aplicarDelta],
   );
@@ -1425,18 +1429,19 @@ export function BionProvider({ children }: { children: ReactNode }) {
   );
 
   const adicionarPaciente = useCallback(
-    (p: Omit<PacienteRegistro, "id" | "desde">) => {
-      void criarContaComCredenciais("/api/pacientes", {
+    (p: Omit<PacienteRegistro, "id" | "desde">) =>
+      criarContaComCredenciais("/api/pacientes", {
         nome: p.nome,
         email: p.email,
         telefone: p.telefone,
         cpf: p.cpf,
         idade: p.idade,
+        // "YYYY-MM-DD" ou null; o servidor valida e grava como data pura.
+        dataNascimento: p.dataNascimento ?? null,
         genero: p.genero,
         convenio: p.convenio,
         status: p.status,
-      });
-    },
+      }),
     [criarContaComCredenciais],
   );
 
