@@ -119,6 +119,7 @@ export async function POST(req: NextRequest) {
           tamanhoKb: Math.max(1, Math.round(arquivo.size / 1024)),
           enviadoPor: "paciente",
           usuarioId: usuario.id,
+          pacienteId: usuario.id, // A3: destinatário = o próprio paciente
           consulta: "BION IA",
         },
       });
@@ -217,6 +218,7 @@ export async function POST(req: NextRequest) {
         tamanhoKb: Math.max(1, Math.round(arquivo.size / 1024)),
         enviadoPor: "paciente",
         usuarioId: usuario.id,
+        pacienteId: usuario.id, // A3: destinatário = o próprio paciente
         consulta: "BION IA",
       },
     });

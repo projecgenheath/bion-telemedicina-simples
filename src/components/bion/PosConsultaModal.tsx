@@ -83,7 +83,7 @@ export function PosConsultaModal({
           </h2>
           <p className="text-sm text-muted-foreground max-w-md mx-auto">
             Atendimento com <strong>{medico}</strong> ({especialidade}) concluído. Seus documentos
-            digitais assinados já estão prontos.
+            digitais já estão prontos.
           </p>
         </div>
 
@@ -115,7 +115,7 @@ export function PosConsultaModal({
                     <div className="min-w-0">
                       <div className="font-bold text-foreground truncate">{d.titulo}</div>
                       <div className="text-muted-foreground text-xs truncate">
-                        Assinado digitalmente • {d.data}
+                        Emitido • {d.data}
                       </div>
                     </div>
                   </div>
