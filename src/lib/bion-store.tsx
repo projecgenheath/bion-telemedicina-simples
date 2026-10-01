@@ -124,6 +124,7 @@ type EstadoFresco = {
     especialidade: string; dataInicio: string; status: string;
     motivoConsulta?: string; motivoCancelamento?: string; resumoMedico?: string;
     valor: number; pago: boolean; remarcada?: boolean;
+    remarcacaoPendente?: Consulta["remarcacaoPendente"];
   }[];
   documentos: {
     id: string; tipo: string; titulo: string; conteudo: string; medico: string; paciente: string;
@@ -234,6 +235,7 @@ const mapConsulta = (c: EstadoFresco["consultas"][number]): Consulta => ({
   valor: fmtValorBRL(c.valor),
   pago: c.pago,
   dataISO: c.dataInicio,
+  remarcacaoPendente: c.remarcacaoPendente ?? null,
 });
 
 const mapDocumento = (x: EstadoFresco["documentos"][number]): Documento => ({
@@ -1138,6 +1140,7 @@ export function BionProvider({ children }: { children: ReactNode }) {
     [mutarConsultaDelta],
   );
 
+  // Com multa (≤24 h) o servidor responde 402 { usar: "remarcacao" }: `api` mostra o toast e devolve false.
   const remarcarConsulta = useCallback(
     (id: string, data: string, hora: string) => mutarConsultaDelta(id, { acao: "remarcar", data, hora }),
     [mutarConsultaDelta],

@@ -23,12 +23,14 @@ import {
   Undo2,
 } from "lucide-react";
 import { useBion } from "@/lib/bion-store";
-import { fmtTicketData, type Consulta } from "@/lib/bion-tipos";
+import { fmtCurta, fmtHora, fmtTicketData, type Consulta } from "@/lib/bion-tipos";
+import { toast } from "sonner";
 import { calcularImc, lerAlturaCm, lerPesoKg } from "@/lib/medidas-paciente";
 import { MESES_AGENDA } from "./constantes";
 import { acharMedicoDaConsulta } from "./agenda-medico";
 import { CancelarRemarcarSheet, type AcaoSheet } from "./CancelarRemarcarSheet";
 import { fmtCentavos, rotuloReembolso, usePreviaCancelamento } from "./usePreviaCancelamento";
+import { desistirRemarcacao, iniciarRemarcacaoComMulta, useRecarregarEstado } from "./useRemarcacaoComMulta";
 import { GraficoLinha, type PontoGrafico } from "./GraficoLinha";
 import { DetalheMedicao, type Detalhe } from "./DetalheMedicao";
 import dynamic from "next/dynamic";
@@ -136,6 +138,18 @@ export function PacienteApp() {
       consultas
         .filter((c) => c.paciente === sessao.nome && c.status === "aguardando_reagendamento")
         .sort((a, b) => a.ts - b.ts),
+    [consultas, sessao.nome],
+  );
+
+  /** Remarcação com multa reservada (nova data aguardando pagamento; a data original segue valendo). */
+  const comRemarcacaoPendente = useMemo(
+    () =>
+      consultas.filter(
+        (c) =>
+          c.paciente === sessao.nome &&
+          c.remarcacaoPendente?.status === "pendente" &&
+          new Date(c.remarcacaoPendente.expiraEm).getTime() > Date.now(),
+      ),
     [consultas, sessao.nome],
   );
 
@@ -307,6 +321,15 @@ export function PacienteApp() {
                 consulta={c}
                 onRemarcar={() => setModalConsulta({ id: c.id, acao: "remarcar" })}
                 onReembolso={() => setModalConsulta({ id: c.id, acao: "reembolso" })}
+              />
+            ))}
+
+            {/* Cards: nova data reservada aguardando pagamento da multa */}
+            {comRemarcacaoPendente.map((c) => (
+              <CardRemarcacaoPendente
+                key={c.id}
+                consulta={c}
+                onContinuar={() => setModalConsulta({ id: c.id, acao: "remarcar" })}
               />
             ))}
 
@@ -810,6 +833,7 @@ export function PacienteApp() {
           medico={medicoModal}
           consultas={consultas}
           onFechar={() => setModalConsulta(null)}
+          onPagarMulta={iniciarRemarcacaoComMulta}
         />
       ) : null}
     </div>
@@ -894,6 +918,69 @@ function CardReembolso({ consulta }: { consulta: Consulta }) {
         {r.multaCentavos > 0 ? ` (multa de ${fmtCentavos(r.multaCentavos)} descontada)` : ""}
         {r.processadoEm ? ` · concluído em ${fmtTicketData(r.processadoEm)}` : ` · solicitado em ${fmtTicketData(r.criadoEm)}`}
       </p>
+    </div>
+  );
+}
+
+function CardRemarcacaoPendente({ consulta, onContinuar }: { consulta: Consulta; onContinuar: () => void }) {
+  const recarregarEstado = useRecarregarEstado();
+  const [confirmando, setConfirmando] = useState(false);
+  const [enviando, setEnviando] = useState(false);
+  const r = consulta.remarcacaoPendente;
+  if (!r) return null;
+  const novaData = `${fmtCurta(r.novaData)} às ${fmtHora(r.novaData)}`;
+
+  const desistir = async () => {
+    if (!confirmando) {
+      setConfirmando(true);
+      return;
+    }
+    setEnviando(true);
+    const res = await desistirRemarcacao(consulta.id);
+    if (res.ok) {
+      await recarregarEstado();
+      toast.success(`Remarcação desfeita — a consulta continua em ${consulta.data} às ${consulta.hora}`);
+    } else {
+      toast.error(res.erro ?? "Não foi possível desistir da remarcação.");
+    }
+    setEnviando(false);
+    setConfirmando(false);
+  };
+
+  return (
+    <div className="bp-glass p-5 w-full mb-3 border border-sky-500/40" role="group" aria-label={`Remarcação de ${consulta.especialidade} aguardando pagamento da multa`}>
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-xs font-bold uppercase tracking-wider text-bion-ink/50 dark:text-white/50">Remarcação</span>
+        <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-sky-500/15 text-sky-800 dark:text-sky-200">
+          Aguardando pagamento
+        </span>
+      </div>
+      <div className="text-xl font-bold">{consulta.especialidade}</div>
+      <div className="text-sm opacity-70">com {consulta.medico}</div>
+      <p className="text-sm mt-3 leading-relaxed">
+        Nova data <strong className="font-bold">{novaData}</strong> reservada, aguardando pagamento da multa de{" "}
+        <strong className="font-bold">{fmtCentavos(r.multaCentavos)}</strong> até {fmtHora(r.expiraEm)}.
+      </p>
+      <p className="text-xs opacity-60 mt-1 inline-flex items-center gap-1.5">
+        <CalendarClock className="w-3.5 h-3.5" /> Vale a data original até o pagamento: {consulta.data} · {consulta.hora}
+      </p>
+      <div className="mt-4 flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={onContinuar}
+          className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-bold bg-bion-ink text-white dark:bg-white dark:text-bion-ink"
+        >
+          <RefreshCw className="w-3.5 h-3.5" /> Continuar pagamento
+        </button>
+        <button
+          type="button"
+          onClick={() => void desistir()}
+          disabled={enviando}
+          className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-bold text-destructive bg-destructive/10 disabled:opacity-40"
+        >
+          <X className="w-3.5 h-3.5" /> {confirmando ? "Confirmar desistência" : "Desistir"}
+        </button>
+      </div>
     </div>
   );
 }

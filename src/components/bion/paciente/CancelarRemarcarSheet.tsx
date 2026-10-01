@@ -1,12 +1,23 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { AlertTriangle, Loader2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { AlertTriangle, CreditCard, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useBion } from "@/lib/bion-store";
-import type { Consulta, Medico } from "@/lib/bion-tipos";
+import { fmtHora, type Consulta, type Medico } from "@/lib/bion-tipos";
 import { agendaLivreDoMedico } from "./agenda-medico";
 import { fmtCentavos, usePreviaCancelamento, type PreviaAcao, type PreviaCancelamento } from "./usePreviaCancelamento";
+import {
+  STATUS_TERMINAIS,
+  desistirRemarcacao,
+  useRecarregarEstado,
+  useRemarcacaoComMulta,
+  type CobrancaMulta,
+  type MetodoMulta,
+  type PedidoPagamentoMulta,
+  type RemarcacaoWire,
+  type RespostaPagarMulta,
+} from "./useRemarcacaoComMulta";
 
 /**
  * Folha (bottom sheet) de cancelar / remarcar / reembolso integral.
@@ -18,8 +29,10 @@ import { fmtCentavos, usePreviaCancelamento, type PreviaAcao, type PreviaCancela
  * Remarcar com multa (≤24 h): decisão do Alisson — o paciente paga a multa
  * (50%) pelo app e a nova data só é confirmada após o pagamento aprovado; sem
  * pagamento, a consulta fica na data original. Por isso, com multa, esta tela
- * NUNCA chama `remarcarConsulta` (o servidor atual remarcaria sem cobrar): usa
- * `onPagarMulta`; sem ele, o botão fica desabilitado ("em breve").
+ * NUNCA chama `remarcarConsulta` (o PATCH responde 402): usa `onPagarMulta`
+ * (POST /api/consultas/[id]/remarcacao), mostra a cobrança e acompanha o
+ * status (polling ~3 s) até aprovada/expirada/falhou/cancelada. Sem
+ * `onPagarMulta`, o botão fica desabilitado.
  *
  * "reembolso": consulta em aguardando_reagendamento (médico cancelou o dia).
  * O servidor trata o cancelamento do paciente nesse status como isento de
@@ -34,21 +47,12 @@ type Props = {
   consultas: Consulta[];
   onFechar: () => void;
   /**
-   * Ponto ÚNICO de integração do pagamento da multa de remarcação (≤24 h).
-   * TODO(PR de pagamentos do Admin): ligar aqui o endpoint/gateway da multa —
-   * cobrar `multaCentavos`, e o servidor só remarca para `data`/`hora` depois
-   * que o pagamento for aprovado. Devolve true quando a cobrança foi criada.
-   * Enquanto não for passado, a remarcação com multa fica desabilitada.
+   * Ponto ÚNICO de integração do pagamento da multa de remarcação (≤24 h):
+   * reserva `data`/`hora` e cria a cobrança (ver iniciarRemarcacaoComMulta).
+   * O servidor só remarca depois que o pagamento é aprovado.
+   * Sem esta prop, a remarcação com multa fica desabilitada.
    */
-  onPagarMulta?: (pedido: PedidoPagamentoMulta) => Promise<boolean>;
-};
-
-export type PedidoPagamentoMulta = {
-  consultaId: string;
-  /** Nova data/hora escolhida (dia YYYY-MM-DD e HH:MM no fuso de Brasília). */
-  data: string;
-  hora: string;
-  multaCentavos: number;
+  onPagarMulta?: (pedido: PedidoPagamentoMulta) => Promise<RespostaPagarMulta>;
 };
 
 export function CancelarRemarcarSheet({ consulta, acao, medico, consultas, onFechar, onPagarMulta }: Props) {
@@ -58,6 +62,28 @@ export function CancelarRemarcarSheet({ consulta, acao, medico, consultas, onFec
   const [novaData, setNovaData] = useState("");
   const [novaHora, setNovaHora] = useState("09:00");
   const [enviando, setEnviando] = useState(false);
+  const [metodo, setMetodo] = useState<MetodoMulta | null>(null);
+  const recarregarEstado = useRecarregarEstado();
+  const { remarcacao, cobranca, adotar, limpar } = useRemarcacaoComMulta(
+    consulta.id,
+    acao === "remarcar" && !!consulta.remarcacaoPendente,
+  );
+
+  // Desfecho da remarcação com multa: aprovada → atualiza o app e fecha;
+  // demais status terminais → atualiza o app (a reserva some) e a folha explica.
+  const desfechoRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!remarcacao || !STATUS_TERMINAIS.includes(remarcacao.status)) return;
+    const chave = `${remarcacao.id}:${remarcacao.status}`;
+    if (desfechoRef.current === chave) return;
+    desfechoRef.current = chave;
+    if (remarcacao.status === "aprovada") {
+      toast.success(`Multa paga — consulta remarcada para ${remarcacao.novaDataTexto}`);
+      void recarregarEstado().then(() => onFechar());
+    } else {
+      void recarregarEstado();
+    }
+  }, [remarcacao, recarregarEstado, onFechar]);
 
   const aguardando = consulta.status === "aguardando_reagendamento";
 
@@ -104,26 +130,56 @@ export function CancelarRemarcarSheet({ consulta, acao, medico, consultas, onFec
     }
     if (exigePagamento) {
       // Nunca remarca direto com multa: a data só muda após o pagamento aprovado.
-      if (!onPagarMulta) return;
+      if (!onPagarMulta || !metodo) return;
       setEnviando(true);
-      const criado = await onPagarMulta({
-        consultaId: consulta.id,
-        data: dataEscolhida,
-        hora: horaEscolhida,
-        multaCentavos: multaRemarcar,
-      });
+      const r = await onPagarMulta({ consultaId: consulta.id, data: dataEscolhida, hora: horaEscolhida, metodo });
       setEnviando(false);
-      if (!criado) return;
-      toast.success("Pagamento iniciado — a nova data será confirmada após a aprovação");
-      onFechar();
+      if (r.tipo === "criada") {
+        adotar(r.remarcacao, r.cobranca);
+        if (r.remarcacao.status === "pendente") void recarregarEstado(); // card da reserva na home
+      } else if (r.tipo === "ja_pendente") {
+        toast.message("Você já tem uma remarcação aguardando pagamento.");
+        adotar(r.remarcacao, null);
+      } else if (r.tipo === "sem_multa") {
+        // O servidor recalculou: não há multa — segue a remarcação normal.
+        await remarcarNormal();
+      } else {
+        toast.error(r.erro);
+        recarregar();
+      }
       return;
     }
+    await remarcarNormal();
+  };
+
+  const remarcarNormal = async () => {
     setEnviando(true);
     const aceito = await remarcarConsulta(consulta.id, dataEscolhida, horaEscolhida);
     setEnviando(false);
-    if (!aceito) return;
+    if (!aceito) {
+      // Ex.: 402 (a multa passou a valer): a prévia atualizada mostra o pagamento.
+      recarregar();
+      return;
+    }
     toast.success("Consulta remarcada");
     onFechar();
+  };
+
+  const desistir = async () => {
+    setEnviando(true);
+    const r = await desistirRemarcacao(consulta.id);
+    setEnviando(false);
+    if (!r.ok) {
+      toast.error(r.erro ?? "Não foi possível desistir da remarcação.");
+      return;
+    }
+    if (remarcacao) adotar({ ...remarcacao, status: "cancelada" }, cobranca);
+  };
+
+  const tentarOutroHorario = () => {
+    limpar();
+    setMetodo(null);
+    recarregar();
   };
 
   const fechar = () => {
@@ -161,6 +217,18 @@ export function CancelarRemarcarSheet({ consulta, acao, medico, consultas, onFec
           </>
         )}
 
+        {acao === "remarcar" && remarcacao ? (
+          <PainelPagamentoMulta
+            consulta={consulta}
+            remarcacao={remarcacao}
+            cobranca={cobranca}
+            enviando={enviando}
+            onDesistir={() => void desistir()}
+            onOutroHorario={tentarOutroHorario}
+            onFechar={fechar}
+          />
+        ) : (
+        <>
         <BlocoPrevia acao={acao} previa={previa} carregando={carregando} erro={erro} onTentarDeNovo={recarregar} />
 
         {acao === "remarcar" ? (
@@ -203,6 +271,31 @@ export function CancelarRemarcarSheet({ consulta, acao, medico, consultas, onFec
                     </button>
                   ))}
                 </div>
+                {exigePagamento && onPagarMulta ? (
+                  <>
+                    <div className="text-xs font-bold mt-4 mb-2 text-white/80 inline-flex items-center gap-1.5">
+                      <CreditCard className="w-3.5 h-3.5" /> Forma de pagamento da multa
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      {([
+                        { id: "pix", nome: "Pix" },
+                        { id: "cartao", nome: "Cartão" },
+                      ] as const).map((m) => (
+                        <button
+                          key={m.id}
+                          type="button"
+                          onClick={() => setMetodo(m.id)}
+                          aria-pressed={metodo === m.id}
+                          className={`rounded-2xl border px-4 py-3 text-sm font-semibold transition ${
+                            metodo === m.id ? "border-sky-400 bg-sky-400/15" : "border-white/10 bg-zinc-900"
+                          }`}
+                        >
+                          {m.nome}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                ) : null}
               </>
             )
           ) : null
@@ -230,7 +323,12 @@ export function CancelarRemarcarSheet({ consulta, acao, medico, consultas, onFec
             <button
               type="button"
               disabled={
-                !prontoParaConfirmar || pagamentoIndisponivel || !dataEscolhida || !horaEscolhida || agendaLivre.length === 0
+                !prontoParaConfirmar ||
+                pagamentoIndisponivel ||
+                (exigePagamento && !metodo) ||
+                !dataEscolhida ||
+                !horaEscolhida ||
+                agendaLivre.length === 0
               }
               onClick={() => void confirmarRemarcacao()}
               className="flex-1 py-3 rounded-xl bg-sky-500 text-zinc-950 text-sm font-bold disabled:opacity-40 inline-flex items-center justify-center gap-2"
@@ -260,8 +358,128 @@ export function CancelarRemarcarSheet({ consulta, acao, medico, consultas, onFec
             </button>
           )}
         </div>
+        </>
+        )}
       </div>
     </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+
+const ROTULO_METODO: Record<string, string> = { pix: "Pix", cartao: "Cartão" };
+
+/** Cobrança da multa + acompanhamento do status da reserva da nova data. */
+function PainelPagamentoMulta({
+  consulta,
+  remarcacao: r,
+  cobranca,
+  enviando,
+  onDesistir,
+  onOutroHorario,
+  onFechar,
+}: {
+  consulta: Consulta;
+  remarcacao: RemarcacaoWire;
+  cobranca: CobrancaMulta | null;
+  enviando: boolean;
+  onDesistir: () => void;
+  onOutroHorario: () => void;
+  onFechar: () => void;
+}) {
+  const dataOriginal = `${consulta.data} às ${consulta.hora}`;
+  const metodo = ROTULO_METODO[cobranca?.metodo ?? r.metodo] ?? r.metodo;
+  const valor = fmtCentavos(cobranca?.valorCentavos ?? r.multaCentavos);
+
+  if (r.status === "pendente") {
+    return (
+      <>
+        <div className="mt-4 rounded-2xl border border-sky-400/30 bg-sky-500/10 p-4 text-sm" role="status" aria-live="polite">
+          <p className="font-bold text-sky-100 inline-flex items-center gap-2">
+            <Loader2 className="w-4 h-4 animate-spin" /> Aguardando o pagamento da multa
+          </p>
+          <ul className="mt-3 space-y-1.5 text-white/80">
+            <li>
+              Nova data reservada: <strong className="text-white">{r.novaDataTexto}</strong>
+            </li>
+            <li>
+              Multa: <strong className="text-white">{valor}</strong> · {metodo}
+            </li>
+            <li>Reserva válida até {fmtHora(r.expiraEm)} (horário de Brasília)</li>
+          </ul>
+          {cobranca?.via === "pendente" ? (
+            <p className="text-xs text-amber-200 mt-3">
+              O pagamento online ainda não está disponível neste ambiente. Se a multa não for paga até {fmtHora(r.expiraEm)}, a reserva expira sozinha.
+            </p>
+          ) : (
+            <p className="text-xs text-white/60 mt-3">
+              Assim que o pagamento for aprovado, a nova data é confirmada automaticamente.
+            </p>
+          )}
+          <p className="text-xs text-white/60 mt-1">
+            Até lá, sua consulta continua em <strong className="text-white/85">{dataOriginal}</strong>.
+          </p>
+        </div>
+        <div className="flex gap-2 mt-5">
+          <button
+            type="button"
+            onClick={onDesistir}
+            disabled={enviando}
+            className="flex-1 py-3 rounded-xl border border-red-400/40 text-red-200 text-sm font-semibold disabled:opacity-40 inline-flex items-center justify-center gap-2"
+          >
+            {enviando ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+            Desistir da remarcação
+          </button>
+          <button
+            type="button"
+            onClick={onFechar}
+            disabled={enviando}
+            className="flex-1 py-3 rounded-xl border border-white/15 text-sm font-semibold disabled:opacity-40"
+          >
+            Fechar
+          </button>
+        </div>
+        <p className="text-xs text-white/45 mt-2">Ao fechar, a reserva continua; você pode retomar pela tela inicial.</p>
+      </>
+    );
+  }
+
+  if (r.status === "aprovada") {
+    return (
+      <div className="mt-4 rounded-2xl border border-emerald-400/25 bg-emerald-500/10 p-4 text-sm" role="status">
+        <p className="font-bold text-emerald-100">Multa paga — consulta remarcada para {r.novaDataTexto}.</p>
+      </div>
+    );
+  }
+
+  const motivo =
+    r.status === "expirada"
+      ? "O prazo para pagar a multa terminou e a reserva da nova data expirou."
+      : r.status === "falhou"
+        ? "O pagamento da multa não foi aprovado."
+        : r.status === "cancelada"
+          ? "Você desistiu da remarcação e o horário reservado foi liberado."
+          : "A remarcação não foi concluída.";
+  return (
+    <>
+      <div className="mt-4 rounded-2xl border border-amber-400/30 bg-amber-500/10 p-4 text-sm" role="alert">
+        <p className="font-bold text-amber-100">{motivo}</p>
+        <p className="text-white/80 mt-1">
+          Sua consulta continua na data original: <strong className="text-white">{dataOriginal}</strong>.
+        </p>
+        {r.status === "expirada" ? (
+          <p className="text-xs text-white/55 mt-2">Se o pagamento for concluído depois do prazo, a multa é devolvida automaticamente.</p>
+        ) : null}
+      </div>
+      <div className="flex gap-2 mt-5">
+        <button type="button" onClick={onFechar} className="flex-1 py-3 rounded-xl border border-white/15 text-sm font-semibold">
+          Fechar
+        </button>
+        <button type="button" onClick={onOutroHorario} className="flex-1 py-3 rounded-xl bg-sky-500 text-zinc-950 text-sm font-bold">
+          Escolher outro horário
+        </button>
+      </div>
+    </>
   );
 }
 
