@@ -6,6 +6,7 @@ import type { Prisma } from "@prisma/client";
 import type { UsuarioSessao } from "./auth";
 import { whereArquivosVisiveis } from "./arquivos-acesso";
 import { alturaCanonica, pesoCanonico } from "@/lib/medidas-paciente";
+import { dataNascimentoParaIso, idadeDeNascimento } from "@/lib/idade";
 
 /* ------------------------------------------------------------------ */
 /* Utilitários de data (rótulos do cliente: "Hoje", "Amanhã", "12 Dez") */
@@ -271,7 +272,7 @@ export function pacienteWire(p: UserComPerfilPaciente, opts?: { mascarar?: boole
     email: opts?.mascarar ? "" : p.email,
     telefone: p.perfilPaciente?.telefone ?? "",
     cpf: opts?.mascarar ? mascararCpf(cpf) : cpf,
-    idade: p.perfilPaciente?.idade ?? 0,
+    idade: p.perfilPaciente ? idadeDoPerfil(p.perfilPaciente) : 0,
     genero: p.perfilPaciente?.genero ?? "",
     convenio: p.perfilPaciente?.convenio ?? "Particular",
     status: p.status as "ativo" | "inativo",
@@ -315,10 +316,18 @@ export type PerfilPacienteComUser = Prisma.PerfilPacienteGetPayload<{
   include: { user: { select: { nome: true, email: true } } };
 }>;
 
+/** M4: idade calculada pela data de nascimento (America/Sao_Paulo); sem data, a idade legada. */
+function idadeDoPerfil(p: { idade: number; dataNascimento: Date | null }): number {
+  const iso = dataNascimentoParaIso(p.dataNascimento);
+  return (iso ? idadeDeNascimento(iso) : null) ?? p.idade;
+}
+
 export function perfilPacienteWire(p: PerfilPacienteComUser) {
   return {
     nome: p.user.nome,
-    idade: p.idade,
+    idade: idadeDoPerfil(p),
+    /** M4: "YYYY-MM-DD" (dia de calendário) ou null. */
+    dataNascimento: dataNascimentoParaIso(p.dataNascimento),
     genero: p.genero,
     cpf: p.cpf,
     email: p.user.email,

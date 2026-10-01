@@ -22,6 +22,8 @@ import {
   medidaCanonica,
 } from "@/lib/medidas-paciente";
 
+import { IDADE_MAXIMA, idadeDeNascimento, isoParaDataNascimento } from "@/lib/idade";
+
 // M3: leitura/normalização de peso e altura (isomórfica — também usada na UI).
 export {
   alturaCanonica,
@@ -39,6 +41,8 @@ export type PerfilPacienteUpdate = {
   telefone?: string;
   convenio?: string;
   idade?: number;
+  /** M4: dia de calendário (Date à meia-noite UTC → coluna DATE); null limpa. */
+  dataNascimento?: Date | null;
   genero?: string;
   alergias?: string;
   medicamentos?: string;
@@ -206,6 +210,26 @@ function validarMedida(v: unknown, campo: "peso" | "altura"): ResultadoValidacao
   return { ok: true, valor: medidaCanonica(cm) };
 }
 
+/**
+ * M4 — data de nascimento: "YYYY-MM-DD" válida no calendário, não futura e
+ * com idade ≤ IDADE_MAXIMA (hoje em America/Sao_Paulo). null/"" → limpar.
+ */
+export function validarDataNascimento(
+  v: unknown,
+  agora: Date = new Date(),
+): ResultadoValidacao<{ data: Date; idade: number } | null> {
+  if (v === null || v === "") return { ok: true, valor: null };
+  if (typeof v !== "string") return falhaCampo("dataNascimento", "Data de nascimento inválida. Use AAAA-MM-DD.");
+  const data = isoParaDataNascimento(v);
+  if (!data) return falhaCampo("dataNascimento", "Data de nascimento inválida. Use AAAA-MM-DD.");
+  const idade = idadeDeNascimento(v.trim(), agora);
+  if (idade === null) return falhaCampo("dataNascimento", "A data de nascimento não pode estar no futuro.");
+  if (idade > IDADE_MAXIMA) {
+    return falhaCampo("dataNascimento", `Data de nascimento inválida (idade acima de ${IDADE_MAXIMA} anos).`);
+  }
+  return { ok: true, valor: { data, idade } };
+}
+
 function ehObjetoSimples(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
@@ -214,7 +238,10 @@ function ehObjetoSimples(v: unknown): v is Record<string, unknown> {
  * Valida o corpo do PATCH /api/perfil. `foto` NÃO é tratada aqui (ver
  * validarFotoPerfil — achado A2).
  */
-export function validarPatchPerfil(corpo: unknown): ResultadoValidacao<PatchPerfilValidado> {
+export function validarPatchPerfil(
+  corpo: unknown,
+  agora: Date = new Date(),
+): ResultadoValidacao<PatchPerfilValidado> {
   if (!ehObjetoSimples(corpo)) return { ok: false, erro: "Corpo da requisição inválido." };
 
   const perfil: PerfilPacienteUpdate = {};
@@ -257,6 +284,20 @@ export function validarPatchPerfil(corpo: unknown): ResultadoValidacao<PatchPerf
     }
     perfil.idade = v;
     campos.push("idade");
+  }
+
+  // M4: data de nascimento "YYYY-MM-DD" (null/"" limpa). Quando informada,
+  // a idade gravada passa a ser a calculada (America/Sao_Paulo) — vence um
+  // `idade` enviado junto.
+  if (corpo.dataNascimento !== undefined) {
+    const r = validarDataNascimento(corpo.dataNascimento, agora);
+    if (!r.ok) return r;
+    perfil.dataNascimento = r.valor ? r.valor.data : null;
+    if (r.valor) {
+      perfil.idade = r.valor.idade;
+      if (!campos.includes("idade")) campos.push("idade");
+    }
+    campos.push("dataNascimento");
   }
 
   if (corpo.genero !== undefined) {

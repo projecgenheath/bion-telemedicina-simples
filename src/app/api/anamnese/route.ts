@@ -15,6 +15,7 @@ import {
   type MotorCtx,
 } from "@/lib/server/anamnese-motor";
 import { validarTelefone } from "@/lib/server/validar-perfil";
+import { dataNascimentoParaIso, idadeDeNascimento } from "@/lib/idade";
 import { alturaCanonica, formatarAltura, formatarPeso, lerAlturaCm, lerPesoKg, medidaCanonica, pesoCanonico } from "@/lib/medidas-paciente";
 
 /**
@@ -280,7 +281,11 @@ async function montarPerfilDados(usuarioId: string): Promise<PerfilDados | null>
     }
   };
   return {
-    idade: p.idade ?? null,
+    // M4: idade pela data de nascimento quando houver (a data em si NÃO vai ao prompt).
+    idade: (() => {
+      const iso = dataNascimentoParaIso(p.dataNascimento);
+      return (iso ? idadeDeNascimento(iso) : null) ?? p.idade ?? null;
+    })(),
     genero: p.genero || "",
     profissao: p.profissao || "",
     estadoCivil: p.estadoCivil || "",

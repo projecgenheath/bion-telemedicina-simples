@@ -86,7 +86,8 @@ model PerfilPaciente {
   cpf            String  @default("")
   telefone       String  @default("")
   convenio       String  @default("Particular")
-  idade          Int     @default(0)
+  idade          Int     @default(0) // legado: só para quem ainda não informou dataNascimento
+  dataNascimento DateTime? @db.Date
   genero         String  @default("")
   alergias       String  @default("[]") // JSON string[]
   medicamentos   String  @default("[]") // JSON string[]

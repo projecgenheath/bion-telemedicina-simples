@@ -4,6 +4,7 @@ import { exigirPapel } from "@/lib/server/auth";
 import { aplicarSideEffects, perfilPacienteWire } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
 import { cpfPodeSerAlterado, validarFotoPerfil, validarPatchPerfil } from "@/lib/server/validar-perfil";
+import { dataNascimentoParaIso, idadeDeNascimento } from "@/lib/idade";
 import { cpfEmUsoPorOutroPaciente, ERRO_CPF_BLOQUEADO, ERRO_CPF_EM_USO } from "@/lib/server/cpf-paciente";
 
 /** Teto do corpo (texto JSON). Folga para a foto de perfil (~150 KB em base64). */
@@ -52,6 +53,14 @@ export async function PATCH(req: NextRequest) {
     const perfilAtual = await db.perfilPaciente.findUnique({ where: { userId: usuario.id } });
     if (!perfilAtual) {
       return Response.json({ erro: "Perfil não encontrado." }, { status: 404 });
+    }
+
+    // M4: com data de nascimento gravada, a idade é DERIVADA — um `idade`
+    // enviado sozinho é substituído pela idade calculada.
+    if (perfil.idade !== undefined && perfil.dataNascimento === undefined) {
+      const iso = dataNascimentoParaIso(perfilAtual.dataNascimento);
+      const calculada = iso ? idadeDeNascimento(iso) : null;
+      if (calculada !== null) perfil.idade = calculada;
     }
 
     // M4: CPF travado depois do primeiro valor VÁLIDO (correção só pelo

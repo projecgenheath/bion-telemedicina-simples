@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { useBion } from "@/lib/bion-store";
 import { formatarAltura, formatarPeso } from "@/lib/medidas-paciente";
+import { formatarDataNascimento, hojeIsoSaoPaulo, idadeDeNascimento, type ComDataNascimento } from "@/lib/idade";
 
 /**
  * Painel do perfil (gesto esquerda → direita): foto, dados pessoais e de
@@ -71,10 +72,14 @@ export function PerfilPainel({ onSair }: { onSair: () => void }) {
   const { pacientePerfil, sessao, consultas, arquivos, exames, atualizarPacientePerfil } = useBion();
   const router = useRouter();
   const inputFotoRef = useRef<HTMLInputElement>(null);
+  // M4: data de nascimento ("YYYY-MM-DD" do payload; o tipo do store não a declara).
+  const dataNascimento = (pacientePerfil as (typeof pacientePerfil & ComDataNascimento) | undefined)?.dataNascimento ?? "";
+  const idadeExibida = (dataNascimento ? idadeDeNascimento(dataNascimento) : null) ?? pacientePerfil?.idade ?? 0;
   const [editando, setEditando] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [enviandoFoto, setEnviandoFoto] = useState(false);
   const [form, setForm] = useState({
+    dataNascimento,
     telefone: pacientePerfil?.telefone ?? "",
     profissao: pacientePerfil?.profissao ?? "",
     estadoCivil: pacientePerfil?.estadoCivil ?? "",
@@ -184,6 +189,7 @@ export function PerfilPainel({ onSair }: { onSair: () => void }) {
     if (salvando) return;
     const lista = (v: string) => v.split(",").map((s) => s.trim()).filter(Boolean);
     const novo = {
+      dataNascimento: form.dataNascimento || null,
       telefone: form.telefone.trim(),
       profissao: form.profissao.trim(),
       estadoCivil: form.estadoCivil,
@@ -192,6 +198,7 @@ export function PerfilPainel({ onSair }: { onSair: () => void }) {
       medicamentos: lista(form.medicamentos),
     };
     const atual = {
+      dataNascimento: dataNascimento || null,
       telefone: pacientePerfil?.telefone ?? "",
       profissao: pacientePerfil?.profissao ?? "",
       estadoCivil: pacientePerfil?.estadoCivil ?? "",
@@ -267,6 +274,7 @@ export function PerfilPainel({ onSair }: { onSair: () => void }) {
               if (editando) void salvar();
               else {
                 setForm({
+                  dataNascimento,
                   telefone: pacientePerfil?.telefone ?? "",
                   profissao: pacientePerfil?.profissao ?? "",
                   estadoCivil: pacientePerfil?.estadoCivil ?? "",
@@ -286,6 +294,10 @@ export function PerfilPainel({ onSair }: { onSair: () => void }) {
         </div>
         {editando ? (
           <div className="space-y-3 pt-1">
+            <label className="block">
+              <span className="text-xs font-semibold text-bion-ink/70 dark:text-bion-paper/70">Data de nascimento</span>
+              <input type="date" value={form.dataNascimento} onChange={(e) => setForm((f) => ({ ...f, dataNascimento: e.target.value }))} min="1900-01-01" max={hojeIsoSaoPaulo()} autoComplete="bday" className="bp-entrada mt-1 w-full px-4 py-2.5 text-sm" />
+            </label>
             <input value={form.telefone} onChange={(e) => setForm((f) => ({ ...f, telefone: e.target.value }))} placeholder="Telefone" aria-label="Telefone" type="tel" inputMode="tel" autoComplete="tel" maxLength={25} className="bp-entrada w-full px-4 py-2.5 text-sm" />
             <input value={form.profissao} onChange={(e) => setForm((f) => ({ ...f, profissao: e.target.value }))} placeholder="Profissão" aria-label="Profissão" maxLength={80} className="bp-entrada w-full px-4 py-2.5 text-sm" />
             <select value={form.estadoCivil} onChange={(e) => setForm((f) => ({ ...f, estadoCivil: e.target.value }))} aria-label="Estado civil" className="bp-entrada w-full px-4 py-2.5 text-sm">
@@ -303,7 +315,8 @@ export function PerfilPainel({ onSair }: { onSair: () => void }) {
           </div>
         ) : (
           <div className="divide-y divide-bion-ink/5 dark:divide-white/5">
-            <Linha icone={<CalendarDays className="w-4 h-4" />} rotulo="Idade" valor={pacientePerfil?.idade ? `${pacientePerfil.idade} anos` : ""} />
+            <Linha icone={<CalendarDays className="w-4 h-4" />} rotulo="Nascimento" valor={formatarDataNascimento(dataNascimento)} />
+            <Linha icone={<CalendarDays className="w-4 h-4" />} rotulo="Idade" valor={dataNascimento || idadeExibida > 0 ? `${idadeExibida} ${idadeExibida === 1 ? "ano" : "anos"}` : ""} />
             <Linha icone={<CircleUserRound className="w-4 h-4" />} rotulo="Sexo" valor={pacientePerfil?.genero} />
             <Linha icone={<Phone className="w-4 h-4" />} rotulo="Telefone" valor={pacientePerfil?.telefone} />
             <Linha icone={<Briefcase className="w-4 h-4" />} rotulo="Profissão" valor={pacientePerfil?.profissao} />

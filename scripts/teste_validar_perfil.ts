@@ -19,6 +19,16 @@ import {
   lerPesoKg,
   pesoCanonico,
 } from "../src/lib/medidas-paciente";
+import {
+  dataNascimentoParaIso,
+  formatarDataNascimento,
+  hojeEmSaoPaulo,
+  hojeIsoSaoPaulo,
+  idadeDeNascimento,
+  isoParaDataNascimento,
+  lerDataIso,
+} from "../src/lib/idade";
+import { validarDataNascimento } from "../src/lib/server/validar-perfil";
 
 let passou = 0;
 let falhou = 0;
@@ -162,6 +172,59 @@ for (const [entrada, esperado] of [
 }
 for (const entrada of ["(01) 91234-5678", "(10) 91234-5678", "(11) 81234-5678", "(11) 9123-4567", "(11) 1123-4567", "+1 415 555 0100", "123456789012345"]) {
   verificar(`telefone ${entrada} → erro`, !validarTelefone(entrada).ok, validarTelefone(entrada));
+}
+
+// --- M4: data de nascimento → idade (America/Sao_Paulo) ---
+{
+  // 01/10/2026 02:30 UTC = 30/09/2026 23:30 em São Paulo (UTC-3): ainda é dia 30.
+  const virada = new Date("2026-10-01T02:30:00Z");
+  const h = hojeEmSaoPaulo(virada);
+  verificar("hoje em SP usa o fuso, não UTC", h.ano === 2026 && h.mes === 9 && h.dia === 30, h);
+  verificar("hojeIsoSaoPaulo", hojeIsoSaoPaulo(virada) === "2026-09-30", hojeIsoSaoPaulo(virada));
+  verificar("aniversário amanhã (SP) ainda não conta", idadeDeNascimento("1994-10-01", virada) === 31, idadeDeNascimento("1994-10-01", virada));
+  verificar("aniversário hoje (SP) conta", idadeDeNascimento("1994-09-30", virada) === 32, idadeDeNascimento("1994-09-30", virada));
+  verificar("data futura (SP) → null", idadeDeNascimento("2026-10-01", virada) === null);
+  verificar("nascido hoje → 0", idadeDeNascimento("2026-09-30", virada) === 0);
+  const meioDia = new Date("2026-09-30T15:00:00Z");
+  verificar("idade simples", idadeDeNascimento("1990-01-15", meioDia) === 36);
+  // 29/02: em ano não bissexto, faz aniversário em 01/03.
+  verificar("29/02 em 28/02/2027 → ainda 26", idadeDeNascimento("2000-02-29", new Date("2027-02-28T15:00:00Z")) === 26);
+  verificar("29/02 em 01/03/2027 → 27", idadeDeNascimento("2000-02-29", new Date("2027-03-01T15:00:00Z")) === 27);
+}
+for (const iso of ["2023-02-29", "1990-13-01", "1990-00-10", "1990-04-31", "90-01-01", "1990/01/01", "01/01/1990", "", "abc"]) {
+  verificar(`lerDataIso(${JSON.stringify(iso)}) inválida`, lerDataIso(iso) === null, lerDataIso(iso));
+}
+verificar("lerDataIso 2024-02-29 válida", lerDataIso("2024-02-29") !== null);
+verificar("lerDataIso não-string → null", lerDataIso(19900101) === null && lerDataIso(null) === null);
+{
+  const d = isoParaDataNascimento("1994-03-15");
+  verificar("ISO → Date meia-noite UTC", d !== null && d.toISOString() === "1994-03-15T00:00:00.000Z", d);
+  verificar("Date (DATE do Prisma) → ISO pelas partes UTC", dataNascimentoParaIso(new Date("1994-03-15T00:00:00Z")) === "1994-03-15");
+  verificar("Date null → null", dataNascimentoParaIso(null) === null);
+  verificar("DD/MM/AAAA", formatarDataNascimento("1994-03-15") === "15/03/1994");
+  verificar("formatar inválida → ''", formatarDataNascimento("1994-02-30") === "" && formatarDataNascimento(null) === "");
+}
+{
+  const agora = new Date("2026-09-30T15:00:00Z");
+  const r = validarDataNascimento("1994-03-15", agora);
+  verificar("validar data ok + idade", r.ok && r.valor !== null && r.valor.idade === 32, r);
+  verificar("validar null limpa", (() => { const x = validarDataNascimento(null, agora); return x.ok && x.valor === null; })());
+  verificar("validar '' limpa", (() => { const x = validarDataNascimento("", agora); return x.ok && x.valor === null; })());
+  verificar("validar data inexistente → erro", !validarDataNascimento("1994-02-30", agora).ok);
+  verificar("validar futuro → erro", !validarDataNascimento("2026-10-01", agora).ok);
+  verificar("validar idade > 130 → erro", !validarDataNascimento("1895-01-01", agora).ok);
+  verificar("validar idade 130 ok", validarDataNascimento("1896-01-01", agora).ok);
+  verificar("validar número → erro", !validarDataNascimento(19940315, agora).ok);
+  const p = validarPatchPerfil({ dataNascimento: "1994-03-15", idade: 99 }, agora);
+  verificar(
+    "PATCH com data grava data + idade calculada (vence idade enviada)",
+    p.ok && p.valor.perfil.dataNascimento?.toISOString() === "1994-03-15T00:00:00.000Z" && p.valor.perfil.idade === 32 &&
+      p.valor.campos.includes("dataNascimento"),
+    p,
+  );
+  const limpa = validarPatchPerfil({ dataNascimento: null }, agora);
+  verificar("PATCH data null limpa e mantém idade legada", limpa.ok && limpa.valor.perfil.dataNascimento === null && limpa.valor.perfil.idade === undefined, limpa);
+  verificar("PATCH data inválida → 400", !validarPatchPerfil({ dataNascimento: "31/12/1990" }, agora).ok);
 }
 
 // --- foto (A2) ---
