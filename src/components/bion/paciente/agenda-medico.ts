@@ -13,7 +13,7 @@ export type DiaAgenda = {
 };
 
 /** Chave YYYY-MM-DD do dia no fuso da clínica (não no do navegador). */
-function isoDia(tsOuIso: number | string) {
+export function isoDia(tsOuIso: number | string) {
   const p = partesFusoClinica(tsOuIso);
   return `${p.ano}-${String(p.mes + 1).padStart(2, "0")}-${String(p.dia).padStart(2, "0")}`;
 }

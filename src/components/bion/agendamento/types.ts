@@ -1,5 +1,6 @@
 import type { ChangeEvent, Dispatch, SetStateAction } from "react";
 import type { Medico } from "@/lib/bion-store";
+import type { DiaAgendamento } from "@/components/bion/agendamento/horarios";
 
 export type AgendamentoCorpoProps = {
   step: number;
@@ -11,11 +12,16 @@ export type AgendamentoCorpoProps = {
   setMedicoSelecionado: (m: Medico | null) => void;
   setMedicoModal: (m: Medico | null) => void;
   proximoPasso: () => void;
+  /** Rótulo do dia escolhido ("Hoje" | "Amanhã" | "D Mês"); "" = nenhum dia válido. */
   dataSelecionada: string;
+  /** Recebe o rótulo de um dos `diasDisponiveis`. */
   setDataSelecionada: (v: string) => void;
+  /** "HH:MM" livre no dia escolhido; "" = nenhum horário válido. */
   horaSelecionada: string;
   setHoraSelecionada: (v: string) => void;
-  diasDisponiveis: { rotulo: string; sem: string; diaNum: number; mes: string }[];
+  /** Só dias com horário livre na agenda do médico (fuso da clínica). */
+  diasDisponiveis: DiaAgendamento[];
+  irParaPasso: (passo: number) => void;
   motivoTexto: string;
   setMotivoTexto: (v: string) => void;
   sintomasEscolhidos: string[];

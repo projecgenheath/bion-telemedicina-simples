@@ -1,61 +1,42 @@
 "use client";
 
-import {
-  ChevronRight,
-  Star,
-  Check,
-  CreditCard,
-  QrCode,
-  FileText,
-  Upload,
-  Trash2,
-  Copy,
-  CheckCheck,
-} from "lucide-react";
+import { CalendarX, ChevronLeft } from "lucide-react";
 import type { AgendamentoCorpoProps } from "@/components/bion/agendamento/types";
 
 export function PassoData(p: AgendamentoCorpoProps) {
   const {
-    especialidade,
-    setEspecialidade,
-    medicos,
-    medicosFiltrados,
-    medicoSelecionado,
-    setMedicoSelecionado,
-    setMedicoModal,
     proximoPasso,
     dataSelecionada,
     setDataSelecionada,
-    horaSelecionada,
-    setHoraSelecionada,
     diasDisponiveis,
-    motivoTexto,
-    setMotivoTexto,
-    sintomasEscolhidos,
-    toggleSintoma,
-    arquivosAnexados,
-    handleFileUpload,
-    removerArquivo,
-    metodoPagamento,
-    setMetodoPagamento,
-    pixCopiado,
-    copiarChavePix,
-    cartaoNumero,
-    setCartaoNumero,
-    cartaoNome,
-    setCartaoNome,
-    cartaoValidade,
-    setCartaoValidade,
-    cartaoCVV,
-    setCartaoCVV,
-    cartaoParcelas,
-    setCartaoParcelas,
-    processandoPagamento,
-    finalizarAgendamento,
+    irParaPasso,
     medicoAtual,
-    onGoToWaitingRoom,
-    onDone,
   } = p;
+
+  if (diasDisponiveis.length === 0) {
+    return (
+      <div className="bg-card border rounded-3xl p-8 text-center space-y-4 shadow-sm">
+        <div className="w-14 h-14 rounded-2xl bg-muted mx-auto flex items-center justify-center">
+          <CalendarX className="w-7 h-7 text-muted-foreground" />
+        </div>
+        <div>
+          <h3 className="text-lg font-bold">Sem horários livres nos próximos 14 dias</h3>
+          <p className="text-sm text-muted-foreground mt-1 max-w-md mx-auto">
+            A agenda de <strong>{medicoAtual.nome}</strong> está completa neste período. Escolha
+            outro profissional da especialidade para agendar mais cedo.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => irParaPasso(1)}
+          className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl text-primary-foreground font-bold text-xs"
+          style={{ backgroundColor: "var(--accent)" }}
+        >
+          <ChevronLeft className="w-4 h-4" /> Escolher outro médico
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -64,11 +45,11 @@ export function PassoData(p: AgendamentoCorpoProps) {
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
-        {diasDisponiveis.map((d, i) => {
+        {diasDisponiveis.map((d) => {
           const isSelected = dataSelecionada === d.rotulo;
           return (
             <button type="button"
-              key={i}
+              key={d.iso}
               onClick={() => {
                 setDataSelecionada(d.rotulo);
                 proximoPasso();
