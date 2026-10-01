@@ -10,7 +10,7 @@ import {
   consultasCancelaveisDoDia,
   contarAcoesPacienteHoje,
   diaHoraClinica,
-  idsFalhaTecnica,
+  desfechosSistema,
   pontosReceita,
   reservaVigente,
   reservasNoDia,
@@ -220,11 +220,13 @@ igual("pontos sem resposta", pontosReceita(null), []);
 
 // Rótulos de falta do paciente / falha técnica (eventos do sistema)
 {
-  const falhasT = idsFalhaTecnica([
+  const falhasT = desfechosSistema([
     ev({ consultaId: "ft", por: "sistema", tipo: "falha_tecnica", motivo: "falha_tecnica" }),
     ev({ consultaId: "fp", por: "sistema", tipo: "falta_paciente", motivo: "falta_paciente" }),
+    ev({ consultaId: "fm", por: "sistema", tipo: "falha_tecnica", motivo: "falta_medico" }),
   ]);
-  igual("ids falha técnica", [...falhasT], ["ft"]);
+  igual("desfechos do sistema", [...falhasT], [["ft", "falha_tecnica"], ["fm", "falta_medico"]]);
+  igual("rótulo médico não compareceu", rotuloStatusMedico(consulta({ id: "fm", dataISO: HOJE_9H, status: "aguardando_reagendamento" }), falhasT), "Médico não compareceu");
   igual("rótulo falha técnica", rotuloStatusMedico(consulta({ id: "ft", dataISO: HOJE_9H, status: "aguardando_reagendamento" }), falhasT), "Falha técnica");
   igual("rótulo falta do paciente", rotuloStatusMedico(consulta({ id: "fp", dataISO: HOJE_9H, falta: true }), falhasT), "Falta do paciente");
   igual("rótulo sem evento = status", rotuloStatusMedico(consulta({ id: "x", dataISO: HOJE_9H, status: "em_espera" })), "Aguardando pagamento");

@@ -279,21 +279,32 @@ export const ROTULO_STATUS: Record<Consulta["status"], string> = {
 /** Desfechos gravados pelo sistema a partir da presença na sala (EventoConsulta). */
 export const ROTULO_FALTA_PACIENTE = "Falta do paciente";
 export const ROTULO_FALHA_TECNICA = "Falha técnica";
+/** Evento falha_tecnica com motivo "falta_medico" (o paciente entrou e o médico não). */
+export const ROTULO_FALTA_MEDICO = "Médico não compareceu";
+
+/** Desfecho do sistema por consulta: falha técnica comum ou falta do médico. */
+export type DesfechoSistema = "falha_tecnica" | "falta_medico";
 
 /**
  * Rótulo da consulta na agenda do médico: a falta do paciente (`c.falta`, do
- * bootstrap) e a falha técnica (evento falha_tecnica de GET /api/medico/eventos)
- * têm precedência sobre o status.
+ * bootstrap) e a falha técnica / falta do médico (evento falha_tecnica de
+ * GET /api/medico/eventos) têm precedência sobre o status.
  */
-export function rotuloStatusMedico(c: Consulta, falhasTecnicas?: ReadonlySet<string>): string {
-  if (falhasTecnicas?.has(c.id)) return ROTULO_FALHA_TECNICA;
+export function rotuloStatusMedico(c: Consulta, desfechos?: ReadonlyMap<string, DesfechoSistema>): string {
+  const d = desfechos?.get(c.id);
+  if (d === "falta_medico") return ROTULO_FALTA_MEDICO;
+  if (d === "falha_tecnica") return ROTULO_FALHA_TECNICA;
   if (c.falta) return ROTULO_FALTA_PACIENTE;
   return ROTULO_STATUS[c.status];
 }
 
-/** Ids das consultas com evento falha_tecnica. */
-export function idsFalhaTecnica(eventos: EventoMedico[]): Set<string> {
-  return new Set(eventos.filter((e) => e.tipo === "falha_tecnica").map((e) => e.consultaId));
+/** Consultas com evento falha_tecnica → "falta_medico" (motivo) ou "falha_tecnica". */
+export function desfechosSistema(eventos: EventoMedico[]): Map<string, DesfechoSistema> {
+  const mapa = new Map<string, DesfechoSistema>();
+  for (const e of eventos) {
+    if (e.tipo === "falha_tecnica") mapa.set(e.consultaId, e.motivo === "falta_medico" ? "falta_medico" : "falha_tecnica");
+  }
+  return mapa;
 }
 
 /* ------------------------------------------------------------------ */
