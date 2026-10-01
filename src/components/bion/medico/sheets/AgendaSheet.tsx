@@ -11,6 +11,7 @@ import {
   type ParametrosGrade,
 } from "../metricas";
 import { Campo, EmBreve, SheetMedico } from "./SheetMedico";
+import { AgendaDoDia } from "./AgendaDoDia";
 import type { Confirmar } from "./useConfirmarSalvamento";
 
 const chaveLocal = (id: string) => `bion-medico-grade:${id}`;
@@ -48,6 +49,11 @@ export function AgendaSheet({
   const { atualizarMedico } = useBion();
   const [p, setP] = useState<ParametrosGrade>(() => lerParametros(medico));
   const [excluidos, setExcluidos] = useState<Set<string>>(() => new Set());
+  /** "Cancelar agenda do dia" em andamento: a folha não fecha no meio. */
+  const [cancelandoDia, setCancelandoDia] = useState(false);
+  const fechar = () => {
+    if (!cancelandoDia) onFechar();
+  };
   const erro = validarGrade(p);
   const gerados = useMemo(() => gerarGrade(p), [p]);
   const finais = gerados.filter((h) => !excluidos.has(h));
@@ -80,11 +86,15 @@ export function AgendaSheet({
   return (
     <SheetMedico
       aberto={aberto}
-      onFechar={onFechar}
+      onFechar={fechar}
       titulo="Minha agenda"
-      subtitulo="Os horários gerados valem para todos os dias da semana."
+      subtitulo="Consultas por dia e grade de horários (vale para todos os dias da semana)."
     >
       <div className="space-y-5">
+        <AgendaDoDia medico={medico} onExecutando={setCancelandoDia} />
+
+        <hr className="border-bion-ink/10 dark:border-white/10" />
+
         <div>
           <div className="text-xs font-bold uppercase tracking-wider text-bion-ink/75 dark:text-bion-paper/75">
             Horários atuais ({atual.length})
@@ -175,14 +185,14 @@ export function AgendaSheet({
         <button
           type="button"
           onClick={salvar}
-          disabled={Boolean(erro) || finais.length === 0 || igualAoAtual}
+          disabled={Boolean(erro) || finais.length === 0 || igualAoAtual || cancelandoDia}
           className="bp-acao w-full py-3 text-sm"
         >
           {igualAoAtual ? "Grade igual à atual" : "Salvar horários"}
         </button>
 
         <ul className="space-y-2">
-          {["Dias da semana de atendimento", "Pausas semanais", "Cancelar a agenda de um dia"].map((t) => (
+          {["Dias da semana de atendimento", "Pausas semanais"].map((t) => (
             <li key={t} className="rounded-2xl border border-bion-ink/10 dark:border-white/10 px-4 py-3 flex items-center justify-between gap-3">
               <span className="text-sm font-semibold">{t}</span>
               <EmBreve />
