@@ -25,14 +25,23 @@ export async function GET(req: NextRequest) {
     if (!arquivo) {
       return Response.json({ erro: "Arquivo não encontrado." }, { status: 404 });
     }
-    // Visibilidade: dono do upload ou admin (médico vê via lista bootstrap)
-    if (arquivo.usuarioId !== usuario.id && usuario.role !== "ADMIN") {
-      // médico/paciente parceiro: permite se já está na lista do bootstrap (mesmo usuário vinculado)
-      // simplificação: qualquer autenticado com o id obtido do próprio bootstrap
-      // reforço: só dono ou admin baixa diretamente
-      if (usuario.role === "PACIENTE" && arquivo.usuarioId !== usuario.id) {
-        return Response.json({ erro: "Acesso negado." }, { status: 403 });
-      }
+    // A4 (auditoria 2026-09): autorização explícita por papel. Antes o MÉDICO
+    // baixava QUALQUER arquivo por id (só o paciente era barrado).
+    // - dono do upload: sempre;
+    // - ADMIN: mantido como antes;
+    // - MÉDICO: só arquivos enviados por paciente com quem tem/teve consulta
+    //   (mesma regra de vínculo da listagem em carregarDados);
+    // - PACIENTE: só os próprios (como antes).
+    let permitido = arquivo.usuarioId === usuario.id || usuario.role === "ADMIN";
+    if (!permitido && usuario.role === "MEDICO") {
+      const vinculo = await db.consulta.findFirst({
+        where: { medicoId: usuario.id, pacienteId: arquivo.usuarioId },
+        select: { id: true },
+      });
+      permitido = vinculo !== null;
+    }
+    if (!permitido) {
+      return Response.json({ erro: "Acesso negado." }, { status: 403 });
     }
     if (!arquivo.storagePath) {
       return Response.json(
