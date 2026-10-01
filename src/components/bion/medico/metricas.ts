@@ -276,6 +276,26 @@ export const ROTULO_STATUS: Record<Consulta["status"], string> = {
   aguardando_reagendamento: "Aguardando reagendamento",
 };
 
+/** Desfechos gravados pelo sistema a partir da presença na sala (EventoConsulta). */
+export const ROTULO_FALTA_PACIENTE = "Falta do paciente";
+export const ROTULO_FALHA_TECNICA = "Falha técnica";
+
+/**
+ * Rótulo da consulta na agenda do médico: a falta do paciente (`c.falta`, do
+ * bootstrap) e a falha técnica (evento falha_tecnica de GET /api/medico/eventos)
+ * têm precedência sobre o status.
+ */
+export function rotuloStatusMedico(c: Consulta, falhasTecnicas?: ReadonlySet<string>): string {
+  if (falhasTecnicas?.has(c.id)) return ROTULO_FALHA_TECNICA;
+  if (c.falta) return ROTULO_FALTA_PACIENTE;
+  return ROTULO_STATUS[c.status];
+}
+
+/** Ids das consultas com evento falha_tecnica. */
+export function idsFalhaTecnica(eventos: EventoMedico[]): Set<string> {
+  return new Set(eventos.filter((e) => e.tipo === "falha_tecnica").map((e) => e.consultaId));
+}
+
 /* ------------------------------------------------------------------ */
 /* Remarcações/cancelamentos do PACIENTE (GET /api/medico/eventos)     */
 /* ------------------------------------------------------------------ */
@@ -283,7 +303,7 @@ export const ROTULO_STATUS: Record<Consulta["status"], string> = {
 /** Evento de consulta como chega de GET /api/medico/eventos (datas ISO). */
 export type EventoMedico = {
   consultaId: string;
-  tipo: string; // "cancelada" | "remarcada" | "falha_tecnica"
+  tipo: string; // "cancelada" | "remarcada" | "falha_tecnica" | "falta_paciente"
   por: string; // "paciente" | "medico" | "sistema" | "admin"
   motivo: string;
   em: string;

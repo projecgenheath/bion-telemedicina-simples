@@ -10,9 +10,11 @@ import {
   consultasCancelaveisDoDia,
   contarAcoesPacienteHoje,
   diaHoraClinica,
+  idsFalhaTecnica,
   pontosReceita,
   reservaVigente,
   reservasNoDia,
+  rotuloStatusMedico,
   textoReservaPendente,
   type EventoMedico,
 } from "./metricas";
@@ -215,6 +217,18 @@ igual(
   ],
 );
 igual("pontos sem resposta", pontosReceita(null), []);
+
+// Rótulos de falta do paciente / falha técnica (eventos do sistema)
+{
+  const falhasT = idsFalhaTecnica([
+    ev({ consultaId: "ft", por: "sistema", tipo: "falha_tecnica", motivo: "falha_tecnica" }),
+    ev({ consultaId: "fp", por: "sistema", tipo: "falta_paciente", motivo: "falta_paciente" }),
+  ]);
+  igual("ids falha técnica", [...falhasT], ["ft"]);
+  igual("rótulo falha técnica", rotuloStatusMedico(consulta({ id: "ft", dataISO: HOJE_9H, status: "aguardando_reagendamento" }), falhasT), "Falha técnica");
+  igual("rótulo falta do paciente", rotuloStatusMedico(consulta({ id: "fp", dataISO: HOJE_9H, falta: true }), falhasT), "Falta do paciente");
+  igual("rótulo sem evento = status", rotuloStatusMedico(consulta({ id: "x", dataISO: HOJE_9H, status: "em_espera" })), "Aguardando pagamento");
+}
 
 console.log(`\n${ok} ok, ${falhas} falha(s)`);
 if (falhas) process.exit(1);

@@ -5,6 +5,7 @@ import { ok, falha } from "@/lib/server/http";
 import { resolverIceServers } from "@/lib/server/ice";
 import { canalSalaConsulta } from "@/lib/supabase/realtime";
 import { broadcastCanal } from "@/lib/supabase/broadcast";
+import { verificarPresencaConsultaSemFalhar } from "@/lib/server/presenca-consulta";
 
 /**
  * Sinalização WebRTC da sala de teleconsulta (Fase 2 — vídeo real P2P).
@@ -102,6 +103,11 @@ export async function GET(
     const consulta = await carregarConsultaAutorizada(consultaId, usuario.id);
     const papel = papelDe(consulta, usuario.id);
     const outroId = idDoOutro(consulta, usuario.id);
+
+    // Depois que a sala fecha: falta do paciente / falha técnica pela presença
+    // (antes do heartbeat, para quem chega depois do fim não contar presença).
+    // Nunca lança e roda no máximo 1x/min por consulta.
+    await verificarPresencaConsultaSemFalhar(consultaId);
 
     // Heartbeat de presença (upsert; "criado" = primeira entrada nesta sessão)
     const presencaExistente = await db.presencaSala.findUnique({

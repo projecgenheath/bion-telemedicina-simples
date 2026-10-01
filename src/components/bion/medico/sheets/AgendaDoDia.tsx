@@ -1,20 +1,22 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, CalendarX2, CheckCircle2, Loader2 } from "lucide-react";
 import { useBion, type Consulta, type Medico } from "@/lib/bion-store";
-import { diaFusoClinica } from "@/lib/bion-tipos";
+import { diaFusoClinica, instanteFusoClinica } from "@/lib/bion-tipos";
 import {
   agendaDoDia,
   consultasCancelaveisDoDia,
   ehDoMedico,
+  idsFalhaTecnica,
   reservaVigente,
   reservasNoDia,
-  ROTULO_STATUS,
+  rotuloStatusMedico,
   STATUS_ATIVOS,
   diaDaConsulta,
   horaClinica,
   textoReservaPendente,
+  type EventoMedico,
   type SlotAgenda,
 } from "../metricas";
 import { avisarDadosMedicoAlterados } from "../useDadosMedico";
@@ -27,8 +29,34 @@ type Falha = { consulta: Consulta; erro: string };
 type Fase =
   | { tipo: "lista" }
   | { tipo: "confirmar"; alvo: Consulta[]; reservas: number }
-  | { tipo: "executando"; alvo: Consulta[]; feitas: number }
-  | { tipo: "resultado"; canceladas: number; falhas: Falha[] };
+  | { tipo: "executando"; alvo: Consulta[]; feitas: number; etapa: "reservas" | "consultas" }
+  | { tipo: "resultado"; canceladas: number; reservasLiberadas: number; erroReservas: string | null; falhas: Falha[] };
+
+/** "AAAA-MM-DD" → partes (mês 0-11). */
+function partesIso(iso: string) {
+  const [ano, mes, dia] = iso.split("-").map(Number);
+  return { ano, mes: mes - 1, dia };
+}
+
+/**
+ * Libera as reservas de remarcação aguardando pagamento do dia
+ * (POST /api/medico/agenda/cancelar-dia → cancelarReservasDoDia no servidor).
+ * Idempotente: chamado sempre, mesmo se o estado local não mostra reservas.
+ */
+async function liberarReservasDoDia(dia: string): Promise<{ ok: true; liberadas: number } | { ok: false; erro: string }> {
+  try {
+    const res = await fetch("/api/medico/agenda/cancelar-dia", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ data: dia }),
+    });
+    const json = (await res.json().catch(() => null)) as { erro?: string; reservasLiberadas?: number } | null;
+    if (!res.ok) return { ok: false, erro: json?.erro ?? `Erro ${res.status}` };
+    return { ok: true, liberadas: json?.reservasLiberadas ?? 0 };
+  } catch {
+    return { ok: false, erro: "Falha de conexão com o servidor." };
+  }
+}
 
 /**
  * Cancela UMA consulta como parte de "cancelar agenda do dia". O store
@@ -52,9 +80,13 @@ async function cancelarComoDia(id: string): Promise<{ ok: true; delta: unknown }
 }
 
 /**
- * Agenda de um dia (próximos 14 dias) com as consultas, os horários livres e
- * os horários RESERVADOS por remarcações aguardando pagamento, mais a ação
- * "Cancelar agenda do dia".
+ * Agenda de um dia (atalhos para os próximos 14 dias + "Outro dia" para
+ * qualquer data futura) com as consultas, os horários livres e os horários
+ * RESERVADOS por remarcações aguardando pagamento, mais a ação "Cancelar
+ * agenda do dia" — hoje ou qualquer dia futuro, mesmo que o dia só tenha
+ * reservas aguardando pagamento. Dia que já passou não é cancelado.
+ * Consultas com falta do paciente / falha técnica (gravadas pelo sistema a
+ * partir da presença na sala) mostram esse rótulo no lugar do status.
  */
 export function AgendaDoDia({ medico, onExecutando }: { medico: Medico; onExecutando: (rodando: boolean) => void }) {
   const { consultas, sessao, aplicarDelta, aplicarEstadoFresco } = useBion();
@@ -65,6 +97,35 @@ export function AgendaDoDia({ medico, onExecutando }: { medico: Medico; onExecut
   const tituloResultadoRef = useRef<HTMLHeadingElement>(null);
 
   const minhas = useMemo(() => consultas.filter((c) => ehDoMedico(c, sessao)), [consultas, sessao]);
+  const hojeIso = diaFusoClinica(0).iso;
+  const diaPassado = dia < hojeIso;
+
+  // Falhas técnicas do dia escolhido (eventos do servidor; a falta já vem no bootstrap).
+  const [falhasTecnicas, setFalhasTecnicas] = useState<ReadonlySet<string>>(() => new Set());
+  const versaoDia = useMemo(
+    () =>
+      minhas
+        .filter((c) => diaDaConsulta(c) === dia)
+        .map((c) => `${c.id}:${c.status}:${c.falta ? 1 : 0}`)
+        .join("|"),
+    [minhas, dia],
+  );
+  useEffect(() => {
+    const { ano, mes, dia: d } = partesIso(dia);
+    const inicio = instanteFusoClinica(ano, mes, d);
+    if (!Number.isFinite(inicio)) return;
+    const ctrl = new AbortController();
+    const url = `/api/medico/eventos?de=${encodeURIComponent(new Date(inicio).toISOString())}&ate=${encodeURIComponent(new Date(inicio + 86_400_000).toISOString())}`;
+    fetch(url, { headers: { "Content-Type": "application/json" }, signal: ctrl.signal })
+      .then(async (res) => {
+        const json = (await res.json().catch(() => null)) as { eventos?: EventoMedico[] } | null;
+        if (!ctrl.signal.aborted && res.ok && json?.eventos) setFalhasTecnicas(idsFalhaTecnica(json.eventos));
+      })
+      .catch(() => {
+        /* sem os eventos, a agenda mostra só o status */
+      });
+    return () => ctrl.abort();
+  }, [dia, versaoDia]);
   const dias = useMemo(
     () =>
       Array.from({ length: HORIZONTE_DIAS }, (_, i) => {
@@ -81,7 +142,9 @@ export function AgendaDoDia({ medico, onExecutando }: { medico: Medico; onExecut
   );
   const slots = useMemo(() => agendaDoDia(minhas, dia, medico.horariosDisponiveis, agora), [minhas, dia, medico.horariosDisponiveis, agora]);
   const cancelaveis = useMemo(() => consultasCancelaveisDoDia(minhas, dia, agora), [minhas, dia, agora]);
-  const rotuloDia = dias.find((d) => d.iso === dia)?.rotulo ?? dia;
+  const reservasDia = useMemo(() => reservasNoDia(minhas, dia, agora), [minhas, dia, agora]);
+  const podeCancelar = !diaPassado && (cancelaveis.length > 0 || reservasDia.length > 0);
+  const rotuloDia = dias.find((d) => d.iso === dia)?.rotulo ?? `${dia.slice(8, 10)}/${dia.slice(5, 7)}`;
   /** "hoje" · "amanhã" · "em 05/10" — para as frases. */
   const quandoDia = rotuloDia === "Hoje" ? "hoje" : rotuloDia === "Amanhã" ? "amanhã" : `em ${rotuloDia}`;
   const deDia = rotuloDia === "Hoje" ? "de hoje" : rotuloDia === "Amanhã" ? "de amanhã" : `de ${rotuloDia}`;
@@ -90,9 +153,11 @@ export function AgendaDoDia({ medico, onExecutando }: { medico: Medico; onExecut
   const pedirConfirmacao = () => {
     const t = Date.now();
     setAgora(t);
+    if (dia < diaFusoClinica(0).iso) return;
     const alvo = consultasCancelaveisDoDia(minhas, dia, t);
-    if (!alvo.length) return;
-    setFase({ tipo: "confirmar", alvo, reservas: reservasNoDia(minhas, dia, t).length });
+    const reservas = reservasNoDia(minhas, dia, t).length;
+    if (!alvo.length && !reservas) return;
+    setFase({ tipo: "confirmar", alvo, reservas });
   };
 
   const executar = async (alvo: Consulta[]) => {
@@ -101,8 +166,13 @@ export function AgendaDoDia({ medico, onExecutando }: { medico: Medico; onExecut
     onExecutando(true);
     let canceladas = 0;
     const falhas: Falha[] = [];
-    setFase({ tipo: "executando", alvo, feitas: 0 });
-    // Sequencial: uma por vez (ordem do horário), mostrando o progresso.
+    // 1) Reservas aguardando pagamento do dia (antes das consultas, para a contagem sair certa).
+    setFase({ tipo: "executando", alvo, feitas: 0, etapa: "reservas" });
+    const rr = await liberarReservasDoDia(dia);
+    const reservasLiberadas = rr.ok ? rr.liberadas : 0;
+    const erroReservas = rr.ok ? null : rr.erro;
+    // 2) Consultas: sequencial, uma por vez (ordem do horário), mostrando o progresso.
+    setFase({ tipo: "executando", alvo, feitas: 0, etapa: "consultas" });
     for (let i = 0; i < alvo.length; i++) {
       const r = await cancelarComoDia(alvo[i].id);
       if (r.ok) {
@@ -111,7 +181,7 @@ export function AgendaDoDia({ medico, onExecutando }: { medico: Medico; onExecut
       } else {
         falhas.push({ consulta: alvo[i], erro: r.erro });
       }
-      setFase({ tipo: "executando", alvo, feitas: i + 1 });
+      setFase({ tipo: "executando", alvo, feitas: i + 1, etapa: "consultas" });
     }
     // Reservas de OUTRAS consultas também caíram no servidor: recarrega o estado.
     try {
@@ -122,7 +192,7 @@ export function AgendaDoDia({ medico, onExecutando }: { medico: Medico; onExecut
     }
     avisarDadosMedicoAlterados();
     setAgora(Date.now());
-    setFase({ tipo: "resultado", canceladas, falhas });
+    setFase({ tipo: "resultado", canceladas, reservasLiberadas, erroReservas, falhas });
     rodando.current = false;
     onExecutando(false);
     requestAnimationFrame(() => tituloResultadoRef.current?.focus());
@@ -162,12 +232,30 @@ export function AgendaDoDia({ medico, onExecutando }: { medico: Medico; onExecut
         ))}
       </div>
 
+      <label className="flex items-center gap-2 text-sm">
+        <span className="font-bold">Outro dia</span>
+        <input
+          type="date"
+          min={hojeIso}
+          value={dia}
+          disabled={ocupado}
+          onChange={(e) => {
+            const v = e.target.value;
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return;
+            setDia(v);
+            setAgora(Date.now());
+            if (fase.tipo !== "executando") setFase({ tipo: "lista" });
+          }}
+          className="rounded-xl border border-bion-ink/15 dark:border-white/15 bg-transparent px-2 py-1.5 text-sm disabled:opacity-60"
+        />
+      </label>
+
       {slots.length === 0 ? (
         <p className="text-sm text-bion-ink/75 dark:text-bion-paper/75">Nenhum horário nem consulta neste dia.</p>
       ) : (
         <ul className="space-y-1.5" aria-label={`Horários de ${rotuloDia}`}>
           {slots.map((s) => (
-            <LinhaSlot key={s.hora} slot={s} agora={agora} />
+            <LinhaSlot key={s.hora} slot={s} agora={agora} falhasTecnicas={falhasTecnicas} />
           ))}
         </ul>
       )}
@@ -177,14 +265,16 @@ export function AgendaDoDia({ medico, onExecutando }: { medico: Medico; onExecut
           <button
             type="button"
             onClick={pedirConfirmacao}
-            disabled={cancelaveis.length === 0}
+            disabled={!podeCancelar}
             className="w-full py-3 rounded-2xl text-sm font-bold inline-flex items-center justify-center gap-2 bg-red-700 text-white hover:bg-red-800 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-red-300 dark:text-zinc-950 dark:hover:bg-red-200"
           >
             <CalendarX2 className="w-4 h-4" aria-hidden /> Cancelar agenda do dia
           </button>
-          {cancelaveis.length === 0 ? (
+          {diaPassado ? (
+            <p className="text-xs text-bion-ink/70 dark:text-bion-paper/70">Um dia que já passou não pode ser cancelado.</p>
+          ) : !podeCancelar ? (
             <p className="text-xs text-bion-ink/70 dark:text-bion-paper/70">
-              Nenhuma consulta ativa por acontecer {quandoDia}.
+              Nada para cancelar {quandoDia}: nenhuma consulta por acontecer nem reserva aguardando pagamento.
             </p>
           ) : null}
         </>
@@ -194,18 +284,22 @@ export function AgendaDoDia({ medico, onExecutando }: { medico: Medico; onExecut
         <div role="alertdialog" aria-labelledby="bm-cancelar-dia-titulo" aria-describedby="bm-cancelar-dia-texto" className="rounded-2xl border-2 border-red-700 dark:border-red-300 p-4 space-y-3">
           <h4 id="bm-cancelar-dia-titulo" className="text-base font-black inline-flex items-center gap-2">
             <AlertTriangle className="w-5 h-5 text-red-700 dark:text-red-300" aria-hidden />
-            Cancelar {fase.alvo.length} {fase.alvo.length === 1 ? "consulta" : "consultas"} {deDia}?
+            {fase.alvo.length
+              ? `Cancelar ${fase.alvo.length} ${fase.alvo.length === 1 ? "consulta" : "consultas"} ${deDia}?`
+              : `Cancelar a agenda ${deDia}?`}
           </h4>
           <div id="bm-cancelar-dia-texto" className="text-sm space-y-2">
-            <p>
-              Os pacientes <strong>não pagam multa</strong>. Quem já pagou escolhe entre <strong>reembolso integral</strong> ou{" "}
-              <strong>remarcar</strong> sem custo; consultas ainda não pagas são canceladas.
-            </p>
+            {fase.alvo.length ? (
+              <p>
+                Os pacientes <strong>não pagam multa</strong>. Quem já pagou escolhe entre <strong>reembolso integral</strong> ou{" "}
+                <strong>remarcar</strong> sem custo; consultas ainda não pagas são canceladas.
+              </p>
+            ) : null}
             {fase.reservas > 0 ? (
               <p>
                 {fase.reservas === 1
-                  ? "1 reserva de remarcação aguardando pagamento para este dia também será cancelada."
-                  : `${fase.reservas} reservas de remarcação aguardando pagamento para este dia também serão canceladas.`}
+                  ? `1 reserva de remarcação aguardando pagamento para este dia ${fase.alvo.length ? "também " : ""}será liberada (o paciente é avisado e a consulta dele fica na data original).`
+                  : `${fase.reservas} reservas de remarcação aguardando pagamento para este dia ${fase.alvo.length ? "também " : ""}serão liberadas (os pacientes são avisados e as consultas ficam na data original).`}
               </p>
             ) : null}
             <p className="text-bion-ink/75 dark:text-bion-paper/75">Consultas que já começaram não são canceladas. Esta ação não pode ser desfeita.</p>
@@ -241,9 +335,11 @@ export function AgendaDoDia({ medico, onExecutando }: { medico: Medico; onExecut
         <div className="rounded-2xl border border-bion-ink/15 dark:border-white/15 p-4" role="status" aria-live="polite">
           <div className="text-sm font-bold inline-flex items-center gap-2">
             <Loader2 className="w-4 h-4 motion-safe:animate-spin" aria-hidden />
-            Cancelando {fase.feitas} de {fase.alvo.length}…
+            {fase.etapa === "reservas" ? "Liberando reservas aguardando pagamento…" : `Cancelando ${fase.feitas} de ${fase.alvo.length}…`}
           </div>
-          <progress className="w-full mt-2 accent-red-700" max={fase.alvo.length} value={fase.feitas} aria-label="Progresso do cancelamento" />
+          {fase.alvo.length ? (
+            <progress className="w-full mt-2 accent-red-700" max={fase.alvo.length} value={fase.feitas} aria-label="Progresso do cancelamento" />
+          ) : null}
           <p className="text-xs mt-1 text-bion-ink/70 dark:text-bion-paper/70">Não feche esta tela até terminar.</p>
         </div>
       ) : null}
@@ -253,8 +349,12 @@ export function AgendaDoDia({ medico, onExecutando }: { medico: Medico; onExecut
           <h4 ref={tituloResultadoRef} tabIndex={-1} className="text-sm font-black inline-flex items-center gap-2 outline-none">
             <CheckCircle2 className="w-4 h-4 text-emerald-700 dark:text-emerald-300" aria-hidden />
             {fase.canceladas} {fase.canceladas === 1 ? "consulta cancelada" : "consultas canceladas"}
+            {` · ${fase.reservasLiberadas} ${fase.reservasLiberadas === 1 ? "reserva liberada" : "reservas liberadas"}`}
             {fase.falhas.length ? ` · ${fase.falhas.length} com falha` : ""}
           </h4>
+          {fase.erroReservas ? (
+            <p className="text-sm text-red-700 dark:text-red-300">Reservas aguardando pagamento não foram liberadas: {fase.erroReservas}</p>
+          ) : null}
           {fase.falhas.length ? (
             <ul className="text-sm space-y-1" aria-label="Consultas que não foram canceladas">
               {fase.falhas.map((f) => (
@@ -263,11 +363,11 @@ export function AgendaDoDia({ medico, onExecutando }: { medico: Medico; onExecut
                 </li>
               ))}
             </ul>
-          ) : (
+          ) : !fase.erroReservas ? (
             <p className="text-sm text-bion-ink/75 dark:text-bion-paper/75">Os pacientes foram avisados pelo app.</p>
-          )}
+          ) : null}
           <button type="button" onClick={() => setFase({ tipo: "lista" })} className="text-sm font-bold text-bion-sea dark:text-sky-300 underline underline-offset-2">
-            {fase.falhas.length ? "Voltar à agenda (tente de novo as que falharam)" : "Voltar à agenda"}
+            {fase.falhas.length || fase.erroReservas ? "Voltar à agenda (tente de novo o que falhou)" : "Voltar à agenda"}
           </button>
         </div>
       ) : null}
@@ -282,7 +382,7 @@ const ROTULO_SLOT: Record<SlotAgenda["estado"], string> = {
   encerrada: "Liberado",
 };
 
-function LinhaSlot({ slot, agora }: { slot: SlotAgenda; agora: number }) {
+function LinhaSlot({ slot, agora, falhasTecnicas }: { slot: SlotAgenda; agora: number; falhasTecnicas: ReadonlySet<string> }) {
   const cor =
     slot.estado === "ocupado"
       ? "bg-bion-sea text-white dark:bg-sky-300 dark:text-zinc-950"
@@ -296,7 +396,7 @@ function LinhaSlot({ slot, agora }: { slot: SlotAgenda; agora: number }) {
         <span className={`text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full shrink-0 ${cor}`}>{ROTULO_SLOT[slot.estado]}</span>
         <span className="text-sm truncate min-w-0">
           {slot.consultas.length
-            ? slot.consultas.map((c) => `${c.paciente} (${ROTULO_STATUS[c.status]})`).join(" · ")
+            ? slot.consultas.map((c) => `${c.paciente} (${rotuloStatusMedico(c, falhasTecnicas)})`).join(" · ")
             : slot.reservadoPor
               ? `Remarcação de ${slot.reservadoPor.paciente}`
               : ""}
