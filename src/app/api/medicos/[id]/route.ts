@@ -16,9 +16,87 @@ type MedicoPatch = {
   idiomas?: string[];
   bio?: string;
   horariosDisponiveis?: string[];
+  foto?: string;
 };
 
+/** Campos que o PRÓPRIO médico pode editar no seu perfil. Nome, CRM,
+ *  especialidade e status são validados/alterados só pelo administrador. */
+const CAMPOS_AUTOEDICAO = new Set([
+  "acao",
+  "bio",
+  "formacao",
+  "experiencia",
+  "idiomas",
+  "subespecialidades",
+  "valor",
+  "horariosDisponiveis",
+  "foto",
+]);
+const VALOR_MIN = 1;
+const VALOR_MAX = 5000;
+const TAM_MAX_TEXTO = 2000;
+const TAM_MAX_FOTO = 700_000; // data URL (~500 KB de imagem)
+
+function erroHttp(mensagem: string, status: number) {
+  return Response.json({ erro: mensagem }, { status });
+}
+
+/** Valida o PATCH de autoedição do médico. Devolve mensagem de erro ou null. */
+function validarAutoedicao(
+  body: MedicoPatch,
+  atual: { nome: string; crm: string; especialidade: string },
+): string | null {
+  if (body.acao && body.acao !== "atualizar") return "Ação permitida apenas ao administrador.";
+  // O cliente pode reenviar nome/CRM/especialidade sem alteração; mudar exige admin.
+  if (body.nome !== undefined && body.nome.trim() !== atual.nome) {
+    return "Alteração de nome é feita pelo administrador.";
+  }
+  if (body.crm !== undefined && body.crm.trim() !== atual.crm) {
+    return "Alteração de CRM é feita pelo administrador (requer nova validação).";
+  }
+  if (body.especialidade !== undefined && body.especialidade.trim() !== atual.especialidade) {
+    return "Alteração de especialidade é feita pelo administrador.";
+  }
+  for (const k of Object.keys(body)) {
+    if (!CAMPOS_AUTOEDICAO.has(k) && !["nome", "crm", "especialidade"].includes(k)) {
+      return `Campo não editável: ${k}.`;
+    }
+  }
+  if (body.valor !== undefined) {
+    if (typeof body.valor !== "number" || !Number.isFinite(body.valor) || body.valor < VALOR_MIN || body.valor > VALOR_MAX) {
+      return `Valor da consulta deve estar entre R$ ${VALOR_MIN} e R$ ${VALOR_MAX}.`;
+    }
+  }
+  for (const k of ["bio", "formacao", "experiencia"] as const) {
+    const v = body[k];
+    if (v !== undefined && (typeof v !== "string" || v.length > TAM_MAX_TEXTO)) {
+      return `Campo ${k} inválido (máx. ${TAM_MAX_TEXTO} caracteres).`;
+    }
+  }
+  for (const k of ["idiomas", "subespecialidades", "horariosDisponiveis"] as const) {
+    const v = body[k];
+    if (v !== undefined && (!Array.isArray(v) || v.length > 100 || v.some((x) => typeof x !== "string" || x.length > 60))) {
+      return `Campo ${k} inválido.`;
+    }
+  }
+  if (body.horariosDisponiveis?.some((h) => !/^([01]\d|2[0-3]):[0-5]\d$/.test(h))) {
+    return "Horários devem estar no formato HH:MM.";
+  }
+  if (body.foto !== undefined) {
+    if (
+      typeof body.foto !== "string" ||
+      body.foto.length > TAM_MAX_FOTO ||
+      (body.foto !== "" && !/^data:image\/(png|jpe?g|webp);base64,/.test(body.foto))
+    ) {
+      return "Foto inválida (PNG, JPEG ou WebP, até ~500 KB).";
+    }
+  }
+  return null;
+}
+
 /** Ações administrativas sobre médicos: aprovar, suspender, editar e excluir.
+ *  O próprio MÉDICO pode usar a ação "atualizar" no SEU perfil, restrita aos
+ *  campos de CAMPOS_AUTOEDICAO (bio, formação, valor, horários, foto…).
  *  Contrato delta (auditoria FASE 2): toda ação devolve APENAS o médico
  *  atualizado + efeitos (notificações/auditoria) — sem recarregar o estado. */
 export async function PATCH(
@@ -26,9 +104,16 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const admin = await exigirPapel("ADMIN");
+    const ator = await exigirPapel("ADMIN", "MEDICO");
     const { id } = await params;
     const body = (await req.json()) as MedicoPatch;
+    // ator = ADMIN (gestão) ou o próprio MÉDICO (autoedição restrita)
+    const autoedicao = ator.role === "MEDICO";
+
+    // Médico só edita o PRÓPRIO perfil (comparação por ID, nunca por nome).
+    if (autoedicao && ator.id !== id) {
+      return erroHttp("Acesso negado", 403);
+    }
 
     const medico = await db.user.findFirst({
       where: { id, role: "MEDICO" },
@@ -36,6 +121,15 @@ export async function PATCH(
     });
     if (!medico?.perfilMedico) {
       return Response.json({ erro: "Médico não encontrado." }, { status: 404 });
+    }
+
+    if (autoedicao) {
+      const erro = validarAutoedicao(body, {
+        nome: medico.nome,
+        crm: medico.perfilMedico.crm,
+        especialidade: medico.perfilMedico.especialidade,
+      });
+      if (erro) return erroHttp(erro, erro === "Ação permitida apenas ao administrador." ? 403 : 400);
     }
 
     const acao = body.acao ?? "atualizar";
@@ -49,7 +143,7 @@ export async function PATCH(
         db.perfilMedico.update({ where: { userId: id }, data: { status: "ativo" } }),
       ]);
       efeitos = await aplicarSideEffects(
-        admin,
+        ator,
         [
           {
             tipo: "agenda",
@@ -79,7 +173,7 @@ export async function PATCH(
         db.sessao.deleteMany({ where: { userId: id } }),
       ]);
       efeitos = await aplicarSideEffects(
-        admin,
+        ator,
         [
           {
             tipo: "agenda",
@@ -101,13 +195,15 @@ export async function PATCH(
       await db.$transaction([
         db.user.update({
           where: { id },
-          data: body.nome ? { nome: body.nome.trim() } : {},
+          data: body.nome && !autoedicao ? { nome: body.nome.trim() } : {},
         }),
         db.perfilMedico.update({
           where: { userId: id },
           data: {
-            ...(body.crm !== undefined ? { crm: body.crm } : {}),
-            ...(body.especialidade !== undefined ? { especialidade: body.especialidade } : {}),
+            ...(body.crm !== undefined && !autoedicao ? { crm: body.crm } : {}),
+            ...(body.especialidade !== undefined && !autoedicao
+              ? { especialidade: body.especialidade }
+              : {}),
             ...(body.subespecialidades !== undefined
               ? { subespecialidades: JSON.stringify(body.subespecialidades) }
               : {}),
@@ -119,15 +215,16 @@ export async function PATCH(
             ...(body.horariosDisponiveis !== undefined
               ? { horariosDisponiveis: JSON.stringify(body.horariosDisponiveis) }
               : {}),
+            ...(body.foto !== undefined && autoedicao ? { foto: body.foto || null } : {}),
           },
         }),
       ]);
-      efeitos = await aplicarSideEffects(admin, undefined, {
-        acao: "MEDICO_ATUALIZADO",
-        categoria: "admin",
+      efeitos = await aplicarSideEffects(ator, undefined, {
+        acao: autoedicao ? "MEDICO_PERFIL_AUTOEDITADO" : "MEDICO_ATUALIZADO",
+        categoria: autoedicao ? "usuario" : "admin",
         entidade: "medico",
         entidadeId: id,
-        detalhes: `Médico ${medico.nome}: dados atualizados (${Object.keys(body).filter((k) => k !== "acao").join(", ")})`,
+        detalhes: `Médico ${medico.nome}: dados atualizados (${Object.keys(body).filter((k) => k !== "acao" && k !== "foto").concat(body.foto !== undefined ? ["foto"] : []).join(", ")})`,
       });
     }
 
