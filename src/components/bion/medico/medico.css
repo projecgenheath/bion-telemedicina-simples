@@ -1,0 +1,87 @@
+/* ==================================================================== */
+/* App do MÉDICO — complementa as classes bp-* do app do paciente        */
+/* (bp-shell, bp-carrossel, bp-glass…) sem alterar globals.css.          */
+/* Contraste: todo texto claro fica sobre fundos com luminância baixa    */
+/* (≥ 4,5:1, WCAG AA); o degradê não passa por azul-claro sob texto      */
+/* branco (diferente da seção 3 do paciente).                            */
+/* ==================================================================== */
+
+/* Carrossel horizontal: não deixa o "overscroll" virar voltar/avançar do navegador */
+.bm-carrossel {
+  overscroll-behavior-x: contain;
+}
+
+/* Coluna central: rolagem vertical COM snap entre as telas 1-2-3 */
+.bm-snap-y {
+  scroll-snap-type: y mandatory;
+  overscroll-behavior-y: contain;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.bm-snap-y::-webkit-scrollbar { display: none; }
+.bm-snap-y > .bm-tela {
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  min-height: 100%;
+}
+
+/* Tela 1 — branco puro (clean) / preto puro (dark) */
+.bm-tela-1 { background: linear-gradient(180deg, #ffffff 0%, #f3f7fd 100%); }
+.dark .bm-tela-1 { background: linear-gradient(180deg, #000000 0%, #040a16 100%); }
+
+/* Tela 2 — transição para o azul (texto escuro no clean: ≥ 9:1 sobre #b9cde9) */
+.bm-tela-2 { background: linear-gradient(180deg, #f3f7fd 0%, #dbe6f5 55%, #b9cde9 100%); }
+.dark .bm-tela-2 { background: linear-gradient(180deg, #040a16 0%, #061331 55%, #0a1d40 100%); }
+
+/* Tela 3 — azul-marinho desde o topo (texto branco ≥ 7:1 em todo o degradê) */
+.bm-tela-3 { background: linear-gradient(180deg, #1d4a8a 0%, #143a72 35%, #0d2856 70%, #0a1f44 100%); }
+.dark .bm-tela-3 { background: linear-gradient(180deg, #0a1d40 0%, #0b2552 35%, #071a3a 70%, #020a1a 100%); }
+
+/* Páginas laterais: mesmo degradê dos painéis do paciente */
+.bm-painel { background: linear-gradient(180deg, #ffffff 0%, #eef4fb 60%, #dfe9f7 100%); }
+.dark .bm-painel { background: linear-gradient(180deg, #000000 0%, #03080f 55%, #071224 100%); }
+
+/* Superfície de sobreposição (conversa, suporte, prontuário) */
+.bm-sobreposicao { background: linear-gradient(180deg, #ffffff 0%, #f3f7fd 70%, #e6eef9 100%); }
+.dark .bm-sobreposicao { background: linear-gradient(180deg, #000000 0%, #030913 70%, #061127 100%); }
+
+/* Bottom sheet do médico */
+.bm-sheet {
+  background: #ffffff;
+  color: #0a1f44;
+  border-top-left-radius: 1.75rem;
+  border-top-right-radius: 1.75rem;
+  box-shadow: 0 -16px 48px rgba(10, 31, 68, 0.25);
+}
+.dark .bm-sheet {
+  background: #05080f;
+  color: #f2f6fc;
+  box-shadow: 0 -16px 48px rgba(0, 0, 0, 0.7);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+@media (min-width: 768px) {
+  .bm-sheet { border-radius: 1.75rem; }
+}
+
+/* Sem backdrop-filter (aparelhos fracos / navegadores antigos): vidro opaco legível */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .bm-app .bp-glass { background: rgba(255, 255, 255, 0.92); }
+  .dark .bm-app .bp-glass { background: rgba(18, 24, 38, 0.95); }
+  .bm-app .bp-glass-marinho { background: rgba(10, 31, 68, 0.92); }
+}
+
+/* Indicador discreto: some após inatividade, volta ao interagir */
+/* Indicadores: visíveis ao mudar de tela e depois esmaecem (sem JS de timer) */
+@keyframes bm-esmaecer {
+  0%, 70% { opacity: 1; }
+  100% { opacity: 0.35; }
+}
+.bm-indicador { animation: bm-esmaecer 3.5s ease forwards; }
+.bm-indicador:hover,
+.bm-indicador:focus-within { animation: none; opacity: 1; }
+@media (prefers-reduced-motion: reduce) {
+  .bm-indicador { animation: none; opacity: 1; }
+}
+
+/* Gráfico: o gesto vertical continua rolando a coluna */
+.bm-grafico { touch-action: pan-y; }
