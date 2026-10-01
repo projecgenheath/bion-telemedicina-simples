@@ -84,7 +84,7 @@ model PerfilMedico {
   dataNascimento      DateTime? @db.Date
   genero              String? // Feminino | Masculino | Outro | Prefiro não informar (CHECK no banco)
   telefone            String  @default("")
-  cnpj                String  @default("") // só dígitos (14); "" = não informado
+  cnpj                String  @default("") // 14 caracteres normalizados (numérico ou alfanumérico); "" = não informado
 }
 
 model PerfilPaciente {

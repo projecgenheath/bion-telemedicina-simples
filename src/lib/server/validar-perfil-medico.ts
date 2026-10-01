@@ -9,8 +9,10 @@
  *   America/Sao_Paulo, helpers de src/lib/idade.ts); null/"" limpa.
  * - genero: uma de GENEROS_MEDICO; null/"" limpa.
  * - telefone: validarTelefone (mesma regra do paciente); null/"" limpa.
- * - cnpj: com ou sem máscara; grava só os 14 dígitos; DV oficial; sequência
- *   repetida rejeitada; null/"" limpa.
+ * - cnpj: numérico OU alfanumérico (Receita Federal, a partir de jul/2026);
+ *   com ou sem máscara; grava os 14 caracteres normalizados (maiúsculos);
+ *   DV oficial (ASCII − 48, módulo 11); 14 caracteres iguais rejeitados;
+ *   null/"" limpa.
  *
  * Arquivo puro (sem "server-only") para ser testado com
  * `bun scripts/teste_validar_perfil_medico.ts`.
@@ -22,9 +24,9 @@ import {
   GENEROS_MEDICO,
   IDADE_MAXIMA_MEDICO,
   IDADE_MINIMA_MEDICO,
-  cnpjDigitosValidos,
-  digitosCnpj,
+  cnpjValido,
   ehGeneroMedico,
+  normalizarCnpj,
   type GeneroMedico,
 } from "@/components/bion/medico/dados-pessoais";
 
@@ -77,16 +79,20 @@ export function validarGeneroMedico(v: unknown): ResultadoValidacao<GeneroMedico
   return falhaCampo("genero", `Sexo inválido. Use: ${GENEROS_MEDICO.join(", ")}.`);
 }
 
-/** CNPJ: aceita máscara (pontos, barra, hífen, espaços); devolve só os 14 dígitos; "" limpa. */
+/**
+ * CNPJ numérico ou alfanumérico: aceita máscara (pontos, barra, hífen,
+ * espaços) e letras minúsculas; devolve os 14 caracteres normalizados
+ * (ex.: "12ABC34501DE35"); "" limpa.
+ */
 export function validarCnpj(v: unknown): ResultadoValidacao<string> {
   if (v === null) return { ok: true, valor: "" };
   if (typeof v !== "string") return falhaCampo("cnpj", "CNPJ deve ser um texto.");
   const bruto = v.trim();
   if (bruto === "") return { ok: true, valor: "" };
-  if (bruto.length > 24 || !/^[\d.\-/\s]+$/.test(bruto)) return falhaCampo("cnpj", "CNPJ inválido.");
-  const d = digitosCnpj(bruto);
-  if (!cnpjDigitosValidos(d)) return falhaCampo("cnpj", "CNPJ inválido.");
-  return { ok: true, valor: d };
+  if (bruto.length > 24 || !/^[0-9A-Za-z.\-/\s]+$/.test(bruto)) return falhaCampo("cnpj", "CNPJ inválido.");
+  const c = normalizarCnpj(bruto);
+  if (!cnpjValido(c)) return falhaCampo("cnpj", "CNPJ inválido.");
+  return { ok: true, valor: c };
 }
 
 export function validarPatchPerfilMedico(

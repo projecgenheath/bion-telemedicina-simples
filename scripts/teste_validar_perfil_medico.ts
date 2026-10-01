@@ -2,6 +2,7 @@
  * Teste unitário do validador do PATCH /api/medico/perfil (dados pessoais do
  * médico: data de nascimento, sexo, telefone e CNPJ) e dos helpers
  * isomórficos de src/components/bion/medico/dados-pessoais.ts.
+ * CNPJ: numérico e alfanumérico (exemplo oficial da Receita Federal).
  * Uso: bun scripts/teste_validar_perfil_medico.ts
  */
 import {
@@ -11,9 +12,10 @@ import {
   validarPatchPerfilMedico,
 } from "../src/lib/server/validar-perfil-medico";
 import {
-  cnpjDigitosValidos,
+  cnpjValido,
   formatarCnpj,
   limitesDataNascimentoMedico,
+  normalizarCnpj,
 } from "../src/components/bion/medico/dados-pessoais";
 import { idadeDeNascimento } from "../src/lib/idade";
 
@@ -30,32 +32,78 @@ function verificar(nome: string, cond: boolean, detalhe?: unknown) {
 // "Agora" fixo: 01/10/2026 12:00 em São Paulo (15:00 UTC).
 const AGORA = new Date("2026-10-01T15:00:00Z");
 
-/* ---------------- CNPJ ---------------- */
-// CNPJs com DV válido (exemplos públicos/sintéticos).
+/* ---------------- CNPJ (numérico e alfanumérico) ---------------- */
+// Numéricos com DV válido (exemplos públicos/sintéticos) — mesmo comportamento de antes.
 const VALIDOS = ["11222333000181", "11444777000161", "45723174000110", "04252011000110"];
-for (const c of VALIDOS) verificar(`CNPJ válido ${c}`, cnpjDigitosValidos(c));
-verificar("CNPJ DV1 errado", !cnpjDigitosValidos("11222333000191"));
-verificar("CNPJ DV2 errado", !cnpjDigitosValidos("11222333000182"));
-for (let d = 0; d <= 9; d++) verificar(`CNPJ repetido ${d}×14`, !cnpjDigitosValidos(String(d).repeat(14)));
-verificar("CNPJ 13 dígitos", !cnpjDigitosValidos("1122233300018"));
-verificar("CNPJ 15 dígitos", !cnpjDigitosValidos("112223330001810"));
-verificar("CNPJ com letra", !cnpjDigitosValidos("1122233300018A"));
+for (const c of VALIDOS) verificar(`CNPJ numérico válido ${c}`, cnpjValido(c));
+verificar("CNPJ numérico DV1 errado", !cnpjValido("11222333000191"));
+verificar("CNPJ numérico DV2 errado", !cnpjValido("11222333000182"));
+for (let d = 0; d <= 9; d++) verificar(`CNPJ repetido ${d}×14`, !cnpjValido(String(d).repeat(14)));
+verificar("CNPJ 13 caracteres", !cnpjValido("1122233300018"));
+verificar("CNPJ 15 caracteres", !cnpjValido("112223330001810"));
+
+// Exemplo oficial da Receita Federal (Manual de Cálculo do DV do CNPJ): 12.ABC.345/01DE-35.
+verificar("CNPJ alfanumérico oficial 12ABC34501DE35", cnpjValido("12ABC34501DE35"));
+// Primeiro CNPJ alfanumérico emitido (Receita Federal, notícia de 31/07/2026): 00.000.000/E08G-12.
+verificar("CNPJ alfanumérico real 00.000.000/E08G-12", cnpjValido(normalizarCnpj("00.000.000/E08G-12")));
+verificar("alfanumérico oficial: 1º DV errado", !cnpjValido("12ABC34501DE45"));
+verificar("alfanumérico oficial: 2º DV errado", !cnpjValido("12ABC34501DE36"));
+verificar("alfanumérico: letra trocada muda o DV", !cnpjValido("12ABD34501DE35"));
+verificar("alfanumérico: DV com letra → inválido", !cnpjValido("12ABC34501DE3A"));
+verificar("alfanumérico minúsculo sem normalizar → inválido", !cnpjValido("12abc34501de35"));
+verificar("14 letras iguais → inválido", !cnpjValido("AAAAAAAAAAAAAA"));
+verificar("caractere fora de A-Z0-9 → inválido", !cnpjValido("12ABÇ34501DE35"));
+verificar("normalizarCnpj", normalizarCnpj(" 12.abc.345/01de-35 ") === "12ABC34501DE35");
+// Paridade com o algoritmo numérico tradicional (só dígitos) em amostras aleatórias.
+const dvTradicional = (d: string) => {
+  const calc = (n: number) => {
+    const pesos = n === 12 ? [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2] : [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+    const r = pesos.reduce((s, p, i) => s + p * Number(d[i]), 0) % 11;
+    return r < 2 ? 0 : 11 - r;
+  };
+  const a = calc(12);
+  const b = calc(13);
+  return d.length === 14 && a === Number(d[12]) && b === Number(d[13]);
+};
+let paridade = true;
+for (let i = 0; i < 2000; i++) {
+  const base = Array.from({ length: 12 }, () => Math.floor(Math.random() * 10)).join("");
+  for (const dvs of ["00", "35", "81", String(Math.floor(Math.random() * 100)).padStart(2, "0")]) {
+    const c = base + dvs;
+    if (/^(.)\1{13}$/.test(c)) continue;
+    if (cnpjValido(c) !== dvTradicional(c)) paridade = false;
+  }
+}
+verificar("numérico: paridade com o algoritmo tradicional (8000 amostras)", paridade);
 
 const rMasc = validarCnpj("11.222.333/0001-81");
-verificar("validarCnpj com máscara → só dígitos", rMasc.ok && rMasc.valor === "11222333000181", rMasc);
+verificar("validarCnpj numérico com máscara → normalizado", rMasc.ok && rMasc.valor === "11222333000181", rMasc);
 const rSem = validarCnpj(" 11222333000181 ");
-verificar("validarCnpj sem máscara (trim)", rSem.ok && rSem.valor === "11222333000181", rSem);
+verificar("validarCnpj numérico sem máscara (trim)", rSem.ok && rSem.valor === "11222333000181", rSem);
+const rAlfa = validarCnpj("12.ABC.345/01DE-35");
+verificar("validarCnpj alfanumérico oficial com máscara", rAlfa.ok && rAlfa.valor === "12ABC34501DE35", rAlfa);
+const rAlfaMin = validarCnpj("12.abc.345/01de-35");
+verificar("validarCnpj alfanumérico minúsculo → maiúsculo", rAlfaMin.ok && rAlfaMin.valor === "12ABC34501DE35", rAlfaMin);
+const rAlfaSem = validarCnpj("12ABC34501DE35");
+verificar("validarCnpj alfanumérico sem máscara", rAlfaSem.ok && rAlfaSem.valor === "12ABC34501DE35", rAlfaSem);
 verificar("validarCnpj '' limpa", (() => { const r = validarCnpj(""); return r.ok && r.valor === ""; })());
 verificar("validarCnpj null limpa", (() => { const r = validarCnpj(null); return r.ok && r.valor === ""; })());
 verificar("validarCnpj número → erro", !validarCnpj(11222333000181).ok);
 verificar("validarCnpj DV errado → erro com campo", (() => { const r = validarCnpj("11.222.333/0001-82"); return !r.ok && r.campo === "cnpj"; })());
+verificar("validarCnpj alfanumérico DV errado → erro", !validarCnpj("12.ABC.345/01DE-36").ok);
 verificar("validarCnpj repetido → erro", !validarCnpj("00.000.000/0000-00").ok);
-verificar("validarCnpj letras → erro", !validarCnpj("11.222.333/0001-8a").ok);
+verificar("validarCnpj letras repetidas → erro", !validarCnpj("AA.AAA.AAA/AAAA-AA").ok);
+verificar("validarCnpj DV com letra → erro", !validarCnpj("11.222.333/0001-8a").ok);
+verificar("validarCnpj caractere especial → erro", !validarCnpj("12.ABC.345/01DE_35").ok);
+verificar("validarCnpj acento → erro", !validarCnpj("12.ÁBC.345/01DE-35").ok);
 verificar("validarCnpj gigante → erro", !validarCnpj("1".repeat(100)).ok);
 
-verificar("formatarCnpj", formatarCnpj("11222333000181") === "11.222.333/0001-81");
-verificar("formatarCnpj idempotente", formatarCnpj("11.222.333/0001-81") === "11.222.333/0001-81");
+verificar("formatarCnpj numérico", formatarCnpj("11222333000181") === "11.222.333/0001-81");
+verificar("formatarCnpj alfanumérico", formatarCnpj("12ABC34501DE35") === "12.ABC.345/01DE-35");
+verificar("formatarCnpj normaliza minúsculas", formatarCnpj("12abc34501de35") === "12.ABC.345/01DE-35");
+verificar("formatarCnpj idempotente", formatarCnpj("12.ABC.345/01DE-35") === "12.ABC.345/01DE-35");
 verificar("formatarCnpj incompleto → ''", formatarCnpj("1122") === "");
+verificar("formatarCnpj DV com letra → ''", formatarCnpj("12ABC34501DEAB") === "");
 verificar("formatarCnpj vazio/null → ''", formatarCnpj("") === "" && formatarCnpj(null) === "");
 
 /* ---------------- Data de nascimento (18–100) ---------------- */
@@ -94,6 +142,8 @@ verificar("sexo null limpa", (() => { const r = validarGeneroMedico(null); retur
 /* ---------------- PATCH completo ---------------- */
 const p = (c: unknown) => validarPatchPerfilMedico(c, AGORA);
 const completo = p({ dataNascimento: "1980-05-10", genero: "Feminino", telefone: "11912345678", cnpj: "11.222.333/0001-81" });
+const completoAlfa = p({ cnpj: "12.abc.345/01de-35" });
+verificar("PATCH CNPJ alfanumérico → normalizado", completoAlfa.ok && completoAlfa.valor.dados.cnpj === "12ABC34501DE35", completoAlfa);
 verificar(
   "PATCH completo",
   completo.ok &&

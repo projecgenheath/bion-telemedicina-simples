@@ -1,6 +1,7 @@
 -- BION — Médicos (fase 2, parte 1): dados pessoais do médico no perfil
--- (PerfilMedico.dataNascimento, genero, telefone) e CNPJ (PerfilMedico.cnpj,
--- só dígitos — 14 — ou '' quando não informado).
+-- (PerfilMedico.dataNascimento, genero, telefone) e CNPJ (PerfilMedico.cnpj:
+-- 14 caracteres normalizados, numérico ou alfanumérico, ou '' quando não
+-- informado).
 --
 -- ⚠️ APLICAR ANTES DO DEPLOY DO CÓDIGO. O Prisma seleciona TODAS as colunas do
 -- PerfilMedico (bootstrap, /api/consultas, /api/avaliacoes, /api/medicos…):

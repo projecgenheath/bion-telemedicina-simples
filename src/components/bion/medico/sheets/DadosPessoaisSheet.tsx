@@ -7,10 +7,10 @@ import {
   GENEROS_MEDICO,
   IDADE_MAXIMA_MEDICO,
   IDADE_MINIMA_MEDICO,
-  cnpjDigitosValidos,
-  digitosCnpj,
+  cnpjValido,
   formatarCnpj,
   limitesDataNascimentoMedico,
+  normalizarCnpj,
   type DadosPessoaisMedico,
 } from "../dados-pessoais";
 import { Campo, SheetMedico } from "./SheetMedico";
@@ -33,7 +33,7 @@ function normalizado(f: Form): Form {
     dataNascimento: f.dataNascimento.trim(),
     genero: f.genero,
     telefone: f.telefone.trim(),
-    cnpj: digitosCnpj(f.cnpj),
+    cnpj: normalizarCnpj(f.cnpj),
   };
 }
 
@@ -47,7 +47,7 @@ function validarLocal(f: Form): Partial<Record<CampoForm, string>> {
       erros.dataNascimento = `A idade deve estar entre ${IDADE_MINIMA_MEDICO} e ${IDADE_MAXIMA_MEDICO} anos.`;
     }
   }
-  if (f.cnpj && !cnpjDigitosValidos(f.cnpj)) erros.cnpj = "CNPJ inválido. Confira os 14 dígitos.";
+  if (f.cnpj && !cnpjValido(f.cnpj)) erros.cnpj = "CNPJ inválido. Confira os 14 caracteres.";
   return erros;
 }
 
@@ -161,12 +161,19 @@ export function DadosPessoaisSheet({
             aria-label="Telefone"
           />
         </Campo>
-        <Campo rotulo="CNPJ (opcional)" erro={erros.cnpj} ajuda="Se você atende como pessoa jurídica. Formato 00.000.000/0000-00.">
+        <Campo
+          rotulo="CNPJ (opcional)"
+          erro={erros.cnpj}
+          ajuda="Se você atende como pessoa jurídica. Numérico (00.000.000/0000-00) ou alfanumérico (12.ABC.345/01DE-35)."
+        >
           <input
-            inputMode="numeric"
+            inputMode="text"
+            autoCapitalize="characters"
+            autoCorrect="off"
+            spellCheck={false}
             maxLength={18}
             value={form.cnpj}
-            onChange={(e) => mudar("cnpj", e.target.value)}
+            onChange={(e) => mudar("cnpj", e.target.value.toUpperCase().replace(/[^0-9A-Z.\-/\s]/g, ""))}
             onBlur={() => {
               const f = formatarCnpj(form.cnpj);
               if (f) setForm((x) => ({ ...x, cnpj: f }));
