@@ -132,7 +132,7 @@ type EstadoFresco = {
   }[];
   arquivos: {
     id: string; nome: string; tipo: string; tamanhoKb: number; enviadoPor: string;
-    consulta: string; createdAt: string;
+    consulta: string; createdAt: string; pacienteId?: string | null;
   }[];
   notificacoes: {
     id: string; paraRole?: string | null; tipo: string; titulo: string; texto: string;
@@ -255,6 +255,7 @@ const mapArquivo = (a: EstadoFresco["arquivos"][number]): Arquivo => ({
   enviadoPor: a.enviadoPor as Arquivo["enviadoPor"], data: fmtLonga(a.createdAt),
   consulta: a.consulta,
   storagePath: (a as { storagePath?: string | null }).storagePath ?? null,
+  pacienteId: a.pacienteId ?? null,
 });
 
 const mapNotificacao = (n: EstadoFresco["notificacoes"][number]): Notificacao => ({
@@ -416,7 +417,12 @@ type Store = {
   concluirAnamnese: (consultaId: string) => Promise<boolean>;
   pularAnamnese: (consultaId: string) => Promise<boolean>;
   registrarDocAnamnese: (consultaId: string, doc: { nome: string; tipo: string; exameImportado: boolean; resumo?: string }) => void;
-  adicionarArquivo: (a: Omit<Arquivo, "id" | "data"> & { file?: File }) => void;
+  /**
+   * A3: médico deve informar o destinatário — `pacienteId` e/ou `consultaId`
+   * (o servidor deriva/valida). Sem nenhum, o arquivo fica sem destinatário
+   * (visível só a quem enviou e ao admin). Paciente: ignorado (sempre ele).
+   */
+  adicionarArquivo: (a: Omit<Arquivo, "id" | "data"> & { file?: File; consultaId?: string }) => void;
   marcarLida: (id: string) => void;
   marcarTodasLidas: () => void;
   avaliacoes: Avaliacao[];
@@ -1151,13 +1157,15 @@ export function BionProvider({ children }: { children: ReactNode }) {
   );
 
   const adicionarArquivo = useCallback(
-    (a: Omit<Arquivo, "id" | "data"> & { file?: File }) => {
+    (a: Omit<Arquivo, "id" | "data"> & { file?: File; consultaId?: string }) => {
       if (a.file) {
         const fd = new FormData();
         fd.append("file", a.file);
         fd.append("nome", a.nome);
         fd.append("tipo", a.tipo);
         fd.append("consulta", a.consulta || "");
+        if (a.pacienteId) fd.append("pacienteId", a.pacienteId);
+        if (a.consultaId) fd.append("consultaId", a.consultaId);
         void (async () => {
           try {
             const res = await fetch("/api/arquivos", { method: "POST", body: fd, credentials: "include" });
@@ -1186,6 +1194,8 @@ export function BionProvider({ children }: { children: ReactNode }) {
         tamanhoKb: a.tamanhoKb,
         enviadoPor: a.enviadoPor,
         consulta: a.consulta,
+        ...(a.pacienteId ? { pacienteId: a.pacienteId } : {}),
+        ...(a.consultaId ? { consultaId: a.consultaId } : {}),
       });
     },
     [mutar],

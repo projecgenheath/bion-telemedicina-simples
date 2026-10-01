@@ -291,9 +291,9 @@ async function main() {
   }});
 
   console.log("Criando arquivos...");
-  await db.arquivo.create({ data: { nome: "hemograma-completo.pdf", tipo: "Exame laboratorial", tamanhoKb: 480, enviadoPor: "paciente", usuarioId: marina.id, consulta: "Clínica Geral — Dra. Ana Ribeiro", createdAt: em(-30, 9, 12) } });
-  await db.arquivo.create({ data: { nome: "receita-losartana.pdf", tipo: "Receita", tamanhoKb: 120, enviadoPor: "medico", usuarioId: medicos["Dra. Ana Ribeiro"], consulta: "Clínica Geral — Dra. Ana Ribeiro", createdAt: em(-22, 15, 12) } });
-  await db.arquivo.create({ data: { nome: "eletrocardiograma-laudo.pdf", tipo: "Exame cardiológico", tamanhoKb: 650, enviadoPor: "paciente", usuarioId: marina.id, consulta: "Cardiologia — Dr. Carlos Mendes", createdAt: em(-35, 14, 45) } });
+  await db.arquivo.create({ data: { nome: "hemograma-completo.pdf", tipo: "Exame laboratorial", tamanhoKb: 480, enviadoPor: "paciente", usuarioId: marina.id, pacienteId: marina.id, consulta: "Clínica Geral — Dra. Ana Ribeiro", createdAt: em(-30, 9, 12) } });
+  await db.arquivo.create({ data: { nome: "receita-losartana.pdf", tipo: "Receita", tamanhoKb: 120, enviadoPor: "medico", usuarioId: medicos["Dra. Ana Ribeiro"], pacienteId: marina.id, consulta: "Clínica Geral — Dra. Ana Ribeiro", createdAt: em(-22, 15, 12) } });
+  await db.arquivo.create({ data: { nome: "eletrocardiograma-laudo.pdf", tipo: "Exame cardiológico", tamanhoKb: 650, enviadoPor: "paciente", usuarioId: marina.id, pacienteId: marina.id, consulta: "Cardiologia — Dr. Carlos Mendes", createdAt: em(-35, 14, 45) } });
 
   console.log("Criando notificações...");
   await db.notificacao.create({ data: { usuarioId: marina.id, paraRole: "PACIENTE", tipo: "agenda", titulo: "Sua consulta é hoje!", texto: "Dra. Ana Ribeiro às 14:30. A sala de espera já está disponível para testes de câmera.", lida: false, createdAt: em(0, 13, 45) } });

@@ -4,6 +4,7 @@ import { canalNotificacoes } from "@/lib/supabase/realtime";
 import { db } from "@/lib/db";
 import type { Prisma } from "@prisma/client";
 import type { UsuarioSessao } from "./auth";
+import { whereArquivosVisiveis } from "./arquivos-acesso";
 
 /* ------------------------------------------------------------------ */
 /* Utilitários de data (rótulos do cliente: "Hoje", "Amanhã", "12 Dez") */
@@ -158,6 +159,7 @@ export function arquivoWire(a: ArquivoRow) {
     enviadoPor: a.enviadoPor,
     consulta: a.consulta,
     storagePath: (a as { storagePath?: string | null }).storagePath ?? null,
+    pacienteId: a.pacienteId ?? null,
     createdAt: a.createdAt.toISOString(),
   };
 }
@@ -401,16 +403,11 @@ export async function carregarDados(usuario: UsuarioSessao) {
       ? { OR: [{ medicoId: usuario.id }, { pacienteId: { in: idsPacientes } }] }
       : {};
 
-  // Visibilidade de arquivos: próprios + trocados com pacientes vinculados.
-  // A3 (auditoria 2026-09): o PACIENTE vê só os PRÓPRIOS uploads. `Arquivo`
-  // não tem destinatário (usuarioId = quem enviou), então "arquivos dos meus
-  // médicos" incluía os enviados a OUTROS pacientes (vazamento LGPD). O
-  // download desses arquivos já era negado ao paciente em GET /api/arquivos.
-  const arquivoWhere: Record<string, unknown> = souPaciente
-    ? { usuarioId: usuario.id }
-    : souMedico
-      ? { OR: [{ usuarioId: usuario.id }, { usuarioId: { in: idsPacientes } }] }
-      : {};
+  // Visibilidade de arquivos — A3/A4: MESMA regra do download
+  // (GET /api/arquivos), via helper único. Paciente: enviados por ele OU
+  // destinados a ele (Arquivo.pacienteId). Médico: próprios, enviados por
+  // paciente vinculado OU destinados a paciente vinculado. Admin: todos.
+  const arquivoWhere = whereArquivosVisiveis(usuario);
 
   const avaliacaoWhere = souPaciente
     ? { pacienteId: usuario.id }
