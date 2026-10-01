@@ -33,7 +33,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     const por: PorEvento = ehAdmin ? "admin" : ehDonoMedico ? "medico" : "paciente";
     const eventos = await db.eventoConsulta.findMany({
       where: { consultaId: id },
-      select: { por: true, em: true, dataAnterior: true },
+      select: { por: true, em: true, dataAnterior: true, motivo: true },
     });
     const previa = calcularMulta({ consulta, eventos, por });
     const encerrada = consulta.status === "cancelada" || consulta.status === "concluida";

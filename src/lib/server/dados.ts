@@ -119,7 +119,23 @@ export type ConsultaComNomes = Prisma.ConsultaGetPayload<{
   include: { medico: { select: { nome: true } }; paciente: { select: { nome: true } } };
 }>;
 
-export function consultaWire(c: ConsultaComNomes) {
+/** Reserva de remarcação paga (RemarcacaoPendente) — só os campos do wire. */
+type ReservaRemarcacaoRow = { novaData: Date; expiraEm: Date; multaCentavos: number; status: string };
+
+/** Include das reservas VIGENTES (pendente e dentro do prazo) para o wire. */
+export function includeReservaVigente(agora: Date = new Date()) {
+  return {
+    where: { status: "pendente", expiraEm: { gt: agora } },
+    select: { novaData: true, expiraEm: true, multaCentavos: true, status: true },
+    orderBy: { criadoEm: "desc" as const },
+    take: 1,
+  };
+}
+
+export function consultaWire(c: ConsultaComNomes & { remarcacoes?: ReservaRemarcacaoRow[] }) {
+  // Remarcação com multa aguardando pagamento: a data que vale continua sendo
+  // dataInicio; novaData fica "reservada" até o pagamento ser aprovado.
+  const reserva = c.remarcacoes?.find((r) => r.status === "pendente" && r.expiraEm.getTime() > Date.now());
   return {
     id: c.id,
     medicoId: c.medicoId,
@@ -135,6 +151,14 @@ export function consultaWire(c: ConsultaComNomes) {
     valor: c.valor,
     pago: c.pago,
     remarcada: c.remarcada || undefined,
+    remarcacaoPendente: reserva
+      ? {
+          novaData: reserva.novaData.toISOString(),
+          expiraEm: reserva.expiraEm.toISOString(),
+          multaCentavos: reserva.multaCentavos,
+          status: "pendente" as const,
+        }
+      : null,
   };
 }
 
@@ -383,6 +407,7 @@ export async function carregarDados(usuario: UsuarioSessao) {
       include: {
         medico: { select: { nome: true } },
         paciente: { select: { nome: true } },
+        remarcacoes: includeReservaVigente(),
       },
       orderBy: { dataInicio: "asc" },
       // P2: admin não baixa agenda infinita no bootstrap
