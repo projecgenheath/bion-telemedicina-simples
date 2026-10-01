@@ -16,6 +16,7 @@ import {
 } from "@/lib/server/anamnese-motor";
 import { validarTelefone } from "@/lib/server/validar-perfil";
 import { dataNascimentoParaIso, idadeDeNascimento } from "@/lib/idade";
+import { anonimizarMensagensIa } from "@/lib/server/anonimizar-ia";
 import { alturaCanonica, formatarAltura, formatarPeso, lerAlturaCm, lerPesoKg, medidaCanonica, pesoCanonico } from "@/lib/medidas-paciente";
 
 /**
@@ -204,7 +205,7 @@ const promptSistema = (ctx: {
   etapa: string;
   coleta: Coleta;
   perfil: string;
-}) => `Você é a BION IA, assistente clínica da plataforma de telemedicina BION. Você conduz a TRIAGEM PRÉ-CONSULTA do usuário — uma consulta de ${ctx.especialidade} com ${ctx.medico}, marcada para ${ctx.quando}. A consulta JÁ está confirmada e paga; seu papel é ouvir e organizar a história do paciente para o médico receber um dossiê pronto antes do atendimento. Dirija-se a quem fala contigo sempre como "você" — o nome dele está nos dados do perfil abaixo.
+}) => `Você é a BION IA, assistente clínica da plataforma de telemedicina BION. Você conduz a TRIAGEM PRÉ-CONSULTA do usuário — uma consulta de ${ctx.especialidade} com ${ctx.medico}, marcada para ${ctx.quando}. A consulta JÁ está confirmada e paga; seu papel é ouvir e organizar a história do paciente para o médico receber um dossiê pronto antes do atendimento. Dirija-se a quem fala contigo sempre como "você" — por privacidade, o nome e os contatos do paciente NÃO são informados a você (não pergunte por eles).
 
 ETAPA ATUAL: ${ROTULO_ETAPA[ctx.etapa] ?? ctx.etapa} (índice interno: ${ctx.etapa})
 
@@ -301,16 +302,17 @@ async function montarPerfilDados(usuarioId: string): Promise<PerfilDados | null>
   };
 }
 
-function perfilParaPrompt(d: PerfilDados | null, nome: string): string {
+// M6: sem identificadores diretos (nome, telefone, CPF, e-mail, data de
+// nascimento) — só o necessário para a triagem clínica.
+function perfilParaPrompt(d: PerfilDados | null): string {
   if (!d) return "Perfil não preenchido — comece a identificação perguntando o básico.";
   const lista = (v: string[]) => (v.length ? v.join(", ") : "—");
   return [
-    `Nome: ${nome}`,
     `Idade: ${d.idade || "não informada"}`,
     `Sexo: ${d.genero || "não informado"}`,
     `Profissão: ${d.profissao || "não informada"}`,
     `Estado civil: ${d.estadoCivil || "não informado"}`,
-    `Telefone: ${d.telefone || "não informado"}`,
+    `Telefone: ${d.telefone ? "cadastrado (número não enviado à IA)" : "não informado"}`,
     `Alergias/intolerâncias: ${lista(d.alergias)}`,
     `Comorbidades: ${lista(d.comorbidades)}`,
     `Medicamentos em uso: ${lista(d.medicamentos)}`,
@@ -533,7 +535,7 @@ export async function POST(req: NextRequest) {
                 quando,
                 etapa: etapaAtual,
                 coleta: coletaAtual,
-                perfil: perfilParaPrompt(perfilDados, usuario.nome),
+                perfil: perfilParaPrompt(perfilDados),
               }) + (instrucaoAbertura ? `\n\n${instrucaoAbertura}` : ""),
           },
           ...historico.map((m) => ({
@@ -542,7 +544,22 @@ export async function POST(req: NextRequest) {
           })),
           { role: "user" as const, content: mensagem || "(retomar etapa)" },
         ];
-        const llmRes = await chatComFonte(mensagens, TIMEOUT_LLM_MS, anonNomes(usuario, consulta.medico.nome, perfilDados?.genero ?? ""));
+        // M6: identificadores diretos do paciente saem de todo o texto (prompt
+        // e mensagens digitadas) para QUALQUER canal de IA. A extração
+        // determinística de telefone/peso/altura usa a `mensagem` original.
+        const idsPerfil = await db.perfilPaciente.findUnique({
+          where: { userId: usuario.id },
+          select: { cpf: true, telefone: true, dataNascimento: true },
+        });
+        const mensagensIa = anonimizarMensagensIa(mensagens, {
+          nome: usuario.nome,
+          email: usuario.email,
+          cpf: idsPerfil?.cpf,
+          telefone: idsPerfil?.telefone,
+          dataNascimento: dataNascimentoParaIso(idsPerfil?.dataNascimento),
+          substitutoNome: (perfilDados?.genero ?? "").toLowerCase().startsWith("m") ? "o paciente" : "a paciente",
+        });
+        const llmRes = await chatComFonte(mensagensIa, TIMEOUT_LLM_MS, anonNomes(usuario, consulta.medico.nome, perfilDados?.genero ?? ""));
         llmFonte = llmRes.fonte;
         parsed = llmRes.texto ? extrairJson(llmRes.texto) : null;
 

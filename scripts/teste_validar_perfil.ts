@@ -29,6 +29,7 @@ import {
   lerDataIso,
 } from "../src/lib/idade";
 import { validarDataNascimento } from "../src/lib/server/validar-perfil";
+import { anonimizarMensagensIa, removerIdentificadores } from "../src/lib/server/anonimizar-ia";
 
 let passou = 0;
 let falhou = 0;
@@ -225,6 +226,37 @@ verificar("lerDataIso não-string → null", lerDataIso(19900101) === null && le
   const limpa = validarPatchPerfil({ dataNascimento: null }, agora);
   verificar("PATCH data null limpa e mantém idade legada", limpa.ok && limpa.valor.perfil.dataNascimento === null && limpa.valor.perfil.idade === undefined, limpa);
   verificar("PATCH data inválida → 400", !validarPatchPerfil({ dataNascimento: "31/12/1990" }, agora).ok);
+}
+
+// --- M6: identificadores diretos fora do texto enviado à IA ---
+{
+  const ids = {
+    nome: "Marina Souza da Costa",
+    email: "marina@bion.com",
+    cpf: "529.982.247-25",
+    telefone: "(11) 98765-4321",
+    dataNascimento: "1994-03-15",
+  };
+  const t = removerIdentificadores(
+    "Sou Marina Souza da Costa, CPF 52998224725, tel 11987654321, nasci em 15/03/1994, marina@bion.com, CEP 01310-100",
+    ids,
+  );
+  verificar("IA: nome completo removido", !/marina|souza|costa/i.test(t), t);
+  verificar("IA: CPF removido", !t.includes("52998224725") && t.includes("[CPF removido]"), t);
+  verificar("IA: telefone removido", !t.includes("11987654321") && t.includes("[telefone removido]"), t);
+  verificar("IA: data de nascimento exata removida", !t.includes("15/03/1994"), t);
+  verificar("IA: e-mail removido", !t.includes("marina@bion.com"), t);
+  verificar("IA: CEP removido", !t.includes("01310-100"), t);
+  const clinico = "Pressão 120/80, glicemia 99 mg/dL desde 10/09/2026, peso 62 kg, Losartana 50 mg 1x/dia, dor 7/10";
+  verificar("IA: dado clínico preservado", removerIdentificadores(clinico, ids) === clinico, removerIdentificadores(clinico, ids));
+  verificar("IA: primeiro nome isolado removido", removerIdentificadores("a marina disse", ids) === "a o paciente disse");
+  verificar("IA: palavra que só contém o sobrenome fica", removerIdentificadores("Costela", ids) === "Costela");
+  verificar("IA: CPF formatado de terceiro removido", removerIdentificadores("cpf 111.444.777-35", {}) === "cpf [CPF removido]");
+  verificar("IA: celular com +55 removido", removerIdentificadores("+55 21 99876-5432", {}) === "[telefone removido]");
+  verificar("IA: e-mail qualquer removido", removerIdentificadores("x.y@exemplo.com.br", {}) === "[e-mail removido]");
+  verificar("IA: nome acentuado", removerIdentificadores("Fale com Ângela Érica", { nome: "Ângela Érica", substitutoNome: "o usuário" }) === "Fale com o usuário");
+  const msgs = anonimizarMensagensIa([{ role: "user" as const, content: "sou a Marina" }], ids);
+  verificar("IA: mensagens mantêm role", msgs[0].role === "user" && msgs[0].content === "sou a o paciente", msgs);
 }
 
 // --- foto (A2) ---
