@@ -61,11 +61,21 @@ export async function POST(req: NextRequest) {
 
       if (!error && data.user) {
         await resetarAsync(chaveFalhas);
-        const row = await garantirUsuarioPrismaDeAuth({
-          supabaseId: data.user.id,
-          email: emailNormado,
-          nome: (data.user.user_metadata?.nome as string) || emailNormado.split("@")[0],
-        });
+        // A5: a senha recém-validada no Auth serve de prova para vincular uma
+        // conta legada de mesmo e-mail; sem prova, 409 e a sessão Auth é
+        // encerrada (não fica cookie de um Auth sem usuário vinculado).
+        let row: Awaited<ReturnType<typeof garantirUsuarioPrismaDeAuth>>;
+        try {
+          row = await garantirUsuarioPrismaDeAuth({
+            supabaseId: data.user.id,
+            email: emailNormado,
+            nome: (data.user.user_metadata?.nome as string) || emailNormado.split("@")[0],
+            senhaParaVincular: senha,
+          });
+        } catch (erroVinculo) {
+          await supabase.auth.signOut().catch(() => {});
+          throw erroVinculo;
+        }
         if (row.status !== "ativo") {
           await supabase.auth.signOut();
           return NextResponse.json(
