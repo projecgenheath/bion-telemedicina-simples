@@ -32,7 +32,8 @@ model User {
   consultasComoMedico  Consulta[]     @relation("ConsultaMedico")
   documentosEmitidos   Documento[]    @relation("DocumentoMedico")
   documentosRecebidos  Documento[]    @relation("DocumentoPaciente")
-  arquivos             Arquivo[]
+  arquivos             Arquivo[]      @relation("ArquivoUsuario")
+  arquivosRecebidos    Arquivo[]      @relation("ArquivoPaciente")
   notificacoes         Notificacao[]
   avaliacoes           Avaliacao[]    @relation("AvaliacaoPaciente")
   avaliacoesRecebidas  Avaliacao[]    @relation("AvaliacaoMedico")
@@ -269,12 +270,21 @@ model Arquivo {
   tipo        String
   tamanhoKb   Int
   enviadoPor  String // paciente | medico
+  /// Quem ENVIOU o arquivo (paciente ou médico).
   usuarioId   String
-  usuario     User     @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  usuario     User     @relation("ArquivoUsuario", fields: [usuarioId], references: [id], onDelete: Cascade)
+  /// Paciente a quem o arquivo pertence/destina (A3). Upload de paciente = ele
+  /// mesmo; upload de médico = paciente com quem o médico tem consulta.
+  /// Nulo = legado sem destinatário identificável (só o remetente/admin veem).
+  /// Migração: supabase/migrations/20260930_arquivo_paciente_id.sql
+  pacienteId  String?
+  paciente    User?    @relation("ArquivoPaciente", fields: [pacienteId], references: [id], onDelete: SetNull)
   consulta    String   @default("")
   /// Path no bucket Supabase Storage (documentos), se houver upload real
   storagePath String?
   createdAt   DateTime @default(now())
+
+  @@index([pacienteId])
 }
 
 model Notificacao {
@@ -376,4 +386,21 @@ model AuditLog {
   entidadeId String?
   detalhes   String?
   createdAt  DateTime @default(now())
+}
+
+// Cofre de identificação (LGPD art. 16, I + Lei 13.787/2018): identificação
+// mínima (nome, CPF, data de nascimento) do paciente ANONIMIZADO, cifrada com
+// AES-256-GCM (chave BION_COFRE_CHAVE, só no servidor), para reidentificar o
+// prontuário preservado por obrigação legal. Busca exata por HMAC-SHA256.
+// `userId` é String simples SEM @relation de propósito (não altera o model User).
+model IdentificacaoCofre {
+  id            String   @id @default(cuid())
+  userId        String   @unique // id do User (paciente) anonimizado
+  dadosCifrados String // "v1:iv:tag:ciphertext" (base64)
+  cpfHash       String? // HMAC-SHA256 do CPF só com dígitos
+  nomeHash      String? // HMAC-SHA256 do nome sem acento, minúsculo
+  createdAt     DateTime @default(now())
+
+  @@index([cpfHash])
+  @@index([nomeHash])
 }
