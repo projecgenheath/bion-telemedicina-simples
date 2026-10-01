@@ -63,11 +63,9 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
       .slice(0, 2)
       .map((p) => p[0]!.toUpperCase())
       .join("");
-  const dadosPaciente = pacientes.find(
-    (p) =>
-      (role === "medico" ? p.id === consultaAtual?.pacienteId : p.nome === sessao.nome) ||
-      p.nome === (role === "medico" ? contraparteNome : sessao.nome),
-  );
+  // Só por id: comparar por nome mostrava dados de um homônimo.
+  const idPacienteSala = role === "medico" ? consultaAtual?.pacienteId : sessao.id;
+  const dadosPaciente = idPacienteSala ? pacientes.find((p) => p.id === idPacienteSala) : undefined;
 
   // ── WebRTC REAL (Fase 2): mídia P2P + sinalização via banco ──
   const tele = useTeleconsulta(consultaAtual?.id);
