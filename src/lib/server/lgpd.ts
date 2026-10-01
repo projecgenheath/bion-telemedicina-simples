@@ -6,11 +6,15 @@ import { createSupabaseAdminClient } from "@/lib/supabase/server";
 import { BUCKET_DOCUMENTOS } from "@/lib/supabase/storage";
 import {
   cifrarIdentificacao,
+  complementarIdentificacao,
+  dataNascimentoParaCofre,
+  decifrarIdentificacao,
   exigirChaveCofre,
-  extrairDataNascimento,
   hashCpf,
   hashNome,
+  type IdentificacaoClara,
 } from "@/lib/server/cofre";
+import { dataNascimentoParaIso, idadeDeNascimento } from "@/lib/idade";
 
 /**
  * Anonimização LGPD (art. 12 / art. 16) de um paciente, feita pela administração.
@@ -19,7 +23,8 @@ import {
  *
  * 1) CADASTRO / LOGIN / DADOS NÃO CLÍNICOS — anonimizados ou removidos:
  *    identidade (nome, e-mail, senha), dados cadastrais do perfil (CPF,
- *    telefone, foto, profissão, estado civil, convênio), usuário no Supabase
+ *    data de nascimento, telefone, foto, profissão, estado civil, convênio —
+ *    ver DADOS_PERFIL_PSEUDONIMIZADO), usuário no Supabase
  *    Auth, arquivos PESSOAIS no Storage, consentimentos (`quem`), nomes na
  *    auditoria, tickets, comentários de avaliação, lembretes, notificações e
  *    mensagens trocadas com quem NÃO é médico (suporte/admin).
@@ -29,8 +34,9 @@ import {
  *    medições, documentos clínicos (receitas, atestados, solicitações),
  *    arquivos clínicos, mensagens com médicos e os dados clínicos do perfil
  *    (alergias, medicamentos, comorbidades, tipo sanguíneo, peso, altura,
- *    idade, gênero). A Lei 13.787/2018 (art. 6º) exige guarda do prontuário
- *    por no mínimo 20 anos; a LGPD (art. 16, I) autoriza a conservação para
+ *    idade, gênero — a IDADE fica: o histórico clínico usa; a data de
+ *    nascimento exata sai do cadastro e vai só para o cofre). A Lei
+ *    13.787/2018 (art. 6º) exige guarda do prontuário por no mínimo 20 anos; a LGPD (art. 16, I) autoriza a conservação para
  *    cumprimento de obrigação legal. O vínculo clínico continua pelo `id`
  *    interno do paciente, agora sem nome/e-mail/CPF (pseudônimo).
  *
@@ -38,7 +44,8 @@ import {
  *   a) Supabase Auth (remove o usuário; "não encontrado" = já removido);
  *   b) Storage (remove só objetos pessoais; remover o que não existe é ok);
  *   c) Postgres numa transação — incluindo o COFRE de identificação
- *      (nome, CPF, data de nascimento cifrados; ver src/lib/server/cofre.ts),
+ *      (nome, CPF, data de nascimento cifrados; ver src/lib/server/cofre.ts;
+ *      a data vem de PerfilPaciente.dataNascimento, com fallback na anamnese),
  *      gravado ANTES/junto da pseudonimização, de forma atômica.
  * Sem `BION_COFRE_CHAVE` válida a operação recusa com 503 antes de tudo.
  * Se (a) ou (b) falhar, NADA é alterado no banco e o erro sobe (502/503) —
@@ -54,6 +61,23 @@ export const DOMINIO_EMAIL_ANON = "anon.bion.app";
 export function estaAnonimizado(u: { email: string }): boolean {
   return u.email.toLowerCase().endsWith(`@${DOMINIO_EMAIL_ANON}`);
 }
+
+/**
+ * Campos CADASTRAIS do PerfilPaciente zerados na pseudonimização. A data de
+ * nascimento exata é identificador direto: sai do perfil (null) e fica só no
+ * cofre cifrado. Dados clínicos (alergias, medicamentos, comorbidades, tipo
+ * sanguíneo, peso, altura, IDADE, gênero) fazem parte do prontuário e ficam —
+ * por isso `idade` NÃO está aqui.
+ */
+export const DADOS_PERFIL_PSEUDONIMIZADO = {
+  cpf: "",
+  dataNascimento: null,
+  telefone: "",
+  convenio: "Particular",
+  profissao: "",
+  estadoCivil: "",
+  foto: null,
+} as const;
 
 function erroStatus(msg: string, status: number): Error & { status?: number } {
   const e = new Error(msg) as Error & { status?: number };
@@ -300,6 +324,8 @@ export async function anonimizarPacienteCompleto(pacienteId: string): Promise<Re
 
   // ---- Cofre: identificação real cifrada (só na 1ª anonimização — numa
   //      reexecução o nome/CPF reais já não existem no cadastro) ----
+  //      Data de nascimento: PerfilPaciente.dataNascimento ("YYYY-MM-DD", data
+  //      pura); só se vazia, o fallback da anamnese.
   const registroCofre = jaEstavaAnonimizado
     ? null
     : {
@@ -307,7 +333,10 @@ export async function anonimizarPacienteCompleto(pacienteId: string): Promise<Re
         dadosCifrados: cifrarIdentificacao(pacienteId, {
           nome: paciente.nome,
           cpf: paciente.perfilPaciente?.cpf ?? "",
-          dataNascimento: extrairDataNascimento(anamneses.map((a) => a.coleta)),
+          dataNascimento: dataNascimentoParaCofre(
+            paciente.perfilPaciente?.dataNascimento,
+            anamneses.map((a) => a.coleta),
+          ),
         }),
         cpfHash: hashCpf(paciente.perfilPaciente?.cpf ?? ""),
         nomeHash: hashNome(paciente.nome),
@@ -366,6 +395,39 @@ export async function anonimizarPacienteCompleto(pacienteId: string): Promise<Re
           create: registroCofre,
           update: {},
         });
+      } else {
+        // Reexecução com data de nascimento ainda no perfil (conta anonimizada
+        // antes de a data ir para o cofre): complementa o cofre ANTES de
+        // apagar a data (passo 2), na mesma transação.
+        const dataPerfil = dataNascimentoParaIso(paciente.perfilPaciente?.dataNascimento);
+        if (dataPerfil) {
+          const existente = await tx.identificacaoCofre.findUnique({ where: { userId: pacienteId } });
+          let claro: IdentificacaoClara | null = null;
+          if (existente) {
+            try {
+              claro = decifrarIdentificacao(pacienteId, existente.dadosCifrados);
+            } catch {
+              throw erroStatus(
+                "Não foi possível ler o registro do cofre deste paciente (chave trocada ou registro adulterado). Nada foi alterado no banco.",
+                503,
+              );
+            }
+          }
+          const novo = complementarIdentificacao(claro, dataPerfil);
+          if (novo) {
+            const dadosCifrados = cifrarIdentificacao(pacienteId, novo);
+            await tx.identificacaoCofre.upsert({
+              where: { userId: pacienteId },
+              create: {
+                userId: pacienteId,
+                dadosCifrados,
+                cpfHash: hashCpf(novo.cpf),
+                nomeHash: hashNome(novo.nome),
+              },
+              update: { dadosCifrados },
+            });
+          }
+        }
       }
 
       // 1) Identidade / login: nome, e-mail, senha inutilizada, sem vínculo com o Auth.
@@ -381,18 +443,19 @@ export async function anonimizarPacienteCompleto(pacienteId: string): Promise<Re
         },
       });
 
-      // 2) Perfil: só os dados CADASTRAIS. Dados clínicos (alergias,
+      // 2) Perfil: só os dados CADASTRAIS (inclusive a data de nascimento,
+      //    já guardada no cofre no passo 0). Dados clínicos (alergias,
       //    medicamentos, comorbidades, tipo sanguíneo, peso, altura, idade,
-      //    gênero) fazem parte do prontuário e ficam.
+      //    gênero) fazem parte do prontuário e ficam. Sem a data, a idade
+      //    exibida passa a ser a coluna `idade`: ela é atualizada para a idade
+      //    calculada HOJE (a que o sistema mostrava), congelada daqui em diante.
+      const isoNascimento = dataNascimentoParaIso(paciente.perfilPaciente?.dataNascimento);
+      const idadeNaAnonimizacao = isoNascimento ? idadeDeNascimento(isoNascimento) : null;
       await tx.perfilPaciente.updateMany({
         where: { userId: pacienteId },
         data: {
-          cpf: "",
-          telefone: "",
-          convenio: "Particular",
-          profissao: "",
-          estadoCivil: "",
-          foto: null,
+          ...DADOS_PERFIL_PSEUDONIMIZADO,
+          ...(idadeNaAnonimizacao !== null ? { idade: idadeNaAnonimizacao } : {}),
         },
       });
 

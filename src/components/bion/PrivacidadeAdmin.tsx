@@ -16,6 +16,17 @@ import {
 } from "lucide-react";
 import { useBion } from "@/lib/bion-store";
 import { ModalBion } from "@/components/bion/ModalBion";
+import { formatarDataNascimento } from "@/lib/idade";
+
+/**
+ * Data de nascimento guardada no cofre → "DD/MM/AAAA", sem conversão de fuso
+ * (é dia de calendário "YYYY-MM-DD"). Registro antigo com texto livre da
+ * anamnese em outro formato é mostrado como veio.
+ */
+function nascimentoCofre(v: string | null): string {
+  if (!v) return "—";
+  return formatarDataNascimento(v) || v;
+}
 
 /** Linha da lista LGPD vinda do servidor — uma por PACIENTE (id), nunca por nome. */
 type PacienteLgpd = {
@@ -331,7 +342,7 @@ export function PrivacidadeAdmin() {
                 <dt className="font-bold">CPF</dt>
                 <dd>{r.identificacao.cpf || "—"}</dd>
                 <dt className="font-bold">Nascimento</dt>
-                <dd>{r.identificacao.dataNascimento ?? "—"}</dd>
+                <dd>{nascimentoCofre(r.identificacao.dataNascimento)}</dd>
               </dl>
             )}
             <div className="text-muted-foreground">
@@ -443,9 +454,11 @@ export function PrivacidadeAdmin() {
               </dd>
             </dl>
             <p className="text-sm text-muted-foreground leading-relaxed">
-              Nome, e-mail, CPF, telefone e demais dados cadastrais serão substituídos por um
-              pseudônimo; o login é removido (inclusive no Supabase Auth), os arquivos pessoais são
-              apagados do Storage e o nome sai dos consentimentos e da auditoria. O prontuário
+              Nome, e-mail, CPF, data de nascimento, telefone e demais dados cadastrais serão
+              substituídos por um pseudônimo ou apagados (nome, CPF e data de nascimento ficam
+              guardados cifrados no cofre de identificação; a idade permanece no prontuário); o
+              login é removido (inclusive no Supabase Auth), os arquivos pessoais são apagados do
+              Storage e o nome sai dos consentimentos e da auditoria. O prontuário
               (consultas, anamnese, exames, documentos clínicos e receitas) é preservado por 20 anos
               (Lei 13.787/2018), apenas pseudonimizado.
               {acao.tipo === "excluir" ? " A conta é arquivada sem acesso." : ""} Esta ação não pode

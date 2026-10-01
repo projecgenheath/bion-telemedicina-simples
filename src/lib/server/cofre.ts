@@ -1,11 +1,13 @@
 import "server-only";
 import crypto from "crypto";
+import { dataNascimentoParaIso, lerDataIso } from "@/lib/idade";
 
 /**
  * Cofre de identificação (LGPD art. 16, I + Lei 13.787/2018).
  *
  * Na anonimização, a identificação mínima do paciente (nome, CPF e data de
- * nascimento, se existir) é guardada CIFRADA numa tabela separada
+ * nascimento — de `PerfilPaciente.dataNascimento`, com fallback na anamnese —
+ * se existir) é guardada CIFRADA numa tabela separada
  * (`IdentificacaoCofre`) para que o prontuário preservado possa ser
  * reidentificado por obrigação legal (ordem judicial, pedido do titular,
  * CFM) — só pelo servidor, só por ADMIN, sempre com motivo e auditoria.
@@ -21,6 +23,7 @@ import crypto from "crypto";
 export type IdentificacaoClara = {
   nome: string;
   cpf: string;
+  /** "YYYY-MM-DD" (data pura) ou, em registro antigo/fallback, texto livre da anamnese. */
   dataNascimento: string | null;
 };
 
@@ -109,8 +112,9 @@ export function decifrarIdentificacao(userId: string, cifrado: string): Identifi
 }
 
 /**
- * Data de nascimento, se existir. O schema não tem esse campo; procura de
- * forma tolerante uma chave "*nascimento*" (string) no JSON da anamnese.
+ * FALLBACK da data de nascimento: procura de forma tolerante uma chave
+ * "*nascimento*" (string) no JSON da anamnese. Usado só quando
+ * `PerfilPaciente.dataNascimento` está vazia (ver `dataNascimentoParaCofre`).
  */
 export function extrairDataNascimento(coletas: string[]): string | null {
   const buscar = (v: unknown, prof: number): string | null => {
@@ -131,4 +135,51 @@ export function extrairDataNascimento(coletas: string[]): string | null {
     }
   }
   return null;
+}
+
+const RE_DATA_BR = /^(\d{2})\/(\d{2})\/(\d{4})$/;
+
+/**
+ * Data de nascimento que vai para o cofre:
+ *  1) `PerfilPaciente.dataNascimento` (coluna DATE) como "YYYY-MM-DD", lida
+ *     pelas partes UTC — data pura, sem conversão de fuso;
+ *  2) só se estiver vazia, o fallback da anamnese (`extrairDataNascimento`),
+ *     normalizado para "YYYY-MM-DD" quando vier "YYYY-MM-DD" ou "DD/MM/AAAA"
+ *     válidos; texto livre em outro formato é guardado como veio;
+ *  3) null se não houver nenhuma.
+ */
+export function dataNascimentoParaCofre(
+  dataPerfil: Date | null | undefined,
+  coletasAnamnese: string[],
+): string | null {
+  const doPerfil = dataNascimentoParaIso(dataPerfil);
+  if (doPerfil) return doPerfil;
+  const bruto = extrairDataNascimento(coletasAnamnese);
+  if (!bruto) return null;
+  if (lerDataIso(bruto)) return bruto;
+  const br = RE_DATA_BR.exec(bruto);
+  if (br) {
+    const iso = `${br[3]}-${br[2]}-${br[1]}`;
+    if (lerDataIso(iso)) return iso;
+  }
+  return bruto;
+}
+
+/**
+ * Reexecução da anonimização numa conta JÁ pseudonimizada que ainda tem
+ * `PerfilPaciente.dataNascimento` (ex.: anonimizada antes de a data ir para o
+ * cofre). Antes de apagar a data do perfil, ela precisa estar no cofre.
+ * Devolve a identificação a gravar, ou null se o cofre já tem essa data.
+ * Sem registro anterior, cria um só com a data (nome/CPF reais já não existem).
+ */
+export function complementarIdentificacao(
+  existente: IdentificacaoClara | null,
+  dataNascimentoIso: string,
+): IdentificacaoClara | null {
+  if (existente?.dataNascimento === dataNascimentoIso) return null;
+  return {
+    nome: existente?.nome ?? "",
+    cpf: existente?.cpf ?? "",
+    dataNascimento: dataNascimentoIso,
+  };
 }
