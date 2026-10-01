@@ -17,6 +17,8 @@ import {
 } from "@/lib/server/rate-limit";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { supabaseConfigurado } from "@/lib/supabase/env";
+import { validarCpf } from "@/lib/server/validar-perfil";
+import { cpfEmUsoPorOutroPaciente, ERRO_CPF_EM_USO } from "@/lib/server/cpf-paciente";
 
 export async function POST(req: NextRequest) {
   try {
@@ -52,6 +54,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ erro: "Já existe uma conta com este e-mail." }, { status: 409 });
     }
 
+    // M4: CPF opcional, mas se vier precisa ter dígitos verificadores válidos
+    // (gravado como 000.000.000-00) e não pode pertencer a outro paciente.
+    // Validado ANTES de criar a conta no Supabase Auth.
+    let cpf = "";
+    if (body.cpf !== undefined && body.cpf !== null) {
+      const rc = validarCpf(body.cpf);
+      if (!rc.ok) return NextResponse.json({ erro: rc.erro, campo: "cpf" }, { status: 400 });
+      cpf = rc.valor;
+      if (cpf && (await cpfEmUsoPorOutroPaciente(cpf))) {
+        return NextResponse.json({ erro: ERRO_CPF_EM_USO, campo: "cpf" }, { status: 409 });
+      }
+    }
+
     // --- Supabase Auth (usuário aparece em Authentication → Users) ---
     if (supabaseConfigurado()) {
       const supabase = await createSupabaseServerClient();
@@ -75,11 +90,11 @@ export async function POST(req: NextRequest) {
         senhaHash,
       });
       // CPF se enviado
-      if (body.cpf?.trim()) {
+      if (cpf) {
         await db.perfilPaciente.upsert({
           where: { userId: row.id },
-          create: { userId: row.id, cpf: body.cpf.trim() },
-          update: { cpf: body.cpf.trim() },
+          create: { userId: row.id, cpf },
+          update: { cpf },
         });
       }
 
@@ -119,7 +134,7 @@ export async function POST(req: NextRequest) {
         email,
         senhaHash,
         role: "PACIENTE",
-        perfilPaciente: { create: { cpf: body.cpf?.trim() ?? "" } },
+        perfilPaciente: { create: { cpf } },
       },
     });
     await criarSessaoLegada(user.id);

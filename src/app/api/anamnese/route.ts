@@ -14,6 +14,7 @@ import {
   extrairTelefone,
   type MotorCtx,
 } from "@/lib/server/anamnese-motor";
+import { validarTelefone } from "@/lib/server/validar-perfil";
 import { alturaCanonica, formatarAltura, formatarPeso, lerAlturaCm, lerPesoKg, medidaCanonica, pesoCanonico } from "@/lib/medidas-paciente";
 
 /**
@@ -346,8 +347,11 @@ async function aplicarPerfilAtualizacoes(
   const aplicados: string[] = [];
   const dadosPerfil: Record<string, string> = {};
 
-  if (typeof up.telefone === "string" && up.telefone.trim()) {
-    dadosPerfil.telefone = up.telefone.trim().slice(0, 40);
+  // M4: telefone vindo da IA/extração passa pela mesma validação do perfil
+  // (DDD + número, gravado normalizado); inválido é ignorado.
+  const tel = typeof up.telefone === "string" ? validarTelefone(up.telefone) : null;
+  if (tel?.ok && tel.valor) {
+    dadosPerfil.telefone = tel.valor;
     aplicados.push("telefone");
   }
   if (typeof up.profissao === "string" && up.profissao.trim()) {

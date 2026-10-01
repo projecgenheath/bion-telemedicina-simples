@@ -3,7 +3,8 @@ import { db } from "@/lib/db";
 import { exigirPapel } from "@/lib/server/auth";
 import { aplicarSideEffects, perfilPacienteWire } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
-import { validarFotoPerfil, validarPatchPerfil } from "@/lib/server/validar-perfil";
+import { cpfPodeSerAlterado, validarFotoPerfil, validarPatchPerfil } from "@/lib/server/validar-perfil";
+import { cpfEmUsoPorOutroPaciente, ERRO_CPF_BLOQUEADO, ERRO_CPF_EM_USO } from "@/lib/server/cpf-paciente";
 
 /** Teto do corpo (texto JSON). Folga para a foto de perfil (~150 KB em base64). */
 const CORPO_MAX_CHARS = 300_000;
@@ -51,6 +52,18 @@ export async function PATCH(req: NextRequest) {
     const perfilAtual = await db.perfilPaciente.findUnique({ where: { userId: usuario.id } });
     if (!perfilAtual) {
       return Response.json({ erro: "Perfil não encontrado." }, { status: 404 });
+    }
+
+    // M4: CPF travado depois do primeiro valor VÁLIDO (correção só pelo
+    // suporte/admin) e único entre pacientes. Perfil sem CPF ou com valor
+    // legado inválido pode definir uma vez.
+    if (perfil.cpf !== undefined) {
+      if (!cpfPodeSerAlterado(perfilAtual.cpf, perfil.cpf)) {
+        return Response.json({ erro: ERRO_CPF_BLOQUEADO, campo: "cpf" }, { status: 409 });
+      }
+      if (perfil.cpf && (await cpfEmUsoPorOutroPaciente(perfil.cpf, usuario.id))) {
+        return Response.json({ erro: ERRO_CPF_EM_USO, campo: "cpf" }, { status: 409 });
+      }
     }
 
     await db.$transaction([

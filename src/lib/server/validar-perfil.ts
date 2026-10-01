@@ -114,19 +114,38 @@ export function validarCpf(v: unknown): ResultadoValidacao<string> {
   return { ok: true, valor: `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}` };
 }
 
-/** Telefone: só dígitos, espaços, + ( ) - . ; 10 a 13 dígitos (DDD + número, opcional +55). "" limpa. */
+/**
+ * M4 — CPF travado: depois que o perfil tem um CPF VÁLIDO, o próprio paciente
+ * não pode trocá-lo nem apagá-lo (correção só via suporte/admin). Perfil sem
+ * CPF ou com valor legado inválido pode definir. `cpfNovo` já validado.
+ */
+export function cpfPodeSerAlterado(cpfAtual: string | null | undefined, cpfNovo: string): boolean {
+  const atual = validarCpf(cpfAtual ?? "");
+  if (!atual.ok || atual.valor === "") return true;
+  return atual.valor === cpfNovo;
+}
+
+/**
+ * Telefone (M4): número brasileiro com DDD. Aceita máscara, espaços e +55;
+ * exige DDD válido (11–99) e 10 dígitos (fixo, começa com 2–5) ou 11 dígitos
+ * (celular, começa com 9). Grava normalizado: "(11) 91234-5678" /
+ * "(11) 3123-4567". "" limpa. Números estrangeiros não são aceitos.
+ */
 export function validarTelefone(v: unknown): ResultadoValidacao<string> {
   if (typeof v !== "string") return falhaCampo("telefone", "Telefone deve ser um texto.");
   const s = v.trim();
   if (s === "") return { ok: true, valor: "" };
-  if (s.length > LIMITES.telefoneMax || !/^[\d\s()+\-.]+$/.test(s)) {
-    return falhaCampo("telefone", "Telefone inválido. Use DDD + número, ex.: (11) 91234-5678.");
-  }
-  const digitos = s.replace(/\D/g, "").length;
-  if (digitos < 10 || digitos > 13) {
-    return falhaCampo("telefone", "Telefone inválido. Use DDD + número, ex.: (11) 91234-5678.");
-  }
-  return { ok: true, valor: s };
+  const invalido = () => falhaCampo("telefone", "Telefone inválido. Use DDD + número, ex.: (11) 91234-5678.");
+  if (s.length > LIMITES.telefoneMax || !/^[\d\s()+\-.]+$/.test(s)) return invalido();
+  let d = s.replace(/\D/g, "");
+  if ((d.length === 12 || d.length === 13) && d.startsWith("55")) d = d.slice(2);
+  else if ((d.length === 11 || d.length === 12) && d.startsWith("0")) d = d.slice(1); // 0 + DDD + número
+  if (d.length !== 10 && d.length !== 11) return invalido();
+  if (!/^[1-9][1-9]/.test(d)) return invalido();
+  const numero = d.slice(2);
+  if (d.length === 11 ? numero[0] !== "9" : !/^[2-5]/.test(numero)) return invalido();
+  const corte = numero.length - 4;
+  return { ok: true, valor: `(${d.slice(0, 2)}) ${numero.slice(0, corte)}-${numero.slice(corte)}` };
 }
 
 function validarLista(v: unknown, campo: string, rotulo: string): ResultadoValidacao<string> {

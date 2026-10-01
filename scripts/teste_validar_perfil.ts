@@ -4,6 +4,7 @@
  */
 import {
   FOTO_MAX_CHARS,
+  cpfPodeSerAlterado,
   validarCpf,
   validarFotoPerfil,
   validarPatchPerfil,
@@ -131,6 +132,13 @@ verificar("CPF DV errado → erro", !validarCpf("529.982.247-24").ok);
 verificar("CPF repetido → erro", !validarCpf("111.111.111-11").ok);
 verificar("CPF com letras → erro", !validarCpf("abc").ok);
 verificar("CPF vazio limpa", validarCpf("").ok);
+// M4: CPF travado após o primeiro valor válido
+verificar("CPF: perfil sem CPF pode definir", cpfPodeSerAlterado("", "529.982.247-25"));
+verificar("CPF: legado inválido pode ser corrigido", cpfPodeSerAlterado("123.456.789-00", "529.982.247-25"));
+verificar("CPF: mesmo valor (sem máscara no banco) é aceito", cpfPodeSerAlterado("52998224725", "529.982.247-25"));
+verificar("CPF: trocar CPF válido → bloqueado", !cpfPodeSerAlterado("529.982.247-25", "111.444.777-35"));
+verificar("CPF: apagar CPF válido → bloqueado", !cpfPodeSerAlterado("529.982.247-25", ""));
+verificar("CPF: null no banco pode definir", cpfPodeSerAlterado(null, "529.982.247-25"));
 
 // --- telefone ---
 verificar("telefone celular ok", validarTelefone("(11) 91234-5678").ok);
@@ -138,6 +146,23 @@ verificar("telefone +55 ok", validarTelefone("+55 11 91234-5678").ok);
 verificar("telefone curto → erro", !validarTelefone("1234").ok);
 verificar("telefone com letras → erro", !validarTelefone("ligar 1191234-5678").ok);
 verificar("telefone vazio limpa", validarTelefone("").ok);
+// M4: telefone brasileiro normalizado
+for (const [entrada, esperado] of [
+  ["(11) 91234-5678", "(11) 91234-5678"],
+  ["11912345678", "(11) 91234-5678"],
+  ["+55 11 91234-5678", "(11) 91234-5678"],
+  ["5511912345678", "(11) 91234-5678"],
+  ["(21) 3123-4567", "(21) 3123-4567"],
+  ["021 3123-4567", "(21) 3123-4567"],
+  ["011 91234-5678", "(11) 91234-5678"],
+  ["(55) 99876-5432", "(55) 99876-5432"],
+] as const) {
+  const r = validarTelefone(entrada);
+  verificar(`telefone ${entrada} → ${esperado}`, r.ok && r.valor === esperado, r);
+}
+for (const entrada of ["(01) 91234-5678", "(10) 91234-5678", "(11) 81234-5678", "(11) 9123-4567", "(11) 1123-4567", "+1 415 555 0100", "123456789012345"]) {
+  verificar(`telefone ${entrada} → erro`, !validarTelefone(entrada).ok, validarTelefone(entrada));
+}
 
 // --- foto (A2) ---
 const JPEG_MIN = "data:image/jpeg;base64," + Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 0x10, 0x4a, 0x46, 0x49, 0x46, 0, 1]).toString("base64");
