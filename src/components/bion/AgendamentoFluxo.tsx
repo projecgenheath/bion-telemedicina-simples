@@ -27,6 +27,7 @@ import {
   CheckCheck,
 } from "lucide-react";
 import { useBion, type Medico } from "@/lib/bion-store";
+import { diaFusoClinica } from "@/lib/bion-tipos";
 import { ModalBion } from "@/components/bion/ModalBion";
 import {
   ESPECIALIDADES,
@@ -147,9 +148,9 @@ export function AgendamentoFluxo({
 
   // Gerador de datas dos próximos 14 dias
   const diasDisponiveis = Array.from({ length: 14 }).map((_, i) => {
-    const d = new Date();
-    d.setDate(d.getDate() + i);
-    const diaNum = d.getDate();
+    // Dias no fuso da clínica, não no do navegador.
+    const d = diaFusoClinica(i);
+    const diaNum = d.dia;
     const meses = [
       "Jan",
       "Fev",
@@ -164,9 +165,9 @@ export function AgendamentoFluxo({
       "Nov",
       "Dez",
     ];
-    const sem = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"][d.getDay()];
-    const rotulo = i === 0 ? "Hoje" : i === 1 ? "Amanhã" : `${diaNum} ${meses[d.getMonth()]}`;
-    return { rotulo, sem, diaNum, mes: meses[d.getMonth()] };
+    const sem = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"][d.semana];
+    const rotulo = i === 0 ? "Hoje" : i === 1 ? "Amanhã" : `${diaNum} ${meses[d.mes]}`;
+    return { rotulo, sem, diaNum, mes: meses[d.mes] };
   });
 
   const medicoAtual = medicoSelecionado ?? medicosFiltrados[0] ?? medicos[0];

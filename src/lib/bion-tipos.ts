@@ -290,6 +290,23 @@ export function partesFusoClinica(d: Date | string | number): PartesData {
   return { ano: g("year"), mes: g("month") - 1, dia: g("day"), hora: g("hour") % 24, minuto: g("minute") };
 }
 
+/** Instante (ms) de um horário de parede no fuso da clínica (mes 0-11). */
+export function instanteFusoClinica(ano: number, mes: number, dia: number, hora = 0, minuto = 0): number {
+  const comoUtc = Date.UTC(ano, mes, dia, hora, minuto);
+  const p = partesFusoClinica(comoUtc);
+  const desvio = Date.UTC(p.ano, p.mes, p.dia, p.hora, p.minuto) - comoUtc;
+  return comoUtc - desvio;
+}
+
+/** Dia "hoje + n" no fuso da clínica: partes, chave YYYY-MM-DD e dia da semana (0=Dom). */
+export function diaFusoClinica(n: number) {
+  const hoje = partesFusoClinica(Date.now());
+  const meioDia = instanteFusoClinica(hoje.ano, hoje.mes, hoje.dia, 12) + n * 86_400_000;
+  const p = partesFusoClinica(meioDia);
+  const iso = `${p.ano}-${String(p.mes + 1).padStart(2, "0")}-${String(p.dia).padStart(2, "0")}`;
+  return { ...p, iso, semana: new Date(Date.UTC(p.ano, p.mes, p.dia)).getUTCDay() };
+}
+
 const mesmoDia = (a: PartesData, b: PartesData) =>
   a.ano === b.ano && a.mes === b.mes && a.dia === b.dia;
 
