@@ -60,12 +60,30 @@ export async function POST(req: NextRequest) {
       });
 
       if (!error && data.user) {
+        // A5: a senha recém-validada no Auth serve de prova para vincular uma
+        // conta legada de mesmo e-mail; sem prova, 409 e a sessão Auth é
+        // encerrada (não fica cookie de um Auth sem usuário vinculado).
+        // O contador de falhas só é zerado DEPOIS do vínculo dar certo: quem
+        // cria no Auth uma conta com o e-mail da vítima não pode usar o login
+        // Auth válido para zerar o limite e testar a senha legada à vontade.
+        let row: Awaited<ReturnType<typeof garantirUsuarioPrismaDeAuth>>;
+        try {
+          row = await garantirUsuarioPrismaDeAuth({
+            supabaseId: data.user.id,
+            email: emailNormado,
+            nome: (data.user.user_metadata?.nome as string) || emailNormado.split("@")[0],
+            senhaParaVincular: senha,
+          });
+        } catch (erroVinculo) {
+          await supabase.auth.signOut().catch(() => {});
+          // 409 (VINCULO_AUTH_RECUSADO) conta como tentativa falha, igual a
+          // senha errada.
+          if ((erroVinculo as { status?: number })?.status === 409) {
+            await limitarAsync(chaveFalhas, MAX_FALHAS_LOGIN, JANELA_FALHAS_MS);
+          }
+          throw erroVinculo;
+        }
         await resetarAsync(chaveFalhas);
-        const row = await garantirUsuarioPrismaDeAuth({
-          supabaseId: data.user.id,
-          email: emailNormado,
-          nome: (data.user.user_metadata?.nome as string) || emailNormado.split("@")[0],
-        });
         if (row.status !== "ativo") {
           await supabase.auth.signOut();
           return NextResponse.json(

@@ -2,10 +2,59 @@
  * Seed do BION Telemedicina — cria contas demo com senhas reais (bcrypt)
  * e os dados iniciais da plataforma (médicos, consultas, documentos, etc.).
  *
- * Executar: bun prisma/seed.ts
+ * Executar (SOMENTE em banco local/descartável — o seed APAGA todas as tabelas):
+ *   BION_PERMITIR_SEED=1 SEED_ADMIN_PASSWORD=... SEED_DEMO_PASSWORD=... bun prisma/seed.ts
+ *
+ * Segurança (auditoria admin, achado C1): nenhuma senha fica no código. As
+ * senhas vêm de variáveis de ambiente obrigatórias e o seed se recusa a rodar
+ * em produção (NODE_ENV/VERCEL_ENV) ou contra o projeto Supabase de produção.
  */
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
+
+/* ------------------------------------------------------------------ */
+/* Trava de segurança: nunca rodar em produção; senhas só por env      */
+/* ------------------------------------------------------------------ */
+
+/** Refs/hosts do banco de PRODUÇÃO (lista extensível via BION_PRODUCAO_REFS="a,b"). */
+const REFS_PRODUCAO = [
+  "tnygegihboiyptrnmaqt",
+  ...(process.env.BION_PRODUCAO_REFS ?? "").split(",").map((s) => s.trim()).filter(Boolean),
+];
+
+function abortar(msg: string): never {
+  console.error(`\n⛔ Seed abortado: ${msg}\n`);
+  process.exit(1);
+}
+
+function exigirAmbienteSeguro(): void {
+  if (process.env.NODE_ENV === "production" || process.env.VERCEL_ENV === "production") {
+    abortar("NODE_ENV/VERCEL_ENV = production. O seed apaga todas as tabelas e nunca roda em produção.");
+  }
+  const alvos = [process.env.DATABASE_URL ?? "", process.env.NEXT_PUBLIC_SUPABASE_URL ?? ""];
+  const ref = REFS_PRODUCAO.find((r) => alvos.some((a) => a.includes(r)));
+  if (ref) {
+    abortar(`DATABASE_URL/NEXT_PUBLIC_SUPABASE_URL aponta para o projeto de produção (${ref}).`);
+  }
+  if (process.env.BION_PERMITIR_SEED !== "1") {
+    abortar("defina BION_PERMITIR_SEED=1 para confirmar que o banco alvo é descartável (o seed APAGA tudo).");
+  }
+}
+
+/** Senha obrigatória via env, com a mesma política de validarSenhaForte. */
+function senhaDeEnv(nome: string): string {
+  const v = process.env[nome]?.trim() ?? "";
+  if (!v) abortar(`variável ${nome} não definida (senhas não ficam mais no código).`);
+  if (v.length < 10 || v.length > 64 || !/[A-Za-z]/.test(v) || !/[0-9]/.test(v)) {
+    abortar(`${nome} deve ter 10–64 caracteres, com letras e números.`);
+  }
+  if (v === "bion123456") abortar(`${nome} não pode ser a antiga senha demo pública.`);
+  return v;
+}
+
+exigirAmbienteSeguro();
+const SENHA_ADMIN = senhaDeEnv("SEED_ADMIN_PASSWORD");
+const SENHA_DEMO = senhaDeEnv("SEED_DEMO_PASSWORD");
 
 const db = new PrismaClient();
 
@@ -85,11 +134,13 @@ async function main() {
   await db.sessao.deleteMany();
   await db.user.deleteMany();
 
-  const senhaHash = await bcrypt.hash("bion123456", 10); // 10+ chars: coerente com validarSenhaForte (política P0)
+  // Senhas vindas de env (SEED_ADMIN_PASSWORD / SEED_DEMO_PASSWORD) — nunca no código.
+  const senhaHash = await bcrypt.hash(SENHA_DEMO, 10);
+  const senhaHashAdmin = await bcrypt.hash(SENHA_ADMIN, 10);
 
   console.log("Criando usuários...");
   const admin = await db.user.create({
-    data: { nome: "Administrador Geral", email: "admin@bion.app", senhaHash, role: "ADMIN" },
+    data: { nome: "Administrador Geral", email: "admin@bion.app", senhaHash: senhaHashAdmin, role: "ADMIN" },
   });
 
   const marina = await db.user.create({
@@ -291,9 +342,9 @@ async function main() {
   }});
 
   console.log("Criando arquivos...");
-  await db.arquivo.create({ data: { nome: "hemograma-completo.pdf", tipo: "Exame laboratorial", tamanhoKb: 480, enviadoPor: "paciente", usuarioId: marina.id, consulta: "Clínica Geral — Dra. Ana Ribeiro", createdAt: em(-30, 9, 12) } });
-  await db.arquivo.create({ data: { nome: "receita-losartana.pdf", tipo: "Receita", tamanhoKb: 120, enviadoPor: "medico", usuarioId: medicos["Dra. Ana Ribeiro"], consulta: "Clínica Geral — Dra. Ana Ribeiro", createdAt: em(-22, 15, 12) } });
-  await db.arquivo.create({ data: { nome: "eletrocardiograma-laudo.pdf", tipo: "Exame cardiológico", tamanhoKb: 650, enviadoPor: "paciente", usuarioId: marina.id, consulta: "Cardiologia — Dr. Carlos Mendes", createdAt: em(-35, 14, 45) } });
+  await db.arquivo.create({ data: { nome: "hemograma-completo.pdf", tipo: "Exame laboratorial", tamanhoKb: 480, enviadoPor: "paciente", usuarioId: marina.id, pacienteId: marina.id, consulta: "Clínica Geral — Dra. Ana Ribeiro", createdAt: em(-30, 9, 12) } });
+  await db.arquivo.create({ data: { nome: "receita-losartana.pdf", tipo: "Receita", tamanhoKb: 120, enviadoPor: "medico", usuarioId: medicos["Dra. Ana Ribeiro"], pacienteId: marina.id, consulta: "Clínica Geral — Dra. Ana Ribeiro", createdAt: em(-22, 15, 12) } });
+  await db.arquivo.create({ data: { nome: "eletrocardiograma-laudo.pdf", tipo: "Exame cardiológico", tamanhoKb: 650, enviadoPor: "paciente", usuarioId: marina.id, pacienteId: marina.id, consulta: "Cardiologia — Dr. Carlos Mendes", createdAt: em(-35, 14, 45) } });
 
   console.log("Criando notificações...");
   await db.notificacao.create({ data: { usuarioId: marina.id, paraRole: "PACIENTE", tipo: "agenda", titulo: "Sua consulta é hoje!", texto: "Dra. Ana Ribeiro às 14:30. A sala de espera já está disponível para testes de câmera.", lida: false, createdAt: em(0, 13, 45) } });
@@ -352,18 +403,17 @@ async function main() {
   await db.consentimento.create({ data: { pacienteId: marina.id, quem: marina.nome, perfil: "PACIENTE", finalidade: "Geração de prontuário em PDF", documentos: 3, aceito: true, createdAt: em(-20, 12, 5) } });
 
   // Supabase Auth: provisiona contas demo se SERVICE_ROLE estiver configurada
-  const SENHA_DEMO = "bion123456";
   console.log("\nVinculando contas ao Supabase Auth (se SERVICE_ROLE configurada)...");
-  const todos = await db.user.findMany({ select: { id: true, email: true, nome: true } });
+  const todos = await db.user.findMany({ select: { id: true, email: true, nome: true, role: true } });
   for (const u of todos) {
-    await vincularSupabaseAuth(u.id, u.email, u.nome, SENHA_DEMO);
+    await vincularSupabaseAuth(u.id, u.email, u.nome, u.role === "ADMIN" ? SENHA_ADMIN : SENHA_DEMO);
   }
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()) {
     console.log("  (pulado — defina SUPABASE_SERVICE_ROLE_KEY para criar em Authentication → Users)");
   }
 
   console.log("\n✅ Seed concluído!");
-  console.log("\nContas demo (senha: bion123456):");
+  console.log("\nContas demo (senhas: SEED_DEMO_PASSWORD; admin: SEED_ADMIN_PASSWORD):");
   console.log("  Paciente: marina.silva@email.com");
   console.log("  Médico:   ana.ribeiro@med.bion.app");
   console.log("  Admin:    admin@bion.app");

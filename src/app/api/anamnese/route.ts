@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { quandoClinica } from "@/lib/server/fuso";
 import { db } from "@/lib/db";
 import { exigirPapel } from "@/lib/server/auth";
 import { aplicarSideEffects, anamneseWire, consultaWire, perfilPacienteWire } from "@/lib/server/dados";
@@ -450,8 +451,7 @@ export async function POST(req: NextRequest) {
 
     const perfilDados = await montarPerfilDados(usuario.id);
 
-    const quando = consulta.dataInicio.toLocaleDateString("pt-BR", { day: "numeric", month: "long" }) +
-      " às " + consulta.dataInicio.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+    const quando = quandoClinica(consulta.dataInicio, { day: "numeric", month: "long" });
 
     // Contexto do motor determinístico — usado no caminho 2 E pelas garantias
     // do SERVIDOR no caminho 1 (ponte de etapa e guarda de qualidade).
@@ -786,8 +786,7 @@ export async function PATCH(req: NextRequest) {
       return ok({ ...(atualizada ? { anamnese: anamneseWire(atualizada) } : {}) });
     }
 
-    const quando = consulta.dataInicio.toLocaleDateString("pt-BR") +
-      " às " + consulta.dataInicio.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+    const quando = quandoClinica(consulta.dataInicio);
 
     await db.$transaction([
       db.anamnese.update({ where: { id: anamnese.id }, data: { status: "concluida", etapa: "fechamento" } }),
