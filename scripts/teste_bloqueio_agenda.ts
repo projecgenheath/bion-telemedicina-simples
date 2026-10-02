@@ -7,8 +7,14 @@
  *   TZ=Asia/Tokyo bun scripts/teste_bloqueio_agenda.ts
  * O resultado deve ser o mesmo em qualquer TZ do processo.
  */
+import type { Prisma } from "@prisma/client";
 import type { Consulta } from "../src/lib/bion-tipos";
 import {
+  bloquearDiaTravado,
+  chaveTravaDia,
+  criarSeDiaLivre,
+  MAX_BLOQUEIOS_FUTUROS,
+  travarDiaDoMedico,
   dateParaDiaIso,
   diaBloqueado,
   diaIsoSaoPaulo,
@@ -166,6 +172,246 @@ const falso = {
   );
   igual("semDiasBloqueados sem bloqueios", semDiasBloqueados([{ iso: "2026-10-01" }], new Set()).length, 1);
 
+  await testesCorrida();
+
   console.log(`${ok} ok, ${falhas} falha(s) — TZ do processo: ${Intl.DateTimeFormat().resolvedOptions().timeZone}`);
   if (falhas) process.exit(1);
 })();
+
+/* ================================================================== */
+/* Corridas agendar × bloquear (banco falso com trava por chave)       */
+/* ================================================================== */
+
+type ConsultaFake = { id: string; dia: string; ativa: boolean; via: string };
+const pausa = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+/**
+ * Banco em memória: bloqueios, consultas e pg_advisory_xact_lock simulado
+ * (a trava é liberada no fim da $transaction). `trava: false` = controle sem
+ * trava, para provar que o teste detecta a corrida.
+ */
+function bancoFake(opcoes: { trava: boolean }) {
+  const bloqueios = new Map<string, { dia: Date; motivo: string; criadoEm: Date }>();
+  const consultas: ConsultaFake[] = [];
+  const travas = new Map<string, Promise<void>>();
+  const sqls: { sql: string; valores: unknown[] }[] = [];
+  const k = (w: { medicoId_dia: { medicoId: string; dia: Date } }) =>
+    `${w.medicoId_dia.medicoId}|${dateParaDiaIso(w.medicoId_dia.dia)}`;
+
+  async function adquirir(chave: string): Promise<() => void> {
+    while (travas.has(chave)) await travas.get(chave);
+    let liberar!: () => void;
+    travas.set(chave, new Promise<void>((r) => (liberar = r)));
+    return () => {
+      travas.delete(chave);
+      liberar();
+    };
+  }
+
+  function novoTx(liberacoes: (() => void)[]) {
+    return {
+      $executeRaw: async (partes: TemplateStringsArray, ...valores: unknown[]) => {
+        sqls.push({ sql: partes.join("?"), valores });
+        if (opcoes.trava) liberacoes.push(await adquirir(String(valores[0])));
+        return 1;
+      },
+      bloqueioAgenda: {
+        findUnique: async ({ where }: { where: { medicoId_dia: { medicoId: string; dia: Date } } }) => {
+          await pausa(1);
+          return bloqueios.has(k(where)) ? { id: "b" } : null;
+        },
+        count: async ({ where }: { where: { medicoId: string } }) => {
+          await pausa(1);
+          return [...bloqueios.keys()].filter((x) => x.startsWith(`${where.medicoId}|`)).length;
+        },
+        upsert: async ({
+          where,
+          create,
+          update,
+        }: {
+          where: { medicoId_dia: { medicoId: string; dia: Date } };
+          create: { motivo: string; dia: Date };
+          update: { motivo: string };
+        }) => {
+          await pausa(1);
+          const atual = bloqueios.get(k(where));
+          const novo = atual ? { ...atual, motivo: update.motivo } : { dia: create.dia, motivo: create.motivo, criadoEm: new Date() };
+          bloqueios.set(k(where), novo);
+          return novo;
+        },
+      },
+    } as unknown as Prisma.TransactionClient;
+  }
+
+  return {
+    bloqueios,
+    consultas,
+    sqls,
+    async $transaction<T>(fn: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
+      const liberacoes: (() => void)[] = [];
+      try {
+        return await fn(novoTx(liberacoes));
+      } finally {
+        liberacoes.forEach((f) => f());
+      }
+    },
+    ativasNoDia: (dia: string) => consultas.filter((c) => c.dia === dia && c.ativa),
+    /** Invariante: dia bloqueado não tem consulta ativa. */
+    invarianteOk: (medicoId: string, dia: string) =>
+      !bloqueios.has(`${medicoId}|${dia}`) || consultas.every((c) => c.dia !== dia || !c.ativa),
+  };
+}
+
+const DIA = "2026-10-05";
+const INSTANTE = A("2026-10-05T13:00:00Z"); // 10:00 SP
+const AGORA_C = A("2026-10-01T13:00:00Z");
+
+/** POST /api/consultas (núcleo): trava → confere bloqueio → cria (criação lenta). */
+function agendar(b: ReturnType<typeof bancoFake>, id: string, demoraMs = 20) {
+  return b.$transaction((tx) =>
+    criarSeDiaLivre(tx, "m1", INSTANTE, async () => {
+      await pausa(demoraMs);
+      b.consultas.push({ id, dia: DIA, ativa: true, via: "agendamento" });
+      return id;
+    }),
+  );
+}
+
+/** POST /api/medico/agenda/bloqueios (núcleo), com contar/cancelar sobre o banco falso. */
+function bloquear(
+  b: ReturnType<typeof bancoFake>,
+  cancelarConsultas: boolean,
+  aposPrimeiraContagem?: () => void,
+) {
+  let contagens = 0;
+  return b.$transaction((tx) =>
+    bloquearDiaTravado(
+      tx,
+      { medicoId: "m1", dia: DIA, motivo: "Férias", cancelarConsultas, agora: AGORA_C },
+      {
+        contar: async () => {
+          await pausa(1);
+          const n = b.ativasNoDia(DIA).length;
+          if (++contagens === 1) aposPrimeiraContagem?.();
+          return { consultas: n, reservas: 0 };
+        },
+        cancelar: async () => {
+          await pausa(1);
+          const alvo = b.ativasNoDia(DIA);
+          alvo.forEach((c) => (c.ativa = false));
+          return { canceladas: alvo.length, ids: alvo.map((c) => c.id) };
+        },
+      },
+    ),
+  );
+}
+
+async function testesCorrida() {
+  /* ---------- trava: SQL e chave ---------- */
+  {
+    const b = bancoFake({ trava: true });
+    const dia = await b.$transaction((tx) => travarDiaDoMedico(tx, "m1", A("2026-10-02T01:00:00Z")));
+    igual("trava: dia de SP de 22:00", dia, "2026-10-01");
+    igual("trava: SQL pg_advisory_xact_lock(hashtext(...))", b.sqls[0]?.sql.replace(/\s+/g, " "), "SELECT pg_advisory_xact_lock(hashtext(?::text))");
+    igual("trava: chave medicoId:dia", b.sqls[0]?.valores, ["m1:2026-10-01"]);
+    igual("chaveTravaDia", chaveTravaDia("m1", "2026-10-05"), "m1:2026-10-05");
+  }
+
+  /* ---------- corrida 1: agendamento passou na checagem, bloqueio chega durante a criação ---------- */
+  {
+    const b = bancoFake({ trava: true });
+    const pAg = agendar(b, "c1");
+    await pausa(5); // agendamento já passou pela checagem e está criando
+    const pBl = bloquear(b, true);
+    const [ag, bl] = await Promise.all([pAg, pBl]);
+    igual("corrida1 (trava): agendamento entrou antes", ag.bloqueado, false);
+    igual("corrida1 (trava): bloqueio gravado", bl.tipo, "ok");
+    igual(
+      "corrida1 (trava): bloqueio esperou e cancelou a consulta",
+      bl.tipo === "ok" ? (bl.cancelamento as { canceladas: number } | null)?.canceladas : null,
+      1,
+    );
+    igual("corrida1 (trava): nenhuma consulta ativa no dia bloqueado", b.invarianteOk("m1", DIA), true);
+  }
+  {
+    // Controle SEM trava: a mesma sequência deixa consulta ativa no dia bloqueado.
+    const b = bancoFake({ trava: false });
+    const pAg = agendar(b, "c1");
+    await pausa(5);
+    const pBl = bloquear(b, true);
+    await Promise.all([pAg, pBl]);
+    igual("controle sem trava: a corrida é detectada (invariante quebra)", b.invarianteOk("m1", DIA), false);
+  }
+  {
+    // Sem cancelarConsultas: o bloqueio espera, vê a consulta e pede confirmação (nada gravado).
+    const b = bancoFake({ trava: true });
+    const pAg = agendar(b, "c1");
+    await pausa(5);
+    const pBl = bloquear(b, false);
+    const [, bl] = await Promise.all([pAg, pBl]);
+    igual("corrida1 sem cancelar: pede confirmação", bl.tipo === "confirmar" ? [bl.tipo, bl.consultas] : bl.tipo, ["confirmar", 1]);
+    igual("corrida1 sem cancelar: bloqueio NÃO gravado", b.bloqueios.size, 0);
+    igual("corrida1 sem cancelar: consulta segue ativa", b.ativasNoDia(DIA).length, 1);
+  }
+  {
+    // Bloqueio primeiro: o agendamento espera a trava e recebe "bloqueado".
+    const b = bancoFake({ trava: true });
+    const pBl = bloquear(b, true);
+    await pausa(1);
+    const pAg = agendar(b, "c2");
+    const [bl, ag] = await Promise.all([pBl, pAg]);
+    igual("bloqueio antes: bloqueio ok", bl.tipo, "ok");
+    igual("bloqueio antes: agendamento recusado (409)", ag.bloqueado, true);
+    igual("bloqueio antes: nenhuma consulta criada", b.consultas.length, 0);
+  }
+  {
+    // Vários agendamentos concorrentes + bloqueio: invariante sempre vale.
+    const b = bancoFake({ trava: true });
+    const ps: Promise<unknown>[] = [agendar(b, "a", 15), agendar(b, "b", 3)];
+    await pausa(2);
+    ps.push(bloquear(b, true));
+    ps.push(agendar(b, "c", 5));
+    await Promise.all(ps);
+    igual("vários: invariante", b.invarianteOk("m1", DIA), true);
+    igual("vários: dia bloqueado", b.bloqueios.size, 1);
+  }
+
+  /* ---------- corrida 2: consulta entra entre a contagem e o upsert (sem cancelarConsultas) ---------- */
+  {
+    const b = bancoFake({ trava: true });
+    const bl = await bloquear(b, false, () => {
+      // Caminho que não passa pela trava (ex.: remarcação) grava logo após a contagem.
+      b.consultas.push({ id: "r1", dia: DIA, ativa: true, via: "remarcacao" });
+    });
+    igual("corrida2: bloqueio gravado", bl.tipo, "ok");
+    igual("corrida2: recontagem detectou", bl.tipo === "ok" ? bl.apareceuDepois : null, true);
+    igual(
+      "corrida2: consulta que apareceu foi cancelada",
+      bl.tipo === "ok" ? (bl.cancelamento as { ids: string[] } | null)?.ids : null,
+      ["r1"],
+    );
+    igual("corrida2: invariante", b.invarianteOk("m1", DIA), true);
+  }
+  {
+    const b = bancoFake({ trava: true });
+    const bl = await bloquear(b, false);
+    igual(
+      "dia vazio sem cancelar: bloqueia sem cancelar nada",
+      bl.tipo === "ok" ? [bl.cancelamento, bl.apareceuDepois] : bl.tipo,
+      [null, false],
+    );
+  }
+
+  /* ---------- teto de bloqueios futuros (dentro da trava) ---------- */
+  {
+    const b = bancoFake({ trava: true });
+    for (let i = 0; i < MAX_BLOQUEIOS_FUTUROS; i++) {
+      b.bloqueios.set(`m1|${somarDiasIso("2026-11-01", i)}`, { dia: new Date(), motivo: "", criadoEm: new Date() });
+    }
+    const bl = await bloquear(b, false);
+    igual("teto: 121º dia recusado", bl.tipo, "limite");
+    b.bloqueios.set(`m1|${DIA}`, { dia: new Date(), motivo: "", criadoEm: new Date() });
+    const de_novo = await bloquear(b, false);
+    igual("teto: dia já bloqueado atualiza (idempotente)", de_novo.tipo, "ok");
+  }
+}
