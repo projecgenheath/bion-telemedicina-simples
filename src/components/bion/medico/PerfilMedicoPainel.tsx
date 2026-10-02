@@ -4,18 +4,24 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
+  Building2,
+  CalendarDays,
   Camera,
   ChevronRight,
+  CircleUserRound,
   FileText,
   LifeBuoy,
   LogOut,
   Moon,
+  Phone,
   Sun,
-  Type,
   Wallet,
 } from "lucide-react";
 import { useBion } from "@/lib/bion-store";
+import { formatarDataNascimento, idadeDeNascimento } from "@/lib/idade";
 import { iniciais } from "./metricas";
+import { formatarCnpj } from "./dados-pessoais";
+import { DadosPessoaisSheet } from "./sheets/DadosPessoaisSheet";
 import { EmBreve } from "./sheets/SheetMedico";
 import { useConfirmarSalvamento } from "./sheets/useConfirmarSalvamento";
 import type { DadosMedico } from "./useDadosMedico";
@@ -118,7 +124,9 @@ export function PerfilMedicoPainel({
 }) {
   const router = useRouter();
   const { atualizarMedico, sair } = useBion();
-  const { medico, sessao } = dados;
+  const { medico, sessao, dadosPessoais } = dados;
+  const [sheetDados, setSheetDados] = useState(false);
+  const [aberturasDados, setAberturasDados] = useState(0);
   const [tema, setTema] = useState<Tema>(lerTema);
   const [densidade, setDensidade] = useState<Densidade>(lerDensidade);
   const [enviando, setEnviando] = useState(false);
@@ -193,6 +201,23 @@ export function PerfilMedicoPainel({
     router.replace("/entrar");
   };
 
+  const abrirDadosPessoais = () => {
+    if (dadosPessoais.erro && !dadosPessoais.dados) {
+      dadosPessoais.recarregar();
+      return;
+    }
+    if (!dadosPessoais.dados) return; // ainda carregando
+    setAberturasDados((n) => n + 1);
+    setSheetDados(true);
+  };
+  const dp = dadosPessoais.dados;
+  const detalheDado = (valor: string) =>
+    dp ? valor || "Não informado" : dadosPessoais.erro ? "Não foi possível carregar — toque para tentar de novo" : "Carregando…";
+  const idade = dp?.dataNascimento ? idadeDeNascimento(dp.dataNascimento) : null;
+  const nascimentoTexto = dp?.dataNascimento
+    ? `${formatarDataNascimento(dp.dataNascimento)}${idade !== null ? ` · ${idade} anos` : ""}`
+    : "";
+
   const grupo = "bp-glass divide-y divide-bion-ink/10 dark:divide-white/10 overflow-hidden";
   // Títulos de seção ficam DENTRO dos cards: o fundo do painel escurece
   // para o marinho e texto escuro solto perderia contraste.
@@ -249,10 +274,19 @@ export function PerfilMedicoPainel({
         <h3 id="bm-pf-dados" className={tituloGrupo}>
           Dados pessoais
         </h3>
-        {["Telefone", "Data de nascimento", "Sexo"].map((t) => (
-          <Linha key={t} icone={<Type className="w-4 h-4" />} titulo={t} direita={<EmBreve />} />
-        ))}
+        <Linha icone={<Phone className="w-4 h-4" />} titulo="Telefone" detalhe={detalheDado(dp?.telefone ?? "")} onClick={abrirDadosPessoais} />
+        <Linha icone={<CalendarDays className="w-4 h-4" />} titulo="Data de nascimento" detalhe={detalheDado(nascimentoTexto)} onClick={abrirDadosPessoais} />
+        <Linha icone={<CircleUserRound className="w-4 h-4" />} titulo="Sexo" detalhe={detalheDado(dp?.genero ?? "")} onClick={abrirDadosPessoais} />
+        <Linha icone={<Building2 className="w-4 h-4" />} titulo="CNPJ" detalhe={detalheDado(formatarCnpj(dp?.cnpj))} onClick={abrirDadosPessoais} />
       </section>
+
+      <DadosPessoaisSheet
+        key={`dados-${aberturasDados}`}
+        aberto={sheetDados}
+        onFechar={() => setSheetDados(false)}
+        dados={dp}
+        onSalvo={dadosPessoais.recarregar}
+      />
 
       <section className={`${grupo} mt-4`} aria-labelledby="bm-pf-conta">
         <h3 id="bm-pf-conta" className={tituloGrupo}>

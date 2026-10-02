@@ -14,6 +14,7 @@ import {
   type EventoMedico,
   type RespostaReceita,
 } from "./metricas";
+import type { DadosPessoaisMedico } from "./dados-pessoais";
 
 /** Evento de janela: algo mudou na agenda do médico (ex.: "Cancelar agenda do dia"). */
 export const EVENTO_DADOS_MEDICO = "bion-medico:dados-alterados";
@@ -143,6 +144,18 @@ export function useDadosMedico() {
     }),
     [receitaRecurso.dados, receitaRecurso.carregando, receitaRecurso.erro, receitaRecurso.recarregar],
   );
+  // Dados pessoais PRIVADOS do próprio médico (GET /api/medico/perfil) —
+  // fora do store/diretório público de propósito (pacientes recebem medicoWire).
+  const dadosPessoaisRecurso = useRecurso<{ dados: DadosPessoaisMedico }>(ehMedico ? "/api/medico/perfil" : null, "");
+  const dadosPessoais = useMemo(
+    () => ({
+      dados: dadosPessoaisRecurso.dados?.dados ?? null,
+      carregando: dadosPessoaisRecurso.carregando,
+      erro: dadosPessoaisRecurso.erro,
+      recarregar: dadosPessoaisRecurso.recarregar,
+    }),
+    [dadosPessoaisRecurso.dados, dadosPessoaisRecurso.carregando, dadosPessoaisRecurso.erro, dadosPessoaisRecurso.recarregar],
+  );
   const atendimentos30d = useMemo(() => concluidas30d(minhas, agora), [minhas, agora]);
   const listaPacientes = useMemo(() => pacientesOrdenados(minhas, pacientes, agora), [minhas, pacientes, agora]);
 
@@ -168,6 +181,8 @@ export function useDadosMedico() {
     acoesPaciente,
     acoesPacienteEstado: { carregando: eventos.carregando, erro: eventos.erro, recarregar: eventos.recarregar },
     receita,
+    /** Data de nascimento, sexo, telefone e CNPJ do próprio médico (privados). */
+    dadosPessoais,
     atendimentos30d,
     listaPacientes,
     naoLidasPorPaciente,

@@ -78,6 +78,13 @@ model PerfilMedico {
   foto                String?
   status              String  @default("ativo") // ativo | pendente | suspenso
   horariosDisponiveis String  @default("[]") // JSON string[]
+  // Dados pessoais do médico (privados: só o próprio médico lê/edita em
+  // /api/medico/perfil — NUNCA entram no diretório público / medicoWire).
+  // Migração: supabase/migrations/20261002_perfil_medico_dados_pessoais.sql
+  dataNascimento      DateTime? @db.Date
+  genero              String? // Feminino | Masculino | Outro | Prefiro não informar (CHECK no banco)
+  telefone            String  @default("")
+  cnpj                String  @default("") // 14 caracteres normalizados (numérico ou alfanumérico); "" = não informado
 }
 
 model PerfilPaciente {
