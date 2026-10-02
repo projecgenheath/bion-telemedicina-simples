@@ -12,7 +12,7 @@ import { criarCobranca, confirmarPagamento, modoGateway, paraWire } from "@/lib/
 import { ok, falha } from "@/lib/server/http";
 import { STATUS_LIBERAM_HORARIO, horarioReservado } from "@/lib/server/financeiro";
 import { partesNoFuso } from "@/lib/server/fuso";
-import { diaBloqueado, ERRO_DIA_BLOQUEADO } from "@/lib/server/bloqueio-agenda";
+import { criarSeDiaLivre, diaBloqueado, ERRO_DIA_BLOQUEADO, OPCOES_TX_TRAVA } from "@/lib/server/bloqueio-agenda";
 
 /** Ano/mês/dia formam uma data real do calendário. */
 function dataCalendarioValida(ano: number, mes: number, dia: number): boolean {
@@ -124,7 +124,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Dia inteiro bloqueado pelo médico (folga/férias).
+    // Dia bloqueado: resposta rápida (a checagem que vale é a atômica, abaixo).
     if (await diaBloqueado(db, medico.id, dataInicio)) {
       return Response.json({ erro: ERRO_DIA_BLOQUEADO }, { status: 409 });
     }
@@ -152,18 +152,33 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const consulta = await db.consulta.create({
-      data: {
-        pacienteId: usuario.id,
-        medicoId: medico.id,
-        especialidade: medico.perfilMedico?.especialidade ?? "Clínica Geral",
-        dataInicio,
-        status,
-        valor: valorConsulta,
-        pago: false, // só o gateway/servidor confirma
-        motivoConsulta: body.motivoConsulta?.trim().slice(0, 300) || "Consulta de rotina",
-      },
-    });
+    // Dia inteiro bloqueado pelo médico (folga/férias): checagem + criação
+    // ATÔMICAS, com a trava (médico, dia) que o bloqueio do dia também toma —
+    // um agendamento que passou pela checagem não termina depois do bloqueio
+    // e dos cancelamentos (ou entra antes e é visto por eles, ou espera e
+    // recebe 409).
+    const criada = await db.$transaction(
+      (tx) =>
+        criarSeDiaLivre(tx, medico.id, dataInicio, (t) =>
+          t.consulta.create({
+            data: {
+              pacienteId: usuario.id,
+              medicoId: medico.id,
+              especialidade: medico.perfilMedico?.especialidade ?? "Clínica Geral",
+              dataInicio,
+              status,
+              valor: valorConsulta,
+              pago: false, // só o gateway/servidor confirma
+              motivoConsulta: body.motivoConsulta?.trim().slice(0, 300) || "Consulta de rotina",
+            },
+          }),
+        ),
+      OPCOES_TX_TRAVA,
+    );
+    if (criada.bloqueado) {
+      return Response.json({ erro: ERRO_DIA_BLOQUEADO }, { status: 409 });
+    }
+    const consulta = criada.valor;
 
     // Agendamento pela BION IA: cria a anamnese pendente que confirma a consulta
     const a = await db.anamnese.create({

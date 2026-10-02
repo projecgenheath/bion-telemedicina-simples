@@ -16,8 +16,10 @@
  * (cancelarReservasDoDia). Tudo numa transação.
  */
 
+import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import type { NotifPayload } from "@/lib/server/dados";
+import { travarDiaDoMedico, OPCOES_TX_TRAVA, type ClienteBanco } from "@/lib/server/bloqueio-agenda";
 import {
   cancelarReservasDoDia,
   cancelarReservasPendentes,
@@ -47,12 +49,18 @@ export function filtroReservasDoDia(medicoId: string, instanteNoDia: Date, agora
   return { ...filtroReservaVigente(agora), novaData: { gte: inicio, lt: fim }, consulta: { medicoId } };
 }
 
-/** Quantas consultas/reservas seriam afetadas (para a confirmação na UI). */
-export async function contarAfetadosDoDia(medicoId: string, instanteNoDia: Date, agora: Date = new Date()) {
-  const [consultas, reservas] = await Promise.all([
-    db.consulta.count({ where: filtroConsultasDoDia(medicoId, instanteNoDia, agora) }),
-    db.remarcacaoPendente.count({ where: filtroReservasDoDia(medicoId, instanteNoDia, agora) }),
-  ]);
+/**
+ * Quantas consultas/reservas seriam afetadas (para a confirmação na UI).
+ * Dentro de transação, passe o `tx` (as duas contagens rodam em sequência).
+ */
+export async function contarAfetadosDoDia(
+  client: ClienteBanco,
+  medicoId: string,
+  instanteNoDia: Date,
+  agora: Date = new Date(),
+) {
+  const consultas = await client.consulta.count({ where: filtroConsultasDoDia(medicoId, instanteNoDia, agora) });
+  const reservas = await client.remarcacaoPendente.count({ where: filtroReservasDoDia(medicoId, instanteNoDia, agora) });
   return { consultas, reservas };
 }
 
@@ -60,9 +68,17 @@ export async function contarAfetadosDoDia(medicoId: string, instanteNoDia: Date,
  * Cancela as consultas futuras do dia e libera as reservas do dia.
  * Devolve as contagens e as notificações para os pacientes (sem o motivo
  * privado do bloqueio).
+ * - Com `tx`: roda DENTRO dessa transação (quem chama já tomou a trava do
+ *   dia — ex.: bloquearDiaTravado).
+ * - Sem `tx`: abre a própria transação e toma a trava (médico, dia).
  */
-export async function cancelarConsultasDoDia(medicoId: string, instanteNoDia: Date, agora: Date = new Date()) {
-  const { canceladas, reservas } = await db.$transaction(async (tx) => {
+export async function cancelarConsultasDoDia(
+  medicoId: string,
+  instanteNoDia: Date,
+  agora: Date = new Date(),
+  tx?: Prisma.TransactionClient,
+) {
+  const executar = async (tx: Prisma.TransactionClient) => {
     const consultas = await tx.consulta.findMany({
       where: filtroConsultasDoDia(medicoId, instanteNoDia, agora),
       select: { id: true, pago: true, pacienteId: true, especialidade: true, dataInicio: true },
@@ -94,7 +110,13 @@ export async function cancelarConsultasDoDia(medicoId: string, instanteNoDia: Da
     });
     await cancelarReservasDoDia(tx, medicoId, instanteNoDia);
     return { canceladas: consultas, reservas: vigentes };
-  });
+  };
+  const { canceladas, reservas } = tx
+    ? await executar(tx)
+    : await db.$transaction(async (t) => {
+        await travarDiaDoMedico(t, medicoId, instanteNoDia);
+        return executar(t);
+      }, OPCOES_TX_TRAVA);
 
   const notificacoes: NotifPayload[] = [
     ...canceladas.map((c) => ({
