@@ -12,6 +12,7 @@ import { criarCobranca, confirmarPagamento, modoGateway, paraWire } from "@/lib/
 import { ok, falha } from "@/lib/server/http";
 import { STATUS_LIBERAM_HORARIO, horarioReservado } from "@/lib/server/financeiro";
 import { partesNoFuso } from "@/lib/server/fuso";
+import { diaBloqueado, ERRO_DIA_BLOQUEADO } from "@/lib/server/bloqueio-agenda";
 
 /** Ano/mês/dia formam uma data real do calendário. */
 function dataCalendarioValida(ano: number, mes: number, dia: number): boolean {
@@ -121,6 +122,11 @@ export async function POST(req: NextRequest) {
         { erro: "Não é possível agendar no passado — escolha uma data e hora futuras." },
         { status: 400 },
       );
+    }
+
+    // Dia inteiro bloqueado pelo médico (folga/férias).
+    if (await diaBloqueado(db, medico.id, dataInicio)) {
+      return Response.json({ erro: ERRO_DIA_BLOQUEADO }, { status: 409 });
     }
 
     // P2 — conflito de horário: mesmo médico (ou mesmo paciente) já possui

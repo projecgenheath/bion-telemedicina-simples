@@ -13,6 +13,7 @@ import {
   type AuditPayload,
 } from "@/lib/server/dados";
 import { quandoClinica } from "@/lib/server/fuso";
+import { diaBloqueado, ERRO_DIA_BLOQUEADO } from "@/lib/server/bloqueio-agenda";
 import { criarCobranca, confirmarPagamento, falharPagamento } from "@/lib/server/pagamentos";
 import { ok, falha } from "@/lib/server/http";
 import {
@@ -268,6 +269,17 @@ export async function PATCH(
             return Response.json({ erro: "Médico não encontrado." }, { status: 400 });
           }
           data.medicoId = novoMedico.id;
+        }
+        // Dia bloqueado pelo médico: vale para a combinação RESULTANTE
+        // (médico + dia), só quando a data ou o médico mudam e a consulta não
+        // está sendo cancelada. (Conflito de horário do admin: fora deste PR.)
+        {
+          const novoInicio = (data.dataInicio as Date | undefined) ?? consulta.dataInicio;
+          const novoMedicoId = (data.medicoId as string | undefined) ?? consulta.medicoId;
+          const mudou = novoInicio.getTime() !== consulta.dataInicio.getTime() || novoMedicoId !== consulta.medicoId;
+          if (mudou && body.status !== "cancelada" && (await diaBloqueado(db, novoMedicoId, novoInicio))) {
+            return Response.json({ erro: ERRO_DIA_BLOQUEADO }, { status: 409 });
+          }
         }
         if (body.especialidade) data.especialidade = body.especialidade;
         if (body.status) {

@@ -2,6 +2,7 @@ import "server-only";
 import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { partesNoFuso, quandoClinica } from "@/lib/server/fuso";
+import { diaBloqueado, ERRO_DIA_BLOQUEADO } from "@/lib/server/bloqueio-agenda";
 import { REEMBOLSO_MANUAL_PRAZO_DIAS, parseDataHora, prazoReembolsoManual } from "@/lib/server/dados";
 
 /* ------------------------------------------------------------------ */
@@ -535,6 +536,8 @@ export async function aprovarMultaRemarcacao(remarcacaoId: string, via: "webhook
       });
       if (ocupado) aplicavel = false;
     }
+    // Dia bloqueado pelo médico depois da reserva: não move; a multa volta (caminho abaixo).
+    if (aplicavel && (await diaBloqueado(tx, c.medicoId, r.novaData))) aplicavel = false;
 
     if (aplicavel) {
       await tx.consulta.update({ where: { id: c.id }, data: { dataInicio: r.novaData, remarcada: true } });
@@ -591,7 +594,8 @@ export async function falharMultaRemarcacao(remarcacaoId: string, via: "webhook"
 /**
  * Valida a nova data/hora de uma remarcação (mesma regra para o PATCH
  * "remarcar" e para a remarcação com multa): antecedência de 20 min, grade do
- * médico, consulta que ocupa o horário e reserva vigente de outra consulta.
+ * médico, dia bloqueado pelo médico, consulta que ocupa o horário e reserva
+ * vigente de outra consulta.
  */
 export async function validarNovoHorario(
   consulta: { id: string; medicoId: string },
@@ -612,6 +616,10 @@ export async function validarNovoHorario(
   }
   if (grade.length && !grade.includes(hora)) {
     return { ok: false, erro: "Esse horário não faz parte da agenda do médico.", status: 400 };
+  }
+  // Dia inteiro bloqueado pelo médico (folga/férias) — antes da checagem de conflito.
+  if (await diaBloqueado(db, consulta.medicoId, dataInicio)) {
+    return { ok: false, erro: ERRO_DIA_BLOQUEADO, status: 409 };
   }
   const conflito = await db.consulta.findFirst({
     where: {

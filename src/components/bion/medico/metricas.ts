@@ -413,8 +413,12 @@ export function textoReservaPendente(r: NonNullable<Consulta["remarcacaoPendente
 
 export type SlotAgenda = {
   hora: string;
-  /** livre: horário da grade sem consulta; ocupado: consulta ativa; reservado: novo horário de uma remarcação aguardando pagamento. */
-  estado: "livre" | "ocupado" | "reservado" | "encerrada";
+  /**
+   * livre: horário da grade sem consulta; ocupado: consulta ativa; reservado:
+   * novo horário de uma remarcação aguardando pagamento; bloqueado: horário
+   * que estaria livre num dia que o médico bloqueou (não aceita agendamento).
+   */
+  estado: "livre" | "ocupado" | "reservado" | "encerrada" | "bloqueado";
   /** Consulta neste horário (qualquer status) — a data ORIGINAL continua valendo. */
   consultas: Consulta[];
   /** Consulta cuja remarcação (ainda não paga) reservou este horário. */
@@ -428,8 +432,15 @@ export type SlotAgenda = {
  * pendentes (vigentes) que caem neste dia. A consulta com reserva fica no
  * horário ORIGINAL (vale até o pagamento); o novo horário aparece como
  * "reservado". Reserva expirada é ignorada (o horário volta a ficar livre).
+ * Dia bloqueado pelo médico (`bloqueado`): o que estaria livre vira "bloqueado".
  */
-export function agendaDoDia(consultas: Consulta[], iso: string, grade: string[], agora: number): SlotAgenda[] {
+export function agendaDoDia(
+  consultas: Consulta[],
+  iso: string,
+  grade: string[],
+  agora: number,
+  bloqueado = false,
+): SlotAgenda[] {
   const slots = new Map<string, SlotAgenda>();
   const slot = (hora: string) => {
     let s = slots.get(hora);
@@ -456,6 +467,7 @@ export function agendaDoDia(consultas: Consulta[], iso: string, grade: string[],
     if (s.consultas.some((c) => STATUS_ATIVOS.includes(c.status))) s.estado = "ocupado";
     else if (s.reservadoPor) s.estado = "reservado";
     else if (s.consultas.length) s.estado = "encerrada";
+    else if (bloqueado) s.estado = "bloqueado";
   }
   return [...slots.values()].sort((a, b) => paraMin(a.hora) - paraMin(b.hora));
 }
@@ -517,4 +529,12 @@ export function pontosReceita(r: RespostaReceita | null): PontoReceita[] {
     const [, mes, dia] = d.dia.split("-");
     return { iso: d.dia, rotulo: `${dia}/${mes}`, centavos: d.totalCentavos, qtd: d.consultas };
   });
+}
+
+/**
+ * Remove os dias bloqueados pelo médico de uma lista de dias ("AAAA-MM-DD"
+ * no fuso da clínica) — ex.: a prévia da agenda que o paciente vê.
+ */
+export function semDiasBloqueados<T extends { iso: string }>(dias: T[], bloqueados: ReadonlySet<string>): T[] {
+  return bloqueados.size ? dias.filter((d) => !bloqueados.has(d.iso)) : dias;
 }

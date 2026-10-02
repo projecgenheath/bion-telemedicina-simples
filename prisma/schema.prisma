@@ -48,6 +48,7 @@ model User {
   anamneses            Anamnese[]
   leiturasNotificacao  NotificacaoLeitura[]
   repasses             Repasse[]      @relation("RepasseMedico")
+  bloqueiosAgenda      BloqueioAgenda[] @relation("BloqueioMedico")
 }
 
 model Sessao {
@@ -548,4 +549,20 @@ model RemarcacaoPendente {
 
   @@index([consultaId, status])
   @@index([novaData, status])
+}
+
+// Dia inteiro bloqueado pelo médico (folga/férias): pacientes não agendam nem
+// remarcam para esse dia. `dia` = dia civil em America/Sao_Paulo (DATE; o
+// Prisma lê/grava como meia-noite UTC). `motivo` é PRIVADO do médico — nunca
+// vai ao paciente. Migração: supabase/migrations/20261002b_bloqueio_agenda.sql
+model BloqueioAgenda {
+  id       String   @id @default(cuid())
+  medicoId String
+  medico   User     @relation("BloqueioMedico", fields: [medicoId], references: [id], onDelete: Cascade)
+  dia      DateTime @db.Date
+  motivo   String   @default("")
+  criadoEm DateTime @default(now())
+
+  @@unique([medicoId, dia])
+  @@index([dia])
 }

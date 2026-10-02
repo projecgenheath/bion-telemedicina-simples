@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, CalendarX2, CheckCircle2, Loader2 } from "lucide-react";
+import { AlertTriangle, Ban, CalendarX2, CheckCircle2, Loader2, LockOpen } from "lucide-react";
 import { useBion, type Consulta, type Medico } from "@/lib/bion-store";
 import { diaFusoClinica, instanteFusoClinica } from "@/lib/bion-tipos";
 import {
@@ -20,18 +20,40 @@ import {
   type EventoMedico,
   type SlotAgenda,
 } from "../metricas";
-import { avisarDadosMedicoAlterados } from "../useDadosMedico";
+import { avisarDadosMedicoAlterados, useBloqueiosAgenda } from "../useDadosMedico";
 
 const DIAS_SEMANA = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 const HORIZONTE_DIAS = 14;
 const MOTIVO_CANCELAR_DIA = "Agenda do dia cancelada pelo médico";
+/** Bloqueio de dia: até 365 dias à frente; motivo (privado) até 120 caracteres — mesmas regras do servidor. */
+const HORIZONTE_BLOQUEIO_DIAS = 365;
+const MOTIVO_BLOQUEIO_MAX = 120;
 
 type Falha = { consulta: Consulta; erro: string };
 type Fase =
   | { tipo: "lista" }
   | { tipo: "confirmar"; alvo: Consulta[]; reservas: number }
   | { tipo: "executando"; alvo: Consulta[]; feitas: number; etapa: "reservas" | "consultas" }
-  | { tipo: "resultado"; canceladas: number; reservasLiberadas: number; erroReservas: string | null; falhas: Falha[] };
+  | { tipo: "resultado"; canceladas: number; reservasLiberadas: number; erroReservas: string | null; falhas: Falha[] }
+  /** Bloquear o dia: `consultasServidor` vem do 409 quando o servidor achou consultas que a tela não tinha. */
+  | { tipo: "confirmarBloqueio"; alvo: Consulta[]; reservas: number; consultasServidor?: number }
+  | { tipo: "confirmarDesbloqueio" }
+  | { tipo: "salvandoBloqueio"; acao: "bloquear" | "desbloquear" }
+  | {
+      tipo: "resultadoBloqueio";
+      acao: "bloquear" | "desbloquear";
+      canceladas: number;
+      reservasLiberadas: number;
+      erro: string | null;
+    };
+
+type RespostaBloqueio = {
+  erro?: string;
+  consultas?: number;
+  reservas?: number;
+  canceladas?: number;
+  reservasLiberadas?: number;
+};
 
 /** "AAAA-MM-DD" → partes (mês 0-11). */
 function partesIso(iso: string) {
@@ -100,6 +122,11 @@ export function AgendaDoDia({ medico, onExecutando }: { medico: Medico; onExecut
   const minhas = useMemo(() => consultas.filter((c) => ehDoMedico(c, sessao)), [consultas, sessao]);
   const hojeIso = diaFusoClinica(0).iso;
   const diaPassado = dia < hojeIso;
+  const bloqueios = useBloqueiosAgenda();
+  const bloqueioDia = bloqueios.porDia.get(dia);
+  const [motivoBloqueio, setMotivoBloqueio] = useState("");
+  const limiteBloqueioIso = diaFusoClinica(HORIZONTE_BLOQUEIO_DIAS).iso;
+  const podeBloquear = !diaPassado && !bloqueioDia && dia <= limiteBloqueioIso;
 
   // Falhas técnicas / faltas do médico do dia escolhido (eventos do servidor; a falta já vem no bootstrap).
   const [desfechos, setDesfechos] = useState<ReadonlyMap<string, DesfechoSistema>>(() => new Map());
@@ -137,11 +164,15 @@ export function AgendaDoDia({ medico, onExecutando }: { medico: Medico; onExecut
           rotulo: i === 0 ? "Hoje" : i === 1 ? "Amanhã" : `${String(d.dia).padStart(2, "0")}/${String(d.mes + 1).padStart(2, "0")}`,
           sub: DIAS_SEMANA[d.semana],
           ativas,
+          bloqueado: bloqueios.porDia.has(d.iso),
         };
       }),
-    [minhas],
+    [minhas, bloqueios.porDia],
   );
-  const slots = useMemo(() => agendaDoDia(minhas, dia, medico.horariosDisponiveis, agora), [minhas, dia, medico.horariosDisponiveis, agora]);
+  const slots = useMemo(
+    () => agendaDoDia(minhas, dia, medico.horariosDisponiveis, agora, !!bloqueioDia),
+    [minhas, dia, medico.horariosDisponiveis, agora, bloqueioDia],
+  );
   const cancelaveis = useMemo(() => consultasCancelaveisDoDia(minhas, dia, agora), [minhas, dia, agora]);
   const reservasDia = useMemo(() => reservasNoDia(minhas, dia, agora), [minhas, dia, agora]);
   const podeCancelar = !diaPassado && (cancelaveis.length > 0 || reservasDia.length > 0);
@@ -149,7 +180,7 @@ export function AgendaDoDia({ medico, onExecutando }: { medico: Medico; onExecut
   /** "hoje" · "amanhã" · "em 05/10" — para as frases. */
   const quandoDia = rotuloDia === "Hoje" ? "hoje" : rotuloDia === "Amanhã" ? "amanhã" : `em ${rotuloDia}`;
   const deDia = rotuloDia === "Hoje" ? "de hoje" : rotuloDia === "Amanhã" ? "de amanhã" : `de ${rotuloDia}`;
-  const ocupado = fase.tipo === "executando";
+  const ocupado = fase.tipo === "executando" || fase.tipo === "salvandoBloqueio";
 
   const pedirConfirmacao = () => {
     const t = Date.now();
@@ -199,6 +230,99 @@ export function AgendaDoDia({ medico, onExecutando }: { medico: Medico; onExecut
     requestAnimationFrame(() => tituloResultadoRef.current?.focus());
   };
 
+  const pedirBloqueio = () => {
+    const t = Date.now();
+    setAgora(t);
+    if (dia < diaFusoClinica(0).iso || bloqueios.porDia.has(dia)) return;
+    setMotivoBloqueio("");
+    setFase({
+      tipo: "confirmarBloqueio",
+      alvo: consultasCancelaveisDoDia(minhas, dia, t),
+      reservas: reservasNoDia(minhas, dia, t).length,
+    });
+  };
+
+  const recarregarEstado = async () => {
+    try {
+      const res = await fetch("/api/bootstrap", { headers: { "Content-Type": "application/json" } });
+      if (res.ok) aplicarEstadoFresco(await res.json());
+    } catch {
+      /* o polling do store cobre */
+    }
+  };
+
+  const terminarBloqueio = (r: Extract<Fase, { tipo: "resultadoBloqueio" }>) => {
+    avisarDadosMedicoAlterados();
+    setAgora(Date.now());
+    setFase(r);
+    rodando.current = false;
+    onExecutando(false);
+    requestAnimationFrame(() => tituloResultadoRef.current?.focus());
+  };
+
+  /** POST /api/medico/agenda/bloqueios — grava o bloqueio e (se houver) cancela as consultas/reservas do dia no servidor. */
+  const executarBloqueio = async (f: Extract<Fase, { tipo: "confirmarBloqueio" }>) => {
+    if (rodando.current) return;
+    rodando.current = true;
+    onExecutando(true);
+    setFase({ tipo: "salvandoBloqueio", acao: "bloquear" });
+    const cancelarConsultas = (f.consultasServidor ?? f.alvo.length) > 0 || f.reservas > 0;
+    let json: RespostaBloqueio | null = null;
+    let status = 0;
+    try {
+      const res = await fetch("/api/medico/agenda/bloqueios", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dia, motivo: motivoBloqueio.trim().slice(0, MOTIVO_BLOQUEIO_MAX), cancelarConsultas }),
+      });
+      status = res.status;
+      json = (await res.json().catch(() => null)) as RespostaBloqueio | null;
+    } catch {
+      json = { erro: "Falha de conexão com o servidor." };
+    }
+    if (status === 409 && typeof json?.consultas === "number" && !cancelarConsultas) {
+      // O servidor achou consultas/reservas que a tela ainda não mostrava: pede a confirmação de novo.
+      rodando.current = false;
+      onExecutando(false);
+      await recarregarEstado();
+      setFase({ ...f, reservas: json.reservas ?? 0, consultasServidor: json.consultas });
+      return;
+    }
+    if (status < 200 || status >= 300) {
+      terminarBloqueio({
+        tipo: "resultadoBloqueio",
+        acao: "bloquear",
+        canceladas: 0,
+        reservasLiberadas: 0,
+        erro: json?.erro ?? `Erro ${status}`,
+      });
+      return;
+    }
+    const canceladas = json?.canceladas ?? 0;
+    const reservasLiberadas = json?.reservasLiberadas ?? 0;
+    if (canceladas || reservasLiberadas) await recarregarEstado();
+    terminarBloqueio({ tipo: "resultadoBloqueio", acao: "bloquear", canceladas, reservasLiberadas, erro: null });
+  };
+
+  /** DELETE /api/medico/agenda/bloqueios?dia= — não restaura consultas canceladas. */
+  const executarDesbloqueio = async () => {
+    if (rodando.current) return;
+    rodando.current = true;
+    onExecutando(true);
+    setFase({ tipo: "salvandoBloqueio", acao: "desbloquear" });
+    let erro: string | null = null;
+    try {
+      const res = await fetch(`/api/medico/agenda/bloqueios?dia=${encodeURIComponent(dia)}`, { method: "DELETE" });
+      if (!res.ok) {
+        const json = (await res.json().catch(() => null)) as { erro?: string } | null;
+        erro = json?.erro ?? `Erro ${res.status}`;
+      }
+    } catch {
+      erro = "Falha de conexão com o servidor.";
+    }
+    terminarBloqueio({ tipo: "resultadoBloqueio", acao: "desbloquear", canceladas: 0, reservasLiberadas: 0, erro });
+  };
+
   return (
     <section aria-labelledby="bm-agenda-dia-titulo" className="space-y-3">
       <h3 id="bm-agenda-dia-titulo" className="text-xs font-bold uppercase tracking-wider text-bion-ink/75 dark:text-bion-paper/75">
@@ -226,8 +350,10 @@ export function AgendaDoDia({ medico, onExecutando }: { medico: Medico; onExecut
             <span className="block text-sm font-bold">{d.rotulo}</span>
             <span className="block text-xs">
               {d.sub}
-              {d.ativas ? ` · ${d.ativas}` : ""}
-              <span className="sr-only">{d.ativas ? ` consultas ativas` : " sem consultas ativas"}</span>
+              {d.bloqueado ? " · Bloqueado" : d.ativas ? ` · ${d.ativas}` : ""}
+              <span className="sr-only">
+                {d.bloqueado && d.ativas ? `, ${d.ativas} consultas ativas` : d.bloqueado ? "" : d.ativas ? ` consultas ativas` : " sem consultas ativas"}
+              </span>
             </span>
           </button>
         ))}
@@ -250,6 +376,27 @@ export function AgendaDoDia({ medico, onExecutando }: { medico: Medico; onExecut
           className="rounded-xl border border-bion-ink/15 dark:border-white/15 bg-transparent px-2 py-1.5 text-sm disabled:opacity-60"
         />
       </label>
+
+      {bloqueioDia && fase.tipo === "lista" ? (
+        <div className="rounded-2xl border-2 border-bion-ink/25 dark:border-white/25 p-3 space-y-2">
+          <p className="text-sm font-black inline-flex items-center gap-2">
+            <Ban className="w-4 h-4" aria-hidden /> Dia bloqueado
+          </p>
+          <p className="text-sm text-bion-ink/75 dark:text-bion-paper/75">
+            Você não atende {quandoDia}: os pacientes não conseguem agendar nem remarcar para este dia.
+            {bloqueioDia.motivo ? ` Motivo (só você vê): ${bloqueioDia.motivo}.` : ""}
+          </p>
+          {!diaPassado ? (
+            <button
+              type="button"
+              onClick={() => setFase({ tipo: "confirmarDesbloqueio" })}
+              className="py-2 px-3 rounded-xl text-sm font-bold inline-flex items-center gap-2 border border-bion-ink/25 dark:border-white/25"
+            >
+              <LockOpen className="w-4 h-4" aria-hidden /> Desbloquear dia
+            </button>
+          ) : null}
+        </div>
+      ) : null}
 
       {slots.length === 0 ? (
         <p className="text-sm text-bion-ink/75 dark:text-bion-paper/75">Nenhum horário nem consulta neste dia.</p>
@@ -278,7 +425,166 @@ export function AgendaDoDia({ medico, onExecutando }: { medico: Medico; onExecut
               Nada para cancelar {quandoDia}: nenhuma consulta por acontecer nem reserva aguardando pagamento.
             </p>
           ) : null}
+          {!diaPassado && !bloqueioDia ? (
+            <>
+              <button
+                type="button"
+                onClick={pedirBloqueio}
+                disabled={!podeBloquear}
+                className="w-full py-3 rounded-2xl text-sm font-bold inline-flex items-center justify-center gap-2 border-2 border-bion-ink/25 dark:border-white/25 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Ban className="w-4 h-4" aria-hidden /> Bloquear o dia (não atender)
+              </button>
+              {dia > limiteBloqueioIso ? (
+                <p className="text-xs text-bion-ink/70 dark:text-bion-paper/70">Dá para bloquear no máximo {HORIZONTE_BLOQUEIO_DIAS} dias à frente.</p>
+              ) : null}
+            </>
+          ) : null}
         </>
+      ) : null}
+
+      {fase.tipo === "confirmarBloqueio" ? (
+        (() => {
+          const nConsultas = fase.consultasServidor ?? fase.alvo.length;
+          const cancela = nConsultas > 0 || fase.reservas > 0;
+          return (
+            <div
+              role="alertdialog"
+              aria-labelledby="bm-bloquear-dia-titulo"
+              aria-describedby="bm-bloquear-dia-texto"
+              className={`rounded-2xl border-2 p-4 space-y-3 ${cancela ? "border-red-700 dark:border-red-300" : "border-bion-ink/25 dark:border-white/25"}`}
+            >
+              <h4 id="bm-bloquear-dia-titulo" className="text-base font-black inline-flex items-center gap-2">
+                {cancela ? <AlertTriangle className="w-5 h-5 text-red-700 dark:text-red-300" aria-hidden /> : <Ban className="w-5 h-5" aria-hidden />}
+                {cancela ? "Cancelar e bloquear o dia" : `Bloquear o dia ${rotuloDia === "Hoje" || rotuloDia === "Amanhã" ? rotuloDia.toLowerCase() : rotuloDia}?`}
+              </h4>
+              <div id="bm-bloquear-dia-texto" className="text-sm space-y-2">
+                <p>Os pacientes não vão conseguir agendar nem remarcar para {quandoDia}. Você pode desbloquear depois.</p>
+                {nConsultas > 0 ? (
+                  <p>
+                    {nConsultas === 1 ? "1 consulta será cancelada" : `${nConsultas} consultas serão canceladas`}: os pacientes{" "}
+                    <strong>não pagam multa</strong>. Quem já pagou escolhe entre <strong>reembolso integral</strong> ou{" "}
+                    <strong>remarcar</strong> sem custo; consultas ainda não pagas são canceladas. Desbloquear o dia não desfaz isso.
+                  </p>
+                ) : null}
+                {fase.reservas > 0 ? (
+                  <p>
+                    {fase.reservas === 1
+                      ? "1 reserva de remarcação aguardando pagamento para este dia será liberada (o paciente é avisado)."
+                      : `${fase.reservas} reservas de remarcação aguardando pagamento para este dia serão liberadas (os pacientes são avisados).`}
+                  </p>
+                ) : null}
+              </div>
+              {fase.alvo.length ? (
+                <ul className="text-sm space-y-0.5">
+                  {fase.alvo.map((c) => (
+                    <li key={c.id} className="flex justify-between gap-2">
+                      <span className="truncate">{c.paciente}</span>
+                      <span className="font-bold tabular-nums">{horaClinica(c.dataISO ?? c.ts)}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+              <label className="block text-sm">
+                <span className="font-bold">Motivo (opcional, só você vê)</span>
+                <input
+                  type="text"
+                  value={motivoBloqueio}
+                  maxLength={MOTIVO_BLOQUEIO_MAX}
+                  onChange={(e) => setMotivoBloqueio(e.target.value)}
+                  placeholder="Ex.: férias, congresso"
+                  className="mt-1 w-full rounded-xl border border-bion-ink/15 dark:border-white/15 bg-transparent px-3 py-2 text-sm"
+                />
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setFase({ tipo: "lista" })}
+                  className="py-2.5 rounded-xl text-sm font-bold border border-bion-ink/25 dark:border-white/25"
+                >
+                  Voltar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void executarBloqueio(fase)}
+                  className={`py-2.5 rounded-xl text-sm font-bold ${
+                    cancela
+                      ? "bg-red-700 text-white hover:bg-red-800 dark:bg-red-300 dark:text-zinc-950 dark:hover:bg-red-200"
+                      : "bg-bion-sea text-white dark:bg-sky-300 dark:text-zinc-950"
+                  }`}
+                >
+                  {cancela ? "Cancelar e bloquear o dia" : "Bloquear o dia"}
+                </button>
+              </div>
+            </div>
+          );
+        })()
+      ) : null}
+
+      {fase.tipo === "confirmarDesbloqueio" ? (
+        <div role="alertdialog" aria-labelledby="bm-desbloquear-dia-titulo" className="rounded-2xl border-2 border-bion-ink/25 dark:border-white/25 p-4 space-y-3">
+          <h4 id="bm-desbloquear-dia-titulo" className="text-base font-black inline-flex items-center gap-2">
+            <LockOpen className="w-5 h-5" aria-hidden /> Desbloquear {quandoDia}?
+          </h4>
+          <p className="text-sm">
+            Os horários da sua grade voltam a ficar disponíveis para os pacientes. Consultas canceladas no bloqueio não voltam.
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setFase({ tipo: "lista" })}
+              className="py-2.5 rounded-xl text-sm font-bold border border-bion-ink/25 dark:border-white/25"
+            >
+              Voltar
+            </button>
+            <button
+              type="button"
+              onClick={() => void executarDesbloqueio()}
+              className="py-2.5 rounded-xl text-sm font-bold bg-bion-sea text-white dark:bg-sky-300 dark:text-zinc-950"
+            >
+              Desbloquear dia
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {fase.tipo === "salvandoBloqueio" ? (
+        <div className="rounded-2xl border border-bion-ink/15 dark:border-white/15 p-4" role="status" aria-live="polite">
+          <div className="text-sm font-bold inline-flex items-center gap-2">
+            <Loader2 className="w-4 h-4 motion-safe:animate-spin" aria-hidden />
+            {fase.acao === "bloquear" ? "Bloqueando o dia…" : "Desbloqueando o dia…"}
+          </div>
+          <p className="text-xs mt-1 text-bion-ink/70 dark:text-bion-paper/70">Não feche esta tela até terminar.</p>
+        </div>
+      ) : null}
+
+      {fase.tipo === "resultadoBloqueio" ? (
+        <div className="rounded-2xl border border-bion-ink/15 dark:border-white/15 p-4 space-y-2" role="status" aria-live="polite">
+          <h4 ref={tituloResultadoRef} tabIndex={-1} className="text-sm font-black inline-flex items-center gap-2 outline-none">
+            {fase.erro ? (
+              <AlertTriangle className="w-4 h-4 text-red-700 dark:text-red-300" aria-hidden />
+            ) : (
+              <CheckCircle2 className="w-4 h-4 text-emerald-700 dark:text-emerald-300" aria-hidden />
+            )}
+            {fase.erro
+              ? fase.acao === "bloquear"
+                ? "O dia não foi bloqueado"
+                : "O dia não foi desbloqueado"
+              : fase.acao === "bloquear"
+                ? `Dia bloqueado${fase.canceladas ? ` · ${fase.canceladas} ${fase.canceladas === 1 ? "consulta cancelada" : "consultas canceladas"}` : ""}${
+                    fase.reservasLiberadas ? ` · ${fase.reservasLiberadas} ${fase.reservasLiberadas === 1 ? "reserva liberada" : "reservas liberadas"}` : ""
+                  }`
+                : "Dia desbloqueado"}
+          </h4>
+          {fase.erro ? (
+            <p className="text-sm text-red-700 dark:text-red-300">{fase.erro}</p>
+          ) : fase.canceladas || fase.reservasLiberadas ? (
+            <p className="text-sm text-bion-ink/75 dark:text-bion-paper/75">Os pacientes foram avisados pelo app.</p>
+          ) : null}
+          <button type="button" onClick={() => setFase({ tipo: "lista" })} className="text-sm font-bold text-bion-sea dark:text-sky-300 underline underline-offset-2">
+            Voltar à agenda
+          </button>
+        </div>
       ) : null}
 
       {fase.tipo === "confirmar" ? (
@@ -381,6 +687,7 @@ const ROTULO_SLOT: Record<SlotAgenda["estado"], string> = {
   ocupado: "Ocupado",
   reservado: "Reservado",
   encerrada: "Liberado",
+  bloqueado: "Bloqueado",
 };
 
 function LinhaSlot({ slot, agora, desfechos }: { slot: SlotAgenda; agora: number; desfechos: ReadonlyMap<string, DesfechoSistema> }) {

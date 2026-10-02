@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { Consulta, Medico } from "@/lib/bion-store";
 import { agendaLivreDoMedico } from "@/components/bion/paciente/agenda-medico";
 import { SheetMedico } from "./SheetMedico";
+import { semDiasBloqueados } from "../metricas";
+import { useBloqueiosAgenda } from "../useDadosMedico";
 
 /** Prévia (somente leitura) do "Agendar consulta" que o paciente vê. */
 export function AgendaPreviewSheet({
@@ -18,9 +20,15 @@ export function AgendaPreviewSheet({
   consultas: Consulta[];
 }) {
   // O médico tem TODAS as próprias consultas, então a prévia é exata.
-  const [agenda] = useState(() => agendaLivreDoMedico(medico, consultas));
-  const [dia, setDia] = useState(() => agenda[0]?.iso ?? "");
-  const selecionado = agenda.find((d) => d.iso === dia);
+  // A grade é calculada uma vez ao abrir; os dias bloqueados pelo médico
+  // (que o paciente também não vê) saem quando a lista de bloqueios chega.
+  const [base] = useState(() => agendaLivreDoMedico(medico, consultas));
+  const bloqueios = useBloqueiosAgenda();
+  const bloqueados = useMemo(() => new Set(bloqueios.porDia.keys()), [bloqueios.porDia]);
+  const agenda = useMemo(() => semDiasBloqueados(base, bloqueados), [base, bloqueados]);
+  const [escolhido, setDia] = useState(() => base[0]?.iso ?? "");
+  const selecionado = agenda.find((d) => d.iso === escolhido) ?? agenda[0];
+  const dia = selecionado?.iso ?? "";
 
   return (
     <SheetMedico
