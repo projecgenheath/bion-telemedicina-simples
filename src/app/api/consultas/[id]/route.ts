@@ -21,8 +21,10 @@ import {
   cancelarReservasDoDia,
   cancelarReservasPendentes,
   criarReembolsoSeDevido,
+  horarioReservado,
   reaisParaCentavos,
   registrarEvento,
+  STATUS_LIBERAM_HORARIO,
   type MotivoEvento,
   type PorEvento,
   type TipoEvento,
@@ -270,15 +272,46 @@ export async function PATCH(
           }
           data.medicoId = novoMedico.id;
         }
-        // Dia bloqueado pelo médico: vale para a combinação RESULTANTE
-        // (médico + dia), só quando a data ou o médico mudam e a consulta não
-        // está sendo cancelada. (Conflito de horário do admin: fora deste PR.)
+        if (data.dataInicio && Number.isNaN((data.dataInicio as Date).getTime())) {
+          return Response.json({ erro: "Data ou horário inválido." }, { status: 400 });
+        }
+        if (body.status && !STATUS_VALIDOS.includes(body.status)) {
+          return Response.json({ erro: "Status inválido." }, { status: 400 });
+        }
+        // Agenda da combinação RESULTANTE (médico + horário + status): confere
+        // dia bloqueado, conflito do médico, conflito do paciente e reserva
+        // vigente de outra consulta quando a data ou o médico mudam, ou quando
+        // uma consulta que liberava o horário (cancelada/concluída/aguardando
+        // reagendamento) volta a ocupá-lo. Cancelar nunca é barrado.
         {
           const novoInicio = (data.dataInicio as Date | undefined) ?? consulta.dataInicio;
           const novoMedicoId = (data.medicoId as string | undefined) ?? consulta.medicoId;
+          const novoStatus = body.status ?? consulta.status;
           const mudou = novoInicio.getTime() !== consulta.dataInicio.getTime() || novoMedicoId !== consulta.medicoId;
-          if (mudou && body.status !== "cancelada" && (await diaBloqueado(db, novoMedicoId, novoInicio))) {
-            return Response.json({ erro: ERRO_DIA_BLOQUEADO }, { status: 409 });
+          const voltaAOcupar =
+            STATUS_LIBERAM_HORARIO.includes(consulta.status) && !STATUS_LIBERAM_HORARIO.includes(novoStatus);
+          const vaiOcupar = !STATUS_LIBERAM_HORARIO.includes(novoStatus);
+          if (vaiOcupar && (mudou || voltaAOcupar)) {
+            if (await diaBloqueado(db, novoMedicoId, novoInicio)) {
+              return Response.json({ erro: ERRO_DIA_BLOQUEADO }, { status: 409 });
+            }
+            const [choqueMedico, choquePaciente, reservado] = await Promise.all([
+              db.consulta.findFirst({
+                where: { id: { not: id }, medicoId: novoMedicoId, dataInicio: novoInicio, status: { notIn: STATUS_LIBERAM_HORARIO } },
+                select: { id: true },
+              }),
+              db.consulta.findFirst({
+                where: { id: { not: id }, pacienteId: consulta.pacienteId, dataInicio: novoInicio, status: { notIn: STATUS_LIBERAM_HORARIO } },
+                select: { id: true },
+              }),
+              horarioReservado(novoMedicoId, novoInicio, id),
+            ]);
+            if (choqueMedico || reservado) {
+              return Response.json({ erro: "Esse horário já está ocupado na agenda do médico." }, { status: 409 });
+            }
+            if (choquePaciente) {
+              return Response.json({ erro: "O paciente já tem outra consulta nesse horário." }, { status: 409 });
+            }
           }
         }
         if (body.especialidade) data.especialidade = body.especialidade;
