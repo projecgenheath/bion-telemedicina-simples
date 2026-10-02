@@ -192,3 +192,24 @@ export function useDadosMedico() {
 }
 
 export type DadosMedico = ReturnType<typeof useDadosMedico>;
+
+/** Dia inteiro bloqueado pelo próprio médico (folga/férias). */
+export type BloqueioAgendaMedico = { dia: string; motivo: string; criadoEm: string };
+
+/**
+ * Dias bloqueados do PRÓPRIO médico, de hoje em diante
+ * (GET /api/medico/agenda/bloqueios). Recarrega no EVENTO_DADOS_MEDICO.
+ * `porDia`: "AAAA-MM-DD" → bloqueio (motivo é privado do médico).
+ */
+export function useBloqueiosAgenda() {
+  const { sessao } = useBion();
+  const r = useRecurso<{ bloqueios: BloqueioAgendaMedico[] }>(
+    sessao.role === "medico" ? "/api/medico/agenda/bloqueios" : null,
+    "",
+  );
+  const porDia = useMemo(
+    () => new Map((r.dados?.bloqueios ?? []).map((b) => [b.dia, b] as const)),
+    [r.dados],
+  );
+  return { porDia, carregando: r.carregando, erro: r.erro, recarregar: r.recarregar };
+}
