@@ -13,7 +13,7 @@ import {
   type AuditPayload,
 } from "@/lib/server/dados";
 import { quandoClinica } from "@/lib/server/fuso";
-import { diaBloqueado, ERRO_DIA_BLOQUEADO } from "@/lib/server/bloqueio-agenda";
+import { diaBloqueado, ERRO_DIA_BLOQUEADO, OPCOES_TX_TRAVA } from "@/lib/server/bloqueio-agenda";
 import { criarCobranca, confirmarPagamento, falharPagamento } from "@/lib/server/pagamentos";
 import { ok, falha } from "@/lib/server/http";
 import {
@@ -29,6 +29,12 @@ import {
   type PorEvento,
   type TipoEvento,
   validarNovoHorario,
+  conferirHorarioNaTransacao,
+  ERRO_CONSULTA_MUDOU,
+  ERRO_HORARIO_OCUPADO,
+  ERRO_PACIENTE_OCUPADO,
+  HorarioIndisponivel,
+  travarDias,
 } from "@/lib/server/financeiro";
 
 type Acao = "cancelar" | "concluir" | "remarcar" | "atualizar";
@@ -131,6 +137,9 @@ export async function PATCH(
     const por: PorEvento = ehAdmin ? "admin" : ehDonoMedico ? "medico" : "paciente";
     let evento: EventoPendente | null = null;
     let reembolso: ReembolsoPendente | null = null;
+    // Horário que a consulta passa a ocupar: conferido de novo DENTRO da
+    // transação, com a trava (médico, dia) do agendamento e do bloqueio do dia.
+    let conferir: { medicoId: string; dataInicio: Date; pacienteId?: string; exigirAberta?: boolean } | null = null;
     const eventosAnteriores = () =>
       db.eventoConsulta.findMany({ where: { consultaId: id }, select: { por: true, em: true, dataAnterior: true, motivo: true } });
 
@@ -200,6 +209,7 @@ export async function PATCH(
         const horario = await validarNovoHorario(consulta, body.data, body.hora);
         if (!horario.ok) return Response.json({ erro: horario.erro }, { status: horario.status });
         data.dataInicio = horario.dataInicio;
+        conferir = { medicoId: consulta.medicoId, dataInicio: horario.dataInicio, exigirAberta: true };
         // Regra de status no SERVIDOR: remarcar NÃO altera confirmação —
         // quem confirma é o pagamento (confirmarPagamento). Legado
         // "pendente_anamnese" permanece até a trilha de pagamento resolver.
@@ -292,6 +302,8 @@ export async function PATCH(
             STATUS_LIBERAM_HORARIO.includes(consulta.status) && !STATUS_LIBERAM_HORARIO.includes(novoStatus);
           const vaiOcupar = !STATUS_LIBERAM_HORARIO.includes(novoStatus);
           if (vaiOcupar && (mudou || voltaAOcupar)) {
+            conferir = { medicoId: novoMedicoId, dataInicio: novoInicio, pacienteId: consulta.pacienteId };
+            // Resposta rápida; a checagem que vale é a da transação travada, abaixo.
             if (await diaBloqueado(db, novoMedicoId, novoInicio)) {
               return Response.json({ erro: ERRO_DIA_BLOQUEADO }, { status: 409 });
             }
@@ -307,10 +319,10 @@ export async function PATCH(
               horarioReservado(novoMedicoId, novoInicio, id),
             ]);
             if (choqueMedico || reservado) {
-              return Response.json({ erro: "Esse horário já está ocupado na agenda do médico." }, { status: 409 });
+              return Response.json({ erro: ERRO_HORARIO_OCUPADO }, { status: 409 });
             }
             if (choquePaciente) {
-              return Response.json({ erro: "O paciente já tem outra consulta nesse horário." }, { status: 409 });
+              return Response.json({ erro: ERRO_PACIENTE_OCUPADO }, { status: 409 });
             }
           }
         }
@@ -351,19 +363,44 @@ export async function PATCH(
 
     const ev = evento as EventoPendente | null;
     const re = reembolso as ReembolsoPendente | null;
-    await db.$transaction(async (tx) => {
-      await tx.consulta.update({ where: { id }, data });
-      if (ev) await registrarEvento(tx, { consultaId: id, atorId: usuario.id, ...ev });
-      // Cancelamento (qualquer pessoa) ou mudança de data por outra via:
-      // a reserva de remarcação paga perde a validade na mesma transação.
-      if (data.status === "cancelada" || data.status === "aguardando_reagendamento" || ev?.tipo === "remarcada") {
-        await cancelarReservasPendentes(tx, id);
-      }
-      if (por === "medico" && body.acao === "cancelar" && body.cancelarDia) {
-        await cancelarReservasDoDia(tx, consulta.medicoId, consulta.dataInicio);
-      }
-      if (re) await criarReembolsoSeDevido(tx, { consultaId: id, solicitadoPor: usuario.id, ...re });
-    });
+    const alvo = conferir as typeof conferir;
+    try {
+      await db.$transaction(async (tx) => {
+        if (alvo) {
+          // Dia atual e dia novo, em ordem fixa (sem deadlock); depois confere
+          // que ninguém mexeu na consulta e que o horário continua livre.
+          await travarDias(tx, [
+            { medicoId: consulta.medicoId, instante: consulta.dataInicio },
+            { medicoId: alvo.medicoId, instante: alvo.dataInicio },
+          ]);
+          const atual = await tx.consulta.findUnique({ where: { id }, select: { medicoId: true, dataInicio: true, status: true } });
+          if (
+            !atual ||
+            atual.medicoId !== consulta.medicoId ||
+            atual.dataInicio.getTime() !== consulta.dataInicio.getTime() ||
+            (alvo.exigirAberta && (atual.status === "cancelada" || atual.status === "concluida"))
+          ) {
+            throw new HorarioIndisponivel(ERRO_CONSULTA_MUDOU);
+          }
+          const erro = await conferirHorarioNaTransacao(tx, { consultaId: id, ...alvo });
+          if (erro) throw new HorarioIndisponivel(erro);
+        }
+        await tx.consulta.update({ where: { id }, data });
+        if (ev) await registrarEvento(tx, { consultaId: id, atorId: usuario.id, ...ev });
+        // Cancelamento (qualquer pessoa) ou mudança de data por outra via:
+        // a reserva de remarcação paga perde a validade na mesma transação.
+        if (data.status === "cancelada" || data.status === "aguardando_reagendamento" || ev?.tipo === "remarcada") {
+          await cancelarReservasPendentes(tx, id);
+        }
+        if (por === "medico" && body.acao === "cancelar" && body.cancelarDia) {
+          await cancelarReservasDoDia(tx, consulta.medicoId, consulta.dataInicio);
+        }
+        if (re) await criarReembolsoSeDevido(tx, { consultaId: id, solicitadoPor: usuario.id, ...re });
+      }, alvo ? OPCOES_TX_TRAVA : undefined);
+    } catch (e) {
+      if (e instanceof HorarioIndisponivel) return Response.json({ erro: e.message }, { status: e.status });
+      throw e;
+    }
     const efeitos = await aplicarSideEffects(usuario, eventos, audit);
     const atualizada = await consultaWire(id);
 

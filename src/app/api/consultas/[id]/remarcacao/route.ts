@@ -4,11 +4,15 @@ import { exigirSessao, registrarAudit } from "@/lib/server/auth";
 import { ok, falha } from "@/lib/server/http";
 import { quandoClinica } from "@/lib/server/fuso";
 import { modoGateway } from "@/lib/server/pagamentos";
+import { OPCOES_TX_TRAVA } from "@/lib/server/bloqueio-agenda";
 import {
   RESERVA_REMARCACAO_MIN,
   aprovarMultaRemarcacao,
   calcularMulta,
+  conferirHorarioNaTransacao,
   filtroReservaVigente,
+  HorarioIndisponivel,
+  travarDias,
   remarcacaoWire,
   validarNovoHorario,
 } from "@/lib/server/financeiro";
@@ -84,27 +88,41 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const horario = await validarNovoHorario(consulta, body.data, body.hora);
     if (!horario.ok) return Response.json({ erro: horario.erro }, { status: horario.status });
 
-    // Pendentes já expiradas não seguram o índice único parcial.
-    await db.remarcacaoPendente.updateMany({
-      where: { consultaId: id, status: "pendente", expiraEm: { lte: new Date() } },
-      data: { status: "expirada" },
-    });
-    const criada = await db.remarcacaoPendente
-      .create({
-      data: {
-        consultaId: id,
-        novaData: horario.dataInicio,
-        multaCentavos: previa.multaCentavos,
-        metodo: body.metodo === "cartao" ? "cartao" : "pix",
-        solicitadoPor: usuario.id,
-        expiraEm: new Date(Date.now() + RESERVA_REMARCACAO_MIN * 60_000),
-      },
-      })
-      .catch((e: unknown) => {
-        // Clique duplo: o índice único parcial barra a 2ª pendente.
-        if ((e as { code?: string }).code === "P2002") return null;
-        throw e;
-      });
+    // Reserva numa transação com a trava (médico, dia) do agendamento e do
+    // bloqueio do dia: o horário é conferido de novo com o dia travado, então
+    // nenhuma reserva nasce num dia que acabou de ser bloqueado.
+    let criada: Awaited<ReturnType<typeof db.remarcacaoPendente.create>> | null;
+    try {
+      criada = await db.$transaction(async (tx) => {
+        await travarDias(tx, [{ medicoId: consulta.medicoId, instante: horario.dataInicio }]);
+        const erro = await conferirHorarioNaTransacao(tx, {
+          consultaId: id,
+          medicoId: consulta.medicoId,
+          dataInicio: horario.dataInicio,
+        });
+        if (erro) throw new HorarioIndisponivel(erro);
+        // Pendentes já expiradas não seguram o índice único parcial.
+        await tx.remarcacaoPendente.updateMany({
+          where: { consultaId: id, status: "pendente", expiraEm: { lte: new Date() } },
+          data: { status: "expirada" },
+        });
+        return tx.remarcacaoPendente.create({
+          data: {
+            consultaId: id,
+            novaData: horario.dataInicio,
+            multaCentavos: previa.multaCentavos,
+            metodo: body.metodo === "cartao" ? "cartao" : "pix",
+            solicitadoPor: usuario.id,
+            expiraEm: new Date(Date.now() + RESERVA_REMARCACAO_MIN * 60_000),
+          },
+        });
+      }, OPCOES_TX_TRAVA);
+    } catch (e) {
+      if (e instanceof HorarioIndisponivel) return Response.json({ erro: e.message }, { status: e.status });
+      // Clique duplo: o índice único parcial barra a 2ª pendente (a transação é desfeita).
+      if ((e as { code?: string }).code === "P2002") criada = null;
+      else throw e;
+    }
     if (!criada) {
       return Response.json({ erro: "Já existe uma remarcação aguardando pagamento." }, { status: 409 });
     }
