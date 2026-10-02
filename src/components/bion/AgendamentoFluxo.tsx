@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { useBion, type Medico } from "@/lib/bion-store";
 import { agendaLivreDoMedico } from "@/components/bion/paciente/agenda-medico";
+import { useDiasBloqueados } from "@/components/bion/paciente/useDiasBloqueados";
 import { diasDoAgendamento, selecaoValida } from "@/components/bion/agendamento/horarios";
 import { ModalBion } from "@/components/bion/ModalBion";
 import {
@@ -110,9 +111,16 @@ export function AgendamentoFluxo({
   // sem horários passados nem já ocupados por consultas conhecidas no cliente)
   // e sem horários em que o próprio paciente já tem consulta. Outras reservas
   // de outros pacientes só o servidor conhece: o 409 dele continua valendo.
+  // Dias inteiros bloqueados pelo médico também saem (o servidor recusa
+  // esses dias com 409 "O médico não atende neste dia.").
+  const { bloqueados, recarregar: recarregarBloqueios } = useDiasBloqueados(medicoAtual?.id);
   const diasDisponiveis = useMemo(
-    () => diasDoAgendamento(agendaLivreDoMedico(medicoAtual, consultas), consultas),
-    [medicoAtual, consultas, minutoAtual],
+    () =>
+      diasDoAgendamento(
+        agendaLivreDoMedico(medicoAtual, consultas, undefined, undefined, bloqueados),
+        consultas,
+      ),
+    [medicoAtual, consultas, minutoAtual, bloqueados],
   );
 
   // Seleção efetiva: se o dia saiu da agenda ou a hora não está mais livre
@@ -219,9 +227,11 @@ export function AgendamentoFluxo({
     );
 
     if (!criada) {
-      // Servidor recusou (ex.: 409 horário já ocupado, horário no passado) ou
-      // falha de rede: o store já mostrou a mensagem do servidor. Nada foi
-      // reservado nem cobrado — volta para a escolha de horário.
+      // Servidor recusou (ex.: 409 horário já ocupado, 409 "O médico não
+      // atende neste dia.", horário no passado) ou falha de rede: o store já
+      // mostrou a mensagem do servidor. Nada foi reservado nem cobrado — volta
+      // para a escolha de horário, com os dias bloqueados atualizados.
+      recarregarBloqueios();
       setSelecaoCongelada(null);
       setHoraEscolhida("");
       toast.error("Consulta não reservada", {

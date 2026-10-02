@@ -16,14 +16,15 @@ import {
   X,
 } from "lucide-react";
 import { useBion, type AnamneseResumo } from "@/lib/bion-store";
-import { MESES_AGENDA } from "./constantes";
+import { diasDoAgendamento } from "@/components/bion/agendamento/horarios";
+import { agendaLivreDoMedico } from "./agenda-medico";
+import { useDiasBloqueados } from "./useDiasBloqueados";
 import {
   type Msg,
   type Etapa,
   type AnamneseAtiva,
   type RespostaAnamnese,
   ETAPAS_ANAMNESE,
-  DIAS_SEMANA,
   JANELA_TRIAGEM_MS,
   triagemDisponivel,
 } from "./chat-bion-types";
@@ -68,7 +69,15 @@ export function ChatBion({
   const [entrada, setEntrada] = useState("");
   const [pensando, setPensando] = useState(false);
   const [etapa, setEtapa] = useState<Etapa>(null);
-  const [escolha, setEscolha] = useState<{ especialidade?: string; medico?: string; dia?: string; hora?: string }>({});
+  // dia = rótulo exibido ("Hoje", "Amanhã", "D Mês"); diaIso = chave do dia no
+  // fuso da clínica (o rótulo muda de sentido na virada do dia, o ISO não).
+  const [escolha, setEscolha] = useState<{
+    especialidade?: string;
+    medico?: string;
+    dia?: string;
+    diaIso?: string;
+    hora?: string;
+  }>({});
   const [metodo, setMetodo] = useState<"pix" | "cartao" | null>(null);
   const [pagando, setPagando] = useState(false);
   const [anamneseAtiva, setAnamneseAtiva] = useState<AnamneseAtiva | null>(null);
@@ -78,6 +87,17 @@ export function ChatBion({
   const histAnamneseRef = useRef<{ remetente: "usuario" | "ia"; texto: string }[]>([]);
 
   const medicosAtivos = medicos.filter((m) => m.status === "ativo");
+
+  // Agenda LIVRE do profissional escolhido — a MESMA do fluxo de agendamento
+  // (AgendamentoFluxo): fuso de São Paulo (não o relógio do navegador), sem
+  // horários passados, sem horários já ocupados por consultas conhecidas, sem
+  // horários em que o próprio paciente já tem consulta e sem os dias inteiros
+  // bloqueados pelo médico. O servidor continua validando (409).
+  const medicoEscolhido = escolha.medico ? medicosAtivos.find((m) => m.nome === escolha.medico) : undefined;
+  const { bloqueados, recarregar: recarregarBloqueios } = useDiasBloqueados(medicoEscolhido?.id);
+  const agendaChat = medicoEscolhido
+    ? diasDoAgendamento(agendaLivreDoMedico(medicoEscolhido, consultas, undefined, 7, bloqueados), consultas)
+    : [];
 
   // Triagens em andamento de consultas confirmadas dentro da janela (retomada)
   const anamnesesPendentes = anamneses
@@ -426,15 +446,30 @@ export function ChatBion({
 
   /** Pagamento (simulado) + criação da consulta — o pagamento confirma no agenda. */
   const pagarEAgendar = async () => {
-    const { medico, especialidade, dia, hora } = escolha;
-    if (!medico || !especialidade || !dia || !hora || pagando) return;
+    const { medico, especialidade, diaIso, hora } = escolha;
+    if (!medico || !especialidade || !diaIso || !hora || pagando) return;
     const medicoRegistro = medicosAtivos.find((m) => m.nome === medico);
     const medicoId = medicoRegistro?.id;
     if (!medicoId) {
       toast.error("Médico não encontrado para o agendamento.");
       return;
     }
+    // O horário ainda precisa estar livre (virada do dia, vaga ocupada, dia bloqueado).
+    const diaAtual = agendaChat.find((d) => d.iso === diaIso);
+    if (!diaAtual || !diaAtual.horarios.includes(hora)) {
+      setMensagens((m) => [
+        ...m,
+        { remetente: "ia", texto: "Esse horário não está mais disponível. Escolha outro dia ou horário, por favor.", tipo: "erro" },
+      ]);
+      setEscolha({ especialidade, medico });
+      setEtapa("dia");
+      return;
+    }
+    // Rótulo atual do dia ("Hoje" | "Amanhã" | "D Mês"), formato lido pelo servidor.
+    const dia = diaAtual.rotulo;
     setPagando(true);
+    // Recusa do servidor (ex.: 409 "O médico não atende neste dia.") — distinta de falha de rede.
+    let recusa: { status: number; erro: string } | null = null;
     try {
       const res = await fetch("/api/consultas", {
         method: "POST",
@@ -448,8 +483,11 @@ export function ChatBion({
           metodo,
         }),
       });
-      const json = (await res.json()) as { consultaCriada?: string; erro?: string } & Record<string, unknown>;
-      if (!res.ok || !json.consultaCriada) throw new Error(json.erro ?? "Falha");
+      const json = ((await res.json().catch(() => null)) ?? {}) as { consultaCriada?: string; erro?: string } & Record<string, unknown>;
+      if (!res.ok || !json.consultaCriada) {
+        recusa = { status: res.status, erro: typeof json.erro === "string" ? json.erro : "" };
+        throw new Error(recusa.erro || "Falha");
+      }
       // Contrato delta: resposta contém APENAS a consulta criada (+ anamnese).
       aplicarDelta(json);
 
@@ -472,29 +510,35 @@ export function ChatBion({
         quando,
       });
     } catch {
-      setMensagens((m) => [
-        ...m,
-        { remetente: "ia", texto: "Não consegui concluir o agendamento agora. Verifique sua conexão e tente novamente — seu pagamento não foi debitado.", tipo: "erro" },
-      ]);
+      if (recusa?.status === 409) {
+        // Horário/dia recusado (ocupado, dia bloqueado pelo médico…): mostra o
+        // motivo do servidor e volta para a escolha do dia com a agenda atualizada.
+        const motivo = recusa.erro || "Esse horário não está mais disponível.";
+        recarregarBloqueios();
+        setMensagens((m) => [
+          ...m,
+          { remetente: "ia", texto: `${motivo} Escolha outro dia ou horário, por favor — seu pagamento não foi debitado.`, tipo: "erro" },
+        ]);
+        setEscolha({ especialidade, medico });
+        setEtapa("dia");
+      } else if (recusa?.erro) {
+        const motivo = recusa.erro;
+        setMensagens((m) => [
+          ...m,
+          { remetente: "ia", texto: `Não consegui concluir o agendamento: ${motivo} Seu pagamento não foi debitado.`, tipo: "erro" },
+        ]);
+      } else {
+        setMensagens((m) => [
+          ...m,
+          { remetente: "ia", texto: "Não consegui concluir o agendamento agora. Verifique sua conexão e tente novamente — seu pagamento não foi debitado.", tipo: "erro" },
+        ]);
+      }
     } finally {
       setPagando(false);
     }
   };
 
   /* --------------------------- opções do wizard --------------------------- */
-
-  const diasDisponiveis = () => {
-    const dias: { rotulo: string; sub: string }[] = [];
-    for (let i = 0; i < 7; i++) {
-      const d = new Date();
-      d.setDate(d.getDate() + i);
-      dias.push({
-        rotulo: i === 0 ? "Hoje" : i === 1 ? "Amanhã" : `${d.getDate()} ${MESES_AGENDA[d.getMonth()]}`,
-        sub: DIAS_SEMANA[d.getDay()],
-      });
-    }
-    return dias;
-  };
 
   type OpcoesEtapa = {
     titulo: string;
@@ -528,34 +572,40 @@ export function ChatBion({
       };
     }
     if (etapa === "dia") {
+      // Só dias com horário livre (agenda do médico, próximos 7 dias).
+      if (!agendaChat.length) {
+        return {
+          titulo: "Dia",
+          opcoes: [{ rotulo: "Sem horários livres nos próximos 7 dias", valor: "" }],
+          escolher: () => {
+            setMensagens((m) => [...m, { remetente: "ia", texto: "Este profissional não tem horários livres nos próximos 7 dias — escolha outro profissional, por favor." }]);
+            setEscolha((c) => ({ especialidade: c.especialidade }));
+            setEtapa("medico");
+          },
+        };
+      }
       return {
         titulo: "Dia",
-        opcoes: diasDisponiveis().map((d) => ({ rotulo: d.rotulo, valor: d.rotulo, sub: d.sub })),
+        opcoes: agendaChat.map((d) => ({ rotulo: d.rotulo, valor: d.iso, sub: d.sem })),
         escolher: (v: string) => {
-          setEscolha((c) => ({ ...c, dia: v }));
-          setMensagens((m) => [...m, { remetente: "usuario", texto: v }, { remetente: "ia", texto: "Agora escolha o horário:" }]);
+          const d = agendaChat.find((x) => x.iso === v);
+          if (!d) return;
+          setEscolha((c) => ({ ...c, dia: d.rotulo, diaIso: d.iso, hora: undefined }));
+          setMensagens((m) => [...m, { remetente: "usuario", texto: d.rotulo }, { remetente: "ia", texto: "Agora escolha o horário:" }]);
           setEtapa("hora");
         },
       };
     }
     if (etapa === "hora") {
-      const medico = medicosAtivos.find((m) => m.nome === escolha.medico);
-      let horarios = medico?.horariosDisponiveis?.length ? medico.horariosDisponiveis : ["08:00", "09:00", "10:00", "14:00", "15:00", "16:00"];
-      // "Hoje": só horários com folga suficiente para o pagamento + triagem (10 min)
-      if (escolha.dia === "Hoje") {
-        const agora = new Date(Date.now() + 10 * 60_000);
-        const limiteMin = agora.getHours() * 60 + agora.getMinutes();
-        horarios = horarios.filter((h) => {
-          const [hh, mm] = h.split(":").map(Number);
-          return hh * 60 + mm >= limiteMin;
-        });
-      }
+      // Horários livres do dia escolhido (já sem passados/ocupados/bloqueados).
+      const horarios = agendaChat.find((d) => d.iso === escolha.diaIso)?.horarios ?? [];
       if (!horarios.length) {
         return {
           titulo: "Horário",
-          opcoes: [{ rotulo: "Sem horários disponíveis hoje", valor: "" }],
+          opcoes: [{ rotulo: "Sem horários disponíveis neste dia", valor: "" }],
           escolher: () => {
-            setMensagens((m) => [...m, { remetente: "ia", texto: "Para hoje a janela de triagem já passou — escolha outro dia, por favor." }]);
+            setMensagens((m) => [...m, { remetente: "ia", texto: "Esse dia não tem mais horários livres — escolha outro dia, por favor." }]);
+            setEscolha((c) => ({ especialidade: c.especialidade, medico: c.medico }));
             setEtapa("dia");
           },
         };
