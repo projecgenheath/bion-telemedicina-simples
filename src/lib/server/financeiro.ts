@@ -2,7 +2,15 @@ import "server-only";
 import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { partesNoFuso, quandoClinica } from "@/lib/server/fuso";
-import { diaBloqueado, ERRO_DIA_BLOQUEADO } from "@/lib/server/bloqueio-agenda";
+import {
+  chaveTravaDia,
+  diaBloqueado,
+  diaIsoSaoPaulo,
+  ERRO_DIA_BLOQUEADO,
+  OPCOES_TX_TRAVA,
+  travarDiaIso,
+  type ClienteBanco,
+} from "@/lib/server/bloqueio-agenda";
 import { REEMBOLSO_MANUAL_PRAZO_DIAS, parseDataHora, prazoReembolsoManual } from "@/lib/server/dados";
 
 /* ------------------------------------------------------------------ */
@@ -441,8 +449,13 @@ export function filtroReservaVigente(agora: Date = new Date()) {
  * Há uma reserva vigente de OUTRA consulta do mesmo médico neste horário?
  * Usado na checagem de conflito ao agendar e ao remarcar.
  */
-export async function horarioReservado(medicoId: string, dataInicio: Date, excetoConsultaId?: string) {
-  const r = await db.remarcacaoPendente.findFirst({
+export async function horarioReservado(
+  medicoId: string,
+  dataInicio: Date,
+  excetoConsultaId?: string,
+  client: ClienteBanco = db,
+) {
+  const r = await client.remarcacaoPendente.findFirst({
     where: {
       ...filtroReservaVigente(),
       novaData: dataInicio,
@@ -522,6 +535,17 @@ export function remarcacaoWire(r: {
  */
 export async function aprovarMultaRemarcacao(remarcacaoId: string, via: "webhook" | "simulado", gatewayRef?: string) {
   return db.$transaction(async (tx) => {
+    // Trava o dia novo e o dia atual do médico ANTES de ler o estado: um
+    // bloqueio do dia (ou outro agendamento) não intercala com a aplicação.
+    const alvo = await tx.remarcacaoPendente.findUnique({
+      where: { id: remarcacaoId },
+      select: { novaData: true, consulta: { select: { medicoId: true, dataInicio: true } } },
+    });
+    if (!alvo) return null;
+    await travarDias(tx, [
+      { medicoId: alvo.consulta.medicoId, instante: alvo.novaData },
+      { medicoId: alvo.consulta.medicoId, instante: alvo.consulta.dataInicio },
+    ]);
     const r = await tx.remarcacaoPendente.findUnique({ where: { id: remarcacaoId }, include: { consulta: true } });
     if (!r) return null;
     if (r.status === "aprovada") return { remarcacao: r, aplicada: true, jaProcessada: true };
@@ -581,7 +605,7 @@ export async function aprovarMultaRemarcacao(remarcacaoId: string, via: "webhook
       });
     }
     return { remarcacao: atual, aplicada: false, jaProcessada: false };
-  });
+  }, OPCOES_TX_TRAVA);
 }
 
 /** Gateway reportou falha na multa: a consulta fica na data original. */
@@ -631,7 +655,72 @@ export async function validarNovoHorario(
     select: { id: true },
   });
   if (conflito || (await horarioReservado(consulta.medicoId, dataInicio, consulta.id))) {
-    return { ok: false, erro: "Esse horário já está ocupado na agenda do médico.", status: 409 };
+    return { ok: false, erro: ERRO_HORARIO_OCUPADO, status: 409 };
   }
   return { ok: true, dataInicio };
+}
+
+/* ------------------------------------------------------------------ */
+/* Trava (médico, dia) nos caminhos que mudam a data de uma consulta    */
+/* ------------------------------------------------------------------ */
+
+export const ERRO_HORARIO_OCUPADO = "Esse horário já está ocupado na agenda do médico.";
+export const ERRO_PACIENTE_OCUPADO = "O paciente já tem outra consulta nesse horário.";
+export const ERRO_CONSULTA_MUDOU =
+  "A consulta foi alterada por outra pessoa enquanto você salvava. Atualize a tela e tente de novo.";
+
+/** Horário indisponível visto DENTRO da transação travada: desfaz tudo e vira resposta HTTP. */
+export class HorarioIndisponivel extends Error {
+  constructor(
+    message: string,
+    readonly status: number = 409,
+  ) {
+    super(message);
+    this.name = "HorarioIndisponivel";
+  }
+}
+
+/**
+ * Toma a trava (médico, dia de São Paulo) de cada alvo — a mesma do
+ * agendamento e do bloqueio do dia (bloqueio-agenda.ts) —, sem repetir e em
+ * ordem fixa da chave. Quem pega mais de um dia sempre pega na mesma ordem e
+ * as outras rotas pegam um dia só, então não há espera em ciclo (deadlock).
+ * Chame no começo da transação, antes de ler o estado que será conferido.
+ */
+export async function travarDias(tx: Prisma.TransactionClient, alvos: { medicoId: string; instante: Date }[]) {
+  const porChave = new Map<string, { medicoId: string; dia: string }>();
+  for (const a of alvos) {
+    const dia = diaIsoSaoPaulo(a.instante);
+    porChave.set(chaveTravaDia(a.medicoId, dia), { medicoId: a.medicoId, dia });
+  }
+  for (const chave of [...porChave.keys()].sort()) {
+    const { medicoId, dia } = porChave.get(chave)!;
+    await travarDiaIso(tx, medicoId, dia);
+  }
+}
+
+/**
+ * Confere o horário DENTRO da transação, depois de `travarDias`: dia
+ * bloqueado, outra consulta do médico, reserva vigente de outra consulta e,
+ * com `pacienteId`, outra consulta do paciente. Devolve a mensagem de erro
+ * (409) ou null quando o horário está livre.
+ */
+export async function conferirHorarioNaTransacao(
+  tx: Prisma.TransactionClient,
+  p: { consultaId: string; medicoId: string; dataInicio: Date; pacienteId?: string },
+): Promise<string | null> {
+  if (await diaBloqueado(tx, p.medicoId, p.dataInicio)) return ERRO_DIA_BLOQUEADO;
+  const choqueMedico = await tx.consulta.findFirst({
+    where: { id: { not: p.consultaId }, medicoId: p.medicoId, dataInicio: p.dataInicio, status: { notIn: STATUS_LIBERAM_HORARIO } },
+    select: { id: true },
+  });
+  if (choqueMedico || (await horarioReservado(p.medicoId, p.dataInicio, p.consultaId, tx))) return ERRO_HORARIO_OCUPADO;
+  if (p.pacienteId) {
+    const choquePaciente = await tx.consulta.findFirst({
+      where: { id: { not: p.consultaId }, pacienteId: p.pacienteId, dataInicio: p.dataInicio, status: { notIn: STATUS_LIBERAM_HORARIO } },
+      select: { id: true },
+    });
+    if (choquePaciente) return ERRO_PACIENTE_OCUPADO;
+  }
+  return null;
 }
