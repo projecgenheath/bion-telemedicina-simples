@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { useBion } from "@/lib/bion-store";
 import { fmtHora, type Consulta, type Medico } from "@/lib/bion-tipos";
 import { agendaLivreDoMedico } from "./agenda-medico";
+import { useDiasBloqueados } from "./useDiasBloqueados";
 import { fraseMotivoReagendamento } from "./motivo-reagendamento";
 import { fmtCentavos, usePreviaCancelamento, type PreviaAcao, type PreviaCancelamento } from "./usePreviaCancelamento";
 import {
@@ -88,9 +89,18 @@ export function CancelarRemarcarSheet({ consulta, acao, medico, consultas, onFec
 
   const aguardando = consulta.status === "aguardando_reagendamento";
 
+  // Dias inteiros bloqueados pelo médico saem da agenda (inclusive no
+  // "remarcar sem custo" de aguardando_reagendamento). O servidor recusa
+  // esses dias com 409 "O médico não atende neste dia." de qualquer forma.
+  const { bloqueados, recarregar: recarregarBloqueios } = useDiasBloqueados(
+    acao === "remarcar" ? medico?.id : null,
+  );
   const agendaLivre = useMemo(
-    () => (acao === "remarcar" ? agendaLivreDoMedico(medico, consultas, consulta.id) : []),
-    [acao, medico, consultas, consulta.id],
+    () =>
+      acao === "remarcar"
+        ? agendaLivreDoMedico(medico, consultas, consulta.id, undefined, bloqueados)
+        : [],
+    [acao, medico, consultas, consulta.id, bloqueados],
   );
 
   // Seleção efetiva derivada da agenda livre (sem efeito): cai no 1º dia/horário livre.
@@ -147,6 +157,7 @@ export function CancelarRemarcarSheet({ consulta, acao, medico, consultas, onFec
       } else {
         toast.error(r.erro);
         recarregar();
+        recarregarBloqueios();
       }
       return;
     }
@@ -159,7 +170,10 @@ export function CancelarRemarcarSheet({ consulta, acao, medico, consultas, onFec
     setEnviando(false);
     if (!aceito) {
       // Ex.: 402 (a multa passou a valer): a prévia atualizada mostra o pagamento.
+      // 409 "O médico não atende neste dia.": o store já mostrou a mensagem e
+      // o dia some da agenda com os bloqueios atualizados.
       recarregar();
+      recarregarBloqueios();
       return;
     }
     toast.success("Consulta remarcada");
@@ -181,6 +195,7 @@ export function CancelarRemarcarSheet({ consulta, acao, medico, consultas, onFec
     limpar();
     setMetodo(null);
     recarregar();
+    recarregarBloqueios();
   };
 
   const fechar = () => {

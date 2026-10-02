@@ -27,12 +27,30 @@ function eDoMedico(c: Consulta, medico: Medico) {
   return c.medicoId ? c.medicoId === medico.id : c.medico === medico.nome;
 }
 
+/** Dias bloqueados pelo médico ("AAAA-MM-DD", dia civil de São Paulo). */
+export type DiasBloqueados = ReadonlySet<string> | readonly string[];
+
+/**
+ * Agenda LIVRE do médico (dias com ao menos um horário livre), no fuso da
+ * clínica — independente do fuso do navegador.
+ *
+ * `bloqueados` (opcional): dias inteiros em que o médico não atende
+ * (GET /api/medicos/[id]/bloqueios). Esses dias somem da agenda, como os
+ * dias sem vaga. Sem o parâmetro, o comportamento é o de antes. O servidor
+ * continua recusando esses dias com 409 — aqui é só conveniência de tela.
+ */
 export function agendaLivreDoMedico(
   medico: Medico | undefined,
   consultas: Consulta[],
   excluirConsultaId?: string,
   horizonteDias = 14,
+  bloqueados?: DiasBloqueados,
 ): DiaAgenda[] {
+  const diasBloqueados: ReadonlySet<string> | null = !bloqueados
+    ? null
+    : bloqueados instanceof Set
+      ? bloqueados
+      : new Set(bloqueados as readonly string[]);
   const horasBase = medico?.horariosDisponiveis?.length ? medico.horariosDisponiveis : HORAS_PADRAO;
   const agora = Date.now() + 30 * 60_000;
 
@@ -50,6 +68,9 @@ export function agendaLivreDoMedico(
   const dias: DiaAgenda[] = [];
   for (let i = 0; i < horizonteDias; i++) {
     const d = diaFusoClinica(i);
+    // d.iso é o dia civil de São Paulo: um horário 22:00 (01:00Z do dia
+    // seguinte) pertence a este dia, não ao seguinte.
+    if (diasBloqueados?.has(d.iso)) continue;
     const horarios = horasBase.filter((h) => {
       const [hh, mm] = h.split(":").map(Number);
       const ts = instanteFusoClinica(d.ano, d.mes, d.dia, hh || 0, mm || 0);
