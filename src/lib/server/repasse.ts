@@ -717,11 +717,6 @@ export async function fecharRepasse(dia: string, opcoes: { agora?: Date; medicoI
 /* ---------- Pagamento (admin) --------------------------------------- */
 
 /**
- * Marca o repasse como pago: guarda a cópia da chave PIX usada (a atual do
- * médico), quem pagou e o comprovante. `pixChaveConferida` é a chave que o
- * admin viu na tela; se mudou nesse meio-tempo, recusa (409).
- */
-/**
  * Mesmas checagens do marcarRepassePago, só lendo: a rota chama antes de
  * subir o comprovante, para não deixar arquivo no bucket num 409 previsível.
  */
@@ -742,6 +737,11 @@ export async function conferirAntesDePagar(repasseId: string, pixChaveConferida:
   return { repasse, pix };
 }
 
+/**
+ * Marca o repasse como pago: guarda a cópia da chave PIX usada (a atual do
+ * médico), quem pagou e o comprovante. `pixChaveConferida` é a chave que o
+ * admin viu na tela; se mudou nesse meio-tempo, recusa (409).
+ */
 export async function marcarRepassePago(params: {
   repasseId: string;
   adminId: string;
