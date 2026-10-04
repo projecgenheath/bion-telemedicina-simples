@@ -30,7 +30,24 @@ export const ERRO_INTERNO_PADRAO = "Erro interno. Tente novamente.";
  * registra o detalhe só no log. Erros lançados de propósito com `status`
  * (ex.: `err.status = 404`) continuam com a própria mensagem.
  */
+/** Mensagem quando o banco recusa mexer em algo que já entrou num repasse. */
+export const ERRO_JA_REPASSADO = "Esse registro já entrou num repasse e não pode ser alterado.";
+
+/**
+ * FK violada (P2003) por causa das tabelas de repasse: Repasse, RepasseItem e
+ * RepasseAjuste usam ON DELETE/UPDATE RESTRICT; apagar ou trocar o médico de
+ * algo já repassado estoura aqui. Outras FKs continuam sendo erro interno.
+ */
+function violouRepasse(e: { code?: unknown; message?: unknown; meta?: unknown }): boolean {
+  if (e?.code !== "P2003") return false;
+  const texto = `${JSON.stringify(e.meta ?? {})} ${typeof e.message === "string" ? e.message : ""}`;
+  return /Repasse/.test(texto);
+}
+
 export function falha(erro: unknown) {
+  if (violouRepasse(erro as { code?: unknown })) {
+    return NextResponse.json({ erro: ERRO_JA_REPASSADO }, { status: 409 });
+  }
   const e = erro as Error & { status?: number };
   const statusExplicito = typeof e?.status === "number";
   const status = statusExplicito ? (e.status as number) : 500;
