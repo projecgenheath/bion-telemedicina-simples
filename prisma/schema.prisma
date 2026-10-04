@@ -48,6 +48,9 @@ model User {
   anamneses            Anamnese[]
   leiturasNotificacao  NotificacaoLeitura[]
   repasses             Repasse[]      @relation("RepasseMedico")
+  repassesPagos        Repasse[]      @relation("RepassePagoPor")
+  repasseAjustes       RepasseAjuste[] @relation("RepasseAjusteMedico")
+  dadosRecebimento     DadosRecebimentoMedico?
   bloqueiosAgenda      BloqueioAgenda[] @relation("BloqueioMedico")
 }
 
@@ -171,6 +174,7 @@ model Consulta {
   // Fase financeira: histórico de cancelamentos/remarcações e repasse
   eventos     EventoConsulta[]
   repasseItem RepasseItem?
+  repasseAjustes RepasseAjuste[]
   remarcacoes RemarcacaoPendente[]
 }
 
@@ -479,29 +483,44 @@ model Reembolso {
   respostaAdmin String?
   decididoPor   String?
   decididoEm    DateTime?
+  repasseAjuste RepasseAjuste?
 
   @@index([pagamentoId, status])
   @@index([status, criadoEm])
   @@index([origem, status, criadoEm])
 }
 
-// Repasse mensal ao médico. competencia: "AAAA-MM" (mês de Brasília).
-// status: aberto | fechado | pago
+// Repasse DIÁRIO ao médico (fecha às 23:30 de São Paulo, consultas do dia).
+// competencia: "AAAA-MM-DD" (dia em São Paulo; CHECK no banco).
+// status: aberto | fechado | pago. Pago exige pagoEm, pagoPorId e comprovante.
+// pix*: cópia da chave usada no pagamento (trocar a chave não muda o histórico).
+// Migração: supabase/migrations/20261003_repasse_diario.sql. NUNCA vai ao
+// paciente (fora do consultaWire, medicoWire e bootstrap).
 model Repasse {
-  id                 String        @id @default(cuid())
-  medicoId           String
-  medico             User          @relation("RepasseMedico", fields: [medicoId], references: [id], onDelete: Restrict)
-  competencia        String
-  brutoCentavos      Int           @default(0)
-  taxasCentavos      Int           @default(0)
-  reembolsosCentavos Int           @default(0)
-  multasCentavos     Int           @default(0)
-  liquidoCentavos    Int           @default(0)
-  status             String        @default("aberto")
-  criadoEm           DateTime      @default(now())
-  fechadoEm          DateTime?
-  pagoEm             DateTime?
-  itens              RepasseItem[]
+  id                  String          @id @default(cuid())
+  medicoId            String
+  medico              User            @relation("RepasseMedico", fields: [medicoId], references: [id], onDelete: Restrict)
+  competencia         String
+  brutoCentavos       Int             @default(0)
+  comissaoCentavos    Int             @default(0)
+  taxasCentavos       Int             @default(0)
+  reembolsosCentavos  Int             @default(0)
+  multasCentavos      Int             @default(0)
+  ajustesCentavos     Int             @default(0) // descontos de reembolsos posteriores
+  liquidoCentavos     Int             @default(0) // nunca negativo
+  status              String          @default("aberto")
+  criadoEm            DateTime        @default(now())
+  fechadoEm           DateTime?
+  pagoEm              DateTime?
+  pagoPorId           String?
+  pagoPor             User?           @relation("RepassePagoPor", fields: [pagoPorId], references: [id], onDelete: Restrict)
+  comprovantePath     String? // caminho no bucket PRIVADO (nunca URL pública)
+  pixTipo             String?
+  pixChave            String?
+  pixTitularNome      String?
+  pixTitularDocumento String?
+  itens               RepasseItem[]
+  ajustes             RepasseAjuste[]
 
   @@unique([medicoId, competencia])
   @@index([competencia, status])
@@ -515,6 +534,7 @@ model RepasseItem {
   consultaId         String   @unique
   consulta           Consulta @relation(fields: [consultaId], references: [id], onDelete: Restrict)
   brutoCentavos      Int
+  comissaoCentavos   Int      @default(0)
   taxasCentavos      Int      @default(0)
   reembolsosCentavos Int      @default(0)
   multasCentavos     Int      @default(0)
@@ -522,6 +542,50 @@ model RepasseItem {
   criadoEm           DateTime @default(now())
 
   @@index([repasseId])
+}
+
+// Desconto num repasse SEGUINTE.
+// motivo "reembolso": reembolso efetivado depois de a consulta/multa ter
+//   entrado num repasse fechado (reembolsoId único: desconta uma vez só).
+// motivo "saldo_anterior": sobra de um desconto maior que o líquido do dia
+//   (o repasse fecha em 0 e o resto passa pro dia seguinte).
+// repasseId nulo = pendente; preenchido = descontado nesse repasse.
+model RepasseAjuste {
+  id             String          @id @default(cuid())
+  medicoId       String
+  medico         User            @relation("RepasseAjusteMedico", fields: [medicoId], references: [id], onDelete: Restrict)
+  consultaId     String
+  consulta       Consulta        @relation(fields: [consultaId], references: [id], onDelete: Restrict)
+  motivo         String // reembolso | saldo_anterior
+  reembolsoId    String?         @unique
+  reembolso      Reembolso?      @relation(fields: [reembolsoId], references: [id], onDelete: Restrict)
+  origemAjusteId String?         @unique
+  origemAjuste   RepasseAjuste?  @relation("AjusteSaldo", fields: [origemAjusteId], references: [id], onDelete: Restrict)
+  saldo          RepasseAjuste?  @relation("AjusteSaldo")
+  valorCentavos  Int // parte do MÉDICO a descontar (> 0)
+  repasseId      String?
+  repasse        Repasse?        @relation(fields: [repasseId], references: [id], onDelete: Restrict)
+  criadoEm       DateTime        @default(now())
+  aplicadoEm     DateTime?
+
+  @@index([medicoId, repasseId])
+  @@index([repasseId])
+}
+
+// Chave PIX do médico (privada: só o próprio médico e o admin). O titular é o
+// próprio médico (pf, CPF) ou o CNPJ do PerfilMedico (pj; conferido no
+// servidor). titularDocumento normalizado: 11 dígitos (CPF) ou 14 (CNPJ).
+model DadosRecebimentoMedico {
+  id               String   @id @default(cuid())
+  medicoId         String   @unique
+  medico           User     @relation(fields: [medicoId], references: [id], onDelete: Cascade)
+  pixTipo          String // cpf | cnpj | email | telefone | aleatoria
+  pixChave         String
+  titularTipo      String // pf | pj
+  titularNome      String
+  titularDocumento String
+  criadoEm         DateTime @default(now())
+  atualizadoEm     DateTime @default(now()) @updatedAt
 }
 
 // Remarcação do PACIENTE com multa (≤24 h da data de referência): a nova data
