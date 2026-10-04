@@ -14,6 +14,7 @@ import {
   LogOut,
   Moon,
   Phone,
+  Receipt,
   Sun,
   Wallet,
 } from "lucide-react";
@@ -22,9 +23,20 @@ import { formatarDataNascimento, idadeDeNascimento } from "@/lib/idade";
 import { iniciais } from "./metricas";
 import { formatarCnpj } from "./dados-pessoais";
 import { DadosPessoaisSheet } from "./sheets/DadosPessoaisSheet";
-import { EmBreve } from "./sheets/SheetMedico";
+import { Campo, EmBreve, SheetMedico } from "./sheets/SheetMedico";
 import { useConfirmarSalvamento } from "./sheets/useConfirmarSalvamento";
-import type { DadosMedico } from "./useDadosMedico";
+import { useRecebimento, type DadosMedico } from "./useDadosMedico";
+import {
+  PIX_TIPOS,
+  ROTULO_PIX_TIPO,
+  ROTULO_TITULAR_TIPO,
+  TITULAR_NOME_MAX,
+  validarRecebimento,
+  type CampoRecebimento,
+  type PixTipo,
+  type RecebimentoWire,
+  type TitularTipo,
+} from "@/lib/server/recebimento";
 
 type Tema = "claro" | "escuro";
 type Densidade = "compacta" | "confortavel" | "grande";
@@ -112,6 +124,207 @@ function Segmentado<T extends string>({
   );
 }
 
+const DICA_CHAVE: Record<PixTipo, { placeholder: string; ajuda: string; inputMode: "numeric" | "text" | "email" | "tel" }> = {
+  cpf: { placeholder: "000.000.000-00", ajuda: "O CPF do titular da conta.", inputMode: "numeric" },
+  cnpj: { placeholder: "00.000.000/0000-00", ajuda: "O CNPJ cadastrado no seu perfil.", inputMode: "text" },
+  email: { placeholder: "voce@exemplo.com", ajuda: "E-mail cadastrado como chave no seu banco.", inputMode: "email" },
+  telefone: { placeholder: "(11) 91234-5678", ajuda: "Celular cadastrado como chave no seu banco.", inputMode: "tel" },
+  aleatoria: {
+    placeholder: "1a2b3c4d-…",
+    ajuda: "Copie a chave aleatória completa do app do seu banco.",
+    inputMode: "text",
+  },
+};
+
+/**
+ * Cadastro/troca da chave PIX de recebimento (PUT /api/medico/recebimento).
+ * A chave atual só chega mascarada: trocar exige digitar a chave e o
+ * documento de novo. Pré-validação com as MESMAS regras do servidor
+ * (validarRecebimento); o servidor é a autoridade.
+ */
+function RecebimentoSheet({
+  aberto,
+  onFechar,
+  atual,
+  nomeSugerido,
+  cnpjPerfil,
+  salvando,
+  salvar,
+}: {
+  aberto: boolean;
+  onFechar: () => void;
+  atual: RecebimentoWire | null;
+  nomeSugerido: string;
+  /** CNPJ normalizado do perfil ("" = sem CNPJ → titular PJ indisponível). */
+  cnpjPerfil: string;
+  salvando: boolean;
+  salvar: ReturnType<typeof useRecebimento>["salvar"];
+}) {
+  const pjDisponivel = cnpjPerfil !== "";
+  // Chave CNPJ/titular PJ salvos antes, mas o perfil está sem CNPJ agora → começa em CPF/PF.
+  const tipoInicial: PixTipo = atual?.pixTipo === "cnpj" && !pjDisponivel ? "cpf" : (atual?.pixTipo ?? "cpf");
+  const [pixTipo, setPixTipo] = useState<PixTipo>(tipoInicial);
+  const [titularTipo, setTitularTipo] = useState<TitularTipo>(
+    atual?.titularTipo === "pj" && pjDisponivel ? "pj" : "pf",
+  );
+  // Chave CNPJ = sempre o CNPJ do perfil (campo só leitura); as demais o médico digita.
+  const [chave, setChave] = useState(tipoInicial === "cnpj" ? formatarCnpj(cnpjPerfil) : "");
+  const [nome, setNome] = useState(atual?.titularNome ?? nomeSugerido);
+  const [cpfTitular, setCpfTitular] = useState("");
+  const [erros, setErros] = useState<Partial<Record<CampoRecebimento, string>>>({});
+  const limparErro = (c: CampoRecebimento) => setErros((e) => ({ ...e, [c]: undefined }));
+
+  // Chave CPF → titular PF com o mesmo CPF; chave CNPJ → titular PJ (CNPJ do perfil).
+  const titularEfetivo: TitularTipo = pixTipo === "cpf" ? "pf" : pixTipo === "cnpj" ? "pj" : titularTipo;
+  const documento = titularEfetivo === "pj" ? cnpjPerfil : pixTipo === "cpf" ? chave : cpfTitular;
+
+  const trocarTipo = (t: PixTipo) => {
+    setPixTipo(t);
+    setChave(t === "cnpj" && pjDisponivel ? formatarCnpj(cnpjPerfil) : "");
+    setErros({});
+  };
+
+  const enviar = async () => {
+    if (salvando) return;
+    const corpo = { pixTipo, pixChave: chave, titularTipo: titularEfetivo, titularNome: nome, titularDocumento: documento };
+    const local = validarRecebimento(corpo, { cnpjPerfil });
+    if (!local.ok) {
+      const campo = (local.campo ?? "pixChave") as CampoRecebimento;
+      setErros({ [campo === "titularDocumento" && pixTipo === "cpf" ? "pixChave" : campo]: local.erro });
+      return;
+    }
+    const r = await salvar(corpo);
+    if (!r.ok) {
+      if (r.campo) setErros({ [r.campo]: r.erro });
+      else toast.error(r.erro);
+      return;
+    }
+    toast.success(r.alterado ? "Chave PIX salva" : "Nada mudou na sua chave PIX");
+    onFechar();
+  };
+
+  const entrada = "bp-entrada w-full px-4 py-3 text-base";
+  const dica = DICA_CHAVE[pixTipo];
+  const opcaoTitular = (t: TitularTipo, desabilitado: boolean) => (
+    <button
+      key={t}
+      type="button"
+      role="radio"
+      aria-checked={titularEfetivo === t}
+      disabled={desabilitado}
+      onClick={() => {
+        setTitularTipo(t);
+        limparErro("titularTipo");
+      }}
+      className={`py-2 rounded-xl text-xs font-bold disabled:opacity-50 ${
+        titularEfetivo === t ? "bg-white text-bion-ink shadow dark:bg-zinc-800 dark:text-white" : "text-bion-ink/80 dark:text-bion-paper/80"
+      }`}
+    >
+      {ROTULO_TITULAR_TIPO[t]}
+    </button>
+  );
+  const titularTravado = pixTipo === "cpf" || pixTipo === "cnpj";
+
+  return (
+    <SheetMedico
+      aberto={aberto}
+      onFechar={onFechar}
+      titulo={atual ? "Trocar chave PIX" : "Cadastrar chave PIX"}
+      subtitulo={
+        atual
+          ? `Atual: ${ROTULO_PIX_TIPO[atual.pixTipo]} ${atual.chaveMascarada}. Por segurança, digite a chave completa de novo.`
+          : "Chave onde você recebe o repasse diário."
+      }
+    >
+      <div className="space-y-4">
+        <Campo rotulo="Tipo de chave" erro={erros.pixTipo}>
+          <select value={pixTipo} onChange={(e) => trocarTipo(e.target.value as PixTipo)} className={entrada} aria-label="Tipo de chave">
+            {PIX_TIPOS.map((t) => (
+              <option key={t} value={t} disabled={t === "cnpj" && !pjDisponivel}>
+                {ROTULO_PIX_TIPO[t]}
+                {t === "cnpj" && !pjDisponivel ? " (cadastre o CNPJ em Dados pessoais)" : ""}
+              </option>
+            ))}
+          </select>
+        </Campo>
+        <Campo rotulo="Chave PIX" erro={erros.pixChave} ajuda={dica.ajuda}>
+          <input
+            inputMode={dica.inputMode}
+            type={pixTipo === "email" ? "email" : "text"}
+            autoComplete="off"
+            autoCapitalize="off"
+            autoCorrect="off"
+            spellCheck={false}
+            maxLength={pixTipo === "email" ? 77 : 60}
+            placeholder={dica.placeholder}
+            value={chave}
+            readOnly={pixTipo === "cnpj"}
+            onChange={(e) => {
+              setChave(e.target.value);
+              limparErro("pixChave");
+            }}
+            className={entrada}
+            aria-label="Chave PIX"
+          />
+        </Campo>
+        <Campo
+          rotulo="Titular da conta"
+          erro={erros.titularTipo}
+          ajuda={
+            titularTravado
+              ? `Chave ${ROTULO_PIX_TIPO[pixTipo]}: o titular é ${titularEfetivo === "pf" ? "o próprio CPF" : "o CNPJ do seu perfil"}.`
+              : pjDisponivel
+                ? "A conta precisa estar no seu nome (CPF) ou no CNPJ do seu perfil."
+                : "Para usar conta de pessoa jurídica, cadastre antes o CNPJ em Dados pessoais."
+          }
+        >
+          <div role="radiogroup" aria-label="Titular da conta" className="grid grid-cols-2 gap-1 p-1 rounded-2xl bg-bion-ink/8 dark:bg-white/10">
+            {opcaoTitular("pf", titularTravado)}
+            {opcaoTitular("pj", titularTravado || !pjDisponivel)}
+          </div>
+        </Campo>
+        <Campo rotulo="Nome do titular" erro={erros.titularNome} ajuda={titularEfetivo === "pj" ? "Razão social, como está no banco." : "Seu nome completo, como está no banco."}>
+          <input
+            autoComplete="name"
+            maxLength={TITULAR_NOME_MAX}
+            value={nome}
+            onChange={(e) => {
+              setNome(e.target.value);
+              limparErro("titularNome");
+            }}
+            className={entrada}
+            aria-label="Nome do titular"
+          />
+        </Campo>
+        {titularEfetivo === "pf" && pixTipo !== "cpf" ? (
+          <Campo rotulo="CPF do titular" erro={erros.titularDocumento}>
+            <input
+              inputMode="numeric"
+              autoComplete="off"
+              maxLength={14}
+              placeholder="000.000.000-00"
+              value={cpfTitular}
+              onChange={(e) => {
+                setCpfTitular(e.target.value.replace(/[^\d.\-\s]/g, ""));
+                limparErro("titularDocumento");
+              }}
+              className={entrada}
+              aria-label="CPF do titular"
+            />
+          </Campo>
+        ) : titularEfetivo === "pj" ? (
+          <Campo rotulo="CNPJ do titular" erro={erros.titularDocumento} ajuda="O CNPJ cadastrado em Dados pessoais.">
+            <input value={formatarCnpj(cnpjPerfil)} readOnly className={entrada} aria-label="CNPJ do titular" />
+          </Campo>
+        ) : null}
+        <button type="button" onClick={() => void enviar()} disabled={salvando} className="bp-acao w-full py-3 text-sm">
+          {salvando ? "Salvando…" : "Salvar chave PIX"}
+        </button>
+      </div>
+    </SheetMedico>
+  );
+}
+
 /** Página à ESQUERDA do carrossel — perfil e preferências do médico. */
 export function PerfilMedicoPainel({
   dados,
@@ -127,6 +340,9 @@ export function PerfilMedicoPainel({
   const { medico, sessao, dadosPessoais } = dados;
   const [sheetDados, setSheetDados] = useState(false);
   const [aberturasDados, setAberturasDados] = useState(0);
+  const recebimento = useRecebimento();
+  const [sheetPix, setSheetPix] = useState(false);
+  const [aberturasPix, setAberturasPix] = useState(0);
   const [tema, setTema] = useState<Tema>(lerTema);
   const [densidade, setDensidade] = useState<Densidade>(lerDensidade);
   const [enviando, setEnviando] = useState(false);
@@ -211,6 +427,24 @@ export function PerfilMedicoPainel({
     setSheetDados(true);
   };
   const dp = dadosPessoais.dados;
+  const abrirRecebimento = () => {
+    if (recebimento.erro && !recebimento.carregado) {
+      recebimento.recarregar();
+      return;
+    }
+    if (!recebimento.carregado) return; // ainda carregando
+    if (!dp && dadosPessoais.erro) dadosPessoais.recarregar();
+    setAberturasPix((n) => n + 1);
+    setSheetPix(true);
+  };
+  const rec = recebimento.recebimento;
+  const detalhePix = recebimento.carregado
+    ? rec
+      ? `${ROTULO_PIX_TIPO[rec.pixTipo]} ${rec.chaveMascarada}`
+      : "Nenhuma chave cadastrada — toque para cadastrar"
+    : recebimento.erro
+      ? "Não foi possível carregar — toque para tentar de novo"
+      : "Carregando…";
   const detalheDado = (valor: string) =>
     dp ? valor || "Não informado" : dadosPessoais.erro ? "Não foi possível carregar — toque para tentar de novo" : "Carregando…";
   const idade = dp?.dataNascimento ? idadeDeNascimento(dp.dataNascimento) : null;
@@ -288,11 +522,41 @@ export function PerfilMedicoPainel({
         onSalvo={dadosPessoais.recarregar}
       />
 
+      <section className={`${grupo} mt-4`} aria-labelledby="bm-pf-recebimento">
+        <h3 id="bm-pf-recebimento" className={tituloGrupo}>
+          Recebimento (PIX)
+        </h3>
+        <Linha icone={<Wallet className="w-4 h-4" />} titulo="Chave PIX" detalhe={detalhePix} onClick={abrirRecebimento} />
+        {rec ? (
+          <Linha
+            icone={rec.titularTipo === "pj" ? <Building2 className="w-4 h-4" /> : <CircleUserRound className="w-4 h-4" />}
+            titulo="Titular"
+            detalhe={`${rec.titularNome} · ${rec.titularTipo === "pj" ? "CNPJ" : "CPF"} ${rec.documentoMascarado}`}
+            onClick={abrirRecebimento}
+          />
+        ) : null}
+        <p className="px-4 py-3 text-xs text-bion-ink/75 dark:text-bion-paper/75">
+          O repasse é diário: todo dia às 23:30 (horário de Brasília) fechamos as consultas do dia e o valor vai por PIX para esta chave.
+          A chave precisa estar no seu nome (CPF) ou no CNPJ cadastrado no seu perfil.
+        </p>
+        <Linha icone={<Receipt className="w-4 h-4" />} titulo="Repasses" detalhe="Extrato dos repasses diários" direita={<EmBreve />} />
+      </section>
+
+      <RecebimentoSheet
+        key={`pix-${aberturasPix}`}
+        aberto={sheetPix}
+        onFechar={() => setSheetPix(false)}
+        atual={rec}
+        nomeSugerido={sessao.nome}
+        cnpjPerfil={dp?.cnpj ?? ""}
+        salvando={recebimento.salvando}
+        salvar={recebimento.salvar}
+      />
+
       <section className={`${grupo} mt-4`} aria-labelledby="bm-pf-conta">
         <h3 id="bm-pf-conta" className={tituloGrupo}>
           Conta
         </h3>
-        <Linha icone={<Wallet className="w-4 h-4" />} titulo="Repasses" detalhe="Valores a receber e extratos" direita={<EmBreve />} />
         <Linha icone={<LifeBuoy className="w-4 h-4" />} titulo="Suporte" detalhe="Abrir e acompanhar chamados" onClick={onAbrirSuporte} />
         <Linha icone={<FileText className="w-4 h-4" />} titulo="Termos e ajuda" detalhe="Termos de uso e perguntas frequentes" onClick={onAbrirTermos} />
       </section>
