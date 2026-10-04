@@ -8,6 +8,8 @@
 --     foi paga;
 --   * reembolso depois do fechamento é descontado no repasse seguinte
 --     (tabela "RepasseAjuste");
+--   * a multa entra como item próprio do repasse ("RepasseItem".tipo), então
+--     uma consulta pode ter o item dela e itens de multa em dias diferentes;
 --   * PIX no nome do médico ou do CNPJ dele ("DadosRecebimentoMedico");
 --   * o admin faz o PIX por fora, marca como pago e anexa o comprovante.
 --
@@ -25,13 +27,31 @@
 
 BEGIN;
 
+-- ---------- Fórmula (vale no Repasse e, sem "ajustes", no RepasseItem) --
+--   liquido = bruto − comissao − taxas − reembolsos + multas − ajustes
+--   bruto      = valor pago da consulta (0 nos itens de multa)
+--   comissao   = 10% do bruto (só do bruto; multa não paga comissão)
+--   taxas      = taxa do gateway (0 até o pagamento informar)
+--   reembolsos = parte do MÉDICO em reembolsos feitos ANTES do fechamento
+--   multas     = parte do MÉDICO na multa (50%), no dia em que foi paga
+--   ajustes    = descontos de reembolsos feitos DEPOIS de um fechamento
+--                anterior (soma de RepasseAjuste.valorAplicadoCentavos)
+-- O banco confere a fórmula e que nada fica negativo.
+
 -- ---------- Repasse: competência diária + comissão, ajustes, pagamento ----
+-- Só existe a partir do fechamento (23:30): não há linha "aberta" durante o
+-- dia — a prévia do dia é calculada na hora. status: fechado | pago.
 ALTER TABLE public."Repasse" DROP CONSTRAINT IF EXISTS "Repasse_competencia_check";
 ALTER TABLE public."Repasse" ADD CONSTRAINT "Repasse_competencia_check"
-  CHECK ("competencia" ~ '^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$');
+  CHECK ("competencia" ~ '^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$'
+         AND to_char(to_date("competencia", 'YYYY-MM-DD'), 'YYYY-MM-DD') = "competencia");
+ALTER TABLE public."Repasse" DROP CONSTRAINT IF EXISTS "Repasse_status_check";
+ALTER TABLE public."Repasse" ADD CONSTRAINT "Repasse_status_check" CHECK ("status" IN ('fechado', 'pago'));
+ALTER TABLE public."Repasse" ALTER COLUMN "status" SET DEFAULT 'fechado';
+ALTER TABLE public."Repasse" ALTER COLUMN "fechadoEm" SET DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE public."Repasse" ALTER COLUMN "fechadoEm" SET NOT NULL;
 
 ALTER TABLE public."Repasse" ADD COLUMN IF NOT EXISTS "comissaoCentavos" INTEGER NOT NULL DEFAULT 0;
--- Descontos de reembolsos feitos depois do fechamento de um repasse anterior.
 ALTER TABLE public."Repasse" ADD COLUMN IF NOT EXISTS "ajustesCentavos"  INTEGER NOT NULL DEFAULT 0;
 -- Caminho no bucket PRIVADO de comprovantes (nunca URL pública).
 ALTER TABLE public."Repasse" ADD COLUMN IF NOT EXISTS "comprovantePath"  TEXT;
@@ -42,53 +62,105 @@ ALTER TABLE public."Repasse" ADD COLUMN IF NOT EXISTS "pixChave"         TEXT;
 ALTER TABLE public."Repasse" ADD COLUMN IF NOT EXISTS "pixTitularNome"   TEXT;
 ALTER TABLE public."Repasse" ADD COLUMN IF NOT EXISTS "pixTitularDocumento" TEXT;
 
-ALTER TABLE public."RepasseItem" ADD COLUMN IF NOT EXISTS "comissaoCentavos" INTEGER NOT NULL DEFAULT 0;
+-- Alvo das FKs compostas (repasseId, medicoId): item/ajuste de um médico não
+-- cai no repasse de outro.
+CREATE UNIQUE INDEX IF NOT EXISTS "Repasse_id_medicoId_key" ON public."Repasse"("id","medicoId");
 
 DO $$ BEGIN
   ALTER TABLE public."Repasse" ADD CONSTRAINT "Repasse_valores_check" CHECK (
     "brutoCentavos" >= 0 AND "comissaoCentavos" >= 0 AND "taxasCentavos" >= 0 AND
     "reembolsosCentavos" >= 0 AND "multasCentavos" >= 0 AND "ajustesCentavos" >= 0 AND
-    "liquidoCentavos" >= 0);
+    "liquidoCentavos" >= 0 AND
+    "liquidoCentavos" = "brutoCentavos" - "comissaoCentavos" - "taxasCentavos"
+                        - "reembolsosCentavos" + "multasCentavos" - "ajustesCentavos");
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
-  -- Pago exige data, quem pagou e comprovante.
+  -- Pago exige data, quem pagou, comprovante e a cópia completa da chave PIX.
   ALTER TABLE public."Repasse" ADD CONSTRAINT "Repasse_pago_check" CHECK (
-    "status" <> 'pago' OR ("pagoEm" IS NOT NULL AND "pagoPorId" IS NOT NULL AND "comprovantePath" IS NOT NULL));
-EXCEPTION WHEN duplicate_object THEN NULL; END $$;
-DO $$ BEGIN
-  ALTER TABLE public."Repasse" ADD CONSTRAINT "Repasse_fechado_check" CHECK (
-    "status" = 'aberto' OR "fechadoEm" IS NOT NULL);
+    "status" <> 'pago' OR (
+      "pagoEm" IS NOT NULL AND "pagoPorId" IS NOT NULL AND "comprovantePath" IS NOT NULL AND
+      "pixTipo" IS NOT NULL AND "pixChave" IS NOT NULL AND
+      "pixTitularNome" IS NOT NULL AND "pixTitularDocumento" IS NOT NULL));
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
   ALTER TABLE public."Repasse" ADD CONSTRAINT "Repasse_pagoPorId_fkey"
     FOREIGN KEY ("pagoPorId") REFERENCES public."User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- ---------- RepasseItem: consulta OU multa ------------------------------
+-- tipo = 'consulta'           → a consulta realizada (uma vez só por consulta)
+-- tipo = 'multa_cancelamento' → parte do médico na multa de cancelamento
+--                               (uma por consulta), bruto = comissão = 0
+-- tipo = 'multa_remarcacao'   → parte do médico na multa de UMA remarcação
+--                               paga (uma por remarcação), bruto = comissão = 0
+-- Unicidade por "chave" (texto montado pelo servidor e conferido pela CHECK):
+--   'consulta:<consultaId>' | 'multa_cancelamento:<consultaId>' |
+--   'multa_remarcacao:<remarcacaoId>'.
+-- (Índice único comum, que o Prisma 6 entende; índice parcial ele não
+-- representa no schema e um `db push` o apagaria.)
+ALTER TABLE public."RepasseItem" ADD COLUMN IF NOT EXISTS "medicoId"         TEXT NOT NULL;
+ALTER TABLE public."RepasseItem" ADD COLUMN IF NOT EXISTS "tipo"             TEXT NOT NULL;
+ALTER TABLE public."RepasseItem" ADD COLUMN IF NOT EXISTS "remarcacaoId"     TEXT;
+ALTER TABLE public."RepasseItem" ADD COLUMN IF NOT EXISTS "chave"            TEXT NOT NULL;
+ALTER TABLE public."RepasseItem" ADD COLUMN IF NOT EXISTS "comissaoCentavos" INTEGER NOT NULL DEFAULT 0;
+
+DROP INDEX IF EXISTS public."RepasseItem_consultaId_key";
+CREATE INDEX IF NOT EXISTS "RepasseItem_consultaId_idx"        ON public."RepasseItem"("consultaId");
+CREATE UNIQUE INDEX IF NOT EXISTS "RepasseItem_chave_key"        ON public."RepasseItem"("chave");
+CREATE UNIQUE INDEX IF NOT EXISTS "RepasseItem_remarcacaoId_key" ON public."RepasseItem"("remarcacaoId");
+
+-- Repasse é registro financeiro: apagar não leva os itens junto (RESTRICT).
+ALTER TABLE public."RepasseItem" DROP CONSTRAINT IF EXISTS "RepasseItem_repasseId_fkey";
+DO $$ BEGIN
+  ALTER TABLE public."RepasseItem" ADD CONSTRAINT "RepasseItem_repasseId_medicoId_fkey"
+    FOREIGN KEY ("repasseId","medicoId") REFERENCES public."Repasse"("id","medicoId") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  ALTER TABLE public."RepasseItem" ADD CONSTRAINT "RepasseItem_remarcacaoId_fkey"
+    FOREIGN KEY ("remarcacaoId") REFERENCES public."RemarcacaoPendente"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  ALTER TABLE public."RepasseItem" ADD CONSTRAINT "RepasseItem_tipo_check" CHECK (
+    ("tipo" = 'consulta' AND "remarcacaoId" IS NULL
+       AND "chave" = 'consulta:' || "consultaId") OR
+    ("tipo" = 'multa_cancelamento' AND "remarcacaoId" IS NULL
+       AND "brutoCentavos" = 0 AND "comissaoCentavos" = 0
+       AND "chave" = 'multa_cancelamento:' || "consultaId") OR
+    ("tipo" = 'multa_remarcacao' AND "remarcacaoId" IS NOT NULL
+       AND "brutoCentavos" = 0 AND "comissaoCentavos" = 0
+       AND "chave" = 'multa_remarcacao:' || "remarcacaoId"));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
   ALTER TABLE public."RepasseItem" ADD CONSTRAINT "RepasseItem_valores_check" CHECK (
     "brutoCentavos" >= 0 AND "comissaoCentavos" >= 0 AND "taxasCentavos" >= 0 AND
-    "reembolsosCentavos" >= 0 AND "multasCentavos" >= 0 AND "liquidoCentavos" >= 0);
+    "reembolsosCentavos" >= 0 AND "multasCentavos" >= 0 AND "liquidoCentavos" >= 0 AND
+    "liquidoCentavos" = "brutoCentavos" - "comissaoCentavos" - "taxasCentavos"
+                        - "reembolsosCentavos" + "multasCentavos");
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- ---------- RepasseAjuste: desconto em repasse seguinte -----------------
 -- motivo = 'reembolso'      → reembolso efetivado DEPOIS de a consulta (ou a
 --                             multa) já ter entrado num repasse fechado.
---                             "reembolsoId" único: cada reembolso é
---                             descontado uma vez só.
--- motivo = 'saldo_anterior' → sobra de um ajuste maior que o líquido do dia
---                             (o repasse fecha em 0 e o resto vai pro dia
---                             seguinte). "origemAjusteId" único.
--- "repasseId" nulo = desconto pendente; preenchido = descontado nesse repasse.
+--                             "reembolsoId" e "consultaId" obrigatórios;
+--                             "reembolsoId" único (desconta uma vez só).
+-- motivo = 'saldo_anterior' → sobra de um ajuste aplicado em parte (o repasse
+--                             fechou em 0). "origemAjusteId" único; a
+--                             consulta é opcional (vem da origem).
+-- Pendente: repasseId, aplicadoEm nulos e valorAplicadoCentavos = 0.
+-- Aplicado: 0 < valorAplicadoCentavos ≤ valorCentavos; se for menor, o resto
+-- (valor − aplicado) vira um 'saldo_anterior' pendente.
 CREATE TABLE IF NOT EXISTS public."RepasseAjuste" (
-  "id"            TEXT NOT NULL,
-  "medicoId"      TEXT NOT NULL,
-  "consultaId"    TEXT NOT NULL,
-  "motivo"        TEXT NOT NULL,
-  "reembolsoId"   TEXT,
-  "origemAjusteId" TEXT,
-  "valorCentavos" INTEGER NOT NULL,          -- parte do MÉDICO a descontar (> 0)
-  "repasseId"     TEXT,
-  "criadoEm"      TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "aplicadoEm"    TIMESTAMP(3),
+  "id"                    TEXT NOT NULL,
+  "medicoId"              TEXT NOT NULL,
+  "consultaId"            TEXT,
+  "motivo"                TEXT NOT NULL,
+  "reembolsoId"           TEXT,
+  "origemAjusteId"        TEXT,
+  "valorCentavos"         INTEGER NOT NULL,          -- parte do MÉDICO a descontar (> 0)
+  "valorAplicadoCentavos" INTEGER NOT NULL DEFAULT 0, -- quanto foi descontado no repasse
+  "repasseId"             TEXT,
+  "criadoEm"              TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "aplicadoEm"            TIMESTAMP(3),
   CONSTRAINT "RepasseAjuste_pkey" PRIMARY KEY ("id")
 );
 CREATE UNIQUE INDEX IF NOT EXISTS "RepasseAjuste_reembolsoId_key"    ON public."RepasseAjuste"("reembolsoId");
@@ -112,15 +184,18 @@ DO $$ BEGIN
     FOREIGN KEY ("origemAjusteId") REFERENCES public."RepasseAjuste"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
-  ALTER TABLE public."RepasseAjuste" ADD CONSTRAINT "RepasseAjuste_repasseId_fkey"
-    FOREIGN KEY ("repasseId") REFERENCES public."Repasse"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+  -- Composta: o repasse onde o desconto cai é do MESMO médico.
+  ALTER TABLE public."RepasseAjuste" ADD CONSTRAINT "RepasseAjuste_repasseId_medicoId_fkey"
+    FOREIGN KEY ("repasseId","medicoId") REFERENCES public."Repasse"("id","medicoId") ON DELETE RESTRICT ON UPDATE CASCADE;
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
   ALTER TABLE public."RepasseAjuste" ADD CONSTRAINT "RepasseAjuste_regras_check" CHECK (
     "valorCentavos" > 0 AND
-    (("motivo" = 'reembolso'      AND "reembolsoId" IS NOT NULL AND "origemAjusteId" IS NULL) OR
+    (("motivo" = 'reembolso'      AND "reembolsoId" IS NOT NULL AND "consultaId" IS NOT NULL AND "origemAjusteId" IS NULL) OR
      ("motivo" = 'saldo_anterior' AND "origemAjusteId" IS NOT NULL AND "reembolsoId" IS NULL)) AND
-    (("repasseId" IS NULL) = ("aplicadoEm" IS NULL)));
+    (("repasseId" IS NULL AND "aplicadoEm" IS NULL AND "valorAplicadoCentavos" = 0) OR
+     ("repasseId" IS NOT NULL AND "aplicadoEm" IS NOT NULL
+        AND "valorAplicadoCentavos" > 0 AND "valorAplicadoCentavos" <= "valorCentavos")));
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- ---------- DadosRecebimentoMedico: chave PIX (privada) -----------------

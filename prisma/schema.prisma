@@ -173,7 +173,7 @@ model Consulta {
 
   // Fase financeira: histórico de cancelamentos/remarcações e repasse
   eventos     EventoConsulta[]
-  repasseItem RepasseItem?
+  repasseItens RepasseItem[]
   repasseAjustes RepasseAjuste[]
   remarcacoes RemarcacaoPendente[]
 }
@@ -490,10 +490,17 @@ model Reembolso {
   @@index([origem, status, criadoEm])
 }
 
-// Repasse DIÁRIO ao médico (fecha às 23:30 de São Paulo, consultas do dia).
-// competencia: "AAAA-MM-DD" (dia em São Paulo; CHECK no banco).
-// status: aberto | fechado | pago. Pago exige pagoEm, pagoPorId e comprovante.
-// pix*: cópia da chave usada no pagamento (trocar a chave não muda o histórico).
+// Repasse DIÁRIO ao médico. Só existe a partir do fechamento (23:30 de São
+// Paulo, consultas do dia): não há linha "aberta"; a prévia é calculada na hora.
+// competencia: "AAAA-MM-DD" (dia em São Paulo; CHECK no banco, data real).
+// status: fechado | pago. Pago exige pagoEm, pagoPorId, comprovante e a cópia
+// completa da chave PIX (pix*: trocar a chave depois não muda o histórico).
+// Fórmula (CHECK no banco; nada negativo):
+//   liquido = bruto − comissao − taxas − reembolsos + multas − ajustes
+//   comissao = 10% só do bruto; taxas = gateway (0 até informar);
+//   reembolsos = parte do médico em reembolsos ANTES do fechamento;
+//   multas = parte do médico (50%) no dia em que a multa foi paga;
+//   ajustes = soma de RepasseAjuste.valorAplicadoCentavos.
 // Migração: supabase/migrations/20261003_repasse_diario.sql. NUNCA vai ao
 // paciente (fora do consultaWire, medicoWire e bootstrap).
 model Repasse {
@@ -506,11 +513,11 @@ model Repasse {
   taxasCentavos       Int             @default(0)
   reembolsosCentavos  Int             @default(0)
   multasCentavos      Int             @default(0)
-  ajustesCentavos     Int             @default(0) // descontos de reembolsos posteriores
-  liquidoCentavos     Int             @default(0) // nunca negativo
-  status              String          @default("aberto")
+  ajustesCentavos     Int             @default(0)
+  liquidoCentavos     Int             @default(0)
+  status              String          @default("fechado")
   criadoEm            DateTime        @default(now())
-  fechadoEm           DateTime?
+  fechadoEm           DateTime        @default(now())
   pagoEm              DateTime?
   pagoPorId           String?
   pagoPor             User?           @relation("RepassePagoPor", fields: [pagoPorId], references: [id], onDelete: Restrict)
@@ -523,50 +530,67 @@ model Repasse {
   ajustes             RepasseAjuste[]
 
   @@unique([medicoId, competencia])
+  @@unique([id, medicoId]) // alvo das FKs compostas de item/ajuste
   @@index([competencia, status])
 }
 
-// Uma consulta entra em no máximo UM repasse.
+// Item do repasse: a consulta OU a parte do médico numa multa.
+// tipo: consulta | multa_cancelamento | multa_remarcacao (bruto = comissão = 0
+// nas multas). chave (montada pelo servidor, conferida por CHECK):
+//   "consulta:<consultaId>" | "multa_cancelamento:<consultaId>" |
+//   "multa_remarcacao:<remarcacaoId>" → cada coisa entra uma vez só.
+// (repasseId, medicoId) → Repasse(id, medicoId): não cai no repasse de outro.
+// liquido = bruto − comissao − taxas − reembolsos + multas (CHECK).
 model RepasseItem {
-  id                 String   @id @default(cuid())
+  id                 String              @id @default(cuid())
   repasseId          String
-  repasse            Repasse  @relation(fields: [repasseId], references: [id], onDelete: Cascade)
-  consultaId         String   @unique
-  consulta           Consulta @relation(fields: [consultaId], references: [id], onDelete: Restrict)
+  medicoId           String
+  repasse            Repasse             @relation(fields: [repasseId, medicoId], references: [id, medicoId], onDelete: Restrict)
+  tipo               String
+  chave              String              @unique
+  consultaId         String
+  consulta           Consulta            @relation(fields: [consultaId], references: [id], onDelete: Restrict)
+  remarcacaoId       String?             @unique
+  remarcacao         RemarcacaoPendente? @relation(fields: [remarcacaoId], references: [id], onDelete: Restrict)
   brutoCentavos      Int
-  comissaoCentavos   Int      @default(0)
-  taxasCentavos      Int      @default(0)
-  reembolsosCentavos Int      @default(0)
-  multasCentavos     Int      @default(0)
+  comissaoCentavos   Int                 @default(0)
+  taxasCentavos      Int                 @default(0)
+  reembolsosCentavos Int                 @default(0)
+  multasCentavos     Int                 @default(0)
   liquidoCentavos    Int
-  criadoEm           DateTime @default(now())
+  criadoEm           DateTime            @default(now())
 
   @@index([repasseId])
+  @@index([consultaId])
 }
 
 // Desconto num repasse SEGUINTE.
 // motivo "reembolso": reembolso efetivado depois de a consulta/multa ter
-//   entrado num repasse fechado (reembolsoId único: desconta uma vez só).
-// motivo "saldo_anterior": sobra de um desconto maior que o líquido do dia
-//   (o repasse fecha em 0 e o resto passa pro dia seguinte).
-// repasseId nulo = pendente; preenchido = descontado nesse repasse.
+//   entrado num repasse fechado (reembolsoId e consultaId obrigatórios;
+//   reembolsoId único: desconta uma vez só).
+// motivo "saldo_anterior": resto de um ajuste aplicado em parte
+//   (origemAjusteId único; consulta opcional).
+// Pendente: repasseId/aplicadoEm nulos e valorAplicado = 0. Aplicado:
+//   0 < valorAplicado ≤ valor; se menor, o resto vira um "saldo_anterior".
+// (repasseId, medicoId) → Repasse(id, medicoId): não cai no repasse de outro.
 model RepasseAjuste {
-  id             String          @id @default(cuid())
-  medicoId       String
-  medico         User            @relation("RepasseAjusteMedico", fields: [medicoId], references: [id], onDelete: Restrict)
-  consultaId     String
-  consulta       Consulta        @relation(fields: [consultaId], references: [id], onDelete: Restrict)
-  motivo         String // reembolso | saldo_anterior
-  reembolsoId    String?         @unique
-  reembolso      Reembolso?      @relation(fields: [reembolsoId], references: [id], onDelete: Restrict)
-  origemAjusteId String?         @unique
-  origemAjuste   RepasseAjuste?  @relation("AjusteSaldo", fields: [origemAjusteId], references: [id], onDelete: Restrict)
-  saldo          RepasseAjuste?  @relation("AjusteSaldo")
-  valorCentavos  Int // parte do MÉDICO a descontar (> 0)
-  repasseId      String?
-  repasse        Repasse?        @relation(fields: [repasseId], references: [id], onDelete: Restrict)
-  criadoEm       DateTime        @default(now())
-  aplicadoEm     DateTime?
+  id                    String         @id @default(cuid())
+  medicoId              String
+  medico                User           @relation("RepasseAjusteMedico", fields: [medicoId], references: [id], onDelete: Restrict)
+  consultaId            String?
+  consulta              Consulta?      @relation(fields: [consultaId], references: [id], onDelete: Restrict)
+  motivo                String // reembolso | saldo_anterior
+  reembolsoId           String?        @unique
+  reembolso             Reembolso?     @relation(fields: [reembolsoId], references: [id], onDelete: Restrict)
+  origemAjusteId        String?        @unique
+  origemAjuste          RepasseAjuste? @relation("AjusteSaldo", fields: [origemAjusteId], references: [id], onDelete: Restrict)
+  saldo                 RepasseAjuste? @relation("AjusteSaldo")
+  valorCentavos         Int // parte do MÉDICO a descontar (> 0)
+  valorAplicadoCentavos Int            @default(0)
+  repasseId             String?
+  repasse               Repasse?       @relation(fields: [repasseId, medicoId], references: [id, medicoId], onDelete: Restrict)
+  criadoEm              DateTime       @default(now())
+  aplicadoEm            DateTime?
 
   @@index([medicoId, repasseId])
   @@index([repasseId])
@@ -610,6 +634,7 @@ model RemarcacaoPendente {
   criadoEm      DateTime   @default(now())
   aprovadoEm    DateTime?
   reembolso     Reembolso?
+  repasseItem   RepasseItem?
 
   @@index([consultaId, status])
   @@index([novaData, status])
