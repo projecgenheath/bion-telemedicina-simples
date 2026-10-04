@@ -41,6 +41,89 @@ export const MOTIVO_MAX = 120;
 
 export type ClienteBanco = Prisma.TransactionClient | typeof db;
 
+/* ------------------------------------------------------------------ */
+/* Horário vedado: sem teleconsulta entre 23:00 e 00:00 (São Paulo)     */
+/* ------------------------------------------------------------------ */
+
+/** Mensagem única (409) para agendar/remarcar/mover consulta para 23:00–00:00. */
+export const ERRO_HORARIO_VEDADO = "Não há atendimento entre 23:00 e 00:00.";
+/** Início da janela vedada, em minutos desde a meia-noite de São Paulo (23:00). */
+export const VEDADO_INICIO_MIN = 23 * 60;
+/** Fim (exclusivo) da janela vedada: meia-noite do dia seguinte (00:00). */
+export const VEDADO_FIM_MIN = 24 * 60;
+/**
+ * Duração considerada no servidor para uma consulta. A Consulta não tem
+ * dataFim nem duração no banco (presenca-consulta.ts: "Não existe duração de
+ * consulta gravada no banco"); a duração da grade é um parâmetro só do
+ * aparelho do médico (AgendaSheet, padrão 30 min em `sugerirParametros`).
+ * Então o fim real usado aqui é início + 30 min: 22:30 termina 23:00 e pode;
+ * 22:31 invadiria a janela e é recusado.
+ */
+export const DURACAO_CONSULTA_MIN = 30;
+
+/** Fim considerado da consulta que começa em `inicio`. */
+export function fimDaConsulta(inicio: Date, duracaoMin: number = DURACAO_CONSULTA_MIN): Date {
+  return new Date(inicio.getTime() + duracaoMin * 60_000);
+}
+
+/**
+ * O intervalo [inicio, fim) encosta em 23:00–00:00 de São Paulo em algum
+ * dia? Pura (sem banco), independe do fuso do processo. Atravessar a
+ * meia-noite ou vários dias funciona: confere a janela do dia (São Paulo) de
+ * `inicio` e as seguintes até passar de `fim`. Intervalo vazio (fim ≤
+ * inicio) vale como o instante `inicio`. Data inválida → false (as rotas já
+ * recusam data inválida antes).
+ */
+export function horarioVedado(inicio: Date, fim: Date): boolean {
+  const a = inicio.getTime();
+  let b = fim.getTime();
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return false;
+  if (b <= a) b = a + 1;
+  const p = partesNoFuso(inicio);
+  for (let d = 0; ; d++) {
+    const ini = instanteNoFuso(p.ano, p.mes, p.dia + d, 23, 0).getTime();
+    const fimJanela = instanteNoFuso(p.ano, p.mes, p.dia + d + 1, 0, 0).getTime();
+    if (ini >= b) return false;
+    if (a < fimJanela && b > ini) return true;
+  }
+}
+
+/** A consulta que começa em `inicio` (duração DURACAO_CONSULTA_MIN) cai em 23:00–00:00? */
+export function consultaEmHorarioVedado(inicio: Date): boolean {
+  return horarioVedado(inicio, fimDaConsulta(inicio));
+}
+
+/**
+ * Horário da grade ("HH:MM", São Paulo) cuja consulta de `duracaoMin`
+ * encosta em 23:00–00:00. São Paulo não tem horário de verão (UTC-3 fixo),
+ * então dá para fazer em minutos do dia. Formato inválido → false (a rota
+ * valida o formato à parte).
+ */
+export function slotVedado(hora: string, duracaoMin: number = DURACAO_CONSULTA_MIN): boolean {
+  const m = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(hora);
+  if (!m) return false;
+  const a = Number(m[1]) * 60 + Number(m[2]);
+  const b = a + Math.max(1, duracaoMin);
+  for (let k = 0; VEDADO_INICIO_MIN + k * 1440 < b; k++) {
+    if (a < VEDADO_FIM_MIN + k * 1440 && b > VEDADO_INICIO_MIN + k * 1440) return true;
+  }
+  return false;
+}
+
+/** Horários da grade que encostam em 23:00–00:00 (vazio = grade aceita). */
+export function horariosVedadosDaGrade(horarios: unknown): string[] {
+  if (!Array.isArray(horarios)) return [];
+  return horarios.filter((h): h is string => typeof h === "string" && slotVedado(h));
+}
+
+/** Mensagem (400) para grade com horários vedados. */
+export function erroGradeVedada(vedados: string[]): string {
+  return (
+    `Não há atendimento entre 23:00 e 00:00. Cada consulta conta ${DURACAO_CONSULTA_MIN} min e precisa terminar até 23:00 — ` +
+    `remova: ${vedados.join(", ")}.`
+  );
+}
+
 export type Resultado<T> = { ok: true; valor: T } | { ok: false; erro: string };
 
 const RE_DIA = /^(\d{4})-(\d{2})-(\d{2})$/;
@@ -151,17 +234,20 @@ export async function travarDiaIso(tx: Prisma.TransactionClient, medicoId: strin
 export const OPCOES_TX_TRAVA = { maxWait: 10_000, timeout: 20_000 } as const;
 
 /**
- * Agendamento atômico: trava o dia → confere o bloqueio → `criar(tx)`, tudo
- * na transação `tx`. Dia bloqueado → `{ bloqueado: true }` e nada é criado.
+ * Agendamento atômico: trava o dia → confere o bloqueio e a janela vedada
+ * (23:00–00:00) → `criar(tx)`, tudo na transação `tx`. Recusado →
+ * `{ bloqueado: true, erro }` (ERRO_DIA_BLOQUEADO ou ERRO_HORARIO_VEDADO) e
+ * nada é criado.
  */
 export async function criarSeDiaLivre<T>(
   tx: Prisma.TransactionClient,
   medicoId: string,
   dataInicio: Date,
   criar: (tx: Prisma.TransactionClient) => Promise<T>,
-): Promise<{ bloqueado: true } | { bloqueado: false; valor: T }> {
+): Promise<{ bloqueado: true; erro: string } | { bloqueado: false; valor: T }> {
   await travarDiaDoMedico(tx, medicoId, dataInicio);
-  if (await diaBloqueado(tx, medicoId, dataInicio)) return { bloqueado: true };
+  if (consultaEmHorarioVedado(dataInicio)) return { bloqueado: true, erro: ERRO_HORARIO_VEDADO };
+  if (await diaBloqueado(tx, medicoId, dataInicio)) return { bloqueado: true, erro: ERRO_DIA_BLOQUEADO };
   return { bloqueado: false, valor: await criar(tx) };
 }
 

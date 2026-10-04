@@ -13,7 +13,13 @@ import {
   type AuditPayload,
 } from "@/lib/server/dados";
 import { quandoClinica } from "@/lib/server/fuso";
-import { diaBloqueado, ERRO_DIA_BLOQUEADO, OPCOES_TX_TRAVA } from "@/lib/server/bloqueio-agenda";
+import {
+  consultaEmHorarioVedado,
+  diaBloqueado,
+  ERRO_DIA_BLOQUEADO,
+  ERRO_HORARIO_VEDADO,
+  OPCOES_TX_TRAVA,
+} from "@/lib/server/bloqueio-agenda";
 import { criarCobranca, confirmarPagamento, falharPagamento } from "@/lib/server/pagamentos";
 import { ok, falha } from "@/lib/server/http";
 import {
@@ -289,8 +295,9 @@ export async function PATCH(
           return Response.json({ erro: "Status inválido." }, { status: 400 });
         }
         // Agenda da combinação RESULTANTE (médico + horário + status): confere
-        // dia bloqueado, conflito do médico, conflito do paciente e reserva
-        // vigente de outra consulta quando a data ou o médico mudam, ou quando
+        // dia bloqueado, janela vedada 23:00–00:00 (São Paulo), conflito do
+        // médico, conflito do paciente e reserva vigente de outra consulta
+        // quando a data ou o médico mudam, ou quando
         // uma consulta que liberava o horário (cancelada/concluída/aguardando
         // reagendamento) volta a ocupá-lo. Cancelar nunca é barrado.
         {
@@ -306,6 +313,10 @@ export async function PATCH(
             // Resposta rápida; a checagem que vale é a da transação travada, abaixo.
             if (await diaBloqueado(db, novoMedicoId, novoInicio)) {
               return Response.json({ erro: ERRO_DIA_BLOQUEADO }, { status: 409 });
+            }
+            // Sem teleconsulta entre 23:00 e 00:00 (São Paulo); a transação confere de novo.
+            if (consultaEmHorarioVedado(novoInicio)) {
+              return Response.json({ erro: ERRO_HORARIO_VEDADO }, { status: 409 });
             }
             const [choqueMedico, choquePaciente, reservado] = await Promise.all([
               db.consulta.findFirst({

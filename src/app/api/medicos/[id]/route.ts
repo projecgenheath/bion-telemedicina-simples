@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { exigirPapel } from "@/lib/server/auth";
 import { aplicarSideEffects, medicoWire, type EfeitosCriados } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
+import { erroGradeVedada, horariosVedadosDaGrade } from "@/lib/server/bloqueio-agenda";
 
 type MedicoPatch = {
   acao?: "aprovar" | "suspender" | "atualizar";
@@ -133,6 +134,13 @@ export async function PATCH(
     }
 
     const acao = body.acao ?? "atualizar";
+    // Sem teleconsulta entre 23:00 e 00:00 (São Paulo): vale para o médico e
+    // para o administrador. Horário cuja consulta (DURACAO_CONSULTA_MIN)
+    // encosta na janela → 400, nada é gravado.
+    if (acao === "atualizar") {
+      const vedados = horariosVedadosDaGrade(body.horariosDisponiveis);
+      if (vedados.length) return erroHttp(erroGradeVedada(vedados), 400);
+    }
     let efeitos: EfeitosCriados = { notificacoes: [], audit: null };
 
     if (acao === "aprovar") {
