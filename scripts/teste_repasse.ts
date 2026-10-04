@@ -14,6 +14,7 @@ import {
   competenciaPadraoParaFechar,
   corteDaCompetencia,
   ERRO_CHAVE_MUDOU,
+  ERRO_CNPJ_DIVERGENTE,
   ERRO_REPASSE_NAO_ABERTO,
   ERRO_SEM_CHAVE_PIX,
   fecharRepasse,
@@ -43,6 +44,7 @@ async function limpar() {
   await db.repasseItem.deleteMany();
   await db.repasse.deleteMany();
   await db.dadosRecebimentoMedico.deleteMany();
+  await db.perfilMedico.deleteMany();
   await db.reembolso.deleteMany();
   await db.remarcacaoPendente.deleteMany();
   await db.eventoConsulta.deleteMany();
@@ -173,6 +175,21 @@ async function main() {
   const rpago = await db.repasse.findUnique({ where: { id: id10 } });
   verifica(pago.status === "pago" && rpago?.pixChave === "med@pix.com" && rpago.pagoPorId === adm.id && rpago.comprovantePath === "repasses/c.pdf", "marca como pago com a cópia da chave");
   verifica((await erroDe(marcarRepassePago({ repasseId: id10, adminId: adm.id, comprovantePath: "c.pdf", pixChaveConferida: "med@pix.com" }))) === ERRO_REPASSE_NAO_ABERTO, "pagar de novo: recusa");
+
+  /* ---------- Titular PJ com CNPJ trocado no perfil ---------- */
+  const CNPJ_A = "11222333000181";
+  const CNPJ_B = "11444777000161";
+  await db.perfilMedico.create({ data: { userId: med2.id, crm: "1", especialidade: "Clínica", cnpj: CNPJ_A } });
+  await db.dadosRecebimentoMedico.create({
+    data: { medicoId: med2.id, pixTipo: "cnpj", pixChave: CNPJ_A, titularTipo: "pj", titularNome: "Med2 Ltda", titularDocumento: CNPJ_A },
+  });
+  await db.perfilMedico.update({ where: { userId: med2.id }, data: { cnpj: CNPJ_B } });
+  const rep14 = (await db.repasse.findFirst({ where: { medicoId: med2.id } }))!;
+  verifica((await erroDe(marcarRepassePago({ repasseId: rep14.id, adminId: adm.id, comprovantePath: "c.pdf", pixChaveConferida: CNPJ_A }))) === ERRO_CNPJ_DIVERGENTE,
+    "titular PJ com CNPJ diferente do perfil: recusa");
+  await db.perfilMedico.update({ where: { userId: med2.id }, data: { cnpj: CNPJ_A } });
+  verifica((await marcarRepassePago({ repasseId: rep14.id, adminId: adm.id, comprovantePath: "c.pdf", pixChaveConferida: CNPJ_A })).status === "pago",
+    "titular PJ com o CNPJ do perfil: paga");
 
   /* ---------- Troca de médico de consulta repassada ---------- */
   let erroTroca: unknown = null;

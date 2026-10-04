@@ -4,6 +4,7 @@ import { exigirPapel, registrarAudit } from "@/lib/server/auth";
 import { ok, falha } from "@/lib/server/http";
 import {
   chaveTrocadaRecente,
+  cnpjDivergente,
   competenciaPadraoParaFechar,
   fecharRepasse,
   previaDoDia,
@@ -16,7 +17,7 @@ const LIMITE = 200;
 type Pix = { pixTipo: string; pixChave: string; titularTipo: string; titularNome: string; titularDocumento: string; criadoEm: Date; atualizadoEm: Date } | null;
 
 /** Dados de recebimento completos: só o admin vê (o GET do médico mascara). */
-function recebimentoAdmin(pix: Pix, agora: Date) {
+function recebimentoAdmin(pix: Pix, agora: Date, cnpjPerfil: string | null | undefined) {
   if (!pix) return null;
   return {
     pixTipo: pix.pixTipo,
@@ -26,6 +27,8 @@ function recebimentoAdmin(pix: Pix, agora: Date) {
     titularDocumento: pix.titularDocumento,
     atualizadoEm: pix.atualizadoEm.toISOString(),
     chaveTrocadaRecente: chaveTrocadaRecente(pix, agora),
+    /** Titular PJ com CNPJ diferente do perfil atual: o pagamento é recusado. */
+    cnpjDivergente: cnpjDivergente(pix, cnpjPerfil),
   };
 }
 
@@ -63,7 +66,7 @@ export async function GET(req: NextRequest) {
           medicoId: m.id,
           medico: m.nome,
           cnpj: m.perfilMedico?.cnpj || null,
-          recebimento: recebimentoAdmin(m.dadosRecebimento, agora),
+          recebimento: recebimentoAdmin(m.dadosRecebimento, agora, m.perfilMedico?.cnpj),
           competencia: p.competencia,
           corte: p.corte,
           itens: p.itens.length,
@@ -129,7 +132,7 @@ export async function GET(req: NextRequest) {
         pagoPor: r.pagoPor?.nome ?? null,
         // pago: a chave usada (cópia); aberto: a chave atual do médico
         pixUsado: r.status === "pago" ? { pixTipo: r.pixTipo, pixChave: r.pixChave, titularNome: r.pixTitularNome, titularDocumento: r.pixTitularDocumento } : null,
-        recebimento: r.status === "pago" ? null : recebimentoAdmin(r.medico.dadosRecebimento, agora),
+        recebimento: r.status === "pago" ? null : recebimentoAdmin(r.medico.dadosRecebimento, agora, r.medico.perfilMedico?.cnpj),
       })),
     });
   } catch (erro) {

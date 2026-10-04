@@ -1,6 +1,7 @@
 import "server-only";
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
+import { normalizarCnpj } from "@/components/bion/medico/dados-pessoais";
 import {
   COMISSAO_APP_PCT,
   divisaoDaMulta,
@@ -47,6 +48,18 @@ export const ERRO_SEM_CHAVE_PIX = "O médico ainda não cadastrou a chave PIX.";
 export const ERRO_CHAVE_MUDOU = "A chave PIX do médico mudou desde que a tela foi aberta. Confira a chave nova antes de pagar.";
 export const ERRO_REPASSE_NAO_ABERTO = "Esse repasse não existe ou já foi marcado como pago.";
 export const ERRO_REPASSE_ZERADO = "Esse repasse não tem valor a pagar.";
+export const ERRO_CNPJ_DIVERGENTE =
+  "A conta PIX é de pessoa jurídica, mas o CNPJ dela não é mais o CNPJ do perfil do médico. Peça para o médico atualizar o recebimento antes de pagar.";
+
+/**
+ * Titular PJ: o documento salvo no recebimento precisa continuar sendo o
+ * CNPJ atual do PerfilMedico (o médico pode trocar o CNPJ depois de salvar
+ * a chave). Titular PF não depende do perfil.
+ */
+export function cnpjDivergente(pix: { titularTipo: string; titularDocumento: string } | null, cnpjPerfil: string | null | undefined): boolean {
+  if (!pix || pix.titularTipo !== "pj") return false;
+  return normalizarCnpj(cnpjPerfil ?? "") !== pix.titularDocumento;
+}
 
 export type TipoItem = "consulta" | "multa_cancelamento" | "multa_remarcacao";
 
@@ -698,6 +711,10 @@ export async function marcarRepassePago(params: {
     const pix = await tx.dadosRecebimentoMedico.findUnique({ where: { medicoId: repasse.medicoId } });
     if (!pix) throw erroHttp(ERRO_SEM_CHAVE_PIX, 409);
     if (pix.pixChave !== params.pixChaveConferida) throw erroHttp(ERRO_CHAVE_MUDOU, 409);
+    if (pix.titularTipo === "pj") {
+      const perfil = await tx.perfilMedico.findUnique({ where: { userId: repasse.medicoId }, select: { cnpj: true } });
+      if (cnpjDivergente(pix, perfil?.cnpj)) throw erroHttp(ERRO_CNPJ_DIVERGENTE, 409);
+    }
     const r = await tx.repasse.updateMany({
       where: { id: repasse.id, status: "fechado" },
       data: {

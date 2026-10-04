@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { exigirPapel, registrarAudit } from "@/lib/server/auth";
 import { ok, falha } from "@/lib/server/http";
-import { chaveTrocadaRecente, marcarRepassePago } from "@/lib/server/repasse";
+import { chaveTrocadaRecente, cnpjDivergente, marcarRepassePago } from "@/lib/server/repasse";
 import { supabaseServiceRoleKey } from "@/lib/supabase/env";
 import { uploadDocumento, urlAssinadaDocumento } from "@/lib/supabase/storage";
 
@@ -71,6 +71,7 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
               titularDocumento: pix.titularDocumento,
               atualizadoEm: pix.atualizadoEm.toISOString(),
               chaveTrocadaRecente: chaveTrocadaRecente(pix, agora),
+              cnpjDivergente: cnpjDivergente(pix, r.medico.perfilMedico?.cnpj),
             }
           : null,
         itens: r.itens.map((i) => ({
