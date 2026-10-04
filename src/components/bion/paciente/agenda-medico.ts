@@ -27,6 +27,29 @@ function eDoMedico(c: Consulta, medico: Medico) {
   return c.medicoId ? c.medicoId === medico.id : c.medico === medico.nome;
 }
 
+/**
+ * Sem teleconsulta entre 23:00 e 00:00 (São Paulo; o repasse diário fecha às
+ * 23:30). O servidor conta cada consulta com 30 min (fim não incluído):
+ * 22:30 termina 23:00 e pode; de 22:31 a 23:59 é recusado com 409.
+ *
+ * Mesma regra de `slotVedado` (src/lib/server/bloqueio-agenda.ts) e de
+ * `slotNaJanelaVedada` (medico/metricas.ts). Fica repetida aqui porque
+ * metricas.ts já importa este arquivo (importar de lá daria import
+ * circular). scripts/teste_horario_vedado_paciente.ts confere, minuto a
+ * minuto, que as três dão o mesmo resultado.
+ */
+const DURACAO_CONSULTA_SERVIDOR_MIN = 30;
+const VEDADO_INICIO_MIN = 23 * 60;
+
+/** "HH:MM" (São Paulo) cuja consulta encosta em 23:00–00:00. Formato inválido → false. */
+export function horaVedadaParaPaciente(hora: string): boolean {
+  const m = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(hora);
+  if (!m) return false;
+  const inicio = Number(m[1]) * 60 + Number(m[2]);
+  // Início em 00:00–23:59: só a janela deste dia (23:00–24:00) pode ser tocada.
+  return inicio + DURACAO_CONSULTA_SERVIDOR_MIN > VEDADO_INICIO_MIN;
+}
+
 /** Dias bloqueados pelo médico ("AAAA-MM-DD", dia civil de São Paulo). */
 export type DiasBloqueados = ReadonlySet<string> | readonly string[];
 
@@ -38,6 +61,9 @@ export type DiasBloqueados = ReadonlySet<string> | readonly string[];
  * (GET /api/medicos/[id]/bloqueios). Esses dias somem da agenda, como os
  * dias sem vaga. Sem o parâmetro, o comportamento é o de antes. O servidor
  * continua recusando esses dias com 409 — aqui é só conveniência de tela.
+ *
+ * Horários em 23:00–00:00 (`horaVedadaParaPaciente`) nunca são oferecidos,
+ * mesmo que estejam na grade do médico.
  */
 export function agendaLivreDoMedico(
   medico: Medico | undefined,
@@ -72,6 +98,7 @@ export function agendaLivreDoMedico(
     // seguinte) pertence a este dia, não ao seguinte.
     if (diasBloqueados?.has(d.iso)) continue;
     const horarios = horasBase.filter((h) => {
+      if (horaVedadaParaPaciente(h)) return false;
       const [hh, mm] = h.split(":").map(Number);
       const ts = instanteFusoClinica(d.ano, d.mes, d.dia, hh || 0, mm || 0);
       if (ts < agora) return false;
