@@ -115,9 +115,19 @@ DO $$ BEGIN
   ALTER TABLE public."RepasseItem" ADD CONSTRAINT "RepasseItem_repasseId_medicoId_fkey"
     FOREIGN KEY ("repasseId","medicoId") REFERENCES public."Repasse"("id","medicoId") ON DELETE RESTRICT ON UPDATE CASCADE;
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+-- A consulta do item é do MESMO médico do repasse, e a multa de remarcação
+-- é de uma remarcação da MESMA consulta. ON UPDATE RESTRICT: trocar o médico
+-- de uma consulta que já entrou num repasse fica bloqueado.
+CREATE UNIQUE INDEX IF NOT EXISTS "Consulta_id_medicoId_key"           ON public."Consulta"("id","medicoId");
+CREATE UNIQUE INDEX IF NOT EXISTS "RemarcacaoPendente_id_consultaId_key" ON public."RemarcacaoPendente"("id","consultaId");
+ALTER TABLE public."RepasseItem" DROP CONSTRAINT IF EXISTS "RepasseItem_consultaId_fkey";
 DO $$ BEGIN
-  ALTER TABLE public."RepasseItem" ADD CONSTRAINT "RepasseItem_remarcacaoId_fkey"
-    FOREIGN KEY ("remarcacaoId") REFERENCES public."RemarcacaoPendente"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+  ALTER TABLE public."RepasseItem" ADD CONSTRAINT "RepasseItem_consultaId_medicoId_fkey"
+    FOREIGN KEY ("consultaId","medicoId") REFERENCES public."Consulta"("id","medicoId") ON DELETE RESTRICT ON UPDATE RESTRICT;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  ALTER TABLE public."RepasseItem" ADD CONSTRAINT "RepasseItem_remarcacaoId_consultaId_fkey"
+    FOREIGN KEY ("remarcacaoId","consultaId") REFERENCES public."RemarcacaoPendente"("id","consultaId") ON DELETE RESTRICT ON UPDATE RESTRICT;
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
   ALTER TABLE public."RepasseItem" ADD CONSTRAINT "RepasseItem_tipo_check" CHECK (
@@ -171,17 +181,21 @@ DO $$ BEGIN
   ALTER TABLE public."RepasseAjuste" ADD CONSTRAINT "RepasseAjuste_medicoId_fkey"
     FOREIGN KEY ("medicoId") REFERENCES public."User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+-- Composta: a consulta do ajuste é do MESMO médico (MATCH SIMPLE: sem
+-- consulta, não confere).
 DO $$ BEGIN
-  ALTER TABLE public."RepasseAjuste" ADD CONSTRAINT "RepasseAjuste_consultaId_fkey"
-    FOREIGN KEY ("consultaId") REFERENCES public."Consulta"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+  ALTER TABLE public."RepasseAjuste" ADD CONSTRAINT "RepasseAjuste_consultaId_medicoId_fkey"
+    FOREIGN KEY ("consultaId","medicoId") REFERENCES public."Consulta"("id","medicoId") ON DELETE RESTRICT ON UPDATE RESTRICT;
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
   ALTER TABLE public."RepasseAjuste" ADD CONSTRAINT "RepasseAjuste_reembolsoId_fkey"
     FOREIGN KEY ("reembolsoId") REFERENCES public."Reembolso"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+-- Composta: a sobra ('saldo_anterior') fica com o MESMO médico da origem.
+CREATE UNIQUE INDEX IF NOT EXISTS "RepasseAjuste_id_medicoId_key" ON public."RepasseAjuste"("id","medicoId");
 DO $$ BEGIN
-  ALTER TABLE public."RepasseAjuste" ADD CONSTRAINT "RepasseAjuste_origemAjusteId_fkey"
-    FOREIGN KEY ("origemAjusteId") REFERENCES public."RepasseAjuste"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+  ALTER TABLE public."RepasseAjuste" ADD CONSTRAINT "RepasseAjuste_origemAjusteId_medicoId_fkey"
+    FOREIGN KEY ("origemAjusteId","medicoId") REFERENCES public."RepasseAjuste"("id","medicoId") ON DELETE RESTRICT ON UPDATE RESTRICT;
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
   -- Composta: o repasse onde o desconto cai é do MESMO médico.

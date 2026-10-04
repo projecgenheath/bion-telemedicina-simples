@@ -176,6 +176,8 @@ model Consulta {
   repasseItens RepasseItem[]
   repasseAjustes RepasseAjuste[]
   remarcacoes RemarcacaoPendente[]
+
+  @@unique([id, medicoId]) // alvo das FKs (consultaId, medicoId) do repasse
 }
 
 // Cobrança da consulta. O CLIENTE NUNCA define `pago` — a confirmação vem do
@@ -540,6 +542,10 @@ model Repasse {
 //   "consulta:<consultaId>" | "multa_cancelamento:<consultaId>" |
 //   "multa_remarcacao:<remarcacaoId>" → cada coisa entra uma vez só.
 // (repasseId, medicoId) → Repasse(id, medicoId): não cai no repasse de outro.
+// (consultaId, medicoId) → Consulta(id, medicoId): a consulta é do mesmo
+//   médico (trocar o médico de consulta já repassada fica bloqueado).
+// (remarcacaoId, consultaId) → RemarcacaoPendente(id, consultaId): a multa é
+//   de uma remarcação da MESMA consulta.
 // liquido = bruto − comissao − taxas − reembolsos + multas (CHECK).
 model RepasseItem {
   id                 String              @id @default(cuid())
@@ -549,9 +555,9 @@ model RepasseItem {
   tipo               String
   chave              String              @unique
   consultaId         String
-  consulta           Consulta            @relation(fields: [consultaId], references: [id], onDelete: Restrict)
+  consulta           Consulta            @relation(fields: [consultaId, medicoId], references: [id, medicoId], onDelete: Restrict, onUpdate: Restrict)
   remarcacaoId       String?             @unique
-  remarcacao         RemarcacaoPendente? @relation(fields: [remarcacaoId], references: [id], onDelete: Restrict)
+  remarcacao         RemarcacaoPendente? @relation(fields: [remarcacaoId, consultaId], references: [id, consultaId], onDelete: Restrict, onUpdate: Restrict)
   brutoCentavos      Int
   comissaoCentavos   Int                 @default(0)
   taxasCentavos      Int                 @default(0)
@@ -573,18 +579,20 @@ model RepasseItem {
 // Pendente: repasseId/aplicadoEm nulos e valorAplicado = 0. Aplicado:
 //   0 < valorAplicado ≤ valor; se menor, o resto vira um "saldo_anterior".
 // (repasseId, medicoId) → Repasse(id, medicoId): não cai no repasse de outro.
+// (consultaId, medicoId) → Consulta(id, medicoId) e (origemAjusteId, medicoId)
+//   → RepasseAjuste(id, medicoId): consulta e sobra são do mesmo médico.
 model RepasseAjuste {
   id                    String         @id @default(cuid())
   medicoId              String
   medico                User           @relation("RepasseAjusteMedico", fields: [medicoId], references: [id], onDelete: Restrict)
   consultaId            String?
-  consulta              Consulta?      @relation(fields: [consultaId], references: [id], onDelete: Restrict)
+  consulta              Consulta?      @relation(fields: [consultaId, medicoId], references: [id, medicoId], onDelete: Restrict, onUpdate: Restrict)
   motivo                String // reembolso | saldo_anterior
   reembolsoId           String?        @unique
   reembolso             Reembolso?     @relation(fields: [reembolsoId], references: [id], onDelete: Restrict)
   origemAjusteId        String?        @unique
-  origemAjuste          RepasseAjuste? @relation("AjusteSaldo", fields: [origemAjusteId], references: [id], onDelete: Restrict)
-  saldo                 RepasseAjuste? @relation("AjusteSaldo")
+  origemAjuste          RepasseAjuste? @relation("AjusteSaldo", fields: [origemAjusteId, medicoId], references: [id, medicoId], onDelete: Restrict, onUpdate: Restrict)
+  saldos                RepasseAjuste[] @relation("AjusteSaldo") // no máximo 1 (origemAjusteId @unique)
   valorCentavos         Int // parte do MÉDICO a descontar (> 0)
   valorAplicadoCentavos Int            @default(0)
   repasseId             String?
@@ -592,6 +600,7 @@ model RepasseAjuste {
   criadoEm              DateTime       @default(now())
   aplicadoEm            DateTime?
 
+  @@unique([id, medicoId]) // alvo da FK (origemAjusteId, medicoId): a sobra fica com o mesmo médico
   @@index([medicoId, repasseId])
   @@index([repasseId])
 }
@@ -634,8 +643,9 @@ model RemarcacaoPendente {
   criadoEm      DateTime   @default(now())
   aprovadoEm    DateTime?
   reembolso     Reembolso?
-  repasseItem   RepasseItem?
+  repasseItens  RepasseItem[] // no máximo 1 (remarcacaoId @unique)
 
+  @@unique([id, consultaId]) // alvo da FK (remarcacaoId, consultaId) do RepasseItem
   @@index([consultaId, status])
   @@index([novaData, status])
 }
