@@ -2,7 +2,7 @@
  * Teste do repasse diário (src/lib/server/repasse.ts) contra um Postgres
  * LOCAL descartável (nunca o banco de produção), com a migração
  * 20261003_repasse_diario aplicada.
- *   DATABASE_URL=postgresql://postgres@localhost:55432/repasse \
+ *   DATABASE_URL=postgresql://<usuario>@localhost:<porta>/<banco> \
  *   bun --conditions react-server scripts/teste_repasse.ts
  */
 import { db } from "@/lib/db";
@@ -90,6 +90,10 @@ async function main() {
   const { c: c1 } = await consultaPaga(med.id, pac.id, sp(D, "14:00"), 200);
   await consultaPaga(med.id, pac.id, sp(D, "15:00"), 300, { pago: false }); // não pagou: fora
   await consultaPaga(med.id, pac.id, sp(D, "16:00"), 300, { status: "cancelada" }); // cancelada: fora
+  // consulta de teste: pago=true sem Pagamento (as 6 de produção) → fora
+  const semPag = await db.consulta.create({
+    data: { medicoId: med.id, pacienteId: pac.id, dataInicio: sp(D, "13:00"), especialidade: "Clínica", valor: 300, pago: true, status: "confirmada" },
+  });
   const { c: c00 } = await consultaPaga(med.id, pac.id, sp("2030-03-11", "00:00"), 150); // dia seguinte
   // duas remarcações pagas da mesma consulta (multa R$ 100 cada), uma às 10:00 e outra às 23:40
   const { c: cRem } = await consultaPaga(med.id, pac.id, sp("2030-03-20", "10:00"), 200);
@@ -114,6 +118,8 @@ async function main() {
   verifica(cron.resultados.find((x) => x.medicoId === med2.id)?.situacao === "sem_itens", "médico sem nada: não cria repasse");
   const rep10 = await db.repasse.findUnique({ where: { medicoId_competencia: { medicoId: med.id, competencia: D } }, include: { itens: true } });
   verifica(rep10?.comissaoCentavos === 2000 && rep10?.brutoCentavos === 20000 && rep10.multasCentavos === 10000, "totais do repasse batem com a fórmula", rep10);
+  verifica(!rep10?.itens.some((i) => i.consultaId === semPag.id), "consulta pago=true sem Pagamento confirmado não entra");
+  verifica(rep10?.itens.every((i) => i.criadoEm.getTime() === sp(D, "23:30").getTime()), "itens gravados com criadoEm = corte");
   verifica(!rep10?.itens.some((i) => i.consultaId === c00.id), "consulta das 00:00 do dia 11 não entra no dia 10");
   verifica(!rep10?.itens.some((i) => i.remarcacaoId === r2.id), "multa paga às 23:40 não entra no fechamento das 23:30");
   verifica(rep10?.itens.some((i) => i.remarcacaoId === r1.id && i.tipo === "multa_remarcacao"), "multa de remarcação paga às 10:00 entra");
@@ -162,6 +168,20 @@ async function main() {
   ]);
   verifica([x.situacao, y.situacao].sort().join(",") === "fechado,ja_fechado", "dois fechamentos simultâneos: um fecha, o outro vê fechado", [x, y]);
 
+  /* ---------- Reembolso que vale depois do corte não sai em dobro ---------- */
+  const { p: p15 } = await consultaPaga(med2.id, pac.id, sp("2030-03-15", "10:00"), 100);
+  // decidido às 23:31, já gravado quando o fechamento das 23:30 roda (cron atrasado)
+  await db.reembolso.create({
+    data: { pagamentoId: p15.id, valorCentavos: 5000, motivo: "parcial", status: "aprovado", solicitadoPor: adm.id, criadoEm: sp("2030-03-15", "23:00"), decididoEm: sp("2030-03-15", "23:31"), decididoPor: adm.id },
+  });
+  const f15 = await fecharRepasseDoMedico(med2.id, "2030-03-15", sp("2030-03-15", "23:30"));
+  const it15 = await db.repasseItem.findFirst({ where: { repasseId: f15.repasseId! } });
+  verifica(it15?.reembolsosCentavos === 0 && it15.liquidoCentavos === 9000, "reembolso decidido depois do corte não entra no item", it15);
+  await consultaPaga(med2.id, pac.id, sp("2030-03-16", "10:00"), 100);
+  const f16 = await fecharRepasseDoMedico(med2.id, "2030-03-16", sp("2030-03-16", "23:30"));
+  const aj15 = await db.repasseAjuste.findMany({ where: { medicoId: med2.id, motivo: "reembolso" } });
+  verifica(aj15.length === 1 && aj15[0].valorCentavos === 4500 && aj15[0].repasseId === f16.repasseId, "esse reembolso vira um único ajuste de 45 no dia seguinte", aj15);
+
   /* ---------- Pagamento ---------- */
   const id10 = rep10!.id;
   verifica((await erroDe(marcarRepassePago({ repasseId: id10, adminId: adm.id, comprovantePath: "c.pdf", pixChaveConferida: "x" }))) === ERRO_SEM_CHAVE_PIX, "sem chave PIX: recusa");
@@ -184,7 +204,7 @@ async function main() {
     data: { medicoId: med2.id, pixTipo: "cnpj", pixChave: CNPJ_A, titularTipo: "pj", titularNome: "Med2 Ltda", titularDocumento: CNPJ_A },
   });
   await db.perfilMedico.update({ where: { userId: med2.id }, data: { cnpj: CNPJ_B } });
-  const rep14 = (await db.repasse.findFirst({ where: { medicoId: med2.id } }))!;
+  const rep14 = (await db.repasse.findFirst({ where: { medicoId: med2.id, competencia: "2030-03-14" } }))!;
   verifica((await erroDe(marcarRepassePago({ repasseId: rep14.id, adminId: adm.id, comprovantePath: "c.pdf", pixChaveConferida: CNPJ_A }))) === ERRO_CNPJ_DIVERGENTE,
     "titular PJ com CNPJ diferente do perfil: recusa");
   await db.perfilMedico.update({ where: { userId: med2.id }, data: { cnpj: CNPJ_A } });

@@ -110,7 +110,22 @@ export function validarCompetenciaParaFechar(dia: string, agora: Date = new Date
 
 /* ---------- Cálculo puro (sem banco) -------------------------------- */
 
-type ReembolsoMin = { status: string; valorCentavos: number; origem?: string | null };
+type ReembolsoMin = {
+  status: string;
+  valorCentavos: number;
+  origem?: string | null;
+  /** Quando passou a devolver dinheiro (decididoEm ?? criadoEm). Sem data = já efetivo. */
+  efetivoEm?: Date | null;
+};
+
+/**
+ * Só os reembolsos que já valiam no corte. Os posteriores não mexem no item:
+ * viram ajuste no próximo fechamento (sem isso, um reembolso entre o corte e
+ * a gravação sairia em dobro, no item e no ajuste).
+ */
+export function reembolsosAteOCorte<T extends ReembolsoMin>(lista: T[] | null | undefined, corte: Date): T[] {
+  return (lista ?? []).filter((r) => !r.efetivoEm || r.efetivoEm.getTime() <= corte.getTime());
+}
 
 export type CandidatoConsulta = ConsultaReceita;
 export type CandidatoMultaCancelamento = {
@@ -200,18 +215,24 @@ export function itensElegiveis(params: {
     vistas.add(i.chave);
     itens.push(i);
   };
-  for (const c of params.consultas) {
-    if (c.dataInicio.getTime() >= corte.getTime()) continue;
+  for (const c0 of params.consultas) {
+    if (c0.dataInicio.getTime() >= corte.getTime()) continue;
+    // Repasse só de consulta com Pagamento confirmado: as 6 consultas de teste
+    // (pago=true sem Pagamento) ficam fora, por decisão do Alisson.
+    if (c0.pagamento?.status !== "confirmado") continue;
+    const c = { ...c0, pagamento: { ...c0.pagamento, reembolsos: reembolsosAteOCorte(c0.pagamento.reembolsos, corte) } };
     if (!consultaEntraNaReceita(c, corte)) continue;
     add(itemDaConsulta(c));
   }
-  for (const m of params.multasCancelamento) {
-    if (m.multaCentavos <= 0 || m.em.getTime() >= corte.getTime()) continue;
+  for (const m0 of params.multasCancelamento) {
+    if (m0.multaCentavos <= 0 || m0.em.getTime() >= corte.getTime()) continue;
+    const m = { ...m0, reembolsos: reembolsosAteOCorte(m0.reembolsos, corte) };
     if (multaCancelamentoDevolvida(m)) continue;
     add(itemDeMulta("multa_cancelamento", m.consultaId, null, m.em, m.multaCentavos));
   }
-  for (const m of params.multasRemarcacao) {
-    if (m.multaCentavos <= 0 || m.quando.getTime() >= corte.getTime()) continue;
+  for (const m0 of params.multasRemarcacao) {
+    if (m0.multaCentavos <= 0 || m0.quando.getTime() >= corte.getTime()) continue;
+    const m = { ...m0, reembolso: reembolsosAteOCorte(m0.reembolso ? [m0.reembolso] : [], corte)[0] ?? null };
     if (multaRemarcacaoDevolvida(m)) continue;
     add(itemDeMulta("multa_remarcacao", m.consultaId, m.remarcacaoId, m.quando, m.multaCentavos));
   }
@@ -338,7 +359,8 @@ export function somarTotais(itens: ItemCalculado[], ajustesCentavos: number): To
 
 type Cliente = Prisma.TransactionClient | typeof db;
 
-const selReembolso = { status: true, valorCentavos: true, origem: true } as const;
+const selReembolso = { status: true, valorCentavos: true, origem: true, criadoEm: true, decididoEm: true } as const;
+const comEfetivo = <T extends { criadoEm: Date; decididoEm: Date | null }>(r: T) => ({ ...r, efetivoEm: r.decididoEm ?? r.criadoEm });
 
 /** Candidatos do médico ainda sem item, até o corte. */
 async function carregarCandidatos(c: Cliente, medicoId: string, corte: Date) {
@@ -347,6 +369,7 @@ async function carregarCandidatos(c: Cliente, medicoId: string, corte: Date) {
       where: {
         medicoId,
         pago: true,
+        pagamento: { status: "confirmado" },
         dataInicio: { lt: corte },
         status: { notIn: STATUS_FORA_DO_FATURAMENTO },
         repasseItens: { none: { tipo: "consulta" } },
@@ -362,7 +385,7 @@ async function carregarCandidatos(c: Cliente, medicoId: string, corte: Date) {
     }),
     c.eventoConsulta.findMany({
       where: {
-        consulta: { medicoId, repasseItens: { none: { tipo: "multa_cancelamento" } } },
+        consulta: { medicoId, pagamento: { status: "confirmado" }, repasseItens: { none: { tipo: "multa_cancelamento" } } },
         tipo: "cancelada",
         por: "paciente",
         multaCentavos: { gt: 0 },
@@ -395,20 +418,23 @@ async function carregarCandidatos(c: Cliente, medicoId: string, corte: Date) {
     }),
   ]);
   return {
-    consultas,
+    consultas: consultas.map((c) => ({
+      ...c,
+      pagamento: c.pagamento ? { ...c.pagamento, reembolsos: c.pagamento.reembolsos.map(comEfetivo) } : null,
+    })),
     multasCancelamento: eventos.map((e) => ({
       consultaId: e.consultaId,
       em: e.em,
       multaCentavos: e.multaCentavos ?? 0,
       valorConsulta: e.consulta.valor,
-      reembolsos: e.consulta.pagamento?.reembolsos ?? [],
+      reembolsos: (e.consulta.pagamento?.reembolsos ?? []).map(comEfetivo),
     })),
     multasRemarcacao: remarcacoes.map((r) => ({
       remarcacaoId: r.id,
       consultaId: r.consultaId,
       quando: r.aprovadoEm ?? r.criadoEm,
       multaCentavos: r.multaCentavos,
-      reembolso: r.reembolso,
+      reembolso: r.reembolso ? comEfetivo(r.reembolso) : null,
     })),
   };
 }
@@ -628,6 +654,8 @@ export async function fecharRepasseDoMedico(medicoId: string, dia: string, agora
             reembolsosCentavos: i.reembolsosCentavos,
             multasCentavos: i.multasCentavos,
             liquidoCentavos: i.liquidoCentavos,
+            // = corte: os reembolsos até o corte já estão no item; os depois viram ajuste
+            criadoEm: corte,
           })),
         });
       }
@@ -693,6 +721,27 @@ export async function fecharRepasse(dia: string, opcoes: { agora?: Date; medicoI
  * médico), quem pagou e o comprovante. `pixChaveConferida` é a chave que o
  * admin viu na tela; se mudou nesse meio-tempo, recusa (409).
  */
+/**
+ * Mesmas checagens do marcarRepassePago, só lendo: a rota chama antes de
+ * subir o comprovante, para não deixar arquivo no bucket num 409 previsível.
+ */
+export async function conferirAntesDePagar(repasseId: string, pixChaveConferida: string, c: Cliente = db) {
+  const repasse = await c.repasse.findUnique({
+    where: { id: repasseId },
+    select: { id: true, medicoId: true, status: true, liquidoCentavos: true, competencia: true },
+  });
+  if (!repasse || repasse.status !== "fechado") throw erroHttp(ERRO_REPASSE_NAO_ABERTO, 409);
+  if (repasse.liquidoCentavos <= 0) throw erroHttp(ERRO_REPASSE_ZERADO, 409);
+  const pix = await c.dadosRecebimentoMedico.findUnique({ where: { medicoId: repasse.medicoId } });
+  if (!pix) throw erroHttp(ERRO_SEM_CHAVE_PIX, 409);
+  if (pix.pixChave !== pixChaveConferida) throw erroHttp(ERRO_CHAVE_MUDOU, 409);
+  if (pix.titularTipo === "pj") {
+    const perfil = await c.perfilMedico.findUnique({ where: { userId: repasse.medicoId }, select: { cnpj: true } });
+    if (cnpjDivergente(pix, perfil?.cnpj)) throw erroHttp(ERRO_CNPJ_DIVERGENTE, 409);
+  }
+  return { repasse, pix };
+}
+
 export async function marcarRepassePago(params: {
   repasseId: string;
   adminId: string;
@@ -702,19 +751,7 @@ export async function marcarRepassePago(params: {
 }) {
   const agora = params.agora ?? new Date();
   return db.$transaction(async (tx) => {
-    const repasse = await tx.repasse.findUnique({
-      where: { id: params.repasseId },
-      select: { id: true, medicoId: true, status: true, liquidoCentavos: true, competencia: true },
-    });
-    if (!repasse || repasse.status !== "fechado") throw erroHttp(ERRO_REPASSE_NAO_ABERTO, 409);
-    if (repasse.liquidoCentavos <= 0) throw erroHttp(ERRO_REPASSE_ZERADO, 409);
-    const pix = await tx.dadosRecebimentoMedico.findUnique({ where: { medicoId: repasse.medicoId } });
-    if (!pix) throw erroHttp(ERRO_SEM_CHAVE_PIX, 409);
-    if (pix.pixChave !== params.pixChaveConferida) throw erroHttp(ERRO_CHAVE_MUDOU, 409);
-    if (pix.titularTipo === "pj") {
-      const perfil = await tx.perfilMedico.findUnique({ where: { userId: repasse.medicoId }, select: { cnpj: true } });
-      if (cnpjDivergente(pix, perfil?.cnpj)) throw erroHttp(ERRO_CNPJ_DIVERGENTE, 409);
-    }
+    const { repasse, pix } = await conferirAntesDePagar(params.repasseId, params.pixChaveConferida, tx);
     const r = await tx.repasse.updateMany({
       where: { id: repasse.id, status: "fechado" },
       data: {

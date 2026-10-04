@@ -53,3 +53,10 @@ export async function urlAssinadaDocumento(path: string, expiresSec = 3600) {
   if (error) throw error;
   return data.signedUrl;
 }
+
+/** Remove um arquivo do bucket privado (ex.: comprovante de um pagamento recusado). */
+export async function removerDocumento(path: string) {
+  const admin = createSupabaseAdminClient();
+  const { error } = await admin.storage.from(BUCKET_DOCUMENTOS).remove([path]);
+  if (error) throw error;
+}

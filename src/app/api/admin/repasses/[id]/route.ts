@@ -2,15 +2,21 @@ import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { exigirPapel, registrarAudit } from "@/lib/server/auth";
 import { ok, falha } from "@/lib/server/http";
-import { chaveTrocadaRecente, cnpjDivergente, marcarRepassePago } from "@/lib/server/repasse";
+import { chaveTrocadaRecente, cnpjDivergente, conferirAntesDePagar, marcarRepassePago } from "@/lib/server/repasse";
 import { supabaseServiceRoleKey } from "@/lib/supabase/env";
-import { uploadDocumento, urlAssinadaDocumento } from "@/lib/supabase/storage";
+import { removerDocumento, uploadDocumento, urlAssinadaDocumento } from "@/lib/supabase/storage";
 
-const TIPOS_COMPROVANTE: Record<string, string> = {
-  "application/pdf": "pdf",
-  "image/png": "png",
-  "image/jpeg": "jpg",
-};
+/**
+ * Tipo do comprovante pelos primeiros bytes (o Content-Type vem do cliente e
+ * não é confiável): PDF "%PDF-", PNG 89 50 4E 47 0D 0A 1A 0A, JPG FF D8 FF.
+ */
+function tipoDoComprovante(b: Uint8Array): { ext: string; mime: string } | null {
+  const comeca = (...x: number[]) => x.every((v, i) => b[i] === v);
+  if (comeca(0x25, 0x50, 0x44, 0x46, 0x2d)) return { ext: "pdf", mime: "application/pdf" };
+  if (comeca(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a)) return { ext: "png", mime: "image/png" };
+  if (comeca(0xff, 0xd8, 0xff)) return { ext: "jpg", mime: "image/jpeg" };
+  return null;
+}
 const MAX_COMPROVANTE = 10 * 1024 * 1024;
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -125,26 +131,28 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
     if (!(arquivo instanceof File) || arquivo.size === 0) {
       return Response.json({ erro: "Anexe o comprovante do PIX." }, { status: 400 });
     }
-    const ext = TIPOS_COMPROVANTE[arquivo.type];
-    if (!ext) return Response.json({ erro: "O comprovante precisa ser PDF, PNG ou JPG." }, { status: 400 });
     if (arquivo.size > MAX_COMPROVANTE) return Response.json({ erro: "O comprovante pode ter até 10 MB." }, { status: 400 });
     if (typeof conferida !== "string" || !conferida.trim()) {
       return Response.json({ erro: "Confira a chave PIX antes de marcar como pago." }, { status: 400 });
     }
+    const bytes = Buffer.from(await arquivo.arrayBuffer());
+    const tipo = tipoDoComprovante(bytes);
+    if (!tipo) return Response.json({ erro: "O comprovante precisa ser PDF, PNG ou JPG." }, { status: 400 });
 
-    const atual = await db.repasse.findUnique({ where: { id }, select: { medicoId: true, status: true, competencia: true } });
-    if (!atual) return Response.json({ erro: "Repasse não encontrado." }, { status: 404 });
-    if (atual.status !== "fechado") {
-      return Response.json({ erro: "Esse repasse já foi marcado como pago." }, { status: 409 });
+    // Confere tudo antes de subir o arquivo (404/409 não deixam sobra no bucket).
+    const existe = await db.repasse.findUnique({ where: { id }, select: { id: true } });
+    if (!existe) return Response.json({ erro: "Repasse não encontrado." }, { status: 404 });
+    const { repasse } = await conferirAntesDePagar(id, conferida.trim());
+
+    const { path } = await uploadDocumento(`repasses/${repasse.medicoId}`, `${repasse.competencia}.${tipo.ext}`, bytes, tipo.mime);
+    let pago;
+    try {
+      pago = await marcarRepassePago({ repasseId: id, adminId: admin.id, comprovantePath: path, pixChaveConferida: conferida.trim() });
+    } catch (e) {
+      // Algo mudou entre a conferência e a gravação: apaga o arquivo que subiu.
+      await removerDocumento(path).catch((err) => console.error("[repasse] comprovante órfão", path, err));
+      throw e;
     }
-
-    const { path } = await uploadDocumento(
-      `repasses/${atual.medicoId}`,
-      `${atual.competencia}.${ext}`,
-      Buffer.from(await arquivo.arrayBuffer()),
-      arquivo.type,
-    );
-    const pago = await marcarRepassePago({ repasseId: id, adminId: admin.id, comprovantePath: path, pixChaveConferida: conferida.trim() });
     await registrarAudit(admin, {
       acao: "repasse_pago",
       categoria: "financeiro",

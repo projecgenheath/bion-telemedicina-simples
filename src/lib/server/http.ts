@@ -20,16 +20,6 @@ const DB_INDISPONIVEL = [
 /** Mensagem genérica para falhas inesperadas (o detalhe fica só no log do servidor). */
 export const ERRO_INTERNO_PADRAO = "Erro interno. Tente novamente.";
 
-/**
- * Converte erros lançados pelos helpers (401/403/404/409…) e erros genéricos
- * em respostas JSON.
- *
- * M2 (auditoria perfil do paciente): erro SEM `status` explícito é falha
- * inesperada (Prisma, bug, rede) — a mensagem interna (nomes de modelo/campo,
- * trechos de query) NÃO vai mais ao cliente: responde a mensagem genérica e
- * registra o detalhe só no log. Erros lançados de propósito com `status`
- * (ex.: `err.status = 404`) continuam com a própria mensagem.
- */
 /** Mensagem quando o banco recusa mexer em algo que já entrou num repasse. */
 export const ERRO_JA_REPASSADO = "Esse registro já entrou num repasse e não pode ser alterado.";
 
@@ -44,6 +34,16 @@ function violouRepasse(e: { code?: unknown; message?: unknown; meta?: unknown })
   return /Repasse/.test(texto);
 }
 
+/**
+ * Converte erros lançados pelos helpers (401/403/404/409…) e erros genéricos
+ * em respostas JSON.
+ *
+ * M2 (auditoria perfil do paciente): erro SEM `status` explícito é falha
+ * inesperada (Prisma, bug, rede) — a mensagem interna (nomes de modelo/campo,
+ * trechos de query) NÃO vai mais ao cliente: responde a mensagem genérica e
+ * registra o detalhe só no log. Erros lançados de propósito com `status`
+ * (ex.: `err.status = 404`) continuam com a própria mensagem.
+ */
 export function falha(erro: unknown) {
   if (violouRepasse(erro as { code?: unknown })) {
     return NextResponse.json({ erro: ERRO_JA_REPASSADO }, { status: 409 });
