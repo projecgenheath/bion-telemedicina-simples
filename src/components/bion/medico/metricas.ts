@@ -163,6 +163,28 @@ export type ParametrosGrade = {
 
 export const HORA_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 
+/**
+ * Janela sem teleconsulta: 23:00–00:00 (São Paulo; o repasse diário fecha às
+ * 23:30). Mesma regra do servidor (src/lib/server/bloqueio-agenda.ts:
+ * slotVedado/DURACAO_CONSULTA_MIN), repetida aqui porque este arquivo roda no
+ * navegador. O servidor não conhece a duração escolhida neste aparelho e
+ * conta cada consulta com DURACAO_CONSULTA_SERVIDOR min, então a grade usa a
+ * MAIOR das duas: assim nada que o servidor recusaria é oferecido.
+ */
+export const VEDADO_INICIO_MIN = 23 * 60;
+export const VEDADO_FIM_MIN = 24 * 60;
+export const DURACAO_CONSULTA_SERVIDOR = 30;
+export const AVISO_HORARIO_VEDADO = "Não há atendimento entre 23:00 e 00:00 — a última consulta precisa terminar até 23:00.";
+
+/** A consulta que começa em `inicioMin` (minutos do dia) e dura `duracaoMin` encosta em 23:00–00:00? */
+export function slotNaJanelaVedada(inicioMin: number, duracaoMin: number): boolean {
+  const b = inicioMin + Math.max(1, duracaoMin, DURACAO_CONSULTA_SERVIDOR);
+  for (let k = 0; VEDADO_INICIO_MIN + k * 1440 < b; k++) {
+    if (inicioMin < VEDADO_FIM_MIN + k * 1440 && b > VEDADO_INICIO_MIN + k * 1440) return true;
+  }
+  return false;
+}
+
 export const paraMin = (h: string) => {
   const [hh, mm] = h.split(":").map(Number);
   return (hh || 0) * 60 + (mm || 0);
@@ -192,7 +214,8 @@ export function validarGrade(p: ParametrosGrade): string | null {
 /**
  * Gera os horários de início: a partir de `inicio`, passo = duração +
  * intervalo; a consulta precisa terminar até `fim` e não pode invadir a
- * pausa (se invadir, o próximo horário começa no fim da pausa).
+ * pausa (se invadir, o próximo horário começa no fim da pausa) nem a janela
+ * 23:00–00:00 (`slotNaJanelaVedada`: horário não oferecido).
  */
 export function gerarGrade(p: ParametrosGrade): string[] {
   if (validarGrade(p)) return [];
@@ -206,7 +229,7 @@ export function gerarGrade(p: ParametrosGrade): string[] {
       t = pf;
       continue;
     }
-    horarios.push(paraHora(t));
+    if (!slotNaJanelaVedada(t, p.duracao)) horarios.push(paraHora(t));
     t += p.duracao + p.intervalo;
   }
   return horarios;

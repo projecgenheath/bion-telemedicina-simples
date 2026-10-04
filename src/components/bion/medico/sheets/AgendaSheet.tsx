@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useBion, type Medico } from "@/lib/bion-store";
 import {
+  AVISO_HORARIO_VEDADO,
   gerarGrade,
   INTERVALO_MINIMO,
   DURACAO_MINIMA,
@@ -181,6 +182,7 @@ export function AgendaSheet({
         <p className="text-xs text-bion-ink/70 dark:text-bion-paper/70">
           Só os horários de início são gravados; duração e intervalo ficam salvos neste aparelho. Consultas já marcadas não mudam.
         </p>
+        <p className="text-xs text-bion-ink/70 dark:text-bion-paper/70">{AVISO_HORARIO_VEDADO}</p>
 
         <button
           type="button"

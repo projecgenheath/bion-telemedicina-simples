@@ -4,9 +4,11 @@ import { db } from "@/lib/db";
 import { partesNoFuso, quandoClinica } from "@/lib/server/fuso";
 import {
   chaveTravaDia,
+  consultaEmHorarioVedado,
   diaBloqueado,
   diaIsoSaoPaulo,
   ERRO_DIA_BLOQUEADO,
+  ERRO_HORARIO_VEDADO,
   OPCOES_TX_TRAVA,
   travarDiaIso,
   type ClienteBanco,
@@ -562,6 +564,8 @@ export async function aprovarMultaRemarcacao(remarcacaoId: string, via: "webhook
     }
     // Dia bloqueado pelo médico depois da reserva: não move; a multa volta (caminho abaixo).
     if (aplicavel && (await diaBloqueado(tx, c.medicoId, r.novaData))) aplicavel = false;
+    // Horário novo em 23:00–00:00 (São Paulo): mesmo caminho — não move, a multa volta.
+    if (aplicavel && consultaEmHorarioVedado(r.novaData)) aplicavel = false;
 
     if (aplicavel) {
       await tx.consulta.update({ where: { id: c.id }, data: { dataInicio: r.novaData, remarcada: true } });
@@ -618,8 +622,8 @@ export async function falharMultaRemarcacao(remarcacaoId: string, via: "webhook"
 /**
  * Valida a nova data/hora de uma remarcação (mesma regra para o PATCH
  * "remarcar" e para a remarcação com multa): antecedência de 20 min, grade do
- * médico, dia bloqueado pelo médico, consulta que ocupa o horário e reserva
- * vigente de outra consulta.
+ * médico, dia bloqueado pelo médico, janela vedada 23:00–00:00 (São Paulo),
+ * consulta que ocupa o horário e reserva vigente de outra consulta.
  */
 export async function validarNovoHorario(
   consulta: { id: string; medicoId: string },
@@ -644,6 +648,10 @@ export async function validarNovoHorario(
   // Dia inteiro bloqueado pelo médico (folga/férias) — antes da checagem de conflito.
   if (await diaBloqueado(db, consulta.medicoId, dataInicio)) {
     return { ok: false, erro: ERRO_DIA_BLOQUEADO, status: 409 };
+  }
+  // Sem teleconsulta entre 23:00 e 00:00 (São Paulo).
+  if (consultaEmHorarioVedado(dataInicio)) {
+    return { ok: false, erro: ERRO_HORARIO_VEDADO, status: 409 };
   }
   const conflito = await db.consulta.findFirst({
     where: {
@@ -701,7 +709,8 @@ export async function travarDias(tx: Prisma.TransactionClient, alvos: { medicoId
 
 /**
  * Confere o horário DENTRO da transação, depois de `travarDias`: dia
- * bloqueado, outra consulta do médico, reserva vigente de outra consulta e,
+ * bloqueado, janela vedada 23:00–00:00 (São Paulo), outra consulta do
+ * médico, reserva vigente de outra consulta e,
  * com `pacienteId`, outra consulta do paciente. Devolve a mensagem de erro
  * (409) ou null quando o horário está livre.
  */
@@ -710,6 +719,7 @@ export async function conferirHorarioNaTransacao(
   p: { consultaId: string; medicoId: string; dataInicio: Date; pacienteId?: string },
 ): Promise<string | null> {
   if (await diaBloqueado(tx, p.medicoId, p.dataInicio)) return ERRO_DIA_BLOQUEADO;
+  if (consultaEmHorarioVedado(p.dataInicio)) return ERRO_HORARIO_VEDADO;
   const choqueMedico = await tx.consulta.findFirst({
     where: { id: { not: p.consultaId }, medicoId: p.medicoId, dataInicio: p.dataInicio, status: { notIn: STATUS_LIBERAM_HORARIO } },
     select: { id: true },

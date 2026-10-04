@@ -14,7 +14,7 @@ import {
   HorarioIndisponivel,
   travarDias,
 } from "@/lib/server/financeiro";
-import { ERRO_DIA_BLOQUEADO } from "@/lib/server/bloqueio-agenda";
+import { ERRO_DIA_BLOQUEADO, ERRO_HORARIO_VEDADO } from "@/lib/server/bloqueio-agenda";
 
 const url = process.env.DATABASE_URL ?? "";
 if (!/localhost|127\.0\.0\.1/.test(url)) throw new Error("Só roda contra um Postgres local.");
@@ -140,6 +140,30 @@ async function main() {
   verifica(a1?.aplicada === true && cFinal.dataInicio.getTime() === diaLivre.getTime(), "dia livre: multa aplicada e consulta movida");
   verifica(a2?.jaProcessada === true, "segunda aprovação é idempotente");
   verifica((await aprovarMultaRemarcacao("nao-existe", "webhook")) === null, "remarcação inexistente → null");
+
+  // 6) Janela vedada 23:00–00:00 (São Paulo)
+  // 27/12/2030 23:00 SP = 28/12 02:00Z ; 22:30 SP = 01:30Z ; 00:00 SP = 03:00Z
+  verifica(
+    (await conf({ consultaId: c.id, medicoId: med.id, dataInicio: new Date("2030-12-28T02:00:00Z") })) === ERRO_HORARIO_VEDADO,
+    "23:00 SP (dia livre) → horário vedado",
+  );
+  verifica(
+    (await conf({ consultaId: c.id, medicoId: med.id, dataInicio: new Date("2030-12-28T01:30:00Z") })) === null,
+    "22:30 SP (termina 23:00) → livre",
+  );
+  verifica(
+    (await conf({ consultaId: c.id, medicoId: med.id, dataInicio: new Date("2030-12-28T03:00:00Z") })) === null,
+    "00:00 SP → livre",
+  );
+  const antesVedado = await db.consulta.findUniqueOrThrow({ where: { id: c.id } });
+  const rp3 = await db.remarcacaoPendente.create({
+    data: { consultaId: c.id, novaData: new Date("2030-12-28T02:15:00Z"), multaCentavos: 700, solicitadoPor: pac.id, expiraEm: new Date(Date.now() + 600_000) },
+  });
+  const a3 = await aprovarMultaRemarcacao(rp3.id, "webhook");
+  const cVedado = await db.consulta.findUniqueOrThrow({ where: { id: c.id } });
+  verifica(a3?.aplicada === false, "multa para 23:15 SP não move a consulta");
+  verifica(cVedado.dataInicio.getTime() === antesVedado.dataInicio.getTime(), "consulta ficou na data anterior");
+  verifica((await db.reembolso.count({ where: { remarcacaoId: rp3.id } })) === 1, "a multa para horário vedado volta como reembolso");
 
   console.log(`\n${okN} ok, ${falhaN} falha(s)`);
   await db.$disconnect();

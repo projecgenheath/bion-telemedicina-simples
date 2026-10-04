@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { exigirPapel, hashSenha } from "@/lib/server/auth";
 import { aplicarSideEffects, medicoWire, slugEmail } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
+import { erroGradeVedada, horariosVedadosDaGrade } from "@/lib/server/bloqueio-agenda";
 import { gerarSenhaTemporaria, sufixoAleatorio } from "@/lib/server/senha-temporaria";
 import { emailNorm, isErro } from "@/lib/server/validar";
 
@@ -29,6 +30,9 @@ export async function POST(req: NextRequest) {
     if (!body.nome?.trim() || !body.crm?.trim() || !body.especialidade?.trim()) {
       return Response.json({ erro: "Nome, CRM e especialidade são obrigatórios." }, { status: 400 });
     }
+    // Sem teleconsulta entre 23:00 e 00:00 (São Paulo): grade não pode ter esses horários.
+    const vedados = horariosVedadosDaGrade(body.horariosDisponiveis);
+    if (vedados.length) return Response.json({ erro: erroGradeVedada(vedados) }, { status: 400 });
 
     // Auditoria admin (C2): o login não pode mais ser adivinhado pelo nome
     // ("nome.sobrenome@med.bion.app"). Usa o e-mail real, se informado, ou
