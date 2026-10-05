@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useVoltarFecha } from "./useVoltarFecha";
+import { useFocoDialogo } from "./useFocoDialogo";
 import { toast } from "sonner";
 import {
   Activity,
@@ -59,21 +61,19 @@ function Envolver({
   onFechar: () => void;
   children: React.ReactNode;
 }) {
+  const rootRef = useRef<HTMLDivElement>(null);
+  useVoltarFecha(true, onFechar);
+  useFocoDialogo(true, onFechar, rootRef);
   useEffect(() => {
     const antes = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    const aoTeclar = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onFechar();
-    };
-    window.addEventListener("keydown", aoTeclar);
     return () => {
       document.body.style.overflow = antes;
-      window.removeEventListener("keydown", aoTeclar);
     };
-  }, [onFechar]);
+  }, []);
 
   return (
-    <div className="absolute inset-0 z-50 overflow-y-auto bp-coluna" role="dialog" aria-modal="true" aria-label={titulo}>
+    <div ref={rootRef} className="absolute inset-0 z-50 overflow-y-auto bp-coluna" role="dialog" aria-modal="true" aria-label={titulo}>
       <div className="min-h-full bp-painel">
         <div className="mx-auto w-full max-w-xl px-5 bp-safe-top pb-16">
           <div className="flex items-start justify-between gap-4 pt-2">

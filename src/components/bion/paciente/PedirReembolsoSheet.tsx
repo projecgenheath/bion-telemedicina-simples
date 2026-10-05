@@ -1,6 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { useVoltarFecha } from "./useVoltarFecha";
+import { useFocoDialogo } from "./useFocoDialogo";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { fmtTicketData, type Consulta } from "@/lib/bion-tipos";
@@ -53,9 +55,12 @@ export function PedirReembolsoSheet({ consulta, onFechar }: { consulta: Consulta
   const fechar = () => {
     if (!enviando) onFechar();
   };
+  const dialogoRef = useRef<HTMLDivElement>(null);
+  useVoltarFecha(true, fechar);
+  useFocoDialogo(true, fechar, dialogoRef);
 
   return (
-    <div className="absolute inset-0 z-[80] flex items-end justify-center" role="dialog" aria-modal="true" aria-labelledby="titulo-sheet-reembolso">
+    <div ref={dialogoRef} className="absolute inset-0 z-[80] flex items-end justify-center" role="dialog" aria-modal="true" aria-labelledby="titulo-sheet-reembolso">
       <button type="button" className="absolute inset-0 bg-black/80" aria-label="Fechar" onClick={fechar} />
       <div className="relative w-full max-w-lg max-h-[92svh] overflow-y-auto rounded-t-3xl bg-zinc-950 text-white border-t border-white/10 px-5 pt-3 pb-8 shadow-[0_-12px_40px_rgba(0,0,0,0.55)]">
         <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-white/25" aria-hidden />

@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useVoltarFecha } from "./useVoltarFecha";
+import { useFocoDialogo } from "./useFocoDialogo";
 import {
   ArrowLeft,
   BadgeCheck,
@@ -49,18 +51,12 @@ function Visualizador({
   corpo: string[];
   onFechar: () => void;
 }) {
-  // A11Y (auditoria FASE 3): ESC fecha o documento — caminho de teclado
-  // equivalente ao clique no fundo escurecido e ao botão de fechar.
-  useEffect(() => {
-    const aoTeclar = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onFechar();
-    };
-    window.addEventListener("keydown", aoTeclar);
-    return () => window.removeEventListener("keydown", aoTeclar);
-  }, [onFechar]);
+  const dialogoRef = useRef<HTMLDivElement>(null);
+  useVoltarFecha(true, onFechar);
+  useFocoDialogo(true, onFechar, dialogoRef);
 
   return (
-    <div className="absolute inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label={`Documento: ${titulo}`}>
+    <div ref={dialogoRef} className="absolute inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label={`Documento: ${titulo}`}>
       {/* A11Y: fundo clicável agora é button real (tabIndex=-1 o mantém fora
           da ordem de tabulação — fechar por teclado é papel do ESC/botão). */}
       <button

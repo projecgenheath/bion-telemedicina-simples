@@ -6,8 +6,6 @@ import {
   Activity,
   CalendarClock,
   ChevronDown,
-  ChevronLeft,
-  ChevronRight,
   ClipboardList,
   FileText,
   HeartPulse,
@@ -49,6 +47,7 @@ const TriagemSlides = dynamic(
 import { PerfilPainel } from "./PerfilPainel";
 import { DocumentosPainel } from "./DocumentosPainel";
 import { fraseMotivoReagendamento, rotuloMotivoReagendamento } from "./motivo-reagendamento";
+import { DicaGestos, NavegacaoPaciente, useDicaGestos } from "./NavegacaoPaciente";
 
 /**
  * App imersivo do paciente — fullscreen, sem menu e sem botões de navegação.
@@ -68,12 +67,35 @@ const rotuloCurto = (iso: string) => {
   return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
 };
 
+const EM_CAMPO = ["INPUT", "TEXTAREA", "SELECT"];
+
+function comportamentoScroll(): ScrollBehavior {
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
+}
+
+function ehTelaLarga(): boolean {
+  return window.matchMedia("(min-width: 1024px)").matches;
+}
+
 export function PacienteApp() {
   const router = useRouter();
-  const { sessao, pacientePerfil, consultas, anamneses, lembretes, medicoes, exames, sair, medicos } = useBion();
+  const {
+    sessao,
+    pacientePerfil,
+    consultas,
+    anamneses,
+    lembretes,
+    medicoes,
+    exames,
+    sair,
+    medicos,
+    naoLidasMensagens,
+  } = useBion();
 
   const carrosselRef = useRef<HTMLDivElement>(null);
+  const colunaRef = useRef<HTMLDivElement>(null);
   const [painel, setPainel] = useState(1);
+  const [secao, setSecao] = useState(0);
   const [detalhe, setDetalhe] = useState<Detalhe>(null);
   const [chatAberto, setChatAberto] = useState(false);
   const [triagemConsultaId, setTriagemConsultaId] = useState<string | null>(null);
@@ -86,23 +108,37 @@ export function PacienteApp() {
   const [listaConsultasAberta, setListaConsultasAberta] = useState(false);
   const [modalConsulta, setModalConsulta] = useState<{ id: string; acao: AcaoSheet } | null>(null);
   const [reembolsoConsultaId, setReembolsoConsultaId] = useState<string | null>(null);
-  const arrastandoRef = useRef(false);
-  const inicioArrasteX = useRef(0);
-  const inicioArrasteScroll = useRef(0);
-  const moveuArrasteRef = useRef(false);
+  const dica = useDicaGestos();
+
+  const bloqueado = !!(chatAberto || triagemSlide || modalConsulta || detalhe || reembolsoConsultaId);
 
   const irPara = useCallback((p: number) => {
+    if (ehTelaLarga()) {
+      setPainel(p);
+      return;
+    }
     const el = carrosselRef.current;
     if (!el) return;
-    const menosMovimento = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    el.scrollTo({ left: p * el.clientWidth, behavior: menosMovimento ? "auto" : "smooth" });
+    el.scrollTo({ left: p * el.clientWidth, behavior: comportamentoScroll() });
+  }, []);
+
+  const irSecao = useCallback((i: number) => {
+    const col = colunaRef.current;
+    const alvo = col?.children[i] as HTMLElement | undefined;
+    if (col && alvo) {
+      col.scrollTo({ top: alvo.offsetTop, behavior: comportamentoScroll() });
+    }
+    setSecao(i);
   }, []);
 
   // A página inicial é a SEÇÃO 1 (painel central): posiciona o carrossel já na montagem
   useEffect(() => {
     const el = carrosselRef.current;
     if (!el) return;
-    const posicionar = () => el.scrollTo({ left: el.clientWidth, behavior: "instant" as ScrollBehavior });
+    const posicionar = () => {
+      if (ehTelaLarga()) return;
+      el.scrollTo({ left: el.clientWidth, behavior: "instant" as ScrollBehavior });
+    };
     posicionar();
     const raf = requestAnimationFrame(posicionar);
     // Tela larga (≥ 1024 px): os 3 painéis ficam lado a lado, sem deslizar.
@@ -118,25 +154,79 @@ export function PacienteApp() {
     };
   }, []);
 
+  // Deep links: /paciente?tela=perfil|documentos|saude|exames|inicio
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const tela = (params.get("tela") || "").toLowerCase();
+    if (!tela) return;
+    const aplicar = () => {
+      if (tela === "perfil") irPara(0);
+      else if (tela === "documentos") irPara(2);
+      else if (tela === "saude") {
+        irPara(1);
+        requestAnimationFrame(() => irSecao(1));
+      } else if (tela === "exames") {
+        irPara(1);
+        requestAnimationFrame(() => irSecao(2));
+      } else if (tela === "inicio") {
+        irPara(1);
+        requestAnimationFrame(() => irSecao(0));
+      } else return;
+      // Limpa o parâmetro para não reaplicar ao voltar
+      const url = new URL(window.location.href);
+      url.searchParams.delete("tela");
+      window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
+    };
+    // Espera o carrossel posicionar no centro
+    const t = window.setTimeout(aplicar, 50);
+    return () => window.clearTimeout(t);
+  }, [irPara, irSecao]);
+
   const aoRolar = () => {
     const el = carrosselRef.current;
-    if (!el) return;
+    if (!el || !el.clientWidth || ehTelaLarga()) return;
     const idx = Math.round(el.scrollLeft / el.clientWidth);
-    if (idx !== painel) setPainel(idx);
+    if (idx !== painel) {
+      setPainel(idx);
+      dica.dispensar();
+    }
   };
 
-  // Teclado (desktop): setas navegam entre os painéis quando não há foco em texto
+  const aoRolarColuna = () => {
+    const col = colunaRef.current;
+    if (!col) return;
+    const meio = col.scrollTop + col.clientHeight / 2;
+    let idx = 0;
+    Array.from(col.children).forEach((c, i) => {
+      if ((c as HTMLElement).offsetTop <= meio) idx = i;
+    });
+    if (idx !== secao) {
+      setSecao(idx);
+      dica.dispensar();
+    }
+  };
+
+  // Teclado: ←/→ trocam de painel; PageUp/PageDown (e ↑/↓ fora de campos) trocam de seção
   useEffect(() => {
     const aoTeclar = (e: KeyboardEvent) => {
-      if (detalhe || chatAberto) return;
+      if (bloqueado || e.altKey || e.ctrlKey || e.metaKey) return;
       const alvo = e.target as HTMLElement | null;
-      if (alvo && ["INPUT", "TEXTAREA", "SELECT"].includes(alvo.tagName)) return;
+      if (alvo && (EM_CAMPO.includes(alvo.tagName) || alvo.isContentEditable)) return;
       if (e.key === "ArrowRight") irPara(Math.min(2, painel + 1));
-      if (e.key === "ArrowLeft") irPara(Math.max(0, painel - 1));
+      else if (e.key === "ArrowLeft") irPara(Math.max(0, painel - 1));
+      else if (painel === 1) {
+        const foraDaColuna = !alvo || !colunaRef.current?.contains(alvo);
+        const desce = e.key === "PageDown" || (foraDaColuna && e.key === "ArrowDown");
+        const sobe = e.key === "PageUp" || (foraDaColuna && e.key === "ArrowUp");
+        if (desce || sobe) {
+          e.preventDefault();
+          irSecao(desce ? Math.min(2, secao + 1) : Math.max(0, secao - 1));
+        }
+      }
     };
     window.addEventListener("keydown", aoTeclar);
     return () => window.removeEventListener("keydown", aoTeclar);
-  }, [painel, detalhe, chatAberto, irPara]);
+  }, [bloqueado, painel, secao, irPara, irSecao]);
 
   /* ------------------------------- dados --------------------------------- */
 
@@ -306,7 +396,8 @@ export function PacienteApp() {
         role="group"
         tabIndex={0}
         onScroll={aoRolar}
-        className={`bp-carrossel bpp-carrossel flex h-full overflow-x-auto ${chatAberto || triagemSlide || modalConsulta || consultaReembolso || detalhe ? "pointer-events-none" : ""}`}
+        inert={bloqueado}
+        className={`bp-carrossel bpp-carrossel flex h-full overflow-x-auto ${bloqueado ? "pointer-events-none" : ""}`}
         aria-label="Painéis do app: perfil, início e documentos (arraste para os lados)"
       >
         {/* ============================== PERFIL ============================== */}
@@ -320,9 +411,15 @@ export function PacienteApp() {
         </div>
 
         {/* ============================= PRINCIPAL ============================ */}
-        <div className="bpp-central flex-[0_0_100%] w-full min-w-full h-full overflow-y-auto bp-coluna" aria-label="Início, saúde e exames">
+        <div
+          ref={colunaRef}
+          onScroll={aoRolarColuna}
+          className="bpp-central bpp-snap-y flex-[0_0_100%] w-full min-w-full h-full overflow-y-auto bp-coluna"
+          aria-label="Início, saúde e exames"
+          role="region"
+        >
           {/* --- Seção 1: início --- */}
-          <section className="bp-secao-1 bpp-secao min-h-[100svh] flex flex-col px-5 bp-safe-top pb-28" aria-label="Página inicial">
+          <section className="bp-secao-1 bpp-secao bpp-tela min-h-[100svh] flex flex-col px-5 bp-safe-top pb-28" aria-label="Página inicial">
             <header className="flex items-center justify-between pt-2">
               <div className="text-xs font-semibold uppercase tracking-wider text-bion-ink/75 dark:text-bion-paper/75">
                 {hoje}
@@ -455,27 +552,27 @@ export function PacienteApp() {
                         </div>
                       </button>
                       <div className="mt-3 flex flex-wrap gap-2">
-                        <button type="button" onClick={() => entrarSala(c.ts)} className="inline-flex items-center gap-1 rounded-full px-2.5 py-1.5 text-xs font-bold bg-bion-ink/8 dark:bg-white/10">
-                          <Video className="w-3 h-3" /> {aberta ? "Entrar" : "Sala de espera"}
+                        <button type="button" onClick={() => entrarSala(c.ts)} className="inline-flex items-center gap-1.5 rounded-full px-3 min-h-11 text-xs font-bold bg-bion-ink/8 dark:bg-white/10">
+                          <Video className="w-3.5 h-3.5" /> {aberta ? "Entrar" : "Sala de espera"}
                         </button>
                         {st !== "feita" && janelaTriagem(c) ? (
-                          <button type="button" onClick={() => abrirTriagem(c.id)} className="inline-flex items-center gap-1 rounded-full px-2.5 py-1.5 text-xs font-bold bg-sky-600/15">
-                            <Sparkles className="w-3 h-3" /> {st === "andamento" ? "Continuar triagem" : "Fazer triagem"}
+                          <button type="button" onClick={() => abrirTriagem(c.id)} className="inline-flex items-center gap-1.5 rounded-full px-3 min-h-11 text-xs font-bold bg-sky-600/15">
+                            <Sparkles className="w-3.5 h-3.5" /> {st === "andamento" ? "Continuar triagem" : "Fazer triagem"}
                           </button>
                         ) : null}
                         <button
                           type="button"
                           onClick={() => setModalConsulta({ id: c.id, acao: "remarcar" })}
-                          className="inline-flex items-center gap-1 rounded-full px-2.5 py-1.5 text-xs font-bold bg-bion-ink/8 dark:bg-white/10"
+                          className="inline-flex items-center gap-1.5 rounded-full px-3 min-h-11 text-xs font-bold bg-bion-ink/8 dark:bg-white/10"
                         >
-                          <RefreshCw className="w-3 h-3" /> Remarcar
+                          <RefreshCw className="w-3.5 h-3.5" /> Remarcar
                         </button>
                         <button
                           type="button"
                           onClick={() => setModalConsulta({ id: c.id, acao: "cancelar" })}
-                          className="inline-flex items-center gap-1 rounded-full px-2.5 py-1.5 text-xs font-bold bg-red-600/10 text-red-800 dark:bg-red-400/15 dark:text-red-300"
+                          className="inline-flex items-center gap-1.5 rounded-full px-3 min-h-11 text-xs font-bold bg-red-600/10 text-red-800 dark:bg-red-400/15 dark:text-red-300"
                         >
-                          <X className="w-3 h-3" /> Cancelar
+                          <X className="w-3.5 h-3.5" /> Cancelar
                         </button>
                       </div>
                     </div>
@@ -541,7 +638,7 @@ export function PacienteApp() {
           </section>
 
           {/* --- Seção 2: saúde --- */}
-          <section className="bp-secao-2 bpp-secao px-5 py-8" aria-label="Saúde: lembretes, IMC e pressão arterial">
+          <section className="bp-secao-2 bpp-secao bpp-tela px-5 py-8 pb-28" aria-label="Saúde: lembretes, IMC e pressão arterial">
             <h2 className="text-2xl font-black mb-1">Sua saúde</h2>
             <p className="text-sm text-bion-ink/75 dark:text-bion-paper/75 mb-5">
               Toque em um card para ver o histórico e atualizar.
@@ -658,7 +755,7 @@ export function PacienteApp() {
           </section>
 
           {/* --- Seção 3: exames laboratoriais --- */}
-          <section className="bp-secao-3 bpp-secao px-5 pt-10 pb-28 text-white" aria-label="Resultados de exames laboratoriais">
+          <section className="bp-secao-3 bpp-secao bpp-tela px-5 pt-10 pb-28 text-white" aria-label="Resultados de exames laboratoriais">
             <h2 className="text-2xl font-black mb-1">Exames laboratoriais</h2>
             <p className="text-sm text-white/80 mb-6">
               Resultados importados automaticamente dos laudos que você envia à BION IA.
@@ -760,40 +857,15 @@ export function PacienteApp() {
         </div>
       </div>
 
-      {/* Indicador de painéis — some quando há overlay para não cobrir cards */}
-      {!(chatAberto || triagemSlide || modalConsulta || consultaReembolso || detalhe) ? (
-      <nav
-        aria-label="Painéis do app"
-        className="bpp-indicador absolute bottom-[calc(1rem+env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2 z-20 flex items-center gap-0.5 rounded-full bg-zinc-950/85 text-white backdrop-blur px-1.5 py-1 pointer-events-auto"
-      >
-        {[
-          { idx: 0, rotulo: "Perfil" },
-          { idx: 1, rotulo: "Início" },
-          { idx: 2, rotulo: "Documentos" },
-        ].map(({ idx, rotulo }) => (
-          <button type="button"
-            key={idx}
-            onClick={() => irPara(idx)}
-            aria-label={`Ir para ${rotulo}`}
-            aria-current={painel === idx ? "page" : undefined}
-            className="p-1.5"
-          >
-            <span className={`block h-2 rounded-full transition-all ${painel === idx ? "w-6 bg-sky-300" : "w-2 bg-white/70"}`} />
-          </button>
-        ))}
-        {painel !== 1 ? (
-          <button type="button"
-            onClick={() => irPara(1)}
-            aria-label="Voltar ao início"
-            className="p-1 text-white/85"
-          >
-            <ChevronLeft className="w-4 h-4" />
-          </button>
-        ) : (
-          <ChevronRight className="w-4 h-4 mx-1 text-white/70" aria-hidden />
-        )}
-      </nav>
-      ) : null}
+      <NavegacaoPaciente
+        painel={painel}
+        secao={secao}
+        onPainel={irPara}
+        onSecao={irSecao}
+        naoLidas={naoLidasMensagens}
+        oculto={bloqueado}
+      />
+      {dica.visivel && !bloqueado ? <DicaGestos onDispensar={dica.dispensar} /> : null}
 
       {/* Overlays */}
       <DetalheMedicao detalhe={detalhe} onFechar={() => setDetalhe(null)} />
