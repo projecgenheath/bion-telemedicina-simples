@@ -57,6 +57,7 @@ export function KpiAdmin({
   carregando = false,
   onAbrir,
   denso = false,
+  className = "",
 }: {
   rotulo: string;
   valor: ReactNode;
@@ -67,6 +68,7 @@ export function KpiAdmin({
   /** Torna o card inteiro clicável (abre o módulo/fila correspondente). */
   onAbrir?: () => void;
   denso?: boolean;
+  className?: string;
 }) {
   const conteudo = (
     <>
@@ -78,7 +80,7 @@ export function KpiAdmin({
         <div className="ba-esqueleto h-9 w-20 mt-2" aria-hidden />
       ) : (
         <div
-          className={`ba-numero mt-1 ${denso ? "text-2xl" : "text-4xl"}`}
+          className={`ba-numero mt-1 break-words ${denso ? "text-2xl" : "text-3xl sm:text-4xl"}`}
           style={tom && tom !== "neutro" ? { color: "var(--ba-tom)" } : undefined}
           data-tom={tom}
         >
@@ -91,13 +93,13 @@ export function KpiAdmin({
   );
   if (onAbrir) {
     return (
-      <button type="button" onClick={onAbrir} className="ba-card" data-tom={tom} data-denso={denso || undefined} aria-busy={carregando}>
+      <button type="button" onClick={onAbrir} className={`ba-card text-left ${className}`} data-tom={tom} data-denso={denso || undefined} aria-busy={carregando}>
         {conteudo}
       </button>
     );
   }
   return (
-    <div className="ba-card" data-tom={tom} data-denso={denso || undefined} aria-busy={carregando}>
+    <div className={`ba-card ${className}`} data-tom={tom} data-denso={denso || undefined} aria-busy={carregando}>
       {conteudo}
     </div>
   );

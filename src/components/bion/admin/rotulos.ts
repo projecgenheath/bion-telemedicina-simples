@@ -12,8 +12,11 @@ export type Estado = { rotulo: string; tom: Tom };
 export function humanizar(valor: string | null | undefined): string {
   const t = String(valor ?? "").replace(/[_-]+/g, " ").trim();
   if (!t) return "—";
-  return t.charAt(0).toUpperCase() + t.slice(1).toLowerCase();
+  const frase = t.charAt(0).toUpperCase() + t.slice(1).toLowerCase();
+  return frase.replace(SIGLAS, (m) => m.toUpperCase());
 }
+/** Siglas que continuam em maiúsculas ao humanizar códigos (ex.: LGPD_COFRE_CONSULTADO). */
+const SIGLAS = /\b(lgpd|crm|pix|cnpj|cpf|llm|pdf|csv|ia|id)\b/gi;
 
 function buscar<T extends string>(mapa: Record<T, Estado>, valor: string | null | undefined): Estado {
   const e = (mapa as Record<string, Estado>)[String(valor ?? "")];

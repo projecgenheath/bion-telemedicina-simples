@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
-import { ChevronRight, Command, Inbox, PanelLeftClose, PanelLeftOpen, Search } from "lucide-react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
+import { ArrowLeft, ChevronRight, Inbox, PanelLeftClose, PanelLeftOpen, Search } from "lucide-react";
 import { SheetAdmin } from "./ui/SheetAdmin";
 import { useDensidadeAdmin, useLargo, usePreferenciaBool } from "./ui/preferencias";
+import { useAtalhoBusca } from "./ui/atalho";
 import type { Tom } from "./rotulos";
 import "./admin.css";
 
@@ -12,8 +13,16 @@ type Icone = ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
 export type ItemNavAdmin = { id: string; rotulo: string; icone: Icone; selo?: number; tomSelo?: Tom };
 export type GrupoNavAdmin = { rotulo: string; itens: ItemNavAdmin[] };
 export type Migalha = { rotulo: string; onClick?: () => void };
+/** Módulo aberto por cima do Comando (no celular vira tela cheia com "Voltar"). */
+export type ModuloAberto = { titulo: string; icone?: Icone; onVoltar: () => void };
+/** Id reservado: abre a Fila (painel lateral no desktop, painel da direita no celular). */
+export const ID_FILA = "fila";
 
 const PAINEIS = ["Conta", "Comando", "Fila"] as const;
+
+/** Quem está dentro da casca (Fila, Conta) pode fechar as camadas antes de navegar. */
+const CamadasCtx = createContext<{ fechar: () => void; abrirFila: () => void }>({ fechar: () => {}, abrirFila: () => {} });
+export const useCamadasAdmin = () => useContext(CamadasCtx);
 const EM_CAMPO = ["INPUT", "TEXTAREA", "SELECT"];
 const iniciais = (nome: string) =>
   nome
@@ -24,13 +33,15 @@ const iniciais = (nome: string) =>
     .join("");
 
 /**
- * Casca da Torre BION (PR 1: componente pronto, AINDA NÃO ligado às rotas).
+ * Casca da Torre BION — ligada ao layout autenticado só para o papel admin
+ * (via TorreAdmin). Nunca usa .bp-shell: sem a moldura de 430 px.
  *
  * Celular / tablet estreito (< 1024 px): tela cheia com carrossel nativo
  *   [Conta] ⟷ [Comando = children] ⟷ [Fila], abrindo no centro; pílula
  *   flutuante com os pontos + botão "Ir para…" (lançador). ←/→ no teclado.
+ *   Com `modulo`, o celular mostra o módulo em tela cheia com "Voltar".
  * Largo (≥ 1024 px): largura toda — trilho lateral de vidro (72 px, abre
- *   para 240 px), barra de comando com migalhas, busca (⌘K / Ctrl K), Fila
+ *   para 240 px), barra de comando com migalhas, busca (Ctrl K; ⌘K no Mac), Fila
  *   e conta (em painel lateral à direita) e o conteúdo ao lado.
  *
  * Só visual/navegação: quem usa decide o que é cada módulo (o admin tem
@@ -47,6 +58,8 @@ export function AdminShell({
   filaContagem = 0,
   onBuscar,
   acoesBarra,
+  modulo,
+  abrirNaFila = false,
   children,
 }: {
   grupos: GrupoNavAdmin[];
@@ -57,15 +70,39 @@ export function AdminShell({
   conta: ReactNode;
   fila: ReactNode;
   filaContagem?: number;
-  /** Substitui o lançador simples embutido (ex.: paleta cmdk no PR 2). */
+  /** Substitui o lançador embutido (ex.: futura busca de pessoas e consultas). */
   onBuscar?: () => void;
   acoesBarra?: ReactNode;
+  modulo?: ModuloAberto;
+  /** Celular: abre já no painel da Fila (ex.: veio de um módulo pelo lançador). */
+  abrirNaFila?: boolean;
   children: ReactNode;
 }) {
   const largo = useLargo();
+  const atalho = useAtalhoBusca();
+  const irParaPainel = useRef<((i: number) => void) | null>(null);
   const { densidade } = useDensidadeAdmin();
   const [lateral, setLateral] = useState<"conta" | "fila" | null>(null);
   const [lancador, setLancador] = useState(false);
+
+  // Trocou de módulo: fecha painel lateral e lançador (ajuste durante o render, sem efeito).
+  const [ativoAntes, setAtivoAntes] = useState(ativo);
+  if (ativo !== ativoAntes) {
+    setAtivoAntes(ativo);
+    setLateral(null);
+    setLancador(false);
+  }
+  const fecharCamadas = useCallback(() => {
+    setLateral(null);
+    setLancador(false);
+  }, []);
+  const abrirFila = useCallback(() => {
+    setLancador(false);
+    if (largo) setLateral("fila");
+    else if (irParaPainel.current) irParaPainel.current(2);
+    else onNavegar(ID_FILA); // celular dentro de um módulo: quem usa leva ao Comando já na Fila
+  }, [largo, onNavegar]);
+  const camadas = useMemo(() => ({ fechar: fecharCamadas, abrirFila }), [fecharCamadas, abrirFila]);
 
   const abrirBusca = useCallback(() => (onBuscar ? onBuscar() : setLancador(true)), [onBuscar]);
 
@@ -83,16 +120,28 @@ export function AdminShell({
 
   const navegar = (id: string) => {
     setLancador(false);
-    onNavegar(id);
+    if (id === ID_FILA) abrirFila();
+    else onNavegar(id);
   };
 
   const lancadorSheet = (
     <Lancador aberto={lancador} onFechar={() => setLancador(false)} grupos={grupos} ativo={ativo} onNavegar={navegar} />
   );
 
+  if (!largo && modulo) {
+    return (
+      <CamadasCtx.Provider value={camadas}>
+        <ModuloCelular modulo={modulo} densidade={densidade} onBuscar={abrirBusca} bloqueado={lancador}>
+          {children}
+        </ModuloCelular>
+        {lancadorSheet}
+      </CamadasCtx.Provider>
+    );
+  }
+
   if (!largo) {
     return (
-      <>
+      <CamadasCtx.Provider value={camadas}>
         <ShellCelular
           densidade={densidade}
           conta={conta}
@@ -100,15 +149,18 @@ export function AdminShell({
           filaContagem={filaContagem}
           bloqueado={lancador}
           onBuscar={abrirBusca}
+          controleRef={irParaPainel}
+          abrirNaFila={abrirNaFila}
         >
           {children}
         </ShellCelular>
         {lancadorSheet}
-      </>
+      </CamadasCtx.Provider>
     );
   }
 
   return (
+    <CamadasCtx.Provider value={camadas}>
     <div className="ba-app ba-ceu" data-densidade={densidade}>
       <a
         href="#ba-conteudo"
@@ -145,11 +197,14 @@ export function AdminShell({
               type="button"
               onClick={abrirBusca}
               className="ba-entrada !w-80 flex items-center gap-2 text-left ba-texto-3"
-              aria-label="Buscar ou ir para (Ctrl K)"
+              aria-label={`Buscar ou ir para (${atalho.falado})`}
+              aria-keyshortcuts="Control+K Meta+K"
             >
               <Search className="w-4 h-4" aria-hidden />
               <span className="flex-1">Buscar ou ir para…</span>
-              <kbd className="text-[11px] font-bold rounded-md px-1.5 py-0.5 ba-botao-secundario">⌘K</kbd>
+              <kbd className="text-[11px] font-bold rounded-md px-1.5 py-0.5 ba-botao-secundario" aria-hidden>
+                {atalho.curto}
+              </kbd>
             </button>
             <button
               type="button"
@@ -175,6 +230,7 @@ export function AdminShell({
       </SheetAdmin>
       {lancadorSheet}
     </div>
+    </CamadasCtx.Provider>
   );
 }
 
@@ -272,6 +328,8 @@ function ShellCelular({
   filaContagem,
   bloqueado,
   onBuscar,
+  controleRef,
+  abrirNaFila,
   children,
 }: {
   densidade: string;
@@ -280,21 +338,31 @@ function ShellCelular({
   filaContagem: number;
   bloqueado: boolean;
   onBuscar: () => void;
+  controleRef: React.RefObject<((i: number) => void) | null>;
+  abrirNaFila: boolean;
   children: ReactNode;
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  const [painel, setPainel] = useState(1);
+  const [painel, setPainel] = useState(abrirNaFila ? 2 : 1);
+  const inicial = useRef(abrirNaFila ? 2 : 1);
 
   const irPara = useCallback((i: number) => {
     const el = ref.current;
     if (el) el.scrollTo({ left: i * el.clientWidth, behavior: "smooth" });
   }, []);
 
-  // Abre no centro (Comando), como os apps do paciente e do médico.
+  useEffect(() => {
+    controleRef.current = irPara;
+    return () => {
+      controleRef.current = null;
+    };
+  }, [controleRef, irPara]);
+
+  // Abre no centro (Comando), como os apps do paciente e do médico (ou na Fila, se pedido).
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const pos = () => el.scrollTo({ left: el.clientWidth, behavior: "instant" as ScrollBehavior });
+    const pos = () => el.scrollTo({ left: inicial.current * el.clientWidth, behavior: "instant" as ScrollBehavior });
     pos();
     const raf = requestAnimationFrame(pos);
     return () => cancelAnimationFrame(raf);
@@ -360,7 +428,7 @@ function ShellCelular({
           ))}
           <span className="w-px h-5 bg-white/25 mx-1" aria-hidden />
           <button type="button" onClick={onBuscar} aria-label="Ir para… (busca e módulos)" className="ba-pilula-alvo">
-            <Command className="w-4 h-4 text-sky-300" aria-hidden />
+            <Search className="w-4 h-4 text-sky-300" aria-hidden />
           </button>
         </nav>
       ) : null}
@@ -368,7 +436,43 @@ function ShellCelular({
   );
 }
 
-/** Lançador simples (grade dos módulos + filtro). O PR 2 pode trocar por cmdk. */
+/** Celular: módulo em tela cheia por cima do Comando, com "Voltar" e "Ir para…". */
+function ModuloCelular({
+  modulo,
+  densidade,
+  onBuscar,
+  bloqueado,
+  children,
+}: {
+  modulo: ModuloAberto;
+  densidade: string;
+  onBuscar: () => void;
+  bloqueado: boolean;
+  children: ReactNode;
+}) {
+  const Icone = modulo.icone;
+  return (
+    <div className="ba-app ba-ceu" data-densidade={densidade}>
+      <div className="ba-coluna h-full flex flex-col" inert={bloqueado}>
+        <header className="ba-barra sticky top-0 z-20 flex items-center gap-2 px-3 pt-[max(0.5rem,env(safe-area-inset-top))] pb-2">
+          <button type="button" onClick={modulo.onVoltar} className="ba-icone-botao shrink-0" aria-label="Voltar ao Comando">
+            <ArrowLeft className="w-5 h-5" aria-hidden />
+          </button>
+          {Icone ? <Icone className="w-5 h-5 shrink-0 ba-texto-2" aria-hidden /> : null}
+          <h1 className="flex-1 min-w-0 text-base font-black truncate">{modulo.titulo}</h1>
+          <button type="button" onClick={onBuscar} className="ba-icone-botao shrink-0" aria-label="Ir para… (busca e módulos)">
+            <Search className="w-5 h-5" aria-hidden />
+          </button>
+        </header>
+        <main id="ba-conteudo" tabIndex={-1} className="flex-1 outline-none">
+          {children}
+        </main>
+      </div>
+    </div>
+  );
+}
+
+/** Lançador (grade dos módulos + filtro). Aberto pela pílula, pela barra ou por Ctrl K / ⌘K. */
 function Lancador({
   aberto,
   onFechar,
