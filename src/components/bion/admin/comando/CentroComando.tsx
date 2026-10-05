@@ -44,9 +44,9 @@ export function CentroComando() {
   const { sessao, consultas, medicos, pacientes, tickets } = useBion();
   const { agora, fila, filaPronta, repasses, reembolsos, atualizar, atualizando } = useDadosAdmin();
   const { fechar, abrirFila } = useCamadasAdmin();
-  const ir = (v: View) => {
+  const ir = (v: View, consulta?: string) => {
     fechar();
-    router.push(urlDa(v));
+    router.push(consulta ? `${urlDa(v)}?${consulta}` : urlDa(v));
   };
 
   const hoje = useMemo(() => resumoHoje(consultas, agora), [consultas, agora]);
@@ -289,7 +289,7 @@ export function CentroComando() {
             titulo="Reembolsos em análise"
             icone={Undo2}
             tom={reembolsos.dados?.total ? "atencao" : undefined}
-            acao={<AbrirModulo onClick={() => ir("admin-agendamentos")} rotulo="Abrir reembolsos em Agendamentos" />}
+            acao={<AbrirModulo onClick={() => ir("admin-agendamentos", "aba=reembolsos")} rotulo="Abrir reembolsos em Agendamentos" />}
           >
             {reembolsos.carregando ? (
               <div className="ba-esqueleto h-8 w-16" aria-hidden />

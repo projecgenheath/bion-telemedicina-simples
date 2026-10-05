@@ -180,7 +180,7 @@ export function montarFila(
         .join(" · "),
       chips: [estadoReembolso(r.status)],
       ts: Number.isFinite(ts) ? ts : undefined,
-      destino: "admin-agendamentos",
+      destino: "admin-agendamentos?aba=reembolsos",
     });
   }
 
