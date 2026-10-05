@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useVoltarFecha } from "./useVoltarFecha";
+import { useFocoDialogo } from "./useFocoDialogo";
 import { toast } from "sonner";
 import {
   ArrowLeft,
@@ -625,10 +627,14 @@ export function ChatBion({
 
   const opcoes = opcoesEtapas();
 
+  const dialogoRef = useRef<HTMLDivElement>(null);
+  useVoltarFecha(aberto, onFechar);
+  useFocoDialogo(aberto, onFechar, dialogoRef);
+
   if (!aberto) return null;
 
   return (
-    <div className="bpp-sobreposicao absolute inset-0 z-50 flex flex-col bp-painel" role="dialog" aria-modal="true" aria-label="Conversa com a BION IA">
+    <div ref={dialogoRef} className="bpp-sobreposicao absolute inset-0 z-50 flex flex-col bp-painel" role="dialog" aria-modal="true" aria-label="Conversa com a BION IA">
       <input
         ref={inputArquivoRef}
         type="file"

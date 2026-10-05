@@ -266,3 +266,75 @@
     align-items: start;
   }
 }
+
+/* ==================================================================== */
+/* Fase 2 — gestos e navegação (só no celular; tela larga ≥ 1024        */
+/* mantém o layout lado a lado da fase 1).                               */
+/* ==================================================================== */
+
+/* Carrossel: não deixa o overscroll virar "voltar página" do navegador */
+.bp-app-paciente .bpp-carrossel {
+  overscroll-behavior-x: contain;
+}
+
+/* Coluna central: snap vertical entre Início → Saúde → Exames */
+.bp-app-paciente .bpp-snap-y {
+  scroll-snap-type: y mandatory;
+  overscroll-behavior-y: contain;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.bp-app-paciente .bpp-snap-y::-webkit-scrollbar { display: none; }
+.bp-app-paciente .bpp-snap-y > .bpp-tela {
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  min-height: 100%;
+}
+
+/* Indicador lateral esmaece depois de uns segundos (como no médico) */
+@keyframes bpp-esmaecer {
+  0%, 60% { opacity: 1; }
+  100% { opacity: 0.25; }
+}
+.bp-app-paciente .bpp-indicador-secao {
+  animation: bpp-esmaecer 3.5s ease forwards;
+}
+.bp-app-paciente .bpp-indicador-secao:hover,
+.bp-app-paciente .bpp-indicador-secao:focus-within {
+  animation: none;
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bp-app-paciente .bpp-snap-y {
+    scroll-snap-type: y proximity;
+  }
+  .bp-app-paciente .bpp-indicador-secao {
+    animation: none;
+    opacity: 1;
+  }
+  .bp-app-paciente .bpp-dica {
+    transition: none;
+  }
+}
+
+/* Tela larga: sem pontinhos, sem snap, sem dica — layout da fase 1 */
+@media (min-width: 1024px) {
+  .bp-app-paciente .bpp-indicador,
+  .bp-app-paciente .bpp-indicador-secao,
+  .bp-app-paciente .bpp-dica {
+    display: none !important;
+  }
+  .bp-app-paciente .bpp-snap-y {
+    scroll-snap-type: none;
+  }
+  .bp-app-paciente .bpp-snap-y > .bpp-tela {
+    scroll-snap-align: none;
+    scroll-snap-stop: normal;
+    min-height: 0;
+  }
+  /* Seção 1 deixa de forçar 100svh (era para o snap no celular) */
+  .bp-app-paciente .bp-secao-1.bpp-tela {
+    min-height: auto;
+  }
+}

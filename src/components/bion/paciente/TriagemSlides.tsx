@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useVoltarFecha } from "./useVoltarFecha";
+import { useFocoDialogo } from "./useFocoDialogo";
 import { ArrowLeft, ArrowRight, Check, Sparkles, X } from "lucide-react";
 import { toast } from "sonner";
 import { useBion } from "@/lib/bion-store";
@@ -178,8 +180,12 @@ export function TriagemSlides({
     return Math.min(100, Math.round((n / ETAPAS_ANAMNESE.length) * 100));
   }, [idxServidor, respondidos, pronta]);
 
+  const dialogoRef = useRef<HTMLDivElement>(null);
+  useVoltarFecha(true, onFechar);
+  useFocoDialogo(true, onFechar, dialogoRef);
+
   return (
-    <div className="absolute inset-0 z-[70] flex flex-col bg-zinc-950 text-white" role="dialog" aria-modal="true" aria-label="Triagem">
+    <div ref={dialogoRef} className="absolute inset-0 z-[70] flex flex-col bg-zinc-950 text-white" role="dialog" aria-modal="true" aria-label="Triagem">
       <header className="px-4 pt-3 pb-2 flex items-center gap-3">
         <button type="button" onClick={onFechar} className="rounded-full p-2 bg-white/10" aria-label="Fechar">
           <X className="w-5 h-5" />

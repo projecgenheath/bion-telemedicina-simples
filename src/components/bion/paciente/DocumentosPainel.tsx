@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useVoltarFecha } from "./useVoltarFecha";
+import { useFocoDialogo } from "./useFocoDialogo";
 import {
   ArrowLeft,
   BadgeCheck,
@@ -49,18 +51,12 @@ function Visualizador({
   corpo: string[];
   onFechar: () => void;
 }) {
-  // A11Y (auditoria FASE 3): ESC fecha o documento — caminho de teclado
-  // equivalente ao clique no fundo escurecido e ao botão de fechar.
-  useEffect(() => {
-    const aoTeclar = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onFechar();
-    };
-    window.addEventListener("keydown", aoTeclar);
-    return () => window.removeEventListener("keydown", aoTeclar);
-  }, [onFechar]);
+  const dialogoRef = useRef<HTMLDivElement>(null);
+  useVoltarFecha(true, onFechar);
+  useFocoDialogo(true, onFechar, dialogoRef);
 
   return (
-    <div className="absolute inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label={`Documento: ${titulo}`}>
+    <div ref={dialogoRef} className="absolute inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label={`Documento: ${titulo}`}>
       {/* A11Y: fundo clicável agora é button real (tabIndex=-1 o mantém fora
           da ordem de tabulação — fechar por teclado é papel do ESC/botão). */}
       <button
@@ -99,7 +95,7 @@ function Visualizador({
 }
 
 export function DocumentosPainel() {
-  const { consultas, documentos, sessao, mensagens, enviarMensagem, marcarConversaLida } = useBion();
+  const { consultas, documentos, sessao, mensagens, enviarMensagem, marcarConversaLida, naoLidasMensagens } = useBion();
   const [consultaSelecionada, setConsultaSelecionada] = useState<string | null>(null);
   const [visualizando, setVisualizando] = useState<{ titulo: string; corpo: string[] } | null>(null);
   const [conversaAtiva, setConversaAtiva] = useState<string | null>(null);
@@ -273,7 +269,14 @@ export function DocumentosPainel() {
 
       {/* ------------------------------ Mensagens ------------------------------ */}
       <section aria-label="Mensagens com médicos" className="pt-2">
-        <h2 className="text-2xl font-black text-bion-ink dark:text-bion-paper">Mensagens</h2>
+        <h2 className="text-2xl font-black text-bion-ink dark:text-bion-paper inline-flex items-center gap-2">
+          Mensagens
+          {naoLidasMensagens > 0 ? (
+            <span className="min-w-5 h-5 px-1.5 rounded-full bg-rose-500 text-white text-xs font-black leading-5 text-center">
+              {naoLidasMensagens > 9 ? "9+" : naoLidasMensagens}
+            </span>
+          ) : null}
+        </h2>
         <p className="text-sm text-bion-ink/75 dark:text-bion-paper/75 mb-4">
           Converse com o médico da sua consulta — do agendamento até 30 dias depois dela.
         </p>
