@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useBion } from "@/lib/bion-store";
 import { AppShell } from "@/components/bion/telas/AppShell";
+import { TorreAdmin } from "@/components/bion/admin/TorreAdmin";
 import { TrocarSenhaObrigatoria } from "@/components/bion/telas/TrocarSenhaObrigatoria";
 import { TelaCarregando } from "@/components/bion/brand";
 import { SO_ADMIN, SO_CLINICA, SO_MEDICO, SO_PACIENTE, viewDoPath } from "@/lib/rotas";
@@ -49,6 +50,9 @@ export default function LayoutAutenticado({ children }: { children: React.ReactN
   // V4 — conta criada pela administração: troca de senha obrigatória antes
   // de qualquer navegação (a tela usa a própria sessão, já válida).
   if (precisaTrocarSenha) return <TrocarSenhaObrigatoria />;
+
+  // Administrador: casca própria (Torre BION). Paciente e médico seguem abaixo, sem mudança.
+  if (sessao.role === "admin") return <TorreAdmin>{children}</TorreAdmin>;
 
   // Paciente: nunca monta o AppShell antigo (sidebar/abas) — nem por um frame.
   if (destinoPaciente || rotaTelaCheia) {

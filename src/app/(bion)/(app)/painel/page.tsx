@@ -3,16 +3,14 @@
 import { Suspense, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useBion } from "@/lib/bion-store";
-import { AdminDashboard } from "@/components/bion/telas/Dashboards";
+import { CentroComando } from "@/components/bion/admin/comando/CentroComando";
 import { TelaCarregando } from "@/components/bion/brand";
 import { PosConsultaModal } from "@/components/bion/PosConsultaModal";
-import { urlDa, type View } from "@/lib/rotas";
 
 function ConteudoPainel() {
   const { sessao } = useBion();
   const router = useRouter();
   const parametros = useSearchParams();
-  const go = (v: View) => router.push(urlDa(v));
   const posConsulta = parametros.get("pos-consulta") === "1";
   // Paciente e médico têm app imersivo próprio em fullscreen; o painel
   // clássico do médico foi removido (não há mais ?legado=1).
@@ -29,7 +27,7 @@ function ConteudoPainel() {
 
   return (
     <>
-      {sessao.role === "admin" && <AdminDashboard go={go} />}
+      {sessao.role === "admin" && <CentroComando />}
 
       {posConsulta && (
         <PosConsultaModal
