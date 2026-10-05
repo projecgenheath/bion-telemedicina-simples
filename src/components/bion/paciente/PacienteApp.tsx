@@ -33,6 +33,7 @@ import { fmtCentavos, rotuloReembolso, usePreviaCancelamento } from "./usePrevia
 import { desistirRemarcacao, iniciarRemarcacaoComMulta, useRecarregarEstado } from "./useRemarcacaoComMulta";
 import { EtiquetaStatus, PedirReembolsoSheet } from "./PedirReembolsoSheet";
 import { GraficoLinha, type PontoGrafico } from "./GraficoLinha";
+import { CLASSE_ETIQUETA, etiquetaConsulta, type EtiquetaConsulta } from "./etiqueta-consulta";
 import { DetalheMedicao, type Detalhe } from "./DetalheMedicao";
 import dynamic from "next/dynamic";
 import "./paciente.css";
@@ -203,6 +204,17 @@ export function PacienteApp() {
 
   const salaAberta = proxima ? janelaSala(proxima.ts) : false;
 
+  /** Uma etiqueta só, a mais relevante agora (ver etiqueta-consulta.ts). */
+  const etiquetaDe = (c: Consulta) =>
+    etiquetaConsulta({
+      status: c.status,
+      pago: c.pago,
+      remarcacaoPendente: c.remarcacaoPendente,
+      salaAberta: janelaSala(c.ts),
+      triagem: statusTriagem(c.id),
+      triagemDisponivel: janelaTriagem(c),
+    });
+
   const consultaModal = modalConsulta ? consultas.find((c) => c.id === modalConsulta.id) : undefined;
   const medicoModal = acharMedicoDaConsulta(consultaModal, medicos);
 
@@ -372,26 +384,7 @@ export function PacienteApp() {
                     <span className="text-xs font-bold uppercase tracking-wider text-bion-ink/75 dark:text-bion-paper/75">
                       Próxima consulta
                     </span>
-                    <span className="flex items-center gap-1.5">
-                      {statusTriagem(proxima.id) === "feita" ? (
-                        <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-600/15 text-emerald-800 dark:text-emerald-200">
-                          Triagem feita
-                        </span>
-                      ) : statusTriagem(proxima.id) === "andamento" ? (
-                        <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-amber-500/15 text-amber-800 dark:text-amber-200">
-                          Triagem em andamento
-                        </span>
-                      ) : janelaTriagem(proxima) ? (
-                        <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-sky-500/15 text-sky-800 dark:text-sky-200">
-                          Triagem disponível
-                        </span>
-                      ) : null}
-                      {salaAberta ? (
-                        <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-700 text-white">Sala aberta</span>
-                      ) : (
-                        <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-bion-ink/8 dark:bg-white/10">Confirmada</span>
-                      )}
-                    </span>
+                    <EtiquetaEstado e={etiquetaDe(proxima)} />
                   </div>
                   <div className="text-xl font-bold">{proxima.especialidade}</div>
                   <div className="text-sm opacity-80">com {proxima.medico}</div>
@@ -458,9 +451,7 @@ export function PacienteApp() {
                               {c.data} · {c.hora}
                             </div>
                           </div>
-                          <span className="text-xs font-bold px-2 py-1 rounded-full bg-bion-ink/8 dark:bg-white/10 shrink-0">
-                            {st === "feita" ? "Triagem feita" : st === "andamento" ? "Triagem em andamento" : janelaTriagem(c) ? "Triagem disponível" : "Confirmada"}
-                          </span>
+                          <EtiquetaEstado e={etiquetaDe(c)} className="shrink-0" />
                         </div>
                       </button>
                       <div className="mt-3 flex flex-wrap gap-2">
@@ -504,7 +495,7 @@ export function PacienteApp() {
             ))}
 
             {/* Cartão único da BION IA: agendar (principal) + perguntar */}
-            <div className="bpp-cartao-ia mt-4 w-full rounded-3xl p-5 text-white relative overflow-hidden shadow-lg shadow-bion-ink/25 bg-gradient-to-br from-bion-deep via-bion-sea to-bion-ink">
+            <div className="bpp-cartao-ia mt-4 w-full rounded-3xl p-5 text-white relative overflow-hidden bg-gradient-to-br from-bion-deep via-bion-sea to-bion-ink">
               <span aria-hidden className="absolute -right-8 -top-10 w-40 h-40 rounded-full bg-white/10 blur-2xl" />
               <span aria-hidden className="absolute right-10 -bottom-10 w-28 h-28 rounded-full bg-sky-300/15 blur-2xl" />
               <div className="relative flex items-center gap-3">
@@ -1073,7 +1064,8 @@ function AcoesProximaConsulta({
   // Prioridade do botão principal: sala aberta → triagem pendente → sala de espera.
   const triagemPendente = triagem !== "feita" && triagemDisponivel;
   const principal = salaAberta ? "sala" : triagemPendente ? "triagem" : "espera";
-  const secundario = "inline-flex items-center gap-1.5 rounded-full px-3.5 py-2.5 text-xs font-bold";
+  const secundario =
+    "min-h-[52px] min-w-0 rounded-2xl px-1 py-2 inline-flex flex-col items-center justify-center gap-1 text-xs font-bold leading-none";
 
   return (
     <div className="mt-4">
@@ -1090,24 +1082,32 @@ function AcoesProximaConsulta({
           <Video className="w-4 h-4" aria-hidden /> Abrir sala de espera
         </button>
       )}
-      <div className="mt-2 flex flex-wrap items-center gap-2">
+      {/* Ações secundárias: botões iguais numa linha só (ícone em cima + uma palavra), alvo >= 52 px. */}
+      <div className={`bpp-acoes-sec mt-2 grid gap-2 ${principal === "triagem" ? "grid-cols-3" : "grid-cols-2"}`}>
         {principal === "triagem" ? (
-          <button type="button" onClick={onEntrar} className={`${secundario} bg-bion-ink/8 dark:bg-white/10`}>
-            <Video className="w-3.5 h-3.5" aria-hidden /> Sala de espera
+          <button type="button" onClick={onEntrar} aria-label="Abrir sala de espera" className={`${secundario} bpp-acao-sec`}>
+            <Video className="w-4 h-4" aria-hidden /> Sala
           </button>
         ) : null}
-        {triagem === "feita" ? (
-          <span className="inline-flex items-center gap-1.5 px-1 py-2 text-xs font-semibold text-emerald-800 dark:text-emerald-200">
-            Triagem enviada ao médico
-          </span>
-        ) : null}
-        <button type="button" onClick={onRemarcar} className={`${secundario} bg-bion-ink/8 dark:bg-white/10`}>
-          <RefreshCw className="w-3.5 h-3.5" aria-hidden /> Remarcar
+        <button type="button" onClick={onRemarcar} aria-label="Remarcar consulta" className={`${secundario} bpp-acao-sec`}>
+          <RefreshCw className="w-4 h-4" aria-hidden /> Remarcar
         </button>
-        <button type="button" onClick={onCancelar} className={`${secundario} bg-red-600/10 text-red-800 dark:bg-red-400/15 dark:text-red-300`}>
-          <X className="w-3.5 h-3.5" aria-hidden /> Cancelar
+        <button type="button" onClick={onCancelar} aria-label="Cancelar consulta" className={`${secundario} bpp-acao-cancelar`}>
+          <X className="w-4 h-4" aria-hidden /> Cancelar
         </button>
       </div>
+      {triagem === "feita" ? (
+        <p className="mt-2 text-xs font-semibold text-emerald-800 dark:text-emerald-200">Triagem enviada ao médico</p>
+      ) : null}
     </div>
+  );
+}
+
+/** Etiqueta única de estado da consulta. */
+function EtiquetaEstado({ e, className = "" }: { e: EtiquetaConsulta; className?: string }) {
+  return (
+    <span className={`text-xs font-bold px-2.5 py-1 rounded-full whitespace-nowrap ${CLASSE_ETIQUETA[e.tom]} ${className}`}>
+      {e.texto}
+    </span>
   );
 }

@@ -11,12 +11,14 @@
 
 /* ---------------------------- tokens ------------------------------- */
 .bp-app-paciente {
-  /* Seção 1 — hero claro */
+  /* Seção 1 — hero: branco → azul muito claro, com um brilho azul
+     suave no canto (o Clean deixa de ser branco/cinza chapado) */
   --bpp-s1-topo: #ffffff;
-  --bpp-s1-base: #f2f6fc;
-  /* Seção 2 — do claro ao azul (texto solto só no topo claro) */
-  --bpp-s2-topo: #f2f6fc;
-  --bpp-s2-meio: #d5e1f2;
+  --bpp-s1-brilho: #dce9fc;
+  --bpp-s1-base: #e6effc;
+  /* Seção 2 — do azul claro ao marinho (texto solto só no topo claro) */
+  --bpp-s2-topo: #e6effc;
+  --bpp-s2-meio: #c9dbf4;
   --bpp-s2-azul: #5b7fb8;
   --bpp-s2-base: #1d4a8a;
   /* Seção 3 — começa já no azul escuro: texto branco ≥ 4,5:1 desde o topo */
@@ -25,9 +27,9 @@
   --bpp-s3-fundo: #10294f;
   --bpp-s3-base: #0a1f44;
   /* Painéis laterais (perfil / documentos / sobreposições) */
-  --bpp-painel-topo: #ffffff;
-  --bpp-painel-meio: #eef4fb;
-  --bpp-painel-base: #e2ecf9;
+  --bpp-painel-topo: #fbfdff;
+  --bpp-painel-meio: #ebf2fc;
+  --bpp-painel-base: #dce8f9;
   /* Vidro: mais sólido que o base para o texto não perder contraste
      quando o cartão passa sobre o azul */
   --bpp-vidro: rgba(255, 255, 255, 0.84);
@@ -42,6 +44,16 @@
   --bpp-grafico-eixo-marinho: rgba(255, 255, 255, 0.8);
   /* Placeholder de campos */
   --bpp-placeholder: rgba(10, 31, 68, 0.62);
+  /* Cartão da BION IA: brilho em volta (só decoração, sem texto) */
+  --bpp-ia-brilho: rgba(56, 132, 255, 0.42);
+  --bpp-ia-aro: rgba(147, 197, 253, 0.55);
+  /* Ações secundárias da próxima consulta */
+  --bpp-sec-fundo: rgba(10, 31, 68, 0.07);
+  --bpp-sec-borda: rgba(10, 31, 68, 0.14);
+  --bpp-sec-texto: #0a1f44;
+  --bpp-cancelar-fundo: rgba(220, 38, 38, 0.06);
+  --bpp-cancelar-borda: rgba(185, 28, 28, 0.28);
+  --bpp-cancelar-texto: #991b1b;
 }
 .dark .bp-app-paciente {
   --bpp-s1-topo: #000000;
@@ -67,6 +79,15 @@
   --bpp-grafico-linha-marinho: #9ac1f4;
   --bpp-grafico-eixo-marinho: rgba(255, 255, 255, 0.8);
   --bpp-placeholder: rgba(242, 246, 252, 0.62);
+  --bpp-s1-brilho: #03101f;
+  --bpp-ia-brilho: rgba(59, 130, 246, 0.34);
+  --bpp-ia-aro: rgba(147, 197, 253, 0.35);
+  --bpp-sec-fundo: rgba(255, 255, 255, 0.08);
+  --bpp-sec-borda: rgba(255, 255, 255, 0.16);
+  --bpp-sec-texto: #f2f6fc;
+  --bpp-cancelar-fundo: rgba(248, 113, 113, 0.1);
+  --bpp-cancelar-borda: rgba(252, 165, 165, 0.3);
+  --bpp-cancelar-texto: #fca5a5;
 }
 
 /* ------------------- fundos (movidos do globals.css) ---------------- */
@@ -74,7 +95,9 @@
   background: linear-gradient(180deg, var(--bpp-painel-topo, #ffffff) 0%, var(--bpp-painel-meio, #eef4fb) 60%, var(--bpp-painel-base, #e2ecf9) 100%);
 }
 .bp-secao-1 {
-  background: linear-gradient(180deg, var(--bpp-s1-topo) 0%, var(--bpp-s1-base) 100%);
+  background:
+    radial-gradient(120% 55% at 100% 0%, var(--bpp-s1-brilho, #dce9fc) 0%, transparent 70%),
+    linear-gradient(180deg, var(--bpp-s1-topo) 0%, var(--bpp-s1-base) 100%);
 }
 .bp-secao-2 {
   background: linear-gradient(180deg, var(--bpp-s2-topo) 0%, var(--bpp-s2-meio) 45%, var(--bpp-s2-azul) 80%, var(--bpp-s2-base) 100%);
@@ -96,6 +119,57 @@
   color: var(--bpp-placeholder);
 }
 
+/* ---------------- cartão da BION IA: o destaque do Início ------------ */
+.bp-app-paciente .bpp-cartao-ia {
+  box-shadow:
+    0 0 0 1px var(--bpp-ia-aro),
+    0 14px 36px -10px var(--bpp-ia-brilho),
+    0 0 44px -6px var(--bpp-ia-brilho),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22);
+}
+/* Reflexo que passa uma vez pelo cartão ao abrir o Início */
+.bp-app-paciente .bpp-cartao-ia::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(110deg, transparent 30%, rgba(255, 255, 255, 0.16) 48%, transparent 66%);
+  transform: translateX(-120%);
+  animation: bpp-reflexo 1.6s ease-out 0.5s 1 both;
+}
+@keyframes bpp-reflexo {
+  to { transform: translateX(120%); }
+}
+
+/* ---------------- ações secundárias da próxima consulta ------------- */
+.bp-app-paciente .bpp-acao-sec,
+.bp-app-paciente .bpp-acao-cancelar {
+  border: 1px solid;
+  transition: background-color 0.15s ease, transform 0.15s ease;
+}
+.bp-app-paciente .bpp-acao-sec {
+  background: var(--bpp-sec-fundo);
+  border-color: var(--bpp-sec-borda);
+  color: var(--bpp-sec-texto);
+}
+.bp-app-paciente .bpp-acao-cancelar {
+  background: var(--bpp-cancelar-fundo);
+  border-color: var(--bpp-cancelar-borda);
+  color: var(--bpp-cancelar-texto);
+}
+.bp-app-paciente .bpp-acao-sec:active,
+.bp-app-paciente .bpp-acao-cancelar:active {
+  transform: scale(0.97);
+}
+/* Com largura sobrando (≥ 480 px), ícone ao lado da palavra */
+@media (min-width: 480px) {
+  .bp-app-paciente .bpp-acoes-sec > button {
+    flex-direction: row;
+    gap: 0.375rem;
+    min-height: 44px;
+  }
+}
+
 /* Sem backdrop-filter (aparelhos fracos / navegadores antigos): vidro opaco */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .bp-app-paciente .bp-glass { background: rgba(255, 255, 255, 0.94); }
@@ -108,9 +182,12 @@
   .bp-app-paciente .bp-acao:hover,
   .bp-app-paciente .bp-acao:active,
   .bp-app-paciente [class*="active:scale"]:active,
-  .bp-app-paciente [class*="hover:-translate"]:hover {
+  .bp-app-paciente [class*="hover:-translate"]:hover,
+  .bp-app-paciente .bpp-acao-sec:active,
+  .bp-app-paciente .bpp-acao-cancelar:active {
     transform: none;
   }
+  .bp-app-paciente .bpp-cartao-ia::after { animation: none; display: none; }
 }
 
 /* --------------------------- impressão ----------------------------- */
@@ -130,7 +207,7 @@
 /* < 1024 px: carrossel com gestos exatamente como antes.               */
 /* ==================================================================== */
 @media (min-width: 1024px) {
-  html body:has(.bp-app-paciente.bp-shell) { background: #ffffff; }
+  html body:has(.bp-app-paciente.bp-shell) { background: #eaf1fc; }
   html.dark body:has(.bp-app-paciente.bp-shell) { background: #000000; }
 
   .bp-app-paciente.bp-shell {

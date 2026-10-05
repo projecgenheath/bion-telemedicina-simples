@@ -116,6 +116,7 @@ for (const modo of ["Clean", "Dark"] as const) {
   // Fundos soltos onde há texto escuro/claro direto (topo das seções e painéis)
   const fundosTexto: [string, RGB][] = [
     ["seção 1 (topo)", cheio("bpp-s1-topo")],
+    ["seção 1 (brilho azul do canto)", cheio("bpp-s1-brilho")],
     ["seção 1 (base)", cheio("bpp-s1-base")],
     ["seção 2 (topo, título)", cheio("bpp-s2-topo")],
     ["seção 2 (45%, subtítulo)", cheio("bpp-s2-meio")],
@@ -131,6 +132,7 @@ for (const modo of ["Clean", "Dark"] as const) {
   // Cartões de vidro sobre TODOS os fundos por onde podem passar
   const baseCartao: [string, RGB][] = [
     ["seção 1", cheio("bpp-s1-base")],
+    ["seção 1 brilho", cheio("bpp-s1-brilho")],
     ["seção 2 meio", cheio("bpp-s2-meio")],
     ["seção 2 azul", cheio("bpp-s2-azul")],
     ["seção 2 base", cheio("bpp-s2-base")],
@@ -160,6 +162,13 @@ for (const modo of ["Clean", "Dark"] as const) {
       par(modo, `IMC "Abaixo do peso" sky-800 (${onde})`, tw("sky-800"), g);
       par(modo, `chip neutro bion-ink/8 (${onde})`, texto, mix(INK, 0.08, g));
     }
+    // Ações secundárias da próxima consulta (Sala / Remarcar / Cancelar)
+    const sec = sobre(c("bpp-sec-fundo"), g);
+    par(modo, `ação secundária · texto (${onde})`, sobre(c("bpp-sec-texto"), sec), sec);
+    par(modo, `ação secundária · borda (${onde})`, sobre(c("bpp-sec-borda"), g), g, 1);
+    const canc = sobre(c("bpp-cancelar-fundo"), g);
+    par(modo, `ação Cancelar · texto (${onde})`, sobre(c("bpp-cancelar-texto"), canc), canc);
+    par(modo, `ação Cancelar · ícone (${onde})`, sobre(c("bpp-cancelar-texto"), canc), canc, GRAFICO);
     par(modo, `gráfico: linha (${onde})`, sobre(c("bpp-grafico-linha"), g), g, GRAFICO);
     par(modo, `gráfico: diastólica (${onde})`, sobre(c("bpp-grafico-alerta"), g), g, GRAFICO);
     par(modo, `gráfico: eixo e rótulos (${onde})`, sobre(c("bpp-grafico-eixo"), g), g, TEXTO);
@@ -204,6 +213,11 @@ for (const modo of ["Clean", "Dark"] as const) {
     par(modo, `cartão BION IA (${onde}) · barra "Pergunte" white/85 sobre white/12`, mix(BRANCO, 0.85, mix(BRANCO, 0.12, bg)), mix(BRANCO, 0.12, bg));
   }
   par(modo, 'cartão BION IA · botão "Agendar" (ink sobre branco)', INK, BRANCO);
+  // Reflexo que passa uma vez (white/16) por cima do texto do cartão
+  for (const [onde, bg] of [["deep", DEEP], ["sea", SEA]] as [string, RGB][]) {
+    const reflexo = mix(BRANCO, 0.16, bg);
+    par(modo, `cartão BION IA (${onde}) · texto white/85 sob o reflexo`, mix(BRANCO, 0.85, reflexo), reflexo);
+  }
 
   // Pontinhos de navegação: pílula zinc-950/85 sobre o fundo mais claro e o mais escuro
   for (const [onde, fundo] of [["fundo claro", cheio("bpp-s1-topo")], ["fundo escuro", cheio("bpp-s3-base")]] as [string, RGB][]) {
