@@ -162,7 +162,7 @@ export function montarFila(
       titulo: m.nome,
       detalhe: [m.especialidade, m.crm ? `CRM ${m.crm}` : ""].filter(Boolean).join(" · "),
       chips: [{ rotulo: "Em validação", tom: "atencao" }],
-      destino: "admin-medicos",
+      destino: `admin-medicos?aba=validacao&medico=${encodeURIComponent(m.id)}`,
     });
   }
 

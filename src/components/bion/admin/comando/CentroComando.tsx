@@ -195,7 +195,7 @@ export function CentroComando() {
             titulo="Médicos"
             icone={Stethoscope}
             tom={med.validacao ? "atencao" : undefined}
-            acao={<AbrirModulo onClick={() => ir("admin-medicos")} rotulo="Abrir Médicos" />}
+            acao={<AbrirModulo onClick={() => ir("admin-medicos", med.validacao ? "aba=validacao" : undefined)} rotulo={med.validacao ? "Validar médicos" : "Abrir Médicos"} />}
           >
             <div className="ba-numero text-3xl">{med.ativos}</div>
             <p className="text-xs ba-texto-2">ativos</p>
