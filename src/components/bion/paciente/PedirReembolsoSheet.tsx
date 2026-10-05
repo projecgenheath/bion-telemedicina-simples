@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { useVoltarFecha } from "./useVoltarFecha";
 import { useFocoDialogo } from "./useFocoDialogo";
+import { EstadoCarregando, EstadoErro } from "./EstadosPaciente";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { fmtTicketData, type Consulta } from "@/lib/bion-tipos";
@@ -60,14 +61,14 @@ export function PedirReembolsoSheet({ consulta, onFechar }: { consulta: Consulta
   useFocoDialogo(true, fechar, dialogoRef);
 
   return (
-    <div ref={dialogoRef} className="absolute inset-0 z-[80] flex items-end justify-center" role="dialog" aria-modal="true" aria-labelledby="titulo-sheet-reembolso">
-      <button type="button" className="absolute inset-0 bg-black/80" aria-label="Fechar" onClick={fechar} />
-      <div className="relative w-full max-w-lg max-h-[92svh] overflow-y-auto rounded-t-3xl bg-zinc-950 text-white border-t border-white/10 px-5 pt-3 pb-8 shadow-[0_-12px_40px_rgba(0,0,0,0.55)]">
-        <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-white/25" aria-hidden />
+    <div ref={dialogoRef} className="bpp-sheet-raiz absolute inset-0 z-[80] flex items-end justify-center" role="dialog" aria-modal="true" aria-labelledby="titulo-sheet-reembolso">
+      <button type="button" className="absolute inset-0 bpp-sheet-veu" aria-label="Fechar" onClick={fechar} />
+      <div className="bpp-sheet-painel relative w-full max-w-lg max-h-[92svh] overflow-y-auto rounded-t-3xl bpp-sheet border-t bpp-sheet-borda px-5 pt-3 pb-8 shadow-[0_-12px_40px_rgba(2,8,26,0.35)]">
+        <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bpp-sheet-alca" aria-hidden />
         <h2 id="titulo-sheet-reembolso" className="text-lg font-bold">
           {temPedido ? "Pedido de reembolso" : "Pedir reembolso"}
         </h2>
-        <p className="text-sm text-white/60 mt-1">
+        <p className="text-sm bpp-sheet-suave mt-1">
           {consulta.especialidade} com {consulta.medico} · {consulta.data} às {consulta.hora}
         </p>
 
@@ -75,9 +76,9 @@ export function PedirReembolsoSheet({ consulta, onFechar }: { consulta: Consulta
           <DetalhesPedido consultaId={consulta.id} onFechar={fechar} />
         ) : (
           <>
-            <div className="mt-4 rounded-2xl border border-white/10 bg-zinc-900 p-4 text-sm text-white/75">
+            <div className="mt-4 rounded-2xl border bpp-sheet-borda bpp-sheet-cartao p-4 text-sm bpp-sheet-suave">
               <p>
-                O médico ficou na sala e a consulta foi registrada como <strong className="text-white">falta</strong>, por isso não há
+                O médico ficou na sala e a consulta foi registrada como <strong className="bpp-sheet-forte">falta</strong>, por isso não há
                 reembolso automático.
               </p>
               <p className="mt-2">
@@ -85,13 +86,13 @@ export function PedirReembolsoSheet({ consulta, onFechar }: { consulta: Consulta
                 {consulta.valor ? ` (${consulta.valor})` : ""} volta pelo mesmo meio de pagamento. Se for negado, a decisão é definitiva.
               </p>
               {prazo ? (
-                <p className="mt-2 text-xs text-white/70">
+                <p className="mt-2 text-xs bpp-sheet-suave">
                   {prazoAberto ? `Prazo para pedir: até ${fmtTicketData(prazo)} (horário de Brasília).` : "O prazo de 7 dias para pedir reembolso já terminou."}
                 </p>
               ) : null}
             </div>
 
-            <label htmlFor="justificativa-reembolso" className="block text-xs font-bold mt-4 mb-2 text-white/80">
+            <label htmlFor="justificativa-reembolso" className="block text-xs font-bold mt-4 mb-2 bpp-sheet-suave">
               Justificativa
             </label>
             <textarea
@@ -99,26 +100,26 @@ export function PedirReembolsoSheet({ consulta, onFechar }: { consulta: Consulta
               value={justificativa}
               onChange={(e) => setJustificativa(e.target.value.slice(0, JUSTIFICATIVA_MAX + 200))}
               disabled={!prazoAberto || enviando}
-              className="w-full rounded-xl border border-white/15 bg-zinc-900 p-3 text-sm text-white placeholder:text-white/60 disabled:opacity-50"
+              className="w-full rounded-xl border bpp-sheet-borda p-3 text-sm bpp-sheet-campo disabled:opacity-50"
               rows={5}
               placeholder="Conte o que aconteceu (ex.: problema de conexão, emergência…)"
               aria-describedby="contador-justificativa"
             />
             <div id="contador-justificativa" className="mt-1 flex justify-between text-xs" aria-live="polite">
-              <span className={tamanho > 0 && !valida ? "text-amber-300" : "text-white/70"}>
+              <span className={tamanho > 0 && !valida ? "text-amber-800 dark:text-amber-300" : "bpp-sheet-suave"}>
                 {tamanho < JUSTIFICATIVA_MIN
                   ? `Mínimo de ${JUSTIFICATIVA_MIN} caracteres`
                   : tamanho > JUSTIFICATIVA_MAX
                     ? `Máximo de ${JUSTIFICATIVA_MAX} caracteres`
                     : "Tudo certo"}
               </span>
-              <span className={tamanho > JUSTIFICATIVA_MAX ? "text-amber-300" : "text-white/70"}>
+              <span className={tamanho > JUSTIFICATIVA_MAX ? "text-amber-800 dark:text-amber-300" : "bpp-sheet-suave"}>
                 {tamanho}/{JUSTIFICATIVA_MAX}
               </span>
             </div>
 
             {erroEnvio ? (
-              <div className="mt-3 rounded-2xl border border-red-400/30 bg-red-500/10 p-3 text-sm text-red-100" role="alert">
+              <div className="mt-3 rounded-2xl border border-red-400/30 bg-red-500/10 p-3 text-sm text-red-900 dark:text-red-100" role="alert">
                 {erroEnvio}
               </div>
             ) : null}
@@ -128,7 +129,7 @@ export function PedirReembolsoSheet({ consulta, onFechar }: { consulta: Consulta
                 type="button"
                 onClick={fechar}
                 disabled={enviando}
-                className="flex-1 py-3 rounded-xl border border-white/15 text-sm font-semibold disabled:opacity-40"
+                className="bpp-toque flex-1 py-3 rounded-xl border bpp-sheet-borda text-sm font-semibold disabled:opacity-40"
               >
                 Voltar
               </button>
@@ -136,7 +137,7 @@ export function PedirReembolsoSheet({ consulta, onFechar }: { consulta: Consulta
                 type="button"
                 onClick={() => void enviar()}
                 disabled={!valida || !prazoAberto || enviando}
-                className="flex-1 py-3 rounded-xl bg-sky-500 text-zinc-950 text-sm font-bold disabled:opacity-40 inline-flex items-center justify-center gap-2"
+                className="bpp-toque flex-1 py-3 rounded-xl bpp-sheet-primario text-sm font-bold disabled:opacity-40 inline-flex items-center justify-center gap-2"
               >
                 {enviando ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                 Enviar pedido
@@ -155,71 +156,66 @@ function DetalhesPedido({ consultaId, onFechar }: { consultaId: string; onFechar
   return (
     <>
       {carregando ? (
-        <div className="mt-4 rounded-2xl border border-white/10 bg-zinc-900 p-4 text-sm text-white/70 inline-flex w-full items-center gap-2" role="status">
-          <Loader2 className="w-4 h-4 animate-spin" /> Carregando o pedido…
-        </div>
+        <EstadoCarregando texto="Carregando o pedido…" superficie="janela" className="mt-4" />
       ) : erro || !r ? (
-        <div className="mt-4 rounded-2xl border border-red-400/30 bg-red-500/10 p-4 text-sm" role="alert">
-          <p className="text-red-100">{erro ?? "Pedido de reembolso não encontrado."}</p>
-          <button type="button" onClick={recarregar} className="mt-3 rounded-full px-3 py-1.5 text-xs font-bold bg-white/10">
-            Tentar de novo
-          </button>
-        </div>
+        <EstadoErro
+          texto={erro ?? "Pedido de reembolso não encontrado."}
+          onTentarDeNovo={recarregar}
+          superficie="janela"
+          className="mt-4"
+        />
       ) : (
         <div className="mt-4 space-y-3 text-sm">
-          <div className="rounded-2xl border border-white/10 bg-zinc-900 p-4">
+          <div className="rounded-2xl border bpp-sheet-borda bpp-sheet-cartao p-4">
             <div className="flex items-center justify-between gap-2">
-              <span className="text-xs font-bold uppercase tracking-wider text-white/70">Status</span>
+              <span className="text-xs font-bold uppercase tracking-wider bpp-sheet-suave">Status</span>
               <EtiquetaStatus status={r.status} />
             </div>
-            <ul className="mt-3 space-y-1 text-white/75">
+            <ul className="mt-3 space-y-1 bpp-sheet-suave">
               <li>
-                Valor: <strong className="text-white">{fmtCentavos(r.valorCentavos)}</strong>
+                Valor: <strong className="bpp-sheet-forte">{fmtCentavos(r.valorCentavos)}</strong>
               </li>
               <li>Pedido em {fmtTicketData(r.criadoEm)}</li>
               {r.decididoEm ? <li>Decidido em {fmtTicketData(r.decididoEm)}</li> : null}
             </ul>
           </div>
-          <div className="rounded-2xl border border-white/10 bg-zinc-900 p-4">
-            <span className="text-xs font-bold uppercase tracking-wider text-white/70">Sua justificativa</span>
-            <p className="mt-2 whitespace-pre-wrap text-white/85">{r.justificativa || "—"}</p>
+          <div className="rounded-2xl border bpp-sheet-borda bpp-sheet-cartao p-4">
+            <span className="text-xs font-bold uppercase tracking-wider bpp-sheet-suave">Sua justificativa</span>
+            <p className="mt-2 whitespace-pre-wrap bpp-sheet-suave">{r.justificativa || "—"}</p>
           </div>
           {r.respostaAdmin ? (
             <div
               className={`rounded-2xl border p-4 ${
-                r.status === "negado" ? "border-red-400/30 bg-red-500/10" : "border-white/10 bg-zinc-900"
+                r.status === "negado" ? "border-red-400/30 bg-red-500/10" : "bpp-sheet-borda bpp-sheet-cartao"
               }`}
             >
-              <span className="text-xs font-bold uppercase tracking-wider text-white/70">Resposta da equipe BION</span>
-              <p className="mt-2 whitespace-pre-wrap text-white/85">{r.respostaAdmin}</p>
+              <span className="text-xs font-bold uppercase tracking-wider bpp-sheet-suave">Resposta da equipe BION</span>
+              <p className="mt-2 whitespace-pre-wrap bpp-sheet-suave">{r.respostaAdmin}</p>
             </div>
           ) : null}
           {r.status === "negado" ? (
-            <p className="text-xs text-white/70">A decisão é definitiva e não é possível fazer um novo pedido para esta consulta.</p>
+            <p className="text-xs bpp-sheet-suave">A decisão é definitiva e não é possível fazer um novo pedido para esta consulta.</p>
           ) : r.status === "em_analise" ? (
-            <p className="text-xs text-white/70">Você será avisado quando a equipe decidir.</p>
+            <p className="text-xs bpp-sheet-suave">Você será avisado quando a equipe decidir.</p>
           ) : null}
         </div>
       )}
-      <button type="button" onClick={onFechar} className="mt-5 w-full py-3 rounded-xl border border-white/15 text-sm font-semibold">
+      <button type="button" onClick={onFechar} className="mt-5 w-full py-3 rounded-xl border bpp-sheet-borda text-sm font-semibold">
         Fechar
       </button>
     </>
   );
 }
 
-export function EtiquetaStatus({ status, claro = false }: { status: string; claro?: boolean }) {
+export function EtiquetaStatus({ status }: { status: string; claro?: boolean }) {
+  // Fase 3: as janelas seguem o tema (Clean/Dark), então a etiqueta usa
+  // sempre o par claro/escuro — o antigo `claro` ficou só por compatibilidade.
   const rotulo = rotuloReembolsoManual(status);
-  const cor = claro
-    ? rotulo.tom === "ok"
+  const cor =
+    rotulo.tom === "ok"
       ? "bg-emerald-600/15 text-emerald-800 dark:text-emerald-200"
       : rotulo.tom === "erro"
         ? "bg-red-600/10 text-red-800 dark:bg-red-400/15 dark:text-red-300"
-        : "bg-sky-500/15 text-sky-800 dark:text-sky-200"
-    : rotulo.tom === "ok"
-      ? "bg-emerald-500/15 text-emerald-200"
-      : rotulo.tom === "erro"
-        ? "bg-red-500/15 text-red-200"
-        : "bg-sky-500/15 text-sky-200";
+        : "bg-sky-500/15 text-sky-800 dark:text-sky-200";
   return <span className={`text-xs font-bold px-2 py-1 rounded-full text-right ${cor}`}>{rotulo.texto}</span>;
 }

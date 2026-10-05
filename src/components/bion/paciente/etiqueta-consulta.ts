@@ -16,7 +16,7 @@
 
 export type StatusTriagem = "feita" | "andamento" | "nao_iniciada";
 
-export type TomEtiqueta = "pagamento" | "sala" | "remarcacao" | "triagem" | "ok";
+export type TomEtiqueta = "pagamento" | "sala" | "remarcacao" | "triagem" | "ok" | "neutro";
 
 export type EtiquetaConsulta = { texto: string; tom: TomEtiqueta };
 
@@ -52,4 +52,29 @@ export const CLASSE_ETIQUETA: Record<TomEtiqueta, string> = {
   remarcacao: "bg-sky-500/15 text-sky-800 dark:text-sky-200",
   triagem: "bg-amber-500/15 text-amber-800 dark:text-amber-200",
   ok: "bg-emerald-600/15 text-emerald-800 dark:text-emerald-200",
+  neutro: "bg-bion-ink/8 text-bion-ink dark:bg-white/10 dark:text-bion-paper",
 };
+
+/**
+ * Rótulo de status para LISTAS (histórico do Perfil, "Ver tudo").
+ * Antes, qualquer status fora de concluída/cancelada aparecia como
+ * "Confirmada" — inclusive consulta sem pagamento ou sem triagem.
+ */
+export function rotuloHistorico(status: string, pago?: boolean): EtiquetaConsulta {
+  switch (status) {
+    case "concluida":
+      return { texto: "Realizada", tom: "ok" };
+    case "cancelada":
+      return { texto: "Cancelada", tom: "neutro" };
+    case "em_espera":
+      return { texto: "Aguardando pagamento", tom: "pagamento" };
+    case "pendente_anamnese":
+      return pago === false ? { texto: "Aguardando pagamento", tom: "pagamento" } : { texto: "Falta a triagem", tom: "triagem" };
+    case "aguardando_reagendamento":
+      return { texto: "Aguardando reagendamento", tom: "pagamento" };
+    case "confirmada":
+      return pago === false ? { texto: "Aguardando pagamento", tom: "pagamento" } : { texto: "Confirmada", tom: "ok" };
+    default:
+      return { texto: "Agendada", tom: "neutro" };
+  }
+}

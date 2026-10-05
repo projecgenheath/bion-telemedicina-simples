@@ -17,11 +17,13 @@ import {
 } from "lucide-react";
 import { useBion } from "@/lib/bion-store";
 import { toast } from "sonner";
+import { EstadoVazio } from "./EstadosPaciente";
 
 /**
  * Página 4 do app do paciente (gesto direita → esquerda):
- *  1. Documentos por consulta realizada (atestados, receitas, pedidos de
- *     exames e prontuário) com visualização e impressão;
+ *  1. Documentos por consulta REALIZADA (status "concluida"; antes entravam
+ *     também as confirmadas, ainda por acontecer) — atestados, receitas,
+ *     pedidos de exames e prontuário, com visualização e impressão;
  *  2. Ao rolar para baixo: mensagens com os médicos das consultas — aberta do
  *     agendamento até 30 dias depois da consulta (validado também no servidor).
  */
@@ -45,15 +47,24 @@ const ROTULO_DOC = {
 function Visualizador({
   titulo,
   corpo,
+  imprimir = false,
   onFechar,
 }: {
   titulo: string;
   corpo: string[];
+  /** Fase 3: o botão de impressora da lista abre o documento JÁ imprimindo. */
+  imprimir?: boolean;
   onFechar: () => void;
 }) {
   const dialogoRef = useRef<HTMLDivElement>(null);
   useVoltarFecha(true, onFechar);
   useFocoDialogo(true, onFechar, dialogoRef);
+  useEffect(() => {
+    if (!imprimir) return;
+    // Espera o documento pintar (a regra @media print só mostra .bp-impressao).
+    const id = window.setTimeout(() => window.print(), 250);
+    return () => window.clearTimeout(id);
+  }, [imprimir]);
 
   return (
     <div ref={dialogoRef} className="absolute inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label={`Documento: ${titulo}`}>
@@ -64,21 +75,21 @@ function Visualizador({
         tabIndex={-1}
         aria-hidden="true"
         aria-label="Fechar documento"
-        className="absolute inset-0 bg-bion-ink/60 backdrop-blur-sm cursor-default"
+        className="bpp-veu-doc absolute inset-0 bg-bion-ink/60 backdrop-blur-sm cursor-default"
         onClick={onFechar}
       />
-      <div className="relative w-full max-w-lg max-h-[88vh] overflow-y-auto bp-coluna rounded-3xl bg-white dark:bg-bion-night p-6 shadow-2xl">
+      <div className="bpp-surgir relative w-full max-w-lg max-h-[88vh] overflow-y-auto bp-coluna rounded-3xl bg-white dark:bg-bion-night p-6 shadow-2xl">
         <div className="flex items-start justify-between gap-3 mb-4">
           <h3 className="text-lg font-bold text-bion-ink dark:text-bion-paper">{titulo}</h3>
           <div className="flex gap-2 shrink-0">
             <button type="button"
               onClick={() => window.print()}
               aria-label="Imprimir documento"
-              className="bp-acao px-4 py-2 text-xs inline-flex items-center gap-1.5"
+              className="bpp-toque bp-acao px-4 min-h-11 text-xs inline-flex items-center gap-1.5"
             >
               <Printer className="w-4 h-4" /> Imprimir
             </button>
-            <button type="button" onClick={onFechar} aria-label="Fechar documento" className="rounded-full p-2 bg-bion-ink/5 dark:bg-white/10 text-bion-ink dark:text-bion-paper">
+            <button type="button" onClick={onFechar} aria-label="Fechar documento" className="bpp-toque w-11 h-11 inline-flex items-center justify-center rounded-full bg-bion-ink/5 dark:bg-white/10 text-bion-ink dark:text-bion-paper">
               <X className="w-4 h-4" />
             </button>
           </div>
@@ -94,17 +105,26 @@ function Visualizador({
   );
 }
 
-export function DocumentosPainel() {
+export function DocumentosPainel({
+  conversaAtiva,
+  onConversa,
+  onAgendar,
+}: {
+  /** Conversa aberta (id do médico). Fica no PacienteApp para o aviso do Início abrir direto. */
+  conversaAtiva: string | null;
+  onConversa: (medicoId: string | null) => void;
+  onAgendar: () => void;
+}) {
   const { consultas, documentos, sessao, mensagens, enviarMensagem, marcarConversaLida, naoLidasMensagens } = useBion();
   const [consultaSelecionada, setConsultaSelecionada] = useState<string | null>(null);
-  const [visualizando, setVisualizando] = useState<{ titulo: string; corpo: string[] } | null>(null);
-  const [conversaAtiva, setConversaAtiva] = useState<string | null>(null);
+  const [visualizando, setVisualizando] = useState<{ titulo: string; corpo: string[]; imprimir?: boolean } | null>(null);
+  const setConversaAtiva = onConversa;
   const [texto, setTexto] = useState("");
 
   const realizadas = useMemo(
     () =>
       consultas
-        .filter((c) => c.paciente === sessao.nome && (c.status === "concluida" || c.status === "confirmada"))
+        .filter((c) => c.paciente === sessao.nome && c.status === "concluida")
         .sort((a, b) => b.ts - a.ts),
     [consultas, sessao.nome],
   );
@@ -156,6 +176,9 @@ export function DocumentosPainel() {
     return lista;
   };
 
+  // Calculado uma vez por render (antes rodava 2 vezes).
+  const docsSelecionados = consultaSelecionada ? documentosDaConsulta(consultaSelecionada) : [];
+
   /* -------------------------- mensagens (30 dias) ------------------------- */
 
   const contatos = useMemo(() => {
@@ -193,7 +216,7 @@ export function DocumentosPainel() {
 
   return (
     <div className="px-5 py-6 space-y-4 bp-safe-top pb-24">
-      {visualizando && <Visualizador titulo={visualizando.titulo} corpo={visualizando.corpo} onFechar={() => setVisualizando(null)} />}
+      {visualizando && <Visualizador titulo={visualizando.titulo} corpo={visualizando.corpo} imprimir={visualizando.imprimir} onFechar={() => setVisualizando(null)} />}
 
       {/* ------------------------------ Documentos ------------------------------ */}
       <section aria-label="Documentos das consultas">
@@ -203,9 +226,12 @@ export function DocumentosPainel() {
         </p>
 
         {realizadas.length === 0 ? (
-          <div className="bp-glass p-6 text-center text-sm text-bion-ink/75 dark:text-bion-paper/75">
-            Nenhuma consulta ainda. Após a primeira teleconsulta, seus documentos aparecem aqui.
-          </div>
+          <EstadoVazio
+            icone={<FileText className="w-6 h-6" />}
+            titulo="Nenhuma consulta realizada ainda"
+            texto="Depois da sua primeira teleconsulta, receitas, atestados e pedidos de exame aparecem aqui."
+            acao={{ rotulo: "Agendar consulta", onClick: onAgendar }}
+          />
         ) : (
           <div className="flex gap-2 overflow-x-auto bp-coluna pb-1 -mx-1 px-1">
             {realizadas.map((c) => (
@@ -213,7 +239,7 @@ export function DocumentosPainel() {
                 key={c.id}
                 onClick={() => setConsultaSelecionada(c.id)}
                 aria-pressed={consultaSelecionada === c.id}
-                className={`shrink-0 rounded-2xl px-4 py-3 text-left transition border ${
+                className={`bpp-toque shrink-0 rounded-2xl px-4 py-3 text-left transition border ${
                   consultaSelecionada === c.id
                     ? "bp-acao border-transparent"
                     : "bp-glass border-transparent text-bion-ink dark:text-bion-paper"
@@ -230,12 +256,10 @@ export function DocumentosPainel() {
 
         {consultaSelecionada && (
           <div className="mt-4 space-y-2">
-            {documentosDaConsulta(consultaSelecionada).length === 0 ? (
-              <div className="bp-glass p-5 text-sm text-bion-ink/75 dark:text-bion-paper/75">
-                Nenhum documento emitido para esta consulta.
-              </div>
+            {docsSelecionados.length === 0 ? (
+              <EstadoVazio icone={<ClipboardList className="w-6 h-6" />} titulo="Nenhum documento nesta consulta" texto="Se o médico emitir algo, aparece aqui." />
             ) : (
-              documentosDaConsulta(consultaSelecionada).map((d) => {
+              docsSelecionados.map((d) => {
                 const Icone = ICONE_DOC[d.tipo] ?? FileText;
                 return (
                   <div key={d.id} className="bp-glass p-4 flex items-center gap-3">
@@ -248,14 +272,14 @@ export function DocumentosPainel() {
                     </div>
                     <button type="button"
                       onClick={() => setVisualizando({ titulo: d.titulo, corpo: d.corpo })}
-                      className="rounded-full border border-bion-sea/25 dark:border-sky-300/25 px-4 py-2 text-xs font-bold text-bion-sea dark:text-sky-300"
+                      className="bpp-toque min-h-11 rounded-full border border-bion-sea/25 dark:border-sky-300/25 px-4 py-2 text-xs font-bold text-bion-sea dark:text-sky-300"
                     >
                       Ver
                     </button>
                     <button type="button"
-                      onClick={() => setVisualizando({ titulo: d.titulo, corpo: d.corpo })}
+                      onClick={() => setVisualizando({ titulo: d.titulo, corpo: d.corpo, imprimir: true })}
                       aria-label={`Imprimir ${d.titulo}`}
-                      className="rounded-full p-2.5 bg-bion-ink/5 dark:bg-white/10 text-bion-ink dark:text-bion-paper"
+                      className="bpp-toque w-11 h-11 inline-flex items-center justify-center rounded-full bg-bion-ink/5 dark:bg-white/10 text-bion-ink dark:text-bion-paper"
                     >
                       <Printer className="w-4 h-4" />
                     </button>
@@ -272,7 +296,7 @@ export function DocumentosPainel() {
         <h2 className="text-2xl font-black text-bion-ink dark:text-bion-paper inline-flex items-center gap-2">
           Mensagens
           {naoLidasMensagens > 0 ? (
-            <span className="min-w-5 h-5 px-1.5 rounded-full bg-rose-500 text-white text-xs font-black leading-5 text-center">
+            <span className="min-w-5 h-5 px-1.5 rounded-full bg-rose-600 text-white text-xs font-black leading-5 text-center">
               {naoLidasMensagens > 9 ? "9+" : naoLidasMensagens}
             </span>
           ) : null}
@@ -289,7 +313,7 @@ export function DocumentosPainel() {
                   setConversaAtiva(null);
                 }}
                 aria-label="Voltar para contatos"
-                className="rounded-full p-2 bg-bion-ink/5 dark:bg-white/10 text-bion-ink dark:text-bion-paper"
+                className="bpp-toque w-11 h-11 inline-flex items-center justify-center rounded-full bg-bion-ink/5 dark:bg-white/10 text-bion-ink dark:text-bion-paper"
               >
                 <ArrowLeft className="w-4 h-4" />
               </button>
@@ -357,9 +381,11 @@ export function DocumentosPainel() {
         ) : (
           <div className="space-y-2">
             {contatos.length === 0 ? (
-              <div className="bp-glass p-6 text-center text-sm text-bion-ink/75 dark:text-bion-paper/75">
-                Após agendar sua primeira consulta, o médico ficará disponível aqui.
-              </div>
+              <EstadoVazio
+                icone={<MessageCircle className="w-6 h-6" />}
+                titulo="Nenhuma conversa ainda"
+                texto="Ao agendar uma consulta, você pode falar com o médico por aqui até 30 dias depois dela."
+              />
             ) : (
               contatos.map((c) => (
                 <button type="button"
@@ -368,7 +394,7 @@ export function DocumentosPainel() {
                     setConversaAtiva(c.id);
                     marcarConversaLida(c.id);
                   }}
-                  className="w-full bp-glass p-4 flex items-center gap-3 text-left"
+                  className="bpp-toque w-full bp-glass p-4 flex items-center gap-3 text-left"
                 >
                   <div className="w-11 h-11 rounded-full bg-gradient-to-br from-bion-sea to-bion-ink text-white inline-flex items-center justify-center text-sm font-bold shrink-0">
                     {c.nome.split(" ").slice(-1)[0][0]}

@@ -157,8 +157,20 @@ export function TriagemSlides({
     }
   };
 
+  // Fase 3: o botão "Pular" do topo chamava `void pularTudo` (sem os
+  // parênteses) e não fazia nada. Agora chama de verdade e evita clique duplo.
+  const [confirmandoPulo, setConfirmandoPulo] = useState(false);
   const pularTudo = async () => {
+    if (enviando) return;
+    // Pular dispensa a triagem inteira: pede um segundo toque para confirmar.
+    if (!confirmandoPulo) {
+      setConfirmandoPulo(true);
+      return;
+    }
+    setEnviando(true);
     const ok = await pularAnamnese(consultaId);
+    setEnviando(false);
+    setConfirmandoPulo(false);
     if (ok) {
       toast.success("Triagem pulada — consulta segue confirmada");
       onFechar();
@@ -185,28 +197,30 @@ export function TriagemSlides({
   useFocoDialogo(true, onFechar, dialogoRef);
 
   return (
-    <div ref={dialogoRef} className="absolute inset-0 z-[70] flex flex-col bg-zinc-950 text-white" role="dialog" aria-modal="true" aria-label="Triagem">
+    <div ref={dialogoRef} className="absolute inset-0 z-[70] flex flex-col bpp-sheet" role="dialog" aria-modal="true" aria-label="Triagem">
       <header className="px-4 pt-3 pb-2 flex items-center gap-3">
-        <button type="button" onClick={onFechar} className="rounded-full p-2 bg-white/10" aria-label="Fechar">
+        <button type="button" onClick={onFechar} className="rounded-full p-2 bpp-sheet-chip" aria-label="Fechar">
           <X className="w-5 h-5" />
         </button>
         <div className="min-w-0 flex-1">
-          <div className="text-xs font-bold uppercase tracking-wider text-white/70">Triagem</div>
+          <div className="text-xs font-bold uppercase tracking-wider bpp-sheet-suave">Triagem</div>
           <div className="text-sm font-bold truncate">{especialidade}</div>
-          <div className="text-xs text-white/70 truncate">
+          <div className="text-xs bpp-sheet-suave truncate">
             {medico} · {quando}
           </div>
         </div>
-        <button type="button" onClick={() => void pularTudo} className="text-xs font-semibold text-white/70">
-          Pular
+        <button type="button" onClick={() => void pularTudo()} disabled={enviando} className="bpp-toque min-h-11 rounded-full px-3 text-xs font-semibold bpp-sheet-suave disabled:opacity-40"
+          aria-label={confirmandoPulo ? "Confirmar: pular a triagem inteira" : "Pular a triagem"}
+        >
+          {confirmandoPulo ? "Pular tudo?" : "Pular"}
         </button>
       </header>
 
       <div className="px-4 pb-2">
-        <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
-          <div className="h-full bg-sky-400 transition-all" style={{ width: `${progresso}%` }} />
+        <div className="h-1.5 rounded-full bpp-sheet-chip overflow-hidden">
+          <div className="h-full bg-sky-700 dark:bg-sky-400 transition-all" style={{ width: `${progresso}%` }} />
         </div>
-        <div className="mt-1 text-xs text-white/70">
+        <div className="mt-1 text-xs bpp-sheet-suave">
           {indice + 1} / {ETAPAS_ANAMNESE.length} · {etapa.rotulo}
         </div>
       </div>
@@ -239,21 +253,21 @@ export function TriagemSlides({
           <article
             key={item.id}
             className={`snap-center shrink-0 w-[86vw] max-w-md h-full rounded-3xl border p-5 flex flex-col ${
-              i === indice ? "border-sky-400/50 bg-zinc-900" : "border-white/10 bg-zinc-900/80"
+              i === indice ? "bpp-sheet-sel bpp-sheet-cartao" : "bpp-sheet-borda bpp-sheet-cartao"
             }`}
           >
             <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-bold uppercase tracking-wider text-sky-300">
+              <span className="text-xs font-bold uppercase tracking-wider text-sky-800 dark:text-sky-300">
                 {String(i + 1).padStart(2, "0")} · {item.rotulo}
               </span>
-              {respondidos[item.id] ? <Check className="w-4 h-4 text-emerald-400" /> : <Sparkles className="w-4 h-4 text-white/60" />}
+              {respondidos[item.id] ? <Check className="w-4 h-4 text-emerald-700 dark:text-emerald-400" /> : <Sparkles className="w-4 h-4 bpp-sheet-suave" />}
             </div>
             <p className="text-[17px] font-semibold leading-snug">
               {pronta && i === ETAPAS_ANAMNESE.length - 1
                 ? "Tudo certo. Envie ao médico quando quiser."
                 : DICAS[item.id]}
             </p>
-            {respondidos[item.id] ? <p className="mt-3 text-sm text-white/70">Você: {respondidos[item.id]}</p> : null}
+            {respondidos[item.id] ? <p className="mt-3 text-sm bpp-sheet-suave">Você: {respondidos[item.id]}</p> : null}
 
             {i === idxServidor && !pronta ? (
               <>
@@ -264,7 +278,7 @@ export function TriagemSlides({
                       type="button"
                       disabled={enviando}
                       onClick={() => void enviar(atalho)}
-                      className="rounded-full px-3 py-2 text-xs font-semibold bg-white/10 border border-white/15"
+                      className="rounded-full px-3 py-2 text-xs font-semibold bpp-sheet-chip border bpp-sheet-borda"
                     >
                       {atalho}
                     </button>
@@ -275,15 +289,15 @@ export function TriagemSlides({
                   onChange={(e) => setRascunhos((r) => ({ ...r, [item.id]: e.target.value }))}
                   rows={3}
                   placeholder="Ou escreva aqui…"
-                  className="mt-4 w-full rounded-2xl border border-white/15 bg-black/35 p-3 text-sm text-white placeholder:text-white/60"
+                  className="mt-4 w-full rounded-2xl border bpp-sheet-borda p-3 text-sm bpp-sheet-campo"
                 />
               </>
             ) : i > idxServidor && !pronta ? (
-              <p className="mt-4 text-sm text-white/70">Responda o card atual para chegar aqui.</p>
+              <p className="mt-4 text-sm bpp-sheet-suave">Responda o card atual para chegar aqui.</p>
             ) : null}
 
             <div className="mt-auto pt-4 flex items-center gap-2">
-              <button type="button" disabled={i === 0} onClick={() => irPara(i - 1)} className="rounded-full p-2.5 bg-white/10 disabled:opacity-30" aria-label="Anterior">
+              <button type="button" disabled={i === 0} onClick={() => irPara(i - 1)} className="rounded-full p-2.5 bpp-sheet-chip disabled:opacity-30" aria-label="Anterior">
                 <ArrowLeft className="w-4 h-4" />
               </button>
               {pronta || i === ETAPAS_ANAMNESE.length - 1 ? (
@@ -292,19 +306,19 @@ export function TriagemSlides({
                 </button>
               ) : i === idxServidor ? (
                 <>
-                  <button type="button" onClick={() => void enviar("Pode pular esta etapa.")} className="text-xs font-semibold text-white/70 px-2">
+                  <button type="button" onClick={() => void enviar("Pode pular esta etapa.")} className="text-xs font-semibold bpp-sheet-suave px-2">
                     Pular
                   </button>
-                  <button type="button" disabled={enviando || !(rascunhos[item.id] ?? "").trim()} onClick={() => void enviar(rascunhos[item.id] ?? "")} className="flex-1 rounded-2xl py-3 text-sm font-bold bg-sky-400 text-zinc-950 disabled:opacity-40">
+                  <button type="button" disabled={enviando || !(rascunhos[item.id] ?? "").trim()} onClick={() => void enviar(rascunhos[item.id] ?? "")} className="flex-1 rounded-2xl py-3 text-sm font-bold bpp-sheet-primario disabled:opacity-40">
                     {enviando ? "Enviando…" : "Continuar"}
                   </button>
                 </>
               ) : (
-                <button type="button" onClick={() => irPara(i)} className="flex-1 rounded-2xl py-3 text-sm font-bold bg-white/10">
+                <button type="button" onClick={() => irPara(i)} className="flex-1 rounded-2xl py-3 text-sm font-bold bpp-sheet-chip">
                   Abrir este card
                 </button>
               )}
-              <button type="button" disabled={i >= ETAPAS_ANAMNESE.length - 1} onClick={() => irPara(i + 1)} className="rounded-full p-2.5 bg-white/10 disabled:opacity-30" aria-label="Próximo">
+              <button type="button" disabled={i >= ETAPAS_ANAMNESE.length - 1} onClick={() => irPara(i + 1)} className="rounded-full p-2.5 bpp-sheet-chip disabled:opacity-30" aria-label="Próximo">
                 <ArrowRight className="w-4 h-4" />
               </button>
             </div>

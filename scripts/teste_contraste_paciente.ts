@@ -228,14 +228,59 @@ for (const modo of ["Clean", "Dark"] as const) {
   }
 }
 
-// Janelas sempre escuras (cancelar/remarcar, reembolso, triagem): zinc-950 e cartões zinc-900
-for (const [onde, bg] of [["zinc-950", tw("zinc-950")], ["zinc-900", tw("zinc-900")]] as [string, RGB][]) {
-  par("Sempre escuro", `janelas · texto white/60 (${onde})`, mix(BRANCO, 0.6, bg), bg);
-  par("Sempre escuro", `janelas · texto white/70 (${onde})`, mix(BRANCO, 0.7, bg), bg);
-  par("Sempre escuro", `janelas · placeholder white/60 (${onde})`, mix(BRANCO, 0.6, bg), bg);
-  par("Sempre escuro", `janelas · aviso amber-200 (${onde})`, tw("amber-200"), bg);
-  par("Sempre escuro", `triagem · ícone white/60 (${onde})`, mix(BRANCO, 0.6, bg), bg, GRAFICO);
-  par("Sempre escuro", `triagem · rótulo sky-300 (${onde})`, tw("sky-300"), bg);
+// Fase 3 — janelas (cancelar/remarcar, reembolso, triagem, edição do perfil)
+// seguem o tema: tokens --bpp-sheet-* no Clean e no Dark.
+for (const modo of ["Clean", "Dark"] as const) {
+  const t = modo === "Clean" ? bloco(".bp-app-paciente") : { ...bloco(".bp-app-paciente"), ...bloco(".dark .bp-app-paciente") };
+  const c = (n: string) => {
+    if (!t[n]) throw new Error(`token --${n} ausente (${modo})`);
+    return t[n];
+  };
+  const escuro = modo === "Dark";
+  const fundo = sobre(c("bpp-sheet-fundo"), BRANCO);
+  const superficies: [string, RGB][] = [
+    ["fundo", fundo],
+    ["cartão", sobre(c("bpp-sheet-cartao"), fundo)],
+    ["campo", sobre(c("bpp-sheet-campo"), fundo)],
+    ["chip", sobre(c("bpp-sheet-chip"), fundo)],
+    ["selecionado", sobre(c("bpp-sheet-sel-fundo"), sobre(c("bpp-sheet-cartao"), fundo))],
+  ];
+  for (const [onde, bg] of superficies) {
+    par(modo, `janelas · texto (${onde})`, sobre(c("bpp-sheet-texto"), bg), bg);
+    par(modo, `janelas · texto suave / placeholder (${onde})`, sobre(c("bpp-sheet-suave"), bg), bg);
+    par(modo, `janelas · aviso âmbar (${onde})`, escuro ? tw("amber-200") : tw("amber-800"), bg);
+    par(modo, `janelas · rótulo azul da triagem (${onde})`, escuro ? tw("sky-300") : tw("sky-800"), bg);
+    par(modo, `janelas · erro vermelho (${onde})`, escuro ? tw("red-200") : tw("red-800"), mix(tw("red-500"), 0.1, bg));
+    par(modo, `janelas · ok verde (${onde})`, escuro ? tw("emerald-100") : tw("emerald-900"), mix(tw("emerald-500"), 0.1, bg));
+  }
+  par(modo, "janelas · botão principal", sobre(c("bpp-sheet-primario-texto"), sobre(c("bpp-sheet-primario"), fundo)), sobre(c("bpp-sheet-primario"), fundo));
+  par(modo, "janelas · horário escolhido", sobre(c("bpp-sheet-sel-cheio-texto"), sobre(c("bpp-sheet-sel-cheio"), fundo)), sobre(c("bpp-sheet-sel-cheio"), fundo));
+  par(modo, "janelas · borda do selecionado", sobre(c("bpp-sheet-sel-borda"), fundo), fundo, GRAFICO);
+  par(modo, "janelas · Confirmar reembolso (zinc-950 sobre emerald-500)", tw("zinc-950"), tw("emerald-500"));
+  par(modo, "janelas · Cancelar (branco sobre red-600)", BRANCO, tw("red-600"));
+  par(modo, "contador de não lidas (branco sobre rose-600)", BRANCO, tw("rose-600"));
+
+  // Início: selo da contagem regressiva (sobre o vidro do cartão, no pior fundo)
+  for (const [onde, base] of [["seção 1", sobre(c("bpp-s1-base"), PRETO)], ["painel", sobre(c("bpp-painel-base"), PRETO)]] as [string, RGB][]) {
+    const g = sobre(c("bpp-vidro"), base);
+    const selo = sobre(c("bpp-contagem-fundo"), g);
+    par(modo, `contagem regressiva · texto (${onde})`, sobre(c("bpp-contagem-texto"), selo), selo);
+    par(modo, `contagem regressiva urgente (branco sobre emerald-700)`, BRANCO, tw("emerald-700"));
+    par(modo, `aviso de mensagem · ponto (${onde})`, sobre(c("bpp-aviso-ponto"), g), g, GRAFICO);
+  }
+}
+
+// Cartão de saúde do Perfil: degradê marinho fixo (#14457f → #123e7d → #0a1f44)
+for (const [onde, bg] of [["início", DEEP], ["meio", SEA], ["fim", INK]] as [string, RGB][]) {
+  const caixa = mix(BRANCO, 0.1, bg);
+  par("Ambos", `cartão de saúde (${onde}) · texto white/80`, mix(BRANCO, 0.8, bg), bg);
+  par("Ambos", `cartão de saúde (${onde}) · caixinha white/10 · rótulo white/80`, mix(BRANCO, 0.8, caixa), caixa);
+  const alerta = mix(tw("amber-300"), 0.2, bg);
+  par("Ambos", `cartão de saúde (${onde}) · chip de alergia amber-100`, tw("amber-100"), alerta);
+  par("Ambos", `cartão de saúde (${onde}) · chip neutro branco sobre white/15`, BRANCO, mix(BRANCO, 0.15, bg));
+  // Reflexo azul do canto (rgba(125,175,240,.25)) por cima do início do degradê
+  const reflexo = mix(hex("#7dafF0"), 0.25, bg);
+  par("Ambos", `cartão de saúde (${onde}) · texto white/80 sob o reflexo`, mix(BRANCO, 0.8, reflexo), reflexo);
 }
 
 /* ------------------------- varredura dos .tsx ------------------------- */
