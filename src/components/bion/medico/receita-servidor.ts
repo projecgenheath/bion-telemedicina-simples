@@ -74,20 +74,23 @@ export type MultaRemarcacao = {
 
 /**
  * A consulta entra na receita líquida quando:
- *  - está paga (consulta.pago e, se há Pagamento, status "confirmado");
+ *  - tem Pagamento com status "confirmado" (as 6 consultas de teste com
+ *    pago=true sem Pagamento ficam fora, mesma regra do repasse);
  *  - o status NÃO está em STATUS_FORA_DO_FATURAMENTO (cancelada,
  *    aguardando_reagendamento);
  *  - o horário já começou (dataInicio ≤ agora): consulta paga futura ainda
  *    não foi realizada, então ainda não é receita;
  *  - não tem reembolso integral efetivo (consultaReembolsadaIntegral).
+ * Reembolso parcial efetivo NÃO exclui: desconta a parte do médico (90%)
+ * no líquido (ver calcularReceita), igual ao itemDaConsulta do repasse.
  * O dia é o da CONSULTA em São Paulo (mesma competência do repasse).
  */
 export function consultaEntraNaReceita(c: ConsultaReceita, agora: Date): boolean {
-  if (!c.pago) return false;
-  if (c.pagamento && c.pagamento.status !== "confirmado") return false;
+  // pago=true sem Pagamento (consultas de teste) NÃO entra: exige confirmado.
+  if (!c.pago || c.pagamento?.status !== "confirmado") return false;
   if (STATUS_FORA_DO_FATURAMENTO.includes(c.status)) return false;
   if (c.dataInicio.getTime() > agora.getTime()) return false;
-  return !consultaReembolsadaIntegral(reaisParaCentavos(c.valor), c.pagamento?.reembolsos);
+  return !consultaReembolsadaIntegral(reaisParaCentavos(c.valor), c.pagamento.reembolsos);
 }
 
 /**
@@ -147,8 +150,9 @@ const zero = (): Omit<ReceitaDia, "dia"> => ({
  * Soma por dia (São Paulo). Consultas pelo dia da consulta; multas pelo dia
  * em que foram cobradas (cancelamento: `em` do evento; remarcação: aprovação
  * do pagamento). Multas entram SEPARADAS do líquido da consulta, só a parte
- * do médico (divisaoDaMulta). Taxa do gateway = 0 enquanto o Pagamento não
- * guarda a taxa.
+ * do médico (divisaoDaMulta). Reembolso parcial efetivo reduz o líquido da
+ * consulta (parte do médico = 90% do reembolsado). Taxa do gateway = 0
+ * enquanto o Pagamento não guarda a taxa.
  */
 export function calcularReceita(params: {
   de: string;
@@ -162,15 +166,24 @@ export function calcularReceita(params: {
   const agora = params.agora ?? new Date();
   const mapa = new Map<string, ReceitaDia>(params.dias.map((dia) => [dia, { dia, ...zero() }]));
 
+  // Parte do médico na consulta = 100 − comissão do app (mesma do repasse).
+  const parteMedicoPct = 100 - COMISSAO_APP_PCT;
   for (const c of params.consultas) {
     if (!consultaEntraNaReceita(c, agora)) continue;
     const d = mapa.get(dataIsoClinica(c.dataInicio));
     if (!d) continue;
     const l = liquidoDaConsulta(reaisParaCentavos(c.valor), 0);
+    // Reembolso parcial: desconta a parte do médico (90% do reembolsado),
+    // espelhando itemDaConsulta em repasse.ts.
+    const antes = l.brutoCentavos - l.comissaoCentavos - l.taxaCentavos;
+    const reembolsos = Math.min(
+      antes,
+      Math.round((totalReembolsadoCentavos(c.pagamento?.reembolsos) * parteMedicoPct) / 100),
+    );
     d.brutoCentavos += l.brutoCentavos;
     d.comissaoCentavos += l.comissaoCentavos;
     d.taxaCentavos += l.taxaCentavos;
-    d.liquidoCentavos += l.liquidoCentavos;
+    d.liquidoCentavos += antes - reembolsos;
     d.consultas += 1;
   }
   const somarMulta = (quando: Date, multa: number) => {
