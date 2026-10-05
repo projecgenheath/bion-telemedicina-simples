@@ -15,6 +15,7 @@ import {
   type RespostaReceita,
 } from "./metricas";
 import type { DadosPessoaisMedico } from "./dados-pessoais";
+import type { CampoRecebimento, PixTipo, RecebimentoWire, TitularTipo } from "@/lib/server/recebimento";
 
 /** Evento de janela: algo mudou na agenda do médico (ex.: "Cancelar agenda do dia"). */
 export const EVENTO_DADOS_MEDICO = "bion-medico:dados-alterados";
@@ -212,4 +213,70 @@ export function useBloqueiosAgenda() {
     [r.dados],
   );
   return { porDia, carregando: r.carregando, erro: r.erro, recarregar: r.recarregar };
+}
+
+/** Corpo do PUT /api/medico/recebimento (o servidor normaliza e valida). */
+export type RecebimentoEntrada = {
+  pixTipo: PixTipo;
+  pixChave: string;
+  titularTipo: TitularTipo;
+  titularNome: string;
+  titularDocumento: string;
+};
+
+export type ResultadoSalvarRecebimento =
+  | { ok: true; alterado: boolean }
+  | { ok: false; erro: string; campo?: CampoRecebimento };
+
+/**
+ * Chave PIX de recebimento do PRÓPRIO médico (GET/PUT
+ * /api/medico/recebimento). Só máscaras chegam ao cliente; fora do
+ * store/bootstrap de propósito. `salvar` grava e recarrega.
+ */
+export function useRecebimento() {
+  const { sessao } = useBion();
+  const r = useRecurso<{ recebimento: RecebimentoWire | null; perfilTemCnpj: boolean }>(
+    sessao.role === "medico" ? "/api/medico/recebimento" : null,
+    "",
+  );
+  const [salvando, setSalvando] = useState(false);
+  const { recarregar } = r;
+
+  const salvar = useCallback(
+    async (entrada: RecebimentoEntrada): Promise<ResultadoSalvarRecebimento> => {
+      setSalvando(true);
+      try {
+        const res = await fetch("/api/medico/recebimento", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(entrada),
+        });
+        const json = (await res.json().catch(() => null)) as
+          | { erro?: string; campo?: CampoRecebimento; alterado?: boolean }
+          | null;
+        if (!res.ok) return { ok: false, erro: json?.erro ?? "Não foi possível salvar agora.", campo: json?.campo };
+        recarregar();
+        return { ok: true, alterado: json?.alterado !== false };
+      } catch {
+        return { ok: false, erro: "Falha de conexão com o servidor." };
+      } finally {
+        setSalvando(false);
+      }
+    },
+    [recarregar],
+  );
+
+  return {
+    /** null = ainda não cadastrou (ou carregando/erro: veja `carregando`/`erro`). */
+    recebimento: r.dados?.recebimento ?? null,
+    /** Sem CNPJ no perfil, titular PJ não é aceito. */
+    perfilTemCnpj: r.dados?.perfilTemCnpj ?? false,
+    /** true depois da primeira resposta boa. */
+    carregado: r.dados !== null,
+    carregando: r.carregando,
+    erro: r.erro,
+    recarregar,
+    salvando,
+    salvar,
+  };
 }
