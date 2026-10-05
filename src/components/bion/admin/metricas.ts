@@ -137,7 +137,7 @@ export type ItemFila = {
   detalhe: string;
   chips: Estado[];
   ts?: number;
-  /** View de destino (rotas.ts); null = a tela ainda não existe (ex.: Repasses, PR 3). */
+  /** View de destino (rotas.ts), com parâmetros opcionais ("admin-repasses?repasse=ID"); null = sem tela. */
   destino: string | null;
 };
 
@@ -196,7 +196,7 @@ export function montarFila(
       detalhe: `${competenciaCurta(r.competencia, agora)} · ${brl(r.liquidoCentavos)} · ${r.itens} ${r.itens === 1 ? "consulta" : "consultas"}`,
       chips: [estadoRepasse(r.status), ...avisos],
       ts: Number.isFinite(ts) ? ts : undefined,
-      destino: null,
+      destino: `admin-repasses?repasse=${encodeURIComponent(r.id)}`,
     });
   }
 

@@ -117,7 +117,7 @@ igual(
 );
 igual("fila: contagem", contarPorCategoria(fila), { validacao: 1, reembolso: 1, repasse: 3, chamado: 1, sistema: 1 });
 const rr = fila.find((i) => i.chave === "repasse-r2")!;
-igual("fila: repasse com CNPJ divergente", [rr.tom, rr.chips.map((c) => c.rotulo), rr.destino], ["critico", ["A pagar", "CNPJ divergente"], null]);
+igual("fila: repasse com CNPJ divergente", [rr.tom, rr.chips.map((c) => c.rotulo), rr.destino], ["critico", ["A pagar", "CNPJ divergente"], "admin-repasses?repasse=r2"]);
 igual("fila: repasse detalhe", rr.detalhe, "03/10 · R$ 50,00 · 1 consulta");
 igual("fila: sem PIX", fila[0].chips.map((c) => c.rotulo), ["A pagar", "Sem chave PIX"]);
 const re = fila.find((i) => i.chave === "reembolso-e1")!;

@@ -18,6 +18,7 @@ import {
   Stethoscope,
   TrendingUp,
   Users,
+  Wallet,
 } from "lucide-react";
 import { useBion } from "@/lib/bion-store";
 import { PATH_TO_VIEW, urlDa, type View } from "@/lib/rotas";
@@ -38,6 +39,7 @@ const MODULOS: Partial<Record<View, { rotulo: string; icone: Icone }>> = {
   "admin-medicos": { rotulo: "Médicos", icone: Stethoscope },
   "admin-pacientes": { rotulo: "Pacientes", icone: HeartPulse },
   usuarios: { rotulo: "Usuários & CRM", icone: Users },
+  "admin-repasses": { rotulo: "Repasses", icone: Wallet },
   relatorios: { rotulo: "Relatórios", icone: TrendingUp },
   auditoria: { rotulo: "Auditoria", icone: FileSearch },
   "llm-monitor": { rotulo: "Monitor LLM", icone: Gauge },
@@ -72,11 +74,13 @@ function TorreInterna({ children }: { children: ReactNode }) {
   const path = (pathname || "/").split("?")[0].replace(/\/+$/, "") || "/";
   const view: View | undefined = PATH_TO_VIEW[path];
   const { sessao, sair, naoLidas, auditLogs } = useBion();
-  const { fila, reembolsos, agora } = useDadosAdmin();
+  const { fila, reembolsos, repasses, agora } = useDadosAdmin();
   const largo = useLargo();
   const naFila = useSyncExternalStore(nada, hashFila, () => false);
 
   const comando = path === "/painel";
+  // Telas já redesenhadas no visual Torre não usam a "folha" das telas antigas.
+  const redesenhada = comando || view === "admin-repasses";
   const info = view ? MODULOS[view] : undefined;
   const contagem = contarPorCategoria(fila);
   const criticos24h = auditLogs.filter((l) => l.severidade === "critical" && agora - l.ts <= 86_400_000).length;
@@ -98,7 +102,13 @@ function TorreInterna({ children }: { children: ReactNode }) {
         { id: "usuarios", rotulo: "Usuários & CRM", icone: Users },
       ],
     },
-    { rotulo: "Dinheiro", itens: [{ id: "relatorios", rotulo: "Relatórios", icone: TrendingUp }] },
+    {
+      rotulo: "Dinheiro",
+      itens: [
+        { id: "admin-repasses", rotulo: "Repasses", icone: Wallet, selo: repasses.dados?.total || undefined },
+        { id: "relatorios", rotulo: "Relatórios", icone: TrendingUp },
+      ],
+    },
     {
       rotulo: "Sistema",
       itens: [
@@ -112,8 +122,10 @@ function TorreInterna({ children }: { children: ReactNode }) {
 
   const navegar = (id: string) => {
     // Só chega aqui "fila" quando o celular está dentro de um módulo: volta ao Comando já na Fila.
-    if (id === ID_FILA) router.push("/painel#fila");
-    else router.push(urlDa(id as View));
+    if (id === ID_FILA) return router.push("/painel#fila");
+    // Itens da Fila podem levar parâmetros (ex.: "admin-repasses?repasse=ID").
+    const [destino, consulta] = id.split("?");
+    router.push(consulta ? `${urlDa(destino as View)}?${consulta}` : urlDa(destino as View));
   };
   const sairDaConta = async () => {
     await sair();
@@ -147,7 +159,7 @@ function TorreInterna({ children }: { children: ReactNode }) {
         </button>
       }
     >
-      {comando ? children : <div className="ba-folha">{children}</div>}
+      {redesenhada ? children : <div className="ba-folha">{children}</div>}
     </AdminShell>
   );
 }

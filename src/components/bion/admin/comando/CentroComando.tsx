@@ -116,6 +116,7 @@ export function CentroComando() {
             icone={Wallet}
             rotulo="Repasses a pagar"
             className="col-span-2 lg:col-span-1"
+            onAbrir={() => ir("admin-repasses")}
             valor={repasses.erro ? "—" : brl(repasses.dados?.totalLiquidoCentavos ?? 0)}
             carregando={repasses.carregando}
             tom="dinheiro"
@@ -253,7 +254,12 @@ export function CentroComando() {
               {brl(hoje.brutoPagoCentavos)} bruto (valor de tabela, antes de taxas e repasse)
             </p>
           </CardAdmin>
-          <CardAdmin titulo="Repasses a pagar" icone={Wallet} tom={Object.keys(avisosRepasse).length ? "critico" : "dinheiro"}>
+          <CardAdmin
+            titulo="Repasses a pagar"
+            icone={Wallet}
+            tom={Object.keys(avisosRepasse).length ? "critico" : "dinheiro"}
+            acao={<AbrirModulo onClick={() => ir("admin-repasses")} rotulo="Abrir Repasses" />}
+          >
             {repasses.carregando ? (
               <div className="ba-esqueleto h-8 w-28" aria-hidden />
             ) : repasses.erro ? (
@@ -264,7 +270,7 @@ export function CentroComando() {
               <>
                 <div className="ba-numero text-3xl">{brl(repasses.dados?.totalLiquidoCentavos ?? 0)}</div>
                 <p className="text-xs ba-texto-2">
-                  {repasses.dados?.total ?? 0} fechados aguardando pagamento · tela Repasses em breve
+                  {repasses.dados?.total ?? 0} fechados aguardando pagamento
                 </p>
                 {Object.keys(avisosRepasse).length ? (
                   <div className="flex flex-wrap gap-1.5 mt-2">

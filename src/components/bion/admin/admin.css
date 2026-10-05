@@ -461,3 +461,60 @@ button.ba-card:hover, a.ba-card:hover, .ba-card[role="button"]:hover { transform
     }
   }
 }
+
+/* Faixa de aviso (Repasses): âmbar = atenção, vermelho = bloqueia. Texto sempre junto da cor. */
+@layer components {
+  .ba-aviso {
+    display: flex;
+    gap: 0.5rem;
+    padding: 0.625rem 0.75rem;
+    border-radius: 0.875rem;
+    font-size: 0.8125rem;
+    line-height: 1.35;
+    color: var(--ba-texto);
+    background: color-mix(in srgb, var(--ba-tom) 12%, var(--ba-card));
+    border: 1px solid color-mix(in srgb, var(--ba-tom) 40%, transparent);
+    border-left: 4px solid var(--ba-tom);
+  }
+  .ba-aviso > svg { color: var(--ba-tom); }
+  .ba-passos { display: flex; gap: 0.5rem; }
+  .ba-passo {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--ba-texto-3);
+  }
+  .ba-passo::before {
+    content: "";
+    height: 4px;
+    border-radius: 9999px;
+    background: color-mix(in srgb, var(--ba-texto) 14%, transparent);
+  }
+  .ba-passo[data-estado="feito"]::before,
+  .ba-passo[data-estado="atual"]::before { background: var(--ba-sinal); }
+  .ba-passo[data-estado="atual"] { color: var(--ba-texto); }
+  .ba-passo[data-estado="feito"] { color: var(--ba-texto-2); }
+  /* Abas segmentadas (Hoje · A pagar · Pagos) */
+  .ba-abas {
+    display: inline-flex;
+    gap: 0.25rem;
+    padding: 0.25rem;
+    border-radius: 9999px;
+    background: color-mix(in srgb, var(--ba-card-solido) 80%, transparent);
+    border: 1px solid var(--ba-borda);
+  }
+  .ba-aba {
+    min-height: 2.5rem;
+    padding: 0 1rem;
+    border-radius: 9999px;
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: var(--ba-texto-2);
+    white-space: nowrap;
+  }
+  .ba-aba[aria-selected="true"] { background: #0a1f44; color: #fff; }
+  .dark .ba-aba[aria-selected="true"] { background: #7dd3fc; color: #05080f; }
+}

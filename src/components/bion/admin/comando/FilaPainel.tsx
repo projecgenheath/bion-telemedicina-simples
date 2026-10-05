@@ -117,7 +117,6 @@ function ItemDaFila({ item, agora, onAbrir }: { item: ItemFila; agora: number; o
         ))}
         {item.ts ? <span className="text-xs ba-texto-3">{relativo(item.ts, agora)}</span> : null}
       </div>
-      {!item.destino ? <p className="text-xs ba-texto-3 mt-2">O pagamento será feito na tela Repasses (em breve).</p> : null}
     </>
   );
   if (!item.destino) {
