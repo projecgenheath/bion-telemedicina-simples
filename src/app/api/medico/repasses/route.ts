@@ -55,7 +55,7 @@ export async function GET() {
       .filter((r) => r.status === "fechado")
       .reduce((s, r) => s + r.liquidoCentavos, 0);
     const saldoCentavos =
-      somaFechados + previa.totais.liquidoCentavos - previa.ajustesPendentesRestantesCentavos;
+      somaFechados + previa.totais.liquidoCentavos;
 
     return ok({
       saldoCentavos,

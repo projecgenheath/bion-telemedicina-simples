@@ -340,8 +340,8 @@ export function RepassesSheet({
                 <div className="text-xs font-bold uppercase tracking-wider text-white/80">Saldo a receber</div>
                 <div className="mt-1 text-3xl font-black tabular-nums">{fmtCentavos(lista.saldoCentavos)}</div>
                 <p className="mt-2 text-xs text-white/80 leading-relaxed">
-                  Soma dos repasses fechados (ainda não pagos) e da prévia de hoje, já descontados os ajustes que cabem
-                  agora.
+                  Soma dos repasses já fechados (ainda não pagos) com a prévia de hoje. Cada repasse fechado é pago
+                  inteiro; ajustes que ainda restam só saem dos próximos repasses.
                 </p>
               </div>
 

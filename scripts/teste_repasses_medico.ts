@@ -233,11 +233,13 @@ async function main() {
   igual("líquido pago = 18000 (R$200 − 10%)", pago?.liquidoCentavos, 18000);
   igual("líquido fechado = 13500 (R$150 − 10%)", fechado?.liquidoCentavos, 13500);
 
-  // saldo = fechados (13500) + prévia.líquido − ajustesPendentesRestantes
-  // A prévia de "hoje" (data real do teste) provavelmente está vazia;
-  // o ajuste de 5000 fica em ajustesPendentesRestantes.
-  const saldoEsp = 13500 + (lista.json.previa?.totais?.liquidoCentavos ?? 0) - (lista.json.previa?.ajustesPendentesRestantesCentavos ?? 0);
-  igual("saldo = fechados + prévia − restante ajustes", lista.json.saldoCentavos, saldoEsp);
+  // saldo = fechados (13500) + prévia.líquido. O restante dos ajustes NÃO
+  // sai do saldo: o fechado é pago inteiro e o restante só desconta dos
+  // próximos repasses (revisão do Admin no #39).
+  const saldoEsp = 13500 + (lista.json.previa?.totais?.liquidoCentavos ?? 0);
+  igual("saldo = fechados + prévia (sem tirar o restante)", lista.json.saldoCentavos, saldoEsp);
+  igual("restante de ajustes = 5000 (prévia vazia)", lista.json.previa.ajustesPendentesRestantesCentavos, 5000);
+  verifica(lista.json.saldoCentavos >= 13500, "saldo nunca menor que o PIX fechado de 13500");
   verifica(lista.json.previa.ajustesPendentesRestantesCentavos >= 0, "prévia traz ajustesPendentesRestantes");
 
   const textoLista = JSON.stringify(lista.json);
