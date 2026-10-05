@@ -1,19 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import {
-  Activity,
-  FileText,
-  Hand,
-  HeartPulse,
-  Home,
-  MessageCircle,
-} from "lucide-react";
+import { Hand } from "lucide-react";
+
+const PAINEIS = [
+  { idx: 0, rotulo: "Perfil" },
+  { idx: 1, rotulo: "Início" },
+  { idx: 2, rotulo: "Documentos" },
+] as const;
 
 const SECOES = [
-  { id: "inicio", rotulo: "Início", Icone: Home },
-  { id: "saude", rotulo: "Saúde", Icone: HeartPulse },
-  { id: "exames", rotulo: "Exames", Icone: Activity },
+  { id: "inicio", rotulo: "Início" },
+  { id: "saude", rotulo: "Saúde" },
+  { id: "exames", rotulo: "Exames" },
 ] as const;
 
 const CHAVE_DICA = "bion-paciente-dica-gestos";
@@ -43,7 +42,7 @@ export function DicaGestos({ onDispensar }: { onDispensar: () => void }) {
   return (
     <div
       role="status"
-      className="bpp-dica absolute left-4 right-4 bottom-[calc(5.5rem+env(safe-area-inset-bottom))] z-30 rounded-3xl bg-zinc-950/90 text-white p-4 backdrop-blur shadow-2xl"
+      className="bpp-dica absolute left-4 right-4 bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-30 rounded-3xl bg-zinc-950/90 text-white p-4 backdrop-blur shadow-2xl"
     >
       <div className="flex items-start gap-3">
         <Hand className="w-5 h-5 mt-0.5 shrink-0 text-sky-300" aria-hidden />
@@ -54,7 +53,7 @@ export function DicaGestos({ onDispensar }: { onDispensar: () => void }) {
           <p>
             <strong>Para baixo:</strong> saúde e exames.
           </p>
-          <p className="text-white/80 text-xs mt-1">No computador: setas do teclado ou os botões embaixo.</p>
+          <p className="text-white/80 text-xs mt-1">No computador: setas do teclado ou os pontinhos na tela.</p>
         </div>
       </div>
       <button
@@ -69,9 +68,11 @@ export function DicaGestos({ onDispensar }: { onDispensar: () => void }) {
 }
 
 /**
- * Barra inferior (Início / Saúde / Exames) + pontinhos laterais da seção +
- * atalho de Documentos com contador de mensagens não lidas.
- * Some em tela larga (≥ 1024), onde os 3 painéis ficam lado a lado.
+ * Indicadores discretos (estilo etapa 1):
+ * - pílula embaixo com pontinhos de Perfil / Início / Documentos
+ * - pontinhos laterais das seções Início → Saúde → Exames (só no painel central)
+ * Contador de mensagens não lidas no pontinho de Documentos.
+ * Some em tela larga (≥ 1024).
  */
 export function NavegacaoPaciente({
   painel,
@@ -93,7 +94,6 @@ export function NavegacaoPaciente({
 
   const irSecao = (i: number) => {
     if (painel !== 1) onPainel(1);
-    // Pequeno atraso se ainda estamos voltando do perfil/documentos
     if (painel !== 1) {
       requestAnimationFrame(() => onSecao(i));
     } else {
@@ -117,7 +117,7 @@ export function NavegacaoPaciente({
               onClick={() => irSecao(i)}
               aria-label={`Ir para ${s.rotulo}`}
               aria-current={secao === i ? "true" : undefined}
-              className="px-[3px] py-1.5 min-h-8"
+              className="px-[3px] py-1"
             >
               <span
                 className={`block w-1.5 rounded-full transition-all ${
@@ -129,53 +129,39 @@ export function NavegacaoPaciente({
         </nav>
       ) : null}
 
+      {/* Pontinhos inferiores discretos — Perfil / Início / Documentos */}
       <nav
-        aria-label="Navegação do paciente"
-        className="bpp-barra absolute bottom-[calc(0.75rem+env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2 z-20 flex items-stretch gap-1 rounded-full bg-zinc-950/90 text-white backdrop-blur px-1.5 py-1.5 shadow-lg"
+        aria-label="Painéis do app"
+        className="bpp-indicador absolute bottom-[calc(1rem+env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2 z-20 flex items-center gap-0.5 rounded-full bg-zinc-950/85 text-white backdrop-blur px-1.5 py-1 pointer-events-auto"
       >
-        {SECOES.map((s, i) => {
-          const ativo = painel === 1 && secao === i;
-          const Icone = s.Icone;
+        {PAINEIS.map(({ idx, rotulo }) => {
+          const docs = idx === 2;
+          const rotuloAria =
+            docs && naoLidas > 0
+              ? `${rotulo}, ${naoLidas} mensagem${naoLidas === 1 ? "" : "ns"} não lida${naoLidas === 1 ? "" : "s"}`
+              : `Ir para ${rotulo}`;
           return (
             <button
-              key={s.id}
               type="button"
-              onClick={() => irSecao(i)}
-              aria-label={s.rotulo}
-              aria-current={ativo ? "page" : undefined}
-              className={`bpp-barra-btn min-w-14 min-h-11 px-2.5 rounded-full inline-flex flex-col items-center justify-center gap-0.5 transition-colors ${
-                ativo ? "bg-white/15 text-sky-200" : "text-white/75"
-              }`}
+              key={idx}
+              onClick={() => onPainel(idx)}
+              aria-label={rotuloAria}
+              aria-current={painel === idx ? "page" : undefined}
+              className="relative p-1.5"
             >
-              <Icone className="w-5 h-5" aria-hidden />
-              <span className="text-[11px] font-bold leading-none">{s.rotulo}</span>
+              <span
+                className={`block h-2 rounded-full transition-all ${
+                  painel === idx ? "w-6 bg-sky-300" : "w-2 bg-white/70"
+                }`}
+              />
+              {docs && naoLidas > 0 ? (
+                <span className="absolute -top-0.5 -right-0.5 min-w-3.5 h-3.5 px-0.5 rounded-full bg-rose-500 text-[9px] font-black leading-[14px] text-center text-white">
+                  {naoLidas > 9 ? "9+" : naoLidas}
+                </span>
+              ) : null}
             </button>
           );
         })}
-
-        <span className="w-px self-stretch my-1.5 bg-white/15" aria-hidden />
-
-        <button
-          type="button"
-          onClick={() => onPainel(2)}
-          aria-label={
-            naoLidas > 0
-              ? `Documentos e mensagens, ${naoLidas} não lida${naoLidas === 1 ? "" : "s"}`
-              : "Documentos e mensagens"
-          }
-          aria-current={painel === 2 ? "page" : undefined}
-          className={`bpp-barra-btn relative min-w-14 min-h-11 px-2.5 rounded-full inline-flex flex-col items-center justify-center gap-0.5 transition-colors ${
-            painel === 2 ? "bg-white/15 text-sky-200" : "text-white/75"
-          }`}
-        >
-          {naoLidas > 0 ? <MessageCircle className="w-5 h-5" aria-hidden /> : <FileText className="w-5 h-5" aria-hidden />}
-          <span className="text-[11px] font-bold leading-none">Docs</span>
-          {naoLidas > 0 ? (
-            <span className="absolute top-0.5 right-1 min-w-4 h-4 px-1 rounded-full bg-rose-500 text-[10px] font-black leading-4 text-center">
-              {naoLidas > 9 ? "9+" : naoLidas}
-            </span>
-          ) : null}
-        </button>
       </nav>
     </>
   );

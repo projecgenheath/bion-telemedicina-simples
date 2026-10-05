@@ -19,6 +19,7 @@ import {
   X,
   ChevronUp,
   Undo2,
+  MessageCircle,
 } from "lucide-react";
 import { useBion } from "@/lib/bion-store";
 import { fmtCurta, fmtHora, fmtTicketData, type Consulta } from "@/lib/bion-tipos";
@@ -424,20 +425,35 @@ export function PacienteApp() {
               <div className="text-xs font-semibold uppercase tracking-wider text-bion-ink/75 dark:text-bion-paper/75">
                 {hoje}
               </div>
-              <button type="button"
-                onClick={() => irPara(0)}
-                aria-label="Abrir perfil"
-                className="w-12 h-12 rounded-full overflow-hidden bp-glass shrink-0"
-              >
-                {pacientePerfil?.foto ? (
-                   
-                  <img src={pacientePerfil.foto} alt="Seu perfil" className="w-full h-full object-cover" />
-                ) : (
-                  <span className="w-full h-full inline-flex items-center justify-center text-sm font-black text-bion-ink dark:text-bion-paper">
-                    {iniciais}
-                  </span>
-                )}
-              </button>
+              <div className="flex items-center gap-2 shrink-0">
+                {naoLidasMensagens > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => irPara(2)}
+                    aria-label={`${naoLidasMensagens} mensagem${naoLidasMensagens === 1 ? "" : "ns"} não lida${naoLidasMensagens === 1 ? "" : "s"}`}
+                    className="relative w-11 h-11 rounded-full bp-glass inline-flex items-center justify-center"
+                  >
+                    <MessageCircle className="w-5 h-5 text-bion-ink dark:text-bion-paper" aria-hidden />
+                    <span className="absolute -top-0.5 -right-0.5 min-w-4 h-4 px-1 rounded-full bg-rose-500 text-[10px] font-black leading-4 text-center text-white">
+                      {naoLidasMensagens > 9 ? "9+" : naoLidasMensagens}
+                    </span>
+                  </button>
+                ) : null}
+                <button type="button"
+                  onClick={() => irPara(0)}
+                  aria-label="Abrir perfil"
+                  className="w-12 h-12 rounded-full overflow-hidden bp-glass shrink-0"
+                >
+                  {pacientePerfil?.foto ? (
+                     
+                    <img src={pacientePerfil.foto} alt="Seu perfil" className="w-full h-full object-cover" />
+                  ) : (
+                    <span className="w-full h-full inline-flex items-center justify-center text-sm font-black text-bion-ink dark:text-bion-paper">
+                      {iniciais}
+                    </span>
+                  )}
+                </button>
+              </div>
             </header>
 
             <div className="mt-8 mb-6">

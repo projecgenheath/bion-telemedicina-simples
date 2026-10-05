@@ -305,12 +305,6 @@
   opacity: 1;
 }
 
-/* Barra inferior: área de toque ≥ 44 px */
-.bp-app-paciente .bpp-barra-btn {
-  min-height: 44px;
-  min-width: 44px;
-}
-
 @media (prefers-reduced-motion: reduce) {
   .bp-app-paciente .bpp-snap-y {
     scroll-snap-type: y proximity;
@@ -324,9 +318,9 @@
   }
 }
 
-/* Tela larga: sem barra, sem snap, sem dica — layout da fase 1 */
+/* Tela larga: sem pontinhos, sem snap, sem dica — layout da fase 1 */
 @media (min-width: 1024px) {
-  .bp-app-paciente .bpp-barra,
+  .bp-app-paciente .bpp-indicador,
   .bp-app-paciente .bpp-indicador-secao,
   .bp-app-paciente .bpp-dica {
     display: none !important;

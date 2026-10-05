@@ -95,7 +95,7 @@ function Visualizador({
 }
 
 export function DocumentosPainel() {
-  const { consultas, documentos, sessao, mensagens, enviarMensagem, marcarConversaLida } = useBion();
+  const { consultas, documentos, sessao, mensagens, enviarMensagem, marcarConversaLida, naoLidasMensagens } = useBion();
   const [consultaSelecionada, setConsultaSelecionada] = useState<string | null>(null);
   const [visualizando, setVisualizando] = useState<{ titulo: string; corpo: string[] } | null>(null);
   const [conversaAtiva, setConversaAtiva] = useState<string | null>(null);
@@ -269,7 +269,14 @@ export function DocumentosPainel() {
 
       {/* ------------------------------ Mensagens ------------------------------ */}
       <section aria-label="Mensagens com médicos" className="pt-2">
-        <h2 className="text-2xl font-black text-bion-ink dark:text-bion-paper">Mensagens</h2>
+        <h2 className="text-2xl font-black text-bion-ink dark:text-bion-paper inline-flex items-center gap-2">
+          Mensagens
+          {naoLidasMensagens > 0 ? (
+            <span className="min-w-5 h-5 px-1.5 rounded-full bg-rose-500 text-white text-xs font-black leading-5 text-center">
+              {naoLidasMensagens > 9 ? "9+" : naoLidasMensagens}
+            </span>
+          ) : null}
+        </h2>
         <p className="text-sm text-bion-ink/75 dark:text-bion-paper/75 mb-4">
           Converse com o médico da sua consulta — do agendamento até 30 dias depois dela.
         </p>
