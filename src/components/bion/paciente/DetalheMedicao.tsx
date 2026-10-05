@@ -33,9 +33,9 @@ const rotuloCurto = (iso: string) => {
 };
 
 function classificarImc(imc: number): { rotulo: string; cor: string } {
-  if (imc < 18.5) return { rotulo: "Abaixo do peso", cor: "text-sky-700 dark:text-sky-300" };
+  if (imc < 18.5) return { rotulo: "Abaixo do peso", cor: "text-sky-800 dark:text-sky-300" };
   if (imc < 25) return { rotulo: "Peso normal", cor: "text-emerald-800 dark:text-emerald-200" };
-  if (imc < 30) return { rotulo: "Sobrepeso", cor: "text-amber-700 dark:text-amber-300" };
+  if (imc < 30) return { rotulo: "Sobrepeso", cor: "text-amber-800 dark:text-amber-200" };
   return { rotulo: "Obesidade", cor: "text-red-700 dark:text-red-300" };
 }
 
@@ -79,7 +79,7 @@ function Envolver({
           <div className="flex items-start justify-between gap-4 pt-2">
             <div>
               <h2 className="text-xl font-bold text-bion-ink dark:text-bion-paper">{titulo}</h2>
-              <p className="text-sm text-bion-ink/60 dark:text-bion-paper/60">{descricao}</p>
+              <p className="text-sm text-bion-ink/75 dark:text-bion-paper/75">{descricao}</p>
             </div>
             <button type="button"
               onClick={onFechar}
@@ -115,7 +115,7 @@ function FormMedicao({
       <div className="grid grid-cols-2 gap-3">
         {campos.map((c) => (
           <label key={c.id} className="block">
-            <span className="text-xs font-semibold text-bion-ink/70 dark:text-bion-paper/70">{c.rotulo}</span>
+            <span className="text-xs font-semibold text-bion-ink/75 dark:text-bion-paper/75">{c.rotulo}</span>
             <input
               id={c.id}
               type="number"
@@ -198,12 +198,12 @@ function DetalheImc({ onFechar }: { onFechar: () => void }) {
           <>
             <div className="text-4xl font-black text-bion-ink dark:text-bion-paper">{imcAtual.toFixed(1)}</div>
             <div className={`text-sm font-semibold mt-1 ${classe?.cor}`}>{classe?.rotulo}</div>
-            <div className="text-xs text-bion-ink/60 dark:text-bion-paper/60 mt-1">
+            <div className="text-xs text-bion-ink/75 dark:text-bion-paper/75 mt-1">
               {formatarPeso(pesoAtual)} · {formatarAltura(alturaAtual)}
             </div>
           </>
         ) : (
-          <p className="text-sm text-bion-ink/60 dark:text-bion-paper/60">
+          <p className="text-sm text-bion-ink/75 dark:text-bion-paper/75">
             Registre peso e altura para calcular seu IMC.
           </p>
         )}
@@ -216,7 +216,7 @@ function DetalheImc({ onFechar }: { onFechar: () => void }) {
           </div>
           <GraficoLinha
             ariaLabel="Gráfico da evolução do IMC"
-            series={[{ pontos: serieImc, cor: "var(--bion-sea)", area: true }]}
+            series={[{ pontos: serieImc, cor: "var(--bpp-grafico-linha)", area: true }]}
             refMin={18.5}
             refMax={24.9}
           />
@@ -255,7 +255,7 @@ function DetalheImc({ onFechar }: { onFechar: () => void }) {
               return (
                 <li key={p.id} className="flex items-center justify-between text-sm text-bion-ink dark:text-bion-paper">
                   <span className="flex items-center gap-2">
-                    <Scale className="w-4 h-4 opacity-60" /> {rotuloCurto(p.criadoEm)}
+                    <Scale className="w-4 h-4 opacity-80" /> {rotuloCurto(p.criadoEm)}
                   </span>
                   <span className="font-semibold">
                     {p.valor1} kg{imc ? ` · IMC ${imc.toFixed(1)}` : ""}
@@ -289,15 +289,15 @@ function DetalhePa({ onFechar }: { onFechar: () => void }) {
           <>
             <div className="text-4xl font-black text-bion-ink dark:text-bion-paper">
               {atual.valor1}
-              <span className="text-2xl opacity-60">/</span>
+              <span className="text-2xl opacity-80">/</span>
               {atual.valor2 ?? "—"}
             </div>
-            <div className="text-sm font-semibold mt-1 text-bion-ink/70 dark:text-bion-paper/70">
+            <div className="text-sm font-semibold mt-1 text-bion-ink/75 dark:text-bion-paper/75">
               {classe?.rotulo} · mmHg
             </div>
           </>
         ) : (
-          <p className="text-sm text-bion-ink/60 dark:text-bion-paper/60">Registre sua primeira medição.</p>
+          <p className="text-sm text-bion-ink/75 dark:text-bion-paper/75">Registre sua primeira medição.</p>
         )}
       </div>
 
@@ -309,12 +309,12 @@ function DetalhePa({ onFechar }: { onFechar: () => void }) {
           <GraficoLinha
             ariaLabel="Gráfico da evolução da pressão arterial"
             series={[
-              { pontos: pas.map((p) => ({ valor: p.valor1, rotulo: rotuloCurto(p.criadoEm) })), cor: "var(--bion-sea)", area: true },
+              { pontos: pas.map((p) => ({ valor: p.valor1, rotulo: rotuloCurto(p.criadoEm) })), cor: "var(--bpp-grafico-linha)", area: true },
               ...(pas.some((p) => p.valor2 !== undefined)
                 ? [
                     {
                       pontos: pas.map((p) => ({ valor: p.valor2 ?? p.valor1, rotulo: rotuloCurto(p.criadoEm) })),
-                      cor: "var(--bion-alerta)",
+                      cor: "var(--bpp-grafico-alerta)",
                     },
                   ]
                 : []),
@@ -322,9 +322,9 @@ function DetalhePa({ onFechar }: { onFechar: () => void }) {
             refMin={70}
             refMax={120}
           />
-          <div className="flex gap-4 justify-center text-xs text-bion-ink/60 dark:text-bion-paper/60 mt-2">
-            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-bion-sea inline-block" /> Sistólica</span>
-            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-bion-alerta inline-block" /> Diastólica</span>
+          <div className="flex gap-4 justify-center text-xs text-bion-ink/75 dark:text-bion-paper/75 mt-2">
+            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-[var(--bpp-grafico-linha)] inline-block" /> Sistólica</span>
+            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-[var(--bpp-grafico-alerta)] inline-block" /> Diastólica</span>
           </div>
         </div>
       )}
@@ -352,7 +352,7 @@ function DetalhePa({ onFechar }: { onFechar: () => void }) {
             {[...pas].reverse().map((p) => (
               <li key={p.id} className="flex items-center justify-between text-sm text-bion-ink dark:text-bion-paper">
                 <span className="flex items-center gap-2">
-                  <Activity className="w-4 h-4 opacity-60" /> {rotuloCurto(p.criadoEm)}
+                  <Activity className="w-4 h-4 opacity-80" /> {rotuloCurto(p.criadoEm)}
                 </span>
                 <span className="font-semibold">
                   {p.valor1}/{p.valor2 ?? "—"} mmHg · {classificarPa(p.valor1, p.valor2 ?? 0).rotulo}
@@ -431,7 +431,7 @@ function DetalheLembretes({ onFechar }: { onFechar: () => void }) {
       <div className="bp-glass p-5">
         <h3 className="text-sm font-bold text-bion-ink dark:text-bion-paper mb-3">Rotina</h3>
         {lembretes.length === 0 ? (
-          <p className="text-sm text-bion-ink/60 dark:text-bion-paper/60">
+          <p className="text-sm text-bion-ink/75 dark:text-bion-paper/75">
             Nenhum lembrete ainda. Crie o primeiro acima.
           </p>
         ) : (
@@ -449,24 +449,24 @@ function DetalheLembretes({ onFechar }: { onFechar: () => void }) {
                     aria-pressed={l.feito}
                     className={`w-7 h-7 rounded-full border-2 shrink-0 inline-flex items-center justify-center transition ${
                       l.feito
-                        ? "bg-emerald-600 border-emerald-600 text-white"
-                        : "border-bion-ink/30 dark:border-bion-paper/30 text-transparent"
+                        ? "bg-emerald-700 border-emerald-700 text-white"
+                        : "border-bion-ink/60 dark:border-bion-paper/60 text-transparent"
                     }`}
                   >
                     <Check className="w-4 h-4" />
                   </button>
                   <div className="flex-1 min-w-0">
-                    <div className={`text-sm font-semibold truncate ${l.feito ? "line-through opacity-50" : ""} text-bion-ink dark:text-bion-paper`}>
+                    <div className={`text-sm font-semibold truncate ${l.feito ? "line-through opacity-80" : ""} text-bion-ink dark:text-bion-paper`}>
                       {l.titulo}
                     </div>
-                    <div className="text-xs text-bion-ink/60 dark:text-bion-paper/60 flex items-center gap-1">
+                    <div className="text-xs text-bion-ink/75 dark:text-bion-paper/75 flex items-center gap-1">
                       <CalendarClock className="w-3 h-3" /> {l.horario} · {l.frequencia}
                     </div>
                   </div>
                   <button type="button"
                     onClick={() => removerLembrete(l.id)}
                     aria-label={`Remover ${l.titulo}`}
-                    className="p-2 rounded-full text-bion-ink/50 dark:text-bion-paper/50 hover:text-red-600 dark:hover:text-red-400"
+                    className="p-2 rounded-full text-bion-ink/75 dark:text-bion-paper/75 hover:text-red-700 dark:hover:text-red-300"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>

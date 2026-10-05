@@ -3,6 +3,9 @@
 /**
  * Gráfico de linha leve (SVG puro, sem dependências) usado nos cards e
  * detalhes do app do paciente. Suporta múltiplas séries e faixa de referência.
+ * Cores via `style` (aceitam var(--bpp-grafico-*) do paciente.css, que mudam
+ * entre Clean e Dark). Rótulos com fontSize 14 no viewBox de 320 → ≥ 12 px
+ * nos cartões do celular.
  */
 
 export type PontoGrafico = { valor: number; rotulo: string };
@@ -22,12 +25,12 @@ type Props = {
   ariaLabel: string;
 };
 
-export function GraficoLinha({ series, refMin, refMax, altura = 132, corEixo = "rgba(10,31,68,0.35)", ariaLabel }: Props & { ariaLabel: string }) {
+export function GraficoLinha({ series, refMin, refMax, altura = 132, corEixo = "var(--bpp-grafico-eixo, rgba(10,31,68,0.72))", ariaLabel }: Props & { ariaLabel: string }) {
   const W = 320;
   const H = altura;
   const padX = 8;
   const padTop = 12;
-  const padBottom = 20;
+  const padBottom = 24;
 
   const valores = series.flatMap((s) => s.pontos.map((p) => p.valor));
   const refs = [refMin, refMax].filter((v): v is number => typeof v === "number");
@@ -73,8 +76,8 @@ export function GraficoLinha({ series, refMin, refMax, altura = 132, corEixo = "
           x2={W - padX}
           y1={padTop + f * (H - padTop - padBottom)}
           y2={padTop + f * (H - padTop - padBottom)}
-          stroke={corEixo}
-          strokeWidth="0.5"
+          style={{ stroke: corEixo }}
+          strokeWidth="0.8"
           strokeDasharray="3 4"
         />
       ))}
@@ -99,10 +102,10 @@ export function GraficoLinha({ series, refMin, refMax, altura = 132, corEixo = "
 
       {(series[0]?.pontos.length ?? 0) > 1 && (
         <>
-          <text x={padX} y={H - 6} fontSize="9" fill={corEixo}>
+          <text x={padX} y={H - 6} fontSize="14" style={{ fill: corEixo }}>
             {series[0].pontos[0].rotulo}
           </text>
-          <text x={W - padX} y={H - 6} fontSize="9" fill={corEixo} textAnchor="end">
+          <text x={W - padX} y={H - 6} fontSize="14" style={{ fill: corEixo }} textAnchor="end">
             {series[0].pontos[series[0].pontos.length - 1].rotulo}
           </text>
         </>

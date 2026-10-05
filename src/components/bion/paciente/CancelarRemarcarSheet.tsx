@@ -275,7 +275,7 @@ export function CancelarRemarcarSheet({ consulta, acao, medico, consultas, onFec
                       }`}
                     >
                       <span className="block text-sm font-bold">{d.rotulo}</span>
-                      <span className="block text-[11px] text-white/50">{d.sub}</span>
+                      <span className="block text-xs text-white/70">{d.sub}</span>
                     </button>
                   ))}
                 </div>
@@ -326,7 +326,7 @@ export function CancelarRemarcarSheet({ consulta, acao, medico, consultas, onFec
           <textarea
             value={motivo}
             onChange={(e) => setMotivo(e.target.value)}
-            className="mt-4 w-full rounded-xl border border-white/15 bg-zinc-900 p-3 text-sm text-white placeholder:text-white/40"
+            className="mt-4 w-full rounded-xl border border-white/15 bg-zinc-900 p-3 text-sm text-white placeholder:text-white/60"
             rows={3}
             placeholder="Motivo (opcional)"
             aria-label="Motivo do cancelamento (opcional)"
@@ -462,7 +462,7 @@ function PainelPagamentoMulta({
             Fechar
           </button>
         </div>
-        <p className="text-xs text-white/45 mt-2">Ao fechar, a reserva continua; você pode retomar pela tela inicial.</p>
+        <p className="text-xs text-white/70 mt-2">Ao fechar, a reserva continua; você pode retomar pela tela inicial.</p>
       </>
     );
   }
@@ -491,7 +491,7 @@ function PainelPagamentoMulta({
           Sua consulta continua na data original: <strong className="text-white">{dataOriginal}</strong>.
         </p>
         {r.status === "expirada" ? (
-          <p className="text-xs text-white/55 mt-2">Se o pagamento for concluído depois do prazo, a multa é devolvida automaticamente.</p>
+          <p className="text-xs text-white/70 mt-2">Se o pagamento for concluído depois do prazo, a multa é devolvida automaticamente.</p>
         ) : null}
       </div>
       <div className="flex gap-2 mt-5">
@@ -534,7 +534,7 @@ function BlocoPrevia({
     return (
       <div className="mt-4 rounded-2xl border border-red-400/30 bg-red-500/10 p-4 text-sm" role="alert">
         <p className="text-red-100">{erro ?? "Não foi possível carregar a prévia."}</p>
-        <p className="text-xs text-white/55 mt-1">Para sua segurança, a confirmação só fica disponível depois de mostrarmos os valores.</p>
+        <p className="text-xs text-white/70 mt-1">Para sua segurança, a confirmação só fica disponível depois de mostrarmos os valores.</p>
         <button type="button" onClick={onTentarDeNovo} className="mt-3 rounded-full px-3 py-1.5 text-xs font-bold bg-white/10">
           Tentar de novo
         </button>

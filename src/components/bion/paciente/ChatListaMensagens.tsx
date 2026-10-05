@@ -26,7 +26,7 @@ export function ChatListaMensagens({
               j % 2 === 1 ? <strong key={j}>{parte}</strong> : <span key={j}>{parte}</span>,
             )}
             {m.remetente === "ia" && m.fonte === "gemini" && (
-              <div className="text-xs mt-2 opacity-40" aria-hidden="true">
+              <div className="text-xs mt-2 opacity-70" aria-hidden="true">
                 {/gemma/i.test(m.modelo ?? "") ? "Gemma 4 26B" : "Gemini"}
               </div>
             )}
@@ -47,7 +47,7 @@ export function ChatListaMensagens({
                   />
                 ))}
               </div>
-              <span className="text-xs opacity-55">
+              <span className="text-xs opacity-80">
                 {segundosEspera > 2 ? `Pensando… ${segundosEspera}s` : "Digitando…"}
               </span>
             </div>

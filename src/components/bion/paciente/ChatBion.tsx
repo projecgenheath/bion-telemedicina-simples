@@ -628,7 +628,7 @@ export function ChatBion({
   if (!aberto) return null;
 
   return (
-    <div className="absolute inset-0 z-50 flex flex-col bp-painel" role="dialog" aria-modal="true" aria-label="Conversa com a BION IA">
+    <div className="bpp-sobreposicao absolute inset-0 z-50 flex flex-col bp-painel" role="dialog" aria-modal="true" aria-label="Conversa com a BION IA">
       <input
         ref={inputArquivoRef}
         type="file"
@@ -666,7 +666,7 @@ export function ChatBion({
           <button
             type="button"
             onClick={() => void enviar(ultimaFalha)}
-            className="rounded-full px-4 py-2 text-sm font-semibold bg-amber-500/15 text-amber-200 border border-amber-400/30 w-fit"
+            className="rounded-full px-4 py-2 text-sm font-semibold bg-amber-500/15 text-amber-900 dark:text-amber-200 border border-amber-600/40 dark:border-amber-400/30 w-fit"
           >
             Tentar de novo
           </button>
@@ -684,7 +684,7 @@ export function ChatBion({
                 <li><strong>Data:</strong> {escolha.dia} às {escolha.hora}</li>
                 <li><strong>Valor:</strong> R$ {medicoRegistro?.valor ?? 0}</li>
               </ul>
-              <div className="text-xs font-bold uppercase tracking-wide opacity-60 mb-2 inline-flex items-center gap-1.5">
+              <div className="text-xs font-bold uppercase tracking-wide opacity-80 mb-2 inline-flex items-center gap-1.5">
                 <CreditCard className="w-3.5 h-3.5" /> Forma de pagamento
               </div>
               <div className="grid grid-cols-2 gap-2 mb-3">
@@ -726,7 +726,7 @@ export function ChatBion({
                   Cancelar
                 </button>
               </div>
-              <p className="text-xs opacity-50 mt-2">O pagamento confirma sua consulta. A triagem é opcional e fica disponível até 5 minutos antes do horário.</p>
+              <p className="text-xs opacity-80 mt-2">O pagamento confirma sua consulta. A triagem é opcional e fica disponível até 5 minutos antes do horário.</p>
             </div>
           );
         })()}
@@ -737,7 +737,7 @@ export function ChatBion({
             <div className="flex items-center gap-2 text-sm font-bold text-bion-ink dark:text-bion-paper mb-1">
               <FileUp className="w-4 h-4" /> Exame ou documento para o médico?
             </div>
-            <p className="text-xs opacity-60 mb-3">Anexe PDF ou foto — a IA confere seu nome no documento antes de processar.</p>
+            <p className="text-xs opacity-80 mb-3">Anexe PDF ou foto — a IA confere seu nome no documento antes de processar.</p>
             <div className="flex gap-2">
               <button type="button" onClick={anexarDocumentoAnamnese} className="bp-acao flex-1 py-3 text-sm inline-flex items-center justify-center gap-2">
                 <FileUp className="w-4 h-4" /> Anexar documento
@@ -758,7 +758,7 @@ export function ChatBion({
             <div className="flex items-center gap-2 text-sm font-bold text-bion-ink dark:text-bion-paper mb-1">
               <BadgeCheck className="w-4 h-4" /> Tudo pronto para o médico
             </div>
-            <p className="text-xs opacity-60 mb-3">Ao concluir, o médico recebe sua triagem antes do atendimento.</p>
+            <p className="text-xs opacity-80 mb-3">Ao concluir, o médico recebe sua triagem antes do atendimento.</p>
             <button type="button" onClick={() => void concluirAnamneseAgora()} className="bp-acao w-full py-3 text-sm inline-flex items-center justify-center gap-2">
               <BadgeCheck className="w-4 h-4" /> Concluir triagem e enviar ao médico
             </button>
@@ -771,7 +771,7 @@ export function ChatBion({
         {/* Retomada: triagens em andamento de consultas confirmadas na janela */}
         {mensagens.length > 0 && etapa === null && !anamneseAtiva && anamnesesPendentes.length > 0 && (
           <div className="flex flex-col gap-2">
-            <p className="text-xs opacity-60">Triagem opcional — ajuda o médico, mas você pode pular.</p>
+            <p className="text-xs opacity-80">Triagem opcional — ajuda o médico, mas você pode pular.</p>
             <div className="flex flex-wrap gap-2">
             {anamnesesPendentes.map((a) => {
               const c = consultas.find((x) => x.id === a.consultaId);
@@ -802,7 +802,7 @@ export function ChatBion({
         {opcoes && (
           <div className="bp-glass p-4">
             <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-bold uppercase tracking-wide text-bion-ink/60 dark:text-bion-paper/60">{opcoes.titulo}</span>
+              <span className="text-xs font-bold uppercase tracking-wide text-bion-ink/75 dark:text-bion-paper/75">{opcoes.titulo}</span>
               {etapa !== "especialidade" && (
                 <button type="button"
                   onClick={() => {
@@ -830,7 +830,7 @@ export function ChatBion({
                     <span className="truncate">{o.rotulo}</span>
                     {opcoes.titulo === "Profissional" && <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500 shrink-0" />}
                   </div>
-                  {o.sub && <div className="text-xs font-normal opacity-60 mt-0.5">{o.sub}</div>}
+                  {o.sub && <div className="text-xs font-normal opacity-80 mt-0.5">{o.sub}</div>}
                 </button>
               ))}
             </div>
@@ -882,14 +882,14 @@ export function ChatBion({
             placeholder={anamneseAtiva ? "Conte com suas palavras…" : "Pergunte à BION IA…"}
             aria-label={anamneseAtiva ? "Resposta para a anamnese" : "Mensagem para a BION IA"}
             disabled={pensando || enviandoLaudo || (etapa !== null && !anamneseAtiva)}
-            className="flex-1 bg-transparent outline-none text-sm text-bion-ink dark:text-bion-paper placeholder:text-bion-ink/40 dark:placeholder:text-white/40 disabled:opacity-50"
+            className="flex-1 bg-transparent outline-none text-sm text-bion-ink dark:text-bion-paper placeholder:text-bion-ink/60 dark:placeholder:text-white/60 disabled:opacity-50"
           />
           {!anamneseAtiva && (
             <button type="button"
               onClick={iniciarExame}
               disabled={enviandoLaudo || etapa !== null}
               aria-label="Anexar laudo de exame"
-              className="p-2.5 rounded-full text-bion-ink/60 dark:text-white/60 hover:bg-bion-ink/5 dark:hover:bg-white/10 disabled:opacity-40"
+              className="p-2.5 rounded-full text-bion-ink/75 dark:text-bion-paper/75 hover:bg-bion-ink/5 dark:hover:bg-white/10 disabled:opacity-40"
             >
               <FileUp className="w-5 h-5" />
             </button>

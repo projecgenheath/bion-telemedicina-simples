@@ -140,25 +140,8 @@
   }
 }
 
-/* Painéis laterais (perfil / documentos) */
-.bp-painel {
-  background: linear-gradient(180deg, #ffffff 0%, #eef4fb 60%, #e2ecf9 100%);
-}
-.dark .bp-painel {
-  background: linear-gradient(180deg, #000000 0%, #03080f 55%, #071224 100%);
-}
-
-/* Seção 1 — hero claro */
-.bp-secao-1 { background: linear-gradient(180deg, #ffffff 0%, #f2f6fc 100%); }
-.dark .bp-secao-1 { background: linear-gradient(180deg, #000000 0%, #050c19 100%); }
-
-/* Seção 2 — transição para o azul */
-.bp-secao-2 { background: linear-gradient(180deg, #f2f6fc 0%, #cddcf1 55%, #9db9de 100%); }
-.dark .bp-secao-2 { background: linear-gradient(180deg, #050c19 0%, #071731 55%, #0b2145 100%); }
-
-/* Seção 3 — azul marinho profundo */
-.bp-secao-3 { background: linear-gradient(180deg, #9db9de 0%, #35568f 30%, #10294f 70%, #0a1f44 100%); }
-.dark .bp-secao-3 { background: linear-gradient(180deg, #0b2145 0%, #0d2c5c 30%, #071e42 70%, #020a1a 100%); }
+/* bp-painel, bp-secao-1/2/3 e bp-impressao (exclusivas do paciente) moram
+   em src/components/bion/paciente/paciente.css */
 
 /* Liquid glass sobre fundos claros */
 .bp-glass {
@@ -259,12 +242,6 @@
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
-}
-
-@media print {
-  body * { visibility: hidden; }
-  .bp-impressao, .bp-impressao * { visibility: visible; }
-  .bp-impressao { position: absolute; inset: 0; padding: 2rem; background: #fff; color: #111; }
 }
 
 /* Foco visível consistente (teclado) — não remove outline para mouse via :focus */
