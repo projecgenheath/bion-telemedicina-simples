@@ -49,6 +49,10 @@ import { PerfilPainel } from "./PerfilPainel";
 import { DocumentosPainel } from "./DocumentosPainel";
 import { fraseMotivoReagendamento, rotuloMotivoReagendamento } from "./motivo-reagendamento";
 import { DicaGestos, NavegacaoPaciente, useDicaGestos } from "./NavegacaoPaciente";
+import { DadosPessoaisSheet, type CampoPerfil } from "./DadosPessoaisSheet";
+import { TelaListaCompleta, type ListaPerfil } from "./TelaListaCompleta";
+import { AvisoMensagemNova, ContagemConsulta } from "./AvisosInicio";
+import { EstadoVazio } from "./EstadosPaciente";
 
 /**
  * App imersivo do paciente — fullscreen, sem menu e sem botões de navegação.
@@ -91,6 +95,8 @@ export function PacienteApp() {
     sair,
     medicos,
     naoLidasMensagens,
+    mensagens,
+    marcarConversaLida,
   } = useBion();
 
   const carrosselRef = useRef<HTMLDivElement>(null);
@@ -109,9 +115,22 @@ export function PacienteApp() {
   const [listaConsultasAberta, setListaConsultasAberta] = useState(false);
   const [modalConsulta, setModalConsulta] = useState<{ id: string; acao: AcaoSheet } | null>(null);
   const [reembolsoConsultaId, setReembolsoConsultaId] = useState<string | null>(null);
+  // Fase 3: edição do perfil e "Ver tudo" abrem por cima de tudo (fora do carrossel).
+  const [edicaoPerfil, setEdicaoPerfil] = useState<{ campo?: CampoPerfil } | null>(null);
+  const [listaCompleta, setListaCompleta] = useState<ListaPerfil | null>(null);
+  // Conversa aberta em Documentos (o aviso do Início abre direto nela).
+  const [conversaAtiva, setConversaAtiva] = useState<string | null>(null);
   const dica = useDicaGestos();
 
-  const bloqueado = !!(chatAberto || triagemSlide || modalConsulta || detalhe || reembolsoConsultaId);
+  const bloqueado = !!(
+    chatAberto ||
+    triagemSlide ||
+    modalConsulta ||
+    detalhe ||
+    reembolsoConsultaId ||
+    edicaoPerfil ||
+    listaCompleta
+  );
 
   const irPara = useCallback((p: number) => {
     if (ehTelaLarga()) {
@@ -239,6 +258,17 @@ export function PacienteApp() {
   }, [consultas, sessao.nome]);
 
   const proxima = proximas[0];
+
+  /** Mensagem mais recente que o paciente ainda não leu (aviso no Início). */
+  const ultimaNaoLida = useMemo(
+    () => mensagens.filter((m) => !m.minha && !m.lida).sort((a, b) => b.ts - a.ts)[0],
+    [mensagens],
+  );
+  const abrirConversa = (medicoId: string) => {
+    setConversaAtiva(medicoId);
+    marcarConversaLida(medicoId);
+    irPara(2);
+  };
 
   /** Médico cancelou, falha técnica ou o médico não compareceu: o paciente escolhe remarcar ou reembolso integral. */
   const aguardandoReagendamento = useMemo(
@@ -408,6 +438,9 @@ export function PacienteApp() {
               await sair();
               router.replace("/entrar");
             }}
+            onEditar={(campo) => setEdicaoPerfil({ campo })}
+            onVerTudo={setListaCompleta}
+            onAgendar={() => setChatAberto(true)}
           />
         </div>
 
@@ -434,7 +467,7 @@ export function PacienteApp() {
                     className="relative w-11 h-11 rounded-full bp-glass inline-flex items-center justify-center"
                   >
                     <MessageCircle className="w-5 h-5 text-bion-ink dark:text-bion-paper" aria-hidden />
-                    <span className="absolute -top-0.5 -right-0.5 min-w-4 h-4 px-1 rounded-full bg-rose-500 text-[10px] font-black leading-4 text-center text-white">
+                    <span className="absolute -top-1 -right-1 min-w-5 h-5 px-1 rounded-full bg-rose-600 text-xs font-black leading-5 text-center text-white">
                       {naoLidasMensagens > 9 ? "9+" : naoLidasMensagens}
                     </span>
                   </button>
@@ -465,6 +498,11 @@ export function PacienteApp() {
               </p>
             </div>
 
+            {/* Aviso de mensagem nova do médico (some quando a conversa é aberta) */}
+            {ultimaNaoLida ? (
+              <AvisoMensagemNova mensagem={ultimaNaoLida} total={naoLidasMensagens} onAbrir={() => abrirConversa(ultimaNaoLida.deId)} />
+            ) : null}
+
             {/* Cards: aguardando reagendamento (motivo no cartão) — remarcar ou reembolso integral, sem multa */}
             {aguardandoReagendamento.map((c) => (
               <CardAguardandoReagendamento
@@ -486,11 +524,11 @@ export function PacienteApp() {
 
             {/* Card: próxima consulta */}
             {proxima ? (
-              <div className="bp-glass p-5 w-full">
+              <div className="bp-glass bpp-surgir p-5 w-full">
                 <button
                   type="button"
                   onClick={() => entrarSala(proxima.ts)}
-                  className="text-left w-full"
+                  className="bpp-toque text-left w-full rounded-2xl"
                   aria-label={`Próxima consulta: ${proxima.especialidade} com ${proxima.medico}. Toque para ${salaAberta ? "entrar na sala" : "abrir a sala de espera"}`}
                 >
                   <div className="flex items-center justify-between mb-3">
@@ -501,8 +539,11 @@ export function PacienteApp() {
                   </div>
                   <div className="text-xl font-bold">{proxima.especialidade}</div>
                   <div className="text-sm opacity-80">com {proxima.medico}</div>
-                  <div className="mt-3 inline-flex items-center gap-2 text-sm font-bold">
-                    <CalendarClock className="w-4 h-4" /> {proxima.data} · {proxima.hora}
+                  <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2">
+                    <span className="inline-flex items-center gap-2 text-sm font-bold">
+                      <CalendarClock className="w-4 h-4" aria-hidden /> {proxima.data} · {proxima.hora}
+                    </span>
+                    <ContagemConsulta ts={proxima.ts} />
                   </div>
                 </button>
 
@@ -520,7 +561,7 @@ export function PacienteApp() {
                 ) : null}
               </div>
             ) : (
-              <button type="button" onClick={() => setChatAberto(true)} className="bp-glass p-5 text-left w-full transition hover:shadow-xl">
+              <button type="button" onClick={() => setChatAberto(true)} className="bpp-toque bp-glass p-5 text-left w-full">
                 <div className="text-xs font-bold uppercase tracking-wider text-bion-ink/75 dark:text-bion-paper/75 mb-3">
                   Consultas
                 </div>
@@ -535,7 +576,7 @@ export function PacienteApp() {
               <button
                 type="button"
                 onClick={() => setListaConsultasAberta((v) => !v)}
-                className="bp-glass mt-3 w-full px-5 py-3.5 flex items-center justify-between text-left"
+                className="bpp-toque bp-glass mt-3 w-full px-5 py-3.5 flex items-center justify-between text-left"
                 aria-expanded={listaConsultasAberta}
               >
                 <span>
@@ -629,7 +670,7 @@ export function PacienteApp() {
               <button
                 type="button"
                 onClick={() => setChatAberto(true)}
-                className="relative mt-4 w-full inline-flex items-center justify-center gap-2 rounded-full bg-white text-bion-ink text-sm font-bold px-5 py-3.5 shadow-md transition hover:shadow-lg active:scale-[0.99]"
+                className="bpp-toque relative mt-4 w-full inline-flex items-center justify-center gap-2 rounded-full bg-white text-bion-ink text-sm font-bold px-5 py-3.5 shadow-md hover:shadow-lg"
               >
                 <Stethoscope className="w-4 h-4" aria-hidden /> Agendar consulta agora
               </button>
@@ -664,7 +705,7 @@ export function PacienteApp() {
               {/* Lembretes */}
               <button type="button"
                 onClick={() => setDetalhe("lembretes")}
-                className="bp-glass p-5 w-full text-left transition hover:shadow-xl"
+                className="bpp-toque bp-glass p-5 w-full text-left"
                 aria-label={`Lembretes de medicação: ${lembretesPendentes.length} pendente(s) de ${lembretes.length}. Abrir detalhes`}
               >
                 <div className="flex items-center justify-between mb-3">
@@ -698,7 +739,7 @@ export function PacienteApp() {
               {/* IMC */}
               <button type="button"
                 onClick={() => setDetalhe("imc")}
-                className="bp-glass p-5 w-full text-left transition hover:shadow-xl"
+                className="bpp-toque bp-glass p-5 w-full text-left"
                 aria-label={`Índice de massa corporal: ${imcAtual ? imcAtual.toFixed(1) : "sem dados"}. Abrir histórico e atualizar peso e altura`}
               >
                 <div className="flex items-center justify-between mb-1">
@@ -734,7 +775,7 @@ export function PacienteApp() {
               {/* Pressão arterial */}
               <button type="button"
                 onClick={() => setDetalhe("pa")}
-                className="bp-glass p-5 w-full text-left transition hover:shadow-xl"
+                className="bpp-toque bp-glass p-5 w-full text-left"
                 aria-label={`Pressão arterial: ${pas.at(-1) ? `${pas.at(-1)!.valor1}/${pas.at(-1)!.valor2 ?? "—"}` : "sem dados"}. Abrir histórico e registrar`}
               >
                 <div className="flex items-center justify-between mb-1">
@@ -779,7 +820,7 @@ export function PacienteApp() {
 
             <button type="button"
               onClick={() => setChatAberto(true)}
-              className="bp-glass-marinho w-full p-4 flex items-center gap-3 text-left mb-5 transition hover:shadow-xl"
+              className="bpp-toque bp-glass-marinho w-full p-4 flex items-center gap-3 text-left mb-5"
               aria-label="Enviar novo laudo à BION IA"
             >
               <span className="w-11 h-11 rounded-2xl bg-white/15 inline-flex items-center justify-center shrink-0">
@@ -793,11 +834,12 @@ export function PacienteApp() {
             </button>
 
             {examesAgrupados.length === 0 ? (
-              <div className="bp-glass-marinho p-6 text-center">
-                <p className="text-sm text-white/80">
-                  Nenhum resultado ainda. Envie um laudo pela BION IA e os resultados aparecem aqui automaticamente.
-                </p>
-              </div>
+              <EstadoVazio
+                superficie="marinho"
+                icone={<FileText className="w-6 h-6" />}
+                titulo="Nenhum resultado ainda"
+                texto="Envie um laudo pela BION IA e os resultados aparecem aqui automaticamente."
+              />
             ) : (
               <div className="bpp-grade flex flex-col gap-4">
                 {examesAgrupados.map(([titulo, lista]) => {
@@ -869,7 +911,7 @@ export function PacienteApp() {
 
         {/* ====================== PÁGINA 4: DOCUMENTOS ======================== */}
         <div className="bpp-lateral bpp-lateral-dir flex-[0_0_100%] w-full min-w-full h-full bp-painel overflow-y-auto bp-coluna" aria-label="Documentos e mensagens">
-          <DocumentosPainel />
+          <DocumentosPainel conversaAtiva={conversaAtiva} onConversa={setConversaAtiva} onAgendar={() => setChatAberto(true)} />
         </div>
       </div>
 
@@ -915,6 +957,21 @@ export function PacienteApp() {
           consultas={consultas}
           onFechar={() => setModalConsulta(null)}
           onPagarMulta={iniciarRemarcacaoComMulta}
+        />
+      ) : null}
+
+      {edicaoPerfil ? (
+        <DadosPessoaisSheet campoInicial={edicaoPerfil.campo} onFechar={() => setEdicaoPerfil(null)} />
+      ) : null}
+
+      {listaCompleta ? (
+        <TelaListaCompleta
+          lista={listaCompleta}
+          onFechar={() => setListaCompleta(null)}
+          onAgendar={() => {
+            setListaCompleta(null);
+            setChatAberto(true);
+          }}
         />
       ) : null}
 

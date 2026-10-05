@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useVoltarFecha } from "./useVoltarFecha";
+import { EstadoCarregando, EstadoErro } from "./EstadosPaciente";
 import { useFocoDialogo } from "./useFocoDialogo";
 import { AlertTriangle, CreditCard, Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -208,31 +209,31 @@ export function CancelarRemarcarSheet({ consulta, acao, medico, consultas, onFec
   useFocoDialogo(true, fechar, dialogoRef);
 
   return (
-    <div ref={dialogoRef} className="absolute inset-0 z-[80] flex items-end justify-center" role="dialog" aria-modal="true" aria-labelledby="titulo-sheet-consulta">
-      <button type="button" className="absolute inset-0 bg-black/80" aria-label="Fechar" onClick={fechar} />
-      <div className="relative w-full max-w-lg max-h-[92svh] overflow-y-auto rounded-t-3xl bg-zinc-950 text-white border-t border-white/10 px-5 pt-3 pb-8 shadow-[0_-12px_40px_rgba(0,0,0,0.55)]">
-        <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-white/25" aria-hidden />
+    <div ref={dialogoRef} className="bpp-sheet-raiz absolute inset-0 z-[80] flex items-end justify-center" role="dialog" aria-modal="true" aria-labelledby="titulo-sheet-consulta">
+      <button type="button" className="absolute inset-0 bpp-sheet-veu" aria-label="Fechar" onClick={fechar} />
+      <div className="bpp-sheet-painel relative w-full max-w-lg max-h-[92svh] overflow-y-auto rounded-t-3xl bpp-sheet border-t bpp-sheet-borda px-5 pt-3 pb-8 shadow-[0_-12px_40px_rgba(2,8,26,0.35)]">
+        <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bpp-sheet-alca" aria-hidden />
 
         {acao === "remarcar" ? (
           <>
             <h2 id="titulo-sheet-consulta" className="text-lg font-bold">
               {aguardando ? "Escolha um novo horário" : "Remarcar consulta"}
             </h2>
-            <p className="text-sm text-white/60 mt-1">
+            <p className="text-sm bpp-sheet-suave mt-1">
               {consulta.especialidade} · horários livres na agenda de {consulta.medico || "seu médico"}.
             </p>
           </>
         ) : acao === "reembolso" ? (
           <>
             <h2 id="titulo-sheet-consulta" className="text-lg font-bold">Reembolso integral</h2>
-            <p className="text-sm text-white/60 mt-1">
+            <p className="text-sm bpp-sheet-suave mt-1">
               {consulta.especialidade} com {consulta.medico}. {fraseMotivoReagendamento(consulta.motivoReagendamento)}. A consulta será encerrada e o valor pago volta para você, sem multa.
             </p>
           </>
         ) : (
           <>
             <h2 id="titulo-sheet-consulta" className="text-lg font-bold">Cancelar consulta?</h2>
-            <p className="text-sm text-white/60 mt-1">
+            <p className="text-sm bpp-sheet-suave mt-1">
               {consulta.especialidade} · {consulta.data} às {consulta.hora}. O médico será avisado.
             </p>
           </>
@@ -262,10 +263,10 @@ export function CancelarRemarcarSheet({ consulta, acao, medico, consultas, onFec
         {acao === "remarcar" ? (
           permitido ? (
             agendaLivre.length === 0 ? (
-              <p className="mt-4 text-sm text-amber-200">Não há vaga na agenda deste médico nos próximos 14 dias.</p>
+              <p className="mt-4 text-sm text-amber-800 dark:text-amber-200">Não há vaga na agenda deste médico nos próximos 14 dias.</p>
             ) : (
               <>
-                <label className="block text-xs font-bold mt-4 mb-2 text-white/80">Data</label>
+                <label className="block text-xs font-bold mt-4 mb-2 bpp-sheet-suave">Data</label>
                 <div className="flex gap-2 overflow-x-auto pb-1">
                   {agendaLivre.map((d) => (
                     <button
@@ -276,15 +277,15 @@ export function CancelarRemarcarSheet({ consulta, acao, medico, consultas, onFec
                         setNovaHora(d.horarios.includes(horaEscolhida) ? horaEscolhida : d.horarios[0]);
                       }}
                       className={`shrink-0 rounded-2xl px-3 py-2 text-left border ${
-                        dataEscolhida === d.iso ? "border-sky-400 bg-sky-400/15" : "border-white/10 bg-zinc-900"
+                        dataEscolhida === d.iso ? "bpp-sheet-sel" : "bpp-sheet-borda bpp-sheet-cartao"
                       }`}
                     >
                       <span className="block text-sm font-bold">{d.rotulo}</span>
-                      <span className="block text-xs text-white/70">{d.sub}</span>
+                      <span className="block text-xs bpp-sheet-suave">{d.sub}</span>
                     </button>
                   ))}
                 </div>
-                <label className="block text-xs font-bold mt-4 mb-2 text-white/80">Horário</label>
+                <label className="block text-xs font-bold mt-4 mb-2 bpp-sheet-suave">Horário</label>
                 <div className="grid grid-cols-3 gap-2">
                   {(diaSelecionado?.horarios ?? []).map((h) => (
                     <button
@@ -292,7 +293,7 @@ export function CancelarRemarcarSheet({ consulta, acao, medico, consultas, onFec
                       type="button"
                       onClick={() => setNovaHora(h)}
                       className={`py-2.5 rounded-xl text-sm font-semibold border ${
-                        horaEscolhida === h ? "border-sky-400 bg-sky-400 text-zinc-950" : "border-white/10 bg-zinc-900"
+                        horaEscolhida === h ? "bpp-sheet-sel-cheio" : "bpp-sheet-borda bpp-sheet-cartao"
                       }`}
                     >
                       {h}
@@ -301,7 +302,7 @@ export function CancelarRemarcarSheet({ consulta, acao, medico, consultas, onFec
                 </div>
                 {exigePagamento && onPagarMulta ? (
                   <>
-                    <div className="text-xs font-bold mt-4 mb-2 text-white/80 inline-flex items-center gap-1.5">
+                    <div className="text-xs font-bold mt-4 mb-2 bpp-sheet-suave inline-flex items-center gap-1.5">
                       <CreditCard className="w-3.5 h-3.5" /> Forma de pagamento da multa
                     </div>
                     <div className="grid grid-cols-2 gap-2">
@@ -315,7 +316,7 @@ export function CancelarRemarcarSheet({ consulta, acao, medico, consultas, onFec
                           onClick={() => setMetodo(m.id)}
                           aria-pressed={metodo === m.id}
                           className={`rounded-2xl border px-4 py-3 text-sm font-semibold transition ${
-                            metodo === m.id ? "border-sky-400 bg-sky-400/15" : "border-white/10 bg-zinc-900"
+                            metodo === m.id ? "bpp-sheet-sel" : "bpp-sheet-borda bpp-sheet-cartao"
                           }`}
                         >
                           {m.nome}
@@ -331,7 +332,7 @@ export function CancelarRemarcarSheet({ consulta, acao, medico, consultas, onFec
           <textarea
             value={motivo}
             onChange={(e) => setMotivo(e.target.value)}
-            className="mt-4 w-full rounded-xl border border-white/15 bg-zinc-900 p-3 text-sm text-white placeholder:text-white/60"
+            className="mt-4 w-full rounded-xl border bpp-sheet-borda p-3 text-sm bpp-sheet-campo"
             rows={3}
             placeholder="Motivo (opcional)"
             aria-label="Motivo do cancelamento (opcional)"
@@ -343,7 +344,7 @@ export function CancelarRemarcarSheet({ consulta, acao, medico, consultas, onFec
             type="button"
             onClick={fechar}
             disabled={enviando}
-            className="flex-1 py-3 rounded-xl border border-white/15 text-sm font-semibold disabled:opacity-40"
+            className="bpp-toque flex-1 py-3 rounded-xl border bpp-sheet-borda text-sm font-semibold disabled:opacity-40"
           >
             Voltar
           </button>
@@ -359,7 +360,7 @@ export function CancelarRemarcarSheet({ consulta, acao, medico, consultas, onFec
                 agendaLivre.length === 0
               }
               onClick={() => void confirmarRemarcacao()}
-              className="flex-1 py-3 rounded-xl bg-sky-500 text-zinc-950 text-sm font-bold disabled:opacity-40 inline-flex items-center justify-center gap-2"
+              className="bpp-toque flex-1 py-3 rounded-xl bpp-sheet-primario text-sm font-bold disabled:opacity-40 inline-flex items-center justify-center gap-2"
             >
               {enviando ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
               {pagamentoIndisponivel
@@ -373,7 +374,7 @@ export function CancelarRemarcarSheet({ consulta, acao, medico, consultas, onFec
               type="button"
               disabled={!prontoParaConfirmar}
               onClick={() => void confirmarCancelamento()}
-              className={`flex-1 py-3 rounded-xl text-sm font-semibold disabled:opacity-40 inline-flex items-center justify-center gap-2 ${
+              className={`bpp-toque flex-1 py-3 rounded-xl text-sm font-semibold disabled:opacity-40 inline-flex items-center justify-center gap-2 ${
                 acao === "reembolso" ? "bg-emerald-500 text-zinc-950 font-bold" : "bg-red-600 text-white"
               }`}
             >
@@ -423,29 +424,29 @@ function PainelPagamentoMulta({
     return (
       <>
         <div className="mt-4 rounded-2xl border border-sky-400/30 bg-sky-500/10 p-4 text-sm" role="status" aria-live="polite">
-          <p className="font-bold text-sky-100 inline-flex items-center gap-2">
+          <p className="font-bold text-sky-900 dark:text-sky-100 inline-flex items-center gap-2">
             <Loader2 className="w-4 h-4 animate-spin" /> Aguardando o pagamento da multa
           </p>
-          <ul className="mt-3 space-y-1.5 text-white/80">
+          <ul className="mt-3 space-y-1.5 bpp-sheet-suave">
             <li>
-              Nova data reservada: <strong className="text-white">{r.novaDataTexto}</strong>
+              Nova data reservada: <strong className="bpp-sheet-forte">{r.novaDataTexto}</strong>
             </li>
             <li>
-              Multa: <strong className="text-white">{valor}</strong> · {metodo}
+              Multa: <strong className="bpp-sheet-forte">{valor}</strong> · {metodo}
             </li>
             <li>Reserva válida até {fmtHora(r.expiraEm)} (horário de Brasília)</li>
           </ul>
           {cobranca?.via === "pendente" ? (
-            <p className="text-xs text-amber-200 mt-3">
+            <p className="text-xs text-amber-800 dark:text-amber-200 mt-3">
               O pagamento online ainda não está disponível neste ambiente. Se a multa não for paga até {fmtHora(r.expiraEm)}, a reserva expira sozinha.
             </p>
           ) : (
-            <p className="text-xs text-white/60 mt-3">
+            <p className="text-xs bpp-sheet-suave mt-3">
               Assim que o pagamento for aprovado, a nova data é confirmada automaticamente.
             </p>
           )}
-          <p className="text-xs text-white/60 mt-1">
-            Até lá, sua consulta continua em <strong className="text-white/85">{dataOriginal}</strong>.
+          <p className="text-xs bpp-sheet-suave mt-1">
+            Até lá, sua consulta continua em <strong className="bpp-sheet-suave">{dataOriginal}</strong>.
           </p>
         </div>
         <div className="flex gap-2 mt-5">
@@ -453,7 +454,7 @@ function PainelPagamentoMulta({
             type="button"
             onClick={onDesistir}
             disabled={enviando}
-            className="flex-1 py-3 rounded-xl border border-red-400/40 text-red-200 text-sm font-semibold disabled:opacity-40 inline-flex items-center justify-center gap-2"
+            className="bpp-toque flex-1 py-3 rounded-xl border border-red-400/40 text-red-700 dark:text-red-200 text-sm font-semibold disabled:opacity-40 inline-flex items-center justify-center gap-2"
           >
             {enviando ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
             Desistir da remarcação
@@ -462,12 +463,12 @@ function PainelPagamentoMulta({
             type="button"
             onClick={onFechar}
             disabled={enviando}
-            className="flex-1 py-3 rounded-xl border border-white/15 text-sm font-semibold disabled:opacity-40"
+            className="bpp-toque flex-1 py-3 rounded-xl border bpp-sheet-borda text-sm font-semibold disabled:opacity-40"
           >
             Fechar
           </button>
         </div>
-        <p className="text-xs text-white/70 mt-2">Ao fechar, a reserva continua; você pode retomar pela tela inicial.</p>
+        <p className="text-xs bpp-sheet-suave mt-2">Ao fechar, a reserva continua; você pode retomar pela tela inicial.</p>
       </>
     );
   }
@@ -475,7 +476,7 @@ function PainelPagamentoMulta({
   if (r.status === "aprovada") {
     return (
       <div className="mt-4 rounded-2xl border border-emerald-400/25 bg-emerald-500/10 p-4 text-sm" role="status">
-        <p className="font-bold text-emerald-100">Multa paga — consulta remarcada para {r.novaDataTexto}.</p>
+        <p className="font-bold text-emerald-900 dark:text-emerald-100">Multa paga — consulta remarcada para {r.novaDataTexto}.</p>
       </div>
     );
   }
@@ -491,19 +492,19 @@ function PainelPagamentoMulta({
   return (
     <>
       <div className="mt-4 rounded-2xl border border-amber-400/30 bg-amber-500/10 p-4 text-sm" role="alert">
-        <p className="font-bold text-amber-100">{motivo}</p>
-        <p className="text-white/80 mt-1">
-          Sua consulta continua na data original: <strong className="text-white">{dataOriginal}</strong>.
+        <p className="font-bold text-amber-900 dark:text-amber-100">{motivo}</p>
+        <p className="bpp-sheet-suave mt-1">
+          Sua consulta continua na data original: <strong className="bpp-sheet-forte">{dataOriginal}</strong>.
         </p>
         {r.status === "expirada" ? (
-          <p className="text-xs text-white/70 mt-2">Se o pagamento for concluído depois do prazo, a multa é devolvida automaticamente.</p>
+          <p className="text-xs bpp-sheet-suave mt-2">Se o pagamento for concluído depois do prazo, a multa é devolvida automaticamente.</p>
         ) : null}
       </div>
       <div className="flex gap-2 mt-5">
-        <button type="button" onClick={onFechar} className="flex-1 py-3 rounded-xl border border-white/15 text-sm font-semibold">
+        <button type="button" onClick={onFechar} className="bpp-toque flex-1 py-3 rounded-xl border bpp-sheet-borda text-sm font-semibold">
           Fechar
         </button>
-        <button type="button" onClick={onOutroHorario} className="flex-1 py-3 rounded-xl bg-sky-500 text-zinc-950 text-sm font-bold">
+        <button type="button" onClick={onOutroHorario} className="bpp-toque flex-1 py-3 rounded-xl bpp-sheet-primario text-sm font-bold">
           Escolher outro horário
         </button>
       </div>
@@ -529,21 +530,17 @@ function BlocoPrevia({
   motivoReagendamento?: Consulta["motivoReagendamento"];
 }) {
   if (carregando && !previa) {
-    return (
-      <div className="mt-4 rounded-2xl border border-white/10 bg-zinc-900 p-4 text-sm text-white/70 inline-flex w-full items-center gap-2" role="status">
-        <Loader2 className="w-4 h-4 animate-spin" /> Calculando multa e reembolso…
-      </div>
-    );
+    return <EstadoCarregando texto="Calculando multa e reembolso…" superficie="janela" className="mt-4" />;
   }
   if (erro || !previa) {
     return (
-      <div className="mt-4 rounded-2xl border border-red-400/30 bg-red-500/10 p-4 text-sm" role="alert">
-        <p className="text-red-100">{erro ?? "Não foi possível carregar a prévia."}</p>
-        <p className="text-xs text-white/70 mt-1">Para sua segurança, a confirmação só fica disponível depois de mostrarmos os valores.</p>
-        <button type="button" onClick={onTentarDeNovo} className="mt-3 rounded-full px-3 py-1.5 text-xs font-bold bg-white/10">
-          Tentar de novo
-        </button>
-      </div>
+      <EstadoErro
+        texto={erro ?? "Não foi possível carregar a prévia."}
+        detalhe="Para sua segurança, a confirmação só fica disponível depois de mostrarmos os valores."
+        onTentarDeNovo={onTentarDeNovo}
+        superficie="janela"
+        className="mt-4"
+      />
     );
   }
 
@@ -551,7 +548,7 @@ function BlocoPrevia({
   if (!permitido) {
     const encerrada = previa.status === "cancelada" || previa.status === "concluida";
     return (
-      <div className="mt-4 rounded-2xl border border-white/10 bg-zinc-900 p-4 text-sm text-white/75" role="note">
+      <div className="mt-4 rounded-2xl border bpp-sheet-borda bpp-sheet-cartao p-4 text-sm bpp-sheet-suave" role="note">
         {encerrada
           ? `Esta consulta já foi ${previa.status === "cancelada" ? "cancelada" : "concluída"} e não pode mais ser ${acao === "remarcar" ? "remarcada" : "cancelada"}.`
           : `Esta consulta não pode ser ${acao === "remarcar" ? "remarcada" : "cancelada"} por aqui. Fale com o suporte se precisar de ajuda.`}
@@ -565,13 +562,13 @@ function BlocoPrevia({
   if (acao === "reembolso" || p.isencao === "aguardando_reagendamento") {
     return (
       <div className="mt-4 rounded-2xl border border-emerald-400/25 bg-emerald-500/10 p-4 text-sm">
-        <p className="font-bold text-emerald-100">Sem multa. {fraseMotivoReagendamento(motivoReagendamento)}.</p>
+        <p className="font-bold text-emerald-900 dark:text-emerald-100">Sem multa. {fraseMotivoReagendamento(motivoReagendamento)}.</p>
         {acao !== "remarcar" && p.pago ? (
-          <p className="text-white/75 mt-1">
-            Reembolso integral: <strong className="text-white">{fmtCentavos(p.reembolsoCentavos)}</strong>. O reembolso é automático, sem necessidade de aprovação.
+          <p className="bpp-sheet-suave mt-1">
+            Reembolso integral: <strong className="bpp-sheet-forte">{fmtCentavos(p.reembolsoCentavos)}</strong>. O reembolso é automático, sem necessidade de aprovação.
           </p>
         ) : acao === "remarcar" ? (
-          <p className="text-white/75 mt-1">Escolha um novo horário; o valor já pago continua valendo para a consulta.</p>
+          <p className="bpp-sheet-suave mt-1">Escolha um novo horário; o valor já pago continua valendo para a consulta.</p>
         ) : null}
       </div>
     );
@@ -580,12 +577,12 @@ function BlocoPrevia({
   if (p.multaCentavos > 0 && acao === "remarcar") {
     return (
       <div className="mt-4 rounded-2xl border border-amber-400/30 bg-amber-500/10 p-4 text-sm" role="alert">
-        <p className="font-bold text-amber-100 inline-flex items-start gap-2">
+        <p className="font-bold text-amber-900 dark:text-amber-100 inline-flex items-start gap-2">
           <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
           Para confirmar a nova data, é preciso pagar a multa de {fmtCentavos(p.multaCentavos)} ({multaPct}%) pelo app.
         </p>
-        <p className="text-white/75 mt-1">A consulta continua na data original até o pagamento ser aprovado.</p>
-        <p className="text-white/60 mt-2 text-xs">
+        <p className="bpp-sheet-suave mt-1">A consulta continua na data original até o pagamento ser aprovado.</p>
+        <p className="bpp-sheet-suave mt-2 text-xs">
           Remarcações com {janelaHoras} h ou menos de antecedência têm multa. O prazo sem multa terminou em {p.semMultaAteTexto}.
         </p>
       </div>
@@ -595,16 +592,16 @@ function BlocoPrevia({
   if (p.multaCentavos > 0) {
     return (
       <div className="mt-4 rounded-2xl border border-amber-400/30 bg-amber-500/10 p-4 text-sm" role="alert">
-        <p className="font-bold text-amber-100 inline-flex items-start gap-2">
+        <p className="font-bold text-amber-900 dark:text-amber-100 inline-flex items-start gap-2">
           <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
           Será aplicada uma multa de {fmtCentavos(p.multaCentavos)} ({multaPct}%).
         </p>
-        <p className="text-white/70 mt-1">
+        <p className="bpp-sheet-suave mt-1">
           Cancelamentos feitos com {janelaHoras} h ou menos de antecedência têm multa. O prazo sem multa terminou em {p.semMultaAteTexto}.
         </p>
         {acao === "cancelar" && p.pago ? (
-          <p className="text-white/80 mt-2">
-            Valor a ser reembolsado: <strong className="text-white">{fmtCentavos(p.reembolsoCentavos)}</strong> de {fmtCentavos(p.valorCentavos)}.
+          <p className="bpp-sheet-suave mt-2">
+            Valor a ser reembolsado: <strong className="bpp-sheet-forte">{fmtCentavos(p.reembolsoCentavos)}</strong> de {fmtCentavos(p.valorCentavos)}.
           </p>
         ) : null}
       </div>
@@ -612,20 +609,20 @@ function BlocoPrevia({
   }
 
   return (
-    <div className="mt-4 rounded-2xl border border-white/10 bg-zinc-900 p-4 text-sm">
+    <div className="mt-4 rounded-2xl border bpp-sheet-borda bpp-sheet-cartao p-4 text-sm">
       <p className="font-bold">Sem multa</p>
       {p.isencao === "fora_da_janela" ? (
-        <p className="text-white/70 mt-1">
+        <p className="bpp-sheet-suave mt-1">
           {acao === "remarcar" ? "Remarque" : "Cancele"} sem multa até {p.semMultaAteTexto} (horário de Brasília). Depois disso, a multa é de {multaPct}% do valor.
         </p>
       ) : null}
       {acao === "cancelar" ? (
         p.pago ? (
-          <p className="text-white/80 mt-2">
-            Reembolso integral: <strong className="text-white">{fmtCentavos(p.reembolsoCentavos)}</strong>, automático.
+          <p className="bpp-sheet-suave mt-2">
+            Reembolso integral: <strong className="bpp-sheet-forte">{fmtCentavos(p.reembolsoCentavos)}</strong>, automático.
           </p>
         ) : (
-          <p className="text-white/60 mt-2 text-xs">Esta consulta ainda não foi paga — não há valor a devolver.</p>
+          <p className="bpp-sheet-suave mt-2 text-xs">Esta consulta ainda não foi paga — não há valor a devolver.</p>
         )
       ) : null}
     </div>

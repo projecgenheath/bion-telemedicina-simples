@@ -54,6 +54,30 @@
   --bpp-cancelar-fundo: rgba(220, 38, 38, 0.06);
   --bpp-cancelar-borda: rgba(185, 28, 28, 0.28);
   --bpp-cancelar-texto: #991b1b;
+  /* Fase 3 — janelas (cancelar/remarcar, reembolso, triagem, edição):
+     seguem o tema. Clean = branco com texto marinho. */
+  --bpp-sheet-fundo: #ffffff;
+  --bpp-sheet-cartao: #eef3fa;
+  --bpp-sheet-borda: rgba(10, 31, 68, 0.14);
+  --bpp-sheet-texto: #0a1f44;
+  --bpp-sheet-suave: rgba(10, 31, 68, 0.78);
+  --bpp-sheet-veu: rgba(10, 31, 68, 0.55);
+  --bpp-sheet-alca: rgba(10, 31, 68, 0.22);
+  --bpp-sheet-chip: rgba(10, 31, 68, 0.07);
+  --bpp-sheet-campo: #f7f9fd;
+  --bpp-sheet-primario: #0a1f44;
+  --bpp-sheet-primario-texto: #ffffff;
+  --bpp-sheet-sel-borda: #1d4a8a;
+  --bpp-sheet-sel-fundo: rgba(29, 74, 138, 0.1);
+  --bpp-sheet-sel-cheio: #1d4a8a;
+  --bpp-sheet-sel-cheio-texto: #ffffff;
+  /* Esqueleto (carregando) */
+  --bpp-esqueleto: rgba(10, 31, 68, 0.09);
+  --bpp-esqueleto-brilho: rgba(255, 255, 255, 0.65);
+  /* Contagem regressiva e aviso de mensagem */
+  --bpp-contagem-fundo: rgba(18, 62, 125, 0.08);
+  --bpp-contagem-texto: #123e7d;
+  --bpp-aviso-ponto: #e11d48;
 }
 .dark .bp-app-paciente {
   --bpp-s1-topo: #000000;
@@ -88,6 +112,27 @@
   --bpp-cancelar-fundo: rgba(248, 113, 113, 0.1);
   --bpp-cancelar-borda: rgba(252, 165, 165, 0.3);
   --bpp-cancelar-texto: #fca5a5;
+  /* Fase 3 — janelas no Dark: preto com texto claro (como antes) */
+  --bpp-sheet-fundo: #09090b;
+  --bpp-sheet-cartao: #18181b;
+  --bpp-sheet-borda: rgba(255, 255, 255, 0.14);
+  --bpp-sheet-texto: #ffffff;
+  --bpp-sheet-suave: rgba(255, 255, 255, 0.72);
+  --bpp-sheet-veu: rgba(0, 0, 0, 0.8);
+  --bpp-sheet-alca: rgba(255, 255, 255, 0.25);
+  --bpp-sheet-chip: rgba(255, 255, 255, 0.1);
+  --bpp-sheet-campo: #18181b;
+  --bpp-sheet-primario: #38bdf8;
+  --bpp-sheet-primario-texto: #09090b;
+  --bpp-sheet-sel-borda: #38bdf8;
+  --bpp-sheet-sel-fundo: rgba(56, 189, 248, 0.15);
+  --bpp-sheet-sel-cheio: #38bdf8;
+  --bpp-sheet-sel-cheio-texto: #09090b;
+  --bpp-esqueleto: rgba(255, 255, 255, 0.08);
+  --bpp-esqueleto-brilho: rgba(255, 255, 255, 0.12);
+  --bpp-contagem-fundo: rgba(127, 178, 240, 0.12);
+  --bpp-contagem-texto: #bcd7fa;
+  --bpp-aviso-ponto: #fb7185;
 }
 
 /* ------------------- fundos (movidos do globals.css) ---------------- */
@@ -337,4 +382,161 @@
   .bp-app-paciente .bp-secao-1.bpp-tela {
     min-height: auto;
   }
+}
+
+/* ==================================================================== */
+/* Fase 3 — Perfil, janelas que seguem o tema, estados e micro-         */
+/* interações. Tudo com escopo .bp-app-paciente (as janelas do paciente */
+/* são renderizadas DENTRO da casca, não em portal).                    */
+/* ==================================================================== */
+
+/* ------------------------------ janelas ----------------------------- */
+.bp-app-paciente .bpp-sheet {
+  background: var(--bpp-sheet-fundo);
+  color: var(--bpp-sheet-texto);
+}
+.bp-app-paciente .bpp-sheet-veu { background: var(--bpp-sheet-veu); }
+.bp-app-paciente .bpp-sheet-cartao { background: var(--bpp-sheet-cartao); }
+.bp-app-paciente .bpp-sheet-borda { border-color: var(--bpp-sheet-borda); }
+.bp-app-paciente .bpp-sheet-suave { color: var(--bpp-sheet-suave); }
+.bp-app-paciente .bpp-sheet-forte { color: var(--bpp-sheet-texto); }
+.bp-app-paciente .bpp-sheet-chip { background: var(--bpp-sheet-chip); }
+.bp-app-paciente .bpp-sheet-alca { background: var(--bpp-sheet-alca); }
+.bp-app-paciente .bpp-sheet-campo {
+  background: var(--bpp-sheet-campo);
+  border-color: var(--bpp-sheet-borda);
+  color: var(--bpp-sheet-texto);
+}
+.bp-app-paciente .bpp-sheet-campo::placeholder,
+.bp-app-paciente .bpp-sheet textarea::placeholder,
+.bp-app-paciente .bpp-sheet input::placeholder { color: var(--bpp-sheet-suave); }
+.bp-app-paciente .bpp-sheet-primario {
+  background: var(--bpp-sheet-primario);
+  color: var(--bpp-sheet-primario-texto);
+}
+.bp-app-paciente .bpp-sheet-sel {
+  border-color: var(--bpp-sheet-sel-borda);
+  background: var(--bpp-sheet-sel-fundo);
+}
+.bp-app-paciente .bpp-sheet-sel.bpp-sheet-cartao {
+  background: linear-gradient(var(--bpp-sheet-sel-fundo), var(--bpp-sheet-sel-fundo)), var(--bpp-sheet-cartao);
+}
+.bp-app-paciente .bpp-sheet-sel-cheio {
+  border-color: var(--bpp-sheet-sel-cheio);
+  background: var(--bpp-sheet-sel-cheio);
+  color: var(--bpp-sheet-sel-cheio-texto);
+}
+.bp-app-paciente .bpp-sheet-painel { padding-bottom: max(2rem, env(safe-area-inset-bottom)); }
+
+/* Entrada: o véu aparece e a janela sobe (some com menos movimento) */
+@keyframes bpp-veu-entrar { from { opacity: 0; } to { opacity: 1; } }
+@keyframes bpp-sheet-subir { from { transform: translateY(24px); opacity: 0.6; } to { transform: none; opacity: 1; } }
+@keyframes bpp-surgir { from { transform: translateY(8px); opacity: 0; } to { transform: none; opacity: 1; } }
+.bp-app-paciente .bpp-sheet-veu { animation: bpp-veu-entrar 0.2s ease-out both; }
+.bp-app-paciente .bpp-sheet-painel { animation: bpp-sheet-subir 0.26s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.bp-app-paciente .bpp-surgir { animation: bpp-surgir 0.28s ease-out both; }
+
+/* Tela larga: a janela vira um cartão centralizado */
+@media (min-width: 1024px) {
+  .bp-app-paciente .bpp-sheet-raiz { align-items: center; padding: 2rem; }
+  .bp-app-paciente .bpp-sheet-painel { border-radius: 1.5rem; border-top-width: 0; padding-bottom: 2rem; }
+}
+
+/* -------------------------- Perfil (grupos) ------------------------- */
+.bp-app-paciente .bpp-grupo-titulo {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0 0.25rem;
+  margin-bottom: 0.5rem;
+}
+.bp-app-paciente .bpp-linha {
+  width: 100%;
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.625rem 0.25rem;
+  text-align: left;
+  border-radius: 0.875rem;
+  transition: background-color 0.15s ease, transform 0.15s ease;
+}
+.bp-app-paciente button.bpp-linha:hover { background: rgba(10, 31, 68, 0.04); }
+.dark .bp-app-paciente button.bpp-linha:hover { background: rgba(255, 255, 255, 0.05); }
+.bp-app-paciente .bpp-linha + .bpp-linha { border-top: 1px solid rgba(10, 31, 68, 0.07); }
+.dark .bp-app-paciente .bpp-linha + .bpp-linha { border-top-color: rgba(255, 255, 255, 0.07); }
+
+/* Cartão de saúde: marinho nos dois modos (texto branco ≥ 4,5:1) */
+.bp-app-paciente .bpp-cartao-saude {
+  background:
+    radial-gradient(120% 80% at 100% 0%, rgba(125, 175, 240, 0.25) 0%, transparent 60%),
+    linear-gradient(140deg, #14457f 0%, #123e7d 45%, #0a1f44 100%);
+  color: #ffffff;
+  box-shadow: 0 14px 34px -14px rgba(10, 31, 68, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.16);
+}
+.dark .bp-app-paciente .bpp-cartao-saude {
+  box-shadow: 0 0 0 1px rgba(147, 197, 253, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+/* ------------------- Início: contagem e aviso ----------------------- */
+.bp-app-paciente .bpp-contagem {
+  background: var(--bpp-contagem-fundo);
+  color: var(--bpp-contagem-texto);
+}
+.bp-app-paciente .bpp-aviso-ponto { background: var(--bpp-aviso-ponto); }
+@keyframes bpp-pulso {
+  0% { box-shadow: 0 0 0 0 var(--bpp-aviso-ponto); }
+  70% { box-shadow: 0 0 0 8px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+.bp-app-paciente .bpp-aviso-ponto.bpp-pulsar { animation: bpp-pulso 1.8s ease-out 3; }
+
+/* ------------------------ estados padronizados ---------------------- */
+@keyframes bpp-brilho-esqueleto { from { background-position: 150% 0; } to { background-position: -50% 0; } }
+.bp-app-paciente .bpp-esqueleto {
+  border-radius: 0.75rem;
+  background:
+    linear-gradient(100deg, transparent 30%, var(--bpp-esqueleto-brilho) 50%, transparent 70%) 0 0 / 200% 100% no-repeat,
+    var(--bpp-esqueleto);
+  animation: bpp-brilho-esqueleto 1.4s ease-in-out infinite;
+}
+
+/* ---------------------- toque com resposta leve --------------------- */
+/* .bpp-toque: botões e cartões "afundam" um pouco ao tocar.            */
+.bp-app-paciente .bpp-toque {
+  transition: transform 0.14s ease, box-shadow 0.2s ease, background-color 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.bp-app-paciente .bpp-toque:active { transform: scale(0.98); }
+.bp-app-paciente .bpp-toque-forte:active { transform: scale(0.95); }
+@media (hover: hover) {
+  .bp-app-paciente .bp-glass.bpp-toque:hover { box-shadow: 0 16px 34px -18px rgba(10, 31, 68, 0.45); }
+}
+.bp-app-paciente button:focus-visible,
+.bp-app-paciente a:focus-visible,
+.bp-app-paciente [role="button"]:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+/* Sem backdrop-filter: pontinhos, dica e véu do documento ficam opacos */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .bp-app-paciente .bpp-indicador,
+  .bp-app-paciente .bpp-indicador-secao,
+  .bp-app-paciente .bpp-dica { background: rgba(9, 9, 11, 0.94); }
+  .bp-app-paciente .bpp-veu-doc { background: rgba(10, 31, 68, 0.82); }
+}
+
+/* Menos movimento: sem animação de entrada, pulso, brilho nem escala */
+@media (prefers-reduced-motion: reduce) {
+  .bp-app-paciente .bpp-sheet-veu,
+  .bp-app-paciente .bpp-sheet-painel,
+  .bp-app-paciente .bpp-surgir,
+  .bp-app-paciente .bpp-aviso-ponto.bpp-pulsar,
+  .bp-app-paciente .bpp-esqueleto { animation: none; }
+  .bp-app-paciente .bpp-toque,
+  .bp-app-paciente .bpp-linha { transition: none; }
+  .bp-app-paciente .bpp-toque:active,
+  .bp-app-paciente .bpp-toque-forte:active { transform: none; }
 }

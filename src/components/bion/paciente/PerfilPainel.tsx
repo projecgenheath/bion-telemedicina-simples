@@ -1,14 +1,12 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
-  Activity,
   Briefcase,
   CalendarDays,
   ChevronRight,
-  CircleUserRound,
   CreditCard,
   Droplets,
   FileUp,
@@ -18,24 +16,33 @@ import {
   Moon,
   Pencil,
   Phone,
-  Pill,
-  Scale,
   ShieldCheck,
   Sun,
-  X,
+  Users,
 } from "lucide-react";
 import { useBion } from "@/lib/bion-store";
-import { formatarAltura, formatarPeso } from "@/lib/medidas-paciente";
-import { formatarDataNascimento, hojeIsoSaoPaulo, idadeDeNascimento, type ComDataNascimento } from "@/lib/idade";
+import { calcularImc, formatarAltura, formatarPeso, lerAlturaCm, lerPesoKg } from "@/lib/medidas-paciente";
+import { formatarDataNascimento, idadeDeNascimento, type ComDataNascimento } from "@/lib/idade";
+import { CLASSE_ETIQUETA, rotuloHistorico } from "./etiqueta-consulta";
+import { EstadoVazio } from "./EstadosPaciente";
+import { aplicarTema, useTemaHtml } from "./useTemaHtml";
+import type { CampoPerfil } from "./DadosPessoaisSheet";
+import type { ListaPerfil } from "./TelaListaCompleta";
 
 /**
- * Painel do perfil (gesto esquerda → direita): foto, dados pessoais e de
- * saúde, histórico de consultas, uploads na BION IA, pagamentos, suporte,
- * termos e alternância Dark/Clean.
+ * Painel do perfil (gesto esquerda → direita), reorganizado em grupos na
+ * fase 3: cabeçalho com foto, cartão de saúde, dados pessoais (linhas que
+ * abrem a janela de edição com Salvar e Cancelar), consultas, pagamentos e
+ * uploads (3 últimos + "Ver tudo" em tela cheia), aparência, conta e Sair.
+ *
+ * A edição e o "Ver tudo" são sobreposições renderizadas pelo PacienteApp
+ * (fora do carrossel), por isso chegam como callbacks.
  */
 
 /** Limite do arquivo ORIGINAL antes do recorte para 256×256 (o servidor valida o resultado). */
 const FOTO_ORIGINAL_MAX_BYTES = 15 * 1024 * 1024;
+/** Quantos itens cada grupo mostra antes do "Ver tudo". */
+const PREVIA = 3;
 
 const INICIAIS = (nome: string) =>
   nome
@@ -45,56 +52,98 @@ const INICIAIS = (nome: string) =>
     .map((p) => p[0]?.toUpperCase())
     .join("") || "?";
 
-function Linha({ icone, rotulo, valor }: { icone: React.ReactNode; rotulo: string; valor: React.ReactNode }) {
+function Grupo({ titulo, acao, children }: { titulo: string; acao?: ReactNode; children: ReactNode }) {
   return (
-    <div className="flex items-center gap-3 py-2.5">
-      <span className="text-bion-ink/75 dark:text-bion-paper/75">{icone}</span>
-      <span className="text-sm text-bion-ink/75 dark:text-bion-paper/75 w-28 shrink-0">{rotulo}</span>
-      <span className="text-sm font-semibold text-bion-ink dark:text-bion-paper text-right flex-1">{valor || "—"}</span>
-    </div>
+    <section aria-label={titulo}>
+      <div className="flex items-end justify-between">
+        <h3 className="bpp-grupo-titulo text-bion-ink/75 dark:text-bion-paper/75">{titulo}</h3>
+        {acao}
+      </div>
+      <div className="bp-glass p-2">{children}</div>
+    </section>
   );
 }
 
-function Chips({ itens, cor }: { itens: string[]; cor: string }) {
-  if (!itens.length) return <span className="text-sm opacity-80">—</span>;
+/** Linha de dado: com `onClick` vira botão (abre a edição daquele campo). */
+function LinhaDado({ icone, rotulo, valor, onClick }: { icone: ReactNode; rotulo: string; valor?: ReactNode; onClick?: () => void }) {
+  const conteudo = (
+    <>
+      <span className="w-9 h-9 rounded-xl bg-bion-ink/6 dark:bg-white/8 inline-flex items-center justify-center shrink-0 text-bion-ink/75 dark:text-bion-paper/75" aria-hidden>
+        {icone}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-xs font-semibold text-bion-ink/75 dark:text-bion-paper/75">{rotulo}</span>
+        <span className={`block text-sm font-semibold truncate ${valor ? "text-bion-ink dark:text-bion-paper" : "text-bion-ink/75 dark:text-bion-paper/75"}`}>
+          {valor || (onClick ? "Adicionar" : "—")}
+        </span>
+      </span>
+      {onClick ? <ChevronRight className="w-4 h-4 shrink-0 text-bion-ink/75 dark:text-bion-paper/75" aria-hidden /> : null}
+    </>
+  );
+  return onClick ? (
+    <button type="button" onClick={onClick} className="bpp-linha bpp-toque" aria-label={`${rotulo}: ${valor || "não informado"}. Editar`}>
+      {conteudo}
+    </button>
+  ) : (
+    <div className="bpp-linha">{conteudo}</div>
+  );
+}
+
+function LinhaLink({ icone, rotulo, onClick }: { icone: ReactNode; rotulo: string; onClick: () => void }) {
   return (
-    <div className="flex flex-wrap gap-1.5 justify-end">
+    <button type="button" onClick={onClick} role="link" className="bpp-linha bpp-toque group">
+      <span className="w-9 h-9 rounded-xl bg-bion-ink/6 dark:bg-white/8 inline-flex items-center justify-center shrink-0 text-bion-ink dark:text-bion-paper" aria-hidden>
+        {icone}
+      </span>
+      <span className="flex-1 text-sm font-semibold text-bion-ink dark:text-bion-paper">{rotulo}</span>
+      <ChevronRight className="w-4 h-4 text-bion-ink/75 dark:text-bion-paper/75 transition group-hover:translate-x-0.5" aria-hidden />
+    </button>
+  );
+}
+
+function VerTudo({ total, onClick, rotulo }: { total: number; onClick: () => void; rotulo: string }) {
+  if (total <= PREVIA) return null;
+  return (
+    <button type="button" onClick={onClick} aria-label={`Ver tudo: ${rotulo} (${total})`} className="bpp-toque min-h-11 px-2 -mr-1 text-xs font-bold text-bion-sea dark:text-sky-300 inline-flex items-center gap-0.5">
+      Ver tudo ({total}) <ChevronRight className="w-3.5 h-3.5" aria-hidden />
+    </button>
+  );
+}
+
+/** Chips do cartão de saúde (sobre o marinho: texto claro ≥ 4,5:1). */
+function ChipsSaude({ itens, vazio, tom }: { itens: string[]; vazio: string; tom: "alerta" | "neutro" }) {
+  if (!itens.length) return <span className="text-sm text-white/80">{vazio}</span>;
+  return (
+    <span className="flex flex-wrap gap-1.5">
       {itens.map((i) => (
-        <span key={i} className={`text-xs font-semibold px-2.5 py-1 rounded-full ${cor}`}>
+        <span key={i} className={`text-xs font-bold px-2.5 py-1 rounded-full ${tom === "alerta" ? "bg-amber-300/20 text-amber-100 ring-1 ring-amber-200/30" : "bg-white/15 text-white"}`}>
           {i}
         </span>
       ))}
-    </div>
+    </span>
   );
 }
 
-export function PerfilPainel({ onSair }: { onSair: () => void }) {
-  const { pacientePerfil, sessao, consultas, arquivos, exames, atualizarPacientePerfil } = useBion();
+export function PerfilPainel({
+  onSair,
+  onEditar,
+  onVerTudo,
+  onAgendar,
+}: {
+  onSair: () => void;
+  onEditar: (campo?: CampoPerfil) => void;
+  onVerTudo: (lista: ListaPerfil) => void;
+  onAgendar: () => void;
+}) {
+  const { pacientePerfil, sessao, consultas, arquivos, exames, medicoes, atualizarPacientePerfil } = useBion();
   const router = useRouter();
   const inputFotoRef = useRef<HTMLInputElement>(null);
   // M4: data de nascimento ("YYYY-MM-DD" do payload; o tipo do store não a declara).
   const dataNascimento = (pacientePerfil as (typeof pacientePerfil & ComDataNascimento) | undefined)?.dataNascimento ?? "";
   const idadeExibida = (dataNascimento ? idadeDeNascimento(dataNascimento) : null) ?? pacientePerfil?.idade ?? 0;
-  const [editando, setEditando] = useState(false);
-  const [salvando, setSalvando] = useState(false);
   const [enviandoFoto, setEnviandoFoto] = useState(false);
-  const [form, setForm] = useState({
-    dataNascimento,
-    telefone: pacientePerfil?.telefone ?? "",
-    profissao: pacientePerfil?.profissao ?? "",
-    estadoCivil: pacientePerfil?.estadoCivil ?? "",
-    alergias: (pacientePerfil?.alergias ?? []).join(", "),
-    comorbidades: (pacientePerfil?.comorbidades ?? []).join(", "),
-    medicamentos: (pacientePerfil?.medicamentos ?? []).join(", "),
-  });
-  const [tema, setTema] = useState(() => {
-    if (typeof window === "undefined") return "claro" as "claro" | "escuro";
-    try {
-      return (localStorage.getItem("bion-tema") === "escuro" ? "escuro" : "claro") as "claro" | "escuro";
-    } catch {
-      return "claro" as "claro" | "escuro";
-    }
-  });
+  // Tema lido do <html> (segue o celular quando não há escolha salva).
+  const tema = useTemaHtml();
   const [densidade, setDensidade] = useState<"compacta" | "confortavel" | "grande">(() => {
     if (typeof window === "undefined") return "confortavel";
     try {
@@ -110,10 +159,19 @@ export function PerfilPainel({ onSair }: { onSair: () => void }) {
     [consultas, sessao.nome],
   );
   const uploads = useMemo(
-    () => arquivos.filter((a) => a.enviadoPor === "paciente" || a.consulta === "BION IA").slice(0, 20),
+    () => arquivos.filter((a) => a.enviadoPor === "paciente" || a.consulta === "BION IA"),
     [arquivos],
   );
-  const pagamentos = consultasDoPaciente.filter((c) => c.status !== "cancelada");
+  const pagamentos = useMemo(() => consultasDoPaciente.filter((c) => c.status !== "cancelada"), [consultasDoPaciente]);
+
+  // Peso, altura e IMC do cartão de saúde: medição mais recente; se não houver, o perfil.
+  const ultimaMedicao = (tipo: "peso" | "altura") =>
+    medicoes.filter((m) => m.tipo === tipo).sort((a, b) => a.criadoEm.localeCompare(b.criadoEm)).at(-1)?.valor1;
+  const pesoKg = ultimaMedicao("peso") ?? lerPesoKg(pacientePerfil?.peso) ?? undefined;
+  const alturaCm = ultimaMedicao("altura") ?? lerAlturaCm(pacientePerfil?.altura) ?? undefined;
+  const imc = calcularImc(pesoKg, alturaCm);
+  const pesoTexto = pesoKg ? formatarPeso(String(pesoKg)) : "";
+  const alturaTexto = alturaCm ? formatarAltura(String(alturaCm)) : "";
 
   // A2: valida o arquivo antes de ler, trata falhas de leitura e só
   // confirma o sucesso depois que o servidor aceitou a foto.
@@ -160,16 +218,6 @@ export function PerfilPainel({ onSair }: { onSair: () => void }) {
     reader.readAsDataURL(arquivo);
   };
 
-  const alternarTema = (novo: "claro" | "escuro") => {
-    setTema(novo);
-    document.documentElement.classList.toggle("dark", novo === "escuro");
-    try {
-      localStorage.setItem("bion-tema", novo === "escuro" ? "escuro" : "claro");
-    } catch {
-      /* ignora */
-    }
-  };
-
   const aplicarDensidade = (novo: "compacta" | "confortavel" | "grande") => {
     setDensidade(novo);
     const root = document.documentElement;
@@ -182,51 +230,14 @@ export function PerfilPainel({ onSair }: { onSair: () => void }) {
     }
   };
 
-  // A2: aguarda a resposta do servidor. Em erro (toast vem de `api`), o modo
-  // de edição continua aberto com o que foi digitado. Envia só os campos
-  // alterados — dado legado fora do formato novo (A1) não bloqueia o resto.
-  const salvar = async () => {
-    if (salvando) return;
-    const lista = (v: string) => v.split(",").map((s) => s.trim()).filter(Boolean);
-    const novo = {
-      dataNascimento: form.dataNascimento || null,
-      telefone: form.telefone.trim(),
-      profissao: form.profissao.trim(),
-      estadoCivil: form.estadoCivil,
-      alergias: lista(form.alergias),
-      comorbidades: lista(form.comorbidades),
-      medicamentos: lista(form.medicamentos),
-    };
-    const atual = {
-      dataNascimento: dataNascimento || null,
-      telefone: pacientePerfil?.telefone ?? "",
-      profissao: pacientePerfil?.profissao ?? "",
-      estadoCivil: pacientePerfil?.estadoCivil ?? "",
-      alergias: pacientePerfil?.alergias ?? [],
-      comorbidades: pacientePerfil?.comorbidades ?? [],
-      medicamentos: pacientePerfil?.medicamentos ?? [],
-    };
-    const alterado = (Object.keys(novo) as (keyof typeof novo)[]).filter(
-      (k) => JSON.stringify(novo[k]) !== JSON.stringify(atual[k]),
-    );
-    if (!alterado.length) {
-      setEditando(false);
-      return;
-    }
-    const patch = Object.fromEntries(alterado.map((k) => [k, novo[k]])) as Partial<typeof novo>;
-    setSalvando(true);
-    const ok = await atualizarPacientePerfil(patch);
-    setSalvando(false);
-    if (ok) {
-      setEditando(false);
-      toast.success("Perfil atualizado.");
-    }
-  };
-
-  const chip = "bg-bion-ink/8 dark:bg-white/10 text-bion-ink dark:text-bion-paper";
+  const idadeTexto = dataNascimento || idadeExibida > 0 ? `${idadeExibida} ${idadeExibida === 1 ? "ano" : "anos"}` : "";
+  const segmento = (ativo: boolean) =>
+    `bpp-toque min-h-11 rounded-full text-sm font-semibold inline-flex items-center justify-center gap-2 ${
+      ativo ? "bp-acao" : "text-bion-ink dark:text-bion-paper"
+    }`;
 
   return (
-    <div className="px-5 py-6 space-y-4 bp-safe-top pb-24">
+    <div className="px-5 py-6 space-y-6 bp-safe-top pb-24">
       <input
         ref={inputFotoRef}
         type="file"
@@ -240,241 +251,187 @@ export function PerfilPainel({ onSair }: { onSair: () => void }) {
         }}
       />
 
-      {/* Cabeçalho do perfil */}
-      <div className="bp-glass p-6 flex flex-col items-center text-center">
-        <div className="relative">
+      {/* Cabeçalho: foto, nome, idade e e-mail */}
+      <header className="flex items-center gap-4 pt-1">
+        <div className="relative shrink-0">
           {pacientePerfil?.foto ? (
-             
-            <img src={pacientePerfil.foto} alt={`Foto de ${sessao.nome}`} className="w-24 h-24 rounded-full object-cover border-4 border-white/80 dark:border-white/20 shadow-lg" />
+            <img src={pacientePerfil.foto} alt={`Foto de ${sessao.nome}`} className="w-20 h-20 rounded-full object-cover border-4 border-white/80 dark:border-white/20 shadow-lg" />
           ) : (
-            <div className="w-24 h-24 rounded-full bg-gradient-to-br from-bion-sea to-bion-ink text-white inline-flex items-center justify-center text-2xl font-black border-4 border-white/80 dark:border-white/20 shadow-lg">
+            <div className="w-20 h-20 rounded-full bg-gradient-to-br from-bion-sea to-bion-ink text-white inline-flex items-center justify-center text-2xl font-black border-4 border-white/80 dark:border-white/20 shadow-lg">
               {INICIAIS(sessao.nome)}
             </div>
           )}
-          <button type="button"
+          <button
+            type="button"
             onClick={() => inputFotoRef.current?.click()}
             disabled={enviandoFoto}
             aria-busy={enviandoFoto}
             aria-label={enviandoFoto ? "Enviando foto de perfil" : "Alterar foto de perfil"}
-            className="absolute -bottom-1 -right-1 bp-acao w-9 h-9 inline-flex items-center justify-center !rounded-full disabled:opacity-60"
+            className="bpp-toque-forte absolute -bottom-1 -right-1 bp-acao w-9 h-9 inline-flex items-center justify-center !rounded-full disabled:opacity-60"
           >
             <Pencil className="w-4 h-4" />
           </button>
         </div>
-        <h2 className="mt-3 text-lg font-bold text-bion-ink dark:text-bion-paper">{sessao.nome}</h2>
-        <p className="text-sm text-bion-ink/75 dark:text-bion-paper/75">{sessao.email}</p>
-      </div>
+        <div className="min-w-0">
+          <h2 className="text-xl font-black leading-tight text-bion-ink dark:text-bion-paper break-words">{sessao.nome}</h2>
+          {idadeTexto ? <p className="text-sm font-semibold text-bion-ink dark:text-bion-paper mt-0.5">{idadeTexto}</p> : null}
+          <p className="text-sm text-bion-ink/75 dark:text-bion-paper/75 truncate">{sessao.email}</p>
+        </div>
+      </header>
 
-      {/* Dados pessoais */}
-      <div className="bp-glass p-5">
-        <div className="flex items-center justify-between mb-2">
-          <h3 className="text-sm font-bold text-bion-ink dark:text-bion-paper">Dados pessoais</h3>
-          <button type="button"
-            onClick={() => {
-              if (editando) void salvar();
-              else {
-                setForm({
-                  dataNascimento,
-                  telefone: pacientePerfil?.telefone ?? "",
-                  profissao: pacientePerfil?.profissao ?? "",
-                  estadoCivil: pacientePerfil?.estadoCivil ?? "",
-                  alergias: (pacientePerfil?.alergias ?? []).join(", "),
-                  comorbidades: (pacientePerfil?.comorbidades ?? []).join(", "),
-                  medicamentos: (pacientePerfil?.medicamentos ?? []).join(", "),
-                });
-                setEditando(true);
-              }
-            }}
-            disabled={salvando}
-            className="text-xs font-bold text-bion-sea dark:text-sky-300 inline-flex items-center gap-1 disabled:opacity-50"
-          >
-            {editando ? <X className="w-3.5 h-3.5" /> : <Pencil className="w-3.5 h-3.5" />}
-            {editando ? "Salvar" : "Editar"}
+      {/* Cartão de saúde — o que o médico precisa saber de cara */}
+      <section aria-label="Cartão de saúde" className="bpp-cartao-saude rounded-3xl p-5">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-xs font-bold uppercase tracking-wider text-white/80">Cartão de saúde</span>
+          <button type="button" onClick={() => onEditar("tipoSanguineo")} className="bpp-toque min-h-11 -my-2 -mr-2 px-3 rounded-full text-xs font-bold text-white inline-flex items-center gap-1.5 hover:bg-white/10" aria-label="Editar cartão de saúde">
+            <Pencil className="w-3.5 h-3.5" aria-hidden /> Editar
           </button>
         </div>
-        {editando ? (
-          <div className="space-y-3 pt-1">
-            <label className="block">
-              <span className="text-xs font-semibold text-bion-ink/75 dark:text-bion-paper/75">Data de nascimento</span>
-              <input type="date" value={form.dataNascimento} onChange={(e) => setForm((f) => ({ ...f, dataNascimento: e.target.value }))} min="1900-01-01" max={hojeIsoSaoPaulo()} autoComplete="bday" className="bp-entrada mt-1 w-full px-4 py-2.5 text-sm" />
-            </label>
-            <input value={form.telefone} onChange={(e) => setForm((f) => ({ ...f, telefone: e.target.value }))} placeholder="Telefone" aria-label="Telefone" type="tel" inputMode="tel" autoComplete="tel" maxLength={25} className="bp-entrada w-full px-4 py-2.5 text-sm" />
-            <input value={form.profissao} onChange={(e) => setForm((f) => ({ ...f, profissao: e.target.value }))} placeholder="Profissão" aria-label="Profissão" maxLength={80} className="bp-entrada w-full px-4 py-2.5 text-sm" />
-            <select value={form.estadoCivil} onChange={(e) => setForm((f) => ({ ...f, estadoCivil: e.target.value }))} aria-label="Estado civil" className="bp-entrada w-full px-4 py-2.5 text-sm">
-              <option value="">Estado civil…</option>
-              {["Solteiro(a)", "Casado(a)", "Divorciado(a)", "Viúvo(a)", "União estável"].map((o) => (
-                <option key={o} value={o}>{o}</option>
-              ))}
-            </select>
-            <input value={form.alergias} onChange={(e) => setForm((f) => ({ ...f, alergias: e.target.value }))} placeholder="Alergias (separadas por vírgula)" aria-label="Alergias separadas por vírgula" className="bp-entrada w-full px-4 py-2.5 text-sm" />
-            <input value={form.comorbidades} onChange={(e) => setForm((f) => ({ ...f, comorbidades: e.target.value }))} placeholder="Comorbidades (separadas por vírgula)" aria-label="Comorbidades separadas por vírgula" className="bp-entrada w-full px-4 py-2.5 text-sm" />
-            <input value={form.medicamentos} onChange={(e) => setForm((f) => ({ ...f, medicamentos: e.target.value }))} placeholder="Medicamentos em uso (separados por vírgula)" aria-label="Medicamentos separados por vírgula" className="bp-entrada w-full px-4 py-2.5 text-sm" />
-            <button type="button" onClick={() => void salvar()} disabled={salvando} className="bp-acao w-full py-2.5 text-sm">
-              {salvando ? "Salvando..." : "Salvar alterações"}
-            </button>
+        <div className="mt-3 grid grid-cols-3 gap-2">
+          <div className="rounded-2xl bg-white/10 px-3 py-2.5">
+            <div className="text-xs font-semibold text-white/80 inline-flex items-center gap-1"><Droplets className="w-3.5 h-3.5" aria-hidden /> Sangue</div>
+            <div className="text-xl font-black leading-tight mt-0.5">{pacientePerfil?.tipoSanguineo || "—"}</div>
           </div>
-        ) : (
-          <div className="divide-y divide-bion-ink/5 dark:divide-white/5">
-            <Linha icone={<CalendarDays className="w-4 h-4" />} rotulo="Nascimento" valor={formatarDataNascimento(dataNascimento)} />
-            <Linha icone={<CalendarDays className="w-4 h-4" />} rotulo="Idade" valor={dataNascimento || idadeExibida > 0 ? `${idadeExibida} ${idadeExibida === 1 ? "ano" : "anos"}` : ""} />
-            <Linha icone={<CircleUserRound className="w-4 h-4" />} rotulo="Sexo" valor={pacientePerfil?.genero} />
-            <Linha icone={<Phone className="w-4 h-4" />} rotulo="Telefone" valor={pacientePerfil?.telefone} />
-            <Linha icone={<Briefcase className="w-4 h-4" />} rotulo="Profissão" valor={pacientePerfil?.profissao} />
-            <Linha icone={<HeartCrack className="w-4 h-4" />} rotulo="Estado civil" valor={pacientePerfil?.estadoCivil} />
-            <div className="flex items-center gap-3 py-2.5">
-              <span className="text-bion-ink/75 dark:text-bion-paper/75"><Droplets className="w-4 h-4" /></span>
-              <span className="text-sm text-bion-ink/75 dark:text-bion-paper/75 w-28 shrink-0">Tipo sanguíneo</span>
-              <span className="text-sm font-semibold text-bion-ink dark:text-bion-paper text-right flex-1">{pacientePerfil?.tipoSanguineo || "—"}</span>
-            </div>
-            <div className="flex items-center gap-3 py-2.5">
-              <span className="text-bion-ink/75 dark:text-bion-paper/75"><Activity className="w-4 h-4" /></span>
-              <span className="text-sm text-bion-ink/75 dark:text-bion-paper/75 w-28 shrink-0">Alergias</span>
-              <div className="flex-1 flex justify-end">
-                <Chips itens={pacientePerfil?.alergias ?? []} cor="bg-amber-500/15 text-amber-800 dark:text-amber-300" />
-              </div>
-            </div>
-            <div className="flex items-center gap-3 py-2.5">
-              <span className="text-bion-ink/75 dark:text-bion-paper/75"><HeartCrack className="w-4 h-4" /></span>
-              <span className="text-sm text-bion-ink/75 dark:text-bion-paper/75 w-28 shrink-0">Comorbidades</span>
-              <div className="flex-1 flex justify-end">
-                <Chips itens={pacientePerfil?.comorbidades ?? []} cor="bg-red-500/10 text-red-800 dark:text-red-300" />
-              </div>
-            </div>
-            <div className="flex items-center gap-3 py-2.5">
-              <span className="text-bion-ink/75 dark:text-bion-paper/75"><Pill className="w-4 h-4" /></span>
-              <span className="text-sm text-bion-ink/75 dark:text-bion-paper/75 w-28 shrink-0">Medicamentos</span>
-              <div className="flex-1 flex justify-end">
-                <Chips itens={pacientePerfil?.medicamentos ?? []} cor={chip} />
-              </div>
-            </div>
-            <Linha icone={<Scale className="w-4 h-4" />} rotulo="Peso / Altura" valor={[formatarPeso(pacientePerfil?.peso), formatarAltura(pacientePerfil?.altura)].filter(Boolean).join(" · ")} />
+          <div className="rounded-2xl bg-white/10 px-3 py-2.5">
+            <div className="text-xs font-semibold text-white/80">Peso</div>
+            <div className="text-base font-black leading-tight mt-1 truncate">{pesoTexto || "—"}</div>
           </div>
-        )}
-      </div>
+          <div className="rounded-2xl bg-white/10 px-3 py-2.5">
+            <div className="text-xs font-semibold text-white/80">{imc ? "IMC" : "Altura"}</div>
+            <div className="text-base font-black leading-tight mt-1 truncate">{imc ? imc.toFixed(1) : alturaTexto || "—"}</div>
+          </div>
+        </div>
+        <dl className="mt-4 space-y-3">
+          <div>
+            <dt className="text-xs font-semibold text-white/80 mb-1">Alergias</dt>
+            <dd><ChipsSaude itens={pacientePerfil?.alergias ?? []} vazio="Nenhuma informada" tom="alerta" /></dd>
+          </div>
+          <div>
+            <dt className="text-xs font-semibold text-white/80 mb-1">Comorbidades</dt>
+            <dd><ChipsSaude itens={pacientePerfil?.comorbidades ?? []} vazio="Nenhuma informada" tom="neutro" /></dd>
+          </div>
+          <div>
+            <dt className="text-xs font-semibold text-white/80 mb-1">Medicamentos em uso</dt>
+            <dd><ChipsSaude itens={pacientePerfil?.medicamentos ?? []} vazio="Nenhum informado" tom="neutro" /></dd>
+          </div>
+        </dl>
+      </section>
 
-      {/* Histórico de consultas */}
-      <div className="bp-glass p-5">
-        <h3 className="text-sm font-bold text-bion-ink dark:text-bion-paper mb-3">Histórico de consultas</h3>
+      {/* Dados pessoais: cada linha abre a edição daquele campo */}
+      <Grupo titulo="Dados pessoais">
+        <LinhaDado icone={<CalendarDays className="w-4 h-4" />} rotulo="Nascimento" valor={formatarDataNascimento(dataNascimento)} onClick={() => onEditar("dataNascimento")} />
+        <LinhaDado icone={<Phone className="w-4 h-4" />} rotulo="Telefone" valor={pacientePerfil?.telefone} onClick={() => onEditar("telefone")} />
+        <LinhaDado icone={<Briefcase className="w-4 h-4" />} rotulo="Profissão" valor={pacientePerfil?.profissao} onClick={() => onEditar("profissao")} />
+        <LinhaDado icone={<HeartCrack className="w-4 h-4" />} rotulo="Estado civil" valor={pacientePerfil?.estadoCivil} onClick={() => onEditar("estadoCivil")} />
+        <LinhaDado icone={<Users className="w-4 h-4" />} rotulo="Sexo" valor={pacientePerfil?.genero} />
+      </Grupo>
+
+      {/* Consultas: 3 últimas + Ver tudo */}
+      <Grupo titulo="Consultas" acao={<VerTudo total={consultasDoPaciente.length} rotulo="histórico de consultas" onClick={() => onVerTudo("consultas")} />}>
         {consultasDoPaciente.length === 0 ? (
-          <p className="text-sm opacity-80">Nenhuma consulta ainda — agende pela BION IA.</p>
+          <EstadoVazio
+            superficie="solto"
+            icone={<CalendarDays className="w-6 h-6" />}
+            titulo="Nenhuma consulta ainda"
+            texto="Agende a primeira pela BION IA."
+            acao={{ rotulo: "Agendar consulta", onClick: onAgendar }}
+          />
         ) : (
-          <ul className="space-y-2 max-h-72 overflow-y-auto bp-coluna">
-            {consultasDoPaciente.map((c) => (
-              <li key={c.id} className="rounded-2xl bg-white/50 dark:bg-white/5 px-4 py-3 flex items-center justify-between gap-2">
-                <div className="min-w-0">
+          consultasDoPaciente.slice(0, PREVIA).map((c) => {
+            const e = rotuloHistorico(c.status, c.pago);
+            return (
+              <div key={c.id} className="bpp-linha">
+                <div className="min-w-0 flex-1">
                   <div className="text-sm font-semibold text-bion-ink dark:text-bion-paper truncate">{c.especialidade} · {c.medico}</div>
-                  <div className="text-xs opacity-80">{c.data} às {c.hora} · {c.status === "concluida" ? "Realizada" : c.status === "cancelada" ? "Cancelada" : c.status === "em_espera" ? "Aguardando" : c.status === "pendente_anamnese" ? "Pendente anamnese" : "Confirmada"}</div>
+                  <div className="text-xs text-bion-ink/75 dark:text-bion-paper/75">{c.data} às {c.hora}</div>
                 </div>
-                <span className="text-xs font-bold shrink-0 text-bion-ink dark:text-bion-paper">{c.valor}</span>
-              </li>
-            ))}
-          </ul>
+                <span className={`text-xs font-bold px-2.5 py-1 rounded-full whitespace-nowrap ${CLASSE_ETIQUETA[e.tom]}`}>{e.texto}</span>
+              </div>
+            );
+          })
         )}
-      </div>
-
-      {/* Uploads na BION IA */}
-      <div className="bp-glass p-5">
-        <h3 className="text-sm font-bold text-bion-ink dark:text-bion-paper mb-1 flex items-center gap-2">
-          <FileUp className="w-4 h-4" /> Uploads na BION IA
-        </h3>
-        <p className="text-xs opacity-80 mb-3">{uploads.length} laudo(s) enviado(s) · {exames.length} grupo(s) de resultados ativos</p>
-        {uploads.length === 0 ? (
-          <p className="text-sm opacity-80">Nenhum upload ainda. Envie laudos pela BION IA.</p>
-        ) : (
-          <ul className="space-y-2">
-            {uploads.map((a) => (
-              <li key={a.id} className="text-sm flex items-center justify-between gap-2 text-bion-ink dark:text-bion-paper">
-                <span className="truncate">{a.nome}</span>
-                <span className="text-xs opacity-80 shrink-0">{a.data} · {a.tamanhoKb} KB</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+      </Grupo>
 
       {/* Pagamentos */}
-      <div className="bp-glass p-5">
-        <h3 className="text-sm font-bold text-bion-ink dark:text-bion-paper mb-3 flex items-center gap-2">
-          <CreditCard className="w-4 h-4" /> Pagamentos de consultas
-        </h3>
+      <Grupo titulo="Pagamentos" acao={<VerTudo total={pagamentos.length} rotulo="pagamentos" onClick={() => onVerTudo("pagamentos")} />}>
         {pagamentos.length === 0 ? (
-          <p className="text-sm opacity-80">Nenhum pagamento ainda.</p>
+          <div className="bpp-linha">
+            <CreditCard className="w-4 h-4 shrink-0 text-bion-ink/75 dark:text-bion-paper/75" aria-hidden />
+            <span className="text-sm text-bion-ink/75 dark:text-bion-paper/75">Nenhum pagamento ainda.</span>
+          </div>
         ) : (
-          <ul className="space-y-2 max-h-56 overflow-y-auto bp-coluna">
-            {pagamentos.map((c) => (
-              <li key={c.id} className="text-sm flex items-center justify-between gap-2">
-                <span className="truncate text-bion-ink dark:text-bion-paper">{c.especialidade} · {c.data}</span>
-                <span className={`shrink-0 text-xs font-bold px-2.5 py-1 rounded-full ${c.pago ? "bg-emerald-500/15 text-emerald-800 dark:text-emerald-200" : "bg-amber-500/15 text-amber-800 dark:text-amber-200"}`}>
-                  {c.pago ? "Pago" : "Pendente"} {c.valor ? `· ${c.valor}` : ""}
-                </span>
-              </li>
-            ))}
-          </ul>
+          pagamentos.slice(0, PREVIA).map((c) => (
+            <div key={c.id} className="bpp-linha">
+              <span className="min-w-0 flex-1 text-sm font-semibold truncate text-bion-ink dark:text-bion-paper">{c.especialidade} · {c.data}</span>
+              <span className={`shrink-0 text-xs font-bold px-2.5 py-1 rounded-full ${c.pago ? CLASSE_ETIQUETA.ok : CLASSE_ETIQUETA.pagamento}`}>
+                {c.pago ? "Pago" : "Pendente"}{c.valor ? ` · ${c.valor}` : ""}
+              </span>
+            </div>
+          ))
         )}
-      </div>
+      </Grupo>
 
-      {/* Preferências e acessos */}
-      <div className="bp-glass p-5 space-y-1">
-        <h3 className="text-sm font-bold text-bion-ink dark:text-bion-paper mb-2">Modo do app</h3>
-        <div className="grid grid-cols-2 gap-2 rounded-full bg-bion-ink/5 dark:bg-white/5 p-1.5">
-          <button type="button"
-            onClick={() => alternarTema("claro")}
-            aria-pressed={tema === "claro"}
-            className={`rounded-full py-2.5 text-sm font-semibold inline-flex items-center justify-center gap-2 transition ${tema === "claro" ? "bp-acao" : "text-bion-ink/75 dark:text-bion-paper/75"}`}
-          >
-            <Sun className="w-4 h-4" /> Clean
-          </button>
-          <button type="button"
-            onClick={() => alternarTema("escuro")}
-            aria-pressed={tema === "escuro"}
-            className={`rounded-full py-2.5 text-sm font-semibold inline-flex items-center justify-center gap-2 transition ${tema === "escuro" ? "bp-acao" : "text-bion-ink/75 dark:text-bion-paper/75"}`}
-          >
-            <Moon className="w-4 h-4" /> Dark
-          </button>
-        </div>
-
-        <h3 className="text-sm font-bold text-bion-ink dark:text-bion-paper mt-4 mb-2">Tamanho do texto</h3>
-        <div className="grid grid-cols-3 gap-1.5 rounded-2xl bg-bion-ink/5 dark:bg-white/5 p-1.5" role="group" aria-label="Densidade do texto">
-          {(
-            [
-              ["compacta", "Compacto"],
-              ["confortavel", "Padrão"],
-              ["grande", "Grande"],
-            ] as const
-          ).map(([id, rotulo]) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => aplicarDensidade(id)}
-              aria-pressed={densidade === id}
-              className={`rounded-xl py-2 text-xs font-semibold transition ${
-                densidade === id ? "bp-acao" : "text-bion-ink/75 dark:text-bion-paper/75"
-              }`}
-            >
-              {rotulo}
-            </button>
-          ))}
-        </div>
-
-        <button type="button" onClick={() => router.push("/suporte")} className="w-full flex items-center justify-between py-3 px-1 group" role="link">
-          <span className="text-sm font-semibold text-bion-ink dark:text-bion-paper inline-flex items-center gap-2.5">
-            <LifeBuoy className="w-4 h-4 opacity-80" /> Suporte
+      {/* Uploads na BION IA */}
+      <Grupo titulo="Uploads na BION IA" acao={<VerTudo total={uploads.length} rotulo="uploads" onClick={() => onVerTudo("uploads")} />}>
+        <div className="bpp-linha">
+          <FileUp className="w-4 h-4 shrink-0 text-bion-ink/75 dark:text-bion-paper/75" aria-hidden />
+          <span className="text-sm text-bion-ink/75 dark:text-bion-paper/75">
+            {uploads.length === 1 ? "1 laudo enviado" : `${uploads.length} laudos enviados`} · {exames.length === 1 ? "1 grupo de resultados" : `${exames.length} grupos de resultados`}
           </span>
-          <ChevronRight className="w-4 h-4 opacity-70 group-hover:translate-x-0.5 transition" />
-        </button>
-        <button type="button" onClick={() => router.push("/privacidade")} className="w-full flex items-center justify-between py-3 px-1 group" role="link">
-          <span className="text-sm font-semibold text-bion-ink dark:text-bion-paper inline-flex items-center gap-2.5">
-            <ShieldCheck className="w-4 h-4 opacity-80" /> Termos e privacidade
-          </span>
-          <ChevronRight className="w-4 h-4 opacity-70 group-hover:translate-x-0.5 transition" />
-        </button>
-      </div>
+        </div>
+        {uploads.slice(0, PREVIA).map((a) => (
+          <div key={a.id} className="bpp-linha">
+            <span className="min-w-0 flex-1 text-sm font-semibold truncate text-bion-ink dark:text-bion-paper">{a.nome}</span>
+            <span className="text-xs text-bion-ink/75 dark:text-bion-paper/75 shrink-0">{a.data}</span>
+          </div>
+        ))}
+      </Grupo>
 
-      <button type="button"
+      {/* Aparência */}
+      <Grupo titulo="Aparência">
+        <div className="p-2 space-y-4">
+          <div>
+            <div className="text-xs font-semibold text-bion-ink/75 dark:text-bion-paper/75 mb-2" id="rotulo-modo">Modo do app</div>
+            <div className="grid grid-cols-2 gap-1.5 rounded-full bg-bion-ink/6 dark:bg-white/8 p-1" role="group" aria-labelledby="rotulo-modo">
+              <button type="button" onClick={() => aplicarTema("claro")} aria-pressed={tema === "claro"} className={segmento(tema === "claro")}>
+                <Sun className="w-4 h-4" aria-hidden /> Clean
+              </button>
+              <button type="button" onClick={() => aplicarTema("escuro")} aria-pressed={tema === "escuro"} className={segmento(tema === "escuro")}>
+                <Moon className="w-4 h-4" aria-hidden /> Dark
+              </button>
+            </div>
+          </div>
+          <div>
+            <div className="text-xs font-semibold text-bion-ink/75 dark:text-bion-paper/75 mb-2" id="rotulo-texto">Tamanho do texto</div>
+            <div className="grid grid-cols-3 gap-1.5 rounded-full bg-bion-ink/6 dark:bg-white/8 p-1" role="group" aria-labelledby="rotulo-texto">
+              {(
+                [
+                  ["compacta", "A−", "Texto menor", "text-xs"],
+                  ["confortavel", "A", "Texto padrão", "text-sm"],
+                  ["grande", "A+", "Texto maior", "text-base"],
+                ] as const
+              ).map(([id, rotulo, nome, tamanho]) => (
+                <button key={id} type="button" onClick={() => aplicarDensidade(id)} aria-pressed={densidade === id} aria-label={nome} className={`${segmento(densidade === id)} !font-black ${tamanho}`}>
+                  {rotulo}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </Grupo>
+
+      {/* Conta */}
+      <Grupo titulo="Conta">
+        <LinhaLink icone={<LifeBuoy className="w-4 h-4" />} rotulo="Suporte" onClick={() => router.push("/suporte")} />
+        <LinhaLink icone={<ShieldCheck className="w-4 h-4" />} rotulo="Termos e privacidade" onClick={() => router.push("/privacidade")} />
+      </Grupo>
+
+      <button
+        type="button"
         onClick={onSair}
-        className="w-full rounded-full border-2 border-red-600/40 text-red-700 dark:border-red-400/40 dark:text-red-300 py-3.5 text-sm font-bold inline-flex items-center justify-center gap-2 hover:bg-red-500/10 transition"
+        className="bpp-toque w-full min-h-12 rounded-full border-2 border-red-600/40 text-red-700 dark:border-red-400/40 dark:text-red-300 text-sm font-bold inline-flex items-center justify-center gap-2 hover:bg-red-500/10"
       >
-        <LogOut className="w-4 h-4" /> Sair da conta
+        <LogOut className="w-4 h-4" aria-hidden /> Sair da conta
       </button>
     </div>
   );

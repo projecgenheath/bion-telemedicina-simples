@@ -155,7 +155,7 @@ export function NavegacaoPaciente({
                 }`}
               />
               {docs && naoLidas > 0 ? (
-                <span className="absolute -top-0.5 -right-0.5 min-w-3.5 h-3.5 px-0.5 rounded-full bg-rose-500 text-[9px] font-black leading-[14px] text-center text-white">
+                <span className="absolute -top-1.5 -right-1.5 min-w-5 h-5 px-1 rounded-full bg-rose-600 text-xs font-black leading-5 text-center text-white">
                   {naoLidas > 9 ? "9+" : naoLidas}
                 </span>
               ) : null}
