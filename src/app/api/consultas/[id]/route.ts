@@ -22,6 +22,7 @@ import {
 } from "@/lib/server/bloqueio-agenda";
 import { criarCobranca, confirmarPagamento, falharPagamento } from "@/lib/server/pagamentos";
 import { ok, falha } from "@/lib/server/http";
+import { consultaJaRepassada, ERRO_CONSULTA_REPASSADA } from "@/lib/server/repasse";
 import {
   calcularMulta,
   cancelarReservasDoDia,
@@ -285,6 +286,9 @@ export async function PATCH(
           });
           if (!novoMedico) {
             return Response.json({ erro: "Médico não encontrado." }, { status: 400 });
+          }
+          if (novoMedico.id !== consulta.medicoId && (await consultaJaRepassada(id))) {
+            return Response.json({ erro: ERRO_CONSULTA_REPASSADA }, { status: 409 });
           }
           data.medicoId = novoMedico.id;
         }

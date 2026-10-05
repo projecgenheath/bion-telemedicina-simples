@@ -9,6 +9,7 @@ const PUBLICOS: readonly string[] = [
   "/api/auth/sessao",
   "/api/auth/logout",
   "/api/pagamentos/webhook",
+  "/api/cron/fechar-repasses", // protegido pelo Bearer CRON_SECRET na própria rota
 ];
 
 function ehPublico(pathname: string): boolean {

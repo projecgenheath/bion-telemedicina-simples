@@ -27,6 +27,11 @@ function verifica(cond: unknown, nome: string) {
 const espera = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 async function main() {
+  // repasse primeiro: as FKs do repasse são RESTRICT
+  await db.repasseAjuste.deleteMany({ where: { origemAjusteId: { not: null } } });
+  await db.repasseAjuste.deleteMany();
+  await db.repasseItem.deleteMany();
+  await db.repasse.deleteMany();
   await db.reembolso.deleteMany();
   await db.remarcacaoPendente.deleteMany();
   await db.bloqueioAgenda.deleteMany();
