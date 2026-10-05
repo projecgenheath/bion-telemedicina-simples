@@ -121,7 +121,7 @@ igual("fila: repasse com CNPJ divergente", [rr.tom, rr.chips.map((c) => c.rotulo
 igual("fila: repasse detalhe", rr.detalhe, "03/10 · R$ 50,00 · 1 consulta");
 igual("fila: sem PIX", fila[0].chips.map((c) => c.rotulo), ["A pagar", "Sem chave PIX"]);
 const re = fila.find((i) => i.chave === "reembolso-e1")!;
-igual("fila: reembolso", [re.titulo, re.detalhe, re.destino], ["Reembolso · Paulo", "Dra. A · consulta ontem 10:00 · R$ 150,00", "admin-agendamentos"]);
+igual("fila: reembolso", [re.titulo, re.detalhe, re.destino], ["Reembolso · Paulo", "Dra. A · consulta ontem 10:00 · R$ 150,00", "admin-agendamentos?aba=reembolsos"]);
 igual("fila: médico em validação", [fila[4].titulo, fila[4].detalhe, fila[4].destino], ["Dr. 2", "Clínica · CRM 2-SP", "admin-medicos"]);
 igual("fila: auditoria crítica humanizada", fila[2].titulo, "Login falhou repetido");
 igual("humanizar mantém siglas", montarFila({ medicos: [], tickets: [], repasses: null, reembolsos: null, auditLogs: [{ ...logs[0], acao: "LGPD_COFRE_CONSULTADO" }] }, AGORA)[0].titulo, "LGPD cofre consultado");

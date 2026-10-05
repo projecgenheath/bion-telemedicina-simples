@@ -80,7 +80,7 @@ function TorreInterna({ children }: { children: ReactNode }) {
 
   const comando = path === "/painel";
   // Telas já redesenhadas no visual Torre não usam a "folha" das telas antigas.
-  const redesenhada = comando || view === "admin-repasses";
+  const redesenhada = comando || view === "admin-repasses" || view === "admin-agendamentos";
   const info = view ? MODULOS[view] : undefined;
   const contagem = contarPorCategoria(fila);
   const criticos24h = auditLogs.filter((l) => l.severidade === "critical" && agora - l.ts <= 86_400_000).length;
