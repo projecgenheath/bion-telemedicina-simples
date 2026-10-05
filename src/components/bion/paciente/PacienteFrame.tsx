@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
+import "./paciente.css";
 
 /** Moldura sem AppShell para telas abertas a partir do app do paciente. */
 export function PacienteFrame({
@@ -13,12 +14,12 @@ export function PacienteFrame({
 }) {
   const router = useRouter();
   return (
-    <div className="min-h-dvh bp-painel text-bion-ink dark:text-bion-paper">
-      <header className="sticky top-0 z-20 px-4 py-3 flex items-center gap-3 border-b border-black/5 dark:border-white/10 bg-background/85 backdrop-blur">
+    <div className="bp-app-paciente min-h-dvh bp-painel text-bion-ink dark:text-bion-paper">
+      <header className="sticky top-0 z-20 px-4 py-3 flex items-center gap-3 border-b border-bion-ink/10 dark:border-white/10 bg-white/85 dark:bg-black/80 backdrop-blur">
         <button
           type="button"
           onClick={() => router.replace("/paciente")}
-          className="rounded-full p-2 bg-bion-ink/5 dark:bg-white/10"
+          className="w-11 h-11 inline-flex items-center justify-center rounded-full bg-bion-ink/8 dark:bg-white/10"
           aria-label="Voltar ao app"
         >
           <ArrowLeft className="w-5 h-5" />

@@ -185,13 +185,13 @@ export function TriagemSlides({
           <X className="w-5 h-5" />
         </button>
         <div className="min-w-0 flex-1">
-          <div className="text-[11px] font-bold uppercase tracking-wider text-white/50">Triagem</div>
+          <div className="text-xs font-bold uppercase tracking-wider text-white/70">Triagem</div>
           <div className="text-sm font-bold truncate">{especialidade}</div>
-          <div className="text-xs text-white/50 truncate">
+          <div className="text-xs text-white/70 truncate">
             {medico} · {quando}
           </div>
         </div>
-        <button type="button" onClick={() => void pularTudo} className="text-xs font-semibold text-white/55">
+        <button type="button" onClick={() => void pularTudo} className="text-xs font-semibold text-white/70">
           Pular
         </button>
       </header>
@@ -200,7 +200,7 @@ export function TriagemSlides({
         <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
           <div className="h-full bg-sky-400 transition-all" style={{ width: `${progresso}%` }} />
         </div>
-        <div className="mt-1 text-[11px] text-white/45">
+        <div className="mt-1 text-xs text-white/70">
           {indice + 1} / {ETAPAS_ANAMNESE.length} · {etapa.rotulo}
         </div>
       </div>
@@ -237,17 +237,17 @@ export function TriagemSlides({
             }`}
           >
             <div className="flex items-center justify-between mb-3">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-sky-300">
+              <span className="text-xs font-bold uppercase tracking-wider text-sky-300">
                 {String(i + 1).padStart(2, "0")} · {item.rotulo}
               </span>
-              {respondidos[item.id] ? <Check className="w-4 h-4 text-emerald-400" /> : <Sparkles className="w-4 h-4 text-white/30" />}
+              {respondidos[item.id] ? <Check className="w-4 h-4 text-emerald-400" /> : <Sparkles className="w-4 h-4 text-white/60" />}
             </div>
             <p className="text-[17px] font-semibold leading-snug">
               {pronta && i === ETAPAS_ANAMNESE.length - 1
                 ? "Tudo certo. Envie ao médico quando quiser."
                 : DICAS[item.id]}
             </p>
-            {respondidos[item.id] ? <p className="mt-3 text-sm text-white/55">Você: {respondidos[item.id]}</p> : null}
+            {respondidos[item.id] ? <p className="mt-3 text-sm text-white/70">Você: {respondidos[item.id]}</p> : null}
 
             {i === idxServidor && !pronta ? (
               <>
@@ -269,11 +269,11 @@ export function TriagemSlides({
                   onChange={(e) => setRascunhos((r) => ({ ...r, [item.id]: e.target.value }))}
                   rows={3}
                   placeholder="Ou escreva aqui…"
-                  className="mt-4 w-full rounded-2xl border border-white/15 bg-black/35 p-3 text-sm text-white placeholder:text-white/40"
+                  className="mt-4 w-full rounded-2xl border border-white/15 bg-black/35 p-3 text-sm text-white placeholder:text-white/60"
                 />
               </>
             ) : i > idxServidor && !pronta ? (
-              <p className="mt-4 text-sm text-white/45">Responda o card atual para chegar aqui.</p>
+              <p className="mt-4 text-sm text-white/70">Responda o card atual para chegar aqui.</p>
             ) : null}
 
             <div className="mt-auto pt-4 flex items-center gap-2">
@@ -286,7 +286,7 @@ export function TriagemSlides({
                 </button>
               ) : i === idxServidor ? (
                 <>
-                  <button type="button" onClick={() => void enviar("Pode pular esta etapa.")} className="text-xs font-semibold text-white/50 px-2">
+                  <button type="button" onClick={() => void enviar("Pode pular esta etapa.")} className="text-xs font-semibold text-white/70 px-2">
                     Pular
                   </button>
                   <button type="button" disabled={enviando || !(rascunhos[item.id] ?? "").trim()} onClick={() => void enviar(rascunhos[item.id] ?? "")} className="flex-1 rounded-2xl py-3 text-sm font-bold bg-sky-400 text-zinc-950 disabled:opacity-40">

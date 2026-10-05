@@ -80,7 +80,7 @@ export function PedirReembolsoSheet({ consulta, onFechar }: { consulta: Consulta
                 {consulta.valor ? ` (${consulta.valor})` : ""} volta pelo mesmo meio de pagamento. Se for negado, a decisão é definitiva.
               </p>
               {prazo ? (
-                <p className="mt-2 text-xs text-white/55">
+                <p className="mt-2 text-xs text-white/70">
                   {prazoAberto ? `Prazo para pedir: até ${fmtTicketData(prazo)} (horário de Brasília).` : "O prazo de 7 dias para pedir reembolso já terminou."}
                 </p>
               ) : null}
@@ -94,20 +94,20 @@ export function PedirReembolsoSheet({ consulta, onFechar }: { consulta: Consulta
               value={justificativa}
               onChange={(e) => setJustificativa(e.target.value.slice(0, JUSTIFICATIVA_MAX + 200))}
               disabled={!prazoAberto || enviando}
-              className="w-full rounded-xl border border-white/15 bg-zinc-900 p-3 text-sm text-white placeholder:text-white/40 disabled:opacity-50"
+              className="w-full rounded-xl border border-white/15 bg-zinc-900 p-3 text-sm text-white placeholder:text-white/60 disabled:opacity-50"
               rows={5}
               placeholder="Conte o que aconteceu (ex.: problema de conexão, emergência…)"
               aria-describedby="contador-justificativa"
             />
-            <div id="contador-justificativa" className="mt-1 flex justify-between text-[11px]" aria-live="polite">
-              <span className={tamanho > 0 && !valida ? "text-amber-300" : "text-white/45"}>
+            <div id="contador-justificativa" className="mt-1 flex justify-between text-xs" aria-live="polite">
+              <span className={tamanho > 0 && !valida ? "text-amber-300" : "text-white/70"}>
                 {tamanho < JUSTIFICATIVA_MIN
                   ? `Mínimo de ${JUSTIFICATIVA_MIN} caracteres`
                   : tamanho > JUSTIFICATIVA_MAX
                     ? `Máximo de ${JUSTIFICATIVA_MAX} caracteres`
                     : "Tudo certo"}
               </span>
-              <span className={tamanho > JUSTIFICATIVA_MAX ? "text-amber-300" : "text-white/45"}>
+              <span className={tamanho > JUSTIFICATIVA_MAX ? "text-amber-300" : "text-white/70"}>
                 {tamanho}/{JUSTIFICATIVA_MAX}
               </span>
             </div>
@@ -164,7 +164,7 @@ function DetalhesPedido({ consultaId, onFechar }: { consultaId: string; onFechar
         <div className="mt-4 space-y-3 text-sm">
           <div className="rounded-2xl border border-white/10 bg-zinc-900 p-4">
             <div className="flex items-center justify-between gap-2">
-              <span className="text-xs font-bold uppercase tracking-wider text-white/50">Status</span>
+              <span className="text-xs font-bold uppercase tracking-wider text-white/70">Status</span>
               <EtiquetaStatus status={r.status} />
             </div>
             <ul className="mt-3 space-y-1 text-white/75">
@@ -176,7 +176,7 @@ function DetalhesPedido({ consultaId, onFechar }: { consultaId: string; onFechar
             </ul>
           </div>
           <div className="rounded-2xl border border-white/10 bg-zinc-900 p-4">
-            <span className="text-xs font-bold uppercase tracking-wider text-white/50">Sua justificativa</span>
+            <span className="text-xs font-bold uppercase tracking-wider text-white/70">Sua justificativa</span>
             <p className="mt-2 whitespace-pre-wrap text-white/85">{r.justificativa || "—"}</p>
           </div>
           {r.respostaAdmin ? (
@@ -185,14 +185,14 @@ function DetalhesPedido({ consultaId, onFechar }: { consultaId: string; onFechar
                 r.status === "negado" ? "border-red-400/30 bg-red-500/10" : "border-white/10 bg-zinc-900"
               }`}
             >
-              <span className="text-xs font-bold uppercase tracking-wider text-white/50">Resposta da equipe BION</span>
+              <span className="text-xs font-bold uppercase tracking-wider text-white/70">Resposta da equipe BION</span>
               <p className="mt-2 whitespace-pre-wrap text-white/85">{r.respostaAdmin}</p>
             </div>
           ) : null}
           {r.status === "negado" ? (
-            <p className="text-xs text-white/55">A decisão é definitiva e não é possível fazer um novo pedido para esta consulta.</p>
+            <p className="text-xs text-white/70">A decisão é definitiva e não é possível fazer um novo pedido para esta consulta.</p>
           ) : r.status === "em_analise" ? (
-            <p className="text-xs text-white/55">Você será avisado quando a equipe decidir.</p>
+            <p className="text-xs text-white/70">Você será avisado quando a equipe decidir.</p>
           ) : null}
         </div>
       )}
@@ -209,12 +209,12 @@ export function EtiquetaStatus({ status, claro = false }: { status: string; clar
     ? rotulo.tom === "ok"
       ? "bg-emerald-600/15 text-emerald-800 dark:text-emerald-200"
       : rotulo.tom === "erro"
-        ? "bg-destructive/10 text-destructive"
+        ? "bg-red-600/10 text-red-800 dark:bg-red-400/15 dark:text-red-300"
         : "bg-sky-500/15 text-sky-800 dark:text-sky-200"
     : rotulo.tom === "ok"
       ? "bg-emerald-500/15 text-emerald-200"
       : rotulo.tom === "erro"
         ? "bg-red-500/15 text-red-200"
         : "bg-sky-500/15 text-sky-200";
-  return <span className={`text-[11px] font-bold px-2 py-1 rounded-full text-right ${cor}`}>{rotulo.texto}</span>;
+  return <span className={`text-xs font-bold px-2 py-1 rounded-full text-right ${cor}`}>{rotulo.texto}</span>;
 }

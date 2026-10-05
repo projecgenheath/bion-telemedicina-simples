@@ -91,7 +91,7 @@ function Visualizador({
           {corpo.map((p, i) => (
             <p key={i}>{p}</p>
           ))}
-          <p className="pt-4 text-xs opacity-60">Documento assinado digitalmente — BION Telemedicina.</p>
+          <p className="pt-4 text-xs opacity-80">Documento assinado digitalmente — BION Telemedicina.</p>
         </div>
       </div>
     </div>
@@ -202,12 +202,12 @@ export function DocumentosPainel() {
       {/* ------------------------------ Documentos ------------------------------ */}
       <section aria-label="Documentos das consultas">
         <h2 className="text-2xl font-black text-bion-ink dark:text-bion-paper">Documentos</h2>
-        <p className="text-sm text-bion-ink/60 dark:text-bion-paper/60 mb-4">
+        <p className="text-sm text-bion-ink/75 dark:text-bion-paper/75 mb-4">
           Escolha uma consulta realizada para ver ou imprimir seus documentos.
         </p>
 
         {realizadas.length === 0 ? (
-          <div className="bp-glass p-6 text-center text-sm text-bion-ink/60 dark:text-bion-paper/60">
+          <div className="bp-glass p-6 text-center text-sm text-bion-ink/75 dark:text-bion-paper/75">
             Nenhuma consulta ainda. Após a primeira teleconsulta, seus documentos aparecem aqui.
           </div>
         ) : (
@@ -224,7 +224,7 @@ export function DocumentosPainel() {
                 }`}
               >
                 <div className="text-sm font-bold">{c.especialidade}</div>
-                <div className={`text-xs ${consultaSelecionada === c.id ? "opacity-80" : "opacity-60"}`}>
+                <div className={`text-xs ${consultaSelecionada === c.id ? "opacity-80" : "opacity-80"}`}>
                   {c.data} · {c.medico.split(" ").slice(-1)[0]}
                 </div>
               </button>
@@ -235,7 +235,7 @@ export function DocumentosPainel() {
         {consultaSelecionada && (
           <div className="mt-4 space-y-2">
             {documentosDaConsulta(consultaSelecionada).length === 0 ? (
-              <div className="bp-glass p-5 text-sm text-bion-ink/60 dark:text-bion-paper/60">
+              <div className="bp-glass p-5 text-sm text-bion-ink/75 dark:text-bion-paper/75">
                 Nenhum documento emitido para esta consulta.
               </div>
             ) : (
@@ -248,7 +248,7 @@ export function DocumentosPainel() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-bold text-bion-ink dark:text-bion-paper">{d.titulo}</div>
-                      <div className="text-xs opacity-60">{d.data}</div>
+                      <div className="text-xs opacity-80">{d.data}</div>
                     </div>
                     <button type="button"
                       onClick={() => setVisualizando({ titulo: d.titulo, corpo: d.corpo })}
@@ -274,7 +274,7 @@ export function DocumentosPainel() {
       {/* ------------------------------ Mensagens ------------------------------ */}
       <section aria-label="Mensagens com médicos" className="pt-2">
         <h2 className="text-2xl font-black text-bion-ink dark:text-bion-paper">Mensagens</h2>
-        <p className="text-sm text-bion-ink/60 dark:text-bion-paper/60 mb-4">
+        <p className="text-sm text-bion-ink/75 dark:text-bion-paper/75 mb-4">
           Converse com o médico da sua consulta — do agendamento até 30 dias depois dela.
         </p>
 
@@ -292,19 +292,19 @@ export function DocumentosPainel() {
               </button>
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-bold text-bion-ink dark:text-bion-paper truncate">{contatoAtivo.nome}</div>
-                <div className="text-xs opacity-60">{contatoAtivo.aberta ? `Conversa aberta por ${contatoAtivo.fimDias} dia(s)` : "Janela encerrada"}</div>
+                <div className="text-xs opacity-80">{contatoAtivo.aberta ? `Conversa aberta por ${contatoAtivo.fimDias} dia(s)` : "Janela encerrada"}</div>
               </div>
             </div>
 
             <div className="h-72 overflow-y-auto bp-coluna px-4 py-3 space-y-2">
               {conversa.length === 0 ? (
-                <p className="text-sm opacity-60 text-center pt-16">Envie a primeira mensagem para {contatoAtivo.nome.split(" ")[0]}.</p>
+                <p className="text-sm opacity-80 text-center pt-16">Envie a primeira mensagem para {contatoAtivo.nome.split(" ")[0]}.</p>
               ) : (
                 conversa.map((m) => (
                   <div key={m.id} className={`flex ${m.minha ? "justify-end" : "justify-start"}`}>
                     <div className={`max-w-[80%] px-4 py-2.5 text-sm ${m.minha ? "bp-acao rounded-3xl rounded-br-md" : "bg-white/60 dark:bg-white/10 text-bion-ink dark:text-bion-paper rounded-3xl rounded-bl-md"}`}>
                       {m.texto}
-                      <div className={`text-xs mt-1 ${m.minha ? "opacity-70" : "opacity-50"}`}>{m.quando}</div>
+                      <div className={`text-xs mt-1 ${m.minha ? "opacity-80" : "opacity-80"}`}>{m.quando}</div>
                     </div>
                   </div>
                 ))
@@ -354,7 +354,7 @@ export function DocumentosPainel() {
         ) : (
           <div className="space-y-2">
             {contatos.length === 0 ? (
-              <div className="bp-glass p-6 text-center text-sm text-bion-ink/60 dark:text-bion-paper/60">
+              <div className="bp-glass p-6 text-center text-sm text-bion-ink/75 dark:text-bion-paper/75">
                 Após agendar sua primeira consulta, o médico ficará disponível aqui.
               </div>
             ) : (
@@ -373,7 +373,7 @@ export function DocumentosPainel() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-bold text-bion-ink dark:text-bion-paper truncate">{c.nome}</div>
-                    <div className="text-xs opacity-60 flex items-center gap-1">
+                    <div className="text-xs opacity-80 flex items-center gap-1">
                       <MessageCircle className="w-3 h-3" /> {c.aberta ? "Conversa disponível" : "Janela de 30 dias encerrada"}
                     </div>
                   </div>
@@ -385,7 +385,7 @@ export function DocumentosPainel() {
                 </button>
               ))
             )}
-            <p className="text-xs opacity-50 flex items-center gap-1.5 pt-1">
+            <p className="text-xs opacity-80 flex items-center gap-1.5 pt-1">
               <FileUp className="w-3.5 h-3.5" /> Laudos enviados pela BION IA também aparecem no seu histórico de uploads.
             </p>
           </div>

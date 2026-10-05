@@ -35,6 +35,7 @@ import { EtiquetaStatus, PedirReembolsoSheet } from "./PedirReembolsoSheet";
 import { GraficoLinha, type PontoGrafico } from "./GraficoLinha";
 import { DetalheMedicao, type Detalhe } from "./DetalheMedicao";
 import dynamic from "next/dynamic";
+import "./paciente.css";
 
 const ChatBion = dynamic(
   () => import("./ChatBion").then((m) => m.ChatBion),
@@ -91,7 +92,9 @@ export function PacienteApp() {
 
   const irPara = useCallback((p: number) => {
     const el = carrosselRef.current;
-    if (el) el.scrollTo({ left: p * el.clientWidth, behavior: "smooth" });
+    if (!el) return;
+    const menosMovimento = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    el.scrollTo({ left: p * el.clientWidth, behavior: menosMovimento ? "auto" : "smooth" });
   }, []);
 
   // A página inicial é a SEÇÃO 1 (painel central): posiciona o carrossel já na montagem
@@ -101,7 +104,17 @@ export function PacienteApp() {
     const posicionar = () => el.scrollTo({ left: el.clientWidth, behavior: "instant" as ScrollBehavior });
     posicionar();
     const raf = requestAnimationFrame(posicionar);
-    return () => cancelAnimationFrame(raf);
+    // Tela larga (≥ 1024 px): os 3 painéis ficam lado a lado, sem deslizar.
+    // Ao voltar para a largura de celular, recoloca no Início.
+    const largo = window.matchMedia("(min-width: 1024px)");
+    const aoMudarLargura = () => {
+      if (!largo.matches) requestAnimationFrame(posicionar);
+    };
+    largo.addEventListener("change", aoMudarLargura);
+    return () => {
+      cancelAnimationFrame(raf);
+      largo.removeEventListener("change", aoMudarLargura);
+    };
   }, []);
 
   const aoRolar = () => {
@@ -275,17 +288,17 @@ export function PacienteApp() {
   /* Arraste com mouse no desktop quebrava clique de botão ao trocar de painel. */
 
   return (
-    <div className="bp-shell text-bion-ink dark:text-bion-paper">
+    <div className="bp-shell bp-app-paciente text-bion-ink dark:text-bion-paper">
       <div
         ref={carrosselRef}
         role="group"
         tabIndex={0}
         onScroll={aoRolar}
-        className={`bp-carrossel flex h-full overflow-x-auto ${chatAberto || triagemSlide || modalConsulta || consultaReembolso || detalhe ? "pointer-events-none" : ""}`}
+        className={`bp-carrossel bpp-carrossel flex h-full overflow-x-auto ${chatAberto || triagemSlide || modalConsulta || consultaReembolso || detalhe ? "pointer-events-none" : ""}`}
         aria-label="Painéis do app: perfil, início e documentos (arraste para os lados)"
       >
         {/* ============================== PERFIL ============================== */}
-        <div className="flex-[0_0_100%] w-full min-w-full h-full bp-painel overflow-y-auto bp-coluna" aria-label="Perfil">
+        <div className="bpp-lateral bpp-lateral-esq flex-[0_0_100%] w-full min-w-full h-full bp-painel overflow-y-auto bp-coluna" aria-label="Perfil">
           <PerfilPainel
             onSair={async () => {
               await sair();
@@ -295,11 +308,11 @@ export function PacienteApp() {
         </div>
 
         {/* ============================= PRINCIPAL ============================ */}
-        <div className="flex-[0_0_100%] w-full min-w-full h-full overflow-y-auto bp-coluna" aria-label="Início, saúde e exames">
+        <div className="bpp-central flex-[0_0_100%] w-full min-w-full h-full overflow-y-auto bp-coluna" aria-label="Início, saúde e exames">
           {/* --- Seção 1: início --- */}
-          <section className="bp-secao-1 min-h-[100svh] flex flex-col px-5 bp-safe-top pb-28" aria-label="Página inicial">
+          <section className="bp-secao-1 bpp-secao min-h-[100svh] flex flex-col px-5 bp-safe-top pb-28" aria-label="Página inicial">
             <header className="flex items-center justify-between pt-2">
-              <div className="text-xs font-semibold uppercase tracking-wider text-bion-ink/45 dark:text-white/40">
+              <div className="text-xs font-semibold uppercase tracking-wider text-bion-ink/75 dark:text-bion-paper/75">
                 {hoje}
               </div>
               <button type="button"
@@ -322,7 +335,7 @@ export function PacienteApp() {
               <h1 className="text-3xl font-black leading-tight">
                 {saudacao}, {sessao.nome.split(" ")[0]}
               </h1>
-              <p className="text-sm text-bion-ink/55 dark:text-white/50 mt-1">
+              <p className="text-sm text-bion-ink/75 dark:text-bion-paper/75 mt-1">
                 Como você está se sentindo hoje?
               </p>
             </div>
@@ -356,7 +369,7 @@ export function PacienteApp() {
                   aria-label={`Próxima consulta: ${proxima.especialidade} com ${proxima.medico}. Toque para ${salaAberta ? "entrar na sala" : "abrir a sala de espera"}`}
                 >
                   <div className="flex items-center justify-between mb-3">
-                    <span className="text-xs font-bold uppercase tracking-wider text-bion-ink/50 dark:text-white/50">
+                    <span className="text-xs font-bold uppercase tracking-wider text-bion-ink/75 dark:text-bion-paper/75">
                       Próxima consulta
                     </span>
                     <span className="flex items-center gap-1.5">
@@ -365,7 +378,7 @@ export function PacienteApp() {
                           Triagem feita
                         </span>
                       ) : statusTriagem(proxima.id) === "andamento" ? (
-                        <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-300">
+                        <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-amber-500/15 text-amber-800 dark:text-amber-200">
                           Triagem em andamento
                         </span>
                       ) : janelaTriagem(proxima) ? (
@@ -374,68 +387,39 @@ export function PacienteApp() {
                         </span>
                       ) : null}
                       {salaAberta ? (
-                        <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-600 text-white">Sala aberta</span>
+                        <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-700 text-white">Sala aberta</span>
                       ) : (
                         <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-bion-ink/8 dark:bg-white/10">Confirmada</span>
                       )}
                     </span>
                   </div>
                   <div className="text-xl font-bold">{proxima.especialidade}</div>
-                  <div className="text-sm opacity-70">com {proxima.medico}</div>
+                  <div className="text-sm opacity-80">com {proxima.medico}</div>
                   <div className="mt-3 inline-flex items-center gap-2 text-sm font-bold">
                     <CalendarClock className="w-4 h-4" /> {proxima.data} · {proxima.hora}
                   </div>
                 </button>
 
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => entrarSala(proxima.ts)}
-                    className={`inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-bold ${salaAberta ? "bg-emerald-600 text-white" : "bg-bion-ink/8 dark:bg-white/10"}`}
-                  >
-                    <Video className="w-3.5 h-3.5" />
-                    {salaAberta ? "Entrar na sala" : "Abrir sala de espera"}
-                  </button>
-                  {statusTriagem(proxima.id) !== "feita" && janelaTriagem(proxima) ? (
-                    <button
-                      type="button"
-                      onClick={() => abrirTriagem(proxima.id)}
-                      className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-bold bg-sky-600/15 text-sky-900 dark:text-sky-200"
-                    >
-                      <Sparkles className="w-3.5 h-3.5" />
-                      {statusTriagem(proxima.id) === "andamento" ? "Continuar triagem" : "Fazer triagem"}
-                    </button>
-                  ) : statusTriagem(proxima.id) === "feita" ? (
-                    <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-semibold opacity-70">
-                      Triagem enviada ao médico
-                    </span>
-                  ) : null}
-                  <button
-                    type="button"
-                    onClick={() => setModalConsulta({ id: proxima.id, acao: "remarcar" })}
-                    className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-bold bg-bion-ink/8 dark:bg-white/10"
-                  >
-                    <RefreshCw className="w-3.5 h-3.5" /> Remarcar
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setModalConsulta({ id: proxima.id, acao: "cancelar" })}
-                    className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-bold text-destructive bg-destructive/10"
-                  >
-                    <X className="w-3.5 h-3.5" /> Cancelar
-                  </button>
-                </div>
+                <AcoesProximaConsulta
+                  salaAberta={salaAberta}
+                  triagem={statusTriagem(proxima.id)}
+                  triagemDisponivel={janelaTriagem(proxima)}
+                  onEntrar={() => entrarSala(proxima.ts)}
+                  onTriagem={() => abrirTriagem(proxima.id)}
+                  onRemarcar={() => setModalConsulta({ id: proxima.id, acao: "remarcar" })}
+                  onCancelar={() => setModalConsulta({ id: proxima.id, acao: "cancelar" })}
+                />
                 {!salaAberta ? (
-                  <p className="text-xs opacity-50 mt-3">A sala de teleatendimento abre 30 min antes do horário.</p>
+                  <p className="text-xs opacity-80 mt-3">A sala de teleatendimento abre 30 min antes do horário.</p>
                 ) : null}
               </div>
             ) : (
               <button type="button" onClick={() => setChatAberto(true)} className="bp-glass p-5 text-left w-full transition hover:shadow-xl">
-                <div className="text-xs font-bold uppercase tracking-wider text-bion-ink/50 dark:text-white/50 mb-3">
+                <div className="text-xs font-bold uppercase tracking-wider text-bion-ink/75 dark:text-bion-paper/75 mb-3">
                   Consultas
                 </div>
                 <div className="text-xl font-bold">Nenhuma consulta agendada</div>
-                <div className="text-sm opacity-70 mt-1 inline-flex items-center gap-1.5">
+                <div className="text-sm opacity-80 mt-1 inline-flex items-center gap-1.5">
                   <Sparkles className="w-4 h-4" /> Toque para agendar com a BION IA
                 </div>
               </button>
@@ -449,7 +433,7 @@ export function PacienteApp() {
                 aria-expanded={listaConsultasAberta}
               >
                 <span>
-                  <span className="block text-xs font-bold uppercase tracking-wider opacity-50">Agenda</span>
+                  <span className="block text-xs font-bold uppercase tracking-wider opacity-80">Agenda</span>
                   <span className="text-sm font-bold">
                     {proximas.length === 1 ? "1 consulta agendada" : `${proximas.length} consultas agendadas`}
                   </span>
@@ -469,36 +453,36 @@ export function PacienteApp() {
                         <div className="flex items-start justify-between gap-2">
                           <div>
                             <div className="font-bold">{c.especialidade}</div>
-                            <div className="text-xs opacity-70">com {c.medico}</div>
+                            <div className="text-xs opacity-80">com {c.medico}</div>
                             <div className="text-xs font-semibold mt-1">
                               {c.data} · {c.hora}
                             </div>
                           </div>
-                          <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-bion-ink/8 dark:bg-white/10 shrink-0">
+                          <span className="text-xs font-bold px-2 py-1 rounded-full bg-bion-ink/8 dark:bg-white/10 shrink-0">
                             {st === "feita" ? "Triagem feita" : st === "andamento" ? "Triagem em andamento" : janelaTriagem(c) ? "Triagem disponível" : "Confirmada"}
                           </span>
                         </div>
                       </button>
                       <div className="mt-3 flex flex-wrap gap-2">
-                        <button type="button" onClick={() => entrarSala(c.ts)} className="inline-flex items-center gap-1 rounded-full px-2.5 py-1.5 text-[11px] font-bold bg-bion-ink/8 dark:bg-white/10">
+                        <button type="button" onClick={() => entrarSala(c.ts)} className="inline-flex items-center gap-1 rounded-full px-2.5 py-1.5 text-xs font-bold bg-bion-ink/8 dark:bg-white/10">
                           <Video className="w-3 h-3" /> {aberta ? "Entrar" : "Sala de espera"}
                         </button>
                         {st !== "feita" && janelaTriagem(c) ? (
-                          <button type="button" onClick={() => abrirTriagem(c.id)} className="inline-flex items-center gap-1 rounded-full px-2.5 py-1.5 text-[11px] font-bold bg-sky-600/15">
+                          <button type="button" onClick={() => abrirTriagem(c.id)} className="inline-flex items-center gap-1 rounded-full px-2.5 py-1.5 text-xs font-bold bg-sky-600/15">
                             <Sparkles className="w-3 h-3" /> {st === "andamento" ? "Continuar triagem" : "Fazer triagem"}
                           </button>
                         ) : null}
                         <button
                           type="button"
                           onClick={() => setModalConsulta({ id: c.id, acao: "remarcar" })}
-                          className="inline-flex items-center gap-1 rounded-full px-2.5 py-1.5 text-[11px] font-bold bg-bion-ink/8 dark:bg-white/10"
+                          className="inline-flex items-center gap-1 rounded-full px-2.5 py-1.5 text-xs font-bold bg-bion-ink/8 dark:bg-white/10"
                         >
                           <RefreshCw className="w-3 h-3" /> Remarcar
                         </button>
                         <button
                           type="button"
                           onClick={() => setModalConsulta({ id: c.id, acao: "cancelar" })}
-                          className="inline-flex items-center gap-1 rounded-full px-2.5 py-1.5 text-[11px] font-bold text-destructive bg-destructive/10"
+                          className="inline-flex items-center gap-1 rounded-full px-2.5 py-1.5 text-xs font-bold bg-red-600/10 text-red-800 dark:bg-red-400/15 dark:text-red-300"
                         >
                           <X className="w-3 h-3" /> Cancelar
                         </button>
@@ -519,63 +503,60 @@ export function PacienteApp() {
               <CardReembolso key={c.id} consulta={c} />
             ))}
 
-            {/* Card hero: BION IA — agendamento com anamnese */}
-            <button type="button"
-              onClick={() => setChatAberto(true)}
-              className="mt-4 w-full rounded-3xl p-5 text-left text-white relative overflow-hidden shadow-lg shadow-bion-ink/25 transition hover:shadow-xl hover:-translate-y-0.5 bg-gradient-to-br from-bion-deep via-bion-sea to-bion-ink"
-              aria-label="Abrir a BION IA: agendar consulta, fazer anamnese ou perguntar"
-            >
+            {/* Cartão único da BION IA: agendar (principal) + perguntar */}
+            <div className="bpp-cartao-ia mt-4 w-full rounded-3xl p-5 text-white relative overflow-hidden shadow-lg shadow-bion-ink/25 bg-gradient-to-br from-bion-deep via-bion-sea to-bion-ink">
               <span aria-hidden className="absolute -right-8 -top-10 w-40 h-40 rounded-full bg-white/10 blur-2xl" />
               <span aria-hidden className="absolute right-10 -bottom-10 w-28 h-28 rounded-full bg-sky-300/15 blur-2xl" />
               <div className="relative flex items-center gap-3">
-                <span className="w-12 h-12 rounded-2xl bg-white/15 backdrop-blur inline-flex items-center justify-center shrink-0">
+                <span className="w-12 h-12 rounded-2xl bg-white/15 inline-flex items-center justify-center shrink-0" aria-hidden>
                   <Sparkles className="w-6 h-6" />
                 </span>
                 <span className="flex-1 min-w-0">
-                  <span className="flex items-center gap-2">
+                  <span className="flex items-center gap-2 flex-wrap">
                     <span className="font-black text-base">BION IA</span>
                     <span className="text-xs font-bold uppercase tracking-wider bg-white/15 rounded-full px-2 py-0.5">Seu agendamento</span>
                   </span>
-                  <span className="block text-xs text-white/70 mt-0.5">Online agora · responde na hora</span>
+                  <span className="block text-xs text-white/85 mt-0.5">Online agora · responde na hora</span>
                 </span>
               </div>
-              <p className="relative text-sm text-white/85 mt-3 leading-relaxed">
+              <p className="relative text-sm text-white/90 mt-3 leading-relaxed">
                 Eu agendo sua consulta, cuido do pagamento e faço sua <strong className="font-bold text-white">triagem</strong> — uma conversa tranquila para o médico já te conhecer antes do atendimento.
               </p>
-              <span className="relative mt-4 inline-flex items-center gap-2 rounded-full bg-white text-bion-ink text-sm font-bold pl-4 pr-5 py-3">
-                <Stethoscope className="w-4 h-4" /> Agendar consulta agora
-              </span>
-            </button>
+              <button
+                type="button"
+                onClick={() => setChatAberto(true)}
+                className="relative mt-4 w-full inline-flex items-center justify-center gap-2 rounded-full bg-white text-bion-ink text-sm font-bold px-5 py-3.5 shadow-md transition hover:shadow-lg active:scale-[0.99]"
+              >
+                <Stethoscope className="w-4 h-4" aria-hidden /> Agendar consulta agora
+              </button>
+              <button
+                type="button"
+                onClick={() => setChatAberto(true)}
+                className="relative mt-2 w-full flex items-center gap-3 rounded-full bg-white/12 border border-white/25 pl-4 pr-1.5 py-1.5 text-left transition hover:bg-white/18"
+                aria-label="Perguntar algo à BION IA"
+              >
+                <Search className="w-4 h-4 text-white/85 shrink-0" aria-hidden />
+                <span className="flex-1 text-sm text-white/85">Pergunte algo à BION IA…</span>
+                <span className="w-10 h-10 rounded-full bg-white/15 inline-flex items-center justify-center shrink-0" aria-hidden>
+                  <Sparkles className="w-4 h-4" />
+                </span>
+              </button>
+            </div>
 
-            {/* Card: barra de pesquisa da BION IA */}
-            <button type="button"
-              onClick={() => setChatAberto(true)}
-              className="bp-glass mt-3 w-full flex items-center gap-3 px-5 py-4 text-left transition hover:shadow-xl"
-              aria-label="Perguntar à BION IA"
-            >
-              <Search className="w-5 h-5 text-bion-ink/50 dark:text-white/50 shrink-0" />
-              <span className="flex-1 text-sm text-bion-ink/50 dark:text-white/50">
-                Pergunte algo à BION IA…
-              </span>
-              <span className="bp-acao w-10 h-10 inline-flex items-center justify-center shrink-0">
-                <Sparkles className="w-4 h-4" />
-              </span>
-            </button>
-
-            <div className="mt-auto pt-10 flex flex-col items-center gap-1 text-bion-ink/40 dark:text-white/35">
+            <div className="mt-auto pt-10 flex flex-col items-center gap-1 text-bion-ink/75 dark:text-bion-paper/75">
               <span className="text-xs font-semibold">Saúde e exames abaixo</span>
               <ChevronDown className="w-5 h-5 motion-safe:animate-bounce" />
             </div>
           </section>
 
           {/* --- Seção 2: saúde --- */}
-          <section className="bp-secao-2 px-5 py-8" aria-label="Saúde: lembretes, IMC e pressão arterial">
+          <section className="bp-secao-2 bpp-secao px-5 py-8" aria-label="Saúde: lembretes, IMC e pressão arterial">
             <h2 className="text-2xl font-black mb-1">Sua saúde</h2>
-            <p className="text-sm text-bion-ink/60 dark:text-white/50 mb-5">
+            <p className="text-sm text-bion-ink/75 dark:text-bion-paper/75 mb-5">
               Toque em um card para ver o histórico e atualizar.
             </p>
 
-            <div className="space-y-4">
+            <div className="bpp-grade flex flex-col gap-4">
               {/* Lembretes */}
               <button type="button"
                 onClick={() => setDetalhe("lembretes")}
@@ -598,15 +579,15 @@ export function PacienteApp() {
                       .map((l) => (
                         <li key={l.id} className="flex items-center justify-between text-sm">
                           <span className="truncate">{l.titulo}</span>
-                          <span className="opacity-60 shrink-0 ml-2">{l.horario}</span>
+                          <span className="opacity-80 shrink-0 ml-2">{l.horario}</span>
                         </li>
                       ))}
                     {lembretesPendentes.length === 0 && (
-                      <li className="text-sm opacity-60">Todos os lembretes de hoje concluídos.</li>
+                      <li className="text-sm opacity-80">Todos os lembretes de hoje concluídos.</li>
                     )}
                   </ul>
                 ) : (
-                  <p className="text-sm opacity-60">Nenhum lembrete — toque para criar o primeiro.</p>
+                  <p className="text-sm opacity-80">Nenhum lembrete — toque para criar o primeiro.</p>
                 )}
               </button>
 
@@ -628,19 +609,19 @@ export function PacienteApp() {
                   <GraficoLinha
                     ariaLabel="Evolução do IMC"
                     altura={110}
-                    series={[{ pontos: serieImc, cor: "var(--bion-sea)", area: true }]}
+                    series={[{ pontos: serieImc, cor: "var(--bpp-grafico-linha)", area: true }]}
                     refMin={18.5}
                     refMax={24.9}
                   />
                 ) : (
-                  <p className="text-sm opacity-60 py-4">
+                  <p className="text-sm opacity-80 py-4">
                     {pesos.length === 0
                       ? "Registre peso e altura para acompanhar seu IMC."
                       : "Mais um registro e o gráfico aparece."}
                   </p>
                 )}
                 {imcAtual && (
-                  <span className="text-xs font-semibold inline-flex items-center gap-1 opacity-60">
+                  <span className="text-xs font-semibold inline-flex items-center gap-1 opacity-80">
                     <TrendingUp className="w-3.5 h-3.5" /> Toque para atualizar peso e altura
                   </span>
                 )}
@@ -659,7 +640,7 @@ export function PacienteApp() {
                   {pas.at(-1) && (
                     <span className="text-2xl font-black">
                       {pas.at(-1)!.valor1}
-                      <span className="text-base opacity-50">/{pas.at(-1)!.valor2 ?? "—"}</span>
+                      <span className="text-base opacity-80">/{pas.at(-1)!.valor2 ?? "—"}</span>
                     </span>
                   )}
                 </div>
@@ -668,16 +649,16 @@ export function PacienteApp() {
                     ariaLabel="Evolução da pressão arterial"
                     altura={110}
                     series={[
-                      { pontos: pas.map((p) => ({ valor: p.valor1, rotulo: rotuloCurto(p.criadoEm) })), cor: "var(--bion-sea)", area: true },
+                      { pontos: pas.map((p) => ({ valor: p.valor1, rotulo: rotuloCurto(p.criadoEm) })), cor: "var(--bpp-grafico-linha)", area: true },
                       ...(pas.some((p) => p.valor2 !== undefined)
-                        ? [{ pontos: pas.map((p) => ({ valor: p.valor2 ?? p.valor1, rotulo: rotuloCurto(p.criadoEm) })), cor: "var(--bion-alerta)" }]
+                        ? [{ pontos: pas.map((p) => ({ valor: p.valor2 ?? p.valor1, rotulo: rotuloCurto(p.criadoEm) })), cor: "var(--bpp-grafico-alerta)" }]
                         : []),
                     ]}
                     refMin={70}
                     refMax={120}
                   />
                 ) : (
-                  <p className="text-sm opacity-60 py-4">
+                  <p className="text-sm opacity-80 py-4">
                     {pas.length === 0 ? "Registre sua primeira medição." : "Mais um registro e o gráfico aparece."}
                   </p>
                 )}
@@ -686,9 +667,9 @@ export function PacienteApp() {
           </section>
 
           {/* --- Seção 3: exames laboratoriais --- */}
-          <section className="bp-secao-3 px-5 py-10 text-white" aria-label="Resultados de exames laboratoriais">
+          <section className="bp-secao-3 bpp-secao px-5 pt-10 pb-28 text-white" aria-label="Resultados de exames laboratoriais">
             <h2 className="text-2xl font-black mb-1">Exames laboratoriais</h2>
-            <p className="text-sm text-white/65 mb-6">
+            <p className="text-sm text-white/80 mb-6">
               Resultados importados automaticamente dos laudos que você envia à BION IA.
             </p>
 
@@ -702,19 +683,19 @@ export function PacienteApp() {
               </span>
               <span className="flex-1">
                 <span className="block text-sm font-bold">Enviar novo laudo</span>
-                <span className="block text-xs text-white/60">PDF ou foto — a IA confere seu nome no documento</span>
+                <span className="block text-xs text-white/80">PDF ou foto — a IA confere seu nome no documento</span>
               </span>
-              <FileText className="w-5 h-5 text-white/50 shrink-0" />
+              <FileText className="w-5 h-5 text-white/80 shrink-0" />
             </button>
 
             {examesAgrupados.length === 0 ? (
               <div className="bp-glass-marinho p-6 text-center">
-                <p className="text-sm text-white/70">
+                <p className="text-sm text-white/80">
                   Nenhum resultado ainda. Envie um laudo pela BION IA e os resultados aparecem aqui automaticamente.
                 </p>
               </div>
             ) : (
-              <div className="space-y-4">
+              <div className="bpp-grade flex flex-col gap-4">
                 {examesAgrupados.map(([titulo, lista]) => {
                   const ultimo = lista.at(-1)!;
                   const itemDestaque = ultimo.itens[0];
@@ -730,15 +711,15 @@ export function PacienteApp() {
                       <div className="flex items-start justify-between gap-3 mb-2">
                         <div>
                           <div className="font-bold text-sm">{titulo}</div>
-                          <div className="text-xs text-white/55">Última coleta: {rotuloCurto(ultimo.dataColeta)}</div>
+                          <div className="text-xs text-white/80">Última coleta: {rotuloCurto(ultimo.dataColeta)}</div>
                         </div>
                         {itemDestaque && (
                           <div className="text-right">
                             <div className="text-xl font-black leading-none">
                               {itemDestaque.valor}
-                              <span className="text-xs font-semibold opacity-60 ml-1">{itemDestaque.unidade}</span>
+                              <span className="text-xs font-semibold opacity-80 ml-1">{itemDestaque.unidade}</span>
                             </div>
-                            <div className="text-xs text-white/55 mt-0.5">{itemDestaque.nome}</div>
+                            <div className="text-xs text-white/80 mt-0.5">{itemDestaque.nome}</div>
                           </div>
                         )}
                       </div>
@@ -746,14 +727,14 @@ export function PacienteApp() {
                         <GraficoLinha
                           ariaLabel={`Histórico gráfico de ${titulo}`}
                           altura={104}
-                          corEixo="rgba(255,255,255,0.4)"
-                          series={[{ pontos: serieItem, cor: "var(--bion-sky)", area: true }]}
+                          corEixo="var(--bpp-grafico-eixo-marinho)"
+                          series={[{ pontos: serieItem, cor: "var(--bpp-grafico-linha-marinho)", area: true }]}
                           refMin={itemDestaque?.refMin}
                           refMax={itemDestaque?.refMax}
                         />
                       )}
                       <details className="mt-2 group">
-                        <summary className="text-xs font-semibold text-white/60 cursor-pointer list-none inline-flex items-center gap-1">
+                        <summary className="text-xs font-semibold text-white/80 cursor-pointer list-none inline-flex items-center gap-1">
                           <ChevronDown className="w-3.5 h-3.5 group-open:rotate-180 transition" />
                           {ultimo.itens.length} resultado(s) da última coleta
                         </summary>
@@ -764,7 +745,7 @@ export function PacienteApp() {
                               (i.refMax !== undefined && i.valor > i.refMax);
                             return (
                               <li key={i.nome} className="flex items-center justify-between text-sm">
-                                <span className="text-white/75">{i.nome}</span>
+                                <span className="text-white/80">{i.nome}</span>
                                 <span className={`font-semibold ${fora ? "text-amber-300" : "text-white"}`}>
                                   {i.valor} {i.unidade}
                                   {fora && " ⚠"}
@@ -783,14 +764,17 @@ export function PacienteApp() {
         </div>
 
         {/* ====================== PÁGINA 4: DOCUMENTOS ======================== */}
-        <div className="flex-[0_0_100%] w-full min-w-full h-full bp-painel overflow-y-auto bp-coluna" aria-label="Documentos e mensagens">
+        <div className="bpp-lateral bpp-lateral-dir flex-[0_0_100%] w-full min-w-full h-full bp-painel overflow-y-auto bp-coluna" aria-label="Documentos e mensagens">
           <DocumentosPainel />
         </div>
       </div>
 
       {/* Indicador de painéis — some quando há overlay para não cobrir cards */}
       {!(chatAberto || triagemSlide || modalConsulta || consultaReembolso || detalhe) ? (
-      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 rounded-full bg-zinc-950/80 text-white backdrop-blur px-3 py-2 pointer-events-auto">
+      <nav
+        aria-label="Painéis do app"
+        className="bpp-indicador absolute bottom-[calc(1rem+env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2 z-20 flex items-center gap-0.5 rounded-full bg-zinc-950/85 text-white backdrop-blur px-1.5 py-1 pointer-events-auto"
+      >
         {[
           { idx: 0, rotulo: "Perfil" },
           { idx: 1, rotulo: "Início" },
@@ -801,23 +785,23 @@ export function PacienteApp() {
             onClick={() => irPara(idx)}
             aria-label={`Ir para ${rotulo}`}
             aria-current={painel === idx ? "page" : undefined}
-            className={`h-2 rounded-full transition-all ${painel === idx ? "w-6 bg-bion-sea dark:bg-sky-300" : "w-2 bg-bion-ink/25 dark:bg-white/30"}`}
-          />
+            className="p-1.5"
+          >
+            <span className={`block h-2 rounded-full transition-all ${painel === idx ? "w-6 bg-sky-300" : "w-2 bg-white/70"}`} />
+          </button>
         ))}
-        {painel !== 1 && (
+        {painel !== 1 ? (
           <button type="button"
             onClick={() => irPara(1)}
             aria-label="Voltar ao início"
-            className="pl-1 text-bion-ink/60 dark:text-white/60"
+            className="p-1 text-white/85"
           >
             <ChevronLeft className="w-4 h-4" />
           </button>
+        ) : (
+          <ChevronRight className="w-4 h-4 mx-1 text-white/70" aria-hidden />
         )}
-        {painel !== 1 && (
-          <span className="sr-only">Use as setas do teclado para navegar</span>
-        )}
-        {painel === 1 && <ChevronRight className="w-4 h-4 text-white/40" />}
-      </div>
+      </nav>
       ) : null}
 
       {/* Overlays */}
@@ -882,14 +866,14 @@ function CardAguardandoReagendamento({
   return (
     <div className="bp-glass p-5 w-full mb-3 border border-amber-500/40" role="group" aria-label={`Consulta de ${consulta.especialidade}: ${rotuloMotivoReagendamento(consulta.motivoReagendamento)}. Escolha remarcar ou reembolso integral`}>
       <div className="flex items-center justify-between mb-3">
-        <span className="text-xs font-bold uppercase tracking-wider text-bion-ink/50 dark:text-white/50">Ação necessária</span>
-        <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-300">
+        <span className="text-xs font-bold uppercase tracking-wider text-bion-ink/75 dark:text-bion-paper/75">Ação necessária</span>
+        <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-amber-500/15 text-amber-800 dark:text-amber-200">
           Aguardando reagendamento
         </span>
       </div>
       <div className="text-xl font-bold">{consulta.especialidade}</div>
-      <div className="text-sm opacity-70">com {consulta.medico}</div>
-      <div className="mt-2 inline-flex items-center gap-2 text-sm font-semibold opacity-60 line-through">
+      <div className="text-sm opacity-80">com {consulta.medico}</div>
+      <div className="mt-2 inline-flex items-center gap-2 text-sm font-semibold opacity-80 line-through">
         <CalendarClock className="w-4 h-4" /> {consulta.data} · {consulta.hora}
       </div>
       <p className="text-sm mt-3 leading-relaxed">
@@ -899,9 +883,9 @@ function CardAguardandoReagendamento({
         <button
           type="button"
           onClick={onRemarcar}
-          className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-bold bg-bion-ink text-white dark:bg-white dark:text-bion-ink"
+          className="bp-acao w-full py-3 text-sm inline-flex items-center justify-center gap-2"
         >
-          <RefreshCw className="w-3.5 h-3.5" /> Remarcar sem multa
+          <RefreshCw className="w-4 h-4" aria-hidden /> Remarcar sem multa
         </button>
         {consulta.pago !== false ? (
           <button
@@ -926,20 +910,20 @@ function CardReembolso({ consulta }: { consulta: Consulta }) {
     rotulo.tom === "ok"
       ? "bg-emerald-600/15 text-emerald-800 dark:text-emerald-200"
       : rotulo.tom === "erro"
-        ? "bg-destructive/10 text-destructive"
+        ? "bg-red-600/10 text-red-800 dark:bg-red-400/15 dark:text-red-300"
         : "bg-sky-500/15 text-sky-800 dark:text-sky-200";
   return (
     <div className="bp-glass mt-3 w-full px-5 py-4" aria-label={`Reembolso da consulta de ${consulta.especialidade}: ${rotulo.texto}`}>
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <span className="block text-xs font-bold uppercase tracking-wider opacity-50">Consulta cancelada</span>
+          <span className="block text-xs font-bold uppercase tracking-wider opacity-80">Consulta cancelada</span>
           <span className="block text-sm font-bold truncate">
             {consulta.especialidade} · {consulta.data} {consulta.hora}
           </span>
         </div>
-        <span className={`text-[10px] font-bold px-2 py-1 rounded-full shrink-0 ${cor}`}>{rotulo.texto}</span>
+        <span className={`text-xs font-bold px-2 py-1 rounded-full shrink-0 ${cor}`}>{rotulo.texto}</span>
       </div>
-      <p className="text-xs opacity-70 mt-2">
+      <p className="text-xs opacity-80 mt-2">
         Valor do reembolso: <strong className="font-bold">{fmtCentavos(r.valorCentavos)}</strong>
         {r.multaCentavos > 0 ? ` (multa de ${fmtCentavos(r.multaCentavos)} descontada)` : ""}
         {r.processadoEm ? ` · concluído em ${fmtTicketData(r.processadoEm)}` : ` · solicitado em ${fmtTicketData(r.criadoEm)}`}
@@ -976,33 +960,33 @@ function CardRemarcacaoPendente({ consulta, onContinuar }: { consulta: Consulta;
   return (
     <div className="bp-glass p-5 w-full mb-3 border border-sky-500/40" role="group" aria-label={`Remarcação de ${consulta.especialidade} aguardando pagamento da multa`}>
       <div className="flex items-center justify-between mb-3">
-        <span className="text-xs font-bold uppercase tracking-wider text-bion-ink/50 dark:text-white/50">Remarcação</span>
+        <span className="text-xs font-bold uppercase tracking-wider text-bion-ink/75 dark:text-bion-paper/75">Remarcação</span>
         <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-sky-500/15 text-sky-800 dark:text-sky-200">
           Aguardando pagamento
         </span>
       </div>
       <div className="text-xl font-bold">{consulta.especialidade}</div>
-      <div className="text-sm opacity-70">com {consulta.medico}</div>
+      <div className="text-sm opacity-80">com {consulta.medico}</div>
       <p className="text-sm mt-3 leading-relaxed">
         Nova data <strong className="font-bold">{novaData}</strong> reservada, aguardando pagamento da multa de{" "}
         <strong className="font-bold">{fmtCentavos(r.multaCentavos)}</strong> até {fmtHora(r.expiraEm)}.
       </p>
-      <p className="text-xs opacity-60 mt-1 inline-flex items-center gap-1.5">
+      <p className="text-xs opacity-80 mt-1 inline-flex items-center gap-1.5">
         <CalendarClock className="w-3.5 h-3.5" /> Vale a data original até o pagamento: {consulta.data} · {consulta.hora}
       </p>
       <div className="mt-4 flex flex-wrap gap-2">
         <button
           type="button"
           onClick={onContinuar}
-          className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-bold bg-bion-ink text-white dark:bg-white dark:text-bion-ink"
+          className="bp-acao w-full py-3 text-sm inline-flex items-center justify-center gap-2"
         >
-          <RefreshCw className="w-3.5 h-3.5" /> Continuar pagamento
+          <RefreshCw className="w-4 h-4" aria-hidden /> Continuar pagamento
         </button>
         <button
           type="button"
           onClick={() => void desistir()}
           disabled={enviando}
-          className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-bold text-destructive bg-destructive/10 disabled:opacity-40"
+          className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-bold bg-red-600/10 text-red-800 dark:bg-red-400/15 dark:text-red-300 disabled:opacity-40"
         >
           <X className="w-3.5 h-3.5" /> {confirmando ? "Confirmar desistência" : "Desistir"}
         </button>
@@ -1022,7 +1006,7 @@ function CardFalta({ consulta, onAbrir }: { consulta: Consulta; onAbrir: () => v
     <div className="bp-glass mt-3 w-full px-5 py-4" role="group" aria-label={`Falta na consulta de ${consulta.especialidade}`}>
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <span className="block text-xs font-bold uppercase tracking-wider opacity-50">
+          <span className="block text-xs font-bold uppercase tracking-wider opacity-80">
             {pedido ? "Pedido de reembolso" : "Consulta não realizada"}
           </span>
           <span className="block text-sm font-bold truncate">
@@ -1041,7 +1025,7 @@ function CardFalta({ consulta, onAbrir }: { consulta: Consulta; onAbrir: () => v
           <button
             type="button"
             onClick={onAbrir}
-            className="mt-3 inline-flex items-center gap-1 rounded-full px-2.5 py-1.5 text-[11px] font-bold bg-bion-ink/8 dark:bg-white/10"
+            className="mt-3 inline-flex items-center gap-1 rounded-full px-2.5 py-1.5 text-xs font-bold bg-bion-ink/8 dark:bg-white/10"
           >
             <FileText className="w-3 h-3" /> Ver detalhes
           </button>
@@ -1055,12 +1039,75 @@ function CardFalta({ consulta, onAbrir }: { consulta: Consulta; onAbrir: () => v
           <button
             type="button"
             onClick={onAbrir}
-            className="mt-3 inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-bold bg-bion-ink text-white dark:bg-white dark:text-bion-ink"
+            className="bp-acao mt-3 w-full py-3 text-sm inline-flex items-center justify-center gap-2"
           >
-            <Undo2 className="w-3.5 h-3.5" /> Pedir reembolso
+            <Undo2 className="w-4 h-4" aria-hidden /> Pedir reembolso
           </button>
         </>
       )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Ações da próxima consulta: um botão principal + ações menores       */
+/* ------------------------------------------------------------------ */
+
+function AcoesProximaConsulta({
+  salaAberta,
+  triagem,
+  triagemDisponivel,
+  onEntrar,
+  onTriagem,
+  onRemarcar,
+  onCancelar,
+}: {
+  salaAberta: boolean;
+  triagem: "feita" | "andamento" | "nao_iniciada";
+  triagemDisponivel: boolean;
+  onEntrar: () => void;
+  onTriagem: () => void;
+  onRemarcar: () => void;
+  onCancelar: () => void;
+}) {
+  // Prioridade do botão principal: sala aberta → triagem pendente → sala de espera.
+  const triagemPendente = triagem !== "feita" && triagemDisponivel;
+  const principal = salaAberta ? "sala" : triagemPendente ? "triagem" : "espera";
+  const secundario = "inline-flex items-center gap-1.5 rounded-full px-3.5 py-2.5 text-xs font-bold";
+
+  return (
+    <div className="mt-4">
+      {principal === "sala" ? (
+        <button type="button" onClick={onEntrar} className="bpp-acao-sala w-full rounded-full py-3 text-sm font-bold inline-flex items-center justify-center gap-2 bg-emerald-700 text-white">
+          <Video className="w-4 h-4" aria-hidden /> Entrar na sala
+        </button>
+      ) : principal === "triagem" ? (
+        <button type="button" onClick={onTriagem} className="bp-acao w-full py-3 text-sm inline-flex items-center justify-center gap-2">
+          <Sparkles className="w-4 h-4" aria-hidden /> {triagem === "andamento" ? "Continuar triagem" : "Fazer triagem"}
+        </button>
+      ) : (
+        <button type="button" onClick={onEntrar} className="bp-acao w-full py-3 text-sm inline-flex items-center justify-center gap-2">
+          <Video className="w-4 h-4" aria-hidden /> Abrir sala de espera
+        </button>
+      )}
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        {principal === "triagem" ? (
+          <button type="button" onClick={onEntrar} className={`${secundario} bg-bion-ink/8 dark:bg-white/10`}>
+            <Video className="w-3.5 h-3.5" aria-hidden /> Sala de espera
+          </button>
+        ) : null}
+        {triagem === "feita" ? (
+          <span className="inline-flex items-center gap-1.5 px-1 py-2 text-xs font-semibold text-emerald-800 dark:text-emerald-200">
+            Triagem enviada ao médico
+          </span>
+        ) : null}
+        <button type="button" onClick={onRemarcar} className={`${secundario} bg-bion-ink/8 dark:bg-white/10`}>
+          <RefreshCw className="w-3.5 h-3.5" aria-hidden /> Remarcar
+        </button>
+        <button type="button" onClick={onCancelar} className={`${secundario} bg-red-600/10 text-red-800 dark:bg-red-400/15 dark:text-red-300`}>
+          <X className="w-3.5 h-3.5" aria-hidden /> Cancelar
+        </button>
+      </div>
     </div>
   );
 }

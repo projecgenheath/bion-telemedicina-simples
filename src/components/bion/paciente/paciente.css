@@ -1,0 +1,191 @@
+/* ==================================================================== */
+/* App do PACIENTE — classes exclusivas + ajustes com escopo             */
+/* (.bp-app-paciente na casca). As classes de base bp-* (bp-glass,       */
+/* bp-shell, bp-carrossel, bp-coluna, bp-acao, bp-entrada, bp-safe-*)    */
+/* continuam no globals.css SEM mudança — Médicos e Admin usam.          */
+/*                                                                      */
+/* Contraste (WCAG AA): texto ≥ 4,5:1; títulos grandes, ícones e linhas  */
+/* de gráfico ≥ 3:1, nos modos Clean e Dark. As cores abaixo são         */
+/* conferidas por scripts/teste_contraste_paciente.ts (lê este arquivo). */
+/* ==================================================================== */
+
+/* ---------------------------- tokens ------------------------------- */
+.bp-app-paciente {
+  /* Seção 1 — hero claro */
+  --bpp-s1-topo: #ffffff;
+  --bpp-s1-base: #f2f6fc;
+  /* Seção 2 — do claro ao azul (texto solto só no topo claro) */
+  --bpp-s2-topo: #f2f6fc;
+  --bpp-s2-meio: #d5e1f2;
+  --bpp-s2-azul: #5b7fb8;
+  --bpp-s2-base: #1d4a8a;
+  /* Seção 3 — começa já no azul escuro: texto branco ≥ 4,5:1 desde o topo */
+  --bpp-s3-topo: #1d4a8a;
+  --bpp-s3-meio: #163f7a;
+  --bpp-s3-fundo: #10294f;
+  --bpp-s3-base: #0a1f44;
+  /* Painéis laterais (perfil / documentos / sobreposições) */
+  --bpp-painel-topo: #ffffff;
+  --bpp-painel-meio: #eef4fb;
+  --bpp-painel-base: #e2ecf9;
+  /* Vidro: mais sólido que o base para o texto não perder contraste
+     quando o cartão passa sobre o azul */
+  --bpp-vidro: rgba(255, 255, 255, 0.84);
+  --bpp-vidro-borda: rgba(255, 255, 255, 0.9);
+  --bpp-vidro-marinho: rgba(255, 255, 255, 0.08);
+  --bpp-vidro-marinho-borda: rgba(255, 255, 255, 0.22);
+  /* Gráficos */
+  --bpp-grafico-linha: #123e7d;
+  --bpp-grafico-alerta: #c2410c;
+  --bpp-grafico-eixo: rgba(10, 31, 68, 0.72);
+  --bpp-grafico-linha-marinho: #9ac1f4;
+  --bpp-grafico-eixo-marinho: rgba(255, 255, 255, 0.8);
+  /* Placeholder de campos */
+  --bpp-placeholder: rgba(10, 31, 68, 0.62);
+}
+.dark .bp-app-paciente {
+  --bpp-s1-topo: #000000;
+  --bpp-s1-base: #050c19;
+  --bpp-s2-topo: #050c19;
+  --bpp-s2-meio: #061328;
+  --bpp-s2-azul: #08193a;
+  --bpp-s2-base: #0b2145;
+  --bpp-s3-topo: #0b2145;
+  --bpp-s3-meio: #0d2c5c;
+  --bpp-s3-fundo: #071e42;
+  --bpp-s3-base: #020a1a;
+  --bpp-painel-topo: #000000;
+  --bpp-painel-meio: #03080f;
+  --bpp-painel-base: #071224;
+  --bpp-vidro: rgba(255, 255, 255, 0.06);
+  --bpp-vidro-borda: rgba(255, 255, 255, 0.12);
+  --bpp-vidro-marinho: rgba(255, 255, 255, 0.08);
+  --bpp-vidro-marinho-borda: rgba(255, 255, 255, 0.18);
+  --bpp-grafico-linha: #7fb2f0;
+  --bpp-grafico-alerta: #fb923c;
+  --bpp-grafico-eixo: rgba(242, 246, 252, 0.6);
+  --bpp-grafico-linha-marinho: #9ac1f4;
+  --bpp-grafico-eixo-marinho: rgba(255, 255, 255, 0.8);
+  --bpp-placeholder: rgba(242, 246, 252, 0.62);
+}
+
+/* ------------------- fundos (movidos do globals.css) ---------------- */
+.bp-painel {
+  background: linear-gradient(180deg, var(--bpp-painel-topo, #ffffff) 0%, var(--bpp-painel-meio, #eef4fb) 60%, var(--bpp-painel-base, #e2ecf9) 100%);
+}
+.bp-secao-1 {
+  background: linear-gradient(180deg, var(--bpp-s1-topo) 0%, var(--bpp-s1-base) 100%);
+}
+.bp-secao-2 {
+  background: linear-gradient(180deg, var(--bpp-s2-topo) 0%, var(--bpp-s2-meio) 45%, var(--bpp-s2-azul) 80%, var(--bpp-s2-base) 100%);
+}
+.bp-secao-3 {
+  background: linear-gradient(180deg, var(--bpp-s3-topo) 0%, var(--bpp-s3-meio) 35%, var(--bpp-s3-fundo) 70%, var(--bpp-s3-base) 100%);
+}
+
+/* --------- ajustes das classes de base, SÓ dentro do paciente ------- */
+.bp-app-paciente .bp-glass {
+  background: var(--bpp-vidro);
+  border-color: var(--bpp-vidro-borda);
+}
+.bp-app-paciente .bp-glass-marinho {
+  background: var(--bpp-vidro-marinho);
+  border-color: var(--bpp-vidro-marinho-borda);
+}
+.bp-app-paciente .bp-entrada::placeholder {
+  color: var(--bpp-placeholder);
+}
+
+/* Sem backdrop-filter (aparelhos fracos / navegadores antigos): vidro opaco */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .bp-app-paciente .bp-glass { background: rgba(255, 255, 255, 0.94); }
+  .dark .bp-app-paciente .bp-glass { background: rgba(18, 24, 38, 0.95); }
+  .bp-app-paciente .bp-glass-marinho { background: rgba(10, 31, 68, 0.92); }
+}
+
+/* Menos movimento: sem "pulinho" de hover nem escala ao tocar */
+@media (prefers-reduced-motion: reduce) {
+  .bp-app-paciente .bp-acao:hover,
+  .bp-app-paciente .bp-acao:active,
+  .bp-app-paciente [class*="active:scale"]:active,
+  .bp-app-paciente [class*="hover:-translate"]:hover {
+    transform: none;
+  }
+}
+
+/* --------------------------- impressão ----------------------------- */
+/* Só esconde o resto da página quando um documento do paciente está    */
+/* aberto (antes valia para o app inteiro, inclusive Médicos/Admin).    */
+@media print {
+  body:has(.bp-impressao) * { visibility: hidden; }
+  .bp-impressao,
+  .bp-impressao * { visibility: visible; }
+  .bp-impressao { position: absolute; inset: 0; padding: 2rem; background: #fff; color: #111; }
+}
+
+/* ==================================================================== */
+/* Tela larga (≥ 1024 px): sem moldura de celular; Perfil | Início |    */
+/* Documentos lado a lado, cada coluna com a própria rolagem.           */
+/* 768–1023 px: mantém a moldura de 430 px do globals.css.              */
+/* < 1024 px: carrossel com gestos exatamente como antes.               */
+/* ==================================================================== */
+@media (min-width: 1024px) {
+  html body:has(.bp-app-paciente.bp-shell) { background: #ffffff; }
+  html.dark body:has(.bp-app-paciente.bp-shell) { background: #000000; }
+
+  .bp-app-paciente.bp-shell {
+    max-width: none;
+    margin-left: 0;
+    margin-right: 0;
+    border: 0;
+    box-shadow: none;
+  }
+
+  .bp-app-paciente .bpp-carrossel {
+    display: grid;
+    grid-template-columns: minmax(300px, 340px) minmax(0, 1fr) minmax(300px, 360px);
+    overflow: hidden;
+    scroll-snap-type: none;
+  }
+  .bp-app-paciente .bpp-carrossel > * {
+    width: auto;
+    min-width: 0;
+    flex: none;
+    scroll-snap-align: none;
+  }
+  .bp-app-paciente .bpp-lateral-esq { border-right: 1px solid rgba(10, 31, 68, 0.1); }
+  .bp-app-paciente .bpp-lateral-dir { border-left: 1px solid rgba(10, 31, 68, 0.1); }
+  .dark .bp-app-paciente .bpp-lateral-esq { border-right-color: rgba(255, 255, 255, 0.1); }
+  .dark .bp-app-paciente .bpp-lateral-dir { border-left-color: rgba(255, 255, 255, 0.1); }
+
+  /* Conteúdo central com largura confortável; o degradê ocupa tudo */
+  .bp-app-paciente .bpp-secao {
+    padding-left: max(1.5rem, calc((100% - 760px) / 2));
+    padding-right: max(1.5rem, calc((100% - 760px) / 2));
+  }
+
+  /* Todos os painéis estão visíveis: os pontinhos não fazem sentido */
+  .bp-app-paciente .bpp-indicador { display: none; }
+  .bp-app-paciente .bp-secao-3 { padding-bottom: 2.5rem; }
+
+  /* Conversa da BION IA: janela centralizada com fundo escurecido */
+  .bp-app-paciente .bpp-sobreposicao {
+    left: 50%;
+    right: auto;
+    width: min(760px, 100%);
+    transform: translateX(-50%);
+    box-shadow: 0 0 0 100vmax rgba(2, 8, 26, 0.55);
+  }
+}
+
+@media (min-width: 1440px) {
+  .bp-app-paciente .bpp-carrossel {
+    grid-template-columns: 360px minmax(0, 1fr) 380px;
+  }
+  /* Saúde e exames em 2 colunas quando sobra largura */
+  .bp-app-paciente .bpp-grade {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+}
