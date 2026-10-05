@@ -1,0 +1,438 @@
+/* ==================================================================== */
+/* Torre BION — fundação visual do perfil ADMINISTRATIVO (classes ba-*)  */
+/*                                                                      */
+/* Herda o DNA do app (Inter, bion-ink, degradê branco puro → marinho,  */
+/* preto absoluto → marinho no Dark, vidro líquido) sem alterar         */
+/* globals.css, bp-* (paciente) ou bm-* (médico).                       */
+/*                                                                      */
+/* Contraste (WCAG AA): todo par texto/superfície abaixo é conferido    */
+/* em admin.teste.ts (≥ 4,5:1) — o texto só fica sobre cards opacos     */
+/* (.ba-card) ou na faixa branca/preta do topo do céu (.ba-ceu).        */
+/* Tema: classe .dark no <html> (chave localStorage "bion-tema").       */
+/* Regras em @layer components: utilitários do Tailwind (p-0, pr-14…)    */
+/* continuam podendo ajustar os componentes.                            */
+/* ==================================================================== */
+
+/* ---------- Tokens (em :root porque sheets usam portal fora da casca) */
+:root {
+  --ba-texto: #0a1f44;                 /* bion-ink */
+  --ba-texto-2: #3b4a66;               /* secundário (≥ 7:1 no card) */
+  --ba-texto-3: #52607a;               /* rótulos pequenos (≥ 5:1) */
+  --ba-sinal: #075985;                 /* ciano-torre: ação/foco do admin */
+  --ba-ok: #065f46;
+  --ba-atencao: #92400e;
+  --ba-critico: #991b1b;
+  --ba-dinheiro: #123e7d;              /* bion-sea */
+  --ba-neutro: #334155;
+  --ba-card: rgba(255, 255, 255, 0.88);
+  --ba-card-solido: #ffffff;
+  --ba-borda: rgba(10, 31, 68, 0.1);
+  --ba-realce: rgba(255, 255, 255, 0.9);
+  --ba-sombra: 0 12px 32px -10px rgba(10, 31, 68, 0.18);
+  --ba-trilho: rgba(255, 255, 255, 0.86);
+  --ba-esqueleto: rgba(10, 31, 68, 0.08);
+  --ba-raio: 1.5rem;
+  --ba-raio-denso: 1.125rem;
+  --ba-pad: 1.25rem;
+  --ba-linha: 3.25rem;                 /* altura da linha de tabela */
+}
+.dark {
+  --ba-texto: #f2f6fc;                 /* bion-paper */
+  --ba-texto-2: #c7d2e3;
+  --ba-texto-3: #a9b6cb;
+  --ba-sinal: #7dd3fc;
+  --ba-ok: #6ee7b7;
+  --ba-atencao: #fcd34d;
+  --ba-critico: #fca5a5;
+  --ba-dinheiro: #93c5fd;
+  --ba-neutro: #cbd5e1;
+  --ba-card: rgba(12, 16, 28, 0.8);
+  --ba-card-solido: #05080f;
+  --ba-borda: rgba(255, 255, 255, 0.1);
+  --ba-realce: rgba(255, 255, 255, 0.07);
+  --ba-sombra: 0 12px 32px -10px rgba(0, 0, 0, 0.6);
+  --ba-trilho: rgba(5, 8, 15, 0.78);
+  --ba-esqueleto: rgba(255, 255, 255, 0.08);
+}
+
+@layer components {
+
+/* Tom de estado: qualquer elemento com data-tom ganha --ba-tom */
+[data-tom] { --ba-tom: var(--ba-neutro); }
+[data-tom="ok"] { --ba-tom: var(--ba-ok); }
+[data-tom="atencao"] { --ba-tom: var(--ba-atencao); }
+[data-tom="critico"] { --ba-tom: var(--ba-critico); }
+[data-tom="dinheiro"] { --ba-tom: var(--ba-dinheiro); }
+[data-tom="sinal"] { --ba-tom: var(--ba-sinal); }
+
+/* ---------- Casca ------------------------------------------------------ */
+/* Não usa .bp-shell: o admin ocupa a largura toda (sem moldura de 430 px). */
+.ba-app {
+  position: relative;
+  height: 100dvh;
+  width: 100%;
+  overflow: hidden;
+  color: var(--ba-texto);
+}
+.ba-app[data-densidade="compacta"] { --ba-pad: 0.875rem; --ba-linha: 2.75rem; }
+
+/* Céu: branco puro → marinho (Clean) / preto absoluto → marinho (Dark).
+   Texto solto só na faixa de cima (0–35%), que é branco/preto puro. */
+.ba-ceu {
+  background: linear-gradient(180deg, #ffffff 0%, #ffffff 35%, #e6eef9 62%, #a9c0e0 84%, #1d4a8a 100%);
+  background-attachment: fixed;
+}
+.dark .ba-ceu {
+  background: linear-gradient(180deg, #000000 0%, #000000 35%, #030a17 62%, #08204a 86%, #0e2d63 100%);
+  background-attachment: fixed;
+}
+/* Painéis laterais (Conta / Fila) e superfícies sobrepostas */
+.ba-painel {
+  background: linear-gradient(180deg, #ffffff 0%, #f6f9fd 60%, #e9f0fa 100%);
+}
+.dark .ba-painel {
+  background: linear-gradient(180deg, #000000 0%, #02060d 60%, #050f20 100%);
+}
+
+/* Carrossel do celular: Conta ⟷ Centro ⟷ Fila */
+.ba-carrossel {
+  display: flex;
+  height: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+.ba-carrossel::-webkit-scrollbar { display: none; }
+.ba-carrossel > * {
+  flex: 0 0 100%;
+  min-width: 100%;
+  height: 100%;
+  scroll-snap-align: center;
+  scroll-snap-stop: always;
+}
+.ba-coluna {
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scrollbar-width: none;
+}
+.ba-coluna::-webkit-scrollbar { display: none; }
+
+/* Pílula flutuante (mesmo desenho do paciente/médico) */
+.ba-pilula {
+  position: absolute;
+  left: 50%;
+  bottom: calc(1rem + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 0.125rem;
+  padding: 0.25rem 0.375rem;
+  border-radius: 9999px;
+  background: rgba(9, 9, 11, 0.82);
+  color: #fff;
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 10px 30px -8px rgba(0, 0, 0, 0.5);
+}
+.ba-pilula-ponto {
+  display: block;
+  height: 0.5rem;
+  width: 0.5rem;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.5);
+  transition: width 0.2s ease, background-color 0.2s ease;
+}
+.ba-pilula-ponto[data-ativo="true"] { width: 1.5rem; background: #7dd3fc; }
+/* Alvo de toque ≥ 44 px mesmo com o ponto pequeno */
+.ba-pilula-alvo {
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+}
+
+/* Desktop / tablet largo: trilho + barra de comando + conteúdo */
+.ba-desk {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr); /* sem isto a linha cresce com o conteúdo e o <main> não rola */
+  height: 100%;
+}
+.ba-trilho {
+  width: 4.5rem;
+  height: 100%;
+  overflow-y: auto;
+  scrollbar-width: none;
+  background: var(--ba-trilho);
+  -webkit-backdrop-filter: blur(18px) saturate(1.3);
+  backdrop-filter: blur(18px) saturate(1.3);
+  border-right: 1px solid var(--ba-borda);
+  transition: width 0.2s ease;
+}
+.ba-trilho[data-aberto="true"] { width: 15rem; }
+.ba-trilho-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0 0.875rem;
+  border-radius: 0.875rem;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--ba-texto-2);
+  white-space: nowrap;
+}
+.ba-trilho-item:hover { background: color-mix(in srgb, var(--ba-sinal) 10%, transparent); color: var(--ba-texto); }
+.ba-trilho-item[aria-current="page"] {
+  background: color-mix(in srgb, var(--ba-sinal) 14%, transparent);
+  color: var(--ba-texto);
+}
+.ba-trilho-item[aria-current="page"]::before {
+  content: "";
+  position: absolute;
+  left: -0.5rem;
+  top: 25%;
+  bottom: 25%;
+  width: 3px;
+  border-radius: 9999px;
+  background: var(--ba-sinal);
+}
+.ba-barra {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: color-mix(in srgb, var(--ba-card-solido) 78%, transparent);
+  -webkit-backdrop-filter: blur(18px) saturate(1.3);
+  backdrop-filter: blur(18px) saturate(1.3);
+  border-bottom: 1px solid var(--ba-borda);
+}
+
+/* ---------- Cards ------------------------------------------------------ */
+.ba-card {
+  position: relative;
+  background: var(--ba-card);
+  -webkit-backdrop-filter: blur(18px) saturate(1.4);
+  backdrop-filter: blur(18px) saturate(1.4);
+  border: 1px solid var(--ba-borda);
+  border-radius: var(--ba-raio);
+  box-shadow: 0 1px 0 var(--ba-realce) inset, var(--ba-sombra);
+  padding: var(--ba-pad);
+  color: var(--ba-texto);
+}
+.ba-card[data-denso="true"] { border-radius: var(--ba-raio-denso); padding: calc(var(--ba-pad) * 0.7); }
+/* Faixa de estado: 3 px à esquerda na cor do tom (o texto do estado vem junto) */
+.ba-card[data-tom]:not([data-tom="neutro"])::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.875rem;
+  bottom: 0.875rem;
+  width: 3px;
+  border-radius: 0 9999px 9999px 0;
+  background: var(--ba-tom);
+}
+button.ba-card, a.ba-card, .ba-card[role="button"] {
+  text-align: left;
+  width: 100%;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+button.ba-card:hover, a.ba-card:hover, .ba-card[role="button"]:hover { transform: translateY(-1px); }
+
+.ba-rotulo {
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ba-texto-3);
+}
+.ba-texto-2 { color: var(--ba-texto-2); }
+.ba-texto-3 { color: var(--ba-texto-3); }
+.ba-numero { font-variant-numeric: tabular-nums; font-weight: 900; letter-spacing: -0.02em; }
+
+/* Chip de estado: rótulo legível na cor do tom sobre fundo tingido */
+.ba-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  max-width: 100%;
+  padding: 0.1875rem 0.625rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-weight: 700;
+  white-space: nowrap;
+  color: var(--ba-tom, var(--ba-neutro));
+  background: color-mix(in srgb, var(--ba-tom, var(--ba-neutro)) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ba-tom, var(--ba-neutro)) 22%, transparent);
+}
+.ba-chip-ponto { width: 0.375rem; height: 0.375rem; border-radius: 9999px; background: currentColor; flex-shrink: 0; }
+
+/* Botões do admin */
+.ba-botao {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 2.75rem;
+  padding: 0 1.125rem;
+  border-radius: 9999px;
+  font-size: 0.875rem;
+  font-weight: 700;
+  transition: transform 0.15s ease, opacity 0.15s ease, background-color 0.15s ease;
+}
+.ba-botao:disabled { opacity: 0.5; cursor: not-allowed; }
+.ba-botao-primario {
+  background: linear-gradient(135deg, #123e7d 0%, #0a1f44 100%);
+  color: #ffffff;
+  box-shadow: 0 8px 20px -6px rgba(10, 31, 68, 0.45);
+}
+.dark .ba-botao-primario { background: linear-gradient(135deg, #7dd3fc 0%, #93c5fd 100%); color: #05080f; }
+.ba-botao-secundario {
+  background: color-mix(in srgb, var(--ba-texto) 7%, transparent);
+  color: var(--ba-texto);
+}
+.ba-botao-secundario:hover { background: color-mix(in srgb, var(--ba-texto) 12%, transparent); }
+.ba-botao-perigo {
+  background: color-mix(in srgb, var(--ba-critico) 12%, transparent);
+  color: var(--ba-critico);
+  border: 1px solid color-mix(in srgb, var(--ba-critico) 30%, transparent);
+}
+.ba-icone-botao {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 9999px;
+  color: var(--ba-texto);
+  background: color-mix(in srgb, var(--ba-texto) 6%, transparent);
+}
+.ba-icone-botao:hover { background: color-mix(in srgb, var(--ba-texto) 11%, transparent); }
+
+.ba-entrada {
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0 1rem;
+  border-radius: 9999px;
+  background: color-mix(in srgb, var(--ba-card-solido) 80%, transparent);
+  border: 1px solid var(--ba-borda);
+  color: var(--ba-texto);
+  font-size: 0.875rem;
+}
+.ba-entrada::placeholder { color: var(--ba-texto-3); }
+.ba-entrada:focus { outline: none; border-color: var(--ba-sinal); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ba-sinal) 22%, transparent); }
+
+/* Foco visível na cor-sinal (casca, sheets e páginas do admin) */
+.ba-app :focus-visible,
+.ba-escopo :focus-visible {
+  outline: 2px solid var(--ba-sinal);
+  outline-offset: 2px;
+}
+
+/* ---------- Tabela densa de vidro (desktop) ---------------------------- */
+.ba-tabela-moldura { overflow: auto; border-radius: var(--ba-raio-denso); }
+.ba-tabela { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 0.8125rem; }
+.ba-tabela th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  text-align: left;
+  padding: 0.625rem 0.875rem;
+  font-size: 0.6875rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ba-texto-3);
+  background: var(--ba-card-solido);
+  border-bottom: 1px solid var(--ba-borda);
+  white-space: nowrap;
+}
+.ba-tabela td {
+  height: var(--ba-linha);
+  padding: 0 0.875rem;
+  border-bottom: 1px solid var(--ba-borda);
+  color: var(--ba-texto);
+  vertical-align: middle;
+}
+.ba-tabela tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--ba-texto) 2.5%, transparent); }
+.ba-tabela tbody tr[data-clicavel="true"] { cursor: pointer; }
+.ba-tabela tbody tr[data-clicavel="true"]:hover td { background: color-mix(in srgb, var(--ba-sinal) 7%, transparent); }
+.ba-tabela tbody tr[aria-selected="true"] td { background: color-mix(in srgb, var(--ba-sinal) 12%, transparent); }
+.ba-tabela tbody tr:focus-visible { outline: 2px solid var(--ba-sinal); outline-offset: -2px; }
+.ba-tabela .ba-num { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* ---------- Estados (carregando / vazio / erro) ------------------------ */
+.ba-esqueleto { background: var(--ba-esqueleto); border-radius: 0.75rem; }
+@media (prefers-reduced-motion: no-preference) {
+  .ba-esqueleto { animation: ba-pulsar 1.4s ease-in-out infinite; }
+}
+@keyframes ba-pulsar { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+.ba-estado-icone {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 3.5rem;
+  height: 3.5rem;
+  border-radius: 9999px;
+  background: color-mix(in srgb, var(--ba-tom, var(--ba-sinal)) 12%, transparent);
+  color: var(--ba-tom, var(--ba-sinal));
+}
+
+/* ---------- Card deslizável (ações rápidas por gesto) ------------------ */
+.ba-deslizar { position: relative; border-radius: var(--ba-raio); overflow: hidden; touch-action: pan-y; }
+.ba-deslizar[data-denso="true"] { border-radius: var(--ba-raio-denso); }
+.ba-deslizar-fundo {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  padding: 0 1.25rem;
+  font-size: 0.875rem;
+  font-weight: 800;
+  color: #ffffff;
+}
+.ba-deslizar-fundo[data-lado="direita"] { justify-content: flex-start; }
+.ba-deslizar-fundo[data-lado="esquerda"] { justify-content: flex-end; }
+/* Fundos sólidos escuros: texto branco ≥ 4,5:1 nos dois modos */
+.ba-deslizar-fundo[data-tom="ok"] { background: #047857; }
+.ba-deslizar-fundo[data-tom="critico"] { background: #b91c1c; }
+.ba-deslizar-fundo[data-tom="atencao"] { background: #92400e; }
+.ba-deslizar-fundo[data-tom="dinheiro"], .ba-deslizar-fundo[data-tom="sinal"] { background: #123e7d; }
+.ba-deslizar-fundo[data-tom="neutro"] { background: #334155; }
+.ba-deslizar-frente { position: relative; will-change: transform; }
+.ba-deslizar-frente[data-soltando="true"] { transition: transform 0.22s cubic-bezier(0.2, 0.8, 0.2, 1); }
+
+/* ---------- Puxar para atualizar --------------------------------------- */
+.ba-puxar-anel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  overflow: hidden;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--ba-sinal);
+}
+
+/* ---------- Sheet do admin (vaul) -------------------------------------- */
+.ba-sheet {
+  background: var(--ba-card-solido);
+  color: var(--ba-texto);
+  box-shadow: 0 -16px 48px rgba(10, 31, 68, 0.25);
+}
+.dark .ba-sheet { box-shadow: 0 -16px 48px rgba(0, 0, 0, 0.7); border-color: rgba(255, 255, 255, 0.1); }
+
+/* Sem backdrop-filter (aparelhos fracos): superfícies opacas e legíveis */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .ba-card, .ba-trilho, .ba-barra { background: var(--ba-card-solido); }
+}
+
+} /* @layer components */
