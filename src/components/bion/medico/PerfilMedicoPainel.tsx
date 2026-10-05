@@ -23,6 +23,7 @@ import { formatarDataNascimento, idadeDeNascimento } from "@/lib/idade";
 import { iniciais } from "./metricas";
 import { formatarCnpj } from "./dados-pessoais";
 import { DadosPessoaisSheet } from "./sheets/DadosPessoaisSheet";
+import { RepassesSheet } from "./sheets/RepassesSheet";
 import { Campo, EmBreve, SheetMedico } from "./sheets/SheetMedico";
 import { useConfirmarSalvamento } from "./sheets/useConfirmarSalvamento";
 import { useRecebimento, type DadosMedico } from "./useDadosMedico";
@@ -343,6 +344,8 @@ export function PerfilMedicoPainel({
   const recebimento = useRecebimento();
   const [sheetPix, setSheetPix] = useState(false);
   const [aberturasPix, setAberturasPix] = useState(0);
+  const [sheetRepasses, setSheetRepasses] = useState(false);
+  const [aberturasRepasses, setAberturasRepasses] = useState(0);
   const [tema, setTema] = useState<Tema>(lerTema);
   const [densidade, setDensidade] = useState<Densidade>(lerDensidade);
   const [enviando, setEnviando] = useState(false);
@@ -539,7 +542,15 @@ export function PerfilMedicoPainel({
           O repasse é diário: todo dia às 23:30 (horário de Brasília) fechamos as consultas do dia e o valor vai por PIX para esta chave.
           A chave precisa estar no seu nome (CPF) ou no CNPJ cadastrado no seu perfil.
         </p>
-        <Linha icone={<Receipt className="w-4 h-4" />} titulo="Repasses" detalhe="Extrato dos repasses diários" direita={<EmBreve />} />
+        <Linha
+          icone={<Receipt className="w-4 h-4" />}
+          titulo="Histórico de repasses"
+          detalhe="Prévia de hoje e extrato dos fechamentos diários"
+          onClick={() => {
+            setAberturasRepasses((n) => n + 1);
+            setSheetRepasses(true);
+          }}
+        />
       </section>
 
       <RecebimentoSheet
@@ -551,6 +562,13 @@ export function PerfilMedicoPainel({
         cnpjPerfil={dp?.cnpj ?? ""}
         salvando={recebimento.salvando}
         salvar={recebimento.salvar}
+      />
+
+      <RepassesSheet
+        key={`repasses-${aberturasRepasses}`}
+        aberto={sheetRepasses}
+        onFechar={() => setSheetRepasses(false)}
+        onAbrirRecebimento={abrirRecebimento}
       />
 
       <section className={`${grupo} mt-4`} aria-labelledby="bm-pf-conta">

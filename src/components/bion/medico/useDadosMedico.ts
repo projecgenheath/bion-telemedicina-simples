@@ -280,3 +280,145 @@ export function useRecebimento() {
     salvar,
   };
 }
+
+
+/* ---------- Repasses do próprio médico -------------------------------- */
+
+export type TotaisRepasseWire = {
+  brutoCentavos: number;
+  comissaoCentavos: number;
+  taxasCentavos: number;
+  reembolsosCentavos: number;
+  multasCentavos: number;
+  ajustesCentavos: number;
+  liquidoCentavos: number;
+};
+
+export type RepasseResumo = {
+  id: string;
+  competencia: string;
+  status: string;
+  brutoCentavos: number;
+  comissaoCentavos: number;
+  taxasCentavos: number;
+  reembolsosCentavos: number;
+  multasCentavos: number;
+  ajustesCentavos: number;
+  liquidoCentavos: number;
+  itens: number;
+  fechadoEm: string | null;
+  pagoEm: string | null;
+};
+
+export type PreviaRepasseWire = {
+  competencia: string;
+  corte: string;
+  totais: TotaisRepasseWire;
+  ajustesPendentesRestantesCentavos: number;
+  itens: {
+    tipo: string;
+    data: string;
+    brutoCentavos: number;
+    comissaoCentavos: number;
+    taxasCentavos: number;
+    reembolsosCentavos: number;
+    multasCentavos: number;
+    liquidoCentavos: number;
+  }[];
+  ajustes: { valorCentavos: number; aplicadoCentavos: number }[];
+};
+
+export type ListaRepasses = {
+  saldoCentavos: number;
+  temChavePix: boolean;
+  aviso: string;
+  previa: PreviaRepasseWire;
+  repasses: RepasseResumo[];
+};
+
+export type ItemRepasseDetalhe = {
+  tipo: string;
+  data: string;
+  paciente: string;
+  brutoCentavos: number;
+  comissaoCentavos: number;
+  taxasCentavos: number;
+  reembolsosCentavos: number;
+  multasCentavos: number;
+  liquidoCentavos: number;
+};
+
+export type RepasseDetalhe = {
+  id: string;
+  competencia: string;
+  status: string;
+  brutoCentavos: number;
+  comissaoCentavos: number;
+  taxasCentavos: number;
+  reembolsosCentavos: number;
+  multasCentavos: number;
+  ajustesCentavos: number;
+  liquidoCentavos: number;
+  fechadoEm: string | null;
+  pagoEm: string | null;
+  comprovanteUrl: string | null;
+  pixUsado: { pixTipo: string; chaveMascarada: string; titularNome: string | null } | null;
+  itens: ItemRepasseDetalhe[];
+  ajustes: { motivo: string; valorCentavos: number; valorAplicadoCentavos: number; criadoEm: string }[];
+};
+
+/**
+ * Histórico e prévia dos repasses do PRÓPRIO médico
+ * (GET /api/medico/repasses e /api/medico/repasses/[id]).
+ * Recarrega no EVENTO_DADOS_MEDICO.
+ */
+export function useRepasses() {
+  const { sessao } = useBion();
+  const r = useRecurso<ListaRepasses>(sessao.role === "medico" ? "/api/medico/repasses" : null, "");
+  const [detalhe, setDetalhe] = useState<RepasseDetalhe | null>(null);
+  const [detalheCarregando, setDetalheCarregando] = useState(false);
+  const [detalheErro, setDetalheErro] = useState<string | null>(null);
+
+  const carregarDetalhe = useCallback(async (id: string) => {
+    setDetalheCarregando(true);
+    setDetalheErro(null);
+    try {
+      const res = await fetch(`/api/medico/repasses/${encodeURIComponent(id)}`, {
+        headers: { "Content-Type": "application/json" },
+      });
+      const json = (await res.json().catch(() => null)) as
+        | { repasse?: RepasseDetalhe; erro?: string }
+        | null;
+      if (!res.ok || !json?.repasse) {
+        setDetalhe(null);
+        setDetalheErro(json?.erro ?? "Não foi possível carregar o detalhe.");
+        return null;
+      }
+      setDetalhe(json.repasse);
+      return json.repasse;
+    } catch {
+      setDetalhe(null);
+      setDetalheErro("Falha de conexão com o servidor.");
+      return null;
+    } finally {
+      setDetalheCarregando(false);
+    }
+  }, []);
+
+  const limparDetalhe = useCallback(() => {
+    setDetalhe(null);
+    setDetalheErro(null);
+  }, []);
+
+  return {
+    lista: r.dados,
+    carregando: r.carregando,
+    erro: r.erro,
+    recarregar: r.recarregar,
+    detalhe,
+    detalheCarregando,
+    detalheErro,
+    carregarDetalhe,
+    limparDetalhe,
+  };
+}

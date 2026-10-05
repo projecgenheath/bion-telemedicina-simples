@@ -60,7 +60,7 @@ igual("pagamento não confirmado fora", consultaEntraNaReceita(c({ id: "1", data
 igual("cancelada fora", consultaEntraNaReceita(c({ id: "1", dataInicio: d, status: "cancelada" }), AGORA), false);
 igual("aguardando_reagendamento fora", consultaEntraNaReceita(c({ id: "1", dataInicio: d, status: "aguardando_reagendamento" }), AGORA), false);
 igual("futura (ainda não realizada) fora", consultaEntraNaReceita(c({ id: "1", dataInicio: new Date("2026-10-01T20:00:00.000Z") }), AGORA), false);
-igual("pago legado sem Pagamento entra", consultaEntraNaReceita(c({ id: "1", dataInicio: d, pagamento: null }), AGORA), true);
+igual("pago legado sem Pagamento fica fora", consultaEntraNaReceita(c({ id: "1", dataInicio: d, pagamento: null }), AGORA), false);
 
 /* ---------- reembolso integral (regra do dono) ---------- */
 for (const status of ["aprovado", "processado"]) {
@@ -142,6 +142,30 @@ igual("totais", r.totais, {
   consultas: 3,
 });
 igual("regra", r.regra, { comissaoPct: 10, multaParteMedicoPct: 50 });
+
+/* ---------- reembolso parcial desconta a parte do médico (90%) ---------- */
+const rp = calcularReceita({
+  de: "2026-10-01",
+  ate: "2026-10-01",
+  dias: ["2026-10-01"],
+  agora: AGORA,
+  consultas: [
+    // R$ 200 = 20000; líquido 18000; reembolso 5000 → médico perde 4500 → líquido 13500
+    c({ id: "parcial", dataInicio: d, valor: 200, pagamento: pagamento([{ status: "aprovado", valorCentavos: 5000 }]) }),
+  ],
+  multasCancelamento: [],
+  multasRemarcacao: [],
+});
+igual("parcial: líquido desconta 90% do reembolso", rp.dias[0], {
+  dia: "2026-10-01",
+  liquidoCentavos: 13500,
+  brutoCentavos: 20000,
+  comissaoCentavos: 2000,
+  taxaCentavos: 0,
+  multasMedicoCentavos: 0,
+  totalCentavos: 13500,
+  consultas: 1,
+});
 
 console.log(`\n${ok} ok, ${falhas} falha(s)`);
 if (falhas) process.exit(1);
