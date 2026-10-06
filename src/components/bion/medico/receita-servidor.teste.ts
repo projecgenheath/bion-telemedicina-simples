@@ -54,7 +54,46 @@ igual("mais de 366 dias recusa", "erro" in intervaloReceita("2025-09-29", "2026-
 /* ---------- inclusão ---------- */
 const d = new Date("2026-10-01T12:00:00.000Z"); // 09:00 SP
 igual("concluída paga entra", consultaEntraNaReceita(c({ id: "1", dataInicio: d }), AGORA), true);
-igual("confirmada paga que já passou entra", consultaEntraNaReceita(c({ id: "1", dataInicio: d, status: "confirmada" }), AGORA), true);
+igual("confirmada paga sem desfecho fora", consultaEntraNaReceita(c({ id: "1", dataInicio: d, status: "confirmada" }), AGORA), false);
+igual(
+  "confirmada com falta do paciente vigente entra",
+  consultaEntraNaReceita(
+    c({
+      id: "1",
+      dataInicio: d,
+      status: "confirmada",
+      eventos: [{ tipo: "falta_paciente", dataAnterior: d, corrigidoEm: null }],
+    }),
+    AGORA,
+  ),
+  true,
+);
+igual(
+  "confirmada com evento corrigido (sem desfecho) fora",
+  consultaEntraNaReceita(
+    c({
+      id: "1",
+      dataInicio: d,
+      status: "confirmada",
+      eventos: [{ tipo: "falta_paciente", dataAnterior: d, corrigidoEm: new Date("2026-10-01T20:00:00.000Z") }],
+    }),
+    AGORA,
+  ),
+  false,
+);
+igual(
+  "confirmada com evento de data antiga (remarcação) fora",
+  consultaEntraNaReceita(
+    c({
+      id: "1",
+      dataInicio: d,
+      status: "confirmada",
+      eventos: [{ tipo: "falta_paciente", dataAnterior: new Date("2026-09-01T12:00:00.000Z"), corrigidoEm: null }],
+    }),
+    AGORA,
+  ),
+  false,
+);
 igual("não paga fora", consultaEntraNaReceita(c({ id: "1", dataInicio: d, pago: false }), AGORA), false);
 igual("pagamento não confirmado fora", consultaEntraNaReceita(c({ id: "1", dataInicio: d, pagamento: pagamento([], "falhou") }), AGORA), false);
 igual("cancelada fora", consultaEntraNaReceita(c({ id: "1", dataInicio: d, status: "cancelada" }), AGORA), false);
