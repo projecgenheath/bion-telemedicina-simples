@@ -3,6 +3,8 @@ import { db } from "@/lib/db";
 import { quandoClinica } from "@/lib/server/fuso";
 import { aplicarFalhaTecnica, registrarEvento } from "@/lib/server/financeiro";
 import { REEMBOLSO_MANUAL_PRAZO_DIAS } from "@/lib/server/dados";
+import { SALA_FECHA_DEPOIS_MIN } from "@/lib/janela-sala";
+import { medicoEsperouAteOLimite, SINAL_PARADO_MS, type PresencaRegra } from "@/components/bion/medico/metricas";
 
 /* ------------------------------------------------------------------ */
 /* Falta do paciente / falha técnica detectadas pela PRESENÇA na sala.  */
@@ -16,24 +18,33 @@ import { REEMBOLSO_MANUAL_PRAZO_DIAS } from "@/lib/server/dados";
 /*    pedir o reembolso pelo app em até REEMBOLSO_MANUAL_PRAZO_DIAS e o   */
 /*    admin decide em "Reembolsos".                                      */
 /*  - falha_tecnica (regra do Alisson): SÓ quando alguém que já estava   */
-/*    conectado caiu e a chamada não seguiu, OU quando NINGUÉM conseguiu */
-/*    entrar. Gravada por aplicarFalhaTecnica (financeiro.ts, do Admin): */
+/*    conectado caiu e a chamada não seguiu. Ninguém entrou → sem       */
+/*    desfecho (fica para o admin; abrir o app NÃO grava sozinho).       */
+/*    Gravada por aplicarFalhaTecnica (financeiro.ts, do Admin):         */
 /*    paga → aguardando_reagendamento; não paga → cancelada.             */
 /*  - falta do médico (regra aprovada pelo Alisson): o paciente entrou e */
 /*    o médico nunca entrou, em consulta PAGA → mesmo tratamento da      */
 /*    falha técnica: aplicarFalhaTecnica com motivo "falta_medico"       */
 /*    (evento tipo falha_tecnica, motivo falta_medico). Não paga: nada.  */
 /* Os dois eventos nunca convivem na mesma consulta.                     */
+/*                                                                      */
+/* Desfecho MANUAL (regras do Alisson, 06/10/2026): o médico também     */
+/* marca falta do paciente / falha técnica pela sala ou pela agenda      */
+/* (POST /api/medico/consultas/[id]/desfecho), pela MESMA gravação daqui */
+/* (gravarDesfecho), com por = "medico". O sistema nunca grava por cima  */
+/* de um desfecho que já existe — manual ou não — e o médico também não. */
+/* A presença guarda a ENTRADA da sessão atual (PresencaSala.entrouEm,   */
+/* zera quando o sinal fica mais de 30 s parado) além do último sinal.   */
 /* ------------------------------------------------------------------ */
 
 /**
  * Carência depois do horário marcado: a decisão só sai quando a SALA já
- * fechou (mesma janela de `salaAberta` em components/bion/medico/metricas.ts:
- * a sala fica aberta até 2 h depois do horário). Não existe duração de
+ * fechou (janela única em lib/janela-sala.ts: a sala fica aberta até 2 h
+ * depois do horário). Não existe duração de
  * consulta gravada no banco; esperar a sala fechar garante que um paciente
  * atrasado ainda pode entrar e que a classificação não muda depois.
  */
-export const CARENCIA_APOS_INICIO_MIN = 120;
+export const CARENCIA_APOS_INICIO_MIN = SALA_FECHA_DEPOIS_MIN;
 /**
  * Queda: os dois entraram, mas um parou de mandar heartbeat e o outro ficou
  * na sala pelo menos este tempo esperando (sem ninguém encerrar a chamada).
@@ -67,6 +78,8 @@ export function classificarPresenca(p: {
   pago: boolean;
   ultimoPingMedico: Date | null;
   ultimoPingPaciente: Date | null;
+  /** Entrada da última sessão do médico na sala (PresencaSala.entrouEm; null = linha antiga). */
+  entrouEmMedico?: Date | null;
   /** Algum participante encerrou a chamada pelo botão (sinal de controle "encerrada"). */
   encerradaPeloBotao: boolean;
 }): Classificacao {
@@ -79,13 +92,30 @@ export function classificarPresenca(p: {
   const paciente = presente(p.ultimoPingPaciente);
 
   if (!medico && !paciente) {
-    // Consulta não paga em que ninguém entrou: é uma reserva que não foi paga,
-    // não uma falha técnica. Fica como está.
-    if (!p.pago) return { resultado: "sem_evento", motivo: "Consulta não paga e ninguém entrou na sala." };
-    return { resultado: "falha_tecnica", motivo: "Nem o médico nem o paciente conseguiram entrar na sala." };
+    // Ninguém entrou: NÃO grava falha técnica automática (paga ou não).
+    // Fica sem desfecho para o admin; o bootstrap/abrir o app não marca sozinho.
+    return {
+      resultado: "sem_evento",
+      motivo: p.pago
+        ? "Ninguém entrou na sala: fica sem desfecho para o admin."
+        : "Consulta não paga e ninguém entrou na sala.",
+    };
   }
   if (medico && !paciente) {
-    return { resultado: "falta_paciente", motivo: "O médico esteve na sala e o paciente não entrou." };
+    // Mesma regra da falta marcada pelo médico (regra 1): ele precisa ter
+    // ficado na sala até o horário + 15 min. Se saiu antes, não há falta nem
+    // falha técnica automática: a consulta fica sem desfecho para o admin.
+    const sessaoMedico: PresencaRegra = {
+      entrouEm: p.entrouEmMedico?.getTime() ?? null,
+      ultimoPing: p.ultimoPingMedico!.getTime(),
+    };
+    if (!medicoEsperouAteOLimite(inicio, sessaoMedico)) {
+      return {
+        resultado: "sem_evento",
+        motivo: "O médico saiu da sala antes de 15 min do horário e o paciente não entrou: fica para o admin.",
+      };
+    }
+    return { resultado: "falta_paciente", motivo: "O médico esperou na sala e o paciente não entrou." };
   }
   if (!medico && paciente) {
     // Falta do médico: mesmo tratamento da falha técnica, só em consulta paga
@@ -110,7 +140,7 @@ export function classificarPresenca(p: {
 /** Erro interno para desfazer a transação sem gravar nada. */
 class SemAlteracao extends Error {}
 
-type ConsultaAvaliada = {
+export type ConsultaAvaliada = {
   id: string;
   pacienteId: string;
   medicoId: string;
@@ -121,8 +151,11 @@ type ConsultaAvaliada = {
   updatedAt: Date;
 };
 
-/** Auditoria do evento gravado pelo sistema (aparece para o admin em /auditoria). */
-type Desfecho = "falta_paciente" | "falha_tecnica" | "falta_medico";
+/** Desfecho gravado na consulta (evento falta_paciente ou falha_tecnica). */
+export type Desfecho = "falta_paciente" | "falha_tecnica" | "falta_medico";
+
+/** Quem grava: o sistema (presença, por = "sistema") ou o médico dono (por = "medico"). */
+export type AutorDesfecho = { por: "sistema" } | { por: "medico"; id: string; nome: string };
 
 const ROTULO_DESFECHO: Record<Desfecho, string> = {
   falta_paciente: "Falta do paciente",
@@ -130,7 +163,12 @@ const ROTULO_DESFECHO: Record<Desfecho, string> = {
   falta_medico: "Falta do médico",
 };
 
-function dadosAudit(c: ConsultaAvaliada, tipo: Desfecho, motivo: string) {
+/** Tipos de evento que encerram a questão "a consulta aconteceu?". */
+export const TIPOS_DESFECHO = ["falta_paciente", "falha_tecnica"];
+
+/** Auditoria do desfecho (aparece para o admin em /auditoria). */
+function dadosAudit(c: ConsultaAvaliada, tipo: Desfecho, motivo: string, autor: AutorDesfecho) {
+  const manual = autor.por === "medico";
   return {
     acao:
       tipo === "falta_paciente"
@@ -140,26 +178,33 @@ function dadosAudit(c: ConsultaAvaliada, tipo: Desfecho, motivo: string) {
           : "CONSULTA_FALHA_TECNICA",
     categoria: "consulta",
     severidade: "warning",
-    usuarioNome: "Sistema BION",
-    role: "sistema",
+    usuarioId: manual ? autor.id : null,
+    usuarioNome: manual ? autor.nome : "Sistema BION",
+    role: manual ? "MEDICO" : "sistema",
     entidade: "consulta",
     entidadeId: c.id,
-    detalhes: `${ROTULO_DESFECHO[tipo]} registrada automaticamente — ${c.especialidade} (${quandoClinica(c.dataInicio)}). ${motivo}`,
+    detalhes: `${ROTULO_DESFECHO[tipo]} registrada ${manual ? "pelo médico" : "automaticamente"} — ${c.especialidade} (${quandoClinica(c.dataInicio)}). ${motivo}`,
   };
 }
 
 /**
- * Grava o evento da classificação, numa transação só. Idempotente:
+ * Grava o desfecho, numa transação só. Usado pela verificação automática
+ * (autor "sistema") e pela rota do médico (autor "medico"). Idempotente:
  * - trava a consulta com updateMany condicionado ao status e ao updatedAt
  *   lidos (outra requisição que mexeu nela no meio faz esta desistir);
- * - não grava se já existe falta_paciente OU falha_tecnica;
- * - falha técnica e falta do médico passam por aplicarFalhaTecnica (que tem
- *   a própria checagem); a falta do médico grava evento falha_tecnica com
- *   motivo "falta_medico".
+ * - NUNCA grava por cima de um desfecho que já existe (falta_paciente OU
+ *   falha_tecnica, de quem for): manual ou automático, o primeiro vale;
+ * - falha técnica e falta do médico passam por aplicarFalhaTecnica
+ *   (financeiro.ts, do Admin), que tem a própria checagem; a falta do médico
+ *   grava evento falha_tecnica com motivo "falta_medico".
+ * Devolve o desfecho gravado (e o novo status) ou null se nada foi gravado.
  */
-async function gravarClassificacao(c: ConsultaAvaliada, cl: Classificacao) {
-  if (cl.resultado === "aguardar" || cl.resultado === "sem_evento") return null;
-  const tipo: Desfecho = cl.resultado;
+export async function gravarDesfecho(
+  c: ConsultaAvaliada,
+  tipo: Desfecho,
+  motivo: string,
+  autor: AutorDesfecho = { por: "sistema" },
+): Promise<{ tipo: Desfecho; status: string } | null> {
   try {
     return await db.$transaction(async (tx) => {
       const { count } = await tx.consulta.updateMany({
@@ -167,18 +212,27 @@ async function gravarClassificacao(c: ConsultaAvaliada, cl: Classificacao) {
         data: { status: c.status },
       });
       if (count === 0) throw new SemAlteracao();
+      // Só conta desfecho vigente da data ATUAL (corrigidoEm nulo; depois de
+      // remarcação o evento da data antiga não bloqueia).
       const jaTem = await tx.eventoConsulta.findFirst({
-        where: { consultaId: c.id, tipo: { in: ["falta_paciente", "falha_tecnica"] } },
+        where: {
+          consultaId: c.id,
+          tipo: { in: TIPOS_DESFECHO },
+          corrigidoEm: null,
+          dataAnterior: c.dataInicio,
+        },
         select: { id: true },
       });
       if (jaTem) throw new SemAlteracao();
 
+      const atorId = autor.por === "medico" ? autor.id : null;
+      let status = c.status;
       if (tipo === "falta_paciente") {
         await registrarEvento(tx, {
           consultaId: c.id,
           tipo: "falta_paciente",
-          por: "sistema",
-          atorId: null,
+          por: autor.por,
+          atorId,
           dataAnterior: c.dataInicio,
           motivo: "falta_paciente",
           multaCentavos: 0,
@@ -193,8 +247,12 @@ async function gravarClassificacao(c: ConsultaAvaliada, cl: Classificacao) {
         });
       } else {
         const faltaMedico = tipo === "falta_medico";
-        const r = await aplicarFalhaTecnica(tx, c.id, { motivo: faltaMedico ? "falta_medico" : "falha_tecnica" });
+        const r = await aplicarFalhaTecnica(tx, c.id, {
+          motivo: faltaMedico ? "falta_medico" : "falha_tecnica",
+          ...(autor.por === "medico" ? { por: "medico" as const, atorId } : { por: "sistema" as const }),
+        });
         if (!r) throw new SemAlteracao();
+        status = r.status;
         const causa = faltaMedico ? "porque o médico não entrou na sala" : "por falha técnica";
         await tx.notificacao.create({
           data: {
@@ -208,8 +266,8 @@ async function gravarClassificacao(c: ConsultaAvaliada, cl: Classificacao) {
           },
         });
       }
-      await tx.auditLog.create({ data: dadosAudit(c, tipo, cl.motivo) });
-      return tipo;
+      await tx.auditLog.create({ data: dadosAudit(c, tipo, motivo, autor) });
+      return { tipo, status };
     });
   } catch (e) {
     if (e instanceof SemAlteracao) return null;
@@ -217,28 +275,74 @@ async function gravarClassificacao(c: ConsultaAvaliada, cl: Classificacao) {
   }
 }
 
+/** Grava (se for o caso) o evento da classificação automática. */
+async function gravarClassificacao(c: ConsultaAvaliada, cl: Classificacao) {
+  if (cl.resultado === "aguardar" || cl.resultado === "sem_evento") return null;
+  const r = await gravarDesfecho(c, cl.resultado, cl.motivo, { por: "sistema" });
+  return r ? r.tipo : null;
+}
+
+/** Presença de cada participante na sala (ms), para as regras de metricas.ts. */
+export type PresencasConsulta = { medico: PresencaRegra; paciente: PresencaRegra };
+
+/** Lê a presença (entrada da sessão atual + último sinal) do médico e do paciente da consulta. */
+export async function lerPresencas(c: { id: string; medicoId: string; pacienteId: string }): Promise<PresencasConsulta> {
+  const linhas = await db.presencaSala.findMany({
+    where: { consultaId: c.id },
+    select: { usuarioId: true, ultimoPing: true, entrouEm: true },
+  });
+  const de = (usuarioId: string): PresencaRegra => {
+    const l = linhas.find((x) => x.usuarioId === usuarioId);
+    return l ? { entrouEm: l.entrouEm?.getTime() ?? null, ultimoPing: l.ultimoPing.getTime() } : null;
+  };
+  return { medico: de(c.medicoId), paciente: de(c.pacienteId) };
+}
+
+/**
+ * A consulta já tem desfecho VIGENTE da data atual (falta_paciente /
+ * falha_tecnica com corrigidoEm nulo e dataAnterior = dataInicio)?
+ * Devolve o evento ou null. `dataInicio` opcional evita um SELECT a mais.
+ */
+export async function desfechoExistente(consultaId: string, dataInicio?: Date) {
+  let inicio = dataInicio;
+  if (!inicio) {
+    const c = await db.consulta.findUnique({ where: { id: consultaId }, select: { dataInicio: true } });
+    if (!c) return null;
+    inicio = c.dataInicio;
+  }
+  return db.eventoConsulta.findFirst({
+    where: { consultaId, tipo: { in: TIPOS_DESFECHO }, corrigidoEm: null, dataAnterior: inicio },
+    select: { id: true, tipo: true, motivo: true, por: true, atorId: true },
+    orderBy: { em: "asc" },
+  });
+}
+
 /** Lê a presença e grava (se for o caso) o evento de UMA consulta. */
 async function avaliarConsulta(c: ConsultaAvaliada, agora: Date) {
+  // Já tem desfecho vigente da data atual (corrigido pelo admin não conta;
+  // evento de data antiga após remarcação não conta): não grava de novo.
+  if (await desfechoExistente(c.id, c.dataInicio)) return null;
   const [presencas, encerrada] = await Promise.all([
-    db.presencaSala.findMany({ where: { consultaId: c.id }, select: { usuarioId: true, ultimoPing: true } }),
+    lerPresencas(c),
     db.sinalSala.findFirst({
       where: { consultaId: c.id, tipo: "controle", payload: { contains: '"encerrada"' } },
       select: { id: true },
     }),
   ]);
-  const ping = (usuarioId: string) => presencas.find((x) => x.usuarioId === usuarioId)?.ultimoPing ?? null;
+  const data = (ms: number | null | undefined) => (ms == null ? null : new Date(ms));
   const cl = classificarPresenca({
     dataInicio: c.dataInicio,
     agora,
     pago: c.pago,
-    ultimoPingMedico: ping(c.medicoId),
-    ultimoPingPaciente: ping(c.pacienteId),
+    ultimoPingMedico: data(presencas.medico?.ultimoPing),
+    ultimoPingPaciente: data(presencas.paciente?.ultimoPing),
+    entrouEmMedico: data(presencas.medico?.entrouEm),
     encerradaPeloBotao: !!encerrada,
   });
   return gravarClassificacao(c, cl);
 }
 
-const selectAvaliada = {
+export const selectAvaliada = {
   id: true,
   pacienteId: true,
   medicoId: true,
@@ -262,7 +366,11 @@ export function filtroPendentes(agora: Date) {
       gte: limiteRecente > INICIO_DETECCAO ? limiteRecente : INICIO_DETECCAO,
       lte: new Date(agora.getTime() - CARENCIA_APOS_INICIO_MIN * 60_000),
     },
-    eventos: { none: { tipo: { in: ["falta_paciente", "falha_tecnica"] } } },
+    // Desfecho vigente = tipo falta/falha, corrigidoEm nulo E dataAnterior =
+    // dataInicio (data atual). O Prisma não compara colunas entre tabelas, então
+    // o filtro fino da data fica em desfechoExistente/avaliarConsulta. Aqui
+    // não filtramos por eventos: consulta remarcada com evento da data antiga
+    // ainda precisa ser avaliada.
   };
 }
 
@@ -345,4 +453,63 @@ export async function verificarPresencasDoPacienteSemFalhar(pacienteId: string) 
   } catch (e) {
     console.error("[presenca-consulta] falha ao verificar as presenças do paciente", pacienteId, e);
   }
+}
+
+/* ------------------------------------------------------------------ */
+/* Heartbeat e limpeza da sala (usados por /api/telemedicina/[id]/sala) */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Entrada da sessão atual depois de um heartbeat (PURA, testada):
+ * primeira vez, linha antiga sem entrada, ou sinal parado há mais de
+ * SINAL_PARADO_MS → a sessão recomeça agora; senão mantém a entrada.
+ */
+export function entradaAposSinal(
+  existente: { ultimoPing: Date; entrouEm: Date | null } | null,
+  agora: Date,
+): Date {
+  if (!existente || !existente.entrouEm) return agora;
+  if (agora.getTime() - existente.ultimoPing.getTime() > SINAL_PARADO_MS) return agora;
+  return existente.entrouEm;
+}
+
+/** A consulta já tem desfecho: saiu dos status "ia acontecer" ou tem evento vigente da data atual. */
+export async function consultaTemDesfecho(consultaId: string): Promise<boolean> {
+  const c = await db.consulta.findUnique({
+    where: { id: consultaId },
+    select: {
+      status: true,
+      dataInicio: true,
+      eventos: {
+        where: { tipo: { in: TIPOS_DESFECHO }, corrigidoEm: null },
+        select: { id: true, dataAnterior: true },
+      },
+    },
+  });
+  if (!c) return true;
+  if (!STATUS_AVALIAVEIS.includes(c.status)) return true;
+  return c.eventos.some((e) => e.dataAnterior.getTime() === c.dataInicio.getTime());
+}
+
+/**
+ * Limpeza da sala: apaga sinais já consumidos com mais de 30 min. Enquanto a
+ * consulta NÃO tem desfecho, guarda a presença (prova da espera / da entrada
+ * do paciente) e o sinal de controle "encerrada" (a classificação automática
+ * usa os dois). Com desfecho, também apaga as presenças paradas há mais de 1 h.
+ */
+export async function limparSala(consultaId: string, agora: Date = new Date()) {
+  const temDesfecho = await consultaTemDesfecho(consultaId);
+  const t = agora.getTime();
+  await db.sinalSala.deleteMany({
+    where: {
+      consultaId,
+      consumido: true,
+      createdAt: { lt: new Date(t - 30 * 60 * 1000) },
+      ...(temDesfecho ? {} : { NOT: { tipo: "controle", payload: { contains: '"encerrada"' } } }),
+    },
+  });
+  if (temDesfecho) {
+    await db.presencaSala.deleteMany({ where: { consultaId, ultimoPing: { lt: new Date(t - 60 * 60 * 1000) } } });
+  }
+  return { temDesfecho };
 }

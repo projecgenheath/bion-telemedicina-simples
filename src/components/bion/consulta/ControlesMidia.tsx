@@ -161,6 +161,7 @@ export function ConsultaControlesMidia({
       <button
         type="button"
         onClick={onEncerrar}
+        aria-haspopup={role === "medico" ? "dialog" : undefined}
         className="px-6 h-12 shrink-0 rounded-2xl bg-red-600 dark:bg-red-500 hover:bg-red-700 text-white text-xs font-extrabold flex items-center gap-2 transition shadow-lg shadow-red-600/30"
       >
         <PhoneOff className="w-4 h-4" /> Encerrar Atendimento

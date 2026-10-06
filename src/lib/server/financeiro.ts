@@ -265,19 +265,37 @@ export async function criarReembolsoSeDevido(
  * estiver encerrada. O motivo "falta_medico" só deve ser usado após aprovação
  * da regra pelo Alisson.
  */
+/** Filtro Prisma: evento ainda vale (não foi corrigido pelo admin). */
+export const EVENTO_VIGENTE = { corrigidoEm: null } as const;
+
+/**
+ * Falha técnica (ou falta do médico, com `motivo: "falta_medico"`): paga vai
+ * para aguardando_reagendamento, não paga é cancelada. Idempotente: não faz
+ * nada se a consulta já tiver falta_paciente ou falha_tecnica VIGENTE da data
+ * atual (corrigidoEm nulo e dataAnterior = dataInicio), ou se já estiver
+ * encerrada. Quem grava: `por` = "sistema" (padrão), "medico" (rota do
+ * desfecho) ou "admin" (correção).
+ */
 export async function aplicarFalhaTecnica(
   tx: Prisma.TransactionClient,
   consultaId: string,
-  opcoes: { motivo?: "falha_tecnica" | "falta_medico" } = {},
+  opcoes: { motivo?: "falha_tecnica" | "falta_medico"; por?: "sistema" | "medico" | "admin"; atorId?: string | null } = {},
 ) {
   const motivo = opcoes.motivo ?? "falha_tecnica";
+  const por = opcoes.por ?? "sistema";
+  const atorId = por === "sistema" ? null : (opcoes.atorId ?? null);
   const consulta = await tx.consulta.findUnique({
     where: { id: consultaId },
     select: { id: true, status: true, pago: true, dataInicio: true },
   });
   if (!consulta) return null;
   const jaTem = await tx.eventoConsulta.findFirst({
-    where: { consultaId, tipo: { in: ["falha_tecnica", "falta_paciente"] } },
+    where: {
+      consultaId,
+      tipo: { in: ["falha_tecnica", "falta_paciente"] },
+      ...EVENTO_VIGENTE,
+      dataAnterior: consulta.dataInicio,
+    },
     select: { id: true },
   });
   if (jaTem) return null;
@@ -293,8 +311,8 @@ export async function aplicarFalhaTecnica(
   const evento = await registrarEvento(tx, {
     consultaId,
     tipo: "falha_tecnica",
-    por: "sistema",
-    atorId: null,
+    por,
+    atorId,
     dataAnterior: consulta.dataInicio,
     motivo,
     multaCentavos: 0,
