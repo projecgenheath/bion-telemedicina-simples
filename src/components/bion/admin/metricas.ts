@@ -35,6 +35,19 @@ export type ReembolsoWire = {
   consulta: { id: string; especialidade: string; dataInicio: string; medico: string; paciente: string } | null;
 };
 export type ReembolsosResposta = { total: number; reembolsos: ReembolsoWire[] };
+/** GET /api/admin/consultas/sem-desfecho: sem desfecho há mais de 24 h (fora do repasse até ganhar desfecho). */
+export type SemDesfechoWire = {
+  id: string;
+  medicoId: string;
+  medico: string;
+  paciente: string;
+  especialidade: string;
+  dataInicio: string;
+  status: string;
+  pago: boolean;
+  valor: number;
+};
+export type SemDesfechoResposta = { total: number; horas: number; consultas: SemDesfechoWire[] };
 
 /** Valor da consulta como chega do store ("R$ 150" | "R$ 150,5" | "R$ 1.234,56") → centavos. */
 export function centavosDoValor(valor: string | null | undefined): number {
@@ -120,9 +133,10 @@ export function resumoMedicos(medicos: Medico[]) {
 /* ------------------------------------------------------------------ */
 /* Fila de decisões                                                    */
 /* ------------------------------------------------------------------ */
-export type CategoriaFila = "validacao" | "reembolso" | "repasse" | "chamado" | "sistema";
+export type CategoriaFila = "validacao" | "desfecho" | "reembolso" | "repasse" | "chamado" | "sistema";
 export const ROTULO_CATEGORIA: Record<CategoriaFila, string> = {
   validacao: "Validação",
+  desfecho: "Sem desfecho",
   reembolso: "Reembolsos",
   repasse: "Repasses",
   chamado: "Chamados",
@@ -148,10 +162,28 @@ export function montarFila(
     auditLogs: AuditLog[];
     repasses: RepasseWire[] | null;
     reembolsos: ReembolsoWire[] | null;
+    semDesfecho?: SemDesfechoWire[] | null;
   },
   agora: number,
 ): ItemFila[] {
   const itens: ItemFila[] = [];
+
+  // Sem desfecho há mais de 24 h (o servidor já filtra; aqui só confere a idade):
+  // fica fora do repasse até alguém dar o desfecho. Abre direto o "Corrigir desfecho".
+  for (const c of d.semDesfecho ?? []) {
+    const ts = Date.parse(c.dataInicio);
+    if (!Number.isFinite(ts) || agora - ts < DIA) continue;
+    itens.push({
+      chave: `desfecho-${c.id}`,
+      categoria: "desfecho",
+      tom: "atencao",
+      titulo: `Sem desfecho · ${c.paciente}`,
+      detalhe: [c.medico, c.especialidade, `${rotuloDia(ts, agora)} ${hora(ts)}`].filter(Boolean).join(" · "),
+      chips: [{ rotulo: "Sem desfecho", tom: "atencao" }, c.pago ? { rotulo: "Pago · fora do repasse", tom: "dinheiro" } : { rotulo: "Não pago", tom: "neutro" }],
+      ts,
+      destino: `admin-agendamentos?consulta=${encodeURIComponent(c.id)}&acao=desfecho`,
+    });
+  }
 
   for (const m of d.medicos) {
     if (m.status !== "pendente") continue;
@@ -235,7 +267,7 @@ export function montarFila(
 }
 
 export function contarPorCategoria(itens: ItemFila[]): Record<CategoriaFila, number> {
-  const out: Record<CategoriaFila, number> = { validacao: 0, reembolso: 0, repasse: 0, chamado: 0, sistema: 0 };
+  const out: Record<CategoriaFila, number> = { validacao: 0, desfecho: 0, reembolso: 0, repasse: 0, chamado: 0, sistema: 0 };
   for (const i of itens) out[i.categoria]++;
   return out;
 }

@@ -3,7 +3,7 @@
  * Rodar: bun src/components/bion/admin/metricas.teste.ts  (também com TZ=UTC e TZ=Asia/Tokyo)
  */
 import type { AuditLog, Consulta, Medico, TicketSuporte } from "@/lib/bion-tipos";
-import { centavosDoValor, contarPorCategoria, especialidades30d, montarFila, resumoHoje, resumoMedicos, serieDiaria, type RepasseWire, type ReembolsoWire } from "./metricas";
+import { centavosDoValor, contarPorCategoria, especialidades30d, montarFila, resumoHoje, resumoMedicos, serieDiaria, type RepasseWire, type ReembolsoWire, type SemDesfechoWire } from "./metricas";
 import { ehApple, rotuloAtalhoBusca } from "./ui/atalho";
 
 let ok = 0;
@@ -115,7 +115,7 @@ igual(
   fila.map((i) => i.chave),
   ["repasse-r3", "repasse-r2", "audit-a1", "reembolso-e1", "medico-2", "chamado-t1", "repasse-r1"],
 );
-igual("fila: contagem", contarPorCategoria(fila), { validacao: 1, reembolso: 1, repasse: 3, chamado: 1, sistema: 1 });
+igual("fila: contagem", contarPorCategoria(fila), { validacao: 1, desfecho: 0, reembolso: 1, repasse: 3, chamado: 1, sistema: 1 });
 const rr = fila.find((i) => i.chave === "repasse-r2")!;
 igual("fila: repasse com CNPJ divergente", [rr.tom, rr.chips.map((c) => c.rotulo), rr.destino], ["critico", ["A pagar", "CNPJ divergente"], "admin-repasses?repasse=r2"]);
 igual("fila: repasse detalhe", rr.detalhe, "03/10 · R$ 50,00 · 1 consulta");
@@ -126,6 +126,27 @@ igual("fila: médico em validação", [fila[4].titulo, fila[4].detalhe, fila[4].
 igual("fila: auditoria crítica humanizada", fila[2].titulo, "Login falhou repetido");
 igual("humanizar mantém siglas", montarFila({ medicos: [], tickets: [], repasses: null, reembolsos: null, auditLogs: [{ ...logs[0], acao: "LGPD_COFRE_CONSULTADO" }] }, AGORA)[0].titulo, "LGPD cofre consultado");
 igual("fila: sem rotas ainda (null) não quebra", montarFila({ medicos: [], tickets: [], auditLogs: [], repasses: null, reembolsos: null }, AGORA), []);
+
+/* ---------- fila: sem desfecho há mais de 24 h ---------- */
+const semDesfecho: SemDesfechoWire[] = [
+  { id: "s1", medicoId: "m1", medico: "Dra. Ana", paciente: "Rita", especialidade: "Clínica", dataInicio: "2026-10-02T13:00:00.000Z", status: "confirmada", pago: true, valor: 150 },
+  { id: "s2", medicoId: "m1", medico: "Dra. Ana", paciente: "Caio", especialidade: "Pediatria", dataInicio: "2026-10-03T12:00:00.000Z", status: "em_espera", pago: false, valor: 100 },
+  // 23 h atrás: ainda não entra (o médico tinha até 23:30 do dia; o servidor já filtra, a tela confere)
+  { id: "s3", medicoId: "m1", medico: "Dra. Ana", paciente: "Lia", especialidade: "Clínica", dataInicio: "2026-10-03T14:00:00.000Z", status: "confirmada", pago: true, valor: 150 },
+];
+const filaD = montarFila({ medicos: [], tickets: [], auditLogs: [], repasses: null, reembolsos: null, semDesfecho }, AGORA);
+igual("fila sem desfecho: só as de mais de 24 h, mais antiga primeiro", filaD.map((i) => i.chave), ["desfecho-s1", "desfecho-s2"]);
+igual("fila sem desfecho: título, detalhe e destino (abre o Corrigir desfecho)", [filaD[0].titulo, filaD[0].detalhe, filaD[0].destino, filaD[0].categoria], [
+  "Sem desfecho · Rita",
+  "Dra. Ana · Clínica · sex, 02/10 10:00",
+  "admin-agendamentos?consulta=s1&acao=desfecho",
+  "desfecho",
+]);
+igual("fila sem desfecho: chips (pago fica fora do repasse)", [filaD[0].chips.map((c) => c.rotulo), filaD[1].chips.map((c) => c.rotulo)], [
+  ["Sem desfecho", "Pago · fora do repasse"],
+  ["Sem desfecho", "Não pago"],
+]);
+igual("fila sem desfecho: contagem", contarPorCategoria(filaD).desfecho, 2);
 
 /* ---------- atalho da busca ---------- */
 igual("Mac", ehApple("MacIntel"), true);

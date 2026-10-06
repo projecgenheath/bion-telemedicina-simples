@@ -39,3 +39,19 @@ ALTER TABLE public."EventoConsulta" ADD CONSTRAINT "EventoConsulta_correcao_chec
   );
 
 COMMIT;
+
+-- Verificação:
+--   SELECT column_name, data_type, is_nullable FROM information_schema.columns
+--    WHERE table_schema = 'public' AND table_name = 'EventoConsulta'
+--      AND column_name IN ('corrigidoEm', 'corrigidoPorId', 'motivoCorrecao')
+--    ORDER BY column_name;
+--   -- corrigidoEm    | timestamp without time zone | YES
+--   -- corrigidoPorId | text                        | YES
+--   -- motivoCorrecao | text                        | YES
+--   SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname = 'EventoConsulta_correcao_check';
+--
+-- Reverter (só se o PR não entrar; perde o histórico de correções):
+--   ALTER TABLE public."EventoConsulta" DROP CONSTRAINT IF EXISTS "EventoConsulta_correcao_check";
+--   ALTER TABLE public."EventoConsulta" DROP COLUMN IF EXISTS "motivoCorrecao";
+--   ALTER TABLE public."EventoConsulta" DROP COLUMN IF EXISTS "corrigidoPorId";
+--   ALTER TABLE public."EventoConsulta" DROP COLUMN IF EXISTS "corrigidoEm";
