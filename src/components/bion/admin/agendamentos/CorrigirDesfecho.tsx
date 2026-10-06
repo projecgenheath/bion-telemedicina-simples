@@ -8,7 +8,7 @@ import { Esqueleto, EstadoErro } from "../ui/Estados";
 import { chamarApi, useRecurso } from "../repasses/recurso";
 import { useDadosAdmin } from "../dados";
 import { brl, dataLonga, hora as horaDe } from "../tempo";
-import { destaqueDinheiro, textoConfirmacao, validarMotivoCorrecao, type DesfechoAlvo, type PlanoWire, type PreviaDesfechoWire } from "./desfecho";
+import { avisoMotivo, destaqueDinheiro, textoAvisos, textoConfirmacao, validarMotivoCorrecao, type DesfechoAlvo, type PlanoWire, type PreviaDesfechoWire } from "./desfecho";
 
 const TOM_ATUAL: Record<string, "ok" | "atencao" | "critico" | "neutro"> = {
   realizada: "ok",
@@ -56,6 +56,7 @@ export function CorrigirDesfecho({
   const opcaoSel = p.opcoes.find((o) => o.novo === novo) ?? null;
   const plano = opcaoSel?.ok ? opcaoSel.plano : null;
   const erroMotivo = validarMotivoCorrecao(motivo, p.motivoMin);
+  const aviso = avisoMotivo(plano);
   const algumaPossivel = p.opcoes.some((o) => o.ok);
   const pronto = Boolean(plano) && !erroMotivo && entendi && !enviando;
 
@@ -139,7 +140,7 @@ export function CorrigirDesfecho({
 
       {algumaPossivel ? (
         <label className="block">
-          <span className="ba-rotulo">Motivo da correção (fica na auditoria)</span>
+          <span className="ba-rotulo">{aviso.vaiParaPaciente ? "Motivo da correção (auditoria e paciente)" : "Motivo da correção (fica na auditoria)"}</span>
           <textarea
             value={motivo}
             onChange={(e) => {
@@ -158,8 +159,17 @@ export function CorrigirDesfecho({
             {tocouMotivo && erroMotivo
               ? erroMotivo
               : erroMotivo
-                ? `${motivo.trim().length} de ${p.motivoMin} caracteres no mínimo. Não vai para o paciente.`
-                : `${motivo.trim().length} caracteres. Não vai para o paciente.`}
+                ? `${motivo.trim().length} de ${p.motivoMin} caracteres no mínimo.`
+                : `${motivo.trim().length} caracteres.`}{" "}
+            {!(tocouMotivo && erroMotivo) ? (
+              <span
+                data-testid="aviso-motivo"
+                className={aviso.vaiParaPaciente ? "font-semibold" : undefined}
+                style={aviso.vaiParaPaciente ? { color: "var(--ba-atencao)" } : undefined}
+              >
+                {aviso.texto}
+              </span>
+            ) : null}
           </span>
         </label>
       ) : null}
@@ -220,7 +230,7 @@ function PreviaPlano({ plano }: { plano: PlanoWire }) {
             {e}
           </li>
         ))}
-        <li>{plano.notificarMedico ? "Avisos: paciente e médico (muda o que o médico recebe)." : "Aviso: só o paciente."}</li>
+        <li>{textoAvisos(plano)}</li>
       </ul>
     </section>
   );

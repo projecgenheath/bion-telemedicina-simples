@@ -457,7 +457,7 @@ model EventoConsulta {
   dataNova      DateTime?
   motivo        String
   multaCentavos Int?
-  /// Correção pelo admin (migração 20261006c): o evento fica no histórico,
+  /// Correção pelo admin (migração 20261006d): o evento fica no histórico,
   /// mas deixa de valer como desfecho. As três juntas ou nenhuma.
   corrigidoEm    DateTime?
   corrigidoPorId String?

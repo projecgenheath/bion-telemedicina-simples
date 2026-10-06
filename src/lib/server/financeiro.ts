@@ -868,10 +868,24 @@ export type PlanoCorrecao = {
   };
   /** Frases da prévia (o que vai acontecer), em ordem. */
   efeitos: string[];
+  /**
+   * O paciente é avisado, menos quando a correção só tira o "sem desfecho" e
+   * grava "realizada" (para ele nada muda na tela).
+   */
+  notificarPaciente: boolean;
+  /**
+   * O motivo do admin vai no texto ao paciente só quando a correção encerra
+   * um pedido de reembolso pendente ou registra falta do paciente. Nos outros
+   * casos, fica só no AuditLog.
+   */
+  motivoParaPaciente: boolean;
+  /** O médico é avisado quando muda o que ele recebe (pagamento confirmado). */
   notificarMedico: boolean;
 };
 
 type FalhaCorrecao = { ok: false; erro: string; status: number };
+
+const MUDA_O_QUE_O_MEDICO_RECEBE: EfeitoDinheiro[] = ["entra_no_proximo_repasse", "sai_do_repasse", "desconto_se_reembolso"];
 
 const brlCentavos = (c: number) => (c / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const diaBr = (iso: string) => iso.split("-").reverse().join("/");
@@ -984,6 +998,7 @@ export function planejarCorrecaoDesfecho(e: EstadoCorrecao, novo: Desfecho, agor
     efeitos.push(`O pedido de reembolso ${r.status === "em_analise" ? "em análise" : "solicitado"} (${brlCentavos(r.valorCentavos)}) é encerrado: o paciente vê como negado, com a explicação.`);
   }
   if (evento) efeitos.push(`O registro "${ROTULO_DESFECHO[atual]}" fica no histórico, marcado como corrigido.`);
+  const notificarPaciente = !(atual === "sem_desfecho" && novo === "realizada") || pendentes.length > 0;
 
   return {
     ok: true,
@@ -1004,7 +1019,9 @@ export function planejarCorrecaoDesfecho(e: EstadoCorrecao, novo: Desfecho, agor
         repasse: rep,
       },
       efeitos,
-      notificarMedico: pagoConfirmado && antes !== depois,
+      notificarPaciente,
+      motivoParaPaciente: notificarPaciente && (pendentes.length > 0 || novo === "falta_paciente"),
+      notificarMedico: pagoConfirmado && MUDA_O_QUE_O_MEDICO_RECEBE.includes(efeito),
     },
   };
 }
@@ -1050,44 +1067,79 @@ export async function carregarEstadoCorrecao(c: ClienteLeitura, consultaId: stri
   };
 }
 
-/** Textos da notificação ao paciente e ao médico (formato do PATCH /api/admin/reembolsos/[id]). */
-export function textosNotificacaoCorrecao(e: EstadoCorrecao, plano: PlanoCorrecao, agora: Date = new Date()) {
+/** Rótulos que o paciente lê (sem termo interno). */
+export const ROTULO_DESFECHO_PACIENTE: Record<Desfecho, string> = {
+  realizada: "realizada",
+  falta_paciente: "falta",
+  falha_tecnica: "falha técnica",
+  falta_medico: "falta do médico",
+};
+/** Rótulos que o médico lê (a falta é do paciente). */
+export const ROTULO_DESFECHO_MEDICO: Record<Desfecho, string> = {
+  realizada: "realizada",
+  falta_paciente: "falta do paciente",
+  falha_tecnica: "falha técnica",
+  falta_medico: "falta do médico",
+};
+
+/** "06/10 às 14:00", no fuso de São Paulo. */
+const diaHora = (d: Date) => quandoClinica(d, { day: "2-digit", month: "2-digit" });
+
+type NotificacaoCorrecao = { usuarioId: string; tipo: "agenda"; titulo: string; texto: string };
+
+/**
+ * Textos da notificação ao paciente e ao médico (mesmo formato do PATCH
+ * /api/admin/reembolsos/[id]: { usuarioId, tipo: "agenda", titulo, texto }).
+ * `null` = não notifica (ver plano.notificarPaciente / notificarMedico).
+ * O motivo do admin só entra no texto do paciente quando plano.motivoParaPaciente.
+ */
+export function textosNotificacaoCorrecao(
+  e: EstadoCorrecao,
+  plano: PlanoCorrecao,
+  motivo: string,
+  agora: Date = new Date(),
+): { paciente: NotificacaoCorrecao | null; medico: NotificacaoCorrecao | null } {
   const c = e.consulta;
-  const quando = quandoClinica(c.dataInicio);
-  const troca = `${ROTULO_DESFECHO[plano.atual]} → ${ROTULO_DESFECHO[plano.novo]}`;
-  let efeitoPaciente: string;
-  if (plano.novo === "falha_tecnica" || plano.novo === "falta_medico") {
-    efeitoPaciente = c.pago ? "Escolha no app: remarcar sem custo ou reembolso integral." : "A consulta foi cancelada, sem custo.";
-  } else if (plano.novo === "falta_paciente") {
-    const prazo = prazoReembolsoManual(c.dataInicio);
-    efeitoPaciente = !plano.dinheiro.pagoConfirmado
-      ? "A consulta fica registrada como falta."
-      : agora.getTime() <= prazo.getTime()
-        ? `Se teve um imprevisto, peça o reembolso pelo app até ${quandoClinica(prazo)}.`
-        : `O prazo de ${REEMBOLSO_MANUAL_PRAZO_DIAS} dias para pedir reembolso desta consulta já terminou.`;
-  } else {
-    efeitoPaciente = "A consulta fica registrada como realizada.";
+  const consulta = `consulta de ${c.especialidade} de ${diaHora(c.dataInicio)}`;
+  const atual = plano.atual === "sem_desfecho" || plano.atual === "encerrada" ? null : plano.atual;
+
+  let paciente: NotificacaoCorrecao | null = null;
+  if (plano.notificarPaciente) {
+    const partes: string[] = [
+      atual
+        ? `O registro da ${consulta} foi corrigido. Antes estava como ${ROTULO_DESFECHO_PACIENTE[atual]}, agora está como ${ROTULO_DESFECHO_PACIENTE[plano.novo]}.`
+        : `A ${consulta} foi registrada como ${ROTULO_DESFECHO_PACIENTE[plano.novo]}.`,
+    ];
+    if (plano.novo === "falha_tecnica" || plano.novo === "falta_medico") {
+      partes.push(c.pago ? "Escolha no app: remarcar sem custo ou receber o reembolso integral." : "A consulta foi cancelada, sem custo para você.");
+    } else if (plano.novo === "falta_paciente" && plano.dinheiro.pagoConfirmado) {
+      const prazo = prazoReembolsoManual(c.dataInicio);
+      partes.push(
+        agora.getTime() <= prazo.getTime()
+          ? `Se você teve um imprevisto, pode pedir o reembolso pelo app até ${diaHora(prazo)}.`
+          : `O prazo de ${REEMBOLSO_MANUAL_PRAZO_DIAS} dias para pedir o reembolso desta consulta já terminou.`,
+      );
+    }
+    if (plano.reembolsosEncerrados.length) partes.push("Seu pedido de reembolso desta consulta foi encerrado por causa desta correção.");
+    if (plano.motivoParaPaciente) partes.push(`Motivo: ${motivo.trim()}`);
+    paciente = { usuarioId: c.pacienteId, tipo: "agenda", titulo: "Registro da consulta corrigido", texto: partes.join(" ") };
   }
-  if (plano.reembolsosEncerrados.length) efeitoPaciente += " Seu pedido de reembolso desta consulta foi encerrado por causa desta correção.";
-  const paciente = {
-    usuarioId: c.pacienteId,
-    tipo: "agenda",
-    titulo: "Registro da consulta corrigido",
-    texto: `A administração corrigiu o registro da consulta de ${c.especialidade} (${quando}): ${troca}. ${efeitoPaciente}`,
-  };
-  if (!plano.notificarMedico) return { paciente, medico: null };
-  const d = plano.dinheiro;
-  const efeitoMedico = d.medicoRecebeDepois
-    ? `O valor desta consulta (${brlCentavos(d.liquidoMedicoCentavos)}) entra no próximo repasse.`
-    : d.repasse
-      ? `O repasse de ${diaBr(d.repasse.competencia)} não muda. Se o paciente escolher o reembolso integral, ${brlCentavos(d.liquidoMedicoCentavos)} serão descontados do próximo repasse.`
-      : `Esta consulta sai do seu repasse (${brlCentavos(d.liquidoMedicoCentavos)}).`;
-  const medico = {
-    usuarioId: c.medicoId,
-    tipo: "agenda",
-    titulo: "Desfecho corrigido pela administração",
-    texto: `Consulta de ${c.especialidade} (${quando}): ${troca}. ${efeitoMedico}`,
-  };
+
+  let medico: NotificacaoCorrecao | null = null;
+  if (plano.notificarMedico) {
+    const d = plano.dinheiro;
+    const valor = brlCentavos(d.liquidoMedicoCentavos);
+    const inicio = atual
+      ? `O registro da ${consulta} foi corrigido pela administração. Antes estava como ${ROTULO_DESFECHO_MEDICO[atual]}, agora está como ${ROTULO_DESFECHO_MEDICO[plano.novo]}.`
+      : `A administração registrou a ${consulta} como ${ROTULO_DESFECHO_MEDICO[plano.novo]}.`;
+    const efeito =
+      d.efeito === "entra_no_proximo_repasse"
+        ? `Os ${valor} desta consulta entram no seu próximo repasse.`
+        : d.efeito === "sai_do_repasse"
+          ? `Os ${valor} desta consulta saem do seu próximo repasse.`
+          : `O repasse de ${diaBr(d.repasse?.competencia ?? "")} não muda. Se o paciente escolher o reembolso integral, ${valor} serão descontados do seu próximo repasse.`;
+    medico = { usuarioId: c.medicoId, tipo: "agenda", titulo: "Desfecho corrigido pela administração", texto: `${inicio} ${efeito}` };
+  }
   return { paciente, medico };
 }
 
@@ -1209,8 +1261,8 @@ export async function corrigirDesfecho(params: {
           statusFinal = r.status;
         }
 
-        const notif = textosNotificacaoCorrecao(e, plano, agora);
-        await tx.notificacao.create({ data: notif.paciente });
+        const notif = textosNotificacaoCorrecao(e, plano, motivo, agora);
+        if (notif.paciente) await tx.notificacao.create({ data: notif.paciente });
         if (notif.medico) await tx.notificacao.create({ data: notif.medico });
 
         await tx.auditLog.create({
@@ -1239,7 +1291,8 @@ export async function corrigirDesfecho(params: {
                 efeitoDinheiro: plano.dinheiro.efeito,
                 liquidoMedicoCentavos: plano.dinheiro.liquidoMedicoCentavos,
               },
-              notificados: [notif.paciente.usuarioId, notif.medico?.usuarioId].filter(Boolean),
+              notificados: [notif.paciente?.usuarioId, notif.medico?.usuarioId].filter(Boolean),
+              motivoEnviadoAoPaciente: notif.paciente !== null && plano.motivoParaPaciente,
             }),
           },
         });

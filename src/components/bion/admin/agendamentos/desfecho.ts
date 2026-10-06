@@ -21,6 +21,10 @@ export type PlanoWire = {
   statusDepois: string;
   efeitos: string[];
   reembolsosEncerrados: { id: string; status: string; valorCentavos: number }[];
+  /** false quando só tira o "sem desfecho" e grava "realizada" (nada muda para o paciente). */
+  notificarPaciente: boolean;
+  /** O motivo vai no texto ao paciente (encerra pedido de reembolso ou registra falta). */
+  motivoParaPaciente: boolean;
   notificarMedico: boolean;
   dinheiro: {
     efeito: EfeitoDinheiro;
@@ -80,10 +84,36 @@ export function destaqueDinheiro(d: PlanoWire["dinheiro"]): { valor: string; leg
   }
 }
 
+/** Quem recebe aviso, em minúsculas ("o paciente e o médico", "só o médico"…). */
+function quemAvisa(p: Pick<PlanoWire, "notificarPaciente" | "notificarMedico">): string | null {
+  if (p.notificarPaciente && p.notificarMedico) return "o paciente e o médico serão avisados";
+  if (p.notificarPaciente) return "o paciente será avisado";
+  if (p.notificarMedico) return "só o médico será avisado";
+  return null;
+}
+
 /** Frase da caixa de confirmação (o que o admin está aceitando). */
 export function textoConfirmacao(p: PlanoWire): string {
-  const quem = p.notificarMedico ? "o paciente e o médico serão avisados" : "o paciente será avisado";
-  return `Revisei o efeito no dinheiro: corrigir para "${ROTULO_ALVO[p.novo]}" não tem "Desfazer" e ${quem}.`;
+  const quem = quemAvisa(p);
+  const base = `Revisei o efeito no dinheiro: corrigir para "${ROTULO_ALVO[p.novo]}" não tem "Desfazer"`;
+  if (!quem) return `${base} e ninguém será avisado.`;
+  return `${base} e ${quem}${p.motivoParaPaciente ? ", com o motivo" : ""}.`;
+}
+
+/** Linha "Avisos" da prévia. */
+export function textoAvisos(p: Pick<PlanoWire, "notificarPaciente" | "notificarMedico" | "motivoParaPaciente">): string {
+  const motivo = p.motivoParaPaciente ? " O paciente lê o motivo." : "";
+  if (p.notificarPaciente && p.notificarMedico) return `Avisos: paciente e médico (muda o que o médico recebe).${motivo}`;
+  if (p.notificarPaciente) return `Aviso: só o paciente.${motivo}`;
+  if (p.notificarMedico) return "Aviso: só o médico (muda o que ele recebe). Para o paciente nada muda na tela.";
+  return "Sem aviso: para o paciente nada muda na tela.";
+}
+
+/** Dica embaixo do campo do motivo: muda conforme a opção escolhida. */
+export function avisoMotivo(p: Pick<PlanoWire, "motivoParaPaciente"> | null): { texto: string; vaiParaPaciente: boolean } {
+  return p?.motivoParaPaciente
+    ? { texto: "O paciente vai ler este motivo.", vaiParaPaciente: true }
+    : { texto: "Não vai para o paciente.", vaiParaPaciente: false };
 }
 
 export const ROTULO_ALVO: Record<DesfechoAlvo, string> = {

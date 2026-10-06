@@ -19,7 +19,7 @@ import {
   validarHoraManual,
   validarRespostaNegar,
 } from "./agenda";
-import { desfechoNoStore, destaqueDinheiro, podeCorrigirDesfecho, textoConfirmacao, validarMotivoCorrecao, type PlanoWire } from "./desfecho";
+import { avisoMotivo, desfechoNoStore, destaqueDinheiro, podeCorrigirDesfecho, textoAvisos, textoConfirmacao, validarMotivoCorrecao, type PlanoWire } from "./desfecho";
 
 let ok = 0;
 let falhas = 0;
@@ -174,6 +174,8 @@ const plano = (efeito: PlanoWire["dinheiro"]["efeito"], extra: Partial<PlanoWire
   statusDepois: "concluida",
   efeitos: [],
   reembolsosEncerrados: [],
+  notificarPaciente: true,
+  motivoParaPaciente: false,
   notificarMedico: true,
   dinheiro: { efeito, pagoConfirmado: true, valorCentavos: 20000, liquidoMedicoCentavos: 18000, medicoRecebiaAntes: false, medicoRecebeDepois: true, repasse: null },
   ...extra,
@@ -185,6 +187,16 @@ igual("prévia: sem pagamento", destaqueDinheiro(plano("sem_pagamento").dinheiro
 igual("prévia: sem mudança", destaqueDinheiro(plano("nenhum").dinheiro), { valor: "Sem mudança", legenda: "o médico continua com R$ 180,00", tom: "neutro" });
 igual("confirmação cita o desfecho e quem é avisado", textoConfirmacao(plano("entra_no_proximo_repasse")), 'Revisei o efeito no dinheiro: corrigir para "Realizada" não tem "Desfazer" e o paciente e o médico serão avisados.');
 igual("confirmação só paciente", textoConfirmacao(plano("nenhum", { notificarMedico: false, novo: "falta_paciente" })).endsWith("o paciente será avisado."), true);
+igual("confirmação: sem desfecho → realizada avisa só o médico", textoConfirmacao(plano("entra_no_proximo_repasse", { notificarPaciente: false })).endsWith("e só o médico será avisado."), true);
+igual("confirmação: ninguém avisado", textoConfirmacao(plano("sem_pagamento", { notificarPaciente: false, notificarMedico: false })).endsWith("e ninguém será avisado."), true);
+igual("confirmação: motivo vai ao paciente", textoConfirmacao(plano("nenhum", { notificarMedico: false, novo: "falta_paciente", motivoParaPaciente: true })).endsWith("o paciente será avisado, com o motivo."), true);
+igual("avisos: paciente e médico", textoAvisos(plano("entra_no_proximo_repasse")), "Avisos: paciente e médico (muda o que o médico recebe).");
+igual("avisos: só o médico", textoAvisos(plano("entra_no_proximo_repasse", { notificarPaciente: false })), "Aviso: só o médico (muda o que ele recebe). Para o paciente nada muda na tela.");
+igual("avisos: ninguém", textoAvisos(plano("sem_pagamento", { notificarPaciente: false, notificarMedico: false })), "Sem aviso: para o paciente nada muda na tela.");
+igual("avisos: paciente lê o motivo", textoAvisos(plano("nenhum", { notificarMedico: false, motivoParaPaciente: true })), "Aviso: só o paciente. O paciente lê o motivo.");
+igual("aviso do motivo: vai ao paciente", avisoMotivo(plano("nenhum", { motivoParaPaciente: true })), { texto: "O paciente vai ler este motivo.", vaiParaPaciente: true });
+igual("aviso do motivo: fica na auditoria", avisoMotivo(plano("nenhum")), { texto: "Não vai para o paciente.", vaiParaPaciente: false });
+igual("aviso do motivo: sem opção escolhida", avisoMotivo(null).texto, "Não vai para o paciente.");
 igual("motivo curto", validarMotivoCorrecao("  curto  "), "Explique o motivo com pelo menos 10 caracteres (fica na auditoria).");
 igual("motivo ok", validarMotivoCorrecao("O suporte confirmou."), null);
 

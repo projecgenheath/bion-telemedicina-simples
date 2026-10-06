@@ -27,7 +27,9 @@ import {
  *      { novo, motivo (10 a 1000 caracteres), esperado? }
  *      Grava pela corrigirDesfecho (financeiro.ts): evento antigo marcado como
  *      corrigido, desfecho novo por "admin", reembolso pendente encerrado,
- *      notificação ao paciente (e ao médico se mudar o repasse), auditoria
+ *      notificação ao paciente (menos sem desfecho → realizada) e ao médico
+ *      (se mudar o que ele recebe); o motivo só vai ao paciente quando encerra
+ *      pedido de reembolso ou registra falta. Auditoria
  *      antes/depois, numa transação. Repetir o mesmo pedido devolve
  *      `jaAplicado: true`. `esperado` diferente do atual → 409.
  * Acesso: só ADMIN (403 para médico e paciente).
@@ -43,6 +45,8 @@ function planoWire(p: PlanoCorrecao) {
     statusDepois: p.statusDepois,
     efeitos: p.efeitos,
     reembolsosEncerrados: p.reembolsosEncerrados,
+    notificarPaciente: p.notificarPaciente,
+    motivoParaPaciente: p.motivoParaPaciente,
     notificarMedico: p.notificarMedico,
     dinheiro: p.dinheiro,
   };
