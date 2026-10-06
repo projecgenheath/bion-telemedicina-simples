@@ -86,7 +86,10 @@ function TorreInterna({ children }: { children: ReactNode }) {
     view === "admin-agendamentos" ||
     view === "admin-medicos" ||
     view === "admin-pacientes" ||
-    view === "usuarios";
+    view === "usuarios" ||
+    view === "auditoria" ||
+    view === "llm-monitor" ||
+    view === "relatorios";
   const info = view ? MODULOS[view] : undefined;
   const contagem = contarPorCategoria(fila);
   const criticos24h = auditLogs.filter((l) => l.severidade === "critical" && agora - l.ts <= 86_400_000).length;
