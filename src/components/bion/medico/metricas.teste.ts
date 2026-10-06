@@ -11,6 +11,12 @@ import {
   contarAcoesPacienteHoje,
   diaHoraClinica,
   desfechosSistema,
+  ESPERA_FALTA_MIN,
+  medicoEsperouAteOLimite,
+  pacienteEsteveNaSala,
+  podeMarcarDesfechoNaAgenda,
+  podeMarcarFalta,
+  prazoDesfecho,
   pontosReceita,
   reservaVigente,
   reservasNoDia,
@@ -230,6 +236,61 @@ igual("pontos sem resposta", pontosReceita(null), []);
   igual("rótulo falha técnica", rotuloStatusMedico(consulta({ id: "ft", dataISO: HOJE_9H, status: "aguardando_reagendamento" }), falhasT), "Falha técnica");
   igual("rótulo falta do paciente", rotuloStatusMedico(consulta({ id: "fp", dataISO: HOJE_9H, falta: true }), falhasT), "Falta do paciente");
   igual("rótulo sem evento = status", rotuloStatusMedico(consulta({ id: "x", dataISO: HOJE_9H, status: "em_espera" })), "Aguardando pagamento");
+}
+
+/* ---- Desfecho marcado pelo médico (regras do Alisson, 06/10/2026) ---- */
+{
+  // Consulta às 14:00 de 06/10/2026 em São Paulo (17:00Z).
+  const INI = Date.parse("2026-10-06T17:00:00.000Z");
+  const m = (min: number) => INI + min * 60_000;
+  const sessao = (entrou: number | null, ultimo: number | null) => ({ entrouEm: entrou, ultimoPing: ultimo });
+
+  igual("prazo = 23:30 SP do dia", new Date(prazoDesfecho(INI)).toISOString(), "2026-10-07T02:30:00.000Z");
+  igual("prazo de consulta às 22:30 SP (01:30Z do dia seguinte) ainda é 23:30 do dia dela", new Date(prazoDesfecho("2026-10-07T01:30:00.000Z")).toISOString(), "2026-10-07T02:30:00.000Z");
+  igual("espera é 15 min", ESPERA_FALTA_MIN, 15);
+
+  // Médico na sala desde 13:58, agora 14:05 → espera, libera 14:15.
+  let r = podeMarcarFalta({ dataInicio: INI, agora: m(5), medico: sessao(m(-2), m(5)), paciente: null });
+  igual("antes de 15 min: não pode", [r.pode, !r.pode && r.motivo, r.liberaEm, r.faltaMs], [false, "aguardar", m(15), 10 * 60_000]);
+  r = podeMarcarFalta({ dataInicio: INI, agora: m(15), medico: sessao(m(-2), m(15)), paciente: null });
+  igual("aos 15 min na sala: pode", [r.pode, r.pode && r.esperouMs], [true, 15 * 60_000]);
+  // Médico entrou atrasado (14:10): aos 14:12 ainda não; aos 14:15 sim.
+  r = podeMarcarFalta({ dataInicio: INI, agora: m(12), medico: sessao(m(10), m(12)), paciente: null });
+  igual("entrou atrasado: espera até o horário + 15", [r.pode, r.liberaEm], [false, m(15)]);
+  r = podeMarcarFalta({ dataInicio: INI, agora: m(15), medico: sessao(m(10), m(15)), paciente: null });
+  igual("entrou atrasado: libera no horário + 15", [r.pode, r.pode && r.esperouMs], [true, 5 * 60_000]);
+  // Paciente com presença depois do horário → nunca.
+  r = podeMarcarFalta({ dataInicio: INI, agora: m(30), medico: sessao(m(0), m(30)), paciente: sessao(m(3), m(4)) });
+  igual("paciente esteve depois do horário: não pode", [r.pode, !r.pode && r.motivo], [false, "paciente_esteve"]);
+  // Paciente só antes do horário → não impede.
+  r = podeMarcarFalta({ dataInicio: INI, agora: m(20), medico: sessao(m(0), m(20)), paciente: sessao(m(-10), m(-5)) });
+  igual("paciente só antes do horário: pode", r.pode, true);
+  // Médico saiu antes de 15 min (sinal parado) → não pode; precisa voltar.
+  r = podeMarcarFalta({ dataInicio: INI, agora: m(20), medico: sessao(m(0), m(8)), paciente: null });
+  igual("médico saiu antes de 15 min: não pode", [r.pode, !r.pode && r.motivo, r.liberaEm], [false, "medico_nao_esteve", null]);
+  r = podeMarcarFalta({ dataInicio: INI, agora: m(10), medico: null, paciente: null });
+  igual("médico nunca entrou (antes do limite): entre e espere", [r.pode, !r.pode && r.motivo, r.liberaEm], [false, "medico_nao_esteve", m(15)]);
+  // Pela agenda, mais tarde no mesmo dia: vale a sessão que alcançou o limite.
+  r = podeMarcarFalta({ dataInicio: INI, agora: m(300), medico: sessao(m(0), m(16)), paciente: null });
+  igual("pela agenda no mesmo dia, com espera feita: pode", r.pode, true);
+  // Depois das 23:30 → prazo.
+  r = podeMarcarFalta({ dataInicio: INI, agora: prazoDesfecho(INI) + 60_000, medico: sessao(m(0), m(16)), paciente: null });
+  igual("depois das 23:30: prazo", [r.pode, !r.pode && r.motivo], [false, "prazo"]);
+  r = podeMarcarFalta({ dataInicio: INI, agora: m(-5), medico: sessao(m(-6), m(-5)), paciente: null });
+  igual("antes do horário: não pode", [r.pode, !r.pode && r.motivo], [false, "antes_do_horario"]);
+
+  igual("paciente esteve: ping no horário conta", pacienteEsteveNaSala(INI, sessao(m(-1), m(0))), true);
+  igual("paciente esteve: ping antes não conta", pacienteEsteveNaSala(INI, sessao(m(-9), m(-1))), false);
+  igual("médico esperou até o limite", [medicoEsperouAteOLimite(INI, sessao(m(0), m(15))), medicoEsperouAteOLimite(INI, sessao(m(0), m(14)))], [true, false]);
+
+  // Botões na agenda: consulta que já começou, ativa, sem desfecho, dentro do prazo.
+  const c14 = consulta({ id: "a", dataISO: new Date(INI).toISOString(), status: "confirmada" });
+  igual("agenda: antes do horário não mostra", podeMarcarDesfechoNaAgenda(c14, m(-1)), false);
+  igual("agenda: depois do horário mostra", podeMarcarDesfechoNaAgenda(c14, m(1)), true);
+  igual("agenda: depois das 23:30 não mostra", podeMarcarDesfechoNaAgenda(c14, prazoDesfecho(INI) + 1), false);
+  igual("agenda: com falta não mostra", podeMarcarDesfechoNaAgenda({ ...c14, falta: true }, m(30)), false);
+  igual("agenda: com falha técnica não mostra", podeMarcarDesfechoNaAgenda(c14, m(30), new Map([["a", "falha_tecnica" as const]])), false);
+  igual("agenda: concluída não mostra", podeMarcarDesfechoNaAgenda({ ...c14, status: "concluida" }, m(30)), false);
 }
 
 console.log(`\n${ok} ok, ${falhas} falha(s)`);
