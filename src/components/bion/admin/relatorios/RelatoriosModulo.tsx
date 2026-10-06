@@ -23,6 +23,7 @@ import {
   notaMedia,
   opcoesRelatorio,
   pacientesDoRecorte,
+  rotuloMedico,
   textoFiltro,
   type FiltrosRelatorio,
 } from "./relatorio";
@@ -211,19 +212,21 @@ export function RelatoriosModulo() {
               <p className="text-sm ba-texto-2">Sem dados para os filtros atuais.</p>
             ) : (
               <ul className="divide-y divide-[color:var(--ba-borda)]">
-                {dados.medicos.map(([m, v]) => (
-                  <li key={m}>
+                {dados.medicos.map((v) => {
+                  const rotulo = rotuloMedico(v, dados.medicos);
+                  return (
+                  <li key={v.chave}>
                     <button
                       type="button"
                       onClick={() => {
-                        mudar({ medico: m });
+                        mudar({ medico: v.nome });
                         setDrill("consultas");
                       }}
                       className="w-full flex items-center gap-3 py-2 text-left"
-                      aria-label={`${m}: ${v.total} consultas, nota ${virgula(notaMedia(v))}. Filtrar e ver`}
+                      aria-label={`${rotulo}: ${v.total} consultas, nota ${virgula(notaMedia(v))}. Filtrar e ver`}
                     >
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-bold truncate">{m}</p>
+                        <p className="text-sm font-bold truncate">{rotulo}</p>
                         <p className="text-xs ba-texto-2">{v.total} consulta(s)</p>
                       </div>
                       <span className="inline-flex items-center gap-1 text-sm font-bold tabular-nums shrink-0">
@@ -233,7 +236,8 @@ export function RelatoriosModulo() {
                       <ChevronRight className="w-4 h-4 ba-texto-3 shrink-0" aria-hidden />
                     </button>
                   </li>
-                ))}
+                  );
+                })}
               </ul>
             )}
           </CardAdmin>

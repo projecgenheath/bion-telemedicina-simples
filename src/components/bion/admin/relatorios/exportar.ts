@@ -1,15 +1,16 @@
 /**
  * Exportações dos Relatórios — a MESMA lógica do Relatorios antigo
- * (src/components/bion/Relatorios.tsx): mesmo CSV, mesmo PDF (jsPDF, A4,
+ * (removido; ver o histórico do git): mesmo CSV, mesmo PDF (jsPDF, A4,
  * mesmas seções), mesmos nomes de arquivo e os mesmos eventos
  * RELATORIO_CSV_EXPORTADO / RELATORIO_PDF_EXPORTADO. A data de geração
- * sai no fuso da clínica.
+ * sai no fuso da clínica. O desempenho por médico (uma linha por médico)
+ * agrupa pelo medicoId, com o nome como rótulo.
  */
 import { jsPDF } from "jspdf";
 import type { AuditLog, Avaliacao, Consulta } from "@/lib/bion-tipos";
 import { baixarArquivo } from "../auditoria/exportar";
 import { formatarDataAuditoria } from "../auditoria/trilha";
-import { csvRelatorio, notaMedia, type DadosRelatorio } from "./relatorio";
+import { csvRelatorio, notaMedia, rotuloMedico, type DadosRelatorio } from "./relatorio";
 
 type Registrar = (log: Omit<AuditLog, "id" | "ts" | "usuario" | "role">) => void;
 export type EntradaExportacao = {
@@ -86,7 +87,7 @@ export function exportarPdfRelatorio(e: EntradaExportacao, registrarAudit: Regis
 
   secao("Desempenho por médico");
   if (!dados.medicos.length) linha("Sem dados no período.");
-  dados.medicos.forEach(([m, v]) => linha(`${m} — ${v.total} consulta(s) • nota média ${notaMedia(v)}`));
+  dados.medicos.forEach((v) => linha(`${rotuloMedico(v, dados.medicos)} — ${v.total} consulta(s) • nota média ${notaMedia(v)}`));
   y += 8;
 
   secao("Avaliações");
