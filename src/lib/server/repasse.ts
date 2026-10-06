@@ -585,7 +585,8 @@ export async function listarConsultasSemDesfecho(
       ...(params.medicoId ? { medicoId: params.medicoId } : {}),
     },
     orderBy: { dataInicio: "asc" },
-    take: Math.min(Math.max(params.limite ?? 200, 1), 500),
+    // As abertas que já têm falta vigente saem no filtro fino; lê folgado.
+    take: 1000,
     select: {
       id: true,
       medicoId: true,
@@ -599,7 +600,11 @@ export async function listarConsultasSemDesfecho(
       eventos: { where: { tipo: { in: TIPOS_EVENTO_DESFECHO }, ...EVENTO_VIGENTE }, select: selEventoDesfecho },
     },
   });
-  return linhas.filter(consultaSemDesfecho).map((l) => ({
+  const limite = Math.min(Math.max(params.limite ?? 200, 1), 500);
+  return linhas
+    .filter(consultaSemDesfecho)
+    .slice(0, limite)
+    .map((l) => ({
     id: l.id,
     medicoId: l.medicoId,
     medico: l.medico.nome,
