@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, Ban, CalendarX2, CheckCircle2, Loader2, LockOpen } from "lucide-react";
+import { AlertTriangle, Ban, CalendarX2, CheckCircle2, Loader2, LockOpen, UserX, WifiOff } from "lucide-react";
 import { useBion, type Consulta, type Medico } from "@/lib/bion-store";
 import { diaFusoClinica, instanteFusoClinica } from "@/lib/bion-tipos";
 import {
@@ -16,6 +16,8 @@ import {
   type DesfechoSistema,
   diaDaConsulta,
   horaClinica,
+  podeMarcarDesfechoNaAgenda,
+  prazoDesfecho,
   textoReservaPendente,
   type EventoMedico,
   type SlotAgenda,
@@ -30,6 +32,9 @@ const HORIZONTE_BLOQUEIO_DIAS = 365;
 const MOTIVO_BLOQUEIO_MAX = 120;
 
 type Falha = { consulta: Consulta; erro: string };
+/** Desfecho marcado pela agenda (regras do Alisson, 06/10/2026). */
+type TipoDesfecho = "falta_paciente" | "falha_tecnica";
+type Marcacao = { consultaId: string; tipo: TipoDesfecho; etapa: "confirmar" | "enviando" | "erro" | "feito"; erro?: string };
 type Fase =
   | { tipo: "lista" }
   | { tipo: "confirmar"; alvo: Consulta[]; reservas: number }
@@ -242,6 +247,39 @@ export function AgendaDoDia({ medico, onExecutando }: { medico: Medico; onExecut
     });
   };
 
+  // Botões "Paciente não compareceu" / "Falha técnica": dependem da hora.
+  useEffect(() => {
+    const t = setInterval(() => setAgora(Date.now()), 30_000);
+    return () => clearInterval(t);
+  }, []);
+  const [marcacao, setMarcacao] = useState<Marcacao | null>(null);
+
+  /** POST /api/medico/consultas/[id]/desfecho — o servidor confere presença, prazo e desfecho. */
+  const marcarDesfecho = async (m: Marcacao) => {
+    if (rodando.current) return;
+    rodando.current = true;
+    onExecutando(true);
+    setMarcacao({ ...m, etapa: "enviando" });
+    let erro: string | null = null;
+    try {
+      const res = await fetch(`/api/medico/consultas/${encodeURIComponent(m.consultaId)}/desfecho`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tipo: m.tipo }),
+      });
+      const json = (await res.json().catch(() => null)) as ({ erro?: string } & Record<string, unknown>) | null;
+      if (!res.ok) erro = json?.erro ?? `Erro ${res.status}`;
+      else aplicarDelta(json);
+    } catch {
+      erro = "Falha de conexão com o servidor.";
+    }
+    if (!erro) avisarDadosMedicoAlterados();
+    setAgora(Date.now());
+    setMarcacao(erro ? { ...m, etapa: "erro", erro } : { ...m, etapa: "feito" });
+    rodando.current = false;
+    onExecutando(false);
+  };
+
   const recarregarEstado = async () => {
     try {
       const res = await fetch("/api/bootstrap", { headers: { "Content-Type": "application/json" } });
@@ -403,7 +441,17 @@ export function AgendaDoDia({ medico, onExecutando }: { medico: Medico; onExecut
       ) : (
         <ul className="space-y-1.5" aria-label={`Horários de ${rotuloDia}`}>
           {slots.map((s) => (
-            <LinhaSlot key={s.hora} slot={s} agora={agora} desfechos={desfechos} />
+            <LinhaSlot
+              key={s.hora}
+              slot={s}
+              agora={agora}
+              desfechos={desfechos}
+              marcacao={marcacao}
+              ocupado={ocupado || marcacao?.etapa === "enviando"}
+              onPedir={(consultaId, tipo) => setMarcacao({ consultaId, tipo, etapa: "confirmar" })}
+              onConfirmar={(m) => void marcarDesfecho(m)}
+              onFechar={() => setMarcacao(null)}
+            />
           ))}
         </ul>
       )}
@@ -690,7 +738,40 @@ const ROTULO_SLOT: Record<SlotAgenda["estado"], string> = {
   bloqueado: "Bloqueado",
 };
 
-function LinhaSlot({ slot, agora, desfechos }: { slot: SlotAgenda; agora: number; desfechos: ReadonlyMap<string, DesfechoSistema> }) {
+const TEXTO_DESFECHO: Record<TipoDesfecho, { titulo: string; pergunta: string; efeito: string; feito: string }> = {
+  falta_paciente: {
+    titulo: "Paciente não compareceu",
+    pergunta: "Registrar que o paciente não compareceu?",
+    efeito: "Vale se você esperou na sala até 15 min depois do horário e o paciente não entrou. Você recebe normalmente; o paciente é avisado e pode pedir reembolso em até 7 dias.",
+    feito: "Falta do paciente registrada. O paciente foi avisado.",
+  },
+  falha_tecnica: {
+    titulo: "Falha técnica",
+    pergunta: "Registrar falha técnica?",
+    efeito: "A consulta não pôde acontecer. Se estiver paga, o paciente escolhe remarcar sem custo ou o reembolso integral; se não, é cancelada. Você não recebe por ela.",
+    feito: "Falha técnica registrada. O paciente foi avisado.",
+  },
+};
+
+function LinhaSlot({
+  slot,
+  agora,
+  desfechos,
+  marcacao,
+  ocupado,
+  onPedir,
+  onConfirmar,
+  onFechar,
+}: {
+  slot: SlotAgenda;
+  agora: number;
+  desfechos: ReadonlyMap<string, DesfechoSistema>;
+  marcacao: Marcacao | null;
+  ocupado: boolean;
+  onPedir: (consultaId: string, tipo: TipoDesfecho) => void;
+  onConfirmar: (m: Marcacao) => void;
+  onFechar: () => void;
+}) {
   const cor =
     slot.estado === "ocupado"
       ? "bg-bion-sea text-white dark:bg-sky-300 dark:text-zinc-950"
@@ -717,6 +798,88 @@ function LinhaSlot({ slot, agora, desfechos }: { slot: SlotAgenda; agora: number
             {textoReservaPendente(r)}
           </p>
         ) : null;
+      })}
+      {slot.consultas.map((c) => {
+        const m = marcacao?.consultaId === c.id ? marcacao : null;
+        const pode = podeMarcarDesfechoNaAgenda(c, agora, desfechos);
+        if (!pode && !m) return null;
+        if (m && m.etapa !== "feito" && (m.etapa === "confirmar" || m.etapa === "enviando" || m.etapa === "erro")) {
+          const t = TEXTO_DESFECHO[m.tipo];
+          return (
+            <div
+              key={c.id}
+              role="alertdialog"
+              aria-labelledby={`bm-desfecho-${c.id}`}
+              aria-describedby={`bm-desfecho-texto-${c.id}`}
+              className={`mt-2 rounded-xl border-2 p-3 space-y-2 ${m.tipo === "falha_tecnica" ? "border-amber-600 dark:border-amber-300" : "border-bion-ink/30 dark:border-white/30"}`}
+            >
+              <p id={`bm-desfecho-${c.id}`} className="text-sm font-black">
+                {t.pergunta} <span className="font-semibold">({c.paciente}, {horaClinica(c.dataISO ?? c.ts)})</span>
+              </p>
+              <p id={`bm-desfecho-texto-${c.id}`} className="text-xs text-bion-ink/75 dark:text-bion-paper/75">
+                {t.efeito} Não dá para desfazer.
+              </p>
+              {m.etapa === "erro" ? (
+                <p className="text-xs font-semibold text-red-700 dark:text-red-300" role="alert">{m.erro}</p>
+              ) : null}
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  disabled={m.etapa === "enviando"}
+                  onClick={onFechar}
+                  className="py-2 rounded-xl text-sm font-bold border border-bion-ink/25 dark:border-white/25 disabled:opacity-60"
+                >
+                  Voltar
+                </button>
+                <button
+                  type="button"
+                  disabled={m.etapa === "enviando" || !pode}
+                  onClick={() => onConfirmar(m)}
+                  className={`py-2 rounded-xl text-sm font-bold inline-flex items-center justify-center gap-1.5 disabled:opacity-60 ${
+                    m.tipo === "falha_tecnica"
+                      ? "bg-amber-700 text-white dark:bg-amber-300 dark:text-zinc-950"
+                      : "bg-bion-sea text-white dark:bg-sky-300 dark:text-zinc-950"
+                  }`}
+                >
+                  {m.etapa === "enviando" ? <Loader2 className="w-4 h-4 motion-safe:animate-spin" aria-hidden /> : null}
+                  {m.etapa === "enviando" ? "Registrando…" : "Confirmar"}
+                </button>
+              </div>
+            </div>
+          );
+        }
+        if (m?.etapa === "feito") {
+          return (
+            <p key={c.id} className="mt-1.5 text-xs font-semibold inline-flex items-center gap-1.5" role="status">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-300" aria-hidden /> {TEXTO_DESFECHO[m.tipo].feito}
+            </p>
+          );
+        }
+        return (
+          <div key={c.id} className="mt-2 space-y-1">
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                disabled={ocupado}
+                onClick={() => onPedir(c.id, "falta_paciente")}
+                className="py-2 px-2 rounded-xl text-xs font-bold inline-flex items-center justify-center gap-1.5 border border-bion-ink/25 dark:border-white/25 disabled:opacity-60"
+              >
+                <UserX className="w-4 h-4 shrink-0" aria-hidden /> Paciente não compareceu
+              </button>
+              <button
+                type="button"
+                disabled={ocupado}
+                onClick={() => onPedir(c.id, "falha_tecnica")}
+                className="py-2 px-2 rounded-xl text-xs font-bold inline-flex items-center justify-center gap-1.5 border border-amber-600/60 text-amber-900 dark:border-amber-300/60 dark:text-amber-100 disabled:opacity-60"
+              >
+                <WifiOff className="w-4 h-4 shrink-0" aria-hidden /> Falha técnica
+              </button>
+            </div>
+            <p className="text-[11px] text-bion-ink/70 dark:text-bion-paper/70">
+              {c.paciente}: dá para marcar até {horaClinica(prazoDesfecho(c.dataISO ?? c.ts))} de hoje.
+            </p>
+          </div>
+        );
       })}
       {slot.reservadoPor && slot.expiraEm ? (
         <p className="mt-1.5 text-xs text-bion-ink/75 dark:text-bion-paper/75">

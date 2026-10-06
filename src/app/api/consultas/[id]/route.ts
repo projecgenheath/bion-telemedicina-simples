@@ -22,6 +22,8 @@ import {
 } from "@/lib/server/bloqueio-agenda";
 import { criarCobranca, confirmarPagamento, falharPagamento } from "@/lib/server/pagamentos";
 import { ok, falha } from "@/lib/server/http";
+import { desfechoExistente, lerPresencas } from "@/lib/server/presenca-consulta";
+import { pacienteEsteveNaSala } from "@/components/bion/medico/metricas";
 import { consultaJaRepassada, ERRO_CONSULTA_REPASSADA } from "@/lib/server/repasse";
 import {
   calcularMulta,
@@ -196,6 +198,30 @@ export async function PATCH(
       case "concluir": {
         if (!ehDonoMedico && !ehAdmin) {
           return Response.json({ erro: "Apenas o médico pode concluir a consulta." }, { status: 403 });
+        }
+        // Regras do Alisson (06/10/2026), só para o MÉDICO (o admin corrige):
+        // não conclui consulta com desfecho (falta/falha técnica, de quem for),
+        // nem cancelada/aguardando reagendamento, nem sem o paciente ter
+        // entrado na sala depois do horário (regra 4: aí só falta ou falha).
+        if (ehDonoMedico && !ehAdmin) {
+          if (consulta.status === "cancelada" || consulta.status === "aguardando_reagendamento") {
+            return Response.json({ erro: "Esta consulta não pode ser concluída: ela foi cancelada ou aguarda reagendamento." }, { status: 409 });
+          }
+          if (await desfechoExistente(id)) {
+            return Response.json({ erro: "Esta consulta já tem desfecho registrado (falta do paciente ou falha técnica)." }, { status: 409 });
+          }
+          if (consulta.status !== "concluida") {
+            const { paciente } = await lerPresencas(consulta);
+            if (!pacienteEsteveNaSala(consulta.dataInicio.getTime(), paciente)) {
+              return Response.json(
+                {
+                  erro: "O paciente não entrou na sala depois do horário: marque \"Paciente não compareceu\" ou \"Falha técnica\".",
+                  semPaciente: true,
+                },
+                { status: 409 },
+              );
+            }
+          }
         }
         data.status = "concluida";
         if (body.resumo !== undefined) data.resumoMedico = body.resumo;

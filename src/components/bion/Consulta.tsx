@@ -19,15 +19,26 @@ import { ConsultaBarraSuperior } from "@/components/bion/consulta/BarraSuperior"
 import { ConsultaAreaVideo } from "@/components/bion/consulta/AreaVideo";
 import { ConsultaControlesMidia } from "@/components/bion/consulta/ControlesMidia";
 import { ConsultaPainelLateral } from "@/components/bion/consulta/PainelLateral";
+import { EncerrarAtendimento, type EscolhaEncerrar } from "@/components/bion/consulta/EncerrarAtendimento";
+import { avisarDadosMedicoAlterados } from "@/components/bion/medico/useDadosMedico";
 
 type Role = "paciente" | "medico" | "admin";
 
-export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
+export function Consulta({
+  onEnd,
+  role,
+  consultaId,
+}: {
+  onEnd: () => void;
+  role: Role;
+  /** `?consulta=<id>` da URL: a sala é DESTA consulta. Sem ele, adivinha (links antigos). */
+  consultaId?: string;
+}) {
   const {
     arquivos,
     adicionarArquivo,
     emitirDocumento,
-    concluirConsulta,
+    aplicarDelta,
     consultas,
     registrarAudit,
     sessao,
@@ -35,15 +46,20 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
     anamneses,
   } = useStore();
 
-  // Consulta ativa real (banco) — define a sala WebRTC.
-  // Preferência: próxima confirmada futura (janela de 2h) → primeira confirmada → primeira da lista.
+  // Consulta da sala (banco) — define a sala WebRTC.
+  // Com `?consulta=<id>`: SEMPRE essa (o servidor confere se a pessoa participa).
+  // Sem o parâmetro (links antigos): próxima confirmada futura (janela de 2h) →
+  // primeira confirmada → primeira da lista.
   const consultaAtual = useMemo(() => {
+    if (consultaId) return consultas.find((c) => c.id === consultaId);
     const limite = Date.now() - 2 * 3_600_000;
     const futura = consultas
       .filter((c) => c.status === "confirmada" && c.ts >= limite)
       .sort((a, b) => a.ts - b.ts)[0];
     return futura ?? consultas.find((c) => c.status === "confirmada") ?? consultas[0];
-  }, [consultas]);
+  }, [consultas, consultaId]);
+  /** Id da sala: o da URL mesmo antes de o store carregar a consulta. */
+  const idSala = consultaId ?? consultaAtual?.id;
 
   // Anamnese da consulta ativa (conduzida pela BION IA antes do atendimento)
   const anamneseAtual: AnamneseResumo | undefined = anamneses.find(
@@ -68,7 +84,7 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
   const dadosPaciente = idPacienteSala ? pacientes.find((p) => p.id === idPacienteSala) : undefined;
 
   // ── WebRTC REAL (Fase 2): mídia P2P + sinalização via banco ──
-  const tele = useTeleconsulta(consultaAtual?.id);
+  const tele = useTeleconsulta(idSala);
   const {
     status: statusSala,
     outroOnline,
@@ -86,6 +102,10 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
     pararCompartilhamento,
     enviarChat: enviarChatSinal,
     encerrar: encerrarChamada,
+    sair: sairDaChamada,
+    outroSaiu,
+    qualidade,
+    reconectando,
   } = tele;
 
   const videoLocalRef = useRef<HTMLVideoElement>(null);
@@ -190,7 +210,7 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
         categoria: "consulta",
         severidade: "info",
         entidade: "consulta",
-        entidadeId: consultaAtual?.id,
+        entidadeId: idSala,
         detalhes: "Compartilhamento de tela finalizado",
       });
       return;
@@ -202,7 +222,7 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
         categoria: "consulta",
         severidade: "info",
         entidade: "consulta",
-        entidadeId: consultaAtual?.id,
+        entidadeId: idSala,
         detalhes: "Compartilhamento de tela iniciado durante consulta",
       });
     } catch {
@@ -322,22 +342,76 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
     setModalExame(false);
   };
 
-  const encerrar = () => {
-    // WebRTC real: avisa o outro participante e libera mídia/stream/PC
-    encerrarChamada();
-    // Concluir consulta é papel do médico (paciente só encerra a chamada).
-    // C4: conclui SEMPRE a consulta desta sala (a mesma usada no WebRTC) —
-    // nunca "a primeira confirmada da lista", que pode ser de outro paciente.
-    if (role === "medico" && consultaAtual) {
-      if (consultaAtual.status === "confirmada") {
-        concluirConsulta(consultaAtual.id, anotacoes);
-      } else {
-        toast.info("Chamada encerrada", {
-          description: "A consulta não foi marcada como concluída porque não está confirmada.",
-        });
-      }
-    }
+  // Médico: "Encerrar" abre a escolha (concluir / falta do paciente / falha
+  // técnica / sair sem concluir). Regras do Alisson (06/10/2026): sem o
+  // paciente na sala a consulta NÃO é concluída (o servidor também recusa).
+  const [escolhaAberta, setEscolhaAberta] = useState(false);
+
+  const sairDaSala = () => {
+    // Só o médico encerra a chamada para os dois. O paciente SAI (o médico
+    // vê "Paciente saiu da chamada" e pode esperar ele voltar).
+    if (role === "medico") encerrarChamada();
+    else sairDaChamada();
     onEnd();
+  };
+
+  const encerrar = () => {
+    if (role === "medico" && idSala) {
+      setEscolhaAberta(true);
+      return;
+    }
+    // Paciente só sai da chamada (não encerra a consulta).
+    sairDaSala();
+  };
+
+  /** Executa a escolha do médico. Devolve a recusa do servidor (fica no modal) ou null. */
+  const executarEscolha = async (escolha: EscolhaEncerrar): Promise<string | null> => {
+    if (!idSala) return "Nenhuma consulta identificada nesta sala.";
+    if (escolha === "sair") {
+      setEscolhaAberta(false);
+      toast.info("Você saiu sem concluir", {
+        description: "Dá para marcar falta do paciente ou falha técnica pela agenda até 23:30 de hoje.",
+      });
+      sairDaSala();
+      return null;
+    }
+    // C4: SEMPRE a consulta desta sala (a mesma usada no WebRTC).
+    const req =
+      escolha === "concluir"
+        ? fetch(`/api/consultas/${encodeURIComponent(idSala)}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ acao: "concluir", resumo: anotacoes }),
+          })
+        : fetch(`/api/medico/consultas/${encodeURIComponent(idSala)}/desfecho`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ tipo: escolha }),
+          });
+    let res: Response;
+    try {
+      res = await req;
+    } catch {
+      return "Falha de conexão com o servidor.";
+    }
+    const json = (await res.json().catch(() => null)) as ({ erro?: string } & Record<string, unknown>) | null;
+    if (!res.ok) return json?.erro ?? `Não foi possível concluir a operação (erro ${res.status}).`;
+    aplicarDelta(json);
+    avisarDadosMedicoAlterados();
+    setEscolhaAberta(false);
+    if (escolha === "concluir") {
+      toast.success("Consulta concluída");
+    } else if (escolha === "falta_paciente") {
+      toast.success("Falta do paciente registrada", {
+        description: "Você recebe normalmente. O paciente foi avisado e pode pedir reembolso em até 7 dias.",
+      });
+    } else {
+      toast.success("Falha técnica registrada", {
+        description: "O paciente foi avisado e escolhe entre remarcar sem custo ou o reembolso.",
+      });
+    }
+    sairDaSala();
+    return null;
   };
 
   return (
@@ -366,6 +440,10 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
             iniciais={iniciais}
             statusSala={statusSala}
             outroOnline={outroOnline}
+            outroSaiu={outroSaiu}
+            qualidade={qualidade}
+            reconectando={reconectando}
+            role={role}
           />
           <ConsultaControlesMidia
             role={role}
@@ -404,6 +482,16 @@ export function Consulta({ onEnd, role }: { onEnd: () => void; role: Role }) {
           inserirModeloResumo={inserirModeloResumo}
         />
       </div>
+
+      {role === "medico" ? (
+        <EncerrarAtendimento
+          aberto={escolhaAberta}
+          consultaId={idSala}
+          outroOnline={outroOnline}
+          onFechar={() => setEscolhaAberta(false)}
+          onEscolher={executarEscolha}
+        />
+      ) : null}
 
       {/* Modal de Emissão de Receita */}
       {modalReceita && (

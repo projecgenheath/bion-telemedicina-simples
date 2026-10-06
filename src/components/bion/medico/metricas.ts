@@ -6,9 +6,10 @@
  * Regra do redesign: nada de número inventado. Se não há dado, o chamador
  * mostra estado vazio.
  */
-import { partesFusoClinica } from "@/lib/bion-tipos";
+import { instanteFusoClinica, partesFusoClinica } from "@/lib/bion-tipos";
 import type { Consulta, PacienteRegistro } from "@/lib/bion-tipos";
 import { isoDia } from "@/components/bion/paciente/agenda-medico";
+import { salaAbertaEm } from "@/lib/janela-sala";
 
 /** Status em que a consulta ainda vai acontecer. */
 export const STATUS_ATIVOS: Consulta["status"][] = ["confirmada", "em_espera", "pendente_anamnese"];
@@ -49,8 +50,8 @@ export function proximaConsulta(consultas: Consulta[], agora: number): Consulta 
     .sort((a, b) => a.ts - b.ts)[0];
 }
 
-/** Sala de teleatendimento aberta: de 30 min antes até 2 h depois do horário. */
-export const salaAberta = (ts: number, agora: number) => agora >= ts - 30 * 60_000 && agora <= ts + 2 * 3_600_000;
+/** Sala de teleatendimento aberta: de 30 min antes até 2 h depois do horário (janela única em lib/janela-sala.ts). */
+export const salaAberta = (ts: number, agora: number) => salaAbertaEm(ts, agora);
 
 export type ResumoHoje = {
   agendadas: Consulta[];
@@ -560,4 +561,123 @@ export function pontosReceita(r: RespostaReceita | null): PontoReceita[] {
  */
 export function semDiasBloqueados<T extends { iso: string }>(dias: T[], bloqueados: ReadonlySet<string>): T[] {
   return bloqueados.size ? dias.filter((d) => !bloqueados.has(d.iso)) : dias;
+}
+
+/* ------------------------------------------------------------------ */
+/* Desfecho marcado pelo MÉDICO (falta do paciente / falha técnica)    */
+/* Regras aprovadas pelo Alisson (06/10/2026). A MESMA função decide    */
+/* no servidor (POST /api/medico/consultas/[id]/desfecho e a verificação */
+/* automática em presenca-consulta.ts) e mostra a contagem na sala.     */
+/* ------------------------------------------------------------------ */
+
+/** Espera mínima, contada do horário marcado, antes de marcar "paciente não compareceu". */
+export const ESPERA_FALTA_MIN = 15;
+/** Sinal parado por mais que isto: a pessoa saiu da sala (e a entrada recomeça na volta). */
+export const SINAL_PARADO_MS = 30_000;
+/** Prazo para marcar pela agenda: fechamento do dia da consulta, 23:30 em São Paulo. */
+export const PRAZO_DESFECHO_HORA = 23;
+export const PRAZO_DESFECHO_MINUTO = 30;
+
+/** Presença de uma pessoa na sala (PresencaSala). Datas em ms; null = nunca entrou. */
+export type PresencaRegra = { entrouEm: number | null; ultimoPing: number | null } | null;
+
+/** 23:30 (São Paulo) do dia da consulta, em ms. */
+export function prazoDesfecho(dataInicio: number | string | Date): number {
+  const p = partesFusoClinica(dataInicio);
+  return instanteFusoClinica(p.ano, p.mes, p.dia, PRAZO_DESFECHO_HORA, PRAZO_DESFECHO_MINUTO);
+}
+
+/** O paciente esteve na sala DEPOIS do horário marcado (presença antes do horário não conta). */
+export function pacienteEsteveNaSala(dataInicio: number, paciente: PresencaRegra): boolean {
+  return paciente?.ultimoPing != null && paciente.ultimoPing >= dataInicio;
+}
+
+/**
+ * O médico ficou na sala até o horário + ESPERA_FALTA_MIN: a sessão dele
+ * (entrouEm → ultimoPing) alcançou esse limite. Quem entrou atrasado conta
+ * do mesmo jeito: precisa estar na sala no horário + 15.
+ */
+export function medicoEsperouAteOLimite(dataInicio: number, medico: PresencaRegra): boolean {
+  return medico?.ultimoPing != null && medico.ultimoPing >= dataInicio + ESPERA_FALTA_MIN * 60_000;
+}
+
+/** A pessoa está na sala agora (sinal com menos de SINAL_PARADO_MS). */
+export function estaNaSala(p: PresencaRegra, agora: number): boolean {
+  return p?.ultimoPing != null && agora - p.ultimoPing <= SINAL_PARADO_MS;
+}
+
+export type MotivoSemFalta = "prazo" | "antes_do_horario" | "paciente_esteve" | "medico_nao_esteve" | "aguardar";
+
+export type ResultadoFalta =
+  | { pode: true; liberaEm: number; faltaMs: 0; esperouMs: number }
+  | { pode: false; motivo: MotivoSemFalta; liberaEm: number | null; faltaMs: number; mensagem: string };
+
+const fmtHoraSP = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" });
+
+/**
+ * Regra 1 (+ 5): o médico pode marcar "paciente não compareceu" quando
+ *  - ainda está dentro do prazo (23:30 do dia da consulta);
+ *  - o paciente NÃO teve presença na sala depois do horário marcado;
+ *  - o médico esteve na sala numa sessão que alcançou o horário + 15 min
+ *    (último sinal ≥ horário + 15). Quem entrou atrasado espera do mesmo
+ *    jeito até o horário + 15; quem saiu antes disso precisa voltar à sala.
+ * `esperouMs`: quanto tempo o médico ficou na sala desde a entrada (ou desde
+ * o horário, se entrou antes), pela coluna PresencaSala.entrouEm.
+ * Devolve também quando libera (`liberaEm`) e quanto falta (`faltaMs`), para
+ * a contagem do botão na sala.
+ */
+export function podeMarcarFalta(p: {
+  dataInicio: number;
+  agora: number;
+  medico: PresencaRegra;
+  paciente: PresencaRegra;
+}): ResultadoFalta {
+  const limite = p.dataInicio + ESPERA_FALTA_MIN * 60_000;
+  const prazo = prazoDesfecho(p.dataInicio);
+  const nao = (motivo: MotivoSemFalta, mensagem: string, liberaEm: number | null = null): ResultadoFalta => ({
+    pode: false,
+    motivo,
+    liberaEm,
+    faltaMs: liberaEm === null ? 0 : Math.max(0, liberaEm - p.agora),
+    mensagem,
+  });
+  if (p.agora > prazo) {
+    return nao("prazo", `O prazo para marcar terminou às ${fmtHoraSP.format(prazo)} do dia da consulta.`);
+  }
+  if (p.agora < p.dataInicio) {
+    return nao("antes_do_horario", "A consulta ainda não começou.", limite);
+  }
+  if (pacienteEsteveNaSala(p.dataInicio, p.paciente)) {
+    return nao("paciente_esteve", "O paciente entrou na sala depois do horário: não dá para marcar falta.");
+  }
+  const m = p.medico;
+  if (m?.ultimoPing != null && medicoEsperouAteOLimite(p.dataInicio, m)) {
+    const desde = Math.max(m.entrouEm ?? m.ultimoPing, p.dataInicio);
+    return { pode: true, liberaEm: limite, faltaMs: 0, esperouMs: Math.max(0, m.ultimoPing - desde) };
+  }
+  if (estaNaSala(m, p.agora)) {
+    return nao("aguardar", `Espere na sala até ${fmtHoraSP.format(limite)} (15 min depois do horário).`, limite);
+  }
+  return nao(
+    "medico_nao_esteve",
+    p.agora < limite
+      ? `Entre na sala e espere até ${fmtHoraSP.format(limite)} para marcar a falta.`
+      : "Você não esperou na sala até 15 min depois do horário. Entre na sala para marcar a falta.",
+    p.agora < limite ? limite : null,
+  );
+}
+
+/**
+ * A agenda mostra os botões "Paciente não compareceu" e "Falha técnica" na
+ * consulta que já começou, ainda ativa, sem desfecho e dentro do prazo
+ * (o servidor confere tudo de novo, inclusive a presença).
+ */
+export function podeMarcarDesfechoNaAgenda(
+  c: Consulta,
+  agora: number,
+  desfechos?: ReadonlyMap<string, DesfechoSistema>,
+): boolean {
+  const inicio = c.dataISO ? Date.parse(c.dataISO) : c.ts;
+  if (!STATUS_ATIVOS.includes(c.status) || c.falta || desfechos?.has(c.id)) return false;
+  return agora >= inicio && agora <= prazoDesfecho(inicio);
 }
