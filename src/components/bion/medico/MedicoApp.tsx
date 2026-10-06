@@ -24,11 +24,16 @@ type Sheet = "preco" | "agenda" | "preview" | null;
 type Sobreposicao = { tipo: "suporte" } | { tipo: "termos" } | { tipo: "paciente"; p: PacienteDoMedico } | null;
 
 const EM_CAMPO = ["INPUT", "TEXTAREA", "SELECT"];
+/** Mesmo corte do medico.css: a partir daqui as 3 colunas ficam lado a lado. */
+const TELA_LARGA = "(min-width: 1024px)";
+const FOCAVEL = 'input, button, a[href], select, textarea, [tabindex]:not([tabindex="-1"])';
 
 /**
  * App do MÉDICO (fase 1 — só front-end, dados existentes).
  * Carrossel horizontal: [Perfil] ← [Coluna central] → [Pacientes].
  * Coluna central com snap vertical: Início → Gestão → Perfil público.
+ * Tela larga (≥ 1024 px, ver medico.css): as três colunas ficam lado a lado,
+ * sem carrossel; a coluna central rola livre pelas três telas.
  */
 export function MedicoApp() {
   const dados = useDadosMedico();
@@ -51,7 +56,14 @@ export function MedicoApp() {
 
   const irPara = useCallback((p: number) => {
     const el = carrosselRef.current;
-    if (el) el.scrollTo({ left: p * el.clientWidth, behavior: "smooth" });
+    if (!el) return;
+    // Tela larga: as colunas já estão todas visíveis — só leva o foco ao
+    // primeiro controle da coluna (ex.: a busca de pacientes).
+    if (window.matchMedia(TELA_LARGA).matches) {
+      el.children[p]?.querySelector<HTMLElement>(FOCAVEL)?.focus();
+      return;
+    }
+    el.scrollTo({ left: p * el.clientWidth, behavior: "smooth" });
   }, []);
 
   const irSecao = useCallback((i: number) => {
@@ -68,6 +80,20 @@ export function MedicoApp() {
     posicionar();
     const raf = requestAnimationFrame(posicionar);
     return () => cancelAnimationFrame(raf);
+  }, []);
+
+  // Ao cruzar 1024 px (girar o tablet, redimensionar a janela) volta ao
+  // painel central: no celular o carrossel reaparece no Início, e na tela
+  // larga os pontos das seções (que dependem do painel 1) continuam valendo.
+  useEffect(() => {
+    const mq = window.matchMedia(TELA_LARGA);
+    const aoMudar = () => {
+      setPainel(1);
+      const el = carrosselRef.current;
+      if (el && !mq.matches) el.scrollTo({ left: el.clientWidth, behavior: "instant" as ScrollBehavior });
+    };
+    mq.addEventListener("change", aoMudar);
+    return () => mq.removeEventListener("change", aoMudar);
   }, []);
 
   const aoRolarCarrossel = () => {
@@ -135,7 +161,7 @@ export function MedicoApp() {
         className={`bp-carrossel bm-carrossel flex flex-1 min-h-0 overflow-x-auto ${bloqueado ? "pointer-events-none" : ""}`}
         aria-label="Áreas do app do médico"
       >
-        <div className={painelCls} aria-label="Meu perfil" role="region">
+        <div className={`${painelCls} bm-lateral-esq`} aria-label="Meu perfil" role="region">
           <PerfilMedicoPainel
             dados={dados}
             onAbrirSuporte={() => setSobreposicao({ tipo: "suporte" })}
@@ -146,7 +172,7 @@ export function MedicoApp() {
         <div
           ref={colunaRef}
           onScroll={aoRolarColuna}
-          className={`${painelCls} overflow-y-auto bp-coluna bm-snap-y`}
+          className={`${painelCls} overflow-y-auto bp-coluna bm-snap-y bm-centro`}
           aria-label="Início"
           role="region"
         >
@@ -155,7 +181,7 @@ export function MedicoApp() {
           <TelaPerfilPublico dados={dados} onAgendar={() => abrirSheet("preview")} confirmarBio={confirmarBio} />
         </div>
 
-        <div className={painelCls} aria-label="Pacientes" role="region">
+        <div className={`${painelCls} bm-lateral-dir`} aria-label="Pacientes" role="region">
           <PacientesPainel dados={dados} onAbrirPaciente={(p) => setSobreposicao({ tipo: "paciente", p })} />
         </div>
       </div>
