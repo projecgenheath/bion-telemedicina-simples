@@ -1,4 +1,4 @@
-import { NextRequest, after } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { db } from "@/lib/db";
 import { exigirSessao, registrarAudit } from "@/lib/server/auth";
 import { ok, falha } from "@/lib/server/http";
@@ -39,7 +39,9 @@ import { estadoJanelaSala, janelaSala, SALA_ABRE_ANTES_MIN, SALA_FECHA_DEPOIS_MI
  *      feitas pela /consulta depois de "Entrar".
  *
  * Janela (lib/janela-sala.ts): fora de [horário − 30 min, horário + 2 h] o
- * GET normal e o POST de sinais respondem 409 (o sinal de controle
+ * GET normal e o POST de sinais respondem 409. O 409 do GET traz também
+ * `motivo` ("antes" | "depois") e `abreEm` ou `fechouEm` (ISO), para a tela
+ * mostrar "A sala abre às HH:MM" / "A sala já fechou" (o sinal de controle
  * continua aceito, para quem encerra no limite). O modo espiar funciona a
  * qualquer hora.
  *
@@ -105,6 +107,31 @@ function exigirJanelaAberta(dataInicio: Date) {
   if (estado === "fechada") {
     throw erroHttp(409, `A sala já fechou: ela fica aberta até ${SALA_FECHA_DEPOIS_MIN / 60} h depois do horário.`);
   }
+}
+
+/**
+ * 409 do GET normal fora da janela, com os horários para a tela da sala:
+ *   antes de abrir → { erro, motivo: "antes", abreEm }   (ISO)
+ *   depois de fechar → { erro, motivo: "depois", fechouEm } (ISO)
+ * null com a sala aberta. (O POST continua com exigirJanelaAberta: só `erro`.)
+ */
+function respostaForaDaJanela(dataInicio: Date): NextResponse | null {
+  const estado = estadoJanelaSala(dataInicio, Date.now());
+  if (estado === "aberta") return null;
+  const { abreEm, fechaEm } = janelaSala(dataInicio);
+  const corpo =
+    estado === "antes"
+      ? {
+          erro: `A sala ainda não abriu: ela abre ${SALA_ABRE_ANTES_MIN} min antes do horário.`,
+          motivo: "antes" as const,
+          abreEm: new Date(abreEm).toISOString(),
+        }
+      : {
+          erro: `A sala já fechou: ela fica aberta até ${SALA_FECHA_DEPOIS_MIN / 60} h depois do horário.`,
+          motivo: "depois" as const,
+          fechouEm: new Date(fechaEm).toISOString(),
+        };
+  return NextResponse.json(corpo, { status: 409, headers: { "Cache-Control": "no-store, private" } });
 }
 
 function janelaWire(dataInicio: Date) {
@@ -182,8 +209,10 @@ export async function GET(
       after(() => verificarPresencaConsultaSemFalhar(consultaId));
     }
 
-    // Fora da janela (30 min antes … 2 h depois): 409, sem presença nem auditoria.
-    exigirJanelaAberta(consulta.dataInicio);
+    // Fora da janela (30 min antes … 2 h depois): 409 com abreEm/fechouEm,
+    // sem presença nem auditoria.
+    const foraDaJanela = respostaForaDaJanela(consulta.dataInicio);
+    if (foraDaJanela) return foraDaJanela;
 
     // Presença dos dois numa consulta só (antes: duas).
     const agoraPing = new Date();

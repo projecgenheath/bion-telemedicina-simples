@@ -10,10 +10,14 @@ import {
   chaveCandidato,
   classificarQualidade,
   ehCelular,
+  esperaForaDaJanela,
   intervaloPolling,
+  lerForaDaJanela,
+  mesmoForaDaJanela,
   limitesEnvio,
   medirAmostra,
   restricoesMidia,
+  type ForaDaJanela,
   type LeituraStats,
   type Qualidade,
 } from "@/lib/teleconsulta-logica";
@@ -47,6 +51,14 @@ import {
  * zero (sessão nova). Também reage a `online`, troca de rede
  * (navigator.connection), volta da aba (visibilitychange) e fim de track
  * (câmera/microfone desconectados → captura de novo).
+ *
+ * Fora da janela da sala (409 do GET /sala: ainda não abriu ou já fechou):
+ * `foraDaJanela` vai para o estado (motivo + abreEm/fechouEm do servidor) e
+ * o GET é repetido a cada 30 s (ou logo depois da abertura, se for antes).
+ * Enquanto isso NÃO pede câmera/microfone, NÃO anuncia entrada (o papel só
+ * vem num GET 200) e, se nunca entrou na sala, não manda "saiu"/"encerrada"
+ * ao sair. Quando o GET volta 200, `foraDaJanela` volta a null, a mídia é
+ * pedida, o ICE é recarregado (se tinha sido recusado) e a chamada segue.
  */
 
 export type StatusSala =
@@ -57,6 +69,8 @@ export type StatusSala =
   | "instavel" // conexão caiu, tentando recuperar
   | "encerrada" // o médico encerrou (ou eu saí)
   | "indisponivel"; // reservado
+
+export type { ForaDaJanela } from "@/lib/teleconsulta-logica";
 
 export type MsgChat = { id: string; minha: boolean; texto: string; hora: string };
 
@@ -74,6 +88,8 @@ export type EstadoChamada = {
   remotoPronto: boolean;
   qualidade: Qualidade;
   reconectando: boolean;
+  /** Sala fora da janela (409 do GET /sala); null com a sala aberta. */
+  foraDaJanela: ForaDaJanela | null;
 };
 
 export const ESTADO_INICIAL: EstadoChamada = {
@@ -89,6 +105,7 @@ export const ESTADO_INICIAL: EstadoChamada = {
   remotoPronto: false,
   qualidade: "boa",
   reconectando: false,
+  foraDaJanela: null,
 };
 
 type SinalApi = { id: string; tipo: string; payload: string; createdAt: string };
@@ -154,6 +171,8 @@ export class ChamadaTeleconsulta {
   private readonly sinaisVistos = new ConjuntoLimitado(800);
   private candidatosVistos = new ConjuntoLimitado(400);
   private candidatosPendentes: CandidatoComSessao[] = [];
+  /** Controle/SDP que chegaram antes da mídia local resolver (ver processar). */
+  private sinaisAntesDaMidia: { tipo: string; env: Envelope; de: string }[] = [];
 
   private pc: RTCPeerConnection | null = null;
   private fazendoOferta = false;
@@ -163,9 +182,14 @@ export class ChamadaTeleconsulta {
   private iceServers: RTCIceServer[] = ICE_RESERVA;
   private iceExpiraEm = 0;
   private iceCarregado = false;
+  private iceEmAndamento = false;
   private timerIce: ReturnType<typeof setTimeout> | null = null;
 
   private midiaResolvida = false;
+  /** getUserMedia já foi pedido (só depois do primeiro GET /sala fora do 409). */
+  private midiaPedida = false;
+  /** Já recebeu um GET /sala 200 (o servidor gravou presença): só então avisa saída. */
+  private entrouNaSala = false;
   private readonly celular: boolean;
   private displayStream: MediaStream | null = null;
 
@@ -214,7 +238,7 @@ export class ChamadaTeleconsulta {
 
   iniciar(): void {
     log("iniciando sala", { consulta: this.consultaId, sessao: this.sessao, celular: this.celular });
-    void this.obterMidia();
+    // A mídia só é pedida depois do primeiro GET /sala (não pede câmera com a sala fora da janela).
     void this.carregarIce();
     void this.ciclo();
     this.ouvirAmbiente();
@@ -223,7 +247,7 @@ export class ChamadaTeleconsulta {
   /** Desmontagem do componente (troca de página, fechar aba). */
   destruir(): void {
     if (!this.vivo) return;
-    if (!this.encerrada) this.avisarSaida("navegacao");
+    if (!this.encerrada && this.entrouNaSala) this.avisarSaida("navegacao");
     this.vivo = false;
     this.limparTudo();
   }
@@ -274,6 +298,13 @@ export class ChamadaTeleconsulta {
     return null;
   }
 
+  /** Pede câmera/microfone uma vez só. */
+  private pedirMidia(): void {
+    if (this.midiaPedida || !this.vivo) return;
+    this.midiaPedida = true;
+    void this.obterMidia();
+  }
+
   private async obterMidia(): Promise<void> {
     const stream = await this.capturar();
     if (!this.vivo) {
@@ -287,6 +318,7 @@ export class ChamadaTeleconsulta {
           "Não foi possível acessar câmera e microfone (permissão negada, bloqueada pelo navegador ou dispositivo em uso por outro app). A consulta continua; peça ao outro participante para confirmar o áudio.",
         status: this.estado.status === "conectando" ? "aguardando" : this.estado.status,
       });
+      this.processarSinaisAntesDaMidia();
       this.talvezAnunciar();
       return;
     }
@@ -299,6 +331,7 @@ export class ChamadaTeleconsulta {
       erroMidia: soAudio ? "Câmera indisponível — participando com áudio." : null,
       status: this.estado.status === "conectando" ? "aguardando" : this.estado.status,
     });
+    this.processarSinaisAntesDaMidia();
     this.talvezAnunciar();
   }
 
@@ -351,8 +384,19 @@ export class ChamadaTeleconsulta {
   /* ================================================================ */
 
   private async carregarIce(): Promise<void> {
+    if (this.iceEmAndamento) return;
+    this.iceEmAndamento = true;
+    // timerIce = "há uma nova tentativa agendada": zera ao rodar (disparado ou adiantado).
+    if (this.timerIce) clearTimeout(this.timerIce);
+    this.timerIce = null;
     try {
       const res = await fetch(`${this.base}/ice`, { cache: "no-store" });
+      if (res.status === 409) {
+        // Sala fora da janela: sem nova tentativa por timer. O ciclo() pede
+        // de novo quando o GET /sala voltar 200 (ver recarregarIceSePreciso).
+        log("ICE servers recusados: sala fora da janela");
+        return;
+      }
       if (!res.ok) throw new Error(`ice ${res.status}`);
       const j = (await res.json()) as { iceServers?: RTCIceServer[]; expiraEm?: string; fonte?: string };
       if (!this.vivo) return;
@@ -376,9 +420,21 @@ export class ChamadaTeleconsulta {
       aviso("não consegui carregar os ICE servers; usando STUN de reserva e tentando de novo em 30 s", e);
       if (this.vivo) this.timerIce = setTimeout(() => void this.carregarIce(), 30_000);
     } finally {
+      this.iceEmAndamento = false;
       this.iceCarregado = true;
       this.talvezAnunciar();
     }
+  }
+
+  /**
+   * Sala aberta e o ICE nunca carregou (foi recusado com 409 fora da janela):
+   * busca agora e segura o anúncio de entrada até chegar (para já entrar com
+   * o TURN). Pedido em andamento ou nova tentativa agendada: não faz nada.
+   */
+  private recarregarIceSePreciso(): void {
+    if (this.iceExpiraEm > 0 || this.iceEmAndamento || this.timerIce) return;
+    this.iceCarregado = false;
+    void this.carregarIce();
   }
 
   /* ================================================================ */
@@ -410,6 +466,8 @@ export class ChamadaTeleconsulta {
 
   /** Saída sem esperar resposta (fechar aba / recarregar): sendBeacon sobrevive ao fim da página. */
   private avisarSaida(motivo: "navegacao" | "botao"): void {
+    // Nunca entrou (sala fora da janela o tempo todo): não há saída a avisar.
+    if (!this.entrouNaSala) return;
     const corpo = JSON.stringify({ acao: "sinal", tipo: "controle", payload: JSON.stringify({ acao: "saiu", s: this.sessao, motivo }) });
     try {
       if (typeof navigator !== "undefined" && navigator.sendBeacon) {
@@ -754,8 +812,35 @@ export class ChamadaTeleconsulta {
     if (env.para && env.para !== this.sessao) return; // para uma sessão antiga minha
     if (this.sessoesMortas.tem(de)) return;
 
-    if (sinal.tipo === "controle") return this.receberControle(env, de);
-    if (sinal.tipo === "oferta" || sinal.tipo === "resposta") return this.receberDescricao(env, de);
+    if (sinal.tipo !== "controle" && sinal.tipo !== "oferta" && sinal.tipo !== "resposta") return;
+    // Mídia local ainda não resolvida: criar a conexão agora a deixaria SEM as
+    // tracks locais (o outro lado ficaria sem o meu vídeo/áudio). Guarda e
+    // aplica na ordem quando a mídia resolver (obterMidia). Candidatos já
+    // esperam em candidatosPendentes.
+    if (!this.midiaResolvida) {
+      this.sinaisAntesDaMidia.push({ tipo: sinal.tipo, env, de });
+      if (this.sinaisAntesDaMidia.length > 30) this.sinaisAntesDaMidia.shift();
+      return;
+    }
+    return this.aplicarSinal(sinal.tipo, env, de);
+  }
+
+  private aplicarSinal(tipo: string, env: Envelope, de: string): Promise<void> | void {
+    if (tipo === "controle") return this.receberControle(env, de);
+    return this.receberDescricao(env, de);
+  }
+
+  /** Aplica, na ordem, o controle/SDP guardado enquanto a mídia local não estava pronta. */
+  private processarSinaisAntesDaMidia(): void {
+    const fila = this.sinaisAntesDaMidia.splice(0);
+    if (fila.length === 0) return;
+    log("aplicando sinais recebidos antes da mídia", { total: fila.length });
+    void (async () => {
+      for (const { tipo, env, de } of fila) {
+        if (!this.vivo || this.sessoesMortas.tem(de)) continue;
+        await this.aplicarSinal(tipo, env, de);
+      }
+    })();
   }
 
   private receberControle(env: Envelope, de: string): void {
@@ -885,14 +970,27 @@ export class ChamadaTeleconsulta {
     try {
       const res = await fetch(`${this.base}/sala`, { cache: "no-store" });
       if (res.status === 409) {
-        const j = (await res.json().catch(() => null)) as { erro?: string } | null;
-        aviso("sala fora da janela", j?.erro);
-        proximo = 30_000;
+        const corpo = (await res.json().catch(() => null)) as unknown;
+        if (!this.vivo) return;
+        const fora = lerForaDaJanela(corpo);
+        if (!mesmoForaDaJanela(fora, this.estado.foraDaJanela)) {
+          aviso("sala fora da janela", fora);
+          this.set({ foraDaJanela: fora });
+        }
+        proximo = esperaForaDaJanela(fora, Date.now());
         return;
       }
+      // Qualquer outra resposta: segue como antes (pede a mídia; erros caem no catch).
+      this.pedirMidia();
       if (!res.ok) throw new Error(`sala ${res.status}`);
       const dados = (await res.json()) as RespostaSala;
       if (!this.vivo) return;
+      this.entrouNaSala = true;
+      if (this.estado.foraDaJanela) {
+        log("a sala abriu");
+        this.set({ foraDaJanela: null });
+      }
+      this.recarregarIceSePreciso();
       this.papel = dados.eu.papel;
       this.meuId = dados.eu.id;
       if (dados.outroOnline !== this.estado.outroOnline) this.set({ outroOnline: dados.outroOnline });
@@ -908,6 +1006,8 @@ export class ChamadaTeleconsulta {
         this.anunciarEntrada(false);
       }
     } catch (e) {
+      // Falha de rede antes do primeiro GET: pede a mídia mesmo assim (comportamento anterior).
+      this.pedirMidia();
       aviso("polling da sala falhou", (e as Error)?.message);
       proximo = INTERVALO_ERRO_MS;
     } finally {
@@ -1172,7 +1272,8 @@ export class ChamadaTeleconsulta {
   encerrar(): void {
     if (this.encerrada) return;
     log("encerrando a chamada (médico)");
-    void this.enviar("controle", { acao: "encerrada", s: this.sessao });
+    // Sem nunca ter entrado (sala fora da janela), não há chamada para encerrar no servidor.
+    if (this.entrouNaSala) void this.enviar("controle", { acao: "encerrada", s: this.sessao });
     this.encerrada = true;
     this.remoto = null;
     this.set({ status: "encerrada", reconectando: false });

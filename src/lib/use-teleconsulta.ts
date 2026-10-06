@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ChamadaTeleconsulta, ESTADO_INICIAL, type EstadoChamada } from "@/lib/teleconsulta-chamada";
 
 export type { StatusSala, MsgChat, EstadoChamada } from "@/lib/teleconsulta-chamada";
-export type { Qualidade } from "@/lib/teleconsulta-logica";
+export type { Qualidade, ForaDaJanela } from "@/lib/teleconsulta-logica";
 
 /**
  * Hook React da sala de teleconsulta. Toda a lógica de WebRTC, sinalização,
@@ -15,6 +15,12 @@ export type { Qualidade } from "@/lib/teleconsulta-logica";
  * Expõe, além do que já existia: `qualidade` ('boa' | 'fraca' | 'ruim'),
  * `reconectando`, `outroSaiu` e `sair()` (paciente sai sem encerrar a
  * consulta). `encerrar()` é do médico: encerra a chamada para os dois.
+ *
+ * `foraDaJanela`: { motivo: "antes" | "depois", abreEm?, fechouEm? } quando o
+ * GET /sala responde 409 (sala ainda não abriu ou já fechou); null com a sala
+ * aberta. A tela mostra "A sala abre às HH:MM" / "A sala já fechou" (ver
+ * textoForaDaJanela/exibirForaDaJanela em teleconsulta-logica.ts). A classe
+ * continua tentando e conecta sozinha quando a sala abre.
  */
 export function useTeleconsulta(consultaId: string | undefined) {
   const [estado, setEstado] = useState<EstadoChamada>(ESTADO_INICIAL);

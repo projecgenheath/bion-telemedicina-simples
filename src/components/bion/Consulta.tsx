@@ -11,10 +11,13 @@ import {
   Sparkles,
   Send,
   X,
+  Clock,
+  ArrowLeft,
 } from "lucide-react";
 import { useBion as useStore, type AnamneseResumo } from "@/lib/bion-store";
 import { ModalBion } from "@/components/bion/ModalBion";
 import { useTeleconsulta } from "@/lib/use-teleconsulta";
+import { exibirForaDaJanela, textoForaDaJanela } from "@/lib/teleconsulta-logica";
 import { ConsultaBarraSuperior } from "@/components/bion/consulta/BarraSuperior";
 import { ConsultaAreaVideo } from "@/components/bion/consulta/AreaVideo";
 import { ConsultaControlesMidia } from "@/components/bion/consulta/ControlesMidia";
@@ -106,7 +109,11 @@ export function Consulta({
     outroSaiu,
     qualidade,
     reconectando,
+    foraDaJanela,
   } = tele;
+  // Sala fora da janela (409 do servidor) e sem chamada em andamento: mensagem
+  // simples no lugar da área de espera (a Parte 3 redesenha esta tela).
+  const salaForaDaJanela = exibirForaDaJanela(foraDaJanela, statusSala) ? foraDaJanela : null;
 
   const videoLocalRef = useRef<HTMLVideoElement>(null);
   const videoRemotoRef = useRef<HTMLVideoElement>(null);
@@ -429,6 +436,10 @@ export function Consulta({
       <div className="flex-1 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden">
         {/* Painel do Vídeo */}
         <div className="flex-1 flex flex-col p-3 lg:p-5 gap-4 min-w-0">
+          {salaForaDaJanela ? (
+            <AvisoForaDaJanela textos={textoForaDaJanela(salaForaDaJanela, Date.now())} onVoltar={onEnd} />
+          ) : (
+          <>
           <ConsultaAreaVideo
             videoRemotoRef={videoRemotoRef}
             videoLocalRef={videoLocalRef}
@@ -461,6 +472,8 @@ export function Consulta({
             fileRef={fileRef}
             onArquivos={enviarArquivo}
           />
+          </>
+          )}
         </div>
 
         <ConsultaPainelLateral
@@ -750,6 +763,40 @@ export function Consulta({
           </form>
         </ModalBion>
       )}
+    </div>
+  );
+}
+
+/** Sala fora da janela: "A sala abre às HH:MM" / "A sala já fechou" + Voltar (visual mínimo). */
+function AvisoForaDaJanela({
+  textos,
+  onVoltar,
+}: {
+  textos: { titulo: string; detalhe: string };
+  onVoltar: () => void;
+}) {
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="aspect-video lg:aspect-auto lg:flex-1 lg:min-h-[320px] w-full shrink-0 lg:shrink rounded-3xl bg-gradient-to-br from-slate-800 via-slate-900 to-slate-950 border border-white/10 flex items-center justify-center shadow-2xl p-6"
+    >
+      <div className="flex flex-col items-center gap-4 text-center max-w-md">
+        <div className="w-16 h-16 rounded-3xl bg-primary/20 border-2 border-primary/40 flex items-center justify-center">
+          <Clock className="w-7 h-7 text-white" />
+        </div>
+        <div>
+          <div className="text-lg font-bold">{textos.titulo}</div>
+          <p className="text-xs text-slate-300 mt-1 leading-relaxed">{textos.detalhe}</p>
+        </div>
+        <button
+          type="button"
+          onClick={onVoltar}
+          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/15 border border-white/15 text-sm font-bold transition"
+        >
+          <ArrowLeft className="w-4 h-4" /> Voltar
+        </button>
+      </div>
     </div>
   );
 }
