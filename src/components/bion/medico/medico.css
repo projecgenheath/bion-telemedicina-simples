@@ -106,3 +106,90 @@
 
 /* Gráfico: o gesto vertical continua rolando a coluna */
 .bm-grafico { touch-action: pan-y; }
+
+/* ==================================================================== */
+/* Tela larga (≥ 1024 px): sem moldura de celular. Perfil | Início,     */
+/* Gestão e Perfil público | Pacientes lado a lado, cada coluna com a    */
+/* própria rolagem. Abaixo de 1024 px nada aqui vale: o carrossel, o     */
+/* snap e a moldura de 430 px do globals.css (768–1023) seguem iguais.   */
+/* Seletores com .bm-app para não vazar para paciente/admin.             */
+/* ==================================================================== */
+@media (min-width: 1024px) {
+  /* Anula o fundo escuro de body:has(.bp-shell) do globals.css (só médico) */
+  html body:has(.bm-app.bp-shell) { background: #ffffff; }
+  html.dark body:has(.bm-app.bp-shell) { background: #000000; }
+
+  /* Tira a moldura de 430 px */
+  .bm-app.bp-shell {
+    max-width: none;
+    margin-left: 0;
+    margin-right: 0;
+    border: 0;
+    box-shadow: none;
+  }
+
+  /* Carrossel vira grade de 3 colunas: sem rolagem horizontal nem snap,
+     então nenhum gesto de deslizar troca de página no computador. */
+  .bm-app .bm-carrossel {
+    display: grid;
+    grid-template-columns: 300px minmax(0, 1fr) 320px;
+    overflow: hidden;
+    scroll-snap-type: none;
+    overscroll-behavior-x: auto;
+  }
+  .bm-app .bm-carrossel > * {
+    width: auto;
+    min-width: 0;
+    flex: none;
+    scroll-snap-align: none;
+    scroll-snap-stop: normal;
+  }
+  .bm-app .bm-lateral-esq { border-right: 1px solid rgba(10, 31, 68, 0.12); }
+  .bm-app .bm-lateral-dir { border-left: 1px solid rgba(10, 31, 68, 0.12); }
+  .dark .bm-app .bm-lateral-esq { border-right-color: rgba(255, 255, 255, 0.1); }
+  .dark .bm-app .bm-lateral-dir { border-left-color: rgba(255, 255, 255, 0.1); }
+
+  /* Coluna central: as 3 telas empilhadas com rolagem livre (roda do
+     mouse/trackpad sem "trancos" do snap obrigatório). Cada tela segue
+     com pelo menos a altura da janela, então o degradê é o mesmo. */
+  .bm-app .bm-snap-y { scroll-snap-type: none; }
+  .bm-app .bm-snap-y > .bm-tela {
+    scroll-snap-align: none;
+    scroll-snap-stop: normal;
+    padding-left: max(1.5rem, calc((100% - 720px) / 2));
+    /* folga extra à direita para os pontos das seções não encostarem nos cards */
+    padding-right: max(2.25rem, calc((100% - 720px) / 2));
+    padding-bottom: 3rem;
+  }
+
+  /* Todas as páginas estão visíveis: sem pontos de página nem dica de
+     gestos. Os pontos das seções (Início/Gestão/Perfil público) ficam na
+     borda direita da coluna central, como atalho. */
+  .bm-app .bm-paginas,
+  .bm-app .bm-dica { display: none; }
+  .bm-app .bm-indicador { right: calc(320px + 0.5rem); }
+
+  /* Laterais não precisam da folga para a pílula de páginas */
+  .bm-app .bm-lateral-esq > .bm-painel { padding-bottom: 2.5rem; }
+
+  /* Conversa, suporte e termos: janela centralizada com fundo escurecido,
+     em vez de cobrir as 3 colunas. Só a camada raiz (filha da casca); a
+     classe bm-sobreposicao também é usada como fundo dentro dela. */
+  .bm-app > .bm-sobreposicao {
+    left: 50%;
+    right: auto;
+    width: min(760px, 100%);
+    transform: translateX(-50%);
+    box-shadow: 0 0 0 100vmax rgba(2, 8, 26, 0.55);
+  }
+}
+
+@media (min-width: 1280px) {
+  .bm-app .bm-carrossel { grid-template-columns: 340px minmax(0, 1fr) 360px; }
+  .bm-app .bm-indicador { right: calc(360px + 0.5rem); }
+}
+
+@media (min-width: 1440px) {
+  .bm-app .bm-carrossel { grid-template-columns: 360px minmax(0, 1fr) 380px; }
+  .bm-app .bm-indicador { right: calc(380px + 0.5rem); }
+}

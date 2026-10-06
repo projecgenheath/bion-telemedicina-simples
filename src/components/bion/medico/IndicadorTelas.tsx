@@ -27,7 +27,7 @@ export function IndicadorTelas({
     <>
       <nav
         aria-label="Páginas"
-        className="absolute bottom-[calc(1rem+env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2 z-20 flex items-center gap-1 rounded-full bg-zinc-950/80 px-2 py-1 backdrop-blur"
+        className="bm-paginas absolute bottom-[calc(1rem+env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2 z-20 flex items-center gap-1 rounded-full bg-zinc-950/80 px-2 py-1 backdrop-blur"
       >
         {PAINEIS.map((r, i) => (
           <button
@@ -91,7 +91,7 @@ export function DicaGestos({ onDispensar }: { onDispensar: () => void }) {
   return (
     <div
       role="status"
-      className="absolute left-4 right-4 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-30 rounded-3xl bg-zinc-950/90 text-white p-4 backdrop-blur shadow-2xl"
+      className="bm-dica absolute left-4 right-4 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-30 rounded-3xl bg-zinc-950/90 text-white p-4 backdrop-blur shadow-2xl"
     >
       <div className="flex items-start gap-3">
         <Hand className="w-5 h-5 mt-0.5 shrink-0 text-sky-300" aria-hidden />
