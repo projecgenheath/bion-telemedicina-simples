@@ -1,7 +1,7 @@
 /**
  * Ponta a ponta das rotas do admin para o desfecho, contra um servidor LOCAL
  * ligado a um Postgres LOCAL descartável (nunca produção), com as migrações
- * até 20261006c_evento_correcao_desfecho aplicadas:
+ * até 20261006d_evento_correcao_desfecho aplicadas:
  *   GET/POST /api/admin/consultas/[id]/corrigir-desfecho
  *   GET      /api/admin/consultas/sem-desfecho
  *

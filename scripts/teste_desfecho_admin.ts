@@ -2,7 +2,7 @@
  * Teste do desfecho pelo admin (financeiro.ts: aplicarFalhaTecnica com
  * {motivo, por, atorId}, desfechoDaConsulta, planejarCorrecaoDesfecho e
  * corrigirDesfecho) contra um Postgres LOCAL descartável (nunca produção),
- * com as migrações até 20261006c_evento_correcao_desfecho aplicadas.
+ * com as migrações até 20261006d_evento_correcao_desfecho aplicadas.
  *   DATABASE_URL=postgresql://<usuario>@localhost:<porta>/<banco> \
  *   bun --conditions react-server scripts/teste_desfecho_admin.ts
  * APAGA os dados do banco local.
