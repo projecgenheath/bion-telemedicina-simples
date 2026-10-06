@@ -3,7 +3,8 @@
  * MÉDICO (regras do Alisson, 06/10/2026), contra um servidor LOCAL ligado a um
  * Postgres LOCAL descartável (nunca o banco de produção), com as migrações
  * 20261001_financeiro, 20261001b_reembolso_manual, 20261003_repasse_diario,
- * 20261006_trava_motivo_falta_medico e 20261006b_presenca_entrou_em.
+ * 20261006_trava_motivo_falta_medico, 20261006b_presenca_entrou_em e
+ * 20261006d_evento_correcao_desfecho.
  *
  *   DATABASE_URL=postgresql://<usuario>@localhost:<porta>/<banco> \
  *   BASE=http://127.0.0.1:<porta-do-next> \

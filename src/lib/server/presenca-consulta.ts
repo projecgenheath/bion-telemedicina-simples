@@ -18,8 +18,9 @@ import { medicoEsperouAteOLimite, SINAL_PARADO_MS, type PresencaRegra } from "@/
 /*    pedir o reembolso pelo app em até REEMBOLSO_MANUAL_PRAZO_DIAS e o   */
 /*    admin decide em "Reembolsos".                                      */
 /*  - falha_tecnica (regra do Alisson): SÓ quando alguém que já estava   */
-/*    conectado caiu e a chamada não seguiu, OU quando NINGUÉM conseguiu */
-/*    entrar. Gravada por aplicarFalhaTecnica (financeiro.ts, do Admin): */
+/*    conectado caiu e a chamada não seguiu. Ninguém entrou → sem       */
+/*    desfecho (fica para o admin; abrir o app NÃO grava sozinho).       */
+/*    Gravada por aplicarFalhaTecnica (financeiro.ts, do Admin):         */
 /*    paga → aguardando_reagendamento; não paga → cancelada.             */
 /*  - falta do médico (regra aprovada pelo Alisson): o paciente entrou e */
 /*    o médico nunca entrou, em consulta PAGA → mesmo tratamento da      */
@@ -91,10 +92,14 @@ export function classificarPresenca(p: {
   const paciente = presente(p.ultimoPingPaciente);
 
   if (!medico && !paciente) {
-    // Consulta não paga em que ninguém entrou: é uma reserva que não foi paga,
-    // não uma falha técnica. Fica como está.
-    if (!p.pago) return { resultado: "sem_evento", motivo: "Consulta não paga e ninguém entrou na sala." };
-    return { resultado: "falha_tecnica", motivo: "Nem o médico nem o paciente conseguiram entrar na sala." };
+    // Ninguém entrou: NÃO grava falha técnica automática (paga ou não).
+    // Fica sem desfecho para o admin; o bootstrap/abrir o app não marca sozinho.
+    return {
+      resultado: "sem_evento",
+      motivo: p.pago
+        ? "Ninguém entrou na sala: fica sem desfecho para o admin."
+        : "Consulta não paga e ninguém entrou na sala.",
+    };
   }
   if (medico && !paciente) {
     // Mesma regra da falta marcada pelo médico (regra 1): ele precisa ter
@@ -207,8 +212,15 @@ export async function gravarDesfecho(
         data: { status: c.status },
       });
       if (count === 0) throw new SemAlteracao();
+      // Só conta desfecho vigente da data ATUAL (corrigidoEm nulo; depois de
+      // remarcação o evento da data antiga não bloqueia).
       const jaTem = await tx.eventoConsulta.findFirst({
-        where: { consultaId: c.id, tipo: { in: TIPOS_DESFECHO } },
+        where: {
+          consultaId: c.id,
+          tipo: { in: TIPOS_DESFECHO },
+          corrigidoEm: null,
+          dataAnterior: c.dataInicio,
+        },
         select: { id: true },
       });
       if (jaTem) throw new SemAlteracao();
@@ -235,16 +247,12 @@ export async function gravarDesfecho(
         });
       } else {
         const faltaMedico = tipo === "falta_medico";
-        const r = await aplicarFalhaTecnica(tx, c.id, { motivo: faltaMedico ? "falta_medico" : "falha_tecnica" });
+        const r = await aplicarFalhaTecnica(tx, c.id, {
+          motivo: faltaMedico ? "falta_medico" : "falha_tecnica",
+          ...(autor.por === "medico" ? { por: "medico" as const, atorId } : { por: "sistema" as const }),
+        });
         if (!r) throw new SemAlteracao();
         status = r.status;
-        if (autor.por === "medico") {
-          // PROVISÓRIO até o PR do Admin: aplicarFalhaTecnica ainda grava
-          // sempre por = "sistema". Corrige o autor do evento NA MESMA
-          // transação; com o PR dele, vira aplicarFalhaTecnica(tx, id,
-          // { motivo, por: "medico", atorId }) e estas linhas saem.
-          await tx.eventoConsulta.update({ where: { id: r.evento.id }, data: { por: "medico", atorId } });
-        }
         const causa = faltaMedico ? "porque o médico não entrou na sala" : "por falha técnica";
         await tx.notificacao.create({
           data: {
@@ -290,10 +298,20 @@ export async function lerPresencas(c: { id: string; medicoId: string; pacienteId
   return { medico: de(c.medicoId), paciente: de(c.pacienteId) };
 }
 
-/** A consulta já tem desfecho (evento falta_paciente / falha_tecnica)? Devolve o evento ou null. */
-export async function desfechoExistente(consultaId: string) {
+/**
+ * A consulta já tem desfecho VIGENTE da data atual (falta_paciente /
+ * falha_tecnica com corrigidoEm nulo e dataAnterior = dataInicio)?
+ * Devolve o evento ou null. `dataInicio` opcional evita um SELECT a mais.
+ */
+export async function desfechoExistente(consultaId: string, dataInicio?: Date) {
+  let inicio = dataInicio;
+  if (!inicio) {
+    const c = await db.consulta.findUnique({ where: { id: consultaId }, select: { dataInicio: true } });
+    if (!c) return null;
+    inicio = c.dataInicio;
+  }
   return db.eventoConsulta.findFirst({
-    where: { consultaId, tipo: { in: TIPOS_DESFECHO } },
+    where: { consultaId, tipo: { in: TIPOS_DESFECHO }, corrigidoEm: null, dataAnterior: inicio },
     select: { id: true, tipo: true, motivo: true, por: true, atorId: true },
     orderBy: { em: "asc" },
   });
@@ -301,6 +319,9 @@ export async function desfechoExistente(consultaId: string) {
 
 /** Lê a presença e grava (se for o caso) o evento de UMA consulta. */
 async function avaliarConsulta(c: ConsultaAvaliada, agora: Date) {
+  // Já tem desfecho vigente da data atual (corrigido pelo admin não conta;
+  // evento de data antiga após remarcação não conta): não grava de novo.
+  if (await desfechoExistente(c.id, c.dataInicio)) return null;
   const [presencas, encerrada] = await Promise.all([
     lerPresencas(c),
     db.sinalSala.findFirst({
@@ -345,7 +366,11 @@ export function filtroPendentes(agora: Date) {
       gte: limiteRecente > INICIO_DETECCAO ? limiteRecente : INICIO_DETECCAO,
       lte: new Date(agora.getTime() - CARENCIA_APOS_INICIO_MIN * 60_000),
     },
-    eventos: { none: { tipo: { in: TIPOS_DESFECHO } } },
+    // Desfecho vigente = tipo falta/falha, corrigidoEm nulo E dataAnterior =
+    // dataInicio (data atual). O Prisma não compara colunas entre tabelas, então
+    // o filtro fino da data fica em desfechoExistente/avaliarConsulta. Aqui
+    // não filtramos por eventos: consulta remarcada com evento da data antiga
+    // ainda precisa ser avaliada.
   };
 }
 
@@ -448,14 +473,22 @@ export function entradaAposSinal(
   return existente.entrouEm;
 }
 
-/** A consulta já tem desfecho: saiu dos status "ia acontecer" ou tem evento de falta/falha. */
+/** A consulta já tem desfecho: saiu dos status "ia acontecer" ou tem evento vigente da data atual. */
 export async function consultaTemDesfecho(consultaId: string): Promise<boolean> {
   const c = await db.consulta.findUnique({
     where: { id: consultaId },
-    select: { status: true, eventos: { where: { tipo: { in: TIPOS_DESFECHO } }, select: { id: true }, take: 1 } },
+    select: {
+      status: true,
+      dataInicio: true,
+      eventos: {
+        where: { tipo: { in: TIPOS_DESFECHO }, corrigidoEm: null },
+        select: { id: true, dataAnterior: true },
+      },
+    },
   });
   if (!c) return true;
-  return !STATUS_AVALIAVEIS.includes(c.status) || c.eventos.length > 0;
+  if (!STATUS_AVALIAVEIS.includes(c.status)) return true;
+  return c.eventos.some((e) => e.dataAnterior.getTime() === c.dataInicio.getTime());
 }
 
 /**

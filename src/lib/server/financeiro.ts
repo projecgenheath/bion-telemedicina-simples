@@ -323,10 +323,10 @@ export const medicoRecebe = (d: DesfechoAtual) => d === "realizada" || d === "fa
 /**
  * Falha técnica (ou falta do médico, com `motivo: "falta_medico"`): paga vai
  * para aguardando_reagendamento, não paga é cancelada. Idempotente: não faz
- * nada se a consulta já tiver falta_paciente ou falha_tecnica VIGENTE (os
- * corrigidos pelo admin não contam), ou se já estiver encerrada.
- * Quem grava: `por` = "sistema" (padrão, atorId nulo), "medico" (rota do
- * desfecho do médico: `{ motivo, por: "medico", atorId }`) ou "admin"
+ * nada se a consulta já tiver falta_paciente ou falha_tecnica VIGENTE da data
+ * atual (corrigidoEm nulo e dataAnterior = dataInicio), ou se já estiver
+ * encerrada. Quem grava: `por` = "sistema" (padrão, atorId nulo), "medico"
+ * (rota do desfecho: `{ motivo, por: "medico", atorId }`) ou "admin"
  * (correção de desfecho).
  */
 export async function aplicarFalhaTecnica(
@@ -343,7 +343,12 @@ export async function aplicarFalhaTecnica(
   });
   if (!consulta) return null;
   const jaTem = await tx.eventoConsulta.findFirst({
-    where: { consultaId, tipo: { in: TIPOS_EVENTO_DESFECHO }, ...EVENTO_VIGENTE },
+    where: {
+      consultaId,
+      tipo: { in: TIPOS_EVENTO_DESFECHO },
+      ...EVENTO_VIGENTE,
+      dataAnterior: consulta.dataInicio,
+    },
     select: { id: true },
   });
   if (jaTem) return null;
