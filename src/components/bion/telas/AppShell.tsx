@@ -371,7 +371,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   if (
     sessao.role === "paciente" ||
     path === "/consulta" ||
-    path === "/sala-espera" ||
     path === "/paciente" ||
     path.startsWith("/consulta/")
   ) {

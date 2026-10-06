@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import {
   Activity,
   CalendarClock,
   ChevronDown,
+  Clock,
   ClipboardList,
   FileText,
   HeartPulse,
@@ -52,6 +53,9 @@ import { DicaGestos, NavegacaoPaciente, useDicaGestos } from "./NavegacaoPacient
 import { DadosPessoaisSheet, type CampoPerfil } from "./DadosPessoaisSheet";
 import { TelaListaCompleta, type ListaPerfil } from "./TelaListaCompleta";
 import { AvisoMensagemNova, ContagemConsulta } from "./AvisosInicio";
+import { acaoSalaPaciente, botaoPrincipalProxima, type AcaoSala } from "./entrada-sala";
+import { useRelogioSala } from "./useRelogioSala";
+import { SALA_ABRE_ANTES_MIN, salaAbertaEm } from "@/lib/janela-sala";
 import { EstadoVazio } from "./EstadosPaciente";
 
 /**
@@ -259,6 +263,12 @@ export function PacienteApp() {
 
   const proxima = proximas[0];
 
+  /* Sala (sem pré-sala): a janela vem de lib/janela-sala.ts, a mesma do servidor.
+     O relógio avança sozinho e acerta o instante em que a sala abre ou fecha. */
+  const horariosProximas = useMemo(() => proximas.map((c) => c.ts), [proximas]);
+  const agoraSala = useRelogioSala(horariosProximas);
+  const acaoSala = (c: Consulta): AcaoSala => acaoSalaPaciente(c, agoraSala);
+
   /** Mensagem mais recente que o paciente ainda não leu (aviso no Início). */
   const ultimaNaoLida = useMemo(
     () => mensagens.filter((m) => !m.minha && !m.lida).sort((a, b) => b.ts - a.ts)[0],
@@ -310,7 +320,6 @@ export function PacienteApp() {
       .slice(0, 3);
   }, [consultas, sessao.nome]);
 
-  const janelaSala = (ts: number) => Date.now() >= ts - 30 * 60_000 && Date.now() <= ts + 2 * 3_600_000;
   const janelaTriagem = (c: { ts: number; pago?: boolean; status: string }) =>
     ["confirmada", "pendente_anamnese"].includes(c.status) &&
     c.pago !== false &&
@@ -323,7 +332,7 @@ export function PacienteApp() {
     return "nao_iniciada" as const;
   };
 
-  const salaAberta = proxima ? janelaSala(proxima.ts) : false;
+  const acaoProxima = proxima ? acaoSala(proxima) : null;
 
   /** Uma etiqueta só, a mais relevante agora (ver etiqueta-consulta.ts). */
   const etiquetaDe = (c: Consulta) =>
@@ -331,7 +340,7 @@ export function PacienteApp() {
       status: c.status,
       pago: c.pago,
       remarcacaoPendente: c.remarcacaoPendente,
-      salaAberta: janelaSala(c.ts),
+      salaAberta: salaAbertaEm(c.ts, agoraSala),
       triagem: statusTriagem(c.id),
       triagemDisponivel: janelaTriagem(c),
     });
@@ -352,9 +361,10 @@ export function PacienteApp() {
     });
   };
 
-  const entrarSala = (ts: number) => {
-    if (janelaSala(ts)) router.push("/consulta");
-    else router.push("/sala-espera");
+  /** Entra na sala da consulta só com a sala aberta (fora da janela não há para onde ir). */
+  const entrarSala = (c: Consulta) => {
+    const acao = acaoSalaPaciente(c, Date.now());
+    if (acao.tipo === "entrar") router.push(acao.href);
   };
 
   const lembretesPendentes = lembretes.filter((l) => !l.feito);
@@ -525,11 +535,10 @@ export function PacienteApp() {
             {/* Card: próxima consulta */}
             {proxima ? (
               <div className="bp-glass bpp-surgir p-5 w-full">
-                <button
-                  type="button"
-                  onClick={() => entrarSala(proxima.ts)}
-                  className="bpp-toque text-left w-full rounded-2xl"
-                  aria-label={`Próxima consulta: ${proxima.especialidade} com ${proxima.medico}. Toque para ${salaAberta ? "entrar na sala" : "abrir a sala de espera"}`}
+                <CabecalhoProxima
+                  podeEntrar={acaoProxima?.tipo === "entrar"}
+                  onEntrar={() => entrarSala(proxima)}
+                  rotulo={`Próxima consulta: ${proxima.especialidade} com ${proxima.medico}. Toque para entrar na sala`}
                 >
                   <div className="flex items-center justify-between mb-3">
                     <span className="text-xs font-bold uppercase tracking-wider text-bion-ink/75 dark:text-bion-paper/75">
@@ -545,20 +554,17 @@ export function PacienteApp() {
                     </span>
                     <ContagemConsulta ts={proxima.ts} />
                   </div>
-                </button>
+                </CabecalhoProxima>
 
                 <AcoesProximaConsulta
-                  salaAberta={salaAberta}
+                  acao={acaoProxima ?? { tipo: "nenhuma" }}
                   triagem={statusTriagem(proxima.id)}
                   triagemDisponivel={janelaTriagem(proxima)}
-                  onEntrar={() => entrarSala(proxima.ts)}
+                  onEntrar={() => entrarSala(proxima)}
                   onTriagem={() => abrirTriagem(proxima.id)}
                   onRemarcar={() => setModalConsulta({ id: proxima.id, acao: "remarcar" })}
                   onCancelar={() => setModalConsulta({ id: proxima.id, acao: "cancelar" })}
                 />
-                {!salaAberta ? (
-                  <p className="text-xs opacity-80 mt-3">A sala de teleatendimento abre 30 min antes do horário.</p>
-                ) : null}
               </div>
             ) : (
               <button type="button" onClick={() => setChatAberto(true)} className="bpp-toque bp-glass p-5 text-left w-full">
@@ -593,25 +599,45 @@ export function PacienteApp() {
               <div className="mt-2 space-y-2">
                 {proximas.map((c) => {
                   const st = statusTriagem(c.id);
-                  const aberta = janelaSala(c.ts);
+                  const acao = acaoSala(c);
+                  const resumo = (
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <div className="font-bold">{c.especialidade}</div>
+                        <div className="text-xs opacity-80">com {c.medico}</div>
+                        <div className="text-xs font-semibold mt-1">
+                          {c.data} · {c.hora}
+                        </div>
+                      </div>
+                      <EtiquetaEstado e={etiquetaDe(c)} className="shrink-0" />
+                    </div>
+                  );
                   return (
                     <div key={c.id} className="bp-glass p-4">
-                      <button type="button" onClick={() => entrarSala(c.ts)} className="text-left w-full">
-                        <div className="flex items-start justify-between gap-2">
-                          <div>
-                            <div className="font-bold">{c.especialidade}</div>
-                            <div className="text-xs opacity-80">com {c.medico}</div>
-                            <div className="text-xs font-semibold mt-1">
-                              {c.data} · {c.hora}
-                            </div>
-                          </div>
-                          <EtiquetaEstado e={etiquetaDe(c)} className="shrink-0" />
-                        </div>
-                      </button>
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        <button type="button" onClick={() => entrarSala(c.ts)} className="inline-flex items-center gap-1.5 rounded-full px-3 min-h-11 text-xs font-bold bg-bion-ink/8 dark:bg-white/10">
-                          <Video className="w-3.5 h-3.5" /> {aberta ? "Entrar" : "Sala de espera"}
+                      {/* Fora da janela o item não leva à sala. */}
+                      {acao.tipo === "entrar" ? (
+                        <button type="button" onClick={() => entrarSala(c)} className="text-left w-full">
+                          {resumo}
                         </button>
+                      ) : (
+                        <div>{resumo}</div>
+                      )}
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {acao.tipo === "entrar" ? (
+                          <button type="button" onClick={() => entrarSala(c)} className="inline-flex items-center gap-1.5 rounded-full px-3 min-h-11 text-xs font-bold bg-emerald-700 text-white">
+                            <Video className="w-3.5 h-3.5" aria-hidden /> Entrar na sala
+                          </button>
+                        ) : acao.tipo === "aguardar" ? (
+                          <button
+                            type="button"
+                            disabled
+                            aria-label={`Sala: ${acao.rotulo}`}
+                            title={acao.rotulo}
+                            className="inline-flex items-center gap-1.5 rounded-full px-3 min-h-11 text-xs font-bold bg-bion-ink/8 dark:bg-white/10 opacity-75 cursor-not-allowed"
+                          >
+                            <Video className="w-3.5 h-3.5" aria-hidden /> Sala
+                          </button>
+                        ) : null}
                         {st !== "feita" && janelaTriagem(c) ? (
                           <button type="button" onClick={() => abrirTriagem(c.id)} className="inline-flex items-center gap-1.5 rounded-full px-3 min-h-11 text-xs font-bold bg-sky-600/15">
                             <Sparkles className="w-3.5 h-3.5" /> {st === "andamento" ? "Continuar triagem" : "Fazer triagem"}
@@ -1186,11 +1212,34 @@ function CardFalta({ consulta, onAbrir }: { consulta: Consulta; onAbrir: () => v
 }
 
 /* ------------------------------------------------------------------ */
+/* Cabeçalho do card da próxima consulta: só é botão com a sala aberta */
+/* ------------------------------------------------------------------ */
+
+function CabecalhoProxima({
+  podeEntrar,
+  onEntrar,
+  rotulo,
+  children,
+}: {
+  podeEntrar: boolean;
+  onEntrar: () => void;
+  rotulo: string;
+  children: ReactNode;
+}) {
+  if (!podeEntrar) return <div className="w-full">{children}</div>;
+  return (
+    <button type="button" onClick={onEntrar} className="bpp-toque text-left w-full rounded-2xl" aria-label={rotulo}>
+      {children}
+    </button>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /* Ações da próxima consulta: um botão principal + ações menores       */
 /* ------------------------------------------------------------------ */
 
 function AcoesProximaConsulta({
-  salaAberta,
+  acao,
   triagem,
   triagemDisponivel,
   onEntrar,
@@ -1198,7 +1247,7 @@ function AcoesProximaConsulta({
   onRemarcar,
   onCancelar,
 }: {
-  salaAberta: boolean;
+  acao: AcaoSala;
   triagem: "feita" | "andamento" | "nao_iniciada";
   triagemDisponivel: boolean;
   onEntrar: () => void;
@@ -1206,31 +1255,47 @@ function AcoesProximaConsulta({
   onRemarcar: () => void;
   onCancelar: () => void;
 }) {
-  // Prioridade do botão principal: sala aberta → triagem pendente → sala de espera.
+  // Prioridade do botão principal: sala aberta → triagem pendente → "A sala abre às HH:MM" (desativado).
+  // Com a sala já fechada não há entrada.
   const triagemPendente = triagem !== "feita" && triagemDisponivel;
-  const principal = salaAberta ? "sala" : triagemPendente ? "triagem" : "espera";
+  const principal = botaoPrincipalProxima(acao, triagemPendente);
   const secundario =
     "min-h-[52px] min-w-0 rounded-2xl px-1 py-2 inline-flex flex-col items-center justify-center gap-1 text-xs font-bold leading-none";
+  const avisoSala = acao.tipo === "aguardar" ? acao.rotulo : acao.tipo === "nenhuma" ? "A sala já fechou" : undefined;
 
   return (
     <div className="mt-4">
-      {principal === "sala" ? (
-        <button type="button" onClick={onEntrar} className="bpp-acao-sala w-full rounded-full py-3 text-sm font-bold inline-flex items-center justify-center gap-2 bg-emerald-700 text-white">
-          <Video className="w-4 h-4" aria-hidden /> Entrar na sala
-        </button>
-      ) : principal === "triagem" ? (
-        <button type="button" onClick={onTriagem} className="bp-acao w-full py-3 text-sm inline-flex items-center justify-center gap-2">
-          <Sparkles className="w-4 h-4" aria-hidden /> {triagem === "andamento" ? "Continuar triagem" : "Fazer triagem"}
-        </button>
-      ) : (
-        <button type="button" onClick={onEntrar} className="bp-acao w-full py-3 text-sm inline-flex items-center justify-center gap-2">
-          <Video className="w-4 h-4" aria-hidden /> Abrir sala de espera
-        </button>
-      )}
+      {/* aria-live: avisa quando "A sala abre às HH:MM" vira "Entrar na sala". */}
+      <div aria-live="polite">
+        {principal === "sala" ? (
+          <button type="button" onClick={onEntrar} className="bpp-acao-sala w-full rounded-full py-3 text-sm font-bold inline-flex items-center justify-center gap-2 bg-emerald-700 text-white">
+            <Video className="w-4 h-4" aria-hidden /> Entrar na sala
+          </button>
+        ) : principal === "triagem" ? (
+          <button type="button" onClick={onTriagem} className="bp-acao w-full py-3 text-sm inline-flex items-center justify-center gap-2">
+            <Sparkles className="w-4 h-4" aria-hidden /> {triagem === "andamento" ? "Continuar triagem" : "Fazer triagem"}
+          </button>
+        ) : principal === "aguardar" && acao.tipo === "aguardar" ? (
+          <button
+            type="button"
+            disabled
+            className="bp-acao w-full py-3 text-sm inline-flex items-center justify-center gap-2 opacity-75 cursor-not-allowed"
+          >
+            <Clock className="w-4 h-4" aria-hidden /> {acao.rotulo}
+          </button>
+        ) : null}
+      </div>
       {/* Ações secundárias: botões iguais numa linha só (ícone em cima + uma palavra), alvo >= 52 px. */}
-      <div className={`bpp-acoes-sec mt-2 grid gap-2 ${principal === "triagem" ? "grid-cols-3" : "grid-cols-2"}`}>
+      <div className={`bpp-acoes-sec ${principal === "nenhum" ? "" : "mt-2"} grid gap-2 ${principal === "triagem" ? "grid-cols-3" : "grid-cols-2"}`}>
         {principal === "triagem" ? (
-          <button type="button" onClick={onEntrar} aria-label="Abrir sala de espera" className={`${secundario} bpp-acao-sec`}>
+          <button
+            type="button"
+            onClick={onEntrar}
+            disabled={acao.tipo !== "entrar"}
+            aria-label={avisoSala ? `Sala: ${avisoSala}` : "Entrar na sala"}
+            title={avisoSala}
+            className={`${secundario} bpp-acao-sec disabled:opacity-75 disabled:cursor-not-allowed`}
+          >
             <Video className="w-4 h-4" aria-hidden /> Sala
           </button>
         ) : null}
@@ -1243,6 +1308,15 @@ function AcoesProximaConsulta({
       </div>
       {triagem === "feita" ? (
         <p className="mt-2 text-xs font-semibold text-emerald-800 dark:text-emerald-200">Triagem enviada ao médico</p>
+      ) : null}
+      {acao.tipo === "aguardar" ? (
+        <p className="text-xs opacity-80 mt-3">
+          {/* Com a triagem no botão principal, o horário de abertura aparece aqui. */}
+          {principal === "triagem" ? `${acao.rotulo}. ` : null}A sala abre {SALA_ABRE_ANTES_MIN} min antes do horário. O teste de câmera e
+          microfone é feito dentro da chamada.
+        </p>
+      ) : acao.tipo === "nenhuma" ? (
+        <p className="text-xs opacity-80 mt-3">A sala desta consulta já fechou.</p>
       ) : null}
     </div>
   );

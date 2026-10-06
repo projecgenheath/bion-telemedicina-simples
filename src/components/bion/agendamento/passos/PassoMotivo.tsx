@@ -58,7 +58,6 @@ export function PassoMotivo(p: AgendamentoCorpoProps) {
     processandoPagamento,
     finalizarAgendamento,
     medicoAtual,
-    onGoToWaitingRoom,
     onDone,
   } = p;
 

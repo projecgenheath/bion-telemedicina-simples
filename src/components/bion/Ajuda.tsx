@@ -34,7 +34,7 @@ const FAQS: Faq[] = [
   {
     pergunta: "Como entro na videochamada?",
     resposta:
-      "No horário da consulta, abra Consultas e toque em Entrar na sala de espera. Quando o médico iniciar, o botão Entrar na consulta fica verde. Autorize câmera e microfone quando o navegador pedir.",
+      "Na tela inicial, o card da próxima consulta tem o botão Entrar na sala. Ele fica liberado a partir de 30 minutos antes do horário; antes disso, mostra a que horas a sala abre. Ao entrar, autorize câmera e microfone quando o navegador pedir. O teste de câmera e microfone é feito dentro da chamada.",
     categoria: "Consultas",
     perfis: ["paciente"],
   },
@@ -118,8 +118,8 @@ const PASSOS: Record<
     titulo: "Sua primeira consulta em 3 passos",
     passos: [
       { icone: CalendarCheck, texto: "Toque em Agendar e escolha especialidade, médico e horário." },
-      { icone: Bell, texto: "Aguarde o lembrete e entre na sala de espera alguns minutos antes." },
-      { icone: Video, texto: "Toque em Entrar na consulta e autorize câmera e microfone." },
+      { icone: Bell, texto: "Aguarde o lembrete: o botão Entrar na sala é liberado 30 minutos antes do horário." },
+      { icone: Video, texto: "Toque em Entrar na sala e autorize câmera e microfone. O teste é feito dentro da chamada." },
     ],
   },
   medico: {

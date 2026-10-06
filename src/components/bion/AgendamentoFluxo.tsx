@@ -41,10 +41,8 @@ import { AgendamentoCorpo } from "@/components/bion/agendamento/Corpo";
 
 export function AgendamentoFluxo({
   onDone,
-  onGoToWaitingRoom,
 }: {
   onDone: () => void;
-  onGoToWaitingRoom: () => void;
 }) {
   const { medicos, consultas, sessao, adicionarConsulta, adicionarArquivo } = useBion();
 
@@ -304,7 +302,6 @@ export function AgendamentoFluxo({
         processandoPagamento={processandoPagamento}
         finalizarAgendamento={finalizarAgendamento}
         medicoAtual={medicoAtual}
-        onGoToWaitingRoom={onGoToWaitingRoom}
         onDone={onDone}
       />
 
