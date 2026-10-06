@@ -73,7 +73,7 @@ async function main() {
     return c;
   };
   const velha = await nova(ha(30)); // sem desfecho há 30 h
-  await nova(ha(5)); // sem desfecho há 5 h (ainda não vai para a Fila)
+  const recente = await nova(ha(5)); // sem desfecho há 5 h (ainda não vai para a Fila)
   await nova(ha(40), "concluida"); // com desfecho
 
   const rota = `/api/admin/consultas/${velha.id}/corrigir-desfecho`;
@@ -87,9 +87,17 @@ async function main() {
   verifica(lista.status === 200 && ids.length === 1 && ids[0] === velha.id && lista.json.horas === 24, "sem-desfecho: só a de mais de 24 h", lista.json);
 
   const prev = await chamar(admin, "GET", rota);
-  const opcoes = (prev.json.opcoes as { novo: string; ok: boolean; plano?: { dinheiro: { efeito: string } } }[]) ?? [];
+  type PlanoT = { dinheiro: { efeito: string }; notificarPaciente: boolean; motivoParaPaciente: boolean; notificarMedico: boolean };
+  const opcoes = (prev.json.opcoes as { novo: string; ok: boolean; plano?: PlanoT }[]) ?? [];
   verifica(prev.status === 200 && prev.json.atual === "sem_desfecho" && opcoes.length === 4, "prévia: atual sem desfecho e 4 opções", prev.json);
   verifica(opcoes.find((o) => o.novo === "realizada")?.plano?.dinheiro.efeito === "entra_no_proximo_repasse", "prévia: realizada entra no próximo repasse");
+  const pR = opcoes.find((o) => o.novo === "realizada")?.plano;
+  const pF = opcoes.find((o) => o.novo === "falta_paciente")?.plano;
+  const pT = opcoes.find((o) => o.novo === "falha_tecnica")?.plano;
+  verifica(pR?.notificarPaciente === false && pR.motivoParaPaciente === false && pR.notificarMedico === true,
+    "prévia: sem desfecho → realizada não avisa o paciente (só o médico)", pR);
+  verifica(pF?.notificarPaciente === true && pF.motivoParaPaciente === true, "prévia: falta do paciente leva o motivo ao paciente", pF);
+  verifica(pT?.notificarPaciente === true && pT.motivoParaPaciente === false, "prévia: falha técnica avisa o paciente sem o motivo", pT);
   verifica((await chamar(admin, "GET", "/api/admin/consultas/nao-existe/corrigir-desfecho")).status === 404, "prévia: consulta inexistente 404");
 
   verifica((await chamar(admin, "POST", rota, { novo: "realizada", motivo: "curto" })).status === 400, "POST: motivo com menos de 10 caracteres → 400");
@@ -102,10 +110,27 @@ async function main() {
   verifica(ev?.por === "admin" && ev.atorId === admin.id && ev.tipo === "falta_paciente", "evento por admin com o id do admin", ev);
   const de = await chamar(admin, "POST", rota, { novo: "falta_paciente", motivo: "O paciente confirmou que não entrou.", esperado: "sem_desfecho" });
   verifica(de.status === 200 && de.json.jaAplicado === true, "POST repetido: 200 jaAplicado (sem gravar de novo)", de.json);
-  verifica((await db.auditLog.count({ where: { acao: "CONSULTA_DESFECHO_CORRIGIDO" } })) === 1, "uma auditoria só");
+  verifica((await db.auditLog.count({ where: { acao: "CONSULTA_DESFECHO_CORRIGIDO", entidadeId: velha.id } })) === 1, "uma auditoria só");
+  // Antes do bootstrap do paciente (a avaliação de presença do Médicos roda nele
+  // e grava desfecho em consulta antiga sem ninguém na sala).
+  // sem desfecho → realizada: o paciente não recebe nada; o médico, sim (passa a receber).
+  const antesPac = await db.notificacao.count({ where: { usuarioId: pac.id } });
+  const antesMed = await db.notificacao.count({ where: { usuarioId: med.id } });
+  const rr = await chamar(admin, "POST", `/api/admin/consultas/${recente.id}/corrigir-desfecho`, { novo: "realizada", motivo: "A médica confirmou que atendeu.", esperado: "sem_desfecho" });
+  verifica(rr.status === 200 && rr.json.desfecho === "realizada", "POST: sem desfecho → realizada", rr.json);
+  verifica((await db.notificacao.count({ where: { usuarioId: pac.id } })) === antesPac, "sem desfecho → realizada: nenhuma notificação nova para o paciente");
+  verifica((await db.notificacao.count({ where: { usuarioId: med.id } })) === antesMed + 1, "sem desfecho → realizada: o médico é notificado");
+  const aud2 = JSON.parse((await db.auditLog.findFirst({ where: { acao: "CONSULTA_DESFECHO_CORRIGIDO", entidadeId: recente.id } }))?.detalhes ?? "{}");
+  verifica(aud2.motivoEnviadoAoPaciente === false && JSON.stringify(aud2.notificados) === JSON.stringify([med.id]), "auditoria: motivo não enviado; notificado só o médico", aud2);
   const notifs = await chamar(pac, "GET", "/api/bootstrap");
-  const doPac = ((notifs.json.notificacoes as { titulo: string }[]) ?? []).filter((n) => n.titulo === "Registro da consulta corrigido");
+  const doPac = ((notifs.json.notificacoes as { titulo: string; texto?: string; mensagem?: string }[]) ?? []).filter((n) => n.titulo === "Registro da consulta corrigido");
+  const textoPac = (doPac[0]?.texto ?? doPac[0]?.mensagem ?? "").replace(/\u00a0/g, " ");
   verifica(doPac.length === 1, "o paciente vê a notificação no bootstrap", notifs.json.notificacoes);
+  verifica(/^A consulta de Clínica de \d{2}\/\d{2} às \d{2}:\d{2} foi registrada como falta\. /.test(textoPac) && textoPac.endsWith(" Motivo: O paciente confirmou que não entrou.") && !/→|_/.test(textoPac),
+    "texto do paciente: sem termo interno nem seta, com o motivo (falta)", textoPac);
+  const aud = await db.auditLog.findFirst({ where: { acao: "CONSULTA_DESFECHO_CORRIGIDO", entidadeId: velha.id } });
+  verifica(JSON.parse(aud?.detalhes ?? "{}").motivoEnviadoAoPaciente === true, "auditoria registra que o motivo foi enviado ao paciente", aud?.detalhes);
+
   const semAgora = await chamar(admin, "GET", "/api/admin/consultas/sem-desfecho");
   verifica((semAgora.json.consultas as unknown[]).length === 0, "depois do desfecho, sai da lista da Fila");
 
