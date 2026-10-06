@@ -155,7 +155,11 @@ export function CorrigirDesfecho({
             className="ba-entrada mt-1 w-full !rounded-2xl py-2"
           />
           <span id="motivo-desfecho-dica" className={`block text-xs mt-1 ${tocouMotivo && erroMotivo ? "" : "ba-texto-3"}`} style={tocouMotivo && erroMotivo ? { color: "var(--ba-critico)" } : undefined}>
-            {tocouMotivo && erroMotivo ? erroMotivo : `${motivo.trim().length}/${p.motivoMin} caracteres no mínimo. Não vai para o paciente.`}
+            {tocouMotivo && erroMotivo
+              ? erroMotivo
+              : erroMotivo
+                ? `${motivo.trim().length} de ${p.motivoMin} caracteres no mínimo. Não vai para o paciente.`
+                : `${motivo.trim().length} caracteres. Não vai para o paciente.`}
           </span>
         </label>
       ) : null}
