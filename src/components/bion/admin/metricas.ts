@@ -224,7 +224,7 @@ export function montarFila(
       detalhe: [l.usuario, l.entidade].filter(Boolean).join(" · "),
       chips: [{ rotulo: "Crítico", tom: "critico" }],
       ts: l.ts,
-      destino: "auditoria",
+      destino: `auditoria?evento=${encodeURIComponent(l.id)}`,
     });
   }
 
