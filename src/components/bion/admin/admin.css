@@ -659,3 +659,33 @@ button.ba-card:hover, a.ba-card:hover, .ba-card[role="button"]:hover { transform
 @media (prefers-reduced-motion: no-preference) {
   .ba-anel-valor { transition: stroke-dasharray 0.6s ease-out; }
 }
+
+/* ------------------------------------------------------------------ */
+/* PR 7: Chamados (conversa) e acabamento                              */
+/* ------------------------------------------------------------------ */
+@layer components {
+  /* Bolhas da conversa do chamado: a pessoa à esquerda, o suporte à direita.
+     Texto sempre na cor do tema (AA); o lado do suporte usa fundo marinho/ciano sólido. */
+  .ba-bolha {
+    display: block;
+    max-width: min(36rem, 92%);
+    padding: 0.75rem 0.95rem;
+    border-radius: 1.1rem;
+    border: 1px solid var(--ba-borda);
+    background: var(--ba-card-solido);
+    color: var(--ba-texto);
+  }
+  .ba-bolha[data-lado="pessoa"] { border-bottom-left-radius: 0.35rem; }
+  .ba-bolha[data-lado="suporte"] {
+    margin-left: auto;
+    border-bottom-right-radius: 0.35rem;
+    background: #0a1f44;
+    border-color: #0a1f44;
+    color: #fff;
+  }
+  .dark .ba-bolha[data-lado="suporte"] { background: #0c4a6e; border-color: #0e7490; color: #f2f6fc; }
+  blockquote.ba-bolha { max-width: 100%; margin: 0; }
+
+  /* Seções focáveis por âncora: sem anel ao receber foco programático. */
+  section[tabindex="-1"]:focus { outline: none; }
+}

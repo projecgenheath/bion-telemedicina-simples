@@ -124,6 +124,7 @@ const re = fila.find((i) => i.chave === "reembolso-e1")!;
 igual("fila: reembolso", [re.titulo, re.detalhe, re.destino], ["Reembolso · Paulo", "Dra. A · consulta ontem 10:00 · R$ 150,00", "admin-agendamentos?aba=reembolsos"]);
 igual("fila: médico em validação", [fila[4].titulo, fila[4].detalhe, fila[4].destino], ["Dr. 2", "Clínica · CRM 2-SP", "admin-medicos?aba=validacao&medico=2"]);
 igual("fila: auditoria crítica humanizada", fila[2].titulo, "Login falhou repetido");
+igual("fila: chamado abre a conversa", fila.find((i) => i.chave === "chamado-t1")!.destino, "suporte?chamado=t1");
 igual("humanizar mantém siglas", montarFila({ medicos: [], tickets: [], repasses: null, reembolsos: null, auditLogs: [{ ...logs[0], acao: "LGPD_COFRE_CONSULTADO" }] }, AGORA)[0].titulo, "LGPD cofre consultado");
 igual("fila: sem rotas ainda (null) não quebra", montarFila({ medicos: [], tickets: [], auditLogs: [], repasses: null, reembolsos: null }, AGORA), []);
 

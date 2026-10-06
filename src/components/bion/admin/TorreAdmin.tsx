@@ -1,6 +1,6 @@
 "use client";
 
-import { useSyncExternalStore, type ComponentType, type ReactNode } from "react";
+import { useCallback, useSyncExternalStore, type ComponentType, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Bell,
@@ -25,6 +25,7 @@ import { AdminShell, ID_FILA, type GrupoNavAdmin } from "./AdminShell";
 import { ContaPainel } from "./comando/ContaPainel";
 import { FilaPainel } from "./comando/FilaPainel";
 import { ProvedorDadosAdmin, useDadosAdmin } from "./dados";
+import { buscarGlobal } from "./busca";
 import { contarPorCategoria } from "./metricas";
 import { useLargo } from "./ui/preferencias";
 import "./admin.css";
@@ -73,7 +74,7 @@ function TorreInterna({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const path = (pathname || "/").split("?")[0].replace(/\/+$/, "") || "/";
   const view: View | undefined = PATH_TO_VIEW[path];
-  const { sessao, sair, naoLidas, auditLogs } = useBion();
+  const { sessao, sair, naoLidas, auditLogs, medicos, pacientes, consultas, tickets } = useBion();
   const { fila, reembolsos, repasses, agora } = useDadosAdmin();
   const largo = useLargo();
   const naFila = useSyncExternalStore(nada, hashFila, () => false);
@@ -89,7 +90,9 @@ function TorreInterna({ children }: { children: ReactNode }) {
     view === "usuarios" ||
     view === "auditoria" ||
     view === "llm-monitor" ||
-    view === "relatorios";
+    view === "relatorios" ||
+    view === "suporte" ||
+    view === "privacidade";
   const info = view ? MODULOS[view] : undefined;
   const contagem = contarPorCategoria(fila);
   const criticos24h = auditLogs.filter((l) => l.severidade === "critical" && agora - l.ts <= 86_400_000).length;
@@ -98,32 +101,32 @@ function TorreInterna({ children }: { children: ReactNode }) {
     {
       rotulo: "Comando",
       itens: [
-        { id: "dashboard", rotulo: "Início", icone: Home },
-        { id: ID_FILA, rotulo: "Fila", icone: Inbox, selo: fila.length || undefined },
+        { id: "dashboard", rotulo: "Início", icone: Home, palavras: "comando painel agora hoje" },
+        { id: ID_FILA, rotulo: "Fila", icone: Inbox, selo: fila.length || undefined, palavras: "decisoes pendencias caixa" },
       ],
     },
     {
       rotulo: "Operação",
       itens: [
-        { id: "admin-agendamentos", rotulo: "Agendamentos", icone: CalendarDays, selo: reembolsos.dados?.total || undefined },
-        { id: "admin-medicos", rotulo: "Médicos", icone: Stethoscope, selo: contagem.validacao || undefined },
-        { id: "admin-pacientes", rotulo: "Pacientes", icone: HeartPulse },
+        { id: "admin-agendamentos", rotulo: "Agendamentos", icone: CalendarDays, selo: reembolsos.dados?.total || undefined, palavras: "consultas agenda remarcar cancelar reembolsos" },
+        { id: "admin-medicos", rotulo: "Médicos", icone: Stethoscope, selo: contagem.validacao || undefined, palavras: "crm validacao aprovar suspender" },
+        { id: "admin-pacientes", rotulo: "Pacientes", icone: HeartPulse, palavras: "cpf cadastro senha" },
       ],
     },
     {
       rotulo: "Dinheiro",
       itens: [
-        { id: "admin-repasses", rotulo: "Repasses", icone: Wallet, selo: repasses.dados?.total || undefined },
-        { id: "relatorios", rotulo: "Relatórios", icone: TrendingUp },
+        { id: "admin-repasses", rotulo: "Repasses", icone: Wallet, selo: repasses.dados?.total || undefined, palavras: "pix pagar dinheiro" },
+        { id: "relatorios", rotulo: "Relatórios", icone: TrendingUp, palavras: "pdf csv indicadores exportar" },
       ],
     },
     {
       rotulo: "Sistema",
       itens: [
-        { id: "auditoria", rotulo: "Auditoria", icone: FileSearch, selo: criticos24h || undefined, tomSelo: "critico" },
-        { id: "llm-monitor", rotulo: "Monitor LLM", icone: Gauge },
-        { id: "suporte", rotulo: "Chamados", icone: LifeBuoy, selo: contagem.chamado || undefined },
-        { id: "privacidade", rotulo: "Privacidade & LGPD", icone: Shield },
+        { id: "auditoria", rotulo: "Auditoria", icone: FileSearch, selo: criticos24h || undefined, tomSelo: "critico", palavras: "logs trilha eventos csv pdf" },
+        { id: "llm-monitor", rotulo: "Monitor LLM", icone: Gauge, palavras: "ia bion modelo latencia" },
+        { id: "suporte", rotulo: "Chamados", icone: LifeBuoy, selo: contagem.chamado || undefined, palavras: "suporte tickets atendimento responder" },
+        { id: "privacidade", rotulo: "Privacidade & LGPD", icone: Shield, palavras: "lgpd cofre anonimizar consentimentos titular" },
       ],
     },
   ];
@@ -135,6 +138,10 @@ function TorreInterna({ children }: { children: ReactNode }) {
     const [destino, consulta] = id.split("?");
     router.push(consulta ? `${urlDa(destino as View)}?${consulta}` : urlDa(destino as View));
   };
+  const buscar = useCallback(
+    (termo: string) => buscarGlobal(termo, { medicos, pacientes, consultas, tickets }),
+    [medicos, pacientes, consultas, tickets],
+  );
   const sairDaConta = async () => {
     await sair();
     router.replace("/");
@@ -154,6 +161,7 @@ function TorreInterna({ children }: { children: ReactNode }) {
       fila={<FilaPainel onAbrir={navegar} comTitulo={!largo} />}
       filaContagem={fila.length}
       abrirNaFila={comando && naFila}
+      buscar={buscar}
       modulo={comando ? undefined : { titulo: info?.rotulo ?? "Página", icone: info?.icone, onVoltar: () => router.push("/painel") }}
       acoesBarra={
         <button

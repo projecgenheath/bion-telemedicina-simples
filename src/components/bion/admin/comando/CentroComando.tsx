@@ -215,7 +215,7 @@ export function CentroComando() {
             titulo="Chamados"
             icone={LifeBuoy}
             tom={chamadosAbertos ? "atencao" : undefined}
-            acao={<AbrirModulo onClick={() => ir("suporte")} rotulo="Abrir Chamados" />}
+            acao={<AbrirModulo onClick={() => ir("suporte", chamadosAbertos ? "status=aberto" : undefined)} rotulo="Abrir Chamados" />}
           >
             <div className="ba-numero text-3xl">{chamadosAbertos}</div>
             <p className="text-xs ba-texto-2">{chamadosAbertos === 1 ? "aberto ou em atendimento" : "abertos ou em atendimento"}</p>
