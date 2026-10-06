@@ -4,10 +4,15 @@ import { db } from "@/lib/db";
 import { normalizarCnpj } from "@/components/bion/medico/dados-pessoais";
 import {
   COMISSAO_APP_PCT,
+  desfechoDaConsulta,
   divisaoDaMulta,
+  EVENTO_VIGENTE,
   liquidoDaConsulta,
   reaisParaCentavos,
+  STATUS_ABERTOS,
   STATUS_FORA_DO_FATURAMENTO,
+  TIPOS_EVENTO_DESFECHO,
+  type EventoDesfechoMin,
 } from "@/lib/server/financeiro";
 import { dataIsoClinica, partesNoFuso } from "@/lib/server/fuso";
 import {
@@ -35,6 +40,14 @@ import {
 /* "Até o corte": o fechamento pega TUDO o que ficou elegível até a     */
 /* hora do corte e ainda não entrou em nenhum item. Nada se perde se o  */
 /* cron atrasar ou falhar: o fechamento seguinte leva junto.            */
+/*                                                                      */
+/* Desfecho (regras do Alisson, 06/10/2026): consulta SEM DESFECHO      */
+/* (status ainda "confirmada"/"em_espera"/"pendente_anamnese" e nenhum  */
+/* evento falta_paciente/falha_tecnica vigente da data atual — ver      */
+/* desfechoDaConsulta em financeiro.ts) fica FORA do fechamento: entra  */
+/* no primeiro fechamento depois de ganhar desfecho (médico conclui,    */
+/* marca falta/falha até 23:30 ou o admin corrige). O fechamento não    */
+/* muda status nem roda a verificação de presença.                      */
 /*                                                                      */
 /* Fórmula (o banco confere com CHECK):                                 */
 /*   liquido = bruto − comissao − taxas − reembolsos + multas − ajustes */
@@ -127,7 +140,16 @@ export function reembolsosAteOCorte<T extends ReembolsoMin>(lista: T[] | null | 
   return (lista ?? []).filter((r) => !r.efetivoEm || r.efetivoEm.getTime() <= corte.getTime());
 }
 
-export type CandidatoConsulta = ConsultaReceita;
+/** Consulta candidata: `eventos` = falta/falha (vigentes ou não) para saber o desfecho. */
+export type CandidatoConsulta = ConsultaReceita & { eventos?: EventoDesfechoMin[] | null };
+
+/**
+ * A consulta ainda não tem desfecho (PURA)? Status "ia acontecer" e sem
+ * evento de falta/falha vigente da data atual. Fica fora do fechamento.
+ */
+export function consultaSemDesfecho(c: { status: string; dataInicio: Date; eventos?: EventoDesfechoMin[] | null }): boolean {
+  return desfechoDaConsulta(c) === "sem_desfecho";
+}
 export type CandidatoMultaCancelamento = {
   consultaId: string;
   em: Date;
@@ -220,6 +242,11 @@ export function itensElegiveis(params: {
     // Repasse só de consulta com Pagamento confirmado: as 6 consultas de teste
     // (pago=true sem Pagamento) ficam fora, por decisão do Alisson.
     if (c0.pagamento?.status !== "confirmado") continue;
+    // Sem desfecho (ninguém concluiu nem marcou falta/falha): fica para o
+    // fechamento seguinte ao desfecho. Falha técnica/falta do médico vigente
+    // também fica fora (o status já sai do faturamento; aqui é a garantia).
+    const desfecho = desfechoDaConsulta(c0);
+    if (desfecho === "sem_desfecho" || desfecho === "falha_tecnica" || desfecho === "falta_medico") continue;
     const c = { ...c0, pagamento: { ...c0.pagamento, reembolsos: reembolsosAteOCorte(c0.pagamento.reembolsos, corte) } };
     if (!consultaEntraNaReceita(c, corte)) continue;
     add(itemDaConsulta(c));
@@ -360,6 +387,7 @@ export function somarTotais(itens: ItemCalculado[], ajustesCentavos: number): To
 type Cliente = Prisma.TransactionClient | typeof db;
 
 const selReembolso = { status: true, valorCentavos: true, origem: true, criadoEm: true, decididoEm: true } as const;
+const selEventoDesfecho = { id: true, tipo: true, motivo: true, em: true, dataAnterior: true, corrigidoEm: true } as const;
 const comEfetivo = <T extends { criadoEm: Date; decididoEm: Date | null }>(r: T) => ({ ...r, efetivoEm: r.decididoEm ?? r.criadoEm });
 
 /** Candidatos do médico ainda sem item, até o corte. */
@@ -381,6 +409,7 @@ async function carregarCandidatos(c: Cliente, medicoId: string, corte: Date) {
         valor: true,
         pago: true,
         pagamento: { select: { status: true, reembolsos: { select: selReembolso } } },
+        eventos: { where: { tipo: { in: TIPOS_EVENTO_DESFECHO } }, select: selEventoDesfecho },
       },
     }),
     c.eventoConsulta.findMany({
@@ -523,6 +552,64 @@ async function calcularAjustesNovos(c: Cliente, medicoId: string, corte: Date): 
     porPagamento.set(k, [...(porPagamento.get(k) ?? []), { id: r.id, valorCentavos: r.valorCentavos, efetivoEm: efetivoEm(r) }]);
   }
   return ajustesNovos({ reembolsos: lista, itens: mapaItens, jaAjustado, reembolsosDoPagamento: porPagamento });
+}
+
+/* ---------- Sem desfecho (fora do fechamento) ------------------------ */
+
+export type ConsultaSemDesfecho = {
+  id: string;
+  medicoId: string;
+  medico: string;
+  paciente: string;
+  especialidade: string;
+  dataInicio: Date;
+  status: string;
+  pago: boolean;
+  valor: number;
+};
+
+/**
+ * Consultas sem desfecho que começaram antes de `ate` (mais antigas
+ * primeiro). Usado pela Fila do admin (> 24 h) e pela contagem do cron.
+ * O Prisma não compara colunas (evento.dataAnterior = consulta.dataInicio),
+ * então o filtro fino é o mesmo consultaSemDesfecho do fechamento.
+ */
+export async function listarConsultasSemDesfecho(
+  params: { ate: Date; medicoId?: string; limite?: number },
+  c: Cliente = db,
+): Promise<ConsultaSemDesfecho[]> {
+  const linhas = await c.consulta.findMany({
+    where: {
+      status: { in: STATUS_ABERTOS },
+      dataInicio: { lt: params.ate },
+      ...(params.medicoId ? { medicoId: params.medicoId } : {}),
+    },
+    orderBy: { dataInicio: "asc" },
+    take: Math.min(Math.max(params.limite ?? 200, 1), 500),
+    select: {
+      id: true,
+      medicoId: true,
+      especialidade: true,
+      dataInicio: true,
+      status: true,
+      pago: true,
+      valor: true,
+      medico: { select: { nome: true } },
+      paciente: { select: { nome: true } },
+      eventos: { where: { tipo: { in: TIPOS_EVENTO_DESFECHO }, ...EVENTO_VIGENTE }, select: selEventoDesfecho },
+    },
+  });
+  return linhas.filter(consultaSemDesfecho).map((l) => ({
+    id: l.id,
+    medicoId: l.medicoId,
+    medico: l.medico.nome,
+    paciente: l.paciente.nome,
+    especialidade: l.especialidade,
+    dataInicio: l.dataInicio,
+    status: l.status,
+    pago: l.pago,
+    valor: l.valor,
+  }));
 }
 
 /* ---------- Prévia (nada é gravado) ---------------------------------- */

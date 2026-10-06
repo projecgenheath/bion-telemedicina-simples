@@ -253,31 +253,97 @@ export async function criarReembolsoSeDevido(
 // pagamento confirmado, vai para "cancelada". Nenhum reembolso é criado aqui:
 // ele nasce quando o paciente escolhe "Reembolso integral" no cartão.
 
-/**
- * Aplica a falha técnica na consulta, dentro da transação de quem detectou.
- * Idempotente: só age se a consulta ainda não está encerrada e ainda não tem
- * evento falha_tecnica; senão devolve null e não grava nada.
- */
+/* ---------- Desfecho da consulta (a consulta aconteceu?) ----------- */
+// "Desfecho" é o que a sala/agenda do médico (feat/medico-falta-falha-sala),
+// a verificação de presença e o admin gravam para dizer o que aconteceu:
+//  - realizada: status "concluida" (o médico concluiu);
+//  - falta_paciente: EventoConsulta tipo "falta_paciente" (status não muda);
+//  - falha_tecnica / falta_medico: EventoConsulta tipo "falha_tecnica"
+//    (motivo "falha_tecnica" | "falta_medico"); paga → aguardando_reagendamento,
+//    não paga → cancelada.
+// O evento só vale se NÃO foi corrigido pelo admin (corrigidoEm nulo) e se é
+// da data ATUAL da consulta (dataAnterior = dataInicio): depois de uma falha
+// técnica o paciente pode remarcar, e o evento antigo é da data antiga.
+// "Sem desfecho": status ainda "ia acontecer" (STATUS_ABERTOS) e nenhum
+// evento vigente da data atual. O fechamento do repasse deixa essas de fora
+// (entram no fechamento seguinte ao desfecho) e a Fila do admin mostra as que
+// estão assim há mais de 24 h.
+
+/** Status em que a consulta ainda "ia acontecer" (mesma lista de STATUS_AVALIAVEIS da presença). */
+export const STATUS_ABERTOS = ["confirmada", "em_espera", "pendente_anamnese"];
+/** Tipos de EventoConsulta que são desfecho. */
+export const TIPOS_EVENTO_DESFECHO = ["falta_paciente", "falha_tecnica"];
+/** Filtro Prisma: evento ainda vale (não foi corrigido pelo admin). */
+export const EVENTO_VIGENTE = { corrigidoEm: null } as const;
+/** Sem desfecho há mais que isto: aparece na Fila do admin. */
+export const SEM_DESFECHO_FILA_HORAS = 24;
+
+export type Desfecho = "realizada" | "falta_paciente" | "falha_tecnica" | "falta_medico";
+export type DesfechoAtual = Desfecho | "sem_desfecho" | "encerrada";
+
+export const ROTULO_DESFECHO: Record<DesfechoAtual, string> = {
+  realizada: "Realizada",
+  falta_paciente: "Falta do paciente",
+  falha_tecnica: "Falha técnica",
+  falta_medico: "Falta do médico",
+  sem_desfecho: "Sem desfecho",
+  encerrada: "Cancelada/remarcada (sem desfecho de sala)",
+};
+
+export type EventoDesfechoMin = {
+  id?: string;
+  tipo: string;
+  motivo: string;
+  em?: Date;
+  dataAnterior: Date;
+  corrigidoEm?: Date | null;
+};
+
+/** Evento de desfecho que vale para a data atual (o mais recente), ou null. */
+export function eventoDesfechoVigente<E extends EventoDesfechoMin>(dataInicio: Date, eventos: E[] | null | undefined): E | null {
+  const validos = (eventos ?? []).filter(
+    (e) => TIPOS_EVENTO_DESFECHO.includes(e.tipo) && !e.corrigidoEm && e.dataAnterior.getTime() === dataInicio.getTime(),
+  );
+  validos.sort((a, b) => (b.em?.getTime() ?? 0) - (a.em?.getTime() ?? 0));
+  return validos[0] ?? null;
+}
+
+/** Desfecho da consulta (PURA): ver o bloco acima. */
+export function desfechoDaConsulta(c: { status: string; dataInicio: Date; eventos?: EventoDesfechoMin[] | null }): DesfechoAtual {
+  const ev = eventoDesfechoVigente(c.dataInicio, c.eventos);
+  if (ev) return ev.tipo === "falta_paciente" ? "falta_paciente" : ev.motivo === "falta_medico" ? "falta_medico" : "falha_tecnica";
+  if (c.status === "concluida") return "realizada";
+  if (STATUS_ABERTOS.includes(c.status)) return "sem_desfecho";
+  return "encerrada";
+}
+
+/** O médico recebe por este desfecho (consulta paga)? Realizada e falta do paciente: sim. */
+export const medicoRecebe = (d: DesfechoAtual) => d === "realizada" || d === "falta_paciente";
+
 /**
  * Falha técnica (ou falta do médico, com `motivo: "falta_medico"`): paga vai
  * para aguardando_reagendamento, não paga é cancelada. Idempotente: não faz
- * nada se a consulta já tiver falta_paciente ou falha_tecnica, ou se já
- * estiver encerrada. O motivo "falta_medico" só deve ser usado após aprovação
- * da regra pelo Alisson.
+ * nada se a consulta já tiver falta_paciente ou falha_tecnica VIGENTE (os
+ * corrigidos pelo admin não contam), ou se já estiver encerrada.
+ * Quem grava: `por` = "sistema" (padrão, atorId nulo), "medico" (rota do
+ * desfecho do médico: `{ motivo, por: "medico", atorId }`) ou "admin"
+ * (correção de desfecho).
  */
 export async function aplicarFalhaTecnica(
   tx: Prisma.TransactionClient,
   consultaId: string,
-  opcoes: { motivo?: "falha_tecnica" | "falta_medico" } = {},
+  opcoes: { motivo?: "falha_tecnica" | "falta_medico"; por?: "sistema" | "medico" | "admin"; atorId?: string | null } = {},
 ) {
   const motivo = opcoes.motivo ?? "falha_tecnica";
+  const por = opcoes.por ?? "sistema";
+  const atorId = por === "sistema" ? null : (opcoes.atorId ?? null);
   const consulta = await tx.consulta.findUnique({
     where: { id: consultaId },
     select: { id: true, status: true, pago: true, dataInicio: true },
   });
   if (!consulta) return null;
   const jaTem = await tx.eventoConsulta.findFirst({
-    where: { consultaId, tipo: { in: ["falha_tecnica", "falta_paciente"] } },
+    where: { consultaId, tipo: { in: TIPOS_EVENTO_DESFECHO }, ...EVENTO_VIGENTE },
     select: { id: true },
   });
   if (jaTem) return null;
@@ -293,8 +359,8 @@ export async function aplicarFalhaTecnica(
   const evento = await registrarEvento(tx, {
     consultaId,
     tipo: "falha_tecnica",
-    por: "sistema",
-    atorId: null,
+    por,
+    atorId,
     dataAnterior: consulta.dataInicio,
     motivo,
     multaCentavos: 0,
@@ -356,12 +422,13 @@ export async function pedirReembolsoManual(params: {
     where: { id: params.consultaId },
     include: {
       pagamento: true,
-      eventos: { where: { tipo: "falta_paciente" }, select: { id: true }, take: 1 },
+      eventos: { where: { tipo: { in: TIPOS_EVENTO_DESFECHO }, ...EVENTO_VIGENTE }, select: { tipo: true, motivo: true, em: true, dataAnterior: true } },
     },
   });
   if (!consulta) return { ok: false, erro: "Consulta não encontrada.", status: 404 };
   if (consulta.pacienteId !== params.pacienteId) return { ok: false, erro: "Acesso negado.", status: 403 };
-  if (!consulta.eventos.length) {
+  // Só a falta VIGENTE da data atual (a corrigida pelo admin não vale).
+  if (desfechoDaConsulta(consulta) !== "falta_paciente") {
     return { ok: false, erro: "O reembolso pelo app é só para consultas marcadas como falta.", status: 409 };
   }
   const pagamento = consulta.pagamento;
