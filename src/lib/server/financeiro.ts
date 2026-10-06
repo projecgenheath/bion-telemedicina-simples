@@ -801,3 +801,456 @@ export async function conferirHorarioNaTransacao(
   }
   return null;
 }
+
+/* ------------------------------------------------------------------ */
+/* Correção de desfecho pelo ADMIN (regras do Alisson, 06/10/2026)      */
+/*                                                                      */
+/* Só o admin corrige o desfecho que o sistema ou o médico marcou, e    */
+/* também dá desfecho a uma consulta que ficou sem (Fila > 24 h).       */
+/*  - o evento antigo NÃO é apagado: fica marcado como corrigido         */
+/*    (corrigidoEm, corrigidoPorId, motivoCorrecao) e deixa de valer;    */
+/*  - o desfecho novo é gravado com por = "admin";                       */
+/*  - repasse fechado/pago NÃO reabre: o que o médico recebeu a mais vira */
+/*    desconto no próximo repasse pelo mecanismo de sempre (reembolso    */
+/*    efetivo depois do item → RepasseAjuste); o que ele passa a receber */
+/*    entra no próximo fechamento (a consulta ainda não tem item);       */
+/*  - reembolso pendente (em_analise/solicitado) é encerrado (status     */
+/*    "negado" com a explicação — a trava do banco não tem "cancelado"); */
+/*    reembolso aprovado/processado → recusa (o dinheiro já voltou);     */
+/*  - notifica o paciente (e o médico quando muda o que ele recebe);     */
+/*  - AuditLog com antes/depois; tudo numa transação, idempotente.       */
+/* ------------------------------------------------------------------ */
+
+export const DESFECHOS_ALVO: Desfecho[] = ["realizada", "falta_paciente", "falha_tecnica", "falta_medico"];
+export const MOTIVO_CORRECAO_MIN = 10;
+export const MOTIVO_CORRECAO_MAX = 1000;
+const REEMBOLSO_PENDENTE = ["em_analise", "solicitado"];
+const REEMBOLSO_JA_EFETIVO = ["aprovado", "processado"];
+
+export type EstadoCorrecao = {
+  consulta: {
+    id: string;
+    pacienteId: string;
+    medicoId: string;
+    especialidade: string;
+    dataInicio: Date;
+    status: string;
+    pago: boolean;
+    valor: number;
+    motivoCancelamento: string | null;
+  };
+  /** Todos os eventos da consulta (para saber se algo aconteceu depois do desfecho). */
+  eventos: { id: string; tipo: string; motivo: string; por: string; em: Date; dataAnterior: Date; corrigidoEm: Date | null }[];
+  pagamento: { id: string; status: string } | null;
+  reembolsos: { id: string; status: string; origem: string; valorCentavos: number }[];
+  /** Repasse em que a consulta já entrou (item "consulta"), se houver. */
+  repasse: { id: string; competencia: string; status: string } | null;
+};
+
+export type EfeitoDinheiro = "sem_pagamento" | "nenhum" | "entra_no_proximo_repasse" | "sai_do_repasse" | "desconto_se_reembolso";
+
+export type PlanoCorrecao = {
+  atual: DesfechoAtual;
+  novo: Desfecho;
+  statusAntes: string;
+  statusDepois: string;
+  eventoCorrigidoId: string | null;
+  reembolsosEncerrados: { id: string; status: string; valorCentavos: number }[];
+  dinheiro: {
+    efeito: EfeitoDinheiro;
+    pagoConfirmado: boolean;
+    valorCentavos: number;
+    /** Parte do médico (valor − 10%), o que entra ou sai do repasse. */
+    liquidoMedicoCentavos: number;
+    medicoRecebiaAntes: boolean;
+    medicoRecebeDepois: boolean;
+    repasse: { id: string; competencia: string; status: string } | null;
+  };
+  /** Frases da prévia (o que vai acontecer), em ordem. */
+  efeitos: string[];
+  notificarMedico: boolean;
+};
+
+type FalhaCorrecao = { ok: false; erro: string; status: number };
+
+const brlCentavos = (c: number) => (c / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+const diaBr = (iso: string) => iso.split("-").reverse().join("/");
+
+/** Status depois da correção (a falha passa por aplicarFalhaTecnica, que decide pelo `pago`). */
+function statusDepoisDe(novo: Desfecho, c: EstadoCorrecao["consulta"]): string {
+  if (novo === "realizada") return "concluida";
+  if (novo === "falta_paciente") return STATUS_ABERTOS.includes(c.status) ? c.status : "confirmada";
+  return c.pago ? "aguardando_reagendamento" : "cancelada";
+}
+
+/**
+ * Plano da correção (PURA, testada): o que muda, o efeito no dinheiro e as
+ * recusas. A prévia da tela e a gravação usam o MESMO plano.
+ */
+export function planejarCorrecaoDesfecho(e: EstadoCorrecao, novo: Desfecho, agora: Date = new Date()): { ok: true; plano: PlanoCorrecao } | FalhaCorrecao {
+  const c = e.consulta;
+  if (!DESFECHOS_ALVO.includes(novo)) return { ok: false, erro: "Desfecho inválido.", status: 400 };
+  if (c.dataInicio.getTime() > agora.getTime()) {
+    return { ok: false, erro: "A consulta ainda não começou: não há desfecho para corrigir.", status: 409 };
+  }
+  const atual = desfechoDaConsulta({ status: c.status, dataInicio: c.dataInicio, eventos: e.eventos });
+  if (atual === "encerrada") {
+    return {
+      ok: false,
+      erro: "Esta consulta foi cancelada ou aguarda reagendamento por outro motivo (não por falta ou falha técnica): não há desfecho para corrigir.",
+      status: 409,
+    };
+  }
+  if (atual === novo) return { ok: false, erro: `A consulta já está como "${ROTULO_DESFECHO[novo]}".`, status: 409 };
+
+  const evento = eventoDesfechoVigente(c.dataInicio, e.eventos);
+  // Algo aconteceu DEPOIS do desfecho (o paciente cancelou pela escolha de
+  // reembolso, o admin cancelou/remarcou): corrigir exigiria desfazer isso.
+  if (evento?.em) {
+    const depois = e.eventos.find(
+      (x) => x.id !== evento.id && !TIPOS_EVENTO_DESFECHO.includes(x.tipo) && x.em.getTime() > evento.em.getTime(),
+    );
+    if (depois) {
+      const quem = depois.por === "paciente" ? "pelo paciente" : depois.por === "admin" ? "pela administração" : depois.por === "medico" ? "pelo médico" : "pelo sistema";
+      return {
+        ok: false,
+        erro: `Depois do desfecho, a consulta foi ${depois.tipo === "remarcada" ? "remarcada" : "cancelada"} ${quem}. Corrigir agora exigiria desfazer isso: não é feito pelo app.`,
+        status: 409,
+      };
+    }
+  }
+  const efetivo = e.reembolsos.find((r) => REEMBOLSO_JA_EFETIVO.includes(r.status));
+  if (efetivo) {
+    return {
+      ok: false,
+      erro: `Esta consulta já tem reembolso ${efetivo.status === "processado" ? "processado" : "aprovado"} (${brlCentavos(efetivo.valorCentavos)}): o dinheiro já voltou ao paciente e a consulta já saiu do repasse. A correção não é feita pelo app.`,
+      status: 409,
+    };
+  }
+  const pendentes = e.reembolsos.filter((r) => REEMBOLSO_PENDENTE.includes(r.status));
+
+  const pagoConfirmado = c.pago && e.pagamento?.status === "confirmado";
+  const valorCentavos = reaisParaCentavos(c.valor);
+  const liquido = liquidoDaConsulta(valorCentavos, 0).liquidoCentavos;
+  const antes = medicoRecebe(atual);
+  const depois = medicoRecebe(novo);
+  const rep = e.repasse;
+  const repTexto = rep ? `o repasse de ${diaBr(rep.competencia)} (${rep.status === "pago" ? "já pago" : "fechado"})` : "";
+
+  let efeito: EfeitoDinheiro;
+  const efeitos: string[] = [];
+  if (!pagoConfirmado) {
+    efeito = "sem_pagamento";
+    efeitos.push("Consulta sem pagamento confirmado: nada muda no dinheiro nem no repasse.");
+  } else if (depois && rep) {
+    efeito = "nenhum";
+    efeitos.push(`A consulta já está n${repTexto}: o médico continua com ${brlCentavos(liquido)} e nada muda no repasse.`);
+  } else if (depois) {
+    efeito = antes ? "nenhum" : "entra_no_proximo_repasse";
+    efeitos.push(
+      antes
+        ? `O médico continua recebendo ${brlCentavos(liquido)} no próximo fechamento (23:30).`
+        : `O médico passa a receber ${brlCentavos(liquido)}: a consulta entra no próximo fechamento (23:30).`,
+    );
+  } else if (rep) {
+    efeito = "desconto_se_reembolso";
+    efeitos.push(
+      `${repTexto.charAt(0).toUpperCase()}${repTexto.slice(1)} não reabre. Se o paciente escolher o reembolso integral, ${brlCentavos(liquido)} viram desconto no próximo repasse do médico; se remarcar, o médico não recebe de novo por esta consulta.`,
+    );
+  } else {
+    efeito = antes ? "sai_do_repasse" : "nenhum";
+    efeitos.push(antes ? `Sai do próximo fechamento: o médico deixa de receber ${brlCentavos(liquido)}.` : "O médico não recebe por esta consulta.");
+  }
+
+  if (novo === "falha_tecnica" || novo === "falta_medico") {
+    efeitos.push(
+      c.pago
+        ? `Status: aguardando reagendamento. O paciente escolhe no app: remarcar sem custo ou reembolso integral de ${brlCentavos(valorCentavos)}.`
+        : "Status: cancelada, sem custo para o paciente.",
+    );
+  } else if (novo === "falta_paciente") {
+    const prazo = prazoReembolsoManual(c.dataInicio);
+    if (pagoConfirmado) {
+      efeitos.push(
+        agora.getTime() <= prazo.getTime()
+          ? `O paciente pode pedir reembolso pelo app até ${quandoClinica(prazo)}.`
+          : `O prazo de ${REEMBOLSO_MANUAL_PRAZO_DIAS} dias para o paciente pedir reembolso já terminou.`,
+      );
+    }
+  } else {
+    efeitos.push("Status: concluída.");
+  }
+  for (const r of pendentes) {
+    efeitos.push(`O pedido de reembolso ${r.status === "em_analise" ? "em análise" : "solicitado"} (${brlCentavos(r.valorCentavos)}) é encerrado: o paciente vê como negado, com a explicação.`);
+  }
+  if (evento) efeitos.push(`O registro "${ROTULO_DESFECHO[atual]}" fica no histórico, marcado como corrigido.`);
+
+  return {
+    ok: true,
+    plano: {
+      atual,
+      novo,
+      statusAntes: c.status,
+      statusDepois: statusDepoisDe(novo, c),
+      eventoCorrigidoId: evento?.id ?? null,
+      reembolsosEncerrados: pendentes.map((r) => ({ id: r.id, status: r.status, valorCentavos: r.valorCentavos })),
+      dinheiro: {
+        efeito,
+        pagoConfirmado,
+        valorCentavos,
+        liquidoMedicoCentavos: liquido,
+        medicoRecebiaAntes: antes,
+        medicoRecebeDepois: depois,
+        repasse: rep,
+      },
+      efeitos,
+      notificarMedico: pagoConfirmado && antes !== depois,
+    },
+  };
+}
+
+type ClienteLeitura = Prisma.TransactionClient | typeof db;
+
+/** Lê tudo o que o plano precisa (null = consulta não existe). */
+export async function carregarEstadoCorrecao(c: ClienteLeitura, consultaId: string): Promise<EstadoCorrecao | null> {
+  const linha = await c.consulta.findUnique({
+    where: { id: consultaId },
+    select: {
+      id: true,
+      pacienteId: true,
+      medicoId: true,
+      especialidade: true,
+      dataInicio: true,
+      status: true,
+      pago: true,
+      valor: true,
+      motivoCancelamento: true,
+      eventos: {
+        select: { id: true, tipo: true, motivo: true, por: true, em: true, dataAnterior: true, corrigidoEm: true },
+        orderBy: { em: "asc" },
+      },
+      pagamento: {
+        select: { id: true, status: true, reembolsos: { select: { id: true, status: true, origem: true, valorCentavos: true } } },
+      },
+      repasseItens: {
+        where: { tipo: "consulta" },
+        select: { repasse: { select: { id: true, competencia: true, status: true } } },
+        take: 1,
+      },
+    },
+  });
+  if (!linha) return null;
+  const { eventos, pagamento, repasseItens, ...consulta } = linha;
+  return {
+    consulta,
+    eventos,
+    pagamento: pagamento ? { id: pagamento.id, status: pagamento.status } : null,
+    reembolsos: pagamento?.reembolsos ?? [],
+    repasse: repasseItens[0]?.repasse ?? null,
+  };
+}
+
+/** Textos da notificação ao paciente e ao médico (formato do PATCH /api/admin/reembolsos/[id]). */
+export function textosNotificacaoCorrecao(e: EstadoCorrecao, plano: PlanoCorrecao, agora: Date = new Date()) {
+  const c = e.consulta;
+  const quando = quandoClinica(c.dataInicio);
+  const troca = `${ROTULO_DESFECHO[plano.atual]} → ${ROTULO_DESFECHO[plano.novo]}`;
+  let efeitoPaciente: string;
+  if (plano.novo === "falha_tecnica" || plano.novo === "falta_medico") {
+    efeitoPaciente = c.pago ? "Escolha no app: remarcar sem custo ou reembolso integral." : "A consulta foi cancelada, sem custo.";
+  } else if (plano.novo === "falta_paciente") {
+    const prazo = prazoReembolsoManual(c.dataInicio);
+    efeitoPaciente = !plano.dinheiro.pagoConfirmado
+      ? "A consulta fica registrada como falta."
+      : agora.getTime() <= prazo.getTime()
+        ? `Se teve um imprevisto, peça o reembolso pelo app até ${quandoClinica(prazo)}.`
+        : `O prazo de ${REEMBOLSO_MANUAL_PRAZO_DIAS} dias para pedir reembolso desta consulta já terminou.`;
+  } else {
+    efeitoPaciente = "A consulta fica registrada como realizada.";
+  }
+  if (plano.reembolsosEncerrados.length) efeitoPaciente += " Seu pedido de reembolso desta consulta foi encerrado por causa desta correção.";
+  const paciente = {
+    usuarioId: c.pacienteId,
+    tipo: "agenda",
+    titulo: "Registro da consulta corrigido",
+    texto: `A administração corrigiu o registro da consulta de ${c.especialidade} (${quando}): ${troca}. ${efeitoPaciente}`,
+  };
+  if (!plano.notificarMedico) return { paciente, medico: null };
+  const d = plano.dinheiro;
+  const efeitoMedico = d.medicoRecebeDepois
+    ? `O valor desta consulta (${brlCentavos(d.liquidoMedicoCentavos)}) entra no próximo repasse.`
+    : d.repasse
+      ? `O repasse de ${diaBr(d.repasse.competencia)} não muda. Se o paciente escolher o reembolso integral, ${brlCentavos(d.liquidoMedicoCentavos)} serão descontados do próximo repasse.`
+      : `Esta consulta sai do seu repasse (${brlCentavos(d.liquidoMedicoCentavos)}).`;
+  const medico = {
+    usuarioId: c.medicoId,
+    tipo: "agenda",
+    titulo: "Desfecho corrigido pela administração",
+    texto: `Consulta de ${c.especialidade} (${quando}): ${troca}. ${efeitoMedico}`,
+  };
+  return { paciente, medico };
+}
+
+/** Prévia para a tela do admin: desfecho atual e o plano de cada desfecho possível. Só lê. */
+export async function previaCorrecaoDesfecho(consultaId: string, agora: Date = new Date()) {
+  const e = await carregarEstadoCorrecao(db, consultaId);
+  if (!e) return null;
+  const atual = desfechoDaConsulta({ status: e.consulta.status, dataInicio: e.consulta.dataInicio, eventos: e.eventos });
+  return {
+    atual,
+    opcoes: DESFECHOS_ALVO.filter((d) => d !== atual).map((novo) => {
+      const p = planejarCorrecaoDesfecho(e, novo, agora);
+      return p.ok ? { novo, ok: true as const, plano: p.plano } : { novo, ok: false as const, erro: p.erro };
+    }),
+  };
+}
+
+/** Conflito dentro da transação: desfaz tudo e vira 409. */
+class ConflitoCorrecao extends Error {}
+
+/**
+ * Grava a correção (só ADMIN; a rota confere o papel). Numa transação:
+ * trava o médico (mesma trava do fechamento do repasse) e a consulta,
+ * relê o estado, recalcula o plano e só então grava. Idempotente: pedir de
+ * novo o desfecho que já vale devolve `jaAplicado` sem gravar nada.
+ * `esperado` = desfecho que o admin viu na prévia; se mudou, 409.
+ */
+export async function corrigirDesfecho(params: {
+  consultaId: string;
+  novo: Desfecho;
+  motivo: string;
+  admin: { id: string; nome: string };
+  esperado?: DesfechoAtual;
+  agora?: Date;
+}): Promise<{ ok: true; jaAplicado: boolean; plano: PlanoCorrecao | null; status: string } | FalhaCorrecao> {
+  const agora = params.agora ?? new Date();
+  const motivo = params.motivo.trim();
+  if (motivo.length < MOTIVO_CORRECAO_MIN || motivo.length > MOTIVO_CORRECAO_MAX) {
+    return { ok: false, erro: `Explique o motivo da correção (${MOTIVO_CORRECAO_MIN} a ${MOTIVO_CORRECAO_MAX} caracteres).`, status: 400 };
+  }
+  if (!DESFECHOS_ALVO.includes(params.novo)) return { ok: false, erro: "Desfecho inválido.", status: 400 };
+  const dono = await db.consulta.findUnique({ where: { id: params.consultaId }, select: { medicoId: true } });
+  if (!dono) return { ok: false, erro: "Consulta não encontrada.", status: 404 };
+
+  try {
+    return await db.$transaction(
+      async (tx) => {
+        // Mesma trava do fechamento (repasse.ts): a correção e o fechamento
+        // do mesmo médico não se intercalam. Depois, a linha da consulta.
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${"repasse:" + dono.medicoId}))`;
+        await tx.$queryRaw`SELECT id FROM "Consulta" WHERE id = ${params.consultaId} FOR UPDATE`;
+        const e = await carregarEstadoCorrecao(tx, params.consultaId);
+        if (!e) return { ok: false as const, erro: "Consulta não encontrada.", status: 404 };
+        if (e.consulta.medicoId !== dono.medicoId) throw new ConflitoCorrecao();
+        const atual = desfechoDaConsulta({ status: e.consulta.status, dataInicio: e.consulta.dataInicio, eventos: e.eventos });
+        if (atual === params.novo) return { ok: true as const, jaAplicado: true, plano: null, status: e.consulta.status };
+        if (params.esperado && params.esperado !== atual) {
+          return {
+            ok: false as const,
+            erro: `O desfecho mudou para "${ROTULO_DESFECHO[atual]}" enquanto você revisava. Confira a prévia de novo.`,
+            status: 409,
+          };
+        }
+        const p = planejarCorrecaoDesfecho(e, params.novo, agora);
+        if (!p.ok) return p;
+        const plano = p.plano;
+        const c = e.consulta;
+
+        if (plano.eventoCorrigidoId) {
+          const r = await tx.eventoConsulta.updateMany({
+            where: { id: plano.eventoCorrigidoId, corrigidoEm: null },
+            data: { corrigidoEm: agora, corrigidoPorId: params.admin.id, motivoCorrecao: motivo },
+          });
+          if (r.count !== 1) throw new ConflitoCorrecao();
+        }
+        for (const r of plano.reembolsosEncerrados) {
+          const u = await tx.reembolso.updateMany({
+            where: { id: r.id, status: { in: REEMBOLSO_PENDENTE } },
+            data: {
+              status: "negado",
+              respostaAdmin: `Pedido encerrado: a administração corrigiu o registro da consulta para "${ROTULO_DESFECHO[plano.novo]}".`,
+              decididoPor: params.admin.id,
+              decididoEm: agora,
+            },
+          });
+          if (u.count !== 1) throw new ConflitoCorrecao();
+        }
+
+        let statusFinal = plano.statusDepois;
+        const deFalha = plano.atual === "falha_tecnica" || plano.atual === "falta_medico";
+        if (plano.novo === "realizada" || plano.novo === "falta_paciente") {
+          await tx.consulta.update({
+            where: { id: c.id },
+            data: { status: plano.statusDepois, ...(deFalha ? { motivoCancelamento: null } : {}) },
+          });
+          if (plano.novo === "falta_paciente") {
+            await registrarEvento(tx, {
+              consultaId: c.id,
+              tipo: "falta_paciente",
+              por: "admin",
+              atorId: params.admin.id,
+              dataAnterior: c.dataInicio,
+              motivo: "falta_paciente",
+              multaCentavos: 0,
+            });
+          }
+          await cancelarReservasPendentes(tx, c.id);
+        } else {
+          // aplicarFalhaTecnica só age em consulta "aberta": abre de novo, na mesma transação.
+          if (!STATUS_ABERTOS.includes(c.status)) {
+            await tx.consulta.update({ where: { id: c.id }, data: { status: "confirmada", motivoCancelamento: null } });
+          }
+          const r = await aplicarFalhaTecnica(tx, c.id, {
+            motivo: plano.novo === "falta_medico" ? "falta_medico" : "falha_tecnica",
+            por: "admin",
+            atorId: params.admin.id,
+          });
+          if (!r) throw new ConflitoCorrecao();
+          statusFinal = r.status;
+        }
+
+        const notif = textosNotificacaoCorrecao(e, plano, agora);
+        await tx.notificacao.create({ data: notif.paciente });
+        if (notif.medico) await tx.notificacao.create({ data: notif.medico });
+
+        await tx.auditLog.create({
+          data: {
+            acao: "CONSULTA_DESFECHO_CORRIGIDO",
+            categoria: "consulta",
+            severidade: "warning",
+            usuarioId: params.admin.id,
+            usuarioNome: params.admin.nome,
+            role: "ADMIN",
+            entidade: "consulta",
+            entidadeId: c.id,
+            detalhes: JSON.stringify({
+              motivo,
+              antes: {
+                desfecho: plano.atual,
+                status: plano.statusAntes,
+                eventoId: plano.eventoCorrigidoId,
+                reembolsos: plano.reembolsosEncerrados.map((r) => ({ id: r.id, status: r.status })),
+                repasseId: plano.dinheiro.repasse?.id ?? null,
+              },
+              depois: {
+                desfecho: plano.novo,
+                status: statusFinal,
+                reembolsos: plano.reembolsosEncerrados.map((r) => ({ id: r.id, status: "negado" })),
+                efeitoDinheiro: plano.dinheiro.efeito,
+                liquidoMedicoCentavos: plano.dinheiro.liquidoMedicoCentavos,
+              },
+              notificados: [notif.paciente.usuarioId, notif.medico?.usuarioId].filter(Boolean),
+            }),
+          },
+        });
+        return { ok: true as const, jaAplicado: false, plano: { ...plano, statusDepois: statusFinal }, status: statusFinal };
+      },
+      { timeout: 20_000, maxWait: 10_000 },
+    );
+  } catch (e) {
+    if (e instanceof ConflitoCorrecao) {
+      return { ok: false, erro: "A consulta mudou enquanto a correção era gravada. Atualize e confira a prévia de novo.", status: 409 };
+    }
+    throw e;
+  }
+}
