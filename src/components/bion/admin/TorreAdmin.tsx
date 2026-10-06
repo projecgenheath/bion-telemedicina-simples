@@ -17,7 +17,6 @@ import {
   Shield,
   Stethoscope,
   TrendingUp,
-  Users,
   Wallet,
 } from "lucide-react";
 import { useBion } from "@/lib/bion-store";
@@ -38,7 +37,8 @@ const MODULOS: Partial<Record<View, { rotulo: string; icone: Icone }>> = {
   "admin-agendamentos": { rotulo: "Agendamentos", icone: CalendarDays },
   "admin-medicos": { rotulo: "Médicos", icone: Stethoscope },
   "admin-pacientes": { rotulo: "Pacientes", icone: HeartPulse },
-  usuarios: { rotulo: "Usuários & CRM", icone: Users },
+  // /usuarios (antiga "Usuários & CRM", que era de mentira) só redireciona para Médicos › Em validação.
+  usuarios: { rotulo: "Médicos", icone: Stethoscope },
   "admin-repasses": { rotulo: "Repasses", icone: Wallet },
   relatorios: { rotulo: "Relatórios", icone: TrendingUp },
   auditoria: { rotulo: "Auditoria", icone: FileSearch },
@@ -80,7 +80,13 @@ function TorreInterna({ children }: { children: ReactNode }) {
 
   const comando = path === "/painel";
   // Telas já redesenhadas no visual Torre não usam a "folha" das telas antigas.
-  const redesenhada = comando || view === "admin-repasses" || view === "admin-agendamentos";
+  const redesenhada =
+    comando ||
+    view === "admin-repasses" ||
+    view === "admin-agendamentos" ||
+    view === "admin-medicos" ||
+    view === "admin-pacientes" ||
+    view === "usuarios";
   const info = view ? MODULOS[view] : undefined;
   const contagem = contarPorCategoria(fila);
   const criticos24h = auditLogs.filter((l) => l.severidade === "critical" && agora - l.ts <= 86_400_000).length;
@@ -99,7 +105,6 @@ function TorreInterna({ children }: { children: ReactNode }) {
         { id: "admin-agendamentos", rotulo: "Agendamentos", icone: CalendarDays, selo: reembolsos.dados?.total || undefined },
         { id: "admin-medicos", rotulo: "Médicos", icone: Stethoscope, selo: contagem.validacao || undefined },
         { id: "admin-pacientes", rotulo: "Pacientes", icone: HeartPulse },
-        { id: "usuarios", rotulo: "Usuários & CRM", icone: Users },
       ],
     },
     {

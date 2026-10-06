@@ -21,10 +21,12 @@ type AcaoBase = { id: string; rotulo: string; icone: Icone; tom: Tom };
  * - `confirmar`: o gesto só ABRE a confirmação (dinheiro e ações destrutivas: cancelar consulta,
  *   negar reembolso, suspender…). Pagar repasse NUNCA entra como ação de gesto — só como item de menu
  *   que abre o fluxo de pagamento (use `extras`).
+ * - `direto`: o gesto chama `executar` e quem chama cuida do aviso e do "Desfazer" (ex.: aprovar
+ *   médico, que só envia o pedido depois da janela de 5 s — desfazer não manda nada ao servidor).
  */
 export type AcaoRapida =
   | (AcaoBase & { modo: "reversivel"; executar: () => void | Promise<void>; desfazer: () => void | Promise<void> })
-  | (AcaoBase & { modo: "confirmar"; executar: () => void });
+  | (AcaoBase & { modo: "confirmar" | "direto"; executar: () => void });
 
 const LIMIAR = 0.4; // fração da largura para disparar
 const BORDA_SISTEMA = 24; // px: não briga com o "voltar" do iOS
@@ -45,6 +47,7 @@ export function CardDeslizavel({
   denso = false,
   tom,
   children,
+  rodape,
 }: {
   /** Nome acessível do item (ex.: "Consulta de Ana às 14:00"). */
   rotulo: string;
@@ -55,6 +58,8 @@ export function CardDeslizavel({
   denso?: boolean;
   tom?: Tom;
   children: ReactNode;
+  /** Controles fora da área que abre o item (ex.: "Desfazer"), para não aninhar botões. */
+  rodape?: ReactNode;
 }) {
   const frenteRef = useRef<HTMLDivElement>(null);
   const gesto = useRef<{ x: number; y: number; id: number; eixo: "?" | "x" | "y"; largura: number } | null>(null);
@@ -212,6 +217,7 @@ export function CardDeslizavel({
           ) : (
             children
           )}
+          {rodape}
         </div>
         {todas.length ? (
           <DropdownMenu open={menu} onOpenChange={setMenu}>
