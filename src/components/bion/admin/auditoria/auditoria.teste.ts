@@ -114,7 +114,7 @@ igual("médico sem id não tem destino", destinoEntidade({ entidade: "medico" })
 igual("entidade sem tela", destinoEntidade({ entidade: "lembrete", entidadeId: "x" }), null);
 
 /* ---------------- exportação: MESMA lógica do AuditTrail antigo ---------------- */
-// Cópia literal do csvLinha de src/components/bion/AuditTrail.tsx (referência).
+// Cópia literal do csvLinha do AuditTrail antigo (removido; está no histórico do git).
 function csvLinhaAntigo(valores: (string | number | undefined)[]) {
   return valores
     .map((v) => {

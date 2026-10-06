@@ -7,6 +7,7 @@ import type { Avaliacao, Consulta } from "@/lib/bion-tipos";
 import {
   FILTROS_RELATORIO_PADRAO,
   calcularRelatorio,
+  chaveMedico,
   csvLinhaRelatorio,
   csvRelatorio,
   filtrarAvaliacoesRelatorio,
@@ -15,6 +16,7 @@ import {
   notaMedia,
   opcoesRelatorio,
   pacientesDoRecorte,
+  rotuloMedico,
   textoFiltro,
 } from "./relatorio";
 
@@ -69,14 +71,48 @@ const dados = calcularRelatorio(consultas, avaliacoes);
 igual("totais", [dados.total, dados.concluidas, dados.canceladas, dados.taxaCancelamento, dados.pacientes], [5, 3, 1, 20, 3]);
 igual("média", dados.media.toFixed(2), "4.00");
 igual("especialidades ordenadas", dados.especialidades, [["Clínica Geral", 3], ["Cardiologia", 2]]);
-igual("médicos ordenados por consultas, com nota", dados.medicos.map(([m, v]) => [m, v.total, notaMedia(v)]), [["Dra. A", 3, "5.0"], ["Dr. B", 2, "4.0"], ["Dr. C", 0, "3.0"]]);
+igual("médicos ordenados por consultas, com nota", dados.medicos.map((v) => [v.nome, v.total, notaMedia(v)]), [["Dra. A", 3, "5.0"], ["Dr. B", 2, "4.0"], ["Dr. C", 0, "3.0"]]);
+igual("sem medicoId cai no nome", dados.medicos.map((v) => v.chave), ["nome:Dra. A", "nome:Dr. B", "nome:Dr. C"]);
+
+/* ---------------- desempenho por médico: agrupa pelo medicoId ---------------- */
+const comId = (dias: number, medico: string, medicoId: string | undefined, paciente: string): Consulta => ({ ...c(dias, medico, "Pediatria", paciente), medicoId });
+const homonimos: Consulta[] = [
+  comId(1, "Dr. Xavier Lima", "med-aaa111", "Paulo"),
+  comId(2, "Dr. Xavier Lima", "med-bbb222", "Ana"),
+  comId(3, "Dr. Xavier Lima", "med-aaa111", "Rita"),
+  comId(4, "Dra. Única", "med-ccc333", "Paulo"),
+  comId(5, "Dra. Única", undefined, "Ana"),
+];
+const avHom: Avaliacao[] = [av(1, "Dr. Xavier Lima", 5), av(2, "Dra. Única", 4), av(3, "Dr. Sem Consulta", 2)];
+const dHom = calcularRelatorio(homonimos, avHom);
+igual("chave: id quando há, nome quando não", [chaveMedico(homonimos[0]), chaveMedico(homonimos[4])], ["id:med-aaa111", "nome:Dra. Única"]);
+igual(
+  "dois médicos de mesmo nome ficam separados pelo id",
+  dHom.medicos.map((v) => [v.chave, v.nome, v.total, v.n]),
+  [
+    ["id:med-aaa111", "Dr. Xavier Lima", 2, 0],
+    ["id:med-bbb222", "Dr. Xavier Lima", 1, 0],
+    ["id:med-ccc333", "Dra. Única", 1, 1],
+    ["nome:Dra. Única", "Dra. Única", 1, 0],
+    ["homonimo:Dr. Xavier Lima", "Dr. Xavier Lima", 0, 1],
+    ["nome:Dr. Sem Consulta", "Dr. Sem Consulta", 0, 1],
+  ],
+);
+igual("total de consultas preservado", dHom.medicos.reduce((s, v) => s + v.total, 0), homonimos.length);
+igual("média geral não muda", dHom.media.toFixed(2), "3.67");
+igual(
+  "rótulos: nome; id curto só quando o nome se repete",
+  dHom.medicos.map((v) => rotuloMedico(v, dHom.medicos)),
+  ["Dr. Xavier Lima (#aaa111)", "Dr. Xavier Lima (#bbb222)", "Dra. Única (#ccc333)", "Dra. Única (consultas sem ID)", "Dr. Xavier Lima (avaliações sem médico identificado)", "Dr. Sem Consulta"],
+);
+igual("homônimo marcado só na linha das avaliações", dHom.medicos.filter((v) => v.homonimo).map((v) => v.chave), ["homonimo:Dr. Xavier Lima"]);
 igual("vazio", calcularRelatorio([], []), { total: 0, concluidas: 0, canceladas: 0, media: 0, taxaCancelamento: 0, especialidades: [], medicos: [], pacientes: 0 });
 igual("pacientes do recorte", pacientesDoRecorte(consultas).map((p) => [p.nome, p.consultas]), [["Ana", 2], ["Paulo", 2], ['Rita "Ri"', 1]]);
 igual("última consulta do paciente", pacientesDoRecorte(consultas)[1].ultima, agora - D);
 igual("texto do filtro", textoFiltro({ periodo: "30", especialidade: "todas", medico: "Dr. B" }), "Período: 30 dias • Especialidade: todas • Médico: Dr. B");
 
 /* ---------------- CSV: MESMA lógica do Relatorios antigo ---------------- */
-// Cópia literal de csvLinha e da montagem de exportarCSV de src/components/bion/Relatorios.tsx (referência).
+// Cópia literal de csvLinha e da montagem de exportarCSV do Relatorios antigo (removido; está no histórico do git).
 const csvLinhaAntiga = (campos: (string | number)[]) => campos.map((x) => `"${String(x).replace(/"/g, '""')}"`).join(";");
 function csvAntigo(filtroTexto: string, d: typeof dados, cs: Consulta[], as: Avaliacao[], docs: number, arqs: number, cons: number) {
   const linhas: string[] = [];
