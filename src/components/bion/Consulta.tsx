@@ -102,6 +102,10 @@ export function Consulta({
     pararCompartilhamento,
     enviarChat: enviarChatSinal,
     encerrar: encerrarChamada,
+    sair: sairDaChamada,
+    outroSaiu,
+    qualidade,
+    reconectando,
   } = tele;
 
   const videoLocalRef = useRef<HTMLVideoElement>(null);
@@ -344,8 +348,10 @@ export function Consulta({
   const [escolhaAberta, setEscolhaAberta] = useState(false);
 
   const sairDaSala = () => {
-    // WebRTC real: avisa o outro participante e libera mídia/stream/PC
-    encerrarChamada();
+    // Só o médico encerra a chamada para os dois. O paciente SAI (o médico
+    // vê "Paciente saiu da chamada" e pode esperar ele voltar).
+    if (role === "medico") encerrarChamada();
+    else sairDaChamada();
     onEnd();
   };
 
@@ -354,7 +360,7 @@ export function Consulta({
       setEscolhaAberta(true);
       return;
     }
-    // Paciente só encerra a chamada.
+    // Paciente só sai da chamada (não encerra a consulta).
     sairDaSala();
   };
 
@@ -434,6 +440,10 @@ export function Consulta({
             iniciais={iniciais}
             statusSala={statusSala}
             outroOnline={outroOnline}
+            outroSaiu={outroSaiu}
+            qualidade={qualidade}
+            reconectando={reconectando}
+            role={role}
           />
           <ConsultaControlesMidia
             role={role}
