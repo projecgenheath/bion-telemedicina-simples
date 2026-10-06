@@ -53,7 +53,6 @@ export function PassoMedico(p: AgendamentoCorpoProps) {
     processandoPagamento,
     finalizarAgendamento,
     medicoAtual,
-    onGoToWaitingRoom,
     onDone,
   } = p;
 

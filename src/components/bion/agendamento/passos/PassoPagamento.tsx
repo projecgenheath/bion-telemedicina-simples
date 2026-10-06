@@ -54,7 +54,6 @@ export function PassoPagamento(p: AgendamentoCorpoProps) {
     processandoPagamento,
     finalizarAgendamento,
     medicoAtual,
-    onGoToWaitingRoom,
     onDone,
   } = p;
 
@@ -237,8 +236,8 @@ export function PassoPagamento(p: AgendamentoCorpoProps) {
             <FileText className="w-8 h-8 text-primary mx-auto" />
             <div className="font-bold text-sm">Boleto Bancário Digital</div>
             <p className="text-xs text-muted-foreground">
-              O boleto é compensado em até 1 dia útil. O link de acesso à sala de espera será
-              liberado após a compensação.
+              O boleto é compensado em até 1 dia útil. A consulta é confirmada após a compensação, e o
+              botão Entrar na sala fica disponível 30 minutos antes do horário.
             </p>
           </div>
         )}

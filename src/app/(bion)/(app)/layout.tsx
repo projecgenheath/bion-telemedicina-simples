@@ -18,7 +18,6 @@ export default function LayoutAutenticado({ children }: { children: React.ReactN
   const rotaTelaCheia =
     path === "/paciente" ||
     path === "/consulta" ||
-    path === "/sala-espera" ||
     path === "/suporte" ||
     path === "/privacidade" ||
     path === "/ajuda" ||
