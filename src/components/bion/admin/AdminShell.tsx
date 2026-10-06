@@ -5,12 +5,13 @@ import { ArrowLeft, ChevronRight, Inbox, PanelLeftClose, PanelLeftOpen, Search }
 import { SheetAdmin } from "./ui/SheetAdmin";
 import { useDensidadeAdmin, useLargo, usePreferenciaBool } from "./ui/preferencias";
 import { useAtalhoBusca } from "./ui/atalho";
+import { ROTULO_TIPO, casa, type ResultadoBusca, type TipoResultado } from "./busca";
 import type { Tom } from "./rotulos";
 import "./admin.css";
 
 type Icone = ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
 
-export type ItemNavAdmin = { id: string; rotulo: string; icone: Icone; selo?: number; tomSelo?: Tom };
+export type ItemNavAdmin = { id: string; rotulo: string; icone: Icone; selo?: number; tomSelo?: Tom; /** Sinônimos para a busca do lançador (ex.: "lgpd cofre"). */ palavras?: string };
 export type GrupoNavAdmin = { rotulo: string; itens: ItemNavAdmin[] };
 export type Migalha = { rotulo: string; onClick?: () => void };
 /** Módulo aberto por cima do Comando (no celular vira tela cheia com "Voltar"). */
@@ -60,6 +61,7 @@ export function AdminShell({
   acoesBarra,
   modulo,
   abrirNaFila = false,
+  buscar,
   children,
 }: {
   grupos: GrupoNavAdmin[];
@@ -76,6 +78,8 @@ export function AdminShell({
   modulo?: ModuloAberto;
   /** Celular: abre já no painel da Fila (ex.: veio de um módulo pelo lançador). */
   abrirNaFila?: boolean;
+  /** Busca global do lançador (pessoas, consultas, chamados, atalhos). */
+  buscar?: (termo: string) => ResultadoBusca[];
   children: ReactNode;
 }) {
   const largo = useLargo();
@@ -125,7 +129,7 @@ export function AdminShell({
   };
 
   const lancadorSheet = (
-    <Lancador aberto={lancador} onFechar={() => setLancador(false)} grupos={grupos} ativo={ativo} onNavegar={navegar} />
+    <Lancador aberto={lancador} onFechar={() => setLancador(false)} grupos={grupos} ativo={ativo} onNavegar={navegar} buscar={buscar} />
   );
 
   if (!largo && modulo) {
@@ -472,47 +476,90 @@ function ModuloCelular({
   );
 }
 
-/** Lançador (grade dos módulos + filtro). Aberto pela pílula, pela barra ou por Ctrl K / ⌘K. */
+/**
+ * Lançador (Ctrl K / ⌘K, pílula ou barra): módulos (nome e palavras-chave)
+ * e, com `buscar`, atalhos, pessoas, consultas e chamados. Sem acento.
+ * Enter abre o primeiro resultado; ↓ sai do campo para a lista e ↑/↓
+ * andam entre os resultados; Esc fecha.
+ */
 function Lancador({
   aberto,
   onFechar,
   grupos,
   ativo,
   onNavegar,
+  buscar,
 }: {
   aberto: boolean;
   onFechar: () => void;
   grupos: GrupoNavAdmin[];
   ativo: string;
   onNavegar: (id: string) => void;
+  buscar?: (termo: string) => ResultadoBusca[];
 }) {
   const [termo, setTermo] = useState("");
+  const listaRef = useRef<HTMLDivElement>(null);
   const [abertoAntes, setAbertoAntes] = useState(aberto);
   if (aberto !== abertoAntes) {
     setAbertoAntes(aberto);
     if (!aberto) setTermo("");
   }
-  const t = termo.trim().toLowerCase();
   const filtrados = grupos
-    .map((g) => ({ ...g, itens: g.itens.filter((i) => !t || i.rotulo.toLowerCase().includes(t) || g.rotulo.toLowerCase().includes(t)) }))
+    .map((g) => ({ ...g, itens: g.itens.filter((i) => casa(termo, i.rotulo, g.rotulo, i.palavras)) }))
     .filter((g) => g.itens.length);
+  const resultados = useMemo(() => (buscar && aberto ? buscar(termo) : []), [buscar, aberto, termo]);
+  const porTipo = useMemo(() => {
+    const m = new Map<TipoResultado, ResultadoBusca[]>();
+    for (const r of resultados) m.set(r.tipo, [...(m.get(r.tipo) ?? []), r]);
+    return [...m.entries()];
+  }, [resultados]);
+  const primeiro = filtrados[0]?.itens[0]?.id ?? resultados[0]?.id;
+  const nada = filtrados.length === 0 && resultados.length === 0;
+
+  const focaveis = () => Array.from(listaRef.current?.querySelectorAll<HTMLButtonElement>("button[data-lancador]") ?? []);
+  const aoTeclarLista = (e: React.KeyboardEvent) => {
+    if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+    const b = focaveis();
+    const i = b.indexOf(document.activeElement as HTMLButtonElement);
+    if (i < 0) return;
+    e.preventDefault();
+    if (e.key === "ArrowUp" && i === 0) {
+      (listaRef.current?.closest("[role=dialog]")?.querySelector("input") as HTMLInputElement | null)?.focus();
+      return;
+    }
+    b[Math.max(0, Math.min(b.length - 1, i + (e.key === "ArrowDown" ? 1 : -1)))]?.focus();
+  };
+
   return (
-    <SheetAdmin aberto={aberto} onFechar={onFechar} titulo="Ir para…" descricao="Módulos da administração">
+    <SheetAdmin aberto={aberto} onFechar={onFechar} titulo="Buscar ou ir para…" descricao={buscar ? "Módulos, atalhos, pessoas, consultas e chamados" : "Módulos da administração"}>
       <label className="block mb-4">
-        <span className="sr-only">Filtrar módulos</span>
+        <span className="sr-only">Buscar módulos, pessoas, consultas ou chamados</span>
         <input
           autoFocus
+          type="search"
           value={termo}
           onChange={(e) => setTermo(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter" && filtrados[0]?.itens[0]) onNavegar(filtrados[0].itens[0].id);
+            if (e.key === "Enter" && primeiro) onNavegar(primeiro);
+            else if (e.key === "ArrowDown") {
+              e.preventDefault();
+              focaveis()[0]?.focus();
+            }
           }}
-          placeholder="Digite o nome do módulo"
+          placeholder={buscar ? "Módulo, pessoa, CRM, e-mail, chamado…" : "Digite o nome do módulo"}
           className="ba-entrada"
+          aria-describedby="lancador-dica"
         />
+        <span id="lancador-dica" className="block text-xs ba-texto-3 mt-1.5 px-1">
+          Enter abre o primeiro · ↓ e ↑ andam na lista · Esc fecha
+        </span>
       </label>
-      {filtrados.length === 0 ? <p className="text-sm ba-texto-2 text-center py-6">Nenhum módulo com esse nome.</p> : null}
-      <div className="space-y-5">
+      <div ref={listaRef} onKeyDown={aoTeclarLista} className="space-y-5">
+        {nada ? (
+          <p className="text-sm ba-texto-2 text-center py-6" role="status">
+            Nada encontrado para “{termo.trim()}”.
+          </p>
+        ) : null}
         {filtrados.map((g) => (
           <div key={g.rotulo}>
             <div className="ba-rotulo mb-2">{g.rotulo}</div>
@@ -521,6 +568,7 @@ function Lancador({
                 <button
                   key={it.id}
                   type="button"
+                  data-lancador=""
                   onClick={() => onNavegar(it.id)}
                   aria-current={ativo === it.id ? "page" : undefined}
                   className={`ba-card !p-3 flex flex-col items-center gap-1.5 text-center ${ativo === it.id ? "ring-2 ring-[var(--ba-sinal)]" : ""}`}
@@ -537,6 +585,24 @@ function Lancador({
                 </button>
               ))}
             </div>
+          </div>
+        ))}
+        {porTipo.map(([tipo, lista]) => (
+          <div key={tipo}>
+            <div className="ba-rotulo mb-2">{ROTULO_TIPO[tipo]}</div>
+            <ul className="space-y-1.5">
+              {lista.map((r) => (
+                <li key={r.chave}>
+                  <button type="button" data-lancador="" onClick={() => onNavegar(r.id)} className="ba-card w-full text-left flex items-center gap-3" data-denso="true">
+                    <span className="flex-1 min-w-0">
+                      <span className="font-bold block truncate">{r.rotulo}</span>
+                      {r.detalhe ? <span className="text-xs ba-texto-2 block truncate">{r.detalhe}</span> : null}
+                    </span>
+                    <ChevronRight className="w-4 h-4 ba-texto-3 shrink-0" aria-hidden />
+                  </button>
+                </li>
+              ))}
+            </ul>
           </div>
         ))}
       </div>

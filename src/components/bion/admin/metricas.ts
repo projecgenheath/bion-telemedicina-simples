@@ -210,7 +210,7 @@ export function montarFila(
       titulo: t.assunto || "Chamado sem assunto",
       detalhe: [t.usuario, t.perfil === "medico" ? "médico" : "paciente", t.data].filter(Boolean).join(" · "),
       chips: [e],
-      destino: "suporte",
+      destino: `suporte?chamado=${encodeURIComponent(t.id)}`,
     });
   }
 
