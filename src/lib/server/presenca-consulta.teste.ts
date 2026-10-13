@@ -12,6 +12,7 @@ import {
   QUEDA_MIN,
   STATUS_AVALIAVEIS,
   classificarPresenca,
+  entradaAposSinal,
   filtroPendentes,
 } from "./presenca-consulta";
 
@@ -38,6 +39,7 @@ const base = {
   pago: true,
   ultimoPingMedico: null as Date | null,
   ultimoPingPaciente: null as Date | null,
+  entrouEmMedico: null as Date | null,
   encerradaPeloBotao: false,
 };
 const r = (p: Partial<typeof base>) => classificarPresenca({ ...base, ...p }).resultado;
@@ -46,15 +48,21 @@ const r = (p: Partial<typeof base>) => classificarPresenca({ ...base, ...p }).re
 igual("antes da sala fechar: aguarda", r({ agora: min(CARENCIA_APOS_INICIO_MIN - 1), ultimoPingMedico: min(20) }), "aguardar");
 igual("logo depois da carência: decide", r({ agora: min(CARENCIA_APOS_INICIO_MIN), ultimoPingMedico: min(20) }), "falta_paciente");
 
-// Ninguém entrou
-igual("ninguém entrou (paga): falha técnica", r({}), "falha_tecnica");
+// Ninguém entrou → sem desfecho (não grava falha técnica sozinho no bootstrap)
+igual("ninguém entrou (paga): sem evento (fica para o admin)", r({}), "sem_evento");
 igual("ninguém entrou (não paga): sem evento", r({ pago: false }), "sem_evento");
-igual("os dois só antes do horário: conta como ninguém", r({ ultimoPingMedico: min(-10), ultimoPingPaciente: min(-5) }), "falha_tecnica");
+igual("os dois só antes do horário: conta como ninguém (sem evento)", r({ ultimoPingMedico: min(-10), ultimoPingPaciente: min(-5) }), "sem_evento");
 
 // Falta do paciente
 igual("médico na sala, paciente nunca entrou: falta", r({ ultimoPingMedico: min(15) }), "falta_paciente");
 igual("falta também sem pagamento", r({ pago: false, ultimoPingMedico: min(15) }), "falta_paciente");
 igual("paciente saiu antes do horário, médico esperou: falta", r({ ultimoPingMedico: min(15), ultimoPingPaciente: min(-20) }), "falta_paciente");
+
+// Regra 1 (06/10/2026) também na classificação automática: o médico precisa
+// ter ficado na sala até o horário + 15 min para virar falta do paciente.
+igual("médico saiu aos 14 min, paciente não entrou: sem evento (fica para o admin)", r({ ultimoPingMedico: min(14) }), "sem_evento");
+igual("médico entrou atrasado e ficou até +15: falta", r({ entrouEmMedico: min(10), ultimoPingMedico: min(15) }), "falta_paciente");
+igual("médico entrou depois de +15: falta (o paciente não veio)", r({ entrouEmMedico: min(40), ultimoPingMedico: min(41) }), "falta_paciente");
 
 // Médico não entrou (paciente entrou): falta do médico só em consulta paga
 igual("só o paciente entrou (paga): falta do médico", r({ ultimoPingPaciente: min(15) }), "falta_medico");
@@ -82,6 +90,17 @@ igual(
   true,
 );
 
+// Entrada da sessão (PresencaSala.entrouEm) depois de cada sinal
+{
+  const t0 = new Date("2026-10-06T17:00:00.000Z");
+  const seg = (n: number) => new Date(t0.getTime() + n * 1000);
+  igual("primeira entrada: agora", entradaAposSinal(null, seg(0)).toISOString(), seg(0).toISOString());
+  igual("linha antiga sem entrada: agora", entradaAposSinal({ ultimoPing: seg(0), entrouEm: null }, seg(2)).toISOString(), seg(2).toISOString());
+  igual("sinal contínuo: mantém a entrada", entradaAposSinal({ ultimoPing: seg(28), entrouEm: seg(0) }, seg(30)).toISOString(), seg(0).toISOString());
+  igual("30 s parado ainda mantém", entradaAposSinal({ ultimoPing: seg(0), entrouEm: seg(-60) }, seg(30)).toISOString(), seg(-60).toISOString());
+  igual("mais de 30 s parado: recomeça", entradaAposSinal({ ultimoPing: seg(0), entrouEm: seg(-60) }, seg(31)).toISOString(), seg(31).toISOString());
+}
+
 // Filtro (o mesmo para médico, paciente e sala)
 {
   const agoraCedo = new Date("2026-10-03T12:00:00.000Z");
@@ -93,7 +112,7 @@ igual(
     f.dataInicio.lte.toISOString(),
     new Date(agoraCedo.getTime() - CARENCIA_APOS_INICIO_MIN * 60_000).toISOString(),
   );
-  igual("filtro: sem falta nem falha", f.eventos.none.tipo.in, ["falta_paciente", "falha_tecnica"]);
+  igual("filtro: sem chave eventos (data atual filtrada em desfechoExistente)", "eventos" in f, false);
   const agoraTarde = new Date("2026-11-20T12:00:00.000Z");
   igual(
     "filtro: janela retroativa depois do corte",

@@ -2,11 +2,11 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 import { useBion } from "@/lib/bion-store";
-import { montarFila, type ItemFila, type ReembolsosResposta, type RepassesResposta } from "./metricas";
+import { montarFila, type ItemFila, type ReembolsosResposta, type RepassesResposta, type SemDesfechoResposta } from "./metricas";
 
 /**
- * Dados reais do admin que NÃO vêm no bootstrap: repasses a pagar e
- * reembolsos em análise (rotas existentes, só ADMIN). O resto (consultas,
+ * Dados reais do admin que NÃO vêm no bootstrap: repasses a pagar,
+ * reembolsos em análise e consultas sem desfecho há mais de 24 h (rotas só ADMIN). O resto (consultas,
  * médicos, pacientes, chamados, auditoria) vem do store, que já é real.
  * Erro de uma rota não derruba a outra: cada bloco mostra o próprio estado.
  */
@@ -15,8 +15,9 @@ type DadosAdmin = {
   agora: number;
   repasses: Fonte<RepassesResposta>;
   reembolsos: Fonte<ReembolsosResposta>;
+  semDesfecho: Fonte<SemDesfechoResposta>;
   fila: ItemFila[];
-  /** Fila completa só depois das duas rotas responderem (com ou sem erro). */
+  /** Fila completa só depois das três rotas responderem (com ou sem erro). */
   filaPronta: boolean;
   atualizando: boolean;
   atualizar: () => Promise<void>;
@@ -47,15 +48,18 @@ export function ProvedorDadosAdmin({ children }: { children: ReactNode }) {
   const agora = useSyncExternalStore(assinarMinuto, minutoAtual, minutoAtual);
   const [repasses, setRepasses] = useState<Fonte<RepassesResposta>>({ dados: null, erro: null, carregando: true });
   const [reembolsos, setReembolsos] = useState<Fonte<ReembolsosResposta>>({ dados: null, erro: null, carregando: true });
+  const [semDesfecho, setSemDesfecho] = useState<Fonte<SemDesfechoResposta>>({ dados: null, erro: null, carregando: true });
   const [atualizando, setAtualizando] = useState(false);
 
   const buscarRotas = useCallback(async () => {
-    const [rp, rb] = await Promise.all([
+    const [rp, rb, sd] = await Promise.all([
       lerJson<RepassesResposta>("/api/admin/repasses?status=fechado"),
       lerJson<ReembolsosResposta>("/api/admin/reembolsos?status=em_analise"),
+      lerJson<SemDesfechoResposta>("/api/admin/consultas/sem-desfecho"),
     ]);
     setRepasses({ ...rp, carregando: false });
     setReembolsos({ ...rb, carregando: false });
+    setSemDesfecho({ ...sd, carregando: false });
   }, []);
 
   useEffect(() => {
@@ -82,10 +86,11 @@ export function ProvedorDadosAdmin({ children }: { children: ReactNode }) {
           auditLogs,
           repasses: repasses.dados?.repasses ?? null,
           reembolsos: reembolsos.dados?.reembolsos ?? null,
+          semDesfecho: semDesfecho.dados?.consultas ?? null,
         },
         agora,
       ),
-    [medicos, tickets, auditLogs, repasses.dados, reembolsos.dados, agora],
+    [medicos, tickets, auditLogs, repasses.dados, reembolsos.dados, semDesfecho.dados, agora],
   );
 
   const valor = useMemo<DadosAdmin>(
@@ -93,12 +98,13 @@ export function ProvedorDadosAdmin({ children }: { children: ReactNode }) {
       agora,
       repasses,
       reembolsos,
+      semDesfecho,
       fila,
-      filaPronta: !repasses.carregando && !reembolsos.carregando,
+      filaPronta: !repasses.carregando && !reembolsos.carregando && !semDesfecho.carregando,
       atualizando,
       atualizar,
     }),
-    [agora, repasses, reembolsos, fila, atualizando, atualizar],
+    [agora, repasses, reembolsos, semDesfecho, fila, atualizando, atualizar],
   );
   return <Ctx.Provider value={valor}>{children}</Ctx.Provider>;
 }

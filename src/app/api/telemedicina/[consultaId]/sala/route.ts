@@ -5,7 +5,8 @@ import { ok, falha } from "@/lib/server/http";
 import { resolverIceServers } from "@/lib/server/ice";
 import { canalSalaConsulta } from "@/lib/supabase/realtime";
 import { broadcastCanal } from "@/lib/supabase/broadcast";
-import { verificarPresencaConsultaSemFalhar } from "@/lib/server/presenca-consulta";
+import { entradaAposSinal, limparSala, verificarPresencaConsultaSemFalhar } from "@/lib/server/presenca-consulta";
+import { estadoJanelaSala, janelaSala, SALA_ABRE_ANTES_MIN, SALA_FECHA_DEPOIS_MIN } from "@/lib/janela-sala";
 
 /**
  * Sinalização WebRTC da sala de teleconsulta (Fase 2 — vídeo real P2P).
@@ -23,6 +24,18 @@ import { verificarPresencaConsultaSemFalhar } from "@/lib/server/presenca-consul
  *      tipo "candidato" aceita payload de UM candidato (objeto) OU um LOTE
  *      (array de até MAX_CANDIDATOS_POR_LOTE) — micro-batch do cliente reduz
  *      round trips de rede e consumo do rate limit durante o handshake.
+ *
+ * GET /api/telemedicina/[consultaId]/sala?espiar=1
+ *      Modo SÓ DE LEITURA (pré-sala do paciente): devolve se o outro está na
+ *      sala, o status da consulta e a janela da sala. NÃO grava presença,
+ *      NÃO grava auditoria de entrada, NÃO consome sinais/mensagens, não roda
+ *      a verificação de presença e não entrega iceServers. A presença só
+ *      conta nas chamadas normais, feitas pela /consulta depois de "Entrar".
+ *
+ * Janela (lib/janela-sala.ts): fora de [horário − 30 min, horário + 2 h] o
+ * GET normal e o POST de sinais respondem 409 (o sinal de controle
+ * "encerrada" continua aceito, para quem encerra no limite). O modo espiar
+ * funciona a qualquer hora.
  *
  * Segurança: apenas o paciente e o médico da consulta acessam a sala (403 para
  * qualquer outro papel, inclusive admin — sala é 1:1). Sinais só são aceitos
@@ -49,6 +62,7 @@ async function carregarConsultaAutorizada(consultaId: string, usuarioId: string)
     select: {
       id: true,
       status: true,
+      dataInicio: true,
       especialidade: true,
       pacienteId: true,
       medicoId: true,
@@ -63,6 +77,26 @@ async function carregarConsultaAutorizada(consultaId: string, usuarioId: string)
   return consulta;
 }
 
+/** 409 fora da janela da sala (antes de abrir ou depois de fechar). */
+function exigirJanelaAberta(dataInicio: Date) {
+  const estado = estadoJanelaSala(dataInicio, Date.now());
+  if (estado === "antes") {
+    throw erroHttp(409, `A sala ainda não abriu: ela abre ${SALA_ABRE_ANTES_MIN} min antes do horário.`);
+  }
+  if (estado === "fechada") {
+    throw erroHttp(409, `A sala já fechou: ela fica aberta até ${SALA_FECHA_DEPOIS_MIN / 60} h depois do horário.`);
+  }
+}
+
+function janelaWire(dataInicio: Date) {
+  const { abreEm, fechaEm } = janelaSala(dataInicio);
+  return {
+    estado: estadoJanelaSala(dataInicio, Date.now()),
+    abreEm: new Date(abreEm).toISOString(),
+    fechaEm: new Date(fechaEm).toISOString(),
+  };
+}
+
 function papelDe(consulta: { pacienteId: string; medicoId: string }, usuarioId: string) {
   return consulta.pacienteId === usuarioId ? "PACIENTE" : "MEDICO";
 }
@@ -71,29 +105,18 @@ function idDoOutro(consulta: { pacienteId: string; medicoId: string }, usuarioId
   return consulta.pacienteId === usuarioId ? consulta.medicoId : consulta.pacienteId;
 }
 
-/** Remove sinais já consumidos e presenças órfãs (executa em ~8% dos GETs). */
+/**
+ * Limpeza em ~8% dos GETs: sinais consumidos antigos; presença e o sinal
+ * "encerrada" só depois que a consulta tem desfecho (ver limparSala).
+ */
 function limpezaPeriodica(consultaId: string) {
   if (Math.random() > 0.08) return;
-  const agora = Date.now();
-  db.sinalSala
-    .deleteMany({
-      where: {
-        consultaId,
-        consumido: true,
-        createdAt: { lt: new Date(agora - 30 * 60 * 1000) },
-      },
-    })
-    .catch(() => {});
-  db.presencaSala
-    .deleteMany({
-      where: { consultaId, ultimoPing: { lt: new Date(agora - 60 * 60 * 1000) } },
-    })
-    .catch(() => {});
+  limparSala(consultaId).catch(() => {});
 }
 
 /** GET: heartbeat + estado da sala + pull de sinais novos. */
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ consultaId: string }> },
 ) {
   try {
@@ -104,21 +127,48 @@ export async function GET(
     const papel = papelDe(consulta, usuario.id);
     const outroId = idDoOutro(consulta, usuario.id);
 
+    // Modo só de leitura (pré-sala): nada é gravado nem consumido.
+    if (req.nextUrl.searchParams.get("espiar") === "1") {
+      const online = await db.presencaSala.findFirst({
+        where: { consultaId, usuarioId: outroId, ultimoPing: { gte: new Date(Date.now() - JANELA_ONLINE_MS) } },
+        select: { usuarioId: true },
+      });
+      return ok({
+        espiar: true,
+        consulta: {
+          id: consulta.id,
+          status: consulta.status,
+          especialidade: consulta.especialidade,
+          paciente: consulta.paciente.nome,
+          medico: consulta.medico.nome,
+        },
+        eu: { id: usuario.id, nome: usuario.nome, papel },
+        outroOnline: online !== null,
+        janela: janelaWire(consulta.dataInicio),
+      });
+    }
+
     // Depois que a sala fecha: falta do paciente / falha técnica pela presença
-    // (antes do heartbeat, para quem chega depois do fim não contar presença).
-    // Nunca lança e roda no máximo 1x/min por consulta.
+    // (antes do heartbeat e da janela). Nunca lança e roda no máximo 1x/min por consulta.
     await verificarPresencaConsultaSemFalhar(consultaId);
 
-    // Heartbeat de presença (upsert; "criado" = primeira entrada nesta sessão)
+    // Fora da janela (30 min antes … 2 h depois): 409, sem presença nem auditoria.
+    exigirJanelaAberta(consulta.dataInicio);
+
+    // Heartbeat de presença (upsert; "criado" = primeira entrada nesta consulta).
+    // "entrouEm" = início da sessão atual: recomeça quando o sinal ficou mais
+    // de 30 s parado (prova de quanto tempo a pessoa esperou na sala).
     const presencaExistente = await db.presencaSala.findUnique({
       where: { consultaId_usuarioId: { consultaId, usuarioId: usuario.id } },
-      select: { usuarioId: true },
+      select: { ultimoPing: true, entrouEm: true },
     });
     const criado = presencaExistente === null;
+    const agoraPing = new Date();
+    const entrouEm = entradaAposSinal(presencaExistente, agoraPing);
     await db.presencaSala.upsert({
       where: { consultaId_usuarioId: { consultaId, usuarioId: usuario.id } },
-      create: { consultaId, usuarioId: usuario.id, papel },
-      update: { ultimoPing: new Date(), papel },
+      create: { consultaId, usuarioId: usuario.id, papel, ultimoPing: agoraPing, entrouEm },
+      update: { ultimoPing: agoraPing, papel, entrouEm },
     });
 
     // Audit apenas na primeira entrada da sessão atual na sala
@@ -172,6 +222,7 @@ export async function GET(
       },
       eu: { id: usuario.id, nome: usuario.nome, papel },
       outroOnline: presencaOutro !== null,
+      janela: janelaWire(consulta.dataInicio),
       iceServers: resolverIceServers(),
       sinais: sinaisPendentes,
     });
@@ -205,6 +256,8 @@ export async function POST(
     if (!ativa && body.tipo !== "controle") {
       throw erroHttp(409, `Sala fechada: consulta está "${consulta.status}".`);
     }
+    // Fora da janela da sala, só o controle (ex.: "encerrada" no limite) passa.
+    if (body.tipo !== "controle") exigirJanelaAberta(consulta.dataInicio);
 
     // Anti-spam simples: cap de sinais por minuto por usuário
     const recentes = await db.sinalSala.count({

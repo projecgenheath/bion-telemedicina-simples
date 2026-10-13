@@ -99,7 +99,7 @@ export function TelaInicio({
             <button
               type="button"
               disabled={!aberta}
-              onClick={() => router.push("/consulta")}
+              onClick={() => router.push(`/consulta?consulta=${encodeURIComponent(proxima.id)}`)}
               className="bp-acao mt-4 w-full py-3 text-sm inline-flex items-center justify-center gap-2"
             >
               <Video className="w-4 h-4" /> {aberta ? "Entrar na sala" : "A sala abre 30 min antes"}

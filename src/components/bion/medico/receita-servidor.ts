@@ -47,6 +47,13 @@ export function consultaReembolsadaIntegral(brutoCentavos: number, reembolsos: R
   return brutoCentavos > 0 && totalReembolsadoCentavos(reembolsos) >= brutoCentavos;
 }
 
+/** Evento de falta/falha para saber se a consulta ainda está sem desfecho. */
+export type EventoDesfechoReceita = {
+  tipo: string;
+  dataAnterior: Date;
+  corrigidoEm?: Date | null;
+};
+
 export type ConsultaReceita = {
   id: string;
   dataInicio: Date;
@@ -54,7 +61,23 @@ export type ConsultaReceita = {
   valor: number; // reais (Float legado)
   pago: boolean;
   pagamento: { status: string; reembolsos: ReembolsoMin[] } | null;
+  /** Falta/falha (vigentes ou não). Sem isso, status aberto = sem desfecho. */
+  eventos?: EventoDesfechoReceita[] | null;
 };
+
+/** Status em que a consulta ainda "ia acontecer" (sem desfecho automático). */
+const STATUS_ABERTOS_RECEITA = ["confirmada", "em_espera", "pendente_anamnese"];
+const TIPOS_DESFECHO_RECEITA = ["falta_paciente", "falha_tecnica"];
+
+/** Tem desfecho vigente da data atual (corrigidoEm nulo e dataAnterior = dataInicio)? */
+function temDesfechoVigenteDaData(c: ConsultaReceita): boolean {
+  return (c.eventos ?? []).some(
+    (e) =>
+      TIPOS_DESFECHO_RECEITA.includes(e.tipo) &&
+      !e.corrigidoEm &&
+      e.dataAnterior.getTime() === c.dataInicio.getTime(),
+  );
+}
 
 /** Multa do cancelamento pelo paciente (EventoConsulta "cancelada" com multaCentavos > 0). */
 export type MultaCancelamento = {
@@ -78,6 +101,10 @@ export type MultaRemarcacao = {
  *    pago=true sem Pagamento ficam fora, mesma regra do repasse);
  *  - o status NÃO está em STATUS_FORA_DO_FATURAMENTO (cancelada,
  *    aguardando_reagendamento);
+ *  - NÃO está sem desfecho: status aberto (confirmada/em_espera/
+ *    pendente_anamnese) sem evento falta/falha vigente da data atual fica
+ *    fora (igual ao fechamento do repasse às 23:30). Falta do paciente
+ *    (status aberto + evento) entra; concluída entra;
  *  - o horário já começou (dataInicio ≤ agora): consulta paga futura ainda
  *    não foi realizada, então ainda não é receita;
  *  - não tem reembolso integral efetivo (consultaReembolsadaIntegral).
@@ -89,6 +116,8 @@ export function consultaEntraNaReceita(c: ConsultaReceita, agora: Date): boolean
   // pago=true sem Pagamento (consultas de teste) NÃO entra: exige confirmado.
   if (!c.pago || c.pagamento?.status !== "confirmado") return false;
   if (STATUS_FORA_DO_FATURAMENTO.includes(c.status)) return false;
+  // Sem desfecho (ninguém concluiu nem marcou falta/falha da data atual): fora.
+  if (STATUS_ABERTOS_RECEITA.includes(c.status) && !temDesfechoVigenteDaData(c)) return false;
   if (c.dataInicio.getTime() > agora.getTime()) return false;
   return !consultaReembolsadaIntegral(reaisParaCentavos(c.valor), c.pagamento.reembolsos);
 }

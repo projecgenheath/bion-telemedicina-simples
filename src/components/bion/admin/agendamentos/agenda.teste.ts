@@ -19,6 +19,7 @@ import {
   validarHoraManual,
   validarRespostaNegar,
 } from "./agenda";
+import { avisoMotivo, desfechoNoStore, destaqueDinheiro, podeCorrigirDesfecho, textoAvisos, textoConfirmacao, validarMotivoCorrecao, type PlanoWire } from "./desfecho";
 
 let ok = 0;
 let falhas = 0;
@@ -154,6 +155,50 @@ igual(
 igual("erro 409 já decidido", explicarErro(409, "Este pedido já foi decidido."), "Este pedido já foi decidido.");
 igual("erro 404", explicarErro(404, "Consulta não encontrada."), "Consulta não encontrada.");
 igual("erro 500 sem texto", explicarErro(500, null), "O servidor respondeu 500. Nada foi alterado.");
+
+/* ---------- Desfecho (rótulo do store, prévia e confirmação) ---------- */
+const passada = "2026-10-03T10:00:00-03:00";
+igual("desfecho: aberta e passada = sem desfecho", desfechoNoStore(c(passada), AGORA), { rotulo: "Sem desfecho", tom: "atencao" });
+igual("desfecho: aberta e futura = nada", desfechoNoStore(c("2026-10-05T10:00:00-03:00"), AGORA), null);
+igual("desfecho: concluída = realizada", desfechoNoStore(c(passada, { status: "concluida" }), AGORA)?.rotulo, "Realizada");
+igual("desfecho: falta do paciente", desfechoNoStore(c(passada, { falta: true }), AGORA)?.rotulo, "Falta do paciente");
+igual("desfecho: aguardando por falha", desfechoNoStore(c(passada, { status: "aguardando_reagendamento", motivoReagendamento: "falha_tecnica" }), AGORA)?.rotulo, "Falha técnica");
+igual("desfecho: aguardando por falta do médico", desfechoNoStore(c(passada, { status: "aguardando_reagendamento", motivoReagendamento: "falta_medico" }), AGORA)?.rotulo, "Falta do médico");
+igual("desfecho: não paga cancelada por falha", desfechoNoStore(c(passada, { status: "cancelada", pago: false, motivoCancelamento: "Falha técnica: a consulta não aconteceu" }), AGORA)?.rotulo, "Falha técnica");
+igual("desfecho: cancelada por outro motivo = nada", desfechoNoStore(c(passada, { status: "cancelada", motivoCancelamento: "Paciente pediu" }), AGORA), null);
+igual("corrigir desfecho: só depois de começar", [podeCorrigirDesfecho(c(passada), AGORA), podeCorrigirDesfecho(c("2026-10-05T10:00:00-03:00"), AGORA)], [true, false]);
+const plano = (efeito: PlanoWire["dinheiro"]["efeito"], extra: Partial<PlanoWire> = {}): PlanoWire => ({
+  atual: "sem_desfecho",
+  novo: "realizada",
+  statusAntes: "confirmada",
+  statusDepois: "concluida",
+  efeitos: [],
+  reembolsosEncerrados: [],
+  notificarPaciente: true,
+  motivoParaPaciente: false,
+  notificarMedico: true,
+  dinheiro: { efeito, pagoConfirmado: true, valorCentavos: 20000, liquidoMedicoCentavos: 18000, medicoRecebiaAntes: false, medicoRecebeDepois: true, repasse: null },
+  ...extra,
+});
+igual("prévia: entra no repasse", destaqueDinheiro(plano("entra_no_proximo_repasse").dinheiro), { valor: "+ R$ 180,00", legenda: "para o médico no próximo fechamento (23:30)", tom: "dinheiro" });
+igual("prévia: sai do repasse", destaqueDinheiro(plano("sai_do_repasse").dinheiro).valor, "− R$ 180,00");
+igual("prévia: repasse fechado (desconto só com reembolso)", destaqueDinheiro(plano("desconto_se_reembolso").dinheiro), { valor: "até − R$ 180,00", legenda: "desconto no próximo repasse, só se o paciente escolher o reembolso", tom: "atencao" });
+igual("prévia: sem pagamento", destaqueDinheiro(plano("sem_pagamento").dinheiro).valor, "—");
+igual("prévia: sem mudança", destaqueDinheiro(plano("nenhum").dinheiro), { valor: "Sem mudança", legenda: "o médico continua com R$ 180,00", tom: "neutro" });
+igual("confirmação cita o desfecho e quem é avisado", textoConfirmacao(plano("entra_no_proximo_repasse")), 'Revisei o efeito no dinheiro: corrigir para "Realizada" não tem "Desfazer" e o paciente e o médico serão avisados.');
+igual("confirmação só paciente", textoConfirmacao(plano("nenhum", { notificarMedico: false, novo: "falta_paciente" })).endsWith("o paciente será avisado."), true);
+igual("confirmação: sem desfecho → realizada avisa só o médico", textoConfirmacao(plano("entra_no_proximo_repasse", { notificarPaciente: false })).endsWith("e só o médico será avisado."), true);
+igual("confirmação: ninguém avisado", textoConfirmacao(plano("sem_pagamento", { notificarPaciente: false, notificarMedico: false })).endsWith("e ninguém será avisado."), true);
+igual("confirmação: motivo vai ao paciente", textoConfirmacao(plano("nenhum", { notificarMedico: false, novo: "falta_paciente", motivoParaPaciente: true })).endsWith("o paciente será avisado, com o motivo."), true);
+igual("avisos: paciente e médico", textoAvisos(plano("entra_no_proximo_repasse")), "Avisos: paciente e médico (muda o que o médico recebe).");
+igual("avisos: só o médico", textoAvisos(plano("entra_no_proximo_repasse", { notificarPaciente: false })), "Aviso: só o médico (muda o que ele recebe). Para o paciente nada muda na tela.");
+igual("avisos: ninguém", textoAvisos(plano("sem_pagamento", { notificarPaciente: false, notificarMedico: false })), "Sem aviso: para o paciente nada muda na tela.");
+igual("avisos: paciente lê o motivo", textoAvisos(plano("nenhum", { notificarMedico: false, motivoParaPaciente: true })), "Aviso: só o paciente. O paciente lê o motivo.");
+igual("aviso do motivo: vai ao paciente", avisoMotivo(plano("nenhum", { motivoParaPaciente: true })), { texto: "O paciente vai ler este motivo.", vaiParaPaciente: true });
+igual("aviso do motivo: fica na auditoria", avisoMotivo(plano("nenhum")), { texto: "Não vai para o paciente.", vaiParaPaciente: false });
+igual("aviso do motivo: sem opção escolhida", avisoMotivo(null).texto, "Não vai para o paciente.");
+igual("motivo curto", validarMotivoCorrecao("  curto  "), "Explique o motivo com pelo menos 10 caracteres (fica na auditoria).");
+igual("motivo ok", validarMotivoCorrecao("O suporte confirmou."), null);
 
 console.log(`${ok} ok, ${falhas} falha(s)`);
 if (falhas) process.exit(1);

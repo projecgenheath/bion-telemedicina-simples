@@ -133,7 +133,8 @@ export function prazoReembolsoManual(dataInicio: Date): Date {
  * falha técnica ou falta do médico).
  */
 export const includeFaltaWire = {
-  where: { tipo: { in: ["falta_paciente", "falha_tecnica", "cancelada"] } },
+  // corrigidoEm nulo: o evento corrigido pelo admin não vale mais (migração 20261006d).
+  where: { tipo: { in: ["falta_paciente", "falha_tecnica", "cancelada"] }, corrigidoEm: null },
   select: { tipo: true, motivo: true },
   orderBy: { em: "desc" },
   take: 20,

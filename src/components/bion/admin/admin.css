@@ -689,3 +689,9 @@ button.ba-card:hover, a.ba-card:hover, .ba-card[role="button"]:hover { transform
   /* Seções focáveis por âncora: sem anel ao receber foco programático. */
   section[tabindex="-1"]:focus { outline: none; }
 }
+
+/* Opção escolhida no "Corrigir desfecho" (radio dentro do card): contorno na cor do sinal. */
+@layer components {
+  .ba-opcao[data-selecionada="true"] { outline: 2px solid var(--ba-sinal); outline-offset: 1px; }
+  .ba-opcao:has(input:focus-visible) { outline: 2px solid var(--ba-sinal); outline-offset: 2px; }
+}

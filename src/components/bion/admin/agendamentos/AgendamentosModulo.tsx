@@ -33,7 +33,8 @@ const PERIODOS: { id: Periodo; rotulo: string }[] = [
  * Agendamentos do admin (Torre BION): agenda real do app (linha do tempo no
  * celular, tabela no desktop), editar/remarcar com médico por id e horários
  * livres, cancelar com confirmação e a aba de pedidos de reembolso.
- * ?aba=reembolsos abre a aba; ?consulta=ID abre o detalhe.
+ * ?aba=reembolsos abre a aba; ?consulta=ID abre o detalhe (com &acao=desfecho,
+ * direto no "Corrigir desfecho").
  */
 export function AgendamentosModulo() {
   const router = useRouter();
@@ -43,7 +44,10 @@ export function AgendamentosModulo() {
   const largo = useLargo();
   const aba: Aba = params.get("aba") === "reembolsos" ? "reembolsos" : "agenda";
   const idAberto = params.get("consulta");
-  const [modoInicial, setModoInicial] = useState<"detalhe" | "editar" | "cancelar">("detalhe");
+  // ?acao=desfecho (vindo da Fila "Sem desfecho") abre direto o "Corrigir desfecho".
+  const acaoUrl = params.get("acao") === "desfecho" ? "desfecho" : null;
+  const [modoEscolhido, setModoInicial] = useState<"detalhe" | "editar" | "cancelar">("detalhe");
+  const modoInicial = acaoUrl ?? modoEscolhido;
   const [filtros, setFiltros] = useState<Filtros>(FILTROS_PADRAO);
   const [limite, setLimite] = useState(PAGINA);
 
