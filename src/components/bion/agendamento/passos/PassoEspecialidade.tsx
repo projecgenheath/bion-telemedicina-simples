@@ -57,7 +57,6 @@ export function PassoEspecialidade(p: AgendamentoCorpoProps) {
     processandoPagamento,
     finalizarAgendamento,
     medicoAtual,
-    onGoToWaitingRoom,
     onDone,
   } = p;
 

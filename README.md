@@ -41,7 +41,7 @@ Outros pacientes: `joao.pereira@email.com`, `carlos.souza@email.com`. Outros mé
 
 **Paciente**
 - Agendamento com especialista (valor, pagamento, remarcação e cancelamento com motivo)
-- Sala de espera e teleconsulta por vídeo real (P2P, com chat na sala, compartilhamento de tela, degradação para áudio/escuta quando não há câmera)
+- Teleconsulta por vídeo real, com o botão Entrar na sala liberado 30 min antes do horário (P2P, com chat na sala, compartilhamento de tela, degradação para áudio/escuta quando não há câmera)
 - Mensagens com a médica vinculada e com o Suporte BION (polling de 4s, não lidas, notificação ao destinatário)
 - BION Saúde IA: assistente clínico com LLM real, ciente de medicamentos, alergias e próximas consultas do paciente (com fallback local por palavras-chave)
 - Histórico clínico, receitas/atestados em PDF, anexo de exames, lembretes de medicação, avaliações, privacidade/consentimentos LGPD
@@ -66,7 +66,7 @@ src/
     page.tsx              # landing pública
     entrar/               # login e registro
     (app)/                # telas autenticadas (App Shell com sidebar)
-      painel/ agendar/ consultas/ sala-espera/ consulta/ mensagens/
+      painel/ agendar/ consultas/ consulta/ mensagens/
       bion-ia/ historico/ receitas/ prontuario/ lembretes/ avaliacoes/
       notificacoes/ perfil/ privacidade/ ajuda/ suporte/
       medico-pacientes/ medico-perfil/

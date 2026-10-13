@@ -8,7 +8,6 @@ export type View =
   | "login"
   | "dashboard"
   | "agendar"
-  | "sala-espera"
   | "consulta"
   | "medico-perfil"
   | "paciente-perfil"
@@ -40,7 +39,6 @@ export const VIEW_TO_PATH: Record<View, string> = {
   login: "/entrar",
   dashboard: "/painel",
   agendar: "/agendar",
-  "sala-espera": "/sala-espera",
   consulta: "/consulta",
   "medico-perfil": "/medico-perfil",
   "paciente-perfil": "/perfil",
@@ -103,7 +101,6 @@ export const SO_MEDICO: View[] = ["medico-pacientes", "medico-perfil", "avaliaco
 /** Exclusivas do paciente (histórico clínico é a linha do tempo do PRÓPRIO paciente). */
 export const SO_PACIENTE: View[] = [
   "agendar",
-  "sala-espera",
   "paciente-perfil",
   "historico",
   "paciente-app",

@@ -30,7 +30,7 @@ const passos: Record<Role, Passo[]> = {
       icon: Video,
       titulo: "2. Entrar na consulta",
       texto:
-        "No horário marcado, a sala de espera libera o botão de entrada. Câmera e microfone são testados antes.",
+        "O botão Entrar na sala é liberado 30 minutos antes do horário marcado. Câmera e microfone são testados dentro da chamada.",
     },
     {
       icon: FileText,

@@ -54,7 +54,6 @@ export function PassoAnexos(p: AgendamentoCorpoProps) {
     processandoPagamento,
     finalizarAgendamento,
     medicoAtual,
-    onGoToWaitingRoom,
     onDone,
   } = p;
 
