@@ -134,11 +134,11 @@ function Ficha({ paciente: p, agora, onModo }: { paciente: PacienteRegistro; ago
               <dt className="ba-texto-2">Paciente desde</dt>
               <dd>{p.desde || "—"}</dd>
             </dl>
-            <Link href="/privacidade" className="ba-card flex items-center gap-3" data-denso="true">
+            <Link href={`/privacidade?busca=${encodeURIComponent(p.id)}`} className="ba-card flex items-center gap-3" data-denso="true">
               <ShieldCheck className="w-5 h-5 shrink-0" style={{ color: "var(--ba-sinal)" }} aria-hidden />
               <span className="flex-1 min-w-0">
                 <span className="font-bold block">Privacidade &amp; LGPD</span>
-                <span className="text-xs ba-texto-2">Consentimentos, cofre de identificação e pedidos do titular. Busque por este paciente lá.</span>
+                <span className="text-xs ba-texto-2">Consentimentos, cofre de identificação e anonimização. Abre já filtrada por este paciente.</span>
               </span>
             </Link>
             {s !== "anonimizado" ? (
@@ -210,7 +210,7 @@ function Ficha({ paciente: p, agora, onModo }: { paciente: PacienteRegistro; ago
               <ul className="space-y-1.5">
                 {chamados.lista.map((t) => (
                   <li key={t.id}>
-                    <Link href="/suporte" className="ba-card flex items-center gap-3" data-denso="true">
+                    <Link href={`/suporte?chamado=${encodeURIComponent(t.id)}`} className="ba-card flex items-center gap-3" data-denso="true">
                       <LifeBuoy className="w-4 h-4 shrink-0" style={{ color: "var(--ba-sinal)" }} aria-hidden />
                       <span className="flex-1 min-w-0">
                         <span className="font-semibold block break-words">{t.assunto}</span>

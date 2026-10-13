@@ -230,7 +230,7 @@ export function destinoEntidade(l: Pick<AuditLog, "entidade" | "entidadeId">): {
   if (e === "consulta") return id ? { view: `admin-agendamentos?consulta=${id}`, rotulo: "Abrir consulta" } : null;
   if (e === "repasse") return id ? { view: `admin-repasses?repasse=${id}`, rotulo: "Abrir repasse" } : null;
   if (e === "reembolso") return { view: "admin-agendamentos?aba=reembolsos", rotulo: "Abrir reembolsos" };
-  if (e === "ticket") return { view: "suporte", rotulo: "Abrir chamados" };
+  if (e === "ticket") return { view: id ? `suporte?chamado=${id}` : "suporte", rotulo: id ? "Abrir chamado" : "Abrir chamados" };
   if (e === "llm") return { view: "llm-monitor", rotulo: "Abrir Monitor LLM" };
   return null;
 }
