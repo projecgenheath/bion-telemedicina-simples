@@ -1,7 +1,7 @@
 "use client";
 
 import type { RefObject } from "react";
-import { CameraOff } from "lucide-react";
+import { CameraOff, WifiOff } from "lucide-react";
 import { AlertaMidia } from "@/components/bion/consulta/AlertaMidia";
 
 type StatusSala = string;
@@ -17,6 +17,10 @@ export function ConsultaAreaVideo({
   iniciais,
   statusSala,
   outroOnline,
+  outroSaiu = false,
+  qualidade = "boa",
+  reconectando = false,
+  role,
 }: {
   videoRemotoRef: RefObject<HTMLVideoElement | null>;
   videoLocalRef: RefObject<HTMLVideoElement | null>;
@@ -28,7 +32,24 @@ export function ConsultaAreaVideo({
   iniciais: (nome: string) => string;
   statusSala: StatusSala;
   outroOnline: boolean;
+  /** O outro participante saiu da chamada (pode voltar enquanto a sala estiver aberta). */
+  outroSaiu?: boolean;
+  qualidade?: "boa" | "fraca" | "ruim";
+  reconectando?: boolean;
+  role?: "paciente" | "medico" | "admin";
 }) {
+  const quemSaiu = role === "medico" ? "Paciente saiu da chamada" : "O(a) médico(a) saiu da chamada";
+  // Aviso simples de rede (o redesign da tela vem em outro PR).
+  const avisoRede =
+    statusSala === "encerrada"
+      ? null
+      : reconectando
+        ? "Reconectando… a chamada volta sozinha em instantes."
+        : qualidade === "ruim"
+          ? "Conexão muito instável: o vídeo pode travar. Se puder, aproxime-se do Wi-Fi."
+          : qualidade === "fraca"
+            ? "Conexão fraca: a imagem pode perder qualidade."
+            : null;
   return (
     <>
       <div className="aspect-video lg:aspect-auto lg:flex-1 lg:min-h-[320px] w-full shrink-0 lg:shrink relative rounded-3xl overflow-hidden bg-gradient-to-br from-slate-800 via-slate-900 to-slate-950 border border-white/10 flex items-center justify-center shadow-2xl">
@@ -55,7 +76,9 @@ export function ConsultaAreaVideo({
                 />
                 {statusSala === "encerrada"
                   ? "Chamada encerrada"
-                  : statusSala === "conectando-p2p"
+                  : outroSaiu
+                    ? `${quemSaiu}. A sala continua aberta para a volta.`
+                    : statusSala === "conectando-p2p"
                     ? "Negociando conexão segura…"
                     : outroOnline
                       ? "Na sala — conectando mídia…"
@@ -64,6 +87,19 @@ export function ConsultaAreaVideo({
             </div>
           </div>
         )}
+
+        {avisoRede ? (
+          <div
+            role="status"
+            aria-live="polite"
+            className={`absolute top-2.5 left-2.5 sm:top-4 sm:left-4 max-w-[60%] flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold backdrop-blur shadow-lg ${
+              reconectando || qualidade === "ruim" ? "bg-red-600/85 text-white" : "bg-amber-500/90 text-black"
+            }`}
+          >
+            <WifiOff className="w-3.5 h-3.5 shrink-0" />
+            <span>{avisoRede}</span>
+          </div>
+        ) : null}
 
         <div className="absolute top-2.5 right-2.5 sm:top-4 sm:right-4 w-28 h-20 sm:w-36 sm:h-28 md:w-52 md:h-36 rounded-2xl overflow-hidden bg-slate-900 border-2 border-white/20 shadow-2xl flex items-center justify-center text-xs">
           <video
