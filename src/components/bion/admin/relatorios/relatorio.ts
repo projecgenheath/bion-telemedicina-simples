@@ -1,7 +1,8 @@
 /**
  * Regras puras dos Relatórios do admin (Torre BION). Mesmos números,
- * mesmos filtros e o MESMO CSV do Relatorios antigo
- * (src/components/bion/Relatorios.tsx); o "agora" entra como parâmetro.
+ * mesmos filtros e o MESMO CSV do Relatorios antigo (removido; ver o
+ * histórico do git); o "agora" entra como parâmetro. Única diferença: o
+ * desempenho por médico agrupa pelo medicoId (ver linhasPorMedico).
  * Testes: relatorios.teste.ts (também com TZ=UTC e TZ=Asia/Tokyo).
  */
 import type { Avaliacao, Consulta } from "@/lib/bion-tipos";
@@ -45,6 +46,44 @@ export function filtrarAvaliacoesRelatorio(avaliacoes: Avaliacao[], f: FiltrosRe
 }
 
 export type DesempenhoMedico = { total: number; soma: number; n: number };
+/**
+ * Uma linha do desempenho por médico. `chave` é "id:<medicoId>" ou, para
+ * consulta sem medicoId, "nome:<nome>"; `nome` é só o rótulo.
+ * `homonimo` = avaliações de um nome que pertence a mais de um médico no
+ * recorte: a avaliação não traz medicoId, então não dá para separá-las.
+ */
+export type LinhaMedico = DesempenhoMedico & { chave: string; nome: string; medicoId?: string; homonimo?: boolean };
+
+export const chaveMedico = (c: Pick<Consulta, "medico" | "medicoId">): string => (c.medicoId ? `id:${c.medicoId}` : `nome:${c.medico}`);
+
+/**
+ * Desempenho por médico agrupado pelo medicoId (consulta sem medicoId cai no
+ * nome). As avaliações só têm o nome do médico: vão para o único médico com
+ * esse nome no recorte; sem nenhum, ficam numa linha pelo nome (como antes);
+ * com dois ou mais (homônimos), ficam numa linha própria marcada `homonimo`.
+ * Ordem: mais consultas primeiro (empate mantém a ordem de chegada).
+ */
+export function linhasPorMedico(consultas: Consulta[], avaliacoes: Avaliacao[]): LinhaMedico[] {
+  const linhas = new Map<string, LinhaMedico>();
+  const idsPorNome = new Map<string, Set<string>>();
+  consultas.forEach((c) => {
+    const chave = chaveMedico(c);
+    const l = linhas.get(chave) ?? { chave, nome: c.medico, ...(c.medicoId ? { medicoId: c.medicoId } : {}), total: 0, soma: 0, n: 0 };
+    l.total += 1;
+    linhas.set(chave, l);
+    if (c.medicoId) idsPorNome.set(c.medico, (idsPorNome.get(c.medico) ?? new Set()).add(chave));
+  });
+  avaliacoes.forEach((a) => {
+    const ids = idsPorNome.get(a.medico);
+    const homonimo = !!ids && ids.size > 1;
+    const chave = ids && ids.size === 1 ? [...ids][0] : homonimo ? `homonimo:${a.medico}` : `nome:${a.medico}`;
+    const l = linhas.get(chave) ?? { chave, nome: a.medico, total: 0, soma: 0, n: 0, ...(homonimo ? { homonimo: true } : {}) };
+    l.soma += a.nota;
+    l.n += 1;
+    linhas.set(chave, l);
+  });
+  return [...linhas.values()].sort((a, b) => b.total - a.total);
+}
 export type DadosRelatorio = {
   total: number;
   concluidas: number;
@@ -52,11 +91,11 @@ export type DadosRelatorio = {
   media: number;
   taxaCancelamento: number;
   especialidades: [string, number][];
-  medicos: [string, DesempenhoMedico][];
+  medicos: LinhaMedico[];
   pacientes: number;
 };
 
-/** Exatamente o cálculo da tela antiga. */
+/** O cálculo da tela antiga; o desempenho por médico agrupa pelo medicoId. */
 export function calcularRelatorio(consultas: Consulta[], avaliacoes: Avaliacao[]): DadosRelatorio {
   const total = consultas.length;
   const concluidas = consultas.filter((c) => c.status === "concluida").length;
@@ -66,19 +105,6 @@ export function calcularRelatorio(consultas: Consulta[], avaliacoes: Avaliacao[]
   const porEspecialidade = new Map<string, number>();
   consultas.forEach((c) => porEspecialidade.set(c.especialidade, (porEspecialidade.get(c.especialidade) ?? 0) + 1));
 
-  const porMedico = new Map<string, DesempenhoMedico>();
-  consultas.forEach((c) => {
-    const m = porMedico.get(c.medico) ?? { total: 0, soma: 0, n: 0 };
-    m.total += 1;
-    porMedico.set(c.medico, m);
-  });
-  avaliacoes.forEach((a) => {
-    const m = porMedico.get(a.medico) ?? { total: 0, soma: 0, n: 0 };
-    m.soma += a.nota;
-    m.n += 1;
-    porMedico.set(a.medico, m);
-  });
-
   return {
     total,
     concluidas,
@@ -86,7 +112,7 @@ export function calcularRelatorio(consultas: Consulta[], avaliacoes: Avaliacao[]
     media,
     taxaCancelamento: total ? Math.round((canceladas / total) * 100) : 0,
     especialidades: [...porEspecialidade.entries()].sort((a, b) => b[1] - a[1]),
-    medicos: [...porMedico.entries()].sort((a, b) => b[1].total - a[1].total),
+    medicos: linhasPorMedico(consultas, avaliacoes),
     pacientes: new Set(consultas.map((c) => c.paciente)).size,
   };
 }
@@ -101,6 +127,18 @@ export function pacientesDoRecorte(consultas: Consulta[]): { nome: string; consu
     m.set(c.paciente, p);
   }
   return [...m.values()].sort((a, b) => b.consultas - a.consultas || a.nome.localeCompare(b.nome, "pt-BR"));
+}
+
+/**
+ * Rótulo da linha: o nome. Só quando o mesmo nome aparece em mais de uma
+ * linha acrescenta o fim do medicoId (ou "consultas sem ID"); a linha das
+ * avaliações de homônimos diz "avaliações sem médico identificado".
+ */
+export function rotuloMedico(l: LinhaMedico, linhas: LinhaMedico[]): string {
+  if (l.homonimo) return `${l.nome} (avaliações sem médico identificado)`;
+  const repetido = linhas.filter((x) => x.nome === l.nome && !x.homonimo).length > 1;
+  if (!repetido) return l.nome;
+  return l.medicoId ? `${l.nome} (#${l.medicoId.slice(-6)})` : `${l.nome} (consultas sem ID)`;
 }
 
 export const notaMedia = (v: DesempenhoMedico, casas = 1) => (v.n ? (v.soma / v.n).toFixed(casas) : "—");

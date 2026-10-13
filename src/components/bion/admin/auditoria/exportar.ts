@@ -1,6 +1,6 @@
 /**
  * Exportações da Auditoria — a MESMA lógica do AuditTrail antigo
- * (src/components/bion/AuditTrail.tsx): mesmo CSV, mesmo PDF (jsPDF, A4,
+ * (removido; ver o histórico do git): mesmo CSV, mesmo PDF (jsPDF, A4,
  * mesma diagramação), mesmos nomes de arquivo e os mesmos eventos
  * AUDITORIA_CSV_EXPORTADA / AUDITORIA_PDF_EXPORTADA (o servidor força
  * categoria e severidade). Datas sempre no fuso da clínica.
