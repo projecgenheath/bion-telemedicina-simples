@@ -1,9 +1,9 @@
-import { NextRequest } from "next/server";
+import { NextRequest, after } from "next/server";
 import { db } from "@/lib/db";
 import { exigirSessao } from "@/lib/server/auth";
 import { aplicarSideEffects } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
-import { canalMensagensUsuario } from "@/lib/supabase/realtime";
+import { topicoMensagensUsuario } from "@/lib/server/usuario-canal";
 import { broadcastCanal } from "@/lib/supabase/broadcast";
 import { idCuid, isErro } from "@/lib/server/validar";
 
@@ -155,8 +155,14 @@ export async function POST(req: NextRequest) {
       lida: msg.lida,
       createdAt: msg.createdAt.toISOString(),
     };
-    void broadcastCanal(canalMensagensUsuario(destinatario.id), "nova_mensagem", payloadRt);
-    void broadcastCanal(canalMensagensUsuario(usuario.id), "nova_mensagem", payloadRt);
+    const destinoId = destinatario.id;
+    const remetenteId = usuario.id;
+    after(() =>
+      Promise.all([
+        broadcastCanal(topicoMensagensUsuario(destinoId), "nova_mensagem", payloadRt, { privado: true }),
+        broadcastCanal(topicoMensagensUsuario(remetenteId), "nova_mensagem", payloadRt, { privado: true }),
+      ]),
+    );
 
 
     // Notificação gerada pelo SERVIDOR a partir do evento real (o cliente

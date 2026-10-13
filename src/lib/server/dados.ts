@@ -1,7 +1,8 @@
 import "server-only";
 import { instanteNoFuso, partesNoFuso } from "./fuso";
 import { broadcastCanal } from "@/lib/supabase/broadcast";
-import { canalNotificacoes } from "@/lib/supabase/realtime";
+import { after } from "next/server";
+import { topicoNotificacoesUsuario } from "./usuario-canal";
 import { db } from "@/lib/db";
 import type { Prisma } from "@prisma/client";
 import type { UsuarioSessao } from "./auth";
@@ -776,10 +777,14 @@ export async function aplicarSideEffects(
         criadas.push(wire);
       }
       if (row.usuarioId) {
-        void broadcastCanal(
-          canalNotificacoes(row.usuarioId),
-          "nova_notificacao",
-          wire as unknown as Record<string, unknown>,
+        const destinoId = row.usuarioId;
+        after(() =>
+          broadcastCanal(
+            topicoNotificacoesUsuario(destinoId),
+            "nova_notificacao",
+            wire as unknown as Record<string, unknown>,
+            { privado: true },
+          ),
         );
       }
     }
