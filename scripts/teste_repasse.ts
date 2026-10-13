@@ -20,6 +20,7 @@ import {
   fecharRepasse,
   fecharRepasseDoMedico,
   marcarRepassePago,
+  listarConsultasSemDesfecho,
   previaDoDia,
   validarCompetenciaParaFechar,
 } from "@/lib/server/repasse";
@@ -53,9 +54,10 @@ async function limpar() {
   await db.user.deleteMany();
 }
 
+/** Consulta paga. Padrão "concluida" (realizada): sem desfecho ela não entra no fechamento. */
 async function consultaPaga(medicoId: string, pacienteId: string, quando: Date, valor = 200, extra: Record<string, unknown> = {}) {
   const c = await db.consulta.create({
-    data: { medicoId, pacienteId, dataInicio: quando, especialidade: "Clínica", valor, pago: true, status: "confirmada", ...extra },
+    data: { medicoId, pacienteId, dataInicio: quando, especialidade: "Clínica", valor, pago: true, status: "concluida", ...extra },
   });
   const p = await db.pagamento.create({ data: { consultaId: c.id, valor, status: "confirmado", via: "simulado", confirmadoEm: quando } });
   return { c, p };
@@ -96,7 +98,7 @@ async function main() {
   });
   const { c: c00 } = await consultaPaga(med.id, pac.id, sp("2030-03-11", "00:00"), 150); // dia seguinte
   // duas remarcações pagas da mesma consulta (multa R$ 100 cada), uma às 10:00 e outra às 23:40
-  const { c: cRem } = await consultaPaga(med.id, pac.id, sp("2030-03-20", "10:00"), 200);
+  const { c: cRem } = await consultaPaga(med.id, pac.id, sp("2030-03-20", "10:00"), 200, { status: "confirmada" }); // futura
   const r1 = await db.remarcacaoPendente.create({
     data: { consultaId: cRem.id, novaData: sp("2030-03-12", "10:00"), multaCentavos: 10000, status: "aprovada", solicitadoPor: pac.id, expiraEm: sp(D, "11:00"), aprovadoEm: sp(D, "10:00") },
   });
@@ -141,7 +143,7 @@ async function main() {
   /* ---------- Reembolso integral depois do fechamento vira desconto ---------- */
   const pc1 = await db.pagamento.findUnique({ where: { consultaId: c1.id } });
   await db.reembolso.create({
-    data: { pagamentoId: pc1!.id, valorCentavos: 20000, motivo: "falta_paciente", status: "aprovado", origem: "manual", solicitadoPor: pac.id, criadoEm: sp("2030-03-12", "08:00"), decididoEm: sp("2030-03-12", "09:00"), decididoPor: adm.id },
+    data: { pagamentoId: pc1!.id, valorCentavos: 20000, motivo: "falta_paciente", status: "aprovado", origem: "manual", justificativa: "Tive um imprevisto.", solicitadoPor: pac.id, criadoEm: sp("2030-03-12", "08:00"), decididoEm: sp("2030-03-12", "09:00"), decididoPor: adm.id },
   });
   // dia 12: só uma consulta de 100 (líquido 90) → desconto de 180 aplica 90 e sobram 90
   await consultaPaga(med.id, pac.id, sp("2030-03-12", "11:00"), 100);
@@ -181,6 +183,49 @@ async function main() {
   const f16 = await fecharRepasseDoMedico(med2.id, "2030-03-16", sp("2030-03-16", "23:30"));
   const aj15 = await db.repasseAjuste.findMany({ where: { medicoId: med2.id, motivo: "reembolso" } });
   verifica(aj15.length === 1 && aj15[0].valorCentavos === 4500 && aj15[0].repasseId === f16.repasseId, "esse reembolso vira um único ajuste de 45 no dia seguinte", aj15);
+
+  /* ---------- Desfecho: consulta sem desfecho fica fora do fechamento ---------- */
+  // Médico novo, dias 2030-04-0x. "Sem desfecho" = status confirmada/em_espera/
+  // pendente_anamnese e nenhum evento falta_paciente/falha_tecnica VIGENTE da
+  // data atual (desfechoDaConsulta em financeiro.ts).
+  const med3 = await db.user.create({ data: { nome: "Med3", email: "m3@t", senhaHash: "x", role: "MEDICO" } });
+  const DD = "2030-04-02";
+  const { c: dSem } = await consultaPaga(med3.id, pac.id, sp(DD, "09:00"), 100, { status: "confirmada" }); // ninguém marcou nada
+  const { c: dEspera } = await consultaPaga(med3.id, pac.id, sp(DD, "09:30"), 100, { status: "em_espera" }); // idem
+  const { c: dConc } = await consultaPaga(med3.id, pac.id, sp(DD, "10:00"), 100); // concluída
+  const { c: dFalta } = await consultaPaga(med3.id, pac.id, sp(DD, "11:00"), 100, { status: "confirmada" }); // falta do paciente (médico recebe)
+  await db.eventoConsulta.create({ data: { consultaId: dFalta.id, tipo: "falta_paciente", por: "medico", atorId: med3.id, dataAnterior: dFalta.dataInicio, motivo: "falta_paciente", multaCentavos: 0 } });
+  const { c: dCorr } = await consultaPaga(med3.id, pac.id, sp(DD, "12:00"), 100, { status: "confirmada" }); // falta corrigida pelo admin: não vale
+  await db.eventoConsulta.create({
+    data: { consultaId: dCorr.id, tipo: "falta_paciente", por: "sistema", dataAnterior: dCorr.dataInicio, motivo: "falta_paciente", multaCentavos: 0, corrigidoEm: sp(DD, "13:00"), corrigidoPorId: adm.id, motivoCorrecao: "Paciente entrou, sistema errou." },
+  });
+  const { c: dRem } = await consultaPaga(med3.id, pac.id, sp(DD, "14:00"), 100, { status: "confirmada", remarcada: true }); // falha antiga (outra data), remarcada para hoje
+  await db.eventoConsulta.create({ data: { consultaId: dRem.id, tipo: "falha_tecnica", por: "sistema", dataAnterior: sp("2030-04-01", "14:00"), motivo: "falha_tecnica", multaCentavos: 0 } });
+  const { c: dFalha } = await consultaPaga(med3.id, pac.id, sp(DD, "15:00"), 100, { status: "aguardando_reagendamento" }); // falha técnica vigente
+  await db.eventoConsulta.create({ data: { consultaId: dFalha.id, tipo: "falha_tecnica", por: "medico", atorId: med3.id, dataAnterior: dFalha.dataInicio, motivo: "falha_tecnica", multaCentavos: 0 } });
+
+  const previaD = await previaDoDia(med3.id, sp(DD, "23:30"));
+  const idsPrevia = new Set(previaD.itens.map((i) => i.consultaId));
+  verifica(idsPrevia.size === 2 && idsPrevia.has(dConc.id) && idsPrevia.has(dFalta.id),
+    "prévia: só a concluída e a falta do paciente entram (sem desfecho, falta corrigida, falha antiga e falha vigente ficam fora)", [...idsPrevia]);
+  const semD = await listarConsultasSemDesfecho({ ate: sp(DD, "23:30"), medicoId: med3.id });
+  verifica(semD.map((x) => x.id).sort().join() === [dSem.id, dEspera.id, dCorr.id, dRem.id].sort().join(),
+    "listarConsultasSemDesfecho: confirmada, em_espera, falta corrigida e remarcada depois de falha antiga", semD.map((x) => x.id));
+  const statusAntes = await db.consulta.findMany({ where: { medicoId: med3.id }, select: { id: true, status: true }, orderBy: { id: "asc" } });
+  const fD = await fecharRepasseDoMedico(med3.id, DD, sp(DD, "23:30"));
+  verifica(fD.situacao === "fechado" && fD.itens === 2 && fD.liquidoCentavos === 18000, "fechamento das 23:30 leva só as 2 com desfecho (2 × 90)", fD);
+  const statusDepois = await db.consulta.findMany({ where: { medicoId: med3.id }, select: { id: true, status: true }, orderBy: { id: "asc" } });
+  verifica(JSON.stringify(statusAntes) === JSON.stringify(statusDepois), "o fechamento não muda o status de nenhuma consulta");
+  verifica((await db.eventoConsulta.count({ where: { consulta: { medicoId: med3.id } } })) === 4, "o fechamento não grava evento (não roda presença)");
+
+  // Dia seguinte: o médico conclui a de 09:00 e o admin dá falta na de 12:00 → entram no fechamento do dia 3.
+  await db.consulta.update({ where: { id: dSem.id }, data: { status: "concluida" } });
+  await db.eventoConsulta.create({ data: { consultaId: dCorr.id, tipo: "falta_paciente", por: "admin", atorId: adm.id, dataAnterior: dCorr.dataInicio, motivo: "falta_paciente", multaCentavos: 0 } });
+  const fD3 = await fecharRepasseDoMedico(med3.id, "2030-04-03", sp("2030-04-03", "23:30"));
+  const repD3 = await db.repasse.findUnique({ where: { id: fD3.repasseId! }, include: { itens: true } });
+  verifica(repD3?.itens.length === 2 && repD3.itens.some((i) => i.consultaId === dSem.id) && repD3.itens.some((i) => i.consultaId === dCorr.id),
+    "ganhou desfecho depois: entra no fechamento seguinte (consulta do dia 2 no repasse do dia 3)", repD3?.itens.map((i) => i.consultaId));
+  verifica(!repD3?.itens.some((i) => i.consultaId === dEspera.id || i.consultaId === dRem.id), "as que continuam sem desfecho seguem fora");
 
   /* ---------- Pagamento ---------- */
   const id10 = rep10!.id;

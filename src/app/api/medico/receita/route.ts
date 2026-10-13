@@ -37,6 +37,10 @@ export async function GET(req: NextRequest) {
           valor: true,
           pago: true,
           pagamento: { select: { status: true, reembolsos: { select: { status: true, valorCentavos: true, origem: true } } } },
+          eventos: {
+            where: { tipo: { in: ["falta_paciente", "falha_tecnica"] } },
+            select: { tipo: true, dataAnterior: true, corrigidoEm: true },
+          },
         },
       }),
       db.eventoConsulta.findMany({

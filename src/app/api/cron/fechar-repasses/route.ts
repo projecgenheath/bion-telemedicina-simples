@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import { NextRequest } from "next/server";
 import { registrarAudit } from "@/lib/server/auth";
 import { ok, falha } from "@/lib/server/http";
-import { competenciaPadraoParaFechar, fecharRepasse } from "@/lib/server/repasse";
+import { competenciaPadraoParaFechar, fecharRepasse, listarConsultasSemDesfecho } from "@/lib/server/repasse";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -22,6 +22,13 @@ function autorizado(req: NextRequest): boolean | null {
  * dia para todos os médicos. Idempotente: se rodar de novo ou atrasar para
  * depois da meia-noite, fecha a competência certa sem duplicar
  * (corte = mínimo entre agora e o fim do dia em SP).
+ *
+ * Desfecho (regras do Alisson, 06/10/2026): consultas SEM DESFECHO (status
+ * ainda "ia acontecer" e sem falta/falha técnica vigente) ficam fora do
+ * fechamento e entram no primeiro fechamento depois de ganhar desfecho
+ * (repasse.ts). O cron NÃO muda status nem roda a verificação de presença:
+ * só conta as que ficaram de fora (`semDesfecho`, na auditoria) — a Fila do
+ * admin mostra as que estão assim há mais de 24 h.
  */
 export async function GET(req: NextRequest) {
   try {
@@ -35,14 +42,16 @@ export async function GET(req: NextRequest) {
     const r = await fecharRepasse(dia, { agora });
     const fechados = r.resultados.filter((x) => x.situacao === "fechado").length;
     const erros = r.resultados.filter((x) => x.situacao === "erro").length;
+    // Só leitura: quantas consultas até o corte ficaram de fora por falta de desfecho.
+    const semDesfecho = (await listarConsultasSemDesfecho({ ate: new Date(r.corte), limite: 500 }).catch(() => [])).length;
     await registrarAudit(null, {
       acao: "repasse_fechado_cron",
       categoria: "financeiro",
       severidade: erros ? "warning" : "info",
       entidade: "Repasse",
-      detalhes: JSON.stringify({ competencia: dia, fechados, erros }),
+      detalhes: JSON.stringify({ competencia: dia, fechados, erros, semDesfecho }),
     });
-    return ok({ competencia: dia, fechados, erros });
+    return ok({ competencia: dia, fechados, erros, semDesfecho });
   } catch (erro) {
     return falha(erro);
   }

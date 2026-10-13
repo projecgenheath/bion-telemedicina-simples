@@ -48,10 +48,10 @@ const r = (p: Partial<typeof base>) => classificarPresenca({ ...base, ...p }).re
 igual("antes da sala fechar: aguarda", r({ agora: min(CARENCIA_APOS_INICIO_MIN - 1), ultimoPingMedico: min(20) }), "aguardar");
 igual("logo depois da carência: decide", r({ agora: min(CARENCIA_APOS_INICIO_MIN), ultimoPingMedico: min(20) }), "falta_paciente");
 
-// Ninguém entrou
-igual("ninguém entrou (paga): falha técnica", r({}), "falha_tecnica");
+// Ninguém entrou → sem desfecho (não grava falha técnica sozinho no bootstrap)
+igual("ninguém entrou (paga): sem evento (fica para o admin)", r({}), "sem_evento");
 igual("ninguém entrou (não paga): sem evento", r({ pago: false }), "sem_evento");
-igual("os dois só antes do horário: conta como ninguém", r({ ultimoPingMedico: min(-10), ultimoPingPaciente: min(-5) }), "falha_tecnica");
+igual("os dois só antes do horário: conta como ninguém (sem evento)", r({ ultimoPingMedico: min(-10), ultimoPingPaciente: min(-5) }), "sem_evento");
 
 // Falta do paciente
 igual("médico na sala, paciente nunca entrou: falta", r({ ultimoPingMedico: min(15) }), "falta_paciente");
@@ -112,7 +112,7 @@ igual(
     f.dataInicio.lte.toISOString(),
     new Date(agoraCedo.getTime() - CARENCIA_APOS_INICIO_MIN * 60_000).toISOString(),
   );
-  igual("filtro: sem falta nem falha", f.eventos.none.tipo.in, ["falta_paciente", "falha_tecnica"]);
+  igual("filtro: sem chave eventos (data atual filtrada em desfechoExistente)", "eventos" in f, false);
   const agoraTarde = new Date("2026-11-20T12:00:00.000Z");
   igual(
     "filtro: janela retroativa depois do corte",
