@@ -363,6 +363,47 @@ const mapAnamnese = (a: NonNullable<EstadoFresco["anamneses"]>[number]): Anamnes
 /* Infra do store                                                       */
 /* ==================================================================== */
 
+/**
+ * Assina um canal Realtime PRIVADO do próprio usuário (mensagens ou
+ * notificações). O tópico (com sufixo HMAC) vem do servidor em
+ * GET /api/realtime/canais; o acesso é validado pela policy RLS de
+ * realtime.messages (migração 20261013a_canais_usuario_privados.sql).
+ * Mesmo modelo da sala (teleconsulta-chamada.ts): setAuth + private: true,
+ * renovando o token a cada 10 min. Falhou? Segue só com o polling.
+ */
+async function assinarCanalPrivadoUsuario(
+  tipo: "mensagens" | "notificacoes",
+  montar: (ch: import("@supabase/supabase-js").RealtimeChannel) => import("@supabase/supabase-js").RealtimeChannel,
+): Promise<(() => void) | undefined> {
+  const res = await fetch("/api/realtime/canais", { cache: "no-store", credentials: "same-origin" });
+  if (!res.ok) return undefined;
+  const topicos = (await res.json()) as { mensagens?: string; notificacoes?: string };
+  const topico = topicos[tipo];
+  if (!topico) return undefined;
+  const { createSupabaseBrowserClient } = await import("@/lib/supabase/browser");
+  const sb = createSupabaseBrowserClient();
+  const { data } = await sb.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) {
+    console.warn(`[Realtime] ${tipo}: sem sessão do Supabase Auth, seguindo só com polling`);
+    return undefined;
+  }
+  await sb.realtime.setAuth(token);
+  const canal = montar(sb.channel(topico, { config: { private: true } })).subscribe();
+  const timer = setInterval(async () => {
+    try {
+      const { data: d } = await sb.auth.getSession();
+      if (d.session?.access_token) await sb.realtime.setAuth(d.session.access_token);
+    } catch {
+      /* próximo ciclo tenta de novo */
+    }
+  }, 10 * 60_000);
+  return () => {
+    clearInterval(timer);
+    void sb.removeChannel(canal);
+  };
+}
+
 async function api<T>(url: string, init?: RequestInit): Promise<T | null> {
   try {
     const res = await fetch(url, {
@@ -1535,28 +1576,27 @@ export function BionProvider({ children }: { children: ReactNode }) {
     if (!autenticado || !sessao.id) return;
     if (!process.env.NEXT_PUBLIC_SUPABASE_URL) return;
     let limpar: (() => void) | undefined;
+    let cancelado = false;
     (async () => {
       try {
-        const { createSupabaseBrowserClient } = await import("@/lib/supabase/browser");
-        const { canalMensagensUsuario } = await import("@/lib/supabase/realtime");
-        const sb = createSupabaseBrowserClient();
-        const canal = sb
-          .channel(canalMensagensUsuario(sessao.id))
-          .on("broadcast", { event: "nova_mensagem" }, ({ payload }) => {
+        const parar = await assinarCanalPrivadoUsuario("mensagens", (ch) =>
+          ch.on("broadcast", { event: "nova_mensagem" }, ({ payload }) => {
             if (!payload || typeof payload !== "object") return;
             const row = payload as Parameters<typeof fmtMensagem>[0];
             if (!row?.id) return;
             mesclarMensagens([row]);
-          })
-          .subscribe();
-        limpar = () => {
-          void sb.removeChannel(canal);
-        };
+          }),
+        );
+        if (cancelado) parar?.();
+        else limpar = parar;
       } catch (e) {
         console.warn("[Realtime] mensagens indisponível", e);
       }
     })();
-    return () => limpar?.();
+    return () => {
+      cancelado = true;
+      limpar?.();
+    };
   }, [autenticado, sessao.id, mesclarMensagens]);
 
   // Realtime Supabase: notificações dirigidas
@@ -1564,14 +1604,11 @@ export function BionProvider({ children }: { children: ReactNode }) {
     if (!autenticado || !sessao.id) return;
     if (!process.env.NEXT_PUBLIC_SUPABASE_URL) return;
     let limpar: (() => void) | undefined;
+    let cancelado = false;
     (async () => {
       try {
-        const { createSupabaseBrowserClient } = await import("@/lib/supabase/browser");
-        const { canalNotificacoes } = await import("@/lib/supabase/realtime");
-        const sb = createSupabaseBrowserClient();
-        const canal = sb
-          .channel(canalNotificacoes(sessao.id))
-          .on("broadcast", { event: "nova_notificacao" }, ({ payload }) => {
+        const parar = await assinarCanalPrivadoUsuario("notificacoes", (ch) =>
+          ch.on("broadcast", { event: "nova_notificacao" }, ({ payload }) => {
             if (!payload || typeof payload !== "object") return;
             const n = payload as {
               id?: string;
@@ -1597,16 +1634,18 @@ export function BionProvider({ children }: { children: ReactNode }) {
               return [mapped, ...prev];
             });
             toast.message(n.titulo, { description: n.texto?.slice(0, 120) });
-          })
-          .subscribe();
-        limpar = () => {
-          void sb.removeChannel(canal);
-        };
+          }),
+        );
+        if (cancelado) parar?.();
+        else limpar = parar;
       } catch (e) {
         console.warn("[Realtime] notificações indisponível", e);
       }
     })();
-    return () => limpar?.();
+    return () => {
+      cancelado = true;
+      limpar?.();
+    };
   }, [autenticado, sessao.id]);
 
 
