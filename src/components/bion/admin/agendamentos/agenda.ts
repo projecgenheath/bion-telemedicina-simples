@@ -5,7 +5,7 @@
  * src/lib/server/financeiro.ts e bloqueio-agenda.ts; o texto do servidor é
  * sempre mostrado quando não há tradução melhor.
  */
-import type { ApptStatus, Consulta } from "@/lib/bion-tipos";
+import type { ApptStatus, Consulta, TipoAtendimento } from "@/lib/bion-tipos";
 import { instanteFusoClinica } from "@/lib/bion-tipos";
 import { centavosDoValor } from "../metricas";
 import { estadoConsulta, estadoReembolso, type Estado } from "../rotulos";
@@ -20,8 +20,35 @@ export const HORA_VEDADA = 23;
 
 export type Periodo = "hoje" | "proximas" | "passadas" | "todas";
 export type FiltroPago = "todos" | "pago" | "nao_pago";
-export type Filtros = { busca: string; status: ApptStatus | "todos"; medicoId: string; periodo: Periodo; pago: FiltroPago };
-export const FILTROS_PADRAO: Filtros = { busca: "", status: "todos", medicoId: "", periodo: "proximas", pago: "todos" };
+export type Filtros = { busca: string; status: ApptStatus | "todos"; medicoId: string; periodo: Periodo; pago: FiltroPago; tipo: TipoAtendimento | "todos" };
+export const FILTROS_PADRAO: Filtros = { busca: "", status: "todos", medicoId: "", periodo: "proximas", pago: "todos", tipo: "todos" };
+
+/** Rótulo do tipo de atendimento; "padrao" não ganha chip. */
+export const ROTULO_TIPO_ATENDIMENTO: Record<TipoAtendimento, string> = {
+  padrao: "Consulta padrão",
+  renovacao: "Renovação de receita",
+  retorno: "Retorno",
+  segunda_opiniao: "Segunda opinião",
+};
+/** Ordem do filtro "Tipo". */
+export const TIPO_FILTRO: TipoAtendimento[] = ["padrao", "renovacao", "retorno", "segunda_opiniao"];
+
+/** Tipo efetivo: ausente (antes da migração) conta como "padrao". */
+export const tipoDe = (c: Pick<Consulta, "tipoAtendimento">): TipoAtendimento => c.tipoAtendimento ?? "padrao";
+
+/** Chip do motivo do atendimento (null para "padrao"). */
+export function chipTipoAtendimento(c: Pick<Consulta, "tipoAtendimento">): Estado | null {
+  const t = tipoDe(c);
+  return t === "padrao" ? null : { rotulo: ROTULO_TIPO_ATENDIMENTO[t] ?? "Atendimento", tom: "sinal" };
+}
+
+/** Consultas que nasceram desta (renovação/retorno/segunda opinião), da mais antiga para a mais nova. */
+export function continuacoesDe(consultas: Consulta[], origemId: string): Consulta[] {
+  return consultas.filter((c) => c.consultaOrigemId === origemId && c.id !== origemId).sort((a, b) => a.ts - b.ts || a.id.localeCompare(b.id));
+}
+
+/** Link do admin para abrir uma consulta (ex.: a de origem). */
+export const linkConsultaAdmin = (id: string) => `/admin-agendamentos?consulta=${encodeURIComponent(id)}`;
 
 /** Minúsculas e sem acento (busca "jose" encontra "José"). */
 export function normalizar(t: string | null | undefined): string {
@@ -43,6 +70,7 @@ export function filtrarConsultas(consultas: Consulta[], f: Filtros, agora: numbe
   const lista = consultas.filter((c) => {
     if (f.status !== "todos" && c.status !== f.status) return false;
     if (f.medicoId && c.medicoId !== f.medicoId) return false;
+    if (f.tipo !== "todos" && tipoDe(c) !== f.tipo) return false;
     if (f.pago === "pago" && !c.pago) return false;
     if (f.pago === "nao_pago" && c.pago) return false;
     if (f.periodo === "hoje" && (c.ts < inicio || c.ts >= fim)) return false;
@@ -191,6 +219,8 @@ const MOTIVO_REAGENDAMENTO: Record<string, string> = {
 /** Chips do card/linha: sempre texto + cor. */
 export function chipsConsulta(c: Consulta, agora: number): Estado[] {
   const out: Estado[] = [estadoConsulta(c.status)];
+  const tipo = chipTipoAtendimento(c);
+  if (tipo) out.push(tipo);
   if (c.status !== "cancelada") out.push(c.pago ? { rotulo: "Pago", tom: "ok" } : { rotulo: "Não pago", tom: "atencao" });
   if (c.motivoReagendamento) out.push({ rotulo: MOTIVO_REAGENDAMENTO[c.motivoReagendamento] ?? "Reagendar", tom: "atencao" });
   if (c.remarcada) out.push({ rotulo: "Remarcada", tom: "neutro" });

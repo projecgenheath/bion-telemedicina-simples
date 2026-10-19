@@ -1,5 +1,6 @@
 import "server-only";
 import { instanteNoFuso, partesNoFuso } from "./fuso";
+import { normalizarTipoAtendimento } from "@/lib/bion-tipos";
 import { broadcastCanal } from "@/lib/supabase/broadcast";
 import { after } from "next/server";
 import { topicoNotificacoesUsuario } from "./usuario-canal";
@@ -183,6 +184,10 @@ export function includeReservaVigente(agora: Date = new Date()) {
   };
 }
 
+function idOuNull(v: unknown): string | null {
+  return typeof v === "string" && v ? v : null;
+}
+
 export function consultaWire(c: ConsultaComNomes & { remarcacoes?: ReservaRemarcacaoRow[] } & ExtrasReembolsoWire) {
   const falta = Boolean(c.eventos?.some((e) => e.tipo === "falta_paciente"));
   const pedido = c.pagamento?.reembolsos?.[0];
@@ -218,6 +223,10 @@ export function consultaWire(c: ConsultaComNomes & { remarcacoes?: ReservaRemarc
     podePedirAte: falta ? prazoReembolsoManual(c.dataInicio).toISOString() : null,
     // Só em aguardando_reagendamento: por que o paciente precisa remarcar ou pedir reembolso.
     motivoReagendamento: motivoReagendamentoDe(c.status, c.eventos ?? []),
+    // Colunas da migração do Médicos (tipoAtendimento/consultaOrigemId): lidas
+    // de forma tolerante para funcionar antes e depois dela entrar.
+    tipoAtendimento: normalizarTipoAtendimento((c as { tipoAtendimento?: unknown }).tipoAtendimento),
+    consultaOrigemId: idOuNull((c as { consultaOrigemId?: unknown }).consultaOrigemId),
   };
 }
 
