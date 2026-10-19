@@ -1361,6 +1361,14 @@ export class ChamadaTeleconsulta {
   async compartilharTela(): Promise<void> {
     try {
       const display = await navigator.mediaDevices.getDisplayMedia({ video: true });
+      // O seletor de tela pode ficar aberto por muito tempo: se a chamada acabou nesse
+      // meio-tempo (encerrada, 404, paciente saiu, tela desmontada), solta a captura
+      // da tela na hora e não mexe no sender. O erro faz quem chamou tratar como
+      // "não iniciado" (sem auditoria de compartilhamento iniciado).
+      if (!this.salaAtiva()) {
+        pararTracks(display);
+        throw Object.assign(new Error("sala encerrada enquanto o seletor de tela estava aberto"), { name: "AbortError" });
+      }
       this.displayStream = display;
       const track = display.getVideoTracks()[0];
       try {
