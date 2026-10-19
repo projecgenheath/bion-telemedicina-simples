@@ -284,5 +284,44 @@ const orfas = (entregues: TrackFalsa[], trocas: TrackFalsa[]) =>
   igual("trava solta: 1 vídeo ao vivo", videoDe(t.local.current).filter((v) => v.readyState === "live").length, 1);
 }
 
+// ── getUserMedia rejeita, volta da aba, novo pedido: a trava é liberada ──
+{
+  // A: o pedido que vai falhar ainda está pendente quando a aba volta (reaproveita);
+  // depois da rejeição, um novo recapturar abre um getUserMedia novo.
+  let soltar = () => {};
+  const segurar = new Promise<void>((r) => (soltar = r));
+  let n = 0;
+  const t = montar({ celular: true, cameras: ["f", "t"], segurar, falharCom: () => ++n === 1 });
+  t.camInicial.readyState = "ended";
+  const rec = recapturar(t.chamada, "video", "ended");
+  await Promise.resolve();
+  const volta = voltarParaAba(t.chamada);
+  soltar();
+  await Promise.all([rec, volta]);
+  igual("rejeição pendente + aba: um pedido só (reaproveitado)", t.pedidos.length, 1);
+  igual("rejeição pendente + aba: nada ao vivo ainda", t.entregues.length, 0);
+  await recapturar(t.chamada, "video", "ended");
+  igual("rejeição pendente + aba → novo pedido: getUserMedia novo", t.pedidos.length, 2);
+  igual("rejeição pendente + aba → novo pedido: nenhuma órfã", orfas(t.entregues, t.trocas), 0);
+  igual("rejeição pendente + aba → novo pedido: 1 vídeo ao vivo no stream", videoDe(t.local.current).filter((v) => v.readyState === "live").length, 1);
+  igual("rejeição pendente + aba → novo pedido: um único replaceTrack", t.trocas.length, 1);
+}
+{
+  // B: a rejeição termina, a aba volta com a câmera ainda indisponível (falha de novo)
+  // e o paciente toca Virar: abre um getUserMedia novo para a traseira.
+  let n = 0;
+  const t = montar({ celular: true, cameras: ["f", "t"], falharCom: () => ++n <= 2 });
+  t.camInicial.readyState = "ended";
+  await recapturar(t.chamada, "video", "ended");
+  await voltarParaAba(t.chamada);
+  igual("rejeição + aba: dois pedidos, ambos recusados", [t.pedidos.length, t.entregues.length], [2, 0]);
+  igual("rejeição + aba → Virar: trocou", await t.chamada.trocarCamera(), true);
+  igual("rejeição + aba → Virar: getUserMedia novo (trava liberada)", t.pedidos.length, 3);
+  igual("rejeição + aba → Virar: pediu a traseira", (t.pedidos[2].video as MediaTrackConstraints).facingMode, "environment");
+  igual("rejeição + aba → Virar: nenhuma órfã", orfas(t.entregues, t.trocas), 0);
+  igual("rejeição + aba → Virar: só a traseira ao vivo", videoDe(t.local.current).filter((v) => v.readyState === "live").map((v) => v.facingMode), ["environment"]);
+  igual("rejeição + aba → Virar: um único replaceTrack", t.trocas.length, 1);
+}
+
 console.log(`teleconsulta-troca-camera: ${ok} ok, ${falhas} falha(s)`);
 if (falhas > 0) process.exit(1);
