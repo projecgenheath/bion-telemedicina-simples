@@ -131,7 +131,7 @@ export async function POST(req: NextRequest) {
         categoria: "consulta",
         entidade: "pedido_renovacao",
         entidadeId: pedido.id,
-        detalhes: `Pedido de renovação da receita ${receita.id} ao médico ${receita.medico.nome}`,
+        detalhes: `pedidoId=${pedido.id} documentoId=${receita.id} pacienteId=${receita.pacienteId}`,
       },
     );
     return ok({ disponivel: true, pedido, ...efeitos });
