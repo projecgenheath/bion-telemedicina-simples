@@ -13,7 +13,7 @@ import {
   modoChamadaRecebida,
   respostaConsultaEncerrada,
   tentativaParaAtenderNaSala,
-  TEXTO_CONFIRMAR_TROCA,
+  textoConfirmarTroca,
   type ModoChamadaRecebida,
   type ChamadaTocando,
 } from "@/lib/chamada-recebida-logica";
@@ -31,7 +31,8 @@ import {
  *
  * Onde aparece (modoChamadaRecebida): fora de /consulta, tela cheia com toque;
  * em QUALQUER outra /consulta, aviso compacto no topo (só vibração curta, sem
- * toque) e "Atender" pede confirmação "Sair da chamada atual e atender?";
+ * toque) e "Atender" pede confirmação "Sair da chamada atual e atender?" com
+ * o aviso de perda por papel (textoConfirmarTroca);
  * na sala da MESMA consulta, nada na tela, e a tentativa é atendida em segundo
  * plano (uma vez, sem navegar, erros ignorados).
  */
@@ -50,6 +51,7 @@ export function ChamadaRecebida() {
     <Suspense fallback={null}>
       <ChamadaNoLugar
         chamada={chamada}
+        papel={sessao.role === "medico" ? "medico" : "paciente"}
         usuarioId={usuarioId}
         onFechar={fechar}
         onEncerrada={() => encerrar(chamada.consultaId)}
@@ -61,12 +63,14 @@ export function ChamadaRecebida() {
 
 function ChamadaNoLugar({
   chamada,
+  papel,
   usuarioId,
   onFechar,
   onEncerrada,
   onFecharTentativa,
 }: {
   chamada: ChamadaTocando;
+  papel: PapelChamada;
   usuarioId: string | null;
   onFechar: () => void;
   onEncerrada: () => void;
@@ -94,6 +98,7 @@ function ChamadaNoLugar({
       key={chaveChamada(chamada.consultaId, chamada.tentativa)}
       chamada={chamada}
       modo={modo}
+      papel={papel}
       onFechar={onFechar}
       onEncerrada={onEncerrada}
     />
@@ -103,6 +108,7 @@ function ChamadaNoLugar({
 export default ChamadaRecebida;
 
 type Fase = "tocando" | "atendendo" | "recusando" | "bloqueado";
+type PapelChamada = "paciente" | "medico";
 type Resposta = { status: number; corpo?: unknown } | null;
 
 async function pedir(url: string, init?: RequestInit): Promise<Resposta> {
@@ -127,11 +133,14 @@ function responder(consultaId: string, acao: "atender" | "recusar", tentativa: n
 export function ControleChamadaRecebida({
   chamada,
   modo = "tela",
+  papel = "paciente",
   onFechar,
   onEncerrada,
 }: {
   chamada: ChamadaTocando;
   modo?: Exclude<ModoChamadaRecebida, "nada">;
+  /** Quem recebe (muda o texto da confirmação de troca de chamada). */
+  papel?: PapelChamada;
   onFechar: () => void;
   /** 409 consulta_encerrada: fecha e não toca mais nesta consulta (padrão: só fecha). */
   onEncerrada?: () => void;
@@ -203,6 +212,7 @@ export function ControleChamadaRecebida({
         fase={fase}
         mensagem={mensagem}
         confirmando={confirmando}
+        textoConfirmacao={textoConfirmarTroca(papel)}
         onAtender={pedirAtender}
         onCancelarConfirmacao={() => setConfirmando(false)}
         onRecusar={recusar}
@@ -408,6 +418,7 @@ export function AvisoChamadaRecebida({
   fase,
   mensagem,
   confirmando,
+  textoConfirmacao,
   onAtender,
   onCancelarConfirmacao,
   onRecusar,
@@ -417,6 +428,8 @@ export function AvisoChamadaRecebida({
   fase: Fase;
   mensagem?: string | null;
   confirmando: boolean;
+  /** Texto da confirmação (textoConfirmarTroca(papel)). */
+  textoConfirmacao: string;
   onAtender: () => void;
   onCancelarConfirmacao: () => void;
   onRecusar: () => void;
@@ -445,11 +458,7 @@ export function AvisoChamadaRecebida({
           </p>
           <p className="flex items-center gap-1 truncate text-xs text-white/70">
             <Video className="size-3.5 shrink-0" aria-hidden />
-            {confirmando
-              ? TEXTO_CONFIRMAR_TROCA
-              : fase === "atendendo"
-                ? "Conectando…"
-                : `Chamada de vídeo${especialidade ? ` · ${especialidade}` : ""}`}
+            {fase === "atendendo" ? "Conectando…" : `Chamada de vídeo${especialidade ? ` · ${especialidade}` : ""}`}
           </p>
         </div>
         {!confirmando && (
@@ -466,6 +475,9 @@ export function AvisoChamadaRecebida({
           </div>
         )}
       </div>
+      {confirmando && (
+        <p className="mt-2 text-sm leading-snug text-white/90">{textoConfirmacao}</p>
+      )}
       {confirmando && (
         <div className="mt-3 flex items-center justify-end gap-2">
           <button

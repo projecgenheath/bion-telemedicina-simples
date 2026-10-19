@@ -255,8 +255,21 @@ export function tentativaParaAtenderNaSala(
   return { consultaId: atual.consultaId, tentativa: atual.tentativa };
 }
 
-/** Texto da confirmação ao atender pelo aviso compacto (há uma chamada em andamento). */
+/** Pergunta da confirmação ao atender pelo aviso compacto (há uma chamada em andamento). */
 export const TEXTO_CONFIRMAR_TROCA = "Sair da chamada atual e atender?";
+
+/**
+ * Texto completo da confirmação, por papel. Sair da sala desmonta tudo: as
+ * anotações (useSalaConsulta) e os rascunhos do médico (ChamadaMedico) vivem
+ * só em useState e se perdem. Aceita "medico"/"MEDICO"; o resto cai no texto
+ * do paciente (admin nunca vê a chamada recebida).
+ */
+export function textoConfirmarTroca(papel: string | null | undefined): string {
+  if ((papel ?? "").toLowerCase() === "medico") {
+    return `${TEXTO_CONFIRMAR_TROCA} A consulta atual não será concluída, e as anotações e os documentos não emitidos serão perdidos.`;
+  }
+  return `${TEXTO_CONFIRMAR_TROCA} As anotações não salvas desta consulta serão perdidas.`;
+}
 
 /* ------------------------------------------------------------------ */
 /* Rota POST /api/telemedicina/[consultaId]/chamada                    */

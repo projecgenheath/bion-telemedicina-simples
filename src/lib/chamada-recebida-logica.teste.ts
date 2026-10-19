@@ -11,6 +11,7 @@ import {
   tentativaParaAtenderNaSala,
   respostaConsultaEncerrada,
   TEXTO_CONFIRMAR_TROCA,
+  textoConfirmarTroca,
   decidirAposAtender,
   decidirResposta,
   iniciaisContraparte,
@@ -256,7 +257,15 @@ igual("em outra consulta o toque entra no estado (vira aviso)", mAviso.atual?.co
 mAviso = reduzirChamada(mAviso, { tipo: "expirou", consultaId: "c1", tentativa: 1, agora: Date.parse(EXPIRA) });
 igual("aviso some no expiraEm", mAviso.atual, null);
 igual("aviso não volta para o mesmo toque", reduzirChamada(mAviso, ev(t1, AGORA)).atual, null);
-igual("texto da confirmação", TEXTO_CONFIRMAR_TROCA, "Sair da chamada atual e atender?");
+igual("pergunta da confirmação", TEXTO_CONFIRMAR_TROCA, "Sair da chamada atual e atender?");
+const TXT_MEDICO = "Sair da chamada atual e atender? A consulta atual não será concluída, e as anotações e os documentos não emitidos serão perdidos.";
+const TXT_PACIENTE = "Sair da chamada atual e atender? As anotações não salvas desta consulta serão perdidas.";
+igual("confirmação do médico", textoConfirmarTroca("medico"), TXT_MEDICO);
+igual("confirmação do médico (MEDICO)", textoConfirmarTroca("MEDICO"), TXT_MEDICO);
+igual("confirmação do paciente", textoConfirmarTroca("paciente"), TXT_PACIENTE);
+igual("confirmação do paciente (PACIENTE)", textoConfirmarTroca("PACIENTE"), TXT_PACIENTE);
+igual("sem papel cai no do paciente", textoConfirmarTroca(undefined), TXT_PACIENTE);
+igual("papel desconhecido cai no do paciente", textoConfirmarTroca("admin"), TXT_PACIENTE);
 
 // ── 409 consulta_encerrada: fecha sem navegar ───────────────────────────
 const encerrada = { status: 409, corpo: { erro: "Esta consulta foi cancelada ou já foi concluída.", motivo: "consulta_encerrada" } };
