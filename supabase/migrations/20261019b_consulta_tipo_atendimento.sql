@@ -128,3 +128,22 @@ ALTER TABLE public."PedidoMedicao" ADD CONSTRAINT "PedidoMedicao_status_check"
     'cancelado'
   ));
 -- Reversão da parte 3: ALTER TABLE public."PedidoMedicao" DROP CONSTRAINT IF EXISTS "PedidoMedicao_status_check";
+
+-- ---------------------------------------------------------------------
+-- 4) "Documento": receita de controlado e consulta de emissão;
+--    "Consulta": data de retorno sugerida pelo médico. Só aditivo.
+-- ---------------------------------------------------------------------
+ALTER TABLE public."Documento"
+  ADD COLUMN IF NOT EXISTS "controlado" BOOLEAN NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS "consultaId" TEXT NULL;
+
+ALTER TABLE public."Documento" DROP CONSTRAINT IF EXISTS "Documento_consultaId_fkey";
+ALTER TABLE public."Documento" ADD CONSTRAINT "Documento_consultaId_fkey"
+  FOREIGN KEY ("consultaId") REFERENCES public."Consulta"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+CREATE INDEX IF NOT EXISTS "Documento_consultaId_idx" ON public."Documento"("consultaId");
+
+ALTER TABLE public."Consulta"
+  ADD COLUMN IF NOT EXISTS "retornoSugeridoEm" TIMESTAMPTZ(3) NULL;
+-- Reversão da parte 4: DROP INDEX "Documento_consultaId_idx"; DROP CONSTRAINT "Documento_consultaId_fkey";
+--   DROP COLUMN "Documento"."controlado", "Documento"."consultaId", "Consulta"."retornoSugeridoEm".
