@@ -1,4 +1,5 @@
 import { BionProvider } from "@/lib/bion-store";
+import { ChamadaRecebida } from "@/components/bion/chamada/ChamadaRecebida";
 
 /**
  * FASE 2 (auditoria front-end): o BionProvider agora vive NESTE grupo de
@@ -8,5 +9,12 @@ import { BionProvider } from "@/lib/bion-store";
  * bootstrap duplicado nem flash de carregamento pós-login).
  */
 export default function LayoutComBion({ children }: { children: React.ReactNode }) {
-  return <BionProvider>{children}</BionProvider>;
+  // Chamada recebida (tele v2): comum a paciente e médico; o componente não
+  // renderiza (nem ouve os eventos) para admin ou sem sessão.
+  return (
+    <BionProvider>
+      {children}
+      <ChamadaRecebida />
+    </BionProvider>
+  );
 }

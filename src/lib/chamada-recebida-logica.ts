@@ -1,0 +1,303 @@
+/**
+ * Chamada recebida com o app aberto (tele v2, fase 2): regras PURAS, sem
+ * React nem servidor. Testadas em chamada-recebida-logica.teste.ts.
+ *
+ * Contrato dos eventos (canal PRIVADO de notificações do usuário,
+ * `notificacoes:user:<id>:<hmac>`):
+ *   chamada_tocando  { consultaId, contraparte, especialidade, expiraEm, tentativa }  (job do Admin)
+ *   chamada_expirada { consultaId, tentativa, em, ultima }                             (job do Admin)
+ *   chamada_atendida { consultaId, tentativa, por: "paciente"|"medico", em }          (POST .../chamada)
+ *   chamada_recusada { consultaId, tentativa, por, em }                                (POST .../chamada)
+ * Sem dado de saúde além da especialidade (que só aparece com o app aberto).
+ */
+
+export const EVENTOS_CHAMADA = ["chamada_tocando", "chamada_atendida", "chamada_recusada", "chamada_expirada"] as const;
+export type NomeEventoChamada = (typeof EVENTOS_CHAMADA)[number];
+
+export type ChamadaTocando = {
+  consultaId: string;
+  contraparte: string;
+  especialidade: string;
+  /** Instante (ms) em que o toque expira. */
+  expiraEm: number;
+  tentativa: number;
+};
+
+export type EventoChamada =
+  | ({ tipo: "chamada_tocando" } & ChamadaTocando)
+  | { tipo: "chamada_atendida" | "chamada_recusada"; consultaId: string; tentativa: number; por: "paciente" | "medico" }
+  | { tipo: "chamada_expirada"; consultaId: string; tentativa: number; ultima: boolean };
+
+const ID_VALIDO = /^[A-Za-z0-9_-]{1,64}$/;
+const TENTATIVA_MAX = 10;
+
+function tentativaValida(v: unknown): v is number {
+  return typeof v === "number" && Number.isInteger(v) && v >= 1 && v <= TENTATIVA_MAX;
+}
+
+/** Valida o payload de um broadcast (vem da rede: nada é confiável). null = ignorar. */
+export function lerEventoChamada(evento: string, payload: unknown): EventoChamada | null {
+  if (!payload || typeof payload !== "object") return null;
+  const p = payload as Record<string, unknown>;
+  const consultaId = typeof p.consultaId === "string" && ID_VALIDO.test(p.consultaId) ? p.consultaId : null;
+  if (!consultaId || !tentativaValida(p.tentativa)) return null;
+  const tentativa = p.tentativa;
+  if (evento === "chamada_tocando") {
+    const expiraEm = typeof p.expiraEm === "string" || typeof p.expiraEm === "number" ? new Date(p.expiraEm).getTime() : NaN;
+    if (!Number.isFinite(expiraEm)) return null;
+    const texto = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : "");
+    return {
+      tipo: "chamada_tocando",
+      consultaId,
+      tentativa,
+      expiraEm,
+      contraparte: texto(p.contraparte, 80),
+      especialidade: texto(p.especialidade, 60),
+    };
+  }
+  if (evento === "chamada_atendida" || evento === "chamada_recusada") {
+    const por = p.por === "medico" ? "medico" : p.por === "paciente" ? "paciente" : null;
+    if (!por) return null;
+    return { tipo: evento, consultaId, tentativa, por };
+  }
+  if (evento === "chamada_expirada") {
+    return { tipo: "chamada_expirada", consultaId, tentativa, ultima: p.ultima === true };
+  }
+  return null;
+}
+
+export const chaveChamada = (consultaId: string, tentativa: number) => `${consultaId}:${tentativa}`;
+
+/* ------------------------------------------------------------------ */
+/* Estado do toque no cliente                                          */
+/* ------------------------------------------------------------------ */
+
+export type EstadoChamadaRecebida = {
+  /** Chamada tocando agora (no máximo uma). */
+  atual: ChamadaTocando | null;
+  /** Chaves consultaId:tentativa já tratadas (dedupe entre aparelhos e reenvios). */
+  vistas: string[];
+  /** Início de referência (ms) por consulta: horário da consulta ou, sem ele, o 1º toque visto. */
+  inicios: [string, number][];
+  /** Consultas cujo toque acabou de vez (ultima, +15 min do início, cancelada/concluída). */
+  finalizadas: string[];
+};
+
+export const ESTADO_CHAMADA_INICIAL: EstadoChamadaRecebida = { atual: null, vistas: [], inicios: [], finalizadas: [] };
+const MAX_VISTAS = 50;
+
+/** Depois disso (a partir do início da consulta) qualquer expiração é a final, mesmo sem `ultima: true`. */
+export const FIM_TOQUES_APOS_INICIO_MS = 15 * 60_000;
+
+/** Status da consulta que encerram o toque na hora. */
+export const STATUS_CONSULTA_FINAL = ["cancelada", "concluida"] as const;
+export const consultaEncerrada = (status: string | null | undefined) =>
+  !!status && (STATUS_CONSULTA_FINAL as readonly string[]).includes(status);
+
+export type AcaoChamada =
+  | {
+      tipo: "evento";
+      evento: EventoChamada;
+      agora: number;
+      consultaAberta?: string | null;
+      /** Horário (ms) da consulta, quando o app conhece (store). */
+      inicioConsulta?: number | null;
+    }
+  /** Timer local chegou no expiraEm (não espera o chamada_expirada do servidor). */
+  | { tipo: "expirou"; consultaId: string; tentativa: number; agora: number }
+  /** A consulta mudou para cancelada/concluída: para de tocar e não toca mais. */
+  | { tipo: "consulta_encerrada"; consultaId: string }
+  /** O próprio usuário atendeu, recusou ou fechou nesta tela. */
+  | { tipo: "fechar" };
+
+function marcar(vistas: string[], chave: string): string[] {
+  if (vistas.includes(chave)) return vistas;
+  const prox = [...vistas, chave];
+  return prox.length > MAX_VISTAS ? prox.slice(prox.length - MAX_VISTAS) : prox;
+}
+
+function finalizar(estado: EstadoChamadaRecebida, consultaId: string): string[] {
+  return marcar(estado.finalizadas, consultaId);
+}
+
+function inicioDe(estado: EstadoChamadaRecebida, consultaId: string): number | null {
+  return estado.inicios.find(([id]) => id === consultaId)?.[1] ?? null;
+}
+
+const passouDoFim = (estado: EstadoChamadaRecebida, consultaId: string, agora: number) => {
+  const ini = inicioDe(estado, consultaId);
+  return ini !== null && agora >= ini + FIM_TOQUES_APOS_INICIO_MS;
+};
+
+const mesma = (a: ChamadaTocando | null, consultaId: string, tentativa: number) =>
+  !!a && a.consultaId === consultaId && a.tentativa === tentativa;
+
+export function reduzirChamada(estado: EstadoChamadaRecebida, acao: AcaoChamada): EstadoChamadaRecebida {
+  if (acao.tipo === "fechar") {
+    if (!estado.atual) return estado;
+    return { ...estado, atual: null, vistas: marcar(estado.vistas, chaveChamada(estado.atual.consultaId, estado.atual.tentativa)) };
+  }
+  if (acao.tipo === "consulta_encerrada") {
+    const finalizadas = finalizar(estado, acao.consultaId);
+    const atual = estado.atual?.consultaId === acao.consultaId ? null : estado.atual;
+    if (atual === estado.atual && finalizadas === estado.finalizadas) return estado;
+    return { ...estado, atual, finalizadas };
+  }
+  if (acao.tipo === "expirou") {
+    if (!mesma(estado.atual, acao.consultaId, acao.tentativa)) return estado;
+    return {
+      ...estado,
+      atual: null,
+      vistas: marcar(estado.vistas, chaveChamada(acao.consultaId, acao.tentativa)),
+      finalizadas: passouDoFim(estado, acao.consultaId, acao.agora) ? finalizar(estado, acao.consultaId) : estado.finalizadas,
+    };
+  }
+  const ev = acao.evento;
+  const chave = chaveChamada(ev.consultaId, ev.tentativa);
+  if (ev.tipo === "chamada_tocando") {
+    // Consulta já sem toque (última tentativa, +15 min, cancelada/concluída).
+    if (estado.finalizadas.includes(ev.consultaId)) return estado;
+    // Repetido (outro caminho/aparelho), já expirado, ou o usuário já está na sala desta consulta.
+    if (estado.vistas.includes(chave)) return estado;
+    // Guarda o início de referência na primeira vez (horário da consulta ou este toque).
+    if (inicioDe(estado, ev.consultaId) === null) {
+      const ini = acao.inicioConsulta ?? acao.agora;
+      const inicios: [string, number][] = [...estado.inicios, [ev.consultaId, ini]];
+      estado = { ...estado, inicios: inicios.length > MAX_VISTAS ? inicios.slice(inicios.length - MAX_VISTAS) : inicios };
+    } else if (typeof acao.inicioConsulta === "number") {
+      estado = { ...estado, inicios: estado.inicios.map(([id, v]) => [id, id === ev.consultaId ? acao.inicioConsulta! : v]) };
+    }
+    if (passouDoFim(estado, ev.consultaId, acao.agora)) {
+      return { ...estado, vistas: marcar(estado.vistas, chave), finalizadas: finalizar(estado, ev.consultaId) };
+    }
+    if (ev.expiraEm <= acao.agora) return { ...estado, vistas: marcar(estado.vistas, chave) };
+    if (acao.consultaAberta && acao.consultaAberta === ev.consultaId) return { ...estado, vistas: marcar(estado.vistas, chave) };
+    // Já tocando outra chamada ainda válida: mantém a atual (a nova toca de novo na próxima tentativa).
+    if (estado.atual && estado.atual.expiraEm > acao.agora && estado.atual.consultaId !== ev.consultaId) return estado;
+    const { tipo: _tipo, ...chamada } = ev;
+    void _tipo;
+    return { ...estado, atual: chamada, vistas: marcar(estado.vistas, chave) };
+  }
+  // atendida / recusada / expirada: fecha a desta consulta+tentativa e lembra a chave
+  // (um "tocando" atrasado da mesma tentativa não volta a tocar).
+  const vistas = marcar(estado.vistas, chave);
+  const finalizadas =
+    ev.tipo === "chamada_expirada" && (ev.ultima || passouDoFim(estado, ev.consultaId, acao.agora))
+      ? finalizar(estado, ev.consultaId)
+      : estado.finalizadas;
+  // Fecha a mesma tentativa; se a consulta acabou de vez, fecha qualquer toque dela.
+  const fecha =
+    mesma(estado.atual, ev.consultaId, ev.tentativa) ||
+    (finalizadas !== estado.finalizadas && estado.atual?.consultaId === ev.consultaId);
+  if (fecha) return { ...estado, atual: null, vistas, finalizadas };
+  return { ...estado, vistas, finalizadas };
+}
+
+/** "/consulta?consulta=<id>" → id (a sala daquela consulta está aberta neste aparelho). */
+export function consultaAbertaNaUrl(pathname: string, search: string): string | null {
+  const path = pathname.replace(/\/+$/, "");
+  if (path !== "/consulta") return null;
+  const id = new URLSearchParams(search).get("consulta");
+  return id && ID_VALIDO.test(id) ? id : null;
+}
+
+/* ------------------------------------------------------------------ */
+/* Rota POST /api/telemedicina/[consultaId]/chamada                    */
+/* ------------------------------------------------------------------ */
+
+export type AcaoResposta = "atender" | "recusar";
+
+/** Corpo do POST: { acao: "atender"|"recusar", tentativa }. null = 400. */
+export function lerPedidoResposta(corpo: unknown): { acao: AcaoResposta; tentativa: number } | null {
+  if (!corpo || typeof corpo !== "object") return null;
+  const c = corpo as Record<string, unknown>;
+  if (c.acao !== "atender" && c.acao !== "recusar") return null;
+  if (!tentativaValida(c.tentativa)) return null;
+  return { acao: c.acao, tentativa: c.tentativa };
+}
+
+export type StatusLinhaChamada = "tocando" | "atendida" | "recusada" | "expirada";
+
+export type DecisaoResposta = {
+  /** Grava o novo status (atender: tocando|expirada; recusar: só tocando). */
+  atualizarPara: "atendida" | "recusada" | null;
+  /** Status de onde a linha pode sair (guarda do updateMany contra corrida). */
+  de: StatusLinhaChamada[];
+  /** Avisa os outros aparelhos do próprio usuário (para de tocar neles). */
+  avisar: boolean;
+  /** Status devolvido ao cliente. */
+  status: StatusLinhaChamada | "sem_registro";
+};
+
+/**
+ * Decide o que a rota faz com a linha (consultaId, eu, tentativa).
+ *  - Sem linha (antes do job do Admin): 200 sem criar nada; avisa os outros aparelhos.
+ *  - atender: vale com a linha "tocando" OU "expirada" (o toque pode ter acabado
+ *    de expirar; quem barra é a janela da consulta, checada antes na rota).
+ *  - recusar: só sai de "tocando".
+ *  - Já atendida (ou recusada / expirada no recusar): idempotente, devolve o
+ *    estado atual sem avisar de novo.
+ */
+export function decidirResposta(acao: AcaoResposta, linha: { status: string } | null): DecisaoResposta {
+  if (!linha) return { atualizarPara: null, de: [], avisar: true, status: "sem_registro" };
+  const de: StatusLinhaChamada[] = acao === "atender" ? ["tocando", "expirada"] : ["tocando"];
+  if ((de as string[]).includes(linha.status)) {
+    const para = acao === "atender" ? "atendida" : "recusada";
+    return { atualizarPara: para, de, avisar: true, status: para };
+  }
+  const st = (["atendida", "recusada", "expirada"] as const).find((s) => s === linha.status) ?? "expirada";
+  return { atualizarPara: null, de: [], avisar: false, status: st };
+}
+
+/* ------------------------------------------------------------------ */
+/* Cliente: depois de tocar em "Atender"                               */
+/* ------------------------------------------------------------------ */
+
+export const TEXTO_EVOLUCAO_PENDENTE = "Conclua a evolução anterior para atender";
+
+export type ResultadoAtender = { tipo: "entrar" } | { tipo: "bloqueado"; mensagem: string };
+
+/**
+ * Atender: decide entre ir para a sala ou ficar na tela com um aviso.
+ *  - 409 { motivo: "evolucao_pendente" } (do GET /sala ou, no futuro, do POST
+ *    .../chamada): bloqueia com "Conclua a evolução anterior para atender".
+ *  - 409 de janela (sala fechada/ainda não abriu) do POST: bloqueia com o texto do servidor.
+ *  - 403/404 do POST: bloqueia (não é desta pessoa / não existe).
+ *  - Qualquer outra coisa (200, rede, 5xx): entra na sala, que tem o próprio tratamento.
+ */
+export function decidirAposAtender(
+  sala: { status: number; corpo?: unknown } | null,
+  chamada: { status: number; corpo?: unknown } | null,
+): ResultadoAtender {
+  const motivo = (c: unknown) => (c && typeof c === "object" ? (c as { motivo?: unknown }).motivo : undefined);
+  const erro = (c: unknown) => (c && typeof c === "object" ? (c as { erro?: unknown }).erro : undefined);
+  for (const r of [sala, chamada]) {
+    if (r?.status === 409 && motivo(r.corpo) === "evolucao_pendente") {
+      return { tipo: "bloqueado", mensagem: TEXTO_EVOLUCAO_PENDENTE };
+    }
+  }
+  if (chamada && (chamada.status === 409 || chamada.status === 403 || chamada.status === 404)) {
+    const e = erro(chamada.corpo);
+    return {
+      tipo: "bloqueado",
+      mensagem:
+        typeof e === "string" && e
+          ? e
+          : chamada.status === 409
+            ? "A sala desta consulta não está aberta agora."
+            : "Não foi possível atender esta chamada.",
+    };
+  }
+  return { tipo: "entrar" };
+}
+
+/** Iniciais do avatar ("Dr. Rafael Lima" → "RL"; ignora títulos). */
+export function iniciaisContraparte(nome: string): string {
+  const partes = nome
+    .split(/\s+/)
+    .filter((p) => p && !/^(dr|dra|dr\(a\))\.?$/i.test(p));
+  if (partes.length === 0) return "?";
+  const pri = partes[0]![0] ?? "";
+  const ult = partes.length > 1 ? (partes[partes.length - 1]![0] ?? "") : "";
+  return (pri + ult).toUpperCase();
+}
