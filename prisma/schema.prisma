@@ -674,3 +674,42 @@ model BloqueioAgenda {
   @@unique([medicoId, dia])
   @@index([dia])
 }
+
+// Admin: toque da consulta (PR 1 do plano teleconsulta-v2 — só schema).
+// Sem relações Prisma de propósito (evita conflito com os PRs de Médicos e
+// Pacientes); as FKs (ON DELETE CASCADE) ficam na migração
+// supabase/migrations/20261018a_chamada_push.sql.
+
+// Registro de cada toque: uma linha por consulta, usuário e tentativa.
+model ChamadaConsulta {
+  id            String    @id @default(cuid())
+  consultaId    String
+  tentativa     Int                   // 1..3
+  paraUsuarioId String                // quem recebeu o toque
+  papel         String                // paciente | medico
+  status        String    @default("tocando") // tocando | atendida | recusada | expirada
+  tocouEm       DateTime  @default(now())
+  expiraEm      DateTime              // tocouEm + 2 min
+  respondidaEm  DateTime?
+  canal         String    @default("realtime") // realtime | push | ambos
+  pushEnviado   Boolean   @default(false)
+
+  @@unique([consultaId, paraUsuarioId, tentativa]) // trava contra toque duplo
+  @@index([status, expiraEm])
+}
+
+// Inscrições de Web Push (uma por aparelho/navegador).
+model PushInscricao {
+  id          String    @id @default(cuid())
+  usuarioId   String
+  endpoint    String    @unique
+  p256dh      String
+  auth        String
+  plataforma  String?             // ios_pwa | android | desktop
+  userAgent   String?
+  criadaEm    DateTime  @default(now())
+  ultimoUsoEm DateTime?
+  falhas      Int       @default(0) // 404/410 do serviço de push → apagar
+
+  @@index([usuarioId])
+}
