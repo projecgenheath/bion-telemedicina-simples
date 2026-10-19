@@ -90,6 +90,8 @@ export type EstadoChamada = {
   reconectando: boolean;
   /** Sala fora da janela (409 do GET /sala); null com a sala aberta. */
   foraDaJanela: ForaDaJanela | null;
+  /** GET /sala respondeu 404: a consulta não existe. O polling para e a mídia não é pedida. */
+  naoEncontrada: boolean;
 };
 
 export const ESTADO_INICIAL: EstadoChamada = {
@@ -106,6 +108,7 @@ export const ESTADO_INICIAL: EstadoChamada = {
   qualidade: "boa",
   reconectando: false,
   foraDaJanela: null,
+  naoEncontrada: false,
 };
 
 type SinalApi = { id: string; tipo: string; payload: string; createdAt: string };
@@ -269,6 +272,15 @@ export class ChamadaTeleconsulta {
     this.streamLocal.current?.getTracks().forEach((t) => t.stop());
   }
 
+  /** 404 do GET /sala: avisa a tela e desliga timers (o componente continua montado). */
+  private pararPorNaoEncontrada(): void {
+    this.set({ naoEncontrada: true });
+    for (const t of [this.timerPoll, this.timerIce, this.timerReconexao]) {
+      if (t) clearTimeout(t);
+    }
+    this.timerPoll = this.timerIce = this.timerReconexao = null;
+  }
+
   private set(parcial: Partial<EstadoChamada>): void {
     this.estado = { ...this.estado, ...parcial };
     if (this.vivo) this.aoMudar(this.estado);
@@ -391,6 +403,10 @@ export class ChamadaTeleconsulta {
     this.timerIce = null;
     try {
       const res = await fetch(`${this.base}/ice`, { cache: "no-store" });
+      if (res.status === 404 || this.estado.naoEncontrada) {
+        // Consulta inexistente: sem nova tentativa (o ciclo() também para).
+        return;
+      }
       if (res.status === 409) {
         // Sala fora da janela: sem nova tentativa por timer. O ciclo() pede
         // de novo quando o GET /sala voltar 200 (ver recarregarIceSePreciso).
@@ -951,7 +967,7 @@ export class ChamadaTeleconsulta {
 
   /** Agenda o próximo GET (ou adianta, com `agora`). */
   private agendarPoll(ms?: number): void {
-    if (!this.vivo || this.encerrada) return;
+    if (!this.vivo || this.encerrada || this.estado.naoEncontrada) return;
     if (this.timerPoll) clearTimeout(this.timerPoll);
     const intervalo =
       ms ??
@@ -978,6 +994,13 @@ export class ChamadaTeleconsulta {
           this.set({ foraDaJanela: fora });
         }
         proximo = esperaForaDaJanela(fora, Date.now());
+        return;
+      }
+      if (res.status === 404) {
+        // Consulta inexistente: nada a esperar. Para o polling e o ICE, sem pedir câmera.
+        if (!this.vivo) return;
+        aviso("consulta não encontrada; parando a sala");
+        this.pararPorNaoEncontrada();
         return;
       }
       // Qualquer outra resposta: segue como antes (pede a mídia; erros caem no catch).

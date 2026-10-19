@@ -314,3 +314,13 @@ export function exibirForaDaJanela(f: ForaDaJanela | null, status: string): f is
   if (!f) return false;
   return status === "conectando" || status === "aguardando";
 }
+
+/**
+ * Início de cada papel, usado pela tela "Consulta não encontrada" (404 do
+ * GET /sala): paciente → /paciente, médico → /painel, admin → /admin-agendamentos.
+ */
+export function rotaInicioPorPapel(role: string): string {
+  if (role === "paciente") return "/paciente";
+  if (role === "admin") return "/admin-agendamentos";
+  return "/painel";
+}

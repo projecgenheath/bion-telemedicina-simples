@@ -22,6 +22,7 @@ import {
   limitesEnvio,
   medirAmostra,
   restricoesMidia,
+  rotaInicioPorPapel,
   textoForaDaJanela,
 } from "./teleconsulta-logica";
 
@@ -170,6 +171,11 @@ igual("não exibe reconectando", exibirForaDaJanela({ motivo: "depois" }, "insta
 igual("não exibe negociando", exibirForaDaJanela({ motivo: "depois" }, "conectando-p2p"), false);
 igual("não exibe encerrada", exibirForaDaJanela({ motivo: "depois" }, "encerrada"), false);
 igual("não exibe sem 409", exibirForaDaJanela(null, "aguardando"), false);
+
+igual("404 do paciente volta para /paciente", rotaInicioPorPapel("paciente"), "/paciente");
+igual("404 do médico volta para /painel", rotaInicioPorPapel("medico"), "/painel");
+igual("404 do admin volta para /admin-agendamentos", rotaInicioPorPapel("admin"), "/admin-agendamentos");
+igual("papel desconhecido volta para /painel", rotaInicioPorPapel("x"), "/painel");
 
 console.log(`teleconsulta-logica: ${ok} ok, ${falhas} falha(s)`);
 if (falhas > 0) process.exit(1);
