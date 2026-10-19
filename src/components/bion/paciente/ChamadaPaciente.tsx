@@ -1,14 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
-import { ArrowLeft, Clock, X } from "lucide-react";
+import { ArrowLeft, Clock, MonitorUp, MonitorX, X } from "lucide-react";
 import { textoForaDaJanela } from "@/lib/teleconsulta-logica";
 import { ConsultaNaoEncontrada } from "@/components/bion/consulta/SalaConsultaTela";
 import { ConsultaPainelLateral } from "@/components/bion/consulta/PainelLateral";
 import { AlertaMidia } from "@/components/bion/consulta/AlertaMidia";
 import { useSalaConsulta, type SalaConsulta } from "@/components/bion/consulta/useSalaConsulta";
-import { BarraChamada } from "@/components/bion/chamada/BarraChamada";
+import { BarraChamada, BotaoChamada } from "@/components/bion/chamada/BarraChamada";
+import { podeCompartilharTelaAqui } from "@/components/bion/chamada/compartilhar-tela";
 import { VideoChamada916 } from "@/components/bion/chamada/VideoChamada916";
 import { useAtalhosChamada } from "@/components/bion/chamada/useAtalhosChamada";
 import { useCamerasDisponiveis } from "@/components/bion/chamada/useCamerasDisponiveis";
@@ -56,6 +57,20 @@ function useTempoDeChamada(conectado: boolean): string | null {
   return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
 }
 
+/** Botão de compartilhar tela só no computador (relê se o ponteiro principal mudar). */
+function usePodeCompartilharTela(): boolean {
+  return useSyncExternalStore(
+    (avisar) => {
+      if (typeof window === "undefined" || typeof window.matchMedia !== "function") return () => {};
+      const mq = window.matchMedia("(pointer: fine)");
+      mq.addEventListener?.("change", avisar);
+      return () => mq.removeEventListener?.("change", avisar);
+    },
+    podeCompartilharTelaAqui,
+    () => false,
+  );
+}
+
 /** Texto no lugar do vídeo do médico, conforme o estado da sala. */
 function textoEspera(t: SalaConsulta["tele"]): { titulo: string; detalhe?: string; animar: boolean } {
   if (t.status === "encerrada") {
@@ -88,6 +103,7 @@ export function TelaChamadaPaciente({
   const conectado = tele.status === "conectado";
   const tempo = useTempoDeChamada(conectado);
   const qtdCameras = useCamerasDisponiveis(tele.localPronto);
+  const podeCompartilhar = usePodeCompartilharTela();
   const [mensagensAbertas, setMensagensAbertas] = useState(false);
   const [virando, setVirando] = useState(false);
   const [alertaFechado, setAlertaFechado] = useState<string | null>(null);
@@ -153,17 +169,30 @@ export function TelaChamadaPaciente({
       overlaysVisiveis={atalhos.visivel}
       handlers={atalhos.handlers}
       avisos={
-        alerta ? (
-          <div className="relative overflow-hidden rounded-2xl bg-bion-night/90 shadow-2xl backdrop-blur-md">
-            <AlertaMidia mensagem={alerta} />
-            <button
-              type="button"
-              onClick={() => setAlertaFechado(alerta)}
-              aria-label="Fechar aviso de câmera e microfone"
-              className="absolute right-2 top-2 grid size-8 place-items-center rounded-full text-amber-100 hover:bg-white/10"
-            >
-              <X className="size-4" aria-hidden />
-            </button>
+        alerta || tele.compartilhando ? (
+          <div className="flex flex-col items-start gap-2">
+            {tele.compartilhando ? (
+              <p
+                role="status"
+                aria-live="polite"
+                className="flex items-center gap-2 rounded-full bg-primary px-3.5 py-1.5 text-xs font-semibold text-primary-foreground shadow-lg"
+              >
+                <MonitorUp className="size-3.5" aria-hidden /> Você está compartilhando a tela
+              </p>
+            ) : null}
+            {alerta ? (
+              <div className="relative w-full overflow-hidden rounded-2xl bg-bion-night/90 shadow-2xl backdrop-blur-md">
+                <AlertaMidia mensagem={alerta} />
+                <button
+                  type="button"
+                  onClick={() => setAlertaFechado(alerta)}
+                  aria-label="Fechar aviso de câmera e microfone"
+                  className="absolute right-2 top-2 grid size-8 place-items-center rounded-full text-amber-100 hover:bg-white/10"
+                >
+                  <X className="size-4" aria-hidden />
+                </button>
+              </div>
+            ) : null}
           </div>
         ) : null
       }
@@ -183,6 +212,19 @@ export function TelaChamadaPaciente({
           onEncerrar={sala.sairDaSala}
           rotuloEncerrar="Sair"
           ariaEncerrar="Sair da chamada"
+          extras={
+            podeCompartilhar ? (
+              <BotaoChamada
+                rotulo={tele.compartilhando ? "Parar" : "Tela"}
+                aria={tele.compartilhando ? "Parar de compartilhar a tela" : "Compartilhar tela"}
+                pressionado={tele.compartilhando}
+                destaque={tele.compartilhando}
+                onClick={() => void sala.toggleTela()}
+              >
+                {tele.compartilhando ? <MonitorX className="size-6" aria-hidden /> : <MonitorUp className="size-6" aria-hidden />}
+              </BotaoChamada>
+            ) : undefined
+          }
           visivel={atalhos.visivel}
         />
       }
