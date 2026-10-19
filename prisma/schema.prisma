@@ -176,6 +176,13 @@ model Consulta {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
+  // Teleconsulta v2: tipo do atendimento e consulta de origem (renovação,
+  // retorno, segunda opinião). Trava no banco: Consulta_tipoAtendimento_check.
+  tipoAtendimento    String    @default("padrao") // padrao | renovacao | retorno | segunda_opiniao
+  consultaOrigemId   String?
+  consultaOrigem     Consulta? @relation("ConsultaOrigem", fields: [consultaOrigemId], references: [id], onDelete: SetNull)
+  consultasDerivadas Consulta[] @relation("ConsultaOrigem")
+
   // Telemedicina WebRTC (Fase 2)
   sinaisSala    SinalSala[]
   presencasSala PresencaSala[]
@@ -194,6 +201,7 @@ model Consulta {
   chamadas    ChamadaConsulta[] // Admin: toque da consulta
 
   @@unique([id, medicoId]) // alvo das FKs (consultaId, medicoId) do repasse
+  @@index([consultaOrigemId])
 }
 
 // Cobrança da consulta. O CLIENTE NUNCA define `pago` — a confirmação vem do
