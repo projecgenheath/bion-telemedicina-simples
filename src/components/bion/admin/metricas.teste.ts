@@ -115,7 +115,7 @@ igual(
   fila.map((i) => i.chave),
   ["repasse-r3", "repasse-r2", "audit-a1", "reembolso-e1", "medico-2", "chamado-t1", "repasse-r1"],
 );
-igual("fila: contagem", contarPorCategoria(fila), { validacao: 1, nao_atendida: 0, desfecho: 0, reembolso: 1, repasse: 3, chamado: 1, sistema: 1 });
+igual("fila: contagem", contarPorCategoria(fila), { validacao: 1, nao_atendida: 0, desfecho: 0, renovacao: 0, reembolso: 1, repasse: 3, chamado: 1, sistema: 1 });
 const rr = fila.find((i) => i.chave === "repasse-r2")!;
 igual("fila: repasse com CNPJ divergente", [rr.tom, rr.chips.map((c) => c.rotulo), rr.destino], ["critico", ["A pagar", "CNPJ divergente"], "admin-repasses?repasse=r2"]);
 igual("fila: repasse detalhe", rr.detalhe, "03/10 · R$ 50,00 · 1 consulta");
@@ -188,3 +188,8 @@ igual("rótulo outros", rotuloAtalhoBusca(false).curto, "Ctrl K");
 
 console.log(`${ok} ok, ${falhas} falha(s)`);
 if (falhas) process.exit(1);
+
+/* ---------- fila: renovações pendentes há mais de 24 h (só contagem) ---------- */
+const filaR = montarFila({ medicos: [], tickets: [], auditLogs: [], repasses: null, reembolsos: null, renovacoes: { total: 3, horas: 24, ids: ["r1", "r2", "r3"], maisAntigoEm: "2026-10-01T10:00:00.000Z" } }, AGORA);
+igual("fila renovações: um item com a contagem", [filaR.length, filaR[0].titulo, filaR[0].categoria, contarPorCategoria(filaR).renovacao], [1, "3 renovações pendentes há mais de 24 h", "renovacao", 1]);
+igual("fila renovações: zero não aparece", montarFila({ medicos: [], tickets: [], auditLogs: [], repasses: null, reembolsos: null, renovacoes: { total: 0, horas: 24, ids: [], maisAntigoEm: null } }, AGORA), []);

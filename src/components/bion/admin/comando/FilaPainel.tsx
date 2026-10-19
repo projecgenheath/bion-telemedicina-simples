@@ -9,7 +9,7 @@ import { useDadosAdmin } from "../dados";
 import { contarPorCategoria, ROTULO_CATEGORIA, type CategoriaFila, type ItemFila } from "../metricas";
 import { relativo } from "../tempo";
 
-const ORDEM: CategoriaFila[] = ["validacao", "nao_atendida", "desfecho", "reembolso", "repasse", "chamado", "sistema"];
+const ORDEM: CategoriaFila[] = ["validacao", "nao_atendida", "desfecho", "renovacao", "reembolso", "repasse", "chamado", "sistema"];
 
 /**
  * Fila de decisões com itens REAIS: médicos em validação, chamadas não
@@ -20,7 +20,7 @@ const ORDEM: CategoriaFila[] = ["validacao", "nao_atendida", "desfecho", "reembo
  * As ações por gesto chegam com cada módulo novo (PRs seguintes).
  */
 export function FilaPainel({ onAbrir, comTitulo = true }: { onAbrir: (view: string) => void; comTitulo?: boolean }) {
-  const { fila, filaPronta, repasses, reembolsos, semDesfecho, naoAtendidas, agora, atualizar, atualizando } = useDadosAdmin();
+  const { fila, filaPronta, repasses, reembolsos, semDesfecho, naoAtendidas, renovacoes, agora, atualizar, atualizando } = useDadosAdmin();
   const { fechar } = useCamadasAdmin();
   const [filtro, setFiltro] = useState<CategoriaFila | "tudo">("tudo");
   const contagem = contarPorCategoria(fila);
@@ -31,6 +31,7 @@ export function FilaPainel({ onAbrir, comTitulo = true }: { onAbrir: (view: stri
     reembolsos.erro ? `Reembolsos: ${reembolsos.erro}` : null,
     semDesfecho.erro ? `Sem desfecho: ${semDesfecho.erro}` : null,
     naoAtendidas.erro ? `Chamadas não atendidas: ${naoAtendidas.erro}` : null,
+    renovacoes.erro ? `Renovações: ${renovacoes.erro}` : null,
   ].filter(Boolean) as string[];
 
   const abrir = (i: ItemFila) => {
