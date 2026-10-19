@@ -6,6 +6,7 @@ import { useBion } from "@/lib/bion-store";
 import { useVoltarFecha } from "./useVoltarFecha";
 import { useFocoDialogo } from "./useFocoDialogo";
 import { CLASSE_ETIQUETA, rotuloHistorico } from "./etiqueta-consulta";
+import { EtiquetaTipo } from "./tipo-atendimento-ui";
 import { EstadoVazio } from "./EstadosPaciente";
 
 /**
@@ -63,6 +64,7 @@ export function TelaListaCompleta({ lista, onFechar, onAgendar }: { lista: Lista
                       <li key={c.id} className="bpp-linha">
                         <div className="min-w-0 flex-1">
                           <div className="text-sm font-semibold text-bion-ink dark:text-bion-paper truncate">{c.especialidade} · {c.medico}</div>
+                          <EtiquetaTipo consulta={c} className="mt-0.5" />
                           <div className="text-xs text-bion-ink/75 dark:text-bion-paper/75">{c.data} às {c.hora}{c.valor ? ` · ${c.valor}` : ""}</div>
                         </div>
                         <span className={`text-xs font-bold px-2.5 py-1 rounded-full whitespace-nowrap ${CLASSE_ETIQUETA[e.tom]}`}>{e.texto}</span>

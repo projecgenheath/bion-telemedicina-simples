@@ -1,5 +1,6 @@
 "use client";
 
+import { tipoDaConsulta } from "./tipo-atendimento-ui";
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { ArrowLeft, Clock, MonitorUp, MonitorX, X } from "lucide-react";
@@ -153,7 +154,7 @@ export function TelaChamadaPaciente({
       espelharLocal={!tele.cameraTraseira && !tele.compartilhando}
       semCameraLocal={semCamera}
       contraparteNome={sala.contraparteNome}
-      contraparteDetalhe={especialidade ? `${especialidade} · Teleconsulta` : "Teleconsulta"}
+      contraparteDetalhe={`${especialidade ? `${especialidade} · ` : ""}${tipoDaConsulta(sala.consultaAtual) ?? "Teleconsulta"}`}
       iniciais={sala.iniciais(sala.contraparteNome)}
       tempo={tempo}
       conectado={conectado}

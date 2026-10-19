@@ -176,6 +176,12 @@ model Consulta {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
+  // TEMPORÁRIO (Pacientes, para compilar): a migração de verdade é do Médicos
+  // (Consulta_tipoAtendimento_check, FK ON DELETE SET NULL, índice). Sai daqui
+  // quando o PR dele entrar na main.
+  tipoAtendimento    String   @default("padrao") // padrao | renovacao | retorno | segunda_opiniao
+  consultaOrigemId   String?
+
   // Telemedicina WebRTC (Fase 2)
   sinaisSala    SinalSala[]
   presencasSala PresencaSala[]
