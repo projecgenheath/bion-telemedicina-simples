@@ -18,23 +18,19 @@ import { useCamerasDisponiveis } from "@/components/bion/chamada/useCamerasDispo
  * Sala de teleconsulta do PACIENTE: tela cheia 9:16 estilo ligação.
  * Toda a lógica (janela, presença, saída, alertas, chat) continua em
  * useSalaConsulta/useTeleconsulta; aqui é só a casca. O paciente só SAI
- * da chamada (não encerra a consulta).
- *
- * `role` ainda aceita "admin" porque o roteador (Consulta.tsx) manda o admin
- * para cá; um PR seguinte tira o admin desta tela.
+ * da chamada (não encerra a consulta). O admin nunca chega aqui: o roteador
+ * (Consulta.tsx) o manda para Agendamentos (RedirecionaAdminSala).
  */
 export function ChamadaPaciente({
   onEnd,
-  role = "paciente",
   consultaId,
 }: {
   onEnd: () => void;
-  role?: "paciente" | "admin";
   consultaId?: string;
 }) {
-  const sala = useSalaConsulta({ role, consultaId, onEnd });
-  if (sala.tele.naoEncontrada) return <ConsultaNaoEncontrada role={role} />;
-  return <TelaChamadaPaciente sala={sala} role={role} onEnd={onEnd} />;
+  const sala = useSalaConsulta({ role: "paciente", consultaId, onEnd });
+  if (sala.tele.naoEncontrada) return <ConsultaNaoEncontrada role="paciente" />;
+  return <TelaChamadaPaciente sala={sala} onEnd={onEnd} />;
 }
 
 /** "MM:SS" (ou "H:MM:SS") desde a primeira vez que a chamada conectou. */
@@ -92,11 +88,9 @@ function textoEspera(t: SalaConsulta["tele"]): { titulo: string; detalhe?: strin
 /** Casca visual (separada para poder ser montada com dados de teste). */
 export function TelaChamadaPaciente({
   sala,
-  role,
   onEnd,
 }: {
   sala: SalaConsulta;
-  role: "paciente" | "admin";
   onEnd: () => void;
 }) {
   const { tele } = sala;
@@ -243,7 +237,7 @@ export function TelaChamadaPaciente({
       />
       <FolhaMensagens aberta={mensagensAbertas} onFechar={fecharMensagens}>
         <ConsultaPainelLateral
-          role={role}
+          role="paciente"
           aba={sala.aba}
           setAba={sala.setAba}
           anamneseAtual={sala.anamneseAtual}

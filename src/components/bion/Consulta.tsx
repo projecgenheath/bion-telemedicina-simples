@@ -25,5 +25,5 @@ export function Consulta({
 }) {
   if (role === "admin") return <RedirecionaAdminSala consultaId={consultaId} />;
   if (role === "medico") return <ChamadaMedico onEnd={onEnd} consultaId={consultaId} />;
-  return <ChamadaPaciente onEnd={onEnd} role={role} consultaId={consultaId} />;
+  return <ChamadaPaciente onEnd={onEnd} consultaId={consultaId} />;
 }
