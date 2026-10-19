@@ -509,7 +509,7 @@ export function PacienteApp() {
               </p>
             </div>
 
-            <AvisoAtivarToque role={sessao.role} className="mb-4" />
+            <AvisoAtivarToque role={sessao.role} usuarioId={sessao.id} className="mb-4" />
 
             {/* Aviso de mensagem nova do médico (some quando a conversa é aberta) */}
             {ultimaNaoLida ? (

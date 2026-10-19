@@ -72,3 +72,29 @@ export function corpoInscricao(j: { endpoint?: string; keys?: Record<string, str
   if (!j.endpoint || !j.keys?.p256dh || !j.keys?.auth) return null;
   return { endpoint: j.endpoint, keys: { p256dh: j.keys.p256dh, auth: j.keys.auth }, plataforma };
 }
+
+/* Ressincronização: POST só se o endpoint mudou ou a última foi há > 24 h. */
+export const SYNC_PREFIXO = "bion:push-sync:";
+export const SYNC_MS = 24 * 60 * 60 * 1000;
+export type RegistroSync = { endpoint: string; em: number };
+
+export const chaveSync = (usuarioId: string) => SYNC_PREFIXO + usuarioId;
+
+export function lerRegistroSync(valor: string | null): RegistroSync | null {
+  try {
+    const r = JSON.parse(valor ?? "") as Partial<RegistroSync> | null;
+    return r && typeof r.endpoint === "string" && typeof r.em === "number" && Number.isFinite(r.em) ? { endpoint: r.endpoint, em: r.em } : null;
+  } catch {
+    return null;
+  }
+}
+
+export function precisaSincronizar(registro: RegistroSync | null, endpoint: string, agora: number): boolean {
+  if (!registro || registro.endpoint !== endpoint) return true;
+  return agora - registro.em > SYNC_MS || agora < registro.em; // relógio voltou: sincroniza
+}
+
+/** Chaves do localStorage a apagar no logout (todas as de sync). */
+export function chavesSyncParaLimpar(chaves: string[]): string[] {
+  return chaves.filter((k) => k.startsWith(SYNC_PREFIXO));
+}

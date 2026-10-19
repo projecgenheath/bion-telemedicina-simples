@@ -1,5 +1,5 @@
 /** Rodar: bun src/lib/push-cliente-logica.teste.ts */
-import { base64UrlParaBytes, corpoInscricao, detectarSuporte, deveMostrarAviso, dispensaRecente, DISPENSA_MS, escolherChave, ehIOS, papelComAviso } from "./push-cliente-logica";
+import { chaveSync, chavesSyncParaLimpar, lerRegistroSync, precisaSincronizar, SYNC_MS, base64UrlParaBytes, corpoInscricao, detectarSuporte, deveMostrarAviso, dispensaRecente, DISPENSA_MS, escolherChave, ehIOS, papelComAviso } from "./push-cliente-logica";
 
 let ok = 0, falhas = 0;
 function igual(n: string, o: unknown, e: unknown) {
@@ -33,5 +33,17 @@ igual("chave inativo", escolherChave(undefined, { ativo: false, chavePublica: nu
 igual("b64url", Array.from(base64UrlParaBytes("AP-_")), [0, 255, 191]);
 igual("corpo", corpoInscricao({ endpoint: "https://fcm.googleapis.com/x", keys: { p256dh: "a", auth: "b" } }, "android"), { endpoint: "https://fcm.googleapis.com/x", keys: { p256dh: "a", auth: "b" }, plataforma: "android" });
 igual("corpo incompleto", corpoInscricao({ endpoint: "e" }, "android"), null);
+igual("sync sem registro", precisaSincronizar(null, "e1", agora), true);
+igual("sync mesmo endpoint recente", precisaSincronizar({ endpoint: "e1", em: agora - 1000 }, "e1", agora), false);
+igual("sync endpoint mudou", precisaSincronizar({ endpoint: "e0", em: agora - 1000 }, "e1", agora), true);
+igual("sync > 24h", precisaSincronizar({ endpoint: "e1", em: agora - SYNC_MS - 1 }, "e1", agora), true);
+igual("sync = 24h", precisaSincronizar({ endpoint: "e1", em: agora - SYNC_MS }, "e1", agora), false);
+igual("sync relógio voltou", precisaSincronizar({ endpoint: "e1", em: agora + 60_000 }, "e1", agora), true);
+igual("ler ok", lerRegistroSync(JSON.stringify({ endpoint: "e", em: 5 })), { endpoint: "e", em: 5 });
+igual("ler lixo", lerRegistroSync("{x"), null);
+igual("ler null", lerRegistroSync(null), null);
+igual("ler incompleto", lerRegistroSync(JSON.stringify({ endpoint: "e" })), null);
+igual("chave por usuário", chaveSync("u1"), "bion:push-sync:u1");
+igual("limpar", chavesSyncParaLimpar(["bion:push-sync:u1", "bion:push-aviso-dispensado", "x", "bion:push-sync:u2"]), ["bion:push-sync:u1", "bion:push-sync:u2"]);
 console.log(`${ok} ok, ${falhas} falhas`);
 if (falhas) process.exit(1);

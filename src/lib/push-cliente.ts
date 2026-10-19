@@ -1,6 +1,10 @@
 "use client";
 import {
   base64UrlParaBytes,
+  chaveSync,
+  chavesSyncParaLimpar,
+  lerRegistroSync,
+  precisaSincronizar,
   corpoInscricao,
   detectarSuporte,
   escolherChave,
@@ -49,38 +53,58 @@ async function chavePublica(): Promise<string | null> {
 export type ResultadoAtivar = "ativado" | "negado" | "sem_suporte" | "sem_chave" | "erro";
 
 /** Só chamar a partir de um clique (pede permissão). */
-export async function ativarPush(): Promise<ResultadoAtivar> {
+export async function ativarPush(usuarioId?: string): Promise<ResultadoAtivar> {
   const sup = suportePush();
   if (!sup.ok) return "sem_suporte";
   const perm = await Notification.requestPermission();
   if (perm !== "granted") return "negado";
-  return inscrever(sup.plataforma);
+  return inscrever(sup.plataforma, usuarioId, true);
 }
 
 /** Renova/reenvia a inscrição quando a permissão já foi dada (sem pedir nada). */
-export async function sincronizarPush(): Promise<ResultadoAtivar | null> {
+export async function sincronizarPush(usuarioId?: string): Promise<ResultadoAtivar | null> {
   const sup = suportePush();
   if (!sup.ok || permissaoAtual() !== "granted") return null;
-  return inscrever(sup.plataforma);
+  return inscrever(sup.plataforma, usuarioId, false);
 }
 
-async function inscrever(plataforma: Parameters<typeof corpoInscricao>[1]): Promise<ResultadoAtivar> {
+function lerLS(k: string): string | null {
+  try {
+    return localStorage.getItem(k);
+  } catch {
+    return null;
+  }
+}
+
+async function inscrever(
+  plataforma: Parameters<typeof corpoInscricao>[1],
+  usuarioId: string | undefined,
+  forcar: boolean,
+): Promise<ResultadoAtivar> {
   const reg = await registrarSW();
   if (!reg) return "erro";
-  const chave = await chavePublica();
-  if (!chave) return "sem_chave";
+  const chavePub = await chavePublica();
+  if (!chavePub) return "sem_chave";
   try {
     const sub =
       (await reg.pushManager.getSubscription()) ??
-      (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: base64UrlParaBytes(chave) }));
+      (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: base64UrlParaBytes(chavePub) }));
     const corpo = corpoInscricao(sub.toJSON() as { endpoint?: string; keys?: Record<string, string> }, plataforma);
     if (!corpo) return "erro";
+    const chave = usuarioId ? chaveSync(usuarioId) : null;
+    if (!forcar && chave && !precisaSincronizar(lerRegistroSync(lerLS(chave)), corpo.endpoint, Date.now())) return "ativado";
     const r = await fetch("/api/push/inscricao", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(corpo),
     });
-    return r.ok ? "ativado" : "erro";
+    if (!r.ok) return "erro";
+    if (chave) {
+      try {
+        localStorage.setItem(chave, JSON.stringify({ endpoint: corpo.endpoint, em: Date.now() }));
+      } catch {}
+    }
+    return "ativado";
   } catch {
     return "erro";
   }
@@ -95,4 +119,23 @@ export async function inscricaoAtual(): Promise<PushSubscription | null> {
   } catch {
     return null;
   }
+}
+
+/** Logout: apaga os registros de sincronização do push deste navegador. */
+export function limparSyncPush(): void {
+  try {
+    const ks: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) ks.push(localStorage.key(i) ?? "");
+    for (const k of chavesSyncParaLimpar(ks)) localStorage.removeItem(k);
+  } catch {}
+}
+
+/** Fecha as notificações do toque desta consulta (tag = consultaId). */
+export async function fecharNotificacoesConsulta(consultaId: string): Promise<void> {
+  try {
+    if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return;
+    const reg = await navigator.serviceWorker.getRegistration("/");
+    const ns = (await reg?.getNotifications({ tag: consultaId })) ?? [];
+    for (const n of ns) n.close();
+  } catch {}
 }

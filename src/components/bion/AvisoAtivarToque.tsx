@@ -5,7 +5,7 @@ import { DISPENSA_CHAVE, deveMostrarAviso } from "@/lib/push-cliente-logica";
 import { ativarPush, permissaoAtual, sincronizarPush, suportePush } from "@/lib/push-cliente";
 
 /** Aviso "Ativar toque da consulta" (PACIENTE e MEDICO). requestPermission só no clique. */
-export function AvisoAtivarToque({ role, className = "" }: { role: string | null | undefined; className?: string }) {
+export function AvisoAtivarToque({ role, usuarioId, className = "" }: { role: string | null | undefined; usuarioId?: string; className?: string }) {
   const [visivel, setVisivel] = useState(false);
   const [estado, setEstado] = useState<"ocioso" | "ativando" | "erro">("ocioso");
 
@@ -18,9 +18,9 @@ export function AvisoAtivarToque({ role, className = "" }: { role: string | null
     const mostrar = deveMostrarAviso({ role, suporte: suportePush(), permissao, dispensadoEm, agora: Date.now() });
     // Lido só no cliente (localStorage/Notification): aplica fora do corpo do efeito.
     const t = window.setTimeout(() => setVisivel(mostrar), 0);
-    if (permissao === "granted") void sincronizarPush();
+    if (permissao === "granted") void sincronizarPush(usuarioId);
     return () => window.clearTimeout(t);
-  }, [role]);
+  }, [role, usuarioId]);
 
   if (!visivel) return null;
 
@@ -32,7 +32,7 @@ export function AvisoAtivarToque({ role, className = "" }: { role: string | null
   };
   const ativar = async () => {
     setEstado("ativando");
-    const r = await ativarPush();
+    const r = await ativarPush(usuarioId);
     if (r === "ativado" || r === "negado") setVisivel(false);
     else setEstado("erro");
   };

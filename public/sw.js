@@ -19,14 +19,35 @@ self.addEventListener("push", (event) => {
   event.waitUntil(
     self.registration.showNotification(titulo, {
       body: "",
-      tag: consultaId ? `${consultaId}:${tentativa}` : "bion-toque",
-      renotify: !vencido,
+      // tag só consultaId: o toque seguinte SUBSTITUI o anterior (renotify re-alerta).
+      tag: consultaId || "bion-toque",
+      renotify: !vencido, // vencido: mostra (exigência do Chrome) sem re-alertar e fecha em seguida
       requireInteraction: !vencido,
-      icon: "/logo.svg",
+      icon: "/icons/icon-192.png",
+      badge: "/icons/badge-96.png",
       data: { url, consultaId, tentativa },
-    }),
+    }).then(() => (vencido ? fecharTag(consultaId || "bion-toque", tentativa) : fecharNoExpira(consultaId || "bion-toque", tentativa, expira))),
   );
 });
+
+/*
+ * Fechamento best-effort no expiraEm. NÃO é garantido: o navegador pode
+ * encerrar o SW antes (o Chrome corta waitUntil longos, ~5 min no máximo),
+ * por isso o limite de 90 s. O fechamento confiável é o do cliente
+ * (chamada_expirada / atender / recusar → fecharNotificacoesConsulta).
+ */
+const ESPERA_MAX_MS = 90 * 1000;
+async function fecharTag(tag, tentativa) {
+  const ns = await self.registration.getNotifications({ tag });
+  // Só fecha se ainda for a mesma tentativa (uma nova pode ter substituído).
+  for (const n of ns) if (!n.data || n.data.tentativa === tentativa) n.close();
+}
+function fecharNoExpira(tag, tentativa, expira) {
+  if (!Number.isFinite(expira)) return undefined;
+  const ms = expira - Date.now();
+  if (ms > ESPERA_MAX_MS) return undefined;
+  return new Promise((r) => setTimeout(r, Math.max(0, ms))).then(() => fecharTag(tag, tentativa));
+}
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();

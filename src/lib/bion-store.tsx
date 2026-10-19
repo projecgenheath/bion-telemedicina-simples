@@ -1,6 +1,6 @@
 "use client";
 
-import { inscricaoAtual } from "@/lib/push-cliente";
+import { inscricaoAtual, limparSyncPush } from "@/lib/push-cliente";
 import {
   createContext,
   useCallback,
@@ -786,6 +786,7 @@ export function BionProvider({ children }: { children: ReactNode }) {
       // mesmo sem rede, encerra a sessão local
     }
     await inscricao?.unsubscribe().catch(() => false);
+    limparSyncPush();
     setAutenticado(false);
     setPrecisaTrocarSenha(false);
     setSessaoState(SESSAO_VAZIA);
