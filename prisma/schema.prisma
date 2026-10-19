@@ -182,6 +182,7 @@ model Consulta {
   // Teleconsulta v2: tipo do atendimento e consulta de origem (renovação,
   // retorno, segunda opinião). Trava no banco: Consulta_tipoAtendimento_check.
   tipoAtendimento    String    @default("padrao") // padrao | renovacao | retorno | segunda_opiniao
+  // consultaOrigemId nunca é o próprio id (Consulta_origem_diferente_check)
   consultaOrigemId   String?
   consultaOrigem     Consulta? @relation("ConsultaOrigem", fields: [consultaOrigemId], references: [id], onDelete: SetNull)
   consultasDerivadas Consulta[] @relation("ConsultaOrigem")
@@ -808,7 +809,7 @@ model PedidoMedicao {
   medicoId   String
   medico     User      @relation("PedidoMedicaoMedico", fields: [medicoId], references: [id], onDelete: Cascade)
   tipos      String    @default("[]")
-  status     String    @default("pendente")
+  status     String    @default("pendente") // pendente | atendido | cancelado (PedidoMedicao_status_check)
   criadoEm   DateTime  @default(now())
   atendidoEm DateTime?
   medicoes   Medicao[]
@@ -832,7 +833,7 @@ model PedidoRenovacao {
   documento          Documento? @relation("PedidoRenovacaoDocumento", fields: [documentoId], references: [id], onDelete: SetNull)
   documentoNovoId    String?    // receita nova, quando status = renovada
   documentoNovo      Documento? @relation("PedidoRenovacaoDocumentoNovo", fields: [documentoNovoId], references: [id], onDelete: SetNull)
-  status             String     @default("pendente") // pendente | renovada | chamada_marcada | recusada
+  status             String     @default("pendente") // pendente | renovada | chamada_marcada | recusada | cancelado; respondidoEm nulo só em pendente (PedidoRenovacao_respondido_check)
   observacaoPaciente String?
   mensagemMedico     String?
   consultaId         String?    // chamada curta marcada pelo médico
@@ -846,4 +847,5 @@ model PedidoRenovacao {
   // Índice único parcial só no SQL (o Prisma não suporta parcial):
   // "PedidoRenovacao_pendente_unico" (pacienteId, documentoId) WHERE status = 'pendente'
   // — um só pedido pendente por paciente e receita. Ver 20261019b.
+  // Também só no SQL: "PedidoRenovacao_pendente_criadoEm_idx" (criadoEm) WHERE status = 'pendente'.
 }

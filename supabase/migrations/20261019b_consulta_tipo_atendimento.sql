@@ -34,6 +34,12 @@ ALTER TABLE public."Consulta" ADD CONSTRAINT "Consulta_tipoAtendimento_check"
     'segunda_opiniao'
   ));
 
+-- Uma consulta não pode ser a própria origem. Em produção (19/10/2026) a
+-- coluna ainda não existe, então nenhuma linha viola.
+ALTER TABLE public."Consulta" DROP CONSTRAINT IF EXISTS "Consulta_origem_diferente_check";
+ALTER TABLE public."Consulta" ADD CONSTRAINT "Consulta_origem_diferente_check"
+  CHECK ("consultaOrigemId" IS NULL OR "consultaOrigemId" <> "id");
+
 -- ---------------------------------------------------------------------
 -- 2) Tabela nova "PedidoRenovacao": pedido de renovação de receita feito
 --    pelo paciente. FKs: paciente e médico → "User" (cascade); consulta de
@@ -84,8 +90,15 @@ ALTER TABLE public."PedidoRenovacao" ADD CONSTRAINT "PedidoRenovacao_status_chec
     'pendente',
     'renovada',
     'chamada_marcada',
-    'recusada'
+    'recusada',
+    'cancelado'  -- cancelado pelo paciente enquanto pendente
   ));
+
+-- Pendente <=> sem resposta. Qualquer saída de 'pendente' (inclusive o
+-- cancelamento pelo paciente) preenche "respondidoEm".
+ALTER TABLE public."PedidoRenovacao" DROP CONSTRAINT IF EXISTS "PedidoRenovacao_respondido_check";
+ALTER TABLE public."PedidoRenovacao" ADD CONSTRAINT "PedidoRenovacao_respondido_check"
+  CHECK (("status" = 'pendente') = ("respondidoEm" IS NULL));
 
 -- Um só pedido pendente por paciente e receita (índice único parcial; o
 -- Prisma não representa índice parcial, por isso só existe aqui).
@@ -93,7 +106,25 @@ CREATE UNIQUE INDEX IF NOT EXISTS "PedidoRenovacao_pendente_unico"
   ON public."PedidoRenovacao"("pacienteId", "documentoId")
   WHERE "status" = 'pendente';
 
+-- Fila do médico/Admin: pendentes por antiguidade (índice parcial, só no SQL).
+CREATE INDEX IF NOT EXISTS "PedidoRenovacao_pendente_criadoEm_idx"
+  ON public."PedidoRenovacao"("criadoEm")
+  WHERE "status" = 'pendente';
+
 -- RLS negando tudo por padrão (o app acessa só pelo servidor), como as demais.
 ALTER TABLE public."PedidoRenovacao" ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON TABLE public."PedidoRenovacao" FROM anon, authenticated;
 -- Reversão da parte 2: DROP TABLE IF EXISTS public."PedidoRenovacao";
+
+-- ---------------------------------------------------------------------
+-- 3) Trava de domínio em "PedidoMedicao".status (valores previstos na
+--    20261018c). Produção em 19/10/2026: tabela vazia, nenhuma linha viola.
+-- ---------------------------------------------------------------------
+ALTER TABLE public."PedidoMedicao" DROP CONSTRAINT IF EXISTS "PedidoMedicao_status_check";
+ALTER TABLE public."PedidoMedicao" ADD CONSTRAINT "PedidoMedicao_status_check"
+  CHECK ("status" IN (
+    'pendente',
+    'atendido',
+    'cancelado'
+  ));
+-- Reversão da parte 3: ALTER TABLE public."PedidoMedicao" DROP CONSTRAINT IF EXISTS "PedidoMedicao_status_check";
