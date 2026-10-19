@@ -200,11 +200,16 @@ export async function registrarResultado(endpoint: string, status: number): Prom
   return "falha";
 }
 
-/** Push para todos os aparelhos do usuário, em paralelo. Devolve quantos aceitaram (2xx); null = push desligado. */
+/**
+ * Push para todos os aparelhos do usuário, em paralelo. Devolve quantos
+ * aceitaram (2xx); null = push desligado. `prazo` (instante absoluto, ms):
+ * o timeout de cada POST é recalculado DEPOIS de ler as inscrições
+ * (min(timeoutMs, prazo − agora − 1 s)); abaixo de 500 ms não envia.
+ */
 export async function enviarPushParaUsuario(
   usuarioId: string,
   payload: unknown,
-  opcoes: { ttl: number; urgencia?: Urgencia; timeoutMs?: number },
+  opcoes: { ttl: number; urgencia?: Urgencia; timeoutMs?: number; prazo?: number },
   dep: { fetch?: Fetch; cfg?: ConfigVapid | null } = {},
 ): Promise<number | null> {
   const cfg = dep.cfg === undefined ? configVapid() : dep.cfg;
@@ -214,7 +219,15 @@ export async function enviarPushParaUsuario(
     select: { id: true, endpoint: true, p256dh: true, auth: true },
     take: 10,
   });
-  const r = await Promise.allSettled(inscricoes.map((i) => enviarPush(i, payload, opcoes, { ...dep, cfg })));
+  let timeoutMs = opcoes.timeoutMs ?? TEMPO_LIMITE_PUSH_MS;
+  if (opcoes.prazo !== undefined) {
+    timeoutMs = Math.min(timeoutMs, opcoes.prazo - Date.now() - 1_000);
+    if (timeoutMs < 500) {
+      console.warn("[Push] pulado: sem tempo até o prazo", { aparelhos: inscricoes.length });
+      return 0;
+    }
+  }
+  const r = await Promise.allSettled(inscricoes.map((i) => enviarPush(i, payload, { ...opcoes, timeoutMs }, { ...dep, cfg })));
   return r.filter((x) => x.status === "fulfilled" && x.value !== null && x.value >= 200 && x.value < 300).length;
 }
 

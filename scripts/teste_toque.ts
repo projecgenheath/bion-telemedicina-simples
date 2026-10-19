@@ -511,6 +511,72 @@ verifica(rr.tocadas === 2 && rr.pushPulados === 2 && fetchChamadas === 0, "sem o
 verifica((await db.chamadaConsulta.count({ where: { status: "tocando", pushEnviado: false } })) === 2 && (await linhasSemBroadcast()) === 0, "push pulado: a linha fica tocando, com broadcast");
 verifica(ms < toque.ORCAMENTO_MS, `push pulado: a rodada termina antes do orçamento (${ms} ms)`);
 
+// E) prazo ABSOLUTO com findMany das inscrições lento (pool/banco): o POST só sai se ainda couber.
+const insc = db.pushInscricao as unknown as { findMany: (...a: unknown[]) => Promise<unknown> };
+const findManyOriginal = insc.findMany;
+let atrasoFindMany = 0;
+insc.findMany = async (...a: unknown[]) => {
+  await espera(atrasoFindMany);
+  return findManyOriginal.apply(db.pushInscricao, a);
+};
+await cenario(1, 1);
+zerar();
+zerarFetch(50);
+atrasoFindMany = 6_200; // sobra < 500 ms + margem quando as inscrições chegam
+ini = Date.now();
+rr = await rodarToque(em(0.2), depLento(() => 0) as never);
+ms = Date.now() - ini;
+verifica(fetchChamadas === 0 && rr.push === 0, "findMany lento (6,2 s): não chama o serviço depois de ler as inscrições", { fetchChamadas, rr });
+verifica(ms <= toque.ORCAMENTO_MS + 300, `findMany lento (6,2 s): a rodada termina no prazo absoluto (${ms} ms)`);
+verifica((await db.chamadaConsulta.count({ where: { status: "tocando", pushEnviado: false, canal: "realtime" } })) === 2, "findMany lento: linha fica tocando e livre para reenvio");
+await cenario(1, 1);
+zerar();
+zerarFetch(8_000); // serviço travado (respeita abort)
+atrasoFindMany = 3_000;
+ini = Date.now();
+rr = await rodarToque(em(0.2), depLento(() => 0) as never);
+ms = Date.now() - ini;
+verifica(fetchChamadas === 2 && fetchAbortados === 2 && ms <= toque.ORCAMENTO_MS, `findMany 3 s + push travado: timeout do fetch = prazo − agora − margem, a rodada termina antes do prazo (${ms} ms)`, { fetchChamadas, fetchAbortados });
+atrasoFindMany = 9_000; // findMany que passa do prazo: o Promise.race corta
+await cenario(1, 1);
+zerar();
+zerarFetch(50);
+ini = Date.now();
+rr = await rodarToque(em(0.2), depLento(() => 0) as never);
+ms = Date.now() - ini;
+verifica(rr.pushCortados === 2 && fetchChamadas === 0, "findMany que passa do prazo: cortado pelo timer do prazo (registrado)", rr);
+verifica(ms <= toque.ORCAMENTO_MS + 300, `findMany que passa do prazo: a rodada termina no prazo absoluto (${ms} ms)`);
+await espera(2_200); // deixa os findMany cortados terminarem antes de limpar o banco
+insc.findMany = findManyOriginal;
+const semTempo = await webPush.enviarPushParaUsuario("op0", { tipo: "chamada_tocando" }, { ttl: 60, timeoutMs: 5_000, prazo: Date.now() + 1_300 });
+verifica(semTempo === 0 && fetchChamadas === 0, "enviarPushParaUsuario com prazo a 1,3 s (< 500 ms + margem): não envia", { semTempo, fetchChamadas });
+
+// F) push que trava e IGNORA o abort: o Promise.race contra o prazo corta.
+await cenario(2, 1);
+zerar();
+let travados = 0;
+globalThis.fetch = (() => { travados++; return new Promise<Response>(() => {}); }) as unknown as typeof fetch;
+ini = Date.now();
+rr = await rodarToque(em(0.2), depLento(() => 0) as never);
+ms = Date.now() - ini;
+verifica(travados === 4 && rr.pushCortados === 4 && rr.push === 0, "push que ignora o abort: os 4 cortados no prazo absoluto", { travados, rr });
+verifica(ms >= toque.ORCAMENTO_MS - 200 && ms <= toque.ORCAMENTO_MS + 300, `push que ignora o abort: a rodada termina no prazo (${ms} ms ≈ ${toque.ORCAMENTO_MS})`);
+verifica(rr.tocadas === 4 && (await linhasSemBroadcast()) === 0, "push cortado: linhas tocando, com broadcast");
+
+// G) dep.enviarPush lento (pool cheio): recebe o prazo absoluto e é cortado nele.
+await cenario(1, 1);
+zerar();
+const prazos: number[] = [];
+ini = Date.now();
+rr = await rodarToque(em(0.2), {
+  enviarEvento: dep.enviarEvento,
+  enviarPush: async (_u: string, _p: unknown, o: { prazo: number }) => { prazos.push(o.prazo); await espera(9_000); return 1; },
+} as never);
+ms = Date.now() - ini;
+verifica(prazos.length === 2 && prazos.every((p) => Math.abs(p - (ini + toque.ORCAMENTO_MS)) < 200), "enviarPush recebe prazo = t0 + ORCAMENTO_MS", prazos.map((p) => p - ini));
+verifica(rr.pushCortados === 2 && ms <= toque.ORCAMENTO_MS + 300, `enviarPush lento (9 s): cortado no prazo (${ms} ms)`, rr);
+await espera(2_200);
+
 globalThis.fetch = fetchOriginal;
 
 /* ---------------- reenvio do push que não chegou ---------------- */
@@ -538,13 +604,17 @@ verifica(reenviado[0]?.payload.tentativa === 1 && reenviado[0]?.payload.expiraEm
 verifica(reenviado[0] && reenviado[0].opcoes.ttl >= 59 && reenviado[0].opcoes.ttl <= 60, "reenvio: TTL = segundos até expiraEm (~60)", reenviado[0]?.opcoes);
 verifica(!eventos.some((e) => e.evento === "chamada_tocando") && (await db.chamadaConsulta.count()) === 2, "reenvio não repete o broadcast nem cria linha");
 pushes = [];
+const rR2 = await rodarR(em(1.4));
+verifica(pushes.length === 0 && rR2.reenvios === 0, "no máximo um reenvio por toque (linha reivindicada como 'reenvio')", rR2);
+await db.chamadaConsulta.updateMany({ data: { canal: "realtime" } });
+pushes = [];
 aceitar = 1;
 await rodarR(em(1.5)); // agora o serviço aceita
 verifica(pushes.length === 2 && (await db.chamadaConsulta.count({ where: { pushEnviado: true } })) === 2, "reenvio aceito: marca pushEnviado");
 pushes = [];
 await rodarR(em(1.7));
 verifica(pushes.length === 0, "push já entregue: não reenvia mais");
-await db.chamadaConsulta.updateMany({ data: { pushEnviado: false } });
+await db.chamadaConsulta.updateMany({ data: { pushEnviado: false, canal: "realtime" } });
 pushes = [];
 await rodarR(new Date(em(2.2).getTime() - 15_000)); // faltam 15 s
 verifica(pushes.length === 0, "faltando menos de 20 s para expirar: não reenvia");
@@ -552,10 +622,65 @@ pushes = [];
 await rodarR(new Date(em(2.2).getTime() - 21_000)); // faltam 21 s
 verifica(pushes.length === 2 && pushes.every((p) => p.opcoes.ttl <= 21), "faltando 21 s: ainda reenvia, com TTL ≤ 21 s", pushes.map((p) => p.opcoes.ttl));
 await db.consulta.update({ where: { id: "oc0" }, data: { status: "cancelada" } });
-await db.chamadaConsulta.updateMany({ data: { pushEnviado: false } });
+await db.chamadaConsulta.updateMany({ data: { pushEnviado: false, canal: "realtime" } });
 pushes = [];
 await rodarR(em(1.3));
 verifica(pushes.length === 0, "consulta cancelada: não reenvia");
+
+/* ---- reenvios: limite por rodada, ordem por expiraEm, corrida entre rodadas ---- */
+await cenario(1, 0);
+zerar();
+await db.chamadaConsulta.createMany({
+  data: Array.from({ length: 60 }, (_, k) => ({
+    consultaId: "oc0",
+    paraUsuarioId: "op0",
+    tentativa: k + 1,
+    papel: "paciente",
+    status: "tocando",
+    canal: "realtime",
+    pushEnviado: false,
+    tocouEm: em(0),
+    expiraEm: new Date(em(1.5).getTime() + (59 - k) * 1_000), // tentativa 60 expira antes
+  })),
+});
+pushes = [];
+aceitar = 1;
+const rL = await rodarR(em(1));
+pushes = pushes.filter((p) => p.usuarioId === "op0"); // o médico (sem linha) toca normalmente
+const tentReenviadas = pushes.map((p) => p.payload.tentativa as number).sort((a, b) => a - b);
+verifica(rL.reenvios === toque.REENVIO_MAX && pushes.length === 50, "reenvios limitados a 50 por rodada", { reenvios: rL.reenvios, pushes: pushes.length });
+verifica(tentReenviadas[0] === 11 && tentReenviadas[49] === 60, "reenvia os 50 que expiram antes (expiraEm asc)", tentReenviadas.slice(0, 3));
+verifica((await db.chamadaConsulta.count({ where: { canal: "realtime", pushEnviado: false } })) === 10, "os 10 menos urgentes ficam para a rodada seguinte");
+pushes = [];
+await rodarR(em(1.05));
+pushes = pushes.filter((p) => p.usuarioId === "op0");
+verifica(pushes.length === 10, "rodada seguinte reenvia os 10 restantes", pushes.length);
+
+// Duas rodadas simultâneas: o mesmo reenvio sai uma vez só.
+await cenario(1, 0);
+zerar();
+aceitar = 0;
+await rodarR(em(0.2)); // toca; push falha (2 linhas livres)
+pushes = [];
+const [s1, s2] = await Promise.all([rodarR(em(1.2)), rodarR(em(1.2))]);
+verifica(pushes.length === 2 && s1.reenvios + s2.reenvios === 2 && new Set(pushes.map((p) => p.usuarioId)).size === 2, "duas rodadas simultâneas: cada linha reenviada uma vez só", { pushes: pushes.length, s1: s1.reenvios, s2: s2.reenvios });
+
+// Push original ainda em voo (rodada lenta) bloqueia o reenvio da rodada sobreposta.
+await cenario(1, 0);
+zerar();
+let liberar: () => void = () => {};
+const emVoo = new Promise<void>((r) => { liberar = r; });
+const lenta = rodarToque(em(0.2), {
+  enviarEvento: dep.enviarEvento,
+  enviarPush: async (u: string, payload: Record<string, unknown>, opcoes: unknown) => { pushes.push({ usuarioId: u, payload, opcoes } as never); await emVoo; return 1; },
+} as never);
+await espera(300);
+pushes = [];
+const sob = await rodarR(em(1.2));
+verifica(sob.reenvios === 0 && pushes.length === 0, "push original em voo: rodada sobreposta não reenvia", sob);
+liberar();
+const rLenta = await lenta;
+verifica(rLenta.push === 2 && (await db.chamadaConsulta.count({ where: { pushEnviado: true, canal: "ambos" } })) === 2, "push original em voo termina e marca ambos", rLenta);
 
 await limpar();
 await db.$disconnect();
