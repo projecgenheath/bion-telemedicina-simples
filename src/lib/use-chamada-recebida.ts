@@ -1,0 +1,92 @@
+"use client";
+
+import { useCallback, useEffect, useReducer, useRef } from "react";
+import { ouvirEventosChamada } from "@/lib/chamada-eventos";
+import {
+  ESTADO_CHAMADA_INICIAL,
+  consultaEncerrada,
+  reduzirChamada,
+  type ChamadaTocando,
+} from "@/lib/chamada-recebida-logica";
+
+/**
+ * Chamada recebida com o app aberto (tele v2, fase 2).
+ *
+ * Ouve os 4 eventos (chamada_tocando / _atendida / _recusada / _expirada) que
+ * o store repassa do canal privado de notificações (chamada-eventos.ts) e
+ * devolve a chamada que está tocando agora, ou null.
+ *  - Dedupe por consultaId:tentativa (o mesmo toque não volta depois de fechado).
+ *  - Ignora toque já expirado. Toque da consulta já aberta em /consulta entra
+ *    no estado, mas a UI não mostra (modo "nada") e atende em segundo plano.
+ *  - Fecha sozinho no expiraEm LOCAL (não espera o chamada_expirada) e quando
+ *    chega atendida/recusada/expirada da mesma tentativa (ex.: atendeu em outro aparelho).
+ *  - Fim de vez (não toca mais nesta consulta): `ultima: true`, qualquer
+ *    expiração depois de 15 min do início (`inicioEm` do payload; sem ele, o
+ *    horário da consulta no store; sem nenhum, o 1º toque visto), ou a
+ *    consulta virar cancelada/concluída no store.
+ *
+ * `ativo = false` (admin, ou sem sessão) não ouve nada.
+ */
+export type ConsultaParaToque = { id: string; status: string; dataISO?: string };
+
+export function useChamadaRecebida(
+  ativo: boolean,
+  consultas: readonly ConsultaParaToque[] = [],
+): {
+  chamada: ChamadaTocando | null;
+  fechar: () => void;
+  /** A consulta acabou (ex.: 409 consulta_encerrada): fecha e não toca mais nela. */
+  encerrar: (consultaId: string) => void;
+  /** Fecha uma tentativa específica (atendida em segundo plano). */
+  fecharTentativa: (consultaId: string, tentativa: number) => void;
+} {
+  const [estado, despachar] = useReducer(reduzirChamada, ESTADO_CHAMADA_INICIAL);
+  const consultasRef = useRef(consultas);
+  useEffect(() => {
+    consultasRef.current = consultas;
+  }, [consultas]);
+
+  useEffect(() => {
+    if (!ativo) return;
+    return ouvirEventosChamada((evento) => {
+      const c = consultasRef.current.find((x) => x.id === evento.consultaId);
+      if (c && consultaEncerrada(c.status)) {
+        despachar({ tipo: "consulta_encerrada", consultaId: evento.consultaId });
+        return;
+      }
+      const inicio = c?.dataISO ? Date.parse(c.dataISO) : NaN;
+      despachar({
+        tipo: "evento",
+        evento,
+        agora: Date.now(),
+        inicioConsulta: Number.isFinite(inicio) ? inicio : null,
+      });
+    });
+  }, [ativo]);
+
+  const atual = estado.atual;
+  // expiraEm LOCAL: para o toque sem esperar o chamada_expirada do servidor.
+  useEffect(() => {
+    if (!atual) return;
+    const t = window.setTimeout(
+      () => despachar({ tipo: "expirou", consultaId: atual.consultaId, tentativa: atual.tentativa, agora: Date.now() }),
+      Math.max(0, atual.expiraEm - Date.now()),
+    );
+    return () => window.clearTimeout(t);
+  }, [atual]);
+
+  // Consulta virou cancelada/concluída (store atualizado por realtime/refresh): para na hora.
+  const statusAtual = atual ? consultas.find((x) => x.id === atual.consultaId)?.status : undefined;
+  const idAtual = atual?.consultaId;
+  useEffect(() => {
+    if (idAtual && consultaEncerrada(statusAtual)) despachar({ tipo: "consulta_encerrada", consultaId: idAtual });
+  }, [idAtual, statusAtual]);
+
+  const fechar = useCallback(() => despachar({ tipo: "fechar" }), []);
+  const encerrar = useCallback((consultaId: string) => despachar({ tipo: "consulta_encerrada", consultaId }), []);
+  const fecharTentativa = useCallback(
+    (consultaId: string, tentativa: number) => despachar({ tipo: "fechar_tentativa", consultaId, tentativa }),
+    [],
+  );
+  return { chamada: ativo ? atual : null, fechar, encerrar, fecharTentativa };
+}

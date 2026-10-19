@@ -24,8 +24,14 @@ function SalaConsulta() {
   // antigos), a sala continua escolhendo a consulta como antes.
   const pedido = useSearchParams().get("consulta");
   const consultaId = pedido && ID_VALIDO.test(pedido) ? pedido : undefined;
+  // key: trocar ?consulta=A por ?consulta=B (ex.: "Sair e atender" da chamada
+  // recebida) REMONTA a sala. Sem isso o estado de A (anotações, rascunhos,
+  // cronômetro, chat, aba) vazaria para B. Na troca, a sala A desmonta antes:
+  // useTeleconsulta → destruir() avisa "saiu" e para todas as tracks; só então
+  // a sala B monta e pede a mídia de novo.
   return (
     <Consulta
+      key={consultaId ?? "auto"}
       role={sessao.role}
       consultaId={consultaId}
       onEnd={() =>

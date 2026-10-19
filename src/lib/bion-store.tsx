@@ -11,6 +11,8 @@ import {
   type ReactNode,
 } from "react";
 import { toast } from "sonner";
+import { EVENTOS_CHAMADA, lerEventoChamada } from "@/lib/chamada-recebida-logica";
+import { emitirEventoChamada } from "@/lib/chamada-eventos";
 
 /* ==================================================================== */
 /* Tipos públicos, formatação e constantes vazias vivem em bion-tipos.ts */
@@ -402,6 +404,25 @@ async function assinarCanalPrivadoUsuario(
     clearInterval(timer);
     void sb.removeChannel(canal);
   };
+}
+
+/**
+ * Chamada recebida (tele v2, fase 2): os eventos do toque chegam no MESMO
+ * canal privado de notificações e vão para a tela ChamadaRecebida pela ponte
+ * chamada-eventos.ts. Admin não recebe toque (nem ouve os eventos).
+ */
+function ouvirChamadaRecebida(
+  ch: import("@supabase/supabase-js").RealtimeChannel,
+  role: Sessao["role"],
+): import("@supabase/supabase-js").RealtimeChannel {
+  if (role !== "paciente" && role !== "medico") return ch;
+  for (const nome of EVENTOS_CHAMADA) {
+    ch.on("broadcast", { event: nome }, ({ payload }) => {
+      const ev = lerEventoChamada(nome, payload);
+      if (ev) emitirEventoChamada(ev);
+    });
+  }
+  return ch;
 }
 
 async function api<T>(url: string, init?: RequestInit): Promise<T | null> {
@@ -1608,7 +1629,7 @@ export function BionProvider({ children }: { children: ReactNode }) {
     (async () => {
       try {
         const parar = await assinarCanalPrivadoUsuario("notificacoes", (ch) =>
-          ch.on("broadcast", { event: "nova_notificacao" }, ({ payload }) => {
+          ouvirChamadaRecebida(ch, sessao.role).on("broadcast", { event: "nova_notificacao" }, ({ payload }) => {
             if (!payload || typeof payload !== "object") return;
             const n = payload as {
               id?: string;
@@ -1646,7 +1667,7 @@ export function BionProvider({ children }: { children: ReactNode }) {
       cancelado = true;
       limpar?.();
     };
-  }, [autenticado, sessao.id]);
+  }, [autenticado, sessao.id, sessao.role]);
 
 
   const value = useMemo<Store>(
