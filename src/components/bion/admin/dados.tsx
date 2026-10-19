@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 import { useBion } from "@/lib/bion-store";
-import { montarFila, type ItemFila, type NaoAtendidasResposta, type ReembolsosResposta, type RepassesResposta, type SemDesfechoResposta } from "./metricas";
+import { montarFila, type ItemFila, type EvolucaoPendenteResposta, type NaoAtendidasResposta, type ReembolsosResposta, type RepassesResposta, type SemDesfechoResposta } from "./metricas";
 
 /**
  * Dados reais do admin que NÃO vêm no bootstrap: repasses a pagar,
@@ -18,8 +18,9 @@ type DadosAdmin = {
   reembolsos: Fonte<ReembolsosResposta>;
   semDesfecho: Fonte<SemDesfechoResposta>;
   naoAtendidas: Fonte<NaoAtendidasResposta>;
+  evolucaoPendente: Fonte<EvolucaoPendenteResposta>;
   fila: ItemFila[];
-  /** Fila completa só depois das quatro rotas responderem (com ou sem erro). */
+  /** Fila completa só depois das cinco rotas responderem (com ou sem erro). */
   filaPronta: boolean;
   atualizando: boolean;
   atualizar: () => Promise<void>;
@@ -52,19 +53,22 @@ export function ProvedorDadosAdmin({ children }: { children: ReactNode }) {
   const [reembolsos, setReembolsos] = useState<Fonte<ReembolsosResposta>>({ dados: null, erro: null, carregando: true });
   const [semDesfecho, setSemDesfecho] = useState<Fonte<SemDesfechoResposta>>({ dados: null, erro: null, carregando: true });
   const [naoAtendidas, setNaoAtendidas] = useState<Fonte<NaoAtendidasResposta>>({ dados: null, erro: null, carregando: true });
+  const [evolucaoPendente, setEvolucaoPendente] = useState<Fonte<EvolucaoPendenteResposta>>({ dados: null, erro: null, carregando: true });
   const [atualizando, setAtualizando] = useState(false);
 
   const buscarRotas = useCallback(async () => {
-    const [rp, rb, sd, na] = await Promise.all([
+    const [rp, rb, sd, na, ep] = await Promise.all([
       lerJson<RepassesResposta>("/api/admin/repasses?status=fechado"),
       lerJson<ReembolsosResposta>("/api/admin/reembolsos?status=em_analise"),
       lerJson<SemDesfechoResposta>("/api/admin/consultas/sem-desfecho"),
       lerJson<NaoAtendidasResposta>("/api/admin/consultas/chamadas-nao-atendidas"),
+      lerJson<EvolucaoPendenteResposta>("/api/admin/consultas/evolucao-pendente"),
     ]);
     setRepasses({ ...rp, carregando: false });
     setReembolsos({ ...rb, carregando: false });
     setSemDesfecho({ ...sd, carregando: false });
     setNaoAtendidas({ ...na, carregando: false });
+    setEvolucaoPendente({ ...ep, carregando: false });
   }, []);
 
   useEffect(() => {
@@ -93,10 +97,11 @@ export function ProvedorDadosAdmin({ children }: { children: ReactNode }) {
           reembolsos: reembolsos.dados?.reembolsos ?? null,
           semDesfecho: semDesfecho.dados?.consultas ?? null,
           naoAtendidas: naoAtendidas.dados?.consultas ?? null,
+          evolucaoPendente: evolucaoPendente.dados?.consultas ?? null,
         },
         agora,
       ),
-    [medicos, tickets, auditLogs, repasses.dados, reembolsos.dados, semDesfecho.dados, naoAtendidas.dados, agora],
+    [medicos, tickets, auditLogs, repasses.dados, reembolsos.dados, semDesfecho.dados, naoAtendidas.dados, evolucaoPendente.dados, agora],
   );
 
   const valor = useMemo<DadosAdmin>(
@@ -106,12 +111,13 @@ export function ProvedorDadosAdmin({ children }: { children: ReactNode }) {
       reembolsos,
       semDesfecho,
       naoAtendidas,
+      evolucaoPendente,
       fila,
-      filaPronta: !repasses.carregando && !reembolsos.carregando && !semDesfecho.carregando && !naoAtendidas.carregando,
+      filaPronta: !repasses.carregando && !reembolsos.carregando && !semDesfecho.carregando && !naoAtendidas.carregando && !evolucaoPendente.carregando,
       atualizando,
       atualizar,
     }),
-    [agora, repasses, reembolsos, semDesfecho, naoAtendidas, fila, atualizando, atualizar],
+    [agora, repasses, reembolsos, semDesfecho, naoAtendidas, evolucaoPendente, fila, atualizando, atualizar],
   );
   return <Ctx.Provider value={valor}>{children}</Ctx.Provider>;
 }
