@@ -3,7 +3,7 @@
  * Rodar: bun src/components/bion/admin/metricas.teste.ts  (também com TZ=UTC e TZ=Asia/Tokyo)
  */
 import type { AuditLog, Consulta, Medico, TicketSuporte } from "@/lib/bion-tipos";
-import { centavosDoValor, contarPorCategoria, especialidades30d, montarFila, resumoHoje, resumoMedicos, serieDiaria, type RepasseWire, type ReembolsoWire, type SemDesfechoWire } from "./metricas";
+import { centavosDoValor, contarPorCategoria, especialidades30d, montarFila, resumoHoje, resumoMedicos, serieDiaria, type RepasseWire, type ReembolsoWire, type SemDesfechoWire, type NaoAtendidaWire } from "./metricas";
 import { ehApple, rotuloAtalhoBusca } from "./ui/atalho";
 
 let ok = 0;
@@ -115,7 +115,7 @@ igual(
   fila.map((i) => i.chave),
   ["repasse-r3", "repasse-r2", "audit-a1", "reembolso-e1", "medico-2", "chamado-t1", "repasse-r1"],
 );
-igual("fila: contagem", contarPorCategoria(fila), { validacao: 1, desfecho: 0, reembolso: 1, repasse: 3, chamado: 1, sistema: 1 });
+igual("fila: contagem", contarPorCategoria(fila), { validacao: 1, nao_atendida: 0, desfecho: 0, reembolso: 1, repasse: 3, chamado: 1, sistema: 1 });
 const rr = fila.find((i) => i.chave === "repasse-r2")!;
 igual("fila: repasse com CNPJ divergente", [rr.tom, rr.chips.map((c) => c.rotulo), rr.destino], ["critico", ["A pagar", "CNPJ divergente"], "admin-repasses?repasse=r2"]);
 igual("fila: repasse detalhe", rr.detalhe, "03/10 · R$ 50,00 · 1 consulta");
@@ -148,6 +148,32 @@ igual("fila sem desfecho: chips (pago fica fora do repasse)", [filaD[0].chips.ma
   ["Sem desfecho", "Não pago"],
 ]);
 igual("fila sem desfecho: contagem", contarPorCategoria(filaD).desfecho, 2);
+
+/* ---------- fila: chamada não atendida (toque) ---------- */
+const naoAtendidas: NaoAtendidaWire[] = [
+  {
+    consultaId: "n1", dataInicio: "2026-10-03T18:00:00.000Z", medico: "Dra. Ana", paciente: "Rita", especialidade: "Clínica",
+    quem: [{ papel: "paciente", nome: "Rita", motivo: "expirada", em: "2026-10-03T18:12:00.000Z" }],
+  },
+  {
+    consultaId: "n2", dataInicio: "2026-10-03T17:00:00.000Z", medico: "Dr. Beto", paciente: "Caio", especialidade: "Pediatria",
+    quem: [
+      { papel: "paciente", nome: "Caio", motivo: "recusada", em: "2026-10-03T17:01:00.000Z" },
+      { papel: "medico", nome: "Dr. Beto", motivo: "expirada", em: "2026-10-03T17:12:00.000Z" },
+    ],
+  },
+  { consultaId: "n3", dataInicio: "2026-10-03T16:00:00.000Z", medico: "Dr. Beto", paciente: "Lia", especialidade: "Clínica", quem: [] },
+];
+const filaN = montarFila({ medicos: [], tickets: [], auditLogs: [], repasses: null, reembolsos: null, naoAtendidas }, AGORA);
+igual("fila não atendida: sem 'quem' não entra; mais antiga primeiro", filaN.map((i) => i.chave), ["nao-atendida-n2", "nao-atendida-n1"]);
+igual("fila não atendida: título, detalhe com quem e a hora, destino (detalhe, não a sala)", [filaN[1].titulo, filaN[1].detalhe, filaN[1].destino, filaN[1].categoria], [
+  "Chamada não atendida · Rita",
+  "Dra. Ana · Clínica · Ontem 15:00 · paciente não atendeu às 15:12",
+  "admin-agendamentos?consulta=n1",
+  "nao_atendida",
+]);
+igual("fila não atendida: chips por participante", filaN[0].chips.map((c) => c.rotulo), ["Paciente recusou", "Médico não atendeu"]);
+igual("fila não atendida: contagem", contarPorCategoria(filaN).nao_atendida, 2);
 
 /* ---------- atalho da busca ---------- */
 igual("Mac", ehApple("MacIntel"), true);

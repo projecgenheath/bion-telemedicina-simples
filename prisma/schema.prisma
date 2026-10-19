@@ -715,7 +715,7 @@ model ChamadaConsulta {
   tocouEm       DateTime  @default(now())
   expiraEm      DateTime              // tocouEm + 2 min
   respondidaEm  DateTime?
-  canal         String    @default("realtime") // realtime | push | ambos
+  canal         String    @default("realtime") // realtime | push | reenvio | ambos | sem_inscricao
   pushEnviado   Boolean   @default(false)
 
   consulta      Consulta  @relation(fields: [consultaId], references: [id], onDelete: Cascade)
