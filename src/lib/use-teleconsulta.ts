@@ -49,6 +49,11 @@ export function useTeleconsulta(consultaId: string | undefined) {
   const enviarChat = useCallback((texto: string) => chamadaRef.current?.enviarChat(texto), []);
   const sair = useCallback(() => chamadaRef.current?.sair(), []);
   const encerrar = useCallback(() => chamadaRef.current?.encerrar(), []);
+  /** Botão "Virar" (frontal ↔ traseira; próxima câmera no computador). true se trocou. */
+  const trocarCamera = useCallback(
+    async (): Promise<boolean> => (await chamadaRef.current?.trocarCamera()) ?? false,
+    [],
+  );
 
   return {
     ...estado,
@@ -61,5 +66,6 @@ export function useTeleconsulta(consultaId: string | undefined) {
     enviarChat,
     sair,
     encerrar,
+    trocarCamera,
   };
 }

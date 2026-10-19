@@ -324,3 +324,43 @@ export function rotaInicioPorPapel(role: string): string {
   if (role === "admin") return "/admin-agendamentos";
   return "/painel";
 }
+
+/* ------------------------------------------------------------------ */
+/* Troca de câmera (botão "Virar")                                     */
+/* ------------------------------------------------------------------ */
+
+/** Câmera pedida ao getUserMedia: frontal/traseira (celular) ou um deviceId (computador). */
+export type CameraEscolhida = { facingMode: "user" | "environment"; deviceId?: string };
+
+/**
+ * Próxima câmera do botão "Virar".
+ *  - Celular: alterna frontal ↔ traseira por `facingMode` (não percorre
+ *    deviceIds, porque celulares listam várias traseiras: grande-angular, zoom…).
+ *  - Computador com 2+ câmeras: vai para a próxima da lista (por deviceId),
+ *    a partir da câmera em uso; continua "user" (espelhada, como webcam).
+ *  - Computador com 0–1 câmera: alterna o facingMode (sem efeito prático).
+ */
+export function proximaCamera(
+  atual: CameraEscolhida,
+  celular: boolean,
+  cameras: readonly string[],
+  idEmUso?: string,
+): CameraEscolhida {
+  const outroLado = atual.facingMode === "user" ? "environment" : "user";
+  if (celular) return { facingMode: outroLado };
+  const ids = Array.from(new Set(cameras.filter(Boolean)));
+  if (ids.length < 2) return { facingMode: outroLado };
+  const emUso = idEmUso ?? atual.deviceId;
+  const i = emUso ? ids.indexOf(emUso) : -1;
+  return { facingMode: "user", deviceId: ids[(i + 1) % ids.length] };
+}
+
+/** Restrições de vídeo para a câmera escolhida (mesma resolução/fps de restricoesMidia). */
+export function restricoesVideoCamera(celular: boolean, camera: CameraEscolhida): MediaTrackConstraints {
+  const base = { ...(restricoesMidia(celular).video as MediaTrackConstraints) };
+  if (camera.deviceId) {
+    delete base.facingMode;
+    return { ...base, deviceId: { exact: camera.deviceId } };
+  }
+  return { ...base, facingMode: camera.facingMode };
+}

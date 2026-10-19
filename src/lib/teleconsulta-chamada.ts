@@ -16,7 +16,10 @@ import {
   mesmoForaDaJanela,
   limitesEnvio,
   medirAmostra,
+  proximaCamera,
   restricoesMidia,
+  restricoesVideoCamera,
+  type CameraEscolhida,
   type ForaDaJanela,
   type LeituraStats,
   type Qualidade,
@@ -92,6 +95,8 @@ export type EstadoChamada = {
   foraDaJanela: ForaDaJanela | null;
   /** GET /sala respondeu 404: a consulta não existe. O polling para e a mídia não é pedida. */
   naoEncontrada: boolean;
+  /** A câmera em uso é a traseira (botão "Virar" no celular): o vídeo local não é espelhado. */
+  cameraTraseira: boolean;
 };
 
 export const ESTADO_INICIAL: EstadoChamada = {
@@ -109,6 +114,7 @@ export const ESTADO_INICIAL: EstadoChamada = {
   reconectando: false,
   foraDaJanela: null,
   naoEncontrada: false,
+  cameraTraseira: false,
 };
 
 type SinalApi = { id: string; tipo: string; payload: string; createdAt: string };
@@ -197,6 +203,9 @@ export class ChamadaTeleconsulta {
   private displayStream: MediaStream | null = null;
 
   private vivo = true;
+  /** Câmera pedida nas recapturas (muda pelo botão "Virar"; a captura inicial é sempre a frontal). */
+  private camera: CameraEscolhida = { facingMode: "user" };
+  private trocandoCamera = false;
   private encerrada = false;
   private anunciado = false;
   private ultimoEntrei = 0;
@@ -370,7 +379,9 @@ export class ChamadaTeleconsulta {
     const ideal = restricoesMidia(this.celular);
     try {
       const novo = await navigator.mediaDevices.getUserMedia(
-        tipo === "audio" ? { audio: ideal.audio, video: false } : { video: ideal.video, audio: false },
+        tipo === "audio"
+          ? { audio: ideal.audio, video: false }
+          : { video: restricoesVideoCamera(this.celular, this.camera), audio: false },
       );
       const track = novo.getTracks()[0];
       if (!track || !this.vivo) {
@@ -1228,6 +1239,50 @@ export class ChamadaTeleconsulta {
     tracks.forEach((t) => (t.enabled = prox));
     this.set({ camAtivo: prox });
     if (prox && this.estado.compartilhando) this.pararCompartilhamento();
+  }
+
+  /**
+   * Botão "Virar": troca a câmera sem renegociar (celular: frontal ↔ traseira;
+   * computador: próxima câmera). Para a câmera atual, recaptura com a nova
+   * (recapturar → replaceTrack no sender) e, se a nova não abrir, volta para a
+   * anterior. Devolve true quando a câmera mudou.
+   */
+  async trocarCamera(): Promise<boolean> {
+    if (!this.vivo || this.encerrada || this.trocandoCamera) return false;
+    const local = this.streamLocal.current;
+    const atual = local?.getVideoTracks()[0];
+    if (!local || !atual) return false;
+    this.trocandoCamera = true;
+    const anterior = this.camera;
+    try {
+      const idEmUso = typeof atual.getSettings === "function" ? atual.getSettings().deviceId : undefined;
+      this.camera = proximaCamera(anterior, this.celular, await this.listarCameras(), idEmUso);
+      // Muitos celulares não abrem as duas câmeras juntas: solta a atual antes.
+      atual.stop();
+      await this.recapturar("video", "trocar-camera");
+      if (!this.temVideoAoVivo()) {
+        aviso("a outra câmera não abriu; voltando para a anterior");
+        this.camera = anterior;
+        await this.recapturar("video", "trocar-camera-volta");
+      }
+      this.set({ cameraTraseira: this.camera.facingMode === "environment" });
+      return this.camera !== anterior;
+    } finally {
+      this.trocandoCamera = false;
+    }
+  }
+
+  private async listarCameras(): Promise<string[]> {
+    try {
+      const lista = (await navigator.mediaDevices?.enumerateDevices?.()) ?? [];
+      return lista.filter((d) => d.kind === "videoinput").map((d) => d.deviceId);
+    } catch {
+      return [];
+    }
+  }
+
+  private temVideoAoVivo(): boolean {
+    return (this.streamLocal.current?.getVideoTracks() ?? []).some((t) => t.readyState === "live");
   }
 
   /** Sender do transceiver de áudio ou vídeo (existe mesmo com a track trocada ou nula). */
