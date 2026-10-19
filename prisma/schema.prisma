@@ -136,6 +136,7 @@ model Medicao {
 
   @@index([usuarioId, tipo, criadoEm])
   @@index([pedidoId])
+  @@index([consultaId])
 }
 
 // Resultados de exames laboratoriais extraídos de laudos enviados à BION IA
@@ -731,6 +732,7 @@ model MedicamentoEmUso {
 
   @@index([pacienteId, ativo])
   @@index([documentoId])
+  @@index([medicoId])
 }
 
 // Pedido do médico para o paciente informar medidas ("pedir levantamento").
@@ -750,4 +752,5 @@ model PedidoMedicao {
 
   @@index([pacienteId, status])
   @@index([consultaId])
+  @@index([medicoId])
 }

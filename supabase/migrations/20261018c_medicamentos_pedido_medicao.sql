@@ -53,6 +53,7 @@ CREATE TABLE IF NOT EXISTS public."MedicamentoEmUso" (
 );
 CREATE INDEX IF NOT EXISTS "MedicamentoEmUso_pacienteId_ativo_idx" ON public."MedicamentoEmUso"("pacienteId", "ativo");
 CREATE INDEX IF NOT EXISTS "MedicamentoEmUso_documentoId_idx" ON public."MedicamentoEmUso"("documentoId");
+CREATE INDEX IF NOT EXISTS "MedicamentoEmUso_medicoId_idx" ON public."MedicamentoEmUso"("medicoId");
 DO $$ BEGIN
   ALTER TABLE public."MedicamentoEmUso" ADD CONSTRAINT "MedicamentoEmUso_pacienteId_fkey"
     FOREIGN KEY ("pacienteId") REFERENCES public."User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -80,6 +81,7 @@ CREATE TABLE IF NOT EXISTS public."PedidoMedicao" (
 );
 CREATE INDEX IF NOT EXISTS "PedidoMedicao_pacienteId_status_idx" ON public."PedidoMedicao"("pacienteId", "status");
 CREATE INDEX IF NOT EXISTS "PedidoMedicao_consultaId_idx" ON public."PedidoMedicao"("consultaId");
+CREATE INDEX IF NOT EXISTS "PedidoMedicao_medicoId_idx" ON public."PedidoMedicao"("medicoId");
 DO $$ BEGIN
   ALTER TABLE public."PedidoMedicao" ADD CONSTRAINT "PedidoMedicao_pacienteId_fkey"
     FOREIGN KEY ("pacienteId") REFERENCES public."User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -96,6 +98,7 @@ ALTER TABLE public."Medicao" ADD COLUMN IF NOT EXISTS "origem"     TEXT NOT NULL
 ALTER TABLE public."Medicao" ADD COLUMN IF NOT EXISTS "consultaId" TEXT;
 ALTER TABLE public."Medicao" ADD COLUMN IF NOT EXISTS "pedidoId"   TEXT;
 CREATE INDEX IF NOT EXISTS "Medicao_pedidoId_idx" ON public."Medicao"("pedidoId");
+CREATE INDEX IF NOT EXISTS "Medicao_consultaId_idx" ON public."Medicao"("consultaId");
 DO $$ BEGIN
   ALTER TABLE public."Medicao" ADD CONSTRAINT "Medicao_pedidoId_fkey"
     FOREIGN KEY ("pedidoId") REFERENCES public."PedidoMedicao"("id") ON DELETE SET NULL ON UPDATE CASCADE;
