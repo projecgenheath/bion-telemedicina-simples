@@ -3,6 +3,7 @@
  * Rodar: bun src/lib/atendimento-tipo.teste.ts
  */
 import {
+  ehViolacaoUnica,
   escolherHorarioInicial,
   lerCorpoPedidoRenovacao,
   lerPedidoRenovacao,
@@ -77,6 +78,13 @@ eq("pedido mais recente da receita", pedidoDaReceita([lerPedidoRenovacao(linha)!
 eq("sem pedido", pedidoDaReceita([p2], "zz"), null);
 eq("corpo sem receita", lerCorpoPedidoRenovacao({}), "Informe a receita que será renovada.");
 eq("corpo ok", lerCorpoPedidoRenovacao({ documentoId: "d1", observacaoPaciente: "  " }), { documentoId: "d1", observacaoPaciente: null });
+
+eq("cancelado é status válido", lerPedidoRenovacao({ ...linha, status: "cancelado" })?.status, "cancelado");
+eq("consultaId só em chamada_marcada", lerPedidoRenovacao({ ...linha, status: "renovada", consultaId: "c9" })?.consultaId, null);
+eq("consultaId em chamada_marcada", lerPedidoRenovacao({ ...linha, status: "chamada_marcada", consultaId: "c9" })?.consultaId, "c9");
+eq("P2002", ehViolacaoUnica({ code: "P2002" }), true);
+eq("P2010/23505", ehViolacaoUnica({ code: "P2010", meta: { code: "23505" } }), true);
+eq("outro erro", ehViolacaoUnica({ code: "P2010", meta: { code: "42P01" }, message: "relation does not exist" }), false);
 
 console.log(`atendimento-tipo: ${ok} ok, ${falhas} falha(s)`);
 if (falhas) process.exit(1);

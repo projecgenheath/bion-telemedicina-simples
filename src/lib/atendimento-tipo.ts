@@ -172,7 +172,7 @@ export function escolherHorarioInicial<T extends { iso: string; horarios: string
  * mensagem ou se marca uma chamada curta (aí nasce uma Consulta com
  * tipoAtendimento 'renovacao', ligada por `consultaId`).
  */
-export const STATUS_PEDIDO_RENOVACAO = ["pendente", "renovada", "chamada_marcada", "recusada"] as const;
+export const STATUS_PEDIDO_RENOVACAO = ["pendente", "renovada", "chamada_marcada", "recusada", "cancelado"] as const;
 export type StatusPedidoRenovacao = (typeof STATUS_PEDIDO_RENOVACAO)[number];
 
 export type PedidoRenovacao = {
@@ -219,7 +219,17 @@ export const ROTULO_STATUS_RENOVACAO: Record<StatusPedidoRenovacao, { texto: str
   renovada: { texto: "Renovada por mensagem", tom: "ok" },
   chamada_marcada: { texto: "Chamada curta marcada", tom: "info" },
   recusada: { texto: "Não renovada", tom: "erro" },
+  cancelado: { texto: "Pedido cancelado", tom: "erro" },
 };
+
+/**
+ * Violação do índice único parcial (pacienteId, documentoId) WHERE
+ * status='pendente'. P2002 pelo client tipado; P2010/23505 pelo SQL cru.
+ */
+export function ehViolacaoUnica(e: unknown): boolean {
+  const x = e as { code?: string; meta?: { code?: string } } | null;
+  return x?.code === "P2002" || (x?.code === "P2010" && x.meta?.code === "23505") || /23505|unique constraint/i.test(String((e as Error)?.message ?? ""));
+}
 
 /** Pedido mais recente para a receita (para o botão virar status). */
 export function pedidoDaReceita(pedidos: PedidoRenovacao[], documentoId: string): PedidoRenovacao | null {

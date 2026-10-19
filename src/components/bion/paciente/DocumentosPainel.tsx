@@ -129,6 +129,7 @@ export function DocumentosPainel({
   const [texto, setTexto] = useState("");
   const [retornoDe, setRetornoDe] = useState<string | null>(null);
   const [renovando, setRenovando] = useState<{ id: string; medicamento: string; medico: string } | null>(null);
+  const [cancelandoPedido, setCancelandoPedido] = useState<string | null>(null);
   const renovacao = usePedidosRenovacao(sessao.role === "paciente");
 
   const realizadas = useMemo(
@@ -318,6 +319,32 @@ export function DocumentosPainel({
                             <div className="mt-1.5">
                               <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${classe}`}>Renovação: {r.texto}</span>
                               {pedido.mensagemMedico ? <p className="mt-1 text-xs opacity-80">{pedido.mensagemMedico}</p> : null}
+                              {pedido.status === "pendente" ? (
+                                cancelandoPedido === pedido.id ? (
+                                  <div className="mt-1.5 flex flex-wrap items-center gap-2" role="group" aria-label="Confirmar cancelamento">
+                                    <span className="text-xs font-semibold">Cancelar este pedido?</span>
+                                    <button
+                                      type="button"
+                                      onClick={async () => {
+                                        const r = await renovacao.cancelar(pedido.id);
+                                        setCancelandoPedido(null);
+                                        if (r.ok) toast.success("Pedido de renovação cancelado.");
+                                        else toast.error(r.erro ?? "Não foi possível cancelar.");
+                                      }}
+                                      className="bpp-toque min-h-9 rounded-full px-3 text-xs font-bold bg-red-600/10 text-red-800 dark:bg-red-400/15 dark:text-red-300"
+                                    >
+                                      Sim, cancelar
+                                    </button>
+                                    <button type="button" onClick={() => setCancelandoPedido(null)} className="bpp-toque min-h-9 rounded-full px-3 text-xs font-bold bg-bion-ink/8 dark:bg-white/10">
+                                      Voltar
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <button type="button" onClick={() => setCancelandoPedido(pedido.id)} className="mt-1 block text-xs font-bold underline">
+                                    Cancelar pedido
+                                  </button>
+                                )
+                              ) : null}
                               {pedido.status !== "pendente" ? (
                                 <button type="button" onClick={() => setRenovando({ id: o.id, medicamento: o.medicamento ?? "", medico: o.medico })} className="mt-1 block text-xs font-bold underline">
                                   Pedir de novo

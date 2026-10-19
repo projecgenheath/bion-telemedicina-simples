@@ -5,6 +5,7 @@ import { exigirPapel } from "@/lib/server/auth";
 import { aplicarSideEffects } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
 import {
+  ehViolacaoUnica,
   lerCorpoPedidoRenovacao,
   lerPedidoRenovacao,
   podeRenovarReceita,
@@ -18,6 +19,7 @@ import {
  * existir, as duas rotas respondem { disponivel: false } (sem erro), e a tela
  * esconde o botão. SQL cru de propósito: o modelo Prisma entra com o PR dele.
  *
+ *  PATCH /api/renovacoes/[id] { acao: "cancelar" } → paciente cancela o próprio pedido pendente.
  *  GET  → pedidos do próprio paciente.
  *  POST → { documentoId, observacaoPaciente? } cria um pedido "pendente".
  *         Recusa: receita de outra pessoa, não-receita, medicamento
@@ -91,15 +93,24 @@ export async function POST(req: NextRequest) {
 
     const id = randomUUID();
     // Duplicado pendente: checagem e inserção no MESMO comando (sem corrida).
-    const inseridos = await db.$queryRaw<unknown[]>`
+    let inseridos: unknown[];
+    try {
+      inseridos = await db.$queryRaw<unknown[]>`
       INSERT INTO public."PedidoRenovacao"
         ("id", "pacienteId", "medicoId", "consultaOrigemId", "documentoId", "status", "observacaoPaciente", "criadoEm")
       SELECT ${id}, ${usuario.id}, ${receita.medicoId}, ${origem?.id ?? null}, ${receita.id}, 'pendente', ${corpo.observacaoPaciente}, now()
       WHERE NOT EXISTS (
         SELECT 1 FROM public."PedidoRenovacao"
-        WHERE "documentoId" = ${receita.id} AND "status" = 'pendente'
+        WHERE "pacienteId" = ${usuario.id} AND "documentoId" = ${receita.id} AND "status" = 'pendente'
       )
       RETURNING *`;
+    } catch (e) {
+      // Índice único parcial (pacienteId, documentoId) WHERE status='pendente'.
+      if (ehViolacaoUnica(e)) {
+        return Response.json({ erro: "Você já pediu a renovação desta receita. Aguarde o médico." }, { status: 409 });
+      }
+      throw e;
+    }
     const pedido = lerPedidoRenovacao(inseridos[0]);
     if (!pedido) {
       return Response.json({ erro: "Você já pediu a renovação desta receita. Aguarde o médico." }, { status: 409 });

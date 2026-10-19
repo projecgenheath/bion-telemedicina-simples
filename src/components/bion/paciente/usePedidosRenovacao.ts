@@ -47,5 +47,26 @@ export function usePedidosRenovacao(ativo = true) {
     }
   }, []);
 
-  return { disponivel, pedidos, pedir, recarregar: () => setVersao((v) => v + 1) };
+  const cancelar = useCallback(async (id: string): Promise<{ ok: boolean; erro?: string }> => {
+    try {
+      const r = await fetch(`/api/renovacoes/${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ acao: "cancelar" }),
+      });
+      const j = (await r.json().catch(() => ({}))) as { erro?: string; pedido?: unknown };
+      if (!r.ok) {
+        if (r.status === 409) setVersao((v) => v + 1); // o médico respondeu antes: recarrega o status
+        return { ok: false, erro: j.erro ?? "Não foi possível cancelar." };
+      }
+      const p = lerPedidoRenovacao(j.pedido);
+      if (p) setPedidos((atual) => atual.map((x) => (x.id === p.id ? p : x)));
+      return { ok: true };
+    } catch {
+      return { ok: false, erro: "Sem conexão. Tente de novo." };
+    }
+  }, []);
+
+  return { disponivel, pedidos, pedir, cancelar, recarregar: () => setVersao((v) => v + 1) };
 }
