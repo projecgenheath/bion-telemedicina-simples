@@ -19,9 +19,11 @@ import {
   intervaloPolling,
   lerForaDaJanela,
   mesmoForaDaJanela,
+  pararTracks,
   limitesEnvio,
   medirAmostra,
   restricoesMidia,
+  rotaInicioPorPapel,
   textoForaDaJanela,
 } from "./teleconsulta-logica";
 
@@ -170,6 +172,36 @@ igual("não exibe reconectando", exibirForaDaJanela({ motivo: "depois" }, "insta
 igual("não exibe negociando", exibirForaDaJanela({ motivo: "depois" }, "conectando-p2p"), false);
 igual("não exibe encerrada", exibirForaDaJanela({ motivo: "depois" }, "encerrada"), false);
 igual("não exibe sem 409", exibirForaDaJanela(null, "aguardando"), false);
+
+igual("404 do paciente volta para /paciente", rotaInicioPorPapel("paciente"), "/paciente");
+igual("404 do médico volta para /painel", rotaInicioPorPapel("medico"), "/painel");
+igual("404 do admin volta para /admin-agendamentos", rotaInicioPorPapel("admin"), "/admin-agendamentos");
+igual("papel desconhecido volta para /painel", rotaInicioPorPapel("x"), "/painel");
+
+// ── 404 no meio da chamada: todas as tracks param (luz da câmera apaga) ──
+const trackFalsa = (falha = false) => {
+  const t = {
+    paradas: 0,
+    stop() {
+      t.paradas++;
+      if (falha) throw new Error("já encerrada");
+    },
+  };
+  return t;
+};
+const cam = trackFalsa();
+const mic = trackFalsa();
+const tela = trackFalsa(true);
+const local = { getTracks: () => [cam, mic] };
+const compartilhada = { getTracks: () => [tela] };
+igual("para as 3 tracks (câmera, microfone e tela)", pararTracks(local, compartilhada), 3);
+igual("câmera parada", cam.paradas, 1);
+igual("microfone parado", mic.paradas, 1);
+igual("track que lança erro não interrompe", tela.paradas, 1);
+igual("nulos são ignorados", pararTracks(null, undefined), 0);
+igual("sem streams", pararTracks(), 0);
+pararTracks(local);
+igual("chamar de novo não quebra", cam.paradas, 2);
 
 console.log(`teleconsulta-logica: ${ok} ok, ${falhas} falha(s)`);
 if (falhas > 0) process.exit(1);

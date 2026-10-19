@@ -20,6 +20,7 @@ import {
   type ForaDaJanela,
   type LeituraStats,
   type Qualidade,
+  pararTracks,
 } from "@/lib/teleconsulta-logica";
 
 /**
@@ -90,6 +91,8 @@ export type EstadoChamada = {
   reconectando: boolean;
   /** Sala fora da janela (409 do GET /sala); null com a sala aberta. */
   foraDaJanela: ForaDaJanela | null;
+  /** GET /sala respondeu 404: a consulta não existe. O polling para e a mídia não é pedida. */
+  naoEncontrada: boolean;
 };
 
 export const ESTADO_INICIAL: EstadoChamada = {
@@ -106,6 +109,7 @@ export const ESTADO_INICIAL: EstadoChamada = {
   qualidade: "boa",
   reconectando: false,
   foraDaJanela: null,
+  naoEncontrada: false,
 };
 
 type SinalApi = { id: string; tipo: string; payload: string; createdAt: string };
@@ -264,9 +268,30 @@ export class ChamadaTeleconsulta {
     this.limparRealtime = null;
     this.limpadores.splice(0).forEach((f) => f());
     this.fecharPC();
-    this.displayStream?.getTracks().forEach((t) => t.stop());
+    pararTracks(this.displayStream, this.streamLocal.current);
     this.displayStream = null;
-    this.streamLocal.current?.getTracks().forEach((t) => t.stop());
+  }
+
+  /**
+   * 404 do GET /sala (antes OU no meio da chamada): a consulta não existe.
+   * Desliga tudo como no fim da chamada — polling, ICE, Realtime, timers,
+   * RTCPeerConnection fechada e todas as tracks locais paradas (a luz da
+   * câmera apaga) — e avisa a tela "Consulta não encontrada". Não manda
+   * sinal de saída: não há consulta no servidor. O componente continua montado.
+   */
+  private pararPorNaoEncontrada(): void {
+    if (this.estado.naoEncontrada) return;
+    this.encerrada = true;
+    this.remoto = null;
+    this.limparTudo();
+    this.streamLocal.current = null;
+    this.set({
+      naoEncontrada: true,
+      localPronto: false,
+      remotoPronto: false,
+      compartilhando: false,
+      reconectando: false,
+    });
   }
 
   private set(parcial: Partial<EstadoChamada>): void {
@@ -307,7 +332,8 @@ export class ChamadaTeleconsulta {
 
   private async obterMidia(): Promise<void> {
     const stream = await this.capturar();
-    if (!this.vivo) {
+    // Câmera liberada depois do fim (desmontagem, 404 durante o pedido): solta na hora.
+    if (!this.vivo || this.encerrada || this.estado.naoEncontrada) {
       stream?.getTracks().forEach((t) => t.stop());
       return;
     }
@@ -384,13 +410,17 @@ export class ChamadaTeleconsulta {
   /* ================================================================ */
 
   private async carregarIce(): Promise<void> {
-    if (this.iceEmAndamento) return;
+    if (this.iceEmAndamento || this.estado.naoEncontrada) return;
     this.iceEmAndamento = true;
     // timerIce = "há uma nova tentativa agendada": zera ao rodar (disparado ou adiantado).
     if (this.timerIce) clearTimeout(this.timerIce);
     this.timerIce = null;
     try {
       const res = await fetch(`${this.base}/ice`, { cache: "no-store" });
+      if (res.status === 404 || this.estado.naoEncontrada) {
+        // Consulta inexistente: sem nova tentativa (o ciclo() também para).
+        return;
+      }
       if (res.status === 409) {
         // Sala fora da janela: sem nova tentativa por timer. O ciclo() pede
         // de novo quando o GET /sala voltar 200 (ver recarregarIceSePreciso).
@@ -399,7 +429,8 @@ export class ChamadaTeleconsulta {
       }
       if (!res.ok) throw new Error(`ice ${res.status}`);
       const j = (await res.json()) as { iceServers?: RTCIceServer[]; expiraEm?: string; fonte?: string };
-      if (!this.vivo) return;
+      // Sem renovação agendada se a sala parou no meio do pedido (404, fim, desmontagem).
+      if (!this.vivo || this.encerrada || this.estado.naoEncontrada) return;
       if (Array.isArray(j.iceServers) && j.iceServers.length > 0) {
         this.iceServers = j.iceServers;
         this.iceExpiraEm = j.expiraEm ? Date.parse(j.expiraEm) : Date.now() + 3_600_000;
@@ -418,7 +449,9 @@ export class ChamadaTeleconsulta {
       this.timerIce = setTimeout(() => void this.carregarIce(), proxima);
     } catch (e) {
       aviso("não consegui carregar os ICE servers; usando STUN de reserva e tentando de novo em 30 s", e);
-      if (this.vivo) this.timerIce = setTimeout(() => void this.carregarIce(), 30_000);
+      if (this.vivo && !this.encerrada && !this.estado.naoEncontrada) {
+        this.timerIce = setTimeout(() => void this.carregarIce(), 30_000);
+      }
     } finally {
       this.iceEmAndamento = false;
       this.iceCarregado = true;
@@ -951,7 +984,7 @@ export class ChamadaTeleconsulta {
 
   /** Agenda o próximo GET (ou adianta, com `agora`). */
   private agendarPoll(ms?: number): void {
-    if (!this.vivo || this.encerrada) return;
+    if (!this.vivo || this.encerrada || this.estado.naoEncontrada) return;
     if (this.timerPoll) clearTimeout(this.timerPoll);
     const intervalo =
       ms ??
@@ -978,6 +1011,13 @@ export class ChamadaTeleconsulta {
           this.set({ foraDaJanela: fora });
         }
         proximo = esperaForaDaJanela(fora, Date.now());
+        return;
+      }
+      if (res.status === 404) {
+        // Consulta inexistente: nada a esperar. Para o polling e o ICE, sem pedir câmera.
+        if (!this.vivo) return;
+        aviso("consulta não encontrada; parando a sala");
+        this.pararPorNaoEncontrada();
         return;
       }
       // Qualquer outra resposta: segue como antes (pede a mídia; erros caem no catch).
