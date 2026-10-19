@@ -22,7 +22,9 @@ import {
   pararTracks,
   limitesEnvio,
   medirAmostra,
+  proximaCamera,
   restricoesMidia,
+  restricoesVideoCamera,
   rotaInicioPorPapel,
   textoForaDaJanela,
 } from "./teleconsulta-logica";
@@ -177,6 +179,26 @@ igual("404 do paciente volta para /paciente", rotaInicioPorPapel("paciente"), "/
 igual("404 do médico volta para /painel", rotaInicioPorPapel("medico"), "/painel");
 igual("404 do admin volta para /admin-agendamentos", rotaInicioPorPapel("admin"), "/admin-agendamentos");
 igual("papel desconhecido volta para /painel", rotaInicioPorPapel("x"), "/painel");
+
+// ── Botão "Virar": próxima câmera ──────────────────────────────────────
+igual("celular: frontal → traseira", proximaCamera({ facingMode: "user" }, true, ["a", "b", "c"]), { facingMode: "environment" });
+igual("celular: traseira → frontal", proximaCamera({ facingMode: "environment" }, true, ["a", "b"]), { facingMode: "user" });
+igual("computador: vai para a próxima câmera", proximaCamera({ facingMode: "user" }, false, ["a", "b"], "a"), { facingMode: "user", deviceId: "b" });
+igual("computador: da última volta à primeira", proximaCamera({ facingMode: "user", deviceId: "c" }, false, ["a", "b", "c"]), { facingMode: "user", deviceId: "a" });
+igual("computador: id em uso desconhecido vai para a primeira", proximaCamera({ facingMode: "user" }, false, ["a", "b"], "x"), { facingMode: "user", deviceId: "a" });
+igual("computador: ignora ids vazios (sem permissão)", proximaCamera({ facingMode: "user" }, false, ["", ""]), { facingMode: "environment" });
+igual("restrições: traseira mantém resolução do celular", restricoesVideoCamera(true, { facingMode: "environment" }), {
+  width: { ideal: 960 },
+  height: { ideal: 540 },
+  frameRate: { ideal: 30, max: 30 },
+  facingMode: "environment",
+});
+igual("restrições: deviceId exato sem facingMode", restricoesVideoCamera(false, { facingMode: "user", deviceId: "b" }), {
+  width: { ideal: 1280 },
+  height: { ideal: 720 },
+  frameRate: { ideal: 30, max: 30 },
+  deviceId: { exact: "b" },
+});
 
 // ── 404 no meio da chamada: todas as tracks param (luz da câmera apaga) ──
 const trackFalsa = (falha = false) => {

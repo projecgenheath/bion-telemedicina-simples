@@ -16,7 +16,10 @@ import {
   mesmoForaDaJanela,
   limitesEnvio,
   medirAmostra,
+  proximaCamera,
   restricoesMidia,
+  restricoesVideoCamera,
+  type CameraEscolhida,
   type ForaDaJanela,
   type LeituraStats,
   type Qualidade,
@@ -93,6 +96,8 @@ export type EstadoChamada = {
   foraDaJanela: ForaDaJanela | null;
   /** GET /sala respondeu 404: a consulta não existe. O polling para e a mídia não é pedida. */
   naoEncontrada: boolean;
+  /** A câmera em uso é a traseira (botão "Virar" no celular): o vídeo local não é espelhado. */
+  cameraTraseira: boolean;
 };
 
 export const ESTADO_INICIAL: EstadoChamada = {
@@ -110,6 +115,7 @@ export const ESTADO_INICIAL: EstadoChamada = {
   reconectando: false,
   foraDaJanela: null,
   naoEncontrada: false,
+  cameraTraseira: false,
 };
 
 type SinalApi = { id: string; tipo: string; payload: string; createdAt: string };
@@ -198,6 +204,15 @@ export class ChamadaTeleconsulta {
   private displayStream: MediaStream | null = null;
 
   private vivo = true;
+  /** Câmera pedida nas recapturas (muda pelo botão "Virar"; a captura inicial é sempre a frontal). */
+  private camera: CameraEscolhida = { facingMode: "user" };
+  private trocandoCamera = false;
+  /**
+   * Recaptura em andamento por tipo: um segundo pedido (visibilitychange no
+   * meio do "Virar", "ended" repetido) reaproveita a mesma promessa em vez de
+   * abrir um segundo getUserMedia (duas câmeras, uma órfã com a luz acesa).
+   */
+  private readonly recapturas: { audio: Promise<void> | null; video: Promise<void> | null } = { audio: null, video: null };
   private encerrada = false;
   private anunciado = false;
   private ultimoEntrei = 0;
@@ -373,8 +388,30 @@ export class ChamadaTeleconsulta {
     }
   }
 
-  /** Câmera/microfone caíram (desconectados, iOS em segundo plano): captura de novo e troca no envio. */
-  private async recapturar(tipo: "audio" | "video", motivo: string): Promise<void> {
+  /** Sala ainda de pé: não encerrada, sem 404, não saiu, componente montado. */
+  private salaAtiva(): boolean {
+    return this.vivo && !this.encerrada && !this.estado.naoEncontrada;
+  }
+
+  /**
+   * Câmera/microfone caíram (desconectados, iOS em segundo plano): captura de novo e troca no envio.
+   * Trava por tipo: enquanto uma recaptura de vídeo (ou de áudio) não termina, outro
+   * pedido do mesmo tipo recebe a mesma promessa e não abre outro getUserMedia.
+   */
+  private recapturar(tipo: "audio" | "video", motivo: string): Promise<void> {
+    const emAndamento = this.recapturas[tipo];
+    if (emAndamento) {
+      log("recaptura já em andamento; reaproveitando", { tipo, motivo });
+      return emAndamento;
+    }
+    const promessa = this.recapturarAgora(tipo, motivo).finally(() => {
+      if (this.recapturas[tipo] === promessa) this.recapturas[tipo] = null;
+    });
+    this.recapturas[tipo] = promessa;
+    return promessa;
+  }
+
+  private async recapturarAgora(tipo: "audio" | "video", motivo: string): Promise<void> {
     if (!this.vivo || this.encerrada) return;
     const local = this.streamLocal.current;
     if (!local) return;
@@ -384,11 +421,23 @@ export class ChamadaTeleconsulta {
     const ideal = restricoesMidia(this.celular);
     try {
       const novo = await navigator.mediaDevices.getUserMedia(
-        tipo === "audio" ? { audio: ideal.audio, video: false } : { video: ideal.video, audio: false },
+        tipo === "audio"
+          ? { audio: ideal.audio, video: false }
+          : { video: restricoesVideoCamera(this.celular, this.camera), audio: false },
       );
       const track = novo.getTracks()[0];
-      if (!track || !this.vivo) {
-        novo.getTracks().forEach((t) => t.stop());
+      // A sala parou durante o pedido (fim, 404 → pararTracks já rodou, desmontagem):
+      // a câmera nova não entra no stream e é solta na hora (luz da câmera apaga).
+      if (!track || !this.salaAtiva() || this.streamLocal.current !== local) {
+        pararTracks(novo);
+        return;
+      }
+      // Segurança: se outra captura já pôs uma track deste tipo ao vivo no stream,
+      // a nova sobraria órfã (câmera acesa sem uso). Solta a nova e fica com a que já está lá.
+      const doTipo = tipo === "audio" ? local.getAudioTracks() : local.getVideoTracks();
+      if (doTipo.some((t) => t !== track && t.readyState === "live")) {
+        aviso("já há track ao vivo no stream; soltando a recapturada", { tipo, motivo });
+        pararTracks(novo);
         return;
       }
       this.prepararTracks(novo);
@@ -1247,6 +1296,57 @@ export class ChamadaTeleconsulta {
     if (prox && this.estado.compartilhando) this.pararCompartilhamento();
   }
 
+  /**
+   * Botão "Virar": troca a câmera sem renegociar (celular: frontal ↔ traseira;
+   * computador: próxima câmera). Para a câmera atual, recaptura com a nova
+   * (recapturar → replaceTrack no sender) e, se a nova não abrir, volta para a
+   * anterior. Devolve true quando a câmera mudou.
+   */
+  async trocarCamera(): Promise<boolean> {
+    if (!this.vivo || this.encerrada || this.trocandoCamera) return false;
+    const local = this.streamLocal.current;
+    if (!local || !local.getVideoTracks()[0]) return false;
+    this.trocandoCamera = true;
+    const anterior = this.camera;
+    try {
+      // Uma recaptura de vídeo já em curso (volta da aba) termina antes: a troca
+      // parte da câmera que ela abrir, sem duas câmeras abertas ao mesmo tempo.
+      if (this.recapturas.video) {
+        await this.recapturas.video;
+        if (!this.salaAtiva()) return false;
+      }
+      const atual = local.getVideoTracks()[0];
+      if (!atual) return false;
+      const idEmUso = typeof atual.getSettings === "function" ? atual.getSettings().deviceId : undefined;
+      this.camera = proximaCamera(anterior, this.celular, await this.listarCameras(), idEmUso);
+      // Muitos celulares não abrem as duas câmeras juntas: solta a atual antes.
+      atual.stop();
+      await this.recapturar("video", "trocar-camera");
+      if (!this.temVideoAoVivo()) {
+        aviso("a outra câmera não abriu; voltando para a anterior");
+        this.camera = anterior;
+        await this.recapturar("video", "trocar-camera-volta");
+      }
+      this.set({ cameraTraseira: this.camera.facingMode === "environment" });
+      return this.camera !== anterior;
+    } finally {
+      this.trocandoCamera = false;
+    }
+  }
+
+  private async listarCameras(): Promise<string[]> {
+    try {
+      const lista = (await navigator.mediaDevices?.enumerateDevices?.()) ?? [];
+      return lista.filter((d) => d.kind === "videoinput").map((d) => d.deviceId);
+    } catch {
+      return [];
+    }
+  }
+
+  private temVideoAoVivo(): boolean {
+    return (this.streamLocal.current?.getVideoTracks() ?? []).some((t) => t.readyState === "live");
+  }
+
   /** Sender do transceiver de áudio ou vídeo (existe mesmo com a track trocada ou nula). */
   private senderDe(tipo: "audio" | "video"): RTCRtpSender | undefined {
     const pc = this.pc;
@@ -1261,6 +1361,14 @@ export class ChamadaTeleconsulta {
   async compartilharTela(): Promise<void> {
     try {
       const display = await navigator.mediaDevices.getDisplayMedia({ video: true });
+      // O seletor de tela pode ficar aberto por muito tempo: se a chamada acabou nesse
+      // meio-tempo (encerrada, 404, paciente saiu, tela desmontada), solta a captura
+      // da tela na hora e não mexe no sender. O erro faz quem chamou tratar como
+      // "não iniciado" (sem auditoria de compartilhamento iniciado).
+      if (!this.salaAtiva()) {
+        pararTracks(display);
+        throw Object.assign(new Error("sala encerrada enquanto o seletor de tela estava aberto"), { name: "AbortError" });
+      }
       this.displayStream = display;
       const track = display.getVideoTracks()[0];
       try {
