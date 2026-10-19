@@ -59,6 +59,9 @@ model User {
   medicamentosPrescritos     MedicamentoEmUso[] @relation("MedicamentoEmUsoMedico")
   pedidosMedicaoRecebidos    PedidoMedicao[]    @relation("PedidoMedicaoPaciente")
   pedidosMedicaoFeitos       PedidoMedicao[]    @relation("PedidoMedicaoMedico")
+  // Teleconsulta v2 — Médicos: renovação de receita
+  pedidosRenovacaoFeitos     PedidoRenovacao[]  @relation("PedidoRenovacaoPaciente")
+  pedidosRenovacaoRecebidos  PedidoRenovacao[]  @relation("PedidoRenovacaoMedico")
 }
 
 model Sessao {
@@ -182,6 +185,8 @@ model Consulta {
   consultaOrigemId   String?
   consultaOrigem     Consulta? @relation("ConsultaOrigem", fields: [consultaOrigemId], references: [id], onDelete: SetNull)
   consultasDerivadas Consulta[] @relation("ConsultaOrigem")
+  renovacoesDaOrigem PedidoRenovacao[] @relation("PedidoRenovacaoOrigem")
+  renovacoesChamada  PedidoRenovacao[] @relation("PedidoRenovacaoChamada")
 
   // Telemedicina WebRTC (Fase 2)
   sinaisSala    SinalSala[]
@@ -313,6 +318,8 @@ model Documento {
   observacoes String?
   cid         String?
   createdAt   DateTime @default(now())
+  renovacoesPedidas   PedidoRenovacao[] @relation("PedidoRenovacaoDocumento")
+  renovacoesEmitidas  PedidoRenovacao[] @relation("PedidoRenovacaoDocumentoNovo")
 }
 
 model Arquivo {
@@ -809,4 +816,31 @@ model PedidoMedicao {
   @@index([pacienteId, status])
   @@index([consultaId])
   @@index([medicoId])
+}
+
+// Teleconsulta v2 — Médicos: pedido de renovação de receita feito pelo
+// paciente. Trava no banco: PedidoRenovacao_status_check.
+model PedidoRenovacao {
+  id                 String     @id @default(cuid())
+  pacienteId         String
+  paciente           User       @relation("PedidoRenovacaoPaciente", fields: [pacienteId], references: [id], onDelete: Cascade)
+  medicoId           String
+  medico             User       @relation("PedidoRenovacaoMedico", fields: [medicoId], references: [id], onDelete: Cascade)
+  consultaOrigemId   String?
+  consultaOrigem     Consulta?  @relation("PedidoRenovacaoOrigem", fields: [consultaOrigemId], references: [id], onDelete: SetNull)
+  documentoId        String?    // receita anterior que o paciente quer renovar
+  documento          Documento? @relation("PedidoRenovacaoDocumento", fields: [documentoId], references: [id], onDelete: SetNull)
+  documentoNovoId    String?    // receita nova, quando status = renovada
+  documentoNovo      Documento? @relation("PedidoRenovacaoDocumentoNovo", fields: [documentoNovoId], references: [id], onDelete: SetNull)
+  status             String     @default("pendente") // pendente | renovada | chamada_marcada | recusada
+  observacaoPaciente String?
+  mensagemMedico     String?
+  consultaId         String?    // chamada curta marcada pelo médico
+  consulta           Consulta?  @relation("PedidoRenovacaoChamada", fields: [consultaId], references: [id], onDelete: SetNull)
+  criadoEm           DateTime   @default(now()) @db.Timestamptz(3)
+  respondidoEm       DateTime?  @db.Timestamptz(3)
+
+  @@index([medicoId, status, criadoEm])
+  @@index([pacienteId])
+  @@index([consultaOrigemId])
 }
