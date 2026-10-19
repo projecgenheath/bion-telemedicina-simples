@@ -64,6 +64,25 @@ export const RESERVA_PARTICIPANTE_MS = 3_500;
 export const PUSH_MAX_MS = 5_000;
 export const PUSH_MIN_MS = 500;
 export const PUSH_MARGEM_MS = 1_000;
+/** Reenvio do push só se faltarem pelo menos 20 s para o toque expirar. */
+export const REENVIO_MIN_MS = 20_000;
+
+/**
+ * Payload cifrado do push (contrato com o service worker do Pacientes). O
+ * mesmo para o envio e o reenvio: sem nome nem especialidade; corpo vazio.
+ */
+export function payloadPush(consultaId: string, tentativa: number, inicio: Date, expiraEm: Date): Record<string, unknown> {
+  return {
+    tipo: "chamada_tocando",
+    consultaId,
+    tentativa,
+    inicioEm: inicio.toISOString(),
+    expiraEm: expiraEm.toISOString(),
+    url: `/consulta?consulta=${encodeURIComponent(consultaId)}`,
+    titulo: TITULO_PUSH,
+    corpo: CORPO_PUSH,
+  };
+}
 /**
  * Folga nas comparações de tempo: o pg_cron dispara alguns décimos (ou
  * segundos) antes ou depois do minuto cheio. Sem folga, um disparo 0,3 s
@@ -155,6 +174,8 @@ export type ResultadoToque = {
   /** Pushes pulados por falta de orçamento (a linha e o broadcast ficam). */
   pushPulados: number;
   consultas: number;
+  /** Pushes reenviados de toques anteriores ainda tocando (push não tinha chegado). */
+  reenvios: number;
   /** Toques ao médico adiados porque ele está atendendo outra consulta. */
   medicoOcupado: number;
   /** Sobrou trabalho para o minuto seguinte (orçamento acabou). */
@@ -165,7 +186,7 @@ export async function rodarToque(agora: Date = new Date(), dep: DependenciasToqu
   const t0 = Date.now();
   const enviarEvento = dep.enviarEvento ?? eventoPadrao;
   const enviarPush = dep.enviarPush ?? ((u, payload, o) => enviarPushParaUsuario(u, payload, o));
-  const r: ResultadoToque = { expiradas: 0, tocadas: 0, push: 0, pushPulados: 0, consultas: 0, medicoOcupado: 0, incompleto: false };
+  const r: ResultadoToque = { expiradas: 0, tocadas: 0, push: 0, pushPulados: 0, reenvios: 0, consultas: 0, medicoOcupado: 0, incompleto: false };
   const restante = () => ORCAMENTO_MS - (Date.now() - t0);
   /** Cabe mais um passo "grava + broadcast"? Conferido ANTES de cada UPDATE/INSERT. */
   const cabeParticipante = () => restante() >= RESERVA_PARTICIPANTE_MS;
@@ -239,6 +260,33 @@ export async function rodarToque(agora: Date = new Date(), dep: DependenciasToqu
 
   type PushPendente = { consultaId: string; usuarioId: string; tentativa: number; expiraEm: Date; payload: Record<string, unknown> };
   const pendentes: PushPendente[] = [];
+
+  // Reenvio: toque de rodada anterior ainda `tocando` cujo push não chegou a
+  // nenhum aparelho (falhou, foi cortado ou pulado por orçamento). Payload
+  // IDÊNTICO ao original (mesma tentativa, expiraEm e inicioEm — o service
+  // worker deduplica por consultaId:tentativa); sem novo broadcast; pula se
+  // faltar menos de REENVIO_MIN_MS para expirar.
+  const reenvios = await db.chamadaConsulta.findMany({
+    where: {
+      status: "tocando",
+      pushEnviado: false,
+      tocouEm: { lt: agora },
+      expiraEm: { gte: new Date(agora.getTime() + REENVIO_MIN_MS) },
+      consulta: { status: { in: STATUS_AVALIAVEIS } },
+    },
+    select: { consultaId: true, paraUsuarioId: true, tentativa: true, expiraEm: true, consulta: { select: { dataInicio: true } } },
+    take: MAX_EXPIRAR,
+  });
+  for (const l of reenvios) {
+    pendentes.push({
+      consultaId: l.consultaId,
+      usuarioId: l.paraUsuarioId,
+      tentativa: l.tentativa,
+      expiraEm: l.expiraEm,
+      payload: payloadPush(l.consultaId, l.tentativa, l.consulta.dataInicio, l.expiraEm),
+    });
+  }
+  r.reenvios = reenvios.length;
   consultas: for (const c of consultas) {
     const abriu = c.dataInicio.getTime() - SALA_ABRE_ANTES_MIN * 60_000;
     // Nunca toca para ADMIN (o admin não entra na chamada — LGPD), mesmo em dado inconsistente.
@@ -281,16 +329,7 @@ export async function rodarToque(agora: Date = new Date(), dep: DependenciasToqu
         usuarioId: p.usuarioId,
         tentativa,
         expiraEm,
-        payload: {
-          tipo: "chamada_tocando",
-          consultaId: c.id,
-          tentativa,
-          inicioEm: c.dataInicio.toISOString(),
-          expiraEm: expiraEm.toISOString(),
-          url: `/consulta?consulta=${encodeURIComponent(c.id)}`,
-          titulo: TITULO_PUSH,
-          corpo: CORPO_PUSH,
-        },
+        payload: payloadPush(c.id, tentativa, c.dataInicio, expiraEm),
       });
     }
   }
@@ -348,7 +387,8 @@ export function naoAtendeu(chamadas: (ChamadaMin & { respondidaEm?: Date | null 
 }
 
 /**
- * Consultas das últimas `horas` (24 h) em que alguém não atendeu o toque e
+ * Consultas das últimas `horas` (24 h) em que alguém não atendeu o toque (e
+ * não entrou na sala daquela consulta) e
  * que ainda não têm desfecho (depois de 24 h sem desfecho, a consulta já
  * aparece em "Sem desfecho"). Mais recentes primeiro.
  */
@@ -372,16 +412,23 @@ export async function listarChamadasNaoAtendidas(agora: Date = new Date(), horas
       medico: { select: { nome: true } },
       eventos: { where: { tipo: { in: TIPOS_EVENTO_DESFECHO }, ...EVENTO_VIGENTE }, select: { id: true, tipo: true, motivo: true, em: true, dataAnterior: true, corrigidoEm: true } },
       chamadas: { select: { paraUsuarioId: true, tentativa: true, status: true, expiraEm: true, respondidaEm: true } },
+      presencasSala: { select: { usuarioId: true, ultimoPing: true } },
     },
   });
   const out: ChamadaNaoAtendida[] = [];
   for (const l of linhas) {
     if (!consultaSemDesfecho(l)) continue;
+    // Quem entrou na sala desta consulta (desde a abertura) não "deixou de
+    // atender", mesmo que o 3º toque tenha expirado sozinho (entrou durante o
+    // toque sem tocar em "atender"): a linha fica `expirada`, mas não conta aqui.
+    const abriu = l.dataInicio.getTime() - SALA_ABRE_ANTES_MIN * 60_000;
+    const entrou = (usuarioId: string) => l.presencasSala.some((x) => x.usuarioId === usuarioId && x.ultimoPing.getTime() >= abriu);
     const quem: NaoAtendeu[] = [];
     for (const [papel, usuarioId, nome] of [
       ["paciente", l.pacienteId, l.paciente.nome],
       ["medico", l.medicoId, l.medico.nome],
     ] as const) {
+      if (entrou(usuarioId)) continue;
       const n = naoAtendeu(l.chamadas.filter((c) => c.paraUsuarioId === usuarioId));
       if (n) quem.push({ papel, nome, motivo: n.motivo, em: n.em.toISOString() });
     }

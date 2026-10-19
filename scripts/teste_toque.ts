@@ -208,6 +208,14 @@ const f1 = fila.find((f) => f.consultaId === "c1");
 const f2 = fila.find((f) => f.consultaId === "c2");
 verifica(f1 && f1.quem.length === 1 && f1.quem[0].papel === "paciente" && f1.quem[0].motivo === "expirada" && f1.quem[0].em === em(12.4 - 0.1).toISOString(), "fila: c1, paciente não atendeu (3 expiradas), com a hora", f1);
 verifica(f2 && f2.quem.length === 1 && f2.quem[0].motivo === "recusada" && f2.quem[0].em === em(5.6).toISOString(), "fila: c2, paciente recusou, com a hora", f2);
+// Entrou na sala durante o 3º toque sem atender: a linha expira normal, mas não conta para a Fila.
+await db.presencaSala.create({ data: { consultaId: "c1", usuarioId: "pac1", papel: "PACIENTE", ultimoPing: em(11), entrouEm: em(11) } });
+verifica((await linhas("c1", "pac1")).map((l) => l.status).join() === "expirada,expirada,expirada", "entrou na sala no 3º toque: as linhas continuam expiradas");
+verifica(!(await listarChamadasNaoAtendidas(em(20))).some((f) => f.consultaId === "c1"), "fila: quem entrou na sala da consulta não aparece como 'não atendeu'");
+// presença em OUTRA consulta não tira da fila
+await db.presencaSala.update({ where: { consultaId_usuarioId: { consultaId: "c1", usuarioId: "pac1" } }, data: { consultaId: "c4" } });
+verifica((await listarChamadasNaoAtendidas(em(20))).some((f) => f.consultaId === "c1"), "fila: presença em outra consulta não conta");
+await db.presencaSala.deleteMany({ where: { usuarioId: "pac1" } });
 await db.eventoConsulta.create({ data: { consultaId: "c1", tipo: "falta_paciente", motivo: "teste", por: "medico", dataAnterior: T0 } }).catch((e) => console.log("(evento)", e.message));
 const fila2 = await listarChamadasNaoAtendidas(em(20));
 verifica(!fila2.some((f) => f.consultaId === "c1"), "fila: com desfecho (falta) sai da lista");
@@ -504,6 +512,50 @@ verifica((await db.chamadaConsulta.count({ where: { status: "tocando", pushEnvia
 verifica(ms < toque.ORCAMENTO_MS, `push pulado: a rodada termina antes do orçamento (${ms} ms)`);
 
 globalThis.fetch = fetchOriginal;
+
+/* ---------------- reenvio do push que não chegou ---------------- */
+await cenario(1, 1);
+zerar();
+let aceitar = 0; // 0 = nenhum aparelho aceitou
+const depReenvio = {
+  enviarEvento: dep.enviarEvento,
+  enviarPush: async (usuarioId: string, payload: Record<string, unknown>, opcoes: { ttl: number; urgencia: string; timeoutMs: number }) => {
+    pushes.push({ usuarioId, payload, opcoes });
+    return aceitar;
+  },
+};
+const rodarR = (t: Date) => rodarToque(t, depReenvio as never);
+await rodarR(em(0.2)); // toca; push falha nos dois participantes
+const originais = pushes.filter((p) => p.usuarioId === "op0");
+verifica(originais.length === 1 && (await db.chamadaConsulta.count({ where: { pushEnviado: false } })) === 2, "push falhou: linha tocando com pushEnviado = false");
+pushes = [];
+eventos = [];
+const rR = await rodarR(em(1.2)); // 60 s antes de expirar (expira 2,2)
+const reenviado = pushes.filter((p) => p.usuarioId === "op0");
+verifica(rR.reenvios === 2 && reenviado.length === 1, "reenvia o push na rodada seguinte", rR);
+verifica(JSON.stringify(reenviado[0]?.payload) === JSON.stringify(originais[0]?.payload), "payload reenviado é IDÊNTICO ao original (tentativa, inicioEm, expiraEm…)", { original: originais[0]?.payload, reenviado: reenviado[0]?.payload });
+verifica(reenviado[0]?.payload.tentativa === 1 && reenviado[0]?.payload.expiraEm === em(2.2).toISOString() && reenviado[0]?.payload.inicioEm === T0.toISOString(), "reenvio: mesma tentativa, mesmo expiraEm e inicioEm");
+verifica(reenviado[0] && reenviado[0].opcoes.ttl >= 59 && reenviado[0].opcoes.ttl <= 60, "reenvio: TTL = segundos até expiraEm (~60)", reenviado[0]?.opcoes);
+verifica(!eventos.some((e) => e.evento === "chamada_tocando") && (await db.chamadaConsulta.count()) === 2, "reenvio não repete o broadcast nem cria linha");
+pushes = [];
+aceitar = 1;
+await rodarR(em(1.5)); // agora o serviço aceita
+verifica(pushes.length === 2 && (await db.chamadaConsulta.count({ where: { pushEnviado: true } })) === 2, "reenvio aceito: marca pushEnviado");
+pushes = [];
+await rodarR(em(1.7));
+verifica(pushes.length === 0, "push já entregue: não reenvia mais");
+await db.chamadaConsulta.updateMany({ data: { pushEnviado: false } });
+pushes = [];
+await rodarR(new Date(em(2.2).getTime() - 15_000)); // faltam 15 s
+verifica(pushes.length === 0, "faltando menos de 20 s para expirar: não reenvia");
+pushes = [];
+await rodarR(new Date(em(2.2).getTime() - 21_000)); // faltam 21 s
+verifica(pushes.length === 2 && pushes.every((p) => p.opcoes.ttl <= 21), "faltando 21 s: ainda reenvia, com TTL ≤ 21 s", pushes.map((p) => p.opcoes.ttl));
+await db.consulta.update({ where: { id: "oc0" }, data: { status: "cancelada" } });
+await db.chamadaConsulta.updateMany({ data: { pushEnviado: false } });
+pushes = [];
+await rodarR(em(1.3));
+verifica(pushes.length === 0, "consulta cancelada: não reenvia");
 
 await limpar();
 await db.$disconnect();
