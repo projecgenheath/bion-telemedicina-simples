@@ -48,6 +48,16 @@ export type SemDesfechoWire = {
   valor: number;
 };
 export type SemDesfechoResposta = { total: number; horas: number; consultas: SemDesfechoWire[] };
+/** GET /api/admin/consultas/chamadas-nao-atendidas: toque recusado ou 3 tentativas expiradas (últimas 24 h, sem desfecho). */
+export type NaoAtendidaWire = {
+  consultaId: string;
+  dataInicio: string;
+  medico: string;
+  paciente: string;
+  especialidade: string;
+  quem: { papel: "paciente" | "medico"; nome: string; motivo: "recusada" | "expirada"; em: string }[];
+};
+export type NaoAtendidasResposta = { total: number; horas: number; consultas: NaoAtendidaWire[] };
 
 /** Valor da consulta como chega do store ("R$ 150" | "R$ 150,5" | "R$ 1.234,56") → centavos. */
 export function centavosDoValor(valor: string | null | undefined): number {
@@ -133,9 +143,10 @@ export function resumoMedicos(medicos: Medico[]) {
 /* ------------------------------------------------------------------ */
 /* Fila de decisões                                                    */
 /* ------------------------------------------------------------------ */
-export type CategoriaFila = "validacao" | "desfecho" | "reembolso" | "repasse" | "chamado" | "sistema";
+export type CategoriaFila = "validacao" | "nao_atendida" | "desfecho" | "reembolso" | "repasse" | "chamado" | "sistema";
 export const ROTULO_CATEGORIA: Record<CategoriaFila, string> = {
   validacao: "Validação",
+  nao_atendida: "Chamada não atendida",
   desfecho: "Sem desfecho",
   reembolso: "Reembolsos",
   repasse: "Repasses",
@@ -163,6 +174,7 @@ export function montarFila(
     repasses: RepasseWire[] | null;
     reembolsos: ReembolsoWire[] | null;
     semDesfecho?: SemDesfechoWire[] | null;
+    naoAtendidas?: NaoAtendidaWire[] | null;
   },
   agora: number,
 ): ItemFila[] {
@@ -182,6 +194,30 @@ export function montarFila(
       chips: [{ rotulo: "Sem desfecho", tom: "atencao" }, c.pago ? { rotulo: "Pago · fora do repasse", tom: "dinheiro" } : { rotulo: "Não pago", tom: "neutro" }],
       ts,
       destino: `admin-agendamentos?consulta=${encodeURIComponent(c.id)}&acao=desfecho`,
+    });
+  }
+
+  // Toque não atendido (recusou ou 3 tentativas expiradas): quem não atendeu e a hora.
+  // Abre o detalhe da consulta (o admin não entra na sala).
+  for (const c of d.naoAtendidas ?? []) {
+    const ts = Date.parse(c.dataInicio);
+    if (!Number.isFinite(ts) || !c.quem.length) continue;
+    // "paciente não atendeu às 15:12; médico recusou às 15:03"
+    const quem = c.quem
+      .map((q) => `${q.papel === "medico" ? "médico" : "paciente"} ${q.motivo === "recusada" ? "recusou" : "não atendeu"} às ${hora(Date.parse(q.em))}`)
+      .join("; ");
+    itens.push({
+      chave: `nao-atendida-${c.consultaId}`,
+      categoria: "nao_atendida",
+      tom: "atencao",
+      titulo: `Chamada não atendida · ${c.paciente}`,
+      detalhe: [c.medico, c.especialidade, `${rotuloDia(ts, agora)} ${hora(ts)}`, quem].filter(Boolean).join(" · "),
+      chips: c.quem.map((q) => ({
+        rotulo: `${q.papel === "medico" ? "Médico" : "Paciente"} ${q.motivo === "recusada" ? "recusou" : "não atendeu"}`,
+        tom: "atencao" as const,
+      })),
+      ts,
+      destino: `admin-agendamentos?consulta=${encodeURIComponent(c.consultaId)}`,
     });
   }
 
@@ -267,7 +303,7 @@ export function montarFila(
 }
 
 export function contarPorCategoria(itens: ItemFila[]): Record<CategoriaFila, number> {
-  const out: Record<CategoriaFila, number> = { validacao: 0, desfecho: 0, reembolso: 0, repasse: 0, chamado: 0, sistema: 0 };
+  const out: Record<CategoriaFila, number> = { validacao: 0, nao_atendida: 0, desfecho: 0, reembolso: 0, repasse: 0, chamado: 0, sistema: 0 };
   for (const i of itens) out[i.categoria]++;
   return out;
 }
