@@ -205,13 +205,17 @@ export async function registrarResultado(endpoint: string, status: number): Prom
  * aceitaram (2xx); null = push desligado. `prazo` (instante absoluto, ms):
  * o timeout de cada POST é recalculado DEPOIS de ler as inscrições
  * (min(timeoutMs, prazo − agora − 1 s)); abaixo de 500 ms não envia.
+ * Sem nenhuma inscrição: SEM_INSCRICAO (o toque marca a linha e não tenta de novo).
  */
+/** Devolvido por enviarPushParaUsuario quando o usuário não tem nenhum aparelho inscrito. */
+export const SEM_INSCRICAO = "sem_inscricao" as const;
+
 export async function enviarPushParaUsuario(
   usuarioId: string,
   payload: unknown,
   opcoes: { ttl: number; urgencia?: Urgencia; timeoutMs?: number; prazo?: number },
   dep: { fetch?: Fetch; cfg?: ConfigVapid | null } = {},
-): Promise<number | null> {
+): Promise<number | null | typeof SEM_INSCRICAO> {
   const cfg = dep.cfg === undefined ? configVapid() : dep.cfg;
   if (!cfg) return null;
   const inscricoes = await db.pushInscricao.findMany({
@@ -219,6 +223,7 @@ export async function enviarPushParaUsuario(
     select: { id: true, endpoint: true, p256dh: true, auth: true },
     take: 10,
   });
+  if (!inscricoes.length) return SEM_INSCRICAO;
   let timeoutMs = opcoes.timeoutMs ?? TEMPO_LIMITE_PUSH_MS;
   if (opcoes.prazo !== undefined) {
     timeoutMs = Math.min(timeoutMs, opcoes.prazo - Date.now() - 1_000);

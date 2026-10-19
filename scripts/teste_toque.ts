@@ -676,11 +676,61 @@ const lenta = rodarToque(em(0.2), {
 } as never);
 await espera(300);
 pushes = [];
-const sob = await rodarR(em(1.2));
-verifica(sob.reenvios === 0 && pushes.length === 0, "push original em voo: rodada sobreposta não reenvia", sob);
+const sob = await rodarR(new Date(em(0.2).getTime() + 10_000)); // rodada sobreposta de verdade: < 15 s depois
+verifica(sob.reenvios === 0 && pushes.length === 0, "push original em voo (< 15 s): rodada sobreposta não reenvia", sob);
 liberar();
 const rLenta = await lenta;
 verifica(rLenta.push === 2 && (await db.chamadaConsulta.count({ where: { pushEnviado: true, canal: "ambos" } })) === 2, "push original em voo termina e marca ambos", rLenta);
+
+// Linha órfã presa em "push" (rodada morreu / push cortado no prazo): reenviada UMA vez depois de 15 s.
+async function linhaPresa() {
+  await cenario(1, 0);
+  zerar();
+  await db.chamadaConsulta.create({
+    data: { consultaId: "oc0", paraUsuarioId: "op0", papel: "paciente", tentativa: 1, status: "tocando", canal: "push", pushEnviado: false, tocouEm: em(1), expiraEm: em(3) },
+  });
+}
+const linhaOp0 = () => db.chamadaConsulta.findFirst({ where: { paraUsuarioId: "op0", tentativa: 1 }, select: { canal: true, pushEnviado: true } });
+const pushesOp0 = () => pushes.filter((p) => p.usuarioId === "op0");
+await linhaPresa();
+aceitar = 0;
+pushes = [];
+const rP1 = await rodarR(new Date(em(1).getTime() + 10_000));
+verifica(pushesOp0().length === 0 && rP1.reenvios === 0 && (await linhaOp0())?.canal === "push", "linha em 'push' há 10 s (< 15 s): não é reivindicada", rP1);
+pushes = [];
+const rP2 = await rodarR(new Date(em(1).getTime() + 16_000));
+verifica(pushesOp0().length === 1 && rP2.reenvios === 1 && (await linhaOp0())?.canal === "reenvio", "linha órfã em 'push' há 16 s: reenviada uma vez (vira 'reenvio')", { rP2, linha: await linhaOp0() });
+verifica(pushesOp0()[0]?.payload.tentativa === 1 && pushesOp0()[0]?.payload.expiraEm === em(3).toISOString(), "reenvio da órfã: mesmo payload (tentativa, expiraEm)", pushesOp0()[0]?.payload);
+pushes = [];
+const rP3 = await rodarR(new Date(em(1).getTime() + 40_000));
+// (o médico, tocado na rodada de +10 s com push falho, é reenviado normalmente aqui — só olhamos o paciente)
+verifica(pushesOp0().length === 0 && (await linhaOp0())?.canal === "reenvio", "linha órfã já reenviada: não reenvia de novo (limite de 1)", rP3);
+await linhaPresa();
+aceitar = 1;
+pushes = [];
+const [o1, o2] = await Promise.all([rodarR(new Date(em(1).getTime() + 20_000)), rodarR(new Date(em(1).getTime() + 20_000))]);
+verifica(pushesOp0().length === 1 && o1.reenvios + o2.reenvios === 1 && (await linhaOp0())?.canal === "ambos", "órfã com duas rodadas simultâneas: reenviada uma vez só e marca ambos", { o1: o1.reenvios, o2: o2.reenvios });
+await db.chamadaConsulta.updateMany({ where: { paraUsuarioId: "op0" }, data: { canal: "reenvio", pushEnviado: false, tocouEm: em(0) } });
+pushes = [];
+await rodarR(em(1.5));
+verifica(pushesOp0().length === 0, "linha em 'reenvio' continua fora do reenvio");
+
+// Usuário sem nenhum aparelho inscrito: a linha vira "sem_inscricao" e não é reivindicada de novo.
+await cenario(1, 0); // ninguém tem inscrição; push pelo caminho REAL (enviarPushParaUsuario)
+zerar();
+let fetchSemInsc = 0;
+globalThis.fetch = (async () => { fetchSemInsc++; return new Response(null, { status: 201 }); }) as unknown as typeof fetch;
+const rS1 = await rodarToque(em(0.2), depLento(() => 0) as never);
+const canaisS = (await db.chamadaConsulta.findMany({ select: { canal: true, status: true } }));
+verifica(rS1.tocadas === 2 && rS1.semInscricao === 2 && rS1.push === 0 && fetchSemInsc === 0, "sem aparelho inscrito: não chama o serviço, conta semInscricao", rS1);
+verifica(canaisS.length === 2 && canaisS.every((c) => c.canal === "sem_inscricao" && c.status === "tocando"), "sem aparelho inscrito: linha marcada 'sem_inscricao' (não volta para realtime), segue tocando", canaisS);
+const rS2 = await rodarToque(em(1.2), depLento(() => 0) as never);
+verifica(rS2.reenvios === 0 && rS2.semInscricao === 0 && fetchSemInsc === 0, "rodada seguinte: 'sem_inscricao' não é reivindicada para reenvio", rS2);
+const sem = await webPush.enviarPushParaUsuario("op0", { tipo: "chamada_tocando" }, { ttl: 60 });
+verifica(sem === webPush.SEM_INSCRICAO, "enviarPushParaUsuario sem inscrição devolve SEM_INSCRICAO", sem);
+const rS3 = await rodarToque(em(2.3), depLento(() => 0) as never);
+verifica(rS3.expiradas === 2 && (await db.chamadaConsulta.count({ where: { status: "expirada", canal: "sem_inscricao" } })) === 2, "linha 'sem_inscricao' expira normalmente", rS3);
+globalThis.fetch = fetchOriginal;
 
 await limpar();
 await db.$disconnect();

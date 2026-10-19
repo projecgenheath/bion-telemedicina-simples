@@ -3,7 +3,7 @@ import crypto from "node:crypto";
 import { db } from "@/lib/db";
 import { broadcastCanal } from "@/lib/supabase/broadcast";
 import { topicoNotificacoesUsuario } from "@/lib/server/usuario-canal";
-import { enviarPushParaUsuario, pushAtivo, type Urgencia } from "@/lib/server/web-push";
+import { enviarPushParaUsuario, pushAtivo, SEM_INSCRICAO, type Urgencia } from "@/lib/server/web-push";
 import { SALA_ABRE_ANTES_MIN } from "@/lib/janela-sala";
 import { STATUS_AVALIAVEIS } from "@/lib/server/presenca-consulta";
 import { ESPERA_FALTA_MIN, SINAL_PARADO_MS } from "@/components/bion/medico/metricas";
@@ -68,14 +68,26 @@ export const PUSH_MARGEM_MS = 1_000;
 export const REENVIO_MIN_MS = 20_000;
 /** Máximo de reenvios por rodada (os mais urgentes primeiro): cabe no orçamento junto com os toques novos. */
 export const REENVIO_MAX = 50;
+/**
+ * Linha em "push" com tocouEm mais antigo que isto é ÓRFÃ: o "push" só é
+ * reivindicado na rodada que criou a linha (tocouEm = agora daquela rodada) e
+ * essa rodada termina em ORCAMENTO_MS (7 s). Passado o limite, a rodada morreu
+ * (timeout da função, push cortado no prazo, processo congelado) e o reenvio
+ * pode reivindicá-la.
+ */
+export const PUSH_ORFAO_MS = 15_000;
 
 /*
  * Estado do push na linha, só com o campo `canal` que já existe (sem coluna nova):
  *   "realtime" → só o broadcast saiu; o push está livre (nunca tentado, pulado ou falhou);
- *   "push"     → push REIVINDICADO por uma rodada (em andamento);
+ *   "push"     → push REIVINDICADO pela rodada que criou a linha (em
+ *                andamento); com tocouEm há mais de PUSH_ORFAO_MS é órfão e
+ *                o reenvio pode reivindicá-lo;
  *   "reenvio"  → reenvio reivindicado (no máximo um por toque: com 2 min de
  *                toque e o corte de 20 s, só cabe uma rodada de reenvio);
- *   "ambos"    → algum aparelho aceitou (pushEnviado = true).
+ *   "ambos"    → algum aparelho aceitou (pushEnviado = true);
+ *   "sem_inscricao" → o usuário não tem nenhum aparelho inscrito: não tenta
+ *                de novo (nem reenvio). Só o toque.ts lê `canal`.
  * A reivindicação é um UPDATE condicionado (count === 1): duas rodadas
  * sobrepostas nunca mandam o mesmo push duas vezes.
  */
@@ -137,13 +149,13 @@ export type EventoToque = "chamada_tocando" | "chamada_expirada";
 export type DependenciasToque = {
   /** Broadcast no tópico privado de notificações do usuário. */
   enviarEvento?: (usuarioId: string, evento: EventoToque, payload: Record<string, unknown>) => Promise<void>;
-  /** Web Push para os aparelhos do usuário; null = desligado, número = aceitos. */
+  /** Web Push para os aparelhos do usuário; null = desligado, número = aceitos, SEM_INSCRICAO = nenhum aparelho. */
   enviarPush?: (
     usuarioId: string,
     payload: Record<string, unknown>,
     /** prazo = instante absoluto (ms) em que a rodada termina; timeoutMs = limite do POST ao serviço. */
     opcoes: { ttl: number; urgencia: Urgencia; timeoutMs: number; prazo: number },
-  ) => Promise<number | null>;
+  ) => Promise<number | null | typeof SEM_INSCRICAO>;
 };
 
 const eventoPadrao: NonNullable<DependenciasToque["enviarEvento"]> = (usuarioId, evento, payload) =>
@@ -210,6 +222,8 @@ export type ResultadoToque = {
   reenvios: number;
   /** Pushes que não terminaram até o prazo absoluto da rodada (cortados pelo Promise.race). */
   pushCortados: number;
+  /** Pushes não enviados porque o usuário não tem aparelho inscrito (linha marcada "sem_inscricao"). */
+  semInscricao: number;
   /** Toques ao médico adiados porque ele está atendendo outra consulta. */
   medicoOcupado: number;
   /** Sobrou trabalho para o minuto seguinte (orçamento acabou). */
@@ -223,7 +237,7 @@ export async function rodarToque(agora: Date = new Date(), dep: DependenciasToqu
   const pushLigado = dep.enviarPush !== undefined || pushAtivo();
   /** Prazo ABSOLUTO da rodada: toda a fase de push (inscrições, fila do pool, POSTs) termina antes dele. */
   const prazo = t0 + ORCAMENTO_MS;
-  const r: ResultadoToque = { expiradas: 0, tocadas: 0, push: 0, pushPulados: 0, reenvios: 0, pushCortados: 0, consultas: 0, medicoOcupado: 0, incompleto: false };
+  const r: ResultadoToque = { expiradas: 0, tocadas: 0, push: 0, pushPulados: 0, reenvios: 0, pushCortados: 0, semInscricao: 0, consultas: 0, medicoOcupado: 0, incompleto: false };
   const restante = () => ORCAMENTO_MS - (Date.now() - t0);
   /** Cabe mais um passo "grava + broadcast"? Conferido ANTES de cada UPDATE/INSERT. */
   const cabeParticipante = () => restante() >= RESERVA_PARTICIPANTE_MS;
@@ -311,15 +325,19 @@ export async function rodarToque(agora: Date = new Date(), dep: DependenciasToqu
   // IDÊNTICO ao original (mesma tentativa, expiraEm e inicioEm — o service
   // worker deduplica por consultaId:tentativa); sem novo broadcast; pula se
   // faltar menos de REENVIO_MIN_MS para expirar.
-  // Só linhas com o push livre (canal "realtime"); até REENVIO_MAX, as que expiram antes primeiro.
+  // Só linhas com o push livre ("realtime") ou órfão ("push" há mais de PUSH_ORFAO_MS);
+  // "reenvio", "ambos" e "sem_inscricao" ficam fora. Até REENVIO_MAX, as que expiram antes primeiro.
+  const reenviavel = {
+    canal: { in: ["realtime", "push"] },
+    tocouEm: { lt: new Date(agora.getTime() - PUSH_ORFAO_MS) },
+  };
   const reenvios = !pushLigado
     ? []
     : await db.chamadaConsulta.findMany({
         where: {
           status: "tocando",
           pushEnviado: false,
-          canal: "realtime",
-          tocouEm: { lt: agora },
+          ...reenviavel,
           expiraEm: { gte: new Date(agora.getTime() + REENVIO_MIN_MS) },
           consulta: { status: { in: STATUS_AVALIAVEIS } },
         },
@@ -397,11 +415,21 @@ export async function rodarToque(agora: Date = new Date(), dep: DependenciasToqu
   } else if (pendentes.length) {
     const linhaDe = (pp: PushPendente) =>
       pp.id ? { id: pp.id } : { consultaId: pp.consultaId, paraUsuarioId: pp.usuarioId, tentativa: pp.tentativa };
-    const umPush = async (pp: PushPendente): Promise<"ok" | "falhou" | "pulado" | "ocupado"> => {
+    const umPush = async (pp: PushPendente): Promise<"ok" | "falhou" | "pulado" | "ocupado" | "sem_inscricao"> => {
       if (prazo - Date.now() - PUSH_MARGEM_MS < PUSH_MIN_MS) return "pulado";
-      // Reivindica: só uma rodada envia cada push (e cada reenvio).
+      // Reivindica: só uma rodada envia cada push (e cada reenvio). O original
+      // (linha recém-criada NESTA rodada) só sai de "realtime"; o reenvio pega
+      // "realtime" ou "push" órfão, com as mesmas condições do findMany.
       const dono = await db.chamadaConsulta.updateMany({
-        where: { ...linhaDe(pp), status: "tocando", pushEnviado: false, canal: "realtime" },
+        where: pp.reenvio
+          ? {
+              ...linhaDe(pp),
+              ...reenviavel,
+              status: "tocando",
+              pushEnviado: false,
+              expiraEm: { gte: new Date(agora.getTime() + REENVIO_MIN_MS) },
+            }
+          : { ...linhaDe(pp), status: "tocando", pushEnviado: false, canal: "realtime" },
         data: { canal: pp.reenvio ? "reenvio" : "push" },
       });
       if (dono.count !== 1) return "ocupado";
@@ -413,6 +441,11 @@ export async function rodarToque(agora: Date = new Date(), dep: DependenciasToqu
       }
       const ttl = Math.max(0, Math.floor((pp.expiraEm.getTime() - agora.getTime() - (Date.now() - t0)) / 1000));
       const aceitos = await enviarPush(pp.usuarioId, pp.payload, { ttl, urgencia: "high", timeoutMs, prazo }).catch(() => 0);
+      if (aceitos === SEM_INSCRICAO) {
+        // Nenhum aparelho inscrito: marca e NÃO volta para "realtime" (o reenvio não a pega de novo).
+        await db.chamadaConsulta.updateMany({ where: { ...linhaDe(pp), canal: { in: ["push", "reenvio"] } }, data: { canal: SEM_INSCRICAO } });
+        return "sem_inscricao";
+      }
       if (aceitos) {
         await db.chamadaConsulta.updateMany({ where: linhaDe(pp), data: { pushEnviado: true, canal: "ambos" } });
         return "ok";
@@ -431,6 +464,7 @@ export async function rodarToque(agora: Date = new Date(), dep: DependenciasToqu
       if (x === "ok") r.push++;
       if (x === "pulado") r.pushPulados++;
       if (x === "cortado") r.pushCortados++;
+      if (x === "sem_inscricao") r.semInscricao++;
       if (pp.reenvio && x !== "ocupado" && x !== "pulado") r.reenvios++;
     }
     if (r.pushPulados) console.warn("[Toque] push pulado: sem orçamento", { pulados: r.pushPulados });
