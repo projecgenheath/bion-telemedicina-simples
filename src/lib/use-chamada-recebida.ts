@@ -4,7 +4,6 @@ import { useCallback, useEffect, useReducer, useRef } from "react";
 import { ouvirEventosChamada } from "@/lib/chamada-eventos";
 import {
   ESTADO_CHAMADA_INICIAL,
-  consultaAbertaNaUrl,
   consultaEncerrada,
   reduzirChamada,
   type ChamadaTocando,
@@ -17,7 +16,8 @@ import {
  * o store repassa do canal privado de notificações (chamada-eventos.ts) e
  * devolve a chamada que está tocando agora, ou null.
  *  - Dedupe por consultaId:tentativa (o mesmo toque não volta depois de fechado).
- *  - Ignora toque já expirado e toque da consulta que já está aberta em /consulta.
+ *  - Ignora toque já expirado. Toque da consulta já aberta em /consulta entra
+ *    no estado, mas a UI não mostra (modo "nada") e atende em segundo plano.
  *  - Fecha sozinho no expiraEm LOCAL (não espera o chamada_expirada) e quando
  *    chega atendida/recusada/expirada da mesma tentativa (ex.: atendeu em outro aparelho).
  *  - Fim de vez (não toca mais nesta consulta): `ultima: true`, qualquer
@@ -37,6 +37,8 @@ export function useChamadaRecebida(
   fechar: () => void;
   /** A consulta acabou (ex.: 409 consulta_encerrada): fecha e não toca mais nela. */
   encerrar: (consultaId: string) => void;
+  /** Fecha uma tentativa específica (atendida em segundo plano). */
+  fecharTentativa: (consultaId: string, tentativa: number) => void;
 } {
   const [estado, despachar] = useReducer(reduzirChamada, ESTADO_CHAMADA_INICIAL);
   const consultasRef = useRef(consultas);
@@ -47,8 +49,6 @@ export function useChamadaRecebida(
   useEffect(() => {
     if (!ativo) return;
     return ouvirEventosChamada((evento) => {
-      const aberta =
-        typeof window === "undefined" ? null : consultaAbertaNaUrl(window.location.pathname, window.location.search);
       const c = consultasRef.current.find((x) => x.id === evento.consultaId);
       if (c && consultaEncerrada(c.status)) {
         despachar({ tipo: "consulta_encerrada", consultaId: evento.consultaId });
@@ -59,7 +59,6 @@ export function useChamadaRecebida(
         tipo: "evento",
         evento,
         agora: Date.now(),
-        consultaAberta: aberta,
         inicioConsulta: Number.isFinite(inicio) ? inicio : null,
       });
     });
@@ -85,5 +84,9 @@ export function useChamadaRecebida(
 
   const fechar = useCallback(() => despachar({ tipo: "fechar" }), []);
   const encerrar = useCallback((consultaId: string) => despachar({ tipo: "consulta_encerrada", consultaId }), []);
-  return { chamada: ativo ? atual : null, fechar, encerrar };
+  const fecharTentativa = useCallback(
+    (consultaId: string, tentativa: number) => despachar({ tipo: "fechar_tentativa", consultaId, tentativa }),
+    [],
+  );
+  return { chamada: ativo ? atual : null, fechar, encerrar, fecharTentativa };
 }

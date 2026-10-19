@@ -8,6 +8,7 @@ import {
   consultaAbertaNaUrl,
   consultaEncerrada,
   modoChamadaRecebida,
+  tentativaParaAtenderNaSala,
   respostaConsultaEncerrada,
   TEXTO_CONFIRMAR_TROCA,
   decidirAposAtender,
@@ -75,8 +76,7 @@ igual(
 );
 
 // ── Reducer ─────────────────────────────────────────────────────────────
-const ev = (e: EventoChamada, agora = AGORA, consultaAberta: string | null = null) =>
-  ({ tipo: "evento", evento: e, agora, consultaAberta }) as const;
+const ev = (e: EventoChamada, agora = AGORA) => ({ tipo: "evento", evento: e, agora }) as const;
 const t1 = toque as EventoChamada;
 let s: EstadoChamadaRecebida = reduzirChamada(ESTADO_CHAMADA_INICIAL, ev(t1));
 igual("toca", s.atual?.consultaId, "c1");
@@ -88,8 +88,6 @@ const t2 = { ...t1, tentativa: 2 } as EventoChamada;
 igual("tentativa 2 toca de novo", reduzirChamada(s, ev(t2)).atual?.tentativa, 2);
 
 igual("já expirado não toca", reduzirChamada(ESTADO_CHAMADA_INICIAL, ev(t1, Date.parse(EXPIRA) + 1)).atual, null);
-igual("na sala da consulta não toca", reduzirChamada(ESTADO_CHAMADA_INICIAL, ev(t1, AGORA, "c1")).atual, null);
-igual("na sala de OUTRA consulta toca", reduzirChamada(ESTADO_CHAMADA_INICIAL, ev(t1, AGORA, "c9")).atual?.consultaId, "c1");
 
 const tocando = reduzirChamada(ESTADO_CHAMADA_INICIAL, ev(t1));
 for (const tipo of ["chamada_atendida", "chamada_recusada"] as const) {
@@ -160,7 +158,6 @@ const tocarEm = (e: EstadoChamadaRecebida, tentativa: number, agora: number, ini
     tipo: "evento",
     evento: { ...(t1 as Extract<EventoChamada, { tipo: "chamada_tocando" }>), tentativa, expiraEm: agora + 2 * MIN },
     agora,
-    consultaAberta: null,
     inicioConsulta,
   });
 // Timer local fecha sem esperar chamada_expirada; a próxima tentativa (antes de 15 min) toca.
@@ -217,7 +214,6 @@ const tocarCom = (e: EstadoChamadaRecebida, tentativa: number, agora: number, in
     tipo: "evento",
     evento: { ...(t1 as Extract<EventoChamada, { tipo: "chamada_tocando" }>), tentativa, expiraEm: agora + 2 * MIN, ...(inicioEm !== undefined ? { inicioEm } : {}) },
     agora,
-    consultaAberta: null,
     inicioConsulta,
   });
 // Presente: vence o dataISO do store (store diz começo agora; inicioEm diz 16 min atrás → já passou).
@@ -242,7 +238,7 @@ igual("ausente: usa dataISO (prioridade 1)", tocarCom(ESTADO_CHAMADA_INICIAL, 1,
 igual("ausente e sem store: 1º toque (prioridade 0)", tocarCom(ESTADO_CHAMADA_INICIAL, 1, AGORA, undefined, null).inicios, [["c1", AGORA, 0]]);
 // Inválido no payload → equivale a ausente (cai no dataISO).
 const invalido = lerEventoChamada("chamada_tocando", { ...base, inicioEm: "xx" }) as EventoChamada;
-igual("inválido: cai no dataISO", reduzirChamada(ESTADO_CHAMADA_INICIAL, { tipo: "evento", evento: invalido, agora: AGORA, consultaAberta: null, inicioConsulta: AGORA - MIN }).inicios, [["c1", AGORA - MIN, 1]]);
+igual("inválido: cai no dataISO", reduzirChamada(ESTADO_CHAMADA_INICIAL, { tipo: "evento", evento: invalido, agora: AGORA, inicioConsulta: AGORA - MIN }).inicios, [["c1", AGORA - MIN, 1]]);
 
 // ── Tela cheia vs aviso compacto vs nada ────────────────────────────────
 igual("fora de /consulta: tela cheia", modoChamadaRecebida("c1", "/paciente", ""), "tela");
@@ -255,11 +251,11 @@ igual("em /consulta/ (barra) de outra: aviso", modoChamadaRecebida("c1", "/consu
 igual("na MESMA consulta: nada", modoChamadaRecebida("c1", "/consulta", "?consulta=c1"), "nada");
 igual("na mesma consulta com outros parâmetros: nada", modoChamadaRecebida("c1", "/consulta", "?x=1&consulta=c1"), "nada");
 // Expiração e dedupe valem igual no aviso: o reducer não depende do modo.
-let mAviso = reduzirChamada(ESTADO_CHAMADA_INICIAL, ev(t1, AGORA, "c2"));
+let mAviso = reduzirChamada(ESTADO_CHAMADA_INICIAL, ev(t1, AGORA));
 igual("em outra consulta o toque entra no estado (vira aviso)", mAviso.atual?.consultaId, "c1");
 mAviso = reduzirChamada(mAviso, { tipo: "expirou", consultaId: "c1", tentativa: 1, agora: Date.parse(EXPIRA) });
 igual("aviso some no expiraEm", mAviso.atual, null);
-igual("aviso não volta para o mesmo toque", reduzirChamada(mAviso, ev(t1, AGORA, "c2")).atual, null);
+igual("aviso não volta para o mesmo toque", reduzirChamada(mAviso, ev(t1, AGORA)).atual, null);
 igual("texto da confirmação", TEXTO_CONFIRMAR_TROCA, "Sair da chamada atual e atender?");
 
 // ── 409 consulta_encerrada: fecha sem navegar ───────────────────────────
@@ -272,6 +268,29 @@ igual("respostaConsultaEncerrada: sim", respostaConsultaEncerrada(encerrada), tr
 igual("respostaConsultaEncerrada: 200 não", respostaConsultaEncerrada({ status: 200, corpo: { motivo: "consulta_encerrada" } }), false);
 igual("respostaConsultaEncerrada: outro motivo não", respostaConsultaEncerrada({ status: 409, corpo: { motivo: "evolucao_pendente" } }), false);
 igual("respostaConsultaEncerrada: rede não", respostaConsultaEncerrada(null), false);
+
+// ── Já na sala da MESMA consulta: atende em segundo plano, uma vez ─────
+{
+  const naSala = modoChamadaRecebida("c1", "/consulta", "?consulta=c1");
+  let e = reduzirChamada(ESTADO_CHAMADA_INICIAL, ev(t1));
+  igual("toque da consulta aberta entra no estado (UI não mostra)", [e.atual?.consultaId, naSala], ["c1", "nada"]);
+  const alvo = tentativaParaAtenderNaSala(e.atual, naSala, AGORA);
+  igual("na mesma sala: dispara atender da tentativa", alvo, { consultaId: "c1", tentativa: 1 });
+  e = reduzirChamada(e, { tipo: "fechar_tentativa", consultaId: "c1", tentativa: 1 });
+  igual("depois de fechar_tentativa não dispara de novo", tentativaParaAtenderNaSala(e.atual, naSala, AGORA), null);
+  igual("reenvio do mesmo toque não volta (dispara uma vez só)", tentativaParaAtenderNaSala(reduzirChamada(e, ev(t1)).atual, naSala, AGORA), null);
+  igual("próxima tentativa na mesma sala dispara de novo (é outra)", tentativaParaAtenderNaSala(reduzirChamada(e, ev(t2)).atual, naSala, AGORA), { consultaId: "c1", tentativa: 2 });
+  const tocandoC1 = reduzirChamada(ESTADO_CHAMADA_INICIAL, ev(t1));
+  igual("tentativa expirada não dispara", tentativaParaAtenderNaSala(tocandoC1.atual, naSala, Date.parse(EXPIRA)), null);
+  const respondida = reduzirChamada(tocandoC1, ev({ tipo: "chamada_atendida", consultaId: "c1", tentativa: 1, por: "paciente" }));
+  igual("tentativa respondida (outro aparelho) não dispara", tentativaParaAtenderNaSala(respondida.atual, naSala, AGORA), null);
+  const recusada = reduzirChamada(tocandoC1, ev({ tipo: "chamada_recusada", consultaId: "c1", tentativa: 1, por: "medico" }));
+  igual("tentativa recusada não dispara", tentativaParaAtenderNaSala(recusada.atual, naSala, AGORA), null);
+  igual("em OUTRA consulta (aviso) não dispara", tentativaParaAtenderNaSala(tocandoC1.atual, modoChamadaRecebida("c1", "/consulta", "?consulta=c2"), AGORA), null);
+  igual("fora de /consulta (tela) não dispara", tentativaParaAtenderNaSala(tocandoC1.atual, modoChamadaRecebida("c1", "/paciente", ""), AGORA), null);
+  igual("sem chamada não dispara", tentativaParaAtenderNaSala(null, naSala, AGORA), null);
+  igual("fechar_tentativa de outra tentativa não fecha", reduzirChamada(tocandoC1, { tipo: "fechar_tentativa", consultaId: "c1", tentativa: 2 }) === tocandoC1, true);
+}
 
 console.log(`chamada-recebida-logica: ${ok} ok, ${falhas} falha(s)`);
 if (falhas > 0) process.exit(1);

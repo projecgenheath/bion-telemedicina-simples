@@ -107,7 +107,6 @@ export type AcaoChamada =
       tipo: "evento";
       evento: EventoChamada;
       agora: number;
-      consultaAberta?: string | null;
       /** Horário (ms) da consulta, quando o app conhece (store). */
       inicioConsulta?: number | null;
     }
@@ -115,6 +114,8 @@ export type AcaoChamada =
   | { tipo: "expirou"; consultaId: string; tentativa: number; agora: number }
   /** A consulta mudou para cancelada/concluída: para de tocar e não toca mais. */
   | { tipo: "consulta_encerrada"; consultaId: string }
+  /** Fecha UMA tentativa (ex.: atendida em segundo plano por já estar na sala dela). */
+  | { tipo: "fechar_tentativa"; consultaId: string; tentativa: number }
   /** O próprio usuário atendeu, recusou ou fechou nesta tela. */
   | { tipo: "fechar" };
 
@@ -151,6 +152,10 @@ export function reduzirChamada(estado: EstadoChamadaRecebida, acao: AcaoChamada)
     if (atual === estado.atual && finalizadas === estado.finalizadas) return estado;
     return { ...estado, atual, finalizadas };
   }
+  if (acao.tipo === "fechar_tentativa") {
+    if (!mesma(estado.atual, acao.consultaId, acao.tentativa)) return estado;
+    return { ...estado, atual: null, vistas: marcar(estado.vistas, chaveChamada(acao.consultaId, acao.tentativa)) };
+  }
   if (acao.tipo === "expirou") {
     if (!mesma(estado.atual, acao.consultaId, acao.tentativa)) return estado;
     return {
@@ -165,7 +170,9 @@ export function reduzirChamada(estado: EstadoChamadaRecebida, acao: AcaoChamada)
   if (ev.tipo === "chamada_tocando") {
     // Consulta já sem toque (última tentativa, +15 min, cancelada/concluída).
     if (estado.finalizadas.includes(ev.consultaId)) return estado;
-    // Repetido (outro caminho/aparelho), já expirado, ou o usuário já está na sala desta consulta.
+    // Repetido (outro caminho/aparelho) ou já expirado. Quem já está na sala desta
+    // consulta TAMBÉM entra no estado: a UI não mostra nada (modo "nada") e atende
+    // em segundo plano (tentativaParaAtenderNaSala + fechar_tentativa).
     if (estado.vistas.includes(chave)) return estado;
     // Início de referência da janela de 15 min, por prioridade:
     // inicioEm do payload > horário da consulta no store (dataISO) > 1º toque visto.
@@ -190,7 +197,6 @@ export function reduzirChamada(estado: EstadoChamadaRecebida, acao: AcaoChamada)
       return { ...estado, vistas: marcar(estado.vistas, chave), finalizadas: finalizar(estado, ev.consultaId) };
     }
     if (ev.expiraEm <= acao.agora) return { ...estado, vistas: marcar(estado.vistas, chave) };
-    if (acao.consultaAberta && acao.consultaAberta === ev.consultaId) return { ...estado, vistas: marcar(estado.vistas, chave) };
     // Já tocando outra chamada ainda válida: mantém a atual (a nova toca de novo na próxima tentativa).
     if (estado.atual && estado.atual.expiraEm > acao.agora && estado.atual.consultaId !== ev.consultaId) return estado;
     const { tipo: _tipo, ...chamada } = ev;
@@ -233,6 +239,20 @@ export type ModoChamadaRecebida = "tela" | "aviso" | "nada";
 export function modoChamadaRecebida(consultaId: string, pathname: string, search: string): ModoChamadaRecebida {
   if (pathname.replace(/\/+$/, "") !== "/consulta") return "tela";
   return consultaAbertaNaUrl(pathname, search) === consultaId ? "nada" : "aviso";
+}
+
+/**
+ * Já na sala da MESMA consulta (modo "nada") com uma tentativa dela tocando
+ * (não expirada; respondida já saiu do estado): atende em segundo plano, uma
+ * vez, sem UI nem navegação. Depois a UI despacha fechar_tentativa.
+ */
+export function tentativaParaAtenderNaSala(
+  atual: ChamadaTocando | null,
+  modo: ModoChamadaRecebida,
+  agora: number,
+): { consultaId: string; tentativa: number } | null {
+  if (!atual || modo !== "nada" || atual.expiraEm <= agora) return null;
+  return { consultaId: atual.consultaId, tentativa: atual.tentativa };
 }
 
 /** Texto da confirmação ao atender pelo aviso compacto (há uma chamada em andamento). */

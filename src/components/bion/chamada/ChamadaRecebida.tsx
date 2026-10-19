@@ -11,6 +11,7 @@ import {
   iniciaisContraparte,
   modoChamadaRecebida,
   respostaConsultaEncerrada,
+  tentativaParaAtenderNaSala,
   TEXTO_CONFIRMAR_TROCA,
   type ModoChamadaRecebida,
   type ChamadaTocando,
@@ -30,17 +31,23 @@ import {
  * Onde aparece (modoChamadaRecebida): fora de /consulta, tela cheia com toque;
  * em QUALQUER outra /consulta, aviso compacto no topo (só vibração curta, sem
  * toque) e "Atender" pede confirmação "Sair da chamada atual e atender?";
- * na sala da MESMA consulta, nada.
+ * na sala da MESMA consulta, nada na tela, e a tentativa é atendida em segundo
+ * plano (uma vez, sem navegar, erros ignorados).
  */
 export function ChamadaRecebida() {
   const { sessao, autenticado, consultas } = useBion();
   const ativo = autenticado && (sessao.role === "paciente" || sessao.role === "medico");
-  const { chamada, fechar, encerrar } = useChamadaRecebida(ativo, consultas);
+  const { chamada, fechar, encerrar, fecharTentativa } = useChamadaRecebida(ativo, consultas);
   if (!chamada) return null;
   // useSearchParams pede Suspense no layout (senão o build estático reclama).
   return (
     <Suspense fallback={null}>
-      <ChamadaNoLugar chamada={chamada} onFechar={fechar} onEncerrada={() => encerrar(chamada.consultaId)} />
+      <ChamadaNoLugar
+        chamada={chamada}
+        onFechar={fechar}
+        onEncerrada={() => encerrar(chamada.consultaId)}
+        onFecharTentativa={fecharTentativa}
+      />
     </Suspense>
   );
 }
@@ -49,14 +56,30 @@ function ChamadaNoLugar({
   chamada,
   onFechar,
   onEncerrada,
+  onFecharTentativa,
 }: {
   chamada: ChamadaTocando;
   onFechar: () => void;
   onEncerrada: () => void;
+  onFecharTentativa: (consultaId: string, tentativa: number) => void;
 }) {
   const pathname = usePathname() ?? "";
   const busca = useSearchParams()?.toString() ?? "";
   const modo = modoChamadaRecebida(chamada.consultaId, pathname, busca ? `?${busca}` : "");
+
+  // Já está na sala desta consulta: atende em segundo plano, uma vez, sem UI
+  // nem navegação (erros, inclusive 409, ignorados) e fecha a tentativa.
+  useEffect(() => {
+    const alvo = tentativaParaAtenderNaSala(chamada, modo, Date.now());
+    if (!alvo) return;
+    const chave = chaveChamada(alvo.consultaId, alvo.tentativa);
+    if (!ATENDIDAS_NA_SALA.has(chave)) {
+      ATENDIDAS_NA_SALA.add(chave);
+      void responder(alvo.consultaId, "atender", alvo.tentativa).catch(() => undefined);
+    }
+    onFecharTentativa(alvo.consultaId, alvo.tentativa);
+  }, [chamada, modo, onFecharTentativa]);
+
   if (modo === "nada") return null;
   return (
     <ControleChamadaRecebida
@@ -70,6 +93,9 @@ function ChamadaNoLugar({
 }
 
 export default ChamadaRecebida;
+
+/** Tentativas já atendidas em segundo plano (guarda extra contra efeito duplo do StrictMode). */
+const ATENDIDAS_NA_SALA = new Set<string>();
 
 type Fase = "tocando" | "atendendo" | "recusando" | "bloqueado";
 type Resposta = { status: number; corpo?: unknown } | null;
