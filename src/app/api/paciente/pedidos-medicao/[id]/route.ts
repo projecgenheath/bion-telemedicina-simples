@@ -4,7 +4,7 @@ import { exigirPapel } from "@/lib/server/auth";
 import { aplicarSideEffects } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
 import { medidaCanonica } from "@/lib/medidas-paciente";
-import { lerTiposPedido, validarResposta, type RespostaPedido } from "@/lib/saude-paciente";
+import { detalhesAuditoria, lerTiposPedido, validarResposta, type RespostaPedido } from "@/lib/saude-paciente";
 
 /**
  * POST /api/paciente/pedidos-medicao/:id — o paciente responde o pedido.
@@ -22,8 +22,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (!pedido || pedido.pacienteId !== usuario.id) {
       return Response.json({ erro: "Pedido não encontrado." }, { status: 404 });
     }
+    if (pedido.status === "cancelado") {
+      return Response.json({ erro: "O médico cancelou este pedido. Não é preciso enviar as medidas." }, { status: 409 });
+    }
     if (pedido.status !== "pendente") {
-      return Response.json({ erro: "Este pedido já foi respondido ou cancelado." }, { status: 409 });
+      return Response.json({ erro: "Você já enviou as medidas deste pedido." }, { status: 409 });
     }
     const v = validarResposta(lerTiposPedido(pedido.tipos), body);
     if (!v.ok) return Response.json({ erro: v.erro }, { status: 400 });
@@ -53,7 +56,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       }
       return lista;
     });
-    if (!criadas) return Response.json({ erro: "Este pedido já foi respondido." }, { status: 409 });
+    if (!criadas) return Response.json({ erro: "Este pedido não está mais aberto (já respondido ou cancelado pelo médico)." }, { status: 409 });
 
     // Mesmo sincronismo de POST /api/medicoes (peso/altura atuais do perfil).
     const perfil: { peso?: string; altura?: string } = {};
@@ -66,11 +69,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
 
     await aplicarSideEffects(usuario, undefined, {
-      acao: "PEDIDO_MEDICAO_ATENDIDO",
+      acao: "pedido_medicao_atendido",
       categoria: "prontuario",
       entidade: "pedidoMedicao",
       entidadeId: id,
-      detalhes: v.medicoes.map((m) => `${m.tipo}: ${m.valor1}${m.valor2 ? `/${m.valor2}` : ""}`).join("; "),
+      detalhes: detalhesAuditoria({ pacienteId: usuario.id, pedidoId: id, tipos: v.medicoes.map((m) => m.tipo) }),
     });
 
     return ok({

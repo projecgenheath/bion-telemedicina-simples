@@ -1,5 +1,5 @@
 /** Rodar: bun --conditions=react-server src/lib/saude-paciente.teste.ts */
-import { lerTiposPedido, validarResposta, lerPosologia, resumoMedicamento, validarMedicamento } from "./saude-paciente";
+import { detalhesAuditoria, lerTiposPedido, validarResposta, lerPosologia, resumoMedicamento, validarMedicamento } from "./saude-paciente";
 
 let ok = 0;
 let falhas = 0;
@@ -47,6 +47,9 @@ igual("med ok", validarMedicamento({ nome: " Losartana ", dose: "50 mg", frequen
   ok: true,
   dados: { nome: "Losartana", dose: "50 mg", via: null, posologia: '{"frequencia":"1x ao dia"}', usoContinuo: true },
 });
+
+igual("auditoria só ids/tipos", detalhesAuditoria({ pacienteId: "u1", pedidoId: "p1", tipos: ["peso", "pa"], x: undefined, y: null }), '{"pacienteId":"u1","pedidoId":"p1","tipos":["peso","pa"]}');
+igual("auditoria sem dígitos de medida", /\d{2,}/.test(detalhesAuditoria({ pacienteId: "u", medicaoId: "m", tipos: ["pa"] })), false);
 
 console.log(`${ok} ok, ${falhas} falha(s)`);
 if (falhas) process.exit(1);

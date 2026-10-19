@@ -4,6 +4,7 @@ import { exigirPapel } from "@/lib/server/auth";
 import { aplicarSideEffects } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
 import { serializarMedicamento } from "../serializar";
+import { detalhesAuditoria } from "@/lib/saude-paciente";
 
 /**
  * PATCH  { ativo: boolean } — "parei de tomar" / "voltei a tomar" (qualquer origem).
@@ -32,7 +33,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       categoria: "prontuario",
       entidade: "medicamentoEmUso",
       entidadeId: id,
-      detalhes: m.nome,
+      detalhes: detalhesAuditoria({ pacienteId: usuario.id, medicamentoEmUsoId: id }),
     });
     return ok({ medicamento: serializarMedicamento(m) });
   } catch (erro) {
@@ -55,7 +56,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
       categoria: "prontuario",
       entidade: "medicamentoEmUso",
       entidadeId: id,
-      detalhes: m.nome,
+      detalhes: detalhesAuditoria({ pacienteId: usuario.id, medicamentoEmUsoId: id }),
     });
     return ok({ removido: id });
   } catch (erro) {

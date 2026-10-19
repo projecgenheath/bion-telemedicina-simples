@@ -118,3 +118,10 @@ export function validarMedicamento(
 }
 
 export const FREQUENCIAS_LEMBRETE = ["Todos os dias", "Dias úteis", "Semanal"] as const;
+
+/** LGPD: detalhes de auditoria só com ids e tipos — nunca valores de saúde, nomes ou doses. */
+export function detalhesAuditoria(campos: Record<string, string | string[] | null | undefined>): string {
+  const limpo: Record<string, string | string[]> = {};
+  for (const [k, v] of Object.entries(campos)) if (v !== undefined && v !== null) limpo[k] = v;
+  return JSON.stringify(limpo);
+}

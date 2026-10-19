@@ -30,10 +30,15 @@ export function PedidosMedicao({ consultaId, variante = "app" }: { consultaId?: 
     // Primeira carga fora do corpo do efeito (evita setState síncrono no efeito).
     const t0 = setTimeout(() => void carregar(), 0);
     if (variante !== "chamada") return () => clearTimeout(t0);
+    // Busca na hora quando o médico pede (broadcast `pedido_medicao_criado` no
+    // canal da sala, repassado por teleconsulta-chamada); 15 s fica de reserva.
+    const aoCriar = () => void carregar();
+    window.addEventListener("bion:pedido-medicao-criado", aoCriar);
     const t = setInterval(() => void carregar(), 15_000);
     return () => {
       clearTimeout(t0);
       clearInterval(t);
+      window.removeEventListener("bion:pedido-medicao-criado", aoCriar);
     };
   }, [carregar, variante]);
 
@@ -87,7 +92,7 @@ export function PedidosMedicao({ consultaId, variante = "app" }: { consultaId?: 
             )}
           </div>
           {aberto === p.id && (
-            <FormPedido pedido={p} escuro={escuro} onCancelar={() => setAberto(null)} onEnviado={respondido} />
+            <FormPedido pedido={p} escuro={escuro} onCancelar={() => setAberto(null)} onEnviado={respondido} onFalhou={() => void carregar()} />
           )}
         </div>
       ))}
@@ -135,11 +140,13 @@ function FormPedido({
   escuro,
   onCancelar,
   onEnviado,
+  onFalhou,
 }: {
   pedido: PedidoPendente;
   escuro: boolean;
   onCancelar: () => void;
   onEnviado: (id: string, medicoes: unknown[], perfil?: unknown) => void;
+  onFalhou?: (id: string) => void;
 }) {
   const [peso, setPeso] = useState("");
   const [altura, setAltura] = useState("");
@@ -162,6 +169,7 @@ function FormPedido({
     );
     setEnviando(false);
     if (d) onEnviado(pedido.id, d.medicoes, d.perfilPaciente);
+    else onFalhou?.(pedido.id);
   };
 
   return (

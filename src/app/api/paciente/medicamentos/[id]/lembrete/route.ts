@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { exigirPapel } from "@/lib/server/auth";
 import { aplicarSideEffects } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
-import { FREQUENCIAS_LEMBRETE, HORA, resumoMedicamento } from "@/lib/saude-paciente";
+import { detalhesAuditoria, FREQUENCIAS_LEMBRETE, HORA, resumoMedicamento } from "@/lib/saude-paciente";
 
 /**
  * POST /api/paciente/medicamentos/:id/lembrete { horario: "HH:MM", frequencia? }
@@ -55,7 +55,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         categoria: "sistema",
         entidade: "lembrete",
         entidadeId: lembrete.id,
-        detalhes: `Lembrete do medicamento "${med.nome}" — ${lembrete.horario} (${lembrete.frequencia})`,
+        detalhes: detalhesAuditoria({ pacienteId: usuario.id, lembreteId: lembrete.id, medicamentoEmUsoId: med.id, documentoId: med.documentoId }),
       },
     );
 

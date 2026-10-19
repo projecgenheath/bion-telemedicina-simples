@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { exigirPapel } from "@/lib/server/auth";
 import { aplicarSideEffects } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
-import { validarMedicamento } from "@/lib/saude-paciente";
+import { detalhesAuditoria, validarMedicamento } from "@/lib/saude-paciente";
 import { serializarMedicamento } from "./serializar";
 
 /**
@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
       categoria: "prontuario",
       entidade: "medicamentoEmUso",
       entidadeId: m.id,
-      detalhes: `Medicamento em uso: ${m.nome}`,
+      detalhes: detalhesAuditoria({ pacienteId: usuario.id, medicamentoEmUsoId: m.id }),
     });
     return ok({ medicamento: serializarMedicamento(m) });
   } catch (erro) {
