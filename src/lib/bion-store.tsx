@@ -1,5 +1,6 @@
 "use client";
 
+import { inscricaoAtual } from "@/lib/push-cliente";
 import {
   createContext,
   useCallback,
@@ -773,11 +774,18 @@ export function BionProvider({ children }: { children: ReactNode }) {
   );
 
   const sair = useCallback(async () => {
+    // Push: manda o endpoint DESTE aparelho ao logout (servidor apaga a inscrição) e só depois desinscreve local.
+    const inscricao = await inscricaoAtual();
     try {
-      await fetch("/api/auth/logout", { method: "POST" });
+      await fetch("/api/auth/logout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(inscricao ? { endpoint: inscricao.endpoint } : {}),
+      });
     } catch {
       // mesmo sem rede, encerra a sessão local
     }
+    await inscricao?.unsubscribe().catch(() => false);
     setAutenticado(false);
     setPrecisaTrocarSenha(false);
     setSessaoState(SESSAO_VAZIA);

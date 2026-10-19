@@ -1,5 +1,6 @@
 "use client";
 
+import { AvisoAtivarToque } from "@/components/bion/AvisoAtivarToque";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -507,6 +508,8 @@ export function PacienteApp() {
                 Como você está se sentindo hoje?
               </p>
             </div>
+
+            <AvisoAtivarToque role={sessao.role} className="mb-4" />
 
             {/* Aviso de mensagem nova do médico (some quando a conversa é aberta) */}
             {ultimaNaoLida ? (
