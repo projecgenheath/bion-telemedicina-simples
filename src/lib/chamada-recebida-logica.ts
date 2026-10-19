@@ -292,12 +292,23 @@ export function decidirResposta(acao: AcaoResposta, linha: { status: string } | 
 
 export const TEXTO_EVOLUCAO_PENDENTE = "Conclua a evolução anterior para atender";
 
-export type ResultadoAtender = { tipo: "entrar" } | { tipo: "bloqueado"; mensagem: string };
+export type ResultadoAtender = { tipo: "entrar" } | { tipo: "fechar" } | { tipo: "bloqueado"; mensagem: string };
+
+/** 409 { motivo: "consulta_encerrada" }: consulta cancelada/concluída (fecha o toque, sem navegar). */
+export function respostaConsultaEncerrada(r: { status: number; corpo?: unknown } | null): boolean {
+  return (
+    r?.status === 409 &&
+    !!r.corpo &&
+    typeof r.corpo === "object" &&
+    (r.corpo as { motivo?: unknown }).motivo === "consulta_encerrada"
+  );
+}
 
 /**
  * Atender: decide entre ir para a sala ou ficar na tela com um aviso.
  *  - 409 { motivo: "evolucao_pendente" } (do GET /sala ou, no futuro, do POST
  *    .../chamada): bloqueia com "Conclua a evolução anterior para atender".
+ *  - 409 { motivo: "consulta_encerrada" } (consulta cancelada/concluída): fecha a tela, sem navegar.
  *  - 409 de janela (sala fechada/ainda não abriu) do POST: bloqueia com o texto do servidor.
  *  - 403/404 do POST: bloqueia (não é desta pessoa / não existe).
  *  - Qualquer outra coisa (200, rede, 5xx): entra na sala, que tem o próprio tratamento.
@@ -313,6 +324,7 @@ export function decidirAposAtender(
       return { tipo: "bloqueado", mensagem: TEXTO_EVOLUCAO_PENDENTE };
     }
   }
+  if (respostaConsultaEncerrada(sala) || respostaConsultaEncerrada(chamada)) return { tipo: "fechar" };
   if (chamada && (chamada.status === 409 || chamada.status === 403 || chamada.status === 404)) {
     const e = erro(chamada.corpo);
     return {

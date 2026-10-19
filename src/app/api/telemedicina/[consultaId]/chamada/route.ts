@@ -6,14 +6,17 @@ import { topicoNotificacoesUsuario } from "@/lib/server/usuario-canal";
 import { broadcastCanal } from "@/lib/supabase/broadcast";
 import { estadoJanelaSala } from "@/lib/janela-sala";
 import { decidirResposta, lerPedidoResposta } from "@/lib/chamada-recebida-logica";
+import { bloqueioConsultaEncerrada } from "@/lib/server/chamada-resposta";
 
 /**
  * POST /api/telemedicina/[consultaId]/chamada — atender ou recusar o toque (tele v2, fase 2).
  *
  * Body: { acao: "atender" | "recusar", tentativa: 1..10 }
  *  - 401 sem sessão; 404 consulta inexistente; 403 se não for o paciente nem o
- *    médico DESTA consulta (admin também 403); 409 fora da janela da sala
- *    (lib/janela-sala.ts); 400 corpo inválido.
+ *    médico DESTA consulta (admin também 403); 409 { erro, motivo:
+ *    "consulta_encerrada" } se a consulta está cancelada/concluida (nada é
+ *    gravado); 409 fora da janela da sala (lib/janela-sala.ts); 400 corpo inválido.
+ *    Respostas com `motivo` saem direto com NextResponse.json (falha() só leva `erro`).
  *  - Atualiza a linha ChamadaConsulta (consultaId, eu, tentativa) com
  *    respondidaEm = agora: atender vale de "tocando" OU "expirada" (o toque
  *    pode ter acabado de expirar; dentro da janela da consulta, atende);
@@ -37,7 +40,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ con
 
     const consulta = await db.consulta.findUnique({
       where: { id: consultaId },
-      select: { id: true, pacienteId: true, medicoId: true, dataInicio: true },
+      select: { id: true, pacienteId: true, medicoId: true, dataInicio: true, status: true },
     });
     if (!consulta) throw comStatus(404, "Consulta não encontrada.");
     const papel =
@@ -47,6 +50,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ con
           ? "medico"
           : null;
     if (!papel) throw comStatus(403, "Acesso negado: você não participa desta consulta.");
+    const encerrada = bloqueioConsultaEncerrada(consulta.status);
+    if (encerrada) return encerrada;
     if (estadoJanelaSala(consulta.dataInicio, Date.now()) !== "aberta") {
       throw comStatus(409, "A sala desta consulta não está aberta agora.");
     }

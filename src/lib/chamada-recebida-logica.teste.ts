@@ -8,6 +8,7 @@ import {
   consultaAbertaNaUrl,
   consultaEncerrada,
   modoChamadaRecebida,
+  respostaConsultaEncerrada,
   TEXTO_CONFIRMAR_TROCA,
   decidirAposAtender,
   decidirResposta,
@@ -260,6 +261,17 @@ mAviso = reduzirChamada(mAviso, { tipo: "expirou", consultaId: "c1", tentativa: 
 igual("aviso some no expiraEm", mAviso.atual, null);
 igual("aviso não volta para o mesmo toque", reduzirChamada(mAviso, ev(t1, AGORA, "c2")).atual, null);
 igual("texto da confirmação", TEXTO_CONFIRMAR_TROCA, "Sair da chamada atual e atender?");
+
+// ── 409 consulta_encerrada: fecha sem navegar ───────────────────────────
+const encerrada = { status: 409, corpo: { erro: "Esta consulta foi cancelada ou já foi concluída.", motivo: "consulta_encerrada" } };
+igual("409 consulta_encerrada da rota chamada: fecha", decidirAposAtender({ status: 200 }, encerrada), { tipo: "fechar" });
+igual("409 consulta_encerrada vindo da sala: fecha", decidirAposAtender(encerrada, null), { tipo: "fechar" });
+igual("evolucao_pendente tem prioridade sobre consulta_encerrada", decidirAposAtender({ status: 409, corpo: { motivo: "evolucao_pendente" } }, encerrada).tipo, "bloqueado");
+igual("409 sem motivo continua bloqueando", decidirAposAtender({ status: 200 }, { status: 409, corpo: { erro: "fora" } }), { tipo: "bloqueado", mensagem: "fora" });
+igual("respostaConsultaEncerrada: sim", respostaConsultaEncerrada(encerrada), true);
+igual("respostaConsultaEncerrada: 200 não", respostaConsultaEncerrada({ status: 200, corpo: { motivo: "consulta_encerrada" } }), false);
+igual("respostaConsultaEncerrada: outro motivo não", respostaConsultaEncerrada({ status: 409, corpo: { motivo: "evolucao_pendente" } }), false);
+igual("respostaConsultaEncerrada: rede não", respostaConsultaEncerrada(null), false);
 
 console.log(`chamada-recebida-logica: ${ok} ok, ${falhas} falha(s)`);
 if (falhas > 0) process.exit(1);

@@ -10,6 +10,7 @@ import {
   decidirAposAtender,
   iniciaisContraparte,
   modoChamadaRecebida,
+  respostaConsultaEncerrada,
   TEXTO_CONFIRMAR_TROCA,
   type ModoChamadaRecebida,
   type ChamadaTocando,
@@ -34,17 +35,25 @@ import {
 export function ChamadaRecebida() {
   const { sessao, autenticado, consultas } = useBion();
   const ativo = autenticado && (sessao.role === "paciente" || sessao.role === "medico");
-  const { chamada, fechar } = useChamadaRecebida(ativo, consultas);
+  const { chamada, fechar, encerrar } = useChamadaRecebida(ativo, consultas);
   if (!chamada) return null;
   // useSearchParams pede Suspense no layout (senão o build estático reclama).
   return (
     <Suspense fallback={null}>
-      <ChamadaNoLugar chamada={chamada} onFechar={fechar} />
+      <ChamadaNoLugar chamada={chamada} onFechar={fechar} onEncerrada={() => encerrar(chamada.consultaId)} />
     </Suspense>
   );
 }
 
-function ChamadaNoLugar({ chamada, onFechar }: { chamada: ChamadaTocando; onFechar: () => void }) {
+function ChamadaNoLugar({
+  chamada,
+  onFechar,
+  onEncerrada,
+}: {
+  chamada: ChamadaTocando;
+  onFechar: () => void;
+  onEncerrada: () => void;
+}) {
   const pathname = usePathname() ?? "";
   const busca = useSearchParams()?.toString() ?? "";
   const modo = modoChamadaRecebida(chamada.consultaId, pathname, busca ? `?${busca}` : "");
@@ -55,6 +64,7 @@ function ChamadaNoLugar({ chamada, onFechar }: { chamada: ChamadaTocando; onFech
       chamada={chamada}
       modo={modo}
       onFechar={onFechar}
+      onEncerrada={onEncerrada}
     />
   );
 }
@@ -87,10 +97,13 @@ export function ControleChamadaRecebida({
   chamada,
   modo = "tela",
   onFechar,
+  onEncerrada,
 }: {
   chamada: ChamadaTocando;
   modo?: Exclude<ModoChamadaRecebida, "nada">;
   onFechar: () => void;
+  /** 409 consulta_encerrada: fecha e não toca mais nesta consulta (padrão: só fecha). */
+  onEncerrada?: () => void;
 }) {
   const router = useRouter();
   const [fase, setFase] = useState<Fase>("tocando");
@@ -118,6 +131,10 @@ export function ControleChamadaRecebida({
     const sala = await pedir(`/api/telemedicina/${encodeURIComponent(consultaId)}/sala?espiar=1`);
     // Bloqueado já na sala: não marca a chamada como atendida.
     const pre = decidirAposAtender(sala, null);
+    if (pre.tipo === "fechar") {
+      (onEncerrada ?? onFechar)();
+      return;
+    }
     if (pre.tipo === "bloqueado") {
       setMensagem(pre.mensagem);
       setFase("bloqueado");
@@ -125,6 +142,11 @@ export function ControleChamadaRecebida({
     }
     const resp = await responder(consultaId, "atender", tentativa);
     const r = decidirAposAtender(sala, resp);
+    // Consulta cancelada/concluída: só fecha o toque, sem navegar.
+    if (r.tipo === "fechar") {
+      (onEncerrada ?? onFechar)();
+      return;
+    }
     if (r.tipo === "bloqueado") {
       setMensagem(r.mensagem);
       setFase("bloqueado");
@@ -137,8 +159,9 @@ export function ControleChamadaRecebida({
   async function recusar() {
     if (fase === "recusando") return;
     setFase("recusando");
-    await responder(consultaId, "recusar", tentativa);
-    onFechar();
+    const resp = await responder(consultaId, "recusar", tentativa);
+    if (respostaConsultaEncerrada(resp)) (onEncerrada ?? onFechar)();
+    else onFechar();
   }
 
   if (modo === "aviso") {

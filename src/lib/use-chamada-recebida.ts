@@ -35,6 +35,8 @@ export function useChamadaRecebida(
 ): {
   chamada: ChamadaTocando | null;
   fechar: () => void;
+  /** A consulta acabou (ex.: 409 consulta_encerrada): fecha e não toca mais nela. */
+  encerrar: (consultaId: string) => void;
 } {
   const [estado, despachar] = useReducer(reduzirChamada, ESTADO_CHAMADA_INICIAL);
   const consultasRef = useRef(consultas);
@@ -82,5 +84,6 @@ export function useChamadaRecebida(
   }, [idAtual, statusAtual]);
 
   const fechar = useCallback(() => despachar({ tipo: "fechar" }), []);
-  return { chamada: ativo ? atual : null, fechar };
+  const encerrar = useCallback((consultaId: string) => despachar({ tipo: "consulta_encerrada", consultaId }), []);
+  return { chamada: ativo ? atual : null, fechar, encerrar };
 }
