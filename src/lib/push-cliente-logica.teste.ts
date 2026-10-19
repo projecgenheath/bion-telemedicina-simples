@@ -1,5 +1,5 @@
 /** Rodar: bun src/lib/push-cliente-logica.teste.ts */
-import { chaveSync, chavesSyncParaLimpar, lerRegistroSync, precisaSincronizar, SYNC_MS, base64UrlParaBytes, corpoInscricao, detectarSuporte, deveMostrarAviso, dispensaRecente, DISPENSA_MS, escolherChave, ehIOS, papelComAviso } from "./push-cliente-logica";
+import { chaveDispensa, mesmaChave, tipoAviso, chaveSync, chavesSyncParaLimpar, lerRegistroSync, precisaSincronizar, SYNC_MS, base64UrlParaBytes, corpoInscricao, detectarSuporte, deveMostrarAviso, dispensaRecente, DISPENSA_MS, escolherChave, ehIOS, papelComAviso } from "./push-cliente-logica";
 
 let ok = 0, falhas = 0;
 function igual(n: string, o: unknown, e: unknown) {
@@ -45,5 +45,24 @@ igual("ler null", lerRegistroSync(null), null);
 igual("ler incompleto", lerRegistroSync(JSON.stringify({ endpoint: "e" })), null);
 igual("chave por usuário", chaveSync("u1"), "bion:push-sync:u1");
 igual("limpar", chavesSyncParaLimpar(["bion:push-sync:u1", "bion:push-aviso-dispensado", "x", "bion:push-sync:u2"]), ["bion:push-sync:u1", "bion:push-sync:u2"]);
+// item 1/2: tipoAviso
+const ta = (x: Partial<Parameters<typeof tipoAviso>[0]>) => tipoAviso({ role: "paciente", suporte: sup, permissao: "default", dispensadoEm: null, agora, temChave: true, ...x });
+igual("aviso ativar", ta({}), "ativar");
+igual("sem VAPID esconde", ta({ temChave: false }), null);
+igual("buscando chave esconde", ta({ temChave: null }), null);
+igual("ios sem pwa → instalar", ta({ suporte: { ok: false, motivo: "ios_sem_pwa" }, permissao: "indisponivel" }), "instalar");
+igual("instalar dispensado", ta({ suporte: { ok: false, motivo: "ios_sem_pwa" }, dispensadoEm: String(agora) }), null);
+igual("instalar admin", ta({ role: "admin", suporte: { ok: false, motivo: "ios_sem_pwa" } }), null);
+igual("sem api", ta({ suporte: { ok: false, motivo: "sem_api" } }), null);
+igual("granted", ta({ permissao: "granted" }), null);
+igual("dispensa por usuário", chaveDispensa("u1"), "bion:push-aviso-dispensado:u1");
+igual("dispensa sem usuário", chaveDispensa(), "bion:push-aviso-dispensado");
+// item 4: mesmaChave
+const k = "BAAQ_w";
+igual("mesma chave", mesmaChave(base64UrlParaBytes(k), k), true);
+igual("mesma chave (ArrayBuffer)", mesmaChave(base64UrlParaBytes(k).buffer, k), true);
+igual("chave trocou", mesmaChave(base64UrlParaBytes("BAAQ_g"), k), false);
+igual("tamanho difere", mesmaChave(new Uint8Array([4, 0]), k), false);
+igual("navegador não informa", mesmaChave(null, k), true);
 console.log(`${ok} ok, ${falhas} falhas`);
 if (falhas) process.exit(1);

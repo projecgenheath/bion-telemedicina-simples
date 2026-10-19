@@ -2,7 +2,9 @@
 export type Plataforma = "ios_pwa" | "android" | "desktop";
 export type Suporte = { ok: true; plataforma: Plataforma } | { ok: false; motivo: "sem_api" | "ios_sem_pwa" | "inseguro" };
 
-export const DISPENSA_CHAVE = "bion:push-aviso-dispensado";
+export const DISPENSA_PREFIXO = "bion:push-aviso-dispensado";
+/** Dispensa por usuário (aparelho compartilhado: um dispensar não esconde o aviso do outro). */
+export const chaveDispensa = (usuarioId?: string) => (usuarioId ? `${DISPENSA_PREFIXO}:${usuarioId}` : DISPENSA_PREFIXO);
 export const DISPENSA_MS = 7 * 24 * 60 * 60 * 1000;
 
 export type Ambiente = {
@@ -97,4 +99,33 @@ export function precisaSincronizar(registro: RegistroSync | null, endpoint: stri
 /** Chaves do localStorage a apagar no logout (todas as de sync). */
 export function chavesSyncParaLimpar(chaves: string[]): string[] {
   return chaves.filter((k) => k.startsWith(SYNC_PREFIXO));
+}
+
+export type TipoAviso = "ativar" | "instalar" | null;
+/**
+ * Qual aviso mostrar. `temChave`: null = ainda buscando (não mostra nada);
+ * false = servidor sem VAPID (ativo:false) → nenhum aviso.
+ * iOS fora da PWA → "instalar" (orientação, sem pedir permissão).
+ */
+export function tipoAviso(o: {
+  role: string | null | undefined;
+  suporte: Suporte;
+  permissao: NotificationPermission | "indisponivel";
+  dispensadoEm: string | null;
+  agora: number;
+  temChave: boolean | null;
+}): TipoAviso {
+  if (o.temChave !== true || !papelComAviso(o.role) || dispensaRecente(o.dispensadoEm, o.agora)) return null;
+  if (!o.suporte.ok) return o.suporte.motivo === "ios_sem_pwa" ? "instalar" : null;
+  return o.permissao === "default" ? "ativar" : null;
+}
+
+/** A inscrição atual foi feita com a mesma chave VAPID? null (navegador não informa) = assume que sim. */
+export function mesmaChave(atual: ArrayBuffer | Uint8Array | null | undefined, chaveB64: string): boolean {
+  if (!atual) return true;
+  const a = atual instanceof Uint8Array ? atual : new Uint8Array(atual);
+  const b = base64UrlParaBytes(chaveB64);
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
 }

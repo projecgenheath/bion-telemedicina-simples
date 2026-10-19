@@ -4,6 +4,7 @@ import {
   chaveSync,
   chavesSyncParaLimpar,
   lerRegistroSync,
+  mesmaChave,
   precisaSincronizar,
   corpoInscricao,
   detectarSuporte,
@@ -39,7 +40,8 @@ export async function registrarSW(): Promise<ServiceWorkerRegistration | null> {
   }
 }
 
-async function chavePublica(): Promise<string | null> {
+/** NEXT_PUBLIC_ ou GET /api/push/inscricao. Buscar AO MONTAR (o Safari perde o gesto se buscar no clique). */
+export async function chavePublica(): Promise<string | null> {
   const env = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
   if (env && env.trim()) return escolherChave(env, null);
   try {
@@ -53,19 +55,20 @@ async function chavePublica(): Promise<string | null> {
 export type ResultadoAtivar = "ativado" | "negado" | "sem_suporte" | "sem_chave" | "erro";
 
 /** Só chamar a partir de um clique (pede permissão). */
-export async function ativarPush(usuarioId?: string): Promise<ResultadoAtivar> {
+export async function ativarPush(usuarioId: string | undefined, chavePub: string): Promise<ResultadoAtivar> {
   const sup = suportePush();
   if (!sup.ok) return "sem_suporte";
+  // requestPermission é a 1ª coisa assíncrona do clique (a chave já veio no mount).
   const perm = await Notification.requestPermission();
   if (perm !== "granted") return "negado";
-  return inscrever(sup.plataforma, usuarioId, true);
+  return inscrever(sup.plataforma, usuarioId, true, chavePub);
 }
 
 /** Renova/reenvia a inscrição quando a permissão já foi dada (sem pedir nada). */
 export async function sincronizarPush(usuarioId?: string): Promise<ResultadoAtivar | null> {
   const sup = suportePush();
   if (!sup.ok || permissaoAtual() !== "granted") return null;
-  return inscrever(sup.plataforma, usuarioId, false);
+  return inscrever(sup.plataforma, usuarioId, false, null);
 }
 
 function lerLS(k: string): string | null {
@@ -80,15 +83,21 @@ async function inscrever(
   plataforma: Parameters<typeof corpoInscricao>[1],
   usuarioId: string | undefined,
   forcar: boolean,
+  chaveConhecida: string | null,
 ): Promise<ResultadoAtivar> {
   const reg = await registrarSW();
   if (!reg) return "erro";
-  const chavePub = await chavePublica();
+  const chavePub = chaveConhecida ?? (await chavePublica());
   if (!chavePub) return "sem_chave";
   try {
-    const sub =
-      (await reg.pushManager.getSubscription()) ??
-      (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: base64UrlParaBytes(chavePub) }));
+    let sub = await reg.pushManager.getSubscription();
+    if (sub && !mesmaChave(sub.options?.applicationServerKey, chavePub)) {
+      // Chave VAPID trocou: a inscrição antiga não recebe mais; refaz e força o POST.
+      await sub.unsubscribe().catch(() => false);
+      sub = null;
+      forcar = true;
+    }
+    sub ??= await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: base64UrlParaBytes(chavePub) });
     const corpo = corpoInscricao(sub.toJSON() as { endpoint?: string; keys?: Record<string, string> }, plataforma);
     if (!corpo) return "erro";
     const chave = usuarioId ? chaveSync(usuarioId) : null;

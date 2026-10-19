@@ -2,6 +2,17 @@
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (e) => e.waitUntil(self.clients.claim()));
 
+/** Só URLs da própria origem (bloqueia "//externo", "https://…" e afins). */
+function urlSegura(u) {
+  if (typeof u !== "string" || !u) return "/paciente";
+  try {
+    const x = new URL(u, self.location.origin);
+    return x.origin === self.location.origin ? x.pathname + x.search + x.hash : "/paciente";
+  } catch {
+    return "/paciente";
+  }
+}
+
 self.addEventListener("push", (event) => {
   let p = {};
   try {
@@ -9,10 +20,13 @@ self.addEventListener("push", (event) => {
   } catch {
     p = {};
   }
+  if (!p || typeof p !== "object") p = {};
+  // Defensivo: hoje só existe "chamada_tocando"; tipo desconhecido ainda mostra (exigência do Chrome), com o texto padrão.
+  if (p.tipo !== undefined && p.tipo !== "chamada_tocando") p = { url: "/paciente" };
   const titulo = typeof p.titulo === "string" && p.titulo ? p.titulo : "Sua consulta vai começar";
   const consultaId = typeof p.consultaId === "string" ? p.consultaId : "";
   const tentativa = Number.isFinite(p.tentativa) ? p.tentativa : 0;
-  const url = typeof p.url === "string" && p.url.startsWith("/") ? p.url : "/paciente";
+  const url = urlSegura(p.url);
   const expira = Date.parse(p.expiraEm);
   const vencido = Number.isFinite(expira) && Date.now() > expira;
   // O Chrome exige notificação visível em todo push: mostra sempre; vencido não re-alerta.
@@ -51,14 +65,18 @@ function fecharNoExpira(tag, tentativa, expira) {
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const alvo = new URL((event.notification.data && event.notification.data.url) || "/paciente", self.location.origin);
+  const alvo = new URL(urlSegura(event.notification.data && event.notification.data.url), self.location.origin);
   event.waitUntil(
     (async () => {
       const abas = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
       for (const aba of abas) {
         if (new URL(aba.url).origin !== alvo.origin) continue;
-        await aba.focus();
-        if ("navigate" in aba && aba.url !== alvo.href) await aba.navigate(alvo.href).catch(() => undefined);
+        if (aba.url !== alvo.href) {
+          // navigate() falha em aba não controlada pelo SW: aí abre uma nova.
+          const ok = "navigate" in aba ? await aba.navigate(alvo.href).then((c) => c !== null, () => false) : false;
+          if (!ok) break;
+        }
+        await aba.focus().catch(() => undefined);
         return;
       }
       await self.clients.openWindow(alvo.href);
