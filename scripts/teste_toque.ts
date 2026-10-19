@@ -12,7 +12,10 @@ import { mock } from "bun:test";
 import crypto from "node:crypto";
 
 const url = process.env.DATABASE_URL ?? "";
-if (!/localhost|127\.0\.0\.1/.test(url)) throw new Error("Só roda contra um Postgres local.");
+// Host exato (não regex): "localhost.evil.com" ou "?host=127.0.0.1" não passam.
+let hostBanco = "";
+try { hostBanco = new URL(url).hostname; } catch { /* URL inválida */ }
+if (!["localhost", "127.0.0.1"].includes(hostBanco)) throw new Error("Só roda contra um Postgres local (localhost/127.0.0.1).");
 
 /* Sessão falsa para as rotas (a real depende de cookies do Next). */
 let sessaoAtual: { id: string; nome: string; email: string; role: "PACIENTE" | "MEDICO" | "ADMIN"; precisaTrocarSenha: boolean } | null = null;
@@ -134,6 +137,7 @@ verifica(
   pP,
 );
 verifica(!JSON.stringify(pushes).match(/Ana|Maria|Psiquiatria|Lima/), "push sem nome nem especialidade");
+verifica(pP?.payload.titulo === "Sua consulta vai começar" && pP?.payload.corpo === "", "push: tela de bloqueio só com o título (corpo vazio)", pP?.payload);
 verifica(pP && pP.opcoes.ttl > 0 && pP.opcoes.ttl <= 120 && pP.opcoes.urgencia === "high", "push: TTL = segundos até expirar (≤ 120) e urgência alta", pP?.opcoes);
 const l1 = await linhas("c1", "pac1");
 verifica(l1.length === 1 && l1[0].status === "tocando" && l1[0].pushEnviado && l1[0].canal === "ambos" && l1[0].papel === "paciente", "linha tocando, push marcado", l1);
@@ -298,6 +302,48 @@ const n = await webPush.enviarPushParaUsuario("pac1", { tipo: "chamada_tocando" 
   fetch: async (_u, init) => { capturado = init as never; return { status: 201 }; },
 });
 verifica(n === 1 && capturado!.headers.TTL === "90" && capturado!.body.length > 86, "enviarPushParaUsuario: 1 aparelho aceitou, TTL repassado");
+
+/* ---------------- ritmo 0/5/10 com a variação do pg_cron ---------------- */
+// Roda o job a cada minuto cheio (de -1 a 16 min) com o disparo deslocado
+// por `desvio(min)` segundos e confere em que minuto cada evento saiu.
+async function simular(nome: string, desvio: (min: number) => number | null, esperado = { tocou: "0,5,10", expirou: "2,7,12*" }) {
+  await limpar();
+  await db.user.createMany({
+    data: [
+      { id: "sp", nome: "Pedro", email: "sp@t", senhaHash: "x", role: "PACIENTE" },
+      { id: "sm", nome: "Dra. Sara", email: "sm@t", senhaHash: "x", role: "MEDICO" },
+    ],
+  });
+  await db.consulta.create({ data: { id: "cs", pacienteId: "sp", medicoId: "sm", especialidade: "Clínica", dataInicio: T0, status: "confirmada", valor: 150 } });
+  const tocou: number[] = [];
+  const expirou: string[] = [];
+  for (let m = -1; m <= 16; m++) {
+    zerar();
+    const d = desvio(m);
+    if (d === null) continue; // job fora do ar neste minuto
+    await rodar(new Date(em(m).getTime() + d * 1000));
+    for (const e of eventos) {
+      if (e.usuarioId !== "sp") continue;
+      if (e.evento === "chamada_tocando") tocou.push(m);
+      if (e.evento === "chamada_expirada") expirou.push(`${m}${e.payload.ultima ? "*" : ""}`);
+    }
+  }
+  verifica(tocou.join() === esperado.tocou && expirou.join() === esperado.expirou, `ritmo com cron ${nome}: toca ${esperado.tocou}, expira ${esperado.expirou} (* = ultima)`, { tocou, expirou });
+}
+let semente = 42;
+const aleatorio = () => ((semente = (semente * 1103515245 + 12345) % 2 ** 31) / 2 ** 31) * 2 - 1; // [-1, 1)
+await simular("pontual", () => 0);
+await simular("0,3 s adiantado", () => -0.3);
+await simular("0,3 s atrasado", () => 0.3);
+await simular("±0,3 s alternado", (m) => (m % 2 ? 0.3 : -0.3));
+await simular("3 s adiantado", () => -3);
+await simular("3 s atrasado", () => 3);
+await simular("±3 s alternado", (m) => (m % 2 ? 3 : -3));
+await simular("∓3 s alternado", (m) => (m % 2 ? -3 : 3));
+await simular("±3 s aleatório", () => 3 * aleatorio());
+// Job fora do ar no horário (volta aos 2,5 min): toca quando volta, sem ancorar
+// no horário nominal, e mantém 5 min entre toques; a 3ª ainda cabe na janela de 15 min.
+await simular("fora do ar até 2 min (volta 30 s atrasado)", (m) => (m <= 1 ? null : 30), { tocou: "2,7,12", expirou: "4,9,14*" });
 
 await limpar();
 await db.$disconnect();

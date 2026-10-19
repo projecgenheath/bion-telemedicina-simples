@@ -17,20 +17,33 @@
 -- Sem os segredos, o job roda mas o http_post falha (URL nula) — nada quebra
 -- no app; só não toca.
 --
+-- Tempo: o job para sozinho em 7 s (ORCAMENTO_MS em toque.ts), abaixo deste
+-- timeout de 10 s e do maxDuration de 10 s da rota (plano Hobby).
+--
 -- Idempotente: as extensões usam IF NOT EXISTS e o job é desagendado se já
 -- existir antes de agendar de novo.
--- Para desligar: select cron.unschedule('bion-toque');
+-- Também agenda `bion-limpa-cron` (domingo 03:00 UTC = 00:00 em SP): apaga o
+-- histórico do pg_cron (cron.job_run_details) com mais de 7 dias — o job por
+-- minuto grava ~10 mil linhas por semana.
+-- Para desligar: select cron.unschedule('bion-toque'); select cron.unschedule('bion-limpa-cron');
 -- Log das execuções: select * from cron.job_run_details order by start_time desc limit 20;
 --                    select * from net._http_response order by created desc limit 20;
 -- =====================================================================
 
-create extension if not exists pg_cron;
-create extension if not exists pg_net;
+-- Schemas como na documentação do Supabase (pg_cron em pg_catalog; pg_net em
+-- extensions — as funções ficam no schema net de qualquer forma).
+create extension if not exists pg_cron with schema pg_catalog;
+grant usage on schema cron to postgres;
+grant all privileges on all tables in schema cron to postgres;
+create extension if not exists pg_net with schema extensions;
 
 do $$
 begin
   if exists (select 1 from cron.job where jobname = 'bion-toque') then
     perform cron.unschedule('bion-toque');
+  end if;
+  if exists (select 1 from cron.job where jobname = 'bion-limpa-cron') then
+    perform cron.unschedule('bion-limpa-cron');
   end if;
 end
 $$;
@@ -46,7 +59,13 @@ select cron.schedule(
       'Content-Type', 'application/json'
     ),
     body := '{}'::jsonb,
-    timeout_milliseconds := 8000
+    timeout_milliseconds := 10000
   )
   $job$
+);
+
+select cron.schedule(
+  'bion-limpa-cron',
+  '0 3 * * 0',
+  $limpa$ delete from cron.job_run_details where end_time < now() - interval '7 days' $limpa$
 );

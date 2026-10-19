@@ -3,7 +3,8 @@ import { ok, falha } from "@/lib/server/http";
 import { autorizadoCron, rodarToque } from "@/lib/server/toque";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+// Plano Hobby; o job para em ORCAMENTO_MS (7 s) e o pg_net espera até 10 s.
+export const maxDuration = 10;
 
 /**
  * Job do toque da consulta, a cada minuto: pg_cron + pg_net no Supabase

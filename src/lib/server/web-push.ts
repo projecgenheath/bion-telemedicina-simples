@@ -168,7 +168,9 @@ export async function enviarPush(
   let status = 0;
   try {
     const { url, init } = montarRequisicaoPush(inscricao, payload, opcoes, cfg);
-    const f: Fetch = dep.fetch ?? ((u, i) => fetch(u, { ...i, signal: AbortSignal.timeout(TEMPO_LIMITE_MS), cache: "no-store" }));
+    // redirect: "error" — o serviço de push nunca redireciona; seguir um 3xx
+    // levaria o POST (com o JWT VAPID) para um host fora da lista.
+    const f: Fetch = dep.fetch ?? ((u, i) => fetch(u, { ...i, signal: AbortSignal.timeout(TEMPO_LIMITE_MS), cache: "no-store", redirect: "error" }));
     status = (await f(url, init)).status;
   } catch (e) {
     console.error("[Push] falha no envio", { erro: e instanceof Error ? e.name : "erro" });

@@ -27,7 +27,7 @@ import { consultaSemDesfecho } from "@/lib/server/repasse";
 /*     (#53) + Web Push com texto genérico (decisão do Alisson: sem nome  */
 /*     nem especialidade na tela bloqueada).                              */
 /* `chamada_atendida`/`chamada_recusada` são da rota do Pacientes          */
-/* (POST /api/telemedicina/[id]/chamada), não daqui.                      */
+/* (POST /api/telemedicina/[consultaId]/chamada), não daqui.               */
 /* A FALTA continua definida pela presença na sala, não pelo toque.       */
 /* Idempotente (trava única + UPDATE condicionado), tempo limitado e log  */
 /* só com contagens.                                                      */
@@ -39,10 +39,37 @@ export const TOQUE_PAUSA_MS = TOQUE_INTERVALO_MS - TOQUE_DURACAO_MS; // 3 min de
 export const TOQUE_MAX_TENTATIVAS = 3;
 export const TOQUE_JANELA_MS = ESPERA_FALTA_MIN * 60_000;
 export const TITULO_PUSH = "Sua consulta vai começar";
-export const CORPO_PUSH = "Toque para entrar na sala.";
+/** Corpo vazio: a tela de bloqueio mostra só o título (decisão do Alisson). */
+export const CORPO_PUSH = "";
 const MAX_CONSULTAS = 200;
 const MAX_EXPIRAR = 500;
-const ORCAMENTO_MS = 20_000;
+/**
+ * Orçamento de uma rodada: menor que o timeout do pg_net (10 s, migração
+ * 20261019a) e que o maxDuration da rota (10 s, plano Hobby). O que sobrar
+ * fica para o minuto seguinte (`incompleto: true`).
+ */
+export const ORCAMENTO_MS = 7_000;
+/**
+ * Folga nas comparações de tempo: o pg_cron dispara alguns décimos (ou
+ * segundos) antes ou depois do minuto cheio. Sem folga, um disparo 0,3 s
+ * adiantado empurra a expiração para o minuto seguinte e o ritmo vira 0/6/12.
+ */
+export const TOQUE_FOLGA_MS = 5_000;
+
+/** Horário "nominal" da tentativa n: horário da consulta + (n-1) × 5 min (0/5/10). */
+export const horarioTentativa = (dataInicio: Date, tentativa: number) =>
+  dataInicio.getTime() + (tentativa - 1) * TOQUE_INTERVALO_MS;
+
+/**
+ * expiraEm da tentativa: ancorado no horário nominal quando o cron disparou
+ * perto dele (±folga), para a variação de um minuto não somar no seguinte;
+ * se o job atrasou mais que isso (ficou fora do ar), conta a partir de agora.
+ */
+export function expiraEmTentativa(agora: Date, dataInicio: Date, tentativa: number): Date {
+  const nominal = horarioTentativa(dataInicio, tentativa);
+  const base = Math.abs(agora.getTime() - nominal) <= TOQUE_FOLGA_MS ? nominal : agora.getTime();
+  return new Date(base + TOQUE_DURACAO_MS);
+}
 
 export type Papel = "paciente" | "medico";
 export type EventoToque = "chamada_tocando" | "chamada_expirada";
@@ -82,16 +109,16 @@ export function proximaTentativa(p: {
 }): number | null {
   const agora = p.agora.getTime();
   const inicio = p.dataInicio.getTime();
-  if (agora < inicio || agora > inicio + TOQUE_JANELA_MS) return null;
+  if (agora < inicio - TOQUE_FOLGA_MS || agora > inicio + TOQUE_JANELA_MS + TOQUE_FOLGA_MS) return null;
   if (p.entrouNaSala) return null;
   // Atendeu ou recusou QUALQUER tentativa desta consulta (gravado pela rota do
-  // Pacientes, POST /api/telemedicina/[id]/chamada): não toca mais para ele.
+  // Pacientes, POST /api/telemedicina/[consultaId]/chamada): não toca mais para ele.
   if (p.chamadas.some((c) => c.status === "atendida" || c.status === "recusada")) return null;
   if (p.chamadas.length === 0) return 1;
   const ultima = p.chamadas.reduce((a, b) => (b.tentativa > a.tentativa ? b : a));
   if (ultima.tentativa >= TOQUE_MAX_TENTATIVAS) return null;
   if (ultima.status !== "expirada") return null; // ainda tocando
-  if (agora - ultima.expiraEm.getTime() < TOQUE_PAUSA_MS) return null;
+  if (agora - ultima.expiraEm.getTime() < TOQUE_PAUSA_MS - TOQUE_FOLGA_MS) return null;
   return ultima.tentativa + 1;
 }
 
@@ -117,7 +144,8 @@ export async function rodarToque(agora: Date = new Date(), dep: DependenciasToqu
   /* 1. Expira o que passou do tempo. O UPDATE condicionado a status=tocando
         garante um único evento mesmo com duas execuções ao mesmo tempo. */
   const vencidas = await db.chamadaConsulta.findMany({
-    where: { status: "tocando", expiraEm: { lte: agora } },
+    // Folga: um disparo do cron um pouco adiantado já expira o toque deste minuto.
+    where: { status: "tocando", expiraEm: { lte: new Date(agora.getTime() + TOQUE_FOLGA_MS) } },
     select: { id: true, consultaId: true, paraUsuarioId: true, tentativa: true, expiraEm: true },
     orderBy: { expiraEm: "asc" },
     take: MAX_EXPIRAR,
@@ -139,7 +167,10 @@ export async function rodarToque(agora: Date = new Date(), dep: DependenciasToqu
   const consultas = await db.consulta.findMany({
     where: {
       status: { in: STATUS_AVALIAVEIS },
-      dataInicio: { lte: agora, gte: new Date(agora.getTime() - TOQUE_JANELA_MS) },
+      dataInicio: {
+        lte: new Date(agora.getTime() + TOQUE_FOLGA_MS),
+        gte: new Date(agora.getTime() - TOQUE_JANELA_MS - TOQUE_FOLGA_MS),
+      },
     },
     select: {
       id: true,
@@ -175,7 +206,7 @@ export async function rodarToque(agora: Date = new Date(), dep: DependenciasToqu
         chamadas: c.chamadas.filter((x) => x.paraUsuarioId === p.usuarioId),
       });
       if (tentativa === null) continue;
-      const expiraEm = new Date(agora.getTime() + TOQUE_DURACAO_MS);
+      const expiraEm = expiraEmTentativa(agora, c.dataInicio, tentativa);
       // ON CONFLICT DO NOTHING na trava (consultaId, paraUsuarioId, tentativa): só quem inseriu envia.
       const ins = await db.chamadaConsulta.createMany({
         data: [{ consultaId: c.id, paraUsuarioId: p.usuarioId, papel: p.papel, tentativa, tocouEm: agora, expiraEm }],
