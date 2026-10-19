@@ -207,6 +207,12 @@ export class ChamadaTeleconsulta {
   /** Câmera pedida nas recapturas (muda pelo botão "Virar"; a captura inicial é sempre a frontal). */
   private camera: CameraEscolhida = { facingMode: "user" };
   private trocandoCamera = false;
+  /**
+   * Recaptura em andamento por tipo: um segundo pedido (visibilitychange no
+   * meio do "Virar", "ended" repetido) reaproveita a mesma promessa em vez de
+   * abrir um segundo getUserMedia (duas câmeras, uma órfã com a luz acesa).
+   */
+  private readonly recapturas: { audio: Promise<void> | null; video: Promise<void> | null } = { audio: null, video: null };
   private encerrada = false;
   private anunciado = false;
   private ultimoEntrei = 0;
@@ -382,8 +388,30 @@ export class ChamadaTeleconsulta {
     }
   }
 
-  /** Câmera/microfone caíram (desconectados, iOS em segundo plano): captura de novo e troca no envio. */
-  private async recapturar(tipo: "audio" | "video", motivo: string): Promise<void> {
+  /** Sala ainda de pé: não encerrada, sem 404, não saiu, componente montado. */
+  private salaAtiva(): boolean {
+    return this.vivo && !this.encerrada && !this.estado.naoEncontrada;
+  }
+
+  /**
+   * Câmera/microfone caíram (desconectados, iOS em segundo plano): captura de novo e troca no envio.
+   * Trava por tipo: enquanto uma recaptura de vídeo (ou de áudio) não termina, outro
+   * pedido do mesmo tipo recebe a mesma promessa e não abre outro getUserMedia.
+   */
+  private recapturar(tipo: "audio" | "video", motivo: string): Promise<void> {
+    const emAndamento = this.recapturas[tipo];
+    if (emAndamento) {
+      log("recaptura já em andamento; reaproveitando", { tipo, motivo });
+      return emAndamento;
+    }
+    const promessa = this.recapturarAgora(tipo, motivo).finally(() => {
+      if (this.recapturas[tipo] === promessa) this.recapturas[tipo] = null;
+    });
+    this.recapturas[tipo] = promessa;
+    return promessa;
+  }
+
+  private async recapturarAgora(tipo: "audio" | "video", motivo: string): Promise<void> {
     if (!this.vivo || this.encerrada) return;
     const local = this.streamLocal.current;
     if (!local) return;
@@ -400,7 +428,15 @@ export class ChamadaTeleconsulta {
       const track = novo.getTracks()[0];
       // A sala parou durante o pedido (fim, 404 → pararTracks já rodou, desmontagem):
       // a câmera nova não entra no stream e é solta na hora (luz da câmera apaga).
-      if (!track || !this.vivo || this.encerrada || this.estado.naoEncontrada || this.streamLocal.current !== local) {
+      if (!track || !this.salaAtiva() || this.streamLocal.current !== local) {
+        pararTracks(novo);
+        return;
+      }
+      // Segurança: se outra captura já pôs uma track deste tipo ao vivo no stream,
+      // a nova sobraria órfã (câmera acesa sem uso). Solta a nova e fica com a que já está lá.
+      const doTipo = tipo === "audio" ? local.getAudioTracks() : local.getVideoTracks();
+      if (doTipo.some((t) => t !== track && t.readyState === "live")) {
+        aviso("já há track ao vivo no stream; soltando a recapturada", { tipo, motivo });
         pararTracks(novo);
         return;
       }
@@ -1269,11 +1305,18 @@ export class ChamadaTeleconsulta {
   async trocarCamera(): Promise<boolean> {
     if (!this.vivo || this.encerrada || this.trocandoCamera) return false;
     const local = this.streamLocal.current;
-    const atual = local?.getVideoTracks()[0];
-    if (!local || !atual) return false;
+    if (!local || !local.getVideoTracks()[0]) return false;
     this.trocandoCamera = true;
     const anterior = this.camera;
     try {
+      // Uma recaptura de vídeo já em curso (volta da aba) termina antes: a troca
+      // parte da câmera que ela abrir, sem duas câmeras abertas ao mesmo tempo.
+      if (this.recapturas.video) {
+        await this.recapturas.video;
+        if (!this.salaAtiva()) return false;
+      }
+      const atual = local.getVideoTracks()[0];
+      if (!atual) return false;
       const idEmUso = typeof atual.getSettings === "function" ? atual.getSettings().deviceId : undefined;
       this.camera = proximaCamera(anterior, this.celular, await this.listarCameras(), idEmUso);
       // Muitos celulares não abrem as duas câmeras juntas: solta a atual antes.

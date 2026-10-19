@@ -211,5 +211,78 @@ for (const [nome, parar] of [
   igual("sair depois da troca: traseira parada", t.entregues.map((v) => v.readyState), ["ended"]);
 }
 
+// ── Virar + visibilitychange ao mesmo tempo: nenhuma câmera órfã ────────
+const recapturar = (c: ChamadaTeleconsulta, tipo: "audio" | "video", motivo: string) =>
+  (c as unknown as { recapturar(t: string, m: string): Promise<void> }).recapturar(tipo, motivo);
+/** O que o aoVisibilidade faz com a mídia ao voltar para a aba. */
+const voltarParaAba = (c: ChamadaTeleconsulta) => Promise.all([recapturar(c, "video", "visibilitychange"), recapturar(c, "audio", "visibilitychange")]);
+/** Câmeras abertas ao vivo que não são a enviada ao médico (a última do replaceTrack). */
+const orfas = (entregues: TrackFalsa[], trocas: TrackFalsa[]) =>
+  entregues.filter((v) => v.readyState === "live" && v !== trocas[trocas.length - 1]).length;
+{
+  // Virar pediu a traseira (getUserMedia demorando) e a aba volta no meio.
+  let soltar = () => {};
+  const segurar = new Promise<void>((r) => (soltar = r));
+  const t = montar({ celular: true, cameras: ["f", "t"], segurar });
+  const troca = t.chamada.trocarCamera();
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+  const volta = voltarParaAba(t.chamada);
+  const volta2 = voltarParaAba(t.chamada);
+  soltar();
+  igual("virar+visível: trocou", await troca, true);
+  await Promise.all([volta, volta2]);
+  igual("virar+visível: um único getUserMedia", t.pedidos.length, 1);
+  igual("virar+visível: nenhuma track órfã ao vivo", orfas(t.entregues, t.trocas), 0);
+  igual("virar+visível: 1 vídeo ao vivo, a traseira", videoDe(t.local.current).filter((v) => v.readyState === "live").map((v) => v.facingMode), ["environment"]);
+  igual("virar+visível: microfone intacto", t.mic.readyState, "live");
+  igual("virar+visível: um replaceTrack", t.trocas.length, 1);
+}
+{
+  // A aba volta (câmera caiu em segundo plano) e o paciente toca Virar antes de a recaptura terminar.
+  let soltar = () => {};
+  const segurar = new Promise<void>((r) => (soltar = r));
+  const t = montar({ celular: true, cameras: ["f", "t"], segurar });
+  t.camInicial.readyState = "ended";
+  const volta = voltarParaAba(t.chamada);
+  await Promise.resolve();
+  const troca = t.chamada.trocarCamera();
+  igual("visível+virar: Virar espera a recaptura (sem 2º pedido)", t.pedidos.length, 1);
+  soltar();
+  await volta;
+  igual("visível+virar: trocou", await troca, true);
+  igual("visível+virar: frontal e depois traseira, em sequência", t.pedidos.map((p) => (p.video as MediaTrackConstraints).facingMode), ["user", "environment"]);
+  igual("visível+virar: nenhuma track órfã ao vivo", orfas(t.entregues, t.trocas), 0);
+  igual("visível+virar: só a traseira ao vivo", t.entregues.map((v) => [v.facingMode, v.readyState]), [["user", "ended"], ["environment", "live"]]);
+  igual("visível+virar: estado traseira", t.estado().cameraTraseira, true);
+}
+{
+  // Segurança: outra captura já pôs uma câmera ao vivo no stream enquanto a recaptura esperava.
+  let soltar = () => {};
+  const segurar = new Promise<void>((r) => (soltar = r));
+  const t = montar({ celular: true, cameras: ["f", "t"], segurar });
+  t.camInicial.readyState = "ended";
+  const rec = recapturar(t.chamada, "video", "ended");
+  await Promise.resolve();
+  const jaViva = new TrackFalsa("video", "f", "user");
+  t.local.current.addTrack(jaViva as unknown as MediaStreamTrack);
+  soltar();
+  await rec;
+  igual("já ao vivo: recapturada parada", t.entregues.map((v) => v.readyState), ["ended"]);
+  igual("já ao vivo: segue a que já estava", videoDe(t.local.current).filter((v) => v.readyState === "live"), [jaViva]);
+  igual("já ao vivo: sem replaceTrack", t.trocas.length, 0);
+}
+{
+  // A trava solta no fim: uma queda posterior recaptura de novo.
+  const t = montar({ celular: true, cameras: ["f", "t"] });
+  t.camInicial.readyState = "ended";
+  await recapturar(t.chamada, "video", "ended");
+  videoDe(t.local.current)[0].readyState = "ended";
+  await recapturar(t.chamada, "video", "ended");
+  igual("trava solta: duas quedas, dois pedidos", t.pedidos.length, 2);
+  igual("trava solta: 1 vídeo ao vivo", videoDe(t.local.current).filter((v) => v.readyState === "live").length, 1);
+}
+
 console.log(`teleconsulta-troca-camera: ${ok} ok, ${falhas} falha(s)`);
 if (falhas > 0) process.exit(1);
