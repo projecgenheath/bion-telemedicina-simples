@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Phone, PhoneOff, Video, VolumeX } from "lucide-react";
 import { useBion } from "@/lib/bion-store";
 import { useChamadaRecebida } from "@/lib/use-chamada-recebida";
+import { marcarAtendidaNaSala, sincronizarUsuarioAtendidasNaSala } from "@/lib/chamada-atendidas-na-sala";
 import {
   chaveChamada,
   decidirAposAtender,
@@ -38,12 +39,18 @@ export function ChamadaRecebida() {
   const { sessao, autenticado, consultas } = useBion();
   const ativo = autenticado && (sessao.role === "paciente" || sessao.role === "medico");
   const { chamada, fechar, encerrar, fecharTentativa } = useChamadaRecebida(ativo, consultas);
+  const usuarioId = autenticado ? (sessao.id ?? null) : null;
+  // Logout ou troca de conta: esquece as tentativas atendidas em segundo plano.
+  useEffect(() => {
+    sincronizarUsuarioAtendidasNaSala(usuarioId);
+  }, [usuarioId]);
   if (!chamada) return null;
   // useSearchParams pede Suspense no layout (senão o build estático reclama).
   return (
     <Suspense fallback={null}>
       <ChamadaNoLugar
         chamada={chamada}
+        usuarioId={usuarioId}
         onFechar={fechar}
         onEncerrada={() => encerrar(chamada.consultaId)}
         onFecharTentativa={fecharTentativa}
@@ -54,11 +61,13 @@ export function ChamadaRecebida() {
 
 function ChamadaNoLugar({
   chamada,
+  usuarioId,
   onFechar,
   onEncerrada,
   onFecharTentativa,
 }: {
   chamada: ChamadaTocando;
+  usuarioId: string | null;
   onFechar: () => void;
   onEncerrada: () => void;
   onFecharTentativa: (consultaId: string, tentativa: number) => void;
@@ -72,13 +81,12 @@ function ChamadaNoLugar({
   useEffect(() => {
     const alvo = tentativaParaAtenderNaSala(chamada, modo, Date.now());
     if (!alvo) return;
-    const chave = chaveChamada(alvo.consultaId, alvo.tentativa);
-    if (!ATENDIDAS_NA_SALA.has(chave)) {
-      ATENDIDAS_NA_SALA.add(chave);
+    // Um POST por usuário+consulta+tentativa (guarda também contra o efeito duplo do StrictMode).
+    if (marcarAtendidaNaSala(usuarioId, alvo.consultaId, alvo.tentativa)) {
       void responder(alvo.consultaId, "atender", alvo.tentativa).catch(() => undefined);
     }
     onFecharTentativa(alvo.consultaId, alvo.tentativa);
-  }, [chamada, modo, onFecharTentativa]);
+  }, [chamada, modo, usuarioId, onFecharTentativa]);
 
   if (modo === "nada") return null;
   return (
@@ -93,9 +101,6 @@ function ChamadaNoLugar({
 }
 
 export default ChamadaRecebida;
-
-/** Tentativas já atendidas em segundo plano (guarda extra contra efeito duplo do StrictMode). */
-const ATENDIDAS_NA_SALA = new Set<string>();
 
 type Fase = "tocando" | "atendendo" | "recusando" | "bloqueado";
 type Resposta = { status: number; corpo?: unknown } | null;
