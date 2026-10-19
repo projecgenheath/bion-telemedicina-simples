@@ -52,6 +52,8 @@ model User {
   repasseAjustes       RepasseAjuste[] @relation("RepasseAjusteMedico")
   dadosRecebimento     DadosRecebimentoMedico?
   bloqueiosAgenda      BloqueioAgenda[] @relation("BloqueioMedico")
+  chamadasRecebidas    ChamadaConsulta[] @relation("ChamadaPara") // Admin: toque da consulta
+  pushInscricoes       PushInscricao[]   // Admin: toque da consulta
   // Teleconsulta v2 — Pacientes
   medicamentosEmUso          MedicamentoEmUso[] @relation("MedicamentoEmUsoPaciente")
   medicamentosPrescritos     MedicamentoEmUso[] @relation("MedicamentoEmUsoMedico")
@@ -189,6 +191,7 @@ model Consulta {
   repasseItens RepasseItem[]
   repasseAjustes RepasseAjuste[]
   remarcacoes RemarcacaoPendente[]
+  chamadas    ChamadaConsulta[] // Admin: toque da consulta
 
   @@unique([id, medicoId]) // alvo das FKs (consultaId, medicoId) do repasse
 }
@@ -694,6 +697,51 @@ model BloqueioAgenda {
 
   @@unique([medicoId, dia])
   @@index([dia])
+}
+
+// Admin: toque da consulta (PR 1 do plano teleconsulta-v2 — só schema).
+// Relações com ON DELETE CASCADE, iguais às FKs da migração
+// supabase/migrations/20261018a_chamada_push.sql (assim um `prisma db push`
+// não apaga as FKs).
+
+// Registro de cada toque: uma linha por consulta, usuário e tentativa.
+model ChamadaConsulta {
+  id            String    @id @default(cuid())
+  consultaId    String
+  tentativa     Int                   // 1..3
+  paraUsuarioId String                // quem recebeu o toque
+  papel         String                // paciente | medico
+  status        String    @default("tocando") // tocando | atendida | recusada | expirada
+  tocouEm       DateTime  @default(now())
+  expiraEm      DateTime              // tocouEm + 2 min
+  respondidaEm  DateTime?
+  canal         String    @default("realtime") // realtime | push | ambos
+  pushEnviado   Boolean   @default(false)
+
+  consulta      Consulta  @relation(fields: [consultaId], references: [id], onDelete: Cascade)
+  paraUsuario   User      @relation("ChamadaPara", fields: [paraUsuarioId], references: [id], onDelete: Cascade)
+
+  @@unique([consultaId, paraUsuarioId, tentativa]) // trava contra toque duplo
+  @@index([status, expiraEm])
+  @@index([paraUsuarioId])
+}
+
+// Inscrições de Web Push (uma por aparelho/navegador).
+model PushInscricao {
+  id          String    @id @default(cuid())
+  usuarioId   String
+  endpoint    String    @unique
+  p256dh      String
+  auth        String
+  plataforma  String?             // ios_pwa | android | desktop
+  userAgent   String?
+  criadaEm    DateTime  @default(now())
+  ultimoUsoEm DateTime?
+  falhas      Int       @default(0) // 404/410 do serviço de push → apagar
+
+  usuario     User      @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId])
 }
 
 // =====================================================================
