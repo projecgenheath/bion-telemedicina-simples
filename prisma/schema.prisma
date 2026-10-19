@@ -52,6 +52,11 @@ model User {
   repasseAjustes       RepasseAjuste[] @relation("RepasseAjusteMedico")
   dadosRecebimento     DadosRecebimentoMedico?
   bloqueiosAgenda      BloqueioAgenda[] @relation("BloqueioMedico")
+  // Teleconsulta v2 — Pacientes
+  medicamentosEmUso          MedicamentoEmUso[] @relation("MedicamentoEmUsoPaciente")
+  medicamentosPrescritos     MedicamentoEmUso[] @relation("MedicamentoEmUsoMedico")
+  pedidosMedicaoRecebidos    PedidoMedicao[]    @relation("PedidoMedicaoPaciente")
+  pedidosMedicaoFeitos       PedidoMedicao[]    @relation("PedidoMedicaoMedico")
 }
 
 model Sessao {
@@ -122,8 +127,15 @@ model Medicao {
   valor1    Float
   valor2    Float?
   criadoEm  DateTime @default(now())
+  // Teleconsulta v2 — Pacientes (migração 20261018c): de onde veio a medida.
+  // origem: paciente | pedido | medico. consultaId sem FK (Consulta é do Médicos).
+  origem     String         @default("paciente")
+  consultaId String?
+  pedidoId   String?
+  pedido     PedidoMedicao? @relation(fields: [pedidoId], references: [id], onDelete: SetNull)
 
   @@index([usuarioId, tipo, criadoEm])
+  @@index([pedidoId])
 }
 
 // Resultados de exames laboratoriais extraídos de laudos enviados à BION IA
@@ -386,6 +398,14 @@ model Lembrete {
   frequencia  String
   feito       Boolean @default(false)
   medicamento String?
+  // Teleconsulta v2 — Pacientes (migração 20261018c). origem: paciente | receita | medico.
+  // documentoId sem FK (Documento é do Médicos).
+  origem             String            @default("paciente")
+  medicamentoEmUsoId String?
+  medicamentoEmUso   MedicamentoEmUso? @relation(fields: [medicamentoEmUsoId], references: [id], onDelete: SetNull)
+  documentoId        String?
+
+  @@index([medicamentoEmUsoId])
 }
 
 model Consentimento {
@@ -673,4 +693,61 @@ model BloqueioAgenda {
 
   @@unique([medicoId, dia])
   @@index([dia])
+}
+
+// =====================================================================
+// Teleconsulta v2 — Pacientes
+// Migração: supabase/migrations/20261018c_medicamentos_pedido_medicao.sql
+// RLS ligado, sem policies e sem grants (só o servidor, via Prisma, lê e grava).
+// consultaId/documentoId são String simples SEM @relation de propósito: não
+// alteram Consulta nem Documento (donos: Médicos). Integridade no servidor.
+// =====================================================================
+
+// Medicamento em uso do paciente (estruturado). Substitui aos poucos o JSON
+// livre PerfilPaciente.medicamentos. Uma receita (Documento) pode gerar vários.
+// posologia: JSON { vezesAoDia, horarios: ["08:00", ...], dias, textoLivre? }
+// origem: paciente | receita | medico. controlado: não aparece "Renovar receita".
+model MedicamentoEmUso {
+  id           String    @id @default(cuid())
+  pacienteId   String
+  paciente     User      @relation("MedicamentoEmUsoPaciente", fields: [pacienteId], references: [id], onDelete: Cascade)
+  nome         String
+  dose         String?
+  via          String?
+  posologia    String    @default("{}")
+  usoContinuo  Boolean   @default(false)
+  controlado   Boolean   @default(false)
+  inicio       DateTime  @default(now())
+  fim          DateTime?
+  ativo        Boolean   @default(true)
+  origem       String    @default("paciente")
+  documentoId  String?
+  consultaId   String?
+  medicoId     String?
+  medico       User?     @relation("MedicamentoEmUsoMedico", fields: [medicoId], references: [id], onDelete: SetNull)
+  criadoEm     DateTime  @default(now())
+  atualizadoEm DateTime  @default(now()) @updatedAt
+  lembretes    Lembrete[]
+
+  @@index([pacienteId, ativo])
+  @@index([documentoId])
+}
+
+// Pedido do médico para o paciente informar medidas ("pedir levantamento").
+// tipos: JSON string[] com peso | altura | pressao. status: pendente | atendido | cancelado.
+model PedidoMedicao {
+  id         String    @id @default(cuid())
+  consultaId String?
+  pacienteId String
+  paciente   User      @relation("PedidoMedicaoPaciente", fields: [pacienteId], references: [id], onDelete: Cascade)
+  medicoId   String
+  medico     User      @relation("PedidoMedicaoMedico", fields: [medicoId], references: [id], onDelete: Cascade)
+  tipos      String    @default("[]")
+  status     String    @default("pendente")
+  criadoEm   DateTime  @default(now())
+  atendidoEm DateTime?
+  medicoes   Medicao[]
+
+  @@index([pacienteId, status])
+  @@index([consultaId])
 }
