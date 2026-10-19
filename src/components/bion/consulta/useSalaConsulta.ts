@@ -95,10 +95,14 @@ export function useSalaConsulta({
   // Chat na chamada (REAL — via sinalização WebRTC)
   const [chatInput, setChatInput] = useState("");
 
+  // Cronômetro da chamada. Para com o 404 (consulta não encontrada): a chamada
+  // (polling, ICE, PeerConnection e câmera) já foi desligada em teleconsulta-chamada.ts.
+  const naoEncontrada = tele.naoEncontrada;
   useEffect(() => {
+    if (naoEncontrada) return;
     const t = setInterval(() => setSegundos((s) => s + 1), 1000);
     return () => clearInterval(t);
-  }, []);
+  }, [naoEncontrada]);
 
   const tempo = `${String(Math.floor(segundos / 60)).padStart(2, "0")}:${String(segundos % 60).padStart(2, "0")}`;
 

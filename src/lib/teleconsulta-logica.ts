@@ -364,3 +364,27 @@ export function restricoesVideoCamera(celular: boolean, camera: CameraEscolhida)
   }
   return { ...base, facingMode: camera.facingMode };
 }
+
+/** O mínimo de MediaStream que `pararTracks` usa (permite teste sem navegador). */
+export type ComTracks = { getTracks(): { stop(): void }[] };
+
+/**
+ * Para TODAS as tracks dos streams dados (câmera, microfone, tela), ignorando
+ * nulos. Parar a track é o que apaga a luz da câmera. Chamar de novo não tem
+ * efeito (stop() numa track parada não faz nada). Devolve quantas tracks viu.
+ */
+export function pararTracks(...streams: (ComTracks | null | undefined)[]): number {
+  let n = 0;
+  for (const s of streams) {
+    if (!s) continue;
+    for (const t of s.getTracks()) {
+      try {
+        t.stop();
+      } catch {
+        /* track já encerrada */
+      }
+      n++;
+    }
+  }
+  return n;
+}

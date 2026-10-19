@@ -61,15 +61,30 @@ class StreamFalso {
 }
 
 type Pedido = MediaStreamConstraints;
-function montar({ celular, cameras, falharCom }: { celular: boolean; cameras: string[]; falharCom?: (p: Pedido) => boolean }) {
+function montar({
+  celular,
+  cameras,
+  falharCom,
+  segurar,
+}: {
+  celular: boolean;
+  cameras: string[];
+  falharCom?: (p: Pedido) => boolean;
+  /** Segura o getUserMedia até a promessa resolver (simula a câmera demorando). */
+  segurar?: Promise<void>;
+}) {
   const pedidos: Pedido[] = [];
+  const entregues: TrackFalsa[] = [];
   const md = {
     async getUserMedia(c: Pedido) {
       pedidos.push(c);
+      if (segurar) await segurar;
       if (falharCom?.(c)) throw Object.assign(new Error("NotReadableError"), { name: "NotReadableError" });
       const v = c.video as MediaTrackConstraints;
       const id = (v.deviceId as { exact?: string } | undefined)?.exact ?? "";
-      return new StreamFalso([new TrackFalsa("video", id, String(v.facingMode ?? ""))]);
+      const nova = new TrackFalsa("video", id, String(v.facingMode ?? ""));
+      entregues.push(nova);
+      return new StreamFalso([nova]);
     },
     async enumerateDevices() {
       return cameras.map((deviceId) => ({ kind: "videoinput", deviceId }));
@@ -95,7 +110,7 @@ function montar({ celular, cameras, falharCom }: { celular: boolean; cameras: st
   (chamada as unknown as { pc: unknown }).pc = {
     getTransceivers: () => [{ receiver: { track: { kind: "video" } }, sender }],
   };
-  return { chamada, local, pedidos, trocas, camInicial, mic, estado: () => estado };
+  return { chamada, local, pedidos, entregues, trocas, camInicial, mic, estado: () => estado };
 }
 const videoDe = (s: MediaStream) => s.getVideoTracks() as unknown as TrackFalsa[];
 
@@ -165,6 +180,35 @@ const videoDe = (s: MediaStream) => s.getVideoTracks() as unknown as TrackFalsa[
   const [a, b] = await Promise.all([t.chamada.trocarCamera(), t.chamada.trocarCamera()]);
   igual("toque duplo: só a primeira troca", [a, b], [true, false]);
   igual("toque duplo: um getUserMedia", t.pedidos.length, 1);
+}
+
+// ── Fim/404 durante a troca: a câmera nova é solta (pararTracks) e não entra ──
+for (const [nome, parar] of [
+  ["404", (c: ChamadaTeleconsulta) => (c as unknown as { pararPorNaoEncontrada(): void }).pararPorNaoEncontrada()],
+  ["sair", (c: ChamadaTeleconsulta) => c.sair()],
+] as const) {
+  let soltar = () => {};
+  const segurar = new Promise<void>((r) => (soltar = r));
+  const t = montar({ celular: true, cameras: ["f", "t"], segurar });
+  const local = t.local.current;
+  const troca = t.chamada.trocarCamera();
+  await Promise.resolve();
+  await Promise.resolve();
+  parar(t.chamada);
+  igual(`${nome} na troca: microfone parado pelo pararTracks`, t.mic.readyState, "ended");
+  soltar();
+  igual(`${nome} na troca: não trocou`, await troca, false);
+  igual(`${nome} na troca: câmera nova parada (luz apaga)`, t.entregues.map((v) => v.readyState), ["ended"]);
+  igual(`${nome} na troca: câmera nova fora do stream`, videoDe(local).filter((v) => v.readyState === "live").length, 0);
+  igual(`${nome} na troca: sem replaceTrack`, t.trocas.length, 0);
+}
+
+// ── Fim da chamada depois da troca: a câmera trocada também para ────────
+{
+  const t = montar({ celular: true, cameras: ["f", "t"] });
+  await t.chamada.trocarCamera();
+  t.chamada.sair();
+  igual("sair depois da troca: traseira parada", t.entregues.map((v) => v.readyState), ["ended"]);
 }
 
 console.log(`teleconsulta-troca-camera: ${ok} ok, ${falhas} falha(s)`);

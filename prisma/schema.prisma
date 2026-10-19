@@ -52,6 +52,13 @@ model User {
   repasseAjustes       RepasseAjuste[] @relation("RepasseAjusteMedico")
   dadosRecebimento     DadosRecebimentoMedico?
   bloqueiosAgenda      BloqueioAgenda[] @relation("BloqueioMedico")
+  chamadasRecebidas    ChamadaConsulta[] @relation("ChamadaPara") // Admin: toque da consulta
+  pushInscricoes       PushInscricao[]   // Admin: toque da consulta
+  // Teleconsulta v2 — Pacientes
+  medicamentosEmUso          MedicamentoEmUso[] @relation("MedicamentoEmUsoPaciente")
+  medicamentosPrescritos     MedicamentoEmUso[] @relation("MedicamentoEmUsoMedico")
+  pedidosMedicaoRecebidos    PedidoMedicao[]    @relation("PedidoMedicaoPaciente")
+  pedidosMedicaoFeitos       PedidoMedicao[]    @relation("PedidoMedicaoMedico")
 }
 
 model Sessao {
@@ -122,8 +129,16 @@ model Medicao {
   valor1    Float
   valor2    Float?
   criadoEm  DateTime @default(now())
+  // Teleconsulta v2 — Pacientes (migração 20261018c): de onde veio a medida.
+  // origem: paciente | pedido | medico. consultaId sem FK (Consulta é do Médicos).
+  origem     String         @default("paciente")
+  consultaId String?
+  pedidoId   String?
+  pedido     PedidoMedicao? @relation(fields: [pedidoId], references: [id], onDelete: SetNull)
 
   @@index([usuarioId, tipo, criadoEm])
+  @@index([pedidoId])
+  @@index([consultaId])
 }
 
 // Resultados de exames laboratoriais extraídos de laudos enviados à BION IA
@@ -176,6 +191,7 @@ model Consulta {
   repasseItens RepasseItem[]
   repasseAjustes RepasseAjuste[]
   remarcacoes RemarcacaoPendente[]
+  chamadas    ChamadaConsulta[] // Admin: toque da consulta
 
   @@unique([id, medicoId]) // alvo das FKs (consultaId, medicoId) do repasse
 }
@@ -386,6 +402,14 @@ model Lembrete {
   frequencia  String
   feito       Boolean @default(false)
   medicamento String?
+  // Teleconsulta v2 — Pacientes (migração 20261018c). origem: paciente | receita | medico.
+  // documentoId sem FK (Documento é do Médicos).
+  origem             String            @default("paciente")
+  medicamentoEmUsoId String?
+  medicamentoEmUso   MedicamentoEmUso? @relation(fields: [medicamentoEmUsoId], references: [id], onDelete: SetNull)
+  documentoId        String?
+
+  @@index([medicamentoEmUsoId])
 }
 
 model Consentimento {
@@ -673,4 +697,108 @@ model BloqueioAgenda {
 
   @@unique([medicoId, dia])
   @@index([dia])
+}
+
+// Admin: toque da consulta (PR 1 do plano teleconsulta-v2 — só schema).
+// Relações com ON DELETE CASCADE, iguais às FKs da migração
+// supabase/migrations/20261018a_chamada_push.sql (assim um `prisma db push`
+// não apaga as FKs).
+
+// Registro de cada toque: uma linha por consulta, usuário e tentativa.
+model ChamadaConsulta {
+  id            String    @id @default(cuid())
+  consultaId    String
+  tentativa     Int                   // 1..3
+  paraUsuarioId String                // quem recebeu o toque
+  papel         String                // paciente | medico
+  status        String    @default("tocando") // tocando | atendida | recusada | expirada
+  tocouEm       DateTime  @default(now())
+  expiraEm      DateTime              // tocouEm + 2 min
+  respondidaEm  DateTime?
+  canal         String    @default("realtime") // realtime | push | ambos
+  pushEnviado   Boolean   @default(false)
+
+  consulta      Consulta  @relation(fields: [consultaId], references: [id], onDelete: Cascade)
+  paraUsuario   User      @relation("ChamadaPara", fields: [paraUsuarioId], references: [id], onDelete: Cascade)
+
+  @@unique([consultaId, paraUsuarioId, tentativa]) // trava contra toque duplo
+  @@index([status, expiraEm])
+  @@index([paraUsuarioId])
+}
+
+// Inscrições de Web Push (uma por aparelho/navegador).
+model PushInscricao {
+  id          String    @id @default(cuid())
+  usuarioId   String
+  endpoint    String    @unique
+  p256dh      String
+  auth        String
+  plataforma  String?             // ios_pwa | android | desktop
+  userAgent   String?
+  criadaEm    DateTime  @default(now())
+  ultimoUsoEm DateTime?
+  falhas      Int       @default(0) // 404/410 do serviço de push → apagar
+
+  usuario     User      @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId])
+}
+
+// =====================================================================
+// Teleconsulta v2 — Pacientes
+// Migração: supabase/migrations/20261018c_medicamentos_pedido_medicao.sql
+// RLS ligado, sem policies e sem grants (só o servidor, via Prisma, lê e grava).
+// consultaId/documentoId são String simples SEM @relation de propósito: não
+// alteram Consulta nem Documento (donos: Médicos). Integridade no servidor.
+// =====================================================================
+
+// Medicamento em uso do paciente (estruturado). Substitui aos poucos o JSON
+// livre PerfilPaciente.medicamentos. Uma receita (Documento) pode gerar vários.
+// posologia: JSON { vezesAoDia, horarios: ["08:00", ...], dias, textoLivre? }
+// origem: paciente | receita | medico. controlado: não aparece "Renovar receita".
+model MedicamentoEmUso {
+  id           String    @id @default(cuid())
+  pacienteId   String
+  paciente     User      @relation("MedicamentoEmUsoPaciente", fields: [pacienteId], references: [id], onDelete: Cascade)
+  nome         String
+  dose         String?
+  via          String?
+  posologia    String    @default("{}")
+  usoContinuo  Boolean   @default(false)
+  controlado   Boolean   @default(false)
+  inicio       DateTime  @default(now())
+  fim          DateTime?
+  ativo        Boolean   @default(true)
+  origem       String    @default("paciente")
+  documentoId  String?
+  consultaId   String?
+  medicoId     String?
+  medico       User?     @relation("MedicamentoEmUsoMedico", fields: [medicoId], references: [id], onDelete: SetNull)
+  criadoEm     DateTime  @default(now())
+  atualizadoEm DateTime  @default(now()) @updatedAt
+  lembretes    Lembrete[]
+
+  @@index([pacienteId, ativo])
+  @@index([documentoId])
+  @@index([medicoId])
+}
+
+// Pedido do médico para o paciente informar medidas ("pedir levantamento").
+// tipos: JSON string[] com peso | altura | pressao. status: pendente | atendido | cancelado.
+model PedidoMedicao {
+  id         String    @id @default(cuid())
+  consultaId String?
+  pacienteId String
+  paciente   User      @relation("PedidoMedicaoPaciente", fields: [pacienteId], references: [id], onDelete: Cascade)
+  medicoId   String
+  medico     User      @relation("PedidoMedicaoMedico", fields: [medicoId], references: [id], onDelete: Cascade)
+  tipos      String    @default("[]")
+  status     String    @default("pendente")
+  criadoEm   DateTime  @default(now())
+  atendidoEm DateTime?
+  medicoes   Medicao[]
+
+  @@index([pacienteId, status])
+  @@index([consultaId])
+  @@index([medicoId])
 }
