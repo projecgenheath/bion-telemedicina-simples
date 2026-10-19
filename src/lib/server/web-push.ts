@@ -23,7 +23,7 @@ export type ConfigVapid = { publica: string; privada: string; subject: string };
 export const MAX_FALHAS_PUSH = 5;
 /** Registro único de 4096 bytes: 86 de cabeçalho + 16 da tag + 1 do delimitador. */
 export const MAX_PAYLOAD_PUSH = 4096 - 86 - 16 - 1;
-const TEMPO_LIMITE_MS = 5_000;
+export const TEMPO_LIMITE_PUSH_MS = 5_000;
 const VALIDADE_JWT_S = 12 * 3600;
 
 export const b64url = (b: Uint8Array | Buffer) => Buffer.from(b).toString("base64url");
@@ -160,17 +160,19 @@ type Fetch = (url: string, init: RequestInit) => Promise<{ status: number }>;
 export async function enviarPush(
   inscricao: InscricaoPush,
   payload: unknown,
-  opcoes: { ttl: number; urgencia?: Urgencia },
+  /** timeoutMs: limite do POST ao serviço de push (padrão 5 s; o job passa o que sobra do orçamento). */
+  opcoes: { ttl: number; urgencia?: Urgencia; timeoutMs?: number },
   dep: { fetch?: Fetch; cfg?: ConfigVapid | null } = {},
 ): Promise<number | null> {
   const cfg = dep.cfg === undefined ? configVapid() : dep.cfg;
   if (!cfg) return null;
   let status = 0;
   try {
+    const limite = Math.max(1, Math.floor(opcoes.timeoutMs ?? TEMPO_LIMITE_PUSH_MS));
     const { url, init } = montarRequisicaoPush(inscricao, payload, opcoes, cfg);
     // redirect: "error" — o serviço de push nunca redireciona; seguir um 3xx
     // levaria o POST (com o JWT VAPID) para um host fora da lista.
-    const f: Fetch = dep.fetch ?? ((u, i) => fetch(u, { ...i, signal: AbortSignal.timeout(TEMPO_LIMITE_MS), cache: "no-store", redirect: "error" }));
+    const f: Fetch = dep.fetch ?? ((u, i) => fetch(u, { ...i, signal: AbortSignal.timeout(limite), cache: "no-store", redirect: "error" }));
     status = (await f(url, init)).status;
   } catch (e) {
     console.error("[Push] falha no envio", { erro: e instanceof Error ? e.name : "erro" });
@@ -198,11 +200,11 @@ export async function registrarResultado(endpoint: string, status: number): Prom
   return "falha";
 }
 
-/** Push para todos os aparelhos do usuário. Devolve quantos aceitaram (2xx); null = push desligado. */
+/** Push para todos os aparelhos do usuário, em paralelo. Devolve quantos aceitaram (2xx); null = push desligado. */
 export async function enviarPushParaUsuario(
   usuarioId: string,
   payload: unknown,
-  opcoes: { ttl: number; urgencia?: Urgencia },
+  opcoes: { ttl: number; urgencia?: Urgencia; timeoutMs?: number },
   dep: { fetch?: Fetch; cfg?: ConfigVapid | null } = {},
 ): Promise<number | null> {
   const cfg = dep.cfg === undefined ? configVapid() : dep.cfg;
@@ -212,8 +214,8 @@ export async function enviarPushParaUsuario(
     select: { id: true, endpoint: true, p256dh: true, auth: true },
     take: 10,
   });
-  const r = await Promise.all(inscricoes.map((i) => enviarPush(i, payload, opcoes, { ...dep, cfg })));
-  return r.filter((s) => s !== null && s >= 200 && s < 300).length;
+  const r = await Promise.allSettled(inscricoes.map((i) => enviarPush(i, payload, opcoes, { ...dep, cfg })));
+  return r.filter((x) => x.status === "fulfilled" && x.value !== null && x.value >= 200 && x.value < 300).length;
 }
 
 /* ---------------- Validação da inscrição (rota /api/push/inscricao) ---------------- */

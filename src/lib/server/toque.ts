@@ -6,7 +6,7 @@ import { topicoNotificacoesUsuario } from "@/lib/server/usuario-canal";
 import { enviarPushParaUsuario, type Urgencia } from "@/lib/server/web-push";
 import { SALA_ABRE_ANTES_MIN } from "@/lib/janela-sala";
 import { STATUS_AVALIAVEIS } from "@/lib/server/presenca-consulta";
-import { ESPERA_FALTA_MIN } from "@/components/bion/medico/metricas";
+import { ESPERA_FALTA_MIN, SINAL_PARADO_MS } from "@/components/bion/medico/metricas";
 import { STATUS_ABERTOS, TIPOS_EVENTO_DESFECHO, EVENTO_VIGENTE } from "@/lib/server/financeiro";
 import { consultaSemDesfecho } from "@/lib/server/repasse";
 
@@ -21,7 +21,9 @@ import { consultaSemDesfecho } from "@/lib/server/repasse";
 /*     paciente e o médico que NÃO entraram na sala e não atenderam nem   */
 /*     recusaram, abre a próxima tentativa (1..3) — toca 2 min e repete    */
 /*     a cada 5 (a próxima sai 3 min depois de a anterior expirar);       */
-/*     INSERT … ON CONFLICT DO NOTHING: só quem inseriu envia;            */
+/*     INSERT … ON CONFLICT DO NOTHING: só quem inseriu envia; o médico   */
+/*     que está em OUTRA sala (sinal há até 30 s) fica para o minuto       */
+/*     seguinte, sem linha;                                               */
 /*  3. `chamada_tocando` { consultaId, contraparte, especialidade,        */
 /*     inicioEm, expiraEm, tentativa } no tópico PRIVADO de notificações  */
 /*     do usuário (#53) + Web Push { tipo, consultaId, tentativa,         */
@@ -52,6 +54,17 @@ const MAX_EXPIRAR = 500;
  */
 export const ORCAMENTO_MS = 7_000;
 /**
+ * Só começa um participante (INSERT + broadcast, que tem limite de 3 s em
+ * broadcast.ts) se sobrar pelo menos isto do orçamento: assim a linha nunca
+ * fica gravada `tocando` sem o broadcast, mesmo no pior caso. Sem orçamento,
+ * não grava e o participante toca no minuto seguinte.
+ */
+export const RESERVA_PARTICIPANTE_MS = 3_500;
+/** Limite de cada push: min(5 s, restante − 1 s); abaixo de 500 ms o push é pulado (fica só o Realtime). */
+export const PUSH_MAX_MS = 5_000;
+export const PUSH_MIN_MS = 500;
+export const PUSH_MARGEM_MS = 1_000;
+/**
  * Folga nas comparações de tempo: o pg_cron dispara alguns décimos (ou
  * segundos) antes ou depois do minuto cheio. Sem folga, um disparo 0,3 s
  * adiantado empurra a expiração para o minuto seguinte e o ritmo vira 0/6/12.
@@ -79,7 +92,7 @@ export type DependenciasToque = {
   /** Broadcast no tópico privado de notificações do usuário. */
   enviarEvento?: (usuarioId: string, evento: EventoToque, payload: Record<string, unknown>) => Promise<void>;
   /** Web Push para os aparelhos do usuário; null = desligado, número = aceitos. */
-  enviarPush?: (usuarioId: string, payload: Record<string, unknown>, opcoes: { ttl: number; urgencia: Urgencia }) => Promise<number | null>;
+  enviarPush?: (usuarioId: string, payload: Record<string, unknown>, opcoes: { ttl: number; urgencia: Urgencia; timeoutMs: number }) => Promise<number | null>;
 };
 
 const eventoPadrao: NonNullable<DependenciasToque["enviarEvento"]> = (usuarioId, evento, payload) =>
@@ -134,14 +147,28 @@ export function autorizadoCron(req: { headers: Headers }, segredoEnv = process.e
   return crypto.timingSafeEqual(a, b);
 }
 
-export type ResultadoToque = { expiradas: number; tocadas: number; push: number; consultas: number; incompleto: boolean };
+export type ResultadoToque = {
+  expiradas: number;
+  tocadas: number;
+  /** Participantes com pelo menos um aparelho que aceitou o push. */
+  push: number;
+  /** Pushes pulados por falta de orçamento (a linha e o broadcast ficam). */
+  pushPulados: number;
+  consultas: number;
+  /** Toques ao médico adiados porque ele está atendendo outra consulta. */
+  medicoOcupado: number;
+  /** Sobrou trabalho para o minuto seguinte (orçamento acabou). */
+  incompleto: boolean;
+};
 
 export async function rodarToque(agora: Date = new Date(), dep: DependenciasToque = {}): Promise<ResultadoToque> {
   const t0 = Date.now();
   const enviarEvento = dep.enviarEvento ?? eventoPadrao;
   const enviarPush = dep.enviarPush ?? ((u, payload, o) => enviarPushParaUsuario(u, payload, o));
-  const r: ResultadoToque = { expiradas: 0, tocadas: 0, push: 0, consultas: 0, incompleto: false };
-  const dentroDoTempo = () => Date.now() - t0 < ORCAMENTO_MS;
+  const r: ResultadoToque = { expiradas: 0, tocadas: 0, push: 0, pushPulados: 0, consultas: 0, medicoOcupado: 0, incompleto: false };
+  const restante = () => ORCAMENTO_MS - (Date.now() - t0);
+  /** Cabe mais um passo "grava + broadcast"? Conferido ANTES de cada UPDATE/INSERT. */
+  const cabeParticipante = () => restante() >= RESERVA_PARTICIPANTE_MS;
 
   /* 1. Expira o que passou do tempo. O UPDATE condicionado a status=tocando
         garante um único evento mesmo com duas execuções ao mesmo tempo. */
@@ -153,7 +180,7 @@ export async function rodarToque(agora: Date = new Date(), dep: DependenciasToqu
     take: MAX_EXPIRAR,
   });
   for (const v of vencidas) {
-    if (!dentroDoTempo()) { r.incompleto = true; break; }
+    if (!cabeParticipante()) { r.incompleto = true; break; }
     const u = await db.chamadaConsulta.updateMany({ where: { id: v.id, status: "tocando" }, data: { status: "expirada" } });
     if (u.count !== 1) continue;
     r.expiradas++;
@@ -190,8 +217,29 @@ export async function rodarToque(agora: Date = new Date(), dep: DependenciasToqu
   });
   r.consultas = consultas.length;
 
-  for (const c of consultas) {
-    if (!dentroDoTempo()) { r.incompleto = true; break; }
+  /* 3. Grava e avisa pelo Realtime, um participante por vez, enquanto couber
+        no orçamento; os pushes ficam para o fim, todos em paralelo. */
+  // Médico atendendo OUTRA consulta agora (sinal na sala há até SINAL_PARADO_MS,
+  // a mesma janela de "presente" da presença): não toca nem grava linha; tenta
+  // de novo no minuto seguinte, dentro da janela de 15 min. O paciente toca normal.
+  const ocupados = new Map<string, Set<string>>(); // medicoId → consultas com presença recente
+  const medicoIds = [...new Set(consultas.map((c) => c.medicoId))];
+  if (medicoIds.length) {
+    const ativos = await db.presencaSala.findMany({
+      where: { usuarioId: { in: medicoIds }, ultimoPing: { gte: new Date(agora.getTime() - SINAL_PARADO_MS) } },
+      select: { usuarioId: true, consultaId: true },
+    });
+    for (const a of ativos) {
+      if (!ocupados.has(a.usuarioId)) ocupados.set(a.usuarioId, new Set());
+      ocupados.get(a.usuarioId)!.add(a.consultaId);
+    }
+  }
+  const medicoEmOutraSala = (medicoId: string, consultaId: string) =>
+    [...(ocupados.get(medicoId) ?? [])].some((id) => id !== consultaId);
+
+  type PushPendente = { consultaId: string; usuarioId: string; tentativa: number; expiraEm: Date; payload: Record<string, unknown> };
+  const pendentes: PushPendente[] = [];
+  consultas: for (const c of consultas) {
     const abriu = c.dataInicio.getTime() - SALA_ABRE_ANTES_MIN * 60_000;
     // Nunca toca para ADMIN (o admin não entra na chamada — LGPD), mesmo em dado inconsistente.
     const participantes = (
@@ -208,6 +256,9 @@ export async function rodarToque(agora: Date = new Date(), dep: DependenciasToqu
         chamadas: c.chamadas.filter((x) => x.paraUsuarioId === p.usuarioId),
       });
       if (tentativa === null) continue;
+      if (p.papel === "medico" && medicoEmOutraSala(p.usuarioId, c.id)) { r.medicoOcupado++; continue; }
+      // Orçamento ANTES do INSERT: sem tempo para o broadcast, não grava (toca no minuto seguinte).
+      if (!cabeParticipante()) { r.incompleto = true; break consultas; }
       const expiraEm = expiraEmTentativa(agora, c.dataInicio, tentativa);
       // ON CONFLICT DO NOTHING na trava (consultaId, paraUsuarioId, tentativa): só quem inseriu envia.
       const ins = await db.chamadaConsulta.createMany({
@@ -224,11 +275,13 @@ export async function rodarToque(agora: Date = new Date(), dep: DependenciasToqu
         expiraEm: expiraEm.toISOString(),
         tentativa,
       });
-      // Push: contrato combinado com o Pacientes (service worker do PR 5/8).
-      // Sem nome nem especialidade; TTL = segundos até expirar.
-      const aceitos = await enviarPush(
-        p.usuarioId,
-        {
+      // Push: contrato combinado com o Pacientes (service worker do PR 5/8). Sem nome nem especialidade.
+      pendentes.push({
+        consultaId: c.id,
+        usuarioId: p.usuarioId,
+        tentativa,
+        expiraEm,
+        payload: {
           tipo: "chamada_tocando",
           consultaId: c.id,
           tentativa,
@@ -238,15 +291,34 @@ export async function rodarToque(agora: Date = new Date(), dep: DependenciasToqu
           titulo: TITULO_PUSH,
           corpo: CORPO_PUSH,
         },
-        { ttl: Math.max(0, Math.floor((expiraEm.getTime() - agora.getTime() - (Date.now() - t0)) / 1000)), urgencia: "high" },
-      ).catch(() => 0);
-      if (aceitos) {
-        r.push++;
-        await db.chamadaConsulta.updateMany({
-          where: { consultaId: c.id, paraUsuarioId: p.usuarioId, tentativa },
-          data: { pushEnviado: true, canal: "ambos" },
-        });
-      }
+      });
+    }
+  }
+
+  /* 4. Pushes em paralelo, cada um limitado a min(5 s, restante − 1 s).
+        Sem orçamento: pula (a linha e o broadcast já foram; não desfaz). */
+  if (pendentes.length) {
+    const timeoutMs = Math.min(PUSH_MAX_MS, restante() - PUSH_MARGEM_MS);
+    if (timeoutMs < PUSH_MIN_MS) {
+      r.pushPulados = pendentes.length;
+      console.warn("[Toque] push pulado: sem orçamento", { pulados: pendentes.length });
+    } else {
+      const decorrido = Date.now() - t0;
+      const res = await Promise.allSettled(
+        pendentes.map(async (pp) => {
+          const ttl = Math.max(0, Math.floor((pp.expiraEm.getTime() - agora.getTime() - decorrido) / 1000));
+          const aceitos = await enviarPush(pp.usuarioId, pp.payload, { ttl, urgencia: "high", timeoutMs });
+          if (!aceitos) return false;
+          await db.chamadaConsulta.updateMany({
+            where: { consultaId: pp.consultaId, paraUsuarioId: pp.usuarioId, tentativa: pp.tentativa },
+            data: { pushEnviado: true, canal: "ambos" },
+          });
+          return true;
+        }),
+      );
+      r.push = res.filter((x) => x.status === "fulfilled" && x.value).length;
+      const falharam = res.filter((x) => x.status === "rejected").length;
+      if (falharam) console.warn("[Toque] push com erro", { falharam });
     }
   }
 

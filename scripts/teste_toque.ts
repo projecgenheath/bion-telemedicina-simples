@@ -52,12 +52,12 @@ function verifica(cond: unknown, nome: string, extra?: unknown) {
 const MIN = 60_000;
 
 type Ev = { usuarioId: string; evento: string; payload: Record<string, unknown> };
-type Push = { usuarioId: string; payload: Record<string, unknown>; opcoes: { ttl: number; urgencia: string } };
+type Push = { usuarioId: string; payload: Record<string, unknown>; opcoes: { ttl: number; urgencia: string; timeoutMs: number } };
 let eventos: Ev[] = [];
 let pushes: Push[] = [];
 const dep = {
   enviarEvento: async (usuarioId: string, evento: string, payload: Record<string, unknown>) => { eventos.push({ usuarioId, evento, payload }); },
-  enviarPush: async (usuarioId: string, payload: Record<string, unknown>, opcoes: { ttl: number; urgencia: string }) => { pushes.push({ usuarioId, payload, opcoes }); return 1; },
+  enviarPush: async (usuarioId: string, payload: Record<string, unknown>, opcoes: { ttl: number; urgencia: string; timeoutMs: number }) => { pushes.push({ usuarioId, payload, opcoes }); return 1; },
 };
 const zerar = () => { eventos = []; pushes = []; };
 const rodar = (t: Date) => rodarToque(t, dep as never);
@@ -346,6 +346,164 @@ await simular("±3 s aleatório", () => 3 * aleatorio());
 // Job fora do ar no horário (volta aos 2,5 min): toca quando volta, sem ancorar
 // no horário nominal, e mantém 5 min entre toques; a 3ª ainda cabe na janela de 15 min.
 await simular("fora do ar até 2 min (volta 30 s atrasado)", (m) => (m <= 1 ? null : 30), { tocou: "2,7,12", expirou: "4,9,14*" });
+
+/* ---------------- médico atendendo outra consulta ---------------- */
+await limpar();
+await db.user.createMany({
+  data: [
+    { id: "xp1", nome: "Lucas", email: "xp1@t", senhaHash: "x", role: "PACIENTE" },
+    { id: "xp2", nome: "Bia", email: "xp2@t", senhaHash: "x", role: "PACIENTE" },
+    { id: "xm", nome: "Dr. Caio", email: "xm@t", senhaHash: "x", role: "MEDICO" },
+  ],
+});
+await db.consulta.createMany({
+  data: [
+    // a anterior, ainda em andamento (o médico está na sala dela)
+    { id: "xa", pacienteId: "xp1", medicoId: "xm", especialidade: "Clínica", dataInicio: em(-30), status: "confirmada", valor: 150 },
+    { id: "xb", pacienteId: "xp2", medicoId: "xm", especialidade: "Clínica", dataInicio: T0, status: "confirmada", valor: 150 },
+  ],
+});
+await db.presencaSala.create({ data: { consultaId: "xa", usuarioId: "xm", papel: "MEDICO", ultimoPing: em(0.2 - 0.1), entrouEm: em(-30) } });
+zerar();
+let ro = await rodar(em(0.2));
+verifica(!eventos.some((e) => e.usuarioId === "xm") && (await linhas("xb", "xm")).length === 0, "médico em outra sala (sinal há 6 s): não toca e não grava linha", ro);
+verifica(eventos.some((e) => e.usuarioId === "xp2" && e.evento === "chamada_tocando") && ro.medicoOcupado === 1, "paciente da consulta seguinte toca normal");
+// ainda na outra sala no minuto seguinte (sinal há 20 s)
+await db.presencaSala.update({ where: { consultaId_usuarioId: { consultaId: "xa", usuarioId: "xm" } }, data: { ultimoPing: em(1.2 - 20 / 60) } });
+zerar();
+await rodar(em(1.2));
+verifica(!eventos.some((e) => e.usuarioId === "xm"), "médico ainda na outra sala (20 s): continua sem toque");
+// saiu da outra sala (último sinal há 50 s, acima da janela de presença)
+zerar();
+await rodar(em(2.03));
+verifica(eventos.some((e) => e.usuarioId === "xm" && e.evento === "chamada_tocando" && e.payload.tentativa === 1 && e.payload.consultaId === "xb"), "médico saiu da outra sala: recebe a 1ª tentativa no minuto seguinte", eventos);
+verifica((await linhas("xb", "xm")).length === 1, "agora grava a linha do médico");
+// presença na PRÓPRIA consulta não conta como "outra sala" (é o caso "entrou na sala")
+verifica(!toque.proximaTentativa({ agora: em(2), dataInicio: T0, entrouNaSala: true, chamadas: [] }), "presença na própria sala continua sendo 'entrou' (não toca)");
+
+/* ---------------- orçamento: pushes e broadcasts lentos ---------------- */
+// fetch global falso (o push real passa por ele): responde 201 depois de
+// `atrasoFetch` ms e respeita o AbortSignal do timeout, como o fetch de verdade.
+const fetchOriginal = globalThis.fetch;
+let atrasoFetch = 4_000;
+let fetchChamadas = 0;
+let fetchSimult = 0;
+let fetchMaxSimult = 0;
+let fetchAbortados = 0;
+globalThis.fetch = ((_u: unknown, init?: RequestInit) =>
+  new Promise<Response>((resolve, reject) => {
+    fetchChamadas++;
+    fetchSimult++;
+    fetchMaxSimult = Math.max(fetchMaxSimult, fetchSimult);
+    let fim = false;
+    const t = setTimeout(() => { if (fim) return; fim = true; fetchSimult--; resolve(new Response(null, { status: 201 })); }, atrasoFetch);
+    init?.signal?.addEventListener(
+      "abort",
+      () => {
+        if (fim) return;
+        fim = true;
+        clearTimeout(t);
+        fetchSimult--;
+        fetchAbortados++;
+        reject(new DOMException("tempo esgotado", "TimeoutError"));
+      },
+      { once: true },
+    );
+  })) as typeof fetch;
+const zerarFetch = (atraso: number) => { atrasoFetch = atraso; fetchChamadas = 0; fetchSimult = 0; fetchMaxSimult = 0; fetchAbortados = 0; };
+
+/** n consultas às 10:00, cada participante com `aparelhos` inscrições de push. */
+async function cenario(n: number, aparelhos: number) {
+  await limpar();
+  for (let i = 0; i < n; i++) {
+    await db.user.createMany({
+      data: [
+        { id: `op${i}`, nome: `Paciente ${i}`, email: `op${i}@t`, senhaHash: "x", role: "PACIENTE" },
+        { id: `om${i}`, nome: `Médico ${i}`, email: `om${i}@t`, senhaHash: "x", role: "MEDICO" },
+      ],
+    });
+    await db.consulta.create({ data: { id: `oc${i}`, pacienteId: `op${i}`, medicoId: `om${i}`, especialidade: "Clínica", dataInicio: T0, status: "confirmada", valor: 150 } });
+    for (const u of [`op${i}`, `om${i}`]) {
+      for (let k = 0; k < aparelhos; k++) {
+        await db.pushInscricao.create({ data: { usuarioId: u, endpoint: `https://fcm.googleapis.com/fcm/send/${u}-${k}`, p256dh: keys.p256dh, auth: keys.auth } });
+      }
+    }
+  }
+}
+const espera = (ms: number) => new Promise((r) => setTimeout(r, ms));
+/** Broadcast gravado (com atraso opcional) — o push vai pelo caminho REAL (enviarPushParaUsuario). */
+function depLento(atrasoBroadcast: (i: number) => number) {
+  let i = 0;
+  return {
+    enviarEvento: async (usuarioId: string, evento: string, payload: Record<string, unknown>) => {
+      await espera(atrasoBroadcast(i++));
+      eventos.push({ usuarioId, evento, payload });
+    },
+  };
+}
+/** Toda linha gravada tem o broadcast correspondente (mesmo usuário, consulta e tentativa)? */
+async function linhasSemBroadcast() {
+  const ls = await db.chamadaConsulta.findMany({ select: { consultaId: true, paraUsuarioId: true, tentativa: true } });
+  return ls.filter(
+    (l) => !eventos.some((e) => e.evento === "chamada_tocando" && e.usuarioId === l.paraUsuarioId && e.payload.consultaId === l.consultaId && e.payload.tentativa === l.tentativa),
+  ).length;
+}
+
+// A) 6 consultas × 2 participantes × 3 aparelhos, cada push leva 4 s.
+await cenario(6, 3);
+zerar();
+zerarFetch(4_000);
+let ini = Date.now();
+let rr = await rodarToque(em(0.2), depLento(() => 0) as never);
+let ms = Date.now() - ini;
+verifica(rr.tocadas === 12 && !rr.incompleto, "push lento (4 s): os 12 participantes tocam na mesma rodada", rr);
+verifica(ms < toque.ORCAMENTO_MS, `push lento (4 s × 36 aparelhos): a rodada termina antes do orçamento (${ms} ms < ${toque.ORCAMENTO_MS})`);
+verifica(fetchChamadas === 36 && fetchMaxSimult === 36, "pushes de todos os aparelhos e consultas em paralelo", { fetchChamadas, fetchMaxSimult });
+verifica(rr.push === 12 && (await db.chamadaConsulta.count({ where: { pushEnviado: true } })) === 12, "push lento dentro do limite: pushEnviado marcado", rr);
+verifica((await linhasSemBroadcast()) === 0, "nenhuma linha gravada sem broadcast (push lento)");
+
+// B) push que não responde (8 s): cada um é cortado em min(5 s, restante − 1 s).
+await cenario(3, 2);
+zerar();
+zerarFetch(8_000);
+ini = Date.now();
+rr = await rodarToque(em(0.2), depLento(() => 0) as never);
+ms = Date.now() - ini;
+verifica(ms < toque.ORCAMENTO_MS && ms >= 4_000, `push travado: cortado pelo timeout e a rodada termina antes do orçamento (${ms} ms)`);
+verifica(fetchAbortados === 12 && rr.push === 0, "push travado: os 12 POSTs abortados, nenhum conta como enviado", { fetchAbortados, rr });
+verifica(rr.tocadas === 6 && (await db.chamadaConsulta.count({ where: { status: "tocando" } })) === 6 && (await linhasSemBroadcast()) === 0, "push travado: as linhas continuam tocando, com broadcast");
+
+// C) broadcast lento (1 s cada): para de gravar quando não cabe mais, e o resto toca no minuto seguinte.
+await cenario(6, 1);
+zerar();
+zerarFetch(50);
+const rodadas: ResultadoRodada[] = [];
+type ResultadoRodada = { tocadas: number; incompleto: boolean; ms: number };
+for (let m = 0; m < 5; m++) {
+  ini = Date.now();
+  const x = await rodarToque(new Date(em(0.2).getTime() + m * MIN), depLento(() => 1_000) as never);
+  rodadas.push({ tocadas: x.tocadas, incompleto: x.incompleto, ms: Date.now() - ini });
+  if (!x.incompleto) break;
+}
+verifica(rodadas[0].incompleto && rodadas[0].tocadas > 0 && rodadas[0].tocadas < 12, "broadcast lento: a 1ª rodada para no meio (orçamento) sem gravar o resto", rodadas);
+verifica(rodadas.every((x) => x.ms < toque.ORCAMENTO_MS), "broadcast lento: toda rodada termina antes do orçamento", rodadas.map((x) => x.ms));
+verifica(rodadas.reduce((a, x) => a + x.tocadas, 0) === 12 && !rodadas[rodadas.length - 1].incompleto, "broadcast lento: quem ficou de fora toca nas rodadas seguintes (12 no total)", rodadas);
+const t1 = await db.chamadaConsulta.groupBy({ by: ["paraUsuarioId"], _count: { _all: true } });
+verifica(t1.length === 12 && t1.every((g) => g._count._all === 1), "broadcast lento: uma tentativa por participante, sem duplicar");
+verifica((await linhasSemBroadcast()) === 0, "broadcast lento: nenhuma linha gravada sem broadcast");
+
+// D) broadcasts de 3,2 s: o 2º participante ainda cabe, mas não sobra tempo para push → pula o push, mantém a linha.
+await cenario(1, 1);
+zerar();
+zerarFetch(50);
+ini = Date.now();
+rr = await rodarToque(em(0.2), depLento(() => 3_200) as never);
+ms = Date.now() - ini;
+verifica(rr.tocadas === 2 && rr.pushPulados === 2 && fetchChamadas === 0, "sem orçamento para o push: pula o push (registra) e não chama o serviço", rr);
+verifica((await db.chamadaConsulta.count({ where: { status: "tocando", pushEnviado: false } })) === 2 && (await linhasSemBroadcast()) === 0, "push pulado: a linha fica tocando, com broadcast");
+verifica(ms < toque.ORCAMENTO_MS, `push pulado: a rodada termina antes do orçamento (${ms} ms)`);
+
+globalThis.fetch = fetchOriginal;
 
 await limpar();
 await db.$disconnect();
