@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useId, useRef, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Phone, PhoneOff, Video, VolumeX } from "lucide-react";
 import { useBion } from "@/lib/bion-store";
 import { useChamadaRecebida } from "@/lib/use-chamada-recebida";
@@ -9,6 +9,9 @@ import {
   chaveChamada,
   decidirAposAtender,
   iniciaisContraparte,
+  modoChamadaRecebida,
+  TEXTO_CONFIRMAR_TROCA,
+  type ModoChamadaRecebida,
   type ChamadaTocando,
 } from "@/lib/chamada-recebida-logica";
 
@@ -22,13 +25,38 @@ import {
  * Se vier 409 { motivo: "evolucao_pendente" } (da sala ou da rota chamada),
  * NÃO navega: para o toque e mostra "Conclua a evolução anterior para atender".
  * Recusar: POST .../chamada { acao: "recusar" } e fecha.
+ *
+ * Onde aparece (modoChamadaRecebida): fora de /consulta, tela cheia com toque;
+ * em QUALQUER outra /consulta, aviso compacto no topo (só vibração curta, sem
+ * toque) e "Atender" pede confirmação "Sair da chamada atual e atender?";
+ * na sala da MESMA consulta, nada.
  */
 export function ChamadaRecebida() {
   const { sessao, autenticado, consultas } = useBion();
   const ativo = autenticado && (sessao.role === "paciente" || sessao.role === "medico");
   const { chamada, fechar } = useChamadaRecebida(ativo, consultas);
   if (!chamada) return null;
-  return <ControleChamadaRecebida key={chaveChamada(chamada.consultaId, chamada.tentativa)} chamada={chamada} onFechar={fechar} />;
+  // useSearchParams pede Suspense no layout (senão o build estático reclama).
+  return (
+    <Suspense fallback={null}>
+      <ChamadaNoLugar chamada={chamada} onFechar={fechar} />
+    </Suspense>
+  );
+}
+
+function ChamadaNoLugar({ chamada, onFechar }: { chamada: ChamadaTocando; onFechar: () => void }) {
+  const pathname = usePathname() ?? "";
+  const busca = useSearchParams()?.toString() ?? "";
+  const modo = modoChamadaRecebida(chamada.consultaId, pathname, busca ? `?${busca}` : "");
+  if (modo === "nada") return null;
+  return (
+    <ControleChamadaRecebida
+      key={chaveChamada(chamada.consultaId, chamada.tentativa)}
+      chamada={chamada}
+      modo={modo}
+      onFechar={onFechar}
+    />
+  );
 }
 
 export default ChamadaRecebida;
@@ -55,15 +83,37 @@ function responder(consultaId: string, acao: "atender" | "recusar", tentativa: n
 }
 
 /** Controle de UMA chamada (toque, atender, recusar). Exportado para testes manuais/harness. */
-export function ControleChamadaRecebida({ chamada, onFechar }: { chamada: ChamadaTocando; onFechar: () => void }) {
+export function ControleChamadaRecebida({
+  chamada,
+  modo = "tela",
+  onFechar,
+}: {
+  chamada: ChamadaTocando;
+  modo?: Exclude<ModoChamadaRecebida, "nada">;
+  onFechar: () => void;
+}) {
   const router = useRouter();
   const [fase, setFase] = useState<Fase>("tocando");
   const [mensagem, setMensagem] = useState<string | null>(null);
-  const somBloqueado = useToque(fase === "tocando");
+  const [confirmando, setConfirmando] = useState(false);
+  // Tela cheia: toque em loop + vibração. Aviso (já numa chamada): só uma vibração curta.
+  const somBloqueado = useToque(fase === "tocando" && modo === "tela");
+  useVibracaoCurta(fase === "tocando" && modo === "aviso");
   const { consultaId, tentativa } = chamada;
+
+  function pedirAtender() {
+    if (fase !== "tocando") return;
+    // No aviso compacto o usuário está em outra chamada: confirma antes de sair dela.
+    if (modo === "aviso" && !confirmando) {
+      setConfirmando(true);
+      return;
+    }
+    void atender();
+  }
 
   async function atender() {
     if (fase !== "tocando") return;
+    setConfirmando(false);
     setFase("atendendo");
     const sala = await pedir(`/api/telemedicina/${encodeURIComponent(consultaId)}/sala?espiar=1`);
     // Bloqueado já na sala: não marca a chamada como atendida.
@@ -91,6 +141,20 @@ export function ControleChamadaRecebida({ chamada, onFechar }: { chamada: Chamad
     onFechar();
   }
 
+  if (modo === "aviso") {
+    return (
+      <AvisoChamadaRecebida
+        contraparte={chamada.contraparte}
+        especialidade={chamada.especialidade}
+        fase={fase}
+        mensagem={mensagem}
+        confirmando={confirmando}
+        onAtender={pedirAtender}
+        onCancelarConfirmacao={() => setConfirmando(false)}
+        onRecusar={recusar}
+      />
+    );
+  }
   return (
     <TelaChamadaRecebida
       contraparte={chamada.contraparte}
@@ -98,10 +162,29 @@ export function ControleChamadaRecebida({ chamada, onFechar }: { chamada: Chamad
       fase={fase}
       mensagem={mensagem}
       somBloqueado={somBloqueado}
-      onAtender={atender}
+      onAtender={pedirAtender}
       onRecusar={recusar}
     />
   );
+}
+
+/** Uma vibração curta ao aparecer o aviso compacto (sem toque: há uma chamada em andamento). */
+function useVibracaoCurta(ativa: boolean) {
+  useEffect(() => {
+    if (!ativa || typeof navigator === "undefined" || typeof navigator.vibrate !== "function") return;
+    try {
+      navigator.vibrate(200);
+    } catch {
+      /* sem vibração */
+    }
+    return () => {
+      try {
+        navigator.vibrate(0);
+      } catch {
+        /* nada */
+      }
+    };
+  }, [ativa]);
 }
 
 /**
@@ -257,6 +340,126 @@ export function TelaChamadaRecebida({
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * Aviso compacto no topo, para quem já está em /consulta (outra chamada):
+ * faixa pequena que não cobre os controles da chamada (que ficam embaixo),
+ * não rouba o foco (atalhos M/V da chamada continuam) e não toca som.
+ */
+export function AvisoChamadaRecebida({
+  contraparte,
+  especialidade,
+  fase,
+  mensagem,
+  confirmando,
+  onAtender,
+  onCancelarConfirmacao,
+  onRecusar,
+}: {
+  contraparte: string;
+  especialidade: string;
+  fase: Fase;
+  mensagem?: string | null;
+  confirmando: boolean;
+  onAtender: () => void;
+  onCancelarConfirmacao: () => void;
+  onRecusar: () => void;
+}) {
+  const titulo = useId();
+  const bloqueado = fase === "bloqueado";
+  const ocupado = fase === "atendendo" || fase === "recusando";
+  const nome = contraparte || "Chamada da consulta";
+  return (
+    <div
+      role="dialog"
+      aria-labelledby={titulo}
+      aria-live="polite"
+      className="fixed inset-x-2 top-[max(0.5rem,env(safe-area-inset-top))] z-[200] mx-auto max-w-md rounded-2xl bg-[#0a1f44]/95 p-3 text-white shadow-2xl ring-1 ring-white/15 backdrop-blur-md motion-safe:animate-in motion-safe:slide-in-from-top-4 motion-safe:fade-in"
+    >
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <div className="relative flex size-10 shrink-0 items-center justify-center rounded-full bg-white/15 text-sm font-semibold ring-1 ring-white/25">
+          {!bloqueado && (
+            <span aria-hidden className="absolute inset-0 rounded-full ring-2 ring-emerald-400/70 motion-safe:animate-ping [animation-duration:1.6s]" />
+          )}
+          {iniciaisContraparte(contraparte)}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p id={titulo} className="truncate text-sm font-semibold">
+            {nome}
+          </p>
+          <p className="flex items-center gap-1 truncate text-xs text-white/70">
+            <Video className="size-3.5 shrink-0" aria-hidden />
+            {confirmando
+              ? TEXTO_CONFIRMAR_TROCA
+              : fase === "atendendo"
+                ? "Conectando…"
+                : `Chamada de vídeo${especialidade ? ` · ${especialidade}` : ""}`}
+          </p>
+        </div>
+        {!confirmando && (
+          // Celular: botões numa 2ª linha (o nome não fica cortado); sm+: tudo numa linha.
+          <div className="ml-auto flex shrink-0 items-center gap-2 max-sm:w-full max-sm:justify-end">
+            <BotaoAviso cor="vermelho" rotulo="Recusar" onClick={onRecusar} desativado={fase === "recusando"}>
+              <PhoneOff className="size-4" aria-hidden />
+            </BotaoAviso>
+            {!bloqueado && (
+              <BotaoAviso cor="verde" rotulo="Atender" onClick={onAtender} desativado={ocupado}>
+                <Phone className="size-4" aria-hidden />
+              </BotaoAviso>
+            )}
+          </div>
+        )}
+      </div>
+      {confirmando && (
+        <div className="mt-3 flex items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={onCancelarConfirmacao}
+            className="rounded-full px-3 py-1.5 text-sm font-medium text-white/85 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
+          >
+            Continuar aqui
+          </button>
+          <BotaoAviso cor="verde" rotulo="Sair e atender" onClick={onAtender} desativado={ocupado}>
+            <Phone className="size-4" aria-hidden />
+          </BotaoAviso>
+        </div>
+      )}
+      {bloqueado && mensagem && (
+        <p role="alert" className="mt-2 rounded-xl bg-amber-400/15 px-3 py-2 text-center text-sm font-medium text-amber-100 ring-1 ring-amber-300/40">
+          {mensagem}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function BotaoAviso({
+  cor,
+  rotulo,
+  onClick,
+  desativado,
+  children,
+}: {
+  cor: "verde" | "vermelho";
+  rotulo: string;
+  onClick: () => void;
+  desativado?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={desativado}
+      className={`flex h-9 items-center gap-1.5 rounded-full px-3 text-sm font-semibold shadow transition active:scale-95 disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 ${
+        cor === "verde" ? "bg-emerald-500 hover:bg-emerald-400" : "bg-red-500 hover:bg-red-400"
+      }`}
+    >
+      {children}
+      {rotulo}
+    </button>
   );
 }
 

@@ -7,6 +7,8 @@ import {
   TEXTO_EVOLUCAO_PENDENTE,
   consultaAbertaNaUrl,
   consultaEncerrada,
+  modoChamadaRecebida,
+  TEXTO_CONFIRMAR_TROCA,
   decidirAposAtender,
   decidirResposta,
   iniciaisContraparte,
@@ -240,6 +242,24 @@ igual("ausente e sem store: 1º toque (prioridade 0)", tocarCom(ESTADO_CHAMADA_I
 // Inválido no payload → equivale a ausente (cai no dataISO).
 const invalido = lerEventoChamada("chamada_tocando", { ...base, inicioEm: "xx" }) as EventoChamada;
 igual("inválido: cai no dataISO", reduzirChamada(ESTADO_CHAMADA_INICIAL, { tipo: "evento", evento: invalido, agora: AGORA, consultaAberta: null, inicioConsulta: AGORA - MIN }).inicios, [["c1", AGORA - MIN, 1]]);
+
+// ── Tela cheia vs aviso compacto vs nada ────────────────────────────────
+igual("fora de /consulta: tela cheia", modoChamadaRecebida("c1", "/paciente", ""), "tela");
+igual("início: tela cheia", modoChamadaRecebida("c1", "/", "?consulta=c1"), "tela");
+igual("rota parecida não conta: tela", modoChamadaRecebida("c1", "/consultas", "?consulta=c2"), "tela");
+igual("em OUTRA consulta: aviso", modoChamadaRecebida("c1", "/consulta", "?consulta=c2"), "aviso");
+igual("em /consulta sem id: aviso", modoChamadaRecebida("c1", "/consulta", ""), "aviso");
+igual("em /consulta com id inválido: aviso", modoChamadaRecebida("c1", "/consulta", "?consulta=a%20b"), "aviso");
+igual("em /consulta/ (barra) de outra: aviso", modoChamadaRecebida("c1", "/consulta/", "?consulta=c2"), "aviso");
+igual("na MESMA consulta: nada", modoChamadaRecebida("c1", "/consulta", "?consulta=c1"), "nada");
+igual("na mesma consulta com outros parâmetros: nada", modoChamadaRecebida("c1", "/consulta", "?x=1&consulta=c1"), "nada");
+// Expiração e dedupe valem igual no aviso: o reducer não depende do modo.
+let mAviso = reduzirChamada(ESTADO_CHAMADA_INICIAL, ev(t1, AGORA, "c2"));
+igual("em outra consulta o toque entra no estado (vira aviso)", mAviso.atual?.consultaId, "c1");
+mAviso = reduzirChamada(mAviso, { tipo: "expirou", consultaId: "c1", tentativa: 1, agora: Date.parse(EXPIRA) });
+igual("aviso some no expiraEm", mAviso.atual, null);
+igual("aviso não volta para o mesmo toque", reduzirChamada(mAviso, ev(t1, AGORA, "c2")).atual, null);
+igual("texto da confirmação", TEXTO_CONFIRMAR_TROCA, "Sair da chamada atual e atender?");
 
 console.log(`chamada-recebida-logica: ${ok} ok, ${falhas} falha(s)`);
 if (falhas > 0) process.exit(1);

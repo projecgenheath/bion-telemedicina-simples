@@ -220,6 +220,24 @@ export function consultaAbertaNaUrl(pathname: string, search: string): string | 
   return id && ID_VALIDO.test(id) ? id : null;
 }
 
+/** Como mostrar o toque: tela cheia, aviso compacto no topo, ou nada. */
+export type ModoChamadaRecebida = "tela" | "aviso" | "nada";
+
+/**
+ * Onde o usuário está decide como o toque aparece:
+ *  - na sala da MESMA consulta (/consulta?consulta=<id>): nada;
+ *  - em QUALQUER outra /consulta (outra chamada, pré-sala, sem id): aviso
+ *    compacto no topo, sem toque alto (não cobre os controles da chamada);
+ *  - fora de /consulta: tela cheia com toque.
+ */
+export function modoChamadaRecebida(consultaId: string, pathname: string, search: string): ModoChamadaRecebida {
+  if (pathname.replace(/\/+$/, "") !== "/consulta") return "tela";
+  return consultaAbertaNaUrl(pathname, search) === consultaId ? "nada" : "aviso";
+}
+
+/** Texto da confirmação ao atender pelo aviso compacto (há uma chamada em andamento). */
+export const TEXTO_CONFIRMAR_TROCA = "Sair da chamada atual e atender?";
+
 /* ------------------------------------------------------------------ */
 /* Rota POST /api/telemedicina/[consultaId]/chamada                    */
 /* ------------------------------------------------------------------ */
