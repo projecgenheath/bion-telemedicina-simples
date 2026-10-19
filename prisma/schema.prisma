@@ -843,4 +843,7 @@ model PedidoRenovacao {
   @@index([medicoId, status, criadoEm])
   @@index([pacienteId])
   @@index([consultaOrigemId])
+  // Índice único parcial só no SQL (o Prisma não suporta parcial):
+  // "PedidoRenovacao_pendente_unico" (pacienteId, documentoId) WHERE status = 'pendente'
+  // — um só pedido pendente por paciente e receita. Ver 20261019b.
 }

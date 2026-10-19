@@ -87,6 +87,12 @@ ALTER TABLE public."PedidoRenovacao" ADD CONSTRAINT "PedidoRenovacao_status_chec
     'recusada'
   ));
 
+-- Um só pedido pendente por paciente e receita (índice único parcial; o
+-- Prisma não representa índice parcial, por isso só existe aqui).
+CREATE UNIQUE INDEX IF NOT EXISTS "PedidoRenovacao_pendente_unico"
+  ON public."PedidoRenovacao"("pacienteId", "documentoId")
+  WHERE "status" = 'pendente';
+
 -- RLS negando tudo por padrão (o app acessa só pelo servidor), como as demais.
 ALTER TABLE public."PedidoRenovacao" ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON TABLE public."PedidoRenovacao" FROM anon, authenticated;
