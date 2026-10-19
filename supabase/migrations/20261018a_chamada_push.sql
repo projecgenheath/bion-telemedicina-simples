@@ -8,9 +8,8 @@
 -- estas tabelas ainda (o job do toque e as rotas de inscrição vêm no PR 7).
 --
 -- Aditiva e idempotente (IF NOT EXISTS / duplicate_object): pode rodar de
--- novo e antes ou depois de `prisma db push` (que cria as MESMAS tabelas).
--- O Prisma não declara relações nestes models (evita conflito com os PRs de
--- Médicos e Pacientes); as FKs ficam só aqui, com ON DELETE CASCADE.
+-- novo sem efeito. As FKs (ON DELETE CASCADE) têm os mesmos nomes e regras
+-- das @relation do schema.prisma, então `prisma db push` não as remove.
 -- Trava contra toque duplo: UNIQUE ("consultaId","paraUsuarioId","tentativa")
 -- + INSERT … ON CONFLICT DO NOTHING no job (só quem inseriu envia).
 -- NÃO ativa pg_cron/pg_net (fica no PR 7).
@@ -37,6 +36,8 @@ CREATE TABLE IF NOT EXISTS public."ChamadaConsulta" (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS "ChamadaConsulta_consultaId_paraUsuarioId_tentativa_key"
   ON public."ChamadaConsulta"("consultaId","paraUsuarioId","tentativa");
+CREATE INDEX IF NOT EXISTS "ChamadaConsulta_paraUsuarioId_idx"
+  ON public."ChamadaConsulta"("paraUsuarioId");
 CREATE INDEX IF NOT EXISTS "ChamadaConsulta_status_expiraEm_idx"
   ON public."ChamadaConsulta"("status","expiraEm");
 DO $$ BEGIN
