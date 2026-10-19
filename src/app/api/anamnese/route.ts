@@ -19,6 +19,7 @@ import { validarTelefone } from "@/lib/server/validar-perfil";
 import { dataNascimentoParaIso, idadeDeNascimento } from "@/lib/idade";
 import { anonimizarMensagensIa } from "@/lib/server/anonimizar-ia";
 import { alturaCanonica, formatarAltura, formatarPeso, lerAlturaCm, lerPesoKg, medidaCanonica, pesoCanonico } from "@/lib/medidas-paciente";
+import { nomesMedicamentosEmUso } from "@/lib/server/medicamentos-legado";
 
 /**
  * Triagem pré-consulta guiada pela BION IA (storytelling clínico).
@@ -294,7 +295,7 @@ async function montarPerfilDados(usuarioId: string): Promise<PerfilDados | null>
     telefone: p.telefone || "",
     alergias: lista(p.alergias),
     comorbidades: lista(p.comorbidades),
-    medicamentos: lista(p.medicamentos),
+    medicamentos: await nomesMedicamentosEmUso(usuarioId, p.medicamentos),
     // M3: legado ("62 kg", "1,68 m") normalizado para kg / cm.
     peso: pesoCanonico(p.peso) ?? "",
     altura: alturaCanonica(p.altura) ?? "",

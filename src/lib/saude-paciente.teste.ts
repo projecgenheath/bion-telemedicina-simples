@@ -1,5 +1,5 @@
 /** Rodar: bun --conditions=react-server src/lib/saude-paciente.teste.ts */
-import { detalhesAuditoria, lerTiposPedido, validarResposta, lerPosologia, resumoMedicamento, validarMedicamento } from "./saude-paciente";
+import { detalhesAuditoria, lerTiposPedido, validarResposta, lerPosologia, resumoMedicamento, validarMedicamento, dividirMedicamentosLegado, chaveMedicamento } from "./saude-paciente";
 
 let ok = 0;
 let falhas = 0;
@@ -50,6 +50,24 @@ igual("med ok", validarMedicamento({ nome: " Losartana ", dose: "50 mg", frequen
 
 igual("auditoria só ids/tipos", detalhesAuditoria({ pacienteId: "u1", pedidoId: "p1", tipos: ["peso", "pa"], x: undefined, y: null }), '{"pacienteId":"u1","pedidoId":"p1","tipos":["peso","pa"]}');
 igual("auditoria sem dígitos de medida", /\d{2,}/.test(detalhesAuditoria({ pacienteId: "u", medicaoId: "m", tipos: ["pa"] })), false);
+
+// Import do campo antigo PerfilPaciente.medicamentos
+igual("legado JSON + vírgula/;/linha", dividirMedicamentosLegado('["Losartana 50 mg, AAS; Metformina\\nVitamina D"]'), ["Losartana 50 mg", "AAS", "Metformina", "Vitamina D"]);
+igual("legado texto solto", dividirMedicamentosLegado("dipirona;  omeprazol  20mg"), ["dipirona", "omeprazol 20mg"]);
+igual("dedupe sem caixa/acento", dividirMedicamentosLegado('["Losartana","LOSARTANA","losartána"]'), ["Losartana"]);
+igual("dedupe contra existentes", dividirMedicamentosLegado('["Losartana","AAS"]', ["losartana"]), ["AAS"]);
+igual("vazio/[] não importa", [dividirMedicamentosLegado(""), dividirMedicamentosLegado("[]"), dividirMedicamentosLegado(null)], [[], [], []]);
+igual("descarta curtos e não-string", dividirMedicamentosLegado('["a", 3, " , ", "Insulina"]'), ["Insulina"]);
+igual("máximo 50", dividirMedicamentosLegado(JSON.stringify(Array.from({ length: 60 }, (_, i) => `rem${i}`))).length, 50);
+igual("nome cortado em 120", dividirMedicamentosLegado(JSON.stringify(["x".repeat(200)]))[0].length, 120);
+{
+  // Idempotência: depois do import, o campo vira "[]" e uma segunda passada não cria nada;
+  // e mesmo sem limpar, reimportar contra a lista já criada não repete.
+  const primeira = dividirMedicamentosLegado('["AAS","Losartana"]', []);
+  igual("idempotente: campo limpo", dividirMedicamentosLegado("[]", primeira), []);
+  igual("idempotente: reimport contra existentes", dividirMedicamentosLegado('["AAS","Losartana"]', primeira), []);
+}
+igual("chave normaliza", chaveMedicamento("  Ácido   Fólico "), "acido folico");
 
 console.log(`${ok} ok, ${falhas} falha(s)`);
 if (falhas) process.exit(1);

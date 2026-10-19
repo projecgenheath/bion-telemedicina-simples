@@ -125,3 +125,46 @@ export function detalhesAuditoria(campos: Record<string, string | string[] | nul
   for (const [k, v] of Object.entries(campos)) if (v !== undefined && v !== null) limpo[k] = v;
   return JSON.stringify(limpo);
 }
+
+/** Chave de comparação de nomes: sem acento, sem caixa e com espaços normalizados. */
+export function chaveMedicamento(nome: string): string {
+  return nome
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Divide o campo antigo PerfilPaciente.medicamentos (JSON string[]; aceita
+ * também texto solto) em nomes para a lista MedicamentoEmUso. Quebra por
+ * linha, vírgula e ponto e vírgula, apara, descarta itens com menos de 2
+ * caracteres, corta em 120 e remove repetidos (entre si e contra `existentes`)
+ * sem diferenciar maiúsculas nem acentos. No máximo 50 itens.
+ */
+export function dividirMedicamentosLegado(bruto: string | null | undefined, existentes: string[] = []): string[] {
+  const texto = (bruto ?? "").trim();
+  if (!texto) return [];
+  let partes: string[];
+  try {
+    const j: unknown = JSON.parse(texto);
+    partes = Array.isArray(j) ? j.filter((x): x is string => typeof x === "string") : typeof j === "string" ? [j] : [];
+  } catch {
+    partes = [texto];
+  }
+  const vistos = new Set(existentes.map(chaveMedicamento));
+  const saida: string[] = [];
+  for (const parte of partes) {
+    for (const pedaco of parte.split(/[\n\r,;]+/)) {
+      const nome = pedaco.replace(/\s+/g, " ").trim().slice(0, 120);
+      if (nome.length < 2) continue;
+      const chave = chaveMedicamento(nome);
+      if (vistos.has(chave)) continue;
+      vistos.add(chave);
+      saida.push(nome);
+      if (saida.length >= 50) return saida;
+    }
+  }
+  return saida;
+}

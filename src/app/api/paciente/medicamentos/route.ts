@@ -4,24 +4,37 @@ import { exigirPapel } from "@/lib/server/auth";
 import { aplicarSideEffects } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
 import { detalhesAuditoria, validarMedicamento } from "@/lib/saude-paciente";
+import { importarMedicamentosLegado } from "@/lib/server/medicamentos-legado";
 import { serializarMedicamento } from "./serializar";
 
 /**
  * GET  /api/paciente/medicamentos — medicamentos em uso do próprio paciente
- *      (ativos primeiro; receita + os que ele adicionou).
+ *      (ativos primeiro; receita + os que ele adicionou). Na primeira leitura,
+ *      importa o campo antigo PerfilPaciente.medicamentos (idempotente).
  * POST /api/paciente/medicamentos — paciente adiciona { nome, dose?, via?, frequencia?, usoContinuo? }
  *      (origem "paciente"; nunca controlado).
  */
 export async function GET() {
   try {
     const usuario = await exigirPapel("PACIENTE");
+    const imp = await importarMedicamentosLegado(usuario.id);
+    if (imp.importados > 0 || imp.descartados > 0) {
+      // LGPD: só ação, ids e contagens; nunca os nomes.
+      await aplicarSideEffects(usuario, undefined, {
+        acao: "MEDICAMENTOS_PERFIL_IMPORTADOS",
+        categoria: "prontuario",
+        entidade: "perfilPaciente",
+        entidadeId: usuario.id,
+        detalhes: detalhesAuditoria({ pacienteId: usuario.id, importados: String(imp.importados), repetidos: String(imp.descartados) }),
+      });
+    }
     const lista = await db.medicamentoEmUso.findMany({
       where: { pacienteId: usuario.id },
       orderBy: [{ ativo: "desc" }, { inicio: "desc" }],
       take: 100,
       include: { lembretes: { select: { id: true } } },
     });
-    return ok({ medicamentos: lista.map(serializarMedicamento) });
+    return ok({ medicamentos: lista.map(serializarMedicamento), ...(imp.importados || imp.descartados ? { perfilImportado: true } : {}) });
   } catch (erro) {
     return falha(erro);
   }
