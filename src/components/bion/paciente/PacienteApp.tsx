@@ -57,6 +57,8 @@ import { acaoSalaPaciente, botaoPrincipalProxima, type AcaoSala } from "./entrad
 import { useRelogioSala } from "./useRelogioSala";
 import { SALA_ABRE_ANTES_MIN, salaAbertaEm } from "@/lib/janela-sala";
 import { EstadoVazio } from "./EstadosPaciente";
+import { PedidosMedicao } from "./PedidosMedicao";
+import { MedicamentosEmUso } from "./MedicamentosEmUso";
 
 /**
  * App imersivo do paciente — fullscreen, sem menu e sem botões de navegação.
@@ -728,6 +730,12 @@ export function PacienteApp() {
             </p>
 
             <div className="bpp-grade flex flex-col gap-4">
+              {/* Pedidos de medição do médico (só aparece se houver pendente) */}
+              <PedidosMedicao />
+
+              {/* Medicamentos em uso (receita + adicionados) com lembrete direto */}
+              <MedicamentosEmUso />
+
               {/* Lembretes */}
               <button type="button"
                 onClick={() => setDetalhe("lembretes")}

@@ -13,6 +13,7 @@ import { podeCompartilharTelaAqui } from "@/components/bion/chamada/compartilhar
 import { VideoChamada916 } from "@/components/bion/chamada/VideoChamada916";
 import { useAtalhosChamada } from "@/components/bion/chamada/useAtalhosChamada";
 import { useCamerasDisponiveis } from "@/components/bion/chamada/useCamerasDisponiveis";
+import { PedidosMedicao } from "./PedidosMedicao";
 
 /**
  * Sala de teleconsulta do PACIENTE: tela cheia 9:16 estilo ligação.
@@ -223,6 +224,12 @@ export function TelaChamadaPaciente({
         />
       }
     >
+      {/* Pedido de medidas do médico chega durante a chamada: faixa no topo do vídeo. */}
+      {sala.consultaAtual?.id && (
+        <div className="pointer-events-none absolute inset-x-0 top-24 z-30 px-4">
+          <PedidosMedicao consultaId={sala.consultaAtual.id} variante="chamada" />
+        </div>
+      )}
       {/* Arquivos anexados pela aba Exames da folha (mesmo fluxo de antes). */}
       <input
         aria-label="Anexar arquivo"
