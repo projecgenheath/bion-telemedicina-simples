@@ -23,9 +23,11 @@ import { consultaSemDesfecho } from "@/lib/server/repasse";
 /*     a cada 5 (a próxima sai 3 min depois de a anterior expirar);       */
 /*     INSERT … ON CONFLICT DO NOTHING: só quem inseriu envia;            */
 /*  3. `chamada_tocando` { consultaId, contraparte, especialidade,        */
-/*     expiraEm, tentativa } no tópico PRIVADO de notificações do usuário */
-/*     (#53) + Web Push com texto genérico (decisão do Alisson: sem nome  */
-/*     nem especialidade na tela bloqueada).                              */
+/*     inicioEm, expiraEm, tentativa } no tópico PRIVADO de notificações  */
+/*     do usuário (#53) + Web Push { tipo, consultaId, tentativa,         */
+/*     inicioEm, expiraEm, url, titulo, corpo:"" } com texto genérico     */
+/*     (decisão do Alisson: sem nome nem especialidade na tela            */
+/*     bloqueada). inicioEm = horário MARCADO da consulta (ISO).          */
 /* `chamada_atendida`/`chamada_recusada` são da rota do Pacientes          */
 /* (POST /api/telemedicina/[consultaId]/chamada), não daqui.               */
 /* A FALTA continua definida pela presença na sala, não pelo toque.       */
@@ -218,6 +220,7 @@ export async function rodarToque(agora: Date = new Date(), dep: DependenciasToqu
         consultaId: c.id,
         contraparte: p.contraparte,
         especialidade: c.especialidade,
+        inicioEm: c.dataInicio.toISOString(),
         expiraEm: expiraEm.toISOString(),
         tentativa,
       });
@@ -229,6 +232,7 @@ export async function rodarToque(agora: Date = new Date(), dep: DependenciasToqu
           tipo: "chamada_tocando",
           consultaId: c.id,
           tentativa,
+          inicioEm: c.dataInicio.toISOString(),
           expiraEm: expiraEm.toISOString(),
           url: `/consulta?consulta=${encodeURIComponent(c.id)}`,
           titulo: TITULO_PUSH,

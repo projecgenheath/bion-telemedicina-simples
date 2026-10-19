@@ -124,16 +124,18 @@ verifica(
   "evento chamada_tocando do paciente: {consultaId, contraparte, especialidade, expiraEm, tentativa}",
   evP,
 );
-verifica(Object.keys(evP?.payload ?? {}).sort().join() === "consultaId,contraparte,especialidade,expiraEm,tentativa", "evento: só os 5 campos do contrato");
+verifica(Object.keys(evP?.payload ?? {}).sort().join() === "consultaId,contraparte,especialidade,expiraEm,inicioEm,tentativa", "evento: só os 6 campos do contrato");
+verifica(evP?.payload.inicioEm === T0.toISOString(), "evento: inicioEm = horário marcado da consulta (ISO)", evP?.payload.inicioEm);
 const evM = eventos.find((e) => e.usuarioId === "med1" && e.evento === "chamada_tocando");
 verifica(evM?.payload.contraparte === "Maria", "evento do médico: contraparte = primeiro nome do paciente", evM);
 verifica(!eventos.some((e) => e.usuarioId === "med2"), "para quem entrou na sala (médico de c2): não toca");
 verifica(!eventos.some((e) => ["c3", "c4", "c5"].includes(String(e.payload.consultaId))), "não toca cancelada, futura nem com mais de 15 min");
 const pP = pushes.find((p) => p.usuarioId === "pac1");
 verifica(
-  pP && JSON.stringify(Object.keys(pP.payload).sort()) === JSON.stringify(["consultaId", "corpo", "expiraEm", "tentativa", "tipo", "titulo", "url"]) &&
+  pP && JSON.stringify(Object.keys(pP.payload).sort()) === JSON.stringify(["consultaId", "corpo", "expiraEm", "inicioEm", "tentativa", "tipo", "titulo", "url"]) &&
+    pP.payload.inicioEm === T0.toISOString() &&
     pP.payload.tipo === "chamada_tocando" && pP.payload.url === "/consulta?consulta=c1" && pP.payload.titulo === TITULO_PUSH,
-  "push: {tipo, consultaId, tentativa, expiraEm, url, titulo, corpo}",
+  "push: {tipo, consultaId, tentativa, inicioEm, expiraEm, url, titulo, corpo}",
   pP,
 );
 verifica(!JSON.stringify(pushes).match(/Ana|Maria|Psiquiatria|Lima/), "push sem nome nem especialidade");
