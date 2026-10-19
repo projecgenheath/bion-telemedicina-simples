@@ -4,7 +4,7 @@
  *
  * Contrato dos eventos (canal PRIVADO de notificações do usuário,
  * `notificacoes:user:<id>:<hmac>`):
- *   chamada_tocando  { consultaId, contraparte, especialidade, expiraEm, tentativa }  (job do Admin)
+ *   chamada_tocando  { consultaId, contraparte, especialidade, expiraEm, tentativa, inicioEm? }  (job do Admin)
  *   chamada_expirada { consultaId, tentativa, em, ultima }                             (job do Admin)
  *   chamada_atendida { consultaId, tentativa, por: "paciente"|"medico", em }          (POST .../chamada)
  *   chamada_recusada { consultaId, tentativa, por, em }                                (POST .../chamada)
@@ -21,6 +21,8 @@ export type ChamadaTocando = {
   /** Instante (ms) em que o toque expira. */
   expiraEm: number;
   tentativa: number;
+  /** Horário marcado da consulta (ms), quando o servidor manda `inicioEm`. */
+  inicioEm?: number;
 };
 
 export type EventoChamada =
@@ -46,6 +48,8 @@ export function lerEventoChamada(evento: string, payload: unknown): EventoChamad
     const expiraEm = typeof p.expiraEm === "string" || typeof p.expiraEm === "number" ? new Date(p.expiraEm).getTime() : NaN;
     if (!Number.isFinite(expiraEm)) return null;
     const texto = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : "");
+    // inicioEm (ISO, opcional): valor inválido é ignorado, sem derrubar o toque.
+    const inicioEm = typeof p.inicioEm === "string" && p.inicioEm ? Date.parse(p.inicioEm) : NaN;
     return {
       tipo: "chamada_tocando",
       consultaId,
@@ -53,6 +57,7 @@ export function lerEventoChamada(evento: string, payload: unknown): EventoChamad
       expiraEm,
       contraparte: texto(p.contraparte, 80),
       especialidade: texto(p.especialidade, 60),
+      ...(Number.isFinite(inicioEm) ? { inicioEm } : {}),
     };
   }
   if (evento === "chamada_atendida" || evento === "chamada_recusada") {
@@ -77,8 +82,11 @@ export type EstadoChamadaRecebida = {
   atual: ChamadaTocando | null;
   /** Chaves consultaId:tentativa já tratadas (dedupe entre aparelhos e reenvios). */
   vistas: string[];
-  /** Início de referência (ms) por consulta: horário da consulta ou, sem ele, o 1º toque visto. */
-  inicios: [string, number][];
+  /**
+   * Início de referência (ms) por consulta, com a prioridade da fonte:
+   * 2 = inicioEm do payload, 1 = dataISO do store, 0 = 1º toque visto.
+   */
+  inicios: [consultaId: string, inicio: number, prioridade: 0 | 1 | 2][];
   /** Consultas cujo toque acabou de vez (ultima, +15 min do início, cancelada/concluída). */
   finalizadas: string[];
 };
@@ -159,13 +167,24 @@ export function reduzirChamada(estado: EstadoChamadaRecebida, acao: AcaoChamada)
     if (estado.finalizadas.includes(ev.consultaId)) return estado;
     // Repetido (outro caminho/aparelho), já expirado, ou o usuário já está na sala desta consulta.
     if (estado.vistas.includes(chave)) return estado;
-    // Guarda o início de referência na primeira vez (horário da consulta ou este toque).
-    if (inicioDe(estado, ev.consultaId) === null) {
-      const ini = acao.inicioConsulta ?? acao.agora;
-      const inicios: [string, number][] = [...estado.inicios, [ev.consultaId, ini]];
+    // Início de referência da janela de 15 min, por prioridade:
+    // inicioEm do payload > horário da consulta no store (dataISO) > 1º toque visto.
+    // Uma fonte de prioridade menor nunca sobrescreve uma maior.
+    const [ini, prio]: [number, 0 | 1 | 2] =
+      typeof ev.inicioEm === "number"
+        ? [ev.inicioEm, 2]
+        : typeof acao.inicioConsulta === "number"
+          ? [acao.inicioConsulta, 1]
+          : [acao.agora, 0];
+    const anterior = estado.inicios.find(([id]) => id === ev.consultaId);
+    if (!anterior) {
+      const inicios: EstadoChamadaRecebida["inicios"] = [...estado.inicios, [ev.consultaId, ini, prio]];
       estado = { ...estado, inicios: inicios.length > MAX_VISTAS ? inicios.slice(inicios.length - MAX_VISTAS) : inicios };
-    } else if (typeof acao.inicioConsulta === "number") {
-      estado = { ...estado, inicios: estado.inicios.map(([id, v]) => [id, id === ev.consultaId ? acao.inicioConsulta! : v]) };
+    } else if (prio > 0 && prio >= anterior[2] && ini !== anterior[1]) {
+      estado = {
+        ...estado,
+        inicios: estado.inicios.map((e) => (e[0] === ev.consultaId ? [e[0], ini, prio] : e)),
+      };
     }
     if (passouDoFim(estado, ev.consultaId, acao.agora)) {
       return { ...estado, vistas: marcar(estado.vistas, chave), finalizadas: finalizar(estado, ev.consultaId) };

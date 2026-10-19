@@ -200,5 +200,46 @@ igual("confirmada não é final", consultaEncerrada("confirmada"), false);
 igual("em_espera não é final", consultaEncerrada("em_espera"), false);
 igual("sem status não é final", consultaEncerrada(undefined), false);
 
+// ── inicioEm do payload (Admin): prioridade sobre dataISO e 1º toque ──
+const base = { consultaId: "c1", contraparte: "Dr. X", especialidade: "", expiraEm: EXPIRA, tentativa: 1 };
+const comInicio = lerEventoChamada("chamada_tocando", { ...base, inicioEm: "2026-10-19T13:50:00.000Z" });
+igual("inicioEm presente é lido em ms", (comInicio as { inicioEm?: number }).inicioEm, Date.parse("2026-10-19T13:50:00.000Z"));
+igual("inicioEm ausente: campo não existe", "inicioEm" in (lerEventoChamada("chamada_tocando", base) as object), false);
+for (const ruim of ["ontem", "", 123, null, { a: 1 }]) {
+  const e = lerEventoChamada("chamada_tocando", { ...base, inicioEm: ruim });
+  igual(`inicioEm inválido (${JSON.stringify(ruim)}) é ignorado e o toque vale`, e !== null && !("inicioEm" in e), true);
+}
+const tocarCom = (e: EstadoChamadaRecebida, tentativa: number, agora: number, inicioEm: number | undefined, inicioConsulta: number | null) =>
+  reduzirChamada(e, {
+    tipo: "evento",
+    evento: { ...(t1 as Extract<EventoChamada, { tipo: "chamada_tocando" }>), tentativa, expiraEm: agora + 2 * MIN, ...(inicioEm !== undefined ? { inicioEm } : {}) },
+    agora,
+    consultaAberta: null,
+    inicioConsulta,
+  });
+// Presente: vence o dataISO do store (store diz começo agora; inicioEm diz 16 min atrás → já passou).
+igual("inicioEm presente vence dataISO", tocarCom(ESTADO_CHAMADA_INICIAL, 1, AGORA, AGORA - 16 * MIN, AGORA).atual, null);
+igual("inicioEm presente fica como início (prioridade 2)", tocarCom(ESTADO_CHAMADA_INICIAL, 1, AGORA, AGORA - 5 * MIN, AGORA).inicios, [["c1", AGORA - 5 * MIN, 2]]);
+// Presente: vence o 1º toque visto (sem store).
+let p1 = tocarCom(ESTADO_CHAMADA_INICIAL, 1, AGORA, AGORA - 14 * MIN, null);
+igual("toca aos 14 min pelo inicioEm", p1.atual?.tentativa, 1);
+p1 = reduzirChamada(p1, { tipo: "expirou", consultaId: "c1", tentativa: 1, agora: AGORA + 2 * MIN });
+igual("expira aos 16 min pelo inicioEm → final (o 1º toque diria só 2 min)", p1.finalizadas, ["c1"]);
+// Chega depois: inicioEm na tentativa 2 substitui o 1º toque visto.
+let p2 = tocarCom(ESTADO_CHAMADA_INICIAL, 1, AGORA, undefined, null);
+p2 = reduzirChamada(p2, { tipo: "fechar" });
+p2 = tocarCom(p2, 2, AGORA + 5 * MIN, AGORA - 20 * MIN, null);
+igual("inicioEm tardio substitui o 1º toque e encerra", [p2.atual, p2.finalizadas], [null, ["c1"]]);
+// Ausente: cai no dataISO do store; depois um toque sem nada não rebaixa a fonte.
+let p3 = tocarCom(ESTADO_CHAMADA_INICIAL, 1, AGORA, AGORA - 3 * MIN, null);
+p3 = reduzirChamada(p3, { tipo: "fechar" });
+p3 = tocarCom(p3, 2, AGORA + 5 * MIN, undefined, AGORA - 30 * MIN);
+igual("dataISO não sobrescreve inicioEm já conhecido", [p3.atual?.tentativa, p3.inicios], [2, [["c1", AGORA - 3 * MIN, 2]]]);
+igual("ausente: usa dataISO (prioridade 1)", tocarCom(ESTADO_CHAMADA_INICIAL, 1, AGORA, undefined, AGORA - 2 * MIN).inicios, [["c1", AGORA - 2 * MIN, 1]]);
+igual("ausente e sem store: 1º toque (prioridade 0)", tocarCom(ESTADO_CHAMADA_INICIAL, 1, AGORA, undefined, null).inicios, [["c1", AGORA, 0]]);
+// Inválido no payload → equivale a ausente (cai no dataISO).
+const invalido = lerEventoChamada("chamada_tocando", { ...base, inicioEm: "xx" }) as EventoChamada;
+igual("inválido: cai no dataISO", reduzirChamada(ESTADO_CHAMADA_INICIAL, { tipo: "evento", evento: invalido, agora: AGORA, consultaAberta: null, inicioConsulta: AGORA - MIN }).inicios, [["c1", AGORA - MIN, 1]]);
+
 console.log(`chamada-recebida-logica: ${ok} ok, ${falhas} falha(s)`);
 if (falhas > 0) process.exit(1);

@@ -21,8 +21,9 @@ import {
  *  - Fecha sozinho no expiraEm LOCAL (não espera o chamada_expirada) e quando
  *    chega atendida/recusada/expirada da mesma tentativa (ex.: atendeu em outro aparelho).
  *  - Fim de vez (não toca mais nesta consulta): `ultima: true`, qualquer
- *    expiração depois de 15 min do início (horário da consulta do store ou,
- *    sem ele, o 1º toque), ou a consulta virar cancelada/concluída no store.
+ *    expiração depois de 15 min do início (`inicioEm` do payload; sem ele, o
+ *    horário da consulta no store; sem nenhum, o 1º toque visto), ou a
+ *    consulta virar cancelada/concluída no store.
  *
  * `ativo = false` (admin, ou sem sessão) não ouve nada.
  */
