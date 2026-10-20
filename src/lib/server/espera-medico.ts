@@ -642,7 +642,7 @@ export async function avisarPacienteEspera(pagamentoId: string, resultado: "rema
     where: { id: pagamentoId },
     select: { consulta: { select: { pacienteId: true, medico: { select: { nome: true } } } } },
   });
-  if (!p) return null;
+  if (!p?.consulta) return null; // pagamento de renovação não tem consulta
   const texto =
     resultado === "remarcada"
       ? `Pagamento aprovado. Sua consulta com Dr(a). ${p.consulta.medico.nome} começa agora; entre na sala.`
