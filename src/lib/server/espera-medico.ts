@@ -49,6 +49,9 @@ import {
 /* ------------------------------------------------------------------ */
 
 export const ERRO_ESPERA_NAO_EXPIRADA = "A espera ainda não terminou.";
+/** 409 ao tentar remarcar com outro médico um retorno grátis (valor 0, sem Pagamento). */
+export const ERRO_REMARCAR_RETORNO_GRATIS =
+  "Este retorno é gratuito e não pode ser remarcado com outro médico. Cancele, e o seu direito ao retorno grátis volta.";
 const MOTIVO_CANCELAMENTO = "O médico não entrou na sala em até 10 minutos";
 /** Médico "livre agora" (mesma regra da GET /api/medicos/livres-agora do Médicos). */
 const SEM_CONSULTA_PROXIMOS_MIN = 40;
@@ -380,7 +383,7 @@ export async function remarcarPorEspera(params: {
     if (status !== "expirada") return falhar(409, status === "aguardando" ? "espera_nao_expirada" : "espera_resolvida", status === "aguardando" ? ERRO_ESPERA_NAO_EXPIRADA : "A espera já foi resolvida.", { status });
     if (!transicaoPermitida(status, "remarcada")) return falhar(409, "espera_resolvida", "A espera já foi resolvida.");
     if (!STATUS_ABERTOS.includes(consulta.status)) return falhar(409, "consulta_encerrada", "A consulta já foi encerrada.");
-    if (!consulta.pago || consulta.pagamento?.status !== "confirmado") return falhar(409, "nao_pago", "Só dá para remarcar uma consulta paga. Escolha cancelar.");
+    if (!consulta.pago || consulta.pagamento?.status !== "confirmado") return falhar(409, "nao_pago", reaisParaCentavos(consulta.valor) === 0 ? ERRO_REMARCAR_RETORNO_GRATIS : "Só dá para remarcar uma consulta paga. Escolha cancelar.");
 
     const livre = await medicoLivreAgora(tx, { medicoId: params.medicoId, especialidade: consulta.especialidade, excetoMedicoId: consulta.medicoId, agora });
     if (!livre) return falhar(409, "medico_indisponivel", "medico_indisponivel");

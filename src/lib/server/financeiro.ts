@@ -14,6 +14,7 @@ import {
   type ClienteBanco,
 } from "@/lib/server/bloqueio-agenda";
 import { REEMBOLSO_MANUAL_PRAZO_DIAS, parseDataHora, prazoReembolsoManual } from "@/lib/server/dados";
+import { fimDoPrazoEmDiasUteis } from "@/lib/server/dias-uteis";
 import { statusAposFalhaDoMedico } from "@/lib/atendimento-tipo";
 
 /* ------------------------------------------------------------------ */
@@ -399,10 +400,13 @@ export async function aplicarFalhaTecnica(
 }
 
 /* ---------- Reembolso manual (falta do paciente) ------------------- */
-// Regras do Alisson (01/10): na falta não há reembolso automático e o médico
-// recebe; o paciente pode pedir em até REEMBOLSO_MANUAL_PRAZO_DIAS com
-// justificativa, e o admin aprova ou nega (negado é definitivo). Aprovado:
-// a consulta sai do repasse — o médico devolve a parte dele e o app os 10%.
+// Regras do Alisson (01/10, revistas em 20/10): na falta o médico recebe; o
+// paciente pode pedir o reembolso em até REEMBOLSO_MANUAL_PRAZO_DIAS com
+// justificativa. Desde 20/10 o pedido é aprovado NA HORA, sem análise do
+// admin, e devolvido por PIX: valor INTEGRAL (a parte do médico, 90%, e a do
+// app, 10%). As taxas do meio de pagamento ficam com o app e não saem do
+// valor do paciente. A consulta sai do repasse; se o repasse já foi fechado,
+// a parte do médico vira desconto no próximo (RepasseAjuste, repasse.ts).
 
 /** Até quando o paciente pode pedir reembolso de uma falta. */
 export { prazoReembolsoManual };
@@ -487,10 +491,13 @@ export async function pedirReembolsoManual(params: {
         valorCentavos: reaisParaCentavos(pagamento.valor),
         multaCentavos: 0,
         motivo: "falta_paciente",
-        status: "em_analise",
+        // Aprovado na hora (regra de 20/10): sem fila do admin.
+        status: "aprovado",
         origem: "manual",
         justificativa,
         solicitadoPor: params.pacienteId,
+        decididoPor: "sistema",
+        decididoEm: agora,
       },
     })
     .catch((e: unknown) => {
@@ -527,6 +534,125 @@ export async function decidirReembolsoManual(params: {
   if (!r || r.origem !== "manual") return { ok: false, erro: "Pedido de reembolso não encontrado.", status: 404 };
   if (res.count === 0) return { ok: false, erro: "Este pedido já foi decidido.", status: 409 };
   return { ok: true, reembolso: r };
+}
+
+/* ---------- Prazo de escolha depois de uma correção ---------------- */
+// Regras do Alisson (20/10/2026): quando o admin corrige o desfecho para
+// falha técnica ou falta do médico e a consulta está paga, ela fica em
+// "aguardando_reagendamento" e o paciente escolhe remarcar ou o reembolso
+// integral. Prazo: PRAZO_ESCOLHA_CORRECAO_DIAS_UTEIS dias úteis a partir do
+// dia SEGUINTE à correção (seg–sex, horário de Brasília). Passou do prazo sem
+// escolha: o sistema cancela a consulta e cria o reembolso INTEGRAL (mesmo
+// criarReembolsoSeDevido do cancelamento; status aprovado, via PIX; taxas do
+// meio de pagamento por conta do app). Repasse já fechado: desconto no
+// próximo, pelo mecanismo de sempre.
+
+export const PRAZO_ESCOLHA_CORRECAO_DIAS_UTEIS = 7;
+/** 7 dias úteis contados do dia seguinte nunca vencem antes de 9 dias corridos (filtro do cron). */
+export const DIAS_CORRIDOS_MINIMOS_ESCOLHA = 9;
+
+/** Até quando o paciente pode escolher depois da correção feita em `corrigidoEm`. */
+export function prazoEscolhaCorrecao(corrigidoEm: Date): Date {
+  return fimDoPrazoEmDiasUteis(corrigidoEm, PRAZO_ESCOLHA_CORRECAO_DIAS_UTEIS);
+}
+
+/** O prazo da escolha venceu? (PURA) */
+export function escolhaCorrecaoVencida(corrigidoEm: Date, agora: Date): boolean {
+  return agora.getTime() > prazoEscolhaCorrecao(corrigidoEm).getTime();
+}
+
+export const MOTIVO_CANCELAMENTO_PRAZO_ESCOLHA =
+  "Prazo de 7 dias úteis para escolher entre remarcar e o reembolso terminou: reembolso integral automático";
+
+/**
+ * Job: reembolsa automaticamente as consultas cujo prazo de escolha depois da
+ * correção venceu. Idempotente (updateMany com status no where e o índice de
+ * um reembolso ativo por pagamento). Roda no cron da espera do médico.
+ */
+/** Notificação do vencimento do prazo. Sem reembolso (valor 0, retorno grátis): cancelada sem custo. (PURA) */
+export function textoVencimentoEscolha(especialidade: string, quando: string, comReembolso: boolean): { titulo: string; texto: string } {
+  const base = `O prazo para escolher entre remarcar e o reembolso da consulta de ${especialidade} de ${quando} terminou.`;
+  return comReembolso
+    ? { titulo: "Reembolso automático", texto: `${base} O reembolso integral foi aprovado automaticamente, sem custo para você.` }
+    : { titulo: "Consulta cancelada", texto: `${base} A consulta foi cancelada sem custo, e o seu direito ao retorno grátis volta.` };
+}
+
+export async function vencerEscolhasCorrecao(agora: Date = new Date()): Promise<{ vencidas: number; reembolsadas: number }> {
+  // 7 dias úteis a partir do dia seguinte são sempre mais de 9 dias corridos:
+  // o banco já descarta o que não pode ter vencido. Mais antigos primeiro.
+  const limite = new Date(agora.getTime() - DIAS_CORRIDOS_MINIMOS_ESCOLHA * 86_400_000);
+  const eventos = await db.eventoConsulta.findMany({
+    where: {
+      tipo: "falha_tecnica",
+      por: { in: ["admin", "sistema"] },
+      ...EVENTO_VIGENTE,
+      em: { lte: limite },
+      consulta: { status: "aguardando_reagendamento", pago: true },
+    },
+    select: {
+      em: true,
+      motivo: true,
+      dataAnterior: true,
+      consulta: { select: { id: true, medicoId: true, pacienteId: true, especialidade: true, dataInicio: true, valor: true } },
+    },
+    orderBy: { em: "asc" },
+    take: 50,
+  });
+  const candidatas = eventos.map((e) => ({ ...e.consulta, eventos: [{ em: e.em, motivo: e.motivo, dataAnterior: e.dataAnterior }] }));
+  let vencidas = 0;
+  let reembolsadas = 0;
+  for (const c of candidatas) {
+    const ev = c.eventos.find((e) => e.dataAnterior.getTime() === c.dataInicio.getTime());
+    if (!ev || !escolhaCorrecaoVencida(ev.em, agora)) continue;
+    const r = await db.$transaction(async (tx) => {
+      // Mesma trava do fechamento do repasse e da correção.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${"repasse:" + c.medicoId}))`;
+      const { count } = await tx.consulta.updateMany({
+        where: { id: c.id, status: "aguardando_reagendamento", dataInicio: c.dataInicio },
+        data: { status: "cancelada", motivoCancelamento: MOTIVO_CANCELAMENTO_PRAZO_ESCOLHA },
+      });
+      if (count === 0) return null;
+      await registrarEvento(tx, {
+        consultaId: c.id,
+        tipo: "cancelada",
+        por: "sistema",
+        dataAnterior: c.dataInicio,
+        motivo: ev.motivo === "falta_medico" ? "falta_medico" : "falha_tecnica",
+        multaCentavos: 0,
+      });
+      const reembolso = await criarReembolsoSeDevido(tx, {
+        consultaId: c.id,
+        valorCentavos: reaisParaCentavos(c.valor),
+        multaCentavos: 0,
+        motivo: ev.motivo === "falta_medico" ? "falta_medico" : "falha_tecnica",
+        solicitadoPor: "sistema",
+      });
+      await cancelarReservasPendentes(tx, c.id);
+      await tx.notificacao.create({
+        data: {
+          usuarioId: c.pacienteId,
+          tipo: "agenda",
+          ...textoVencimentoEscolha(c.especialidade, quandoClinica(c.dataInicio, { day: "2-digit", month: "2-digit" }), !!reembolso),
+        },
+      });
+      await tx.auditLog.create({
+        data: {
+          acao: "REEMBOLSO_AUTOMATICO_PRAZO_ESCOLHA",
+          categoria: "pagamento",
+          severidade: "warning",
+          usuarioNome: "Sistema",
+          role: "SISTEMA",
+          entidade: "consulta",
+          entidadeId: c.id,
+          detalhes: JSON.stringify({ consultaId: c.id, reembolsoId: reembolso?.id ?? null, corrigidoEm: ev.em.toISOString() }),
+        },
+      });
+      return { reembolso };
+    }, { timeout: 20_000, maxWait: 10_000 });
+    if (r) vencidas++;
+    if (r?.reembolso) reembolsadas++;
+  }
+  return { vencidas, reembolsadas };
 }
 
 /* ---------- Remarcação com multa (reserva + cobrança) -------------- */
@@ -1140,12 +1266,16 @@ export function textosNotificacaoCorrecao(
         : `A ${consulta} foi registrada como ${ROTULO_DESFECHO_PACIENTE[plano.novo]}.`,
     ];
     if (plano.novo === "falha_tecnica" || plano.novo === "falta_medico") {
-      partes.push(c.pago ? "Escolha no app: remarcar sem custo ou receber o reembolso integral." : "A consulta foi cancelada, sem custo para você.");
+      partes.push(
+        c.pago
+          ? `Escolha no app até ${diaHora(prazoEscolhaCorrecao(agora))}: remarcar sem custo ou receber o reembolso integral. Se você não escolher até lá, o reembolso é integral e automático.`
+          : "A consulta foi cancelada, sem custo para você.",
+      );
     } else if (plano.novo === "falta_paciente" && plano.dinheiro.pagoConfirmado) {
       const prazo = prazoReembolsoManual(c.dataInicio);
       partes.push(
         agora.getTime() <= prazo.getTime()
-          ? `Se você teve um imprevisto, pode pedir o reembolso pelo app até ${diaHora(prazo)}.`
+          ? `Se você teve um imprevisto, pode pedir o reembolso pelo app até ${diaHora(prazo)}; o reembolso é integral e automático.`
           : `O prazo de ${REEMBOLSO_MANUAL_PRAZO_DIAS} dias para pedir o reembolso desta consulta já terminou.`,
       );
     }

@@ -2,7 +2,7 @@ import "server-only";
 import { db } from "@/lib/db";
 import { guardarChatSala, guardarChatSalaSemFalhar } from "@/lib/server/chat-consulta";
 import { quandoClinica } from "@/lib/server/fuso";
-import { aplicarFalhaTecnica, registrarEvento } from "@/lib/server/financeiro";
+import { aplicarFalhaTecnica, prazoEscolhaCorrecao, registrarEvento } from "@/lib/server/financeiro";
 import { REEMBOLSO_MANUAL_PRAZO_DIAS } from "@/lib/server/dados";
 import { SALA_FECHA_DEPOIS_MIN } from "@/lib/janela-sala";
 import { medicoEsperouAteOLimite, SINAL_PARADO_MS, type PresencaRegra } from "@/components/bion/medico/metricas";
@@ -278,7 +278,7 @@ function gravarDesfechoTx(
           titulo: faltaMedico ? "O médico não compareceu" : "Falha técnica na consulta",
           texto:
             r.status === "aguardando_reagendamento"
-              ? `A consulta de ${c.especialidade} (${quandoClinica(c.dataInicio)}) não pôde acontecer ${causa}. Escolha no app: remarcar sem custo ou reembolso integral.`
+              ? `A consulta de ${c.especialidade} (${quandoClinica(c.dataInicio)}) não pôde acontecer ${causa}. ${autor.por === "sistema" ? `Escolha no app até ${quandoClinica(prazoEscolhaCorrecao(r.evento.em))}: remarcar sem custo ou reembolso integral. Se você não escolher até lá, a consulta é cancelada com reembolso integral automático.` : "Escolha no app: remarcar sem custo ou reembolso integral."}`
               : `A consulta de ${c.especialidade} (${quandoClinica(c.dataInicio)}) não pôde acontecer ${causa} e foi cancelada, sem custo.`,
           usuarioId: c.pacienteId,
         },
