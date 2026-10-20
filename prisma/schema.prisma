@@ -207,6 +207,8 @@ model Consulta {
   repasseAjustes RepasseAjuste[]
   remarcacoes RemarcacaoPendente[]
   chamadas    ChamadaConsulta[] // Admin: toque da consulta
+  esperaMedico   EsperaMedico?  @relation("EsperaConsulta") // Admin: espera do médico
+  esperasOrigem  EsperaMedico[] @relation("EsperaConsultaNova")
 
   @@unique([id, medicoId]) // alvo das FKs (consultaId, medicoId) do repasse
   @@index([consultaOrigemId])
@@ -860,4 +862,31 @@ model PedidoRenovacao {
   // "PedidoRenovacao_aberto_unico" (pacienteId, documentoId) WHERE status IN ('aguardando_pagamento','pendente')
   // — um só pedido aberto por paciente e receita. Ver 20261020a.
   // Também só no SQL: "PedidoRenovacao_pendente_criadoEm_idx" (criadoEm) WHERE status = 'pendente'.
+}
+
+// Admin: espera do médico (paciente na sala, médico ainda não entrou).
+// Migração: supabase/migrations/20261019c_espera_medico.sql (CHECKs, índice
+// parcial em expiraEm WHERE status='aguardando', RLS). Uma por consulta.
+// status: aguardando | medico_entrou | expirada | remarcando | cancelada | remarcada.
+// remarcando: esperando o pagamento da diferença até reservaExpiraEm (10 min).
+// diferencaCentavos = valorNovo − valorAntigo (> 0 paciente paga; < 0 recebe).
+model EsperaMedico {
+  id                  String    @id @default(cuid())
+  consultaId          String    @unique
+  consulta            Consulta  @relation("EsperaConsulta", fields: [consultaId], references: [id], onDelete: Cascade)
+  iniciadaEm          DateTime
+  expiraEm            DateTime
+  status              String    @default("aguardando")
+  consultaNovaId      String?
+  consultaNova        Consulta? @relation("EsperaConsultaNova", fields: [consultaNovaId], references: [id], onDelete: SetNull)
+  valorAntigoCentavos Int?
+  valorNovoCentavos   Int?
+  diferencaCentavos   Int?
+  reembolsoId         String?
+  reservaExpiraEm     DateTime?
+  criadoEm            DateTime  @default(now())
+  resolvidoEm         DateTime?
+
+  @@index([consultaNovaId])
+  @@index([status, resolvidoEm])
 }
