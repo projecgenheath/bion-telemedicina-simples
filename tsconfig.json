@@ -43,6 +43,9 @@
     "tests",
     "mini-services",
     "bion-telemedicina-simples",
-    "scripts"
+    "scripts",
+    "android",
+    "ios",
+    "cap-www"
   ]
 }
