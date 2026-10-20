@@ -226,6 +226,13 @@ export type ResultadoToque = {
   semInscricao: number;
   /** Toques ao médico adiados porque ele está atendendo outra consulta. */
   medicoOcupado: number;
+  /**
+   * Toques ao médico pulados porque ele tem uma Evolução em rascunho de OUTRA
+   * consulta (mesmo critério do medicoLivreAgora e da Fila do admin). O
+   * paciente toca normalmente (a espera de 10 min começa); o médico volta a
+   * ser chamado nas tentativas seguintes quando concluir a evolução.
+   */
+  medicoEvolucaoPendente: number;
   /** Sobrou trabalho para o minuto seguinte (orçamento acabou). */
   incompleto: boolean;
 };
@@ -237,7 +244,7 @@ export async function rodarToque(agora: Date = new Date(), dep: DependenciasToqu
   const pushLigado = dep.enviarPush !== undefined || pushAtivo();
   /** Prazo ABSOLUTO da rodada: toda a fase de push (inscrições, fila do pool, POSTs) termina antes dele. */
   const prazo = t0 + ORCAMENTO_MS;
-  const r: ResultadoToque = { expiradas: 0, tocadas: 0, push: 0, pushPulados: 0, reenvios: 0, pushCortados: 0, semInscricao: 0, consultas: 0, medicoOcupado: 0, incompleto: false };
+  const r: ResultadoToque = { expiradas: 0, tocadas: 0, push: 0, pushPulados: 0, reenvios: 0, pushCortados: 0, semInscricao: 0, consultas: 0, medicoOcupado: 0, medicoEvolucaoPendente: 0, incompleto: false };
   const restante = () => ORCAMENTO_MS - (Date.now() - t0);
   /** Cabe mais um passo "grava + broadcast"? Conferido ANTES de cada UPDATE/INSERT. */
   const cabeParticipante = () => restante() >= RESERVA_PARTICIPANTE_MS;
@@ -308,6 +315,22 @@ export async function rodarToque(agora: Date = new Date(), dep: DependenciasToqu
   }
   const medicoEmOutraSala = (medicoId: string, consultaId: string) =>
     [...(ocupados.get(medicoId) ?? [])].some((id) => id !== consultaId);
+  // Médico com Evolução em rascunho de OUTRA consulta: não toca para ele nem
+  // grava a linha dele (a do paciente segue normal, para a espera começar).
+  // O rascunho da PRÓPRIA consulta não bloqueia.
+  const rascunhos = new Map<string, Set<string>>(); // medicoId → consultas com evolução em rascunho
+  if (medicoIds.length) {
+    const evs = await db.evolucao.findMany({
+      where: { medicoId: { in: medicoIds }, status: "rascunho" },
+      select: { medicoId: true, consultaId: true },
+    });
+    for (const e of evs) {
+      if (!rascunhos.has(e.medicoId)) rascunhos.set(e.medicoId, new Set());
+      rascunhos.get(e.medicoId)!.add(e.consultaId);
+    }
+  }
+  const medicoComEvolucaoPendente = (medicoId: string, consultaId: string) =>
+    [...(rascunhos.get(medicoId) ?? [])].some((id) => id !== consultaId);
 
   type PushPendente = {
     id?: string;
@@ -374,6 +397,7 @@ export async function rodarToque(agora: Date = new Date(), dep: DependenciasToqu
       });
       if (tentativa === null) continue;
       if (p.papel === "medico" && medicoEmOutraSala(p.usuarioId, c.id)) { r.medicoOcupado++; continue; }
+      if (p.papel === "medico" && medicoComEvolucaoPendente(p.usuarioId, c.id)) { r.medicoEvolucaoPendente++; continue; }
       // Orçamento ANTES do INSERT: sem tempo para o broadcast, não grava (toca no minuto seguinte).
       if (!cabeParticipante()) { r.incompleto = true; break consultas; }
       const expiraEm = expiraEmTentativa(agora, c.dataInicio, tentativa);
