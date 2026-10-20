@@ -107,14 +107,15 @@ export type ResumoHoje = {
   reagendar: number; // aguardando reagendamento
   aoVivo: Consulta[]; // começaram há até 30 min ou começam em até 30 min
   proximas: Consulta[]; // restantes do dia, em ordem de horário
-  pagas: number;
+  pagas: number; // só com valor > 0 (retorno grátis fica de fora)
   brutoPagoCentavos: number; // soma do valor de tabela das consultas pagas do dia
 };
 
 export function resumoHoje(consultas: Consulta[], agora: number): ResumoHoje {
   const hoje = consultas.filter((c) => Number.isFinite(c.ts) && mesmoDia(c.ts, agora));
   const abertas = hoje.filter((c) => EM_ABERTO.includes(c.status));
-  const pagas = hoje.filter((c) => c.pago && c.status !== "cancelada");
+  // Valor 0 (retorno grátis, #84) nasce "paga" sem cobrança: não conta como paga nem como receita.
+  const pagas = hoje.filter((c) => c.pago && c.status !== "cancelada" && centavosDoValor(c.valor) > 0);
   return {
     total: hoje.length,
     agendadas: abertas.length,
