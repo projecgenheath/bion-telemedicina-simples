@@ -252,7 +252,7 @@ export function TriagemSlides({
         {ETAPAS_ANAMNESE.map((item, i) => (
           <article
             key={item.id}
-            className={`snap-center shrink-0 w-[86vw] max-w-md h-full rounded-3xl border p-5 flex flex-col ${
+            className={`snap-center shrink-0 w-[86vw] max-w-md h-full overflow-y-auto overscroll-contain rounded-3xl border p-5 flex flex-col ${
               i === indice ? "bpp-sheet-sel bpp-sheet-cartao" : "bpp-sheet-borda bpp-sheet-cartao"
             }`}
           >
@@ -288,12 +288,18 @@ export function TriagemSlides({
                   value={rascunhos[item.id] ?? ""}
                   onChange={(e) => setRascunhos((r) => ({ ...r, [item.id]: e.target.value }))}
                   rows={3}
-                  placeholder="Ou escreva aqui…"
-                  className="mt-4 w-full rounded-2xl border bpp-sheet-borda p-3 text-sm bpp-sheet-campo"
+                  aria-label="Sua resposta"
+                  placeholder="Escreva sua resposta aqui…"
+                  className="mt-4 w-full min-h-24 shrink-0 rounded-2xl border bpp-sheet-borda p-3 text-sm bpp-sheet-campo"
                 />
               </>
             ) : i > idxServidor && !pronta ? (
-              <p className="mt-4 text-sm bpp-sheet-suave">Responda o card atual para chegar aqui.</p>
+              <div className="mt-4 flex flex-col gap-2">
+                <p className="text-sm bpp-sheet-suave">Esta pergunta vem depois. Responda primeiro a pergunta {idxServidor + 1}.</p>
+                <button type="button" onClick={() => irPara(idxServidor)} className="rounded-2xl py-3 text-sm font-bold bpp-sheet-primario">
+                  Ir para a pergunta {idxServidor + 1}
+                </button>
+              </div>
             ) : null}
 
             <div className="mt-auto pt-4 flex items-center gap-2">
