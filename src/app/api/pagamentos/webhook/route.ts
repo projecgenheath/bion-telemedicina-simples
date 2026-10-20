@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { confirmarRemarcacaoEspera } from "@/lib/server/espera-medico";
 import { quandoClinica } from "@/lib/server/fuso";
 import { db } from "@/lib/db";
 import {
@@ -98,6 +99,9 @@ export async function POST(req: NextRequest) {
     if (!p) {
       return Response.json({ erro: "Pagamento não encontrado." }, { status: 404 });
     }
+    // Diferença da remarcação da espera do médico (gatewayRef "espera:<id>"):
+    // troca a consulta (idempotente) ou, se a reserva já venceu, reembolsa.
+    await confirmarRemarcacaoEspera(p.id);
     // O pagamento CONFIRMOU a consulta (regra imposta no servidor): avisa o
     // paciente e registra a trilha de auditoria server-side.
     const consulta = await db.consulta.findUnique({
