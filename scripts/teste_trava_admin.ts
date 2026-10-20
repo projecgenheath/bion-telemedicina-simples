@@ -35,6 +35,7 @@ async function main() {
   await db.reembolso.deleteMany();
   await db.remarcacaoPendente.deleteMany();
   await db.bloqueioAgenda.deleteMany();
+  await db.chatConsulta.deleteMany(); // FK Restrict: o chat vai antes da Consulta
   await db.consulta.deleteMany();
   await db.user.deleteMany();
   const med = await db.user.create({ data: { nome: "Med", email: "m@t", senhaHash: "x", role: "MEDICO" } });

@@ -40,6 +40,7 @@ async function limpar() {
   await db.pagamento.deleteMany();
   await db.notificacao.deleteMany();
   await db.auditLog.deleteMany();
+  await db.chatConsulta.deleteMany(); // FK Restrict: o chat vai antes da Consulta
   await db.consulta.deleteMany();
   await db.user.deleteMany();
 }
