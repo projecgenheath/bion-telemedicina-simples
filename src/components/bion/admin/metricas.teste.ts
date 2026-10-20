@@ -209,10 +209,10 @@ igual("espera: dois itens na categoria", filaE.filter((i) => i.categoria === "es
 igual("espera: contagem", contarPorCategoria(filaE).espera_medico, 2);
 igual("espera: destino", filaE.find((i) => i.chave === "espera-e2")?.destino, "admin-agendamentos?consulta=e2");
 
-console.log(`${ok} ok, ${falhas} falha(s)`);
-if (falhas) process.exit(1);
-
 /* ---------- fila: renovações pendentes há mais de 24 h (só contagem) ---------- */
 const filaR = montarFila({ medicos: [], tickets: [], auditLogs: [], repasses: null, reembolsos: null, renovacoes: { total: 3, horas: 24, ids: ["r1", "r2", "r3"], maisAntigoEm: "2026-10-01T10:00:00.000Z" } }, AGORA);
 igual("fila renovações: um item com a contagem", [filaR.length, filaR[0].titulo, filaR[0].categoria, contarPorCategoria(filaR).renovacao], [1, "3 renovações pendentes há mais de 24 h", "renovacao", 1]);
 igual("fila renovações: zero não aparece", montarFila({ medicos: [], tickets: [], auditLogs: [], repasses: null, reembolsos: null, renovacoes: { total: 0, horas: 24, ids: [], maisAntigoEm: null } }, AGORA), []);
+
+console.log(`${ok} ok, ${falhas} falha(s)`);
+if (falhas) process.exit(1);
