@@ -1,4 +1,5 @@
 import "server-only";
+import { whereLimpezaSala } from "@/lib/privacidade-consulta";
 import { db } from "@/lib/db";
 import { quandoClinica } from "@/lib/server/fuso";
 import { aplicarFalhaTecnica, registrarEvento } from "@/lib/server/financeiro";
@@ -495,19 +496,13 @@ export async function consultaTemDesfecho(consultaId: string): Promise<boolean> 
  * Limpeza da sala: apaga sinais já consumidos com mais de 30 min. Enquanto a
  * consulta NÃO tem desfecho, guarda a presença (prova da espera / da entrada
  * do paciente) e o sinal de controle "encerrada" (a classificação automática
- * usa os dois). Com desfecho, também apaga as presenças paradas há mais de 1 h.
+ * usa os dois). Com desfecho, também apaga as presenças paradas há mais de 1 h
+ * e TODO o chat da sala (privacidade: a conversa não fica guardada).
  */
 export async function limparSala(consultaId: string, agora: Date = new Date()) {
   const temDesfecho = await consultaTemDesfecho(consultaId);
   const t = agora.getTime();
-  await db.sinalSala.deleteMany({
-    where: {
-      consultaId,
-      consumido: true,
-      createdAt: { lt: new Date(t - 30 * 60 * 1000) },
-      ...(temDesfecho ? {} : { NOT: { tipo: "controle", payload: { contains: '"encerrada"' } } }),
-    },
-  });
+  await db.sinalSala.deleteMany({ where: whereLimpezaSala(consultaId, temDesfecho, t) });
   if (temDesfecho) {
     await db.presencaSala.deleteMany({ where: { consultaId, ultimoPing: { lt: new Date(t - 60 * 60 * 1000) } } });
   }

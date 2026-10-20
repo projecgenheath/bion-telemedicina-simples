@@ -1,4 +1,5 @@
 import "server-only";
+import { adminBaixaArquivoClinico } from "@/lib/privacidade-consulta";
 import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import type { UsuarioSessao } from "./auth";
@@ -47,6 +48,8 @@ export async function podeAcessarArquivo(
   usuario: Pick<UsuarioSessao, "id" | "role">,
   arquivoId: string,
 ): Promise<boolean> {
+  // Privacidade da consulta: admin lista (contagens), mas não baixa o conteúdo.
+  if (!adminBaixaArquivoClinico(usuario.role)) return false;
   const row = await db.arquivo.findFirst({
     where: { AND: [{ id: arquivoId }, whereArquivosVisiveis(usuario)] },
     select: { id: true },
