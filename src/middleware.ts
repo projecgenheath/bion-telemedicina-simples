@@ -11,6 +11,7 @@ const PUBLICOS: readonly string[] = [
   "/api/pagamentos/webhook",
   "/api/cron/fechar-repasses", // protegido pelo Bearer CRON_SECRET na própria rota
   "/api/cron/toque", // idem (pg_cron + pg_net a cada minuto)
+  "/api/cron/espera-medico", // idem (pg_cron a cada minuto)
 ];
 
 function ehPublico(pathname: string): boolean {

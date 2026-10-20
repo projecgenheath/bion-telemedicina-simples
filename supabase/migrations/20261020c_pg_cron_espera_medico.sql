@@ -19,8 +19,11 @@
 -- SÓ APLICAR COM O OK DO ALISSON E DEPOIS DO BACKUP.
 --
 -- Tempo: timeout de 10 s, igual ao maxDuration da rota (plano Hobby).
--- Idempotente: extensões com IF NOT EXISTS; os jobs são desagendados se já
--- existirem antes de agendar de novo. Sem BEGIN/COMMIT.
+-- Idempotente: os jobs são desagendados se já existirem antes de agendar de
+-- novo. Sem BEGIN/COMMIT.
+-- NÃO cria extensões nem faz grant/revoke: pg_cron, pg_net e os grants do
+-- schema cron já existem (20261019a). Repetir o create extension/grants deu
+-- 'ERROR 2BP01: dependent privileges exist' em produção.
 -- Reagenda também `bion-limpa-cron` (domingo 03:00 UTC = 00:00 em SP), com
 -- o mesmo comando do 20261019a, para garantir a limpeza semanal do
 -- cron.job_run_details agora que há dois jobs por minuto.
@@ -28,11 +31,6 @@
 -- Log: select * from cron.job_run_details order by start_time desc limit 20;
 --      select * from net._http_response order by created desc limit 20;
 -- =====================================================================
-
-create extension if not exists pg_cron with schema pg_catalog;
-grant usage on schema cron to postgres;
-grant all privileges on all tables in schema cron to postgres;
-create extension if not exists pg_net with schema extensions;
 
 do $$
 begin
