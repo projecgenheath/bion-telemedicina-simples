@@ -1,6 +1,6 @@
 "use client";
 
-import { CreditCard, FileText } from "lucide-react";
+import { FileText } from "lucide-react";
 import type { Consulta } from "@/lib/bion-tipos";
 import { CLASSE_ETIQUETA, rotuloHistorico } from "./etiqueta-consulta";
 import { EtiquetaTipo } from "./tipo-atendimento-ui";
@@ -35,21 +35,18 @@ function textoPagamento(c: Consulta, aguardandoPagamento: boolean): string | nul
 /**
  * Linha única de "Consultas e pagamentos" (Perfil e "Ver tudo"):
  * especialidade · médico, data/hora, status da consulta e do pagamento,
- * ação de pagar quando pendente e a nota fiscal das consultas pagas e realizadas.
+ * e a nota fiscal das consultas pagas e realizadas.
  */
 export function LinhaConsultaPagamento({
   c,
-  onPagar,
   detalhada = false,
 }: {
   c: ConsultaComNota;
-  onPagar?: () => void;
   detalhada?: boolean;
 }) {
   const e = rotuloHistorico(c.status, c.pago);
   const aguardando = e.tom === "pagamento" && e.texto === "Aguardando pagamento";
   const pag = textoPagamento(c, aguardando);
-  const pendente = c.status !== "cancelada" && !ehRetornoGratis(c) && (aguardando || c.pago === false);
   const mostraNota = c.status === "concluida" && c.pago === true && !ehRetornoGratis(c);
 
   return (
@@ -65,15 +62,6 @@ export function LinhaConsultaPagamento({
           {pag ? ` · ${pag}` : ""}
         </span>
       </div>
-      {pendente && onPagar ? (
-        <button
-          type="button"
-          onClick={onPagar}
-          className="bpp-toque self-start inline-flex items-center gap-1.5 rounded-full px-3 min-h-11 text-xs font-bold bg-bion-ink text-bion-paper dark:bg-bion-paper dark:text-bion-ink"
-        >
-          <CreditCard className="w-3.5 h-3.5" aria-hidden /> Pagar pela BION IA
-        </button>
-      ) : null}
       {mostraNota ? (
         c.temNotaFiscal === true ? (
           <a

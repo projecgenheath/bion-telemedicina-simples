@@ -335,7 +335,7 @@ export function PerfilPainel({
             acao={{ rotulo: "Agendar consulta", onClick: onAgendar }}
           />
         ) : (
-          consultasDoPaciente.slice(0, PREVIA).map((c) => <LinhaConsultaPagamento key={c.id} c={c} onPagar={onAgendar} />)
+          consultasDoPaciente.slice(0, PREVIA).map((c) => <LinhaConsultaPagamento key={c.id} c={c} />)
         )}
       </Grupo>
 

@@ -57,7 +57,7 @@ export function TelaListaCompleta({ lista, onFechar, onAgendar }: { lista: Lista
                 <ul className="bp-glass p-2">
                   {doPaciente.map((c) => (
                     <li key={c.id}>
-                      <LinhaConsultaPagamento c={c} detalhada onPagar={onAgendar} />
+                      <LinhaConsultaPagamento c={c} detalhada />
                     </li>
                   ))}
                 </ul>
