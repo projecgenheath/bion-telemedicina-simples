@@ -85,7 +85,7 @@ export async function GET(req: NextRequest) {
 }
 
 /**
- * Operações LGPD da administração (PrivacidadeAdmin), sempre por `pacienteId`:
+ * Operações LGPD da administração (Privacidade & LGPD da Torre), sempre por `pacienteId`:
  * - anonimizar: cadastro/login anonimizados, login removido do Supabase Auth,
  *   arquivos pessoais removidos do Storage; PRONTUÁRIO PRESERVADO e
  *   pseudonimizado (Lei 13.787/2018 — ver src/lib/server/lgpd.ts).

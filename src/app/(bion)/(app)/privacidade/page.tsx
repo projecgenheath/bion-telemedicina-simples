@@ -8,7 +8,7 @@ import { PacienteFrame } from "@/components/bion/paciente/PacienteFrame";
 
 export default function PaginaPrivacidade() {
   const { sessao } = useBion();
-  // Admin: Privacidade & LGPD no visual Torre BION (PrivacidadeAdmin fica sem uso, não apagado).
+  // Admin: Privacidade & LGPD no visual Torre BION.
   if (sessao.role === "admin") {
     return (
       <Suspense fallback={null}>
