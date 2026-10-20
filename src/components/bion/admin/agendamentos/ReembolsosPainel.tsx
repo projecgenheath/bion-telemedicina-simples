@@ -42,7 +42,7 @@ export function ReembolsosPainel({ agora, onMudou }: { agora: number; onMudou: (
 
   return (
     <div className="space-y-3">
-      <p className="text-sm ba-texto-2">O paciente pede em até 7 dias depois de uma falta e o reembolso é aprovado na hora, integral e por PIX (as taxas ficam com o app). A consulta sai do repasse do médico; se o repasse já fechou, a parte dele vira desconto no próximo. Aqui ficam só os pedidos antigos que ainda estão em análise.</p>
+      <p className="text-sm ba-texto-2">O paciente pede em até 7 dias depois de uma falta e o reembolso é aprovado na hora, integral e automático (as taxas ficam com o app). A consulta sai do repasse do médico; se o repasse já fechou, a parte dele vira desconto no próximo. Aqui ficam só os pedidos antigos que ainda estão em análise.</p>
       <div className="flex flex-wrap gap-2" role="group" aria-label="Situação dos pedidos">
         {FILTROS.map(([v, l]) => (
           <button key={v} type="button" onClick={() => setFiltro(v)} aria-pressed={filtro === v} className="ba-aba ba-aba-solta">
