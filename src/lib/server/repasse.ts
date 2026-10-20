@@ -338,8 +338,11 @@ export type ReembolsoParaAjuste = {
   valorCentavos: number;
   /** Quando passou a devolver dinheiro: decisão do admin (manual) ou criação (automático). */
   efetivoEm: Date;
+  /** Vazio no reembolso de renovação paga (aí vale pedidoRenovacaoId). */
   consultaId: string;
   remarcacaoId: string | null;
+  /** Reembolso do pagamento de um PedidoRenovacao (item 'renovacao'). */
+  pedidoRenovacaoId?: string | null;
 };
 
 export type ItemGravado = {
@@ -351,13 +354,14 @@ export type ItemGravado = {
   valorConsultaCentavos?: number;
 };
 
-export type AjusteNovo = { reembolsoId: string; consultaId: string; chaveItem: string; valorCentavos: number };
+export type AjusteNovo = { reembolsoId: string; consultaId: string | null; chaveItem: string; valorCentavos: number };
 
 /**
  * Reembolsos efetivados DEPOIS de o item correspondente ter sido gravado
  * num repasse viram desconto (parte do médico), limitado ao que o médico
  * recebeu naquele item menos os descontos já feitos.
  * - consulta: 90% do reembolso (o app devolve os 10% dele);
+ * - renovação paga: 90% do reembolso (como a consulta);
  * - multa de remarcação: 50% do valor devolvido;
  * - multa de cancelamento: 50% do que o reembolso devolveu ALÉM de
  *   (valor − multa), que é o reembolso automático do cancelamento.
@@ -376,7 +380,12 @@ export function ajustesNovos(params: {
   for (const r of ordenados) {
     let chave: string;
     let parte: number;
-    if (r.remarcacaoId) {
+    if (r.pedidoRenovacaoId) {
+      chave = chaveDoItem("renovacao", r.pedidoRenovacaoId);
+      parte = pct(r.valorCentavos, PARTE_MEDICO_CONSULTA_PCT);
+    } else if (!r.consultaId) {
+      continue;
+    } else if (r.remarcacaoId) {
       chave = chaveDoItem("multa_remarcacao", r.remarcacaoId);
       parte = divisaoDaMulta(r.valorCentavos).medicoCentavos;
     } else if (params.itens.has(chaveDoItem("consulta", r.consultaId))) {
@@ -402,7 +411,7 @@ export function ajustesNovos(params: {
     const valor = Math.min(parte, resta);
     if (valor <= 0) continue;
     ajustado.set(chave, (ajustado.get(chave) ?? 0) + valor);
-    novos.push({ reembolsoId: r.id, consultaId: r.consultaId, chaveItem: chave, valorCentavos: valor });
+    novos.push({ reembolsoId: r.id, consultaId: r.pedidoRenovacaoId ? null : r.consultaId, chaveItem: chave, valorCentavos: valor });
   }
   return novos;
 }
@@ -599,6 +608,7 @@ async function calcularAjustesNovos(c: Cliente, medicoId: string, corte: Date): 
       OR: [
         { pagamento: { consulta: { medicoId, repasseItens: { some: {} } } } },
         { remarcacao: { consulta: { medicoId }, repasseItens: { some: {} } } },
+        { pagamento: { pedidoRenovacao: { medicoId, repasseItens: { some: {} } } } },
       ],
     },
     select: {
@@ -608,7 +618,7 @@ async function calcularAjustesNovos(c: Cliente, medicoId: string, corte: Date): 
       decididoEm: true,
       remarcacaoId: true,
       remarcacao: { select: { consultaId: true } },
-      pagamento: { select: { consultaId: true } },
+      pagamento: { select: { consultaId: true, pedidoRenovacao: { select: { id: true, medicoId: true } } } },
     },
   });
   const lista: ReembolsoParaAjuste[] = reembolsos
@@ -618,14 +628,20 @@ async function calcularAjustesNovos(c: Cliente, medicoId: string, corte: Date): 
       efetivoEm: efetivoEm(r),
       consultaId: r.remarcacao?.consultaId ?? r.pagamento?.consultaId ?? "",
       remarcacaoId: r.remarcacaoId,
+      // Pagamento de renovação não tem consulta; só conta se o pedido é deste médico.
+      pedidoRenovacaoId:
+        !r.remarcacaoId && !r.pagamento?.consultaId && r.pagamento?.pedidoRenovacao?.medicoId === medicoId
+          ? r.pagamento.pedidoRenovacao.id
+          : null,
     }))
-    .filter((r) => r.consultaId && r.efetivoEm.getTime() <= corte.getTime());
+    .filter((r) => (r.consultaId || r.pedidoRenovacaoId) && r.efetivoEm.getTime() <= corte.getTime());
   if (lista.length === 0) return [];
 
-  const consultaIds = [...new Set(lista.map((r) => r.consultaId))];
-  const [itens, ajustes, doPagamento] = await Promise.all([
+  const consultaIds = [...new Set(lista.map((r) => r.consultaId).filter(Boolean))];
+  const pedidoIds = [...new Set(lista.map((r) => r.pedidoRenovacaoId).filter((x): x is string => !!x))];
+  const [itens, ajustes, ajustesRenovacao, doPagamento] = await Promise.all([
     c.repasseItem.findMany({
-      where: { consultaId: { in: consultaIds }, medicoId },
+      where: { medicoId, OR: [{ consultaId: { in: consultaIds } }, { pedidoRenovacaoId: { in: pedidoIds } }] },
       select: {
         chave: true,
         criadoEm: true,
@@ -639,6 +655,12 @@ async function calcularAjustesNovos(c: Cliente, medicoId: string, corte: Date): 
       where: { motivo: "reembolso", consultaId: { in: consultaIds }, medicoId },
       select: { valorCentavos: true, consultaId: true, reembolso: { select: { remarcacaoId: true } } },
     }),
+    pedidoIds.length
+      ? c.repasseAjuste.findMany({
+          where: { motivo: "reembolso", medicoId, reembolso: { pagamento: { pedidoRenovacao: { id: { in: pedidoIds } } } } },
+          select: { valorCentavos: true, reembolso: { select: { pagamento: { select: { pedidoRenovacao: { select: { id: true } } } } } } },
+        })
+      : Promise.resolve([]),
     c.reembolso.findMany({
       where: { status: { in: REEMBOLSO_STATUS_EFETIVOS }, pagamento: { consultaId: { in: consultaIds } } },
       select: { id: true, valorCentavos: true, criadoEm: true, decididoEm: true, pagamento: { select: { consultaId: true } } },
@@ -663,6 +685,12 @@ async function calcularAjustesNovos(c: Cliente, medicoId: string, corte: Date): 
       : mapaItens.has(chaveDoItem("consulta", a.consultaId))
         ? chaveDoItem("consulta", a.consultaId)
         : chaveDoItem("multa_cancelamento", a.consultaId);
+    jaAjustado.set(chave, (jaAjustado.get(chave) ?? 0) + a.valorCentavos);
+  }
+  for (const a of ajustesRenovacao) {
+    const pid = a.reembolso?.pagamento?.pedidoRenovacao?.id;
+    if (!pid) continue;
+    const chave = chaveDoItem("renovacao", pid);
     jaAjustado.set(chave, (jaAjustado.get(chave) ?? 0) + a.valorCentavos);
   }
   const porPagamento = new Map<string, { id: string; valorCentavos: number; efetivoEm: Date }[]>();

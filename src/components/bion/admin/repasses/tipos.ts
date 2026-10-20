@@ -73,6 +73,8 @@ export type AjusteDetalhe = {
   motivo: "reembolso" | "saldo_anterior" | string;
   consultaId: string | null;
   reembolsoId: string | null;
+  /** Desconto de reembolso de renovação de receita paga (sem consulta). */
+  renovacao?: boolean;
   valorCentavos: number;
   valorAplicadoCentavos: number | null;
   criadoEm: string;

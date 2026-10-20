@@ -34,8 +34,8 @@ export function formatarChavePix(tipo: string | null | undefined, chave: string 
 
 export const rotuloItem = (tipo: string) =>
   tipo === "consulta" ? "Consulta" : tipo === "multa_cancelamento" ? "Multa de cancelamento" : tipo === "multa_remarcacao" ? "Multa de remarcação" : tipo === "renovacao" ? "Renovação de receita" : tipo;
-export const rotuloAjuste = (motivo: string) =>
-  motivo === "reembolso" ? "Reembolso ao paciente" : motivo === "saldo_anterior" ? "Saldo de desconto anterior" : motivo;
+export const rotuloAjuste = (motivo: string, renovacao = false) =>
+  motivo === "reembolso" && renovacao ? "Reembolso de renovação de receita" : motivo === "reembolso" ? "Reembolso ao paciente" : motivo === "saldo_anterior" ? "Saldo de desconto anterior" : motivo;
 
 /** Pode pagar? Sem chave, CNPJ divergente, zerado ou já pago bloqueiam (o servidor recusa os mesmos casos). */
 export function podePagar(r: Pick<RepasseLista | RepasseDetalhe, "status" | "liquidoCentavos" | "recebimento">): { ok: true } | { ok: false; motivo: string } {
