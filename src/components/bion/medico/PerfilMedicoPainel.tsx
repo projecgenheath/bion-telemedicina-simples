@@ -331,10 +331,12 @@ export function PerfilMedicoPainel({
   dados,
   onAbrirSuporte,
   onAbrirTermos,
+  onAbrirRenovacoes,
 }: {
   dados: DadosMedico;
   onAbrirSuporte: () => void;
   onAbrirTermos: () => void;
+  onAbrirRenovacoes?: () => void;
 }) {
   const router = useRouter();
   const { atualizarMedico, sair } = useBion();
@@ -575,6 +577,9 @@ export function PerfilMedicoPainel({
         <h3 id="bm-pf-conta" className={tituloGrupo}>
           Conta
         </h3>
+        {onAbrirRenovacoes ? (
+          <Linha icone={<FileText className="w-4 h-4" />} titulo="Renovações de receita" detalhe="Pedidos de pacientes para responder" onClick={onAbrirRenovacoes} />
+        ) : null}
         <Linha icone={<LifeBuoy className="w-4 h-4" />} titulo="Suporte" detalhe="Abrir e acompanhar chamados" onClick={onAbrirSuporte} />
         <Linha icone={<FileText className="w-4 h-4" />} titulo="Termos e ajuda" detalhe="Termos de uso e perguntas frequentes" onClick={onAbrirTermos} />
       </section>
