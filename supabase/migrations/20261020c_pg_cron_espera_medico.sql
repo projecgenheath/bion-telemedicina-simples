@@ -11,6 +11,8 @@
 --   - bion_cron_secret: o mesmo CRON_SECRET da Vercel;
 --   - bion_toque_url: a URL do toque; a URL da espera é derivada dela,
 --     trocando o sufixo '/api/cron/toque' por '/api/cron/espera-medico'.
+--     Se a URL não terminar exatamente em '/api/cron/toque', fica NULL e o
+--     http_post falha de forma visível (sem chamar uma URL errada).
 -- Sem os segredos, o job roda mas o http_post falha (URL nula) — nada
 -- quebra no app; só não expira as esperas.
 --
@@ -49,7 +51,11 @@ select cron.schedule(
   $job$
   select net.http_post(
     url := (
-      select regexp_replace(decrypted_secret, '/api/cron/toque/?$', '/api/cron/espera-medico')
+      select case
+        when decrypted_secret like '%/api/cron/toque'
+          then left(decrypted_secret, length(decrypted_secret) - length('/api/cron/toque')) || '/api/cron/espera-medico'
+        else null
+      end
       from vault.decrypted_secrets where name = 'bion_toque_url'
     ),
     headers := jsonb_build_object(
