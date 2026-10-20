@@ -98,6 +98,27 @@ export async function POST(req: NextRequest) {
     if (!p) {
       return Response.json({ erro: "Pagamento não encontrado." }, { status: 404 });
     }
+    if (!p.consultaId) {
+      // Pagamento sem consulta: renovação de receita só por mensagem (#66).
+      const pedido = await db.pedidoRenovacao.findUnique({
+        where: { pagamentoId: p.id },
+        select: { id: true, status: true },
+      });
+      if (!pedido) {
+        return Response.json({ erro: "Pagamento sem consulta nem pedido de renovação." }, { status: 404 });
+      }
+      // TODO(#66): chamar confirmarPagamentoRenovacao(p.id, tx), exportada pelo
+      // Pacientes (aguardando_pagamento → pendente, idempotente). Ainda não
+      // existe no 2723f2f; sem stub aqui, por combinado no grupo.
+      await registrarAudit(null, {
+        acao: "PAGAMENTO_CONFIRMADO",
+        categoria: "pagamento",
+        entidade: "pagamento",
+        entidadeId: p.id,
+        detalhes: `Pagamento confirmado via webhook do gateway — renovação ${pedido.id} (status do pedido: ${pedido.status})`,
+      });
+      return Response.json({ ok: true, pagamento: paraWire(p), pedidoRenovacaoId: pedido.id });
+    }
     // O pagamento CONFIRMOU a consulta (regra imposta no servidor): avisa o
     // paciente e registra a trilha de auditoria server-side.
     const consulta = await db.consulta.findUnique({
