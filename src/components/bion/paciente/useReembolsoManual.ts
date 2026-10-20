@@ -37,10 +37,12 @@ const url = (consultaId: string) => `/api/consultas/${encodeURIComponent(consult
 export function rotuloReembolsoManual(status: string): { texto: string; tom: "ok" | "andamento" | "erro" } {
   switch (status) {
     case "em_analise":
-    case "solicitado":
+      // Pedidos antigos, do fluxo com análise, ainda fechados pelo admin.
       return { texto: "Em análise", tom: "andamento" };
+    case "solicitado":
+      return { texto: "Reembolso pedido", tom: "andamento" };
     case "aprovado":
-      return { texto: "Aprovado — o valor volta pelo mesmo meio de pagamento", tom: "ok" };
+      return { texto: "Aprovado — reembolso integral e imediato", tom: "ok" };
     case "processado":
       return { texto: "Processado — reembolso concluído", tom: "ok" };
     case "negado":
@@ -48,7 +50,7 @@ export function rotuloReembolsoManual(status: string): { texto: string; tom: "ok
     case "falhou":
       return { texto: "Falhou — fale com o suporte", tom: "erro" };
     default:
-      return { texto: "Em análise", tom: "andamento" };
+      return { texto: "Reembolso pedido", tom: "andamento" };
   }
 }
 

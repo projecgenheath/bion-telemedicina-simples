@@ -51,15 +51,18 @@ export function rotuloReembolso(status: string): { texto: string; tom: "ok" | "a
     case "solicitado":
       return { texto: "Reembolso solicitado", tom: "andamento" };
     case "aprovado":
-      return { texto: "Reembolso aprovado — em processamento", tom: "andamento" };
+      return { texto: "Reembolso aprovado — integral", tom: "andamento" };
     case "processado":
       return { texto: "Reembolso concluído", tom: "ok" };
     case "negado":
       return { texto: "Reembolso não aprovado", tom: "erro" };
     case "falhou":
       return { texto: "Falha no reembolso — fale com o suporte", tom: "erro" };
-    default:
+    case "em_analise":
+      // Pedidos antigos, do fluxo com análise, ainda fechados pelo admin.
       return { texto: "Reembolso em análise", tom: "andamento" };
+    default:
+      return { texto: "Reembolso pedido", tom: "andamento" };
   }
 }
 
