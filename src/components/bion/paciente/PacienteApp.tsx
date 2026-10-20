@@ -97,6 +97,7 @@ export function PacienteApp() {
     sessao,
     pacientePerfil,
     consultas,
+    lembretes,
     anamneses,
     medicoes,
     exames,
@@ -266,6 +267,10 @@ export function PacienteApp() {
   }, [consultas, sessao.nome]);
 
   const proxima = proximas[0];
+  const lembretesConsulta = useMemo(
+    () => lembretes.filter((l) => l.tipo === "Consulta").sort((x, y) => Number(x.feito) - Number(y.feito) || x.horario.localeCompare(y.horario)),
+    [lembretes],
+  );
 
   /* Sala (sem pré-sala): a janela vem de lib/janela-sala.ts, a mesma do servidor.
      O relógio avança sozinho e acerta o instante em que a sala abre ou fecha. */
@@ -667,6 +672,24 @@ export function PacienteApp() {
                   );
                 })}
               </div>
+            ) : null}
+
+            {/* Lembretes de consulta: ficam aqui na agenda (fora do card de medicamentos). */}
+            {lembretesConsulta.length > 0 ? (
+              <ul className="bp-glass mt-3 w-full px-5 py-3 space-y-1.5" aria-label="Lembretes de consulta">
+                {lembretesConsulta.map((l) => (
+                  <li key={l.id} className={`flex items-center justify-between gap-2 text-sm ${l.feito ? "opacity-60 line-through" : ""}`}>
+                    <span className="min-w-0 truncate">
+                      <span className="text-xs font-bold uppercase tracking-wider opacity-80 mr-1.5">Lembrete</span>
+                      {l.titulo}
+                    </span>
+                    <span className="shrink-0 text-xs font-semibold opacity-80">
+                      {l.horario}
+                      {l.frequencia ? ` · ${l.frequencia}` : ""}
+                    </span>
+                  </li>
+                ))}
+              </ul>
             ) : null}
 
             {/* Status do reembolso das consultas canceladas (some se não houver reembolso) */}
