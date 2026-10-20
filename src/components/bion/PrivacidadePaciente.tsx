@@ -106,7 +106,7 @@ export function PrivacidadePaciente() {
           </li>
           <li className="flex gap-2 items-start">
             <Check className="w-4 h-4 text-emerald-500 dark:text-emerald-400 mt-0.5 shrink-0" />
-            Cada médico vê apenas os documentos das consultas que atendeu com você.
+            O médico que atende você vê todo o seu histórico clínico na BION, inclusive o que foi feito com outros médicos: exames, evoluções, triagens e documentos. Assim ele não precisa pedir tudo de novo. Médicos sem consulta com você não veem nada.
           </li>
           <li className="flex gap-2 items-start">
             <X className="w-4 h-4 text-destructive mt-0.5 shrink-0" />

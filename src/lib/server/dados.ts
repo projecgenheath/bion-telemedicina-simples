@@ -218,6 +218,7 @@ export function consultaWire(c: ConsultaComNomes & { remarcacoes?: ReservaRemarc
     podePedirAte: falta ? prazoReembolsoManual(c.dataInicio).toISOString() : null,
     // Só em aguardando_reagendamento: por que o paciente precisa remarcar ou pedir reembolso.
     motivoReagendamento: motivoReagendamentoDe(c.status, c.eventos ?? []),
+    retornoSugeridoEm: c.retornoSugeridoEm ? c.retornoSugeridoEm.toISOString() : null,
   };
 }
 
@@ -238,6 +239,7 @@ export function documentoWire(d: DocumentoComNomes) {
     duracao: d.duracao,
     observacoes: d.observacoes,
     cid: d.cid,
+    controlado: d.controlado,
     createdAt: d.createdAt.toISOString(),
   };
 }
