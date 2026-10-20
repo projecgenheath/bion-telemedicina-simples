@@ -22,8 +22,7 @@ export type CampoPerfil =
   | "estadoCivil"
   | "tipoSanguineo"
   | "alergias"
-  | "comorbidades"
-  | "medicamentos";
+  | "comorbidades";
 
 const ESTADOS_CIVIS = ["Solteiro(a)", "Casado(a)", "Divorciado(a)", "Viúvo(a)", "União estável"];
 /** Mesma lista do servidor (lib/server/validar-perfil.ts). */
@@ -43,7 +42,6 @@ export function DadosPessoaisSheet({ campoInicial, onFechar }: { campoInicial?: 
     tipoSanguineo: pacientePerfil?.tipoSanguineo ?? "",
     alergias: (pacientePerfil?.alergias ?? []).join(", "),
     comorbidades: (pacientePerfil?.comorbidades ?? []).join(", "),
-    medicamentos: (pacientePerfil?.medicamentos ?? []).join(", "),
   });
   const set = (k: keyof typeof form) => (e: { target: { value: string } }) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
@@ -81,7 +79,6 @@ export function DadosPessoaisSheet({ campoInicial, onFechar }: { campoInicial?: 
       tipoSanguineo: form.tipoSanguineo,
       alergias: lista(form.alergias),
       comorbidades: lista(form.comorbidades),
-      medicamentos: lista(form.medicamentos),
     };
     const atual = {
       dataNascimento: dataNascimento || null,
@@ -91,7 +88,6 @@ export function DadosPessoaisSheet({ campoInicial, onFechar }: { campoInicial?: 
       tipoSanguineo: pacientePerfil?.tipoSanguineo ?? "",
       alergias: pacientePerfil?.alergias ?? [],
       comorbidades: pacientePerfil?.comorbidades ?? [],
-      medicamentos: pacientePerfil?.medicamentos ?? [],
     };
     const alterado = (Object.keys(novo) as (keyof typeof novo)[]).filter(
       (k) => JSON.stringify(novo[k]) !== JSON.stringify(atual[k]),
@@ -174,10 +170,7 @@ export function DadosPessoaisSheet({ campoInicial, onFechar }: { campoInicial?: 
             <span className={rotulo}>Comorbidades</span>
             <input ref={(el) => focarCampo(el, "comorbidades")} value={form.comorbidades} onChange={set("comorbidades")} placeholder="Separe por vírgula. Ex.: hipertensão" className={campo} />
           </label>
-          <label className="block">
-            <span className={rotulo}>Medicamentos em uso</span>
-            <input ref={(el) => focarCampo(el, "medicamentos")} value={form.medicamentos} onChange={set("medicamentos")} placeholder="Separe por vírgula. Ex.: losartana 50 mg" className={campo} />
-          </label>
+          <p className="text-xs opacity-75">Medicamentos em uso ficam em <strong>Sua saúde</strong>, na lista de medicamentos.</p>
         </fieldset>
 
         <div className="flex gap-2 mt-6">

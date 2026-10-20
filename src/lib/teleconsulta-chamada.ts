@@ -1138,6 +1138,21 @@ export class ChamadaTeleconsulta {
               this.agendarPoll(0);
             }
           })
+          // Teleconsulta v2: o médico pediu medidas; a UI do paciente busca na hora
+          // (PedidosMedicao escuta este evento de janela; o polling de 15 s é a reserva).
+          .on("broadcast", { event: "pedido_medicao_criado" }, ({ payload }) => {
+            const p = payload as { pedidoId?: string } | null;
+            if (typeof window !== "undefined") {
+              window.dispatchEvent(new CustomEvent("bion:pedido-medicao-criado", { detail: { pedidoId: p?.pedidoId } }));
+            }
+          })
+          // O médico cancelou o pedido: a UI do paciente tira o pedido da tela na hora.
+          .on("broadcast", { event: "pedido_medicao_cancelado" }, ({ payload }) => {
+            const p = payload as { pedidoId?: string } | null;
+            if (typeof window !== "undefined" && typeof p?.pedidoId === "string" && p.pedidoId) {
+              window.dispatchEvent(new CustomEvent("bion:pedido-medicao-cancelado", { detail: { pedidoId: p.pedidoId } }));
+            }
+          })
           .on("broadcast", { event: "eco" }, ({ payload }) => {
             const p = payload as { nonce?: string } | null;
             if (p?.nonce && p.nonce === this.nonceEco && !this.realtimeConfirmado) {

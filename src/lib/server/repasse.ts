@@ -74,7 +74,7 @@ export function cnpjDivergente(pix: { titularTipo: string; titularDocumento: str
   return normalizarCnpj(cnpjPerfil ?? "") !== pix.titularDocumento;
 }
 
-export type TipoItem = "consulta" | "multa_cancelamento" | "multa_remarcacao";
+export type TipoItem = "consulta" | "multa_cancelamento" | "multa_remarcacao" | "renovacao";
 
 const pct = (centavos: number, p: number) => Math.round((centavos * p) / 100);
 const erroHttp = (msg: string, status: number) => Object.assign(new Error(msg), { status });
@@ -141,7 +141,34 @@ export function reembolsosAteOCorte<T extends ReembolsoMin>(lista: T[] | null | 
 }
 
 /** Consulta candidata: `eventos` = falta/falha (vigentes ou não) para saber o desfecho. */
-export type CandidatoConsulta = ConsultaReceita & { eventos?: EventoDesfechoMin[] | null };
+export type CandidatoConsulta = ConsultaReceita & {
+  eventos?: EventoDesfechoMin[] | null;
+  tipoAtendimento?: string | null;
+  /** id do Pagamento: trava para o mesmo pagamento nunca ser repassado duas vezes. */
+  pagamentoId?: string | null;
+};
+
+/**
+ * Renovação de receita paga (#66). Campos opcionais até a migração do #66
+ * entrar: sem `valorCentavos` ou sem `pagamentoId`, o pedido não entra.
+ * Contam só `renovada` (só mensagem) e `chamada_marcada` (chamada curta);
+ * a data é `respondidoEm`. `recusada`/`cancelado`/`pendente`/`aguardando_pagamento` ficam fora.
+ */
+export type CandidatoRenovacao = {
+  id: string;
+  status: string;
+  respondidoEm: Date | null;
+  valorCentavos?: number | null;
+  pagamentoId?: string | null;
+  pagamentoStatus?: string | null;
+  reembolsos?: ReembolsoMin[] | null;
+};
+export const STATUS_RENOVACAO_REPASSE = ["renovada", "chamada_marcada"] as const;
+
+/** Consulta de renovação (valor 0): o dinheiro está no pedido, não na consulta. */
+export function consultaForaPorRenovacao(c: { tipoAtendimento?: string | null; valor: number }): boolean {
+  return c.tipoAtendimento === "renovacao" && reaisParaCentavos(c.valor) === 0;
+}
 
 /**
  * A consulta ainda não tem desfecho (PURA)? Status "ia acontecer" e sem
@@ -168,7 +195,9 @@ export type CandidatoMultaRemarcacao = {
 export type ItemCalculado = {
   tipo: TipoItem;
   chave: string;
-  consultaId: string;
+  /** null só no item 'renovacao' (aí vale pedidoRenovacaoId). */
+  consultaId: string | null;
+  pedidoRenovacaoId?: string | null;
   remarcacaoId: string | null;
   quando: string; // ISO: início da consulta ou momento em que a multa foi paga
   brutoCentavos: number;
@@ -192,6 +221,27 @@ export function itemDaConsulta(c: CandidatoConsulta): ItemCalculado {
     consultaId: c.id,
     remarcacaoId: null,
     quando: c.dataInicio.toISOString(),
+    brutoCentavos: l.brutoCentavos,
+    comissaoCentavos: l.comissaoCentavos,
+    taxasCentavos: l.taxaCentavos,
+    reembolsosCentavos: reembolsos,
+    multasCentavos: 0,
+    liquidoCentavos: antes - reembolsos,
+  };
+}
+
+/** Item da renovação paga: mesma divisão da consulta (90% médico), sobre valorCentavos. */
+export function itemDaRenovacao(r: CandidatoRenovacao & { valorCentavos: number; respondidoEm: Date }): ItemCalculado {
+  const l = liquidoDaConsulta(r.valorCentavos, 0);
+  const antes = l.brutoCentavos - l.comissaoCentavos - l.taxaCentavos;
+  const reembolsos = Math.min(antes, pct(totalReembolsadoCentavos(r.reembolsos), PARTE_MEDICO_CONSULTA_PCT));
+  return {
+    tipo: "renovacao",
+    chave: chaveDoItem("renovacao", r.id),
+    consultaId: null,
+    pedidoRenovacaoId: r.id,
+    remarcacaoId: null,
+    quando: r.respondidoEm.toISOString(),
     brutoCentavos: l.brutoCentavos,
     comissaoCentavos: l.comissaoCentavos,
     taxasCentavos: l.taxaCentavos,
@@ -227,14 +277,20 @@ export function itensElegiveis(params: {
   consultas: CandidatoConsulta[];
   multasCancelamento: CandidatoMultaCancelamento[];
   multasRemarcacao: CandidatoMultaRemarcacao[];
+  renovacoes?: CandidatoRenovacao[];
   jaIncluidas?: Set<string>;
+  /** pagamentoIds que já entraram em algum repasse. */
+  pagamentosJaRepassados?: Set<string>;
 }): ItemCalculado[] {
   const { corte } = params;
   const vistas = new Set(params.jaIncluidas ?? []);
   const itens: ItemCalculado[] = [];
-  const add = (i: ItemCalculado) => {
+  const pagamentos = new Set(params.pagamentosJaRepassados ?? []);
+  const add = (i: ItemCalculado, pagamentoId?: string | null) => {
     if (vistas.has(i.chave) || i.liquidoCentavos < 0) return;
+    if (pagamentoId && pagamentos.has(pagamentoId)) return;
     vistas.add(i.chave);
+    if (pagamentoId) pagamentos.add(pagamentoId);
     itens.push(i);
   };
   for (const c0 of params.consultas) {
@@ -242,6 +298,7 @@ export function itensElegiveis(params: {
     // Repasse só de consulta com Pagamento confirmado: as 6 consultas de teste
     // (pago=true sem Pagamento) ficam fora, por decisão do Alisson.
     if (c0.pagamento?.status !== "confirmado") continue;
+    if (consultaForaPorRenovacao(c0)) continue;
     // Sem desfecho (ninguém concluiu nem marcou falta/falha): fica para o
     // fechamento seguinte ao desfecho. Falha técnica/falta do médico vigente
     // também fica fora (o status já sai do faturamento; aqui é a garantia).
@@ -249,7 +306,15 @@ export function itensElegiveis(params: {
     if (desfecho === "sem_desfecho" || desfecho === "falha_tecnica" || desfecho === "falta_medico") continue;
     const c = { ...c0, pagamento: { ...c0.pagamento, reembolsos: reembolsosAteOCorte(c0.pagamento.reembolsos, corte) } };
     if (!consultaEntraNaReceita(c, corte)) continue;
-    add(itemDaConsulta(c));
+    add(itemDaConsulta(c), c0.pagamentoId);
+  }
+  for (const r of params.renovacoes ?? []) {
+    if (!(STATUS_RENOVACAO_REPASSE as readonly string[]).includes(r.status)) continue;
+    if (!r.pagamentoId || r.pagamentoStatus !== "confirmado") continue;
+    if (r.valorCentavos == null || r.valorCentavos <= 0 || !r.respondidoEm) continue;
+    if (r.respondidoEm.getTime() >= corte.getTime()) continue;
+    const rr = { ...r, valorCentavos: r.valorCentavos, respondidoEm: r.respondidoEm, reembolsos: reembolsosAteOCorte(r.reembolsos, corte) };
+    add(itemDaRenovacao(rr), r.pagamentoId);
   }
   for (const m0 of params.multasCancelamento) {
     if (m0.multaCentavos <= 0 || m0.em.getTime() >= corte.getTime()) continue;
@@ -401,6 +466,7 @@ async function carregarCandidatos(c: Cliente, medicoId: string, corte: Date) {
         dataInicio: { lt: corte },
         status: { notIn: STATUS_FORA_DO_FATURAMENTO },
         repasseItens: { none: { tipo: "consulta" } },
+        NOT: { tipoAtendimento: "renovacao", valor: 0 },
       },
       select: {
         id: true,
@@ -408,7 +474,8 @@ async function carregarCandidatos(c: Cliente, medicoId: string, corte: Date) {
         status: true,
         valor: true,
         pago: true,
-        pagamento: { select: { status: true, reembolsos: { select: selReembolso } } },
+        tipoAtendimento: true,
+        pagamento: { select: { id: true, status: true, reembolsos: { select: selReembolso } } },
         eventos: { where: { tipo: { in: TIPOS_EVENTO_DESFECHO } }, select: selEventoDesfecho },
       },
     }),
@@ -446,9 +513,62 @@ async function carregarCandidatos(c: Cliente, medicoId: string, corte: Date) {
       },
     }),
   ]);
+  // Renovação de receita paga (#66): pedidos renovada/chamada_marcada do
+  // médico, com pagamento confirmado, respondidos antes do corte e sem item.
+  const pedidos = await c.pedidoRenovacao.findMany({
+    where: {
+      medicoId,
+      status: { in: [...STATUS_RENOVACAO_REPASSE] },
+      respondidoEm: { lt: corte },
+      valorCentavos: { gt: 0 },
+      pagamento: { status: "confirmado" },
+      repasseItens: { none: {} },
+    },
+    select: {
+      id: true,
+      status: true,
+      respondidoEm: true,
+      valorCentavos: true,
+      pagamentoId: true,
+      pagamento: { select: { status: true, reembolsos: { select: selReembolso } } },
+    },
+  });
+  // Trava: um pagamento que já entrou num repasse (pela consulta ou pelo
+  // pedido) não entra de novo pelo outro caminho.
+  const idsPagamento = [
+    ...consultas.map((x) => x.pagamento?.id),
+    ...pedidos.map((x) => x.pagamentoId),
+  ].filter((x): x is string => !!x);
+  const jaGravados = idsPagamento.length
+    ? await c.repasseItem.findMany({
+        where: {
+          OR: [
+            { tipo: "consulta", consulta: { pagamento: { id: { in: idsPagamento } } } },
+            { tipo: "renovacao", pedidoRenovacao: { pagamentoId: { in: idsPagamento } } },
+          ],
+        },
+        select: { consulta: { select: { pagamento: { select: { id: true } } } }, pedidoRenovacao: { select: { pagamentoId: true } } },
+      })
+    : [];
+  const pagamentosJaRepassados = new Set(
+    jaGravados.map((g) => g.consulta?.pagamento?.id ?? g.pedidoRenovacao?.pagamentoId).filter((x): x is string => !!x),
+  );
   return {
+    pagamentosJaRepassados,
+    renovacoes: pedidos.map(
+      (p): CandidatoRenovacao => ({
+        id: p.id,
+        status: p.status,
+        respondidoEm: p.respondidoEm,
+        valorCentavos: p.valorCentavos,
+        pagamentoId: p.pagamentoId,
+        pagamentoStatus: p.pagamento?.status ?? null,
+        reembolsos: (p.pagamento?.reembolsos ?? []).map(comEfetivo),
+      }),
+    ),
     consultas: consultas.map((c) => ({
       ...c,
+      pagamentoId: c.pagamento?.id ?? null,
       pagamento: c.pagamento ? { ...c.pagamento, reembolsos: c.pagamento.reembolsos.map(comEfetivo) } : null,
     })),
     multasCancelamento: eventos.map((e) => ({
@@ -532,7 +652,7 @@ async function calcularAjustesNovos(c: Cliente, medicoId: string, corte: Date): 
       criadoEm: i.criadoEm,
       liquidoCentavos: i.liquidoCentavos,
       multaCentavos: multaCheia,
-      valorConsultaCentavos: reaisParaCentavos(i.consulta.valor),
+      valorConsultaCentavos: i.consulta ? reaisParaCentavos(i.consulta.valor) : undefined,
     });
   }
   const jaAjustado = new Map<string, number>();
@@ -739,6 +859,7 @@ export async function fecharRepasseDoMedico(medicoId: string, dia: string, agora
             tipo: i.tipo,
             chave: i.chave,
             consultaId: i.consultaId,
+            pedidoRenovacaoId: i.pedidoRenovacaoId ?? null,
             remarcacaoId: i.remarcacaoId,
             brutoCentavos: i.brutoCentavos,
             comissaoCentavos: i.comissaoCentavos,

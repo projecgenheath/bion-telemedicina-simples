@@ -12,6 +12,7 @@ import {
   formatarDocumento,
   podePagar,
   resumoFechamento,
+  rotuloItem,
   rotuloPixTipo,
   tamanhoArquivo,
   validarCompetencia,
@@ -140,5 +141,7 @@ igual(
   ],
 );
 
+igual("rotuloItem renovacao", rotuloItem("renovacao"), "Renovação de receita");
+igual("rotuloItem consulta", rotuloItem("consulta"), "Consulta");
 console.log(`${ok} ok, ${falhas} falha(s)`);
 if (falhas) process.exit(1);

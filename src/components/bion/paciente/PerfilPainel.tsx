@@ -312,7 +312,7 @@ export function PerfilPainel({
           </div>
           <div>
             <dt className="text-xs font-semibold text-white/80 mb-1">Medicamentos em uso</dt>
-            <dd><ChipsSaude itens={pacientePerfil?.medicamentos ?? []} vazio="Nenhum informado" tom="neutro" /></dd>
+            <dd className="text-sm text-white/85">Veja e edite em <strong>Sua saúde</strong>, na lista de medicamentos.</dd>
           </div>
         </dl>
       </section>

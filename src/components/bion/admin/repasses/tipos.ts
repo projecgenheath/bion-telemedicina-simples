@@ -59,9 +59,10 @@ export type RespostaPrevia = { competenciaPadraoParaFechar: string; previas: Pre
 
 export type ItemDetalhe = Omit<Totais, "ajustesCentavos"> & {
   id: string;
-  tipo: "consulta" | "multa_cancelamento" | "multa_remarcacao" | string;
-  consultaId: string;
+  tipo: "consulta" | "multa_cancelamento" | "multa_remarcacao" | "renovacao" | string;
+  consultaId: string | null;
   remarcacaoId: string | null;
+  pedidoRenovacaoId?: string | null;
   dataConsulta: string;
   especialidade: string;
   statusConsulta: string;
