@@ -5,6 +5,7 @@
 import {
   ESTADO_CHAMADA_INICIAL,
   TEXTO_EVOLUCAO_PENDENTE,
+  TEXTO_ESPERA_ENCERRADA,
   consultaAbertaNaUrl,
   consultaEncerrada,
   modoChamadaRecebida,
@@ -272,6 +273,7 @@ const encerrada = { status: 409, corpo: { erro: "Esta consulta foi cancelada ou 
 igual("409 consulta_encerrada da rota chamada: fecha", decidirAposAtender({ status: 200 }, encerrada), { tipo: "fechar" });
 igual("409 consulta_encerrada vindo da sala: fecha", decidirAposAtender(encerrada, null), { tipo: "fechar" });
 igual("evolucao_pendente tem prioridade sobre consulta_encerrada", decidirAposAtender({ status: 409, corpo: { motivo: "evolucao_pendente" } }, encerrada).tipo, "bloqueado");
+igual("espera_encerrada bloqueia com aviso", decidirAposAtender({ status: 200 }, { status: 409, corpo: { erro: "espera_encerrada", motivo: "espera_encerrada" } }), { tipo: "bloqueado", mensagem: TEXTO_ESPERA_ENCERRADA });
 igual("409 sem motivo continua bloqueando", decidirAposAtender({ status: 200 }, { status: 409, corpo: { erro: "fora" } }), { tipo: "bloqueado", mensagem: "fora" });
 igual("respostaConsultaEncerrada: sim", respostaConsultaEncerrada(encerrada), true);
 igual("respostaConsultaEncerrada: 200 não", respostaConsultaEncerrada({ status: 200, corpo: { motivo: "consulta_encerrada" } }), false);

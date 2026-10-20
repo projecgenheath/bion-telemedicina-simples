@@ -15,6 +15,8 @@ import { VideoChamada916 } from "@/components/bion/chamada/VideoChamada916";
 import { useAtalhosChamada } from "@/components/bion/chamada/useAtalhosChamada";
 import { useCamerasDisponiveis } from "@/components/bion/chamada/useCamerasDisponiveis";
 import { PedidosMedicao } from "./PedidosMedicao";
+import { EsperaMedicoPainel } from "./EsperaMedicoPainel";
+import { useRecarregarEstado } from "./useRemarcacaoComMulta";
 
 /**
  * Sala de teleconsulta do PACIENTE: tela cheia 9:16 estilo ligação.
@@ -97,6 +99,7 @@ export function TelaChamadaPaciente({
 }) {
   const { tele } = sala;
   const conectado = tele.status === "conectado";
+  const recarregarEstado = useRecarregarEstado();
   const tempo = useTempoDeChamada(conectado);
   const qtdCameras = useCamerasDisponiveis(tele.localPronto);
   const podeCompartilhar = usePodeCompartilharTela();
@@ -231,6 +234,14 @@ export function TelaChamadaPaciente({
           <PedidosMedicao consultaId={sala.consultaAtual.id} variante="chamada" />
         </div>
       )}
+      {/* Espera do médico (10 min): contagem e, se ele não entrar, cancelar ou remarcar. */}
+      <EsperaMedicoPainel
+        consultaId={sala.consultaAtual?.id}
+        medicoConectado={conectado && tele.remotoPronto}
+        onSair={onEnd}
+        onSairDaChamada={sala.sairDaSala}
+        onResolvida={() => void recarregarEstado()}
+      />
       {/* Arquivos anexados pela aba Exames da folha (mesmo fluxo de antes). */}
       <input
         aria-label="Anexar arquivo"
