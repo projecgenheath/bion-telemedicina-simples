@@ -14,37 +14,26 @@ import {
 
 /**
  * Pedido de renovação de receita — lado do PACIENTE (Teleconsulta v2).
- *
- * A tabela "PedidoRenovacao" é criada pela migração do Médicos. Até ela
- * existir, as duas rotas respondem { disponivel: false } (sem erro), e a tela
- * esconde o botão. SQL cru de propósito: o modelo Prisma entra com o PR dele.
+ * Tabela "PedidoRenovacao" (migração 20261019b do Médicos), via Prisma.
  *
  *  PATCH /api/renovacoes/[id] { acao: "cancelar" } → paciente cancela o próprio pedido pendente.
  *  GET  → pedidos do próprio paciente.
  *  POST → { documentoId, observacaoPaciente? } cria um pedido "pendente".
  *         Recusa: receita de outra pessoa, não-receita, medicamento
- *         controlado (sempre), receita velha demais e pedido pendente
- *         duplicado para a mesma prescrição.
+ *         controlado (Documento.controlado OU lista da Portaria 344),
+ *         receita velha demais e pedido pendente duplicado para a mesma
+ *         prescrição (índice único parcial no banco).
  */
-async function tabelaExiste(): Promise<boolean> {
-  try {
-    const r = await db.$queryRaw<{ t: string | null }[]>`SELECT to_regclass('public."PedidoRenovacao"')::text AS t`;
-    return Boolean(r[0]?.t);
-  } catch {
-    return false;
-  }
-}
-
 export async function GET() {
   try {
     const usuario = await exigirPapel("PACIENTE");
-    if (!(await tabelaExiste())) return ok({ disponivel: false, pedidos: [] });
-    const linhas = await db.$queryRaw<unknown[]>`
-      SELECT * FROM public."PedidoRenovacao"
-      WHERE "pacienteId" = ${usuario.id}
-      ORDER BY "criadoEm" DESC
-      LIMIT 100`;
+    const linhas = await db.pedidoRenovacao.findMany({
+      where: { pacienteId: usuario.id },
+      orderBy: { criadoEm: "desc" },
+      take: 100,
+    });
     const pedidos = linhas.map(lerPedidoRenovacao).filter((p) => p !== null);
+    // `disponivel` fica na resposta por compatibilidade com a tela.
     return ok({ disponivel: true, pedidos });
   } catch (erro) {
     return falha(erro);
@@ -56,9 +45,6 @@ export async function POST(req: NextRequest) {
     const usuario = await exigirPapel("PACIENTE");
     const corpo = lerCorpoPedidoRenovacao(await req.json().catch(() => null));
     if (typeof corpo === "string") return Response.json({ erro: corpo }, { status: 400 });
-    if (!(await tabelaExiste())) {
-      return Response.json({ disponivel: false, erro: "A renovação de receita ainda não está disponível." }, { status: 503 });
-    }
 
     const receita = await db.documento.findFirst({
       where: { id: corpo.documentoId, pacienteId: usuario.id },
@@ -78,40 +64,60 @@ export async function POST(req: NextRequest) {
       return Response.json({ erro: "Receita com mais de um ano. Agende uma consulta." }, { status: 400 });
     }
 
-    // Documento não guarda a consulta: a origem é a última consulta concluída
-    // com esse médico até 1 dia depois da emissão da receita.
-    const origem = await db.consulta.findFirst({
-      where: {
-        pacienteId: usuario.id,
-        medicoId: receita.medicoId,
-        status: "concluida",
-        dataInicio: { lte: new Date(receita.createdAt.getTime() + 86_400_000) },
-      },
-      orderBy: { dataInicio: "desc" },
+    // Origem: Documento.consultaId quando o médico gravou (e a consulta é
+    // deste paciente). Senão (docs antigos), a última consulta concluída com
+    // esse médico até 1 dia depois da emissão da receita.
+    let origemId: string | null = null;
+    if (receita.consultaId) {
+      const c = await db.consulta.findFirst({
+        where: { id: receita.consultaId, pacienteId: usuario.id },
+        select: { id: true },
+      });
+      origemId = c?.id ?? null;
+    }
+    if (!origemId) {
+      const origem = await db.consulta.findFirst({
+        where: {
+          pacienteId: usuario.id,
+          medicoId: receita.medicoId,
+          status: "concluida",
+          dataInicio: { lte: new Date(receita.createdAt.getTime() + 86_400_000) },
+        },
+        orderBy: { dataInicio: "desc" },
+        select: { id: true },
+      });
+      origemId = origem?.id ?? null;
+    }
+
+    const duplicado = await db.pedidoRenovacao.findFirst({
+      where: { pacienteId: usuario.id, documentoId: receita.id, status: "pendente" },
       select: { id: true },
     });
-
-    const id = randomUUID();
-    // Duplicado pendente: checagem e inserção no MESMO comando (sem corrida).
-    let inseridos: unknown[];
+    if (duplicado) {
+      return Response.json({ erro: "Você já pediu a renovação desta receita. Aguarde o médico." }, { status: 409 });
+    }
+    let criado;
     try {
-      inseridos = await db.$queryRaw<unknown[]>`
-      INSERT INTO public."PedidoRenovacao"
-        ("id", "pacienteId", "medicoId", "consultaOrigemId", "documentoId", "status", "observacaoPaciente", "criadoEm")
-      SELECT ${id}, ${usuario.id}, ${receita.medicoId}, ${origem?.id ?? null}, ${receita.id}, 'pendente', ${corpo.observacaoPaciente}, now()
-      WHERE NOT EXISTS (
-        SELECT 1 FROM public."PedidoRenovacao"
-        WHERE "pacienteId" = ${usuario.id} AND "documentoId" = ${receita.id} AND "status" = 'pendente'
-      )
-      RETURNING *`;
+      criado = await db.pedidoRenovacao.create({
+        data: {
+          id: randomUUID(),
+          pacienteId: usuario.id,
+          medicoId: receita.medicoId,
+          consultaOrigemId: origemId,
+          documentoId: receita.id,
+          status: "pendente",
+          observacaoPaciente: corpo.observacaoPaciente,
+        },
+      });
     } catch (e) {
-      // Índice único parcial (pacienteId, documentoId) WHERE status='pendente'.
+      // Corrida: o índice único parcial (pacienteId, documentoId) WHERE
+      // status='pendente' segura o segundo pedido.
       if (ehViolacaoUnica(e)) {
         return Response.json({ erro: "Você já pediu a renovação desta receita. Aguarde o médico." }, { status: 409 });
       }
       throw e;
     }
-    const pedido = lerPedidoRenovacao(inseridos[0]);
+    const pedido = lerPedidoRenovacao(criado);
     if (!pedido) {
       return Response.json({ erro: "Você já pediu a renovação desta receita. Aguarde o médico." }, { status: 409 });
     }

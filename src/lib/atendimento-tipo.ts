@@ -40,8 +40,8 @@ export function rotuloTipoAtendimento(v: unknown): string | null {
 /* Medicamento controlado                                              */
 /* ------------------------------------------------------------------ */
 /*
- * O schema NÃO marca receita controlada (Documento não tem campo para isso).
- * Até o Médicos criar um campo explícito, a regra é CONSERVADORA: se o nome,
+ * Documento.controlado (do médico) bloqueia sempre. Como os documentos
+ * antigos entram com controlado=false, a regra continua CONSERVADORA: se o nome,
  * a posologia, o conteúdo ou as observações citam uma substância das listas
  * da Portaria SVS/MS 344/98 (A, B, C) mais comuns, ou falam em "controle
  * especial"/"receita azul/amarela"/"tarja preta", a renovação NÃO é oferecida
@@ -85,10 +85,15 @@ export type ReceitaParaRenovar = {
   conteudo?: string | null;
   observacoes?: string | null;
   titulo?: string | null;
+  /** Marcado pelo médico (Documento.controlado). Docs antigos ficam false. */
+  controlado?: boolean | null;
 };
 
 /** true se a receita cita substância controlada (ou não dá para saber o medicamento). */
 export function receitaControlada(d: ReceitaParaRenovar): boolean {
+  // Campo explícito OU lista da Portaria 344: os documentos antigos entram
+  // com controlado=false, então a lista continua valendo para todos.
+  if (d.controlado === true) return true;
   const texto = semAcento([d.medicamento, d.posologia, d.conteudo, d.observacoes, d.titulo].filter(Boolean).join(" \n "));
   if (MARCAS_CONTROLE.some((r) => r.test(texto))) return true;
   return SUBSTANCIAS_CONTROLADAS.some((s) => new RegExp(`\\b${s}\\b`).test(texto));

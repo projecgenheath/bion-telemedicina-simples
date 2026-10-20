@@ -59,6 +59,9 @@ model User {
   medicamentosPrescritos     MedicamentoEmUso[] @relation("MedicamentoEmUsoMedico")
   pedidosMedicaoRecebidos    PedidoMedicao[]    @relation("PedidoMedicaoPaciente")
   pedidosMedicaoFeitos       PedidoMedicao[]    @relation("PedidoMedicaoMedico")
+  // Teleconsulta v2 — Médicos: renovação de receita
+  pedidosRenovacaoFeitos     PedidoRenovacao[]  @relation("PedidoRenovacaoPaciente")
+  pedidosRenovacaoRecebidos  PedidoRenovacao[]  @relation("PedidoRenovacaoMedico")
 }
 
 model Sessao {
@@ -176,11 +179,17 @@ model Consulta {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
-  // TEMPORÁRIO (Pacientes, para compilar): a migração de verdade é do Médicos
-  // (Consulta_tipoAtendimento_check, FK ON DELETE SET NULL, índice). Sai daqui
-  // quando o PR dele entrar na main.
-  tipoAtendimento    String   @default("padrao") // padrao | renovacao | retorno | segunda_opiniao
+  // Teleconsulta v2: tipo do atendimento e consulta de origem (renovação,
+  // retorno, segunda opinião). Trava no banco: Consulta_tipoAtendimento_check.
+  tipoAtendimento    String    @default("padrao") // padrao | renovacao | retorno | segunda_opiniao
+  // consultaOrigemId nunca é o próprio id (Consulta_origem_diferente_check)
+  retornoSugeridoEm  DateTime? @db.Timestamptz(3) // data de retorno sugerida pelo médico
+  documentos         Documento[] @relation("DocumentoConsulta")
   consultaOrigemId   String?
+  consultaOrigem     Consulta? @relation("ConsultaOrigem", fields: [consultaOrigemId], references: [id], onDelete: SetNull)
+  consultasDerivadas Consulta[] @relation("ConsultaOrigem")
+  renovacoesDaOrigem PedidoRenovacao[] @relation("PedidoRenovacaoOrigem")
+  renovacoesChamada  PedidoRenovacao[] @relation("PedidoRenovacaoChamada")
 
   // Telemedicina WebRTC (Fase 2)
   sinaisSala    SinalSala[]
@@ -200,6 +209,7 @@ model Consulta {
   chamadas    ChamadaConsulta[] // Admin: toque da consulta
 
   @@unique([id, medicoId]) // alvo das FKs (consultaId, medicoId) do repasse
+  @@index([consultaOrigemId])
 }
 
 // Cobrança da consulta. O CLIENTE NUNCA define `pago` — a confirmação vem do
@@ -311,6 +321,14 @@ model Documento {
   observacoes String?
   cid         String?
   createdAt   DateTime @default(now())
+  renovacoesPedidas   PedidoRenovacao[] @relation("PedidoRenovacaoDocumento")
+  renovacoesEmitidas  PedidoRenovacao[] @relation("PedidoRenovacaoDocumentoNovo")
+  // Teleconsulta v2 — Médicos
+  controlado  Boolean   @default(false) // receita de controlado (fica fora da renovação curta)
+  consultaId  String?   // consulta em que o documento foi emitido
+  consulta    Consulta? @relation("DocumentoConsulta", fields: [consultaId], references: [id], onDelete: SetNull)
+
+  @@index([consultaId])
 }
 
 model Arquivo {
@@ -799,7 +817,7 @@ model PedidoMedicao {
   medicoId   String
   medico     User      @relation("PedidoMedicaoMedico", fields: [medicoId], references: [id], onDelete: Cascade)
   tipos      String    @default("[]")
-  status     String    @default("pendente")
+  status     String    @default("pendente") // pendente | atendido | cancelado (PedidoMedicao_status_check)
   criadoEm   DateTime  @default(now())
   atendidoEm DateTime?
   medicoes   Medicao[]
@@ -807,4 +825,35 @@ model PedidoMedicao {
   @@index([pacienteId, status])
   @@index([consultaId])
   @@index([medicoId])
+}
+
+// Teleconsulta v2 — Médicos: pedido de renovação de receita feito pelo
+// paciente. Trava no banco: PedidoRenovacao_status_check.
+model PedidoRenovacao {
+  id                 String     @id @default(cuid())
+  pacienteId         String
+  paciente           User       @relation("PedidoRenovacaoPaciente", fields: [pacienteId], references: [id], onDelete: Cascade)
+  medicoId           String
+  medico             User       @relation("PedidoRenovacaoMedico", fields: [medicoId], references: [id], onDelete: Cascade)
+  consultaOrigemId   String?
+  consultaOrigem     Consulta?  @relation("PedidoRenovacaoOrigem", fields: [consultaOrigemId], references: [id], onDelete: SetNull)
+  documentoId        String?    // receita anterior que o paciente quer renovar
+  documento          Documento? @relation("PedidoRenovacaoDocumento", fields: [documentoId], references: [id], onDelete: SetNull)
+  documentoNovoId    String?    // receita nova, quando status = renovada
+  documentoNovo      Documento? @relation("PedidoRenovacaoDocumentoNovo", fields: [documentoNovoId], references: [id], onDelete: SetNull)
+  status             String     @default("pendente") // pendente | renovada | chamada_marcada | recusada | cancelado; respondidoEm nulo só em pendente (PedidoRenovacao_respondido_check)
+  observacaoPaciente String?
+  mensagemMedico     String?
+  consultaId         String?    // chamada curta marcada pelo médico
+  consulta           Consulta?  @relation("PedidoRenovacaoChamada", fields: [consultaId], references: [id], onDelete: SetNull)
+  criadoEm           DateTime   @default(now()) @db.Timestamptz(3)
+  respondidoEm       DateTime?  @db.Timestamptz(3)
+
+  @@index([medicoId, status, criadoEm])
+  @@index([pacienteId])
+  @@index([consultaOrigemId])
+  // Índice único parcial só no SQL (o Prisma não suporta parcial):
+  // "PedidoRenovacao_pendente_unico" (pacienteId, documentoId) WHERE status = 'pendente'
+  // — um só pedido pendente por paciente e receita. Ver 20261019b.
+  // Também só no SQL: "PedidoRenovacao_pendente_criadoEm_idx" (criadoEm) WHERE status = 'pendente'.
 }

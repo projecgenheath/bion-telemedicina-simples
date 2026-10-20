@@ -5,8 +5,8 @@ import { lerPedidoRenovacao, type PedidoRenovacao } from "@/lib/atendimento-tipo
 
 /**
  * Pedidos de renovação do paciente (GET/POST /api/renovacoes).
- * `disponivel=false` enquanto a tabela do Médicos não existe: a tela esconde
- * o botão "Renovar receita".
+ * `disponivel` só vira true quando o GET responde ok; se a rota falhar, a
+ * tela esconde o botão "Renovar receita".
  */
 export function usePedidosRenovacao(ativo = true) {
   const [disponivel, setDisponivel] = useState(false);

@@ -19,20 +19,16 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (body?.acao !== "cancelar") return Response.json({ erro: "Ação inválida." }, { status: 400 });
     if (!id || id.length > 64) return Response.json({ erro: "Pedido inválido." }, { status: 400 });
 
-    let linhas: unknown[];
-    try {
-      linhas = await db.$queryRaw<unknown[]>`
-        UPDATE public."PedidoRenovacao"
-        SET "status" = 'cancelado', "respondidoEm" = now()
-        WHERE "id" = ${id} AND "pacienteId" = ${usuario.id} AND "status" = 'pendente'
-        RETURNING *`;
-    } catch {
-      return Response.json({ disponivel: false, erro: "A renovação de receita ainda não está disponível." }, { status: 503 });
-    }
-    if (linhas.length !== 1) {
+    // Um único UPDATE condicional (dono + pendente).
+    const r = await db.pedidoRenovacao.updateMany({
+      where: { id, pacienteId: usuario.id, status: "pendente" },
+      data: { status: "cancelado", respondidoEm: new Date() },
+    });
+    if (r.count !== 1) {
       return Response.json({ erro: "Este pedido já foi respondido ou cancelado." }, { status: 409 });
     }
-    const pedido = lerPedidoRenovacao(linhas[0]);
+    const linha = await db.pedidoRenovacao.findUnique({ where: { id } });
+    const pedido = lerPedidoRenovacao(linha);
     const efeitos = pedido
       ? await aplicarSideEffects(
           usuario,

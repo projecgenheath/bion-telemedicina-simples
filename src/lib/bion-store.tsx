@@ -131,11 +131,12 @@ type EstadoFresco = {
     reembolsoManual?: Consulta["reembolsoManual"];
     podePedirAte?: string | null;
     motivoReagendamento?: Consulta["motivoReagendamento"];
+    retornoSugeridoEm?: string | null;
   }[];
   documentos: {
     id: string; tipo: string; titulo: string; conteudo: string; medico: string; paciente: string;
     medicamento?: string | null; posologia?: string | null; duracao?: string | null;
-    observacoes?: string | null; cid?: string | null; createdAt: string;
+    observacoes?: string | null; cid?: string | null; controlado?: boolean; createdAt: string;
   }[];
   arquivos: {
     id: string; nome: string; tipo: string; tamanhoKb: number; enviadoPor: string;
@@ -246,6 +247,7 @@ const mapConsulta = (c: EstadoFresco["consultas"][number]): Consulta => ({
   reembolsoManual: c.reembolsoManual ?? null,
   podePedirAte: c.podePedirAte ?? null,
   motivoReagendamento: c.motivoReagendamento ?? null,
+  retornoSugeridoEm: c.retornoSugeridoEm ?? null,
 });
 
 const mapDocumento = (x: EstadoFresco["documentos"][number]): Documento => ({
@@ -261,6 +263,7 @@ const mapDocumento = (x: EstadoFresco["documentos"][number]): Documento => ({
   duracao: x.duracao ?? undefined,
   observacoes: x.observacoes ?? undefined,
   cid: x.cid ?? undefined,
+  controlado: x.controlado ?? false,
 });
 
 const mapArquivo = (a: EstadoFresco["arquivos"][number]): Arquivo => ({

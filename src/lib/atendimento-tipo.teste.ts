@@ -42,6 +42,9 @@ eq("acento: codeína bloqueia", podeRenovarReceita(r("Paracetamol + Codeína")),
 eq("ácido valpróico bloqueia", podeRenovarReceita(r("Ácido valproico 500")), false);
 eq("controle especial nas obs", podeRenovarReceita(r("Xpto", { observacoes: "Receita de controle especial em 2 vias" })), false);
 eq("receita azul no conteudo", podeRenovarReceita(r("Xpto", { conteudo: "Notificação de receita B (azul)" })), false);
+eq("Documento.controlado=true bloqueia mesmo sem substância", podeRenovarReceita(r("Losartana 50 mg", { controlado: true })), false);
+eq("controlado=false ainda usa a lista (doc antigo)", podeRenovarReceita(r("Clonazepam 2 mg", { controlado: false })), false);
+eq("controlado=false + substância comum renova", podeRenovarReceita(r("Losartana 50 mg", { controlado: false })), true);
 eq("sem medicamento não oferece", podeRenovarReceita({ tipo: "receita", medicamento: "" }), false);
 eq("atestado não renova", podeRenovarReceita({ tipo: "atestado", medicamento: "Losartana" }), false);
 eq("palavra parcial não casa (litio x politica)", receitaControlada(r("Losartana", { conteudo: "conforme política" })), false);

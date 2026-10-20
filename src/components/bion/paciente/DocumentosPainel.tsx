@@ -519,7 +519,7 @@ export function DocumentosPainel({
       </section>
 
       {retornoDe && realizadas.find((c) => c.id === retornoDe) ? (
-        <MarcarRetornoSheet origem={realizadas.find((c) => c.id === retornoDe)!} retornoSugeridoEm={null} onFechar={() => setRetornoDe(null)} />
+        <MarcarRetornoSheet origem={realizadas.find((c) => c.id === retornoDe)!} retornoSugeridoEm={realizadas.find((c) => c.id === retornoDe)!.retornoSugeridoEm ?? null} onFechar={() => setRetornoDe(null)} />
       ) : null}
       {renovando ? (
         <RenovarReceitaSheet
