@@ -2,11 +2,11 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 import { useBion } from "@/lib/bion-store";
-import { montarFila, type ItemFila, type NaoAtendidasResposta, type ReembolsosResposta, type RenovacoesPendentesResposta, type RepassesResposta, type SemDesfechoResposta } from "./metricas";
+import { montarFila, type ItemFila, type EsperasMedicoResposta, type NaoAtendidasResposta, type ReembolsosResposta, type RenovacoesPendentesResposta, type RepassesResposta, type SemDesfechoResposta } from "./metricas";
 
 /**
  * Dados reais do admin que NÃO vêm no bootstrap: repasses a pagar,
- * reembolsos em análise, consultas sem desfecho há mais de 24 h e chamadas
+ * reembolsos em análise, pacientes esperando o médico, consultas sem desfecho há mais de 24 h e chamadas
  * não atendidas nas últimas 24 h (rotas só ADMIN). O resto (consultas,
  * médicos, pacientes, chamados, auditoria) vem do store, que já é real.
  * Erro de uma rota não derruba a outra: cada bloco mostra o próprio estado.
@@ -19,6 +19,7 @@ type DadosAdmin = {
   semDesfecho: Fonte<SemDesfechoResposta>;
   renovacoes: Fonte<RenovacoesPendentesResposta>;
   naoAtendidas: Fonte<NaoAtendidasResposta>;
+  esperas: Fonte<EsperasMedicoResposta>;
   fila: ItemFila[];
   /** Fila completa só depois das cinco rotas responderem (com ou sem erro). */
   filaPronta: boolean;
@@ -53,21 +54,24 @@ export function ProvedorDadosAdmin({ children }: { children: ReactNode }) {
   const [reembolsos, setReembolsos] = useState<Fonte<ReembolsosResposta>>({ dados: null, erro: null, carregando: true });
   const [semDesfecho, setSemDesfecho] = useState<Fonte<SemDesfechoResposta>>({ dados: null, erro: null, carregando: true });
   const [naoAtendidas, setNaoAtendidas] = useState<Fonte<NaoAtendidasResposta>>({ dados: null, erro: null, carregando: true });
+  const [esperas, setEsperas] = useState<Fonte<EsperasMedicoResposta>>({ dados: null, erro: null, carregando: true });
   const [renovacoes, setRenovacoes] = useState<Fonte<RenovacoesPendentesResposta>>({ dados: null, erro: null, carregando: true });
   const [atualizando, setAtualizando] = useState(false);
 
   const buscarRotas = useCallback(async () => {
-    const [rp, rb, sd, na, rn] = await Promise.all([
+    const [rp, rb, sd, na, es, rn] = await Promise.all([
       lerJson<RepassesResposta>("/api/admin/repasses?status=fechado"),
       lerJson<ReembolsosResposta>("/api/admin/reembolsos?status=em_analise"),
       lerJson<SemDesfechoResposta>("/api/admin/consultas/sem-desfecho"),
       lerJson<NaoAtendidasResposta>("/api/admin/consultas/chamadas-nao-atendidas"),
+      lerJson<EsperasMedicoResposta>("/api/admin/consultas/esperas-medico"),
       lerJson<RenovacoesPendentesResposta>("/api/admin/renovacoes/pendentes"),
     ]);
     setRepasses({ ...rp, carregando: false });
     setReembolsos({ ...rb, carregando: false });
     setSemDesfecho({ ...sd, carregando: false });
     setNaoAtendidas({ ...na, carregando: false });
+    setEsperas({ ...es, carregando: false });
     setRenovacoes({ ...rn, carregando: false });
   }, []);
 
@@ -97,11 +101,12 @@ export function ProvedorDadosAdmin({ children }: { children: ReactNode }) {
           reembolsos: reembolsos.dados?.reembolsos ?? null,
           semDesfecho: semDesfecho.dados?.consultas ?? null,
           naoAtendidas: naoAtendidas.dados?.consultas ?? null,
+          esperas: esperas.dados?.consultas ?? null,
           renovacoes: renovacoes.dados ?? null,
         },
         agora,
       ),
-    [medicos, tickets, auditLogs, repasses.dados, reembolsos.dados, semDesfecho.dados, naoAtendidas.dados, renovacoes.dados, agora],
+    [medicos, tickets, auditLogs, repasses.dados, reembolsos.dados, semDesfecho.dados, naoAtendidas.dados, esperas.dados, renovacoes.dados, agora],
   );
 
   const valor = useMemo<DadosAdmin>(
@@ -111,13 +116,14 @@ export function ProvedorDadosAdmin({ children }: { children: ReactNode }) {
       reembolsos,
       semDesfecho,
       naoAtendidas,
+      esperas,
       renovacoes,
       fila,
-      filaPronta: !repasses.carregando && !reembolsos.carregando && !semDesfecho.carregando && !naoAtendidas.carregando && !renovacoes.carregando,
+      filaPronta: !repasses.carregando && !reembolsos.carregando && !semDesfecho.carregando && !naoAtendidas.carregando && !esperas.carregando && !renovacoes.carregando,
       atualizando,
       atualizar,
     }),
-    [agora, repasses, reembolsos, semDesfecho, naoAtendidas, renovacoes, fila, atualizando, atualizar],
+    [agora, repasses, reembolsos, semDesfecho, naoAtendidas, esperas, renovacoes, fila, atualizando, atualizar],
   );
   return <Ctx.Provider value={valor}>{children}</Ctx.Provider>;
 }

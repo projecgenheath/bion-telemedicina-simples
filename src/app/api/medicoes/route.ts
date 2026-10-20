@@ -4,6 +4,7 @@ import { exigirPapel } from "@/lib/server/auth";
 import { aplicarSideEffects } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
 import { medidaCanonica } from "@/lib/medidas-paciente";
+import { detalhesAuditoria } from "@/lib/saude-paciente";
 
 /**
  * Medições do paciente (app imersivo — peso, altura, pressão arterial).
@@ -84,9 +85,12 @@ export async function POST(req: NextRequest) {
     }
 
     const efeitos = await aplicarSideEffects(usuario, undefined, {
-      acao: "MEDICAO_REGISTRADA",
+      acao: "medicao_registrada",
       categoria: "prontuario",
-      detalhes: `Medição de ${tipo}: ${body.valor1}${tipo === "pa" && body.valor2 ? `/${body.valor2}` : ""}`,
+      entidade: "medicao",
+      entidadeId: medicao.id,
+      // LGPD: sem valores de saúde na auditoria — só ids e o tipo.
+      detalhes: detalhesAuditoria({ pacienteId: usuario.id, medicaoId: medicao.id, tipos: [tipo] }),
     });
 
     // Contrato delta: devolve APENAS a medição criada + o valor do perfil

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { FileText, Pill, Award, X } from "lucide-react";
 import { useBion as useStore } from "@/lib/bion-store";
@@ -9,6 +9,7 @@ import { EncerrarAtendimento, type EscolhaEncerrar } from "@/components/bion/con
 import { ConsultaNaoEncontrada, SalaConsultaTela } from "@/components/bion/consulta/SalaConsultaTela";
 import { useSalaConsulta } from "@/components/bion/consulta/useSalaConsulta";
 import { avisarDadosMedicoAlterados } from "@/components/bion/medico/useDadosMedico";
+import { PainelEvolucao } from "@/components/bion/medico/evolucao/PainelEvolucao";
 
 /**
  * Sala de teleconsulta do MÉDICO (movida de Consulta.tsx sem mudança visual
@@ -21,6 +22,25 @@ export function ChamadaMedico({ onEnd, consultaId }: { onEnd: () => void; consul
   const sala = useSalaConsulta({ role, consultaId, onEnd });
   const { sessao, consultaAtual, idSala, contraparteNome, anotacoes, sairDaSala, tele } = sala;
   const { outroOnline } = tele;
+
+  // Teleconsulta v2: painel da Evolução (deslizar) e trava do próximo
+  // atendimento — o servidor também recusa a sala com 409 evolucao_pendente.
+  const [evolucaoAberta, setEvolucaoAberta] = useState(false);
+  const abrirEvolucao = useCallback(() => setEvolucaoAberta(true), []);
+  const fecharEvolucao = useCallback(() => setEvolucaoAberta(false), []);
+  const [pendente, setPendente] = useState<{ consultaId: string; paciente: string } | null>(null);
+  useEffect(() => {
+    let vivo = true;
+    fetch("/api/medico/evolucao-pendente", { cache: "no-store" })
+      .then((r) => (r.ok ? (r.json() as Promise<{ pendente: { consultaId: string; paciente: string } | null }>) : null))
+      .then((j) => {
+        if (vivo) setPendente(j?.pendente && j.pendente.consultaId !== idSala ? j.pendente : null);
+      })
+      .catch(() => undefined);
+    return () => {
+      vivo = false;
+    };
+  }, [idSala]);
 
   // Modais de Emissão
   const [modalReceita, setModalReceita] = useState(false);
@@ -220,6 +240,28 @@ export function ChamadaMedico({ onEnd, consultaId }: { onEnd: () => void; consul
 
   if (tele.naoEncontrada) return <ConsultaNaoEncontrada role={role} />;
 
+  if (pendente) {
+    return (
+      <div className="min-h-dvh flex flex-col items-center justify-center gap-4 p-6 text-center">
+        <p className="text-lg font-bold">Conclua a evolução de {pendente.paciente} para atender o próximo.</p>
+        <button type="button" onClick={abrirEvolucao} className="rounded-full bg-primary text-primary-foreground px-6 py-3 font-bold">
+          Abrir evolução pendente
+        </button>
+        <button type="button" onClick={onEnd} className="underline text-sm">Voltar</button>
+        <PainelEvolucao
+          consultaId={pendente.consultaId}
+          aberto={evolucaoAberta}
+          onAbrir={abrirEvolucao}
+          onFechar={fecharEvolucao}
+          onConcluida={() => {
+            setEvolucaoAberta(false);
+            window.location.reload();
+          }}
+        />
+      </div>
+    );
+  }
+
   return (
     <SalaConsultaTela
       sala={sala}
@@ -230,6 +272,9 @@ export function ChamadaMedico({ onEnd, consultaId }: { onEnd: () => void; consul
       onAtestado={() => setModalAtestado(true)}
       onExame={() => setModalExame(true)}
     >
+      {idSala ? (
+        <PainelEvolucao consultaId={idSala} aberto={evolucaoAberta} onAbrir={abrirEvolucao} onFechar={fecharEvolucao} />
+      ) : null}
       <EncerrarAtendimento
         aberto={escolhaAberta}
         consultaId={idSala}

@@ -3,7 +3,7 @@
  * Rodar: bun src/components/bion/admin/metricas.teste.ts  (também com TZ=UTC e TZ=Asia/Tokyo)
  */
 import type { AuditLog, Consulta, Medico, TicketSuporte } from "@/lib/bion-tipos";
-import { centavosDoValor, contarPorCategoria, especialidades30d, montarFila, resumoHoje, resumoMedicos, serieDiaria, type RepasseWire, type ReembolsoWire, type SemDesfechoWire, type NaoAtendidaWire } from "./metricas";
+import { centavosDoValor, contarPorCategoria, especialidades30d, montarFila, resumoHoje, resumoMedicos, serieDiaria, type RepasseWire, type ReembolsoWire, type SemDesfechoWire, type NaoAtendidaWire, type EsperaMedicoWire } from "./metricas";
 import { ehApple, rotuloAtalhoBusca } from "./ui/atalho";
 
 let ok = 0;
@@ -115,7 +115,7 @@ igual(
   fila.map((i) => i.chave),
   ["repasse-r3", "repasse-r2", "audit-a1", "reembolso-e1", "medico-2", "chamado-t1", "repasse-r1"],
 );
-igual("fila: contagem", contarPorCategoria(fila), { validacao: 1, nao_atendida: 0, desfecho: 0, renovacao: 0, reembolso: 1, repasse: 3, chamado: 1, sistema: 1 });
+igual("fila: contagem", contarPorCategoria(fila), { validacao: 1, espera_medico: 0, nao_atendida: 0, desfecho: 0, renovacao: 0, reembolso: 1, repasse: 3, chamado: 1, sistema: 1 });
 const rr = fila.find((i) => i.chave === "repasse-r2")!;
 igual("fila: repasse com CNPJ divergente", [rr.tom, rr.chips.map((c) => c.rotulo), rr.destino], ["critico", ["A pagar", "CNPJ divergente"], "admin-repasses?repasse=r2"]);
 igual("fila: repasse detalhe", rr.detalhe, "03/10 · R$ 50,00 · 1 consulta");
@@ -185,6 +185,16 @@ igual("Android", ehApple("Linux armv8l", "Mozilla/5.0 (Linux; Android 14)"), fal
 igual("sem plataforma, UA de Mac", ehApple("", "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0)"), true);
 igual("rótulo Mac", rotuloAtalhoBusca(true).curto, "⌘K");
 igual("rótulo outros", rotuloAtalhoBusca(false).curto, "Ctrl K");
+
+// Paciente esperando médico: aguardando (atenção) e expirada sem escolha (crítico).
+const esperas: EsperaMedicoWire[] = [
+  { consultaId: "e1", status: "aguardando", iniciadaEm: "2026-10-04T12:55:00.000Z", expiraEm: "2026-10-04T13:05:00.000Z", dataInicio: "2026-10-04T12:55:00.000Z", medico: "Dra. A", paciente: "P1", especialidade: "Clínica" },
+  { consultaId: "e2", status: "expirada", iniciadaEm: "2026-10-04T12:30:00.000Z", expiraEm: "2026-10-04T12:40:00.000Z", dataInicio: "2026-10-04T12:30:00.000Z", medico: "Dr. B", paciente: "P2", especialidade: "Clínica" },
+];
+const filaE = montarFila({ medicos: [], tickets: [], auditLogs: [], repasses: null, reembolsos: null, esperas }, AGORA);
+igual("espera: dois itens na categoria", filaE.filter((i) => i.categoria === "espera_medico").map((i) => [i.chave, i.tom]), [["espera-e2", "critico"], ["espera-e1", "atencao"]]);
+igual("espera: contagem", contarPorCategoria(filaE).espera_medico, 2);
+igual("espera: destino", filaE.find((i) => i.chave === "espera-e2")?.destino, "admin-agendamentos?consulta=e2");
 
 console.log(`${ok} ok, ${falhas} falha(s)`);
 if (falhas) process.exit(1);

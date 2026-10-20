@@ -228,8 +228,31 @@ export async function criarReembolsoSeDevido(
   },
 ) {
   if (params.valorCentavos <= 0) return null;
-  const pagamento = await tx.pagamento.findUnique({ where: { consultaId: params.consultaId } });
+  const pagamento = await tx.pagamento.findUnique({ where: { consultaId: params.consultaId }, select: { id: true } });
+  if (!pagamento) return null;
+  return criarReembolsoPorPagamento(pagamento.id, params.motivo, tx, {
+    valorCentavos: params.valorCentavos,
+    multaCentavos: params.multaCentavos,
+    solicitadoPor: params.solicitadoPor,
+  });
+}
+
+/**
+ * Cria o reembolso de um pagamento confirmado, com ou sem consulta
+ * (renovação por mensagem). Só cria uma vez: se já há reembolso ATIVO para o
+ * pagamento, devolve o existente. Sem `valores`, devolve o valor integral do
+ * pagamento sem multa (recusa da renovação).
+ */
+export async function criarReembolsoPorPagamento(
+  pagamentoId: string,
+  motivo: MotivoEvento | "multa_remarcacao_nao_aplicada" | (string & {}),
+  tx: Prisma.TransactionClient | typeof db = db,
+  valores?: { valorCentavos?: number; multaCentavos?: number; solicitadoPor?: string },
+) {
+  const pagamento = await tx.pagamento.findUnique({ where: { id: pagamentoId } });
   if (!pagamento || pagamento.status !== "confirmado") return null;
+  const valorCentavos = valores?.valorCentavos ?? Math.round(pagamento.valor * 100);
+  if (valorCentavos <= 0) return null;
   const ativo = await tx.reembolso.findFirst({
     where: { pagamentoId: pagamento.id, status: { in: REEMBOLSO_STATUS_ATIVOS } },
   });
@@ -237,11 +260,11 @@ export async function criarReembolsoSeDevido(
   return tx.reembolso.create({
     data: {
       pagamentoId: pagamento.id,
-      valorCentavos: params.valorCentavos,
-      multaCentavos: params.multaCentavos,
-      motivo: params.motivo,
+      valorCentavos,
+      multaCentavos: valores?.multaCentavos ?? 0,
+      motivo,
       status: REEMBOLSO_AUTOMATICO ? "aprovado" : "solicitado",
-      solicitadoPor: params.solicitadoPor,
+      solicitadoPor: valores?.solicitadoPor ?? "sistema",
     },
   });
 }

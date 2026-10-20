@@ -62,6 +62,8 @@ model User {
   // Teleconsulta v2 — Médicos: renovação de receita
   pedidosRenovacaoFeitos     PedidoRenovacao[]  @relation("PedidoRenovacaoPaciente")
   pedidosRenovacaoRecebidos  PedidoRenovacao[]  @relation("PedidoRenovacaoMedico")
+  evolucoesComoMedico        Evolucao[]         @relation("EvolucaoMedico")
+  evolucoesComoPaciente      Evolucao[]         @relation("EvolucaoPaciente")
 }
 
 model Sessao {
@@ -207,6 +209,9 @@ model Consulta {
   repasseAjustes RepasseAjuste[]
   remarcacoes RemarcacaoPendente[]
   chamadas    ChamadaConsulta[] // Admin: toque da consulta
+  evolucao    Evolucao?         // Teleconsulta v2 — Médicos: evolução (1 por consulta)
+  esperaMedico   EsperaMedico?  @relation("EsperaConsulta") // Admin: espera do médico
+  esperasOrigem  EsperaMedico[] @relation("EsperaConsultaNova")
 
   @@unique([id, medicoId]) // alvo das FKs (consultaId, medicoId) do repasse
   @@index([consultaOrigemId])
@@ -217,8 +222,8 @@ model Consulta {
 // demonstração. status: pendente | confirmado | falhou.
 model Pagamento {
   id           String    @id @default(cuid())
-  consultaId   String    @unique
-  consulta     Consulta  @relation(fields: [consultaId], references: [id], onDelete: Cascade)
+  consultaId   String?   @unique // nulo só na renovação por mensagem: aí o vínculo é PedidoRenovacao.pagamentoId (20261020b)
+  consulta     Consulta? @relation(fields: [consultaId], references: [id], onDelete: Cascade)
   valor        Float
   metodo       String    @default("pix") // pix | cartao
   status       String    @default("pendente") // pendente | confirmado | falhou
@@ -228,6 +233,7 @@ model Pagamento {
   confirmadoEm DateTime?
 
   reembolsos Reembolso[]
+  pedidoRenovacao PedidoRenovacao? @relation("PedidoRenovacaoPagamento")
 }
 
 // Triagem (anamnese) guiada pela BION IA em formato storytelling, feita APÓS o
@@ -611,8 +617,10 @@ model RepasseItem {
   repasse            Repasse             @relation(fields: [repasseId, medicoId], references: [id, medicoId], onDelete: Restrict)
   tipo               String
   chave              String              @unique
-  consultaId         String
-  consulta           Consulta            @relation(fields: [consultaId, medicoId], references: [id, medicoId], onDelete: Restrict, onUpdate: Restrict)
+  consultaId         String? // nulo só no item 'renovacao' (RepasseItem_alvo_check: exatamente um entre consultaId e pedidoRenovacaoId)
+  consulta           Consulta?           @relation(fields: [consultaId, medicoId], references: [id, medicoId], onDelete: Restrict, onUpdate: Restrict)
+  pedidoRenovacaoId  String?             @unique
+  pedidoRenovacao    PedidoRenovacao?    @relation(fields: [pedidoRenovacaoId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   remarcacaoId       String?             @unique
   remarcacao         RemarcacaoPendente? @relation(fields: [remarcacaoId, consultaId], references: [id, consultaId], onDelete: Restrict, onUpdate: Restrict)
   brutoCentavos      Int
@@ -841,7 +849,10 @@ model PedidoRenovacao {
   documento          Documento? @relation("PedidoRenovacaoDocumento", fields: [documentoId], references: [id], onDelete: SetNull)
   documentoNovoId    String?    // receita nova, quando status = renovada
   documentoNovo      Documento? @relation("PedidoRenovacaoDocumentoNovo", fields: [documentoNovoId], references: [id], onDelete: SetNull)
-  status             String     @default("pendente") // pendente | renovada | chamada_marcada | recusada | cancelado; respondidoEm nulo só em pendente (PedidoRenovacao_respondido_check)
+  status             String     @default("pendente") // aguardando_pagamento | pendente | renovada | chamada_marcada | recusada | cancelado; respondidoEm nulo só nos abertos (aguardando_pagamento, pendente) — PedidoRenovacao_respondido_check
+  valorCentavos      Int?       // valor normal da consulta do médico, copiado no pedido (20261020a)
+  pagamentoId        String?    @unique
+  pagamento          Pagamento? @relation("PedidoRenovacaoPagamento", fields: [pagamentoId], references: [id], onDelete: SetNull)
   observacaoPaciente String?
   mensagemMedico     String?
   consultaId         String?    // chamada curta marcada pelo médico
@@ -849,11 +860,68 @@ model PedidoRenovacao {
   criadoEm           DateTime   @default(now()) @db.Timestamptz(3)
   respondidoEm       DateTime?  @db.Timestamptz(3)
 
+  repasseItens       RepasseItem[] // no máximo 1 (pedidoRenovacaoId @unique), item tipo renovacao (20261020b)
+
   @@index([medicoId, status, criadoEm])
   @@index([pacienteId])
   @@index([consultaOrigemId])
   // Índice único parcial só no SQL (o Prisma não suporta parcial):
-  // "PedidoRenovacao_pendente_unico" (pacienteId, documentoId) WHERE status = 'pendente'
-  // — um só pedido pendente por paciente e receita. Ver 20261019b.
+  // "PedidoRenovacao_aberto_unico" (pacienteId, documentoId) WHERE status IN ('aguardando_pagamento','pendente')
+  // — um só pedido aberto por paciente e receita. Ver 20261020a.
   // Também só no SQL: "PedidoRenovacao_pendente_criadoEm_idx" (criadoEm) WHERE status = 'pendente'.
+}
+
+// Teleconsulta v2 — Médicos: evolução do médico (1 por consulta). Seções em
+// JSON (string). status: rascunho | concluida (Evolucao_status_check). Enquanto
+// o médico tiver evolução em rascunho, não inicia outra consulta (trava).
+model Evolucao {
+  id           String    @id @default(cuid())
+  consultaId   String    @unique
+  consulta     Consulta  @relation(fields: [consultaId], references: [id], onDelete: Cascade)
+  medicoId     String
+  medico       User      @relation("EvolucaoMedico", fields: [medicoId], references: [id], onDelete: Cascade)
+  pacienteId   String
+  paciente     User      @relation("EvolucaoPaciente", fields: [pacienteId], references: [id], onDelete: Cascade)
+  dados        String    @default("{}")
+  triagem      String    @default("{}")
+  exames       String    @default("{}")
+  medicamentos String    @default("{}")
+  conduta      String    @default("{}")
+  cid          String?
+  documentos   String    @default("[]")
+  rascunho     String    @default("{}") // estado livre do autosave da tela
+  status       String    @default("rascunho") // rascunho | concluida
+  criadoEm     DateTime  @default(now()) @db.Timestamptz(3)
+  concluidaEm  DateTime? @db.Timestamptz(3)
+  atualizadoEm DateTime  @default(now()) @updatedAt @db.Timestamptz(3)
+
+  @@index([medicoId, status])
+  @@index([pacienteId])
+}
+
+// Admin: espera do médico (paciente na sala, médico ainda não entrou).
+// Migração: supabase/migrations/20261019c_espera_medico.sql (CHECKs, índice
+// parcial em expiraEm WHERE status='aguardando', RLS). Uma por consulta.
+// status: aguardando | medico_entrou | expirada | remarcando | cancelada | remarcada.
+// remarcando: esperando o pagamento da diferença até reservaExpiraEm (10 min).
+// diferencaCentavos = valorNovo − valorAntigo (> 0 paciente paga; < 0 recebe).
+model EsperaMedico {
+  id                  String    @id @default(cuid())
+  consultaId          String    @unique
+  consulta            Consulta  @relation("EsperaConsulta", fields: [consultaId], references: [id], onDelete: Cascade)
+  iniciadaEm          DateTime
+  expiraEm            DateTime
+  status              String    @default("aguardando")
+  consultaNovaId      String?
+  consultaNova        Consulta? @relation("EsperaConsultaNova", fields: [consultaNovaId], references: [id], onDelete: SetNull)
+  valorAntigoCentavos Int?
+  valorNovoCentavos   Int?
+  diferencaCentavos   Int?
+  reembolsoId         String?
+  reservaExpiraEm     DateTime?
+  criadoEm            DateTime  @default(now())
+  resolvidoEm         DateTime?
+
+  @@index([consultaNovaId])
+  @@index([status, resolvidoEm])
 }

@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { exigirPapel } from "@/lib/server/auth";
 import { aplicarSideEffects } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
+import { detalhesAuditoria } from "@/lib/saude-paciente";
 
 /** Criação de lembretes de saúde (apenas pacientes).
  *  Notificações e auditoria geradas PELO SERVIDOR. */
@@ -47,7 +48,7 @@ export async function POST(req: NextRequest) {
         categoria: "sistema",
         entidade: "lembrete",
         entidadeId: lembrete.id,
-        detalhes: `Lembrete "${lembrete.titulo}" — ${lembrete.horario} (${lembrete.frequencia})`,
+        detalhes: detalhesAuditoria({ pacienteId: usuario.id, lembreteId: lembrete.id }),
       },
     );
 

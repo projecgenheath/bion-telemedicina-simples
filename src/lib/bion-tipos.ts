@@ -58,6 +58,8 @@ export type Consulta = {
   podePedirAte?: string | null;
   // Só em aguardando_reagendamento: médico cancelou, falha técnica ou o médico não compareceu.
   motivoReagendamento?: "medico_cancelou" | "falha_tecnica" | "falta_medico" | null;
+  /** Data de retorno sugerida pelo médico nesta consulta (ISO), se houver. */
+  retornoSugeridoEm?: string | null;
   // Tipo de atendimento (CHECK no banco). Ausente = "padrao" (antes da migração).
   tipoAtendimento?: TipoAtendimento;
   // Renovação/retorno/segunda opinião: a consulta de origem (null se apagada).
@@ -98,6 +100,8 @@ export type Documento = {
   duracao?: string;
   observacoes?: string;
   cid?: string;
+  /** Receita de controlado marcada pelo médico (docs antigos: false). */
+  controlado?: boolean;
 };
 
 export type NotifTipo = "lembrete" | "mensagem" | "receita" | "agenda" | "exame" | "suporte";

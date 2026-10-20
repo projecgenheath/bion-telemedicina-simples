@@ -35,9 +35,13 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
           orderBy: { criadoEm: "asc" },
           include: {
             consulta: { select: { dataInicio: true, especialidade: true, status: true, paciente: { select: { nome: true } } } },
+            pedidoRenovacao: { select: { status: true, respondidoEm: true, criadoEm: true, paciente: { select: { nome: true } } } },
           },
         },
-        ajustes: { orderBy: { criadoEm: "asc" } },
+        ajustes: {
+          orderBy: { criadoEm: "asc" },
+          include: { reembolso: { select: { pagamento: { select: { pedidoRenovacao: { select: { id: true } } } } } } },
+        },
       },
     });
     if (!r) return Response.json({ erro: "Repasse não encontrado." }, { status: 404 });
@@ -85,10 +89,12 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
           tipo: i.tipo,
           consultaId: i.consultaId,
           remarcacaoId: i.remarcacaoId,
-          dataConsulta: i.consulta.dataInicio.toISOString(),
-          especialidade: i.consulta.especialidade,
-          statusConsulta: i.consulta.status,
-          paciente: i.consulta.paciente.nome,
+          pedidoRenovacaoId: i.pedidoRenovacaoId,
+          // Item 'renovacao' (só mensagem) não tem consulta: usa o pedido.
+          dataConsulta: (i.consulta?.dataInicio ?? i.pedidoRenovacao?.respondidoEm ?? i.pedidoRenovacao?.criadoEm ?? i.criadoEm).toISOString(),
+          especialidade: i.consulta?.especialidade ?? "Renovação de receita",
+          statusConsulta: i.consulta?.status ?? i.pedidoRenovacao?.status ?? "",
+          paciente: i.consulta?.paciente.nome ?? i.pedidoRenovacao?.paciente.nome ?? "",
           brutoCentavos: i.brutoCentavos,
           comissaoCentavos: i.comissaoCentavos,
           taxasCentavos: i.taxasCentavos,
@@ -101,6 +107,7 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
           motivo: a.motivo,
           consultaId: a.consultaId,
           reembolsoId: a.reembolsoId,
+          renovacao: !!a.reembolso?.pagamento?.pedidoRenovacao,
           valorCentavos: a.valorCentavos,
           valorAplicadoCentavos: a.valorAplicadoCentavos,
           criadoEm: a.criadoEm.toISOString(),

@@ -40,6 +40,8 @@ const ROTULO_TIPO: Record<string, string> = {
   consulta: "Consulta",
   multa_cancelamento: "Multa de cancelamento",
   multa_remarcacao: "Multa de remarcação",
+  // Item do #70: renovação de receita paga (pode vir sem consulta).
+  renovacao: "Renovação de receita",
 };
 
 const ROTULO_STATUS: Record<string, string> = {
@@ -128,15 +130,18 @@ function ItemLinha({
   liquidoCentavos,
 }: {
   tipo: string;
-  data: string;
-  paciente?: string;
+  data?: string | null;
+  paciente?: string | null;
   liquidoCentavos: number;
 }) {
+  // Renovação só por mensagem não tem consulta: o nome do paciente vem do
+  // pedido; se não vier, mostra um texto neutro em vez de quebrar.
+  const subtitulo = paciente || (tipo === "renovacao" ? "Pedido de renovação por mensagem" : null);
   return (
     <li className="flex items-start justify-between gap-3 px-4 py-3">
       <div className="min-w-0">
         <div className="text-sm font-bold">{ROTULO_TIPO[tipo] ?? tipo}</div>
-        {paciente ? <div className="text-xs text-bion-ink/75 dark:text-bion-paper/75 truncate">{paciente}</div> : null}
+        {subtitulo ? <div className="text-xs text-bion-ink/75 dark:text-bion-paper/75 truncate">{subtitulo}</div> : null}
         <div className="text-xs text-bion-ink/70 dark:text-bion-paper/70">{fmtDataHora(data)}</div>
       </div>
       <div className="text-sm font-bold tabular-nums shrink-0">{fmtCentavos(liquidoCentavos)}</div>
