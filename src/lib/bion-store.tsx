@@ -132,11 +132,12 @@ type EstadoFresco = {
     reembolsoManual?: Consulta["reembolsoManual"];
     podePedirAte?: string | null;
     motivoReagendamento?: Consulta["motivoReagendamento"];
+    retornoSugeridoEm?: string | null;
   }[];
   documentos: {
     id: string; tipo: string; titulo: string; conteudo: string; medico: string; paciente: string;
     medicamento?: string | null; posologia?: string | null; duracao?: string | null;
-    observacoes?: string | null; cid?: string | null; createdAt: string;
+    observacoes?: string | null; cid?: string | null; controlado?: boolean; createdAt: string;
   }[];
   arquivos: {
     id: string; nome: string; tipo: string; tamanhoKb: number; enviadoPor: string;
@@ -247,6 +248,7 @@ const mapConsulta = (c: EstadoFresco["consultas"][number]): Consulta => ({
   reembolsoManual: c.reembolsoManual ?? null,
   podePedirAte: c.podePedirAte ?? null,
   motivoReagendamento: c.motivoReagendamento ?? null,
+  retornoSugeridoEm: c.retornoSugeridoEm ?? null,
 });
 
 const mapDocumento = (x: EstadoFresco["documentos"][number]): Documento => ({
@@ -262,6 +264,7 @@ const mapDocumento = (x: EstadoFresco["documentos"][number]): Documento => ({
   duracao: x.duracao ?? undefined,
   observacoes: x.observacoes ?? undefined,
   cid: x.cid ?? undefined,
+  controlado: x.controlado ?? false,
 });
 
 const mapArquivo = (a: EstadoFresco["arquivos"][number]): Arquivo => ({
@@ -489,7 +492,7 @@ type Store = {
   remarcarConsulta: (id: string, data: string, hora: string) => Promise<boolean>;
   concluirConsulta: (id: string, resumo?: string) => void;
   /** Resolve true quando o servidor criou a consulta; false em erro (o toast já foi mostrado). */
-  adicionarConsulta: (c: Omit<Consulta, "id" | "status" | "ts"> & { status?: "pendente_anamnese" }) => Promise<boolean>;
+  adicionarConsulta: (c: Omit<Consulta, "id" | "status" | "ts"> & { status?: "pendente_anamnese" }, vinculo?: { tipoAtendimento: "retorno"; consultaOrigemId: string }) => Promise<boolean>;
   concluirAnamnese: (consultaId: string) => Promise<boolean>;
   pularAnamnese: (consultaId: string) => Promise<boolean>;
   registrarDocAnamnese: (consultaId: string, doc: { nome: string; tipo: string; exameImportado: boolean; resumo?: string }) => void;
@@ -1235,7 +1238,11 @@ export function BionProvider({ children }: { children: ReactNode }) {
   );
 
   const adicionarConsulta = useCallback(
-    async (c: Omit<Consulta, "id" | "status" | "ts">): Promise<boolean> => {
+    async (
+      c: Omit<Consulta, "id" | "status" | "ts">,
+      // Retorno (Teleconsulta v2): vínculo com a consulta de origem (ver lib/atendimento-tipo.ts).
+      vinculo?: { tipoAtendimento: "retorno"; consultaOrigemId: string },
+    ): Promise<boolean> => {
       // Médico identificado por ID quando o chamador o tem (nunca por nome —
       // homônimos existem); a busca por nome fica só como último recurso.
       const medicoId = c.medicoId ?? medicosRef.current.find((m) => m.nome === c.medico)?.id;
@@ -1255,6 +1262,7 @@ export function BionProvider({ children }: { children: ReactNode }) {
           hora: c.hora,
           motivoConsulta: c.motivoConsulta,
           valor: c.valor,
+          ...(vinculo ?? {}),
         }),
       });
       if (!d) return false;

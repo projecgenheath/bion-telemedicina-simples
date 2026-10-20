@@ -6,6 +6,7 @@ import { ok, falha } from "@/lib/server/http";
 import { chatComFonte, registrosGemini, type AnonNomes } from "@/lib/server/llm";
 import { anonimizarMensagensIa, type IdentificadoresPaciente } from "@/lib/server/anonimizar-ia";
 import { dataNascimentoParaIso } from "@/lib/idade";
+import { nomesMedicamentosEmUso } from "@/lib/server/medicamentos-legado";
 
 /**
  * BION IA — assistente clínico (backend apenas).
@@ -41,7 +42,7 @@ async function montarContexto(
   if (usuario.role === "PACIENTE") {
     const perfil = await db.perfilPaciente.findUnique({ where: { userId: usuario.id } });
     if (perfil) {
-      const medicamentos = JSON.parse(perfil.medicamentos || "[]") as string[];
+      const medicamentos = await nomesMedicamentosEmUso(usuario.id, perfil.medicamentos);
       const alergias = JSON.parse(perfil.alergias || "[]") as string[];
       if (medicamentos.length) linhas.push(`Medicamentos em uso: ${medicamentos.join(", ")}.`);
       if (alergias.length) linhas.push(`Alergias relatadas: ${alergias.join(", ")}.`);

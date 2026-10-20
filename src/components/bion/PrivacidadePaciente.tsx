@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Shield, FileText, Check, X, User, Stethoscope, Lock, Clock, KeyRound } from "lucide-react";
 import { toast } from "sonner";
 import { useBion } from "@/lib/bion-store";
+import { apiSaude } from "./paciente/api-saude";
 
 export function PrivacidadePaciente() {
   const { pacientePerfil, documentosVisiveis, consentimentosVisiveis, consultas, sessao, trocarSenha } =
@@ -11,6 +12,20 @@ export function PrivacidadePaciente() {
   const [senhaAtual, setSenhaAtual] = useState("");
   const [novaSenha, setNovaSenha] = useState("");
   const [trocando, setTrocando] = useState(false);
+  // Contagem vem da lista MedicamentoEmUso (ativos). Enquanto não carrega
+  // (ou se falhar), cai no campo antigo do perfil.
+  const [ativosLista, setAtivosLista] = useState<number | null>(null);
+  useEffect(() => {
+    if (sessao.role !== "paciente") return;
+    let vivo = true;
+    void apiSaude<{ medicamentos: { ativo: boolean }[] }>("/api/paciente/medicamentos", undefined, true).then((d) => {
+      if (vivo && d?.medicamentos) setAtivosLista(d.medicamentos.filter((m) => m.ativo).length);
+    });
+    return () => {
+      vivo = false;
+    };
+  }, [sessao.role]);
+  const qtdMedicamentos = ativosLista ?? pacientePerfil.medicamentos.length;
 
   const minhasConsultas = consultas.filter((c) => c.paciente === sessao.nome);
   const medicosVinculados = Array.from(new Set(minhasConsultas.map((c) => c.medico)));
@@ -22,7 +37,7 @@ export function PrivacidadePaciente() {
     { rotulo: "Convênio", valor: pacientePerfil.convenio },
     {
       rotulo: "Dados de saúde",
-      valor: `Tipo sanguíneo ${pacientePerfil.tipoSanguineo}, ${pacientePerfil.alergias.length} alergias, ${pacientePerfil.medicamentos.length} medicamentos em uso`,
+      valor: `Tipo sanguíneo ${pacientePerfil.tipoSanguineo}, ${pacientePerfil.alergias.length} alergias, ${qtdMedicamentos} medicamentos em uso`,
     },
     {
       rotulo: "Histórico clínico",
@@ -91,7 +106,7 @@ export function PrivacidadePaciente() {
           </li>
           <li className="flex gap-2 items-start">
             <Check className="w-4 h-4 text-emerald-500 dark:text-emerald-400 mt-0.5 shrink-0" />
-            Cada médico vê apenas os documentos das consultas que atendeu com você.
+            O médico que atende você vê todo o seu histórico clínico na BION, inclusive o que foi feito com outros médicos: exames, evoluções, triagens e documentos. Assim ele não precisa pedir tudo de novo. Médicos sem consulta com você não veem nada.
           </li>
           <li className="flex gap-2 items-start">
             <X className="w-4 h-4 text-destructive mt-0.5 shrink-0" />

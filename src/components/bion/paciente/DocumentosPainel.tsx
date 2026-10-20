@@ -18,6 +18,13 @@ import {
 import { useBion } from "@/lib/bion-store";
 import { toast } from "sonner";
 import { EstadoVazio } from "./EstadosPaciente";
+import { CalendarPlus, RotateCcw } from "lucide-react";
+import { podeRenovarReceita, pedidoDaReceita, PRAZO_RETORNO_DIAS, ROTULO_STATUS_RENOVACAO } from "@/lib/atendimento-tipo";
+import { MarcarRetornoSheet } from "./MarcarRetornoSheet";
+import { RenovarReceitaSheet } from "./RenovarReceitaSheet";
+import { usePedidosRenovacao } from "./usePedidosRenovacao";
+import { EtiquetaTipo } from "./tipo-atendimento-ui";
+import { CLASSE_ETIQUETA } from "./etiqueta-consulta";
 
 /**
  * Página 4 do app do paciente (gesto direita → esquerda):
@@ -120,6 +127,10 @@ export function DocumentosPainel({
   const [visualizando, setVisualizando] = useState<{ titulo: string; corpo: string[]; imprimir?: boolean } | null>(null);
   const setConversaAtiva = onConversa;
   const [texto, setTexto] = useState("");
+  const [retornoDe, setRetornoDe] = useState<string | null>(null);
+  const [renovando, setRenovando] = useState<{ id: string; medicamento: string; medico: string } | null>(null);
+  const [cancelandoPedido, setCancelandoPedido] = useState<string | null>(null);
+  const renovacao = usePedidosRenovacao(sessao.role === "paciente");
 
   const realizadas = useMemo(
     () =>
@@ -147,6 +158,7 @@ export function DocumentosPainel({
       tipo: d.tipo as keyof typeof ICONE_DOC,
       titulo: ROTULO_DOC[d.tipo as keyof typeof ROTULO_DOC] ?? d.titulo,
       data: d.data,
+      original: d as (typeof documentos)[number] | undefined,
       corpo: [
         `${d.titulo}`,
         d.tipo === "receita" && d.medicamento ? `Medicamento: ${d.medicamento}` : "",
@@ -163,6 +175,7 @@ export function DocumentosPainel({
       lista.unshift({
         id: `prontuario-${c.id}`,
         tipo: "prontuario" as const,
+        original: undefined,
         titulo: ROTULO_DOC.prontuario,
         data: c.data,
         corpo: [
@@ -256,6 +269,32 @@ export function DocumentosPainel({
 
         {consultaSelecionada && (
           <div className="mt-4 space-y-2">
+            {(() => {
+              const c = realizadas.find((x) => x.id === consultaSelecionada);
+              if (!c) return null;
+              const noPrazo = Date.now() - c.ts <= PRAZO_RETORNO_DIAS * 86_400_000;
+              return (
+                <div className="bp-glass p-4 flex items-center gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-bold text-bion-ink dark:text-bion-paper inline-flex items-center gap-2 flex-wrap">
+                      {c.especialidade} · {c.data} <EtiquetaTipo consulta={c} />
+                    </div>
+                    <div className="text-xs opacity-80">
+                      {noPrazo ? `Retorno com ${c.medico}, com a triagem já preenchida.` : `O retorno pode ser marcado até ${PRAZO_RETORNO_DIAS} dias depois da consulta.`}
+                    </div>
+                  </div>
+                  {noPrazo ? (
+                    <button
+                      type="button"
+                      onClick={() => setRetornoDe(c.id)}
+                      className="bpp-toque bp-acao shrink-0 min-h-11 rounded-full px-4 text-xs font-bold inline-flex items-center gap-1.5"
+                    >
+                      <CalendarPlus className="w-4 h-4" aria-hidden /> Marcar retorno
+                    </button>
+                  ) : null}
+                </div>
+              );
+            })()}
             {docsSelecionados.length === 0 ? (
               <EstadoVazio icone={<ClipboardList className="w-6 h-6" />} titulo="Nenhum documento nesta consulta" texto="Se o médico emitir algo, aparece aqui." />
             ) : (
@@ -269,6 +308,64 @@ export function DocumentosPainel({
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-bold text-bion-ink dark:text-bion-paper">{d.titulo}</div>
                       <div className="text-xs opacity-80">{d.data}</div>
+                      {(() => {
+                        const o = d.original;
+                        if (!o || o.tipo !== "receita" || !renovacao.disponivel) return null;
+                        const pedido = pedidoDaReceita(renovacao.pedidos, o.id);
+                        if (pedido) {
+                          const r = ROTULO_STATUS_RENOVACAO[pedido.status];
+                          const classe = r.tom === "ok" ? CLASSE_ETIQUETA.ok : r.tom === "pendente" ? CLASSE_ETIQUETA.pagamento : r.tom === "info" ? CLASSE_ETIQUETA.remarcacao : CLASSE_ETIQUETA.neutro;
+                          return (
+                            <div className="mt-1.5">
+                              <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${classe}`}>Renovação: {r.texto}</span>
+                              {pedido.mensagemMedico ? <p className="mt-1 text-xs opacity-80">{pedido.mensagemMedico}</p> : null}
+                              {pedido.status === "pendente" ? (
+                                cancelandoPedido === pedido.id ? (
+                                  <div className="mt-1.5 flex flex-wrap items-center gap-2" role="group" aria-label="Confirmar cancelamento">
+                                    <span className="text-xs font-semibold">Cancelar este pedido?</span>
+                                    <button
+                                      type="button"
+                                      onClick={async () => {
+                                        const r = await renovacao.cancelar(pedido.id);
+                                        setCancelandoPedido(null);
+                                        if (r.ok) toast.success("Pedido de renovação cancelado.");
+                                        else toast.error(r.erro ?? "Não foi possível cancelar.");
+                                      }}
+                                      className="bpp-toque min-h-9 rounded-full px-3 text-xs font-bold bg-red-600/10 text-red-800 dark:bg-red-400/15 dark:text-red-300"
+                                    >
+                                      Sim, cancelar
+                                    </button>
+                                    <button type="button" onClick={() => setCancelandoPedido(null)} className="bpp-toque min-h-9 rounded-full px-3 text-xs font-bold bg-bion-ink/8 dark:bg-white/10">
+                                      Voltar
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <button type="button" onClick={() => setCancelandoPedido(pedido.id)} className="mt-1 block text-xs font-bold underline">
+                                    Cancelar pedido
+                                  </button>
+                                )
+                              ) : null}
+                              {pedido.status !== "pendente" ? (
+                                <button type="button" onClick={() => setRenovando({ id: o.id, medicamento: o.medicamento ?? "", medico: o.medico })} className="mt-1 block text-xs font-bold underline">
+                                  Pedir de novo
+                                </button>
+                              ) : null}
+                            </div>
+                          );
+                        }
+                        if (!podeRenovarReceita(o)) {
+                          return <div className="mt-1 text-xs opacity-80">Renovação só em consulta (medicamento controlado ou sem nome).</div>;
+                        }
+                        return (
+                          <button
+                            type="button"
+                            onClick={() => setRenovando({ id: o.id, medicamento: o.medicamento ?? "", medico: o.medico })}
+                            className="bpp-toque mt-1.5 inline-flex items-center gap-1.5 rounded-full px-3 min-h-9 text-xs font-bold bg-sky-600/15 text-sky-900 dark:text-sky-100"
+                          >
+                            <RotateCcw className="w-3.5 h-3.5" aria-hidden /> Renovar receita
+                          </button>
+                        );
+                      })()}
                     </div>
                     <button type="button"
                       onClick={() => setVisualizando({ titulo: d.titulo, corpo: d.corpo })}
@@ -420,6 +517,18 @@ export function DocumentosPainel({
           </div>
         )}
       </section>
+
+      {retornoDe && realizadas.find((c) => c.id === retornoDe) ? (
+        <MarcarRetornoSheet origem={realizadas.find((c) => c.id === retornoDe)!} retornoSugeridoEm={realizadas.find((c) => c.id === retornoDe)!.retornoSugeridoEm ?? null} onFechar={() => setRetornoDe(null)} />
+      ) : null}
+      {renovando ? (
+        <RenovarReceitaSheet
+          medicamento={renovando.medicamento}
+          medico={renovando.medico}
+          onPedir={(obs) => renovacao.pedir(renovando.id, obs)}
+          onFechar={() => setRenovando(null)}
+        />
+      ) : null}
     </div>
   );
 }

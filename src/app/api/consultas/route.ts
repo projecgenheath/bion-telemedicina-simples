@@ -20,6 +20,7 @@ import {
   ERRO_HORARIO_VEDADO,
   OPCOES_TX_TRAVA,
 } from "@/lib/server/bloqueio-agenda";
+import { lerPedidoVinculado, PRAZO_RETORNO_DIAS } from "@/lib/atendimento-tipo";
 
 /** Ano/mês/dia formam uma data real do calendário. */
 function dataCalendarioValida(ano: number, mes: number, dia: number): boolean {
@@ -86,7 +87,39 @@ export async function POST(req: NextRequest) {
       hora: string;
       motivoConsulta?: string;
       metodo?: "pix" | "cartao";
+      tipoAtendimento?: string;
+      consultaOrigemId?: string;
+      documentoOrigemId?: string;
     };
+
+    // Retorno (Teleconsulta v2): vínculo com uma consulta CONCLUÍDA do próprio
+    // paciente, com o MESMO médico. O cliente não escolhe o médico de outra
+    // pessoa nem herda triagem alheia — tudo conferido aqui.
+    const vinculo = lerPedidoVinculado(body);
+    if (typeof vinculo === "string") {
+      return Response.json({ erro: vinculo }, { status: 400 });
+    }
+    if (vinculo?.tipoAtendimento === "renovacao") {
+      // Renovação sem horário: formato de armazenamento ainda em definição (Médicos).
+      return Response.json({ erro: "A renovação de receita ainda não está disponível." }, { status: 400 });
+    }
+    let origemRetorno: { id: string; anamnese: { coleta: string } | null } | null = null;
+    if (vinculo) {
+      const origem = await db.consulta.findFirst({
+        where: { id: vinculo.consultaOrigemId, pacienteId: usuario.id },
+        select: { id: true, medicoId: true, status: true, dataInicio: true, anamnese: { select: { coleta: true } } },
+      });
+      if (!origem || origem.status !== "concluida") {
+        return Response.json({ erro: "Só é possível marcar retorno de uma consulta concluída." }, { status: 400 });
+      }
+      if (origem.medicoId !== body.medicoId) {
+        return Response.json({ erro: "O retorno é com o mesmo médico da consulta de origem." }, { status: 400 });
+      }
+      if (Date.now() - origem.dataInicio.getTime() > PRAZO_RETORNO_DIAS * 86_400_000) {
+        return Response.json({ erro: `O retorno pode ser marcado até ${PRAZO_RETORNO_DIAS} dias depois da consulta. Agende uma consulta nova.` }, { status: 400 });
+      }
+      origemRetorno = { id: origem.id, anamnese: origem.anamnese };
+    }
 
     const medico = await db.user.findFirst({
       where: { id: body.medicoId, role: "MEDICO" },
@@ -183,6 +216,7 @@ export async function POST(req: NextRequest) {
               valor: valorConsulta,
               pago: false, // só o gateway/servidor confirma
               motivoConsulta: body.motivoConsulta?.trim().slice(0, 300) || "Consulta de rotina",
+              ...(origemRetorno ? { tipoAtendimento: "retorno", consultaOrigemId: origemRetorno.id } : {}),
             },
           }),
         ),
@@ -195,7 +229,13 @@ export async function POST(req: NextRequest) {
 
     // Agendamento pela BION IA: cria a anamnese pendente que confirma a consulta
     const a = await db.anamnese.create({
-      data: { consultaId: consulta.id, usuarioId: usuario.id },
+      // Retorno: a triagem nasce com as respostas da consulta de origem; o
+      // paciente só confirma ou edita.
+      data: {
+        consultaId: consulta.id,
+        usuarioId: usuario.id,
+        ...(origemRetorno?.anamnese?.coleta ? { coleta: origemRetorno.anamnese.coleta } : {}),
+      },
     });
     const anamnese = {
       id: a.id,
@@ -222,7 +262,7 @@ export async function POST(req: NextRequest) {
     const eventos: NotifPayload[] = [
       {
         tipo: "agenda",
-        titulo: "Nova consulta agendada",
+        titulo: origemRetorno ? "Retorno agendado" : "Nova consulta agendada",
         texto: `${usuario.nome} agendou ${consulta.especialidade} em ${body.data} às ${body.hora}. Triagem pré-consulta (BION IA) disponível até 5 minutos antes do horário.`,
         usuarioId: medico.id,
       },
@@ -286,6 +326,8 @@ export async function POST(req: NextRequest) {
         motivoCancelamento: consulta.motivoCancelamento ?? undefined,
         valor: consulta.valor,
         pago: pagoFinal,
+        tipoAtendimento: consulta.tipoAtendimento,
+        consultaOrigemId: consulta.consultaOrigemId,
       },
       anamnese,
       pagamento,

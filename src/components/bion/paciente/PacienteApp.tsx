@@ -34,6 +34,7 @@ import { fmtCentavos, rotuloReembolso, usePreviaCancelamento } from "./usePrevia
 import { desistirRemarcacao, iniciarRemarcacaoComMulta, useRecarregarEstado } from "./useRemarcacaoComMulta";
 import { EtiquetaStatus, PedirReembolsoSheet } from "./PedirReembolsoSheet";
 import { GraficoLinha, type PontoGrafico } from "./GraficoLinha";
+import { EtiquetaTipo } from "./tipo-atendimento-ui";
 import { CLASSE_ETIQUETA, etiquetaConsulta, type EtiquetaConsulta } from "./etiqueta-consulta";
 import { DetalheMedicao, type Detalhe } from "./DetalheMedicao";
 import dynamic from "next/dynamic";
@@ -58,6 +59,8 @@ import { acaoSalaPaciente, botaoPrincipalProxima, type AcaoSala } from "./entrad
 import { useRelogioSala } from "./useRelogioSala";
 import { SALA_ABRE_ANTES_MIN, salaAbertaEm } from "@/lib/janela-sala";
 import { EstadoVazio } from "./EstadosPaciente";
+import { PedidosMedicao } from "./PedidosMedicao";
+import { MedicamentosEmUso } from "./MedicamentosEmUso";
 
 /**
  * App imersivo do paciente — fullscreen, sem menu e sem botões de navegação.
@@ -549,7 +552,7 @@ export function PacienteApp() {
                     </span>
                     <EtiquetaEstado e={etiquetaDe(proxima)} />
                   </div>
-                  <div className="text-xl font-bold">{proxima.especialidade}</div>
+                  <div className="text-xl font-bold inline-flex items-center gap-2 flex-wrap">{proxima.especialidade} <EtiquetaTipo consulta={proxima} /></div>
                   <div className="text-sm opacity-80">com {proxima.medico}</div>
                   <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2">
                     <span className="inline-flex items-center gap-2 text-sm font-bold">
@@ -606,7 +609,7 @@ export function PacienteApp() {
                   const resumo = (
                     <div className="flex items-start justify-between gap-2">
                       <div>
-                        <div className="font-bold">{c.especialidade}</div>
+                        <div className="font-bold inline-flex items-center gap-2 flex-wrap">{c.especialidade} <EtiquetaTipo consulta={c} /></div>
                         <div className="text-xs opacity-80">com {c.medico}</div>
                         <div className="text-xs font-semibold mt-1">
                           {c.data} · {c.hora}
@@ -731,6 +734,12 @@ export function PacienteApp() {
             </p>
 
             <div className="bpp-grade flex flex-col gap-4">
+              {/* Pedidos de medição do médico (só aparece se houver pendente) */}
+              <PedidosMedicao />
+
+              {/* Medicamentos em uso (receita + adicionados) com lembrete direto */}
+              <MedicamentosEmUso />
+
               {/* Lembretes */}
               <button type="button"
                 onClick={() => setDetalhe("lembretes")}

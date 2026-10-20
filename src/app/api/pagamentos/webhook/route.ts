@@ -1,6 +1,8 @@
 import { NextRequest } from "next/server";
+import { avisarPacienteEspera, confirmarRemarcacaoEspera } from "@/lib/server/espera-medico";
 import { quandoClinica } from "@/lib/server/fuso";
 import { db } from "@/lib/db";
+import { cancelarRenovacaoPagamentoFalhou, confirmarPagamentoRenovacao } from "@/lib/server/renovacao-pagamento";
 import {
   confirmarPagamento,
   falharPagamento,
@@ -83,6 +85,8 @@ export async function POST(req: NextRequest) {
 
     if (body.evento === "pagamento.falhou") {
       const p = await falharPagamento(body.pagamentoId, "webhook");
+      // PIX expirado/falho da renovação por mensagem: o pedido vira "cancelado".
+      if (p && !p.consultaId) await db.$transaction((tx) => cancelarRenovacaoPagamentoFalhou(p.id, tx));
       await registrarAudit(null, {
         acao: "PAGAMENTO_FALHOU",
         categoria: "pagamento",
@@ -98,13 +102,38 @@ export async function POST(req: NextRequest) {
     if (!p) {
       return Response.json({ erro: "Pagamento não encontrado." }, { status: 404 });
     }
+    if (!p.consultaId) {
+      // Pagamento sem consulta: renovação de receita só por mensagem (#66).
+      const pedido = await db.pedidoRenovacao.findUnique({
+        where: { pagamentoId: p.id },
+        select: { id: true, status: true },
+      });
+      if (!pedido) {
+        return Response.json({ erro: "Pagamento sem consulta nem pedido de renovação." }, { status: 404 });
+      }
+      // aguardando_pagamento → pendente (idempotente; reentrega não muda nada).
+      const r = await db.$transaction((tx) => confirmarPagamentoRenovacao(p.id, tx));
+      await registrarAudit(null, {
+        acao: "PAGAMENTO_CONFIRMADO",
+        categoria: "pagamento",
+        entidade: "pagamento",
+        entidadeId: p.id,
+        detalhes: `Pagamento confirmado via webhook do gateway — renovação ${pedido.id} (${r})`,
+      });
+      return Response.json({ ok: true, pagamento: paraWire(p), pedidoRenovacaoId: pedido.id });
+    }
+    // Diferença da remarcação da espera do médico (gatewayRef "espera:<id>"):
+    // troca a consulta (idempotente) ou, se a reserva já venceu, reembolsa.
+    const espera = await confirmarRemarcacaoEspera(p.id);
+    if (espera) await avisarPacienteEspera(p.id, espera);
     // O pagamento CONFIRMOU a consulta (regra imposta no servidor): avisa o
     // paciente e registra a trilha de auditoria server-side.
     const consulta = await db.consulta.findUnique({
       where: { id: p.consultaId },
       include: { medico: { select: { nome: true } } },
     });
-    if (consulta && consulta.status === "confirmada") {
+    // Espera do médico: o aviso próprio já foi enviado (avisarPacienteEspera).
+    if (consulta && consulta.status === "confirmada" && !espera) {
       const quando = quandoClinica(consulta.dataInicio);
       await db.notificacao.create({
         data: {

@@ -26,6 +26,7 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
         itens: {
           orderBy: { criadoEm: "asc" },
           include: {
+            pedidoRenovacao: { select: { respondidoEm: true, criadoEm: true, paciente: { select: { nome: true } } } },
             consulta: {
               select: {
                 dataInicio: true,
@@ -69,8 +70,9 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
             : null,
         itens: r.itens.map((i) => ({
           tipo: i.tipo,
-          data: i.consulta.dataInicio.toISOString(),
-          paciente: i.consulta.paciente.nome,
+          // Item 'renovacao' (só mensagem) não tem consulta: usa o pedido.
+          data: (i.consulta?.dataInicio ?? i.pedidoRenovacao?.respondidoEm ?? i.pedidoRenovacao?.criadoEm ?? i.criadoEm).toISOString(),
+          paciente: i.consulta?.paciente.nome ?? i.pedidoRenovacao?.paciente.nome ?? "",
           brutoCentavos: i.brutoCentavos,
           comissaoCentavos: i.comissaoCentavos,
           taxasCentavos: i.taxasCentavos,
