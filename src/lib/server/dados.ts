@@ -1,4 +1,5 @@
 import "server-only";
+import { adminVeAnamnese, documentoParaPapel } from "@/lib/privacidade-consulta";
 import { instanteNoFuso, partesNoFuso } from "./fuso";
 import { normalizarTipoAtendimento } from "@/lib/bion-tipos";
 import { broadcastCanal } from "@/lib/supabase/broadcast";
@@ -500,7 +501,10 @@ export async function carregarDados(usuario: UsuarioSessao) {
             orderBy: { createdAt: "desc" },
           })
         : Promise.resolve([] as UserComPerfilPaciente[]),
-    db.anamnese.findMany({
+    // Privacidade da consulta: admin não recebe triagem/anamnese.
+    !adminVeAnamnese(usuario.role)
+      ? Promise.resolve([])
+      : db.anamnese.findMany({
       where: souPaciente
         ? { usuarioId: usuario.id }
         : souMedico
@@ -657,7 +661,7 @@ export async function carregarDados(usuario: UsuarioSessao) {
     exames: exames.map((e) => exameWire(e)),
     consultas: consultasRaw.map((c) => consultaWire(c)),
     anamneses: anamnesesRaw.map((a) => anamneseWire(a)),
-    documentos: documentos.map((doc) => documentoWire(doc)),
+    documentos: documentos.map((doc) => documentoParaPapel(documentoWire(doc), usuario.role)),
     arquivos: arquivos.map((a) => arquivoWire(a)),
     notificacoes: notificacoes.map((n) => ({
       ...n,
