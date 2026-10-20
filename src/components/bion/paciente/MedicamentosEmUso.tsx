@@ -145,9 +145,9 @@ export function MedicamentosEmUso({ onGerenciarLembretes }: { onGerenciarLembret
         </ul>
       )}
 
-      {onGerenciarLembretes && lembretesMed.length > 0 && (
-        <button type="button" onClick={onGerenciarLembretes} className="mt-2 text-xs font-semibold underline opacity-80">
-          Gerenciar lembretes
+      {onGerenciarLembretes && (
+        <button type="button" onClick={onGerenciarLembretes} className="mt-2 block text-left text-xs font-semibold underline opacity-80">
+          {lembretes.length > 0 ? "Gerenciar lembretes" : "Gerenciar lembretes · Toque para criar o primeiro lembrete"}
         </button>
       )}
 
