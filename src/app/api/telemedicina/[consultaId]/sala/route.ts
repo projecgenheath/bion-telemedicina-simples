@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse, after } from "next/server";
 import { db } from "@/lib/db";
 import { exigirSessao, registrarAudit } from "@/lib/server/auth";
+import { evolucaoPendenteDoMedico, garantirEvolucao, respostaEvolucaoPendente } from "@/lib/server/evolucao";
 import { ok, falha } from "@/lib/server/http";
 import { topicoSala } from "@/lib/server/sala-canal";
 import { broadcastCanal } from "@/lib/supabase/broadcast";
@@ -213,6 +214,15 @@ export async function GET(
     // sem presença nem auditoria.
     const foraDaJanela = respostaForaDaJanela(consulta.dataInicio);
     if (foraDaJanela) return foraDaJanela;
+
+    // Teleconsulta v2 — trava do próximo atendimento (só o MÉDICO): com
+    // evolução em rascunho de OUTRA consulta, 409 { erro: "evolucao_pendente" }.
+    // Ao entrar, a evolução desta consulta nasce em rascunho (idempotente).
+    if (papel === "MEDICO") {
+      const pendente = await evolucaoPendenteDoMedico(usuario.id, consultaId);
+      if (pendente) return respostaEvolucaoPendente(pendente);
+      await garantirEvolucao({ id: consultaId, medicoId: consulta.medicoId, pacienteId: consulta.pacienteId });
+    }
 
     // Presença dos dois numa consulta só (antes: duas).
     const agoraPing = new Date();

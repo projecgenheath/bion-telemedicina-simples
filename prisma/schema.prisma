@@ -62,6 +62,8 @@ model User {
   // Teleconsulta v2 — Médicos: renovação de receita
   pedidosRenovacaoFeitos     PedidoRenovacao[]  @relation("PedidoRenovacaoPaciente")
   pedidosRenovacaoRecebidos  PedidoRenovacao[]  @relation("PedidoRenovacaoMedico")
+  evolucoesComoMedico        Evolucao[]         @relation("EvolucaoMedico")
+  evolucoesComoPaciente      Evolucao[]         @relation("EvolucaoPaciente")
 }
 
 model Sessao {
@@ -207,6 +209,7 @@ model Consulta {
   repasseAjustes RepasseAjuste[]
   remarcacoes RemarcacaoPendente[]
   chamadas    ChamadaConsulta[] // Admin: toque da consulta
+  evolucao    Evolucao?         // Teleconsulta v2 — Médicos: evolução (1 por consulta)
   esperaMedico   EsperaMedico?  @relation("EsperaConsulta") // Admin: espera do médico
   esperasOrigem  EsperaMedico[] @relation("EsperaConsultaNova")
 
@@ -866,6 +869,34 @@ model PedidoRenovacao {
   // "PedidoRenovacao_aberto_unico" (pacienteId, documentoId) WHERE status IN ('aguardando_pagamento','pendente')
   // — um só pedido aberto por paciente e receita. Ver 20261020a.
   // Também só no SQL: "PedidoRenovacao_pendente_criadoEm_idx" (criadoEm) WHERE status = 'pendente'.
+}
+
+// Teleconsulta v2 — Médicos: evolução do médico (1 por consulta). Seções em
+// JSON (string). status: rascunho | concluida (Evolucao_status_check). Enquanto
+// o médico tiver evolução em rascunho, não inicia outra consulta (trava).
+model Evolucao {
+  id           String    @id @default(cuid())
+  consultaId   String    @unique
+  consulta     Consulta  @relation(fields: [consultaId], references: [id], onDelete: Cascade)
+  medicoId     String
+  medico       User      @relation("EvolucaoMedico", fields: [medicoId], references: [id], onDelete: Cascade)
+  pacienteId   String
+  paciente     User      @relation("EvolucaoPaciente", fields: [pacienteId], references: [id], onDelete: Cascade)
+  dados        String    @default("{}")
+  triagem      String    @default("{}")
+  exames       String    @default("{}")
+  medicamentos String    @default("{}")
+  conduta      String    @default("{}")
+  cid          String?
+  documentos   String    @default("[]")
+  rascunho     String    @default("{}") // estado livre do autosave da tela
+  status       String    @default("rascunho") // rascunho | concluida
+  criadoEm     DateTime  @default(now()) @db.Timestamptz(3)
+  concluidaEm  DateTime? @db.Timestamptz(3)
+  atualizadoEm DateTime  @default(now()) @updatedAt @db.Timestamptz(3)
+
+  @@index([medicoId, status])
+  @@index([pacienteId])
 }
 
 // Admin: espera do médico (paciente na sala, médico ainda não entrou).
