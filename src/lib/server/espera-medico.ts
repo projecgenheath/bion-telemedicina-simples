@@ -93,30 +93,36 @@ async function travarEspera(tx: Tx, consultaId: string) {
 
 /* ---------------- abrir / fechar ---------------- */
 
-/** Abre a espera quando o paciente atende (idempotente: devolve a existente). */
-export async function abrirEspera(consultaId: string, atendidaPacienteEm: Date) {
-  const existente = await db.esperaMedico.findUnique({ where: { consultaId } });
+type Cliente = Prisma.TransactionClient | typeof db;
+
+/**
+ * Abre a espera quando o paciente atende. Idempotente MESMO com chamadas
+ * simultâneas: INSERT … ON CONFLICT ("consultaId") DO NOTHING e relê
+ * (datas gravadas em UTC, como o Prisma grava TIMESTAMP(3)). Não
+ * gera erro de unicidade, então pode rodar dentro da transação de quem chama
+ * (`tx`, padrão `db`) sem abortá-la. Consulta inexistente ou encerrada → null.
+ */
+export async function abrirEspera(consultaId: string, atendidaPacienteEm: Date, tx: Cliente = db) {
+  const existente = await tx.esperaMedico.findUnique({ where: { consultaId } });
   if (existente) return existente;
-  const c = await db.consulta.findUnique({ where: { id: consultaId }, select: { dataInicio: true, status: true } });
+  const c = await tx.consulta.findUnique({ where: { id: consultaId }, select: { dataInicio: true, status: true } });
   if (!c || !STATUS_ABERTOS.includes(c.status)) return null;
-  try {
-    return await db.esperaMedico.create({
-      data: {
-        id: crypto.randomUUID(),
-        consultaId,
-        iniciadaEm: atendidaPacienteEm,
-        expiraEm: calcularExpiraEm(c.dataInicio, atendidaPacienteEm),
-      },
-    });
-  } catch (e) {
-    if ((e as { code?: string }).code === "P2002") return db.esperaMedico.findUnique({ where: { consultaId } });
-    throw e;
-  }
+  const expiraEm = calcularExpiraEm(c.dataInicio, atendidaPacienteEm);
+  await tx.$executeRaw`
+    INSERT INTO "EsperaMedico" ("id", "consultaId", "iniciadaEm", "expiraEm", "status")
+    VALUES (${crypto.randomUUID()}, ${consultaId}, (${atendidaPacienteEm}::timestamptz AT TIME ZONE 'UTC'), (${expiraEm}::timestamptz AT TIME ZONE 'UTC'), 'aguardando')
+    ON CONFLICT ("consultaId") DO NOTHING`;
+  return tx.esperaMedico.findUnique({ where: { consultaId } });
 }
 
-/** O médico atendeu: fecha como medico_entrou (de aguardando ou expirada sem escolha). Idempotente. */
-export async function fecharEsperaMedicoEntrou(consultaId: string, em: Date = new Date()) {
-  const { count } = await db.esperaMedico.updateMany({
+/**
+ * O médico atendeu: fecha como medico_entrou SÓ se a espera ainda está
+ * `aguardando` ou `expirada` (expirada = o paciente ainda não escolheu;
+ * escolher grava `cancelada`/`remarcada`). Idempotente (updateMany
+ * condicional). `tx` opcional, padrão `db`.
+ */
+export async function fecharEsperaMedicoEntrou(consultaId: string, em: Date = new Date(), tx: Cliente = db) {
+  const { count } = await tx.esperaMedico.updateMany({
     where: { consultaId, status: { in: ["aguardando", "expirada"] } },
     data: { status: "medico_entrou", resolvidoEm: em },
   });

@@ -55,6 +55,43 @@ async function cenario(valorAntigo = 150) {
   igual("fechar de novo é no-op", await m.fecharEsperaMedicoEntrou(c.id, AGORA), false);
 }
 
+// --- chamada dupla simultânea e uso dentro de $transaction
+{
+  const { c } = await cenario();
+  const entrada = new Date(AGORA.getTime() - 3 * 60_000);
+  const [a, b, d] = await Promise.all([m.abrirEspera(c.id, entrada), m.abrirEspera(c.id, entrada), m.abrirEspera(c.id, new Date(AGORA.getTime() - 60_000))]);
+  igual("abrir simultâneo: mesma espera", new Set([a?.id, b?.id, d?.id]).size, 1);
+  igual("abrir simultâneo: uma linha", await db.esperaMedico.count({ where: { consultaId: c.id } }), 1);
+  const [f1, f2] = await Promise.all([m.fecharEsperaMedicoEntrou(c.id, AGORA), m.fecharEsperaMedicoEntrou(c.id, AGORA)]);
+  igual("fechar simultâneo: só um fecha", [f1, f2].filter(Boolean).length, 1);
+}
+{
+  const { c } = await cenario();
+  const entrada = new Date(AGORA.getTime() - 3 * 60_000);
+  const r = await db.$transaction(async (tx) => {
+    const e1 = await m.abrirEspera(c.id, entrada, tx);
+    const e2 = await m.abrirEspera(c.id, entrada, tx); // repetir na mesma tx não aborta
+    const fechou = await m.fecharEsperaMedicoEntrou(c.id, AGORA, tx);
+    return { mesma: e1?.id === e2?.id, fechou };
+  });
+  igual("dentro de $transaction", r, { mesma: true, fechou: true });
+  igual("tx commitou medico_entrou", (await db.esperaMedico.findUnique({ where: { consultaId: c.id } }))?.status, "medico_entrou");
+  const { c: c2 } = await cenario();
+  await db.$transaction(async (tx) => {
+    await m.abrirEspera(c2.id, entrada, tx);
+    throw new Error("rollback");
+  }).catch(() => null);
+  igual("rollback da tx desfaz a abertura", await db.esperaMedico.count({ where: { consultaId: c2.id } }), 0);
+}
+// fechar não mexe em espera com escolha do paciente
+{
+  const { pac, c } = await cenario();
+  await m.abrirEspera(c.id, new Date(AGORA.getTime() - 15 * 60_000));
+  await m.cancelarPorEspera({ consultaId: c.id, pacienteId: pac.id, agora: AGORA });
+  igual("fechar depois de cancelada não muda", await m.fecharEsperaMedicoEntrou(c.id, AGORA), false);
+  igual("continua cancelada", (await db.esperaMedico.findUnique({ where: { consultaId: c.id } }))?.status, "cancelada");
+}
+
 // --- cancelar: só expirada, reembolso integral, idempotente
 {
   const { pac, c } = await cenario(150);
