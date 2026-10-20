@@ -13,6 +13,7 @@ import {
   type AuditPayload,
 } from "@/lib/server/dados";
 import { quandoClinica } from "@/lib/server/fuso";
+import { statusAposFalhaDoMedico } from "@/lib/atendimento-tipo";
 import {
   consultaEmHorarioVedado,
   diaBloqueado,
@@ -159,7 +160,7 @@ export async function PATCH(
         }
         const valorCentavos = reaisParaCentavos(consulta.valor);
         if (por === "medico") {
-          data.status = consulta.pago ? "aguardando_reagendamento" : "cancelada";
+          data.status = statusAposFalhaDoMedico(consulta);
           evento = { tipo: "cancelada", por, motivo: "agenda_cancelada", dataAnterior: consulta.dataInicio, multaCentavos: 0 };
         } else if (por === "admin") {
           data.status = "cancelada";

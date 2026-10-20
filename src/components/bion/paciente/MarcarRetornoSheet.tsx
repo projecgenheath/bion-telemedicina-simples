@@ -5,7 +5,7 @@ import { CalendarClock, Loader2, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { useBion } from "@/lib/bion-store";
 import type { Consulta, Medico } from "@/lib/bion-tipos";
-import { escolherHorarioInicial, motivoSugerido } from "@/lib/atendimento-tipo";
+import { escolherHorarioInicial, fimRetornoGratis, motivoSugerido, retornoEhGratis, ultimoDiaRetornoGratis } from "@/lib/atendimento-tipo";
 import { agendaLivreDoMedico, type DiaAgenda } from "./agenda-medico";
 import { useDiasBloqueados } from "./useDiasBloqueados";
 import { useVoltarFecha } from "./useVoltarFecha";
@@ -31,8 +31,12 @@ export function MarcarRetornoSheet({
   const medico = medicos.find((m) => (origem.medicoId ? m.id === origem.medicoId : m.nome === origem.medico));
   const { bloqueados } = useDiasBloqueados(medico?.id);
   const agenda = useMemo(() => agendaLivreDoMedico(medico, consultas, undefined, 30, bloqueados), [medico, consultas, bloqueados]);
+  // Só aviso: quem decide se é grátis é o servidor. Já existe retorno ativo
+  // desta origem → o grátis (um por consulta) já foi usado.
+  const jaUsouGratis = consultas.some((c) => c.consultaOrigemId === origem.id && c.tipoAtendimento === "retorno" && c.status !== "cancelada");
   return (
     <MarcarRetornoPainel
+      jaUsouGratis={jaUsouGratis}
       origem={origem}
       medico={medico}
       agenda={agenda}
@@ -56,7 +60,9 @@ export function MarcarRetornoPainel({
   retornoSugeridoEm,
   onFechar,
   onConfirmar,
+  jaUsouGratis = false,
 }: {
+  jaUsouGratis?: boolean;
   origem: Consulta;
   medico: Medico | undefined;
   agenda: DiaAgenda[];
@@ -77,13 +83,20 @@ export function MarcarRetornoPainel({
   const diaSel = agenda.find((d) => d.iso === (dia ?? inicial?.dia.iso)) ?? inicial?.dia;
   const horaSel = diaSel && hora && diaSel.horarios.includes(hora) ? hora : diaSel?.horarios[0];
 
+  // Retorno grátis até 30 dias da consulta de origem (regra do servidor).
+  const origemISO = origem.dataISO ?? null;
+  const gratisAte = origemISO && !jaUsouGratis && Date.now() < fimRetornoGratis(origemISO).getTime() ? ultimoDiaRetornoGratis(origemISO) : null;
+  const instanteSel = diaSel && horaSel ? new Date(`${diaSel.iso}T${horaSel}:00-03:00`) : null;
+  const gratis = !!(origemISO && instanteSel && retornoEhGratis(origemISO, instanteSel, jaUsouGratis));
+  const preco = medico ? `R$ ${medico.valor.toFixed(2).replace(".", ",")}` : null;
+
   async function confirmar() {
     if (!medico || !diaSel || !horaSel) return;
     setEnviando(true);
     const ok = await onConfirmar(medico, diaSel.iso, horaSel, motivo.trim() || motivoSugerido("retorno", origem));
     setEnviando(false);
     if (ok) {
-      toast.success(`Retorno marcado: ${diaSel.rotulo} às ${horaSel}.`);
+      toast.success(`Retorno marcado${gratis ? " (grátis)" : ""}: ${diaSel.rotulo} às ${horaSel}.`);
       onFechar();
     }
   }
@@ -150,6 +163,13 @@ export function MarcarRetornoPainel({
               Sua triagem já vem preenchida com as respostas da consulta anterior. Você só confirma ou corrige o que mudou.
             </p>
 
+            <p className="mt-4 text-sm font-semibold" data-teste="preco-retorno">
+              {gratis
+                ? `Retorno grátis até ${gratisAte ?? ultimoDiaRetornoGratis(origemISO!)} · sem pagamento`
+                : gratisAte
+                  ? `Retorno grátis até ${gratisAte}. Neste dia o valor é ${preco}.`
+                  : `Valor da consulta: ${preco}`}
+            </p>
             <button
               type="button"
               disabled={enviando || !horaSel}
@@ -157,7 +177,7 @@ export function MarcarRetornoPainel({
               className="bpp-toque bp-acao mt-5 w-full min-h-12 rounded-full text-sm font-bold inline-flex items-center justify-center gap-2 disabled:opacity-60"
             >
               {enviando ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden /> : null}
-              Confirmar retorno · {diaSel?.rotulo} às {horaSel}
+              Confirmar retorno{gratis ? " grátis" : ""} · {diaSel?.rotulo} às {horaSel}
             </button>
           </>
         )}

@@ -20,7 +20,7 @@ import {
   ERRO_HORARIO_VEDADO,
   OPCOES_TX_TRAVA,
 } from "@/lib/server/bloqueio-agenda";
-import { lerPedidoVinculado, PRAZO_RETORNO_DIAS } from "@/lib/atendimento-tipo";
+import { jaUsouRetornoGratis, lerPedidoVinculado, PRAZO_RETORNO_DIAS, retornoEhGratis } from "@/lib/atendimento-tipo";
 
 /** Ano/mês/dia formam uma data real do calendário. */
 function dataCalendarioValida(ano: number, mes: number, dia: number): boolean {
@@ -103,7 +103,7 @@ export async function POST(req: NextRequest) {
       // Renovação sem horário: formato de armazenamento ainda em definição (Médicos).
       return Response.json({ erro: "A renovação de receita ainda não está disponível." }, { status: 400 });
     }
-    let origemRetorno: { id: string; anamnese: { coleta: string } | null } | null = null;
+    let origemRetorno: { id: string; dataInicio: Date; anamnese: { coleta: string } | null } | null = null;
     if (vinculo) {
       const origem = await db.consulta.findFirst({
         where: { id: vinculo.consultaOrigemId, pacienteId: usuario.id },
@@ -118,7 +118,7 @@ export async function POST(req: NextRequest) {
       if (Date.now() - origem.dataInicio.getTime() > PRAZO_RETORNO_DIAS * 86_400_000) {
         return Response.json({ erro: `O retorno pode ser marcado até ${PRAZO_RETORNO_DIAS} dias depois da consulta. Agende uma consulta nova.` }, { status: 400 });
       }
-      origemRetorno = { id: origem.id, anamnese: origem.anamnese };
+      origemRetorno = { id: origem.id, dataInicio: origem.dataInicio, anamnese: origem.anamnese };
     }
 
     const medico = await db.user.findFirst({
@@ -150,7 +150,7 @@ export async function POST(req: NextRequest) {
     // O cliente não manda valor — um paciente malicioso podia agendar com
     // valor 0 e receber consulta confirmada grátis. O perfilMedico do médico
     // já veio carregado acima (valor padrão 150 no schema).
-    const valorConsulta = medico.perfilMedico?.valor ?? 150;
+    const valorMedico = medico.perfilMedico?.valor ?? 150;
 
     const dataInicio = parseDataHora(body.data, body.hora);
 
@@ -206,19 +206,34 @@ export async function POST(req: NextRequest) {
     const criada = await db.$transaction(
       (tx) =>
         criarSeDiaLivre(tx, medico.id, dataInicio, (t) =>
-          t.consulta.create({
+          (async () => {
+            // Retorno grátis (até 30 dias da origem, um por origem): decidido
+            // AQUI, dentro da transação e com trava pela consulta de origem,
+            // para dois pedidos simultâneos não ganharem dois retornos grátis.
+            let gratis = false;
+            if (origemRetorno) {
+              await t.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${"retorno-gratis:" + origemRetorno.id}))`;
+              const anteriores = await t.consulta.findMany({
+                where: { consultaOrigemId: origemRetorno.id, tipoAtendimento: "retorno" },
+                select: { status: true, valor: true },
+              });
+              gratis = retornoEhGratis(origemRetorno.dataInicio, dataInicio, jaUsouRetornoGratis(anteriores));
+            }
+            return t.consulta.create({
             data: {
               pacienteId: usuario.id,
               medicoId: medico.id,
               especialidade: medico.perfilMedico?.especialidade ?? "Clínica Geral",
               dataInicio,
-              status,
-              valor: valorConsulta,
-              pago: false, // só o gateway/servidor confirma
+              // Grátis: confirmada já na criação, como uma paga após o pagamento.
+              status: gratis ? "confirmada" : status,
+              valor: gratis ? 0 : valorMedico,
+              pago: gratis, // paga: só o gateway/servidor confirma
               motivoConsulta: body.motivoConsulta?.trim().slice(0, 300) || "Consulta de rotina",
               ...(origemRetorno ? { tipoAtendimento: "retorno", consultaOrigemId: origemRetorno.id } : {}),
             },
-          }),
+          });
+          })(),
         ),
       OPCOES_TX_TRAVA,
     );
@@ -255,10 +270,13 @@ export async function POST(req: NextRequest) {
     };
 
     // Cobrança: o servidor decide a confirmação (gateway simulado ou webhook).
+    // Retorno grátis: não existe cobrança (nem PIX); a consulta já nasceu
+    // confirmada e paga com valor 0 (o repasse ignora valor 0, #77).
+    const retornoGratis = !!origemRetorno && consulta.valor === 0 && consulta.status === "confirmada";
     const metodo = body.metodo === "cartao" ? "cartao" : "pix";
-    const cobranca = await criarCobranca(consulta.id, consulta.valor, metodo);
-    let pagamento = paraWire(cobranca);
-    let pagoFinal = false;
+    const cobranca = retornoGratis ? null : await criarCobranca(consulta.id, consulta.valor, metodo);
+    let pagamento = cobranca ? paraWire(cobranca) : null;
+    let pagoFinal = retornoGratis;
     const eventos: NotifPayload[] = [
       {
         tipo: "agenda",
@@ -281,9 +299,18 @@ export async function POST(req: NextRequest) {
       detalhes: `Agendamento com ${medico.nome} — ${consulta.especialidade} em ${body.data} às ${body.hora} (em_espera — aguardando pagamento)`,
     };
 
-    let statusFinal = status;
+    let statusFinal: string = retornoGratis ? "confirmada" : status;
 
-    if (modoGateway() === "simulado") {
+    if (retornoGratis) {
+      eventos[1] = {
+        tipo: "agenda",
+        titulo: "Retorno confirmado",
+        texto: `Retorno grátis de ${consulta.especialidade} com ${medico.nome} — ${body.data} às ${body.hora} está confirmado. Se quiser, faça a triagem opcional com a BION IA até 5 minutos antes do horário.`,
+        usuarioId: usuario.id,
+      };
+      audit.acao = "CONSULTA_AGENDADA_RETORNO_GRATIS";
+      audit.detalhes = `Retorno grátis (até 30 dias da consulta de origem ${origemRetorno!.id}) com ${medico.nome} — ${consulta.especialidade} em ${body.data} às ${body.hora} (valor 0, sem cobrança — confirmada)`;
+    } else if (cobranca && modoGateway() === "simulado") {
       // Demonstração: gateway simulado confirma no servidor — e o pagamento
       // CONFIRMA a consulta (regra imposta aqui, não pelo navegador).
       const confirmado = await confirmarPagamento(cobranca.id, "simulado");
