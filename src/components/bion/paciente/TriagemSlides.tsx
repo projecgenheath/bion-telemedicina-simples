@@ -80,10 +80,11 @@ export function TriagemSlides({
       if (t) feitos[e.id] = t;
     }
     if (Object.keys(feitos).length) setRespondidos((r) => ({ ...feitos, ...r }));
+    // Mesmo limite do irPara: nunca cai num card que não está na tela.
     const i = Math.max(0, ETAPAS_ANAMNESE.findIndex((e) => e.id === (etapa ?? "identificacao")));
-    setIndice(i < 0 ? 0 : i);
+    setIndice(i);
     requestAnimationFrame(() => {
-      const el = faixaRef.current?.children[i < 0 ? 0 : i] as HTMLElement | undefined;
+      const el = faixaRef.current?.children[i] as HTMLElement | undefined;
       el?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
     });
   };
@@ -97,7 +98,7 @@ export function TriagemSlides({
   useEffect(() => {
     const a = anamneses.find((x) => x.consultaId === consultaId);
     if (a) hidratar(a.etapa, a.coleta, a.status === "concluida");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [consultaId]);
 
   useEffect(() => {
@@ -121,7 +122,7 @@ export function TriagemSlides({
     return () => {
       vivo = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [consultaId]);
 
   const enviar = async (texto: string) => {
@@ -318,7 +319,7 @@ export function TriagemSlides({
                 </>
               ) : (
                 <button type="button" onClick={() => irPara(idxServidor)} className="flex-1 rounded-2xl py-3 text-sm font-bold bpp-sheet-chip">
-                  Ir para a pergunta atual
+                  Ir para a pergunta {idxServidor + 1}
                 </button>
               )}
               <button type="button" disabled={i >= visiveis.length - 1} onClick={() => irPara(i + 1)} className="rounded-full p-2.5 bpp-sheet-chip disabled:opacity-30" aria-label="Próximo">
