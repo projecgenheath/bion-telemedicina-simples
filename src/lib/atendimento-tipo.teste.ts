@@ -32,7 +32,7 @@ eq("normaliza retorno", normalizarTipoAtendimento("retorno"), "retorno");
 eq("rotulo padrao some", rotuloTipoAtendimento("padrao"), null);
 eq("rotulo renovacao", rotuloTipoAtendimento("renovacao"), "Renovação de receita");
 
-const r = (medicamento: string, extra: Partial<{ observacoes: string; conteudo: string }> = {}) => ({ tipo: "receita", medicamento, ...extra });
+const r = (medicamento: string, extra: Partial<{ observacoes: string; conteudo: string; controlado: boolean }> = {}) => ({ tipo: "receita", medicamento, ...extra });
 eq("losartana renova", podeRenovarReceita(r("Losartana 50 mg")), true);
 eq("metformina renova", podeRenovarReceita(r("Metformina 850mg")), true);
 eq("clonazepam bloqueia", podeRenovarReceita(r("Clonazepam 2 mg")), false);
