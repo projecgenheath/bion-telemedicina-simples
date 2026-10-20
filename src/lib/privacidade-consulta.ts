@@ -3,11 +3,11 @@
  * clínico e a conversa da teleconsulta são só do médico e do paciente.
  * O admin continua vendo o que precisa para operar (agenda, status,
  * pagamento, contagens), mas nunca o conteúdo: triagem/anamnese, texto de
- * receitas e atestados (CID, medicamento, posologia, observações), arquivos
- * clínicos e o chat da sala.
+ * receitas e atestados (CID, medicamento, posologia, observações) e arquivos
+ * clínicos.
  *
- * Funções puras, usadas por lib/server/dados.ts, lib/server/arquivos-acesso.ts
- * e lib/server/presenca-consulta.ts.
+ * Funções puras, usadas por lib/server/dados.ts e
+ * lib/server/arquivos-acesso.ts.
  */
 
 export type Papel = "PACIENTE" | "MEDICO" | "ADMIN";
@@ -38,20 +38,4 @@ type DocumentoClinico = {
 export function documentoParaPapel<T extends DocumentoClinico>(doc: T, role: Papel | string): T {
   if (role !== "ADMIN") return doc;
   return { ...doc, conteudo: "", medicamento: null, posologia: null, duracao: null, observacoes: null, cid: null };
-}
-
-/**
- * Sinais da sala que a limpeza apaga. Com desfecho, o chat sai inteiro
- * (consumido ou não, de qualquer idade): a conversa não fica guardada
- * depois da consulta. Os demais tipos seguem a regra antiga.
- */
-export function whereLimpezaSala(consultaId: string, temDesfecho: boolean, agoraMs: number) {
-  const antigos = {
-    consultaId,
-    consumido: true,
-    createdAt: { lt: new Date(agoraMs - 30 * 60 * 1000) },
-    ...(temDesfecho ? {} : { NOT: { tipo: "controle", payload: { contains: '"encerrada"' } } }),
-  };
-  if (!temDesfecho) return antigos;
-  return { OR: [antigos, { consultaId, tipo: "chat" }] };
 }

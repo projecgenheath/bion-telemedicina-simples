@@ -2,7 +2,7 @@
  * Testes da privacidade da consulta (lib/privacidade-consulta.ts).
  * Rodar: npx tsx src/lib/privacidade-consulta.teste.ts
  */
-import { adminBaixaArquivoClinico, adminVeAnamnese, documentoParaPapel, whereLimpezaSala } from "./privacidade-consulta";
+import { adminBaixaArquivoClinico, adminVeAnamnese, documentoParaPapel } from "./privacidade-consulta";
 
 let ok = 0;
 let falhas = 0;
@@ -35,19 +35,6 @@ igual("admin: metadados ficam", [doAdmin.id, doAdmin.tipo, doAdmin.titulo, doAdm
 igual("admin: não muta o original", doc.conteudo, "Afastamento por 3 dias");
 igual("médico recebe igual", documentoParaPapel(doc, "MEDICO"), doc);
 igual("paciente recebe igual", documentoParaPapel(doc, "PACIENTE"), doc);
-
-const agora = Date.parse("2026-10-20T18:00:00Z");
-const corte = new Date(agora - 30 * 60 * 1000);
-igual(
-  "sem desfecho: regra antiga, chat não consumido fica até a consulta acabar",
-  whereLimpezaSala("c1", false, agora),
-  { consultaId: "c1", consumido: true, createdAt: { lt: corte }, NOT: { tipo: "controle", payload: { contains: '"encerrada"' } } },
-);
-igual(
-  "com desfecho: apaga todo o chat (qualquer idade, consumido ou não)",
-  whereLimpezaSala("c1", true, agora),
-  { OR: [{ consultaId: "c1", consumido: true, createdAt: { lt: corte } }, { consultaId: "c1", tipo: "chat" }] },
-);
 
 console.log(`\n${ok} ok, ${falhas} falha(s)`);
 process.exit(falhas ? 1 : 0);
