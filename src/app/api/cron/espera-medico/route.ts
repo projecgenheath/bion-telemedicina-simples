@@ -9,8 +9,8 @@ export const maxDuration = 10;
 /**
  * Job da espera do médico (a cada minuto, como o do toque): abre esperas,
  * fecha como medico_entrou e marca expiradas. `Authorization: Bearer
- * <CRON_SECRET>`. Idempotente. Resposta só com contagens. O agendamento em
- * produção (pg_cron) NÃO faz parte deste PR.
+ * <CRON_SECRET>`. Idempotente. Resposta só com contagens. Agendada pelo pg_cron
+ * (migração 20261020c_pg_cron_espera_medico), via POST.
  */
 async function executar(req: NextRequest) {
   try {
