@@ -15,9 +15,9 @@ export async function POST(_req: Request, { params }: { params: Promise<{ consul
   try {
     const usuario = await exigirSessao();
     const { consultaId } = await params;
-    if (usuario.role !== "PACIENTE") return Response.json({ erro: "Acesso negado." }, { status: 403 });
+    if (usuario.role !== "PACIENTE") return Response.json({ erro: "Acesso negado.", codigo: "acesso_negado" }, { status: 403 });
     const r = await desistirRemarcacao({ consultaId, pacienteId: usuario.id });
-    if (!r.ok) return Response.json({ erro: r.erro, ...(r.extra ?? {}) }, { status: r.status });
+    if (!r.ok) return Response.json({ erro: r.erro, codigo: r.codigo, ...(r.extra ?? {}) }, { status: r.status });
     return ok(r);
   } catch (erro) {
     return falha(erro);

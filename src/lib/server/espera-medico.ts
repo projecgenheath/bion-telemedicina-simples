@@ -54,8 +54,15 @@ const SEM_CONSULTA_PROXIMOS_MIN = 40;
 const CONSULTA_EM_ANDAMENTO_MIN = 60;
 
 type Tx = Prisma.TransactionClient;
-type Falha = { ok: false; status: number; erro: string; extra?: Record<string, unknown> };
-const falhar = (status: number, erro: string, extra?: Record<string, unknown>): Falha => ({ ok: false, status, erro, extra });
+/** Códigos estáveis das falhas da espera (o front decide por `codigo`, não pelo texto de `erro`). */
+export const CODIGOS_ESPERA = [
+  "nao_encontrada", "acesso_negado", "corpo_invalido", "sem_espera", "espera_nao_expirada", "espera_resolvida",
+  "consulta_encerrada", "nao_pago", "sem_remarcacao", "medico_entrou", "preco_mudou", "medico_indisponivel",
+  "remarcando", "pagamento_confirmado",
+] as const;
+export type CodigoEspera = (typeof CODIGOS_ESPERA)[number];
+type Falha = { ok: false; status: number; codigo: CodigoEspera; erro: string; extra?: Record<string, unknown> };
+const falhar = (status: number, codigo: CodigoEspera, erro: string, extra?: Record<string, unknown>): Falha => ({ ok: false, status, codigo, erro, extra });
 
 type EsperaRow = Awaited<ReturnType<typeof db.esperaMedico.findUnique>> & {};
 
@@ -214,11 +221,42 @@ export async function rodarEsperaMedico(agora: Date = new Date()): Promise<Resul
 
 /* ---------------- leitura do paciente ---------------- */
 
+/**
+ * Estado da espera (SÓ LEITURA). Se o médico já atendeu (ChamadaConsulta do
+ * médico "atendida") e a espera ainda está aguardando/expirada, devolve
+ * status "medico_entrou" e podeEscolher false sem gravar (o job ou a
+ * próxima escolha do paciente fecha de verdade).
+ */
 export async function estadoEsperaDoPaciente(consultaId: string, pacienteId: string, agora: Date = new Date()) {
   const c = await db.consulta.findUnique({ where: { id: consultaId }, select: { pacienteId: true, esperaMedico: true } });
-  if (!c) return falhar(404, "Consulta não encontrada.");
-  if (c.pacienteId !== pacienteId) return falhar(403, "Acesso negado.");
-  return { ok: true as const, espera: c.esperaMedico ? esperaWire(c.esperaMedico, agora) : null };
+  if (!c) return falhar(404, "nao_encontrada", "Consulta não encontrada.");
+  if (c.pacienteId !== pacienteId) return falhar(403, "acesso_negado", "Acesso negado.");
+  if (!c.esperaMedico) return { ok: true as const, espera: null };
+  const wire = esperaWire(c.esperaMedico, agora);
+  if (wire.status === "aguardando" || wire.status === "expirada") {
+    const medico = await db.chamadaConsulta.findFirst({ where: { consultaId, papel: "medico", status: "atendida" }, select: { id: true } });
+    if (medico) return { ok: true as const, espera: { ...wire, status: "medico_entrou" as const, podeEscolher: false, segundosRestantes: 0 } };
+  }
+  return { ok: true as const, espera: wire };
+}
+
+/* ---------------- cobrança da diferença ---------------- */
+
+/**
+ * Cobrança da diferença como vai ao paciente. `pixCopiaECola` e
+ * `qrCodeBase64` ficam null no gateway simulado (e até o gateway real ser
+ * integrado: hoje não há dado de PIX guardado); o tipo já está pronto.
+ */
+export type CobrancaEspera = {
+  pagamentoId: string;
+  valorCentavos: number;
+  status: string;
+  reservaExpiraEm: string | null;
+  pixCopiaECola: string | null;
+  qrCodeBase64: string | null;
+};
+function cobrancaWire(p: { pagamentoId: string; valorCentavos: number; status: string; reservaExpiraEm: Date | null }): CobrancaEspera {
+  return { ...p, reservaExpiraEm: p.reservaExpiraEm?.toISOString() ?? null, pixCopiaECola: null, qrCodeBase64: null };
 }
 
 /* ---------------- validação comum ---------------- */
@@ -228,17 +266,17 @@ async function carregarParaEscolha(tx: Tx, consultaId: string, pacienteId: strin
     where: { id: consultaId },
     select: { id: true, pacienteId: true, medicoId: true, especialidade: true, dataInicio: true, status: true, valor: true, pago: true, motivoConsulta: true, pagamento: { select: { id: true, status: true } } },
   });
-  if (!consulta) return { falha: falhar(404, "Consulta não encontrada.") } as const;
-  if (consulta.pacienteId !== pacienteId) return { falha: falhar(403, "Acesso negado.") } as const;
+  if (!consulta) return { falha: falhar(404, "nao_encontrada", "Consulta não encontrada.") } as const;
+  if (consulta.pacienteId !== pacienteId) return { falha: falhar(403, "acesso_negado", "Acesso negado.") } as const;
   const espera = await travarEspera(tx, consultaId);
-  if (!espera) return { falha: falhar(409, "Esta consulta não tem espera do médico.") } as const;
+  if (!espera) return { falha: falhar(409, "sem_espera", "Esta consulta não tem espera do médico.") } as const;
   // O médico já atendeu (atendidaMedicoEm = ChamadaConsulta do médico "atendida"):
   // fecha a espera como medico_entrou e o paciente não escolhe mais.
   if (espera.status === "aguardando" || espera.status === "expirada") {
     const medico = await tx.chamadaConsulta.findFirst({ where: { consultaId, papel: "medico", status: "atendida" }, select: { respondidaEm: true } });
     if (medico) {
       await tx.esperaMedico.update({ where: { id: espera.id }, data: { status: "medico_entrou", resolvidoEm: medico.respondidaEm ?? agora } });
-      return { falha: falhar(409, "medico_entrou") } as const;
+      return { falha: falhar(409, "medico_entrou", "medico_entrou") } as const;
     }
   }
   return { consulta, espera, status: statusEfetivo(espera, agora) } as const;
@@ -253,15 +291,15 @@ export async function cancelarPorEspera(params: { consultaId: string; pacienteId
     if ("falha" in r) return r.falha!;
     const { consulta, espera, status } = r;
     if (status === "cancelada") return { ok: true as const, jaProcessada: true, espera: esperaWire(espera, agora), reembolsoId: espera.reembolsoId };
-    if (status === "remarcando") return falhar(409, "remarcando", { status });
-    if (status !== "expirada") return falhar(409, status === "aguardando" ? ERRO_ESPERA_NAO_EXPIRADA : "A espera já foi resolvida.", { status });
-    if (!transicaoPermitida(status, "cancelada")) return falhar(409, "A espera já foi resolvida.");
+    if (status === "remarcando") return falhar(409, "remarcando", "remarcando", { status });
+    if (status !== "expirada") return falhar(409, status === "aguardando" ? "espera_nao_expirada" : "espera_resolvida", status === "aguardando" ? ERRO_ESPERA_NAO_EXPIRADA : "A espera já foi resolvida.", { status });
+    if (!transicaoPermitida(status, "cancelada")) return falhar(409, "espera_resolvida", "A espera já foi resolvida.");
 
     const { count } = await tx.consulta.updateMany({
       where: { id: consulta.id, status: { in: STATUS_ABERTOS } },
       data: { status: "cancelada", motivoCancelamento: MOTIVO_CANCELAMENTO },
     });
-    if (count === 0) return falhar(409, "A consulta já foi encerrada.");
+    if (count === 0) return falhar(409, "consulta_encerrada", "A consulta já foi encerrada.");
     await registrarEvento(tx, { consultaId: consulta.id, tipo: "cancelada", por: "sistema", dataAnterior: consulta.dataInicio, motivo: "falta_medico", multaCentavos: 0 });
     const reembolso = await criarReembolsoSeDevido(tx, {
       consultaId: consulta.id,
@@ -328,31 +366,31 @@ export async function remarcarPorEspera(params: {
     if ("falha" in r) return r.falha!;
     const { consulta, espera, status } = r;
     if (status === "remarcada") {
-      return { ok: true as const, jaProcessada: true, espera: esperaWire(espera, agora), consultaNovaId: espera.consultaNovaId, cobranca: null, reembolsoId: espera.reembolsoId };
+      return { ok: true as const, jaProcessada: true, espera: esperaWire(espera, agora), consultaNovaId: espera.consultaNovaId, cobranca: null as CobrancaEspera | null, reembolsoId: espera.reembolsoId };
     }
     if (status === "remarcando") {
       const pg = espera.consultaNovaId ? await tx.pagamento.findUnique({ where: { consultaId: espera.consultaNovaId } }) : null;
       return {
         ok: true as const, jaProcessada: true, espera: esperaWire(espera, agora), consultaNovaId: espera.consultaNovaId,
-        cobranca: pg ? { pagamentoId: pg.id, valorCentavos: espera.diferencaCentavos ?? 0, status: pg.status, reservaExpiraEm: espera.reservaExpiraEm?.toISOString() ?? null } : null,
+        cobranca: pg ? cobrancaWire({ pagamentoId: pg.id, valorCentavos: espera.diferencaCentavos ?? 0, status: pg.status, reservaExpiraEm: espera.reservaExpiraEm }) : null,
         reembolsoId: null,
       };
     }
-    if (status !== "expirada") return falhar(409, status === "aguardando" ? ERRO_ESPERA_NAO_EXPIRADA : "A espera já foi resolvida.", { status });
-    if (!transicaoPermitida(status, "remarcada")) return falhar(409, "A espera já foi resolvida.");
-    if (!STATUS_ABERTOS.includes(consulta.status)) return falhar(409, "A consulta já foi encerrada.");
-    if (!consulta.pago || consulta.pagamento?.status !== "confirmado") return falhar(409, "Só dá para remarcar uma consulta paga. Escolha cancelar.");
+    if (status !== "expirada") return falhar(409, status === "aguardando" ? "espera_nao_expirada" : "espera_resolvida", status === "aguardando" ? ERRO_ESPERA_NAO_EXPIRADA : "A espera já foi resolvida.", { status });
+    if (!transicaoPermitida(status, "remarcada")) return falhar(409, "espera_resolvida", "A espera já foi resolvida.");
+    if (!STATUS_ABERTOS.includes(consulta.status)) return falhar(409, "consulta_encerrada", "A consulta já foi encerrada.");
+    if (!consulta.pago || consulta.pagamento?.status !== "confirmado") return falhar(409, "nao_pago", "Só dá para remarcar uma consulta paga. Escolha cancelar.");
 
     const livre = await medicoLivreAgora(tx, { medicoId: params.medicoId, especialidade: consulta.especialidade, excetoMedicoId: consulta.medicoId, agora });
-    if (!livre) return falhar(409, "medico_indisponivel");
+    if (!livre) return falhar(409, "medico_indisponivel", "medico_indisponivel");
     const dif = calcularDiferenca(reaisParaCentavos(consulta.valor), livre.valorCentavos);
     const conf = conferirDiferencaEsperada(params.diferencaEsperadaCentavos, dif.diferencaCentavos);
-    if (!conf.ok) return falhar(409, conf.erro, { diferencaAtualCentavos: conf.diferencaAtualCentavos });
+    if (!conf.ok) return falhar(409, "preco_mudou", conf.erro, { diferencaAtualCentavos: conf.diferencaAtualCentavos });
 
     const cobrar = dif.acao === "cobrar";
     // 1) Antiga: cancelada já (sem diferença a pagar) ou só quando a diferença
     //    for paga (confirmarRemarcacaoEspera). Até lá ela continua valendo.
-    if (!cobrar && !(await cancelarAntiga(tx, consulta))) return falhar(409, "A consulta já foi encerrada.");
+    if (!cobrar && !(await cancelarAntiga(tx, consulta))) return falhar(409, "consulta_encerrada", "A consulta já foi encerrada.");
 
     // 2) Nova: médico livre, agora, valor dele, ligada à antiga.
     const nova = await tx.consulta.create({
@@ -421,7 +459,7 @@ export async function remarcarPorEspera(params: {
       jaProcessada: false,
       espera: esperaWire(atual, agora),
       consultaNovaId: nova.id,
-      cobranca: cobrar ? { pagamentoId: pagamentoNovoId!, valorCentavos: dif.diferencaCentavos, status: "pendente" as string, reservaExpiraEm: reservaExpiraEm!.toISOString() } : null,
+      cobranca: cobrar ? cobrancaWire({ pagamentoId: pagamentoNovoId!, valorCentavos: dif.diferencaCentavos, status: "pendente", reservaExpiraEm }) : null,
       reembolsoId,
     };
   }, OPCOES_TX_TRAVA);
@@ -431,7 +469,8 @@ export async function remarcarPorEspera(params: {
     const p = await confirmarPagamento(res.cobranca.pagamentoId, "simulado");
     if (p?.status === "confirmado") {
       res.cobranca.status = "confirmado";
-      await confirmarRemarcacaoEspera(p.id, agora);
+      const res2 = await confirmarRemarcacaoEspera(p.id, agora);
+      if (res2) await avisarPacienteEspera(p.id, res2);
       const e = await db.esperaMedico.findUnique({ where: { consultaId: params.consultaId } });
       if (e) res.espera = esperaWire(e, agora);
     }
@@ -505,6 +544,8 @@ export async function confirmarRemarcacaoEspera(pagamentoId: string, agora: Date
     // PIX depois da reserva vencer (ou da desistência): devolve este pagamento.
     const reemb = await criarReembolsoSeDevido(tx, { consultaId: p.consultaId, valorCentavos: reaisParaCentavos(p.valor), multaCentavos: 0, motivo: "falta_medico", solicitadoPor: "sistema" });
     await tx.consulta.updateMany({ where: { id: p.consultaId, status: { notIn: ["cancelada", "concluida"] } }, data: { status: "cancelada", motivoCancelamento: ERRO_RESERVA } });
+    // Reembolsada: a consulta nova cancelada não fica como paga.
+    await tx.consulta.update({ where: { id: p.consultaId }, data: { pago: false } });
     await auditar(tx, "ESPERA_MEDICO_PAGAMENTO_ATRASADO", {
       usuarioId: null, role: "SISTEMA", consultaId: espera.consultaId,
       detalhes: JSON.stringify({ consultaId: espera.consultaId, consultaNovaId: p.consultaId, esperaId: espera.id, pagamentoNovoId: p.id, reembolsoId: reemb?.id ?? null }),
@@ -537,9 +578,9 @@ export async function desistirRemarcacao(params: { consultaId: string; pacienteI
     if ("falha" in r) return r.falha!;
     const { espera, status } = r;
     if (status === "expirada" && !espera.consultaNovaId) return { ok: true as const, jaProcessada: true, espera: esperaWire(espera, agora) };
-    if (status !== "remarcando") return falhar(409, "Não há remarcação esperando pagamento.", { status });
+    if (status !== "remarcando") return falhar(409, "sem_remarcacao", "Não há remarcação esperando pagamento.", { status });
     const p = espera.consultaNovaId ? await tx.pagamento.findUnique({ where: { consultaId: espera.consultaNovaId }, select: { status: true } }) : null;
-    if (p?.status === "confirmado") return falhar(409, "pagamento_confirmado");
+    if (p?.status === "confirmado") return falhar(409, "pagamento_confirmado", "pagamento_confirmado");
     const atual = await liberarReserva(tx, espera, "O paciente desistiu de pagar a diferença");
     await auditar(tx, "ESPERA_MEDICO_REMARCACAO_DESISTIDA", { usuarioId: params.pacienteId, role: "PACIENTE", consultaId: espera.consultaId, detalhes: JSON.stringify({ consultaId: espera.consultaId, esperaId: espera.id }) });
     return { ok: true as const, jaProcessada: false, espera: esperaWire(atual, agora) };
@@ -580,4 +621,25 @@ export async function listarEsperasFila(agora: Date = new Date(), limite = 200):
     paciente: l.consulta.paciente.nome,
     especialidade: l.consulta.especialidade,
   }));
+}
+
+/**
+ * Aviso ao paciente depois do pagamento da diferença (webhook ou simulado).
+ * Substitui o aviso padrão de "triagem até 5 min antes", que não vale para
+ * uma consulta que começa agora. Sem dado de saúde no texto.
+ */
+export async function avisarPacienteEspera(pagamentoId: string, resultado: "remarcada" | "ja_remarcada" | "reembolsada") {
+  if (resultado === "ja_remarcada") return null;
+  const p = await db.pagamento.findUnique({
+    where: { id: pagamentoId },
+    select: { consulta: { select: { pacienteId: true, medico: { select: { nome: true } } } } },
+  });
+  if (!p) return null;
+  const texto =
+    resultado === "remarcada"
+      ? `Pagamento aprovado. Sua consulta com Dr(a). ${p.consulta.medico.nome} começa agora; entre na sala.`
+      : "O pagamento da diferença chegou depois do prazo da reserva. A consulta nova foi cancelada e o valor será devolvido.";
+  return db.notificacao.create({
+    data: { tipo: resultado === "remarcada" ? "agenda" : "pagamento", titulo: resultado === "remarcada" ? "Consulta remarcada" : "Pagamento devolvido", texto, usuarioId: p.consulta.pacienteId },
+  });
 }
