@@ -57,6 +57,10 @@ igual("agora ± 30 min", r.aoVivo.map((c) => c.id), ["c2", "c3"]);
 igual("próximas em ordem", r.proximas.map((c) => c.id), ["c2", "c3", "c4", "c7"]);
 igual("pagas (sem canceladas)", r.pagas, 2);
 igual("bruto pago em centavos", r.brutoPagoCentavos, 25050);
+const rg = resumoHoje([...lista, consulta("2026-10-04T12:00:00-03:00", "confirmada", { pago: true, valor: "R$ 0" })], AGORA);
+igual("retorno grátis (valor 0) não conta como paga", rg.pagas, 2);
+igual("retorno grátis não soma no bruto", rg.brutoPagoCentavos, 25050);
+igual("retorno grátis entra no total do dia", rg.total, 8);
 
 const s = serieDiaria(lista, AGORA, 3);
 igual("série: rótulos", s.map((x) => x.rotulo), ["sex, 02/10", "Ontem", "Hoje"]);
