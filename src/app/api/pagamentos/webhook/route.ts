@@ -1,6 +1,8 @@
 import { NextRequest } from "next/server";
+import { confirmarRemarcacaoEspera } from "@/lib/server/espera-medico";
 import { quandoClinica } from "@/lib/server/fuso";
 import { db } from "@/lib/db";
+import { cancelarRenovacaoPagamentoFalhou, confirmarPagamentoRenovacao } from "@/lib/server/renovacao-pagamento";
 import {
   confirmarPagamento,
   falharPagamento,
@@ -83,6 +85,8 @@ export async function POST(req: NextRequest) {
 
     if (body.evento === "pagamento.falhou") {
       const p = await falharPagamento(body.pagamentoId, "webhook");
+      // PIX expirado/falho da renovação por mensagem: o pedido vira "cancelado".
+      if (p && !p.consultaId) await db.$transaction((tx) => cancelarRenovacaoPagamentoFalhou(p.id, tx));
       await registrarAudit(null, {
         acao: "PAGAMENTO_FALHOU",
         categoria: "pagamento",
@@ -107,18 +111,20 @@ export async function POST(req: NextRequest) {
       if (!pedido) {
         return Response.json({ erro: "Pagamento sem consulta nem pedido de renovação." }, { status: 404 });
       }
-      // TODO(#66): chamar confirmarPagamentoRenovacao(p.id, tx), exportada pelo
-      // Pacientes (aguardando_pagamento → pendente, idempotente). Ainda não
-      // existe no 2723f2f; sem stub aqui, por combinado no grupo.
+      // aguardando_pagamento → pendente (idempotente; reentrega não muda nada).
+      const r = await db.$transaction((tx) => confirmarPagamentoRenovacao(p.id, tx));
       await registrarAudit(null, {
         acao: "PAGAMENTO_CONFIRMADO",
         categoria: "pagamento",
         entidade: "pagamento",
         entidadeId: p.id,
-        detalhes: `Pagamento confirmado via webhook do gateway — renovação ${pedido.id} (status do pedido: ${pedido.status})`,
+        detalhes: `Pagamento confirmado via webhook do gateway — renovação ${pedido.id} (${r})`,
       });
       return Response.json({ ok: true, pagamento: paraWire(p), pedidoRenovacaoId: pedido.id });
     }
+    // Diferença da remarcação da espera do médico (gatewayRef "espera:<id>"):
+    // troca a consulta (idempotente) ou, se a reserva já venceu, reembolsa.
+    await confirmarRemarcacaoEspera(p.id);
     // O pagamento CONFIRMOU a consulta (regra imposta no servidor): avisa o
     // paciente e registra a trilha de auditoria server-side.
     const consulta = await db.consulta.findUnique({
