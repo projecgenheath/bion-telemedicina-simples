@@ -147,9 +147,11 @@ function ConteudoDetalhe({ r, agora, onPagar }: { r: RepasseDetalhe; agora: numb
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-bold break-words">{i.paciente}</p>
                   <p className="text-xs ba-texto-2">
-                    {rotuloItem(i.tipo)} · {i.especialidade} · {quando(i.dataConsulta, agora)}
+                    {i.tipo === "renovacao"
+                      ? `${rotuloItem(i.tipo)} · ${quando(i.dataConsulta, agora)}`
+                      : `${rotuloItem(i.tipo)} · ${i.especialidade} · ${quando(i.dataConsulta, agora)}`}
                   </p>
-                  <ChipEstado estado={estadoConsulta(i.statusConsulta)} className="mt-1" />
+                  {i.tipo !== "renovacao" && <ChipEstado estado={estadoConsulta(i.statusConsulta)} className="mt-1" />}
                 </div>
                 <span className="text-sm font-bold tabular-nums shrink-0">{brl(i.liquidoCentavos)}</span>
               </li>

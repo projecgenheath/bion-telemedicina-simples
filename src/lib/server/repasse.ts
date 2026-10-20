@@ -157,8 +157,6 @@ export type CandidatoConsulta = ConsultaReceita & {
 export type CandidatoRenovacao = {
   id: string;
   status: string;
-  /** consulta usada como âncora do item (RepasseItem.consultaId). */
-  consultaId: string;
   respondidoEm: Date | null;
   valorCentavos?: number | null;
   pagamentoId?: string | null;
@@ -197,7 +195,9 @@ export type CandidatoMultaRemarcacao = {
 export type ItemCalculado = {
   tipo: TipoItem;
   chave: string;
-  consultaId: string;
+  /** null só no item 'renovacao' (aí vale pedidoRenovacaoId). */
+  consultaId: string | null;
+  pedidoRenovacaoId?: string | null;
   remarcacaoId: string | null;
   quando: string; // ISO: início da consulta ou momento em que a multa foi paga
   brutoCentavos: number;
@@ -238,7 +238,8 @@ export function itemDaRenovacao(r: CandidatoRenovacao & { valorCentavos: number;
   return {
     tipo: "renovacao",
     chave: chaveDoItem("renovacao", r.id),
-    consultaId: r.consultaId,
+    consultaId: null,
+    pedidoRenovacaoId: r.id,
     remarcacaoId: null,
     quando: r.respondidoEm.toISOString(),
     brutoCentavos: l.brutoCentavos,
@@ -512,7 +513,59 @@ async function carregarCandidatos(c: Cliente, medicoId: string, corte: Date) {
       },
     }),
   ]);
+  // Renovação de receita paga (#66): pedidos renovada/chamada_marcada do
+  // médico, com pagamento confirmado, respondidos antes do corte e sem item.
+  const pedidos = await c.pedidoRenovacao.findMany({
+    where: {
+      medicoId,
+      status: { in: [...STATUS_RENOVACAO_REPASSE] },
+      respondidoEm: { lt: corte },
+      valorCentavos: { gt: 0 },
+      pagamento: { status: "confirmado" },
+      repasseItens: { none: {} },
+    },
+    select: {
+      id: true,
+      status: true,
+      respondidoEm: true,
+      valorCentavos: true,
+      pagamentoId: true,
+      pagamento: { select: { status: true, reembolsos: { select: selReembolso } } },
+    },
+  });
+  // Trava: um pagamento que já entrou num repasse (pela consulta ou pelo
+  // pedido) não entra de novo pelo outro caminho.
+  const idsPagamento = [
+    ...consultas.map((x) => x.pagamento?.id),
+    ...pedidos.map((x) => x.pagamentoId),
+  ].filter((x): x is string => !!x);
+  const jaGravados = idsPagamento.length
+    ? await c.repasseItem.findMany({
+        where: {
+          OR: [
+            { tipo: "consulta", consulta: { pagamento: { id: { in: idsPagamento } } } },
+            { tipo: "renovacao", pedidoRenovacao: { pagamentoId: { in: idsPagamento } } },
+          ],
+        },
+        select: { consulta: { select: { pagamento: { select: { id: true } } } }, pedidoRenovacao: { select: { pagamentoId: true } } },
+      })
+    : [];
+  const pagamentosJaRepassados = new Set(
+    jaGravados.map((g) => g.consulta?.pagamento?.id ?? g.pedidoRenovacao?.pagamentoId).filter((x): x is string => !!x),
+  );
   return {
+    pagamentosJaRepassados,
+    renovacoes: pedidos.map(
+      (p): CandidatoRenovacao => ({
+        id: p.id,
+        status: p.status,
+        respondidoEm: p.respondidoEm,
+        valorCentavos: p.valorCentavos,
+        pagamentoId: p.pagamentoId,
+        pagamentoStatus: p.pagamento?.status ?? null,
+        reembolsos: (p.pagamento?.reembolsos ?? []).map(comEfetivo),
+      }),
+    ),
     consultas: consultas.map((c) => ({
       ...c,
       pagamentoId: c.pagamento?.id ?? null,
@@ -599,7 +652,7 @@ async function calcularAjustesNovos(c: Cliente, medicoId: string, corte: Date): 
       criadoEm: i.criadoEm,
       liquidoCentavos: i.liquidoCentavos,
       multaCentavos: multaCheia,
-      valorConsultaCentavos: reaisParaCentavos(i.consulta.valor),
+      valorConsultaCentavos: i.consulta ? reaisParaCentavos(i.consulta.valor) : undefined,
     });
   }
   const jaAjustado = new Map<string, number>();
@@ -806,6 +859,7 @@ export async function fecharRepasseDoMedico(medicoId: string, dia: string, agora
             tipo: i.tipo,
             chave: i.chave,
             consultaId: i.consultaId,
+            pedidoRenovacaoId: i.pedidoRenovacaoId ?? null,
             remarcacaoId: i.remarcacaoId,
             brutoCentavos: i.brutoCentavos,
             comissaoCentavos: i.comissaoCentavos,

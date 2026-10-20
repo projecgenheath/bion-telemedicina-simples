@@ -8,7 +8,7 @@ const igual = (n: string, a: unknown, b: unknown) => {
 const corte = new Date("2026-10-20T23:00:00-03:00");
 const antes = new Date("2026-10-20T10:00:00-03:00");
 const ped = (o: Partial<CandidatoRenovacao>): CandidatoRenovacao => ({
-  id: "p1", status: "renovada", consultaId: "c0", respondidoEm: antes,
+  id: "p1", status: "renovada", respondidoEm: antes,
   valorCentavos: 10000, pagamentoId: "pg1", pagamentoStatus: "confirmado", reembolsos: [], ...o,
 });
 const cons = (o: Record<string, unknown>) => ({
@@ -25,6 +25,7 @@ igual("sem pagamentoId fora", run([ped({ pagamentoId: null })]).length, 0);
 igual("pagamento não confirmado fora", run([ped({ pagamentoStatus: "pendente" })]).length, 0);
 igual("sem valorCentavos fora", run([ped({ valorCentavos: undefined })]).length, 0);
 igual("respondidoEm depois do corte fora", run([ped({ respondidoEm: new Date(corte.getTime() + 1) })]).length, 0);
+igual("item grava pedidoRenovacaoId e consultaId nulo", run([ped({})]).map((i) => [i.consultaId, i.pedidoRenovacaoId]), [[null, "p1"]]);
 igual("data = respondidoEm", run([ped({})])[0].quando, antes.toISOString());
 igual("mesmo pagamento em 2 pedidos: 1 vez", run([ped({}), ped({ id: "p2" })]).length, 1);
 igual("pagamento já repassado fora", run([ped({})], [], { pagamentosJaRepassados: new Set(["pg1"]) }).length, 0);
