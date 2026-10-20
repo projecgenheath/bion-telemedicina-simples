@@ -98,7 +98,6 @@ export function PacienteApp() {
     pacientePerfil,
     consultas,
     anamneses,
-    lembretes,
     medicoes,
     exames,
     sair,
@@ -372,7 +371,6 @@ export function PacienteApp() {
     if (acao.tipo === "entrar") router.push(acao.href);
   };
 
-  const lembretesPendentes = lembretes.filter((l) => !l.feito);
 
   const alturas = useMemo(
     () => medicoes.filter((m) => m.tipo === "altura").sort((a, b) => a.criadoEm.localeCompare(b.criadoEm)),
@@ -728,7 +726,7 @@ export function PacienteApp() {
           </section>
 
           {/* --- Seção 2: saúde --- */}
-          <section className="bp-secao-2 bpp-secao bpp-tela px-5 py-8 pb-28" aria-label="Saúde: lembretes, IMC e pressão arterial">
+          <section className="bp-secao-2 bpp-secao bpp-tela px-5 py-8 pb-28" aria-label="Saúde: medicamentos, IMC e pressão arterial">
             <h2 className="text-2xl font-black mb-1">Sua saúde</h2>
             <p className="text-sm text-bion-ink/75 dark:text-bion-paper/75 mb-5">
               Toque em um card para ver o histórico e atualizar.
@@ -738,42 +736,9 @@ export function PacienteApp() {
               {/* Pedidos de medição do médico (só aparece se houver pendente) */}
               <PedidosMedicao />
 
-              {/* Medicamentos em uso (receita + adicionados) com lembrete direto */}
-              <MedicamentosEmUso />
-
-              {/* Lembretes */}
-              <button type="button"
-                onClick={() => setDetalhe("lembretes")}
-                className="bpp-toque bp-glass p-5 w-full text-left"
-                aria-label={`Lembretes de medicação: ${lembretesPendentes.length} pendente(s) de ${lembretes.length}. Abrir detalhes`}
-              >
-                <div className="flex items-center justify-between mb-3">
-                  <span className="inline-flex items-center gap-2 text-sm font-bold">
-                    <Pill className="w-4 h-4" /> Lembretes de medicação
-                  </span>
-                  <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-bion-ink/8 dark:bg-white/10">
-                    {lembretesPendentes.length ? `${lembretesPendentes.length} hoje` : "Em dia"}
-                  </span>
-                </div>
-                {lembretes.length ? (
-                  <ul className="space-y-1.5">
-                    {lembretes
-                      .filter((l) => !l.feito)
-                      .slice(0, 3)
-                      .map((l) => (
-                        <li key={l.id} className="flex items-center justify-between text-sm">
-                          <span className="truncate">{l.titulo}</span>
-                          <span className="opacity-80 shrink-0 ml-2">{l.horario}</span>
-                        </li>
-                      ))}
-                    {lembretesPendentes.length === 0 && (
-                      <li className="text-sm opacity-80">Todos os lembretes de hoje concluídos.</li>
-                    )}
-                  </ul>
-                ) : (
-                  <p className="text-sm opacity-80">Nenhum lembrete — toque para criar o primeiro.</p>
-                )}
-              </button>
+              {/* Card único de medicamentos: cada remédio uma vez, com horários e lembrete na própria linha.
+                  Lembretes de consulta não entram aqui. */}
+              <MedicamentosEmUso onGerenciarLembretes={() => setDetalhe("lembretes")} />
 
               {/* IMC */}
               <button type="button"

@@ -1,11 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { BellPlus, Loader2, Pill, Plus, Trash2 } from "lucide-react";
+import { Bell, BellPlus, Loader2, Pill, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useBion } from "@/lib/bion-store";
 import { FREQUENCIAS_LEMBRETE, type Posologia } from "@/lib/saude-paciente";
 import { apiSaude } from "./api-saude";
+import type { Lembrete } from "@/lib/bion-tipos";
 
 export type MedicamentoWire = {
   id: string;
@@ -31,8 +32,8 @@ const campo =
  * Card "Medicamentos em uso" da seção Saúde: os que vieram da receita
  * (origem "receita") + os que o paciente adicionou, com lembrete direto.
  */
-export function MedicamentosEmUso() {
-  const { aplicarDelta } = useBion();
+export function MedicamentosEmUso({ onGerenciarLembretes }: { onGerenciarLembretes?: () => void } = {}) {
+  const { aplicarDelta, lembretes } = useBion();
   const [lista, setLista] = useState<MedicamentoWire[] | null>(null);
   const [adicionando, setAdicionando] = useState(false);
   const [lembreteDe, setLembreteDe] = useState<string | null>(null);
@@ -65,6 +66,24 @@ export function MedicamentosEmUso() {
   const ativos = (lista ?? []).filter((m) => m.ativo);
   const suspensos = (lista ?? []).filter((m) => !m.ativo);
 
+  // Só lembretes de medicação; consulta/exame/hidratação ficam fora deste card.
+  const lembretesMed = lembretes.filter((l) => l.tipo === "Medicação");
+  const chave = (s: string | undefined) => (s ?? "").trim().toLowerCase();
+  const horariosDe = (m: MedicamentoWire) =>
+    lembretesMed.filter((l) => chave(l.medicamento) === chave(m.nome)).sort((x, y) => x.horario.localeCompare(y.horario));
+  // Lembretes de medicação sem medicamento correspondente na lista: uma linha por remédio, sem repetir.
+  const nomesAtivos = new Set(ativos.map((m) => chave(m.nome)));
+  const avulsos = new Map<string, { nome: string; lembretes: Lembrete[] }>();
+  for (const l of lembretesMed) {
+    const nome = l.medicamento?.trim() || l.titulo;
+    const k = chave(nome);
+    if (nomesAtivos.has(k)) continue;
+    const g = avulsos.get(k) ?? { nome, lembretes: [] };
+    g.lembretes.push(l);
+    avulsos.set(k, g);
+  }
+  const listaAvulsos = [...avulsos.values()].map((g) => ({ ...g, lembretes: g.lembretes.sort((x, y) => x.horario.localeCompare(y.horario)) }));
+
   return (
     <section className="bp-glass p-5 w-full" aria-label="Medicamentos em uso">
       <div className="mb-3 flex items-center justify-between">
@@ -94,7 +113,7 @@ export function MedicamentosEmUso() {
 
       {lista === null ? (
         <p className="py-2 text-sm opacity-80">Carregando…</p>
-      ) : ativos.length === 0 ? (
+      ) : ativos.length === 0 && listaAvulsos.length === 0 ? (
         <p className="text-sm opacity-80">
           Nenhum medicamento em uso. Os da receita do médico aparecem aqui sozinhos; você também pode adicionar.
         </p>
@@ -104,6 +123,7 @@ export function MedicamentosEmUso() {
             <ItemMedicamento
               key={m.id}
               m={m}
+              horarios={horariosDe(m)}
               lembreteAberto={lembreteDe === m.id}
               onLembrete={() => setLembreteDe((v) => (v === m.id ? null : m.id))}
               onLembreteCriado={(lembrete) => {
@@ -116,7 +136,19 @@ export function MedicamentosEmUso() {
               onRemover={() => void remover(m)}
             />
           ))}
+          {listaAvulsos.map((g) => (
+            <li key={`avulso-${g.nome}`} className="py-3">
+              <p className="truncate text-sm font-bold">{g.nome}</p>
+              <Horarios lembretes={g.lembretes} />
+            </li>
+          ))}
         </ul>
+      )}
+
+      {onGerenciarLembretes && lembretesMed.length > 0 && (
+        <button type="button" onClick={onGerenciarLembretes} className="mt-2 text-xs font-semibold underline opacity-80">
+          Gerenciar lembretes
+        </button>
       )}
 
       {suspensos.length > 0 && (
@@ -144,6 +176,7 @@ export function MedicamentosEmUso() {
 
 function ItemMedicamento({
   m,
+  horarios,
   lembreteAberto,
   onLembrete,
   onLembreteCriado,
@@ -151,6 +184,7 @@ function ItemMedicamento({
   onRemover,
 }: {
   m: MedicamentoWire;
+  horarios: Lembrete[];
   lembreteAberto: boolean;
   onLembrete: () => void;
   onLembreteCriado: (lembrete: unknown) => void;
@@ -169,12 +203,8 @@ function ItemMedicamento({
               {m.origem === "receita" ? "Da receita" : "Adicionado por você"}
             </span>
             {m.usoContinuo && <span className="rounded-full bg-bion-ink/8 px-2 py-0.5 dark:bg-white/10">Uso contínuo</span>}
-            {m.lembretes > 0 && (
-              <span className="rounded-full bg-bion-ink/8 px-2 py-0.5 dark:bg-white/10">
-                {m.lembretes} lembrete{m.lembretes > 1 ? "s" : ""}
-              </span>
-            )}
           </p>
+          <Horarios lembretes={horarios} />
           {m.posologia.instrucoes && <p className="mt-1 text-xs opacity-80">{m.posologia.instrucoes}</p>}
         </div>
         <button
@@ -199,6 +229,21 @@ function ItemMedicamento({
         )}
       </div>
     </li>
+  );
+}
+
+/** Horários de lembrete na própria linha do medicamento (feitos aparecem riscados). */
+function Horarios({ lembretes }: { lembretes: Lembrete[] }) {
+  if (lembretes.length === 0) return null;
+  return (
+    <p className="mt-1 flex flex-wrap items-center gap-1.5 text-xs font-semibold" aria-label={`Lembretes: ${lembretes.map((l) => `${l.horario}${l.feito ? " (feito)" : ""}`).join(", ")}`}>
+      <Bell className="size-3.5 opacity-80" aria-hidden />
+      {lembretes.map((l) => (
+        <span key={l.id} className={`rounded-full bg-bion-ink/8 px-2 py-0.5 dark:bg-white/10 ${l.feito ? "line-through opacity-60" : ""}`}>
+          {l.horario}
+        </span>
+      ))}
+    </p>
   );
 }
 
