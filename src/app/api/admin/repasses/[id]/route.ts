@@ -38,7 +38,10 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
             pedidoRenovacao: { select: { status: true, respondidoEm: true, criadoEm: true, paciente: { select: { nome: true } } } },
           },
         },
-        ajustes: { orderBy: { criadoEm: "asc" } },
+        ajustes: {
+          orderBy: { criadoEm: "asc" },
+          include: { reembolso: { select: { pagamento: { select: { pedidoRenovacao: { select: { id: true } } } } } } },
+        },
       },
     });
     if (!r) return Response.json({ erro: "Repasse não encontrado." }, { status: 404 });
@@ -104,6 +107,7 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
           motivo: a.motivo,
           consultaId: a.consultaId,
           reembolsoId: a.reembolsoId,
+          renovacao: !!a.reembolso?.pagamento?.pedidoRenovacao,
           valorCentavos: a.valorCentavos,
           valorAplicadoCentavos: a.valorAplicadoCentavos,
           criadoEm: a.criadoEm.toISOString(),
