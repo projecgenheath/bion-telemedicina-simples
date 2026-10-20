@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { confirmarRemarcacaoEspera } from "@/lib/server/espera-medico";
+import { avisarPacienteEspera, confirmarRemarcacaoEspera } from "@/lib/server/espera-medico";
 import { quandoClinica } from "@/lib/server/fuso";
 import { db } from "@/lib/db";
 import { cancelarRenovacaoPagamentoFalhou, confirmarPagamentoRenovacao } from "@/lib/server/renovacao-pagamento";
@@ -124,14 +124,16 @@ export async function POST(req: NextRequest) {
     }
     // Diferença da remarcação da espera do médico (gatewayRef "espera:<id>"):
     // troca a consulta (idempotente) ou, se a reserva já venceu, reembolsa.
-    await confirmarRemarcacaoEspera(p.id);
+    const espera = await confirmarRemarcacaoEspera(p.id);
+    if (espera) await avisarPacienteEspera(p.id, espera);
     // O pagamento CONFIRMOU a consulta (regra imposta no servidor): avisa o
     // paciente e registra a trilha de auditoria server-side.
     const consulta = await db.consulta.findUnique({
       where: { id: p.consultaId },
       include: { medico: { select: { nome: true } } },
     });
-    if (consulta && consulta.status === "confirmada") {
+    // Espera do médico: o aviso próprio já foi enviado (avisarPacienteEspera).
+    if (consulta && consulta.status === "confirmada" && !espera) {
       const quando = quandoClinica(consulta.dataInicio);
       await db.notificacao.create({
         data: {

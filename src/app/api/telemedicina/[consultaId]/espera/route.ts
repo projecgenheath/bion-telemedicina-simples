@@ -12,9 +12,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ consult
   try {
     const usuario = await exigirSessao();
     const { consultaId } = await params;
-    if (usuario.role !== "PACIENTE") return Response.json({ erro: "Acesso negado." }, { status: 403 });
+    if (usuario.role !== "PACIENTE") return Response.json({ erro: "Acesso negado.", codigo: "acesso_negado" }, { status: 403 });
     const r = await estadoEsperaDoPaciente(consultaId, usuario.id);
-    if (!r.ok) return Response.json({ erro: r.erro }, { status: r.status });
+    if (!r.ok) return Response.json({ erro: r.erro, codigo: r.codigo }, { status: r.status });
     return ok({ espera: r.espera });
   } catch (erro) {
     return falha(erro);

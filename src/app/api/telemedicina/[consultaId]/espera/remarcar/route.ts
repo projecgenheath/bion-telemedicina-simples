@@ -17,11 +17,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ consult
   try {
     const usuario = await exigirSessao();
     const { consultaId } = await params;
-    if (usuario.role !== "PACIENTE") return Response.json({ erro: "Acesso negado." }, { status: 403 });
+    if (usuario.role !== "PACIENTE") return Response.json({ erro: "Acesso negado.", codigo: "acesso_negado" }, { status: 403 });
     const pedido = lerPedidoRemarcar(await req.json().catch(() => null));
-    if (!pedido) return Response.json({ erro: "Envie medicoId e diferencaEsperadaCentavos (inteiro)." }, { status: 400 });
+    if (!pedido) return Response.json({ erro: "Envie medicoId e diferencaEsperadaCentavos (inteiro).", codigo: "corpo_invalido" }, { status: 400 });
     const r = await remarcarPorEspera({ consultaId, pacienteId: usuario.id, ...pedido });
-    if (!r.ok) return Response.json({ erro: r.erro, ...(r.extra ?? {}) }, { status: r.status });
+    if (!r.ok) return Response.json({ erro: r.erro, codigo: r.codigo, ...(r.extra ?? {}) }, { status: r.status });
     return ok(r);
   } catch (erro) {
     return falha(erro);
