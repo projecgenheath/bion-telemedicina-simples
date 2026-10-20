@@ -78,7 +78,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         usuarioId: usuario.id,
         tipo: "suporte",
         titulo: "Reembolso aprovado",
-        texto: `Seu reembolso${consulta ? ` da consulta de ${consulta.especialidade} (${quando})` : ""} foi aprovado: R$ ${(res.reembolso.valorCentavos / 100).toFixed(2)} serão devolvidos por PIX, sem desconto de taxas.`,
+        texto: `Seu reembolso${consulta ? ` da consulta de ${consulta.especialidade} (${quando})` : ""} foi aprovado: R$ ${(res.reembolso.valorCentavos / 100).toFixed(2)}, reembolso integral e automático, sem desconto de taxas.`,
       },
     });
     return Response.json({ reembolso: reembolsoManualWire(res.reembolso) }, { status: 201 });

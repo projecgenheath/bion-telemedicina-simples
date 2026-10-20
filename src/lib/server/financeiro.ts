@@ -1267,14 +1267,14 @@ export function textosNotificacaoCorrecao(
     if (plano.novo === "falha_tecnica" || plano.novo === "falta_medico") {
       partes.push(
         c.pago
-          ? `Escolha no app até ${diaHora(prazoEscolhaCorrecao(agora))}: remarcar sem custo ou receber o reembolso integral. Se você não escolher até lá, o reembolso integral é feito automaticamente por PIX.`
+          ? `Escolha no app até ${diaHora(prazoEscolhaCorrecao(agora))}: remarcar sem custo ou receber o reembolso integral. Se você não escolher até lá, o reembolso é integral e automático.`
           : "A consulta foi cancelada, sem custo para você.",
       );
     } else if (plano.novo === "falta_paciente" && plano.dinheiro.pagoConfirmado) {
       const prazo = prazoReembolsoManual(c.dataInicio);
       partes.push(
         agora.getTime() <= prazo.getTime()
-          ? `Se você teve um imprevisto, pode pedir o reembolso pelo app até ${diaHora(prazo)}; ele é feito na hora, por PIX.`
+          ? `Se você teve um imprevisto, pode pedir o reembolso pelo app até ${diaHora(prazo)}; o reembolso é integral e automático.`
           : `O prazo de ${REEMBOLSO_MANUAL_PRAZO_DIAS} dias para pedir o reembolso desta consulta já terminou.`,
       );
     }
