@@ -20,7 +20,7 @@ type DadosAdmin = {
   renovacoes: Fonte<RenovacoesPendentesResposta>;
   naoAtendidas: Fonte<NaoAtendidasResposta>;
   fila: ItemFila[];
-  /** Fila completa só depois das quatro rotas responderem (com ou sem erro). */
+  /** Fila completa só depois das cinco rotas responderem (com ou sem erro). */
   filaPronta: boolean;
   atualizando: boolean;
   atualizar: () => Promise<void>;
