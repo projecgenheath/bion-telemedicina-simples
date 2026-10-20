@@ -78,8 +78,8 @@ export function PedirReembolsoSheet({ consulta, onFechar }: { consulta: Consulta
           <>
             <div className="mt-4 rounded-2xl border bpp-sheet-borda bpp-sheet-cartao p-4 text-sm bpp-sheet-suave">
               <p>
-                O médico ficou na sala e a consulta foi registrada como <strong className="bpp-sheet-forte">falta</strong>, por isso não há
-                reembolso automático.
+                O médico ficou na sala e a consulta foi registrada como <strong className="bpp-sheet-forte">falta</strong>, por isso o reembolso
+                não é feito sozinho: você precisa pedir abaixo. Depois do pedido, o reembolso é integral e imediato.
               </p>
               <p className="mt-2">
                 Se você teve um motivo, explique abaixo. O reembolso é integral e automático
