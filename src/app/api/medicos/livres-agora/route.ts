@@ -50,7 +50,7 @@ export async function GET(req: NextRequest) {
     const livres: (typeof candidatos[number] | null)[] = [];
     for (let i = 0; i < candidatos.length; i += LOTE) {
       const lote = candidatos.slice(i, i + LOTE);
-      livres.push(...(await Promise.all(lote.map(async (m) => ((await medicoLivreAgora(m.userId, undefined, agora)) ? m : null)))));
+      livres.push(...(await Promise.all(lote.map(async (m) => ((await medicoLivreAgora(m.userId, undefined, agora, consultaId ?? undefined)) ? m : null)))));
     }
     return ok({
       medicos: livres
