@@ -732,6 +732,41 @@ const rS3 = await rodarToque(em(2.3), depLento(() => 0) as never);
 verifica(rS3.expiradas === 2 && (await db.chamadaConsulta.count({ where: { status: "expirada", canal: "sem_inscricao" } })) === 2, "linha 'sem_inscricao' expira normalmente", rS3);
 globalThis.fetch = fetchOriginal;
 
+/* ---------------- evolução pendente do médico ---------------- */
+// Médico com Evolução em rascunho de OUTRA consulta: não toca para ele nem cria
+// a linha dele; o paciente toca normal (linha, evento e push). Rascunho da
+// PRÓPRIA consulta não bloqueia; concluída, o médico volta a tocar.
+await limpar();
+await db.user.createMany({
+  data: [
+    { id: "ep1", nome: "Paula Dias", email: "ep1@t", senhaHash: "x", role: "PACIENTE" },
+    { id: "ep0", nome: "Rui", email: "ep0@t", senhaHash: "x", role: "PACIENTE" },
+    { id: "em1", nome: "Dra. Eva", email: "em1@t", senhaHash: "x", role: "MEDICO" },
+    { id: "ep2", nome: "Lia", email: "ep2@t", senhaHash: "x", role: "PACIENTE" },
+    { id: "em2", nome: "Dr. Leo", email: "em2@t", senhaHash: "x", role: "MEDICO" },
+  ],
+});
+await db.consulta.createMany({
+  data: [
+    { id: "ce0", pacienteId: "ep0", medicoId: "em1", especialidade: "Clínica", dataInicio: em(-120), status: "concluida", valor: 150 },
+    { id: "ce1", pacienteId: "ep1", medicoId: "em1", especialidade: "Clínica", dataInicio: T0, status: "confirmada", pago: true, valor: 150 },
+    { id: "ce2", pacienteId: "ep2", medicoId: "em2", especialidade: "Clínica", dataInicio: T0, status: "confirmada", pago: true, valor: 150 },
+  ],
+});
+await db.evolucao.create({ data: { id: "ev0", consultaId: "ce0", medicoId: "em1", pacienteId: "ep0", status: "rascunho" } });
+zerar();
+const rE1 = await rodar(em(0.2));
+verifica(rE1.medicoEvolucaoPendente === 1 && rE1.tocadas === 3, "evolução pendente: pula só o médico com rascunho (3 toques: ep1, ep2, em2)", rE1);
+verifica((await linhas("ce1", "em1")).length === 0 && !eventos.some((e) => e.usuarioId === "em1") && !pushes.some((x) => x.usuarioId === "em1"), "médico com rascunho de outra consulta: sem linha, sem evento, sem push");
+verifica((await linhas("ce1", "ep1")).length === 1 && eventos.some((e) => e.usuarioId === "ep1" && e.evento === "chamada_tocando" && e.payload.consultaId === "ce1") && pushes.some((x) => x.usuarioId === "ep1"), "paciente do médico com rascunho: linha, evento chamada_tocando e push");
+verifica((await linhas("ce2", "ep2")).length === 1 && (await linhas("ce2", "em2")).length === 1 && pushes.some((x) => x.usuarioId === "em2"), "sem rascunho: paciente e médico tocam");
+// Rascunho da PRÓPRIA consulta (a evolução de ce0 concluída, a de ce1 aberta): não bloqueia.
+await db.evolucao.update({ where: { id: "ev0" }, data: { status: "concluida", concluidaEm: em(4) } });
+await db.evolucao.create({ data: { consultaId: "ce1", medicoId: "em1", pacienteId: "ep1", status: "rascunho" } });
+zerar();
+const rE2 = await rodar(em(5.2));
+verifica(rE2.medicoEvolucaoPendente === 0 && (await linhas("ce1", "em1")).length === 1 && eventos.some((e) => e.usuarioId === "em1" && e.evento === "chamada_tocando"), "evolução concluída e rascunho da própria consulta: o médico volta a tocar", rE2);
+
 await limpar();
 await db.$disconnect();
 console.log(`\n${okN} ok, ${falhaN} falha(s)`);
