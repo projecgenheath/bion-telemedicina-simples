@@ -171,6 +171,18 @@ export function consultaForaPorRenovacao(c: { tipoAtendimento?: string | null; v
 }
 
 /**
+ * Consulta sem valor cobrado (valor 0) fica fora do repasse e nunca gera item
+ * de R$ 0. Cobre a renovação (dinheiro no pedido) e o retorno grátis em até
+ * 30 dias (regra do Alisson: tipoAtendimento "retorno", valor 0, sem
+ * pagamento). O retorno grátis normalmente já cai fora antes, por não ter
+ * Pagamento confirmado; esta regra é a garantia explícita mesmo que um
+ * Pagamento apareça.
+ */
+export function consultaForaPorValorZero(c: { tipoAtendimento?: string | null; valor: number }): boolean {
+  return consultaForaPorRenovacao(c) || reaisParaCentavos(c.valor) <= 0;
+}
+
+/**
  * A consulta ainda não tem desfecho (PURA)? Status "ia acontecer" e sem
  * evento de falta/falha vigente da data atual. Fica fora do fechamento.
  */
@@ -297,8 +309,10 @@ export function itensElegiveis(params: {
     if (c0.dataInicio.getTime() >= corte.getTime()) continue;
     // Repasse só de consulta com Pagamento confirmado: as 6 consultas de teste
     // (pago=true sem Pagamento) ficam fora, por decisão do Alisson.
+    // Retorno grátis (valor 0, sem pagamento) já sai aqui.
     if (c0.pagamento?.status !== "confirmado") continue;
-    if (consultaForaPorRenovacao(c0)) continue;
+    // Valor 0 (renovação, retorno grátis ou qualquer outra): fora, sem item de R$ 0.
+    if (consultaForaPorValorZero(c0)) continue;
     // Sem desfecho (ninguém concluiu nem marcou falta/falha): fica para o
     // fechamento seguinte ao desfecho. Falha técnica/falta do médico vigente
     // também fica fora (o status já sai do faturamento; aqui é a garantia).

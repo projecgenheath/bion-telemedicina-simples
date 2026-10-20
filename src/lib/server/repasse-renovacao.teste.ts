@@ -1,5 +1,5 @@
 /** Testes do repasse da renovação paga. Rodar: bun src/lib/server/repasse-renovacao.teste.ts */
-import { itensElegiveis, consultaForaPorRenovacao, type CandidatoConsulta, type CandidatoRenovacao } from "./repasse";
+import { itensElegiveis, consultaForaPorRenovacao, consultaForaPorValorZero, type CandidatoConsulta, type CandidatoRenovacao } from "./repasse";
 
 let ok = 0, falhas = 0;
 const igual = (n: string, a: unknown, b: unknown) => {
@@ -34,6 +34,13 @@ igual("consulta e pedido com mesmo pagamento: só a consulta",
 igual("consulta renovacao valor 0 fora", run([], [cons({ tipoAtendimento: "renovacao", valor: 0 })]).length, 0);
 igual("consulta renovacao com valor entra", run([], [cons({ tipoAtendimento: "renovacao", valor: 100 })]).length, 1);
 igual("consultaForaPorRenovacao normal", consultaForaPorRenovacao({ tipoAtendimento: "normal", valor: 0 }), false);
+// Retorno em até 30 dias é grátis: valor 0 e sem pagamento.
+igual("retorno grátis sem pagamento fora", run([], [cons({ tipoAtendimento: "retorno", valor: 0, pagamento: null, pago: false })]).length, 0);
+igual("retorno grátis fora mesmo com Pagamento confirmado", run([], [cons({ tipoAtendimento: "retorno", valor: 0 })]).length, 0);
+igual("qualquer consulta valor 0 fora (nenhum item de R$ 0)", run([], [cons({ tipoAtendimento: "padrao", valor: 0 })]).length, 0);
+igual("retorno pago (fora dos 30 dias) entra", run([], [cons({ tipoAtendimento: "retorno", valor: 100 })]).length, 1);
+igual("consultaForaPorValorZero retorno 0", consultaForaPorValorZero({ tipoAtendimento: "retorno", valor: 0 }), true);
+igual("consultaForaPorValorZero com valor", consultaForaPorValorZero({ tipoAtendimento: "retorno", valor: 100 }), false);
 igual("reembolso total zera", run([ped({ reembolsos: [{ status: "processado", valorCentavos: 10000 }] })]).map((i) => i.liquidoCentavos), [0]);
 
 console.log(`${ok} ok, ${falhas} falha(s)`);

@@ -59,6 +59,17 @@ export type NaoAtendidaWire = {
   especialidade: string;
   quem: { papel: "paciente" | "medico"; nome: string; motivo: "recusada" | "expirada"; em: string }[];
 };
+/** GET /api/admin/consultas/evolucao-pendente: paciente na sala e o médico com evolução em aberto de consulta anterior. */
+export type EvolucaoPendenteWire = {
+  consultaId: string;
+  dataInicio: string;
+  medico: string;
+  paciente: string;
+  especialidade: string;
+  esperandoDesde: string | null;
+  pendentes: { consultaId: string; paciente: string; status: "rascunho"; dataInicio: string }[];
+};
+export type EvolucaoPendenteResposta = { total: number; disponivel: boolean; consultas: EvolucaoPendenteWire[] };
 export type NaoAtendidasResposta = { total: number; horas: number; consultas: NaoAtendidaWire[] };
 /** GET /api/admin/consultas/esperas-medico: paciente na sala esperando o médico (ativa ou expirada sem escolha). */
 export type EsperaMedicoWire = {
@@ -157,10 +168,11 @@ export function resumoMedicos(medicos: Medico[]) {
 /* ------------------------------------------------------------------ */
 /* Fila de decisões                                                    */
 /* ------------------------------------------------------------------ */
-export type CategoriaFila = "validacao" | "espera_medico" | "nao_atendida" | "desfecho" | "renovacao" | "reembolso" | "repasse" | "chamado" | "sistema";
+export type CategoriaFila = "validacao" | "espera_medico" | "evolucao_pendente" | "nao_atendida" | "desfecho" | "renovacao" | "reembolso" | "repasse" | "chamado" | "sistema";
 export const ROTULO_CATEGORIA: Record<CategoriaFila, string> = {
   validacao: "Validação",
   espera_medico: "Paciente esperando médico",
+  evolucao_pendente: "Evolução pendente com paciente esperando",
   nao_atendida: "Chamada não atendida",
   desfecho: "Sem desfecho",
   renovacao: "Renovações",
@@ -192,6 +204,7 @@ export function montarFila(
     semDesfecho?: SemDesfechoWire[] | null;
     naoAtendidas?: NaoAtendidaWire[] | null;
     esperas?: EsperaMedicoWire[] | null;
+    evolucaoPendente?: EvolucaoPendenteWire[] | null;
     renovacoes?: RenovacoesPendentesResposta | null;
   },
   agora: number,
@@ -270,6 +283,28 @@ export function montarFila(
         tom: "atencao" as const,
       })),
       ts,
+      destino: `admin-agendamentos?consulta=${encodeURIComponent(c.consultaId)}`,
+    });
+  }
+
+  // Paciente esperando na sala enquanto o médico não concluiu a evolução da
+  // consulta anterior (a trava do §5 segura o próximo atendimento). Abre a consulta.
+  for (const c of d.evolucaoPendente ?? []) {
+    const ts = Date.parse(c.dataInicio);
+    if (!Number.isFinite(ts) || !c.pendentes.length) continue;
+    const desde = c.esperandoDesde ? Date.parse(c.esperandoDesde) : NaN;
+    const pend = c.pendentes.map((p) => `evolução de ${p.paciente} (${rotuloDia(Date.parse(p.dataInicio), agora)} ${hora(Date.parse(p.dataInicio))}) em rascunho`).join("; ");
+    itens.push({
+      chave: `evolucao-pendente-${c.consultaId}`,
+      categoria: "evolucao_pendente",
+      tom: "critico",
+      titulo: `Paciente esperando · ${c.paciente}`,
+      detalhe: [c.medico, c.especialidade, `${rotuloDia(ts, agora)} ${hora(ts)}`, Number.isFinite(desde) ? `na sala desde ${hora(desde)}` : "", pend].filter(Boolean).join(" · "),
+      chips: [
+        { rotulo: "Paciente na sala", tom: "atencao" },
+        { rotulo: c.pendentes.length > 1 ? `${c.pendentes.length} evoluções pendentes` : "Evolução pendente", tom: "critico" },
+      ],
+      ts: Number.isFinite(desde) ? desde : ts,
       destino: `admin-agendamentos?consulta=${encodeURIComponent(c.consultaId)}`,
     });
   }
@@ -356,7 +391,7 @@ export function montarFila(
 }
 
 export function contarPorCategoria(itens: ItemFila[]): Record<CategoriaFila, number> {
-  const out: Record<CategoriaFila, number> = { validacao: 0, espera_medico: 0, nao_atendida: 0, desfecho: 0, renovacao: 0, reembolso: 0, repasse: 0, chamado: 0, sistema: 0 };
+  const out: Record<CategoriaFila, number> = { validacao: 0, espera_medico: 0, evolucao_pendente: 0, nao_atendida: 0, desfecho: 0, renovacao: 0, reembolso: 0, repasse: 0, chamado: 0, sistema: 0 };
   for (const i of itens) out[i.categoria]++;
   return out;
 }

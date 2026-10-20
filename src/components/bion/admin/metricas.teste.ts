@@ -3,7 +3,7 @@
  * Rodar: bun src/components/bion/admin/metricas.teste.ts  (também com TZ=UTC e TZ=Asia/Tokyo)
  */
 import type { AuditLog, Consulta, Medico, TicketSuporte } from "@/lib/bion-tipos";
-import { centavosDoValor, contarPorCategoria, especialidades30d, montarFila, resumoHoje, resumoMedicos, serieDiaria, type RepasseWire, type ReembolsoWire, type SemDesfechoWire, type NaoAtendidaWire, type EsperaMedicoWire } from "./metricas";
+import { centavosDoValor, contarPorCategoria, especialidades30d, montarFila, resumoHoje, resumoMedicos, serieDiaria, type RepasseWire, type ReembolsoWire, type SemDesfechoWire, type NaoAtendidaWire, type EsperaMedicoWire, type EvolucaoPendenteWire } from "./metricas";
 import { ehApple, rotuloAtalhoBusca } from "./ui/atalho";
 
 let ok = 0;
@@ -115,7 +115,7 @@ igual(
   fila.map((i) => i.chave),
   ["repasse-r3", "repasse-r2", "audit-a1", "reembolso-e1", "medico-2", "chamado-t1", "repasse-r1"],
 );
-igual("fila: contagem", contarPorCategoria(fila), { validacao: 1, espera_medico: 0, nao_atendida: 0, desfecho: 0, renovacao: 0, reembolso: 1, repasse: 3, chamado: 1, sistema: 1 });
+igual("fila: contagem", contarPorCategoria(fila), { validacao: 1, espera_medico: 0, evolucao_pendente: 0, nao_atendida: 0, desfecho: 0, renovacao: 0, reembolso: 1, repasse: 3, chamado: 1, sistema: 1 });
 const rr = fila.find((i) => i.chave === "repasse-r2")!;
 igual("fila: repasse com CNPJ divergente", [rr.tom, rr.chips.map((c) => c.rotulo), rr.destino], ["critico", ["A pagar", "CNPJ divergente"], "admin-repasses?repasse=r2"]);
 igual("fila: repasse detalhe", rr.detalhe, "03/10 · R$ 50,00 · 1 consulta");
@@ -174,6 +174,19 @@ igual("fila não atendida: título, detalhe com quem e a hora, destino (detalhe,
 ]);
 igual("fila não atendida: chips por participante", filaN[0].chips.map((c) => c.rotulo), ["Paciente recusou", "Médico não atendeu"]);
 igual("fila não atendida: contagem", contarPorCategoria(filaN).nao_atendida, 2);
+
+/* ---------- evolução pendente com paciente esperando ---------- */
+const ep: EvolucaoPendenteWire[] = [
+  { consultaId: "e1", dataInicio: "2026-10-04T09:50:00-03:00", medico: "Dra. A", paciente: "Bia", especialidade: "Clínica Geral", esperandoDesde: "2026-10-04T09:52:00-03:00",
+    pendentes: [{ consultaId: "e0", paciente: "Caio", status: "rascunho", dataInicio: "2026-10-04T09:00:00-03:00" }] },
+  { consultaId: "e2", dataInicio: "2026-10-04T09:50:00-03:00", medico: "Dr. B", paciente: "Duda", especialidade: "", esperandoDesde: null, pendentes: [] },
+];
+const filaEv = montarFila({ medicos: [], tickets: [], auditLogs: [], repasses: [], reembolsos: [], evolucaoPendente: ep }, AGORA);
+igual("fila evolução: só com pendência", filaEv.map((i) => i.chave), ["evolucao-pendente-e1"]);
+igual("fila evolução: categoria/tom", [filaEv[0].categoria, filaEv[0].tom], ["evolucao_pendente", "critico"]);
+igual("fila evolução: detalhe", filaEv[0].detalhe, "Dra. A · Clínica Geral · Hoje 09:50 · na sala desde 09:52 · evolução de Caio (Hoje 09:00) em rascunho");
+igual("fila evolução: destino", filaEv[0].destino, "admin-agendamentos?consulta=e1");
+igual("fila evolução: contagem", contarPorCategoria(filaEv).evolucao_pendente, 1);
 
 /* ---------- atalho da busca ---------- */
 igual("Mac", ehApple("MacIntel"), true);

@@ -1,5 +1,6 @@
 "use client";
 
+import { fecharNotificacoesConsulta } from "@/lib/push-cliente";
 import { Suspense, useEffect, useId, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Phone, PhoneOff, Video, VolumeX } from "lucide-react";
@@ -168,6 +169,7 @@ export function ControleChamadaRecebida({
     if (fase !== "tocando") return;
     setConfirmando(false);
     setFase("atendendo");
+    void fecharNotificacoesConsulta(consultaId);
     const sala = await pedir(`/api/telemedicina/${encodeURIComponent(consultaId)}/sala?espiar=1`);
     // Bloqueado já na sala: não marca a chamada como atendida.
     const pre = decidirAposAtender(sala, null);
@@ -199,6 +201,7 @@ export function ControleChamadaRecebida({
   async function recusar() {
     if (fase === "recusando") return;
     setFase("recusando");
+    void fecharNotificacoesConsulta(consultaId);
     const resp = await responder(consultaId, "recusar", tentativa);
     if (respostaConsultaEncerrada(resp)) (onEncerrada ?? onFechar)();
     else onFechar();
