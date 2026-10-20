@@ -5,11 +5,12 @@ import { CalendarClock, Loader2, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { useBion } from "@/lib/bion-store";
 import type { Consulta, Medico } from "@/lib/bion-tipos";
-import { escolherHorarioInicial, fimRetornoGratis, motivoSugerido, retornoEhGratis, ultimoDiaRetornoGratis } from "@/lib/atendimento-tipo";
+import { PRAZO_RETORNO_GRATIS_DIAS, escolherHorarioInicial, fimRetornoGratis, motivoSugerido, retornoEhGratis, ultimoDiaRetornoGratis } from "@/lib/atendimento-tipo";
 import { agendaLivreDoMedico, type DiaAgenda } from "./agenda-medico";
 import { useDiasBloqueados } from "./useDiasBloqueados";
 import { useVoltarFecha } from "./useVoltarFecha";
 import { useFocoDialogo } from "./useFocoDialogo";
+import { useArrastarFechar } from "./useArrastarFechar";
 
 /**
  * "Marcar retorno" (Teleconsulta v2): mesma pessoa, mesmo médico, em poucos
@@ -73,6 +74,8 @@ export function MarcarRetornoPainel({
   const raizRef = useRef<HTMLDivElement>(null);
   useVoltarFecha(true, onFechar);
   useFocoDialogo(true, onFechar, raizRef);
+  const painelRef = useRef<HTMLDivElement>(null);
+  useArrastarFechar(painelRef, onFechar);
   const inicial = useMemo(() => escolherHorarioInicial(agenda, retornoSugeridoEm), [agenda, retornoSugeridoEm]);
 
   const [dia, setDia] = useState<string | null>(null);
@@ -88,6 +91,14 @@ export function MarcarRetornoPainel({
   const gratisAte = origemISO && !jaUsouGratis && Date.now() < fimRetornoGratis(origemISO).getTime() ? ultimoDiaRetornoGratis(origemISO) : null;
   const instanteSel = diaSel && horaSel ? new Date(`${diaSel.iso}T${horaSel}:00-03:00`) : null;
   const gratis = !!(origemISO && instanteSel && retornoEhGratis(origemISO, instanteSel, jaUsouGratis));
+  // Por que este retorno é cobrado (só quando a origem tem data conhecida).
+  const avisoCobrado = !origemISO
+    ? null
+    : jaUsouGratis
+      ? "O retorno grátis desta consulta já foi usado. Este retorno é cobrado."
+      : Date.now() >= fimRetornoGratis(origemISO).getTime()
+        ? `O retorno grátis vale até ${PRAZO_RETORNO_GRATIS_DIAS} dias após a consulta. Este retorno é cobrado.`
+        : null;
   const preco = medico ? `R$ ${medico.valor.toFixed(2).replace(".", ",")}` : null;
 
   async function confirmar() {
@@ -104,9 +115,10 @@ export function MarcarRetornoPainel({
   return (
     <div ref={raizRef} className="bpp-sheet-raiz absolute inset-0 z-[80] flex items-end justify-center" role="dialog" aria-modal="true" aria-labelledby="titulo-retorno">
       <button type="button" className="absolute inset-0 bpp-sheet-veu" aria-label="Fechar" onClick={onFechar} />
-      <div className="bpp-sheet-painel relative w-full max-w-lg max-h-[92svh] overflow-y-auto rounded-t-3xl bpp-sheet border-t bpp-sheet-borda px-5 pt-3 pb-8 shadow-[0_-12px_40px_rgba(2,8,26,0.35)]">
-        <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bpp-sheet-alca" aria-hidden />
-        <h2 id="titulo-retorno" className="text-lg font-bold">Marcar retorno</h2>
+      <div
+        ref={painelRef} className="bpp-sheet-painel relative w-full max-w-lg max-h-[92svh] overflow-y-auto rounded-t-3xl bpp-sheet border-t bpp-sheet-borda px-5 pt-3 pb-8 shadow-[0_-12px_40px_rgba(2,8,26,0.35)]">
+        <div data-arrastar className="-mx-5 -mt-3 mb-1 pt-3 pb-3 touch-none"><div className="mx-auto h-1.5 w-12 rounded-full bpp-sheet-alca" aria-hidden /></div>
+        <h2 data-arrastar id="titulo-retorno" className="text-lg font-bold">Marcar retorno</h2>
         <p className="text-sm bpp-sheet-suave mt-1">
           {origem.especialidade} com {origem.medico} · consulta de {origem.data}
         </p>
@@ -163,7 +175,10 @@ export function MarcarRetornoPainel({
               Sua triagem já vem preenchida com as respostas da consulta anterior. Você só confirma ou corrige o que mudou.
             </p>
 
-            <p className="mt-4 text-sm font-semibold" data-teste="preco-retorno">
+            {!gratis && avisoCobrado ? (
+              <p className="mt-4 text-xs bpp-sheet-suave" data-teste="aviso-retorno-cobrado">{avisoCobrado}</p>
+            ) : null}
+            <p className={`${!gratis && avisoCobrado ? "mt-1" : "mt-4"} text-sm font-semibold`} data-teste="preco-retorno">
               {gratis
                 ? `Retorno grátis até ${gratisAte ?? ultimoDiaRetornoGratis(origemISO!)} · sem pagamento`
                 : gratisAte

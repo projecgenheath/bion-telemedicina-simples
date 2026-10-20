@@ -5,6 +5,7 @@ import { Loader2, MessageSquare } from "lucide-react";
 import { toast } from "sonner";
 import { useVoltarFecha } from "./useVoltarFecha";
 import { useFocoDialogo } from "./useFocoDialogo";
+import { useArrastarFechar } from "./useArrastarFechar";
 
 /**
  * "Renovar receita": é um PEDIDO, sem horário. O médico decide se renova por
@@ -25,6 +26,8 @@ export function RenovarReceitaSheet({
   const raizRef = useRef<HTMLDivElement>(null);
   useVoltarFecha(true, onFechar);
   useFocoDialogo(true, onFechar, raizRef);
+  const painelRef = useRef<HTMLDivElement>(null);
+  useArrastarFechar(painelRef, onFechar);
   const [obs, setObs] = useState("");
   const [enviando, setEnviando] = useState(false);
 
@@ -41,9 +44,10 @@ export function RenovarReceitaSheet({
   return (
     <div ref={raizRef} className="bpp-sheet-raiz absolute inset-0 z-[90] flex items-end justify-center" role="dialog" aria-modal="true" aria-labelledby="titulo-renovar">
       <button type="button" className="absolute inset-0 bpp-sheet-veu" aria-label="Fechar" onClick={onFechar} />
-      <div className="bpp-sheet-painel relative w-full max-w-lg max-h-[92svh] overflow-y-auto rounded-t-3xl bpp-sheet border-t bpp-sheet-borda px-5 pt-3 pb-8 shadow-[0_-12px_40px_rgba(2,8,26,0.35)]">
-        <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bpp-sheet-alca" aria-hidden />
-        <h2 id="titulo-renovar" className="text-lg font-bold">Renovar receita</h2>
+      <div
+        ref={painelRef} className="bpp-sheet-painel relative w-full max-w-lg max-h-[92svh] overflow-y-auto rounded-t-3xl bpp-sheet border-t bpp-sheet-borda px-5 pt-3 pb-8 shadow-[0_-12px_40px_rgba(2,8,26,0.35)]">
+        <div data-arrastar className="-mx-5 -mt-3 mb-1 pt-3 pb-3 touch-none"><div className="mx-auto h-1.5 w-12 rounded-full bpp-sheet-alca" aria-hidden /></div>
+        <h2 data-arrastar id="titulo-renovar" className="text-lg font-bold">Renovar receita</h2>
         <p className="text-sm bpp-sheet-suave mt-1">{medicamento} · {medico}</p>
         <p className="mt-4 text-sm leading-relaxed">
           O pedido vai para o médico. Ele pode renovar por mensagem ou marcar uma chamada curta com você. Você não precisa escolher horário agora.
