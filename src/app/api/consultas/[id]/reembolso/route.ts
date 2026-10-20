@@ -8,13 +8,15 @@ import { pedirReembolsoManual, prazoReembolsoManual, reembolsoManualWire } from 
 /**
  * Reembolso MANUAL de uma consulta marcada como falta do paciente.
  *
- * POST { justificativa } → paciente dono pede o reembolso (status em_analise).
+ * POST { justificativa } → paciente dono pede o reembolso. Regra de 20/10:
+ *      aprovado NA HORA (status aprovado, sem análise do admin), integral e
+ *      por PIX; as taxas do meio de pagamento ficam com o app.
  *      Só com evento falta_paciente, pagamento confirmado e dentro de
  *      REEMBOLSO_MANUAL_PRAZO_DIAS depois da consulta. Um pedido por
  *      pagamento: se já houver (inclusive negado) → 409.
  * GET  → { reembolso | null, podePedirAte | null } para o paciente dono ou admin.
  *
- * A decisão é do admin: PATCH /api/admin/reembolsos/[id].
+ * PATCH /api/admin/reembolsos/[id] continua para pedidos antigos em_analise.
  */
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -64,7 +66,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const consulta = await db.consulta.findUnique({ where: { id }, select: { especialidade: true, dataInicio: true } });
     const quando = consulta ? quandoClinica(consulta.dataInicio) : "";
     await registrarAudit(usuario, {
-      acao: "REEMBOLSO_MANUAL_SOLICITADO",
+      acao: "REEMBOLSO_MANUAL_APROVADO_AUTOMATICO",
       categoria: "pagamento",
       severidade: "warning",
       entidade: "reembolso",
@@ -73,10 +75,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     });
     await db.notificacao.create({
       data: {
-        paraRole: "ADMIN",
+        usuarioId: usuario.id,
         tipo: "suporte",
-        titulo: "Pedido de reembolso para analisar",
-        texto: `${usuario.nome} pediu reembolso de uma consulta marcada como falta${consulta ? ` (${consulta.especialidade}, ${quando})` : ""}.`,
+        titulo: "Reembolso aprovado",
+        texto: `Seu reembolso${consulta ? ` da consulta de ${consulta.especialidade} (${quando})` : ""} foi aprovado: R$ ${(res.reembolso.valorCentavos / 100).toFixed(2)} serão devolvidos por PIX, sem desconto de taxas.`,
       },
     });
     return Response.json({ reembolso: reembolsoManualWire(res.reembolso) }, { status: 201 });
