@@ -1,5 +1,5 @@
 /** Rodar: bun --conditions=react-server src/lib/saude-paciente.teste.ts */
-import { detalhesAuditoria, lerTiposPedido, validarResposta, lerPosologia, resumoMedicamento, validarMedicamento, dividirMedicamentosLegado, chaveMedicamento } from "./saude-paciente";
+import { detalhesAuditoria, lerTiposPedido, validarResposta, lerPosologia, resumoMedicamento, validarMedicamento, dividirMedicamentosLegado, chaveMedicamento, removerPedidoCancelado } from "./saude-paciente";
 
 let ok = 0;
 let falhas = 0;
@@ -68,6 +68,13 @@ igual("nome cortado em 120", dividirMedicamentosLegado(JSON.stringify(["x".repea
   igual("idempotente: reimport contra existentes", dividirMedicamentosLegado('["AAS","Losartana"]', primeira), []);
 }
 igual("chave normaliza", chaveMedicamento("  Ácido   Fólico "), "acido folico");
+
+{
+  const lista = [{ id: "p1" }, { id: "p2" }];
+  igual("cancelado sai da lista", removerPedidoCancelado(lista, "p1"), [{ id: "p2" }]);
+  igual("id desconhecido: mesma lista", removerPedidoCancelado(lista, "x") === lista, true);
+  igual("id inválido: mesma lista", [removerPedidoCancelado(lista, undefined), removerPedidoCancelado(lista, 3), removerPedidoCancelado(lista, "")].every((l) => l === lista), true);
+}
 
 console.log(`${ok} ok, ${falhas} falha(s)`);
 if (falhas) process.exit(1);

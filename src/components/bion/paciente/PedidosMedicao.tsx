@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ClipboardList, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useBion } from "@/lib/bion-store";
-import { ROTULO_TIPO, validarResposta, type TipoPedido } from "@/lib/saude-paciente";
+import { ROTULO_TIPO, removerPedidoCancelado, validarResposta, type TipoPedido } from "@/lib/saude-paciente";
 import { apiSaude } from "./api-saude";
 
 export type PedidoPendente = { id: string; consultaId: string | null; tipos: TipoPedido[]; medico: string; criadoEm: string };
@@ -34,11 +34,19 @@ export function PedidosMedicao({ consultaId, variante = "app" }: { consultaId?: 
     // canal da sala, repassado por teleconsulta-chamada); 15 s fica de reserva.
     const aoCriar = () => void carregar();
     window.addEventListener("bion:pedido-medicao-criado", aoCriar);
+    // Cancelado pelo médico (broadcast `pedido_medicao_cancelado`): sai da tela na hora.
+    const aoCancelar = (e: Event) => {
+      const id = (e as CustomEvent<{ pedidoId?: unknown }>).detail?.pedidoId;
+      setPedidos((p) => removerPedidoCancelado(p, id));
+      setAberto((a) => (a === id ? null : a));
+    };
+    window.addEventListener("bion:pedido-medicao-cancelado", aoCancelar);
     const t = setInterval(() => void carregar(), 15_000);
     return () => {
       clearTimeout(t0);
       clearInterval(t);
       window.removeEventListener("bion:pedido-medicao-criado", aoCriar);
+      window.removeEventListener("bion:pedido-medicao-cancelado", aoCancelar);
     };
   }, [carregar, variante]);
 

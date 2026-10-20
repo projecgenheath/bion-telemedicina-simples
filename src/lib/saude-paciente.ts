@@ -168,3 +168,9 @@ export function dividirMedicamentosLegado(bruto: string | null | undefined, exis
   }
   return saida;
 }
+
+/** Tira da lista o pedido cancelado pelo médico (id inválido ou ausente: lista igual). */
+export function removerPedidoCancelado<T extends { id: string }>(lista: T[], pedidoId: unknown): T[] {
+  if (typeof pedidoId !== "string" || !pedidoId || !lista.some((p) => p.id === pedidoId)) return lista;
+  return lista.filter((p) => p.id !== pedidoId);
+}
