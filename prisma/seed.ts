@@ -128,6 +128,7 @@ async function main() {
   await db.notificacao.deleteMany();
   await db.arquivo.deleteMany();
   await db.documento.deleteMany();
+  await db.chatConsulta.deleteMany(); // FK Restrict: o chat vai antes da Consulta
   await db.consulta.deleteMany();
   await db.perfilMedico.deleteMany();
   await db.perfilPaciente.deleteMany();

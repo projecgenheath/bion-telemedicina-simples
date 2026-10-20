@@ -210,6 +210,16 @@ async function testarRota(url: string) {
   await db.auditLog.deleteMany({});
   await db.dadosRecebimentoMedico.deleteMany({});
   await db.perfilMedico.deleteMany({});
+  await db.chatConsulta.deleteMany({
+    where: {
+      consulta: {
+        OR: [
+          { pacienteId: { startsWith: "trec_" } },
+          { medicoId: { startsWith: "trec_" } },
+        ],
+      },
+    },
+  }); // FK Restrict: o chat vai antes do User (cascade User → Consulta)
   await db.user.deleteMany({ where: { id: { startsWith: "trec_" } } });
   const mkUser = (id: string, role: string) => db.user.create({ data: { id, nome: `Usuário ${id}`, email: `${id}@teste.local`, senhaHash: "x", role } });
   await mkUser("trec_medA", "MEDICO");

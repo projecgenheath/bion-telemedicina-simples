@@ -224,71 +224,69 @@ function gravarDesfechoTx(
   motivo: string,
   autor: AutorDesfecho,
 ): Promise<{ tipo: Desfecho; status: string }> {
-  {
-    return db.$transaction(async (tx) => {
-      const { count } = await tx.consulta.updateMany({
-        where: { id: c.id, status: c.status, updatedAt: c.updatedAt },
-        data: { status: c.status },
-      });
-      if (count === 0) throw new SemAlteracao();
-      // Só conta desfecho vigente da data ATUAL (corrigidoEm nulo; depois de
-      // remarcação o evento da data antiga não bloqueia).
-      const jaTem = await tx.eventoConsulta.findFirst({
-        where: {
-          consultaId: c.id,
-          tipo: { in: TIPOS_DESFECHO },
-          corrigidoEm: null,
-          dataAnterior: c.dataInicio,
-        },
-        select: { id: true },
-      });
-      if (jaTem) throw new SemAlteracao();
-
-      const atorId = autor.por === "medico" ? autor.id : null;
-      let status = c.status;
-      if (tipo === "falta_paciente") {
-        await registrarEvento(tx, {
-          consultaId: c.id,
-          tipo: "falta_paciente",
-          por: autor.por,
-          atorId,
-          dataAnterior: c.dataInicio,
-          motivo: "falta_paciente",
-          multaCentavos: 0,
-        });
-        await tx.notificacao.create({
-          data: {
-            tipo: "agenda",
-            titulo: "Falta registrada",
-            texto: `Você não entrou na sala da consulta de ${c.especialidade} (${quandoClinica(c.dataInicio)}). Se teve um imprevisto, peça o reembolso pelo app em até ${REEMBOLSO_MANUAL_PRAZO_DIAS} dias.`,
-            usuarioId: c.pacienteId,
-          },
-        });
-      } else {
-        const faltaMedico = tipo === "falta_medico";
-        const r = await aplicarFalhaTecnica(tx, c.id, {
-          motivo: faltaMedico ? "falta_medico" : "falha_tecnica",
-          ...(autor.por === "medico" ? { por: "medico" as const, atorId } : { por: "sistema" as const }),
-        });
-        if (!r) throw new SemAlteracao();
-        status = r.status;
-        const causa = faltaMedico ? "porque o médico não entrou na sala" : "por falha técnica";
-        await tx.notificacao.create({
-          data: {
-            tipo: "agenda",
-            titulo: faltaMedico ? "O médico não compareceu" : "Falha técnica na consulta",
-            texto:
-              r.status === "aguardando_reagendamento"
-                ? `A consulta de ${c.especialidade} (${quandoClinica(c.dataInicio)}) não pôde acontecer ${causa}. Escolha no app: remarcar sem custo ou reembolso integral.`
-                : `A consulta de ${c.especialidade} (${quandoClinica(c.dataInicio)}) não pôde acontecer ${causa} e foi cancelada, sem custo.`,
-            usuarioId: c.pacienteId,
-          },
-        });
-      }
-      await tx.auditLog.create({ data: dadosAudit(c, tipo, motivo, autor) });
-      return { tipo, status };
+  return db.$transaction(async (tx) => {
+    const { count } = await tx.consulta.updateMany({
+      where: { id: c.id, status: c.status, updatedAt: c.updatedAt },
+      data: { status: c.status },
     });
-  }
+    if (count === 0) throw new SemAlteracao();
+    // Só conta desfecho vigente da data ATUAL (corrigidoEm nulo; depois de
+    // remarcação o evento da data antiga não bloqueia).
+    const jaTem = await tx.eventoConsulta.findFirst({
+      where: {
+        consultaId: c.id,
+        tipo: { in: TIPOS_DESFECHO },
+        corrigidoEm: null,
+        dataAnterior: c.dataInicio,
+      },
+      select: { id: true },
+    });
+    if (jaTem) throw new SemAlteracao();
+
+    const atorId = autor.por === "medico" ? autor.id : null;
+    let status = c.status;
+    if (tipo === "falta_paciente") {
+      await registrarEvento(tx, {
+        consultaId: c.id,
+        tipo: "falta_paciente",
+        por: autor.por,
+        atorId,
+        dataAnterior: c.dataInicio,
+        motivo: "falta_paciente",
+        multaCentavos: 0,
+      });
+      await tx.notificacao.create({
+        data: {
+          tipo: "agenda",
+          titulo: "Falta registrada",
+          texto: `Você não entrou na sala da consulta de ${c.especialidade} (${quandoClinica(c.dataInicio)}). Se teve um imprevisto, peça o reembolso pelo app em até ${REEMBOLSO_MANUAL_PRAZO_DIAS} dias.`,
+          usuarioId: c.pacienteId,
+        },
+      });
+    } else {
+      const faltaMedico = tipo === "falta_medico";
+      const r = await aplicarFalhaTecnica(tx, c.id, {
+        motivo: faltaMedico ? "falta_medico" : "falha_tecnica",
+        ...(autor.por === "medico" ? { por: "medico" as const, atorId } : { por: "sistema" as const }),
+      });
+      if (!r) throw new SemAlteracao();
+      status = r.status;
+      const causa = faltaMedico ? "porque o médico não entrou na sala" : "por falha técnica";
+      await tx.notificacao.create({
+        data: {
+          tipo: "agenda",
+          titulo: faltaMedico ? "O médico não compareceu" : "Falha técnica na consulta",
+          texto:
+            r.status === "aguardando_reagendamento"
+              ? `A consulta de ${c.especialidade} (${quandoClinica(c.dataInicio)}) não pôde acontecer ${causa}. Escolha no app: remarcar sem custo ou reembolso integral.`
+              : `A consulta de ${c.especialidade} (${quandoClinica(c.dataInicio)}) não pôde acontecer ${causa} e foi cancelada, sem custo.`,
+          usuarioId: c.pacienteId,
+        },
+      });
+    }
+    await tx.auditLog.create({ data: dadosAudit(c, tipo, motivo, autor) });
+    return { tipo, status };
+  });
 }
 
 /** Grava (se for o caso) o evento da classificação automática. */

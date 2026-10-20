@@ -31,6 +31,11 @@ igual(
 );
 igual("payload não JSON", textoDoPayload("oi"), "oi");
 igual("payload string JSON", textoDoPayload(JSON.stringify("oi")), "oi");
+igual("payload {} não vira texto", textoDoPayload("{}"), null);
+igual("payload vazio não vira texto", textoDoPayload(""), null);
+igual("payload só espaços não vira texto", textoDoPayload("   "), null);
+igual("payload {texto: \"\"} não vira texto", textoDoPayload('{"texto":""}'), null);
+igual("payload sem campo texto não vira texto", textoDoPayload('{"s":"x"}'), null);
 
 // --- quem lê ---
 const consulta = { pacienteId: "p1", medicoId: "m1" };
@@ -157,6 +162,34 @@ async function banco() {
     "cópia idempotente: 2 linhas",
     await db.chatConsulta.count({ where: { consultaId: c.id } }),
     2,
+  );
+
+  // Chat sem texto ("{}" ou vazio) não é guardado, mas pode ser limpo.
+  const vazios = await Promise.all(
+    ["{}", ""].map((payload) =>
+      db.sinalSala.create({
+        data: {
+          consultaId: c.id,
+          deUsuarioId: pac.id,
+          deRole: "PACIENTE",
+          tipo: "chat",
+          payload,
+          consumido: true,
+          createdAt: velho,
+        },
+      }),
+    ),
+  );
+  const g3 = await guardarChatSala(c.id);
+  igual(
+    "chat sem texto: não vira linha",
+    await db.chatConsulta.count({ where: { consultaId: c.id } }),
+    2,
+  );
+  igual(
+    "chat sem texto: liberado para a limpeza",
+    vazios.every((v) => g3.has(v.id)),
+    true,
   );
 
   // Mensagem nova que ainda não foi copiada: limparSala copia antes de apagar.
