@@ -79,18 +79,29 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ con
       // Guarda contra corrida (job que expira, outro aparelho): só sai dos status
       // permitidos (atender: tocando|expirada; recusar: tocando).
       const atender = decisao.atualizarPara === "atendida";
-      const r = await db.$transaction(async (tx) => {
-        if (atender && papel === "medico") {
-          const fechou = await fecharEsperaMedicoEntrou(consultaId, agora, tx);
-          if (fechou.resultado === "espera_encerrada") return { count: 0, encerrada: fechou.desfecho };
-        }
-        const u = await tx.chamadaConsulta.updateMany({
-          where: { ...onde, status: { in: decisao.de } },
-          data: { status: decisao.atualizarPara!, respondidaEm: agora },
+      // Médico: atualiza a linha dele primeiro e só fecha a espera se count === 1.
+      // Se a espera já estava encerrada, desfaz a atualização (rollback) e devolve 409.
+      class EsperaEncerrada extends Error {
+        constructor(public desfecho: DesfechoEspera) { super("espera_encerrada"); }
+      }
+      let r: { count: number; encerrada: DesfechoEspera | null };
+      try {
+        r = await db.$transaction(async (tx) => {
+          const u = await tx.chamadaConsulta.updateMany({
+            where: { ...onde, status: { in: decisao.de } },
+            data: { status: decisao.atualizarPara!, respondidaEm: agora },
+          });
+          if (u.count === 1 && atender && papel === "medico") {
+            const fechou = await fecharEsperaMedicoEntrou(consultaId, agora, tx);
+            if (fechou.resultado === "espera_encerrada") throw new EsperaEncerrada(fechou.desfecho);
+          }
+          if (u.count === 1 && atender && papel === "paciente") await abrirEspera(consultaId, agora, tx);
+          return { count: u.count, encerrada: null as DesfechoEspera | null };
         });
-        if (u.count === 1 && atender && papel === "paciente") await abrirEspera(consultaId, agora, tx);
-        return { count: u.count, encerrada: null as DesfechoEspera | null };
-      });
+      } catch (e) {
+        if (e instanceof EsperaEncerrada) r = { count: 0, encerrada: e.desfecho };
+        else throw e;
+      }
       if (r.encerrada) {
         return NextResponse.json({ erro: "espera_encerrada", motivo: "espera_encerrada", desfecho: r.encerrada }, { status: 409 });
       }

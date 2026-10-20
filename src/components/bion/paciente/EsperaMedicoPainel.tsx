@@ -389,7 +389,7 @@ export function EsperaMedicoPainel({
     conteudo = (
       <>
         <Cabecalho refTitulo={tituloRef} icone={<Check className="size-7" aria-hidden />} titulo="Consulta cancelada">
-          O reembolso integral foi pedido. O valor volta pelo mesmo meio de pagamento.
+          O reembolso foi pedido. Ele é integral e automático.
         </Cabecalho>
         <Acoes>
           <Botao primario onClick={onSair}>
