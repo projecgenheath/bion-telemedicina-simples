@@ -12,6 +12,7 @@ import { PerfilMedicoPainel } from "./PerfilMedicoPainel";
 import { PacientesPainel } from "./PacientesPainel";
 import { ConversaPaciente } from "./ConversaPaciente";
 import { TelaSobreposta } from "./TelaSobreposta";
+import { RenovacoesPendentes } from "./evolucao/RenovacoesPendentes";
 import { DicaGestos, IndicadorTelas, useDicaGestos } from "./IndicadorTelas";
 import { PrecoSheet } from "./sheets/PrecoSheet";
 import { AgendaSheet } from "./sheets/AgendaSheet";
@@ -21,7 +22,7 @@ import type { PacienteDoMedico } from "./metricas";
 import "./medico.css";
 
 type Sheet = "preco" | "agenda" | "preview" | null;
-type Sobreposicao = { tipo: "suporte" } | { tipo: "termos" } | { tipo: "paciente"; p: PacienteDoMedico } | null;
+type Sobreposicao = { tipo: "renovacoes" } | { tipo: "suporte" } | { tipo: "termos" } | { tipo: "paciente"; p: PacienteDoMedico } | null;
 
 const EM_CAMPO = ["INPUT", "TEXTAREA", "SELECT"];
 /** Mesmo corte do medico.css: a partir daqui as 3 colunas ficam lado a lado. */
@@ -166,6 +167,7 @@ export function MedicoApp() {
             dados={dados}
             onAbrirSuporte={() => setSobreposicao({ tipo: "suporte" })}
             onAbrirTermos={() => setSobreposicao({ tipo: "termos" })}
+            onAbrirRenovacoes={() => setSobreposicao({ tipo: "renovacoes" })}
           />
         </div>
 
@@ -217,6 +219,11 @@ export function MedicoApp() {
 
       {sobreposicao?.tipo === "paciente" ? (
         <ConversaPaciente paciente={sobreposicao.p} dados={dados} onFechar={fecharSobreposicao} />
+      ) : null}
+      {sobreposicao?.tipo === "renovacoes" ? (
+        <TelaSobreposta titulo="Renovações de receita" subtitulo="Pedidos pendentes dos seus pacientes" onFechar={fecharSobreposicao}>
+          <RenovacoesPendentes />
+        </TelaSobreposta>
       ) : null}
       {sobreposicao?.tipo === "suporte" ? (
         <TelaSobreposta titulo="Suporte" subtitulo="Chamados com a equipe BION" onFechar={fecharSobreposicao}>

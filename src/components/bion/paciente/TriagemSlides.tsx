@@ -80,10 +80,11 @@ export function TriagemSlides({
       if (t) feitos[e.id] = t;
     }
     if (Object.keys(feitos).length) setRespondidos((r) => ({ ...feitos, ...r }));
+    // Mesmo limite do irPara: nunca cai num card que não está na tela.
     const i = Math.max(0, ETAPAS_ANAMNESE.findIndex((e) => e.id === (etapa ?? "identificacao")));
-    setIndice(i < 0 ? 0 : i);
+    setIndice(i);
     requestAnimationFrame(() => {
-      const el = faixaRef.current?.children[i < 0 ? 0 : i] as HTMLElement | undefined;
+      const el = faixaRef.current?.children[i] as HTMLElement | undefined;
       el?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
     });
   };
@@ -97,7 +98,7 @@ export function TriagemSlides({
   useEffect(() => {
     const a = anamneses.find((x) => x.consultaId === consultaId);
     if (a) hidratar(a.etapa, a.coleta, a.status === "concluida");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [consultaId]);
 
   useEffect(() => {
@@ -121,7 +122,7 @@ export function TriagemSlides({
     return () => {
       vivo = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [consultaId]);
 
   const enviar = async (texto: string) => {
@@ -178,7 +179,8 @@ export function TriagemSlides({
   };
 
   const irPara = (i: number) => {
-    const n = Math.max(0, Math.min(ETAPAS_ANAMNESE.length - 1, i));
+    const limite = pronta ? ETAPAS_ANAMNESE.length - 1 : idxServidor;
+    const n = Math.max(0, Math.min(limite, i));
     setIndice(n);
     requestAnimationFrame(() => {
       const el = faixaRef.current?.children[n] as HTMLElement | undefined;
@@ -186,6 +188,9 @@ export function TriagemSlides({
     });
   };
 
+  // Só aparecem os cards já liberados: os de trás (respondidos) e o atual,
+  // que sempre tem campo. Cards futuros não aparecem mais sem campo.
+  const visiveis = pronta ? ETAPAS_ANAMNESE : ETAPAS_ANAMNESE.slice(0, idxServidor + 1);
   const etapa = ETAPAS_ANAMNESE[indice] ?? ETAPAS_ANAMNESE[0];
   const progresso = useMemo(() => {
     const n = pronta ? ETAPAS_ANAMNESE.length : Math.max(idxServidor, Object.keys(respondidos).length);
@@ -234,7 +239,7 @@ export function TriagemSlides({
           const card = el.children[0] as HTMLElement | undefined;
           const passo = (card?.offsetWidth ?? el.clientWidth) + 12;
           const i = Math.round(el.scrollLeft / Math.max(1, passo));
-          if (i !== indice && i >= 0 && i < ETAPAS_ANAMNESE.length) setIndice(i);
+          if (i !== indice && i >= 0 && i < el.children.length) setIndice(i);
         }}
         onPointerDown={(e) => {
           if ((e.target as HTMLElement).closest("textarea, input, button")) return;
@@ -249,10 +254,10 @@ export function TriagemSlides({
           irPara(indice + (dx < 0 ? 1 : -1));
         }}
       >
-        {ETAPAS_ANAMNESE.map((item, i) => (
+        {visiveis.map((item, i) => (
           <article
             key={item.id}
-            className={`snap-center shrink-0 w-[86vw] max-w-md h-full rounded-3xl border p-5 flex flex-col ${
+            className={`snap-center shrink-0 w-[86vw] max-w-md h-full overflow-y-auto overscroll-contain rounded-3xl border p-5 flex flex-col ${
               i === indice ? "bpp-sheet-sel bpp-sheet-cartao" : "bpp-sheet-borda bpp-sheet-cartao"
             }`}
           >
@@ -288,12 +293,11 @@ export function TriagemSlides({
                   value={rascunhos[item.id] ?? ""}
                   onChange={(e) => setRascunhos((r) => ({ ...r, [item.id]: e.target.value }))}
                   rows={3}
-                  placeholder="Ou escreva aqui…"
-                  className="mt-4 w-full rounded-2xl border bpp-sheet-borda p-3 text-sm bpp-sheet-campo"
+                  aria-label="Sua resposta"
+                  placeholder="Escreva sua resposta aqui…"
+                  className="mt-4 w-full min-h-24 shrink-0 rounded-2xl border bpp-sheet-borda p-3 text-sm bpp-sheet-campo"
                 />
               </>
-            ) : i > idxServidor && !pronta ? (
-              <p className="mt-4 text-sm bpp-sheet-suave">Responda o card atual para chegar aqui.</p>
             ) : null}
 
             <div className="mt-auto pt-4 flex items-center gap-2">
@@ -314,11 +318,11 @@ export function TriagemSlides({
                   </button>
                 </>
               ) : (
-                <button type="button" onClick={() => irPara(i)} className="flex-1 rounded-2xl py-3 text-sm font-bold bpp-sheet-chip">
-                  Abrir este card
+                <button type="button" onClick={() => irPara(idxServidor)} className="flex-1 rounded-2xl py-3 text-sm font-bold bpp-sheet-chip">
+                  Ir para a pergunta {idxServidor + 1}
                 </button>
               )}
-              <button type="button" disabled={i >= ETAPAS_ANAMNESE.length - 1} onClick={() => irPara(i + 1)} className="rounded-full p-2.5 bpp-sheet-chip disabled:opacity-30" aria-label="Próximo">
+              <button type="button" disabled={i >= visiveis.length - 1} onClick={() => irPara(i + 1)} className="rounded-full p-2.5 bpp-sheet-chip disabled:opacity-30" aria-label="Próximo">
                 <ArrowRight className="w-4 h-4" />
               </button>
             </div>

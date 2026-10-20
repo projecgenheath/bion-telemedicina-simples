@@ -1,21 +1,16 @@
 import "server-only";
 import { db } from "@/lib/db";
 import { SALA_ABRE_ANTES_MIN, SALA_FECHA_DEPOIS_MIN } from "@/lib/janela-sala";
-import { cruzarEvolucaoPendente, PACIENTE_PRESENTE_MS, type EvolucaoAberta, type EvolucaoPendenteItem } from "@/lib/evolucao-pendente";
+import { cruzarEvolucaoPendente, STATUS_EVOLUCAO_PENDENTE, PACIENTE_PRESENTE_MS, type EvolucaoAberta, type EvolucaoPendenteItem } from "@/lib/evolucao-pendente";
 
 /**
- * Lista para a Fila do Admin. A tabela "Evolucao" é do Médicos (migração
- * 20261018b) e pode ainda não existir: confere com to_regclass e, sem ela,
- * responde `disponivel: false` (nunca quebra a Fila). Lê via SQL cru porque o
- * model ainda não está no schema.prisma da main. Só leitura.
+ * Lista para a Fila do Admin. Lê o model `Evolucao` da main (status
+ * "rascunho" | "concluida") com o mesmo critério da trava de
+ * `medicoLivreAgora`. `disponivel` fica sempre true (mantido no contrato da
+ * rota). Só leitura.
  */
-export async function evolucaoTabelaExiste(): Promise<boolean> {
-  const r = await db.$queryRaw<{ existe: boolean }[]>`SELECT to_regclass('public."Evolucao"') IS NOT NULL AS existe`;
-  return Boolean(r[0]?.existe);
-}
 
 export async function listarEvolucaoPendente(agora: Date = new Date()): Promise<{ disponivel: boolean; consultas: EvolucaoPendenteItem[] }> {
-  if (!(await evolucaoTabelaExiste())) return { disponivel: false, consultas: [] };
   const t = agora.getTime();
   const esperando = await db.consulta.findMany({
     where: {
@@ -33,12 +28,15 @@ export async function listarEvolucaoPendente(agora: Date = new Date()): Promise<
   });
   if (!esperando.length) return { disponivel: true, consultas: [] };
   const medicos = [...new Set(esperando.map((c) => c.medicoId))];
-  const evolucoes = await db.$queryRaw<EvolucaoAberta[]>`
-    SELECT e."consultaId", e."medicoId", e.status, c."dataInicio", c.status AS "consultaStatus", u.nome AS paciente
-    FROM "Evolucao" e
-    JOIN "Consulta" c ON c.id = e."consultaId"
-    JOIN "User" u ON u.id = c."pacienteId"
-    WHERE e.status IN ('rascunho', 'pendente') AND e."medicoId" = ANY(${medicos}::text[])`;
+  const abertas = await db.evolucao.findMany({
+    where: { status: { in: [...STATUS_EVOLUCAO_PENDENTE] }, medicoId: { in: medicos } },
+    take: 500,
+    select: { consultaId: true, medicoId: true, status: true, consulta: { select: { dataInicio: true, status: true } }, paciente: { select: { nome: true } } },
+  });
+  const evolucoes: EvolucaoAberta[] = abertas.map((e) => ({
+    consultaId: e.consultaId, medicoId: e.medicoId, status: e.status, paciente: e.paciente.nome,
+    dataInicio: e.consulta.dataInicio, consultaStatus: e.consulta.status,
+  }));
   const consultas = cruzarEvolucaoPendente(
     esperando.map((c) => {
       const p = c.presencasSala.filter((x) => x.usuarioId === c.pacienteId);

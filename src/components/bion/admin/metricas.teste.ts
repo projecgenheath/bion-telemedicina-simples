@@ -3,7 +3,7 @@
  * Rodar: bun src/components/bion/admin/metricas.teste.ts  (também com TZ=UTC e TZ=Asia/Tokyo)
  */
 import type { AuditLog, Consulta, Medico, TicketSuporte } from "@/lib/bion-tipos";
-import { centavosDoValor, contarPorCategoria, especialidades30d, montarFila, resumoHoje, resumoMedicos, serieDiaria, type RepasseWire, type ReembolsoWire, type SemDesfechoWire, type NaoAtendidaWire, type EvolucaoPendenteWire } from "./metricas";
+import { centavosDoValor, contarPorCategoria, especialidades30d, montarFila, resumoHoje, resumoMedicos, serieDiaria, type RepasseWire, type ReembolsoWire, type SemDesfechoWire, type NaoAtendidaWire, type EsperaMedicoWire, type EvolucaoPendenteWire } from "./metricas";
 import { ehApple, rotuloAtalhoBusca } from "./ui/atalho";
 
 let ok = 0;
@@ -115,7 +115,7 @@ igual(
   fila.map((i) => i.chave),
   ["repasse-r3", "repasse-r2", "audit-a1", "reembolso-e1", "medico-2", "chamado-t1", "repasse-r1"],
 );
-igual("fila: contagem", contarPorCategoria(fila), { validacao: 1, evolucao_pendente: 0, nao_atendida: 0, desfecho: 0, reembolso: 1, repasse: 3, chamado: 1, sistema: 1 });
+igual("fila: contagem", contarPorCategoria(fila), { validacao: 1, espera_medico: 0, evolucao_pendente: 0, nao_atendida: 0, desfecho: 0, reembolso: 1, repasse: 3, chamado: 1, sistema: 1 });
 const rr = fila.find((i) => i.chave === "repasse-r2")!;
 igual("fila: repasse com CNPJ divergente", [rr.tom, rr.chips.map((c) => c.rotulo), rr.destino], ["critico", ["A pagar", "CNPJ divergente"], "admin-repasses?repasse=r2"]);
 igual("fila: repasse detalhe", rr.detalhe, "03/10 · R$ 50,00 · 1 consulta");
@@ -178,15 +178,15 @@ igual("fila não atendida: contagem", contarPorCategoria(filaN).nao_atendida, 2)
 /* ---------- evolução pendente com paciente esperando ---------- */
 const ep: EvolucaoPendenteWire[] = [
   { consultaId: "e1", dataInicio: "2026-10-04T09:50:00-03:00", medico: "Dra. A", paciente: "Bia", especialidade: "Clínica Geral", esperandoDesde: "2026-10-04T09:52:00-03:00",
-    pendentes: [{ consultaId: "e0", paciente: "Caio", status: "pendente", dataInicio: "2026-10-04T09:00:00-03:00" }] },
+    pendentes: [{ consultaId: "e0", paciente: "Caio", status: "rascunho", dataInicio: "2026-10-04T09:00:00-03:00" }] },
   { consultaId: "e2", dataInicio: "2026-10-04T09:50:00-03:00", medico: "Dr. B", paciente: "Duda", especialidade: "", esperandoDesde: null, pendentes: [] },
 ];
-const filaE = montarFila({ medicos: [], tickets: [], auditLogs: [], repasses: [], reembolsos: [], evolucaoPendente: ep }, AGORA);
-igual("fila evolução: só com pendência", filaE.map((i) => i.chave), ["evolucao-pendente-e1"]);
-igual("fila evolução: categoria/tom", [filaE[0].categoria, filaE[0].tom], ["evolucao_pendente", "critico"]);
-igual("fila evolução: detalhe", filaE[0].detalhe, "Dra. A · Clínica Geral · Hoje 09:50 · na sala desde 09:52 · evolução de Caio (Hoje 09:00) pendente");
-igual("fila evolução: destino", filaE[0].destino, "admin-agendamentos?consulta=e1");
-igual("fila evolução: contagem", contarPorCategoria(filaE).evolucao_pendente, 1);
+const filaEv = montarFila({ medicos: [], tickets: [], auditLogs: [], repasses: [], reembolsos: [], evolucaoPendente: ep }, AGORA);
+igual("fila evolução: só com pendência", filaEv.map((i) => i.chave), ["evolucao-pendente-e1"]);
+igual("fila evolução: categoria/tom", [filaEv[0].categoria, filaEv[0].tom], ["evolucao_pendente", "critico"]);
+igual("fila evolução: detalhe", filaEv[0].detalhe, "Dra. A · Clínica Geral · Hoje 09:50 · na sala desde 09:52 · evolução de Caio (Hoje 09:00) em rascunho");
+igual("fila evolução: destino", filaEv[0].destino, "admin-agendamentos?consulta=e1");
+igual("fila evolução: contagem", contarPorCategoria(filaEv).evolucao_pendente, 1);
 
 /* ---------- atalho da busca ---------- */
 igual("Mac", ehApple("MacIntel"), true);
@@ -198,6 +198,16 @@ igual("Android", ehApple("Linux armv8l", "Mozilla/5.0 (Linux; Android 14)"), fal
 igual("sem plataforma, UA de Mac", ehApple("", "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0)"), true);
 igual("rótulo Mac", rotuloAtalhoBusca(true).curto, "⌘K");
 igual("rótulo outros", rotuloAtalhoBusca(false).curto, "Ctrl K");
+
+// Paciente esperando médico: aguardando (atenção) e expirada sem escolha (crítico).
+const esperas: EsperaMedicoWire[] = [
+  { consultaId: "e1", status: "aguardando", iniciadaEm: "2026-10-04T12:55:00.000Z", expiraEm: "2026-10-04T13:05:00.000Z", dataInicio: "2026-10-04T12:55:00.000Z", medico: "Dra. A", paciente: "P1", especialidade: "Clínica" },
+  { consultaId: "e2", status: "expirada", iniciadaEm: "2026-10-04T12:30:00.000Z", expiraEm: "2026-10-04T12:40:00.000Z", dataInicio: "2026-10-04T12:30:00.000Z", medico: "Dr. B", paciente: "P2", especialidade: "Clínica" },
+];
+const filaE = montarFila({ medicos: [], tickets: [], auditLogs: [], repasses: null, reembolsos: null, esperas }, AGORA);
+igual("espera: dois itens na categoria", filaE.filter((i) => i.categoria === "espera_medico").map((i) => [i.chave, i.tom]), [["espera-e2", "critico"], ["espera-e1", "atencao"]]);
+igual("espera: contagem", contarPorCategoria(filaE).espera_medico, 2);
+igual("espera: destino", filaE.find((i) => i.chave === "espera-e2")?.destino, "admin-agendamentos?consulta=e2");
 
 console.log(`${ok} ok, ${falhas} falha(s)`);
 if (falhas) process.exit(1);

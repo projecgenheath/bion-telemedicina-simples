@@ -16,17 +16,16 @@ const esp = (x: Partial<ConsultaEsperando>): ConsultaEsperando => ({
   status: "confirmada", pingsPaciente: [d("2026-10-19T15:09:40-03:00")], entrouEm: d("2026-10-19T15:01:00-03:00"), ...x,
 });
 const evo = (x: Partial<EvolucaoAberta>): EvolucaoAberta => ({
-  consultaId: "c1", medicoId: "m1", paciente: "Caio", status: "pendente", dataInicio: d("2026-10-19T14:00:00-03:00"), consultaStatus: "concluida", ...x,
+  consultaId: "c1", medicoId: "m1", paciente: "Caio", status: "rascunho", dataInicio: d("2026-10-19T14:00:00-03:00"), consultaStatus: "concluida", ...x,
 });
 
 igual("caso base", cruzarEvolucaoPendente([esp({})], [evo({})], AGORA).map((i) => [i.consultaId, i.pendentes.map((p) => p.consultaId), i.esperandoDesde]),
   [["c2", ["c1"], "2026-10-19T18:01:00.000Z"]]);
-igual("rascunho conta", cruzarEvolucaoPendente([esp({})], [evo({ status: "rascunho" })], AGORA).length, 1);
+igual("status fora do contrato não conta", cruzarEvolucaoPendente([esp({})], [evo({ status: "pendente" })], AGORA).length, 0);
 igual("concluida não conta", cruzarEvolucaoPendente([esp({})], [evo({ status: "concluida" })], AGORA).length, 0);
 igual("outro médico não conta", cruzarEvolucaoPendente([esp({})], [evo({ medicoId: "m2" })], AGORA).length, 0);
 igual("a própria consulta não conta", cruzarEvolucaoPendente([esp({})], [evo({ consultaId: "c2", dataInicio: d("2026-10-19T15:00:00-03:00") })], AGORA).length, 0);
-igual("consulta posterior não conta", cruzarEvolucaoPendente([esp({})], [evo({ dataInicio: d("2026-10-19T16:00:00-03:00") })], AGORA).length, 0);
-igual("consulta cancelada não conta", cruzarEvolucaoPendente([esp({})], [evo({ consultaStatus: "cancelada" })], AGORA).length, 0);
+igual("qualquer rascunho do médico conta (igual medicoLivreAgora)", cruzarEvolucaoPendente([esp({})], [evo({ consultaStatus: "cancelada" })], AGORA).length, 1);
 igual("paciente saiu (ping velho)", cruzarEvolucaoPendente([esp({ pingsPaciente: [d("2026-10-19T15:05:00-03:00")] })], [evo({})], AGORA).length, 0);
 igual("sem ping", cruzarEvolucaoPendente([esp({ pingsPaciente: [] })], [evo({})], AGORA).length, 0);
 igual("sala fechada (> 2 h)", cruzarEvolucaoPendente([esp({ dataInicio: d("2026-10-19T13:00:00-03:00") })], [evo({ dataInicio: d("2026-10-19T12:00:00-03:00") })], AGORA).length, 0);

@@ -65,10 +65,22 @@ export type EvolucaoPendenteWire = {
   paciente: string;
   especialidade: string;
   esperandoDesde: string | null;
-  pendentes: { consultaId: string; paciente: string; status: "rascunho" | "pendente"; dataInicio: string }[];
+  pendentes: { consultaId: string; paciente: string; status: "rascunho"; dataInicio: string }[];
 };
 export type EvolucaoPendenteResposta = { total: number; disponivel: boolean; consultas: EvolucaoPendenteWire[] };
 export type NaoAtendidasResposta = { total: number; horas: number; consultas: NaoAtendidaWire[] };
+/** GET /api/admin/consultas/esperas-medico: paciente na sala esperando o médico (ativa ou expirada sem escolha). */
+export type EsperaMedicoWire = {
+  consultaId: string;
+  status: "aguardando" | "expirada";
+  iniciadaEm: string;
+  expiraEm: string;
+  dataInicio: string;
+  medico: string;
+  paciente: string;
+  especialidade: string;
+};
+export type EsperasMedicoResposta = { total: number; consultas: EsperaMedicoWire[] };
 
 /** Valor da consulta como chega do store ("R$ 150" | "R$ 150,5" | "R$ 1.234,56") → centavos. */
 export function centavosDoValor(valor: string | null | undefined): number {
@@ -154,9 +166,10 @@ export function resumoMedicos(medicos: Medico[]) {
 /* ------------------------------------------------------------------ */
 /* Fila de decisões                                                    */
 /* ------------------------------------------------------------------ */
-export type CategoriaFila = "validacao" | "evolucao_pendente" | "nao_atendida" | "desfecho" | "reembolso" | "repasse" | "chamado" | "sistema";
+export type CategoriaFila = "validacao" | "espera_medico" | "evolucao_pendente" | "nao_atendida" | "desfecho" | "reembolso" | "repasse" | "chamado" | "sistema";
 export const ROTULO_CATEGORIA: Record<CategoriaFila, string> = {
   validacao: "Validação",
+  espera_medico: "Paciente esperando médico",
   evolucao_pendente: "Evolução pendente com paciente esperando",
   nao_atendida: "Chamada não atendida",
   desfecho: "Sem desfecho",
@@ -187,6 +200,7 @@ export function montarFila(
     reembolsos: ReembolsoWire[] | null;
     semDesfecho?: SemDesfechoWire[] | null;
     naoAtendidas?: NaoAtendidaWire[] | null;
+    esperas?: EsperaMedicoWire[] | null;
     evolucaoPendente?: EvolucaoPendenteWire[] | null;
   },
   agora: number,
@@ -207,6 +221,24 @@ export function montarFila(
       chips: [{ rotulo: "Sem desfecho", tom: "atencao" }, c.pago ? { rotulo: "Pago · fora do repasse", tom: "dinheiro" } : { rotulo: "Não pago", tom: "neutro" }],
       ts,
       destino: `admin-agendamentos?consulta=${encodeURIComponent(c.id)}&acao=desfecho`,
+    });
+  }
+
+  // Paciente na sala esperando o médico: aguardando (com o prazo) ou expirada
+  // sem o paciente ter escolhido cancelar/remarcar. Abre o detalhe da consulta.
+  for (const e of d.esperas ?? []) {
+    const ts = Date.parse(e.expiraEm);
+    if (!Number.isFinite(ts)) continue;
+    const expirada = e.status === "expirada" || ts <= agora;
+    itens.push({
+      chave: `espera-${e.consultaId}`,
+      categoria: "espera_medico",
+      tom: expirada ? "critico" : "atencao",
+      titulo: `Paciente esperando médico · ${e.paciente}`,
+      detalhe: [e.medico, e.especialidade, expirada ? `prazo venceu às ${hora(ts)}` : `médico tem até ${hora(ts)}`].filter(Boolean).join(" · "),
+      chips: [expirada ? { rotulo: "Expirada · sem escolha", tom: "critico" as const } : { rotulo: "Aguardando médico", tom: "atencao" as const }],
+      ts,
+      destino: `admin-agendamentos?consulta=${encodeURIComponent(e.consultaId)}`,
     });
   }
 
@@ -240,7 +272,7 @@ export function montarFila(
     const ts = Date.parse(c.dataInicio);
     if (!Number.isFinite(ts) || !c.pendentes.length) continue;
     const desde = c.esperandoDesde ? Date.parse(c.esperandoDesde) : NaN;
-    const pend = c.pendentes.map((p) => `evolução de ${p.paciente} (${rotuloDia(Date.parse(p.dataInicio), agora)} ${hora(Date.parse(p.dataInicio))}) ${p.status === "rascunho" ? "em rascunho" : "pendente"}`).join("; ");
+    const pend = c.pendentes.map((p) => `evolução de ${p.paciente} (${rotuloDia(Date.parse(p.dataInicio), agora)} ${hora(Date.parse(p.dataInicio))}) em rascunho`).join("; ");
     itens.push({
       chave: `evolucao-pendente-${c.consultaId}`,
       categoria: "evolucao_pendente",
@@ -338,7 +370,7 @@ export function montarFila(
 }
 
 export function contarPorCategoria(itens: ItemFila[]): Record<CategoriaFila, number> {
-  const out: Record<CategoriaFila, number> = { validacao: 0, evolucao_pendente: 0, nao_atendida: 0, desfecho: 0, reembolso: 0, repasse: 0, chamado: 0, sistema: 0 };
+  const out: Record<CategoriaFila, number> = { validacao: 0, espera_medico: 0, evolucao_pendente: 0, nao_atendida: 0, desfecho: 0, reembolso: 0, repasse: 0, chamado: 0, sistema: 0 };
   for (const i of itens) out[i.categoria]++;
   return out;
 }

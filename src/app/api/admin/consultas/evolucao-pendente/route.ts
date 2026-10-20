@@ -7,9 +7,9 @@ export const dynamic = "force-dynamic";
 
 /**
  * GET /api/admin/consultas/evolucao-pendente
- * Consultas com o paciente na sala agora cujo médico tem evolução em aberto
- * (rascunho | pendente) de uma consulta anterior. `disponivel: false` enquanto
- * a tabela Evolucao (Médicos) não existir no banco. Só ADMIN, só leitura.
+ * Consultas com o paciente na sala agora cujo médico tem Evolucao em rascunho
+ * de outra consulta (mesma trava de medicoLivreAgora: o job não toca). Só
+ * ADMIN, só leitura.
  */
 export async function GET(_req: NextRequest) {
   try {
