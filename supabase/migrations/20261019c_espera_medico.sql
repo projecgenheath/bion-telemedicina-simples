@@ -10,7 +10,7 @@
 --   Tabela nova "EsperaMedico", uma por consulta.
 --   status: aguardando | medico_entrou | expirada | remarcando | cancelada | remarcada
 --   remarcando = remarcação para médico mais caro esperando o pagamento da
---     diferença; a consulta nova fica reservada até "reservaExpiraEm" (15 min).
+--     diferença; a consulta nova fica reservada até "reservaExpiraEm" (10 min).
 --   iniciadaEm = quando o paciente atendeu (atendidaPacienteEm);
 --   expiraEm   = max(horário marcado, iniciadaEm) + 10 min (servidor);
 --   diferencaCentavos (remarcada): valor novo − valor antigo, em centavos

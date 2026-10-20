@@ -41,7 +41,7 @@ const TRANSICOES: Record<StatusEspera, StatusEspera[]> = {
   // O médico ainda pode entrar enquanto o paciente não escolheu.
   // remarcando: médico mais caro, esperando o pagamento da diferença.
   expirada: ["medico_entrou", "cancelada", "remarcada", "remarcando"],
-  // Pago → remarcada; reserva de 15 min venceu → volta para expirada.
+  // Pago → remarcada; reserva de 10 min venceu → volta para expirada.
   remarcando: ["remarcada", "expirada"],
   medico_entrou: [],
   cancelada: [],
