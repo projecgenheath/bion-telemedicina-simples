@@ -4,6 +4,10 @@
  */
 import {
   ehViolacaoUnica,
+  fimRetornoGratis,
+  jaUsouRetornoGratis,
+  retornoEhGratis,
+  ultimoDiaRetornoGratis,
   escolherHorarioInicial,
   lerCorpoPedidoRenovacao,
   lerPedidoRenovacao,
@@ -88,6 +92,20 @@ eq("consultaId em chamada_marcada", lerPedidoRenovacao({ ...linha, status: "cham
 eq("P2002", ehViolacaoUnica({ code: "P2002" }), true);
 eq("P2010/23505", ehViolacaoUnica({ code: "P2010", meta: { code: "23505" } }), true);
 eq("outro erro", ehViolacaoUnica({ code: "P2010", meta: { code: "42P01" }, message: "relation does not exist" }), false);
+
+// Retorno grátis em 30 dias (origem: 01/10 às 22:30 SP = 02/10 01:30Z)
+const orig = "2026-10-02T01:30:00.000Z";
+eq("fim grátis = 01/11 00:00 SP", fimRetornoGratis(orig).toISOString(), "2026-11-01T03:00:00.000Z");
+eq("último dia grátis 31/10", ultimoDiaRetornoGratis(orig), "31/10");
+eq("31/10 23:00 SP grátis", retornoEhGratis(orig, "2026-11-01T02:00:00.000Z", false), true);
+eq("01/11 00:00 SP pago", retornoEhGratis(orig, "2026-11-01T03:00:00.000Z", false), false);
+eq("dentro do prazo mas já usou", retornoEhGratis(orig, "2026-10-10T12:00:00.000Z", true), false);
+eq("virada de mês curto", ultimoDiaRetornoGratis("2026-01-31T12:00:00.000Z"), "02/03");
+eq("sem retornos: não usou", jaUsouRetornoGratis([]), false);
+eq("grátis ativo: usou", jaUsouRetornoGratis([{ status: "confirmada", valor: 0 }]), true);
+eq("grátis concluído: usou", jaUsouRetornoGratis([{ status: "concluida", valor: 0 }]), true);
+eq("grátis cancelado: devolve", jaUsouRetornoGratis([{ status: "cancelada", valor: 0 }]), false);
+eq("só retorno pago: não usou", jaUsouRetornoGratis([{ status: "confirmada", valor: 150 }]), false);
 
 console.log(`atendimento-tipo: ${ok} ok, ${falhas} falha(s)`);
 if (falhas) process.exit(1);

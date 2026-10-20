@@ -255,3 +255,44 @@ export function lerCorpoPedidoRenovacao(body: unknown): { documentoId: string; o
   const obs = typeof b.observacaoPaciente === "string" ? b.observacaoPaciente.trim().slice(0, 500) : "";
   return { documentoId, observacaoPaciente: obs || null };
 }
+
+/* ------------------------------------------------------------------ */
+/* Retorno grátis em até 30 dias (regra do Alisson, 20/10/2026)          */
+/* ------------------------------------------------------------------ */
+/*
+ * O retorno cujo HORÁRIO cai até 30 dias corridos depois do dia da consulta
+ * de origem (Consulta.dataInicio, no fuso de São Paulo, até 23:59 do 30º dia)
+ * sai de graça: valor 0, sem cobrança, já confirmado. Um retorno grátis por
+ * consulta de origem (um retorno grátis cancelado libera outro). Depois do
+ * prazo, o retorno é uma consulta paga normal, pelo preço do médico.
+ * Conta a partir de dataInicio porque é a data que o prazo de 90 dias do
+ * retorno já usa e a que o paciente vê ("consulta de DD/MM").
+ */
+export const PRAZO_RETORNO_GRATIS_DIAS = 30;
+const FUSO_SP_MS = 3 * 3600_000; // America/Sao_Paulo, UTC-3 (sem horário de verão desde 2019)
+
+/** Instante em que o retorno deixa de ser grátis (meia-noite SP após o 30º dia). */
+export function fimRetornoGratis(origemInicio: Date | string): Date {
+  const o = new Date(new Date(origemInicio).getTime() - FUSO_SP_MS);
+  return new Date(Date.UTC(o.getUTCFullYear(), o.getUTCMonth(), o.getUTCDate() + PRAZO_RETORNO_GRATIS_DIAS + 1) + FUSO_SP_MS);
+}
+
+/** Último dia (DD/MM, São Paulo) em que o retorno é grátis. */
+export function ultimoDiaRetornoGratis(origemInicio: Date | string): string {
+  const d = new Date(fimRetornoGratis(origemInicio).getTime() - FUSO_SP_MS - 1);
+  return `${String(d.getUTCDate()).padStart(2, "0")}/${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+/** Status que NÃO gastam o retorno grátis (só o cancelamento devolve). */
+export const STATUS_DEVOLVEM_RETORNO_GRATIS = ["cancelada"] as const;
+
+/** Já existe retorno grátis ativo desta origem? (lista: retornos da mesma origem) */
+export function jaUsouRetornoGratis(retornos: { status: string; valor: number }[]): boolean {
+  return retornos.some((r) => r.valor === 0 && !(STATUS_DEVOLVEM_RETORNO_GRATIS as readonly string[]).includes(r.status));
+}
+
+/** O retorno marcado para `retornoInicio` é grátis? */
+export function retornoEhGratis(origemInicio: Date | string, retornoInicio: Date | string, jaUsou: boolean): boolean {
+  if (jaUsou) return false;
+  return new Date(retornoInicio).getTime() < fimRetornoGratis(origemInicio).getTime();
+}
