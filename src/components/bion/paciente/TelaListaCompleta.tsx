@@ -1,23 +1,21 @@
 "use client";
 
 import { useMemo, useRef } from "react";
-import { CalendarDays, CreditCard, FileUp, X } from "lucide-react";
+import { CalendarDays, FileUp, X } from "lucide-react";
 import { useBion } from "@/lib/bion-store";
 import { useVoltarFecha } from "./useVoltarFecha";
 import { useFocoDialogo } from "./useFocoDialogo";
-import { CLASSE_ETIQUETA, rotuloHistorico } from "./etiqueta-consulta";
-import { EtiquetaTipo } from "./tipo-atendimento-ui";
+import { LinhaConsultaPagamento } from "./LinhaConsultaPagamento";
 import { EstadoVazio } from "./EstadosPaciente";
 
 /**
- * "Ver tudo" do Perfil (fase 3): histórico de consultas, pagamentos ou
+ * "Ver tudo" do Perfil (fase 3): consultas e pagamentos (lista única) ou
  * uploads em tela cheia. Substitui as listas com rolagem dentro da rolagem.
  */
-export type ListaPerfil = "consultas" | "pagamentos" | "uploads";
+export type ListaPerfil = "consultas" | "uploads";
 
 const TITULO: Record<ListaPerfil, { titulo: string; descricao: string }> = {
-  consultas: { titulo: "Histórico de consultas", descricao: "Todas as suas consultas, da mais recente para a mais antiga." },
-  pagamentos: { titulo: "Pagamentos", descricao: "Consultas pagas e pendentes (canceladas ficam de fora)." },
+  consultas: { titulo: "Consultas e pagamentos", descricao: "Todas as suas consultas com o pagamento de cada uma, da mais recente para a mais antiga." },
   uploads: { titulo: "Uploads na BION IA", descricao: "Laudos e exames que você enviou." },
 };
 
@@ -31,7 +29,6 @@ export function TelaListaCompleta({ lista, onFechar, onAgendar }: { lista: Lista
     () => consultas.filter((c) => c.paciente === sessao.nome).sort((a, b) => b.ts - a.ts),
     [consultas, sessao.nome],
   );
-  const pagamentos = useMemo(() => doPaciente.filter((c) => c.status !== "cancelada"), [doPaciente]);
   const uploads = useMemo(
     () => arquivos.filter((a) => a.enviadoPor === "paciente" || a.consulta === "BION IA"),
     [arquivos],
@@ -58,35 +55,9 @@ export function TelaListaCompleta({ lista, onFechar, onAgendar }: { lista: Lista
                 <EstadoVazio icone={<CalendarDays className="w-6 h-6" />} titulo="Nenhuma consulta ainda" texto="Quando você agendar, ela aparece aqui." acao={{ rotulo: "Agendar com a BION IA", onClick: onAgendar }} />
               ) : (
                 <ul className="bp-glass p-2">
-                  {doPaciente.map((c) => {
-                    const e = rotuloHistorico(c.status, c.pago);
-                    return (
-                      <li key={c.id} className="bpp-linha">
-                        <div className="min-w-0 flex-1">
-                          <div className="text-sm font-semibold text-bion-ink dark:text-bion-paper truncate">{c.especialidade} · {c.medico}</div>
-                          <EtiquetaTipo consulta={c} className="mt-0.5" />
-                          <div className="text-xs text-bion-ink/75 dark:text-bion-paper/75">{c.data} às {c.hora}{c.valor ? ` · ${c.valor}` : ""}</div>
-                        </div>
-                        <span className={`text-xs font-bold px-2.5 py-1 rounded-full whitespace-nowrap ${CLASSE_ETIQUETA[e.tom]}`}>{e.texto}</span>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )
-            ) : lista === "pagamentos" ? (
-              pagamentos.length === 0 ? (
-                <EstadoVazio icone={<CreditCard className="w-6 h-6" />} titulo="Nenhum pagamento ainda" texto="O pagamento é feito no agendamento, pela BION IA." />
-              ) : (
-                <ul className="bp-glass p-2">
-                  {pagamentos.map((c) => (
-                    <li key={c.id} className="bpp-linha">
-                      <div className="min-w-0 flex-1">
-                        <div className="text-sm font-semibold text-bion-ink dark:text-bion-paper truncate">{c.especialidade}</div>
-                        <div className="text-xs text-bion-ink/75 dark:text-bion-paper/75">{c.data} · {c.medico}</div>
-                      </div>
-                      <span className={`shrink-0 text-xs font-bold px-2.5 py-1 rounded-full ${c.pago ? CLASSE_ETIQUETA.ok : CLASSE_ETIQUETA.pagamento}`}>
-                        {c.pago ? "Pago" : "Pendente"}{c.valor ? ` · ${c.valor}` : ""}
-                      </span>
+                  {doPaciente.map((c) => (
+                    <li key={c.id}>
+                      <LinhaConsultaPagamento c={c} detalhada onPagar={onAgendar} />
                     </li>
                   ))}
                 </ul>
