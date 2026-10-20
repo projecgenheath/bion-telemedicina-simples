@@ -19,12 +19,15 @@ const evs: Ev[] = [
   { medicoId: "m1", status: "concluida", consultaId: "c2" },
   { medicoId: "m2", status: "rascunho", consultaId: "c3" },
 ];
-const trava = (m: string, exceto?: string | null) => evs.some((e) => casa(filtroEvolucaoPendente(m, exceto), e));
+const trava = (m: string, exceto?: string | null, lista: Ev[] = evs) => lista.some((e) => casa(filtroEvolucaoPendente(m, exceto), e));
 
 igual("sem exceção: rascunho de qualquer consulta trava", trava("m1"), true);
 igual("rascunho da própria consulta não trava", trava("m1", "c1"), false);
 igual("rascunho de outra consulta trava", trava("m1", "c9"), true);
-igual("concluída não trava", trava("m1", "c1"), false);
+// Só a evolução concluída de outra consulta (c2), excetuando outra (c9): não pode travar.
+const soConcluida: Ev[] = [{ medicoId: "m1", status: "concluida", consultaId: "c2" }];
+igual("concluída de outra consulta não trava (com exceção)", trava("m1", "c9", soConcluida), false);
+igual("concluída não trava (sem exceção)", trava("m1", undefined, soConcluida), false);
 igual("null = sem exceção", trava("m2", null), true);
 igual("rascunho de outro médico não trava", trava("m3"), false);
 igual("where sem exceção", filtroEvolucaoPendente("m1"), { medicoId: "m1", status: "rascunho" });
