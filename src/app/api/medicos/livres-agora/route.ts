@@ -14,6 +14,8 @@ import { foraDoHorarioVedado, medicoLivreAgora, reaisParaCentavos } from "@/lib/
  * diferencaCentavos = null. Inteiros, em centavos.
  * → { medicos: [{ id, nome, especialidade, foto, avaliacao, valorConsultaCentavos, diferencaCentavos }] }
  */
+const LOTE = 5;
+
 export async function GET(req: NextRequest) {
   try {
     const usuario = await exigirSessao();
@@ -44,7 +46,12 @@ export async function GET(req: NextRequest) {
       take: 50,
     });
     const agora = new Date();
-    const livres = await Promise.all(candidatos.map(async (m) => ((await medicoLivreAgora(m.userId, undefined, agora)) ? m : null)));
+    // Concorrência limitada: lotes de 5 médicos (4 consultas cada).
+    const livres: (typeof candidatos[number] | null)[] = [];
+    for (let i = 0; i < candidatos.length; i += LOTE) {
+      const lote = candidatos.slice(i, i + LOTE);
+      livres.push(...(await Promise.all(lote.map(async (m) => ((await medicoLivreAgora(m.userId, undefined, agora)) ? m : null)))));
+    }
     return ok({
       medicos: livres
         .filter((m): m is NonNullable<typeof m> => m !== null)

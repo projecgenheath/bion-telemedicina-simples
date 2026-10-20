@@ -40,14 +40,20 @@ export async function POST(req: NextRequest) {
     if (consulta.status === "cancelada") return Response.json({ erro: "consulta_cancelada" }, { status: 409 });
 
     const tiposJson = JSON.stringify(tipos);
-    const existente = await db.pedidoMedicao.findFirst({
-      where: { consultaId: consulta.id, medicoId: medico.id, status: "pendente", tipos: tiposJson },
+    // Sem pendentes duplicados: trava a linha da consulta (SELECT … FOR UPDATE)
+    // e, dentro da mesma transação, procura um pendente com os mesmos tipos.
+    const { pedido, existente } = await db.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT "id" FROM "Consulta" WHERE "id" = ${consulta.id} FOR UPDATE`;
+      const existente = await tx.pedidoMedicao.findFirst({
+        where: { consultaId: consulta.id, medicoId: medico.id, status: "pendente", tipos: tiposJson },
+      });
+      const pedido =
+        existente ??
+        (await tx.pedidoMedicao.create({
+          data: { consultaId: consulta.id, pacienteId: consulta.pacienteId, medicoId: medico.id, tipos: tiposJson },
+        }));
+      return { pedido, existente };
     });
-    const pedido =
-      existente ??
-      (await db.pedidoMedicao.create({
-        data: { consultaId: consulta.id, pacienteId: consulta.pacienteId, medicoId: medico.id, tipos: tiposJson },
-      }));
     if (!existente) {
       after(() => broadcastCanal(topicoSala(consulta.id), "pedido_medicao_criado", { pedidoId: pedido.id }, { privado: true }));
       await registrarAudit(medico, {

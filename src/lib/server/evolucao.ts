@@ -44,12 +44,17 @@ export function respostaEvolucaoPendente(p: EvolucaoPendente) {
   );
 }
 
-/** Cria (se não existir) a evolução em rascunho da consulta. Idempotente. */
-export async function garantirEvolucao(c: { id: string; medicoId: string; pacienteId: string }) {
-  return db.evolucao.upsert({
-    where: { consultaId: c.id },
-    create: { consultaId: c.id, medicoId: c.medicoId, pacienteId: c.pacienteId },
-    update: {},
+/**
+ * Cria a evolução em rascunho da consulta SÓ se ainda não existir. Chamado a
+ * cada GET da sala (heartbeat): a leitura vem primeiro e, quando já existe,
+ * nada é gravado; a criação usa ON CONFLICT DO NOTHING (skipDuplicates).
+ */
+export async function garantirEvolucao(c: { id: string; medicoId: string; pacienteId: string }): Promise<void> {
+  const existe = await db.evolucao.findUnique({ where: { consultaId: c.id }, select: { id: true } });
+  if (existe) return;
+  await db.evolucao.createMany({
+    data: [{ consultaId: c.id, medicoId: c.medicoId, pacienteId: c.pacienteId }],
+    skipDuplicates: true,
   });
 }
 

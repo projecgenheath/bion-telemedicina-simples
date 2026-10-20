@@ -4,6 +4,7 @@ import { exigirPapel } from "@/lib/server/auth";
 import { ok, falha } from "@/lib/server/http";
 import { aplicarSideEffects } from "@/lib/server/dados";
 import { erroHttp } from "@/lib/server/evolucao";
+import { reembolsarPedidoRenovacao } from "@/lib/server/renovacao-reembolso";
 
 /**
  * POST /api/medico/renovacoes/[id]/responder — resposta do MÉDICO do pedido.
@@ -147,11 +148,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     if (body.acao === "recusar") {
       if (!mensagemMedico) return Response.json({ erro: "Escreva a mensagem para o paciente." }, { status: 400 });
-      const r = await db.pedidoRenovacao.updateMany({
-        where: { id, medicoId: medico.id, status: "pendente" },
-        data: { status: "recusada", mensagemMedico, respondidoEm: agora },
+      await db.$transaction(async (tx) => {
+        const r = await tx.pedidoRenovacao.updateMany({
+          where: { id, medicoId: medico.id, status: "pendente" },
+          data: { status: "recusada", mensagemMedico, respondidoEm: agora },
+        });
+        if (r.count === 0) throw naoPendente();
+        // Ponto único do reembolso na recusa (pedido pago, pagamentoId do #66).
+        // A função é do #66; aqui só a chamamos, na mesma transação.
+        await reembolsarPedidoRenovacao(id, tx);
       });
-      if (r.count === 0) return Response.json({ erro: "pedido_nao_pendente" }, { status: 409 });
       const efeitos = await aplicarSideEffects(
         medico,
         [{ tipo: "receita", titulo: "Pedido de renovação respondido", texto: `${medico.nome} respondeu seu pedido de renovação.`, usuarioId: pedido.pacienteId }],
