@@ -1,4 +1,5 @@
 import "server-only";
+import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { partesNoFuso } from "@/lib/server/fuso";
 
@@ -19,13 +20,18 @@ export function foraDoHorarioVedado(agora: Date = new Date()): boolean {
 
 export type MotivoOcupado = "inativo" | "sem_pix" | "em_andamento" | "evolucao_pendente" | "consulta_proxima" | "horario_vedado";
 
-export async function motivoMedicoOcupado(medicoId: string, agora: Date = new Date()): Promise<MotivoOcupado | null> {
+export async function motivoMedicoOcupado(
+  medicoId: string,
+  tx?: Prisma.TransactionClient,
+  agora: Date = new Date(),
+): Promise<MotivoOcupado | null> {
+  const cli = tx ?? db;
   if (!foraDoHorarioVedado(agora)) return "horario_vedado";
   const t = agora.getTime();
   const [medico, pix, consulta, evolucao] = await Promise.all([
-    db.user.findFirst({ where: { id: medicoId, role: "MEDICO", status: "ativo", perfilMedico: { status: "ativo" } }, select: { id: true } }),
-    db.dadosRecebimentoMedico.findFirst({ where: { medicoId, pixChave: { not: "" } }, select: { id: true } }),
-    db.consulta.findFirst({
+    cli.user.findFirst({ where: { id: medicoId, role: "MEDICO", status: "ativo", perfilMedico: { status: "ativo" } }, select: { id: true } }),
+    cli.dadosRecebimentoMedico.findFirst({ where: { medicoId, pixChave: { not: "" } }, select: { id: true } }),
+    cli.consulta.findFirst({
       where: {
         medicoId,
         OR: [
@@ -38,7 +44,7 @@ export async function motivoMedicoOcupado(medicoId: string, agora: Date = new Da
       },
       select: { dataInicio: true },
     }),
-    db.evolucao.findFirst({ where: { medicoId, status: "rascunho" }, select: { id: true } }),
+    cli.evolucao.findFirst({ where: { medicoId, status: "rascunho" }, select: { id: true } }),
   ]);
   if (!medico) return "inativo";
   if (!pix) return "sem_pix";
@@ -47,8 +53,13 @@ export async function motivoMedicoOcupado(medicoId: string, agora: Date = new Da
   return null;
 }
 
-export async function medicoLivreAgora(medicoId: string, agora: Date = new Date()): Promise<boolean> {
-  return (await motivoMedicoOcupado(medicoId, agora)) === null;
+/** Aceita o cliente da transação (o Admin chama dentro da remarcação). */
+export async function medicoLivreAgora(
+  medicoId: string,
+  tx?: Prisma.TransactionClient,
+  agora: Date = new Date(),
+): Promise<boolean> {
+  return (await motivoMedicoOcupado(medicoId, tx, agora)) === null;
 }
 
 /** Reais (Float) → centavos inteiros, sem erro de arredondamento. */

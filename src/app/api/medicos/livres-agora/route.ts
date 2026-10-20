@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
       take: 50,
     });
     const agora = new Date();
-    const livres = await Promise.all(candidatos.map(async (m) => ((await medicoLivreAgora(m.userId, agora)) ? m : null)));
+    const livres = await Promise.all(candidatos.map(async (m) => ((await medicoLivreAgora(m.userId, undefined, agora)) ? m : null)));
     return ok({
       medicos: livres
         .filter((m): m is NonNullable<typeof m> => m !== null)
