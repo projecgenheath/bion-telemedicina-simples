@@ -3,6 +3,7 @@
  * Rodar: bun src/components/bion/admin/agendamentos/agenda.teste.ts  (também com TZ=UTC e TZ=Asia/Tokyo)
  */
 import type { Consulta } from "@/lib/bion-tipos";
+import { normalizarTipoAtendimento } from "@/lib/bion-tipos";
 import {
   FILTROS_PADRAO,
   agruparPorDia,
@@ -13,6 +14,10 @@ import {
   filtrarConsultas,
   horariosDoDia,
   normalizar,
+  chipTipoAtendimento,
+  continuacoesDe,
+  linkConsultaAdmin,
+  tipoDe,
   podeCancelar,
   reembolsoAoCancelar,
   resumoAgenda,
@@ -199,6 +204,34 @@ igual("aviso do motivo: fica na auditoria", avisoMotivo(plano("nenhum")), { text
 igual("aviso do motivo: sem opção escolhida", avisoMotivo(null).texto, "Não vai para o paciente.");
 igual("motivo curto", validarMotivoCorrecao("  curto  "), "Explique o motivo com pelo menos 10 caracteres (fica na auditoria).");
 igual("motivo ok", validarMotivoCorrecao("O suporte confirmou."), null);
+
+// --- Tipo de atendimento (renovação / retorno / segunda opinião) ---
+{
+  const origem = c("2026-10-01T10:00:00-03:00");
+  const legado = c("2026-10-05T10:00:00-03:00"); // sem os campos (antes da migração)
+  const ren = c("2026-10-06T10:00:00-03:00", { tipoAtendimento: "renovacao", consultaOrigemId: origem.id });
+  const ret = c("2026-10-05T11:00:00-03:00", { tipoAtendimento: "retorno", consultaOrigemId: origem.id });
+  const seg = c("2026-10-07T10:00:00-03:00", { tipoAtendimento: "segunda_opiniao" });
+  const todas = [origem, legado, ren, ret, seg];
+  igual("tipo ausente = padrao", tipoDe(legado), "padrao");
+  igual("normalizar tipo desconhecido", normalizarTipoAtendimento("xyz"), "padrao");
+  igual("normalizar tipo undefined", normalizarTipoAtendimento(undefined), "padrao");
+  igual("normalizar tipo válido", normalizarTipoAtendimento("retorno"), "retorno");
+  igual("chip: padrao sem chip", chipTipoAtendimento(legado), null);
+  igual("chip: renovação", chipTipoAtendimento(ren)?.rotulo, "Renovação de receita");
+  igual("chip: retorno", chipTipoAtendimento(ret)?.rotulo, "Retorno");
+  igual("chip: segunda opinião", chipTipoAtendimento(seg)?.rotulo, "Segunda opinião");
+  igual("chips da consulta incluem o tipo", chipsConsulta(ret, AGORA).map((e) => e.rotulo).includes("Retorno"), true);
+  igual("chips de padrao sem tipo", chipsConsulta(legado, AGORA).some((e) => /Retorno|Renovação|Segunda/.test(e.rotulo)), false);
+  const f = (tipo: (typeof FILTROS_PADRAO)["tipo"]) => filtrarConsultas(todas, { ...FILTROS_PADRAO, periodo: "todas", tipo }, AGORA).map((x) => x.id);
+  igual("filtro tipo todos", f("todos").length, 5);
+  igual("filtro padrao inclui legado", f("padrao").sort(), [origem.id, legado.id].sort());
+  igual("filtro retorno", f("retorno"), [ret.id]);
+  igual("filtro renovação", f("renovacao"), [ren.id]);
+  igual("continuações em ordem", continuacoesDe(todas, origem.id).map((x) => x.id), [ret.id, ren.id]);
+  igual("sem continuações", continuacoesDe(todas, seg.id), []);
+  igual("link origem", linkConsultaAdmin("ab c"), "/admin-agendamentos?consulta=ab%20c");
+}
 
 console.log(`${ok} ok, ${falhas} falha(s)`);
 if (falhas) process.exit(1);

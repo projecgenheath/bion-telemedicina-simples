@@ -81,6 +81,7 @@ export type {
   Sessao,
   TicketSuporte,
 } from "./bion-tipos";
+import { normalizarTipoAtendimento } from "./bion-tipos";
 
 export {
   fmtCurta,
@@ -133,6 +134,8 @@ type EstadoFresco = {
     podePedirAte?: string | null;
     motivoReagendamento?: Consulta["motivoReagendamento"];
     retornoSugeridoEm?: string | null;
+    tipoAtendimento?: string;
+    consultaOrigemId?: string | null;
   }[];
   documentos: {
     id: string; tipo: string; titulo: string; conteudo: string; medico: string; paciente: string;
@@ -249,6 +252,8 @@ const mapConsulta = (c: EstadoFresco["consultas"][number]): Consulta => ({
   podePedirAte: c.podePedirAte ?? null,
   motivoReagendamento: c.motivoReagendamento ?? null,
   retornoSugeridoEm: c.retornoSugeridoEm ?? null,
+  tipoAtendimento: normalizarTipoAtendimento(c.tipoAtendimento),
+  consultaOrigemId: c.consultaOrigemId ?? null,
 });
 
 const mapDocumento = (x: EstadoFresco["documentos"][number]): Documento => ({

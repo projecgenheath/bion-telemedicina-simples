@@ -60,7 +60,18 @@ export type Consulta = {
   motivoReagendamento?: "medico_cancelou" | "falha_tecnica" | "falta_medico" | null;
   /** Data de retorno sugerida pelo médico nesta consulta (ISO), se houver. */
   retornoSugeridoEm?: string | null;
+  // Tipo de atendimento (CHECK no banco). Ausente = "padrao" (antes da migração).
+  tipoAtendimento?: TipoAtendimento;
+  // Renovação/retorno/segunda opinião: a consulta de origem (null se apagada).
+  consultaOrigemId?: string | null;
 };
+
+export type TipoAtendimento = "padrao" | "renovacao" | "retorno" | "segunda_opiniao";
+export const TIPOS_ATENDIMENTO: TipoAtendimento[] = ["padrao", "renovacao", "retorno", "segunda_opiniao"];
+/** Valor desconhecido ou ausente vira "padrao" (tolera o banco antes da migração). */
+export function normalizarTipoAtendimento(v: unknown): TipoAtendimento {
+  return typeof v === "string" && (TIPOS_ATENDIMENTO as string[]).includes(v) ? (v as TipoAtendimento) : "padrao";
+}
 
 export type Arquivo = {
   id: string;

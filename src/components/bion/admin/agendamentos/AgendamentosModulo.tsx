@@ -16,7 +16,7 @@ import { brl, hora as horaDe, rotuloDia } from "../tempo";
 import { centavosDoValor } from "../metricas";
 import { DetalheConsulta } from "./DetalheConsulta";
 import { ReembolsosPainel } from "./ReembolsosPainel";
-import { FILTROS_PADRAO, STATUS_FILTRO, agruparPorDia, chipsConsulta, filtrarConsultas, podeCancelar, resumoAgenda, type Filtros, type Periodo } from "./agenda";
+import { FILTROS_PADRAO, ROTULO_TIPO_ATENDIMENTO, STATUS_FILTRO, TIPO_FILTRO, agruparPorDia, chipsConsulta, filtrarConsultas, podeCancelar, resumoAgenda, type Filtros, type Periodo } from "./agenda";
 
 type Aba = "agenda" | "reembolsos";
 const PAGINA = 60;
@@ -205,6 +205,14 @@ function BarraFiltros({ filtros, onMudar, medicos }: { filtros: Filtros; onMudar
           <option value="todos">Pagas e não pagas</option>
           <option value="pago">Só pagas</option>
           <option value="nao_pago">Só não pagas</option>
+        </Seletor>
+        <Seletor rotulo="Tipo" valor={filtros.tipo} onMudar={(v) => onMudar({ tipo: v as Filtros["tipo"] })}>
+          <option value="todos">Todos os tipos</option>
+          {TIPO_FILTRO.map((t) => (
+            <option key={t} value={t}>
+              {ROTULO_TIPO_ATENDIMENTO[t]}
+            </option>
+          ))}
         </Seletor>
         <Seletor rotulo="Médico" valor={filtros.medicoId} onMudar={(v) => onMudar({ medicoId: v })} className="col-span-2 lg:min-w-64">
           <option value="">Todos os médicos</option>

@@ -1,5 +1,6 @@
 import "server-only";
 import { instanteNoFuso, partesNoFuso } from "./fuso";
+import { normalizarTipoAtendimento } from "@/lib/bion-tipos";
 import { broadcastCanal } from "@/lib/supabase/broadcast";
 import { after } from "next/server";
 import { topicoNotificacoesUsuario } from "./usuario-canal";
@@ -219,6 +220,9 @@ export function consultaWire(c: ConsultaComNomes & { remarcacoes?: ReservaRemarc
     // Só em aguardando_reagendamento: por que o paciente precisa remarcar ou pedir reembolso.
     motivoReagendamento: motivoReagendamentoDe(c.status, c.eventos ?? []),
     retornoSugeridoEm: c.retornoSugeridoEm ? c.retornoSugeridoEm.toISOString() : null,
+    // Colunas da migração 20261019b (#64), já em produção.
+    tipoAtendimento: normalizarTipoAtendimento(c.tipoAtendimento),
+    consultaOrigemId: c.consultaOrigemId ?? null,
   };
 }
 

@@ -47,6 +47,8 @@ export type SemDesfechoWire = {
   pago: boolean;
   valor: number;
 };
+/** GET /api/admin/renovacoes/pendentes: só contagem e ids (sem dados de saúde). */
+export type RenovacoesPendentesResposta = { total: number; horas: number; ids: string[]; maisAntigoEm: string | null };
 export type SemDesfechoResposta = { total: number; horas: number; consultas: SemDesfechoWire[] };
 /** GET /api/admin/consultas/chamadas-nao-atendidas: toque recusado ou 3 tentativas expiradas (últimas 24 h, sem desfecho). */
 export type NaoAtendidaWire = {
@@ -166,13 +168,14 @@ export function resumoMedicos(medicos: Medico[]) {
 /* ------------------------------------------------------------------ */
 /* Fila de decisões                                                    */
 /* ------------------------------------------------------------------ */
-export type CategoriaFila = "validacao" | "espera_medico" | "evolucao_pendente" | "nao_atendida" | "desfecho" | "reembolso" | "repasse" | "chamado" | "sistema";
+export type CategoriaFila = "validacao" | "espera_medico" | "evolucao_pendente" | "nao_atendida" | "desfecho" | "renovacao" | "reembolso" | "repasse" | "chamado" | "sistema";
 export const ROTULO_CATEGORIA: Record<CategoriaFila, string> = {
   validacao: "Validação",
   espera_medico: "Paciente esperando médico",
   evolucao_pendente: "Evolução pendente com paciente esperando",
   nao_atendida: "Chamada não atendida",
   desfecho: "Sem desfecho",
+  renovacao: "Renovações",
   reembolso: "Reembolsos",
   repasse: "Repasses",
   chamado: "Chamados",
@@ -202,6 +205,7 @@ export function montarFila(
     naoAtendidas?: NaoAtendidaWire[] | null;
     esperas?: EsperaMedicoWire[] | null;
     evolucaoPendente?: EvolucaoPendenteWire[] | null;
+    renovacoes?: RenovacoesPendentesResposta | null;
   },
   agora: number,
 ): ItemFila[] {
@@ -239,6 +243,23 @@ export function montarFila(
       chips: [expirada ? { rotulo: "Expirada · sem escolha", tom: "critico" as const } : { rotulo: "Aguardando médico", tom: "atencao" as const }],
       ts,
       destino: `admin-agendamentos?consulta=${encodeURIComponent(e.consultaId)}`,
+    });
+  }
+
+  // Pedidos de renovação pendentes há mais de 24 h: um item só, com a contagem.
+  // Sem paciente, remédio nem médico (LGPD): o servidor só manda ids.
+  const rn = d.renovacoes;
+  if (rn && rn.total > 0) {
+    const ts = rn.maisAntigoEm ? Date.parse(rn.maisAntigoEm) : NaN;
+    itens.push({
+      chave: "renovacoes-pendentes",
+      categoria: "renovacao",
+      tom: "atencao",
+      titulo: rn.total === 1 ? "1 renovação pendente há mais de 24 h" : `${rn.total} renovações pendentes há mais de 24 h`,
+      detalhe: "Pedidos de renovação de receita sem resposta do médico",
+      chips: [{ rotulo: `${rn.total} pendente${rn.total === 1 ? "" : "s"}`, tom: "atencao" }],
+      ...(Number.isFinite(ts) ? { ts } : {}),
+      destino: null,
     });
   }
 
@@ -370,7 +391,7 @@ export function montarFila(
 }
 
 export function contarPorCategoria(itens: ItemFila[]): Record<CategoriaFila, number> {
-  const out: Record<CategoriaFila, number> = { validacao: 0, espera_medico: 0, evolucao_pendente: 0, nao_atendida: 0, desfecho: 0, reembolso: 0, repasse: 0, chamado: 0, sistema: 0 };
+  const out: Record<CategoriaFila, number> = { validacao: 0, espera_medico: 0, evolucao_pendente: 0, nao_atendida: 0, desfecho: 0, renovacao: 0, reembolso: 0, repasse: 0, chamado: 0, sistema: 0 };
   for (const i of itens) out[i.categoria]++;
   return out;
 }

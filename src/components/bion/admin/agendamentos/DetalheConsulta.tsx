@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { CalendarX2, Gavel, Pencil } from "lucide-react";
 import { useBion } from "@/lib/bion-store";
 import { SheetAdmin } from "../ui/SheetAdmin";
@@ -12,7 +13,7 @@ import { centavosDoValor } from "../metricas";
 import { CancelarConsulta } from "./CancelarConsulta";
 import { EditarConsulta } from "./EditarConsulta";
 import { CorrigirDesfecho } from "./CorrigirDesfecho";
-import { chipsConsulta, podeCancelar } from "./agenda";
+import { ROTULO_TIPO_ATENDIMENTO, chipsConsulta, continuacoesDe, linkConsultaAdmin, podeCancelar, tipoDe } from "./agenda";
 import { desfechoNoStore, podeCorrigirDesfecho } from "./desfecho";
 
 export type ModoDetalhe = "detalhe" | "editar" | "cancelar" | "desfecho";
@@ -42,6 +43,8 @@ export function DetalheConsulta({ id, agora, modoInicial = "detalhe", onFechar }
   const titulo =
     modo === "editar" ? "Editar ou remarcar" : modo === "cancelar" ? "Cancelar consulta" : modo === "desfecho" ? "Corrigir desfecho" : (c?.paciente ?? "Consulta");
   const desfecho = c ? desfechoNoStore(c, agora) : null;
+  const origem = c?.consultaOrigemId ? consultas.find((x) => x.id === c.consultaOrigemId) : undefined;
+  const continuacoes = c ? continuacoesDe(consultas, c.id) : [];
   return (
     <SheetAdmin
       aberto={Boolean(id)}
@@ -117,6 +120,22 @@ export function DetalheConsulta({ id, agora, modoInicial = "detalhe", onFechar }
                 </dd>
               </>
             ) : null}
+            {tipoDe(c) !== "padrao" ? (
+              <>
+                <dt className="ba-texto-2">Tipo</dt>
+                <dd className="break-words">{ROTULO_TIPO_ATENDIMENTO[tipoDe(c)]}</dd>
+              </>
+            ) : null}
+            {c.consultaOrigemId ? (
+              <>
+                <dt className="ba-texto-2">Origem</dt>
+                <dd className="break-words">
+                  <Link href={linkConsultaAdmin(c.consultaOrigemId)} scroll={false} className="underline font-bold">
+                    {origem ? `${origem.especialidade} · ${dataLonga(origem.ts)} às ${horaDe(origem.ts)}` : "Abrir consulta de origem"}
+                  </Link>
+                </dd>
+              </>
+            ) : null}
             {c.motivoConsulta ? (
               <>
                 <dt className="ba-texto-2">Motivo</dt>
@@ -150,6 +169,21 @@ export function DetalheConsulta({ id, agora, modoInicial = "detalhe", onFechar }
               </>
             ) : null}
           </dl>
+
+          {continuacoes.length ? (
+            <section className="ba-card text-sm" data-denso="true" aria-label="Continuações desta consulta">
+              <h3 className="font-bold mb-2">Continuações ({continuacoes.length})</h3>
+              <ul className="space-y-1.5">
+                {continuacoes.map((f) => (
+                  <li key={f.id}>
+                    <Link href={linkConsultaAdmin(f.id)} scroll={false} className="underline">
+                      {ROTULO_TIPO_ATENDIMENTO[tipoDe(f)]} · {dataLonga(f.ts)} às {horaDe(f.ts)} · {f.medico}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
         </div>
       )}
     </SheetAdmin>
