@@ -612,8 +612,10 @@ model RepasseItem {
   repasse            Repasse             @relation(fields: [repasseId, medicoId], references: [id, medicoId], onDelete: Restrict)
   tipo               String
   chave              String              @unique
-  consultaId         String
-  consulta           Consulta            @relation(fields: [consultaId, medicoId], references: [id, medicoId], onDelete: Restrict, onUpdate: Restrict)
+  consultaId         String? // nulo só no item 'renovacao' (RepasseItem_alvo_check: exatamente um entre consultaId e pedidoRenovacaoId)
+  consulta           Consulta?           @relation(fields: [consultaId, medicoId], references: [id, medicoId], onDelete: Restrict, onUpdate: Restrict)
+  pedidoRenovacaoId  String?             @unique
+  pedidoRenovacao    PedidoRenovacao?    @relation(fields: [pedidoRenovacaoId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   remarcacaoId       String?             @unique
   remarcacao         RemarcacaoPendente? @relation(fields: [remarcacaoId, consultaId], references: [id, consultaId], onDelete: Restrict, onUpdate: Restrict)
   brutoCentavos      Int
@@ -852,6 +854,8 @@ model PedidoRenovacao {
   consulta           Consulta?  @relation("PedidoRenovacaoChamada", fields: [consultaId], references: [id], onDelete: SetNull)
   criadoEm           DateTime   @default(now()) @db.Timestamptz(3)
   respondidoEm       DateTime?  @db.Timestamptz(3)
+
+  repasseItens       RepasseItem[] // no máximo 1 (pedidoRenovacaoId @unique), item tipo renovacao (20261020b)
 
   @@index([medicoId, status, criadoEm])
   @@index([pacienteId])

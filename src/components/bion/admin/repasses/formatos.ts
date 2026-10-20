@@ -33,7 +33,7 @@ export function formatarChavePix(tipo: string | null | undefined, chave: string 
 }
 
 export const rotuloItem = (tipo: string) =>
-  tipo === "consulta" ? "Consulta" : tipo === "multa_cancelamento" ? "Multa de cancelamento" : tipo === "multa_remarcacao" ? "Multa de remarcação" : tipo;
+  tipo === "consulta" ? "Consulta" : tipo === "multa_cancelamento" ? "Multa de cancelamento" : tipo === "multa_remarcacao" ? "Multa de remarcação" : tipo === "renovacao" ? "Renovação de receita" : tipo;
 export const rotuloAjuste = (motivo: string) =>
   motivo === "reembolso" ? "Reembolso ao paciente" : motivo === "saldo_anterior" ? "Saldo de desconto anterior" : motivo;
 
