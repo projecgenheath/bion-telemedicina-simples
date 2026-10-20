@@ -1,3 +1,4 @@
+import { STATUS_RENOVACAO_ABERTOS } from "@/lib/atendimento-tipo";
 import { NextRequest } from "next/server";
 import { randomUUID } from "node:crypto";
 import { db } from "@/lib/db";
@@ -90,7 +91,7 @@ export async function POST(req: NextRequest) {
     }
 
     const duplicado = await db.pedidoRenovacao.findFirst({
-      where: { pacienteId: usuario.id, documentoId: receita.id, status: "pendente" },
+      where: { pacienteId: usuario.id, documentoId: receita.id, status: { in: [...STATUS_RENOVACAO_ABERTOS] } },
       select: { id: true },
     });
     if (duplicado) {

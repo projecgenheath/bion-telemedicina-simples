@@ -177,7 +177,7 @@ export function escolherHorarioInicial<T extends { iso: string; horarios: string
  * mensagem ou se marca uma chamada curta (aí nasce uma Consulta com
  * tipoAtendimento 'renovacao', ligada por `consultaId`).
  */
-export const STATUS_PEDIDO_RENOVACAO = ["pendente", "renovada", "chamada_marcada", "recusada", "cancelado"] as const;
+export const STATUS_PEDIDO_RENOVACAO = ["aguardando_pagamento", "pendente", "renovada", "chamada_marcada", "recusada", "cancelado"] as const;
 export type StatusPedidoRenovacao = (typeof STATUS_PEDIDO_RENOVACAO)[number];
 
 export type PedidoRenovacao = {
@@ -219,7 +219,11 @@ export function lerPedidoRenovacao(v: unknown): PedidoRenovacao | null {
   };
 }
 
+/** Status em que o pedido ainda está aberto (sem resposta; índice único parcial). */
+export const STATUS_RENOVACAO_ABERTOS = ["aguardando_pagamento", "pendente"] as const;
+
 export const ROTULO_STATUS_RENOVACAO: Record<StatusPedidoRenovacao, { texto: string; tom: "pendente" | "ok" | "info" | "erro" }> = {
+  aguardando_pagamento: { texto: "Aguardando o pagamento", tom: "pendente" },
   pendente: { texto: "Aguardando o médico", tom: "pendente" },
   renovada: { texto: "Renovada por mensagem", tom: "ok" },
   chamada_marcada: { texto: "Chamada curta marcada", tom: "info" },

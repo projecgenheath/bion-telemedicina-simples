@@ -228,6 +228,7 @@ model Pagamento {
   confirmadoEm DateTime?
 
   reembolsos Reembolso[]
+  pedidoRenovacao PedidoRenovacao? @relation("PedidoRenovacaoPagamento")
 }
 
 // Triagem (anamnese) guiada pela BION IA em formato storytelling, feita APÓS o
@@ -841,7 +842,10 @@ model PedidoRenovacao {
   documento          Documento? @relation("PedidoRenovacaoDocumento", fields: [documentoId], references: [id], onDelete: SetNull)
   documentoNovoId    String?    // receita nova, quando status = renovada
   documentoNovo      Documento? @relation("PedidoRenovacaoDocumentoNovo", fields: [documentoNovoId], references: [id], onDelete: SetNull)
-  status             String     @default("pendente") // pendente | renovada | chamada_marcada | recusada | cancelado; respondidoEm nulo só em pendente (PedidoRenovacao_respondido_check)
+  status             String     @default("pendente") // aguardando_pagamento | pendente | renovada | chamada_marcada | recusada | cancelado; respondidoEm nulo só nos abertos (aguardando_pagamento, pendente) — PedidoRenovacao_respondido_check
+  valorCentavos      Int?       // valor normal da consulta do médico, copiado no pedido (20261020a)
+  pagamentoId        String?    @unique
+  pagamento          Pagamento? @relation("PedidoRenovacaoPagamento", fields: [pagamentoId], references: [id], onDelete: SetNull)
   observacaoPaciente String?
   mensagemMedico     String?
   consultaId         String?    // chamada curta marcada pelo médico
@@ -853,7 +857,7 @@ model PedidoRenovacao {
   @@index([pacienteId])
   @@index([consultaOrigemId])
   // Índice único parcial só no SQL (o Prisma não suporta parcial):
-  // "PedidoRenovacao_pendente_unico" (pacienteId, documentoId) WHERE status = 'pendente'
-  // — um só pedido pendente por paciente e receita. Ver 20261019b.
+  // "PedidoRenovacao_aberto_unico" (pacienteId, documentoId) WHERE status IN ('aguardando_pagamento','pendente')
+  // — um só pedido aberto por paciente e receita. Ver 20261020a.
   // Também só no SQL: "PedidoRenovacao_pendente_criadoEm_idx" (criadoEm) WHERE status = 'pendente'.
 }

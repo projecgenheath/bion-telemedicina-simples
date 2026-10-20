@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { exigirPapel } from "@/lib/server/auth";
 import { aplicarSideEffects } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
-import { lerPedidoRenovacao } from "@/lib/atendimento-tipo";
+import { lerPedidoRenovacao, STATUS_RENOVACAO_ABERTOS } from "@/lib/atendimento-tipo";
 
 /**
  * Cancelamento do pedido de renovação — SÓ o paciente dono, SÓ enquanto
@@ -21,7 +21,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
     // Um único UPDATE condicional (dono + pendente).
     const r = await db.pedidoRenovacao.updateMany({
-      where: { id, pacienteId: usuario.id, status: "pendente" },
+      where: { id, pacienteId: usuario.id, status: { in: [...STATUS_RENOVACAO_ABERTOS] } },
       data: { status: "cancelado", respondidoEm: new Date() },
     });
     if (r.count !== 1) {
