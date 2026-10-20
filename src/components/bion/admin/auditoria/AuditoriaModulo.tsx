@@ -69,7 +69,7 @@ export const ICONE_CATEGORIA: Record<string, Icone> = {
 /**
  * Auditoria do admin (Torre BION): linha do tempo agrupada por dia e hora,
  * severidade visível (faixa + chip com texto), filtros (busca, severidade e
- * categoria à mão; perfil, usuário, entidade e período no sheet) e as
+ * categoria à mão; ação, perfil, usuário, entidade e período no sheet) e as
  * exportações CSV/PDF com a mesma lógica do AuditTrail antigo.
  * ?evento=ID abre o detalhe (a Fila do Centro de Comando leva direto a ele).
  * Dados: os eventos reais que o bootstrap do admin já traz (auditLogs).
@@ -202,7 +202,7 @@ export function AuditoriaModulo() {
             <EstadoVazio
               icone={FileSearch}
               titulo={auditLogs.length ? "Nenhum registro com esses filtros" : "Nenhum evento registrado ainda"}
-              texto={auditLogs.length ? "Ajuste a categoria, a severidade, o período ou a busca." : "Os eventos aparecem aqui assim que alguém usar o app."}
+              texto={auditLogs.length ? "Ajuste a categoria, a severidade, a ação, o usuário, o período ou a busca." : "Os eventos aparecem aqui assim que alguém usar o app."}
               acao={
                 algumFiltro ? (
                   <button type="button" onClick={limpar} className="ba-botao ba-botao-secundario">
@@ -228,6 +228,7 @@ export function AuditoriaModulo() {
         onFechar={() => setSheetFiltros(false)}
         filtros={filtros}
         opcoes={opcoes}
+        agora={agora}
         onAplicar={(f) => {
           mudar(f);
           setSheetFiltros(false);
@@ -303,6 +304,7 @@ function ResumoFiltros({ filtros: f, onMudar, onLimpar }: { filtros: FiltrosAudi
   if (f.busca.trim()) itens.push({ rotulo: `“${f.busca.trim()}”`, tirar: { busca: "" } });
   if (f.severidade !== "todas") itens.push({ rotulo: estadoSeveridade(f.severidade).rotulo, tirar: { severidade: "todas" } });
   if (f.categoria !== "todas") itens.push({ rotulo: rotuloCategoria(f.categoria), tirar: { categoria: "todas" } });
+  if (f.acao !== "todas") itens.push({ rotulo: `Ação: ${rotuloAcao(f.acao)}`, tirar: { acao: "todas" } });
   if (f.perfil !== "todos") itens.push({ rotulo: `Perfil: ${rotuloPerfil(f.perfil)}`, tirar: { perfil: "todos" } });
   if (f.usuario !== "todos") itens.push({ rotulo: `Usuário: ${f.usuario}`, tirar: { usuario: "todos" } });
   if (f.entidade !== "todas") itens.push({ rotulo: `Entidade: ${f.entidade}`, tirar: { entidade: "todas" } });

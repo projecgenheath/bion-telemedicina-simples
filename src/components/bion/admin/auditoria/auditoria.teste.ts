@@ -24,6 +24,8 @@ import {
   inicioDoDia,
   jsonFormatado,
   opcoesFiltro,
+  periodoRapido,
+  periodoRapidoAtivo,
   piorSeveridade,
   resumo24h,
   rotuloAcao,
@@ -85,7 +87,16 @@ igual("busca no detalhe", filtrarEventos(logs, { ...FILTROS_VAZIOS, busca: "VÍR
 igual("busca pelo id da entidade", filtrarEventos(logs, { ...FILTROS_VAZIOS, busca: "pac-1" }).map((l) => l.id), ["l1"]);
 igual("filtros ativos (busca não conta)", filtrosAtivos({ ...FILTROS_VAZIOS, busca: "x", severidade: "warning", de: "2026-10-01", entidade: "medico" }), 3);
 igual("contar por severidade", contarPor(logs, "severidade"), { critical: 2, warning: 1, info: 2 });
-igual("opções do filtro", opcoesFiltro(logs), { usuarios: ["Admin Fictício", "BION IA", "Dra. Exemplo", "Paciente Fictício"], entidades: ["consulta", "llm", "paciente", "repasse"] });
+igual("opções do filtro", opcoesFiltro(logs), { usuarios: ["Admin Fictício", "BION IA", "Dra. Exemplo", "Paciente Fictício"], entidades: ["consulta", "llm", "paciente", "repasse"], acoes: ["ACESSO_NEGADO", "CONSULTA_CANCELADA", "Editou o valor da consulta", "LGPD_DADOS_EXCLUIDOS", "LLM_TURNO"] });
+igual("ação (código exato)", filtrarEventos(logs, { ...FILTROS_VAZIOS, acao: "CONSULTA_CANCELADA" }).map((l) => l.id), ["l2"]);
+igual("ação + usuário + período", filtrarEventos(logs, { ...FILTROS_VAZIOS, acao: "LGPD_DADOS_EXCLUIDOS", usuario: "Admin Fictício", de: "2026-10-05", ate: "2026-10-05" }).map((l) => l.id), ["l1"]);
+igual("ação conta como filtro ativo", filtrosAtivos({ ...FILTROS_VAZIOS, acao: "LLM_TURNO" }), 1);
+igual("período rápido: hoje", periodoRapido("hoje", agora), { de: "2026-10-06", ate: "2026-10-06" });
+igual("período rápido: 7 dias", periodoRapido("7d", agora), { de: "2026-09-30", ate: "2026-10-06" });
+igual("período rápido: 30 dias", periodoRapido("30d", agora), { de: "2026-09-07", ate: "2026-10-06" });
+igual("período rápido às 23:30 de SP ainda é o dia de SP", periodoRapido("hoje", sp("2026-10-05T23:30:00")), { de: "2026-10-05", ate: "2026-10-05" });
+igual("atalho ativo reconhecido", [periodoRapidoAtivo({ de: "2026-09-30", ate: "2026-10-06" }, agora), periodoRapidoAtivo({ de: "2026-10-01", ate: "" }, agora)], ["7d", null]);
+igual("7 dias pega o evento do dia 01", filtrarEventos(logs, { ...FILTROS_VAZIOS, ...periodoRapido("7d", agora) }).length, 5);
 igual("resumo 24 h", resumo24h(logs, agora), { criticos: 1, avisos: 1, total: 4 });
 igual("entidadeDe", entidadeDe({ entidade: " Repasse" }), "repasse");
 
