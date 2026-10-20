@@ -21,10 +21,10 @@
 --
 -- Deny-by-default como as demais tabelas: RLS ligado, sem políticas, e
 -- nenhum privilégio para anon/authenticated (só o servidor, via Prisma).
--- Idempotente (IF NOT EXISTS / duplicate_object), numa transação só.
+-- Idempotente (IF NOT EXISTS / duplicate_object); sem BEGIN/COMMIT, pois o
+-- apply_migration roda sem transação explícita. Não toca na
+-- "PedidoMedicao_status_check" (criada na 20261019b, #64).
 -- =====================================================================
-
-BEGIN;
 
 -- ---------------------------------------------------------------------
 -- 1) MedicamentoEmUso
@@ -124,8 +124,6 @@ ALTER TABLE public."MedicamentoEmUso" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public."PedidoMedicao"    ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON TABLE public."MedicamentoEmUso" FROM anon, authenticated;
 REVOKE ALL ON TABLE public."PedidoMedicao"    FROM anon, authenticated;
-
-COMMIT;
 
 -- Verificação:
 --   SELECT relname, relrowsecurity FROM pg_class
