@@ -547,6 +547,8 @@ export async function decidirReembolsoManual(params: {
 // próximo, pelo mecanismo de sempre.
 
 export const PRAZO_ESCOLHA_CORRECAO_DIAS_UTEIS = 7;
+/** 7 dias úteis contados do dia seguinte nunca vencem antes de 9 dias corridos (filtro do cron). */
+export const DIAS_CORRIDOS_MINIMOS_ESCOLHA = 9;
 
 /** Até quando o paciente pode escolher depois da correção feita em `corrigidoEm`. */
 export function prazoEscolhaCorrecao(corrigidoEm: Date): Date {
@@ -566,28 +568,36 @@ export const MOTIVO_CANCELAMENTO_PRAZO_ESCOLHA =
  * correção venceu. Idempotente (updateMany com status no where e o índice de
  * um reembolso ativo por pagamento). Roda no cron da espera do médico.
  */
+/** Notificação do vencimento do prazo. Sem reembolso (valor 0, retorno grátis): cancelada sem custo. (PURA) */
+export function textoVencimentoEscolha(especialidade: string, quando: string, comReembolso: boolean): { titulo: string; texto: string } {
+  const base = `O prazo para escolher entre remarcar e o reembolso da consulta de ${especialidade} de ${quando} terminou.`;
+  return comReembolso
+    ? { titulo: "Reembolso automático", texto: `${base} O reembolso integral foi aprovado automaticamente, sem custo para você.` }
+    : { titulo: "Consulta cancelada", texto: `${base} A consulta foi cancelada sem custo, e o seu direito ao retorno grátis volta.` };
+}
+
 export async function vencerEscolhasCorrecao(agora: Date = new Date()): Promise<{ vencidas: number; reembolsadas: number }> {
-  const candidatas = await db.consulta.findMany({
+  // 7 dias úteis a partir do dia seguinte são sempre mais de 9 dias corridos:
+  // o banco já descarta o que não pode ter vencido. Mais antigos primeiro.
+  const limite = new Date(agora.getTime() - DIAS_CORRIDOS_MINIMOS_ESCOLHA * 86_400_000);
+  const eventos = await db.eventoConsulta.findMany({
     where: {
-      status: "aguardando_reagendamento",
-      pago: true,
-      eventos: { some: { tipo: "falha_tecnica", por: "admin", ...EVENTO_VIGENTE } },
+      tipo: "falha_tecnica",
+      por: { in: ["admin", "sistema"] },
+      ...EVENTO_VIGENTE,
+      em: { lte: limite },
+      consulta: { status: "aguardando_reagendamento", pago: true },
     },
     select: {
-      id: true,
-      medicoId: true,
-      pacienteId: true,
-      especialidade: true,
-      dataInicio: true,
-      valor: true,
-      eventos: {
-        where: { tipo: "falha_tecnica", por: "admin", ...EVENTO_VIGENTE },
-        select: { em: true, motivo: true, dataAnterior: true },
-        orderBy: { em: "desc" },
-      },
+      em: true,
+      motivo: true,
+      dataAnterior: true,
+      consulta: { select: { id: true, medicoId: true, pacienteId: true, especialidade: true, dataInicio: true, valor: true } },
     },
-    take: 200,
+    orderBy: { em: "asc" },
+    take: 50,
   });
+  const candidatas = eventos.map((e) => ({ ...e.consulta, eventos: [{ em: e.em, motivo: e.motivo, dataAnterior: e.dataAnterior }] }));
   let vencidas = 0;
   let reembolsadas = 0;
   for (const c of candidatas) {
@@ -621,8 +631,7 @@ export async function vencerEscolhasCorrecao(agora: Date = new Date()): Promise<
         data: {
           usuarioId: c.pacienteId,
           tipo: "agenda",
-          titulo: "Reembolso automático",
-          texto: `O prazo para escolher entre remarcar e o reembolso da consulta de ${c.especialidade} de ${quandoClinica(c.dataInicio, { day: "2-digit", month: "2-digit" })} terminou. Fizemos o reembolso integral por PIX, sem custo para você.`,
+          ...textoVencimentoEscolha(c.especialidade, quandoClinica(c.dataInicio, { day: "2-digit", month: "2-digit" }), !!reembolso),
         },
       });
       await tx.auditLog.create({

@@ -79,10 +79,45 @@ igual("30/10 00:00 venceu", f.escolhaCorrecaoVencida(CORRIGIDO, new Date("2026-1
   igual("já remarcou: nada", await estado(c.id), { status: "confirmada", reembolsos: [] });
 }
 {
+  // Falha técnica marcada pelo sistema (presenca-consulta): mesmo prazo, contado do dia seguinte à falha.
   const c = await cenario({ por: "sistema" });
-  await f.vencerEscolhasCorrecao(new Date("2026-11-02T10:00:00-03:00"));
-  igual("falha sem correção do admin: fora desta regra", await estado(c.id), { status: "aguardando_reagendamento", reembolsos: [] });
+  await f.vencerEscolhasCorrecao(new Date("2026-10-29T23:59:00-03:00"));
+  igual("falha do sistema: dentro do prazo nada muda", await estado(c.id), { status: "aguardando_reagendamento", reembolsos: [] });
+  await f.vencerEscolhasCorrecao(new Date("2026-10-30T00:01:00-03:00"));
+  igual("falha do sistema: venceu, reembolso integral", await estado(c.id), {
+    status: "cancelada",
+    reembolsos: [{ status: "aprovado", valorCentavos: 15000, multaCentavos: 0, motivo: "falha_tecnica" }],
+  });
 }
+{
+  // Falha marcada pelo médico continua fora (não é desta regra).
+  const c = await cenario({ por: "medico" });
+  await f.vencerEscolhasCorrecao(new Date("2026-11-03T10:00:00-03:00"));
+  igual("falha marcada pelo médico: fora", await estado(c.id), { status: "aguardando_reagendamento", reembolsos: [] });
+}
+{
+  // Retorno grátis: valor 0, sem Pagamento. Cancela sem custo, sem reembolso, texto certo.
+  const pac = await usuario("PACIENTE");
+  const med = await usuario("MEDICO");
+  const c = await db.consulta.create({ data: { pacienteId: pac.id, medicoId: med.id, especialidade: "Clínica", dataInicio: DATA, status: "aguardando_reagendamento", valor: 0, pago: true } });
+  await db.eventoConsulta.create({ data: { consultaId: c.id, tipo: "falha_tecnica", por: "sistema", em: CORRIGIDO, dataAnterior: DATA, motivo: "falha_tecnica", multaCentavos: 0 } });
+  await f.vencerEscolhasCorrecao(new Date("2026-10-30T00:01:00-03:00"));
+  igual("retorno grátis: cancelada sem reembolso", await estado(c.id), { status: "cancelada", reembolsos: [] });
+  const n = await db.notificacao.findFirst({ where: { usuarioId: pac.id }, select: { titulo: true, texto: true } });
+  igual("retorno grátis: título", n?.titulo, "Consulta cancelada");
+  igual("retorno grátis: direito volta", /retorno grátis volta/.test(n?.texto ?? ""), true);
+  igual("retorno grátis: sem PIX/reembolso no texto", /PIX|Fizemos o reembolso/.test(n?.texto ?? ""), false);
+}
+{
+  // Filtro do banco: menos de 9 dias corridos desde o evento não entra.
+  const c = await cenario({ por: "sistema" });
+  await db.eventoConsulta.updateMany({ where: { consultaId: c.id }, data: { em: new Date("2026-10-25T10:00:00-03:00") } });
+  await f.vencerEscolhasCorrecao(new Date("2026-11-02T10:00:00-03:00"));
+  igual("evento com menos de 9 dias corridos: fora", (await estado(c.id)).status, "aguardando_reagendamento");
+}
+// Puro: texto do vencimento.
+igual("texto com reembolso não fala em PIX", /PIX/.test(f.textoVencimentoEscolha("Clínica", "19/10", true).texto), false);
+igual("prazo da falha de sex 13/11: 16..19, (20/11), 23, 24, 25 → fim de qua 25/11", f.prazoEscolhaCorrecao(new Date("2026-11-13T15:00:00-03:00")).toISOString(), "2026-11-26T02:59:59.999Z");
 {
   const c = await cenario({ corrigidoEm: new Date("2026-10-21T10:00:00-03:00") });
   await f.vencerEscolhasCorrecao(new Date("2026-11-02T10:00:00-03:00"));
