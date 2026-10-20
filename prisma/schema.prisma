@@ -219,8 +219,8 @@ model Consulta {
 // demonstração. status: pendente | confirmado | falhou.
 model Pagamento {
   id           String    @id @default(cuid())
-  consultaId   String    @unique
-  consulta     Consulta  @relation(fields: [consultaId], references: [id], onDelete: Cascade)
+  consultaId   String?   @unique // nulo só na renovação por mensagem: aí o vínculo é PedidoRenovacao.pagamentoId (20261020b)
+  consulta     Consulta? @relation(fields: [consultaId], references: [id], onDelete: Cascade)
   valor        Float
   metodo       String    @default("pix") // pix | cartao
   status       String    @default("pendente") // pendente | confirmado | falhou

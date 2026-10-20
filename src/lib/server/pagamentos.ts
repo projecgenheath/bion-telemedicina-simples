@@ -17,7 +17,7 @@ export type MetodoPagamento = "pix" | "cartao";
 
 export type PagamentoWire = {
   id: string;
-  consultaId: string;
+  consultaId: string | null;
   valor: number;
   metodo: string;
   status: string;
@@ -63,15 +63,22 @@ export async function confirmarPagamento(pagamentoId: string, via: "webhook" | "
   });
   if (!p) return null;
   if (p.status === "confirmado") return p; // reentrega do webhook: no-op
+  const marcar = db.pagamento.update({
+    where: { id: p.id },
+    data: { status: "confirmado", via, confirmadoEm: new Date() },
+  });
+  if (!p.consulta || !p.consultaId) {
+    // Pagamento sem consulta (renovação só por mensagem, 20261020b): o vínculo
+    // é PedidoRenovacao.pagamentoId; o webhook avança o pedido depois.
+    await marcar;
+    return db.pagamento.findUnique({ where: { id: p.id } });
+  }
   const statusConsulta: "confirmada" | undefined =
     p.consulta.status === "em_espera" || p.consulta.status === "pendente_anamnese"
       ? "confirmada"
       : undefined;
   await db.$transaction([
-    db.pagamento.update({
-      where: { id: p.id },
-      data: { status: "confirmado", via, confirmadoEm: new Date() },
-    }),
+    marcar,
     db.consulta.update({
       where: { id: p.consultaId },
       data: { pago: true, ...(statusConsulta ? { status: statusConsulta } : {}) },
@@ -89,7 +96,7 @@ export async function falharPagamento(pagamentoId: string, via: "webhook" | "sim
 
 export function paraWire(p: {
   id: string;
-  consultaId: string;
+  consultaId: string | null;
   valor: number;
   metodo: string;
   status: string;

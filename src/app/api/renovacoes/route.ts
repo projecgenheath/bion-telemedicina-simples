@@ -1,3 +1,5 @@
+import { confirmarPagamento, modoGateway } from "@/lib/server/pagamentos";
+import { confirmarPagamentoRenovacao, criarCobrancaRenovacao } from "@/lib/server/renovacao-pagamento";
 import { STATUS_RENOVACAO_ABERTOS } from "@/lib/atendimento-tipo";
 import { NextRequest } from "next/server";
 import { randomUUID } from "node:crypto";
@@ -98,18 +100,22 @@ export async function POST(req: NextRequest) {
       return Response.json({ erro: "Você já pediu a renovação desta receita. Aguarde o médico." }, { status: 409 });
     }
     let criado;
+    let pagamentoId: string;
     try {
-      criado = await db.pedidoRenovacao.create({
-        data: {
+      // Cobra o valor normal da consulta do médico já no pedido (aguardando_pagamento);
+      // o webhook (confirmarPagamentoRenovacao) leva para "pendente".
+      const r = await db.$transaction((tx) =>
+        criarCobrancaRenovacao(tx, {
           id: randomUUID(),
           pacienteId: usuario.id,
           medicoId: receita.medicoId,
           consultaOrigemId: origemId,
           documentoId: receita.id,
-          status: "pendente",
-          observacaoPaciente: corpo.observacaoPaciente,
-        },
-      });
+          observacaoPaciente: corpo.observacaoPaciente ?? null,
+        }),
+      );
+      criado = r.pedido;
+      pagamentoId = r.pagamento.id;
     } catch (e) {
       // Corrida: o índice único parcial (pacienteId, documentoId) WHERE
       // status='pendente' segura o segundo pedido.
@@ -117,6 +123,14 @@ export async function POST(req: NextRequest) {
         return Response.json({ erro: "Você já pediu a renovação desta receita. Aguarde o médico." }, { status: 409 });
       }
       throw e;
+    }
+    // Demonstração: o gateway simulado confirma no servidor, como no agendar.
+    if (modoGateway() === "simulado") {
+      const pg = await confirmarPagamento(pagamentoId, "simulado");
+      if (pg?.status === "confirmado") {
+        await db.$transaction((tx) => confirmarPagamentoRenovacao(pagamentoId, tx));
+        criado = (await db.pedidoRenovacao.findUnique({ where: { id: criado.id } })) ?? criado;
+      }
     }
     const pedido = lerPedidoRenovacao(criado);
     if (!pedido) {
@@ -141,7 +155,7 @@ export async function POST(req: NextRequest) {
         detalhes: `pedidoId=${pedido.id} documentoId=${receita.id} pacienteId=${receita.pacienteId}`,
       },
     );
-    return ok({ disponivel: true, pedido, ...efeitos });
+    return ok({ disponivel: true, pedido, cobranca: { pagamentoId, valorCentavos: criado.valorCentavos ?? 0, status: criado.status === "aguardando_pagamento" ? "pendente" : "confirmado", pixCopiaECola: null, qrCodeBase64: null }, ...efeitos });
   } catch (erro) {
     return falha(erro);
   }

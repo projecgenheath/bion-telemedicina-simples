@@ -490,7 +490,7 @@ export async function confirmarRemarcacaoEspera(pagamentoId: string, agora: Date
     await tx.$queryRaw`SELECT "id" FROM "EsperaMedico" WHERE "id" = ${esperaId} FOR UPDATE`;
     const p = await tx.pagamento.findUnique({ where: { id: pagamentoId } });
     const espera = await tx.esperaMedico.findUnique({ where: { id: esperaId } });
-    if (!p || !espera || p.status !== "confirmado" || p.valor <= 0) return null;
+    if (!p || !p.consultaId || !espera || p.status !== "confirmado" || p.valor <= 0) return null;
     if (espera.status === "remarcada" && espera.consultaNovaId === p.consultaId) return "ja_remarcada" as const;
     if (espera.status === "remarcando" && espera.consultaNovaId === p.consultaId) {
       const antiga = await tx.consulta.findUnique({ where: { id: espera.consultaId }, select: { id: true, dataInicio: true } });
