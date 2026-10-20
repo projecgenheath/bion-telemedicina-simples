@@ -18,6 +18,7 @@ import {
   podeRenovarReceita,
   receitaControlada,
   rotuloTipoAtendimento,
+  statusAposFalhaDoMedico,
 } from "./atendimento-tipo";
 
 let ok = 0;
@@ -106,6 +107,11 @@ eq("grátis ativo: usou", jaUsouRetornoGratis([{ status: "confirmada", valor: 0 
 eq("grátis concluído: usou", jaUsouRetornoGratis([{ status: "concluida", valor: 0 }]), true);
 eq("grátis cancelado: devolve", jaUsouRetornoGratis([{ status: "cancelada", valor: 0 }]), false);
 eq("só retorno pago: não usou", jaUsouRetornoGratis([{ status: "confirmada", valor: 150 }]), false);
+eq("médico falha, paga: aguarda", statusAposFalhaDoMedico({ pago: true, valor: 150 }), "aguardando_reagendamento");
+eq("médico falha, grátis: cancela", statusAposFalhaDoMedico({ pago: true, valor: 0 }), "cancelada");
+eq("médico falha, não paga: cancela", statusAposFalhaDoMedico({ pago: false, valor: 150 }), "cancelada");
+eq("valor Decimal-like 0", statusAposFalhaDoMedico({ pago: true, valor: { toString: () => "0.00" } }), "cancelada");
+eq("grátis cancelado pelo médico devolve o direito", jaUsouRetornoGratis([{ status: statusAposFalhaDoMedico({ pago: true, valor: 0 }), valor: 0 }]), false);
 
 console.log(`atendimento-tipo: ${ok} ok, ${falhas} falha(s)`);
 if (falhas) process.exit(1);

@@ -291,6 +291,17 @@ export function jaUsouRetornoGratis(retornos: { status: string; valor: number }[
   return retornos.some((r) => r.valor === 0 && !(STATUS_DEVOLVEM_RETORNO_GRATIS as readonly string[]).includes(r.status));
 }
 
+/**
+ * Status depois que o médico cancela ou falha (falta/falha técnica).
+ * Só a consulta paga e com valor fica aguardando reagendamento; o retorno
+ * grátis (valor 0) vai direto para "cancelada", sem reembolso, e devolve o
+ * direito ao retorno grátis.
+ */
+export function statusAposFalhaDoMedico(consulta: { pago: boolean; valor: number | { toString(): string } }):
+  "aguardando_reagendamento" | "cancelada" {
+  return consulta.pago && Number(consulta.valor) > 0 ? "aguardando_reagendamento" : "cancelada";
+}
+
 /** O retorno marcado para `retornoInicio` é grátis? */
 export function retornoEhGratis(origemInicio: Date | string, retornoInicio: Date | string, jaUsou: boolean): boolean {
   if (jaUsou) return false;
