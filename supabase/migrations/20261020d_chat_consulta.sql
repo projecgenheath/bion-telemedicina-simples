@@ -25,6 +25,6 @@ CREATE INDEX IF NOT EXISTS "ChatConsulta_consultaId_criadoEm_idx" ON public."Cha
 
 ALTER TABLE public."ChatConsulta" DROP CONSTRAINT IF EXISTS "ChatConsulta_consultaId_fkey";
 ALTER TABLE public."ChatConsulta" ADD CONSTRAINT "ChatConsulta_consultaId_fkey"
-  FOREIGN KEY ("consultaId") REFERENCES public."Consulta"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+  FOREIGN KEY ("consultaId") REFERENCES public."Consulta"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 ALTER TABLE public."ChatConsulta" ENABLE ROW LEVEL SECURITY;

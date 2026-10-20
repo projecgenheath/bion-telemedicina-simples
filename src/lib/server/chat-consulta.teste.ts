@@ -225,6 +225,17 @@ async function banco() {
     1,
   );
 
+  // FK Restrict: o chat é prontuário, então apagar a consulta com chat falha.
+  let apagou = true;
+  try {
+    await db.consulta.delete({ where: { id: c.id } });
+  } catch {
+    apagou = false;
+  }
+  igual("Restrict: consulta com chat não é apagada", apagou, false);
+
+  await db.chatConsulta.deleteMany({ where: { consultaId: c.id } });
+  await db.sinalSala.deleteMany({ where: { consultaId: c.id } });
   await db.consulta.delete({ where: { id: c.id } });
   await db.user.deleteMany({ where: { id: { in: [pac.id, med.id] } } });
   await db.$disconnect();
