@@ -60,6 +60,7 @@ export type FiltrosAuditoria = {
   categoria: "todas" | AuditCategoria;
   perfil: string; // "todos" | role
   severidade: "todas" | AuditSeveridade;
+  acao: string; // "todas" | código da ação (como gravado)
   usuario: string; // "todos" | nome
   entidade: string; // "todas" | entidade (minúsculas)
   de: string; // AAAA-MM-DD (dia no fuso da clínica) ou ""
@@ -71,6 +72,7 @@ export const FILTROS_VAZIOS: FiltrosAuditoria = {
   categoria: "todas",
   perfil: "todos",
   severidade: "todas",
+  acao: "todas",
   usuario: "todos",
   entidade: "todas",
   de: "",
@@ -112,6 +114,7 @@ export function filtrarEventos(logs: AuditLog[], f: FiltrosAuditoria): AuditLog[
       if (f.categoria !== "todas" && l.categoria !== f.categoria) return false;
       if (f.perfil !== "todos" && l.role !== f.perfil) return false;
       if (f.severidade !== "todas" && l.severidade !== f.severidade) return false;
+      if (f.acao !== "todas" && l.acao !== f.acao) return false;
       if (f.usuario !== "todos" && l.usuario !== f.usuario) return false;
       if (f.entidade !== "todas" && entidadeDe(l) !== f.entidade) return false;
       if (Number.isFinite(de) && l.ts < de) return false;
@@ -128,6 +131,7 @@ export function filtrosAtivos(f: FiltrosAuditoria): number {
     Number(f.categoria !== "todas") +
     Number(f.perfil !== "todos") +
     Number(f.severidade !== "todas") +
+    Number(f.acao !== "todas") +
     Number(f.usuario !== "todos") +
     Number(f.entidade !== "todas") +
     Number(Boolean(f.de)) +
@@ -143,10 +147,36 @@ export function contarPor<K extends "categoria" | "severidade">(logs: AuditLog[]
 }
 
 /** Valores distintos (ordenados) para os seletores do filtro. */
-export function opcoesFiltro(logs: AuditLog[]): { usuarios: string[]; entidades: string[] } {
+export function opcoesFiltro(logs: AuditLog[]): { usuarios: string[]; entidades: string[]; acoes: string[] } {
+  const acoes = [...new Set(logs.map((l) => l.acao).filter(Boolean))].sort((a, b) => rotuloAcao(a).localeCompare(rotuloAcao(b), "pt-BR"));
   const usuarios = [...new Set(logs.map((l) => l.usuario).filter(Boolean))].sort((a, b) => a.localeCompare(b, "pt-BR"));
   const entidades = [...new Set(logs.map(entidadeDe).filter(Boolean))].sort((a, b) => a.localeCompare(b, "pt-BR"));
-  return { usuarios, entidades };
+  return { usuarios, entidades, acoes };
+}
+
+export type PeriodoRapido = "hoje" | "7d" | "30d";
+export const PERIODOS_RAPIDOS: { k: PeriodoRapido; label: string }[] = [
+  { k: "hoje", label: "Hoje" },
+  { k: "7d", label: "7 dias" },
+  { k: "30d", label: "30 dias" },
+];
+
+/** Atalho de período ("de"/"ate" em AAAA-MM-DD no fuso da clínica), contando o dia de hoje. */
+export function periodoRapido(k: PeriodoRapido, agora: number): { de: string; ate: string } {
+  const dias = k === "hoje" ? 1 : k === "7d" ? 7 : 30;
+  const ate = chaveDia(agora);
+  // Meio-dia evita erro de borda em troca de horário.
+  const hojeMeioDia = inicioDoDia(ate) + 12 * 3_600_000;
+  return { de: chaveDia(hojeMeioDia - (dias - 1) * 86_400_000), ate };
+}
+
+/** Qual atalho corresponde ao período atual (ou null). */
+export function periodoRapidoAtivo(f: Pick<FiltrosAuditoria, "de" | "ate">, agora: number): PeriodoRapido | null {
+  for (const p of PERIODOS_RAPIDOS) {
+    const r = periodoRapido(p.k, agora);
+    if (r.de === f.de && r.ate === f.ate) return p.k;
+  }
+  return null;
 }
 
 /** Resumo das últimas 24 h (para o cabeçalho e o selo do trilho). */

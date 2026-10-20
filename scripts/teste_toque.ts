@@ -67,6 +67,7 @@ async function limpar() {
   await db.pushInscricao.deleteMany();
   await db.presencaSala.deleteMany();
   await db.eventoConsulta.deleteMany();
+  await db.chatConsulta.deleteMany(); // FK Restrict: o chat vai antes da Consulta
   await db.consulta.deleteMany();
   await db.user.deleteMany();
 }

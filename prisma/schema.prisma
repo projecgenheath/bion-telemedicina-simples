@@ -195,6 +195,7 @@ model Consulta {
 
   // Telemedicina WebRTC (Fase 2)
   sinaisSala    SinalSala[]
+  chatGuardado  ChatConsulta[]
   presencasSala PresencaSala[]
 
   // Anamnese conduzida pela BION IA (uma por consulta)
@@ -274,6 +275,25 @@ model SinalSala {
   consumido   Boolean  @default(false)
 
   @@index([consultaId, consumido, createdAt])
+}
+
+// Chat da teleconsulta guardado com a consulta (decisão do Alisson, 20/10/2026:
+// faz parte do prontuário, CFM 20 anos; nunca é apagado pela limpeza da sala).
+// Cópia das linhas tipo "chat" da SinalSala (lib/server/chat-consulta.ts);
+// sinalId = id do sinal original (UNIQUE: copiar duas vezes não duplica).
+// Só o médico e o paciente da consulta leem (lib/chat-consulta-acesso.ts);
+// o admin nunca recebe o conteúdo.
+model ChatConsulta {
+  id         String   @id @default(cuid())
+  sinalId    String   @unique
+  consultaId String
+  consulta   Consulta @relation(fields: [consultaId], references: [id], onDelete: Restrict)
+  autorId    String
+  papel      String // PACIENTE | MEDICO
+  texto      String
+  criadoEm   DateTime
+
+  @@index([consultaId, criadoEm])
 }
 
 // Presença em tempo real na sala: heartbeat a cada ciclo de polling (~1,5s).

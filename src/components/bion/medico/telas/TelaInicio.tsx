@@ -2,6 +2,7 @@
 
 import { CalendarClock, CalendarDays, ChevronDown, Info, RefreshCw, Video, XCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { AvisoAtivarToque } from "@/components/bion/AvisoAtivarToque";
 import { partesFusoClinica } from "@/lib/bion-tipos";
 import { ContagemRegressiva } from "../ContagemRegressiva";
 import { iniciais, reservaVigente, ROTULO_STATUS, salaAberta, saudacao, textoReservaPendente } from "../metricas";
@@ -52,6 +53,9 @@ export function TelaInicio({
           )}
         </button>
       </header>
+
+      {/* Toque da consulta no celular do médico (some sem permissão pendente). */}
+      <AvisoAtivarToque role={sessao.role} usuarioId={sessao.id} className="mt-4" />
 
       <div className="mt-6 mb-5">
         <h1 id="bm-t1-titulo" className="text-3xl font-black leading-tight">

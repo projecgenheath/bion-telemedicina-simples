@@ -31,7 +31,7 @@ const MEDICOS_INICIAIS = 8;
 
 /**
  * Privacidade & LGPD do admin no visual Torre BION. Mesmas funções do
- * PrivacidadeAdmin (fica sem uso, não apagado): panorama, dados por paciente
+ * antigo PrivacidadeAdmin (apagado): panorama, dados por paciente
  * (sempre por id, GET /api/admin/lgpd), anonimizar e anonimizar+arquivar
  * (POST, irreversíveis, confirmação digitada), busca no cofre com motivo
  * (POST /api/admin/lgpd/cofre/busca) e dados de médicos. Novo (dados que

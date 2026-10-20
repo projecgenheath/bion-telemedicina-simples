@@ -15,6 +15,7 @@ import {
 } from "@/lib/server/bloqueio-agenda";
 import { REEMBOLSO_MANUAL_PRAZO_DIAS, parseDataHora, prazoReembolsoManual } from "@/lib/server/dados";
 import { fimDoPrazoEmDiasUteis } from "@/lib/server/dias-uteis";
+import { statusAposFalhaDoMedico } from "@/lib/atendimento-tipo";
 
 /* ------------------------------------------------------------------ */
 /* Fase financeira: regras ÚNICAS de multa, reembolso e repasse.       */
@@ -363,7 +364,7 @@ export async function aplicarFalhaTecnica(
   const atorId = por === "sistema" ? null : (opcoes.atorId ?? null);
   const consulta = await tx.consulta.findUnique({
     where: { id: consultaId },
-    select: { id: true, status: true, pago: true, dataInicio: true },
+    select: { id: true, status: true, pago: true, valor: true, dataInicio: true },
   });
   if (!consulta) return null;
   const jaTem = await tx.eventoConsulta.findFirst({
@@ -376,7 +377,7 @@ export async function aplicarFalhaTecnica(
     select: { id: true },
   });
   if (jaTem) return null;
-  const novoStatus = consulta.pago ? "aguardando_reagendamento" : "cancelada";
+  const novoStatus = statusAposFalhaDoMedico(consulta);
   const motivoTexto =
     motivo === "falta_medico" ? "O médico não compareceu à consulta" : "Falha técnica: a consulta não aconteceu";
   // Atômico: se outra requisição encerrou a consulta no meio, não faz nada.

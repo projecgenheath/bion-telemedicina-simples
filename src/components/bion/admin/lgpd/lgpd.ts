@@ -1,6 +1,6 @@
 /**
  * Regras puras de Privacidade & LGPD do admin (Torre BION). Nada de React.
- * Mesmas regras do PrivacidadeAdmin (que fica sem uso, não apagado):
+ * Mesmas regras do antigo PrivacidadeAdmin (apagado):
  * lista SEMPRE por id do paciente, confirmação pelos 6 últimos caracteres
  * do id, cofre só com motivo (5–300) — e datas sempre no fuso da clínica.
  * Testes: lgpd.teste.ts (também com TZ=UTC e TZ=Asia/Tokyo).

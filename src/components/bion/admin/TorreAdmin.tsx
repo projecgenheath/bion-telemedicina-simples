@@ -92,7 +92,10 @@ function TorreInterna({ children }: { children: ReactNode }) {
     view === "llm-monitor" ||
     view === "relatorios" ||
     view === "suporte" ||
-    view === "privacidade";
+    view === "privacidade" ||
+    view === "notificacoes" ||
+    view === "lembretes" ||
+    view === "ajuda";
   const info = view ? MODULOS[view] : undefined;
   const contagem = contarPorCategoria(fila);
   const criticos24h = auditLogs.filter((l) => l.severidade === "critical" && agora - l.ts <= 86_400_000).length;

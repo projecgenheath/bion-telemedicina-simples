@@ -1,5 +1,6 @@
 import "server-only";
 import { db } from "@/lib/db";
+import { guardarChatSala, guardarChatSalaSemFalhar } from "@/lib/server/chat-consulta";
 import { quandoClinica } from "@/lib/server/fuso";
 import { aplicarFalhaTecnica, prazoEscolhaCorrecao, registrarEvento } from "@/lib/server/financeiro";
 import { REEMBOLSO_MANUAL_PRAZO_DIAS } from "@/lib/server/dados";
@@ -206,73 +207,86 @@ export async function gravarDesfecho(
   autor: AutorDesfecho = { por: "sistema" },
 ): Promise<{ tipo: Desfecho; status: string } | null> {
   try {
-    return await db.$transaction(async (tx) => {
-      const { count } = await tx.consulta.updateMany({
-        where: { id: c.id, status: c.status, updatedAt: c.updatedAt },
-        data: { status: c.status },
-      });
-      if (count === 0) throw new SemAlteracao();
-      // Só conta desfecho vigente da data ATUAL (corrigidoEm nulo; depois de
-      // remarcação o evento da data antiga não bloqueia).
-      const jaTem = await tx.eventoConsulta.findFirst({
-        where: {
-          consultaId: c.id,
-          tipo: { in: TIPOS_DESFECHO },
-          corrigidoEm: null,
-          dataAnterior: c.dataInicio,
-        },
-        select: { id: true },
-      });
-      if (jaTem) throw new SemAlteracao();
-
-      const atorId = autor.por === "medico" ? autor.id : null;
-      let status = c.status;
-      if (tipo === "falta_paciente") {
-        await registrarEvento(tx, {
-          consultaId: c.id,
-          tipo: "falta_paciente",
-          por: autor.por,
-          atorId,
-          dataAnterior: c.dataInicio,
-          motivo: "falta_paciente",
-          multaCentavos: 0,
-        });
-        await tx.notificacao.create({
-          data: {
-            tipo: "agenda",
-            titulo: "Falta registrada",
-            texto: `Você não entrou na sala da consulta de ${c.especialidade} (${quandoClinica(c.dataInicio)}). Se teve um imprevisto, peça o reembolso pelo app em até ${REEMBOLSO_MANUAL_PRAZO_DIAS} dias.`,
-            usuarioId: c.pacienteId,
-          },
-        });
-      } else {
-        const faltaMedico = tipo === "falta_medico";
-        const r = await aplicarFalhaTecnica(tx, c.id, {
-          motivo: faltaMedico ? "falta_medico" : "falha_tecnica",
-          ...(autor.por === "medico" ? { por: "medico" as const, atorId } : { por: "sistema" as const }),
-        });
-        if (!r) throw new SemAlteracao();
-        status = r.status;
-        const causa = faltaMedico ? "porque o médico não entrou na sala" : "por falha técnica";
-        await tx.notificacao.create({
-          data: {
-            tipo: "agenda",
-            titulo: faltaMedico ? "O médico não compareceu" : "Falha técnica na consulta",
-            texto:
-              r.status === "aguardando_reagendamento"
-                ? `A consulta de ${c.especialidade} (${quandoClinica(c.dataInicio)}) não pôde acontecer ${causa}. ${autor.por === "sistema" ? `Escolha no app até ${quandoClinica(prazoEscolhaCorrecao(r.evento.em))}: remarcar sem custo ou reembolso integral. Se você não escolher até lá, a consulta é cancelada com reembolso integral automático.` : "Escolha no app: remarcar sem custo ou reembolso integral."}`
-                : `A consulta de ${c.especialidade} (${quandoClinica(c.dataInicio)}) não pôde acontecer ${causa} e foi cancelada, sem custo.`,
-            usuarioId: c.pacienteId,
-          },
-        });
-      }
-      await tx.auditLog.create({ data: dadosAudit(c, tipo, motivo, autor) });
-      return { tipo, status };
-    });
+    const r = await gravarDesfechoTx(c, tipo, motivo, autor);
+    // Chat da sala guardado com a consulta assim que o desfecho é gravado
+    // (vale para o sistema e para o médico, que chama esta mesma função).
+    await guardarChatSalaSemFalhar(c.id);
+    return r;
   } catch (e) {
     if (e instanceof SemAlteracao) return null;
     throw e;
   }
+}
+
+function gravarDesfechoTx(
+  c: ConsultaAvaliada,
+  tipo: Desfecho,
+  motivo: string,
+  autor: AutorDesfecho,
+): Promise<{ tipo: Desfecho; status: string }> {
+  return db.$transaction(async (tx) => {
+    const { count } = await tx.consulta.updateMany({
+      where: { id: c.id, status: c.status, updatedAt: c.updatedAt },
+      data: { status: c.status },
+    });
+    if (count === 0) throw new SemAlteracao();
+    // Só conta desfecho vigente da data ATUAL (corrigidoEm nulo; depois de
+    // remarcação o evento da data antiga não bloqueia).
+    const jaTem = await tx.eventoConsulta.findFirst({
+      where: {
+        consultaId: c.id,
+        tipo: { in: TIPOS_DESFECHO },
+        corrigidoEm: null,
+        dataAnterior: c.dataInicio,
+      },
+      select: { id: true },
+    });
+    if (jaTem) throw new SemAlteracao();
+
+    const atorId = autor.por === "medico" ? autor.id : null;
+    let status = c.status;
+    if (tipo === "falta_paciente") {
+      await registrarEvento(tx, {
+        consultaId: c.id,
+        tipo: "falta_paciente",
+        por: autor.por,
+        atorId,
+        dataAnterior: c.dataInicio,
+        motivo: "falta_paciente",
+        multaCentavos: 0,
+      });
+      await tx.notificacao.create({
+        data: {
+          tipo: "agenda",
+          titulo: "Falta registrada",
+          texto: `Você não entrou na sala da consulta de ${c.especialidade} (${quandoClinica(c.dataInicio)}). Se teve um imprevisto, peça o reembolso pelo app em até ${REEMBOLSO_MANUAL_PRAZO_DIAS} dias.`,
+          usuarioId: c.pacienteId,
+        },
+      });
+    } else {
+      const faltaMedico = tipo === "falta_medico";
+      const r = await aplicarFalhaTecnica(tx, c.id, {
+        motivo: faltaMedico ? "falta_medico" : "falha_tecnica",
+        ...(autor.por === "medico" ? { por: "medico" as const, atorId } : { por: "sistema" as const }),
+      });
+      if (!r) throw new SemAlteracao();
+      status = r.status;
+      const causa = faltaMedico ? "porque o médico não entrou na sala" : "por falha técnica";
+      await tx.notificacao.create({
+        data: {
+          tipo: "agenda",
+          titulo: faltaMedico ? "O médico não compareceu" : "Falha técnica na consulta",
+          texto:
+            r.status === "aguardando_reagendamento"
+              ? `A consulta de ${c.especialidade} (${quandoClinica(c.dataInicio)}) não pôde acontecer ${causa}. ${autor.por === "sistema" ? `Escolha no app até ${quandoClinica(prazoEscolhaCorrecao(r.evento.em))}: remarcar sem custo ou reembolso integral. Se você não escolher até lá, a consulta é cancelada com reembolso integral automático.` : "Escolha no app: remarcar sem custo ou reembolso integral."}`
+              : `A consulta de ${c.especialidade} (${quandoClinica(c.dataInicio)}) não pôde acontecer ${causa} e foi cancelada, sem custo.`,
+          usuarioId: c.pacienteId,
+        },
+      });
+    }
+    await tx.auditLog.create({ data: dadosAudit(c, tipo, motivo, autor) });
+    return { tipo, status };
+  });
 }
 
 /** Grava (se for o caso) o evento da classificação automática. */
@@ -492,7 +506,8 @@ export async function consultaTemDesfecho(consultaId: string): Promise<boolean> 
 }
 
 /**
- * Limpeza da sala: apaga sinais já consumidos com mais de 30 min. Enquanto a
+ * Limpeza da sala: guarda o chat em ChatConsulta (lib/server/chat-consulta.ts)
+ * e depois apaga sinais já consumidos com mais de 30 min. Enquanto a
  * consulta NÃO tem desfecho, guarda a presença (prova da espera / da entrada
  * do paciente) e o sinal de controle "encerrada" (a classificação automática
  * usa os dois). Com desfecho, também apaga as presenças paradas há mais de 1 h.
@@ -500,12 +515,19 @@ export async function consultaTemDesfecho(consultaId: string): Promise<boolean> 
 export async function limparSala(consultaId: string, agora: Date = new Date()) {
   const temDesfecho = await consultaTemDesfecho(consultaId);
   const t = agora.getTime();
+  // Chat é prontuário (decisão do Alisson): copia para ChatConsulta ANTES de
+  // apagar, e a limpeza só apaga chat cujo id já está guardado. Se a cópia
+  // falhar, a exceção sobe e nada é apagado.
+  const chatGuardado = await guardarChatSala(consultaId);
   await db.sinalSala.deleteMany({
     where: {
       consultaId,
       consumido: true,
       createdAt: { lt: new Date(t - 30 * 60 * 1000) },
-      ...(temDesfecho ? {} : { NOT: { tipo: "controle", payload: { contains: '"encerrada"' } } }),
+      AND: [
+        temDesfecho ? {} : { NOT: { tipo: "controle", payload: { contains: '"encerrada"' } } },
+        { OR: [{ tipo: { not: "chat" } }, { id: { in: [...chatGuardado] } }] },
+      ],
     },
   });
   if (temDesfecho) {

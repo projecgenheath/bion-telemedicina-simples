@@ -2,7 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import { SheetAdmin } from "../ui/SheetAdmin";
-import { CATEGORIAS, FILTROS_VAZIOS, PERFIS, SEVERIDADES, type FiltrosAuditoria } from "./trilha";
+import { CATEGORIAS, FILTROS_VAZIOS, PERFIS, PERIODOS_RAPIDOS, SEVERIDADES, periodoRapido, periodoRapidoAtivo, rotuloAcao, type FiltrosAuditoria } from "./trilha";
 
 /**
  * Filtros da Auditoria em sheet (vaul): categoria, severidade, perfil,
@@ -14,12 +14,14 @@ export function FiltrosAuditoriaSheet({
   onFechar,
   filtros,
   opcoes,
+  agora,
   onAplicar,
 }: {
   aberto: boolean;
   onFechar: () => void;
   filtros: FiltrosAuditoria;
-  opcoes: { usuarios: string[]; entidades: string[] };
+  opcoes: { usuarios: string[]; entidades: string[]; acoes: string[] };
+  agora: number;
   onAplicar: (f: Partial<FiltrosAuditoria>) => void;
 }) {
   const [rascunho, setRascunho] = useState(filtros);
@@ -31,6 +33,7 @@ export function FiltrosAuditoriaSheet({
   }
   const m = (f: Partial<FiltrosAuditoria>) => setRascunho((x) => ({ ...x, ...f }));
   const periodoInvalido = Boolean(rascunho.de && rascunho.ate && rascunho.de > rascunho.ate);
+  const atalho = periodoRapidoAtivo(rascunho, agora);
 
   return (
     <SheetAdmin
@@ -75,6 +78,14 @@ export function FiltrosAuditoriaSheet({
             </option>
           ))}
         </Seletor>
+        <Seletor id="fa-acao" rotulo="Ação" valor={rascunho.acao} onMudar={(v) => m({ acao: v })}>
+          <option value="todas">Todas</option>
+          {opcoes.acoes.map((a) => (
+            <option key={a} value={a}>
+              {rotuloAcao(a)}
+            </option>
+          ))}
+        </Seletor>
         <Seletor id="fa-perfil" rotulo="Perfil" valor={rascunho.perfil} onMudar={(v) => m({ perfil: v })}>
           <option value="todos">Todos</option>
           {PERFIS.map((p) => (
@@ -100,7 +111,19 @@ export function FiltrosAuditoriaSheet({
             </option>
           ))}
         </Seletor>
-        <div className="hidden sm:block" aria-hidden />
+        <div role="group" aria-label="Período rápido" className="sm:col-span-2 flex flex-wrap gap-1.5">
+          {PERIODOS_RAPIDOS.map((p) => (
+            <button
+              key={p.k}
+              type="button"
+              className="ba-filtro"
+              aria-pressed={atalho === p.k}
+              onClick={() => m(atalho === p.k ? { de: "", ate: "" } : periodoRapido(p.k, agora))}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
         <div>
           <label htmlFor="fa-de" className="ba-rotulo block">
             De

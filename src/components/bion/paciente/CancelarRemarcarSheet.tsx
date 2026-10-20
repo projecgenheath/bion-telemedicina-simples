@@ -11,6 +11,7 @@ import { fmtHora, type Consulta, type Medico } from "@/lib/bion-tipos";
 import { agendaLivreDoMedico } from "./agenda-medico";
 import { useDiasBloqueados } from "./useDiasBloqueados";
 import { fraseMotivoReagendamento } from "./motivo-reagendamento";
+import { previaTemReembolso } from "./reembolso-visivel";
 import { fmtCentavos, usePreviaCancelamento, type PreviaAcao, type PreviaCancelamento } from "./usePreviaCancelamento";
 import {
   STATUS_TERMINAIS,
@@ -563,7 +564,7 @@ function BlocoPrevia({
     return (
       <div className="mt-4 rounded-2xl border border-emerald-400/25 bg-emerald-500/10 p-4 text-sm">
         <p className="font-bold text-emerald-900 dark:text-emerald-100">Sem multa. {fraseMotivoReagendamento(motivoReagendamento)}.</p>
-        {acao !== "remarcar" && p.pago ? (
+        {acao !== "remarcar" && previaTemReembolso(p) ? (
           <p className="bpp-sheet-suave mt-1">
             Reembolso integral: <strong className="bpp-sheet-forte">{fmtCentavos(p.reembolsoCentavos)}</strong>. O reembolso é automático, sem necessidade de aprovação.
           </p>
@@ -599,7 +600,7 @@ function BlocoPrevia({
         <p className="bpp-sheet-suave mt-1">
           Cancelamentos feitos com {janelaHoras} h ou menos de antecedência têm multa. O prazo sem multa terminou em {p.semMultaAteTexto}.
         </p>
-        {acao === "cancelar" && p.pago ? (
+        {acao === "cancelar" && previaTemReembolso(p) ? (
           <p className="bpp-sheet-suave mt-2">
             Valor a ser reembolsado: <strong className="bpp-sheet-forte">{fmtCentavos(p.reembolsoCentavos)}</strong> de {fmtCentavos(p.valorCentavos)}.
           </p>
@@ -616,7 +617,7 @@ function BlocoPrevia({
           {acao === "remarcar" ? "Remarque" : "Cancele"} sem multa até {p.semMultaAteTexto} (horário de Brasília). Depois disso, a multa é de {multaPct}% do valor.
         </p>
       ) : null}
-      {acao === "cancelar" ? (
+      {acao === "cancelar" && p.valorCentavos > 0 ? (
         p.pago ? (
           <p className="bpp-sheet-suave mt-2">
             Reembolso integral: <strong className="bpp-sheet-forte">{fmtCentavos(p.reembolsoCentavos)}</strong>, automático.

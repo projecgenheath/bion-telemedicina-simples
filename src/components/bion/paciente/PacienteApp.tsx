@@ -33,6 +33,7 @@ import { CancelarRemarcarSheet, type AcaoSheet } from "./CancelarRemarcarSheet";
 import { fmtCentavos, rotuloReembolso, usePreviaCancelamento } from "./usePreviaCancelamento";
 import { desistirRemarcacao, iniciarRemarcacaoComMulta, useRecarregarEstado } from "./useRemarcacaoComMulta";
 import { EtiquetaStatus, PedirReembolsoSheet } from "./PedirReembolsoSheet";
+import { consultaTemReembolso } from "./reembolso-visivel";
 import { GraficoLinha, type PontoGrafico } from "./GraficoLinha";
 import { EtiquetaTipo } from "./tipo-atendimento-ui";
 import { CLASSE_ETIQUETA, etiquetaConsulta, type EtiquetaConsulta } from "./etiqueta-consulta";
@@ -319,7 +320,7 @@ export function PacienteApp() {
   const canceladasComPagamento = useMemo(() => {
     const limite = Date.now() - 60 * 86_400_000;
     return consultas
-      .filter((c) => c.paciente === sessao.nome && c.status === "cancelada" && c.pago && c.ts >= limite)
+      .filter((c) => c.paciente === sessao.nome && c.status === "cancelada" && c.pago && consultaTemReembolso(c) && c.ts >= limite)
       .sort((a, b) => b.ts - a.ts)
       .slice(0, 3);
   }, [consultas, sessao.nome]);
@@ -1037,8 +1038,9 @@ function CardAguardandoReagendamento({
   onRemarcar: () => void;
   onReembolso: () => void;
 }) {
+  const comReembolso = consultaTemReembolso(consulta);
   return (
-    <div className="bp-glass p-5 w-full mb-3 border border-amber-500/40" role="group" aria-label={`Consulta de ${consulta.especialidade}: ${rotuloMotivoReagendamento(consulta.motivoReagendamento)}. Escolha remarcar ou reembolso integral`}>
+    <div className="bp-glass p-5 w-full mb-3 border border-amber-500/40" role="group" aria-label={`Consulta de ${consulta.especialidade}: ${rotuloMotivoReagendamento(consulta.motivoReagendamento)}. ${comReembolso ? "Escolha remarcar ou reembolso integral" : "Escolha um novo horário"}`}>
       <div className="flex items-center justify-between mb-3">
         <span className="text-xs font-bold uppercase tracking-wider text-bion-ink/75 dark:text-bion-paper/75">Ação necessária</span>
         <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-amber-500/15 text-amber-800 dark:text-amber-200">
@@ -1051,7 +1053,7 @@ function CardAguardandoReagendamento({
         <CalendarClock className="w-4 h-4" /> {consulta.data} · {consulta.hora}
       </div>
       <p className="text-sm mt-3 leading-relaxed">
-        {fraseMotivoReagendamento(consulta.motivoReagendamento)}. Escolha remarcar ou reembolso integral, <strong className="font-bold">sem multa</strong>.
+        {fraseMotivoReagendamento(consulta.motivoReagendamento)}. {comReembolso ? "Escolha remarcar ou reembolso integral" : "Escolha um novo horário"}, <strong className="font-bold">sem multa</strong>.
       </p>
       <div className="mt-4 flex flex-wrap gap-2">
         <button
@@ -1061,7 +1063,7 @@ function CardAguardandoReagendamento({
         >
           <RefreshCw className="w-4 h-4" aria-hidden /> Remarcar sem multa
         </button>
-        {consulta.pago !== false ? (
+        {comReembolso ? (
           <button
             type="button"
             onClick={onReembolso}
@@ -1175,6 +1177,8 @@ function CardFalta({ consulta, onAbrir }: { consulta: Consulta; onAbrir: () => v
   const prazoAberto = !!prazo && Date.now() < new Date(prazo).getTime();
   // Sem pedido e fora do prazo: nada a fazer — o card some.
   if (!pedido && !prazoAberto) return null;
+  // Retorno grátis (valor 0): não há o que reembolsar.
+  if (!pedido && !consultaTemReembolso(consulta)) return null;
 
   return (
     <div className="bp-glass mt-3 w-full px-5 py-4" role="group" aria-label={`Falta na consulta de ${consulta.especialidade}`}>
