@@ -4,7 +4,7 @@
  */
 import {
   calcularDiferenca, calcularExpiraEm, conferirDiferencaEsperada, lerPedidoRemarcar,
-  segundosRestantes, statusEfetivo, transicaoPermitida, STATUS_ESPERA,
+  segundosRestantes, statusEfetivo, RESERVA_DIFERENCA_MIN, transicaoPermitida, STATUS_ESPERA,
 } from "./espera-medico-logica";
 
 let ok = 0;
@@ -42,6 +42,14 @@ igual("expirada → medico_entrou", transicaoPermitida("expirada", "medico_entro
 for (const f of ["medico_entrou", "cancelada", "remarcada"] as const)
   for (const p of STATUS_ESPERA) igual(`${f} é final (${p})`, transicaoPermitida(f, p), false);
 igual("cancelada → remarcada (idempotência não deixa trocar)", transicaoPermitida("cancelada", "remarcada"), false);
+
+igual("expirada → remarcando", transicaoPermitida("expirada", "remarcando"), true);
+igual("remarcando → remarcada (pagou)", transicaoPermitida("remarcando", "remarcada"), true);
+igual("remarcando → expirada (venceu/desistiu)", transicaoPermitida("remarcando", "expirada"), true);
+igual("remarcando → cancelada (proibido: desistir antes)", transicaoPermitida("remarcando", "cancelada"), false);
+igual("remarcando → medico_entrou (proibido)", transicaoPermitida("remarcando", "medico_entrou"), false);
+igual("aguardando → remarcando (proibido)", transicaoPermitida("aguardando", "remarcando"), false);
+igual("reserva da diferença = 10 min", RESERVA_DIFERENCA_MIN, 10);
 
 // diferença
 igual("novo mais caro: cobra", calcularDiferenca(15000, 20000), { valorAntigoCentavos: 15000, valorNovoCentavos: 20000, diferencaCentavos: 5000, acao: "cobrar" });

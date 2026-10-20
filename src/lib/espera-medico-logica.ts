@@ -11,8 +11,10 @@
  */
 
 export const ESPERA_MEDICO_MIN = 10;
+/** Reserva da consulta nova enquanto o paciente paga a diferença (10 min, combinado no grupo; a do #13 é 15). */
+export const RESERVA_DIFERENCA_MIN = 10;
 
-export const STATUS_ESPERA = ["aguardando", "medico_entrou", "expirada", "cancelada", "remarcada"] as const;
+export const STATUS_ESPERA = ["aguardando", "medico_entrou", "expirada", "remarcando", "cancelada", "remarcada"] as const;
 export type StatusEspera = (typeof STATUS_ESPERA)[number];
 /** Status finais: a espera tem desfecho. */
 export const STATUS_ESPERA_FINAIS: StatusEspera[] = ["medico_entrou", "cancelada", "remarcada"];
@@ -37,7 +39,10 @@ export function segundosRestantes(expiraEm: Date, agora: Date): number {
 const TRANSICOES: Record<StatusEspera, StatusEspera[]> = {
   aguardando: ["medico_entrou", "expirada"],
   // O médico ainda pode entrar enquanto o paciente não escolheu.
-  expirada: ["medico_entrou", "cancelada", "remarcada"],
+  // remarcando: médico mais caro, esperando o pagamento da diferença.
+  expirada: ["medico_entrou", "cancelada", "remarcada", "remarcando"],
+  // Pago → remarcada; reserva de 15 min venceu → volta para expirada.
+  remarcando: ["remarcada", "expirada"],
   medico_entrou: [],
   cancelada: [],
   remarcada: [],

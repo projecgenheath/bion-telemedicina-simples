@@ -51,8 +51,9 @@ async function cenario(valorAntigo = 150) {
   const e2 = await m.abrirEspera(c.id, new Date());
   igual("abrir idempotente", e1?.id, e2?.id);
   igual("expiraEm = entrada + 10", e1?.expiraEm.toISOString(), new Date(entrada.getTime() + 10 * 60_000).toISOString());
-  igual("fechar medico_entrou", await m.fecharEsperaMedicoEntrou(c.id, AGORA), true);
-  igual("fechar de novo é no-op", await m.fecharEsperaMedicoEntrou(c.id, AGORA), false);
+  igual("fechar medico_entrou", await m.fecharEsperaMedicoEntrou(c.id, AGORA), { resultado: "fechada" });
+  igual("fechar de novo é no-op", await m.fecharEsperaMedicoEntrou(c.id, AGORA), { resultado: "ja_fechada" });
+  igual("fechar sem espera", await m.fecharEsperaMedicoEntrou("nao-existe", AGORA), { resultado: "ja_fechada" });
 }
 
 // --- chamada dupla simultânea e uso dentro de $transaction
@@ -63,7 +64,7 @@ async function cenario(valorAntigo = 150) {
   igual("abrir simultâneo: mesma espera", new Set([a?.id, b?.id, d?.id]).size, 1);
   igual("abrir simultâneo: uma linha", await db.esperaMedico.count({ where: { consultaId: c.id } }), 1);
   const [f1, f2] = await Promise.all([m.fecharEsperaMedicoEntrou(c.id, AGORA), m.fecharEsperaMedicoEntrou(c.id, AGORA)]);
-  igual("fechar simultâneo: só um fecha", [f1, f2].filter(Boolean).length, 1);
+  igual("fechar simultâneo: um fechada, outro ja_fechada", [f1.resultado, f2.resultado].sort(), ["fechada", "ja_fechada"]);
 }
 {
   const { c } = await cenario();
@@ -72,7 +73,7 @@ async function cenario(valorAntigo = 150) {
     const e1 = await m.abrirEspera(c.id, entrada, tx);
     const e2 = await m.abrirEspera(c.id, entrada, tx); // repetir na mesma tx não aborta
     const fechou = await m.fecharEsperaMedicoEntrou(c.id, AGORA, tx);
-    return { mesma: e1?.id === e2?.id, fechou };
+    return { mesma: e1?.id === e2?.id, fechou: fechou.resultado === "fechada" };
   });
   igual("dentro de $transaction", r, { mesma: true, fechou: true });
   igual("tx commitou medico_entrou", (await db.esperaMedico.findUnique({ where: { consultaId: c.id } }))?.status, "medico_entrou");
@@ -88,7 +89,8 @@ async function cenario(valorAntigo = 150) {
   const { pac, c } = await cenario();
   await m.abrirEspera(c.id, new Date(AGORA.getTime() - 15 * 60_000));
   await m.cancelarPorEspera({ consultaId: c.id, pacienteId: pac.id, agora: AGORA });
-  igual("fechar depois de cancelada não muda", await m.fecharEsperaMedicoEntrou(c.id, AGORA), false);
+  igual("fechar depois de cancelada → espera_encerrada", await m.fecharEsperaMedicoEntrou(c.id, AGORA), { resultado: "espera_encerrada", desfecho: "cancelada" });
+  igual("esperaEncerrada cancelada", await m.esperaEncerrada(c.id), "cancelada");
   igual("continua cancelada", (await db.esperaMedico.findUnique({ where: { consultaId: c.id } }))?.status, "cancelada");
 }
 
@@ -143,15 +145,88 @@ async function cenario(valorAntigo = 150) {
   const audit = await db.auditLog.findFirst({ where: { entidadeId: c.id, acao: "ESPERA_MEDICO_REMARCADA" } });
   igual("auditoria só com ids", audit?.detalhes?.includes("Clínica") || audit?.detalhes?.includes("120"), false);
 }
-{
+// --- médico mais caro: remarcando até pagar (gateway por webhook, sem simulado)
+process.env.BION_PAGAMENTO_WEBHOOK_SECRET = "teste-local";
+const ANTES = AGORA.getTime();
+async function remarcandoCaro() {
   const { pac, c } = await cenario(150);
-  await m.abrirEspera(c.id, new Date(AGORA.getTime() - 15 * 60_000));
+  await m.abrirEspera(c.id, new Date(ANTES - 15 * 60_000));
   const caro = await medico(200);
-  const r = await m.remarcarPorEspera({ consultaId: c.id, pacienteId: pac.id, medicoId: caro.id, diferencaEsperadaCentavos: 5000, agora: new Date(AGORA.getTime() + 60_000) });
-  const nova = r.ok ? await db.consulta.findUnique({ where: { id: r.consultaNovaId! }, include: { pagamento: true } }) : null;
-  igual("mais caro: cobra só a diferença", r.ok ? [r.cobranca?.valorCentavos, nova?.pagamento?.valor] : null, [5000, 50]);
-  igual("sem reembolso no mais caro", await db.reembolso.count({ where: { pagamento: { consultaId: c.id } } }), 0);
+  const r = await m.remarcarPorEspera({ consultaId: c.id, pacienteId: pac.id, medicoId: caro.id, diferencaEsperadaCentavos: 5000, agora: new Date(ANTES + 60_000) });
+  if (!r.ok || !r.cobranca) throw new Error("remarcar caro falhou");
+  return { pac, c, caro, r, cobranca: r.cobranca };
 }
+const confirmarNoGateway = (id: string) => db.pagamento.update({ where: { id }, data: { status: "confirmado", confirmadoEm: new Date() } }).then(() => db.consulta.updateMany({ where: { pagamento: { id }, status: "em_espera" }, data: { status: "confirmada", pago: true } }));
+{
+  const { pac, c, caro, r, cobranca } = await remarcandoCaro();
+  const e = await db.esperaMedico.findUnique({ where: { consultaId: c.id } });
+  igual("caro: espera remarcando com reserva de 10 min", [e?.status, e?.reservaExpiraEm?.toISOString()], ["remarcando", new Date(ANTES + 11 * 60_000).toISOString()]);
+  igual("caro: antiga continua valendo", (await db.consulta.findUnique({ where: { id: c.id } }))?.status, "confirmada");
+  const nova = await db.consulta.findUnique({ where: { id: r.consultaNovaId! }, include: { pagamento: true } });
+  igual("caro: nova em_espera, cobra só a diferença", [nova?.status, nova?.pagamento?.valor, cobranca.valorCentavos], ["em_espera", 50, 5000]);
+  igual("caro: cancelar enquanto remarcando → 409", await m.cancelarPorEspera({ consultaId: c.id, pacienteId: pac.id, agora: new Date(ANTES + 2 * 60_000) }).then((x) => (x.ok ? null : x.erro)), "remarcando");
+  igual("caro: médico entrando → espera_encerrada remarcando", await m.fecharEsperaMedicoEntrou(c.id), { resultado: "espera_encerrada", desfecho: "remarcando" });
+  const rep2 = await m.remarcarPorEspera({ consultaId: c.id, pacienteId: pac.id, medicoId: caro.id, diferencaEsperadaCentavos: 5000, agora: new Date(ANTES + 2 * 60_000) });
+  igual("caro: repetir devolve a mesma cobrança", rep2.ok && rep2.jaProcessada && rep2.cobranca?.pagamentoId === cobranca.pagamentoId, true);
+  await confirmarNoGateway(cobranca.pagamentoId);
+  igual("caro: webhook troca", await m.confirmarRemarcacaoEspera(cobranca.pagamentoId), "remarcada");
+  igual("caro: webhook repetido idempotente", await m.confirmarRemarcacaoEspera(cobranca.pagamentoId), "ja_remarcada");
+  igual("caro: antiga cancelada depois do pagamento", (await db.consulta.findUnique({ where: { id: c.id } }))?.status, "cancelada");
+  igual("caro: espera remarcada", (await db.esperaMedico.findUnique({ where: { consultaId: c.id } }))?.status, "remarcada");
+  igual("caro: sem reembolso", await db.reembolso.count({ where: { pagamento: { consultaId: { in: [c.id, r.consultaNovaId!] } } } }), 0);
+}
+{
+  // Reserva vence sem pagar: cron cancela cobrança e nova; espera volta; paciente cancela com reembolso integral.
+  const { pac, c, r, cobranca } = await remarcandoCaro();
+  const job = await m.rodarEsperaMedico(new Date(ANTES + 12 * 60_000));
+  igual("vence: cron expira a reserva", job.reservasExpiradas >= 1, true);
+  const nova = await db.consulta.findUnique({ where: { id: r.consultaNovaId! }, include: { pagamento: true } });
+  igual("vence: nova cancelada, cobrança falhou", [nova?.status, nova?.pagamento?.status], ["cancelada", "falhou"]);
+  const e = await db.esperaMedico.findUnique({ where: { consultaId: c.id } });
+  igual("vence: espera volta para expirada", [e?.status, e?.consultaNovaId, e?.reservaExpiraEm], ["expirada", null, null]);
+  const canc = await m.cancelarPorEspera({ consultaId: c.id, pacienteId: pac.id, agora: new Date(ANTES + 13 * 60_000) });
+  igual("vence: pode cancelar com reembolso integral", canc.ok, true);
+  igual("vence: reembolso integral da antiga", (await db.reembolso.findMany({ where: { pagamento: { consultaId: c.id } } })).map((x) => x.valorCentavos), [15000]);
+  // PIX atrasado: chega depois de a reserva vencer → reembolsa esse pagamento.
+  await confirmarNoGateway(cobranca.pagamentoId);
+  igual("atrasado: reembolsa", await m.confirmarRemarcacaoEspera(cobranca.pagamentoId), "reembolsada");
+  igual("atrasado: reembolso da diferença", (await db.reembolso.findMany({ where: { pagamentoId: cobranca.pagamentoId } })).map((x) => x.valorCentavos), [5000]);
+  igual("atrasado: nova segue cancelada", (await db.consulta.findUnique({ where: { id: r.consultaNovaId! } }))?.status, "cancelada");
+  igual("atrasado: repetir não duplica", (await m.confirmarRemarcacaoEspera(cobranca.pagamentoId), await db.reembolso.count({ where: { pagamentoId: cobranca.pagamentoId } })), 1);
+}
+{
+  // Desistir: cobrança e nova canceladas, médico liberado, pode remarcar de novo.
+  const { pac, c, caro, r, cobranca } = await remarcandoCaro();
+  const d1 = await m.desistirRemarcacao({ consultaId: c.id, pacienteId: pac.id, agora: new Date(ANTES + 3 * 60_000) });
+  const d2 = await m.desistirRemarcacao({ consultaId: c.id, pacienteId: pac.id, agora: new Date(ANTES + 3 * 60_000) });
+  igual("desistir ok e idempotente", [d1.ok && !d1.jaProcessada, d2.ok && d2.jaProcessada], [true, true]);
+  const nova = await db.consulta.findUnique({ where: { id: r.consultaNovaId! }, include: { pagamento: true } });
+  igual("desistir: nova cancelada e cobrança falhou", [nova?.status, nova?.pagamento?.status], ["cancelada", "falhou"]);
+  igual("desistir: espera expirada", (await db.esperaMedico.findUnique({ where: { consultaId: c.id } }))?.status, "expirada");
+  const de2 = await m.remarcarPorEspera({ consultaId: c.id, pacienteId: pac.id, medicoId: caro.id, diferencaEsperadaCentavos: 5000, agora: new Date(ANTES + 4 * 60_000) });
+  igual("desistir: médico volta a estar livre (remarca de novo)", de2.ok && !de2.jaProcessada && de2.consultaNovaId !== r.consultaNovaId, true);
+  const outro = await usuario("PACIENTE");
+  igual("desistir de outro paciente → 403", await m.desistirRemarcacao({ consultaId: c.id, pacienteId: outro.id }).then((x) => (x.ok ? 200 : x.status)), 403);
+  void cobranca;
+}
+{
+  // Pagou no limite: cron vê confirmado e troca em vez de expirar.
+  const { c, cobranca } = await remarcandoCaro();
+  await confirmarNoGateway(cobranca.pagamentoId);
+  const job = await m.rodarEsperaMedico(new Date(ANTES + 12 * 60_000));
+  igual("limite: cron troca", [job.remarcadasNoJob >= 1, (await db.esperaMedico.findUnique({ where: { consultaId: c.id } }))?.status], [true, "remarcada"]);
+}
+{
+  // O médico atendeu antes da escolha: 409 medico_entrou e a espera fecha.
+  const { pac, med, c } = await cenario(150);
+  await m.abrirEspera(c.id, new Date(ANTES - 15 * 60_000));
+  await db.chamadaConsulta.create({ data: { consultaId: c.id, tentativa: 1, paraUsuarioId: med.id, papel: "medico", status: "atendida", expiraEm: new Date(ANTES), respondidaEm: new Date(ANTES - 60_000) } });
+  const r = await m.cancelarPorEspera({ consultaId: c.id, pacienteId: pac.id, agora: new Date(ANTES + 60_000) });
+  igual("medico_entrou → 409", r.ok ? null : [r.status, r.erro], [409, "medico_entrou"]);
+  igual("medico_entrou: espera fechada e consulta segue", [(await db.esperaMedico.findUnique({ where: { consultaId: c.id } }))?.status, (await db.consulta.findUnique({ where: { id: c.id } }))?.status], ["medico_entrou", "confirmada"]);
+  igual("medico_entrou: sem reembolso", await db.reembolso.count({ where: { pagamento: { consultaId: c.id } } }), 0);
+}
+delete process.env.BION_PAGAMENTO_WEBHOOK_SECRET;
 
 // --- job: expira as aguardando vencidas
 {

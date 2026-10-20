@@ -863,7 +863,8 @@ model PedidoRenovacao {
 // Admin: espera do médico (paciente na sala, médico ainda não entrou).
 // Migração: supabase/migrations/20261019c_espera_medico.sql (CHECKs, índice
 // parcial em expiraEm WHERE status='aguardando', RLS). Uma por consulta.
-// status: aguardando | medico_entrou | expirada | cancelada | remarcada.
+// status: aguardando | medico_entrou | expirada | remarcando | cancelada | remarcada.
+// remarcando: esperando o pagamento da diferença até reservaExpiraEm (15 min).
 // diferencaCentavos = valorNovo − valorAntigo (> 0 paciente paga; < 0 recebe).
 model EsperaMedico {
   id                  String    @id @default(cuid())
@@ -878,6 +879,7 @@ model EsperaMedico {
   valorNovoCentavos   Int?
   diferencaCentavos   Int?
   reembolsoId         String?
+  reservaExpiraEm     DateTime?
   criadoEm            DateTime  @default(now())
   resolvidoEm         DateTime?
 

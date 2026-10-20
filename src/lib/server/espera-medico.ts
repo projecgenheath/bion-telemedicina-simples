@@ -14,6 +14,7 @@ import {
 import { confirmarPagamento, modoGateway } from "@/lib/server/pagamentos";
 import {
   calcularDiferenca,
+  RESERVA_DIFERENCA_MIN,
   calcularExpiraEm,
   conferirDiferencaEsperada,
   segundosRestantes,
@@ -34,9 +35,13 @@ import {
 /*    e ganha um Pagamento próprio, então o repasse vai ao médico novo:  */
 /*      diferença 0  → Pagamento novo de R$ 0, "confirmado" (crédito);   */
 /*      diferença <0 → idem + Reembolso parcial do Pagamento ANTIGO;     */
-/*      diferença >0 → cobrança pendente SÓ da diferença (Pagamento    */
-/*                     e consulta "em_espera" até o gateway confirmar     */
-/*                     (confirmarPagamento a confirma, como no agendar).  */
+/*      diferença >0 → espera "remarcando": a antiga continua valendo,  */
+/*                     a nova fica "em_espera" (reservada 10 min) com   */
+/*                     cobrança pendente SÓ da diferença. Pago (webhook */
+/*                     → confirmarRemarcacaoEspera): cancela a antiga e */
+/*                     marca remarcada. Venceu/desistiu: cobrança e     */
+/*                     nova canceladas, espera volta a "expirada". PIX  */
+/*                     atrasado: reembolso desse pagamento.             */
 /*    Assim o app recebe o valor novo no total e o repasse do médico novo */
 /*    sai de liquidoDaConsulta(valor novo), sem mexer em repasse.ts.      */
 /*  - AuditLog só com ids e tipos (sem dado de saúde, nome ou valor).     */
@@ -61,7 +66,8 @@ export function esperaWire(e: NonNullable<EsperaRow>, agora: Date = new Date()) 
     status,
     iniciadaEm: e.iniciadaEm.toISOString(),
     expiraEm: e.expiraEm.toISOString(),
-    segundosRestantes: status === "aguardando" ? segundosRestantes(e.expiraEm, agora) : 0,
+    segundosRestantes: status === "aguardando" ? segundosRestantes(e.expiraEm, agora) : status === "remarcando" && e.reservaExpiraEm ? segundosRestantes(e.reservaExpiraEm, agora) : 0,
+    reservaExpiraEm: e.reservaExpiraEm?.toISOString() ?? null,
     podeEscolher: status === "expirada",
     consultaNovaId: e.consultaNovaId,
     diferencaCentavos: e.diferencaCentavos,
@@ -115,23 +121,41 @@ export async function abrirEspera(consultaId: string, atendidaPacienteEm: Date, 
   return tx.esperaMedico.findUnique({ where: { consultaId } });
 }
 
+export type DesfechoEspera = "cancelada" | "remarcada" | "remarcando";
+export type ResultadoFechar =
+  | { resultado: "fechada" }
+  | { resultado: "ja_fechada" }
+  | { resultado: "espera_encerrada"; desfecho: DesfechoEspera };
+
 /**
  * O médico atendeu: fecha como medico_entrou SÓ se a espera ainda está
- * `aguardando` ou `expirada` (expirada = o paciente ainda não escolheu;
- * escolher grava `cancelada`/`remarcada`). Idempotente (updateMany
+ * `aguardando` ou `expirada` sem escolha do paciente. Idempotente (updateMany
  * condicional). `tx` opcional, padrão `db`.
+ *  - fechada: esta chamada fechou;
+ *  - ja_fechada: já estava medico_entrou, ou a consulta não tem espera;
+ *  - espera_encerrada: o paciente já escolheu (cancelada/remarcada) ou está
+ *    pagando a diferença (remarcando) → a rota de entrada do médico responde
+ *    409 `espera_encerrada`.
  */
-export async function fecharEsperaMedicoEntrou(consultaId: string, em: Date = new Date(), tx: Cliente = db) {
+export async function fecharEsperaMedicoEntrou(consultaId: string, em: Date = new Date(), tx: Cliente = db): Promise<ResultadoFechar> {
   const { count } = await tx.esperaMedico.updateMany({
     where: { consultaId, status: { in: ["aguardando", "expirada"] } },
     data: { status: "medico_entrou", resolvidoEm: em },
   });
-  return count > 0;
+  if (count > 0) return { resultado: "fechada" };
+  const desfecho = await esperaEncerrada(consultaId, tx);
+  return desfecho ? { resultado: "espera_encerrada", desfecho } : { resultado: "ja_fechada" };
+}
+
+/** O paciente já escolheu (ou está pagando a diferença)? Devolve o desfecho, ou null. `tx` opcional. */
+export async function esperaEncerrada(consultaId: string, tx: Cliente = db): Promise<DesfechoEspera | null> {
+  const e = await tx.esperaMedico.findUnique({ where: { consultaId }, select: { status: true } });
+  return e && (e.status === "cancelada" || e.status === "remarcada" || e.status === "remarcando") ? e.status : null;
 }
 
 /* ---------------- job ---------------- */
 
-export type ResultadoJobEspera = { abertas: number; medicoEntrou: number; expiradas: number };
+export type ResultadoJobEspera = { abertas: number; medicoEntrou: number; expiradas: number; reservasExpiradas: number; remarcadasNoJob: number };
 
 /**
  * Rodada do job (/api/cron/espera-medico). Idempotente:
@@ -169,13 +193,23 @@ export async function rodarEsperaMedico(agora: Date = new Date()): Promise<Resul
   let medicoEntrou = 0;
   for (const e of abertasComMedico) {
     const em = e.consulta.chamadas.map((x) => x.respondidaEm).find(Boolean) ?? agora;
-    if (await fecharEsperaMedicoEntrou(e.consultaId, em)) medicoEntrou++;
+    if ((await fecharEsperaMedicoEntrou(e.consultaId, em)).resultado === "fechada") medicoEntrou++;
   }
   const { count: expiradas } = await db.esperaMedico.updateMany({
     where: { status: "aguardando", expiraEm: { lte: agora } },
     data: { status: "expirada" },
   });
-  return { abertas, medicoEntrou, expiradas };
+  // 4) remarcando com a reserva de 10 min vencida: pagou no limite → troca;
+  //    senão cancela a cobrança e a consulta nova e volta para expirada.
+  const vencidas = await db.esperaMedico.findMany({ where: { status: "remarcando", reservaExpiraEm: { lte: agora } }, select: { consultaId: true }, take: 200 });
+  let reservasExpiradas = 0;
+  let remarcadasNoJob = 0;
+  for (const v of vencidas) {
+    const r = await expirarReservaDiferenca(v.consultaId, agora);
+    if (r === "expirada") reservasExpiradas++;
+    if (r === "remarcada") remarcadasNoJob++;
+  }
+  return { abertas, medicoEntrou, expiradas, reservasExpiradas, remarcadasNoJob };
 }
 
 /* ---------------- leitura do paciente ---------------- */
@@ -198,6 +232,15 @@ async function carregarParaEscolha(tx: Tx, consultaId: string, pacienteId: strin
   if (consulta.pacienteId !== pacienteId) return { falha: falhar(403, "Acesso negado.") } as const;
   const espera = await travarEspera(tx, consultaId);
   if (!espera) return { falha: falhar(409, "Esta consulta não tem espera do médico.") } as const;
+  // O médico já atendeu (atendidaMedicoEm = ChamadaConsulta do médico "atendida"):
+  // fecha a espera como medico_entrou e o paciente não escolhe mais.
+  if (espera.status === "aguardando" || espera.status === "expirada") {
+    const medico = await tx.chamadaConsulta.findFirst({ where: { consultaId, papel: "medico", status: "atendida" }, select: { respondidaEm: true } });
+    if (medico) {
+      await tx.esperaMedico.update({ where: { id: espera.id }, data: { status: "medico_entrou", resolvidoEm: medico.respondidaEm ?? agora } });
+      return { falha: falhar(409, "medico_entrou") } as const;
+    }
+  }
   return { consulta, espera, status: statusEfetivo(espera, agora) } as const;
 }
 
@@ -210,6 +253,7 @@ export async function cancelarPorEspera(params: { consultaId: string; pacienteId
     if ("falha" in r) return r.falha!;
     const { consulta, espera, status } = r;
     if (status === "cancelada") return { ok: true as const, jaProcessada: true, espera: esperaWire(espera, agora), reembolsoId: espera.reembolsoId };
+    if (status === "remarcando") return falhar(409, "remarcando", { status });
     if (status !== "expirada") return falhar(409, status === "aguardando" ? ERRO_ESPERA_NAO_EXPIRADA : "A espera já foi resolvida.", { status });
     if (!transicaoPermitida(status, "cancelada")) return falhar(409, "A espera já foi resolvida.");
 
@@ -286,6 +330,14 @@ export async function remarcarPorEspera(params: {
     if (status === "remarcada") {
       return { ok: true as const, jaProcessada: true, espera: esperaWire(espera, agora), consultaNovaId: espera.consultaNovaId, cobranca: null, reembolsoId: espera.reembolsoId };
     }
+    if (status === "remarcando") {
+      const pg = espera.consultaNovaId ? await tx.pagamento.findUnique({ where: { consultaId: espera.consultaNovaId } }) : null;
+      return {
+        ok: true as const, jaProcessada: true, espera: esperaWire(espera, agora), consultaNovaId: espera.consultaNovaId,
+        cobranca: pg ? { pagamentoId: pg.id, valorCentavos: espera.diferencaCentavos ?? 0, status: pg.status, reservaExpiraEm: espera.reservaExpiraEm?.toISOString() ?? null } : null,
+        reembolsoId: null,
+      };
+    }
     if (status !== "expirada") return falhar(409, status === "aguardando" ? ERRO_ESPERA_NAO_EXPIRADA : "A espera já foi resolvida.", { status });
     if (!transicaoPermitida(status, "remarcada")) return falhar(409, "A espera já foi resolvida.");
     if (!STATUS_ABERTOS.includes(consulta.status)) return falhar(409, "A consulta já foi encerrada.");
@@ -297,17 +349,12 @@ export async function remarcarPorEspera(params: {
     const conf = conferirDiferencaEsperada(params.diferencaEsperadaCentavos, dif.diferencaCentavos);
     if (!conf.ok) return falhar(409, conf.erro, { diferencaAtualCentavos: conf.diferencaAtualCentavos });
 
-    // 1) Antiga: cancelada, sem multa, fora do faturamento (o 1º médico não recebe).
-    const { count } = await tx.consulta.updateMany({
-      where: { id: consulta.id, status: { in: STATUS_ABERTOS } },
-      data: { status: "cancelada", motivoCancelamento: MOTIVO_CANCELAMENTO },
-    });
-    if (count === 0) return falhar(409, "A consulta já foi encerrada.");
-    await registrarEvento(tx, { consultaId: consulta.id, tipo: "cancelada", por: "sistema", dataAnterior: consulta.dataInicio, motivo: "falta_medico", multaCentavos: 0 });
-    await cancelarReservasPendentes(tx, consulta.id);
+    const cobrar = dif.acao === "cobrar";
+    // 1) Antiga: cancelada já (sem diferença a pagar) ou só quando a diferença
+    //    for paga (confirmarRemarcacaoEspera). Até lá ela continua valendo.
+    if (!cobrar && !(await cancelarAntiga(tx, consulta))) return falhar(409, "A consulta já foi encerrada.");
 
     // 2) Nova: médico livre, agora, valor dele, ligada à antiga.
-    const cobrar = dif.acao === "cobrar";
     const nova = await tx.consulta.create({
       data: {
         pacienteId: consulta.pacienteId,
@@ -349,11 +396,13 @@ export async function remarcarPorEspera(params: {
       }
     }
 
+    const reservaExpiraEm = cobrar ? new Date(agora.getTime() + RESERVA_DIFERENCA_MIN * 60_000) : null;
     const atual = await tx.esperaMedico.update({
       where: { id: espera.id },
       data: {
-        status: "remarcada",
-        resolvidoEm: agora,
+        status: cobrar ? "remarcando" : "remarcada",
+        resolvidoEm: cobrar ? null : agora,
+        reservaExpiraEm,
         consultaNovaId: nova.id,
         valorAntigoCentavos: dif.valorAntigoCentavos,
         valorNovoCentavos: dif.valorNovoCentavos,
@@ -361,7 +410,7 @@ export async function remarcarPorEspera(params: {
         reembolsoId,
       },
     });
-    await auditar(tx, "ESPERA_MEDICO_REMARCADA", {
+    await auditar(tx, cobrar ? "ESPERA_MEDICO_REMARCANDO" : "ESPERA_MEDICO_REMARCADA", {
       usuarioId: params.pacienteId,
       role: "PACIENTE",
       consultaId: consulta.id,
@@ -372,7 +421,7 @@ export async function remarcarPorEspera(params: {
       jaProcessada: false,
       espera: esperaWire(atual, agora),
       consultaNovaId: nova.id,
-      cobranca: cobrar ? { pagamentoId: pagamentoNovoId!, valorCentavos: dif.diferencaCentavos, status: "pendente" as string } : null,
+      cobranca: cobrar ? { pagamentoId: pagamentoNovoId!, valorCentavos: dif.diferencaCentavos, status: "pendente" as string, reservaExpiraEm: reservaExpiraEm!.toISOString() } : null,
       reembolsoId,
     };
   }, OPCOES_TX_TRAVA);
@@ -380,9 +429,121 @@ export async function remarcarPorEspera(params: {
   // Demonstração: gateway simulado confirma a diferença no servidor, como no agendar.
   if (res.ok && res.cobranca && modoGateway() === "simulado") {
     const p = await confirmarPagamento(res.cobranca.pagamentoId, "simulado");
-    if (p?.status === "confirmado") res.cobranca.status = "confirmado";
+    if (p?.status === "confirmado") {
+      res.cobranca.status = "confirmado";
+      await confirmarRemarcacaoEspera(p.id, agora);
+      const e = await db.esperaMedico.findUnique({ where: { consultaId: params.consultaId } });
+      if (e) res.espera = esperaWire(e, agora);
+    }
   }
   return res;
+}
+
+/** Cancela a consulta antiga (sem multa, fora do faturamento: o 1º médico não recebe). */
+async function cancelarAntiga(tx: Tx, c: { id: string; dataInicio: Date }) {
+  const { count } = await tx.consulta.updateMany({
+    where: { id: c.id, status: { in: STATUS_ABERTOS } },
+    data: { status: "cancelada", motivoCancelamento: MOTIVO_CANCELAMENTO },
+  });
+  if (count === 0) return false;
+  await registrarEvento(tx, { consultaId: c.id, tipo: "cancelada", por: "sistema", dataAnterior: c.dataInicio, motivo: "falta_medico", multaCentavos: 0 });
+  await cancelarReservasPendentes(tx, c.id);
+  return true;
+}
+
+const ERRO_RESERVA = "Pagamento da diferença não chegou em 10 minutos";
+
+/**
+ * Desfaz a reserva da consulta nova (remarcando → expirada): a cobrança
+ * pendente vira "falhou" e a consulta nova "cancelada" (deixa de ocupar o
+ * médico). O paciente pode escolher de novo. Chamar com a espera travada.
+ */
+async function liberarReserva(tx: Tx, espera: { id: string; consultaId: string; consultaNovaId: string | null }, motivo: string) {
+  if (espera.consultaNovaId) {
+    await tx.pagamento.updateMany({ where: { consultaId: espera.consultaNovaId, status: "pendente" }, data: { status: "falhou" } });
+    await tx.consulta.updateMany({
+      where: { id: espera.consultaNovaId, status: { notIn: ["cancelada", "concluida"] } },
+      data: { status: "cancelada", motivoCancelamento: motivo },
+    });
+  }
+  return tx.esperaMedico.update({
+    where: { id: espera.id },
+    data: { status: "expirada", consultaNovaId: null, reservaExpiraEm: null, valorAntigoCentavos: null, valorNovoCentavos: null, diferencaCentavos: null },
+  });
+}
+
+/**
+ * Pagamento da diferença CONFIRMADO (webhook ou simulado). Idempotente:
+ *  - espera remarcando com esta consulta nova → cancela a antiga e marca
+ *    remarcada ("remarcada");
+ *  - já remarcada com esta consulta nova → nada ("ja_remarcada");
+ *  - reserva já expirada/desistida (PIX atrasado) → reembolsa este
+ *    pagamento inteiro ("reembolsada");
+ *  - pagamento que não é de espera → null.
+ * Chamar DEPOIS de confirmarPagamento.
+ */
+export async function confirmarRemarcacaoEspera(pagamentoId: string, agora: Date = new Date()) {
+  const p0 = await db.pagamento.findUnique({ where: { id: pagamentoId }, select: { gatewayRef: true } });
+  const esperaId = p0?.gatewayRef?.startsWith("espera:") ? p0.gatewayRef.slice("espera:".length) : null;
+  if (!esperaId) return null;
+  return db.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT "id" FROM "EsperaMedico" WHERE "id" = ${esperaId} FOR UPDATE`;
+    const p = await tx.pagamento.findUnique({ where: { id: pagamentoId } });
+    const espera = await tx.esperaMedico.findUnique({ where: { id: esperaId } });
+    if (!p || !espera || p.status !== "confirmado" || p.valor <= 0) return null;
+    if (espera.status === "remarcada" && espera.consultaNovaId === p.consultaId) return "ja_remarcada" as const;
+    if (espera.status === "remarcando" && espera.consultaNovaId === p.consultaId) {
+      const antiga = await tx.consulta.findUnique({ where: { id: espera.consultaId }, select: { id: true, dataInicio: true } });
+      if (antiga) await cancelarAntiga(tx, antiga);
+      await tx.esperaMedico.update({ where: { id: espera.id }, data: { status: "remarcada", resolvidoEm: agora, reservaExpiraEm: null } });
+      await auditar(tx, "ESPERA_MEDICO_REMARCADA", {
+        usuarioId: null, role: "SISTEMA", consultaId: espera.consultaId,
+        detalhes: JSON.stringify({ consultaId: espera.consultaId, consultaNovaId: p.consultaId, esperaId: espera.id, pagamentoNovoId: p.id, acao: "cobrar" }),
+      });
+      return "remarcada" as const;
+    }
+    // PIX depois da reserva vencer (ou da desistência): devolve este pagamento.
+    const reemb = await criarReembolsoSeDevido(tx, { consultaId: p.consultaId, valorCentavos: reaisParaCentavos(p.valor), multaCentavos: 0, motivo: "falta_medico", solicitadoPor: "sistema" });
+    await tx.consulta.updateMany({ where: { id: p.consultaId, status: { notIn: ["cancelada", "concluida"] } }, data: { status: "cancelada", motivoCancelamento: ERRO_RESERVA } });
+    await auditar(tx, "ESPERA_MEDICO_PAGAMENTO_ATRASADO", {
+      usuarioId: null, role: "SISTEMA", consultaId: espera.consultaId,
+      detalhes: JSON.stringify({ consultaId: espera.consultaId, consultaNovaId: p.consultaId, esperaId: espera.id, pagamentoNovoId: p.id, reembolsoId: reemb?.id ?? null }),
+    });
+    return "reembolsada" as const;
+  }, OPCOES_TX_TRAVA);
+}
+
+/** Cron: reserva de 10 min vencida. Se o pagamento já confirmou, faz a troca; senão libera. */
+async function expirarReservaDiferenca(consultaId: string, agora: Date) {
+  const pre = await db.esperaMedico.findUnique({ where: { consultaId }, select: { consultaNovaId: true } });
+  const pg = pre?.consultaNovaId ? await db.pagamento.findUnique({ where: { consultaId: pre.consultaNovaId }, select: { id: true, status: true } }) : null;
+  if (pg?.status === "confirmado") return (await confirmarRemarcacaoEspera(pg.id, agora)) === "remarcada" ? "remarcada" : null;
+  return db.$transaction(async (tx) => {
+    const espera = await travarEspera(tx, consultaId);
+    if (!espera || espera.status !== "remarcando" || !espera.reservaExpiraEm || espera.reservaExpiraEm > agora) return null;
+    const p = espera.consultaNovaId ? await tx.pagamento.findUnique({ where: { consultaId: espera.consultaNovaId }, select: { status: true } }) : null;
+    if (p?.status === "confirmado") return null; // confirmou no meio: a próxima rodada (ou o webhook) troca
+    await liberarReserva(tx, espera, ERRO_RESERVA);
+    await auditar(tx, "ESPERA_MEDICO_RESERVA_EXPIRADA", { usuarioId: null, role: "SISTEMA", consultaId, detalhes: JSON.stringify({ consultaId, esperaId: espera.id }) });
+    return "expirada" as const;
+  }, OPCOES_TX_TRAVA);
+}
+
+/** Paciente desistiu de pagar a diferença: cancela a cobrança e a consulta nova; espera volta para expirada. Idempotente. */
+export async function desistirRemarcacao(params: { consultaId: string; pacienteId: string; agora?: Date }) {
+  const agora = params.agora ?? new Date();
+  return db.$transaction(async (tx) => {
+    const r = await carregarParaEscolha(tx, params.consultaId, params.pacienteId, agora);
+    if ("falha" in r) return r.falha!;
+    const { espera, status } = r;
+    if (status === "expirada" && !espera.consultaNovaId) return { ok: true as const, jaProcessada: true, espera: esperaWire(espera, agora) };
+    if (status !== "remarcando") return falhar(409, "Não há remarcação esperando pagamento.", { status });
+    const p = espera.consultaNovaId ? await tx.pagamento.findUnique({ where: { consultaId: espera.consultaNovaId }, select: { status: true } }) : null;
+    if (p?.status === "confirmado") return falhar(409, "pagamento_confirmado");
+    const atual = await liberarReserva(tx, espera, "O paciente desistiu de pagar a diferença");
+    await auditar(tx, "ESPERA_MEDICO_REMARCACAO_DESISTIDA", { usuarioId: params.pacienteId, role: "PACIENTE", consultaId: espera.consultaId, detalhes: JSON.stringify({ consultaId: espera.consultaId, esperaId: espera.id }) });
+    return { ok: true as const, jaProcessada: false, espera: esperaWire(atual, agora) };
+  }, OPCOES_TX_TRAVA);
 }
 
 /* ---------------- Fila do admin ---------------- */

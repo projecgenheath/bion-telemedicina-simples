@@ -8,17 +8,19 @@
 --
 -- O que faz (só aditivo):
 --   Tabela nova "EsperaMedico", uma por consulta.
---   status: aguardando | medico_entrou | expirada | cancelada | remarcada
+--   status: aguardando | medico_entrou | expirada | remarcando | cancelada | remarcada
+--   remarcando = remarcação para médico mais caro esperando o pagamento da
+--     diferença; a consulta nova fica reservada até "reservaExpiraEm" (15 min).
 --   iniciadaEm = quando o paciente atendeu (atendidaPacienteEm);
 --   expiraEm   = max(horário marcado, iniciadaEm) + 10 min (servidor);
 --   diferencaCentavos (remarcada): valor novo − valor antigo, em centavos
 --     (> 0 o paciente paga a diferença; < 0 recebe de volta; 0 nada).
 -- Deny-by-default: RLS ligada, sem políticas, REVOKE de anon/authenticated.
--- Idempotente (IF NOT EXISTS; DROP CONSTRAINT IF EXISTS + ADD), em transação.
+-- Idempotente (IF NOT EXISTS; DROP CONSTRAINT IF EXISTS + ADD). Sem BEGIN/COMMIT
+-- (o SQL Editor do Supabase já roda o lote numa transação).
 -- Reversão: DROP TABLE IF EXISTS public."EsperaMedico";
 -- =====================================================================
 
-BEGIN;
 
 CREATE TABLE IF NOT EXISTS public."EsperaMedico" (
   "id"                TEXT NOT NULL,
@@ -31,10 +33,13 @@ CREATE TABLE IF NOT EXISTS public."EsperaMedico" (
   "valorNovoCentavos"   INTEGER,
   "diferencaCentavos"   INTEGER,
   "reembolsoId"       TEXT,
+  "reservaExpiraEm"   TIMESTAMP(3),
   "criadoEm"          TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "resolvidoEm"       TIMESTAMP(3),
   CONSTRAINT "EsperaMedico_pkey" PRIMARY KEY ("id")
 );
+
+ALTER TABLE public."EsperaMedico" ADD COLUMN IF NOT EXISTS "reservaExpiraEm" TIMESTAMP(3);
 
 CREATE UNIQUE INDEX IF NOT EXISTS "EsperaMedico_consultaId_key" ON public."EsperaMedico"("consultaId");
 CREATE INDEX IF NOT EXISTS "EsperaMedico_consultaNovaId_idx" ON public."EsperaMedico"("consultaNovaId");
@@ -42,6 +47,8 @@ CREATE INDEX IF NOT EXISTS "EsperaMedico_status_resolvidoEm_idx" ON public."Espe
 -- Só as que o job precisa varrer.
 CREATE INDEX IF NOT EXISTS "EsperaMedico_aguardando_expiraEm_idx"
   ON public."EsperaMedico"("expiraEm") WHERE "status" = 'aguardando';
+CREATE INDEX IF NOT EXISTS "EsperaMedico_remarcando_reserva_idx"
+  ON public."EsperaMedico"("reservaExpiraEm") WHERE "status" = 'remarcando';
 
 ALTER TABLE public."EsperaMedico" DROP CONSTRAINT IF EXISTS "EsperaMedico_consultaId_fkey";
 ALTER TABLE public."EsperaMedico" ADD CONSTRAINT "EsperaMedico_consultaId_fkey"
@@ -52,14 +59,18 @@ ALTER TABLE public."EsperaMedico" ADD CONSTRAINT "EsperaMedico_consultaNovaId_fk
 
 ALTER TABLE public."EsperaMedico" DROP CONSTRAINT IF EXISTS "EsperaMedico_status_check";
 ALTER TABLE public."EsperaMedico" ADD CONSTRAINT "EsperaMedico_status_check"
-  CHECK ("status" IN ('aguardando', 'medico_entrou', 'expirada', 'cancelada', 'remarcada'));
+  CHECK ("status" IN ('aguardando', 'medico_entrou', 'expirada', 'remarcando', 'cancelada', 'remarcada'));
 ALTER TABLE public."EsperaMedico" DROP CONSTRAINT IF EXISTS "EsperaMedico_expira_check";
 ALTER TABLE public."EsperaMedico" ADD CONSTRAINT "EsperaMedico_expira_check"
   CHECK ("expiraEm" > "iniciadaEm");
 -- Desfecho fechado ⇔ resolvidoEm preenchido; remarcada ⇔ consulta nova e valores.
 ALTER TABLE public."EsperaMedico" DROP CONSTRAINT IF EXISTS "EsperaMedico_resolvido_check";
 ALTER TABLE public."EsperaMedico" ADD CONSTRAINT "EsperaMedico_resolvido_check"
-  CHECK (("status" IN ('aguardando', 'expirada')) = ("resolvidoEm" IS NULL));
+  CHECK (("status" IN ('aguardando', 'expirada', 'remarcando')) = ("resolvidoEm" IS NULL));
+-- remarcando ⇔ consulta nova reservada com prazo.
+ALTER TABLE public."EsperaMedico" DROP CONSTRAINT IF EXISTS "EsperaMedico_remarcando_check";
+ALTER TABLE public."EsperaMedico" ADD CONSTRAINT "EsperaMedico_remarcando_check"
+  CHECK (("status" = 'remarcando') = ("reservaExpiraEm" IS NOT NULL AND "consultaNovaId" IS NOT NULL));
 ALTER TABLE public."EsperaMedico" DROP CONSTRAINT IF EXISTS "EsperaMedico_remarcada_check";
 ALTER TABLE public."EsperaMedico" ADD CONSTRAINT "EsperaMedico_remarcada_check"
   CHECK ("status" <> 'remarcada' OR ("valorAntigoCentavos" IS NOT NULL AND "valorNovoCentavos" IS NOT NULL
@@ -71,4 +82,3 @@ ALTER TABLE public."EsperaMedico" ADD CONSTRAINT "EsperaMedico_nova_diferente_ch
 ALTER TABLE public."EsperaMedico" ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON TABLE public."EsperaMedico" FROM anon, authenticated;
 
-COMMIT;
