@@ -5,7 +5,9 @@ import { chaveDispensa, tipoAviso, type TipoAviso } from "@/lib/push-cliente-log
 import { ativarPush, chavePublica, permissaoAtual, sincronizarPush, suportePush } from "@/lib/push-cliente";
 
 /**
- * Aviso do toque da consulta (PACIENTE e MEDICO).
+ * Aviso do toque da consulta (PACIENTE e MEDICO). Montado em
+ * paciente/PacienteApp.tsx e, no médico, em medico/telas/TelaInicio.tsx
+ * (coluna central: não mexe no layout de 3 colunas da tela larga).
  * - "ativar": permissão default; requestPermission só no clique.
  * - "instalar": iOS fora da PWA; só orienta (dispensável, sem pedir permissão).
  * A chave VAPID é buscada ao montar: sem chave (servidor ativo:false), nenhum aviso.

@@ -2,12 +2,14 @@ import "server-only";
 import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { partesNoFuso } from "@/lib/server/fuso";
+import { filtroEvolucaoPendente } from "@/lib/medico-livre-logica";
 
 /**
  * Teleconsulta v2 — Médicos: "médico livre agora" (remarcação para outro
  * médico da mesma especialidade). Livre = médico ativo (User e PerfilMedico),
  * com chave PIX cadastrada, sem consulta em andamento, sem evolução em
- * rascunho (trava), sem consulta nos próximos 40 min e fora de 23:00–00:00
+ * rascunho de OUTRA consulta (trava; o rascunho de `excetoConsultaId` não
+ * conta, mesmo critério de evolucaoPendenteDoMedico e toque.ts), sem consulta nos próximos 40 min e fora de 23:00–00:00
  * (São Paulo). A especialidade é filtrada por quem chama.
  */
 export const PROXIMA_CONSULTA_MIN = 40;
@@ -24,6 +26,7 @@ export async function motivoMedicoOcupado(
   medicoId: string,
   tx?: Prisma.TransactionClient,
   agora: Date = new Date(),
+  excetoConsultaId?: string,
 ): Promise<MotivoOcupado | null> {
   const cli = tx ?? db;
   if (!foraDoHorarioVedado(agora)) return "horario_vedado";
@@ -44,7 +47,7 @@ export async function motivoMedicoOcupado(
       },
       select: { dataInicio: true },
     }),
-    cli.evolucao.findFirst({ where: { medicoId, status: "rascunho" }, select: { id: true } }),
+    cli.evolucao.findFirst({ where: filtroEvolucaoPendente(medicoId, excetoConsultaId), select: { id: true } }),
   ]);
   if (!medico) return "inativo";
   if (!pix) return "sem_pix";
@@ -58,8 +61,9 @@ export async function medicoLivreAgora(
   medicoId: string,
   tx?: Prisma.TransactionClient,
   agora: Date = new Date(),
+  excetoConsultaId?: string,
 ): Promise<boolean> {
-  return (await motivoMedicoOcupado(medicoId, tx, agora)) === null;
+  return (await motivoMedicoOcupado(medicoId, tx, agora, excetoConsultaId)) === null;
 }
 
 /** Reais (Float) → centavos inteiros, sem erro de arredondamento. */
