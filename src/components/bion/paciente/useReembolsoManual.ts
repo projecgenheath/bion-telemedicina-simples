@@ -42,7 +42,7 @@ export function rotuloReembolsoManual(status: string): { texto: string; tom: "ok
     case "solicitado":
       return { texto: "Reembolso pedido", tom: "andamento" };
     case "aprovado":
-      return { texto: "Aprovado — reembolso integral e automático", tom: "ok" };
+      return { texto: "Aprovado — reembolso integral e imediato", tom: "ok" };
     case "processado":
       return { texto: "Processado — reembolso concluído", tom: "ok" };
     case "negado":

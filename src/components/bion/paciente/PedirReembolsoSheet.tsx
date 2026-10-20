@@ -82,7 +82,7 @@ export function PedirReembolsoSheet({ consulta, onFechar }: { consulta: Consulta
                 não é feito sozinho: você precisa pedir abaixo. Depois do pedido, o reembolso é integral e imediato.
               </p>
               <p className="mt-2">
-                Se você teve um motivo, explique abaixo. O reembolso é integral e automático
+                Se você teve um motivo, explique abaixo. O reembolso é integral e imediato
                 {consulta.valor ? ` (${consulta.valor})` : ""}, sem etapa de análise.
               </p>
               {prazo ? (

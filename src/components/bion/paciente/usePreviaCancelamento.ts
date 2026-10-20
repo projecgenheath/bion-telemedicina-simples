@@ -51,7 +51,7 @@ export function rotuloReembolso(status: string): { texto: string; tom: "ok" | "a
     case "solicitado":
       return { texto: "Reembolso solicitado", tom: "andamento" };
     case "aprovado":
-      return { texto: "Reembolso aprovado — em processamento", tom: "andamento" };
+      return { texto: "Reembolso aprovado — integral", tom: "andamento" };
     case "processado":
       return { texto: "Reembolso concluído", tom: "ok" };
     case "negado":
