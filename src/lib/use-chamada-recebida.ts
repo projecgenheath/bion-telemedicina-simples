@@ -1,5 +1,6 @@
 "use client";
 
+import { fecharNotificacoesConsulta } from "@/lib/push-cliente";
 import { useCallback, useEffect, useReducer, useRef } from "react";
 import { ouvirEventosChamada } from "@/lib/chamada-eventos";
 import {
@@ -49,6 +50,8 @@ export function useChamadaRecebida(
   useEffect(() => {
     if (!ativo) return;
     return ouvirEventosChamada((evento) => {
+      // Toque terminou (expirou / atendido / recusado, inclusive em outro aparelho): some com a notificação do push.
+      if (evento.tipo !== "chamada_tocando") void fecharNotificacoesConsulta(evento.consultaId);
       const c = consultasRef.current.find((x) => x.id === evento.consultaId);
       if (c && consultaEncerrada(c.status)) {
         despachar({ tipo: "consulta_encerrada", consultaId: evento.consultaId });
