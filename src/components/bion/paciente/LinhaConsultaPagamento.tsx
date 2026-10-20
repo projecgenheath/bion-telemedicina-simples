@@ -73,7 +73,7 @@ export function LinhaConsultaPagamento({
             <FileText className="w-3.5 h-3.5" aria-hidden /> Nota fiscal / recibo do médico
           </a>
         ) : (
-          <span className="text-xs text-bion-ink/75 dark:text-bion-paper/75">Nota fiscal / recibo do médico · Nota disponível após a consulta</span>
+          <span className="text-xs text-bion-ink/75 dark:text-bion-paper/75">Nota fiscal / recibo do médico · Aguardando nota do médico</span>
         )
       ) : null}
     </div>
