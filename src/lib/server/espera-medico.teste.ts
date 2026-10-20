@@ -203,13 +203,19 @@ const confirmarNoGateway = (id: string) => db.pagamento.update({ where: { id }, 
   // PIX atrasado: chega depois de a reserva vencer → reembolsa esse pagamento.
   await confirmarNoGateway(cobranca.pagamentoId);
   igual("atrasado: webhook real 200", await webhookConfirma(cobranca.pagamentoId), 200);
-  igual("atrasado: reembolsada já processada", await m.confirmarRemarcacaoEspera(cobranca.pagamentoId), "reembolsada");
+  igual("atrasado: webhook já processou → ja_reembolsada", await m.confirmarRemarcacaoEspera(cobranca.pagamentoId), "ja_reembolsada");
   const novaAtrasada = await db.consulta.findUnique({ where: { id: r.consultaNovaId! } });
   igual("atrasado: nova cancelada com pago=false", [novaAtrasada?.status, novaAtrasada?.pago], ["cancelada", false]);
   igual("atrasado: aviso de devolução", (await db.notificacao.findMany({ where: { usuarioId: pac.id }, select: { titulo: true } })).map((x) => x.titulo), ["Pagamento devolvido"]);
   igual("atrasado: reembolso da diferença", (await db.reembolso.findMany({ where: { pagamentoId: cobranca.pagamentoId } })).map((x) => x.valorCentavos), [5000]);
   igual("atrasado: nova segue cancelada", (await db.consulta.findUnique({ where: { id: r.consultaNovaId! } }))?.status, "cancelada");
   igual("atrasado: repetir não duplica", (await m.confirmarRemarcacaoEspera(cobranca.pagamentoId), await db.reembolso.count({ where: { pagamentoId: cobranca.pagamentoId } })), 1);
+  // Webhook repetido de verdade (rota): sem novo aviso nem nova auditoria.
+  const auditAntes = await db.auditLog.count({ where: { acao: "ESPERA_MEDICO_PAGAMENTO_ATRASADO" } });
+  igual("atrasado: webhook repetido 200", await webhookConfirma(cobranca.pagamentoId), 200);
+  igual("atrasado: webhook repetido não repete aviso", (await db.notificacao.findMany({ where: { usuarioId: pac.id }, select: { titulo: true } })).map((x) => x.titulo), ["Pagamento devolvido"]);
+  igual("atrasado: webhook repetido não repete auditoria", await db.auditLog.count({ where: { acao: "ESPERA_MEDICO_PAGAMENTO_ATRASADO" } }), auditAntes);
+  igual("atrasado: avisar ja_reembolsada não cria aviso", await m.avisarPacienteEspera(cobranca.pagamentoId, "ja_reembolsada"), null);
 }
 {
   // Desistir: cobrança e nova canceladas, médico liberado, pode remarcar de novo.

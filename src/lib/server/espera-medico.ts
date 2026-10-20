@@ -6,6 +6,7 @@ import { consultaEmHorarioVedado, OPCOES_TX_TRAVA } from "@/lib/server/bloqueio-
 import {
   cancelarReservasPendentes,
   criarReembolsoSeDevido,
+  REEMBOLSO_STATUS_ATIVOS,
   reaisParaCentavos,
   registrarEvento,
   STATUS_ABERTOS,
@@ -516,7 +517,7 @@ async function liberarReserva(tx: Tx, espera: { id: string; consultaId: string; 
  *  - espera remarcando com esta consulta nova → cancela a antiga e marca
  *    remarcada ("remarcada");
  *  - já remarcada com esta consulta nova → nada ("ja_remarcada");
- *  - reserva já expirada/desistida (PIX atrasado) → reembolsa este
+ *    pagamento inteiro ("reembolsada"); webhook repetido → "ja_reembolsada" (sem novo aviso nem auditoria);
  *    pagamento inteiro ("reembolsada");
  *  - pagamento que não é de espera → null.
  * Chamar DEPOIS de confirmarPagamento.
@@ -542,6 +543,13 @@ export async function confirmarRemarcacaoEspera(pagamentoId: string, agora: Date
       return "remarcada" as const;
     }
     // PIX depois da reserva vencer (ou da desistência): devolve este pagamento.
+    // Webhook repetido: o reembolso deste pagamento já existe → não repete o
+    // cancelamento, a auditoria nem o aviso "Pagamento devolvido".
+    const jaReembolsado = await tx.reembolso.findFirst({
+      where: { pagamentoId: p.id, status: { in: REEMBOLSO_STATUS_ATIVOS } },
+      select: { id: true },
+    });
+    if (jaReembolsado) return "ja_reembolsada" as const;
     const reemb = await criarReembolsoSeDevido(tx, { consultaId: p.consultaId, valorCentavos: reaisParaCentavos(p.valor), multaCentavos: 0, motivo: "falta_medico", solicitadoPor: "sistema" });
     await tx.consulta.updateMany({ where: { id: p.consultaId, status: { notIn: ["cancelada", "concluida"] } }, data: { status: "cancelada", motivoCancelamento: ERRO_RESERVA } });
     // Reembolsada: a consulta nova cancelada não fica como paga.
@@ -628,8 +636,8 @@ export async function listarEsperasFila(agora: Date = new Date(), limite = 200):
  * Substitui o aviso padrão de "triagem até 5 min antes", que não vale para
  * uma consulta que começa agora. Sem dado de saúde no texto.
  */
-export async function avisarPacienteEspera(pagamentoId: string, resultado: "remarcada" | "ja_remarcada" | "reembolsada") {
-  if (resultado === "ja_remarcada") return null;
+export async function avisarPacienteEspera(pagamentoId: string, resultado: "remarcada" | "ja_remarcada" | "reembolsada" | "ja_reembolsada") {
+  if (resultado === "ja_remarcada" || resultado === "ja_reembolsada") return null;
   const p = await db.pagamento.findUnique({
     where: { id: pagamentoId },
     select: { consulta: { select: { pacienteId: true, medico: { select: { nome: true } } } } },
