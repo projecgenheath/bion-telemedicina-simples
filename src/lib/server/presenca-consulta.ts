@@ -1,5 +1,6 @@
 import "server-only";
 import { db } from "@/lib/db";
+import { guardarChatSala, guardarChatSalaSemFalhar } from "@/lib/server/chat-consulta";
 import { quandoClinica } from "@/lib/server/fuso";
 import { aplicarFalhaTecnica, registrarEvento } from "@/lib/server/financeiro";
 import { REEMBOLSO_MANUAL_PRAZO_DIAS } from "@/lib/server/dados";
@@ -206,7 +207,25 @@ export async function gravarDesfecho(
   autor: AutorDesfecho = { por: "sistema" },
 ): Promise<{ tipo: Desfecho; status: string } | null> {
   try {
-    return await db.$transaction(async (tx) => {
+    const r = await gravarDesfechoTx(c, tipo, motivo, autor);
+    // Chat da sala guardado com a consulta assim que o desfecho é gravado
+    // (vale para o sistema e para o médico, que chama esta mesma função).
+    await guardarChatSalaSemFalhar(c.id);
+    return r;
+  } catch (e) {
+    if (e instanceof SemAlteracao) return null;
+    throw e;
+  }
+}
+
+function gravarDesfechoTx(
+  c: ConsultaAvaliada,
+  tipo: Desfecho,
+  motivo: string,
+  autor: AutorDesfecho,
+): Promise<{ tipo: Desfecho; status: string }> {
+  {
+    return db.$transaction(async (tx) => {
       const { count } = await tx.consulta.updateMany({
         where: { id: c.id, status: c.status, updatedAt: c.updatedAt },
         data: { status: c.status },
@@ -269,9 +288,6 @@ export async function gravarDesfecho(
       await tx.auditLog.create({ data: dadosAudit(c, tipo, motivo, autor) });
       return { tipo, status };
     });
-  } catch (e) {
-    if (e instanceof SemAlteracao) return null;
-    throw e;
   }
 }
 
@@ -492,7 +508,8 @@ export async function consultaTemDesfecho(consultaId: string): Promise<boolean> 
 }
 
 /**
- * Limpeza da sala: apaga sinais já consumidos com mais de 30 min. Enquanto a
+ * Limpeza da sala: guarda o chat em ChatConsulta (lib/server/chat-consulta.ts)
+ * e depois apaga sinais já consumidos com mais de 30 min. Enquanto a
  * consulta NÃO tem desfecho, guarda a presença (prova da espera / da entrada
  * do paciente) e o sinal de controle "encerrada" (a classificação automática
  * usa os dois). Com desfecho, também apaga as presenças paradas há mais de 1 h.
@@ -500,12 +517,19 @@ export async function consultaTemDesfecho(consultaId: string): Promise<boolean> 
 export async function limparSala(consultaId: string, agora: Date = new Date()) {
   const temDesfecho = await consultaTemDesfecho(consultaId);
   const t = agora.getTime();
+  // Chat é prontuário (decisão do Alisson): copia para ChatConsulta ANTES de
+  // apagar, e a limpeza só apaga chat cujo id já está guardado. Se a cópia
+  // falhar, a exceção sobe e nada é apagado.
+  const chatGuardado = await guardarChatSala(consultaId);
   await db.sinalSala.deleteMany({
     where: {
       consultaId,
       consumido: true,
       createdAt: { lt: new Date(t - 30 * 60 * 1000) },
-      ...(temDesfecho ? {} : { NOT: { tipo: "controle", payload: { contains: '"encerrada"' } } }),
+      AND: [
+        temDesfecho ? {} : { NOT: { tipo: "controle", payload: { contains: '"encerrada"' } } },
+        { OR: [{ tipo: { not: "chat" } }, { id: { in: [...chatGuardado] } }] },
+      ],
     },
   });
   if (temDesfecho) {
