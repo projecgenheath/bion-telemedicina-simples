@@ -17,7 +17,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "BION — Consulta médica por vídeo, sem sair de casa",
     description:
-      "Telemedicina simples e humanizada: agendamento rápido, vídeo em HD e acompanhamento médico.",
+      "Agende sua consulta, fale com o médico por vídeo e receba suas orientações pelo app.",
     type: "website",
     locale: "pt_BR",
   },
