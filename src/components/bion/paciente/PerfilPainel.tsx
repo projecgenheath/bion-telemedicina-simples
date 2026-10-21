@@ -18,6 +18,7 @@ import {
   Phone,
   ShieldCheck,
   Sun,
+  Trash2,
   Users,
 } from "lucide-react";
 import { useBion } from "@/lib/bion-store";
@@ -129,8 +130,10 @@ export function PerfilPainel({
   onEditar,
   onVerTudo,
   onAgendar,
+  onExcluirConta,
 }: {
   onSair: () => void;
+  onExcluirConta: () => void;
   onEditar: (campo?: CampoPerfil) => void;
   onVerTudo: (lista: ListaPerfil) => void;
   onAgendar: () => void;
@@ -432,6 +435,14 @@ export function PerfilPainel({
         className="bpp-toque w-full min-h-12 rounded-full border-2 border-red-600/40 text-red-700 dark:border-red-400/40 dark:text-red-300 text-sm font-bold inline-flex items-center justify-center gap-2 hover:bg-red-500/10"
       >
         <LogOut className="w-4 h-4" aria-hidden /> Sair da conta
+      </button>
+
+      <button
+        type="button"
+        onClick={onExcluirConta}
+        className="bpp-toque w-full min-h-11 rounded-full text-red-700 dark:text-red-300 text-sm font-semibold inline-flex items-center justify-center gap-2 hover:bg-red-500/10"
+      >
+        <Trash2 className="w-4 h-4" aria-hidden /> Excluir minha conta
       </button>
     </div>
   );

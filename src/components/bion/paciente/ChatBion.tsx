@@ -31,6 +31,8 @@ import {
   triagemDisponivel,
 } from "./chat-bion-types";
 import { ChatListaMensagens } from "./ChatListaMensagens";
+import { ConsentimentoLaudoIA } from "./ConsentimentoLaudoIA";
+import { CAMPO_CONSENTIMENTO_IA_EXAME, VERSAO_CONSENTIMENTO_IA_EXAME } from "@/lib/consentimento-ia-exame";
 
 /**
  * BION IA do app do paciente — conversa livre (LLM real) + ações estruturadas:
@@ -84,6 +86,8 @@ export function ChatBion({
   const [pagando, setPagando] = useState(false);
   const [anamneseAtiva, setAnamneseAtiva] = useState<AnamneseAtiva | null>(null);
   const [enviandoLaudo, setEnviandoLaudo] = useState(false);
+  // Laudo escolhido aguardando o aceite do aviso de envio ao Google (LGPD).
+  const [laudoPendente, setLaudoPendente] = useState<File | null>(null);
   const inputArquivoRef = useRef<HTMLInputElement>(null);
   const fimRef = useRef<HTMLDivElement>(null);
   const histAnamneseRef = useRef<{ remetente: "usuario" | "ia"; texto: string }[]>([]);
@@ -313,6 +317,7 @@ export function ChatBion({
     try {
       const form = new FormData();
       form.append("arquivo", arquivo);
+      form.append(CAMPO_CONSENTIMENTO_IA_EXAME, VERSAO_CONSENTIMENTO_IA_EXAME);
       const res = await fetch("/api/bion-ia/exame", { method: "POST", body: form });
       const json = (await res.json()) as {
         ok?: boolean;
@@ -642,9 +647,27 @@ export function ChatBion({
         className="hidden"
         onChange={(e) => {
           const f = e.target.files?.[0];
-          if (f) void aoEscolherArquivo(f);
+          if (f) setLaudoPendente(f);
         }}
       />
+      {laudoPendente && (
+        <ConsentimentoLaudoIA
+          nomeArquivo={laudoPendente.name}
+          onConcordar={() => {
+            const f = laudoPendente;
+            setLaudoPendente(null);
+            void aoEscolherArquivo(f);
+          }}
+          onCancelar={() => {
+            setLaudoPendente(null);
+            if (inputArquivoRef.current) inputArquivoRef.current.value = "";
+            setMensagens((m) => [
+              ...m,
+              { remetente: "ia", texto: "Tudo bem, não enviei o documento. Você pode mostrar o laudo ao médico durante a consulta." },
+            ]);
+          }}
+        />
+      )}
 
       {/* Cabeçalho */}
       <header className="px-5 py-4 bp-safe-top border-b border-bion-ink/8 dark:border-white/10">

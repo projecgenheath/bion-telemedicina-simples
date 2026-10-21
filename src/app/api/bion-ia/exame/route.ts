@@ -2,7 +2,14 @@ import { NextRequest } from "next/server";
 import { dataIsoClinica } from "@/lib/server/fuso";
 import ZAI from "z-ai-web-dev-sdk";
 import { db } from "@/lib/db";
-import { exigirPapel } from "@/lib/server/auth";
+import { exigirPapel, registrarAudit } from "@/lib/server/auth";
+import {
+  CAMPO_CONSENTIMENTO_IA_EXAME,
+  FINALIDADE_CONSENTIMENTO_IA_EXAME,
+  VERSAO_CONSENTIMENTO_IA_EXAME,
+  consentimentoIaExameValido,
+} from "@/lib/consentimento-ia-exame";
+import { limparMetadadosImagem } from "@/lib/server/limpar-metadados";
 import { carregarDados, aplicarSideEffects } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
 import { obterLLM, visaoGemini } from "@/lib/server/llm";
@@ -10,7 +17,14 @@ import { obterLLM, visaoGemini } from "@/lib/server/llm";
 /**
  * BION IA — leitura de laudos de exames (PDF ou foto) para o app do paciente.
  *
- * POST multipart/form-data { arquivo }
+ * POST multipart/form-data { arquivo, consentimento }
+ *
+ * Consentimento (LGPD art. 11 e 33): sem `consentimento` igual à versão atual
+ * do aviso (lib/consentimento-ia-exame.ts) a rota recusa com 428, ANTES de
+ * ler o arquivo. O aceite é gravado em Consentimento + AuditLog (data/hora e
+ * versão) antes de qualquer envio ao Google. Para a IA vão só os bytes do
+ * arquivo (sem o nome original) e, em JPEG/PNG, sem metadados EXIF/XMP/texto.
+ * O CONTEÚDO (nome e dados impressos no laudo) segue como está.
  *
  * Fluxo de segurança (LGPD / integridade do prontuário):
  *  1. A IA transcreve o laudo e extrai o NOME COMPLETO do paciente impresso no documento;
@@ -93,6 +107,16 @@ export async function POST(req: NextRequest) {
     if (!(arquivo instanceof File)) {
       return Response.json({ erro: "Envie o arquivo do laudo (PDF ou foto)." }, { status: 400 });
     }
+    if (!consentimentoIaExameValido(form.get(CAMPO_CONSENTIMENTO_IA_EXAME))) {
+      return Response.json(
+        {
+          erro: "Para ler o laudo pela BION IA, confirme antes que concorda com o envio do arquivo ao Google (Gemini).",
+          motivo: "consentimento_necessario",
+          versao: VERSAO_CONSENTIMENTO_IA_EXAME,
+        },
+        { status: 428 },
+      );
+    }
     if (arquivo.size > LIMITE_BYTES) {
       return Response.json({ erro: "Arquivo muito grande (máximo de 10 MB)." }, { status: 413 });
     }
@@ -104,7 +128,28 @@ export async function POST(req: NextRequest) {
       return Response.json({ erro: "Formato não suportado — envie o laudo em PDF ou foto." }, { status: 415 });
     }
 
-    const bytes = Buffer.from(await arquivo.arrayBuffer());
+    // Registra o aceite (data/hora = createdAt; versão na finalidade/detalhes)
+    // ANTES de qualquer envio. Falhou o registro → não envia.
+    await db.consentimento.create({
+      data: {
+        pacienteId: usuario.id,
+        quem: usuario.nome,
+        perfil: "paciente",
+        finalidade: FINALIDADE_CONSENTIMENTO_IA_EXAME,
+        documentos: 1,
+        aceito: true,
+      },
+    });
+    await registrarAudit(usuario, {
+      acao: "CONSENTIMENTO_IA_EXAME",
+      categoria: "consentimento",
+      entidade: "consentimento",
+      entidadeId: VERSAO_CONSENTIMENTO_IA_EXAME,
+      detalhes: `Aceite do envio de laudo ao Google (Gemini) — versão ${VERSAO_CONSENTIMENTO_IA_EXAME} em ${new Date().toISOString()}`,
+    });
+
+    const original = new Uint8Array(await arquivo.arrayBuffer());
+    const bytes = Buffer.from(limparMetadadosImagem(mime, original).bytes);
     const dataUrl = `data:${mime};base64,${bytes.toString("base64")}`;
     const base64Puro = bytes.toString("base64");
 
