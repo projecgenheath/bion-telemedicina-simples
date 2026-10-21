@@ -2,15 +2,30 @@ import { NextRequest } from "next/server";
 import { dataIsoClinica } from "@/lib/server/fuso";
 import ZAI from "z-ai-web-dev-sdk";
 import { db } from "@/lib/db";
-import { exigirPapel } from "@/lib/server/auth";
+import { exigirPapel, registrarAudit } from "@/lib/server/auth";
+import {
+  CAMPO_CONSENTIMENTO_IA_EXAME,
+  FINALIDADE_CONSENTIMENTO_IA_EXAME,
+  VERSAO_CONSENTIMENTO_IA_EXAME,
+  consentimentoIaExameValido,
+} from "@/lib/consentimento-ia-exame";
+import { limparMetadadosImagem } from "@/lib/server/limpar-metadados";
 import { carregarDados, aplicarSideEffects } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
+import { usuarioSemNome } from "@/lib/server/audit-sem-nome";
 import { obterLLM, visaoGemini } from "@/lib/server/llm";
 
 /**
  * BION IA — leitura de laudos de exames (PDF ou foto) para o app do paciente.
  *
- * POST multipart/form-data { arquivo }
+ * POST multipart/form-data { arquivo, consentimento }
+ *
+ * Consentimento (LGPD art. 11 e 33): sem `consentimento` igual à versão atual
+ * do aviso (lib/consentimento-ia-exame.ts) a rota recusa com 428, ANTES de
+ * ler o arquivo. O aceite é gravado em Consentimento + AuditLog (data/hora e
+ * versão) antes de qualquer envio ao Google. Para a IA vão só os bytes do
+ * arquivo (sem o nome original) e, em JPEG/PNG, sem metadados EXIF/XMP/texto.
+ * O CONTEÚDO (nome e dados impressos no laudo) segue como está.
  *
  * Fluxo de segurança (LGPD / integridade do prontuário):
  *  1. A IA transcreve o laudo e extrai o NOME COMPLETO do paciente impresso no documento;
@@ -93,6 +108,16 @@ export async function POST(req: NextRequest) {
     if (!(arquivo instanceof File)) {
       return Response.json({ erro: "Envie o arquivo do laudo (PDF ou foto)." }, { status: 400 });
     }
+    if (!consentimentoIaExameValido(form.get(CAMPO_CONSENTIMENTO_IA_EXAME))) {
+      return Response.json(
+        {
+          erro: "Para ler o laudo pela BION IA, confirme antes que concorda com o envio do arquivo ao Google (Gemini).",
+          motivo: "consentimento_necessario",
+          versao: VERSAO_CONSENTIMENTO_IA_EXAME,
+        },
+        { status: 428 },
+      );
+    }
     if (arquivo.size > LIMITE_BYTES) {
       return Response.json({ erro: "Arquivo muito grande (máximo de 10 MB)." }, { status: 413 });
     }
@@ -104,7 +129,38 @@ export async function POST(req: NextRequest) {
       return Response.json({ erro: "Formato não suportado — envie o laudo em PDF ou foto." }, { status: 415 });
     }
 
-    const bytes = Buffer.from(await arquivo.arrayBuffer());
+    // Registra o aceite (data/hora = createdAt; versão na finalidade/detalhes)
+    // ANTES de qualquer envio. Falhou o Consentimento OU a auditoria → não envia
+    // (registrarAudit engole erros e devolve null; por isso o teste abaixo).
+    await db.consentimento.create({
+      data: {
+        pacienteId: usuario.id,
+        quem: usuario.nome,
+        perfil: "PACIENTE", // = usuario.role, igual a /api/consentimentos (a anonimização casa por "PACIENTE")
+        finalidade: FINALIDADE_CONSENTIMENTO_IA_EXAME,
+        documentos: 1,
+        aceito: true,
+      },
+    });
+    const auditAceite = await registrarAudit(usuarioSemNome(usuario), {
+      acao: "CONSENTIMENTO_IA_EXAME",
+      categoria: "consentimento",
+      entidade: "consentimento",
+      entidadeId: VERSAO_CONSENTIMENTO_IA_EXAME,
+      detalhes: `Aceite do envio de laudo ao Google (Gemini) — versão ${VERSAO_CONSENTIMENTO_IA_EXAME} em ${new Date().toISOString()}`,
+    });
+
+    if (!auditAceite) {
+      return Response.json(
+        { erro: "Não consegui registrar sua autorização agora, então o laudo não foi enviado. Tente novamente." },
+        { status: 503 },
+      );
+    }
+
+    const original = new Uint8Array(await arquivo.arrayBuffer());
+    const limpeza = limparMetadadosImagem(mime, original);
+    if (limpeza.aviso) console.warn(`[BION IA exame] metadados não removidos (${limpeza.aviso}); arquivo enviado como veio`);
+    const bytes = Buffer.from(limpeza.bytes);
     const dataUrl = `data:${mime};base64,${bytes.toString("base64")}`;
     const base64Puro = bytes.toString("base64");
 
@@ -211,7 +267,7 @@ export async function POST(req: NextRequest) {
     const dataValida = Number.isNaN(dataColeta.getTime()) ? new Date() : dataColeta;
 
     // Registra o upload no histórico (mesmo registro visto no perfil)
-    await db.arquivo.create({
+    const arquivoRegistrado = await db.arquivo.create({
       data: {
         nome: arquivo.name || "laudo.pdf",
         tipo: ehPdf ? "application/pdf" : mime,
@@ -255,7 +311,7 @@ export async function POST(req: NextRequest) {
     }
 
     await aplicarSideEffects(
-      usuario,
+      usuarioSemNome(usuario), // auditoria só com id (sem nome do paciente)
       [
         {
           tipo: "exame",
@@ -267,7 +323,10 @@ export async function POST(req: NextRequest) {
       {
         acao: "EXAME_IMPORTADO_IA",
         categoria: "prontuario",
-        detalhes: `Laudo "${arquivo.name}" lido pela IA e vinculado a ${usuario.nome} (${examesSalvos.length} grupos)`,
+        entidade: "arquivo",
+        entidadeId: arquivoRegistrado.id,
+        // Só ids: sem nome do paciente nem nome original do arquivo.
+        detalhes: `Laudo (arquivo ${arquivoRegistrado.id}) lido pela IA para o paciente id ${usuario.id} (${examesSalvos.length} grupos)`,
       },
     );
 

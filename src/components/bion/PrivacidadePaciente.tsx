@@ -5,6 +5,9 @@ import { Shield, FileText, Check, X, User, Stethoscope, Lock, Clock, KeyRound } 
 import { toast } from "sonner";
 import { useBion } from "@/lib/bion-store";
 import { apiSaude } from "./paciente/api-saude";
+import { useRecarregarEstado } from "./paciente/useRemarcacaoComMulta";
+import { fmtTicketData } from "@/lib/bion-tipos";
+import type { EstadoConsentimentoIaExame } from "@/lib/consentimento-ia-exame";
 
 export function PrivacidadePaciente() {
   const { pacientePerfil, documentosVisiveis, consentimentosVisiveis, consultas, sessao, trocarSenha } =
@@ -26,6 +29,37 @@ export function PrivacidadePaciente() {
     };
   }, [sessao.role]);
   const qtdMedicamentos = ativosLista ?? pacientePerfil.medicamentos.length;
+
+  // Consentimento da leitura de laudo pela BION IA (LGPD art. 8º, § 5º).
+  const recarregarEstado = useRecarregarEstado();
+  const [consIa, setConsIa] = useState<{ estado: EstadoConsentimentoIaExame; em: string | null } | null>(null);
+  const [revogando, setRevogando] = useState(false);
+  useEffect(() => {
+    if (sessao.role !== "paciente") return;
+    let vivo = true;
+    fetch("/api/paciente/consentimento-ia-exame")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { estado: EstadoConsentimentoIaExame; em: string | null } | null) => vivo && j && setConsIa(j))
+      .catch(() => {});
+    return () => {
+      vivo = false;
+    };
+  }, [sessao.role]);
+  const revogarConsIa = async () => {
+    if (revogando) return;
+    setRevogando(true);
+    try {
+      const r = await fetch("/api/paciente/consentimento-ia-exame", { method: "DELETE" });
+      if (!r.ok) throw new Error(String(r.status));
+      setConsIa((await r.json()) as { estado: EstadoConsentimentoIaExame; em: string | null });
+      toast.success("Consentimento revogado. No próximo envio de laudo, a BION vai pedir sua autorização de novo.");
+      void recarregarEstado();
+    } catch {
+      toast.error("Não foi possível revogar agora. Tente novamente.");
+    } finally {
+      setRevogando(false);
+    }
+  };
 
   const minhasConsultas = consultas.filter((c) => c.paciente === sessao.nome);
   const medicosVinculados = Array.from(new Set(minhasConsultas.map((c) => c.medico)));
@@ -130,6 +164,41 @@ export function PrivacidadePaciente() {
           </div>
         )}
       </section>
+
+      {sessao.role === "paciente" ? (
+        <section className="bg-card border rounded-3xl p-6 space-y-3" aria-labelledby="titulo-cons-ia">
+          <h2 id="titulo-cons-ia" className="font-bold flex items-center gap-2">
+            <Shield className="w-4 h-4 text-primary" /> Leitura de laudos pela BION IA
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Quando você envia um laudo, o arquivo inteiro, com o seu nome e os dados impressos nele, vai para o
+            Google (Gemini) para leitura, possivelmente fora do Brasil. A BION pede sua autorização a cada envio.
+          </p>
+          <p className="text-sm" aria-live="polite">
+            {consIa === null
+              ? "Carregando…"
+              : consIa.estado === "ativo"
+                ? `Autorizado no último envio${consIa.em ? ` (${fmtTicketData(consIa.em)}, horário de Brasília)` : ""}.`
+                : consIa.estado === "revogado"
+                  ? `Revogado${consIa.em ? ` em ${fmtTicketData(consIa.em)} (horário de Brasília)` : ""}. O próximo envio vai pedir sua autorização.`
+                  : "Você ainda não autorizou nenhum envio."}
+          </p>
+          {consIa?.estado === "ativo" ? (
+            <button
+              type="button"
+              onClick={() => void revogarConsIa()}
+              disabled={revogando}
+              className="min-h-11 px-4 rounded-full border-2 border-red-600/40 text-red-700 dark:text-red-300 text-sm font-bold disabled:opacity-50"
+            >
+              {revogando ? "Revogando…" : "Revogar consentimento"}
+            </button>
+          ) : null}
+          <p className="text-xs text-muted-foreground">
+            Revogar não apaga os resultados que já foram importados. Arquivos já lidos pelo Google seguem as regras do
+            Google.
+          </p>
+        </section>
+      ) : null}
 
       <section className="bg-card border rounded-3xl p-6 space-y-4">
         <h2 className="font-bold flex items-center gap-2">

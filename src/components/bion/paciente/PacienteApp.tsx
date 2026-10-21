@@ -33,6 +33,7 @@ import { CancelarRemarcarSheet, type AcaoSheet } from "./CancelarRemarcarSheet";
 import { fmtCentavos, rotuloReembolso, usePreviaCancelamento } from "./usePreviaCancelamento";
 import { desistirRemarcacao, iniciarRemarcacaoComMulta, useRecarregarEstado } from "./useRemarcacaoComMulta";
 import { EtiquetaStatus, PedirReembolsoSheet } from "./PedirReembolsoSheet";
+import { ExcluirContaSheet } from "./ExcluirContaSheet";
 import { consultaTemReembolso } from "./reembolso-visivel";
 import { GraficoLinha, type PontoGrafico } from "./GraficoLinha";
 import { EtiquetaTipo } from "./tipo-atendimento-ui";
@@ -126,6 +127,7 @@ export function PacienteApp() {
   const [reembolsoConsultaId, setReembolsoConsultaId] = useState<string | null>(null);
   // Fase 3: edição do perfil e "Ver tudo" abrem por cima de tudo (fora do carrossel).
   const [edicaoPerfil, setEdicaoPerfil] = useState<{ campo?: CampoPerfil } | null>(null);
+  const [excluindoConta, setExcluindoConta] = useState(false);
   const [listaCompleta, setListaCompleta] = useState<ListaPerfil | null>(null);
   // Conversa aberta em Documentos (o aviso do Início abre direto nela).
   const [conversaAtiva, setConversaAtiva] = useState<string | null>(null);
@@ -459,6 +461,7 @@ export function PacienteApp() {
             onEditar={(campo) => setEdicaoPerfil({ campo })}
             onVerTudo={setListaCompleta}
             onAgendar={() => setChatAberto(true)}
+            onExcluirConta={() => setExcluindoConta(true)}
           />
         </div>
 
@@ -1007,6 +1010,17 @@ export function PacienteApp() {
           key={consultaReembolso.id}
           consulta={consultaReembolso}
           onFechar={() => setReembolsoConsultaId(null)}
+        />
+      ) : null}
+
+      {excluindoConta ? (
+        <ExcluirContaSheet
+          onFechar={() => setExcluindoConta(false)}
+          onExcluida={async () => {
+            // A sessão já foi encerrada no servidor; sair() só limpa o estado local.
+            await sair().catch(() => {});
+            router.replace("/entrar");
+          }}
         />
       ) : null}
     </div>
