@@ -61,7 +61,7 @@ export function Landing() {
 
             <p className="text-base md:text-lg text-muted-foreground max-w-lg leading-relaxed">
               Marque consultas, converse com médicos especialistas em vídeo HD e receba receitas,
-              exames e atestados assinados digitalmente sem sair de casa.
+              pedidos de exame e atestados emitidos pelo médico sem sair de casa.
             </p>
 
             <div className="flex flex-wrap gap-3 pt-2">
@@ -84,7 +84,7 @@ export function Landing() {
                 <Shield className="w-4 h-4 text-primary" /> 100% LGPD & CFM
               </div>
               <div className="flex items-center gap-1.5">
-                <Check className="w-4 h-4 text-emerald-500 dark:text-emerald-400" /> Assinatura eletrônica + hash SHA-256
+                <Check className="w-4 h-4 text-emerald-500 dark:text-emerald-400" /> Documentos com hash SHA-256
               </div>
               <div className="flex items-center gap-1.5">
                 <Star className="w-4 h-4 text-amber-500 dark:text-amber-400 fill-amber-500" /> 4.9/5 de Avaliação
@@ -145,8 +145,8 @@ export function Landing() {
           },
           {
             icon: FileText,
-            t: "Documentos com Validade",
-            d: "Receitas e atestados aceitos em qualquer farmácia ou empresa.",
+            t: "Documentos digitais",
+            d: "Receitas e atestados emitidos pelo médico depois da consulta, com código de conferência.",
           },
         ].map((f, i) => (
           <div

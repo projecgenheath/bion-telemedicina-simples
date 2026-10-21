@@ -45,11 +45,12 @@ const RESPOSTAS_BASE: Record<string, string> = {
 
 💡 *Se tiver dúvidas específicas sobre o pedido emitido, fale com o suporte ou envie mensagem para o médico.*`,
 
-  atestado: `📄 **Regras e Validação de Atestados Médicos Digitais BION:**
+  atestado: `📄 **Sobre os atestados na BION:**
 
-• Todos os atestados emitidos na plataforma carregam assinatura eletrônica (MP 2.200-2/2001) com hash SHA-256 de validação e QR Code de conferência. Não se trata de assinatura qualificada ICP-Brasil (com certificado digital).
-• São aceitos nacionalmente por empresas, órgãos públicos e instituições de ensino conforme as resoluções do CFM nº 2.299/2021 e nº 2.314/2022.
-• O empregador pode validar o documento escaneando o QR Code timbrado ou pelo portal de validação oficial.`,
+• O atestado só é emitido pelo médico, depois de uma teleconsulta, quando ele avalia que é necessário.
+• O documento traz um código (hash SHA-256) que permite conferir se ele não foi alterado.
+• A BION ainda não tem assinatura digital com certificado ICP-Brasil.
+• Por isso, não garantimos que o atestado será aceito por toda empresa, escola ou órgão público. Cada instituição tem suas próprias regras; se tiver dúvida, pergunte antes a quem vai receber o documento.`,
 
   dor: `🩺 **Orientações Gerais sobre Cefaleia (Dor de Cabeça):**
 
@@ -84,7 +85,7 @@ export function BionIA() {
     : [
         "Como devo tomar minha Losartana 50mg?",
         "Preciso de quanto tempo de jejum para fazer exames?",
-        "O atestado digital é aceito na minha empresa?",
+        "Como funciona o atestado digital?",
         "O que fazer em caso de dor de cabeça constante?",
       ];
 
