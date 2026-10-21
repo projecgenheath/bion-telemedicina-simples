@@ -48,7 +48,9 @@ const RESPOSTAS_BASE: Record<string, string> = {
   atestado: `📄 **Sobre os atestados na BION:**
 
 • O atestado só é emitido pelo médico, depois de uma teleconsulta, quando ele avalia que é necessário.
-• Este documento tem um código de verificação (hash SHA-256), mas ainda não tem assinatura digital ICP-Brasil do médico. Por isso, pode não ser aceito como atestado ou receita válidos. A assinatura ICP-Brasil vai estar disponível em breve.`,
+• Este documento ainda não tem assinatura digital ICP-Brasil do médico e pode não ser aceito como atestado ou receita válidos.`,
+
+  icp: `Ainda não. Por enquanto, os documentos do app não têm assinatura ICP-Brasil e podem não ser aceitos como válidos.`,
 
   dor: `🩺 **Orientações Gerais sobre Cefaleia (Dor de Cabeça):**
 
@@ -77,7 +79,7 @@ export function BionIA() {
     ? [
         "Buscar código CID-10 para Cefaleia e Gripe",
         "Sugestão de conduta para Hipertensão Estágio 1",
-        "Como funciona a validade jurídica da receita digital CFM?",
+        "Minha receita digital tem assinatura ICP-Brasil?",
         "Gerar modelo de anamnese para teleconsulta de retorno",
       ]
     : [
@@ -118,6 +120,12 @@ export function BionIA() {
       lower.includes("laborat")
     ) {
       return RESPOSTAS_BASE.jejum!;
+    }
+    if (
+      lower.includes("icp") ||
+      lower.includes("assinatura")
+    ) {
+      return RESPOSTAS_BASE.icp!;
     }
     if (
       lower.includes("atestado") ||

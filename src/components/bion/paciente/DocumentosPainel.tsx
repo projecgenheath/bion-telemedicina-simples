@@ -105,7 +105,7 @@ function Visualizador({
           {corpo.map((p, i) => (
             <p key={i}>{p}</p>
           ))}
-          <p className="pt-4 text-xs opacity-80">Documento assinado digitalmente — BION Telemedicina.</p>
+          <p className="pt-4 text-xs opacity-80">Documento sem assinatura digital ICP-Brasil — BION Telemedicina.</p>
         </div>
       </div>
     </div>

@@ -12,12 +12,12 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "BION — Consulta médica online em minutos",
   description:
-    "Agende, entre na sala e faça sua consulta por vídeo em minutos. Receitas, atestados e prontuário digital em um só lugar.",
+    "Agende, entre na sala e faça sua consulta por vídeo em minutos. Seu histórico de consultas em um só lugar.",
   keywords: ["telemedicina", "consulta online", "BION", "saúde", "médico online"],
   openGraph: {
     title: "BION — Consulta médica online em minutos",
     description:
-      "Telemedicina simples e humanizada: agendamento rápido, vídeo em HD e documentos com validade legal.",
+      "Telemedicina simples e humanizada: agendamento rápido, vídeo em HD e acompanhamento médico.",
     type: "website",
     locale: "pt_BR",
   },

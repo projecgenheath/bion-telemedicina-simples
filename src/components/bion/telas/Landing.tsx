@@ -60,8 +60,8 @@ export function Landing() {
             </h1>
 
             <p className="text-base md:text-lg text-muted-foreground max-w-lg leading-relaxed">
-              Marque consultas, converse com médicos especialistas em vídeo HD e receba receitas,
-              pedidos de exame e atestados emitidos pelo médico sem sair de casa.
+              Marque consultas, converse com médicos especialistas em vídeo HD e receba as orientações
+              do médico sem sair de casa.
             </p>
 
             <div className="flex flex-wrap gap-3 pt-2">
@@ -82,9 +82,6 @@ export function Landing() {
             <div className="pt-6 border-t flex items-center gap-6 text-xs text-muted-foreground font-medium flex-wrap">
               <div className="flex items-center gap-1.5">
                 <Shield className="w-4 h-4 text-primary" /> 100% LGPD & CFM
-              </div>
-              <div className="flex items-center gap-1.5">
-                <Check className="w-4 h-4 text-emerald-500 dark:text-emerald-400" /> Documentos com hash SHA-256
               </div>
               <div className="flex items-center gap-1.5">
                 <Star className="w-4 h-4 text-amber-500 dark:text-amber-400 fill-amber-500" /> 4.9/5 de Avaliação
@@ -145,8 +142,8 @@ export function Landing() {
           },
           {
             icon: FileText,
-            t: "Documentos digitais",
-            d: "Código de verificação (hash SHA-256). Ainda sem assinatura ICP-Brasil do médico, por isso pode não ser aceito como atestado ou receita válidos. Assinatura ICP-Brasil em breve.",
+            t: "Sobre os documentos",
+            d: "Os documentos ainda não têm assinatura digital ICP-Brasil do médico, então podem não ser aceitos como documentos válidos.",
           },
         ].map((f, i) => (
           <div
