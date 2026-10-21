@@ -5,11 +5,8 @@ import {
   Calendar,
   Video,
   FileText,
-  Shield,
   Clock,
-  Star,
   ArrowRight,
-  Check,
   Sparkles,
 } from "lucide-react";
 import { Logo } from "@/components/bion/brand";
@@ -51,7 +48,7 @@ export function Landing() {
             <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-accent-soft text-accent text-xs font-bold">
               <Sparkles className="w-4 h-4" style={{ color: "var(--accent)" }} />
               <span style={{ color: "var(--accent)" }}>
-                A telemedicina mais simples e humanizada do Brasil
+                Telemedicina simples e humanizada
               </span>
             </div>
 
@@ -77,15 +74,6 @@ export function Landing() {
               >
                 Sou Médico / Especialista
               </button>
-            </div>
-
-            <div className="pt-6 border-t flex items-center gap-6 text-xs text-muted-foreground font-medium flex-wrap">
-              <div className="flex items-center gap-1.5">
-                <Shield className="w-4 h-4 text-primary" /> 100% LGPD & CFM
-              </div>
-              <div className="flex items-center gap-1.5">
-                <Star className="w-4 h-4 text-amber-500 dark:text-amber-400 fill-amber-500" /> 4.9/5 de Avaliação
-              </div>
             </div>
           </div>
 
