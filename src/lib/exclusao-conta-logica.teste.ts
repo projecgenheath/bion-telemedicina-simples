@@ -3,7 +3,14 @@
  * Rodar: bun src/lib/exclusao-conta-logica.teste.ts
  */
 import { confirmacaoExclusaoValida, motivosBloqueioExclusao } from "./exclusao-conta-logica";
-import { consentimentoIaExameValido, VERSAO_CONSENTIMENTO_IA_EXAME } from "./consentimento-ia-exame";
+import {
+  consentimentoIaExameValido,
+  estadoConsentimentoIaExame,
+  FINALIDADE_CONSENTIMENTO_IA_EXAME,
+  FINALIDADE_REVOGACAO_IA_EXAME,
+  PREFIXO_FINALIDADE_IA_EXAME,
+  VERSAO_CONSENTIMENTO_IA_EXAME,
+} from "./consentimento-ia-exame";
 import { limparMetadadosImagem } from "./server/limpar-metadados";
 
 let ok = 0;
@@ -33,6 +40,12 @@ igual("consentimento versão atual", consentimentoIaExameValido(VERSAO_CONSENTIM
 igual("consentimento ausente", consentimentoIaExameValido(null), false);
 igual("consentimento antigo", consentimentoIaExameValido("ia-exame-v0"), false);
 igual("consentimento 'true'", consentimentoIaExameValido("true"), false);
+
+igual("estado nunca", estadoConsentimentoIaExame(null), "nunca");
+igual("estado ativo", estadoConsentimentoIaExame({ aceito: true }), "ativo");
+igual("estado revogado", estadoConsentimentoIaExame({ aceito: false }), "revogado");
+igual("aceite tem prefixo e versão", FINALIDADE_CONSENTIMENTO_IA_EXAME.startsWith(PREFIXO_FINALIDADE_IA_EXAME) && FINALIDADE_CONSENTIMENTO_IA_EXAME.includes(VERSAO_CONSENTIMENTO_IA_EXAME), true);
+igual("revogação tem prefixo e versão", FINALIDADE_REVOGACAO_IA_EXAME.startsWith(PREFIXO_FINALIDADE_IA_EXAME) && FINALIDADE_REVOGACAO_IA_EXAME.includes(VERSAO_CONSENTIMENTO_IA_EXAME), true);
 
 // JPEG: SOI, APP0(JFIF), APP1(EXIF), COM, SOS + dados, EOI
 const jpeg = new Uint8Array([

@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { destruirSessao, exigirPapel, registrarAudit, verificarSenha } from "@/lib/server/auth";
 import { ok, falha } from "@/lib/server/http";
+import { usuarioSemNome } from "@/lib/server/audit-sem-nome";
 import { anonimizarPacienteCompleto } from "@/lib/server/lgpd";
 import {
   JANELA_FALHAS_MS,
@@ -110,7 +111,7 @@ export async function POST(req: NextRequest) {
     const pendencias = await pendenciasDe(usuario.id);
     const motivos = motivosBloqueioExclusao(pendencias);
     if (motivos.length) {
-      await registrarAudit(usuario, {
+      await registrarAudit(usuarioSemNome(usuario), {
         acao: "PACIENTE_AUTOEXCLUSAO_BLOQUEADA",
         categoria: "usuario",
         severidade: "warning",

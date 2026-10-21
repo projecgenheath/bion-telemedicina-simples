@@ -12,6 +12,7 @@ import {
 import { limparMetadadosImagem } from "@/lib/server/limpar-metadados";
 import { carregarDados, aplicarSideEffects } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
+import { usuarioSemNome } from "@/lib/server/audit-sem-nome";
 import { obterLLM, visaoGemini } from "@/lib/server/llm";
 
 /**
@@ -134,13 +135,13 @@ export async function POST(req: NextRequest) {
       data: {
         pacienteId: usuario.id,
         quem: usuario.nome,
-        perfil: "paciente",
+        perfil: "PACIENTE", // = usuario.role, igual a /api/consentimentos (a anonimização casa por "PACIENTE")
         finalidade: FINALIDADE_CONSENTIMENTO_IA_EXAME,
         documentos: 1,
         aceito: true,
       },
     });
-    await registrarAudit(usuario, {
+    await registrarAudit(usuarioSemNome(usuario), {
       acao: "CONSENTIMENTO_IA_EXAME",
       categoria: "consentimento",
       entidade: "consentimento",
