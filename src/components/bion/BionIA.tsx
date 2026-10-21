@@ -48,9 +48,7 @@ const RESPOSTAS_BASE: Record<string, string> = {
   atestado: `📄 **Sobre os atestados na BION:**
 
 • O atestado só é emitido pelo médico, depois de uma teleconsulta, quando ele avalia que é necessário.
-• O documento traz um código (hash SHA-256) que permite conferir se ele não foi alterado.
-• A BION ainda não tem assinatura digital com certificado ICP-Brasil.
-• Por isso, não garantimos que o atestado será aceito por toda empresa, escola ou órgão público. Cada instituição tem suas próprias regras; se tiver dúvida, pergunte antes a quem vai receber o documento.`,
+• Este documento tem um código de verificação (hash SHA-256), mas ainda não tem assinatura digital ICP-Brasil do médico. Por isso, pode não ser aceito como atestado ou receita válidos. A assinatura ICP-Brasil vai estar disponível em breve.`,
 
   dor: `🩺 **Orientações Gerais sobre Cefaleia (Dor de Cabeça):**
 

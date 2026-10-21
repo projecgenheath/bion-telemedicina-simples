@@ -146,7 +146,7 @@ export function Landing() {
           {
             icon: FileText,
             t: "Documentos digitais",
-            d: "Receitas e atestados emitidos pelo médico depois da consulta, com código de conferência.",
+            d: "Código de verificação (hash SHA-256). Ainda sem assinatura ICP-Brasil do médico, por isso pode não ser aceito como atestado ou receita válidos. Assinatura ICP-Brasil em breve.",
           },
         ].map((f, i) => (
           <div
