@@ -45,11 +45,12 @@ const RESPOSTAS_BASE: Record<string, string> = {
 
 💡 *Se tiver dúvidas específicas sobre o pedido emitido, fale com o suporte ou envie mensagem para o médico.*`,
 
-  atestado: `📄 **Regras e Validação de Atestados Médicos Digitais BION:**
+  atestado: `📄 **Sobre os atestados na BION:**
 
-• Todos os atestados emitidos na plataforma carregam assinatura eletrônica (MP 2.200-2/2001) com hash SHA-256 de validação e QR Code de conferência. Não se trata de assinatura qualificada ICP-Brasil (com certificado digital).
-• São aceitos nacionalmente por empresas, órgãos públicos e instituições de ensino conforme as resoluções do CFM nº 2.299/2021 e nº 2.314/2022.
-• O empregador pode validar o documento escaneando o QR Code timbrado ou pelo portal de validação oficial.`,
+• O atestado só é emitido pelo médico, depois de uma teleconsulta, quando ele avalia que é necessário.
+• Este documento ainda não tem assinatura digital ICP-Brasil do médico e pode não ser aceito como atestado ou receita válidos.`,
+
+  icp: `Ainda não. Por enquanto, os documentos do app não têm assinatura ICP-Brasil e podem não ser aceitos como válidos.`,
 
   dor: `🩺 **Orientações Gerais sobre Cefaleia (Dor de Cabeça):**
 
@@ -78,13 +79,13 @@ export function BionIA() {
     ? [
         "Buscar código CID-10 para Cefaleia e Gripe",
         "Sugestão de conduta para Hipertensão Estágio 1",
-        "Como funciona a validade jurídica da receita digital CFM?",
+        "Minha receita digital tem assinatura ICP-Brasil?",
         "Gerar modelo de anamnese para teleconsulta de retorno",
       ]
     : [
         "Como devo tomar minha Losartana 50mg?",
         "Preciso de quanto tempo de jejum para fazer exames?",
-        "O atestado digital é aceito na minha empresa?",
+        "Como funciona o atestado digital?",
         "O que fazer em caso de dor de cabeça constante?",
       ];
 
@@ -119,6 +120,12 @@ export function BionIA() {
       lower.includes("laborat")
     ) {
       return RESPOSTAS_BASE.jejum!;
+    }
+    if (
+      lower.includes("icp") ||
+      lower.includes("assinatura")
+    ) {
+      return RESPOSTAS_BASE.icp!;
     }
     if (
       lower.includes("atestado") ||
