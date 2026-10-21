@@ -82,6 +82,7 @@ export type {
   TicketSuporte,
 } from "./bion-tipos";
 import { normalizarTipoAtendimento } from "./bion-tipos";
+import type { AceiteTermosPayload } from "./aceite-termos";
 
 export {
   fmtCurta,
@@ -467,7 +468,7 @@ type Store = {
   precisaTrocarSenha: boolean;
   trocarSenha: (senhaAtual: string, novaSenha: string) => Promise<RespostaSenha>;
   entrar: (email: string, senha: string) => Promise<RespostaAuth>;
-  registrar: (nome: string, email: string, senha: string) => Promise<RespostaAuth>;
+  registrar: (nome: string, email: string, senha: string, aceiteTermos: AceiteTermosPayload) => Promise<RespostaAuth>;
   sair: () => Promise<void>;
   medicoes: Medicao[];
   exames: ExameLab[];
@@ -770,10 +771,10 @@ export function BionProvider({ children }: { children: ReactNode }) {
   );
 
   const registrar = useCallback(
-    async (nome: string, email: string, senha: string): Promise<RespostaAuth> => {
+    async (nome: string, email: string, senha: string, aceiteTermos: AceiteTermosPayload): Promise<RespostaAuth> => {
       const dados = await api<EstadoFresco>("/api/auth/registro", {
         method: "POST",
-        body: JSON.stringify({ nome, email, senha }),
+        body: JSON.stringify({ nome, email, senha, aceiteTermos }),
       });
       if (!dados) return { ok: false };
       aplicar(dados);

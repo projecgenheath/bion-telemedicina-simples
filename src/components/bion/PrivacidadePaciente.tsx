@@ -61,6 +61,40 @@ export function PrivacidadePaciente() {
     }
   };
 
+  // Opt-in de marketing: desligar/religar com um clique (cada troca = nova linha).
+  const [mkt, setMkt] = useState<{ ativo: boolean; em: string | null } | null>(null);
+  const [salvandoMkt, setSalvandoMkt] = useState(false);
+  useEffect(() => {
+    if (sessao.role !== "paciente") return;
+    let vivo = true;
+    fetch("/api/paciente/marketing")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { ativo: boolean; em: string | null } | null) => vivo && j && setMkt(j))
+      .catch(() => {});
+    return () => {
+      vivo = false;
+    };
+  }, [sessao.role]);
+  const alternarMkt = async () => {
+    if (salvandoMkt || !mkt) return;
+    const novo = !mkt.ativo;
+    setSalvandoMkt(true);
+    try {
+      const r = await fetch("/api/paciente/marketing", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ aceito: novo }),
+      });
+      if (!r.ok) throw new Error(String(r.status));
+      setMkt((await r.json()) as { ativo: boolean; em: string | null });
+      toast.success(novo ? "Pronto, você vai receber novidades e ofertas da BION." : "Pronto, você não vai mais receber novidades e ofertas.");
+    } catch {
+      toast.error("Não foi possível salvar agora. Tente novamente.");
+    } finally {
+      setSalvandoMkt(false);
+    }
+  };
+
   const minhasConsultas = consultas.filter((c) => c.paciente === sessao.nome);
   const medicosVinculados = Array.from(new Set(minhasConsultas.map((c) => c.medico)));
 
@@ -164,6 +198,35 @@ export function PrivacidadePaciente() {
           </div>
         )}
       </section>
+
+      {sessao.role === "paciente" ? (
+        <section className="bg-card border rounded-3xl p-6 space-y-3" aria-labelledby="titulo-mkt">
+          <h2 id="titulo-mkt" className="font-bold flex items-center gap-2">
+            <Shield className="w-4 h-4 text-primary" /> Novidades e ofertas
+          </h2>
+          <div className="flex items-center justify-between gap-4">
+            <p className="text-sm text-muted-foreground">Receber novidades e ofertas da BION por e-mail, push e WhatsApp.</p>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={!!mkt?.ativo}
+              aria-labelledby="titulo-mkt"
+              disabled={mkt === null || salvandoMkt}
+              onClick={() => void alternarMkt()}
+              className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition disabled:opacity-50 ${mkt?.ativo ? "bg-primary" : "bg-muted-foreground/30"}`}
+            >
+              <span className={`inline-block h-5 w-5 rounded-full bg-white shadow transition ${mkt?.ativo ? "translate-x-6" : "translate-x-1"}`} />
+            </button>
+          </div>
+          <p className="text-xs text-muted-foreground" aria-live="polite">
+            {mkt === null
+              ? "Carregando…"
+              : mkt.ativo
+                ? "Ativado. Você pode desligar quando quiser."
+                : "Desativado. A BION não envia novidades nem ofertas para você."}
+          </p>
+        </section>
+      ) : null}
 
       {sessao.role === "paciente" ? (
         <section className="bg-card border rounded-3xl p-6 space-y-3" aria-labelledby="titulo-cons-ia">
