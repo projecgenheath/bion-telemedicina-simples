@@ -2,7 +2,7 @@
  * Testes dos prazos e da pseudonimização do cron de descarte (lib/retencao-logica.ts).
  * Rodar: bun src/lib/retencao-logica.teste.ts
  */
-import { codigoPaciente, cortesRetencao, jaPseudonimizado, pseudonimizarTexto, subtrairMeses } from "./retencao-logica";
+import { auditoriaDescartavel, CATEGORIAS_DESCARTE_AUDITORIA, filtroDescarteAuditoria, modoSimulacao, codigoPaciente, cortesRetencao, jaPseudonimizado, pseudonimizarTexto, subtrairMeses } from "./retencao-logica";
 
 let ok = 0;
 let falhas = 0;
@@ -48,6 +48,37 @@ igual("caracteres de regex no nome", pseudonimizarTexto("por Ana (Bia)", "Ana (B
 const uma = pseudonimizarTexto("por João da Silva", n, cod);
 igual("idempotente", pseudonimizarTexto(uma, n, cod), uma);
 igual("texto sem nome inalterado", pseudonimizarTexto("Problema no vídeo", n, cod), "Problema no vídeo");
+
+// Allowlist do descarte de 5 anos
+igual("allowlist", [...CATEGORIAS_DESCARTE_AUDITORIA], ["autenticacao", "suporte", "sistema"]);
+igual("login apaga", auditoriaDescartavel({ acao: "LOGIN", categoria: "autenticacao" }), true);
+igual("suporte apaga", auditoriaDescartavel({ acao: "TICKET_RESPONDIDO", categoria: "suporte", entidade: "ticket" }), true);
+igual("sistema apaga", auditoriaDescartavel({ acao: "RETENCAO_DESCARTE_CRON", categoria: "sistema", entidade: "Retencao" }), true);
+for (const cat of ["prontuario", "documento", "consentimento", "consulta", "admin", "usuario", "financeiro"])
+  igual(`categoria ${cat} nunca`, auditoriaDescartavel({ acao: "X", categoria: cat }), false);
+for (const cat of ["autenticacao", "suporte", "sistema"]) {
+  for (const acao of ["CONSENTIMENTO_REGISTRADO", "CONSENTIMENTO_IA_EXAME", "CONSENTIMENTO_IA_EXAME_REVOGADO",
+    "EXCLUSAO_CONTA_SOLICITADA_PENDENTE", "EXCLUSAO_CONTA_FALHOU", "repasse_pago", "repasse_fechado_cron",
+    "PRONTUARIO_PDF_EXPORTADO", "DOCUMENTO_VISUALIZADO", "DOCUMENTO_PDF_BAIXADO", "ARQUIVO_ENVIADO", "documento"])
+    igual(`${acao} em ${cat} nunca`, auditoriaDescartavel({ acao, categoria: cat }), false);
+  for (const entidade of ["prontuario", "documento", "arquivo", "Repasse", "pagamento", "consentimento"])
+    igual(`entidade ${entidade} em ${cat} nunca`, auditoriaDescartavel({ acao: "ACESSO", categoria: cat, entidade }), false);
+}
+const f = filtroDescarteAuditoria(c.auditoria);
+igual("filtro usa a allowlist", f.categoria.in, ["autenticacao", "suporte", "sistema"]);
+igual("filtro tem corte", f.createdAt.lt === c.auditoria, true);
+const txt = JSON.stringify(f);
+for (const k of ["CONSENTIMENTO_", "REPASSE_", "PRONTUARIO_", "DOCUMENTO_", "EXCLUSAO_CONTA_FALHOU", "EXCLUSAO_CONTA_SOLICITADA_PENDENTE", "insensitive", "\"entidade\":null"])
+  igual(`filtro exclui ${k}`, txt.includes(k), true);
+
+// Simulação (dryRun)
+igual("padrão sem env simula", modoSimulacao(undefined, null), true);
+igual("env 0 simula", modoSimulacao("0", null), true);
+igual("env true não ativa", modoSimulacao("true", null), true);
+igual("env 1 ativa", modoSimulacao("1", null), false);
+igual("env 1 + dryRun=1 simula", modoSimulacao("1", "1"), true);
+igual("env 1 + dryRun=true simula", modoSimulacao("1", "true"), true);
+igual("env 1 + dryRun=0 ativa", modoSimulacao("1", "0"), false);
 
 console.log(`${ok} ok, ${falhas} falha(s)`);
 if (falhas) process.exit(1);

@@ -3,6 +3,7 @@ import { NextRequest } from "next/server";
 import { registrarAudit } from "@/lib/server/auth";
 import { ok, falha } from "@/lib/server/http";
 import { executarRetencao } from "@/lib/server/retencao";
+import { modoSimulacao } from "@/lib/retencao-logica";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -21,6 +22,7 @@ function autorizado(req: NextRequest): boolean | null {
  * Cron da Vercel (vercel.json, 06:00 UTC = 03:00 em SP): descarte e
  * pseudonimização pelos prazos do Jurídico (lib/retencao-logica.ts).
  * Idempotente e em lotes; registra só contagens, sem dado pessoal.
+ * Simulação por padrão: só apaga/altera com RETENCAO_DESCARTE_ATIVO=1; ?dryRun=1 força simulação.
  */
 export async function GET(req: NextRequest) {
   try {
@@ -28,7 +30,8 @@ export async function GET(req: NextRequest) {
     if (ok_ === null) return Response.json({ erro: "CRON_SECRET não configurado." }, { status: 503 });
     if (!ok_) return Response.json({ erro: "Não autorizado." }, { status: 401 });
 
-    const r = await executarRetencao(new Date());
+    const simulacao = modoSimulacao(process.env.RETENCAO_DESCARTE_ATIVO, req.nextUrl.searchParams.get("dryRun"));
+    const r = await executarRetencao(new Date(), { simulacao });
     console.log("[cron/descarte-retencao]", JSON.stringify(r));
     await registrarAudit(null, {
       acao: "RETENCAO_DESCARTE_CRON",
