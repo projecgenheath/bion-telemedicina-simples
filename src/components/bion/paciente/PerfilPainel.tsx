@@ -7,7 +7,6 @@ import {
   Briefcase,
   CalendarDays,
   ChevronRight,
-  CreditCard,
   Droplets,
   FileUp,
   HeartCrack,
@@ -23,7 +22,7 @@ import {
 import { useBion } from "@/lib/bion-store";
 import { calcularImc, formatarAltura, formatarPeso, lerAlturaCm, lerPesoKg } from "@/lib/medidas-paciente";
 import { formatarDataNascimento, idadeDeNascimento, type ComDataNascimento } from "@/lib/idade";
-import { CLASSE_ETIQUETA, rotuloHistorico } from "./etiqueta-consulta";
+import { LinhaConsultaPagamento } from "./LinhaConsultaPagamento";
 import { EstadoVazio } from "./EstadosPaciente";
 import { aplicarTema, useTemaHtml } from "./useTemaHtml";
 import type { CampoPerfil } from "./DadosPessoaisSheet";
@@ -32,7 +31,7 @@ import type { ListaPerfil } from "./TelaListaCompleta";
 /**
  * Painel do perfil (gesto esquerda → direita), reorganizado em grupos na
  * fase 3: cabeçalho com foto, cartão de saúde, dados pessoais (linhas que
- * abrem a janela de edição com Salvar e Cancelar), consultas, pagamentos e
+ * abrem a janela de edição com Salvar e Cancelar), consultas e pagamentos (um card) e
  * uploads (3 últimos + "Ver tudo" em tela cheia), aparência, conta e Sair.
  *
  * A edição e o "Ver tudo" são sobreposições renderizadas pelo PacienteApp
@@ -162,7 +161,6 @@ export function PerfilPainel({
     () => arquivos.filter((a) => a.enviadoPor === "paciente" || a.consulta === "BION IA"),
     [arquivos],
   );
-  const pagamentos = useMemo(() => consultasDoPaciente.filter((c) => c.status !== "cancelada"), [consultasDoPaciente]);
 
   // Peso, altura e IMC do cartão de saúde: medição mais recente; se não houver, o perfil.
   const ultimaMedicao = (tipo: "peso" | "altura") =>
@@ -326,8 +324,8 @@ export function PerfilPainel({
         <LinhaDado icone={<Users className="w-4 h-4" />} rotulo="Sexo" valor={pacientePerfil?.genero} />
       </Grupo>
 
-      {/* Consultas: 3 últimas + Ver tudo */}
-      <Grupo titulo="Consultas" acao={<VerTudo total={consultasDoPaciente.length} rotulo="histórico de consultas" onClick={() => onVerTudo("consultas")} />}>
+      {/* Consultas e pagamentos: um card só (antes eram dois com as mesmas consultas) */}
+      <Grupo titulo="Consultas e pagamentos" acao={<VerTudo total={consultasDoPaciente.length} rotulo="consultas e pagamentos" onClick={() => onVerTudo("consultas")} />}>
         {consultasDoPaciente.length === 0 ? (
           <EstadoVazio
             superficie="solto"
@@ -337,37 +335,7 @@ export function PerfilPainel({
             acao={{ rotulo: "Agendar consulta", onClick: onAgendar }}
           />
         ) : (
-          consultasDoPaciente.slice(0, PREVIA).map((c) => {
-            const e = rotuloHistorico(c.status, c.pago);
-            return (
-              <div key={c.id} className="bpp-linha">
-                <div className="min-w-0 flex-1">
-                  <div className="text-sm font-semibold text-bion-ink dark:text-bion-paper truncate">{c.especialidade} · {c.medico}</div>
-                  <div className="text-xs text-bion-ink/75 dark:text-bion-paper/75">{c.data} às {c.hora}</div>
-                </div>
-                <span className={`text-xs font-bold px-2.5 py-1 rounded-full whitespace-nowrap ${CLASSE_ETIQUETA[e.tom]}`}>{e.texto}</span>
-              </div>
-            );
-          })
-        )}
-      </Grupo>
-
-      {/* Pagamentos */}
-      <Grupo titulo="Pagamentos" acao={<VerTudo total={pagamentos.length} rotulo="pagamentos" onClick={() => onVerTudo("pagamentos")} />}>
-        {pagamentos.length === 0 ? (
-          <div className="bpp-linha">
-            <CreditCard className="w-4 h-4 shrink-0 text-bion-ink/75 dark:text-bion-paper/75" aria-hidden />
-            <span className="text-sm text-bion-ink/75 dark:text-bion-paper/75">Nenhum pagamento ainda.</span>
-          </div>
-        ) : (
-          pagamentos.slice(0, PREVIA).map((c) => (
-            <div key={c.id} className="bpp-linha">
-              <span className="min-w-0 flex-1 text-sm font-semibold truncate text-bion-ink dark:text-bion-paper">{c.especialidade} · {c.data}</span>
-              <span className={`shrink-0 text-xs font-bold px-2.5 py-1 rounded-full ${c.pago ? CLASSE_ETIQUETA.ok : CLASSE_ETIQUETA.pagamento}`}>
-                {c.pago ? "Pago" : "Pendente"}{c.valor ? ` · ${c.valor}` : ""}
-              </span>
-            </div>
-          ))
+          consultasDoPaciente.slice(0, PREVIA).map((c) => <LinhaConsultaPagamento key={c.id} c={c} />)
         )}
       </Grupo>
 
