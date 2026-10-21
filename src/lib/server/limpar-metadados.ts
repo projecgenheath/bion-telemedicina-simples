@@ -16,16 +16,22 @@
  * Arquivo puro (sem "server-only") para os testes.
  */
 
-export type ResultadoLimpeza = { bytes: Uint8Array; removidos: number };
+/** `aviso` preenchido quando a foto tinha estrutura inesperada e foi devolvida SEM limpeza. */
+export type ResultadoLimpeza = { bytes: Uint8Array; removidos: number; aviso?: string };
 
 export function limparMetadadosImagem(mime: string, entrada: Uint8Array): ResultadoLimpeza {
   try {
-    if (mime === "image/jpeg" || mime === "image/jpg") return limparJpeg(entrada);
-    if (mime === "image/png") return limparPng(entrada);
+    if (mime === "image/jpeg" || mime === "image/jpg") return comAviso(limparJpeg(entrada), entrada, "jpeg");
+    if (mime === "image/png") return comAviso(limparPng(entrada), entrada, "png");
   } catch {
-    /* estrutura inesperada: segue o original */
+    return { bytes: entrada, removidos: 0, aviso: "erro_leitura" };
   }
   return { bytes: entrada, removidos: 0 };
+}
+
+/** O limpador devolveu o PRÓPRIO original (mesmo objeto) só quando desistiu. */
+function comAviso(r: ResultadoLimpeza, entrada: Uint8Array, tipo: string): ResultadoLimpeza {
+  return r.bytes === entrada ? { ...r, aviso: `${tipo}_estrutura_inesperada` } : r;
 }
 
 function limparJpeg(b: Uint8Array): ResultadoLimpeza {

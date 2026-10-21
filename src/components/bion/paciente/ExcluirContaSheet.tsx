@@ -4,7 +4,11 @@ import { useEffect, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { useVoltarFecha } from "./useVoltarFecha";
 import { useFocoDialogo } from "./useFocoDialogo";
-import { PALAVRA_CONFIRMACAO_EXCLUSAO, confirmacaoExclusaoValida } from "@/lib/exclusao-conta-logica";
+import {
+  PALAVRA_CONFIRMACAO_EXCLUSAO,
+  PRAZO_CONCLUSAO_PEDIDO_DIAS,
+  confirmacaoExclusaoValida,
+} from "@/lib/exclusao-conta-logica";
 
 /**
  * Folha "Excluir minha conta" (LGPD art. 18, VI). Explica o que acontece,
@@ -19,6 +23,9 @@ export function ExcluirContaSheet({ onFechar, onExcluida }: { onFechar: () => vo
   const [senha, setSenha] = useState("");
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  // Pedido registrado no servidor sem exclusão imediata: "pendente" (há
+  // pendências; a sessão continua) ou "falha" (sessão já encerrada).
+  const [registrado, setRegistrado] = useState<{ tipo: "pendente" | "falha"; texto: string } | null>(null);
 
   useEffect(() => {
     let vivo = true;
@@ -32,7 +39,7 @@ export function ExcluirContaSheet({ onFechar, onExcluida }: { onFechar: () => vo
   }, []);
 
   const bloqueada = (motivos?.length ?? 0) > 0;
-  const pode = motivos !== null && !bloqueada && confirmacaoExclusaoValida(confirmacao) && senha.length > 0 && !enviando;
+  const pode = motivos !== null && !registrado && confirmacaoExclusaoValida(confirmacao) && senha.length > 0 && !enviando;
 
   const excluir = async () => {
     if (!pode) return;
@@ -44,12 +51,18 @@ export function ExcluirContaSheet({ onFechar, onExcluida }: { onFechar: () => vo
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ confirmacao, senha }),
       });
-      const j = (await r.json().catch(() => ({}))) as { erro?: string; motivos?: string[] };
+      const j = (await r.json().catch(() => ({}))) as { erro?: string; motivos?: string[]; pedidoRegistrado?: boolean };
       if (r.ok) {
         onExcluida();
         return;
       }
       if (r.status === 409 && j.motivos) setMotivos(j.motivos);
+      if (j.pedidoRegistrado) {
+        setRegistrado({ tipo: r.status === 409 ? "pendente" : "falha", texto: j.erro ?? "Seu pedido de exclusão foi registrado." });
+        setSenha("");
+        setEnviando(false);
+        return;
+      }
       setErro(j.erro ?? "Não foi possível excluir a conta agora. Tente novamente.");
     } catch {
       setErro("Falha de conexão. Tente novamente.");
@@ -99,16 +112,28 @@ export function ExcluirContaSheet({ onFechar, onExcluida }: { onFechar: () => vo
         ) : null}
         {bloqueada ? (
           <div className="mt-4 rounded-2xl border border-amber-400/40 bg-amber-500/10 p-3 text-sm text-amber-900 dark:text-amber-100" role="alert">
-            <p className="font-bold">Ainda não dá para excluir a conta:</p>
+            <p className="font-bold">Ainda não dá para excluir a conta agora:</p>
             <ul className="list-disc pl-5 mt-1">
               {motivos!.map((m) => (
                 <li key={m}>{m}</li>
               ))}
             </ul>
+            {!registrado ? (
+              <p className="mt-2">
+                Se quiser, confirme abaixo para registrar o pedido. Assim que as pendências forem resolvidas, a BION conclui a
+                exclusão em até {PRAZO_CONCLUSAO_PEDIDO_DIAS} dias.
+              </p>
+            ) : null}
           </div>
         ) : null}
 
-        {motivos !== null && !bloqueada ? (
+        {registrado ? (
+          <div className="mt-4 rounded-2xl border bpp-sheet-borda bpp-sheet-cartao p-3 text-sm" role="status">
+            {registrado.texto}
+          </div>
+        ) : null}
+
+        {motivos !== null && !registrado ? (
           <>
             <label htmlFor="confirmar-exclusao" className="block text-xs font-bold mt-4 mb-2 bpp-sheet-suave">
               Digite {PALAVRA_CONFIRMACAO_EXCLUSAO} para confirmar
@@ -144,18 +169,23 @@ export function ExcluirContaSheet({ onFechar, onExcluida }: { onFechar: () => vo
         ) : null}
 
         <div className="flex gap-2 mt-5">
-          <button type="button" onClick={fechar} disabled={enviando} className="bpp-toque flex-1 py-3 rounded-xl border bpp-sheet-borda text-sm font-semibold disabled:opacity-40">
-            Voltar
-          </button>
           <button
+            type="button"
+            onClick={registrado?.tipo === "falha" ? onExcluida : fechar}
+            disabled={enviando}
+            className="bpp-toque flex-1 py-3 rounded-xl border bpp-sheet-borda text-sm font-semibold disabled:opacity-40"
+          >
+            {registrado?.tipo === "falha" ? "Ir para o login" : registrado ? "Fechar" : "Voltar"}
+          </button>
+          {registrado ? null : <button
             type="button"
             onClick={() => void excluir()}
             disabled={!pode}
             className="bpp-toque flex-1 py-3 rounded-xl bg-red-700 text-white text-sm font-bold disabled:opacity-40 inline-flex items-center justify-center gap-2"
           >
             {enviando ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden /> : null}
-            Excluir conta
-          </button>
+            {bloqueada ? "Registrar pedido de exclusão" : "Excluir conta"}
+          </button>}
         </div>
       </div>
     </div>

@@ -2,7 +2,7 @@
  * Testes das regras da exclusão da conta pelo paciente.
  * Rodar: bun src/lib/exclusao-conta-logica.teste.ts
  */
-import { confirmacaoExclusaoValida, motivosBloqueioExclusao } from "./exclusao-conta-logica";
+import { confirmacaoExclusaoValida, motivosBloqueioExclusao, STATUS_REEMBOLSO_ABERTO, STATUS_RENOVACAO_ABERTA, MENSAGEM_PEDIDO_REGISTRADO } from "./exclusao-conta-logica";
 import {
   consentimentoIaExameValido,
   estadoConsentimentoIaExame,
@@ -31,10 +31,19 @@ igual("minúsculo recusa", confirmacaoExclusaoValida("excluir"), false);
 igual("vazio recusa", confirmacaoExclusaoValida(""), false);
 igual("não string", confirmacaoExclusaoValida(1), false);
 
-igual("sem pendências", motivosBloqueioExclusao({ consultasAtivas: 0, reembolsosAbertos: 0, remarcacoesAbertas: 0 }), []);
-igual("consulta ativa bloqueia", motivosBloqueioExclusao({ consultasAtivas: 1, reembolsosAbertos: 0, remarcacoesAbertas: 0 }).length, 1);
-igual("três motivos", motivosBloqueioExclusao({ consultasAtivas: 2, reembolsosAbertos: 1, remarcacoesAbertas: 3 }).length, 3);
-igual("plural", motivosBloqueioExclusao({ consultasAtivas: 2, reembolsosAbertos: 0, remarcacoesAbertas: 0 })[0].startsWith("2 consultas ativas"), true);
+igual("sem pendências", motivosBloqueioExclusao({ consultasAtivas: 0, reembolsosAbertos: 0, remarcacoesAbertas: 0, renovacoesAbertas: 0, pagamentosPendentesSemConsulta: 0 }), []);
+igual("consulta ativa bloqueia", motivosBloqueioExclusao({ consultasAtivas: 1, reembolsosAbertos: 0, remarcacoesAbertas: 0, renovacoesAbertas: 0, pagamentosPendentesSemConsulta: 0 }).length, 1);
+igual("três motivos", motivosBloqueioExclusao({ consultasAtivas: 2, reembolsosAbertos: 1, remarcacoesAbertas: 3, renovacoesAbertas: 0, pagamentosPendentesSemConsulta: 0 }).length, 3);
+igual("plural", motivosBloqueioExclusao({ consultasAtivas: 2, reembolsosAbertos: 0, remarcacoesAbertas: 0, renovacoesAbertas: 0, pagamentosPendentesSemConsulta: 0 })[0].startsWith("2 consultas ativas"), true);
+
+const zero = { consultasAtivas: 0, reembolsosAbertos: 0, remarcacoesAbertas: 0, renovacoesAbertas: 0, pagamentosPendentesSemConsulta: 0 };
+igual("reembolso falhou bloqueia", (STATUS_REEMBOLSO_ABERTO as readonly string[]).includes("falhou"), true);
+igual("reembolso processado não bloqueia", (STATUS_REEMBOLSO_ABERTO as readonly string[]).includes("processado"), false);
+igual("renovação aberta = aguardando_pagamento+pendente", [...STATUS_RENOVACAO_ABERTA], ["aguardando_pagamento", "pendente"]);
+igual("renovação aberta bloqueia", motivosBloqueioExclusao({ ...zero, renovacoesAbertas: 1 }).length, 1);
+igual("pagamento pendente sem consulta bloqueia", motivosBloqueioExclusao({ ...zero, pagamentosPendentesSemConsulta: 2 })[0].startsWith("2 pagamentos pendentes"), true);
+igual("cinco motivos", motivosBloqueioExclusao({ consultasAtivas: 1, reembolsosAbertos: 1, remarcacoesAbertas: 1, renovacoesAbertas: 1, pagamentosPendentesSemConsulta: 1 }).length, 5);
+igual("mensagem cita 15 dias", MENSAGEM_PEDIDO_REGISTRADO.includes("15 dias"), true);
 
 igual("consentimento versão atual", consentimentoIaExameValido(VERSAO_CONSENTIMENTO_IA_EXAME), true);
 igual("consentimento ausente", consentimentoIaExameValido(null), false);
@@ -59,6 +68,8 @@ const lj = limparMetadadosImagem("image/jpeg", jpeg);
 igual("jpeg removidos", lj.removidos, 2);
 igual("jpeg resultado", [...lj.bytes], [0xff, 0xd8, 0xff, 0xe0, 0x00, 0x04, 0x4a, 0x46, 0xff, 0xda, 0x00, 0x02, 0x11, 0x22, 0xff, 0xd9]);
 igual("jpeg truncado = original", limparMetadadosImagem("image/jpeg", jpeg.subarray(0, 10)).removidos, 0);
+igual("jpeg truncado avisa", limparMetadadosImagem("image/jpeg", jpeg.subarray(0, 10)).aviso, "jpeg_estrutura_inesperada");
+igual("jpeg ok sem aviso", lj.aviso, undefined);
 
 function chunk(tipo: string, dados: number[]) {
   const n = dados.length;

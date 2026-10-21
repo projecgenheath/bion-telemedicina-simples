@@ -130,7 +130,8 @@ export async function POST(req: NextRequest) {
     }
 
     // Registra o aceite (data/hora = createdAt; versão na finalidade/detalhes)
-    // ANTES de qualquer envio. Falhou o registro → não envia.
+    // ANTES de qualquer envio. Falhou o Consentimento OU a auditoria → não envia
+    // (registrarAudit engole erros e devolve null; por isso o teste abaixo).
     await db.consentimento.create({
       data: {
         pacienteId: usuario.id,
@@ -141,7 +142,7 @@ export async function POST(req: NextRequest) {
         aceito: true,
       },
     });
-    await registrarAudit(usuarioSemNome(usuario), {
+    const auditAceite = await registrarAudit(usuarioSemNome(usuario), {
       acao: "CONSENTIMENTO_IA_EXAME",
       categoria: "consentimento",
       entidade: "consentimento",
@@ -149,8 +150,17 @@ export async function POST(req: NextRequest) {
       detalhes: `Aceite do envio de laudo ao Google (Gemini) — versão ${VERSAO_CONSENTIMENTO_IA_EXAME} em ${new Date().toISOString()}`,
     });
 
+    if (!auditAceite) {
+      return Response.json(
+        { erro: "Não consegui registrar sua autorização agora, então o laudo não foi enviado. Tente novamente." },
+        { status: 503 },
+      );
+    }
+
     const original = new Uint8Array(await arquivo.arrayBuffer());
-    const bytes = Buffer.from(limparMetadadosImagem(mime, original).bytes);
+    const limpeza = limparMetadadosImagem(mime, original);
+    if (limpeza.aviso) console.warn(`[BION IA exame] metadados não removidos (${limpeza.aviso}); arquivo enviado como veio`);
+    const bytes = Buffer.from(limpeza.bytes);
     const dataUrl = `data:${mime};base64,${bytes.toString("base64")}`;
     const base64Puro = bytes.toString("base64");
 
@@ -257,7 +267,7 @@ export async function POST(req: NextRequest) {
     const dataValida = Number.isNaN(dataColeta.getTime()) ? new Date() : dataColeta;
 
     // Registra o upload no histórico (mesmo registro visto no perfil)
-    await db.arquivo.create({
+    const arquivoRegistrado = await db.arquivo.create({
       data: {
         nome: arquivo.name || "laudo.pdf",
         tipo: ehPdf ? "application/pdf" : mime,
@@ -301,7 +311,7 @@ export async function POST(req: NextRequest) {
     }
 
     await aplicarSideEffects(
-      usuario,
+      usuarioSemNome(usuario), // auditoria só com id (sem nome do paciente)
       [
         {
           tipo: "exame",
@@ -313,7 +323,10 @@ export async function POST(req: NextRequest) {
       {
         acao: "EXAME_IMPORTADO_IA",
         categoria: "prontuario",
-        detalhes: `Laudo "${arquivo.name}" lido pela IA e vinculado a ${usuario.nome} (${examesSalvos.length} grupos)`,
+        entidade: "arquivo",
+        entidadeId: arquivoRegistrado.id,
+        // Só ids: sem nome do paciente nem nome original do arquivo.
+        detalhes: `Laudo (arquivo ${arquivoRegistrado.id}) lido pela IA para o paciente id ${usuario.id} (${examesSalvos.length} grupos)`,
       },
     );
 
