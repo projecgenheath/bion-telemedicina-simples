@@ -269,7 +269,11 @@ async function banco() {
 
   await db.chatConsulta.deleteMany({ where: { consultaId: c.id } });
   await db.sinalSala.deleteMany({ where: { consultaId: c.id } });
-  await db.consulta.delete({ where: { id: c.id } });
+  // FK Restrict do médico (LGPD): apaga primeiro o prontuário criado no teste.
+  await db.evolucao.deleteMany({ where: { medicoId: med.id } });
+  await db.documento.deleteMany({ where: { medicoId: med.id } });
+  await db.pedidoRenovacao.deleteMany({ where: { medicoId: med.id } });
+  await db.consulta.deleteMany({ where: { medicoId: med.id } });
   await db.user.deleteMany({ where: { id: { in: [pac.id, med.id] } } });
   await db.$disconnect();
 }

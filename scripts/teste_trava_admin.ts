@@ -36,6 +36,10 @@ async function main() {
   await db.remarcacaoPendente.deleteMany();
   await db.bloqueioAgenda.deleteMany();
   await db.chatConsulta.deleteMany(); // FK Restrict: o chat vai antes da Consulta
+  // FK Restrict do médico (LGPD): prontuário antes da Consulta e do User.
+  await db.evolucao.deleteMany();
+  await db.documento.deleteMany();
+  await db.pedidoRenovacao.deleteMany();
   await db.consulta.deleteMany();
   await db.user.deleteMany();
   const med = await db.user.create({ data: { nome: "Med", email: "m@t", senhaHash: "x", role: "MEDICO" } });

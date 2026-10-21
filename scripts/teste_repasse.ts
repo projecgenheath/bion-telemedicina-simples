@@ -51,6 +51,10 @@ async function limpar() {
   await db.eventoConsulta.deleteMany();
   await db.pagamento.deleteMany();
   await db.chatConsulta.deleteMany(); // FK Restrict: o chat vai antes da Consulta
+  // FK Restrict do médico (LGPD): prontuário antes da Consulta e do User.
+  await db.evolucao.deleteMany();
+  await db.documento.deleteMany();
+  await db.pedidoRenovacao.deleteMany();
   await db.consulta.deleteMany();
   await db.user.deleteMany();
 }

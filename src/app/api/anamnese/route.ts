@@ -18,6 +18,7 @@ import {
 import { validarTelefone } from "@/lib/server/validar-perfil";
 import { dataNascimentoParaIso, idadeDeNascimento } from "@/lib/idade";
 import { anonimizarMensagensIa } from "@/lib/server/anonimizar-ia";
+import { anonimizarMensagensTexto } from "@/lib/server/anonimizar-texto";
 import { alturaCanonica, formatarAltura, formatarPeso, lerAlturaCm, lerPesoKg, medidaCanonica, pesoCanonico } from "@/lib/medidas-paciente";
 import { nomesMedicamentosEmUso } from "@/lib/server/medicamentos-legado";
 
@@ -513,10 +514,10 @@ export async function POST(req: NextRequest) {
 
     // BION_MOTOR_LOCAL=1 força o motor determinístico (teste do comportamento
     // Preferência 2026-09-29: motor LOCAL é o caminho padrão da triagem
-    // (funciona sem Gemma/API). LLM só se body.modo === "ia" ou BION_ANAMNESE_LLM=1.
-    const tentarLlm =
-      process.env.BION_MOTOR_LOCAL !== "1" &&
-      (process.env.BION_ANAMNESE_LLM === "1" || (body as { modo?: string }).modo === "ia");
+    // (funciona sem Gemma/API). LGPD: a IA externa só roda com
+    // BION_ANAMNESE_LLM=1 no SERVIDOR; o `modo: "ia"` do cliente é ignorado
+    // (antes ele mandava a anamnese ao Google mesmo sem a variável).
+    const tentarLlm = process.env.BION_MOTOR_LOCAL !== "1" && process.env.BION_ANAMNESE_LLM === "1";
 
     if (tentarLlm && !fugaCurta && (historico.length > 0 || Boolean(mensagem))) {
       const instrucaoAbertura = mensagem
@@ -552,7 +553,7 @@ export async function POST(req: NextRequest) {
           where: { userId: usuario.id },
           select: { cpf: true, telefone: true, dataNascimento: true },
         });
-        const mensagensIa = anonimizarMensagensIa(mensagens, {
+        const mensagensIdent = anonimizarMensagensIa(mensagens, {
           nome: usuario.nome,
           email: usuario.email,
           cpf: idsPerfil?.cpf,
@@ -560,6 +561,12 @@ export async function POST(req: NextRequest) {
           dataNascimento: dataNascimentoParaIso(idsPerfil?.dataNascimento),
           substitutoNome: (perfilDados?.genero ?? "").toLowerCase().startsWith("m") ? "o paciente" : "a paciente",
         });
+        // LGPD: mesmo filtro do Copilot do médico — nome do médico e do
+        // paciente, CPF, telefone, e-mail, CEP, datas e endereço digitados.
+        const mensagensIa = anonimizarMensagensTexto(
+          anonimizarMensagensTexto(mensagensIdent, { nomesPacientes: [consulta.medico.nome], substitutoNome: "o médico" }),
+          { nomesPacientes: [usuario.nome] },
+        );
         const llmRes = await chatComFonte(mensagensIa, TIMEOUT_LLM_MS, anonNomes(usuario, consulta.medico.nome, perfilDados?.genero ?? ""));
         llmFonte = llmRes.fonte;
         parsed = llmRes.texto ? extrairJson(llmRes.texto) : null;

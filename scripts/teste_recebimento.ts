@@ -220,6 +220,12 @@ async function testarRota(url: string) {
       },
     },
   }); // FK Restrict: o chat vai antes do User (cascade User → Consulta)
+  // FK Restrict do médico (LGPD): prontuário e consultas antes do User.
+  const doTeste = { OR: [{ pacienteId: { startsWith: "trec_" } }, { medicoId: { startsWith: "trec_" } }] };
+  await db.evolucao.deleteMany({ where: doTeste });
+  await db.documento.deleteMany({ where: doTeste });
+  await db.pedidoRenovacao.deleteMany({ where: doTeste });
+  await db.consulta.deleteMany({ where: doTeste });
   await db.user.deleteMany({ where: { id: { startsWith: "trec_" } } });
   const mkUser = (id: string, role: string) => db.user.create({ data: { id, nome: `Usuário ${id}`, email: `${id}@teste.local`, senhaHash: "x", role } });
   await mkUser("trec_medA", "MEDICO");
