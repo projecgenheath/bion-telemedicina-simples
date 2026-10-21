@@ -12,6 +12,7 @@ const PUBLICOS: readonly string[] = [
   "/api/cron/fechar-repasses", // protegido pelo Bearer CRON_SECRET na própria rota
   "/api/cron/toque", // idem (pg_cron + pg_net a cada minuto)
   "/api/cron/espera-medico", // idem (pg_cron a cada minuto)
+  "/api/cron/descarte-retencao", // idem (cron da Vercel, 03:00 em SP)
 ];
 
 function ehPublico(pathname: string): boolean {
