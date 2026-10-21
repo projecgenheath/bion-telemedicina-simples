@@ -168,7 +168,7 @@ model Consulta {
   pacienteId         String
   paciente           User     @relation("ConsultaPaciente", fields: [pacienteId], references: [id], onDelete: Cascade)
   medicoId           String
-  medico             User     @relation("ConsultaMedico", fields: [medicoId], references: [id], onDelete: Cascade)
+  medico             User     @relation("ConsultaMedico", fields: [medicoId], references: [id], onDelete: Restrict)
   especialidade      String
   dataInicio         DateTime
   status             String   @default("confirmada") // confirmada | em_espera | pendente_anamnese (legado) | aguardando_reagendamento | cancelada | concluida
@@ -338,7 +338,7 @@ model Documento {
   titulo      String
   conteudo    String
   medicoId    String
-  medico      User     @relation("DocumentoMedico", fields: [medicoId], references: [id], onDelete: Cascade)
+  medico      User     @relation("DocumentoMedico", fields: [medicoId], references: [id], onDelete: Restrict)
   pacienteId  String
   paciente    User     @relation("DocumentoPaciente", fields: [pacienteId], references: [id], onDelete: Cascade)
   medicamento String?
@@ -862,7 +862,7 @@ model PedidoRenovacao {
   pacienteId         String
   paciente           User       @relation("PedidoRenovacaoPaciente", fields: [pacienteId], references: [id], onDelete: Cascade)
   medicoId           String
-  medico             User       @relation("PedidoRenovacaoMedico", fields: [medicoId], references: [id], onDelete: Cascade)
+  medico             User       @relation("PedidoRenovacaoMedico", fields: [medicoId], references: [id], onDelete: Restrict)
   consultaOrigemId   String?
   consultaOrigem     Consulta?  @relation("PedidoRenovacaoOrigem", fields: [consultaOrigemId], references: [id], onDelete: SetNull)
   documentoId        String?    // receita anterior que o paciente quer renovar
@@ -899,7 +899,7 @@ model Evolucao {
   consultaId   String    @unique
   consulta     Consulta  @relation(fields: [consultaId], references: [id], onDelete: Cascade)
   medicoId     String
-  medico       User      @relation("EvolucaoMedico", fields: [medicoId], references: [id], onDelete: Cascade)
+  medico       User      @relation("EvolucaoMedico", fields: [medicoId], references: [id], onDelete: Restrict)
   pacienteId   String
   paciente     User      @relation("EvolucaoPaciente", fields: [pacienteId], references: [id], onDelete: Cascade)
   dados        String    @default("{}")

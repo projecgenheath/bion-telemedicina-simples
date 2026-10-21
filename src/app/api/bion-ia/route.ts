@@ -5,6 +5,7 @@ import { exigirSessao } from "@/lib/server/auth";
 import { ok, falha } from "@/lib/server/http";
 import { chatComFonte, registrosGemini, type AnonNomes } from "@/lib/server/llm";
 import { anonimizarMensagensIa, type IdentificadoresPaciente } from "@/lib/server/anonimizar-ia";
+import { anonimizarMensagensTexto } from "@/lib/server/anonimizar-texto";
 import { dataNascimentoParaIso } from "@/lib/idade";
 import { nomesMedicamentosEmUso } from "@/lib/server/medicamentos-legado";
 
@@ -112,6 +113,21 @@ async function identificadoresDoUsuario(usuario: {
   return p ? { ...ids, cpf: p.cpf, telefone: p.telefone, dataNascimento: dataNascimentoParaIso(p.dataNascimento) } : ids;
 }
 
+/**
+ * LGPD (Copilot do médico): nomes dos pacientes que têm consulta com este
+ * médico, buscados AQUI no servidor (nunca do cliente), para trocar por
+ * "o paciente" no texto que o médico digita antes de ir para o Google.
+ */
+async function nomesPacientesDoMedico(medicoId: string): Promise<string[]> {
+  const consultas = await db.consulta.findMany({
+    where: { medicoId },
+    select: { paciente: { select: { nome: true } } },
+    distinct: ["pacienteId"],
+    take: 2000,
+  });
+  return consultas.map((c) => c.paciente.nome).filter(Boolean);
+}
+
 export async function POST(req: NextRequest) {
   try {
     const usuario = await exigirSessao();
@@ -144,6 +160,12 @@ export async function POST(req: NextRequest) {
       ],
       await identificadoresDoUsuario(usuario),
     );
+    // LGPD: no Copilot do médico, tira também os dados de PACIENTES que ele
+    // digitar (nomes conhecidos, CPF, telefone, e-mail, CEP, datas e endereço).
+    const mensagensFinais =
+      usuario.role === "MEDICO"
+        ? anonimizarMensagensTexto(mensagens, { nomesPacientes: await nomesPacientesDoMedico(usuario.id) })
+        : mensagens;
 
     // IA generativa em cadeia; nomes reais são removidos no canal público.
     const primeiroNome = usuario.nome.split(" ")[0] ?? "";
@@ -154,7 +176,7 @@ export async function POST(req: NextRequest) {
         : []),
     ];
     // somenteGemini: não gasta tempo em público/SDK; sem fallback local.
-    const { texto: respostaLlm, fonte, modelo } = await chatComFonte(mensagens, TIMEOUT_MS, anon, {
+    const { texto: respostaLlm, fonte, modelo } = await chatComFonte(mensagensFinais, TIMEOUT_MS, anon, {
       somenteGemini: true,
       retries: 0,
     });
