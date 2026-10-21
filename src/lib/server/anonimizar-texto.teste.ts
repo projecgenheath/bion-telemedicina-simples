@@ -31,5 +31,23 @@ nao("endereço: av", anonimizarTexto("Av. Paulista 1578"), "1578");
 igual("clínico preservado", anonimizarTexto("PA 120/80, losartana 50 mg 1x/dia, glicemia 110"), "PA 120/80, losartana 50 mg 1x/dia, glicemia 110");
 igual("CID preservado", anonimizarTexto("CID I10 e E11.9"), "CID I10 e E11.9");
 
+// Nomes sem depender de acento (Joao ↔ João), trocando no texto original.
+const comAcento = ["João da Silva", "Mônica Araújo"];
+igual("sem acento no texto", anonimizarTexto("Joao da Silva voltou", { nomesPacientes: comAcento }), "o paciente voltou");
+igual("Joao Silva (primeiro + último)", anonimizarTexto("Joao Silva tem asma", { nomesPacientes: comAcento }), "o paciente tem asma");
+igual("acento no texto, cadastro sem", anonimizarTexto("a Mônica ligou", { nomesPacientes: ["Monica Araujo"] }), "a o paciente ligou");
+igual("caixa e acento", anonimizarTexto("ARAUJO, M.", { nomesPacientes: comAcento }), "o paciente, M.");
+igual("NFD no texto", anonimizarTexto("Joa\u0303o veio", { nomesPacientes: comAcento }), "o paciente veio");
+igual("resto preservado", anonimizarTexto("Joãozinho e Silvana", { nomesPacientes: comAcento }), "Joãozinho e Silvana");
+
+// Datas por extenso.
+igual("5 de março de 1980", anonimizarTexto("nasceu em 5 de março de 1980."), "nasceu em [data removida].");
+igual("5 de marco de 1980", anonimizarTexto("nasceu em 5 de marco de 1980"), "nasceu em [data removida]");
+igual("05 de mar. de 1980", anonimizarTexto("nasc. 05 de mar. de 1980"), "nasc. [data removida]");
+igual("1º de janeiro de 1990", anonimizarTexto("1º de janeiro de 1990"), "[data removida]");
+igual("MAIÚSCULAS", anonimizarTexto("12 DE DEZEMBRO DE 2001"), "[data removida]");
+igual("sem ano não remove", anonimizarTexto("dor desde 5 de março"), "dor desde 5 de março");
+igual("dose não é data", anonimizarTexto("5 de manhã, 2 de tarde"), "5 de manhã, 2 de tarde");
+
 console.log(`${ok} ok, ${falhas} falha(s)`);
 if (falhas) process.exit(1);
