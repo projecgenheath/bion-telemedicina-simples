@@ -120,7 +120,7 @@ export async function PATCH(
       include: { perfilPaciente: true },
     });
 
-    return ok({ ...(atualizado ? { paciente: pacienteWire(atualizado) } : {}), ...efeitosPatch });
+    return ok({ ...(atualizado ? { paciente: pacienteWire(atualizado, { admin: true }) } : {}), ...efeitosPatch });
   } catch (erro) {
     return falha(erro);
   }
@@ -167,7 +167,7 @@ export async function DELETE(
       include: { perfilPaciente: true },
     });
 
-    return ok({ ...(anonimizado ? { paciente: pacienteWire(anonimizado) } : {}), ...efeitos });
+    return ok({ ...(anonimizado ? { paciente: pacienteWire(anonimizado, { admin: true }) } : {}), ...efeitos });
   } catch (erro) {
     return falha(erro);
   }

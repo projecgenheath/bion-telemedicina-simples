@@ -109,7 +109,7 @@ export async function POST(req: NextRequest) {
     // `credenciais` só existe NESTA resposta (não é persistida em texto puro
     // nem gravada na auditoria): a UI mostra uma vez para o admin repassar.
     return ok({
-      ...(criado ? { paciente: pacienteWire(criado) } : {}),
+      ...(criado ? { paciente: pacienteWire(criado, { admin: true }) } : {}),
       ...efeitos,
       credenciais: { email, senhaTemporaria },
     });

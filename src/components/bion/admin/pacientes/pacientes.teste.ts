@@ -169,3 +169,12 @@ igual("erro 401", explicarErroPaciente(401, "x"), "Sem permissão. Entre de novo
 
 console.log(`${ok} ok, ${falhas} falha(s)`);
 if (falhas) process.exit(1);
+
+/* LGPD: desfazer não regrava campos mascarados (CPF/telefone/nascimento). */
+{
+  const { corpoDesfazerPaciente: desfazer } = await import("./pacientes");
+  const antesMasc = { ...pac("pm", "Mascarada", { cpf: "***.456.789-**", telefone: "(**) *****-4321" }), piiMascarado: true };
+  const d = desfazer(antesMasc, { cpf: "12345678909", telefone: "11999998888", nome: "Nova" });
+  if ("cpf" in d || "telefone" in d || d.nome !== "Mascarada") throw new Error("desfazer mascarado falhou: " + JSON.stringify(d));
+  console.log("ok: desfazer ignora campos mascarados");
+}

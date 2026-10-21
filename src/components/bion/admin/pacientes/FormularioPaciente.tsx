@@ -80,6 +80,7 @@ export function FormularioPaciente({
     );
   }
 
+  const mascarado = Boolean(paciente?.piiMascarado);
   const texto = (k: "nome" | "email" | "telefone" | "cpf" | "convenio" | "genero", rotulo: string, extra?: { tipo?: string; dica?: string; desligado?: boolean; auto?: string }) => (
     <Campo id={`pac-${k}`} rotulo={rotulo} erro={erros[k]} dica={extra?.dica}>
       <input
@@ -99,11 +100,11 @@ export function FormularioPaciente({
       <div className="grid sm:grid-cols-2 gap-3">
         {texto("nome", "Nome completo", { auto: "name" })}
         {texto("email", "E-mail (login)", cadastro ? { tipo: "email", auto: "email", dica: "A senha temporária aparece no fim, uma única vez." } : { desligado: true, dica: "O e-mail de login não muda por aqui." })}
-        {texto("telefone", "Telefone", { tipo: "tel", auto: "tel", dica: "Com DDD." })}
-        {texto("cpf", "CPF")}
+        {texto("telefone", "Telefone", { tipo: "tel", auto: "tel", dica: mascarado ? "Mascarado (LGPD). Para trocar, digite o número completo com DDD." : "Com DDD." })}
+        {texto("cpf", "CPF", mascarado ? { dica: "Mascarado (LGPD). Para trocar, digite o CPF completo." } : undefined)}
         {texto("convenio", "Convênio")}
         {texto("genero", "Gênero")}
-        <Campo id="pac-nasc" rotulo="Data de nascimento (opcional)">
+        <Campo id="pac-nasc" rotulo="Data de nascimento (opcional)" dica={mascarado && paciente?.anoNascimento ? `Gravada (ano ${paciente.anoNascimento}), oculta por LGPD. Deixe vazio para manter.` : undefined}>
           <input id="pac-nasc" type="date" max={hoje} value={form.dataNascimento} onChange={(e) => mudar("dataNascimento", e.target.value)} className="ba-entrada" />
         </Campo>
         <Campo id="pac-idade" rotulo={form.dataNascimento ? "Idade (pela data de nascimento)" : "Idade"} erro={erros.idade}>

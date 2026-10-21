@@ -20,9 +20,9 @@ import ZAI from "z-ai-web-dev-sdk";
  *  1. GOOGLE GEMINI API — modelo gemma-4-26b-a4b-it (chave via env
  *     BION_LLM_GEMINI_API_KEY; dados completos, sem anonimização);
  *  2. Credenciais próprias genéricas (env BION_LLM_BASE_URL + BION_LLM_API_KEY);
- *  3. Endpoint público sem chave (desligado por padrão — BION_LLM_PUBLICO=1
- *     para ativar; nomes anonimizados antes do envio — LGPD);
- *  4. SDK do sandbox (só existe dentro da rede do sandbox).
+ *  3. SDK do sandbox (só existe dentro da rede do sandbox).
+ *  (O antigo canal público sem chave foi REMOVIDO em 2026-10 — LGPD: dados de
+ *  saúde não vão para provedor público sem contrato de operador.)
  *  Nenhum canal respondendo → motores locais determinísticos por rota.
  *
  * A LEITURA DE LAUDOS (visão, fotos/PDFs) segue nos modelos Gemini flash
@@ -30,7 +30,7 @@ import ZAI from "z-ai-web-dev-sdk";
  * paciente e não pode herdar o despejo de raciocínio do Gemma.
  *
  * `chatCompleto()` devolve string | null e `chatComFonte()` também informa
- * a fonte ("gemini" | "env" | "publico" | "sdk") e o modelo exato que
+ * a fonte ("gemini" | "env" | "sdk") e o modelo exato que
  * respondeu. As rotas usam null como sinal para acionar os motores locais
  * determinísticos — a BION IA nunca fica muda.
  */
@@ -39,7 +39,7 @@ export type Msg = { role: "user" | "assistant"; content: string };
 
 export type AnonNomes = { nome: string; substituto: string }[];
 
-export type FonteLlm = "gemini" | "env" | "publico" | "sdk";
+export type FonteLlm = "gemini" | "env" | "sdk";
 
 type ClienteEnv = { tipo: "env"; baseUrl: string; apiKey: string; model?: string };
 type ClienteSdk = { tipo: "sdk"; zai: Awaited<ReturnType<typeof ZAI.create>> };
@@ -49,8 +49,6 @@ type Resultado = { texto: string | null; fonte: FonteLlm | null; modelo?: string
 
 const SONDA_TIMEOUT_MS = 4_000;
 const COOLDOWN_FALHA_MS = 12_000;
-const PUBLICO_URL_PADRAO = "https://text.pollinations.ai/openai";
-const PUBLICO_MODEL_PADRAO = "openai-fast";
 
 /* --------------------------- GOOGLE GEMINI --------------------------- */
 
@@ -84,7 +82,6 @@ const GEMINI_MODEL_PADRAO = "gemma-4-26b-a4b-it";
 const MODELOS_VISAO = ["gemini-3.6-flash", "gemini-3.8-flash", "gemini-flash-lite-latest"];
 
 let _sdk: { cliente: ClienteSdk | null; verificado: boolean } = { cliente: null, verificado: false };
-let _publicoFalhaEm = 0;
 let _geminiFalhaEm = 0;
 
 /**
@@ -101,12 +98,6 @@ const GEMMA_ECO_COOLDOWN_MS = 2 * 60_000;
 let _gemmaEcoSeguidos = 0;
 let _gemmaPuladoAte = 0;
 
-// P2 (2026-09): o canal público (sem chave, serviços de terceiros) passa a
-// nascer DESLIGADO por padrão — só ativa com BION_LLM_PUBLICO="1" explícito.
-// Quando ativo, o chat do paciente exibe a nota de consentimento (anonymização
-// LGPD dos nomes antes do envio).
-const publicoHabilitado = () => process.env.BION_LLM_PUBLICO === "1";
-const publicoEmCooldown = () => Date.now() - _publicoFalhaEm < COOLDOWN_FALHA_MS;
 
 const geminiHabilitado = () => process.env.BION_LLM_GEMINI !== "0";
 const geminiEmCooldown = () => Date.now() - _geminiFalhaEm < COOLDOWN_FALHA_MS;
@@ -151,7 +142,7 @@ function escapeRegExp(v: string) {
   return v.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-/** Remove os nomes informados (paciente, médicos…) das mensagens — usado no canal público. */
+/** Remove os nomes informados (paciente, médicos…) das mensagens. */
 export function anonimizarMensagens(mensagens: Msg[], anon?: AnonNomes): Msg[] {
   const pares = (anon ?? [])
     .map((n) => ({ nome: (n.nome ?? "").trim(), sub: (n.substituto ?? "").trim() }))
@@ -594,21 +585,6 @@ async function chamarEnv(c: ClienteEnv, mensagens: Msg[], prazo: number): Promis
   return bruto?.choices?.[0]?.message?.content?.trim() || null;
 }
 
-/* ----------------------------- canal público ----------------------------- */
-
-/**
- * Textos de ERRO do provedor gratuito vêm como resposta "válida" (HTTP 200) —
- * muro de créditos, aviso de conta, publicidade. NUNCA podem chegar ao
- * paciente como se fosse fala da BION IA: tratamos como falha do canal.
- */
-const RE_RESPOSTA_INVALIDA =
-  /(doesn'?t have enough credits|top[- ]up|pollinations\.ai\/(top-up|quests)|enter\.pollinations\.ai|contact whoever runs|\*\*Ad\*\*|suporte da apikey|insufficient (credits|quota))/i;
-
-function respostaInvalida(texto: string | null | undefined): boolean {
-  if (!texto) return false;
-  return RE_RESPOSTA_INVALIDA.test(texto);
-}
-
 /**
  * ECO DE RACIOCÍNIO (família Gemma 4): o modelo despeja a análise inteira no
  * texto ("* User's input...", "*   User prompt: ...", rascunhos "*Draft 1:",
@@ -618,7 +594,7 @@ function respostaInvalida(texto: string | null | undefined): boolean {
  * A4B usa variantes novas do despejo (User prompt / Draft / Refining / Persona
  * constraints) que ESCAPAVAM do regex original e chegaram ao paciente.
  * Isso NUNCA pode chegar ao paciente: tratamos como falha do modelo e a
- * cadeia cai para o próximo (mesmo padrão do canal público). Quando a Google
+ * cadeia cai para o próximo. Quando a Google
  * servir o Gemma 4 sem o despejo, ele volta a passar automaticamente.
  */
 const RE_ECO_RACIOCINIO =
@@ -805,47 +781,6 @@ function textoComEcoRaciocinio(texto: string | null | undefined): boolean {
   return RE_BULLET_PROMPT_CITADO.test(texto.trimStart());
 }
 
-/**
- * No canal público os nomes reais viram substitutos neutros ("a paciente",
- * "o médico"). Sem aviso, o modelo ECOA o substituto como se fosse nome —
- * "Seu nome é a paciente" chegou a ser exibido ao paciente (bug real).
- * Esta nota ensina o modelo a tratar a pessoa como "você" e a não repetir
- * os marcadores. Aplicada na PRIMEIRA mensagem (instrução do sistema).
- */
-const NOTA_PRIVACIDADE =
-  "\n\nNOTA DE PRIVACIDADE (obrigatória): os nomes reais foram removidos desta conversa por segurança. Você NÃO sabe o nome de quem fala contigo. Dirija-se a essa pessoa SEMPRE no tratamento \"você\" e NUNCA repita os marcadores de substituição (\"a paciente\", \"o paciente\", \"o médico\") como se fossem o nome dela. Exemplo correto: \"Confirmado, 80 kg. Está tudo certo?\" — jamais \"Seu nome é a paciente\".";
-
-function aplicarNotaPrivacidade(mensagens: Msg[]): Msg[] {
-  if (!mensagens.length) return mensagens;
-  const [primeira, ...resto] = mensagens;
-  if (primeira.role === "assistant") {
-    return [{ ...primeira, content: primeira.content + NOTA_PRIVACIDADE }, ...resto];
-  }
-  return [{ role: "assistant", content: NOTA_PRIVACIDADE.trim() }, ...mensagens];
-}
-
-async function chamarPublico(mensagens: Msg[], prazo: number): Promise<string | null> {
-  const url = (process.env.BION_LLM_PUBLICO_URL || PUBLICO_URL_PADRAO).trim();
-  const model = (process.env.BION_LLM_PUBLICO_MODEL || PUBLICO_MODEL_PADRAO).trim();
-  const bruto = await comPrazo(
-    fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model, messages: mensagens }),
-    }).then(async (r) => {
-      if (!r.ok) throw new Error(`publico HTTP ${r.status}`);
-      return r.json();
-    }),
-    restante(prazo),
-  ) as { choices?: { message?: { content?: string } }[] } | null;
-  const texto = bruto?.choices?.[0]?.message?.content?.trim() || null;
-  if (respostaInvalida(texto)) {
-    console.warn("[llm] canal público devolveu texto de erro do provedor — tratado como falha.");
-    return null;
-  }
-  return texto;
-}
-
 /* ------------------------------- canal sdk ------------------------------- */
 
 async function tentarSdk(): Promise<ClienteSdk | null> {
@@ -940,16 +875,7 @@ export async function chatComFonte(
     if (texto) return devolver({ texto, fonte: "env" });
   }
 
-  // 3) endpoint público (desligado por padrão)
-  if (publicoHabilitado() && process.env.BION_LLM_FORCAR_SDK !== "1" && !publicoEmCooldown()) {
-    const anonimizado = anonimizarMensagens(mensagens, anon);
-    const comNota = anon?.length ? aplicarNotaPrivacidade(anonimizado) : anonimizado;
-    const texto = await chamarPublico(comNota, prazo);
-    if (texto) return devolver({ texto, fonte: "publico" });
-    _publicoFalhaEm = Date.now();
-  }
-
-  // 4) SDK sandbox só se sobrar tempo
+  // 3) SDK sandbox só se sobrar tempo
   if (restante(prazo) > 5_000) {
     const sdk = await tentarSdk();
     if (sdk) {
@@ -982,7 +908,6 @@ export async function obterLLM(): Promise<Cliente | null> {
 export type EstadoCanais = {
   gemini: { configurado: boolean; modelo: string; reserva: string[] };
   env: { configurado: boolean; modelo: string | null };
-  publico: { ativo: boolean; modelo: string };
 };
 
 /** Estado de configuração dos canais — SOMENTE booleanos/modelos, nunca chaves. */
@@ -992,7 +917,6 @@ export function estadoCanais(): EstadoCanais {
   return {
     gemini: { configurado: geminiHabilitado() && !!gem.apiKey, modelo: gem.model, reserva: modelosReserva() },
     env: { configurado: !!env, modelo: process.env.BION_LLM_MODEL?.trim() || null },
-    publico: { ativo: publicoHabilitado(), modelo: (process.env.BION_LLM_PUBLICO_MODEL || PUBLICO_MODEL_PADRAO).trim() },
   };
 }
 
@@ -1110,23 +1034,6 @@ export async function probeCanais(timeoutMs = 20_000): Promise<ProbeCanal[]> {
     }
   } else {
     resultados.push({ canal: "gemini", ok: false, detalhe: "não configurado — defina BION_LLM_GEMINI_API_KEY na Vercel e faça redeploy", ms: 0 });
-  }
-
-  // 2) endpoint público (reserva) — só informa se está respondendo
-  if (publicoHabilitado()) {
-    const inicio = Date.now();
-    try {
-      const r = await chamarPublico(
-        [
-          { role: "assistant", content: "Você é um eco de teste." },
-          { role: "user", content: "Responda apenas: ok" },
-        ],
-        prazo,
-      );
-      resultados.push({ canal: "publico", ok: !!r, detalhe: r ? `resposta: ${r.slice(0, 40)}` : "sem resposta", ms: Date.now() - inicio });
-    } catch (e) {
-      resultados.push({ canal: "publico", ok: false, detalhe: e instanceof Error ? e.message : String(e), ms: Date.now() - inicio });
-    }
   }
 
   return resultados;

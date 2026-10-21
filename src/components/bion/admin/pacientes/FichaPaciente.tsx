@@ -14,6 +14,7 @@ import { hora as horaDe, rotuloDia } from "../tempo";
 import { confirmacaoConfere, iniciais } from "../medicos/medicos";
 import { FormularioPaciente } from "./FormularioPaciente";
 import { useAcoesPaciente } from "./acoes";
+import { RevelarDado } from "./RevelarDado";
 import { chamadosDoPaciente, consultasDoPaciente, documentosDoPaciente, estadoPaciente, formatarCpf, idadeExibida, situacaoDe } from "./pacientes";
 
 export type ModoFichaPaciente = "ficha" | "editar" | "anonimizar";
@@ -122,11 +123,29 @@ function Ficha({ paciente: p, agora, onModo }: { paciente: PacienteRegistro; ago
               <dt className="ba-texto-2">E-mail</dt>
               <dd className="break-all">{p.email || "—"}</dd>
               <dt className="ba-texto-2">Telefone</dt>
-              <dd className="tabular-nums">{p.telefone || "—"}</dd>
-              <dt className="ba-texto-2">CPF</dt>
-              <dd className="tabular-nums">{formatarCpf(p.cpf)}</dd>
-              <dt className="ba-texto-2">Nascimento</dt>
-              <dd>{nasc ? `${nasc} (${idadeExibida(p, agora)} anos)` : `não informado · ${p.idade} anos`}</dd>
+              {p.piiMascarado ? (
+                <>
+                  <dd><RevelarDado pacienteId={p.id} campo="telefone" mascarado={p.telefone} /></dd>
+                  <dt className="ba-texto-2">CPF</dt>
+                  <dd><RevelarDado pacienteId={p.id} campo="cpf" mascarado={p.cpf} formatar={formatarCpf} /></dd>
+                  <dt className="ba-texto-2">Nascimento</dt>
+                  <dd>
+                    {p.anoNascimento ? (
+                      <RevelarDado pacienteId={p.id} campo="dataNascimento" mascarado={`${p.anoNascimento} (${p.idade} anos)`} formatar={(v) => formatarDataNascimento(v) || v} />
+                    ) : (
+                      `não informado · ${p.idade} anos`
+                    )}
+                  </dd>
+                </>
+              ) : (
+                <>
+                  <dd className="tabular-nums">{p.telefone || "—"}</dd>
+                  <dt className="ba-texto-2">CPF</dt>
+                  <dd className="tabular-nums">{formatarCpf(p.cpf)}</dd>
+                  <dt className="ba-texto-2">Nascimento</dt>
+                  <dd>{nasc ? `${nasc} (${idadeExibida(p, agora)} anos)` : `não informado · ${p.idade} anos`}</dd>
+                </>
+              )}
               <dt className="ba-texto-2">Gênero</dt>
               <dd>{p.genero || "—"}</dd>
               <dt className="ba-texto-2">Convênio</dt>

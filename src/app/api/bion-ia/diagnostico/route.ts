@@ -22,7 +22,7 @@ export async function GET() {
     await exigirPapel("ADMIN");
     return ok({
       canais: estadoCanais(),
-      ordem: ["gemini", "env", "publico", "sdk"] as const,
+      ordem: ["gemini", "env", "sdk"] as const,
     });
   } catch (e) {
     return falha(e);
