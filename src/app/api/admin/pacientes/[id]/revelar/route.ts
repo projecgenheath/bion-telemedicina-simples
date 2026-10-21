@@ -3,7 +3,8 @@ import { db } from "@/lib/db";
 import { exigirPapel } from "@/lib/server/auth";
 import { aplicarSideEffects } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
-import { estaAnonimizado } from "@/lib/server/lgpd";
+import { estaAnonimizado, removerNumerosLongos } from "@/lib/server/lgpd";
+import { limitarAsync, resposta429 } from "@/lib/server/rate-limit";
 import { dataNascimentoParaIso } from "@/lib/idade";
 
 const CAMPOS = ["cpf", "telefone", "dataNascimento"] as const;
@@ -11,6 +12,7 @@ type CampoRevelavel = (typeof CAMPOS)[number];
 
 const MOTIVO_MIN = 10;
 const MOTIVO_MAX = 300;
+const LIMITE_REVELAR_POR_HORA = 20;
 
 /**
  * POST — revela ao admin UM dado pessoal completo do paciente (CPF, telefone
@@ -24,6 +26,8 @@ const MOTIVO_MAX = 300;
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const admin = await exigirPapel("ADMIN");
+    const teto = await limitarAsync(`revelar:admin:${admin.id}`, LIMITE_REVELAR_POR_HORA, 3_600_000);
+    if (!teto.permitido) return resposta429(teto.restanteSeg);
     const { id } = await params;
     const body = (await req.json().catch(() => null)) as { campo?: unknown; motivo?: unknown } | null;
 
@@ -61,7 +65,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       entidade: "paciente",
       entidadeId: id,
       // Nunca o valor revelado nem o nome — só o id, o campo e o motivo.
-      detalhes: `Admin revelou ${campo} do paciente id ${id}. Motivo: ${motivo}`,
+      detalhes: `Admin revelou ${campo} do paciente id ${id}. Motivo: ${removerNumerosLongos(motivo)}`,
     });
 
     const resp = ok({ campo, valor });

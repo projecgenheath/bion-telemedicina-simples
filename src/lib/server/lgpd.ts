@@ -529,3 +529,11 @@ export async function anonimizarPacienteCompleto(pacienteId: string): Promise<Re
     loginSupabaseRemovido,
   };
 }
+
+/**
+ * Tira de um texto livre (ex.: motivo da auditoria) sequências de 8+ dígitos,
+ * mesmo separadas por ponto, traço ou espaço — CPF, telefone, cartão etc.
+ */
+export function removerNumerosLongos(texto: string): string {
+  return texto.replace(/\d(?:[.\-\s]*\d){7,}/g, "[número removido]");
+}
