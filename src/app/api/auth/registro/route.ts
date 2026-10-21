@@ -19,6 +19,8 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { supabaseConfigurado } from "@/lib/supabase/env";
 import { validarCpf } from "@/lib/server/validar-perfil";
 import { cpfEmUsoPorOutroPaciente, ERRO_CPF_EM_USO } from "@/lib/server/cpf-paciente";
+import { validarAceiteTermos } from "@/lib/aceite-termos";
+import { registrarAceiteTermos } from "@/lib/server/aceite-termos";
 
 export async function POST(req: NextRequest) {
   try {
@@ -27,6 +29,7 @@ export async function POST(req: NextRequest) {
       email?: string;
       senha?: string;
       cpf?: string;
+      aceiteTermos?: unknown;
     };
 
     const teto = await limitarAsync(
@@ -47,6 +50,13 @@ export async function POST(req: NextRequest) {
     }
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return NextResponse.json({ erro: "Informe um e-mail válido." }, { status: 400 });
+    }
+
+    // Aceite obrigatório dos Termos de Uso do Paciente e da Política de
+    // Privacidade (versões vigentes). Validado ANTES de criar qualquer conta.
+    const aceite = validarAceiteTermos(body.aceiteTermos);
+    if (!aceite.ok) {
+      return NextResponse.json({ erro: aceite.erro, campo: "aceiteTermos" }, { status: 400 });
     }
 
     const existente = await db.user.findUnique({ where: { email } });
@@ -110,6 +120,17 @@ export async function POST(req: NextRequest) {
         );
       }
 
+      const usuarioRow = {
+        id: row.id,
+        nome: row.nome,
+        email: row.email,
+        role: "PACIENTE" as const,
+        precisaTrocarSenha: row.precisaTrocarSenha,
+        supabaseId: row.supabaseId,
+      };
+      // Grava o aceite já com a conta criada, mesmo se faltar confirmar o e-mail.
+      await registrarAceiteTermos(usuarioRow, "PACIENTE", aceite.valor);
+
       const usuario = {
         id: row.id,
         nome: row.nome,
@@ -145,6 +166,7 @@ export async function POST(req: NextRequest) {
       role: "PACIENTE" as const,
       precisaTrocarSenha: user.precisaTrocarSenha,
     };
+    await registrarAceiteTermos(usuario, "PACIENTE", aceite.valor);
     await registrarAudit(usuario, {
       acao: "CADASTRO_REALIZADO",
       categoria: "autenticacao",

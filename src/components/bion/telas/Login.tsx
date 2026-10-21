@@ -6,6 +6,8 @@ import { Shield } from "lucide-react";
 import { toast } from "sonner";
 import { useBion } from "@/lib/bion-store";
 import { Logo } from "@/components/bion/brand";
+import { AceiteTermos } from "@/components/bion/AceiteTermos";
+import { aceiteTermosPayload, ERRO_ACEITE_TERMOS } from "@/lib/aceite-termos";
 
 // Só os e-mails das contas demo: a senha NUNCA vai para o bundle do cliente
 // (repo público). Ela é definida no seed via SEED_DEMO_PASSWORD/SEED_ADMIN_PASSWORD.
@@ -32,6 +34,8 @@ export function Login() {
   const [modoCadastro, setModoCadastro] = useState(false);
   const [nome, setNome] = useState("");
   const [confirmaSenha, setConfirmaSenha] = useState("");
+  const [aceitouTermos, setAceitouTermos] = useState(false);
+  const [aceitouMarketing, setAceitouMarketing] = useState(false);
   const [formErro, setFormErro] = useState<string | null>(null);
 
   const trocarAba = (r: Role) => {
@@ -88,9 +92,14 @@ export function Login() {
       toast.error(msg);
       return;
     }
+    if (!aceitouTermos) {
+      setFormErro(ERRO_ACEITE_TERMOS);
+      toast.error(ERRO_ACEITE_TERMOS);
+      return;
+    }
     setFormErro(null);
     setEnviando(true);
-    const r = await registrar(nome.trim(), identificador.trim(), senha);
+    const r = await registrar(nome.trim(), identificador.trim(), senha, aceiteTermosPayload(aceitouMarketing));
     setEnviando(false);
     if (r.ok) {
       toast.success("Conta criada com sucesso! Bem-vindo(a) ao BION.");
@@ -200,6 +209,14 @@ export function Login() {
                       className="w-full px-4 py-3 rounded-2xl border text-sm bg-background outline-none focus:ring-2 focus:ring-primary/20"
                     />
                   </div>
+                  <AceiteTermos
+                    perfil="PACIENTE"
+                    aceitouTermos={aceitouTermos}
+                    onAceitouTermos={setAceitouTermos}
+                    aceitouMarketing={aceitouMarketing}
+                    onAceitouMarketing={setAceitouMarketing}
+                    disabled={enviando}
+                  />
                 </div>
               </div>
             ) : (
@@ -280,7 +297,7 @@ export function Login() {
 
             <button
               type="submit"
-              disabled={enviando}
+              disabled={enviando || (modoCadastro && !aceitouTermos)}
               className="w-full py-4 rounded-2xl bg-primary text-primary-foreground font-bold text-sm shadow-md hover:opacity-90 transition active:scale-[0.99] disabled:opacity-60"
             >
               {enviando
