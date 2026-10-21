@@ -202,10 +202,16 @@ export function corpoEdicaoPaciente(antes: PacienteRegistro, f: FormPaciente): R
   return Object.keys(corpo).length ? corpo : null;
 }
 
+/** Campos que o painel do admin recebe mascarados (ver pacienteWire no servidor). */
+export const CAMPOS_MASCARADOS = ["cpf", "telefone", "dataNascimento"] as const;
+
 /** "Desfazer": os valores de antes, só nos campos alterados. */
 export function corpoDesfazerPaciente(antes: PacienteRegistro, corpo: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const k of Object.keys(corpo)) {
+    // LGPD: com CPF/telefone/nascimento mascarados, o "antes" não é o valor real —
+    // desfazer esses campos gravaria a máscara (ou apagaria a data). Fica de fora.
+    if (antes.piiMascarado && CAMPOS_MASCARADOS.includes(k as (typeof CAMPOS_MASCARADOS)[number])) continue;
     out[k] = valorOriginal(k as CampoEditavel, antes);
   }
   // Mexer na data muda a idade derivada no servidor: devolver também a idade de antes.

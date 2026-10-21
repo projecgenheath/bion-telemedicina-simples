@@ -130,7 +130,7 @@ export async function POST(req: NextRequest) {
     const saudacao = /^(oi|ol[áa]|boa\s+(noite|tarde|dia)|e a[ií]|hey)[\s!.?]*$/i.test(ultima);
     const contexto = saudacao ? "" : await montarContexto(usuario);
     // M6: identificadores diretos saem de TODO o texto (prompt + histórico
-    // digitado) antes de qualquer canal de IA — não só no canal público.
+    // digitado) antes de qualquer canal de IA — em todos os canais.
     const mensagens = anonimizarMensagensIa(
       [
         {
@@ -145,7 +145,7 @@ export async function POST(req: NextRequest) {
       await identificadoresDoUsuario(usuario),
     );
 
-    // IA generativa em cadeia; nomes reais são removidos no canal público.
+    // IA generativa em cadeia; o canal público sem chave foi removido (só Gemini/env/SDK).
     const primeiroNome = usuario.nome.split(" ")[0] ?? "";
     const anon: AnonNomes = [
       { nome: usuario.nome, substituto: "(usuário BION)" },

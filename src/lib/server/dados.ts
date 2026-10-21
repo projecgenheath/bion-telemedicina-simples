@@ -359,23 +359,46 @@ function mascararCpf(cpf: string): string {
   return `***.***.***-${d.slice(-2)}`;
 }
 
+/** Admin: CPF com só os dígitos do meio ("***.456.789-**"). */
+export function mascararCpfAdmin(cpf: string): string {
+  const d = cpf.replace(/\D/g, "");
+  if (!d) return "";
+  if (d.length !== 11) return "***";
+  return `***.${d.slice(3, 6)}.${d.slice(6, 9)}-**`;
+}
+
+/** Admin: telefone com só os 4 últimos dígitos ("(**) *****-4321"). */
+export function mascararTelefoneAdmin(tel: string): string {
+  const d = tel.replace(/\D/g, "");
+  if (!d) return "";
+  if (d.length < 8) return "****";
+  return `(**) *****-${d.slice(-4)}`;
+}
+
 /**
  * Wire de paciente na listagem.
  * `mascarar: true` (médico) omite e-mail e mascara CPF — P2 minimização de PII.
  * A data de nascimento vai para o médico: a lista dele já vem restrita aos
  * pacientes vinculados (idsPacientesDoMedico), e o dado é clínico (idade exata).
  */
-export function pacienteWire(p: UserComPerfilPaciente, opts?: { mascarar?: boolean }) {
+export function pacienteWire(p: UserComPerfilPaciente, opts?: { mascarar?: boolean; admin?: boolean }) {
   const cpf = p.perfilPaciente?.cpf ?? "";
+  const telefone = p.perfilPaciente?.telefone ?? "";
+  const nascimento = dataNascimentoParaIso(p.perfilPaciente?.dataNascimento);
+  // LGPD (minimização): o painel do admin recebe CPF, telefone e nascimento
+  // MASCARADOS já no servidor. O valor completo só sai por
+  // POST /api/admin/pacientes/[id]/revelar (com motivo, registrado na auditoria).
+  const admin = !!opts?.admin;
   return {
     id: p.id,
     nome: p.nome,
     email: opts?.mascarar ? "" : p.email,
-    telefone: p.perfilPaciente?.telefone ?? "",
-    cpf: opts?.mascarar ? mascararCpf(cpf) : cpf,
+    telefone: admin ? mascararTelefoneAdmin(telefone) : telefone,
+    cpf: opts?.mascarar ? mascararCpf(cpf) : admin ? mascararCpfAdmin(cpf) : cpf,
     idade: p.perfilPaciente ? idadeDoPerfil(p.perfilPaciente) : 0,
-    /** M4: "YYYY-MM-DD" (dia de calendário) ou null. Também vai para o médico vinculado. */
-    dataNascimento: dataNascimentoParaIso(p.perfilPaciente?.dataNascimento),
+    /** M4: "YYYY-MM-DD" (dia de calendário) ou null. Também vai para o médico vinculado. Admin: null (só o ano). */
+    dataNascimento: admin ? null : nascimento,
+    ...(admin ? { anoNascimento: nascimento ? Number(nascimento.slice(0, 4)) : null, piiMascarado: true as const } : {}),
     genero: p.perfilPaciente?.genero ?? "",
     convenio: p.perfilPaciente?.convenio ?? "Particular",
     status: p.status as "ativo" | "inativo",
@@ -668,7 +691,7 @@ export async function carregarDados(usuario: UsuarioSessao) {
       lida: n.usuarioId ? n.lida : lidasPorMim.has(n.id),
     })),
     medicos: medicosRaw.map((m) => medicoWire(m)),
-    pacientes: pacientesVisiveis.map((p) => pacienteWire(p, { mascarar: souMedico })),
+    pacientes: pacientesVisiveis.map((p) => pacienteWire(p, { mascarar: souMedico, admin: souAdmin })),
     tickets: tickets.map((t) => ticketWire(t)),
     lembretes,
     avaliacoes: avaliacoesRaw.map((a) => avaliacaoWire(a)),

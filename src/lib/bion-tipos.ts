@@ -287,6 +287,10 @@ export type PacienteRegistro = {
   idade: number;
   /** "YYYY-MM-DD" (dia de calendário, sem fuso) ou null se não preenchida. */
   dataNascimento?: string | null;
+  /** Admin (LGPD): só o ano de nascimento; a data completa sai por "Revelar". */
+  anoNascimento?: number | null;
+  /** Admin (LGPD): CPF, telefone e nascimento chegaram mascarados do servidor. */
+  piiMascarado?: boolean;
   genero: string;
   convenio: string;
   status: "ativo" | "inativo";

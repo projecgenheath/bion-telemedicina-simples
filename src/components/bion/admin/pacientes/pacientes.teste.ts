@@ -167,5 +167,12 @@ igual("erro 409 com texto", explicarErroPaciente(409, "CPF já cadastrado."), "C
 igual("erro 404 sem texto", explicarErroPaciente(404, null), "Paciente não encontrado. Atualize a tela.");
 igual("erro 401", explicarErroPaciente(401, "x"), "Sem permissão. Entre de novo com uma conta de administrador.");
 
+// LGPD: desfazer não regrava campos mascarados (CPF/telefone/nascimento)
+{
+  const antesMasc = { ...pac("pm", "Mascarada", { cpf: "***.456.789-**", telefone: "(**) *****-4321" }), piiMascarado: true };
+  const d = corpoDesfazerPaciente(antesMasc, { cpf: "12345678909", telefone: "11999998888", nome: "Nova" });
+  igual("desfazer ignora campos mascarados", ["cpf" in d, "telefone" in d, d.nome], [false, false, "Mascarada"]);
+}
+
 console.log(`${ok} ok, ${falhas} falha(s)`);
 if (falhas) process.exit(1);

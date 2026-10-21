@@ -325,7 +325,7 @@ function perfilParaPrompt(d: PerfilDados | null): string {
   ].join("\n");
 }
 
-/** Nomes que saem da conversa no canal público (LGPD) e seus substitutos neutros. */
+/** Nomes que saem da conversa (LGPD) e seus substitutos neutros. */
 function anonNomes(
   usuario: { nome: string },
   medicoNome: string,

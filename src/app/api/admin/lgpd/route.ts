@@ -136,7 +136,7 @@ export async function POST(req: NextRequest) {
       include: { perfilPaciente: true },
     });
 
-    return ok({ ...(anonimizado ? { paciente: pacienteWire(anonimizado) } : {}), ...efeitos });
+    return ok({ ...(anonimizado ? { paciente: pacienteWire(anonimizado, { admin: true }) } : {}), ...efeitos });
   } catch (erro) {
     return falha(erro);
   }
