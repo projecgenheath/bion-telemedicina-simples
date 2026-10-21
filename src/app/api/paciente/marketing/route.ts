@@ -1,6 +1,11 @@
 import { NextRequest } from "next/server";
 import { exigirPapel } from "@/lib/server/auth";
 import { ok, falha } from "@/lib/server/http";
+import { origemPermitida } from "@/lib/server/origem";
+import { limitarAsync, resposta429 } from "@/lib/server/rate-limit";
+
+/** Teto de trocas do opt-in por usuário (anti-abuso). */
+const LIMITE_TROCAS_MARKETING_POR_HORA = 20;
 import { registrarMarketing, ultimoMarketing } from "@/lib/server/aceite-termos";
 import { marketingAtivo, VERSAO_MARKETING_OPTIN } from "@/lib/aceite-termos";
 
@@ -22,7 +27,12 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
+    if (!origemPermitida(req)) {
+      return Response.json({ erro: "Origem não permitida." }, { status: 403 });
+    }
     const usuario = await exigirPapel("PACIENTE");
+    const teto = await limitarAsync(`marketing:${usuario.id}`, LIMITE_TROCAS_MARKETING_POR_HORA, 3_600_000);
+    if (!teto.permitido) return resposta429(teto.restanteSeg);
     const body = (await req.json().catch(() => null)) as { aceito?: unknown } | null;
     if (!body || typeof body.aceito !== "boolean") {
       return Response.json({ erro: "Informe aceito: true ou false." }, { status: 400 });

@@ -99,7 +99,7 @@ export function Login() {
     }
     setFormErro(null);
     setEnviando(true);
-    const r = await registrar(nome.trim(), identificador.trim(), senha, aceiteTermosPayload(aceitouMarketing));
+    const r = await registrar(nome.trim(), identificador.trim(), senha, aceiteTermosPayload("PACIENTE", aceitouMarketing));
     setEnviando(false);
     if (r.ok) {
       toast.success("Conta criada com sucesso! Bem-vindo(a) ao BION.");

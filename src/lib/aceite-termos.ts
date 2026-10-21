@@ -20,7 +20,7 @@ export const VERSAO_TERMOS_POR_PERFIL: Record<PerfilAceite, string | null> = {
   MEDICO: null,
 };
 
-/** Rotas públicas dos textos. Ainda não existem páginas públicas: placeholders. */
+/** Rotas públicas (sem login) dos textos: src/app/termos-de-uso e src/app/politica-de-privacidade. */
 export const URL_TERMOS_PACIENTE = "/termos-de-uso";
 export const URL_POLITICA_PRIVACIDADE = "/politica-de-privacidade";
 
@@ -46,10 +46,10 @@ export interface AceiteTermosPayload {
   marketing?: { aceito: boolean; versao: string };
 }
 
-export function aceiteTermosPayload(
-  marketing = false,
-  versaoTermos = VERSAO_TERMOS_PACIENTE,
-): AceiteTermosPayload {
+/** Payload do cliente para o perfil. Lança erro se o perfil ainda não tem termos. */
+export function aceiteTermosPayload(perfil: PerfilAceite, marketing = false): AceiteTermosPayload {
+  const versaoTermos = VERSAO_TERMOS_POR_PERFIL[perfil];
+  if (!versaoTermos) throw new Error(`Termos de uso do perfil ${perfil} ainda não definidos.`);
   return {
     aceito: true,
     versaoTermos,
@@ -62,6 +62,8 @@ export const ERRO_ACEITE_TERMOS =
   "Para criar a conta, é preciso aceitar os Termos de Uso e a Política de Privacidade.";
 export const ERRO_VERSAO_TERMOS =
   "Os Termos de Uso ou a Política de Privacidade foram atualizados. Recarregue a página e aceite a versão atual.";
+export const ERRO_TERMOS_PERFIL_INDEFINIDO =
+  "Os Termos de Uso deste tipo de conta ainda não estão disponíveis. Tente novamente mais tarde.";
 export const ERRO_VERSAO_MARKETING =
   "O texto das novidades e ofertas foi atualizado. Recarregue a página e tente de novo.";
 
@@ -76,9 +78,11 @@ export interface AceiteValidado {
  * vigentes exatas. Marketing é opcional: ausente ou `aceito !== true` = não.
  */
 export function validarAceiteTermos(
+  perfil: PerfilAceite,
   valor: unknown,
-  versaoTermosEsperada: string = VERSAO_TERMOS_PACIENTE,
 ): { ok: true; valor: AceiteValidado } | { ok: false; erro: string } {
+  const versaoTermosEsperada = VERSAO_TERMOS_POR_PERFIL[perfil];
+  if (!versaoTermosEsperada) return { ok: false, erro: ERRO_TERMOS_PERFIL_INDEFINIDO };
   if (!valor || typeof valor !== "object") return { ok: false, erro: ERRO_ACEITE_TERMOS };
   const v = valor as Record<string, unknown>;
   if (v.aceito !== true) return { ok: false, erro: ERRO_ACEITE_TERMOS };

@@ -4,8 +4,8 @@ import {
   criarSessaoLegada,
   hashSenha,
   registrarAudit,
-  garantirUsuarioPrismaDeAuth,
 } from "@/lib/server/auth";
+import { usuarioSemNome } from "@/lib/server/audit-sem-nome";
 import { carregarDados } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
 import {
@@ -15,12 +15,31 @@ import {
   validarSenhaForte,
   LIMITE_REGISTRO_IP_POR_HORA,
 } from "@/lib/server/rate-limit";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseAdminClient, createSupabaseServerClient } from "@/lib/supabase/server";
 import { supabaseConfigurado } from "@/lib/supabase/env";
 import { validarCpf } from "@/lib/server/validar-perfil";
 import { cpfEmUsoPorOutroPaciente, ERRO_CPF_EM_USO } from "@/lib/server/cpf-paciente";
 import { validarAceiteTermos } from "@/lib/aceite-termos";
-import { registrarAceiteTermos } from "@/lib/server/aceite-termos";
+import { auditarAceiteCadastro, gravarAceiteCadastro, type LinhasAceite } from "@/lib/server/aceite-termos";
+
+/** Remove a conta recém-criada no Supabase Auth (best effort, via service role). */
+async function desfazerAuth(supabaseId: string) {
+  try {
+    // Nunca apaga um Auth que já pertence a uma conta existente na BION.
+    if (await db.user.findUnique({ where: { supabaseId }, select: { id: true } })) return;
+    const { error } = await createSupabaseAdminClient().auth.admin.deleteUser(supabaseId);
+    if (error) throw error;
+  } catch {
+    await registrarAudit(null, {
+      acao: "CADASTRO_ROLLBACK_AUTH_FALHOU",
+      categoria: "autenticacao",
+      severidade: "critical",
+      entidade: "supabase_auth",
+      entidadeId: supabaseId,
+      detalhes: "Transação do cadastro falhou e a conta no Supabase Auth não pôde ser removida",
+    });
+  }
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -54,7 +73,7 @@ export async function POST(req: NextRequest) {
 
     // Aceite obrigatório dos Termos de Uso do Paciente e da Política de
     // Privacidade (versões vigentes). Validado ANTES de criar qualquer conta.
-    const aceite = validarAceiteTermos(body.aceiteTermos);
+    const aceite = validarAceiteTermos("PACIENTE", body.aceiteTermos);
     if (!aceite.ok) {
       return NextResponse.json({ erro: aceite.erro, campo: "aceiteTermos" }, { status: 400 });
     }
@@ -91,22 +110,45 @@ export async function POST(req: NextRequest) {
           { status: 400 },
         );
       }
+      const supabaseId = data.user.id;
 
+      // Usuário + perfil + aceite numa transação só (tudo ou nada). Se falhar,
+      // desfaz também a conta no Supabase Auth para não sobrar conta sem aceite.
       const senhaHash = await hashSenha(senha);
-      const row = await garantirUsuarioPrismaDeAuth({
-        supabaseId: data.user.id,
-        email,
-        nome,
-        senhaHash,
-      });
-      // CPF se enviado
-      if (cpf) {
-        await db.perfilPaciente.upsert({
-          where: { userId: row.id },
-          create: { userId: row.id, cpf },
-          update: { cpf },
+      let criado: { row: { id: string; nome: string; email: string; precisaTrocarSenha: boolean; supabaseId: string | null }; linhas: LinhasAceite };
+      try {
+        criado = await db.$transaction(async (tx) => {
+          const row = await tx.user.create({
+            data: { supabaseId, nome, email, senhaHash, role: "PACIENTE", perfilPaciente: { create: { cpf } } },
+          });
+          const linhas = await gravarAceiteCadastro(tx, row.id, "PACIENTE", aceite.valor);
+          return { row, linhas };
         });
+      } catch {
+        await desfazerAuth(supabaseId);
+        return NextResponse.json(
+          { erro: "Não foi possível concluir o cadastro. Tente novamente." },
+          { status: 500 },
+        );
       }
+
+      const usuario = {
+        id: criado.row.id,
+        nome: criado.row.nome,
+        email: criado.row.email,
+        role: "PACIENTE" as const,
+        precisaTrocarSenha: criado.row.precisaTrocarSenha,
+        supabaseId: criado.row.supabaseId,
+      };
+      // Auditoria antes do retorno de "confirme o e-mail" (aceite já gravado).
+      await auditarAceiteCadastro(usuario, "PACIENTE", aceite.valor, criado.linhas);
+      await registrarAudit(usuarioSemNome(usuario), {
+        acao: "CADASTRO_REALIZADO",
+        categoria: "autenticacao",
+        entidade: "usuario",
+        entidadeId: usuario.id,
+        detalhes: "Novo paciente via Supabase Auth",
+      });
 
       // Se o projeto exige confirmação de e-mail, pode não haver sessão ainda
       if (!data.session) {
@@ -119,44 +161,17 @@ export async function POST(req: NextRequest) {
           { status: 201 },
         );
       }
-
-      const usuarioRow = {
-        id: row.id,
-        nome: row.nome,
-        email: row.email,
-        role: "PACIENTE" as const,
-        precisaTrocarSenha: row.precisaTrocarSenha,
-        supabaseId: row.supabaseId,
-      };
-      // Grava o aceite já com a conta criada, mesmo se faltar confirmar o e-mail.
-      await registrarAceiteTermos(usuarioRow, "PACIENTE", aceite.valor);
-
-      const usuario = {
-        id: row.id,
-        nome: row.nome,
-        email: row.email,
-        role: "PACIENTE" as const,
-        precisaTrocarSenha: row.precisaTrocarSenha,
-        supabaseId: row.supabaseId,
-      };
-      await registrarAudit(usuario, {
-        acao: "CADASTRO_REALIZADO",
-        categoria: "autenticacao",
-        detalhes: `Novo paciente via Supabase Auth: ${nome}`,
-      });
       return ok(await carregarDados(usuario));
     }
 
     // --- Fallback sem Supabase ---
     const senhaHash = await hashSenha(senha);
-    const user = await db.user.create({
-      data: {
-        nome,
-        email,
-        senhaHash,
-        role: "PACIENTE",
-        perfilPaciente: { create: { cpf } },
-      },
+    const { user, linhas } = await db.$transaction(async (tx) => {
+      const user = await tx.user.create({
+        data: { nome, email, senhaHash, role: "PACIENTE", perfilPaciente: { create: { cpf } } },
+      });
+      const linhas = await gravarAceiteCadastro(tx, user.id, "PACIENTE", aceite.valor);
+      return { user, linhas };
     });
     await criarSessaoLegada(user.id);
     const usuario = {
@@ -166,11 +181,13 @@ export async function POST(req: NextRequest) {
       role: "PACIENTE" as const,
       precisaTrocarSenha: user.precisaTrocarSenha,
     };
-    await registrarAceiteTermos(usuario, "PACIENTE", aceite.valor);
-    await registrarAudit(usuario, {
+    await auditarAceiteCadastro(usuario, "PACIENTE", aceite.valor, linhas);
+    await registrarAudit(usuarioSemNome(usuario), {
       acao: "CADASTRO_REALIZADO",
       categoria: "autenticacao",
-      detalhes: `Novo paciente (legado): ${nome}`,
+      entidade: "usuario",
+      entidadeId: usuario.id,
+      detalhes: "Novo paciente (legado)",
     });
     return ok(await carregarDados(usuario));
   } catch (erro) {
