@@ -16,7 +16,8 @@ e validado de volta no Postgres com auditoria completa (32/32 rotas, 3 papéis).
 
 | Item | Arquivo |
 |------|---------|
-| DDL completo das 13 tabelas (referência/rota manual) | `supabase/migrations/0001_init.sql` |
+| DDL completo das 13 tabelas (referência/rota manual) | `supabase/legacy/0001_init.sql` |
+| SQL legado (RLS/notas; **fora** de `migrations/`) | `supabase/legacy/` |
 | Schema Prisma oficial (provider PostgreSQL, schema único) | `prisma/schema.prisma` |
 | Script de ativação automática | `scripts/supabase_ativar.sh` |
 | Verificação pós-seed | `scripts/verificar_banco.ts` |
@@ -61,7 +62,7 @@ Se também retornar erro de permissão, use a Rota 1.
 2. Envie o token → aplico tudo via Management API
 
 ### Rota 5 — Manual completa pelo SQL Editor (sem conectar o app)
-1. SQL Editor → cole `supabase/migrations/0001_init.sql` → **Run**
+1. SQL Editor → cole `supabase/legacy/0001_init.sql` → **Run**
 2. Cria as tabelas, mas o app continua no SQLite até uma das rotas 1–4 conectar o Prisma
 
 ## O que o script de ativação faz
