@@ -11,7 +11,7 @@ O app usa Supabase para:
 | **Storage** | buckets `documentos` / `avatares`; upload/download |
 | **Realtime** | mensagens, sala de teleconsulta, notificações |
 | **Edge Functions** | `supabase/functions/pagamento-webhook` (opcional) |
-| **RLS** | SQL em `supabase/migrations/` (aplicar no SQL Editor) |
+| **RLS** | SQL em `supabase/legacy/` (aplicar no SQL Editor; não vai no Branching) |
 
 ## Checklist final (Dashboard / Vercel)
 
@@ -20,7 +20,7 @@ O app usa Supabase para:
 3. [ ] `npx prisma db push` (colunas `supabaseId`, `storagePath`, índices)
 4. [ ] Auth → Email ativo; em dev desligar Confirm email se quiser
 5. [ ] (Só em projeto descartável) `npm run seed:auth` — exige `BION_PERMITIR_SYNC_DEMO=1`, `SEED_ADMIN_PASSWORD` e `SEED_DEMO_PASSWORD`; **redefine senhas de todos os usuários** e é bloqueado em produção
-6. [ ] (Opcional) SQL `20260928_rls_completo.sql`
+6. [ ] (Opcional) SQL `supabase/legacy/20260928_rls_completo.sql`
 7. [ ] (Opcional) Deploy Edge Function do webhook
 
 ```bash
@@ -84,7 +84,7 @@ DATABASE_URL=
 
 ## RLS
 
-Arquivo: `supabase/migrations/20260928_rls_basico.sql`  
+Arquivo: `supabase/legacy/20260928_rls_basico.sql`  
 Rodar no SQL Editor se quiser proteção no acesso direto com anon key.  
 A API Next (Prisma + DATABASE_URL) **não** é bloqueada pelo RLS.
 
@@ -96,7 +96,7 @@ A API Next (Prisma + DATABASE_URL) **não** é bloqueada pelo RLS.
 
 ## RLS completo
 
-`supabase/migrations/20260928_rls_completo.sql` — SELECT/INSERT/UPDATE por participante/dono.
+`supabase/legacy/20260928_rls_completo.sql` — SELECT/INSERT/UPDATE por participante/dono.
 
 
 ## Troca de senha
