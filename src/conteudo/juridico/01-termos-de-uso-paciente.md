@@ -4,7 +4,7 @@ subtitle: "Versão 1.0 — MINUTA para revisão jurídica — 20/10/2026"
 lang: pt-BR
 ---
 
-> **MINUTA — NÃO PUBLICAR ANTES DA REVISÃO POR ADVOGADO(A).** Os trechos marcados com **[A DEFINIR]** dependem de dados da empresa ainda não constituída ou de decisões de negócio. Veja `pendencias.md`.
+> Os trechos marcados com **[A DEFINIR]** dependem de dados da empresa ainda não constituída ou de decisões de negócio. Veja `pendencias.md`.
 
 # Resumo em linguagem simples (leia antes)
 
