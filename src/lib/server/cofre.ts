@@ -25,6 +25,11 @@ export type IdentificacaoClara = {
   cpf: string;
   /** "YYYY-MM-DD" (data pura) ou, em registro antigo/fallback, texto livre da anamnese. */
   dataNascimento: string | null;
+  /** Só no registro de MÉDICO anonimizado (opcionais; registros antigos não têm). */
+  crm?: string;
+  cnpj?: string;
+  telefone?: string;
+  email?: string;
 };
 
 const VERSAO = "v1";

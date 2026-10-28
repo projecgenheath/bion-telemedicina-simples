@@ -1,5 +1,6 @@
 import "server-only";
 import crypto from "crypto";
+import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { supabaseServiceRoleKey } from "@/lib/supabase/env";
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
@@ -15,6 +16,31 @@ import {
   type IdentificacaoClara,
 } from "@/lib/server/cofre";
 import { dataNascimentoParaIso, idadeDeNascimento } from "@/lib/idade";
+import {
+  STATUS_CONSULTA_ENCERRADA,
+  STATUS_PAGAMENTO_PENDENTE,
+  STATUS_REEMBOLSO_ABERTO,
+  STATUS_REMARCACAO_ABERTA,
+  STATUS_RENOVACAO_ABERTA,
+  motivosBloqueioExclusao,
+  type PendenciasExclusao,
+} from "@/lib/exclusao-conta-logica";
+import {
+  DADOS_PERFIL_MEDICO_PSEUDONIMIZADO,
+  STATUS_CONSULTA_ENCERRADA_MEDICO,
+  STATUS_EVOLUCAO_ABERTA,
+  STATUS_REEMBOLSO_PENDENTE,
+  STATUS_REMARCACAO_ABERTA_MEDICO,
+  STATUS_RENOVACAO_ABERTA_MEDICO,
+  STATUS_REPASSE_ABERTO,
+  classificarConsultasAbertas,
+  motivosBloqueioAnonimizacaoMedico,
+  pseudonimoMedico,
+  type PendenciasMedico,
+} from "@/lib/anonimizar-medico-logica";
+
+/** Cliente do Prisma fora (db) ou dentro de uma transação (tx). */
+type Cliente = Prisma.TransactionClient;
 
 /**
  * Anonimização LGPD (art. 12 / art. 16) de um paciente, feita pela administração.
@@ -239,6 +265,47 @@ async function removerObjetosStorage(paths: string[]): Promise<void> {
   }
 }
 
+/**
+ * Pendências que impedem anonimizar o paciente (mesmo critério da exclusão
+ * pelo próprio paciente, em paciente/conta). Aceita `tx` para rodar DENTRO da
+ * transação da escrita (revisão do #95, item 8).
+ */
+export async function pendenciasExclusaoPaciente(cli: Cliente, pacienteId: string): Promise<PendenciasExclusao> {
+  const [consultasAtivas, reembolsosAbertos, remarcacoesAbertas, renovacoesAbertas, pagamentosPendentesSemConsulta] =
+    await Promise.all([
+      cli.consulta.count({ where: { pacienteId, status: { notIn: [...STATUS_CONSULTA_ENCERRADA] } } }),
+      cli.reembolso.count({
+        where: {
+          status: { in: [...STATUS_REEMBOLSO_ABERTO] },
+          OR: [
+            { pagamento: { consulta: { pacienteId } } },
+            { pagamento: { pedidoRenovacao: { pacienteId } } },
+            { remarcacao: { consulta: { pacienteId } } },
+          ],
+        },
+      }),
+      cli.remarcacaoPendente.count({ where: { status: { in: [...STATUS_REMARCACAO_ABERTA] }, consulta: { pacienteId } } }),
+      cli.pedidoRenovacao.count({ where: { pacienteId, status: { in: [...STATUS_RENOVACAO_ABERTA] } } }),
+      cli.pagamento.count({
+        where: { consultaId: null, status: { in: [...STATUS_PAGAMENTO_PENDENTE] }, pedidoRenovacao: { pacienteId } },
+      }),
+    ]);
+  return { consultasAtivas, reembolsosAbertos, remarcacoesAbertas, renovacoesAbertas, pagamentosPendentesSemConsulta };
+}
+
+/** Erro 409 com a lista de pendências (sem dados pessoais). */
+export class PendenciasLgpdError extends Error {
+  status = 409;
+  constructor(public motivos: string[]) {
+    super(`Não é possível anonimizar agora: ${motivos.join(" ")}`);
+  }
+}
+
+/** Trava a linha do usuário até o fim da transação (serializa com outra anonimização do mesmo id). */
+async function travarUsuario(tx: Cliente, userId: string): Promise<void> {
+  await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${userId} FOR UPDATE`;
+}
+
 function substituirTermos(texto: string, termos: string[], por: string): string {
   let out = texto;
   for (const t of termos) out = out.split(t).join(por);
@@ -342,6 +409,13 @@ export async function anonimizarPacienteCompleto(pacienteId: string): Promise<Re
         nomeHash: hashNome(paciente.nome),
       };
 
+  // ---- Pendências: checagem antecipada (antes de mexer no Auth/Storage) ----
+  //      e de novo DENTRO da transação da escrita (fecha a janela de corrida).
+  {
+    const motivos = motivosBloqueioExclusao(await pendenciasExclusaoPaciente(db, pacienteId));
+    if (motivos.length) throw new PendenciasLgpdError(motivos);
+  }
+
   // ---- (a) Supabase Auth e (b) Storage — antes do banco (ver cabeçalho) ----
   let loginSupabaseRemovido = false;
   if (paciente.supabaseId) {
@@ -387,6 +461,11 @@ export async function anonimizarPacienteCompleto(pacienteId: string): Promise<Re
 
   await db.$transaction(
     async (tx) => {
+      // Pendências de novo, na MESMA transação da escrita (com a linha travada).
+      await travarUsuario(tx, pacienteId);
+      const motivosTx = motivosBloqueioExclusao(await pendenciasExclusaoPaciente(tx, pacienteId));
+      if (motivosTx.length) throw new PendenciasLgpdError(motivosTx);
+
       // 0) Cofre de identificação — mesma transação da pseudonimização:
       //    ou os dois acontecem, ou nenhum. Não sobrescreve registro existente.
       if (registroCofre) {
@@ -530,10 +609,240 @@ export async function anonimizarPacienteCompleto(pacienteId: string): Promise<Re
   };
 }
 
+/** Tira números longos (CPF, telefone…) de texto livre — regra pura em anonimizar-medico-logica. */
+export { removerNumerosLongos } from "@/lib/anonimizar-medico-logica";
+
+/* ------------------------------------------------------------------ */
+/* Anonimização do MÉDICO (admin)                                       */
+/* ------------------------------------------------------------------ */
+
 /**
- * Tira de um texto livre (ex.: motivo da auditoria) sequências de 8+ dígitos,
- * mesmo separadas por ponto, traço ou espaço — CPF, telefone, cartão etc.
+ * Pendências do médico que impedem a anonimização. Aceita `tx` para rodar
+ * DENTRO da transação da escrita.
  */
-export function removerNumerosLongos(texto: string): string {
-  return texto.replace(/\d(?:[.\-\s]*\d){7,}/g, "[número removido]");
+export async function pendenciasAnonimizacaoMedico(
+  cli: Cliente,
+  medicoId: string,
+  agora: Date = new Date(),
+): Promise<PendenciasMedico> {
+  const [consultasAbertas, evolucoesPendentes, repassesAbertos, ajustesSemRepasse, reembolsosPendentes, renovacoesAbertas, remarcacoesAbertas] =
+    await Promise.all([
+      cli.consulta.findMany({
+        where: { medicoId, status: { notIn: [...STATUS_CONSULTA_ENCERRADA_MEDICO] } },
+        select: { dataInicio: true, status: true },
+      }),
+      cli.evolucao.count({ where: { medicoId, status: { in: [...STATUS_EVOLUCAO_ABERTA] } } }),
+      cli.repasse.count({ where: { medicoId, status: { in: [...STATUS_REPASSE_ABERTO] } } }),
+      cli.repasseAjuste.count({ where: { medicoId, repasseId: null } }),
+      cli.reembolso.count({
+        where: {
+          status: { in: [...STATUS_REEMBOLSO_PENDENTE] },
+          OR: [
+            { pagamento: { consulta: { medicoId } } },
+            { pagamento: { pedidoRenovacao: { medicoId } } },
+            { remarcacao: { consulta: { medicoId } } },
+          ],
+        },
+      }),
+      cli.pedidoRenovacao.count({ where: { medicoId, status: { in: [...STATUS_RENOVACAO_ABERTA_MEDICO] } } }),
+      cli.remarcacaoPendente.count({ where: { status: { in: [...STATUS_REMARCACAO_ABERTA_MEDICO] }, consulta: { medicoId } } }),
+    ]);
+  const { futuras, emAndamento } = classificarConsultasAbertas(consultasAbertas, agora);
+  return {
+    consultasFuturas: futuras,
+    consultasEmAndamento: emAndamento,
+    evolucoesPendentes,
+    repassesAbertos,
+    ajustesSemRepasse,
+    reembolsosPendentes,
+    renovacoesAbertas,
+    remarcacoesAbertas,
+  };
+}
+
+/** Bloqueia (ban) o login no Supabase Auth — reversível, usado ANTES da transação. */
+async function banirSupabaseAuth(supabaseId: string, banir: boolean): Promise<void> {
+  if (!supabaseServiceRoleKey()) {
+    throw erroStatus(
+      "Supabase não configurado no servidor (service role): não é possível desativar o login do médico. Nada foi alterado.",
+      503,
+    );
+  }
+  const admin = createSupabaseAdminClient();
+  const { error } = await admin.auth.admin.updateUserById(supabaseId, { ban_duration: banir ? "876000h" : "none" });
+  if (!error) return;
+  const naoEncontrado =
+    error.status === 404 || error.code === "user_not_found" || /not\s*found/i.test(error.message);
+  if (naoEncontrado) return;
+  console.error("[LGPD] falha ao (des)bloquear usuário no Supabase Auth", error.status, error.code);
+  throw erroStatus("Falha ao desativar o login do médico no Supabase Auth. Nada foi alterado — tente novamente.", 502);
+}
+
+export type ResultadoAnonimizacaoMedico = {
+  apelido: string;
+  jaEstavaAnonimizado: boolean;
+  loginSupabaseRemovido: boolean;
+};
+
+/**
+ * Anonimização LGPD do médico pela administração.
+ *
+ * Ordem:
+ *  1) checa pendências (rápido, sem efeito);
+ *  2) BLOQUEIA (ban) o login no Supabase Auth — reversível;
+ *  3) transação única: trava a linha do usuário (FOR UPDATE: inserções que
+ *     referenciam o médico — consulta, repasse… — esperam por ela), checa as
+ *     pendências DE NOVO e só então grava cofre + pseudônimo;
+ *     se a transação falhar, o ban é desfeito e nada muda;
+ *  4) remove o usuário do Supabase Auth (falha aqui só é registrada no log:
+ *     o login já está banido e o vínculo `supabaseId` já saiu do banco).
+ *
+ * PRESERVADOS (FKs Restrict, #96): Consulta, Evolucao, Documento, Arquivo,
+ * Mensagem, Avaliacao, Repasse/RepasseItem/RepasseAjuste (com a cópia do PIX
+ * do momento do pagamento — fiscal), Pagamento, Reembolso, PedidoRenovacao.
+ */
+export async function anonimizarMedicoCompleto(medicoId: string): Promise<ResultadoAnonimizacaoMedico> {
+  const medico = await db.user.findFirst({
+    where: { id: medicoId, role: "MEDICO" },
+    include: { perfilMedico: true, dadosRecebimento: true },
+  });
+  if (!medico) throw erroStatus("Médico não encontrado.", 404);
+  exigirChaveCofre();
+
+  const motivosAntes = motivosBloqueioAnonimizacaoMedico(await pendenciasAnonimizacaoMedico(db, medicoId));
+  if (motivosAntes.length) throw new PendenciasLgpdError(motivosAntes);
+
+  const jaEstavaAnonimizado = estaAnonimizado(medico);
+  let apelido = medico.nome;
+  let emailAnon = medico.email;
+  let crmAnon = medico.perfilMedico?.crm ?? "";
+  if (!jaEstavaAnonimizado) {
+    const sufixo = crypto.randomBytes(3).toString("hex").toUpperCase();
+    const p = pseudonimoMedico(sufixo);
+    apelido = p.nome;
+    crmAnon = p.crm;
+    emailAnon = `anon-med-${sufixo.toLowerCase()}-${Date.now().toString(36)}@${DOMINIO_EMAIL_ANON}`;
+  }
+
+  const pm = medico.perfilMedico;
+  const dr = medico.dadosRecebimento;
+  const cpfTitular = dr && dr.titularTipo === "pf" ? dr.titularDocumento : "";
+  const registroCofre = jaEstavaAnonimizado
+    ? null
+    : {
+        userId: medicoId,
+        dadosCifrados: cifrarIdentificacao(medicoId, {
+          nome: medico.nome,
+          cpf: cpfTitular,
+          dataNascimento: pm?.dataNascimento ? pm.dataNascimento.toISOString().slice(0, 10) : null,
+          crm: pm?.crm ?? "",
+          cnpj: pm?.cnpj ?? "",
+          telefone: pm?.telefone ?? "",
+          email: medico.email,
+        }),
+        cpfHash: hashCpf(cpfTitular),
+        nomeHash: hashNome(medico.nome),
+      };
+
+  const termos = [medico.nome, medico.email, pm?.crm ?? "", pm?.telefone ?? "", pm?.cnpj ?? "", cpfTitular, dr?.pixChave ?? ""]
+    .map((t) => t.trim())
+    .filter((t) => t.length >= 5 && t !== apelido && t !== crmAnon)
+    .sort((a, b) => b.length - a.length);
+
+  // (2) login bloqueado antes do banco (reversível).
+  const supabaseId = medico.supabaseId;
+  if (supabaseId) await banirSupabaseAuth(supabaseId, true);
+
+  try {
+    await db.$transaction(
+      async (tx) => {
+        await travarUsuario(tx, medicoId);
+        const motivosTx = motivosBloqueioAnonimizacaoMedico(await pendenciasAnonimizacaoMedico(tx, medicoId));
+        if (motivosTx.length) throw new PendenciasLgpdError(motivosTx);
+
+        if (registroCofre) {
+          await tx.identificacaoCofre.upsert({ where: { userId: medicoId }, create: registroCofre, update: {} });
+        }
+
+        await tx.user.update({
+          where: { id: medicoId },
+          data: {
+            nome: apelido,
+            email: emailAnon,
+            senhaHash: crypto.randomBytes(32).toString("hex"),
+            status: "inativo",
+            precisaTrocarSenha: false,
+            supabaseId: null,
+          },
+        });
+        await tx.perfilMedico.updateMany({
+          where: { userId: medicoId },
+          data: { ...DADOS_PERFIL_MEDICO_PSEUDONIMIZADO, crm: crmAnon },
+        });
+
+        // Chave PIX e documento do titular saem do cadastro (o repasse já pago
+        // guarda a própria cópia — obrigação fiscal).
+        await tx.dadosRecebimentoMedico.deleteMany({ where: { medicoId } });
+        // Fora da agenda / busca.
+        await tx.bloqueioAgenda.deleteMany({ where: { medicoId } });
+
+        await tx.consentimento.updateMany({ where: { quem: medico.nome }, data: { quem: apelido } });
+
+        // Auditoria: ações do médico mostram o pseudônimo; nome/e-mail/CRM/
+        // telefone/CNPJ/chave PIX saem dos detalhes. Escopo por id.
+        const logs = await tx.auditLog.findMany({
+          where: { OR: [{ usuarioId: medicoId }, { entidadeId: medicoId }] },
+          select: { id: true, usuarioId: true, usuarioNome: true, detalhes: true },
+        });
+        for (const l of logs) {
+          const usuarioNome = l.usuarioId === medicoId ? apelido : substituirTermos(l.usuarioNome, termos, apelido);
+          const detalhes = l.detalhes === null ? null : substituirTermos(l.detalhes, termos, apelido);
+          if (usuarioNome !== l.usuarioNome || detalhes !== l.detalhes) {
+            await tx.auditLog.update({ where: { id: l.id }, data: { usuarioNome, detalhes } });
+          }
+        }
+
+        // Suporte (não clínico): tickets e mensagens com quem não é paciente.
+        await tx.ticket.updateMany({
+          where: { usuarioId: medicoId },
+          data: { assunto: MARCADOR_LGPD, mensagem: MARCADOR_LGPD, resposta: MARCADOR_LGPD },
+        });
+        await tx.mensagem.updateMany({
+          where: {
+            OR: [
+              { deId: medicoId, para: { role: { not: "PACIENTE" } } },
+              { paraId: medicoId, de: { role: { not: "PACIENTE" } } },
+            ],
+          },
+          data: { texto: MARCADOR_LGPD },
+        });
+
+        await tx.lembrete.deleteMany({ where: { usuarioId: medicoId } });
+        await tx.notificacao.deleteMany({ where: { usuarioId: medicoId } });
+        await tx.pushInscricao.deleteMany({ where: { usuarioId: medicoId } });
+        await tx.sessao.deleteMany({ where: { userId: medicoId } });
+      },
+      { timeout: 30_000 },
+    );
+  } catch (e) {
+    if (supabaseId && !jaEstavaAnonimizado) {
+      await banirSupabaseAuth(supabaseId, false).catch(() =>
+        console.error("[LGPD] não consegui desfazer o bloqueio do login do médico", medicoId),
+      );
+    }
+    throw e;
+  }
+
+  // (4) Remove do Auth; a conta já está banida e desvinculada.
+  let loginSupabaseRemovido = false;
+  if (supabaseId) {
+    try {
+      await removerUsuarioSupabaseAuth(supabaseId);
+      loginSupabaseRemovido = true;
+    } catch {
+      console.error("[LGPD] login do médico ficou banido, mas não foi removido do Supabase Auth", medicoId);
+    }
+  }
+
+  return { apelido, jaEstavaAnonimizado, loginSupabaseRemovido };
 }
