@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { exigirPapel } from "@/lib/server/auth";
 import { aplicarSideEffects, anamneseWire, consultaWire, perfilPacienteWire } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
-import { chatComFonte, type AnonNomes, type FonteLlm } from "@/lib/server/llm";
+import { chatComFonte, iaPausada, type AnonNomes, type FonteLlm } from "@/lib/server/llm";
 import {
   turnoMotor,
   perguntaRetomada,
@@ -517,7 +517,8 @@ export async function POST(req: NextRequest) {
     // (funciona sem Gemma/API). LGPD: a IA externa só roda com
     // BION_ANAMNESE_LLM=1 no SERVIDOR; o `modo: "ia"` do cliente é ignorado
     // (antes ele mandava a anamnese ao Google mesmo sem a variável).
-    const tentarLlm = process.env.BION_MOTOR_LOCAL !== "1" && process.env.BION_ANAMNESE_LLM === "1";
+    // Pausa da BION IA (até o #108): a triagem segue pelo motor determinístico local, sem IA.
+    const tentarLlm = !iaPausada() && process.env.BION_MOTOR_LOCAL !== "1" && process.env.BION_ANAMNESE_LLM === "1";
 
     if (tentarLlm && !fugaCurta && (historico.length > 0 || Boolean(mensagem))) {
       const instrucaoAbertura = mensagem

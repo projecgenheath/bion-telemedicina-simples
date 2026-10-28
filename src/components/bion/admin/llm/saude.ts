@@ -31,7 +31,7 @@ export type ResumoLlm = {
   modelos: (string | null)[];
 };
 
-export type RespostaMonitor = { resumo?: ResumoLlm | null; eventos?: EventoLlm[] | null };
+export type RespostaMonitor = { resumo?: ResumoLlm | null; eventos?: EventoLlm[] | null; pausada?: boolean };
 
 /**
  * Limites do estado de saúde (decisão de produto, ajustáveis aqui):
@@ -53,7 +53,9 @@ export function falhasSeguidas(eventos: EventoLlm[]): number {
   return n;
 }
 
-export function estadoSaude(resumo: ResumoLlm | null | undefined, eventos: EventoLlm[] = []): Saude {
+export function estadoSaude(resumo: ResumoLlm | null | undefined, eventos: EventoLlm[] = [], pausada = false): Saude {
+  // Pausa proposital (até o motor NVIDIA, #108): não é falha, o painel não fica vermelho.
+  if (pausada) return { tom: "neutro", rotulo: "Pausada", texto: "A BION IA está pausada até o motor NVIDIA entrar. Nenhum dado vai para a IA." };
   if (!resumo || !resumo.turnos) return { tom: "neutro", rotulo: "Sem dados", texto: "Ainda sem turnos nesta instância. Use o chat da BION IA e atualize." };
   const seguidas = falhasSeguidas(eventos);
   if (resumo.taxaOk < LIMITES_SAUDE.okInstavel || seguidas >= LIMITES_SAUDE.falhasSeguidasCriticas) {

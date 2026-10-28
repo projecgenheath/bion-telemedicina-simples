@@ -3,7 +3,7 @@ import { quandoClinica } from "@/lib/server/fuso";
 import { db } from "@/lib/db";
 import { exigirSessao } from "@/lib/server/auth";
 import { ok, falha } from "@/lib/server/http";
-import { chatComFonte, registrosGemini, type AnonNomes } from "@/lib/server/llm";
+import { chatComFonte, iaPausada, registrosGemini, respostaIaPausada, type AnonNomes } from "@/lib/server/llm";
 import { anonimizarMensagensIa, type IdentificadoresPaciente } from "@/lib/server/anonimizar-ia";
 import { anonimizarMensagensTexto } from "@/lib/server/anonimizar-texto";
 import { dataNascimentoParaIso } from "@/lib/idade";
@@ -131,6 +131,8 @@ async function nomesPacientesDoMedico(medicoId: string): Promise<string[]> {
 export async function POST(req: NextRequest) {
   try {
     const usuario = await exigirSessao();
+    // Pausa da BION IA (até o #108): chat do paciente e Copilot do médico não mandam nada à IA.
+    if (iaPausada()) return respostaIaPausada();
     const body = (await req.json()) as { mensagens?: MsgEntrada[] };
 
     const historico = (body.mensagens ?? [])
