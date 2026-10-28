@@ -147,6 +147,22 @@ async function cenario(valorAntigo = 150) {
 }
 // --- médico mais caro: remarcando até pagar (gateway por webhook, sem simulado)
 process.env.BION_PAGAMENTO_WEBHOOK_SECRET = "teste-local";
+// Só cartão: com gateway real e a flag Stripe desligada, a diferença não é
+// cobrada (503 pagamento_indisponivel) e nada é criado. Nunca Pix.
+{
+  const { pac, c } = await cenario(150);
+  await m.abrirEspera(c.id, new Date(AGORA.getTime() - 15 * 60_000));
+  const caro0 = await medico(200);
+  delete process.env.BION_PAGAMENTO_STRIPE;
+  const r0 = await m.remarcarPorEspera({ consultaId: c.id, pacienteId: pac.id, medicoId: caro0.id, diferencaEsperadaCentavos: 5000, agora: new Date(AGORA.getTime() + 60_000) });
+  igual("flag desligada: 503 pagamento_indisponivel", r0.ok ? null : [r0.status, r0.codigo], [503, "pagamento_indisponivel"]);
+  const novas0 = await db.consulta.count({ where: { consultaOrigemId: c.id } });
+  const e0 = await db.esperaMedico.findUnique({ where: { consultaId: c.id } });
+  igual("flag desligada: nada criado", [novas0, e0?.consultaNovaId ?? null, e0?.status === "remarcando"], [0, null, false]);
+}
+// Flag ligada (chave fictícia, nenhuma chamada ao Stripe neste teste): cobra com cartão.
+process.env.BION_PAGAMENTO_STRIPE = "true";
+process.env.STRIPE_SECRET_KEY = "sk_test_local_ficticia";
 const ANTES = AGORA.getTime();
 async function remarcandoCaro() {
   const { pac, c } = await cenario(150);
@@ -177,7 +193,7 @@ const confirmarNoGateway = (id: string) => db.pagamento.update({ where: { id }, 
   igual("caro: médico entrando → espera_encerrada remarcando", await m.fecharEsperaMedicoEntrou(c.id), { resultado: "espera_encerrada", desfecho: "remarcando" });
   const rep2 = await m.remarcarPorEspera({ consultaId: c.id, pacienteId: pac.id, medicoId: caro.id, diferencaEsperadaCentavos: 5000, agora: new Date(ANTES + 2 * 60_000) });
   igual("caro: repetir devolve a mesma cobrança", rep2.ok && rep2.jaProcessada && rep2.cobranca?.pagamentoId === cobranca.pagamentoId, true);
-  igual("caro: cobrança com campos de PIX nulos", [cobranca.pixCopiaECola, cobranca.qrCodeBase64], [null, null]);
+  igual("caro: cobrança só com cartão, sem campos de Pix", [cobranca.metodo, "pixCopiaECola" in cobranca, "qrCodeBase64" in cobranca], ["cartao", false, false]);
   igual("caro: webhook real 200", await webhookConfirma(cobranca.pagamentoId), 200);
   const avisos = await db.notificacao.findMany({ where: { usuarioId: pac.id }, select: { texto: true } });
   igual("caro: aviso próprio 'começa agora'", avisos.map((a) => a.texto), [`Pagamento aprovado. Sua consulta com Dr(a). ${caro.nome} começa agora; entre na sala.`]);
@@ -303,6 +319,7 @@ const confirmarNoGateway = (id: string) => db.pagamento.update({ where: { id }, 
 {
   // Simulado: a troca também manda o aviso próprio.
   delete process.env.BION_PAGAMENTO_WEBHOOK_SECRET;
+  delete process.env.BION_PAGAMENTO_STRIPE; // demonstração: flag desligada + gateway simulado confirma na hora
   const { pac, c } = await cenario(150);
   await m.abrirEspera(c.id, new Date(ANTES - 15 * 60_000));
   const caro = await medico(200);

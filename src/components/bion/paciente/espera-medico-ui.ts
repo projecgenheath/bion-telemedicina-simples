@@ -31,8 +31,10 @@ export type CobrancaEspera = {
   valorCentavos: number;
   status: string;
   reservaExpiraEm: string | null;
-  pixCopiaECola: string | null;
-  qrCodeBase64: string | null;
+  /** Só cartão (checkout Stripe). */
+  metodo: "cartao";
+  /** Flag Stripe ligada: a tela mostra o botão Pagar. */
+  pagarComCartao: boolean;
 };
 
 export type MedicoLivre = {
@@ -79,7 +81,7 @@ export function textoDiferenca(diferencaCentavos: number): { curto: string; deta
   if (d > 0) {
     return {
       curto: `+ ${brl(d)}`,
-      detalhe: `Você paga a diferença de ${brl(d)} por PIX. A consulta atual só é cancelada depois que o PIX for confirmado; o novo horário fica reservado por 10 minutos.`,
+      detalhe: `Você paga a diferença de ${brl(d)} com cartão. A consulta atual só é cancelada depois que o pagamento for confirmado; o novo horário fica reservado por 10 minutos.`,
       acao: "cobrar",
     };
   }
@@ -113,7 +115,9 @@ export function mensagemErroEspera(codigo: string | undefined, erro?: string): s
     case "remarcando":
       return "Já existe uma remarcação esperando o pagamento.";
     case "pagamento_confirmado":
-      return "O PIX já foi confirmado. Sua consulta foi remarcada.";
+      return "O pagamento já foi confirmado. Sua consulta foi remarcada.";
+    case "pagamento_indisponivel":
+      return "Pagamento online indisponível no momento. Tente de novo mais tarde.";
     case "sem_remarcacao":
       return "Não há remarcação esperando pagamento.";
     case "espera_resolvida":

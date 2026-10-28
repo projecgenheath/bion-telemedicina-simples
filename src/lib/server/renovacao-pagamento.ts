@@ -10,7 +10,11 @@ type Tx = Prisma.TransactionClient;
  * vínculo em PedidoRenovacao.pagamentoId) no valor normal da consulta do médico.
  */
 
-/** Cria o pedido + a cobrança PIX pendente. O valor vem de PerfilMedico.valor (reais). */
+/**
+ * Cria o pedido + a cobrança pendente, paga com CARTÃO pelo checkout Stripe
+ * (POST /api/pagamentos/stripe/checkout { pagamentoId }). O app não cobra
+ * por Pix. O valor vem de PerfilMedico.valor (reais).
+ */
 export async function criarCobrancaRenovacao(
   tx: Tx,
   dados: { id: string; pacienteId: string; medicoId: string; consultaOrigemId: string | null; documentoId: string; observacaoPaciente: string | null },
@@ -21,7 +25,7 @@ export async function criarCobrancaRenovacao(
   const valorReais = Math.max(0, Math.round((perfil?.valor ?? 150) * 100) / 100);
   const valorCentavos = Math.round(valorReais * 100);
   const pagamento = await tx.pagamento.create({
-    data: { consultaId: null, valor: valorReais, metodo: "pix", status: "pendente", via: "webhook", gatewayRef: `renovacao:${dados.id}` },
+    data: { consultaId: null, valor: valorReais, metodo: "cartao", status: "pendente", via: "webhook", gatewayRef: `renovacao:${dados.id}` },
   });
   const pedido = await tx.pedidoRenovacao.create({
     data: { ...dados, status: "aguardando_pagamento", valorCentavos, pagamentoId: pagamento.id },
@@ -46,7 +50,7 @@ export async function confirmarPagamentoRenovacao(pagamentoId: string, tx: Tx): 
   return r.count === 1 ? "pendente" : "ja_processado";
 }
 
-/** PIX expirado ou falho: aguardando_pagamento → cancelado (idempotente). */
+/** Pagamento falho: aguardando_pagamento → cancelado (idempotente). */
 export async function cancelarRenovacaoPagamentoFalhou(pagamentoId: string, tx: Tx): Promise<boolean> {
   const r = await tx.pedidoRenovacao.updateMany({
     where: { pagamentoId, status: "aguardando_pagamento" },

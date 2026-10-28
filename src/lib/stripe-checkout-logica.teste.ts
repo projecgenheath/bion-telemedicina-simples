@@ -6,6 +6,16 @@ import { readFileSync } from "fs";
 import {
   acaoDoEvento,
   avaliarElegibilidade,
+  avaliarMulta,
+  avaliarPagamentoAvulso,
+  decisaoCobranca,
+  expiracaoReservaSeg,
+  multaDaSessao,
+  referenciaCliente,
+  referenciaConfere,
+  respostaIndisponivel,
+  tipoPorGatewayRef,
+  type PagamentoAvulso,
   bloqueioChaveLive,
   chaveIdempotencia,
   metodosCheckout,
@@ -170,6 +180,91 @@ igual("tela de volta não marca pago", /method:\s*"(POST|PATCH)"/.test(sucesso),
 
 igual("confirmação condicional (count === 1)", /updateMany\(\{\s*where: \{ id: p\.id, status: \{ not: "confirmado" \} \}[\s\S]*?r\.count !== 1\) return false/.test(pagamentosTs), true);
 igual("confirmarPagamento delega", pagamentosTs.includes("(await confirmarPagamentoSeMudou(pagamentoId, via)).pagamento"), true);
+
+
+// ---- cobranças só com cartão: renovação, diferença da espera, multa ----
+igual("tipo consulta", tipoPorGatewayRef(null), "consulta");
+igual("tipo renovação", tipoPorGatewayRef("renovacao:r1"), "renovacao");
+igual("tipo espera", tipoPorGatewayRef("espera:e1"), "espera");
+igual("tipo desconhecido", tipoPorGatewayRef("outra"), null);
+
+const T = 1_000_000_000;
+const ren: PagamentoAvulso = { id: "pg9", status: "pendente", valor: 150, gatewayRef: "renovacao:r1", pedidoRenovacao: { pacienteId: "p1", status: "aguardando_pagamento" }, consulta: null, espera: null };
+igual("renovação ok", avaliarPagamentoAvulso(ren, "p1", T), { ok: true, valorCentavos: 15000, tipo: "renovacao" });
+igual("renovação outro paciente 403", (avaliarPagamentoAvulso(ren, "p2", T) as { status: number }).status, 403);
+igual("renovação já paga", avaliarPagamentoAvulso({ ...ren, status: "confirmado" }, "p1", T).ok, false);
+igual("renovação pedido já pendente (pago)", avaliarPagamentoAvulso({ ...ren, pedidoRenovacao: { pacienteId: "p1", status: "pendente" } }, "p1", T).ok, false);
+igual("renovação cancelada", avaliarPagamentoAvulso({ ...ren, pedidoRenovacao: { pacienteId: "p1", status: "cancelado" } }, "p1", T).ok, false);
+igual("renovação sem pedido 404", (avaliarPagamentoAvulso({ ...ren, pedidoRenovacao: null }, "p1", T) as { status: number }).status, 404);
+igual("renovação valor zero", avaliarPagamentoAvulso({ ...ren, valor: 0 }, "p1", T).ok, false);
+igual("nula 404", (avaliarPagamentoAvulso(null, "p1", T) as { status: number }).status, 404);
+igual("pagamento de consulta comum não é avulso", avaliarPagamentoAvulso({ ...ren, gatewayRef: null }, "p1", T).ok, false);
+
+const esp: PagamentoAvulso = { id: "pg8", status: "pendente", valor: 50, gatewayRef: "espera:e1", pedidoRenovacao: null, consulta: { pacienteId: "p1", status: "em_espera" }, espera: { status: "remarcando", reservaExpiraEmMs: T + 60_000 } };
+igual("espera ok", avaliarPagamentoAvulso(esp, "p1", T), { ok: true, valorCentavos: 5000, tipo: "espera" });
+igual("espera outro paciente", (avaliarPagamentoAvulso(esp, "p2", T) as { status: number }).status, 403);
+igual("espera reserva vencida", avaliarPagamentoAvulso(esp, "p1", T + 61_000).ok, false);
+igual("espera não remarcando", avaliarPagamentoAvulso({ ...esp, espera: { status: "expirada", reservaExpiraEmMs: null } }, "p1", T).ok, false);
+igual("espera de outra consulta nova (null)", avaliarPagamentoAvulso({ ...esp, espera: null }, "p1", T).ok, false);
+igual("espera pagamento falhou (reserva liberada)", avaliarPagamentoAvulso({ ...esp, status: "falhou" }, "p1", T).ok, false);
+
+const multa = { id: "rm1", status: "pendente", multaCentavos: 3000, expiraEmMs: T + 60_000, consulta: { pacienteId: "p1" } };
+igual("multa ok", avaliarMulta(multa, "p1", T), { ok: true, valorCentavos: 3000 });
+igual("multa outro paciente", (avaliarMulta(multa, "p2", T) as { status: number }).status, 403);
+igual("multa vencida", avaliarMulta(multa, "p1", T + 60_000).ok, false);
+igual("multa aprovada", avaliarMulta({ ...multa, status: "aprovada" }, "p1", T).ok, false);
+igual("multa zero", avaliarMulta({ ...multa, multaCentavos: 0 }, "p1", T).ok, false);
+igual("multa nula", avaliarMulta(null, "p1", T).ok, false);
+
+igual("flag ligada → stripe", decisaoCobranca(true, "webhook"), "stripe");
+igual("flag ligada no simulado → stripe", decisaoCobranca(true, "simulado"), "stripe");
+igual("flag desligada demo → simulado", decisaoCobranca(false, "simulado"), "simulado");
+igual("flag desligada com gateway real → indisponível", decisaoCobranca(false, "webhook"), "indisponivel");
+igual("flag desligada em produção sem gateway → indisponível", decisaoCobranca(false, "pendente"), "indisponivel");
+igual("503 pagamento_indisponivel", respostaIndisponivel(), { corpo: { erro: "Pagamento online indisponível no momento.", codigo: "pagamento_indisponivel" }, status: 503 });
+
+const pRen = parametrosSessao({ consultaId: null, pacienteId: "p1", pagamentoId: "pg9", tipo: "renovacao", valorCentavos: 15000, moeda: "brl", metodos: metodosCheckout(), descricao: "R", baseUrl: "https://a/" });
+igual("renovação: ref pagamento", pRen.client_reference_id, "pagamento:pg9");
+igual("renovação: metadata sem consulta", pRen.metadata, { pacienteId: "p1", pagamentoId: "pg9", tipo: "renovacao" });
+igual("renovação: só cartão", pRen.payment_method_types, ["card"]);
+igual("renovação: volta com tipo", pRen.success_url, "https://a/pagamento/sucesso?tipo=renovacao");
+const pMul = parametrosSessao({ consultaId: null, pacienteId: "p1", pagamentoId: null, tipo: "multa", remarcacaoId: "rm1", expiraEmSeg: 123, valorCentavos: 3000, moeda: "brl", metodos: ["card"], descricao: "M", baseUrl: "https://a" });
+igual("multa: ref", pMul.client_reference_id, "multa:rm1");
+igual("multa: metadata", pMul.metadata, { pacienteId: "p1", tipo: "multa", remarcacaoId: "rm1" });
+igual("multa: expira", (pMul as { expires_at?: number }).expires_at, 123);
+igual("multa da sessão", multaDaSessao(pMul.metadata), "rm1");
+igual("consulta não é multa", multaDaSessao({ consultaId: "c1" }), null);
+const pEsp = parametrosSessao({ consultaId: "cn1", pacienteId: "p1", pagamentoId: "pg8", tipo: "espera", valorCentavos: 5000, moeda: "brl", metodos: ["card"], descricao: "E", baseUrl: "https://a" });
+igual("espera: ref é a consulta nova", pEsp.client_reference_id, "cn1");
+igual("espera: volta acompanha a consulta nova", pEsp.success_url, "https://a/pagamento/sucesso?consulta=cn1");
+igual("consulta sem tipo no metadata (igual ao #119)", parametrosSessao({ consultaId: "c1", pacienteId: "p1", pagamentoId: "pg1", valorCentavos: 1, moeda: "brl", metodos: ["card"], descricao: "T", baseUrl: "https://a" }).metadata, { consultaId: "c1", pacienteId: "p1", pagamentoId: "pg1" });
+igual("consulta sem expires_at", "expires_at" in parametrosSessao({ consultaId: "c1", pacienteId: "p1", pagamentoId: "pg1", valorCentavos: 1, moeda: "brl", metodos: ["card"], descricao: "T", baseUrl: "https://a" }), false);
+igual("ref consulta", referenciaCliente({ consultaId: "c1", pagamentoId: "pg1" }), "c1");
+igual("ref confere consulta", referenciaConfere("c1", { id: "pg1", consultaId: "c1" }), true);
+igual("ref confere renovação", referenciaConfere("pagamento:pg9", { id: "pg9", consultaId: null }), true);
+igual("ref de outro pagamento não confere", referenciaConfere("pagamento:pgX", { id: "pg9", consultaId: null }), false);
+igual("ref de consulta não serve para renovação", referenciaConfere("c1", { id: "pg9", consultaId: null }), false);
+igual("expiração da reserva ≥ 30 min (mínimo do Stripe)", expiracaoReservaSeg(T * 1000) - T >= 30 * 60, true);
+
+// guardas estáticas: nenhuma cobrança nova por Pix
+const ler = (r: string) => readFileSync(new URL(r, import.meta.url), "utf8");
+const renovPag = ler("./server/renovacao-pagamento.ts");
+const renovRota = ler("../app/api/renovacoes/route.ts");
+const remRota = ler("../app/api/consultas/[id]/remarcacao/route.ts");
+const esperaTs = ler("./server/espera-medico.ts");
+igual("renovação cobra cartão", /metodo: "pix"/.test(renovPag) || !/metodo: "cartao"/.test(renovPag), false);
+igual("renovação sem pixCopiaECola", /pixCopiaECola|qrCodeBase64/.test(renovRota), false);
+igual("renovação 503 com a flag desligada", /decisao === "indisponivel"[\s\S]*?respostaIndisponivel\(\)[\s\S]*?criarCobrancaRenovacao\(/.test(renovRota), true);
+igual("remarcação sem pix", /"pix"/.test(remRota), false);
+igual("remarcação 503 antes de reservar", /decisao === "indisponivel"[\s\S]*?respostaIndisponivel\(\)[\s\S]*?remarcacaoPendente\.create/.test(remRota), true);
+igual("espera sem pix", /metodo: "pix"|pixCopiaECola/.test(esperaTs), false);
+igual("espera 503 antes de criar a consulta nova", /"indisponivel"\) \{\s*return falhar\(503, "pagamento_indisponivel"[\s\S]*?consulta\.create/.test(esperaTs), true);
+igual("checkout aceita pagamentoId e remarcacaoId", /body\.remarcacaoId[\s\S]*?body\.pagamentoId/.test(checkout), true);
+igual("webhook confirma renovação", webhook.includes("confirmarPagamentoRenovacao(pagamentoId, tx)"), true);
+igual("webhook cancela renovação falha", webhook.includes("cancelarRenovacaoPagamentoFalhou(p.id, tx)"), true);
+igual("webhook troca a consulta da espera", webhook.includes("confirmarRemarcacaoEspera(pagamentoId)"), true);
+igual("webhook aplica a multa", /aprovarMultaRemarcacao\(r\.id, "webhook"/.test(webhook), true);
+igual("webhook confere valor da multa", /valorConfere\(s\.amount_total, r\.multaCentavos \/ 100\)/.test(webhook), true);
 
 console.log(`${ok} ok, ${falhas} falha(s)`);
 if (falhas) process.exit(1);
