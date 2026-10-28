@@ -1,6 +1,6 @@
 ---
 title: "Termos de Uso do Paciente — BION Telemedicina"
-subtitle: "Versão provisória v0 — 20/10/2026"
+subtitle: "Versão provisória v1 — 27/10/2026"
 lang: pt-BR
 ---
 
@@ -318,4 +318,4 @@ Se alguma cláusula for considerada inválida, as demais continuam valendo. A to
 
 Contato: **[A DEFINIR: e-mail de atendimento]** · Encarregado (DPO): **[A DEFINIR: e-mail do Encarregado]**
 
-*Versão provisória v0 — Vigente a partir do seu aceite.*
+*Vigente a partir do seu aceite*

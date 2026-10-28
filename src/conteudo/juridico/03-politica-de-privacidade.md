@@ -1,6 +1,6 @@
 ---
 title: "Política de Privacidade — BION Telemedicina (Pacientes, Médicos e Visitantes)"
-subtitle: "Versão provisória v0 — 20/10/2026"
+subtitle: "Versão provisória v1 — 27/10/2026"
 lang: pt-BR
 ---
 
@@ -286,7 +286,7 @@ Encarregado pelo tratamento de dados pessoais: **[A DEFINIR: nome]** — **[A DE
 
 Podemos atualizar esta política. Mudanças relevantes serão avisadas no app com antecedência razoável e, quando a mudança exigir, pediremos novo consentimento.
 
-*Versão provisória v0 — Vigente a partir do seu aceite.*
+*Vigente a partir do seu aceite*
 
 ---
 
