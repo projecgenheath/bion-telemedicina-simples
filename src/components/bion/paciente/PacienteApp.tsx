@@ -38,6 +38,8 @@ import { consultaTemReembolso } from "./reembolso-visivel";
 import { GraficoLinha, type PontoGrafico } from "./GraficoLinha";
 import { EtiquetaTipo } from "./tipo-atendimento-ui";
 import { CLASSE_ETIQUETA, etiquetaConsulta, type EtiquetaConsulta } from "./etiqueta-consulta";
+import { BotaoPagarStripe } from "./BotaoPagarStripe";
+import { ehRetornoGratis } from "./LinhaConsultaPagamento";
 import { DetalheMedicao, type Detalhe } from "./DetalheMedicao";
 import dynamic from "next/dynamic";
 import "./paciente.css";
@@ -568,6 +570,10 @@ export function PacienteApp() {
                     <ContagemConsulta ts={proxima.ts} />
                   </div>
                 </CabecalhoProxima>
+
+                {etiquetaDe(proxima).texto === "Aguardando pagamento" && !proxima.remarcacaoPendente && !ehRetornoGratis(proxima) ? (
+                  <BotaoPagarStripe consultaId={proxima.id} className="w-full mt-3" />
+                ) : null}
 
                 <AcoesProximaConsulta
                   acao={acaoProxima ?? { tipo: "nenhuma" }}
