@@ -194,450 +194,58 @@ export function MedicoApp() {
       {medico ? (
         <>
           <PrecoSheet
-          <PromocoesSheet
-            key={`promocoes-${aberturas}`}
-            aberto={sheet === "promocoes"}
-            onFechar={fecharSheet}
-            medico={medico}
-            confirmar={confirmarValor}
-          />
             key={`preco-${aberturas}`}
-          <PromocoesSheet
-            key={`promocoes-${aberturas}`}
-            aberto={sheet === "promocoes"}
-            onFechar={fecharSheet}
-            medico={medico}
-            confirmar={confirmarValor}
-          />
             aberto={sheet === "preco"}
-          <PromocoesSheet
-            key={`promocoes-${aberturas}`}
-            aberto={sheet === "promocoes"}
-            onFechar={fecharSheet}
-            medico={medico}
-            confirmar={confirmarValor}
-          />
-            onFechar={fecharSheet}
-          <PromocoesSheet
-            key={`promocoes-${aberturas}`}
-            aberto={sheet === "promocoes"}
-            onFechar={fecharSheet}
-            medico={medico}
-            confirmar={confirmarValor}
-          />
-            medico={medico}
-          <PromocoesSheet
-            key={`promocoes-${aberturas}`}
-            aberto={sheet === "promocoes"}
-            onFechar={fecharSheet}
-            medico={medico}
-            confirmar={confirmarValor}
-          />
-            confirmar={confirmarValor}
-          <PromocoesSheet
-            key={`promocoes-${aberturas}`}
-            aberto={sheet === "promocoes"}
-            onFechar={fecharSheet}
-            medico={medico}
-            confirmar={confirmarValor}
-          />
-          />
-          <PromocoesSheet
-            key={`promocoes-${aberturas}`}
-            aberto={sheet === "promocoes"}
             onFechar={fecharSheet}
             medico={medico}
             confirmar={confirmarValor}
           />
           <AgendaSheet
-          <PromocoesSheet
-            key={`promocoes-${aberturas}`}
-            aberto={sheet === "promocoes"}
-            onFechar={fecharSheet}
-            medico={medico}
-            confirmar={confirmarValor}
-          />
             key={`agenda-${aberturas}`}
-          <PromocoesSheet
-            key={`promocoes-${aberturas}`}
-            aberto={sheet === "promocoes"}
-            onFechar={fecharSheet}
-            medico={medico}
-            confirmar={confirmarValor}
-          />
             aberto={sheet === "agenda"}
-          <PromocoesSheet
-            key={`promocoes-${aberturas}`}
-            aberto={sheet === "promocoes"}
             onFechar={fecharSheet}
             medico={medico}
-            confirmar={confirmarValor}
-          />
-            onFechar={fecharSheet}
-          <PromocoesSheet
-            key={`promocoes-${aberturas}`}
-            aberto={sheet === "promocoes"}
-            onFechar={fecharSheet}
-            medico={medico}
-            confirmar={confirmarValor}
-          />
-            medico={medico}
-          <PromocoesSheet
-            key={`promocoes-${aberturas}`}
-            aberto={sheet === "promocoes"}
-            onFechar={fecharSheet}
-            medico={medico}
-            confirmar={confirmarValor}
-          />
             confirmar={confirmarHorarios}
-          <PromocoesSheet
-            key={`promocoes-${aberturas}`}
-            aberto={sheet === "promocoes"}
-            onFechar={fecharSheet}
-            medico={medico}
-            confirmar={confirmarValor}
-          />
-          />
-          <PromocoesSheet
-            key={`promocoes-${aberturas}`}
-            aberto={sheet === "promocoes"}
-            onFechar={fecharSheet}
-            medico={medico}
-            confirmar={confirmarValor}
           />
           <AgendaPreviewSheet
-          <PromocoesSheet
-            key={`promocoes-${aberturas}`}
-            aberto={sheet === "promocoes"}
-            onFechar={fecharSheet}
-            medico={medico}
-            confirmar={confirmarValor}
-          />
             key={`preview-${aberturas}`}
-          <PromocoesSheet
-            key={`promocoes-${aberturas}`}
-            aberto={sheet === "promocoes"}
-            onFechar={fecharSheet}
-            medico={medico}
-            confirmar={confirmarValor}
-          />
             aberto={sheet === "preview"}
-          <PromocoesSheet
-            key={`promocoes-${aberturas}`}
-            aberto={sheet === "promocoes"}
             onFechar={fecharSheet}
             medico={medico}
-            confirmar={confirmarValor}
-          />
-            onFechar={fecharSheet}
-          <PromocoesSheet
-            key={`promocoes-${aberturas}`}
-            aberto={sheet === "promocoes"}
-            onFechar={fecharSheet}
-            medico={medico}
-            confirmar={confirmarValor}
-          />
-            medico={medico}
-          <PromocoesSheet
-            key={`promocoes-${aberturas}`}
-            aberto={sheet === "promocoes"}
-            onFechar={fecharSheet}
-            medico={medico}
-            confirmar={confirmarValor}
-          />
             consultas={minhas}
-          <PromocoesSheet
-            key={`promocoes-${aberturas}`}
-            aberto={sheet === "promocoes"}
-            onFechar={fecharSheet}
-            medico={medico}
-            confirmar={confirmarValor}
-          />
-          />
-          <PromocoesSheet
-            key={`promocoes-${aberturas}`}
-            aberto={sheet === "promocoes"}
-            onFechar={fecharSheet}
-            medico={medico}
-            confirmar={confirmarValor}
           />
         </>
-          <PromocoesSheet
-            key={`promocoes-${aberturas}`}
-            aberto={sheet === "promocoes"}
-            onFechar={fecharSheet}
-            medico={medico}
-            confirmar={confirmarValor}
-          />
       ) : null}
-          <PromocoesSheet
-            key={`promocoes-${aberturas}`}
-            aberto={sheet === "promocoes"}
-            onFechar={fecharSheet}
-            medico={medico}
-            confirmar={confirmarValor}
-          />
 
-          <PromocoesSheet
-            key={`promocoes-${aberturas}`}
-            aberto={sheet === "promocoes"}
-            onFechar={fecharSheet}
-            medico={medico}
-            confirmar={confirmarValor}
-          />
       {sobreposicao?.tipo === "paciente" ? (
-          <PromocoesSheet
-            key={`promocoes-${aberturas}`}
-            aberto={sheet === "promocoes"}
-            onFechar={fecharSheet}
-            medico={medico}
-            confirmar={confirmarValor}
-          />
         <ConversaPaciente paciente={sobreposicao.p} dados={dados} onFechar={fecharSobreposicao} />
-          <PromocoesSheet
-            key={`promocoes-${aberturas}`}
-            aberto={sheet === "promocoes"}
-            onFechar={fecharSheet}
-            medico={medico}
-            confirmar={confirmarValor}
-          />
       ) : null}
-          <PromocoesSheet
-            key={`promocoes-${aberturas}`}
-            aberto={sheet === "promocoes"}
-            onFechar={fecharSheet}
-            medico={medico}
-            confirmar={confirmarValor}
-          />
       {sobreposicao?.tipo === "renovacoes" ? (
-          <PromocoesSheet
-            key={`promocoes-${aberturas}`}
-            aberto={sheet === "promocoes"}
-            onFechar={fecharSheet}
-            medico={medico}
-            confirmar={confirmarValor}
-          />
         <TelaSobreposta titulo="Renovações de receita" subtitulo="Pedidos pendentes dos seus pacientes" onFechar={fecharSobreposicao}>
-          <PromocoesSheet
-            key={`promocoes-${aberturas}`}
-            aberto={sheet === "promocoes"}
-            onFechar={fecharSheet}
-            medico={medico}
-            confirmar={confirmarValor}
-          />
           <RenovacoesPendentes />
-          <PromocoesSheet
-            key={`promocoes-${aberturas}`}
-            aberto={sheet === "promocoes"}
-            onFechar={fecharSheet}
-            medico={medico}
-            confirmar={confirmarValor}
-          />
         </TelaSobreposta>
-          <PromocoesSheet
-            key={`promocoes-${aberturas}`}
-            aberto={sheet === "promocoes"}
-            onFechar={fecharSheet}
-            medico={medico}
-            confirmar={confirmarValor}
-          />
       ) : null}
-          <PromocoesSheet
-            key={`promocoes-${aberturas}`}
-            aberto={sheet === "promocoes"}
-            onFechar={fecharSheet}
-            medico={medico}
-            confirmar={confirmarValor}
-          />
       {sobreposicao?.tipo === "suporte" ? (
-          <PromocoesSheet
-            key={`promocoes-${aberturas}`}
-            aberto={sheet === "promocoes"}
-            onFechar={fecharSheet}
-            medico={medico}
-            confirmar={confirmarValor}
-          />
         <TelaSobreposta titulo="Suporte" subtitulo="Chamados com a equipe BION" onFechar={fecharSobreposicao}>
-          <PromocoesSheet
-            key={`promocoes-${aberturas}`}
-            aberto={sheet === "promocoes"}
-            onFechar={fecharSheet}
-            medico={medico}
-            confirmar={confirmarValor}
-          />
           <div className="p-4">
-          <PromocoesSheet
-            key={`promocoes-${aberturas}`}
-            aberto={sheet === "promocoes"}
-            onFechar={fecharSheet}
-            medico={medico}
-            confirmar={confirmarValor}
-          />
             <ChamadosSuporte />
-          <PromocoesSheet
-            key={`promocoes-${aberturas}`}
-            aberto={sheet === "promocoes"}
-            onFechar={fecharSheet}
-            medico={medico}
-            confirmar={confirmarValor}
-          />
           </div>
-          <PromocoesSheet
-            key={`promocoes-${aberturas}`}
-            aberto={sheet === "promocoes"}
-            onFechar={fecharSheet}
-            medico={medico}
-            confirmar={confirmarValor}
-          />
         </TelaSobreposta>
-          <PromocoesSheet
-            key={`promocoes-${aberturas}`}
-            aberto={sheet === "promocoes"}
-            onFechar={fecharSheet}
-            medico={medico}
-            confirmar={confirmarValor}
-          />
       ) : null}
-          <PromocoesSheet
-            key={`promocoes-${aberturas}`}
-            aberto={sheet === "promocoes"}
-            onFechar={fecharSheet}
-            medico={medico}
-            confirmar={confirmarValor}
-          />
       {sobreposicao?.tipo === "termos" ? (
-          <PromocoesSheet
-            key={`promocoes-${aberturas}`}
-            aberto={sheet === "promocoes"}
-            onFechar={fecharSheet}
-            medico={medico}
-            confirmar={confirmarValor}
-          />
         <TelaSobreposta titulo="Termos e ajuda" onFechar={fecharSobreposicao}>
-          <PromocoesSheet
-            key={`promocoes-${aberturas}`}
-            aberto={sheet === "promocoes"}
-            onFechar={fecharSheet}
-            medico={medico}
-            confirmar={confirmarValor}
-          />
           <div className="p-4 space-y-4">
-          <PromocoesSheet
-            key={`promocoes-${aberturas}`}
-            aberto={sheet === "promocoes"}
-            onFechar={fecharSheet}
-            medico={medico}
-            confirmar={confirmarValor}
-          />
             <div className="bp-glass p-4 flex items-center justify-between gap-3">
-          <PromocoesSheet
-            key={`promocoes-${aberturas}`}
-            aberto={sheet === "promocoes"}
-            onFechar={fecharSheet}
-            medico={medico}
-            confirmar={confirmarValor}
-          />
               <div>
-          <PromocoesSheet
-            key={`promocoes-${aberturas}`}
-            aberto={sheet === "promocoes"}
-            onFechar={fecharSheet}
-            medico={medico}
-            confirmar={confirmarValor}
-          />
                 <div className="text-sm font-bold">Termos de uso do médico</div>
-          <PromocoesSheet
-            key={`promocoes-${aberturas}`}
-            aberto={sheet === "promocoes"}
-            onFechar={fecharSheet}
-            medico={medico}
-            confirmar={confirmarValor}
-          />
                 <div className="text-xs text-bion-ink/75 dark:text-bion-paper/75">Texto específico para profissionais.</div>
-          <PromocoesSheet
-            key={`promocoes-${aberturas}`}
-            aberto={sheet === "promocoes"}
-            onFechar={fecharSheet}
-            medico={medico}
-            confirmar={confirmarValor}
-          />
               </div>
-          <PromocoesSheet
-            key={`promocoes-${aberturas}`}
-            aberto={sheet === "promocoes"}
-            onFechar={fecharSheet}
-            medico={medico}
-            confirmar={confirmarValor}
-          />
               <button type="button" onClick={() => window.open("/termos-medico", "_blank")} className="text-xs font-bold text-bion-sea dark:text-sky-300">Ler termos</button>
-          <PromocoesSheet
-            key={`promocoes-${aberturas}`}
-            aberto={sheet === "promocoes"}
-            onFechar={fecharSheet}
-            medico={medico}
-            confirmar={confirmarValor}
-          />
             </div>
-          <PromocoesSheet
-            key={`promocoes-${aberturas}`}
-            aberto={sheet === "promocoes"}
-            onFechar={fecharSheet}
-            medico={medico}
-            confirmar={confirmarValor}
-          />
             <Ajuda perfil="medico" />
-          <PromocoesSheet
-            key={`promocoes-${aberturas}`}
-            aberto={sheet === "promocoes"}
-            onFechar={fecharSheet}
-            medico={medico}
-            confirmar={confirmarValor}
-          />
           </div>
-          <PromocoesSheet
-            key={`promocoes-${aberturas}`}
-            aberto={sheet === "promocoes"}
-            onFechar={fecharSheet}
-            medico={medico}
-            confirmar={confirmarValor}
-          />
         </TelaSobreposta>
-          <PromocoesSheet
-            key={`promocoes-${aberturas}`}
-            aberto={sheet === "promocoes"}
-            onFechar={fecharSheet}
-            medico={medico}
-            confirmar={confirmarValor}
-          />
       ) : null}
-          <PromocoesSheet
-            key={`promocoes-${aberturas}`}
-            aberto={sheet === "promocoes"}
-            onFechar={fecharSheet}
-            medico={medico}
-            confirmar={confirmarValor}
-          />
     </div>
-          <PromocoesSheet
-            key={`promocoes-${aberturas}`}
-            aberto={sheet === "promocoes"}
-            onFechar={fecharSheet}
-            medico={medico}
-            confirmar={confirmarValor}
-          />
   );
-          <PromocoesSheet
-            key={`promocoes-${aberturas}`}
-            aberto={sheet === "promocoes"}
-            onFechar={fecharSheet}
-            medico={medico}
-            confirmar={confirmarValor}
-          />
 }
-          <PromocoesSheet
-            key={`promocoes-${aberturas}`}
-            aberto={sheet === "promocoes"}
-            onFechar={fecharSheet}
-            medico={medico}
-            confirmar={confirmarValor}
-          />
