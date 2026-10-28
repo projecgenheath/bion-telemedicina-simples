@@ -274,5 +274,7 @@ igual("sem ref", sessaoDaMulta(null), null);
 igual("checkout guarda a sessão da multa", /gatewayRef: `\$\{PREFIXO_SESSAO_MULTA\}\$\{sessao\.id\}`/.test(checkout), true);
 igual("checkout lê a sessão anterior da multa", /a\.tipo === "multa" \? a\.sessaoMulta/.test(checkout), true);
 
+igual("pagamento Pix pendente reaproveitado vira cartão", /stripeCheckoutSessionId: sessao\.id, metodo: "cartao"/.test(checkout), true);
+
 console.log(`${ok} ok, ${falhas} falha(s)`);
 if (falhas) process.exit(1);
