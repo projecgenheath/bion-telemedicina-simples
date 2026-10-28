@@ -7,7 +7,7 @@ import { opcoesRequisicao, parametrosSessao, type EntradaSessao } from "@/lib/st
 /* Ponto único de troca de gateway do checkout do paciente.            */
 /*                                                                     */
 /* As rotas falam só com `GatewayCheckout`. Hoje existe a implementação */
-/* Stripe; se o Stripe BR não atender (Pix, CNPJ), uma implementação    */
+/* Stripe; se o Stripe BR não atender (ex.: CNPJ), uma implementação     */
 /* de gateway brasileiro entra aqui sem mexer nas rotas nem nas telas.  */
 /* ------------------------------------------------------------------ */
 

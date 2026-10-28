@@ -13,13 +13,20 @@ export function checkoutStripeAtivo(): Promise<boolean> {
   return ativoCache;
 }
 
-/** Abre (ou reaproveita) a sessão e devolve a URL do Stripe. */
-export async function abrirCheckoutStripe(consultaId: string): Promise<{ url?: string; erro?: string }> {
+/**
+ * O que pagar: a consulta, uma cobrança avulsa (renovação de receita ou
+ * diferença da espera do médico, pelo pagamentoId) ou a multa da remarcação.
+ */
+export type AlvoCheckout = { consultaId: string } | { pagamentoId: string } | { remarcacaoId: string };
+
+/** Abre (ou reaproveita) a sessão e devolve a URL do Stripe. Só cartão. */
+export async function abrirCheckoutStripe(alvo: string | AlvoCheckout): Promise<{ url?: string; erro?: string }> {
   try {
+    const corpo: AlvoCheckout = typeof alvo === "string" ? { consultaId: alvo } : alvo;
     const r = await fetch("/api/pagamentos/stripe/checkout", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ consultaId }),
+      body: JSON.stringify(corpo),
     });
     const j = (await r.json().catch(() => ({}))) as { url?: string; erro?: string };
     if (!r.ok || !j.url) return { erro: j.erro ?? "Não foi possível abrir o pagamento." };

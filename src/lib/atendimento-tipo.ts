@@ -191,6 +191,8 @@ export type PedidoRenovacao = {
   consultaId: string | null;
   observacaoPaciente: string | null;
   documentoNovoId: string | null;
+  /** Só enquanto "aguardando_pagamento": a cobrança paga com cartão (checkout Stripe). */
+  pagamentoId: string | null;
   criadoEm: string;
   respondidoEm: string | null;
 };
@@ -214,6 +216,7 @@ export function lerPedidoRenovacao(v: unknown): PedidoRenovacao | null {
     consultaId: status === "chamada_marcada" ? s(r.consultaId) : null,
     observacaoPaciente: s(r.observacaoPaciente),
     documentoNovoId: s(r.documentoNovoId),
+    pagamentoId: status === "aguardando_pagamento" ? s(r.pagamentoId) : null,
     criadoEm: data(r.criadoEm) ?? new Date(0).toISOString(),
     respondidoEm: data(r.respondidoEm),
   };

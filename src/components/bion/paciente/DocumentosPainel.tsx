@@ -1,5 +1,6 @@
 "use client";
 
+import { BotaoPagarStripe } from "./BotaoPagarStripe";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useVoltarFecha } from "./useVoltarFecha";
 import { useFocoDialogo } from "./useFocoDialogo";
@@ -383,7 +384,10 @@ export function DocumentosPainel({
                                   </button>
                                 )
                               ) : null}
-                              {pedido.status !== "pendente" ? (
+                              {pedido.status === "aguardando_pagamento" && pedido.pagamentoId ? (
+                                <BotaoPagarStripe pagamentoId={pedido.pagamentoId} rotulo="Pagar com cartão" className="mt-1.5" />
+                              ) : null}
+                              {pedido.status !== "pendente" && pedido.status !== "aguardando_pagamento" ? (
                                 <button type="button" onClick={() => setRenovando({ id: o.id, medicamento: o.medicamento ?? "", medico: o.medico })} className="mt-1 block text-xs font-bold underline">
                                   Pedir de novo
                                 </button>

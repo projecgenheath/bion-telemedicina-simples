@@ -4,9 +4,12 @@ import { db } from "@/lib/db";
 import { registrarAudit } from "@/lib/server/auth";
 import { quandoClinica } from "@/lib/server/fuso";
 import { confirmarPagamentoSeMudou, falharPagamento } from "@/lib/server/pagamentos";
+import { avisarPacienteEspera, confirmarRemarcacaoEspera } from "@/lib/server/espera-medico";
+import { aprovarMultaRemarcacao, falharMultaRemarcacao } from "@/lib/server/financeiro";
+import { cancelarRenovacaoPagamentoFalhou, confirmarPagamentoRenovacao } from "@/lib/server/renovacao-pagamento";
 import { gatewayCheckout } from "@/lib/server/gateway-pagamento";
 import { liberarEvento, reivindicarEvento, registrarEventoReembolsoStripe, stripe } from "@/lib/server/stripe";
-import { acaoDoEvento, moedaCheckout, moedaConfere, valorConfere } from "@/lib/stripe-checkout-logica";
+import { acaoDoEvento, moedaCheckout, moedaConfere, multaDaSessao, referenciaConfere, valorConfere } from "@/lib/stripe-checkout-logica";
 
 /**
  * Webhook do Stripe (checkout do paciente).
@@ -20,6 +23,11 @@ import { acaoDoEvento, moedaCheckout, moedaConfere, valorConfere } from "@/lib/s
  *   consulta fica paga + confirmada exatamente como no webhook HMAC antigo.
  * - Aceita eventos do Connect (cobrança direta): `event.account` é a conta do
  *   médico e é usada para ler o PaymentIntent/taxa nessa conta.
+ * - Além da consulta, confirma (cartão) a renovação de receita (Pagamento sem
+ *   consulta → confirmarPagamentoRenovacao), a diferença da espera do médico
+ *   (gatewayRef "espera:" → confirmarRemarcacaoEspera) e a multa da
+ *   remarcação (metadata.tipo "multa" → aprovarMultaRemarcacao), com os
+ *   mesmos efeitos do webhook HMAC antigo.
  * - Não usa a flag BION_PAGAMENTO_STRIPE: sessões já abertas continuam sendo
  *   confirmadas mesmo se a flag for desligada depois.
  */
@@ -76,6 +84,9 @@ async function processar(evento: Stripe.Event): Promise<Record<string, unknown>>
   }
   if (acao !== "confirmar" && acao !== "falhar" && acao !== "expirar") return { acao };
 
+  const remarcacaoId = multaDaSessao(sessao.metadata);
+  if (remarcacaoId) return processarMulta(sessao, acao, remarcacaoId);
+
   const pagamento = await acharPagamento(sessao);
   if (!pagamento) {
     await registrarAudit(null, {
@@ -91,6 +102,8 @@ async function processar(evento: Stripe.Event): Promise<Record<string, unknown>>
   if (acao === "confirmar") return confirmar(sessao, pagamento, conta);
   if (acao === "falhar") {
     const p = await falharPagamento(pagamento.id, "webhook");
+    // Renovação por mensagem: pagamento falho cancela o pedido (igual ao webhook HMAC).
+    if (p && !p.consultaId) await db.$transaction((tx) => cancelarRenovacaoPagamentoFalhou(p.id, tx));
     await registrarAudit(null, {
       acao: "PAGAMENTO_FALHOU",
       categoria: "pagamento",
@@ -141,7 +154,7 @@ async function acharPagamento(s: Stripe.Checkout.Session) {
   const id = s.metadata?.pagamentoId;
   if (id) {
     const p = await db.pagamento.findUnique({ where: { id }, select: { id: true, consultaId: true, valor: true } });
-    if (p && (!s.client_reference_id || p.consultaId === s.client_reference_id)) return p;
+    if (p && referenciaConfere(s.client_reference_id, p)) return p;
   }
   return db.pagamento.findUnique({
     where: { stripeCheckoutSessionId: s.id },
@@ -188,13 +201,26 @@ async function confirmar(
   // (updateMany condicional, count === 1). Evento repetido ou
   // async_payment_succeeded depois do completed não avisam de novo.
   const { pagamento: p, mudou } = await confirmarPagamentoSeMudou(pagamento.id, "webhook");
+  // Efeitos idempotentes rodam mesmo em reentrega (uma tentativa anterior pode
+  // ter confirmado e falhado antes deles; o Stripe reenvia e eles completam).
+  const efeito = p?.status === "confirmado" ? await efeitosDaCobranca(p.id, p.consultaId) : null;
   if (!mudou) return { acao: "confirmar", confirmado: p?.status === "confirmado", repetido: true };
-  if (!p?.consultaId) return { acao: "confirmar", confirmado: !!p };
+  if (!p?.consultaId) {
+    await registrarAudit(null, {
+      acao: "PAGAMENTO_CONFIRMADO",
+      categoria: "pagamento",
+      entidade: "pagamento",
+      entidadeId: p?.id,
+      detalhes: `Pagamento confirmado via Stripe — renovação (${efeito ?? "sem_pedido"})`,
+    });
+    return { acao: "confirmar", confirmado: !!p };
+  }
   const consulta = await db.consulta.findUnique({
     where: { id: p.consultaId },
     include: { medico: { select: { nome: true } } },
   });
-  if (consulta?.status === "confirmada") {
+  // Espera do médico: o aviso próprio já saiu em avisarPacienteEspera.
+  if (consulta?.status === "confirmada" && !efeito) {
     await db.notificacao.create({
       data: {
         tipo: "agenda",
@@ -215,10 +241,79 @@ async function confirmar(
 }
 
 /**
+ * Efeitos do pagamento confirmado além da consulta (todos idempotentes):
+ * renovação (sem consulta) → pedido vai para a fila do médico; diferença da
+ * espera ("espera:") → troca a consulta ou devolve se a reserva venceu.
+ */
+async function efeitosDaCobranca(pagamentoId: string, consultaId: string | null): Promise<string | null> {
+  if (!consultaId) return db.$transaction((tx) => confirmarPagamentoRenovacao(pagamentoId, tx));
+  const espera = await confirmarRemarcacaoEspera(pagamentoId);
+  if (espera) await avisarPacienteEspera(pagamentoId, espera);
+  return espera;
+}
+
+/** Multa da remarcação (sem Pagamento): confirma ou falha a RemarcacaoPendente. */
+async function processarMulta(s: Stripe.Checkout.Session, acao: "confirmar" | "falhar" | "expirar", remarcacaoId: string) {
+  const r = await db.remarcacaoPendente.findUnique({ where: { id: remarcacaoId }, select: { id: true, consultaId: true, multaCentavos: true } });
+  if (!r || (s.client_reference_id && s.client_reference_id !== `multa:${r.id}`)) {
+    await registrarAudit(null, {
+      acao: "STRIPE_PAGAMENTO_NAO_ENCONTRADO",
+      categoria: "pagamento",
+      severidade: "warning",
+      entidade: "remarcacao",
+      entidadeId: remarcacaoId,
+      detalhes: "Evento de multa sem remarcação correspondente",
+    });
+    return { acao, ignorado: true };
+  }
+  if (acao === "expirar") return { acao }; // a reserva vence sozinha (expiraEm)
+  if (acao === "falhar") {
+    const f = await falharMultaRemarcacao(r.id, "webhook");
+    await registrarAudit(null, {
+      acao: "MULTA_REMARCACAO_FALHOU",
+      categoria: "pagamento",
+      severidade: "warning",
+      entidade: "consulta",
+      entidadeId: r.consultaId,
+      detalhes: `Stripe: falha na multa da remarcação ${r.id}; consulta mantida na data original`,
+    });
+    return { acao, status: f?.status ?? null };
+  }
+  if (!valorConfere(s.amount_total, r.multaCentavos / 100) || !moedaConfere(s.currency, moedaCheckout())) {
+    await registrarAudit(null, {
+      acao: "STRIPE_VALOR_DIVERGENTE",
+      categoria: "pagamento",
+      severidade: "critical",
+      entidade: "consulta",
+      entidadeId: r.consultaId,
+      detalhes: `Valor/moeda pagos (${s.amount_total} ${s.currency ?? "?"}) diferentes da multa da remarcação ${r.id} — não confirmado`,
+    });
+    return { acao: "confirmar", confirmado: false };
+  }
+  // Guarda o PaymentIntent como referência da multa (para devolução, se houver).
+  const pi = typeof s.payment_intent === "string" ? s.payment_intent : s.payment_intent?.id ?? null;
+  const res = await aprovarMultaRemarcacao(r.id, "webhook", pi ? `stripe_pi:${pi}` : undefined);
+  if (!res) return { acao: "confirmar", confirmado: false };
+  if (!res.jaProcessada) {
+    await registrarAudit(null, {
+      acao: res.aplicada ? "CONSULTA_REMARCADA_MULTA_PAGA" : "MULTA_REMARCACAO_REEMBOLSADA",
+      categoria: "pagamento",
+      severidade: res.aplicada ? "info" : "warning",
+      entidade: "consulta",
+      entidadeId: res.remarcacao.consultaId,
+      detalhes: res.aplicada
+        ? `Multa paga (Stripe); consulta remarcada para ${quandoClinica(res.remarcacao.novaData)}`
+        : "Multa paga (Stripe) com a reserva já cancelada/expirada ou horário ocupado; consulta não movida, multa em reembolso",
+    });
+  }
+  return { acao: "confirmar", confirmado: true, aplicada: res.aplicada };
+}
+
+/**
  * ÚNICO ponto de chamada do financeiro com a taxa real do gateway.
  * TODO(Médicos): chamar aqui a função do financeiro.ts (comissão de 10% da BION
  * e taxa do Stripe saindo dos 90% do médico; no reembolso a taxa fica com o app).
  * A taxa já fica gravada em Pagamento.stripeTaxaCentavos (null quando o Stripe
- * ainda não liquidou, ex.: Pix).
+ * ainda não liquidou).
  */
 async function informarTaxaAoFinanceiro(_pagamentoId: string, _taxaCentavos: number | null): Promise<void> {}

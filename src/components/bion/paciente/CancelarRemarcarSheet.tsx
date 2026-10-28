@@ -1,5 +1,6 @@
 "use client";
 
+import { BotaoPagarStripe } from "./BotaoPagarStripe";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useVoltarFecha } from "./useVoltarFecha";
 import { EstadoCarregando, EstadoErro } from "./EstadosPaciente";
@@ -69,7 +70,8 @@ export function CancelarRemarcarSheet({ consulta, acao, medico, consultas, onFec
   const [novaData, setNovaData] = useState("");
   const [novaHora, setNovaHora] = useState("09:00");
   const [enviando, setEnviando] = useState(false);
-  const [metodo, setMetodo] = useState<MetodoMulta | null>(null);
+  // Só cartão: a multa é paga no checkout Stripe (BotaoPagarStripe).
+  const [metodo, setMetodo] = useState<MetodoMulta | null>("cartao");
   const recarregarEstado = useRecarregarEstado();
   const { remarcacao, cobranca, adotar, limpar } = useRemarcacaoComMulta(
     consulta.id,
@@ -198,7 +200,7 @@ export function CancelarRemarcarSheet({ consulta, acao, medico, consultas, onFec
 
   const tentarOutroHorario = () => {
     limpar();
-    setMetodo(null);
+    setMetodo("cartao");
     recarregar();
     recarregarBloqueios();
   };
@@ -310,24 +312,7 @@ export function CancelarRemarcarSheet({ consulta, acao, medico, consultas, onFec
                     <div className="text-xs font-bold mt-4 mb-2 bpp-sheet-suave inline-flex items-center gap-1.5">
                       <CreditCard className="w-3.5 h-3.5" /> Forma de pagamento da multa
                     </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      {([
-                        { id: "pix", nome: "Pix" },
-                        { id: "cartao", nome: "Cartão" },
-                      ] as const).map((m) => (
-                        <button
-                          key={m.id}
-                          type="button"
-                          onClick={() => setMetodo(m.id)}
-                          aria-pressed={metodo === m.id}
-                          className={`rounded-2xl border px-4 py-3 text-sm font-semibold transition ${
-                            metodo === m.id ? "bpp-sheet-sel" : "bpp-sheet-borda bpp-sheet-cartao"
-                          }`}
-                        >
-                          {m.nome}
-                        </button>
-                      ))}
-                    </div>
+                    <p className="text-sm bpp-sheet-suave">Cartão de crédito, no pagamento seguro do Stripe.</p>
                   </>
                 ) : null}
               </>
@@ -401,7 +386,7 @@ export function CancelarRemarcarSheet({ consulta, acao, medico, consultas, onFec
 
 /* ------------------------------------------------------------------ */
 
-const ROTULO_METODO: Record<string, string> = { pix: "Pix", cartao: "Cartão" };
+const ROTULO_METODO: Record<string, string> = { cartao: "Cartão" };
 
 /** Cobrança da multa + acompanhamento do status da reserva da nova data. */
 function PainelPagamentoMulta({
@@ -450,6 +435,7 @@ function PainelPagamentoMulta({
               Assim que o pagamento for aprovado, a nova data é confirmada automaticamente.
             </p>
           )}
+          <BotaoPagarStripe remarcacaoId={r.id} rotulo="Pagar multa com cartão" className="mt-3 w-full" />
           <p className="text-xs bpp-sheet-suave mt-1">
             Até lá, sua consulta continua em <strong className="bpp-sheet-suave">{dataOriginal}</strong>.
           </p>

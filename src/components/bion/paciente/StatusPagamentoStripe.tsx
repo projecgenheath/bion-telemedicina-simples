@@ -11,7 +11,10 @@ import { lerStatusPagamento } from "./pagamento-stripe-cliente";
  * Consulta o servidor a cada 3 s por até 2 min.
  */
 export function StatusPagamentoStripe({ volta }: { volta: "sucesso" | "cancelado" }) {
-  const consultaId = useSearchParams().get("consulta") ?? "";
+  const params = useSearchParams();
+  const consultaId = params.get("consulta") ?? "";
+  // Renovação de receita e multa de remarcação não têm consulta para acompanhar.
+  const tipo = params.get("tipo");
   const [estado, setEstado] = useState<{ status: string; pago: boolean } | null>(null);
   const [esgotou, setEsgotou] = useState(false);
 
@@ -39,7 +42,15 @@ export function StatusPagamentoStripe({ volta }: { volta: "sucesso" | "cancelado
 
   let titulo: string;
   let texto: string;
-  if (estado?.pago) {
+  if (!consultaId && tipo) {
+    titulo = volta === "cancelado" ? "Pagamento não concluído" : "Pagamento enviado";
+    texto =
+      volta === "cancelado"
+        ? "Nada foi cobrado. Você pode tentar de novo pelo app."
+        : tipo === "renovacao"
+          ? "Assim que o pagamento for confirmado, o pedido de renovação vai para o médico. Você recebe um aviso."
+          : "Assim que o pagamento for confirmado, a nova data é aplicada. Você recebe um aviso.";
+  } else if (estado?.pago) {
     titulo = "Pagamento confirmado";
     texto = "Sua consulta está confirmada. Se quiser, faça a triagem com a BION IA até 5 minutos antes do horário.";
   } else if (volta === "cancelado") {
