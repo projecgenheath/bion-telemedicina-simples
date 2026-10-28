@@ -1,6 +1,6 @@
 ---
 title: "Política de Cookies e Armazenamento Local — BION"
-subtitle: "Versão 1.0 — MINUTA para revisão jurídica — 20/10/2026"
+subtitle: "Versão provisória v0 — 20/10/2026"
 lang: pt-BR
 ---
 
