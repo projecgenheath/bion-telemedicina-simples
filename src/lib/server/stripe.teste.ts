@@ -1,12 +1,13 @@
 /** Base do Stripe (reembolso e eventos). Rodar: npx tsx src/lib/server/stripe.teste.ts */
-import { enviarReembolsoStripe, registrarEventoReembolsoStripe, statusReembolsoDoStripe, stripeConnectAtivo, modoCobrancaStripe, jaProcessado, marcarEvento, reivindicarEvento, liberarEvento } from "./stripe";
+import { enviarReembolsoStripe, paymentIntentDoGatewayRef, registrarEventoReembolsoStripe, statusReembolsoDoStripe, stripeConnectAtivo, modoCobrancaStripe, jaProcessado, marcarEvento, reivindicarEvento, liberarEvento, reembolsosStripePendentes } from "./stripe";
+import { db } from "@/lib/db";
 
 let ok = 0, falhas = 0;
 const igual = (n: string, a: unknown, b: unknown) => {
   if (JSON.stringify(a) === JSON.stringify(b)) ok++; else { falhas++; console.error(`✗ ${n}\n  obtido ${JSON.stringify(a)}\n  esperado ${JSON.stringify(b)}`); }
 };
 
-type R = { id: string; status: string; valorCentavos: number; stripeRefundId: string | null; pagamento: any; processadoEm?: Date };
+type R = { id: string; status: string; valorCentavos: number; stripeRefundId: string | null; pagamento: any; remarcacao?: any; processadoEm?: Date };
 function fakeDb(linhas: R[]) {
   return {
     linhas,
@@ -121,6 +122,116 @@ async function main() {
   { const d = fakeDb([comConta("acct_1")]); const s = fakeStripe();
     await enviarReembolsoStripe("r1", { d: d as any, s: s as any, connect: true, modo: "destino" });
     igual("destino: params", s.chamadas[0], [{ payment_intent: "pi_1", amount: 15000, metadata: { reembolsoId: "r1" }, reverse_transfer: true, refund_application_fee: true }, { idempotencyKey: "r1" }]);
+  }
+  // multa de remarcação (sem Pagamento, PI em RemarcacaoPendente.gatewayRef)
+  igual("gatewayRef ok", paymentIntentDoGatewayRef("stripe_pi:pi_3Abc"), "pi_3Abc");
+  igual("gatewayRef outro formato", paymentIntentDoGatewayRef("pix:123"), null);
+  igual("gatewayRef nulo", paymentIntentDoGatewayRef(null), null);
+  const multa = (ref: string | null, conta: string | null = "acct_m") => base({ id: "rm", valorCentavos: 5000, pagamento: null, remarcacao: { gatewayRef: ref, consulta: { medico: { perfilMedico: { stripeAccountId: conta } } } } });
+  { const d = fakeDb([multa("stripe_pi:pi_m")]); const s = fakeStripe();
+    const r = await enviarReembolsoStripe("rm", { d: d as any, s: s as any, connect: true, modo: "plataforma" });
+    igual("multa plataforma: enviado", r, { enviado: true, refundId: "re_rm", status: "pending" });
+    igual("multa plataforma: params", s.chamadas[0], [{ payment_intent: "pi_m", amount: 5000, metadata: { reembolsoId: "rm" } }, { idempotencyKey: "rm" }]);
+    igual("multa grava refund", d.linhas[0].stripeRefundId, "re_rm");
+  }
+  { const d = fakeDb([multa("stripe_pi:pi_m")]); const s = fakeStripe();
+    await enviarReembolsoStripe("rm", { d: d as any, s: s as any, connect: true, modo: "direta" });
+    igual("multa direta: params", s.chamadas[0], [{ payment_intent: "pi_m", amount: 5000, metadata: { reembolsoId: "rm" }, refund_application_fee: true }, { idempotencyKey: "rm", stripeAccount: "acct_m" }]);
+  }
+  { const d = fakeDb([multa("stripe_pi:pi_m")]); const s = fakeStripe();
+    await enviarReembolsoStripe("rm", { d: d as any, s: s as any, connect: true, modo: "destino" });
+    igual("multa destino: params", s.chamadas[0], [{ payment_intent: "pi_m", amount: 5000, metadata: { reembolsoId: "rm" }, reverse_transfer: true, refund_application_fee: true }, { idempotencyKey: "rm" }]);
+  }
+  { const d = fakeDb([multa("stripe_pi:pi_m", null)]); const s = fakeStripe();
+    const err = console.error; console.error = () => {};
+    const r = await enviarReembolsoStripe("rm", { d: d as any, s: s as any, connect: true, modo: "direta" });
+    console.error = err;
+    igual("multa direta sem conta", [(r as any).motivo, s.chamadas.length], ["sem_conta_medico", 0]);
+  }
+  { const d = fakeDb([multa(null), multa("pix:abc"), base({ id: "rx", pagamento: null })]); d.linhas[1].id = "rm2"; const s = fakeStripe();
+    igual("multa sem gatewayRef", await enviarReembolsoStripe("rm", { d: d as any, s: s as any }), { enviado: false, motivo: "sem_stripe" });
+    igual("multa gatewayRef não-stripe", await enviarReembolsoStripe("rm2", { d: d as any, s: s as any }), { enviado: false, motivo: "sem_stripe" });
+    igual("sem pagamento nem remarcação", await enviarReembolsoStripe("rx", { d: d as any, s: s as any }), { enviado: false, motivo: "sem_stripe" });
+    igual("multa sem PI: nenhuma chamada", s.chamadas.length, 0);
+  }
+  // sessão de checkout pendente (#121): 'stripe_cs:<id>' não é PaymentIntent, nunca reembolsa
+  igual("gatewayRef sessão pendente", paymentIntentDoGatewayRef("stripe_cs:cs_test_a1B2"), null);
+  { const d = fakeDb([multa("stripe_cs:cs_test_a1B2")]); const s = fakeStripe();
+    for (const modo of ["plataforma", "direta", "destino"] as const) {
+      igual(`multa sessão pendente (${modo}): sem_stripe`, await enviarReembolsoStripe("rm", { d: d as any, s: s as any, connect: true, modo }), { enviado: false, motivo: "sem_stripe" });
+    }
+    igual("multa sessão pendente: nenhuma chamada", s.chamadas.length, 0);
+    igual("multa sessão pendente: sem refund gravado", d.linhas[0].stripeRefundId, null);
+  }
+  { const d = fakeDb([multa("stripe_pi:pi_m")]); const s = fakeStripe();
+    await enviarReembolsoStripe("rm", { d: d as any, s: s as any });
+    igual("multa idempotente", await enviarReembolsoStripe("rm", { d: d as any, s: s as any }), { enviado: false, motivo: "ja_enviado" });
+    igual("multa uma chamada", s.chamadas.length, 1);
+  }
+  // renovação: Pagamento sem consulta, conta do médico pelo PedidoRenovacao
+  { const d = fakeDb([base({ id: "rr", pagamento: { stripePaymentIntentId: "pi_r", consulta: null, pedidoRenovacao: { medico: { perfilMedico: { stripeAccountId: "acct_r" } } } } })]); const s = fakeStripe();
+    const r = await enviarReembolsoStripe("rr", { d: d as any, s: s as any, connect: true, modo: "direta" });
+    igual("renovação direta: enviado", r.enviado, true);
+    igual("renovação direta: params", s.chamadas[0], [{ payment_intent: "pi_r", amount: 15000, metadata: { reembolsoId: "rr" }, refund_application_fee: true }, { idempotencyKey: "rr", stripeAccount: "acct_r" }]);
+  }
+  { const d = fakeDb([base({ id: "rr", pagamento: { stripePaymentIntentId: "pi_r", consulta: null, pedidoRenovacao: null } })]); const s = fakeStripe();
+    const err = console.error; console.error = () => {};
+    const r = await enviarReembolsoStripe("rr", { d: d as any, s: s as any, connect: true, modo: "direta" });
+    console.error = err;
+    igual("renovação direta sem conta", [(r as any).motivo, s.chamadas.length], ["sem_conta_medico", 0]);
+  }
+  // consulta continua usando a conta da consulta (prioridade sobre a renovação)
+  { const d = fakeDb([base({ pagamento: { stripePaymentIntentId: "pi_1", consulta: { medico: { perfilMedico: { stripeAccountId: "acct_c" } } }, pedidoRenovacao: { medico: { perfilMedico: { stripeAccountId: "acct_outro" } } } } })]); const s = fakeStripe();
+    await enviarReembolsoStripe("r1", { d: d as any, s: s as any, connect: true, modo: "direta" });
+    igual("consulta direta: conta da consulta", s.chamadas[0][1], { idempotencyKey: "r1", stripeAccount: "acct_c" });
+  }
+  // reembolso parcial: amount = valor do Reembolso (não o total pago), params por modo intactos
+  for (const modo of ["plataforma", "direta", "destino"] as const) {
+    const extra = modo === "direta" ? { refund_application_fee: true } : modo === "destino" ? { reverse_transfer: true, refund_application_fee: true } : {};
+    { const d = fakeDb([{ ...multa("stripe_pi:pi_m"), valorCentavos: 2500, pagamento: null }]); const s = fakeStripe();
+      await enviarReembolsoStripe("rm", { d: d as any, s: s as any, connect: true, modo });
+      igual(`multa parcial (${modo}): params`, s.chamadas[0], [{ payment_intent: "pi_m", amount: 2500, metadata: { reembolsoId: "rm" }, ...extra }, { idempotencyKey: "rm", ...(modo === "direta" ? { stripeAccount: "acct_m" } : {}) }]);
+    }
+    { const d = fakeDb([base({ id: "rr", valorCentavos: 1234, pagamento: { stripePaymentIntentId: "pi_r", valorCentavos: 15000, consulta: null, pedidoRenovacao: { medico: { perfilMedico: { stripeAccountId: "acct_r" } } } } })]); const s = fakeStripe();
+      await enviarReembolsoStripe("rr", { d: d as any, s: s as any, connect: true, modo });
+      igual(`renovação parcial (${modo}): params`, s.chamadas[0], [{ payment_intent: "pi_r", amount: 1234, metadata: { reembolsoId: "rr" }, ...extra }, { idempotencyKey: "rr", ...(modo === "direta" ? { stripeAccount: "acct_r" } : {}) }]);
+    }
+  }
+  // filtro do cron (reembolsosStripePendentes): avalia o where contra linhas em memória
+  { type L = { id: string; criadoEm: number; status: string; stripeRefundId: string | null; pagamentoId: string | null; pagamento: { stripePaymentIntentId: string | null } | null; remarcacao: { gatewayRef: string | null } | null };
+    const L = (id: string, x: Partial<L>): L => ({ id, criadoEm: 0, status: "aprovado", stripeRefundId: null, pagamentoId: null, pagamento: null, remarcacao: null, ...x });
+    const linhas: L[] = [
+      L("pag_stripe", { criadoEm: 2, pagamentoId: "p1", pagamento: { stripePaymentIntentId: "pi_1" } }),
+      L("multa_pi", { criadoEm: 1, remarcacao: { gatewayRef: "stripe_pi:pi_m" } }),
+      L("multa_cs", { remarcacao: { gatewayRef: "stripe_cs:cs_test_1" } }),
+      L("multa_vazia", { remarcacao: { gatewayRef: "" } }),
+      L("multa_nula", { remarcacao: { gatewayRef: null } }),
+      L("pag_pix", { pagamentoId: "p2", pagamento: { stripePaymentIntentId: null } }),
+      L("ja_enviado", { pagamentoId: "p3", pagamento: { stripePaymentIntentId: "pi_3" }, stripeRefundId: "re_3" }),
+      L("multa_enviada", { remarcacao: { gatewayRef: "stripe_pi:pi_x" }, stripeRefundId: "re_x" }),
+      L("processado", { pagamentoId: "p4", pagamento: { stripePaymentIntentId: "pi_4" }, status: "processado" }),
+    ];
+    const casa = (l: any, w: any): boolean => Object.entries(w).every(([k, v]: [string, any]) => {
+      if (k === "OR") return v.some((o: any) => casa(l, o));
+      const x = l[k];
+      if (v === null) return x === null;
+      if (typeof v !== "object") return x === v;
+      if ("not" in v) return x !== v.not;
+      if ("startsWith" in v) return typeof x === "string" && x.startsWith(v.startsWith);
+      return x != null && casa(x, v);
+    });
+    let arg: any = null;
+    const orig = Object.getOwnPropertyDescriptor(db, "reembolso");
+    Object.defineProperty(db, "reembolso", { configurable: true, value: { async findMany(a: any) {
+      arg = a; return linhas.filter((l) => casa(l, a.where)).sort((p, q) => p.criadoEm - q.criadoEm).slice(0, a.take).map((l) => ({ id: l.id }));
+    } } });
+    try {
+      igual("cron: inclui multa stripe_pi e pagamento Stripe (ordem criadoEm)", await reembolsosStripePendentes(), ["multa_pi", "pag_stripe"]);
+      igual("cron: where exige aprovado e não enviado", [arg.where.status, arg.where.stripeRefundId], ["aprovado", null]);
+      igual("cron: limite", await reembolsosStripePendentes(1), ["multa_pi"]);
+    } finally {
+      if (orig) Object.defineProperty(db, "reembolso", orig); else delete (db as any).reembolso;
+    }
   }
   console.log(`${ok} ok, ${falhas} falha(s)`);
   if (falhas) process.exit(1);

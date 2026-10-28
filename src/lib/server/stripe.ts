@@ -98,6 +98,8 @@ export async function marcarEvento(eventoId: string, tipo: string, d: DbEventos 
 
 // ---------------------------------------------------------------- reembolso
 
+type ContaMedico = { medico?: { perfilMedico?: { stripeAccountId: string | null } | null } | null } | null;
+
 type ReembolsoLinha = {
   id: string;
   status: string;
@@ -105,9 +107,21 @@ type ReembolsoLinha = {
   stripeRefundId: string | null;
   pagamento: {
     stripePaymentIntentId: string | null;
-    consulta?: { medico?: { perfilMedico?: { stripeAccountId: string | null } | null } | null } | null;
+    consulta?: ContaMedico;
+    /** Renovação de receita: Pagamento sem consulta, médico vem do PedidoRenovacao.medicoId. */
+    pedidoRenovacao?: ContaMedico;
   } | null;
+  /** Multa de remarcação: sem Pagamento; o PaymentIntent fica em gatewayRef 'stripe_pi:<id>'. */
+  remarcacao?: { gatewayRef: string | null; consulta?: ContaMedico } | null;
 };
+
+const SELECT_CONTA = { select: { medico: { select: { perfilMedico: { select: { stripeAccountId: true } } } } } } as const;
+
+/** Extrai o PaymentIntent de um gatewayRef 'stripe_pi:<id>' (null se não for desse formato). */
+export function paymentIntentDoGatewayRef(ref: string | null | undefined): string | null {
+  const m = /^stripe_pi:(pi_[A-Za-z0-9_]+)$/.exec((ref ?? "").trim());
+  return m ? m[1] : null;
+}
 
 type DbReembolso = {
   reembolso: {
@@ -146,12 +160,17 @@ export async function enviarReembolsoStripe(
   const d = deps.d ?? (db as unknown as DbReembolso);
   const r = await d.reembolso.findUnique({
     where: { id: reembolsoId },
-    select: { id: true, status: true, valorCentavos: true, stripeRefundId: true, pagamento: { select: { stripePaymentIntentId: true, consulta: { select: { medico: { select: { perfilMedico: { select: { stripeAccountId: true } } } } } } } } },
+    select: {
+      id: true, status: true, valorCentavos: true, stripeRefundId: true,
+      pagamento: { select: { stripePaymentIntentId: true, consulta: SELECT_CONTA, pedidoRenovacao: SELECT_CONTA } },
+      remarcacao: { select: { gatewayRef: true, consulta: SELECT_CONTA } },
+    },
   });
   if (!r) return { enviado: false, motivo: "nao_encontrado" };
   if (r.stripeRefundId) return { enviado: false, motivo: "ja_enviado" };
   if (r.status !== "aprovado") return { enviado: false, motivo: "status" };
-  const pi = r.pagamento?.stripePaymentIntentId;
+  // Consulta/renovação: PI no Pagamento. Multa de remarcação: PI no gatewayRef da RemarcacaoPendente.
+  const pi = r.pagamento?.stripePaymentIntentId ?? (r.pagamento ? null : paymentIntentDoGatewayRef(r.remarcacao?.gatewayRef));
   if (!pi) return { enviado: false, motivo: "sem_stripe" };
   if (r.valorCentavos <= 0) return { enviado: false, motivo: "valor_zero" };
 
@@ -160,7 +179,9 @@ export async function enviarReembolsoStripe(
   const params: Stripe.RefundCreateParams = { payment_intent: pi, amount: r.valorCentavos, metadata: { reembolsoId: r.id } };
   const opcoes: Stripe.RequestOptions = { idempotencyKey: r.id };
   if (modo === "direta") {
-    const conta = r.pagamento?.consulta?.medico?.perfilMedico?.stripeAccountId?.trim();
+    const conta = (r.pagamento
+      ? r.pagamento.consulta?.medico?.perfilMedico?.stripeAccountId ?? r.pagamento.pedidoRenovacao?.medico?.perfilMedico?.stripeAccountId
+      : r.remarcacao?.consulta?.medico?.perfilMedico?.stripeAccountId)?.trim();
     if (!conta) {
       const erro = `Reembolso ${r.id}: Connect ativo (modo 'direta') mas o médico não tem stripeAccountId; refund não enviado.`;
       console.error("[stripe reembolso]", erro);
@@ -230,10 +251,17 @@ export async function registrarEventoReembolsoStripe(
   return n;
 }
 
-/** Lista Reembolsos 'aprovado' de pagamento Stripe ainda não enviados. */
+/** Lista Reembolsos 'aprovado' de pagamento Stripe (ou multa paga no Stripe) ainda não enviados. */
 export async function reembolsosStripePendentes(limite = 50): Promise<string[]> {
   const linhas = await db.reembolso.findMany({
-    where: { status: "aprovado", stripeRefundId: null, pagamento: { stripePaymentIntentId: { not: null } } },
+    where: {
+      status: "aprovado",
+      stripeRefundId: null,
+      OR: [
+        { pagamento: { stripePaymentIntentId: { not: null } } },
+        { pagamentoId: null, remarcacao: { gatewayRef: { startsWith: "stripe_pi:" } } },
+      ],
+    },
     select: { id: true },
     orderBy: { criadoEm: "asc" },
     take: limite,
