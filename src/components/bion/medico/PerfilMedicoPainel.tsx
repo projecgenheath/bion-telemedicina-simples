@@ -235,7 +235,7 @@ function RecebimentoSheet({
       subtitulo={
         atual
           ? `Atual: ${ROTULO_PIX_TIPO[atual.pixTipo]} ${atual.chaveMascarada}. Por segurança, digite a chave completa de novo.`
-          : "Chave onde você recebe o repasse diário."
+          : "Modelo anterior de repasse por PIX. Hoje você recebe pela sua conta Stripe."
       }
     >
       <div className="space-y-4">
@@ -530,9 +530,16 @@ export function PerfilMedicoPainel({
 
       <section className={`${grupo} mt-4`} aria-labelledby="bm-pf-recebimento">
         <h3 id="bm-pf-recebimento" className={tituloGrupo}>
-          Recebimento (PIX)
+          Recebimento
         </h3>
-        <Linha icone={<Wallet className="w-4 h-4" />} titulo="Chave PIX" detalhe={detalhePix} onClick={abrirRecebimento} />
+        <p className="px-4 py-3 text-xs text-bion-ink/75 dark:text-bion-paper/75">
+          Você recebe na sua conta Stripe a cada pagamento, já sem a comissão e a taxa do cartão. A Stripe transfere para o seu banco
+          conforme o calendário dela.
+        </p>
+        {/* Modelo anterior (PIX diário): o cadastro só aparece para quem já tem chave, como registro. */}
+        {rec ? (
+          <Linha icone={<Wallet className="w-4 h-4" />} titulo="Chave PIX (modelo anterior)" detalhe={detalhePix} onClick={abrirRecebimento} />
+        ) : null}
         {rec ? (
           <Linha
             icone={rec.titularTipo === "pj" ? <Building2 className="w-4 h-4" /> : <CircleUserRound className="w-4 h-4" />}
@@ -541,14 +548,10 @@ export function PerfilMedicoPainel({
             onClick={abrirRecebimento}
           />
         ) : null}
-        <p className="px-4 py-3 text-xs text-bion-ink/75 dark:text-bion-paper/75">
-          O repasse é diário: todo dia às 23:30 (horário de Brasília) fechamos as consultas do dia e o valor vai por PIX para esta chave.
-          A chave precisa estar no seu nome (CPF) ou no CNPJ cadastrado no seu perfil.
-        </p>
         <Linha
           icone={<Receipt className="w-4 h-4" />}
           titulo="Histórico de repasses"
-          detalhe="Prévia de hoje e extrato dos fechamentos diários"
+          detalhe="Registro dos repasses por PIX do modelo anterior"
           onClick={() => {
             setAberturasRepasses((n) => n + 1);
             setSheetRepasses(true);
