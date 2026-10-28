@@ -50,13 +50,48 @@ type DbEventos = {
   };
 };
 
-/** true se o evento já foi processado (o webhook deve responder 200 e sair). */
+type DbClaim = {
+  stripeEvento: {
+    create(a: { data: { id: string; tipo: string; processadoEm: Date } }): Promise<unknown>;
+    delete(a: { where: { id: string } }): Promise<unknown>;
+  };
+};
+
+function codigoPrisma(e: unknown): string | undefined {
+  return typeof e === "object" && e !== null && "code" in e ? String((e as { code: unknown }).code) : undefined;
+}
+
+/**
+ * Reivindica o evento ANTES de processar (id único em StripeEvento).
+ * true = este worker processa; false = já reivindicado (P2002), responder 200 e sair.
+ * Se o processamento falhar, chame liberarEvento(id) para o Stripe poder reentregar.
+ */
+export async function reivindicarEvento(eventoId: string, tipo: string, d: DbClaim = db as unknown as DbClaim, agora = new Date()): Promise<boolean> {
+  try {
+    await d.stripeEvento.create({ data: { id: eventoId, tipo, processadoEm: agora } });
+    return true;
+  } catch (e) {
+    if (codigoPrisma(e) === "P2002") return false;
+    throw e;
+  }
+}
+
+/** Desfaz a reivindicação quando o processamento falhou (ignora P2025 = não encontrado). */
+export async function liberarEvento(eventoId: string, d: DbClaim = db as unknown as DbClaim): Promise<void> {
+  try {
+    await d.stripeEvento.delete({ where: { id: eventoId } });
+  } catch (e) {
+    if (codigoPrisma(e) !== "P2025") throw e;
+  }
+}
+
+/** @deprecated Use reivindicarEvento (check-then-act tem corrida). */
 export async function jaProcessado(eventoId: string, d: DbEventos = db as unknown as DbEventos): Promise<boolean> {
   const e = await d.stripeEvento.findUnique({ where: { id: eventoId } });
   return !!e?.processadoEm;
 }
 
-/** Marca o evento como processado (chamar só depois de tratar com sucesso). */
+/** @deprecated Use reivindicarEvento/liberarEvento. */
 export async function marcarEvento(eventoId: string, tipo: string, d: DbEventos = db as unknown as DbEventos, agora = new Date()) {
   await d.stripeEvento.upsert({ where: { id: eventoId }, create: { id: eventoId, tipo, processadoEm: agora }, update: { processadoEm: agora } });
 }
@@ -148,25 +183,37 @@ export async function enviarReembolsoStripe(
   return { enviado: true, refundId: refund.id, status: refund.status ?? "pending" };
 }
 
-type EventoReembolso = { id: string; type: string; data: { object: unknown } };
+type EventoReembolso = { id: string; type: string; account?: string | null; data: { object: unknown } };
+type RefundEv = { id: string; status: string | null; charge?: unknown };
+type StripeRefundsList = {
+  refunds: { list(p: Stripe.RefundListParams, o?: Stripe.RequestOptions): Promise<{ data: RefundEv[] }> };
+};
 
 /**
- * Trata charge.refunded / refund.updated / refund.failed. Fecha o Reembolso
- * em 'processado' ou 'falhou'. Retorna quantos foram atualizados.
+ * Fonte principal: refund.created / refund.updated / refund.failed (objeto refund).
+ * charge.refunded é complementar; se refunds.data vier vazio/ausente, busca
+ * refunds.list({ charge }) (com stripeAccount se o evento tiver account).
+ * Fecha o Reembolso em 'processado' ou 'falhou'. Retorna quantos foram atualizados.
  */
 export async function registrarEventoReembolsoStripe(
   evento: EventoReembolso,
-  deps: { d?: DbReembolso; agora?: Date } = {},
+  deps: { d?: DbReembolso; s?: StripeRefundsList; agora?: Date } = {},
 ): Promise<number> {
   const d = deps.d ?? (db as unknown as DbReembolso);
   const agora = deps.agora ?? new Date();
   let refunds: { id: string; status: string | null }[] = [];
-  if (evento.type === "charge.refunded") {
-    const ch = evento.data.object as { refunds?: { data?: { id: string; status: string | null }[] } };
-    refunds = ch.refunds?.data ?? [];
-  } else if (evento.type === "refund.updated" || evento.type === "refund.failed") {
-    const rf = evento.data.object as { id: string; status: string | null };
+  if (evento.type === "refund.created" || evento.type === "refund.updated" || evento.type === "refund.failed") {
+    const rf = evento.data.object as RefundEv;
+    if (!rf?.id) return 0;
     refunds = [{ id: rf.id, status: evento.type === "refund.failed" ? "failed" : rf.status }];
+  } else if (evento.type === "charge.refunded") {
+    const ch = evento.data.object as { id?: string; refunds?: { data?: RefundEv[] } | null };
+    refunds = ch.refunds?.data ?? [];
+    if (refunds.length === 0 && ch.id) {
+      const s = deps.s ?? (stripe() as unknown as StripeRefundsList);
+      const lista = await s.refunds.list({ charge: ch.id, limit: 100 }, evento.account ? { stripeAccount: evento.account } : undefined);
+      refunds = lista.data;
+    }
   } else return 0;
 
   let n = 0;
