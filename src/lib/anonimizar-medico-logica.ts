@@ -101,16 +101,20 @@ export function validarMotivoAnonimizacao(motivo: unknown): { ok: true; motivo: 
   return { ok: true, motivo: t };
 }
 
-/** Código pseudônimo do médico (6 hex maiúsculos → "Médico Anonimizado ABC123"). */
-export function pseudonimoMedico(sufixo: string): { nome: string; crm: string } {
-  const s = sufixo.toUpperCase();
-  return { nome: `Médico Anonimizado ${s}`, crm: `ANON-${s}` };
-}
+/** Marcador que substitui e-mail/telefone/CNPJ/CPF/PIX em textos livres. */
+export const DADO_REMOVIDO_MEDICO = "[dado removido]";
+
+/**
+ * Campos que NÃO são anonimizados no User/PerfilMedico: nome e CRM ficam por
+ * 20 anos (Res. CFM 1.638/2002, Lei 13.787/2018) — prontuário, receitas e
+ * atestados precisam mostrar quem atendeu.
+ */
+export const CAMPOS_MEDICO_PRESERVADOS = ["nome", "crm"] as const;
 
 /**
  * Campos do PerfilMedico zerados: dados pessoais e de vitrine. Especialidade,
  * valor e avaliações ficam (são do histórico de atendimento, não da pessoa).
- * O CRM vira o código pseudônimo (definido junto, fora deste objeto).
+ * Nome e CRM NÃO entram aqui (ver CAMPOS_MEDICO_PRESERVADOS).
  */
 export const DADOS_PERFIL_MEDICO_PSEUDONIMIZADO = {
   foto: null,

@@ -7,7 +7,8 @@ import {
   SEM_PENDENCIAS_MEDICO,
   classificarConsultasAbertas,
   motivosBloqueioAnonimizacaoMedico,
-  pseudonimoMedico,
+  CAMPOS_MEDICO_PRESERVADOS,
+  DADO_REMOVIDO_MEDICO,
   removerNumerosLongos,
   validarMotivoAnonimizacao,
 } from "./anonimizar-medico-logica";
@@ -58,7 +59,11 @@ igual("motivo longo recusa", validarMotivoAnonimizacao("x".repeat(301)).ok, fals
 igual("motivo ok com trim", validarMotivoAnonimizacao("  Pedido do titular  "), { ok: true, motivo: "Pedido do titular" });
 
 // Pseudônimo e perfil
-igual("pseudônimo", pseudonimoMedico("a1b2c3"), { nome: "Médico Anonimizado A1B2C3", crm: "ANON-A1B2C3" });
+igual("nome e CRM preservados (CFM 1.638/2002)", [...CAMPOS_MEDICO_PRESERVADOS], ["nome", "crm"]);
+igual("perfil não troca o CRM", "crm" in DADOS_PERFIL_MEDICO_PSEUDONIMIZADO, false);
+igual("perfil não troca o nome", "nome" in DADOS_PERFIL_MEDICO_PSEUDONIMIZADO, false);
+igual("marcador de dado removido", DADO_REMOVIDO_MEDICO, "[dado removido]");
+igual("perfil sem bio/nascimento/gênero", [DADOS_PERFIL_MEDICO_PSEUDONIMIZADO.bio, DADOS_PERFIL_MEDICO_PSEUDONIMIZADO.dataNascimento, DADOS_PERFIL_MEDICO_PSEUDONIMIZADO.genero], ["", null, null]);
 igual("perfil sai da busca", DADOS_PERFIL_MEDICO_PSEUDONIMIZADO.status, "suspenso");
 igual("perfil sem horários", DADOS_PERFIL_MEDICO_PSEUDONIMIZADO.horariosDisponiveis, "[]");
 igual("perfil sem telefone/cnpj/foto", [DADOS_PERFIL_MEDICO_PSEUDONIMIZADO.telefone, DADOS_PERFIL_MEDICO_PSEUDONIMIZADO.cnpj, DADOS_PERFIL_MEDICO_PSEUDONIMIZADO.foto], ["", "", null]);

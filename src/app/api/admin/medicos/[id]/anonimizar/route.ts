@@ -53,7 +53,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
         `. Motivo: ${removerNumerosLongos(motivo.motivo)}`,
     });
 
-    return ok({ medicoId: id, pseudonimo: r.apelido, loginSupabaseRemovido: r.loginSupabaseRemovido, ...efeitos });
+    return ok({ medicoId: id, loginSupabaseRemovido: r.loginSupabaseRemovido, ...efeitos });
   } catch (erro) {
     return falha(erro);
   }

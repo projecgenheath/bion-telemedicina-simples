@@ -27,6 +27,7 @@ import {
 } from "@/lib/exclusao-conta-logica";
 import {
   DADOS_PERFIL_MEDICO_PSEUDONIMIZADO,
+  DADO_REMOVIDO_MEDICO,
   STATUS_CONSULTA_ENCERRADA_MEDICO,
   STATUS_EVOLUCAO_ABERTA,
   STATUS_REEMBOLSO_PENDENTE,
@@ -35,7 +36,6 @@ import {
   STATUS_REPASSE_ABERTO,
   classificarConsultasAbertas,
   motivosBloqueioAnonimizacaoMedico,
-  pseudonimoMedico,
   type PendenciasMedico,
 } from "@/lib/anonimizar-medico-logica";
 
@@ -713,15 +713,14 @@ export async function anonimizarMedicoCompleto(medicoId: string): Promise<Result
   if (motivosAntes.length) throw new PendenciasLgpdError(motivosAntes);
 
   const jaEstavaAnonimizado = estaAnonimizado(medico);
-  let apelido = medico.nome;
+  // Nome e CRM NÃO viram código (Res. CFM 1.638/2002 e Lei 13.787/2018: o
+  // prontuário, receitas e atestados mostram quem atendeu por 20 anos).
+  // Ficam no User/PerfilMedico e também cifrados no cofre.
+  const apelido = medico.nome;
   let emailAnon = medico.email;
-  let crmAnon = medico.perfilMedico?.crm ?? "";
   if (!jaEstavaAnonimizado) {
-    const sufixo = crypto.randomBytes(3).toString("hex").toUpperCase();
-    const p = pseudonimoMedico(sufixo);
-    apelido = p.nome;
-    crmAnon = p.crm;
-    emailAnon = `anon-med-${sufixo.toLowerCase()}-${Date.now().toString(36)}@${DOMINIO_EMAIL_ANON}`;
+    const sufixo = crypto.randomBytes(3).toString("hex").toLowerCase();
+    emailAnon = `anon-med-${sufixo}-${Date.now().toString(36)}@${DOMINIO_EMAIL_ANON}`;
   }
 
   const pm = medico.perfilMedico;
@@ -744,9 +743,10 @@ export async function anonimizarMedicoCompleto(medicoId: string): Promise<Result
         nomeHash: hashNome(medico.nome),
       };
 
-  const termos = [medico.nome, medico.email, pm?.crm ?? "", pm?.telefone ?? "", pm?.cnpj ?? "", cpfTitular, dr?.pixChave ?? ""]
+  // Só os dados que saem do cadastro somem dos textos (nome e CRM ficam).
+  const termos = [medico.email, pm?.telefone ?? "", pm?.cnpj ?? "", cpfTitular, dr?.pixChave ?? ""]
     .map((t) => t.trim())
-    .filter((t) => t.length >= 5 && t !== apelido && t !== crmAnon)
+    .filter((t) => t.length >= 5 && t !== medico.nome && t !== (pm?.crm ?? ""))
     .sort((a, b) => b.length - a.length);
 
   // (2) login bloqueado antes do banco (reversível).
@@ -767,7 +767,6 @@ export async function anonimizarMedicoCompleto(medicoId: string): Promise<Result
         await tx.user.update({
           where: { id: medicoId },
           data: {
-            nome: apelido,
             email: emailAnon,
             senhaHash: crypto.randomBytes(32).toString("hex"),
             status: "inativo",
@@ -777,7 +776,7 @@ export async function anonimizarMedicoCompleto(medicoId: string): Promise<Result
         });
         await tx.perfilMedico.updateMany({
           where: { userId: medicoId },
-          data: { ...DADOS_PERFIL_MEDICO_PSEUDONIMIZADO, crm: crmAnon },
+          data: { ...DADOS_PERFIL_MEDICO_PSEUDONIMIZADO },
         });
 
         // Chave PIX e documento do titular saem do cadastro (o repasse já pago
@@ -786,17 +785,16 @@ export async function anonimizarMedicoCompleto(medicoId: string): Promise<Result
         // Fora da agenda / busca.
         await tx.bloqueioAgenda.deleteMany({ where: { medicoId } });
 
-        await tx.consentimento.updateMany({ where: { quem: medico.nome }, data: { quem: apelido } });
-
-        // Auditoria: ações do médico mostram o pseudônimo; nome/e-mail/CRM/
-        // telefone/CNPJ/chave PIX saem dos detalhes. Escopo por id.
+        // Consentimentos e auditoria mantêm nome e CRM (ligam o médico a atos
+        // clínicos: prova por 20 anos). Saem só e-mail, telefone, CNPJ, CPF do
+        // titular e chave PIX dos detalhes. Escopo por id.
         const logs = await tx.auditLog.findMany({
           where: { OR: [{ usuarioId: medicoId }, { entidadeId: medicoId }] },
-          select: { id: true, usuarioId: true, usuarioNome: true, detalhes: true },
+          select: { id: true, usuarioNome: true, detalhes: true },
         });
         for (const l of logs) {
-          const usuarioNome = l.usuarioId === medicoId ? apelido : substituirTermos(l.usuarioNome, termos, apelido);
-          const detalhes = l.detalhes === null ? null : substituirTermos(l.detalhes, termos, apelido);
+          const usuarioNome = substituirTermos(l.usuarioNome, termos, DADO_REMOVIDO_MEDICO);
+          const detalhes = l.detalhes === null ? null : substituirTermos(l.detalhes, termos, DADO_REMOVIDO_MEDICO);
           if (usuarioNome !== l.usuarioNome || detalhes !== l.detalhes) {
             await tx.auditLog.update({ where: { id: l.id }, data: { usuarioNome, detalhes } });
           }
