@@ -25,13 +25,14 @@ import { nomesMedicamentosEmUso } from "@/lib/server/medicamentos-legado";
  * (/api/anamnese).
  *
  * Formato da resposta:
- * - padrão (sem `stream`): JSON { resposta, fonte, modelo, requestId } —
+ * - padrão (sem `stream`): JSON { resposta, raciocinio, fonte, modelo, requestId } —
  *   inalterado para quem não usa stream (ex.: Copilot do médico — a
  *   Evolução não chama a IA).
  * - `stream: true`: NDJSON (application/x-ndjson), uma linha por evento:
- *   {"tipo":"inicio","requestId"} · {"tipo":"delta","texto"} ·
+ *   {"tipo":"inicio","requestId"} · {"tipo":"delta","texto"} · {"tipo":"raciocinio","texto"} ·
  *   {"tipo":"fim","fonte","modelo","requestId"} · {"tipo":"erro","erro","requestId"}.
- * O raciocínio do modelo (reasoning_content / <think>) NUNCA sai do servidor.
+ * O raciocínio do modelo (reasoning_content / <think>) vai em canal próprio
+ * (`raciocinio`), nunca dentro de `resposta`/`delta`, e nunca para monitor/log.
  */
 
 const LIMITE_HISTORICO = 4;
@@ -194,6 +195,7 @@ export async function POST(req: NextRequest) {
           try {
             for await (const ev of gerador) {
               if (ev.tipo === "delta") ctrl.enqueue(linha({ tipo: "delta", texto: ev.texto }));
+              else if (ev.tipo === "raciocinio") ctrl.enqueue(linha({ tipo: "raciocinio", texto: ev.texto }));
               else if (ev.tipo === "fim") ctrl.enqueue(linha({ tipo: "fim", fonte: ev.fonte, modelo: ev.modelo, requestId }));
               else
                 ctrl.enqueue(
@@ -229,7 +231,8 @@ export async function POST(req: NextRequest) {
       requestId,
     });
     if (r.texto) {
-      return ok({ resposta: r.texto, fonte: r.fonte, modelo: r.modelo, requestId });
+      // `raciocinio` separado de `resposta` (a cópia/inserção usa só `resposta`).
+      return ok({ resposta: r.texto, raciocinio: r.raciocinio ?? null, fonte: r.fonte, modelo: r.modelo, requestId });
     }
     return Response.json(
       {

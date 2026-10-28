@@ -2,7 +2,7 @@ import { limparArtefatos, repararRepeticoes } from "@/lib/server/llm-sanitize";
 import { registrarTurnoLlm } from "@/lib/server/llm-monitor";
 import ZAI from "z-ai-web-dev-sdk";
 import {
-  chatNvidia,
+  chatNvidiaComRaciocinio,
   nvidiaConfig,
   nvidiaConfigurado,
   nvidiaLiberado,
@@ -65,6 +65,8 @@ type Resultado = {
   requestId?: string;
   /** tentativas DESTA chamada (sem estado global entre requisições). */
   registros?: RegistroGemini[];
+  /** Raciocínio do modelo (canal separado; nunca vai a monitor/log). */
+  raciocinio?: string;
 };
 
 const SONDA_TIMEOUT_MS = 4_000;
@@ -915,13 +917,13 @@ export async function chatComFonte(
   const tentouNvidia = nvidiaConfigurado();
   if (tentouNvidia) {
     const regNv: RegistroNvidia[] = [];
-    const texto = await chatNvidia(mensagens, {
+    const { texto, raciocinio } = await chatNvidiaComRaciocinio(mensagens, {
       timeoutMs: Math.round(restante(prazo) * FRACAO_NVIDIA),
       registros: regNv,
       maxTokens: opcoes?.maxTokens,
     });
     registros.push(...regNv.map(deNvidia));
-    if (texto) return devolver({ texto, fonte: "nvidia", modelo: nvidiaConfig().model });
+    if (texto) return devolver({ texto, fonte: "nvidia", modelo: nvidiaConfig().model, ...(raciocinio ? { raciocinio } : {}) });
   }
 
   // Reserva desligada (BION_LLM_RESERVA_GEMINI=0/false): NVIDIA → erro amigável.
@@ -962,12 +964,14 @@ export async function chatComFonte(
 
 export type EventoStreamIa =
   | { tipo: "delta"; texto: string }
+  /** Raciocínio do modelo — canal próprio, nunca misturado ao `delta`. */
+  | { tipo: "raciocinio"; texto: string }
   | { tipo: "fim"; fonte: FonteLlm; modelo: string | null; requestId: string }
   | { tipo: "erro"; registros: RegistroGemini[]; requestId: string };
 
 /**
- * Turno em STREAM: NVIDIA em SSE (só conteúdo visível; raciocínio nunca sai
- * daqui). Se o NVIDIA falhar ANTES do 1º token (sem chave, erro, ou sem token
+ * Turno em STREAM: NVIDIA em SSE. Texto final em `delta`; raciocínio em
+ * eventos `raciocinio` separados (nunca no monitor/log: só tamanho e tempo). Se o NVIDIA falhar ANTES do 1º token (sem chave, erro, ou sem token
  * em `primeiroTokenMs`), cai no Gemini (não-stream) e emite o texto inteiro
  * num único delta. Falha no MEIO do stream encerra com o texto parcial.
  */
@@ -1010,8 +1014,12 @@ export async function* chatStreamComFonte(
         primeiroTokenMs: opcoes.primeiroTokenMs ?? Math.round(restante(prazo) * 0.5),
         registros: regNv,
       })) {
-        len += pedaco.length;
-        yield { tipo: "delta", texto: pedaco };
+        if (pedaco.canal === "raciocinio") {
+          yield { tipo: "raciocinio", texto: pedaco.texto };
+          continue;
+        }
+        len += pedaco.texto.length;
+        yield { tipo: "delta", texto: pedaco.texto };
       }
       registros.push(...regNv.map(deNvidia));
       if (len > 0) {

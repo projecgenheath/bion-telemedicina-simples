@@ -26,6 +26,7 @@ import {
   nvidiaLiberado,
   paraMensagensOpenAI,
   semPensamento,
+  separarPensamento,
   streamNvidia,
   chatNvidia,
   nvidiaBaseUrl,
@@ -33,7 +34,7 @@ import {
   reservaGeminiAtiva,
   modeloReservaGemini,
 } from "@/lib/server/llm-nvidia";
-import { linhasNdjson } from "@/lib/bion-ia-cliente";
+import { linhasNdjson, textoParaCopiar } from "@/lib/bion-ia-cliente";
 
 let ok = 0;
 let falhas = 0;
@@ -189,15 +190,18 @@ igual("motivo: 429", motivoFalhaIa([{ status: 429, erro: "x" }]), "A cota da IA 
     return Response.json({ choices: [{ message: { content: "Olá!", reasoning_content: "segredo" } }] });
   }) as typeof fetch;
   const pedacos: string[] = [];
-  for await (const p of streamNvidia([{ role: "user", content: "Boa noite" }], { timeoutMs: 5_000 })) pedacos.push(p);
-  igual("stream: só conteúdo, sem reasoning_content", pedacos.join(""), "Boa noite!");
+  const pensou: string[] = [];
+  for await (const p of streamNvidia([{ role: "user", content: "Boa noite" }], { timeoutMs: 5_000 }))
+    (p.canal === "texto" ? pedacos : pensou).push(p.texto);
+  igual("stream: texto sem reasoning_content", pedacos.join(""), "Boa noite!");
+  igual("stream: reasoning_content no canal raciocinio", pensou.join(""), "pensando em segredo");
   igual("stream: enable_thinking=false", corpoEnviado.chat_template_kwargs?.enable_thinking, false);
   const r = await chatNvidia([{ role: "user", content: "oi" }], { timeoutMs: 5_000 });
   igual("não-stream: só content", r, "Olá!");
   globalThis.fetch = (async () => new Response("<html>504</html>", { status: 504 })) as typeof fetch;
   const regs: { status: number | null; erro: string | null }[] = [];
   const nada: string[] = [];
-  for await (const p of streamNvidia([{ role: "user", content: "x" }], { timeoutMs: 5_000, registros: regs as never })) nada.push(p);
+  for await (const p of streamNvidia([{ role: "user", content: "x" }], { timeoutMs: 5_000, registros: regs as never })) nada.push(p.texto);
   igual("stream 504: nada emitido e status registrado", [nada.length, regs[0]?.status], [0, 504]);
   igual("erro não vaza a chave", JSON.stringify(regs).includes("chave-de-teste"), false);
   globalThis.fetch = fetchOriginal;
@@ -280,7 +284,15 @@ igual("motivo: 429", motivoFalhaIa([{ status: 429, erro: "x" }]), "A cota da IA 
   igual("think: órfão </think> descarta antes", semPensamento("pensei muito aqui</think>Resposta."), "Resposta.");
   igual("think: maiúsculas", semPensamento("<THINK>x</Think>Oi"), "Oi");
   igual("think: órfão maiúsculo", semPensamento("raciocínio</THINK> Oi"), "Oi");
-  igual("think: abertura sem fim descarta", semPensamento("<think>só raciocínio"), "");
+  igual("think: abertura sem fim não vaza", semPensamento("<think>só raciocínio"), "");
+  igual("separar: órfão vira raciocínio", separarPensamento("pensei</THINK>Oi"), { texto: "Oi", raciocinio: "pensei" });
+  igual("separar: bloco vira raciocínio", separarPensamento("<think>a b</think>Oi"), { texto: "Oi", raciocinio: "a b" });
+  igual("separar: sem fim vira raciocínio", separarPensamento("<think>só isso"), { texto: "", raciocinio: "só isso" });
+  {
+    const f = new FiltroPensamento();
+    const vis = ["<think>pen", "sando</th", "ink>Oi"].map((p) => f.empurrar(p)).join("") + f.fechar();
+    igual("stream: raciocínio partido separado", [vis, f.tomarRaciocinio()], ["Oi", "pensando"]);
+  }
   igual("think: texto sem tags intacto", semPensamento("Olá, tudo bem?"), "Olá, tudo bem?");
   const juntar = (pedacos: string[]) => {
     const f = new FiltroPensamento();
@@ -370,8 +382,10 @@ igual("motivo: 429", motivoFalhaIa([{ status: 429, erro: "x" }]), "A cota da IA 
   const orig = { log: console.log, warn: console.warn, error: console.error, info: console.info };
   for (const k of ["log", "warn", "error", "info"] as const) console[k] = (...a: unknown[]) => void logs.push(a.map(String).join(" "));
   let entregue = "";
+  let pensouStream = "";
   for await (const ev of chatStreamComFonte([{ role: "user", content: "oi" }], 5_000, { requestId: "ia_teste_rac" })) {
     if (ev.tipo === "delta") entregue += ev.texto;
+    if (ev.tipo === "raciocinio") pensouStream += ev.texto;
   }
   globalThis.fetch = (async () =>
     new Response(
@@ -383,6 +397,9 @@ igual("motivo: 429", motivoFalhaIa([{ status: 429, erro: "x" }]), "A cota da IA 
   globalThis.fetch = fetchOriginal;
   igual("copilot (stream): só a resposta final", entregue.trim(), "Resposta final do Copilot.");
   igual("copilot (json/cópia): só a resposta final", naoStream.texto, "Resposta final do Copilot.");
+  igual("stream: raciocínio em canal próprio", pensouStream.includes(SEGREDO), true);
+  igual("json: raciocínio em campo próprio", (naoStream.raciocinio ?? "").includes(SEGREDO), true);
+  igual("cópia/inserção usa só a resposta", textoParaCopiar({ texto: entregue, raciocinio: pensouStream }).includes(SEGREDO), false);
   const monitor = JSON.stringify(eventosLlmMemoria().filter((e) => e.requestId?.startsWith("ia_teste_rac")));
   igual("monitor: turnos registrados", monitor.includes("ia_teste_rac"), true);
   igual("monitor: sem raciocínio", monitor.includes(SEGREDO), false);

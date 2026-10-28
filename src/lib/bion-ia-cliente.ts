@@ -7,11 +7,22 @@ import { MSG_CONSENTIMENTO_IA_PENDENTE, VERSAO_CONSENTIMENTO_IA, ehConsentimento
  * - Resposta não-JSON (ex.: página HTML 504 da Vercel) vira mensagem amigável.
  * - Falhas do lado do cliente vão para o monitor LLM (/api/bion-ia/falha-cliente)
  *   só com requestId, tipo e status — sem texto da conversa (sem PII).
- * - O servidor nunca envia o raciocínio do modelo; aqui só há texto final.
+ * - O raciocínio do modelo chega em canal próprio (`raciocinio`), nunca
+ *   misturado ao texto final.
  */
 
 export type MsgBionIa = { remetente: "usuario" | "ia"; texto: string };
-export type RespostaBionIa = { texto: string; fonte: string | null; modelo: string | null; requestId: string | null };
+/** `texto` = só a resposta final (é o que se copia/insere). `raciocinio` vem à parte. */
+export type RespostaBionIa = {
+  texto: string;
+  raciocinio: string;
+  fonte: string | null;
+  modelo: string | null;
+  requestId: string | null;
+};
+
+/** Aviso mostrado na resposta e no bloco "ver como a IA pensou". */
+export const AVISO_IA = "Conteúdo gerado por IA, não substitui avaliação médica.";
 export type TipoFalhaCliente = "timeout" | "nao_json" | "rede" | "http" | "stream_interrompido";
 
 export class ErroBionIa extends Error {
@@ -74,7 +85,13 @@ export async function* linhasNdjson(corpo: ReadableStream<Uint8Array>): AsyncGen
 
 export async function perguntarBionIa(
   mensagens: MsgBionIa[],
-  opcoes: { onDelta?: (textoAcumulado: string) => void; timeoutMs?: number; signal?: AbortSignal } = {},
+  opcoes: {
+    onDelta?: (textoAcumulado: string) => void;
+    /** Raciocínio acumulado (canal separado; nunca entra em `texto`). */
+    onRaciocinio?: (raciocinioAcumulado: string) => void;
+    timeoutMs?: number;
+    signal?: AbortSignal;
+  } = {},
 ): Promise<RespostaBionIa> {
   const inicio = Date.now();
   const ctrl = new AbortController();
@@ -86,6 +103,7 @@ export async function perguntarBionIa(
   opcoes.signal?.addEventListener("abort", () => ctrl.abort(), { once: true });
   let requestId: string | null = null;
   let texto = "";
+  let raciocinio = "";
   const falhar = (tipo: TipoFalhaCliente, msg: string, http?: number): never => {
     reportarFalhaCliente(tipo, { requestId, http, ms: Date.now() - inicio });
     throw new ErroBionIa(msg, tipo, texto);
@@ -109,7 +127,7 @@ export async function perguntarBionIa(
     if (!tipoConteudo.includes("ndjson")) {
       // JSON de erro (401/503/…) ou página HTML (504 da Vercel).
       const bruto = await res.text().catch(() => "");
-      let j: { resposta?: string; erro?: string; fonte?: string; modelo?: string; requestId?: string } | null = null;
+      let j: { resposta?: string; raciocinio?: string | null; erro?: string; fonte?: string; modelo?: string; requestId?: string } | null = null;
       try {
         j = JSON.parse(bruto);
       } catch {
@@ -119,7 +137,8 @@ export async function perguntarBionIa(
       if (ehConsentimentoIaPendente(res.status, j)) throw new ErroBionIa(MSG_CONSENTIMENTO_IA_PENDENTE, "consentimento");
       if (!j) return falhar(res.status === 504 ? "timeout" : "nao_json", res.status === 504 ? MSG_TIMEOUT : MSG_NAO_JSON, res.status);
       requestId = j.requestId ?? requestId;
-      if (res.ok && j.resposta) return { texto: j.resposta, fonte: j.fonte ?? null, modelo: j.modelo ?? null, requestId };
+      if (res.ok && j.resposta)
+        return { texto: j.resposta, raciocinio: j.raciocinio ?? "", fonte: j.fonte ?? null, modelo: j.modelo ?? null, requestId };
       throw new ErroBionIa(j.erro || "A BION IA não respondeu agora. Toque em Tentar de novo.", "servidor");
     }
     if (!res.body) return falhar("nao_json", MSG_NAO_JSON, res.status);
@@ -133,6 +152,9 @@ export async function perguntarBionIa(
         else if (ev.tipo === "delta" && typeof ev.texto === "string") {
           texto += ev.texto;
           opcoes.onDelta?.(texto);
+        } else if (ev.tipo === "raciocinio" && typeof ev.texto === "string") {
+          raciocinio += ev.texto;
+          opcoes.onRaciocinio?.(raciocinio);
         } else if (ev.tipo === "fim") {
           fonte = typeof ev.fonte === "string" ? ev.fonte : null;
           modelo = typeof ev.modelo === "string" ? ev.modelo : null;
@@ -147,10 +169,10 @@ export async function perguntarBionIa(
       return falhar(porTimeout ? "timeout" : "stream_interrompido", porTimeout ? MSG_TIMEOUT : MSG_REDE, res.status);
     }
     if (!terminou || !texto.trim()) {
-      if (texto.trim()) return { texto, fonte, modelo, requestId }; // parcial útil
+      if (texto.trim()) return { texto, raciocinio, fonte, modelo, requestId }; // parcial útil
       return falhar("stream_interrompido", MSG_REDE, res.status);
     }
-    return { texto, fonte, modelo, requestId };
+    return { texto, raciocinio, fonte, modelo, requestId };
   } finally {
     clearTimeout(t);
   }
@@ -168,4 +190,9 @@ export async function aceitarConsentimentoIa(): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/** O que o botão copiar/inserir usa: SÓ a resposta final, nunca o raciocínio. */
+export function textoParaCopiar(msg: { texto: string; raciocinio?: string | null }): string {
+  return msg.texto;
 }

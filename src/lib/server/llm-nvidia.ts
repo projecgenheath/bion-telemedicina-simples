@@ -7,8 +7,10 @@
  *   canal é pulado em silêncio e a cadeia segue para o Gemini.
  * - Modelo: env BION_LLM_NVIDIA_MODEL (padrão nvidia/nemotron-3.5-super-vl-120b-a12b).
  * - Raciocínio: enable_thinking=false no chat (latência). Mesmo assim,
- *   `reasoning_content` e blocos <think>…</think> são DESCARTADOS aqui:
- *   o raciocínio nunca chega ao paciente nem ao médico.
+ *   `reasoning_content` e blocos <think>…</think> são SEPARADOS aqui num
+ *   canal próprio (`raciocinio`), nunca misturado ao texto final. O
+ *   raciocínio NUNCA vai para monitor, auditoria, registros ou logs (só o
+ *   texto final conta em `textoLen`).
  * - Fetch direto (sem SDK novo): a API é OpenAI-compatível e o streaming é
  *   SSE simples; todo request tem AbortSignal (timeout de verdade, sem
  *   requisição órfã consumindo cota).
@@ -116,7 +118,8 @@ export function paraMensagensOpenAI(mensagens: MsgEntradaNv[]): MsgNv[] {
  *
  * Regras (sem vazar raciocínio):
  *  - tags sem diferenciar maiúsculas (<THINK>, </Think>);
- *  - `</think>` órfão (sem abertura) = fim do raciocínio: tudo ANTES é descartado;
+ *  - `</think>` órfão (sem abertura) = fim do raciocínio: tudo ANTES vira raciocínio;
+ *  - o raciocínio não é descartado: fica em `tomarRaciocinio()` (canal separado);
  *  - no começo do stream a saída fica retida até aparecer `</think>` ou até
  *    passar LIMITE_RETENCAO caracteres sem nenhuma tag (aí é liberada).
  */
@@ -130,6 +133,13 @@ export class FiltroPensamento {
   private dentro = false;
   private buffer = "";
   private pendente = "";
+  private pens = "";
+  /** Raciocínio acumulado desde a última chamada (e zera). */
+  tomarRaciocinio(): string {
+    const p = this.pens;
+    this.pens = "";
+    return p;
+  }
   empurrar(pedaco: string): string {
     if (this.decidindo) {
       this.buffer += pedaco;
@@ -143,6 +153,7 @@ export class FiltroPensamento {
         return this.normal(tudo);
       }
       if (fecha) {
+        this.pens += this.buffer.slice(0, fecha.index);
         const resto = this.buffer.slice(fecha.index + fecha[0].length);
         this.buffer = "";
         this.decidindo = false;
@@ -164,16 +175,19 @@ export class FiltroPensamento {
       if (this.dentro) {
         const fim = RE_FECHA.exec(s);
         if (!fim) {
+          this.pens += s.slice(0, Math.max(0, s.length - 7));
           this.pendente = s.slice(-7); // possível "</think" partido
           return saida;
         }
+        this.pens += s.slice(0, fim.index);
         s = s.slice(fim.index + fim[0].length);
         this.dentro = false;
       } else {
         const ini = RE_ABRE.exec(s);
         const fimOrfao = RE_FECHA.exec(s);
         if (fimOrfao && (!ini || fimOrfao.index < ini.index)) {
-          // órfão depois de já liberar texto: descarta só o trecho deste pedaço
+          // órfão depois de já liberar texto: o trecho deste pedaço é raciocínio
+          this.pens += saida + s.slice(0, fimOrfao.index);
           saida = "";
           s = s.slice(fimOrfao.index + fimOrfao[0].length);
           continue;
@@ -199,13 +213,19 @@ export class FiltroPensamento {
       const b = this.buffer;
       this.buffer = "";
       this.decidindo = false;
-      if (RE_ABRE.test(b)) return b.slice(0, RE_ABRE.exec(b)!.index); // raciocínio sem fim: descarta
+      const abre = RE_ABRE.exec(b);
+      if (abre) {
+        // raciocínio sem fim: vai para o canal de raciocínio
+        this.pens += b.slice(abre.index + abre[0].length);
+        return b.slice(0, abre.index);
+      }
       return this.normal(b) + this.fecharNormal();
     }
     return this.fecharNormal();
   }
   private fecharNormal(): string {
     const p = this.dentro ? "" : this.pendente;
+    if (this.dentro) this.pens += this.pendente;
     this.pendente = "";
     return p;
   }
@@ -216,10 +236,25 @@ export function limparNvidia(texto: string): string {
   return texto ? repararRepeticoes(limparArtefatos(texto)).trim() : texto;
 }
 
+/** Teto do raciocínio entregue ao usuário (o resto é cortado). */
+export const MAX_RACIOCINIO = 8_000;
+
+/** Separa texto final e raciocínio (<think>) de uma resposta inteira. */
+export function separarPensamento(texto: string): { texto: string; raciocinio: string } {
+  const f = new FiltroPensamento();
+  const t = (f.empurrar(texto) + f.fechar()).trim();
+  return { texto: t, raciocinio: f.tomarRaciocinio().trim() };
+}
+
 /** Limpeza final (não-stream): remove <think> e espaços. */
 export function semPensamento(texto: string): string {
-  const f = new FiltroPensamento();
-  return (f.empurrar(texto) + f.fechar()).trim();
+  return separarPensamento(texto).texto;
+}
+
+/** Junta raciocínios (reasoning_content + <think>) com teto. */
+export function juntarRaciocinio(...partes: (string | null | undefined)[]): string {
+  const r = partes.map((p) => (p ?? "").trim()).filter(Boolean).join("\n\n");
+  return r.length > MAX_RACIOCINIO ? `${r.slice(0, MAX_RACIOCINIO - 1)}…` : r;
 }
 
 type OpcoesNv = {
@@ -257,14 +292,21 @@ function registrar(o: OpcoesNv, r: Omit<RegistroNvidia, "rotulo">) {
   o.registros?.push({ rotulo: o.rotulo ?? "nvidia", ...r, erro: encurtarErro(r.erro) });
 }
 
+export type RespostaNv = { texto: string | null; raciocinio: string };
+
 /** Chamada NÃO-stream. Devolve só o conteúdo final (sem raciocínio). */
 export async function chatNvidia(mensagens: MsgEntradaNv[], o: OpcoesNv): Promise<string | null> {
+  return (await completarNvidia(paraMensagensOpenAI(mensagens), o)).texto;
+}
+
+/** Chamada NÃO-stream com o raciocínio em campo separado. */
+export async function chatNvidiaComRaciocinio(mensagens: MsgEntradaNv[], o: OpcoesNv): Promise<RespostaNv> {
   return completarNvidia(paraMensagensOpenAI(mensagens), o);
 }
 
-async function completarNvidia(mensagens: unknown[], o: OpcoesNv): Promise<string | null> {
+async function completarNvidia(mensagens: unknown[], o: OpcoesNv): Promise<RespostaNv> {
   const { apiKey, model } = nvidiaConfig();
-  if (!apiKey) return null;
+  if (!apiKey) return { texto: null, raciocinio: "" };
   const inicio = Date.now();
   try {
     const r = await fetch(`${nvidiaBaseUrl()}/chat/completions`, {
@@ -274,19 +316,26 @@ async function completarNvidia(mensagens: unknown[], o: OpcoesNv): Promise<strin
       signal: AbortSignal.timeout(Math.max(o.timeoutMs, 1_000)),
     });
     const j = (await r.json().catch(() => null)) as
-      | { choices?: { message?: { content?: string | null } }[]; error?: { message?: string } | string; detail?: string }
+      | {
+          choices?: { message?: { content?: string | null; reasoning_content?: string | null } }[];
+          error?: { message?: string } | string;
+          detail?: string;
+        }
       | null;
     if (!r.ok) {
       const msg = typeof j?.error === "string" ? j.error : j?.error?.message ?? j?.detail ?? `HTTP ${r.status}`;
       registrar(o, { status: r.status, ms: Date.now() - inicio, textoLen: 0, erro: limparSegredo(String(msg), apiKey) });
-      return null;
+      return { texto: null, raciocinio: "" };
     }
-    const texto = limparNvidia(semPensamento(j?.choices?.[0]?.message?.content ?? ""));
+    const msg = j?.choices?.[0]?.message;
+    const sep = separarPensamento(msg?.content ?? "");
+    const texto = limparNvidia(sep.texto);
+    // registro: só tamanho e tempo — o raciocínio nunca entra aqui
     registrar(o, { status: r.status, ms: Date.now() - inicio, textoLen: texto.length, erro: texto ? null : "sem texto" });
-    return texto || null;
+    return { texto: texto || null, raciocinio: juntarRaciocinio(msg?.reasoning_content, sep.raciocinio) };
   } catch (e) {
     registrar(o, { status: null, ms: Date.now() - inicio, textoLen: 0, erro: erroDeFetch(e, apiKey) });
-    return null;
+    return { texto: null, raciocinio: "" };
   }
 }
 
@@ -297,12 +346,14 @@ function erroDeFetch(e: unknown, apiKey: string): string {
 }
 
 /**
- * Chamada em STREAM (SSE). Gera só pedaços de CONTEÚDO visível:
- * `reasoning_content` é ignorado e <think> é filtrado.
+ * Chamada em STREAM (SSE). Gera pedaços em DOIS canais: `texto` (resposta
+ * final) e `raciocinio` (`reasoning_content` e <think>), nunca misturados.
  * Se nenhum token visível chegar em `primeiroTokenMs`, aborta (o chamador
  * cai no Gemini). Erro antes do 1º token → o gerador termina sem emitir.
  */
-export async function* streamNvidia(mensagens: MsgEntradaNv[], o: OpcoesNv): AsyncGenerator<string> {
+export type PedacoNv = { canal: "texto" | "raciocinio"; texto: string };
+
+export async function* streamNvidia(mensagens: MsgEntradaNv[], o: OpcoesNv): AsyncGenerator<PedacoNv> {
   const { apiKey, model } = nvidiaConfig();
   if (!apiKey) return;
   const inicio = Date.now();
@@ -313,6 +364,7 @@ export async function* streamNvidia(mensagens: MsgEntradaNv[], o: OpcoesNv): Asy
     : null;
   let status: number | null = null;
   let len = 0;
+  let lenRac = 0;
   let erro: string | null = null;
   try {
     const r = await fetch(`${nvidiaBaseUrl()}/chat/completions`, {
@@ -348,21 +400,34 @@ export async function* streamNvidia(mensagens: MsgEntradaNv[], o: OpcoesNv): Asy
         } catch {
           continue;
         }
-        // reasoning_content: DESCARTADO por construção (nunca lido).
-        const c = j?.choices?.[0]?.delta?.content;
-        if (!c) continue;
-        const visivel = filtro.empurrar(c);
+        const delta = j?.choices?.[0]?.delta;
+        // Raciocínio: canal separado, com teto; não conta em `len` (registro).
+        const rc = delta?.reasoning_content ?? "";
+        const visivel = delta?.content ? filtro.empurrar(delta.content) : "";
+        const pens = rc + filtro.tomarRaciocinio();
+        if (pens && lenRac < MAX_RACIOCINIO) {
+          if (primeiro) clearTimeout(primeiro); // modelo está vivo (pensando)
+          const corte = pens.slice(0, MAX_RACIOCINIO - lenRac);
+          lenRac += corte.length;
+          yield { canal: "raciocinio", texto: corte };
+        }
         if (visivel) {
           if (primeiro && len === 0) clearTimeout(primeiro);
           len += visivel.length;
-          yield visivel;
+          yield { canal: "texto", texto: visivel };
         }
       }
     }
     const resto = filtro.fechar();
+    const pensFim = filtro.tomarRaciocinio();
+    if (pensFim && lenRac < MAX_RACIOCINIO) {
+      const corte = pensFim.slice(0, MAX_RACIOCINIO - lenRac);
+      lenRac += corte.length;
+      yield { canal: "raciocinio", texto: corte };
+    }
     if (resto) {
       len += resto.length;
-      yield resto;
+      yield { canal: "texto", texto: resto };
     }
     if (!len) erro = "sem texto";
   } catch (e) {
@@ -384,7 +449,7 @@ export async function visaoNvidia(
   o: OpcoesNv,
 ): Promise<string | null> {
   if (!mime.startsWith("image/")) return null;
-  return completarNvidia(
+  const r = await completarNvidia(
     [
       {
         role: "user",
@@ -396,6 +461,7 @@ export async function visaoNvidia(
     ],
     { temperatura: 0.1, maxTokens: 4096, ...o, thinking: false },
   );
+  return r.texto; // extração de laudo: raciocínio não é usado
 }
 
 /**

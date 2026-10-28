@@ -416,16 +416,34 @@ export function ChatBion({
         return copia;
       });
     };
+    // Raciocínio em campo próprio da MESMA bolha (nunca no texto).
+    const mostrarRaciocinio = (raciocinio: string) => {
+      setMensagens((m) => {
+        if (!emStream) {
+          emStream = true;
+          return [...m, { remetente: "ia", texto: "", raciocinio }];
+        }
+        const copia = m.slice();
+        copia[copia.length - 1] = { ...copia[copia.length - 1], raciocinio };
+        return copia;
+      });
+    };
     try {
       const r = await perguntarBionIa(
         historico
           .filter((m) => m.texto.length < 500)
           .slice(-4)
           .map((m) => ({ remetente: m.remetente === "usuario" ? ("usuario" as const) : ("ia" as const), texto: m.texto.replace(/\*\*/g, "") })),
-        { onDelta: mostrarParcial },
+        { onDelta: mostrarParcial, onRaciocinio: mostrarRaciocinio },
       );
       setMensagens((m) => {
-        const final = { remetente: "ia" as const, texto: r.texto, fonte: r.fonte ?? undefined, modelo: r.modelo ?? undefined };
+        const final = {
+          remetente: "ia" as const,
+          texto: r.texto,
+          raciocinio: r.raciocinio || undefined,
+          fonte: r.fonte ?? undefined,
+          modelo: r.modelo ?? undefined,
+        };
         if (!emStream) return [...m, final];
         const copia = m.slice();
         copia[copia.length - 1] = { ...copia[copia.length - 1], ...final };

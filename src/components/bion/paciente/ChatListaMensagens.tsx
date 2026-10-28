@@ -1,6 +1,7 @@
 "use client";
 
 import type { Msg } from "./chat-bion-types";
+import { BlocoRaciocinio } from "../BlocoRaciocinio";
 
 export function ChatListaMensagens({
   mensagens,
@@ -25,6 +26,7 @@ export function ChatListaMensagens({
             {m.texto.split("**").map((parte, j) =>
               j % 2 === 1 ? <strong key={j}>{parte}</strong> : <span key={j}>{parte}</span>,
             )}
+            {m.remetente === "ia" && <BlocoRaciocinio raciocinio={m.raciocinio} />}
             {m.remetente === "ia" && m.fonte === "gemini" && (
               <div className="text-xs mt-2 opacity-70" aria-hidden="true">
                 {/gemma/i.test(m.modelo ?? "") ? "Gemma 4 26B" : "Gemini"}

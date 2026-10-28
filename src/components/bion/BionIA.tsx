@@ -16,7 +16,8 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { useBion } from "@/lib/bion-store";
-import { ErroBionIa, perguntarBionIa } from "@/lib/bion-ia-cliente";
+import { ErroBionIa, perguntarBionIa, textoParaCopiar } from "@/lib/bion-ia-cliente";
+import { BlocoRaciocinio } from "./BlocoRaciocinio";
 
 type MensagemIA = {
   id: string;
@@ -24,6 +25,8 @@ type MensagemIA = {
   texto: string;
   hora: string;
   sugestoes?: string[];
+  /** Raciocínio (bloco fechado); copiar/inserir usa só `texto`. */
+  raciocinio?: string;
 };
 
 const RESPOSTAS_BASE: Record<string, string> = {
@@ -180,12 +183,14 @@ export function BionIA() {
     });
 
     let resposta = "";
+    let raciocinio = "";
     try {
       // JSON/NDJSON tratados em perguntarBionIa: AbortController, HTML 504 e
       // falhas de cliente reportadas ao monitor (sem PII). Raciocínio do
       // modelo nunca chega aqui (filtrado no servidor).
       const r = await perguntarBionIa(historico.map((m) => ({ remetente: m.remetente, texto: m.texto })));
       resposta = r.texto;
+      raciocinio = r.raciocinio;
     } catch (e) {
       const aviso =
         e instanceof Error && e.message
@@ -200,6 +205,7 @@ export function BionIA() {
       id: `ia-${Date.now()}`,
       remetente: "ia",
       texto: resposta,
+      ...(raciocinio ? { raciocinio } : {}),
       hora: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
     };
 
@@ -259,6 +265,18 @@ export function BionIA() {
                 }`}
               >
                 <div className="whitespace-pre-wrap">{msg.texto}</div>
+                {msg.remetente === "ia" && msg.id !== "ia-intro" && (
+                  <>
+                    <BlocoRaciocinio raciocinio={msg.raciocinio} />
+                    <button
+                      type="button"
+                      onClick={() => void navigator.clipboard?.writeText(textoParaCopiar(msg)).catch(() => {})}
+                      className="mt-2 text-xs font-semibold underline opacity-80"
+                    >
+                      {isMedico ? "Copiar resposta (para a evolução)" : "Copiar resposta"}
+                    </button>
+                  </>
+                )}
                 <div
                   className={`text-xs mt-2 text-right ${
                     msg.remetente === "usuario"
