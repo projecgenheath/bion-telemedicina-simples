@@ -18,6 +18,8 @@ type MedicoPatch = {
   idiomas?: string[];
   bio?: string;
   horariosDisponiveis?: string[];
+  diasAtendimento?: number[];
+  pausasSemanais?: {dia: number; inicio: string; fim: string}[];
   foto?: string;
 };
 
@@ -83,6 +85,20 @@ function validarAutoedicao(
   }
   if (body.horariosDisponiveis?.some((h) => !/^([01]\d|2[0-3]):[0-5]\d$/.test(h))) {
     return "Horários devem estar no formato HH:MM.";
+  }
+  if (body.diasAtendimento !== undefined) {
+    if (!Array.isArray(body.diasAtendimento) || body.diasAtendimento.some(d => typeof d !== "number" || d < 0 || d > 6)) {
+      return "diasAtendimento deve ser um array de números de 0 (Dom) a 6 (Sáb).";
+    }
+  }
+  if (body.pausasSemanais !== undefined) {
+    if (!Array.isArray(body.pausasSemanais) || body.pausasSemanais.some(p =>
+      typeof p.dia !== "number" || p.dia < 0 || p.dia > 6 ||
+      typeof p.inicio !== "string" || !/^([01]\d|2[0-3]):[0-5]\d$/.test(p.inicio) ||
+      typeof p.fim !== "string" || !/^([01]\d|2[0-3]):[0-5]\d$/.test(p.fim)
+    )) {
+      return "pausasSemanais inválido. Cada pausa precisa de dia (0-6), inicio e fim (HH:MM).";
+    }
   }
   if (body.foto !== undefined) {
     if (

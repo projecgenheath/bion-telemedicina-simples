@@ -189,6 +189,28 @@ export async function POST(req: NextRequest) {
       return Response.json({ erro: ERRO_DIA_BLOQUEADO }, { status: 409 });
     }
 
+    // Dias da semana e pausas semanais (se configurados).
+    const perfil = await db.perfilMedico.findUnique({ where: { userId: medico.id }, select: { diasAtendimento: true, pausasSemanais: true } });
+    if (perfil) {
+      const partes = partesNoFuso(dataInicio);
+      const diaSemana = partes.diaSemana; // 0=Dom … 6=Sáb
+      const hhmm = `${String(partes.hora).padStart(2,"0")}:${String(partes.minuto).padStart(2,"0")}`;
+      let dias: number[] = [];
+      try { dias = JSON.parse(perfil.diasAtendimento || "[]"); } catch { /* ignora */ }
+      if (Array.isArray(dias) && dias.length > 0 && !dias.includes(diaSemana)) {
+        return Response.json({ erro: "O médico não atende neste dia da semana." }, { status: 409 });
+      }
+      let pausas: {dia: number; inicio: string; fim: string}[] = [];
+      try { pausas = JSON.parse(perfil.pausasSemanais || "[]"); } catch { /* ignora */ }
+      if (Array.isArray(pausas)) {
+        for (const pa of pausas) {
+          if (pa.dia === diaSemana && hhmm >= pa.inicio && hhmm < pa.fim) {
+            return Response.json({ erro: "Este horário está em pausa semanal do médico." }, { status: 409 });
+          }
+        }
+      }
+    }
+
     // P2 — conflito de horário: mesmo médico (ou mesmo paciente) já possui
     // consulta que ainda ocupa este exato horário (ver STATUS_LIBERAM_HORARIO).
     const choqueMedico = await db.consulta.findFirst({
