@@ -733,7 +733,7 @@ export async function PATCH(req: NextRequest) {
     const usuario = await exigirPapel("PACIENTE");
     const body = (await req.json()) as {
       consultaId?: string;
-      acao?: "concluir" | "documento";
+      acao?: "concluir" | "documento" | "pular";
       documento?: { nome?: string; tipo?: string; exameImportado?: boolean; resumo?: string };
     };
     if (!body.consultaId) {

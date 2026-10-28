@@ -347,6 +347,8 @@ export function medicoWire(m: PerfilMedicoComUser, nota: { avaliacao: number; nu
     foto: m.foto ?? undefined,
     status: m.status,
     horariosDisponiveis: JSON.parse(m.horariosDisponiveis || "[]") as string[],
+    diasAtendimento: JSON.parse(m.diasAtendimento || "[]") as number[],
+    pausasSemanais: JSON.parse(m.pausasSemanais || "[]") as { dia: number; inicio: string; fim: string }[],
   };
 }
 

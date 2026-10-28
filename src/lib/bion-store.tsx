@@ -156,6 +156,7 @@ type EstadoFresco = {
     id: string; nome: string; crm: string; especialidade: string; subespecialidades: string[];
     valor: number; avaliacao: number; numAvaliacoes: number; formacao: string; experiencia: string;
     idiomas: string[]; bio: string; foto?: string; status: string; horariosDisponiveis: string[];
+    diasAtendimento?: number[]; pausasSemanais?: { dia: number; inicio: string; fim: string }[];
   }[];
   pacientes: {
     id: string; nome: string; email: string; telefone: string; cpf: string; idade: number;
@@ -298,6 +299,7 @@ const mapMedico = (m: EstadoFresco["medicos"][number]): Medico => ({
   numAvaliacoes: m.numAvaliacoes, formacao: m.formacao, experiencia: m.experiencia,
   idiomas: m.idiomas, bio: m.bio, foto: m.foto,
   status: m.status as Medico["status"], horariosDisponiveis: m.horariosDisponiveis,
+  diasAtendimento: m.diasAtendimento ?? [], pausasSemanais: m.pausasSemanais ?? [],
 });
 
 const mapPaciente = (p: EstadoFresco["pacientes"][number]): PacienteRegistro => ({

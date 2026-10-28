@@ -50,6 +50,7 @@ export function MedicoApp() {
 
   // Confirmações vivem aqui (sempre montado), não nos sheets que desmontam.
   const confirmarValor = useConfirmarSalvamento(medico?.valor ?? 0, (a, b) => Math.abs(a - b) < 0.005);
+  const confirmarPromocao = useConfirmarSalvamento(medico?.valor ?? 0, (a, b) => Math.abs(a - b) < 0.005);
   const confirmarHorarios = useConfirmarSalvamento(medico?.horariosDisponiveis.join(",") ?? "", (a, b) => a === b);
   const confirmarBio = useConfirmarSalvamento(medico?.bio ?? "", (a, b) => a === b);
 
@@ -199,6 +200,13 @@ export function MedicoApp() {
             onFechar={fecharSheet}
             medico={medico}
             confirmar={confirmarValor}
+          />
+          <PromocoesSheet
+            key={`promocoes-${aberturas}`}
+            aberto={sheet === "promocoes"}
+            onFechar={fecharSheet}
+            medico={medico}
+            confirmar={confirmarPromocao}
           />
           <AgendaSheet
             key={`agenda-${aberturas}`}

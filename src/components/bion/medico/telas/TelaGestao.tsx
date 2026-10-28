@@ -31,23 +31,26 @@ export function TelaGestao({
 
       {medico ? (
         <>
-          <button
-            type="button"
-            onClick={onAbrirPreco}
-            className="bp-glass p-5 mt-3 w-full text-left"
-            aria-label={`Preço da consulta: ${fmtBRL(medico.valor)}. Alterar preço`}
-          >
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-xs font-bold uppercase tracking-wider text-bion-ink/75 dark:text-bion-paper/75 inline-flex items-center gap-1.5">
-                <Tag className="w-4 h-4" /> Preço da consulta
-              </span>
-              <span className="text-xs font-bold text-bion-sea dark:text-sky-300">Alterar</span>
-            </div>
-            <div className="mt-1 text-2xl font-black tabular-nums">{fmtBRL(medico.valor)}</div>
+          <div className="bp-glass p-5 mt-3 w-full text-left">
+            <button
+              type="button"
+              onClick={onAbrirPreco}
+              className="w-full text-left"
+              aria-label={`Preço da consulta: ${fmtBRL(medico.valor)}. Alterar preço`}
+            >
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-xs font-bold uppercase tracking-wider text-bion-ink/75 dark:text-bion-paper/75 inline-flex items-center gap-1.5">
+                  <Tag className="w-4 h-4" /> Preço da consulta
+                </span>
+                <span className="text-xs font-bold text-bion-sea dark:text-sky-300">Alterar</span>
+              </div>
+              <div className="mt-1 text-2xl font-black tabular-nums">{fmtBRL(medico.valor)}</div>
+            </button>
             <div className="mt-2 flex items-center gap-2 text-sm text-bion-ink/75 dark:text-bion-paper/75">
+              {/* Irmão do botão de preço — antes era <button> dentro de <button> (HTML inválido). */}
               <button type="button" onClick={onAbrirPromocoes} className="text-xs font-bold text-bion-sea dark:text-sky-300">Promoções</button>
             </div>
-          </button>
+          </div>
 
           <button
             type="button"

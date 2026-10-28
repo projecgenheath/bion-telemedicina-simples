@@ -20,6 +20,8 @@ const vazio: Form = {
   bio: "",
   status: "pendente",
   horariosDisponiveis: ["09:00", "10:00", "14:00"],
+  diasAtendimento: [],
+  pausasSemanais: [],
 };
 
 export function AdminMedicos() {

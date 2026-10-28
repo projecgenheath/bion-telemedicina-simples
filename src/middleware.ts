@@ -15,6 +15,7 @@ const PUBLICOS: readonly string[] = [
   "/api/cron/espera-medico", // idem (pg_cron a cada minuto)
   "/api/cron/descarte-retencao", // idem (cron da Vercel, 03:00 em SP)
   "/api/cron/lgpd-pendencias", // idem (cron da Vercel, 04:00 em SP; pendências LGPD de Auth/Storage/desban)
+  "/api/publico", // perfil público compartilhável /p/[id] — dados já públicos de médicos ativos
 ];
 
 function ehPublico(pathname: string): boolean {

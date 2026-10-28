@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { partesNoFuso, quandoClinica } from "@/lib/server/fuso";
 import {
   chaveTravaDia,
+  conferirDiasEPausas,
   consultaEmHorarioVedado,
   conferirMedicoAtivoNaTransacao,
   diaBloqueado,
@@ -1050,6 +1051,15 @@ export async function conferirHorarioNaTransacao(
   if (erroMedico) return erroMedico;
   if (await diaBloqueado(tx, p.medicoId, p.dataInicio)) return ERRO_DIA_BLOQUEADO;
   if (consultaEmHorarioVedado(p.dataInicio)) return ERRO_HORARIO_VEDADO;
+  // Dias de atendimento × pausas semanais do médico (grade): a remarcação e o
+  // agendamento seguem a MESMA regra (P1-2/P1-3 da auditoria — antes a
+  // remarcação ignorava a grade e o agendamento lia uma propriedade inexistente).
+  const perfil = await tx.perfilMedico.findUnique({
+    where: { userId: p.medicoId },
+    select: { diasAtendimento: true, pausasSemanais: true },
+  });
+  const erroGrade = conferirDiasEPausas(perfil, p.dataInicio);
+  if (erroGrade) return erroGrade;
   const choqueMedico = await tx.consulta.findFirst({
     where: { id: { not: p.consultaId }, medicoId: p.medicoId, dataInicio: p.dataInicio, status: { notIn: STATUS_LIBERAM_HORARIO } },
     select: { id: true },

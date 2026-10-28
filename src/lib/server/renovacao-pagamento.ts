@@ -1,6 +1,7 @@
 import "server-only";
 import type { Prisma } from "@prisma/client";
 import { conferirMedicoAtivoNaTransacao } from "@/lib/server/bloqueio-agenda";
+import { reembolsarPedidoRenovacao } from "@/lib/server/renovacao-reembolso";
 
 type Tx = Prisma.TransactionClient;
 
@@ -35,14 +36,23 @@ export async function criarCobrancaRenovacao(
 
 /**
  * Pagamento da renovação CONFIRMADO (webhook ou simulado). Idempotente:
- * aguardando_pagamento → pendente (vai para a fila do médico). Qualquer outro
- * status: nada muda. Devolve o desfecho.
+ * aguardando_pagamento → pendente (vai para a fila do médico). Pedido já
+ * CANCELADO (confirmação tardia — paciente cancelou enquanto o pagamento
+ * ainda estava no ar): reembolso INTEGRAL imediato na mesma transação
+ * (P1-3 da auditoria: nunca confirmar pagamento de pedido cancelado sem
+ * devolver o valor). Devolve o desfecho.
  */
-export async function confirmarPagamentoRenovacao(pagamentoId: string, tx: Tx): Promise<"pendente" | "ja_processado" | "sem_pedido"> {
+export async function confirmarPagamentoRenovacao(pagamentoId: string, tx: Tx): Promise<"pendente" | "ja_processado" | "sem_pedido" | "reembolsado"> {
   const pedido = await tx.pedidoRenovacao.findUnique({ where: { pagamentoId }, select: { id: true } });
   if (!pedido) return "sem_pedido";
   const pg = await tx.pagamento.findUnique({ where: { id: pagamentoId }, select: { status: true } });
   if (pg?.status !== "confirmado") return "ja_processado";
+  // Confirmação tardia sobre pedido cancelado: devolve o dinheiro na hora.
+  const cancelado = await tx.pedidoRenovacao.findUnique({ where: { id: pedido.id }, select: { status: true } });
+  if (cancelado?.status === "cancelado") {
+    await reembolsarPedidoRenovacao(pedido.id, tx);
+    return "reembolsado";
+  }
   const r = await tx.pedidoRenovacao.updateMany({
     where: { id: pedido.id, status: "aguardando_pagamento" },
     data: { status: "pendente" },

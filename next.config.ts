@@ -56,7 +56,10 @@ const nextConfig: NextConfig = {
     ];
   },
   typescript: {
-    ignoreBuildErrors: true,
+    // P1-6 da auditoria: os erros de tipo voltam a QUEBRAR o build. Esta
+    // opção mascarou os três achados críticos do relatório (TS2353/TS2339
+    // na AgendaSheet e no POST de consultas) e os levou a produção.
+    ignoreBuildErrors: false,
   },
   reactStrictMode: false,
 };

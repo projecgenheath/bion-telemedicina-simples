@@ -34,6 +34,8 @@ const CAMPOS_AUTOEDICAO = new Set([
   "subespecialidades",
   "valor",
   "horariosDisponiveis",
+  "diasAtendimento",
+  "pausasSemanais",
   "foto",
 ]);
 const VALOR_MIN = 1;
@@ -239,6 +241,12 @@ export async function PATCH(
             ...(body.bio !== undefined ? { bio: body.bio } : {}),
             ...(body.horariosDisponiveis !== undefined
               ? { horariosDisponiveis: JSON.stringify(body.horariosDisponiveis) }
+              : {}),
+            ...(body.diasAtendimento !== undefined
+              ? { diasAtendimento: JSON.stringify(body.diasAtendimento) }
+              : {}),
+            ...(body.pausasSemanais !== undefined
+              ? { pausasSemanais: JSON.stringify(body.pausasSemanais) }
               : {}),
             ...(body.foto !== undefined && autoedicao ? { foto: body.foto || null } : {}),
           },

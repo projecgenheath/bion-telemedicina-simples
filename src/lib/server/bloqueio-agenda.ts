@@ -234,6 +234,37 @@ export async function travarDiaIso(tx: Prisma.TransactionClient, medicoId: strin
 /** Opções das transações que tomam a trava (espera pela trava conta no timeout). */
 export const OPCOES_TX_TRAVA = { maxWait: 10_000, timeout: 20_000 } as const;
 
+export const ERRO_DIA_SEMANA = "O médico não atende neste dia da semana.";
+export const ERRO_PAUSA_SEMANAL = "Este horário está em pausa semanal do médico.";
+
+/**
+ * Dias de atendimento × pausas semanais do médico (grade em JSON) versus o
+ * instante da consulta. Pura (sem banco): recebe as colunas do perfilMedico
+ * já lidas pela chamadora. `null` = liberado; string = mensagem do 409.
+ */
+export function conferirDiasEPausas(
+  perfil: { diasAtendimento?: string | null; pausasSemanais?: string | null } | null,
+  dataInicio: Date,
+): string | null {
+  if (!perfil) return null;
+  const partes = partesNoFuso(dataInicio);
+  // Dia da semana a partir do calendário (nunca uma propriedade inexistente):
+  // 0=Dom … 6=Sáb, mesmo padrão de dias-uteis.ts.
+  const diaSemana = new Date(Date.UTC(partes.ano, partes.mes - 1, partes.dia)).getUTCDay();
+  const hhmm = `${String(partes.hora).padStart(2, "0")}:${String(partes.minuto).padStart(2, "0")}`;
+  let dias: number[] = [];
+  try { dias = JSON.parse(perfil.diasAtendimento || "[]"); } catch { /* JSON inválido = ignora */ }
+  if (Array.isArray(dias) && dias.length > 0 && !dias.includes(diaSemana)) return ERRO_DIA_SEMANA;
+  let pausas: { dia: number; inicio: string; fim: string }[] = [];
+  try { pausas = JSON.parse(perfil.pausasSemanais || "[]"); } catch { /* JSON inválido = ignora */ }
+  if (Array.isArray(pausas)) {
+    for (const pa of pausas) {
+      if (pa && pa.dia === diaSemana && hhmm >= pa.inicio && hhmm < pa.fim) return ERRO_PAUSA_SEMANAL;
+    }
+  }
+  return null;
+}
+
 /**
  * Agendamento atômico: trava o dia → confere o bloqueio e a janela vedada
  * (23:00–00:00) → `criar(tx)`, tudo na transação `tx`. Recusado →

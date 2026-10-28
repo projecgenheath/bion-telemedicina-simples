@@ -146,6 +146,10 @@ export type Medico = {
   foto?: string;
   status: "ativo" | "pendente" | "suspenso";
   horariosDisponiveis: string[];
+  /** Dias da semana atendidos (0=Dom … 6=Sáb). Vazio = todos os dias. */
+  diasAtendimento: number[];
+  /** Pausas semanais fixas (ex.: almoço de terças 12:00–13:00). */
+  pausasSemanais: { dia: number; inicio: string; fim: string }[];
 };
 
 export type TicketSuporte = {

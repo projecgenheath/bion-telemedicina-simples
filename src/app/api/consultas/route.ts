@@ -11,10 +11,11 @@ import {
 } from "@/lib/server/dados";
 import { criarCobranca, confirmarPagamento, modoGateway, paraWire } from "@/lib/server/pagamentos";
 import { ok, falha } from "@/lib/server/http";
-import { STATUS_LIBERAM_HORARIO, horarioReservado } from "@/lib/server/financeiro";
+import { conferirHorarioNaTransacao, ERRO_HORARIO_OCUPADO, ERRO_PACIENTE_OCUPADO } from "@/lib/server/financeiro";
 import { partesNoFuso } from "@/lib/server/fuso";
 import {
   consultaEmHorarioVedado,
+  conferirDiasEPausas,
   criarSeDiaLivre,
   diaBloqueado,
   ERRO_DIA_BLOQUEADO,
@@ -189,49 +190,14 @@ export async function POST(req: NextRequest) {
       return Response.json({ erro: ERRO_DIA_BLOQUEADO }, { status: 409 });
     }
 
-    // Dias da semana e pausas semanais (se configurados).
-    const perfil = await db.perfilMedico.findUnique({ where: { userId: medico.id }, select: { diasAtendimento: true, pausasSemanais: true } });
-    if (perfil) {
-      const partes = partesNoFuso(dataInicio);
-      const diaSemana = partes.diaSemana; // 0=Dom … 6=Sáb
-      const hhmm = `${String(partes.hora).padStart(2,"0")}:${String(partes.minuto).padStart(2,"0")}`;
-      let dias: number[] = [];
-      try { dias = JSON.parse(perfil.diasAtendimento || "[]"); } catch { /* ignora */ }
-      if (Array.isArray(dias) && dias.length > 0 && !dias.includes(diaSemana)) {
-        return Response.json({ erro: "O médico não atende neste dia da semana." }, { status: 409 });
-      }
-      let pausas: {dia: number; inicio: string; fim: string}[] = [];
-      try { pausas = JSON.parse(perfil.pausasSemanais || "[]"); } catch { /* ignora */ }
-      if (Array.isArray(pausas)) {
-        for (const pa of pausas) {
-          if (pa.dia === diaSemana && hhmm >= pa.inicio && hhmm < pa.fim) {
-            return Response.json({ erro: "Este horário está em pausa semanal do médico." }, { status: 409 });
-          }
-        }
-      }
-    }
-
-    // P2 — conflito de horário: mesmo médico (ou mesmo paciente) já possui
-    // consulta que ainda ocupa este exato horário (ver STATUS_LIBERAM_HORARIO).
-    const choqueMedico = await db.consulta.findFirst({
-      where: { medicoId: medico.id, dataInicio, status: { notIn: STATUS_LIBERAM_HORARIO } },
-      select: { id: true },
-    });
-    if (choqueMedico || (await horarioReservado(medico.id, dataInicio))) {
-      return Response.json(
-        { erro: "Este médico já possui uma consulta neste horário. Escolha outro horário." },
-        { status: 409 },
-      );
-    }
-    const choquePaciente = await db.consulta.findFirst({
-      where: { pacienteId: usuario.id, dataInicio, status: { notIn: STATUS_LIBERAM_HORARIO } },
-      select: { id: true },
-    });
-    if (choquePaciente) {
-      return Response.json(
-        { erro: "Você já possui uma consulta neste horário. Escolha outro horário." },
-        { status: 409 },
-      );
+    // Dias da semana e pausas semanais (se configurados) — pré-checagem
+    // rápida fora da transação para dar resposta imediata; a checagem que
+    // VALE é a atômica, dentro da transação travada (abaixo), que agora
+    // confere dias, pausas e conflitos de horário (P1-3 e P1-4 da auditoria).
+    const perfilGrade = await db.perfilMedico.findUnique({ where: { userId: medico.id }, select: { diasAtendimento: true, pausasSemanais: true } });
+    const erroGrade = conferirDiasEPausas(perfilGrade, dataInicio);
+    if (erroGrade) {
+      return Response.json({ erro: erroGrade }, { status: 409 });
     }
 
     // Dia inteiro bloqueado pelo médico (folga/férias): checagem + criação
@@ -245,6 +211,17 @@ export async function POST(req: NextRequest) {
       (tx) =>
         criarSeDiaLivre(tx, medico.id, dataInicio, (t) =>
           (async () => {
+            // P1-4 da auditoria: conflito de horário (médico, reserva de
+            // remarcação e consulta do paciente) refeito DENTRO da transação
+            // travada, reutilizando a mesma função do fluxo de remarcação.
+            // consultaId "novo" não exclui nenhuma consulta existente.
+            const erroConflito = await conferirHorarioNaTransacao(t, {
+              consultaId: "novo",
+              medicoId: medico.id,
+              dataInicio,
+              pacienteId: usuario.id,
+            });
+            if (erroConflito) throw new ConflitoHorario(erroConflito);
             // Retorno grátis (até 30 dias da origem, um por origem): decidido
             // AQUI, dentro da transação e com trava pela consulta de origem,
             // para dois pedidos simultâneos não ganharem dois retornos grátis.
@@ -281,6 +258,9 @@ export async function POST(req: NextRequest) {
       if (e instanceof PagamentoIndisponivel) {
         const r = respostaIndisponivel();
         return Response.json(r.corpo, { status: r.status });
+      }
+      if (e instanceof ConflitoHorario) {
+        return Response.json({ erro: e.erro }, { status: 409 });
       }
       throw e;
     }
@@ -418,3 +398,10 @@ export async function POST(req: NextRequest) {
 
 /** Retorno pago com o cartão desligado e gateway real: aborta a transação. */
 class PagamentoIndisponivel extends Error {}
+
+/** Conflito de horário detectado dentro da transação travada (409). */
+class ConflitoHorario extends Error {
+  constructor(readonly erro: string) {
+    super(erro);
+  }
+}
