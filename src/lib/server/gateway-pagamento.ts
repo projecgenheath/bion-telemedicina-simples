@@ -1,7 +1,8 @@
 import "server-only";
 import type Stripe from "stripe";
 import { stripe } from "@/lib/server/stripe";
-import { opcoesRequisicao, parametrosSessao, type EntradaSessao } from "@/lib/stripe-checkout-logica";
+import { opcoesRequisicao, parametrosSessao, type EntradaSessao, type TipoCobranca } from "@/lib/stripe-checkout-logica";
+import { taxaPlataformaConnectCentavos } from "@/lib/server/financeiro";
 
 /* ------------------------------------------------------------------ */
 /* Ponto único de troca de gateway do checkout do paciente.            */
@@ -74,11 +75,13 @@ export function gatewayCheckout(): GatewayCheckout {
 }
 
 /**
- * Comissão da plataforma no Connect (modos destino/direta).
- * TODO(Médicos #116): quando taxaPlataformaConnectCentavos estiver no main, trocar por
- *   return taxaPlataformaConnectCentavos({ tipo: "consulta", valorCentavos });
- * (import de @/lib/server/financeiro). Até lá os modos Connect recusam a cobrança.
+ * Comissão da plataforma no Connect (modos destino/direta) = `application_fee_amount`.
+ * Consulta, renovação e diferença da sala de espera: 10% do valor.
+ * Multa de remarcação: `divisaoDaMulta().appCentavos` (50%).
+ * A taxa do cartão NÃO entra aqui: na cobrança direta o Stripe a debita da
+ * conta do médico, ou seja, ela sai da parte do médico.
  */
-export function comissaoPlataformaConnect(_valorCentavos: number): number {
-  throw new Error("Connect indisponível: taxaPlataformaConnectCentavos (financeiro.ts, #116) ainda não está no main.");
+export function comissaoPlataformaConnect(tipo: TipoCobranca, valorCentavos: number): number {
+  if (tipo === "multa") return taxaPlataformaConnectCentavos({ tipo: "multa", multaCentavos: valorCentavos });
+  return taxaPlataformaConnectCentavos({ tipo: "consulta", valorCentavos });
 }

@@ -7,7 +7,7 @@ import {
   desfechoDaConsulta,
   divisaoDaMulta,
   EVENTO_VIGENTE,
-  liquidoDaConsulta,
+  liquidoComReembolso,
   reaisParaCentavos,
   STATUS_ABERTOS,
   STATUS_FORA_DO_FATURAMENTO,
@@ -35,7 +35,9 @@ import {
 /*  - a parte do médico (50%) na multa entra no dia em que foi paga;    */
 /*  - reembolso depois do fechamento vira desconto (RepasseAjuste) no   */
 /*    repasse seguinte; o que não couber passa adiante (saldo_anterior);*/
-/*  - taxa do gateway = 0 até o pagamento informá-la.                   */
+/*  - taxa do gateway: a REAL do pagamento (Stripe balance_transaction */
+/*    .fee em Pagamento.stripeTaxaCentavos) quando houver; senão 0;     */
+/*    no reembolso integral a taxa fica com o app.                      */
 /*                                                                      */
 /* "Até o corte": o fechamento pega TUDO o que ficou elegível até a     */
 /* hora do corte e ainda não entrou em nenhum item. Nada se perde se o  */
@@ -161,6 +163,8 @@ export type CandidatoRenovacao = {
   valorCentavos?: number | null;
   pagamentoId?: string | null;
   pagamentoStatus?: string | null;
+  /** Taxa REAL do gateway do pagamento (centavos). Ver taxaGatewayValida em financeiro.ts. */
+  taxaGatewayCentavos?: number | null;
   reembolsos?: ReembolsoMin[] | null;
 };
 export const STATUS_RENOVACAO_REPASSE = ["renovada", "chamada_marcada"] as const;
@@ -224,9 +228,7 @@ export const chaveDoItem = (tipo: TipoItem, id: string) => `${tipo}:${id}`;
 
 /** Item da consulta realizada. Reembolso parcial efetivo: sai a parte do médico (90%). */
 export function itemDaConsulta(c: CandidatoConsulta): ItemCalculado {
-  const l = liquidoDaConsulta(reaisParaCentavos(c.valor), 0);
-  const antes = l.brutoCentavos - l.comissaoCentavos - l.taxaCentavos;
-  const reembolsos = Math.min(antes, pct(totalReembolsadoCentavos(c.pagamento?.reembolsos), PARTE_MEDICO_CONSULTA_PCT));
+  const l = liquidoComReembolso(reaisParaCentavos(c.valor), c.pagamento?.taxaGatewayCentavos ?? 0, totalReembolsadoCentavos(c.pagamento?.reembolsos));
   return {
     tipo: "consulta",
     chave: chaveDoItem("consulta", c.id),
@@ -236,17 +238,15 @@ export function itemDaConsulta(c: CandidatoConsulta): ItemCalculado {
     brutoCentavos: l.brutoCentavos,
     comissaoCentavos: l.comissaoCentavos,
     taxasCentavos: l.taxaCentavos,
-    reembolsosCentavos: reembolsos,
+    reembolsosCentavos: l.reembolsosCentavos,
     multasCentavos: 0,
-    liquidoCentavos: antes - reembolsos,
+    liquidoCentavos: l.liquidoCentavos,
   };
 }
 
 /** Item da renovação paga: mesma divisão da consulta (90% médico), sobre valorCentavos. */
 export function itemDaRenovacao(r: CandidatoRenovacao & { valorCentavos: number; respondidoEm: Date }): ItemCalculado {
-  const l = liquidoDaConsulta(r.valorCentavos, 0);
-  const antes = l.brutoCentavos - l.comissaoCentavos - l.taxaCentavos;
-  const reembolsos = Math.min(antes, pct(totalReembolsadoCentavos(r.reembolsos), PARTE_MEDICO_CONSULTA_PCT));
+  const l = liquidoComReembolso(r.valorCentavos, r.taxaGatewayCentavos ?? 0, totalReembolsadoCentavos(r.reembolsos));
   return {
     tipo: "renovacao",
     chave: chaveDoItem("renovacao", r.id),
@@ -257,9 +257,9 @@ export function itemDaRenovacao(r: CandidatoRenovacao & { valorCentavos: number;
     brutoCentavos: l.brutoCentavos,
     comissaoCentavos: l.comissaoCentavos,
     taxasCentavos: l.taxaCentavos,
-    reembolsosCentavos: reembolsos,
+    reembolsosCentavos: l.reembolsosCentavos,
     multasCentavos: 0,
-    liquidoCentavos: antes - reembolsos,
+    liquidoCentavos: l.liquidoCentavos,
   };
 }
 
@@ -498,7 +498,8 @@ async function carregarCandidatos(c: Cliente, medicoId: string, corte: Date) {
         valor: true,
         pago: true,
         tipoAtendimento: true,
-        pagamento: { select: { id: true, status: true, reembolsos: { select: selReembolso } } },
+        // Taxa real do Stripe (balance_transaction.fee) → pagamento.taxaGatewayCentavos.
+        pagamento: { select: { id: true, status: true, stripeTaxaCentavos: true, reembolsos: { select: selReembolso } } },
         eventos: { where: { tipo: { in: TIPOS_EVENTO_DESFECHO } }, select: selEventoDesfecho },
       },
     }),
@@ -553,7 +554,7 @@ async function carregarCandidatos(c: Cliente, medicoId: string, corte: Date) {
       respondidoEm: true,
       valorCentavos: true,
       pagamentoId: true,
-      pagamento: { select: { status: true, reembolsos: { select: selReembolso } } },
+      pagamento: { select: { status: true, stripeTaxaCentavos: true, reembolsos: { select: selReembolso } } },
     },
   });
   // Trava: um pagamento que já entrou num repasse (pela consulta ou pelo
@@ -586,13 +587,16 @@ async function carregarCandidatos(c: Cliente, medicoId: string, corte: Date) {
         valorCentavos: p.valorCentavos,
         pagamentoId: p.pagamentoId,
         pagamentoStatus: p.pagamento?.status ?? null,
+        taxaGatewayCentavos: p.pagamento?.stripeTaxaCentavos ?? null,
         reembolsos: (p.pagamento?.reembolsos ?? []).map(comEfetivo),
       }),
     ),
     consultas: consultas.map((c) => ({
       ...c,
       pagamentoId: c.pagamento?.id ?? null,
-      pagamento: c.pagamento ? { ...c.pagamento, reembolsos: c.pagamento.reembolsos.map(comEfetivo) } : null,
+      pagamento: c.pagamento
+        ? { ...c.pagamento, taxaGatewayCentavos: c.pagamento.stripeTaxaCentavos ?? null, reembolsos: c.pagamento.reembolsos.map(comEfetivo) }
+        : null,
     })),
     multasCancelamento: eventos.map((e) => ({
       consultaId: e.consultaId,
