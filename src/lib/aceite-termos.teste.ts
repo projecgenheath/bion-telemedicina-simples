@@ -68,7 +68,7 @@ igual("pendente só privacidade", aceitePendente("MEDICO", [fP]), true);
 igual("pendente com termos antigos", aceitePendente("MEDICO", [finalidadeTermos("termos-medico-v-1"), fP]), true);
 igual("pendente com termos do paciente", aceitePendente("MEDICO", [finalidadeTermos(VERSAO_TERMOS_PACIENTE), fP]), true);
 igual("não pendente com os dois", aceitePendente("MEDICO", [fTM, fP]), false);
-igual("links do médico", [URL_TERMOS_POR_PERFIL.MEDICO, URL_POLITICA_PRIVACIDADE], ["/termos-de-uso", "/politica-de-privacidade"]);
+igual("links do médico", [URL_TERMOS_POR_PERFIL.MEDICO, URL_POLITICA_PRIVACIDADE], ["/termos-medico", "/politica-de-privacidade"]);
 igual("origem igual", origemConfere("https://bion.app", "bion.app"), true);
 igual("origem com porta", origemConfere("http://localhost:3000/x", "localhost:3000"), true);
 igual("origem diferente", origemConfere("https://mal.com", "bion.app"), false);

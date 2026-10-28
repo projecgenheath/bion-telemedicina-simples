@@ -25,12 +25,8 @@ export const VERSAO_TERMOS_POR_PERFIL: Record<PerfilAceite, string | null> = {
 /** Rotas públicas (sem login) dos textos: src/app/termos-de-uso e src/app/politica-de-privacidade. */
 export const URL_TERMOS_PACIENTE = "/termos-de-uso";
 export const URL_POLITICA_PRIVACIDADE = "/politica-de-privacidade";
-/**
- * PROVISÓRIO: ainda não há página de Termos de Uso específica do médico
- * (src/conteudo/juridico só tem a minuta do paciente). Trocar para
- * "/termos-de-uso-medico" quando o Jurídico entregar o texto.
- */
-export const URL_TERMOS_MEDICO = "/termos-de-uso";
+/** Rota pública (sem login) do texto do médico + anexos I–III: src/app/termos-medico. */
+export const URL_TERMOS_MEDICO = "/termos-medico";
 export const URL_TERMOS_POR_PERFIL: Record<PerfilAceite, string> = {
   PACIENTE: URL_TERMOS_PACIENTE,
   MEDICO: URL_TERMOS_MEDICO,
