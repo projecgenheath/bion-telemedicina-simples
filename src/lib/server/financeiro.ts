@@ -102,16 +102,73 @@ export function divisaoDaMulta(multaCentavos: number) {
   return { medicoCentavos: medico, appCentavos: multaCentavos - medico };
 }
 
-/** Líquido do médico numa consulta realizada. */
-export function liquidoDaConsulta(valorCentavos: number, taxaGatewayCentavos = 0) {
+/**
+ * Taxa do gateway válida em centavos: inteiro ≥ 0, limitada ao valor cobrado.
+ * Origem prevista: Stripe `balance_transaction.fee` (já em centavos), gravada
+ * em `Pagamento.stripeTaxaCentavos` (Int?, migração do Admin). null/ausente = 0.
+ */
+export function taxaGatewayValida(taxaCentavos: number | null | undefined, valorCentavos: number): number {
+  if (typeof taxaCentavos !== "number" || !Number.isFinite(taxaCentavos) || taxaCentavos <= 0) return 0;
+  return Math.min(Math.round(taxaCentavos), Math.max(0, valorCentavos));
+}
+
+/**
+ * Líquido do médico numa consulta realizada (cobrança normal).
+ * Regra (Alisson, 20/10): a taxa REAL do gateway sai dos 90% do médico.
+ * No reembolso a taxa fica com o app — ver `liquidoComReembolso`.
+ */
+export function liquidoDaConsulta(valorCentavos: number, taxaGatewayCentavos: number | null = 0) {
   const comissao = pct(valorCentavos, COMISSAO_APP_PCT);
-  const taxa = TAXA_GATEWAY_NO_LIQUIDO ? taxaGatewayCentavos : 0;
+  const taxa = TAXA_GATEWAY_NO_LIQUIDO ? Math.min(taxaGatewayValida(taxaGatewayCentavos, valorCentavos), valorCentavos - comissao) : 0;
   return {
     brutoCentavos: valorCentavos,
     comissaoCentavos: comissao,
     taxaCentavos: taxa,
     liquidoCentavos: valorCentavos - comissao - taxa,
   };
+}
+
+/**
+ * Item com reembolso: o paciente recebe de volta o valor reembolsado INTEIRO
+ * (o gateway não devolve a taxa; ela fica com o app). Do médico sai a parte
+ * dele (90%) do reembolsado. Reembolso integral → a taxa não é cobrada do
+ * médico (ele fica com 0 e o app absorve a taxa). Reembolso parcial → o
+ * médico paga a taxa da parte que ficou (cobrança normal) e perde 90% do
+ * reembolsado, nunca abaixo de 0.
+ */
+export function liquidoComReembolso(valorCentavos: number, taxaGatewayCentavos: number | null, reembolsadoCentavos: number) {
+  const integral = valorCentavos > 0 && reembolsadoCentavos >= valorCentavos;
+  const l = liquidoDaConsulta(valorCentavos, integral ? 0 : taxaGatewayCentavos);
+  const antes = l.brutoCentavos - l.comissaoCentavos - l.taxaCentavos;
+  const reembolsos = Math.min(antes, pct(Math.max(0, reembolsadoCentavos), 100 - COMISSAO_APP_PCT));
+  return { ...l, reembolsosCentavos: reembolsos, liquidoCentavos: antes - reembolsos };
+}
+
+/* ---------- Stripe Connect (preparado, DESLIGADO) ------------------ */
+/*                                                                     */
+/* Com Connect, a cobrança é "destination charge": o dinheiro vai para */
+/* a conta do médico (PerfilMedico.stripeAccountId, migração do Admin) */
+/* e a BION retém só `application_fee_amount`. Nessa modalidade a taxa */
+/* do Stripe é debitada da conta da PLATAFORMA, então a application   */
+/* fee NÃO inclui a taxa: o médico recebe valor − fee, e a taxa sai    */
+/* dos 10% da BION. Isso DIVERGE da regra atual (taxa nos 90% do       */
+/* médico); decisão do Alisson pendente antes de ligar o Connect.      */
+/* Multa: dividida 50/50, sem comissão → fee = 50% da multa.           */
+/* Reembolso: refund com reverse_transfer + refund_application_fee.    */
+/* ------------------------------------------------------------------ */
+
+export type CobrancaConnect =
+  | { tipo: "consulta" | "renovacao"; valorCentavos: number }
+  | { tipo: "multa"; multaCentavos: number };
+
+/**
+ * Ponto ÚNICO do `application_fee_amount` (centavos) de uma cobrança com
+ * destino na conta do médico: 10% da consulta/renovação (COMISSAO_APP_PCT)
+ * ou a parte do app na multa (50%). Nada da taxa do gateway entra aqui.
+ */
+export function taxaPlataformaConnectCentavos(c: CobrancaConnect): number {
+  if (c.tipo === "multa") return divisaoDaMulta(Math.max(0, c.multaCentavos)).appCentavos;
+  return pct(Math.max(0, c.valorCentavos), COMISSAO_APP_PCT);
 }
 
 /** Competência "AAAA-MM" do mês de Brasília (não o mês em UTC). */

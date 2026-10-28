@@ -60,7 +60,12 @@ export type ConsultaReceita = {
   status: string;
   valor: number; // reais (Float legado)
   pago: boolean;
-  pagamento: { status: string; reembolsos: ReembolsoMin[] } | null;
+  pagamento: {
+    status: string;
+    reembolsos: ReembolsoMin[];
+    /** Taxa REAL do gateway em centavos (Stripe balance_transaction.fee → Pagamento.stripeTaxaCentavos). null/ausente = 0. */
+    taxaGatewayCentavos?: number | null;
+  } | null;
   /** Falta/falha (vigentes ou não). Sem isso, status aberto = sem desfecho. */
   eventos?: EventoDesfechoReceita[] | null;
 };
