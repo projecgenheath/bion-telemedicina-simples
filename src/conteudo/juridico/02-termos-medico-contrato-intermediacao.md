@@ -1,6 +1,6 @@
 ---
 title: "Termos de Uso e Contrato de Intermediação do Médico — BION Telemedicina"
-subtitle: "Versão provisória v0 — 20/10/2026"
+subtitle: "Versão provisória v2 — 28/10/2026"
 lang: pt-BR
 ---
 
@@ -10,7 +10,7 @@ lang: pt-BR
 - **Não há vínculo empregatício**, exclusividade, subordinação ou horário obrigatório. Você define **sua agenda e seu preço** (padrão sugerido R$ 150,00).
 - Exigimos **CRM ativo e regular** o tempo todo. Se o CRM ficar irregular, a conta é suspensa.
 - **Remuneração da BION: 10%** do valor de cada consulta realizada; **você recebe 90%**, menos eventuais taxas do gateway (hoje zero) e ajustes de reembolso.
-- **Repasse:** calculado **todo dia às 23:30 (Brasília)**; o **pagamento é feito por PIX pela equipe da BION, manualmente**, para a chave que você cadastrou, com comprovante no app. **Não é automático.**
+- **Recebimentos:** Você recebe na sua conta Stripe no momento do pagamento, já descontadas a comissão de 10% da BION e a taxa do cartão. A Stripe transfere o valor para a sua conta bancária conforme o calendário dela.
 - **Multas de cancelamento/remarcação tardia (≤ 24 h):** 50% do valor, divididas meio a meio entre você e a BION. **Atenção ao risco ético** descrito na cláusula 10.6.
 - **Notas fiscais:** você emite ao paciente (NFS-e se PJ; recibo Receita Saúde se PF). A BION emite a você a NFS-e da comissão dela. Opcionalmente, você pode autorizar a BION a emitir a NFS-e em seu nome, com seu certificado A1 guardado criptografado (**recurso ainda não disponível**).
 - **Proteção de dados:** você é **controlador** do prontuário que produz; a BION é **operadora** dele e **controladora** dos dados da plataforma. Detalhes no Anexo I.
@@ -26,7 +26,7 @@ lang: pt-BR
 7. Obrigações profissionais e éticas na teleconsulta  
 8. Documentos médicos, prescrição e renovação de receita  
 9. Agenda, pontualidade, faltas e cancelamentos do médico  
-10. Preço, remuneração da BION, multas e repasse  
+10. Preço, remuneração da BION, multas e recebimentos  
 11. Obrigações fiscais e emissão de documentos fiscais  
 12. Proteção de dados pessoais  
 13. Ferramentas de apoio e inteligência artificial  
@@ -41,7 +41,7 @@ lang: pt-BR
 22. Disposições gerais, anticorrupção e foro  
 Anexo I — Acordo de Tratamento de Dados (médico controlador × BION operadora)  
 Anexo II — Autorização de emissão de NFS-e e guarda do certificado A1  
-Anexo III — Tabela de remuneração, multas, repasses e ajustes
+Anexo III — Tabela de remuneração, multas, recebimentos e ajustes
 
 # 1. Partes e aceite
 
@@ -57,8 +57,8 @@ Aplicam-se as definições dos Termos de Uso do Paciente. Além delas:
 
 - **Consulta realizada:** consulta com desfecho registrado de atendimento (presença do médico e do paciente na sala) e evolução concluída.
 - **Desfecho:** o resultado registrado da consulta (realizada, falta do paciente, falta do médico, falha técnica, cancelada, remarcada).
-- **Repasse:** o valor líquido devido ao médico em cada competência diária.
-- **Competência:** o dia (horário de Brasília) a que se refere o repasse.
+- **Recebimento:** a parte do médico em cada pagamento, creditada pela Stripe na conta conectada dele.
+- **Competência:** o mês do pagamento, usado na nota fiscal mensal da BION ao médico pela comissão e pelas multas.
 - **Torre BION:** painel administrativo da BION.
 
 # 3. Objeto e natureza da relação
@@ -87,13 +87,13 @@ g) **[RECOMENDADO]** manter seguro de responsabilidade civil profissional.
 
 # 5. Cadastro, dados e perfil público
 
-5.1. **Dados tratados do médico:** nome, e-mail, senha (guardada em hash), CRM e UF, especialidade e subespecialidades, formação, experiência, idiomas, biografia, foto, **data de nascimento, sexo/gênero, telefone, CNPJ (opcional)**, dados de recebimento (tipo e **chave PIX**, tipo de titular, **nome e CPF/CNPJ do titular**), agenda, bloqueios e seus motivos, preço, avaliações recebidas, histórico de repasses e comprovantes, registros de presença na sala, endereço IP e dados de acesso. O tratamento segue a Política de Privacidade.
+5.1. **Dados tratados do médico:** nome, e-mail, senha (guardada em hash), CRM e UF, especialidade e subespecialidades, formação, experiência, idiomas, biografia, foto, **data de nascimento, sexo/gênero, telefone, CNPJ (opcional)**, identificador da conta conectada na Stripe, agenda, bloqueios e seus motivos, preço, avaliações recebidas, histórico de pagamentos, registros de presença na sala, endereço IP e dados de acesso. O tratamento segue a Política de Privacidade. Para receber, o médico abre e mantém uma conta conectada na Stripe, com documento, verificação de identidade e conta bancária em seu nome.
 
 5.2. **Perfil público** (visível a usuários logados): nome, CRM, especialidade(s), valor da consulta, avaliação média e número de avaliações, formação, experiência, idiomas, biografia, foto e horários disponíveis. Data de nascimento, sexo, telefone, CNPJ e dados de recebimento **nunca** aparecem no perfil público.
 
 5.3. O conteúdo do perfil é de responsabilidade do médico e deve respeitar as regras de publicidade médica (Res. CFM 2.336/2023): sem promessa de resultado, sem sensacionalismo, sem preço como chamariz indevido, com CRM e RQE quando citar especialidade.
 
-5.4. **Segurança dos dados de recebimento.** Nesta versão, a chave PIX e o CPF/CNPJ do titular ficam armazenados no banco de dados (Brasil) com controle de acesso, **sem criptografia adicional no campo**, e uma cópia é registrada em cada repasse como prova do destino do pagamento. **[Ver pendências: recomendação de criptografar.]** Trocas de chave PIX geram alerta ao administrador.
+5.4. **Dados de recebimento.** A BION não recebe nem guarda os dados bancários do médico, que ficam com a Stripe. A BION guarda apenas o identificador da conta conectada e o histórico dos pagamentos.
 
 # 6. Autonomia técnica e independência
 
@@ -127,7 +127,7 @@ k) **não cobrar do paciente nenhum valor fora da Plataforma** por consultas age
 
 8.4. **CID em atestado** só com autorização expressa do paciente, salvo dever legal (Res. CFM 1.658/2002, art. 5º).
 
-8.5. **Renovação de receita por mensagem.** O paciente pode pedir a renovação ao médico que emitiu a receita, pagando por PIX o valor da consulta. O médico deve avaliar com critério clínico e pode renovar, marcar chamada curta, pedir exames ou **recusar** — a recusa gera **reembolso integral** ao paciente, sem repasse. Renovar sem condições clínicas suficientes é responsabilidade do médico (CEM, art. 37).
+8.5. **Renovação de receita por mensagem.** O paciente pode pedir a renovação ao médico que emitiu a receita, pagando com cartão, dentro do app. O médico deve avaliar com critério clínico e pode renovar, marcar chamada curta, pedir exames ou **recusar** — a recusa gera **reembolso integral** ao paciente, sem repasse. Renovar sem condições clínicas suficientes é responsabilidade do médico (CEM, art. 37).
 
 # 9. Agenda, pontualidade, faltas e cancelamentos do médico
 
@@ -141,25 +141,25 @@ k) **não cobrar do paciente nenhum valor fora da Plataforma** por consultas age
 
 9.5. Faltas ou cancelamentos reiterados do médico podem levar a advertência, ocultação temporária da agenda ou suspensão (cláusula 19), sem prejuízo dos direitos dos pacientes.
 
-# 10. Preço, remuneração da BION, multas e repasse
+# 10. Preço, remuneração da BION, multas e recebimentos
 
 10.1. **Preço.** O médico define livremente o valor da sua consulta (padrão sugerido R$ 150,00), exibido ao paciente antes do pagamento (Res. CFM 2.314/2022, art. 16). Alterações valem para **novos** agendamentos. Não há planos nem pacotes.
 
 10.2. **Remuneração da BION.** Pela intermediação, a BION retém **10% do valor bruto** de cada consulta realizada e de cada renovação atendida. O médico recebe **90%**. Sobre retornos gratuitos não há cobrança nem repasse.
 
-10.3. **Taxas do gateway.** Eventuais taxas do gateway de pagamento são **deduzidas da parte do médico**. **Hoje a taxa considerada é zero.** Qualquer mudança será comunicada com **30 dias** de antecedência. **[A DEFINIR: confirmar com o advogado/contador se a taxa sai da parte do médico, da BION ou é rateada.]**
+10.3. **Recebimento pela Stripe.** O médico recebe os pagamentos numa conta conectada da Stripe, aberta em seu nome com CPF ou CNPJ, e aceita os termos da Stripe Connected Account Agreement. Cada pagamento é dividido no ato: a BION recebe uma comissão de 10% do valor da consulta, e o restante fica com o médico, já descontada a taxa de processamento cobrada pela Stripe. A Stripe transfere o valor para a conta bancária do médico conforme o calendário dela. Em reembolso integral, o médico não recebe a sua parte e a taxa fica com a BION. Em reembolso parcial, o médico devolve a parte proporcional dele e continua responsável pela taxa de processamento. Toda consulta dá ao paciente direito a um retorno grátis em até 30 dias, e o retorno não gera repasse. O médico é responsável por emitir o recibo (Receita Saúde) ou a nota fiscal da consulta ao paciente.
 
-10.4. **Reembolsos.** Se a consulta for reembolsada (falta do médico, falha técnica, falta do paciente com pedido no prazo, renovação recusada, direito de arrependimento), o médico não recebe por ela. Se o reembolso ocorrer **depois** de o repasse ter sido pago, o valor da parte do médico será **descontado de repasses futuros** (ajuste), e eventual saldo negativo será carregado para os dias seguintes. **[A DEFINIR: prazo máximo de compensação e cobrança de saldo negativo remanescente após encerramento.]**
+10.4. **Reembolsos e contestações.** Se um reembolso, estorno ou contestação (chargeback) acontecer depois de a parte do médico já ter caído na conta Stripe dele, a parte proporcional do médico é revertida pela própria Stripe, que a debita do saldo da conta conectada. Se o saldo não for suficiente, o valor pode ser descontado dos próximos recebimentos, conforme as regras da Stripe.
 
 10.5. **Multas pagas pelo paciente** (cancelamento ou remarcação com 24 h ou menos de antecedência: 50% do valor da consulta) são divididas **50% para o médico e 50% para a BION**, sem comissão adicional sobre a parte do médico.
 
-10.6. **⚠️ Aviso de risco ético ao médico.** Na regra atual, a falta do paciente gera repasse ao médico (salvo se o paciente pedir reembolso em até 7 dias corridos), e o médico recebe metade das multas. O CFM entende que o art. 59 do Código de Ética Médica veda ao médico aceitar remuneração por atendimento não prestado, inclusive multa ou taxa por falta ou cancelamento (Despacho CFM SEI nº 102/2025). Há também entendimento de Conselhos Regionais contrário à cobrança de percentual sobre o honorário por empresas de intermediação (CEM, art. 58). O médico declara estar ciente desse risco e **pode optar por não receber a sua parte das multas** na sua área de recebimento **[A DEFINIR: implementar a opção]**. **[DECISÃO PENDENTE DA BION COM ADVOGADO — ver pendências.]**
+10.6. **⚠️ Aviso de risco ético ao médico.** Se o paciente faltar à consulta sem cancelar, não há reembolso, e o médico fica com a sua parte, que já foi creditada na conta Stripe dele. Nas multas por cancelamento com 24 horas ou menos de antecedência, o médico recebe metade do valor retido. O CFM entende que o art. 59 do Código de Ética Médica veda ao médico aceitar remuneração por atendimento não prestado, inclusive multa ou taxa por falta ou cancelamento (Despacho CFM SEI nº 102/2025). Há também entendimento de Conselhos Regionais contrário à cobrança de percentual sobre o honorário por empresas de intermediação (CEM, art. 58). O médico declara estar ciente desse risco e **pode optar por não receber a sua parte das multas** na sua área de recebimento **[A DEFINIR: implementar a opção]**. **[DECISÃO PENDENTE DA BION COM ADVOGADO — ver pendências.]**
 
-10.7. **Cálculo diário.** Todo dia às **23:30 (horário de Brasília)** a Plataforma **calcula e fecha** o repasse da competência: consultas realizadas, renovações atendidas, multas, ajustes e reembolsos. Consultas sem desfecho registrado entram no fechamento em que o desfecho for registrado.
+10.7. **Crédito na conta Stripe.** Os valores do médico são creditados direto na conta Stripe dele no momento do pagamento, já descontadas a comissão da BION e a taxa de processamento. A BION não recebe nem guarda a parte do médico e não faz repasse por PIX.
 
-10.8. **Pagamento do repasse.** O pagamento é feito **manualmente pela equipe da BION, por PIX**, para a chave cadastrada pelo médico, **em até [A DEFINIR: X] dias úteis** após o fechamento, com **comprovante** disponível no app. **O pagamento não é automático**, e o horário do cálculo não é o horário do pagamento.
+10.8. **Transferência para o banco.** A transferência do saldo da conta Stripe para a conta bancária do médico segue o calendário e os prazos da Stripe. A BION não controla esses prazos.
 
-10.9. **Chave PIX.** O médico é responsável pela correção da chave e pela titularidade (ela deve pertencer ao médico ou à sua PJ). Pagamentos feitos para a chave cadastrada quitam a obrigação. Alterações recentes de chave podem atrasar o pagamento para conferência de segurança.
+10.9. **Acompanhamento e cadastro na Stripe.** No painel, o médico pode acompanhar cada pagamento, a comissão e a taxa descontadas e os reembolsos. Para receber, o médico precisa manter o cadastro da Stripe completo e atualizado, com documento, verificação de identidade e conta bancária. Enquanto o cadastro estiver pendente, ele não pode receber novos agendamentos pagos.
 
 10.10. **Contestação.** O médico pode contestar valores em até **[A DEFINIR: 30] dias** do fechamento, pelo suporte. Correções de desfecho feitas pela administração são registradas em auditoria e informadas ao médico.
 
@@ -218,9 +218,9 @@ A Plataforma, a marca BION e seus elementos pertencem à BION. O médico autoriz
 
 18.1. O médico responde exclusivamente pelo **ato médico** e pelas obrigações profissionais, fiscais e éticas próprias, e **indenizará a BION** por condenações, multas ou custos decorrentes de atos seus (inclusive erro médico, documentos irregulares, violação de sigilo ou de dados por sua conta).
 
-18.2. A BION responde pela Plataforma, pela segurança dos dados sob sua guarda, pela correção do cálculo e do pagamento dos repasses e por atos próprios.
+18.2. A BION responde pela Plataforma, pela segurança dos dados sob sua guarda, pela correção das regras de divisão que ela configura em cada pagamento (comissão, multas e reembolsos) e por atos próprios. O processamento, a custódia e a transferência dos valores são feitos pela Stripe, conforme os termos dela.
 
-18.3. **Limitação.** Salvo dolo, culpa grave, violação de dados pessoais causada pela BION ou obrigação de pagar repasses devidos, a responsabilidade total da BION perante o médico fica limitada ao valor da remuneração recebida pela BION do médico nos **12 meses** anteriores ao fato. **[Validar com advogado.]**
+18.3. **Limitação.** Salvo dolo, culpa grave, violação de dados pessoais causada pela BION ou valores devidos ao médico por erro nas regras de divisão configuradas pela BION, a responsabilidade total da BION perante o médico fica limitada ao valor da remuneração recebida pela BION do médico nos **12 meses** anteriores ao fato. **[Validar com advogado.]**
 
 18.4. Nenhuma parte responde por caso fortuito ou força maior (Código Civil, art. 393).
 
@@ -232,7 +232,7 @@ A Plataforma, a marca BION e seus elementos pertencem à BION. O médico autoriz
 
 19.3. **Suspensão ou rescisão imediata** pela BION em caso de: CRM irregular; denúncia grave com indícios; fraude; violação de sigilo ou de dados; descumprimento reiterado; ordem de autoridade. A decisão será comunicada com o motivo, e o médico pode apresentar defesa em **[A DEFINIR: 5] dias úteis**.
 
-19.4. **Efeitos.** Após o término: (a) os repasses devidos são pagos e os ajustes compensados; (b) **o prontuário permanece guardado pela BION** pelo prazo legal (20 anos — Lei 13.787/2018), acessível aos pacientes e ao médico mediante solicitação para fins legais; (c) os dados pessoais do médico são mantidos pelos prazos da Política de Privacidade (ex.: fiscais 5 anos; logs 6 meses). **[Ver pendências: ainda não há rotina de anonimização da conta do médico.]**
+19.4. **Efeitos.** Após o término: (a) os valores já creditados permanecem na conta Stripe do médico, e reembolsos, estornos ou contestações de consultas anteriores ao término continuam sendo revertidos pela Stripe, como no 10.4; (b) **o prontuário permanece guardado pela BION** pelo prazo legal (20 anos — Lei 13.787/2018), acessível aos pacientes e ao médico mediante solicitação para fins legais; (c) os dados pessoais do médico são mantidos pelos prazos da Política de Privacidade (ex.: fiscais 5 anos; logs 6 meses). **[Ver pendências: ainda não há rotina de anonimização da conta do médico.]**
 
 # 20. Alterações
 
@@ -277,23 +277,23 @@ As comunicações ocorrem pelo app e pelo e-mail cadastrado. Contato da BION: **
 4. **Revogação.** O médico pode revogar a autorização a qualquer momento, no app; o certificado é **apagado em até 5 dias úteis**, ficando apenas os registros de auditoria. O certificado também é apagado ao vencer ou ao término do contrato.
 5. **Incidente.** Em caso de suspeita de comprometimento do certificado, a BION avisa o médico imediatamente para que ele o revogue junto à Autoridade Certificadora.
 
-# Anexo III — Tabela de remuneração, multas, repasses e ajustes
+# Anexo III — Tabela de remuneração, multas, recebimentos e ajustes
 
 | Evento | Paciente paga | Médico recebe | BION recebe |
 |---|---|---|---|
 | Consulta realizada (valor V) | V | 90% de V (− taxa do gateway, hoje 0) | 10% de V |
-| Renovação de receita atendida (valor V, só PIX) | V | 90% de V | 10% de V |
+| Renovação de receita atendida (valor V, cartão, pela Stripe) | V | 90% de V | 10% de V |
 | Renovação recusada pelo médico | reembolso integral | 0 | 0 |
 | Retorno grátis (até 30 dias, 1 por consulta) | 0 | 0 | 0 |
 | Retorno pago (31 a 90 dias, ou 2º retorno) | V | 90% de V | 10% de V |
 | Cancelamento com > 24 h | reembolso integral | 0 | 0 |
-| Cancelamento com ≤ 24 h | multa de 50% de V (devolve 50%) | 25% de V ⚠️ | 25% de V |
+| Cancelamento com ≤ 24 h | multa de 50% de V (o paciente recebe 50% de volta no cartão; os outros 50% ficam divididos meio a meio entre o médico e a BION) | 25% de V ⚠️ | 25% de V |
 | Remarcação com ≤ 24 h | multa de 50% de V (horário reservado 15 min) | 25% de V ⚠️ + consulta remarcada normalmente | 25% de V |
 | Falta ou atraso > 10 min do médico / falha técnica | remarcação sem custo ou reembolso integral | 0 | 0 |
-| Falta do paciente (desfecho registrado) | V | 90% de V ⚠️ (entra no repasse do dia) | 10% de V |
-| Falta do paciente — paciente pede reembolso em até 7 dias corridos | reembolso integral | 0 (se já pago, descontado do repasse seguinte) | 0 |
+| Falta do paciente sem cancelar (desfecho registrado) | V, sem reembolso | 90% de V ⚠️ (sem reembolso; a parte do médico permanece na conta Stripe dele) | 10% de V |
+| Falta do médico ou falha técnica — paciente pede reembolso integral em até 7 dias | reembolso integral | 0 (se já pago, revertidos pela Stripe da conta conectada do médico) | 0 |
 
-- **Cálculo:** diário, 23:30 (Brasília). **Pagamento:** PIX manual pela BION, em até **[A DEFINIR]** dias úteis, com comprovante.
-- **Ajustes:** reembolsos posteriores ao pagamento são descontados dos repasses seguintes; saldo não compensado é carregado.
+- **Divisão:** divisão automática no momento do pagamento; transferência ao banco conforme o calendário da Stripe.
+- **Ajustes:** reembolsos posteriores ao pagamento são revertidos pela Stripe da conta conectada do médico; saldo não compensado é carregado.
 
 *Vigente a partir do seu aceite.*
