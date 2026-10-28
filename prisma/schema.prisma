@@ -95,6 +95,8 @@ model PerfilMedico {
   status              String  @default("ativo") // ativo | pendente | suspenso
   stripeAccountId     String? // conta conectada (Stripe Connect), 20261028a
   horariosDisponiveis String  @default("[]") // JSON string[]
+  diasAtendimento     String  @default("[]") // JSON number[] (0=Dom … 6=Sáb). Vazio = todos os dias.
+  pausasSemanais      String  @default("[]") // JSON {dia,inicio,fim}[].
   // Dados pessoais do médico (privados: só o próprio médico lê/edita em
   // /api/medico/perfil — NUNCA entram no diretório público / medicoWire).
   // Migração: supabase/migrations/20261002_perfil_medico_dados_pessoais.sql
