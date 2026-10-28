@@ -271,6 +271,12 @@ export function multaDaSessao(metadata: Record<string, string> | null | undefine
   return metadata?.tipo === "multa" && metadata.remarcacaoId ? metadata.remarcacaoId : null;
 }
 
+/** gatewayRef da RemarcacaoPendente com a sessão aberta da multa ("stripe_cs:<id>"). */
+export const PREFIXO_SESSAO_MULTA = "stripe_cs:";
+export function sessaoDaMulta(gatewayRef: string | null | undefined): string | null {
+  return gatewayRef?.startsWith(PREFIXO_SESSAO_MULTA) ? gatewayRef.slice(PREFIXO_SESSAO_MULTA.length) || null : null;
+}
+
 /** Expiração da sessão para reservas curtas: o mínimo do Stripe (30 min + folga). */
 export function expiracaoReservaSeg(agoraMs = Date.now()): number {
   return Math.floor(agoraMs / 1000) + 31 * 60;
