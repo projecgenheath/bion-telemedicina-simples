@@ -150,3 +150,14 @@ export function medicoPodeAtender(m: { userStatus: string | null; perfilStatus: 
   if (m.userStatus !== "ativo" || m.perfilStatus !== "ativo") return false;
   return !(m.email ?? "").toLowerCase().endsWith(`@${DOMINIO_EMAIL_ANON_MEDICO}`);
 }
+
+/**
+ * CNPJ mostrado num repasse: o do perfil; se o perfil foi limpo (médico
+ * anonimizado), o documento do titular que o repasse pago copiou, quando é
+ * um CNPJ (14 caracteres alfanuméricos). Sem nenhum dos dois: null.
+ */
+export function cnpjDoRepasse(cnpjPerfil: string | null | undefined, pixTitularDocumento: string | null | undefined): string | null {
+  if (cnpjPerfil && cnpjPerfil.trim()) return cnpjPerfil;
+  const doc = (pixTitularDocumento ?? "").replace(/[^0-9A-Za-z]/g, "");
+  return doc.length === 14 ? (pixTitularDocumento as string) : null;
+}

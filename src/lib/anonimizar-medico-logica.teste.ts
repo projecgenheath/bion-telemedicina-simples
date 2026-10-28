@@ -10,6 +10,7 @@ import {
   CAMPOS_MEDICO_PRESERVADOS,
   DADO_REMOVIDO_MEDICO,
   medicoPodeAtender,
+  cnpjDoRepasse,
   removerNumerosLongos,
   validarMotivoAnonimizacao,
 } from "./anonimizar-medico-logica";
@@ -82,6 +83,12 @@ igual("perfil pendente não atende", medicoPodeAtender({ ...at, perfilStatus: "p
 igual("user inativo não atende", medicoPodeAtender({ ...at, userStatus: "inativo" }), false);
 igual("anonimizado não atende", medicoPodeAtender({ ...at, email: "anon-med-abc@ANON.bion.app" }), false);
 igual("sem perfil não atende", medicoPodeAtender(null), false);
+
+// CNPJ do repasse: perfil, senão a cópia do titular (PJ) guardada no repasse pago
+igual("cnpj do perfil", cnpjDoRepasse("12.345.678/0001-90", "123.456.789-09"), "12.345.678/0001-90");
+igual("perfil limpo usa cópia CNPJ", cnpjDoRepasse("", "12.345.678/0001-90"), "12.345.678/0001-90");
+igual("perfil limpo + CPF: sem CNPJ", cnpjDoRepasse("", "123.456.789-09"), null);
+igual("nada", cnpjDoRepasse(null, null), null);
 
 console.log(`${ok} ok, ${falhas} falha(s)`);
 if (falhas) process.exit(1);

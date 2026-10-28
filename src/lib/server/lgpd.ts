@@ -2,6 +2,7 @@ import "server-only";
 import crypto from "crypto";
 import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
+import { removerNumerosLongos as removerNumerosLongosLocal } from "@/lib/anonimizar-medico-logica";
 import { supabaseServiceRoleKey } from "@/lib/supabase/env";
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
 import { BUCKET_DOCUMENTOS } from "@/lib/supabase/storage";
@@ -248,7 +249,7 @@ async function removerObjetosStorage(paths: string[]): Promise<void> {
   if (paths.length === 0) return;
   if (!supabaseServiceRoleKey()) {
     throw erroStatus(
-      "Supabase Storage não configurado no servidor (service role): não é possível remover os arquivos pessoais. Nada foi alterado no banco.",
+      "Supabase Storage não configurado no servidor (service role): não é possível remover os arquivos pessoais.",
       503,
     );
   }
@@ -258,7 +259,7 @@ async function removerObjetosStorage(paths: string[]): Promise<void> {
     if (error) {
       console.error("[LGPD] falha ao remover objetos do Storage", error.message);
       throw erroStatus(
-        "Falha ao remover arquivos pessoais do Storage. Nada foi alterado no banco — tente novamente.",
+        "Falha ao remover arquivos pessoais do Storage.",
         502,
       );
     }
@@ -418,192 +419,201 @@ export async function anonimizarPacienteCompleto(pacienteId: string): Promise<Re
 
   // ---- (a) Supabase Auth: só BANE antes do banco (reversível). A remoção
   //      definitiva vem depois do commit; se a transação falhar (ex.: 409
-  //      por pendência), o ban é desfeito. (b) Storage antes do banco.
+  //      por pendência), o ban é desfeito. (b) Storage: só DEPOIS do commit,
+  //      e só dos arquivos pessoais sem vínculo clínico (reconferidos na
+  //      transação). Arquivo de consulta/prontuário nunca é apagado (20 anos).
   const supabaseIdPaciente = paciente.supabaseId;
   if (supabaseIdPaciente && !jaEstavaAnonimizado) await banirSupabaseAuth(supabaseIdPaciente, true);
+  let pathsParaRemover: string[] = [];
+  let pessoaisRemovidos = 0;
   try {
-    await removerObjetosStorage(
-    pessoais.map((a) => a.storagePath).filter((p): p is string => !!p),
-  );
+    // ---- Termos identificáveis a remover de textos de auditoria ----
+    const termos = [
+      paciente.nome,
+      paciente.email,
+      paciente.perfilPaciente?.cpf ?? "",
+      paciente.perfilPaciente?.telefone ?? "",
+    ]
+      .map((t) => t.trim())
+      .filter((t) => t.length >= 5 && t !== apelido)
+      .sort((a, b) => b.length - a.length);
 
-  // ---- Termos identificáveis a remover de textos de auditoria ----
-  const termos = [
-    paciente.nome,
-    paciente.email,
-    paciente.perfilPaciente?.cpf ?? "",
-    paciente.perfilPaciente?.telefone ?? "",
-  ]
-    .map((t) => t.trim())
-    .filter((t) => t.length >= 5 && t !== apelido)
-    .sort((a, b) => b.length - a.length);
+    // Entidades do paciente referenciadas pela auditoria (escopo por ID — nunca
+    // por nome, para não alterar a auditoria de um homônimo).
+    const [consultas, documentos, tickets, avaliacoes, consentimentos, lembretes] = await Promise.all([
+      db.consulta.findMany({ where: { pacienteId }, select: { id: true, pagamento: { select: { id: true } } } }),
+      db.documento.findMany({ where: { pacienteId }, select: { id: true } }),
+      db.ticket.findMany({ where: { usuarioId: pacienteId }, select: { id: true } }),
+      db.avaliacao.findMany({ where: { pacienteId }, select: { id: true } }),
+      db.consentimento.findMany({ where: { pacienteId }, select: { id: true } }),
+      db.lembrete.findMany({ where: { usuarioId: pacienteId }, select: { id: true } }),
+    ]);
+    const idsEntidades = [
+      pacienteId,
+      ...consultas.map((c) => c.id),
+      ...consultas.flatMap((c) => (c.pagamento ? [c.pagamento.id] : [])),
+      ...documentos.map((d) => d.id),
+      ...arquivos.map((a) => a.id),
+      ...tickets.map((t) => t.id),
+      ...avaliacoes.map((a) => a.id),
+      ...consentimentos.map((c) => c.id),
+      ...lembretes.map((l) => l.id),
+    ];
 
-  // Entidades do paciente referenciadas pela auditoria (escopo por ID — nunca
-  // por nome, para não alterar a auditoria de um homônimo).
-  const [consultas, documentos, tickets, avaliacoes, consentimentos, lembretes] = await Promise.all([
-    db.consulta.findMany({ where: { pacienteId }, select: { id: true, pagamento: { select: { id: true } } } }),
-    db.documento.findMany({ where: { pacienteId }, select: { id: true } }),
-    db.ticket.findMany({ where: { usuarioId: pacienteId }, select: { id: true } }),
-    db.avaliacao.findMany({ where: { pacienteId }, select: { id: true } }),
-    db.consentimento.findMany({ where: { pacienteId }, select: { id: true } }),
-    db.lembrete.findMany({ where: { usuarioId: pacienteId }, select: { id: true } }),
-  ]);
-  const idsEntidades = [
-    pacienteId,
-    ...consultas.map((c) => c.id),
-    ...consultas.flatMap((c) => (c.pagamento ? [c.pagamento.id] : [])),
-    ...documentos.map((d) => d.id),
-    ...arquivos.map((a) => a.id),
-    ...tickets.map((t) => t.id),
-    ...avaliacoes.map((a) => a.id),
-    ...consentimentos.map((c) => c.id),
-    ...lembretes.map((l) => l.id),
-  ];
+    await db.$transaction(
+      async (tx) => {
+        // Pendências de novo, na MESMA transação da escrita (com a linha travada).
+        await travarUsuario(tx, pacienteId);
+        const motivosTx = motivosBloqueioExclusao(await pendenciasExclusaoPaciente(tx, pacienteId));
+        if (motivosTx.length) throw new PendenciasLgpdError(motivosTx);
 
-  await db.$transaction(
-    async (tx) => {
-      // Pendências de novo, na MESMA transação da escrita (com a linha travada).
-      await travarUsuario(tx, pacienteId);
-      const motivosTx = motivosBloqueioExclusao(await pendenciasExclusaoPaciente(tx, pacienteId));
-      if (motivosTx.length) throw new PendenciasLgpdError(motivosTx);
-
-      // 0) Cofre de identificação — mesma transação da pseudonimização:
-      //    ou os dois acontecem, ou nenhum. Não sobrescreve registro existente.
-      if (registroCofre) {
-        await tx.identificacaoCofre.upsert({
-          where: { userId: pacienteId },
-          create: registroCofre,
-          update: {},
-        });
-      } else {
-        // Reexecução com data de nascimento ainda no perfil (conta anonimizada
-        // antes de a data ir para o cofre): complementa o cofre ANTES de
-        // apagar a data (passo 2), na mesma transação.
-        const dataPerfil = dataNascimentoParaIso(paciente.perfilPaciente?.dataNascimento);
-        if (dataPerfil) {
-          const existente = await tx.identificacaoCofre.findUnique({ where: { userId: pacienteId } });
-          let claro: IdentificacaoClara | null = null;
-          if (existente) {
-            try {
-              claro = decifrarIdentificacao(pacienteId, existente.dadosCifrados);
-            } catch {
-              throw erroStatus(
-                "Não foi possível ler o registro do cofre deste paciente (chave trocada ou registro adulterado). Nada foi alterado no banco.",
-                503,
-              );
+        // 0) Cofre de identificação — mesma transação da pseudonimização:
+        //    ou os dois acontecem, ou nenhum. Não sobrescreve registro existente.
+        if (registroCofre) {
+          await tx.identificacaoCofre.upsert({
+            where: { userId: pacienteId },
+            create: registroCofre,
+            update: {},
+          });
+        } else {
+          // Reexecução com data de nascimento ainda no perfil (conta anonimizada
+          // antes de a data ir para o cofre): complementa o cofre ANTES de
+          // apagar a data (passo 2), na mesma transação.
+          const dataPerfil = dataNascimentoParaIso(paciente.perfilPaciente?.dataNascimento);
+          if (dataPerfil) {
+            const existente = await tx.identificacaoCofre.findUnique({ where: { userId: pacienteId } });
+            let claro: IdentificacaoClara | null = null;
+            if (existente) {
+              try {
+                claro = decifrarIdentificacao(pacienteId, existente.dadosCifrados);
+              } catch {
+                throw erroStatus(
+                  "Não foi possível ler o registro do cofre deste paciente (chave trocada ou registro adulterado). Nada foi alterado no banco.",
+                  503,
+                );
+              }
+            }
+            const novo = complementarIdentificacao(claro, dataPerfil);
+            if (novo) {
+              const dadosCifrados = cifrarIdentificacao(pacienteId, novo);
+              await tx.identificacaoCofre.upsert({
+                where: { userId: pacienteId },
+                create: {
+                  userId: pacienteId,
+                  dadosCifrados,
+                  cpfHash: hashCpf(novo.cpf),
+                  nomeHash: hashNome(novo.nome),
+                },
+                update: { dadosCifrados },
+              });
             }
           }
-          const novo = complementarIdentificacao(claro, dataPerfil);
-          if (novo) {
-            const dadosCifrados = cifrarIdentificacao(pacienteId, novo);
-            await tx.identificacaoCofre.upsert({
-              where: { userId: pacienteId },
-              create: {
-                userId: pacienteId,
-                dadosCifrados,
-                cpfHash: hashCpf(novo.cpf),
-                nomeHash: hashNome(novo.nome),
-              },
-              update: { dadosCifrados },
-            });
+        }
+
+        // 1) Identidade / login: nome, e-mail, senha inutilizada, sem vínculo com o Auth.
+        await tx.user.update({
+          where: { id: pacienteId },
+          data: {
+            nome: apelido,
+            email: emailAnon,
+            senhaHash: crypto.randomBytes(32).toString("hex"),
+            status: "inativo",
+            precisaTrocarSenha: false,
+            supabaseId: null,
+          },
+        });
+
+        // 2) Perfil: só os dados CADASTRAIS (inclusive a data de nascimento,
+        //    já guardada no cofre no passo 0). Dados clínicos (alergias,
+        //    medicamentos, comorbidades, tipo sanguíneo, peso, altura, idade,
+        //    gênero) fazem parte do prontuário e ficam. Sem a data, a idade
+        //    exibida passa a ser a coluna `idade`: ela é atualizada para a idade
+        //    calculada HOJE (a que o sistema mostrava), congelada daqui em diante.
+        const isoNascimento = dataNascimentoParaIso(paciente.perfilPaciente?.dataNascimento);
+        const idadeNaAnonimizacao = isoNascimento ? idadeDeNascimento(isoNascimento) : null;
+        await tx.perfilPaciente.updateMany({
+          where: { userId: pacienteId },
+          data: {
+            ...DADOS_PERFIL_PSEUDONIMIZADO,
+            ...(idadeNaAnonimizacao !== null ? { idade: idadeNaAnonimizacao } : {}),
+          },
+        });
+
+        // 3) Consentimentos: o registro (prova do consentimento) fica; o nome
+        //    de quem registrou, quando é o próprio paciente, vira o pseudônimo.
+        await tx.consentimento.updateMany({
+          where: { pacienteId, OR: [{ perfil: "PACIENTE" }, { quem: paciente.nome }] },
+          data: { quem: apelido },
+        });
+
+        // 4) Auditoria: ações do próprio paciente e eventos sobre as entidades
+        //    dele passam a mostrar o pseudônimo; nome/e-mail/CPF/telefone saem
+        //    dos detalhes. A trilha (ação, data, ids) é mantida.
+        const logs = await tx.auditLog.findMany({
+          where: { OR: [{ usuarioId: pacienteId }, { entidadeId: { in: idsEntidades } }] },
+          select: { id: true, usuarioId: true, usuarioNome: true, detalhes: true },
+        });
+        for (const l of logs) {
+          const usuarioNome = l.usuarioId === pacienteId ? apelido : substituirTermos(l.usuarioNome, termos, apelido);
+          const detalhes = l.detalhes === null ? null : substituirTermos(l.detalhes, termos, apelido);
+          if (usuarioNome !== l.usuarioNome || detalhes !== l.detalhes) {
+            await tx.auditLog.update({ where: { id: l.id }, data: { usuarioNome, detalhes } });
           }
         }
-      }
 
-      // 1) Identidade / login: nome, e-mail, senha inutilizada, sem vínculo com o Auth.
-      await tx.user.update({
-        where: { id: pacienteId },
-        data: {
-          nome: apelido,
-          email: emailAnon,
-          senhaHash: crypto.randomBytes(32).toString("hex"),
-          status: "inativo",
-          precisaTrocarSenha: false,
-          supabaseId: null,
-        },
-      });
+        // 5) Mensagens com quem NÃO é médico (suporte/admin): texto removido.
+        //    Mensagens com médicos são comunicação clínica e ficam (revisão clínica).
+        await tx.mensagem.updateMany({
+          where: {
+            OR: [
+              { deId: pacienteId, para: { role: { not: "MEDICO" } } },
+              { paraId: pacienteId, de: { role: { not: "MEDICO" } } },
+            ],
+          },
+          data: { texto: MARCADOR_LGPD },
+        });
 
-      // 2) Perfil: só os dados CADASTRAIS (inclusive a data de nascimento,
-      //    já guardada no cofre no passo 0). Dados clínicos (alergias,
-      //    medicamentos, comorbidades, tipo sanguíneo, peso, altura, idade,
-      //    gênero) fazem parte do prontuário e ficam. Sem a data, a idade
-      //    exibida passa a ser a coluna `idade`: ela é atualizada para a idade
-      //    calculada HOJE (a que o sistema mostrava), congelada daqui em diante.
-      const isoNascimento = dataNascimentoParaIso(paciente.perfilPaciente?.dataNascimento);
-      const idadeNaAnonimizacao = isoNascimento ? idadeDeNascimento(isoNascimento) : null;
-      await tx.perfilPaciente.updateMany({
-        where: { userId: pacienteId },
-        data: {
-          ...DADOS_PERFIL_PSEUDONIMIZADO,
-          ...(idadeNaAnonimizacao !== null ? { idade: idadeNaAnonimizacao } : {}),
-        },
-      });
+        // 6) Tickets de suporte e comentários livres de avaliação (não clínicos).
+        await tx.ticket.updateMany({
+          where: { usuarioId: pacienteId },
+          data: { assunto: MARCADOR_LGPD, mensagem: MARCADOR_LGPD, resposta: MARCADOR_LGPD },
+        });
+        await tx.avaliacao.updateMany({ where: { pacienteId }, data: { comentario: null } });
 
-      // 3) Consentimentos: o registro (prova do consentimento) fica; o nome
-      //    de quem registrou, quando é o próprio paciente, vira o pseudônimo.
-      await tx.consentimento.updateMany({
-        where: { pacienteId, OR: [{ perfil: "PACIENTE" }, { quem: paciente.nome }] },
-        data: { quem: apelido },
-      });
+        // 7) Dados do app que não são prontuário: lembretes e notificações dirigidas.
+        await tx.lembrete.deleteMany({ where: { usuarioId: pacienteId } });
+        await tx.notificacao.deleteMany({ where: { usuarioId: pacienteId } });
 
-      // 4) Auditoria: ações do próprio paciente e eventos sobre as entidades
-      //    dele passam a mostrar o pseudônimo; nome/e-mail/CPF/telefone saem
-      //    dos detalhes. A trilha (ação, data, ids) é mantida.
-      const logs = await tx.auditLog.findMany({
-        where: { OR: [{ usuarioId: pacienteId }, { entidadeId: { in: idsEntidades } }] },
-        select: { id: true, usuarioId: true, usuarioNome: true, detalhes: true },
-      });
-      for (const l of logs) {
-        const usuarioNome = l.usuarioId === pacienteId ? apelido : substituirTermos(l.usuarioNome, termos, apelido);
-        const detalhes = l.detalhes === null ? null : substituirTermos(l.detalhes, termos, apelido);
-        if (usuarioNome !== l.usuarioNome || detalhes !== l.detalhes) {
-          await tx.auditLog.update({ where: { id: l.id }, data: { usuarioNome, detalhes } });
+        // 8) Arquivos PESSOAIS: reconfere na transação que continuam sem vínculo
+        //    clínico (enviados pelo paciente, sem consulta) e apaga só as linhas;
+        //    os objetos do Storage saem depois do commit. Clínicos ficam intactos.
+        if (pessoais.length) {
+          const aindaPessoais = (
+            await tx.arquivo.findMany({
+              where: { id: { in: pessoais.map((a) => a.id) }, usuarioId: pacienteId, enviadoPor: "paciente" },
+              select: { id: true, storagePath: true, consulta: true },
+            })
+          ).filter((a) => ["", "envio avulso"].includes(a.consulta.trim().toLowerCase()));
+          if (aindaPessoais.length) {
+            await tx.arquivo.deleteMany({ where: { id: { in: aindaPessoais.map((a) => a.id) } } });
+          }
+          pessoaisRemovidos = aindaPessoais.length;
+          pathsParaRemover = aindaPessoais.map((a) => a.storagePath).filter((p): p is string => !!p);
         }
-      }
 
-      // 5) Mensagens com quem NÃO é médico (suporte/admin): texto removido.
-      //    Mensagens com médicos são comunicação clínica e ficam (revisão clínica).
-      await tx.mensagem.updateMany({
-        where: {
-          OR: [
-            { deId: pacienteId, para: { role: { not: "MEDICO" } } },
-            { paraId: pacienteId, de: { role: { not: "MEDICO" } } },
-          ],
-        },
-        data: { texto: MARCADOR_LGPD },
-      });
+        // 9) Sessões revogadas — a conta anonimizada não pode mais ser usada.
+        await tx.sessao.deleteMany({ where: { userId: pacienteId } });
 
-      // 6) Tickets de suporte e comentários livres de avaliação (não clínicos).
-      await tx.ticket.updateMany({
-        where: { usuarioId: pacienteId },
-        data: { assunto: MARCADOR_LGPD, mensagem: MARCADOR_LGPD, resposta: MARCADOR_LGPD },
-      });
-      await tx.avaliacao.updateMany({ where: { pacienteId }, data: { comentario: null } });
-
-      // 7) Dados do app que não são prontuário: lembretes e notificações dirigidas.
-      await tx.lembrete.deleteMany({ where: { usuarioId: pacienteId } });
-      await tx.notificacao.deleteMany({ where: { usuarioId: pacienteId } });
-
-      // 8) Arquivos PESSOAIS (objetos já removidos do Storage acima).
-      //    Arquivos clínicos permanecem intactos.
-      if (pessoais.length) {
-        await tx.arquivo.deleteMany({ where: { id: { in: pessoais.map((a) => a.id) } } });
-      }
-
-      // 9) Sessões revogadas — a conta anonimizada não pode mais ser usada.
-      await tx.sessao.deleteMany({ where: { userId: pacienteId } });
-
-      // PRESERVADOS (prontuário — Lei 13.787/2018, 20 anos): Consulta
-      // (inclusive motivoConsulta e resumoMedico), Anamnese, ExameLaboratorial,
-      // Medicao, Documento (receitas/atestados/solicitações), Pagamento e
-      // arquivos clínicos — todos ligados apenas ao id pseudonimizado.
-    },
-    { timeout: 30_000 },
-  );
+        // PRESERVADOS (prontuário — Lei 13.787/2018, 20 anos): Consulta
+        // (inclusive motivoConsulta e resumoMedico), Anamnese, ExameLaboratorial,
+        // Medicao, Documento (receitas/atestados/solicitações), Pagamento e
+        // arquivos clínicos — todos ligados apenas ao id pseudonimizado.
+      },
+      { timeout: 30_000 },
+    );
   } catch (e) {
     if (supabaseIdPaciente && !jaEstavaAnonimizado) {
-      await banirSupabaseAuth(supabaseIdPaciente, false).catch(() =>
-        console.error("[LGPD] não consegui desfazer o bloqueio do login do paciente", pacienteId),
-      );
+      await desfazerBanOuRegistrarPendente(pacienteId, supabaseIdPaciente, "PACIENTE");
     }
     throw e;
   }
@@ -611,12 +621,13 @@ export async function anonimizarPacienteCompleto(pacienteId: string): Promise<Re
   const loginSupabaseRemovido = supabaseIdPaciente
     ? await removerAuthOuRegistrarPendente(pacienteId, supabaseIdPaciente, "PACIENTE")
     : false;
+  await removerStorageOuRegistrarPendente(pacienteId, pathsParaRemover);
 
   return {
     apelido,
     jaEstavaAnonimizado,
-    arquivosPessoaisRemovidos: pessoais.length,
-    arquivosClinicosPreservados: arquivos.length - pessoais.length,
+    arquivosPessoaisRemovidos: pessoaisRemovidos,
+    arquivosClinicosPreservados: arquivos.length - pessoaisRemovidos,
     loginSupabaseRemovido,
   };
 }
@@ -656,6 +667,262 @@ async function removerAuthOuRegistrarPendente(userId: string, supabaseId: string
       .catch(() => console.error("[LGPD] não consegui registrar a remoção pendente do Auth", userId));
     return false;
   }
+}
+
+export const ACAO_STORAGE_REMOCAO_PENDENTE = "LGPD_STORAGE_REMOCAO_PENDENTE";
+export const ACAO_STORAGE_REMOCAO_CONCLUIDA = "LGPD_STORAGE_REMOCAO_CONCLUIDA";
+
+/**
+ * Remove do Storage os objetos dos arquivos pessoais já apagados no banco
+ * (depois do commit). Falhou: grava a pendência na auditoria (categoria
+ * "admin") com os caminhos, para `reprocessarRemocoesStoragePendentes`.
+ */
+async function removerStorageOuRegistrarPendente(pacienteId: string, paths: string[]): Promise<boolean> {
+  if (!paths.length) return true;
+  try {
+    await removerObjetosStorage(paths);
+    return true;
+  } catch (e) {
+    console.error("[LGPD] arquivos pessoais não foram removidos do Storage", pacienteId);
+    await db.auditLog
+      .create({
+        data: {
+          acao: ACAO_STORAGE_REMOCAO_PENDENTE,
+          categoria: "admin",
+          severidade: "critical",
+          usuarioNome: "Sistema",
+          role: "SISTEMA",
+          entidade: "paciente",
+          entidadeId: pacienteId,
+          detalhes: JSON.stringify({ paths, erro: (e as Error)?.message?.slice(0, 120) ?? "erro" }),
+        },
+      })
+      .catch(() => console.error("[LGPD] não consegui registrar a remoção pendente do Storage", pacienteId));
+    return false;
+  }
+}
+
+/** Nova tentativa das remoções do Storage pendentes. */
+export async function reprocessarRemocoesStoragePendentes(limite = 50): Promise<{ concluidas: number; falhas: number }> {
+  const pendentes = await db.auditLog.findMany({
+    where: { acao: ACAO_STORAGE_REMOCAO_PENDENTE },
+    orderBy: { createdAt: "asc" },
+    take: limite,
+    select: { id: true, entidadeId: true, detalhes: true },
+  });
+  const feitos = new Set(
+    (
+      await db.auditLog.findMany({
+        where: { acao: ACAO_STORAGE_REMOCAO_CONCLUIDA, detalhes: { in: pendentes.map((p) => `pendencia=${p.id}`) } },
+        select: { detalhes: true },
+      })
+    ).map((c) => c.detalhes ?? ""),
+  );
+  let concluidas = 0;
+  let falhas = 0;
+  for (const p of pendentes) {
+    if (feitos.has(`pendencia=${p.id}`)) continue;
+    let paths: string[] = [];
+    try {
+      const d = JSON.parse(p.detalhes ?? "{}") as { paths?: unknown };
+      paths = Array.isArray(d.paths) ? d.paths.filter((x): x is string => typeof x === "string") : [];
+    } catch {
+      continue;
+    }
+    try {
+      await removerObjetosStorage(paths);
+      await db.auditLog.create({
+        data: {
+          acao: ACAO_STORAGE_REMOCAO_CONCLUIDA, categoria: "admin", severidade: "info",
+          usuarioNome: "Sistema", role: "SISTEMA", entidade: "paciente", entidadeId: p.entidadeId,
+          detalhes: `pendencia=${p.id}`,
+        },
+      });
+      concluidas++;
+    } catch {
+      falhas++;
+    }
+  }
+  return { concluidas, falhas };
+}
+
+export const ACAO_AUTH_DESBAN_PENDENTE = "LGPD_AUTH_DESBAN_PENDENTE";
+export const ACAO_AUTH_DESBAN_CONCLUIDO = "LGPD_AUTH_DESBAN_CONCLUIDO";
+
+/**
+ * A anonimização falhou depois do ban: desfaz o ban. Se isso também falhar,
+ * grava a pendência na auditoria (categoria "admin", com o supabaseId) para
+ * `reprocessarDesbansPendentes` tentar de novo — a pessoa não fica sem login.
+ */
+async function desfazerBanOuRegistrarPendente(userId: string, supabaseId: string, papel: "PACIENTE" | "MEDICO"): Promise<void> {
+  try {
+    await banirSupabaseAuth(supabaseId, false);
+  } catch (e) {
+    console.error("[LGPD] não consegui desfazer o bloqueio do login", userId);
+    await db.auditLog
+      .create({
+        data: {
+          acao: ACAO_AUTH_DESBAN_PENDENTE,
+          categoria: "admin",
+          severidade: "critical",
+          usuarioNome: "Sistema",
+          role: "SISTEMA",
+          entidade: papel === "MEDICO" ? "medico" : "paciente",
+          entidadeId: userId,
+          detalhes: `supabaseId=${supabaseId}; anonimização desfeita, mas o login continua banido (${(e as Error)?.message?.slice(0, 120) ?? "erro"}). Tentar de novo.`,
+        },
+      })
+      .catch(() => console.error("[LGPD] não consegui registrar o desbloqueio pendente", userId));
+  }
+}
+
+/**
+ * Nova tentativa dos desbloqueios pendentes. Só desbane se a conta NÃO foi
+ * anonimizada depois (ainda ligada ao mesmo supabaseId e não anonimizada).
+ */
+export async function reprocessarDesbansPendentes(limite = 50): Promise<{ concluidas: number; falhas: number }> {
+  const pendentes = await db.auditLog.findMany({
+    where: { acao: ACAO_AUTH_DESBAN_PENDENTE },
+    orderBy: { createdAt: "asc" },
+    take: limite,
+    select: { id: true, entidade: true, entidadeId: true, detalhes: true },
+  });
+  const feitos = new Set(
+    (
+      await db.auditLog.findMany({
+        where: { acao: ACAO_AUTH_DESBAN_CONCLUIDO, detalhes: { in: pendentes.map((p) => `pendencia=${p.id}`) } },
+        select: { detalhes: true },
+      })
+    ).map((c) => c.detalhes ?? ""),
+  );
+  let concluidas = 0;
+  let falhas = 0;
+  for (const p of pendentes) {
+    if (feitos.has(`pendencia=${p.id}`) || !p.entidadeId) continue;
+    const id = /supabaseId=([0-9a-fA-F-]{36})/.exec(p.detalhes ?? "")?.[1];
+    if (!id) continue;
+    const u = await db.user.findUnique({ where: { id: p.entidadeId }, select: { email: true, supabaseId: true } });
+    const concluir = async () =>
+      db.auditLog.create({
+        data: {
+          acao: ACAO_AUTH_DESBAN_CONCLUIDO, categoria: "admin", severidade: "info",
+          usuarioNome: "Sistema", role: "SISTEMA", entidade: p.entidade, entidadeId: p.entidadeId,
+          detalhes: `pendencia=${p.id}`,
+        },
+      });
+    // Anonimizada depois (ou desvinculada): o ban deve ficar.
+    if (!u || u.supabaseId !== id || estaAnonimizado(u)) {
+      await concluir();
+      continue;
+    }
+    try {
+      await banirSupabaseAuth(id, false);
+      await concluir();
+      concluidas++;
+    } catch {
+      falhas++;
+    }
+  }
+  return { concluidas, falhas };
+}
+
+export const ACAO_PENDENCIA_LGPD_ATRASADA = "LGPD_PENDENCIA_ATRASADA";
+/** LGPD: 15 dias para concluir; avisa na auditoria a partir de 10. */
+export const DIAS_ALERTA_PENDENCIA_LGPD = 10;
+
+const PARES_PENDENCIA: [string, string][] = [
+  [ACAO_AUTH_REMOCAO_PENDENTE, ACAO_AUTH_REMOCAO_CONCLUIDA],
+  [ACAO_STORAGE_REMOCAO_PENDENTE, ACAO_STORAGE_REMOCAO_CONCLUIDA],
+  [ACAO_AUTH_DESBAN_PENDENTE, ACAO_AUTH_DESBAN_CONCLUIDO],
+];
+
+/**
+ * Pendências (Auth, Storage, desban) abertas há mais de 10 dias: grava UM
+ * aviso `LGPD_PENDENCIA_ATRASADA` (crítico, categoria "admin", só ids) por
+ * pendência. Aberta = sem evento de conclusão do mesmo tipo e da mesma
+ * entidade depois dela.
+ */
+export async function alertarPendenciasLgpdAtrasadas(agora: Date = new Date()): Promise<number> {
+  const limite = new Date(agora.getTime() - DIAS_ALERTA_PENDENCIA_LGPD * 86_400_000);
+  let alertas = 0;
+  for (const [pendente, concluida] of PARES_PENDENCIA) {
+    const antigas = await db.auditLog.findMany({
+      where: { acao: pendente, createdAt: { lte: limite } },
+      select: { id: true, entidade: true, entidadeId: true, createdAt: true },
+      take: 200,
+    });
+    for (const p of antigas) {
+      const fechada = await db.auditLog.count({
+        where: { acao: concluida, entidadeId: p.entidadeId, createdAt: { gte: p.createdAt } },
+      });
+      if (fechada) continue;
+      const marca = `pendencia=${p.id}`;
+      const jaAvisado = await db.auditLog.count({ where: { acao: ACAO_PENDENCIA_LGPD_ATRASADA, detalhes: { startsWith: marca } } });
+      if (jaAvisado) continue;
+      const dias = Math.floor((agora.getTime() - p.createdAt.getTime()) / 86_400_000);
+      await db.auditLog.create({
+        data: {
+          acao: ACAO_PENDENCIA_LGPD_ATRASADA, categoria: "admin", severidade: "critical",
+          usuarioNome: "Sistema", role: "SISTEMA", entidade: p.entidade, entidadeId: p.entidadeId,
+          detalhes: `${marca}; tipo=${pendente}; aberta há ${dias} dias (prazo LGPD: 15 dias). Resolver manualmente.`,
+        },
+      });
+      alertas++;
+    }
+  }
+  return alertas;
+}
+
+export type PendenciaLgpd = {
+  id: string;
+  tipo: "auth" | "storage" | "desban";
+  entidade: string | null;
+  entidadeId: string | null;
+  criadaEm: string;
+  dias: number;
+};
+
+const TIPO_PENDENCIA: Record<string, PendenciaLgpd["tipo"]> = {
+  [ACAO_AUTH_REMOCAO_PENDENTE]: "auth",
+  [ACAO_STORAGE_REMOCAO_PENDENTE]: "storage",
+  [ACAO_AUTH_DESBAN_PENDENTE]: "desban",
+};
+
+/** Pendências LGPD abertas (Auth, Storage, desban), lidas da auditoria. Só ids. */
+export async function listarPendenciasLgpd(agora: Date = new Date(), limite = 100): Promise<PendenciaLgpd[]> {
+  const out: PendenciaLgpd[] = [];
+  for (const [pendente, concluida] of PARES_PENDENCIA) {
+    const lista = await db.auditLog.findMany({
+      where: { acao: pendente },
+      orderBy: { createdAt: "asc" },
+      take: limite,
+      select: { id: true, entidade: true, entidadeId: true, createdAt: true },
+    });
+    for (const p of lista) {
+      const fechada = await db.auditLog.count({
+        where: { acao: concluida, entidadeId: p.entidadeId, createdAt: { gte: p.createdAt } },
+      });
+      if (fechada) continue;
+      out.push({
+        id: p.id,
+        tipo: TIPO_PENDENCIA[pendente],
+        entidade: p.entidade,
+        entidadeId: p.entidadeId,
+        criadaEm: p.createdAt.toISOString(),
+        dias: Math.floor((agora.getTime() - p.createdAt.getTime()) / 86_400_000),
+      });
+    }
+  }
+  return out.sort((a, b) => b.dias - a.dias);
+}
+
+/** Reprocessa tudo (cron diário e botão do admin). */
+export async function reprocessarPendenciasLgpd(agora: Date = new Date()) {
+  const auth = await reprocessarRemocoesAuthPendentes();
+  const storage = await reprocessarRemocoesStoragePendentes();
+  const desban = await reprocessarDesbansPendentes();
+  const atrasadas = await alertarPendenciasLgpdAtrasadas(agora);
+  return { auth, storage, desban, atrasadas };
 }
 
 /** Nova tentativa das remoções do Auth pendentes. Devolve quantas concluiu. */
@@ -699,7 +966,6 @@ export async function reprocessarRemocoesAuthPendentes(limite = 50): Promise<{ c
 
 /** Tira números longos (CPF, telefone…) de texto livre — regra pura em anonimizar-medico-logica. */
 export { removerNumerosLongos } from "@/lib/anonimizar-medico-logica";
-import { removerNumerosLongos as removerNumerosLongosLocal } from "@/lib/anonimizar-medico-logica";
 
 /* ------------------------------------------------------------------ */
 /* Anonimização do MÉDICO (admin)                                       */
@@ -829,6 +1095,15 @@ export async function anonimizarMedicoCompleto(medicoId: string, motivo = ""): P
           cnpj: pm?.cnpj ?? "",
           telefone: pm?.telefone ?? "",
           email: medico.email,
+          ...(dr
+            ? {
+                pixTipo: dr.pixTipo,
+                pixChave: dr.pixChave,
+                pixTitularTipo: dr.titularTipo,
+                pixTitularNome: dr.titularNome,
+                pixTitularDocumento: dr.titularDocumento,
+              }
+            : {}),
         }),
         cpfHash: hashCpf(cpfTitular),
         nomeHash: hashNome(medico.nome),
@@ -915,9 +1190,7 @@ export async function anonimizarMedicoCompleto(medicoId: string, motivo = ""): P
     );
   } catch (e) {
     if (supabaseId && !jaEstavaAnonimizado) {
-      await banirSupabaseAuth(supabaseId, false).catch(() =>
-        console.error("[LGPD] não consegui desfazer o bloqueio do login do médico", medicoId),
-      );
+      await desfazerBanOuRegistrarPendente(medicoId, supabaseId, "MEDICO");
     }
     throw e;
   }

@@ -30,6 +30,12 @@ export type IdentificacaoClara = {
   cnpj?: string;
   telefone?: string;
   email?: string;
+  /** Chave PIX de recebimento do médico no momento da anonimização. */
+  pixTipo?: string;
+  pixChave?: string;
+  pixTitularTipo?: string;
+  pixTitularNome?: string;
+  pixTitularDocumento?: string;
 };
 
 const VERSAO = "v1";
