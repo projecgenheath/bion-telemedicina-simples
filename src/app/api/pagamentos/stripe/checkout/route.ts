@@ -9,6 +9,8 @@ import { modoCobrancaStripe, stripeConnectAtivo } from "@/lib/server/stripe";
 import {
   avaliarElegibilidade,
   avaliarMulta,
+  sessaoDaMulta,
+  PREFIXO_SESSAO_MULTA,
   avaliarPagamentoAvulso,
   expiracaoReservaSeg,
   type TipoCobranca,
@@ -130,6 +132,8 @@ type Alvo = {
   entidade: { tipo: string; id: string };
   base: string;
   expiraEmSeg?: number | null;
+  /** Só na multa: sessão já aberta (RemarcacaoPendente.gatewayRef "stripe_cs:<id>"). */
+  sessaoMulta?: string | null;
 };
 
 /**
@@ -208,6 +212,7 @@ async function checkoutMulta(usuario: Usuario, remarcacaoId: string, base: strin
       status: true,
       multaCentavos: true,
       expiraEm: true,
+      gatewayRef: true,
       consulta: { select: { id: true, pacienteId: true, medicoId: true, especialidade: true, medico: { select: { nome: true } } } },
     },
   });
@@ -225,6 +230,9 @@ async function checkoutMulta(usuario: Usuario, remarcacaoId: string, base: strin
     entidade: { tipo: "consulta", id: rem.consulta.id },
     base,
     expiraEmSeg: expiracaoReservaSeg(),
+    // 2º clique: reaproveita a sessão aberta (a chave de idempotência é a mesma,
+    // mas expires_at mudaria e o Stripe recusaria com 400).
+    sessaoMulta: sessaoDaMulta(rem.gatewayRef),
   });
 }
 
@@ -234,7 +242,7 @@ async function abrirSessao(usuario: Usuario, a: Alvo) {
   const atual = a.pagamentoId
     ? await db.pagamento.findUnique({ where: { id: a.pagamentoId }, select: { id: true, status: true, stripeCheckoutSessionId: true } })
     : null;
-  const sessaoAnterior = atual?.stripeCheckoutSessionId ?? null;
+  const sessaoAnterior = a.tipo === "multa" ? a.sessaoMulta ?? null : atual?.stripeCheckoutSessionId ?? null;
 
   // Modo de cobrança (plataforma por padrão; Connect só com STRIPE_CONNECT=true).
   const modo = stripeConnectAtivo() ? modoCobrancaStripe() : "plataforma";
@@ -295,6 +303,13 @@ async function abrirSessao(usuario: Usuario, a: Alvo) {
       // Tentativa nova depois de falha volta a "pendente" (na espera, a falha
       // libera a reserva e o checkout já recusou antes de chegar aqui).
       data: { stripeCheckoutSessionId: sessao.id, ...(atual?.status === "falhou" ? { status: "pendente" } : {}) },
+    });
+  }
+  if (a.tipo === "multa" && a.remarcacaoId) {
+    // Guarda a sessão aberta (só enquanto pendente; o webhook troca por stripe_pi:).
+    await db.remarcacaoPendente.updateMany({
+      where: { id: a.remarcacaoId, status: "pendente" },
+      data: { gatewayRef: `${PREFIXO_SESSAO_MULTA}${sessao.id}` },
     });
   }
   await registrarAudit(usuario, {
