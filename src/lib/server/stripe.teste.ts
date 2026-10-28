@@ -1,12 +1,12 @@
 /** Base do Stripe (reembolso e eventos). Rodar: npx tsx src/lib/server/stripe.teste.ts */
-import { enviarReembolsoStripe, registrarEventoReembolsoStripe, statusReembolsoDoStripe, stripeConnectAtivo, jaProcessado, marcarEvento } from "./stripe";
+import { enviarReembolsoStripe, registrarEventoReembolsoStripe, statusReembolsoDoStripe, stripeConnectAtivo, modoCobrancaStripe, jaProcessado, marcarEvento } from "./stripe";
 
 let ok = 0, falhas = 0;
 const igual = (n: string, a: unknown, b: unknown) => {
   if (JSON.stringify(a) === JSON.stringify(b)) ok++; else { falhas++; console.error(`✗ ${n}\n  obtido ${JSON.stringify(a)}\n  esperado ${JSON.stringify(b)}`); }
 };
 
-type R = { id: string; status: string; valorCentavos: number; stripeRefundId: string | null; pagamento: { stripePaymentIntentId: string | null } | null; processadoEm?: Date };
+type R = { id: string; status: string; valorCentavos: number; stripeRefundId: string | null; pagamento: any; processadoEm?: Date };
 function fakeDb(linhas: R[]) {
   return {
     linhas,
@@ -68,6 +68,36 @@ async function main() {
     igual("evento novo", await jaProcessado("evt_1", d as any), false);
     await marcarEvento("evt_1", "refund.updated", d as any);
     igual("evento repetido", await jaProcessado("evt_1", d as any), true);
+  }
+  // modos de cobrança (Connect)
+  igual("modo padrão", modoCobrancaStripe(undefined), "plataforma");
+  igual("modo inválido", modoCobrancaStripe("xyz"), "plataforma");
+  igual("modo direta", modoCobrancaStripe(" Direta "), "direta");
+  const comConta = (conta: string | null) => base({ pagamento: { stripePaymentIntentId: "pi_1", consulta: { medico: { perfilMedico: { stripeAccountId: conta } } } } });
+  { const d = fakeDb([comConta("acct_1")]); const s = fakeStripe();
+    await enviarReembolsoStripe("r1", { d: d as any, s: s as any, connect: true, modo: "plataforma" });
+    igual("plataforma: params", s.chamadas[0], [{ payment_intent: "pi_1", amount: 15000, metadata: { reembolsoId: "r1" } }, { idempotencyKey: "r1" }]);
+  }
+  { const d = fakeDb([comConta("acct_1")]); const s = fakeStripe();
+    await enviarReembolsoStripe("r1", { d: d as any, s: s as any, connect: false, modo: "direta" });
+    igual("connect off ignora modo", s.chamadas[0][1], { idempotencyKey: "r1" });
+  }
+  { const d = fakeDb([comConta("acct_1")]); const s = fakeStripe();
+    const r = await enviarReembolsoStripe("r1", { d: d as any, s: s as any, connect: true, modo: "direta" });
+    igual("direta: enviado", r.enviado, true);
+    igual("direta: params", s.chamadas[0], [{ payment_intent: "pi_1", amount: 15000, metadata: { reembolsoId: "r1" }, refund_application_fee: true }, { idempotencyKey: "r1", stripeAccount: "acct_1" }]);
+  }
+  { const d = fakeDb([comConta(null)]); const s = fakeStripe();
+    const err = console.error; console.error = () => {};
+    const r = await enviarReembolsoStripe("r1", { d: d as any, s: s as any, connect: true, modo: "direta" });
+    console.error = err;
+    igual("direta sem conta: motivo", (r as any).motivo, "sem_conta_medico");
+    igual("direta sem conta: não chama Stripe", s.chamadas.length, 0);
+    igual("direta sem conta: não grava", d.linhas[0].stripeRefundId, null);
+  }
+  { const d = fakeDb([comConta("acct_1")]); const s = fakeStripe();
+    await enviarReembolsoStripe("r1", { d: d as any, s: s as any, connect: true, modo: "destino" });
+    igual("destino: params", s.chamadas[0], [{ payment_intent: "pi_1", amount: 15000, metadata: { reembolsoId: "r1" }, reverse_transfer: true, refund_application_fee: true }, { idempotencyKey: "r1" }]);
   }
   console.log(`${ok} ok, ${falhas} falha(s)`);
   if (falhas) process.exit(1);

@@ -29,6 +29,14 @@ export function stripeConnectAtivo(valor = process.env.STRIPE_CONNECT): boolean 
   return v === "1" || v === "true";
 }
 
+export type ModoCobranca = "plataforma" | "direta" | "destino";
+
+/** STRIPE_MODO_COBRANCA: 'plataforma' (padrão) | 'direta' (direct charge) | 'destino' (destination + on_behalf_of). */
+export function modoCobrancaStripe(valor = process.env.STRIPE_MODO_COBRANCA): ModoCobranca {
+  const v = (valor ?? "").trim().toLowerCase();
+  return v === "direta" || v === "destino" ? v : "plataforma";
+}
+
 // ---------------------------------------------------------------- eventos
 
 type DbEventos = {
@@ -60,7 +68,10 @@ type ReembolsoLinha = {
   status: string;
   valorCentavos: number;
   stripeRefundId: string | null;
-  pagamento: { stripePaymentIntentId: string | null } | null;
+  pagamento: {
+    stripePaymentIntentId: string | null;
+    consulta?: { medico?: { perfilMedico?: { stripeAccountId: string | null } | null } | null } | null;
+  } | null;
 };
 
 type DbReembolso = {
@@ -80,7 +91,7 @@ type StripeRefunds = {
 
 export type ResultadoEnvio =
   | { enviado: true; refundId: string; status: string }
-  | { enviado: false; motivo: "nao_encontrado" | "status" | "ja_enviado" | "sem_stripe" | "valor_zero" };
+  | { enviado: false; motivo: "nao_encontrado" | "status" | "ja_enviado" | "sem_stripe" | "valor_zero" | "sem_conta_medico"; erro?: string };
 
 /** Status do refund no Stripe → status do Reembolso (null = ainda pendente). */
 export function statusReembolsoDoStripe(status: string | null | undefined): "processado" | "falhou" | null {
@@ -95,12 +106,12 @@ export function statusReembolsoDoStripe(status: string | null | undefined): "pro
  */
 export async function enviarReembolsoStripe(
   reembolsoId: string,
-  deps: { d?: DbReembolso; s?: StripeRefunds; agora?: Date } = {},
+  deps: { d?: DbReembolso; s?: StripeRefunds; agora?: Date; connect?: boolean; modo?: ModoCobranca } = {},
 ): Promise<ResultadoEnvio> {
   const d = deps.d ?? (db as unknown as DbReembolso);
   const r = await d.reembolso.findUnique({
     where: { id: reembolsoId },
-    select: { id: true, status: true, valorCentavos: true, stripeRefundId: true, pagamento: { select: { stripePaymentIntentId: true } } },
+    select: { id: true, status: true, valorCentavos: true, stripeRefundId: true, pagamento: { select: { stripePaymentIntentId: true, consulta: { select: { medico: { select: { perfilMedico: { select: { stripeAccountId: true } } } } } } } } },
   });
   if (!r) return { enviado: false, motivo: "nao_encontrado" };
   if (r.stripeRefundId) return { enviado: false, motivo: "ja_enviado" };
@@ -109,11 +120,26 @@ export async function enviarReembolsoStripe(
   if (!pi) return { enviado: false, motivo: "sem_stripe" };
   if (r.valorCentavos <= 0) return { enviado: false, motivo: "valor_zero" };
 
+  const connect = deps.connect ?? stripeConnectAtivo();
+  const modo: ModoCobranca = connect ? (deps.modo ?? modoCobrancaStripe()) : "plataforma";
+  const params: Stripe.RefundCreateParams = { payment_intent: pi, amount: r.valorCentavos, metadata: { reembolsoId: r.id } };
+  const opcoes: Stripe.RequestOptions = { idempotencyKey: r.id };
+  if (modo === "direta") {
+    const conta = r.pagamento?.consulta?.medico?.perfilMedico?.stripeAccountId?.trim();
+    if (!conta) {
+      const erro = `Reembolso ${r.id}: Connect ativo (modo 'direta') mas o médico não tem stripeAccountId; refund não enviado.`;
+      console.error("[stripe reembolso]", erro);
+      return { enviado: false, motivo: "sem_conta_medico", erro };
+    }
+    params.refund_application_fee = true;
+    opcoes.stripeAccount = conta;
+  } else if (modo === "destino") {
+    params.reverse_transfer = true;
+    params.refund_application_fee = true;
+  }
+
   const s = deps.s ?? stripe();
-  const refund = await s.refunds.create(
-    { payment_intent: pi, amount: r.valorCentavos, metadata: { reembolsoId: r.id } },
-    { idempotencyKey: r.id },
-  );
+  const refund = await s.refunds.create(params, opcoes);
   const final = statusReembolsoDoStripe(refund.status);
   await d.reembolso.update({
     where: { id: r.id },
