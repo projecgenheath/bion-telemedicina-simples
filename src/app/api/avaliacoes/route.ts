@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { exigirPapel } from "@/lib/server/auth";
 import { aplicarSideEffects, avaliacaoWire, medicoWire } from "@/lib/server/dados";
+import { notaReal } from "@/lib/server/notas-medico";
 import { ok, falha } from "@/lib/server/http";
 
 /** Registro de avaliação de consulta (apenas pacientes).
@@ -117,12 +118,12 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // Atualização incremental da média do médico
-    const perfil = medico.perfilMedico;
-    const novaMedia = (perfil.avaliacao * perfil.numAvaliacoes + nota) / (perfil.numAvaliacoes + 1);
+    // Média recalculada só com avaliações reais (o perfil podia trazer
+    // nota do seed, ex.: 4.9 com 312, que não pode entrar na conta).
+    const real = await notaReal(medico.id);
     await db.perfilMedico.update({
       where: { userId: medico.id },
-      data: { avaliacao: Number(novaMedia.toFixed(1)), numAvaliacoes: { increment: 1 } },
+      data: { avaliacao: real.avaliacao, numAvaliacoes: real.numAvaliacoes },
     });
 
     // Contrato delta (auditoria FASE 2): devolve APENAS a avaliação criada +
@@ -158,7 +159,7 @@ export async function POST(req: NextRequest) {
 
     return ok({
       avaliacao: avaliacaoWire(avaliacao),
-      ...(perfilAtualizado ? { medico: medicoWire(perfilAtualizado) } : {}),
+      ...(perfilAtualizado ? { medico: medicoWire(perfilAtualizado, real) } : {}),
       ...efeitos,
     });
   } catch (erro) {
