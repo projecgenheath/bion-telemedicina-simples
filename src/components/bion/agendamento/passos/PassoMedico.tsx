@@ -1,5 +1,6 @@
 "use client";
 
+import { textoNota } from "@/lib/medico-exibicao";
 import {
   ChevronRight,
   Star,
@@ -90,10 +91,8 @@ export function PassoMedico(p: AgendamentoCorpoProps) {
                 </div>
                 <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
                   <span className="flex items-center gap-0.5 text-amber-500 dark:text-amber-400 font-bold">
-                    <Star className="w-3.5 h-3.5 fill-amber-500" /> {med.avaliacao}
+                    {med.numAvaliacoes > 0 && <Star className="w-3.5 h-3.5 fill-amber-500" />} {textoNota(med)}
                   </span>
-                  <span>•</span>
-                  <span>{med.numAvaliacoes} atendimentos</span>
                 </div>
                 <div className="flex flex-wrap gap-1.5 mt-2">
                   {med.subespecialidades.slice(0, 3).map((sub) => (

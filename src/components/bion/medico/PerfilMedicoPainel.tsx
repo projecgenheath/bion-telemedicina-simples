@@ -1,5 +1,6 @@
 "use client";
 
+import { crmComRotulo } from "@/lib/medico-exibicao";
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -500,7 +501,7 @@ export function PerfilMedicoPainel({
         <div className="text-sm text-bion-ink/75 dark:text-bion-paper/75 break-all">{sessao.email}</div>
         {medico ? (
           <div className="text-xs text-bion-ink/75 dark:text-bion-paper/75 mt-1">
-            {medico.especialidade} · CRM {medico.crm}
+            {medico.especialidade} · {crmComRotulo(medico.crm)}
           </div>
         ) : (
           <div className="mt-2">

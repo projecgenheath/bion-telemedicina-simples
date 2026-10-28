@@ -1,5 +1,6 @@
 "use client";
 
+import { crmComRotulo } from "@/lib/medico-exibicao";
 import { useState } from "react";
 import { BadgeCheck, CalendarCheck, Pencil, Star } from "lucide-react";
 import { useBion } from "@/lib/bion-store";
@@ -56,7 +57,7 @@ export function TelaPerfilPublico({
                 <div className="text-lg font-black leading-tight">{medico.nome}</div>
                 <div className="text-sm text-white/85">{medico.especialidade}</div>
                 <div className="text-xs text-white/80 mt-0.5 inline-flex items-center gap-1">
-                  <BadgeCheck className="w-3.5 h-3.5" /> CRM {medico.crm}
+                  <BadgeCheck className="w-3.5 h-3.5" /> {crmComRotulo(medico.crm)}
                 </div>
               </div>
             </div>

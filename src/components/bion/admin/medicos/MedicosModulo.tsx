@@ -1,5 +1,6 @@
 "use client";
 
+import { crmComRotulo } from "@/lib/medico-exibicao";
 import { useMemo, useState, type KeyboardEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Ban, CheckCircle2, Info, Plus, RotateCcw, Search, Star, Stethoscope } from "lucide-react";
@@ -255,7 +256,7 @@ function CardMedico({ medico: m, consultas30, onAbrir }: { medico: Medico; agora
         <div className="flex-1 min-w-0">
           <p className="font-bold leading-snug break-words">{m.nome}</p>
           <p className="text-xs ba-texto-2 break-words">
-            {m.especialidade} · CRM {m.crm}
+            {m.especialidade} · {crmComRotulo(m.crm)}
           </p>
           <div className="flex flex-wrap gap-1.5 mt-1.5">
             <ChipEstado estado={estado} />

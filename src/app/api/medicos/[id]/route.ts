@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { exigirPapel } from "@/lib/server/auth";
 import { aplicarSideEffects, medicoWire, type EfeitosCriados } from "@/lib/server/dados";
+import { notaReal } from "@/lib/server/notas-medico";
 import { ok, falha } from "@/lib/server/http";
 import { erroGradeVedada, horariosVedadosDaGrade } from "@/lib/server/bloqueio-agenda";
 
@@ -241,7 +242,7 @@ export async function PATCH(
       include: { user: { select: { id: true, nome: true } } },
     });
 
-    return ok({ ...(perfil ? { medico: medicoWire(perfil) } : {}), ...efeitos });
+    return ok({ ...(perfil ? { medico: medicoWire(perfil, await notaReal(perfil.userId)) } : {}), ...efeitos });
   } catch (erro) {
     return falha(erro);
   }
@@ -285,7 +286,7 @@ export async function DELETE(
       include: { user: { select: { id: true, nome: true } } },
     });
 
-    return ok({ ...(perfil ? { medico: medicoWire(perfil) } : {}), ...efeitos });
+    return ok({ ...(perfil ? { medico: medicoWire(perfil, await notaReal(perfil.userId)) } : {}), ...efeitos });
   } catch (erro) {
     return falha(erro);
   }

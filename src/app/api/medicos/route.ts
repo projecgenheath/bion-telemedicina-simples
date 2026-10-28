@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { exigirPapel, hashSenha } from "@/lib/server/auth";
 import { aplicarSideEffects, medicoWire, slugEmail } from "@/lib/server/dados";
+import { notaReal } from "@/lib/server/notas-medico";
 import { ok, falha } from "@/lib/server/http";
 import { erroGradeVedada, horariosVedadosDaGrade } from "@/lib/server/bloqueio-agenda";
 import { gerarSenhaTemporaria, sufixoAleatorio } from "@/lib/server/senha-temporaria";
@@ -103,7 +104,7 @@ export async function POST(req: NextRequest) {
     // `credenciais` só existe NESTA resposta (não é persistida em texto puro
     // nem gravada na auditoria): a UI mostra uma vez para o admin repassar.
     return ok({
-      ...(perfil ? { medico: medicoWire(perfil) } : {}),
+      ...(perfil ? { medico: medicoWire(perfil, await notaReal(perfil.userId)) } : {}),
       ...efeitos,
       credenciais: { email, senhaTemporaria },
     });
