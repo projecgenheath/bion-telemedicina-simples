@@ -15,12 +15,13 @@ import { TelaSobreposta } from "./TelaSobreposta";
 import { RenovacoesPendentes } from "./evolucao/RenovacoesPendentes";
 import { DicaGestos, IndicadorTelas, useDicaGestos } from "./IndicadorTelas";
 import { PrecoSheet } from "./sheets/PrecoSheet";
+import { PromocoesSheet } from "./sheets/PromocoesSheet";
 import { AgendaSheet } from "./sheets/AgendaSheet";
 import { AgendaPreviewSheet } from "./sheets/AgendaPreviewSheet";
 import type { PacienteDoMedico } from "./metricas";
 import "./medico.css";
 
-type Sheet = "preco" | "agenda" | "preview" | null;
+type Sheet = "preco" | "agenda" | "preview" | "promocoes" | null;
 type Sobreposicao = { tipo: "renovacoes" } | { tipo: "suporte" } | { tipo: "termos" } | { tipo: "paciente"; p: PacienteDoMedico } | null;
 
 const EM_CAMPO = ["INPUT", "TEXTAREA", "SELECT"];
@@ -178,7 +179,7 @@ export function MedicoApp() {
           role="region"
         >
           <TelaInicio dados={dados} onAbrirPerfil={() => irPara(0)} onAbrirPacientes={() => irPara(2)} />
-          <TelaGestao dados={dados} onAbrirPreco={() => abrirSheet("preco")} onAbrirAgenda={() => abrirSheet("agenda")} />
+          <TelaGestao dados={dados} onAbrirPreco={() => abrirSheet("preco")} onAbrirAgenda={() => abrirSheet("agenda")} onAbrirPromocoes={() => abrirSheet("promocoes")} />
           <TelaPerfilPublico dados={dados} onAgendar={() => abrirSheet("preview")} confirmarBio={confirmarBio} />
         </div>
 
@@ -193,58 +194,450 @@ export function MedicoApp() {
       {medico ? (
         <>
           <PrecoSheet
+          <PromocoesSheet
+            key={`promocoes-${aberturas}`}
+            aberto={sheet === "promocoes"}
+            onFechar={fecharSheet}
+            medico={medico}
+            confirmar={confirmarValor}
+          />
             key={`preco-${aberturas}`}
+          <PromocoesSheet
+            key={`promocoes-${aberturas}`}
+            aberto={sheet === "promocoes"}
+            onFechar={fecharSheet}
+            medico={medico}
+            confirmar={confirmarValor}
+          />
             aberto={sheet === "preco"}
+          <PromocoesSheet
+            key={`promocoes-${aberturas}`}
+            aberto={sheet === "promocoes"}
+            onFechar={fecharSheet}
+            medico={medico}
+            confirmar={confirmarValor}
+          />
+            onFechar={fecharSheet}
+          <PromocoesSheet
+            key={`promocoes-${aberturas}`}
+            aberto={sheet === "promocoes"}
+            onFechar={fecharSheet}
+            medico={medico}
+            confirmar={confirmarValor}
+          />
+            medico={medico}
+          <PromocoesSheet
+            key={`promocoes-${aberturas}`}
+            aberto={sheet === "promocoes"}
+            onFechar={fecharSheet}
+            medico={medico}
+            confirmar={confirmarValor}
+          />
+            confirmar={confirmarValor}
+          <PromocoesSheet
+            key={`promocoes-${aberturas}`}
+            aberto={sheet === "promocoes"}
+            onFechar={fecharSheet}
+            medico={medico}
+            confirmar={confirmarValor}
+          />
+          />
+          <PromocoesSheet
+            key={`promocoes-${aberturas}`}
+            aberto={sheet === "promocoes"}
             onFechar={fecharSheet}
             medico={medico}
             confirmar={confirmarValor}
           />
           <AgendaSheet
-            key={`agenda-${aberturas}`}
-            aberto={sheet === "agenda"}
+          <PromocoesSheet
+            key={`promocoes-${aberturas}`}
+            aberto={sheet === "promocoes"}
             onFechar={fecharSheet}
             medico={medico}
+            confirmar={confirmarValor}
+          />
+            key={`agenda-${aberturas}`}
+          <PromocoesSheet
+            key={`promocoes-${aberturas}`}
+            aberto={sheet === "promocoes"}
+            onFechar={fecharSheet}
+            medico={medico}
+            confirmar={confirmarValor}
+          />
+            aberto={sheet === "agenda"}
+          <PromocoesSheet
+            key={`promocoes-${aberturas}`}
+            aberto={sheet === "promocoes"}
+            onFechar={fecharSheet}
+            medico={medico}
+            confirmar={confirmarValor}
+          />
+            onFechar={fecharSheet}
+          <PromocoesSheet
+            key={`promocoes-${aberturas}`}
+            aberto={sheet === "promocoes"}
+            onFechar={fecharSheet}
+            medico={medico}
+            confirmar={confirmarValor}
+          />
+            medico={medico}
+          <PromocoesSheet
+            key={`promocoes-${aberturas}`}
+            aberto={sheet === "promocoes"}
+            onFechar={fecharSheet}
+            medico={medico}
+            confirmar={confirmarValor}
+          />
             confirmar={confirmarHorarios}
+          <PromocoesSheet
+            key={`promocoes-${aberturas}`}
+            aberto={sheet === "promocoes"}
+            onFechar={fecharSheet}
+            medico={medico}
+            confirmar={confirmarValor}
+          />
+          />
+          <PromocoesSheet
+            key={`promocoes-${aberturas}`}
+            aberto={sheet === "promocoes"}
+            onFechar={fecharSheet}
+            medico={medico}
+            confirmar={confirmarValor}
           />
           <AgendaPreviewSheet
-            key={`preview-${aberturas}`}
-            aberto={sheet === "preview"}
+          <PromocoesSheet
+            key={`promocoes-${aberturas}`}
+            aberto={sheet === "promocoes"}
             onFechar={fecharSheet}
             medico={medico}
+            confirmar={confirmarValor}
+          />
+            key={`preview-${aberturas}`}
+          <PromocoesSheet
+            key={`promocoes-${aberturas}`}
+            aberto={sheet === "promocoes"}
+            onFechar={fecharSheet}
+            medico={medico}
+            confirmar={confirmarValor}
+          />
+            aberto={sheet === "preview"}
+          <PromocoesSheet
+            key={`promocoes-${aberturas}`}
+            aberto={sheet === "promocoes"}
+            onFechar={fecharSheet}
+            medico={medico}
+            confirmar={confirmarValor}
+          />
+            onFechar={fecharSheet}
+          <PromocoesSheet
+            key={`promocoes-${aberturas}`}
+            aberto={sheet === "promocoes"}
+            onFechar={fecharSheet}
+            medico={medico}
+            confirmar={confirmarValor}
+          />
+            medico={medico}
+          <PromocoesSheet
+            key={`promocoes-${aberturas}`}
+            aberto={sheet === "promocoes"}
+            onFechar={fecharSheet}
+            medico={medico}
+            confirmar={confirmarValor}
+          />
             consultas={minhas}
+          <PromocoesSheet
+            key={`promocoes-${aberturas}`}
+            aberto={sheet === "promocoes"}
+            onFechar={fecharSheet}
+            medico={medico}
+            confirmar={confirmarValor}
+          />
+          />
+          <PromocoesSheet
+            key={`promocoes-${aberturas}`}
+            aberto={sheet === "promocoes"}
+            onFechar={fecharSheet}
+            medico={medico}
+            confirmar={confirmarValor}
           />
         </>
+          <PromocoesSheet
+            key={`promocoes-${aberturas}`}
+            aberto={sheet === "promocoes"}
+            onFechar={fecharSheet}
+            medico={medico}
+            confirmar={confirmarValor}
+          />
       ) : null}
+          <PromocoesSheet
+            key={`promocoes-${aberturas}`}
+            aberto={sheet === "promocoes"}
+            onFechar={fecharSheet}
+            medico={medico}
+            confirmar={confirmarValor}
+          />
 
+          <PromocoesSheet
+            key={`promocoes-${aberturas}`}
+            aberto={sheet === "promocoes"}
+            onFechar={fecharSheet}
+            medico={medico}
+            confirmar={confirmarValor}
+          />
       {sobreposicao?.tipo === "paciente" ? (
+          <PromocoesSheet
+            key={`promocoes-${aberturas}`}
+            aberto={sheet === "promocoes"}
+            onFechar={fecharSheet}
+            medico={medico}
+            confirmar={confirmarValor}
+          />
         <ConversaPaciente paciente={sobreposicao.p} dados={dados} onFechar={fecharSobreposicao} />
+          <PromocoesSheet
+            key={`promocoes-${aberturas}`}
+            aberto={sheet === "promocoes"}
+            onFechar={fecharSheet}
+            medico={medico}
+            confirmar={confirmarValor}
+          />
       ) : null}
+          <PromocoesSheet
+            key={`promocoes-${aberturas}`}
+            aberto={sheet === "promocoes"}
+            onFechar={fecharSheet}
+            medico={medico}
+            confirmar={confirmarValor}
+          />
       {sobreposicao?.tipo === "renovacoes" ? (
+          <PromocoesSheet
+            key={`promocoes-${aberturas}`}
+            aberto={sheet === "promocoes"}
+            onFechar={fecharSheet}
+            medico={medico}
+            confirmar={confirmarValor}
+          />
         <TelaSobreposta titulo="Renovações de receita" subtitulo="Pedidos pendentes dos seus pacientes" onFechar={fecharSobreposicao}>
+          <PromocoesSheet
+            key={`promocoes-${aberturas}`}
+            aberto={sheet === "promocoes"}
+            onFechar={fecharSheet}
+            medico={medico}
+            confirmar={confirmarValor}
+          />
           <RenovacoesPendentes />
+          <PromocoesSheet
+            key={`promocoes-${aberturas}`}
+            aberto={sheet === "promocoes"}
+            onFechar={fecharSheet}
+            medico={medico}
+            confirmar={confirmarValor}
+          />
         </TelaSobreposta>
+          <PromocoesSheet
+            key={`promocoes-${aberturas}`}
+            aberto={sheet === "promocoes"}
+            onFechar={fecharSheet}
+            medico={medico}
+            confirmar={confirmarValor}
+          />
       ) : null}
+          <PromocoesSheet
+            key={`promocoes-${aberturas}`}
+            aberto={sheet === "promocoes"}
+            onFechar={fecharSheet}
+            medico={medico}
+            confirmar={confirmarValor}
+          />
       {sobreposicao?.tipo === "suporte" ? (
+          <PromocoesSheet
+            key={`promocoes-${aberturas}`}
+            aberto={sheet === "promocoes"}
+            onFechar={fecharSheet}
+            medico={medico}
+            confirmar={confirmarValor}
+          />
         <TelaSobreposta titulo="Suporte" subtitulo="Chamados com a equipe BION" onFechar={fecharSobreposicao}>
+          <PromocoesSheet
+            key={`promocoes-${aberturas}`}
+            aberto={sheet === "promocoes"}
+            onFechar={fecharSheet}
+            medico={medico}
+            confirmar={confirmarValor}
+          />
           <div className="p-4">
+          <PromocoesSheet
+            key={`promocoes-${aberturas}`}
+            aberto={sheet === "promocoes"}
+            onFechar={fecharSheet}
+            medico={medico}
+            confirmar={confirmarValor}
+          />
             <ChamadosSuporte />
+          <PromocoesSheet
+            key={`promocoes-${aberturas}`}
+            aberto={sheet === "promocoes"}
+            onFechar={fecharSheet}
+            medico={medico}
+            confirmar={confirmarValor}
+          />
           </div>
+          <PromocoesSheet
+            key={`promocoes-${aberturas}`}
+            aberto={sheet === "promocoes"}
+            onFechar={fecharSheet}
+            medico={medico}
+            confirmar={confirmarValor}
+          />
         </TelaSobreposta>
+          <PromocoesSheet
+            key={`promocoes-${aberturas}`}
+            aberto={sheet === "promocoes"}
+            onFechar={fecharSheet}
+            medico={medico}
+            confirmar={confirmarValor}
+          />
       ) : null}
+          <PromocoesSheet
+            key={`promocoes-${aberturas}`}
+            aberto={sheet === "promocoes"}
+            onFechar={fecharSheet}
+            medico={medico}
+            confirmar={confirmarValor}
+          />
       {sobreposicao?.tipo === "termos" ? (
+          <PromocoesSheet
+            key={`promocoes-${aberturas}`}
+            aberto={sheet === "promocoes"}
+            onFechar={fecharSheet}
+            medico={medico}
+            confirmar={confirmarValor}
+          />
         <TelaSobreposta titulo="Termos e ajuda" onFechar={fecharSobreposicao}>
+          <PromocoesSheet
+            key={`promocoes-${aberturas}`}
+            aberto={sheet === "promocoes"}
+            onFechar={fecharSheet}
+            medico={medico}
+            confirmar={confirmarValor}
+          />
           <div className="p-4 space-y-4">
+          <PromocoesSheet
+            key={`promocoes-${aberturas}`}
+            aberto={sheet === "promocoes"}
+            onFechar={fecharSheet}
+            medico={medico}
+            confirmar={confirmarValor}
+          />
             <div className="bp-glass p-4 flex items-center justify-between gap-3">
+          <PromocoesSheet
+            key={`promocoes-${aberturas}`}
+            aberto={sheet === "promocoes"}
+            onFechar={fecharSheet}
+            medico={medico}
+            confirmar={confirmarValor}
+          />
               <div>
+          <PromocoesSheet
+            key={`promocoes-${aberturas}`}
+            aberto={sheet === "promocoes"}
+            onFechar={fecharSheet}
+            medico={medico}
+            confirmar={confirmarValor}
+          />
                 <div className="text-sm font-bold">Termos de uso do médico</div>
+          <PromocoesSheet
+            key={`promocoes-${aberturas}`}
+            aberto={sheet === "promocoes"}
+            onFechar={fecharSheet}
+            medico={medico}
+            confirmar={confirmarValor}
+          />
                 <div className="text-xs text-bion-ink/75 dark:text-bion-paper/75">Texto específico para profissionais.</div>
+          <PromocoesSheet
+            key={`promocoes-${aberturas}`}
+            aberto={sheet === "promocoes"}
+            onFechar={fecharSheet}
+            medico={medico}
+            confirmar={confirmarValor}
+          />
               </div>
-              <span className="text-xs text-bion-ink/60 dark:text-bion-paper/60">Disponível após revisão jurídica</span>
+          <PromocoesSheet
+            key={`promocoes-${aberturas}`}
+            aberto={sheet === "promocoes"}
+            onFechar={fecharSheet}
+            medico={medico}
+            confirmar={confirmarValor}
+          />
+              <button type="button" onClick={() => window.open("/termos-medico", "_blank")} className="text-xs font-bold text-bion-sea dark:text-sky-300">Ler termos</button>
+          <PromocoesSheet
+            key={`promocoes-${aberturas}`}
+            aberto={sheet === "promocoes"}
+            onFechar={fecharSheet}
+            medico={medico}
+            confirmar={confirmarValor}
+          />
             </div>
+          <PromocoesSheet
+            key={`promocoes-${aberturas}`}
+            aberto={sheet === "promocoes"}
+            onFechar={fecharSheet}
+            medico={medico}
+            confirmar={confirmarValor}
+          />
             <Ajuda perfil="medico" />
+          <PromocoesSheet
+            key={`promocoes-${aberturas}`}
+            aberto={sheet === "promocoes"}
+            onFechar={fecharSheet}
+            medico={medico}
+            confirmar={confirmarValor}
+          />
           </div>
+          <PromocoesSheet
+            key={`promocoes-${aberturas}`}
+            aberto={sheet === "promocoes"}
+            onFechar={fecharSheet}
+            medico={medico}
+            confirmar={confirmarValor}
+          />
         </TelaSobreposta>
+          <PromocoesSheet
+            key={`promocoes-${aberturas}`}
+            aberto={sheet === "promocoes"}
+            onFechar={fecharSheet}
+            medico={medico}
+            confirmar={confirmarValor}
+          />
       ) : null}
+          <PromocoesSheet
+            key={`promocoes-${aberturas}`}
+            aberto={sheet === "promocoes"}
+            onFechar={fecharSheet}
+            medico={medico}
+            confirmar={confirmarValor}
+          />
     </div>
+          <PromocoesSheet
+            key={`promocoes-${aberturas}`}
+            aberto={sheet === "promocoes"}
+            onFechar={fecharSheet}
+            medico={medico}
+            confirmar={confirmarValor}
+          />
   );
+          <PromocoesSheet
+            key={`promocoes-${aberturas}`}
+            aberto={sheet === "promocoes"}
+            onFechar={fecharSheet}
+            medico={medico}
+            confirmar={confirmarValor}
+          />
 }
+          <PromocoesSheet
+            key={`promocoes-${aberturas}`}
+            aberto={sheet === "promocoes"}
+            onFechar={fecharSheet}
+            medico={medico}
+            confirmar={confirmarValor}
+          />
