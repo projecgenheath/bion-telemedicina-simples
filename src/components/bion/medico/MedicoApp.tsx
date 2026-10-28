@@ -15,12 +15,13 @@ import { TelaSobreposta } from "./TelaSobreposta";
 import { RenovacoesPendentes } from "./evolucao/RenovacoesPendentes";
 import { DicaGestos, IndicadorTelas, useDicaGestos } from "./IndicadorTelas";
 import { PrecoSheet } from "./sheets/PrecoSheet";
+import { PromocoesSheet } from "./sheets/PromocoesSheet";
 import { AgendaSheet } from "./sheets/AgendaSheet";
 import { AgendaPreviewSheet } from "./sheets/AgendaPreviewSheet";
 import type { PacienteDoMedico } from "./metricas";
 import "./medico.css";
 
-type Sheet = "preco" | "agenda" | "preview" | null;
+type Sheet = "preco" | "agenda" | "preview" | "promocoes" | null;
 type Sobreposicao = { tipo: "renovacoes" } | { tipo: "suporte" } | { tipo: "termos" } | { tipo: "paciente"; p: PacienteDoMedico } | null;
 
 const EM_CAMPO = ["INPUT", "TEXTAREA", "SELECT"];
@@ -178,7 +179,7 @@ export function MedicoApp() {
           role="region"
         >
           <TelaInicio dados={dados} onAbrirPerfil={() => irPara(0)} onAbrirPacientes={() => irPara(2)} />
-          <TelaGestao dados={dados} onAbrirPreco={() => abrirSheet("preco")} onAbrirAgenda={() => abrirSheet("agenda")} />
+          <TelaGestao dados={dados} onAbrirPreco={() => abrirSheet("preco")} onAbrirAgenda={() => abrirSheet("agenda")} onAbrirPromocoes={() => abrirSheet("promocoes")} />
           <TelaPerfilPublico dados={dados} onAgendar={() => abrirSheet("preview")} confirmarBio={confirmarBio} />
         </div>
 
@@ -239,7 +240,7 @@ export function MedicoApp() {
                 <div className="text-sm font-bold">Termos de uso do médico</div>
                 <div className="text-xs text-bion-ink/75 dark:text-bion-paper/75">Texto específico para profissionais.</div>
               </div>
-              <span className="text-xs text-bion-ink/60 dark:text-bion-paper/60">Disponível após revisão jurídica</span>
+              <button type="button" onClick={() => window.open("/termos-medico", "_blank")} className="text-xs font-bold text-bion-sea dark:text-sky-300">Ler termos</button>
             </div>
             <Ajuda perfil="medico" />
           </div>
