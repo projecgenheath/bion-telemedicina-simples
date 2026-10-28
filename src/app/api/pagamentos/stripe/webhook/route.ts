@@ -5,7 +5,7 @@ import { registrarAudit } from "@/lib/server/auth";
 import { quandoClinica } from "@/lib/server/fuso";
 import { confirmarPagamentoSeMudou, falharPagamento } from "@/lib/server/pagamentos";
 import { avisarPacienteEspera, confirmarRemarcacaoEspera } from "@/lib/server/espera-medico";
-import { aprovarMultaRemarcacao, falharMultaRemarcacao } from "@/lib/server/financeiro";
+import { aprovarMultaRemarcacao, falharMultaRemarcacao, registrarTaxaGateway } from "@/lib/server/financeiro";
 import { cancelarRenovacaoPagamentoFalhou, confirmarPagamentoRenovacao } from "@/lib/server/renovacao-pagamento";
 import { gatewayCheckout } from "@/lib/server/gateway-pagamento";
 import { liberarEvento, reivindicarEvento, registrarEventoReembolsoStripe, stripe } from "@/lib/server/stripe";
@@ -310,10 +310,10 @@ async function processarMulta(s: Stripe.Checkout.Session, acao: "confirmar" | "f
 }
 
 /**
- * ÚNICO ponto de chamada do financeiro com a taxa real do gateway.
- * TODO(Médicos): chamar aqui a função do financeiro.ts (comissão de 10% da BION
- * e taxa do Stripe saindo dos 90% do médico; no reembolso a taxa fica com o app).
- * A taxa já fica gravada em Pagamento.stripeTaxaCentavos (null quando o Stripe
- * ainda não liquidou).
+ * ÚNICO ponto de chamada do financeiro com a taxa real do gateway: grava a
+ * taxa validada em Pagamento.stripeTaxaCentavos, que o repasse desconta dos
+ * 90% do médico (no reembolso integral a taxa fica com o app).
  */
-async function informarTaxaAoFinanceiro(_pagamentoId: string, _taxaCentavos: number | null): Promise<void> {}
+async function informarTaxaAoFinanceiro(pagamentoId: string, taxaCentavos: number | null): Promise<void> {
+  await registrarTaxaGateway(pagamentoId, taxaCentavos);
+}

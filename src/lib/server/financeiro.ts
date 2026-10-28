@@ -171,6 +171,22 @@ export function taxaPlataformaConnectCentavos(c: CobrancaConnect): number {
   return pct(Math.max(0, c.valorCentavos), COMISSAO_APP_PCT);
 }
 
+/**
+ * Grava a taxa real do gateway (Stripe `balance_transaction.fee`) no
+ * Pagamento, já validada (inteiro ≥ 0, limitada ao valor). O repasse lê
+ * `Pagamento.stripeTaxaCentavos` e a desconta dos 90% do médico; no
+ * reembolso integral a taxa fica com o app (`liquidoComReembolso`).
+ * null = o Stripe ainda não liquidou; não sobrescreve um valor já gravado.
+ */
+export async function registrarTaxaGateway(pagamentoId: string, taxaCentavos: number | null): Promise<number | null> {
+  if (taxaCentavos === null) return null;
+  const p = await db.pagamento.findUnique({ where: { id: pagamentoId }, select: { valor: true, stripeTaxaCentavos: true } });
+  if (!p) return null;
+  const taxa = taxaGatewayValida(taxaCentavos, Math.round(p.valor * 100));
+  if (p.stripeTaxaCentavos !== taxa) await db.pagamento.update({ where: { id: pagamentoId }, data: { stripeTaxaCentavos: taxa } });
+  return taxa;
+}
+
 /** Competência "AAAA-MM" do mês de Brasília (não o mês em UTC). */
 export function competenciaDe(instante: Date): string {
   const p = partesNoFuso(instante);

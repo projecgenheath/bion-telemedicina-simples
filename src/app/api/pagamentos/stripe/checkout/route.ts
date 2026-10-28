@@ -264,11 +264,7 @@ async function abrirSessao(usuario: Usuario, a: Alvo) {
     if (!medico?.stripeAccountId) {
       return Response.json({ erro: "Pagamento online indisponível para este médico." }, { status: 409 });
     }
-    try {
-      connect = { contaMedico: medico.stripeAccountId, taxaPlataformaCentavos: comissaoPlataformaConnect(a.valorCentavos) };
-    } catch {
-      return Response.json({ erro: "Pagamento online indisponível neste ambiente." }, { status: 503 });
-    }
+    connect = { contaMedico: medico.stripeAccountId, taxaPlataformaCentavos: comissaoPlataformaConnect(a.tipo, a.valorCentavos) };
   }
 
   const gateway = gatewayCheckout();

@@ -498,10 +498,8 @@ async function carregarCandidatos(c: Cliente, medicoId: string, corte: Date) {
         valor: true,
         pago: true,
         tipoAtendimento: true,
-        // TODO(migração do Admin): incluir `stripeTaxaCentavos: true` aqui e
-        // mapear para `pagamento.taxaGatewayCentavos` (itemDaConsulta já usa).
-        // Fica fora enquanto a coluna não existe na main, para compilar.
-        pagamento: { select: { id: true, status: true, reembolsos: { select: selReembolso } } },
+        // Taxa real do Stripe (balance_transaction.fee) → pagamento.taxaGatewayCentavos.
+        pagamento: { select: { id: true, status: true, stripeTaxaCentavos: true, reembolsos: { select: selReembolso } } },
         eventos: { where: { tipo: { in: TIPOS_EVENTO_DESFECHO } }, select: selEventoDesfecho },
       },
     }),
@@ -556,7 +554,7 @@ async function carregarCandidatos(c: Cliente, medicoId: string, corte: Date) {
       respondidoEm: true,
       valorCentavos: true,
       pagamentoId: true,
-      pagamento: { select: { status: true, reembolsos: { select: selReembolso } } },
+      pagamento: { select: { status: true, stripeTaxaCentavos: true, reembolsos: { select: selReembolso } } },
     },
   });
   // Trava: um pagamento que já entrou num repasse (pela consulta ou pelo
@@ -589,14 +587,16 @@ async function carregarCandidatos(c: Cliente, medicoId: string, corte: Date) {
         valorCentavos: p.valorCentavos,
         pagamentoId: p.pagamentoId,
         pagamentoStatus: p.pagamento?.status ?? null,
-        // TODO(migração do Admin): taxaGatewayCentavos: p.pagamento?.stripeTaxaCentavos ?? null (incluir no select).
+        taxaGatewayCentavos: p.pagamento?.stripeTaxaCentavos ?? null,
         reembolsos: (p.pagamento?.reembolsos ?? []).map(comEfetivo),
       }),
     ),
     consultas: consultas.map((c) => ({
       ...c,
       pagamentoId: c.pagamento?.id ?? null,
-      pagamento: c.pagamento ? { ...c.pagamento, reembolsos: c.pagamento.reembolsos.map(comEfetivo) } : null,
+      pagamento: c.pagamento
+        ? { ...c.pagamento, taxaGatewayCentavos: c.pagamento.stripeTaxaCentavos ?? null, reembolsos: c.pagamento.reembolsos.map(comEfetivo) }
+        : null,
     })),
     multasCancelamento: eventos.map((e) => ({
       consultaId: e.consultaId,
