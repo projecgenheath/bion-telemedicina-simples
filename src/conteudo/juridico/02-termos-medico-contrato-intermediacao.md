@@ -1,6 +1,6 @@
 ---
 title: "Termos de Uso e Contrato de Intermediação do Médico — BION Telemedicina"
-subtitle: "Versão 1.0 — MINUTA para revisão jurídica — 20/10/2026"
+subtitle: "Versão provisória v0 — 20/10/2026"
 lang: pt-BR
 ---
 
@@ -296,4 +296,4 @@ As comunicações ocorrem pelo app e pelo e-mail cadastrado. Contato da BION: **
 - **Cálculo:** diário, 23:30 (Brasília). **Pagamento:** PIX manual pela BION, em até **[A DEFINIR]** dias úteis, com comprovante.
 - **Ajustes:** reembolsos posteriores ao pagamento são descontados dos repasses seguintes; saldo não compensado é carregado.
 
-*Versão 1.0 — vigente a partir de [A DEFINIR].*
+*Vigente a partir do seu aceite.*
