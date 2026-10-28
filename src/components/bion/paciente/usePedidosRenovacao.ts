@@ -1,4 +1,5 @@
 "use client";
+import { mensagemRecusa } from "@/lib/aceite-termos";
 
 import { useCallback, useEffect, useState } from "react";
 import { lerPedidoRenovacao, type PedidoRenovacao } from "@/lib/atendimento-tipo";
@@ -37,8 +38,8 @@ export function usePedidosRenovacao(ativo = true) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ documentoId, observacaoPaciente }),
       });
-      const j = (await r.json().catch(() => ({}))) as { erro?: string; pedido?: unknown };
-      if (!r.ok) return { ok: false, erro: j.erro ?? "Não foi possível enviar o pedido." };
+      const j = (await r.json().catch(() => ({}))) as { erro?: string; codigo?: string; pedido?: unknown };
+      if (!r.ok) return { ok: false, erro: mensagemRecusa(j, "Não foi possível enviar o pedido.") };
       const p = lerPedidoRenovacao(j.pedido);
       if (p) setPedidos((atual) => [p, ...atual]);
       return { ok: true };

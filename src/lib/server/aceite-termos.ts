@@ -10,6 +10,8 @@ import {
   VERSAO_MARKETING_OPTIN,
   VERSAO_PRIVACIDADE,
   VERSAO_TERMOS_POR_PERFIL,
+  CODIGO_ACEITE_TERMOS_PENDENTE,
+  ERRO_ACEITE_TERMOS_PENDENTE,
   aceitePendente,
   finalidadeMarketing,
   finalidadePrivacidade,
@@ -157,11 +159,6 @@ export async function gravarAceiteAtualizacao(usuario: UsuarioSessao, perfil: Pe
   return linhas;
 }
 
-/** Código do 403 quando o paciente ainda não aceitou os termos vigentes. */
-export const CODIGO_ACEITE_TERMOS_PENDENTE = "ACEITE_TERMOS_PENDENTE";
-export const ERRO_ACEITE_TERMOS_PENDENTE =
-  "Para agendar, aceite os Termos de Uso e a Política de Privacidade atuais. Suas consultas já pagas e a exclusão da conta continuam disponíveis.";
-
 /**
  * Portão do servidor para AGENDAR algo novo: paciente sem o aceite vigente
  * (termos + privacidade) recebe 403 antes de qualquer gravação.
@@ -180,3 +177,5 @@ export async function exigirAceiteTermosPaciente(usuario: { id: string; role: st
     ? Response.json({ erro: ERRO_ACEITE_TERMOS_PENDENTE, codigo: CODIGO_ACEITE_TERMOS_PENDENTE }, { status: 403 })
     : null;
 }
+
+export { CODIGO_ACEITE_TERMOS_PENDENTE, ERRO_ACEITE_TERMOS_PENDENTE };

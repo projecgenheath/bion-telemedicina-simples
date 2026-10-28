@@ -1,5 +1,6 @@
 "use client";
 
+import { CODIGO_ACEITE_TERMOS_PENDENTE, ERRO_ACEITE_TERMOS_PENDENTE } from "@/lib/aceite-termos";
 import { ErroBionIa, perguntarBionIa } from "@/lib/bion-ia-cliente";
 import { ehConsentimentoIaPendente } from "@/lib/consentimento-ia";
 import { useEffect, useRef, useState } from "react";
@@ -541,7 +542,7 @@ export function ChatBion({
     const dia = diaAtual.rotulo;
     setPagando(true);
     // Recusa do servidor (ex.: 409 "O médico não atende neste dia.") — distinta de falha de rede.
-    let recusa: { status: number; erro: string } | null = null;
+    let recusa: { status: number; erro: string; termos?: boolean } | null = null;
     try {
       const res = await fetch("/api/consultas", {
         method: "POST",
@@ -557,7 +558,11 @@ export function ChatBion({
       });
       const json = ((await res.json().catch(() => null)) ?? {}) as { consultaCriada?: string; erro?: string } & Record<string, unknown>;
       if (!res.ok || !json.consultaCriada) {
-        recusa = { status: res.status, erro: typeof json.erro === "string" ? json.erro : "" };
+        recusa = {
+          status: res.status,
+          erro: typeof json.erro === "string" ? json.erro : "",
+          termos: json.codigo === CODIGO_ACEITE_TERMOS_PENDENTE,
+        };
         throw new Error(recusa.erro || "Falha");
       }
       // Contrato delta: resposta contém APENAS a consulta criada (+ anamnese).
@@ -582,7 +587,10 @@ export function ChatBion({
         quando,
       });
     } catch {
-      if (recusa?.status === 409) {
+      if (recusa?.termos) {
+        // Falta o aceite dos termos vigentes: texto fixo, sem "pagamento"/erro genérico.
+        setMensagens((m) => [...m, { remetente: "ia", texto: ERRO_ACEITE_TERMOS_PENDENTE, tipo: "erro" }]);
+      } else if (recusa?.status === 409) {
         // Horário/dia recusado (ocupado, dia bloqueado pelo médico…): mostra o
         // motivo do servidor e volta para a escolha do dia com a agenda atualizada.
         const motivo = recusa.erro || "Esse horário não está mais disponível.";

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { AceiteTermos } from "@/components/bion/AceiteTermos";
 import { TelaCarregando } from "@/components/bion/brand";
 import { useBion } from "@/lib/bion-store";
-import { aceiteTermosPayload, type PerfilAceite } from "@/lib/aceite-termos";
+import { CHAVE_RECUSA_TERMOS, ERRO_ACEITE_TERMOS_PENDENTE, aceiteTermosPayload, limparRecusaTermos, type PerfilAceite } from "@/lib/aceite-termos";
 
 /** Rota do re-aceite por perfil. */
 export const ROTA_ACEITE_POR_PERFIL: Record<PerfilAceite, string> = {
@@ -13,8 +13,6 @@ export const ROTA_ACEITE_POR_PERFIL: Record<PerfilAceite, string> = {
 };
 
 type Estado = "carregando" | "pendente" | "ok" | "erro" | "recusado";
-
-export const CHAVE_RECUSA_TERMOS = "bion:aceite-termos:recusado";
 
 /**
  * Bloqueia a área do perfil até o aceite dos Termos de Uso do perfil
@@ -46,7 +44,10 @@ export function GuardaAceiteTermos({
       const res = await fetch(rota, { cache: "no-store", credentials: "same-origin" });
       const json = (await res.json().catch(() => null)) as { pendente?: boolean } | null;
       if (!res.ok || !json) return setEstado("erro");
-      if (!json.pendente) return setEstado("ok");
+      if (!json.pendente) {
+        limparRecusaTermos();
+        return setEstado("ok");
+      }
       const recusou = permitirRecusa && typeof window !== "undefined" && window.sessionStorage.getItem(CHAVE_RECUSA_TERMOS) === "1";
       setEstado(recusou ? "recusado" : "pendente");
     } catch {
@@ -71,7 +72,10 @@ export function GuardaAceiteTermos({
       });
       const json = (await res.json().catch(() => null)) as { pendente?: boolean; erro?: string } | null;
       if (!res.ok) setErro(json?.erro ?? "Não foi possível registrar o aceite. Tente novamente.");
-      else setEstado(json?.pendente ? "pendente" : "ok");
+      else {
+        if (!json?.pendente) limparRecusaTermos();
+        setEstado(json?.pendente ? "pendente" : "ok");
+      }
     } catch {
       setErro("Falha de conexão com o servidor.");
     } finally {
@@ -93,7 +97,7 @@ export function GuardaAceiteTermos({
     return (
       <>
         <div role="status" className="sticky top-0 z-50 flex items-center justify-between gap-3 border-b bg-amber-50 px-4 py-2 text-xs text-amber-900 dark:bg-amber-950 dark:text-amber-100">
-          <span className="min-w-0">Sem o aceite dos termos você não pode agendar. Suas consultas pagas e a exclusão da conta continuam disponíveis.</span>
+          <span className="min-w-0">{ERRO_ACEITE_TERMOS_PENDENTE}</span>
           <button type="button" onClick={() => setEstado("pendente")} className="shrink-0 rounded-lg border px-2 py-1 font-semibold">
             Ver termos
           </button>

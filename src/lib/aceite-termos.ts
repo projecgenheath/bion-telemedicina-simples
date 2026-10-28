@@ -137,3 +137,24 @@ export function aceitePendente(perfil: PerfilAceite, finalidadesAceitas: readonl
   const tem = new Set(finalidadesAceitas);
   return !tem.has(finalidadeTermos(versaoTermos)) || !tem.has(finalidadePrivacidade(VERSAO_PRIVACIDADE));
 }
+
+/** 403 das rotas de agendar/renovar quando falta o aceite vigente (paciente). */
+export const CODIGO_ACEITE_TERMOS_PENDENTE = "ACEITE_TERMOS_PENDENTE";
+/** Texto único (servidor e telas) do bloqueio por falta de aceite. */
+export const ERRO_ACEITE_TERMOS_PENDENTE = "Para pedir uma nova consulta ou renovação, aceite os termos atualizados.";
+/** Mensagem a mostrar para uma resposta de erro: o texto fixo quando é o bloqueio de aceite. */
+export function mensagemRecusa(json: { erro?: unknown; codigo?: unknown } | null | undefined, padrao: string): string {
+  if (json?.codigo === CODIGO_ACEITE_TERMOS_PENDENTE) return ERRO_ACEITE_TERMOS_PENDENTE;
+  return typeof json?.erro === "string" && json.erro ? json.erro : padrao;
+}
+
+/** sessionStorage: paciente escolheu "Agora não" nesta sessão do navegador. */
+export const CHAVE_RECUSA_TERMOS = "bion:aceite-termos:recusado";
+/** Apaga a recusa (logout e aceite registrado). Sem storage: não faz nada. */
+export function limparRecusaTermos(): void {
+  try {
+    if (typeof window !== "undefined") window.sessionStorage.removeItem(CHAVE_RECUSA_TERMOS);
+  } catch {
+    /* storage indisponível */
+  }
+}
