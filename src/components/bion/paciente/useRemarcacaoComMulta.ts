@@ -14,7 +14,8 @@ import { useBion } from "@/lib/bion-store";
 /* A nova data só vale depois que o servidor aprova o pagamento.       */
 /* ------------------------------------------------------------------ */
 
-export type MetodoMulta = "pix" | "cartao";
+/** Só cartão (checkout Stripe): o app não cobra por Pix. */
+export type MetodoMulta = "cartao";
 export type StatusRemarcacao = "pendente" | "aprovada" | "expirada" | "cancelada" | "falhou";
 
 export type RemarcacaoWire = {
@@ -32,7 +33,7 @@ export type RemarcacaoWire = {
 };
 
 /** Mesmo formato do pagamento da consulta, em centavos. */
-export type CobrancaMulta = { id: string; valorCentavos: number; metodo: string; status: string; via: string };
+export type CobrancaMulta = { id: string; valorCentavos: number; metodo: string; status: string; via: string; pagarComCartao?: boolean };
 
 export type PedidoPagamentoMulta = {
   consultaId: string;

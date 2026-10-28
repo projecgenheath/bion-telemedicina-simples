@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowLeft, Check, Clock, Copy, Loader2, RotateCcw, UserRound, XCircle } from "lucide-react";
+import { ArrowLeft, Check, Clock, Loader2, RotateCcw, UserRound, XCircle } from "lucide-react";
+import { BotaoPagarStripe } from "./BotaoPagarStripe";
 import {
   contagemFalada,
   formatarContagem,
@@ -23,8 +24,8 @@ import {
  *  - "Cancelar com reembolso" (POST .../espera/cancelar, reembolso integral);
  *  - "Remarcar com outro médico" (GET /api/medicos/livres-agora?consultaId=…
  *    → POST .../espera/remarcar), mostrando a diferença ANTES de confirmar.
- *    Mais caro: cobra a diferença por PIX e a consulta atual só é cancelada
- *    depois do PIX confirmado (reserva de 10 min); dá para desistir
+ *    Mais caro: cobra a diferença com cartão (checkout Stripe) e a consulta
+ *    atual só é cancelada depois do pagamento confirmado (reserva de 10 min); dá para desistir
  *    (POST .../espera/desistir-remarcacao).
  * Some sozinha quando o médico entra. Sem dado de saúde nos textos.
  */
@@ -108,7 +109,6 @@ export function EsperaMedicoPainel({
   const [medicos, setMedicos] = useState<MedicoLivre[] | null>(null);
   const [carregandoMedicos, setCarregandoMedicos] = useState(false);
   const [cobranca, setCobranca] = useState<CobrancaEspera | null>(null);
-  const [copiado, setCopiado] = useState(false);
   const [devolucao, setDevolucao] = useState<number | null>(null);
   const tituloRef = useRef<HTMLHeadingElement>(null);
 
@@ -205,16 +205,6 @@ export function EsperaMedicoPainel({
       setEspera(r.dados.espera);
       setEtapa({ tipo: "inicio" });
     } else tratarFalha(r.falha);
-  };
-
-  const copiarPix = async (codigo: string) => {
-    try {
-      await navigator.clipboard.writeText(codigo);
-      setCopiado(true);
-      setTimeout(() => setCopiado(false), 2500);
-    } catch {
-      setErro("Não foi possível copiar. Selecione o código e copie manualmente.");
-    }
   };
 
   const status = espera.status === "aguardando" && segundosAte(espera.expiraEm, agora) === 0 ? "expirada" : espera.status;
@@ -320,7 +310,7 @@ export function EsperaMedicoPainel({
           </div>
           <Acoes>
             <Botao primario onClick={() => void remarcar(etapa.medico, etapa.diferenca)} disabled={enviando} carregando={enviando}>
-              {dif.acao === "cobrar" ? "Confirmar e pagar por PIX" : "Confirmar remarcação"}
+              {dif.acao === "cobrar" ? "Confirmar e pagar com cartão" : "Confirmar remarcação"}
             </Botao>
             <Botao onClick={() => setEtapa({ tipo: "escolher_medico" })} disabled={enviando}>
               Escolher outro
@@ -356,28 +346,25 @@ export function EsperaMedicoPainel({
     const valor = cobranca?.valorCentavos ?? espera.diferencaCentavos ?? 0;
     conteudo = (
       <>
-        <Cabecalho refTitulo={tituloRef} icone={<Clock className="size-7" aria-hidden />} titulo="Pague a diferença por PIX">
-          {textoDiferenca(valor).curto.replace("+ ", "")} para confirmar a nova consulta. A consulta atual só é cancelada depois que o PIX for confirmado.
+        <Cabecalho refTitulo={tituloRef} icone={<Clock className="size-7" aria-hidden />} titulo="Pague a diferença com cartão">
+          {textoDiferenca(valor).curto.replace("+ ", "")} para confirmar a nova consulta. A consulta atual só é cancelada depois que o pagamento for confirmado.
         </Cabecalho>
         <p className="mt-3 text-sm text-white/80">
           Horário reservado por <span className="font-semibold tabular-nums" aria-hidden>{formatarContagem(s)}</span>
           <span className="sr-only">{contagemFalada(s)}</span>
         </p>
-        {cobranca?.pixCopiaECola ? (
+        {cobranca?.pagamentoId || espera.consultaNovaId ? (
           <div className="mt-3 w-full">
-            {cobranca.qrCodeBase64 ? (
-              <img src={`data:image/png;base64,${cobranca.qrCodeBase64}`} alt="QR Code do PIX" className="mx-auto size-40 rounded-xl bg-white p-2" />
-            ) : null}
-            <Botao onClick={() => void copiarPix(cobranca.pixCopiaECola!)}>
-              {copiado ? <Check className="size-4" aria-hidden /> : <Copy className="size-4" aria-hidden />}
-              {copiado ? "Código copiado" : "Copiar código PIX"}
-            </Botao>
+            <BotaoPagarStripe
+              {...(cobranca?.pagamentoId ? { pagamentoId: cobranca.pagamentoId } : { consultaId: espera.consultaNovaId! })}
+              rotulo="Pagar com cartão"
+              className="w-full"
+            />
           </div>
-        ) : (
-          <p role="status" className="mt-3 text-sm text-white/80">
-            O código do PIX aparece aqui assim que a cobrança for gerada.
-          </p>
-        )}
+        ) : null}
+        <p role="status" className="mt-3 text-sm text-white/80">
+          {cobranca?.status === "confirmado" ? "Pagamento confirmado." : "O pagamento é só com cartão. Depois de pagar, esta tela atualiza sozinha."}
+        </p>
         <Acoes>
           <Botao onClick={() => void desistir()} disabled={enviando} carregando={enviando}>
             Desistir da remarcação

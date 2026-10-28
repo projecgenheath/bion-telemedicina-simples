@@ -23,7 +23,8 @@ checa("rota do médico usa o handler genérico com MEDICO", rotaMedico.includes(
 checa("GET exige o papel do perfil", /async function GET[\s\S]*?exigirPapel\(perfil\)/.test(rota));
 checa("versão lida de VERSAO_TERMOS_POR_PERFIL[perfil]", rota.includes("VERSAO_TERMOS_POR_PERFIL[perfil]"));
 checa("guarda genérica por perfil", guarda.includes("aceiteTermosPayload(perfil)") && guarda.includes("perfil={perfil}"));
-checa("paciente não ligado neste PR", !/criarRotaAceiteTermos\("PACIENTE"\)/.test(rotaMedico) && !ler("src/app/(bion)/(app)/layout.tsx").includes('GuardaAceiteTermos perfil="PACIENTE"'));
+checa("rota do médico continua só MEDICO", !/criarRotaAceiteTermos\("PACIENTE"\)/.test(rotaMedico));
+checa("guarda do médico segue sem recusa (bloqueio total)", /<GuardaAceiteTermos perfil="MEDICO">/.test(ler("src/app/(bion)/(app)/layout.tsx")) && !/perfil="MEDICO"[^>]*permitirRecusa/.test(ler("src/app/(bion)/(app)/layout.tsx")));
 checa("POST confere Origin antes da sessão", post.indexOf("origemPermitida") > -1 && post.indexOf("origemPermitida") < post.indexOf("exigirPapel"));
 checa("POST exige o papel do perfil", post.includes("exigirPapel(perfil)"));
 checa("POST tem limitarAsync por médico", /limitarAsync\(`aceite-termos:\$\{perfil\.toLowerCase\(\)\}:\$\{usuario\.id\}`/.test(post));

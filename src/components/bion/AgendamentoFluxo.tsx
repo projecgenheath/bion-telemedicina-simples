@@ -1,5 +1,6 @@
 "use client";
 
+import { textoNota } from "@/lib/medico-exibicao";
 import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -329,8 +330,7 @@ export function AgendamentoFluxo({
                   {medicoModal.especialidade} • {medicoModal.crm}
                 </p>
                 <div className="flex items-center gap-2 mt-1 text-xs text-amber-500 dark:text-amber-400 font-bold">
-                  <Star className="w-3.5 h-3.5 fill-amber-500" /> {medicoModal.avaliacao} (
-                  {medicoModal.numAvaliacoes} avaliações)
+                  {medicoModal.numAvaliacoes > 0 && <Star className="w-3.5 h-3.5 fill-amber-500" />} {textoNota(medicoModal)}
                 </div>
               </div>
             </div>

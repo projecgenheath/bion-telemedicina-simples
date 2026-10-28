@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
  * desistiu de pagar a diferença: cancela a cobrança e a consulta nova e a
  * espera volta para expirada (pode cancelar ou remarcar de novo). Só o
  * paciente; só com a espera remarcando (409 antes; 409 pagamento_confirmado
- * se o PIX já chegou). Idempotente: repetir devolve 200 com jaProcessada.
+ * se o pagamento por cartão já foi confirmado). Idempotente: repetir devolve 200 com jaProcessada.
  */
 export async function POST(_req: Request, { params }: { params: Promise<{ consultaId: string }> }) {
   try {

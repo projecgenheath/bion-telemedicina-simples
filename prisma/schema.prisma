@@ -93,6 +93,7 @@ model PerfilMedico {
   bio                 String  @default("")
   foto                String?
   status              String  @default("ativo") // ativo | pendente | suspenso
+  stripeAccountId     String? // conta conectada (Stripe Connect), 20261028a
   horariosDisponiveis String  @default("[]") // JSON string[]
   // Dados pessoais do médico (privados: só o próprio médico lê/edita em
   // /api/medico/perfil — NUNCA entram no diretório público / medicoWire).
@@ -232,6 +233,11 @@ model Pagamento {
   gatewayRef   String?
   criadoEm     DateTime  @default(now())
   confirmadoEm DateTime?
+  // Stripe (migração 20261028a). Gravados pelo webhook do checkout.
+  stripeCheckoutSessionId String? @unique
+  stripePaymentIntentId   String? @unique
+  stripeChargeId          String?
+  stripeTaxaCentavos      Int? // taxa real cobrada pelo Stripe (balance_transaction.fee)
 
   reembolsos Reembolso[]
   pedidoRenovacao PedidoRenovacao? @relation("PedidoRenovacaoPagamento")
@@ -569,6 +575,7 @@ model Reembolso {
   decididoPor   String?
   decididoEm    DateTime?
   repasseAjuste RepasseAjuste?
+  stripeRefundId String? @unique // preenchido = enviado ao Stripe (20261028a)
 
   @@index([pagamentoId, status])
   @@index([status, criadoEm])
@@ -944,4 +951,14 @@ model EsperaMedico {
 
   @@index([consultaNovaId])
   @@index([status, resolvidoEm])
+}
+
+// Idempotência do webhook Stripe (20261028a). id = event.id.
+model StripeEvento {
+  id           String    @id
+  tipo         String
+  recebidoEm   DateTime  @default(now())
+  processadoEm DateTime?
+
+  @@index([tipo, recebidoEm])
 }

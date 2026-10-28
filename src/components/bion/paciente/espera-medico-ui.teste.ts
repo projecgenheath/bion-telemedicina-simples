@@ -30,7 +30,7 @@ igual("falada só s", contagemFalada(1), "1 segundo");
 igual("diferença cobra", textoDiferenca(5000).acao, "cobrar");
 igual("diferença devolve", textoDiferenca(-2550).acao, "devolver");
 igual("diferença zero", textoDiferenca(0).curto, "Mesmo valor");
-igual("cobra cita PIX", textoDiferenca(5000).detalhe.includes("PIX"), true);
+igual("cobra com cartão, sem Pix", [textoDiferenca(5000).detalhe.includes("cartão"), /pix/i.test(textoDiferenca(5000).detalhe)], [true, false]);
 igual("devolve sem sinal negativo no valor", /−\s?-/.test(textoDiferenca(-2550).curto), false);
 
 const base: EsperaWire = {

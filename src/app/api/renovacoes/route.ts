@@ -1,7 +1,9 @@
+import { exigirAceiteTermosPaciente } from "@/lib/server/aceite-termos";
 import { confirmarPagamento, modoGateway } from "@/lib/server/pagamentos";
 import { confirmarPagamentoRenovacao, criarCobrancaRenovacao } from "@/lib/server/renovacao-pagamento";
 import { STATUS_RENOVACAO_ABERTOS } from "@/lib/atendimento-tipo";
 import { NextRequest } from "next/server";
+import { decisaoCobranca, respostaIndisponivel, stripeAtivo } from "@/lib/stripe-checkout-logica";
 import { randomUUID } from "node:crypto";
 import { db } from "@/lib/db";
 import { exigirPapel } from "@/lib/server/auth";
@@ -46,6 +48,9 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const usuario = await exigirPapel("PACIENTE");
+    // Termos + privacidade vigentes: sem aceite, nada novo é agendado (403).
+    const semAceite = await exigirAceiteTermosPaciente(usuario);
+    if (semAceite) return semAceite;
     const corpo = lerCorpoPedidoRenovacao(await req.json().catch(() => null));
     if (typeof corpo === "string") return Response.json({ erro: corpo }, { status: 400 });
 
@@ -99,6 +104,13 @@ export async function POST(req: NextRequest) {
     if (duplicado) {
       return Response.json({ erro: "Você já pediu a renovação desta receita. Aguarde o médico." }, { status: 409 });
     }
+    // Só cartão (checkout Stripe). Flag desligada com gateway real: 503, sem
+    // criar o pedido nem a cobrança. Nunca Pix.
+    const decisao = decisaoCobranca(stripeAtivo(), modoGateway());
+    if (decisao === "indisponivel") {
+      const r = respostaIndisponivel();
+      return Response.json(r.corpo, { status: r.status });
+    }
     let criado;
     let pagamentoId: string;
     try {
@@ -125,7 +137,7 @@ export async function POST(req: NextRequest) {
       throw e;
     }
     // Demonstração: o gateway simulado confirma no servidor, como no agendar.
-    if (modoGateway() === "simulado") {
+    if (decisao === "simulado") {
       const pg = await confirmarPagamento(pagamentoId, "simulado");
       if (pg?.status === "confirmado") {
         await db.$transaction((tx) => confirmarPagamentoRenovacao(pagamentoId, tx));
@@ -155,7 +167,7 @@ export async function POST(req: NextRequest) {
         detalhes: `pedidoId=${pedido.id} documentoId=${receita.id} pacienteId=${receita.pacienteId}`,
       },
     );
-    return ok({ disponivel: true, pedido, cobranca: { pagamentoId, valorCentavos: criado.valorCentavos ?? 0, status: criado.status === "aguardando_pagamento" ? "pendente" : "confirmado", pixCopiaECola: null, qrCodeBase64: null }, ...efeitos });
+    return ok({ disponivel: true, pedido, cobranca: { pagamentoId, valorCentavos: criado.valorCentavos ?? 0, status: criado.status === "aguardando_pagamento" ? "pendente" : "confirmado", metodo: "cartao", pagarComCartao: decisao === "stripe" && criado.status === "aguardando_pagamento" }, ...efeitos });
   } catch (erro) {
     return falha(erro);
   }

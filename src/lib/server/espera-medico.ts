@@ -13,6 +13,7 @@ import {
   travarDias,
 } from "@/lib/server/financeiro";
 import { confirmarPagamento, modoGateway } from "@/lib/server/pagamentos";
+import { decisaoCobranca, ERRO_PAGAMENTO_INDISPONIVEL, stripeAtivo } from "@/lib/stripe-checkout-logica";
 import {
   calcularDiferenca,
   RESERVA_DIFERENCA_MIN,
@@ -41,7 +42,7 @@ import {
 /*                     cobrança pendente SÓ da diferença. Pago (webhook */
 /*                     → confirmarRemarcacaoEspera): cancela a antiga e */
 /*                     marca remarcada. Venceu/desistiu: cobrança e     */
-/*                     nova canceladas, espera volta a "expirada". PIX  */
+/*                     nova canceladas, espera volta a "expirada". Pago */
 /*                     atrasado: reembolso desse pagamento.             */
 /*    Assim o app recebe o valor novo no total e o repasse do médico novo */
 /*    sai de liquidoDaConsulta(valor novo), sem mexer em repasse.ts.      */
@@ -62,7 +63,7 @@ type Tx = Prisma.TransactionClient;
 export const CODIGOS_ESPERA = [
   "nao_encontrada", "acesso_negado", "corpo_invalido", "sem_espera", "espera_nao_expirada", "espera_resolvida",
   "consulta_encerrada", "nao_pago", "sem_remarcacao", "medico_entrou", "preco_mudou", "medico_indisponivel",
-  "remarcando", "pagamento_confirmado",
+  "remarcando", "pagamento_confirmado", "pagamento_indisponivel",
 ] as const;
 export type CodigoEspera = (typeof CODIGOS_ESPERA)[number];
 type Falha = { ok: false; status: number; codigo: CodigoEspera; erro: string; extra?: Record<string, unknown> };
@@ -247,20 +248,21 @@ export async function estadoEsperaDoPaciente(consultaId: string, pacienteId: str
 /* ---------------- cobrança da diferença ---------------- */
 
 /**
- * Cobrança da diferença como vai ao paciente. `pixCopiaECola` e
- * `qrCodeBase64` ficam null no gateway simulado (e até o gateway real ser
- * integrado: hoje não há dado de PIX guardado); o tipo já está pronto.
+ * Cobrança da diferença como vai ao paciente. Paga só com CARTÃO no checkout
+ * Stripe (POST /api/pagamentos/stripe/checkout { pagamentoId }); o app não
+ * cobra por Pix. `pagarComCartao`: a tela mostra o botão Pagar.
  */
 export type CobrancaEspera = {
   pagamentoId: string;
   valorCentavos: number;
   status: string;
   reservaExpiraEm: string | null;
-  pixCopiaECola: string | null;
-  qrCodeBase64: string | null;
+  metodo: "cartao";
+  pagarComCartao: boolean;
 };
 function cobrancaWire(p: { pagamentoId: string; valorCentavos: number; status: string; reservaExpiraEm: Date | null }): CobrancaEspera {
-  return { ...p, reservaExpiraEm: p.reservaExpiraEm?.toISOString() ?? null, pixCopiaECola: null, qrCodeBase64: null };
+  const pagarComCartao = p.status === "pendente" && decisaoCobranca(stripeAtivo(), modoGateway()) === "stripe";
+  return { ...p, reservaExpiraEm: p.reservaExpiraEm?.toISOString() ?? null, metodo: "cartao", pagarComCartao };
 }
 
 /* ---------------- validação comum ---------------- */
@@ -393,6 +395,11 @@ export async function remarcarPorEspera(params: {
     if (!conf.ok) return falhar(409, "preco_mudou", conf.erro, { diferencaAtualCentavos: conf.diferencaAtualCentavos });
 
     const cobrar = dif.acao === "cobrar";
+    // Só cartão (checkout Stripe). Desligado com gateway real: 503 antes de
+    // mexer em qualquer coisa (a transação não grava nada). Nunca Pix.
+    if (cobrar && decisaoCobranca(stripeAtivo(), modoGateway()) === "indisponivel") {
+      return falhar(503, "pagamento_indisponivel", ERRO_PAGAMENTO_INDISPONIVEL);
+    }
     // 1) Antiga: cancelada já (sem diferença a pagar) ou só quando a diferença
     //    for paga (confirmarRemarcacaoEspera). Até lá ela continua valendo.
     if (!cobrar && !(await cancelarAntiga(tx, consulta))) return falhar(409, "consulta_encerrada", "A consulta já foi encerrada.");
@@ -419,7 +426,7 @@ export async function remarcarPorEspera(params: {
     let pagamentoNovoId: string | null = null;
     if (cobrar) {
       const p = await tx.pagamento.create({
-        data: { consultaId: nova.id, valor: dif.diferencaCentavos / 100, metodo: "pix", status: "pendente", via: "webhook", gatewayRef: `espera:${espera.id}` },
+        data: { consultaId: nova.id, valor: dif.diferencaCentavos / 100, metodo: "cartao", status: "pendente", via: "webhook", gatewayRef: `espera:${espera.id}` },
       });
       pagamentoNovoId = p.id;
     } else {
@@ -469,8 +476,9 @@ export async function remarcarPorEspera(params: {
     };
   }, OPCOES_TX_TRAVA);
 
-  // Demonstração: gateway simulado confirma a diferença no servidor, como no agendar.
-  if (res.ok && res.cobranca && modoGateway() === "simulado") {
+  // Demonstração: gateway simulado confirma a diferença no servidor, como no
+  // agendar (só com a flag Stripe desligada; ligada, quem confirma é o webhook).
+  if (res.ok && res.cobranca && decisaoCobranca(stripeAtivo(), modoGateway()) === "simulado") {
     const p = await confirmarPagamento(res.cobranca.pagamentoId, "simulado");
     if (p?.status === "confirmado") {
       res.cobranca.status = "confirmado";
@@ -546,7 +554,7 @@ export async function confirmarRemarcacaoEspera(pagamentoId: string, agora: Date
       });
       return "remarcada" as const;
     }
-    // PIX depois da reserva vencer (ou da desistência): devolve este pagamento.
+    // Pagamento depois da reserva vencer (ou da desistência): devolve este pagamento.
     // Webhook repetido: o reembolso deste pagamento já existe → não repete o
     // cancelamento, a auditoria nem o aviso "Pagamento devolvido".
     const jaReembolsado = await tx.reembolso.findFirst({

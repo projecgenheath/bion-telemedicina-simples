@@ -4,6 +4,7 @@ import { exigirSessao, registrarAudit } from "@/lib/server/auth";
 import { ok, falha } from "@/lib/server/http";
 import { quandoClinica } from "@/lib/server/fuso";
 import { modoGateway } from "@/lib/server/pagamentos";
+import { decisaoCobranca, respostaIndisponivel, stripeAtivo } from "@/lib/stripe-checkout-logica";
 import { OPCOES_TX_TRAVA } from "@/lib/server/bloqueio-agenda";
 import {
   RESERVA_REMARCACAO_MIN,
@@ -20,10 +21,13 @@ import {
 /**
  * Remarcação do PACIENTE com multa (≤24 h da data de referência).
  *
- * POST   { data, hora, metodo? } → reserva o novo horário por
- *        RESERVA_REMARCACAO_MIN e cria a cobrança da multa. A nova data só
- *        vale depois do pagamento aprovado (webhook "multa.confirmada" ou, no
- *        modo simulado, na hora). Multa 0 → 409 (use o PATCH "remarcar").
+ * POST   { data, hora } → reserva o novo horário por
+ *        RESERVA_REMARCACAO_MIN e cria a cobrança da multa, paga só com
+ *        CARTÃO no checkout Stripe (POST /api/pagamentos/stripe/checkout
+ *        { remarcacaoId }). A nova data só vale depois do pagamento aprovado
+ *        (webhook do Stripe ou, no modo simulado, na hora). Flag Stripe
+ *        desligada com gateway real → 503 pagamento_indisponivel, sem
+ *        reservar. Nunca Pix. Multa 0 → 409 (use o PATCH "remarcar").
  * GET    → estado da remarcação mais recente (polling enquanto "pendente").
  * DELETE → paciente desiste: reserva "cancelada", horário liberado.
  *
@@ -41,8 +45,10 @@ async function carregar(id: string) {
 }
 
 function cobrancaWire(r: { id: string; multaCentavos: number; metodo: string; status: string; via: string | null }) {
-  // Mesmo formato do pagamento da consulta, em centavos.
-  return { id: r.id, valorCentavos: r.multaCentavos, metodo: r.metodo, status: r.status, via: r.via ?? modoGateway() };
+  // Mesmo formato do pagamento da consulta, em centavos. `pagarComCartao`:
+  // a tela mostra o botão Pagar (checkout Stripe com { remarcacaoId: id }).
+  const pagarComCartao = r.status === "pendente" && decisaoCobranca(stripeAtivo(), modoGateway()) === "stripe";
+  return { id: r.id, valorCentavos: r.multaCentavos, metodo: r.metodo, status: r.status, via: r.via ?? modoGateway(), pagarComCartao };
 }
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -63,7 +69,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const ctx = await carregar(id);
     if ("erro" in ctx) return ctx.erro;
     const { usuario, consulta } = ctx;
-    const body = (await req.json()) as { data?: string; hora?: string; metodo?: string };
+    const body = (await req.json()) as { data?: string; hora?: string };
 
     if (consulta.status === "cancelada" || consulta.status === "concluida") {
       return Response.json({ erro: "Esta consulta já foi encerrada." }, { status: 409 });
@@ -88,6 +94,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const horario = await validarNovoHorario(consulta, body.data, body.hora);
     if (!horario.ok) return Response.json({ erro: horario.erro }, { status: horario.status });
 
+    // Só cartão (checkout Stripe). Desligado com gateway real: não reserva nada.
+    const decisao = decisaoCobranca(stripeAtivo(), modoGateway());
+    if (decisao === "indisponivel") {
+      const r = respostaIndisponivel();
+      return Response.json(r.corpo, { status: r.status });
+    }
+
     // Reserva numa transação com a trava (médico, dia) do agendamento e do
     // bloqueio do dia: o horário é conferido de novo com o dia travado, então
     // nenhuma reserva nasce num dia que acabou de ser bloqueado.
@@ -111,7 +124,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             consultaId: id,
             novaData: horario.dataInicio,
             multaCentavos: previa.multaCentavos,
-            metodo: body.metodo === "cartao" ? "cartao" : "pix",
+            metodo: "cartao",
             solicitadoPor: usuario.id,
             expiraEm: new Date(Date.now() + RESERVA_REMARCACAO_MIN * 60_000),
           },
@@ -137,7 +150,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     });
 
     let final = criada;
-    if (modoGateway() === "simulado") {
+    if (decisao === "simulado") {
       // Demonstração: o servidor confirma a multa na hora (nunca o navegador).
       const res = await aprovarMultaRemarcacao(criada.id, "simulado");
       if (res) final = res.remarcacao;
