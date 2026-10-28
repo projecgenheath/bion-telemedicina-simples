@@ -76,7 +76,11 @@ export function AgendaSheet({
 
   const salvar = () => {
     if (erro || finais.length === 0) return;
-    atualizarMedico(medico.id, { horariosDisponiveis: finais });
+    atualizarMedico(medico.id, {
+      horariosDisponiveis: finais,
+      diasAtendimento: Array.from(diasSemana).sort(),
+      pausasSemanais: pausas,
+    });
     confirmar(finais.join(","), "Salvando horários…", `Agenda atualizada: ${finais.length} horários por dia`);
     try {
       localStorage.setItem(chaveLocal(medico.id), JSON.stringify(p));
