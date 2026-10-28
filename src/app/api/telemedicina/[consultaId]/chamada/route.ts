@@ -8,6 +8,7 @@ import { estadoJanelaSala } from "@/lib/janela-sala";
 import { decidirResposta, lerPedidoResposta } from "@/lib/chamada-recebida-logica";
 import { bloqueioConsultaEncerrada } from "@/lib/server/chamada-resposta";
 import { abrirEspera, fecharEsperaMedicoEntrou, type DesfechoEspera } from "@/lib/server/espera-medico";
+import { evolucaoPendenteDoMedico, respostaEvolucaoPendente } from "@/lib/server/evolucao";
 
 /**
  * POST /api/telemedicina/[consultaId]/chamada — atender ou recusar o toque (tele v2, fase 2).
@@ -36,8 +37,12 @@ import { abrirEspera, fecharEsperaMedicoEntrou, type DesfechoEspera } from "@/li
  *    o médico recebe 409 { erro: "espera_encerrada", motivo:
  *    "espera_encerrada", desfecho } e a linha dele NÃO é atualizada.
  *
- * A trava "evolucao_pendente" do médico (409) entra aqui depois, no PR do
- * Médicos (verificarEvolucaoPendente em lib/server/trava-evolucao.ts).
+ *  - B-20: MÉDICO atender com evolução em rascunho de OUTRA consulta → 409
+ *    { erro: "evolucao_pendente" } (evolucaoPendenteDoMedico em
+ *    lib/server/evolucao.ts), igual ao GET da sala. Antes, o comentário
+ *    prometia a checagem "no PR do Médicos" e ela nunca foi implementada:
+ *    o médico atendia com rascunho pendente e só era bloqueado ao ENTRAR
+ *    na sala.
  */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ consultaId: string }> }) {
   try {
@@ -62,6 +67,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ con
     if (encerrada) return encerrada;
     if (estadoJanelaSala(consulta.dataInicio, Date.now()) !== "aberta") {
       throw comStatus(409, "A sala desta consulta não está aberta agora.");
+    }
+
+    // B-20: trava de evolução pendente — MÉDICO ATENDER com rascunho de outra
+    // consulta em aberto recusa aqui mesmo (409), antes de gravar a resposta
+    // e fechar a espera; o rascunho DESTA consulta não conta.
+    if (papel === "medico" && pedido.acao === "atender") {
+      const pendente = await evolucaoPendenteDoMedico(usuario.id, consultaId);
+      if (pendente) return respostaEvolucaoPendente(pendente);
     }
 
     const onde = { consultaId, paraUsuarioId: usuario.id, tentativa: pedido.tentativa };

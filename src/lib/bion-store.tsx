@@ -175,6 +175,7 @@ type EstadoFresco = {
   }[];
   avaliacoes: {
     id: string; paciente: string; medico: string; especialidade: string; nota: number;
+    pacienteId?: string | null; medicoId?: string | null; // B-6: filtro por identificador
     comentario?: string; pontualidade?: number; atencao?: number; clareza?: number; createdAt: string;
   }[];
   consentimentos: {
@@ -327,6 +328,7 @@ const mapLembrete = (l: EstadoFresco["lembretes"][number]): Lembrete => ({
 
 const mapAvaliacao = (a: EstadoFresco["avaliacoes"][number]): Avaliacao => ({
   id: a.id, paciente: a.paciente, medico: a.medico, especialidade: a.especialidade,
+  pacienteId: a.pacienteId ?? undefined, medicoId: a.medicoId ?? undefined, // B-6
   nota: a.nota, comentario: a.comentario, pontualidade: a.pontualidade,
   atencao: a.atencao, clareza: a.clareza, quando: fmtQuando(a.createdAt),
   ts: new Date(a.createdAt).getTime(),
@@ -499,7 +501,7 @@ type Store = {
   naoLidasMensagens: number;
   enviarMensagem: (paraId: string, texto: string) => void;
   marcarConversaLida: (comUsuarioId: string) => void;
-  emitirDocumento: (d: Omit<Documento, "id" | "data">, pacienteIdExplicito?: string) => void;
+  emitirDocumento: (d: Omit<Documento, "id" | "data"> & { consultaId?: string }, pacienteIdExplicito?: string) => void;
   /** Resolvem `true` só quando o servidor aceitou (erros já viram toast em `api`). */
   cancelarConsulta: (id: string, motivo: string) => Promise<boolean>;
   remarcarConsulta: (id: string, data: string, hora: string) => Promise<boolean>;
@@ -1360,7 +1362,7 @@ export function BionProvider({ children }: { children: ReactNode }) {
   );
 
   const emitirDocumento = useCallback(
-    (d: Omit<Documento, "id" | "data">, pacienteIdExplicito?: string) => {
+    (d: Omit<Documento, "id" | "data"> & { consultaId?: string }, pacienteIdExplicito?: string) => {
       // Paciente identificado por ID (nunca por nome — homônimos existem):
       // 1º ID explícito do chamador, depois busca por nome (último recurso).
       const pacienteId =
@@ -1376,6 +1378,8 @@ export function BionProvider({ children }: { children: ReactNode }) {
         titulo: d.titulo,
         conteudo: d.conteudo,
         pacienteId,
+        // B-12: vínculo com a consulta em que o documento foi emitido.
+        consultaId: d.consultaId ?? null,
         medicamento: d.medicamento,
         posologia: d.posologia,
         duracao: d.duracao,

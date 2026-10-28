@@ -271,8 +271,8 @@ export function arquivoWire(a: ArquivoRow) {
 
 export type AvaliacaoComNomes = Prisma.AvaliacaoGetPayload<{
   include: {
-    paciente: { select: { nome: true } };
-    medico: { select: { nome: true; perfilMedico: { select: { especialidade: true } } } };
+    paciente: { select: { id: true; nome: true } };
+    medico: { select: { id: true; nome: true; perfilMedico: { select: { especialidade: true } } } };
   };
 }>;
 
@@ -280,6 +280,9 @@ export function avaliacaoWire(a: AvaliacaoComNomes) {
   return {
     id: a.id,
     paciente: a.paciente.nome,
+    // B-6: identificadores para filtrar por ID (nunca por nome — homônimos).
+    pacienteId: a.paciente.id,
+    medicoId: a.medico.id,
     medico: a.medico.nome,
     especialidade: a.medico.perfilMedico?.especialidade ?? "",
     nota: a.nota,
@@ -609,8 +612,9 @@ export async function carregarDados(usuario: UsuarioSessao) {
     db.avaliacao.findMany({
       where: avaliacaoWhere,
       include: {
-        paciente: { select: { nome: true } },
-        medico: { select: { nome: true, perfilMedico: { select: { especialidade: true } } } },
+        // B-6: id para o wire filtrar por identificador (nunca por nome)
+        paciente: { select: { id: true, nome: true } },
+        medico: { select: { id: true, nome: true, perfilMedico: { select: { especialidade: true } } } },
       },
       orderBy: { createdAt: "desc" },
     }),

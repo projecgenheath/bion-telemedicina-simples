@@ -8,8 +8,11 @@ import { db } from "@/lib/db";
  * Recebe o CPF JÁ VALIDADO e formatado por `validarCpf` ("000.000.000-00") e
  * procura em outro perfil tanto o formato mascarado quanto só os dígitos
  * (cadastros antigos gravavam sem máscara). A garantia definitiva contra
- * corrida (dois cadastros simultâneos) é o índice único da migração
- * `supabase/migrations/20260930_perfil_paciente_cpf_unico.sql` (NÃO aplicada).
+ * corrida (dois cadastros simultâneos) é o índice único parcial da migração
+ * `supabase/migrations/20261001122959_perfil_paciente_cpf_unico.sql`
+ * (B-32: comentário citava a migração com nome errado) — NÃO APLICADA em
+ * nenhum ambiente até hoje; enquanto não for aplicada, a corrida segue
+ * aberta (a checagem aqui é só na aplicação).
  */
 export async function cpfEmUsoPorOutroPaciente(cpfFormatado: string, userIdAtual?: string): Promise<boolean> {
   if (!cpfFormatado) return false;

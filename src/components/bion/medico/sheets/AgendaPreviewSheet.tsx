@@ -20,15 +20,22 @@ export function AgendaPreviewSheet({
   consultas: Consulta[];
 }) {
   // O médico tem TODAS as próprias consultas, então a prévia é exata.
-  // A grade é calculada uma vez ao abrir; os dias bloqueados pelo médico
-  // (que o paciente também não vê) saem quando a lista de bloqueios chega.
-  const [base] = useState(() => agendaLivreDoMedico(medico, consultas));
+  // B-13: a grade ACOMPANHA o store (agendamentos que chegam com o sheet
+  // aberto aparecem na hora; antes era congelada na montagem) e os dias
+  // bloqueados pelo médico (que o paciente também não vê) saem quando a
+  // lista de bloqueios chega.
+  const base = useMemo(() => agendaLivreDoMedico(medico, consultas), [medico, consultas]);
   const bloqueios = useBloqueiosAgenda();
   const bloqueados = useMemo(() => new Set(bloqueios.porDia.keys()), [bloqueios.porDia]);
   const agenda = useMemo(() => semDiasBloqueados(base, bloqueados), [base, bloqueados]);
-  const [escolhido, setDia] = useState(() => base[0]?.iso ?? "");
-  const selecionado = agenda.find((d) => d.iso === escolhido) ?? agenda[0];
+  // Dia escolhido é a ESCOLHA explícita do médico; o primeiro dia livre é
+  // só o padrão. Quando o dia escolhido é bloqueado ou fica sem horários,
+  // a prévia mostra o primeiro dia livre COM AVISO (antes: substituição
+  // silenciosa).
+  const [escolhido, setDia] = useState<string | null>(null);
+  const selecionado = (escolhido ? agenda.find((d) => d.iso === escolhido) : undefined) ?? agenda[0];
   const dia = selecionado?.iso ?? "";
+  const diaEscolhidoSumiu = !!escolhido && !agenda.some((d) => d.iso === escolhido);
 
   return (
     <SheetMedico
@@ -41,6 +48,11 @@ export function AgendaPreviewSheet({
         <p className="text-sm text-bion-ink/75 dark:text-bion-paper/75">Nenhum horário livre nos próximos 14 dias.</p>
       ) : (
         <>
+          {diaEscolhidoSumiu ? (
+            <p className="text-xs font-semibold rounded-xl px-3 py-2 bg-amber-500/15 text-amber-900 dark:text-amber-100" role="status">
+              O dia que você escolheu foi bloqueado ou ficou sem horários; mostrando o primeiro dia livre.
+            </p>
+          ) : null}
           <div className="flex gap-2 overflow-x-auto bp-coluna pb-1" role="listbox" aria-label="Datas disponíveis">
             {agenda.map((d) => (
               <button

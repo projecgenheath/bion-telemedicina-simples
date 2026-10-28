@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Hand } from "lucide-react";
 
 const PAINEIS = ["Perfil", "Início", "Pacientes"];
@@ -66,15 +66,22 @@ export function IndicadorTelas({
   );
 }
 
-/** Dica de gestos só na primeira visita (localStorage). */
+/** Dica de gestos só na primeira visita (localStorage). A leitura acontece
+ *  DEPOIS da montagem (B-1): ler no inicializador de estado divergia entre
+ *  servidor e cliente (risco de hidratação). O setState roda num callback
+ *  (não direto no corpo do efeito). */
 export function useDicaGestos() {
-  const [visivel, setVisivel] = useState(() => {
+  const [visivel, setVisivel] = useState(false);
+  useEffect(() => {
+    let mostrar = false;
     try {
-      return localStorage.getItem(CHAVE_DICA) !== "1";
+      mostrar = localStorage.getItem(CHAVE_DICA) !== "1";
     } catch {
-      return false;
+      /* sem acesso ao armazenamento: sem dica */
     }
-  });
+    const t = setTimeout(() => setVisivel(mostrar), 0);
+    return () => clearTimeout(t);
+  }, []);
   const dispensar = () => {
     if (!visivel) return;
     setVisivel(false);

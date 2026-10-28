@@ -29,18 +29,34 @@ export function ChamadaMedico({ onEnd, consultaId }: { onEnd: () => void; consul
   const abrirEvolucao = useCallback(() => setEvolucaoAberta(true), []);
   const fecharEvolucao = useCallback(() => setEvolucaoAberta(false), []);
   const [pendente, setPendente] = useState<{ consultaId: string; paciente: string } | null>(null);
-  useEffect(() => {
-    let vivo = true;
-    fetch("/api/medico/evolucao-pendente", { cache: "no-store" })
-      .then((r) => (r.ok ? (r.json() as Promise<{ pendente: { consultaId: string; paciente: string } | null }>) : null))
-      .then((j) => {
-        if (vivo) setPendente(j?.pendente && j.pendente.consultaId !== idSala ? j.pendente : null);
+  // B-4: falha na consulta da trava não pode virar silêncio (a trava deixaria
+  // de valer sem aviso). Estados de carregando/erro + tentar de novo.
+  const [travaCarregando, setTravaCarregando] = useState(true);
+  const [travaErro, setTravaErro] = useState(false);
+  const recarregarTrava = useCallback(() => {
+    fetch("/api/medico/evolucao-pendente", { cache: "no-store", signal: AbortSignal.timeout(10_000) })
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`Erro ${r.status}`);
+        return (await r.json()) as { pendente: { consultaId: string; paciente: string } | null };
       })
-      .catch(() => undefined);
-    return () => {
-      vivo = false;
-    };
+      .then((j) => {
+        setPendente(j?.pendente && j.pendente.consultaId !== idSala ? j.pendente : null);
+        setTravaErro(false);
+        setTravaCarregando(false);
+      })
+      .catch(() => {
+        setTravaErro(true);
+        setTravaCarregando(false);
+      });
   }, [idSala]);
+  useEffect(() => {
+    recarregarTrava();
+  }, [recarregarTrava]);
+  const tentarTravaDeNovo = () => {
+    setTravaCarregando(true);
+    setTravaErro(false);
+    recarregarTrava();
+  };
 
   // Modais de Emissão
   const [modalReceita, setModalReceita] = useState(false);
@@ -262,6 +278,32 @@ export function ChamadaMedico({ onEnd, consultaId }: { onEnd: () => void; consul
     );
   }
 
+  // B-4: a trava de evolução pendente não pôde ser conferida — avisar e
+  // deixar tentar de novo em vez de entrar na sala como se estivesse livre
+  // (o servidor continua recusando com 409 se houver rascunho pendente).
+  if (travaErro) {
+    return (
+      <div className="min-h-dvh flex flex-col items-center justify-center gap-4 p-6 text-center">
+        <p className="text-lg font-bold">Não foi possível conferir se você tem evolução pendente.</p>
+        <p className="text-sm text-muted-foreground">Sem essa conferência, a sala não abre. Tente de novo em instantes.</p>
+        <button type="button" onClick={tentarTravaDeNovo} className="rounded-full bg-primary text-primary-foreground px-6 py-3 font-bold">
+          Tentar de novo
+        </button>
+        <button type="button" onClick={onEnd} className="underline text-sm">Voltar</button>
+      </div>
+    );
+  }
+
+  // B-4: conferência da trava em andamento (inclusive no "tentar de novo").
+  if (travaCarregando) {
+    return (
+      <div className="min-h-dvh flex flex-col items-center justify-center gap-3 p-6 text-center" role="status">
+        <p className="text-lg font-bold">Conferindo evolução pendente…</p>
+        <p className="text-sm text-muted-foreground">Um instante — a sala abre logo em seguida.</p>
+      </div>
+    );
+  }
+
   return (
     <SalaConsultaTela
       sala={sala}
@@ -374,8 +416,7 @@ export function ChamadaMedico({ onEnd, consultaId }: { onEnd: () => void; consul
 
             <button
               type="submit"
-              className="w-full py-3 rounded-2xl text-primary-foreground font-bold text-xs shadow-md"
-              style={{ backgroundColor: "var(--accent)" }}
+              className="w-full py-3 rounded-2xl bg-primary text-primary-foreground font-bold text-xs shadow-md"
             >
               Emitir e Disponibilizar ao Paciente
             </button>

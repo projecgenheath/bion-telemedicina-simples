@@ -10,12 +10,14 @@ export type TipoEmissao = Documento["tipo"] | "arquivo";
 const ROTULO: Record<TipoEmissao, string> = {
   receita: "Receita",
   atestado: "Atestado",
+  exame: "Exame",
   exame_solicitado: "Exame",
   arquivo: "Arquivo",
 };
 const PREFIXO: Record<Documento["tipo"], string> = {
   receita: "Receita",
   atestado: "Atestado",
+  exame: "Solicitação de exame",
   exame_solicitado: "Solicitação de exame",
 };
 const ARQUIVO_MAX = 20 * 1024 * 1024; // limite do POST /api/arquivos
@@ -41,7 +43,9 @@ export function EmitirDocumentoSheet({
   base?: Documento;
 }) {
   const { emitirDocumento, adicionarArquivo, sessao } = useBion();
-  const [tipo, setTipo] = useState<TipoEmissao>(base?.tipo ?? "receita");
+  // "exame" é o tipo legado (B-15): renovação de documento antigo desse tipo
+  // emite como "exame_solicitado" (o seletor nunca oferece "exame").
+  const [tipo, setTipo] = useState<TipoEmissao>(base?.tipo === "exame" ? "exame_solicitado" : (base?.tipo ?? "receita"));
   const [titulo, setTitulo] = useState(base ? tituloBase(base.titulo) : "");
   const [medicamento, setMedicamento] = useState(base?.medicamento ?? "");
   const [posologia, setPosologia] = useState(base?.posologia ?? "");
@@ -93,6 +97,10 @@ export function EmitirDocumentoSheet({
         ...(tipo === "receita" ? { medicamento: medicamento.trim(), posologia: posologia.trim() } : {}),
         ...(duracao.trim() ? { duracao: duracao.trim() } : {}),
         ...(observacoes.trim() ? { observacoes: observacoes.trim() } : {}),
+        // B-12: documento fica vinculado à consulta em que foi emitido (o
+        // prontuário e a conversa agrupam por consulta; antes só o ramo de
+        // arquivo levava a consulta).
+        ...(consultaId ? { consultaId } : {}),
       },
       pacienteId,
     );
@@ -183,7 +191,7 @@ export function EmitirDocumentoSheet({
             <textarea value={conteudo} onChange={(e) => setConteudo(e.target.value)} rows={4} className={`${entrada} !rounded-2xl`} maxLength={4000} />
           </Campo>
           <Campo rotulo="Observações (opcional)" erro={erros.observacoes} ajuda={`${observacoes.length}/500`}>
-            <textarea value={observacoes} onChange={(e) => setObservacoes(e.target.value)} rows={2} className={`${entrada} !rounded-2xl`} />
+            <textarea value={observacoes} onChange={(e) => setObservacoes(e.target.value)} rows={2} maxLength={500} className={`${entrada} !rounded-2xl`} />
           </Campo>
         </div>
       )}

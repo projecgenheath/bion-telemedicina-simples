@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { Suspense, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useBion } from "@/lib/bion-store";
 import { TelaCarregando } from "@/components/bion/brand";
@@ -10,6 +10,8 @@ import { GuardaAceiteTermos } from "@/components/bion/GuardaAceiteTermos";
 /**
  * App imersivo do MÉDICO (fullscreen). O layout (fullscreen) só garante
  * autenticação; o papel é conferido aqui. Não há mais versão clássica.
+ * Suspense: o MedicoApp lê ?painel= (deep-link do menu e das páginas
+ * clássicas) com useSearchParams.
  */
 export default function PaginaMedico() {
   const { sessao } = useBion();
@@ -23,7 +25,9 @@ export default function PaginaMedico() {
   if (!ehMedico) return <TelaCarregando texto="Redirecionando…" />;
   return (
     <GuardaAceiteTermos perfil="MEDICO">
-      <MedicoApp />
+      <Suspense fallback={<TelaCarregando texto="Abrindo seu app…" />}>
+        <MedicoApp />
+      </Suspense>
     </GuardaAceiteTermos>
   );
 }

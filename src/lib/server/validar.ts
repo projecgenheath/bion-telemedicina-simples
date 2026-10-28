@@ -1,20 +1,7 @@
 import "server-only";
 
-/** Helpers leves de validação de body (P1) — sem dependência extra. */
-
-export function textoObrigatorio(
-  v: unknown,
-  campo: string,
-  opts?: { min?: number; max?: number },
-): string | { erro: string } {
-  if (typeof v !== "string") return { erro: `${campo} é obrigatório.` };
-  const s = v.trim();
-  const min = opts?.min ?? 1;
-  const max = opts?.max ?? 500;
-  if (s.length < min) return { erro: `${campo} é obrigatório.` };
-  if (s.length > max) return { erro: `${campo} deve ter no máximo ${max} caracteres.` };
-  return s;
-}
+/** Helpers leves de validação de body (P1) — sem dependência extra.
+ *  P3-2: textoObrigatorio foi removido — nunca foi usado em nenhum fluxo. */
 
 export function emailNorm(v: unknown): string | { erro: string } {
   if (typeof v !== "string") return { erro: "E-mail inválido." };

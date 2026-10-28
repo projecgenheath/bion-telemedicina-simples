@@ -10,6 +10,7 @@ import {
   Camera,
   ChevronRight,
   CircleUserRound,
+  Clock,
   FileText,
   LifeBuoy,
   LogOut,
@@ -25,7 +26,7 @@ import { iniciais } from "./metricas";
 import { formatarCnpj } from "./dados-pessoais";
 import { DadosPessoaisSheet } from "./sheets/DadosPessoaisSheet";
 import { RepassesSheet } from "./sheets/RepassesSheet";
-import { Campo, EmBreve, SheetMedico } from "./sheets/SheetMedico";
+import { Campo, SheetMedico } from "./sheets/SheetMedico";
 import { useConfirmarSalvamento } from "./sheets/useConfirmarSalvamento";
 import { useRecebimento, type DadosMedico } from "./useDadosMedico";
 import {
@@ -428,7 +429,11 @@ export function PerfilMedicoPainel({
       dadosPessoais.recarregar();
       return;
     }
-    if (!dadosPessoais.dados) return; // ainda carregando
+    // B-14: sem feedback, "ainda carregando" parecia um botão sem efeito.
+    if (!dadosPessoais.dados) {
+      toast.loading("Carregando seus dados…", { duration: 2500 });
+      return;
+    }
     setAberturasDados((n) => n + 1);
     setSheetDados(true);
   };
@@ -438,7 +443,11 @@ export function PerfilMedicoPainel({
       recebimento.recarregar();
       return;
     }
-    if (!recebimento.carregado) return; // ainda carregando
+    // B-14: idem — aviso enquanto carrega em vez de retorno silencioso.
+    if (!recebimento.carregado) {
+      toast.loading("Carregando dados de recebimento…", { duration: 2500 });
+      return;
+    }
     if (!dp && dadosPessoais.erro) dadosPessoais.recarregar();
     setAberturasPix((n) => n + 1);
     setSheetPix(true);
@@ -504,8 +513,10 @@ export function PerfilMedicoPainel({
             {medico.especialidade} · {crmComRotulo(medico.crm)}
           </div>
         ) : (
-          <div className="mt-2">
-            <EmBreve texto="Cadastro em validação" />
+          // B-9: estado REAL (cadastro pendente), não selo de "recurso futuro"
+          // sem prazo — texto informativo com ícone.
+          <div className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-bion-ink/75 dark:text-bion-paper/75">
+            <Clock className="w-3.5 h-3.5" aria-hidden /> Cadastro em validação pela equipe BION
           </div>
         )}
       </div>
@@ -528,26 +539,41 @@ export function PerfilMedicoPainel({
         onSalvo={dadosPessoais.recarregar}
       />
 
+      {/* B-18: recebimento ATUAL (Stripe) separado da área LEGADA (PIX do
+          modelo anterior) — antes o cadastro gravável de chave PIX ficava
+          misturado com o texto do Stripe, conceitualmente confuso. */}
       <section className={`${grupo} mt-4`} aria-labelledby="bm-pf-recebimento">
         <h3 id="bm-pf-recebimento" className={tituloGrupo}>
-          Recebimento
+          Recebimento (Stripe)
         </h3>
         <p className="px-4 py-3 text-xs text-bion-ink/75 dark:text-bion-paper/75">
           Você recebe na sua conta Stripe a cada pagamento, já sem a comissão e a taxa do cartão. A Stripe transfere para o seu banco
           conforme o calendário dela.
         </p>
-        {/* Modelo anterior (PIX diário): o cadastro só aparece para quem já tem chave, como registro. */}
+      </section>
+
+      {/* Modelo anterior (PIX diário): área LEGADA, explícita. A chave só é
+          usada para pagar repasses antigos ainda abertos; o cadastro só
+          aparece para quem já tem chave, como registro editável. */}
+      <section className={`${grupo} mt-2`} aria-labelledby="bm-pf-repasses-legado">
+        <h3 id="bm-pf-repasses-legado" className={tituloGrupo}>
+          Repasses do modelo anterior (PIX)
+        </h3>
         {rec ? (
-          <Linha icone={<Wallet className="w-4 h-4" />} titulo="Chave PIX (modelo anterior)" detalhe={detalhePix} onClick={abrirRecebimento} />
-        ) : null}
-        {rec ? (
-          <Linha
-            icone={rec.titularTipo === "pj" ? <Building2 className="w-4 h-4" /> : <CircleUserRound className="w-4 h-4" />}
-            titulo="Titular"
-            detalhe={`${rec.titularNome} · ${rec.titularTipo === "pj" ? "CNPJ" : "CPF"} ${rec.documentoMascarado}`}
-            onClick={abrirRecebimento}
-          />
-        ) : null}
+          <>
+            <Linha icone={<Wallet className="w-4 h-4" />} titulo="Chave PIX (modelo anterior)" detalhe={detalhePix} onClick={abrirRecebimento} />
+            <Linha
+              icone={rec.titularTipo === "pj" ? <Building2 className="w-4 h-4" /> : <CircleUserRound className="w-4 h-4" />}
+              titulo="Titular da chave PIX"
+              detalhe={`${rec.titularNome} · ${rec.titularTipo === "pj" ? "CNPJ" : "CPF"} ${rec.documentoMascarado}`}
+              onClick={abrirRecebimento}
+            />
+          </>
+        ) : (
+          <p className="px-4 py-3 text-xs text-bion-ink/75 dark:text-bion-paper/75">
+            Você não tem chave PIX do modelo anterior. Novos recebimentos são sempre pela sua conta Stripe.
+          </p>
+        )}
         <Linha
           icone={<Receipt className="w-4 h-4" />}
           titulo="Histórico de repasses"

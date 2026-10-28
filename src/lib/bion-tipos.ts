@@ -89,7 +89,8 @@ export type Arquivo = {
 
 export type Documento = {
   id: string;
-  tipo: "receita" | "atestado" | "exame_solicitado";
+  /** "exame" é o tipo legado aceito pelo servidor (B-15); novo documento usa "exame_solicitado". */
+  tipo: "receita" | "atestado" | "exame" | "exame_solicitado";
   titulo: string;
   medico: string;
   paciente: string;
@@ -236,7 +237,11 @@ export type Sessao = {
 export type Avaliacao = {
   id: string;
   paciente: string;
+  /** Identificador do paciente (B-6: filtros usam ID, nunca o nome). */
+  pacienteId?: string;
   medico: string;
+  /** Identificador do médico (B-6: filtros usam ID, nunca o nome). */
+  medicoId?: string;
   especialidade: string;
   nota: number; // 1-5
   comentario?: string;

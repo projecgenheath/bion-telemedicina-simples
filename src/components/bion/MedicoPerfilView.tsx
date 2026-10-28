@@ -64,7 +64,11 @@ export function MedicoPerfilView({ medicoId }: { medicoId?: string }) {
     );
   }
 
-  const avaliacoesDoMedico = avaliacoes.filter((a) => a.medico === medico.nome);
+  // B-6: avaliações do médico pelo IDENTIFICADOR (nunca pelo nome — homônimos);
+  // o nome só cobre registros legados sem identificador.
+  const avaliacoesDoMedico = avaliacoes.filter(
+    (a) => (a.medicoId ? a.medicoId === medico.id : a.medico === medico.nome),
+  );
 
   const lerFoto = (file?: File | null) => {
     if (!file) return;
@@ -98,6 +102,20 @@ export function MedicoPerfilView({ medicoId }: { medicoId?: string }) {
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
+      {/* P3-3 (M-12): aviso de versão clássica — o app novo do médico (/medico)
+          é a porta principal; esta página segue no endereço antigo para a
+          edição de bio/formação até migrar para o app novo. */}
+      <div className="bg-muted/60 border rounded-2xl px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
+        <p className="text-xs text-muted-foreground">
+          Esta é a <strong>versão clássica</strong> do perfil. O app novo do médico tem a mesma área com o design atual.
+        </p>
+        <a
+          href="/medico?painel=perfil"
+          className="text-xs font-bold text-primary underline underline-offset-2"
+        >
+          Abrir o app novo
+        </a>
+      </div>
       {/* Card Principal */}
       <div className="bg-card border rounded-3xl p-6 md:p-8 shadow-sm relative overflow-hidden">
         <div className="flex flex-col md:flex-row items-start md:items-center gap-6">
@@ -308,7 +326,7 @@ export function MedicoPerfilView({ medicoId }: { medicoId?: string }) {
                 <div className="flex items-center justify-between">
                   <span className="font-bold text-foreground">{av.paciente}</span>
                   <div className="flex items-center gap-1 text-amber-500 dark:text-amber-400 font-bold">
-                    <Star className="w-3.5 h-3.5 fill-amber-500" /> {av.nota}.0
+                    <Star className="w-3.5 h-3.5 fill-amber-500" /> {av.nota.toFixed(1)}
                   </div>
                 </div>
                 {av.comentario && (

@@ -52,9 +52,15 @@ export function MedicoPacientes() {
     const consultasPaciente = minhas
       .filter((c) => chavePaciente(c) === chaveSelecionada)
       .sort((a, b) => b.ts - a.ts);
-    const docsPaciente = documentos.filter((d) => d.paciente === selecionado);
-    const avalsPaciente = avaliacoes.filter((a) => a.paciente === selecionado);
-    // Documentos e avaliações ainda só trazem o nome do paciente.
+    // B-6: documentos e avaliações são casados pelo IDENTIFICADOR do paciente
+    // (homônimos não trocam documentos); o nome só cobre registros legados
+    // gravados antes do identificador existir.
+    const porChave = <T extends { paciente: string; pacienteId?: string }>(lista: T[]): T[] =>
+      chaveSelecionada.startsWith("nome:")
+        ? lista.filter((x) => x.paciente === selecionado)
+        : lista.filter((x) => x.pacienteId === chaveSelecionada || (!x.pacienteId && x.paciente === selecionado));
+    const docsPaciente = porChave(documentos);
+    const avalsPaciente = porChave(avaliacoes);
     const registro = atual?.registro;
 
     return (
@@ -144,7 +150,7 @@ export function MedicoPacientes() {
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-bold text-foreground">{a.medico}</span>
                   <span className="flex items-center gap-1 text-amber-500 dark:text-amber-400 font-bold">
-                    <Star className="w-3.5 h-3.5 fill-amber-500" /> {a.nota}.0
+                    <Star className="w-3.5 h-3.5 fill-amber-500" /> {a.nota.toFixed(1)}
                   </span>
                 </div>
                 {a.comentario && (
@@ -168,6 +174,20 @@ export function MedicoPacientes() {
         <p className="text-xs text-muted-foreground">
           Consulte o histórico, o prontuário e as avaliações de cada paciente atendido.
         </p>
+      </div>
+
+      {/* P3-3 (M-12): aviso de versão clássica — a área de pacientes do app
+          novo (/medico) é a porta principal. */}
+      <div className="bg-muted/60 border rounded-2xl px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
+        <p className="text-xs text-muted-foreground">
+          Esta é a <strong>versão clássica</strong> da lista. O app novo do médico tem a mesma área com o design atual.
+        </p>
+        <a
+          href="/medico?painel=pacientes"
+          className="text-xs font-bold text-primary underline underline-offset-2"
+        >
+          Abrir o app novo
+        </a>
       </div>
 
       <div className="relative">

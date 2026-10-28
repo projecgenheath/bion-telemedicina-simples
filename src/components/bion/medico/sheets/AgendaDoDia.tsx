@@ -135,6 +135,9 @@ export function AgendaDoDia({ medico, onExecutando }: { medico: Medico; onExecut
 
   // Falhas técnicas / faltas do médico do dia escolhido (eventos do servidor; a falta já vem no bootstrap).
   const [desfechos, setDesfechos] = useState<ReadonlyMap<string, DesfechoSistema>>(() => new Map());
+  // B-14: falha na busca de eventos deixa de ser silenciosa — aviso + tentar de novo.
+  const [eventosErro, setEventosErro] = useState(false);
+  const [eventosTentativa, setEventosTentativa] = useState(0);
   const versaoDia = useMemo(
     () =>
       minhas
@@ -152,13 +155,20 @@ export function AgendaDoDia({ medico, onExecutando }: { medico: Medico; onExecut
     fetch(url, { headers: { "Content-Type": "application/json" }, signal: ctrl.signal })
       .then(async (res) => {
         const json = (await res.json().catch(() => null)) as { eventos?: EventoMedico[] } | null;
-        if (!ctrl.signal.aborted && res.ok && json?.eventos) setDesfechos(desfechosSistema(json.eventos));
+        if (ctrl.signal.aborted) return;
+        if (res.ok && json?.eventos) {
+          setDesfechos(desfechosSistema(json.eventos));
+          setEventosErro(false);
+        } else {
+          setEventosErro(true); // B-14: sem os eventos, avisa em vez de só mostrar o status
+        }
       })
-      .catch(() => {
-        /* sem os eventos, a agenda mostra só o status */
+      .catch((e: unknown) => {
+        // Aborte (troca de dia/desmonte) não é erro; o resto é.
+        if (!ctrl.signal.aborted && (e as { name?: string })?.name !== "AbortError") setEventosErro(true);
       });
     return () => ctrl.abort();
-  }, [dia, versaoDia]);
+  }, [dia, versaoDia, eventosTentativa]);
   const dias = useMemo(
     () =>
       Array.from({ length: HORIZONTE_DIAS }, (_, i) => {
@@ -433,6 +443,21 @@ export function AgendaDoDia({ medico, onExecutando }: { medico: Medico; onExecut
               <LockOpen className="w-4 h-4" aria-hidden /> Desbloquear dia
             </button>
           ) : null}
+        </div>
+      ) : null}
+
+      {eventosErro ? (
+        <div className="rounded-2xl border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 flex items-center justify-between gap-3" role="status">
+          <p className="text-xs font-semibold text-amber-900 dark:text-amber-100">
+            Não foi possível carregar as faltas/falhas técnicas deste dia; os horários aparecem só com o status.
+          </p>
+          <button
+            type="button"
+            onClick={() => setEventosTentativa((n) => n + 1)}
+            className="shrink-0 text-xs font-bold text-amber-900 dark:text-amber-100 underline underline-offset-2"
+          >
+            Tentar de novo
+          </button>
         </div>
       ) : null}
 
@@ -803,7 +828,9 @@ function LinhaSlot({
         const m = marcacao?.consultaId === c.id ? marcacao : null;
         const pode = podeMarcarDesfechoNaAgenda(c, agora, desfechos);
         if (!pode && !m) return null;
-        if (m && m.etapa !== "feito" && (m.etapa === "confirmar" || m.etapa === "enviando" || m.etapa === "erro")) {
+        // B-17: a lista de etapas já exclui "feito" — a conferência extra era
+        // código morto dentro da expressão.
+        if (m && (m.etapa === "confirmar" || m.etapa === "enviando" || m.etapa === "erro")) {
           const t = TEXTO_DESFECHO[m.tipo];
           return (
             <div

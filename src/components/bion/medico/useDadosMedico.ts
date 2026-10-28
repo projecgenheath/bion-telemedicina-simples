@@ -139,6 +139,9 @@ export function useDadosMedico() {
     () => ({
       pontos: pontosReceita(receitaRecurso.dados),
       totais: receitaRecurso.dados?.totais ?? null,
+      // B-3: percentual da regra que o servidor devolve — o rótulo da
+      // comissão não mente se a regra mudar (antes: "10%" fixo no código).
+      comissaoPct: receitaRecurso.dados?.regra.comissaoPct ?? 10,
       carregando: receitaRecurso.carregando,
       erro: receitaRecurso.erro,
       recarregar: receitaRecurso.recarregar,

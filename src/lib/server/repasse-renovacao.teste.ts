@@ -43,5 +43,30 @@ igual("consultaForaPorValorZero retorno 0", consultaForaPorValorZero({ tipoAtend
 igual("consultaForaPorValorZero com valor", consultaForaPorValorZero({ tipoAtendimento: "retorno", valor: 100 }), false);
 igual("reembolso total zera", run([ped({ reembolsos: [{ status: "processado", valorCentavos: 10000 }] })]).map((i) => i.liquidoCentavos), [0]);
 
+// B-31: consulta com MAIS DE UM evento de multa (ciclo de cancela e reabre) —
+// os eventos são SOMADOS num item só (chave única por consulta); antes, o
+// segundo evento era descartado em silêncio e o médico não recebia.
+const multa = (o: Record<string, unknown>) => ({
+  consultaId: "c1", em: antes, multaCentavos: 2000, valorConsulta: 100, reembolsos: [], ...o,
+});
+igual(
+  "2 multas da mesma consulta somam num item",
+  run([], [], { multasCancelamento: [multa({}), multa({ em: new Date("2026-10-20T11:00:00-03:00") })] }).map((i) => [
+    i.chave,
+    i.multasCentavos,
+  ]),
+  [["multa_cancelamento:c1", 2000]], // parte do médico = 50% de 4000
+);
+igual(
+  "multa devolvida continua fora",
+  run([], [], { multasCancelamento: [multa({ reembolsos: [{ status: "processado", valorCentavos: 10000, efetivoEm: antes }] })] }).length,
+  0,
+);
+igual(
+  "multa depois do corte fora",
+  run([], [], { multasCancelamento: [multa({ em: new Date(corte.getTime() + 1) })] }).length,
+  0,
+);
+
 console.log(`${ok} ok, ${falhas} falha(s)`);
 if (falhas) process.exit(1);

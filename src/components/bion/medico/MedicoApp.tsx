@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { ChamadosSuporte } from "@/components/bion/ChamadosSuporte";
 import { Ajuda } from "@/components/bion/Ajuda";
 import { useDadosMedico } from "./useDadosMedico";
@@ -41,7 +42,16 @@ export function MedicoApp() {
   const { medico, minhas } = dados;
   const carrosselRef = useRef<HTMLDivElement>(null);
   const colunaRef = useRef<HTMLDivElement>(null);
-  const [painel, setPainel] = useState(1);
+  const parametros = useSearchParams();
+  // P3-3 (M-12): deep-link ?painel=perfil|pacientes — o menu do médico e as
+  // páginas clássicas apontam para cá com o painel de destino. Vira o valor
+  // INICIAL do estado (a montagem posiciona o carrossel; rolar depois é do
+  // usuário) — sem setState dentro de efeito.
+  const [painel, setPainel] = useState(() => {
+    const alvo = parametros.get("painel");
+    return alvo === "perfil" ? 0 : alvo === "pacientes" ? 2 : 1;
+  });
+  const painelInicialRef = useRef(painel);
   const [secao, setSecao] = useState(0);
   const [sheet, setSheet] = useState<Sheet>(null);
   const [aberturas, setAberturas] = useState(0);
@@ -74,11 +84,14 @@ export function MedicoApp() {
     if (col && alvo) col.scrollTo({ top: alvo.offsetTop, behavior: "smooth" });
   }, []);
 
-  // Começa no painel central (Início), como o app do paciente.
+  // Começa no painel do deep-link (ou no central, como o app do paciente):
+  // posiciona o carrossel no PRIMEIRO frame; o estado `painel` já nasce no
+  // destino (P3-3), então aqui é só efeito colateral no DOM (scroll).
   useEffect(() => {
     const el = carrosselRef.current;
     if (!el) return;
-    const posicionar = () => el.scrollTo({ left: el.clientWidth, behavior: "instant" as ScrollBehavior });
+    const alvo = painelInicialRef.current;
+    const posicionar = () => el.scrollTo({ left: alvo * el.clientWidth, behavior: "instant" as ScrollBehavior });
     posicionar();
     const raf = requestAnimationFrame(posicionar);
     return () => cancelAnimationFrame(raf);
@@ -248,7 +261,7 @@ export function MedicoApp() {
                 <div className="text-sm font-bold">Termos de uso do médico</div>
                 <div className="text-xs text-bion-ink/75 dark:text-bion-paper/75">Texto específico para profissionais.</div>
               </div>
-              <button type="button" onClick={() => window.open("/termos-medico", "_blank")} className="text-xs font-bold text-bion-sea dark:text-sky-300">Ler termos</button>
+              <button type="button" onClick={() => window.open("/termos-medico", "_blank", "noopener,noreferrer")} className="text-xs font-bold text-bion-sea dark:text-sky-300">Ler termos</button>
             </div>
             <Ajuda perfil="medico" />
           </div>

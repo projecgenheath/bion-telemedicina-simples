@@ -386,7 +386,9 @@ export async function PATCH(
         if (body.pago !== undefined) {
           if (body.pago) {
             // Trilha de pagamento: admin confirma pela mesma rota do gateway.
-            const cobranca = await criarCobranca(consulta.id, consulta.valor, "pix");
+            // B-34: "cartao" — todos os demais fluxos declaram cartão; "pix"
+            // gerava inconsistência de relatório.
+            const cobranca = await criarCobranca(consulta.id, consulta.valor, "cartao");
             const p = await confirmarPagamento(cobranca.id, "simulado");
             if (p) data.pago = true;
           } else {

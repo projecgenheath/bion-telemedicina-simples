@@ -21,6 +21,8 @@ export async function POST(req: NextRequest) {
       titulo: string;
       conteudo: string;
       pacienteId: string;
+      /** B-12: consulta em que o documento foi emitido (opcional). */
+      consultaId?: string | null;
       medicamento?: string;
       posologia?: string;
       duracao?: string;
@@ -62,6 +64,17 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // B-12: vínculo com a consulta (quando informado) — precisa ser consulta
+    // do PRÓPRIO médico com o MESMO paciente; qualquer outro id é ignorado.
+    let consultaId: string | null = null;
+    if (typeof body.consultaId === "string" && body.consultaId) {
+      const consulta = await db.consulta.findFirst({
+        where: { id: body.consultaId, medicoId: usuario.id, pacienteId: paciente.id },
+        select: { id: true },
+      });
+      consultaId = consulta?.id ?? null;
+    }
+
     const doc = await db.documento.create({
       data: {
         tipo: body.tipo,
@@ -69,6 +82,7 @@ export async function POST(req: NextRequest) {
         conteudo: body.conteudo.slice(0, 6000),
         medicoId: usuario.id,
         pacienteId: paciente.id,
+        consultaId, // B-12: consulta em que o documento foi emitido
         medicamento: body.medicamento?.trim().slice(0, 200) || null,
         posologia: body.posologia?.trim().slice(0, 300) || null,
         duracao: body.duracao?.trim().slice(0, 100) || null,

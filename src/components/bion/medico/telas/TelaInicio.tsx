@@ -3,7 +3,6 @@
 import { CalendarClock, CalendarDays, ChevronDown, Info, RefreshCw, Video, XCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { AvisoAtivarToque } from "@/components/bion/AvisoAtivarToque";
-import { partesFusoClinica } from "@/lib/bion-tipos";
 import { ContagemRegressiva } from "../ContagemRegressiva";
 import { iniciais, reservaVigente, ROTULO_STATUS, salaAberta, saudacao, textoReservaPendente } from "../metricas";
 import type { DadosMedico } from "../useDadosMedico";
@@ -31,7 +30,6 @@ export function TelaInicio({
   const nomeExibicao = sessao.nome.replace(/^(dr|dra)\.?\s+/i, "");
   const tratamento = /^dra\.?\s/i.test(sessao.nome) ? "Dra." : /^dr\.?\s/i.test(sessao.nome) ? "Dr." : "";
   const aberta = proxima ? salaAberta(proxima.ts, agora) : false;
-  const p = proxima ? partesFusoClinica(proxima.ts) : null;
   const reservaProxima = proxima ? reservaVigente(proxima, agora) : null;
 
   return (
@@ -87,7 +85,7 @@ export function TelaInicio({
             </span>
           ) : null}
         </div>
-        {proxima && p ? (
+        {proxima ? (
           <>
             <ContagemRegressiva alvo={proxima.ts} />
             <div className="mt-4 text-base font-bold truncate">{proxima.paciente}</div>

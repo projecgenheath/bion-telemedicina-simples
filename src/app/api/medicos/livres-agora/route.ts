@@ -25,8 +25,15 @@ export async function GET(req: NextRequest) {
     let especialidade = sp.get("especialidade")?.trim() || null;
     let original: { medicoId: string; valorCentavos: number } | null = null;
     if (consultaId) {
+      // B-23: o MÉDICO da própria consulta também pode consultar (a lista é
+      // só leitura); antes, médico passando a própria consulta recebia 404.
       const c = await db.consulta.findFirst({
-        where: { id: consultaId, ...(usuario.role === "ADMIN" ? {} : { pacienteId: usuario.id }) },
+        where: {
+          id: consultaId,
+          ...(usuario.role === "ADMIN"
+            ? {}
+            : { OR: [{ pacienteId: usuario.id }, { medicoId: usuario.id }] }),
+        },
         select: { medicoId: true, valor: true, especialidade: true },
       });
       if (!c) return Response.json({ erro: "Consulta não encontrada." }, { status: 404 });

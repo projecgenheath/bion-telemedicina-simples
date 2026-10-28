@@ -272,18 +272,56 @@ export function lerCorpoPedidoRenovacao(body: unknown): { documentoId: string; o
  * retorno já usa e a que o paciente vê ("consulta de DD/MM").
  */
 export const PRAZO_RETORNO_GRATIS_DIAS = 30;
-const FUSO_SP_MS = 3 * 3600_000; // America/Sao_Paulo, UTC-3 (sem horário de verão desde 2019)
+
+/* B-29: fuso de São Paulo via Intl (à prova de horário de verão), igual ao
+ * restante do sistema. Módulo PURO (cliente e servidor), por isso as funções
+ * ficam AQUI em vez de importar o fuso do servidor. Antes: offset fixo de
+ * −3 h, errado se o horário de verão voltar. */
+const FMT_SP = new Intl.DateTimeFormat("en-US", {
+  timeZone: "America/Sao_Paulo",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  hourCycle: "h23",
+});
+
+function partesSP(t: number): { ano: number; mes: number; dia: number } {
+  const p = FMT_SP.formatToParts(new Date(t));
+  const g = (tipo: string) => Number(p.find((x) => x.type === tipo)?.value ?? "0");
+  return { ano: g("year"), mes: g("month"), dia: g("day") };
+}
+
+/** Offset (ms) de São Paulo em relação a UTC no instante dado (negativo). */
+function offsetSPMs(t: number): number {
+  const p = FMT_SP.formatToParts(new Date(t));
+  const g = (tipo: string) => Number(p.find((x) => x.type === tipo)?.value ?? "0");
+  const comoUtc = Date.UTC(g("year"), g("month") - 1, g("day"), g("hour") % 24, g("minute"), g("second"));
+  return comoUtc - (t - (((t % 1000) + 1000) % 1000));
+}
+
+/** Instante real do horário de parede de São Paulo dado (mesma borda de
+ *  transição do fuso do servidor: normaliza como Date.UTC). */
+function instanteSP(ano: number, mes: number, dia: number): Date {
+  const parede = Date.UTC(ano, mes - 1, dia, 0, 0, 0, 0);
+  let t = parede - offsetSPMs(parede);
+  const o2 = offsetSPMs(t);
+  if (parede - o2 !== t) t = parede - o2; // borda de horário de verão
+  return new Date(t);
+}
 
 /** Instante em que o retorno deixa de ser grátis (meia-noite SP após o 30º dia). */
 export function fimRetornoGratis(origemInicio: Date | string): Date {
-  const o = new Date(new Date(origemInicio).getTime() - FUSO_SP_MS);
-  return new Date(Date.UTC(o.getUTCFullYear(), o.getUTCMonth(), o.getUTCDate() + PRAZO_RETORNO_GRATIS_DIAS + 1) + FUSO_SP_MS);
+  const { ano, mes, dia } = partesSP(new Date(origemInicio).getTime());
+  return instanteSP(ano, mes, dia + PRAZO_RETORNO_GRATIS_DIAS + 1);
 }
 
 /** Último dia (DD/MM, São Paulo) em que o retorno é grátis. */
 export function ultimoDiaRetornoGratis(origemInicio: Date | string): string {
-  const d = new Date(fimRetornoGratis(origemInicio).getTime() - FUSO_SP_MS - 1);
-  return `${String(d.getUTCDate()).padStart(2, "0")}/${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+  const { dia, mes } = partesSP(fimRetornoGratis(origemInicio).getTime() - 1);
+  return `${String(dia).padStart(2, "0")}/${String(mes).padStart(2, "0")}`;
 }
 
 /** Status que NÃO gastam o retorno grátis (só o cancelamento devolve). */

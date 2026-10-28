@@ -2,6 +2,7 @@ import "server-only";
 import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { horarioVedado, diaBloqueado, type ClienteBanco } from "@/lib/server/bloqueio-agenda";
+import { STATUS_LIBERAM_HORARIO } from "@/lib/server/financeiro";
 import { filtroEvolucaoPendente } from "@/lib/medico-livre-logica";
 
 /**
@@ -15,7 +16,10 @@ import { filtroEvolucaoPendente } from "@/lib/medico-livre-logica";
  */
 export const PROXIMA_CONSULTA_MIN = 40;
 export const ANDAMENTO_MIN = 60; // consulta iniciada há até 60 min e não encerrada
-const STATUS_ENCERRADOS = ["cancelada", "concluida", "aguardando_reagendamento"];
+// B-28: lista única de statuses que liberam o horário do médico. Antes havia
+// DUAS cópias com bordas divergentes (STATUS_ENCERRADOS aqui e
+// STATUS_LIBERAM_HORARIO no financeiro) — dois lugares para manter a mesma regra.
+export { STATUS_LIBERAM_HORARIO } from "@/lib/server/financeiro";
 
 /**
  * M-20 da auditoria: mesma janela vedada do agendamento (horarioVedado de
@@ -47,7 +51,7 @@ export async function motivoMedicoOcupado(
         OR: [
           { status: "em_espera" },
           {
-            status: { notIn: STATUS_ENCERRADOS },
+            status: { notIn: STATUS_LIBERAM_HORARIO },
             dataInicio: { gte: new Date(t - ANDAMENTO_MIN * 60_000), lt: new Date(t + PROXIMA_CONSULTA_MIN * 60_000) },
           },
         ],

@@ -117,8 +117,9 @@ export async function POST(req: NextRequest) {
         clareza: clampNota(body.clareza),
       },
       include: {
-        paciente: { select: { nome: true } },
-        medico: { select: { nome: true, perfilMedico: { select: { especialidade: true } } } },
+        // B-6: id para o wire filtrar por identificador (nunca por nome)
+        paciente: { select: { id: true, nome: true } },
+        medico: { select: { id: true, nome: true, perfilMedico: { select: { especialidade: true } } } },
       },
     });
 

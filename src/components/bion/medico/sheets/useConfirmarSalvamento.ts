@@ -33,6 +33,17 @@ export function useConfirmarSalvamento<T>(atual: T, igual: (a: T, b: T) => boole
 
   return useCallback<Confirmar<T>>((esperado, carregando, ok) => {
     if (pendente.current) clearTimeout(pendente.current.t);
+    // B-16: o valor esperado JÁ é o atual (ex.: salvar preço igual ao vigente)?
+    // Sucesso imediato — antes o toast de "Salvando…" ficava pendente os 12 s
+    // e sumia sem confirmação.
+    if (igual(atual, esperado)) {
+      const id = toast.loading(carregando);
+      setTimeout(() => {
+        toast.dismiss(id);
+        toast.success(ok, { id });
+      }, 350);
+      return;
+    }
     const id = toast.loading(carregando);
     // Sem confirmação em 12 s (erro já mostrado pelo store ou rede lenta): some.
     const t = setTimeout(() => {
@@ -40,5 +51,5 @@ export function useConfirmarSalvamento<T>(atual: T, igual: (a: T, b: T) => boole
       pendente.current = null;
     }, 12_000);
     pendente.current = { v: esperado, id, ok, t };
-  }, []);
+  }, [atual, igual]);
 }

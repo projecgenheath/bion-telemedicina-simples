@@ -8,7 +8,16 @@ import { ok, falha } from "@/lib/server/http";
  * Pedidos de renovação de receita feitos ao médico da sessão (só os dele).
  * Padrão: pendentes, mais antigos primeiro (máx. 100).
  */
-const STATUS = new Set(["pendente", "renovada", "chamada_marcada", "recusada", "cancelado"]);
+// B-19: "aguardando_pagamento" é status legítimo do domínio (o pedido nasce
+// nele antes do pagamento ser confirmado) — sem ele, o filtro devolvia 400.
+const STATUS = new Set([
+  "pendente",
+  "aguardando_pagamento",
+  "renovada",
+  "chamada_marcada",
+  "recusada",
+  "cancelado",
+]);
 
 export async function GET(req: NextRequest) {
   try {

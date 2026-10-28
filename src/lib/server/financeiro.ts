@@ -1,7 +1,7 @@
 import "server-only";
 import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
-import { partesNoFuso, quandoClinica } from "@/lib/server/fuso";
+import { instanteNoFuso, partesNoFuso, quandoClinica } from "@/lib/server/fuso";
 import {
   chaveTravaDia,
   conferirDiasEPausas,
@@ -186,12 +186,6 @@ export async function registrarTaxaGateway(pagamentoId: string, taxaCentavos: nu
   const taxa = taxaGatewayValida(taxaCentavos, Math.round(p.valor * 100));
   if (p.stripeTaxaCentavos !== taxa) await db.pagamento.update({ where: { id: pagamentoId }, data: { stripeTaxaCentavos: taxa } });
   return taxa;
-}
-
-/** Competência "AAAA-MM" do mês de Brasília (não o mês em UTC). */
-export function competenciaDe(instante: Date): string {
-  const p = partesNoFuso(instante);
-  return `${p.ano}-${String(p.mes).padStart(2, "0")}`;
 }
 
 /* ---------- Multa -------------------------------------------------- */
@@ -788,11 +782,12 @@ export async function cancelarReservasPendentes(tx: Prisma.TransactionClient, co
   return tx.remarcacaoPendente.updateMany({ where: { consultaId, status: "pendente" }, data: { status: "cancelada" } });
 }
 
-/** Início e fim (exclusivo) do dia civil em São Paulo (UTC-3, sem horário de verão) que contém `d`. */
+/** Início e fim (exclusivo) do dia civil em São Paulo que contém `d`.
+ *  B-29: via API de fuso (partesNoFuso + instanteNoFuso), à prova de horário
+ *  de verão — antes, offset fixo de −3 h como o resto do sistema não usa. */
 export function diaSaoPaulo(d: Date): { inicio: Date; fim: Date } {
-  const OFFSET = 3 * 3600_000;
-  const local = new Date(d.getTime() - OFFSET);
-  const inicio = new Date(Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate()) + OFFSET);
+  const p = partesNoFuso(d);
+  const inicio = instanteNoFuso(p.ano, p.mes, p.dia);
   return { inicio, fim: new Date(inicio.getTime() + 24 * 3600_000) };
 }
 

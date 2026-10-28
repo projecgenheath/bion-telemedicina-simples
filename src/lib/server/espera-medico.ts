@@ -13,6 +13,14 @@ import {
   travarDias,
 } from "@/lib/server/financeiro";
 import { confirmarPagamento, modoGateway } from "@/lib/server/pagamentos";
+// B-28: janelas UNIFICADAS com a rota de listagem (medico-livre.ts) — antes
+// havia cópias locais com borda divergente (`lte` aqui, `lt` na listagem):
+// médico com consulta EXATAMENTE 40 min à frente aparecia livre na lista e
+// era recusado na remarcação.
+import {
+  ANDAMENTO_MIN as CONSULTA_EM_ANDAMENTO_MIN,
+  PROXIMA_CONSULTA_MIN as SEM_CONSULTA_PROXIMOS_MIN,
+} from "@/lib/server/medico-livre";
 import { decisaoCobranca, ERRO_PAGAMENTO_INDISPONIVEL, stripeAtivo } from "@/lib/stripe-checkout-logica";
 import {
   calcularDiferenca,
@@ -54,9 +62,6 @@ export const ERRO_ESPERA_NAO_EXPIRADA = "A espera ainda não terminou.";
 export const ERRO_REMARCAR_RETORNO_GRATIS =
   "Este retorno é gratuito e não pode ser remarcado com outro médico. Cancele, e o seu direito ao retorno grátis volta.";
 const MOTIVO_CANCELAMENTO = "O médico não entrou na sala em até 10 minutos";
-/** Médico "livre agora" (mesma regra da GET /api/medicos/livres-agora do Médicos). */
-const SEM_CONSULTA_PROXIMOS_MIN = 40;
-const CONSULTA_EM_ANDAMENTO_MIN = 60;
 
 type Tx = Prisma.TransactionClient;
 /** Códigos estáveis das falhas da espera (o front decide por `codigo`, não pelo texto de `erro`). */
@@ -126,9 +131,13 @@ export async function abrirEspera(consultaId: string, atendidaPacienteEm: Date, 
   const c = await tx.consulta.findUnique({ where: { id: consultaId }, select: { dataInicio: true, status: true } });
   if (!c || !STATUS_ABERTOS.includes(c.status)) return null;
   const expiraEm = calcularExpiraEm(c.dataInicio, atendidaPacienteEm);
+  // B-33: os parâmetros seguem como timestamptz (ISO com offset, sem
+  // ambiguidade) — o `AT TIME ZONE 'UTC'` antigo re interpretava o instante
+  // na timezone da SESSÃO do banco (hoje UTC; se a configuração mudasse, as
+  // datas deslocariam).
   await tx.$executeRaw`
     INSERT INTO "EsperaMedico" ("id", "consultaId", "iniciadaEm", "expiraEm", "status")
-    VALUES (${crypto.randomUUID()}, ${consultaId}, (${atendidaPacienteEm}::timestamptz AT TIME ZONE 'UTC'), (${expiraEm}::timestamptz AT TIME ZONE 'UTC'), 'aguardando')
+    VALUES (${crypto.randomUUID()}, ${consultaId}, ${atendidaPacienteEm}::timestamptz, ${expiraEm}::timestamptz, 'aguardando')
     ON CONFLICT ("consultaId") DO NOTHING`;
   return tx.esperaMedico.findUnique({ where: { consultaId } });
 }
@@ -347,7 +356,7 @@ export async function medicoLivreAgora(tx: Tx, p: { medicoId: string; especialid
       status: { in: STATUS_ABERTOS },
       dataInicio: {
         gte: new Date(p.agora.getTime() - CONSULTA_EM_ANDAMENTO_MIN * 60_000),
-        lte: new Date(p.agora.getTime() + SEM_CONSULTA_PROXIMOS_MIN * 60_000),
+        lt: new Date(p.agora.getTime() + SEM_CONSULTA_PROXIMOS_MIN * 60_000),
       },
     },
     select: { id: true },

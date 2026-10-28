@@ -217,11 +217,27 @@ export async function GET(
 
     // Teleconsulta v2 — trava do próximo atendimento (só o MÉDICO): com
     // evolução em rascunho de OUTRA consulta, 409 { erro: "evolucao_pendente" }.
-    // Ao entrar, a evolução desta consulta nasce em rascunho (idempotente).
+    //
+    // B-21 — regra documentada (Decisão do Alisson: a trava BLOQUEIA SEMPRE):
+    // o rascunho desta consulta nasce na PRIMEIRA entrada real do médico
+    // (`criado`, linha abaixo) e não a cada sinal de presença (heartbeat a
+    // cada poucos segundos). Entrar por engano cria a trava — as saídas são
+    // concluir a evolução no app, o cancelamento da consulta (limpa o
+    // rascunho, M-22) e a correção pelo admin. Antes, `garantirEvolucao`
+    // rodava em TODA requisição de presença, mesmo sem primeira entrada.
+    let criado = false;
     if (papel === "MEDICO") {
       const pendente = await evolucaoPendenteDoMedico(usuario.id, consultaId);
       if (pendente) return respostaEvolucaoPendente(pendente);
-      await garantirEvolucao({ id: consultaId, medicoId: consulta.medicoId, pacienteId: consulta.pacienteId });
+      // Primeira entrada nesta consulta? (presença ainda não existe)
+      const presenca = await db.presencaSala.findUnique({
+        where: { consultaId_usuarioId: { consultaId, usuarioId: usuario.id } },
+        select: { usuarioId: true },
+      });
+      criado = presenca === null;
+      if (criado) {
+        await garantirEvolucao({ id: consultaId, medicoId: consulta.medicoId, pacienteId: consulta.pacienteId });
+      }
     }
 
     // Presença dos dois numa consulta só (antes: duas).
@@ -236,7 +252,9 @@ export async function GET(
     // Heartbeat de presença (upsert; "criado" = primeira entrada nesta consulta).
     // "entrouEm" = início da sessão atual: recomeça quando o sinal ficou mais
     // de 30 s parado (prova de quanto tempo a pessoa esperou na sala).
-    const criado = presencaExistente === null;
+    // Para o médico, `criado` já foi conferido acima (B-21); paciente e
+    // admin calculam aqui.
+    if (papel !== "MEDICO") criado = presencaExistente === null;
     const entrouEm = entradaAposSinal(presencaExistente, agoraPing);
     await db.presencaSala.upsert({
       where: { consultaId_usuarioId: { consultaId, usuarioId: usuario.id } },

@@ -5,11 +5,13 @@ import { toast } from "sonner";
 import type { Arquivo, Consulta, Documento } from "@/lib/bion-store";
 import { gerarDocumentoPDF } from "@/lib/receita-pdf";
 import { rotuloStatusMedico } from "./metricas";
-import { EmBreve } from "./sheets/SheetMedico";
 
+// B-15: "exame" é aceito pelo servidor (tipo legado) — sem a chave, o rótulo
+// de documentos antigos desse tipo ficava indefinido.
 const ROTULO_DOC: Record<Documento["tipo"], string> = {
   receita: "Receita",
   atestado: "Atestado",
+  exame: "Exame",
   exame_solicitado: "Exame solicitado",
 };
 
@@ -157,11 +159,6 @@ export function ProntuarioPaciente({
             ))}
           </ul>
         )}
-      </section>
-
-      <section className="bp-glass p-4 flex items-center justify-between gap-3">
-        <span className="text-sm">Anamneses com outros profissionais (exige consentimento do paciente)</span>
-        <EmBreve />
       </section>
     </div>
   );

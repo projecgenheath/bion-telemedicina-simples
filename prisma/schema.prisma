@@ -92,7 +92,9 @@ model PerfilMedico {
   idiomas             String  @default("[]") // JSON string[]
   bio                 String  @default("")
   foto                String?
-  status              String  @default("ativo") // ativo | pendente | suspenso
+  // ativo | pendente | suspenso | arquivado (B-22: "arquivado" vem do DELETE
+  // lógico do admin — usuário inativo + perfil arquivado, histórico preservado)
+  status              String  @default("ativo")
   stripeAccountId     String? // conta conectada (Stripe Connect), 20261028a
   horariosDisponiveis String  @default("[]") // JSON string[]
   diasAtendimento     String  @default("[]") // JSON number[] (0=Dom … 6=Sáb). Vazio = todos os dias.
