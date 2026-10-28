@@ -2,7 +2,6 @@
 
 import { CalendarRange, ChevronDown, Clock, Tag } from "lucide-react";
 import { CardFaturamento } from "../cards/CardFaturamento";
-import { EmBreve } from "../sheets/SheetMedico";
 import { fmtBRL } from "../metricas";
 import type { DadosMedico } from "../useDadosMedico";
 
@@ -44,7 +43,7 @@ export function TelaGestao({
             </div>
             <div className="mt-1 text-2xl font-black tabular-nums">{fmtBRL(medico.valor)}</div>
             <div className="mt-2 flex items-center gap-2 text-sm text-bion-ink/75 dark:text-bion-paper/75">
-              Promoções <EmBreve />
+              Promoções (em desenvolvimento)
             </div>
           </button>
 
