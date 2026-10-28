@@ -10,10 +10,12 @@ export function TelaGestao({
   dados,
   onAbrirPreco,
   onAbrirAgenda,
+  onAbrirPromocoes,
 }: {
   dados: DadosMedico;
   onAbrirPreco: () => void;
   onAbrirAgenda: () => void;
+  onAbrirPromocoes: () => void;
 }) {
   const { medico, receita } = dados;
   const horarios = medico ? [...medico.horariosDisponiveis].sort() : [];
@@ -43,7 +45,7 @@ export function TelaGestao({
             </div>
             <div className="mt-1 text-2xl font-black tabular-nums">{fmtBRL(medico.valor)}</div>
             <div className="mt-2 flex items-center gap-2 text-sm text-bion-ink/75 dark:text-bion-paper/75">
-              Promoções (em desenvolvimento)
+              <button type="button" onClick={onAbrirPromocoes} className="text-xs font-bold text-bion-sea dark:text-sky-300">Promoções</button>
             </div>
           </button>
 
