@@ -56,7 +56,19 @@ export default function LayoutAutenticado({ children }: { children: React.ReactN
 
   // Paciente: nunca monta o AppShell antigo (sidebar/abas) — nem por um frame.
   if (destinoPaciente || rotaTelaCheia) {
-    if (telaCheiaPaciente || rotaTelaCheia) return <>{children}</>;
+    if (telaCheiaPaciente || rotaTelaCheia) {
+      // Paciente: aceite dos Termos v1 + Privacidade v1. Pode recusar e seguir
+      // em modo limitado (consultas pagas e exclusão da conta); agendar é
+      // bloqueado no servidor (exigirAceiteTermosPaciente).
+      if (destinoPaciente) {
+        return (
+          <GuardaAceiteTermos perfil="PACIENTE" permitirRecusa>
+            {children}
+          </GuardaAceiteTermos>
+        );
+      }
+      return <>{children}</>;
+    }
     return <TelaCarregando texto="Abrindo seu app…" />;
   }
 

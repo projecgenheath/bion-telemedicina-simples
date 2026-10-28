@@ -156,3 +156,27 @@ export async function gravarAceiteAtualizacao(usuario: UsuarioSessao, perfil: Pe
   }
   return linhas;
 }
+
+/** Código do 403 quando o paciente ainda não aceitou os termos vigentes. */
+export const CODIGO_ACEITE_TERMOS_PENDENTE = "ACEITE_TERMOS_PENDENTE";
+export const ERRO_ACEITE_TERMOS_PENDENTE =
+  "Para agendar, aceite os Termos de Uso e a Política de Privacidade atuais. Suas consultas já pagas e a exclusão da conta continuam disponíveis.";
+
+/**
+ * Portão do servidor para AGENDAR algo novo: paciente sem o aceite vigente
+ * (termos + privacidade) recebe 403 antes de qualquer gravação.
+ * Erro ao consultar o banco também bloqueia (falha fechada). null = pode seguir.
+ * Consultas já pagas, cancelamento/reembolso e exclusão da conta não passam por aqui.
+ */
+export async function exigirAceiteTermosPaciente(usuario: { id: string; role: string }): Promise<Response | null> {
+  if (usuario.role !== "PACIENTE") return null;
+  let pendente = true;
+  try {
+    pendente = await aceiteVigentePendente(usuario.id, "PACIENTE");
+  } catch {
+    pendente = true;
+  }
+  return pendente
+    ? Response.json({ erro: ERRO_ACEITE_TERMOS_PENDENTE, codigo: CODIGO_ACEITE_TERMOS_PENDENTE }, { status: 403 })
+    : null;
+}

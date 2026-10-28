@@ -1,3 +1,4 @@
+import { exigirAceiteTermosPaciente } from "@/lib/server/aceite-termos";
 import { confirmarPagamento, modoGateway } from "@/lib/server/pagamentos";
 import { confirmarPagamentoRenovacao, criarCobrancaRenovacao } from "@/lib/server/renovacao-pagamento";
 import { STATUS_RENOVACAO_ABERTOS } from "@/lib/atendimento-tipo";
@@ -46,6 +47,9 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const usuario = await exigirPapel("PACIENTE");
+    // Termos + privacidade vigentes: sem aceite, nada novo é agendado (403).
+    const semAceite = await exigirAceiteTermosPaciente(usuario);
+    if (semAceite) return semAceite;
     const corpo = lerCorpoPedidoRenovacao(await req.json().catch(() => null));
     if (typeof corpo === "string") return Response.json({ erro: corpo }, { status: 400 });
 

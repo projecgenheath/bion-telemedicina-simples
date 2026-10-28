@@ -6,27 +6,32 @@ import { TelaCarregando } from "@/components/bion/brand";
 import { useBion } from "@/lib/bion-store";
 import { aceiteTermosPayload, type PerfilAceite } from "@/lib/aceite-termos";
 
-/** Rota do re-aceite por perfil. PACIENTE ainda não tem rota ligada. */
+/** Rota do re-aceite por perfil. */
 export const ROTA_ACEITE_POR_PERFIL: Record<PerfilAceite, string> = {
   MEDICO: "/api/medico/aceite-termos",
   PACIENTE: "/api/paciente/aceite-termos",
 };
 
-type Estado = "carregando" | "pendente" | "ok" | "erro";
+type Estado = "carregando" | "pendente" | "ok" | "erro" | "recusado";
+
+export const CHAVE_RECUSA_TERMOS = "bion:aceite-termos:recusado";
 
 /**
  * Bloqueia a área do perfil até o aceite dos Termos de Uso do perfil
  * (VERSAO_TERMOS_POR_PERFIL[perfil]) e da Política de Privacidade vigentes.
  * Não desloga ninguém: logins de demonstração só veem esta tela.
- * Hoje ligado só para MEDICO.
+ * MEDICO: bloqueio total. PACIENTE (permitirRecusa): "Agora não" libera o
+ * modo limitado nesta sessão do navegador; o servidor bloqueia novos agendamentos.
  */
 export function GuardaAceiteTermos({
   perfil,
   rota = ROTA_ACEITE_POR_PERFIL[perfil],
+  permitirRecusa = false,
   children,
 }: {
   perfil: PerfilAceite;
   rota?: string;
+  permitirRecusa?: boolean;
   children: React.ReactNode;
 }) {
   const { sair } = useBion();
@@ -41,11 +46,13 @@ export function GuardaAceiteTermos({
       const res = await fetch(rota, { cache: "no-store", credentials: "same-origin" });
       const json = (await res.json().catch(() => null)) as { pendente?: boolean } | null;
       if (!res.ok || !json) return setEstado("erro");
-      setEstado(json.pendente ? "pendente" : "ok");
+      if (!json.pendente) return setEstado("ok");
+      const recusou = permitirRecusa && typeof window !== "undefined" && window.sessionStorage.getItem(CHAVE_RECUSA_TERMOS) === "1";
+      setEstado(recusou ? "recusado" : "pendente");
     } catch {
       setEstado("erro");
     }
-  }, [rota]);
+  }, [rota, permitirRecusa]);
 
   useEffect(() => {
     void consultar();
@@ -72,7 +79,29 @@ export function GuardaAceiteTermos({
     }
   }
 
+  function recusar() {
+    try {
+      window.sessionStorage.setItem(CHAVE_RECUSA_TERMOS, "1");
+    } catch {
+      /* sem storage: vale só até recarregar */
+    }
+    setEstado("recusado");
+  }
+
   if (estado === "ok") return <>{children}</>;
+  if (estado === "recusado") {
+    return (
+      <>
+        <div role="status" className="sticky top-0 z-50 flex items-center justify-between gap-3 border-b bg-amber-50 px-4 py-2 text-xs text-amber-900 dark:bg-amber-950 dark:text-amber-100">
+          <span className="min-w-0">Sem o aceite dos termos você não pode agendar. Suas consultas pagas e a exclusão da conta continuam disponíveis.</span>
+          <button type="button" onClick={() => setEstado("pendente")} className="shrink-0 rounded-lg border px-2 py-1 font-semibold">
+            Ver termos
+          </button>
+        </div>
+        {children}
+      </>
+    );
+  }
   if (estado === "carregando") return <TelaCarregando texto="Conferindo os termos…" />;
 
   return (
@@ -104,6 +133,11 @@ export function GuardaAceiteTermos({
             >
               {enviando ? "Registrando…" : "Aceitar e continuar"}
             </button>
+            {permitirRecusa ? (
+              <button type="button" onClick={recusar} disabled={enviando} className="w-full rounded-xl border py-3 text-sm font-semibold disabled:opacity-50">
+                Agora não
+              </button>
+            ) : null}
           </>
         )}
       </div>
