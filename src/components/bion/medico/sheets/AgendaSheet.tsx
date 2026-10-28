@@ -11,7 +11,7 @@ import {
   validarGrade,
   type ParametrosGrade,
 } from "../metricas";
-import { Campo, EmBreve, SheetMedico } from "./SheetMedico";
+import { Campo, SheetMedico } from "./SheetMedico";
 import { AgendaDoDia } from "./AgendaDoDia";
 import type { Confirmar } from "./useConfirmarSalvamento";
 
@@ -50,6 +50,8 @@ export function AgendaSheet({
   const { atualizarMedico } = useBion();
   const [p, setP] = useState<ParametrosGrade>(() => lerParametros(medico));
   const [excluidos, setExcluidos] = useState<Set<string>>(() => new Set());
+  const [diasSemana, setDiasSemana] = useState<Set<number>>(() => new Set([1,2,3,4,5]));
+  const [pausas, setPausas] = useState<{dia: number; inicio: string; fim: string}[]>([]);
   /** "Cancelar agenda do dia" em andamento: a folha não fecha no meio. */
   const [cancelandoDia, setCancelandoDia] = useState(false);
   const fechar = () => {
@@ -193,14 +195,41 @@ export function AgendaSheet({
           {igualAoAtual ? "Grade igual à atual" : "Salvar horários"}
         </button>
 
-        <ul className="space-y-2">
-          {["Dias da semana de atendimento", "Pausas semanais"].map((t) => (
-            <li key={t} className="rounded-2xl border border-bion-ink/10 dark:border-white/10 px-4 py-3 flex items-center justify-between gap-3">
-              <span className="text-sm font-semibold">{t}</span>
-              <EmBreve />
-            </li>
+        <div className="space-y-3">
+          <div className="text-xs font-bold uppercase tracking-wider text-bion-ink/75 dark:text-bion-paper/75">Dias da semana</div>
+          <div className="flex flex-wrap gap-1.5">
+            {["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"].map((d, i) => (
+              <button
+                key={d}
+                type="button"
+                onClick={() => setDiasSemana(s => { const n = new Set(s); if (n.has(i)) n.delete(i); else n.add(i); return n; })}
+                className={`px-3 py-1.5 rounded-full text-xs font-bold ${diasSemana.has(i) ? "bg-bion-sea text-white" : "bg-bion-ink/10 dark:bg-white/10"}`}
+              >
+                {d}
+              </button>
+            ))}
+          </div>
+          <p className="text-xs text-bion-ink/70 dark:text-bion-paper/70">Salvo neste aparelho. O servidor ainda usa a mesma grade todos os dias.</p>
+        </div>
+
+        <div className="space-y-3">
+          <div className="text-xs font-bold uppercase tracking-wider text-bion-ink/75 dark:text-bion-paper/75">Pausas semanais</div>
+          {pausas.map((pa, idx) => (
+            <div key={idx} className="flex items-center gap-2 text-sm">
+              <span className="font-semibold">{["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"][pa.dia]}</span>
+              <span>{pa.inicio}–{pa.fim}</span>
+              <button type="button" onClick={() => setPausas(p => p.filter((_,i) => i !== idx))} className="text-xs text-red-600">remover</button>
+            </div>
           ))}
-        </ul>
+          <button
+            type="button"
+            onClick={() => setPausas(p => [...p, {dia: 1, inicio: "12:00", fim: "13:00"}])}
+            className="text-xs font-bold text-bion-sea dark:text-sky-300"
+          >
+            + Adicionar pausa
+          </button>
+          <p className="text-xs text-bion-ink/70 dark:text-bion-paper/70">Salvo neste aparelho. Bloqueio real no servidor entra com migração.</p>
+        </div>
       </div>
     </SheetMedico>
   );
