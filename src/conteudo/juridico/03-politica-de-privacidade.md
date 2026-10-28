@@ -286,7 +286,7 @@ Encarregado pelo tratamento de dados pessoais: **[A DEFINIR: nome]** — **[A DE
 
 Podemos atualizar esta política. Mudanças relevantes serão avisadas no app com antecedência razoável e, quando a mudança exigir, pediremos novo consentimento.
 
-*Versão 1.0 — vigente a partir de [A DEFINIR].*
+*Versão provisória v0 — Vigente a partir do seu aceite.*
 
 ---
 

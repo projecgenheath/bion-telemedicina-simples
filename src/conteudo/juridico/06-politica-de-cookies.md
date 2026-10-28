@@ -65,4 +65,4 @@ e) você poderá mudar sua escolha a qualquer momento.
 
 Encarregado (DPO): **[A DEFINIR: e-mail do Encarregado]**. Ver também a Política de Privacidade.
 
-*Versão 1.0 — vigente a partir de [A DEFINIR].*
+*Versão provisória v0 — Vigente a partir do seu aceite.*

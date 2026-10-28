@@ -318,4 +318,4 @@ Se alguma cláusula for considerada inválida, as demais continuam valendo. A to
 
 Contato: **[A DEFINIR: e-mail de atendimento]** · Encarregado (DPO): **[A DEFINIR: e-mail do Encarregado]**
 
-*Versão 1.0 — vigente a partir de [A DEFINIR: data de publicação].*
+*Versão provisória v0 — Vigente a partir do seu aceite.*
