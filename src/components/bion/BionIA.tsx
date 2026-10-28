@@ -186,8 +186,9 @@ export function BionIA() {
     let raciocinio = "";
     try {
       // JSON/NDJSON tratados em perguntarBionIa: AbortController, HTML 504 e
-      // falhas de cliente reportadas ao monitor (sem PII). Raciocínio do
-      // modelo nunca chega aqui (filtrado no servidor).
+      // falhas de cliente reportadas ao monitor (sem PII). O raciocínio do
+      // modelo chega em canal separado (r.raciocinio) e só aparece no
+      // BlocoRaciocinio; nunca entra na resposta nem no texto copiado.
       const r = await perguntarBionIa(historico.map((m) => ({ remetente: m.remetente, texto: m.texto })));
       resposta = r.texto;
       raciocinio = r.raciocinio;
