@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { quandoClinica } from "@/lib/server/fuso";
 import { db } from "@/lib/db";
+import { exigirConsentimentoIa } from "@/lib/server/consentimento-ia";
 import { exigirPapel } from "@/lib/server/auth";
 import { aplicarSideEffects, anamneseWire, consultaWire, perfilPacienteWire } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
@@ -50,7 +51,8 @@ import { nomesMedicamentosEmUso } from "@/lib/server/medicamentos-legado";
  * NUNCA interrogatório nem monólogo, sinais de alarme → SAMU 192.
  */
 
-const TIMEOUT_LLM_MS = 32_000;
+// NVIDIA usa ~60% do prazo e o Gemini o resto (timeouts reais via AbortSignal).
+const TIMEOUT_LLM_MS = 30_000;
 
 /** Janela da triagem: fecha 5 minutos antes do início da consulta. */
 const JANELA_TRIAGEM_MS = 5 * 60_000;
@@ -517,8 +519,14 @@ export async function POST(req: NextRequest) {
     // (funciona sem Gemma/API). LGPD: a IA externa só roda com
     // BION_ANAMNESE_LLM=1 no SERVIDOR; o `modo: "ia"` do cliente é ignorado
     // (antes ele mandava a anamnese ao Google mesmo sem a variável).
-    // Pausa da BION IA (até o #108): a triagem segue pelo motor determinístico local, sem IA.
-    const tentarLlm = !iaPausada() && process.env.BION_MOTOR_LOCAL !== "1" && process.env.BION_ANAMNESE_LLM === "1";
+    // Pausa da BION IA (opt-in, BION_IA_PAUSADA=true) ou portão jurídico (sem
+    // o aceite da versão atual da IA/NVIDIA): a triagem segue SÓ no motor
+    // local — nada vai para a IA externa.
+    const tentarLlm =
+      !iaPausada() &&
+      process.env.BION_MOTOR_LOCAL !== "1" &&
+      process.env.BION_ANAMNESE_LLM === "1" &&
+      (await exigirConsentimentoIa(usuario)) === null;
 
     if (tentarLlm && !fugaCurta && (historico.length > 0 || Boolean(mensagem))) {
       const instrucaoAbertura = mensagem

@@ -234,8 +234,8 @@ export function PrivacidadePaciente() {
             <Shield className="w-4 h-4 text-primary" /> Leitura de laudos pela BION IA
           </h2>
           <p className="text-sm text-muted-foreground">
-            Quando você envia um laudo, o arquivo inteiro, com o seu nome e os dados impressos nele, vai para o
-            Google (Gemini) para leitura, possivelmente fora do Brasil. A BION pede sua autorização a cada envio.
+            Quando você envia um laudo, o arquivo inteiro, com o seu nome e os dados impressos nele, vai para a
+            NVIDIA (EUA) para leitura, e ela pode guardá-lo conforme os termos dela. A BION pede sua autorização a cada envio.
           </p>
           <p className="text-sm" aria-live="polite">
             {consIa === null
@@ -257,8 +257,8 @@ export function PrivacidadePaciente() {
             </button>
           ) : null}
           <p className="text-xs text-muted-foreground">
-            Revogar não apaga os resultados que já foram importados. Arquivos já lidos pelo Google seguem as regras do
-            Google.
+            Revogar não apaga os resultados que já foram importados. Arquivos já lidos pela NVIDIA seguem os termos da
+            NVIDIA.
           </p>
         </section>
       ) : null}

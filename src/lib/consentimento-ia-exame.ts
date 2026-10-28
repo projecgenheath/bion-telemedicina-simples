@@ -5,7 +5,7 @@
  * Toda vez que o paciente envia um laudo, o app mostra o aviso e só envia com
  * "Concordo e enviar". O cliente manda `consentimento=<VERSAO>` no formulário;
  * o servidor recusa (428) sem ele ou com versão diferente e registra o aceite
- * (Consentimento + AuditLog) ANTES de mandar o arquivo para o Google.
+ * (Consentimento + AuditLog) ANTES de mandar o arquivo para a IA (NVIDIA).
  *
  * O aviso aparece em TODO envio, então depois de uma revogação (tela de
  * Privacidade → /api/paciente/consentimento-ia-exame) o próximo envio pede
@@ -15,13 +15,13 @@
  * texto novo.
  */
 export const CAMPO_CONSENTIMENTO_IA_EXAME = "consentimento";
-export const VERSAO_CONSENTIMENTO_IA_EXAME = "ia-exame-v1-2026-10-20";
+export const VERSAO_CONSENTIMENTO_IA_EXAME = "ia-exame-v2-2026-10-27";
 
 /** Prefixo comum a aceites e revogações (para achar os registros). */
 export const PREFIXO_FINALIDADE_IA_EXAME = "Leitura de laudo pela BION IA";
 
 export const FINALIDADE_CONSENTIMENTO_IA_EXAME =
-  `${PREFIXO_FINALIDADE_IA_EXAME}: arquivo enviado ao Google (Gemini), possivelmente fora do Brasil (versão ${VERSAO_CONSENTIMENTO_IA_EXAME})`;
+  `${PREFIXO_FINALIDADE_IA_EXAME}: arquivo enviado à NVIDIA (EUA), que pode guardá-lo conforme os termos dela (versão ${VERSAO_CONSENTIMENTO_IA_EXAME})`;
 
 /** Revogação (LGPD art. 8º, § 5º): registro com aceito = false. */
 export const FINALIDADE_REVOGACAO_IA_EXAME =

@@ -6,5 +6,5 @@ export const dynamic = "force-static";
 export const metadata: Metadata = { title: "Termos de Uso do Paciente — BION" };
 
 export default function PaginaTermosDeUso() {
-  return <PaginaDocumentoJuridico versao={VERSAO_TERMOS_PACIENTE} data="2026-10-20" arquivos={["01-termos-de-uso-paciente.md"]} />;
+  return <PaginaDocumentoJuridico versao={VERSAO_TERMOS_PACIENTE} data="2026-10-27" arquivos={["01-termos-de-uso-paciente.md"]} />;
 }

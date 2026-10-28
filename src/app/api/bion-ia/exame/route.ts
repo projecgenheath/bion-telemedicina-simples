@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { dataIsoClinica } from "@/lib/server/fuso";
 import ZAI from "z-ai-web-dev-sdk";
+import { exigirConsentimentoIa } from "@/lib/server/consentimento-ia";
 import { db } from "@/lib/db";
 import { exigirPapel, registrarAudit } from "@/lib/server/auth";
 import {
@@ -23,7 +24,7 @@ import { iaPausada, obterLLM, respostaIaPausada, visaoGemini } from "@/lib/serve
  * Consentimento (LGPD art. 11 e 33): sem `consentimento` igual à versão atual
  * do aviso (lib/consentimento-ia-exame.ts) a rota recusa com 428, ANTES de
  * ler o arquivo. O aceite é gravado em Consentimento + AuditLog (data/hora e
- * versão) antes de qualquer envio ao Google. Para a IA vão só os bytes do
+ * versão) antes de qualquer envio à IA. Para a IA vão só os bytes do
  * arquivo (sem o nome original) e, em JPEG/PNG, sem metadados EXIF/XMP/texto.
  * O CONTEÚDO (nome e dados impressos no laudo) segue como está.
  *
@@ -102,8 +103,11 @@ export const maxDuration = 60;
 export async function POST(req: NextRequest) {
   try {
     const usuario = await exigirPapel("PACIENTE");
-    // Pausa da BION IA (até o #108): o laudo nem é lido, nada vai à IA.
+    // Pausa da BION IA (opt-in): o laudo nem é lido, nada vai à IA.
     if (iaPausada()) return respostaIaPausada();
+    // Portão jurídico: sem o aceite geral da IA (NVIDIA) nada é enviado.
+    const pendente = await exigirConsentimentoIa(usuario);
+    if (pendente) return pendente;
 
     const form = await req.formData();
     const arquivo = form.get("arquivo");
@@ -113,7 +117,7 @@ export async function POST(req: NextRequest) {
     if (!consentimentoIaExameValido(form.get(CAMPO_CONSENTIMENTO_IA_EXAME))) {
       return Response.json(
         {
-          erro: "Para ler o laudo pela BION IA, confirme antes que concorda com o envio do arquivo ao Google (Gemini).",
+          erro: "Para ler o laudo pela BION IA, confirme antes que concorda com o envio do arquivo à NVIDIA (EUA).",
           motivo: "consentimento_necessario",
           versao: VERSAO_CONSENTIMENTO_IA_EXAME,
         },
@@ -149,7 +153,7 @@ export async function POST(req: NextRequest) {
       categoria: "consentimento",
       entidade: "consentimento",
       entidadeId: VERSAO_CONSENTIMENTO_IA_EXAME,
-      detalhes: `Aceite do envio de laudo ao Google (Gemini) — versão ${VERSAO_CONSENTIMENTO_IA_EXAME} em ${new Date().toISOString()}`,
+      detalhes: `Aceite do envio de laudo à NVIDIA (EUA) — versão ${VERSAO_CONSENTIMENTO_IA_EXAME} em ${new Date().toISOString()}`,
     });
 
     if (!auditAceite) {

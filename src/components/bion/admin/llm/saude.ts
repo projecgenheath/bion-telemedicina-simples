@@ -18,6 +18,12 @@ export type EventoLlm = {
   http: number | null;
   finish: string | null;
   erro: string | null;
+  /** Id da chamada (auditoria de requisições simultâneas). */
+  requestId?: string;
+  /** "cliente" = falha vista no navegador (504, resposta não-JSON, timeout). */
+  origem?: "servidor" | "cliente";
+  /** true = o NVIDIA (primário) falhou e outro provedor respondeu. */
+  fallback?: boolean;
 };
 
 export type ResumoLlm = {
@@ -54,8 +60,8 @@ export function falhasSeguidas(eventos: EventoLlm[]): number {
 }
 
 export function estadoSaude(resumo: ResumoLlm | null | undefined, eventos: EventoLlm[] = [], pausada = false): Saude {
-  // Pausa proposital (até o motor NVIDIA, #108): não é falha, o painel não fica vermelho.
-  if (pausada) return { tom: "neutro", rotulo: "Pausada", texto: "A BION IA está pausada até o motor NVIDIA entrar. Nenhum dado vai para a IA." };
+  // Pausa proposital (opt-in, BION_IA_PAUSADA=true): não é falha, o painel não fica vermelho.
+  if (pausada) return { tom: "neutro", rotulo: "Pausada", texto: "A BION IA está pausada (BION_IA_PAUSADA=true). Nenhum dado vai para a IA." };
   if (!resumo || !resumo.turnos) return { tom: "neutro", rotulo: "Sem dados", texto: "Ainda sem turnos nesta instância. Use o chat da BION IA e atualize." };
   const seguidas = falhasSeguidas(eventos);
   if (resumo.taxaOk < LIMITES_SAUDE.okInstavel || seguidas >= LIMITES_SAUDE.falhasSeguidasCriticas) {
@@ -172,7 +178,9 @@ export function falhasRecentes(eventos: EventoLlm[], n = 5): EventoLlm[] {
 
 /** Mesma regra da coluna "Detalhe" do monitor antigo (tamanho da resposta, ou erro → finish → HTTP), em português. */
 export function detalheEvento(e: EventoLlm): string {
-  return e.ok ? `${e.textoLen} caracteres` : (e.erro ?? e.finish ?? `HTTP ${e.http ?? "—"}`);
+  const base = e.ok ? `${e.textoLen} caracteres` : (e.erro ?? e.finish ?? `HTTP ${e.http ?? "—"}`);
+  const origem = e.origem === "cliente" ? "navegador: " : "";
+  return `${origem}${base}${e.fallback ? " (reserva)" : ""}${e.requestId ? ` · ${e.requestId}` : ""}`;
 }
 
 /** Modelo do turno mais recente que informou modelo (o "em uso agora"). */

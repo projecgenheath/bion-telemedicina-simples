@@ -1,8 +1,9 @@
 /**
- * Pausa da BION IA (até o #108): nenhum fetch sai de llm.ts enquanto pausada.
+ * Pausa da BION IA (opt-in desde o #108): só com BION_IA_PAUSADA=true; aí
+ * nenhum fetch sai de llm.ts (NVIDIA, Gemini, env, SDK).
  * Rodar: bun --conditions react-server scripts/teste_pausa_ia.ts
  */
-import { chatComFonte, diagnosticoGemini, iaPausada, listarModelosGemini, obterLLM, probeCanais, respostaIaPausada, visaoGemini } from "../src/lib/server/llm";
+import { chatComFonte, chatStreamComFonte, diagnosticoGemini, iaPausada, listarModelosGemini, obterLLM, probeCanais, respostaIaPausada, visaoGemini } from "../src/lib/server/llm";
 import { estadoSaude } from "../src/components/bion/admin/llm/saude";
 
 let ok = 0, falhas = 0;
@@ -12,16 +13,22 @@ globalThis.fetch = (async () => { fetches++; throw new Error("fetch proibido na 
 process.env.BION_LLM_GEMINI_API_KEY = "x";
 process.env.BION_LLM_API_KEY = "x";
 process.env.BION_LLM_BASE_URL = "https://exemplo.invalid";
+process.env.NVIDIA_API_KEY = "x";
+process.env.BION_LLM_NVIDIA_ATIVO = "true";
+process.env.BION_LLM_RESERVA_GEMINI = "true";
 
 delete process.env.BION_IA_PAUSADA;
-t("pausa por padrão", iaPausada());
-for (const v of ["true", "1", "", "FALSO"]) { process.env.BION_IA_PAUSADA = v; t(`pausada com "${v}"`, iaPausada()); }
-process.env.BION_IA_PAUSADA = " FALSE ";
-t("desliga só com false", !iaPausada());
-delete process.env.BION_IA_PAUSADA;
+t("sem pausa por padrão", !iaPausada());
+for (const v of ["", "1", "false", "sim", "FALSO"]) { process.env.BION_IA_PAUSADA = v; t(`sem pausa com "${v}"`, !iaPausada()); }
+process.env.BION_IA_PAUSADA = " TRUE ";
+t("pausa só com true", iaPausada());
+process.env.BION_IA_PAUSADA = "true";
 
 const r = await chatComFonte([{ role: "user", content: "dado de saúde" }], 5000);
 t("chat sem texto", r.texto === null);
+const evs: string[] = [];
+for await (const ev of chatStreamComFonte([{ role: "user", content: "dado de saúde" }], 5000, { requestId: "ia_pausa_tst" })) evs.push(ev.tipo);
+t("stream pausado: só erro", evs.join() === "erro");
 t("visão nula", (await visaoGemini("image/png", "AAAA", "p", 5000)) === null);
 t("obterLLM nulo", (await obterLLM()) === null);
 t("probe vazio", (await probeCanais()).length === 0);

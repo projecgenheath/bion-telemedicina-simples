@@ -41,16 +41,9 @@ export function ConsentimentoLaudoIA({
 
         <div id="texto-consentimento-laudo" className="mt-4 rounded-2xl border bpp-sheet-borda bpp-sheet-cartao p-4 text-sm bpp-sheet-suave space-y-2">
           <p>
-            Para ler os resultados, a BION envia <strong className="bpp-sheet-forte">o arquivo inteiro</strong> para o
-            Google (serviço de IA Gemini). Isso inclui <strong className="bpp-sheet-forte">o seu nome e qualquer outro dado impresso</strong> no
-            laudo, além dos resultados, que são dados de saúde.
+            O conteúdo deste laudo, inclusive o seu nome impresso, será enviado à NVIDIA (EUA), que pode guardá-lo
+            conforme os termos dela. Você pode recusar e anexar o exame direto à consulta.
           </p>
-          <p>O Google pode processar o arquivo em servidores fora do Brasil.</p>
-          <p>
-            A BION guarda só os valores extraídos (nome do exame, data e resultados) e o registro do envio. O arquivo
-            enviado para leitura não fica guardado na BION.
-          </p>
-          <p>Se não concordar, cancele. Você pode mostrar o laudo ao médico durante a consulta.</p>
         </div>
 
         <div className="flex gap-2 mt-5">

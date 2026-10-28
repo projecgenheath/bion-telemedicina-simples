@@ -33,7 +33,7 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     await exigirPapel("ADMIN");
-    // Pausa da BION IA (até o #108): nem a sonda do admin manda dado à IA.
+    // Pausa da BION IA (opt-in, BION_IA_PAUSADA=true): nem a sonda do admin manda dado à IA.
     if (iaPausada()) return respostaIaPausada();
 
     let mensagens: Msg[] | null = null;

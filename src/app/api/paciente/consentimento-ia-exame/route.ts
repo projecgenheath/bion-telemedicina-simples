@@ -54,7 +54,7 @@ export async function DELETE() {
       severidade: "warning",
       entidade: "consentimento",
       entidadeId: registro.id,
-      detalhes: `Revogação do envio de laudo ao Google (Gemini) — versão ${VERSAO_CONSENTIMENTO_IA_EXAME} em ${registro.createdAt.toISOString()}`,
+      detalhes: `Revogação do envio de laudo à NVIDIA (EUA) — versão ${VERSAO_CONSENTIMENTO_IA_EXAME} em ${registro.createdAt.toISOString()}`,
     });
     return ok({ estado: "revogado", em: registro.createdAt.toISOString(), versao: VERSAO_CONSENTIMENTO_IA_EXAME });
   } catch (erro) {
