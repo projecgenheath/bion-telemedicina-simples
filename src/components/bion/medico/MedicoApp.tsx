@@ -17,7 +17,6 @@ import { DicaGestos, IndicadorTelas, useDicaGestos } from "./IndicadorTelas";
 import { PrecoSheet } from "./sheets/PrecoSheet";
 import { AgendaSheet } from "./sheets/AgendaSheet";
 import { AgendaPreviewSheet } from "./sheets/AgendaPreviewSheet";
-import { EmBreve } from "./sheets/SheetMedico";
 import type { PacienteDoMedico } from "./metricas";
 import "./medico.css";
 
@@ -240,7 +239,7 @@ export function MedicoApp() {
                 <div className="text-sm font-bold">Termos de uso do médico</div>
                 <div className="text-xs text-bion-ink/75 dark:text-bion-paper/75">Texto específico para profissionais.</div>
               </div>
-              <EmBreve />
+              <span className="text-xs text-bion-ink/60 dark:text-bion-paper/60">Disponível após revisão jurídica</span>
             </div>
             <Ajuda perfil="medico" />
           </div>
