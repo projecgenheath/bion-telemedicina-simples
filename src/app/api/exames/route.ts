@@ -3,7 +3,7 @@ import { instanteNoFuso } from "@/lib/server/fuso";
 import { db } from "@/lib/db";
 import { exigirPapel } from "@/lib/server/auth";
 import { aplicarSideEffects, exameWire } from "@/lib/server/dados";
-import { ok, falha } from "@/lib/server/http";
+import {ok, falha, lerCorpoJson} from "@/lib/server/http";
 
 /**
  * Exames laboratoriais do paciente (app imersivo — seção 3).
@@ -41,7 +41,7 @@ type ItemExame = { nome: string; valor: number; unidade: string; refMin?: number
 export async function POST(req: NextRequest) {
   try {
     const usuario = await exigirPapel("PACIENTE");
-    const body = (await req.json()) as {
+    const body = (await lerCorpoJson(req)) as {
       titulo?: string;
       dataColeta?: string;
       itens?: ItemExame[];
@@ -102,7 +102,7 @@ export async function POST(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   try {
     const usuario = await exigirPapel("PACIENTE");
-    const body = (await req.json()) as { id?: string };
+    const body = (await lerCorpoJson(req)) as { id?: string };
     if (!body.id) {
       return Response.json({ erro: "Informe o exame a remover." }, { status: 400 });
     }

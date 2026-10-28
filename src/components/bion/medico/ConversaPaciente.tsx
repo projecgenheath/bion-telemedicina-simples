@@ -69,7 +69,15 @@ export function ConversaPaciente({
     if (aba === "conversa") fimRef.current?.scrollIntoView({ block: "end" });
   }, [conversa.length, aba]);
 
-  const docs = useMemo(() => documentos.filter((d) => d.paciente === atual.nome), [documentos, atual.nome]);
+  // M-9: filtro pelo IDENTIFICADOR do paciente — homônimos não podem misturar
+  // documentos. Fallback por nome apenas para documentos legados (sem id).
+  const docs = useMemo(
+    () =>
+      pid
+        ? documentos.filter((d) => (d.pacienteId ? d.pacienteId === pid : d.paciente === atual.nome))
+        : [],
+    [documentos, pid, atual.nome],
+  );
   const arqs = useMemo(() => (pid ? arquivos.filter((a) => a.pacienteId === pid) : []), [arquivos, pid]);
   const homonimo = listaPacientes.filter((p) => p.nome === atual.nome).length > 1;
 

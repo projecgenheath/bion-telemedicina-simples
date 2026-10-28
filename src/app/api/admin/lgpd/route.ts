@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { exigirPapel } from "@/lib/server/auth";
 import { pacienteWire } from "@/lib/server/dados";
-import { ok, falha } from "@/lib/server/http";
+import {ok, falha, lerCorpoJson} from "@/lib/server/http";
 import {
   PendenciasLgpdError,
   anonimizarPacienteCompleto,
@@ -97,7 +97,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const admin = await exigirPapel("ADMIN");
-    const body = (await req.json()) as {
+    const body = (await lerCorpoJson(req)) as {
       acao: "anonimizar" | "excluir";
       pacienteId: string;
     };

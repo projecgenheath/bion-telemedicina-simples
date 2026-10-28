@@ -2,14 +2,14 @@ import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { exigirSessao } from "@/lib/server/auth";
 import { aplicarSideEffects, ticketWire } from "@/lib/server/dados";
-import { ok, falha } from "@/lib/server/http";
+import {ok, falha, lerCorpoJson} from "@/lib/server/http";
 
 /** Abertura de chamado de suporte.
  *  Notificações (autor + administração) e auditoria geradas PELO SERVIDOR. */
 export async function POST(req: NextRequest) {
   try {
     const usuario = await exigirSessao();
-    const body = (await req.json()) as {
+    const body = (await lerCorpoJson(req)) as {
       assunto: string;
       categoria: string;
       mensagem: string;

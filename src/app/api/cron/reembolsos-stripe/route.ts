@@ -9,8 +9,10 @@ export const maxDuration = 30;
 /**
  * Envia ao Stripe os Reembolsos 'aprovado' de pagamento Stripe.
  * `Authorization: Bearer <CRON_SECRET>`. Idempotente (Idempotency-Key =
- * reembolso.id). Ainda NÃO agendado (fora do vercel.json e do pg_cron) até a
- * conta Stripe Brasil e o ok do Alisson. Resposta só com contagens.
+ * reembolso.id). M-24 da auditoria: AGORA AGENDADO no vercel.json a cada
+ * 15 min — com o reembolso automático ativado e textos prometendo devolução
+ * integral, valores aprovados não podem ficar retidos até execução manual.
+ * Resposta só com contagens.
  */
 async function executar(req: NextRequest) {
   try {

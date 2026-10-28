@@ -1,7 +1,7 @@
 "use client";
 
 import { textoNota } from "@/lib/medico-exibicao";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Star,
   Stethoscope,
@@ -31,13 +31,38 @@ export function MedicoPerfilView({ medicoId }: { medicoId?: string }) {
   const medico =
     medicos.find((m) =>
       medicoId ? m.id === medicoId : sessao.id ? m.id === sessao.id : m.nome === sessao.nome,
-    ) ?? medicos[0];
+    ) ?? undefined; // M-2: sem fallback para medicos[0] — médico pendente/
+  // suspenso não pode ver o perfil de OUTRA pessoa, e lista vazia não pode
+  // quebrar o componente (medico undefined trata abaixo).
 
   const [editando, setEditando] = useState(false);
-  const [valor, setValor] = useState(medico.valor);
-  const [bio, setBio] = useState(medico.bio);
-  const [formacao, setFormacao] = useState(medico.formacao);
-  const [foto, setFoto] = useState(medico.foto ?? "");
+  const [valor, setValor] = useState(medico?.valor ?? 0);
+  const [bio, setBio] = useState(medico?.bio ?? "");
+  const [formacao, setFormacao] = useState(medico?.formacao ?? "");
+  const [foto, setFoto] = useState(medico?.foto ?? "");
+
+  // M-5: os estados de edição sincronizam quando o objeto do médico muda
+  // (ex.: salva pela outra página, delta do store chega depois da montagem).
+  useEffect(() => {
+    if (!editando) {
+      setValor(medico?.valor ?? 0);
+      setBio(medico?.bio ?? "");
+      setFormacao(medico?.formacao ?? "");
+      setFoto(medico?.foto ?? "");
+    }
+  }, [medico?.valor, medico?.bio, medico?.formacao, medico?.foto, editando]);
+
+  if (!medico) {
+    return (
+      <div className="max-w-4xl mx-auto bg-card border rounded-3xl p-8 text-center text-muted-foreground">
+        <p className="font-bold text-foreground">Perfil não disponível</p>
+        <p className="text-sm mt-1">
+          Seu cadastro ainda está em validação pela equipe BION. O perfil fica
+          disponível assim que o CRM for aprovado.
+        </p>
+      </div>
+    );
+  }
 
   const avaliacoesDoMedico = avaliacoes.filter((a) => a.medico === medico.nome);
 
@@ -151,7 +176,11 @@ export function MedicoPerfilView({ medicoId }: { medicoId?: string }) {
             </div>
 
             <div className="pt-2 flex items-baseline gap-2">
-              <span className="text-2xl font-extrabold text-primary">R$ {medico.valor},00</span>
+              {/* M-3: formatador padrão — antes "R$ {valor},00" exibia 149,9 como
+                  R$ 149.9,00 (centavos duplicados). */}
+              <span className="text-2xl font-extrabold text-primary">
+                {medico.valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+              </span>
               <span className="text-xs text-muted-foreground">/ consulta particular</span>
             </div>
           </div>

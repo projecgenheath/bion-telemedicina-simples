@@ -8,7 +8,7 @@ import {
   supabaseAdminOuNull,
 } from "@/lib/server/auth";
 import { carregarDados } from "@/lib/server/dados";
-import { ok, falha } from "@/lib/server/http";
+import {ok, falha, lerCorpoJson} from "@/lib/server/http";
 import { emailNorm, isErro } from "@/lib/server/validar";
 import {
   limitarAsync,
@@ -25,7 +25,7 @@ import { supabaseConfigurado } from "@/lib/supabase/env";
 
 export async function POST(req: NextRequest) {
   try {
-    const body = (await req.json()) as { email?: string; senha?: string };
+    const body = (await lerCorpoJson(req)) as { email?: string; senha?: string };
     const emailOk = emailNorm(body.email);
     if (isErro(emailOk) || !body.senha) {
       return NextResponse.json({ erro: "Informe e-mail e senha." }, { status: 400 });

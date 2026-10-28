@@ -155,14 +155,40 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       if (pendente) return respostaEvolucaoPendente(pendente);
     }
 
-    const ev = await db.evolucao.upsert({
-      where: { consultaId: id },
-      create: { consultaId: id, medicoId: medico.id, pacienteId: consulta.pacienteId, ...data },
-      update: data,
+    // M-19 da auditoria: checagem de trava e gravação ATÔMICAS — antes, dois
+    // autosaves de consultas diferentes passavam na pré-checagem e criavam
+    // dois rascunhos, violando a regra de um rascunho por médico. A trava por
+    // médico serializa os autosaves; a re-checagem dentro dela decide.
+    const ev = await db.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${"evolucao-rascunho:" + medico.id}::text))`;
+      const existe = await tx.evolucao.findUnique({ where: { consultaId: id }, select: { id: true, status: true } });
+      if (existe?.status === "concluida") throw new erroEvolucaoConcluida();
+      if (!existe) {
+        const pendente = await evolucaoPendenteDoMedico(medico.id, id);
+        // Dentro da trava, agora é impossível criar o segundo rascunho.
+        if (pendente) return { pendente } as const;
+      }
+      const salvo = await tx.evolucao.upsert({
+        where: { consultaId: id },
+        create: { consultaId: id, medicoId: medico.id, pacienteId: consulta.pacienteId, ...data },
+        update: data,
+      });
+      return { salvo } as const;
     });
-    if (ev.status === "concluida") return Response.json({ erro: "evolucao_concluida" }, { status: 409 });
-    return ok({ evolucao: evolucaoWire(ev) });
+    if ("pendente" in ev && ev.pendente) return respostaEvolucaoPendente(ev.pendente);
+    if (ev.salvo.status === "concluida") return Response.json({ erro: "evolucao_concluida" }, { status: 409 });
+    return ok({ evolucao: evolucaoWire(ev.salvo) });
   } catch (erro) {
+    if ((erro as Error)?.message === "evolucao_concluida") {
+      return Response.json({ erro: "evolucao_concluida" }, { status: 409 });
+    }
     return falha(erro);
+  }
+}
+
+/** Sinaliza evolução já concluída detectada DENTRO da transação do upsert. */
+class erroEvolucaoConcluida extends Error {
+  constructor() {
+    super("evolucao_concluida");
   }
 }

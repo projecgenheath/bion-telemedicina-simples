@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { exigirSessao } from "@/lib/server/auth";
 import { aplicarSideEffects, consentimentoWire } from "@/lib/server/dados";
-import { ok, falha } from "@/lib/server/http";
+import {ok, falha, lerCorpoJson} from "@/lib/server/http";
 
 /** Registro de consentimento LGPD.
  *  Paciente identificado por ID (sessão do próprio; ou ID informado por
@@ -10,12 +10,16 @@ import { ok, falha } from "@/lib/server/http";
 export async function POST(req: NextRequest) {
   try {
     const usuario = await exigirSessao();
-    const body = (await req.json()) as {
+    const body = (await lerCorpoJson(req)) as {
       finalidade: string;
       documentos: number;
       aceito: boolean;
       pacienteId?: string; // usado por médicos/admin ao registrar para um paciente
     };
+
+    if (!body) {
+      return Response.json({ erro: "Corpo da requisição inválido." }, { status: 400 });
+    }
 
     let pacienteId: string | null = null;
     if (usuario.role === "PACIENTE") {

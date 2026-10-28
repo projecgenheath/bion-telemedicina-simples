@@ -54,6 +54,8 @@ export function PainelEvolucao({
   const [textos, setTextos] = useState<Record<Secao, string>>({ dados: "", triagem: "", exames: "", medicamentos: "", conduta: "" });
   const [cid, setCid] = useState("");
   const [salvo, setSalvo] = useState<"ok" | "salvando" | "erro">("ok");
+  const [erroCarga, setErroCarga] = useState(false);
+  const [concluindo, setConcluindo] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const concluida = estado?.evolucao?.status === "concluida";
 
@@ -62,7 +64,13 @@ export function PainelEvolucao({
     return res?.ok ? ((await res.json()) as Estado) : null;
   }, [base]);
   const aplicar = useCallback((j: Estado | null) => {
-    if (!j) return;
+    if (!j) {
+      // M-8: erro de carga é ESTADO VISÍVEL — antes o painel ficava vazio com
+      // o botão de concluir ativo, permitindo concluir evolução que não carregou.
+      setErroCarga(true);
+      return;
+    }
+    setErroCarga(false);
     setEstado(j);
     if (j.evolucao) {
       setTextos({
@@ -87,6 +95,11 @@ export function PainelEvolucao({
       vivo = false;
     };
   }, [aberto, buscar, aplicar]);
+
+  // M-8: o timer do autosave (1,2 s) é limpo na desmontagem — antes, edições
+  // feitas até 1,2 s antes de fechar a tela eram perdidas (timer morto
+  // disparando em componente desmontado).
+  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
 
   // Deslizar da borda direita (últimos 24 px) para a esquerda abre o painel.
   useEffect(() => {
@@ -135,30 +148,63 @@ export function PainelEvolucao({
   };
 
   const pedirMedicao = async (tipos: string[]) => {
-    const res = await fetch("/api/medico/pedidos-medicao", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ consultaId, tipos }),
-    });
-    if (res.ok) {
-      toast.success("Pedido enviado ao paciente");
-      void carregar();
-    } else toast.error("Não foi possível pedir a medição");
+    try {
+      const res = await fetch("/api/medico/pedidos-medicao", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ consultaId, tipos }),
+      });
+      if (res.ok) {
+        toast.success("Pedido enviado ao paciente");
+        void carregar();
+      } else toast.error("Não foi possível pedir a medição");
+    } catch {
+      toast.error("Falha de conexão", { description: "O pedido de medição não foi enviado." });
+    }
   };
   const cancelarPedido = async (id: string) => {
-    const res = await fetch(`/api/medico/pedidos-medicao?id=${encodeURIComponent(id)}`, { method: "DELETE" });
-    if (res.ok) void carregar();
+    try {
+      const res = await fetch(`/api/medico/pedidos-medicao?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+      if (res.ok) {
+        toast.success("Pedido cancelado");
+        void carregar();
+      } else {
+        // M-8: antes o cancelamento falhava em silêncio total.
+        toast.error("Não foi possível cancelar o pedido");
+      }
+    } catch {
+      toast.error("Falha de conexão", { description: "O cancelamento não foi enviado." });
+    }
   };
 
   const concluir = async () => {
-    if (timer.current) clearTimeout(timer.current);
-    await salvar(textos, cid);
-    const res = await fetch(`${base}/concluir`, { method: "POST" });
-    if (res.ok) {
-      toast.success("Evolução concluída");
-      await carregar();
-      onConcluida?.();
-    } else toast.error("Não foi possível concluir a evolução");
+    // M-8: conclusão é IRREVERSÍVEL — exige conteúdo mínimo em conduta e
+    // confirmação explícita; desabilita durante o envio (duplo clique gerava
+    // segundo POST e 409 confuso).
+    if (!textos.conduta.trim()) {
+      toast.error("Preencha a conduta antes de concluir", { description: "A conduta é obrigatória para encerrar a evolução." });
+      setAba("conduta");
+      return;
+    }
+    if (!window.confirm("Concluir a evolução? Depois de concluída, ela não pode mais ser editada.")) return;
+    setConcluindo(true);
+    try {
+      if (timer.current) clearTimeout(timer.current);
+      await salvar(textos, cid);
+      const res = await fetch(`${base}/concluir`, { method: "POST" });
+      if (res.ok) {
+        toast.success("Evolução concluída");
+        await carregar();
+        onConcluida?.();
+      } else {
+        const j = (await res.json().catch(() => ({}))) as { erro?: string; mensagem?: string };
+        toast.error(j.mensagem ?? j.erro ?? "Não foi possível concluir a evolução");
+      }
+    } catch {
+      toast.error("Falha de conexão", { description: "A evolução não foi concluída." });
+    } finally {
+      setConcluindo(false);
+    }
   };
 
   return (
@@ -263,8 +309,12 @@ export function PainelEvolucao({
         </div>
         {!concluida ? (
           <footer className="p-4 border-t">
-            <button type="button" onClick={() => void concluir()} className="w-full rounded-full bg-primary text-primary-foreground py-3 font-bold flex items-center justify-center gap-2">
-              <Check className="w-4 h-4" /> Concluir evolução
+            {erroCarga ? (
+              <p className="text-xs text-center opacity-70 mb-2">A evolução não carregou — reabra o painel antes de concluir.</p>
+            ) : null}
+            <button type="button" onClick={() => void concluir()} disabled={concluindo || erroCarga}
+              className="w-full rounded-full bg-primary text-primary-foreground py-3 font-bold flex items-center justify-center gap-2 disabled:opacity-50">
+              <Check className="w-4 h-4" /> {concluindo ? "Concluindo…" : "Concluir evolução"}
             </button>
           </footer>
         ) : null}

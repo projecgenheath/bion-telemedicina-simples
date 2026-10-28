@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { exigirSessao, registrarAudit } from "@/lib/server/auth";
-import { ok, falha } from "@/lib/server/http";
+import {ok, falha, lerCorpoJson} from "@/lib/server/http";
 import { quandoClinica } from "@/lib/server/fuso";
 import { modoGateway } from "@/lib/server/pagamentos";
 import { decisaoCobranca, respostaIndisponivel, stripeAtivo } from "@/lib/stripe-checkout-logica";
@@ -69,7 +69,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const ctx = await carregar(id);
     if ("erro" in ctx) return ctx.erro;
     const { usuario, consulta } = ctx;
-    const body = (await req.json()) as { data?: string; hora?: string };
+    const body = (await lerCorpoJson(req)) as { data?: string; hora?: string };
+
+    if (!body) {
+      return Response.json({ erro: "Corpo da requisição inválido." }, { status: 400 });
+    }
 
     if (consulta.status === "cancelada" || consulta.status === "concluida") {
       return Response.json({ erro: "Esta consulta já foi encerrada." }, { status: 409 });
@@ -84,7 +88,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     const eventos = await db.eventoConsulta.findMany({
       where: { consultaId: id },
-      select: { por: true, em: true, dataAnterior: true, motivo: true },
+      select: { por: true, em: true, dataAnterior: true, motivo: true, tipo: true, corrigidoEm: true },
     });
     const previa = calcularMulta({ consulta, eventos, por: "paciente" });
     if (previa.multaCentavos <= 0) {

@@ -1,8 +1,23 @@
 import "server-only";
 import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 
 export function ok<T>(dados: T) {
   return NextResponse.json(dados);
+}
+
+/**
+ * Lê o corpo JSON da requisição SEM estourar 500 em corpo malformado
+ * (M-17 da auditoria). Devolve null quando o corpo não é JSON válido ou a
+ * requisição não tem corpo — a rota devolve 400 com mensagem específica.
+ * Uso: `const body = (await lerCorpoJson(req)) as { ... } | null;`
+ */
+export async function lerCorpoJson(req: NextRequest): Promise<unknown> {
+  try {
+    return await req.json();
+  } catch {
+    return null;
+  }
 }
 
 /** Padrões de falha de infraestrutura de banco (não devem vazar ao usuário). */

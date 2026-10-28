@@ -7,7 +7,7 @@ import {
 } from "@/lib/server/auth";
 import { usuarioSemNome } from "@/lib/server/audit-sem-nome";
 import { carregarDados } from "@/lib/server/dados";
-import { ok, falha } from "@/lib/server/http";
+import {ok, falha, lerCorpoJson} from "@/lib/server/http";
 import {
   limitarAsync,
   obterIp,
@@ -43,7 +43,7 @@ async function desfazerAuth(supabaseId: string) {
 
 export async function POST(req: NextRequest) {
   try {
-    const body = (await req.json()) as {
+    const body = (await lerCorpoJson(req)) as {
       nome?: string;
       email?: string;
       senha?: string;

@@ -15,8 +15,9 @@ const ROTULO_DOC: Record<Documento["tipo"], string> = {
 
 /**
  * Histórico do paciente COMIGO: consultas (com resumo), documentos e arquivos.
- * Documentos vêm do store filtrados pelo nome (o wire ainda não traz
- * pacienteId) — por isso o aviso de homônimo.
+ * Documentos vêm do store filtrados pelo IDENTIFICADOR do paciente (M-9:
+ * o wire agora traz pacienteId); o aviso de homônimo cobre apenas
+ * documentos legados gravados antes do identificador existir.
  */
 export function ProntuarioPaciente({
   consultas,
@@ -66,7 +67,7 @@ export function ProntuarioPaciente({
     <div className="p-5 space-y-6">
       {homonimo ? (
         <p className="rounded-2xl p-3 text-sm bg-amber-500/15 text-amber-900 dark:text-amber-100" role="note">
-          Você tem mais de um paciente com este nome. Os documentos abaixo podem misturar os dois — confira a data antes de usar.
+          Você tem mais de um paciente com este nome. Documentos muito antigos podem aparecer para os dois — confira a data antes de usar.
         </p>
       ) : null}
 

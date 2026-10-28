@@ -46,10 +46,19 @@ export function TelaPerfilPublico({
       {medico && (
         <button
           type="button"
-          onClick={() => {
+          onClick={async () => {
             const link = `${window.location.origin}/p/${medico.id}`;
-            navigator.clipboard.writeText(link);
-            toast.success("Link copiado", { description: "Cole em qualquer rede social." });
+            // M-6: aguarda a promise e trata a permissão negada — antes o
+            // sucesso era anunciado mesmo com a cópia rejeitada.
+            try {
+              await navigator.clipboard.writeText(link);
+              toast.success("Link copiado", { description: "Cole em qualquer rede social." });
+            } catch {
+              toast.error("Não foi possível copiar", {
+                description: "Copie manualmente: " + link,
+                duration: 10_000,
+              });
+            }
           }}
           className="mb-4 text-xs font-bold inline-flex items-center gap-1.5 text-sky-200"
         >

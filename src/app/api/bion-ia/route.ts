@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { quandoClinica } from "@/lib/server/fuso";
 import { db } from "@/lib/db";
 import { exigirSessao } from "@/lib/server/auth";
-import { ok, falha } from "@/lib/server/http";
+import {ok, falha, lerCorpoJson} from "@/lib/server/http";
 import { chatComFonte, chatStreamComFonte, iaPausada, motivoFalhaIa, novoRequestId, respostaIaPausada } from "@/lib/server/llm";
 import { anonimizarMensagensIa, type IdentificadoresPaciente } from "@/lib/server/anonimizar-ia";
 import { exigirConsentimentoIa } from "@/lib/server/consentimento-ia";
@@ -149,7 +149,7 @@ export async function POST(req: NextRequest) {
     // Portão jurídico: paciente sem o aceite da versão atual (NVIDIA) → 409.
     const pendente = await exigirConsentimentoIa(usuario);
     if (pendente) return pendente;
-    const body = (await req.json()) as { mensagens?: MsgEntrada[]; stream?: boolean };
+    const body = (await lerCorpoJson(req)) as { mensagens?: MsgEntrada[]; stream?: boolean };
     const requestId = novoRequestId();
 
     const historico = (body.mensagens ?? [])

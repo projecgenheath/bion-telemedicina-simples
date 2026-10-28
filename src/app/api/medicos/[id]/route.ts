@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { exigirPapel } from "@/lib/server/auth";
 import { aplicarSideEffects, medicoWire, type EfeitosCriados } from "@/lib/server/dados";
 import { notaReal } from "@/lib/server/notas-medico";
-import { ok, falha } from "@/lib/server/http";
+import {ok, falha, lerCorpoJson} from "@/lib/server/http";
 import { erroGradeVedada, horariosVedadosDaGrade } from "@/lib/server/bloqueio-agenda";
 
 type MedicoPatch = {
@@ -126,7 +126,11 @@ export async function PATCH(
   try {
     const ator = await exigirPapel("ADMIN", "MEDICO");
     const { id } = await params;
-    const body = (await req.json()) as MedicoPatch;
+    const body = (await lerCorpoJson(req)) as MedicoPatch;
+
+    if (!body) {
+      return Response.json({ erro: "Corpo da requisição inválido." }, { status: 400 });
+    }
     // ator = ADMIN (gestão) ou o próprio MÉDICO (autoedição restrita)
     const autoedicao = ator.role === "MEDICO";
 

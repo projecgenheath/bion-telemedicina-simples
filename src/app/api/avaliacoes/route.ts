@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { exigirPapel } from "@/lib/server/auth";
 import { aplicarSideEffects, avaliacaoWire, medicoWire } from "@/lib/server/dados";
 import { notaReal } from "@/lib/server/notas-medico";
-import { ok, falha } from "@/lib/server/http";
+import {ok, falha, lerCorpoJson} from "@/lib/server/http";
 
 /** Registro de avaliação de consulta (apenas pacientes).
  *  Notificações e auditoria geradas PELO SERVIDOR.
@@ -21,7 +21,7 @@ const clampNota = (v: unknown): number | null => {
 export async function POST(req: NextRequest) {
   try {
     const usuario = await exigirPapel("PACIENTE");
-    const body = (await req.json()) as {
+    const body = (await lerCorpoJson(req)) as {
       consultaId?: string;
       medicoId: string;
       nota: number;
@@ -30,6 +30,10 @@ export async function POST(req: NextRequest) {
       atencao?: number;
       clareza?: number;
     };
+
+    if (!body) {
+      return Response.json({ erro: "Corpo da requisição inválido." }, { status: 400 });
+    }
 
     const medico = await db.user.findFirst({
       where: { id: body.medicoId, role: "MEDICO" },

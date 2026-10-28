@@ -2,7 +2,7 @@ import { NextRequest, NextResponse, after } from "next/server";
 import { db } from "@/lib/db";
 import { exigirSessao, registrarAudit } from "@/lib/server/auth";
 import { evolucaoPendenteDoMedico, garantirEvolucao, respostaEvolucaoPendente } from "@/lib/server/evolucao";
-import { ok, falha } from "@/lib/server/http";
+import {ok, falha, lerCorpoJson} from "@/lib/server/http";
 import { topicoSala } from "@/lib/server/sala-canal";
 import { broadcastCanal } from "@/lib/supabase/broadcast";
 import { entradaAposSinal, limparSala, verificarPresencaConsultaSemFalhar } from "@/lib/server/presenca-consulta";
@@ -298,7 +298,11 @@ export async function POST(
   try {
     const usuario = await exigirSessao();
     const { consultaId } = await params;
-    const body = (await req.json()) as { acao?: string; tipo?: string; payload?: string; nonce?: string };
+    const body = (await lerCorpoJson(req)) as { acao?: string; tipo?: string; payload?: string; nonce?: string };
+
+    if (!body) {
+      return Response.json({ erro: "Corpo da requisição inválido." }, { status: 400 });
+    }
 
     // Eco: confirma ao cliente que o Realtime privado entrega mensagens a ele.
     if (body.acao === "eco") {

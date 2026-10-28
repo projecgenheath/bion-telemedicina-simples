@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { exigirConsentimentoIa } from "@/lib/server/consentimento-ia";
 import { exigirPapel } from "@/lib/server/auth";
 import { aplicarSideEffects, anamneseWire, consultaWire, perfilPacienteWire } from "@/lib/server/dados";
-import { ok, falha } from "@/lib/server/http";
+import {ok, falha, lerCorpoJson} from "@/lib/server/http";
 import { chatComFonte, iaPausada, type AnonNomes, type FonteLlm } from "@/lib/server/llm";
 import {
   turnoMotor,
@@ -406,7 +406,7 @@ export const maxDuration = 60;
 export async function POST(req: NextRequest) {
   try {
     const usuario = await exigirPapel("PACIENTE");
-    const body = (await req.json()) as { consultaId?: string; mensagem?: string; historico?: MsgEntrada[] };
+    const body = (await lerCorpoJson(req)) as { consultaId?: string; mensagem?: string; historico?: MsgEntrada[] };
 
     if (!body.consultaId) {
       return Response.json({ erro: "Consulta não informada." }, { status: 400 });
@@ -731,7 +731,7 @@ export async function POST(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   try {
     const usuario = await exigirPapel("PACIENTE");
-    const body = (await req.json()) as {
+    const body = (await lerCorpoJson(req)) as {
       consultaId?: string;
       acao?: "concluir" | "documento" | "pular";
       documento?: { nome?: string; tipo?: string; exameImportado?: boolean; resumo?: string };
@@ -824,6 +824,11 @@ export async function PATCH(req: NextRequest) {
     // NÃO altera o status da consulta (o pagamento já a confirmou);
     // apenas o LEGADO "pendente_anamnese" é confirmado aqui, para
     // migrar registros antigos do fluxo anterior.
+    // M-13 da auditoria: ação inválida/ausente NÃO pode cair aqui por
+    // default — antes, um typo no cliente CONCLUÍA a triagem sem querer.
+    if (body.acao !== "concluir") {
+      return Response.json({ erro: "acao inválida (concluir, documento ou pular)." }, { status: 400 });
+    }
     if (anamnese.status === "concluida") {
       const atualizada = await db.anamnese.findUnique({
         where: { id: anamnese.id },

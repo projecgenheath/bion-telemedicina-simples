@@ -10,7 +10,7 @@ import {
   type AuditPayload,
 } from "@/lib/server/dados";
 import { criarCobranca, confirmarPagamento, modoGateway, paraWire } from "@/lib/server/pagamentos";
-import { ok, falha } from "@/lib/server/http";
+import {ok, falha, lerCorpoJson} from "@/lib/server/http";
 import { conferirHorarioNaTransacao, ERRO_HORARIO_OCUPADO, ERRO_PACIENTE_OCUPADO } from "@/lib/server/financeiro";
 import { partesNoFuso } from "@/lib/server/fuso";
 import {
@@ -88,7 +88,7 @@ export async function POST(req: NextRequest) {
     // Termos + privacidade vigentes: sem aceite, nada novo é agendado (403).
     const semAceite = await exigirAceiteTermosPaciente(usuario);
     if (semAceite) return semAceite;
-    const body = (await req.json()) as {
+    const body = (await lerCorpoJson(req)) as {
       medicoId: string;
       data: string;
       hora: string;

@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { exigirPapel } from "@/lib/server/auth";
 import { aplicarSideEffects } from "@/lib/server/dados";
-import { ok, falha } from "@/lib/server/http";
+import {ok, falha, lerCorpoJson} from "@/lib/server/http";
 import { medidaCanonica } from "@/lib/medidas-paciente";
 import { detalhesAuditoria } from "@/lib/saude-paciente";
 
@@ -40,11 +40,15 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const usuario = await exigirPapel("PACIENTE");
-    const body = (await req.json()) as {
+    const body = (await lerCorpoJson(req)) as {
       tipo?: string;
       valor1?: number;
       valor2?: number;
     };
+
+    if (!body) {
+      return Response.json({ erro: "Corpo da requisição inválido." }, { status: 400 });
+    }
 
     const tipo = body.tipo ?? "";
     if (!TIPOS.includes(tipo as (typeof TIPOS)[number]) || typeof body.valor1 !== "number" || !Number.isFinite(body.valor1)) {

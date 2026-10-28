@@ -6,6 +6,7 @@ import {
   divisaoDaMulta,
   liquidoDaConsulta,
   reaisParaCentavos,
+  taxaGatewayValida,
 } from "@/lib/server/financeiro";
 import { dataIsoClinica, instanteNoFuso } from "@/lib/server/fuso";
 import type { ReceitaDia, RespostaReceita } from "./metricas";
@@ -53,6 +54,23 @@ export type EventoDesfechoReceita = {
   dataAnterior: Date;
   corrigidoEm?: Date | null;
 };
+
+/** Consulta com a taxa real do gateway já mapeada (stripeTaxaCentavos → taxaGatewayCentavos). */
+export type ConsultaReceitaBruta = ConsultaReceita & {
+  pagamento:
+    | (Exclude<ConsultaReceita["pagamento"], null> & { stripeTaxaCentavos?: number | null })
+    | null;
+};
+
+/** Normaliza a consulta do banco para ConsultaReceita (taxa real → taxaGatewayCentavos). */
+export function paraReceita(c: ConsultaReceitaBruta): ConsultaReceita {
+  return {
+    ...c,
+    pagamento: c.pagamento
+      ? { ...c.pagamento, taxaGatewayCentavos: c.pagamento.stripeTaxaCentavos ?? null }
+      : null,
+  };
+}
 
 export type ConsultaReceita = {
   id: string;
@@ -185,8 +203,9 @@ const zero = (): Omit<ReceitaDia, "dia"> => ({
  * em que foram cobradas (cancelamento: `em` do evento; remarcação: aprovação
  * do pagamento). Multas entram SEPARADAS do líquido da consulta, só a parte
  * do médico (divisaoDaMulta). Reembolso parcial efetivo reduz o líquido da
- * consulta (parte do médico = 90% do reembolsado). Taxa do gateway = 0
- * enquanto o Pagamento não guarda a taxa.
+ * consulta (parte do médico = 90% do reembolsado). Taxa do gateway = a
+ * REAL gravada pelo webhook do Stripe (stripeTaxaCentavos); 0 quando o
+ * pagamento não tem taxa registrada (M-1: agora igual ao repasse).
  */
 export function calcularReceita(params: {
   de: string;
@@ -206,7 +225,7 @@ export function calcularReceita(params: {
     if (!consultaEntraNaReceita(c, agora)) continue;
     const d = mapa.get(dataIsoClinica(c.dataInicio));
     if (!d) continue;
-    const l = liquidoDaConsulta(reaisParaCentavos(c.valor), 0);
+    const l = liquidoDaConsulta(reaisParaCentavos(c.valor), taxaGatewayValida(c.pagamento?.taxaGatewayCentavos, reaisParaCentavos(c.valor)));
     // Reembolso parcial: desconta a parte do médico (90% do reembolsado),
     // espelhando itemDaConsulta em repasse.ts.
     const antes = l.brutoCentavos - l.comissaoCentavos - l.taxaCentavos;

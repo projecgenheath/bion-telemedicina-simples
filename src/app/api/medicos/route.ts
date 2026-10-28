@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { exigirPapel, hashSenha } from "@/lib/server/auth";
 import { aplicarSideEffects, medicoWire, slugEmail } from "@/lib/server/dados";
 import { notaReal } from "@/lib/server/notas-medico";
-import { ok, falha } from "@/lib/server/http";
+import {ok, falha, lerCorpoJson} from "@/lib/server/http";
 import { erroGradeVedada, horariosVedadosDaGrade } from "@/lib/server/bloqueio-agenda";
 import { gerarSenhaTemporaria, sufixoAleatorio } from "@/lib/server/senha-temporaria";
 import { emailNorm, isErro } from "@/lib/server/validar";
@@ -12,7 +12,7 @@ import { emailNorm, isErro } from "@/lib/server/validar";
 export async function POST(req: NextRequest) {
   try {
     const admin = await exigirPapel("ADMIN");
-    const body = (await req.json()) as {
+    const body = (await lerCorpoJson(req)) as {
       nome: string;
       /** Opcional: e-mail real do médico. Sem ele, gera um login não adivinhável. */
       email?: string;
@@ -28,8 +28,31 @@ export async function POST(req: NextRequest) {
       status?: string;
     };
 
+    if (!body) {
+      return Response.json({ erro: "Corpo da requisição inválido." }, { status: 400 });
+    }
     if (!body.nome?.trim() || !body.crm?.trim() || !body.especialidade?.trim()) {
       return Response.json({ erro: "Nome, CRM e especialidade são obrigatórios." }, { status: 400 });
+    }
+    // M-18 da auditoria: mesmas regras de valor, status e grade que o PATCH
+    // de edição impõe (VALOR_MIN/VALOR_MAX de lá) — antes a criação aceitava
+    // preço negativo/acima do teto, status qualquer e horário sem formato.
+    const VALOR_MIN = 1;
+    const VALOR_MAX = 5000;
+    if (body.valor !== undefined) {
+      if (typeof body.valor !== "number" || !Number.isFinite(body.valor) || body.valor < VALOR_MIN || body.valor > VALOR_MAX) {
+        return Response.json({ erro: `Valor da consulta deve estar entre R$ ${VALOR_MIN} e R$ ${VALOR_MAX}.` }, { status: 400 });
+      }
+    }
+    const STATUS_PERMITIDOS = ["ativo", "pendente", "suspenso"];
+    if (body.status !== undefined && !STATUS_PERMITIDOS.includes(body.status)) {
+      return Response.json({ erro: "Status inválido (ativo, pendente ou suspenso)." }, { status: 400 });
+    }
+    if (
+      !Array.isArray(body.horariosDisponiveis) ||
+      body.horariosDisponiveis.some((h) => typeof h !== "string" || !/^([01]\d|2[0-3]):[0-5]\d$/.test(h))
+    ) {
+      return Response.json({ erro: "Horários devem estar no formato HH:MM." }, { status: 400 });
     }
     // Sem teleconsulta entre 23:00 e 00:00 (São Paulo): grade não pode ter esses horários.
     const vedados = horariosVedadosDaGrade(body.horariosDisponiveis);

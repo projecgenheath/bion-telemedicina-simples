@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { exigirSessao } from "@/lib/server/auth";
 import { podeAcessarArquivo, resolverDestinoUpload } from "@/lib/server/arquivos-acesso";
 import { aplicarSideEffects, arquivoWire } from "@/lib/server/dados";
-import { ok, falha } from "@/lib/server/http";
+import {ok, falha, lerCorpoJson} from "@/lib/server/http";
 import {
   uploadDocumento,
   urlAssinadaDocumento,
@@ -94,7 +94,7 @@ export async function POST(req: NextRequest) {
         }
       }
     } else {
-      const body = (await req.json()) as {
+      const body = (await lerCorpoJson(req)) as {
         nome: string;
         tipo: string;
         tamanhoKb: number;

@@ -8,7 +8,7 @@ import {
   registrarAudit,
   supabaseAdminOuNull,
 } from "@/lib/server/auth";
-import { ok, falha } from "@/lib/server/http";
+import {ok, falha, lerCorpoJson} from "@/lib/server/http";
 import {
   limitarAsync,
   consultarAsync,
@@ -32,7 +32,11 @@ export async function POST(req: NextRequest) {
   try {
     // Única rota (junto de sessao/logout) liberada com troca de senha pendente.
     const usuario = await exigirSessaoPermitindoTrocaSenha();
-    const body = (await req.json()) as { senhaAtual?: string; novaSenha?: string };
+    const body = (await lerCorpoJson(req)) as { senhaAtual?: string; novaSenha?: string };
+
+    if (!body) {
+      return Response.json({ erro: "Corpo da requisição inválido." }, { status: 400 });
+    }
 
     const senhaAtual = body.senhaAtual ?? "";
     const novaSenha = body.novaSenha ?? "";

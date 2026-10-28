@@ -93,6 +93,8 @@ export type Documento = {
   titulo: string;
   medico: string;
   paciente: string;
+  /** Identificador do paciente (M-9: filtros usam ID, nunca o nome). */
+  pacienteId?: string;
   conteudo: string;
   data: string;
   medicamento?: string;

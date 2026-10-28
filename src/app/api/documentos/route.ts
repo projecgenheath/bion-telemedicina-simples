@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { exigirPapel } from "@/lib/server/auth";
 import { aplicarSideEffects, documentoWire } from "@/lib/server/dados";
-import { ok, falha } from "@/lib/server/http";
+import {ok, falha, lerCorpoJson} from "@/lib/server/http";
 
 /** Emissão de documento clínico (receita/atestado/exame) — apenas médicos.
  *  Paciente identificado por ID (nunca por nome — homônimos existem).
@@ -16,7 +16,7 @@ const TIPOS_DOCUMENTO = new Set(["receita", "atestado", "exame", "exame_solicita
 export async function POST(req: NextRequest) {
   try {
     const usuario = await exigirPapel("MEDICO");
-    const body = (await req.json()) as {
+    const body = (await lerCorpoJson(req)) as {
       tipo: string;
       titulo: string;
       conteudo: string;

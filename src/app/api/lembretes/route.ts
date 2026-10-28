@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { exigirPapel } from "@/lib/server/auth";
 import { aplicarSideEffects } from "@/lib/server/dados";
-import { ok, falha } from "@/lib/server/http";
+import {ok, falha, lerCorpoJson} from "@/lib/server/http";
 import { detalhesAuditoria } from "@/lib/saude-paciente";
 
 /** Criação de lembretes de saúde (apenas pacientes).
@@ -10,13 +10,17 @@ import { detalhesAuditoria } from "@/lib/saude-paciente";
 export async function POST(req: NextRequest) {
   try {
     const usuario = await exigirPapel("PACIENTE");
-    const body = (await req.json()) as {
+    const body = (await lerCorpoJson(req)) as {
       titulo: string;
       horario: string;
       tipo: string;
       frequencia: string;
       medicamento?: string;
     };
+
+    if (!body) {
+      return Response.json({ erro: "Corpo da requisição inválido." }, { status: 400 });
+    }
 
     if (!body.titulo?.trim()) {
       return Response.json({ erro: "Informe o título do lembrete." }, { status: 400 });

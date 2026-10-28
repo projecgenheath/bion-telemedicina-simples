@@ -20,6 +20,7 @@ type Pedido = {
 
 export function RenovacoesPendentes() {
   const [pedidos, setPedidos] = useState<Pedido[] | null>(null);
+  const [erroCarga, setErroCarga] = useState<string | null>(null);
   const [aberto, setAberto] = useState<string | null>(null);
   const [mensagem, setMensagem] = useState("");
   const [conteudo, setConteudo] = useState("");
@@ -28,20 +29,16 @@ export function RenovacoesPendentes() {
 
   const carregar = useCallback(async () => {
     const res = await fetch("/api/medico/renovacoes", { cache: "no-store" }).catch(() => null);
-    if (res?.ok) setPedidos(((await res.json()) as { pedidos: Pedido[] }).pedidos);
+    if (res?.ok) {
+      setPedidos(((await res.json()) as { pedidos: Pedido[] }).pedidos);
+      setErroCarga(null);
+    } else {
+      setErroCarga("Não foi possível carregar os pedidos.");
+    }
   }, []);
   useEffect(() => {
-    let vivo = true;
-    fetch("/api/medico/renovacoes", { cache: "no-store" })
-      .then((r) => (r.ok ? (r.json() as Promise<{ pedidos: Pedido[] }>) : null))
-      .then((j) => {
-        if (vivo && j) setPedidos(j.pedidos);
-      })
-      .catch(() => undefined);
-    return () => {
-      vivo = false;
-    };
-  }, []);
+    void carregar();
+  }, [carregar]);
 
   const responder = async (id: string, corpo: Record<string, unknown>) => {
     setEnviando(true);
@@ -60,13 +57,30 @@ export function RenovacoesPendentes() {
       setConteudo("");
       setQuando("");
       await carregar();
+    } catch {
+      // M-7: falha de rede antes era rejeição não tratada — médico sem aviso
+      // e formulário sem limpeza.
+      toast.error("Falha de conexão", { description: "Verifique sua internet e tente novamente." });
     } finally {
       setEnviando(false);
     }
   };
 
-  if (!pedidos) return <div className="p-4 text-sm opacity-70">Carregando…</div>;
+  if (!pedidos) {
+    if (erroCarga) {
+      return (
+        <div className="p-4 space-y-2">
+          <p className="text-sm opacity-70">{erroCarga}</p>
+          <button type="button" onClick={() => void carregar()} className="text-sm underline font-bold">Tentar novamente</button>
+        </div>
+      );
+    }
+    return <div className="p-4 text-sm opacity-70">Carregando…</div>;
+  }
   if (pedidos.length === 0) return <div className="p-4 text-sm opacity-70">Nenhum pedido de renovação pendente.</div>;
+
+  // M-7: mínimo do datetime-local = agora (o servidor recusa horário passado).
+  const agoraLocal = new Date(Date.now() - new Date().getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
 
   return (
     <ul className="p-4 space-y-3">
@@ -85,7 +99,7 @@ export function RenovacoesPendentes() {
                 <textarea value={conteudo} onChange={(e) => setConteudo(e.target.value)} rows={3} maxLength={6000}
                   placeholder="Texto da receita nova" className="w-full rounded-xl border bg-background p-2 text-sm" />
               ) : null}
-              <input type="datetime-local" value={quando} onChange={(e) => setQuando(e.target.value)} className="w-full rounded-xl border bg-background p-2 text-sm" aria-label="Horário da chamada curta" />
+              <input type="datetime-local" min={agoraLocal} value={quando} onChange={(e) => setQuando(e.target.value)} className="w-full rounded-xl border bg-background p-2 text-sm" aria-label="Horário da chamada curta" />
               <div className="flex flex-wrap gap-2">
                 {!p.exigeChamada ? (
                   <button type="button" disabled={enviando || !conteudo.trim()} className="rounded-full bg-primary text-primary-foreground px-4 py-2 text-sm disabled:opacity-50"

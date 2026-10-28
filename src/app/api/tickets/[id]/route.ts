@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { exigirPapel } from "@/lib/server/auth";
 import { aplicarSideEffects, ticketWire } from "@/lib/server/dados";
-import { ok, falha } from "@/lib/server/http";
+import {ok, falha, lerCorpoJson} from "@/lib/server/http";
 
 /** Resposta a chamado de suporte (apenas admin).
  *  Notificação ao autor do chamado e auditoria geradas PELO SERVIDOR. */
@@ -13,7 +13,11 @@ export async function PATCH(
   try {
     const usuario = await exigirPapel("ADMIN");
     const { id } = await params;
-    const body = (await req.json()) as { resposta: string };
+    const body = (await lerCorpoJson(req)) as { resposta: string };
+
+    if (!body) {
+      return Response.json({ erro: "Corpo da requisição inválido." }, { status: 400 });
+    }
 
     const ticket = await db.ticket.findUnique({
       where: { id },

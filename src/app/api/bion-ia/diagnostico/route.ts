@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { exigirPapel } from "@/lib/server/auth";
-import { ok, falha } from "@/lib/server/http";
+import {ok, falha, lerCorpoJson} from "@/lib/server/http";
 import { sondaNvidia, ordemCanais, bloqueioGemini } from "@/lib/server/sonda-nvidia";
 import { estadoCanais, diagnosticoGemini, iaPausada, listarModelosGemini, respostaIaPausada, type Msg } from "@/lib/server/llm";
 
@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
     let modelo: string | undefined;
     let listar = false;
     try {
-      const corpo = (await req.json()) as { mensagens?: Msg[]; modelo?: string; listar?: boolean } | null;
+      const corpo = (await lerCorpoJson(req)) as { mensagens?: Msg[]; modelo?: string; listar?: boolean } | null;
       listar = corpo?.listar === true;
       const candidata = typeof corpo?.modelo === "string" ? corpo.modelo.trim() : "";
       if (/^[A-Za-z0-9._-]{1,80}$/.test(candidata)) modelo = candidata;

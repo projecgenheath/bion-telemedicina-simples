@@ -240,6 +240,9 @@ export function documentoWire(d: DocumentoComNomes) {
     conteudo: d.conteudo,
     medico: d.medico.nome,
     paciente: d.paciente.nome,
+    // M-9 da auditoria: identificador do paciente no wire — o nome duplicado
+    // (homônimos) não pode mais misturar documentos de pessoas diferentes.
+    pacienteId: d.pacienteId,
     medicamento: d.medicamento,
     posologia: d.posologia,
     duracao: d.duracao,

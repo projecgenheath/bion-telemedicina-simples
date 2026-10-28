@@ -196,7 +196,7 @@ export function competenciaDe(instante: Date): string {
 
 /* ---------- Multa -------------------------------------------------- */
 
-type EventoParaMulta = { por: string; em: Date; dataAnterior: Date; motivo?: string };
+type EventoParaMulta = { por: string; em: Date; dataAnterior: Date; motivo?: string; tipo?: string; corrigidoEm?: Date | null };
 
 /**
  * Data que vale para a janela da multa.
@@ -231,7 +231,7 @@ export type PreviaMulta = {
   semMultaAte: string;
   semMultaAteTexto: string;
   /** Motivo da isenção, se houver. */
-  isencao: null | "nao_e_paciente" | "aguardando_reagendamento" | "fora_da_janela";
+  isencao: null | "nao_e_paciente" | "aguardando_reagendamento" | "fora_da_janela" | "falta_do_medico";
 };
 
 /**
@@ -255,6 +255,20 @@ export function calcularMulta(params: {
   if (por !== "paciente") isencao = "nao_e_paciente";
   else if (consulta.status === "aguardando_reagendamento") isencao = "aguardando_reagendamento";
   else if (agora.getTime() < semMultaAte.getTime()) isencao = "fora_da_janela";
+  // M-23 da auditoria: consulta que não ocorreu por FALTA DO MÉDICO (ou
+  // falha técnica registrada) não gera multa ao paciente — mesmo depois do
+  // horário. Antes, cancelamento após o início com falta do médico cobrava
+  // 50% de uma consulta que não aconteceu por culpa do profissional.
+  else if (
+    eventos.some(
+      (e) =>
+        (e.tipo === "falta_medico" || e.tipo === "falha_tecnica") &&
+        !e.corrigidoEm &&
+        e.dataAnterior.getTime() === consulta.dataInicio.getTime(),
+    )
+  ) {
+    isencao = "falta_do_medico";
+  }
 
   // Só há o que cobrar se o paciente pagou: a multa sai do valor devolvido.
   const multaCentavos = isencao || !consulta.pago ? 0 : pct(valorCentavos, MULTA_PCT);
@@ -973,6 +987,13 @@ export async function validarNovoHorario(
   }
   if (grade.length && !grade.includes(hora)) {
     return { ok: false, erro: "Esse horário não faz parte da agenda do médico.", status: 400 };
+  }
+  // M-25 da auditoria: remarcação segue a MESMA regra de dias de atendimento
+  // e pausas semanais do agendamento (agora unificada em conferirDiasEPausas,
+  // usada também por conferirHorarioNaTransacao — a checagem atômica).
+  const erroGrade = conferirDiasEPausas(perfilMedico, dataInicio);
+  if (erroGrade) {
+    return { ok: false, erro: erroGrade, status: 409 };
   }
   // Dia inteiro bloqueado pelo médico (folga/férias) — antes da checagem de conflito.
   if (await diaBloqueado(db, consulta.medicoId, dataInicio)) {

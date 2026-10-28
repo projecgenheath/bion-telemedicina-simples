@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { exigirSessao } from "@/lib/server/auth";
-import { ok, falha } from "@/lib/server/http";
+import {ok, falha, lerCorpoJson} from "@/lib/server/http";
 
 /**
  * PATCH — marca notificação(ões) como lida(s): { id } ou { todas: true }.
@@ -33,7 +33,11 @@ export async function POST() {
 export async function PATCH(req: NextRequest) {
   try {
     const usuario = await exigirSessao();
-    const body = (await req.json()) as { id?: string; todas?: boolean };
+    const body = (await lerCorpoJson(req)) as { id?: string; todas?: boolean };
+
+    if (!body) {
+      return Response.json({ erro: "Corpo da requisição inválido." }, { status: 400 });
+    }
 
     const paraWire = (r: {
       id: string;

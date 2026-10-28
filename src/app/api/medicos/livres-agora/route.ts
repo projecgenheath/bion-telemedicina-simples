@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { exigirSessao } from "@/lib/server/auth";
 import { ok, falha } from "@/lib/server/http";
 import { foraDoHorarioVedado, medicoLivreAgora, reaisParaCentavos } from "@/lib/server/medico-livre";
+import { notaReal } from "@/lib/server/notas-medico";
 
 /**
  * GET /api/medicos/livres-agora?especialidade=...&consultaId=...
@@ -52,17 +53,23 @@ export async function GET(req: NextRequest) {
       const lote = candidatos.slice(i, i + LOTE);
       livres.push(...(await Promise.all(lote.map(async (m) => ((await medicoLivreAgora(m.userId, undefined, agora, consultaId ?? undefined)) ? m : null)))));
     }
+    // M-21 da auditoria: nota REAL (tabela avaliacao) — antes usava a coluna
+    // de seed do perfil (valores fictícios), o que notas-medico proíbe.
+    const livresFiltrados = livres.filter((m): m is NonNullable<typeof m> => m !== null);
+    const notas = new Map(
+      await Promise.all(livresFiltrados.map(async (m) => [m.userId, await notaReal(m.userId)] as const)),
+    );
     return ok({
-      medicos: livres
-        .filter((m): m is NonNullable<typeof m> => m !== null)
-        .map((m) => {
+      medicos: livresFiltrados.map((m) => {
           const valorConsultaCentavos = reaisParaCentavos(m.valor);
+          const nota = notas.get(m.userId) ?? { avaliacao: 0, numAvaliacoes: 0 };
           return {
             id: m.userId,
             nome: m.user.nome,
             especialidade: m.especialidade,
             foto: m.foto,
-            avaliacao: m.avaliacao,
+            avaliacao: nota.avaliacao,
+            numAvaliacoes: nota.numAvaliacoes,
             valorConsultaCentavos,
             diferencaCentavos: original ? valorConsultaCentavos - original.valorCentavos : null,
           };

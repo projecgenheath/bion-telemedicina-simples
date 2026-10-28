@@ -141,6 +141,7 @@ type EstadoFresco = {
   }[];
   documentos: {
     id: string; tipo: string; titulo: string; conteudo: string; medico: string; paciente: string;
+    pacienteId?: string | null; // M-9: filtro por identificador (homônimos)
     medicamento?: string | null; posologia?: string | null; duracao?: string | null;
     observacoes?: string | null; cid?: string | null; controlado?: boolean; createdAt: string;
   }[];
@@ -266,6 +267,7 @@ const mapDocumento = (x: EstadoFresco["documentos"][number]): Documento => ({
   titulo: x.titulo,
   medico: x.medico,
   paciente: x.paciente,
+  pacienteId: x.pacienteId ?? undefined, // M-9: filtro por identificador
   conteudo: x.conteudo,
   data: fmtLonga(x.createdAt),
   medicamento: x.medicamento ?? undefined,
@@ -1154,7 +1156,11 @@ export function BionProvider({ children }: { children: ReactNode }) {
   );
 
   const documentosVisiveis = useMemo(() => {
-    if (sessao.role === "paciente") return documentos.filter((d) => d.paciente === sessao.nome);
+    // M-9: paciente filtra pelo IDENTIFICADOR (homônimos); nome é fallback
+    // apenas para documentos legados sem pacienteId.
+    if (sessao.role === "paciente") {
+      return documentos.filter((d) => (d.pacienteId ? d.pacienteId === sessao.id : d.paciente === sessao.nome));
+    }
     if (sessao.role === "medico") {
       const pacientesVinculados = new Set(
         consultas.filter((c) => c.medico === sessao.nome).map((c) => c.paciente),

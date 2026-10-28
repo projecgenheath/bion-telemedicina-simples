@@ -22,7 +22,7 @@ import {
   OPCOES_TX_TRAVA,
 } from "@/lib/server/bloqueio-agenda";
 import { criarCobranca, confirmarPagamento, falharPagamento } from "@/lib/server/pagamentos";
-import { ok, falha } from "@/lib/server/http";
+import {ok, falha, lerCorpoJson} from "@/lib/server/http";
 import { desfechoExistente, lerPresencas } from "@/lib/server/presenca-consulta";
 import { pacienteEsteveNaSala } from "@/components/bion/medico/metricas";
 import { consultaJaRepassada, ERRO_CONSULTA_REPASSADA } from "@/lib/server/repasse";
@@ -112,7 +112,7 @@ export async function PATCH(
   try {
     const usuario = await exigirSessao();
     const { id } = await params;
-    const body = (await req.json()) as {
+    const body = (await lerCorpoJson(req)) as {
       acao: Acao;
       motivo?: string;
       /** Médico: true quando o cancelamento faz parte de "cancelar agenda do dia". */
@@ -126,6 +126,10 @@ export async function PATCH(
       pago?: boolean;
       valor?: string | number;
     };
+
+    if (!body) {
+      return Response.json({ erro: "Corpo da requisição inválido." }, { status: 400 });
+    }
 
     const consulta = await db.consulta.findUnique({ where: { id } });
     if (!consulta) {
@@ -151,7 +155,7 @@ export async function PATCH(
     // transação, com a trava (médico, dia) do agendamento e do bloqueio do dia.
     let conferir: { medicoId: string; dataInicio: Date; pacienteId?: string; exigirAberta?: boolean } | null = null;
     const eventosAnteriores = () =>
-      db.eventoConsulta.findMany({ where: { consultaId: id }, select: { por: true, em: true, dataAnterior: true, motivo: true } });
+      db.eventoConsulta.findMany({ where: { consultaId: id }, select: { por: true, em: true, dataAnterior: true, motivo: true, tipo: true, corrigidoEm: true } });
 
     switch (body.acao) {
       case "cancelar": {
@@ -428,6 +432,25 @@ export async function PATCH(
           if (erro) throw new HorarioIndisponivel(erro);
         }
         await tx.consulta.update({ where: { id }, data });
+        // M-22 da auditoria: consulta cancelada não pode deixar rascunho de
+        // evolução prendendo a trava do médico para sempre. O rascunho de
+        // consulta morta é ENCERRADO na mesma transação ("concluida" com nota
+        // de cancelamento no rascunho), liberando o próximo atendimento.
+        if (data.status === "cancelada" || data.status === "aguardando_reagendamento") {
+          const rascunho = await tx.evolucao.findUnique({ where: { consultaId: id }, select: { id: true, status: true, rascunho: true } });
+          if (rascunho && rascunho.status === "rascunho") {
+            let nota = {};
+            try { nota = JSON.parse(rascunho.rascunho || "{}") as Record<string, unknown>; } catch { /* rascunho inválido */ }
+            await tx.evolucao.update({
+              where: { id: rascunho.id },
+              data: {
+                status: "concluida",
+                concluidaEm: new Date(),
+                rascunho: JSON.stringify({ ...nota, encerradaPor: "consulta_cancelada" }),
+              },
+            });
+          }
+        }
         if (ev) await registrarEvento(tx, { consultaId: id, atorId: usuario.id, ...ev });
         // Cancelamento (qualquer pessoa) ou mudança de data por outra via:
         // a reserva de remarcação paga perde a validade na mesma transação.

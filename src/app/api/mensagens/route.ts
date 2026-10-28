@@ -2,7 +2,7 @@ import { NextRequest, after } from "next/server";
 import { db } from "@/lib/db";
 import { exigirSessao } from "@/lib/server/auth";
 import { aplicarSideEffects } from "@/lib/server/dados";
-import { ok, falha } from "@/lib/server/http";
+import {ok, falha, lerCorpoJson} from "@/lib/server/http";
 import { topicoMensagensUsuario } from "@/lib/server/usuario-canal";
 import { broadcastCanal } from "@/lib/supabase/broadcast";
 import { idCuid, isErro } from "@/lib/server/validar";
@@ -42,9 +42,13 @@ export async function GET(req: NextRequest) {
         de: { select: { nome: true } },
         para: { select: { nome: true } },
       },
-      orderBy: { createdAt: "asc" },
-      ...(valido ? { take: 200 } : {}),
+      orderBy: { createdAt: "desc" },
+      // M-16 da auditoria: SEMPRE com teto — antes, sem `desde` o GET devolvia
+      // o histórico INTEIRO do usuário, crescente e sem limite. Pega as 200
+      // mais recentes (desc) e devolve em ordem cronológica (asc).
+      take: 200,
     });
+    mensagens.reverse();
     return ok({
       mensagens: mensagens.map((m) => ({
         id: m.id,
@@ -65,10 +69,14 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const usuario = await exigirSessao();
-    const body = (await req.json()) as {
+    const body = (await lerCorpoJson(req)) as {
       paraId?: string;
       texto?: string;
     };
+
+    if (!body) {
+      return Response.json({ erro: "Corpo da requisição inválido." }, { status: 400 });
+    }
 
     const texto = (body.texto ?? "").trim();
     const paraId = idCuid(body.paraId, "Destinatário");
@@ -205,9 +213,18 @@ export async function POST(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   try {
     const usuario = await exigirSessao();
-    const body = (await req.json()) as { comUsuarioId?: string; todas?: boolean };
+    const body = (await lerCorpoJson(req)) as { comUsuarioId?: string; todas?: boolean };
 
+    if (!body) {
+      return Response.json({ erro: "Corpo da requisição inválido." }, { status: 400 });
+    }
+
+    // M-16: PATCH valida o identificador igual ao POST (idCuid).
     if (body.comUsuarioId) {
+      const idOk = idCuid(body.comUsuarioId, "Usuário da conversa");
+      if (isErro(idOk)) {
+        return Response.json({ erro: idOk.erro }, { status: 400 });
+      }
       await db.mensagem.updateMany({
         where: { deId: body.comUsuarioId, paraId: usuario.id, lida: false },
         data: { lida: true },

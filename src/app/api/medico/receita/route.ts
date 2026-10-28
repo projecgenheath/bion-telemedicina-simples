@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { exigirPapel } from "@/lib/server/auth";
 import { ok, falha } from "@/lib/server/http";
 import { dataIsoClinica } from "@/lib/server/fuso";
-import { calcularReceita, intervaloReceita } from "@/components/bion/medico/receita-servidor";
+import { calcularReceita, intervaloReceita, paraReceita } from "@/components/bion/medico/receita-servidor";
 
 /**
  * GET /api/medico/receita?de=AAAA-MM-DD&ate=AAAA-MM-DD — SOMENTE LEITURA.
@@ -36,7 +36,10 @@ export async function GET(req: NextRequest) {
           status: true,
           valor: true,
           pago: true,
-          pagamento: { select: { status: true, reembolsos: { select: { status: true, valorCentavos: true, origem: true } } } },
+          // Taxa REAL do Stripe (balance_transaction.fee) — mesma regra do
+          // repasse (M-1 da auditoria: antes a receita exibia líquido sem a
+          // taxa, sempre maior do que o médico efetivamente recebe).
+          pagamento: { select: { status: true, stripeTaxaCentavos: true, reembolsos: { select: { status: true, valorCentavos: true, origem: true } } } },
           eventos: {
             where: { tipo: { in: ["falta_paciente", "falha_tecnica"] } },
             select: { tipo: true, dataAnterior: true, corrigidoEm: true },
@@ -73,7 +76,7 @@ export async function GET(req: NextRequest) {
         de,
         ate,
         dias,
-        consultas,
+        consultas: consultas.map(paraReceita),
         multasCancelamento: eventosMulta.map((e) => ({
           em: e.em,
           multaCentavos: e.multaCentavos ?? 0,
