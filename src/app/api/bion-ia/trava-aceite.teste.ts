@@ -9,9 +9,12 @@ import { expect, mock, test } from "bun:test";
 let chamadasLlm = 0;
 let registro: { aceito: boolean; finalidade: string; createdAt: Date } | null = null;
 let papel: "PACIENTE" | "MEDICO" = "PACIENTE";
+let termosAceitos: string[] = [];
 
 mock.module("@/lib/server/auth", () => ({
   exigirSessao: async () => ({ id: "p1", nome: "Paciente Teste", email: "p@t.local", role: papel }),
+  exigirPapel: async () => ({ id: "p1", nome: "Paciente Teste", email: "p@t.local", role: papel }),
+  registrarAudit: async () => ({ id: "a1" }),
 }));
 mock.module("@/lib/server/llm", () => ({
   chatComFonte: async () => {
@@ -28,7 +31,7 @@ mock.module("@/lib/server/llm", () => ({
   respostaIaPausada: () => Response.json({ erro: "bion_ia_pausada" }, { status: 503 }),
 }));
 (globalThis as unknown as { prisma: unknown }).prisma = {
-  consentimento: { findFirst: async () => registro },
+  consentimento: { findFirst: async () => registro, findMany: async () => termosAceitos.map((finalidade) => ({ finalidade })) },
   perfilPaciente: { findUnique: async () => null },
   consulta: { findMany: async () => [], count: async () => 0 },
 };
@@ -39,6 +42,8 @@ globalThis.fetch = (async () => {
 }) as unknown as typeof fetch;
 
 const { POST } = await import("./route");
+const { finalidadePrivacidade, finalidadeTermos, VERSAO_PRIVACIDADE, VERSAO_TERMOS_PACIENTE } = await import("@/lib/aceite-termos");
+const termosVigentes = [finalidadePrivacidade(VERSAO_PRIVACIDADE), finalidadeTermos(VERSAO_TERMOS_PACIENTE)];
 const { CODIGO_CONSENTIMENTO_IA_PENDENTE, FINALIDADE_CONSENTIMENTO_IA, FINALIDADE_REVOGACAO_IA } = await import(
   "@/lib/consentimento-ia"
 );
@@ -76,8 +81,18 @@ test("aceite de versão antiga → 403 e nenhuma chamada ao LLM", async () => {
   expect(chamadasLlm).toBe(0);
 });
 
-test("com o aceite atual → chega ao LLM", async () => {
+test("aviso da IA aceito mas Termos novos pendentes → 403 e nenhuma chamada ao LLM", async () => {
   chamadasLlm = 0;
+  termosAceitos = [];
+  registro = { aceito: true, finalidade: FINALIDADE_CONSENTIMENTO_IA, createdAt: new Date() };
+  expect((await pedir(true)).status).toBe(403);
+  expect((await pedir(false)).status).toBe(403);
+  expect(chamadasLlm).toBe(0);
+});
+
+test("com os dois aceites atuais → chega ao LLM", async () => {
+  chamadasLlm = 0;
+  termosAceitos = termosVigentes;
   registro = { aceito: true, finalidade: FINALIDADE_CONSENTIMENTO_IA, createdAt: new Date() };
   const r = await pedir(false);
   expect(r.status).not.toBe(403);

@@ -1,3 +1,4 @@
+import { aceiteTermosPayload } from "@/lib/aceite-termos";
 import { MSG_CONSENTIMENTO_IA_PENDENTE, VERSAO_CONSENTIMENTO_IA, ehConsentimentoIaPendente } from "@/lib/consentimento-ia";
 /**
  * Cliente da BION IA (navegador) — usado por ChatBion (paciente) e BionIA
@@ -187,10 +188,14 @@ export async function perguntarBionIa(
  */
 export async function consultarConsentimentoIa(): Promise<boolean> {
   try {
-    const r = await fetch("/api/paciente/consentimento-ia", { cache: "no-store" });
-    if (!r.ok) return false;
-    const j = (await r.json().catch(() => null)) as { vigente?: unknown; versao?: unknown } | null;
-    return j?.vigente === true && j.versao === VERSAO_CONSENTIMENTO_IA;
+    const [ia, termos] = await Promise.all([
+      fetch("/api/paciente/consentimento-ia", { cache: "no-store" }),
+      fetch("/api/paciente/aceite-termos", { cache: "no-store" }),
+    ]);
+    if (!ia.ok || !termos.ok) return false;
+    const j = (await ia.json().catch(() => null)) as { vigente?: unknown; versao?: unknown } | null;
+    const t = (await termos.json().catch(() => null)) as { pendente?: unknown } | null;
+    return j?.vigente === true && j.versao === VERSAO_CONSENTIMENTO_IA && t?.pendente === false;
   } catch {
     return false;
   }
@@ -199,6 +204,13 @@ export async function consultarConsentimentoIa(): Promise<boolean> {
 /** Registra o aceite da versão atual da BION IA (NVIDIA). true = aceito. */
 export async function aceitarConsentimentoIa(): Promise<boolean> {
   try {
+    // Um aceite só (card do chat): Termos + Privacidade vigentes e o aviso da IA.
+    const termos = await fetch("/api/paciente/aceite-termos", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(aceiteTermosPayload("PACIENTE")),
+    });
+    if (!termos.ok) return false;
     const r = await fetch("/api/paciente/consentimento-ia", {
       method: "POST",
       headers: { "Content-Type": "application/json" },

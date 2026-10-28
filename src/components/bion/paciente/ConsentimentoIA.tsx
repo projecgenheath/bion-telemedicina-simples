@@ -126,7 +126,8 @@ export function CardAceiteIA({ onAceito }: { onAceito: () => void }) {
         <a href="/termos-de-uso" target="_blank" rel="noreferrer" className="underline font-semibold">
           Termos de Uso
         </a>{" "}
-        ({VERSAO_PRIVACIDADE} · {VERSAO_TERMOS_PACIENTE}). O chat só começa depois do aceite.
+        ({VERSAO_PRIVACIDADE} · {VERSAO_TERMOS_PACIENTE}). Um aceite só vale para os Termos, a Política e a IA. O chat
+        só começa depois dele.
       </p>
       {erro ? (
         <p className="text-red-600" role="alert">

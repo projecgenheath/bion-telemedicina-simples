@@ -55,12 +55,15 @@ igual("corpo traz versão", corpoConsentimentoIaPendente().versao, VERSAO_CONSEN
 {
   let registro: { aceito: boolean; finalidade: string; createdAt: Date } | null = null;
   let quebrar = false;
+  const { finalidadePrivacidade, finalidadeTermos } = await import("./aceite-termos");
+  let termos: string[] = [finalidadePrivacidade(VERSAO_PRIVACIDADE), finalidadeTermos(VERSAO_TERMOS_PACIENTE)];
   (globalThis as unknown as { prisma: unknown }).prisma = {
     consentimento: {
       findFirst: async () => {
         if (quebrar) throw new Error("db fora");
         return registro;
       },
+      findMany: async () => termos.map((finalidade) => ({ finalidade })),
     },
   };
   const { exigirConsentimentoIa } = await import("./server/consentimento-ia");
@@ -70,6 +73,9 @@ igual("corpo traz versão", corpoConsentimentoIaPendente().versao, VERSAO_CONSEN
   igual("portão: código no corpo", ((await r!.json()) as { codigo: string }).codigo, CODIGO_CONSENTIMENTO_IA_PENDENTE);
   registro = { aceito: true, finalidade: FINALIDADE_CONSENTIMENTO_IA, createdAt: new Date() };
   igual("portão: aceite atual passa", await exigirConsentimentoIa(pac), null);
+  termos = [];
+  igual("portão: aviso da IA ok mas Termos pendentes → 403", (await exigirConsentimentoIa(pac))?.status, 403);
+  termos = [finalidadePrivacidade(VERSAO_PRIVACIDADE), finalidadeTermos(VERSAO_TERMOS_PACIENTE)];
   registro = { aceito: false, finalidade: FINALIDADE_REVOGACAO_IA, createdAt: new Date() };
   igual("portão: revogado → 403", (await exigirConsentimentoIa(pac))?.status, 403);
   registro = null;
