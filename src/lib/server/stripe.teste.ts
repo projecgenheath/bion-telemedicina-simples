@@ -1,5 +1,6 @@
 /** Base do Stripe (reembolso e eventos). Rodar: npx tsx src/lib/server/stripe.teste.ts */
-import { enviarReembolsoStripe, paymentIntentDoGatewayRef, registrarEventoReembolsoStripe, statusReembolsoDoStripe, stripeConnectAtivo, modoCobrancaStripe, jaProcessado, marcarEvento, reivindicarEvento, liberarEvento } from "./stripe";
+import { enviarReembolsoStripe, paymentIntentDoGatewayRef, registrarEventoReembolsoStripe, statusReembolsoDoStripe, stripeConnectAtivo, modoCobrancaStripe, jaProcessado, marcarEvento, reivindicarEvento, liberarEvento, reembolsosStripePendentes } from "./stripe";
+import { db } from "@/lib/db";
 
 let ok = 0, falhas = 0;
 const igual = (n: string, a: unknown, b: unknown) => {
@@ -183,6 +184,54 @@ async function main() {
   { const d = fakeDb([base({ pagamento: { stripePaymentIntentId: "pi_1", consulta: { medico: { perfilMedico: { stripeAccountId: "acct_c" } } }, pedidoRenovacao: { medico: { perfilMedico: { stripeAccountId: "acct_outro" } } } } })]); const s = fakeStripe();
     await enviarReembolsoStripe("r1", { d: d as any, s: s as any, connect: true, modo: "direta" });
     igual("consulta direta: conta da consulta", s.chamadas[0][1], { idempotencyKey: "r1", stripeAccount: "acct_c" });
+  }
+  // reembolso parcial: amount = valor do Reembolso (não o total pago), params por modo intactos
+  for (const modo of ["plataforma", "direta", "destino"] as const) {
+    const extra = modo === "direta" ? { refund_application_fee: true } : modo === "destino" ? { reverse_transfer: true, refund_application_fee: true } : {};
+    { const d = fakeDb([{ ...multa("stripe_pi:pi_m"), valorCentavos: 2500, pagamento: null }]); const s = fakeStripe();
+      await enviarReembolsoStripe("rm", { d: d as any, s: s as any, connect: true, modo });
+      igual(`multa parcial (${modo}): params`, s.chamadas[0], [{ payment_intent: "pi_m", amount: 2500, metadata: { reembolsoId: "rm" }, ...extra }, { idempotencyKey: "rm", ...(modo === "direta" ? { stripeAccount: "acct_m" } : {}) }]);
+    }
+    { const d = fakeDb([base({ id: "rr", valorCentavos: 1234, pagamento: { stripePaymentIntentId: "pi_r", valorCentavos: 15000, consulta: null, pedidoRenovacao: { medico: { perfilMedico: { stripeAccountId: "acct_r" } } } } })]); const s = fakeStripe();
+      await enviarReembolsoStripe("rr", { d: d as any, s: s as any, connect: true, modo });
+      igual(`renovação parcial (${modo}): params`, s.chamadas[0], [{ payment_intent: "pi_r", amount: 1234, metadata: { reembolsoId: "rr" }, ...extra }, { idempotencyKey: "rr", ...(modo === "direta" ? { stripeAccount: "acct_r" } : {}) }]);
+    }
+  }
+  // filtro do cron (reembolsosStripePendentes): avalia o where contra linhas em memória
+  { type L = { id: string; criadoEm: number; status: string; stripeRefundId: string | null; pagamentoId: string | null; pagamento: { stripePaymentIntentId: string | null } | null; remarcacao: { gatewayRef: string | null } | null };
+    const L = (id: string, x: Partial<L>): L => ({ id, criadoEm: 0, status: "aprovado", stripeRefundId: null, pagamentoId: null, pagamento: null, remarcacao: null, ...x });
+    const linhas: L[] = [
+      L("pag_stripe", { criadoEm: 2, pagamentoId: "p1", pagamento: { stripePaymentIntentId: "pi_1" } }),
+      L("multa_pi", { criadoEm: 1, remarcacao: { gatewayRef: "stripe_pi:pi_m" } }),
+      L("multa_cs", { remarcacao: { gatewayRef: "stripe_cs:cs_test_1" } }),
+      L("multa_vazia", { remarcacao: { gatewayRef: "" } }),
+      L("multa_nula", { remarcacao: { gatewayRef: null } }),
+      L("pag_pix", { pagamentoId: "p2", pagamento: { stripePaymentIntentId: null } }),
+      L("ja_enviado", { pagamentoId: "p3", pagamento: { stripePaymentIntentId: "pi_3" }, stripeRefundId: "re_3" }),
+      L("multa_enviada", { remarcacao: { gatewayRef: "stripe_pi:pi_x" }, stripeRefundId: "re_x" }),
+      L("processado", { pagamentoId: "p4", pagamento: { stripePaymentIntentId: "pi_4" }, status: "processado" }),
+    ];
+    const casa = (l: any, w: any): boolean => Object.entries(w).every(([k, v]: [string, any]) => {
+      if (k === "OR") return v.some((o: any) => casa(l, o));
+      const x = l[k];
+      if (v === null) return x === null;
+      if (typeof v !== "object") return x === v;
+      if ("not" in v) return x !== v.not;
+      if ("startsWith" in v) return typeof x === "string" && x.startsWith(v.startsWith);
+      return x != null && casa(x, v);
+    });
+    let arg: any = null;
+    const orig = Object.getOwnPropertyDescriptor(db, "reembolso");
+    Object.defineProperty(db, "reembolso", { configurable: true, value: { async findMany(a: any) {
+      arg = a; return linhas.filter((l) => casa(l, a.where)).sort((p, q) => p.criadoEm - q.criadoEm).slice(0, a.take).map((l) => ({ id: l.id }));
+    } } });
+    try {
+      igual("cron: inclui multa stripe_pi e pagamento Stripe (ordem criadoEm)", await reembolsosStripePendentes(), ["multa_pi", "pag_stripe"]);
+      igual("cron: where exige aprovado e não enviado", [arg.where.status, arg.where.stripeRefundId], ["aprovado", null]);
+      igual("cron: limite", await reembolsosStripePendentes(1), ["multa_pi"]);
+    } finally {
+      if (orig) Object.defineProperty(db, "reembolso", orig); else delete (db as any).reembolso;
+    }
   }
   console.log(`${ok} ok, ${falhas} falha(s)`);
   if (falhas) process.exit(1);
