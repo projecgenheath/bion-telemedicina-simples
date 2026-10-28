@@ -327,6 +327,11 @@ export function ChatBion({
         examesSalvos?: { titulo: string; itens: { nome: string; valor: number; unidade?: string }[] }[];
         dados?: unknown;
       };
+      if (res.status === 503 && json.erro === "bion_ia_pausada") {
+        // Pausa da BION IA (até o motor NVIDIA): o laudo não é enviado à IA.
+        setMensagens((m) => [...m, { remetente: "ia", texto: json.mensagem || "A BION IA volta em breve." }]);
+        return;
+      }
 
       if (json.ok && json.examesSalvos?.length) {
         // Laudo pela IA ainda devolve estado fresco (rota pesada rara) —
@@ -398,7 +403,12 @@ export function ChatBion({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ mensagens: historico.filter((m) => m.texto.length < 500).slice(-4).map((m) => ({ remetente: m.remetente === "usuario" ? "usuario" : "ia", texto: m.texto.replace(/\*\*/g, "") })) }),
       });
-      const json = (await res.json()) as { resposta?: string; fonte?: string; modelo?: string; erro?: string };
+      const json = (await res.json()) as { resposta?: string; fonte?: string; modelo?: string; erro?: string; mensagem?: string };
+      if (res.status === 503 && json.erro === "bion_ia_pausada") {
+        // Pausa da BION IA (até o motor NVIDIA): aviso amigável, sem "Tentar de novo".
+        setMensagens((m) => [...m, { remetente: "ia", texto: json.mensagem || "A BION IA volta em breve." }]);
+        return;
+      }
       if (!res.ok || !json.resposta) throw new Error(json.erro ?? "Falha");
       setMensagens((m) => [...m, { remetente: "ia", texto: json.resposta!, fonte: json.fonte, modelo: json.modelo }]);
     } catch (e) {

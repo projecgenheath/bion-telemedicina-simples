@@ -191,9 +191,13 @@ export function BionIA() {
         resposta?: string;
         fonte?: string;
         erro?: string;
+        mensagem?: string;
       } | null;
       resposta = json?.resposta ?? "";
-      if (!res.ok || !resposta) {
+      if (res.status === 503 && json?.erro === "bion_ia_pausada") {
+        // Pausa da BION IA (até o motor NVIDIA): aviso amigável, não erro.
+        resposta = json.mensagem || "A BION IA volta em breve.";
+      } else if (!res.ok || !resposta) {
         resposta =
           json?.erro ||
           "A BION IA está um pouco sobrecarregada agora. Aguarde alguns segundos e envie de novo.";

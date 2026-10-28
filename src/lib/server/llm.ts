@@ -35,6 +35,24 @@ import ZAI from "z-ai-web-dev-sdk";
  * determinísticos — a BION IA nunca fica muda.
  */
 
+/* ------------------------------ PAUSA DA BION IA ------------------------------
+ * Decisão do Alisson (27/10/2026): enquanto o motor NVIDIA (#108) não entra,
+ * NENHUM dado sai para o Gemini gratuito. A pausa vale por padrão e só é
+ * desligada com BION_IA_PAUSADA=false. O #108 deve remover esta pausa.
+ * O guard fica AQUI dentro, em todos os pontos que fazem fetch, para cobrir
+ * qualquer chamador (chat, laudo, triagem, Copilot, diagnóstico admin).
+ */
+export const ERRO_IA_PAUSADA = { erro: "bion_ia_pausada", mensagem: "A BION IA volta em breve." } as const;
+
+export function iaPausada(): boolean {
+  return (process.env.BION_IA_PAUSADA ?? "").trim().toLowerCase() !== "false";
+}
+
+/** Resposta HTTP 503 padrão da pausa (as rotas devolvem isto antes de qualquer IA). */
+export function respostaIaPausada(): Response {
+  return Response.json(ERRO_IA_PAUSADA, { status: 503 });
+}
+
 export type Msg = { role: "user" | "assistant"; content: string };
 
 export type AnonNomes = { nome: string; substituto: string }[];
@@ -248,6 +266,7 @@ async function geminiPost(
   prazo: number,
   rotulo = "gemini",
 ): Promise<string | null> {
+  if (iaPausada()) return null; // pausa: nada sai para o Gemini
   const url = `${GEMINI_BASE}/${model}:generateContent`;
   const chamar = async (c: GeminiCorpo, rotuloTurno: string): Promise<GeminiResposta | null> => {
     const inicio = Date.now();
@@ -518,6 +537,7 @@ export async function visaoGemini(
   prompt: string,
   timeoutMs: number,
 ): Promise<string | null> {
+  if (iaPausada()) return null;
   if (!geminiHabilitado()) return null;
   const { apiKey } = geminiConfig();
   const prazo = Date.now() + Math.max(timeoutMs, 5_000);
@@ -566,6 +586,7 @@ function clienteEnv(): ClienteEnv | null {
 }
 
 async function chamarEnv(c: ClienteEnv, mensagens: Msg[], prazo: number): Promise<string | null> {
+  if (iaPausada()) return null;
   const corpo = {
     messages: mensagens,
     thinking: { type: "disabled" },
@@ -784,6 +805,7 @@ function textoComEcoRaciocinio(texto: string | null | undefined): boolean {
 /* ------------------------------- canal sdk ------------------------------- */
 
 async function tentarSdk(): Promise<ClienteSdk | null> {
+  if (iaPausada()) return null;
   if (_sdk.verificado) return _sdk.cliente;
   try {
     const zai = await ZAI.create();
@@ -805,6 +827,7 @@ async function tentarSdk(): Promise<ClienteSdk | null> {
 }
 
 async function chamarSdk(c: ClienteSdk, mensagens: Msg[], prazo: number): Promise<string | null> {
+  if (iaPausada()) return null;
   const bruto = await comPrazo(
     c.zai.chat.completions.create({
       messages: mensagens,
@@ -834,6 +857,8 @@ export async function chatComFonte(
   anon?: AnonNomes,
   opcoes?: OpcoesChat,
 ): Promise<Resultado> {
+  // Pausa: devolve sem texto e SEM registrar turno (o painel mostra "Pausada", não falha).
+  if (iaPausada()) return { texto: null, fonte: null };
   const inicio = Date.now();
   const devolver = (r: Resultado): Resultado => {
     const ultimo = _registrosGemini.at(-1);
@@ -897,6 +922,7 @@ export async function chatCompleto(mensagens: Msg[], timeoutMs: number, anon?: A
  * `visaoGemini`), env genérico ou SDK do sandbox.
  */
 export async function obterLLM(): Promise<Cliente | null> {
+  if (iaPausada()) return null;
   if (geminiHabilitado() && geminiConfig().apiKey && !geminiEmCooldown()) return { tipo: "gemini" };
   const env = clienteEnv();
   if (env) return env;
@@ -930,6 +956,7 @@ export type ProbeCanal = { canal: FonteLlm; ok: boolean; detalhe: string; ms: nu
  * Gemini falha em produção sem expor a chave.
  */
 export async function diagnosticoGemini(mensagens: Msg[], timeoutMs = 25_000, modelo?: string) {
+  if (iaPausada()) return { texto: null, modelo: null, registros: [] as RegistroGemini[], pausada: true as const };
   const prazo = Date.now() + timeoutMs;
   // ignorarDisjuntor: o diagnóstico precisa enxergar o Gemma REAL (inclusive
   // o despejo) mesmo quando o chat está pulando os modelos Gemma.
@@ -947,6 +974,7 @@ export type ModeloDisponivel = { id: string; nome: string };
  * pelo diagnóstico admin para descobrir quais Gemma/Gemini estão liberados.
  */
 export async function listarModelosGemini(timeoutMs = 15_000): Promise<ModeloDisponivel[] | { erro: string }> {
+  if (iaPausada()) return { erro: ERRO_IA_PAUSADA.erro };
   const { apiKey } = geminiConfig();
   if (!apiKey) return { erro: "sem chave BION_LLM_GEMINI_API_KEY" };
   try {
@@ -983,6 +1011,7 @@ function limpar(detalhe: string, ...secretos: string[]): string {
  * canal funciona DESTE runtime (chave válida + região suportada).
  */
 export async function probeCanais(timeoutMs = 20_000): Promise<ProbeCanal[]> {
+  if (iaPausada()) return [];
   const prazo = Date.now() + timeoutMs;
   const resultados: ProbeCanal[] = [];
   const segredoGemini = geminiConfig().apiKey;
