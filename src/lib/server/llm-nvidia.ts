@@ -240,8 +240,16 @@ function corpoChat(mensagens: unknown[], model: string, o: OpcoesNv, stream: boo
   };
 }
 
+export const MAX_ERRO = 120;
+/** Erro do provedor curto (não lota o monitor/log). */
+export function encurtarErro(erro: string | null): string | null {
+  if (erro == null) return null;
+  const e = erro.replace(/\s+/g, " ").trim();
+  return e.length > MAX_ERRO ? `${e.slice(0, MAX_ERRO - 1)}…` : e;
+}
+
 function registrar(o: OpcoesNv, r: Omit<RegistroNvidia, "rotulo">) {
-  o.registros?.push({ rotulo: o.rotulo ?? "nvidia", ...r });
+  o.registros?.push({ rotulo: o.rotulo ?? "nvidia", ...r, erro: encurtarErro(r.erro) });
 }
 
 /** Chamada NÃO-stream. Devolve só o conteúdo final (sem raciocínio). */

@@ -20,6 +20,8 @@ import {
 import {
   FiltroPensamento,
   LIMITE_RETENCAO,
+  encurtarErro,
+  MAX_ERRO,
   motivoFalhaIa,
   nvidiaLiberado,
   paraMensagensOpenAI,
@@ -290,6 +292,53 @@ igual("motivo: 429", motivoFalhaIa([{ status: 429, erro: "x" }]), "A cota da IA 
   igual("stream: sem tags libera após limite", r3.saidas[1], "Oi " + longo);
   const r4 = juntar(["Oi curto"]);
   igual("stream: curto sai no fechar", r4.total, "Oi curto");
+}
+
+{
+  // revisão do Admin: erro curto, monitor, stream interrompido
+  igual("erro: null fica null", encurtarErro(null), null);
+  igual("erro: curto intacto", encurtarErro("HTTP 500"), "HTTP 500");
+  igual("erro: longo cortado", encurtarErro("x".repeat(500))!.length, MAX_ERRO);
+  const { resumir, chaveEvento } = await import("@/lib/server/llm-monitor");
+  const base = { fonte: null, modelo: null, textoLen: 0, http: null, finish: null, erro: null };
+  const r = resumir([
+    { ...base, ts: 1, ok: true, ms: 100, origem: "servidor" },
+    { ...base, ts: 2, ok: false, ms: 200 },
+    { ...base, ts: 3, ok: false, ms: 99_000, origem: "cliente" },
+  ]);
+  igual("monitor: cliente fora dos turnos", [r.turnos, r.falhas, r.falhasCliente], [2, 1, 1]);
+  igual("monitor: cliente fora do p95", r.msP95, 100);
+  igual(
+    "monitor: chave distingue origem",
+    chaveEvento({ ts: 5, requestId: "a", origem: "cliente" }) === chaveEvento({ ts: 5, requestId: "a" }),
+    false,
+  );
+
+  // stream cortado pelo consumidor depois do 1º token
+  const salvo = { ...process.env };
+  process.env.NVIDIA_API_KEY = "chave-de-teste";
+  process.env.BION_LLM_NVIDIA_ATIVO = "true";
+  process.env.BION_LLM_RESERVA_GEMINI = "0";
+  delete process.env.BION_LLM_NVIDIA_BASE_URL;
+  const fetchOriginal = globalThis.fetch;
+  globalThis.fetch = (async () =>
+    new Response(
+      'data: {"choices":[{"delta":{"content":"Olá, aqui é a resposta da BION, que vai ser cortada. ' + "y".repeat(LIMITE_RETENCAO) + '"}}]}\n\n',
+      { status: 200, headers: { "content-type": "text/event-stream" } },
+    )) as unknown as typeof fetch;
+  const { chatStreamComFonte } = await import("@/lib/server/llm");
+  const { eventosLlmMemoria } = await import("@/lib/server/llm-monitor");
+  const g = chatStreamComFonte([{ role: "user", content: "oi" }], 5_000, { requestId: "ia_teste_cort" });
+  const primeiro = await g.next();
+  igual("stream: 1º delta chega", (primeiro.value as { tipo?: string })?.tipo, "delta");
+  await g.return(undefined);
+  const ev = eventosLlmMemoria().find((e) => e.requestId === "ia_teste_cort");
+  igual("stream: corte registrado ok=false", [ev?.ok, ev?.erro], [false, "stream_interrompido"]);
+  globalThis.fetch = fetchOriginal;
+  for (const k of ["NVIDIA_API_KEY", "BION_LLM_NVIDIA_ATIVO", "BION_LLM_RESERVA_GEMINI"]) {
+    if (salvo[k] === undefined) delete process.env[k];
+    else process.env[k] = salvo[k];
+  }
 }
 
 console.log(`llm: ${ok} ok, ${falhas} falha(s) [TZ=${process.env.TZ ?? "padrão"}]`);

@@ -1001,20 +1001,34 @@ export async function* chatStreamComFonte(
   if (tentouNvidia) {
     const regNv: RegistroNvidia[] = [];
     let len = 0;
-    for await (const pedaco of streamNvidia(mensagens, {
-      timeoutMs: restante(prazo) - 1_000,
-      primeiroTokenMs: opcoes.primeiroTokenMs ?? Math.round(restante(prazo) * 0.5),
-      registros: regNv,
-    })) {
-      len += pedaco.length;
-      yield { tipo: "delta", texto: pedaco };
-    }
-    registros.push(...regNv.map(deNvidia));
+    let registrado = false;
     const modelo = nvidiaConfig().model;
-    if (len > 0) {
-      marcar(true, "nvidia", modelo, len);
-      yield { tipo: "fim", fonte: "nvidia", modelo, requestId };
-      return;
+    try {
+      for await (const pedaco of streamNvidia(mensagens, {
+        timeoutMs: restante(prazo) - 1_000,
+        primeiroTokenMs: opcoes.primeiroTokenMs ?? Math.round(restante(prazo) * 0.5),
+        registros: regNv,
+      })) {
+        len += pedaco.length;
+        yield { tipo: "delta", texto: pedaco };
+      }
+      registros.push(...regNv.map(deNvidia));
+      if (len > 0) {
+        // Cortado no meio (erro depois do 1º token) não é turno ok.
+        const cortado = regNv.some((r) => r.erro && r.erro !== "sem texto");
+        if (cortado) registros.push({ ...deNvidia(regNv.at(-1)!), erro: "stream_interrompido" });
+        marcar(!cortado, "nvidia", modelo, len);
+        registrado = true;
+        yield { tipo: "fim", fonte: "nvidia", modelo, requestId };
+        return;
+      }
+    } finally {
+      // Consumidor fechou o stream (cliente saiu / return()) no meio: registra.
+      if (len > 0 && !registrado) {
+        if (!registros.length) registros.push(...regNv.map(deNvidia));
+        registros.push({ rotulo: "nvidia", status: null, finish: null, block: null, ms: Date.now() - inicio, textoLen: len, erro: "stream_interrompido" });
+        marcar(false, "nvidia", modelo, len);
+      }
     }
   }
 

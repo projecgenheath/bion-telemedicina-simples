@@ -50,7 +50,11 @@ async function persistir(e: EventoLlm) {
   }
 }
 
-export function resumir(eventos: EventoLlm[]) {
+export function resumir(todos: EventoLlm[]) {
+  // Falhas vistas no navegador contam à parte: não entram em p50/p95 nem
+  // na contagem principal (são o mesmo turno visto pelo cliente).
+  const falhasCliente = todos.filter((e) => e.origem === "cliente").length;
+  const eventos = todos.filter((e) => e.origem !== "cliente");
   const n = eventos.length;
   const oks = eventos.filter((e) => e.ok);
   const falhas = n - oks.length;
@@ -61,10 +65,16 @@ export function resumir(eventos: EventoLlm[]) {
     turnos: n,
     ok: oks.length,
     falhas,
+    falhasCliente,
     taxaOk: n ? Math.round((oks.length / n) * 100) : 0,
     msMedia: media,
     msP50: pct(50),
     msP95: pct(95),
     modelos: Array.from(new Set(eventos.map((e) => e.modelo).filter(Boolean))),
   };
+}
+
+/** Chave de deduplicação memória × banco (ts sozinho colide). */
+export function chaveEvento(e: Pick<EventoLlm, "ts" | "requestId" | "origem">): string {
+  return `${e.ts}|${e.requestId ?? ""}|${e.origem ?? "servidor"}`;
 }
