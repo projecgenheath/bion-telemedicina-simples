@@ -7,6 +7,7 @@
 import { expect, mock, test } from "bun:test";
 
 let chamadasLlm = 0;
+let ultimasMensagens: { role: string; content: string }[] = [];
 let registro: { aceito: boolean; finalidade: string; createdAt: Date } | null = null;
 let papel: "PACIENTE" | "MEDICO" = "PACIENTE";
 let termosAceitos: string[] = [];
@@ -17,9 +18,10 @@ mock.module("@/lib/server/auth", () => ({
   registrarAudit: async () => ({ id: "a1" }),
 }));
 mock.module("@/lib/server/llm", () => ({
-  chatComFonte: async () => {
+  chatComFonte: async (msgs: { role: string; content: string }[]) => {
     chamadasLlm++;
-    return { texto: "x", raciocinio: "", fonte: "nvidia", modelo: "m", registros: [] };
+    ultimasMensagens = msgs;
+    return { texto: "Desde quando dói?\n[[AGENDAR: Clínica Médica]]", raciocinio: "", fonte: "nvidia", modelo: "m", registros: [] };
   },
   chatStreamComFonte: async function* () {
     chamadasLlm++;
@@ -32,8 +34,14 @@ mock.module("@/lib/server/llm", () => ({
 }));
 (globalThis as unknown as { prisma: unknown }).prisma = {
   consentimento: { findFirst: async () => registro, findMany: async () => termosAceitos.map((finalidade) => ({ finalidade })) },
-  perfilPaciente: { findUnique: async () => null },
+  perfilPaciente: {
+    findUnique: async () => ({ idade: 34, dataNascimento: null, genero: "feminino", alergias: '["dipirona"]', medicamentos: "[]", comorbidades: '["enxaqueca"]', cpf: "", telefone: "" }),
+  },
   consulta: { findMany: async () => [], count: async () => 0 },
+  exameLaboratorial: { findMany: async () => [{ titulo: "Hemograma", dataColeta: new Date("2026-10-01T12:00:00Z") }] },
+  anamnese: { findMany: async () => [] },
+  perfilMedico: { findMany: async () => [{ especialidade: "Clínica Médica", user: { nome: "Dra. B" } }] },
+  medicamentoEmUso: { findMany: async () => [] },
 };
 const fetchOriginal = globalThis.fetch;
 globalThis.fetch = (async () => {
@@ -97,5 +105,22 @@ test("com os dois aceites atuais → chega ao LLM", async () => {
   const r = await pedir(false);
   expect(r.status).not.toBe(403);
   expect(chamadasLlm).toBe(1);
+  // contexto: system com papel + perfil; ação separada do texto
+  expect(ultimasMensagens[0].content).toContain("app de telemedicina BION");
+  expect(ultimasMensagens[0].content).toContain("dipirona");
+  expect(ultimasMensagens[0].content).toContain("Dra. B (Clínica Médica)");
+  expect(ultimasMensagens[0].content).toContain("SAMU 192");
+  const j = (await r.json()) as { resposta: string; acao: unknown };
+  expect(j.resposta).toBe("Desde quando dói?");
+  expect(j.acao).toEqual({ tipo: "agendar", especialidade: "Clínica Médica" });
+});
+
+test("saudação ('Bom dia') também leva o contexto e o histórico vai inteiro (até 12)", async () => {
+  const hist = Array.from({ length: 14 }, (_, i) => ({ remetente: i % 2 ? "ia" : "usuario", texto: `msg ${i} ` + "x".repeat(600) }));
+  hist.push({ remetente: "usuario", texto: "Bom dia" });
+  await POST(new Request("http://teste/api/bion-ia", { method: "POST", body: JSON.stringify({ mensagens: hist }) }) as never);
+  expect(ultimasMensagens[0].content).toContain("dipirona");
+  expect(ultimasMensagens.length).toBe(13);
+  expect(ultimasMensagens.at(-1)?.content).toBe("Bom dia");
   globalThis.fetch = fetchOriginal;
 });

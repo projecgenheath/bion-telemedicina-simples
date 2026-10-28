@@ -1,3 +1,4 @@
+import type { AcaoBionIa } from "@/lib/bion-ia-acao";
 import { aceiteTermosPayload } from "@/lib/aceite-termos";
 import { MSG_CONSENTIMENTO_IA_PENDENTE, VERSAO_CONSENTIMENTO_IA, ehConsentimentoIaPendente } from "@/lib/consentimento-ia";
 /**
@@ -20,7 +21,15 @@ export type RespostaBionIa = {
   fonte: string | null;
   modelo: string | null;
   requestId: string | null;
+  /** Ação sugerida pela IA (ex.: card "Agendar consulta"). */
+  acao?: AcaoBionIa | null;
 };
+
+function lerAcao(v: unknown): AcaoBionIa | null {
+  const a = v as { tipo?: unknown; especialidade?: unknown } | null;
+  if (!a || a.tipo !== "agendar") return null;
+  return { tipo: "agendar", especialidade: typeof a.especialidade === "string" && a.especialidade.trim() ? a.especialidade.trim() : null };
+}
 
 /** Aviso mostrado na resposta e no bloco "ver como a IA pensou". */
 export const AVISO_IA = "Conteúdo gerado por IA, não substitui avaliação médica.";
@@ -128,7 +137,7 @@ export async function perguntarBionIa(
     if (!tipoConteudo.includes("ndjson")) {
       // JSON de erro (401/503/…) ou página HTML (504 da Vercel).
       const bruto = await res.text().catch(() => "");
-      let j: { resposta?: string; raciocinio?: string | null; erro?: string; mensagem?: string; fonte?: string; modelo?: string; requestId?: string } | null = null;
+      let j: { acao?: unknown; resposta?: string; raciocinio?: string | null; erro?: string; mensagem?: string; fonte?: string; modelo?: string; requestId?: string } | null = null;
       try {
         j = JSON.parse(bruto);
       } catch {
@@ -142,13 +151,14 @@ export async function perguntarBionIa(
       if (!j) return falhar(res.status === 504 ? "timeout" : "nao_json", res.status === 504 ? MSG_TIMEOUT : MSG_NAO_JSON, res.status);
       requestId = j.requestId ?? requestId;
       if (res.ok && j.resposta)
-        return { texto: j.resposta, raciocinio: j.raciocinio ?? "", fonte: j.fonte ?? null, modelo: j.modelo ?? null, requestId };
+        return { texto: j.resposta, raciocinio: j.raciocinio ?? "", fonte: j.fonte ?? null, modelo: j.modelo ?? null, requestId, acao: lerAcao(j.acao) };
       throw new ErroBionIa(j.erro || "A BION IA não respondeu agora. Toque em Tentar de novo.", "servidor");
     }
     if (!res.body) return falhar("nao_json", MSG_NAO_JSON, res.status);
 
     let fonte: string | null = null;
     let modelo: string | null = null;
+    let acao: AcaoBionIa | null = null;
     let terminou = false;
     try {
       for await (const ev of linhasNdjson(res.body)) {
@@ -159,6 +169,8 @@ export async function perguntarBionIa(
         } else if (ev.tipo === "raciocinio" && typeof ev.texto === "string") {
           raciocinio += ev.texto;
           opcoes.onRaciocinio?.(raciocinio);
+        } else if (ev.tipo === "acao") {
+          acao = lerAcao(ev.acao);
         } else if (ev.tipo === "fim") {
           fonte = typeof ev.fonte === "string" ? ev.fonte : null;
           modelo = typeof ev.modelo === "string" ? ev.modelo : null;
@@ -173,10 +185,10 @@ export async function perguntarBionIa(
       return falhar(porTimeout ? "timeout" : "stream_interrompido", porTimeout ? MSG_TIMEOUT : MSG_REDE, res.status);
     }
     if (!terminou || !texto.trim()) {
-      if (texto.trim()) return { texto, raciocinio, fonte, modelo, requestId }; // parcial útil
+      if (texto.trim()) return { texto, raciocinio, fonte, modelo, requestId, acao }; // parcial útil
       return falhar("stream_interrompido", MSG_REDE, res.status);
     }
-    return { texto, raciocinio, fonte, modelo, requestId };
+    return { texto, raciocinio, fonte, modelo, requestId, acao };
   } finally {
     clearTimeout(t);
   }
