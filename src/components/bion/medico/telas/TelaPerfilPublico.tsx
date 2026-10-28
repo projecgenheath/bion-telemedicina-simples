@@ -2,7 +2,8 @@
 
 import { crmComRotulo } from "@/lib/medico-exibicao";
 import { useState } from "react";
-import { BadgeCheck, CalendarCheck, Pencil, Star } from "lucide-react";
+import { BadgeCheck, CalendarCheck, Copy, Pencil, Star } from "lucide-react";
+import { toast } from "sonner";
 import { useBion } from "@/lib/bion-store";
 import { fmtBRL, iniciais, nomeAnonimo } from "../metricas";
 import { Campo, SheetMedico } from "../sheets/SheetMedico";
@@ -41,6 +42,20 @@ export function TelaPerfilPublico({
         Seu perfil público
       </h2>
       <p className="text-sm text-white/80 mb-5">Prévia de como os pacientes veem você ao agendar.</p>
+
+      {medico && (
+        <button
+          type="button"
+          onClick={() => {
+            const link = `${window.location.origin}/p/${medico.id}`;
+            navigator.clipboard.writeText(link);
+            toast.success("Link copiado", { description: "Cole em qualquer rede social." });
+          }}
+          className="mb-4 text-xs font-bold inline-flex items-center gap-1.5 text-sky-200"
+        >
+          <Copy className="w-3.5 h-3.5" /> Copiar link do perfil
+        </button>
+      )}
 
       {!medico ? (
         <div className="bp-glass-marinho p-5 text-sm text-white/85">
