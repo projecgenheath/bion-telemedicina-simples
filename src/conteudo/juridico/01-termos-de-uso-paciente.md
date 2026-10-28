@@ -200,7 +200,7 @@ As funcionalidades podem mudar; mudanças relevantes serão informadas (cláusul
 
 13.2. **Medicamentos controlados nunca podem ser renovados** por esse recurso.
 
-13.3. O pedido custa **o mesmo valor da consulta** daquele médico e é pago **somente por PIX**.
+13.3. A renovação é paga com cartão de crédito, dentro do app, pela Stripe.
 
 13.4. O médico decide com autonomia: pode renovar, pedir uma chamada curta, pedir exames ou **recusar**. **Se recusar, você recebe reembolso integral.**
 

@@ -57,7 +57,7 @@ Anexo — Mapa de dados por tabela/funcionalidade
 | Prontuário (evolução, CID, conduta, receitas, atestados, triagem, chat da sala, arquivos da consulta) | **Médico** que atendeu | **BION** (e seus suboperadores) | O registro clínico é dever e decisão técnica do médico (CFM; Lei 13.787/2018); a BION guarda e protege seguindo as instruções dele. |
 | Compartilhamento do histórico entre médicos que atendem você | **BION e médicos, em conjunto** | — | A regra de compartilhamento é definida pela BION, com o seu consentimento, para o cuidado da sua saúde. |
 | BION IA, leitura de exames, lembretes, IMC, medições por conta própria | **BION** | NVIDIA (IA), Supabase, Vercel, serviços de push | São funcionalidades oferecidas pela própria BION. |
-| Dados pessoais do médico (cadastro, PIX, repasses) | **BION** | Supabase, Vercel | Necessários ao contrato com o médico. |
+| Dados pessoais do médico (cadastro, conta Stripe conectada, recebimentos) | **BION** | Supabase, Vercel | Necessários ao contrato com o médico. |
 | NFS-e/recibo emitido ao paciente | **Médico** | BION (se autorizada a emitir em nome do médico — recurso futuro) | A obrigação fiscal é do médico. |
 
 # 3. Quais dados tratamos
@@ -77,7 +77,7 @@ Anexo — Mapa de dados por tabela/funcionalidade
 | 🩺 Medicamentos e lembretes | medicamentos em uso (dose, via, posologia, uso contínuo, controlado), lembretes (título, horário, tipo, frequência) |
 | 🩺 Renovação de receita | receita anterior, observação do paciente, resposta do médico, pagamento |
 | Mensagens | mensagens com médicos (🩺 podem conter saúde) e com o suporte |
-| Pagamentos | valor, forma (PIX ou cartão), status, identificador no gateway, reembolsos, multas, justificativas e decisões. **Os dados do cartão não são guardados pela BION** |
+| Pagamentos | valor, forma de pagamento (cartão), status, identificador no gateway, reembolsos, multas, justificativas e decisões. **Os dados do cartão não são guardados pela BION** |
 | Avaliações | nota, critérios e comentário |
 | Suporte | chamados (assunto, categoria, mensagem, resposta) |
 | Consentimentos | finalidade, aceite/recusa, data, quem registrou |
@@ -87,7 +87,7 @@ Anexo — Mapa de dados por tabela/funcionalidade
 
 ## 3.2. Médicos
 
-nome, e-mail, senha (*hash*), CRM/UF, especialidade e subespecialidades, formação, experiência, idiomas, biografia, foto, preço, horários e bloqueios de agenda (com motivo), **data de nascimento, sexo/gênero, telefone, CNPJ (opcional)**, dados de recebimento (**tipo e chave PIX, tipo de titular, nome e CPF/CNPJ do titular**), repasses, itens, ajustes e comprovantes, avaliações recebidas, registros de presença na sala, mensagens, uso do Copilot IA (só metadados), dados técnicos e de segurança e, no futuro e só com autorização expressa, **certificado digital A1** (guardado criptografado).
+nome, e-mail, senha (*hash*), CRM/UF, especialidade e subespecialidades, formação, experiência, idiomas, biografia, foto, preço, horários e bloqueios de agenda (com motivo), **data de nascimento, sexo/gênero, telefone, CNPJ (opcional)**, identificador da conta Stripe conectada do médico, avaliações recebidas, registros de presença na sala, mensagens, uso do Copilot IA (só metadados), dados técnicos e de segurança e, no futuro e só com autorização expressa, **certificado digital A1** (guardado criptografado). Os dados bancários ficam com a Stripe.
 
 ## 3.3. Visitantes
 
@@ -109,7 +109,7 @@ Dados pessoais "comuns" seguem o **art. 7º** da LGPD; **dados de saúde** (sens
 | Leitura de exames pela BION IA | 🩺 laudo completo | **Consentimento específico e destacado, pedido antes de cada envio** (art. 11, I) |
 | Lembretes, IMC, gráficos de medições feitos por você | 🩺 medicamentos, medições | Consentimento (art. 11, I), dado ao ativar a função |
 | Melhorar a BION IA com dados **anonimizados** | 🩺 dados antes de anonimizar | **Consentimento específico** (art. 11, I), revogável a qualquer momento **[ver pendências: opt-in × opt-out]** |
-| Cobrança, reembolso, repasse ao médico | pagamento, PIX do médico | Execução de contrato (art. 7º, V) |
+| Cobrança, reembolso, divisão do pagamento entre o médico e a BION, feita pela Stripe | pagamento, identificador da conta Stripe conectada | Execução de contrato (art. 7º, V) |
 | Emissão de NFS-e/recibo Receita Saúde | nome, CPF, valor | Obrigação legal (art. 7º, II) do médico/BION |
 | Verificar CRM e situação do médico | CRM, nome | Obrigação regulatória (art. 7º, II; Res. CFM 2.314/2022) e legítimo interesse |
 | Guardar registros de acesso (IP, data e hora) | logs | Obrigação legal (art. 7º, II; Marco Civil, art. 15) |
@@ -194,7 +194,7 @@ Quando a base é o consentimento, você pode **retirá-lo a qualquer momento**, 
 | **Prontuário** (consultas, triagem, evolução, CID, documentos, chat da consulta, arquivos clínicos, exames, medições, medicamentos, mensagens com médicos) | **No mínimo 20 anos a partir do último registro**; depois, eliminação ou anonimização | Lei 13.787/2018, art. 6º; LGPD, art. 16, I |
 | **Identificação de conta excluída** (nome, CPF, data de nascimento no cofre criptografado) | Enquanto durar a guarda do prontuário (20 anos do último registro); depois, eliminação | Lei 13.787/2018; LGPD, art. 16, I |
 | Conta e cadastro (paciente) | Enquanto a conta existir; anonimizados ao excluir a conta | Contrato |
-| Pagamentos, reembolsos, repasses, comprovantes, dados fiscais | **5 anos**, contados do primeiro dia do exercício seguinte | CTN, arts. 173 e 174; legislação fiscal |
+| Registros de pagamentos, recebimentos e, para consultas anteriores a 28/10/2026, repasses e chaves PIX; dados fiscais | **5 anos**, contados do primeiro dia do exercício seguinte | CTN, arts. 173 e 174; legislação fiscal |
 | **Trilha de auditoria administrativa** | **5 anos**; o **nome do paciente no assunto de chamados é pseudonimizado após 6 meses** | CDC, art. 27 (prescrição); exercício regular de direitos |
 | **Registros de acesso** (IP, data e hora) | **6 meses** | Marco Civil, art. 15 |
 | **Monitor de IA** (só metadados, sem conteúdo) | **6 meses** | Legítimo interesse (segurança e qualidade) |
@@ -208,7 +208,6 @@ Quando a base é o consentimento, você pode **retirá-lo a qualquer momento**, 
 | Registros de consentimento | Enquanto vigente + **5 anos** | Prova (LGPD, art. 8º, § 2º) |
 | Avaliações | Nota mantida na média; **comentário apagado** na exclusão da conta | Legítimo interesse |
 | Dados do médico (cadastro) | Contrato + **5 anos** após o término | CDC/Código Civil; defesa de direitos |
-| Chave PIX e titular do médico | Enquanto cadastrada; cópia em cada repasse por **5 anos** | Prova de pagamento; fiscal |
 | Certificado A1 do médico (futuro) | Até a revogação, o vencimento ou o fim do contrato; apagado em **5 dias úteis** | Autorização expressa |
 | Logs da Vercel | Conforme o plano contratado **[A DEFINIR]** | — |
 | Cópias de segurança (*backups*) | **[A DEFINIR]** dias, depois sobrescritas | Segurança |
@@ -268,9 +267,9 @@ Usamos **apenas cookies essenciais de login** (`bion_sessao` e cookies `sb-*` do
 
 # 18. Dados dos médicos
 
-18.1. Os dados dos médicos são tratados para o **contrato** (cadastro, agenda, repasses), **obrigações regulatórias** (verificação do CRM), **obrigações fiscais**, **segurança** (alertas de troca de chave PIX e de CNPJ divergente) e **divulgação do perfil público** (nome, CRM, especialidade, preço, formação, experiência, idiomas, biografia, foto, horários e avaliação média).
+18.1. Os dados dos médicos são tratados para o **contrato** (cadastro, agenda, repasses), **obrigações regulatórias** (verificação do CRM), **obrigações fiscais**, **segurança** (alertas de troca de identificador da conta Stripe (e, no histórico anterior a 28/10/2026, a chave PIX) e de CNPJ divergente) e **divulgação do perfil público** (nome, CRM, especialidade, preço, formação, experiência, idiomas, biografia, foto, horários e avaliação média).
 
-18.2. Data de nascimento, sexo, telefone, CNPJ e dados de recebimento **não são públicos**; são vistos só pelo médico e pela administração. **A chave PIX e o CPF/CNPJ do titular ficam no banco sem criptografia própria no campo**, e uma cópia é registrada em cada repasse como prova do pagamento.
+18.2. Data de nascimento, sexo, telefone, CNPJ e dados de recebimento **não são públicos**; são vistos só pelo médico e pela administração. **O identificador da conta Stripe (e, no histórico anterior a 28/10/2026, a chave PIX) e o CPF/CNPJ do titular ficam no banco sem criptografia própria no campo**, e uma cópia é registrada em cada repasse como prova do pagamento.
 
 18.3. O certificado A1 (recurso futuro) só será tratado com autorização expressa, criptografado, e usado exclusivamente para emitir NFS-e em nome do médico.
 
@@ -312,7 +311,10 @@ Podemos atualizar esta política. Mudanças relevantes serão avisadas no app co
 | `PresencaSala`, `ChamadaConsulta` | paciente/médico | não | paciente, médico; admin status | Supabase; push | 1 h após desfecho (presença) |
 | `Mensagem` | paciente/médico/suporte | pode ser | participantes | Supabase | com médico: 20 anos; com suporte: até exclusão |
 | `Pagamento`, `Reembolso` | paciente | não | paciente, admin; médico (valor) | gateway (futuro) | 5 anos |
-| `Repasse`, `RepasseItem`, `RepasseAjuste`, `DadosRecebimentoMedico` | médico | não | médico, admin | Supabase | 5 anos |
+| `Repasse`, `RepasseItem`, `RepasseAjuste`, `DadosRecebimentoMedico` (histórico de pagamentos anteriores a 28/10/2026, mantido por obrigação fiscal) | médico | não | médico, admin | Supabase | 5 anos |
+| `Pagamento` (colunas `stripeCheckoutSessionId`, `stripePaymentIntentId`, `stripeChargeId`, `stripeTaxaCentavos`), `Reembolso` (coluna `stripeRefundId`) | paciente | não | admin; sistema | Supabase; Stripe 🌐 | 5 anos |
+| `PerfilMedico` (coluna `stripeAccountId`) | médico | não | médico, admin | Supabase; Stripe 🌐 | contrato + 5 anos |
+| `StripeEvento` (identificadores dos avisos da Stripe já processados) | — | não | sistema | Supabase; Stripe 🌐 | **[A DEFINIR]** |
 | `PerfilMedico` | médico | não | público (perfil); privado: médico e admin | Supabase | contrato + 5 anos |
 | `Avaliacao` | paciente/médico | pode ser | médico, admin; média pública | Supabase | nota mantida; comentário apagado na exclusão |
 | `Ticket` | paciente/médico | pode ser | admin | Supabase | até 5 anos; apagado na exclusão |
