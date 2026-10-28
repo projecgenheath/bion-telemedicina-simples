@@ -169,7 +169,7 @@ export function sessaoReaproveitavel(
 
 /* ----------------------------- webhook ----------------------------- */
 
-export type AcaoWebhook = "confirmar" | "falhar" | "expirar" | "aguardar" | "reembolso" | "ignorar";
+export type AcaoWebhook = "confirmar" | "falhar" | "expirar" | "aguardar" | "reembolso" | "taxa" | "ignorar";
 
 /** O que fazer com cada evento do Stripe. */
 export function acaoDoEvento(tipo: string, paymentStatus?: string | null): AcaoWebhook {
@@ -183,6 +183,9 @@ export function acaoDoEvento(tipo: string, paymentStatus?: string | null): AcaoW
       return "falhar";
     case "checkout.session.expired":
       return "expirar";
+    case "charge.updated":
+      return "taxa"; // balance_transaction chegou depois: preenche stripeTaxaCentavos
+    case "refund.created":
     case "charge.refunded":
     case "refund.updated":
     case "refund.failed":
@@ -190,6 +193,11 @@ export function acaoDoEvento(tipo: string, paymentStatus?: string | null): AcaoW
     default:
       return "ignorar";
   }
+}
+
+/** A moeda paga é a moeda configurada da cobrança? */
+export function moedaConfere(paga: string | null | undefined, esperada: string): boolean {
+  return !!paga && paga.toLowerCase() === esperada.toLowerCase();
 }
 
 /** O valor pago bate com o valor do banco? */

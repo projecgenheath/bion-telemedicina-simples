@@ -26,6 +26,8 @@ export interface GatewayCheckout {
   lerSessao(id: string, conta?: string | null): Promise<SessaoCheckout | null>;
   /** Taxa real do gateway (centavos) e id da cobrança, lidos do PaymentIntent. */
   lerCobranca(paymentIntentId: string, conta?: string | null): Promise<{ chargeId: string | null; taxaCentavos: number | null }>;
+  /** Taxa (centavos) de uma balance_transaction; null se não houver. */
+  lerTaxa(balanceTransactionId: string, conta?: string | null): Promise<number | null>;
 }
 
 function paraSessao(s: Stripe.Checkout.Session): SessaoCheckout {
@@ -60,6 +62,10 @@ export const gatewayStripe: GatewayCheckout = {
       // Pix pode confirmar antes da balance_transaction existir: aí fica null.
       taxaCentavos: bt ? bt.fee : null,
     };
+  },
+  async lerTaxa(balanceTransactionId, conta) {
+    const bt = await stripe().balanceTransactions.retrieve(balanceTransactionId, {}, conta ? { stripeAccount: conta } : {});
+    return typeof bt.fee === "number" ? bt.fee : null;
   },
 };
 

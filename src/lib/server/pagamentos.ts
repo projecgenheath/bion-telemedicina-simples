@@ -57,34 +57,42 @@ export async function criarCobranca(
  * canceladas/concluídas.
  */
 export async function confirmarPagamento(pagamentoId: string, via: "webhook" | "simulado") {
+  return (await confirmarPagamentoSeMudou(pagamentoId, via)).pagamento;
+}
+
+/**
+ * Igual a confirmarPagamento, mas diz se ESTA chamada confirmou (`mudou`).
+ * A troca para "confirmado" é um updateMany condicional (status ≠ confirmado):
+ * com duas chamadas simultâneas só uma tem count === 1 e só ela mexe na consulta.
+ */
+export async function confirmarPagamentoSeMudou(pagamentoId: string, via: "webhook" | "simulado") {
   const p = await db.pagamento.findUnique({
     where: { id: pagamentoId },
     include: { consulta: true },
   });
-  if (!p) return null;
-  if (p.status === "confirmado") return p; // reentrega do webhook: no-op
-  const marcar = db.pagamento.update({
-    where: { id: p.id },
-    data: { status: "confirmado", via, confirmadoEm: new Date() },
-  });
-  if (!p.consulta || !p.consultaId) {
-    // Pagamento sem consulta (renovação só por mensagem, 20261020b): o vínculo
-    // é PedidoRenovacao.pagamentoId; o webhook avança o pedido depois.
-    await marcar;
-    return db.pagamento.findUnique({ where: { id: p.id } });
-  }
+  if (!p) return { pagamento: null, mudou: false };
+  if (p.status === "confirmado") return { pagamento: p, mudou: false }; // reentrega do webhook: no-op
   const statusConsulta: "confirmada" | undefined =
-    p.consulta.status === "em_espera" || p.consulta.status === "pendente_anamnese"
+    p.consulta && (p.consulta.status === "em_espera" || p.consulta.status === "pendente_anamnese")
       ? "confirmada"
       : undefined;
-  await db.$transaction([
-    marcar,
-    db.consulta.update({
-      where: { id: p.consultaId },
-      data: { pago: true, ...(statusConsulta ? { status: statusConsulta } : {}) },
-    }),
-  ]);
-  return db.pagamento.findUnique({ where: { id: p.id } });
+  const mudou = await db.$transaction(async (tx) => {
+    const r = await tx.pagamento.updateMany({
+      where: { id: p.id, status: { not: "confirmado" } },
+      data: { status: "confirmado", via, confirmadoEm: new Date() },
+    });
+    if (r.count !== 1) return false;
+    // Pagamento sem consulta (renovação só por mensagem, 20261020b): o vínculo
+    // é PedidoRenovacao.pagamentoId; o webhook avança o pedido depois.
+    if (p.consulta && p.consultaId) {
+      await tx.consulta.update({
+        where: { id: p.consultaId },
+        data: { pago: true, ...(statusConsulta ? { status: statusConsulta } : {}) },
+      });
+    }
+    return true;
+  });
+  return { pagamento: await db.pagamento.findUnique({ where: { id: p.id } }), mudou };
 }
 
 /** Registra falha de pagamento (idempotente). */

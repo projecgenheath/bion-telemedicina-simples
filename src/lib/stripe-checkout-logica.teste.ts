@@ -11,6 +11,7 @@ import {
   metodosCheckout,
   divisaoConnect,
   moedaCheckout,
+  moedaConfere,
   opcoesRequisicao,
   parametrosSessao,
   sessaoReaproveitavel,
@@ -125,14 +126,20 @@ igual("expirada", acaoDoEvento("checkout.session.expired"), "expirar");
 igual("charge.refunded", acaoDoEvento("charge.refunded"), "reembolso");
 igual("refund.updated", acaoDoEvento("refund.updated"), "reembolso");
 igual("refund.failed", acaoDoEvento("refund.failed"), "reembolso");
+igual("charge.updated", acaoDoEvento("charge.updated"), "taxa");
 igual("outro", acaoDoEvento("customer.created"), "ignorar");
 igual("valor confere", valorConfere(15000, 150), true);
+igual("moeda confere", moedaConfere("BRL", "brl"), true);
+igual("moeda diverge", moedaConfere("usd", "brl"), false);
+igual("moeda nula", moedaConfere(null, "brl"), false);
+igual("refund.created", acaoDoEvento("refund.created"), "reembolso");
 igual("valor diverge", valorConfere(100, 150), false);
 igual("valor nulo", valorConfere(null, 150), false);
 
 // guardas estáticas das rotas
 const checkout = readFileSync(new URL("../app/api/pagamentos/stripe/checkout/route.ts", import.meta.url), "utf8");
 const webhook = readFileSync(new URL("../app/api/pagamentos/stripe/webhook/route.ts", import.meta.url), "utf8");
+const pagamentosTs = readFileSync(new URL("./server/pagamentos.ts", import.meta.url), "utf8");
 const sucesso = readFileSync(new URL("../components/bion/paciente/StatusPagamentoStripe.tsx", import.meta.url), "utf8");
 igual("checkout não confirma pagamento", /confirmarPagamento/.test(checkout), false);
 igual("checkout lê valor do banco, não do body", /body\.(valor|amount)/.test(checkout), false);
@@ -143,13 +150,26 @@ igual("checkout reusa o modo do Admin", checkout.includes("stripeConnectAtivo() 
 igual("checkout atrás da flag", checkout.includes("stripeAtivo()"), true);
 igual("webhook confere assinatura", webhook.includes("constructEvent(corpo"), true);
 igual("webhook aceita segredo Connect", webhook.includes("STRIPE_CONNECT_WEBHOOK_SECRET"), true);
+igual("webhook reivindica o evento antes de processar", /reivindicarEvento\(evento\.id[\s\S]*?processar\(evento\)/.test(webhook), true);
+igual("não usa jaProcessado/marcarEvento (deprecated)", /jaProcessado|marcarEvento/.test(webhook), false);
+igual("falha libera o evento e devolve 500", /liberarEvento\(evento\.id\)[\s\S]*?status: 500/.test(webhook), true);
+igual("webhook usa a confirmação condicional", webhook.includes('confirmarPagamentoSeMudou(pagamento.id, "webhook")'), true);
+igual("notificação/auditoria só se esta chamada confirmou", /if \(!mudou\) return[\s\S]*?notificacao\.create[\s\S]*?PAGAMENTO_CONFIRMADO/.test(webhook), true);
+igual("chargeId só com valor e só se vazio", /if \(cobranca\.chargeId\)[\s\S]*?stripeChargeId: null \}/.test(webhook), true);
+igual("nenhum null gravado direto por cima de id/taxa", /data: \{[^}]*(stripeChargeId|stripeTaxaCentavos|stripePaymentIntentId): (cobranca|paymentIntentId)/.test(webhook.replace(/updateMany\([^;]*;/g, "")), false);
+igual("paymentIntent só se vazio", webhook.includes("stripePaymentIntentId: null }"), true);
+igual("confere moeda", webhook.includes("moedaConfere(s.currency"), true);
 igual("webhook usa corpo bruto", webhook.includes("await req.text()"), true);
-igual("webhook idempotente por evento", webhook.includes("jaProcessado(evento.id)"), true);
-igual("webhook usa confirmarPagamento", webhook.includes("confirmarPagamento(pagamento.id, \"webhook\")"), true);
+igual("taxa nunca sobrescreve", webhook.includes("where: { id: pagamentoId, stripeTaxaCentavos: null }"), true);
+igual("confirmar não grava taxa direto", /stripeTaxaCentavos: cobranca/.test(webhook), false);
+igual("charge.updated usa a conta Connect", /lerTaxa\([^)]*conta\)/.test(webhook), true);
 igual("webhook aceita evento Connect", webhook.includes("evento.account"), true);
 igual("webhook grava taxa", webhook.includes("stripeTaxaCentavos"), true);
 igual("webhook não grava id do Stripe no gatewayRef", /gatewayRef\s*:\s*(s\.|sessao|paymentIntent|cobranca)/.test(webhook + checkout), false);
 igual("tela de volta não marca pago", /method:\s*"(POST|PATCH)"/.test(sucesso), false);
+
+igual("confirmação condicional (count === 1)", /updateMany\(\{\s*where: \{ id: p\.id, status: \{ not: "confirmado" \} \}[\s\S]*?r\.count !== 1\) return false/.test(pagamentosTs), true);
+igual("confirmarPagamento delega", pagamentosTs.includes("(await confirmarPagamentoSeMudou(pagamentoId, via)).pagamento"), true);
 
 console.log(`${ok} ok, ${falhas} falha(s)`);
 if (falhas) process.exit(1);
