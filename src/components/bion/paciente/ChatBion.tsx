@@ -98,6 +98,8 @@ export function ChatBion({
   // Trava do aceite (NVIDIA): null = verificando; false = card de aceite no
   // topo e entrada bloqueada; true = liberado. O servidor também recusa (403).
   const [iaLiberada, setIaLiberada] = useState<boolean | null>(null);
+  // Card "Agendar consulta" sugerido pela IA (ex.: depois de um sintoma).
+  const [ofertaAgendar, setOfertaAgendar] = useState<{ especialidade: string | null } | null>(null);
   const inputArquivoRef = useRef<HTMLInputElement>(null);
   const fimRef = useRef<HTMLDivElement>(null);
   const histAnamneseRef = useRef<{ remetente: "usuario" | "ia"; texto: string }[]>([]);
@@ -424,6 +426,7 @@ export function ChatBion({
     setEntrada("");
     setPensando(true);
     setUltimaFalha(null);
+    setOfertaAgendar(null);
     setSegundosEspera(0);
     // Stream: a fala da IA aparece conforme chega (raciocínio nunca vem do servidor).
     let emStream = false;
@@ -453,11 +456,11 @@ export function ChatBion({
     try {
       const r = await perguntarBionIa(
         historico
-          .filter((m) => m.texto.length < 500)
-          .slice(-4)
+          .slice(-12)
           .map((m) => ({ remetente: m.remetente === "usuario" ? ("usuario" as const) : ("ia" as const), texto: m.texto.replace(/\*\*/g, "") })),
         { onDelta: mostrarParcial, onRaciocinio: mostrarRaciocinio },
       );
+      if (r.acao?.tipo === "agendar") setOfertaAgendar({ especialidade: r.acao.especialidade });
       setMensagens((m) => {
         const final = {
           remetente: "ia" as const,
@@ -527,6 +530,29 @@ export function ChatBion({
       return;
     }
     if (!interpretarIntencao(t)) void enviar(t);
+  };
+
+  /** Card da IA: médico disponível da especialidade sugerida (ou o 1º ativo). */
+  const normalizarEsp = (t: string) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+  const medicoOferta = ofertaAgendar
+    ? (ofertaAgendar.especialidade
+        ? medicosAtivos.find((m) => normalizarEsp(m.especialidade) === normalizarEsp(ofertaAgendar.especialidade ?? ""))
+        : undefined) ?? medicosAtivos[0]
+    : undefined;
+  const agendarComOferta = () => {
+    const med = medicoOferta;
+    setOfertaAgendar(null);
+    if (!med) {
+      iniciarAgendamento();
+      return;
+    }
+    setEscolha({ especialidade: med.especialidade, medico: med.nome });
+    setMensagens((m) => [
+      ...m,
+      { remetente: "usuario", texto: `Quero agendar com ${med.nome}` },
+      { remetente: "ia", texto: `Ótimo — ${med.especialidade} com ${med.nome}. Escolha o dia:` },
+    ]);
+    setEtapa("dia");
   };
 
   const iniciarAgendamento = () => {
@@ -796,6 +822,24 @@ export function ChatBion({
       {/* Mensagens */}
       <div className="flex-1 overflow-y-auto bp-coluna px-5 py-4 space-y-3">
         <ChatListaMensagens mensagens={mensagens} pensando={pensando} segundosEspera={segundosEspera} />
+        {ofertaAgendar && etapa === null && !pensando && !anamneseAtiva ? (
+          <section aria-label="Agendar consulta" className="rounded-2xl border border-bion-sea/40 bp-glass p-4 text-sm text-bion-ink dark:text-bion-paper space-y-2">
+            <p className="font-semibold">Quer falar com um médico do BION?</p>
+            {medicoOferta ? (
+              <p>
+                {medicoOferta.nome} · {medicoOferta.especialidade} · R$ {medicoOferta.valor}
+              </p>
+            ) : null}
+            <div className="flex gap-2">
+              <button type="button" onClick={agendarComOferta} className="bp-acao flex-1 py-2.5 rounded-xl font-bold">
+                Agendar consulta
+              </button>
+              <button type="button" onClick={() => setOfertaAgendar(null)} className="flex-1 py-2.5 rounded-xl border border-bion-ink/15 dark:border-white/15">
+                Agora não
+              </button>
+            </div>
+          </section>
+        ) : null}
         {iaLiberada === false && !anamneseAtiva ? (
           <CardAceiteIA
             onAceito={() => {

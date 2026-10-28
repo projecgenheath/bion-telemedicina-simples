@@ -9,6 +9,8 @@ import { exigirConsentimentoIa } from "@/lib/server/consentimento-ia";
 import { anonimizarMensagensTexto } from "@/lib/server/anonimizar-texto";
 import { dataNascimentoParaIso } from "@/lib/idade";
 import { nomesMedicamentosEmUso } from "@/lib/server/medicamentos-legado";
+import { carregarContextoPaciente, promptPaciente, resumoPacienteTexto } from "@/lib/server/bion-ia-contexto";
+import { FiltroAcao, extrairAcao } from "@/lib/bion-ia-acao";
 
 /**
  * BION IA — assistente clínico (backend apenas).
@@ -35,7 +37,10 @@ import { nomesMedicamentosEmUso } from "@/lib/server/medicamentos-legado";
  * (`raciocinio`), nunca dentro de `resposta`/`delta`, e nunca para monitor/log.
  */
 
-const LIMITE_HISTORICO = 4;
+/** Histórico enviado ao modelo (antes 4: a IA "esquecia" a conversa). */
+const LIMITE_HISTORICO = 12;
+/** Teto por mensagem do histórico (antes 500: respostas longas sumiam). */
+const MAX_MSG = 2000;
 /**
  * PRAZO TOTAL DA IA (medido em produção 2026-09-25): o Gemma responde bem em
  * 4-8s (com prefill); quando TRAVA (free tier), não adianta esperar 21s — o
@@ -154,23 +159,29 @@ export async function POST(req: NextRequest) {
 
     const historico = (body.mensagens ?? [])
       .filter((m) => (m?.texto ?? "").trim() && ["usuario", "ia"].includes(m.remetente))
-      .filter((m) => m.texto.length < 500)
+      .map((m) => ({ ...m, texto: m.texto.slice(0, MAX_MSG) }))
       .slice(-LIMITE_HISTORICO);
 
     if (!historico.length) {
       return Response.json({ erro: "Nenhuma mensagem recebida." }, { status: 400 });
     }
 
+    // PACIENTE: prompt com o papel da BION IA no app + contexto clínico
+    // (perfil, consultas, exames, triagens). Antes: prompt de 1 linha, sem
+    // papel, e o contexto era PULADO em saudações ("Bom dia").
     const ultima = (body.mensagens ?? []).at(-1)?.texto?.trim() ?? "";
     const saudacao = /^(oi|ol[áa]|boa\s+(noite|tarde|dia)|e a[ií]|hey)[\s!.?]*$/i.test(ultima);
-    const contexto = saudacao ? "" : await montarContexto(usuario);
+    const instrucoes =
+      usuario.role === "PACIENTE"
+        ? promptPaciente(resumoPacienteTexto(await carregarContextoPaciente(usuario.id)))
+        : instrucoesBase(usuario.role) + (saudacao ? "" : await montarContexto(usuario));
     // M6: identificadores diretos saem de TODO o texto (prompt + histórico
     // digitado) antes de qualquer canal de IA — em todos os canais.
     const mensagens = anonimizarMensagensIa(
       [
         {
           role: "assistant" as const,
-          content: instrucoesBase(usuario.role) + contexto,
+          content: instrucoes,
         },
         ...historico.map((m) => ({
           role: m.remetente === "usuario" ? ("user" as const) : ("assistant" as const),
@@ -191,14 +202,23 @@ export async function POST(req: NextRequest) {
       const enc = new TextEncoder();
       const linha = (o: unknown) => enc.encode(`${JSON.stringify(o)}\n`);
       const gerador = chatStreamComFonte(mensagensFinais, TIMEOUT_MS, { requestId, primeiroTokenMs: PRIMEIRO_TOKEN_MS });
+      // Ação estruturada ([[AGENDAR: …]]): sai do texto e vai em evento próprio.
+      const filtroAcao = new FiltroAcao();
       const corpo = new ReadableStream<Uint8Array>({
         async start(ctrl) {
           ctrl.enqueue(linha({ tipo: "inicio", requestId }));
           try {
             for await (const ev of gerador) {
-              if (ev.tipo === "delta") ctrl.enqueue(linha({ tipo: "delta", texto: ev.texto }));
+              if (ev.tipo === "delta") {
+                const t = filtroAcao.empurrar(ev.texto);
+                if (t) ctrl.enqueue(linha({ tipo: "delta", texto: t }));
+              } else if (ev.tipo === "fim") {
+                const resto = filtroAcao.fechar();
+                if (resto.texto) ctrl.enqueue(linha({ tipo: "delta", texto: resto.texto }));
+                if (resto.acao && usuario.role === "PACIENTE") ctrl.enqueue(linha({ tipo: "acao", acao: resto.acao }));
+                ctrl.enqueue(linha({ tipo: "fim", fonte: ev.fonte, modelo: ev.modelo, requestId }));
+              }
               else if (ev.tipo === "raciocinio") ctrl.enqueue(linha({ tipo: "raciocinio", texto: ev.texto }));
-              else if (ev.tipo === "fim") ctrl.enqueue(linha({ tipo: "fim", fonte: ev.fonte, modelo: ev.modelo, requestId }));
               else
                 ctrl.enqueue(
                   linha({
@@ -234,7 +254,8 @@ export async function POST(req: NextRequest) {
     });
     if (r.texto) {
       // `raciocinio` separado de `resposta` (a cópia/inserção usa só `resposta`).
-      return ok({ resposta: r.texto, raciocinio: r.raciocinio ?? null, fonte: r.fonte, modelo: r.modelo, requestId });
+      const sep = extrairAcao(r.texto);
+      return ok({ resposta: sep.texto, acao: usuario.role === "PACIENTE" ? sep.acao : null, raciocinio: r.raciocinio ?? null, fonte: r.fonte, modelo: r.modelo, requestId });
     }
     return Response.json(
       {
