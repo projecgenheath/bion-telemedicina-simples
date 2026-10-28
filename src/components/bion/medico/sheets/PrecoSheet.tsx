@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useBion, type Medico } from "@/lib/bion-store";
 import { fmtBRL } from "../metricas";
-import { Campo, EmBreve, SheetMedico } from "./SheetMedico";
+import { Campo, SheetMedico } from "./SheetMedico";
 import type { Confirmar } from "./useConfirmarSalvamento";
 
 const VALOR_MIN = 1;
@@ -58,9 +58,6 @@ export function PrecoSheet({
         <button type="button" onClick={salvar} className="bp-acao w-full py-3 text-sm">
           Salvar preço
         </button>
-        <div className="rounded-2xl border border-bion-ink/10 dark:border-white/10 p-4 flex items-center justify-between gap-3">
-          <div>
-            <div className="text-sm font-bold">Promoções</div>
             <div className="text-xs text-bion-ink/70 dark:text-bion-paper/70">Descontos e primeira consulta</div>
           </div>
           <EmBreve />
