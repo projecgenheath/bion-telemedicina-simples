@@ -153,6 +153,15 @@ async function main() {
     igual("sem pagamento nem remarcação", await enviarReembolsoStripe("rx", { d: d as any, s: s as any }), { enviado: false, motivo: "sem_stripe" });
     igual("multa sem PI: nenhuma chamada", s.chamadas.length, 0);
   }
+  // sessão de checkout pendente (#121): 'stripe_cs:<id>' não é PaymentIntent, nunca reembolsa
+  igual("gatewayRef sessão pendente", paymentIntentDoGatewayRef("stripe_cs:cs_test_a1B2"), null);
+  { const d = fakeDb([multa("stripe_cs:cs_test_a1B2")]); const s = fakeStripe();
+    for (const modo of ["plataforma", "direta", "destino"] as const) {
+      igual(`multa sessão pendente (${modo}): sem_stripe`, await enviarReembolsoStripe("rm", { d: d as any, s: s as any, connect: true, modo }), { enviado: false, motivo: "sem_stripe" });
+    }
+    igual("multa sessão pendente: nenhuma chamada", s.chamadas.length, 0);
+    igual("multa sessão pendente: sem refund gravado", d.linhas[0].stripeRefundId, null);
+  }
   { const d = fakeDb([multa("stripe_pi:pi_m")]); const s = fakeStripe();
     await enviarReembolsoStripe("rm", { d: d as any, s: s as any });
     igual("multa idempotente", await enviarReembolsoStripe("rm", { d: d as any, s: s as any }), { enviado: false, motivo: "ja_enviado" });
