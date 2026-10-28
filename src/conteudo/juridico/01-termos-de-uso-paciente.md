@@ -12,6 +12,7 @@ lang: pt-BR
 - **A BION não atende emergências.** Em caso de dor no peito, falta de ar, desmaio, convulsão, sangramento intenso, sinais de AVC, risco de suicídio ou qualquer situação grave, **ligue 192 (SAMU)** ou vá ao pronto-socorro mais próximo. Para apoio emocional: **CVV 188**.
 - **A assistente de IA (ChatBion / BION IA) não faz diagnóstico** e não substitui o médico. Ela orienta, organiza informações e ajuda na triagem.
 - **O preço da consulta é definido por cada médico** (normalmente R$ 150,00) e aparece antes de você pagar. Não há planos nem mensalidade.
+- **Pagamento:** Você paga a consulta com cartão de crédito, dentro do app. Se tiver direito a reembolso, o valor integral volta no mesmo cartão, e pode levar alguns dias para aparecer na fatura.
 - **Cancelar ou remarcar com 24 horas ou menos de antecedência gera multa de 50%** do valor. Com mais de 24 horas, não há multa. **Se a falha for técnica ou o médico faltar, não há multa**: você escolhe remarcar ou receber o reembolso integral.
 - **Retorno com o mesmo médico** em até 90 dias; **grátis em até 30 dias** (1 por consulta).
 - **A videochamada não é gravada.** O chat da consulta fica guardado no seu prontuário.
@@ -215,7 +216,7 @@ As funcionalidades podem mudar; mudanças relevantes serão informadas (cláusul
 
 15.2. **Forma de pagamento.** O pagamento é feito com cartão de crédito, pela Stripe. Quando houver reembolso, o valor é devolvido no mesmo cartão usado no pagamento. O estorno é pedido na hora, mas pode levar alguns dias, ou até a próxima fatura, para aparecer, conforme o prazo do banco emissor. O valor devolvido é o valor integral devido, sem desconto de taxas.
 
-15.3. **Para quem vai o dinheiro.** A BION recebe o pagamento **em nome do médico** e repassa a ele a parte dele, retendo a sua remuneração pela intermediação. O valor que você paga é o valor total exibido; não há cobrança extra da BION a você.
+15.3. **Para quem vai o dinheiro.** O pagamento é processado pela Stripe e vai direto para a conta do médico que atende a consulta. A BION recebe apenas a comissão pela intermediação. O recibo ou a nota fiscal da consulta é emitido pelo médico.
 
 15.4. **Confirmação.** A consulta só é confirmada depois que o pagamento for confirmado pelo gateway.
 
