@@ -346,5 +346,53 @@ igual("motivo: 429", motivoFalhaIa([{ status: 429, erro: "x" }]), "A cota da IA 
   }
 }
 
+{
+  // raciocínio nunca vai a monitor/log (1) nem ao texto entregue ao Copilot/cópia (2)
+  const SEGREDO = "RACIOCINIO_SECRETO_XYZ";
+  const salvo = { ...process.env };
+  process.env.NVIDIA_API_KEY = "chave-de-teste";
+  process.env.BION_LLM_NVIDIA_ATIVO = "true";
+  process.env.BION_LLM_RESERVA_GEMINI = "0";
+  delete process.env.BION_LLM_NVIDIA_BASE_URL;
+  const fetchOriginal = globalThis.fetch;
+  const sse = [
+    { choices: [{ delta: { reasoning_content: `pensando ${SEGREDO}` } }] },
+    { choices: [{ delta: { content: `<think>${SEGREDO}</think>` } }] },
+    { choices: [{ delta: { content: "Resposta final do Copilot." } }] },
+  ]
+    .map((o) => `data: ${JSON.stringify(o)}\n\n`)
+    .join("") + "data: [DONE]\n\n";
+  globalThis.fetch = (async () =>
+    new Response(sse, { status: 200, headers: { "content-type": "text/event-stream" } })) as unknown as typeof fetch;
+  const { chatStreamComFonte, chatComFonte } = await import("@/lib/server/llm");
+  const { eventosLlmMemoria } = await import("@/lib/server/llm-monitor");
+  const logs: string[] = [];
+  const orig = { log: console.log, warn: console.warn, error: console.error, info: console.info };
+  for (const k of ["log", "warn", "error", "info"] as const) console[k] = (...a: unknown[]) => void logs.push(a.map(String).join(" "));
+  let entregue = "";
+  for await (const ev of chatStreamComFonte([{ role: "user", content: "oi" }], 5_000, { requestId: "ia_teste_rac" })) {
+    if (ev.tipo === "delta") entregue += ev.texto;
+  }
+  globalThis.fetch = (async () =>
+    new Response(
+      JSON.stringify({ choices: [{ message: { reasoning_content: SEGREDO, content: `<think>${SEGREDO}</think>Resposta final do Copilot.` } }] }),
+      { status: 200 },
+    )) as unknown as typeof fetch;
+  const naoStream = await chatComFonte([{ role: "user", content: "oi" }], 5_000, undefined, { requestId: "ia_teste_rac2" });
+  Object.assign(console, orig);
+  globalThis.fetch = fetchOriginal;
+  igual("copilot (stream): só a resposta final", entregue.trim(), "Resposta final do Copilot.");
+  igual("copilot (json/cópia): só a resposta final", naoStream.texto, "Resposta final do Copilot.");
+  const monitor = JSON.stringify(eventosLlmMemoria().filter((e) => e.requestId?.startsWith("ia_teste_rac")));
+  igual("monitor: turnos registrados", monitor.includes("ia_teste_rac"), true);
+  igual("monitor: sem raciocínio", monitor.includes(SEGREDO), false);
+  igual("registros da chamada: sem raciocínio", JSON.stringify(naoStream.registros ?? []).includes(SEGREDO), false);
+  igual("logs: sem raciocínio", logs.join("\n").includes(SEGREDO), false);
+  for (const k of ["NVIDIA_API_KEY", "BION_LLM_NVIDIA_ATIVO", "BION_LLM_RESERVA_GEMINI"]) {
+    if (salvo[k] === undefined) delete process.env[k];
+    else process.env[k] = salvo[k];
+  }
+}
+
 console.log(`llm: ${ok} ok, ${falhas} falha(s) [TZ=${process.env.TZ ?? "padrão"}]`);
 if (falhas) process.exit(1);
