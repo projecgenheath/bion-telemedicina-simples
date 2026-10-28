@@ -1,6 +1,6 @@
 ---
 title: "Termos de Uso do Paciente — BION Telemedicina"
-subtitle: "Versão provisória v1 — 27/10/2026"
+subtitle: "Versão provisória v2 — 28/10/2026"
 lang: pt-BR
 ---
 
@@ -213,7 +213,7 @@ As funcionalidades podem mudar; mudanças relevantes serão informadas (cláusul
 
 15.1. **Preço.** Cada médico define o valor da própria consulta (valor padrão sugerido: R$ 150,00). O valor aparece **antes** do pagamento, com o nome do médico. Não há planos, assinatura ou mensalidade.
 
-15.2. **Formas de pagamento.** PIX ou cartão, por meio de um **gateway de pagamento** contratado pela BION **[A DEFINIR: provedor — previsto Stripe]**. A BION não guarda o número completo do seu cartão.
+15.2. **Forma de pagamento.** O pagamento é feito com cartão de crédito, pela Stripe. Quando houver reembolso, o valor é devolvido no mesmo cartão usado no pagamento. O estorno é pedido na hora, mas pode levar alguns dias, ou até a próxima fatura, para aparecer, conforme o prazo do banco emissor. O valor devolvido é o valor integral devido, sem desconto de taxas.
 
 15.3. **Para quem vai o dinheiro.** A BION recebe o pagamento **em nome do médico** e repassa a ele a parte dele, retendo a sua remuneração pela intermediação. O valor que você paga é o valor total exibido; não há cobrança extra da BION a você.
 
@@ -233,7 +233,7 @@ Resumo (as regras completas estão na **Política de Cancelamento, Reembolso e R
 | **Você faltou** | Você pode pedir **reembolso integral** em até **7 dias corridos** depois da consulta. |
 | Renovação de receita **recusada** pelo médico | Reembolso integral. |
 
-16.1. **Como o reembolso é devolvido.** O reembolso é aprovado na Plataforma e devolvido pelo mesmo meio de pagamento, por meio do gateway. O prazo para o valor aparecer na sua conta ou fatura **depende do gateway e do seu banco ou emissor do cartão** **[A DEFINIR com o gateway: prazo máximo]**.
+16.1. **Como o reembolso é devolvido.** O pagamento é feito com cartão de crédito, pela Stripe. Quando houver reembolso, o valor é devolvido no mesmo cartão usado no pagamento. O estorno é pedido na hora, mas pode levar alguns dias, ou até a próxima fatura, para aparecer, conforme o prazo do banco emissor. O valor devolvido é o valor integral devido, sem desconto de taxas.
 
 # 17. Direito de arrependimento
 

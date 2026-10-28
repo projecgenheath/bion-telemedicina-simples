@@ -24,7 +24,7 @@ function igual(nome: string, obtido: unknown, esperado: unknown) {
   }
 }
 
-igual("versões v1", [VERSAO_PRIVACIDADE, VERSAO_TERMOS_PACIENTE], ["privacidade-v1-2026-10-27", "termos-paciente-v1-2026-10-27"]);
+igual("versões v2", [VERSAO_PRIVACIDADE, VERSAO_TERMOS_PACIENTE], ["privacidade-v2-2026-10-28", "termos-paciente-v2-2026-10-28"]);
 igual("finalidade com prefixo, NVIDIA e versões", [
   FINALIDADE_CONSENTIMENTO_IA.startsWith(PREFIXO_FINALIDADE_IA),
   FINALIDADE_CONSENTIMENTO_IA.includes("NVIDIA"),

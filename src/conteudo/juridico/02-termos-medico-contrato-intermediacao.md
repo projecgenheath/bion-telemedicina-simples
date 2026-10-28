@@ -1,6 +1,6 @@
 ---
 title: "Termos de Uso e Contrato de Intermediação do Médico — BION Telemedicina"
-subtitle: "Versão provisória v0 — 20/10/2026"
+subtitle: "Versão provisória v2 — 28/10/2026"
 lang: pt-BR
 ---
 
@@ -147,7 +147,7 @@ k) **não cobrar do paciente nenhum valor fora da Plataforma** por consultas age
 
 10.2. **Remuneração da BION.** Pela intermediação, a BION retém **10% do valor bruto** de cada consulta realizada e de cada renovação atendida. O médico recebe **90%**. Sobre retornos gratuitos não há cobrança nem repasse.
 
-10.3. **Taxas do gateway.** Eventuais taxas do gateway de pagamento são **deduzidas da parte do médico**. **Hoje a taxa considerada é zero.** Qualquer mudança será comunicada com **30 dias** de antecedência. **[A DEFINIR: confirmar com o advogado/contador se a taxa sai da parte do médico, da BION ou é rateada.]**
+10.3. **Recebimento pela Stripe.** O médico recebe os pagamentos numa conta conectada da Stripe, aberta em seu nome com CPF ou CNPJ, e aceita os termos da Stripe Connected Account Agreement. Cada pagamento é dividido no ato: a BION recebe uma comissão de 10% do valor da consulta, e o restante fica com o médico, já descontada a taxa de processamento cobrada pela Stripe. A Stripe transfere o valor para a conta bancária do médico conforme o calendário dela. Em reembolso integral, o médico não recebe a sua parte e a taxa fica com a BION. Em reembolso parcial, o médico devolve a parte proporcional dele e continua responsável pela taxa de processamento. Toda consulta dá ao paciente direito a um retorno grátis em até 30 dias, e o retorno não gera repasse. O médico é responsável por emitir o recibo (Receita Saúde) ou a nota fiscal da consulta ao paciente.
 
 10.4. **Reembolsos.** Se a consulta for reembolsada (falta do médico, falha técnica, falta do paciente com pedido no prazo, renovação recusada, direito de arrependimento), o médico não recebe por ela. Se o reembolso ocorrer **depois** de o repasse ter sido pago, o valor da parte do médico será **descontado de repasses futuros** (ajuste), e eventual saldo negativo será carregado para os dias seguintes. **[A DEFINIR: prazo máximo de compensação e cobrança de saldo negativo remanescente após encerramento.]**
 

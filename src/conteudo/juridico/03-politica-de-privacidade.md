@@ -1,6 +1,6 @@
 ---
 title: "Política de Privacidade — BION Telemedicina (Pacientes, Médicos e Visitantes)"
-subtitle: "Versão provisória v1 — 27/10/2026"
+subtitle: "Versão provisória v2 — 28/10/2026"
 lang: pt-BR
 ---
 
@@ -168,7 +168,7 @@ Quando a base é o consentimento, você pode **retirá-lo a qualquer momento**, 
 | **Cloudflare** | STUN/TURN: conexão e retransmissão da chamada quando a conexão direta falha | **Endereço IP**; áudio e vídeo **criptografados em trânsito** (não acessíveis à Cloudflare, não gravados) | **Global/exterior** 🌐 |
 | **Serviços de push** (Google FCM, Apple, Mozilla etc., conforme o seu navegador) | Entregar notificações | Mensagem **genérica e criptografada**, endereço técnico do aparelho | **Exterior** 🌐 |
 | **Upstash** (quando ativo) | Limitar tentativas (segurança) | **Endereço IP**, por pouco tempo | **[A DEFINIR: região]** 🌐 |
-| **Gateway de pagamento** **[A DEFINIR — previsto Stripe]** | Processar PIX e cartão, reembolsos | Dados de pagamento, nome, e-mail, CPF | **[A DEFINIR]** 🌐 |
+| **Stripe, Inc. e afiliadas (Stripe)** | Processar pagamentos com cartão e reembolsos (operadora dos dados de pagamento; ver 8.3) | Nome, e-mail, dados do cartão e valor da consulta | **Estados Unidos e outros países** 🌐 |
 | **Emissor Nacional da NFS-e** (Receita Federal/Municípios) e **Receita Saúde** | Documentos fiscais | Nome, CPF, valor, descrição do serviço | Brasil (órgão público) |
 | **Médicos** | Atendimento | Conforme a seção 6 | — |
 | **Autoridades** | Ordem judicial, requisição legal, CRM, ANPD | O estritamente exigido | — |
@@ -177,9 +177,11 @@ Quando a base é o consentimento, você pode **retirá-lo a qualquer momento**, 
 
 8.2. Em caso de reorganização societária, os dados podem ser transferidos ao sucessor, que ficará sujeito a esta política.
 
+8.3. Pagamentos. Os pagamentos com cartão são processados pela Stripe, Inc. e por suas afiliadas (Stripe), que atuam como operadoras dos dados de pagamento. A Stripe recebe o seu nome, e-mail, os dados do cartão e o valor da consulta. Os dados completos do cartão vão direto para a Stripe e não ficam guardados na BION. A BION guarda apenas os identificadores da transação, o valor e as taxas. A Stripe pode tratar esses dados nos Estados Unidos e em outros países, com as garantias do art. 33 da LGPD, como as cláusulas contratuais da Stripe. Ela também pode usar os dados para prevenir fraudes e cumprir obrigações legais, conforme a política de privacidade dela.
+
 # 9. Transferência internacional de dados
 
-9.1. Há transferência internacional para **NVIDIA** (IA), **Google** (STUN), **Cloudflare** (STUN/TURN), **serviços de push**, **Vercel** (logs) e, quando houver, **Upstash** e **gateway de pagamento**.
+9.1. Há transferência internacional para **NVIDIA** (IA), **Stripe** (pagamentos com cartão), **Google** (STUN), **Cloudflare** (STUN/TURN), **serviços de push**, **Vercel** (logs) e, quando houver, **Upstash**.
 
 9.2. Essas transferências ocorrem com base no **art. 33 da LGPD**, preferencialmente por **cláusulas-padrão contratuais** aprovadas pela ANPD (**Resolução CD/ANPD nº 19/2024**), incorporadas aos contratos com esses operadores **[A CONFIRMAR: assinatura/aceite das cláusulas com cada fornecedor]**. Para a BION IA e a leitura de exames, além disso, o seu **consentimento específico e destacado** informa que os dados serão tratados no exterior (art. 33, VIII).
 
