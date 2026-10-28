@@ -7,9 +7,8 @@ import { Campo, SheetMedico } from "./SheetMedico";
 import type { Confirmar } from "./useConfirmarSalvamento";
 
 const VALOR_MIN = 1;
-const VALOR_MAX = 5000; // mesmos limites do PATCH /api/medicos/[id]
+const VALOR_MAX = 5000;
 
-/** Preço da consulta — grava em PerfilMedico.valor pela autoedição do médico. */
 export function PrecoSheet({
   aberto,
   onFechar,
@@ -58,8 +57,6 @@ export function PrecoSheet({
         <button type="button" onClick={salvar} className="bp-acao w-full py-3 text-sm">
           Salvar preço
         </button>
-          <EmBreve />
-        </div>
       </div>
     </SheetMedico>
   );
