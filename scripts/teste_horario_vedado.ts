@@ -163,6 +163,7 @@ async function criar(instante: Date, bloqueado: boolean) {
   let criou = false;
   const tx = {
     $executeRaw: async () => 1,
+    $queryRaw: async () => [{ userStatus: "ativo", perfilStatus: "ativo", email: "medico@teste.com" }],
     bloqueioAgenda: { findUnique: async () => (bloqueado ? { id: "b1" } : null) },
   } as unknown as Prisma.TransactionClient;
   const r = await criarSeDiaLivre(tx, "m1", instante, async () => {

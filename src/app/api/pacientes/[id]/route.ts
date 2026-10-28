@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { exigirPapel } from "@/lib/server/auth";
 import { aplicarSideEffects, pacienteWire } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
-import { anonimizarPacienteCompleto, estaAnonimizado } from "@/lib/server/lgpd";
+import { PendenciasLgpdError, anonimizarPacienteCompleto, estaAnonimizado } from "@/lib/server/lgpd";
 import { cpfEmUsoPorOutroPaciente } from "@/lib/server/cpf-paciente";
 import {
   campoDuplicadoPrisma,
@@ -145,7 +145,15 @@ export async function DELETE(
       return Response.json({ erro: "Paciente não encontrado." }, { status: 404 });
     }
 
-    const r = await anonimizarPacienteCompleto(id);
+    let r;
+    try {
+      r = await anonimizarPacienteCompleto(id);
+    } catch (e) {
+      if (e instanceof PendenciasLgpdError) {
+        return Response.json({ erro: "Não é possível anonimizar este paciente agora.", motivos: e.motivos }, { status: 409 });
+      }
+      throw e;
+    }
     // Contrato delta (auditoria FASE 2): o registro (agora anonimizado/inativo)
     // substitui o anterior na lista — mesmo efeito do estado fresco, sem
     // recarregar o app inteiro.

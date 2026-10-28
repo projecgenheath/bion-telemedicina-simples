@@ -161,3 +161,19 @@ export function filtrarConsentimentos(lista: Consentimento[], termo: string, sit
       (!t || semAcento(`${c.paciente} ${c.quem} ${c.finalidade}`).includes(t)),
   );
 }
+
+/* ---- Pendências LGPD (Auth, Storage, desban) ---- */
+export type PendenciaLgpdWire = { id: string; tipo: "auth" | "storage" | "desban"; entidade: string | null; entidadeId: string | null; criadaEm: string; dias: number };
+export type RespostaPendenciasLgpd = { pendencias?: PendenciaLgpdWire[] };
+export const ROTULO_PENDENCIA: Record<PendenciaLgpdWire["tipo"], string> = {
+  auth: "Remover login (Supabase Auth)",
+  storage: "Remover arquivos pessoais (Storage)",
+  desban: "Desbloquear login",
+};
+/** Prazo LGPD de 15 dias: crítico a partir de 10, atenção a partir de 5. */
+export function tomPendencia(dias: number): "critico" | "atencao" | "neutro" {
+  if (dias >= 10) return "critico";
+  if (dias >= 5) return "atencao";
+  return "neutro";
+}
+export const diasPendencia = (dias: number) => (dias <= 0 ? "hoje" : dias === 1 ? "há 1 dia" : `há ${dias} dias`);

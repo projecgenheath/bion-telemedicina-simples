@@ -21,6 +21,7 @@ import {
   OPCOES_TX_TRAVA,
 } from "@/lib/server/bloqueio-agenda";
 import { jaUsouRetornoGratis, lerPedidoVinculado, PRAZO_RETORNO_DIAS, retornoEhGratis } from "@/lib/atendimento-tipo";
+import { estaAnonimizado } from "@/lib/server/lgpd";
 
 /** Ano/mês/dia formam uma data real do calendário. */
 function dataCalendarioValida(ano: number, mes: number, dia: number): boolean {
@@ -125,7 +126,7 @@ export async function POST(req: NextRequest) {
       where: { id: body.medicoId, role: "MEDICO" },
       include: { perfilMedico: true },
     });
-    if (!medico) {
+    if (!medico || estaAnonimizado(medico)) {
       return Response.json({ erro: "Médico não encontrado." }, { status: 400 });
     }
 

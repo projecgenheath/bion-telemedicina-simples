@@ -5,6 +5,7 @@ import { partesNoFuso, quandoClinica } from "@/lib/server/fuso";
 import {
   chaveTravaDia,
   consultaEmHorarioVedado,
+  conferirMedicoAtivoNaTransacao,
   diaBloqueado,
   diaIsoSaoPaulo,
   ERRO_DIA_BLOQUEADO,
@@ -940,6 +941,8 @@ export async function conferirHorarioNaTransacao(
   tx: Prisma.TransactionClient,
   p: { consultaId: string; medicoId: string; dataInicio: Date; pacienteId?: string },
 ): Promise<string | null> {
+  const erroMedico = await conferirMedicoAtivoNaTransacao(tx, p.medicoId);
+  if (erroMedico) return erroMedico;
   if (await diaBloqueado(tx, p.medicoId, p.dataInicio)) return ERRO_DIA_BLOQUEADO;
   if (consultaEmHorarioVedado(p.dataInicio)) return ERRO_HORARIO_VEDADO;
   const choqueMedico = await tx.consulta.findFirst({

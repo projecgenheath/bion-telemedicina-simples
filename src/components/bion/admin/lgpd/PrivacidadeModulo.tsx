@@ -17,6 +17,7 @@ import { relativo } from "../tempo";
 import { rotuloAcao } from "../auditoria/trilha";
 import { AcaoLgpd, type AcaoAberta } from "./AcaoLgpd";
 import { Cofre } from "./Cofre";
+import { PendenciasLgpd } from "./PendenciasLgpd";
 import { Consentimentos } from "./Consentimentos";
 import { dataLgpd, estadoContaLgpd, eventosLgpd, type PacienteLgpd, type RespostaLgpd } from "./lgpd";
 
@@ -155,6 +156,10 @@ export function PrivacidadeModulo() {
               )}
             </>
           )}
+        </section>
+
+        <section id="lgpd-pendencias" tabIndex={-1} className="scroll-mt-20 outline-none" aria-label="Pendências LGPD">
+          <PendenciasLgpd />
         </section>
 
         <section id="lgpd-cofre" tabIndex={-1} className="scroll-mt-20 outline-none" aria-label="Busca no cofre">

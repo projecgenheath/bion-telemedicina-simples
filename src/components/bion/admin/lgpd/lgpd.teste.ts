@@ -5,6 +5,8 @@
  */
 import type { AuditLog, Consentimento } from "@/lib/bion-tipos";
 import {
+  diasPendencia,
+  tomPendencia,
   codigoConfere,
   codigoConfirmacao,
   corpoBuscaCofre,
@@ -81,6 +83,13 @@ const cons: Consentimento[] = [
 igual("consentimentos: busca sem acento", filtrarConsentimentos(cons, "jose").map((c) => c.id), ["c2"]);
 igual("consentimentos: revogados", filtrarConsentimentos(cons, "", "revogados").map((c) => c.id), ["c2"]);
 igual("consentimentos: por finalidade", filtrarConsentimentos(cons, "clinico", "aceitos").map((c) => c.id), ["c1"]);
+
+igual("pendência nova neutra", tomPendencia(0), "neutro");
+igual("pendência 5 dias atenção", tomPendencia(5), "atencao");
+igual("pendência 10 dias crítica", tomPendencia(10), "critico");
+igual("dias: hoje", diasPendencia(0), "hoje");
+igual("dias: 1", diasPendencia(1), "há 1 dia");
+igual("dias: 12", diasPendencia(12), "há 12 dias");
 
 console.log(`lgpd: ${ok} ok, ${falhas} falha(s) [TZ=${process.env.TZ ?? Intl.DateTimeFormat().resolvedOptions().timeZone}]`);
 if (falhas) process.exit(1);
