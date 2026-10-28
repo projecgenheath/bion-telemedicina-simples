@@ -20,6 +20,7 @@ import {
   chaveIdempotencia,
   metodosCheckout,
   divisaoConnect,
+  sessaoDaMulta,
   moedaCheckout,
   moedaConfere,
   opcoesRequisicao,
@@ -265,6 +266,13 @@ igual("webhook cancela renovação falha", webhook.includes("cancelarRenovacaoPa
 igual("webhook troca a consulta da espera", webhook.includes("confirmarRemarcacaoEspera(pagamentoId)"), true);
 igual("webhook aplica a multa", /aprovarMultaRemarcacao\(r\.id, "webhook"/.test(webhook), true);
 igual("webhook confere valor da multa", /valorConfere\(s\.amount_total, r\.multaCentavos \/ 100\)/.test(webhook), true);
+
+// ---- 2º clique na multa reaproveita a sessão aberta ----
+igual("sessão da multa", sessaoDaMulta("stripe_cs:cs_123"), "cs_123");
+igual("stripe_pi não é sessão", sessaoDaMulta("stripe_pi:pi_1"), null);
+igual("sem ref", sessaoDaMulta(null), null);
+igual("checkout guarda a sessão da multa", /gatewayRef: `\$\{PREFIXO_SESSAO_MULTA\}\$\{sessao\.id\}`/.test(checkout), true);
+igual("checkout lê a sessão anterior da multa", /a\.tipo === "multa" \? a\.sessaoMulta/.test(checkout), true);
 
 console.log(`${ok} ok, ${falhas} falha(s)`);
 if (falhas) process.exit(1);
