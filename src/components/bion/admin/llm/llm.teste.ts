@@ -6,6 +6,7 @@
 import {
   detalheEvento,
   estadoSaude,
+  falhasNoNavegador,
   falhasRecentes,
   falhasSeguidas,
   modeloAtual,
@@ -325,6 +326,11 @@ igual("motivo: 429", motivoFalhaIa([{ status: 429, erro: "x" }]), "A cota da IA 
   ]);
   igual("monitor: cliente fora dos turnos", [r.turnos, r.falhas, r.falhasCliente], [2, 1, 1]);
   igual("monitor: cliente fora do p95", r.msP95, 100);
+  // painel: contador "Falhas no navegador" lê resumo.falhasCliente
+  igual("painel: falhas no navegador do monitor", falhasNoNavegador(r as ResumoLlm), { valor: 1, tom: "atencao" });
+  igual("painel: sem falhasCliente (deploy antigo) = 0", falhasNoNavegador({ ...(r as ResumoLlm), falhasCliente: undefined }), { valor: 0 });
+  igual("painel: resumo nulo = 0", falhasNoNavegador(null), { valor: 0 });
+  igual("painel: valor inválido = 0", falhasNoNavegador({ ...(r as ResumoLlm), falhasCliente: Number.NaN }), { valor: 0 });
   igual(
     "monitor: chave distingue origem",
     chaveEvento({ ts: 5, requestId: "a", origem: "cliente" }) === chaveEvento({ ts: 5, requestId: "a" }),

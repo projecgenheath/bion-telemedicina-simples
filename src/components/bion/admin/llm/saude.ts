@@ -35,6 +35,8 @@ export type ResumoLlm = {
   msP50: number;
   msP95: number;
   modelos: (string | null)[];
+  /** Falhas vistas no navegador do paciente (origem "cliente"); ficam fora de turnos/falhas. Desde o #108. */
+  falhasCliente?: number;
 };
 
 export type RespostaMonitor = { resumo?: ResumoLlm | null; eventos?: EventoLlm[] | null; pausada?: boolean };
@@ -77,6 +79,13 @@ export function estadoSaude(resumo: ResumoLlm | null | undefined, eventos: Event
   if (resumo.taxaOk < LIMITES_SAUDE.okSaudavel) return { tom: "atencao", rotulo: "Instável", texto: `${resumo.falhas} ${resumo.falhas === 1 ? "falha" : "falhas"} em ${resumo.turnos} turnos.` };
   if (resumo.msP95 > LIMITES_SAUDE.p95LentoMs) return { tom: "atencao", rotulo: "Lento", texto: `p95 de ${segundos(resumo.msP95)}: 5% das respostas demoram mais que isso.` };
   return { tom: "ok", rotulo: "Saudável", texto: `${resumo.taxaOk}% de sucesso e p95 de ${segundos(resumo.msP95)}.` };
+}
+
+/** Contador de falhas no navegador: número seguro (ausente/inválido → 0) e tom de atenção quando > 0. */
+export function falhasNoNavegador(resumo: ResumoLlm | null | undefined): { valor: number; tom?: "atencao" } {
+  const n = resumo?.falhasCliente;
+  const valor = typeof n === "number" && Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+  return valor > 0 ? { valor, tom: "atencao" } : { valor };
 }
 
 /** 850 → "850 ms"; 12345 → "12,3 s". */
