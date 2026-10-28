@@ -19,12 +19,17 @@ import {
 } from "./saude";
 import {
   FiltroPensamento,
+  LIMITE_RETENCAO,
   motivoFalhaIa,
   nvidiaLiberado,
   paraMensagensOpenAI,
   semPensamento,
   streamNvidia,
   chatNvidia,
+  nvidiaBaseUrl,
+  nvidiaConfig,
+  reservaGeminiAtiva,
+  modeloReservaGemini,
 } from "@/lib/server/llm-nvidia";
 import { linhasNdjson } from "@/lib/bion-ia-cliente";
 
@@ -155,7 +160,10 @@ igual("motivo: 429", motivoFalhaIa([{ status: 429, erro: "x" }]), "A cota da IA 
   igual("produção com flag: liberado", nvidiaLiberado(), true);
   delete process.env.BION_LLM_NVIDIA_ATIVO;
   process.env.VERCEL_ENV = "preview";
-  igual("preview: liberado", nvidiaLiberado(), true);
+  igual("preview sem flag: bloqueado", nvidiaLiberado(), false);
+  process.env.BION_LLM_NVIDIA_ATIVO = "true";
+  igual("preview com flag: liberado", nvidiaLiberado(), true);
+  delete process.env.BION_LLM_NVIDIA_ATIVO;
   process.env.VERCEL_ENV = env.VERCEL_ENV;
   if (env.VERCEL_ENV === undefined) delete process.env.VERCEL_ENV;
   if (env.BION_LLM_NVIDIA_ATIVO !== undefined) process.env.BION_LLM_NVIDIA_ATIVO = env.BION_LLM_NVIDIA_ATIVO;
@@ -207,6 +215,81 @@ igual("motivo: 429", motivoFalhaIa([{ status: 429, erro: "x" }]), "A cota da IA 
     erro = (e as { tipo?: string }).tipo ?? "";
   }
   igual("ndjson: HTML vira nao_json", erro, "nao_json");
+}
+
+{
+  // configuração do provedor e da reserva por env
+  const salvo = { ...process.env };
+  const restaurar = () => {
+    for (const k of ["BION_LLM_NVIDIA_BASE_URL", "BION_LLM_RESERVA_GEMINI", "BION_LLM_RESERVA_GEMINI_MODEL", "VERCEL_ENV"]) {
+      if (salvo[k] === undefined) delete process.env[k];
+      else process.env[k] = salvo[k];
+    }
+  };
+  delete process.env.BION_LLM_NVIDIA_BASE_URL;
+  igual("base: padrão NVIDIA", nvidiaBaseUrl(), "https://integrate.api.nvidia.com/v1");
+  process.env.BION_LLM_NVIDIA_BASE_URL = " https://api.deepinfra.com/v1/openai/ ";
+  igual("base: DeepInfra sem barra final", nvidiaBaseUrl(), "https://api.deepinfra.com/v1/openai");
+  igual("base: em nvidiaConfig", nvidiaConfig().baseUrl, "https://api.deepinfra.com/v1/openai");
+  delete process.env.BION_LLM_RESERVA_GEMINI;
+  process.env.VERCEL_ENV = "preview";
+  igual("reserva: padrão ligada", reservaGeminiAtiva(), true);
+  for (const v of ["0", "false", "FALSE"]) {
+    process.env.BION_LLM_RESERVA_GEMINI = v;
+    igual(`reserva: '${v}' desliga`, reservaGeminiAtiva(), false);
+  }
+  process.env.BION_LLM_RESERVA_GEMINI = "1";
+  igual("reserva: '1' liga", reservaGeminiAtiva(), true);
+  delete process.env.BION_LLM_RESERVA_GEMINI_MODEL;
+  igual("reserva: modelo vazio", modeloReservaGemini(), null);
+  process.env.BION_LLM_RESERVA_GEMINI_MODEL = " gemini-2.5-flash ";
+  igual("reserva: modelo escolhido", modeloReservaGemini(), "gemini-2.5-flash");
+  restaurar();
+}
+
+{
+  // fetch vai para a base configurada
+  const salvoBase = process.env.BION_LLM_NVIDIA_BASE_URL;
+  const salvoChave = process.env.NVIDIA_API_KEY;
+  process.env.BION_LLM_NVIDIA_BASE_URL = "https://exemplo.invalid/v1";
+  process.env.NVIDIA_API_KEY = "chave-de-teste";
+  const fetchOriginal = globalThis.fetch;
+  let urlChamada = "";
+  globalThis.fetch = (async (u: string | URL | Request) => {
+    urlChamada = String(u);
+    return new Response(JSON.stringify({ choices: [{ message: { content: "ok" } }] }), { status: 200 });
+  }) as typeof fetch;
+  await chatNvidia([{ role: "user", content: "oi" }], { timeoutMs: 2_000 });
+  globalThis.fetch = fetchOriginal;
+  igual("fetch: usa BION_LLM_NVIDIA_BASE_URL", urlChamada, "https://exemplo.invalid/v1/chat/completions");
+  if (salvoBase === undefined) delete process.env.BION_LLM_NVIDIA_BASE_URL;
+  else process.env.BION_LLM_NVIDIA_BASE_URL = salvoBase;
+  if (salvoChave === undefined) delete process.env.NVIDIA_API_KEY;
+  else process.env.NVIDIA_API_KEY = salvoChave;
+}
+
+{
+  // vazamento de raciocínio (bloqueio do Médicos)
+  igual("think: órfão </think> descarta antes", semPensamento("pensei muito aqui</think>Resposta."), "Resposta.");
+  igual("think: maiúsculas", semPensamento("<THINK>x</Think>Oi"), "Oi");
+  igual("think: órfão maiúsculo", semPensamento("raciocínio</THINK> Oi"), "Oi");
+  igual("think: abertura sem fim descarta", semPensamento("<think>só raciocínio"), "");
+  igual("think: texto sem tags intacto", semPensamento("Olá, tudo bem?"), "Olá, tudo bem?");
+  const juntar = (pedacos: string[]) => {
+    const f = new FiltroPensamento();
+    const saidas = pedacos.map((p) => f.empurrar(p));
+    return { saidas, total: saidas.join("") + f.fechar() };
+  };
+  const r1 = juntar(["Vou anali", "sar o caso </th", "ink>Resposta", " final"]);
+  igual("stream: órfão partido não vaza", r1.total, "Resposta final");
+  igual("stream: nada sai antes do </think>", r1.saidas.slice(0, 2).join(""), "");
+  const r2 = juntar(["<Think>a", "b</THINK>", "Oi"]);
+  igual("stream: maiúsculas partidas", r2.total, "Oi");
+  const longo = "x".repeat(LIMITE_RETENCAO + 1);
+  const r3 = juntar(["Oi ", longo]);
+  igual("stream: sem tags libera após limite", r3.saidas[1], "Oi " + longo);
+  const r4 = juntar(["Oi curto"]);
+  igual("stream: curto sai no fechar", r4.total, "Oi curto");
 }
 
 console.log(`llm: ${ok} ok, ${falhas} falha(s) [TZ=${process.env.TZ ?? "padrão"}]`);

@@ -3,7 +3,7 @@ import { quandoClinica } from "@/lib/server/fuso";
 import { db } from "@/lib/db";
 import { exigirSessao } from "@/lib/server/auth";
 import { ok, falha } from "@/lib/server/http";
-import { chatComFonte, chatStreamComFonte, motivoFalhaIa, novoRequestId, type AnonNomes } from "@/lib/server/llm";
+import { chatComFonte, chatStreamComFonte, motivoFalhaIa, novoRequestId } from "@/lib/server/llm";
 import { anonimizarMensagensIa, type IdentificadoresPaciente } from "@/lib/server/anonimizar-ia";
 import { anonimizarMensagensTexto } from "@/lib/server/anonimizar-texto";
 import { dataNascimentoParaIso } from "@/lib/idade";
@@ -25,7 +25,8 @@ import { nomesMedicamentosEmUso } from "@/lib/server/medicamentos-legado";
  *
  * Formato da resposta:
  * - padrão (sem `stream`): JSON { resposta, fonte, modelo, requestId } —
- *   inalterado para quem não usa stream (ex.: Evolução IA do médico).
+ *   inalterado para quem não usa stream (ex.: Copilot do médico — a
+ *   Evolução não chama a IA).
  * - `stream: true`: NDJSON (application/x-ndjson), uma linha por evento:
  *   {"tipo":"inicio","requestId"} · {"tipo":"delta","texto"} ·
  *   {"tipo":"fim","fonte","modelo","requestId"} · {"tipo":"erro","erro","requestId"}.
@@ -178,14 +179,7 @@ export async function POST(req: NextRequest) {
         ? anonimizarMensagensTexto(mensagens, { nomesPacientes: await nomesPacientesDoMedico(usuario.id) })
         : mensagens;
 
-    // IA generativa em cadeia; o canal público sem chave foi removido (só Gemini/env/SDK).
-    const primeiroNome = usuario.nome.split(" ")[0] ?? "";
-    const anon: AnonNomes = [
-      { nome: usuario.nome, substituto: "(usuário BION)" },
-      ...(primeiroNome.length >= 3 && primeiroNome !== usuario.nome
-        ? [{ nome: primeiroNome, substituto: "(usuário BION)" }]
-        : []),
-    ];
+    // IA generativa em cadeia (identificadores já removidos acima).
     if (body.stream === true) {
       const enc = new TextEncoder();
       const linha = (o: unknown) => enc.encode(`${JSON.stringify(o)}\n`);
@@ -225,7 +219,7 @@ export async function POST(req: NextRequest) {
     }
 
     // JSON (sem stream): mesmo formato de antes + requestId.
-    const r = await chatComFonte(mensagensFinais, TIMEOUT_MS, anon, {
+    const r = await chatComFonte(mensagensFinais, TIMEOUT_MS, undefined, {
       somenteGemini: true,
       retries: 0,
       requestId,

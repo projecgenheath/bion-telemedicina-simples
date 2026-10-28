@@ -10,6 +10,8 @@ import {
   streamNvidia,
   visaoNvidia,
   type RegistroNvidia,
+  modeloReservaGemini,
+  reservaGeminiAtiva,
 } from "@/lib/server/llm-nvidia";
 
 /**
@@ -125,7 +127,8 @@ function geminiConfig() {
   // Override via env BION_LLM_GEMINI_MODEL: se houver um valor antigo na
   // Vercel (ex.: gemini-3.6-flash), ele VENCE o padrão do código — o painel
   // de diagnóstico (/api/bion-ia/diagnostico GET) mostra o modelo efetivo.
-  const model = (process.env.BION_LLM_GEMINI_MODEL || GEMINI_MODEL_PADRAO).trim();
+  // BION_LLM_RESERVA_GEMINI_MODEL (opcional) escolhe o modelo da reserva.
+  const model = (modeloReservaGemini() || process.env.BION_LLM_GEMINI_MODEL || GEMINI_MODEL_PADRAO).trim();
   return { apiKey, model };
 }
 
@@ -920,6 +923,9 @@ export async function chatComFonte(
     if (texto) return devolver({ texto, fonte: "nvidia", modelo: nvidiaConfig().model });
   }
 
+  // Reserva desligada (BION_LLM_RESERVA_GEMINI=0/false): NVIDIA → erro amigável.
+  if (!reservaGeminiAtiva()) return devolver({ texto: null, fonte: null });
+
   // 1) Google Gemini — API própria (Gemma 4 26B no chat), reserva do NVIDIA
   if (geminiHabilitado() && geminiConfig().apiKey && restante(prazo) > 1_000) {
     _geminiFalhaEm = 0; // não bloquear saudação/turno seguinte por falha anterior nesta instância
@@ -1012,7 +1018,7 @@ export async function* chatStreamComFonte(
     }
   }
 
-  if (geminiHabilitado() && geminiConfig().apiKey && restante(prazo) > 1_000) {
+  if (reservaGeminiAtiva() && geminiHabilitado() && geminiConfig().apiKey && restante(prazo) > 1_000) {
     const { texto, modelo } = await chamarGemini(mensagens, prazo, undefined, undefined, registros);
     if (texto) {
       marcar(true, "gemini", modelo, texto.length);

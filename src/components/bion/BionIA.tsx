@@ -16,7 +16,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { useBion } from "@/lib/bion-store";
-import { perguntarBionIa } from "@/lib/bion-ia-cliente";
+import { ErroBionIa, perguntarBionIa } from "@/lib/bion-ia-cliente";
 
 type MensagemIA = {
   id: string;
@@ -187,10 +187,13 @@ export function BionIA() {
       const r = await perguntarBionIa(historico.map((m) => ({ remetente: m.remetente, texto: m.texto })));
       resposta = r.texto;
     } catch (e) {
-      resposta =
+      const aviso =
         e instanceof Error && e.message
           ? e.message
           : "A BION IA está um pouco sobrecarregada agora. Aguarde alguns segundos e envie de novo.";
+      // Mantém o texto parcial já recebido (não descarta a resposta cortada).
+      const parcial = e instanceof ErroBionIa ? e.parcial.trim() : "";
+      resposta = parcial ? `${parcial}\n\n_(${aviso})_` : aviso;
     }
 
     const novaMsgIA: MensagemIA = {
