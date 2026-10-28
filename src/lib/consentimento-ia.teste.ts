@@ -47,6 +47,7 @@ igual(
 );
 igual("409 reconhecido", ehConsentimentoIaPendente(409, corpoConsentimentoIaPendente()), true);
 igual("409 sem código não", ehConsentimentoIaPendente(409, { erro: "x" }), false);
+igual("403 reconhecido", ehConsentimentoIaPendente(403, corpoConsentimentoIaPendente()), true);
 igual("outro status não", ehConsentimentoIaPendente(400, { codigo: CODIGO_CONSENTIMENTO_IA_PENDENTE }), false);
 igual("corpo traz versão", corpoConsentimentoIaPendente().versao, VERSAO_CONSENTIMENTO_IA);
 
@@ -54,28 +55,34 @@ igual("corpo traz versão", corpoConsentimentoIaPendente().versao, VERSAO_CONSEN
 {
   let registro: { aceito: boolean; finalidade: string; createdAt: Date } | null = null;
   let quebrar = false;
+  const { finalidadePrivacidade, finalidadeTermos } = await import("./aceite-termos");
+  let termos: string[] = [finalidadePrivacidade(VERSAO_PRIVACIDADE), finalidadeTermos(VERSAO_TERMOS_PACIENTE)];
   (globalThis as unknown as { prisma: unknown }).prisma = {
     consentimento: {
       findFirst: async () => {
         if (quebrar) throw new Error("db fora");
         return registro;
       },
+      findMany: async () => termos.map((finalidade) => ({ finalidade })),
     },
   };
   const { exigirConsentimentoIa } = await import("./server/consentimento-ia");
   const pac = { id: "p1", role: "PACIENTE" };
   let r = await exigirConsentimentoIa(pac);
-  igual("portão: sem aceite → 409", r?.status, 409);
+  igual("portão: sem aceite → 403", r?.status, 403);
   igual("portão: código no corpo", ((await r!.json()) as { codigo: string }).codigo, CODIGO_CONSENTIMENTO_IA_PENDENTE);
   registro = { aceito: true, finalidade: FINALIDADE_CONSENTIMENTO_IA, createdAt: new Date() };
   igual("portão: aceite atual passa", await exigirConsentimentoIa(pac), null);
+  termos = [];
+  igual("portão: aviso da IA ok mas Termos pendentes → 403", (await exigirConsentimentoIa(pac))?.status, 403);
+  termos = [finalidadePrivacidade(VERSAO_PRIVACIDADE), finalidadeTermos(VERSAO_TERMOS_PACIENTE)];
   registro = { aceito: false, finalidade: FINALIDADE_REVOGACAO_IA, createdAt: new Date() };
-  igual("portão: revogado → 409", (await exigirConsentimentoIa(pac))?.status, 409);
+  igual("portão: revogado → 403", (await exigirConsentimentoIa(pac))?.status, 403);
   registro = null;
   igual("portão: médico não é afetado", await exigirConsentimentoIa({ id: "m1", role: "MEDICO" }), null);
   quebrar = true;
   r = await exigirConsentimentoIa(pac);
-  igual("portão: erro no banco bloqueia (falha fechada)", r?.status, 409);
+  igual("portão: erro no banco bloqueia (falha fechada)", r?.status, 403);
 }
 
 console.log(`consentimento-ia: ${ok} ok, ${falhas} falha(s)`);

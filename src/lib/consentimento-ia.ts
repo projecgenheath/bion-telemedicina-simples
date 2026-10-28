@@ -4,7 +4,7 @@
  * A troca do provedor para a NVIDIA mudou a Política de Privacidade
  * (VERSAO_PRIVACIDADE) e os Termos do Paciente (VERSAO_TERMOS_PACIENTE).
  * Paciente que não aceitou ESTA versão não manda nada para a IA: o servidor
- * responde 409 { codigo: CODIGO_CONSENTIMENTO_IA_PENDENTE } e o app mostra a
+ * responde 403 { codigo: CODIGO_CONSENTIMENTO_IA_PENDENTE } e o app mostra a
  * tela de aceite (componente ConsentimentoIA).
  *
  * Mudou o texto do aviso, a política ou os termos? Troque a VERSÃO: aceites
@@ -14,7 +14,10 @@ import { VERSAO_PRIVACIDADE, VERSAO_TERMOS_PACIENTE } from "@/lib/aceite-termos"
 
 export const VERSAO_CONSENTIMENTO_IA = "ia-nvidia-v2-2026-10-28";
 export const CODIGO_CONSENTIMENTO_IA_PENDENTE = "consentimento_ia_pendente";
-export const STATUS_CONSENTIMENTO_IA_PENDENTE = 409;
+/** 403: sem o aceite, o servidor recusa — nada vai à IA. (Antes 409.) */
+export const STATUS_CONSENTIMENTO_IA_PENDENTE = 403;
+/** Status antigo, aceito no cliente enquanto houver deploy anterior no ar. */
+const STATUS_CONSENTIMENTO_IA_LEGADO = 409;
 
 /** Prefixo comum a aceites e revogações (para achar os registros). */
 export const PREFIXO_FINALIDADE_IA = "Uso da BION IA";
@@ -47,7 +50,7 @@ export function corpoConsentimentoIaPendente() {
 /** Cliente: a resposta é o pedido de novo aceite? */
 export function ehConsentimentoIaPendente(status: number, corpo: unknown): boolean {
   return (
-    status === STATUS_CONSENTIMENTO_IA_PENDENTE &&
+    (status === STATUS_CONSENTIMENTO_IA_PENDENTE || status === STATUS_CONSENTIMENTO_IA_LEGADO) &&
     typeof corpo === "object" &&
     corpo !== null &&
     (corpo as { codigo?: unknown }).codigo === CODIGO_CONSENTIMENTO_IA_PENDENTE
