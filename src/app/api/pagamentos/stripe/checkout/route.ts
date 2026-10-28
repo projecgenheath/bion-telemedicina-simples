@@ -298,7 +298,8 @@ async function abrirSessao(usuario: Usuario, a: Alvo) {
       where: { id: a.pagamentoId },
       // Tentativa nova depois de falha volta a "pendente" (na espera, a falha
       // libera a reserva e o checkout já recusou antes de chegar aqui).
-      data: { stripeCheckoutSessionId: sessao.id, ...(atual?.status === "falhou" ? { status: "pendente" } : {}) },
+      // Pagamento pendente antigo criado como Pix e reaproveitado aqui passa a cartão.
+      data: { stripeCheckoutSessionId: sessao.id, metodo: "cartao", ...(atual?.status === "falhou" ? { status: "pendente" } : {}) },
     });
   }
   if (a.tipo === "multa" && a.remarcacaoId) {

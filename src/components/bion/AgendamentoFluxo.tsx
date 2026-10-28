@@ -1,6 +1,7 @@
 "use client";
 
 import { textoNota } from "@/lib/medico-exibicao";
+import { abrirCheckoutStripe, checkoutStripeAtivo } from "@/components/bion/paciente/pagamento-stripe-cliente";
 import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -59,13 +60,6 @@ export function AgendamentoFluxo({
   const [arquivosAnexados, setArquivosAnexados] = useState<
     { nome: string; tamanhoKb: number; tipo: string }[]
   >([]);
-  const [metodoPagamento, setMetodoPagamento] = useState<"pix" | "cartao" | "boleto">("pix");
-  const [pixCopiado, setPixCopiado] = useState(false);
-  const [cartaoNumero, setCartaoNumero] = useState("");
-  const [cartaoNome, setCartaoNome] = useState("");
-  const [cartaoValidade, setCartaoValidade] = useState("");
-  const [cartaoCVV, setCartaoCVV] = useState("");
-  const [cartaoParcelas, setCartaoParcelas] = useState("1");
   const [processandoPagamento, setProcessandoPagamento] = useState(false);
   const [medicoModal, setMedicoModal] = useState<Medico | null>(null);
   // Data/hora "congeladas" enquanto o servidor processa e depois de confirmada:
@@ -167,13 +161,6 @@ export function AgendamentoFluxo({
     setArquivosAnexados((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const copiarChavePix = () => {
-    const chave =
-      "00020126580014br.gov.bcb.pix0136bion-telemedicina-pay-987655204000053039865802BR5925BION TELEMEDICINA SA6009SAO PAULO62070503***6304A1B2";
-    navigator.clipboard?.writeText(chave).catch(() => {});
-    setPixCopiado(true);
-    setTimeout(() => setPixCopiado(false), 2500);
-  };
 
   const finalizarAgendamento = async () => {
     if (processandoPagamento) return;
@@ -251,6 +238,22 @@ export function AgendamentoFluxo({
       });
     });
 
+    // Só cartão (checkout Stripe). Consulta ainda não paga e cartão ligado:
+    // vai para a página do Stripe; o webhook confirma. Na demonstração
+    // (gateway simulado) o servidor já confirmou e segue como antes.
+    if (!criada.pago && (await checkoutStripeAtivo())) {
+      const r = await abrirCheckoutStripe({ consultaId: criada.id });
+      if (r.url) {
+        window.location.assign(r.url);
+        return;
+      }
+      toast.error("Consulta reservada, mas o pagamento não abriu", {
+        description: r.erro ?? "Tente pagar de novo em Minhas consultas.",
+      });
+      setStep(steps.length - 1);
+      return;
+    }
+
     toast.success("Pagamento aprovado! Consulta reservada", {
       description: `${med.nome} — ${data} às ${hora}. Complete a anamnese para confirmar.`,
     });
@@ -286,20 +289,6 @@ export function AgendamentoFluxo({
         setArquivosAnexados={setArquivosAnexados}
         handleFileUpload={handleFileUpload}
         removerArquivo={removerArquivo}
-        metodoPagamento={metodoPagamento}
-        setMetodoPagamento={setMetodoPagamento}
-        pixCopiado={pixCopiado}
-        copiarChavePix={copiarChavePix}
-        cartaoNumero={cartaoNumero}
-        setCartaoNumero={setCartaoNumero}
-        cartaoNome={cartaoNome}
-        setCartaoNome={setCartaoNome}
-        cartaoValidade={cartaoValidade}
-        setCartaoValidade={setCartaoValidade}
-        cartaoCVV={cartaoCVV}
-        setCartaoCVV={setCartaoCVV}
-        cartaoParcelas={cartaoParcelas}
-        setCartaoParcelas={setCartaoParcelas}
         processandoPagamento={processandoPagamento}
         finalizarAgendamento={finalizarAgendamento}
         medicoAtual={medicoAtual}
