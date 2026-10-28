@@ -50,14 +50,17 @@ export function LinhaConsultaPagamento({
   const mostraNota = c.status === "concluida" && c.pago === true && !ehRetornoGratis(c);
 
   return (
-    <div className="bpp-linha flex-col items-stretch gap-1.5">
-      <div className="flex items-start gap-2">
-        <div className="min-w-0 flex-1">
+    // `.bpp-linha` centraliza os filhos (align-items: center, com especificidade maior que
+    // `items-stretch`); por isso cada filho leva `w-full min-w-0`, senão a linha fica mais
+    // larga que o card e corta dos dois lados no celular.
+    <div className="bpp-linha flex-col items-stretch gap-1.5 min-w-0">
+      <div className="w-full min-w-0 flex flex-wrap items-start gap-x-2 gap-y-1.5">
+        <div className="min-w-0 flex-1 basis-full sm:basis-0">
           <div className="text-sm font-semibold text-bion-ink dark:text-bion-paper truncate">{c.especialidade} · {c.medico}</div>
           {detalhada && <EtiquetaTipo consulta={c} className="mt-0.5" />}
           <div className="text-xs text-bion-ink/75 dark:text-bion-paper/75">{c.data} às {c.hora}</div>
         </div>
-        <span className={`shrink-0 text-xs font-bold px-2.5 py-1 rounded-full whitespace-nowrap ${CLASSE_ETIQUETA[e.tom]}`}>
+        <span className={`max-w-full text-xs font-bold px-2.5 py-1 rounded-full break-words sm:shrink-0 ${CLASSE_ETIQUETA[e.tom]}`}>
           {e.texto}
           {pag ? ` · ${pag}` : ""}
         </span>
@@ -68,12 +71,12 @@ export function LinhaConsultaPagamento({
             href={rotaNotaFiscal(c.id)}
             target="_blank"
             rel="noopener"
-            className="bpp-toque self-start inline-flex items-center gap-1.5 min-h-11 text-xs font-bold text-bion-sea dark:text-sky-300 underline"
+            className="bpp-toque self-start max-w-full inline-flex items-center gap-1.5 min-h-11 text-xs font-bold text-bion-sea dark:text-sky-300 underline"
           >
             <FileText className="w-3.5 h-3.5" aria-hidden /> Nota fiscal / recibo do médico
           </a>
         ) : (
-          <span className="text-xs text-bion-ink/75 dark:text-bion-paper/75">Nota fiscal / recibo do médico · Aguardando nota do médico</span>
+          <span className="w-full min-w-0 break-words text-xs text-bion-ink/75 dark:text-bion-paper/75">Nota fiscal / recibo do médico · Aguardando nota do médico</span>
         )
       ) : null}
     </div>
