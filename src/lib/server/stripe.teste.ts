@@ -1,5 +1,5 @@
 /** Base do Stripe (reembolso e eventos). Rodar: npx tsx src/lib/server/stripe.teste.ts */
-import { enviarReembolsoStripe, registrarEventoReembolsoStripe, statusReembolsoDoStripe, stripeConnectAtivo, modoCobrancaStripe, jaProcessado, marcarEvento } from "./stripe";
+import { enviarReembolsoStripe, registrarEventoReembolsoStripe, statusReembolsoDoStripe, stripeConnectAtivo, modoCobrancaStripe, jaProcessado, marcarEvento, reivindicarEvento, liberarEvento } from "./stripe";
 
 let ok = 0, falhas = 0;
 const igual = (n: string, a: unknown, b: unknown) => {
@@ -68,6 +68,29 @@ async function main() {
     igual("evento novo", await jaProcessado("evt_1", d as any), false);
     await marcarEvento("evt_1", "refund.updated", d as any);
     igual("evento repetido", await jaProcessado("evt_1", d as any), true);
+  }
+  { const m = new Map<string, any>();
+    const erro = (code: string) => Object.assign(new Error(code), { code });
+    const d = { stripeEvento: {
+      async create(a: any) { if (m.has(a.data.id)) throw erro("P2002"); m.set(a.data.id, a.data); },
+      async delete(a: any) { if (!m.has(a.where.id)) throw erro("P2025"); m.delete(a.where.id); } } };
+    igual("reivindica novo", await reivindicarEvento("evt_9", "charge.refunded", d as any), true);
+    igual("reivindica repetido", await reivindicarEvento("evt_9", "charge.refunded", d as any), false);
+    await liberarEvento("evt_9", d as any);
+    igual("liberado reivindica de novo", await reivindicarEvento("evt_9", "charge.refunded", d as any), true);
+    await liberarEvento("nao_existe", d as any); igual("liberar inexistente ignora", true, true);
+    const ruim = { stripeEvento: { async create() { throw erro("P1001"); }, async delete() {} } };
+    let lancou = false; try { await reivindicarEvento("x", "t", ruim as any); } catch { lancou = true; }
+    igual("outro erro propaga", lancou, true);
+  }
+  { const d = fakeDb([base({ stripeRefundId: "re_c" }), base({ id: "r2", stripeRefundId: "re_d" })]);
+    igual("refund.created succeeded", await registrarEventoReembolsoStripe({ id: "e6", type: "refund.created", data: { object: { id: "re_c", status: "succeeded", charge: "ch_1" } } }, { d: d as any }), 1);
+    const chamadas: any[] = [];
+    const s = { refunds: { async list(p: any, o: any) { chamadas.push([p, o]); return { data: [{ id: "re_d", status: "succeeded" }] }; } } };
+    igual("charge.refunded sem data busca lista", await registrarEventoReembolsoStripe({ id: "e7", type: "charge.refunded", account: "acct_9", data: { object: { id: "ch_2", refunds: { data: [] } } } }, { d: d as any, s: s as any }), 1);
+    igual("list com charge e stripeAccount", chamadas[0], [{ charge: "ch_2", limit: 100 }, { stripeAccount: "acct_9" }]);
+    await registrarEventoReembolsoStripe({ id: "e8", type: "charge.refunded", data: { object: { id: "ch_3" } } }, { d: d as any, s: s as any });
+    igual("list sem account", chamadas[1], [{ charge: "ch_3", limit: 100 }, undefined]);
   }
   // modos de cobrança (Connect)
   igual("modo padrão", modoCobrancaStripe(undefined), "plataforma");
