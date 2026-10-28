@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { exigirPapel } from "@/lib/server/auth";
 import { ok, falha } from "@/lib/server/http";
-import { sondaNvidia, ordemCanais } from "@/lib/server/sonda-nvidia";
+import { sondaNvidia, ordemCanais, bloqueioGemini } from "@/lib/server/sonda-nvidia";
 import { estadoCanais, diagnosticoGemini, iaPausada, listarModelosGemini, respostaIaPausada, type Msg } from "@/lib/server/llm";
 
 /**
@@ -52,6 +52,12 @@ export async function POST(req: NextRequest) {
       if (candidatas.length) mensagens = candidatas.slice(-24);
     } catch {
       // corpo ausente/inválido → modo sonda simples
+    }
+
+    // Reserva do Gemini desligada (padrão em produção): listar/chat-real não chamam o Gemini.
+    if (listar || mensagens) {
+      const bloqueio = bloqueioGemini();
+      if (bloqueio) return bloqueio;
     }
 
     if (listar) {

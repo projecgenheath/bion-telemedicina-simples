@@ -34,3 +34,13 @@ export async function sondaNvidia(timeoutMs = 20_000): Promise<SondaNvidia> {
 export function ordemCanais(): string[] {
   return reservaGeminiAtiva() ? ["nvidia", "gemini", "env", "sdk"] : ["nvidia"];
 }
+
+export const ERRO_GEMINI_DESATIVADO = {
+  erro: "gemini_desativado",
+  mensagem: "A reserva do Gemini está desligada (BION_LLM_RESERVA_GEMINI). Este modo do diagnóstico não chama o Gemini.",
+} as const;
+
+/** 409 quando a reserva do Gemini está desligada; null quando o Gemini pode ser chamado. */
+export function bloqueioGemini(): Response | null {
+  return reservaGeminiAtiva() ? null : Response.json(ERRO_GEMINI_DESATIVADO, { status: 409 });
+}

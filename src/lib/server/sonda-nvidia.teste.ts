@@ -2,7 +2,7 @@
  * Testes da sonda NVIDIA do diagnóstico admin, com fetch simulado.
  * Rodar: bun --conditions=react-server src/lib/server/sonda-nvidia.teste.ts
  */
-import { ordemCanais, sondaNvidia, TEXTO_SONDA } from "./sonda-nvidia";
+import { bloqueioGemini, ordemCanais, sondaNvidia, TEXTO_SONDA } from "./sonda-nvidia";
 
 let ok = 0;
 let falhas = 0;
@@ -62,6 +62,16 @@ async function main() {
   igual("ordem prod", ordemCanais(), ["nvidia"]);
   ambiente({ BION_LLM_RESERVA_GEMINI: "true" });
   igual("ordem com reserva", ordemCanais(), ["nvidia", "gemini", "env", "sdk"]);
+
+  // 5) bloqueio do Gemini (listar / mensagens)
+  ambiente({ VERCEL_ENV: "production" });
+  const b = bloqueioGemini();
+  igual("bloqueio status", b?.status, 409);
+  igual("bloqueio erro", (await b?.json())?.erro, "gemini_desativado");
+  ambiente({ BION_LLM_RESERVA_GEMINI: "0" });
+  igual("bloqueio desligada explícita", bloqueioGemini()?.status, 409);
+  ambiente({ BION_LLM_RESERVA_GEMINI: "true", VERCEL_ENV: "production" });
+  igual("sem bloqueio com reserva", bloqueioGemini(), null);
 
   console.log(`sonda-nvidia: ${ok} ok, ${falhas} falha(s)`);
   if (falhas) process.exit(1);
