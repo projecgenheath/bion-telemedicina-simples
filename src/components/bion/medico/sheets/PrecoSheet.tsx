@@ -58,8 +58,6 @@ export function PrecoSheet({
         <button type="button" onClick={salvar} className="bp-acao w-full py-3 text-sm">
           Salvar preço
         </button>
-            <div className="text-xs text-bion-ink/70 dark:text-bion-paper/70">Descontos e primeira consulta</div>
-          </div>
           <EmBreve />
         </div>
       </div>
