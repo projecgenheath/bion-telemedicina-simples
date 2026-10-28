@@ -5,6 +5,7 @@ import { exigirSessao } from "@/lib/server/auth";
 import { ok, falha } from "@/lib/server/http";
 import { chatComFonte, chatStreamComFonte, motivoFalhaIa, novoRequestId } from "@/lib/server/llm";
 import { anonimizarMensagensIa, type IdentificadoresPaciente } from "@/lib/server/anonimizar-ia";
+import { exigirConsentimentoIa } from "@/lib/server/consentimento-ia";
 import { anonimizarMensagensTexto } from "@/lib/server/anonimizar-texto";
 import { dataNascimentoParaIso } from "@/lib/idade";
 import { nomesMedicamentosEmUso } from "@/lib/server/medicamentos-legado";
@@ -142,6 +143,9 @@ async function nomesPacientesDoMedico(medicoId: string): Promise<string[]> {
 export async function POST(req: NextRequest) {
   try {
     const usuario = await exigirSessao();
+    // Portão jurídico: paciente sem o aceite da versão atual (NVIDIA) → 409.
+    const pendente = await exigirConsentimentoIa(usuario);
+    if (pendente) return pendente;
     const body = (await req.json()) as { mensagens?: MsgEntrada[]; stream?: boolean };
     const requestId = novoRequestId();
 

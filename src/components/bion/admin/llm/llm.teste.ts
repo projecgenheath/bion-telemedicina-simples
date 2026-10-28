@@ -242,6 +242,11 @@ igual("motivo: 429", motivoFalhaIa([{ status: 429, erro: "x" }]), "A cota da IA 
   }
   process.env.BION_LLM_RESERVA_GEMINI = "1";
   igual("reserva: '1' liga", reservaGeminiAtiva(), true);
+  delete process.env.BION_LLM_RESERVA_GEMINI;
+  process.env.VERCEL_ENV = "production";
+  igual("reserva: padrão DESLIGADA em produção", reservaGeminiAtiva(), false);
+  process.env.BION_LLM_RESERVA_GEMINI = "true";
+  igual("reserva: 'true' liga em produção", reservaGeminiAtiva(), true);
   delete process.env.BION_LLM_RESERVA_GEMINI_MODEL;
   igual("reserva: modelo vazio", modeloReservaGemini(), null);
   process.env.BION_LLM_RESERVA_GEMINI_MODEL = " gemini-2.5-flash ";

@@ -1,6 +1,7 @@
 "use client";
 
-import { perguntarBionIa } from "@/lib/bion-ia-cliente";
+import { ErroBionIa, perguntarBionIa } from "@/lib/bion-ia-cliente";
+import { ehConsentimentoIaPendente } from "@/lib/consentimento-ia";
 import { useEffect, useRef, useState } from "react";
 import { useVoltarFecha } from "./useVoltarFecha";
 import { useFocoDialogo } from "./useFocoDialogo";
@@ -33,6 +34,7 @@ import {
 } from "./chat-bion-types";
 import { ChatListaMensagens } from "./ChatListaMensagens";
 import { ConsentimentoLaudoIA } from "./ConsentimentoLaudoIA";
+import { ConsentimentoIA } from "./ConsentimentoIA";
 import { CAMPO_CONSENTIMENTO_IA_EXAME, VERSAO_CONSENTIMENTO_IA_EXAME } from "@/lib/consentimento-ia-exame";
 
 /**
@@ -87,8 +89,10 @@ export function ChatBion({
   const [pagando, setPagando] = useState(false);
   const [anamneseAtiva, setAnamneseAtiva] = useState<AnamneseAtiva | null>(null);
   const [enviandoLaudo, setEnviandoLaudo] = useState(false);
-  // Laudo escolhido aguardando o aceite do aviso de envio ao Google (LGPD).
+  // Laudo escolhido aguardando o aceite do aviso de envio à NVIDIA (LGPD).
   const [laudoPendente, setLaudoPendente] = useState<File | null>(null);
+  // Novo aceite da IA (NVIDIA) pendente: o que repetir depois do aceite.
+  const [aceiteIaPendente, setAceiteIaPendente] = useState<{ texto?: string; arquivo?: File } | null>(null);
   const inputArquivoRef = useRef<HTMLInputElement>(null);
   const fimRef = useRef<HTMLDivElement>(null);
   const histAnamneseRef = useRef<{ remetente: "usuario" | "ia"; texto: string }[]>([]);
@@ -321,6 +325,7 @@ export function ChatBion({
       form.append(CAMPO_CONSENTIMENTO_IA_EXAME, VERSAO_CONSENTIMENTO_IA_EXAME);
       const res = await fetch("/api/bion-ia/exame", { method: "POST", body: form });
       const json = (await res.json()) as {
+        codigo?: string;
         ok?: boolean;
         mensagem?: string;
         erro?: string;
@@ -329,6 +334,11 @@ export function ChatBion({
         dados?: unknown;
       };
 
+      if (ehConsentimentoIaPendente(res.status, json)) {
+        setAceiteIaPendente({ arquivo });
+        setMensagens((m) => [...m, { remetente: "ia", texto: json.erro ?? "Aceite a nova versão para usar a BION IA." }]);
+        return;
+      }
       if (json.ok && json.examesSalvos?.length) {
         // Laudo pela IA ainda devolve estado fresco (rota pesada rara) —
         // contrato compatível com aplicarEstadoFresco.
@@ -422,6 +432,13 @@ export function ChatBion({
         return copia;
       });
     } catch (e) {
+      if (e instanceof ErroBionIa && e.tipo === "consentimento") {
+        // Portão jurídico: nada foi enviado à IA; pede o novo aceite e repete.
+        setAceiteIaPendente({ texto: t });
+        // tira a pergunta da lista: ela é reenviada depois do aceite
+        setMensagens((m) => [...m.slice(0, emStream ? -2 : -1), { remetente: "ia", texto: e.message }]);
+        return;
+      }
       const msg = e instanceof Error && e.message
         ? e.message
         : "A BION IA não respondeu agora. Toque em Tentar de novo.";
@@ -670,6 +687,24 @@ export function ChatBion({
           if (f) setLaudoPendente(f);
         }}
       />
+      {aceiteIaPendente && (
+        <ConsentimentoIA
+          onAceito={() => {
+            const p = aceiteIaPendente;
+            setAceiteIaPendente(null);
+            setMensagens((m) => [...m, { remetente: "ia", texto: "Obrigado! Aceite registrado." }]);
+            if (p.arquivo) setLaudoPendente(p.arquivo);
+            else if (p.texto) void enviar(p.texto);
+          }}
+          onRecusar={() => {
+            setAceiteIaPendente(null);
+            setMensagens((m) => [
+              ...m,
+              { remetente: "ia", texto: "Tudo bem. Sem o aceite, a BION IA fica pausada para você. O agendamento e as consultas continuam normais." },
+            ]);
+          }}
+        />
+      )}
       {laudoPendente && (
         <ConsentimentoLaudoIA
           nomeArquivo={laudoPendente.name}

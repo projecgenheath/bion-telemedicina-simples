@@ -57,7 +57,7 @@ igual("origem com porta", origemConfere("http://localhost:3000/x", "localhost:30
 igual("origem diferente", origemConfere("https://mal.com", "bion.app"), false);
 igual("sem origem", origemConfere(null, "bion.app"), false);
 igual("origem inválida", origemConfere("lixo", "bion.app"), false);
-igual("versões fixas", [VERSAO_TERMOS_PACIENTE, VERSAO_PRIVACIDADE, VERSAO_MARKETING_OPTIN], ["termos-paciente-v0-2026-10-20", "privacidade-v0-2026-10-20", "marketing-optin-v0-2026-10-21"]);
+igual("versões fixas", [VERSAO_TERMOS_PACIENTE, VERSAO_PRIVACIDADE, VERSAO_MARKETING_OPTIN], ["termos-paciente-v1-2026-10-27", "privacidade-v1-2026-10-27", "marketing-optin-v0-2026-10-21"]);
 igual("finalidades com versão", finalidadeTermos(VERSAO_TERMOS_PACIENTE).includes(VERSAO_TERMOS_PACIENTE) && finalidadePrivacidade(VERSAO_PRIVACIDADE).includes(VERSAO_PRIVACIDADE), true);
 
 console.log(`${ok} ok, ${falhas} falha(s)`);

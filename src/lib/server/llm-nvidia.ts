@@ -45,13 +45,18 @@ export function nvidiaBaseUrl(): string {
 }
 
 /**
- * Reserva no Gemini quando o NVIDIA falha. BION_LLM_RESERVA_GEMINI="0"/"false"
- * desliga: a cadeia vira NVIDIA → erro amigável (sem Gemini).
+ * Reserva no Gemini (e nos canais env/SDK) quando o NVIDIA falha.
+ * BION_LLM_RESERVA_GEMINI="0"/"false" desliga, "1"/"true" liga; sem valor:
+ * desligada em produção, ligada fora dela. Desligada, a cadeia vira
+ * NVIDIA → erro amigável / respostas pré-programadas.
  */
 export function reservaGeminiAtiva(): boolean {
   const v = (process.env.BION_LLM_RESERVA_GEMINI || "").trim().toLowerCase();
   if (v === "0" || v === "false") return false;
-  return true;
+  if (v === "1" || v === "true") return true;
+  // Padrão: DESLIGADA em produção (NVIDIA → respostas pré-programadas, sem
+  // outro provedor — Política de Privacidade v1); ligada em preview/dev.
+  return process.env.VERCEL_ENV !== "production";
 }
 
 /** Modelo do Gemini usado como reserva (opcional; vazio = configuração atual). */

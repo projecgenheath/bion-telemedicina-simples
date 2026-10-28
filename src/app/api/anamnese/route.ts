@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { quandoClinica } from "@/lib/server/fuso";
 import { db } from "@/lib/db";
+import { exigirConsentimentoIa } from "@/lib/server/consentimento-ia";
 import { exigirPapel } from "@/lib/server/auth";
 import { aplicarSideEffects, anamneseWire, consultaWire, perfilPacienteWire } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
@@ -518,7 +519,12 @@ export async function POST(req: NextRequest) {
     // (funciona sem Gemma/API). LGPD: a IA externa só roda com
     // BION_ANAMNESE_LLM=1 no SERVIDOR; o `modo: "ia"` do cliente é ignorado
     // (antes ele mandava a anamnese ao Google mesmo sem a variável).
-    const tentarLlm = process.env.BION_MOTOR_LOCAL !== "1" && process.env.BION_ANAMNESE_LLM === "1";
+    // Portão jurídico: sem o aceite da versão atual da IA (NVIDIA), a
+    // triagem segue SÓ no motor local — nada vai para a IA externa.
+    const tentarLlm =
+      process.env.BION_MOTOR_LOCAL !== "1" &&
+      process.env.BION_ANAMNESE_LLM === "1" &&
+      (await exigirConsentimentoIa(usuario)) === null;
 
     if (tentarLlm && !fugaCurta && (historico.length > 0 || Boolean(mensagem))) {
       const instrucaoAbertura = mensagem

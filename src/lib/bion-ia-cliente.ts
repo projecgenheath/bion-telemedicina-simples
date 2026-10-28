@@ -1,3 +1,4 @@
+import { MSG_CONSENTIMENTO_IA_PENDENTE, VERSAO_CONSENTIMENTO_IA, ehConsentimentoIaPendente } from "@/lib/consentimento-ia";
 /**
  * Cliente da BION IA (navegador) — usado por ChatBion (paciente) e BionIA
  * (Copilot do médico). Pede `stream: true` e lê NDJSON de /api/bion-ia.
@@ -16,7 +17,7 @@ export type TipoFalhaCliente = "timeout" | "nao_json" | "rede" | "http" | "strea
 export class ErroBionIa extends Error {
   constructor(
     mensagem: string,
-    public tipo: TipoFalhaCliente | "servidor",
+    public tipo: TipoFalhaCliente | "servidor" | "consentimento",
     public parcial = "",
   ) {
     super(mensagem);
@@ -114,6 +115,8 @@ export async function perguntarBionIa(
       } catch {
         j = null;
       }
+      // Portão jurídico: aceite da nova versão (NVIDIA) pendente → tela de aceite.
+      if (ehConsentimentoIaPendente(res.status, j)) throw new ErroBionIa(MSG_CONSENTIMENTO_IA_PENDENTE, "consentimento");
       if (!j) return falhar(res.status === 504 ? "timeout" : "nao_json", res.status === 504 ? MSG_TIMEOUT : MSG_NAO_JSON, res.status);
       requestId = j.requestId ?? requestId;
       if (res.ok && j.resposta) return { texto: j.resposta, fonte: j.fonte ?? null, modelo: j.modelo ?? null, requestId };
@@ -150,5 +153,19 @@ export async function perguntarBionIa(
     return { texto, fonte, modelo, requestId };
   } finally {
     clearTimeout(t);
+  }
+}
+
+/** Registra o aceite da versão atual da BION IA (NVIDIA). true = aceito. */
+export async function aceitarConsentimentoIa(): Promise<boolean> {
+  try {
+    const r = await fetch("/api/paciente/consentimento-ia", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ versao: VERSAO_CONSENTIMENTO_IA }),
+    });
+    return r.ok;
+  } catch {
+    return false;
   }
 }

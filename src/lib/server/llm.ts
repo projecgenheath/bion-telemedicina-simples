@@ -556,7 +556,8 @@ export async function visaoGemini(
     const t = await visaoNvidia(mime, base64, prompt, { timeoutMs: Math.round(restante(prazo) * 0.75) }); // visão medida ~32 s
     if (t) return t;
   }
-  if (!geminiHabilitado()) return null;
+  // Reserva desligada: laudo NÃO vai ao Gemini (só NVIDIA, se liberado acima).
+  if (!reservaGeminiAtiva() || !geminiHabilitado()) return null;
   const { apiKey } = geminiConfig();
   for (const modelo of MODELOS_VISAO) {
     if (restante(prazo) <= 0) break;
@@ -1058,6 +1059,7 @@ export async function chatCompleto(mensagens: Msg[], timeoutMs: number, anon?: A
  */
 export async function obterLLM(): Promise<Cliente | null> {
   if (nvidiaVisaoHabilitada()) return { tipo: "gemini" }; // visaoGemini tenta o NVIDIA antes (só imagens)
+  if (!reservaGeminiAtiva()) return null; // sem outro provedor além do NVIDIA
   if (geminiHabilitado() && geminiConfig().apiKey && !geminiEmCooldown()) return { tipo: "gemini" };
   const env = clienteEnv();
   if (env) return env;

@@ -9,8 +9,8 @@
 
 export type PerfilAceite = "PACIENTE" | "MEDICO";
 
-export const VERSAO_TERMOS_PACIENTE = "termos-paciente-v0-2026-10-20";
-export const VERSAO_PRIVACIDADE = "privacidade-v0-2026-10-20";
+export const VERSAO_TERMOS_PACIENTE = "termos-paciente-v1-2026-10-27";
+export const VERSAO_PRIVACIDADE = "privacidade-v1-2026-10-27";
 /** Texto provisório (minuta), aguardando revisão jurídica. */
 export const VERSAO_MARKETING_OPTIN = "marketing-optin-v0-2026-10-21";
 
