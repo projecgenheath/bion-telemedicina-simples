@@ -5,6 +5,7 @@ import { ok, falha } from "@/lib/server/http";
 import { aplicarSideEffects } from "@/lib/server/dados";
 import { erroHttp } from "@/lib/server/evolucao";
 import { reembolsarPedidoRenovacao } from "@/lib/server/renovacao-reembolso";
+import { conferirMedicoAtivoNaTransacao } from "@/lib/server/bloqueio-agenda";
 
 /**
  * POST /api/medico/renovacoes/[id]/responder — resposta do MÉDICO do pedido.
@@ -117,6 +118,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       });
       if (conflito) return Response.json({ erro: "horario_ocupado" }, { status: 409 });
       const consulta = await db.$transaction(async (tx) => {
+        // Médico suspenso/anonimizado/inativo não marca chamada (FOR SHARE: a
+        // suspensão no meio do caminho espera esta transação ou a derruba).
+        const erroMedico = await conferirMedicoAtivoNaTransacao(tx, medico.id);
+        if (erroMedico) throw erroHttp(409, erroMedico);
         const c = await tx.consulta.create({
           data: {
             pacienteId: pedido.pacienteId,

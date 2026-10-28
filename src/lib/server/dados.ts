@@ -6,6 +6,7 @@ import { broadcastCanal } from "@/lib/supabase/broadcast";
 import { after } from "next/server";
 import { topicoNotificacoesUsuario } from "./usuario-canal";
 import { db } from "@/lib/db";
+import { notasReais } from "./notas-medico";
 import type { Prisma } from "@prisma/client";
 import type { UsuarioSessao } from "./auth";
 import { whereArquivosVisiveis } from "./arquivos-acesso";
@@ -328,7 +329,7 @@ export type PerfilMedicoComUser = Prisma.PerfilMedicoGetPayload<{
   include: { user: { select: { id: true, nome: true } } };
 }>;
 
-export function medicoWire(m: PerfilMedicoComUser) {
+export function medicoWire(m: PerfilMedicoComUser, nota: { avaliacao: number; numAvaliacoes: number } = { avaliacao: 0, numAvaliacoes: 0 }) {
   return {
     id: m.userId,
     nome: m.user.nome,
@@ -336,8 +337,9 @@ export function medicoWire(m: PerfilMedicoComUser) {
     especialidade: m.especialidade,
     subespecialidades: JSON.parse(m.subespecialidades || "[]") as string[],
     valor: m.valor,
-    avaliacao: m.avaliacao,
-    numAvaliacoes: m.numAvaliacoes,
+    // Só avaliações reais (tabela `avaliacao`), nunca o valor do seed.
+    avaliacao: nota.avaliacao,
+    numAvaliacoes: nota.numAvaliacoes,
     formacao: m.formacao,
     experiencia: m.experiencia,
     idiomas: JSON.parse(m.idiomas || "[]") as string[],
@@ -662,6 +664,8 @@ export async function carregarDados(usuario: UsuarioSessao) {
     : [];
   const lidasPorMim = new Set(leiturasProprias.map((l) => l.notificacaoId));
 
+  const notasMedicos = await notasReais(medicosRaw.map((m) => m.userId));
+
   // Pacientes já vêm filtrados na query (P2)
   const pacientesVisiveis = pacientesRaw;
 
@@ -690,7 +694,7 @@ export async function carregarDados(usuario: UsuarioSessao) {
       ...n,
       lida: n.usuarioId ? n.lida : lidasPorMim.has(n.id),
     })),
-    medicos: medicosRaw.map((m) => medicoWire(m)),
+    medicos: medicosRaw.map((m) => medicoWire(m, notasMedicos.get(m.userId))),
     pacientes: pacientesVisiveis.map((p) => pacienteWire(p, { mascarar: souMedico, admin: souAdmin })),
     tickets: tickets.map((t) => ticketWire(t)),
     lembretes,

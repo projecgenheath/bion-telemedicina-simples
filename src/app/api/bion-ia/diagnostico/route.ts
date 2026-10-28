@@ -1,7 +1,8 @@
 import { NextRequest } from "next/server";
 import { exigirPapel } from "@/lib/server/auth";
 import { ok, falha } from "@/lib/server/http";
-import { estadoCanais, probeCanais, diagnosticoGemini, iaPausada, listarModelosGemini, respostaIaPausada, type Msg } from "@/lib/server/llm";
+import { sondaNvidia, ordemCanais, bloqueioGemini } from "@/lib/server/sonda-nvidia";
+import { estadoCanais, diagnosticoGemini, iaPausada, listarModelosGemini, respostaIaPausada, type Msg } from "@/lib/server/llm";
 
 /**
  * Diagnóstico dos canais de IA (BION IA) — somente ADMIN.
@@ -9,7 +10,8 @@ import { estadoCanais, probeCanais, diagnosticoGemini, iaPausada, listarModelosG
  * GET → estado de configuração dos canais (booleanos/modelos; NUNCA chaves).
  *
  * POST → três modalidades:
- * - sem corpo (ou {}): sonda ao vivo mínima de cada canal ("Responda apenas: ok").
+ * - sem corpo (ou {}): sonda ao vivo mínima SÓ do NVIDIA ("Responda apenas: ok");
+ *   nunca chama o Gemini. Resposta: { probes: [{ canal: "nvidia", ... }] }.
  * - { listar: true }: lista os modelos que a chave Gemini tem acesso (ListModels).
  * - { mensagens: Msg[], modelo? }: reproduz uma chamada REAL ao Gemini com o
  *   payload informado (mesmo caminho do chat, com normalização de alternância);
@@ -23,7 +25,7 @@ export async function GET() {
     return ok({
       canais: estadoCanais(),
       pausada: iaPausada(),
-      ordem: ["gemini", "env", "sdk"] as const,
+      ordem: ordemCanais(),
     });
   } catch (e) {
     return falha(e);
@@ -52,6 +54,12 @@ export async function POST(req: NextRequest) {
       // corpo ausente/inválido → modo sonda simples
     }
 
+    // Reserva do Gemini desligada (padrão em produção): listar/chat-real não chamam o Gemini.
+    if (listar || mensagens) {
+      const bloqueio = bloqueioGemini();
+      if (bloqueio) return bloqueio;
+    }
+
     if (listar) {
       const modelos = await listarModelosGemini();
       return ok({ modelos });
@@ -68,8 +76,8 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const probes = await probeCanais();
-    return ok({ probes });
+    const probe = await sondaNvidia();
+    return ok({ probes: [probe] });
   } catch (e) {
     return falha(e);
   }

@@ -1,5 +1,6 @@
 "use client";
 
+import { crmComRotulo } from "@/lib/medico-exibicao";
 import { useState } from "react";
 import Link from "next/link";
 import { Archive, Ban, CheckCircle2, ExternalLink, Pencil, RotateCcw, ShieldAlert, Star } from "lucide-react";
@@ -91,7 +92,7 @@ function Ficha({ medico: m, agora, onModo }: { medico: Medico; agora: number; on
           <Avatar foto={m.foto} iniciais={iniciais(m.nome)} tamanho="w-16 h-16" />
           <div className="min-w-0">
             <p className="font-black text-lg leading-tight break-words">{m.nome}</p>
-            <p className="text-sm ba-texto-2">CRM {m.crm}</p>
+            <p className="text-sm ba-texto-2">{crmComRotulo(m.crm)}</p>
           </div>
         </div>
         <div className="flex flex-wrap gap-1.5 mt-3">

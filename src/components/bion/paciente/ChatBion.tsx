@@ -1,6 +1,7 @@
 "use client";
 
 import { CODIGO_ACEITE_TERMOS_PENDENTE, ERRO_ACEITE_TERMOS_PENDENTE } from "@/lib/aceite-termos";
+import { textoNota } from "@/lib/medico-exibicao";
 import { ErroBionIa, perguntarBionIa } from "@/lib/bion-ia-cliente";
 import { ehConsentimentoIaPendente } from "@/lib/consentimento-ia";
 import { useEffect, useRef, useState } from "react";
@@ -643,7 +644,7 @@ export function ChatBion({
         titulo: "Profissional",
         opcoes: medicosAtivos
           .filter((m) => m.especialidade === escolha.especialidade)
-          .map((m) => ({ rotulo: m.nome, valor: m.nome, sub: `R$ ${m.valor} · ${m.avaliacao.toFixed(1)} (${m.numAvaliacoes})` })),
+          .map((m) => ({ rotulo: m.nome, valor: m.nome, sub: `R$ ${m.valor} · ${textoNota(m)}` })),
         escolher: (v: string) => {
           setEscolha((c) => ({ ...c, medico: v }));
           setMensagens((m) => [...m, { remetente: "usuario", texto: v }, { remetente: "ia", texto: `Escolha o dia para a consulta com ${v}:` }]);

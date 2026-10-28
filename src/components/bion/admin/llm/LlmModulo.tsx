@@ -16,6 +16,7 @@ import {
   LIMITES_SAUDE,
   detalheEvento,
   estadoSaude,
+  falhasNoNavegador,
   falhasRecentes,
   modeloAtual,
   pontosPolilinha,
@@ -63,6 +64,7 @@ export function LlmModulo() {
   const horas = useMemo(() => porHora(eventos, agora, 24), [eventos, agora]);
   const latencia = useMemo(() => serieLatencia(eventos, 40), [eventos]);
   const falhas = useMemo(() => falhasRecentes(eventos, 4), [eventos]);
+  const falhasCliente = falhasNoNavegador(resumo);
   const modelo = modeloAtual(eventos);
   const modelos = (resumo?.modelos ?? []).filter(Boolean) as string[];
   const ultimo = eventos.length ? Math.max(...eventos.map((e) => e.ts)) : null;
@@ -127,11 +129,17 @@ export function LlmModulo() {
               </div>
             </CardAdmin>
 
-            <div className="grid grid-cols-2 gap-3 lg:col-span-2 lg:grid-cols-4" role="list" aria-label="Números do monitor">
+            <div className="grid grid-cols-2 gap-3 lg:col-span-2 lg:grid-cols-5" role="list" aria-label="Números do monitor">
               <Numero rotulo="Turnos" valor={String(resumo?.turnos ?? 0)} />
               <Numero rotulo="Média" valor={segundos(resumo?.msMedia ?? 0)} />
               <Numero rotulo="p50" valor={segundos(resumo?.msP50 ?? 0)} />
               <Numero rotulo="p95" valor={segundos(resumo?.msP95 ?? 0)} tom={resumo && resumo.msP95 > LIMITES_SAUDE.p95LentoMs ? "atencao" : undefined} />
+              <Numero
+                rotulo="Falhas no navegador"
+                valor={String(falhasCliente.valor)}
+                tom={falhasCliente.tom}
+                className="col-span-2 lg:col-span-1"
+              />
             </div>
 
             <CardAdmin titulo="Tendência" icone={TrendingUp} className="lg:col-span-2">
@@ -196,9 +204,9 @@ export function LlmModulo() {
   );
 }
 
-function Numero({ rotulo, valor, tom }: { rotulo: string; valor: string; tom?: string }) {
+function Numero({ rotulo, valor, tom, className }: { rotulo: string; valor: string; tom?: string; className?: string }) {
   return (
-    <div role="listitem" className="ba-card" data-denso="true" data-tom={tom}>
+    <div role="listitem" className={className ? `ba-card ${className}` : "ba-card"} data-denso="true" data-tom={tom}>
       <p className="ba-rotulo">{rotulo}</p>
       <p className="ba-numero text-2xl lg:text-3xl" style={tom ? { color: "var(--ba-tom)" } : undefined}>
         {valor}
