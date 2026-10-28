@@ -5,7 +5,7 @@ import { exigirConsentimentoIa } from "@/lib/server/consentimento-ia";
 import { exigirPapel } from "@/lib/server/auth";
 import { aplicarSideEffects, anamneseWire, consultaWire, perfilPacienteWire } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
-import { chatComFonte, type AnonNomes, type FonteLlm } from "@/lib/server/llm";
+import { chatComFonte, iaPausada, type AnonNomes, type FonteLlm } from "@/lib/server/llm";
 import {
   turnoMotor,
   perguntaRetomada,
@@ -519,9 +519,11 @@ export async function POST(req: NextRequest) {
     // (funciona sem Gemma/API). LGPD: a IA externa só roda com
     // BION_ANAMNESE_LLM=1 no SERVIDOR; o `modo: "ia"` do cliente é ignorado
     // (antes ele mandava a anamnese ao Google mesmo sem a variável).
-    // Portão jurídico: sem o aceite da versão atual da IA (NVIDIA), a
-    // triagem segue SÓ no motor local — nada vai para a IA externa.
+    // Pausa da BION IA (opt-in, BION_IA_PAUSADA=true) ou portão jurídico (sem
+    // o aceite da versão atual da IA/NVIDIA): a triagem segue SÓ no motor
+    // local — nada vai para a IA externa.
     const tentarLlm =
+      !iaPausada() &&
       process.env.BION_MOTOR_LOCAL !== "1" &&
       process.env.BION_ANAMNESE_LLM === "1" &&
       (await exigirConsentimentoIa(usuario)) === null;

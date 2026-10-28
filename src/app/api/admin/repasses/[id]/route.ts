@@ -1,3 +1,4 @@
+import { cnpjDoRepasse } from "@/lib/anonimizar-medico-logica";
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { exigirPapel, registrarAudit } from "@/lib/server/auth";
@@ -57,7 +58,7 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
         id: r.id,
         medicoId: r.medicoId,
         medico: r.medico.nome,
-        cnpj: r.medico.perfilMedico?.cnpj || null,
+        cnpj: cnpjDoRepasse(r.medico.perfilMedico?.cnpj, r.pixTitularDocumento),
         competencia: r.competencia,
         status: r.status,
         brutoCentavos: r.brutoCentavos,

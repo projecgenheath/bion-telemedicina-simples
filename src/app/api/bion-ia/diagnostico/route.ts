@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { exigirPapel } from "@/lib/server/auth";
 import { ok, falha } from "@/lib/server/http";
-import { estadoCanais, probeCanais, diagnosticoGemini, listarModelosGemini, type Msg } from "@/lib/server/llm";
+import { estadoCanais, probeCanais, diagnosticoGemini, iaPausada, listarModelosGemini, respostaIaPausada, type Msg } from "@/lib/server/llm";
 
 /**
  * Diagnóstico dos canais de IA (BION IA) — somente ADMIN.
@@ -22,6 +22,7 @@ export async function GET() {
     await exigirPapel("ADMIN");
     return ok({
       canais: estadoCanais(),
+      pausada: iaPausada(),
       ordem: ["gemini", "env", "sdk"] as const,
     });
   } catch (e) {
@@ -32,6 +33,8 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     await exigirPapel("ADMIN");
+    // Pausa da BION IA (opt-in, BION_IA_PAUSADA=true): nem a sonda do admin manda dado à IA.
+    if (iaPausada()) return respostaIaPausada();
 
     let mensagens: Msg[] | null = null;
     let modelo: string | undefined;

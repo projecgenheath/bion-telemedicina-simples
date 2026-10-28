@@ -58,7 +58,7 @@ export function LlmModulo() {
 
   const resumo = monitor.dados?.resumo ?? null;
   const eventos = useMemo(() => (monitor.dados?.eventos ?? []).filter((e) => Number.isFinite(e.ts)), [monitor.dados]);
-  const saude = estadoSaude(resumo, eventos);
+  const saude = estadoSaude(resumo, eventos, monitor.dados?.pausada === true);
   const tend = useMemo(() => tendencia(eventos), [eventos]);
   const horas = useMemo(() => porHora(eventos, agora, 24), [eventos, agora]);
   const latencia = useMemo(() => serieLatencia(eventos, 40), [eventos]);

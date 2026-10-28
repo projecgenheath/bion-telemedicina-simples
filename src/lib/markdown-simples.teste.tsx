@@ -20,7 +20,7 @@ igual("negrito", html("a **b** c"), "<div class=\"space-y-3 text-sm leading-rela
 igual("sem HTML cru", html("<script>x</script>").includes("<script>"), false);
 igual("tabela", html("| a | b |\n|---|---|\n| 1 | 2 |").includes("<td class=\"border px-2 py-1 align-top\">2</td>"), true);
 
-for (const f of ["01-termos-de-uso-paciente.md", "03-politica-de-privacidade.md", "06-politica-de-cookies.md"]) {
+for (const f of ["01-termos-de-uso-paciente.md", "02-termos-medico-contrato-intermediacao.md", "03-politica-de-privacidade.md", "06-politica-de-cookies.md"]) {
   const doc = lerFrontMatter(readFileSync(`src/conteudo/juridico/${f}`, "utf8"));
   const h = html(doc.corpo);
   const qtdOrig = (doc.corpo.match(/\[A DEFINIR/g) ?? []).length;

@@ -25,6 +25,7 @@
  * parâmetro), para ser testável com `bun scripts/teste_bloqueio_agenda.ts`.
  */
 
+import { ERRO_MEDICO_INDISPONIVEL, medicoPodeAtender } from "@/lib/anonimizar-medico-logica";
 import type { Prisma } from "@prisma/client";
 import type { db } from "@/lib/db";
 import { instanteNoFuso, partesNoFuso } from "@/lib/server/fuso";
@@ -246,6 +247,8 @@ export async function criarSeDiaLivre<T>(
   criar: (tx: Prisma.TransactionClient) => Promise<T>,
 ): Promise<{ bloqueado: true; erro: string } | { bloqueado: false; valor: T }> {
   await travarDiaDoMedico(tx, medicoId, dataInicio);
+  const erroMedico = await conferirMedicoAtivoNaTransacao(tx, medicoId);
+  if (erroMedico) return { bloqueado: true, erro: erroMedico };
   if (consultaEmHorarioVedado(dataInicio)) return { bloqueado: true, erro: ERRO_HORARIO_VEDADO };
   if (await diaBloqueado(tx, medicoId, dataInicio)) return { bloqueado: true, erro: ERRO_DIA_BLOQUEADO };
   return { bloqueado: false, valor: await criar(tx) };
@@ -321,4 +324,21 @@ export async function bloquearDiaTravado<R>(
   }
   const cancelamento = cancelar ? await ops.cancelar(tx) : null;
   return { tipo: "ok", bloqueio, cancelamento, apareceuDepois };
+}
+
+/**
+ * Relê o médico com FOR SHARE (User + PerfilMedico) dentro da transação: a
+ * anonimização/suspensão (FOR UPDATE no User) espera ou é esperada, então
+ * nenhum agendamento entra depois de o médico sair. Devolve o erro ou null.
+ */
+export async function conferirMedicoAtivoNaTransacao(
+  tx: Prisma.TransactionClient,
+  medicoId: string,
+): Promise<string | null> {
+  const linhas = await tx.$queryRaw<{ userStatus: string; perfilStatus: string; email: string }[]>`
+    SELECT u.status AS "userStatus", p.status AS "perfilStatus", u.email AS "email"
+    FROM "User" u JOIN "PerfilMedico" p ON p."userId" = u.id
+    WHERE u.id = ${medicoId} AND u.role = 'MEDICO'
+    FOR SHARE`;
+  return medicoPodeAtender(linhas[0] ?? null) ? null : ERRO_MEDICO_INDISPONIVEL;
 }

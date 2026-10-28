@@ -4,6 +4,7 @@ import { exigirPapel } from "@/lib/server/auth";
 import { pacienteWire } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
 import {
+  PendenciasLgpdError,
   anonimizarPacienteCompleto,
   estaAnonimizado,
   mascararCpfLgpd,
@@ -112,7 +113,17 @@ export async function POST(req: NextRequest) {
       return Response.json({ erro: "Paciente não encontrado." }, { status: 404 });
     }
 
-    const r = await anonimizarPacienteCompleto(paciente.id);
+    // Pendências (consulta ativa, reembolso, renovação…) checadas DENTRO da
+    // transação da anonimização; com pendência, 409 e nada muda.
+    let r;
+    try {
+      r = await anonimizarPacienteCompleto(paciente.id);
+    } catch (e) {
+      if (e instanceof PendenciasLgpdError) {
+        return Response.json({ erro: "Não é possível anonimizar este paciente agora.", motivos: e.motivos }, { status: 409 });
+      }
+      throw e;
+    }
     const { aplicarSideEffects } = await import("@/lib/server/dados");
     const resumo =
       `login Supabase ${r.loginSupabaseRemovido ? "removido" : "inexistente"}; ` +

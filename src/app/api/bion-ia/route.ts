@@ -3,7 +3,7 @@ import { quandoClinica } from "@/lib/server/fuso";
 import { db } from "@/lib/db";
 import { exigirSessao } from "@/lib/server/auth";
 import { ok, falha } from "@/lib/server/http";
-import { chatComFonte, chatStreamComFonte, motivoFalhaIa, novoRequestId } from "@/lib/server/llm";
+import { chatComFonte, chatStreamComFonte, iaPausada, motivoFalhaIa, novoRequestId, respostaIaPausada } from "@/lib/server/llm";
 import { anonimizarMensagensIa, type IdentificadoresPaciente } from "@/lib/server/anonimizar-ia";
 import { exigirConsentimentoIa } from "@/lib/server/consentimento-ia";
 import { anonimizarMensagensTexto } from "@/lib/server/anonimizar-texto";
@@ -144,6 +144,8 @@ async function nomesPacientesDoMedico(medicoId: string): Promise<string[]> {
 export async function POST(req: NextRequest) {
   try {
     const usuario = await exigirSessao();
+    // Pausa da BION IA (opt-in, BION_IA_PAUSADA=true): nada vai à IA.
+    if (iaPausada()) return respostaIaPausada();
     // Portão jurídico: paciente sem o aceite da versão atual (NVIDIA) → 409.
     const pendente = await exigirConsentimentoIa(usuario);
     if (pendente) return pendente;

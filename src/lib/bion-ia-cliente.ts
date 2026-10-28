@@ -28,7 +28,7 @@ export type TipoFalhaCliente = "timeout" | "nao_json" | "rede" | "http" | "strea
 export class ErroBionIa extends Error {
   constructor(
     mensagem: string,
-    public tipo: TipoFalhaCliente | "servidor" | "consentimento",
+    public tipo: TipoFalhaCliente | "servidor" | "consentimento" | "pausada",
     public parcial = "",
   ) {
     super(mensagem);
@@ -127,12 +127,15 @@ export async function perguntarBionIa(
     if (!tipoConteudo.includes("ndjson")) {
       // JSON de erro (401/503/…) ou página HTML (504 da Vercel).
       const bruto = await res.text().catch(() => "");
-      let j: { resposta?: string; raciocinio?: string | null; erro?: string; fonte?: string; modelo?: string; requestId?: string } | null = null;
+      let j: { resposta?: string; raciocinio?: string | null; erro?: string; mensagem?: string; fonte?: string; modelo?: string; requestId?: string } | null = null;
       try {
         j = JSON.parse(bruto);
       } catch {
         j = null;
       }
+      // Pausa da BION IA (opt-in): 503 bion_ia_pausada → aviso amigável.
+      if (res.status === 503 && j?.erro === "bion_ia_pausada")
+        throw new ErroBionIa(j.mensagem || "A BION IA volta em breve.", "pausada");
       // Portão jurídico: aceite da nova versão (NVIDIA) pendente → tela de aceite.
       if (ehConsentimentoIaPendente(res.status, j)) throw new ErroBionIa(MSG_CONSENTIMENTO_IA_PENDENTE, "consentimento");
       if (!j) return falhar(res.status === 504 ? "timeout" : "nao_json", res.status === 504 ? MSG_TIMEOUT : MSG_NAO_JSON, res.status);

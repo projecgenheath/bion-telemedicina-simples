@@ -333,6 +333,11 @@ export function ChatBion({
         examesSalvos?: { titulo: string; itens: { nome: string; valor: number; unidade?: string }[] }[];
         dados?: unknown;
       };
+      if (res.status === 503 && json.erro === "bion_ia_pausada") {
+        // Pausa da BION IA (opt-in, BION_IA_PAUSADA=true): o laudo não é enviado à IA.
+        setMensagens((m) => [...m, { remetente: "ia", texto: json.mensagem || "A BION IA volta em breve." }]);
+        return;
+      }
 
       if (ehConsentimentoIaPendente(res.status, json)) {
         setAceiteIaPendente({ arquivo });
@@ -450,6 +455,11 @@ export function ChatBion({
         return copia;
       });
     } catch (e) {
+      if (e instanceof ErroBionIa && e.tipo === "pausada") {
+        // Pausa da BION IA (opt-in): aviso amigável, sem "Tentar de novo".
+        setMensagens((m) => [...(emStream ? m.slice(0, -1) : m), { remetente: "ia", texto: e.message }]);
+        return;
+      }
       if (e instanceof ErroBionIa && e.tipo === "consentimento") {
         // Portão jurídico: nada foi enviado à IA; pede o novo aceite e repete.
         setAceiteIaPendente({ texto: t });

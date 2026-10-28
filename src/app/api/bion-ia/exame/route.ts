@@ -14,7 +14,7 @@ import { limparMetadadosImagem } from "@/lib/server/limpar-metadados";
 import { carregarDados, aplicarSideEffects } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
 import { usuarioSemNome } from "@/lib/server/audit-sem-nome";
-import { obterLLM, visaoGemini } from "@/lib/server/llm";
+import { iaPausada, obterLLM, respostaIaPausada, visaoGemini } from "@/lib/server/llm";
 
 /**
  * BION IA — leitura de laudos de exames (PDF ou foto) para o app do paciente.
@@ -103,6 +103,8 @@ export const maxDuration = 60;
 export async function POST(req: NextRequest) {
   try {
     const usuario = await exigirPapel("PACIENTE");
+    // Pausa da BION IA (opt-in): o laudo nem é lido, nada vai à IA.
+    if (iaPausada()) return respostaIaPausada();
     // Portão jurídico: sem o aceite geral da IA (NVIDIA) nada é enviado.
     const pendente = await exigirConsentimentoIa(usuario);
     if (pendente) return pendente;

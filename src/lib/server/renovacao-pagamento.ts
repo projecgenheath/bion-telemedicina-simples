@@ -1,5 +1,6 @@
 import "server-only";
 import type { Prisma } from "@prisma/client";
+import { conferirMedicoAtivoNaTransacao } from "@/lib/server/bloqueio-agenda";
 
 type Tx = Prisma.TransactionClient;
 
@@ -14,6 +15,8 @@ export async function criarCobrancaRenovacao(
   tx: Tx,
   dados: { id: string; pacienteId: string; medicoId: string; consultaOrigemId: string | null; documentoId: string; observacaoPaciente: string | null },
 ) {
+  const erroMedico = await conferirMedicoAtivoNaTransacao(tx, dados.medicoId);
+  if (erroMedico) throw Object.assign(new Error(erroMedico), { status: 409 });
   const perfil = await tx.perfilMedico.findUnique({ where: { userId: dados.medicoId }, select: { valor: true } });
   const valorReais = Math.max(0, Math.round((perfil?.valor ?? 150) * 100) / 100);
   const valorCentavos = Math.round(valorReais * 100);

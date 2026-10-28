@@ -193,13 +193,18 @@ export function BionIA() {
       resposta = r.texto;
       raciocinio = r.raciocinio;
     } catch (e) {
-      const aviso =
-        e instanceof Error && e.message
-          ? e.message
-          : "A BION IA está um pouco sobrecarregada agora. Aguarde alguns segundos e envie de novo.";
-      // Mantém o texto parcial já recebido (não descarta a resposta cortada).
-      const parcial = e instanceof ErroBionIa ? e.parcial.trim() : "";
-      resposta = parcial ? `${parcial}\n\n_(${aviso})_` : aviso;
+      if (e instanceof ErroBionIa && e.tipo === "pausada") {
+        // Pausa da BION IA (opt-in, bion_ia_pausada): aviso amigável, não erro.
+        resposta = e.message || "A BION IA volta em breve.";
+      } else {
+        const aviso =
+          e instanceof Error && e.message
+            ? e.message
+            : "A BION IA está um pouco sobrecarregada agora. Aguarde alguns segundos e envie de novo.";
+        // Mantém o texto parcial já recebido (não descarta a resposta cortada).
+        const parcial = e instanceof ErroBionIa ? e.parcial.trim() : "";
+        resposta = parcial ? `${parcial}\n\n_(${aviso})_` : aviso;
+      }
     }
 
     const novaMsgIA: MensagemIA = {
