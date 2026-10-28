@@ -226,7 +226,7 @@ export async function criarReembolsoSeDevido(
     consultaId: string;
     valorCentavos: number;
     multaCentavos: number;
-    motivo: MotivoEvento | "multa_remarcacao_nao_aplicada";
+    motivo: MotivoEvento | "multa_remarcacao_nao_aplicada" | "multa_remarcacao_medico_suspenso";
     solicitadoPor: string;
   },
 ) {
@@ -749,13 +749,49 @@ export function remarcacaoWire(r: {
   };
 }
 
+/** Por que a multa paga não pode ser aplicada (a consulta não se move e a multa volta). */
+export type ImpedimentoMulta = "medico_suspenso" | "reserva_invalida" | "horario_ocupado" | "dia_bloqueado" | "horario_vedado";
+
+/**
+ * Confere, DENTRO da transação travada, se a multa paga ainda pode mover a
+ * consulta. A 1ª checagem é o médico: suspenso/anonimizado/inativo → a multa
+ * não é cobrada e volta integral ao paciente (as taxas ficam com o app), na
+ * mesma regra de qualquer reembolso. Devolve null quando pode aplicar.
+ */
+export async function impedimentoMultaRemarcacao(
+  tx: Prisma.TransactionClient,
+  p: {
+    consultaId: string;
+    medicoId: string;
+    statusConsulta: string;
+    statusReserva: string;
+    reservaVigente: boolean;
+    novaData: Date;
+  },
+): Promise<ImpedimentoMulta | null> {
+  if (await conferirMedicoAtivoNaTransacao(tx, p.medicoId)) return "medico_suspenso";
+  const encerrada = STATUS_LIBERAM_HORARIO.includes(p.statusConsulta);
+  if (!(p.statusReserva === "pendente" || p.statusReserva === "expirada") || !p.reservaVigente || encerrada) return "reserva_invalida";
+  const ocupado = await tx.consulta.findFirst({
+    where: { id: { not: p.consultaId }, medicoId: p.medicoId, dataInicio: p.novaData, status: { notIn: STATUS_LIBERAM_HORARIO } },
+    select: { id: true },
+  });
+  if (ocupado) return "horario_ocupado";
+  // Dia bloqueado pelo médico depois da reserva: não move; a multa volta.
+  if (await diaBloqueado(tx, p.medicoId, p.novaData)) return "dia_bloqueado";
+  // Horário novo em 23:00–00:00 (São Paulo): mesmo caminho — não move, a multa volta.
+  if (consultaEmHorarioVedado(p.novaData)) return "horario_vedado";
+  return null;
+}
+
 /**
  * Multa da remarcação APROVADA pelo gateway (webhook) ou pelo modo simulado.
  * Idempotente. Numa transação só:
  * - reserva vigente → consulta muda para novaData, EventoConsulta "remarcada"
  *   por paciente com a multa, reserva "aprovada";
- * - reserva já cancelada/expirada ou consulta encerrada → a consulta NÃO se
- *   move e a multa paga volta automaticamente como Reembolso.
+ * - reserva já cancelada/expirada, consulta encerrada ou MÉDICO SUSPENSO →
+ *   a consulta NÃO se move e a multa paga volta automaticamente como
+ *   Reembolso integral (taxas com o app).
  * Também recusa (e devolve a multa) se o horário foi ocupado no meio tempo.
  */
 export async function aprovarMultaRemarcacao(remarcacaoId: string, via: "webhook" | "simulado", gatewayRef?: string) {
@@ -776,21 +812,16 @@ export async function aprovarMultaRemarcacao(remarcacaoId: string, via: "webhook
     if (r.status === "aprovada") return { remarcacao: r, aplicada: true, jaProcessada: true };
     const agora = new Date();
     const c = r.consulta;
-    const encerrada = c.status === "cancelada" || c.status === "concluida" || c.status === "aguardando_reagendamento";
-    let aplicavel = (r.status === "pendente" || r.status === "expirada") && reservaVigente({ ...r, status: "pendente" }, agora) && !encerrada;
-    if (aplicavel) {
-      const ocupado = await tx.consulta.findFirst({
-        where: { id: { not: c.id }, medicoId: c.medicoId, dataInicio: r.novaData, status: { notIn: STATUS_LIBERAM_HORARIO } },
-        select: { id: true },
-      });
-      if (ocupado) aplicavel = false;
-    }
-    // Dia bloqueado pelo médico depois da reserva: não move; a multa volta (caminho abaixo).
-    if (aplicavel && (await diaBloqueado(tx, c.medicoId, r.novaData))) aplicavel = false;
-    // Horário novo em 23:00–00:00 (São Paulo): mesmo caminho — não move, a multa volta.
-    if (aplicavel && consultaEmHorarioVedado(r.novaData)) aplicavel = false;
+    const impedimento = await impedimentoMultaRemarcacao(tx, {
+      consultaId: c.id,
+      medicoId: c.medicoId,
+      statusConsulta: c.status,
+      statusReserva: r.status,
+      reservaVigente: reservaVigente({ ...r, status: "pendente" }, agora),
+      novaData: r.novaData,
+    });
 
-    if (aplicavel) {
+    if (!impedimento) {
       await tx.consulta.update({ where: { id: c.id }, data: { dataInicio: r.novaData, remarcada: true } });
       await registrarEvento(tx, {
         consultaId: c.id,
@@ -825,8 +856,9 @@ export async function aprovarMultaRemarcacao(remarcacaoId: string, via: "webhook
           remarcacaoId: r.id,
           valorCentavos: r.multaCentavos,
           multaCentavos: 0,
-          motivo: "multa_remarcacao_nao_aplicada",
-          status: REEMBOLSO_AUTOMATICO ? "aprovado" : "solicitado",
+          motivo: impedimento === "medico_suspenso" ? "multa_remarcacao_medico_suspenso" : "multa_remarcacao_nao_aplicada",
+          // Médico suspenso: devolução integral e automática, sem depender do admin.
+          status: REEMBOLSO_AUTOMATICO || impedimento === "medico_suspenso" ? "aprovado" : "solicitado",
           solicitadoPor: "sistema",
         },
       });
