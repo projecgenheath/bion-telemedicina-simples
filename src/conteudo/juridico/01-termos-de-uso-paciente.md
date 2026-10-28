@@ -1,10 +1,10 @@
 ---
 title: "Termos de Uso do Paciente — BION Telemedicina"
-subtitle: "Versão 1.0 — MINUTA para revisão jurídica — 20/10/2026"
+subtitle: "Versão provisória v0 — 20/10/2026"
 lang: pt-BR
 ---
 
-> **MINUTA — NÃO PUBLICAR ANTES DA REVISÃO POR ADVOGADO(A).** Os trechos marcados com **[A DEFINIR]** dependem de dados da empresa ainda não constituída ou de decisões de negócio. Veja `pendencias.md`.
+> Os trechos marcados com **[A DEFINIR]** dependem de dados da empresa ainda não constituída ou de decisões de negócio. Veja `pendencias.md`.
 
 # Resumo em linguagem simples (leia antes)
 
@@ -318,4 +318,4 @@ Se alguma cláusula for considerada inválida, as demais continuam valendo. A to
 
 Contato: **[A DEFINIR: e-mail de atendimento]** · Encarregado (DPO): **[A DEFINIR: e-mail do Encarregado]**
 
-*Versão 1.0 — vigente a partir de [A DEFINIR: data de publicação].*
+*Versão provisória v0 — Vigente a partir do seu aceite.*
