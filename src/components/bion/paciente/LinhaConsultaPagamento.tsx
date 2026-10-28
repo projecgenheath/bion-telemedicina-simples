@@ -4,6 +4,7 @@ import { FileText } from "lucide-react";
 import type { Consulta } from "@/lib/bion-tipos";
 import { CLASSE_ETIQUETA, rotuloHistorico } from "./etiqueta-consulta";
 import { EtiquetaTipo } from "./tipo-atendimento-ui";
+import { BotaoPagarStripe } from "./BotaoPagarStripe";
 
 /**
  * Consulta vista pelo paciente com a nota fiscal opcional.
@@ -65,6 +66,9 @@ export function LinhaConsultaPagamento({
           {pag ? ` · ${pag}` : ""}
         </span>
       </div>
+      {aguardando && c.status !== "cancelada" && !ehRetornoGratis(c) ? (
+        <BotaoPagarStripe consultaId={c.id} className="self-start" />
+      ) : null}
       {mostraNota ? (
         c.temNotaFiscal === true ? (
           <a
