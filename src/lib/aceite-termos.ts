@@ -10,19 +10,31 @@
 export type PerfilAceite = "PACIENTE" | "MEDICO";
 
 export const VERSAO_TERMOS_PACIENTE = "termos-paciente-v0-2026-10-20";
+/** Termos do médico. Texto próprio ainda não existe: o link aponta para /termos-de-uso. */
+export const VERSAO_TERMOS_MEDICO = "termos-medico-v0-2026-10-20";
 export const VERSAO_PRIVACIDADE = "privacidade-v0-2026-10-20";
 /** Texto provisório (minuta), aguardando revisão jurídica. */
 export const VERSAO_MARKETING_OPTIN = "marketing-optin-v0-2026-10-21";
 
-/** Versão dos termos exigida por perfil. Médico: preencher ao ligar o cadastro dele. */
+/** Versão dos termos exigida por perfil. */
 export const VERSAO_TERMOS_POR_PERFIL: Record<PerfilAceite, string | null> = {
   PACIENTE: VERSAO_TERMOS_PACIENTE,
-  MEDICO: null,
+  MEDICO: VERSAO_TERMOS_MEDICO,
 };
 
 /** Rotas públicas (sem login) dos textos: src/app/termos-de-uso e src/app/politica-de-privacidade. */
 export const URL_TERMOS_PACIENTE = "/termos-de-uso";
 export const URL_POLITICA_PRIVACIDADE = "/politica-de-privacidade";
+/**
+ * PROVISÓRIO: ainda não há página de Termos de Uso específica do médico
+ * (src/conteudo/juridico só tem a minuta do paciente). Trocar para
+ * "/termos-de-uso-medico" quando o Jurídico entregar o texto.
+ */
+export const URL_TERMOS_MEDICO = "/termos-de-uso";
+export const URL_TERMOS_POR_PERFIL: Record<PerfilAceite, string> = {
+  PACIENTE: URL_TERMOS_PACIENTE,
+  MEDICO: URL_TERMOS_MEDICO,
+};
 
 export const TEXTO_ACEITE_TERMOS = "Li e aceito os Termos de Uso e a Política de Privacidade";
 /** Minuta (provisório) — versão VERSAO_MARKETING_OPTIN. */
@@ -64,6 +76,8 @@ export const ERRO_VERSAO_TERMOS =
   "Os Termos de Uso ou a Política de Privacidade foram atualizados. Recarregue a página e aceite a versão atual.";
 export const ERRO_TERMOS_PERFIL_INDEFINIDO =
   "Os Termos de Uso deste tipo de conta ainda não estão disponíveis. Tente novamente mais tarde.";
+export const ERRO_ACEITE_TERMOS_ATUALIZACAO =
+  "Para continuar, é preciso aceitar os Termos de Uso e a Política de Privacidade.";
 export const ERRO_VERSAO_MARKETING =
   "O texto das novidades e ofertas foi atualizado. Recarregue a página e tente de novo.";
 
@@ -115,4 +129,15 @@ export function finalidadeMarketing(aceito: boolean, versao = VERSAO_MARKETING_O
 /** Estado do opt-in a partir do último registro (null = nunca aceitou). */
 export function marketingAtivo(ultimo: { aceito: boolean } | null | undefined): boolean {
   return !!ultimo?.aceito;
+}
+
+/**
+ * Médico com aceite pendente: falta a linha dos termos OU da privacidade
+ * vigentes. Recebe as finalidades já gravadas (aceito = true) do usuário.
+ */
+export function aceitePendente(perfil: PerfilAceite, finalidadesAceitas: readonly string[]): boolean {
+  const versaoTermos = VERSAO_TERMOS_POR_PERFIL[perfil];
+  if (!versaoTermos) return false;
+  const tem = new Set(finalidadesAceitas);
+  return !tem.has(finalidadeTermos(versaoTermos)) || !tem.has(finalidadePrivacidade(VERSAO_PRIVACIDADE));
 }

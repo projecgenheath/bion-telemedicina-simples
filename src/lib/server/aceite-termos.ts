@@ -8,6 +8,9 @@ import {
   ACAO_AUDIT_MARKETING_REVOGADO,
   PREFIXO_FINALIDADE_MARKETING,
   VERSAO_MARKETING_OPTIN,
+  VERSAO_PRIVACIDADE,
+  VERSAO_TERMOS_POR_PERFIL,
+  aceitePendente,
   finalidadeMarketing,
   finalidadePrivacidade,
   finalidadeTermos,
@@ -99,4 +102,57 @@ export async function ultimoMarketing(userId: string) {
     orderBy: { createdAt: "desc" },
     select: { aceito: true, createdAt: true },
   });
+}
+
+/** Finalidades de termos/privacidade vigentes já aceitas pelo usuário (por id). */
+async function finalidadesVigentesAceitas(userId: string, perfil: PerfilAceite): Promise<string[]> {
+  const versaoTermos = VERSAO_TERMOS_POR_PERFIL[perfil];
+  const alvo = [finalidadePrivacidade(VERSAO_PRIVACIDADE), ...(versaoTermos ? [finalidadeTermos(versaoTermos)] : [])];
+  const linhas = await db.consentimento.findMany({
+    where: { quem: userId, perfil, aceito: true, finalidade: { in: alvo } },
+    select: { finalidade: true },
+  });
+  return linhas.map((l) => l.finalidade);
+}
+
+/** true quando falta o aceite dos termos/privacidade vigentes do perfil. */
+export async function aceiteVigentePendente(userId: string, perfil: PerfilAceite): Promise<boolean> {
+  return aceitePendente(perfil, await finalidadesVigentesAceitas(userId, perfil));
+}
+
+/**
+ * Aceite pós-cadastro (conta criada pelo admin ou anterior aos termos).
+ * Grava só as linhas que faltam, numa transação, e audita só com ids/versões.
+ */
+export async function gravarAceiteAtualizacao(usuario: UsuarioSessao, perfil: PerfilAceite, aceite: AceiteValidado) {
+  const linhas = await db.$transaction(async (tx) => {
+    const ja = new Set(
+      (
+        await tx.consentimento.findMany({
+          where: {
+            quem: usuario.id,
+            perfil,
+            aceito: true,
+            finalidade: { in: [finalidadeTermos(aceite.versaoTermos), finalidadePrivacidade(aceite.versaoPrivacidade)] },
+          },
+          select: { finalidade: true },
+        })
+      ).map((l) => l.finalidade),
+    );
+    const fT = finalidadeTermos(aceite.versaoTermos);
+    const fP = finalidadePrivacidade(aceite.versaoPrivacidade);
+    const termos = ja.has(fT) ? null : (await criarLinha(tx, usuario.id, perfil, fT, true)).id;
+    const privacidade = ja.has(fP) ? null : (await criarLinha(tx, usuario.id, perfil, fP, true)).id;
+    return { termos, privacidade };
+  });
+  if (linhas.termos || linhas.privacidade) {
+    await registrarAudit(usuarioSemNome(usuario), {
+      acao: ACAO_AUDIT_ACEITE_TERMOS,
+      categoria: "consentimento",
+      entidade: "usuario",
+      entidadeId: usuario.id,
+      detalhes: `Aceite ${perfil}: termos=${aceite.versaoTermos} (${linhas.termos ?? "já aceito"}); privacidade=${aceite.versaoPrivacidade} (${linhas.privacidade ?? "já aceito"})`,
+    });
+  }
+  return linhas;
 }

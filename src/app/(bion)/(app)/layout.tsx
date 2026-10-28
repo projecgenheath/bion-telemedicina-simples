@@ -7,6 +7,7 @@ import { AppShell } from "@/components/bion/telas/AppShell";
 import { TorreAdmin } from "@/components/bion/admin/TorreAdmin";
 import { TrocarSenhaObrigatoria } from "@/components/bion/telas/TrocarSenhaObrigatoria";
 import { TelaCarregando } from "@/components/bion/brand";
+import { GuardaAceiteTermosMedico } from "@/components/bion/medico/GuardaAceiteTermosMedico";
 import { SO_ADMIN, SO_CLINICA, SO_MEDICO, SO_PACIENTE, viewDoPath } from "@/lib/rotas";
 
 export default function LayoutAutenticado({ children }: { children: React.ReactNode }) {
@@ -59,5 +60,13 @@ export default function LayoutAutenticado({ children }: { children: React.ReactN
     return <TelaCarregando texto="Abrindo seu app…" />;
   }
 
+  // Médico: aceite dos termos vigentes antes de qualquer tela da área dele.
+  if (sessao.role === "medico") {
+    return (
+      <GuardaAceiteTermosMedico>
+        <AppShell>{children}</AppShell>
+      </GuardaAceiteTermosMedico>
+    );
+  }
   return <AppShell>{children}</AppShell>;
 }
