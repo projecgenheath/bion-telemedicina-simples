@@ -16,7 +16,7 @@ export async function ultimoConsentimentoIa(pacienteId: string) {
 }
 
 /**
- * Portão do servidor: devolve a Response 409 quando o PACIENTE ainda não
+ * Portão do servidor: devolve a Response 403 quando o PACIENTE ainda não
  * aceitou a versão atual (nada é enviado à IA); null = pode seguir.
  * Erro ao consultar o banco também bloqueia (falha fechada).
  */

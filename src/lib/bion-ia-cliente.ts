@@ -181,6 +181,21 @@ export async function perguntarBionIa(
   }
 }
 
+/**
+ * O paciente já aceitou a versão atual da BION IA (NVIDIA)? Falha de rede ou
+ * resposta inesperada = false (falha fechada: mostra o card de aceite).
+ */
+export async function consultarConsentimentoIa(): Promise<boolean> {
+  try {
+    const r = await fetch("/api/paciente/consentimento-ia", { cache: "no-store" });
+    if (!r.ok) return false;
+    const j = (await r.json().catch(() => null)) as { vigente?: unknown; versao?: unknown } | null;
+    return j?.vigente === true && j.versao === VERSAO_CONSENTIMENTO_IA;
+  } catch {
+    return false;
+  }
+}
+
 /** Registra o aceite da versão atual da BION IA (NVIDIA). true = aceito. */
 export async function aceitarConsentimentoIa(): Promise<boolean> {
   try {
