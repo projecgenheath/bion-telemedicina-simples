@@ -31,6 +31,12 @@ igual("finalidade com prefixo, NVIDIA e versões", [
   FINALIDADE_CONSENTIMENTO_IA.includes(VERSAO_PRIVACIDADE),
   FINALIDADE_CONSENTIMENTO_IA.includes(VERSAO_TERMOS_PACIENTE),
 ], [true, true, true, true]);
+igual("versão do consentimento da IA", VERSAO_CONSENTIMENTO_IA, "ia-nvidia-v2-2026-10-28");
+igual(
+  "aceite da v1 (texto anterior): pendente",
+  consentimentoIaVigente({ aceito: true, finalidade: `${PREFIXO_FINALIDADE_IA}: NVIDIA (versão ia-nvidia-v1-2026-10-27)` }),
+  false,
+);
 igual("sem registro: pendente", consentimentoIaVigente(null), false);
 igual("aceite atual: vigente", consentimentoIaVigente({ aceito: true, finalidade: FINALIDADE_CONSENTIMENTO_IA }), true);
 igual("revogado: pendente", consentimentoIaVigente({ aceito: false, finalidade: FINALIDADE_REVOGACAO_IA }), false);

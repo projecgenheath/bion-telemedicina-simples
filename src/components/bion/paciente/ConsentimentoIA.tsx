@@ -43,9 +43,10 @@ export function ConsentimentoIA({ onAceito, onRecusar }: { onAceito: () => void;
         </h2>
         <div id="texto-consentimento-ia" className="mt-4 rounded-2xl border bpp-sheet-borda bpp-sheet-cartao p-4 text-sm bpp-sheet-suave space-y-2">
           <p>
-            A BION IA agora usa o modelo Nemotron, da <strong className="bpp-sheet-forte">NVIDIA Corporation (EUA)</strong>.
-            Nesta fase, a NVIDIA pode guardar e usar o conteúdo enviado conforme os termos dela. Por isso, a BION remove
-            seus identificadores diretos das mensagens antes do envio.
+            A BION IA agora usa o modelo Nemotron, da <strong className="bpp-sheet-forte">NVIDIA Corporation, nos EUA</strong>.
+            O que você escrever, <strong className="bpp-sheet-forte">inclusive informações sobre a sua saúde</strong>, será
+            enviado para lá. Nesta fase, a NVIDIA pode guardar e usar esse conteúdo conforme os termos dela. Antes do
+            envio, a BION remove seu nome, e-mail, CPF, telefone, CEP e data de nascimento.
           </p>
           <p>Se a NVIDIA não responder, entram respostas automáticas pré-programadas.</p>
           <p>

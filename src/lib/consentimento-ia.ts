@@ -12,7 +12,7 @@
  */
 import { VERSAO_PRIVACIDADE, VERSAO_TERMOS_PACIENTE } from "@/lib/aceite-termos";
 
-export const VERSAO_CONSENTIMENTO_IA = "ia-nvidia-v1-2026-10-27";
+export const VERSAO_CONSENTIMENTO_IA = "ia-nvidia-v2-2026-10-28";
 export const CODIGO_CONSENTIMENTO_IA_PENDENTE = "consentimento_ia_pendente";
 export const STATUS_CONSENTIMENTO_IA_PENDENTE = 409;
 
