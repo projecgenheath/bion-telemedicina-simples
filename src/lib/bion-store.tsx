@@ -83,6 +83,7 @@ export type {
 } from "./bion-tipos";
 import { normalizarTipoAtendimento } from "./bion-tipos";
 import type { AceiteTermosPayload } from "./aceite-termos";
+import { limparRecusaTermos, mensagemRecusa } from "./aceite-termos";
 
 export {
   fmtCurta,
@@ -445,7 +446,7 @@ async function api<T>(url: string, init?: RequestInit): Promise<T | null> {
     });
     const json = res.status === 204 ? null : await res.json().catch(() => null);
     if (!res.ok) {
-      const msg = (json as { erro?: string } | null)?.erro ?? "Não foi possível concluir a operação.";
+      const msg = mensagemRecusa(json as { erro?: unknown; codigo?: unknown } | null, "Não foi possível concluir a operação.");
       toast.error(msg);
       return null;
     }
@@ -785,6 +786,8 @@ export function BionProvider({ children }: { children: ReactNode }) {
   );
 
   const sair = useCallback(async () => {
+    // A recusa dos termos ("Agora não") não passa para a próxima conta/sessão.
+    limparRecusaTermos();
     // Push: manda o endpoint DESTE aparelho ao logout (servidor apaga a inscrição) e só depois desinscreve local.
     const inscricao = await inscricaoAtual();
     try {

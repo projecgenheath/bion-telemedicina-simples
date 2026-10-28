@@ -1,3 +1,4 @@
+import { exigirAceiteTermosPaciente } from "@/lib/server/aceite-termos";
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { exigirPapel } from "@/lib/server/auth";
@@ -82,6 +83,9 @@ function validarDataHoraAgendamento(data: string, hora: string): string | null {
 export async function POST(req: NextRequest) {
   try {
     const usuario = await exigirPapel("PACIENTE");
+    // Termos + privacidade vigentes: sem aceite, nada novo é agendado (403).
+    const semAceite = await exigirAceiteTermosPaciente(usuario);
+    if (semAceite) return semAceite;
     const body = (await req.json()) as {
       medicoId: string;
       data: string;
