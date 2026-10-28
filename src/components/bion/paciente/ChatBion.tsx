@@ -1,5 +1,6 @@
 "use client";
 
+import { perguntarBionIa } from "@/lib/bion-ia-cliente";
 import { useEffect, useRef, useState } from "react";
 import { useVoltarFecha } from "./useVoltarFecha";
 import { useFocoDialogo } from "./useFocoDialogo";
@@ -392,22 +393,41 @@ export function ChatBion({
     setPensando(true);
     setUltimaFalha(null);
     setSegundosEspera(0);
-    try {
-      const res = await fetch("/api/bion-ia", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mensagens: historico.filter((m) => m.texto.length < 500).slice(-4).map((m) => ({ remetente: m.remetente === "usuario" ? "usuario" : "ia", texto: m.texto.replace(/\*\*/g, "") })) }),
+    // Stream: a fala da IA aparece conforme chega (raciocínio nunca vem do servidor).
+    let emStream = false;
+    const mostrarParcial = (parcial: string) => {
+      setMensagens((m) => {
+        if (!emStream) {
+          emStream = true;
+          return [...m, { remetente: "ia", texto: parcial }];
+        }
+        const copia = m.slice();
+        copia[copia.length - 1] = { ...copia[copia.length - 1], texto: parcial };
+        return copia;
       });
-      const json = (await res.json()) as { resposta?: string; fonte?: string; modelo?: string; erro?: string };
-      if (!res.ok || !json.resposta) throw new Error(json.erro ?? "Falha");
-      setMensagens((m) => [...m, { remetente: "ia", texto: json.resposta!, fonte: json.fonte, modelo: json.modelo }]);
+    };
+    try {
+      const r = await perguntarBionIa(
+        historico
+          .filter((m) => m.texto.length < 500)
+          .slice(-4)
+          .map((m) => ({ remetente: m.remetente === "usuario" ? ("usuario" as const) : ("ia" as const), texto: m.texto.replace(/\*\*/g, "") })),
+        { onDelta: mostrarParcial },
+      );
+      setMensagens((m) => {
+        const final = { remetente: "ia" as const, texto: r.texto, fonte: r.fonte ?? undefined, modelo: r.modelo ?? undefined };
+        if (!emStream) return [...m, final];
+        const copia = m.slice();
+        copia[copia.length - 1] = { ...copia[copia.length - 1], ...final };
+        return copia;
+      });
     } catch (e) {
-      const msg = e instanceof Error && e.message && e.message !== "Falha"
+      const msg = e instanceof Error && e.message
         ? e.message
         : "A BION IA não respondeu agora. Toque em Tentar de novo.";
       setUltimaFalha(t);
       setMensagens((m) => [
-        ...m,
+        ...(emStream ? m.slice(0, -1) : m),
         { remetente: "ia", texto: msg, tipo: "erro" },
       ]);
     } finally {

@@ -50,7 +50,8 @@ import { nomesMedicamentosEmUso } from "@/lib/server/medicamentos-legado";
  * NUNCA interrogatório nem monólogo, sinais de alarme → SAMU 192.
  */
 
-const TIMEOUT_LLM_MS = 32_000;
+// NVIDIA usa ~60% do prazo e o Gemini o resto (timeouts reais via AbortSignal).
+const TIMEOUT_LLM_MS = 30_000;
 
 /** Janela da triagem: fecha 5 minutos antes do início da consulta. */
 const JANELA_TRIAGEM_MS = 5 * 60_000;

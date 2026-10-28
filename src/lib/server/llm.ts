@@ -1,6 +1,16 @@
 import { limparArtefatos, repararRepeticoes } from "@/lib/server/llm-sanitize";
 import { registrarTurnoLlm } from "@/lib/server/llm-monitor";
 import ZAI from "z-ai-web-dev-sdk";
+import {
+  chatNvidia,
+  nvidiaConfig,
+  nvidiaConfigurado,
+  nvidiaLiberado,
+  nvidiaVisaoHabilitada,
+  streamNvidia,
+  visaoNvidia,
+  type RegistroNvidia,
+} from "@/lib/server/llm-nvidia";
 
 /**
  * Camada única de acesso à IA GENERATIVA para as rotas da BION IA.
@@ -39,13 +49,21 @@ export type Msg = { role: "user" | "assistant"; content: string };
 
 export type AnonNomes = { nome: string; substituto: string }[];
 
-export type FonteLlm = "gemini" | "env" | "sdk";
+export type FonteLlm = "nvidia" | "gemini" | "env" | "sdk";
 
 type ClienteEnv = { tipo: "env"; baseUrl: string; apiKey: string; model?: string };
 type ClienteSdk = { tipo: "sdk"; zai: Awaited<ReturnType<typeof ZAI.create>> };
 type Cliente = ClienteEnv | ClienteSdk | { tipo: "gemini" };
 
-type Resultado = { texto: string | null; fonte: FonteLlm | null; modelo?: string | null };
+type Resultado = {
+  texto: string | null;
+  fonte: FonteLlm | null;
+  modelo?: string | null;
+  /** id desta chamada (auditoria no monitor LLM). */
+  requestId?: string;
+  /** tentativas DESTA chamada (sem estado global entre requisições). */
+  registros?: RegistroGemini[];
+};
 
 const SONDA_TIMEOUT_MS = 4_000;
 const COOLDOWN_FALHA_MS = 12_000;
@@ -161,6 +179,16 @@ function restante(prazo: number) {
   return prazo - Date.now();
 }
 
+function ehTimeout(e: unknown): boolean {
+  const nome = (e as { name?: string })?.name;
+  return nome === "TimeoutError" || nome === "AbortError" || (e instanceof Error && e.message === "timeout");
+}
+
+/** Id curto por chamada — correlaciona servidor, cliente e monitor (sem PII). */
+export function novoRequestId(): string {
+  return `ia_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
 async function comPrazo<T>(promessa: Promise<T>, ms: number): Promise<T | null> {
   try {
     return (await Promise.race([
@@ -233,12 +261,9 @@ export type RegistroGemini = {
   erro: string | null;
 };
 
-let _registrosGemini: RegistroGemini[] = [];
-
-/** Registros da última chamada de chamarGemini NESTA instância (ler logo após). */
-export function registrosGemini(): RegistroGemini[] {
-  return _registrosGemini;
-}
+// Cada chamada carrega o PRÓPRIO array de registros (antes era um array
+// global do módulo: requisições simultâneas na mesma instância liam o status
+// uma da outra e o paciente recebia a mensagem de erro errada).
 
 /** POST genérico ao generateContent; repetição sem thinkingConfig em 400. */
 async function geminiPost(
@@ -247,19 +272,22 @@ async function geminiPost(
   corpo: GeminiCorpo,
   prazo: number,
   rotulo = "gemini",
+  registros: RegistroGemini[] = [],
 ): Promise<string | null> {
   const url = `${GEMINI_BASE}/${model}:generateContent`;
   const chamar = async (c: GeminiCorpo, rotuloTurno: string): Promise<GeminiResposta | null> => {
     const inicio = Date.now();
     try {
-      const bruto = (await Promise.race([
-        fetch(url, {
+      const bruto = (await fetch(url, {
           method: "POST",
           headers: { "Content-Type": "application/json", "X-goog-api-key": apiKey },
           body: JSON.stringify(c),
+          // timeout REAL: aborta o fetch (antes o Promise.race deixava a
+          // requisição viva consumindo cota depois do "timeout").
+          signal: AbortSignal.timeout(Math.max(restante(prazo), 1)),
         }).then(async (r) => {
           const j = (await r.json().catch(() => null)) as (GeminiResposta & { error?: { message?: string } }) | null;
-          _registrosGemini.push({
+          registros.push({
             rotulo: rotuloTurno,
             status: r.status,
             finish: j?.candidates?.[0]?.finishReason ?? null,
@@ -270,28 +298,27 @@ async function geminiPost(
           });
           if (!r.ok) throw new Error(`gemini HTTP ${r.status}`);
           return j as GeminiResposta;
-        }),
-        new Promise<null>((_, rejeita) => setTimeout(() => rejeita(new Error("timeout")), restante(prazo))),
-      ])) as GeminiResposta | null;
+        })) as GeminiResposta | null;
       return bruto;
     } catch (e) {
       // registro ausente = falha antes da resposta HTTP (timeout / rede)
-      const registrado = _registrosGemini.some((rg) => rg.rotulo === rotuloTurno);
+      const registrado = registros.some((rg) => rg.rotulo === rotuloTurno);
       if (!registrado) {
-        _registrosGemini.push({
+        registros.push({
           rotulo: rotuloTurno,
           status: null,
           finish: null,
           block: null,
           ms: Date.now() - inicio,
           textoLen: 0,
-          erro: limpar(e instanceof Error ? e.message : String(e), apiKey),
+          erro: ehTimeout(e) ? "timeout" : limpar(e instanceof Error ? e.message : String(e), apiKey),
         });
       }
       return null;
     }
   };
 
+  if (restante(prazo) <= 0) return null;
   let bruto = await chamar(corpo, rotulo);
   if (!bruto && corpo.generationConfig?.thinkingConfig) {
     const sem = { ...corpo, generationConfig: { ...corpo.generationConfig } };
@@ -317,9 +344,9 @@ async function chamarGemini(
   prazo: number,
   modeloOverride?: string,
   opcoes?: { ignorarDisjuntor?: boolean; bruto?: boolean },
+  registros: RegistroGemini[] = [],
 ): Promise<{ texto: string | null; modelo: string | null }> {
   const { apiKey } = geminiConfig();
-  _registrosGemini = [];
   const sys = mensagens[0]?.role === "assistant" ? mensagens[0].content : null;
   const resto = (sys ? mensagens.slice(1) : mensagens).map((m) => ({
     role: m.role === "user" ? ("user" as const) : ("model" as const),
@@ -441,7 +468,7 @@ function comporFala(continuacao: string, comPrefill: boolean): string {
     const subprazo = Date.now() + Math.max(Math.round(restante(prazo) * (ehGemma ? 0.85 : 0.55)), 6_000);
 
     if (!ehGemma) {
-      const texto1 = await geminiPost(modelo, apiKey, corpo, Math.min(prazo, subprazo), modelo);
+      const texto1 = await geminiPost(modelo, apiKey, corpo, Math.min(prazo, subprazo), modelo, registros);
       if (texto1 && !textoComEcoRaciocinio(texto1)) return { texto: texto1, modelo };
     } else {
       // Sem prefill: o "Claro!" + 2ª geração colava duas falas e atrasava.
@@ -458,6 +485,7 @@ function comporFala(continuacao: string, comPrefill: boolean): string {
         },
         Math.min(prazo, subprazo),
         modelo,
+        registros,
       );
       const comPrefill = false;
       if (texto1) {
@@ -500,7 +528,7 @@ function comporFala(continuacao: string, comPrefill: boolean): string {
       contents: conteudosDoModelo,
       generationConfig: { temperature: 0.7, maxOutputTokens: 8192 },
     };
-    const texto2 = await geminiPost(modelo, apiKey, sem, prazo, `${modelo}-sem-thinking`);
+    const texto2 = await geminiPost(modelo, apiKey, sem, prazo, `${modelo}-sem-thinking`, registros);
     if (texto2 && !textoComEcoRaciocinio(texto2)) return { texto: texto2, modelo };
   }
   return { texto: null, modelo: null };
@@ -518,9 +546,15 @@ export async function visaoGemini(
   prompt: string,
   timeoutMs: number,
 ): Promise<string | null> {
+  const prazo = Date.now() + Math.max(timeoutMs, 5_000);
+  // NVIDIA primeiro para IMAGENS (PDF segue no Gemini). Atrás da flag
+  // BION_LLM_NVIDIA_VISAO=1 até o consentimento citar a NVIDIA.
+  if (mime.startsWith("image/") && nvidiaVisaoHabilitada()) {
+    const t = await visaoNvidia(mime, base64, prompt, { timeoutMs: Math.round(restante(prazo) * 0.75) }); // visão medida ~32 s
+    if (t) return t;
+  }
   if (!geminiHabilitado()) return null;
   const { apiKey } = geminiConfig();
-  const prazo = Date.now() + Math.max(timeoutMs, 5_000);
   for (const modelo of MODELOS_VISAO) {
     if (restante(prazo) <= 0) break;
     // Gemma rejeita thinkingConfig (400 medido em produção) — vai direto sem
@@ -545,6 +579,7 @@ export async function visaoGemini(
       },
       prazo,
       modelo,
+      [],
     );
     if (texto) return texto;
   }
@@ -571,17 +606,18 @@ async function chamarEnv(c: ClienteEnv, mensagens: Msg[], prazo: number): Promis
     thinking: { type: "disabled" },
     ...(c.model ? { model: c.model } : {}),
   };
-  const bruto = await comPrazo(
-    fetch(`${c.baseUrl}/chat/completions`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${c.apiKey}` },
-      body: JSON.stringify(corpo),
-    }).then(async (r) => {
+  if (restante(prazo) <= 0) return null;
+  const bruto = (await fetch(`${c.baseUrl}/chat/completions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${c.apiKey}` },
+    body: JSON.stringify(corpo),
+    signal: AbortSignal.timeout(Math.max(restante(prazo), 1)),
+  })
+    .then(async (r) => {
       if (!r.ok) throw new Error(`LLM HTTP ${r.status}`);
       return r.json();
-    }),
-    restante(prazo),
-  ) as { choices?: { message?: { content?: string } }[] } | null;
+    })
+    .catch(() => null)) as { choices?: { message?: { content?: string } }[] } | null;
   return bruto?.choices?.[0]?.message?.content?.trim() || null;
 }
 
@@ -826,7 +862,18 @@ export type OpcoesChat = {
   somenteGemini?: boolean;
   /** Tentativas extras no canal Gemini se a primeira falhar (padrão 0). */
   retries?: number;
+  /** Id da chamada para o monitor; gerado se ausente. */
+  requestId?: string;
+  /** Teto de tokens da resposta no NVIDIA (padrão 1024). */
+  maxTokens?: number;
 };
+
+/** Fração do prazo que o NVIDIA pode usar antes de cair no Gemini. */
+const FRACAO_NVIDIA = 0.6;
+
+function deNvidia(r: RegistroNvidia): RegistroGemini {
+  return { rotulo: r.rotulo, status: r.status, finish: null, block: null, ms: r.ms, textoLen: r.textoLen, erro: r.erro };
+}
 
 export async function chatComFonte(
   mensagens: Msg[],
@@ -835,8 +882,11 @@ export async function chatComFonte(
   opcoes?: OpcoesChat,
 ): Promise<Resultado> {
   const inicio = Date.now();
+  const requestId = opcoes?.requestId ?? novoRequestId();
+  // Registros DESTA chamada (nunca compartilhados entre requisições).
+  const registros: RegistroGemini[] = [];
   const devolver = (r: Resultado): Resultado => {
-    const ultimo = _registrosGemini.at(-1);
+    const ultimo = registros.at(-1);
     registrarTurnoLlm({
       ts: Date.now(),
       ok: Boolean(r.texto),
@@ -847,18 +897,34 @@ export async function chatComFonte(
       http: ultimo?.status ?? null,
       finish: ultimo?.finish ?? null,
       erro: r.texto ? null : ultimo?.erro ?? "sem texto",
+      requestId,
+      origem: "servidor",
+      fallback: tentouNvidia && r.fonte !== "nvidia" && r.fonte !== null,
     });
-    return r;
+    return { ...r, requestId, registros };
   };
   const prazo = Date.now() + Math.max(timeoutMs, 5_000);
   const retries = Math.max(0, Math.min(3, opcoes?.retries ?? 0));
   const somente = opcoes?.somenteGemini === true;
 
-  // 1) Google Gemini — API própria (Gemma 4 26B no chat)
-  if (geminiHabilitado() && geminiConfig().apiKey) {
+  // 0) NVIDIA (primário). Sem NVIDIA_API_KEY → pulado em silêncio.
+  const tentouNvidia = nvidiaConfigurado();
+  if (tentouNvidia) {
+    const regNv: RegistroNvidia[] = [];
+    const texto = await chatNvidia(mensagens, {
+      timeoutMs: Math.round(restante(prazo) * FRACAO_NVIDIA),
+      registros: regNv,
+      maxTokens: opcoes?.maxTokens,
+    });
+    registros.push(...regNv.map(deNvidia));
+    if (texto) return devolver({ texto, fonte: "nvidia", modelo: nvidiaConfig().model });
+  }
+
+  // 1) Google Gemini — API própria (Gemma 4 26B no chat), reserva do NVIDIA
+  if (geminiHabilitado() && geminiConfig().apiKey && restante(prazo) > 1_000) {
     _geminiFalhaEm = 0; // não bloquear saudação/turno seguinte por falha anterior nesta instância
     for (let tentativa = 0; tentativa <= retries; tentativa++) {
-      const { texto, modelo } = await chamarGemini(mensagens, prazo);
+      const { texto, modelo } = await chamarGemini(mensagens, prazo, undefined, undefined, registros);
       if (texto) return devolver({ texto, fonte: "gemini", modelo });
     }
     _geminiFalhaEm = Date.now();
@@ -887,6 +953,80 @@ export async function chatComFonte(
   return devolver({ texto: null, fonte: null });
 }
 
+export type EventoStreamIa =
+  | { tipo: "delta"; texto: string }
+  | { tipo: "fim"; fonte: FonteLlm; modelo: string | null; requestId: string }
+  | { tipo: "erro"; registros: RegistroGemini[]; requestId: string };
+
+/**
+ * Turno em STREAM: NVIDIA em SSE (só conteúdo visível; raciocínio nunca sai
+ * daqui). Se o NVIDIA falhar ANTES do 1º token (sem chave, erro, ou sem token
+ * em `primeiroTokenMs`), cai no Gemini (não-stream) e emite o texto inteiro
+ * num único delta. Falha no MEIO do stream encerra com o texto parcial.
+ */
+export async function* chatStreamComFonte(
+  mensagens: Msg[],
+  timeoutMs: number,
+  opcoes: { requestId: string; primeiroTokenMs?: number },
+): AsyncGenerator<EventoStreamIa> {
+  const inicio = Date.now();
+  const { requestId } = opcoes;
+  const prazo = Date.now() + Math.max(timeoutMs, 5_000);
+  const registros: RegistroGemini[] = [];
+  const marcar = (ok: boolean, fonte: FonteLlm | null, modelo: string | null, len: number) => {
+    const ultimo = registros.at(-1);
+    registrarTurnoLlm({
+      ts: Date.now(),
+      ok,
+      ms: Date.now() - inicio,
+      fonte,
+      modelo,
+      textoLen: len,
+      http: ultimo?.status ?? null,
+      finish: ultimo?.finish ?? null,
+      erro: ok ? null : ultimo?.erro ?? "sem texto",
+      requestId,
+      origem: "servidor",
+      fallback: tentouNvidia && fonte !== "nvidia" && fonte !== null,
+    });
+  };
+
+  const tentouNvidia = nvidiaConfigurado();
+  if (tentouNvidia) {
+    const regNv: RegistroNvidia[] = [];
+    let len = 0;
+    for await (const pedaco of streamNvidia(mensagens, {
+      timeoutMs: restante(prazo) - 1_000,
+      primeiroTokenMs: opcoes.primeiroTokenMs ?? Math.round(restante(prazo) * 0.5),
+      registros: regNv,
+    })) {
+      len += pedaco.length;
+      yield { tipo: "delta", texto: pedaco };
+    }
+    registros.push(...regNv.map(deNvidia));
+    const modelo = nvidiaConfig().model;
+    if (len > 0) {
+      marcar(true, "nvidia", modelo, len);
+      yield { tipo: "fim", fonte: "nvidia", modelo, requestId };
+      return;
+    }
+  }
+
+  if (geminiHabilitado() && geminiConfig().apiKey && restante(prazo) > 1_000) {
+    const { texto, modelo } = await chamarGemini(mensagens, prazo, undefined, undefined, registros);
+    if (texto) {
+      marcar(true, "gemini", modelo, texto.length);
+      yield { tipo: "delta", texto };
+      yield { tipo: "fim", fonte: "gemini", modelo, requestId };
+      return;
+    }
+  }
+  marcar(false, null, null, 0);
+  yield { tipo: "erro", registros, requestId };
+}
+
+export { motivoFalhaIa } from "@/lib/server/llm-nvidia";
+
 /** Compatibilidade: só o texto (ou null). */
 export async function chatCompleto(mensagens: Msg[], timeoutMs: number, anon?: AnonNomes): Promise<string | null> {
   return (await chatComFonte(mensagens, timeoutMs, anon)).texto;
@@ -897,6 +1037,7 @@ export async function chatCompleto(mensagens: Msg[], timeoutMs: number, anon?: A
  * `visaoGemini`), env genérico ou SDK do sandbox.
  */
 export async function obterLLM(): Promise<Cliente | null> {
+  if (nvidiaVisaoHabilitada()) return { tipo: "gemini" }; // visaoGemini tenta o NVIDIA antes (só imagens)
   if (geminiHabilitado() && geminiConfig().apiKey && !geminiEmCooldown()) return { tipo: "gemini" };
   const env = clienteEnv();
   if (env) return env;
@@ -906,6 +1047,7 @@ export async function obterLLM(): Promise<Cliente | null> {
 /* ---------------------------- diagnóstico (admin) ---------------------------- */
 
 export type EstadoCanais = {
+  nvidia: { configurado: boolean; liberado: boolean; modelo: string; visao: boolean };
   gemini: { configurado: boolean; modelo: string; reserva: string[] };
   env: { configurado: boolean; modelo: string | null };
 };
@@ -915,6 +1057,7 @@ export function estadoCanais(): EstadoCanais {
   const gem = geminiConfig();
   const env = clienteEnv();
   return {
+    nvidia: { configurado: nvidiaConfigurado(), liberado: nvidiaLiberado(), modelo: nvidiaConfig().model, visao: nvidiaVisaoHabilitada() },
     gemini: { configurado: geminiHabilitado() && !!gem.apiKey, modelo: gem.model, reserva: modelosReserva() },
     env: { configurado: !!env, modelo: process.env.BION_LLM_MODEL?.trim() || null },
   };
@@ -935,8 +1078,9 @@ export async function diagnosticoGemini(mensagens: Msg[], timeoutMs = 25_000, mo
   // o despejo) mesmo quando o chat está pulando os modelos Gemma.
   // bruto: quando o despejo é insanitizável, devolve o texto CRU para o painel
   // admin calibrar o sanitizador (nunca vai ao paciente).
-  const r = await chamarGemini(mensagens, prazo, modelo, { ignorarDisjuntor: true, bruto: true });
-  return { texto: r.texto, modelo: r.modelo, registros: _registrosGemini };
+  const registros: RegistroGemini[] = [];
+  const r = await chamarGemini(mensagens, prazo, modelo, { ignorarDisjuntor: true, bruto: true }, registros);
+  return { texto: r.texto, modelo: r.modelo, registros };
 }
 
 export type ModeloDisponivel = { id: string; nome: string };

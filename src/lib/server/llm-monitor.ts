@@ -11,6 +11,12 @@ export type EventoLlm = {
   http: number | null;
   finish: string | null;
   erro: string | null;
+  /** Id da chamada (correlaciona servidor e cliente; sem PII). */
+  requestId?: string;
+  /** "servidor" = turno da IA; "cliente" = falha vista no navegador. */
+  origem?: "servidor" | "cliente";
+  /** true = o NVIDIA (primário) falhou e outro provedor respondeu. */
+  fallback?: boolean;
 };
 
 const MAX = 200;

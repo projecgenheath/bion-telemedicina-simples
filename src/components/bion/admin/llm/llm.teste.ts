@@ -17,6 +17,16 @@ import {
   type EventoLlm,
   type ResumoLlm,
 } from "./saude";
+import {
+  FiltroPensamento,
+  motivoFalhaIa,
+  nvidiaLiberado,
+  paraMensagensOpenAI,
+  semPensamento,
+  streamNvidia,
+  chatNvidia,
+} from "@/lib/server/llm-nvidia";
+import { linhasNdjson } from "@/lib/bion-ia-cliente";
 
 let ok = 0;
 let falhas = 0;
@@ -106,6 +116,98 @@ igual("falhas recentes", falhasRecentes(eventos).map((e) => e.ms), [3000]);
 igual("modelo atual = do turno mais recente", modeloAtual([ev(agora - MIN, true, 1, { modelo: "novo" }), ev(agora - 2 * MIN, true, 1, { modelo: "velho" })]), "novo");
 igual("modelo atual cai na fonte", modeloAtual([ev(agora, true, 1, { modelo: null, fonte: "gemini" })]), "gemini");
 igual("sem eventos, sem modelo", modeloAtual([]), null);
+
+/* ---------------- motor NVIDIA (puro + fetch simulado) ---------------- */
+igual("detalhe com requestId e reserva", detalheEvento(ev(agora, true, 900, { requestId: "ia_x_y", fallback: true })), "420 caracteres (reserva) · ia_x_y");
+igual("detalhe falha do navegador", detalheEvento(ev(agora, false, 900, { erro: "cliente:nao_json", origem: "cliente" })), "navegador: cliente:nao_json");
+
+igual(
+  "instruções viram system e turnos vizinhos se fundem",
+  paraMensagensOpenAI([
+    { role: "assistant", content: "SYS" },
+    { role: "assistant", content: "oi, sou a BION" },
+    { role: "user", content: "a" },
+    { role: "user", content: "b" },
+  ]),
+  [
+    { role: "system", content: "SYS" },
+    { role: "user", content: "(contexto da conversa abaixo)" },
+    { role: "assistant", content: "oi, sou a BION" },
+    { role: "user", content: "a\n\nb" },
+  ],
+);
+igual("think inline removido", semPensamento("<think>raciocínio</think>Olá!"), "Olá!");
+{
+  const f = new FiltroPensamento();
+  const partes = ["Oi <th", "ink>segredo</thi", "nk> tudo", " bem?"].map((p) => f.empurrar(p)).join("") + f.fechar();
+  igual("think partido entre chunks", partes, "Oi  tudo bem?");
+}
+igual("motivo: sem registros", motivoFalhaIa([]), "A BION IA não está configurada no momento.");
+igual("motivo: timeout", motivoFalhaIa([{ status: null, erro: "timeout" }]), "O modelo demorou demais para responder.");
+igual("motivo: 429", motivoFalhaIa([{ status: 429, erro: "x" }]), "A cota da IA esgotou neste minuto.");
+
+{
+  const env = { ...process.env };
+  process.env.VERCEL_ENV = "production";
+  delete process.env.BION_LLM_NVIDIA_ATIVO;
+  igual("produção sem flag: NVIDIA bloqueado", nvidiaLiberado(), false);
+  process.env.BION_LLM_NVIDIA_ATIVO = "true";
+  igual("produção com flag: liberado", nvidiaLiberado(), true);
+  delete process.env.BION_LLM_NVIDIA_ATIVO;
+  process.env.VERCEL_ENV = "preview";
+  igual("preview: liberado", nvidiaLiberado(), true);
+  process.env.VERCEL_ENV = env.VERCEL_ENV;
+  if (env.VERCEL_ENV === undefined) delete process.env.VERCEL_ENV;
+  if (env.BION_LLM_NVIDIA_ATIVO !== undefined) process.env.BION_LLM_NVIDIA_ATIVO = env.BION_LLM_NVIDIA_ATIVO;
+}
+
+{
+  const fetchOriginal = globalThis.fetch;
+  const chaveOriginal = process.env.NVIDIA_API_KEY;
+  process.env.NVIDIA_API_KEY = "chave-de-teste";
+  let corpoEnviado: { stream?: boolean; chat_template_kwargs?: { enable_thinking?: boolean } } = {};
+  const sse = [
+    'data: {"choices":[{"delta":{"reasoning_content":"pensando em segredo"}}]}',
+    'data: {"choices":[{"delta":{"content":"Boa "}}]}',
+    'data: {"choices":[{"delta":{"content":"noite!"}}]}',
+    "data: [DONE]",
+    "",
+  ].join("\n");
+  globalThis.fetch = (async (_u: unknown, init?: RequestInit) => {
+    corpoEnviado = JSON.parse(String(init?.body));
+    if (corpoEnviado.stream) return new Response(sse, { status: 200, headers: { "Content-Type": "text/event-stream" } });
+    return Response.json({ choices: [{ message: { content: "Olá!", reasoning_content: "segredo" } }] });
+  }) as typeof fetch;
+  const pedacos: string[] = [];
+  for await (const p of streamNvidia([{ role: "user", content: "Boa noite" }], { timeoutMs: 5_000 })) pedacos.push(p);
+  igual("stream: só conteúdo, sem reasoning_content", pedacos.join(""), "Boa noite!");
+  igual("stream: enable_thinking=false", corpoEnviado.chat_template_kwargs?.enable_thinking, false);
+  const r = await chatNvidia([{ role: "user", content: "oi" }], { timeoutMs: 5_000 });
+  igual("não-stream: só content", r, "Olá!");
+  globalThis.fetch = (async () => new Response("<html>504</html>", { status: 504 })) as typeof fetch;
+  const regs: { status: number | null; erro: string | null }[] = [];
+  const nada: string[] = [];
+  for await (const p of streamNvidia([{ role: "user", content: "x" }], { timeoutMs: 5_000, registros: regs as never })) nada.push(p);
+  igual("stream 504: nada emitido e status registrado", [nada.length, regs[0]?.status], [0, 504]);
+  igual("erro não vaza a chave", JSON.stringify(regs).includes("chave-de-teste"), false);
+  globalThis.fetch = fetchOriginal;
+  if (chaveOriginal === undefined) delete process.env.NVIDIA_API_KEY;
+  else process.env.NVIDIA_API_KEY = chaveOriginal;
+}
+
+{
+  const corpo = new Response('{"tipo":"inicio","requestId":"ia_a_b"}\n{"tipo":"delta","texto":"Oi"}\n{"tipo":"fim"}').body!;
+  const evs: Record<string, unknown>[] = [];
+  for await (const e of linhasNdjson(corpo)) evs.push(e);
+  igual("ndjson: 3 eventos", evs.map((e) => e.tipo), ["inicio", "delta", "fim"]);
+  let erro = "";
+  try {
+    for await (const _ of linhasNdjson(new Response("<html>504 Gateway Timeout</html>").body!)) void _;
+  } catch (e) {
+    erro = (e as { tipo?: string }).tipo ?? "";
+  }
+  igual("ndjson: HTML vira nao_json", erro, "nao_json");
+}
 
 console.log(`llm: ${ok} ok, ${falhas} falha(s) [TZ=${process.env.TZ ?? "padrão"}]`);
 if (falhas) process.exit(1);

@@ -16,6 +16,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { useBion } from "@/lib/bion-store";
+import { perguntarBionIa } from "@/lib/bion-ia-cliente";
 
 type MensagemIA = {
   id: string;
@@ -180,27 +181,16 @@ export function BionIA() {
 
     let resposta = "";
     try {
-      const res = await fetch("/api/bion-ia", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          mensagens: historico.map((m) => ({ remetente: m.remetente, texto: m.texto })),
-        }),
-      });
-      const json = (await res.json().catch(() => null)) as {
-        resposta?: string;
-        fonte?: string;
-        erro?: string;
-      } | null;
-      resposta = json?.resposta ?? "";
-      if (!res.ok || !resposta) {
-        resposta =
-          json?.erro ||
-          "A BION IA está um pouco sobrecarregada agora. Aguarde alguns segundos e envie de novo.";
-      }
-    } catch {
+      // JSON/NDJSON tratados em perguntarBionIa: AbortController, HTML 504 e
+      // falhas de cliente reportadas ao monitor (sem PII). Raciocínio do
+      // modelo nunca chega aqui (filtrado no servidor).
+      const r = await perguntarBionIa(historico.map((m) => ({ remetente: m.remetente, texto: m.texto })));
+      resposta = r.texto;
+    } catch (e) {
       resposta =
-        "Não consegui falar com a BION IA agora (rede). Tente novamente em instantes — não usamos respostas locais neste chat.";
+        e instanceof Error && e.message
+          ? e.message
+          : "A BION IA está um pouco sobrecarregada agora. Aguarde alguns segundos e envie de novo.";
     }
 
     const novaMsgIA: MensagemIA = {

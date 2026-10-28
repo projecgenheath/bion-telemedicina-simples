@@ -3,7 +3,7 @@ import { quandoClinica } from "@/lib/server/fuso";
 import { db } from "@/lib/db";
 import { exigirSessao } from "@/lib/server/auth";
 import { ok, falha } from "@/lib/server/http";
-import { chatComFonte, registrosGemini, type AnonNomes } from "@/lib/server/llm";
+import { chatComFonte, chatStreamComFonte, motivoFalhaIa, novoRequestId, type AnonNomes } from "@/lib/server/llm";
 import { anonimizarMensagensIa, type IdentificadoresPaciente } from "@/lib/server/anonimizar-ia";
 import { anonimizarMensagensTexto } from "@/lib/server/anonimizar-texto";
 import { dataNascimentoParaIso } from "@/lib/idade";
@@ -19,9 +19,17 @@ import { nomesMedicamentosEmUso } from "@/lib/server/medicamentos-legado";
  * contexto (papel, medicamentos, alergias, próximas consultas) é montado
  * AQUI no servidor a partir do banco — nunca confiar em dados do cliente.
  *
- * IA generativa SOMENTE via Gemma 4 26B (Google API). Motor local NÃO é
- * usado neste chat — só na triagem (/api/anamnese). Se o modelo falhar,
- * devolvemos erro amigável para o paciente tentar de novo.
+ * IA generativa: NVIDIA (nemotron, OpenAI-compatível) → Gemini/Gemma →
+ * erro amigável. Motor local NÃO é usado neste chat — só na triagem
+ * (/api/anamnese).
+ *
+ * Formato da resposta:
+ * - padrão (sem `stream`): JSON { resposta, fonte, modelo, requestId } —
+ *   inalterado para quem não usa stream (ex.: Evolução IA do médico).
+ * - `stream: true`: NDJSON (application/x-ndjson), uma linha por evento:
+ *   {"tipo":"inicio","requestId"} · {"tipo":"delta","texto"} ·
+ *   {"tipo":"fim","fonte","modelo","requestId"} · {"tipo":"erro","erro","requestId"}.
+ * O raciocínio do modelo (reasoning_content / <think>) NUNCA sai do servidor.
  */
 
 const LIMITE_HISTORICO = 4;
@@ -31,7 +39,9 @@ const LIMITE_HISTORICO = 4;
  * paciente espera demais e ainda cai no motor local. 15s limita o pior caso
  * (Gemma travado → local) a ~14s, mantendo folga para respostas reais de 8-12s.
  */
-const TIMEOUT_MS = 20_000;
+const TIMEOUT_MS = 25_000;
+/** Sem 1º token do NVIDIA nesse prazo → cai no Gemini (stream). */
+const PRIMEIRO_TOKEN_MS = 12_000;
 
 type MsgEntrada = { remetente: string; texto: string };
 
@@ -131,7 +141,8 @@ async function nomesPacientesDoMedico(medicoId: string): Promise<string[]> {
 export async function POST(req: NextRequest) {
   try {
     const usuario = await exigirSessao();
-    const body = (await req.json()) as { mensagens?: MsgEntrada[] };
+    const body = (await req.json()) as { mensagens?: MsgEntrada[]; stream?: boolean };
+    const requestId = novoRequestId();
 
     const historico = (body.mensagens ?? [])
       .filter((m) => (m?.texto ?? "").trim() && ["usuario", "ia"].includes(m.remetente))
@@ -175,29 +186,58 @@ export async function POST(req: NextRequest) {
         ? [{ nome: primeiroNome, substituto: "(usuário BION)" }]
         : []),
     ];
-    // somenteGemini: não gasta tempo em público/SDK; sem fallback local.
-    const { texto: respostaLlm, fonte, modelo } = await chatComFonte(mensagensFinais, TIMEOUT_MS, anon, {
+    if (body.stream === true) {
+      const enc = new TextEncoder();
+      const linha = (o: unknown) => enc.encode(`${JSON.stringify(o)}\n`);
+      const gerador = chatStreamComFonte(mensagensFinais, TIMEOUT_MS, { requestId, primeiroTokenMs: PRIMEIRO_TOKEN_MS });
+      const corpo = new ReadableStream<Uint8Array>({
+        async start(ctrl) {
+          ctrl.enqueue(linha({ tipo: "inicio", requestId }));
+          try {
+            for await (const ev of gerador) {
+              if (ev.tipo === "delta") ctrl.enqueue(linha({ tipo: "delta", texto: ev.texto }));
+              else if (ev.tipo === "fim") ctrl.enqueue(linha({ tipo: "fim", fonte: ev.fonte, modelo: ev.modelo, requestId }));
+              else
+                ctrl.enqueue(
+                  linha({
+                    tipo: "erro",
+                    erro: `${motivoFalhaIa(ev.registros)} Tente de novo em alguns segundos — este chat não usa resposta local.`,
+                    requestId,
+                  }),
+                );
+            }
+          } catch {
+            ctrl.enqueue(linha({ tipo: "erro", erro: "A BION IA falhou no meio da resposta. Tente de novo.", requestId }));
+          }
+          ctrl.close();
+        },
+        async cancel() {
+          await gerador.return(undefined);
+        },
+      });
+      return new Response(corpo, {
+        headers: {
+          "Content-Type": "application/x-ndjson; charset=utf-8",
+          "Cache-Control": "no-store, no-transform",
+          "X-Request-Id": requestId,
+        },
+      });
+    }
+
+    // JSON (sem stream): mesmo formato de antes + requestId.
+    const r = await chatComFonte(mensagensFinais, TIMEOUT_MS, anon, {
       somenteGemini: true,
       retries: 0,
+      requestId,
     });
-    if (respostaLlm) {
-      return ok({ resposta: respostaLlm, fonte, modelo });
+    if (r.texto) {
+      return ok({ resposta: r.texto, fonte: r.fonte, modelo: r.modelo, requestId });
     }
-    const ultimo = registrosGemini().at(-1);
-    const motivo =
-      ultimo?.erro === "timeout"
-        ? "O modelo demorou demais para responder."
-        : ultimo?.status === 429
-          ? "A cota da API do Gemma esgotou neste minuto."
-          : ultimo?.status === 403 || ultimo?.status === 401
-            ? "A chave da API do Gemma foi recusada."
-            : ultimo?.status && ultimo.status >= 400
-              ? `O Gemma devolveu HTTP ${ultimo.status}.`
-              : "O Gemma não devolveu texto utilizável.";
     return Response.json(
       {
-        erro: `${motivo} Tente de novo em alguns segundos — este chat não usa resposta local.`,
+        erro: `${motivoFalhaIa(r.registros)} Tente de novo em alguns segundos — este chat não usa resposta local.`,
         fonte: null,
+        requestId,
       },
       { status: 503 },
     );
