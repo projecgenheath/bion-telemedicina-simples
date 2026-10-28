@@ -136,3 +136,17 @@ export const DADOS_PERFIL_MEDICO_PSEUDONIMIZADO = {
 export function removerNumerosLongos(texto: string): string {
   return texto.replace(/\d(?:[.\-\s]*\d){7,}/g, "[número removido]");
 }
+
+/** Domínio dos e-mails de contas anonimizadas (mesmo de lgpd.ts). */
+export const DOMINIO_EMAIL_ANON_MEDICO = "anon.bion.app";
+export const ERRO_MEDICO_INDISPONIVEL = "Este médico não está atendendo no momento. Escolha outro profissional.";
+
+/**
+ * O médico pode receber agendamento/remarcação/renovação? Só com o usuário e o
+ * perfil "ativo" e sem conta anonimizada (suspenso, inativo ou sem perfil: não).
+ */
+export function medicoPodeAtender(m: { userStatus: string | null; perfilStatus: string | null; email: string | null } | null): boolean {
+  if (!m) return false;
+  if (m.userStatus !== "ativo" || m.perfilStatus !== "ativo") return false;
+  return !(m.email ?? "").toLowerCase().endsWith(`@${DOMINIO_EMAIL_ANON_MEDICO}`);
+}

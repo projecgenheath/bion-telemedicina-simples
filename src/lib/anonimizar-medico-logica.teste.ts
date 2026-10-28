@@ -9,6 +9,7 @@ import {
   motivosBloqueioAnonimizacaoMedico,
   CAMPOS_MEDICO_PRESERVADOS,
   DADO_REMOVIDO_MEDICO,
+  medicoPodeAtender,
   removerNumerosLongos,
   validarMotivoAnonimizacao,
 } from "./anonimizar-medico-logica";
@@ -72,6 +73,15 @@ igual("perfil não toca especialidade/valor", "especialidade" in DADOS_PERFIL_ME
 // Motivo sem números longos (mesma regex de lgpd.ts)
 igual("CPF sai do motivo", removerNumerosLongos("Ofício 123.456.789-09 do titular"), "Ofício [número removido] do titular");
 igual("número curto fica", removerNumerosLongos("Processo 1234"), "Processo 1234");
+
+// Médico pode receber agendamento (checado com FOR SHARE na transação)
+const at = { userStatus: "ativo", perfilStatus: "ativo", email: "dra@x.com" };
+igual("ativo atende", medicoPodeAtender(at), true);
+igual("perfil suspenso não atende", medicoPodeAtender({ ...at, perfilStatus: "suspenso" }), false);
+igual("perfil pendente não atende", medicoPodeAtender({ ...at, perfilStatus: "pendente" }), false);
+igual("user inativo não atende", medicoPodeAtender({ ...at, userStatus: "inativo" }), false);
+igual("anonimizado não atende", medicoPodeAtender({ ...at, email: "anon-med-abc@ANON.bion.app" }), false);
+igual("sem perfil não atende", medicoPodeAtender(null), false);
 
 console.log(`${ok} ok, ${falhas} falha(s)`);
 if (falhas) process.exit(1);

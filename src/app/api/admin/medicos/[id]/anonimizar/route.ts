@@ -3,7 +3,7 @@ import { exigirPapel } from "@/lib/server/auth";
 import { aplicarSideEffects } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
 import { limitarAsync, resposta429 } from "@/lib/server/rate-limit";
-import { PendenciasLgpdError, anonimizarMedicoCompleto, removerNumerosLongos } from "@/lib/server/lgpd";
+import { PendenciasLgpdError, anonimizarMedicoCompleto } from "@/lib/server/lgpd";
 import { validarMotivoAnonimizacao } from "@/lib/anonimizar-medico-logica";
 
 const MAX_POR_HORA = 10;
@@ -32,7 +32,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
 
     let r;
     try {
-      r = await anonimizarMedicoCompleto(id);
+      r = await anonimizarMedicoCompleto(id, motivo.motivo);
     } catch (e) {
       if (e instanceof PendenciasLgpdError) {
         return Response.json({ erro: "Não é possível anonimizar este médico agora.", motivos: e.motivos }, { status: 409 });
@@ -50,7 +50,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
         `Médico id ${id} anonimizado (LGPD art. 12): login Supabase ${r.loginSupabaseRemovido ? "removido" : "inexistente ou pendente"}; ` +
         `prontuário e repasses preservados` +
         (r.jaEstavaAnonimizado ? "; reexecução em conta já anonimizada" : "") +
-        `. Motivo: ${removerNumerosLongos(motivo.motivo)}`,
+        `. Motivo: ${r.motivoLimpo}`,
     });
 
     return ok({ medicoId: id, loginSupabaseRemovido: r.loginSupabaseRemovido, ...efeitos });

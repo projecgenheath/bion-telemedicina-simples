@@ -2,7 +2,7 @@ import "server-only";
 import crypto from "crypto";
 import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
-import { consultaEmHorarioVedado, OPCOES_TX_TRAVA } from "@/lib/server/bloqueio-agenda";
+import { conferirMedicoAtivoNaTransacao, consultaEmHorarioVedado, OPCOES_TX_TRAVA } from "@/lib/server/bloqueio-agenda";
 import {
   cancelarReservasPendentes,
   criarReembolsoSeDevido,
@@ -385,6 +385,7 @@ export async function remarcarPorEspera(params: {
     if (!STATUS_ABERTOS.includes(consulta.status)) return falhar(409, "consulta_encerrada", "A consulta já foi encerrada.");
     if (!consulta.pago || consulta.pagamento?.status !== "confirmado") return falhar(409, "nao_pago", reaisParaCentavos(consulta.valor) === 0 ? ERRO_REMARCAR_RETORNO_GRATIS : "Só dá para remarcar uma consulta paga. Escolha cancelar.");
 
+    if (await conferirMedicoAtivoNaTransacao(tx, params.medicoId)) return falhar(409, "medico_indisponivel", "medico_indisponivel");
     const livre = await medicoLivreAgora(tx, { medicoId: params.medicoId, especialidade: consulta.especialidade, excetoMedicoId: consulta.medicoId, agora });
     if (!livre) return falhar(409, "medico_indisponivel", "medico_indisponivel");
     const dif = calcularDiferenca(reaisParaCentavos(consulta.valor), livre.valorCentavos);

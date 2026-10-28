@@ -416,13 +416,13 @@ export async function anonimizarPacienteCompleto(pacienteId: string): Promise<Re
     if (motivos.length) throw new PendenciasLgpdError(motivos);
   }
 
-  // ---- (a) Supabase Auth e (b) Storage — antes do banco (ver cabeçalho) ----
-  let loginSupabaseRemovido = false;
-  if (paciente.supabaseId) {
-    await removerUsuarioSupabaseAuth(paciente.supabaseId);
-    loginSupabaseRemovido = true;
-  }
-  await removerObjetosStorage(
+  // ---- (a) Supabase Auth: só BANE antes do banco (reversível). A remoção
+  //      definitiva vem depois do commit; se a transação falhar (ex.: 409
+  //      por pendência), o ban é desfeito. (b) Storage antes do banco.
+  const supabaseIdPaciente = paciente.supabaseId;
+  if (supabaseIdPaciente && !jaEstavaAnonimizado) await banirSupabaseAuth(supabaseIdPaciente, true);
+  try {
+    await removerObjetosStorage(
     pessoais.map((a) => a.storagePath).filter((p): p is string => !!p),
   );
 
@@ -599,6 +599,18 @@ export async function anonimizarPacienteCompleto(pacienteId: string): Promise<Re
     },
     { timeout: 30_000 },
   );
+  } catch (e) {
+    if (supabaseIdPaciente && !jaEstavaAnonimizado) {
+      await banirSupabaseAuth(supabaseIdPaciente, false).catch(() =>
+        console.error("[LGPD] não consegui desfazer o bloqueio do login do paciente", pacienteId),
+      );
+    }
+    throw e;
+  }
+
+  const loginSupabaseRemovido = supabaseIdPaciente
+    ? await removerAuthOuRegistrarPendente(pacienteId, supabaseIdPaciente, "PACIENTE")
+    : false;
 
   return {
     apelido,
@@ -609,8 +621,85 @@ export async function anonimizarPacienteCompleto(pacienteId: string): Promise<Re
   };
 }
 
+
+/* ------------------------------------------------------------------ */
+/* Remoção do Auth depois do commit, com pendência registrada            */
+/* ------------------------------------------------------------------ */
+
+export const ACAO_AUTH_REMOCAO_PENDENTE = "LGPD_AUTH_REMOCAO_PENDENTE";
+export const ACAO_AUTH_REMOCAO_CONCLUIDA = "LGPD_AUTH_REMOCAO_CONCLUIDA";
+
+/**
+ * Tenta remover o login do Supabase Auth (já banido e desvinculado do banco).
+ * Se falhar, grava na auditoria (categoria "admin", fora do descarte #100) o
+ * `supabaseId` pendente, para `reprocessarRemocoesAuthPendentes` tentar de novo.
+ */
+async function removerAuthOuRegistrarPendente(userId: string, supabaseId: string, papel: "PACIENTE" | "MEDICO"): Promise<boolean> {
+  try {
+    await removerUsuarioSupabaseAuth(supabaseId);
+    return true;
+  } catch (e) {
+    console.error("[LGPD] login ficou banido, mas não foi removido do Supabase Auth", userId);
+    await db.auditLog
+      .create({
+        data: {
+          acao: ACAO_AUTH_REMOCAO_PENDENTE,
+          categoria: "admin",
+          severidade: "critical",
+          usuarioNome: "Sistema",
+          role: "SISTEMA",
+          entidade: papel === "MEDICO" ? "medico" : "paciente",
+          entidadeId: userId,
+          detalhes: `supabaseId=${supabaseId}; login banido, remoção do Supabase Auth falhou (${(e as Error)?.message?.slice(0, 120) ?? "erro"}). Tentar de novo.`,
+        },
+      })
+      .catch(() => console.error("[LGPD] não consegui registrar a remoção pendente do Auth", userId));
+    return false;
+  }
+}
+
+/** Nova tentativa das remoções do Auth pendentes. Devolve quantas concluiu. */
+export async function reprocessarRemocoesAuthPendentes(limite = 50): Promise<{ concluidas: number; falhas: number }> {
+  const pendentes = await db.auditLog.findMany({
+    where: { acao: ACAO_AUTH_REMOCAO_PENDENTE },
+    orderBy: { createdAt: "asc" },
+    take: limite,
+    select: { id: true, entidade: true, entidadeId: true, detalhes: true },
+  });
+  const concluidosIds = new Set(
+    (
+      await db.auditLog.findMany({
+        where: { acao: ACAO_AUTH_REMOCAO_CONCLUIDA, entidadeId: { in: pendentes.map((p) => p.entidadeId ?? "") } },
+        select: { detalhes: true },
+      })
+    ).map((c) => c.detalhes ?? ""),
+  );
+  let concluidas = 0;
+  let falhas = 0;
+  for (const p of pendentes) {
+    const id = /supabaseId=([0-9a-fA-F-]{36})/.exec(p.detalhes ?? "")?.[1];
+    if (!id || concluidosIds.has(`supabaseId=${id}`)) continue;
+    try {
+      await removerUsuarioSupabaseAuth(id);
+      concluidosIds.add(`supabaseId=${id}`);
+      await db.auditLog.create({
+        data: {
+          acao: ACAO_AUTH_REMOCAO_CONCLUIDA, categoria: "admin", severidade: "info",
+          usuarioNome: "Sistema", role: "SISTEMA", entidade: p.entidade, entidadeId: p.entidadeId,
+          detalhes: `supabaseId=${id}`,
+        },
+      });
+      concluidas++;
+    } catch {
+      falhas++;
+    }
+  }
+  return { concluidas, falhas };
+}
+
 /** Tira números longos (CPF, telefone…) de texto livre — regra pura em anonimizar-medico-logica. */
 export { removerNumerosLongos } from "@/lib/anonimizar-medico-logica";
+import { removerNumerosLongos as removerNumerosLongosLocal } from "@/lib/anonimizar-medico-logica";
 
 /* ------------------------------------------------------------------ */
 /* Anonimização do MÉDICO (admin)                                       */
@@ -664,7 +753,7 @@ export async function pendenciasAnonimizacaoMedico(
 async function banirSupabaseAuth(supabaseId: string, banir: boolean): Promise<void> {
   if (!supabaseServiceRoleKey()) {
     throw erroStatus(
-      "Supabase não configurado no servidor (service role): não é possível desativar o login do médico. Nada foi alterado.",
+      "Supabase não configurado no servidor (service role): não é possível desativar o login. Nada foi alterado.",
       503,
     );
   }
@@ -675,11 +764,13 @@ async function banirSupabaseAuth(supabaseId: string, banir: boolean): Promise<vo
     error.status === 404 || error.code === "user_not_found" || /not\s*found/i.test(error.message);
   if (naoEncontrado) return;
   console.error("[LGPD] falha ao (des)bloquear usuário no Supabase Auth", error.status, error.code);
-  throw erroStatus("Falha ao desativar o login do médico no Supabase Auth. Nada foi alterado — tente novamente.", 502);
+  throw erroStatus("Falha ao desativar o login no Supabase Auth. Nada foi alterado — tente novamente.", 502);
 }
 
 export type ResultadoAnonimizacaoMedico = {
   apelido: string;
+  /** Motivo informado, sem e-mail/telefone/CNPJ/CPF/PIX do médico e sem números longos. */
+  motivoLimpo: string;
   jaEstavaAnonimizado: boolean;
   loginSupabaseRemovido: boolean;
 };
@@ -701,7 +792,7 @@ export type ResultadoAnonimizacaoMedico = {
  * Mensagem, Avaliacao, Repasse/RepasseItem/RepasseAjuste (com a cópia do PIX
  * do momento do pagamento — fiscal), Pagamento, Reembolso, PedidoRenovacao.
  */
-export async function anonimizarMedicoCompleto(medicoId: string): Promise<ResultadoAnonimizacaoMedico> {
+export async function anonimizarMedicoCompleto(medicoId: string, motivo = ""): Promise<ResultadoAnonimizacaoMedico> {
   const medico = await db.user.findFirst({
     where: { id: medicoId, role: "MEDICO" },
     include: { perfilMedico: true, dadosRecebimento: true },
@@ -832,15 +923,10 @@ export async function anonimizarMedicoCompleto(medicoId: string): Promise<Result
   }
 
   // (4) Remove do Auth; a conta já está banida e desvinculada.
-  let loginSupabaseRemovido = false;
-  if (supabaseId) {
-    try {
-      await removerUsuarioSupabaseAuth(supabaseId);
-      loginSupabaseRemovido = true;
-    } catch {
-      console.error("[LGPD] login do médico ficou banido, mas não foi removido do Supabase Auth", medicoId);
-    }
-  }
+  const loginSupabaseRemovido = supabaseId
+    ? await removerAuthOuRegistrarPendente(medicoId, supabaseId, "MEDICO")
+    : false;
 
-  return { apelido, jaEstavaAnonimizado, loginSupabaseRemovido };
+  const motivoLimpo = removerNumerosLongosLocal(substituirTermos(motivo, termos, DADO_REMOVIDO_MEDICO));
+  return { apelido, motivoLimpo, jaEstavaAnonimizado, loginSupabaseRemovido };
 }
