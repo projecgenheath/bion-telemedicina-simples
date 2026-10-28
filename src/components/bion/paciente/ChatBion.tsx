@@ -24,6 +24,7 @@ import {
 import { useBion, type AnamneseResumo } from "@/lib/bion-store";
 import { diasDoAgendamento } from "@/components/bion/agendamento/horarios";
 import { agendaLivreDoMedico } from "./agenda-medico";
+import { abrirCheckoutStripe } from "./pagamento-stripe-cliente";
 import { useDiasBloqueados } from "./useDiasBloqueados";
 import {
   type Msg,
@@ -87,7 +88,6 @@ export function ChatBion({
     diaIso?: string;
     hora?: string;
   }>({});
-  const [metodo, setMetodo] = useState<"pix" | "cartao" | null>(null);
   const [pagando, setPagando] = useState(false);
   const [anamneseAtiva, setAnamneseAtiva] = useState<AnamneseAtiva | null>(null);
   const [enviandoLaudo, setEnviandoLaudo] = useState(false);
@@ -552,9 +552,8 @@ export function ChatBion({
           medicoId,
           data: dia,
           hora,
-          motivoConsulta: `Agendamento pela BION IA — ${metodo === "pix" ? "Pix" : "Cartão"}`,
+          motivoConsulta: "Agendamento pela BION IA — Cartão",
           valor: medicoRegistro?.valor ?? 0,
-          metodo,
         }),
       });
       const json = ((await res.json().catch(() => null)) ?? {}) as { consultaCriada?: string; erro?: string } & Record<string, unknown>;
@@ -568,6 +567,22 @@ export function ChatBion({
       }
       // Contrato delta: resposta contém APENAS a consulta criada (+ anamnese).
       aplicarDelta(json);
+      // Só cartão: com o checkout Stripe ligado, a consulta nasce aguardando
+      // pagamento e o paciente vai para a página do Stripe (o webhook confirma).
+      if (json.pagarComCartao === true) {
+        const r = await abrirCheckoutStripe({ consultaId: json.consultaCriada });
+        if (r.url) {
+          window.location.assign(r.url);
+          return;
+        }
+        setMensagens((m) => [
+          ...m,
+          { remetente: "ia", texto: `Reservei o horário, mas o pagamento não abriu: ${r.erro ?? "tente de novo"}. Você pode pagar em Minhas consultas.`, tipo: "erro" },
+        ]);
+        setEtapa(null);
+        setEscolha({});
+        return;
+      }
 
       const quando = rotuloQuando(dia, hora);
       setMensagens((m) => [
@@ -580,7 +595,6 @@ export function ChatBion({
       ]);
       setEtapa(null);
       setEscolha({});
-      setMetodo(null);
       aoAbrirTriagem?.({
         consultaId: json.consultaCriada!,
         medico,
@@ -808,29 +822,13 @@ export function ChatBion({
               <div className="text-xs font-bold uppercase tracking-wide opacity-80 mb-2 inline-flex items-center gap-1.5">
                 <CreditCard className="w-3.5 h-3.5" /> Forma de pagamento
               </div>
-              <div className="grid grid-cols-2 gap-2 mb-3">
-                {([
-                  { id: "pix", nome: "Pix" },
-                  { id: "cartao", nome: "Cartão" },
-                ] as const).map((m2) => (
-                  <button type="button"
-                    key={m2.id}
-                    onClick={() => setMetodo(m2.id)}
-                    aria-pressed={metodo === m2.id}
-                    className={`rounded-2xl border px-4 py-3 text-sm font-semibold transition ${
-                      metodo === m2.id
-                        ? "border-bion-sea bg-bion-sea/10 dark:border-sky-300 dark:bg-sky-300/10"
-                        : "border-bion-ink/15 dark:border-white/15"
-                    }`}
-                  >
-                    {m2.nome}
-                  </button>
-                ))}
-              </div>
+              <p className="text-sm mb-3">
+                Cartão de crédito, na página segura do Stripe. Não aceitamos Pix.
+              </p>
               <div className="flex gap-2">
                 <button type="button"
                   onClick={() => void pagarEAgendar()}
-                  disabled={!metodo || pagando}
+                  disabled={pagando}
                   className="bp-acao flex-1 py-3 text-sm inline-flex items-center justify-center gap-2 disabled:opacity-40"
                 >
                   <Lock className="w-4 h-4" /> Pagar R$ {medicoRegistro?.valor ?? 0} e agendar
@@ -839,7 +837,6 @@ export function ChatBion({
                   onClick={() => {
                     setEtapa(null);
                     setEscolha({});
-                    setMetodo(null);
                     setMensagens((m) => [...m, { remetente: "ia", texto: "Sem problemas — o agendamento foi cancelado, nada foi cobrado. Posso ajudar em outra coisa?" }]);
                   }}
                   className="rounded-full border border-bion-ink/20 dark:border-white/20 px-5 py-3 text-sm font-semibold text-bion-ink dark:text-bion-paper"

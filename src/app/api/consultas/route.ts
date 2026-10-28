@@ -23,6 +23,7 @@ import {
 } from "@/lib/server/bloqueio-agenda";
 import { jaUsouRetornoGratis, lerPedidoVinculado, PRAZO_RETORNO_DIAS, retornoEhGratis } from "@/lib/atendimento-tipo";
 import { estaAnonimizado } from "@/lib/server/lgpd";
+import { decisaoCobranca, respostaIndisponivel, stripeAtivo } from "@/lib/stripe-checkout-logica";
 
 /** Ano/mês/dia formam uma data real do calendário. */
 function dataCalendarioValida(ano: number, mes: number, dia: number): boolean {
@@ -91,7 +92,6 @@ export async function POST(req: NextRequest) {
       data: string;
       hora: string;
       motivoConsulta?: string;
-      metodo?: "pix" | "cartao";
       tipoAtendimento?: string;
       consultaOrigemId?: string;
       documentoOrigemId?: string;
@@ -145,6 +145,15 @@ export async function POST(req: NextRequest) {
     const erroFormato = validarDataHoraAgendamento(body.data.trim(), body.hora.trim());
     if (erroFormato) {
       return Response.json({ erro: erroFormato }, { status: 400 });
+    }
+
+    // Só cartão (checkout Stripe), nunca Pix. Flag desligada com gateway
+    // real: 503 ANTES de criar qualquer coisa (o retorno grátis não cobra e
+    // continua liberado; quem decide se é grátis é a transação abaixo).
+    const decisao = decisaoCobranca(stripeAtivo(), modoGateway());
+    if (decisao === "indisponivel" && !origemRetorno) {
+      const r = respostaIndisponivel();
+      return Response.json(r.corpo, { status: r.status });
     }
 
     // Criação pelo paciente nasce aguardando pagamento — o pagamento é
@@ -208,7 +217,9 @@ export async function POST(req: NextRequest) {
     // um agendamento que passou pela checagem não termina depois do bloqueio
     // e dos cancelamentos (ou entra antes e é visto por eles, ou espera e
     // recebe 409).
-    const criada = await db.$transaction(
+    let criada;
+    try {
+      criada = await db.$transaction(
       (tx) =>
         criarSeDiaLivre(tx, medico.id, dataInicio, (t) =>
           (async () => {
@@ -224,6 +235,8 @@ export async function POST(req: NextRequest) {
               });
               gratis = retornoEhGratis(origemRetorno.dataInicio, dataInicio, jaUsouRetornoGratis(anteriores));
             }
+            // Retorno pago sem cartão disponível: desfaz a transação (503).
+            if (!gratis && decisao === "indisponivel") throw new PagamentoIndisponivel();
             return t.consulta.create({
             data: {
               pacienteId: usuario.id,
@@ -242,6 +255,13 @@ export async function POST(req: NextRequest) {
         ),
       OPCOES_TX_TRAVA,
     );
+    } catch (e) {
+      if (e instanceof PagamentoIndisponivel) {
+        const r = respostaIndisponivel();
+        return Response.json(r.corpo, { status: r.status });
+      }
+      throw e;
+    }
     if (criada.bloqueado) {
       return Response.json({ erro: criada.erro }, { status: 409 });
     }
@@ -275,11 +295,11 @@ export async function POST(req: NextRequest) {
     };
 
     // Cobrança: o servidor decide a confirmação (gateway simulado ou webhook).
-    // Retorno grátis: não existe cobrança (nem PIX); a consulta já nasceu
-    // confirmada e paga com valor 0 (o repasse ignora valor 0, #77).
+    // Retorno grátis: não existe cobrança; a consulta já nasceu confirmada e
+    // paga com valor 0 (o repasse ignora valor 0, #77). As demais são pagas
+    // com cartão (checkout Stripe) — o app não cobra por Pix.
     const retornoGratis = !!origemRetorno && consulta.valor === 0 && consulta.status === "confirmada";
-    const metodo = body.metodo === "cartao" ? "cartao" : "pix";
-    const cobranca = retornoGratis ? null : await criarCobranca(consulta.id, consulta.valor, metodo);
+    const cobranca = retornoGratis ? null : await criarCobranca(consulta.id, consulta.valor, "cartao");
     let pagamento = cobranca ? paraWire(cobranca) : null;
     let pagoFinal = retornoGratis;
     const eventos: NotifPayload[] = [
@@ -315,7 +335,7 @@ export async function POST(req: NextRequest) {
       };
       audit.acao = "CONSULTA_AGENDADA_RETORNO_GRATIS";
       audit.detalhes = `Retorno grátis (até 30 dias da consulta de origem ${origemRetorno!.id}) com ${medico.nome} — ${consulta.especialidade} em ${body.data} às ${body.hora} (valor 0, sem cobrança — confirmada)`;
-    } else if (cobranca && modoGateway() === "simulado") {
+    } else if (cobranca && decisao === "simulado") {
       // Demonstração: gateway simulado confirma no servidor — e o pagamento
       // CONFIRMA a consulta (regra imposta aqui, não pelo navegador).
       const confirmado = await confirmarPagamento(cobranca.id, "simulado");
@@ -327,7 +347,7 @@ export async function POST(req: NextRequest) {
           {
             tipo: "pagamento",
             titulo: "Pagamento confirmado",
-            texto: `Pagamento de R$ ${pagamento.valor.toFixed(2).replace(".", ",")} (${pagamento.metodo === "pix" ? "Pix" : "Cartão"}) aprovado.`,
+            texto: `Pagamento de R$ ${pagamento.valor.toFixed(2).replace(".", ",")} (Cartão) aprovado.`,
             usuarioId: usuario.id,
           },
           {
@@ -363,6 +383,8 @@ export async function POST(req: NextRequest) {
       },
       anamnese,
       pagamento,
+      // Cartão ligado e ainda não paga: o cliente abre o checkout Stripe.
+      pagarComCartao: decisao === "stripe" && !pagoFinal,
       consultaCriada: consulta.id,
       ...(efeitos.notificacoes.length ? { notificacoes: efeitos.notificacoes } : {}),
       ...(efeitos.audit ? { audit: efeitos.audit } : {}),
@@ -371,3 +393,6 @@ export async function POST(req: NextRequest) {
     return falha(erro);
   }
 }
+
+/** Retorno pago com o cartão desligado e gateway real: aborta a transação. */
+class PagamentoIndisponivel extends Error {}
