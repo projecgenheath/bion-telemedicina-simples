@@ -4,8 +4,6 @@ subtitle: "Versão 1.0 — MINUTA para revisão jurídica — 20/10/2026"
 lang: pt-BR
 ---
 
-> **MINUTA — NÃO PUBLICAR ANTES DA REVISÃO POR ADVOGADO(A).** Trechos **[A DEFINIR]** dependem da constituição da empresa ou de decisão de negócio. Há riscos éticos sinalizados em `pendencias.md` (comissão percentual e multa repartida — Despacho CFM SEI nº 102/2025, art. 59 e art. 58 do Código de Ética Médica).
-
 # Resumo em linguagem simples
 
 - A BION é **intermediadora tecnológica**: fornece a plataforma, agenda, sala de vídeo, prontuário eletrônico, cobrança e repasse. **Você presta o serviço médico em nome próprio**, com **autonomia técnica total**. A BION não pratica ato médico.

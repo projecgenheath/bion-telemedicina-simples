@@ -128,8 +128,8 @@ export function marketingAtivo(ultimo: { aceito: boolean } | null | undefined): 
 }
 
 /**
- * Médico com aceite pendente: falta a linha dos termos OU da privacidade
- * vigentes. Recebe as finalidades já gravadas (aceito = true) do usuário.
+ * Aceite pendente (genérico por perfil — MEDICO, PACIENTE…): falta a linha
+ * dos termos do perfil OU da privacidade vigentes. Recebe as finalidades já gravadas (aceito = true) do usuário.
  */
 export function aceitePendente(perfil: PerfilAceite, finalidadesAceitas: readonly string[]): boolean {
   const versaoTermos = VERSAO_TERMOS_POR_PERFIL[perfil];

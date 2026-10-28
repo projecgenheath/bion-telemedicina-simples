@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { AceiteTermos } from "@/components/bion/AceiteTermos";
 import { TelaCarregando } from "@/components/bion/brand";
+import { useBion } from "@/lib/bion-store";
 import { aceiteTermosPayload, type PerfilAceite } from "@/lib/aceite-termos";
 
 /** Rota do re-aceite por perfil. PACIENTE ainda não tem rota ligada. */
@@ -28,6 +29,7 @@ export function GuardaAceiteTermos({
   rota?: string;
   children: React.ReactNode;
 }) {
+  const { sair } = useBion();
   const [estado, setEstado] = useState<Estado>("carregando");
   const [marcado, setMarcado] = useState(false);
   const [enviando, setEnviando] = useState(false);
@@ -81,6 +83,9 @@ export function GuardaAceiteTermos({
             <h1 id="titulo-aceite-termos" className="text-lg font-bold">Não foi possível conferir os termos</h1>
             <button type="button" onClick={() => void consultar()} className="w-full rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground">
               Tentar de novo
+            </button>
+            <button type="button" onClick={() => void sair()} className="w-full rounded-xl border py-3 text-sm font-semibold">
+              Sair
             </button>
           </>
         ) : (
