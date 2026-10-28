@@ -9,7 +9,7 @@ export default function PaginaPoliticaDePrivacidade() {
   return (
     <PaginaDocumentoJuridico
       versao={VERSAO_PRIVACIDADE}
-      data="2026-10-20"
+      data="2026-10-27"
       arquivos={["03-politica-de-privacidade.md", "06-politica-de-cookies.md"]}
     />
   );

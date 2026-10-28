@@ -1,7 +1,8 @@
 import { db } from "@/lib/db";
 import { exigirPapel } from "@/lib/server/auth";
 import { ok, falha } from "@/lib/server/http";
-import { eventosLlmMemoria, resumir, type EventoLlm } from "@/lib/server/llm-monitor";
+import { iaPausada } from "@/lib/server/llm";
+import { chaveEvento, eventosLlmMemoria, resumir, type EventoLlm } from "@/lib/server/llm-monitor";
 
 export async function GET() {
   try {
@@ -29,10 +30,11 @@ export async function GET() {
         };
       }
     });
-    const visto = new Set(vivos.map((e) => e.ts));
-    const eventos = [...vivos, ...doBanco.filter((e) => !visto.has(e.ts))].slice(0, 80);
+    const visto = new Set(vivos.map(chaveEvento));
+    const eventos = [...vivos, ...doBanco.filter((e) => !visto.has(chaveEvento(e)))].slice(0, 80);
     return ok({
       resumo: resumir(eventos),
+      pausada: iaPausada(),
       eventos,
     });
   } catch (e) {

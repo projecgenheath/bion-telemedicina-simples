@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { destruirSessao, exigirPapel, registrarAudit, verificarSenha } from "@/lib/server/auth";
 import { ok, falha } from "@/lib/server/http";
 import { usuarioSemNome } from "@/lib/server/audit-sem-nome";
-import { anonimizarPacienteCompleto } from "@/lib/server/lgpd";
+import { PendenciasLgpdError, anonimizarPacienteCompleto } from "@/lib/server/lgpd";
 import {
   JANELA_FALHAS_MS,
   MAX_FALHAS_SENHA,
@@ -37,7 +37,9 @@ import {
  *   com multa, renovação em aberto, pagamento pendente) responde 409, mas o
  *   PEDIDO fica registrado na auditoria (EXCLUSAO_CONTA_SOLICITADA_PENDENTE,
  *   só id) para a BION concluir em até 15 dias (LGPD art. 19).
- * - Falha no meio da anonimização → EXCLUSAO_CONTA_FALHOU (só id) e erro claro.
+ * - Pendência descoberta dentro da anonimização → mesmo 409 de pedido
+ *   registrado. Falha no bloqueio do login (502/503, nada alterado) → "tente
+ *   de novo", sem logout. Só falha desconhecida → EXCLUSAO_CONTA_FALHOU.
  * - Reusa SEM MUDANÇA a anonimização da administração
  *   (anonimizarPacienteCompleto): dados pessoais anonimizados, prontuário
  *   guardado sem nome (Lei 13.787/2018). Depois apaga as inscrições de push,
@@ -143,16 +145,40 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Push antes da anonimização: se falhar aqui, nada foi alterado ainda.
-    const push = await db.pushInscricao.deleteMany({ where: { usuarioId: usuario.id } });
-
-    // anonimizarPacienteCompleto remove o login do Supabase ANTES da transação
-    // do banco. Se algo falhar, o paciente pode ter perdido o login sem os
-    // dados anonimizados: registra (só id) para o admin concluir pelo painel.
+    // anonimizarPacienteCompleto só BANE o login no Supabase antes da transação
+    // (reversível; desfeito se a transação falhar) e remove o login e os
+    // arquivos pessoais do Storage DEPOIS do commit (falhas viram pendência
+    // no painel, sem erro). Qualquer erro que sobe aqui = banco revertido.
     let r: Awaited<ReturnType<typeof anonimizarPacienteCompleto>>;
     try {
       r = await anonimizarPacienteCompleto(usuario.id);
     } catch (e) {
+      if (e instanceof PendenciasLgpdError) {
+        // Pendência surgiu entre a checagem acima e a transação: mesmo 409.
+        await registrarAudit(usuarioSemNome(usuario), {
+          acao: "EXCLUSAO_CONTA_SOLICITADA_PENDENTE",
+          categoria: "usuario",
+          severidade: "warning",
+          entidade: "paciente",
+          entidadeId: usuario.id,
+          detalhes:
+            `Paciente id ${usuario.id} pediu a exclusão da conta; pendência encontrada na anonimização. ` +
+            `Concluir pelo painel LGPD em até ${PRAZO_CONCLUSAO_PEDIDO_DIAS} dias após resolvidas (LGPD art. 19).`,
+        });
+        return Response.json(
+          { erro: MENSAGEM_PEDIDO_REGISTRADO, pedidoRegistrado: true, motivos: e.motivos },
+          { status: 409 },
+        );
+      }
+      const status = (e as { status?: unknown })?.status;
+      if (status === 502 || status === 503) {
+        // Falha no bloqueio do login (ou config do servidor): nada foi alterado.
+        console.error("[exclusao-conta] anonimização recusada", status, (e as Error)?.message);
+        return Response.json(
+          { erro: "Não consegui excluir a sua conta agora. Nada foi alterado. Tente de novo em alguns minutos." },
+          { status },
+        );
+      }
       console.error("[exclusao-conta] anonimização falhou", (e as Error)?.message);
       await registrarAudit(usuarioSemNome(usuario), {
         acao: "EXCLUSAO_CONTA_FALHOU",
@@ -173,6 +199,14 @@ export async function POST(req: NextRequest) {
         { status: 500 },
       );
     }
+
+    // Push só depois da anonimização concluída (falha aqui não desfaz nada).
+    const push = await db.pushInscricao
+      .deleteMany({ where: { usuarioId: usuario.id } })
+      .catch((e) => {
+        console.error("[exclusao-conta] falha ao apagar inscrições de push", (e as Error)?.message);
+        return { count: 0 };
+      });
 
     // Auditoria sem o nome real: usa o pseudônimo gerado na anonimização.
     await registrarAudit(

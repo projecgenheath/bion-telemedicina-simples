@@ -13,6 +13,7 @@ const PUBLICOS: readonly string[] = [
   "/api/cron/toque", // idem (pg_cron + pg_net a cada minuto)
   "/api/cron/espera-medico", // idem (pg_cron a cada minuto)
   "/api/cron/descarte-retencao", // idem (cron da Vercel, 03:00 em SP)
+  "/api/cron/lgpd-pendencias", // idem (cron da Vercel, 04:00 em SP; pendências LGPD de Auth/Storage/desban)
 ];
 
 function ehPublico(pathname: string): boolean {

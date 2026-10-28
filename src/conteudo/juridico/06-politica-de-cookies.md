@@ -1,6 +1,6 @@
 ---
 title: "Política de Cookies e Armazenamento Local — BION"
-subtitle: "Versão 1.0 — MINUTA para revisão jurídica — 20/10/2026"
+subtitle: "Versão provisória v0 — 20/10/2026"
 lang: pt-BR
 ---
 
@@ -65,4 +65,4 @@ e) você poderá mudar sua escolha a qualquer momento.
 
 Encarregado (DPO): **[A DEFINIR: e-mail do Encarregado]**. Ver também a Política de Privacidade.
 
-*Versão 1.0 — vigente a partir de [A DEFINIR].*
+*Versão provisória v0 — Vigente a partir do seu aceite.*

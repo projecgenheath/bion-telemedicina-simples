@@ -215,6 +215,8 @@ function bancoFake(opcoes: { trava: boolean }) {
         if (opcoes.trava) liberacoes.push(await adquirir(String(valores[0])));
         return 1;
       },
+      // Releitura do médico com FOR SHARE (#105): ativo nos testes da agenda.
+      $queryRaw: async () => [{ userStatus: "ativo", perfilStatus: "ativo", email: "medico@teste.com" }],
       bloqueioAgenda: {
         findUnique: async ({ where }: { where: { medicoId_dia: { medicoId: string; dia: Date } } }) => {
           await pausa(1);

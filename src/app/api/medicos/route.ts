@@ -90,7 +90,9 @@ export async function POST(req: NextRequest) {
       categoria: "admin",
       entidade: "medico",
       entidadeId: user.id,
-      detalhes: `Médico ${user.nome} (${body.crm}) cadastrado`,
+      // Sem PII (nome/CRM) na auditoria: só o id. O médico aceita os termos
+      // no primeiro acesso (GuardaAceiteTermos perfil="MEDICO" + /api/medico/aceite-termos).
+      detalhes: `Médico ${user.id} cadastrado pela administração`,
     });
 
     const perfil = await db.perfilMedico.findUnique({

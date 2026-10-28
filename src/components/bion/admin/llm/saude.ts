@@ -18,6 +18,12 @@ export type EventoLlm = {
   http: number | null;
   finish: string | null;
   erro: string | null;
+  /** Id da chamada (auditoria de requisições simultâneas). */
+  requestId?: string;
+  /** "cliente" = falha vista no navegador (504, resposta não-JSON, timeout). */
+  origem?: "servidor" | "cliente";
+  /** true = o NVIDIA (primário) falhou e outro provedor respondeu. */
+  fallback?: boolean;
 };
 
 export type ResumoLlm = {
@@ -31,7 +37,7 @@ export type ResumoLlm = {
   modelos: (string | null)[];
 };
 
-export type RespostaMonitor = { resumo?: ResumoLlm | null; eventos?: EventoLlm[] | null };
+export type RespostaMonitor = { resumo?: ResumoLlm | null; eventos?: EventoLlm[] | null; pausada?: boolean };
 
 /**
  * Limites do estado de saúde (decisão de produto, ajustáveis aqui):
@@ -53,7 +59,9 @@ export function falhasSeguidas(eventos: EventoLlm[]): number {
   return n;
 }
 
-export function estadoSaude(resumo: ResumoLlm | null | undefined, eventos: EventoLlm[] = []): Saude {
+export function estadoSaude(resumo: ResumoLlm | null | undefined, eventos: EventoLlm[] = [], pausada = false): Saude {
+  // Pausa proposital (opt-in, BION_IA_PAUSADA=true): não é falha, o painel não fica vermelho.
+  if (pausada) return { tom: "neutro", rotulo: "Pausada", texto: "A BION IA está pausada (BION_IA_PAUSADA=true). Nenhum dado vai para a IA." };
   if (!resumo || !resumo.turnos) return { tom: "neutro", rotulo: "Sem dados", texto: "Ainda sem turnos nesta instância. Use o chat da BION IA e atualize." };
   const seguidas = falhasSeguidas(eventos);
   if (resumo.taxaOk < LIMITES_SAUDE.okInstavel || seguidas >= LIMITES_SAUDE.falhasSeguidasCriticas) {
@@ -170,7 +178,9 @@ export function falhasRecentes(eventos: EventoLlm[], n = 5): EventoLlm[] {
 
 /** Mesma regra da coluna "Detalhe" do monitor antigo (tamanho da resposta, ou erro → finish → HTTP), em português. */
 export function detalheEvento(e: EventoLlm): string {
-  return e.ok ? `${e.textoLen} caracteres` : (e.erro ?? e.finish ?? `HTTP ${e.http ?? "—"}`);
+  const base = e.ok ? `${e.textoLen} caracteres` : (e.erro ?? e.finish ?? `HTTP ${e.http ?? "—"}`);
+  const origem = e.origem === "cliente" ? "navegador: " : "";
+  return `${origem}${base}${e.fallback ? " (reserva)" : ""}${e.requestId ? ` · ${e.requestId}` : ""}`;
 }
 
 /** Modelo do turno mais recente que informou modelo (o "em uso agora"). */

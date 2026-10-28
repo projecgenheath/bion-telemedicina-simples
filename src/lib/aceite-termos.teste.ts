@@ -17,6 +17,11 @@ import {
   validarAceiteTermos,
   VERSAO_PRIVACIDADE,
   VERSAO_TERMOS_PACIENTE,
+  VERSAO_TERMOS_MEDICO,
+  VERSAO_TERMOS_POR_PERFIL,
+  URL_TERMOS_POR_PERFIL,
+  URL_POLITICA_PRIVACIDADE,
+  aceitePendente,
 } from "./aceite-termos";
 import { origemConfere } from "./server/origem";
 
@@ -48,16 +53,28 @@ igual("marketing sem termos não passa", erro({ marketing: { aceito: true, versa
 igual("estado marketing", [marketingAtivo(null), marketingAtivo({ aceito: true }), marketingAtivo({ aceito: false })], [false, true, false]);
 igual("finalidade marketing", [finalidadeMarketing(true).includes("aceito"), finalidadeMarketing(false).includes("revogado"), finalidadeMarketing(true).includes(VERSAO_MARKETING_OPTIN)], [true, true, true]);
 igual("ignora campos extras", validarAceiteTermos("PACIENTE", { ...aceiteTermosPayload("PACIENTE"), nome: "X" }).ok, true);
-igual("médico sem termos definidos é recusado", erro2("MEDICO", aceiteTermosPayload("PACIENTE")), ERRO_TERMOS_PERFIL_INDEFINIDO);
-let lancou = false;
-try { aceiteTermosPayload("MEDICO"); } catch { lancou = true; }
-igual("payload do médico sem termos lança", lancou, true);
+// Médico (termos-medico-v0-2026-10-20)
+igual("versão do médico", VERSAO_TERMOS_POR_PERFIL.MEDICO, "termos-medico-v0-2026-10-20");
+igual("payload do médico válido", validarAceiteTermos("MEDICO", aceiteTermosPayload("MEDICO")), { ok: true, valor: { versaoTermos: VERSAO_TERMOS_MEDICO, versaoPrivacidade: VERSAO_PRIVACIDADE, marketing: false } });
+igual("médico com termos do paciente é recusado", erro2("MEDICO", aceiteTermosPayload("PACIENTE")), ERRO_VERSAO_TERMOS);
+igual("paciente com termos do médico é recusado", erro2("PACIENTE", aceiteTermosPayload("MEDICO")), ERRO_VERSAO_TERMOS);
+igual("médico sem aceite é recusado", erro2("MEDICO", { aceito: false, versaoTermos: VERSAO_TERMOS_MEDICO, versaoPrivacidade: VERSAO_PRIVACIDADE }), ERRO_ACEITE_TERMOS);
+igual("perfil sem termos continua recusado", (() => { const o = VERSAO_TERMOS_POR_PERFIL.MEDICO; (VERSAO_TERMOS_POR_PERFIL as Record<PerfilAceite, string | null>).MEDICO = null; const r = erro2("MEDICO", aceiteTermosPayload("PACIENTE")); (VERSAO_TERMOS_POR_PERFIL as Record<PerfilAceite, string | null>).MEDICO = o; return r; })(), ERRO_TERMOS_PERFIL_INDEFINIDO);
+const fTM = finalidadeTermos(VERSAO_TERMOS_MEDICO);
+const fP = finalidadePrivacidade(VERSAO_PRIVACIDADE);
+igual("pendente sem nada", aceitePendente("MEDICO", []), true);
+igual("pendente só termos", aceitePendente("MEDICO", [fTM]), true);
+igual("pendente só privacidade", aceitePendente("MEDICO", [fP]), true);
+igual("pendente com termos antigos", aceitePendente("MEDICO", [finalidadeTermos("termos-medico-v-1"), fP]), true);
+igual("pendente com termos do paciente", aceitePendente("MEDICO", [finalidadeTermos(VERSAO_TERMOS_PACIENTE), fP]), true);
+igual("não pendente com os dois", aceitePendente("MEDICO", [fTM, fP]), false);
+igual("links do médico", [URL_TERMOS_POR_PERFIL.MEDICO, URL_POLITICA_PRIVACIDADE], ["/termos-medico", "/politica-de-privacidade"]);
 igual("origem igual", origemConfere("https://bion.app", "bion.app"), true);
 igual("origem com porta", origemConfere("http://localhost:3000/x", "localhost:3000"), true);
 igual("origem diferente", origemConfere("https://mal.com", "bion.app"), false);
 igual("sem origem", origemConfere(null, "bion.app"), false);
 igual("origem inválida", origemConfere("lixo", "bion.app"), false);
-igual("versões fixas", [VERSAO_TERMOS_PACIENTE, VERSAO_PRIVACIDADE, VERSAO_MARKETING_OPTIN], ["termos-paciente-v0-2026-10-20", "privacidade-v0-2026-10-20", "marketing-optin-v0-2026-10-21"]);
+igual("versões fixas", [VERSAO_TERMOS_PACIENTE, VERSAO_PRIVACIDADE, VERSAO_MARKETING_OPTIN], ["termos-paciente-v1-2026-10-27", "privacidade-v1-2026-10-27", "marketing-optin-v0-2026-10-21"]);
 igual("finalidades com versão", finalidadeTermos(VERSAO_TERMOS_PACIENTE).includes(VERSAO_TERMOS_PACIENTE) && finalidadePrivacidade(VERSAO_PRIVACIDADE).includes(VERSAO_PRIVACIDADE), true);
 
 console.log(`${ok} ok, ${falhas} falha(s)`);

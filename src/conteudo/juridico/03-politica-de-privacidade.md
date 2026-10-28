@@ -1,19 +1,19 @@
 ---
 title: "Política de Privacidade — BION Telemedicina (Pacientes, Médicos e Visitantes)"
-subtitle: "Versão 1.0 — MINUTA para revisão jurídica — 20/10/2026"
+subtitle: "Versão provisória v1 — 27/10/2026"
 lang: pt-BR
 ---
 
-> **MINUTA — NÃO PUBLICAR ANTES DA REVISÃO POR ADVOGADO(A).** Esta política descreve o funcionamento real da Plataforma na data acima, levantado no código-fonte. Trechos **[A DEFINIR]** ou **[A CONFIRMAR]** precisam ser resolvidos antes da publicação (ver `pendencias.md`).
+> Esta política descreve o funcionamento real da Plataforma na data acima, levantado no código-fonte. Trechos **[A DEFINIR]** ou **[A CONFIRMAR]** precisam ser resolvidos antes da publicação (ver `pendencias.md`).
 
 # Resumo em linguagem simples
 
 - **Quem cuida dos seus dados:** a BION (**[A DEFINIR: razão social e CNPJ]**) e, no que é prontuário, o médico que atende você.
-- **Onde ficam:** no **Brasil (São Paulo)**, nos servidores da Supabase e da Vercel. Algumas partes passam pelo exterior: a **IA do Google** (quando você usa a BION IA), servidores de conexão da chamada (**Cloudflare e Google**, que recebem o seu IP) e os **serviços de notificação** do seu navegador.
+- **Onde ficam:** no **Brasil (São Paulo)**, nos servidores da Supabase e da Vercel. Algumas partes passam pelo exterior: a **IA da NVIDIA** (quando você usa a BION IA), servidores de conexão da chamada (**Cloudflare e Google**, que recebem o seu IP) e os **serviços de notificação** do seu navegador.
 - **Dados de saúde** são usados para o seu atendimento, por médicos, com sigilo. **A administração da BION não vê o conteúdo clínico, não entra na sala e não lê o chat da consulta**, mas vê seus dados de cadastro (nome, e-mail, telefone, CPF, data de nascimento) para operar a plataforma.
 - **O médico que atende você vê todo o seu histórico na BION**, inclusive com outros médicos. Médicos que nunca atenderam você não veem nada.
 - **A videochamada não é gravada.** O chat da consulta vai para o prontuário.
-- **A BION IA** só é usada se você consentir. Tiramos seu nome, e-mail, CPF, telefone, CEP e data de nascimento antes de enviar suas mensagens ao Google. **Laudos de exame** enviados à IA **vão com o conteúdo como está** (inclusive o seu nome impresso) e **sempre pedem o seu consentimento antes de cada envio** — você pode recusar.
+- **A BION IA** só é usada se você consentir. Tiramos seu nome, e-mail, CPF, telefone, CEP e data de nascimento antes de enviar suas mensagens à NVIDIA. **Laudos de exame** enviados à IA **vão com o conteúdo como está** (inclusive o seu nome impresso) e **sempre pedem o seu consentimento antes de cada envio** — você pode recusar.
 - **Não vendemos seus dados. Não usamos rastreadores de publicidade.** Só cookies de login.
 - Você pode **ver, corrigir, baixar e excluir** seus dados. O botão **"Excluir minha conta"** está no seu perfil. O prontuário fica guardado **20 anos** sem o seu nome, porque a lei exige.
 - Encarregado (DPO): **[A DEFINIR: nome] — [A DEFINIR: e-mail do Encarregado]**.
@@ -56,7 +56,7 @@ Anexo — Mapa de dados por tabela/funcionalidade
 | Cadastro, login, pagamentos, reembolsos, suporte, avaliações, segurança, logs | **BION** | Supabase, Vercel, gateway etc. | A BION decide por que e como tratar esses dados para oferecer a Plataforma. |
 | Prontuário (evolução, CID, conduta, receitas, atestados, triagem, chat da sala, arquivos da consulta) | **Médico** que atendeu | **BION** (e seus suboperadores) | O registro clínico é dever e decisão técnica do médico (CFM; Lei 13.787/2018); a BION guarda e protege seguindo as instruções dele. |
 | Compartilhamento do histórico entre médicos que atendem você | **BION e médicos, em conjunto** | — | A regra de compartilhamento é definida pela BION, com o seu consentimento, para o cuidado da sua saúde. |
-| BION IA, leitura de exames, lembretes, IMC, medições por conta própria | **BION** | Google (IA), Supabase, Vercel, serviços de push | São funcionalidades oferecidas pela própria BION. |
+| BION IA, leitura de exames, lembretes, IMC, medições por conta própria | **BION** | NVIDIA (IA), Supabase, Vercel, serviços de push | São funcionalidades oferecidas pela própria BION. |
 | Dados pessoais do médico (cadastro, PIX, repasses) | **BION** | Supabase, Vercel | Necessários ao contrato com o médico. |
 | NFS-e/recibo emitido ao paciente | **Médico** | BION (se autorizada a emitir em nome do médico — recurso futuro) | A obrigação fiscal é do médico. |
 
@@ -145,13 +145,13 @@ Quando a base é o consentimento, você pode **retirá-lo a qualquer momento**, 
 
 # 7. Inteligência artificial e decisões automatizadas
 
-7.1. **Provedor.** A BION IA usa o **Google Gemini** (Google LLC), contratado como **operador** da BION. **[A CONFIRMAR antes de publicar: contratação em modalidade paga/empresarial que proíba o uso dos dados para treinar modelos e defina a retenção; hoje a retenção do Google é desconhecida.]** A BION **não usa serviços públicos de IA sem contrato** (o canal público alternativo existente no código é proibido por esta política e deve permanecer desligado). Um provedor de reserva configurável **[A DEFINIR]** só será usado com contrato de operador e cláusulas equivalentes.
+7.1. **Provedor.** A BION IA usa o modelo Nemotron, da **NVIDIA Corporation** (EUA), pela API da NVIDIA. Hoje a BION usa essa API na modalidade de avaliação, e nessa modalidade a NVIDIA **pode guardar e usar o conteúdo enviado** conforme os termos dela. Por isso, removemos seus identificadores diretos das mensagens antes do envio. A BION vai migrar para uma contratação que proíba o uso dos dados para treinar modelos, e esta política será atualizada quando isso acontecer. Se a NVIDIA não responder, entram respostas automáticas pré-programadas. A BION não usa outro provedor sem antes avisar você nesta política.
 
 7.2. **Chat e triagem com IA.** Antes de enviar ao provedor, removemos **seu nome, e-mail, CPF, telefone, CEP e data de nascimento exata**. Seguem o texto que você digita e um contexto clínico (medicamentos em uso, alergias, convênio e as próximas consultas, com especialidade, **nome do médico** e data). **Endereços e dados de terceiros digitados em texto livre podem não ser detectados** — evite digitá-los. A conversa **não é guardada** pela BION.
 
-7.3. **Leitura de exames.** **Antes de cada envio pedimos o seu consentimento específico**, e você pode **recusar**. **O conteúdo do laudo vai ao Google como está**, inclusive com o nome e outros dados impressos, porque a IA precisa ler o documento e conferir se ele é seu. Quando possível, removemos o nome do arquivo e metadados técnicos, **mas não garantimos a anonimização do conteúdo**. O arquivo original não é guardado por essa função; ficam os valores extraídos.
+7.3. **Leitura de exames.** **Antes de cada envio pedimos o seu consentimento específico**, e você pode **recusar**. **O conteúdo do laudo vai à NVIDIA como está**, inclusive com o nome e outros dados impressos, porque a IA precisa ler o documento e conferir se ele é seu. Quando possível, removemos o nome do arquivo e metadados técnicos, **mas não garantimos a anonimização do conteúdo**. O arquivo original não é guardado por essa função; ficam os valores extraídos.
 
-7.4. **Copilot IA do médico.** O texto digitado pelo médico vai ao Google com a especialidade e o CRM dele; os médicos são proibidos de inserir dados identificáveis de pacientes.
+7.4. **Copilot IA do médico.** O texto digitado pelo médico vai à NVIDIA com a especialidade e o CRM dele; os médicos são proibidos de inserir dados identificáveis de pacientes.
 
 7.5. **O que a IA não faz.** A IA **não diagnostica, não prescreve e não decide** sobre o seu atendimento. Nenhuma decisão que afete seus interesses é tomada **unicamente** por tratamento automatizado. Você pode pedir **explicação e revisão** de qualquer resultado automatizado (LGPD, art. 20) pelo Encarregado.
 
@@ -163,7 +163,7 @@ Quando a base é o consentimento, você pode **retirá-lo a qualquer momento**, 
 |---|---|---|---|
 | **Supabase** | Banco de dados, login, arquivos, mensagens em tempo real | Todos os dados da Plataforma | **Brasil — São Paulo (sa-east-1)** |
 | **Vercel** | Hospedagem do site/app e das APIs; registros de execução | Tudo o que trafega; logs com IP, URL e *user agent* | Processamento em **São Paulo (gru1)**; logs da plataforma podem ficar no **exterior (EUA)** 🌐 |
-| **Google LLC — Gemini API** | BION IA (chat, triagem assistida, leitura de exames, Copilot do médico) | Mensagens sem identificadores diretos; **laudos completos (com consentimento)**; contexto clínico | **Exterior** 🌐 |
+| **NVIDIA Corporation — API NVIDIA (Nemotron)** | BION IA (chat, triagem assistida, leitura de exames, Copilot do médico) | Mensagens sem identificadores diretos; **laudos completos (com consentimento)**; contexto clínico | **Exterior** 🌐 |
 | **Google — STUN** | Estabelecer a conexão da videochamada | **Endereço IP** | **Exterior** 🌐 |
 | **Cloudflare** | STUN/TURN: conexão e retransmissão da chamada quando a conexão direta falha | **Endereço IP**; áudio e vídeo **criptografados em trânsito** (não acessíveis à Cloudflare, não gravados) | **Global/exterior** 🌐 |
 | **Serviços de push** (Google FCM, Apple, Mozilla etc., conforme o seu navegador) | Entregar notificações | Mensagem **genérica e criptografada**, endereço técnico do aparelho | **Exterior** 🌐 |
@@ -179,7 +179,7 @@ Quando a base é o consentimento, você pode **retirá-lo a qualquer momento**, 
 
 # 9. Transferência internacional de dados
 
-9.1. Há transferência internacional para **Google** (IA e STUN), **Cloudflare** (STUN/TURN), **serviços de push**, **Vercel** (logs) e, quando houver, **Upstash** e **gateway de pagamento**.
+9.1. Há transferência internacional para **NVIDIA** (IA), **Google** (STUN), **Cloudflare** (STUN/TURN), **serviços de push**, **Vercel** (logs) e, quando houver, **Upstash** e **gateway de pagamento**.
 
 9.2. Essas transferências ocorrem com base no **art. 33 da LGPD**, preferencialmente por **cláusulas-padrão contratuais** aprovadas pela ANPD (**Resolução CD/ANPD nº 19/2024**), incorporadas aos contratos com esses operadores **[A CONFIRMAR: assinatura/aceite das cláusulas com cada fornecedor]**. Para a BION IA e a leitura de exames, além disso, o seu **consentimento específico e destacado** informa que os dados serão tratados no exterior (art. 33, VIII).
 
@@ -286,7 +286,7 @@ Encarregado pelo tratamento de dados pessoais: **[A DEFINIR: nome]** — **[A DE
 
 Podemos atualizar esta política. Mudanças relevantes serão avisadas no app com antecedência razoável e, quando a mudança exigir, pediremos novo consentimento.
 
-*Versão 1.0 — vigente a partir de [A DEFINIR].*
+*Vigente a partir do seu aceite*
 
 ---
 
@@ -296,15 +296,15 @@ Podemos atualizar esta política. Mudanças relevantes serão avisadas no app co
 |---|---|---|---|---|---|
 | `User`, `Sessao`, Supabase Auth | todos | não | próprio, admin; médico vê nome | Supabase | conta; anonimiza na exclusão |
 | `PerfilPaciente` (cadastro) | paciente | não | próprio, admin (completo), médico vinculado (CPF mascarado) | Supabase | conta |
-| `PerfilPaciente` (alergias, comorbidades, medicamentos, tipo sanguíneo, peso, altura) | paciente | **sim** | próprio, médico vinculado | Supabase; Google (alergias e medicamentos no contexto da IA) | prontuário 20 anos |
+| `PerfilPaciente` (alergias, comorbidades, medicamentos, tipo sanguíneo, peso, altura) | paciente | **sim** | próprio, médico vinculado | Supabase; NVIDIA (alergias e medicamentos no contexto da IA) | prontuário 20 anos |
 | `Consulta`, `EventoConsulta`, `RemarcacaoPendente`, `EsperaMedico` | paciente/médico | motivo/resumo: **sim** | paciente, médico; admin sem conteúdo clínico | Supabase | prontuário 20 anos |
-| `Anamnese` | paciente | **sim** | paciente, médico | Supabase; Google se a triagem com IA estiver ativa | 20 anos |
+| `Anamnese` | paciente | **sim** | paciente, médico | Supabase; NVIDIA se a triagem com IA estiver ativa | 20 anos |
 | `Evolucao` (CID, conduta, exames, medicamentos) | paciente | **sim** | médico autor e médicos vinculados; paciente (documentos) | Supabase | 20 anos |
 | `Documento`, `PedidoRenovacao` | paciente | **sim** | paciente, médicos vinculados; admin só tipo/título/data | Supabase | 20 anos |
 | `Arquivo` + bucket privado `documentos` | paciente | **sim** | paciente, médicos vinculados | Supabase | 20 anos (clínico) |
-| `ExameLaboratorial` | paciente | **sim** | paciente, médicos vinculados | Google (no envio, com consentimento) | 20 anos |
+| `ExameLaboratorial` | paciente | **sim** | paciente, médicos vinculados | NVIDIA (no envio, com consentimento) | 20 anos |
 | `Medicao`, `PedidoMedicao` | paciente | **sim** | paciente, médicos vinculados | Supabase | 20 anos |
-| `MedicamentoEmUso`, `Lembrete` | paciente | **sim** | paciente, médicos vinculados | Google (nomes no contexto da IA); push | medicamentos 20 anos; lembretes até a exclusão |
+| `MedicamentoEmUso`, `Lembrete` | paciente | **sim** | paciente, médicos vinculados | NVIDIA (nomes no contexto da IA); push | medicamentos 20 anos; lembretes até a exclusão |
 | `SinalSala` | paciente/médico | chat: **sim**; IP | sistema | Supabase | 30 min após consumido |
 | `ChatConsulta` | paciente/médico | **sim** | paciente, médico; **admin não** | Supabase | prontuário 20 anos (não apagável) |
 | `PresencaSala`, `ChamadaConsulta` | paciente/médico | não | paciente, médico; admin status | Supabase; push | 1 h após desfecho (presença) |

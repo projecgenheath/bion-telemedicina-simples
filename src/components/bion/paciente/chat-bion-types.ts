@@ -6,6 +6,8 @@ export type Msg = {
   tipo?: "sucesso-agendamento" | "sucesso-exame" | "erro" | "anamnese";
   fonte?: string;
   modelo?: string;
+  /** Raciocínio da IA (bloco "ver como a IA pensou"; nunca no texto). */
+  raciocinio?: string;
 };
 
 export type Etapa = null | "especialidade" | "medico" | "dia" | "hora" | "confirmar";

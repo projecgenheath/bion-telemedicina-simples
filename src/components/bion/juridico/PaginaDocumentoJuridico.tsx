@@ -21,6 +21,8 @@ export function PaginaDocumentoJuridico({
 }) {
   const docs = arquivos.map(lerMinuta);
   const [a, m, d] = data.split("-");
+  // Número da versão vem do id (ex.: privacidade-v1-2026-10-27 → v1).
+  const numero = /-v(\d+)-/.exec(versao)?.[1] ?? "0";
   return (
     <main className="min-h-screen bg-background">
       <div className="mx-auto max-w-3xl px-4 py-8 space-y-6">
@@ -28,7 +30,7 @@ export function PaginaDocumentoJuridico({
           Voltar para a BION
         </Link>
         <div role="note" className="rounded-2xl border-2 border-amber-500/60 bg-amber-500/10 px-4 py-3 text-sm font-bold">
-          Versão provisória v0 — {d}/{m}/{a}{" "}
+          Versão provisória v{numero} — {d}/{m}/{a}{" "}
           <span className="font-normal text-muted-foreground">({versao})</span>
         </div>
         {docs.map((doc, i) => (
