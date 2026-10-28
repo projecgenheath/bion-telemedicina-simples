@@ -142,7 +142,7 @@ export function MedicoPerfilView({ medicoId }: { medicoId?: string }) {
 
             <div className="flex items-center gap-4 text-xs font-semibold text-muted-foreground flex-wrap pt-1">
               <span className="flex items-center gap-1 text-amber-500 dark:text-amber-400 font-bold">
-                <Star className="w-4 h-4 fill-amber-500" /> {textoNota(medico)}
+                {medico.numAvaliacoes > 0 && <Star className="w-4 h-4 fill-amber-500" />} {textoNota(medico)}
               </span>
               <span>•</span>
               <span className="flex items-center gap-1">

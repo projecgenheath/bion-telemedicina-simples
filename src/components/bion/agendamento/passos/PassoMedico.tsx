@@ -91,7 +91,7 @@ export function PassoMedico(p: AgendamentoCorpoProps) {
                 </div>
                 <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
                   <span className="flex items-center gap-0.5 text-amber-500 dark:text-amber-400 font-bold">
-                    <Star className="w-3.5 h-3.5 fill-amber-500" /> {textoNota(med)}
+                    {med.numAvaliacoes > 0 && <Star className="w-3.5 h-3.5 fill-amber-500" />} {textoNota(med)}
                   </span>
                 </div>
                 <div className="flex flex-wrap gap-1.5 mt-2">
