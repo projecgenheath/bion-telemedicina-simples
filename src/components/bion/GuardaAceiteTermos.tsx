@@ -3,16 +3,31 @@
 import { useCallback, useEffect, useState } from "react";
 import { AceiteTermos } from "@/components/bion/AceiteTermos";
 import { TelaCarregando } from "@/components/bion/brand";
-import { aceiteTermosPayload } from "@/lib/aceite-termos";
+import { aceiteTermosPayload, type PerfilAceite } from "@/lib/aceite-termos";
+
+/** Rota do re-aceite por perfil. PACIENTE ainda não tem rota ligada. */
+export const ROTA_ACEITE_POR_PERFIL: Record<PerfilAceite, string> = {
+  MEDICO: "/api/medico/aceite-termos",
+  PACIENTE: "/api/paciente/aceite-termos",
+};
 
 type Estado = "carregando" | "pendente" | "ok" | "erro";
 
 /**
- * Bloqueia a área do médico até o aceite dos Termos de Uso do médico e da
- * Política de Privacidade vigentes (contas criadas pelo admin ou antigas).
+ * Bloqueia a área do perfil até o aceite dos Termos de Uso do perfil
+ * (VERSAO_TERMOS_POR_PERFIL[perfil]) e da Política de Privacidade vigentes.
  * Não desloga ninguém: logins de demonstração só veem esta tela.
+ * Hoje ligado só para MEDICO.
  */
-export function GuardaAceiteTermosMedico({ children }: { children: React.ReactNode }) {
+export function GuardaAceiteTermos({
+  perfil,
+  rota = ROTA_ACEITE_POR_PERFIL[perfil],
+  children,
+}: {
+  perfil: PerfilAceite;
+  rota?: string;
+  children: React.ReactNode;
+}) {
   const [estado, setEstado] = useState<Estado>("carregando");
   const [marcado, setMarcado] = useState(false);
   const [enviando, setEnviando] = useState(false);
@@ -21,14 +36,14 @@ export function GuardaAceiteTermosMedico({ children }: { children: React.ReactNo
   const consultar = useCallback(async () => {
     setEstado("carregando");
     try {
-      const res = await fetch("/api/medico/aceite-termos", { cache: "no-store", credentials: "same-origin" });
+      const res = await fetch(rota, { cache: "no-store", credentials: "same-origin" });
       const json = (await res.json().catch(() => null)) as { pendente?: boolean } | null;
       if (!res.ok || !json) return setEstado("erro");
       setEstado(json.pendente ? "pendente" : "ok");
     } catch {
       setEstado("erro");
     }
-  }, []);
+  }, [rota]);
 
   useEffect(() => {
     void consultar();
@@ -39,11 +54,11 @@ export function GuardaAceiteTermosMedico({ children }: { children: React.ReactNo
     setEnviando(true);
     setErro(null);
     try {
-      const res = await fetch("/api/medico/aceite-termos", {
+      const res = await fetch(rota, {
         method: "POST",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(aceiteTermosPayload("MEDICO")),
+        body: JSON.stringify(aceiteTermosPayload(perfil)),
       });
       const json = (await res.json().catch(() => null)) as { pendente?: boolean; erro?: string } | null;
       if (!res.ok) setErro(json?.erro ?? "Não foi possível registrar o aceite. Tente novamente.");
@@ -60,21 +75,21 @@ export function GuardaAceiteTermosMedico({ children }: { children: React.ReactNo
 
   return (
     <main className="min-h-dvh flex items-center justify-center bg-background p-6">
-      <div className="w-full max-w-md space-y-5 rounded-2xl border bg-card p-6 shadow-sm" role="dialog" aria-modal="true" aria-labelledby="titulo-aceite-medico">
+      <div className="w-full max-w-md space-y-5 rounded-2xl border bg-card p-6 shadow-sm" role="dialog" aria-modal="true" aria-labelledby="titulo-aceite-termos">
         {estado === "erro" ? (
           <>
-            <h1 id="titulo-aceite-medico" className="text-lg font-bold">Não foi possível conferir os termos</h1>
+            <h1 id="titulo-aceite-termos" className="text-lg font-bold">Não foi possível conferir os termos</h1>
             <button type="button" onClick={() => void consultar()} className="w-full rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground">
               Tentar de novo
             </button>
           </>
         ) : (
           <>
-            <h1 id="titulo-aceite-medico" className="text-lg font-bold">Termos de Uso e Política de Privacidade</h1>
+            <h1 id="titulo-aceite-termos" className="text-lg font-bold">Termos de Uso e Política de Privacidade</h1>
             <p className="text-sm text-muted-foreground">
-              Para continuar usando a área do médico, leia e aceite a versão atual dos Termos de Uso e da Política de Privacidade da BION.
+              Para continuar usando o app, leia e aceite a versão atual dos Termos de Uso e da Política de Privacidade da BION.
             </p>
-            <AceiteTermos perfil="MEDICO" aceitouTermos={marcado} onAceitouTermos={setMarcado} mostrarMarketing={false} disabled={enviando} />
+            <AceiteTermos perfil={perfil} aceitouTermos={marcado} onAceitouTermos={setMarcado} mostrarMarketing={false} disabled={enviando} />
             {erro ? <p role="alert" className="text-xs text-destructive">{erro}</p> : null}
             <button
               type="button"

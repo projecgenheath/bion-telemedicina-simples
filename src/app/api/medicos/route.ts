@@ -91,7 +91,7 @@ export async function POST(req: NextRequest) {
       entidade: "medico",
       entidadeId: user.id,
       // Sem PII (nome/CRM) na auditoria: só o id. O médico aceita os termos
-      // no primeiro acesso (GuardaAceiteTermosMedico + /api/medico/aceite-termos).
+      // no primeiro acesso (GuardaAceiteTermos perfil="MEDICO" + /api/medico/aceite-termos).
       detalhes: `Médico ${user.id} cadastrado pela administração`,
     });
 
