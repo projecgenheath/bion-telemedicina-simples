@@ -3,6 +3,7 @@ import crypto from "crypto";
 import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { removerNumerosLongos as removerNumerosLongosLocal } from "@/lib/anonimizar-medico-logica";
+import { filtrarAbertas, idsPendenciaConcluidos, lerPathsStorage, marcaPendencia } from "@/lib/lgpd-pendencias-logica";
 import { supabaseServiceRoleKey } from "@/lib/supabase/env";
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
 import { BUCKET_DOCUMENTOS } from "@/lib/supabase/storage";
@@ -702,42 +703,77 @@ async function removerStorageOuRegistrarPendente(pacienteId: string, paths: stri
   }
 }
 
-/** Nova tentativa das remoções do Storage pendentes. */
-export async function reprocessarRemocoesStoragePendentes(limite = 50): Promise<{ concluidas: number; falhas: number }> {
-  const pendentes = await db.auditLog.findMany({
-    where: { acao: ACAO_STORAGE_REMOCAO_PENDENTE },
-    orderBy: { createdAt: "asc" },
-    take: limite,
-    select: { id: true, entidadeId: true, detalhes: true },
+export const ACAO_PENDENCIA_LGPD_INVALIDA = "LGPD_PENDENCIA_INVALIDA";
+
+/**
+ * Pendências ABERTAS de um tipo, das mais antigas: pagina a auditoria em
+ * lotes, descarta as que têm conclusão com `pendencia=<id>` dela mesma e só
+ * então aplica o limite (as abertas novas não somem atrás das fechadas).
+ */
+async function pendenciasAbertas(
+  pendente: string,
+  concluida: string,
+  limite: number,
+  ate?: Date,
+): Promise<{ id: string; entidade: string | null; entidadeId: string | null; detalhes: string | null; createdAt: Date }[]> {
+  const LOTE = 200;
+  const out: { id: string; entidade: string | null; entidadeId: string | null; detalhes: string | null; createdAt: Date }[] = [];
+  let cursor: string | undefined;
+  for (;;) {
+    const lote = await db.auditLog.findMany({
+      where: { acao: pendente, ...(ate ? { createdAt: { lte: ate } } : {}) },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      take: LOTE,
+      ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
+      select: { id: true, entidade: true, entidadeId: true, detalhes: true, createdAt: true },
+    });
+    if (!lote.length) break;
+    const conclusoes = await db.auditLog.findMany({
+      where: { acao: concluida, OR: lote.map((p) => ({ detalhes: { startsWith: marcaPendencia(p.id) } })) },
+      select: { detalhes: true },
+    });
+    out.push(...filtrarAbertas(lote, idsPendenciaConcluidos(conclusoes.map((c) => c.detalhes)), limite - out.length));
+    if (out.length >= limite || lote.length < LOTE) break;
+    cursor = lote[lote.length - 1].id;
+  }
+  return out;
+}
+
+async function registrarConclusao(acao: string, p: { id: string; entidade: string | null; entidadeId: string | null }, extra = "") {
+  await db.auditLog.create({
+    data: {
+      acao, categoria: "admin", severidade: "info",
+      usuarioNome: "Sistema", role: "SISTEMA", entidade: p.entidade, entidadeId: p.entidadeId,
+      detalhes: marcaPendencia(p.id) + extra,
+    },
   });
-  const feitos = new Set(
-    (
-      await db.auditLog.findMany({
-        where: { acao: ACAO_STORAGE_REMOCAO_CONCLUIDA, detalhes: { in: pendentes.map((p) => `pendencia=${p.id}`) } },
-        select: { detalhes: true },
-      })
-    ).map((c) => c.detalhes ?? ""),
-  );
+}
+
+/** Nova tentativa das remoções do Storage pendentes. Detalhes ilegíveis viram falha registrada (uma vez). */
+export async function reprocessarRemocoesStoragePendentes(limite = 50): Promise<{ concluidas: number; falhas: number }> {
+  const pendentes = await pendenciasAbertas(ACAO_STORAGE_REMOCAO_PENDENTE, ACAO_STORAGE_REMOCAO_CONCLUIDA, limite);
   let concluidas = 0;
   let falhas = 0;
   for (const p of pendentes) {
-    if (feitos.has(`pendencia=${p.id}`)) continue;
-    let paths: string[] = [];
-    try {
-      const d = JSON.parse(p.detalhes ?? "{}") as { paths?: unknown };
-      paths = Array.isArray(d.paths) ? d.paths.filter((x): x is string => typeof x === "string") : [];
-    } catch {
+    const lido = lerPathsStorage(p.detalhes);
+    if (!lido.ok) {
+      falhas++;
+      const marca = marcaPendencia(p.id);
+      const jaRegistrada = await db.auditLog.count({ where: { acao: ACAO_PENDENCIA_LGPD_INVALIDA, detalhes: { startsWith: marca } } });
+      if (!jaRegistrada) {
+        await db.auditLog.create({
+          data: {
+            acao: ACAO_PENDENCIA_LGPD_INVALIDA, categoria: "admin", severidade: "critical",
+            usuarioNome: "Sistema", role: "SISTEMA", entidade: p.entidade, entidadeId: p.entidadeId,
+            detalhes: `${marca}; tipo=${ACAO_STORAGE_REMOCAO_PENDENTE}; ${lido.erro}. Remover os arquivos manualmente.`,
+          },
+        });
+      }
       continue;
     }
     try {
-      await removerObjetosStorage(paths);
-      await db.auditLog.create({
-        data: {
-          acao: ACAO_STORAGE_REMOCAO_CONCLUIDA, categoria: "admin", severidade: "info",
-          usuarioNome: "Sistema", role: "SISTEMA", entidade: "paciente", entidadeId: p.entidadeId,
-          detalhes: `pendencia=${p.id}`,
-        },
-      });
+      await removerObjetosStorage(lido.paths);
+      await registrarConclusao(ACAO_STORAGE_REMOCAO_CONCLUIDA, p);
       concluidas++;
     } catch {
       falhas++;
@@ -781,35 +817,15 @@ async function desfazerBanOuRegistrarPendente(userId: string, supabaseId: string
  * anonimizada depois (ainda ligada ao mesmo supabaseId e não anonimizada).
  */
 export async function reprocessarDesbansPendentes(limite = 50): Promise<{ concluidas: number; falhas: number }> {
-  const pendentes = await db.auditLog.findMany({
-    where: { acao: ACAO_AUTH_DESBAN_PENDENTE },
-    orderBy: { createdAt: "asc" },
-    take: limite,
-    select: { id: true, entidade: true, entidadeId: true, detalhes: true },
-  });
-  const feitos = new Set(
-    (
-      await db.auditLog.findMany({
-        where: { acao: ACAO_AUTH_DESBAN_CONCLUIDO, detalhes: { in: pendentes.map((p) => `pendencia=${p.id}`) } },
-        select: { detalhes: true },
-      })
-    ).map((c) => c.detalhes ?? ""),
-  );
+  const pendentes = await pendenciasAbertas(ACAO_AUTH_DESBAN_PENDENTE, ACAO_AUTH_DESBAN_CONCLUIDO, limite);
   let concluidas = 0;
   let falhas = 0;
   for (const p of pendentes) {
-    if (feitos.has(`pendencia=${p.id}`) || !p.entidadeId) continue;
+    if (!p.entidadeId) continue;
     const id = /supabaseId=([0-9a-fA-F-]{36})/.exec(p.detalhes ?? "")?.[1];
     if (!id) continue;
     const u = await db.user.findUnique({ where: { id: p.entidadeId }, select: { email: true, supabaseId: true } });
-    const concluir = async () =>
-      db.auditLog.create({
-        data: {
-          acao: ACAO_AUTH_DESBAN_CONCLUIDO, categoria: "admin", severidade: "info",
-          usuarioNome: "Sistema", role: "SISTEMA", entidade: p.entidade, entidadeId: p.entidadeId,
-          detalhes: `pendencia=${p.id}`,
-        },
-      });
+    const concluir = () => registrarConclusao(ACAO_AUTH_DESBAN_CONCLUIDO, p);
     // Anonimizada depois (ou desvinculada): o ban deve ficar.
     if (!u || u.supabaseId !== id || estaAnonimizado(u)) {
       await concluir();
@@ -839,24 +855,15 @@ const PARES_PENDENCIA: [string, string][] = [
 /**
  * Pendências (Auth, Storage, desban) abertas há mais de 10 dias: grava UM
  * aviso `LGPD_PENDENCIA_ATRASADA` (crítico, categoria "admin", só ids) por
- * pendência. Aberta = sem evento de conclusão do mesmo tipo e da mesma
- * entidade depois dela.
+ * pendência. Aberta = sem conclusão com `pendencia=<id>` dela mesma.
  */
 export async function alertarPendenciasLgpdAtrasadas(agora: Date = new Date()): Promise<number> {
   const limite = new Date(agora.getTime() - DIAS_ALERTA_PENDENCIA_LGPD * 86_400_000);
   let alertas = 0;
   for (const [pendente, concluida] of PARES_PENDENCIA) {
-    const antigas = await db.auditLog.findMany({
-      where: { acao: pendente, createdAt: { lte: limite } },
-      select: { id: true, entidade: true, entidadeId: true, createdAt: true },
-      take: 200,
-    });
+    const antigas = await pendenciasAbertas(pendente, concluida, 200, limite);
     for (const p of antigas) {
-      const fechada = await db.auditLog.count({
-        where: { acao: concluida, entidadeId: p.entidadeId, createdAt: { gte: p.createdAt } },
-      });
-      if (fechada) continue;
-      const marca = `pendencia=${p.id}`;
+      const marca = marcaPendencia(p.id);
       const jaAvisado = await db.auditLog.count({ where: { acao: ACAO_PENDENCIA_LGPD_ATRASADA, detalhes: { startsWith: marca } } });
       if (jaAvisado) continue;
       const dias = Math.floor((agora.getTime() - p.createdAt.getTime()) / 86_400_000);
@@ -892,17 +899,7 @@ const TIPO_PENDENCIA: Record<string, PendenciaLgpd["tipo"]> = {
 export async function listarPendenciasLgpd(agora: Date = new Date(), limite = 100): Promise<PendenciaLgpd[]> {
   const out: PendenciaLgpd[] = [];
   for (const [pendente, concluida] of PARES_PENDENCIA) {
-    const lista = await db.auditLog.findMany({
-      where: { acao: pendente },
-      orderBy: { createdAt: "asc" },
-      take: limite,
-      select: { id: true, entidade: true, entidadeId: true, createdAt: true },
-    });
-    for (const p of lista) {
-      const fechada = await db.auditLog.count({
-        where: { acao: concluida, entidadeId: p.entidadeId, createdAt: { gte: p.createdAt } },
-      });
-      if (fechada) continue;
+    for (const p of await pendenciasAbertas(pendente, concluida, limite)) {
       out.push({
         id: p.id,
         tipo: TIPO_PENDENCIA[pendente],
@@ -927,35 +924,21 @@ export async function reprocessarPendenciasLgpd(agora: Date = new Date()) {
 
 /** Nova tentativa das remoções do Auth pendentes. Devolve quantas concluiu. */
 export async function reprocessarRemocoesAuthPendentes(limite = 50): Promise<{ concluidas: number; falhas: number }> {
-  const pendentes = await db.auditLog.findMany({
-    where: { acao: ACAO_AUTH_REMOCAO_PENDENTE },
-    orderBy: { createdAt: "asc" },
-    take: limite,
-    select: { id: true, entidade: true, entidadeId: true, detalhes: true },
-  });
-  const concluidosIds = new Set(
-    (
-      await db.auditLog.findMany({
-        where: { acao: ACAO_AUTH_REMOCAO_CONCLUIDA, entidadeId: { in: pendentes.map((p) => p.entidadeId ?? "") } },
-        select: { detalhes: true },
-      })
-    ).map((c) => c.detalhes ?? ""),
-  );
+  const pendentes = await pendenciasAbertas(ACAO_AUTH_REMOCAO_PENDENTE, ACAO_AUTH_REMOCAO_CONCLUIDA, limite);
+  const removidosNesta = new Set<string>();
   let concluidas = 0;
   let falhas = 0;
   for (const p of pendentes) {
     const id = /supabaseId=([0-9a-fA-F-]{36})/.exec(p.detalhes ?? "")?.[1];
-    if (!id || concluidosIds.has(`supabaseId=${id}`)) continue;
+    if (!id) {
+      falhas++;
+      continue;
+    }
     try {
-      await removerUsuarioSupabaseAuth(id);
-      concluidosIds.add(`supabaseId=${id}`);
-      await db.auditLog.create({
-        data: {
-          acao: ACAO_AUTH_REMOCAO_CONCLUIDA, categoria: "admin", severidade: "info",
-          usuarioNome: "Sistema", role: "SISTEMA", entidade: p.entidade, entidadeId: p.entidadeId,
-          detalhes: `supabaseId=${id}`,
-        },
-      });
+      // Mesma conta em duas pendências: remove uma vez, conclui as duas.
+      if (!removidosNesta.has(id)) await removerUsuarioSupabaseAuth(id);
+      removidosNesta.add(id);
+      await registrarConclusao(ACAO_AUTH_REMOCAO_CONCLUIDA, p, `; supabaseId=${id}`);
       concluidas++;
     } catch {
       falhas++;
