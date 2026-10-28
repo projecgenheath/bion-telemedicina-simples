@@ -227,6 +227,44 @@ export function DocumentosPainel({
 
   const contatoAtivo = contatos.find((c) => c.id === conversaAtiva);
 
+  // Conversa em tela cheia no celular (< 768px): trava a rolagem da página,
+  // acompanha o teclado (visualViewport) e fecha com o "voltar" do Android.
+  const conversaAberta = Boolean(conversaAtiva && contatoAtivo);
+  const [celular, setCelular] = useState(false);
+  const [alturaVisivel, setAlturaVisivel] = useState<number | null>(null);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 767px)");
+    const atualizar = () => setCelular(mq.matches);
+    atualizar();
+    mq.addEventListener("change", atualizar);
+    return () => mq.removeEventListener("change", atualizar);
+  }, []);
+  useVoltarFecha(conversaAberta, () => setConversaAtiva(null));
+  const telaCheia = conversaAberta && celular;
+  useEffect(() => {
+    if (!telaCheia) return;
+    const html = document.documentElement;
+    const antes = { body: document.body.style.overflow, html: html.style.overflow };
+    document.body.style.overflow = "hidden";
+    html.style.overflow = "hidden";
+    const vv = window.visualViewport;
+    const ajustar = () => setAlturaVisivel(vv ? vv.height : null);
+    ajustar();
+    vv?.addEventListener("resize", ajustar);
+    vv?.addEventListener("scroll", ajustar);
+    return () => {
+      document.body.style.overflow = antes.body;
+      html.style.overflow = antes.html;
+      vv?.removeEventListener("resize", ajustar);
+      vv?.removeEventListener("scroll", ajustar);
+      setAlturaVisivel(null);
+    };
+  }, [telaCheia]);
+  const fimListaRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    fimListaRef.current?.scrollIntoView({ block: "end" });
+  }, [conversa.length, conversaAtiva, alturaVisivel]);
+
   return (
     <div className="px-5 py-6 space-y-4 bp-safe-top pb-24">
       {visualizando && <Visualizador titulo={visualizando.titulo} corpo={visualizando.corpo} imprimir={visualizando.imprimir} onFechar={() => setVisualizando(null)} />}
@@ -403,8 +441,18 @@ export function DocumentosPainel({
         </p>
 
         {conversaAtiva && contatoAtivo ? (
-          <div className="bp-glass overflow-hidden">
-            <div className="flex items-center gap-3 px-4 py-3 border-b border-bion-ink/8 dark:border-white/10">
+          <div
+            role={telaCheia ? "dialog" : undefined}
+            aria-modal={telaCheia ? true : undefined}
+            aria-label={telaCheia ? `Conversa com ${contatoAtivo.nome}` : undefined}
+            style={telaCheia ? { height: alturaVisivel ? `${alturaVisivel}px` : "100dvh" } : undefined}
+            className={
+              telaCheia
+                ? "fixed inset-x-0 top-0 z-[85] flex flex-col overflow-hidden bg-bion-paper dark:bg-slate-950"
+                : "bp-glass overflow-hidden flex flex-col min-h-[60vh] max-h-[80vh]"
+            }
+          >
+            <div className="shrink-0 flex items-center gap-3 px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] border-b border-bion-ink/8 dark:border-white/10">
               <button type="button"
                 onClick={() => {
                   setConversaAtiva(null);
@@ -420,9 +468,9 @@ export function DocumentosPainel({
               </div>
             </div>
 
-            <div className="h-72 overflow-y-auto bp-coluna px-4 py-3 space-y-2">
+            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain bp-coluna px-4 py-3 space-y-2">
               {conversa.length === 0 ? (
-                <p className="text-sm opacity-80 text-center pt-16">Envie a primeira mensagem para {contatoAtivo.nome.split(" ")[0]}.</p>
+                <p className="text-sm opacity-80 text-center pt-16">Envie a primeira mensagem para {contatoAtivo.nome.replace(/\.$/, "")}.</p>
               ) : (
                 conversa.map((m) => (
                   <div key={m.id} className={`flex ${m.minha ? "justify-end" : "justify-start"}`}>
@@ -433,9 +481,10 @@ export function DocumentosPainel({
                   </div>
                 ))
               )}
+              <div ref={fimListaRef} />
             </div>
 
-            <div className="p-3 flex gap-2 border-t border-bion-ink/8 dark:border-white/10">
+            <div className="shrink-0 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] flex gap-2 border-t border-bion-ink/8 dark:border-white/10">
               <input
                 value={texto}
                 onChange={(e) => setTexto(e.target.value)}
