@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useBion } from "@/lib/bion-store";
 import { TelaCarregando } from "@/components/bion/brand";
 import { MedicoApp } from "@/components/bion/medico/MedicoApp";
+import { GuardaAceiteTermos } from "@/components/bion/GuardaAceiteTermos";
 
 /**
  * App imersivo do MÉDICO (fullscreen). O layout (fullscreen) só garante
@@ -20,5 +21,9 @@ export default function PaginaMedico() {
   }, [ehMedico, sessao.role, router]);
 
   if (!ehMedico) return <TelaCarregando texto="Redirecionando…" />;
-  return <MedicoApp />;
+  return (
+    <GuardaAceiteTermos perfil="MEDICO">
+      <MedicoApp />
+    </GuardaAceiteTermos>
+  );
 }

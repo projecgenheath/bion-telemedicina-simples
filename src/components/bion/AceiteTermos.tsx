@@ -3,7 +3,7 @@ import {
   TEXTO_ACEITE_TERMOS,
   TEXTO_MARKETING_OPTIN,
   URL_POLITICA_PRIVACIDADE,
-  URL_TERMOS_PACIENTE,
+  URL_TERMOS_POR_PERFIL,
   type PerfilAceite,
 } from "@/lib/aceite-termos";
 
@@ -14,7 +14,7 @@ import {
  */
 export function AceiteTermos({
   perfil,
-  urlTermos = perfil === "PACIENTE" ? URL_TERMOS_PACIENTE : "",
+  urlTermos = URL_TERMOS_POR_PERFIL[perfil],
   urlPrivacidade = URL_POLITICA_PRIVACIDADE,
   aceitouTermos,
   onAceitouTermos,
