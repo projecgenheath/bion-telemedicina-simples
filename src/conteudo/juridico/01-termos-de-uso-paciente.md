@@ -231,7 +231,7 @@ Resumo (as regras completas estão na **Política de Cancelamento, Reembolso e R
 | Cancelar ou remarcar com **mais de 24 h** de antecedência | Sem multa. Cancelamento: reembolso integral. |
 | Cancelar ou remarcar com **24 h ou menos** | **Multa de 50%** do valor da consulta. Cancelamento: devolvemos o valor menos a multa. Remarcação: o novo horário fica reservado por **15 minutos** enquanto você paga a multa. |
 | **Falha técnica** ou **falta/atraso do médico** | **Sem multa.** Você escolhe remarcar sem custo ou receber **reembolso integral**, em até **7 dias úteis** (contados do dia seguinte, sem contar feriados nacionais). Sem escolha nesse prazo, o reembolso integral é feito automaticamente. |
-| **Você faltou** | Você pode pedir **reembolso integral** em até **7 dias corridos** depois da consulta. |
+| **Você faltou** | Se você faltar sem cancelar, não há reembolso. Se a consulta não acontecer por falta do médico ou por falha técnica, você pode pedir o reembolso integral em até 7 dias, e ele volta no mesmo cartão. |
 | Renovação de receita **recusada** pelo médico | Reembolso integral. |
 
 16.1. **Como o reembolso é devolvido.** O pagamento é feito com cartão de crédito, pela Stripe. Quando houver reembolso, o valor é devolvido no mesmo cartão usado no pagamento. O estorno é pedido na hora, mas pode levar alguns dias, ou até a próxima fatura, para aparecer, conforme o prazo do banco emissor. O valor devolvido é o valor integral devido, sem desconto de taxas.

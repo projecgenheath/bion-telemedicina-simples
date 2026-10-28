@@ -153,7 +153,7 @@ k) **não cobrar do paciente nenhum valor fora da Plataforma** por consultas age
 
 10.5. **Multas pagas pelo paciente** (cancelamento ou remarcação com 24 h ou menos de antecedência: 50% do valor da consulta) são divididas **50% para o médico e 50% para a BION**, sem comissão adicional sobre a parte do médico.
 
-10.6. **⚠️ Aviso de risco ético ao médico.** Se o paciente faltar à consulta sem cancelar, não há reembolso, e o médico fica com a sua parte, que já foi creditada na conta Stripe dele. O médico também recebe metade das multas. O CFM entende que o art. 59 do Código de Ética Médica veda ao médico aceitar remuneração por atendimento não prestado, inclusive multa ou taxa por falta ou cancelamento (Despacho CFM SEI nº 102/2025). Há também entendimento de Conselhos Regionais contrário à cobrança de percentual sobre o honorário por empresas de intermediação (CEM, art. 58). O médico declara estar ciente desse risco e **pode optar por não receber a sua parte das multas** na sua área de recebimento **[A DEFINIR: implementar a opção]**. **[DECISÃO PENDENTE DA BION COM ADVOGADO — ver pendências.]**
+10.6. **⚠️ Aviso de risco ético ao médico.** Se o paciente faltar à consulta sem cancelar, não há reembolso, e o médico fica com a sua parte, que já foi creditada na conta Stripe dele. Nas multas por cancelamento com 24 horas ou menos de antecedência, o médico recebe metade do valor retido. O CFM entende que o art. 59 do Código de Ética Médica veda ao médico aceitar remuneração por atendimento não prestado, inclusive multa ou taxa por falta ou cancelamento (Despacho CFM SEI nº 102/2025). Há também entendimento de Conselhos Regionais contrário à cobrança de percentual sobre o honorário por empresas de intermediação (CEM, art. 58). O médico declara estar ciente desse risco e **pode optar por não receber a sua parte das multas** na sua área de recebimento **[A DEFINIR: implementar a opção]**. **[DECISÃO PENDENTE DA BION COM ADVOGADO — ver pendências.]**
 
 10.7. **Crédito na conta Stripe.** Os valores do médico são creditados direto na conta Stripe dele no momento do pagamento, já descontadas a comissão da BION e a taxa de processamento. A BION não recebe nem guarda a parte do médico e não faz repasse por PIX.
 
@@ -218,9 +218,9 @@ A Plataforma, a marca BION e seus elementos pertencem à BION. O médico autoriz
 
 18.1. O médico responde exclusivamente pelo **ato médico** e pelas obrigações profissionais, fiscais e éticas próprias, e **indenizará a BION** por condenações, multas ou custos decorrentes de atos seus (inclusive erro médico, documentos irregulares, violação de sigilo ou de dados por sua conta).
 
-18.2. A BION responde pela Plataforma, pela segurança dos dados sob sua guarda, pela correção do cálculo e dos créditos feitos pela Stripe na conta conectada do médico e por atos próprios.
+18.2. A BION responde pela Plataforma, pela segurança dos dados sob sua guarda, pela correção das regras de divisão que ela configura em cada pagamento (comissão, multas e reembolsos) e por atos próprios. O processamento, a custódia e a transferência dos valores são feitos pela Stripe, conforme os termos dela.
 
-18.3. **Limitação.** Salvo dolo, culpa grave, violação de dados pessoais causada pela BION ou obrigação de pagar repasses devidos, a responsabilidade total da BION perante o médico fica limitada ao valor da remuneração recebida pela BION do médico nos **12 meses** anteriores ao fato. **[Validar com advogado.]**
+18.3. **Limitação.** Salvo dolo, culpa grave, violação de dados pessoais causada pela BION ou valores devidos ao médico por erro nas regras de divisão configuradas pela BION, a responsabilidade total da BION perante o médico fica limitada ao valor da remuneração recebida pela BION do médico nos **12 meses** anteriores ao fato. **[Validar com advogado.]**
 
 18.4. Nenhuma parte responde por caso fortuito ou força maior (Código Civil, art. 393).
 
@@ -232,7 +232,7 @@ A Plataforma, a marca BION e seus elementos pertencem à BION. O médico autoriz
 
 19.3. **Suspensão ou rescisão imediata** pela BION em caso de: CRM irregular; denúncia grave com indícios; fraude; violação de sigilo ou de dados; descumprimento reiterado; ordem de autoridade. A decisão será comunicada com o motivo, e o médico pode apresentar defesa em **[A DEFINIR: 5] dias úteis**.
 
-19.4. **Efeitos.** Após o término: (a) os repasses devidos são pagos e os ajustes compensados; (b) **o prontuário permanece guardado pela BION** pelo prazo legal (20 anos — Lei 13.787/2018), acessível aos pacientes e ao médico mediante solicitação para fins legais; (c) os dados pessoais do médico são mantidos pelos prazos da Política de Privacidade (ex.: fiscais 5 anos; logs 6 meses). **[Ver pendências: ainda não há rotina de anonimização da conta do médico.]**
+19.4. **Efeitos.** Após o término: (a) os valores já creditados permanecem na conta Stripe do médico, e reembolsos, estornos ou contestações de consultas anteriores ao término continuam sendo revertidos pela Stripe, como no 10.4; (b) **o prontuário permanece guardado pela BION** pelo prazo legal (20 anos — Lei 13.787/2018), acessível aos pacientes e ao médico mediante solicitação para fins legais; (c) os dados pessoais do médico são mantidos pelos prazos da Política de Privacidade (ex.: fiscais 5 anos; logs 6 meses). **[Ver pendências: ainda não há rotina de anonimização da conta do médico.]**
 
 # 20. Alterações
 
@@ -290,10 +290,10 @@ As comunicações ocorrem pelo app e pelo e-mail cadastrado. Contato da BION: **
 | Cancelamento com ≤ 24 h | multa de 50% de V (o paciente recebe 50% de volta no cartão; os outros 50% ficam divididos meio a meio entre o médico e a BION) | 25% de V ⚠️ | 25% de V |
 | Remarcação com ≤ 24 h | multa de 50% de V (horário reservado 15 min) | 25% de V ⚠️ + consulta remarcada normalmente | 25% de V |
 | Falta ou atraso > 10 min do médico / falha técnica | remarcação sem custo ou reembolso integral | 0 | 0 |
-| Falta do paciente (desfecho registrado) | V | 90% de V ⚠️ (sem reembolso; a parte do médico permanece na conta Stripe dele) | 10% de V |
-| Falta do paciente — paciente pede reembolso em até 7 dias corridos | reembolso integral | 0 (se já pago, revertido pela Stripe da conta conectada do médico) | 0 |
+| Falta do paciente sem cancelar (desfecho registrado) | V, sem reembolso | 90% de V ⚠️ (sem reembolso; a parte do médico permanece na conta Stripe dele) | 10% de V |
+| Falta do médico ou falha técnica — paciente pede reembolso integral em até 7 dias | reembolso integral | 0 (se já pago, revertidos pela Stripe da conta conectada do médico) | 0 |
 
 - **Divisão:** divisão automática no momento do pagamento; transferência ao banco conforme o calendário da Stripe.
-- **Ajustes:** reembolsos posteriores ao pagamento são revertido pela Stripe da conta conectada do médico; saldo não compensado é carregado.
+- **Ajustes:** reembolsos posteriores ao pagamento são revertidos pela Stripe da conta conectada do médico; saldo não compensado é carregado.
 
 *Vigente a partir do seu aceite.*

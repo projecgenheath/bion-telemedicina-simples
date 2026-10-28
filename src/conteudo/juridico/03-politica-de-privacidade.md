@@ -267,7 +267,7 @@ Usamos **apenas cookies essenciais de login** (`bion_sessao` e cookies `sb-*` do
 
 # 18. Dados dos médicos
 
-18.1. Os dados dos médicos são tratados para o **contrato** (cadastro, agenda, repasses), **obrigações regulatórias** (verificação do CRM), **obrigações fiscais**, **segurança** (alertas de troca de identificador da conta Stripe (e, no histórico anterior a 28/10/2026, a chave PIX) e de CNPJ divergente) e **divulgação do perfil público** (nome, CRM, especialidade, preço, formação, experiência, idiomas, biografia, foto, horários e avaliação média).
+18.1. Os dados dos médicos são tratados para o **contrato** (cadastro, agenda, recebimentos), **obrigações regulatórias** (verificação do CRM), **obrigações fiscais**, **segurança** (alertas de troca de identificador da conta Stripe (e, no histórico anterior a 28/10/2026, a chave PIX) e de CNPJ divergente) e **divulgação do perfil público** (nome, CRM, especialidade, preço, formação, experiência, idiomas, biografia, foto, horários e avaliação média).
 
 18.2. Data de nascimento, sexo, telefone, CNPJ e dados de recebimento **não são públicos**; são vistos só pelo médico e pela administração. **O identificador da conta Stripe (e, no histórico anterior a 28/10/2026, a chave PIX) e o CPF/CNPJ do titular ficam no banco sem criptografia própria no campo**, e uma cópia é registrada em cada repasse como prova do pagamento.
 
@@ -277,7 +277,7 @@ Usamos **apenas cookies essenciais de login** (`bion_sessao` e cookies `sb-*` do
 
 # 19. Dados de administradores e da equipe
 
-As ações dos administradores (inclusive acessos ao cofre, correções de desfecho, pagamentos de repasse e reembolsos) são registradas em auditoria com nome, papel e data, por 5 anos. A equipe está sujeita a dever de confidencialidade.
+As ações dos administradores (inclusive acessos ao cofre, correções de desfecho, reembolsos e, no histórico anterior a 28/10/2026, pagamentos de repasse) são registradas em auditoria com nome, papel e data, por 5 anos. A equipe está sujeita a dever de confidencialidade.
 
 # 20. Encarregado (DPO) e contato
 
@@ -310,11 +310,11 @@ Podemos atualizar esta política. Mudanças relevantes serão avisadas no app co
 | `ChatConsulta` | paciente/médico | **sim** | paciente, médico; **admin não** | Supabase | prontuário 20 anos (não apagável) |
 | `PresencaSala`, `ChamadaConsulta` | paciente/médico | não | paciente, médico; admin status | Supabase; push | 1 h após desfecho (presença) |
 | `Mensagem` | paciente/médico/suporte | pode ser | participantes | Supabase | com médico: 20 anos; com suporte: até exclusão |
-| `Pagamento`, `Reembolso` | paciente | não | paciente, admin; médico (valor) | gateway (futuro) | 5 anos |
+| `Pagamento`, `Reembolso` | paciente | não | paciente, admin; médico (valor) | Stripe (operadora de pagamentos, EUA) | 5 anos |
 | `Repasse`, `RepasseItem`, `RepasseAjuste`, `DadosRecebimentoMedico` (histórico de pagamentos anteriores a 28/10/2026, mantido por obrigação fiscal) | médico | não | médico, admin | Supabase | 5 anos |
 | `Pagamento` (colunas `stripeCheckoutSessionId`, `stripePaymentIntentId`, `stripeChargeId`, `stripeTaxaCentavos`), `Reembolso` (coluna `stripeRefundId`) | paciente | não | admin; sistema | Supabase; Stripe 🌐 | 5 anos |
 | `PerfilMedico` (coluna `stripeAccountId`) | médico | não | médico, admin | Supabase; Stripe 🌐 | contrato + 5 anos |
-| `StripeEvento` (identificadores dos avisos da Stripe já processados) | — | não | sistema | Supabase; Stripe 🌐 | **[A DEFINIR]** |
+| `StripeEvento` (identificadores dos avisos da Stripe já processados) | — | não | sistema | Supabase; Stripe 🌐 | 5 anos, por obrigação fiscal e para defesa em contestações |
 | `PerfilMedico` | médico | não | público (perfil); privado: médico e admin | Supabase | contrato + 5 anos |
 | `Avaliacao` | paciente/médico | pode ser | médico, admin; média pública | Supabase | nota mantida; comentário apagado na exclusão |
 | `Ticket` | paciente/médico | pode ser | admin | Supabase | até 5 anos; apagado na exclusão |
