@@ -18,6 +18,7 @@ import {
   X,
 } from "lucide-react";
 import { useBion, type AnamneseResumo } from "@/lib/bion-store";
+import { mensagemFalhaIa, postarIa } from "@/lib/bion-ia-cliente";
 import { diasDoAgendamento } from "@/components/bion/agendamento/horarios";
 import { agendaLivreDoMedico } from "./agenda-medico";
 import { useDiasBloqueados } from "./useDiasBloqueados";
@@ -150,13 +151,12 @@ export function ChatBion({
       histAnamneseRef.current.push({ remetente: "ia", texto: info.avisoPrevio });
     }
     try {
-      const res = await fetch("/api/anamnese", {
-        method: "POST",
+      const r = await postarIa<RespostaAnamnese>("/api/anamnese", {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ consultaId, historico: [] }),
       });
-      const json = (await res.json()) as RespostaAnamnese;
-      if (!res.ok || !json.texto) throw new Error(json.erro ?? "Falha");
+      const json = r.json;
+      if (!r.ok || !json?.texto) throw new Error(json?.erro ?? "Falha");
       aplicarDelta(json);
       const sufixoPerfil = json.perfilAtualizado?.length && !json.texto.includes("Perfil atualizado")
         ? `\n\n**Perfil atualizado:** ${json.perfilAtualizado.join(", ")}.`
@@ -210,13 +210,12 @@ export function ChatBion({
     setEntrada("");
     setPensando(true);
     try {
-      const res = await fetch("/api/anamnese", {
-        method: "POST",
+      const r = await postarIa<RespostaAnamnese>("/api/anamnese", {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ consultaId, mensagem: t, historico: histAnamneseRef.current.slice(-14) }),
       });
-      const json = (await res.json()) as RespostaAnamnese;
-      if (!res.ok || !json.texto) throw new Error(json.erro ?? "Falha");
+      const json = r.json;
+      if (!r.ok || !json?.texto) throw new Error(json?.erro ?? "Falha");
       aplicarDelta(json);
       const sufixoPerfil = json.perfilAtualizado?.length && !json.texto.includes("Perfil atualizado")
         ? `\n\n**Perfil atualizado:** ${json.perfilAtualizado.join(", ")}.`
@@ -318,15 +317,16 @@ export function ChatBion({
       const form = new FormData();
       form.append("arquivo", arquivo);
       form.append(CAMPO_CONSENTIMENTO_IA_EXAME, VERSAO_CONSENTIMENTO_IA_EXAME);
-      const res = await fetch("/api/bion-ia/exame", { method: "POST", body: form });
-      const json = (await res.json()) as {
+      const r = await postarIa<{
         ok?: boolean;
         mensagem?: string;
         erro?: string;
         nomeVerificado?: string;
         examesSalvos?: { titulo: string; itens: { nome: string; valor: number; unidade?: string }[] }[];
         dados?: unknown;
-      };
+      }>("/api/bion-ia/exame", { body: form });
+      // 504 HTML / timeout / rede: mensagem amigável (o log sem PII já foi feito).
+      const json = r.json ?? { erro: mensagemFalhaIa(r.ok ? "nao-json" : r.falha) };
 
       if (json.ok && json.examesSalvos?.length) {
         // Laudo pela IA ainda devolve estado fresco (rota pesada rara) —
@@ -393,14 +393,14 @@ export function ChatBion({
     setUltimaFalha(null);
     setSegundosEspera(0);
     try {
-      const res = await fetch("/api/bion-ia", {
-        method: "POST",
+      const r = await postarIa<{ resposta?: string; fonte?: string; modelo?: string; erro?: string }>("/api/bion-ia", {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ mensagens: historico.filter((m) => m.texto.length < 500).slice(-4).map((m) => ({ remetente: m.remetente === "usuario" ? "usuario" : "ia", texto: m.texto.replace(/\*\*/g, "") })) }),
       });
-      const json = (await res.json()) as { resposta?: string; fonte?: string; modelo?: string; erro?: string };
-      if (!res.ok || !json.resposta) throw new Error(json.erro ?? "Falha");
-      setMensagens((m) => [...m, { remetente: "ia", texto: json.resposta!, fonte: json.fonte, modelo: json.modelo }]);
+      const json = r.json;
+      if (!r.ok || !json?.resposta) throw new Error(json?.erro ?? (r.ok ? "Falha" : mensagemFalhaIa(r.falha)));
+      const { resposta, fonte, modelo } = json;
+      setMensagens((m) => [...m, { remetente: "ia", texto: resposta, fonte, modelo }]);
     } catch (e) {
       const msg = e instanceof Error && e.message && e.message !== "Falha"
         ? e.message

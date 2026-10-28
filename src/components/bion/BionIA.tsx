@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { mensagemFalhaIa, postarIa } from "@/lib/bion-ia-cliente";
 import {
   Sparkles,
   Send,
@@ -179,28 +180,16 @@ export function BionIA() {
     });
 
     let resposta = "";
-    try {
-      const res = await fetch("/api/bion-ia", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          mensagens: historico.map((m) => ({ remetente: m.remetente, texto: m.texto })),
-        }),
-      });
-      const json = (await res.json().catch(() => null)) as {
-        resposta?: string;
-        fonte?: string;
-        erro?: string;
-      } | null;
-      resposta = json?.resposta ?? "";
-      if (!res.ok || !resposta) {
-        resposta =
-          json?.erro ||
-          "A BION IA está um pouco sobrecarregada agora. Aguarde alguns segundos e envie de novo.";
-      }
-    } catch {
-      resposta =
-        "Não consegui falar com a BION IA agora (rede). Tente novamente em instantes — não usamos respostas locais neste chat.";
+    // postarIa: prazo no cliente, 504 HTML/timeout tratados e log sem PII.
+    const r = await postarIa<{ resposta?: string; fonte?: string; erro?: string }>("/api/bion-ia", {
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        mensagens: historico.map((m) => ({ remetente: m.remetente, texto: m.texto })),
+      }),
+    });
+    resposta = r.json?.resposta ?? "";
+    if (!r.ok || !resposta) {
+      resposta = r.json?.erro || (r.ok ? mensagemFalhaIa("nao-json") : mensagemFalhaIa(r.falha));
     }
 
     const novaMsgIA: MensagemIA = {

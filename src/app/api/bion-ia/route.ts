@@ -3,7 +3,7 @@ import { quandoClinica } from "@/lib/server/fuso";
 import { db } from "@/lib/db";
 import { exigirSessao } from "@/lib/server/auth";
 import { ok, falha } from "@/lib/server/http";
-import { chatComFonte, registrosGemini, type AnonNomes } from "@/lib/server/llm";
+import { chatComFonte, type AnonNomes } from "@/lib/server/llm";
 import { anonimizarMensagensIa, type IdentificadoresPaciente } from "@/lib/server/anonimizar-ia";
 import { anonimizarMensagensTexto } from "@/lib/server/anonimizar-texto";
 import { dataNascimentoParaIso } from "@/lib/idade";
@@ -176,14 +176,16 @@ export async function POST(req: NextRequest) {
         : []),
     ];
     // somenteGemini: não gasta tempo em público/SDK; sem fallback local.
-    const { texto: respostaLlm, fonte, modelo } = await chatComFonte(mensagensFinais, TIMEOUT_MS, anon, {
+    // retries 1: uma nova tentativa se a primeira falhar e ainda houver
+    // tempo no prazo (a camada llm só repete com folga ≥ 6s).
+    const { texto: respostaLlm, fonte, modelo, requestId, registros } = await chatComFonte(mensagensFinais, TIMEOUT_MS, anon, {
       somenteGemini: true,
-      retries: 0,
+      retries: 1,
     });
     if (respostaLlm) {
-      return ok({ resposta: respostaLlm, fonte, modelo });
+      return ok({ resposta: respostaLlm, fonte, modelo, requestId });
     }
-    const ultimo = registrosGemini().at(-1);
+    const ultimo = registros?.at(-1);
     const motivo =
       ultimo?.erro === "timeout"
         ? "O modelo demorou demais para responder."
@@ -198,6 +200,7 @@ export async function POST(req: NextRequest) {
       {
         erro: `${motivo} Tente de novo em alguns segundos — este chat não usa resposta local.`,
         fonte: null,
+        requestId,
       },
       { status: 503 },
     );

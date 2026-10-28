@@ -2,6 +2,10 @@ import { db } from "@/lib/db";
 import type { FonteLlm } from "@/lib/server/llm";
 
 export type EventoLlm = {
+  /** Id único do pedido (correlaciona com o log do cliente/servidor). Ausente em eventos antigos. */
+  requestId?: string;
+  /** Quantas vezes o canal Gemini foi tentado neste pedido. Ausente em eventos antigos. */
+  tentativas?: number;
   ts: number;
   ok: boolean;
   ms: number;

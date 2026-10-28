@@ -1,6 +1,7 @@
 import { limparArtefatos, repararRepeticoes } from "@/lib/server/llm-sanitize";
 import { registrarTurnoLlm } from "@/lib/server/llm-monitor";
 import ZAI from "z-ai-web-dev-sdk";
+import { randomUUID } from "node:crypto";
 
 /**
  * Camada única de acesso à IA GENERATIVA para as rotas da BION IA.
@@ -45,10 +46,26 @@ type ClienteEnv = { tipo: "env"; baseUrl: string; apiKey: string; model?: string
 type ClienteSdk = { tipo: "sdk"; zai: Awaited<ReturnType<typeof ZAI.create>> };
 type Cliente = ClienteEnv | ClienteSdk | { tipo: "gemini" };
 
-type Resultado = { texto: string | null; fonte: FonteLlm | null; modelo?: string | null };
+type Resultado = {
+  texto: string | null;
+  fonte: FonteLlm | null;
+  modelo?: string | null;
+  /** Id deste pedido (o mesmo gravado no LLM_TURNO do monitor). */
+  requestId?: string;
+  /** Tentativas Gemini DESTE pedido (sem estado global compartilhado). */
+  registros?: RegistroGemini[];
+};
+
+/** Normaliza erros de fetch: abort por prazo vira sempre "timeout". */
+function mensagemErro(e: unknown): string {
+  if (e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError")) return "timeout";
+  return e instanceof Error ? e.message : String(e);
+}
 
 const SONDA_TIMEOUT_MS = 4_000;
 const COOLDOWN_FALHA_MS = 12_000;
+/** Tempo mínimo restante no prazo para valer uma nova tentativa no Gemini. */
+const RETRY_MIN_MS = 6_000;
 
 /* --------------------------- GOOGLE GEMINI --------------------------- */
 
@@ -233,13 +250,6 @@ export type RegistroGemini = {
   erro: string | null;
 };
 
-let _registrosGemini: RegistroGemini[] = [];
-
-/** Registros da última chamada de chamarGemini NESTA instância (ler logo após). */
-export function registrosGemini(): RegistroGemini[] {
-  return _registrosGemini;
-}
-
 /** POST genérico ao generateContent; repetição sem thinkingConfig em 400. */
 async function geminiPost(
   model: string,
@@ -247,47 +257,47 @@ async function geminiPost(
   corpo: GeminiCorpo,
   prazo: number,
   rotulo = "gemini",
+  registros: RegistroGemini[] = [],
 ): Promise<string | null> {
   const url = `${GEMINI_BASE}/${model}:generateContent`;
   const chamar = async (c: GeminiCorpo, rotuloTurno: string): Promise<GeminiResposta | null> => {
     const inicio = Date.now();
+    const ms = restante(prazo);
+    if (ms <= 0) {
+      registros.push({ rotulo: rotuloTurno, status: null, finish: null, block: null, ms: 0, textoLen: 0, erro: "timeout" });
+      return null;
+    }
     try {
-      const bruto = (await Promise.race([
-        fetch(url, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "X-goog-api-key": apiKey },
-          body: JSON.stringify(c),
-        }).then(async (r) => {
-          const j = (await r.json().catch(() => null)) as (GeminiResposta & { error?: { message?: string } }) | null;
-          _registrosGemini.push({
-            rotulo: rotuloTurno,
-            status: r.status,
-            finish: j?.candidates?.[0]?.finishReason ?? null,
-            block: j?.promptFeedback?.blockReason ?? null,
-            ms: Date.now() - inicio,
-            textoLen: r.ok ? textoGemini(j).length : 0,
-            erro: r.ok ? null : limpar(j?.error?.message ?? `HTTP ${r.status}`, apiKey),
-          });
-          if (!r.ok) throw new Error(`gemini HTTP ${r.status}`);
-          return j as GeminiResposta;
-        }),
-        new Promise<null>((_, rejeita) => setTimeout(() => rejeita(new Error("timeout")), restante(prazo))),
-      ])) as GeminiResposta | null;
-      return bruto;
+      // AbortSignal: o fetch é CANCELADO no prazo (antes o Promise.race só
+      // parava de esperar e a conexão seguia aberta consumindo a função).
+      const r = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-goog-api-key": apiKey },
+        body: JSON.stringify(c),
+        signal: AbortSignal.timeout(ms),
+      });
+      const j = (await r.json().catch(() => null)) as (GeminiResposta & { error?: { message?: string } }) | null;
+      registros.push({
+        rotulo: rotuloTurno,
+        status: r.status,
+        finish: j?.candidates?.[0]?.finishReason ?? null,
+        block: j?.promptFeedback?.blockReason ?? null,
+        ms: Date.now() - inicio,
+        textoLen: r.ok ? textoGemini(j).length : 0,
+        erro: r.ok ? null : limpar(j?.error?.message ?? `HTTP ${r.status}`, apiKey),
+      });
+      return r.ok ? (j as GeminiResposta) : null;
     } catch (e) {
-      // registro ausente = falha antes da resposta HTTP (timeout / rede)
-      const registrado = _registrosGemini.some((rg) => rg.rotulo === rotuloTurno);
-      if (!registrado) {
-        _registrosGemini.push({
-          rotulo: rotuloTurno,
-          status: null,
-          finish: null,
-          block: null,
-          ms: Date.now() - inicio,
-          textoLen: 0,
-          erro: limpar(e instanceof Error ? e.message : String(e), apiKey),
-        });
-      }
+      // falha antes da resposta HTTP (timeout / rede)
+      registros.push({
+        rotulo: rotuloTurno,
+        status: null,
+        finish: null,
+        block: null,
+        ms: Date.now() - inicio,
+        textoLen: 0,
+        erro: limpar(mensagemErro(e), apiKey),
+      });
       return null;
     }
   };
@@ -317,9 +327,9 @@ async function chamarGemini(
   prazo: number,
   modeloOverride?: string,
   opcoes?: { ignorarDisjuntor?: boolean; bruto?: boolean },
-): Promise<{ texto: string | null; modelo: string | null }> {
+  registros: RegistroGemini[] = [],
+): Promise<{ texto: string | null; modelo: string | null; registros: RegistroGemini[] }> {
   const { apiKey } = geminiConfig();
-  _registrosGemini = [];
   const sys = mensagens[0]?.role === "assistant" ? mensagens[0].content : null;
   const resto = (sys ? mensagens.slice(1) : mensagens).map((m) => ({
     role: m.role === "user" ? ("user" as const) : ("model" as const),
@@ -343,7 +353,7 @@ async function chamarGemini(
   if (conteudos.length && conteudos[0].role === "model") {
     conteudos.unshift({ role: "user", parts: [{ text: "(contexto da conversa abaixo)" }] });
   }
-  if (!conteudos.length) return { texto: null, modelo: null };
+  if (!conteudos.length) return { texto: null, modelo: null, registros };
 
   // GEMMA: a família Gemma na API do Gemini NÃO aceita systemInstruction nem
   // thinkingConfig — o prompt de sistema é fundido no primeiro turno "user",
@@ -441,8 +451,8 @@ function comporFala(continuacao: string, comPrefill: boolean): string {
     const subprazo = Date.now() + Math.max(Math.round(restante(prazo) * (ehGemma ? 0.85 : 0.55)), 6_000);
 
     if (!ehGemma) {
-      const texto1 = await geminiPost(modelo, apiKey, corpo, Math.min(prazo, subprazo), modelo);
-      if (texto1 && !textoComEcoRaciocinio(texto1)) return { texto: texto1, modelo };
+      const texto1 = await geminiPost(modelo, apiKey, corpo, Math.min(prazo, subprazo), modelo, registros);
+      if (texto1 && !textoComEcoRaciocinio(texto1)) return { texto: texto1, modelo, registros };
     } else {
       // Sem prefill: o "Claro!" + 2ª geração colava duas falas e atrasava.
       // Uma chamada, teto baixo, stop no início de rascunho.
@@ -458,6 +468,7 @@ function comporFala(continuacao: string, comPrefill: boolean): string {
         },
         Math.min(prazo, subprazo),
         modelo,
+        registros,
       );
       const comPrefill = false;
       if (texto1) {
@@ -468,7 +479,7 @@ function comporFala(continuacao: string, comPrefill: boolean): string {
         // Gemma limpo: desarma o disjuntor (a Google corrigiu o despejo).
         _gemmaEcoSeguidos = 0;
         _gemmaPuladoAte = 0;
-        return { texto: repararRepeticoes(comporFala(texto1, comPrefill)), modelo };
+        return { texto: repararRepeticoes(comporFala(texto1, comPrefill)), modelo, registros };
       }
       if (texto1) {
         // Despejo de raciocínio confirmado → SANITIZA em vez de descartar:
@@ -478,7 +489,7 @@ function comporFala(continuacao: string, comPrefill: boolean): string {
         if (limpo) {
           _gemmaEcoSeguidos = 0;
           _gemmaPuladoAte = 0;
-          return { texto: repararRepeticoes(comporFala(limpo, comPrefill)), modelo };
+          return { texto: repararRepeticoes(comporFala(limpo, comPrefill)), modelo, registros };
         }
         // Despejo insanitizável → arma o disjuntor (só tem efeito quando
         // há reserva na cadeia; ver condição do continue acima).
@@ -487,7 +498,7 @@ function comporFala(continuacao: string, comPrefill: boolean): string {
           _gemmaPuladoAte = Date.now() + GEMMA_ECO_COOLDOWN_MS;
           _gemmaEcoSeguidos = 0;
         }
-        if (modoBruto) return { texto: texto1, modelo }; // diagnóstico: ver o despejo cru
+        if (modoBruto) return { texto: texto1, modelo, registros }; // diagnóstico: ver o despejo cru
       }
       // Gemma: o T1 JÁ é o caminho sem thinking (o 400 do thinkingConfig é
       // evitado por construção) e um T2 idêntico só repetiria o mesmo despejo —
@@ -500,10 +511,10 @@ function comporFala(continuacao: string, comPrefill: boolean): string {
       contents: conteudosDoModelo,
       generationConfig: { temperature: 0.7, maxOutputTokens: 8192 },
     };
-    const texto2 = await geminiPost(modelo, apiKey, sem, prazo, `${modelo}-sem-thinking`);
-    if (texto2 && !textoComEcoRaciocinio(texto2)) return { texto: texto2, modelo };
+    const texto2 = await geminiPost(modelo, apiKey, sem, prazo, `${modelo}-sem-thinking`, registros);
+    if (texto2 && !textoComEcoRaciocinio(texto2)) return { texto: texto2, modelo, registros };
   }
-  return { texto: null, modelo: null };
+  return { texto: null, modelo: null, registros };
 }
 
 /**
@@ -545,6 +556,7 @@ export async function visaoGemini(
       },
       prazo,
       modelo,
+      [],
     );
     if (texto) return texto;
   }
@@ -571,16 +583,19 @@ async function chamarEnv(c: ClienteEnv, mensagens: Msg[], prazo: number): Promis
     thinking: { type: "disabled" },
     ...(c.model ? { model: c.model } : {}),
   };
+  const ms = restante(prazo);
+  if (ms <= 0) return null;
   const bruto = await comPrazo(
     fetch(`${c.baseUrl}/chat/completions`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${c.apiKey}` },
       body: JSON.stringify(corpo),
+      signal: AbortSignal.timeout(ms),
     }).then(async (r) => {
       if (!r.ok) throw new Error(`LLM HTTP ${r.status}`);
       return r.json();
     }),
-    restante(prazo),
+    ms,
   ) as { choices?: { message?: { content?: string } }[] } | null;
   return bruto?.choices?.[0]?.message?.content?.trim() || null;
 }
@@ -824,7 +839,10 @@ async function chamarSdk(c: ClienteSdk, mensagens: Msg[], prazo: number): Promis
 export type OpcoesChat = {
   /** Só Gemini/Gemma (+ env se houver). Não tenta público nem SDK (mais rápido). */
   somenteGemini?: boolean;
-  /** Tentativas extras no canal Gemini se a primeira falhar (padrão 0). */
+  /**
+   * Tentativas extras no canal Gemini se a primeira falhar (padrão 1, máx. 3).
+   * A nova tentativa só acontece se sobrar tempo no prazo (≥ RETRY_MIN_MS).
+   */
   retries?: number;
 };
 
@@ -835,9 +853,14 @@ export async function chatComFonte(
   opcoes?: OpcoesChat,
 ): Promise<Resultado> {
   const inicio = Date.now();
+  const requestId = randomUUID();
+  const registros: RegistroGemini[] = [];
+  let tentativas = 0;
   const devolver = (r: Resultado): Resultado => {
-    const ultimo = _registrosGemini.at(-1);
+    const ultimo = registros.at(-1);
     registrarTurnoLlm({
+      requestId,
+      tentativas,
       ts: Date.now(),
       ok: Boolean(r.texto),
       ms: Date.now() - inicio,
@@ -848,17 +871,25 @@ export async function chatComFonte(
       finish: ultimo?.finish ?? null,
       erro: r.texto ? null : ultimo?.erro ?? "sem texto",
     });
-    return r;
+    return { ...r, requestId, registros };
   };
   const prazo = Date.now() + Math.max(timeoutMs, 5_000);
-  const retries = Math.max(0, Math.min(3, opcoes?.retries ?? 0));
+  const retries = Math.max(0, Math.min(3, opcoes?.retries ?? 1));
   const somente = opcoes?.somenteGemini === true;
 
   // 1) Google Gemini — API própria (Gemma 4 26B no chat)
   if (geminiHabilitado() && geminiConfig().apiKey) {
     _geminiFalhaEm = 0; // não bloquear saudação/turno seguinte por falha anterior nesta instância
     for (let tentativa = 0; tentativa <= retries; tentativa++) {
-      const { texto, modelo } = await chamarGemini(mensagens, prazo);
+      // Nova tentativa só com tempo útil sobrando (senão é timeout garantido).
+      if (tentativa > 0 && restante(prazo) < RETRY_MIN_MS) break;
+      tentativas = tentativa + 1;
+      // Orçamento: se ainda houver nova tentativa, a atual usa ~60% do tempo
+      // restante (mín. RETRY_MIN_MS) — sem isso o subprazo do Gemma (85%)
+      // consumia o prazo inteiro e a nova tentativa nunca acontecia.
+      const prazoTentativa =
+        tentativa < retries ? Math.min(prazo, Date.now() + Math.max(RETRY_MIN_MS, Math.round(restante(prazo) * 0.6))) : prazo;
+      const { texto, modelo } = await chamarGemini(mensagens, prazoTentativa, undefined, undefined, registros);
       if (texto) return devolver({ texto, fonte: "gemini", modelo });
     }
     _geminiFalhaEm = Date.now();
@@ -936,7 +967,7 @@ export async function diagnosticoGemini(mensagens: Msg[], timeoutMs = 25_000, mo
   // bruto: quando o despejo é insanitizável, devolve o texto CRU para o painel
   // admin calibrar o sanitizador (nunca vai ao paciente).
   const r = await chamarGemini(mensagens, prazo, modelo, { ignorarDisjuntor: true, bruto: true });
-  return { texto: r.texto, modelo: r.modelo, registros: _registrosGemini };
+  return { texto: r.texto, modelo: r.modelo, registros: r.registros };
 }
 
 export type ModeloDisponivel = { id: string; nome: string };
