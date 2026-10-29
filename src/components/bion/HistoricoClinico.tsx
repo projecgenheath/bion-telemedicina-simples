@@ -20,7 +20,7 @@ import {
   Microscope,
   Filter,
 } from "lucide-react";
-import { useBion } from "@/lib/bion-store";
+import { useBion, type ExameLab, type Medicao } from "@/lib/bion-store";
 
 type FiltroTipo = "tudo" | "consultas" | "exames" | "receitas" | "atestados";
 
@@ -34,6 +34,7 @@ type EventoTimeline = {
   detalhes?: string;
   medico?: string;
   status?: string;
+  pago?: boolean;
 };
 
 const CORES: Record<string, { bg: string; text: string }> = {
@@ -52,42 +53,72 @@ const ICONES: Record<string, React.ComponentType<{ className?: string }>> = {
   evento: Heart,
 };
 
-const PRESSAO_DATA = [
-  { mes: "Jun", s: 135, d: 88 },
-  { mes: "Jul", s: 130, d: 85 },
-  { mes: "Ago", s: 128, d: 83 },
-  { mes: "Set", s: 132, d: 86 },
-  { mes: "Out", s: 126, d: 81 },
-  { mes: "Nov", s: 122, d: 79 },
-  { mes: "Dez", s: 118, d: 77 },
-];
+// Meses em português usados pelo rótulo de data do store ("10 Nov 2025").
+// Serve só para ordenar/agrupar por datas reais; nenhum valor é inventado.
+const MESES_PT: Record<string, number> = {
+  Jan: 0,
+  Fev: 1,
+  Mar: 2,
+  Abr: 3,
+  Mai: 4,
+  Jun: 5,
+  Jul: 6,
+  Ago: 7,
+  Set: 8,
+  Out: 9,
+  Nov: 10,
+  Dez: 11,
+};
 
-const PESO_DATA = [
-  { mes: "Jun", v: 78.2 },
-  { mes: "Jul", v: 77.8 },
-  { mes: "Ago", v: 77.1 },
-  { mes: "Set", v: 76.5 },
-  { mes: "Out", v: 75.9 },
-  { mes: "Nov", v: 75.2 },
-  { mes: "Dez", v: 74.8 },
-];
+/** Timestamp (ms) de um rótulo de data real do store; 0 quando não dá para determinar. */
+function tsDeDataLonga(data: string): number {
+  const m = data.trim().match(/^(\d{1,2})\s+([A-Za-z]{3})\s+(\d{4})$/);
+  if (!m) return 0;
+  const mes = MESES_PT[m[2]];
+  if (mes === undefined) return 0;
+  return Date.UTC(Number(m[3]), mes, Number(m[1]));
+}
 
-function GraficoPressao() {
+function GraficoPressao({ medicoes }: { medicoes: Medicao[] }) {
   const H = 100;
   const max = 155;
   const min = 60;
   const range = max - min;
-  const pS = PRESSAO_DATA.map((d, i) => ({
-    x: (i / (PRESSAO_DATA.length - 1)) * 100,
-    y: H - ((d.s - min) / range) * H,
-    mes: d.mes,
+  // Medições reais de pressão do paciente, em ordem cronológica.
+  const serie = [...medicoes]
+    .filter((m) => m.tipo === "pa")
+    .sort((a, b) => new Date(a.criadoEm).getTime() - new Date(b.criadoEm).getTime());
+  if (serie.length === 0) {
+    return (
+      <div className="space-y-3">
+        <div className="flex items-center justify-between text-xs">
+          <span className="font-bold flex items-center gap-1.5">
+            <Activity className="w-4 h-4 text-primary" /> Pressão Arterial (mmHg)
+          </span>
+        </div>
+        <p className="text-sm text-muted-foreground">Nenhum dado registrado.</p>
+      </div>
+    );
+  }
+  const x = (i: number) => (serie.length === 1 ? 50 : (i / (serie.length - 1)) * 100);
+  const y = (v: number) => H - ((v - min) / range) * H;
+  const pS = serie.map((m, i) => ({
+    x: x(i),
+    y: y(m.valor1),
+    mes: m.quando,
   }));
-  const pD = PRESSAO_DATA.map((d, i) => ({
-    x: (i / (PRESSAO_DATA.length - 1)) * 100,
-    y: H - ((d.d - min) / range) * H,
-  }));
+  const pD = serie
+    .map((m, i) => ({ m, i }))
+    .filter(({ m }) => m.valor2 !== undefined)
+    .map(({ m, i }) => ({
+      x: x(i),
+      y: y(m.valor2 as number),
+    }));
   const pathS = pS.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ");
   const pathD = pD.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ");
+  const ultima = serie[serie.length - 1];
+  const ultimaTexto =
+    ultima.valor2 !== undefined ? `${ultima.valor1}/${ultima.valor2}` : `${ultima.valor1}`;
 
   return (
     <div className="space-y-3">
@@ -158,32 +189,44 @@ function GraficoPressao() {
           </text>
         ))}
       </svg>
-      <div className="grid grid-cols-3 gap-2 text-center">
-        {[
-          { l: "Atual", v: "118/77", cls: "bg-muted/50 text-foreground" },
-          { l: "Meta", v: "120/80", cls: "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-200" },
-          { l: "Tendência", v: "↓ Melhora", cls: "bg-muted/50 text-emerald-700 dark:text-emerald-200" },
-        ].map((c) => (
-          <div key={c.l} className={`rounded-xl p-2 ${c.cls}`}>
-            <div className="text-xs text-muted-foreground">{c.l}</div>
-            <div className="text-sm font-extrabold">{c.v}</div>
-          </div>
-        ))}
+      <div className="text-xs text-muted-foreground">
+        Última medição:{" "}
+        <strong className="text-foreground">
+          {ultimaTexto} mmHg
+        </strong>{" "}
+        • {ultima.quando}
       </div>
     </div>
   );
 }
 
-function GraficoPeso() {
+function GraficoPeso({ medicoes }: { medicoes: Medicao[] }) {
   const H = 80;
-  const max = 80;
-  const min = 73;
-  const range = max - min;
-  const pts = PESO_DATA.map((d, i) => ({
-    x: (i / (PESO_DATA.length - 1)) * 100,
-    y: H - ((d.v - min) / range) * H,
-    v: d.v,
-    mes: d.mes,
+  // Medições reais de peso do paciente, em ordem cronológica.
+  const serie = [...medicoes]
+    .filter((m) => m.tipo === "peso")
+    .sort((a, b) => new Date(a.criadoEm).getTime() - new Date(b.criadoEm).getTime());
+  if (serie.length === 0) {
+    return (
+      <div className="space-y-3">
+        <div className="flex items-center justify-between text-xs">
+          <span className="font-bold flex items-center gap-1.5">
+            <Heart className="w-4 h-4 text-rose-500 dark:text-rose-400" /> Evolução de Peso (kg)
+          </span>
+        </div>
+        <p className="text-sm text-muted-foreground">Nenhum dado registrado.</p>
+      </div>
+    );
+  }
+  const valores = serie.map((m) => m.valor1);
+  const max = Math.max(...valores) + 1;
+  const min = Math.min(...valores) - 1;
+  const range = max - min || 1;
+  const pts = serie.map((m, i) => ({
+    x: serie.length === 1 ? 50 : (i / (serie.length - 1)) * 100,
+    y: H - ((m.valor1 - min) / range) * H,
+    v: m.valor1,
+    mes: m.quando,
   }));
   const path = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ");
   const area = `${path} L100,${H} L0,${H} Z`;
@@ -194,7 +237,9 @@ function GraficoPeso() {
         <span className="font-bold flex items-center gap-1.5">
           <Heart className="w-4 h-4 text-rose-500 dark:text-rose-400" /> Evolução de Peso (kg)
         </span>
-        <span className="text-muted-foreground">últimos 6 meses</span>
+        <span className="text-muted-foreground">
+          {serie.length} registro{serie.length !== 1 ? "s" : ""}
+        </span>
       </div>
       <svg viewBox={`0 0 100 ${H + 16}`} className="w-full" style={{ height: 110 }}>
         <path d={area} fill="rgba(14,165,233,0.08)" />
@@ -227,21 +272,19 @@ function GraficoPeso() {
           </g>
         ))}
       </svg>
-      <div className="flex justify-between text-xs text-muted-foreground">
-        <span>
-          Início: <strong className="text-foreground">78.2 kg</strong>
-        </span>
-        <span className="text-emerald-700 dark:text-emerald-200 font-bold">-3.4 kg em 6 meses</span>
-        <span>
-          IMC: <strong className="text-foreground">24.1</strong> (Normal)
-        </span>
+      <div className="text-xs text-muted-foreground">
+        Última medição:{" "}
+        <strong className="text-foreground">
+          {serie[serie.length - 1].valor1} kg
+        </strong>{" "}
+        • {serie[serie.length - 1].quando}
       </div>
     </div>
   );
 }
 
 export function HistoricoClinico() {
-  const { consultas, documentos, arquivos, sessao } = useBion();
+  const { consultas, documentos, arquivos, medicoes, exames, sessao } = useBion();
   const [filtro, setFiltro] = useState<FiltroTipo>("tudo");
   const [busca, setBusca] = useState("");
   const [ativoId, setAtivoId] = useState<string | null>(null);
@@ -256,25 +299,30 @@ export function HistoricoClinico() {
         subtitulo: c.medico,
         data: c.data,
         ts: c.ts,
-        detalhes: c.motivoConsulta ?? "Consulta de rotina",
+        detalhes: c.motivoConsulta ?? undefined,
         medico: c.medico,
         status: c.status,
+        pago: c.pago,
       })),
     ...documentos
       .filter((d) => d.paciente === sessao.nome)
-      .map((d) => ({
-        id: d.id,
-        tipo: d.tipo === "receita" ? ("receita" as const) : ("atestado" as const),
-        titulo: d.titulo,
-        subtitulo: `Emitido por ${d.medico}`,
-        data: d.data,
-        ts: Date.now() - Math.random() * 90 * 86400000,
-        detalhes:
+      .map((d) => {
+        // Só campos reais do documento; sem padrão inventado para CID ou duração.
+        const partes =
           d.tipo === "receita"
-            ? `${d.medicamento ?? ""} — ${d.posologia ?? ""}`
-            : `CID: ${d.cid ?? "Z00"} • ${d.duracao ?? "1 dia"}`,
-        medico: d.medico,
-      })),
+            ? [d.medicamento, d.posologia].filter(Boolean)
+            : [d.cid ? `CID: ${d.cid}` : undefined, d.duracao].filter(Boolean);
+        return {
+          id: d.id,
+          tipo: d.tipo === "receita" ? ("receita" as const) : ("atestado" as const),
+          titulo: d.titulo,
+          subtitulo: `Emitido por ${d.medico}`,
+          data: d.data,
+          ts: tsDeDataLonga(d.data),
+          detalhes: partes.length > 0 ? partes.join(" • ") : undefined,
+          medico: d.medico,
+        };
+      }),
     ...arquivos
       .filter((a) => a.enviadoPor === "paciente")
       .map((a) => ({
@@ -283,45 +331,22 @@ export function HistoricoClinico() {
         titulo: a.nome,
         subtitulo: "Exame anexado",
         data: a.data,
-        ts: Date.now() - Math.random() * 60 * 86400000,
+        ts: tsDeDataLonga(a.data),
         detalhes: `${a.tipo.toUpperCase()} • ${a.tamanhoKb}KB`,
       })),
-    {
-      id: "ev-hemo",
-      tipo: "exame",
-      titulo: "Hemograma Completo",
-      subtitulo: "Laboratório Fleury",
-      data: "10 Nov",
-      ts: Date.now() - 40 * 86400000,
-      detalhes: "Resultado: Normal. Hemoglobina 13.8 g/dL, Leucócitos 6.800/mm³.",
-    },
-    {
-      id: "ev-ecg",
-      tipo: "exame",
-      titulo: "ECG de Repouso 12 derivações",
-      subtitulo: "Laboratório Einstein",
-      data: "28 Out",
-      ts: Date.now() - 53 * 86400000,
-      detalhes: "Ritmo sinusal normal, sem alterações isquêmicas.",
-    },
-    {
-      id: "ev-gli",
-      tipo: "exame",
-      titulo: "Glicemia + Colesterol Total",
-      subtitulo: "Laboratório Particular",
-      data: "28 Out",
-      ts: Date.now() - 53 * 86400000,
-      detalhes: "Glicemia: 89 mg/dL (Normal). LDL: 112 mg/dL (↑ Atenção).",
-    },
-    {
-      id: "ev-pa",
-      tipo: "evento",
-      titulo: "Medição de Pressão",
-      subtitulo: "Monitoramento domiciliar",
-      data: "15 Nov",
-      ts: Date.now() - 35 * 86400000,
-      detalhes: "118/77 mmHg — Dentro do esperado.",
-    },
+    // Exames laboratoriais reais do paciente (já escopados pelo bootstrap).
+    ...exames.map((e: ExameLab) => ({
+      id: e.id,
+      tipo: "exame" as const,
+      titulo: e.titulo,
+      subtitulo: e.arquivoNome ? `Arquivo: ${e.arquivoNome}` : "Exame laboratorial",
+      data: e.quando,
+      ts: new Date(e.dataColeta).getTime() || 0,
+      detalhes:
+        e.itens
+          .map((it) => `${it.nome}: ${it.valor}${it.unidade ? ` ${it.unidade}` : ""}`)
+          .join(" • ") || undefined,
+    })),
   ] as EventoTimeline[];
 
   const filtered = eventos
@@ -346,10 +371,14 @@ export function HistoricoClinico() {
   // Agrupa por período legível
   const grupos: Record<string, EventoTimeline[]> = {};
   filtered.forEach((e) => {
+    // Sem timestamp real, o evento vai para "Sem data registrada" — nunca para
+    // um mês/ano inventado.
     const key =
       e.data === "Hoje"
         ? "Hoje"
-        : new Date(e.ts).toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+        : e.ts > 0
+          ? new Date(e.ts).toLocaleDateString("pt-BR", { month: "long", year: "numeric" })
+          : "Sem data registrada";
     if (!grupos[key]) grupos[key] = [];
     grupos[key].push(e);
   });
@@ -398,10 +427,10 @@ export function HistoricoClinico() {
       {/* Gráficos de saúde */}
       <div className="grid md:grid-cols-2 gap-6">
         <div className="bg-card border rounded-3xl p-6 shadow-sm">
-          <GraficoPressao />
+          <GraficoPressao medicoes={medicoes} />
         </div>
         <div className="bg-card border rounded-3xl p-6 shadow-sm">
-          <GraficoPeso />
+          <GraficoPeso medicoes={medicoes} />
         </div>
       </div>
 
@@ -571,10 +600,10 @@ export function HistoricoClinico() {
                                   <Eye className="w-3.5 h-3.5" /> Visualizar
                                 </button>
                               )}
-                              {ev.tipo === "consulta" && (
+                              {ev.tipo === "consulta" && ev.pago === true && (
                                 <div className="flex items-center gap-1.5 text-xs font-medium text-blue-700 dark:text-blue-300">
                                   <CheckCircle2 className="w-3.5 h-3.5" />
-                                  Pago via Pix
+                                  Pago
                                 </div>
                               )}
                             </div>
@@ -606,24 +635,9 @@ export function HistoricoClinico() {
         <div className="flex items-center gap-2 font-extrabold text-sm text-amber-900 dark:text-amber-200">
           <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400" /> Itens que merecem acompanhamento
         </div>
-        {[
-          {
-            l: "Colesterol LDL: 112 mg/dL",
-            d: "Levemente acima do ideal (< 100). Dr. Carlos recomendou dieta e novo exame em 90 dias.",
-          },
-          {
-            l: "Receita de Losartana vence em 5 dias",
-            d: "Solicite renovação na próxima consulta ou via BION Saúde IA.",
-          },
-        ].map((a, i) => (
-          <div key={i} className="flex items-start gap-2.5 text-xs">
-            <AlertTriangle className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400 mt-0.5 shrink-0" />
-            <div>
-              <div className="font-bold text-amber-900 dark:text-amber-200">{a.l}</div>
-              <div className="text-amber-700 dark:text-amber-300 mt-0.5">{a.d}</div>
-            </div>
-          </div>
-        ))}
+        <p className="text-xs text-amber-700 dark:text-amber-300">
+          Nenhum item registrado.
+        </p>
       </div>
     </div>
   );

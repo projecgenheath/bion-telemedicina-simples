@@ -133,6 +133,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     const consulta = await consultaDoMedico(id, medico.id);
     if (!consulta) return Response.json({ erro: "Consulta não encontrada." }, { status: 404 });
     if (consulta.status === "cancelada") return Response.json({ erro: "consulta_cancelada" }, { status: 409 });
+    if (consulta.status === "falta_paciente") return Response.json({ erro: "consulta_falta_paciente" }, { status: 409 });
     const body = ((await req.json().catch(() => ({}))) ?? {}) as Record<string, unknown>;
 
     const data: Record<string, string | null> = {};

@@ -234,16 +234,20 @@ export function ChamadaMedico({ onEnd, consultaId }: { onEnd: () => void; consul
     } catch {
       return "Falha de conexão com o servidor.";
     }
-    const json = (await res.json().catch(() => null)) as ({ erro?: string } & Record<string, unknown>) | null;
+    const json = (await res.json().catch(() => null)) as ({ erro?: string; evolucaoConcluida?: boolean } & Record<string, unknown>) | null;
     if (!res.ok) return json?.erro ?? `Não foi possível concluir a operação (erro ${res.status}).`;
+    // Ato único, sem segundo POST: o PATCH "concluir" encerra o rascunho
+    // de evolução desta consulta na mesma transação — se a resposta é ok,
+    // os dois estão concluídos; se é erro, nenhum concluiu (o erro fica
+    // no modal, sem toast de sucesso parcial).
     aplicarDelta(json);
     avisarDadosMedicoAlterados();
     setEscolhaAberta(false);
     if (escolha === "concluir") {
-      toast.success("Consulta concluída");
+      toast.success(json?.evolucaoConcluida ? "Consulta e evolução concluídas" : "Consulta concluída");
     } else if (escolha === "falta_paciente") {
       toast.success("Falta do paciente registrada", {
-        description: "Você recebe normalmente. O paciente foi avisado e pode pedir reembolso em até 7 dias.",
+        description: "A consulta foi encerrada como falta do paciente. Você recebe normalmente. O paciente foi avisado e pode pedir reembolso em até 7 dias.",
       });
     } else {
       toast.success("Falha técnica registrada", {

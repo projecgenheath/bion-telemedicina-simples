@@ -191,6 +191,7 @@ export function Receitas({ perfil }: { perfil: "paciente" | "medico" }) {
   const [titulo, setTitulo] = useState("");
   const [conteudo, setConteudo] = useState("");
   const [medicamento, setMedicamento] = useState("");
+  const [controlado, setControlado] = useState(false);
   const [posologia, setPosologia] = useState("");
   const [duracao, setDuracao] = useState("");
   const [observacoes, setObservacoes] = useState("");
@@ -275,7 +276,7 @@ export function Receitas({ perfil }: { perfil: "paciente" | "medico" }) {
       paciente: perfil === "medico" ? pacienteDoc : sessao.nome,
       conteudo: conteudo.trim(),
       ...(tipo === "receita"
-        ? { medicamento: medicamento.trim(), posologia: posologia.trim() }
+        ? { medicamento: medicamento.trim(), posologia: posologia.trim(), controlado }
         : {}),
       duracao: duracao.trim(),
       ...(observacoes.trim() ? { observacoes: observacoes.trim() } : {}),
@@ -284,6 +285,7 @@ export function Receitas({ perfil }: { perfil: "paciente" | "medico" }) {
     setTitulo("");
     setConteudo("");
     setMedicamento("");
+    setControlado(false);
     setPosologia("");
     setDuracao("");
     setObservacoes("");
@@ -319,7 +321,10 @@ export function Receitas({ perfil }: { perfil: "paciente" | "medico" }) {
             {(["receita", "atestado"] as const).map((t) => (
               <button type="button"
                 key={t}
-                onClick={() => setTipo(t)}
+                onClick={() => {
+                  setTipo(t);
+                  if (t !== "receita") setControlado(false);
+                }}
                 className={`px-4 py-1.5 rounded-lg text-sm font-medium capitalize ${tipo === t ? "bg-card shadow-sm" : "text-muted-foreground"}`}
               >
                 {t}
@@ -357,28 +362,46 @@ export function Receitas({ perfil }: { perfil: "paciente" | "medico" }) {
           </Field>
 
           {tipo === "receita" && (
-            <div className="grid sm:grid-cols-2 gap-3">
-              <Field label="Medicamento" erro={erros["medicamento"]}>
+            <>
+              <div className="grid sm:grid-cols-2 gap-3">
+                <Field label="Medicamento" erro={erros["medicamento"]}>
+                  <input
+                    aria-label="Medicamento e dosagem"
+                    value={medicamento}
+                    onChange={(e) => setMedicamento(e.target.value)}
+                    maxLength={80}
+                    placeholder="Ex.: Losartana 50mg"
+                    className="w-full px-4 py-3 rounded-xl border bg-background"
+                  />
+                </Field>
+                <Field label="Posologia" erro={erros["posologia"]}>
+                  <input
+                    aria-label="Posologia (modo de usar)"
+                    value={posologia}
+                    onChange={(e) => setPosologia(e.target.value)}
+                    maxLength={120}
+                    placeholder="Ex.: 1 comprimido ao dia, pela manhã"
+                    className="w-full px-4 py-3 rounded-xl border bg-background"
+                  />
+                </Field>
+              </div>
+              <label className="flex items-start gap-3 rounded-xl border bg-background px-4 py-3 cursor-pointer">
                 <input
-                  aria-label="Medicamento e dosagem"
-                  value={medicamento}
-                  onChange={(e) => setMedicamento(e.target.value)}
-                  maxLength={80}
-                  placeholder="Ex.: Losartana 50mg"
-                  className="w-full px-4 py-3 rounded-xl border bg-background"
+                  type="checkbox"
+                  aria-label="Medicamento controlado"
+                  checked={controlado}
+                  onChange={(e) => setControlado(e.target.checked)}
+                  className="mt-1 h-4 w-4 shrink-0"
                 />
-              </Field>
-              <Field label="Posologia" erro={erros["posologia"]}>
-                <input
-                  aria-label="Posologia (modo de usar)"
-                  value={posologia}
-                  onChange={(e) => setPosologia(e.target.value)}
-                  maxLength={120}
-                  placeholder="Ex.: 1 comprimido ao dia, pela manhã"
-                  className="w-full px-4 py-3 rounded-xl border bg-background"
-                />
-              </Field>
-            </div>
+                <span>
+                  <span className="block text-sm font-medium">Medicamento controlado</span>
+                  <span className="block text-xs text-muted-foreground mt-0.5">
+                    Receitas de medicamentos controlados só podem ser renovadas numa
+                    chamada com o médico, não pela renovação curta.
+                  </span>
+                </span>
+              </label>
+            </>
           )}
 
           <Field

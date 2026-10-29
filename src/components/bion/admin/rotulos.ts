@@ -30,6 +30,7 @@ const CONSULTA: Record<ApptStatus, Estado> = {
   concluida: { rotulo: "Concluída", tom: "neutro" },
   cancelada: { rotulo: "Cancelada", tom: "critico" },
   aguardando_reagendamento: { rotulo: "Aguardando reagendamento", tom: "atencao" },
+  falta_paciente: { rotulo: "Falta do paciente", tom: "critico" },
 };
 export const estadoConsulta = (s: string | null | undefined) => buscar(CONSULTA, s);
 

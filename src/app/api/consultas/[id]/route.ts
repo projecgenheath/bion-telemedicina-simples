@@ -56,7 +56,15 @@ const STATUS_VALIDOS = [
   "aguardando_reagendamento",
   "concluida",
   "cancelada",
+  // Terminal de falta do paciente (gravado por gravarDesfecho). O admin
+  // pode corrigir para cá pela ação "atualizar"; os demais fluxos a
+  // tratam como já encerrada (cancelar/remarcar/concluir recusam).
+  "falta_paciente",
 ];
+// STATUS_LIBERAM_HORARIO (financeiro.ts) ainda não inclui falta_paciente
+// (arquivo fora do escopo desta correção): para as checagens DESTA rota,
+// falta_paciente já conta como liberando o horário.
+const STATUS_LIBERAM_HORARIO_LOCAL = [...STATUS_LIBERAM_HORARIO, "falta_paciente"];
 
 type EventoPendente = {
   tipo: TipoEvento;
@@ -159,7 +167,7 @@ export async function PATCH(
 
     switch (body.acao) {
       case "cancelar": {
-        if (consulta.status === "cancelada" || consulta.status === "concluida") {
+        if (consulta.status === "cancelada" || consulta.status === "concluida" || consulta.status === "falta_paciente") {
           return Response.json({ erro: "Esta consulta já foi encerrada." }, { status: 409 });
         }
         const valorCentavos = reaisParaCentavos(consulta.valor);
@@ -203,6 +211,13 @@ export async function PATCH(
       case "concluir": {
         if (!ehDonoMedico && !ehAdmin) {
           return Response.json({ erro: "Apenas o médico pode concluir a consulta." }, { status: 403 });
+        }
+        // Estado terminal: falta do paciente nunca vira consulta concluída,
+        // nem pelo admin (a correção, se for o caso, é pela ação
+        // "atualizar" com a whitelist). Sem esta trava, o admin
+        // ressuscitaria uma falta como realizada.
+        if (consulta.status === "falta_paciente") {
+          return Response.json({ erro: "Esta consulta já teve falta do paciente registrada e não pode ser concluída." }, { status: 409 });
         }
         // Regras do Alisson (06/10/2026), só para o MÉDICO (o admin corrige):
         // não conclui consulta com desfecho (falta/falha técnica, de quem for),
@@ -252,7 +267,7 @@ export async function PATCH(
         // quem confirma é o pagamento (confirmarPagamento). Legado
         // "pendente_anamnese" permanece até a trilha de pagamento resolver.
         data.remarcada = true;
-        if (consulta.status === "cancelada" || consulta.status === "concluida") {
+        if (consulta.status === "cancelada" || consulta.status === "concluida" || consulta.status === "falta_paciente") {
           return Response.json({ erro: "Esta consulta já foi encerrada." }, { status: 409 });
         }
         const vindoDeReagendamento = consulta.status === "aguardando_reagendamento";
@@ -341,8 +356,8 @@ export async function PATCH(
           const novoStatus = body.status ?? consulta.status;
           const mudou = novoInicio.getTime() !== consulta.dataInicio.getTime() || novoMedicoId !== consulta.medicoId;
           const voltaAOcupar =
-            STATUS_LIBERAM_HORARIO.includes(consulta.status) && !STATUS_LIBERAM_HORARIO.includes(novoStatus);
-          const vaiOcupar = !STATUS_LIBERAM_HORARIO.includes(novoStatus);
+            STATUS_LIBERAM_HORARIO_LOCAL.includes(consulta.status) && !STATUS_LIBERAM_HORARIO_LOCAL.includes(novoStatus);
+          const vaiOcupar = !STATUS_LIBERAM_HORARIO_LOCAL.includes(novoStatus);
           if (vaiOcupar && (mudou || voltaAOcupar)) {
             conferir = { medicoId: novoMedicoId, dataInicio: novoInicio, pacienteId: consulta.pacienteId };
             // Resposta rápida; a checagem que vale é a da transação travada, abaixo.
@@ -355,11 +370,11 @@ export async function PATCH(
             }
             const [choqueMedico, choquePaciente, reservado] = await Promise.all([
               db.consulta.findFirst({
-                where: { id: { not: id }, medicoId: novoMedicoId, dataInicio: novoInicio, status: { notIn: STATUS_LIBERAM_HORARIO } },
+                where: { id: { not: id }, medicoId: novoMedicoId, dataInicio: novoInicio, status: { notIn: STATUS_LIBERAM_HORARIO_LOCAL } },
                 select: { id: true },
               }),
               db.consulta.findFirst({
-                where: { id: { not: id }, pacienteId: consulta.pacienteId, dataInicio: novoInicio, status: { notIn: STATUS_LIBERAM_HORARIO } },
+                where: { id: { not: id }, pacienteId: consulta.pacienteId, dataInicio: novoInicio, status: { notIn: STATUS_LIBERAM_HORARIO_LOCAL } },
                 select: { id: true },
               }),
               horarioReservado(novoMedicoId, novoInicio, id),
@@ -412,6 +427,11 @@ export async function PATCH(
     const ev = evento as EventoPendente | null;
     const re = reembolso as ReembolsoPendente | null;
     const alvo = conferir as typeof conferir;
+    // Unificação do "concluir": concluir a consulta encerra o rascunho de
+    // evolução dela na mesma transação (abaixo). A UI usa o flag para o
+    // toast, sem segundo POST — não há sucesso parcial: se a transação
+    // falha, nem consulta nem evolução mudam.
+    let evolucaoEncerrada = false;
     try {
       await db.$transaction(async (tx) => {
         if (alvo) {
@@ -434,11 +454,13 @@ export async function PATCH(
           if (erro) throw new HorarioIndisponivel(erro);
         }
         await tx.consulta.update({ where: { id }, data });
-        // M-22 da auditoria: consulta cancelada não pode deixar rascunho de
-        // evolução prendendo a trava do médico para sempre. O rascunho de
-        // consulta morta é ENCERRADO na mesma transação ("concluida" com nota
-        // de cancelamento no rascunho), liberando o próximo atendimento.
-        if (data.status === "cancelada" || data.status === "aguardando_reagendamento") {
+        // M-22 da auditoria, estendido ao "concluir": consulta encerrada
+        // não pode deixar rascunho de evolução prendendo a trava do médico
+        // para sempre. O rascunho é ENCERRADO na mesma transação
+        // ("concluida" com nota no rascunho), liberando o próximo
+        // atendimento — concluir a consulta conclui o rascunho dela, e
+        // concluir a evolução conclui a consulta (rota de evolução).
+        if (data.status === "cancelada" || data.status === "aguardando_reagendamento" || data.status === "concluida") {
           const rascunho = await tx.evolucao.findUnique({ where: { consultaId: id }, select: { id: true, status: true, rascunho: true } });
           if (rascunho && rascunho.status === "rascunho") {
             let nota = {};
@@ -448,9 +470,13 @@ export async function PATCH(
               data: {
                 status: "concluida",
                 concluidaEm: new Date(),
-                rascunho: JSON.stringify({ ...nota, encerradaPor: "consulta_cancelada" }),
+                rascunho: JSON.stringify({
+                  ...nota,
+                  encerradaPor: data.status === "concluida" ? "consulta_concluida" : "consulta_cancelada",
+                }),
               },
             });
+            evolucaoEncerrada = true;
           }
         }
         if (ev) await registrarEvento(tx, { consultaId: id, atorId: usuario.id, ...ev });
@@ -473,6 +499,7 @@ export async function PATCH(
 
     return ok({
       consulta: atualizada,
+      ...(body.acao === "concluir" ? { evolucaoConcluida: evolucaoEncerrada } : {}),
       ...(efeitos.notificacoes.length ? { notificacoes: efeitos.notificacoes } : {}),
       ...(efeitos.audit ? { audit: efeitos.audit } : {}),
     });

@@ -186,14 +186,25 @@ export function PainelEvolucao({
       setAba("conduta");
       return;
     }
-    if (!window.confirm("Concluir a evolução? Depois de concluída, ela não pode mais ser editada.")) return;
+    // Ato único: o POST de concluir a evolução conclui também a consulta
+    // na mesma transação do servidor — NÃO há segundo POST para concluir
+    // a consulta, e um erro aqui significa que nenhum dos dois concluiu
+    // (nunca "evolução ok, consulta pendente" nem o inverso).
+    if (!window.confirm("Concluir a evolução? A consulta correspondente também será concluída. Depois de concluída, a evolução não pode mais ser editada.")) return;
     setConcluindo(true);
     try {
       if (timer.current) clearTimeout(timer.current);
       await salvar(textos, cid);
       const res = await fetch(`${base}/concluir`, { method: "POST" });
       if (res.ok) {
-        toast.success("Evolução concluída");
+        const j = (await res.json().catch(() => ({}))) as { consultaConcluidaAgora?: boolean; consulta?: { status?: string } | null };
+        if (j.consultaConcluidaAgora) {
+          toast.success("Evolução e consulta concluídas");
+        } else if (j.consulta?.status === "concluida") {
+          toast.success("Evolução concluída", { description: "A consulta já estava concluída." });
+        } else {
+          toast.success("Evolução concluída");
+        }
         await carregar();
         onConcluida?.();
       } else {

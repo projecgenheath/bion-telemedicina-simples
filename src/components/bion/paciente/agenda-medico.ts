@@ -64,6 +64,23 @@ export type DiasBloqueados = ReadonlySet<string> | readonly string[];
  *
  * Horários em 23:00–00:00 (`horaVedadaParaPaciente`) nunca são oferecidos,
  * mesmo que estejam na grade do médico.
+ *
+ * Dias de atendimento e pausas semanais — mesma regra de
+ * `conferirDiasEPausas` (src/lib/server/bloqueio-agenda.ts):
+ * `diasAtendimento` vazio (ou ausente) = todos os dias; se não vazio, só
+ * os dias listados aparecem. Horários dentro de uma pausa semanal do dia
+ * (`inicio <= hora < fim`, "HH:MM" de São Paulo) são removidos.
+ *
+ * Coincidência do dia da semana com o servidor: o servidor calcula o dia
+ * a partir da data civil de São Paulo do instante
+ * (`new Date(Date.UTC(ano, mes - 1, dia)).getUTCDay()`, com `mes` 1–12 de
+ * `partesNoFuso`). Aqui `d` já é a data civil de São Paulo
+ * (`diaFusoClinica`, `partesFusoClinica`, também America/Sao_Paulo) e
+ * `d.semana` usa exatamente a mesma fórmula
+ * (`new Date(Date.UTC(ano, mes, dia)).getUTCDay()`, com `mes` 0–11) —
+ * ou seja, o mesmo dia civil, a mesma convenção 0=Dom … 6=Sáb, e o
+ * mesmo resultado. Nunca se usa `getDay()` do navegador nem o dia UTC
+ * do instante (um slot 22:00 em São Paulo é 01:00Z do dia seguinte).
  */
 export function agendaLivreDoMedico(
   medico: Medico | undefined,
@@ -85,11 +102,16 @@ export function agendaLivreDoMedico(
       .filter(
         (c) =>
           c.id !== excluirConsultaId &&
-          !["cancelada", "concluida", "aguardando_reagendamento"].includes(c.status) &&
+          !["cancelada", "concluida", "aguardando_reagendamento", "falta_paciente"].includes(c.status) &&
           (medico ? eDoMedico(c, medico) : true),
       )
       .map((c) => chaveSlot(c.dataISO ?? c.ts, c.hora)),
   );
+
+  // Grade semanal do médico (tipo Medico, já parseada pelo wire):
+  // diasAtendimento vazio/ausente = todos os dias (mesma regra do servidor).
+  const diasAtendimento = medico?.diasAtendimento;
+  const pausasSemanais = medico?.pausasSemanais ?? [];
 
   const dias: DiaAgenda[] = [];
   for (let i = 0; i < horizonteDias; i++) {
@@ -97,8 +119,21 @@ export function agendaLivreDoMedico(
     // d.iso é o dia civil de São Paulo: um horário 22:00 (01:00Z do dia
     // seguinte) pertence a este dia, não ao seguinte.
     if (diasBloqueados?.has(d.iso)) continue;
+    // d.semana é o dia da semana da data civil de São Paulo, na mesma
+    // fórmula do servidor (ver comentário acima) — não o dia UTC.
+    if (
+      Array.isArray(diasAtendimento) &&
+      diasAtendimento.length > 0 &&
+      !diasAtendimento.includes(d.semana)
+    )
+      continue;
     const horarios = horasBase.filter((h) => {
       if (horaVedadaParaPaciente(h)) return false;
+      // Pausa semanal do dia: inicio <= hora < fim (mesma regra do
+      // servidor; "HH:MM" com zero à esquerda, então a comparação de
+      // strings equivale à cronológica).
+      if (pausasSemanais.some((p) => p && p.dia === d.semana && h >= p.inicio && h < p.fim))
+        return false;
       const [hh, mm] = h.split(":").map(Number);
       const ts = instanteFusoClinica(d.ano, d.mes, d.dia, hh || 0, mm || 0);
       if (ts < agora) return false;

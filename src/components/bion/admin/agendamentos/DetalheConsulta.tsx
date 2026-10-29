@@ -94,7 +94,7 @@ export function DetalheConsulta({ id, agora, modoInicial = "detalhe", onFechar }
               <CalendarX2 className="w-4 h-4" aria-hidden /> Cancelar…
             </button>
           </div>
-          {!podeCancelar(c) ? <p className="text-xs ba-texto-2 -mt-2">Consulta {c.status === "concluida" ? "concluída" : "cancelada"}: não dá para cancelar.</p> : null}
+          {!podeCancelar(c) ? <p className="text-xs ba-texto-2 -mt-2">Consulta {c.status === "concluida" ? "concluída" : c.status === "falta_paciente" ? "com falta do paciente" : "cancelada"}: não dá para cancelar.</p> : null}
           {podeCorrigirDesfecho(c, agora) ? (
             <button type="button" onClick={() => setModo("desfecho")} className="ba-botao ba-botao-secundario w-full">
               <Gavel className="w-4 h-4" aria-hidden /> Corrigir desfecho…

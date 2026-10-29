@@ -22,22 +22,43 @@ export function useSalaConsulta({
   consultaId?: string;
   onEnd: () => void;
 }) {
-  const { arquivos, adicionarArquivo, consultas, registrarAudit, sessao, pacientes, anamneses } = useStore();
+  const { arquivos, adicionarArquivo, consultas, registrarAudit, sessao, pacientes, anamneses, carregando } =
+    useStore();
 
-  // Consulta da sala (banco) — define a sala WebRTC.
-  // Com `?consulta=<id>`: SEMPRE essa (o servidor confere se a pessoa participa).
-  // Sem o parâmetro (links antigos): próxima confirmada futura (janela de 2h) →
-  // primeira confirmada → primeira da lista.
+  // Consulta da sala — ESTRITA, sem adivinhação: a sala é EXATAMENTE a
+  // consulta do `?consulta=<id>`. Sem id, sem consulta encontrada no store
+  // ou com participante divergente, NÃO se escolhe outra consulta
+  // (a escolha automática antiga podia abrir a sala errada e deixar a tela
+  // em "Aguardando o outro participante" para sempre). A tela de erro
+  // explícita vive na página (/consulta/page.tsx), única montagem da sala;
+  // aqui o hook só garante: nada de tele, câmera ou cronômetro sem uma
+  // consulta válida, e expõe os flags para quem for renderizar o erro.
   const consultaAtual = useMemo(() => {
-    if (consultaId) return consultas.find((c) => c.id === consultaId);
-    const limite = Date.now() - 2 * 3_600_000;
-    const futura = consultas
-      .filter((c) => c.status === "confirmada" && c.ts >= limite)
-      .sort((a, b) => a.ts - b.ts)[0];
-    return futura ?? consultas.find((c) => c.status === "confirmada") ?? consultas[0];
+    if (!consultaId) return undefined;
+    return consultas.find((c) => c.id === consultaId);
   }, [consultas, consultaId]);
-  /** Id da sala: o da URL mesmo antes de o store carregar a consulta. */
-  const idSala = consultaId ?? consultaAtual?.id;
+  /** Id da sala: exatamente o da URL, mesmo antes de o store carregar a consulta. */
+  const idSala = consultaId;
+  // Participante divergente (só quando os dois ids existem no store; sem
+  // id, o servidor decide com 403 — o store não deve inventar um não).
+  // Admin não entra na sala (o roteador o desvia), então não é barrado aqui.
+  const participanteInvalido =
+    role !== "admin" &&
+    consultaAtual !== undefined &&
+    sessao.id !== undefined &&
+    sessao.id !== "" &&
+    consultaAtual.medicoId !== undefined &&
+    consultaAtual.pacienteId !== undefined &&
+    sessao.id !== consultaAtual.medicoId &&
+    sessao.id !== consultaAtual.pacienteId;
+  /** Store já carregou e não há id válido / consulta / participante. */
+  const consultaInvalida =
+    !carregando && (consultaId === undefined || consultaAtual === undefined || participanteInvalido);
+  const consultaValida = consultaAtual !== undefined && !participanteInvalido;
+  /** Mesmo critério do servidor: em_espera só entra na sala depois de paga. */
+  const pagamentoPendente = consultaAtual?.status === "em_espera" && consultaAtual.pago !== true;
+  /** Sem consulta válida ou sem pagamento, o tele nem monta (sem polling, sem câmera). */
+  const teleBloqueada = consultaInvalida || pagamentoPendente;
 
   // Anamnese da consulta ativa (conduzida pela BION IA antes do atendimento)
   const anamneseAtual: AnamneseResumo | undefined = anamneses.find(
@@ -62,7 +83,9 @@ export function useSalaConsulta({
   const dadosPaciente = idPacienteSala ? pacientes.find((p) => p.id === idPacienteSala) : undefined;
 
   // ── WebRTC REAL (Fase 2): mídia P2P + sinalização via banco ──
-  const tele = useTeleconsulta(idSala);
+  // Bloqueada (sem idSala): o hook do tele devolve o estado inicial, sem
+  // polling e sem pedir câmera — nunca "aguardando" uma sala que não existe.
+  const tele = useTeleconsulta(teleBloqueada ? undefined : idSala);
   // Sala fora da janela (409 do servidor) e sem chamada em andamento: mensagem
   // simples no lugar da área de espera (a Parte 3 redesenha esta tela).
   const salaForaDaJanela = exibirForaDaJanela(tele.foraDaJanela, tele.status) ? tele.foraDaJanela : null;
@@ -95,14 +118,19 @@ export function useSalaConsulta({
   // Chat na chamada (REAL — via sinalização WebRTC)
   const [chatInput, setChatInput] = useState("");
 
-  // Cronômetro da chamada. Para com o 404 (consulta não encontrada): a chamada
-  // (polling, ICE, PeerConnection e câmera) já foi desligada em teleconsulta-chamada.ts.
+  // Cronômetro da chamada. Só roda com consulta válida e paga: para com o
+  // 404 (consulta não encontrada — polling, ICE, PeerConnection e câmera já
+  // foram desligados em teleconsulta-chamada.ts) e nunca conta para uma
+  // sala inválida ou com pagamento pendente (o tempo volta a zero).
   const naoEncontrada = tele.naoEncontrada;
   useEffect(() => {
-    if (naoEncontrada) return;
+    if (naoEncontrada || !consultaValida || pagamentoPendente) {
+      setSegundos(0);
+      return;
+    }
     const t = setInterval(() => setSegundos((s) => s + 1), 1000);
     return () => clearInterval(t);
-  }, [naoEncontrada]);
+  }, [naoEncontrada, consultaValida, pagamentoPendente]);
 
   const tempo = `${String(Math.floor(segundos / 60)).padStart(2, "0")}:${String(segundos % 60).padStart(2, "0")}`;
 
@@ -184,6 +212,9 @@ export function useSalaConsulta({
     sessao,
     arquivos,
     consultaAtual,
+    consultaValida,
+    consultaInvalida,
+    pagamentoPendente,
     idSala,
     anamneseAtual,
     contraparteNome,

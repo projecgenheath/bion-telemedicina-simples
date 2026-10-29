@@ -28,6 +28,8 @@ export async function POST(req: NextRequest) {
       duracao?: string;
       observacoes?: string;
       cid?: string;
+      /** Receita de controlado: só vale para tipo "receita"; default false. */
+      controlado?: boolean;
     };
 
     if (!body.tipo || !body.titulo || !body.conteudo || !body.pacienteId) {
@@ -39,6 +41,12 @@ export async function POST(req: NextRequest) {
     if (!TIPOS_DOCUMENTO.has(body.tipo)) {
       return Response.json(
         { erro: "Tipo de documento inválido (receita, atestado ou exame)." },
+        { status: 400 },
+      );
+    }
+    if (body.controlado !== undefined && typeof body.controlado !== "boolean") {
+      return Response.json(
+        { erro: "O campo controlado deve ser verdadeiro ou falso." },
         { status: 400 },
       );
     }
@@ -88,6 +96,10 @@ export async function POST(req: NextRequest) {
         duracao: body.duracao?.trim().slice(0, 100) || null,
         observacoes: body.observacoes?.trim().slice(0, 1000) || null,
         cid: body.cid?.trim().slice(0, 20) || null,
+        // Só receita pode nascer sinalizada como controlado; qualquer outro
+        // tipo ignora o flag (default false no schema). É este flag que a
+        // guarda controlado_exige_chamada da renovação passa a ler.
+        controlado: body.tipo === "receita" && body.controlado === true,
       },
       include: {
         medico: { select: { nome: true } },

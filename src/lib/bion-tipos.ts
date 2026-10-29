@@ -13,7 +13,9 @@ export type ApptStatus =
   | "concluida"
   | "em_espera"
   // médico cancelou o dia ou houve falha técnica: o paciente escolhe remarcar ou reembolso integral
-  | "aguardando_reagendamento";
+  | "aguardando_reagendamento"
+  // desfecho terminal: paciente não entrou na sala (médico recebe; reembolso manual em 7 dias)
+  | "falta_paciente";
 
 /** Anamnese guiada pela BION IA (resumo sincronizado com o servidor). */
 export type AnamneseResumo = {

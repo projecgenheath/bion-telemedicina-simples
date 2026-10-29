@@ -1385,6 +1385,9 @@ export function BionProvider({ children }: { children: ReactNode }) {
         duracao: d.duracao,
         observacoes: d.observacoes,
         cid: d.cid,
+        // Flag de controlado: repassado à API (undefined é descartado pelo
+        // JSON.stringify; a API só o grava para tipo "receita", default false).
+        controlado: d.controlado,
       });
     },
     [mutar],

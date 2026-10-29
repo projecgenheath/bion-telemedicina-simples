@@ -141,6 +141,10 @@ export function consultaEntraNaReceita(c: ConsultaReceita, agora: Date): boolean
   if (STATUS_FORA_DO_FATURAMENTO.includes(c.status)) return false;
   // Sem desfecho (ninguém concluiu nem marcou falta/falha da data atual): fora.
   if (STATUS_ABERTOS_RECEITA.includes(c.status) && !temDesfechoVigenteDaData(c)) return false;
+  // Falta do paciente: entra na receita (o médico recebe) SOMENTE com o
+  // evento de falta vigente — se o admin corrigir o desfecho, ela sai,
+  // preservando a regra anterior (status confirmada + evento corrigido = fora).
+  if (c.status === "falta_paciente" && !temDesfechoVigenteDaData(c)) return false;
   if (c.dataInicio.getTime() > agora.getTime()) return false;
   return !consultaReembolsadaIntegral(reaisParaCentavos(c.valor), c.pagamento.reembolsos);
 }

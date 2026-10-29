@@ -63,7 +63,7 @@ export const MULTA_RECOMECA_APOS_EVENTO_NAO_PACIENTE = true;
 /* ---------- Status ------------------------------------------------- */
 
 /** Status que liberam o horário do médico (não contam como ocupados). */
-export const STATUS_LIBERAM_HORARIO = ["cancelada", "concluida", "aguardando_reagendamento"];
+export const STATUS_LIBERAM_HORARIO = ["cancelada", "concluida", "aguardando_reagendamento", "falta_paciente"];
 /** Status que ficam fora do faturamento líquido. */
 export const STATUS_FORA_DO_FATURAMENTO = ["cancelada", "aguardando_reagendamento"];
 /** Status de reembolso que bloqueiam um novo pedido para o mesmo pagamento. */

@@ -298,6 +298,7 @@ export const ROTULO_STATUS: Record<Consulta["status"], string> = {
   cancelada: "Cancelada",
   concluida: "Concluída",
   aguardando_reagendamento: "Aguardando reagendamento",
+  falta_paciente: "Falta do paciente",
 };
 
 /** Desfechos gravados pelo sistema a partir da presença na sala (EventoConsulta). */

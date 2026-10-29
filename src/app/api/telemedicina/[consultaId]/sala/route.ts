@@ -55,7 +55,12 @@ import { estadoJanelaSala, janelaSala, SALA_ABRE_ANTES_MIN, SALA_FECHA_DEPOIS_MI
  *
  * Segurança: apenas o paciente e o médico da consulta acessam a sala (403 para
  * qualquer outro papel, inclusive admin — sala é 1:1). Sinais só são aceitos
- * enquanto a consulta estiver ativa (confirmada | em_espera).
+ * enquanto a consulta estiver ativa (confirmada, ou em_espera já paga).
+ * Consulta em_espera NÃO paga nunca entra na sala: GET normal e POST
+ * respondem 402 { erro, motivo: "pagamento_pendente", acao: "pagar" }.
+ * O modo espiar (?espiar=1) não é entrada — não grava presença, não consome
+ * sinais — por isso não é barrado; ele devolve `pago` para a pré-sala
+ * decidir o que mostrar.
  */
 
 /**
@@ -85,6 +90,7 @@ async function carregarConsultaAutorizada(consultaId: string, usuarioId: string,
     select: {
       id: true,
       status: true,
+      pago: true,
       dataInicio: true,
       especialidade: true,
       pacienteId: true,
@@ -97,6 +103,28 @@ async function carregarConsultaAutorizada(consultaId: string, usuarioId: string,
     throw erroHttp(403, "Acesso negado: você não participa desta consulta.");
   }
   return consulta as typeof consulta & { paciente?: { nome: string }; medico?: { nome: string } };
+}
+
+/**
+ * Barreira de pagamento da sala (402 distinto, com ação para pagar).
+ * Critério exato: status "em_espera" E pago === false. Não atinge o modo
+ * simulado nem o retorno grátis: ambos nascem com pago = true (o simulado
+ * confirma o pagamento na criação; o retorno grátis nasce confirmada e
+ * paga, valor 0). Também não atinge "confirmada" não paga por outro
+ * caminho — esse caso não é deste lote e continua como antes.
+ * A resposta carrega `motivo` + `acao` para a tela oferecer o pagamento
+ * em vez de uma mensagem genérica de erro.
+ */
+const ERRO_PAGAMENTO_PENDENTE =
+  "Pagamento pendente: esta consulta ainda não foi paga, por isso a sala não pode ser aberta. Pague para entrar na sala.";
+function respostaPagamentoPendente(): NextResponse {
+  return NextResponse.json(
+    { erro: ERRO_PAGAMENTO_PENDENTE, motivo: "pagamento_pendente" as const, acao: "pagar" as const },
+    { status: 402, headers: { "Cache-Control": "no-store, private" } },
+  );
+}
+function pagamentoPendente(consulta: { status: string; pago: boolean }): boolean {
+  return consulta.status === "em_espera" && !consulta.pago;
 }
 
 /** 409 fora da janela da sala (antes de abrir ou depois de fechar). */
@@ -193,6 +221,7 @@ export async function GET(
         consulta: {
           id: consulta.id,
           status: consulta.status,
+          pago: consulta.pago,
           especialidade: consulta.especialidade,
           paciente: consulta.paciente?.nome ?? "",
           medico: consulta.medico?.nome ?? "",
@@ -214,6 +243,11 @@ export async function GET(
     // sem presença nem auditoria.
     const foraDaJanela = respostaForaDaJanela(consulta.dataInicio);
     if (foraDaJanela) return foraDaJanela;
+
+    // Pagamento pendente: 402 distinto, ANTES de qualquer presença,
+    // evolução ou pull de sinais — a permanência na sala também é barrada,
+    // porque o polling volta a cair aqui enquanto não houver pagamento.
+    if (pagamentoPendente(consulta)) return respostaPagamentoPendente();
 
     // Teleconsulta v2 — trava do próximo atendimento (só o MÉDICO): com
     // evolução em rascunho de OUTRA consulta, 409 { erro: "evolucao_pendente" }.
@@ -296,7 +330,7 @@ export async function GET(
       presencaOutro !== null && agoraPing.getTime() - presencaOutro.ultimoPing.getTime() <= JANELA_ONLINE_MS;
 
     return ok({
-      consulta: { id: consulta.id, status: consulta.status },
+      consulta: { id: consulta.id, status: consulta.status, pago: consulta.pago },
       eu: { id: usuario.id, papel },
       outroOnline,
       janela: janelaWire(consulta.dataInicio),
@@ -328,6 +362,7 @@ export async function POST(
         throw erroHttp(400, "nonce inválido.");
       }
       const consulta = await carregarConsultaAutorizada(consultaId, usuario.id);
+      if (pagamentoPendente(consulta)) return respostaPagamentoPendente();
       exigirJanelaAberta(consulta.dataInicio);
       repassarRealtime(consultaId, "eco", { usuarioId: usuario.id, nonce: body.nonce });
       return ok({ ok: true });
@@ -345,6 +380,11 @@ export async function POST(
 
     const consulta = await carregarConsultaAutorizada(consultaId, usuario.id);
     const papel = papelDe(consulta, usuario.id);
+    // Pagamento pendente barra TODOS os sinais, inclusive controle: uma
+    // sala em_espera não paga nunca começou, então não há "saiu" nem
+    // "encerrada" a registrar nela.
+    if (pagamentoPendente(consulta)) return respostaPagamentoPendente();
+    // A partir daqui, "em_espera" só pode ser a já paga (modo simulado).
     const ativa = ["confirmada", "em_espera"].includes(consulta.status);
     if (!ativa && body.tipo !== "controle") {
       throw erroHttp(409, `Sala fechada: consulta está "${consulta.status}".`);

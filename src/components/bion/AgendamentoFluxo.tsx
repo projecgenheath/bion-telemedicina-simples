@@ -247,8 +247,38 @@ export function AgendamentoFluxo({
         window.location.assign(r.url);
         return;
       }
+      // A consulta JÁ foi criada e reservada; só o checkout falhou. Voltar ao
+      // passo de pagamento (PASSOS_AGENDAMENTO: 6 = "Pagamento", 7 =
+      // "Confirmação") — nunca avançar para a confirmação com pagamento
+      // pendente, onde antes aparecia "Pagamento Aprovado" sem pagamento.
+      // A ação do toast tenta abrir o checkout de novo para esta mesma
+      // consulta (sem criar outra); a alternativa é pagar em Minhas consultas.
       toast.error("Consulta reservada, mas o pagamento não abriu", {
         description: r.erro ?? "Tente pagar de novo em Minhas consultas.",
+        action: {
+          label: "Tentar abrir o pagamento",
+          onClick: async () => {
+            const r2 = await abrirCheckoutStripe({ consultaId: criada.id });
+            if (r2.url) {
+              window.location.assign(r2.url);
+              return;
+            }
+            toast.error("Pagamento ainda não abriu", {
+              description: r2.erro ?? "Tente pagar em Minhas consultas.",
+            });
+          },
+        },
+      });
+      setStep(6);
+      return;
+    }
+
+    if (!criada.pago) {
+      // Reserva existe, mas o pagamento não foi confirmado (ex.: checkout
+      // desligado neste ambiente). Não é "aprovado": o passo de confirmação
+      // mostra o estado honesto de aguardando pagamento.
+      toast("Consulta reservada, aguardando pagamento", {
+        description: `${med.nome} — ${data} às ${hora}. Complete o pagamento em Minhas consultas.`,
       });
       setStep(steps.length - 1);
       return;
