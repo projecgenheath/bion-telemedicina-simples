@@ -98,6 +98,14 @@ export async function POST(req: NextRequest) {
       documentoOrigemId?: string;
     };
 
+    // M1: medicoId precisa ser uma string presente e sã ANTES de qualquer
+    // query — no Prisma, `undefined` no where é ignorado e o findFirst do
+    // médico devolveria o PRIMEIRO médico do banco (agendamento/pagamento
+    // com um médico que o paciente não escolheu).
+    if (typeof body.medicoId !== "string" || !body.medicoId.trim() || body.medicoId.length > 64) {
+      return Response.json({ erro: "Médico não informado." }, { status: 400 });
+    }
+
     // Retorno (Teleconsulta v2): vínculo com uma consulta CONCLUÍDA do próprio
     // paciente, com o MESMO médico. O cliente não escolhe o médico de outra
     // pessoa nem herda triagem alheia — tudo conferido aqui.

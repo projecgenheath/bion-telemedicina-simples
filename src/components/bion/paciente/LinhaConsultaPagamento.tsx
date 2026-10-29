@@ -27,6 +27,9 @@ export function ehRetornoGratis(c: Consulta): boolean {
 /** Texto de pagamento sem repetir o status (ex.: "Aguardando pagamento" já diz que está pendente). */
 function textoPagamento(c: Consulta, aguardandoPagamento: boolean): string | null {
   if (c.status === "cancelada") return null;
+  // M13: consulta encerrada por falta não ganha nota de pagamento — o
+  // "· Pago · R$…" a fazia parecer uma consulta futura já paga.
+  if (c.status === "falta_paciente") return null;
   if (ehRetornoGratis(c)) return "Retorno sem custo";
   if (aguardandoPagamento) return c.valor ?? null;
   if (c.pago) return c.valor ? `Pago · ${c.valor}` : "Pago";

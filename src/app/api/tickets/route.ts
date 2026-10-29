@@ -3,12 +3,17 @@ import { db } from "@/lib/db";
 import { exigirSessao } from "@/lib/server/auth";
 import { aplicarSideEffects, ticketWire } from "@/lib/server/dados";
 import {ok, falha, lerCorpoJson} from "@/lib/server/http";
+import { limitarAsync, resposta429 } from "@/lib/server/rate-limit";
 
 /** Abertura de chamado de suporte.
  *  Notificações (autor + administração) e auditoria geradas PELO SERVIDOR. */
 export async function POST(req: NextRequest) {
   try {
     const usuario = await exigirSessao();
+    // M9 (auditoria): teto por usuário — abrir chamado é raro; 10/h (mesmo
+    // teto do aceite de termos) barra spam ao suporte sem atrapalhar ninguém.
+    const teto = await limitarAsync(`tickets:${usuario.id}`, 10, 3_600_000);
+    if (!teto.permitido) return resposta429(teto.restanteSeg);
     const body = (await lerCorpoJson(req)) as {
       assunto: string;
       categoria: string;

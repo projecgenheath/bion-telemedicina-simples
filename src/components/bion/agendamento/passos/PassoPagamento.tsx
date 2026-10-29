@@ -53,7 +53,7 @@ export function PassoPagamento(p: AgendamentoCorpoProps) {
           <div className="pt-2 border-t flex justify-between items-center">
             <span className="font-bold text-base">Valor Total</span>
             <span className="text-2xl font-extrabold text-primary">
-              R$ {medicoAtual.valor},00
+              {medicoAtual.valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
             </span>
           </div>
         </div>

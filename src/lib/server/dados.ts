@@ -598,6 +598,10 @@ export async function carregarDados(usuario: UsuarioSessao) {
     medicoes,
     exames,
   ] = await Promise.all([
+    // M8 (auditoria): TODAS as coleções do bootstrap têm teto — sem ele, o
+    // endpoint mais chamado do app devolvia o histórico INTEIRO da conta,
+    // crescendo sem limite. 200 mais recentes por coleção (mesmo teto de
+    // medições/exames abaixo), na ordenação que o cliente já consumia.
     db.documento.findMany({
       where: documentoWhere,
       include: {
@@ -605,13 +609,15 @@ export async function carregarDados(usuario: UsuarioSessao) {
         paciente: { select: { nome: true } },
       },
       orderBy: { createdAt: "desc" },
+      take: 200,
     }),
-    db.arquivo.findMany({ where: arquivoWhere, orderBy: { createdAt: "desc" } }),
+    db.arquivo.findMany({ where: arquivoWhere, orderBy: { createdAt: "desc" }, take: 200 }),
     db.notificacao.findMany({
       where: {
         OR: [{ usuarioId: usuario.id }, { paraRole: usuario.role }, { AND: [{ usuarioId: null }, { paraRole: null }] }],
       },
       orderBy: { createdAt: "desc" },
+      take: 200,
     }),
     db.avaliacao.findMany({
       where: avaliacaoWhere,
@@ -621,20 +627,24 @@ export async function carregarDados(usuario: UsuarioSessao) {
         medico: { select: { id: true, nome: true, perfilMedico: { select: { especialidade: true } } } },
       },
       orderBy: { createdAt: "desc" },
+      take: 200,
     }),
     db.ticket.findMany({
       where: souAdmin ? {} : { usuarioId: usuario.id },
       include: { usuario: { select: { nome: true } } },
       orderBy: { createdAt: "desc" },
+      take: 200,
     }),
     db.lembrete.findMany({
       where: { usuarioId: usuario.id },
       orderBy: { horario: "asc" },
+      take: 200,
     }),
     db.consentimento.findMany({
       where: consentimentoWhere,
       include: { paciente: { select: { nome: true } } },
       orderBy: { createdAt: "desc" },
+      take: 200,
     }),
     souAdmin
       ? db.auditLog.findMany({ orderBy: { createdAt: "desc" }, take: 300 })
@@ -645,7 +655,11 @@ export async function carregarDados(usuario: UsuarioSessao) {
         de: { select: { nome: true } },
         para: { select: { nome: true } },
       },
-      orderBy: { createdAt: "asc" },
+      // M8: teto como no GET /api/mensagens (M-16) — busca as 200 mais
+      // recentes (desc) e o array é revertido p/ cronológico logo abaixo;
+      // com asc + take viriam as 200 mais ANTIGAS e as novas sumiriam.
+      orderBy: { createdAt: "desc" },
+      take: 200,
     }),
     db.user.findFirst({
       where: { role: "ADMIN", status: "ativo" },
@@ -661,6 +675,10 @@ export async function carregarDados(usuario: UsuarioSessao) {
       ? db.exameLaboratorial.findMany({ where: { usuarioId: usuario.id }, orderBy: { dataColeta: "asc" }, take: 200 })
       : Promise.resolve([] as Awaited<ReturnType<typeof db.exameLaboratorial.findMany>>),
   ]);
+
+  // M8: mensagens vieram em ordem decrescente (teto nas mais recentes);
+  // o wire consome em ordem cronológica, como antes.
+  mensagensRaw.reverse();
 
   const auditLogs = auditLogsRaw;
 

@@ -68,7 +68,10 @@ function tsDataLonga(data: string | undefined): number {
   if (!m) return 0;
   const mes = MESES_PT[m[2]];
   if (mes === undefined) return 0;
-  return Date.UTC(Number(m[3]), mes, Number(m[1]));
+  // Meia-noite LOCAL (não UTC): mesmo critério do M26 no HistoricoClinico —
+  // com UTC o rótulo valia 21h do dia anterior em São Paulo e o arquivo
+  // ordenava deslocado em relação aos eventos com timestamp real.
+  return new Date(Number(m[3]), mes, Number(m[1])).getTime();
 }
 
 export function Prontuario() {
@@ -81,6 +84,7 @@ export function Prontuario() {
     registrarConsentimento,
     registrarAudit,
     pacientePerfil,
+    carregando,
   } = useBion();
   // M4: nascimento/idade só no prontuário do PRÓPRIO paciente ("YYYY-MM-DD" do
   // payload; o tipo do store não declara o campo — mesmo padrão do PerfilPainel).
@@ -203,7 +207,9 @@ export function Prontuario() {
       list.push({
         id: d.id,
         quando: d.data,
-        ordem: dataDoc(d).getTime(),
+        // M27: data ilegível → ordem 0 (ordena por último, como
+        // tsDataLonga) — nunca "hoje" no topo da linha do tempo.
+        ordem: dataDoc(d)?.getTime() ?? 0,
         tipo: d.tipo,
         titulo: d.titulo,
         detalhe: `${d.medico}${d.posologia ? ` • ${d.posologia}` : ""}`,
@@ -302,9 +308,17 @@ export function Prontuario() {
             <p className="text-sm text-muted-foreground">Carregando medicamentos…</p>
           ) : (
             <>
-              {medicamentos.length === 0 && (
-                <p className="text-sm text-muted-foreground">Nenhum medicamento ativo.</p>
-              )}
+              {/* M24 (só médico/admin, cuja lista deriva do bootstrap):
+                  durante a carga, vazio é "carregando" — o "Nenhum
+                  medicamento ativo" fica para a carga concluída. O paciente
+                  não passa por aqui sem a lista do endpoint (A10 tem os
+                  estados próprios acima), então nada muda para ele. */}
+              {medicamentos.length === 0 &&
+                (sessao.role !== "paciente" && carregando ? (
+                  <p className="text-sm text-muted-foreground">Carregando medicamentos…</p>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Nenhum medicamento ativo.</p>
+                ))}
               {medicamentos.map((m) => (
                 <div key={m.id} className="rounded-xl border p-3">
                   <div className="font-medium">{m.nome}</div>
@@ -340,6 +354,12 @@ export function Prontuario() {
       <div className="mt-4 relative pl-6">
         <div className="absolute left-2 top-2 bottom-2 w-px bg-border" />
         <div className="space-y-3">
+          {/* M24: linha do tempo vazia durante o bootstrap é carga. */}
+          {carregando && eventos.length === 0 && (
+            <p className="text-sm text-muted-foreground" role="status">
+              Carregando prontuário…
+            </p>
+          )}
           {visiveis.map((e) => {
             const Icon = ICONES[e.tipo];
             const docIndex = e.doc ? docs.findIndex((d) => d.id === e.doc!.id) : -1;
@@ -382,11 +402,14 @@ export function Prontuario() {
           Cada geração do prontuário em PDF exige consentimento e fica registrada aqui.
         </p>
         <div className="mt-3 space-y-2">
-          {consentimentosVisiveis.length === 0 && (
-            <p className="text-sm text-muted-foreground">
-              Nenhum registro de consentimento até o momento.
-            </p>
-          )}
+          {consentimentosVisiveis.length === 0 &&
+            (carregando ? (
+              <p className="text-sm text-muted-foreground">Carregando registros…</p>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Nenhum registro de consentimento até o momento.
+              </p>
+            ))}
           {consentimentosVisiveis.map((c) => (
             <div key={c.id} className="rounded-xl border p-3 flex items-start gap-3">
               <span

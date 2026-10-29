@@ -6,7 +6,7 @@ import { FileText, Pill, Award, X } from "lucide-react";
 import { useBion as useStore } from "@/lib/bion-store";
 import { ModalBion } from "@/components/bion/ModalBion";
 import { EncerrarAtendimento, type EscolhaEncerrar } from "@/components/bion/consulta/EncerrarAtendimento";
-import { ConsultaNaoEncontrada, SalaConsultaTela } from "@/components/bion/consulta/SalaConsultaTela";
+import { ConsultaNaoEncontrada, ErroSalaFatal, SalaConsultaTela } from "@/components/bion/consulta/SalaConsultaTela";
 import { useSalaConsulta } from "@/components/bion/consulta/useSalaConsulta";
 import { avisarDadosMedicoAlterados } from "@/components/bion/medico/useDadosMedico";
 import { PainelEvolucao } from "@/components/bion/medico/evolucao/PainelEvolucao";
@@ -270,6 +270,10 @@ export function ChamadaMedico({ onEnd, consultaId }: { onEnd: () => void; consul
   };
 
   if (tele.naoEncontrada) return <ConsultaNaoEncontrada role={role} />;
+
+  // M16: 401/402/403 no polling — o motor parou; mostra a orientação em vez
+  // de a sala ficar congelada no último estado, sem presença no servidor.
+  if (tele.erroSala) return <ErroSalaFatal erro={tele.erroSala} onVoltar={onEnd} />;
 
   if (pendente) {
     return (

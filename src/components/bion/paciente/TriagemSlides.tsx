@@ -60,6 +60,10 @@ export function TriagemSlides({
   const [respondidos, setRespondidos] = useState<Record<string, string>>({});
   const [etapaServidor, setEtapaServidor] = useState("identificacao");
   const [pronta, setPronta] = useState(false);
+  // M17: abertura que falha ganha estado próprio + retry (antes o !res.ok
+  // era ignorado em silêncio e a triagem abria "vazia" sem explicação).
+  const [erroAbertura, setErroAbertura] = useState(false);
+  const [tentativaAbertura, setTentativaAbertura] = useState(0);
 
   const idxServidor = Math.max(0, ETAPAS_ANAMNESE.findIndex((e) => e.id === etapaServidor));
 
@@ -112,9 +116,17 @@ export function TriagemSlides({
           body: JSON.stringify({ consultaId, historico: [] }),
         });
         const json = (await res.json()) as RespostaAnamnese;
-        if (vivo && res.ok) aplicarRespostaApi(json);
+        if (!vivo) return;
+        if (res.ok) {
+          setErroAbertura(false);
+          aplicarRespostaApi(json);
+        } else {
+          // M17: falha do POST inicial (portões do A1, rede, 5xx) não é mais
+          // silêncio — a tela mostra o erro e oferece tentar de novo.
+          setErroAbertura(true);
+        }
       } catch {
-        toast.error("Não abri a triagem agora.");
+        if (vivo) setErroAbertura(true);
       } finally {
         if (vivo) setEnviando(false);
       }
@@ -122,15 +134,13 @@ export function TriagemSlides({
     return () => {
       vivo = false;
     };
-     
-  }, [consultaId]);
+
+  }, [consultaId, tentativaAbertura]);
 
   const enviar = async (texto: string) => {
     const t = texto.trim();
     if (!t || enviando || pronta) return;
     const etapaAtual = ETAPAS_ANAMNESE[idxServidor]?.id ?? etapaServidor;
-    setRespondidos((r) => ({ ...r, [etapaAtual]: t }));
-    setRascunhos((r) => ({ ...r, [etapaAtual]: "" }));
     setEnviando(true);
     try {
       const res = await fetch("/api/anamnese", {
@@ -140,9 +150,14 @@ export function TriagemSlides({
       });
       const json = (await res.json()) as RespostaAnamnese;
       if (!res.ok) throw new Error(json.erro ?? "Falha");
+      // M17: a etapa só é marcada como respondida (e o rascunho limpo)
+      // DEPOIS que o servidor confirmou. Em falha, nada muda na tela: o
+      // rascunho continua no campo e o progresso não avança.
+      setRespondidos((r) => ({ ...r, [etapaAtual]: t }));
+      setRascunhos((r) => ({ ...r, [etapaAtual]: "" }));
       aplicarRespostaApi(json);
     } catch {
-      toast.error("Não enviei essa resposta.");
+      toast.error("Não enviei essa resposta. Ela continua no campo para tentar de novo.");
     } finally {
       setEnviando(false);
     }
@@ -229,6 +244,22 @@ export function TriagemSlides({
           {indice + 1} / {ETAPAS_ANAMNESE.length} · {etapa.rotulo}
         </div>
       </div>
+
+      {erroAbertura && (
+        <div className="mx-4 mb-2 flex items-center gap-3 rounded-2xl border border-red-300 bg-red-50 px-4 py-3 dark:border-red-500/40 dark:bg-red-500/10" role="alert">
+          <p className="flex-1 text-sm font-medium text-red-800 dark:text-red-200">
+            Não consegui abrir sua triagem agora. Tente de novo — suas respostas anteriores estão salvas.
+          </p>
+          <button
+            type="button"
+            onClick={() => setTentativaAbertura((n) => n + 1)}
+            disabled={enviando}
+            className="shrink-0 rounded-full bg-red-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-40"
+          >
+            {enviando ? "Tentando…" : "Tentar de novo"}
+          </button>
+        </div>
+      )}
 
       <div
         ref={faixaRef}

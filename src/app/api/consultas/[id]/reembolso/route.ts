@@ -28,7 +28,13 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       select: {
         pacienteId: true,
         dataInicio: true,
-        eventos: { where: { tipo: "falta_paciente" }, select: { id: true }, take: 1 },
+        // M2: só a falta VIGENTE conta, como o POST (pedirReembolsoManual)
+        // exige — corrigidoEm: null aqui e, abaixo, o evento precisa ser da
+        // data atual (dataAnterior = dataInicio, a mesma regra de
+        // eventoDesfechoVigente). Sem isso, a prévia prometia prazo para
+        // falta já corrigida pelo admin (ou de uma data antiga) e o POST
+        // respondia 409.
+        eventos: { where: { tipo: "falta_paciente", corrigidoEm: null }, select: { id: true, dataAnterior: true } },
         pagamento: {
           select: { reembolsos: { where: { origem: "manual" }, orderBy: { criadoEm: "desc" }, take: 1 } },
         },
@@ -39,9 +45,10 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       return Response.json({ erro: "Acesso negado." }, { status: 403 });
     }
     const r = consulta.pagamento?.reembolsos[0];
+    const faltaVigente = consulta.eventos.some((e) => e.dataAnterior.getTime() === consulta.dataInicio.getTime());
     return ok({
       reembolso: r ? reembolsoManualWire(r) : null,
-      podePedirAte: consulta.eventos.length ? prazoReembolsoManual(consulta.dataInicio).toISOString() : null,
+      podePedirAte: faltaVigente ? prazoReembolsoManual(consulta.dataInicio).toISOString() : null,
     });
   } catch (erro) {
     return falha(erro);

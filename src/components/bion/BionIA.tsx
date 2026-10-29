@@ -17,7 +17,14 @@ import {
 } from "lucide-react";
 import { useBion } from "@/lib/bion-store";
 import { ErroBionIa, perguntarBionIa, textoParaCopiar } from "@/lib/bion-ia-cliente";
+import { inline } from "@/lib/markdown-simples";
 import { BlocoRaciocinio } from "./BlocoRaciocinio";
+import { ConsentimentoIA } from "./paciente/ConsentimentoIA";
+// M22: o ConsentimentoIA usa as classes bpp-sheet (tema do app do paciente,
+// escopo .bp-app-paciente em paciente.css). A página clássica importa o CSS
+// e monta a folha dentro de um invólucro .bp-app-paciente — sem isso a folha
+// do aceite abriria sem fundo/botões nesta página.
+import "./paciente/paciente.css";
 
 type MensagemIA = {
   id: string;
@@ -105,6 +112,11 @@ export function BionIA() {
   ]);
   const [entrada, setEntrada] = useState("");
   const [digitando, setDigitando] = useState(false);
+  // M22: estado real da IA para o selo (pausada quando o servidor responde
+  // bion_ia_pausada; volta a ativa no próximo sucesso) e o portão jurídico —
+  // a pergunta que esbarrou no aceite pendente, repetida após o "Li e concordo".
+  const [iaPausada, setIaPausada] = useState(false);
+  const [aceitePendente, setAceitePendente] = useState<string | null>(null);
 
   const respostaLocal = (txt: string): string => {
     const lower = txt.toLowerCase();
@@ -184,6 +196,9 @@ export function BionIA() {
 
     let resposta = "";
     let raciocinio = "";
+    // M22 (consentimento): como no ChatBion, a pergunta que esbarrou no
+    // portão sai da lista — ela é reenviada depois do aceite.
+    let tirarPergunta = false;
     try {
       // JSON/NDJSON tratados em perguntarBionIa: AbortController, HTML 504 e
       // falhas de cliente reportadas ao monitor (sem PII). O raciocínio do
@@ -192,10 +207,18 @@ export function BionIA() {
       const r = await perguntarBionIa(historico.map((m) => ({ remetente: m.remetente, texto: m.texto })));
       resposta = r.texto;
       raciocinio = r.raciocinio;
+      setIaPausada(false);
     } catch (e) {
       if (e instanceof ErroBionIa && e.tipo === "pausada") {
         // Pausa da BION IA (opt-in, bion_ia_pausada): aviso amigável, não erro.
+        setIaPausada(true);
         resposta = e.message || "A BION IA volta em breve.";
+      } else if (e instanceof ErroBionIa && e.tipo === "consentimento") {
+        // Portão jurídico (mesmo fluxo do ChatBion): nada foi enviado à IA;
+        // abre a folha de aceite e a pergunta é repetida após o aceite.
+        setAceitePendente(txt);
+        tirarPergunta = true;
+        resposta = e.message;
       } else {
         const aviso =
           e instanceof Error && e.message
@@ -215,9 +238,11 @@ export function BionIA() {
       hora: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
     };
 
-    setMensagens((prev) => [...prev, novaMsgIA]);
+    setMensagens((prev) => [...(tirarPergunta ? prev.slice(0, -1) : prev), novaMsgIA]);
     setDigitando(false);
   };
+
+  const horaAgora = () => new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -240,15 +265,46 @@ export function BionIA() {
       </div>
 
       {/* Caixa do Chat */}
-      <div className="bg-card border rounded-3xl overflow-hidden shadow-sm flex flex-col min-h-[520px]">
+      <div className="relative bg-card border rounded-3xl overflow-hidden shadow-sm flex flex-col min-h-[520px]">
         {/* Banner informativo */}
         <div className="bg-muted/70 px-5 py-2.5 border-b flex items-center justify-between text-xs text-muted-foreground">
           <span className="flex items-center gap-2">
             <Shield className="w-3.5 h-3.5 text-primary" /> Suas interações são confidenciais e
             protegidas pela LGPD.
           </span>
-          <span className="font-semibold text-emerald-700 dark:text-emerald-200">● IA Ativa</span>
+          <span className={`font-semibold ${iaPausada ? "text-amber-700 dark:text-amber-300" : "text-emerald-700 dark:text-emerald-200"}`}>
+            {iaPausada ? "● IA pausada" : "● IA Ativa"}
+          </span>
         </div>
+
+        {/* Portão jurídico da IA (mesmo componente/fluxo do ChatBion) */}
+        {aceitePendente !== null && (
+          <div className="bp-app-paciente">
+            <ConsentimentoIA
+              onAceito={() => {
+                const t = aceitePendente;
+                setAceitePendente(null);
+                setMensagens((prev) => [
+                  ...prev,
+                  { id: `ia-aceite-${Date.now()}`, remetente: "ia", texto: "Obrigado! Aceite registrado.", hora: horaAgora() },
+                ]);
+                void enviarMensagem(t);
+              }}
+              onRecusar={() => {
+                setAceitePendente(null);
+                setMensagens((prev) => [
+                  ...prev,
+                  {
+                    id: `ia-recusa-${Date.now()}`,
+                    remetente: "ia",
+                    texto: "Tudo bem. Sem o aceite, a BION IA fica pausada para você. O agendamento e as consultas continuam normais.",
+                    hora: horaAgora(),
+                  },
+                ]);
+              }}
+            />
+          </div>
+        )}
 
         {/* Mensagens */}
         <div className="flex-1 p-5 md:p-6 space-y-4 overflow-y-auto">
@@ -270,7 +326,12 @@ export function BionIA() {
                     : "bg-muted border text-foreground rounded-tl-sm"
                 }`}
               >
-                <div className="whitespace-pre-wrap">{msg.texto}</div>
+                {/* M22: markdown inline (negrito/itálico/código) em vez de
+                    texto cru — sem isso a saudação e as respostas mostravam
+                    os ** literais. O renderizador de blocos (MarkdownSimples)
+                    é para documentos; na bolha, o `inline` do mesmo módulo
+                    preserva as quebras de linha do chat. */}
+                <div className="whitespace-pre-wrap">{inline(msg.texto, msg.id)}</div>
                 {msg.remetente === "ia" && msg.id !== "ia-intro" && (
                   <>
                     <BlocoRaciocinio raciocinio={msg.raciocinio} />

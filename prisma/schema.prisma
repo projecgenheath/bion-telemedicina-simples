@@ -435,6 +435,12 @@ model Avaliacao {
   atencao       Int?
   clareza       Int?
   createdAt     DateTime @default(now())
+
+  // M3: uma avaliação por consulta — fecha a corrida de dois POSTs
+  // concorrentes (a rota trata o P2002 como 409). consultaId é opcional:
+  // no Postgres, NULLs não colidem entre si, então avaliações legadas sem
+  // consulta continuam possíveis.
+  @@unique([consultaId])
 }
 
 model Ticket {

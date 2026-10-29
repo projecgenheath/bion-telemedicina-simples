@@ -105,10 +105,14 @@ function tsDeDataLonga(data: string): number {
   if (!m) return 0;
   const mes = MESES_PT[m[2]];
   if (mes === undefined) return 0;
-  return Date.UTC(Number(m[3]), mes, Number(m[1]));
+  // M26: meia-noite LOCAL (como dataDoc em Receitas) — o agrupamento da
+  // timeline formata o mês em horário local, então um ts em UTC fazia o
+  // documento do dia 1º cair no mês anterior em fusos negativos (SP: 31 out
+  // 21h para o rótulo "1 Nov").
+  return new Date(Number(m[3]), mes, Number(m[1])).getTime();
 }
 
-function GraficoPressao({ medicoes }: { medicoes: Medicao[] }) {
+function GraficoPressao({ medicoes, carregando }: { medicoes: Medicao[]; carregando?: boolean }) {
   const H = 100;
   const max = 155;
   const min = 60;
@@ -125,7 +129,8 @@ function GraficoPressao({ medicoes }: { medicoes: Medicao[] }) {
             <Activity className="w-4 h-4 text-primary" /> Pressão Arterial (mmHg)
           </span>
         </div>
-        <p className="text-sm text-muted-foreground">Nenhum dado registrado.</p>
+        {/* M24: durante o bootstrap, vazio é "carregando" — nunca ausência de dados. */}
+        <p className="text-sm text-muted-foreground">{carregando ? "Carregando dados…" : "Nenhum dado registrado."}</p>
       </div>
     );
   }
@@ -229,7 +234,7 @@ function GraficoPressao({ medicoes }: { medicoes: Medicao[] }) {
   );
 }
 
-function GraficoPeso({ medicoes }: { medicoes: Medicao[] }) {
+function GraficoPeso({ medicoes, carregando }: { medicoes: Medicao[]; carregando?: boolean }) {
   const H = 80;
   // Medições reais de peso do paciente, em ordem cronológica.
   const serie = [...medicoes]
@@ -243,7 +248,8 @@ function GraficoPeso({ medicoes }: { medicoes: Medicao[] }) {
             <Heart className="w-4 h-4 text-rose-500 dark:text-rose-400" /> Evolução de Peso (kg)
           </span>
         </div>
-        <p className="text-sm text-muted-foreground">Nenhum dado registrado.</p>
+        {/* M24: durante o bootstrap, vazio é "carregando" — nunca ausência de dados. */}
+        <p className="text-sm text-muted-foreground">{carregando ? "Carregando dados…" : "Nenhum dado registrado."}</p>
       </div>
     );
   }
@@ -312,12 +318,58 @@ function GraficoPeso({ medicoes }: { medicoes: Medicao[] }) {
   );
 }
 
+/**
+ * M25: alertas derivados dos dados que esta tela já carrega — antes a caixa
+ * era fixa ("Nenhum item registrado") mesmo com exame fora da referência ou
+ * pressão elevada (falso negativo).
+ * - Exames: itens fora de refMin/refMax na coleta MAIS RECENTE de cada exame
+ *   (coleta antiga já normalizada não volta a alertar).
+ * - Pressão: última medição fora da faixa normal, com os cortes do
+ *   classificarPa do app (limítrofe a partir de 130/85; elevada, 140/90).
+ *   Sem diastólica, julga só pela sistólica.
+ */
+function alertasDeSaude(exames: ExameLab[], medicoes: Medicao[]): string[] {
+  const alertas: string[] = [];
+  const porTitulo = new Map<string, ExameLab>();
+  for (const e of exames) {
+    const atual = porTitulo.get(e.titulo);
+    if (!atual || e.dataColeta >= atual.dataColeta) porTitulo.set(e.titulo, e);
+  }
+  for (const e of porTitulo.values()) {
+    for (const it of e.itens) {
+      const abaixo = it.refMin !== undefined && it.valor < it.refMin;
+      const acima = it.refMax !== undefined && it.valor > it.refMax;
+      if (!abaixo && !acima) continue;
+      const ref =
+        it.refMin !== undefined && it.refMax !== undefined
+          ? `referência ${it.refMin}–${it.refMax}`
+          : it.refMax !== undefined
+            ? `referência até ${it.refMax}`
+            : `referência a partir de ${it.refMin}`;
+      alertas.push(`${e.titulo} — ${it.nome}: ${it.valor}${it.unidade ? ` ${it.unidade}` : ""} (${ref})`);
+    }
+  }
+  const pas = medicoes
+    .filter((m) => m.tipo === "pa")
+    .sort((a, b) => a.criadoEm.localeCompare(b.criadoEm));
+  const ultima = pas.at(-1);
+  if (ultima && (ultima.valor1 >= 130 || (ultima.valor2 !== undefined && ultima.valor2 >= 85))) {
+    const elevada = ultima.valor1 >= 140 || (ultima.valor2 !== undefined && ultima.valor2 >= 90);
+    alertas.push(
+      `Pressão arterial ${elevada ? "elevada" : "limítrofe"} na última medição: ${ultima.valor1}${ultima.valor2 !== undefined ? `/${ultima.valor2}` : ""} mmHg (${ultima.quando})`,
+    );
+  }
+  return alertas;
+}
+
 export function HistoricoClinico() {
-  const { consultas, documentos, arquivos, medicoes, exames, sessao } = useBion();
+  const { consultas, documentos, arquivos, medicoes, exames, sessao, carregando } = useBion();
   const [filtro, setFiltro] = useState<FiltroTipo>("tudo");
   const [busca, setBusca] = useState("");
   const [ativoId, setAtivoId] = useState<string | null>(null);
   const [baixandoId, setBaixandoId] = useState<string | null>(null);
+  // M25: caixa de alertas derivada dos dados carregados (ver alertasDeSaude).
+  const alertas = alertasDeSaude(exames, medicoes);
 
   // Baixa um exame com arquivo real no Storage (mesmo fluxo de Arquivos.tsx:
   // GET /api/arquivos?id= devolve o link assinado). Sem arquivo, não há botão.
@@ -469,19 +521,27 @@ export function HistoricoClinico() {
 
   const statusBadge = (s?: string) => {
     if (!s) return null;
+    // M13: mapa explícito para TODOS os ApptStatus — antes faltavam
+    // aguardando_reagendamento e falta_paciente, e o fallback exibia o
+    // código cru (snake_case) justo nos status que pedem atenção/ação.
+    // Rótulos no vocabulário do app novo (paciente/etiqueta-consulta.ts).
     const map: Record<string, string> = {
       confirmada: "bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300",
       concluida: "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-200",
       cancelada: "bg-red-50 dark:bg-red-950/60 text-red-600 dark:text-red-400",
       em_espera: "bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300",
       pendente_anamnese: "bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300",
+      aguardando_reagendamento: "bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300",
+      falta_paciente: "bg-red-50 dark:bg-red-950/60 text-red-600 dark:text-red-400",
     };
     const labels: Record<string, string> = {
       confirmada: "Confirmada",
       concluida: "Concluída",
       cancelada: "Cancelada",
-      em_espera: "Em espera",
-      pendente_anamnese: "Pendente anamnese",
+      em_espera: "Aguardando pagamento",
+      pendente_anamnese: "Falta a triagem",
+      aguardando_reagendamento: "Aguardando reagendamento",
+      falta_paciente: "Falta registrada",
     };
     return (
       <span
@@ -504,10 +564,10 @@ export function HistoricoClinico() {
       {/* Gráficos de saúde */}
       <div className="grid md:grid-cols-2 gap-6">
         <div className="bg-card border rounded-3xl p-6 shadow-sm">
-          <GraficoPressao medicoes={medicoes} />
+          <GraficoPressao medicoes={medicoes} carregando={carregando} />
         </div>
         <div className="bg-card border rounded-3xl p-6 shadow-sm">
-          <GraficoPeso medicoes={medicoes} />
+          <GraficoPeso medicoes={medicoes} carregando={carregando} />
         </div>
       </div>
 
@@ -723,16 +783,30 @@ export function HistoricoClinico() {
             </div>
           </div>
         ))}
-        {filtered.length === 0 && (
-          <div className="text-center py-16 space-y-3">
+        {/* M24: durante o bootstrap do store, a lista vazia é carga — não
+            "nenhum evento". O vazio só aparece com a carga concluída. */}
+        {carregando && eventos.length === 0 ? (
+          <div className="text-center py-16 space-y-3" role="status" aria-live="polite">
             <div className="w-16 h-16 rounded-3xl bg-muted flex items-center justify-center mx-auto">
-              <Filter className="w-7 h-7 text-muted-foreground" />
+              <Clock className="w-7 h-7 text-muted-foreground animate-pulse" />
             </div>
-            <div className="font-bold">Nenhum evento encontrado</div>
+            <div className="font-bold">Carregando seu histórico…</div>
             <div className="text-sm text-muted-foreground">
-              Tente ajustar os filtros ou a busca.
+              Buscando consultas, exames e receitas.
             </div>
           </div>
+        ) : (
+          filtered.length === 0 && (
+            <div className="text-center py-16 space-y-3">
+              <div className="w-16 h-16 rounded-3xl bg-muted flex items-center justify-center mx-auto">
+                <Filter className="w-7 h-7 text-muted-foreground" />
+              </div>
+              <div className="font-bold">Nenhum evento encontrado</div>
+              <div className="text-sm text-muted-foreground">
+                Tente ajustar os filtros ou a busca.
+              </div>
+            </div>
+          )
         )}
       </div>
 
@@ -741,9 +815,24 @@ export function HistoricoClinico() {
         <div className="flex items-center gap-2 font-extrabold text-sm text-amber-900 dark:text-amber-200">
           <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400" /> Itens que merecem acompanhamento
         </div>
-        <p className="text-xs text-amber-700 dark:text-amber-300">
-          Nenhum item registrado.
-        </p>
+        {alertas.length === 0 ? (
+          <p className="text-xs text-amber-700 dark:text-amber-300">
+            Nenhum item registrado.
+          </p>
+        ) : (
+          <ul className="space-y-1.5">
+            {alertas.slice(0, 10).map((a, i) => (
+              <li key={i} className="text-xs font-medium text-amber-800 dark:text-amber-200">
+                {a}
+              </li>
+            ))}
+            {alertas.length > 10 && (
+              <li className="text-xs text-amber-700 dark:text-amber-300">
+                E mais {alertas.length - 10} {alertas.length - 10 === 1 ? "item fora da faixa" : "itens fora da faixa"}.
+              </li>
+            )}
+          </ul>
+        )}
       </div>
     </div>
   );

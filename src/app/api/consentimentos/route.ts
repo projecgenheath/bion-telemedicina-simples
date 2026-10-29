@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { exigirSessao } from "@/lib/server/auth";
 import { aplicarSideEffects, consentimentoWire } from "@/lib/server/dados";
 import {ok, falha, lerCorpoJson} from "@/lib/server/http";
+import { limitarAsync, resposta429 } from "@/lib/server/rate-limit";
 
 /** Registro de consentimento LGPD.
  *  Paciente identificado por ID (sessão do próprio; ou ID informado por
@@ -10,6 +11,12 @@ import {ok, falha, lerCorpoJson} from "@/lib/server/http";
 export async function POST(req: NextRequest) {
   try {
     const usuario = await exigirSessao();
+    // M9 (auditoria): teto por usuário — registrar consentimento é ato
+    // ocasional (exportar prontuário, autorizar em nome de paciente);
+    // 60/h atende a clínica movimentada e barra loop de registros forjados
+    // em sequência a partir de uma conta autenticada.
+    const teto = await limitarAsync(`consentimentos:${usuario.id}`, 60, 3_600_000);
+    if (!teto.permitido) return resposta429(teto.restanteSeg);
     const body = (await lerCorpoJson(req)) as {
       finalidade: string;
       documentos: number;

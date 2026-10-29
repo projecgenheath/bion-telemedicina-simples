@@ -232,6 +232,19 @@ export async function GET(
       });
     }
 
+    // M5 — consulta fora de confirmada/em_espera não mantém a sala viva:
+    // sem presença, sem consumo de sinais e sem canal. É o mesmo 409 que o
+    // POST já devolve para status inativo; sem isto, uma consulta
+    // cancelada/concluída dentro da janela seguia com heartbeat e pull de
+    // sinais como se estivesse ativa. (O modo espiar, só leitura, já
+    // retornou acima e não é afetado.)
+    if (!["confirmada", "em_espera"].includes(consulta.status)) {
+      return NextResponse.json(
+        { erro: `Sala fechada: consulta está "${consulta.status}".` },
+        { status: 409, headers: { "Cache-Control": "no-store, private" } },
+      );
+    }
+
     // Sala fechada: é só aqui que a verificação automática de falta/falha
     // pode gravar algo (ela exige a sala fechada). Roda depois da resposta,
     // no máximo 1x/min por consulta e nunca lança.

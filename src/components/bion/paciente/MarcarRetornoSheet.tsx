@@ -5,12 +5,19 @@ import { CalendarClock, Loader2, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { useBion } from "@/lib/bion-store";
 import type { Consulta, Medico } from "@/lib/bion-tipos";
-import { PRAZO_RETORNO_GRATIS_DIAS, escolherHorarioInicial, fimRetornoGratis, motivoSugerido, retornoEhGratis, ultimoDiaRetornoGratis } from "@/lib/atendimento-tipo";
+import { PRAZO_RETORNO_GRATIS_DIAS, escolherHorarioInicial, fimRetornoGratis, jaUsouRetornoGratis, motivoSugerido, retornoEhGratis, ultimoDiaRetornoGratis } from "@/lib/atendimento-tipo";
 import { agendaLivreDoMedico, type DiaAgenda } from "./agenda-medico";
 import { useDiasBloqueados } from "./useDiasBloqueados";
 import { useVoltarFecha } from "./useVoltarFecha";
 import { useFocoDialogo } from "./useFocoDialogo";
 import { useArrastarFechar } from "./useArrastarFechar";
+
+/** `Consulta.valor` no cliente é o texto já formatado ("R$ 150,00"); este é o
+ *  mesmo parse de LinhaConsultaPagamento para recuperar o número. */
+function valorNumerico(valorFormatado?: string): number {
+  const n = Number((valorFormatado ?? "").replace(/[^\d,]/g, "").replace(",", "."));
+  return Number.isFinite(n) ? n : NaN;
+}
 
 /**
  * "Marcar retorno" (Teleconsulta v2): mesma pessoa, mesmo médico, em poucos
@@ -32,9 +39,14 @@ export function MarcarRetornoSheet({
   const medico = medicos.find((m) => (origem.medicoId ? m.id === origem.medicoId : m.nome === origem.medico));
   const { bloqueados } = useDiasBloqueados(medico?.id);
   const agenda = useMemo(() => agendaLivreDoMedico(medico, consultas, undefined, 30, bloqueados), [medico, consultas, bloqueados]);
-  // Só aviso: quem decide se é grátis é o servidor. Já existe retorno ativo
-  // desta origem → o grátis (um por consulta) já foi usado.
-  const jaUsouGratis = consultas.some((c) => c.consultaOrigemId === origem.id && c.tipoAtendimento === "retorno" && c.status !== "cancelada");
+  // Só aviso: quem decide se é grátis é o servidor. Espelha a regra dele
+  // (jaUsouRetornoGratis): só consome o grátis um retorno GRATUITO (valor 0)
+  // não cancelado desta origem — retorno pago não gasta o direito.
+  const jaUsouGratis = jaUsouRetornoGratis(
+    consultas
+      .filter((c) => c.consultaOrigemId === origem.id && c.tipoAtendimento === "retorno")
+      .map((c) => ({ status: c.status, valor: valorNumerico(c.valor) })),
+  );
   return (
     <MarcarRetornoPainel
       jaUsouGratis={jaUsouGratis}
@@ -72,16 +84,21 @@ export function MarcarRetornoPainel({
   onConfirmar: (medico: Medico, data: string, hora: string, motivo: string) => Promise<boolean>;
 }) {
   const raizRef = useRef<HTMLDivElement>(null);
-  useVoltarFecha(true, onFechar);
-  useFocoDialogo(true, onFechar, raizRef);
+  const [enviando, setEnviando] = useState(false);
+  // Durante o envio a folha não fecha (padrão de CancelarRemarcarSheet):
+  // fechar "às cegas" criaria o retorno sem o paciente saber.
+  const fechar = () => {
+    if (!enviando) onFechar();
+  };
+  useVoltarFecha(true, fechar);
+  useFocoDialogo(true, fechar, raizRef);
   const painelRef = useRef<HTMLDivElement>(null);
-  useArrastarFechar(painelRef, onFechar);
+  useArrastarFechar(painelRef, fechar);
   const inicial = useMemo(() => escolherHorarioInicial(agenda, retornoSugeridoEm), [agenda, retornoSugeridoEm]);
 
   const [dia, setDia] = useState<string | null>(null);
   const [hora, setHora] = useState<string | null>(null);
   const [motivo, setMotivo] = useState(() => motivoSugerido("retorno", origem));
-  const [enviando, setEnviando] = useState(false);
 
   const diaSel = agenda.find((d) => d.iso === (dia ?? inicial?.dia.iso)) ?? inicial?.dia;
   const horaSel = diaSel && hora && diaSel.horarios.includes(hora) ? hora : diaSel?.horarios[0];
@@ -114,7 +131,7 @@ export function MarcarRetornoPainel({
 
   return (
     <div ref={raizRef} className="bpp-sheet-raiz absolute inset-0 z-[80] flex items-end justify-center" role="dialog" aria-modal="true" aria-labelledby="titulo-retorno">
-      <button type="button" className="absolute inset-0 bpp-sheet-veu" aria-label="Fechar" onClick={onFechar} />
+      <button type="button" className="absolute inset-0 bpp-sheet-veu" aria-label="Fechar" onClick={fechar} />
       <div
         ref={painelRef} className="bpp-sheet-painel relative w-full max-w-lg max-h-[92svh] overflow-y-auto rounded-t-3xl bpp-sheet border-t bpp-sheet-borda px-5 pt-3 pb-8 shadow-[0_-12px_40px_rgba(2,8,26,0.35)]">
         <div data-arrastar className="-mx-5 -mt-3 mb-1 pt-3 pb-3 touch-none"><div className="mx-auto h-1.5 w-12 rounded-full bpp-sheet-alca" aria-hidden /></div>

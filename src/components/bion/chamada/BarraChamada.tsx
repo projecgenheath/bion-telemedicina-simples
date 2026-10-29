@@ -15,9 +15,9 @@ export type BarraChamadaProps = {
   camAtivo: boolean;
   onMic: () => void;
   onCam: () => void;
-  /** Sem track de vídeo (só áudio): o botão da câmera fica desabilitado. */
+  /** Sem track de vídeo (só áudio): o botão da câmera vira "tentar de novo" (recaptura do motor, M15) — NÃO desabilita. */
   semCamera?: boolean;
-  /** Sem track de áudio: o botão do microfone fica desabilitado (mesmo padrão). */
+  /** Sem track de áudio: o botão do microfone vira "tentar de novo" (mesmo padrão). */
   semMic?: boolean;
   /** Mostra "Virar" (passe true só com mais de uma câmera; ver useCamerasDisponiveis). */
   podeVirar?: boolean;
@@ -76,10 +76,9 @@ export function BarraChamada({
       <div className="bp-glass-marinho !rounded-[1.75rem] flex items-end justify-around gap-1 px-2 py-3">
         <BotaoChamada
           rotulo="Mudo"
-          aria={semMic ? "Microfone indisponível" : micAtivo ? "Silenciar microfone" : "Ativar microfone"}
+          aria={semMic ? "Microfone indisponível: tentar de novo" : micAtivo ? "Silenciar microfone" : "Ativar microfone"}
           pressionado={!micAtivo}
           destaque={!micAtivo && !semMic}
-          desabilitado={semMic}
           onClick={onMic}
           atalho="M"
         >
@@ -88,10 +87,9 @@ export function BarraChamada({
 
         <BotaoChamada
           rotulo="Câmera"
-          aria={semCamera ? "Câmera indisponível" : camAtivo ? "Desligar câmera" : "Ligar câmera"}
+          aria={semCamera ? "Câmera indisponível: tentar de novo" : camAtivo ? "Desligar câmera" : "Ligar câmera"}
           pressionado={!camAtivo}
           destaque={!camAtivo && !semCamera}
-          desabilitado={semCamera}
           onClick={onCam}
           atalho="V"
         >

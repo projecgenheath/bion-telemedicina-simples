@@ -14,6 +14,8 @@ import { limparMetadadosImagem } from "@/lib/server/limpar-metadados";
 import { carregarDados, aplicarSideEffects } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
 import { usuarioSemNome } from "@/lib/server/audit-sem-nome";
+import { limitarAsync, resposta429 } from "@/lib/server/rate-limit";
+import { nomeCorresponde } from "@/lib/nome-laudo";
 import { iaPausada, obterLLM, respostaIaPausada, visaoGemini } from "@/lib/server/llm";
 
 /**
@@ -32,7 +34,8 @@ import { iaPausada, obterLLM, respostaIaPausada, visaoGemini } from "@/lib/serve
  *  1. A IA transcreve o laudo e extrai o NOME COMPLETO do paciente impresso no documento;
  *     visão em cadeia: GOOGLE GEMINI (API própria) → SDK do sandbox;
  *  2. O servidor compara o nome extraído com o nome da conta autenticada
- *     (comparação normalizada, tolerante a acentos/ordem/nomes do meio);
+ *     (lib/nome-laudo: normalizado, ≥2 tokens e TODOS os tokens da conta —
+ *     primeiro, meio e último — precisam constar no documento);
  *  3. Divergência → o exame NÃO é gravado e o paciente recebe um aviso claro;
  *  4. Sucesso → resultados agrupados por exame são gravados na linha do tempo
  *     (seção "Exames" do app) e um registro de upload entra no histórico.
@@ -59,32 +62,6 @@ type LaudoExtraido = {
   exames?: { titulo?: string; itens?: ItemExtraido[] }[];
 };
 
-function normalizarNome(v: string): string {
-  return v
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/\b(dr\.?|dra\.?|sr\.?|sra\.?)\b/g, " ")
-    .replace(/[^a-z\s]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-/** O nome do documento corresponde ao da conta? Tolerante a nomes do meio e ordem. */
-function nomeCorresponde(extraido: string, esperado: string): boolean {
-  const a = normalizarNome(extraido);
-  const b = normalizarNome(esperado);
-  if (!a || !b) return false;
-  if (a === b) return true;
-  const tokensA = a.split(" ").filter((t) => t.length > 1);
-  const tokensB = b.split(" ").filter((t) => t.length > 1);
-  if (!tokensA.length || !tokensB.length) return false;
-  // Todo token do nome da conta precisa constar no documento (e vice-versa p/ evitar homônimos parciais)
-  const contemTodos = (menor: string[], maior: string[]) =>
-    menor.every((t) => maior.some((x) => x === t || (t.length > 3 && x.startsWith(t)) || (x.length > 3 && t.startsWith(x))));
-  return tokensA.length <= tokensB.length ? contemTodos(tokensA, tokensB) : contemTodos(tokensB, tokensA);
-}
-
 function extrairJson(texto: string): LaudoExtraido | null {
   const limpo = texto.replace(/```json/gi, "```").split("```").find((b) => b.trim().startsWith("{"));
   const bruto = limpo ?? texto;
@@ -103,6 +80,13 @@ export const maxDuration = 60;
 export async function POST(req: NextRequest) {
   try {
     const usuario = await exigirPapel("PACIENTE");
+    // M6 (auditoria): teto por usuário MAIS apertado que o chat — visão é a
+    // chamada mais cara (arquivo de até 10 MB por envio). Antes de ler o
+    // corpo: 5/min e 30/h por paciente.
+    const tetoMin = await limitarAsync(`bion-ia-exame:${usuario.id}`, 5, 60_000);
+    if (!tetoMin.permitido) return resposta429(tetoMin.restanteSeg);
+    const tetoHora = await limitarAsync(`bion-ia-exame-hora:${usuario.id}`, 30, 3_600_000);
+    if (!tetoHora.permitido) return resposta429(tetoHora.restanteSeg);
     // Pausa da BION IA (opt-in): o laudo nem é lido, nada vai à IA.
     if (iaPausada()) return respostaIaPausada();
     // Portão jurídico: sem o aceite geral da IA (NVIDIA) nada é enviado.

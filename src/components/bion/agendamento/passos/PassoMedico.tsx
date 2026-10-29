@@ -114,7 +114,7 @@ export function PassoMedico(p: AgendamentoCorpoProps) {
             <div className="flex sm:flex-col items-center sm:items-end justify-between w-full sm:w-auto gap-3 pt-3 sm:pt-0 border-t sm:border-t-0">
               <div className="text-left sm:text-right">
                 <div className="text-xs text-muted-foreground">Consulta particular</div>
-                <div className="text-xl font-extrabold text-primary">R$ {med.valor}</div>
+                <div className="text-xl font-extrabold text-primary">{med.valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</div>
               </div>
               <div className="flex gap-2">
                 <button type="button"

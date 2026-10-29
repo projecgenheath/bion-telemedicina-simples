@@ -235,7 +235,7 @@ export function AgendamentoFluxo({
           data,
           hora,
           motivoConsulta: motivoCompleto,
-          valor: `R$ ${med.valor}`,
+          valor: med.valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }),
         }),
       );
       await proximoCommit();
@@ -425,7 +425,7 @@ export function AgendamentoFluxo({
             <div className="pt-3 border-t flex items-center justify-between">
               <div>
                 <div className="text-xs text-muted-foreground">Valor por consulta</div>
-                <div className="text-xl font-extrabold text-primary">R$ {medicoModal.valor},00</div>
+                <div className="text-xl font-extrabold text-primary">{medicoModal.valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</div>
               </div>
               <button type="button"
                 onClick={() => {

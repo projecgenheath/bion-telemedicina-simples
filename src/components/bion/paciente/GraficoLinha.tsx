@@ -10,8 +10,13 @@
 
 export type PontoGrafico = { valor: number; rotulo: string };
 
+/** Ponto de série: `valor: null` = medição sem aquele valor (ex.: PA sem
+ *  diastólica) — o ponto é omitido da linha SEM deslocar os demais, em vez
+ *  de inventar um valor (M18). */
+export type PontoSerie = { valor: number | null; rotulo: string };
+
 export type SerieGrafico = {
-  pontos: PontoGrafico[];
+  pontos: PontoSerie[];
   cor: string;
   area?: boolean;
 };
@@ -32,7 +37,7 @@ export function GraficoLinha({ series, refMin, refMax, altura = 132, corEixo = "
   const padTop = 12;
   const padBottom = 24;
 
-  const valores = series.flatMap((s) => s.pontos.map((p) => p.valor));
+  const valores = series.flatMap((s) => s.pontos.map((p) => p.valor)).filter((v): v is number => v !== null);
   const refs = [refMin, refMax].filter((v): v is number => typeof v === "number");
   let min = Math.min(...valores, ...refs);
   let max = Math.max(...valores, ...refs);
@@ -49,8 +54,21 @@ export function GraficoLinha({ series, refMin, refMax, altura = 132, corEixo = "
   const x = (i: number) => padX + (i * (W - padX * 2)) / (totalPontos - 1);
   const y = (v: number) => padTop + ((max - v) * (H - padTop - padBottom)) / (max - min);
 
-  const caminho = (pontos: PontoGrafico[]) =>
-    pontos.map((p, i) => `${i === 0 ? "M" : "L"} ${x(i).toFixed(1)} ${y(p.valor).toFixed(1)}`).join(" ");
+  // Ponto nulo quebra o traço: o próximo ponto real recomeça com "M", na
+  // posição do seu próprio índice (as séries continuam alinhadas no tempo).
+  const caminho = (pontos: PontoSerie[]) => {
+    let d = "";
+    let inicio = true;
+    pontos.forEach((p, i) => {
+      if (p.valor === null) {
+        inicio = true;
+        return;
+      }
+      d += `${inicio ? "M" : "L"} ${x(i).toFixed(1)} ${y(p.valor).toFixed(1)} `;
+      inicio = false;
+    });
+    return d.trim();
+  };
 
   return (
     <svg
@@ -84,7 +102,7 @@ export function GraficoLinha({ series, refMin, refMax, altura = 132, corEixo = "
 
       {series.map((s, idx) => (
         <g key={idx}>
-          {s.area && s.pontos.length > 1 && (
+          {s.area && s.pontos.length > 1 && !s.pontos.some((p) => p.valor === null) && (
             <path
               d={`${caminho(s.pontos)} L ${x(s.pontos.length - 1)} ${H - padBottom} L ${x(0)} ${H - padBottom} Z`}
               /* FASE 3: cor via style (aceita var(--bion-*)); atributos de
@@ -94,9 +112,11 @@ export function GraficoLinha({ series, refMin, refMax, altura = 132, corEixo = "
             />
           )}
           <path d={caminho(s.pontos)} fill="none" style={{ stroke: s.cor }} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
-          {s.pontos.map((p, i) => (
-            <circle key={i} cx={x(i)} cy={y(p.valor)} r="3" style={{ fill: s.cor }} stroke="rgba(255,255,255,0.85)" strokeWidth="1" />
-          ))}
+          {s.pontos.map((p, i) =>
+            p.valor === null ? null : (
+              <circle key={i} cx={x(i)} cy={y(p.valor)} r="3" style={{ fill: s.cor }} stroke="rgba(255,255,255,0.85)" strokeWidth="1" />
+            ),
+          )}
         </g>
       ))}
 

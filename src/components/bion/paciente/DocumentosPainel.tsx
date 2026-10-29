@@ -123,7 +123,7 @@ export function DocumentosPainel({
   onConversa: (medicoId: string | null) => void;
   onAgendar: () => void;
 }) {
-  const { consultas, documentos, sessao, mensagens, enviarMensagem, marcarConversaLida, naoLidasMensagens } = useBion();
+  const { consultas, documentos, medicos, sessao, mensagens, enviarMensagem, marcarConversaLida, naoLidasMensagens } = useBion();
   const [consultaSelecionada, setConsultaSelecionada] = useState<string | null>(null);
   const [visualizando, setVisualizando] = useState<{ titulo: string; corpo: string[]; imprimir?: boolean } | null>(null);
   const setConversaAtiva = onConversa;
@@ -585,6 +585,7 @@ export function DocumentosPainel({
         <RenovarReceitaSheet
           medicamento={renovando.medicamento}
           medico={renovando.medico}
+          valor={medicos.find((m) => m.nome === renovando.medico)?.valor}
           onPedir={(obs) => renovacao.pedir(renovando.id, obs)}
           onFechar={() => setRenovando(null)}
         />

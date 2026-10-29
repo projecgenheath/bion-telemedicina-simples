@@ -75,7 +75,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return Response.json({ erro: "Corpo da requisição inválido." }, { status: 400 });
     }
 
-    if (consulta.status === "cancelada" || consulta.status === "concluida") {
+    // M2: falta_paciente também é encerrada — sem isto, a reserva nascia
+    // (RemarcacaoPendente + cobrança da multa) e só era barrada a jusante,
+    // depois do pagamento da multa e do estorno.
+    if (consulta.status === "cancelada" || consulta.status === "concluida" || consulta.status === "falta_paciente") {
       return Response.json({ erro: "Esta consulta já foi encerrada." }, { status: 409 });
     }
     const jaPendente = await db.remarcacaoPendente.findFirst({ where: { consultaId: id, ...filtroReservaVigente() } });

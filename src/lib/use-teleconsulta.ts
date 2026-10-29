@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ChamadaTeleconsulta, ESTADO_INICIAL, type EstadoChamada } from "@/lib/teleconsulta-chamada";
 
-export type { StatusSala, MsgChat, EstadoChamada } from "@/lib/teleconsulta-chamada";
+export type { StatusSala, MsgChat, EstadoChamada, ErroSala } from "@/lib/teleconsulta-chamada";
 export type { Qualidade, ForaDaJanela } from "@/lib/teleconsulta-logica";
 
 /**
@@ -21,6 +21,11 @@ export type { Qualidade, ForaDaJanela } from "@/lib/teleconsulta-logica";
  * aberta. A tela mostra "A sala abre às HH:MM" / "A sala já fechou" (ver
  * textoForaDaJanela/exibirForaDaJanela em teleconsulta-logica.ts). A classe
  * continua tentando e conecta sozinha quando a sala abre.
+ *
+ * `erroSala` (M16): "sessao" | "pagamento" | "acesso" quando o GET /sala
+ * responde 401/402/403 — o polling PAROU e a tela deve mostrar a orientação.
+ * `conexaoInstavel`: 3+ falhas seguidas do polling (5xx/rede); a tela avisa
+ * e a classe segue tentando (a próxima resposta boa limpa o aviso).
  */
 export function useTeleconsulta(consultaId: string | undefined) {
   const [estado, setEstado] = useState<EstadoChamada>(ESTADO_INICIAL);

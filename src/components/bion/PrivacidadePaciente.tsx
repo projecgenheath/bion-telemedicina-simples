@@ -33,18 +33,29 @@ export function PrivacidadePaciente() {
   // Consentimento da leitura de laudo pela BION IA (LGPD art. 8º, § 5º).
   const recarregarEstado = useRecarregarEstado();
   const [consIa, setConsIa] = useState<{ estado: EstadoConsentimentoIaExame; em: string | null } | null>(null);
+  const [consIaErro, setConsIaErro] = useState(false);
+  const [consIaTentativas, setConsIaTentativas] = useState(0);
   const [revogando, setRevogando] = useState(false);
   useEffect(() => {
     if (sessao.role !== "paciente") return;
     let vivo = true;
     fetch("/api/paciente/consentimento-ia-exame")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((j: { estado: EstadoConsentimentoIaExame; em: string | null } | null) => vivo && j && setConsIa(j))
-      .catch(() => {});
+      .then((r) => {
+        if (!r.ok) throw new Error(String(r.status));
+        return r.json();
+      })
+      .then((j: { estado: EstadoConsentimentoIaExame; em: string | null }) => {
+        if (!vivo) return;
+        setConsIa(j);
+        setConsIaErro(false);
+      })
+      .catch(() => {
+        if (vivo) setConsIaErro(true);
+      });
     return () => {
       vivo = false;
     };
-  }, [sessao.role]);
+  }, [sessao.role, consIaTentativas]);
   const revogarConsIa = async () => {
     if (revogando) return;
     setRevogando(true);
@@ -63,18 +74,29 @@ export function PrivacidadePaciente() {
 
   // Opt-in de marketing: desligar/religar com um clique (cada troca = nova linha).
   const [mkt, setMkt] = useState<{ ativo: boolean; em: string | null } | null>(null);
+  const [mktErro, setMktErro] = useState(false);
+  const [mktTentativas, setMktTentativas] = useState(0);
   const [salvandoMkt, setSalvandoMkt] = useState(false);
   useEffect(() => {
     if (sessao.role !== "paciente") return;
     let vivo = true;
     fetch("/api/paciente/marketing")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((j: { ativo: boolean; em: string | null } | null) => vivo && j && setMkt(j))
-      .catch(() => {});
+      .then((r) => {
+        if (!r.ok) throw new Error(String(r.status));
+        return r.json();
+      })
+      .then((j: { ativo: boolean; em: string | null }) => {
+        if (!vivo) return;
+        setMkt(j);
+        setMktErro(false);
+      })
+      .catch(() => {
+        if (vivo) setMktErro(true);
+      });
     return () => {
       vivo = false;
     };
-  }, [sessao.role]);
+  }, [sessao.role, mktTentativas]);
   const alternarMkt = async () => {
     if (salvandoMkt || !mkt) return;
     const novo = !mkt.ativo;
@@ -223,11 +245,25 @@ export function PrivacidadePaciente() {
           </div>
           <p className="text-xs text-muted-foreground" aria-live="polite">
             {mkt === null
-              ? "Carregando…"
+              ? mktErro
+                ? "Não foi possível carregar sua preferência agora. Verifique sua conexão e tente de novo."
+                : "Carregando…"
               : mkt.ativo
                 ? "Ativado. Você pode desligar quando quiser."
                 : "Desativado. A BION não envia novidades nem ofertas para você."}
           </p>
+          {mkt === null && mktErro ? (
+            <button
+              type="button"
+              onClick={() => {
+                setMktErro(false);
+                setMktTentativas((t) => t + 1);
+              }}
+              className="min-h-11 px-4 rounded-full border-2 border-primary/40 text-primary text-sm font-bold"
+            >
+              Tentar de novo
+            </button>
+          ) : null}
         </section>
       ) : null}
 
@@ -242,13 +278,27 @@ export function PrivacidadePaciente() {
           </p>
           <p className="text-sm" aria-live="polite">
             {consIa === null
-              ? "Carregando…"
+              ? consIaErro
+                ? "Não foi possível carregar o estado do seu consentimento agora. Verifique sua conexão e tente de novo."
+                : "Carregando…"
               : consIa.estado === "ativo"
                 ? `Autorizado no último envio${consIa.em ? ` (${fmtTicketData(consIa.em)}, horário de Brasília)` : ""}.`
                 : consIa.estado === "revogado"
                   ? `Revogado${consIa.em ? ` em ${fmtTicketData(consIa.em)} (horário de Brasília)` : ""}. O próximo envio vai pedir sua autorização.`
                   : "Você ainda não autorizou nenhum envio."}
           </p>
+          {consIa === null && consIaErro ? (
+            <button
+              type="button"
+              onClick={() => {
+                setConsIaErro(false);
+                setConsIaTentativas((t) => t + 1);
+              }}
+              className="min-h-11 px-4 rounded-full border-2 border-primary/40 text-primary text-sm font-bold"
+            >
+              Tentar de novo
+            </button>
+          ) : null}
           {consIa?.estado === "ativo" ? (
             <button
               type="button"

@@ -2,8 +2,9 @@
 
 import type { ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Clock, SearchX } from "lucide-react";
+import { ArrowLeft, Clock, SearchX, ShieldAlert } from "lucide-react";
 import { rotaInicioPorPapel, textoForaDaJanela } from "@/lib/teleconsulta-logica";
+import type { ErroSala } from "@/lib/teleconsulta-chamada";
 import { ConsultaBarraSuperior } from "@/components/bion/consulta/BarraSuperior";
 import { ConsultaAreaVideo } from "@/components/bion/consulta/AreaVideo";
 import { ConsultaControlesMidia } from "@/components/bion/consulta/ControlesMidia";
@@ -147,6 +148,51 @@ function AvisoForaDaJanela({
           className="inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/15 border border-white/15 text-sm font-bold transition"
         >
           <ArrowLeft className="w-4 h-4" /> Voltar
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** Textos da recusa definitiva da sala (M16), por tipo de erro do motor. */
+const TEXTOS_ERRO_SALA: Record<ErroSala, { titulo: string; detalhe: string }> = {
+  sessao: {
+    titulo: "Sua sessão expirou",
+    detalhe: "A sala foi fechada porque o seu acesso venceu. Entre de novo no app para voltar à consulta.",
+  },
+  pagamento: {
+    titulo: "Pagamento pendente",
+    detalhe: "Esta consulta ainda não foi paga, por isso a sala não pode continuar. Volte ao início e conclua o pagamento para entrar.",
+  },
+  acesso: {
+    titulo: "Acesso negado",
+    detalhe: "A conta que está aberta não participa desta consulta. Confira se você entrou com a conta certa.",
+  },
+};
+
+/**
+ * GET /sala respondeu 401/402/403 (M16): o motor parou o polling
+ * (`erroSala`) e a tela mostra a orientação — antes o paciente ficava em
+ * "O médico vai entrar em instantes" para sempre, com a presença morta.
+ */
+export function ErroSalaFatal({ erro, onVoltar }: { erro: ErroSala; onVoltar: () => void }) {
+  const textos = TEXTOS_ERRO_SALA[erro];
+  return (
+    <div className="min-h-[100dvh] bg-slate-950 flex items-center justify-center text-white p-6">
+      <div role="alert" className="flex flex-col items-center gap-4 text-center max-w-md">
+        <div className="w-16 h-16 rounded-3xl bg-destructive/20 border-2 border-destructive/40 flex items-center justify-center">
+          <ShieldAlert className="w-7 h-7 text-white" />
+        </div>
+        <div>
+          <h1 className="text-lg font-bold">{textos.titulo}</h1>
+          <p className="text-xs text-slate-300 mt-1 leading-relaxed">{textos.detalhe}</p>
+        </div>
+        <button
+          type="button"
+          onClick={onVoltar}
+          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/15 border border-white/15 text-sm font-bold transition"
+        >
+          <ArrowLeft className="w-4 h-4" /> Voltar ao início
         </button>
       </div>
     </div>

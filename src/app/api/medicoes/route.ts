@@ -63,6 +63,12 @@ export async function POST(req: NextRequest) {
     if (tipo === "pa" && body.valor2 !== undefined && (body.valor2 < 30 || body.valor2 > 200)) {
       return Response.json({ erro: "Pressão diastólica fora do intervalo plausível (30–200)." }, { status: 400 });
     }
+    // M18: cruzamento que faltava — PA invertida (diastólica >= sistólica)
+    // era gravada e classificada no cliente. Mesma mensagem de
+    // validarResposta (lib/saude-paciente), usada no fluxo de pedidos.
+    if (tipo === "pa" && body.valor2 !== undefined && body.valor2 >= body.valor1) {
+      return Response.json({ erro: "A pressão mínima precisa ser menor que a máxima." }, { status: 400 });
+    }
     if (tipo === "peso" && (body.valor1 < 20 || body.valor1 > 400)) {
       return Response.json({ erro: "Peso fora do intervalo plausível (20–400 kg)." }, { status: 400 });
     }

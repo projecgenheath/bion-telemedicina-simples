@@ -4,6 +4,7 @@ import { exigirSessao } from "@/lib/server/auth";
 import { aplicarSideEffects } from "@/lib/server/dados";
 import {ok, falha, lerCorpoJson} from "@/lib/server/http";
 import { topicoMensagensUsuario } from "@/lib/server/usuario-canal";
+import { limitarAsync, resposta429 } from "@/lib/server/rate-limit";
 import { broadcastCanal } from "@/lib/supabase/broadcast";
 import { idCuid, isErro } from "@/lib/server/validar";
 
@@ -69,6 +70,11 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const usuario = await exigirSessao();
+    // M9 (auditoria): teto por usuário — cada envio cria Mensagem, broadcast
+    // e Notificacao persistida; chat é frequente, então 60/min (uso humano
+    // intenso cabe; loop de spam, não).
+    const teto = await limitarAsync(`mensagens:${usuario.id}`, 60, 60_000);
+    if (!teto.permitido) return resposta429(teto.restanteSeg);
     const body = (await lerCorpoJson(req)) as {
       paraId?: string;
       texto?: string;

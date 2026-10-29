@@ -84,6 +84,16 @@ const rotuloCurto = (iso: string) => {
   return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
 };
 
+/** Chave de comparação de nomes de analito: sem acento, sem caixa, espaços
+ *  normalizados — a extração por IA não garante grafia idêntica entre coletas. */
+const chaveAnalito = (nome: string) =>
+  nome
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+
 const EM_CAMPO = ["INPUT", "TEXTAREA", "SELECT"];
 
 function comportamentoScroll(): ScrollBehavior {
@@ -840,7 +850,9 @@ export function PacienteApp() {
                     series={[
                       { pontos: pas.map((p) => ({ valor: p.valor1, rotulo: rotuloCurto(p.criadoEm) })), cor: "var(--bpp-grafico-linha)", area: true },
                       ...(pas.some((p) => p.valor2 !== undefined)
-                        ? [{ pontos: pas.map((p) => ({ valor: p.valor2 ?? p.valor1, rotulo: rotuloCurto(p.criadoEm) })), cor: "var(--bpp-grafico-alerta)" }]
+                        ? // M18: sem valor2 o ponto é omitido (null) — antes a
+                          // diastólica era plotada igual à sistólica.
+                          [{ pontos: pas.map((p) => ({ valor: p.valor2 ?? null, rotulo: rotuloCurto(p.criadoEm) })), cor: "var(--bpp-grafico-alerta)" }]
                         : []),
                     ]}
                     refMin={70}
@@ -888,14 +900,27 @@ export function PacienteApp() {
               <div className="bpp-grade flex flex-col gap-4">
                 {examesAgrupados.map(([titulo, lista]) => {
                   const ultimo = lista.at(-1)!;
-                  const itemDestaque = ultimo.itens[0];
-                  const serieItem: PontoGrafico[] = lista
-                    .map((e) => {
-                      const it = e.itens[0];
-                      return it ? { valor: it.valor, rotulo: rotuloCurto(e.dataColeta) } : null;
-                    })
-                    .filter((x): x is PontoGrafico => x !== null)
-                    .slice(-10);
+                  // M33: a ordem de `itens` vem da extração por IA e pode
+                  // variar entre coletas — a série é de UM analito, casado
+                  // pelo NOME: o primeiro da coleta mais recente que aparece
+                  // em todas as coletas do grupo (se nenhum aparece em
+                  // todas, o primeiro da coleta mais recente, usando só as
+                  // coletas em que ele aparece). Antes era sempre itens[0],
+                  // e o gráfico podia misturar analitos diferentes.
+                  const itemDe = (e: (typeof lista)[number], chave: string) =>
+                    e.itens.find((it) => chaveAnalito(it.nome) === chave);
+                  const chaveSerie =
+                    ultimo.itens.map((it) => chaveAnalito(it.nome)).find((c) => lista.every((e) => itemDe(e, c))) ??
+                    (ultimo.itens[0] ? chaveAnalito(ultimo.itens[0].nome) : undefined);
+                  const itemDestaque = chaveSerie ? itemDe(ultimo, chaveSerie) : undefined;
+                  const serieItem: PontoGrafico[] = (
+                    chaveSerie
+                      ? lista.flatMap((e) => {
+                          const it = itemDe(e, chaveSerie);
+                          return it ? [{ valor: it.valor, rotulo: rotuloCurto(e.dataColeta) }] : [];
+                        })
+                      : []
+                  ).slice(-10);
                   return (
                     <div key={titulo} className="bp-glass-marinho p-5">
                       <div className="flex items-start justify-between gap-3 mb-2">
@@ -915,7 +940,7 @@ export function PacienteApp() {
                       </div>
                       {serieItem.length > 1 && (
                         <GraficoLinha
-                          ariaLabel={`Histórico gráfico de ${titulo}`}
+                          ariaLabel={`Histórico gráfico de ${titulo}${itemDestaque ? ` — ${itemDestaque.nome}` : ""}`}
                           altura={104}
                           corEixo="var(--bpp-grafico-eixo-marinho)"
                           series={[{ pontos: serieItem, cor: "var(--bpp-grafico-linha-marinho)", area: true }]}

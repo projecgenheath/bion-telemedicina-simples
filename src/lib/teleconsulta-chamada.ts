@@ -63,6 +63,13 @@ import {
  * vem num GET 200) e, se nunca entrou na sala, não manda "saiu"/"encerrada"
  * ao sair. Quando o GET volta 200, `foraDaJanela` volta a null, a mídia é
  * pedida, o ICE é recarregado (se tinha sido recusado) e a chamada segue.
+ *
+ * Recusas e falhas do GET /sala (M16): 401/402/403 são DEFINITIVOS — o
+ * polling para e `erroSala` ("sessao" | "pagamento" | "acesso") vai para o
+ * estado, para a tela mostrar a orientação em vez de "vai entrar em
+ * instantes" com a presença morta no servidor. 5xx e falhas de rede seguem
+ * no retry de 4 s, mas 3 seguidas ligam `conexaoInstavel` no estado (a tela
+ * avisa; a próxima resposta boa desliga).
  */
 
 export type StatusSala =
@@ -78,6 +85,16 @@ export type { ForaDaJanela } from "@/lib/teleconsulta-logica";
 
 export type MsgChat = { id: string; minha: boolean; texto: string; hora: string };
 
+/**
+ * Recusa DEFINITIVA do GET /sala (M16): o polling para e a tela mostra a
+ * orientação correspondente — diferente do 409 de janela (transitório) e
+ * das falhas de rede/5xx (que viram `conexaoInstavel` e seguem tentando).
+ *  - "sessao": 401 — a sessão expirou no meio da espera/chamada;
+ *  - "pagamento": 402 — a consulta não está paga (barreira da sala);
+ *  - "acesso": 403 — quem está logado não participa desta consulta.
+ */
+export type ErroSala = "sessao" | "pagamento" | "acesso";
+
 export type EstadoChamada = {
   status: StatusSala;
   outroOnline: boolean;
@@ -86,9 +103,9 @@ export type EstadoChamada = {
   erroMidia: string | null;
   micAtivo: boolean;
   camAtivo: boolean;
-  /** Sem track de áudio ao vivo (microfone indisponível — botão desabilitado). */
+  /** Sem track de áudio ao vivo (microfone indisponível — o botão vira "tentar de novo": recaptura). */
   semAudio: boolean;
-  /** Sem track de vídeo ao vivo (câmera indisponível — botão desabilitado). */
+  /** Sem track de vídeo ao vivo (câmera indisponível — o botão vira "tentar de novo": recaptura). */
   semVideo: boolean;
   compartilhando: boolean;
   chat: MsgChat[];
@@ -100,6 +117,10 @@ export type EstadoChamada = {
   foraDaJanela: ForaDaJanela | null;
   /** GET /sala respondeu 404: a consulta não existe. O polling para e a mídia não é pedida. */
   naoEncontrada: boolean;
+  /** GET /sala respondeu 401/402/403 (M16): recusa definitiva — o polling para e a tela mostra a orientação. */
+  erroSala: ErroSala | null;
+  /** 3+ falhas seguidas do polling (5xx/rede, M16): a tela avisa "conexão instável"; o polling continua. */
+  conexaoInstavel: boolean;
   /** A câmera em uso é a traseira (botão "Virar" no celular): o vídeo local não é espelhado. */
   cameraTraseira: boolean;
 };
@@ -121,6 +142,8 @@ export const ESTADO_INICIAL: EstadoChamada = {
   reconectando: false,
   foraDaJanela: null,
   naoEncontrada: false,
+  erroSala: null,
+  conexaoInstavel: false,
   cameraTraseira: false,
 };
 
@@ -150,6 +173,8 @@ type CandidatoComSessao = RTCIceCandidateInit & { s?: string; para?: string };
 const JANELA_BATCH_CANDIDATOS_MS = 200;
 const INTERVALO_STATS_MS = 2_000;
 const INTERVALO_ERRO_MS = 4_000;
+/** Falhas seguidas do polling (5xx/rede) até a tela avisar "conexão instável" (M16). */
+const FALHAS_PARA_INSTAVEL = 3;
 /** Reenvia "entrei" se o outro está na sala e ainda não respondeu. */
 const REENVIO_ENTREI_MS = 6_000;
 /** Renovação da credencial TURN: 10 min antes de expirar. */
@@ -219,11 +244,15 @@ export class ChamadaTeleconsulta {
    * abrir um segundo getUserMedia (duas câmeras, uma órfã com a luz acesa).
    */
   private readonly recapturas: { audio: Promise<void> | null; video: Promise<void> | null } = { audio: null, video: null };
+  /** Recaptura completa (sem stream nenhum, M15) em andamento: áudio e vídeo dividem a mesma promessa. */
+  private recapturaCompleta: Promise<void> | null = null;
   private encerrada = false;
   private anunciado = false;
   private ultimoEntrei = 0;
   private timerPoll: ReturnType<typeof setTimeout> | null = null;
   private pollEmAndamento = false;
+  /** Falhas seguidas do polling (5xx/rede): em FALHAS_PARA_INSTAVEL, o estado ganha conexaoInstavel (M16). */
+  private falhasSeguidasSala = 0;
   private timerReconexao: ReturnType<typeof setTimeout> | null = null;
   private tentativas = 0;
   private timerStats: ReturnType<typeof setInterval> | null = null;
@@ -308,6 +337,29 @@ export class ChamadaTeleconsulta {
     this.streamLocal.current = null;
     this.set({
       naoEncontrada: true,
+      localPronto: false,
+      remotoPronto: false,
+      compartilhando: false,
+      reconectando: false,
+    });
+  }
+
+  /**
+   * Recusa definitiva do GET /sala (401/402/403, M16): para tudo como no
+   * 404 — polling, ICE, Realtime, conexão e tracks locais desligados — e a
+   * tela mostra a orientação do `erroSala`. Sem sinal de saída: com a
+   * sessão expirada ou o pagamento pendente, o POST nem seria aceito.
+   * Antes, esses status caíam no retry de 4 s para sempre: a presença
+   * morria no servidor e a tela seguia em "vai entrar em instantes".
+   */
+  private pararPorErroSala(erroSala: ErroSala): void {
+    if (this.estado.erroSala) return;
+    this.encerrada = true;
+    this.remoto = null;
+    this.limparTudo();
+    this.streamLocal.current = null;
+    this.set({
+      erroSala,
       localPronto: false,
       remotoPronto: false,
       compartilhando: false,
@@ -423,10 +475,69 @@ export class ChamadaTeleconsulta {
     return promessa;
   }
 
+  /**
+   * Recaptura do zero (M15): a captura inicial falhou POR COMPLETO (câmera e
+   * microfone negados/bloqueados) e não há stream nenhum — os toggles caíam
+   * num retorno vazio e os botões ficavam desabilitados na tela, sem caminho
+   * para tentar de novo sem recarregar a página. Repete a captura da entrada
+   * (mesma escada de restrições de `capturar`) e liga as tracks aos senders
+   * que a conexão já tem: os transceivers nasceram recvonly sem mídia, e o
+   * replaceTrack é quem dispara a renegociação para eles passarem a enviar.
+   */
+  private recapturarCompleta(motivo: string): Promise<void> {
+    if (this.recapturaCompleta) return this.recapturaCompleta;
+    const promessa = (async () => {
+      log("recaptura completa (sem stream)", { motivo });
+      const stream = await this.capturar();
+      // A sala parou durante o pedido: solta a mídia nova na hora.
+      if (!this.salaAtiva()) {
+        stream?.getTracks().forEach((t) => t.stop());
+        return;
+      }
+      if (!stream) {
+        // Negou de novo: mantém as marcas e o erro na tela (o botão continua
+        // sendo "tentar de novo" — não há estado novo a publicar).
+        this.set({ semAudio: true, semVideo: true, micAtivo: false, camAtivo: false });
+        return;
+      }
+      this.prepararTracks(stream);
+      this.streamLocal.current = stream;
+      for (const tipo of ["audio", "video"] as const) {
+        const track = tipo === "audio" ? stream.getAudioTracks()[0] : stream.getVideoTracks()[0];
+        const alvo = this.senderDe(tipo);
+        if (track && alvo && !(tipo === "video" && this.displayStream)) {
+          try {
+            await alvo.replaceTrack(track);
+          } catch (e) {
+            erro("replaceTrack da recaptura completa falhou", { tipo, erro: (e as Error)?.message });
+          }
+        }
+      }
+      const soAudio = stream.getVideoTracks().length === 0;
+      this.set({
+        localPronto: true,
+        micAtivo: stream.getAudioTracks().length > 0,
+        camAtivo: !soAudio,
+        semAudio: stream.getAudioTracks().length === 0,
+        semVideo: soAudio,
+        erroMidia: soAudio ? "Câmera indisponível — participando com áudio." : null,
+        status: this.estado.status === "conectando" ? "aguardando" : this.estado.status,
+      });
+    })().finally(() => {
+      if (this.recapturaCompleta === promessa) this.recapturaCompleta = null;
+    });
+    this.recapturaCompleta = promessa;
+    return promessa;
+  }
+
   private async recapturarAgora(tipo: "audio" | "video", motivo: string): Promise<void> {
     if (!this.vivo || this.encerrada) return;
     const local = this.streamLocal.current;
-    if (!local) return;
+    if (!local) {
+      // Sem stream nenhum, não há track para trocar: é a recaptura completa (M15).
+      await this.recapturarCompleta(motivo);
+      return;
+    }
     const atual = tipo === "audio" ? local.getAudioTracks()[0] : local.getVideoTracks()[0];
     if (atual && atual.readyState === "live") {
       // Já voltou sozinha: limpa a indisponibilidade (botão volta a funcionar).
@@ -1076,6 +1187,9 @@ export class ChamadaTeleconsulta {
       if (res.status === 409) {
         const corpo = (await res.json().catch(() => null)) as unknown;
         if (!this.vivo) return;
+        // O servidor respondeu (janela): não é falha de conexão (M16).
+        this.falhasSeguidasSala = 0;
+        if (this.estado.conexaoInstavel) this.set({ conexaoInstavel: false });
         const fora = lerForaDaJanela(corpo);
         if (!mesmoForaDaJanela(fora, this.estado.foraDaJanela)) {
           aviso("sala fora da janela", fora);
@@ -1091,12 +1205,26 @@ export class ChamadaTeleconsulta {
         this.pararPorNaoEncontrada();
         return;
       }
+      if (res.status === 401 || res.status === 402 || res.status === 403) {
+        // Recusa DEFINITIVA (M16): sessão expirada (401), pagamento pendente
+        // (402) ou quem está logado não participa (403). Repetir o GET não
+        // muda nada — para o polling e a tela mostra a orientação, em vez de
+        // reagendar a cada 4 s para sempre com a presença morta em silêncio.
+        if (!this.vivo) return;
+        const erroSala: ErroSala = res.status === 402 ? "pagamento" : res.status === 403 ? "acesso" : "sessao";
+        aviso("sala recusada de forma definitiva; parando o polling", { status: res.status, erroSala });
+        this.pararPorErroSala(erroSala);
+        return;
+      }
       // Qualquer outra resposta: segue como antes (pede a mídia; erros caem no catch).
       this.pedirMidia();
       if (!res.ok) throw new Error(`sala ${res.status}`);
       const dados = (await res.json()) as RespostaSala;
       if (!this.vivo) return;
       this.entrouNaSala = true;
+      // Resposta boa: zera as falhas seguidas e limpa o "conexão instável" (M16).
+      this.falhasSeguidasSala = 0;
+      if (this.estado.conexaoInstavel) this.set({ conexaoInstavel: false });
       if (this.estado.foraDaJanela) {
         log("a sala abriu");
         this.set({ foraDaJanela: null });
@@ -1120,6 +1248,13 @@ export class ChamadaTeleconsulta {
       // Falha de rede antes do primeiro GET: pede a mídia mesmo assim (comportamento anterior).
       this.pedirMidia();
       aviso("polling da sala falhou", (e as Error)?.message);
+      // 5xx/rede (M16): o polling segue tentando no mesmo ritmo, mas depois
+      // de FALHAS_PARA_INSTAVEL seguidas o estado ganha conexaoInstavel e a
+      // tela avisa — antes era silêncio eterno, com a presença morta.
+      this.falhasSeguidasSala += 1;
+      if (this.falhasSeguidasSala >= FALHAS_PARA_INSTAVEL && !this.estado.conexaoInstavel) {
+        this.set({ conexaoInstavel: true });
+      }
       proximo = INTERVALO_ERRO_MS;
     } finally {
       this.pollEmAndamento = false;
@@ -1319,9 +1454,13 @@ export class ChamadaTeleconsulta {
 
   toggleMic(): void {
     const stream = this.streamLocal.current;
-    // Sem stream nenhum: não há o que reativar — a UI desabilita o botão
-    // (semAudio) em vez de um toque sem efeito.
-    if (!stream) return;
+    // Sem stream nenhum (a captura inicial foi negada): o botão É a
+    // recaptura — pede câmera/microfone de novo em vez de um toque sem
+    // efeito (M15; a UI não desabilita mais o botão neste estado).
+    if (!stream) {
+      void this.recapturar("audio", "toggle");
+      return;
+    }
     const tracks = stream.getAudioTracks();
     const viva = tracks.find((t) => t.readyState === "live");
     if (!viva) {
@@ -1337,7 +1476,11 @@ export class ChamadaTeleconsulta {
 
   toggleCam(): void {
     const stream = this.streamLocal.current;
-    if (!stream) return;
+    // Sem stream nenhum: idem ao toggleMic — o botão é a recaptura (M15).
+    if (!stream) {
+      void this.recapturar("video", "toggle");
+      return;
+    }
     const tracks = stream.getVideoTracks();
     const viva = tracks.find((t) => t.readyState === "live");
     if (!viva) {

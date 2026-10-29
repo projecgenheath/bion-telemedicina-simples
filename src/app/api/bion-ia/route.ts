@@ -8,6 +8,7 @@ import { anonimizarMensagensIa, type IdentificadoresPaciente } from "@/lib/serve
 import { exigirConsentimentoIa } from "@/lib/server/consentimento-ia";
 import { anonimizarMensagensTexto } from "@/lib/server/anonimizar-texto";
 import { dataNascimentoParaIso } from "@/lib/idade";
+import { limitarAsync, resposta429 } from "@/lib/server/rate-limit";
 import { nomesMedicamentosEmUso } from "@/lib/server/medicamentos-legado";
 
 /**
@@ -144,6 +145,13 @@ async function nomesPacientesDoMedico(medicoId: string): Promise<string[]> {
 export async function POST(req: NextRequest) {
   try {
     const usuario = await exigirSessao();
+    // M6 (auditoria): teto por usuário — cada chamada vai a um LLM PAGO, então
+    // loop de cliente não pode virar custo ilimitado. 20/min cobre a conversa
+    // humana (e o Copilot do médico); 300/h limita o custo acumulado do dia.
+    const tetoMin = await limitarAsync(`bion-ia:${usuario.id}`, 20, 60_000);
+    if (!tetoMin.permitido) return resposta429(tetoMin.restanteSeg);
+    const tetoHora = await limitarAsync(`bion-ia-hora:${usuario.id}`, 300, 3_600_000);
+    if (!tetoHora.permitido) return resposta429(tetoHora.restanteSeg);
     // Pausa da BION IA (opt-in, BION_IA_PAUSADA=true): nada vai à IA.
     if (iaPausada()) return respostaIaPausada();
     // Portão jurídico: paciente sem o aceite da versão atual (NVIDIA) → 409.
@@ -152,9 +160,12 @@ export async function POST(req: NextRequest) {
     const body = (await lerCorpoJson(req)) as { mensagens?: MsgEntrada[]; stream?: boolean };
     const requestId = novoRequestId();
 
+    // M21: NADA de descartar mensagem por tamanho — o filtro antigo
+    // (texto < 500) excluía em silêncio justamente a pergunta atual longa
+    // (ex.: laudo colado). Textos longos são truncados mais abaixo, ao
+    // montar o prompt (slice 0..4000 por mensagem).
     const historico = (body.mensagens ?? [])
       .filter((m) => (m?.texto ?? "").trim() && ["usuario", "ia"].includes(m.remetente))
-      .filter((m) => m.texto.length < 500)
       .slice(-LIMITE_HISTORICO);
 
     if (!historico.length) {

@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { useBion } from "@/lib/bion-store";
 import { calcularImc, formatarAltura, formatarPeso, lerAlturaCm, lerPesoKg } from "@/lib/medidas-paciente";
+import { validarResposta } from "@/lib/saude-paciente";
 import { GraficoLinha } from "./GraficoLinha";
 
 /**
@@ -280,7 +281,9 @@ function DetalhePa({ onFechar }: { onFechar: () => void }) {
     [medicoes],
   );
   const atual = pas.at(-1);
-  const classe = atual ? classificarPa(atual.valor1, atual.valor2 ?? 0) : null;
+  // M18: sem diastólica a PA está incompleta e NÃO é classificada — antes
+  // `valor2 ?? 0` inventava uma classificação (ex.: 180/0 = "estágio 2").
+  const classe = atual && atual.valor2 !== undefined ? classificarPa(atual.valor1, atual.valor2) : null;
 
   return (
     <Envolver titulo="Pressão Arterial" descricao="Histórico gráfico e registro de novas medições" onFechar={onFechar}>
@@ -293,7 +296,7 @@ function DetalhePa({ onFechar }: { onFechar: () => void }) {
               {atual.valor2 ?? "—"}
             </div>
             <div className="text-sm font-semibold mt-1 text-bion-ink/75 dark:text-bion-paper/75">
-              {classe?.rotulo} · mmHg
+              {classe ? `${classe.rotulo} · mmHg` : "mmHg"}
             </div>
           </>
         ) : (
@@ -313,7 +316,9 @@ function DetalhePa({ onFechar }: { onFechar: () => void }) {
               ...(pas.some((p) => p.valor2 !== undefined)
                 ? [
                     {
-                      pontos: pas.map((p) => ({ valor: p.valor2 ?? p.valor1, rotulo: rotuloCurto(p.criadoEm) })),
+                      // M18: sem valor2 o ponto é omitido (null) — antes a
+                      // diastólica era plotada igual à sistólica.
+                      pontos: pas.map((p) => ({ valor: p.valor2 ?? null, rotulo: rotuloCurto(p.criadoEm) })),
                       cor: "var(--bpp-grafico-alerta)",
                     },
                   ]
@@ -335,6 +340,15 @@ function DetalhePa({ onFechar }: { onFechar: () => void }) {
           { id: "dia", rotulo: "Diastólica (mmHg)", placeholder: atual?.valor2 ? String(atual.valor2) : "80", min: 30, max: 200, passo: 1 },
         ]}
         aoSalvar={async ([sis, dia]) => {
+          // M18: o FormMedicao valida as faixas isoladas; o cruzamento
+          // (diastólica < sistólica) é o de validarResposta — a mesma regra
+          // do fluxo de pedidos do médico e da API /api/medicoes. Sem isso,
+          // uma PA invertida (80/120) era gravada e classificada.
+          const v = validarResposta(["pressao"], { sistolica: sis, diastolica: dia });
+          if (!v.ok) {
+            toast.error(v.erro);
+            return false;
+          }
           setEnviando(true);
           const ok = await registrarMedicao("pa", sis, dia);
           setEnviando(false);
@@ -355,7 +369,8 @@ function DetalhePa({ onFechar }: { onFechar: () => void }) {
                   <Activity className="w-4 h-4 opacity-80" /> {rotuloCurto(p.criadoEm)}
                 </span>
                 <span className="font-semibold">
-                  {p.valor1}/{p.valor2 ?? "—"} mmHg · {classificarPa(p.valor1, p.valor2 ?? 0).rotulo}
+                  {p.valor1}/{p.valor2 ?? "—"} mmHg
+                  {p.valor2 !== undefined ? ` · ${classificarPa(p.valor1, p.valor2).rotulo}` : ""}
                 </span>
               </li>
             ))}

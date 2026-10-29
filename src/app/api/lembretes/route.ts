@@ -4,12 +4,18 @@ import { exigirPapel } from "@/lib/server/auth";
 import { aplicarSideEffects } from "@/lib/server/dados";
 import {ok, falha, lerCorpoJson} from "@/lib/server/http";
 import { detalhesAuditoria } from "@/lib/saude-paciente";
+import { limitarAsync, resposta429 } from "@/lib/server/rate-limit";
 
 /** Criação de lembretes de saúde (apenas pacientes).
  *  Notificações e auditoria geradas PELO SERVIDOR. */
 export async function POST(req: NextRequest) {
   try {
     const usuario = await exigirPapel("PACIENTE");
+    // M9 (auditoria): teto por usuário — 100/h cobre com folga a configuração
+    // inicial de vários medicamentos/horários e barra a inflação da tabela
+    // por loop a partir de uma conta autenticada.
+    const teto = await limitarAsync(`lembretes:${usuario.id}`, 100, 3_600_000);
+    if (!teto.permitido) return resposta429(teto.restanteSeg);
     const body = (await lerCorpoJson(req)) as {
       titulo: string;
       horario: string;

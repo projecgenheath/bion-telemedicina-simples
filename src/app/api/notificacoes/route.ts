@@ -77,6 +77,12 @@ export async function PATCH(req: NextRequest) {
           ],
         },
         orderBy: { createdAt: "desc" },
+        // M8 (auditoria): teto no lote "marcar todas" — sem ele, o updateMany
+        // e o createMany de leituras abaixo processavam um backlog sem
+        // limite. 1000 (não 200 como no bootstrap) p/ "todas" continuar
+        // verdadeira em qualquer acúmulo realista; acima disso, um novo
+        // toque limpa o restante, das mais recentes para as mais antigas.
+        take: 1000,
       });
 
       const dirigidas = alvo.filter((n) => n.usuarioId);

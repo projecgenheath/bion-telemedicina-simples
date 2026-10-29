@@ -581,9 +581,14 @@ export async function anonimizarPacienteCompleto(pacienteId: string): Promise<Re
         });
         await tx.avaliacao.updateMany({ where: { pacienteId }, data: { comentario: null } });
 
-        // 7) Dados do app que não são prontuário: lembretes e notificações dirigidas.
+        // 7) Dados do app que não são prontuário: lembretes, notificações
+        //    dirigidas e inscrições de push — endpoint, chaves p256dh/auth e
+        //    userAgent do aparelho não sobrevivem à eliminação (M10: os
+        //    caminhos do admin passavam por aqui sem apagar o push; o fluxo
+        //    do médico já apagava o dele neste mesmo ponto da transação).
         await tx.lembrete.deleteMany({ where: { usuarioId: pacienteId } });
         await tx.notificacao.deleteMany({ where: { usuarioId: pacienteId } });
+        await tx.pushInscricao.deleteMany({ where: { usuarioId: pacienteId } });
 
         // 8) Arquivos PESSOAIS: reconfere na transação que continuam sem vínculo
         //    clínico (enviados pelo paciente, sem consulta) e apaga só as linhas;

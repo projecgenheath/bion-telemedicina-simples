@@ -184,15 +184,23 @@ function Campo({ label, valor }: { label: string; valor: string }) {
 }
 
 const MESES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
-export function dataDoc(d: Documento) {
+/**
+ * Data (meia-noite local) do rótulo do documento; `null` quando o rótulo
+ * não é legível por completo (sem dia/mês/ano). M27: antes, data ilegível
+ * virava "hoje" (e ano ausente virava o ano corrente), então documento
+ * legado entrava nos filtros De/Até como atual e saltava para o topo das
+ * ordenações — data desconhecida agora é explícita, nunca inventada.
+ */
+export function dataDoc(d: Documento): Date | null {
   const m = d.data.toLowerCase().match(/(\d{1,2})\s+([a-zç]{3})[a-zç]*\s*(\d{4})?/);
-  if (!m) return new Date();
+  if (!m || !m[3]) return null;
   const mes = MESES.indexOf(m[2]!.slice(0, 3));
-  return new Date(Number(m[3] ?? new Date().getFullYear()), mes < 0 ? 0 : mes, Number(m[1]));
+  if (mes < 0) return null;
+  return new Date(Number(m[3]), mes, Number(m[1]));
 }
 
 export function Receitas({ perfil }: { perfil: "paciente" | "medico" }) {
-  const { documentosVisiveis: documentos, emitirDocumento, sessao, registrarAudit, pacientes } = useBion();
+  const { documentosVisiveis: documentos, emitirDocumento, sessao, registrarAudit, pacientes, carregando } = useBion();
   const [aberto, setAberto] = useState(false);
   const [tipo, setTipo] = useState<"receita" | "atestado">("receita");
   const [pacienteDoc, setPacienteDoc] = useState("");
@@ -282,8 +290,13 @@ export function Receitas({ perfil }: { perfil: "paciente" | "medico" }) {
       )
         return false;
       const dt = dataDoc(d);
-      if (de && dt < new Date(`${de}T00:00:00`)) return false;
-      if (ate && dt > new Date(`${ate}T23:59:59`)) return false;
+      if (de || ate) {
+        // M27: sem data legível, o documento fica FORA do filtro de período
+        // (explícito e seguro) — nunca "hoje" disfarçado.
+        if (!dt) return false;
+        if (de && dt < new Date(`${de}T00:00:00`)) return false;
+        if (ate && dt > new Date(`${ate}T23:59:59`)) return false;
+      }
       return true;
     });
   }, [documentos, busca, fTipo, fMedico, de, ate]);
@@ -594,11 +607,19 @@ export function Receitas({ perfil }: { perfil: "paciente" | "medico" }) {
       </div>
 
       <div className="mt-4 space-y-2">
-        {filtrados.length === 0 && (
-          <EstadoVazio
-            titulo="Nenhum documento encontrado"
-            descricao="Ajuste os filtros ou aguarde a emissão de receitas, atestados e pedidos de exame após a consulta."
-          />
+        {/* M24: durante o bootstrap do store, lista vazia é carga — o
+            "Nenhum documento" só aparece com a carga concluída. */}
+        {carregando && documentos.length === 0 ? (
+          <div className="bg-card border rounded-2xl p-4 text-sm text-muted-foreground" role="status" aria-live="polite">
+            Carregando documentos…
+          </div>
+        ) : (
+          filtrados.length === 0 && (
+            <EstadoVazio
+              titulo="Nenhum documento encontrado"
+              descricao="Ajuste os filtros ou aguarde a emissão de receitas, atestados e pedidos de exame após a consulta."
+            />
+          )
         )}
         {visiveis.map((d, i) => {
           const Icon = iconeDocumento(d.tipo);

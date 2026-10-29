@@ -36,7 +36,11 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       select: { por: true, em: true, dataAnterior: true, motivo: true, tipo: true, corrigidoEm: true },
     });
     const previa = calcularMulta({ consulta, eventos, por });
-    const encerrada = consulta.status === "cancelada" || consulta.status === "concluida";
+    // M2: falta_paciente é encerrada, como na rota principal
+    // (consultas/[id]/route.ts) — sem isto, a prévia devolvia
+    // podeCancelar/podeRemarcar true para uma consulta que já faltou.
+    const encerrada =
+      consulta.status === "cancelada" || consulta.status === "concluida" || consulta.status === "falta_paciente";
 
     const reembolso = await db.reembolso.findFirst({
       where: { pagamento: { consultaId: id } },

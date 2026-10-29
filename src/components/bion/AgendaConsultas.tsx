@@ -24,8 +24,18 @@ export function AgendaConsultas({ perfil }: { perfil: "paciente" | "medico" }) {
   const lista = consultas.filter((c) =>
     perfil === "paciente" ? doUsuario(c.pacienteId, c.paciente) : doUsuario(c.medicoId, c.medico),
   );
-  const ativas = lista.filter((c) => c.status === "confirmada");
-  const outras = lista.filter((c) => c.status !== "confirmada");
+  // M13: agrupamento pela situação real — ativas/futuras (confirmada,
+  // aguardando pagamento, falta a triagem, aguardando reagendamento) na
+  // lista principal; encerradas (concluída, cancelada, falta) no histórico.
+  // Antes só "confirmada" era principal e futuras ativas caíam sob
+  // "Anteriores e canceladas".
+  const ehAtiva = (c: Consulta) =>
+    c.status === "confirmada" ||
+    c.status === "pendente_anamnese" ||
+    c.status === "em_espera" ||
+    c.status === "aguardando_reagendamento";
+  const ativas = lista.filter(ehAtiva);
+  const outras = lista.filter((c) => !ehAtiva(c));
 
   return (
     <div className="space-y-3">
@@ -41,7 +51,7 @@ export function AgendaConsultas({ perfil }: { perfil: "paciente" | "medico" }) {
       {outras.length > 0 && (
         <>
           <div className="pt-2 text-sm font-medium text-muted-foreground">
-            Anteriores e canceladas
+            Anteriores e encerradas
           </div>
           {outras.map((c) => (
             <LinhaConsulta key={c.id} c={c} perfil={perfil} />
@@ -51,6 +61,20 @@ export function AgendaConsultas({ perfil }: { perfil: "paciente" | "medico" }) {
     </div>
   );
 }
+
+// M13: rótulo e cor explícitos para TODOS os ApptStatus — antes, status sem
+// case (falta_paciente, em_espera, aguardando_reagendamento) caíam no
+// fallback e eram exibidos como "Confirmada". Vocabulário alinhado ao app
+// novo (paciente/etiqueta-consulta.ts).
+const BADGE_STATUS: Record<Consulta["status"], { texto: string; classe: string; acento?: boolean }> = {
+  confirmada: { texto: "Confirmada", classe: "bg-accent-soft", acento: true },
+  pendente_anamnese: { texto: "Falta a triagem", classe: "bg-amber-500/15 text-amber-800 dark:text-amber-200" },
+  em_espera: { texto: "Aguardando pagamento", classe: "bg-amber-500/15 text-amber-800 dark:text-amber-200" },
+  aguardando_reagendamento: { texto: "Aguardando reagendamento", classe: "bg-sky-500/15 text-sky-800 dark:text-sky-200" },
+  concluida: { texto: "Concluída", classe: "bg-muted text-muted-foreground" },
+  cancelada: { texto: "Cancelada", classe: "bg-destructive/10 text-destructive" },
+  falta_paciente: { texto: "Falta registrada", classe: "bg-muted text-muted-foreground" },
+};
 
 function LinhaConsulta({ c, perfil }: { c: Consulta; perfil: "paciente" | "medico" }) {
   const { cancelarConsulta, remarcarConsulta, consultas, medicos, sessao } = useBion();
@@ -111,6 +135,17 @@ function LinhaConsulta({ c, perfil }: { c: Consulta; perfil: "paciente" | "medic
 
   const cancelada = c.status === "cancelada";
   const concluida = c.status === "concluida";
+  // M13: selo pelo mapa explícito de status; sem pagamento confirmado,
+  // consulta ativa aparece como "Aguardando pagamento" (mesma regra de
+  // rotuloHistorico no app novo). "Remarcada" continua valendo para a
+  // confirmada que já foi remarcada.
+  const badgeBase = BADGE_STATUS[c.status];
+  const badge =
+    c.pago === false && (c.status === "confirmada" || c.status === "pendente_anamnese")
+      ? BADGE_STATUS.em_espera
+      : badgeBase;
+  const rotuloBadge =
+    c.status === "confirmada" && c.remarcada && badge === badgeBase ? "Remarcada" : badge.texto;
   // Entrada na sala só para consultas que ainda podem acontecer. Concluída,
   // cancelada, aguardando reagendamento ou com falta não entram na sala.
   const podeEntrar =
@@ -182,22 +217,15 @@ function LinhaConsulta({ c, perfil }: { c: Consulta; perfil: "paciente" | "medic
           </div>
         </div>
         <span
-          className={`text-xs px-2.5 py-1 rounded-full shrink-0 ${cancelada ? "bg-destructive/10 text-destructive" : concluida ? "bg-muted text-muted-foreground" : c.status === "pendente_anamnese" ? "bg-amber-500/15 text-amber-800 dark:text-amber-200" : "bg-accent-soft"}`}
-          style={!cancelada && !concluida && c.status !== "pendente_anamnese" ? { color: "var(--accent)" } : undefined}
+          className={`text-xs px-2.5 py-1 rounded-full shrink-0 ${badge.classe}`}
+          style={badge.acento ? { color: "var(--accent)" } : undefined}
         >
-          {cancelada
-            ? "Cancelada"
-            : concluida
-              ? "Concluída"
-              : c.status === "pendente_anamnese"
-                ? "Pendente anamnese"
-                : c.remarcada
-                  ? "Remarcada"
-                  : "Confirmada"}
+          {rotuloBadge}
         </span>
       </div>
 
-      {!cancelada && !concluida && (
+      {/* M13: falta_paciente é terminal — sem Entrar/Remarcar/Cancelar aqui. */}
+      {!cancelada && !concluida && c.status !== "falta_paciente" && (
         <div className="flex flex-wrap gap-2 mt-3">
           {podeEntrar && (
             <a

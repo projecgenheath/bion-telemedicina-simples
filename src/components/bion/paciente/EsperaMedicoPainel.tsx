@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowLeft, Check, Clock, Loader2, RotateCcw, UserRound, XCircle } from "lucide-react";
+import { ArrowLeft, Check, Clock, Loader2, RotateCcw, ShieldAlert, UserRound, XCircle } from "lucide-react";
 import { BotaoPagarStripe } from "./BotaoPagarStripe";
 import {
   contagemFalada,
@@ -51,10 +51,19 @@ async function chamar<T>(url: string, init?: RequestInit): Promise<Resposta<T>> 
 function useEsperaMedico(consultaId: string | undefined, ativo: boolean) {
   const [espera, setEspera] = useState<EsperaWire | null>(null);
   const [agora, setAgora] = useState(() => Date.now());
+  // M16: 401/402/403 do polling NÃO são "sem espera" — são recusa definitiva
+  // (sessão expirada, pagamento, acesso) e a tela mostra o erro em vez de o
+  // painel sumir em silêncio. Uma resposta boa limpa o estado.
+  const [erroStatus, setErroStatus] = useState<number | null>(null);
   const recarregar = useCallback(async () => {
     if (!consultaId) return;
     const r = await chamar<{ espera: EsperaWire | null }>(base(consultaId));
-    if (r.ok) setEspera(r.dados.espera);
+    if (r.ok) {
+      setEspera(r.dados.espera);
+      setErroStatus(null);
+    } else if (r.status === 401 || r.status === 402 || r.status === 403) {
+      setErroStatus(r.status);
+    }
   }, [consultaId]);
 
   useEffect(() => {
@@ -77,7 +86,7 @@ function useEsperaMedico(consultaId: string | undefined, ativo: boolean) {
     return () => clearInterval(t);
   }, [ativo]);
 
-  return { espera, setEspera, agora, recarregar };
+  return { espera, setEspera, agora, recarregar, erroStatus };
 }
 
 type Etapa =
@@ -102,7 +111,7 @@ export function EsperaMedicoPainel({
   /** Cancelada ou remarcada: o app recarrega o estado (lista de consultas). */
   onResolvida?: () => void;
 }) {
-  const { espera, setEspera, agora, recarregar } = useEsperaMedico(consultaId, !medicoConectado);
+  const { espera, setEspera, agora, recarregar, erroStatus } = useEsperaMedico(consultaId, !medicoConectado);
   const [etapa, setEtapa] = useState<Etapa>({ tipo: "inicio" });
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -139,6 +148,30 @@ export function EsperaMedicoPainel({
       setErro(mensagemErroEspera(r.falha.codigo, r.falha.erro));
     }
   }, [consultaId]);
+
+  // M16: o polling da espera foi recusado (401/402/403) — mostra o erro no
+  // lugar do painel, mesmo sem `espera` carregada; sumir em silêncio faria o
+  // paciente esperar uma contagem que não está sendo atualizada.
+  if (consultaId && erroStatus && !medicoConectado) {
+    const textos =
+      erroStatus === 402
+        ? { titulo: "Pagamento pendente", detalhe: "O pagamento desta consulta ainda não foi confirmado, por isso a espera não pode continuar." }
+        : erroStatus === 403
+          ? { titulo: "Acesso negado", detalhe: "A conta que está aberta não participa desta consulta. Confira se você entrou com a conta certa." }
+          : { titulo: "Sua sessão expirou", detalhe: "A espera parou de atualizar porque o seu acesso venceu. Entre de novo no app para continuar." };
+    return (
+      <div className="absolute inset-0 z-40 grid place-items-center bg-bion-night/80 p-6 text-white backdrop-blur-sm">
+        <section aria-labelledby="titulo-espera-medico" className="flex w-full max-w-xs flex-col items-center text-center">
+          <Cabecalho refTitulo={tituloRef} icone={<ShieldAlert className="size-7" aria-hidden />} titulo={textos.titulo}>
+            {textos.detalhe}
+          </Cabecalho>
+          <Acoes>
+            <Botao onClick={onSairDaChamada}>Sair da chamada</Botao>
+          </Acoes>
+        </section>
+      </div>
+    );
+  }
 
   if (!consultaId || !mostrarPainelEspera(espera, medicoConectado) || !espera) return null;
 

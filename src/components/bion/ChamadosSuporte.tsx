@@ -70,7 +70,7 @@ export function ChamadosSuporte() {
     if (!ok) return;
 
     toast.success("Chamado aberto com sucesso", {
-      description: "Nossa equipe responde em até 4 horas úteis.",
+      description: "Nossa equipe responde em até 1 dia útil.",
     });
 
     setNovoAssunto("");
@@ -337,7 +337,7 @@ export function ChamadosSuporte() {
               <div>
                 <h3 className="text-xl font-bold text-foreground">Abrir Novo Chamado de Suporte</h3>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Nossa equipe médica e técnica responde em poucos minutos.
+                  Nossa equipe médica e técnica responde em até 1 dia útil.
                 </p>
               </div>
               <button
@@ -356,7 +356,7 @@ export function ChamadosSuporte() {
                   aria-label="Assunto"
                   value={novoAssunto}
                   onChange={(e) => setNovoAssunto(e.target.value)}
-                  placeholder="Ex: Dúvida com pagamento Pix ou download de receita"
+                  placeholder="Ex: Dúvida com pagamento no cartão ou download de receita"
                   required
                   className="w-full px-4 py-2.5 rounded-xl border text-xs bg-background outline-none focus:ring-2 focus:ring-primary/20"
                 />

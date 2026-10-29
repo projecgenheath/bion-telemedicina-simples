@@ -3,9 +3,9 @@
 import { tipoDaConsulta } from "./tipo-atendimento-ui";
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
-import { ArrowLeft, Clock, MonitorUp, MonitorX, X } from "lucide-react";
+import { ArrowLeft, Clock, MonitorUp, MonitorX, WifiOff, X } from "lucide-react";
 import { textoForaDaJanela } from "@/lib/teleconsulta-logica";
-import { ConsultaNaoEncontrada } from "@/components/bion/consulta/SalaConsultaTela";
+import { ConsultaNaoEncontrada, ErroSalaFatal } from "@/components/bion/consulta/SalaConsultaTela";
 import { ConsultaPainelLateral } from "@/components/bion/consulta/PainelLateral";
 import { AlertaMidia } from "@/components/bion/consulta/AlertaMidia";
 import { useSalaConsulta, type SalaConsulta } from "@/components/bion/consulta/useSalaConsulta";
@@ -35,6 +35,9 @@ export function ChamadaPaciente({
 }) {
   const sala = useSalaConsulta({ role: "paciente", consultaId, onEnd });
   if (sala.tele.naoEncontrada) return <ConsultaNaoEncontrada role="paciente" />;
+  // M16: 401/402/403 no polling — o motor parou; a tela mostra a orientação
+  // (sessão expirada/pagamento) em vez de "o médico vai entrar em instantes".
+  if (sala.tele.erroSala) return <ErroSalaFatal erro={sala.tele.erroSala} onVoltar={onEnd} />;
   return <TelaChamadaPaciente sala={sala} onEnd={onEnd} />;
 }
 
@@ -114,9 +117,11 @@ export function TelaChamadaPaciente({
   const recebidas = useMemo(() => tele.chat.filter((m) => !m.minha).length, [tele.chat]);
   const naoLidas = mensagensAbertas ? 0 : Math.max(0, recebidas - lidasAte);
 
-  // Só áudio (câmera negada ou indisponível): o botão da câmera fica desabilitado.
-  // semVideo/semAudio vêm do motor (track caiu ou recaptura falhou), não só do
-  // erro inicial — o botão desabilita também no meio da chamada.
+  // Só áudio (câmera negada ou indisponível) ou sem mídia nenhuma.
+  // semVideo/semAudio vêm do motor (track caiu ou a captura inicial falhou):
+  // desde o M15 os botões NÃO desabilitam mais neste estado — eles viram a
+  // ação de recaptura ("tentar de novo") do motor. As marcas seguem servindo
+  // para esconder o vídeo local que não existe (VideoChamada916).
   const semCamera = tele.semVideo || (!!tele.erroMidia && !tele.streamLocalRef.current?.getVideoTracks().length);
   const semMic = tele.semAudio;
   const atalhos = useAtalhosChamada({
@@ -173,8 +178,17 @@ export function TelaChamadaPaciente({
       overlaysVisiveis={atalhos.visivel}
       handlers={atalhos.handlers}
       avisos={
-        alerta || tele.compartilhando ? (
+        alerta || tele.compartilhando || tele.conexaoInstavel ? (
           <div className="flex flex-col items-start gap-2">
+            {tele.conexaoInstavel ? (
+              <p
+                role="status"
+                aria-live="polite"
+                className="flex items-center gap-2 rounded-full bg-amber-500/90 px-3.5 py-1.5 text-xs font-semibold text-white shadow-lg"
+              >
+                <WifiOff className="size-3.5" aria-hidden /> Conexão instável — a sala não está respondendo. Tentando de novo…
+              </p>
+            ) : null}
             {tele.compartilhando ? (
               <p
                 role="status"
