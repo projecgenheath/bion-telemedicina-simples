@@ -13,6 +13,7 @@ import {
   ChevronRight,
   Eye,
   FileText,
+  ClipboardList,
 } from "lucide-react";
 import { EstadoVazio } from "@/components/bion/ui/EstadoVazio";
 import { useBion, type Documento } from "@/lib/bion-store";
@@ -37,6 +38,13 @@ export function docTexto(d: Documento) {
     "BION — Telemedicina",
   ];
   return linhas.filter((l) => l !== "").join("\n");
+}
+
+/** Ícone pela natureza REAL do documento (A11): pedido de exame não é atestado. */
+export function iconeDocumento(tipo: Documento["tipo"]) {
+  if (tipo === "receita") return Pill;
+  if (tipo === "exame" || tipo === "exame_solicitado") return ClipboardList;
+  return Award;
 }
 
 export function baixarDoc(d: Documento) {
@@ -72,7 +80,7 @@ export function VisualizadorDoc({
 }) {
   const d = docs[index];
   if (!d) return null;
-  const Icon = d.tipo === "receita" ? Pill : Award;
+  const Icon = iconeDocumento(d.tipo);
   return (
     <ModalBion
       aberto
@@ -239,7 +247,7 @@ export function Receitas({ perfil }: { perfil: "paciente" | "medico" }) {
 
   // filtros
   const [busca, setBusca] = useState("");
-  const [fTipo, setFTipo] = useState<"todos" | "receita" | "atestado">("todos");
+  const [fTipo, setFTipo] = useState<"todos" | "receita" | "atestado" | "exame">("todos");
   const [fMedico, setFMedico] = useState("todos");
   const [de, setDe] = useState("");
   const [ate, setAte] = useState("");
@@ -261,7 +269,10 @@ export function Receitas({ perfil }: { perfil: "paciente" | "medico" }) {
   const filtrados = useMemo(() => {
     const q = busca.trim().toLowerCase();
     return documentos.filter((d) => {
-      if (fTipo !== "todos" && d.tipo !== fTipo) return false;
+      // A11: "exame" no filtro = pedido de exame (tipo atual e o legado).
+      if (fTipo === "exame") {
+        if (d.tipo !== "exame" && d.tipo !== "exame_solicitado") return false;
+      } else if (fTipo !== "todos" && d.tipo !== fTipo) return false;
       if (fMedico !== "todos" && d.medico !== fMedico) return false;
       if (
         q &&
@@ -537,6 +548,7 @@ export function Receitas({ perfil }: { perfil: "paciente" | "medico" }) {
             <option value="todos">Todos os tipos</option>
             <option value="receita">Somente receitas</option>
             <option value="atestado">Somente atestados</option>
+            <option value="exame">Somente pedidos de exame</option>
           </select>
           <select
             value={fMedico}
@@ -589,7 +601,7 @@ export function Receitas({ perfil }: { perfil: "paciente" | "medico" }) {
           />
         )}
         {visiveis.map((d, i) => {
-          const Icon = d.tipo === "receita" ? Pill : Award;
+          const Icon = iconeDocumento(d.tipo);
           return (
             <div key={d.id} className="bg-card border rounded-2xl p-4 flex items-start gap-4">
               <div className="w-11 h-11 rounded-xl bg-primary-soft flex items-center justify-center shrink-0">

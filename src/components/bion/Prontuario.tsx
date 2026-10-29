@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Pill,
   Award,
@@ -12,9 +12,11 @@ import {
   X,
   History,
 } from "lucide-react";
-import { gerarProntuarioPDF } from "@/lib/prontuario-pdf";
+import { gerarProntuarioPDF, type MedicamentoUso } from "@/lib/prontuario-pdf";
 import type { ComDataNascimento } from "@/lib/idade";
 import { useBion, type Documento } from "@/lib/bion-store";
+import { apiSaude } from "./paciente/api-saude";
+import type { MedicamentoWire } from "./paciente/MedicamentosEmUso";
 import { ModalBion } from "@/components/bion/ModalBion";
 import { VisualizadorDoc, dataDoc } from "./Receitas";
 
@@ -90,10 +92,14 @@ export function Prontuario() {
   const [visualizando, setVisualizando] = useState<number | null>(null);
   const [consentAberto, setConsentAberto] = useState(false);
   const [aceite, setAceite] = useState(false);
+  const [registrando, setRegistrando] = useState(false);
+  const [erroConsent, setErroConsent] = useState<string | null>(null);
 
   const docs = useMemo(() => documentos, [documentos]);
 
-  const medicamentos = useMemo(
+  // Derivação antiga (todas as receitas já emitidas, sem vigência): mantida
+  // só para médico/admin — o endpoint de ativos é escopado ao próprio paciente.
+  const medicamentosReceitas = useMemo(
     () =>
       documentos
         .filter((d) => d.tipo === "receita")
@@ -106,6 +112,65 @@ export function Prontuario() {
         })),
     [documentos],
   );
+
+  // A10: para o paciente, "Medicamentos em uso" vem da lista de ATIVOS do
+  // servidor (/api/paciente/medicamentos — MedicamentoEmUso com vigência;
+  // mesma fonte de PrivacidadePaciente e do card MedicamentosEmUso), não de
+  // todas as receitas já emitidas. null = ainda não carregou; falha é erro
+  // visível, nunca uma lista inventada a partir das receitas.
+  const [medsWire, setMedsWire] = useState<MedicamentoWire[] | null>(null);
+  const [medsErro, setMedsErro] = useState(false);
+  const carregarMeds = useCallback(async () => {
+    if (sessao.role !== "paciente") return;
+    setMedsErro(false);
+    const d = await apiSaude<{ medicamentos: MedicamentoWire[] }>(
+      "/api/paciente/medicamentos",
+      undefined,
+      true,
+    );
+    if (!d?.medicamentos) {
+      setMedsErro(true);
+      return;
+    }
+    setMedsWire(d.medicamentos);
+  }, [sessao.role]);
+  useEffect(() => {
+    // Mesmo padrão do card MedicamentosEmUso: adia a busca para fora do
+    // corpo síncrono do efeito.
+    const t = setTimeout(() => void carregarMeds(), 0);
+    return () => clearTimeout(t);
+  }, [carregarMeds]);
+
+  const medicamentosAtivos = useMemo<(MedicamentoUso & { id: string })[] | null>(() => {
+    if (sessao.role !== "paciente" || !medsWire) return null;
+    return medsWire
+      .filter((m) => m.ativo)
+      .map((m) => ({
+        id: m.id,
+        nome: m.nome,
+        posologia:
+          [m.dose, m.via, m.posologia.frequencia, m.posologia.instrucoes]
+            .filter(Boolean)
+            .join(" · ") || "—",
+        duracao: m.usoContinuo
+          ? "Uso contínuo"
+          : m.fim
+            ? `Até ${new Date(m.fim).toLocaleDateString("pt-BR")}`
+            : m.posologia.duracaoDias
+              ? `${m.posologia.duracaoDias} dias`
+              : "—",
+        // Médico real quando a receita de origem está entre os documentos;
+        // o endpoint não devolve nome de médico.
+        medico: m.documentoId
+          ? (documentos.find((x) => x.id === m.documentoId)?.medico ?? "Receita médica")
+          : m.origem === "paciente"
+            ? "Adicionado por você"
+            : "Receita médica",
+      }));
+  }, [sessao.role, medsWire, documentos]);
+
+  const medicamentos: (MedicamentoUso & { id: string })[] =
+    sessao.role === "paciente" ? (medicamentosAtivos ?? []) : medicamentosReceitas;
 
   // Filtro por contexto (ID primeiro; nome só para registros antigos sem ID):
   // paciente vê só as próprias consultas/arquivos; médico, só as suas
@@ -206,6 +271,7 @@ export function Prontuario() {
         <button type="button"
           onClick={() => {
             setAceite(false);
+            setErroConsent(null);
             setConsentAberto(true);
           }}
           className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-primary-foreground font-medium"
@@ -220,18 +286,36 @@ export function Prontuario() {
           <Pill className="w-4 h-4 text-primary" /> Medicamentos em uso
         </div>
         <div className="mt-3 space-y-2">
-          {medicamentos.length === 0 && (
-            <p className="text-sm text-muted-foreground">Nenhum medicamento ativo.</p>
-          )}
-          {medicamentos.map((m) => (
-            <div key={m.id} className="rounded-xl border p-3">
-              <div className="font-medium">{m.nome}</div>
-              <div className="text-sm text-muted-foreground">{m.posologia}</div>
-              <div className="text-xs text-muted-foreground mt-1">
-                Duração: {m.duracao} • {m.medico}
-              </div>
+          {sessao.role === "paciente" && medsErro ? (
+            <div>
+              <p className="text-sm text-destructive">
+                Não foi possível carregar seus medicamentos em uso agora.
+              </p>
+              <button type="button"
+                onClick={() => void carregarMeds()}
+                className="mt-1 text-sm font-medium text-primary underline"
+              >
+                Tentar de novo
+              </button>
             </div>
-          ))}
+          ) : sessao.role === "paciente" && medsWire === null ? (
+            <p className="text-sm text-muted-foreground">Carregando medicamentos…</p>
+          ) : (
+            <>
+              {medicamentos.length === 0 && (
+                <p className="text-sm text-muted-foreground">Nenhum medicamento ativo.</p>
+              )}
+              {medicamentos.map((m) => (
+                <div key={m.id} className="rounded-xl border p-3">
+                  <div className="font-medium">{m.nome}</div>
+                  <div className="text-sm text-muted-foreground">{m.posologia}</div>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    Duração: {m.duracao} • {m.medico}
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
         </div>
       </div>
 
@@ -367,30 +451,65 @@ export function Prontuario() {
                 consentimento.
               </span>
             </label>
+            {erroConsent && (
+              <p role="alert" className="mt-3 text-sm text-destructive">
+                {erroConsent}
+              </p>
+            )}
             <div className="mt-5 flex justify-end gap-2">
               <button type="button"
-                onClick={() => {
-                  registrarConsentimento({
+                disabled={registrando}
+                onClick={async () => {
+                  setRegistrando(true);
+                  setErroConsent(null);
+                  const registrado = await registrarConsentimento({
                     paciente: sessao.role === "paciente" ? sessao.nome : "Pacientes vinculados",
                     finalidade: "Geração e download do prontuário em PDF",
                     documentos: documentos.length,
                     aceito: false,
                   });
+                  setRegistrando(false);
+                  if (!registrado) {
+                    setErroConsent(
+                      "Não foi possível registrar sua recusa agora. Tente novamente.",
+                    );
+                    return;
+                  }
                   setConsentAberto(false);
                 }}
-                className="px-4 py-2.5 rounded-xl border text-sm font-medium"
+                className="px-4 py-2.5 rounded-xl border text-sm font-medium disabled:opacity-50"
               >
                 Recusar
               </button>
               <button type="button"
-                disabled={!aceite}
-                onClick={() => {
-                  registrarConsentimento({
+                disabled={!aceite || registrando}
+                onClick={async () => {
+                  // A10: sem a lista de ativos carregada, o PDF sairia com
+                  // os medicamentos errados — não gera no escuro.
+                  if (sessao.role === "paciente" && medicamentosAtivos === null) {
+                    setErroConsent(
+                      "Não foi possível carregar seus medicamentos em uso, então o PDF não foi gerado. Tente novamente.",
+                    );
+                    return;
+                  }
+                  setRegistrando(true);
+                  setErroConsent(null);
+                  // A9 (LGPD): o PDF só é gerado DEPOIS que o servidor
+                  // confirma o registro do consentimento; em falha, o modal
+                  // fica aberto com o erro e nenhum arquivo é baixado.
+                  const registrado = await registrarConsentimento({
                     paciente: sessao.role === "paciente" ? sessao.nome : "Pacientes vinculados",
                     finalidade: "Geração e download do prontuário em PDF",
                     documentos: documentos.length,
                     aceito: true,
                   });
+                  if (!registrado) {
+                    setRegistrando(false);
+                    setErroConsent(
+                      "Não foi possível registrar seu consentimento agora, então o PDF não foi gerado. Tente novamente.",
+                    );
+                    return;
+                  }
                   gerarProntuarioPDF({
                     // Para o médico, o PDF reúne vários pacientes: não o
                     // rotula com o nome do médico como se fosse o paciente.
@@ -407,12 +526,13 @@ export function Prontuario() {
                     entidade: "prontuario",
                     detalhes: `PDF do prontuário exportado com ${documentos.length} documento(s)`,
                   });
+                  setRegistrando(false);
                   setConsentAberto(false);
                 }}
                 className="px-4 py-2.5 rounded-xl text-primary-foreground text-sm font-medium disabled:opacity-50"
                 style={{ backgroundColor: "var(--accent)" }}
               >
-                Autorizar e baixar
+                {registrando ? "Registrando…" : "Autorizar e baixar"}
               </button>
             </div>
           </div>

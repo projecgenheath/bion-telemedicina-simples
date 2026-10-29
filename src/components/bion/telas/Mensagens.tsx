@@ -108,11 +108,13 @@ export function Mensagens() {
     if (el) el.scrollTop = el.scrollHeight;
   }, [threadAtiva.length, ativa?.id]);
 
-  const enviar = useCallback(() => {
+  // A8: o texto só é limpo depois que o servidor confirma o envio — em
+  // falha, ele continua no campo para tentar de novo (erro já virou toast).
+  const enviar = useCallback(async () => {
     const t = texto.trim();
     if (!t || !ativa) return;
-    enviarMensagem(ativa.id, t);
-    setTexto("");
+    const ok = await enviarMensagem(ativa.id, t);
+    if (ok) setTexto("");
   }, [texto, ativa, enviarMensagem]);
 
   /* Estado vazio: nenhum contato disponível ainda */

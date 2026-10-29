@@ -98,8 +98,14 @@ export type Documento = {
   paciente: string;
   /** Identificador do paciente (M-9: filtros usam ID, nunca o nome). */
   pacienteId?: string;
+  /** Consulta em que o documento foi emitido (A7: vínculo real vindo do
+   *  servidor; null/ausente = sem consulta vinculada, ex.: receita renovada). */
+  consultaId?: string | null;
   conteudo: string;
   data: string;
+  /** Criação em ISO 8601 (createdAt do servidor): data confiável para o
+   *  fallback de documentos sem consultaId. `data` é só texto de exibição. */
+  criadoEm?: string;
   medicamento?: string;
   posologia?: string;
   duracao?: string;

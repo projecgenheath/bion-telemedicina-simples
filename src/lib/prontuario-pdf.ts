@@ -139,7 +139,7 @@ export function gerarProntuarioPDF(opts: {
     espaco(60 + (d.observacoes ? 40 : 0) + (d.posologia ? 26 : 0) + 40);
     doc.setFillColor(241, 246, 255);
     doc.roundedRect(L, y - 12, W - L * 2, 4, 2, 2, "F");
-    linha("", `${d.tipo === "receita" ? "Receita" : "Atestado"} • ${d.data}`, true);
+    linha("", `${d.tipo === "receita" ? "Receita" : d.tipo === "exame" || d.tipo === "exame_solicitado" ? "Pedido de exames" : "Atestado"} • ${d.data}`, true);
     linha("", d.titulo);
     linha("Médico", d.medico);
     if (d.medicamento) linha("Medicamento", d.medicamento);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Calendar, Clock, Stethoscope, X, RefreshCw, AlertTriangle, Video } from "lucide-react";
 import { EstadoVazio } from "@/components/bion/ui/EstadoVazio";
@@ -8,11 +8,21 @@ import { useBion, type Consulta } from "@/lib/bion-store";
 import { ModalBion } from "@/components/bion/ModalBion";
 import { agendaLivreDoMedico, isoDia } from "@/components/bion/paciente/agenda-medico";
 import { useDiasBloqueados } from "@/components/bion/paciente/useDiasBloqueados";
+import {
+  buscarPreviaCancelamento,
+  fmtCentavos,
+  previaCancelamentoMudou,
+  type PreviaCancelamento,
+} from "@/components/bion/paciente/usePreviaCancelamento";
 
 export function AgendaConsultas({ perfil }: { perfil: "paciente" | "medico" }) {
   const { consultas, sessao } = useBion();
+  // A13: filtro por ID (pacienteId/medicoId); o nome é só fallback para
+  // registros legados sem ID — homônimos e grafias não escondem consultas.
+  const doUsuario = (id: string | undefined, nome: string) =>
+    sessao.id ? (id ? id === sessao.id : nome === sessao.nome) : nome === sessao.nome;
   const lista = consultas.filter((c) =>
-    perfil === "paciente" ? c.paciente === sessao.nome : c.medico === sessao.nome,
+    perfil === "paciente" ? doUsuario(c.pacienteId, c.paciente) : doUsuario(c.medicoId, c.medico),
   );
   const ativas = lista.filter((c) => c.status === "confirmada");
   const outras = lista.filter((c) => c.status !== "confirmada");
@@ -43,7 +53,7 @@ export function AgendaConsultas({ perfil }: { perfil: "paciente" | "medico" }) {
 }
 
 function LinhaConsulta({ c, perfil }: { c: Consulta; perfil: "paciente" | "medico" }) {
-  const { cancelarConsulta, remarcarConsulta, consultas, medicos } = useBion();
+  const { cancelarConsulta, remarcarConsulta, consultas, medicos, sessao } = useBion();
   const [modal, setModal] = useState<null | "cancelar" | "remarcar">(null);
   const [motivo, setMotivo] = useState("Imprevisto pessoal");
   const [diaIso, setDiaIso] = useState("");
@@ -51,14 +61,51 @@ function LinhaConsulta({ c, perfil }: { c: Consulta; perfil: "paciente" | "medic
   const [processando, setProcessando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
+  // A12: só o PACIENTE vê a prévia financeira do cancelamento (o endpoint
+  // calcula pela perspectiva de quem chama; médico/admin seguem o fluxo
+  // de sempre, sem prévia). Sem prévia carregada, o paciente não confirma
+  // no escuro; no clique, a prévia é refeita e divergência bloqueia (A5).
+  const souPaciente = perfil === "paciente" && sessao.role === "paciente";
+  const [previa, setPrevia] = useState<PreviaCancelamento | null>(null);
+  const [previaErro, setPreviaErro] = useState<string | null>(null);
+  const [previaVersao, setPreviaVersao] = useState(0);
+  const [condicoesMudaram, setCondicoesMudaram] = useState(false);
+  const [erroRevalidacao, setErroRevalidacao] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!souPaciente || modal !== "cancelar") return;
+    let cancelado = false;
+    buscarPreviaCancelamento(c.id)
+      .then((p) => {
+        if (cancelado) return;
+        setPrevia(p);
+        setPreviaErro(null);
+      })
+      .catch((e: unknown) => {
+        if (cancelado) return;
+        setPreviaErro(e instanceof Error ? e.message : "Não foi possível carregar a prévia.");
+      });
+    return () => {
+      cancelado = true;
+    };
+  }, [souPaciente, modal, previaVersao, c.id]);
+
   const abrirModal = (m: "cancelar" | "remarcar") => {
     setErro(null);
     setProcessando(false);
+    setPrevia(null);
+    setPreviaErro(null);
+    setCondicoesMudaram(false);
+    setErroRevalidacao(null);
     setModal(m);
   };
   const fecharModal = () => {
     setErro(null);
     setProcessando(false);
+    setPrevia(null);
+    setPreviaErro(null);
+    setCondicoesMudaram(false);
+    setErroRevalidacao(null);
     setModal(null);
   };
 
@@ -214,6 +261,110 @@ function LinhaConsulta({ c, perfil }: { c: Consulta; perfil: "paciente" | "medic
                     <option key={m}>{m}</option>
                   ))}
                 </select>
+                {souPaciente && !previa && !previaErro && (
+                  <p className="text-sm text-muted-foreground mt-4">
+                    Carregando as condições do cancelamento…
+                  </p>
+                )}
+                {souPaciente && previaErro && (
+                  <div
+                    className="mt-4 rounded-2xl border border-destructive/30 bg-destructive/5 p-4 text-sm"
+                    role="alert"
+                  >
+                    <p className="font-semibold text-destructive">
+                      Não foi possível carregar os valores do cancelamento.
+                    </p>
+                    <p className="text-muted-foreground mt-1">
+                      {previaErro} Para sua segurança, a confirmação só fica disponível depois de
+                      mostrarmos a multa e o reembolso.
+                    </p>
+                    <button type="button"
+                      onClick={() => {
+                        setPreviaErro(null);
+                        setPreviaVersao((v) => v + 1);
+                      }}
+                      className="mt-2 text-sm font-semibold underline"
+                    >
+                      Tentar de novo
+                    </button>
+                  </div>
+                )}
+                {souPaciente && previa && !previa.podeCancelar && (
+                  <p className="mt-4 rounded-2xl border p-4 text-sm text-muted-foreground" role="note">
+                    {previa.status === "cancelada" || previa.status === "concluida"
+                      ? `Esta consulta já foi ${previa.status === "cancelada" ? "cancelada" : "concluída"} e não pode mais ser cancelada.`
+                      : "Esta consulta não pode ser cancelada por aqui. Fale com o suporte se precisar de ajuda."}
+                  </p>
+                )}
+                {souPaciente && previa && previa.podeCancelar && (
+                  <div className="mt-4 rounded-2xl border p-4 text-sm space-y-1.5">
+                    {previa.cancelar.pago ? (
+                      <>
+                        <div className="flex justify-between gap-3">
+                          <span className="text-muted-foreground">Valor pago</span>
+                          <strong>{fmtCentavos(previa.cancelar.valorCentavos)}</strong>
+                        </div>
+                        <div className="flex justify-between gap-3">
+                          <span className="text-muted-foreground">Multa</span>
+                          <strong>{fmtCentavos(previa.cancelar.multaCentavos)}</strong>
+                        </div>
+                        <div className="flex justify-between gap-3">
+                          <span className="text-muted-foreground">Reembolso</span>
+                          <strong>{fmtCentavos(previa.cancelar.reembolsoCentavos)}</strong>
+                        </div>
+                        {previa.cancelar.multaCentavos > 0 ? (
+                          <p className="text-muted-foreground pt-1">
+                            Cancelamentos com {previa.regra.janelaHoras} h ou menos de antecedência
+                            têm multa de {previa.regra.multaPct}%. O prazo sem multa terminou em{" "}
+                            {previa.cancelar.semMultaAteTexto}.
+                          </p>
+                        ) : previa.cancelar.isencao === "fora_da_janela" ? (
+                          <p className="text-muted-foreground pt-1">
+                            Sem multa: cancele sem multa até {previa.cancelar.semMultaAteTexto}{" "}
+                            (horário de Brasília). O reembolso é integral e automático.
+                          </p>
+                        ) : (
+                          <p className="text-muted-foreground pt-1">
+                            Sem multa: o reembolso é integral e automático.
+                          </p>
+                        )}
+                      </>
+                    ) : (
+                      <p className="text-muted-foreground">
+                        Esta consulta ainda não foi paga — nenhum valor será cobrado nem
+                        reembolsado.
+                      </p>
+                    )}
+                  </div>
+                )}
+                {souPaciente && condicoesMudaram && (
+                  <div
+                    className="mt-4 rounded-2xl border border-amber-400/30 bg-amber-500/10 p-4 text-sm"
+                    role="alert"
+                  >
+                    <p className="font-bold text-amber-900 dark:text-amber-100">
+                      As condições mudaram desde que você abriu esta tela.
+                    </p>
+                    <p className="text-muted-foreground mt-1">
+                      Os valores acima acabaram de ser atualizados. Confira a multa e o reembolso
+                      e confirme novamente para concluir o cancelamento.
+                    </p>
+                  </div>
+                )}
+                {souPaciente && erroRevalidacao && (
+                  <div
+                    className="mt-4 rounded-2xl border border-red-400/30 bg-red-500/10 p-4 text-sm"
+                    role="alert"
+                  >
+                    <p className="font-bold text-red-900 dark:text-red-100">
+                      Não foi possível confirmar as condições agora.
+                    </p>
+                    <p className="text-muted-foreground mt-1">
+                      {erroRevalidacao} Para sua segurança, o cancelamento não foi feito sem
+                      conferir os valores. Toque em confirmar para tentar de novo.
+                    </p>
+                  </div>
+                )}
                 {erro && (
                   <p role="alert" className="text-sm text-destructive mt-4">
                     {erro}
@@ -227,10 +378,43 @@ function LinhaConsulta({ c, perfil }: { c: Consulta; perfil: "paciente" | "medic
                     Voltar
                   </button>
                   <button type="button"
-                    disabled={processando}
+                    disabled={
+                      processando || (souPaciente && (!previa || !previa.podeCancelar || !!previaErro))
+                    }
                     onClick={async () => {
                       setErro(null);
+                      setCondicoesMudaram(false);
+                      setErroRevalidacao(null);
                       setProcessando(true);
+                      // A12/A5 (só paciente): refaz a prévia NESTE clique — o
+                      // servidor recalcula a multa agora, então só vale
+                      // cancelar sobre os valores atuais. Mudou → não cancela:
+                      // mostra os valores novos e pede nova confirmação.
+                      // Falhou a busca → não cancela no escuro.
+                      let confirmada: PreviaCancelamento | null = null;
+                      if (souPaciente) {
+                        if (!previa) {
+                          setProcessando(false);
+                          return;
+                        }
+                        try {
+                          confirmada = await buscarPreviaCancelamento(c.id);
+                        } catch (e) {
+                          setProcessando(false);
+                          setErroRevalidacao(
+                            e instanceof Error
+                              ? e.message
+                              : "Não foi possível confirmar as condições do cancelamento.",
+                          );
+                          return;
+                        }
+                        if (previaCancelamentoMudou(previa, confirmada) || !confirmada.podeCancelar) {
+                          setPrevia(confirmada);
+                          setProcessando(false);
+                          if (confirmada.podeCancelar) setCondicoesMudaram(true);
+                          return;
+                        }
+                      }
                       const ok = await cancelarConsulta(c.id, motivo);
                       setProcessando(false);
                       if (!ok) {
@@ -240,7 +424,10 @@ function LinhaConsulta({ c, perfil }: { c: Consulta; perfil: "paciente" | "medic
                         return;
                       }
                       toast.warning("Consulta cancelada", {
-                        description: `${c.especialidade} com ${c.medico} — ${c.data} às ${c.hora}`,
+                        description:
+                          confirmada?.cancelar.pago && confirmada.cancelar.reembolsoCentavos > 0
+                            ? `${c.especialidade} com ${c.medico} — ${c.data} às ${c.hora} • Reembolso de ${fmtCentavos(confirmada.cancelar.reembolsoCentavos)}`
+                            : `${c.especialidade} com ${c.medico} — ${c.data} às ${c.hora}`,
                       });
                       fecharModal();
                     }}

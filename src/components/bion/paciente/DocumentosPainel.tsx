@@ -146,14 +146,18 @@ export function DocumentosPainel({
     if (!c) return [];
     const ini = c.ts - 2 * 86_400_000;
     const fim = c.ts + 7 * 86_400_000;
-    const docs = documentos
-      .filter((d) => d.medico === c.medico && d.paciente === sessao.nome)
-      .filter((d) => {
-        const t = new Date(d.data.split(" ").reverse().join("/")).getTime();
-        const t1 = new Date(d.data.replace(/(\d{2}) (\w{3}) (\d{4})/, "$2 $1 $3")).getTime();
-        const ts = Number.isNaN(t) ? (Number.isNaN(t1) ? c.ts : t1) : t;
-        return ts >= ini && ts <= fim;
-      });
+    const docs = documentos.filter((d) => {
+      // A7: documento COM consulta vinculada pertence a ela — e só a ela.
+      if (d.consultaId) return d.consultaId === c.id;
+      // Sem vínculo (legado, ex.: receita renovada fora de consulta): mantém o
+      // recorte médico/paciente/janela, mas sobre a data ISO de criação —
+      // nunca sobre o texto localizado de exibição (`d.data`): o parse dele
+      // com new Date() dava NaN em 7 dos 12 meses e o documento aparecia sob
+      // qualquer consulta concluída do mesmo médico.
+      if (d.medico !== c.medico || d.paciente !== sessao.nome) return false;
+      const ts = d.criadoEm ? new Date(d.criadoEm).getTime() : NaN;
+      return !Number.isNaN(ts) && ts >= ini && ts <= fim;
+    });
     const lista = docs.map((d) => ({
       id: d.id,
       tipo: d.tipo as keyof typeof ICONE_DOC,
@@ -358,7 +362,7 @@ export function DocumentosPainel({
                             <div className="mt-1.5">
                               <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${classe}`}>Renovação: {r.texto}</span>
                               {pedido.mensagemMedico ? <p className="mt-1 text-xs opacity-80">{pedido.mensagemMedico}</p> : null}
-                              {pedido.status === "pendente" ? (
+                              {pedido.status === "pendente" || pedido.status === "aguardando_pagamento" ? (
                                 cancelandoPedido === pedido.id ? (
                                   <div className="mt-1.5 flex flex-wrap items-center gap-2" role="group" aria-label="Confirmar cancelamento">
                                     <span className="text-xs font-semibold">Cancelar este pedido?</span>
@@ -492,15 +496,17 @@ export function DocumentosPainel({
               <input
                 value={texto}
                 onChange={(e) => setTexto(e.target.value)}
-                onKeyDown={(e) => {
+                onKeyDown={async (e) => {
                   if (e.key === "Enter") {
                     if (!contatoAtivo.aberta) {
                       toast.error("A janela de 30 dias desta conversa já encerrou.");
                       return;
                     }
+                    // A8: só limpa o campo com a confirmação do servidor;
+                    // em falha, o texto fica para tentar de novo.
                     if (texto.trim()) {
-                      enviarMensagem(contatoAtivo.id, texto.trim());
-                      setTexto("");
+                      const ok = await enviarMensagem(contatoAtivo.id, texto.trim());
+                      if (ok) setTexto("");
                     }
                   }
                 }}
@@ -510,14 +516,15 @@ export function DocumentosPainel({
                 className="bp-entrada flex-1 px-4 py-3 text-sm disabled:opacity-50"
               />
               <button type="button"
-                onClick={() => {
+                onClick={async () => {
                   if (!contatoAtivo.aberta) {
                     toast.error("A janela de 30 dias desta conversa já encerrou.");
                     return;
                   }
+                  // A8: idem Enter — texto preservado se o envio falhar.
                   if (texto.trim()) {
-                    enviarMensagem(contatoAtivo.id, texto.trim());
-                    setTexto("");
+                    const ok = await enviarMensagem(contatoAtivo.id, texto.trim());
+                    if (ok) setTexto("");
                   }
                 }}
                 disabled={!contatoAtivo.aberta || !texto.trim()}

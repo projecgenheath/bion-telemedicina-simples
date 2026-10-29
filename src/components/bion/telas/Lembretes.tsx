@@ -20,15 +20,22 @@ export function Lembretes() {
   const [tipo, setTipo] = useState<"Medicação" | "Consulta" | "Exame" | "Hidratação">("Medicação");
   const [frequencia, setFrequencia] = useState("Todos os dias");
 
-  const criarLembrete = (e: React.FormEvent) => {
+  const [criando, setCriando] = useState(false);
+
+  // A8: sucesso só depois da confirmação do servidor — em falha, o modal
+  // fica aberto com o título preservado (o erro já virou toast no store).
+  const criarLembrete = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!titulo.trim()) return;
-    adicionarLembrete({
+    if (!titulo.trim() || criando) return;
+    setCriando(true);
+    const ok = await adicionarLembrete({
       titulo: titulo.trim(),
       horario,
       tipo,
       frequencia,
     });
+    setCriando(false);
+    if (!ok) return;
     toast.success("Lembrete criado", {
       description: `"${titulo.trim()}" às ${horario} • ${frequencia}`,
     });
@@ -186,10 +193,11 @@ export function Lembretes() {
 
             <button
               type="submit"
-              className="w-full py-3 rounded-2xl text-primary-foreground font-bold text-xs"
+              disabled={criando}
+              className="w-full py-3 rounded-2xl text-primary-foreground font-bold text-xs disabled:opacity-50"
               style={{ backgroundColor: "var(--accent)" }}
             >
-              Salvar Lembrete
+              {criando ? "Salvando…" : "Salvar Lembrete"}
             </button>
           </form>
         </ModalBion>

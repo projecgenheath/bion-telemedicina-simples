@@ -95,7 +95,10 @@ export function PrivacidadePaciente() {
     }
   };
 
-  const minhasConsultas = consultas.filter((c) => c.paciente === sessao.nome);
+  // A13: por pacienteId; o nome é só fallback para consultas legadas sem ID.
+  const minhasConsultas = consultas.filter((c) =>
+    sessao.id ? (c.pacienteId ? c.pacienteId === sessao.id : c.paciente === sessao.nome) : c.paciente === sessao.nome,
+  );
   const medicosVinculados = Array.from(new Set(minhasConsultas.map((c) => c.medico)));
 
   const dadosColetados = [

@@ -243,6 +243,10 @@ export function documentoWire(d: DocumentoComNomes) {
     // M-9 da auditoria: identificador do paciente no wire — o nome duplicado
     // (homônimos) não pode mais misturar documentos de pessoas diferentes.
     pacienteId: d.pacienteId,
+    // A7 da auditoria do paciente: consulta de emissão (gravada desde o B-12)
+    // — sem ela o cliente atribuía o documento por janela calculada sobre o
+    // texto localizado da data, e ele caía na consulta errada.
+    consultaId: d.consultaId,
     medicamento: d.medicamento,
     posologia: d.posologia,
     duracao: d.duracao,

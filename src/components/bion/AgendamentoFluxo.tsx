@@ -61,6 +61,9 @@ export function AgendamentoFluxo({
     { nome: string; tamanhoKb: number; tipo: string; file?: File }[]
   >([]);
   const [processandoPagamento, setProcessandoPagamento] = useState(false);
+  // Consulta já criada NESTE fluxo (o checkout falhou no passo de pagamento):
+  // o botão principal vira retry do checkout DELA — nunca uma nova reserva.
+  const [consultaCriadaId, setConsultaCriadaId] = useState<string | null>(null);
   const [medicoModal, setMedicoModal] = useState<Medico | null>(null);
   // Data/hora "congeladas" enquanto o servidor processa e depois de confirmada:
   // a consulta criada passa a ocupar o slot e a seleção derivada ficaria vazia.
@@ -166,8 +169,36 @@ export function AgendamentoFluxo({
   };
 
 
+  // Abre o checkout Stripe de uma consulta JÁ criada (retry do pagamento,
+  // A2): usado pela ação do toast e pelo botão principal do passo de
+  // pagamento. Nunca cria outra consulta — só reabre o checkout da mesma.
+  const tentarAbrirCheckout = async (consultaId: string) => {
+    const r = await abrirCheckoutStripe({ consultaId });
+    if (r.url) {
+      window.location.assign(r.url);
+      return;
+    }
+    toast.error("Pagamento ainda não abriu", {
+      description: r.erro ?? "Tente pagar em Minhas consultas.",
+    });
+  };
+
   const finalizarAgendamento = async () => {
     if (processandoPagamento) return;
+
+    // Retry (A2): a consulta deste fluxo já foi criada e está reservada —
+    // só o checkout falhou. O botão reabre o checkout DELA. Sem isso, a
+    // revalidação da seleção esbarrava na própria consulta ocupando o slot
+    // e o paciente acabava criando uma SEGUNDA reserva pagável.
+    if (consultaCriadaId) {
+      setProcessandoPagamento(true);
+      try {
+        await tentarAbrirCheckout(consultaCriadaId);
+      } finally {
+        setProcessandoPagamento(false);
+      }
+      return;
+    }
 
     const med = medicoAtual;
     if (!med) {
@@ -265,18 +296,14 @@ export function AgendamentoFluxo({
         description: r.erro ?? "Tente pagar de novo em Minhas consultas.",
         action: {
           label: "Tentar abrir o pagamento",
-          onClick: async () => {
-            const r2 = await abrirCheckoutStripe({ consultaId: criada.id });
-            if (r2.url) {
-              window.location.assign(r2.url);
-              return;
-            }
-            toast.error("Pagamento ainda não abriu", {
-              description: r2.erro ?? "Tente pagar em Minhas consultas.",
-            });
+          onClick: () => {
+            void tentarAbrirCheckout(criada.id);
           },
         },
       });
+      // Marca a consulta deste fluxo: a partir daqui, o botão principal do
+      // passo de pagamento é retry do checkout dela (ver finalizarAgendamento).
+      setConsultaCriadaId(criada.id);
       setStep(6);
       return;
     }

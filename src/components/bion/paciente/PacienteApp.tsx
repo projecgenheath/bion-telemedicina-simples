@@ -263,12 +263,20 @@ export function PacienteApp() {
 
   /* ------------------------------- dados --------------------------------- */
 
+  // A13: consultas do paciente por pacienteId; o nome é só fallback para
+  // registros legados sem ID — homônimos e grafias não escondem cards.
+  const minhaConsulta = useCallback(
+    (c: Consulta) =>
+      sessao.id ? (c.pacienteId ? c.pacienteId === sessao.id : c.paciente === sessao.nome) : c.paciente === sessao.nome,
+    [sessao],
+  );
+
   const proximas = useMemo(() => {
     const limite = Date.now() - 2 * 3_600_000;
     return consultas
-      .filter((c) => c.paciente === sessao.nome && ["confirmada", "em_espera", "pendente_anamnese"].includes(c.status) && c.ts >= limite)
+      .filter((c) => minhaConsulta(c) && ["confirmada", "em_espera", "pendente_anamnese"].includes(c.status) && c.ts >= limite)
       .sort((a, b) => a.ts - b.ts);
-  }, [consultas, sessao.nome]);
+  }, [consultas, minhaConsulta]);
 
   const proxima = proximas[0];
   const lembretesAgenda = useMemo(
@@ -297,9 +305,9 @@ export function PacienteApp() {
   const aguardandoReagendamento = useMemo(
     () =>
       consultas
-        .filter((c) => c.paciente === sessao.nome && c.status === "aguardando_reagendamento")
+        .filter((c) => minhaConsulta(c) && c.status === "aguardando_reagendamento")
         .sort((a, b) => a.ts - b.ts),
-    [consultas, sessao.nome],
+    [consultas, minhaConsulta],
   );
 
   /** Remarcação com multa reservada (nova data aguardando pagamento; a data original segue valendo). */
@@ -307,11 +315,11 @@ export function PacienteApp() {
     () =>
       consultas.filter(
         (c) =>
-          c.paciente === sessao.nome &&
+          minhaConsulta(c) &&
           c.remarcacaoPendente?.status === "pendente" &&
           new Date(c.remarcacaoPendente.expiraEm).getTime() > Date.now(),
       ),
-    [consultas, sessao.nome],
+    [consultas, minhaConsulta],
   );
 
   /** Canceladas e pagas dos últimos 60 dias: acompanham o status do reembolso (máx. 3). */
@@ -319,19 +327,19 @@ export function PacienteApp() {
   const faltasRecentes = useMemo(() => {
     const limite = Date.now() - 30 * 86_400_000;
     return consultas
-      .filter((c) => c.paciente === sessao.nome && c.falta && c.pago && c.ts >= limite)
+      .filter((c) => minhaConsulta(c) && c.falta && c.pago && c.ts >= limite)
       .sort((a, b) => b.ts - a.ts)
       .slice(0, 3);
-  }, [consultas, sessao.nome]);
+  }, [consultas, minhaConsulta]);
   const consultaReembolso = reembolsoConsultaId ? consultas.find((c) => c.id === reembolsoConsultaId) : undefined;
 
   const canceladasComPagamento = useMemo(() => {
     const limite = Date.now() - 60 * 86_400_000;
     return consultas
-      .filter((c) => c.paciente === sessao.nome && c.status === "cancelada" && c.pago && consultaTemReembolso(c) && c.ts >= limite)
+      .filter((c) => minhaConsulta(c) && c.status === "cancelada" && c.pago && consultaTemReembolso(c) && c.ts >= limite)
       .sort((a, b) => b.ts - a.ts)
       .slice(0, 3);
-  }, [consultas, sessao.nome]);
+  }, [consultas, minhaConsulta]);
 
   const janelaTriagem = (c: { ts: number; pago?: boolean; status: string }) =>
     ["confirmada", "pendente_anamnese"].includes(c.status) &&

@@ -372,7 +372,10 @@ function DetalheLembretes({ onFechar }: { onFechar: () => void }) {
   const { lembretes, adicionarLembrete, alternarLembrete, removerLembrete } = useBion();
   const [titulo, setTitulo] = useState("");
   const [horario, setHorario] = useState("");
-  const [medicamento, setMedicamento] = useState("");
+  // A15: este campo é a FREQUÊNCIA ("1x ao dia") — o nome do remédio é o
+  // `titulo`. Antes a frequência era gravada também como `medicamento`.
+  const [frequencia, setFrequencia] = useState("");
+  const [criando, setCriando] = useState(false);
   const hoje = new Date().toLocaleDateString("pt-BR", { weekday: "long" });
 
   return (
@@ -397,34 +400,42 @@ function DetalheLembretes({ onFechar }: { onFechar: () => void }) {
             className="bp-entrada w-full px-4 py-3 text-sm"
           />
           <input
-            value={medicamento}
-            onChange={(e) => setMedicamento(e.target.value)}
+            value={frequencia}
+            onChange={(e) => setFrequencia(e.target.value)}
             placeholder="Frequência (1x ao dia)"
             aria-label="Frequência do lembrete"
             className="bp-entrada w-full px-4 py-3 text-sm"
           />
         </div>
         <button type="button"
-          onClick={() => {
+          disabled={criando}
+          onClick={async () => {
             if (!titulo.trim() || !/^\d{1,2}:\d{2}$/.test(horario.trim())) {
               toast.error("Informe o nome e o horário (ex.: 08:00).");
               return;
             }
-            adicionarLembrete({
+            // A15: `medicamento` é o NOME do remédio (o título) — é por ele
+            // que "Medicamentos em uso" casa o lembrete; a frequência vai
+            // só em `frequencia`. A8: campos só são limpos e o sucesso só
+            // aparece com a confirmação do servidor.
+            setCriando(true);
+            const ok = await adicionarLembrete({
               titulo: titulo.trim(),
               horario: horario.trim(),
               tipo: "Medicação",
-              frequencia: medicamento.trim() || "1x ao dia",
-              medicamento: medicamento.trim() || undefined,
+              frequencia: frequencia.trim() || "1x ao dia",
+              medicamento: titulo.trim(),
             });
+            setCriando(false);
+            if (!ok) return;
             setTitulo("");
             setHorario("");
-            setMedicamento("");
+            setFrequencia("");
             toast.success("Lembrete criado.");
           }}
-          className="bp-acao w-full py-3 text-sm inline-flex items-center justify-center gap-2"
+          className="bp-acao w-full py-3 text-sm inline-flex items-center justify-center gap-2 disabled:opacity-50"
         >
-          <Plus className="w-4 h-4" /> Criar lembrete
+          <Plus className="w-4 h-4" /> {criando ? "Criando…" : "Criar lembrete"}
         </button>
       </div>
 

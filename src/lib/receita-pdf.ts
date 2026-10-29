@@ -33,8 +33,14 @@ export function gerarDocumentoPDF(d: Documento) {
   let y = 0;
 
   const isReceita = d.tipo === "receita";
+  // A11: pedido de exame tem natureza própria — o PDF dele NÃO é um atestado.
+  const isExame = d.tipo === "exame" || d.tipo === "exame_solicitado";
   const corDestaque = isReceita ? AZUL : VERDE;
-  const tipoTitulo = isReceita ? "RECEITUÁRIO MÉDICO DIGITAL" : "ATESTADO MÉDICO DIGITAL";
+  const tipoTitulo = isReceita
+    ? "RECEITUÁRIO MÉDICO DIGITAL"
+    : isExame
+      ? "SOLICITAÇÃO DE EXAMES"
+      : "ATESTADO MÉDICO DIGITAL";
 
   // Cabeçalho institucional
   doc.setFillColor(...corDestaque);
@@ -147,8 +153,8 @@ export function gerarDocumentoPDF(d: Documento) {
       doc.text(d.duracao, L + 90, y);
       y += 22;
     }
-  } else {
-    // Se for Atestado
+  } else if (!isExame) {
+    // Se for Atestado (pedido de exame não tem "afastamento")
     if (d.duracao) {
       doc.setFont("helvetica", "bold");
       doc.setFontSize(11);

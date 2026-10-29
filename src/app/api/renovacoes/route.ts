@@ -102,7 +102,7 @@ export async function POST(req: NextRequest) {
       select: { id: true },
     });
     if (duplicado) {
-      return Response.json({ erro: "Você já pediu a renovação desta receita. Aguarde o médico." }, { status: 409 });
+      return Response.json({ erro: "Você já tem um pedido de renovação aberto para esta receita. Você pode acompanhar, concluir o pagamento ou cancelar o pedido em Documentos." }, { status: 409 });
     }
     // Só cartão (checkout Stripe). Flag desligada com gateway real: 503, sem
     // criar o pedido nem a cobrança. Nunca Pix.
@@ -132,7 +132,7 @@ export async function POST(req: NextRequest) {
       // Corrida: o índice único parcial (pacienteId, documentoId) WHERE
       // status='pendente' segura o segundo pedido.
       if (ehViolacaoUnica(e)) {
-        return Response.json({ erro: "Você já pediu a renovação desta receita. Aguarde o médico." }, { status: 409 });
+        return Response.json({ erro: "Você já tem um pedido de renovação aberto para esta receita. Você pode acompanhar, concluir o pagamento ou cancelar o pedido em Documentos." }, { status: 409 });
       }
       throw e;
     }
@@ -146,7 +146,7 @@ export async function POST(req: NextRequest) {
     }
     const pedido = lerPedidoRenovacao(criado);
     if (!pedido) {
-      return Response.json({ erro: "Você já pediu a renovação desta receita. Aguarde o médico." }, { status: 409 });
+      return Response.json({ erro: "Você já tem um pedido de renovação aberto para esta receita. Você pode acompanhar, concluir o pagamento ou cancelar o pedido em Documentos." }, { status: 409 });
     }
 
     const efeitos = await aplicarSideEffects(

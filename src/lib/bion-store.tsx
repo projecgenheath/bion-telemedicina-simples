@@ -142,6 +142,7 @@ type EstadoFresco = {
   documentos: {
     id: string; tipo: string; titulo: string; conteudo: string; medico: string; paciente: string;
     pacienteId?: string | null; // M-9: filtro por identificador (homônimos)
+    consultaId?: string | null; // A7: consulta em que o documento foi emitido
     medicamento?: string | null; posologia?: string | null; duracao?: string | null;
     observacoes?: string | null; cid?: string | null; controlado?: boolean; createdAt: string;
   }[];
@@ -269,8 +270,10 @@ const mapDocumento = (x: EstadoFresco["documentos"][number]): Documento => ({
   medico: x.medico,
   paciente: x.paciente,
   pacienteId: x.pacienteId ?? undefined, // M-9: filtro por identificador
+  consultaId: x.consultaId ?? undefined, // A7: vínculo com a consulta de emissão
   conteudo: x.conteudo,
   data: fmtLonga(x.createdAt),
+  criadoEm: x.createdAt, // A7: ISO confiável p/ documentos sem consultaId
   medicamento: x.medicamento ?? undefined,
   posologia: x.posologia ?? undefined,
   duracao: x.duracao ?? undefined,
@@ -499,7 +502,8 @@ type Store = {
   mensagens: Mensagem[];
   suporte: { id: string | null; nome: string };
   naoLidasMensagens: number;
-  enviarMensagem: (paraId: string, texto: string) => void;
+  /** Resolve `true` só quando o servidor aceitou (erros já viram toast em `api`). */
+  enviarMensagem: (paraId: string, texto: string) => Promise<boolean>;
   marcarConversaLida: (comUsuarioId: string) => void;
   emitirDocumento: (d: Omit<Documento, "id" | "data"> & { consultaId?: string }, pacienteIdExplicito?: string) => void;
   /** Resolvem `true` só quando o servidor aceitou (erros já viram toast em `api`). */
@@ -523,12 +527,14 @@ type Store = {
   avaliarConsulta: (a: Omit<Avaliacao, "id" | "quando" | "ts">, medicoIdExplicito?: string) => void;
   consentimentos: Consentimento[];
   consentimentosVisiveis: Consentimento[];
+  /** Resolve `true` só quando o servidor registrou o consentimento (LGPD — o PDF do prontuário aguarda esta confirmação). */
   registrarConsentimento: (
     c: Omit<Consentimento, "id" | "quando" | "quem" | "perfil">,
-  ) => Consentimento;
-  adicionarTicket: (t: Omit<TicketSuporte, "id" | "data" | "status">) => void;
-  responderTicket: (id: string, resposta: string) => void;
-  adicionarLembrete: (l: Omit<Lembrete, "id" | "feito">) => void;
+  ) => Promise<boolean>;
+  /** Resolvem `true` só quando o servidor aceitou (erros já viram toast em `api`). */
+  adicionarTicket: (t: Omit<TicketSuporte, "id" | "data" | "status">) => Promise<boolean>;
+  responderTicket: (id: string, resposta: string) => Promise<boolean>;
+  adicionarLembrete: (l: Omit<Lembrete, "id" | "feito">) => Promise<boolean>;
   alternarLembrete: (id: string) => void;
   removerLembrete: (id: string) => void;
   /** A2: resolve `true` só quando o servidor confirmou (erros já viram toast em `api`). */
@@ -1414,15 +1420,11 @@ export function BionProvider({ children }: { children: ReactNode }) {
   );
 
   const registrarConsentimento = useCallback(
-    (c: Omit<Consentimento, "id" | "quando" | "quem" | "perfil">): Consentimento => {
-      const registro: Consentimento = {
-        ...c,
-        id: `local-${Date.now()}`,
-        quem: sessaoRef.current.nome,
-        perfil: sessaoRef.current.role,
-        quando: new Date().toLocaleString("pt-BR"),
-      };
-      void mutar("/api/consentimentos", "POST", {
+    async (c: Omit<Consentimento, "id" | "quando" | "quem" | "perfil">): Promise<boolean> => {
+      // A9 (LGPD): aguardável de propósito — o PDF do prontuário só é gerado
+      // DEPOIS que o servidor confirma este registro; em falha devolve false
+      // e nenhum arquivo sai sem a trilha de consentimento.
+      return mutar("/api/consentimentos", "POST", {
         finalidade: c.finalidade,
         documentos: c.documentos,
         aceito: c.aceito,
@@ -1430,44 +1432,40 @@ export function BionProvider({ children }: { children: ReactNode }) {
           ? { pacienteId: pacientesRef.current.find((p) => p.nome === c.paciente)?.id }
           : {}),
       });
-      return registro;
     },
     [mutar],
   );
 
   const adicionarTicket = useCallback(
-    (t: Omit<TicketSuporte, "id" | "data" | "status">) => {
-      void mutar("/api/tickets", "POST", {
+    (t: Omit<TicketSuporte, "id" | "data" | "status">) =>
+      mutar("/api/tickets", "POST", {
         assunto: t.assunto,
         categoria: t.categoria,
         mensagem: t.mensagem,
-      });
-    },
+      }),
     [mutar],
   );
 
   const responderTicket = useCallback(
-    (id: string, resposta: string) => {
-      void mutar(`/api/tickets/${id}`, "PATCH", { resposta });
-    },
+    (id: string, resposta: string) => mutar(`/api/tickets/${id}`, "PATCH", { resposta }),
     [mutar],
   );
 
   const adicionarLembrete = useCallback(
-    (l: Omit<Lembrete, "id" | "feito">) => {
-      void (async () => {
-        const d = await api<DeltaWire>("/api/lembretes", {
-          method: "POST",
-          body: JSON.stringify({
-            titulo: l.titulo,
-            horario: l.horario,
-            tipo: l.tipo,
-            frequencia: l.frequencia,
-            medicamento: l.medicamento,
-          }),
-        });
-        if (d) aplicarDelta(d);
-      })();
+    async (l: Omit<Lembrete, "id" | "feito">): Promise<boolean> => {
+      const d = await api<DeltaWire>("/api/lembretes", {
+        method: "POST",
+        body: JSON.stringify({
+          titulo: l.titulo,
+          horario: l.horario,
+          tipo: l.tipo,
+          frequencia: l.frequencia,
+          medicamento: l.medicamento,
+        }),
+      });
+      if (!d) return false;
+      aplicarDelta(d);
+      return true;
     },
     [aplicarDelta],
   );
@@ -1608,14 +1606,18 @@ export function BionProvider({ children }: { children: ReactNode }) {
     [mutarConsultaDelta],
   );
 
-  /** Contrato delta: POST /api/mensagens devolve APENAS a mensagem criada. */
+  /** Contrato delta: POST /api/mensagens devolve APENAS a mensagem criada.
+   *  Resolve `true` só quando o servidor aceitou — quem envia aguarda para
+   *  só limpar o texto digitado com a confirmação (A8). */
   const enviarMensagem = useCallback(
-    async (paraId: string, texto: string) => {
+    async (paraId: string, texto: string): Promise<boolean> => {
       const d = await api<DeltaWire>("/api/mensagens", {
         method: "POST",
         body: JSON.stringify({ paraId, texto }),
       });
+      if (!d) return false;
       aplicarDelta(d);
+      return true;
     },
     [aplicarDelta],
   );

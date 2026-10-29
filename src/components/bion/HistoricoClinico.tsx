@@ -19,16 +19,28 @@ import {
   FlaskConical,
   Microscope,
   Filter,
+  ClipboardList,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useBion, type ExameLab, type Medicao } from "@/lib/bion-store";
 import { gerarDocumentoPDF } from "@/lib/receita-pdf";
 
-type FiltroTipo = "tudo" | "consultas" | "exames" | "receitas" | "atestados";
+type FiltroTipo = "tudo" | "consultas" | "exames" | "receitas" | "atestados" | "pedidos";
+
+const ROTULO_FILTRO: Record<FiltroTipo, string> = {
+  tudo: "tudo",
+  consultas: "consultas",
+  exames: "exames",
+  receitas: "receitas",
+  atestados: "atestados",
+  pedidos: "pedidos de exame",
+};
 
 type EventoTimeline = {
   id: string;
-  tipo: "consulta" | "exame" | "receita" | "atestado" | "evento";
+  // A11: "exame_solicitado" é o pedido de exame (documento) — distinto de
+  // "exame" (resultado/anexo laboratorial) e de "atestado".
+  tipo: "consulta" | "exame" | "receita" | "atestado" | "exame_solicitado" | "evento";
   titulo: string;
   subtitulo: string;
   data: string;
@@ -47,6 +59,7 @@ const CORES: Record<string, { bg: string; text: string }> = {
   exame: { bg: "bg-violet-50 dark:bg-violet-950/60", text: "text-violet-700 dark:text-violet-300" },
   receita: { bg: "bg-emerald-50 dark:bg-emerald-950/60", text: "text-emerald-800 dark:text-emerald-200" },
   atestado: { bg: "bg-amber-50 dark:bg-amber-950/60", text: "text-amber-700 dark:text-amber-300" },
+  exame_solicitado: { bg: "bg-teal-50 dark:bg-teal-950/60", text: "text-teal-700 dark:text-teal-300" },
   evento: { bg: "bg-rose-50 dark:bg-rose-950/60", text: "text-rose-700 dark:text-rose-300" },
 };
 
@@ -55,7 +68,18 @@ const ICONES: Record<string, React.ComponentType<{ className?: string }>> = {
   exame: FlaskConical,
   receita: Pill,
   atestado: FileText,
+  exame_solicitado: ClipboardList,
   evento: Heart,
+};
+
+// Rótulo exibido no selo do evento (o tipo cru "exame_solicitado" não é texto p/ o paciente).
+const ROTULO_TIPO: Record<EventoTimeline["tipo"], string> = {
+  consulta: "consulta",
+  exame: "exame",
+  receita: "receita",
+  atestado: "atestado",
+  exame_solicitado: "pedido de exame",
+  evento: "evento",
 };
 
 // Meses em português usados pelo rótulo de data do store ("10 Nov 2025").
@@ -352,7 +376,13 @@ export function HistoricoClinico() {
             : [d.cid ? `CID: ${d.cid}` : undefined, d.duracao].filter(Boolean);
         return {
           id: d.id,
-          tipo: d.tipo === "receita" ? ("receita" as const) : ("atestado" as const),
+          // A11: exame/exame_solicitado é pedido de exame — nunca "atestado".
+          tipo:
+            d.tipo === "receita"
+              ? ("receita" as const)
+              : d.tipo === "exame" || d.tipo === "exame_solicitado"
+                ? ("exame_solicitado" as const)
+                : ("atestado" as const),
           titulo: d.titulo,
           subtitulo: `Emitido por ${d.medico}`,
           data: d.data,
@@ -400,6 +430,7 @@ export function HistoricoClinico() {
       if (filtro === "exames") return e.tipo === "exame" || e.tipo === "evento";
       if (filtro === "receitas") return e.tipo === "receita";
       if (filtro === "atestados") return e.tipo === "atestado";
+      if (filtro === "pedidos") return e.tipo === "exame_solicitado";
       return true;
     })
     .filter((e) => {
@@ -433,6 +464,7 @@ export function HistoricoClinico() {
     exames: eventos.filter((e) => e.tipo === "exame" || e.tipo === "evento").length,
     receitas: eventos.filter((e) => e.tipo === "receita").length,
     atestados: eventos.filter((e) => e.tipo === "atestado").length,
+    pedidos: eventos.filter((e) => e.tipo === "exame_solicitado").length,
   };
 
   const statusBadge = (s?: string) => {
@@ -480,7 +512,7 @@ export function HistoricoClinico() {
       </div>
 
       {/* Totais */}
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         {[
           {
             l: "Consultas",
@@ -514,6 +546,14 @@ export function HistoricoClinico() {
             bg: "bg-amber-50 dark:bg-amber-950/60",
             f: "atestados",
           },
+          {
+            l: "Pedidos de exame",
+            v: totais.pedidos,
+            I: ClipboardList,
+            c: "text-teal-700 dark:text-teal-300",
+            bg: "bg-teal-50 dark:bg-teal-950/60",
+            f: "pedidos",
+          },
         ].map((s) => (
           <button type="button"
             key={s.l}
@@ -542,13 +582,13 @@ export function HistoricoClinico() {
           />
         </div>
         <div className="flex items-center gap-2 overflow-x-auto">
-          {(["tudo", "consultas", "exames", "receitas", "atestados"] as FiltroTipo[]).map((f) => (
+          {(["tudo", "consultas", "exames", "receitas", "atestados", "pedidos"] as FiltroTipo[]).map((f) => (
             <button type="button"
               key={f}
               onClick={() => setFiltro(f)}
               className={`px-3.5 py-2 rounded-xl text-xs font-bold capitalize whitespace-nowrap transition ${filtro === f ? "bg-primary text-primary-foreground shadow-sm" : "bg-card border hover:bg-muted text-muted-foreground"}`}
             >
-              {f}
+              {ROTULO_FILTRO[f]}
             </button>
           ))}
         </div>
@@ -601,7 +641,7 @@ export function HistoricoClinico() {
                               <span
                                 className={`text-xs font-bold px-2 py-0.5 rounded-full ${cor.bg} ${cor.text}`}
                               >
-                                {ev.tipo}
+                                {ROTULO_TIPO[ev.tipo]}
                               </span>
                             </div>
                             <div className="text-xs text-muted-foreground mt-0.5">
@@ -629,7 +669,7 @@ export function HistoricoClinico() {
                                   {ev.medico}
                                 </div>
                               )}
-                              {(ev.tipo === "receita" || ev.tipo === "atestado") &&
+                              {(ev.tipo === "receita" || ev.tipo === "atestado" || ev.tipo === "exame_solicitado") &&
                                 (() => {
                                   // O documento real, pelo ID — sem ele, não
                                   // há botão (nunca um botão sem efeito).
