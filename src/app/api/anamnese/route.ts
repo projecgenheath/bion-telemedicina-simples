@@ -36,6 +36,8 @@ import { nomesMedicamentosEmUso } from "@/lib/server/medicamentos-legado";
  *        Sem mensagem = abertura da etapa atual (ou retomada).
  * PATCH { consultaId, acao: "concluir" }            → conclui a triagem e avisa o médico.
  * PATCH { consultaId, acao: "documento", documento } → registra documento anexado durante a triagem.
+ * POST e PATCH aplicam os MESMOS portões (erroPortoesTriagem): consulta
+ * encerrada (409), pagamento não confirmado (402) e janela fechada (409).
  *
  * Duplo motor:
  *  1. IA generativa em cadeia (llm.ts): credenciais próprias → endpoint
@@ -403,6 +405,35 @@ async function aplicarPerfilAtualizacoes(
 
 export const maxDuration = 60;
 
+/**
+ * Portões da triagem, IMPOSTOS PELO SERVIDOR e idênticos no POST e no PATCH
+ * (A1 da auditoria da área do paciente: o PATCH executava documento/pular/
+ * concluir sem nenhuma destas travas, e a transição legada
+ * pendente_anamnese → confirmada acontecia sem pagamento):
+ *  1. consulta cancelada/concluída não aceita mais triagem (409);
+ *  2. a triagem só libera com o pagamento CONFIRMADO (402);
+ *  3. a janela fecha 5 minutos antes do horário da consulta (409).
+ * Devolve a Response de erro, ou null quando a ação pode prosseguir.
+ */
+function erroPortoesTriagem(consulta: { status: string; pago: boolean; dataInicio: Date }): Response | null {
+  if (consulta.status === "cancelada" || consulta.status === "concluida") {
+    return Response.json({ erro: "Esta consulta não aceita mais triagem." }, { status: 409 });
+  }
+  if (!consulta.pago) {
+    return Response.json(
+      { erro: "O pagamento precisa estar confirmado para liberar sua triagem." },
+      { status: 402 },
+    );
+  }
+  if (Date.now() >= consulta.dataInicio.getTime() - JANELA_TRIAGEM_MS) {
+    return Response.json(
+      { erro: "A triagem fica disponível até 5 minutos antes da consulta — esta janela já foi encerrada." },
+      { status: 409 },
+    );
+  }
+  return null;
+}
+
 export async function POST(req: NextRequest) {
   try {
     const usuario = await exigirPapel("PACIENTE");
@@ -419,26 +450,11 @@ export async function POST(req: NextRequest) {
     if (!consulta) {
       return Response.json({ erro: "Consulta não encontrada." }, { status: 404 });
     }
-    if (consulta.status === "cancelada" || consulta.status === "concluida") {
-      return Response.json({ erro: "Esta consulta não aceita mais triagem." }, { status: 409 });
-    }
-
-    // Janela da triagem IMPOSTA PELO SERVIDOR:
-    //  1. disponível logo após a CONFIRMAÇÃO (= pagamento aprovado);
-    //  2. fecha 5 minutos antes do horário da consulta.
-    if (!consulta.pago) {
-      return Response.json(
-        { erro: "O pagamento precisa estar confirmado para liberar sua triagem." },
-        { status: 402 },
-      );
-    }
+    // Portões da triagem (status, pagamento e janela), compartilhados com o
+    // PATCH em erroPortoesTriagem.
+    const erroPortoes = erroPortoesTriagem(consulta);
+    if (erroPortoes) return erroPortoes;
     const limiteTriagem = consulta.dataInicio.getTime() - JANELA_TRIAGEM_MS;
-    if (Date.now() >= limiteTriagem) {
-      return Response.json(
-        { erro: "A triagem fica disponível até 5 minutos antes da consulta — esta janela já foi encerrada." },
-        { status: 409 },
-      );
-    }
 
     // Garante o registro da anamnese (idempotente)
     let anamnese = consulta.anamnese;
@@ -748,6 +764,14 @@ export async function PATCH(req: NextRequest) {
       return Response.json({ erro: "Anamnese não encontrada." }, { status: 404 });
     }
     const anamnese = consulta.anamnese;
+
+    // Os MESMOS portões do POST, para TODAS as ações (A1 da auditoria da
+    // área do paciente): nenhuma ação roda sobre consulta cancelada/
+    // concluída, não paga ou fora da janela — e a transição legada
+    // pendente_anamnese → confirmada (pular/concluir) só acontece com o
+    // pagamento confirmado, pois o portão de pagamento vem antes dos ramos.
+    const erroPortoes = erroPortoesTriagem(consulta);
+    if (erroPortoes) return erroPortoes;
 
     if (body.acao === "documento") {
       const doc = body.documento;

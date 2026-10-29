@@ -47,6 +47,7 @@ const selecaoConsulta = {
   status: true,
   pago: true,
   valor: true,
+  dataInicio: true,
   tipoAtendimento: true,
   especialidade: true,
   medicoId: true,

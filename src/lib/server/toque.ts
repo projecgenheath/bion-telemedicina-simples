@@ -181,7 +181,7 @@ type ChamadaMin = { tentativa: number; status: string; expiraEm: Date };
 export function proximaTentativa(p: {
   agora: Date;
   dataInicio: Date;
-  /** Entrou na sala desde a abertura (PresencaSala). */
+  /** Está na sala AGORA (PresencaSala com sinal fresco — ver rodarToque). */
   entrouNaSala: boolean;
   chamadas: ChamadaMin[];
 }): number | null {
@@ -392,7 +392,15 @@ export async function rodarToque(agora: Date = new Date(), dep: DependenciasToqu
       const tentativa = proximaTentativa({
         agora,
         dataInicio: c.dataInicio,
-        entrouNaSala: c.presencasSala.some((x) => x.usuarioId === p.usuarioId && x.ultimoPing.getTime() >= abriu),
+        // Só suprime o toque quem está na sala AGORA: presença desde a
+        // abertura E sinal fresco (SINAL_PARADO_MS, o mesmo critério de
+        // "médico ocupado" acima e de estaNaSala em metricas.ts). Presença
+        // velha — abriu a sala, saiu e fechou o app — NÃO zera as
+        // tentativas: sem frescor, a pessoa perdia a chamada sem nunca
+        // ser chamada (nem broadcast, nem push).
+        entrouNaSala: c.presencasSala.some(
+          (x) => x.usuarioId === p.usuarioId && x.ultimoPing.getTime() >= abriu && agora.getTime() - x.ultimoPing.getTime() <= SINAL_PARADO_MS,
+        ),
         chamadas: c.chamadas.filter((x) => x.paraUsuarioId === p.usuarioId),
       });
       if (tentativa === null) continue;

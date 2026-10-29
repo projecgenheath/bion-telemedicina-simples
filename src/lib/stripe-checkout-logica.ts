@@ -37,6 +37,7 @@ export type ConsultaParaCheckout = {
   status: string;
   pago: boolean;
   valor: number; // reais (do banco)
+  dataInicio: Date;
   tipoAtendimento: string;
   pagamento: { id: string; status: string; gatewayRef: string | null } | null;
 };
@@ -48,7 +49,7 @@ export type Elegibilidade =
 /** Status em que a consulta pode estar "aguardando pagamento" (mesma regra das etiquetas). */
 export const STATUS_AGUARDANDO = ["em_espera", "pendente_anamnese", "confirmada"] as const;
 
-export function avaliarElegibilidade(c: ConsultaParaCheckout | null, pacienteId: string): Elegibilidade {
+export function avaliarElegibilidade(c: ConsultaParaCheckout | null, pacienteId: string, agoraMs = Date.now()): Elegibilidade {
   if (!c) return { ok: false, status: 404, erro: "Consulta não encontrada." };
   if (c.pacienteId !== pacienteId) return { ok: false, status: 403, erro: "Acesso negado." };
   const valorCentavos = Math.round((c.valor ?? 0) * 100);
@@ -60,6 +61,11 @@ export function avaliarElegibilidade(c: ConsultaParaCheckout | null, pacienteId:
   }
   if (!(STATUS_AGUARDANDO as readonly string[]).includes(c.status)) {
     return { ok: false, status: 409, erro: "Esta consulta não está aguardando pagamento." };
+  }
+  // Horário já passou: cobrar seria pagar por um atendimento impossível.
+  // A mesma trava existe na confirmação (confirmarPagamentoSeMudou).
+  if (c.dataInicio.getTime() <= agoraMs) {
+    return { ok: false, status: 409, erro: "O horário desta consulta já passou." };
   }
   if (valorCentavos <= 0) return { ok: false, status: 409, erro: "Consulta sem valor a cobrar." };
   // gatewayRef guarda marcadores do app ("espera:<id>", "renovacao:<id>"):

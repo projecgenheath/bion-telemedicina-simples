@@ -14,7 +14,14 @@ import { agendaLivreDoMedico } from "./agenda-medico";
 import { useDiasBloqueados } from "./useDiasBloqueados";
 import { fraseMotivoReagendamento } from "./motivo-reagendamento";
 import { previaTemReembolso } from "./reembolso-visivel";
-import { fmtCentavos, usePreviaCancelamento, type PreviaAcao, type PreviaCancelamento } from "./usePreviaCancelamento";
+import {
+  buscarPreviaCancelamento,
+  fmtCentavos,
+  previaCancelamentoMudou,
+  usePreviaCancelamento,
+  type PreviaAcao,
+  type PreviaCancelamento,
+} from "./usePreviaCancelamento";
 import {
   STATUS_TERMINAIS,
   desistirRemarcacao,
@@ -33,6 +40,14 @@ import {
  * Antes de confirmar, mostra a PRÉVIA do servidor (multa, reembolso e
  * "sem multa até …" em Brasília) e respeita podeCancelar/podeRemarcar.
  * Só fecha e mostra sucesso quando o store confirma que o servidor aceitou.
+ *
+ * Ao confirmar o CANCELAMENTO (irreversível), a prévia é refeita na hora e
+ * comparada com a exibida: o servidor recalcula a multa no clique, então
+ * uma folha aberta há muito tempo pode mostrar "reembolso integral" quando
+ * a janela sem multa já virou. Se multa/reembolso mudaram, a folha adota
+ * os valores novos, avisa e exige uma segunda confirmação; se a nova busca
+ * falhar, não cancela no escuro. (A remarcação já se protege sozinha: o
+ * PATCH devolve 402 quando a multa passa a valer e a prévia recarrega.)
  *
  * Remarcar com multa (≤24 h): decisão do Alisson — o paciente paga a multa
  * (50%) pelo app e a nova data só é confirmada após o pagamento aprovado; sem
@@ -65,11 +80,16 @@ type Props = {
 
 export function CancelarRemarcarSheet({ consulta, acao, medico, consultas, onFechar, onPagarMulta }: Props) {
   const { cancelarConsulta, remarcarConsulta } = useBion();
-  const { previa, carregando, erro, recarregar } = usePreviaCancelamento(consulta.id, consulta.status);
+  const { previa, carregando, erro, recarregar, adotarPrevia } = usePreviaCancelamento(consulta.id, consulta.status);
   const [motivo, setMotivo] = useState("");
   const [novaData, setNovaData] = useState("");
   const [novaHora, setNovaHora] = useState("09:00");
   const [enviando, setEnviando] = useState(false);
+  // Reconfirmação do cancelamento: a prévia refeita ao confirmar divergiu
+  // da exibida (a folha mostra os valores novos e pede nova confirmação),
+  // ou a nova busca falhou e o cancelamento não foi tentado.
+  const [condicoesMudaram, setCondicoesMudaram] = useState(false);
+  const [erroRevalidacao, setErroRevalidacao] = useState<string | null>(null);
   // Só cartão: a multa é paga no checkout Stripe (BotaoPagarStripe).
   const [metodo, setMetodo] = useState<MetodoMulta | null>("cartao");
   const recarregarEstado = useRecarregarEstado();
@@ -127,8 +147,35 @@ export function CancelarRemarcarSheet({ consulta, acao, medico, consultas, onFec
   const pagamentoIndisponivel = exigePagamento && !onPagarMulta;
 
   const confirmarCancelamento = async () => {
-    if (!prontoParaConfirmar) return;
+    if (!prontoParaConfirmar || !previa) return;
     setEnviando(true);
+    setCondicoesMudaram(false);
+    setErroRevalidacao(null);
+    // 1) Refaz a prévia AGORA: o servidor recalcula a multa neste clique,
+    // então só vale cancelar sobre os valores que ele aplicaria neste
+    // instante — não sobre os da abertura da folha.
+    let fresca: PreviaCancelamento;
+    try {
+      fresca = await buscarPreviaCancelamento(consulta.id);
+    } catch (e) {
+      // Sem prévia fresca, não cancela no escuro: erro visível e nova
+      // tentativa pelo mesmo botão de confirmar.
+      setEnviando(false);
+      setErroRevalidacao(
+        e instanceof Error ? e.message : "Não foi possível confirmar as condições do cancelamento.",
+      );
+      return;
+    }
+    // 2) Mudou de forma relevante (multa, reembolso, permissão…): NÃO
+    // cancela. A folha passa a mostrar os valores novos e o paciente
+    // confirma de novo, já vendo as condições reais.
+    if (previaCancelamentoMudou(previa, fresca)) {
+      adotarPrevia(fresca);
+      setEnviando(false);
+      setCondicoesMudaram(true);
+      return;
+    }
+    // 3) Não mudou: cancela como antes.
     const padrao =
       acao === "reembolso"
         ? "Paciente optou pelo reembolso integral após o cancelamento do médico"
@@ -327,6 +374,26 @@ export function CancelarRemarcarSheet({ consulta, acao, medico, consultas, onFec
             placeholder="Motivo (opcional)"
             aria-label="Motivo do cancelamento (opcional)"
           />
+        ) : null}
+
+        {acao !== "remarcar" && condicoesMudaram ? (
+          <div className="mt-4 rounded-2xl border border-amber-400/30 bg-amber-500/10 p-4 text-sm" role="alert">
+            <p className="font-bold text-amber-900 dark:text-amber-100 inline-flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+              As condições mudaram desde que você abriu esta tela.
+            </p>
+            <p className="bpp-sheet-suave mt-1">
+              Os valores acima acabaram de ser atualizados. Confira a multa e o reembolso e confirme novamente para concluir o cancelamento.
+            </p>
+          </div>
+        ) : null}
+        {acao !== "remarcar" && erroRevalidacao ? (
+          <div className="mt-4 rounded-2xl border border-red-400/30 bg-red-500/10 p-4 text-sm" role="alert">
+            <p className="font-bold text-red-900 dark:text-red-100">Não foi possível confirmar as condições agora.</p>
+            <p className="bpp-sheet-suave mt-1">
+              {erroRevalidacao} Para sua segurança, o cancelamento não foi feito sem conferir os valores. Toque em confirmar para tentar de novo.
+            </p>
+          </div>
         ) : null}
 
         <div className="flex gap-2 mt-5">

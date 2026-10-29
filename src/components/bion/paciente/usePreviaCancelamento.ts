@@ -66,6 +66,55 @@ export function rotuloReembolso(status: string): { texto: string; tom: "ok" | "a
   }
 }
 
+/** Uma busca da prévia, sem cache — usada pelo hook e pela reconfirmação. */
+async function executarBuscaPrevia(consultaId: string, signal?: AbortSignal): Promise<PreviaCancelamento> {
+  let res: Response;
+  try {
+    res = await fetch(`/api/consultas/${encodeURIComponent(consultaId)}/cancelamento`, {
+      headers: { "Content-Type": "application/json" },
+      signal,
+    });
+  } catch (e) {
+    if (e instanceof TypeError) throw new Error("Falha de conexão com o servidor.");
+    throw e;
+  }
+  const json = await res.json().catch(() => null);
+  if (!res.ok) {
+    throw new Error((json as { erro?: string } | null)?.erro ?? "Não foi possível carregar a prévia.");
+  }
+  return json as PreviaCancelamento;
+}
+
+/**
+ * Busca a prévia AGORA (ignora qualquer estado em tela). Quem confirma uma
+ * ação irreversível (cancelar) usa isto para garantir que os valores
+ * exibidos ainda são os que o servidor vai aplicar.
+ */
+export function buscarPreviaCancelamento(consultaId: string): Promise<PreviaCancelamento> {
+  return executarBuscaPrevia(consultaId);
+}
+
+/**
+ * A prévia fresca muda o que o paciente viu para a ação de cancelar
+ * (também usada por "reembolso")? Compara permissão, status e todos os
+ * campos de `cancelar` que aparecem na tela ou decidem o desfecho.
+ */
+export function previaCancelamentoMudou(exibida: PreviaCancelamento, fresca: PreviaCancelamento): boolean {
+  const a = exibida.cancelar;
+  const b = fresca.cancelar;
+  return (
+    exibida.podeCancelar !== fresca.podeCancelar ||
+    exibida.status !== fresca.status ||
+    a.multaCentavos !== b.multaCentavos ||
+    a.reembolsoCentavos !== b.reembolsoCentavos ||
+    a.valorCentavos !== b.valorCentavos ||
+    a.pago !== b.pago ||
+    a.dataOriginal !== b.dataOriginal ||
+    a.semMultaAte !== b.semMultaAte ||
+    a.isencao !== b.isencao
+  );
+}
+
 /**
  * Busca a prévia da consulta `consultaId` (null = não busca).
  * `chave` extra força nova busca quando muda (ex.: status da consulta).
@@ -86,24 +135,29 @@ export function usePreviaCancelamento(consultaId: string | null | undefined, cha
   useEffect(() => {
     if (!req || !consultaId) return;
     const ctrl = new AbortController();
-    fetch(`/api/consultas/${encodeURIComponent(consultaId)}/cancelamento`, {
-      headers: { "Content-Type": "application/json" },
-      signal: ctrl.signal,
-    })
-      .then(async (res) => {
-        const json = await res.json().catch(() => null);
-        if (!res.ok) {
-          throw new Error((json as { erro?: string } | null)?.erro ?? "Não foi possível carregar a prévia.");
-        }
-        setResultado({ req, consultaId, previa: json as PreviaCancelamento, erro: null });
+    executarBuscaPrevia(consultaId, ctrl.signal)
+      .then((novaPrevia) => {
+        setResultado({ req, consultaId, previa: novaPrevia, erro: null });
       })
       .catch((e: unknown) => {
         if (ctrl.signal.aborted) return;
-        const erro = e instanceof TypeError ? "Falha de conexão com o servidor." : (e as Error).message;
+        const erro = e instanceof Error ? e.message : "Não foi possível carregar a prévia.";
         setResultado({ req, consultaId, previa: null, erro });
       });
     return () => ctrl.abort();
   }, [req, consultaId]);
+
+  /**
+   * Substitui a prévia em tela por uma recém-buscada (ex.: a reconfirmação
+   * do cancelamento detectou valores novos e a folha passa a mostrá-los).
+   */
+  const adotarPrevia = useCallback(
+    (nova: PreviaCancelamento) => {
+      if (!consultaId || !req) return;
+      setResultado({ req, consultaId, previa: nova, erro: null });
+    },
+    [consultaId, req],
+  );
 
   const atual = resultado && resultado.req === req ? resultado : null;
   // Enquanto recarrega a MESMA consulta, mantém a última prévia na tela (sem piscar).
@@ -113,5 +167,6 @@ export function usePreviaCancelamento(consultaId: string | null | undefined, cha
     carregando: !!req && !atual,
     erro: atual?.erro ?? null,
     recarregar,
+    adotarPrevia,
   };
 }

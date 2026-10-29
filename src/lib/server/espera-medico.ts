@@ -126,6 +126,24 @@ async function travarEspera(tx: Tx, consultaId: string) {
 type Cliente = Prisma.TransactionClient | typeof db;
 
 /**
+ * O médico ESTEVE na sala desta consulta: há PresencaSala dele com
+ * ultimoPing a partir do horário marcado — o mesmo critério de "presença
+ * que conta" das regras de falta (presenca-consulta.ts; sinal antes do
+ * horário não conta). Quem entra direto pela sala sem atender o toque não
+ * gera ChamadaConsulta "atendida", mas a presença prova que ele entrou:
+ * nesses casos a espera está neutralizada (medico_entrou) e NUNCA vira
+ * cancelamento/remarcação com reembolso por falta do médico.
+ * Devolve o ultimoPing (a prova mais recente) ou null.
+ */
+async function medicoEsteveNaSala(cliente: Cliente, consultaId: string, medicoId: string, dataInicio: Date): Promise<Date | null> {
+  const p = await cliente.presencaSala.findUnique({
+    where: { consultaId_usuarioId: { consultaId, usuarioId: medicoId } },
+    select: { ultimoPing: true },
+  });
+  return p && p.ultimoPing.getTime() >= dataInicio.getTime() ? p.ultimoPing : null;
+}
+
+/**
  * Abre a espera quando o paciente atende. Idempotente MESMO com chamadas
  * simultâneas: INSERT … ON CONFLICT ("consultaId") DO NOTHING e relê
  * (datas gravadas em UTC, como o Prisma grava TIMESTAMP(3)). Não
@@ -189,7 +207,12 @@ export type ResultadoJobEspera = { abertas: number; medicoEntrou: number; expira
  * Rodada do job (/api/cron/espera-medico). Idempotente:
  *  1) abre a espera das consultas abertas em que o paciente já atendeu o
  *     toque e o médico não (respondidaEm do paciente = atendidaPacienteEm);
- *  2) fecha como medico_entrou as que o médico atendeu;
+ *  1b) abre também pela PresencaSala do paciente que entrou DIRETO na sala
+ *     sem atender o toque (presença a partir do horário e o médico sem
+ *     presença; a sessão atual dele, entrouEm, é o atendidaPacienteEm) —
+ *     sem isso a proteção de 10 min não existia nesse fluxo;
+ *  2) fecha como medico_entrou as que o médico atendeu — pelo toque ou
+ *     pela presença dele na sala a partir do horário (entrou direto);
  *  3) marca expirada as aguardando com expiraEm vencido.
  * As rotas do toque podem chamar abrirEspera/fecharEsperaMedicoEntrou na
  * hora; o job garante o estado mesmo sem isso.
@@ -213,6 +236,31 @@ export async function rodarEsperaMedico(agora: Date = new Date()): Promise<Resul
     if (!p.length) continue;
     if (await abrirEspera(c.id, new Date(Math.min(...p)))) abertas++;
   }
+  // 1b) Entrada direta na sala: o paciente está esperando nela desde antes
+  //     do horário (a sala abre 30 min antes e o incentiva a aguardar), sem
+  //     toque para atender. A presença dele a partir do horário abre a
+  //     espera; a do médico a partir do horário a impediria (não é falta).
+  const porPresenca = await db.consulta.findMany({
+    where: {
+      status: { in: STATUS_ABERTOS },
+      dataInicio: { gte: desde, lte: agora },
+      esperaMedico: null,
+      chamadas: { none: { papel: "medico", status: "atendida" } },
+      presencasSala: { some: {} },
+    },
+    select: {
+      id: true, pacienteId: true, medicoId: true, dataInicio: true,
+      presencasSala: { select: { usuarioId: true, ultimoPing: true, entrouEm: true } },
+    },
+    take: 200,
+  });
+  for (const c of porPresenca) {
+    const pac = c.presencasSala.find((x) => x.usuarioId === c.pacienteId);
+    if (!pac || pac.ultimoPing.getTime() < c.dataInicio.getTime()) continue;
+    const med = c.presencasSala.find((x) => x.usuarioId === c.medicoId);
+    if (med && med.ultimoPing.getTime() >= c.dataInicio.getTime()) continue;
+    if (await abrirEspera(c.id, pac.entrouEm ?? pac.ultimoPing)) abertas++;
+  }
   const abertasComMedico = await db.esperaMedico.findMany({
     where: { status: { in: ["aguardando", "expirada"] }, consulta: { chamadas: { some: { papel: "medico", status: "atendida" } } } },
     select: { consultaId: true, consulta: { select: { chamadas: { where: { papel: "medico", status: "atendida" }, select: { respondidaEm: true } } } } },
@@ -222,6 +270,22 @@ export async function rodarEsperaMedico(agora: Date = new Date()): Promise<Resul
   for (const e of abertasComMedico) {
     const em = e.consulta.chamadas.map((x) => x.respondidaEm).find(Boolean) ?? agora;
     if ((await fecharEsperaMedicoEntrou(e.consultaId, em)).resultado === "fechada") medicoEntrou++;
+  }
+  // 2b) O médico entrou direto na sala (sem atender o toque): a presença
+  //     dele a partir do horário fecha a espera como medico_entrou, igual
+  //     ao atendimento do toque — a consulta aconteceu, não é falta dele.
+  const abertasComPresenca = await db.esperaMedico.findMany({
+    where: { status: { in: ["aguardando", "expirada"] } },
+    select: {
+      consultaId: true,
+      consulta: { select: { medicoId: true, dataInicio: true, presencasSala: { select: { usuarioId: true, ultimoPing: true } } } },
+    },
+    take: 500,
+  });
+  for (const e of abertasComPresenca) {
+    const med = e.consulta.presencasSala.find((x) => x.usuarioId === e.consulta.medicoId);
+    if (!med || med.ultimoPing.getTime() < e.consulta.dataInicio.getTime()) continue;
+    if ((await fecharEsperaMedicoEntrou(e.consultaId, med.ultimoPing)).resultado === "fechada") medicoEntrou++;
   }
   const { count: expiradas } = await db.esperaMedico.updateMany({
     where: { status: "aguardando", expiraEm: { lte: agora } },
@@ -244,12 +308,13 @@ export async function rodarEsperaMedico(agora: Date = new Date()): Promise<Resul
 
 /**
  * Estado da espera (SÓ LEITURA). Se o médico já atendeu (ChamadaConsulta do
- * médico "atendida") e a espera ainda está aguardando/expirada, devolve
- * status "medico_entrou" e podeEscolher false sem gravar (o job ou a
- * próxima escolha do paciente fecha de verdade).
+ * médico "atendida") OU já esteve na sala a partir do horário (PresencaSala
+ * — entrou direto, sem toque) e a espera ainda está aguardando/expirada,
+ * devolve status "medico_entrou" e podeEscolher false sem gravar (o job ou
+ * a próxima escolha do paciente fecha de verdade).
  */
 export async function estadoEsperaDoPaciente(consultaId: string, pacienteId: string, agora: Date = new Date()) {
-  const c = await db.consulta.findUnique({ where: { id: consultaId }, select: { pacienteId: true, esperaMedico: true } });
+  const c = await db.consulta.findUnique({ where: { id: consultaId }, select: { pacienteId: true, medicoId: true, dataInicio: true, esperaMedico: true } });
   if (!c) return falhar(404, "nao_encontrada", "Consulta não encontrada.");
   if (c.pacienteId !== pacienteId) return falhar(403, "acesso_negado", "Acesso negado.");
   if (!c.esperaMedico) return { ok: true as const, espera: null };
@@ -257,6 +322,9 @@ export async function estadoEsperaDoPaciente(consultaId: string, pacienteId: str
   if (wire.status === "aguardando" || wire.status === "expirada") {
     const medico = await db.chamadaConsulta.findFirst({ where: { consultaId, papel: "medico", status: "atendida" }, select: { id: true } });
     if (medico) return { ok: true as const, espera: { ...wire, status: "medico_entrou" as const, podeEscolher: false, segundosRestantes: 0 } };
+    if (await medicoEsteveNaSala(db, consultaId, c.medicoId, c.dataInicio)) {
+      return { ok: true as const, espera: { ...wire, status: "medico_entrou" as const, podeEscolher: false, segundosRestantes: 0 } };
+    }
   }
   return { ok: true as const, espera: wire };
 }
@@ -298,6 +366,15 @@ async function carregarParaEscolha(tx: Tx, consultaId: string, pacienteId: strin
     const medico = await tx.chamadaConsulta.findFirst({ where: { consultaId, papel: "medico", status: "atendida" }, select: { respondidaEm: true } });
     if (medico) {
       await tx.esperaMedico.update({ where: { id: espera.id }, data: { status: "medico_entrou", resolvidoEm: medico.respondidaEm ?? agora } });
+      return { falha: falhar(409, "medico_entrou", "medico_entrou") } as const;
+    }
+    // Médico entrou DIRETO na sala (sem atender o toque): sem ChamadaConsulta,
+    // mas a presença dele a partir do horário prova que a consulta foi
+    // atendida — fecha igual e o paciente não escolhe (nada de reembolso
+    // por falta do médico por uma consulta que aconteceu).
+    const pingMedico = await medicoEsteveNaSala(tx, consultaId, consulta.medicoId, consulta.dataInicio);
+    if (pingMedico) {
+      await tx.esperaMedico.update({ where: { id: espera.id }, data: { status: "medico_entrou", resolvidoEm: pingMedico } });
       return { falha: falhar(409, "medico_entrou", "medico_entrou") } as const;
     }
   }
