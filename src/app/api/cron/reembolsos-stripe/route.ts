@@ -9,10 +9,10 @@ export const maxDuration = 30;
 /**
  * Envia ao Stripe os Reembolsos 'aprovado' de pagamento Stripe.
  * `Authorization: Bearer <CRON_SECRET>`. Idempotente (Idempotency-Key =
- * reembolso.id). M-24 da auditoria: AGORA AGENDADO no vercel.json a cada
- * 15 min — com o reembolso automático ativado e textos prometendo devolução
- * integral, valores aprovados não podem ficar retidos até execução manual.
- * Resposta só com contagens.
+ * reembolso.id). M-24 da auditoria: agendado no vercel.json — era a cada
+ * 15 min, mas o plano Hobby da Vercel só permite crons diários e rejeitava
+ * o deploy inteiro; desde 2026-10-29 roda diário (05:00 em SP). Voltar a
+ * 15 min exige o plano Pro. Resposta só com contagens.
  */
 async function executar(req: NextRequest) {
   try {
