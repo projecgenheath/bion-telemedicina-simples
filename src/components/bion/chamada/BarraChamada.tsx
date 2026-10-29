@@ -17,6 +17,8 @@ export type BarraChamadaProps = {
   onCam: () => void;
   /** Sem track de vídeo (só áudio): o botão da câmera fica desabilitado. */
   semCamera?: boolean;
+  /** Sem track de áudio: o botão do microfone fica desabilitado (mesmo padrão). */
+  semMic?: boolean;
   /** Mostra "Virar" (passe true só com mais de uma câmera; ver useCamerasDisponiveis). */
   podeVirar?: boolean;
   onVirar?: () => void;
@@ -47,6 +49,7 @@ export function BarraChamada({
   onMic,
   onCam,
   semCamera = false,
+  semMic = false,
   podeVirar = false,
   onVirar,
   virando = false,
@@ -73,13 +76,14 @@ export function BarraChamada({
       <div className="bp-glass-marinho !rounded-[1.75rem] flex items-end justify-around gap-1 px-2 py-3">
         <BotaoChamada
           rotulo="Mudo"
-          aria={micAtivo ? "Silenciar microfone" : "Ativar microfone"}
+          aria={semMic ? "Microfone indisponível" : micAtivo ? "Silenciar microfone" : "Ativar microfone"}
           pressionado={!micAtivo}
-          destaque={!micAtivo}
+          destaque={!micAtivo && !semMic}
+          desabilitado={semMic}
           onClick={onMic}
           atalho="M"
         >
-          {micAtivo ? <Mic className="size-6" aria-hidden /> : <MicOff className="size-6" aria-hidden />}
+          {micAtivo && !semMic ? <Mic className="size-6" aria-hidden /> : <MicOff className="size-6" aria-hidden />}
         </BotaoChamada>
 
         <BotaoChamada

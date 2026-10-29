@@ -11,7 +11,7 @@ import {
 } from "@/lib/server/dados";
 import { criarCobranca, confirmarPagamento, modoGateway, paraWire } from "@/lib/server/pagamentos";
 import {ok, falha, lerCorpoJson} from "@/lib/server/http";
-import { conferirHorarioNaTransacao, ERRO_HORARIO_OCUPADO, ERRO_PACIENTE_OCUPADO } from "@/lib/server/financeiro";
+import { conferirHorarioNaTransacao, ERRO_HORARIO_OCUPADO, ERRO_PACIENTE_OCUPADO, horarioNaGrade } from "@/lib/server/financeiro";
 import { partesNoFuso } from "@/lib/server/fuso";
 import {
   consultaEmHorarioVedado,
@@ -194,10 +194,15 @@ export async function POST(req: NextRequest) {
     // rápida fora da transação para dar resposta imediata; a checagem que
     // VALE é a atômica, dentro da transação travada (abaixo), que agora
     // confere dias, pausas e conflitos de horário (P1-3 e P1-4 da auditoria).
-    const perfilGrade = await db.perfilMedico.findUnique({ where: { userId: medico.id }, select: { diasAtendimento: true, pausasSemanais: true } });
+    const perfilGrade = await db.perfilMedico.findUnique({ where: { userId: medico.id }, select: { diasAtendimento: true, pausasSemanais: true, horariosDisponiveis: true } });
     const erroGrade = conferirDiasEPausas(perfilGrade, dataInicio);
     if (erroGrade) {
       return Response.json({ erro: erroGrade }, { status: 409 });
+    }
+    // Hora na grade do médico — pré-checagem rápida; a checagem que VALE é
+    // a atômica, dentro da transação travada (conferirHorarioNaTransacao).
+    if (!horarioNaGrade(perfilGrade, dataInicio)) {
+      return Response.json({ erro: "Esse horário não faz parte da agenda do médico." }, { status: 409 });
     }
 
     // Dia inteiro bloqueado pelo médico (folga/férias): checagem + criação

@@ -45,6 +45,15 @@ export function ConversaPaciente({
   const [texto, setTexto] = useState("");
   const [emitir, setEmitir] = useState<{ base?: Documento } | null>(null);
   const fimRef = useRef<HTMLDivElement>(null);
+  // Envio confirmado, não "disparado e esquecido": o store não devolve o
+  // resultado de enviarMensagem (interface void), então a confirmação é a
+  // mensagem nova na conversa (delta do servidor). Enquanto não chega, o
+  // botão fica em "Enviando…" e o texto NÃO é limpo — em falha, ele continua
+  // no campo para tentar de novo, sem duplo envio.
+  const [enviando, setEnviando] = useState(false);
+  const [erroEnvio, setErroEnvio] = useState<string | null>(null);
+  const pendenteRef = useRef<{ texto: string; antes: Set<string> } | null>(null);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Mantém a versão mais recente do grupo (consultas novas chegam por delta).
   const atual = listaPacientes.find((p) => p.chave === paciente.chave) ?? paciente;
@@ -88,10 +97,33 @@ export function ConversaPaciente({
 
   const enviar = () => {
     const t = texto.trim();
-    if (!pid || !t || !podeEnviar) return;
-    enviarMensagem(pid, t.slice(0, MAX_TEXTO));
-    setTexto("");
+    if (!pid || !t || !podeEnviar || enviando) return;
+    const corpo = t.slice(0, MAX_TEXTO);
+    setEnviando(true);
+    setErroEnvio(null);
+    pendenteRef.current = { texto: corpo, antes: new Set(conversa.map((m) => m.id)) };
+    enviarMensagem(pid, corpo);
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    timeoutRef.current = setTimeout(() => {
+      if (!pendenteRef.current) return;
+      pendenteRef.current = null;
+      setEnviando(false);
+      setErroEnvio("Não foi possível confirmar o envio. Tente novamente — sua mensagem não foi apagada.");
+    }, 12_000);
   };
+
+  // Confirmação: a mensagem nova (id ainda não visto) com o mesmo texto,
+  // enviada por mim, chegou via delta — aí sim limpa o campo.
+  useEffect(() => {
+    if (!enviando || !pendenteRef.current) return;
+    const p = pendenteRef.current;
+    if (conversa.some((m) => m.deId === sessao.id && m.texto.trim() === p.texto && !p.antes.has(m.id))) {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      pendenteRef.current = null;
+      setTexto("");
+      setEnviando(false);
+    }
+  }, [conversa, enviando, sessao.id]);
 
   const abas: { id: Aba; r: string }[] = [
     { id: "conversa", r: "Conversa" },
@@ -119,12 +151,18 @@ export function ConversaPaciente({
         aba === "conversa" ? (
           podeEnviar ? (
             <form
-              className="p-3 flex items-end gap-2"
+              className="p-3 space-y-2"
               onSubmit={(e) => {
                 e.preventDefault();
                 enviar();
               }}
             >
+              {erroEnvio ? (
+                <p className="text-xs font-semibold text-red-700 dark:text-red-400" role="alert">
+                  {erroEnvio}
+                </p>
+              ) : null}
+              <div className="flex items-end gap-2">
               <label className="flex-1">
                 <span className="sr-only">Mensagem para {atual.nome}</span>
                 <textarea
@@ -144,12 +182,13 @@ export function ConversaPaciente({
               </label>
               <button
                 type="submit"
-                disabled={!texto.trim()}
-                aria-label="Enviar mensagem"
+                disabled={enviando || !texto.trim()}
+                aria-label={enviando ? "Enviando mensagem…" : "Enviar mensagem"}
                 className="w-11 h-11 rounded-full bg-bion-sea text-white dark:bg-sky-300 dark:text-zinc-950 inline-flex items-center justify-center disabled:opacity-50"
               >
-                <Send className="w-4 h-4" />
+                {enviando ? <span className="text-[10px] font-bold">…</span> : <Send className="w-4 h-4" />}
               </button>
+              </div>
             </form>
           ) : (
             <p className="p-4 text-xs text-center text-bion-ink/75 dark:text-bion-paper/75">

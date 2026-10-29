@@ -52,6 +52,21 @@ export function MedicoApp() {
     return alvo === "perfil" ? 0 : alvo === "pacientes" ? 2 : 1;
   });
   const painelInicialRef = useRef(painel);
+  const painelRef = useRef(painel);
+  painelRef.current = painel;
+  // ?consulta= NÃO é consumido pelo app do médico: só a rota /consulta o
+  // lê. Se o médico chegar aqui com esse parâmetro (link compartilhado),
+  // mostramos um banner com ação explícita para abrir a sala, em vez de
+  // fingir que o parâmetro faz algo ou de saltar sozinho para a chamada.
+  const consultaLink = parametros.get("consulta");
+  const [consultaIgnorada, setConsultaIgnorada] = useState(false);
+  const mostrarBannerConsulta = !!consultaLink && !consultaIgnorada;
+  const ignorarConsultaLink = () => {
+    setConsultaIgnorada(true);
+    const url = new URL(window.location.href);
+    url.searchParams.delete("consulta");
+    window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
+  };
   const [secao, setSecao] = useState(0);
   const [sheet, setSheet] = useState<Sheet>(null);
   const [aberturas, setAberturas] = useState(0);
@@ -67,6 +82,10 @@ export function MedicoApp() {
   const bloqueado = sheet !== null || sobreposicao !== null;
 
   const irPara = useCallback((p: number) => {
+    // O painel é estado em qualquer largura: na tela larga o indicador de
+    // telas (aria-current) e a URL sincronizada abaixo dependem dele, e
+    // só o foco/scroll muda com a largura.
+    setPainel(p);
     const el = carrosselRef.current;
     if (!el) return;
     // Tela larga: as colunas já estão todas visíveis — só leva o foco ao
@@ -97,19 +116,40 @@ export function MedicoApp() {
     return () => cancelAnimationFrame(raf);
   }, []);
 
-  // Ao cruzar 1024 px (girar o tablet, redimensionar a janela) volta ao
-  // painel central: no celular o carrossel reaparece no Início, e na tela
-  // larga os pontos das seções (que dependem do painel 1) continuam valendo.
+  // Ao cruzar 1024 px (girar o tablet, redimensionar a janela) o painel
+  // NÃO é mais forçado para o central: antes, um deep-link ?painel=
+  // pacientes/perfil era perdido no primeiro redimensionamento. Agora o
+  // painel é preservado; ao voltar para a tela estreita, o carrossel só é
+  // reposicionado no painel atual (e na tela larga as colunas já estão
+  // todas visíveis, então não há scroll a fazer).
   useEffect(() => {
     const mq = window.matchMedia(TELA_LARGA);
     const aoMudar = () => {
-      setPainel(1);
       const el = carrosselRef.current;
-      if (el && !mq.matches) el.scrollTo({ left: el.clientWidth, behavior: "instant" as ScrollBehavior });
+      if (el && !mq.matches) el.scrollTo({ left: painelRef.current * el.clientWidth, behavior: "instant" as ScrollBehavior });
     };
     mq.addEventListener("change", aoMudar);
     return () => mq.removeEventListener("change", aoMudar);
   }, []);
+
+  // Sincroniza o painel de volta para a URL (?painel=perfil|pacientes;
+  // o central não tem parâmetro, como na leitura inicial). Usa
+  // replaceState para não empilhar histórico a cada scroll, preserva os
+  // demais parâmetros (?consulta=, etc.) e pula a primeira renderização,
+  // que já nasceu do deep-link — escrever o mesmo valor ali só faria
+  // barulho na URL.
+  const primeiroPainelRef = useRef(true);
+  useEffect(() => {
+    if (primeiroPainelRef.current) {
+      primeiroPainelRef.current = false;
+      return;
+    }
+    const url = new URL(window.location.href);
+    const nome = painel === 0 ? "perfil" : painel === 2 ? "pacientes" : null;
+    if (nome) url.searchParams.set("painel", nome);
+    else url.searchParams.delete("painel");
+    window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
+  }, [painel]);
 
   const aoRolarCarrossel = () => {
     const el = carrosselRef.current;
@@ -169,6 +209,22 @@ export function MedicoApp() {
 
   return (
     <div className="bp-shell bm-app flex flex-col text-bion-ink dark:text-bion-paper">
+      {mostrarBannerConsulta ? (
+        <div className="mx-4 mt-3 rounded-2xl border bg-card p-3 text-sm flex flex-wrap items-center justify-between gap-2">
+          <span className="font-semibold">Você chegou com uma consulta em link — quer abrir a sala dela?</span>
+          <span className="flex gap-2">
+            <a
+              href={`/consulta?consulta=${encodeURIComponent(consultaLink as string)}`}
+              className="px-3 py-1.5 rounded-full bg-primary text-primary-foreground text-xs font-bold"
+            >
+              Abrir sala
+            </a>
+            <button type="button" onClick={ignorarConsultaLink} className="px-3 py-1.5 rounded-full border text-xs font-bold">
+              Ignorar
+            </button>
+          </span>
+        </div>
+      ) : null}
       <div
         ref={carrosselRef}
         onScroll={aoRolarCarrossel}

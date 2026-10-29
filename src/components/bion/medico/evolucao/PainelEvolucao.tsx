@@ -6,10 +6,11 @@ import { ClipboardList, X, Check, Ruler, Lock } from "lucide-react";
 
 /**
  * Painel da Evolução do médico (Teleconsulta v2). Gaveta que entra pela
- * direita: abre ao DESLIZAR da borda direita da tela da consulta para a
- * esquerda (ou pelo botão). Autosave do rascunho no servidor
- * (PUT /api/medico/consultas/[id]/evolucao, 1,2 s depois da última edição).
- * Histórico do paciente com outros médicos: somente leitura.
+ * direita: abre pelo BOTÃO VISÍVEL "Evolução" na borda direita da tela da
+ * consulta, ou ao DESLIZAR da borda direita para a esquerda. Autosave do
+ * rascunho no servidor (PUT /api/medico/consultas/[id]/evolucao, 1,2 s
+ * depois da última edição). Histórico do paciente com outros médicos:
+ * somente leitura.
  */
 
 type Secao = "dados" | "triagem" | "exames" | "medicamentos" | "conduta";
@@ -221,13 +222,17 @@ export function PainelEvolucao({
   return (
     <>
       {!aberto ? (
+        // Botão com RÓTULO VISÍVEL: antes era só um ícone na borda, sem
+        // texto — nada na tela dizia que ali ficava a evolução, e só quem
+        // conhecia o gesto de borda a encontrava.
         <button
           type="button"
           onClick={onAbrir}
-          className="fixed right-0 top-1/2 -translate-y-1/2 z-40 rounded-l-2xl bg-primary text-primary-foreground px-2 py-4 shadow-lg"
+          className="fixed right-0 top-1/2 -translate-y-1/2 z-40 rounded-l-2xl bg-primary text-primary-foreground px-2 py-4 shadow-lg flex flex-col items-center gap-1"
           aria-label="Abrir evolução"
         >
           <ClipboardList className="w-5 h-5" />
+          <span className="text-[11px] font-bold leading-none">Evolução</span>
         </button>
       ) : null}
       <aside
@@ -239,8 +244,23 @@ export function PainelEvolucao({
         <header className="flex items-center justify-between px-4 py-3 border-b">
           <div>
             <div className="font-bold">Evolução {estado?.paciente.nome ? `— ${estado.paciente.nome}` : ""}</div>
-            <div className="text-xs opacity-70">
-              {concluida ? "Concluída" : salvo === "salvando" ? "Salvando…" : salvo === "erro" ? "Não salvou — tente de novo" : "Rascunho salvo"}
+            <div className="text-xs opacity-70 flex items-center gap-2">
+              {concluida ? "Concluída" : salvo === "salvando" ? "Salvando…" : salvo === "erro" ? "Não salvou" : "Rascunho salvo"}
+              {salvo === "erro" && !concluida ? (
+                // Antes o texto dizia "tente de novo" sem nenhuma ação: o
+                // único retry era digitar de novo e esperar o autosave.
+                // O botão tenta salvar o conteúdo atual na hora.
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (timer.current) clearTimeout(timer.current);
+                    void salvar(textos, cid);
+                  }}
+                  className="underline font-bold"
+                >
+                  Tentar de novo
+                </button>
+              ) : null}
             </div>
           </div>
           <button type="button" onClick={onFechar} aria-label="Fechar evolução"><X className="w-5 h-5" /></button>
@@ -321,7 +341,13 @@ export function PainelEvolucao({
         {!concluida ? (
           <footer className="p-4 border-t">
             {erroCarga ? (
-              <p className="text-xs text-center opacity-70 mb-2">A evolução não carregou — reabra o painel antes de concluir.</p>
+              <p className="text-xs text-center opacity-70 mb-2">
+                A evolução não carregou —{" "}
+                <button type="button" onClick={() => void carregar()} className="underline font-bold">
+                  tentar carregar de novo
+                </button>{" "}
+                antes de concluir.
+              </p>
             ) : null}
             <button type="button" onClick={() => void concluir()} disabled={concluindo || erroCarga}
               className="w-full rounded-full bg-primary text-primary-foreground py-3 font-bold flex items-center justify-center gap-2 disabled:opacity-50">

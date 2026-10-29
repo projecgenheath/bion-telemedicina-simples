@@ -51,7 +51,11 @@ export function RenovacoesPendentes() {
       const j = (await res.json().catch(() => ({}))) as { erro?: string; mensagem?: string };
       if (!res.ok) {
         toast.error(j.mensagem ?? (j.erro === "pedido_nao_pendente" ? "Esse pedido já foi respondido." : j.erro ?? "Não foi possível responder."));
-      } else toast.success("Resposta enviada ao paciente");
+        // Falha NÃO apaga o rascunho: o texto digitado fica no formulário para
+        // tentar de novo (o bug antigo limpava tudo mesmo com erro do servidor).
+        return;
+      }
+      toast.success("Resposta enviada ao paciente");
       setAberto(null);
       setMensagem("");
       setConteudo("");

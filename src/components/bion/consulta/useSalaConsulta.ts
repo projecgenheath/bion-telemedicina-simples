@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 import { useBion as useStore, type AnamneseResumo } from "@/lib/bion-store";
 import { useTeleconsulta } from "@/lib/use-teleconsulta";
 import { exibirForaDaJanela } from "@/lib/teleconsulta-logica";
@@ -161,8 +162,12 @@ export function useSalaConsulta({
         entidadeId: idSala,
         detalhes: "Compartilhamento de tela iniciado durante consulta",
       });
-    } catch {
-      // usuário cancelou o seletor de tela
+    } catch (e) {
+      // Cancelar o seletor de tela é normal (AbortError) e fica em silêncio;
+      // qualquer outro erro (permissão, tela em uso) precisa aparecer.
+      if ((e as Error)?.name !== "AbortError") {
+        toast.error("Não foi possível compartilhar a tela. Tente novamente.");
+      }
     }
   };
 
@@ -177,14 +182,23 @@ export function useSalaConsulta({
         consulta: consultaAtual
           ? `Consulta em andamento — ${contraparteNome} / ${sessao.nome}`
           : "Consulta em andamento",
+        // Upload real: sem `file` o store só grava metadados e o exame
+        // nunca chega ao servidor (o anexo "existia" só na tela).
+        file: f,
+        pacienteId: idPacienteSala,
+        consultaId: consultaAtual?.id,
       }),
     );
   };
 
-  const enviarChat = () => {
+  const enviarChat = async () => {
     if (!chatInput.trim()) return;
-    tele.enviarChat(chatInput);
-    setChatInput("");
+    const texto = chatInput;
+    // Só limpa depois da confirmação: em falha, o texto fica no campo e o
+    // erro aparece, em vez de a mensagem sumir sem ter sido entregue.
+    const ok = (await tele.enviarChat(texto)) ?? false;
+    if (ok) setChatInput("");
+    else toast.error("Não foi possível enviar a mensagem. Verifique a conexão e tente novamente.");
   };
 
   // Insere um MODELO estruturado (sem conteúdo clínico inventado) que o

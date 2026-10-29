@@ -154,7 +154,13 @@ async function main() {
       perfilPaciente: {
         create: {
           cpf: "123.456.789-00", telefone: "(11) 98765-4321", convenio: "Particular",
-          idade: 32, genero: "Feminino", tipoSanguineo: "O+", peso: "62 kg", altura: "1,68 m",
+          // Formato canônico (src/lib/medidas-paciente.ts): peso em kg e
+          // altura em cm, número em texto sem unidade ("62", "168").
+          // dataNascimento é a fonte da idade (idadeDoPerfil prefere a data
+          // calculada); a idade legada abaixo fica só como fallback e a
+          // data escolhida corresponde à idade declarada em 2026, para o
+          // demo não envelhecer parado no número fixo.
+          idade: 32, dataNascimento: new Date("1994-03-15"), genero: "Feminino", tipoSanguineo: "O+", peso: "62", altura: "168",
           alergias: JSON.stringify(["Dipirona", "Frutos do mar"]),
           medicamentos: JSON.stringify(["Losartana 50mg (1x/dia)", "Vitamina D 2.000 UI (semanal)"]),
         },
@@ -168,7 +174,7 @@ async function main() {
       perfilPaciente: {
         create: {
           cpf: "234.567.890-11", telefone: "(11) 97654-3210", convenio: "Unimed",
-          idade: 45, genero: "Masculino", tipoSanguineo: "A+",
+          idade: 45, dataNascimento: new Date("1981-07-22"), genero: "Masculino", tipoSanguineo: "A+",
           alergias: JSON.stringify([]), medicamentos: JSON.stringify([]),
         },
       },
@@ -181,7 +187,7 @@ async function main() {
       perfilPaciente: {
         create: {
           cpf: "345.678.901-22", telefone: "(21) 99876-5432", convenio: "Bradesco Saúde",
-          idade: 58, genero: "Masculino", tipoSanguineo: "B+",
+          idade: 58, dataNascimento: new Date("1968-11-02"), genero: "Masculino", tipoSanguineo: "B+",
           alergias: JSON.stringify([]), medicamentos: JSON.stringify([]),
         },
       },
@@ -195,7 +201,7 @@ async function main() {
       perfilPaciente: {
         create: {
           cpf: "456.789.012-33", telefone: "(31) 98111-2233", convenio: "Particular",
-          idade: 27, genero: "Feminino",
+          idade: 27, dataNascimento: new Date("1999-05-30"), genero: "Feminino",
           alergias: JSON.stringify([]), medicamentos: JSON.stringify([]),
         },
       },

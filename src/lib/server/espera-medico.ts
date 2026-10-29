@@ -2,7 +2,14 @@ import "server-only";
 import crypto from "crypto";
 import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
-import { conferirMedicoAtivoNaTransacao, consultaEmHorarioVedado, OPCOES_TX_TRAVA } from "@/lib/server/bloqueio-agenda";
+import {
+  conferirDiasEPausas,
+  conferirMedicoAtivoNaTransacao,
+  consultaEmHorarioVedado,
+  diaBloqueado,
+  OPCOES_TX_TRAVA,
+  type ClienteBanco,
+} from "@/lib/server/bloqueio-agenda";
 import {
   cancelarReservasPendentes,
   criarReembolsoSeDevido,
@@ -340,16 +347,23 @@ export async function cancelarPorEspera(params: { consultaId: string; pacienteId
 
 /* ---------------- remarcar ---------------- */
 
-/** Confere, na transação, que o médico está livre AGORA (regra do Médicos). Devolve o valor dele em centavos ou null. */
+/** Confere, na transação, que o médico está livre AGORA (regra do Médicos). Devolve o valor dele em centavos ou null.
+ *  Além de ativo/especialidade/recebimento e sem consulta na janela, exige
+ *  dia NÃO bloqueado e grade AGORA (dia de atendimento, fora de pausa
+ *  semanal) — a consulta imediata da remarcação por espera começa agora,
+ *  então a grade vale aqui como no agendamento; não há no código evidência
+ *  de isenção para "livre agora" por ser imediato. */
 export async function medicoLivreAgora(tx: Tx, p: { medicoId: string; especialidade: string; excetoMedicoId: string; agora: Date }) {
   if (p.medicoId === p.excetoMedicoId) return null;
   if (consultaEmHorarioVedado(p.agora)) return null;
   const m = await tx.user.findUnique({
     where: { id: p.medicoId },
-    select: { role: true, status: true, perfilMedico: { select: { especialidade: true, status: true, valor: true } }, dadosRecebimento: { select: { id: true } } },
+    select: { role: true, status: true, perfilMedico: { select: { especialidade: true, status: true, valor: true, diasAtendimento: true, pausasSemanais: true } }, dadosRecebimento: { select: { id: true } } },
   });
   if (!m || m.role !== "MEDICO" || m.status !== "ativo" || !m.perfilMedico || m.perfilMedico.status !== "ativo") return null;
   if (m.perfilMedico.especialidade !== p.especialidade || !m.dadosRecebimento) return null;
+  if (await diaBloqueado(tx as ClienteBanco, p.medicoId, p.agora)) return null;
+  if (conferirDiasEPausas({ diasAtendimento: m.perfilMedico.diasAtendimento, pausasSemanais: m.perfilMedico.pausasSemanais }, p.agora)) return null;
   const ocupado = await tx.consulta.findFirst({
     where: {
       medicoId: p.medicoId,

@@ -17,6 +17,7 @@ import { useCamerasDisponiveis } from "@/components/bion/chamada/useCamerasDispo
 import { PedidosMedicao } from "./PedidosMedicao";
 import { EsperaMedicoPainel } from "./EsperaMedicoPainel";
 import { useRecarregarEstado } from "./useRemarcacaoComMulta";
+import { ModalBion } from "@/components/bion/ModalBion";
 
 /**
  * Sala de teleconsulta do PACIENTE: tela cheia 9:16 estilo ligação.
@@ -105,6 +106,7 @@ export function TelaChamadaPaciente({
   const podeCompartilhar = usePodeCompartilharTela();
   const [mensagensAbertas, setMensagensAbertas] = useState(false);
   const [virando, setVirando] = useState(false);
+  const [confirmarSair, setConfirmarSair] = useState(false);
   const [alertaFechado, setAlertaFechado] = useState<string | null>(null);
 
   // Mensagens novas do médico desde a última vez que a folha ficou aberta.
@@ -113,7 +115,10 @@ export function TelaChamadaPaciente({
   const naoLidas = mensagensAbertas ? 0 : Math.max(0, recebidas - lidasAte);
 
   // Só áudio (câmera negada ou indisponível): o botão da câmera fica desabilitado.
-  const semCamera = !!tele.erroMidia && !tele.streamLocalRef.current?.getVideoTracks().length;
+  // semVideo/semAudio vêm do motor (track caiu ou recaptura falhou), não só do
+  // erro inicial — o botão desabilita também no meio da chamada.
+  const semCamera = tele.semVideo || (!!tele.erroMidia && !tele.streamLocalRef.current?.getVideoTracks().length);
+  const semMic = tele.semAudio;
   const atalhos = useAtalhosChamada({
     onMic: sala.toggleMicLocal,
     onCam: sala.toggleCamLocal,
@@ -200,6 +205,7 @@ export function TelaChamadaPaciente({
           micAtivo={tele.micAtivo}
           camAtivo={tele.camAtivo}
           semCamera={semCamera}
+          semMic={semMic}
           onMic={sala.toggleMicLocal}
           onCam={sala.toggleCamLocal}
           podeVirar={qtdCameras > 1 && tele.localPronto && !semCamera}
@@ -208,9 +214,10 @@ export function TelaChamadaPaciente({
           onMensagens={abrirMensagens}
           naoLidas={naoLidas}
           mensagensAbertas={mensagensAbertas}
-          onEncerrar={sala.sairDaSala}
+          onEncerrar={() => setConfirmarSair(true)}
           rotuloEncerrar="Sair"
           ariaEncerrar="Sair da chamada"
+          encerrarAbreDialogo
           extras={
             podeCompartilhar ? (
               <BotaoChamada
@@ -254,6 +261,30 @@ export function TelaChamadaPaciente({
           e.target.value = "";
         }}
       />
+      {/* Sair pede confirmação (como o médico já tem modal de escolha): o toque
+          acidental não derruba a chamada — o médico vê "Paciente saiu" e pode
+          ficar esperando o retorno. */}
+      <ModalBion aberto={confirmarSair} onFechar={() => setConfirmarSair(false)} titulo="Sair da chamada?">
+        <p className="text-sm text-muted-foreground">
+          O médico verá que você saiu da chamada e pode ficar esperando o seu retorno. A consulta continua
+          aberta e você pode voltar enquanto ela durar.
+        </p>
+        <div className="flex gap-2 mt-4">
+          <button type="button" onClick={() => setConfirmarSair(false)} className="px-4 py-3 rounded-2xl border text-sm font-bold flex-1 hover:bg-muted transition">
+            Continuar na chamada
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setConfirmarSair(false);
+              sala.sairDaSala();
+            }}
+            className="px-4 py-3 rounded-2xl bg-primary text-primary-foreground text-sm font-bold flex-1 hover:opacity-90 transition"
+          >
+            Sair da chamada
+          </button>
+        </div>
+      </ModalBion>
       <FolhaMensagens aberta={mensagensAbertas} onFechar={fecharMensagens}>
         <ConsultaPainelLateral
           role="paciente"

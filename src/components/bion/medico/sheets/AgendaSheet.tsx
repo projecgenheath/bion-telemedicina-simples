@@ -55,14 +55,19 @@ export function AgendaSheet({
   // M-11: o estado inicial vem do que o médico JÁ SALVOU no servidor (o delta
   // do store traz diasAtendimento/pausasSemanais desde a correção P1) — antes
   // era sempre o padrão seg–sex sem pausas, ignorando o que foi gravado.
+  // Vazio é fiel ao servidor: diasAtendimento vazio significa "todos os
+  // dias". Converter vazio em seg–sex aqui faria qualquer outro salvamento
+  // gravar seg–sex sem o usuário ter escolhido os dias.
   const [diasSemana, setDiasSemana] = useState<Set<number>>(
-    () => new Set(medico.diasAtendimento?.length ? medico.diasAtendimento : [1, 2, 3, 4, 5]),
+    () => new Set(medico.diasAtendimento ?? []),
   );
   const [pausas, setPausas] = useState<{dia: number; inicio: string; fim: string}[]>(() => [...(medico.pausasSemanais ?? [])]);
   /** "Cancelar agenda do dia" em andamento: a folha não fecha no meio. */
   const [cancelandoDia, setCancelandoDia] = useState(false);
+  const [salvando, setSalvando] = useState(false);
+  const [erroSalvar, setErroSalvar] = useState<string | null>(null);
   const fechar = () => {
-    if (!cancelandoDia) onFechar();
+    if (!cancelandoDia && !salvando) onFechar();
   };
   const erro = validarGrade(p);
   const gerados = useMemo(() => gerarGrade(p), [p]);
@@ -103,14 +108,24 @@ export function AgendaSheet({
       return n;
     });
 
-  const salvar = () => {
-    if (erro || erroPausas || finais.length === 0) return;
+  const salvar = async () => {
+    if (erro || erroPausas || finais.length === 0 || salvando) return;
+    setErroSalvar(null);
+    setSalvando(true);
     atualizarMedico(medico.id, {
       horariosDisponiveis: finais,
       diasAtendimento: Array.from(diasSemana).sort((a, b) => a - b),
       pausasSemanais: pausas,
     });
-    confirmar(finais.join(","), "Salvando horários…", `Agenda atualizada: ${finais.length} horários por dia`);
+    // Só fecha com a confirmação real (delta do servidor). Sem confirmação
+    // em tempo, a folha fica aberta com erro + retry, em vez de fechar
+    // fingindo sucesso.
+    const ok = await confirmar(finais.join(","), "Salvando horários…", `Agenda atualizada: ${finais.length} horários por dia`);
+    setSalvando(false);
+    if (!ok) {
+      setErroSalvar("Não foi possível confirmar o salvamento. Verifique sua conexão e toque em Salvar novamente.");
+      return;
+    }
     try {
       localStorage.setItem(chaveLocal(medico.id), JSON.stringify(p));
     } catch {
@@ -223,13 +238,17 @@ export function AgendaSheet({
           <p className="text-sm font-semibold text-red-700 dark:text-red-300" role="alert">{erroPausas}</p>
         ) : null}
 
+        {erroSalvar ? (
+          <p className="text-sm font-semibold text-red-700 dark:text-red-300" role="alert">{erroSalvar}</p>
+        ) : null}
+
         <button
           type="button"
           onClick={salvar}
-          disabled={Boolean(erro) || Boolean(erroPausas) || finais.length === 0 || nadaMudou || cancelandoDia}
-          className="bp-acao w-full py-3 text-sm"
+          disabled={Boolean(erro) || Boolean(erroPausas) || finais.length === 0 || nadaMudou || cancelandoDia || salvando}
+          className="bp-acao w-full py-3 text-sm disabled:opacity-50"
         >
-          {nadaMudou ? "Nada para salvar" : "Salvar agenda"}
+          {salvando ? "Salvando…" : nadaMudou ? "Nada para salvar" : "Salvar agenda"}
         </button>
 
         <div className="space-y-3">

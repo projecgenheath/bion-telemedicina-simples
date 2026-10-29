@@ -21,6 +21,8 @@ type MedicoPatch = {
   diasAtendimento?: number[];
   pausasSemanais?: {dia: number; inicio: string; fim: string}[];
   foto?: string;
+  /** Não é um campo editável: mudar status é "aprovar"/"suspender" (abaixo). */
+  status?: string;
 };
 
 /** Campos que o PRÓPRIO médico pode editar no seu perfil. Nome, CRM,
@@ -45,6 +47,39 @@ const TAM_MAX_FOTO = 700_000; // data URL (~500 KB de imagem)
 
 function erroHttp(mensagem: string, status: number) {
   return Response.json({ erro: mensagem }, { status });
+}
+
+/**
+ * Valida pausas semanais (mesma regra da UI em AgendaSheet): cada pausa
+ * precisa de dia (0–6) e inicio/fim em HH:MM, com inicio < fim, e pausas do
+ * mesmo dia não podem se sobrepor (inicio < fim da outra e vice-versa).
+ * Devolve mensagem de erro ou null. Usada na autoedição e no PATCH do admin.
+ */
+function validarPausas(pausas: unknown): string | null {
+  if (!Array.isArray(pausas)) return "pausasSemanais deve ser um array.";
+  for (const pa of pausas) {
+    if (
+      !pa || typeof pa !== "object" ||
+      typeof (pa as { dia?: unknown }).dia !== "number" || (pa as { dia: number }).dia < 0 || (pa as { dia: number }).dia > 6 ||
+      typeof (pa as { inicio?: unknown }).inicio !== "string" || !/^([01]\d|2[0-3]):[0-5]\d$/.test((pa as { inicio: string }).inicio) ||
+      typeof (pa as { fim?: unknown }).fim !== "string" || !/^([01]\d|2[0-3]):[0-5]\d$/.test((pa as { fim: string }).fim)
+    ) {
+      return "pausasSemanais inválido. Cada pausa precisa de dia (0-6), inicio e fim (HH:MM).";
+    }
+    if ((pa as { inicio: string }).inicio >= (pa as { fim: string }).fim) {
+      return "A pausa precisa começar antes de terminar.";
+    }
+  }
+  for (let i = 0; i < pausas.length; i++) {
+    for (let j = i + 1; j < pausas.length; j++) {
+      const a = pausas[i] as { dia: number; inicio: string; fim: string };
+      const b = pausas[j] as { dia: number; inicio: string; fim: string };
+      if (a.dia === b.dia && a.inicio < b.fim && b.inicio < a.fim) {
+        return "Duas pausas se sobrepõem no mesmo dia.";
+      }
+    }
+  }
+  return null;
 }
 
 /** Valida o PATCH de autoedição do médico. Devolve mensagem de erro ou null. */
@@ -94,13 +129,8 @@ function validarAutoedicao(
     }
   }
   if (body.pausasSemanais !== undefined) {
-    if (!Array.isArray(body.pausasSemanais) || body.pausasSemanais.some(p =>
-      typeof p.dia !== "number" || p.dia < 0 || p.dia > 6 ||
-      typeof p.inicio !== "string" || !/^([01]\d|2[0-3]):[0-5]\d$/.test(p.inicio) ||
-      typeof p.fim !== "string" || !/^([01]\d|2[0-3]):[0-5]\d$/.test(p.fim)
-    )) {
-      return "pausasSemanais inválido. Cada pausa precisa de dia (0-6), inicio e fim (HH:MM).";
-    }
+    const erroPausas = validarPausas(body.pausasSemanais);
+    if (erroPausas) return erroPausas;
   }
   if (body.foto !== undefined) {
     if (
@@ -163,6 +193,28 @@ export async function PATCH(
     if (acao === "atualizar") {
       const vedados = horariosVedadosDaGrade(body.horariosDisponiveis);
       if (vedados.length) return erroHttp(erroGradeVedada(vedados), 400);
+      // Pausas: mesma validação da autoedição e da UI (inicio < fim, sem
+      // sobreposição no mesmo dia) — antes, o caminho do admin não validava.
+      if (body.pausasSemanais !== undefined) {
+        const erroPausas = validarPausas(body.pausasSemanais);
+        if (erroPausas) return erroHttp(erroPausas, 400);
+      }
+      if (!autoedicao) {
+        // Admin em "atualizar": foto e status NÃO são campos desta ação e
+        // antes eram ignorados em silêncio com 200. Foto só muda na
+        // autoedição do próprio médico; status só muda por "aprovar" ou
+        // "suspender". Rejeitar em vez de fingir sucesso.
+        const proibidos: string[] = [];
+        if (body.foto !== undefined) proibidos.push("foto");
+        if (body.status !== undefined) proibidos.push("status");
+        if (proibidos.length) {
+          return erroHttp(
+            `Campo não permitido na ação "atualizar": ${proibidos.join(", ")}. ` +
+              `Foto só pode ser alterada pelo próprio médico; status só muda com "aprovar" ou "suspender".`,
+            400,
+          );
+        }
+      }
     }
     let efeitos: EfeitosCriados = { notificacoes: [], audit: null };
 

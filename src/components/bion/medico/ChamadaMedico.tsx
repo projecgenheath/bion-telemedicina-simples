@@ -194,6 +194,10 @@ export function ChamadaMedico({ onEnd, consultaId }: { onEnd: () => void; consul
   // técnica / sair sem concluir). Regras do Alisson (06/10/2026): sem o
   // paciente na sala a consulta NÃO é concluída (o servidor também recusa).
   const [escolhaAberta, setEscolhaAberta] = useState(false);
+  // Sair sem concluir com anotações do prontuário: confirmação explícita de
+  // perda (não há caminho seguro de rascunho para elas — só o "concluir" as
+  // envia como resumo; o rascunho da evolução é outra superfície, autosalva).
+  const [confirmarSairSemConcluir, setConfirmarSairSemConcluir] = useState(false);
 
 
   const encerrar = () => {
@@ -208,6 +212,13 @@ export function ChamadaMedico({ onEnd, consultaId }: { onEnd: () => void; consul
   const executarEscolha = async (escolha: EscolhaEncerrar): Promise<string | null> => {
     if (!idSala) return "Nenhuma consulta identificada nesta sala.";
     if (escolha === "sair") {
+      // Anotações do prontuário só são enviadas no "concluir": sair agora as
+      // perde — pede confirmação explícita em vez de descartar em silêncio.
+      if (anotacoes.trim()) {
+        setEscolhaAberta(false);
+        setConfirmarSairSemConcluir(true);
+        return null;
+      }
       setEscolhaAberta(false);
       toast.info("Você saiu sem concluir", {
         description: "Dá para marcar falta do paciente ou falha técnica pela agenda até 23:30 de hoje.",
@@ -328,6 +339,44 @@ export function ChamadaMedico({ onEnd, consultaId }: { onEnd: () => void; consul
         onFechar={() => setEscolhaAberta(false)}
         onEscolher={executarEscolha}
       />
+      <ModalBion
+        aberto={confirmarSairSemConcluir}
+        onFechar={() => setConfirmarSairSemConcluir(false)}
+        titulo="Sair sem concluir?"
+        largura="max-w-md"
+        overlay="bg-black/70 backdrop-blur-sm"
+        foraFecha={false}
+      >
+        <p className="text-sm text-muted-foreground">
+          Suas anotações do prontuário desta sala ainda não foram salvas e serão perdidas se você sair sem
+          concluir. (O rascunho da evolução, se houver, fica salvo à parte.)
+        </p>
+        <div className="flex gap-2 mt-4">
+          <button
+            type="button"
+            onClick={() => {
+              setConfirmarSairSemConcluir(false);
+              setEscolhaAberta(true);
+            }}
+            className="px-4 py-3 rounded-2xl border text-sm font-bold flex-1 hover:bg-muted transition"
+          >
+            Voltar e concluir
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setConfirmarSairSemConcluir(false);
+              toast.info("Você saiu sem concluir", {
+                description: "Dá para marcar falta do paciente ou falha técnica pela agenda até 23:30 de hoje.",
+              });
+              sairDaSala();
+            }}
+            className="px-4 py-3 rounded-2xl bg-primary text-primary-foreground text-sm font-bold flex-1 hover:opacity-90 transition"
+          >
+            Sair mesmo assim
+          </button>
+        </div>
+      </ModalBion>
 
       {/* Modal de Emissão de Receita */}
       {modalReceita && (

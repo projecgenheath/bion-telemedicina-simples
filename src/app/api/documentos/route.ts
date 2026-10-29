@@ -50,6 +50,15 @@ export async function POST(req: NextRequest) {
         { status: 400 },
       );
     }
+    // Receita sem fármaco/dose não é receita: medicamento e posologia são
+    // obrigatórios para tipo "receita" (antes, nada impedia emitir receita
+    // vazia — medicamento/posologia/duracao são opcionais no schema).
+    if (body.tipo === "receita" && (!body.medicamento?.trim() || !body.posologia?.trim())) {
+      return Response.json(
+        { erro: "Receita precisa de medicamento e posologia." },
+        { status: 400 },
+      );
+    }
 
     const paciente = await db.user.findFirst({
       where: { id: body.pacienteId, role: "PACIENTE" },
@@ -73,14 +82,21 @@ export async function POST(req: NextRequest) {
     }
 
     // B-12: vínculo com a consulta (quando informado) — precisa ser consulta
-    // do PRÓPRIO médico com o MESMO paciente; qualquer outro id é ignorado.
+    // do PRÓPRIO médico com o MESMO paciente; id fornecido mas inválido (ou
+    // de outro médico/paciente) é 400, não descartado em silêncio para null.
     let consultaId: string | null = null;
     if (typeof body.consultaId === "string" && body.consultaId) {
       const consulta = await db.consulta.findFirst({
         where: { id: body.consultaId, medicoId: usuario.id, pacienteId: paciente.id },
         select: { id: true },
       });
-      consultaId = consulta?.id ?? null;
+      if (!consulta) {
+        return Response.json(
+          { erro: "Consulta não encontrada para este médico e paciente." },
+          { status: 400 },
+        );
+      }
+      consultaId = consulta.id;
     }
 
     const doc = await db.documento.create({

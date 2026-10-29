@@ -26,6 +26,12 @@ type DadosAdmin = {
   filaPronta: boolean;
   atualizando: boolean;
   atualizar: () => Promise<void>;
+  /**
+   * Erro da última atualização manual ("Atualizar"): quando não é null, os
+   * dados na tela podem estar desatualizados — o módulo mostra o aviso com
+   * retry em vez de deixar número velho parecendo verdade.
+   */
+  erroAtualizar: string | null;
 };
 
 const Ctx = createContext<DadosAdmin | null>(null);
@@ -59,6 +65,7 @@ export function ProvedorDadosAdmin({ children }: { children: ReactNode }) {
   const [evolucaoPendente, setEvolucaoPendente] = useState<Fonte<EvolucaoPendenteResposta>>({ dados: null, erro: null, carregando: true });
   const [renovacoes, setRenovacoes] = useState<Fonte<RenovacoesPendentesResposta>>({ dados: null, erro: null, carregando: true });
   const [atualizando, setAtualizando] = useState(false);
+  const [erroAtualizar, setErroAtualizar] = useState<string | null>(null);
 
   const buscarRotas = useCallback(async () => {
     const [rp, rb, sd, na, es, ep, rn] = await Promise.all([
@@ -77,6 +84,7 @@ export function ProvedorDadosAdmin({ children }: { children: ReactNode }) {
     setEsperas({ ...es, carregando: false });
     setEvolucaoPendente({ ...ep, carregando: false });
     setRenovacoes({ ...rn, carregando: false });
+    return [rp, rb, sd, na, es, ep, rn];
   }, []);
 
   useEffect(() => {
@@ -85,10 +93,19 @@ export function ProvedorDadosAdmin({ children }: { children: ReactNode }) {
 
   const atualizar = useCallback(async () => {
     setAtualizando(true);
+    setErroAtualizar(null);
     try {
       const boot = await lerJson<unknown>("/api/bootstrap");
       if (boot.dados) aplicarEstadoFresco(boot.dados);
-      await buscarRotas();
+      const rotas = await buscarRotas();
+      // Antes o erro do bootstrap era descartado e o do refresh não existia:
+      // "Atualizar" com falha deixava dados velhos parecendo verdade.
+      const falhas = (boot.erro ? 1 : 0) + rotas.filter((r) => r.erro).length;
+      if (falhas > 0) {
+        setErroAtualizar(
+          `Não foi possível atualizar ${falhas === 1 ? "uma fonte de dados" : `${falhas} fontes de dados`} — o que você vê pode estar desatualizado.`,
+        );
+      }
     } finally {
       setAtualizando(false);
     }
@@ -128,8 +145,9 @@ export function ProvedorDadosAdmin({ children }: { children: ReactNode }) {
       filaPronta: !repasses.carregando && !reembolsos.carregando && !semDesfecho.carregando && !naoAtendidas.carregando && !esperas.carregando && !evolucaoPendente.carregando && !renovacoes.carregando,
       atualizando,
       atualizar,
+      erroAtualizar,
     }),
-    [agora, repasses, reembolsos, semDesfecho, naoAtendidas, esperas, evolucaoPendente, renovacoes, fila, atualizando, atualizar],
+    [agora, repasses, reembolsos, semDesfecho, naoAtendidas, esperas, evolucaoPendente, renovacoes, fila, atualizando, atualizar, erroAtualizar],
   );
   return <Ctx.Provider value={valor}>{children}</Ctx.Provider>;
 }

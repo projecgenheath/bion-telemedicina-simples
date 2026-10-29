@@ -41,6 +41,7 @@ export function PassoMedico(p: AgendamentoCorpoProps) {
     finalizarAgendamento,
     medicoAtual,
     onDone,
+    irParaPasso,
   } = p;
 
   return (
@@ -53,6 +54,23 @@ export function PassoMedico(p: AgendamentoCorpoProps) {
           {medicosFiltrados.length} profissionais online
         </span>
       </div>
+
+      {medicosFiltrados.length === 0 ? (
+        <div className="bg-card border rounded-3xl p-5 text-center space-y-3 shadow-sm">
+          <p className="font-bold">Nenhum profissional disponível nesta especialidade no momento.</p>
+          <p className="text-sm text-muted-foreground">
+            Escolha outra especialidade ou volte mais tarde.
+          </p>
+          <button
+            type="button"
+            onClick={() => irParaPasso(0)}
+            className="px-4 py-2 rounded-xl text-primary-foreground text-xs font-bold transition shadow-sm hover:opacity-90"
+            style={{ backgroundColor: "var(--accent)" }}
+          >
+            Escolher outra especialidade
+          </button>
+        </div>
+      ) : null}
 
       <div className="space-y-3">
         {medicosFiltrados.map((med) => (

@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+import { toast } from "sonner";
 import { formatarDataNascimento } from "@/lib/idade";
 import {
   FileText,
@@ -24,7 +26,7 @@ export type ConsultaPainelLateralProps = {
   dadosPaciente?: { idade?: number | string; dataNascimento?: string | null; genero?: string } | null;
   anotacoes: string;
   setAnotacoes: (v: string) => void;
-  arquivos: { id?: string; nome: string; tipo?: string; tamanhoKb?: number; enviadoPor?: string }[];
+  arquivos: { id?: string; nome: string; tipo?: string; tamanhoKb?: number; enviadoPor?: string; storagePath?: string | null }[];
   chatMsgs: { id?: string; texto: string; minha?: boolean; hora?: string }[];
   chatInput: string;
   setChatInput: (v: string) => void;
@@ -52,6 +54,35 @@ export function ConsultaPainelLateral({
   onAnexarExame,
   inserirModeloResumo,
 }: ConsultaPainelLateralProps) {
+  const [baixandoId, setBaixandoId] = useState<string | null>(null);
+
+  // Download real do exame (mesmo fluxo de Arquivos.tsx: GET /api/arquivos?id=
+  // devolve o link assinado). Sem arquivo no Storage, não há botão — só o
+  // texto "Só metadados", nunca um botão sem efeito.
+  const baixarArquivo = async (id: string, nome: string) => {
+    setBaixandoId(id);
+    try {
+      const res = await fetch(`/api/arquivos?id=${encodeURIComponent(id)}`, {
+        credentials: "include",
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json.url) {
+        toast.error(json.erro || "Não foi possível gerar o link.");
+        return;
+      }
+      const a = document.createElement("a");
+      a.href = json.url;
+      a.download = nome;
+      a.target = "_blank";
+      a.rel = "noopener";
+      a.click();
+    } catch {
+      toast.error("Falha ao baixar.");
+    } finally {
+      setBaixandoId(null);
+    }
+  };
+
   // Painel Lateral — abaixo do vídeo no celular, ao lado no desktop
   return (
   <div className="w-full lg:w-96 lg:shrink-0 border-t lg:border-t-0 lg:border-l border-white/10 bg-slate-900/95 flex flex-col min-w-0">
@@ -218,9 +249,21 @@ export function ConsultaPainelLateral({
                     </div>
                   </div>
                 </div>
-                <button type="button" className="p-1.5 rounded-lg hover:bg-white/10 text-slate-300 hover:text-white">
-                  <Download className="w-3.5 h-3.5" />
-                </button>
+                {a.id && a.storagePath ? (
+                  <button type="button"
+                    disabled={baixandoId === a.id}
+                    onClick={() => void baixarArquivo(a.id as string, a.nome)}
+                    title="Baixar"
+                    aria-label={`Baixar ${a.nome}`}
+                    className="p-1.5 rounded-lg hover:bg-white/10 text-slate-300 hover:text-white disabled:opacity-50 shrink-0"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                  </button>
+                ) : (
+                  <span className="text-[11px] text-slate-400 shrink-0" title="Sem arquivo no Storage">
+                    Só metadados
+                  </span>
+                )}
               </div>
             ))}
           </div>

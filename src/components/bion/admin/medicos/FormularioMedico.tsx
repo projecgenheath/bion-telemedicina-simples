@@ -83,8 +83,10 @@ export function FormularioMedico({
     } else {
       const corpo = corpoEdicaoMedico(medico, form);
       if (!corpo) {
+        // Edição sem diff: avisa e MANTÉM a folha aberta, em vez de fechar
+        // em silêncio como se tivesse salvo (o usuário achava que salvou).
         setEnviando(false);
-        onCancelar();
+        setErro("Nenhuma alteração para salvar.");
         return;
       }
       const r = await salvar(medico, corpo);

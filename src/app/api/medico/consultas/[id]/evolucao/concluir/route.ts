@@ -7,6 +7,28 @@ import { topicoSala } from "@/lib/server/sala-canal";
 import { erroHttp, evolucaoWire } from "@/lib/server/evolucao";
 
 /**
+ * Conduta preenchida? A conduta é gravada como JSON (a UI salva
+ * { texto: "..." }); vazia, sem texto ou com qualquer outro formato sem
+ * conteúdo não autoriza concluir — a exigência existia só na UI.
+ */
+function condutaPreenchida(condutaJson: string | null | undefined): boolean {
+  if (!condutaJson) return false;
+  let v: unknown;
+  try {
+    v = JSON.parse(condutaJson);
+  } catch {
+    return false;
+  }
+  if (typeof v === "string") return v.trim().length > 0;
+  if (v && typeof v === "object") {
+    const o = v as Record<string, unknown>;
+    if (typeof o.texto === "string") return o.texto.trim().length > 0;
+    return Object.values(o).some((x) => typeof x === "string" && x.trim().length > 0);
+  }
+  return false;
+}
+
+/**
  * POST /api/medico/consultas/[id]/evolucao/concluir — só o MÉDICO dono.
  * Rascunho → concluida (concluidaEm = agora), libera a trava e, na mesma
  * transação, cancela os PedidoMedicao 'pendente' da consulta
@@ -21,15 +43,21 @@ import { erroHttp, evolucaoWire } from "@/lib/server/evolucao";
  * NÃO é ressuscitada — nesse caso só a evolução é concluída e a
  * resposta informa consultaConcluidaAgora: false.
  * 404 sem evolução; 409 { erro: "evolucao_concluida" } se já concluída.
+ * 400 se a conduta estiver vazia (exigência também no servidor, não só na UI).
  * → { evolucao, pedidosMedicaoCancelados: string[], consulta: { id, status } | null, consultaConcluidaAgora: boolean }
  */
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const medico = await exigirPapel("MEDICO");
     const { id } = await params;
-    const ev = await db.evolucao.findFirst({ where: { consultaId: id, medicoId: medico.id }, select: { id: true, status: true } });
+    const ev = await db.evolucao.findFirst({ where: { consultaId: id, medicoId: medico.id }, select: { id: true, status: true, conduta: true } });
     if (!ev) return Response.json({ erro: "Evolução não encontrada." }, { status: 404 });
     if (ev.status === "concluida") return Response.json({ erro: "evolucao_concluida" }, { status: 409 });
+    // Conduta obrigatória também no servidor (antes, só a UI exigia):
+    // evolução vazia não pode ser carimbada como concluída por API direta.
+    if (!condutaPreenchida(ev.conduta)) {
+      return Response.json({ erro: "Preencha a conduta antes de concluir a evolução." }, { status: 400 });
+    }
 
     const agora = new Date();
     const { atualizada, cancelados, consultaConcluidaAgora, consultaStatus } = await db.$transaction(async (tx) => {
@@ -71,6 +99,10 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
         }
       }
       const atualizada = await tx.evolucao.findUniqueOrThrow({ where: { id: ev.id } });
+      // Re-checagem dentro da transação: um autosave concorrente não pode
+      // esvaziar a conduta entre a pré-checagem e a conclusão (o throw
+      // desfaz a transação inteira, sem concluir metade).
+      if (!condutaPreenchida(atualizada.conduta)) throw erroHttp(400, "Preencha a conduta antes de concluir a evolução.");
       return { atualizada, cancelados: pend.map((p) => p.id), consultaConcluidaAgora, consultaStatus };
     });
     for (const pedidoId of cancelados) {

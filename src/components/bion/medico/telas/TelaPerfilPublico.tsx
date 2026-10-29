@@ -33,6 +33,10 @@ export function TelaPerfilPublico({
   confirmarBio: Confirmar<string>;
 }) {
   const { medico, sessao, avaliacoes, atendimentos30d } = dados;
+  // Mesmo cuidado que em TelaGestao: medico undefined durante o
+  // bootstrap não é cadastro pendente — só depois do carregamento o
+  // undefined significa "ainda não aprovado/ativo".
+  const { carregando } = useBion();
   const [editandoBio, setEditandoBio] = useState(false);
   const comentarios = avaliacoes.filter((a) => a.comentario?.trim()).slice(0, 3);
 
@@ -66,7 +70,11 @@ export function TelaPerfilPublico({
         </button>
       )}
 
-      {!medico ? (
+      {carregando ? (
+        <div className="bp-glass-marinho p-5 text-sm text-white/85">
+          Carregando seu cadastro…
+        </div>
+      ) : !medico ? (
         <div className="bp-glass-marinho p-5 text-sm text-white/85">
           Seu perfil público aparece aqui quando o cadastro for aprovado pela equipe BION.
         </div>

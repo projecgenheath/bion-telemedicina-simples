@@ -1,6 +1,7 @@
 "use client";
 
 import { CalendarRange, ChevronDown, Clock, Tag } from "lucide-react";
+import { useBion } from "@/lib/bion-store";
 import { CardFaturamento } from "../cards/CardFaturamento";
 import { fmtBRL } from "../metricas";
 import type { DadosMedico } from "../useDadosMedico";
@@ -18,6 +19,11 @@ export function TelaGestao({
   onAbrirPromocoes: () => void;
 }) {
   const { medico, receita } = dados;
+  // medico undefined durante o bootstrap NÃO é "em validação": o
+  // diretório só traz médicos ativos, então um médico pendente também
+  // aparece como undefined — mas só depois que o carregamento termina.
+  // Enquanto carrega, mostramos carregamento, não validação.
+  const { carregando } = useBion();
   const horarios = medico ? [...medico.horariosDisponiveis].sort() : [];
 
   return (
@@ -29,7 +35,11 @@ export function TelaGestao({
 
       <CardFaturamento {...receita} />
 
-      {medico ? (
+      {carregando ? (
+        <div className="bp-glass p-5 mt-3 text-sm text-bion-ink/75 dark:text-bion-paper/75">
+          Carregando seu cadastro…
+        </div>
+      ) : medico ? (
         <>
           <div className="bp-glass p-5 mt-3 w-full text-left">
             <button

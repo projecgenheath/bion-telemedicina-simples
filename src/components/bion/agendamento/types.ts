@@ -26,9 +26,9 @@ export type AgendamentoCorpoProps = {
   setMotivoTexto: (v: string) => void;
   sintomasEscolhidos: string[];
   toggleSintoma: (s: string) => void;
-  arquivosAnexados: { nome: string; tamanhoKb: number; tipo: string }[];
+  arquivosAnexados: { nome: string; tamanhoKb: number; tipo: string; file?: File }[];
   setArquivosAnexados: Dispatch<
-    SetStateAction<{ nome: string; tamanhoKb: number; tipo: string }[]>
+    SetStateAction<{ nome: string; tamanhoKb: number; tipo: string; file?: File }[]>
   >;
   handleFileUpload: (e: ChangeEvent<HTMLInputElement>) => void;
   removerArquivo: (index: number) => void;

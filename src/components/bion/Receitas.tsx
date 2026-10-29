@@ -196,6 +196,46 @@ export function Receitas({ perfil }: { perfil: "paciente" | "medico" }) {
   const [duracao, setDuracao] = useState("");
   const [observacoes, setObservacoes] = useState("");
   const [erros, setErros] = useState<Record<string, string>>({});
+  // Emissão pendente de confirmação: o formulário só limpa e fecha quando o
+  // documento emitido aparece de fato na lista (o store aplica o delta do
+  // servidor). Em falha, o formulário fica intacto para tentar de novo —
+  // o erro do servidor já vira toast no store.
+  const [pendente, setPendente] = useState<{ titulo: string; idsAntes: string[] } | null>(null);
+  const [emitindo, setEmitindo] = useState(false);
+
+  useEffect(() => {
+    if (!pendente) return;
+    if (documentos.some((d) => d.titulo === pendente.titulo && !pendente.idsAntes.includes(d.id))) {
+      setPendente(null);
+      setEmitindo(false);
+      setPacienteDoc("");
+      setTitulo("");
+      setConteudo("");
+      setMedicamento("");
+      setControlado(false);
+      setPosologia("");
+      setDuracao("");
+      setObservacoes("");
+      setErros({});
+      setAberto(false);
+      toast.success("Documento emitido", { description: pendente.titulo });
+    }
+  }, [documentos, pendente]);
+
+  // Se a confirmação demorar, libera o botão para tentar de novo (o
+  // formulário continua intacto). A pendência segue valendo: se o documento
+  // aparecer depois, a confirmação acima ainda limpa e fecha o formulário.
+  useEffect(() => {
+    if (!pendente || !emitindo) return;
+    const t = setTimeout(() => {
+      setEmitindo(false);
+      setErros((e) => ({
+        ...e,
+        emissao: "Não foi possível confirmar a emissão. Verifique a mensagem do servidor e tente de novo.",
+      }));
+    }, 15000);
+    return () => clearTimeout(t);
+  }, [pendente, emitindo]);
 
   // filtros
   const [busca, setBusca] = useState("");
@@ -250,6 +290,13 @@ export function Receitas({ perfil }: { perfil: "paciente" | "medico" }) {
   const filtroAtivo = busca || fTipo !== "todos" || fMedico !== "todos" || de || ate;
 
   const salvar = () => {
+    // Sem médico real na sessão, não se emite com nome inventado: o
+    // formulário fica aberto e explica o problema (antes, caía no fallback
+    // "Dra. Ana Ribeiro" para qualquer sessão não-médica).
+    if (perfil === "medico" && sessao.role !== "medico") {
+      toast.error("Só um médico pode emitir documentos.");
+      return;
+    }
     const e: Record<string, string> = {};
     if (perfil === "medico" && !pacienteDoc)
       e["pacienteDoc"] = "Selecione o paciente do documento.";
@@ -269,10 +316,16 @@ export function Receitas({ perfil }: { perfil: "paciente" | "medico" }) {
     setErros(e);
     if (Object.keys(e).length) return;
 
+    const tituloCompleto = `${tipo === "receita" ? "Receita" : "Atestado"} — ${titulo.trim()}`;
+    // Guarda a lista atual para reconhecer o documento novo quando ele
+    // aparecer (o título sozinho poderia casar com um documento antigo).
+    setPendente({ titulo: tituloCompleto, idsAntes: documentos.map((d) => d.id) });
+    setEmitindo(true);
+    setErros({});
     emitirDocumento({
       tipo,
-      titulo: `${tipo === "receita" ? "Receita" : "Atestado"} — ${titulo.trim()}`,
-      medico: sessao.role === "medico" ? sessao.nome : "Dra. Ana Ribeiro",
+      titulo: tituloCompleto,
+      medico: sessao.nome,
       paciente: perfil === "medico" ? pacienteDoc : sessao.nome,
       conteudo: conteudo.trim(),
       ...(tipo === "receita"
@@ -281,16 +334,8 @@ export function Receitas({ perfil }: { perfil: "paciente" | "medico" }) {
       duracao: duracao.trim(),
       ...(observacoes.trim() ? { observacoes: observacoes.trim() } : {}),
     });
-    setPacienteDoc("");
-    setTitulo("");
-    setConteudo("");
-    setMedicamento("");
-    setControlado(false);
-    setPosologia("");
-    setDuracao("");
-    setObservacoes("");
-    setErros({});
-    setAberto(false);
+    // NÃO limpa nem fecha aqui: a confirmação (useEffect acima) só roda
+    // quando o documento aparece na lista. Em falha, tudo fica intacto.
   };
 
   return (
@@ -442,17 +487,25 @@ export function Receitas({ perfil }: { perfil: "paciente" | "medico" }) {
             />
           </Field>
 
+          {erros["emissao"] && (
+            <p role="alert" className="text-xs text-destructive">
+              {erros["emissao"]}
+            </p>
+          )}
           <div className="flex gap-2 pt-1">
             <button type="button"
               onClick={salvar}
-              className="px-5 py-2.5 rounded-xl bg-primary text-primary-foreground font-semibold"
+              disabled={emitindo}
+              className="px-5 py-2.5 rounded-xl bg-primary text-primary-foreground font-semibold disabled:opacity-50"
             >
-              Emitir
+              {emitindo ? "Emitindo…" : "Emitir"}
             </button>
             <button type="button"
               onClick={() => {
                 setAberto(false);
                 setErros({});
+                setPendente(null);
+                setEmitindo(false);
               }}
               className="px-5 py-2.5 rounded-xl border font-medium"
             >

@@ -129,9 +129,17 @@ function ItemDaFila({ item, agora, onAbrir }: { item: ItemFila; agora: number; o
     </>
   );
   if (!item.destino) {
+    // Sem destino, não é botão nem link: card informativo, sem chevron e
+    // sem aparência de clicável. A renovação é o único caso atual: não há
+    // módulo de renovações no admin, então o texto diz onde a ação acontece.
     return (
-      <div className="ba-card" data-tom={item.tom} data-denso="true">
+      <div className="ba-card cursor-default" data-tom={item.tom} data-denso="true">
         {corpo}
+        {item.categoria === "renovacao" ? (
+          <p className="text-sm ba-texto-2 mt-2">
+            Sem ação no admin: a resposta (renovar, chamada ou recusa) é do médico, no app dele.
+          </p>
+        ) : null}
       </div>
     );
   }

@@ -9,6 +9,7 @@ import {
   conferirMedicoAtivoNaTransacao,
   diaBloqueado,
   diaIsoSaoPaulo,
+  DURACAO_CONSULTA_MIN,
   ERRO_DIA_BLOQUEADO,
   ERRO_HORARIO_VEDADO,
   OPCOES_TX_TRAVA,
@@ -762,10 +763,13 @@ export async function horarioReservado(
   excetoConsultaId?: string,
   client: ClienteBanco = db,
 ) {
+  // Uma reserva também ocupa 30 min: reserva às 09:15 bloqueia um agendamento
+  // às 09:00–09:30, e vice-versa (mesma janela de sobreposição das consultas).
+  const janela = janelaSobreposicao(dataInicio);
   const r = await client.remarcacaoPendente.findFirst({
     where: {
       ...filtroReservaVigente(),
-      novaData: dataInicio,
+      novaData: { gt: janela.gt, lt: janela.lt },
       consulta: { medicoId, ...(excetoConsultaId ? { id: { not: excetoConsultaId } } : {}) },
     },
     select: { id: true },
@@ -957,6 +961,42 @@ export async function falharMultaRemarcacao(remarcacaoId: string, via: "webhook"
   return db.remarcacaoPendente.update({ where: { id: r.id }, data: { status: "falhou", via } });
 }
 
+/** Grade do médico como array (JSON inválido = grade vazia = sem restrição). */
+export function gradeHorarios(perfil: { horariosDisponiveis?: string | null } | null): string[] {
+  if (!perfil) return [];
+  try {
+    const g = JSON.parse(perfil.horariosDisponiveis || "[]") as unknown;
+    return Array.isArray(g) ? (g.filter((h) => typeof h === "string") as string[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * A hora de início (HH:MM de São Paulo) faz parte da grade do médico?
+ * Grade vazia = sem restrição (médico legado sem grade configurada), mesma
+ * regra que validarNovoHorario já usava para a remarcação.
+ */
+export function horarioNaGrade(perfil: { horariosDisponiveis?: string | null } | null, dataInicio: Date): boolean {
+  const grade = gradeHorarios(perfil);
+  if (!grade.length) return true;
+  const p = partesNoFuso(dataInicio);
+  const hhmm = `${String(p.hora).padStart(2, "0")}:${String(p.minuto).padStart(2, "0")}`;
+  return grade.includes(hhmm);
+}
+
+/**
+ * Janela de sobreposição de uma consulta que começa em `dataInicio`:
+ * consultas duram DURACAO_CONSULTA_MIN (30 min) e não há dataFim no banco,
+ * então dois atendimentos se sobrepõem quando o início de um cai dentro de
+ * (outro início − 30 min, outro início + 30 min) — encostar (ex.: 09:00 e
+ * 09:30) NÃO é sobreposição.
+ */
+export function janelaSobreposicao(dataInicio: Date): { gt: Date; lt: Date } {
+  const ms = DURACAO_CONSULTA_MIN * 60_000;
+  return { gt: new Date(dataInicio.getTime() - ms), lt: new Date(dataInicio.getTime() + ms) };
+}
+
 /**
  * Valida a nova data/hora de uma remarcação (mesma regra para o PATCH
  * "remarcar" e para a remarcação com multa): antecedência de 20 min, grade do
@@ -998,12 +1038,15 @@ export async function validarNovoHorario(
   if (consultaEmHorarioVedado(dataInicio)) {
     return { ok: false, erro: ERRO_HORARIO_VEDADO, status: 409 };
   }
+  // Conflito por SOBREPOSIÇÃO de 30 min (não só início exato): uma consulta
+  // às 09:15 sobre uma das 09:00–09:30 também ocupa o médico.
+  const janela = janelaSobreposicao(dataInicio);
   const conflito = await db.consulta.findFirst({
     where: {
       id: { not: consulta.id },
       medicoId: consulta.medicoId,
       status: { notIn: STATUS_LIBERAM_HORARIO },
-      dataInicio,
+      dataInicio: { gt: janela.gt, lt: janela.lt },
     },
     select: { id: true },
   });
@@ -1072,18 +1115,25 @@ export async function conferirHorarioNaTransacao(
   // remarcação ignorava a grade e o agendamento lia uma propriedade inexistente).
   const perfil = await tx.perfilMedico.findUnique({
     where: { userId: p.medicoId },
-    select: { diasAtendimento: true, pausasSemanais: true },
+    select: { diasAtendimento: true, pausasSemanais: true, horariosDisponiveis: true },
   });
   const erroGrade = conferirDiasEPausas(perfil, p.dataInicio);
   if (erroGrade) return erroGrade;
+  // Hora na grade do médico: o agendamento passa a exigir o mesmo que a
+  // remarcação já exigia (grade vazia = sem restrição, médico legado).
+  if (!horarioNaGrade(perfil, p.dataInicio)) return "Esse horário não faz parte da agenda do médico.";
+  // Conflito por SOBREPOSIÇÃO de 30 min (não só início exato), para médico
+  // e paciente — vale para criação, remarcação e remarcação com multa, que
+  // todos passam por aqui dentro da transação travada.
+  const janela = janelaSobreposicao(p.dataInicio);
   const choqueMedico = await tx.consulta.findFirst({
-    where: { id: { not: p.consultaId }, medicoId: p.medicoId, dataInicio: p.dataInicio, status: { notIn: STATUS_LIBERAM_HORARIO } },
+    where: { id: { not: p.consultaId }, medicoId: p.medicoId, dataInicio: { gt: janela.gt, lt: janela.lt }, status: { notIn: STATUS_LIBERAM_HORARIO } },
     select: { id: true },
   });
   if (choqueMedico || (await horarioReservado(p.medicoId, p.dataInicio, p.consultaId, tx))) return ERRO_HORARIO_OCUPADO;
   if (p.pacienteId) {
     const choquePaciente = await tx.consulta.findFirst({
-      where: { id: { not: p.consultaId }, pacienteId: p.pacienteId, dataInicio: p.dataInicio, status: { notIn: STATUS_LIBERAM_HORARIO } },
+      where: { id: { not: p.consultaId }, pacienteId: p.pacienteId, dataInicio: { gt: janela.gt, lt: janela.lt }, status: { notIn: STATUS_LIBERAM_HORARIO } },
       select: { id: true },
     });
     if (choquePaciente) return ERRO_PACIENTE_OCUPADO;

@@ -149,7 +149,9 @@ export type Medico = {
   idiomas: string[];
   bio: string;
   foto?: string;
-  status: "ativo" | "pendente" | "suspenso";
+  // "arquivado" vem do DELETE lógico do admin (usuário inativo + perfil
+  // arquivado, histórico preservado); não é status de criação/edição.
+  status: "ativo" | "pendente" | "suspenso" | "arquivado";
   horariosDisponiveis: string[];
   /** Dias da semana atendidos (0=Dom … 6=Sáb). Vazio = todos os dias. */
   diasAtendimento: number[];

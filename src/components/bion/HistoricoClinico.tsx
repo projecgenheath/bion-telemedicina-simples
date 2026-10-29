@@ -20,7 +20,9 @@ import {
   Microscope,
   Filter,
 } from "lucide-react";
+import { toast } from "sonner";
 import { useBion, type ExameLab, type Medicao } from "@/lib/bion-store";
+import { gerarDocumentoPDF } from "@/lib/receita-pdf";
 
 type FiltroTipo = "tudo" | "consultas" | "exames" | "receitas" | "atestados";
 
@@ -35,6 +37,9 @@ type EventoTimeline = {
   medico?: string;
   status?: string;
   pago?: boolean;
+  /** Exame com arquivo no Storage: id do arquivo para baixar/visualizar. */
+  arquivoId?: string;
+  storagePath?: string | null;
 };
 
 const CORES: Record<string, { bg: string; text: string }> = {
@@ -288,10 +293,43 @@ export function HistoricoClinico() {
   const [filtro, setFiltro] = useState<FiltroTipo>("tudo");
   const [busca, setBusca] = useState("");
   const [ativoId, setAtivoId] = useState<string | null>(null);
+  const [baixandoId, setBaixandoId] = useState<string | null>(null);
+
+  // Baixa um exame com arquivo real no Storage (mesmo fluxo de Arquivos.tsx:
+  // GET /api/arquivos?id= devolve o link assinado). Sem arquivo, não há botão.
+  const baixarExame = async (arquivoId: string, nome: string) => {
+    setBaixandoId(arquivoId);
+    try {
+      const res = await fetch(`/api/arquivos?id=${encodeURIComponent(arquivoId)}`, {
+        credentials: "include",
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json.url) {
+        toast.error(json.erro || "Não foi possível gerar o link.");
+        return;
+      }
+      const a = document.createElement("a");
+      a.href = json.url;
+      a.download = nome;
+      a.target = "_blank";
+      a.rel = "noopener";
+      a.click();
+    } catch {
+      toast.error("Falha ao baixar.");
+    } finally {
+      setBaixandoId(null);
+    }
+  };
+
+  // Identificação por ID (nome só para registros antigos sem ID): o
+  // bootstrap já escopa as coleções no servidor; isto evita que um homônimo
+  // misture consultas/documentos/arquivos nesta tela.
+  const mesmoPaciente = (pacienteId?: string, nome?: string) =>
+    sessao.id ? (pacienteId ? pacienteId === sessao.id : nome === sessao.nome) : nome === sessao.nome;
 
   const eventos: EventoTimeline[] = [
     ...consultas
-      .filter((c) => c.paciente === sessao.nome)
+      .filter((c) => mesmoPaciente(c.pacienteId, c.paciente))
       .map((c) => ({
         id: c.id,
         tipo: "consulta" as const,
@@ -305,7 +343,7 @@ export function HistoricoClinico() {
         pago: c.pago,
       })),
     ...documentos
-      .filter((d) => d.paciente === sessao.nome)
+      .filter((d) => mesmoPaciente(d.pacienteId, d.paciente))
       .map((d) => {
         // Só campos reais do documento; sem padrão inventado para CID ou duração.
         const partes =
@@ -324,7 +362,12 @@ export function HistoricoClinico() {
         };
       }),
     ...arquivos
-      .filter((a) => a.enviadoPor === "paciente")
+      .filter((a) =>
+        // Arquivo com destinatário: só o próprio paciente. Sem destinatário
+        // (legado), só o enviado pelo paciente — o servidor já escopa a
+        // lista por quem enviou/destinatário.
+        a.pacienteId ? a.pacienteId === sessao.id : a.enviadoPor === "paciente",
+      )
       .map((a) => ({
         id: a.id,
         tipo: "exame" as const,
@@ -333,6 +376,8 @@ export function HistoricoClinico() {
         data: a.data,
         ts: tsDeDataLonga(a.data),
         detalhes: `${a.tipo.toUpperCase()} • ${a.tamanhoKb}KB`,
+        arquivoId: a.id,
+        storagePath: a.storagePath ?? null,
       })),
     // Exames laboratoriais reais do paciente (já escopados pelo bootstrap).
     ...exames.map((e: ExameLab) => ({
@@ -584,22 +629,43 @@ export function HistoricoClinico() {
                                   {ev.medico}
                                 </div>
                               )}
-                              {(ev.tipo === "receita" || ev.tipo === "atestado") && (
-                                <button type="button"
-                                  className="flex items-center gap-1.5 text-xs font-bold text-emerald-800 dark:text-emerald-200 bg-emerald-50 dark:bg-emerald-950/60 px-3 py-1.5 rounded-xl hover:bg-emerald-100 transition"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  <Download className="w-3.5 h-3.5" /> Baixar PDF
-                                </button>
-                              )}
-                              {ev.tipo === "exame" && (
-                                <button type="button"
-                                  className="flex items-center gap-1.5 text-xs font-bold text-violet-700 dark:text-violet-300 bg-violet-50 dark:bg-violet-950/60 px-3 py-1.5 rounded-xl hover:bg-violet-100 transition"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  <Eye className="w-3.5 h-3.5" /> Visualizar
-                                </button>
-                              )}
+                              {(ev.tipo === "receita" || ev.tipo === "atestado") &&
+                                (() => {
+                                  // O documento real, pelo ID — sem ele, não
+                                  // há botão (nunca um botão sem efeito).
+                                  const doc = documentos.find((d) => d.id === ev.id);
+                                  if (!doc) return null;
+                                  return (
+                                    <button type="button"
+                                      className="flex items-center gap-1.5 text-xs font-bold text-emerald-800 dark:text-emerald-200 bg-emerald-50 dark:bg-emerald-950/60 px-3 py-1.5 rounded-xl hover:bg-emerald-100 transition"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        gerarDocumentoPDF(doc);
+                                        toast.success("PDF baixado", { description: doc.titulo });
+                                      }}
+                                    >
+                                      <Download className="w-3.5 h-3.5" /> Baixar PDF
+                                    </button>
+                                  );
+                                })()}
+                              {ev.tipo === "exame" &&
+                                (ev.arquivoId && ev.storagePath ? (
+                                  <button type="button"
+                                    disabled={baixandoId === ev.arquivoId}
+                                    className="flex items-center gap-1.5 text-xs font-bold text-violet-700 dark:text-violet-300 bg-violet-50 dark:bg-violet-950/60 px-3 py-1.5 rounded-xl hover:bg-violet-100 transition disabled:opacity-50"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      void baixarExame(ev.arquivoId as string, ev.titulo);
+                                    }}
+                                  >
+                                    <Eye className="w-3.5 h-3.5" />
+                                    {baixandoId === ev.arquivoId ? "Baixando…" : "Visualizar"}
+                                  </button>
+                                ) : ev.arquivoId ? (
+                                  <span className="text-xs text-muted-foreground">
+                                    Só metadados — sem arquivo no Storage
+                                  </span>
+                                ) : null)}
                               {ev.tipo === "consulta" && ev.pago === true && (
                                 <div className="flex items-center gap-1.5 text-xs font-medium text-blue-700 dark:text-blue-300">
                                   <CheckCircle2 className="w-3.5 h-3.5" />

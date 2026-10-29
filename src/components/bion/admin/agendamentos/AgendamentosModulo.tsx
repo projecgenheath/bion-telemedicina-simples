@@ -40,7 +40,7 @@ export function AgendamentosModulo() {
   const router = useRouter();
   const params = useSearchParams();
   const { consultas, medicos } = useBion();
-  const { agora, atualizar, atualizando, reembolsos } = useDadosAdmin();
+  const { agora, atualizar, atualizando, erroAtualizar, reembolsos } = useDadosAdmin();
   const largo = useLargo();
   const aba: Aba = params.get("aba") === "reembolsos" ? "reembolsos" : "agenda";
   const idAberto = params.get("consulta");
@@ -90,6 +90,8 @@ export function AgendamentosModulo() {
       subtitulo={`${resumo.hoje} ${resumo.hoje === 1 ? "consulta" : "consultas"} hoje · ${resumo.total} carregadas`}
       onAtualizar={() => void atualizar()}
       atualizando={atualizando}
+      erroAtualizar={erroAtualizar}
+      onTentarDeNovo={() => void atualizar()}
       ferramentas={
         <div className="space-y-3">
           <div role="tablist" aria-label="Agendamentos" className="ba-abas" onKeyDown={teclaAbas}>

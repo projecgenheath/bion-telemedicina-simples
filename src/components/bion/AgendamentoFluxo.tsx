@@ -58,7 +58,7 @@ export function AgendamentoFluxo({
   const [motivoTexto, setMotivoTexto] = useState("");
   const [sintomasEscolhidos, setSintomasEscolhidos] = useState<string[]>([]);
   const [arquivosAnexados, setArquivosAnexados] = useState<
-    { nome: string; tamanhoKb: number; tipo: string }[]
+    { nome: string; tamanhoKb: number; tipo: string; file?: File }[]
   >([]);
   const [processandoPagamento, setProcessandoPagamento] = useState(false);
   const [medicoModal, setMedicoModal] = useState<Medico | null>(null);
@@ -148,10 +148,14 @@ export function AgendamentoFluxo({
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files) return;
+    // O `File` viaja junto com os metadados até a criação da consulta: sem
+    // ele, o store só gravaria nome/tipo/tamanho e o exame nunca chegaria
+    // ao servidor. O tipo declarado (agendamento/types.ts) inclui `file`.
     const novos = Array.from(e.target.files).map((f) => ({
       nome: f.name,
       tamanhoKb: Math.max(1, Math.round(f.size / 1024)),
       tipo: f.type.includes("image") ? "Imagem de exame" : "Documento PDF",
+      file: f,
     }));
     setArquivosAnexados((prev) => [...prev, ...novos]);
     e.target.value = "";
@@ -227,7 +231,8 @@ export function AgendamentoFluxo({
       return;
     }
 
-    // Salva arquivos anexados no histórico (só com a consulta criada)
+    // Salva arquivos anexados no histórico (só com a consulta criada).
+    // Upload real (FormData) via `file`: sem ele o store só grava metadados.
     arquivosAnexados.forEach((a) => {
       adicionarArquivo({
         nome: a.nome,
@@ -235,6 +240,9 @@ export function AgendamentoFluxo({
         tamanhoKb: a.tamanhoKb,
         enviadoPor: "paciente",
         consulta: `${med.especialidade} — ${med.nome}`,
+        file: a.file,
+        pacienteId: sessao.id,
+        consultaId: criada.id,
       });
     });
 

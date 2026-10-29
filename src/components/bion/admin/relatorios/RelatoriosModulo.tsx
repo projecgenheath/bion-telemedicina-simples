@@ -48,7 +48,7 @@ const PAGINA = 50;
 export function RelatoriosModulo() {
   const router = useRouter();
   const { consultas, documentos, avaliacoes, arquivos, consentimentos, registrarAudit } = useBion();
-  const { agora, atualizar, atualizando } = useDadosAdmin();
+  const { agora, atualizar, atualizando, erroAtualizar } = useDadosAdmin();
   const [filtros, setFiltros] = useState<FiltrosRelatorio>(FILTROS_RELATORIO_PADRAO);
   const [drill, setDrill] = useState<Drill>(null);
 
@@ -92,6 +92,8 @@ export function RelatoriosModulo() {
       subtitulo="Indicadores em tempo real. Toque num número para ver o que há por trás dele."
       onAtualizar={() => void atualizar()}
       atualizando={atualizando}
+      erroAtualizar={erroAtualizar}
+      onTentarDeNovo={() => void atualizar()}
       acoes={<BotoesExportar onCsv={exportarCsv} onPdf={exportarPdf} className="hidden sm:flex" />}
       ferramentas={
         <div className="space-y-2 w-full">
@@ -287,6 +289,7 @@ export function RelatoriosModulo() {
         agora={agora}
         filtroTexto={filtroTexto}
         onAbrirConsulta={(c) => router.push(`/admin-agendamentos?consulta=${encodeURIComponent(c.id)}`)}
+        onAbrirMedico={(id) => router.push(`/admin-medicos?medico=${encodeURIComponent(id)}`)}
       />
     </TelaModulo>
   );
@@ -360,6 +363,7 @@ function DetalheDrill({
   agora,
   filtroTexto,
   onAbrirConsulta,
+  onAbrirMedico,
 }: {
   drill: Drill;
   onFechar: () => void;
@@ -368,12 +372,16 @@ function DetalheDrill({
   agora: number;
   filtroTexto: string;
   onAbrirConsulta: (c: Consulta) => void;
+  onAbrirMedico: (id: string) => void;
 }) {
   const [limite, setLimite] = useState(PAGINA);
   const [drillAntes, setDrillAntes] = useState(drill);
+  // Paciente escolhido dentro do drill "pacientes": mostra as consultas dele.
+  const [pacienteFiltro, setPacienteFiltro] = useState<string | null>(null);
   if (drill !== drillAntes) {
     setDrillAntes(drill);
     setLimite(PAGINA);
+    setPacienteFiltro(null);
   }
   const lista =
     drill === "consultas"
@@ -385,31 +393,94 @@ function DetalheDrill({
           : [];
   const ordenada = [...lista].sort((a, b) => b.ts - a.ts);
   const pacientes = drill === "pacientes" ? pacientesDoRecorte(consultas) : [];
-  const total = drill === "avaliacoes" ? avaliacoes.length : drill === "pacientes" ? pacientes.length : ordenada.length;
+  const consultasPaciente = pacienteFiltro
+    ? [...consultas].filter((c) => c.paciente === pacienteFiltro).sort((a, b) => b.ts - a.ts)
+    : [];
+  const total = pacienteFiltro
+    ? consultasPaciente.length
+    : drill === "avaliacoes"
+      ? avaliacoes.length
+      : drill === "pacientes"
+        ? pacientes.length
+        : ordenada.length;
 
   return (
-    <SheetAdmin aberto={drill !== null} onFechar={onFechar} titulo={drill ? TITULO_DRILL[drill] : "Detalhe"} descricao={`${total} ${total === 1 ? "registro" : "registros"} · ${filtroTexto}`}>
+    <SheetAdmin aberto={drill !== null} onFechar={onFechar} titulo={pacienteFiltro ?? (drill ? TITULO_DRILL[drill] : "Detalhe")} descricao={`${total} ${total === 1 ? "registro" : "registros"} · ${filtroTexto}`}>
       {total === 0 ? (
         <EstadoVazio titulo="Nenhum registro para os filtros atuais" texto="Mude o período, a especialidade ou o médico." />
+      ) : pacienteFiltro ? (
+        <div className="space-y-2">
+          <button type="button" onClick={() => setPacienteFiltro(null)} className="ba-botao ba-botao-secundario w-full">
+            Voltar para a lista de pacientes
+          </button>
+          <ul className="space-y-2">
+            {consultasPaciente.slice(0, limite).map((c) => (
+              <li key={c.id}>
+                <button type="button" onClick={() => onAbrirConsulta(c)} className="ba-card" data-denso="true" data-tom={estadoConsulta(c.status).tom} aria-label={`${c.paciente}, ${c.especialidade}, ${rotuloDia(c.ts, agora)} às ${hora(c.ts)}. Abrir em Agendamentos`}>
+                  <div className="flex items-center gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-bold break-words">
+                        {c.paciente} · <span className="font-normal ba-texto-2">{c.especialidade}</span>
+                      </p>
+                      <p className="text-xs ba-texto-2 break-words">
+                        {c.medico} · {rotuloDia(c.ts, agora)} às {hora(c.ts)}
+                      </p>
+                    </div>
+                    <ChipEstado estado={estadoConsulta(c.status)} className="shrink-0" />
+                  </div>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
       ) : drill === "avaliacoes" ? (
         <ul className="space-y-2">
           {avaliacoes.slice(0, limite).map((a) => (
             <li key={a.id}>
-              <ItemAvaliacao a={a} agora={agora} />
+              {a.medicoId ? (
+                <button
+                  type="button"
+                  onClick={() => onAbrirMedico(a.medicoId as string)}
+                  className="ba-card w-full text-left"
+                  data-denso="true"
+                  aria-label={`Avaliação de ${a.medico}. Abrir ficha do médico`}
+                >
+                  <div className="flex items-center gap-2">
+                    <div className="min-w-0 flex-1">
+                      <ItemAvaliacao a={a} agora={agora} />
+                    </div>
+                    <ChevronRight className="w-4 h-4 ba-texto-3 shrink-0" aria-hidden />
+                  </div>
+                </button>
+              ) : (
+                <ItemAvaliacao a={a} agora={agora} />
+              )}
             </li>
           ))}
         </ul>
       ) : drill === "pacientes" ? (
         <ul className="space-y-2">
           {pacientes.slice(0, limite).map((p) => (
-            <li key={p.nome} className="ba-card flex items-center justify-between gap-3" data-denso="true">
-              <div className="min-w-0">
-                <p className="text-sm font-bold break-words">{p.nome}</p>
-                <p className="text-xs ba-texto-2">Última: {rotuloDia(p.ultima, agora)} às {hora(p.ultima)}</p>
-              </div>
-              <span className="text-sm font-bold tabular-nums shrink-0">
-                {p.consultas} {p.consultas === 1 ? "consulta" : "consultas"}
-              </span>
+            <li key={p.nome}>
+              {/* O subtítulo promete "toque para ver": a linha abre as consultas do paciente. */}
+              <button
+                type="button"
+                onClick={() => setPacienteFiltro(p.nome)}
+                className="ba-card w-full flex items-center justify-between gap-3 text-left"
+                data-denso="true"
+                aria-label={`${p.nome}: ver consultas`}
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-bold break-words">{p.nome}</p>
+                  <p className="text-xs ba-texto-2">Última: {rotuloDia(p.ultima, agora)} às {hora(p.ultima)}</p>
+                </div>
+                <span className="flex items-center gap-1 shrink-0">
+                  <span className="text-sm font-bold tabular-nums">
+                    {p.consultas} {p.consultas === 1 ? "consulta" : "consultas"}
+                  </span>
+                  <ChevronRight className="w-4 h-4 ba-texto-3" aria-hidden />
+                </span>
+              </button>
             </li>
           ))}
         </ul>

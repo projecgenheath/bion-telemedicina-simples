@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Check, ShieldAlert, Undo2, X } from "lucide-react";
 import { toast } from "sonner";
 import { SheetAdmin } from "../ui/SheetAdmin";
@@ -9,7 +10,7 @@ import { EstadoErro, EstadoVazio, Esqueleto } from "../ui/Estados";
 import { estadoReembolso } from "../rotulos";
 import { brl, dataLonga, hora as horaDe, relativo } from "../tempo";
 import { chamarApi, useRecurso } from "../repasses/recurso";
-import { explicarErro, validarRespostaNegar } from "./agenda";
+import { explicarErro, linkConsultaAdmin, validarRespostaNegar } from "./agenda";
 
 type Pedido = {
   id: string;
@@ -80,6 +81,13 @@ export function ReembolsosPainel({ agora, onMudou }: { agora: number; onMudou: (
                 <div className="flex flex-wrap items-center gap-1.5">
                   <ChipEstado estado={estadoReembolso(p.status)} />
                   <span className="text-xs ba-texto-3">pedido {relativo(Date.parse(p.criadoEm), agora)}</span>
+                  {/* Detalhe da consulta que gerou o pedido (aba agenda — é lá
+                      que o DetalheConsulta abre; ?aba=reembolsos não abriria nada). */}
+                  {p.consulta ? (
+                    <Link href={linkConsultaAdmin(p.consulta.id)} scroll={false} className="text-xs font-bold underline underline-offset-2">
+                      Abrir detalhe da consulta
+                    </Link>
+                  ) : null}
                 </div>
                 <blockquote className="text-sm whitespace-pre-wrap break-words border-l-2 pl-3" style={{ borderColor: "var(--ba-borda)" }}>
                   “{p.justificativa}”

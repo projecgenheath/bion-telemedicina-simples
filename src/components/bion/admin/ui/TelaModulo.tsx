@@ -19,6 +19,9 @@ export function TelaModulo({
   onVoltar,
   onAtualizar,
   atualizando = false,
+  /** Erro da última atualização manual: aviso + retry, nunca dado velho calado. */
+  erroAtualizar,
+  onTentarDeNovo,
   acoes,
   ferramentas,
   children,
@@ -29,6 +32,8 @@ export function TelaModulo({
   onVoltar?: () => void;
   onAtualizar?: () => void;
   atualizando?: boolean;
+  erroAtualizar?: string | null;
+  onTentarDeNovo?: () => void;
   acoes?: ReactNode;
   ferramentas?: ReactNode;
   children: ReactNode;
@@ -65,6 +70,16 @@ export function TelaModulo({
           {acoes}
         </div>
       </header>
+      {erroAtualizar ? (
+        <div className="ba-aviso mt-4 flex flex-wrap items-center justify-between gap-2" data-tom="critico" role="alert">
+          <p>{erroAtualizar}</p>
+          {onTentarDeNovo ? (
+            <button type="button" onClick={onTentarDeNovo} disabled={atualizando} className="ba-botao ba-botao-secundario shrink-0">
+              {atualizando ? "Atualizando…" : "Tentar novamente"}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
       {ferramentas ? <div className="mt-4 flex flex-col lg:flex-row gap-2 lg:items-center">{ferramentas}</div> : null}
       <div className="mt-5">{children}</div>
     </div>

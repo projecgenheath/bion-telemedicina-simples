@@ -43,6 +43,32 @@ const ROTULOS = {
   exame_solicitado: "Pedido de Exame",
 };
 
+// Meses em português do rótulo de data do store ("10 Nov 2025").
+const MESES_PT: Record<string, number> = {
+  Jan: 0,
+  Fev: 1,
+  Mar: 2,
+  Abr: 3,
+  Mai: 4,
+  Jun: 5,
+  Jul: 6,
+  Ago: 7,
+  Set: 8,
+  Out: 9,
+  Nov: 10,
+  Dez: 11,
+};
+
+/** Timestamp de um rótulo de data real; 0 quando não dá para determinar (ordena por último, nunca inventa data). */
+function tsDataLonga(data: string | undefined): number {
+  if (!data) return 0;
+  const m = data.trim().match(/^(\d{1,2})\s+([A-Za-z]{3})\s+(\d{4})$/);
+  if (!m) return 0;
+  const mes = MESES_PT[m[2]];
+  if (mes === undefined) return 0;
+  return Date.UTC(Number(m[3]), mes, Number(m[1]));
+}
+
 export function Prontuario() {
   const {
     documentosVisiveis: documentos,
@@ -81,6 +107,31 @@ export function Prontuario() {
     [documentos],
   );
 
+  // Filtro por contexto (ID primeiro; nome só para registros antigos sem ID):
+  // paciente vê só as próprias consultas/arquivos; médico, só as suas
+  // consultas (por medicoId) e arquivos de pacientes vinculados a ele
+  // (pacienteId presente nos seus documentos/consultas). O bootstrap já
+  // escopa as coleções por papel no servidor; isto é a segunda camada, no
+  // componente, para nada de outro paciente/médico misturar na linha do tempo.
+  const mesmoPaciente = (pacienteId?: string | null, nome?: string) =>
+    sessao.id
+      ? pacienteId
+        ? pacienteId === sessao.id
+        : nome === sessao.nome
+      : nome === sessao.nome;
+  const mesmoMedico = (medicoId?: string, nome?: string) =>
+    sessao.id ? (medicoId ? medicoId === sessao.id : nome === sessao.nome) : nome === sessao.nome;
+  const pacientesVinculados = useMemo(() => {
+    const ids = new Set<string>();
+    consultas.forEach((c) => {
+      if (c.pacienteId) ids.add(c.pacienteId);
+    });
+    documentos.forEach((d) => {
+      if (d.pacienteId) ids.add(d.pacienteId);
+    });
+    return ids;
+  }, [consultas, documentos]);
+
   const eventos = useMemo<Evento[]>(() => {
     const list: Evento[] = [];
     documentos.forEach((d) =>
@@ -95,29 +146,51 @@ export function Prontuario() {
       }),
     );
     consultas
-      .filter((c) => c.status === "concluida")
+      .filter((c) => {
+        if (c.status !== "concluida") return false;
+        if (sessao.role === "paciente") return mesmoPaciente(c.pacienteId, c.paciente);
+        if (sessao.role === "medico") return mesmoMedico(c.medicoId, c.medico);
+        return true;
+      })
       .forEach((c) =>
         list.push({
           id: c.id,
           quando: `${c.data} • ${c.hora}`,
-          ordem: Date.now() - 1,
+          // Data real da consulta (timestamp do início), nunca ordem arbitrária.
+          ordem: Number.isFinite(c.ts) ? c.ts : 0,
           tipo: "consulta",
           titulo: `Consulta de ${c.especialidade}`,
           detalhe: c.medico,
         }),
       );
-    arquivos.forEach((a) =>
-      list.push({
-        id: a.id,
-        quando: a.data,
-        ordem: Date.parse(a.data) || 0,
-        tipo: "exame",
-        titulo: a.nome,
-        detalhe: `${a.tipo} • enviado pelo ${a.enviadoPor}`,
-      }),
-    );
+    arquivos
+      .filter((a) => {
+        if (sessao.role === "paciente") {
+          // Arquivo com destinatário: só o próprio. Sem destinatário
+          // (legado), só o enviado pelo paciente — o servidor já escopa a
+          // lista por quem enviou/destinatário; nunca um arquivo de outro
+          // paciente com destinatário diferente.
+          return a.pacienteId ? a.pacienteId === sessao.id : a.enviadoPor === "paciente";
+        }
+        if (sessao.role === "medico") {
+          // Sem destinatário: arquivo próprio/legado do escopo do servidor.
+          // Com destinatário: só paciente vinculado a este médico.
+          return !a.pacienteId || pacientesVinculados.has(a.pacienteId);
+        }
+        return true;
+      })
+      .forEach((a) =>
+        list.push({
+          id: a.id,
+          quando: a.data,
+          ordem: tsDataLonga(a.data),
+          tipo: "exame",
+          titulo: a.nome,
+          detalhe: `${a.tipo} • enviado pelo ${a.enviadoPor}`,
+        }),
+      );
     return list.sort((a, b) => b.ordem - a.ordem);
-  }, [documentos, consultas, arquivos]);
+  }, [documentos, consultas, arquivos, sessao, pacientesVinculados]);
 
   const visiveis = filtro === "todos" ? eventos : eventos.filter((e) => e.tipo === filtro);
 
@@ -273,8 +346,13 @@ export function Prontuario() {
               </button>
             </div>
             <p className="text-sm text-muted-foreground mt-3">
-              O arquivo reunirá {documentos.length} documento(s) clínico(s) e os medicamentos em uso
-              de {sessao.nome}. Ao autorizar, o download fica registrado no histórico de acessos com
+              O arquivo reunirá {documentos.length} documento(s) clínico(s) e os medicamentos em uso{" "}
+              {sessao.role === "paciente"
+                ? "seus"
+                : sessao.role === "medico"
+                  ? "dos pacientes vinculados a você"
+                  : "listados aqui"}
+              . Ao autorizar, o download fica registrado no histórico de acessos com
               data, hora e responsável.
             </p>
             <label className="mt-4 flex items-start gap-2 text-sm cursor-pointer">
@@ -293,7 +371,7 @@ export function Prontuario() {
               <button type="button"
                 onClick={() => {
                   registrarConsentimento({
-                    paciente: sessao.nome,
+                    paciente: sessao.role === "paciente" ? sessao.nome : "Pacientes vinculados",
                     finalidade: "Geração e download do prontuário em PDF",
                     documentos: documentos.length,
                     aceito: false,
@@ -308,13 +386,15 @@ export function Prontuario() {
                 disabled={!aceite}
                 onClick={() => {
                   registrarConsentimento({
-                    paciente: sessao.nome,
+                    paciente: sessao.role === "paciente" ? sessao.nome : "Pacientes vinculados",
                     finalidade: "Geração e download do prontuário em PDF",
                     documentos: documentos.length,
                     aceito: true,
                   });
                   gerarProntuarioPDF({
-                    paciente: sessao.nome,
+                    // Para o médico, o PDF reúne vários pacientes: não o
+                    // rotula com o nome do médico como se fosse o paciente.
+                    paciente: sessao.role === "paciente" ? sessao.nome : "Pacientes vinculados",
                     documentos,
                     medicamentos,
                     dataNascimento: perfilProprio?.dataNascimento ?? null,

@@ -11,8 +11,15 @@ export function MinhasAvaliacoes() {
   const [filtro, setFiltro] = useState<"todas" | "com-comentario" | "baixas">("todas");
 
   const minhas = useMemo(
-    () => avaliacoes.filter((a) => a.medico === sessao.nome).sort((x, y) => y.ts - x.ts),
-    [avaliacoes, sessao.nome],
+    () =>
+      avaliacoes
+        .filter((a) =>
+          // Por ID do médico; o nome só vale para avaliações antigas sem
+          // medicoId (homônimos não podem trocar as avaliações de ninguém).
+          sessao.id ? (a.medicoId ? a.medicoId === sessao.id : a.medico === sessao.nome) : a.medico === sessao.nome,
+        )
+        .sort((x, y) => y.ts - x.ts),
+    [avaliacoes, sessao.id, sessao.nome],
   );
 
   const resumo = useMemo(() => {

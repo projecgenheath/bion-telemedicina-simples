@@ -76,6 +76,8 @@ export function SalaConsultaTela({
             role={role}
             micAtivo={tele.micAtivo}
             camAtivo={tele.camAtivo}
+            semMic={tele.semAudio}
+            semCamera={tele.semVideo}
             compartilhando={tele.compartilhando}
             onToggleMic={sala.toggleMicLocal}
             onToggleCam={sala.toggleCamLocal}

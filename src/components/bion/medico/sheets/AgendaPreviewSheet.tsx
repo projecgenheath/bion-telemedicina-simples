@@ -27,7 +27,14 @@ export function AgendaPreviewSheet({
   const base = useMemo(() => agendaLivreDoMedico(medico, consultas), [medico, consultas]);
   const bloqueios = useBloqueiosAgenda();
   const bloqueados = useMemo(() => new Set(bloqueios.porDia.keys()), [bloqueios.porDia]);
-  const agenda = useMemo(() => semDiasBloqueados(base, bloqueados), [base, bloqueados]);
+  // Sem a lista de bloqueios, a prévia NÃO pode ser mostrada: um dia
+  // bloqueado apareceria como livre por falta de dado. Carregando ou erro
+  // (com retry) — nunca uma agenda que parece livre sem a informação.
+  const bloqueiosProntos = !bloqueios.carregando && !bloqueios.erro;
+  const agenda = useMemo(
+    () => (bloqueiosProntos ? semDiasBloqueados(base, bloqueados) : []),
+    [bloqueiosProntos, base, bloqueados],
+  );
   // Dia escolhido é a ESCOLHA explícita do médico; o primeiro dia livre é
   // só o padrão. Quando o dia escolhido é bloqueado ou fica sem horários,
   // a prévia mostra o primeiro dia livre COM AVISO (antes: substituição
@@ -44,7 +51,24 @@ export function AgendaPreviewSheet({
       titulo="Agendar consulta (prévia)"
       subtitulo="Horários livres nos próximos 14 dias, como o paciente vê. Nada é agendado aqui."
     >
-      {agenda.length === 0 ? (
+      {bloqueios.carregando ? (
+        <p className="text-sm text-bion-ink/75 dark:text-bion-paper/75" role="status">
+          Carregando dias bloqueados…
+        </p>
+      ) : bloqueios.erro ? (
+        <div className="space-y-3">
+          <p className="text-sm text-bion-ink/75 dark:text-bion-paper/75" role="alert">
+            Não foi possível carregar os dias bloqueados: {bloqueios.erro}. A prévia não é
+            exibida sem essa informação, para nenhum dia bloqueado parecer livre.
+          </p>
+          <button type="button"
+            onClick={() => void bloqueios.recarregar()}
+            className="px-4 py-2 rounded-xl border text-sm font-bold"
+          >
+            Tentar de novo
+          </button>
+        </div>
+      ) : agenda.length === 0 ? (
         <p className="text-sm text-bion-ink/75 dark:text-bion-paper/75">Nenhum horário livre nos próximos 14 dias.</p>
       ) : (
         <>

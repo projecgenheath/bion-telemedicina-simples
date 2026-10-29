@@ -25,7 +25,38 @@ export async function POST(req: NextRequest) {
       idiomas?: string[];
       bio?: string;
       horariosDisponiveis?: string[];
+      diasAtendimento?: number[];
+      pausasSemanais?: { dia: number; inicio: string; fim: string }[];
       status?: string;
+    };
+
+    /** Valida pausas semanais (mesma regra do PATCH e da UI): dia 0–6,
+     *  inicio/fim HH:MM, inicio < fim, sem sobreposição no mesmo dia. */
+    const validarPausas = (pausas: unknown): string | null => {
+      if (!Array.isArray(pausas)) return "pausasSemanais deve ser um array.";
+      for (const pa of pausas) {
+        if (
+          !pa || typeof pa !== "object" ||
+          typeof (pa as { dia?: unknown }).dia !== "number" || (pa as { dia: number }).dia < 0 || (pa as { dia: number }).dia > 6 ||
+          typeof (pa as { inicio?: unknown }).inicio !== "string" || !/^([01]\d|2[0-3]):[0-5]\d$/.test((pa as { inicio: string }).inicio) ||
+          typeof (pa as { fim?: unknown }).fim !== "string" || !/^([01]\d|2[0-3]):[0-5]\d$/.test((pa as { fim: string }).fim)
+        ) {
+          return "pausasSemanais inválido. Cada pausa precisa de dia (0-6), inicio e fim (HH:MM).";
+        }
+        if ((pa as { inicio: string }).inicio >= (pa as { fim: string }).fim) {
+          return "A pausa precisa começar antes de terminar.";
+        }
+      }
+      for (let i = 0; i < pausas.length; i++) {
+        for (let j = i + 1; j < pausas.length; j++) {
+          const a = pausas[i] as { dia: number; inicio: string; fim: string };
+          const b = pausas[j] as { dia: number; inicio: string; fim: string };
+          if (a.dia === b.dia && a.inicio < b.fim && b.inicio < a.fim) {
+            return "Duas pausas se sobrepõem no mesmo dia.";
+          }
+        }
+      }
+      return null;
     };
 
     if (!body) {
@@ -48,14 +79,31 @@ export async function POST(req: NextRequest) {
     if (body.status !== undefined && !STATUS_PERMITIDOS.includes(body.status)) {
       return Response.json({ erro: "Status inválido (ativo, pendente ou suspenso)." }, { status: 400 });
     }
+    // Grade opcional na criação: ausente, usa o default abaixo (antes, a
+    // ausência caía no !Array.isArray e dava 400, antes de um default que
+    // nunca era alcançado). Se informada, precisa do formato HH:MM.
+    const horariosPadrao = ["09:00", "10:00", "14:00", "15:00"];
     if (
-      !Array.isArray(body.horariosDisponiveis) ||
-      body.horariosDisponiveis.some((h) => typeof h !== "string" || !/^([01]\d|2[0-3]):[0-5]\d$/.test(h))
+      body.horariosDisponiveis !== undefined &&
+      (!Array.isArray(body.horariosDisponiveis) ||
+        body.horariosDisponiveis.some((h) => typeof h !== "string" || !/^([01]\d|2[0-3]):[0-5]\d$/.test(h)))
     ) {
       return Response.json({ erro: "Horários devem estar no formato HH:MM." }, { status: 400 });
     }
+    // Dias de atendimento e pausas: mesma validação do PATCH (dias 0–6;
+    // pausas com inicio < fim e sem sobreposição no mesmo dia).
+    if (
+      body.diasAtendimento !== undefined &&
+      (!Array.isArray(body.diasAtendimento) || body.diasAtendimento.some((d) => typeof d !== "number" || d < 0 || d > 6))
+    ) {
+      return Response.json({ erro: "diasAtendimento deve ser um array de números de 0 (Dom) a 6 (Sáb)." }, { status: 400 });
+    }
+    if (body.pausasSemanais !== undefined) {
+      const erroPausas = validarPausas(body.pausasSemanais);
+      if (erroPausas) return Response.json({ erro: erroPausas }, { status: 400 });
+    }
     // Sem teleconsulta entre 23:00 e 00:00 (São Paulo): grade não pode ter esses horários.
-    const vedados = horariosVedadosDaGrade(body.horariosDisponiveis);
+    const vedados = horariosVedadosDaGrade(body.horariosDisponiveis ?? horariosPadrao);
     if (vedados.length) return Response.json({ erro: erroGradeVedada(vedados) }, { status: 400 });
 
     // Auditoria admin (C2): o login não pode mais ser adivinhado pelo nome
@@ -101,7 +149,9 @@ export async function POST(req: NextRequest) {
             status: body.status ?? "ativo",
             subespecialidades: JSON.stringify(body.subespecialidades ?? []),
             idiomas: JSON.stringify(body.idiomas ?? ["Português"]),
-            horariosDisponiveis: JSON.stringify(body.horariosDisponiveis ?? ["09:00", "10:00", "14:00", "15:00"]),
+            horariosDisponiveis: JSON.stringify(body.horariosDisponiveis ?? horariosPadrao),
+            diasAtendimento: JSON.stringify(body.diasAtendimento ?? []),
+            pausasSemanais: JSON.stringify(body.pausasSemanais ?? []),
           },
         },
       },

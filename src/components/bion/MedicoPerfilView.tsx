@@ -1,7 +1,7 @@
 "use client";
 
 import { textoNota } from "@/lib/medico-exibicao";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Star,
   Stethoscope,
@@ -40,6 +40,16 @@ export function MedicoPerfilView({ medicoId }: { medicoId?: string }) {
   const [bio, setBio] = useState(medico?.bio ?? "");
   const [formacao, setFormacao] = useState(medico?.formacao ?? "");
   const [foto, setFoto] = useState(medico?.foto ?? "");
+  // Salvar confirmado, não "disparado e esquecido": atualizarMedico não
+  // devolve o resultado (interface void), então a confirmação é o médico
+  // atualizado no store (delta do servidor) com os valores enviados.
+  // Enquanto não chega, o botão fica em "Salvando…" e a edição NÃO fecha —
+  // em falha, ela fica aberta com erro + retry, em vez de fechar fingindo
+  // sucesso (o bug antigo: setEditando(false) imediato).
+  const [salvando, setSalvando] = useState(false);
+  const [erroSalvar, setErroSalvar] = useState<string | null>(null);
+  const pendenteRef = useRef<{ valor: number; bio: string; formacao: string; foto: string } | null>(null);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // M-5: os estados de edição sincronizam quando o objeto do médico muda
   // (ex.: salva pela outra página, delta do store chega depois da montagem).
@@ -51,6 +61,21 @@ export function MedicoPerfilView({ medicoId }: { medicoId?: string }) {
       setFoto(medico?.foto ?? "");
     }
   }, [medico?.valor, medico?.bio, medico?.formacao, medico?.foto, editando]);
+
+  // Confirmação do salvamento: o médico do store com os valores enviados.
+  useEffect(() => {
+    const p = pendenteRef.current;
+    if (!salvando || !p || !medico) return;
+    // Comparação com trim: o servidor pode normalizar espaços nas pontas e o
+    // salvamento, mesmo bem-sucedido, pareceria não confirmado.
+    if (medico.valor === p.valor && (medico.bio ?? "").trim() === p.bio.trim() && (medico.formacao ?? "").trim() === p.formacao.trim() && medico.foto === p.foto) {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      pendenteRef.current = null;
+      setSalvando(false);
+      setEditando(false);
+      toast.success("Perfil atualizado");
+    }
+  }, [medico, salvando]);
 
   if (!medico) {
     return (
@@ -88,13 +113,23 @@ export function MedicoPerfilView({ medicoId }: { medicoId?: string }) {
       toast.error("Valor inválido", { description: "Informe um valor entre R$ 1 e R$ 5.000." });
       return;
     }
+    if (salvando) return;
+    setErroSalvar(null);
+    setSalvando(true);
+    pendenteRef.current = { valor, bio, formacao, foto: foto && foto !== medico.foto ? foto : (medico.foto ?? "") };
     atualizarMedico(medico.id, {
       valor,
       bio,
       formacao,
       ...(foto && foto !== medico.foto ? { foto } : {}),
     });
-    setEditando(false);
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    timeoutRef.current = setTimeout(() => {
+      if (!pendenteRef.current) return;
+      pendenteRef.current = null;
+      setSalvando(false);
+      setErroSalvar("Não foi possível confirmar o salvamento. Verifique sua conexão e toque em Salvar novamente.");
+    }, 12_000);
   };
 
   const isProprioMedico =
@@ -206,12 +241,20 @@ export function MedicoPerfilView({ medicoId }: { medicoId?: string }) {
           {isProprioMedico && (
             <div className="self-start md:self-auto">
               {editando ? (
-                <button type="button"
-                  onClick={salvar}
-                  className="px-5 py-2.5 rounded-xl bg-primary text-primary-foreground font-bold text-xs shadow hover:opacity-90 transition flex items-center gap-1.5"
-                >
-                  <Save className="w-4 h-4" /> Salvar Perfil
-                </button>
+                <>
+                  {erroSalvar ? (
+                    <p className="text-xs font-semibold text-red-700 dark:text-red-400 mb-2" role="alert">
+                      {erroSalvar}
+                    </p>
+                  ) : null}
+                  <button type="button"
+                    onClick={salvar}
+                    disabled={salvando}
+                    className="px-5 py-2.5 rounded-xl bg-primary text-primary-foreground font-bold text-xs shadow hover:opacity-90 transition flex items-center gap-1.5 disabled:opacity-50"
+                  >
+                    <Save className="w-4 h-4" /> {salvando ? "Salvando…" : "Salvar Perfil"}
+                  </button>
+                </>
               ) : (
                 <button type="button"
                   onClick={() => setEditando(true)}

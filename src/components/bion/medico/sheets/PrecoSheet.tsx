@@ -39,12 +39,13 @@ export function PrecoSheet({
   const { atualizarMedico } = useBion();
   const [texto, setTexto] = useState(() => String(medico.valor).replace(".", ","));
   const [erro, setErro] = useState<string>();
+  const [salvando, setSalvando] = useState(false);
 
   // Prévia do valor que será salvo (o médico vê como o texto é interpretado).
   const previa = lerValorReais(texto);
   const previaValida = Number.isFinite(previa) && texto.trim() !== "";
 
-  const salvar = () => {
+  const salvar = async () => {
     const v = lerValorReais(texto);
     if (!Number.isFinite(v) || v < VALOR_MIN || v > VALOR_MAX) {
       setErro(`Informe um valor entre ${fmtBRL(VALOR_MIN)} e ${fmtBRL(VALOR_MAX)}.`);
@@ -52,9 +53,15 @@ export function PrecoSheet({
     }
     const valor = Math.round(v * 100) / 100;
     setErro(undefined);
+    setSalvando(true);
     atualizarMedico(medico.id, { valor });
-    confirmar(valor, "Salvando preço…", `Preço atualizado para ${fmtBRL(valor)}`);
-    onFechar();
+    // Só fecha com a confirmação real (delta do servidor). Sem confirmação
+    // em tempo, o sheet fica aberto com erro + retry, em vez de fechar
+    // fingindo sucesso.
+    const ok = await confirmar(valor, "Salvando preço…", `Preço atualizado para ${fmtBRL(valor)}`);
+    setSalvando(false);
+    if (ok) onFechar();
+    else setErro("Não foi possível confirmar o salvamento. Verifique sua conexão e toque em Salvar novamente.");
   };
 
   return (
@@ -85,8 +92,8 @@ export function PrecoSheet({
             aria-label="Novo valor da consulta em reais"
           />
         </Campo>
-        <button type="button" onClick={salvar} className="bp-acao w-full py-3 text-sm">
-          Salvar preço
+        <button type="button" onClick={salvar} disabled={salvando} className="bp-acao w-full py-3 text-sm disabled:opacity-50">
+          {salvando ? "Salvando…" : "Salvar preço"}
         </button>
       </div>
     </SheetMedico>

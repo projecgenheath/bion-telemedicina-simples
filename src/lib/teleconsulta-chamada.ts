@@ -86,6 +86,10 @@ export type EstadoChamada = {
   erroMidia: string | null;
   micAtivo: boolean;
   camAtivo: boolean;
+  /** Sem track de áudio ao vivo (microfone indisponível — botão desabilitado). */
+  semAudio: boolean;
+  /** Sem track de vídeo ao vivo (câmera indisponível — botão desabilitado). */
+  semVideo: boolean;
   compartilhando: boolean;
   chat: MsgChat[];
   localPronto: boolean;
@@ -107,6 +111,8 @@ export const ESTADO_INICIAL: EstadoChamada = {
   erroMidia: null,
   micAtivo: true,
   camAtivo: true,
+  semAudio: false,
+  semVideo: false,
   compartilhando: false,
   chat: [],
   localPronto: false,
@@ -357,6 +363,10 @@ export class ChamadaTeleconsulta {
       this.set({
         erroMidia:
           "Não foi possível acessar câmera e microfone (permissão negada, bloqueada pelo navegador ou dispositivo em uso por outro app). A consulta continua; peça ao outro participante para confirmar o áudio.",
+        semAudio: true,
+        semVideo: true,
+        micAtivo: false,
+        camAtivo: false,
         status: this.estado.status === "conectando" ? "aguardando" : this.estado.status,
       });
       this.processarSinaisAntesDaMidia();
@@ -369,6 +379,8 @@ export class ChamadaTeleconsulta {
     this.set({
       localPronto: true,
       camAtivo: !soAudio,
+      semAudio: stream.getAudioTracks().length === 0,
+      semVideo: soAudio,
       erroMidia: soAudio ? "Câmera indisponível — participando com áudio." : null,
       status: this.estado.status === "conectando" ? "aguardando" : this.estado.status,
     });
@@ -416,7 +428,11 @@ export class ChamadaTeleconsulta {
     const local = this.streamLocal.current;
     if (!local) return;
     const atual = tipo === "audio" ? local.getAudioTracks()[0] : local.getVideoTracks()[0];
-    if (atual && atual.readyState === "live") return;
+    if (atual && atual.readyState === "live") {
+      // Já voltou sozinha: limpa a indisponibilidade (botão volta a funcionar).
+      this.set(tipo === "audio" ? { semAudio: false } : { semVideo: false });
+      return;
+    }
     log("recapturando mídia", { tipo, motivo });
     const ideal = restricoesMidia(this.celular);
     try {
@@ -446,11 +462,17 @@ export class ChamadaTeleconsulta {
       local.addTrack(track);
       const alvo = this.senderDe(tipo);
       if (alvo && !(tipo === "video" && this.displayStream)) await alvo.replaceTrack(track);
+      // Recaptura ok: a mídia voltou — o botão correspondente volta a funcionar.
+      this.set(tipo === "audio" ? { semAudio: false } : { semVideo: false });
       // Força o <video> local a reler o stream
       this.set({ localPronto: false });
       this.set({ localPronto: true });
     } catch (e) {
       erro("falha ao recapturar mídia", { tipo, motivo, erro: (e as Error)?.name, msg: (e as Error)?.message });
+      // A recaptura falhou de fato: marca indisponível para a UI desabilitar o
+      // botão com motivo, em vez de um toggle que não muda nada. Um novo toque
+      // tenta recapturar de novo (toggleMic/toggleCam) e limpa a marca se voltar.
+      this.set(tipo === "audio" ? { semAudio: true } : { semVideo: true });
     }
   }
 
@@ -1296,16 +1318,33 @@ export class ChamadaTeleconsulta {
   /* ================================================================ */
 
   toggleMic(): void {
-    const tracks = this.streamLocal.current?.getAudioTracks() ?? [];
-    const prox = tracks.length > 0 ? !tracks[0].enabled : false;
+    const stream = this.streamLocal.current;
+    // Sem stream nenhum: não há o que reativar — a UI desabilita o botão
+    // (semAudio) em vez de um toque sem efeito.
+    if (!stream) return;
+    const tracks = stream.getAudioTracks();
+    const viva = tracks.find((t) => t.readyState === "live");
+    if (!viva) {
+      // Track caiu (desconexão, iOS em segundo plano): tenta capturar de novo
+      // em vez de fingir que silenciou (o bug antigo: micAtivo=false sem track).
+      void this.recapturar("audio", "toggle");
+      return;
+    }
+    const prox = !viva.enabled;
     tracks.forEach((t) => (t.enabled = prox));
     this.set({ micAtivo: prox });
   }
 
   toggleCam(): void {
-    const tracks = this.streamLocal.current?.getVideoTracks() ?? [];
-    if (tracks.length === 0) return;
-    const prox = !tracks[0].enabled;
+    const stream = this.streamLocal.current;
+    if (!stream) return;
+    const tracks = stream.getVideoTracks();
+    const viva = tracks.find((t) => t.readyState === "live");
+    if (!viva) {
+      void this.recapturar("video", "toggle");
+      return;
+    }
+    const prox = !viva.enabled;
     tracks.forEach((t) => (t.enabled = prox));
     this.set({ camAtivo: prox });
     if (prox && this.estado.compartilhando) this.pararCompartilhamento();
@@ -1413,11 +1452,18 @@ export class ChamadaTeleconsulta {
     void this.aplicarParametros();
   }
 
-  enviarChat(texto: string): void {
+  /** Devolve true quando o servidor aceitou o chat. Em falha, o eco local é
+   * removido para a mensagem não parecer entregue — quem chama mostra o erro. */
+  async enviarChat(texto: string): Promise<boolean> {
     const limpo = texto.trim();
-    if (!limpo) return;
-    this.set({ chat: [...this.estado.chat, { id: `local-${Date.now()}`, minha: true, texto: limpo, hora: horaAgora() }] });
-    void this.enviar("chat", { s: this.sessao, texto: limpo });
+    if (!limpo) return false;
+    const id = `local-${Date.now()}`;
+    this.set({ chat: [...this.estado.chat, { id, minha: true, texto: limpo, hora: horaAgora() }] });
+    const ok = await this.enviar("chat", { s: this.sessao, texto: limpo });
+    if (!ok) {
+      this.set({ chat: this.estado.chat.filter((m) => m.id !== id) });
+    }
+    return ok;
   }
 
   /** Paciente: sai da chamada SEM encerrar a consulta (o médico pode esperar ele voltar). */
