@@ -13,6 +13,7 @@ import {
   desfechosSistema,
   ESPERA_FALTA_MIN,
   medicoEsperouAteOLimite,
+  janelaRespostaPaciente,
   pacienteEsteveNaSala,
   podeMarcarDesfechoNaAgenda,
   podeMarcarFalta,
@@ -291,6 +292,44 @@ igual("pontos sem resposta", pontosReceita(null), []);
   igual("agenda: com falta não mostra", podeMarcarDesfechoNaAgenda({ ...c14, falta: true }, m(30)), false);
   igual("agenda: com falha técnica não mostra", podeMarcarDesfechoNaAgenda(c14, m(30), new Map([["a", "falha_tecnica" as const]])), false);
   igual("agenda: concluída não mostra", podeMarcarDesfechoNaAgenda({ ...c14, status: "concluida" }, m(30)), false);
+}
+
+/* ---------- janelaRespostaPaciente (PC2: regra do POST /api/mensagens) ---------- */
+{
+  const DIA = 86_400_000;
+  const resumo = (j: ReturnType<typeof janelaRespostaPaciente>) =>
+    j ? [j.base.id, j.limite, j.diasRestantes, j.encerrada] : null;
+
+  igual("janela: sem consultas = null", janelaRespostaPaciente([], AGORA), null);
+  igual(
+    "janela: só cancelada = null",
+    janelaRespostaPaciente([consulta({ id: "c", dataISO: HOJE_9H, status: "cancelada" })], AGORA),
+    null,
+  );
+  // Base = NÃO cancelada mais recente (a cancelada de 25/09 é ignorada,
+  // mesmo sendo mais nova que a concluída de 20/09) — como o servidor.
+  const base20 = consulta({ id: "base", dataISO: "2026-09-20T12:00:00.000Z", status: "concluida" });
+  const canc25 = consulta({ id: "canc", dataISO: "2026-09-25T12:00:00.000Z", status: "cancelada" });
+  igual("janela: base ignora cancelada mais recente", resumo(janelaRespostaPaciente([canc25, base20], AGORA))?.[0], "base");
+  // Limite = base + 30 dias; em 01/10 faltam 19 dias para 20/10.
+  igual(
+    "janela: limite e dias restantes",
+    resumo(janelaRespostaPaciente([base20], AGORA)),
+    ["base", Date.parse("2026-09-20T12:00:00.000Z") + 30 * DIA, 19, false],
+  );
+  // Fronteira igual à do servidor (bloqueia com agora > limite): no limite
+  // exato ainda está aberta; 1 ms depois, encerrada.
+  const limite = base20.ts + 30 * DIA;
+  igual("janela: no limite exato ainda aberta", janelaRespostaPaciente([base20], limite)?.encerrada, false);
+  igual("janela: 1 ms após o limite, encerrada", resumo(janelaRespostaPaciente([base20], limite + 1)), ["base", limite, 0, true]);
+  // Consulta futura não cancelada vira a base (servidor ordena por
+  // dataInicio desc, sem filtrar passado): janela segue aberta.
+  const futura = consulta({ id: "fut", dataISO: AMANHA_9H, status: "confirmada" });
+  igual(
+    "janela: consulta futura é a base",
+    resumo(janelaRespostaPaciente([base20, futura], AGORA))?.[0],
+    "fut",
+  );
 }
 
 console.log(`\n${ok} ok, ${falhas} falha(s)`);

@@ -9,6 +9,7 @@ import { ConsultaBarraSuperior } from "@/components/bion/consulta/BarraSuperior"
 import { ConsultaAreaVideo } from "@/components/bion/consulta/AreaVideo";
 import { ConsultaControlesMidia } from "@/components/bion/consulta/ControlesMidia";
 import { ConsultaPainelLateral } from "@/components/bion/consulta/PainelLateral";
+import { ModalBion } from "@/components/bion/ModalBion";
 import type { PapelSala, SalaConsulta } from "@/components/bion/consulta/useSalaConsulta";
 
 const nada = () => {};
@@ -116,6 +117,43 @@ export function SalaConsultaTela({
       </div>
 
       {children}
+
+      {/* O1: inserir o modelo de evolução com anotações já escritas pede
+          confirmação explícita — o texto da sala só é gravado no
+          "concluir", então substituir em silêncio era perda definitiva.
+          Mesmo padrão do modal "sair sem concluir" (ChamadaMedico). */}
+      <ModalBion
+        aberto={sala.confirmarModeloResumo}
+        onFechar={sala.cancelarInsercaoModeloResumo}
+        titulo="Substituir suas anotações pelo modelo de evolução?"
+        largura="max-w-md"
+        overlay="bg-black/70 backdrop-blur-sm"
+        foraFecha={false}
+      >
+        <div className="bg-card text-foreground border rounded-3xl w-full p-6 shadow-2xl">
+          <h3 className="text-base font-bold">Inserir o modelo apaga o texto atual</h3>
+          <p className="text-sm text-muted-foreground mt-2">
+            Você já escreveu anotações nesta consulta e elas ainda não foram salvas — só são gravadas
+            ao concluir. Se inserir o modelo de evolução, o texto atual é substituído por ele.
+          </p>
+          <div className="flex gap-2 mt-4">
+            <button
+              type="button"
+              onClick={sala.cancelarInsercaoModeloResumo}
+              className="px-4 py-3 rounded-2xl bg-primary text-primary-foreground text-sm font-bold flex-1 hover:opacity-90 transition"
+            >
+              Manter minhas anotações
+            </button>
+            <button
+              type="button"
+              onClick={sala.confirmarInsercaoModeloResumo}
+              className="px-4 py-3 rounded-2xl border text-sm font-bold flex-1 hover:bg-muted transition"
+            >
+              Substituir pelo modelo
+            </button>
+          </div>
+        </div>
+      </ModalBion>
     </div>
   );
 }

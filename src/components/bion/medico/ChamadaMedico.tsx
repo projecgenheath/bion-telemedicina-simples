@@ -71,6 +71,10 @@ export function ChamadaMedico({ onEnd, consultaId }: { onEnd: () => void; consul
   const [recPosologia, setRecPosologia] = useState("");
   const [recDuracao, setRecDuracao] = useState("");
   const [recObs, setRecObs] = useState("");
+  // P1 (auditoria de melhorias): a receita da sala também não marcava
+  // controlado — nascia controlado=false e ficava elegível à renovação
+  // curta que o sistema bloqueia para controlados.
+  const [recControlado, setRecControlado] = useState(false);
 
   // Form Atestado
   const [atestDias, setAtestDias] = useState("");
@@ -88,6 +92,7 @@ export function ChamadaMedico({ onEnd, consultaId }: { onEnd: () => void; consul
     setRecPosologia("");
     setRecDuracao("");
     setRecObs("");
+    setRecControlado(false);
   };
   const limparAtestado = () => {
     setAtestDias("");
@@ -126,6 +131,7 @@ export function ChamadaMedico({ onEnd, consultaId }: { onEnd: () => void; consul
         paciente: contraparteNome,
         medicamento,
         posologia: recPosologia.trim(),
+        controlado: recControlado,
         duracao: recDuracao.trim(),
         observacoes: obs,
         conteudo: `${medicamento} — ${recPosologia.trim()} por ${recDuracao.trim()}.${obs ? ` ${obs}` : ""}`,
@@ -458,6 +464,23 @@ export function ChamadaMedico({ onEnd, consultaId }: { onEnd: () => void; consul
                   required
                 />
               </div>
+
+              <label className="flex items-start gap-2 rounded-xl border bg-background px-3 py-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  aria-label="Medicamento controlado"
+                  checked={recControlado}
+                  onChange={(e) => setRecControlado(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 shrink-0"
+                />
+                <span>
+                  <span className="block font-medium">Medicamento controlado</span>
+                  <span className="block opacity-70 mt-0.5">
+                    Receitas de medicamentos controlados só podem ser renovadas numa
+                    chamada com o médico, não pela renovação curta.
+                  </span>
+                </span>
+              </label>
 
               <div>
                 <label className="font-bold block mb-1">Observações ao Paciente</label>

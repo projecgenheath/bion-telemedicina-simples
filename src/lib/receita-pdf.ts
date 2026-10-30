@@ -168,6 +168,20 @@ export function gerarDocumentoPDF(d: Documento) {
     }
   }
 
+  // P3 (auditoria de melhorias): o CID é gravado no documento mas nunca era
+  // impresso — farmácia/empregador recebiam a via sem o diagnóstico codificado.
+  if (d.cid) {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.setTextColor(...CINZA_ESCURO);
+    doc.text("CID:", L, y);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(11);
+    doc.text(d.cid, L + 90, y);
+    y += 22;
+  }
+
   y += 8;
 
   // Conteúdo / Corpo da Prescrição

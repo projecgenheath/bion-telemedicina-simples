@@ -203,7 +203,7 @@ export function useSalaConsulta({
 
   // Insere um MODELO estruturado (sem conteúdo clínico inventado) que o
   // médico preenche com os dados reais da consulta.
-  const inserirModeloResumo = () => {
+  const aplicarModeloResumo = () => {
     setAnotacoes(
       `EVOLUÇÃO CLÍNICA — ${contraparteNome} (${consultaAtual?.especialidade ?? "Consulta"})
 • Queixa principal: —
@@ -213,6 +213,26 @@ export function useSalaConsulta({
 • Conduta: —`,
     );
   };
+
+  // O1: com texto já digitado, inserir o modelo NÃO substitui em
+  // silêncio — as anotações só são gravadas no "concluir", então trocar
+  // o conteúdo aqui é perda definitiva. Abre a confirmação (modal na
+  // SalaConsultaTela, mesmo padrão do "sair sem concluir") e só aplica
+  // com a ação explícita do médico. Texto vazio (ou só espaços) segue
+  // direto, sem fricção.
+  const [confirmarModeloResumo, setConfirmarModeloResumo] = useState(false);
+  const inserirModeloResumo = () => {
+    if (anotacoes.trim()) {
+      setConfirmarModeloResumo(true);
+      return;
+    }
+    aplicarModeloResumo();
+  };
+  const confirmarInsercaoModeloResumo = () => {
+    aplicarModeloResumo();
+    setConfirmarModeloResumo(false);
+  };
+  const cancelarInsercaoModeloResumo = () => setConfirmarModeloResumo(false);
 
   const sairDaSala = () => {
     // Só o médico encerra a chamada para os dois. O paciente SAI (o médico
@@ -253,6 +273,9 @@ export function useSalaConsulta({
     enviarArquivo,
     enviarChat,
     inserirModeloResumo,
+    confirmarModeloResumo,
+    confirmarInsercaoModeloResumo,
+    cancelarInsercaoModeloResumo,
     sairDaSala,
   };
 }

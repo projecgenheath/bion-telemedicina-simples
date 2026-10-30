@@ -24,6 +24,13 @@ export function RenovacoesPendentes() {
   const [aberto, setAberto] = useState<string | null>(null);
   const [mensagem, setMensagem] = useState("");
   const [conteudo, setConteudo] = useState("");
+  // P2 (auditoria de melhorias): medicamento/posologia/duração eram herdados
+  // em silêncio — o médico editava só o texto livre e os campos estruturados
+  // da receita nova podiam contar outra história (a rota já aceita e persiste
+  // os três; quem não enviava era esta tela). Agora são editáveis e visíveis.
+  const [medicamento, setMedicamento] = useState("");
+  const [posologia, setPosologia] = useState("");
+  const [duracao, setDuracao] = useState("");
   const [quando, setQuando] = useState("");
   const [enviando, setEnviando] = useState(false);
 
@@ -59,6 +66,9 @@ export function RenovacoesPendentes() {
       setAberto(null);
       setMensagem("");
       setConteudo("");
+      setMedicamento("");
+      setPosologia("");
+      setDuracao("");
       setQuando("");
       await carregar();
     } catch {
@@ -100,14 +110,22 @@ export function RenovacoesPendentes() {
               <textarea value={mensagem} onChange={(e) => setMensagem(e.target.value)} rows={2} maxLength={1000}
                 placeholder="Mensagem para o paciente (obrigatória para recusar)" className="w-full rounded-xl border bg-background p-2 text-sm" />
               {!p.exigeChamada ? (
-                <textarea value={conteudo} onChange={(e) => setConteudo(e.target.value)} rows={3} maxLength={6000}
-                  placeholder="Texto da receita nova" className="w-full rounded-xl border bg-background p-2 text-sm" />
+                <>
+                  <input value={medicamento} onChange={(e) => setMedicamento(e.target.value)} maxLength={200}
+                    placeholder="Medicamento" aria-label="Medicamento da receita nova" className="w-full rounded-xl border bg-background p-2 text-sm" />
+                  <input value={posologia} onChange={(e) => setPosologia(e.target.value)} maxLength={300}
+                    placeholder="Posologia (ex.: 1 comprimido ao dia)" aria-label="Posologia da receita nova" className="w-full rounded-xl border bg-background p-2 text-sm" />
+                  <input value={duracao} onChange={(e) => setDuracao(e.target.value)} maxLength={100}
+                    placeholder="Duração do tratamento" aria-label="Duração da receita nova" className="w-full rounded-xl border bg-background p-2 text-sm" />
+                  <textarea value={conteudo} onChange={(e) => setConteudo(e.target.value)} rows={3} maxLength={6000}
+                    placeholder="Texto da receita nova" className="w-full rounded-xl border bg-background p-2 text-sm" />
+                </>
               ) : null}
               <input type="datetime-local" min={agoraLocal} value={quando} onChange={(e) => setQuando(e.target.value)} className="w-full rounded-xl border bg-background p-2 text-sm" aria-label="Horário da chamada curta" />
               <div className="flex flex-wrap gap-2">
                 {!p.exigeChamada ? (
-                  <button type="button" disabled={enviando || !conteudo.trim()} className="rounded-full bg-primary text-primary-foreground px-4 py-2 text-sm disabled:opacity-50"
-                    onClick={() => void responder(p.id, { acao: "renovar", documento: { conteudo } })}>Renovar</button>
+                  <button type="button" disabled={enviando || !conteudo.trim() || !medicamento.trim() || !posologia.trim() || !duracao.trim()} className="rounded-full bg-primary text-primary-foreground px-4 py-2 text-sm disabled:opacity-50"
+                    onClick={() => void responder(p.id, { acao: "renovar", documento: { conteudo, medicamento: medicamento.trim(), posologia: posologia.trim(), duracao: duracao.trim() } })}>Renovar</button>
                 ) : null}
                 <button type="button" disabled={enviando || !quando} className="rounded-full border px-4 py-2 text-sm disabled:opacity-50"
                   onClick={() => void responder(p.id, { acao: "chamada", dataInicio: new Date(quando).toISOString() })}>Marcar chamada curta</button>
@@ -119,6 +137,9 @@ export function RenovacoesPendentes() {
             <button type="button" className="text-sm underline" onClick={() => {
               setAberto(p.id);
               setConteudo(p.documento && !p.exigeChamada ? p.documento.conteudo : "");
+              setMedicamento(p.documento && !p.exigeChamada ? (p.documento.medicamento ?? "") : "");
+              setPosologia(p.documento && !p.exigeChamada ? (p.documento.posologia ?? "") : "");
+              setDuracao(p.documento && !p.exigeChamada ? (p.documento.duracao ?? "") : "");
             }}>Responder</button>
           )}
         </li>

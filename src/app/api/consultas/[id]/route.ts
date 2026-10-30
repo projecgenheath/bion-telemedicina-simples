@@ -13,6 +13,9 @@ import {
   type AuditPayload,
 } from "@/lib/server/dados";
 import { quandoClinica } from "@/lib/server/fuso";
+import { erroHttp } from "@/lib/server/evolucao";
+import { evolucaoImpedeConclusao } from "@/lib/evolucao-logica";
+import { LIMITE_RESUMO_MEDICO } from "@/lib/resumo-medico";
 import { statusAposFalhaDoMedico } from "@/lib/atendimento-tipo";
 import {
   consultaEmHorarioVedado,
@@ -48,6 +51,10 @@ import {
 } from "@/lib/server/financeiro";
 
 type Acao = "cancelar" | "concluir" | "remarcar" | "atualizar";
+
+/** O3: evolução iniciada pelo médico sem conduta não vira "concluída" pelo atalho do Encerrar. */
+const ERRO_EVOLUCAO_SEM_CONDUTA =
+  "Você começou a evolução desta consulta, mas a conduta está vazia: preencha a conduta e conclua pela evolução (a consulta conclui junto) — ou apague o conteúdo da evolução para concluir só com o resumo.";
 
 const STATUS_VALIDOS = [
   "pendente_anamnese",
@@ -221,6 +228,19 @@ export async function PATCH(
         if (consulta.status === "falta_paciente") {
           return Response.json({ erro: "Esta consulta já teve falta do paciente registrada e não pode ser concluída." }, { status: 409 });
         }
+        // O2: o resumo NUNCA é truncado. Acima do teto (o mesmo da UI,
+        // lib/resumo-medico) é 400 claro e nada é gravado — antes um
+        // slice(0, 300) cortava o registro clínico em silêncio e o médico
+        // só descobria (se descobrisse) relendo o prontuário depois.
+        const resumoConclusao = textoDoCorpo(body.resumo);
+        if (resumoConclusao !== undefined && resumoConclusao.length > LIMITE_RESUMO_MEDICO) {
+          return Response.json(
+            {
+              erro: `O resumo tem ${resumoConclusao.length.toLocaleString("pt-BR")} caracteres e passa do limite de ${LIMITE_RESUMO_MEDICO.toLocaleString("pt-BR")}: encurte o texto para concluir. Nada foi salvo nem cortado.`,
+            },
+            { status: 400 },
+          );
+        }
         // Regras do Alisson (06/10/2026), só para o MÉDICO (o admin corrige):
         // não conclui consulta com desfecho (falta/falha técnica, de quem for),
         // nem cancelada/aguardando reagendamento, nem sem o paciente ter
@@ -231,6 +251,19 @@ export async function PATCH(
           }
           if (await desfechoExistente(id)) {
             return Response.json({ erro: "Esta consulta já tem desfecho registrado (falta do paciente ou falha técnica)." }, { status: 409 });
+          }
+          // O3: o atalho do Encerrar não pode carimbar "concluída" uma
+          // evolução que o médico COMEÇOU a escrever e deixou sem
+          // conduta — a rota da evolução recusa concluir sem conduta, e
+          // esta via concluía as duas coisas sem olhar. O casco vazio
+          // criado na entrada da sala (garantirEvolucao) NÃO é evolução
+          // iniciada: quem conclui só com o resumo lateral segue normal.
+          const evAtual = await db.evolucao.findUnique({
+            where: { consultaId: id },
+            select: { status: true, dados: true, triagem: true, exames: true, medicamentos: true, conduta: true, cid: true, documentos: true },
+          });
+          if (evAtual && evolucaoImpedeConclusao(evAtual)) {
+            return Response.json({ erro: ERRO_EVOLUCAO_SEM_CONDUTA, evolucaoSemConduta: true }, { status: 409 });
           }
           if (consulta.status !== "concluida") {
             const { paciente } = await lerPresencas(consulta);
@@ -246,8 +279,10 @@ export async function PATCH(
           }
         }
         data.status = "concluida";
-        // B8 (análogo ao motivo): resumo com teto e guarda de tipo.
-        if (body.resumo !== undefined) data.resumoMedico = textoDoCorpo(body.resumo)?.slice(0, 300) ?? null;
+        // O2: resumo já validado no início desta ação (teto explícito,
+        // sem truncar); grava o texto INTEIRO, ou null quando o corpo
+        // não traz string (guarda de tipo do B8, sem o corte).
+        if (body.resumo !== undefined) data.resumoMedico = resumoConclusao ?? null;
         eventos.push({
           tipo: "agenda",
           titulo: "Consulta concluída",
@@ -255,7 +290,9 @@ export async function PATCH(
           usuarioId: consulta.pacienteId,
         });
         audit.acao = "CONSULTA_CONCLUIDA";
-        audit.detalhes = `Consulta ${consulta.especialidade} (${quando}) concluída${textoDoCorpo(body.resumo) ? ` — Resumo: ${textoDoCorpo(body.resumo)!.slice(0, 100)}` : ""}`;
+        // O slice(0, 100) aqui é só a PRÉVIA no log de auditoria — o
+        // registro clínico completo é o resumoMedico gravado acima.
+        audit.detalhes = `Consulta ${consulta.especialidade} (${quando}) concluída${resumoConclusao ? ` — Resumo: ${resumoConclusao.slice(0, 100)}` : ""}`;
         break;
       }
       case "remarcar": {
@@ -435,6 +472,12 @@ export async function PATCH(
     // toast, sem segundo POST — não há sucesso parcial: se a transação
     // falha, nem consulta nem evolução mudam.
     let evolucaoEncerrada = false;
+    // O3 (defesa em profundidade): a pré-checagem do "concluir" já
+    // recusou a evolução iniciada sem conduta; dentro da transação o
+    // rascunho é relido e a MESMA regra barra o carimbo "concluída" se
+    // um autosave esvaziar a conduta entre a checagem e a escrita. Só
+    // para o médico dono — o fluxo do admin (correção) não muda.
+    const exigirCondutaEvolucao = ehDonoMedico && !ehAdmin;
     try {
       await db.$transaction(async (tx) => {
         if (alvo) {
@@ -464,8 +507,14 @@ export async function PATCH(
         // atendimento — concluir a consulta conclui o rascunho dela, e
         // concluir a evolução conclui a consulta (rota de evolução).
         if (data.status === "cancelada" || data.status === "aguardando_reagendamento" || data.status === "concluida") {
-          const rascunho = await tx.evolucao.findUnique({ where: { consultaId: id }, select: { id: true, status: true, rascunho: true } });
+          const rascunho = await tx.evolucao.findUnique({ where: { consultaId: id }, select: { id: true, status: true, rascunho: true, dados: true, triagem: true, exames: true, medicamentos: true, conduta: true, cid: true, documentos: true } });
           if (rascunho && rascunho.status === "rascunho") {
+            // O3: concluir a consulta carimbando "concluída" uma evolução
+            // iniciada e sem conduta desfaz a transação inteira — nem a
+            // consulta nem a evolução concluem pela metade.
+            if (data.status === "concluida" && exigirCondutaEvolucao && evolucaoImpedeConclusao(rascunho)) {
+              throw erroHttp(409, ERRO_EVOLUCAO_SEM_CONDUTA);
+            }
             let nota = {};
             try { nota = JSON.parse(rascunho.rascunho || "{}") as Record<string, unknown>; } catch { /* rascunho inválido */ }
             await tx.evolucao.update({

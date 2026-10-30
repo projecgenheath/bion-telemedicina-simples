@@ -136,7 +136,7 @@ export function gerarProntuarioPDF(opts: {
   }
   opts.documentos.forEach((d) => {
     // mantém o bloco do documento inteiro na mesma página
-    espaco(60 + (d.observacoes ? 40 : 0) + (d.posologia ? 26 : 0) + 40);
+    espaco(60 + (d.observacoes ? 40 : 0) + (d.posologia ? 26 : 0) + (d.cid ? 26 : 0) + 40);
     doc.setFillColor(241, 246, 255);
     doc.roundedRect(L, y - 12, W - L * 2, 4, 2, 2, "F");
     linha("", `${d.tipo === "receita" ? "Receita" : d.tipo === "exame" || d.tipo === "exame_solicitado" ? "Pedido de exames" : "Atestado"} • ${d.data}`, true);
@@ -145,6 +145,9 @@ export function gerarProntuarioPDF(opts: {
     if (d.medicamento) linha("Medicamento", d.medicamento);
     if (d.posologia) linha("Posologia", d.posologia);
     if (d.duracao) linha("Duração", d.duracao);
+    // P3 (auditoria de melhorias): CID gravado no documento passa a constar
+    // também na via do prontuário (antes nenhum PDF o exibia).
+    if (d.cid) linha("CID", d.cid);
     linha("Descrição", d.conteudo);
     if (d.observacoes) linha("Observações", d.observacoes);
     y += 14;

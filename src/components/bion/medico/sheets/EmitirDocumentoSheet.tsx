@@ -49,6 +49,13 @@ export function EmitirDocumentoSheet({
   const [titulo, setTitulo] = useState(base ? tituloBase(base.titulo) : "");
   const [medicamento, setMedicamento] = useState(base?.medicamento ?? "");
   const [posologia, setPosologia] = useState(base?.posologia ?? "");
+  // P1 (auditoria de melhorias): a folha NÃO enviava controlado nem CID —
+  // receita de controlado emitida por aqui nascia controlado=false e ficava
+  // elegível à renovação curta que o sistema bloqueia para controlados.
+  // A API aceita os dois campos e a UI clássica (Receitas.tsx) tem o
+  // interruptor; aqui eles passam a existir e ir no payload.
+  const [controlado, setControlado] = useState(base?.controlado ?? false);
+  const [cid, setCid] = useState(base?.cid ?? "");
   const [duracao, setDuracao] = useState(base?.duracao ?? "");
   const [conteudo, setConteudo] = useState(base?.conteudo ?? "");
   const [observacoes, setObservacoes] = useState(base?.observacoes ?? "");
@@ -143,7 +150,8 @@ export function EmitirDocumentoSheet({
         medico: sessao.nome,
         paciente: pacienteNome,
         conteudo: conteudo.trim(),
-        ...(tipo === "receita" ? { medicamento: medicamento.trim(), posologia: posologia.trim() } : {}),
+        ...(tipo === "receita" ? { medicamento: medicamento.trim(), posologia: posologia.trim(), controlado } : {}),
+        ...(cid.trim() ? { cid: cid.trim() } : {}),
         ...(duracao.trim() ? { duracao: duracao.trim() } : {}),
         ...(observacoes.trim() ? { observacoes: observacoes.trim() } : {}),
         // B-12: documento fica vinculado à consulta em que foi emitido (o
@@ -174,6 +182,8 @@ export function EmitirDocumentoSheet({
             aria-checked={tipo === t}
             onClick={() => {
               setTipo(t);
+              // Como na UI clássica: controlado só existe para receita.
+              if (t !== "receita") setControlado(false);
               setErros({});
             }}
             className={`py-2 rounded-xl text-xs font-bold ${
@@ -228,7 +238,28 @@ export function EmitirDocumentoSheet({
               <Campo rotulo="Posologia" erro={erros.posologia}>
                 <input value={posologia} onChange={(e) => setPosologia(e.target.value)} className={entrada} maxLength={200} />
               </Campo>
+              <label className="flex items-start gap-3 rounded-2xl border border-bion-ink/10 dark:border-white/10 px-4 py-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  aria-label="Medicamento controlado"
+                  checked={controlado}
+                  onChange={(e) => setControlado(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 shrink-0"
+                />
+                <span>
+                  <span className="block text-sm font-medium">Medicamento controlado</span>
+                  <span className="block text-xs opacity-70 mt-0.5">
+                    Receitas de medicamentos controlados só podem ser renovadas numa
+                    chamada com o médico, não pela renovação curta.
+                  </span>
+                </span>
+              </label>
             </>
+          ) : null}
+          {tipo === "receita" || tipo === "atestado" ? (
+            <Campo rotulo="CID (opcional)" ajuda="Ex.: J30.1 — fica gravado no documento e impresso no PDF.">
+              <input value={cid} onChange={(e) => setCid(e.target.value)} className={entrada} maxLength={20} placeholder="Ex.: J30.1" />
+            </Campo>
           ) : null}
           {tipo !== "exame_solicitado" ? (
             <Campo rotulo={tipo === "receita" ? "Duração do tratamento" : "Período de afastamento"} erro={erros.duracao}>

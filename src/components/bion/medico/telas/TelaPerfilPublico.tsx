@@ -194,24 +194,45 @@ function BioSheet({
 }) {
   const { atualizarMedico } = useBion();
   const [texto, setTexto] = useState(bio);
-  const salvar = () => {
+  const [erro, setErro] = useState<string>();
+  const [salvando, setSalvando] = useState(false);
+  // Mesmo padrão de PrecoSheet/AgendaSheet: salvar AGUARDA a confirmação
+  // real (delta do servidor) e só então fecha. Sem confirmação em tempo, a
+  // folha fica aberta com erro + retry, em vez de fechar fingindo sucesso —
+  // e fechar à mão (X/ESC/fundo) também fica travado enquanto salva.
+  const fechar = () => {
+    if (!salvando) onFechar();
+  };
+  const salvar = async () => {
     const novo = texto.trim().slice(0, TAM_BIO);
+    setErro(undefined);
+    setSalvando(true);
     atualizarMedico(id, { bio: novo });
-    confirmar(novo, "Salvando apresentação…", "Apresentação atualizada");
-    onFechar();
+    const ok = await confirmar(novo, "Salvando apresentação…", "Apresentação atualizada");
+    setSalvando(false);
+    if (ok) onFechar();
+    else setErro("Não foi possível confirmar o salvamento. Verifique sua conexão e toque em Salvar novamente.");
   };
   return (
-    <SheetMedico aberto onFechar={onFechar} titulo="Sua apresentação" subtitulo={`Aparece no perfil público de ${nome}.`}>
-      <Campo rotulo="Sobre você" ajuda={`${texto.length}/${TAM_BIO} caracteres`}>
+    <SheetMedico aberto onFechar={fechar} titulo="Sua apresentação" subtitulo={`Aparece no perfil público de ${nome}.`}>
+      <Campo rotulo="Sobre você" erro={erro} ajuda={`${texto.length}/${TAM_BIO} caracteres`}>
         <textarea
           value={texto}
-          onChange={(e) => setTexto(e.target.value.slice(0, TAM_BIO))}
+          onChange={(e) => {
+            setTexto(e.target.value.slice(0, TAM_BIO));
+            setErro(undefined);
+          }}
           rows={6}
           className="bp-entrada !rounded-2xl w-full px-4 py-3 text-sm"
         />
       </Campo>
-      <button type="button" onClick={salvar} disabled={texto.trim() === bio.trim()} className="bp-acao w-full py-3 text-sm mt-4">
-        Salvar apresentação
+      <button
+        type="button"
+        onClick={salvar}
+        disabled={salvando || texto.trim() === bio.trim()}
+        className="bp-acao w-full py-3 text-sm mt-4 disabled:opacity-50"
+      >
+        {salvando ? "Salvando…" : "Salvar apresentação"}
       </button>
     </SheetMedico>
   );

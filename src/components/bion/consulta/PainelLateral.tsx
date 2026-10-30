@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import type { AnamneseResumo } from "@/lib/bion-store";
 import { ROTULOS_ANAMNESE } from "@/components/bion/consulta/rotulos-anamnese";
+import { LIMITE_RESUMO_MEDICO } from "@/lib/resumo-medico";
 
 type Role = "paciente" | "medico" | "admin";
 type Aba = "prontuario" | "anamnese" | "exames" | "chat" | "ia";
@@ -157,10 +158,20 @@ export function ConsultaPainelLateral({
               value={anotacoes}
               onChange={(e) => setAnotacoes(e.target.value)}
               rows={8}
+              maxLength={LIMITE_RESUMO_MEDICO}
               disabled={role !== "medico"}
               placeholder="Registre queixa, hipótese diagnóstica e conduta médica..."
               className="w-full p-3 rounded-2xl bg-white/5 border border-white/10 text-white placeholder:text-slate-400 outline-none focus:border-primary text-xs leading-relaxed"
             />
+            {/* O2: contador no MESMO teto que o servidor valida ao
+                concluir (lib/resumo-medico) — o médico vê o limite
+                enquanto escreve, em vez de descobrir num erro (ou, antes,
+                num corte silencioso de 300 caracteres). */}
+            {role === "medico" && (
+              <div className="text-right text-[11px] text-slate-400" aria-live="polite">
+                {anotacoes.length.toLocaleString("pt-BR")} / {LIMITE_RESUMO_MEDICO.toLocaleString("pt-BR")} caracteres
+              </div>
+            )}
           </div>
         </div>
       )}

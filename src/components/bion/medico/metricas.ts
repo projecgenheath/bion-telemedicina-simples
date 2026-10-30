@@ -88,6 +88,42 @@ export function concluidas30d(consultas: Consulta[], agora: number): number {
   return consultas.filter((c) => c.status === "concluida" && c.ts >= inicio && c.ts <= agora).length;
 }
 
+/** Dias da janela de RESPOSTA do paciente — espelha `janelaDias` do POST /api/mensagens. */
+export const JANELA_RESPOSTA_DIAS = 30;
+
+export type JanelaResposta = {
+  /** Consulta-base da janela: a NÃO cancelada mais recente do par (a mesma que o servidor escolhe). */
+  base: Consulta;
+  /** Instante em que a janela fecha: base.ts + JANELA_RESPOSTA_DIAS. */
+  limite: number;
+  /** Dias restantes, arredondados para cima (0 no dia do fechamento). */
+  diasRestantes: number;
+  /** true quando `agora` passou do limite — o servidor recusa a resposta do paciente (403). */
+  encerrada: boolean;
+};
+
+/**
+ * Janela de resposta do paciente nesta conversa, com a MESMA regra do
+ * POST /api/mensagens: o paciente só responde até 30 dias após a consulta
+ * NÃO cancelada mais recente com este médico (o servidor busca a consulta
+ * por dataInicio desc; no cliente, `ts` é exatamente esse dataInicio). O
+ * médico não tem janela — pode enviar sempre. Sem consulta não cancelada,
+ * devolve null (a conversa nem abre para envio). Serve para o médico não
+ * ler o silêncio do paciente como desinteresse quando é a plataforma
+ * bloqueando a resposta.
+ */
+export function janelaRespostaPaciente(consultas: Consulta[], agora: number): JanelaResposta | null {
+  const base = consultas.filter((c) => c.status !== "cancelada").sort((a, b) => b.ts - a.ts)[0];
+  if (!base) return null;
+  const limite = base.ts + JANELA_RESPOSTA_DIAS * 86_400_000;
+  return {
+    base,
+    limite,
+    diasRestantes: Math.max(0, Math.ceil((limite - agora) / 86_400_000)),
+    encerrada: agora > limite,
+  };
+}
+
 export type PacienteDoMedico = {
   /** pacienteId quando existe; "nome:<nome>" só para consulta legada sem id. */
   chave: string;

@@ -1,10 +1,16 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { FilePlus2, Send } from "lucide-react";
+import { AlertTriangle, FilePlus2, Info as InfoIcone, Send } from "lucide-react";
 import { useBion, type Documento } from "@/lib/bion-store";
 import { formatarDataNascimento, idadeDeNascimento } from "@/lib/idade";
-import { rotuloStatusMedico, type PacienteDoMedico } from "./metricas";
+import { janelaRespostaPaciente, rotuloStatusMedico, type PacienteDoMedico } from "./metricas";
+
+const FUSO = "America/Sao_Paulo";
+
+/** "30/11/2026" (fuso da clínica) para um timestamp. */
+const fmtData = (ts: number) =>
+  new Date(ts).toLocaleDateString("pt-BR", { timeZone: FUSO, day: "2-digit", month: "2-digit", year: "numeric" });
 import { TelaSobreposta } from "./TelaSobreposta";
 import { TriagemPaciente } from "./TriagemPaciente";
 import { ProntuarioPaciente } from "./ProntuarioPaciente";
@@ -94,6 +100,11 @@ export function ConversaPaciente({
   const anamneseRef = ref ? anamneses.find((a) => a.consultaId === ref.id) : undefined;
   const idade = registro?.dataNascimento ? idadeDeNascimento(registro.dataNascimento) : registro?.idade || null;
   const podeEnviar = Boolean(pid) && consultas.some((c) => c.status !== "cancelada");
+  // PC2: janela de RESPOSTA do paciente (regra do POST /api/mensagens,
+  // espelhada em metricas.janelaRespostaPaciente). O médico envia sempre;
+  // quem tem prazo é o paciente — sem este aviso, o silêncio dele depois do
+  // prazo parece desinteresse, quando é a plataforma recusando a resposta.
+  const janela = pid ? janelaRespostaPaciente(consultas, Date.now()) : null;
 
   const enviar = () => {
     const t = texto.trim();
@@ -242,6 +253,37 @@ export function ConversaPaciente({
               <Info r="Motivo" v={ref?.motivoConsulta ?? ""} />
             </dl>
           </article>
+
+          {janela ? (
+            janela.encerrada ? (
+              <div className="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4 flex gap-3" role="status">
+                <AlertTriangle className="w-5 h-5 shrink-0 text-amber-800 dark:text-amber-200" aria-hidden />
+                <div className="min-w-0">
+                  <div className="text-sm font-bold text-amber-900 dark:text-amber-100">
+                    Janela de resposta do paciente encerrada
+                  </div>
+                  <p className="text-xs text-amber-900/80 dark:text-amber-100/80 mt-1">
+                    Desde {fmtData(janela.limite)} o paciente não consegue mais responder por aqui (a plataforma
+                    aceita respostas só até 30 dias após a consulta mais recente). Se ele não respondeu, pode ter
+                    sido esse bloqueio — não desinteresse. Para retomar a conversa, ele precisa de uma nova
+                    consulta. Você ainda pode enviar mensagens.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="bp-glass p-4 flex gap-3" role="status">
+                <InfoIcone className="w-5 h-5 shrink-0 text-bion-sea dark:text-sky-300" aria-hidden />
+                <div className="min-w-0">
+                  <div className="text-sm font-bold">Janela de resposta do paciente: aberta</div>
+                  <p className="text-xs text-bion-ink/75 dark:text-bion-paper/75 mt-1">
+                    Ele pode responder até {fmtData(janela.limite)} (30 dias após a consulta mais recente
+                    {janela.diasRestantes <= 30 ? ` — restam ${janela.diasRestantes} ${janela.diasRestantes === 1 ? "dia" : "dias"}` : ""}).
+                    Você pode enviar mensagens a qualquer momento.
+                  </p>
+                </div>
+              </div>
+            )
+          ) : null}
 
           {conversa.length === 0 ? (
             <p className="text-sm text-center text-bion-ink/75 dark:text-bion-paper/75 py-4">Nenhuma mensagem ainda.</p>

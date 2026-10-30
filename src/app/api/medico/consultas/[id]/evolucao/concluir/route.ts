@@ -5,28 +5,10 @@ import { ok, falha } from "@/lib/server/http";
 import { broadcastCanal } from "@/lib/supabase/broadcast";
 import { topicoSala } from "@/lib/server/sala-canal";
 import { erroHttp, evolucaoWire } from "@/lib/server/evolucao";
-
-/**
- * Conduta preenchida? A conduta é gravada como JSON (a UI salva
- * { texto: "..." }); vazia, sem texto ou com qualquer outro formato sem
- * conteúdo não autoriza concluir — a exigência existia só na UI.
- */
-function condutaPreenchida(condutaJson: string | null | undefined): boolean {
-  if (!condutaJson) return false;
-  let v: unknown;
-  try {
-    v = JSON.parse(condutaJson);
-  } catch {
-    return false;
-  }
-  if (typeof v === "string") return v.trim().length > 0;
-  if (v && typeof v === "object") {
-    const o = v as Record<string, unknown>;
-    if (typeof o.texto === "string") return o.texto.trim().length > 0;
-    return Object.values(o).some((x) => typeof x === "string" && x.trim().length > 0);
-  }
-  return false;
-}
+// Predicado puro compartilhado (lib/evolucao-logica): a MESMA definição
+// de "conduta preenchida" vale aqui e no portão do PATCH de concluir a
+// consulta — antes esta cópia local era a única no servidor.
+import { condutaPreenchida } from "@/lib/evolucao-logica";
 
 /**
  * POST /api/medico/consultas/[id]/evolucao/concluir — só o MÉDICO dono.

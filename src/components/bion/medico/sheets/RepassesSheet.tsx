@@ -6,6 +6,7 @@ import { fmtCentavos } from "../metricas";
 import {
   useRepasses,
   type ItemRepasseDetalhe,
+  type ListaRepasses,
   type PreviaRepasseWire,
   type RepasseDetalhe,
   type RepasseResumo,
@@ -271,6 +272,24 @@ function DetalheView({
 }
 
 /**
+ * Há repasse para o admin pagar (fechado aguardando pagamento, prévia de
+ * hoje com líquido, ou saldo positivo)? É a condição REAL do alerta forte
+ * de chave PIX: "sem chave o admin não consegue pagar" só é fato quando
+ * existe pagamento esperando. Não há como distinguir aqui um eventual
+ * "modelo de recebimento" do médico — o Stripe Connect é ligado por
+ * configuração do servidor e a conta conectada não vem neste wire (por
+ * privacidade, os dados de recebimento não entram no bootstrap) — então
+ * o alerta se ancora no que é verificável: dinheiro a receber.
+ */
+function repasseParaPagar(lista: ListaRepasses): boolean {
+  return (
+    lista.saldoCentavos > 0 ||
+    lista.previa.totais.liquidoCentavos > 0 ||
+    lista.repasses.some((r) => r.status === "fechado" && r.liquidoCentavos > 0)
+  );
+}
+
+/**
  * Histórico de repasses do médico: saldo, prévia de hoje, lista de fechados/pagos
  * e detalhe por competência. Abre a partir do perfil.
  */
@@ -350,13 +369,37 @@ export function RepassesSheet({
                 </p>
               </div>
 
-              {!lista.temChavePix ? (
+              {!lista.temChavePix && repasseParaPagar(lista) ? (
                 <div className="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4 flex gap-3" role="status">
                   <AlertTriangle className="w-5 h-5 shrink-0 text-amber-800 dark:text-amber-200" aria-hidden />
                   <div className="min-w-0">
                     <div className="text-sm font-bold text-amber-900 dark:text-amber-100">Cadastre sua chave PIX</div>
                     <p className="text-xs text-amber-900/80 dark:text-amber-100/80 mt-1">
                       Sem chave cadastrada o admin não consegue pagar o repasse.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onFechar();
+                        onAbrirRecebimento();
+                      }}
+                      className="mt-2 inline-flex items-center gap-1.5 text-sm font-bold text-bion-sea dark:text-sky-300"
+                    >
+                      <Wallet className="w-4 h-4" aria-hidden /> Ir para Recebimento (PIX)
+                    </button>
+                  </div>
+                </div>
+              ) : !lista.temChavePix ? (
+                // Sem repasse esperando pagamento, a falta da chave não
+                // bloqueia nada: nota informativa (sem alarme), com o
+                // atalho para cadastrar quando o médico quiser.
+                <div className="bp-glass p-4 flex gap-3" role="status">
+                  <Wallet className="w-5 h-5 shrink-0 text-bion-sea dark:text-sky-300" aria-hidden />
+                  <div className="min-w-0">
+                    <div className="text-sm font-bold">Chave PIX de recebimento</div>
+                    <p className="text-xs text-bion-ink/75 dark:text-bion-paper/75 mt-1">
+                      Os repasses são pagos na chave PIX cadastrada. No momento você não tem repasse esperando
+                      pagamento, então nada está bloqueado — cadastre a chave quando quiser.
                     </p>
                     <button
                       type="button"
