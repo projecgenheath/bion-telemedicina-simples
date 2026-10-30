@@ -7,7 +7,7 @@
  * mostra estado vazio.
  */
 import { instanteFusoClinica, partesFusoClinica } from "@/lib/bion-tipos";
-import type { Consulta, PacienteRegistro } from "@/lib/bion-tipos";
+import type { Avaliacao, Consulta, Medico, PacienteRegistro } from "@/lib/bion-tipos";
 import { isoDia } from "@/components/bion/paciente/agenda-medico";
 import { salaAbertaEm } from "@/lib/janela-sala";
 
@@ -52,6 +52,13 @@ export function proximaConsulta(consultas: Consulta[], agora: number): Consulta 
 
 /** Sala de teleatendimento aberta: de 30 min antes até 2 h depois do horário (janela única em lib/janela-sala.ts). */
 export const salaAberta = (ts: number, agora: number) => salaAbertaEm(ts, agora);
+
+/**
+ * Vigiar a presença do paciente na sala (item 22)? Só dentro da janela da
+ * sala: fora dela o paciente nem consegue entrar (a sala recusa), então
+ * presença fresca (PresencaSala) não pode existir e o polling nem começa.
+ */
+export const deveVigiarPresenca = (ts: number, agora: number) => salaAbertaEm(ts, agora);
 
 export type ResumoHoje = {
   agendadas: Consulta[];
@@ -717,4 +724,239 @@ export function podeMarcarDesfechoNaAgenda(
   const inicio = c.dataISO ? Date.parse(c.dataISO) : c.ts;
   if (!STATUS_ATIVOS.includes(c.status) || c.falta || desfechos?.has(c.id)) return false;
   return agora >= inicio && agora <= prazoDesfecho(inicio);
+}
+
+/* ------------------------------------------------------------------ */
+/* Painel de gestão: indicadores de um período (7/30/90 dias)          */
+/* ------------------------------------------------------------------ */
+
+export type JanelaDias = { deISO: string; ateISO: string };
+
+/** "AAAA-MM-DD" + delta dias (aritmética no calendário, fuso da clínica). */
+export function somarDiasISO(iso: string, delta: number): string {
+  const [a, m, d] = iso.split("-").map(Number);
+  return isoDia(instanteFusoClinica(a, m - 1, d, 12) + delta * 86_400_000);
+}
+
+/** Dia da semana (0=Dom … 6=Sáb) de um "AAAA-MM-DD". */
+export function diaSemanaISO(iso: string): number {
+  const [a, m, d] = iso.split("-").map(Number);
+  return new Date(Date.UTC(a, m - 1, d)).getUTCDay();
+}
+
+/**
+ * Janela atual de `dias` dias TERMINANDO HOJE (fuso da clínica) e a janela
+ * anterior de mesmo tamanho, para comparação de período no painel de gestão.
+ */
+export function janelasComparacao(agora: number, dias: number): { atual: JanelaDias; anterior: JanelaDias } {
+  const ateISO = isoDia(agora);
+  const deISO = somarDiasISO(ateISO, -(dias - 1));
+  return {
+    atual: { deISO, ateISO },
+    anterior: { deISO: somarDiasISO(deISO, -dias), ateISO: somarDiasISO(deISO, -1) },
+  };
+}
+
+/** Falta do paciente: status próprio ou o selo `falta` do bootstrap (evento falta_paciente). */
+export const ehFaltaPaciente = (c: Consulta) => c.falta === true || c.status === "falta_paciente";
+
+/**
+ * A consulta OCUPA um horário da grade: vai acontecer (status ativo), já
+ * aconteceu (concluída) ou o paciente faltou (o horário foi consumido).
+ * Cancelada e aguardando reagendamento liberaram o horário — não ocupam.
+ */
+export const ocupaSlot = (c: Consulta) =>
+  c.status === "concluida" || STATUS_ATIVOS.includes(c.status) || ehFaltaPaciente(c);
+
+export type MetricasPeriodo = {
+  /** Horários ofertados: dias de atendimento da janela × horários da grade. */
+  ofertados: number;
+  /** Consultas do médico que ocuparam horário na janela. */
+  ocupados: number;
+  /** ocupados / ofertados (null sem oferta: grade vazia). */
+  ocupacao: number | null;
+  /** Consultas concluídas na janela. */
+  atendimentos: number;
+  /** Faltas do paciente na janela. */
+  faltas: number;
+  /** faltas / (concluídas + faltas); null sem nenhum dos dois. */
+  taxaFalta: number | null;
+  /** Canceladas na janela (qualquer autor). */
+  canceladas: number;
+  /** Consultas pagas e não canceladas com valor conhecido na janela. */
+  consultasPagas: number;
+  /** Soma dos valores dessas consultas (R$, bruto). */
+  receitaConsultas: number;
+  /** receitaConsultas / consultasPagas (null sem consulta paga). */
+  ticketMedio: number | null;
+};
+
+/**
+ * Indicadores de prática de UMA janela [deISO, ateISO] (dias no fuso da
+ * clínica, inclusive nas pontas), calculados das consultas que o cliente já
+ * carrega e da grade do próprio médico. `consultas` deve vir já filtrada
+ * para o médico (ehDoMedico). Dias de atendimento vazios = todos os dias.
+ */
+export function metricasPeriodo(
+  consultas: Consulta[],
+  grade: { slotsPorDia: number; diasAtendimento: number[] },
+  janela: JanelaDias,
+): MetricasPeriodo {
+  let ofertados = 0;
+  for (let iso = janela.deISO; iso <= janela.ateISO; iso = somarDiasISO(iso, 1)) {
+    if (grade.diasAtendimento.length === 0 || grade.diasAtendimento.includes(diaSemanaISO(iso))) {
+      ofertados += grade.slotsPorDia;
+    }
+  }
+  const naJanela = consultas.filter((c) => {
+    const d = diaDaConsulta(c);
+    return d >= janela.deISO && d <= janela.ateISO;
+  });
+  const ocupados = naJanela.filter(ocupaSlot).length;
+  const atendimentos = naJanela.filter((c) => c.status === "concluida").length;
+  const faltas = naJanela.filter(ehFaltaPaciente).length;
+  const baseFalta = atendimentos + faltas;
+  const pagas = naJanela.filter((c) => c.pago && c.status !== "cancelada" && parseValorBRL(c.valor) > 0);
+  const receitaConsultas = pagas.reduce((s, c) => s + parseValorBRL(c.valor), 0);
+  return {
+    ofertados,
+    ocupados,
+    ocupacao: ofertados > 0 ? ocupados / ofertados : null,
+    atendimentos,
+    faltas,
+    taxaFalta: baseFalta > 0 ? faltas / baseFalta : null,
+    canceladas: naJanela.filter((c) => c.status === "cancelada").length,
+    consultasPagas: pagas.length,
+    receitaConsultas,
+    ticketMedio: pagas.length > 0 ? receitaConsultas / pagas.length : null,
+  };
+}
+
+/**
+ * Receita prevista: consultas FUTURAS já pagas e ainda ativas (bruto, R$).
+ * É dinheiro contratado que ainda não entrou na receita realizada.
+ */
+export function receitaPrevista(consultas: Consulta[], agora: number): { total: number; qtd: number } {
+  const futuras = consultas.filter(
+    (c) => c.pago && STATUS_ATIVOS.includes(c.status) && c.ts > agora && parseValorBRL(c.valor) > 0,
+  );
+  return { total: futuras.reduce((s, c) => s + parseValorBRL(c.valor), 0), qtd: futuras.length };
+}
+
+/** Variação percentual entre períodos; null sem base (anterior = 0 e atual > 0). */
+export function variacaoPct(atual: number, anterior: number): number | null {
+  if (anterior === 0) return atual === 0 ? 0 : null;
+  return ((atual - anterior) / Math.abs(anterior)) * 100;
+}
+
+/* ------------------------------------------------------------------ */
+/* Avaliações do médico: resumo com sub-notas e distribuição           */
+/* ------------------------------------------------------------------ */
+
+export type ResumoAvaliacoes = {
+  total: number;
+  /** Média da nota geral (null sem avaliações). */
+  media: number | null;
+  /** Quantidade por estrela: índice 0 = 1 estrela … índice 4 = 5 estrelas. */
+  distribuicao: [number, number, number, number, number];
+  /** Médias das sub-notas — cada uma só sobre quem avaliou aquela dimensão. */
+  pontualidade: number | null;
+  atencao: number | null;
+  clareza: number | null;
+  comComentario: number;
+};
+
+const mediaDe = (valores: number[]) =>
+  valores.length ? valores.reduce((s, v) => s + v, 0) / valores.length : null;
+
+const subnotas = (avaliacoes: Avaliacao[], campo: "pontualidade" | "atencao" | "clareza") =>
+  avaliacoes
+    .map((a) => a[campo])
+    .filter((v): v is number => typeof v === "number" && v >= 1 && v <= 5);
+
+/** Resumo das avaliações RECEBIDAS pelo médico (lista que o cliente já carrega). */
+export function resumoAvaliacoes(avaliacoes: Avaliacao[]): ResumoAvaliacoes {
+  const distribuicao: ResumoAvaliacoes["distribuicao"] = [0, 0, 0, 0, 0];
+  for (const a of avaliacoes) {
+    const n = Math.round(a.nota);
+    if (n >= 1 && n <= 5) distribuicao[n - 1]++;
+  }
+  return {
+    total: avaliacoes.length,
+    media: mediaDe(avaliacoes.map((a) => a.nota).filter((v) => v >= 1 && v <= 5)),
+    distribuicao,
+    pontualidade: mediaDe(subnotas(avaliacoes, "pontualidade")),
+    atencao: mediaDe(subnotas(avaliacoes, "atencao")),
+    clareza: mediaDe(subnotas(avaliacoes, "clareza")),
+    comComentario: avaliacoes.filter((a) => a.comentario?.trim()).length,
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/* Perfil público: completude e referência de preço                    */
+/* ------------------------------------------------------------------ */
+
+export type CompletudePerfil = {
+  percentual: number;
+  preenchidos: number;
+  total: number;
+  /** Rótulos do que falta, na ordem em que o paciente sente falta. */
+  faltantes: string[];
+};
+
+/**
+ * Quanto do perfil público está preenchido — os mesmos campos que o
+ * paciente vê (ou procura) ao escolher um médico. Só presença conta,
+ * nunca qualidade inventada.
+ */
+export function completudePerfil(
+  m: Pick<Medico, "foto" | "bio" | "formacao" | "experiencia" | "idiomas" | "subespecialidades" | "horariosDisponiveis">,
+): CompletudePerfil {
+  const itens: { rotulo: string; ok: boolean }[] = [
+    { rotulo: "foto de perfil", ok: Boolean(m.foto?.trim()) },
+    { rotulo: "apresentação (bio)", ok: Boolean(m.bio?.trim()) },
+    { rotulo: "formação", ok: Boolean(m.formacao?.trim()) },
+    { rotulo: "experiência", ok: Boolean(m.experiencia?.trim()) },
+    { rotulo: "idiomas", ok: (m.idiomas ?? []).some((i) => i.trim()) },
+    { rotulo: "subespecialidades", ok: (m.subespecialidades ?? []).some((s) => s.trim()) },
+    { rotulo: "horários de atendimento", ok: (m.horariosDisponiveis ?? []).length > 0 },
+  ];
+  const preenchidos = itens.filter((i) => i.ok).length;
+  return {
+    percentual: Math.round((preenchidos / itens.length) * 100),
+    preenchidos,
+    total: itens.length,
+    faltantes: itens.filter((i) => !i.ok).map((i) => i.rotulo),
+  };
+}
+
+export type FaixaPrecos = { min: number; mediana: number; max: number; n: number };
+
+/**
+ * Faixa de preços dos OUTROS médicos ATIVOS da mesma especialidade no
+ * diretório que o cliente já carrega (o mesmo que o paciente navega).
+ * Sem outro médico com preço válido, devolve null — referência não se
+ * inventa.
+ */
+export function faixaPrecosEspecialidade(
+  medicos: Pick<Medico, "id" | "especialidade" | "valor" | "status">[],
+  especialidade: string,
+  meuId?: string,
+): FaixaPrecos | null {
+  const alvo = especialidade.trim().toLowerCase();
+  const valores = medicos
+    .filter(
+      (m) =>
+        m.status === "ativo" &&
+        m.id !== meuId &&
+        m.especialidade.trim().toLowerCase() === alvo &&
+        Number.isFinite(m.valor) &&
+        m.valor > 0,
+    )
+    .map((m) => m.valor)
+    .sort((a, b) => a - b);
+  if (valores.length === 0) return null;
+  const meio = Math.floor(valores.length / 2);
+  const mediana = valores.length % 2 ? valores[meio] : (valores[meio - 1] + valores[meio]) / 2;
+  return { min: valores[0], mediana, max: valores[valores.length - 1], n: valores.length };
 }

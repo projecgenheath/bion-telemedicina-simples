@@ -9,6 +9,7 @@ import {
   consultasCancelaveisDoDia,
   ehDoMedico,
   desfechosSistema,
+  parseValorBRL,
   reservaVigente,
   reservasNoDia,
   rotuloStatusMedico,
@@ -27,6 +28,10 @@ import { avisarDadosMedicoAlterados, useBloqueiosAgenda } from "../useDadosMedic
 const DIAS_SEMANA = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 const HORIZONTE_DIAS = 14;
 const MOTIVO_CANCELAR_DIA = "Agenda do dia cancelada pelo médico";
+/** Cancelamento individual sem motivo digitado: é o texto que o paciente lê na notificação. */
+const MOTIVO_CANCELAR_UM = "Cancelada pelo médico";
+/** Teto do motivo no servidor (o PATCH corta em 300 ao gravar). */
+const MOTIVO_CANCELAR_MAX = 300;
 /** Bloqueio de dia: até 365 dias à frente; motivo (privado) até 120 caracteres — mesmas regras do servidor. */
 const HORIZONTE_BLOQUEIO_DIAS = 365;
 const MOTIVO_BLOQUEIO_MAX = 120;
@@ -35,6 +40,8 @@ type Falha = { consulta: Consulta; erro: string };
 /** Desfecho marcado pela agenda (regras do Alisson, 06/10/2026). */
 type TipoDesfecho = "falta_paciente" | "falha_tecnica";
 type Marcacao = { consultaId: string; tipo: TipoDesfecho; etapa: "confirmar" | "enviando" | "erro" | "feito"; erro?: string };
+/** Cancelamento de UMA consulta pelo médico (mesmo PATCH do fluxo do dia, sem a bandeira do dia). */
+type Cancelamento = { consultaId: string; motivo: string; etapa: "confirmar" | "enviando" | "erro" | "feito"; erro?: string };
 type Fase =
   | { tipo: "lista" }
   | { tipo: "confirmar"; alvo: Consulta[]; reservas: number }
@@ -108,11 +115,38 @@ async function cancelarComoDia(id: string): Promise<{ ok: true; delta: unknown }
 }
 
 /**
+ * Cancela UMA consulta pelo médico: o MESMO PATCH de `cancelarComoDia`, mas
+ * SEM `cancelarDia` — as regras são as do servidor para o cancelamento pelo
+ * médico (sem multa; paga e com valor → aguarda reagendamento e o paciente
+ * escolhe reembolso integral ou remarcar sem custo; senão, cancelada) e só a
+ * reserva de remarcação DESTA consulta cai junto, não as do dia.
+ */
+async function cancelarIndividual(
+  id: string,
+  motivo: string,
+): Promise<{ ok: true; delta: unknown } | { ok: false; erro: string }> {
+  try {
+    const res = await fetch(`/api/consultas/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ acao: "cancelar", motivo }),
+    });
+    const json = (await res.json().catch(() => null)) as ({ erro?: string } & Record<string, unknown>) | null;
+    if (!res.ok) return { ok: false, erro: json?.erro ?? `Erro ${res.status}` };
+    return { ok: true, delta: json };
+  } catch {
+    return { ok: false, erro: "Falha de conexão com o servidor." };
+  }
+}
+
+/**
  * Agenda de um dia (atalhos para os próximos 14 dias + "Outro dia" para
  * qualquer data futura) com as consultas, os horários livres e os horários
- * RESERVADOS por remarcações aguardando pagamento, mais a ação "Cancelar
+ * RESERVADOS por remarcações aguardando pagamento, mais as ações "Cancelar
  * agenda do dia" — hoje ou qualquer dia futuro, mesmo que o dia só tenha
- * reservas aguardando pagamento. Dia que já passou não é cancelado.
+ * reservas aguardando pagamento — e "Cancelar esta consulta" por consulta
+ * futura (o mesmo PATCH do fluxo do dia, sem a bandeira do dia). Dia que já
+ * passou não é cancelado.
  * Consultas com falta do paciente / falha técnica (gravadas pelo sistema a
  * partir da presença na sala) mostram esse rótulo no lugar do status.
  */
@@ -263,6 +297,7 @@ export function AgendaDoDia({ medico, onExecutando }: { medico: Medico; onExecut
     return () => clearInterval(t);
   }, []);
   const [marcacao, setMarcacao] = useState<Marcacao | null>(null);
+  const [cancelamento, setCancelamento] = useState<Cancelamento | null>(null);
 
   /** POST /api/medico/consultas/[id]/desfecho — o servidor confere presença, prazo e desfecho. */
   const marcarDesfecho = async (m: Marcacao) => {
@@ -286,6 +321,26 @@ export function AgendaDoDia({ medico, onExecutando }: { medico: Medico; onExecut
     if (!erro) avisarDadosMedicoAlterados();
     setAgora(Date.now());
     setMarcacao(erro ? { ...m, etapa: "erro", erro } : { ...m, etapa: "feito" });
+    rodando.current = false;
+    onExecutando(false);
+  };
+
+  /** PATCH /api/consultas/[id] { acao: "cancelar" } — o servidor aplica as regras do cancelamento pelo médico. */
+  const executarCancelamento = async (cx: Cancelamento) => {
+    if (rodando.current) return;
+    rodando.current = true;
+    onExecutando(true);
+    setCancelamento({ ...cx, etapa: "enviando", erro: undefined });
+    const motivo = cx.motivo.trim().slice(0, MOTIVO_CANCELAR_MAX) || MOTIVO_CANCELAR_UM;
+    const r = await cancelarIndividual(cx.consultaId, motivo);
+    if (r.ok) {
+      aplicarDelta(r.delta);
+      avisarDadosMedicoAlterados();
+      setAgora(Date.now());
+      setCancelamento({ ...cx, etapa: "feito" });
+    } else {
+      setCancelamento({ ...cx, etapa: "erro", erro: r.erro });
+    }
     rodando.current = false;
     onExecutando(false);
   };
@@ -472,10 +527,15 @@ export function AgendaDoDia({ medico, onExecutando }: { medico: Medico; onExecut
               agora={agora}
               desfechos={desfechos}
               marcacao={marcacao}
-              ocupado={ocupado || marcacao?.etapa === "enviando"}
+              cancelamento={cancelamento}
+              ocupado={ocupado || marcacao?.etapa === "enviando" || cancelamento?.etapa === "enviando"}
               onPedir={(consultaId, tipo) => setMarcacao({ consultaId, tipo, etapa: "confirmar" })}
               onConfirmar={(m) => void marcarDesfecho(m)}
               onFechar={() => setMarcacao(null)}
+              onPedirCancelar={(consulta) => setCancelamento({ consultaId: consulta.id, motivo: "", etapa: "confirmar" })}
+              onMotivoCancelar={(motivo) => setCancelamento((cx) => (cx ? { ...cx, motivo } : cx))}
+              onConfirmarCancelar={(cx) => void executarCancelamento(cx)}
+              onFecharCancelar={() => setCancelamento(null)}
             />
           ))}
         </ul>
@@ -783,19 +843,29 @@ function LinhaSlot({
   agora,
   desfechos,
   marcacao,
+  cancelamento,
   ocupado,
   onPedir,
   onConfirmar,
   onFechar,
+  onPedirCancelar,
+  onMotivoCancelar,
+  onConfirmarCancelar,
+  onFecharCancelar,
 }: {
   slot: SlotAgenda;
   agora: number;
   desfechos: ReadonlyMap<string, DesfechoSistema>;
   marcacao: Marcacao | null;
+  cancelamento: Cancelamento | null;
   ocupado: boolean;
   onPedir: (consultaId: string, tipo: TipoDesfecho) => void;
   onConfirmar: (m: Marcacao) => void;
   onFechar: () => void;
+  onPedirCancelar: (consulta: Consulta) => void;
+  onMotivoCancelar: (motivo: string) => void;
+  onConfirmarCancelar: (cx: Cancelamento) => void;
+  onFecharCancelar: () => void;
 }) {
   const cor =
     slot.estado === "ocupado"
@@ -905,6 +975,97 @@ function LinhaSlot({
             <p className="text-[11px] text-bion-ink/70 dark:text-bion-paper/70">
               {c.paciente}: dá para marcar até {horaClinica(prazoDesfecho(c.dataISO ?? c.ts))} de hoje.
             </p>
+          </div>
+        );
+      })}
+      {slot.consultas.map((c) => {
+        const cx = cancelamento?.consultaId === c.id ? cancelamento : null;
+        // Mesma elegibilidade de "Cancelar agenda do dia", por consulta:
+        // status ativo e ainda não começou. (Desfecho é o espelho: só depois
+        // de começar — os dois nunca aparecem juntos.)
+        const cancelavel = STATUS_ATIVOS.includes(c.status) && c.ts > agora;
+        if (!cancelavel && !cx) return null;
+        if (cx && (cx.etapa === "confirmar" || cx.etapa === "enviando" || cx.etapa === "erro")) {
+          const pagaComValor = c.pago === true && parseValorBRL(c.valor) > 0;
+          const r = reservaVigente(c, agora);
+          return (
+            <div
+              key={c.id}
+              role="alertdialog"
+              aria-labelledby={`bm-cancelar-um-${c.id}`}
+              aria-describedby={`bm-cancelar-um-texto-${c.id}`}
+              className="mt-2 rounded-xl border-2 border-red-700 dark:border-red-300 p-3 space-y-2"
+            >
+              <p id={`bm-cancelar-um-${c.id}`} className="text-sm font-black">
+                Cancelar esta consulta?{" "}
+                <span className="font-semibold">
+                  ({c.paciente}, {horaClinica(c.dataISO ?? c.ts)})
+                </span>
+              </p>
+              <div id={`bm-cancelar-um-texto-${c.id}`} className="text-xs text-bion-ink/75 dark:text-bion-paper/75 space-y-1">
+                <p>
+                  {pagaComValor
+                    ? "O paciente não paga multa. Como ele já pagou, a consulta fica aguardando reagendamento: ele escolhe entre reembolso integral ou remarcar sem custo."
+                    : "O paciente não paga multa. A consulta é cancelada e ele é avisado pelo app."}
+                </p>
+                {r ? <p>A reserva de remarcação aguardando pagamento desta consulta também é cancelada.</p> : null}
+                <p>Não dá para desfazer.</p>
+              </div>
+              <label className="block text-xs">
+                <span className="font-bold">Motivo (o paciente vê) — opcional</span>
+                <input
+                  type="text"
+                  value={cx.motivo}
+                  maxLength={MOTIVO_CANCELAR_MAX}
+                  disabled={cx.etapa === "enviando"}
+                  onChange={(e) => onMotivoCancelar(e.target.value)}
+                  placeholder="Ex.: imprevisto pessoal"
+                  className="mt-1 w-full rounded-xl border border-bion-ink/15 dark:border-white/15 bg-transparent px-3 py-2 text-sm disabled:opacity-60"
+                />
+              </label>
+              {cx.etapa === "erro" ? (
+                <p className="text-xs font-semibold text-red-700 dark:text-red-300" role="alert">{cx.erro}</p>
+              ) : null}
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  disabled={cx.etapa === "enviando"}
+                  onClick={onFecharCancelar}
+                  className="py-2 rounded-xl text-sm font-bold border border-bion-ink/25 dark:border-white/25 disabled:opacity-60"
+                >
+                  Voltar
+                </button>
+                <button
+                  type="button"
+                  disabled={cx.etapa === "enviando"}
+                  onClick={() => onConfirmarCancelar(cx)}
+                  className="py-2 rounded-xl text-sm font-bold inline-flex items-center justify-center gap-1.5 bg-red-700 text-white hover:bg-red-800 dark:bg-red-300 dark:text-zinc-950 dark:hover:bg-red-200 disabled:opacity-60"
+                >
+                  {cx.etapa === "enviando" ? <Loader2 className="w-4 h-4 motion-safe:animate-spin" aria-hidden /> : null}
+                  {cx.etapa === "enviando" ? "Cancelando…" : "Sim, cancelar consulta"}
+                </button>
+              </div>
+            </div>
+          );
+        }
+        if (cx?.etapa === "feito") {
+          return (
+            <p key={c.id} className="mt-1.5 text-xs font-semibold inline-flex items-center gap-1.5" role="status">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-300" aria-hidden /> Consulta cancelada. O paciente foi avisado.
+            </p>
+          );
+        }
+        return (
+          <div key={c.id} className="mt-2">
+            <button
+              type="button"
+              disabled={ocupado}
+              onClick={() => onPedirCancelar(c)}
+              aria-label={`Cancelar a consulta de ${c.paciente} às ${slot.hora}`}
+              className="w-full py-2 px-2 rounded-xl text-xs font-bold inline-flex items-center justify-center gap-1.5 border border-red-700/50 text-red-800 hover:bg-red-700/5 dark:border-red-300/50 dark:text-red-200 dark:hover:bg-red-300/10 disabled:opacity-60"
+            >
+              <CalendarX2 className="w-4 h-4 shrink-0" aria-hidden /> Cancelar esta consulta
+            </button>
           </div>
         );
       })}

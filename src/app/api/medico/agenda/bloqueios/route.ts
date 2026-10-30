@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
-import { exigirPapel, registrarAudit } from "@/lib/server/auth";
+import { exigirPapel, registrarAudit, type UsuarioSessao } from "@/lib/server/auth";
 import { aplicarSideEffects } from "@/lib/server/dados";
 import {
   bloquearDiaTravado,
@@ -12,9 +12,10 @@ import {
   OPCOES_TX_TRAVA,
   travarDiaIso,
   validarDiaBloqueio,
+  validarIntervaloBloqueio,
 } from "@/lib/server/bloqueio-agenda";
 import { cancelarConsultasDoDia, contarAfetadosDoDia } from "@/lib/server/agenda-dia";
-import { fmtDataClinica } from "@/lib/server/fuso";
+import { fmtDataClinica, instanteNoFuso } from "@/lib/server/fuso";
 import { ok, falha } from "@/lib/server/http";
 
 const CORPO_MAX = 2000;
@@ -28,6 +29,14 @@ const CORPO_MAX = 2000;
  *        → grava o bloqueio (idempotente) e, se o dia tiver consultas/reservas,
  *          cancela-as como o cancelamento pelo médico (exige cancelarConsultas: true;
  *          sem ele → 409 { erro, consultas, reservas } e nada é gravado).
+ * POST   { diaInicio, diaFim, motivo?, cancelarConsultas? }
+ *        → o MESMO bloqueio, dia a dia, para o intervalo inteiro (férias):
+ *          cada dia na sua transação com a trava do dia; sem
+ *          cancelarConsultas e com qualquer dia afetado → 409
+ *          { erro, consultas, reservas, diasAfetados } e NADA é gravado.
+ *          Sucesso → { intervalo, bloqueados, jaBloqueados, canceladas,
+ *          reservasLiberadas, falhas } (falha de um dia não desfaz os outros;
+ *          ela volta nomeada em `falhas` para o médico tentar de novo).
  * DELETE ?dia=AAAA-MM-DD → remove o bloqueio (hoje ou depois). Não restaura consultas.
  */
 export async function GET() {
@@ -51,13 +60,19 @@ export async function POST(req: NextRequest) {
     const medico = await exigirPapel("MEDICO");
     const texto = await req.text();
     if (texto.length > CORPO_MAX) return Response.json({ erro: "Requisição muito grande." }, { status: 413 });
-    let body: { dia?: unknown; motivo?: unknown; cancelarConsultas?: unknown };
+    let body: { dia?: unknown; diaInicio?: unknown; diaFim?: unknown; motivo?: unknown; cancelarConsultas?: unknown };
     try {
       const v: unknown = JSON.parse(texto || "{}");
       if (!v || typeof v !== "object" || Array.isArray(v)) throw new Error();
       body = v as typeof body;
     } catch {
       return Response.json({ erro: "JSON inválido." }, { status: 400 });
+    }
+
+    // Intervalo (férias): basta um dos dois campos vir para ser o fluxo de
+    // período — os dois são obrigatórios nele (validarIntervaloBloqueio).
+    if (body.diaInicio !== undefined || body.diaFim !== undefined) {
+      return await bloquearIntervalo(medico, body);
     }
 
     const agora = new Date();
@@ -128,6 +143,149 @@ export async function POST(req: NextRequest) {
   } catch (erro) {
     return falha(erro);
   }
+}
+
+/** Meio-dia de São Paulo de um dia "AAAA-MM-DD" (longe das bordas, como em validarDiaBloqueio). */
+function meioDiaIso(iso: string): Date {
+  const [ano, mes, dia] = iso.split("-").map(Number);
+  return instanteNoFuso(ano, mes, dia, 12, 0);
+}
+
+type ResultadoCancelamentoDia = Awaited<ReturnType<typeof cancelarConsultasDoDia>>;
+
+/**
+ * Bloqueio de um INTERVALO de dias (férias): um bloqueio de dia por dia,
+ * cada um na sua transação com a trava (médico, dia) — o mesmo caminho do
+ * POST de dia único (bloquearDiaTravado + agenda-dia). Regras:
+ * - o teto de bloqueios futuros é conferido ANTES de gravar qualquer dia;
+ * - sem `cancelarConsultas`, se QUALQUER dia tiver consultas/reservas → 409
+ *   com o detalhamento por dia e NADA é gravado (a confirmação é do período);
+ * - a falha de um dia (limite por corrida, consulta que entrou depois da
+ *   contagem) não desfaz os dias já bloqueados: ela volta nomeada em
+ *   `falhas`, para o médico tentar aquele dia de novo.
+ * As notificações de todos os dias saem juntas, com UMA auditoria do período.
+ */
+async function bloquearIntervalo(
+  medico: UsuarioSessao,
+  body: { diaInicio?: unknown; diaFim?: unknown; motivo?: unknown; cancelarConsultas?: unknown },
+): Promise<Response> {
+  const agora = new Date();
+  const intervalo = validarIntervaloBloqueio(body.diaInicio, body.diaFim, agora);
+  if (!intervalo.ok) return Response.json({ erro: intervalo.erro }, { status: 400 });
+  const motivo = limparMotivo(body.motivo);
+  if (!motivo.ok) return Response.json({ erro: motivo.erro }, { status: 400 });
+  if (body.cancelarConsultas !== undefined && typeof body.cancelarConsultas !== "boolean") {
+    return Response.json({ erro: "cancelarConsultas deve ser verdadeiro ou falso." }, { status: 400 });
+  }
+  const cancelarConsultas = body.cancelarConsultas === true;
+  const { de, ate, dias } = intervalo.valor;
+
+  // Dias do período que já estão bloqueados (o bloqueio é idempotente, mas
+  // o resumo distingue "já estava" de "bloqueado agora").
+  const existentes = await db.bloqueioAgenda.findMany({
+    where: { medicoId: medico.id, dia: { gte: diaParaDate(de), lte: diaParaDate(ate) } },
+    select: { dia: true },
+  });
+  const jaBloqueados = new Set(existentes.map((r) => dateParaDiaIso(r.dia)));
+  const novos = dias.filter((d) => !jaBloqueados.has(d));
+  if (novos.length) {
+    const futuros = await db.bloqueioAgenda.count({
+      where: { medicoId: medico.id, dia: { gte: diaParaDate(hojeSaoPaulo(agora)) } },
+    });
+    if (futuros + novos.length > MAX_BLOQUEIOS_FUTUROS) {
+      return Response.json(
+        { erro: `Limite de ${MAX_BLOQUEIOS_FUTUROS} dias bloqueados atingido. Desbloqueie algum dia antes.` },
+        { status: 409 },
+      );
+    }
+  }
+
+  // Sem a confirmação, qualquer dia afetado segura o período inteiro:
+  // conta tudo ANTES de gravar (a confirmação é uma só, como a do dia único).
+  if (!cancelarConsultas) {
+    const diasAfetados: { dia: string; consultas: number; reservas: number }[] = [];
+    for (const d of dias) {
+      const a = await contarAfetadosDoDia(db, medico.id, meioDiaIso(d), agora);
+      if (a.consultas || a.reservas) diasAfetados.push({ dia: d, consultas: a.consultas, reservas: a.reservas });
+    }
+    if (diasAfetados.length) {
+      return Response.json(
+        {
+          erro: "Este período tem consultas ou reservas. Confirme o cancelamento para bloquear o período.",
+          consultas: diasAfetados.reduce((s, x) => s + x.consultas, 0),
+          reservas: diasAfetados.reduce((s, x) => s + x.reservas, 0),
+          diasAfetados,
+        },
+        { status: 409 },
+      );
+    }
+  }
+
+  const bloqueados: string[] = [];
+  const falhas: { dia: string; erro: string }[] = [];
+  let canceladas = 0;
+  let reservasLiberadas = 0;
+  let entraramDurante = 0;
+  const notificacoes: ResultadoCancelamentoDia["notificacoes"] = [];
+  for (const d of dias) {
+    const meioDia = meioDiaIso(d);
+    try {
+      const resultado = await db.$transaction(
+        (tx) =>
+          bloquearDiaTravado(
+            tx,
+            { medicoId: medico.id, dia: d, motivo: motivo.valor, cancelarConsultas, agora },
+            {
+              contar: (t) => contarAfetadosDoDia(t, medico.id, meioDia, agora),
+              cancelar: (t) => cancelarConsultasDoDia(medico.id, meioDia, new Date(), t),
+            },
+          ),
+        OPCOES_TX_TRAVA,
+      );
+      if (resultado.tipo === "limite") {
+        falhas.push({ dia: d, erro: `Limite de ${MAX_BLOQUEIOS_FUTUROS} dias bloqueados atingido.` });
+        continue;
+      }
+      if (resultado.tipo === "confirmar") {
+        // Corrida: uma consulta/reserva entrou depois da contagem por um
+        // caminho sem a trava. Este dia NÃO foi bloqueado.
+        falhas.push({ dia: d, erro: "Uma consulta ou reserva entrou neste dia agora há pouco. Tente bloquear este dia de novo." });
+        continue;
+      }
+      bloqueados.push(d);
+      if (resultado.apareceuDepois) entraramDurante++;
+      const r = resultado.cancelamento;
+      if (r) {
+        canceladas += r.canceladas;
+        reservasLiberadas += r.reservasLiberadas;
+        notificacoes.push(...r.notificacoes);
+      }
+    } catch {
+      falhas.push({ dia: d, erro: "Falha ao bloquear este dia. Tente de novo." });
+    }
+  }
+
+  const houveCancelamento = canceladas > 0 || reservasLiberadas > 0;
+  const efeitos = await aplicarSideEffects(medico, notificacoes, {
+    acao: "AGENDA_INTERVALO_BLOQUEADO",
+    categoria: "consulta",
+    severidade: houveCancelamento ? "warning" : "info",
+    entidade: "medico",
+    entidadeId: medico.id,
+    detalhes: `Período de ${fmtDataClinica(meioDiaIso(de))} a ${fmtDataClinica(meioDiaIso(ate))} bloqueado pelo médico — ${bloqueados.length} dia(s) bloqueado(s), ${canceladas} consulta(s) cancelada(s), ${reservasLiberadas} reserva(s) liberada(s)${
+      entraramDurante ? ` (${entraramDurante} dia(s) com consultas que entraram durante o bloqueio)` : ""
+    }${falhas.length ? `; ${falhas.length} dia(s) com falha` : ""}`,
+  });
+
+  return ok({
+    intervalo: { de, ate },
+    bloqueados,
+    jaBloqueados: dias.filter((d) => jaBloqueados.has(d)),
+    canceladas,
+    reservasLiberadas,
+    falhas,
+    ...(efeitos.audit ? { audit: efeitos.audit } : {}),
+  });
 }
 
 export async function DELETE(req: NextRequest) {

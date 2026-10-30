@@ -2,15 +2,33 @@
 
 import { crmComRotulo } from "@/lib/medico-exibicao";
 import { useState } from "react";
-import { BadgeCheck, CalendarCheck, Copy, Pencil, Star } from "lucide-react";
+import { Award, BadgeCheck, Briefcase, CalendarCheck, Copy, Globe, ListChecks, Pencil, Sparkles, Star } from "lucide-react";
 import { toast } from "sonner";
-import { useBion } from "@/lib/bion-store";
-import { fmtBRL, iniciais, nomeAnonimo } from "../metricas";
+import { useBion, type Medico } from "@/lib/bion-store";
+import { completudePerfil, fmtBRL, iniciais, nomeAnonimo, resumoAvaliacoes } from "../metricas";
 import { Campo, SheetMedico } from "../sheets/SheetMedico";
-import type { Confirmar } from "../sheets/useConfirmarSalvamento";
+import { useConfirmarSalvamento, type Confirmar } from "../sheets/useConfirmarSalvamento";
 import type { DadosMedico } from "../useDadosMedico";
 
 const TAM_BIO = 2000; // limite do servidor
+const TAM_TEXTO = 2000; // formação/experiência: mesmo limite do servidor
+
+type CamposPerfil = Pick<Medico, "formacao" | "experiencia" | "idiomas" | "subespecialidades">;
+
+/** Chave de confirmação do salvamento: os 4 campos normalizados (trim) como uma string só. */
+const chaveCamposPerfil = (c: CamposPerfil) =>
+  JSON.stringify({
+    f: c.formacao.trim(),
+    e: c.experiencia.trim(),
+    i: c.idiomas.map((x) => x.trim()).filter(Boolean),
+    s: c.subespecialidades.map((x) => x.trim()).filter(Boolean),
+  });
+
+const listaDeTexto = (texto: string) =>
+  texto
+    .split(",")
+    .map((x) => x.trim())
+    .filter(Boolean);
 
 function Estrelas({ nota }: { nota: number }) {
   return (
@@ -38,7 +56,13 @@ export function TelaPerfilPublico({
   // undefined significa "ainda não aprovado/ativo".
   const { carregando } = useBion();
   const [editandoBio, setEditandoBio] = useState(false);
-  const comentarios = avaliacoes.filter((a) => a.comentario?.trim()).slice(0, 3);
+  const [editandoPerfil, setEditandoPerfil] = useState(false);
+  const resumo = resumoAvaliacoes(avaliacoes);
+  const completude = medico ? completudePerfil(medico) : null;
+  // Confirmação do salvamento dos campos do perfil (formação etc.): o hook
+  // mora AQUI (componente que continua montado), como o confirmarBio do
+  // MedicoApp — a folha só fecha quando o delta do servidor confirma.
+  const confirmarPerfil = useConfirmarSalvamento(medico ? chaveCamposPerfil(medico) : "", (a, b) => a === b);
 
   return (
     <section className="bm-tela bm-tela-3 flex flex-col px-5 pt-10 pb-20 text-white" aria-labelledby="bm-t3-titulo">
@@ -69,6 +93,33 @@ export function TelaPerfilPublico({
           <Copy className="w-3.5 h-3.5" /> Copiar link do perfil
         </button>
       )}
+
+      {medico && completude ? (
+        <div className="bp-glass-marinho p-4 mb-4">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-xs font-bold uppercase tracking-wider text-white/80 inline-flex items-center gap-1.5">
+              <ListChecks className="w-4 h-4" /> Perfil {completude.percentual}% completo
+            </span>
+            {completude.faltantes.length ? (
+              <button
+                type="button"
+                onClick={() => setEditandoPerfil(true)}
+                className="text-xs font-bold text-sky-200"
+              >
+                Completar perfil
+              </button>
+            ) : (
+              <span className="text-xs font-bold text-emerald-300">Completo</span>
+            )}
+          </div>
+          <div className="mt-2 h-2 rounded-full bg-white/15 overflow-hidden" role="progressbar" aria-valuenow={completude.percentual} aria-valuemin={0} aria-valuemax={100} aria-label={`Perfil ${completude.percentual}% completo`}>
+            <div className="h-full bg-emerald-300 rounded-full" style={{ width: `${completude.percentual}%` }} />
+          </div>
+          {completude.faltantes.length ? (
+            <p className="text-xs text-white/80 mt-2">Falta: {completude.faltantes.join(", ")}.</p>
+          ) : null}
+        </div>
+      ) : null}
 
       {carregando ? (
         <div className="bp-glass-marinho p-5 text-sm text-white/85">
@@ -126,6 +177,61 @@ export function TelaPerfilPublico({
               </p>
             </div>
 
+            {(medico.formacao?.trim() || medico.experiencia?.trim() || medico.idiomas.length || medico.subespecialidades.length) ? (
+              <div className="mt-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold uppercase tracking-wider text-white/80">Formação e atuação</span>
+                  <button
+                    type="button"
+                    onClick={() => setEditandoPerfil(true)}
+                    className="text-xs font-bold inline-flex items-center gap-1 text-sky-200"
+                  >
+                    <Pencil className="w-3.5 h-3.5" /> Editar
+                  </button>
+                </div>
+                {medico.formacao?.trim() ? (
+                  <p className="text-sm text-white/90 leading-relaxed whitespace-pre-line">
+                    <Award className="w-4 h-4 inline mr-1.5 -mt-0.5" aria-hidden />
+                    {medico.formacao}
+                  </p>
+                ) : null}
+                {medico.experiencia?.trim() ? (
+                  <p className="text-sm text-white/90 leading-relaxed whitespace-pre-line">
+                    <Briefcase className="w-4 h-4 inline mr-1.5 -mt-0.5" aria-hidden />
+                    {medico.experiencia}
+                  </p>
+                ) : null}
+                {medico.idiomas.length ? (
+                  <p className="text-sm text-white/90">
+                    <Globe className="w-4 h-4 inline mr-1.5 -mt-0.5" aria-hidden />
+                    {medico.idiomas.join(", ")}
+                  </p>
+                ) : null}
+                {medico.subespecialidades.length ? (
+                  <div>
+                    <div className="text-xs font-bold uppercase tracking-wider text-white/80 mb-1.5 inline-flex items-center gap-1">
+                      <Sparkles className="w-3.5 h-3.5" /> Subespecialidades
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {medico.subespecialidades.map((s) => (
+                        <span key={s} className="text-xs font-bold px-2 py-1 rounded-full bg-white/10">
+                          {s}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setEditandoPerfil(true)}
+                className="mt-4 text-xs font-bold inline-flex items-center gap-1 text-sky-200"
+              >
+                <Pencil className="w-3.5 h-3.5" /> Adicionar formação, experiência, idiomas e subespecialidades
+              </button>
+            )}
+
             <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
               <div>
                 <div className="text-xs font-bold uppercase tracking-wider text-white/80">Consulta</div>
@@ -142,26 +248,67 @@ export function TelaPerfilPublico({
           </div>
 
           <div className="bp-glass-marinho p-5 mt-3">
-            <div className="text-xs font-bold uppercase tracking-wider text-white/80 mb-2">Avaliações dos pacientes</div>
-            {comentarios.length === 0 ? (
-              <p className="text-sm text-white/85">Nenhum comentário recebido ainda.</p>
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <span className="text-xs font-bold uppercase tracking-wider text-white/80">Suas avaliações</span>
+              <span className="text-xs font-bold text-white/80">
+                {resumo.total} recebida(s){resumo.media !== null ? ` · média ${resumo.media.toFixed(1).replace(".", ",")}` : ""}
+              </span>
+            </div>
+            {avaliacoes.length === 0 ? (
+              <p className="text-sm text-white/85">Nenhuma avaliação recebida ainda.</p>
             ) : (
-              <ul className="space-y-3">
-                {comentarios.map((a) => (
-                  <li key={a.id}>
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-sm font-bold">{nomeAnonimo(a.paciente)}</span>
-                      <span className="inline-flex items-center gap-1">
-                        <Estrelas nota={a.nota} />
-                        <span className="sr-only">{a.nota} de 5</span>
-                      </span>
-                    </div>
-                    <p className="text-sm text-white/90 italic">“{a.comentario}”</p>
-                  </li>
-                ))}
-              </ul>
+              <>
+                {(resumo.pontualidade !== null || resumo.atencao !== null || resumo.clareza !== null) && (
+                  <div className="space-y-1.5 mb-3">
+                    <DimensaoAvaliacao rotulo="Pontualidade" valor={resumo.pontualidade} />
+                    <DimensaoAvaliacao rotulo="Atenção" valor={resumo.atencao} />
+                    <DimensaoAvaliacao rotulo="Clareza" valor={resumo.clareza} />
+                  </div>
+                )}
+                <div className="space-y-1 mb-3" aria-label="Distribuição de estrelas">
+                  {resumo.distribuicao
+                    .map((n, i) => ({ estrelas: i + 1, n }))
+                    .reverse()
+                    .map(({ estrelas, n }) => (
+                      <div key={estrelas} className="flex items-center gap-2 text-xs text-white/80">
+                        <span className="w-6 tabular-nums">{estrelas}★</span>
+                        <div className="flex-1 h-1.5 rounded-full bg-white/15 overflow-hidden">
+                          <div
+                            className="h-full bg-amber-300 rounded-full"
+                            style={{ width: `${resumo.total ? (n / resumo.total) * 100 : 0}%` }}
+                          />
+                        </div>
+                        <span className="w-6 text-right tabular-nums">{n}</span>
+                      </div>
+                    ))}
+                </div>
+                <ul className="space-y-3 max-h-96 overflow-y-auto pr-1">
+                  {avaliacoes.map((a) => (
+                    <li key={a.id} className="border-t border-white/10 pt-3 first:border-t-0 first:pt-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-sm font-bold">{nomeAnonimo(a.paciente)}</span>
+                        <span className="inline-flex items-center gap-1">
+                          <Estrelas nota={a.nota} />
+                          <span className="sr-only">{a.nota} de 5</span>
+                        </span>
+                      </div>
+                      {(a.pontualidade || a.atencao || a.clareza) && (
+                        <div className="mt-1 flex flex-wrap gap-1.5">
+                          {a.pontualidade ? <Subnota rotulo="Pontualidade" valor={a.pontualidade} /> : null}
+                          {a.atencao ? <Subnota rotulo="Atenção" valor={a.atencao} /> : null}
+                          {a.clareza ? <Subnota rotulo="Clareza" valor={a.clareza} /> : null}
+                        </div>
+                      )}
+                      {a.comentario?.trim() ? (
+                        <p className="text-sm text-white/90 italic mt-1">“{a.comentario}”</p>
+                      ) : null}
+                      <p className="text-xs text-white/70 mt-1">{a.quando}</p>
+                    </li>
+                  ))}
+                </ul>
+              </>
             )}
-            <p className="text-xs text-white/80 mt-3">Na prévia, o nome do paciente aparece abreviado.</p>
+            <p className="text-xs text-white/80 mt-3">Lista completa das suas avaliações; na prévia pública, o nome do paciente aparece abreviado.</p>
           </div>
         </>
       )}
@@ -175,7 +322,132 @@ export function TelaPerfilPublico({
           confirmar={confirmarBio}
         />
       ) : null}
+
+      {editandoPerfil && medico ? (
+        <PerfilCompletoSheet
+          onFechar={() => setEditandoPerfil(false)}
+          medico={medico}
+          confirmar={confirmarPerfil}
+        />
+      ) : null}
     </section>
+  );
+}
+
+/** Média de uma dimensão das avaliações (barra 0–5). Sem avaliações da dimensão, não renderiza. */
+function DimensaoAvaliacao({ rotulo, valor }: { rotulo: string; valor: number | null }) {
+  if (valor === null) return null;
+  return (
+    <div className="flex items-center gap-2 text-xs text-white/85">
+      <span className="w-24">{rotulo}</span>
+      <div className="flex-1 h-1.5 rounded-full bg-white/15 overflow-hidden">
+        <div className="h-full bg-amber-300 rounded-full" style={{ width: `${(valor / 5) * 100}%` }} />
+      </div>
+      <span className="w-7 text-right font-bold tabular-nums">{valor.toFixed(1).replace(".", ",")}</span>
+    </div>
+  );
+}
+
+function Subnota({ rotulo, valor }: { rotulo: string; valor: number }) {
+  return (
+    <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-white/10">
+      {rotulo} {valor}★
+    </span>
+  );
+}
+
+/**
+ * Editor completo do perfil público: formação, experiência, idiomas e
+ * subespecialidades — campos que o servidor já aceita na autoedição
+ * (PATCH /api/medicos/[id]) e a página pública exibe. Salvar aguarda a
+ * confirmação real (delta do servidor), como BioSheet/PrecoSheet.
+ */
+function PerfilCompletoSheet({
+  onFechar,
+  medico,
+  confirmar,
+}: {
+  onFechar: () => void;
+  medico: Medico;
+  confirmar: Confirmar<string>;
+}) {
+  const { atualizarMedico } = useBion();
+  const [formacao, setFormacao] = useState(medico.formacao ?? "");
+  const [experiencia, setExperiencia] = useState(medico.experiencia ?? "");
+  const [idiomas, setIdiomas] = useState((medico.idiomas ?? []).join(", "));
+  const [subespecialidades, setSubespecialidades] = useState((medico.subespecialidades ?? []).join(", "));
+  const [erro, setErro] = useState<string>();
+  const [salvando, setSalvando] = useState(false);
+
+  const campos: CamposPerfil = {
+    formacao: formacao.trim(),
+    experiencia: experiencia.trim(),
+    idiomas: listaDeTexto(idiomas),
+    subespecialidades: listaDeTexto(subespecialidades),
+  };
+  const alterado = chaveCamposPerfil(campos) !== chaveCamposPerfil(medico);
+
+  const fechar = () => {
+    if (!salvando) onFechar();
+  };
+  const salvar = async () => {
+    setErro(undefined);
+    setSalvando(true);
+    atualizarMedico(medico.id, campos);
+    const ok = await confirmar(chaveCamposPerfil(campos), "Salvando perfil…", "Perfil atualizado");
+    setSalvando(false);
+    if (ok) onFechar();
+    else setErro("Não foi possível confirmar o salvamento. Verifique sua conexão e toque em Salvar novamente.");
+  };
+
+  const entrada = "bp-entrada !rounded-2xl w-full px-4 py-3 text-sm";
+  return (
+    <SheetMedico aberto onFechar={fechar} titulo="Formação e atuação" subtitulo="Aparece no seu perfil público, abaixo da apresentação.">
+      <div className="space-y-4">
+        <Campo rotulo="Formação e títulos" ajuda={`${formacao.length}/${TAM_TEXTO} caracteres`}>
+          <textarea
+            value={formacao}
+            onChange={(e) => setFormacao(e.target.value.slice(0, TAM_TEXTO))}
+            rows={3}
+            placeholder="Ex.: Medicina na FMUSP · Residência em Clínica Médica no HC"
+            className={entrada}
+          />
+        </Campo>
+        <Campo rotulo="Experiência" ajuda={`${experiencia.length}/${TAM_TEXTO} caracteres`}>
+          <textarea
+            value={experiencia}
+            onChange={(e) => setExperiencia(e.target.value.slice(0, TAM_TEXTO))}
+            rows={3}
+            placeholder="Ex.: 10 anos de pronto-socorro e atenção primária"
+            className={entrada}
+          />
+        </Campo>
+        <Campo rotulo="Idiomas" ajuda="Separe por vírgula. Ex.: Português, Inglês, Espanhol">
+          <input
+            value={idiomas}
+            onChange={(e) => setIdiomas(e.target.value)}
+            placeholder="Português, Inglês"
+            className={entrada}
+          />
+        </Campo>
+        <Campo rotulo="Subespecialidades e focos" ajuda="Separe por vírgula. Ex.: Check-up, Saúde do homem" erro={erro}>
+          <input
+            value={subespecialidades}
+            onChange={(e) => setSubespecialidades(e.target.value)}
+            placeholder="Check-up, Medicina preventiva"
+            className={entrada}
+          />
+        </Campo>
+        <button
+          type="button"
+          onClick={salvar}
+          disabled={salvando || !alterado}
+          className="bp-acao w-full py-3 text-sm disabled:opacity-50"
+        >
+          {salvando ? "Salvando…" : "Salvar perfil"}
+        </button>
+      </div>
+    </SheetMedico>
   );
 }
 

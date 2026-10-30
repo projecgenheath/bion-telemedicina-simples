@@ -10,6 +10,10 @@ type MedicoPublico = {
   especialidade: string;
   crm: string;
   bio: string;
+  subespecialidades?: string[];
+  formacao?: string;
+  experiencia?: string;
+  idiomas?: string[];
   valor: number;
   avaliacao: number;
   numAvaliacoes: number;
@@ -97,10 +101,46 @@ export default function PerfilPublicoPage() {
             </div>
           )}
 
+          {medico.formacao?.trim() ? (
+            <div className="mt-4">
+              <div className="text-xs font-bold uppercase text-white/70">Formação</div>
+              <p className="text-sm mt-1 leading-relaxed whitespace-pre-line">{medico.formacao}</p>
+            </div>
+          ) : null}
+
+          {medico.experiencia?.trim() ? (
+            <div className="mt-4">
+              <div className="text-xs font-bold uppercase text-white/70">Experiência</div>
+              <p className="text-sm mt-1 leading-relaxed whitespace-pre-line">{medico.experiencia}</p>
+            </div>
+          ) : null}
+
+          {medico.idiomas?.length ? (
+            <div className="mt-4">
+              <div className="text-xs font-bold uppercase text-white/70">Idiomas</div>
+              <p className="text-sm mt-1">{medico.idiomas.join(", ")}</p>
+            </div>
+          ) : null}
+
+          {medico.subespecialidades?.length ? (
+            <div className="mt-4">
+              <div className="text-xs font-bold uppercase text-white/70">Subespecialidades</div>
+              <div className="flex flex-wrap gap-1.5 mt-1.5">
+                {medico.subespecialidades.map((s) => (
+                  <span key={s} className="text-xs font-bold px-2 py-1 rounded-full bg-white/10">
+                    {s}
+                  </span>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
           <div className="mt-4 flex items-center justify-between">
             <div>
               <div className="text-xs font-bold uppercase text-white/70">Consulta</div>
-              <div className="text-2xl font-black">R$ {medico.valor},00</div>
+              <div className="text-2xl font-black">
+                {medico.valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+              </div>
             </div>
             <a
               href="/"

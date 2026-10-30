@@ -5,6 +5,7 @@ import { aplicarSideEffects } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
 import { medidaCanonica } from "@/lib/medidas-paciente";
 import { detalhesAuditoria, lerTiposPedido, validarResposta, type RespostaPedido } from "@/lib/saude-paciente";
+import { notificacaoPedidoAtendido } from "@/lib/server/notificar-resultado";
 
 /**
  * POST /api/paciente/pedidos-medicao/:id — o paciente responde o pedido.
@@ -68,7 +69,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       await db.perfilPaciente.updateMany({ where: { userId: usuario.id }, data: perfil });
     }
 
-    await aplicarSideEffects(usuario, undefined, {
+    // Item 13 (melhorias): o médico do pedido fica sabendo — antes o ciclo
+    // "pedi → paciente mediu" terminava em side-effect vazio.
+    await aplicarSideEffects(usuario, [notificacaoPedidoAtendido(usuario.nome, pedido.medicoId, pedido.tipos)], {
       acao: "pedido_medicao_atendido",
       categoria: "prontuario",
       entidade: "pedidoMedicao",

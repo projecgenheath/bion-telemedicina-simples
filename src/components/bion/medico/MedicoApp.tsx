@@ -12,6 +12,7 @@ import { TelaPerfilPublico } from "./telas/TelaPerfilPublico";
 import { PerfilMedicoPainel } from "./PerfilMedicoPainel";
 import { PacientesPainel } from "./PacientesPainel";
 import { ConversaPaciente } from "./ConversaPaciente";
+import { NotificacoesMedico } from "./NotificacoesMedico";
 import { TelaSobreposta } from "./TelaSobreposta";
 import { RenovacoesPendentes } from "./evolucao/RenovacoesPendentes";
 import { DicaGestos, IndicadorTelas, useDicaGestos } from "./IndicadorTelas";
@@ -20,10 +21,11 @@ import { PromocoesSheet } from "./sheets/PromocoesSheet";
 import { AgendaSheet } from "./sheets/AgendaSheet";
 import { AgendaPreviewSheet } from "./sheets/AgendaPreviewSheet";
 import type { PacienteDoMedico } from "./metricas";
+import type { NotifTipo } from "@/lib/bion-store";
 import "./medico.css";
 
 type Sheet = "preco" | "agenda" | "preview" | "promocoes" | null;
-type Sobreposicao = { tipo: "renovacoes" } | { tipo: "suporte" } | { tipo: "termos" } | { tipo: "paciente"; p: PacienteDoMedico } | null;
+type Sobreposicao = { tipo: "renovacoes" } | { tipo: "suporte" } | { tipo: "termos" } | { tipo: "notificacoes" } | { tipo: "paciente"; p: PacienteDoMedico } | null;
 
 const EM_CAMPO = ["INPUT", "TEXTAREA", "SELECT"];
 /** Mesmo corte do medico.css: a partir daqui as 3 colunas ficam lado a lado. */
@@ -198,6 +200,25 @@ export function MedicoApp() {
     return () => window.removeEventListener("keydown", aoTeclar);
   }, [bloqueado, painel, secao, irPara, irSecao]);
 
+  // Item 12: destino interno de cada tipo de notificação (a Notificacao não
+  // carrega o id da entidade — abre a área onde ela se resolve).
+  const navegarNotificacao = useCallback(
+    (tipo: NotifTipo) => {
+      if (tipo === "mensagem") {
+        setSobreposicao(null);
+        irPara(2);
+      } else if (tipo === "receita") {
+        setSobreposicao({ tipo: "renovacoes" });
+      } else if (tipo === "suporte") {
+        setSobreposicao({ tipo: "suporte" });
+      } else {
+        setSobreposicao(null);
+        irPara(1);
+      }
+    },
+    [irPara],
+  );
+
   const abrirSheet = (s: Exclude<Sheet, null>) => {
     setAberturas((n) => n + 1);
     setSheet(s);
@@ -253,6 +274,7 @@ export function MedicoApp() {
             onAbrirPerfil={() => irPara(0)}
             onAbrirPacientes={() => irPara(2)}
             onAbrirRenovacoes={() => setSobreposicao({ tipo: "renovacoes" })}
+            onAbrirNotificacoes={() => setSobreposicao({ tipo: "notificacoes" })}
           />
           <TelaGestao dados={dados} onAbrirPreco={() => abrirSheet("preco")} onAbrirAgenda={() => abrirSheet("agenda")} onAbrirPromocoes={() => abrirSheet("promocoes")} />
           <TelaPerfilPublico dados={dados} onAgendar={() => abrirSheet("preview")} confirmarBio={confirmarBio} />
@@ -301,6 +323,11 @@ export function MedicoApp() {
 
       {sobreposicao?.tipo === "paciente" ? (
         <ConversaPaciente paciente={sobreposicao.p} dados={dados} onFechar={fecharSobreposicao} />
+      ) : null}
+      {sobreposicao?.tipo === "notificacoes" ? (
+        <TelaSobreposta titulo="Notificações" subtitulo="Novidades das suas consultas, mensagens e avaliações" onFechar={fecharSobreposicao}>
+          <NotificacoesMedico onNavegar={navegarNotificacao} />
+        </TelaSobreposta>
       ) : null}
       {sobreposicao?.tipo === "renovacoes" ? (
         <TelaSobreposta titulo="Renovações de receita" subtitulo="Pedidos pendentes dos seus pacientes" onFechar={fecharSobreposicao}>

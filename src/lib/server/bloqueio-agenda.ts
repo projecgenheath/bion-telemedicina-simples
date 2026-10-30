@@ -183,6 +183,45 @@ export function validarDiaBloqueio(
   return { ok: true, valor: { dia, meioDia } };
 }
 
+/** Teto de dias por operação de bloqueio em INTERVALO (férias): ~2 meses de uma vez. */
+export const MAX_DIAS_INTERVALO_BLOQUEIO = 62;
+
+/** Todos os dias "AAAA-MM-DD" de `de` a `ate`, inclusive (aritmética de calendário, sem fuso). */
+export function listarDiasIntervalo(de: string, ate: string): string[] {
+  const dias: string[] = [];
+  for (let d = de; d <= ate; d = somarDiasIso(d, 1)) dias.push(d);
+  return dias;
+}
+
+/**
+ * Valida o intervalo de um bloqueio de vários dias (férias): as DUAS pontas
+ * seguem a regra do dia único (`validarDiaBloqueio` — formato, data real, de
+ * hoje em diante, até hoje + HORIZONTE_BLOQUEIO_DIAS), `ate` não pode vir
+ * antes de `de` e o intervalo tem no máximo MAX_DIAS_INTERVALO_BLOQUEIO dias.
+ * Devolve a lista de dias do intervalo.
+ */
+export function validarIntervaloBloqueio(
+  de: unknown,
+  ate: unknown,
+  agora: Date = new Date(),
+): Resultado<{ de: string; ate: string; dias: string[] }> {
+  const ini = validarDiaBloqueio(de, agora);
+  if (!ini.ok) return ini;
+  const fim = validarDiaBloqueio(ate, agora);
+  if (!fim.ok) return fim;
+  if (fim.valor.dia < ini.valor.dia) {
+    return { ok: false, erro: "O fim do período precisa ser no mesmo dia do início ou depois dele." };
+  }
+  const dias = listarDiasIntervalo(ini.valor.dia, fim.valor.dia);
+  if (dias.length > MAX_DIAS_INTERVALO_BLOQUEIO) {
+    return {
+      ok: false,
+      erro: `Bloqueie no máximo ${MAX_DIAS_INTERVALO_BLOQUEIO} dias por vez (este período tem ${dias.length}). Divida em dois períodos, se precisar.`,
+    };
+  }
+  return { ok: true, valor: { de: ini.valor.dia, ate: fim.valor.dia, dias } };
+}
+
 /** Motivo opcional: sem caracteres de controle, espaços normalizados, ≤ MOTIVO_MAX. */
 export function limparMotivo(v: unknown): Resultado<string> {
   if (v === undefined || v === null) return { ok: true, valor: "" };

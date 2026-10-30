@@ -14,6 +14,7 @@ import { limparMetadadosImagem } from "@/lib/server/limpar-metadados";
 import { carregarDados, aplicarSideEffects } from "@/lib/server/dados";
 import { ok, falha } from "@/lib/server/http";
 import { usuarioSemNome } from "@/lib/server/audit-sem-nome";
+import { notificacaoNovoExame } from "@/lib/server/notificar-resultado";
 import { limitarAsync, resposta429 } from "@/lib/server/rate-limit";
 import { nomeCorresponde } from "@/lib/nome-laudo";
 import { iaPausada, obterLLM, respostaIaPausada, visaoGemini } from "@/lib/server/llm";
@@ -300,6 +301,19 @@ export async function POST(req: NextRequest) {
       examesSalvos.push({ titulo: grupo.titulo, itens: grupo.itens, dataColeta: dataValida.toISOString() });
     }
 
+    // Item 13 (melhorias): além do aviso ao paciente, o médico do vínculo
+    // atual fica sabendo que o laudo chegou — antes o resultado postado
+    // não avisava ninguém. (O nome do paciente vai SÓ na notificação ao
+    // médico, que já o conhece; a auditoria abaixo segue só com ids.)
+    const notifMedico = examesSalvos.length
+      ? await notificacaoNovoExame(
+          { id: usuario.id, nome: usuario.nome },
+          examesSalvos.length > 1
+            ? `${examesSalvos[0].titulo} e outros ${examesSalvos.length - 1}`
+            : examesSalvos[0].titulo,
+        )
+      : null;
+
     await aplicarSideEffects(
       usuarioSemNome(usuario), // auditoria só com id (sem nome do paciente)
       [
@@ -309,6 +323,7 @@ export async function POST(req: NextRequest) {
           texto: `${examesSalvos.length} grupo(s) de resultados de "${arquivo.name || "laudo"}" foram adicionados à sua linha do tempo de exames.`,
           para: "paciente",
         },
+        ...(notifMedico ? [notifMedico] : []),
       ],
       {
         acao: "EXAME_IMPORTADO_IA",

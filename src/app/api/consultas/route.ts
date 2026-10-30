@@ -23,6 +23,7 @@ import {
   OPCOES_TX_TRAVA,
 } from "@/lib/server/bloqueio-agenda";
 import { jaUsouRetornoGratis, lerPedidoVinculado, PRAZO_RETORNO_DIAS, retornoEhGratis } from "@/lib/atendimento-tipo";
+import { agendarPushNotificacoes } from "@/lib/server/push-notificacao";
 import { estaAnonimizado } from "@/lib/server/lgpd";
 import { decisaoCobranca, respostaIndisponivel, stripeAtivo } from "@/lib/stripe-checkout-logica";
 
@@ -394,6 +395,10 @@ export async function POST(req: NextRequest) {
     }
 
     const efeitos = await aplicarSideEffects(usuario, eventos, audit);
+    // Item 12: a notificação "Nova consulta agendada"/"Retorno agendado" ao
+    // médico também vira Web Push (app fechado ele não via nada). Genérico,
+    // em after(), sem bloquear a resposta — ver lib/server/push-notificacao.
+    agendarPushNotificacoes(eventos, medico.id);
 
     return ok({
       consulta: {

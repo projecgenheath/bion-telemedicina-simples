@@ -36,6 +36,10 @@ export async function GET(
         userId: true,
         crm: true,
         especialidade: true,
+        subespecialidades: true,
+        formacao: true,
+        experiencia: true,
+        idiomas: true,
         bio: true,
         valor: true,
         foto: true,
@@ -58,6 +62,13 @@ export async function GET(
         nome: perfil.user.nome,
         especialidade: perfil.especialidade,
         crm: perfil.crm,
+        // Formação/atuação: os mesmos campos públicos do medicoWire (o
+        // diretório já os expõe a pacientes autenticados) — a página
+        // compartilhável mostra o perfil completo, não só a bio.
+        subespecialidades: JSON.parse(perfil.subespecialidades || "[]") as string[],
+        formacao: perfil.formacao ?? "",
+        experiencia: perfil.experiencia ?? "",
+        idiomas: JSON.parse(perfil.idiomas || "[]") as string[],
         bio: perfil.bio ?? "",
         valor: perfil.valor,
         avaliacao: nota.avaliacao,

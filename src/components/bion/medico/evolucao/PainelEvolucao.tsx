@@ -2,10 +2,21 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { ClipboardList, X, Check, Ruler, Lock, Download, ChevronDown, ChevronRight } from "lucide-react";
+import { ClipboardList, X, Check, Ruler, Lock, Download, ChevronDown, ChevronRight, Bookmark, Trash2 } from "lucide-react";
 import { useBion } from "@/lib/bion-store";
 import { gerarDocumentoPDF } from "@/lib/receita-pdf";
 import { BotaoDitado } from "@/components/bion/BotaoDitado";
+import {
+  adicionarModelo,
+  carregarModelos,
+  fonteDoHistorico,
+  mesclarConteudo,
+  novoModelo,
+  persistirModelos,
+  removerModelo,
+  temConteudo,
+  type ModeloEvolucao,
+} from "./modelos-evolucao";
 
 /**
  * Painel da Evolução do médico (Teleconsulta v2). Gaveta que entra pela
@@ -14,6 +25,15 @@ import { BotaoDitado } from "@/components/bion/BotaoDitado";
  * rascunho no servidor (PUT /api/medico/consultas/[id]/evolucao, 1,2 s
  * depois da última edição). Histórico do paciente com outros médicos:
  * somente leitura.
+ *
+ * Reaproveitamento (item 16 da auditoria de melhorias): "Usar como base"
+ * copia conduta + CID de uma evolução anterior DO PRÓPRIO médico (é tudo
+ * o que o GET devolve das evoluções anteriores) e os modelos pessoais
+ * guardam um instantâneo das seções. Os dois passam pela MESMA mescla
+ * conservadora (modelos-evolucao.ts): campo vazio nunca apaga, e
+ * substituir texto já digitado pede confirmação. Aplicar só preenche o
+ * rascunho pelo autosave — nunca conclui nada. Modelos pessoais ficam
+ * no localStorage deste aparelho (sem servidor), e a UI diz isso.
  */
 
 type Secao = "dados" | "triagem" | "exames" | "medicamentos" | "conduta";
@@ -133,8 +153,22 @@ export function PainelEvolucao({
   const [salvo, setSalvo] = useState<"ok" | "salvando" | "erro">("ok");
   const [erroCarga, setErroCarga] = useState(false);
   const [concluindo, setConcluindo] = useState(false);
+  // Modelos pessoais (item 16): vivem no localStorage deste aparelho. A
+  // leitura é DEPOIS da montagem (mesmo cuidado do IndicadorTelas): ler
+  // no inicializador divergia entre servidor e cliente.
+  const [modelos, setModelos] = useState<ModeloEvolucao[]>([]);
+  const [modeloSel, setModeloSel] = useState("");
+  const [salvandoModelo, setSalvandoModelo] = useState(false);
+  const [nomeModelo, setNomeModelo] = useState("");
+  useEffect(() => {
+    setModelos(carregarModelos());
+  }, []);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const concluida = estado?.evolucao?.status === "concluida";
+  // Base/modelos escrevem no rascunho: sem a evolução carregada (ou com a
+  // carga em erro), o conteúdo local está vazio e aplicar uma fonte
+  // mandaria seções vazias por cima do que está no servidor. Travado.
+  const podeMexerModelos = !!estado && !erroCarga;
 
   const buscar = useCallback(async (): Promise<Estado | null> => {
     const res = await fetch(base, { cache: "no-store" }).catch(() => null);
@@ -265,6 +299,96 @@ export function PainelEvolucao({
     timer.current = setTimeout(() => void salvar(textos, v), 1200);
   };
 
+  // ── Reaproveitamento (item 16): base de atendimento anterior + modelos ──
+  // Aplicar conteúdo (base ou modelo) usa o MESMO autosave da digitação:
+  // atualiza o estado e agenda o salvar em 1,2 s. Nada é concluído.
+  const aplicarConteudo = (t: Record<Secao, string>, c: string) => {
+    setTextos(t);
+    setCid(c);
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(() => void salvar(t, c), 1200);
+  };
+
+  const usarBaseHistorico = (h: Estado["historico"][number]) => {
+    // Só evolução do PRÓPRIO médico: a de outro médico é somente leitura
+    // (e auditada) — nem o botão aparece nesses cartões.
+    const fonte = fonteDoHistorico(h);
+    if (!fonte) return;
+    const { resultado, aplicou, sobrescreveu } = mesclarConteudo({ textos, cid }, fonte);
+    if (!aplicou) return;
+    if (
+      sobrescreveu &&
+      !window.confirm(
+        `A evolução atual já tem conduta e/ou CID digitados. Usar o atendimento de ${new Date(h.dataInicio).toLocaleDateString("pt-BR")} como base vai SUBSTITUIR esses trechos pelo texto daquela consulta. As demais seções não mudam e nada é concluído. Continuar?`,
+      )
+    ) {
+      return;
+    }
+    aplicarConteudo(resultado.textos, resultado.cid);
+    setAba("conduta");
+    toast.success("Base aplicada ao rascunho", { description: "Conduta e CID copiados — revise e ajuste antes de concluir." });
+  };
+
+  const aplicarModeloSelecionado = () => {
+    const m = modelos.find((x) => x.id === modeloSel);
+    if (!m) return;
+    const { resultado, aplicou, sobrescreveu } = mesclarConteudo(
+      { textos, cid },
+      { textos: m.textos, cid: m.cid },
+    );
+    if (!aplicou) {
+      toast.error("Este modelo está vazio", { description: "Nada foi aplicado." });
+      return;
+    }
+    if (
+      sobrescreveu &&
+      !window.confirm(
+        `A evolução atual já tem trechos que o modelo "${m.nome}" vai substituir (os trechos preenchidos dele). As demais seções não mudam e nada é concluído. Continuar?`,
+      )
+    ) {
+      return;
+    }
+    aplicarConteudo(resultado.textos, resultado.cid);
+    toast.success(`Modelo "${m.nome}" aplicado ao rascunho`);
+  };
+
+  const salvarComoModelo = () => {
+    if (!nomeModelo.trim()) {
+      toast.error("Dê um nome ao modelo", { description: "Ex.: IVAS — retorno em 7 dias." });
+      return;
+    }
+    if (!temConteudo({ textos, cid })) {
+      toast.error("A evolução está vazia", { description: "Escreva algo antes de salvar como modelo." });
+      return;
+    }
+    const modelo = novoModelo(nomeModelo, { textos, cid });
+    if (!modelo) return;
+    const lista = adicionarModelo(modelos, modelo);
+    if (!persistirModelos(lista)) {
+      toast.error("Não foi possível salvar neste aparelho", { description: "O armazenamento local recusou a gravação." });
+      return;
+    }
+    setModelos(lista);
+    setModeloSel(modelo.id);
+    setSalvandoModelo(false);
+    setNomeModelo("");
+    toast.success("Modelo salvo neste aparelho");
+  };
+
+  const excluirModeloSelecionado = () => {
+    const m = modelos.find((x) => x.id === modeloSel);
+    if (!m) return;
+    if (!window.confirm(`Excluir o modelo "${m.nome}" deste aparelho?`)) return;
+    const lista = removerModelo(modelos, m.id);
+    if (!persistirModelos(lista)) {
+      toast.error("Não foi possível excluir neste aparelho");
+      return;
+    }
+    setModelos(lista);
+    setModeloSel("");
+    toast.success("Modelo excluído");
+  };
+
   const pedirMedicao = async (tipos: string[]) => {
     try {
       const res = await fetch("/api/medico/pedidos-medicao", {
@@ -390,6 +514,61 @@ export function PainelEvolucao({
             </button>
           ))}
         </nav>
+        {!concluida ? (
+          <div className="border-b px-4 py-2 space-y-2">
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <span className="font-bold flex items-center gap-1">
+                <Bookmark className="w-3.5 h-3.5" /> Modelos
+              </span>
+              <select
+                value={modeloSel}
+                onChange={(e) => setModeloSel(e.target.value)}
+                className="rounded-full border bg-background px-2 py-1 max-w-[180px]"
+                aria-label="Modelo salvo"
+              >
+                <option value="">Selecione…</option>
+                {modelos.map((m) => (
+                  <option key={m.id} value={m.id}>{m.nome}</option>
+                ))}
+              </select>
+              <button type="button" onClick={aplicarModeloSelecionado} disabled={!modeloSel || !podeMexerModelos}
+                className="px-3 py-1 rounded-full border font-bold disabled:opacity-50">
+                Aplicar
+              </button>
+              <button type="button" onClick={excluirModeloSelecionado} disabled={!modeloSel}
+                className="p-1.5 rounded-full border disabled:opacity-50" aria-label="Excluir modelo selecionado">
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+              <button type="button" onClick={() => setSalvandoModelo((v) => !v)} disabled={!podeMexerModelos}
+                className="px-3 py-1 rounded-full border disabled:opacity-50">
+                Salvar atual como modelo
+              </button>
+            </div>
+            {salvandoModelo ? (
+              <div className="flex items-center gap-2 text-xs">
+                <input
+                  value={nomeModelo}
+                  onChange={(e) => setNomeModelo(e.target.value)}
+                  maxLength={60}
+                  placeholder="Nome do modelo (ex.: IVAS — retorno)"
+                  className="flex-1 rounded-full border bg-background px-3 py-1"
+                  aria-label="Nome do modelo"
+                />
+                <button type="button" onClick={salvarComoModelo}
+                  className="px-3 py-1 rounded-full bg-primary text-primary-foreground font-bold">
+                  Salvar
+                </button>
+                <button type="button" onClick={() => { setSalvandoModelo(false); setNomeModelo(""); }}
+                  className="px-3 py-1 rounded-full border">
+                  Cancelar
+                </button>
+              </div>
+            ) : null}
+            <p className="text-[11px] opacity-60">
+              Modelos são atalhos com o texto das suas seções e ficam salvos apenas neste aparelho — não vão para o servidor.
+            </p>
+          </div>
+        ) : null}
         <div className="flex-1 overflow-y-auto p-4 space-y-3 text-sm">
           {estado && aba === "dados" ? (
             <div className="space-y-2">
@@ -570,6 +749,20 @@ export function PainelEvolucao({
                   <div className="font-semibold">{new Date(h.dataInicio).toLocaleDateString("pt-BR")} · {h.especialidade}</div>
                   <div className="text-xs opacity-70">{h.medico}{h.deOutroMedico ? " (outro médico)" : ""} · anamnese {h.anamnese?.status ?? "—"}</div>
                   {h.evolucao ? <div className="text-xs mt-1 whitespace-pre-wrap">{h.evolucao.conduta?.texto ?? ""}{h.evolucao.cid ? ` · CID ${h.evolucao.cid}` : ""}</div> : null}
+                  {/* Reutilizar o PRÓPRIO atendimento anterior como ponto
+                      de partida: copia conduta + CID (o que o GET traz
+                      das evoluções anteriores) para o rascunho atual.
+                      Cartão de outro médico NÃO ganha o botão — aquele
+                      histórico é somente leitura. */}
+                  {!concluida && !h.deOutroMedico && fonteDoHistorico(h) ? (
+                    <button
+                      type="button"
+                      onClick={() => usarBaseHistorico(h)}
+                      className="mt-2 px-3 py-1 rounded-full border text-xs font-bold"
+                    >
+                      Usar conduta e CID como base
+                    </button>
+                  ) : null}
                 </div>
               ))}
               {estado.historico.length === 0 ? <div className="text-xs opacity-70">Sem outras consultas.</div> : null}

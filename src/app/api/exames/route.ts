@@ -5,6 +5,7 @@ import { exigirPapel } from "@/lib/server/auth";
 import { aplicarSideEffects, exameWire } from "@/lib/server/dados";
 import {ok, falha, lerCorpoJson, corpoObjeto, textoDoCorpo} from "@/lib/server/http";
 import { registrarAudit } from "@/lib/server/auth";
+import { notificacaoNovoExame } from "@/lib/server/notificar-resultado";
 
 /**
  * Exames laboratoriais do paciente (app imersivo — seção 3).
@@ -106,9 +107,13 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    // Item 13 (melhorias): o médico do vínculo atual fica sabendo do exame
+    // postado — antes ninguém era avisado. Sem vínculo, notifExame é null.
+    const notifExame = await notificacaoNovoExame({ id: usuario.id, nome: usuario.nome }, exame.titulo);
+
     // Contrato delta (auditoria FASE 2): devolve APENAS o exame criado
     // + auditoria — sem recarregar o estado inteiro.
-    const efeitos = await aplicarSideEffects(usuario, undefined, {
+    const efeitos = await aplicarSideEffects(usuario, notifExame ? [notifExame] : undefined, {
       acao: "EXAME_REGISTRADO",
       categoria: "prontuario",
       detalhes: `Exame "${titulo}" registrado manualmente (${itensValidos.length} resultados)`,

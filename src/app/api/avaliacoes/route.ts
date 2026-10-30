@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { exigirPapel } from "@/lib/server/auth";
 import { aplicarSideEffects, avaliacaoWire, medicoWire } from "@/lib/server/dados";
+import { agendarPushNotificacao } from "@/lib/server/push-notificacao";
 import { notaReal } from "@/lib/server/notas-medico";
 import {ok, falha, lerCorpoJson} from "@/lib/server/http";
 
@@ -179,6 +180,10 @@ export async function POST(req: NextRequest) {
         detalhes: `Avaliação ${nota} estrela(s) para ${medico.nome}${body.comentario ? ` — "${body.comentario.slice(0, 80)}"` : ""}`,
       },
     );
+
+    // Item 12: a "Nova avaliação recebida" também vira Web Push para o
+    // médico (título genérico, sem nome do paciente nem comentário).
+    agendarPushNotificacao(medico.id, "Nova avaliação recebida", "/medico");
 
     const perfilAtualizado = await db.perfilMedico.findUnique({
       where: { userId: medico.id },

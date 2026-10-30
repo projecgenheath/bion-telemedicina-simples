@@ -1,9 +1,19 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useBion, type Documento } from "@/lib/bion-store";
 import { gerarConteudoDocumento } from "@/lib/conteudo-documento";
+import { frequentesDoMedico, type SugestaoMedicamento } from "@/lib/catalogo-medicamentos";
+import type { KitReceita, PacoteExames } from "@/lib/kits-prescricao";
+import {
+  AlertasPrescricao,
+  BannerAlergias,
+  CampoMedicamentoBusca,
+  SecaoKitsReceita,
+  SecaoPacotesExames,
+  useDadosSegurancaPaciente,
+} from "../prescricao-assistida";
 import { Campo, SheetMedico } from "./SheetMedico";
 
 export type TipoEmissao = Documento["tipo"] | "arquivo";
@@ -44,6 +54,37 @@ export function EmitirDocumentoSheet({
   base?: Documento;
 }) {
   const { emitirDocumento, adicionarArquivo, sessao, documentos, arquivos } = useBion();
+  // Prescrição assistida (melhorias nº 14–16): segurança do paciente pelo
+  // GET da evolução da consulta de referência (o mesmo caminho do cartão
+  // clínico da sala) e os frequentes do próprio médico, dos documentos
+  // dele no store. Sem consulta identificada, dadosSeguranca fica null e
+  // banner/alertas simplesmente não aparecem.
+  const dadosSeguranca = useDadosSegurancaPaciente(consultaId);
+  const frequentes = useMemo(() => frequentesDoMedico(documentos, sessao.nome), [documentos, sessao.nome]);
+  const medicoKitsId = sessao.id || sessao.email || sessao.nome;
+
+  const aplicarSugestaoMedicamento = (s: SugestaoMedicamento) => {
+    setMedicamento(s.nome);
+    if (s.posologia) setPosologia(s.posologia);
+    if (s.duracao) setDuracao(s.duracao);
+    if (s.controlado) setControlado(true);
+  };
+  const aplicarKitReceita = (k: KitReceita) => {
+    setMedicamento(k.medicamento);
+    setPosologia(k.posologia);
+    setDuracao(k.duracao);
+    setControlado(k.controlado);
+    toast.success(`Kit "${k.nome}" aplicado`, { description: "Confira os campos antes de emitir." });
+  };
+  const aplicarPacoteExames = (p: PacoteExames) => {
+    // A lista vai para o CONTEÚDO (o título do servidor corta em 160
+    // caracteres; a lista completa de um pacote passaria disso). Marcar
+    // como manual protege a lista da regeneração automática pelo título.
+    setConteudo(`Solicito a realização de: ${p.exames}.`);
+    setConteudoManual(true);
+    if (!titulo.trim()) setTitulo(p.nome);
+    toast.success(`Pacote "${p.nome}" aplicado`, { description: "Confira a lista de exames antes de emitir." });
+  };
   // "exame" é o tipo legado (B-15): renovação de documento antigo desse tipo
   // emite como "exame_solicitado" (o seletor nunca oferece "exame").
   const [tipo, setTipo] = useState<TipoEmissao>(base?.tipo === "exame" ? "exame_solicitado" : (base?.tipo ?? "receita"));
@@ -233,6 +274,7 @@ export function EmitirDocumentoSheet({
         </div>
       ) : (
         <div className="space-y-3">
+          <BannerAlergias alergias={dadosSeguranca?.alergias} />
           <Campo rotulo="Título" erro={erros.titulo}>
             <input
               value={titulo}
@@ -242,14 +284,27 @@ export function EmitirDocumentoSheet({
               placeholder={tipo === "receita" ? "Ex.: Tratamento de rinite" : tipo === "atestado" ? "Ex.: Afastamento" : "Ex.: Hemograma completo"}
             />
           </Campo>
+          {tipo === "exame_solicitado" ? (
+            <SecaoPacotesExames medicoId={medicoKitsId} atualExames={titulo} onAplicar={aplicarPacoteExames} />
+          ) : null}
           {tipo === "receita" ? (
             <>
               <Campo rotulo="Medicamento" erro={erros.medicamento}>
-                <input value={medicamento} onChange={(e) => setMedicamento(e.target.value)} className={entrada} maxLength={200} />
+                <CampoMedicamentoBusca
+                  valor={medicamento}
+                  onChange={setMedicamento}
+                  onSelecionar={aplicarSugestaoMedicamento}
+                  frequentes={frequentes}
+                  className={entrada}
+                  maxLength={200}
+                  ariaLabel="Medicamento"
+                  placeholder="Busque pelo nome — frequentes e catálogo"
+                />
               </Campo>
               <Campo rotulo="Posologia" erro={erros.posologia}>
                 <input value={posologia} onChange={(e) => setPosologia(e.target.value)} className={entrada} maxLength={200} />
               </Campo>
+              <AlertasPrescricao medicamento={medicamento} dados={dadosSeguranca} />
               <label className="flex items-start gap-3 rounded-2xl border border-bion-ink/10 dark:border-white/10 px-4 py-3 cursor-pointer">
                 <input
                   type="checkbox"
@@ -266,6 +321,11 @@ export function EmitirDocumentoSheet({
                   </span>
                 </span>
               </label>
+              <SecaoKitsReceita
+                medicoId={medicoKitsId}
+                atual={{ medicamento, posologia, duracao, controlado }}
+                onAplicar={aplicarKitReceita}
+              />
             </>
           ) : null}
           {tipo === "receita" || tipo === "atestado" ? (

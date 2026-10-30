@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useBion, type Medico } from "@/lib/bion-store";
-import { fmtBRL } from "../metricas";
+import { faixaPrecosEspecialidade, fmtBRL } from "../metricas";
 import { Campo, SheetMedico } from "./SheetMedico";
 import type { Confirmar } from "./useConfirmarSalvamento";
 
@@ -36,7 +36,11 @@ export function PrecoSheet({
   medico: Medico;
   confirmar: Confirmar<number>;
 }) {
-  const { atualizarMedico } = useBion();
+  const { atualizarMedico, medicos } = useBion();
+  // Referência de mercado INTERNA: faixa dos outros médicos ativos da mesma
+  // especialidade no diretório que o cliente já carrega (o mesmo que o
+  // paciente navega ao agendar). Com menos de 2 colegas, não vira "faixa".
+  const faixa = faixaPrecosEspecialidade(medicos, medico.especialidade, medico.id);
   const [texto, setTexto] = useState(() => String(medico.valor).replace(".", ","));
   const [erro, setErro] = useState<string>();
   const [salvando, setSalvando] = useState(false);
@@ -92,6 +96,20 @@ export function PrecoSheet({
             aria-label="Novo valor da consulta em reais"
           />
         </Campo>
+        {faixa && faixa.n >= 2 ? (
+          <div className="rounded-2xl bg-bion-ink/5 dark:bg-white/10 px-4 py-3">
+            <div className="text-xs font-bold uppercase tracking-wider text-bion-ink/70 dark:text-bion-paper/70">
+              Na sua especialidade ({medico.especialidade})
+            </div>
+            <div className="mt-1 text-sm">
+              de <strong>{fmtBRL(faixa.min)}</strong> a <strong>{fmtBRL(faixa.max)}</strong> · mediana{" "}
+              <strong>{fmtBRL(faixa.mediana)}</strong>
+            </div>
+            <div className="text-xs text-bion-ink/70 dark:text-bion-paper/70 mt-0.5">
+              Preços de {faixa.n} outros médicos ativos na BION — referência, não sugestão.
+            </div>
+          </div>
+        ) : null}
         <button type="button" onClick={salvar} disabled={salvando} className="bp-acao w-full py-3 text-sm disabled:opacity-50">
           {salvando ? "Salvando…" : "Salvar preço"}
         </button>

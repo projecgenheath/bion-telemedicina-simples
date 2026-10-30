@@ -2,6 +2,7 @@ import { NextRequest, after } from "next/server";
 import { db } from "@/lib/db";
 import { exigirSessao } from "@/lib/server/auth";
 import { aplicarSideEffects } from "@/lib/server/dados";
+import { agendarPushNotificacao } from "@/lib/server/push-notificacao";
 import {ok, falha, lerCorpoJson, textoDoCorpo} from "@/lib/server/http";
 import { topicoMensagensUsuario } from "@/lib/server/usuario-canal";
 import { limitarAsync, resposta429 } from "@/lib/server/rate-limit";
@@ -195,6 +196,13 @@ export async function POST(req: NextRequest) {
       ],
       undefined,
     );
+
+    // Item 12: mensagem nova PARA O MÉDICO também vira Web Push. O título
+    // do push é genérico ("Nova mensagem") — o da notificação interna traz
+    // o nome do remetente, que não vai para a tela de bloqueio.
+    if (destinatario.role === "MEDICO") {
+      agendarPushNotificacao(destinatario.id, "Nova mensagem", "/medico?painel=pacientes");
+    }
 
     // Contrato delta: devolve APENAS a mensagem criada (+ efeitos colaterais
     // criados, quando visíveis ao próprio usuário).

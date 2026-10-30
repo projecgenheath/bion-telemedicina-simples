@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, FilePlus2, Info as InfoIcone, Send } from "lucide-react";
+import { AlertTriangle, FilePlus2, Info as InfoIcone, Plus, Ruler, Send, X } from "lucide-react";
+import { toast } from "sonner";
 import { useBion, type Documento } from "@/lib/bion-store";
 import { formatarDataNascimento, idadeDeNascimento } from "@/lib/idade";
 import { janelaRespostaPaciente, rotuloStatusMedico, type PacienteDoMedico } from "./metricas";
@@ -19,6 +20,38 @@ import type { DadosMedico } from "./useDadosMedico";
 
 type Aba = "conversa" | "triagem" | "prontuario";
 const MAX_TEXTO = 4000; // limite do POST /api/mensagens
+
+/* Item 23 (melhorias): modelos de mensagem — tocar PREENCHE o campo, nunca
+ * envia direto; o médico edita antes de enviar. Os pessoais ficam no
+ * aparelho (localStorage), sem migração nem servidor. */
+const MODELOS_PADRAO: { rotulo: string; texto: string }[] = [
+  {
+    rotulo: "Saudação",
+    texto: "Olá! Tudo bem? Estou acompanhando o seu caso por aqui. Se tiver alguma dúvida ou novidade sobre os sintomas, pode me contar.",
+  },
+  {
+    rotulo: "Orientações pós-consulta",
+    texto: "Seguem as orientações: mantenha o repouso indicado, hidrate-se bem e use a medicação exatamente como está na receita. Se algum sintoma piorar, me avise por aqui.",
+  },
+  {
+    rotulo: "Cobrar resultado de exame",
+    texto: "Quando o resultado do exame ficar pronto, você pode enviá-lo por aqui (foto ou PDF) para eu avaliar. Assim que eu olhar, te respondo.",
+  },
+  {
+    rotulo: "Sugerir retorno",
+    texto: "Recomendo que a gente se fale de novo em alguns dias para reavaliar a sua evolução. Você pode agendar o retorno pelo app quando quiser.",
+  },
+  {
+    rotulo: "Encerramento",
+    texto: "Por aqui está tudo certo. Cuide-se e, precisando, é só chamar. Melhoras!",
+  },
+];
+
+const TIPOS_MEDICAO_CONVERSA = [
+  { id: "peso", rotulo: "Peso" },
+  { id: "altura", rotulo: "Altura" },
+  { id: "pressao", rotulo: "Pressão" },
+] as const;
 
 const mascararCpf = (cpf: string) => {
   const d = cpf.replace(/\D/g, "");
@@ -50,6 +83,21 @@ export function ConversaPaciente({
   const [aba, setAba] = useState<Aba>("conversa");
   const [texto, setTexto] = useState("");
   const [emitir, setEmitir] = useState<{ base?: Documento } | null>(null);
+  // Item 23: modelos pessoais do médico (só neste aparelho) e pedido de
+  // medição a partir da conversa.
+  const chaveModelos = `bion:modelos-medico:${sessao.id}`;
+  const [modelosPessoais, setModelosPessoais] = useState<string[]>(() => {
+    try {
+      const v = window.localStorage.getItem(chaveModelos);
+      const arr = v ? (JSON.parse(v) as unknown) : [];
+      return Array.isArray(arr) ? arr.filter((x): x is string => typeof x === "string" && x.trim().length > 0) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [pedidoAberto, setPedidoAberto] = useState(false);
+  const [tiposPedido, setTiposPedido] = useState<string[]>(["pressao"]);
+  const [enviandoPedido, setEnviandoPedido] = useState(false);
   const fimRef = useRef<HTMLDivElement>(null);
   // Envio confirmado, não "disparado e esquecido": o store não devolve o
   // resultado de enviarMensagem (interface void), então a confirmação é a
@@ -106,6 +154,63 @@ export function ConversaPaciente({
   // prazo parece desinteresse, quando é a plataforma recusando a resposta.
   const janela = pid ? janelaRespostaPaciente(consultas, Date.now()) : null;
 
+  // Item 23a: modelo preenche o campo (anexa ao rascunho, se houver) —
+  // nunca envia direto.
+  const aplicarModelo = (modelo: string) => {
+    setTexto((atual) => (atual.trim() ? `${atual.replace(/\s+$/, "")}\n${modelo}` : modelo));
+  };
+  const salvarModeloAtual = () => {
+    const t = texto.trim();
+    if (!t || modelosPessoais.includes(t)) return;
+    const lista = [...modelosPessoais, t].slice(-12);
+    setModelosPessoais(lista);
+    try {
+      window.localStorage.setItem(chaveModelos, JSON.stringify(lista));
+    } catch {}
+    toast.success("Modelo salvo neste aparelho");
+  };
+  const removerModelo = (modelo: string) => {
+    const lista = modelosPessoais.filter((m) => m !== modelo);
+    setModelosPessoais(lista);
+    try {
+      window.localStorage.setItem(chaveModelos, JSON.stringify(lista));
+    } catch {}
+  };
+
+  // Item 23b: "Pedir medição" sem sair da conversa — mesma API que a sala
+  // usa (POST /api/medico/pedidos-medicao), ancorado na consulta não
+  // cancelada mais recente do vínculo (a lista vem da mais nova p/ a mais
+  // antiga). A rota recusa consulta cancelada com 409.
+  const consultaAlvoPedido = consultas.find((c) => c.status !== "cancelada");
+  const alternarTipoPedido = (id: string) =>
+    setTiposPedido((atuais) => (atuais.includes(id) ? atuais.filter((t) => t !== id) : [...atuais, id]));
+  const enviarPedido = async () => {
+    if (!consultaAlvoPedido || tiposPedido.length === 0 || enviandoPedido) return;
+    setEnviandoPedido(true);
+    try {
+      const res = await fetch("/api/medico/pedidos-medicao", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ consultaId: consultaAlvoPedido.id, tipos: tiposPedido }),
+      });
+      const j = (await res.json().catch(() => ({}))) as { jaExistia?: boolean; erro?: string };
+      if (res.ok) {
+        if (j.jaExistia) {
+          toast.info("Já existe um pedido igual pendente", { description: "O paciente já tem esse pedido em aberto." });
+        } else {
+          toast.success("Pedido de medição enviado", { description: "O paciente verá o pedido no app dele." });
+        }
+        setPedidoAberto(false);
+      } else {
+        toast.error(j.erro === "consulta_cancelada" ? "A consulta foi cancelada." : "Não foi possível enviar o pedido");
+      }
+    } catch {
+      toast.error("Falha de conexão", { description: "O pedido de medição não foi enviado." });
+    } finally {
+      setEnviandoPedido(false);
+    }
+  };
+
   const enviar = () => {
     const t = texto.trim();
     if (!pid || !t || !podeEnviar || enviando) return;
@@ -149,13 +254,28 @@ export function ConversaPaciente({
       onFechar={onFechar}
       acoes={
         pid ? (
-          <button
-            type="button"
-            onClick={() => setEmitir({})}
-            className="rounded-full px-3 py-2 text-xs font-bold bg-bion-sea text-white dark:bg-sky-300 dark:text-zinc-950 inline-flex items-center gap-1"
-          >
-            <FilePlus2 className="w-4 h-4" /> Emitir
-          </button>
+          <div className="flex items-center gap-1.5">
+            {consultaAlvoPedido ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setAba("conversa");
+                  setPedidoAberto((v) => !v);
+                }}
+                aria-expanded={pedidoAberto}
+                className="rounded-full px-3 py-2 text-xs font-bold bg-bion-ink/8 dark:bg-white/10 inline-flex items-center gap-1"
+              >
+                <Ruler className="w-4 h-4" /> Medição
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => setEmitir({})}
+              className="rounded-full px-3 py-2 text-xs font-bold bg-bion-sea text-white dark:bg-sky-300 dark:text-zinc-950 inline-flex items-center gap-1"
+            >
+              <FilePlus2 className="w-4 h-4" /> Emitir
+            </button>
+          </div>
         ) : null
       }
       rodape={
@@ -173,6 +293,46 @@ export function ConversaPaciente({
                   {erroEnvio}
                 </p>
               ) : null}
+              <div className="flex gap-1.5 overflow-x-auto pb-0.5" aria-label="Modelos de mensagem">
+                {MODELOS_PADRAO.map((m) => (
+                  <button
+                    key={m.rotulo}
+                    type="button"
+                    onClick={() => aplicarModelo(m.texto)}
+                    title={m.texto}
+                    className="rounded-full px-2.5 py-1 text-[11px] font-bold bg-bion-ink/8 dark:bg-white/10 whitespace-nowrap shrink-0"
+                  >
+                    {m.rotulo}
+                  </button>
+                ))}
+                {modelosPessoais.map((m) => (
+                  <span
+                    key={m}
+                    className="inline-flex items-center gap-1 rounded-full pl-2.5 pr-1 py-0.5 text-[11px] font-bold bg-bion-sea/15 text-bion-sea dark:text-sky-300 whitespace-nowrap shrink-0"
+                  >
+                    <button type="button" onClick={() => aplicarModelo(m)} title={m} className="max-w-40 truncate">
+                      {m}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => removerModelo(m)}
+                      aria-label="Excluir modelo pessoal"
+                      className="w-4 h-4 rounded-full inline-flex items-center justify-center"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                ))}
+                {texto.trim() && !modelosPessoais.includes(texto.trim()) ? (
+                  <button
+                    type="button"
+                    onClick={salvarModeloAtual}
+                    className="rounded-full px-2.5 py-1 text-[11px] font-bold bg-bion-ink/8 dark:bg-white/10 whitespace-nowrap shrink-0 inline-flex items-center gap-1"
+                  >
+                    <Plus className="w-3 h-3" /> Salvar como modelo
+                  </button>
+                ) : null}
+              </div>
               <div className="flex items-end gap-2">
               <label className="flex-1">
                 <span className="sr-only">Mensagem para {atual.nome}</span>
@@ -232,6 +392,55 @@ export function ConversaPaciente({
 
       {aba === "conversa" ? (
         <div className="px-4 pb-4 space-y-3" role="log" aria-live="polite" aria-label={`Conversa com ${atual.nome}`}>
+          {pedidoAberto && consultaAlvoPedido ? (
+            <section className="bp-glass p-4" aria-label="Pedir medição ao paciente">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <div className="text-sm font-bold">Pedir medição</div>
+                  <p className="text-xs text-bion-ink/75 dark:text-bion-paper/75 mt-0.5">
+                    O paciente recebe o pedido no app e responde quando medir. Você é avisado quando ele enviar.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setPedidoAberto(false)}
+                  aria-label="Fechar pedido de medição"
+                  className="w-8 h-8 rounded-full bg-bion-ink/8 dark:bg-white/10 inline-flex items-center justify-center shrink-0"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-1.5 mt-3" role="group" aria-label="Tipos de medição">
+                {TIPOS_MEDICAO_CONVERSA.map((t) => {
+                  const ativo = tiposPedido.includes(t.id);
+                  return (
+                    <button
+                      key={t.id}
+                      type="button"
+                      aria-pressed={ativo}
+                      onClick={() => alternarTipoPedido(t.id)}
+                      className={`rounded-full px-3 py-1.5 text-xs font-bold ${
+                        ativo
+                          ? "bg-bion-sea text-white dark:bg-sky-300 dark:text-zinc-950"
+                          : "bg-bion-ink/8 dark:bg-white/10"
+                      }`}
+                    >
+                      {t.rotulo}
+                    </button>
+                  );
+                })}
+              </div>
+              <button
+                type="button"
+                onClick={() => void enviarPedido()}
+                disabled={enviandoPedido || tiposPedido.length === 0}
+                className="mt-3 w-full rounded-full py-2.5 text-sm font-bold bg-bion-sea text-white dark:bg-sky-300 dark:text-zinc-950 disabled:opacity-50"
+              >
+                {enviandoPedido ? "Enviando…" : "Enviar pedido"}
+              </button>
+            </section>
+          ) : null}
+
           <article className="bp-glass p-4" aria-label="Dados do paciente">
             <div className="text-xs font-bold uppercase tracking-wider text-bion-sea dark:text-sky-300 mb-2">Ficha do paciente</div>
             {registro ? (

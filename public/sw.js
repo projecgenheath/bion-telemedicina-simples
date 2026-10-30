@@ -1,4 +1,6 @@
-/* Service worker do Bion — toque da consulta (push). Contrato: payloadPush() em src/lib/server/toque.ts */
+/* Service worker do Bion — push. Contratos: payloadPush() em src/lib/server/toque.ts
+ * (tipo "chamada_tocando") e payloadPushNotificacao() em src/lib/server/push-notificacao.ts
+ * (tipo "notificacao": avisos genéricos ao médico — nova marcação, mensagem, avaliação). */
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (e) => e.waitUntil(self.clients.claim()));
 
@@ -21,7 +23,26 @@ self.addEventListener("push", (event) => {
     p = {};
   }
   if (!p || typeof p !== "object") p = {};
-  // Defensivo: hoje só existe "chamada_tocando"; tipo desconhecido ainda mostra (exigência do Chrome), com o texto padrão.
+  // Notificação genérica (item 12): título/corpo/url do payload, sem relógio
+  // de expiração nem som de chamada. O servidor só manda texto genérico
+  // (nada de nome de paciente na tela de bloqueio).
+  if (p.tipo === "notificacao") {
+    const tituloN = typeof p.titulo === "string" && p.titulo ? p.titulo : "BION";
+    const urlN = urlSegura(p.url);
+    event.waitUntil(
+      self.registration.showNotification(tituloN, {
+        body: typeof p.corpo === "string" ? p.corpo : "",
+        tag: "bion-notificacao",
+        renotify: true,
+        requireInteraction: false,
+        icon: "/icons/icon-192.png",
+        badge: "/icons/badge-96.png",
+        data: { url: urlN },
+      }),
+    );
+    return;
+  }
+  // Defensivo: fora o toque e a notificação genérica, tipo desconhecido ainda mostra (exigência do Chrome), com o texto padrão.
   if (p.tipo !== undefined && p.tipo !== "chamada_tocando") p = { url: "/paciente" };
   const titulo = typeof p.titulo === "string" && p.titulo ? p.titulo : "Sua consulta vai começar";
   const consultaId = typeof p.consultaId === "string" ? p.consultaId : "";

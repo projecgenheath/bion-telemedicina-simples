@@ -27,6 +27,7 @@ import {
 import { criarCobranca, confirmarPagamento, falharPagamento } from "@/lib/server/pagamentos";
 import {ok, falha, lerCorpoJson, textoDoCorpo} from "@/lib/server/http";
 import { desfechoExistente, lerPresencas } from "@/lib/server/presenca-consulta";
+import { agendarPushNotificacoes } from "@/lib/server/push-notificacao";
 import { pacienteEsteveNaSala } from "@/components/bion/medico/metricas";
 import { consultaJaRepassada, ERRO_CONSULTA_REPASSADA } from "@/lib/server/repasse";
 import {
@@ -547,6 +548,10 @@ export async function PATCH(
       throw e;
     }
     const efeitos = await aplicarSideEffects(usuario, eventos, audit);
+    // Item 12: cancelamento/remarcação que cai para o médico também vira
+    // Web Push (as notificações ao paciente da mesma lista não disparam:
+    // o filtro é o medicoId). Genérico, em after(), sem bloquear.
+    agendarPushNotificacoes(eventos, consulta.medicoId);
     const atualizada = await consultaWire(id);
 
     return ok({

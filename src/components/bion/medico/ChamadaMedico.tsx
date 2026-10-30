@@ -1,9 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { FileText, Pill, Award, X } from "lucide-react";
 import { useBion as useStore } from "@/lib/bion-store";
+import { frequentesDoMedico, type SugestaoMedicamento } from "@/lib/catalogo-medicamentos";
+import type { KitReceita, PacoteExames } from "@/lib/kits-prescricao";
+import {
+  AlertasPrescricao,
+  BannerAlergias,
+  CampoMedicamentoBusca,
+  SecaoKitsReceita,
+  SecaoPacotesExames,
+  type DadosSegurancaPaciente,
+} from "@/components/bion/medico/prescricao-assistida";
 import { ModalBion } from "@/components/bion/ModalBion";
 import { EncerrarAtendimento, type EscolhaEncerrar } from "@/components/bion/consulta/EncerrarAtendimento";
 import { ConsultaNaoEncontrada, ErroSalaFatal, SalaConsultaTela } from "@/components/bion/consulta/SalaConsultaTela";
@@ -18,9 +28,26 @@ import { PainelEvolucao } from "@/components/bion/medico/evolucao/PainelEvolucao
  */
 export function ChamadaMedico({ onEnd, consultaId }: { onEnd: () => void; consultaId?: string }) {
   const role = "medico" as const;
-  const { emitirDocumento, aplicarDelta } = useStore();
+  const { emitirDocumento, aplicarDelta, documentos } = useStore();
   const sala = useSalaConsulta({ role, consultaId, onEnd });
   const { sessao, consultaAtual, idSala, contraparteNome, anotacoes, sairDaSala, tele } = sala;
+
+  // Prescrição assistida (melhorias nº 14–16): na sala, alergias e
+  // medicamentos em uso vêm do resumo clínico que o hook da sala já
+  // carrega para o cartão do paciente (sem nova chamada); os frequentes
+  // vêm dos documentos do próprio médico no store.
+  const dadosSeguranca: DadosSegurancaPaciente | null = useMemo(
+    () =>
+      sala.resumoClinico
+        ? {
+            alergias: sala.resumoClinico.alergias,
+            medicamentosEmUso: sala.resumoClinico.medicamentosEmUso.map((m) => ({ nome: m.nome, dose: m.dose })),
+          }
+        : null,
+    [sala.resumoClinico],
+  );
+  const frequentes = useMemo(() => frequentesDoMedico(documentos, sessao.nome), [documentos, sessao.nome]);
+  const medicoKitsId = sessao.id || sessao.email || sessao.nome;
   const { outroOnline } = tele;
 
   // Teleconsulta v2: painel da Evolução (deslizar) e trava do próximo
@@ -103,6 +130,26 @@ export function ChamadaMedico({ onEnd, consultaId }: { onEnd: () => void; consul
     setExameNome("");
     setExameUrgencia("Rotina");
     setExameObs("");
+  };
+
+  // Aplicações da prescrição assistida: preenchem o formulário (o médico
+  // confere e emite como sempre — nada é emitido automaticamente).
+  const aplicarSugestaoMedicamento = (s: SugestaoMedicamento) => {
+    setRecMedicamento(s.nome);
+    if (s.posologia) setRecPosologia(s.posologia);
+    if (s.duracao) setRecDuracao(s.duracao);
+    if (s.controlado) setRecControlado(true);
+  };
+  const aplicarKitReceita = (k: KitReceita) => {
+    setRecMedicamento(k.medicamento);
+    setRecPosologia(k.posologia);
+    setRecDuracao(k.duracao);
+    setRecControlado(k.controlado);
+    toast.success(`Kit "${k.nome}" aplicado`, { description: "Confira os campos antes de emitir." });
+  };
+  const aplicarPacoteExames = (p: PacoteExames) => {
+    setExameNome(p.exames);
+    toast.success(`Pacote "${p.nome}" aplicado`, { description: "Confira a lista de exames antes de enviar." });
   };
 
   /** Emissão só com consulta ativa e paciente identificado (por ID). */
@@ -417,6 +464,7 @@ export function ChamadaMedico({ onEnd, consultaId }: { onEnd: () => void; consul
             </div>
 
             <div className="space-y-3 text-xs">
+              <BannerAlergias alergias={dadosSeguranca?.alergias} />
               <div>
                 <label className="font-bold block mb-1">Título da Receita (opcional)</label>
                 <input
@@ -431,12 +479,14 @@ export function ChamadaMedico({ onEnd, consultaId }: { onEnd: () => void; consul
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="font-bold block mb-1">Medicamento & Dosagem</label>
-                  <input
-                  aria-label="Medicamento & Dosagem"
-                    value={recMedicamento}
-                    onChange={(e) => setRecMedicamento(e.target.value)}
+                  <CampoMedicamentoBusca
+                    valor={recMedicamento}
+                    onChange={setRecMedicamento}
+                    onSelecionar={aplicarSugestaoMedicamento}
+                    frequentes={frequentes}
                     placeholder="Nome, concentração e forma"
                     className="w-full px-3 py-2 rounded-xl border bg-background"
+                    ariaLabel="Medicamento & Dosagem"
                     required
                   />
                 </div>
@@ -464,6 +514,8 @@ export function ChamadaMedico({ onEnd, consultaId }: { onEnd: () => void; consul
                   required
                 />
               </div>
+
+              <AlertasPrescricao medicamento={recMedicamento} dados={dadosSeguranca} />
 
               <label className="flex items-start gap-2 rounded-xl border bg-background px-3 py-2 cursor-pointer">
                 <input
@@ -493,6 +545,12 @@ export function ChamadaMedico({ onEnd, consultaId }: { onEnd: () => void; consul
                 />
               </div>
             </div>
+
+            <SecaoKitsReceita
+              medicoId={medicoKitsId}
+              atual={{ medicamento: recMedicamento, posologia: recPosologia, duracao: recDuracao, controlado: recControlado }}
+              onAplicar={aplicarKitReceita}
+            />
 
             <button
               type="submit"
@@ -621,6 +679,7 @@ export function ChamadaMedico({ onEnd, consultaId }: { onEnd: () => void; consul
                   required
                 />
               </div>
+              <SecaoPacotesExames medicoId={medicoKitsId} atualExames={exameNome} onAplicar={aplicarPacoteExames} />
               <div>
                 <label className="font-bold block mb-1">Urgência</label>
                 <div className="flex gap-2">

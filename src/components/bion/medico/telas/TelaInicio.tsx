@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarClock, CalendarDays, ChevronDown, Info, ListChecks, MessageCircle, Pill, RefreshCw, Video, XCircle } from "lucide-react";
+import { Bell, CalendarClock, CalendarDays, ChevronDown, Info, ListChecks, MessageCircle, Pill, RefreshCw, Video, XCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { AvisoAtivarToque } from "@/components/bion/AvisoAtivarToque";
 import { ContagemRegressiva } from "../ContagemRegressiva";
@@ -15,14 +15,16 @@ export function TelaInicio({
   onAbrirPerfil,
   onAbrirPacientes,
   onAbrirRenovacoes,
+  onAbrirNotificacoes,
 }: {
   dados: DadosMedico;
   onAbrirPerfil: () => void;
   onAbrirPacientes: () => void;
   onAbrirRenovacoes: () => void;
+  onAbrirNotificacoes: () => void;
 }) {
   const router = useRouter();
-  const { sessao, medico, proxima, hoje, agora, acoesPaciente, acoesPacienteEstado, naoLidasPorPaciente, renovacoesPendentes } = dados;
+  const { sessao, medico, proxima, pacienteNaSala, notificacoesNaoLidas, hoje, agora, acoesPaciente, acoesPacienteEstado, naoLidasPorPaciente, renovacoesPendentes } = dados;
   // Pendências acionáveis: só aparecem com contador > 0 (sem ruído).
   const totalNaoLidas = [...naoLidasPorPaciente.values()].reduce((a, b) => a + b, 0);
   const conversasComNaoLidas = naoLidasPorPaciente.size;
@@ -45,18 +47,41 @@ export function TelaInicio({
         <div className="text-xs font-semibold uppercase tracking-wider text-bion-ink/70 dark:text-bion-paper/70 first-letter:uppercase">
           {dataHoje}
         </div>
-        <button
-          type="button"
-          onClick={onAbrirPerfil}
-          aria-label="Abrir meu perfil"
-          className="w-12 h-12 rounded-full overflow-hidden bp-glass shrink-0"
-        >
-          {medico?.foto ? (
-            <img src={medico.foto} alt="" className="w-full h-full object-cover" />
-          ) : (
-            <span className="w-full h-full inline-flex items-center justify-center text-sm font-black">{iniciais(sessao.nome)}</span>
-          )}
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Item 12: sino da central de notificações (selo = não lidas). */}
+          <button
+            type="button"
+            onClick={onAbrirNotificacoes}
+            aria-label={
+              notificacoesNaoLidas > 0
+                ? `Notificações: ${notificacoesNaoLidas} não lida${notificacoesNaoLidas > 1 ? "s" : ""}. Abrir notificações`
+                : "Notificações. Abrir notificações"
+            }
+            className="relative w-12 h-12 rounded-full bp-glass shrink-0 inline-flex items-center justify-center"
+          >
+            <Bell className="w-5 h-5" aria-hidden />
+            {notificacoesNaoLidas > 0 ? (
+              <span
+                className="absolute -top-0.5 -right-0.5 min-w-5 h-5 px-1 rounded-full bg-red-600 text-white text-[11px] font-bold inline-flex items-center justify-center"
+                aria-hidden
+              >
+                {notificacoesNaoLidas}
+              </span>
+            ) : null}
+          </button>
+          <button
+            type="button"
+            onClick={onAbrirPerfil}
+            aria-label="Abrir meu perfil"
+            className="w-12 h-12 rounded-full overflow-hidden bp-glass shrink-0"
+          >
+            {medico?.foto ? (
+              <img src={medico.foto} alt="" className="w-full h-full object-cover" />
+            ) : (
+              <span className="w-full h-full inline-flex items-center justify-center text-sm font-black">{iniciais(sessao.nome)}</span>
+            )}
+          </button>
+        </div>
       </header>
 
       {/* Toque da consulta no celular do médico (some sem permissão pendente). */}
@@ -158,6 +183,20 @@ export function TelaInicio({
             {reservaProxima ? (
               <p className="mt-2 text-xs font-semibold rounded-xl px-3 py-2 bg-amber-500/15 text-amber-900 dark:text-amber-100">
                 {textoReservaPendente(reservaProxima)}
+              </p>
+            ) : null}
+            {/* Item 22: o paciente já entrou na sala de espera (presença
+                fresca na PresencaSala, vigiada por polling só leitura). */}
+            {pacienteNaSala ? (
+              <p
+                role="status"
+                className="mt-2 text-xs font-semibold rounded-xl px-3 py-2 bg-emerald-600/15 text-emerald-900 dark:text-emerald-100 inline-flex items-center gap-2 w-full"
+              >
+                <span className="relative flex w-2.5 h-2.5 shrink-0" aria-hidden>
+                  <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-60 motion-safe:animate-ping" />
+                  <span className="relative inline-flex rounded-full w-2.5 h-2.5 bg-emerald-600" />
+                </span>
+                Seu paciente já está na sala de espera.
               </p>
             ) : null}
             <button
