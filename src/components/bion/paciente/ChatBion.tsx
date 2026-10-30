@@ -721,7 +721,9 @@ export function ChatBion({
       }
       return {
         titulo: "Horário",
-        opcoes: horarios.slice(0, 12).map((h) => ({ rotulo: h, valor: h })),
+        // B29: todos os horários livres — o slice(0, 12) escondia os
+        // demais sem avisar quantos existiam.
+        opcoes: horarios.map((h) => ({ rotulo: h, valor: h })),
         escolher: (v: string) => {
           setEscolha((c) => ({ ...c, hora: v }));
           setMensagens((m) => [...m, { remetente: "usuario", texto: v }, { remetente: "ia", texto: "Confira os dados e escolha a forma de pagamento:" }]);

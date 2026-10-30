@@ -42,9 +42,10 @@ import { estadoJanelaSala, janelaSala, SALA_ABRE_ANTES_MIN, SALA_FECHA_DEPOIS_MI
  * Janela (lib/janela-sala.ts): fora de [horário − 30 min, horário + 2 h] o
  * GET normal e o POST de sinais respondem 409. O 409 do GET traz também
  * `motivo` ("antes" | "depois") e `abreEm` ou `fechouEm` (ISO), para a tela
- * mostrar "A sala abre às HH:MM" / "A sala já fechou" (o sinal de controle
- * continua aceito, para quem encerra no limite). O modo espiar funciona a
- * qualquer hora.
+ * mostrar "A sala abre às HH:MM" / "A sala já fechou" (B9: sinais de
+ * controle seguem a mesma janela/status dos demais, exceto um único
+ * "saiu"/"encerrada" por sessão, para quem encerra no limite, com dedup
+ * por consulta/usuário/ação/sessão). O modo espiar funciona a qualquer hora.
  *
  * Verificação automática de falta/falha (presenca-consulta.ts): só pode
  * gravar algo DEPOIS que a sala fecha (CARENCIA_APOS_INICIO_MIN = fim da
@@ -218,6 +219,8 @@ export async function GET(
       });
       return ok({
         espiar: true,
+        // B41: hora do servidor (ISO) p/ o cliente calibrar o relógio local.
+        agoraServidor: new Date().toISOString(),
         consulta: {
           id: consulta.id,
           status: consulta.status,
@@ -343,6 +346,8 @@ export async function GET(
       presencaOutro !== null && agoraPing.getTime() - presencaOutro.ultimoPing.getTime() <= JANELA_ONLINE_MS;
 
     return ok({
+      // B41: hora do servidor (ISO) p/ o cliente calibrar o relógio local.
+      agoraServidor: new Date().toISOString(),
       consulta: { id: consulta.id, status: consulta.status, pago: consulta.pago },
       eu: { id: usuario.id, papel },
       outroOnline,
@@ -397,17 +402,12 @@ export async function POST(
     // sala em_espera não paga nunca começou, então não há "saiu" nem
     // "encerrada" a registrar nela.
     if (pagamentoPendente(consulta)) return respostaPagamentoPendente();
-    // A partir daqui, "em_espera" só pode ser a já paga (modo simulado).
-    const ativa = ["confirmada", "em_espera"].includes(consulta.status);
-    if (!ativa && body.tipo !== "controle") {
-      throw erroHttp(409, `Sala fechada: consulta está "${consulta.status}".`);
-    }
-    // Fora da janela da sala, só o controle (ex.: "encerrada" no limite) passa.
-    if (body.tipo !== "controle") exigirJanelaAberta(consulta.dataInicio);
 
     // Controle: só ações conhecidas; o paciente não encerra a consulta.
+    // (B9: o parse sobe para ANTES das barreiras — a ação decide a exceção.)
     let payload = body.payload;
     let acaoControle = "";
+    let sessaoControle = "";
     if (body.tipo === "controle") {
       let c: { acao?: unknown; s?: unknown; motivo?: unknown };
       try {
@@ -416,6 +416,7 @@ export async function POST(
         throw erroHttp(400, "Payload de controle não é JSON válido.");
       }
       acaoControle = typeof c.acao === "string" ? c.acao : "";
+      sessaoControle = typeof c.s === "string" ? c.s : "";
       if (!(ACOES_CONTROLE as readonly string[]).includes(acaoControle)) {
         throw erroHttp(400, `Ação de controle inválida: ${acaoControle || "(vazia)"}`);
       }
@@ -426,7 +427,38 @@ export async function POST(
         acaoControle = "saiu";
         payload = JSON.stringify({ acao: "saiu", s: typeof c.s === "string" ? c.s : undefined, motivo: "botao" });
       }
+
+      // B9 — dedup por (consulta, usuário, ação, sessão): repetir o mesmo
+      // sinal de controle na mesma sessão NÃO grava nem faz broadcast de
+      // novo (replay de presença/auditoria falsos). Responde ok idempotente.
+      const anteriores = await db.sinalSala.findMany({
+        where: { consultaId, deUsuarioId: usuario.id, tipo: "controle" },
+        select: { payload: true },
+      });
+      const duplicado = anteriores.some((s) => {
+        try {
+          const p = JSON.parse(s.payload) as { acao?: unknown; s?: unknown };
+          // "encerrada" do paciente é gravada como "saiu" (conversão acima).
+          const acaoGravada = p.acao === "encerrada" && papel === "PACIENTE" ? "saiu" : p.acao;
+          return acaoGravada === acaoControle && (typeof p.s === "string" ? p.s : "") === sessaoControle;
+        } catch {
+          return false;
+        }
+      });
+      if (duplicado) return ok({ ok: true, duplicado: true });
     }
+
+    // A partir daqui, "em_espera" só pode ser a já paga (modo simulado).
+    // B9: controle NÃO é mais isento de status/janela — vale a mesma regra
+    // dos demais sinais, EXCETO um único "saiu"/"encerrada" por sessão
+    // (fechar no limite precisa passar; a dedup acima garante o "único").
+    const ativa = ["confirmada", "em_espera"].includes(consulta.status);
+    const excecaoFecho =
+      body.tipo === "controle" && (acaoControle === "saiu" || acaoControle === "encerrada");
+    if (!ativa && !excecaoFecho) {
+      throw erroHttp(409, `Sala fechada: consulta está "${consulta.status}".`);
+    }
+    if (!excecaoFecho) exigirJanelaAberta(consulta.dataInicio);
 
     // Anti-spam simples: cap de sinais por minuto por usuário
     const recentes = await db.sinalSala.count({

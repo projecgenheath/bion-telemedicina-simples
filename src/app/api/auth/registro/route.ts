@@ -7,7 +7,16 @@ import {
 } from "@/lib/server/auth";
 import { usuarioSemNome } from "@/lib/server/audit-sem-nome";
 import { carregarDados } from "@/lib/server/dados";
-import {ok, falha, lerCorpoJson} from "@/lib/server/http";
+import {ok, falha, lerCorpoJson, corpoObjeto, textoDoCorpo} from "@/lib/server/http";
+
+/**
+ * B3: cadastro NÃO pode enumerar contas — dizer "já existe conta com este
+ * e-mail" (ou CPF) a um visitante anônimo confirma que e-mail/CPF pertencem
+ * a um paciente. Duplicado devolve esta resposta genérica, indistinguível
+ * entre e-mail, CPF e falha do provedor de Auth.
+ */
+const ERRO_CADASTRO_GENERICO =
+  "Não foi possível concluir o cadastro com os dados informados. Se você já tem uma conta, faça login; se o problema continuar, fale com o suporte.";
 import {
   limitarAsync,
   obterIp,
@@ -18,7 +27,7 @@ import {
 import { createSupabaseAdminClient, createSupabaseServerClient } from "@/lib/supabase/server";
 import { supabaseConfigurado } from "@/lib/supabase/env";
 import { validarCpf } from "@/lib/server/validar-perfil";
-import { cpfEmUsoPorOutroPaciente, ERRO_CPF_EM_USO } from "@/lib/server/cpf-paciente";
+import { cpfEmUsoPorOutroPaciente } from "@/lib/server/cpf-paciente";
 import { validarAceiteTermos } from "@/lib/aceite-termos";
 import { auditarAceiteCadastro, gravarAceiteCadastro, type LinhasAceite } from "@/lib/server/aceite-termos";
 
@@ -43,12 +52,17 @@ async function desfazerAuth(supabaseId: string) {
 
 export async function POST(req: NextRequest) {
   try {
-    const body = (await lerCorpoJson(req)) as {
-      nome?: string;
-      email?: string;
-      senha?: string;
-      cpf?: string;
-      aceiteTermos?: unknown;
+    // B1 (mesma família): guarda de objeto/tipo antes de .trim().
+    const bruto = corpoObjeto(await lerCorpoJson(req));
+    if (!bruto) {
+      return NextResponse.json({ erro: "Corpo da requisição inválido." }, { status: 400 });
+    }
+    const body = {
+      nome: textoDoCorpo(bruto.nome),
+      email: textoDoCorpo(bruto.email),
+      senha: textoDoCorpo(bruto.senha),
+      cpf: textoDoCorpo(bruto.cpf),
+      aceiteTermos: bruto.aceiteTermos,
     };
 
     const teto = await limitarAsync(
@@ -80,7 +94,8 @@ export async function POST(req: NextRequest) {
 
     const existente = await db.user.findUnique({ where: { email } });
     if (existente) {
-      return NextResponse.json({ erro: "Já existe uma conta com este e-mail." }, { status: 409 });
+      // B3: genérico (não confirma que o e-mail tem conta).
+      return NextResponse.json({ erro: ERRO_CADASTRO_GENERICO }, { status: 409 });
     }
 
     // M4: CPF opcional, mas se vier precisa ter dígitos verificadores válidos
@@ -92,7 +107,8 @@ export async function POST(req: NextRequest) {
       if (!rc.ok) return NextResponse.json({ erro: rc.erro, campo: "cpf" }, { status: 400 });
       cpf = rc.valor;
       if (cpf && (await cpfEmUsoPorOutroPaciente(cpf))) {
-        return NextResponse.json({ erro: ERRO_CPF_EM_USO, campo: "cpf" }, { status: 409 });
+        // B3: genérico, sem campo — não confirma que o CPF tem conta.
+        return NextResponse.json({ erro: ERRO_CADASTRO_GENERICO }, { status: 409 });
       }
     }
 
@@ -105,10 +121,11 @@ export async function POST(req: NextRequest) {
         options: { data: { nome } },
       });
       if (error || !data.user) {
-        return NextResponse.json(
-          { erro: error?.message || "Não foi possível criar a conta no Supabase Auth." },
-          { status: 400 },
-        );
+        // B3: nunca repassar o error.message cru do Supabase (ele distingue
+        // "usuário já registrado" de outros erros — enumeração + vazamento
+        // de detalhe do provedor). Detalhe fica só no log do servidor.
+        if (error) console.error("[registro] Supabase Auth recusou o cadastro:", error.message);
+        return NextResponse.json({ erro: ERRO_CADASTRO_GENERICO }, { status: 400 });
       }
       const supabaseId = data.user.id;
 

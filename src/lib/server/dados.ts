@@ -614,7 +614,14 @@ export async function carregarDados(usuario: UsuarioSessao) {
     db.arquivo.findMany({ where: arquivoWhere, orderBy: { createdAt: "desc" }, take: 200 }),
     db.notificacao.findMany({
       where: {
-        OR: [{ usuarioId: usuario.id }, { paraRole: usuario.role }, { AND: [{ usuarioId: null }, { paraRole: null }] }],
+        // B4: broadcast por papel EXIGE usuarioId: null — sem isso, uma
+        // notificação DIRIGIDA a outro paciente com paraRole preenchido
+        // vazaria para todos do papel. Alinhado a notificacoes/route.ts.
+        OR: [
+          { usuarioId: usuario.id },
+          { usuarioId: null, paraRole: usuario.role },
+          { AND: [{ usuarioId: null }, { paraRole: null }] },
+        ],
       },
       orderBy: { createdAt: "desc" },
       take: 200,

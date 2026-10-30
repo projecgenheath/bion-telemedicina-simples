@@ -1,7 +1,10 @@
 "use client";
 import { useState } from "react";
 import {
+  CalendarClock,
+  ClipboardList,
   Clock,
+  Droplets,
   Plus,
   Pill,
   Check,
@@ -10,7 +13,31 @@ import {
 import { EstadoVazio } from "@/components/bion/ui/EstadoVazio";
 import { toast } from "sonner";
 import { useBion } from "@/lib/bion-store";
+import { HORA } from "@/lib/saude-paciente";
 import { ModalBion } from "@/components/bion/ModalBion";
+
+/** B16: ícone por tipo de lembrete — antes era sempre `Pill`, mesmo para
+ *  consulta, exame e hidratação. */
+const ICONE_TIPO = {
+  "Medicação": Pill,
+  "Consulta": CalendarClock,
+  "Exame": ClipboardList,
+  "Hidratação": Droplets,
+} as const;
+
+/** B16: com frequência "a cada N horas" e um horário inicial, os demais
+ *  horários do dia são derivados dele — o form precisa MOSTRÁ-los. */
+function horariosDerivados(horario: string, frequencia: string): string[] {
+  const m = frequencia.match(/a cada (8|12) horas/i);
+  if (!m || !HORA.test(horario)) return [];
+  const passo = Number(m[1]);
+  const [h, min] = horario.split(":").map(Number);
+  const lista: string[] = [];
+  for (let t = h + passo; t < 24; t += passo) {
+    lista.push(`${String(t).padStart(2, "0")}:${String(min).padStart(2, "0")}`);
+  }
+  return lista;
+}
 
 export function Lembretes() {
   const { lembretes, adicionarLembrete, alternarLembrete, removerLembrete } = useBion();
@@ -27,6 +54,11 @@ export function Lembretes() {
   const criarLembrete = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!titulo.trim() || criando) return;
+    // B16: mesma validação HORA do padrão do app (saude-paciente).
+    if (!HORA.test(horario)) {
+      toast.error("Informe um horário válido (ex.: 08:00).");
+      return;
+    }
     setCriando(true);
     const ok = await adicionarLembrete({
       titulo: titulo.trim(),
@@ -51,8 +83,9 @@ export function Lembretes() {
         <div>
           <h1 className="text-3xl font-extrabold tracking-tight">Lembretes & Alarmes de Saúde</h1>
           <p className="text-muted-foreground mt-1">
-            {pendentes} lembrete{pendentes === 1 ? "" : "s"} pendente{pendentes === 1 ? "" : "s"}{" "}
-            para hoje
+            {/* B16: a contagem soma TODOS os pendentes (o lembrete não tem
+                dia próprio) — o texto não promete mais que são "para hoje". */}
+            {pendentes} lembrete{pendentes === 1 ? "" : "s"} pendente{pendentes === 1 ? "" : "s"}
           </p>
         </div>
         <button type="button"
@@ -71,7 +104,9 @@ export function Lembretes() {
             descricao="Crie lembretes de medicamentos, exames ou consultas para não perder o horário."
           />
         )}
-        {lembretes.map((l) => (
+        {lembretes.map((l) => {
+          const IconeTipo = ICONE_TIPO[l.tipo] ?? Pill;
+          return (
           <div
             key={l.id}
             className={`bg-card border rounded-3xl p-4 flex items-center justify-between gap-4 shadow-sm transition ${
@@ -79,7 +114,7 @@ export function Lembretes() {
             }`}
           >
             <div className="w-11 h-11 rounded-2xl bg-primary-soft flex items-center justify-center text-primary shrink-0">
-              <Pill className="w-5 h-5" />
+              <IconeTipo className="w-5 h-5" />
             </div>
 
             <div className="flex-1 min-w-0">
@@ -87,7 +122,11 @@ export function Lembretes() {
                 {l.titulo}
               </div>
               <div className="text-xs text-muted-foreground flex items-center gap-2 mt-0.5">
-                <Clock className="w-3.5 h-3.5" /> {l.horario} • {l.frequencia}
+                <Clock className="w-3.5 h-3.5" /> {l.horario}
+                {horariosDerivados(l.horario, l.frequencia).length > 0
+                  ? `, ${horariosDerivados(l.horario, l.frequencia).join(", ")}`
+                  : ""}{" "}
+                • {l.frequencia}
                 <span className="px-2 py-0.5 rounded-lg bg-muted text-xs font-bold">
                   {l.tipo}
                 </span>
@@ -118,7 +157,8 @@ export function Lembretes() {
               </button>
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
 
       {modalNovo && (
@@ -188,6 +228,13 @@ export function Lembretes() {
                   <option value="A cada 8 horas">A cada 8 horas</option>
                   <option value="Semanalmente">Semanalmente</option>
                 </select>
+                {/* B16: frequência de intervalo com um horário só — mostra
+                    os demais horários derivados do horário inicial. */}
+                {horariosDerivados(horario, frequencia).length > 0 && (
+                  <p className="mt-1.5 text-muted-foreground">
+                    Também às {horariosDerivados(horario, frequencia).join(", ")} — calculados a partir do horário inicial.
+                  </p>
+                )}
               </div>
             </div>
 

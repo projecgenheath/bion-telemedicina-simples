@@ -203,7 +203,10 @@ type EventoParaMulta = { por: string; em: Date; dataAnterior: Date; motivo?: str
  */
 export function dataOriginalParaMulta(eventos: EventoParaMulta[], dataAtual: Date): Date {
   if (!MULTA_CONTA_DATA_ORIGINAL) return dataAtual;
-  const ordenados = [...eventos].sort((a, b) => a.em.getTime() - b.em.getTime());
+  // B14: evento corrigido/anulado pelo admin (corrigidoEm) não vale — mesma
+  // regra das demais leituras (calcularMulta e EVENTO_VIGENTE). Sem o filtro,
+  // um evento desfeito reiniciava a "data original" da janela de 24 h.
+  const ordenados = eventos.filter((e) => !e.corrigidoEm).sort((a, b) => a.em.getTime() - b.em.getTime());
   if (!MULTA_RECOMECA_APOS_EVENTO_NAO_PACIENTE) return ordenados[0]?.dataAnterior ?? dataAtual;
   let inicio = 0;
   ordenados.forEach((e, i) => {

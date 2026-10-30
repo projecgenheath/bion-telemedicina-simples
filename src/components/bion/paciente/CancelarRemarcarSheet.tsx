@@ -18,6 +18,7 @@ import {
   buscarPreviaCancelamento,
   fmtCentavos,
   previaCancelamentoMudou,
+  textoIsencao,
   usePreviaCancelamento,
   type PreviaAcao,
   type PreviaCancelamento,
@@ -669,7 +670,10 @@ function BlocoPrevia({
   return (
     <div className="mt-4 rounded-2xl border bpp-sheet-borda bpp-sheet-cartao p-4 text-sm">
       <p className="font-bold">Sem multa</p>
-      {p.isencao === "fora_da_janela" ? (
+      {/* B39: isenção com motivo próprio (ex.: falta do médico) mostra o motivo. */}
+      {textoIsencao(p.isencao) ? (
+        <p className="bpp-sheet-suave mt-1">{textoIsencao(p.isencao)}</p>
+      ) : p.isencao === "fora_da_janela" ? (
         <p className="bpp-sheet-suave mt-1">
           {acao === "remarcar" ? "Remarque" : "Cancele"} sem multa até {p.semMultaAteTexto} (horário de Brasília). Depois disso, a multa é de {multaPct}% do valor.
         </p>

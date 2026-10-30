@@ -307,12 +307,16 @@ export function textoForaDaJanela(f: ForaDaJanela, agora: number): { titulo: str
 }
 
 /**
- * Mostra a mensagem no lugar da área de espera? Só fora de uma chamada em
- * andamento: se a janela fecha no meio da chamada, a chamada continua.
+ * Mostra a mensagem no lugar da área de espera? Fora de uma chamada
+ * ESTÁVEL em andamento: se a janela fecha no meio da chamada conectada,
+ * a chamada continua sem aviso. Mas em instavel/reconectando (B42) a
+ * renegociação é barrada fora da janela (o servidor recusa sinais
+ * não-controle), então esconder o aviso deixava um "Reconectando…"
+ * eterno — nesses status o fora-da-janela TAMBÉM aparece.
  */
 export function exibirForaDaJanela(f: ForaDaJanela | null, status: string): f is ForaDaJanela {
   if (!f) return false;
-  return status === "conectando" || status === "aguardando";
+  return status === "conectando" || status === "aguardando" || status === "instavel" || status === "reconectando";
 }
 
 /**

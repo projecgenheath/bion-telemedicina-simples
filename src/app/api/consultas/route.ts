@@ -10,7 +10,7 @@ import {
   type AuditPayload,
 } from "@/lib/server/dados";
 import { criarCobranca, confirmarPagamento, modoGateway, paraWire } from "@/lib/server/pagamentos";
-import {ok, falha, lerCorpoJson} from "@/lib/server/http";
+import {ok, falha, lerCorpoJson, corpoObjeto, textoDoCorpo} from "@/lib/server/http";
 import { conferirHorarioNaTransacao, ERRO_HORARIO_OCUPADO, ERRO_PACIENTE_OCUPADO, horarioNaGrade } from "@/lib/server/financeiro";
 import { partesNoFuso } from "@/lib/server/fuso";
 import {
@@ -88,14 +88,20 @@ export async function POST(req: NextRequest) {
     // Termos + privacidade vigentes: sem aceite, nada novo é agendado (403).
     const semAceite = await exigirAceiteTermosPaciente(usuario);
     if (semAceite) return semAceite;
-    const body = (await lerCorpoJson(req)) as {
-      medicoId: string;
-      data: string;
-      hora: string;
-      motivoConsulta?: string;
-      tipoAtendimento?: string;
-      consultaOrigemId?: string;
-      documentoOrigemId?: string;
+    // B1: guarda de objeto/tipo — corpo null quebrava em body.medicoId e
+    // data/hora/motivo não-string quebravam em .trim()/.slice() (500).
+    const bruto = corpoObjeto(await lerCorpoJson(req));
+    if (!bruto) {
+      return Response.json({ erro: "Corpo da requisição inválido." }, { status: 400 });
+    }
+    const body = {
+      medicoId: textoDoCorpo(bruto.medicoId) ?? "",
+      data: textoDoCorpo(bruto.data) ?? "",
+      hora: textoDoCorpo(bruto.hora) ?? "",
+      motivoConsulta: textoDoCorpo(bruto.motivoConsulta),
+      tipoAtendimento: textoDoCorpo(bruto.tipoAtendimento),
+      consultaOrigemId: textoDoCorpo(bruto.consultaOrigemId),
+      documentoOrigemId: textoDoCorpo(bruto.documentoOrigemId),
     };
 
     // M1: medicoId precisa ser uma string presente e sã ANTES de qualquer
@@ -177,12 +183,22 @@ export async function POST(req: NextRequest) {
 
     const dataInicio = parseDataHora(body.data, body.hora);
 
-    // P2 — proibido agendar no passado (tolerância de 1 min). Fuso: dataInicio
-    // já é o instante real (parseDataHora interpreta em São Paulo), então
-    // compara direto com o agora real; sem "agora de parede" falso.
+    // P2 — proibido agendar no passado. B35: a antecedência mínima é UMA
+    // regra só nos dois lados — 5 min na criação, igual ao cliente
+    // (agenda-medico.ts) e à promessa de triagem "até 5 minutos antes"
+    // das notificações abaixo. Antes o servidor só rejeitava o passado
+    // (tolerância de 1 min) e o cliente escondia outro tanto de horários.
+    // Fuso: dataInicio já é o instante real (parseDataHora interpreta em
+    // São Paulo), então compara direto com o agora real.
     if (dataInicio.getTime() < Date.now() - 60_000) {
       return Response.json(
         { erro: "Não é possível agendar no passado — escolha uma data e hora futuras." },
+        { status: 400 },
+      );
+    }
+    if (dataInicio.getTime() < Date.now() + 5 * 60_000) {
+      return Response.json(
+        { erro: "É preciso agendar com pelo menos 5 minutos de antecedência — escolha um horário mais adiante." },
         { status: 400 },
       );
     }

@@ -1,6 +1,7 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { notaReal } from "@/lib/server/notas-medico";
+import { limitarAsync, obterIp, resposta429 } from "@/lib/server/rate-limit";
 
 /**
  * Dados PÚBLICOS do médico (sem informações sensíveis) — sustenta a página
@@ -16,10 +17,14 @@ import { notaReal } from "@/lib/server/notas-medico";
  * Rate limit / abuso: a rota só devolve dados já públicos de médicos ativos.
  */
 export async function GET(
-  _req: Request,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    // B11: rota ANÔNIMA com agregação por requisição — rate-limit por IP
+    // (padrão limitarAsync do repo) contra scraping em lote/DoS leve.
+    const teto = await limitarAsync(`publico-medico:ip:${obterIp(req)}`, 60, 60_000);
+    if (!teto.permitido) return resposta429(teto.restanteSeg);
     const { id } = await params;
     if (!id || id.length > 64) {
       return NextResponse.json({ erro: "ID inválido" }, { status: 400 });
@@ -47,18 +52,23 @@ export async function GET(
     // Só avaliações reais (mesma regra do medicoWire) — nunca o valor do seed.
     const nota = await notaReal(id);
 
-    return NextResponse.json({
-      id: perfil.userId,
-      nome: perfil.user.nome,
-      especialidade: perfil.especialidade,
-      crm: perfil.crm,
-      bio: perfil.bio ?? "",
-      valor: perfil.valor,
-      avaliacao: nota.avaliacao,
-      numAvaliacoes: nota.numAvaliacoes,
-      foto: perfil.foto ?? undefined,
-      horariosDisponiveis: JSON.parse(perfil.horariosDisponiveis || "[]") as string[],
-    });
+    return NextResponse.json(
+      {
+        id: perfil.userId,
+        nome: perfil.user.nome,
+        especialidade: perfil.especialidade,
+        crm: perfil.crm,
+        bio: perfil.bio ?? "",
+        valor: perfil.valor,
+        avaliacao: nota.avaliacao,
+        numAvaliacoes: nota.numAvaliacoes,
+        foto: perfil.foto ?? undefined,
+        horariosDisponiveis: JSON.parse(perfil.horariosDisponiveis || "[]") as string[],
+      },
+      // B11: dados públicos e pouco voláteis — cache compartilhado de 60 s
+      // reduz a agregação repetida no banco.
+      { headers: { "Cache-Control": "public, s-maxage=60" } },
+    );
   } catch (erro) {
     // Banco fora do ar ou inesperado: 404 de perfil público é mais seguro
     // (não vaza detalhes internos do servidor ao visitante anônimo).

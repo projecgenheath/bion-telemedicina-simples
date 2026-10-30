@@ -474,6 +474,11 @@ type Store = {
   sessao: Sessao;
   autenticado: boolean;
   carregando: boolean;
+  /** B24: a carga inicial FALHOU (sessão/bootstrap) — distinto de "não
+   *  autenticado": os layouts mostram erro com "tentar novamente" em vez
+   *  de redirecionar para o login como se fosse logout. */
+  erroCarga: boolean;
+  tentarNovamenteCarga: () => void;
   /** V4 — conta criada pela administração: troca de senha obrigatória. */
   precisaTrocarSenha: boolean;
   trocarSenha: (senhaAtual: string, novaSenha: string) => Promise<RespostaSenha>;
@@ -584,6 +589,7 @@ export function BionProvider({ children }: { children: ReactNode }) {
   const [suporte, setSuporte] = useState<{ id: string | null; nome: string }>(SUPORTE_VAZIO);
   const [autenticado, setAutenticado] = useState(false);
   const [carregando, setCarregando] = useState(true);
+  const [erroCarga, setErroCarga] = useState(false);
   const [precisaTrocarSenha, setPrecisaTrocarSenha] = useState(false);
 
   const sessaoRef = useRef(sessao);
@@ -645,15 +651,24 @@ export function BionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   /** Carrega sessão + bootstrap ao montar (single-flight: montagens rápidas
-   *  ou re-montagens do provider não disparam duas cargas completas). */
-  useEffect(() => {
+   *  ou re-montagens do provider não disparam duas cargas completas).
+   *  B24: falha de rede/servidor (api → null) NÃO é "não autenticado" —
+   *  /api/auth/sessao responde 200 { autenticado: false } para quem não
+   *  tem sessão. Falha vira `erroCarga`, com retry por tentarNovamenteCarga. */
+  const carregarInicial = useCallback(async () => {
     if (bootstrapEmAndamentoRef.current) return;
     bootstrapEmAndamentoRef.current = true;
-    (async () => {
+    setCarregando(true);
+    setErroCarga(false);
+    try {
       const s = await api<{ autenticado: boolean; usuario?: { id: string; nome: string; email: string; role: string; precisaTrocarSenha?: boolean } }>(
         "/api/auth/sessao",
       );
-      if (s?.autenticado && s.usuario?.precisaTrocarSenha) {
+      if (!s) {
+        setErroCarga(true);
+        return;
+      }
+      if (s.autenticado && s.usuario?.precisaTrocarSenha) {
         // Auditoria admin (C2): com troca de senha pendente o servidor recusa
         // o bootstrap (403). Abre direto a tela de troca; os dados são
         // carregados em trocarSenha() após o sucesso.
@@ -665,17 +680,33 @@ export function BionProvider({ children }: { children: ReactNode }) {
         });
         setPrecisaTrocarSenha(true);
         setAutenticado(true);
-      } else if (s?.autenticado && s.usuario) {
+      } else if (s.autenticado && s.usuario) {
         const dados = await api<EstadoFresco>("/api/bootstrap");
         if (dados) {
           aplicar(dados);
           setAutenticado(true);
+        } else {
+          // Sessão válida, bootstrap falhou: erro de carga, não logout.
+          setErroCarga(true);
         }
+      } else if (s.autenticado) {
+        // Resposta incoerente (autenticado sem usuário): trata como falha.
+        setErroCarga(true);
       }
+      // s.autenticado === false: não autenticado de verdade — sem erro.
+    } finally {
       setCarregando(false);
       bootstrapEmAndamentoRef.current = false;
-    })();
+    }
   }, [aplicar]);
+
+  useEffect(() => {
+    void carregarInicial();
+  }, [carregarInicial]);
+
+  const tentarNovamenteCarga = useCallback(() => {
+    void carregarInicial();
+  }, [carregarInicial]);
 
   /** Mescla mensagens no estado (novas por id, atualizações de recibo de
    *  leitura) e avança o marcador do polling incremental. */
@@ -777,6 +808,7 @@ export function BionProvider({ children }: { children: ReactNode }) {
       });
       if (!dados) return { ok: false };
       aplicar(dados);
+      setErroCarga(false);
       setAutenticado(true);
       return { ok: true, role: dados.usuario.role.toLowerCase() as Sessao["role"] };
     },
@@ -791,6 +823,7 @@ export function BionProvider({ children }: { children: ReactNode }) {
       });
       if (!dados) return { ok: false };
       aplicar(dados);
+      setErroCarga(false);
       setAutenticado(true);
       return { ok: true, role: dados.usuario.role.toLowerCase() as Sessao["role"] };
     },
@@ -813,6 +846,7 @@ export function BionProvider({ children }: { children: ReactNode }) {
     }
     await inscricao?.unsubscribe().catch(() => false);
     limparSyncPush();
+    setErroCarga(false);
     setAutenticado(false);
     setPrecisaTrocarSenha(false);
     setSessaoState(SESSAO_VAZIA);
@@ -1720,6 +1754,8 @@ export function BionProvider({ children }: { children: ReactNode }) {
       sessao,
       autenticado,
       carregando,
+      erroCarga,
+      tentarNovamenteCarga,
       precisaTrocarSenha,
       trocarSenha,
       entrar,
@@ -1778,7 +1814,7 @@ export function BionProvider({ children }: { children: ReactNode }) {
       atualizarConsulta,
     }),
     [
-      sessao, autenticado, carregando, precisaTrocarSenha, trocarSenha, entrar, registrar, sair,
+      sessao, autenticado, carregando, erroCarga, tentarNovamenteCarga, precisaTrocarSenha, trocarSenha, entrar, registrar, sair,
       consultas, arquivos, notificacoes, notificacoesVisiveis, documentos, medicos,
       tickets, lembretes, pacientePerfil, documentosVisiveis,
       mensagens, suporte, enviarMensagem, marcarConversaLida,

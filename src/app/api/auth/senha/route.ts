@@ -8,7 +8,7 @@ import {
   registrarAudit,
   supabaseAdminOuNull,
 } from "@/lib/server/auth";
-import {ok, falha, lerCorpoJson} from "@/lib/server/http";
+import {ok, falha, lerCorpoJson, corpoObjeto, textoDoCorpo} from "@/lib/server/http";
 import {
   limitarAsync,
   consultarAsync,
@@ -32,11 +32,11 @@ export async function POST(req: NextRequest) {
   try {
     // Única rota (junto de sessao/logout) liberada com troca de senha pendente.
     const usuario = await exigirSessaoPermitindoTrocaSenha();
-    const body = (await lerCorpoJson(req)) as { senhaAtual?: string; novaSenha?: string };
-
-    if (!body) {
+    const bruto = corpoObjeto(await lerCorpoJson(req));
+    if (!bruto) {
       return Response.json({ erro: "Corpo da requisição inválido." }, { status: 400 });
     }
+    const body = { senhaAtual: textoDoCorpo(bruto.senhaAtual), novaSenha: textoDoCorpo(bruto.novaSenha) };
 
     const senhaAtual = body.senhaAtual ?? "";
     const novaSenha = body.novaSenha ?? "";
@@ -112,21 +112,25 @@ export async function POST(req: NextRequest) {
               password: novaSenha,
             });
             if (adminErr) {
+              // B3: não repassar a mensagem crua do fornecedor ao cliente.
+              console.error("[senha] Supabase admin recusou a troca:", adminErr.message);
               return Response.json(
-                { erro: adminErr.message || "Não foi possível atualizar a senha no Auth." },
+                { erro: "Não foi possível atualizar a senha. Tente novamente." },
                 { status: 400 },
               );
             }
           } else {
+            console.error("[senha] Supabase recusou a troca:", updErr.message);
             return Response.json(
-              { erro: updErr.message || "Não foi possível atualizar a senha no Auth." },
+              { erro: "Não foi possível atualizar a senha. Tente novamente." },
               { status: 400 },
             );
           }
         }
       } catch (e) {
-        const msg = e instanceof Error ? e.message : "Falha ao atualizar senha no Supabase.";
-        return Response.json({ erro: msg }, { status: 500 });
+        // B3: detalhe do provedor fica no log; ao cliente, mensagem própria.
+        console.error("[senha] falha ao atualizar senha no Supabase:", e);
+        return Response.json({ erro: "Não foi possível atualizar a senha. Tente novamente." }, { status: 500 });
       }
     }
 

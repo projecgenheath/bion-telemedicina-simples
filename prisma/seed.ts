@@ -387,7 +387,7 @@ async function main() {
   const uMarina = { id: marina.id, nome: marina.nome, role: "PACIENTE" };
   const uAna = { id: medicos["Dra. Ana Ribeiro"], nome: "Dra. Ana Ribeiro", role: "MEDICO" };
   const uAdmin = { id: admin.id, nome: "Admin BION", role: "ADMIN" };
-  const uBeatriz = { id: beatriz.id, nome: "Beatriz Costa", role: "PACIENTE" };
+  const uBeatriz = { id: beatriz.id, nome: beatriz.nome, role: "PACIENTE" };
 
   await aud(28, "LOGIN", "autenticacao", "info", uMarina, "Login realizado com sucesso");
   await aud(27, "CONSULTA_AGENDADA", "consulta", "info", uMarina, "Agendamento com Dra. Ana Ribeiro — Clínica Geral", "consulta", c1.id);

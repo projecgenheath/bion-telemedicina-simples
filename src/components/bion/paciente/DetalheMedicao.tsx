@@ -18,7 +18,8 @@ import {
 } from "lucide-react";
 import { useBion } from "@/lib/bion-store";
 import { calcularImc, formatarAltura, formatarPeso, lerAlturaCm, lerPesoKg } from "@/lib/medidas-paciente";
-import { validarResposta } from "@/lib/saude-paciente";
+import { FREQUENCIAS_LEMBRETE, HORA, validarResposta } from "@/lib/saude-paciente";
+import { FUSO_CLINICA, partesFusoClinica } from "@/lib/bion-tipos";
 import { GraficoLinha } from "./GraficoLinha";
 
 /**
@@ -30,9 +31,11 @@ import { GraficoLinha } from "./GraficoLinha";
 
 export type Detalhe = "imc" | "pa" | "lembretes" | null;
 
+// B19: dia/mês no fuso da clínica (America/Sao_Paulo), como o restante do
+// app (partesFusoClinica) — não no fuso do dispositivo.
 const rotuloCurto = (iso: string) => {
-  const d = new Date(iso);
-  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
+  const d = partesFusoClinica(iso);
+  return `${String(d.dia).padStart(2, "0")}/${String(d.mes + 1).padStart(2, "0")}`;
 };
 
 function classificarImc(imc: number): { rotulo: string; cor: string } {
@@ -179,15 +182,17 @@ function DetalheImc({ onFechar }: { onFechar: () => void }) {
   const serieImc = useMemo(() => {
     return pesos
       .map((p) => {
-        const alturaCm =
-          alturas.filter((a) => a.criadoEm <= p.criadoEm).at(-1)?.valor1 ?? alturaAtual;
+        // B18: só a altura registrada ATÉ a data do peso — sem altura da
+        // época, o ponto é descartado (a lista ao lado faz o mesmo); usar a
+        // altura atual recalculava o passado com a altura de hoje.
+        const alturaCm = alturas.filter((a) => a.criadoEm <= p.criadoEm).at(-1)?.valor1;
         if (!alturaCm) return null;
         const imc = p.valor1 / Math.pow(alturaCm / 100, 2);
         return { valor: Math.round(imc * 10) / 10, rotulo: rotuloCurto(p.criadoEm) };
       })
       .filter((x): x is { valor: number; rotulo: string } => x !== null)
       .slice(-12);
-  }, [pesos, alturas, alturaAtual]);
+  }, [pesos, alturas]);
 
   const imcAtual = calcularImc(pesoAtual, alturaAtual);
   const classe = imcAtual ? classificarImc(imcAtual) : null;
@@ -389,9 +394,10 @@ function DetalheLembretes({ onFechar }: { onFechar: () => void }) {
   const [horario, setHorario] = useState("");
   // A15: este campo é a FREQUÊNCIA ("1x ao dia") — o nome do remédio é o
   // `titulo`. Antes a frequência era gravada também como `medicamento`.
-  const [frequencia, setFrequencia] = useState("");
+  const [frequencia, setFrequencia] = useState<string>(FREQUENCIAS_LEMBRETE[0]);
   const [criando, setCriando] = useState(false);
-  const hoje = new Date().toLocaleDateString("pt-BR", { weekday: "long" });
+  // B19: dia da semana no fuso da clínica, não no do dispositivo.
+  const hoje = new Date().toLocaleDateString("pt-BR", { weekday: "long", timeZone: FUSO_CLINICA });
 
   return (
     <Envolver titulo="Lembretes de medicação" descricao={`Agenda de hoje e rotina completa · ${hoje}`} onFechar={onFechar}>
@@ -414,19 +420,24 @@ function DetalheLembretes({ onFechar }: { onFechar: () => void }) {
             aria-label="Horário do lembrete"
             className="bp-entrada w-full px-4 py-3 text-sm"
           />
-          <input
+          <select
             value={frequencia}
             onChange={(e) => setFrequencia(e.target.value)}
-            placeholder="Frequência (1x ao dia)"
             aria-label="Frequência do lembrete"
             className="bp-entrada w-full px-4 py-3 text-sm"
-          />
+          >
+            {FREQUENCIAS_LEMBRETE.map((f) => (
+              <option key={f} value={f}>{f}</option>
+            ))}
+          </select>
         </div>
         <button type="button"
           disabled={criando}
           onClick={async () => {
-            if (!titulo.trim() || !/^\d{1,2}:\d{2}$/.test(horario.trim())) {
-              toast.error("Informe o nome e o horário (ex.: 08:00).");
+            // B16: HORA do padrão do app (saude-paciente) — a regex fraca
+            // anterior aceitava "99:99"/"27:70", que nunca disparam.
+            if (!titulo.trim() || !HORA.test(horario.trim())) {
+              toast.error("Informe o nome e o horário válido (ex.: 08:00).");
               return;
             }
             // A15: `medicamento` é o NOME do remédio (o título) — é por ele
@@ -438,14 +449,14 @@ function DetalheLembretes({ onFechar }: { onFechar: () => void }) {
               titulo: titulo.trim(),
               horario: horario.trim(),
               tipo: "Medicação",
-              frequencia: frequencia.trim() || "1x ao dia",
+              frequencia: frequencia || FREQUENCIAS_LEMBRETE[0],
               medicamento: titulo.trim(),
             });
             setCriando(false);
             if (!ok) return;
             setTitulo("");
             setHorario("");
-            setFrequencia("");
+            setFrequencia(FREQUENCIAS_LEMBRETE[0]);
             toast.success("Lembrete criado.");
           }}
           className="bp-acao w-full py-3 text-sm inline-flex items-center justify-center gap-2 disabled:opacity-50"

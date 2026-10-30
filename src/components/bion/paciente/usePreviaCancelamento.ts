@@ -18,8 +18,23 @@ export type PreviaAcao = {
   semMultaAte: string;
   /** Já formatado em horário de Brasília pelo servidor. */
   semMultaAteTexto: string;
-  isencao: null | "nao_e_paciente" | "aguardando_reagendamento" | "fora_da_janela";
+  isencao: null | "nao_e_paciente" | "aguardando_reagendamento" | "fora_da_janela" | "falta_do_medico";
 };
+
+/**
+ * B39 — texto da isenção por falta do médico (servidor: financeiro.ts,
+ * isencao "falta_do_medico" quando houve falta do médico vigente).
+ * Sem este caso, a prévia caía no genérico "Sem multa" sem explicar o
+ * motivo. Quem exibe a prévia usa este texto para a isenção.
+ */
+export function textoIsencao(isencao: PreviaAcao["isencao"]): string | null {
+  switch (isencao) {
+    case "falta_do_medico":
+      return "Sem multa: o médico não compareceu à consulta, então você não paga multa para cancelar ou remarcar.";
+    default:
+      return null;
+  }
+}
 
 export type StatusReembolso = "solicitado" | "aprovado" | "processado" | "negado" | "falhou";
 
@@ -45,13 +60,21 @@ export type PreviaCancelamento = {
 export const fmtCentavos = (centavos: number) =>
   (centavos / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
-/** Rótulo amigável do status do reembolso. */
-export function rotuloReembolso(status: string): { texto: string; tom: "ok" | "andamento" | "erro" } {
+/**
+ * Rótulo amigável do status do reembolso.
+ * B37: "integral" só sai com multa 0 — com multa descontada o reembolso
+ * aprovado é PARCIAL. Quem chama deve passar `multaCentavos` do resumo
+ * (ReembolsoResumo.multaCentavos); sem o valor, mantém "integral" por
+ * compatibilidade com chamadores antigos.
+ */
+export function rotuloReembolso(status: string, multaCentavos?: number): { texto: string; tom: "ok" | "andamento" | "erro" } {
   switch (status) {
     case "solicitado":
       return { texto: "Reembolso solicitado", tom: "andamento" };
     case "aprovado":
-      return { texto: "Reembolso aprovado — integral", tom: "andamento" };
+      return multaCentavos !== undefined && multaCentavos > 0
+        ? { texto: "Reembolso aprovado — parcial", tom: "andamento" }
+        : { texto: "Reembolso aprovado — integral", tom: "andamento" };
     case "processado":
       return { texto: "Reembolso concluído", tom: "ok" };
     case "negado":

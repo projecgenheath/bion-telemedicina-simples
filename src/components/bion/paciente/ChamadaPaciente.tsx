@@ -41,6 +41,18 @@ export function ChamadaPaciente({
   return <TelaChamadaPaciente sala={sala} onEnd={onEnd} />;
 }
 
+/**
+ * B43: desfaz o fmtValorBRL do store ("R$ 150" / "R$ 149,90") para
+ * centavos, para o painel de espera saber se é retorno grátis (valor 0).
+ * Se não der para interpretar, devolve undefined e o painel mantém o
+ * comportamento de antes.
+ */
+function valorConsultaCentavosDe(valor: string | undefined): number | undefined {
+  if (!valor) return undefined;
+  const n = Number(valor.replace("R$", "").trim().replace(",", "."));
+  return Number.isFinite(n) ? Math.round(n * 100) : undefined;
+}
+
 /** "MM:SS" (ou "H:MM:SS") desde a primeira vez que a chamada conectou. */
 function useTempoDeChamada(conectado: boolean): string | null {
   const [comecou, setComecou] = useState(false);
@@ -258,6 +270,7 @@ export function TelaChamadaPaciente({
       {/* Espera do médico (10 min): contagem e, se ele não entrar, cancelar ou remarcar. */}
       <EsperaMedicoPainel
         consultaId={sala.consultaAtual?.id}
+        valorConsultaCentavos={valorConsultaCentavosDe(sala.consultaAtual?.valor)}
         medicoConectado={conectado && tele.remotoPronto}
         onSair={onEnd}
         onSairDaChamada={sala.sairDaSala}

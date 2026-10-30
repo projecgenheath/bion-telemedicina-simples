@@ -5,7 +5,7 @@
  * no desfecho, a folha NÃO cancela e pede nova confirmação.
  * Rodar: bun src/components/bion/paciente/usePreviaCancelamento.teste.ts
  */
-import { previaCancelamentoMudou, type PreviaCancelamento } from "./usePreviaCancelamento";
+import { previaCancelamentoMudou, rotuloReembolso, textoIsencao, type PreviaCancelamento } from "./usePreviaCancelamento";
 
 let ok = 0;
 let falhas = 0;
@@ -89,6 +89,22 @@ eq("prévias idênticas", previaCancelamentoMudou(base(), base()), false);
   const fresca = clone(base());
   fresca.cancelar.semMultaAteTexto = "08/11 às 09:00";
   eq("só o texto derivado mudou", previaCancelamentoMudou(base(), fresca), false);
+}
+
+/* B37 — "integral" só com multa 0; com multa, o aprovado é parcial. */
+eq("aprovado sem multa = integral", rotuloReembolso("aprovado", 0).texto, "Reembolso aprovado — integral");
+eq("aprovado com multa = parcial", rotuloReembolso("aprovado", 7500).texto, "Reembolso aprovado — parcial");
+eq("aprovado sem informar multa = integral (compat)", rotuloReembolso("aprovado").texto, "Reembolso aprovado — integral");
+eq("processado não muda", rotuloReembolso("processado", 7500).texto, "Reembolso concluído");
+
+/* B39 — isenção falta_do_medico tem tipo e texto próprios. */
+eq("texto da isenção falta_do_medico", /médico não compareceu/.test(textoIsencao("falta_do_medico") ?? ""), true);
+eq("outras isenções sem texto próprio", textoIsencao("fora_da_janela"), null);
+eq("sem isenção sem texto", textoIsencao(null), null);
+{
+  const fresca = clone(base());
+  fresca.cancelar.isencao = "falta_do_medico";
+  eq("isenção falta_do_medico entra na comparação da prévia", previaCancelamentoMudou(base(), fresca), true);
 }
 
 console.log(`usePreviaCancelamento: ${ok} ok, ${falhas} falha(s)`);

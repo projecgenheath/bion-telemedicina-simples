@@ -18,8 +18,22 @@ export function isoDia(tsOuIso: number | string) {
   return `${p.ano}-${String(p.mes + 1).padStart(2, "0")}-${String(p.dia).padStart(2, "0")}`;
 }
 
-function chaveSlot(tsOuIso: number | string, hora: string) {
-  return `${isoDia(tsOuIso)}|${hora}`;
+/** Instante (ms) de início de uma consulta conhecida no cliente. */
+function instanteConsulta(c: Consulta): number {
+  const t = c.dataISO ? Date.parse(c.dataISO) : c.ts;
+  return Number.isFinite(t) ? t : NaN;
+}
+
+/**
+ * B34: o servidor bloqueia por SOBREPOSIÇÃO de 30 min (janelaSobreposicao
+ * em financeiro.ts: início em (t−30min, t+30min)), não só o slot exato.
+ * O cliente usa a mesma janela: um horário candidato conflita se alguma
+ * consulta ocupada começa a menos de 30 min dele (grades desalinhadas
+ * não mostram mais "livre" para um envio que levaria 409).
+ */
+export function conflitaComOcupados(candidatoMs: number, ocupadosMs: readonly number[]): boolean {
+  if (!Number.isFinite(candidatoMs)) return false;
+  return ocupadosMs.some((o) => Number.isFinite(o) && Math.abs(candidatoMs - o) < DURACAO_CONSULTA_SERVIDOR_MIN * 60_000);
 }
 
 /** Mesma consulta do médico: por id; nome só para registros antigos sem medicoId. */
@@ -95,18 +109,28 @@ export function agendaLivreDoMedico(
       ? bloqueados
       : new Set(bloqueados as readonly string[]);
   const horasBase = medico?.horariosDisponiveis?.length ? medico.horariosDisponiveis : HORAS_PADRAO;
-  const agora = Date.now() + 30 * 60_000;
+  // B35 — antecedência mínima ÚNICA por fluxo, coerente com o servidor:
+  //  - remarcação (há consulta a excluir): 20 min, como validarNovoHorario
+  //    (financeiro.ts) — antes o cliente exigia 30 e escondia 10 min de
+  //    horários que o servidor aceita;
+  //  - criação (agendamento novo/retorno): 5 min — o servidor só rejeita
+  //    horário no passado (tolerância de 1 min p/ relógio) e promete
+  //    triagem "até 5 minutos antes"; exigir 30 min escondia horários
+  //    válidos que o servidor aceita e a promessa anuncia.
+  const antecedenciaMin = excluirConsultaId ? 20 : 5;
+  const agora = Date.now() + antecedenciaMin * 60_000;
 
-  const ocupados = new Set(
-    consultas
-      .filter(
-        (c) =>
-          c.id !== excluirConsultaId &&
-          !["cancelada", "concluida", "aguardando_reagendamento", "falta_paciente"].includes(c.status) &&
-          (medico ? eDoMedico(c, medico) : true),
-      )
-      .map((c) => chaveSlot(c.dataISO ?? c.ts, c.hora)),
-  );
+  // B34: ocupados como INSTANTES (não chave exata dia|hora) — o bloqueio
+  // é por sobreposição de 30 min, igual ao servidor.
+  const ocupadosMs = consultas
+    .filter(
+      (c) =>
+        c.id !== excluirConsultaId &&
+        !["cancelada", "concluida", "aguardando_reagendamento", "falta_paciente"].includes(c.status) &&
+        (medico ? eDoMedico(c, medico) : true),
+    )
+    .map(instanteConsulta)
+    .filter((t) => Number.isFinite(t));
 
   // Grade semanal do médico (tipo Medico, já parseada pelo wire):
   // diasAtendimento vazio/ausente = todos os dias (mesma regra do servidor).
@@ -137,7 +161,7 @@ export function agendaLivreDoMedico(
       const [hh, mm] = h.split(":").map(Number);
       const ts = instanteFusoClinica(d.ano, d.mes, d.dia, hh || 0, mm || 0);
       if (ts < agora) return false;
-      return !ocupados.has(`${d.iso}|${h}`);
+      return !conflitaComOcupados(ts, ocupadosMs);
     });
     if (!horarios.length) continue;
     dias.push({

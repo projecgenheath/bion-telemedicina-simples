@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { exigirPapel } from "@/lib/server/auth";
 import { aplicarSideEffects, documentoWire } from "@/lib/server/dados";
-import {ok, falha, lerCorpoJson} from "@/lib/server/http";
+import {ok, falha, lerCorpoJson, corpoObjeto, textoDoCorpo} from "@/lib/server/http";
 
 /** Emissão de documento clínico (receita/atestado/exame) — apenas médicos.
  *  Paciente identificado por ID (nunca por nome — homônimos existem).
@@ -16,20 +16,26 @@ const TIPOS_DOCUMENTO = new Set(["receita", "atestado", "exame", "exame_solicita
 export async function POST(req: NextRequest) {
   try {
     const usuario = await exigirPapel("MEDICO");
-    const body = (await lerCorpoJson(req)) as {
-      tipo: string;
-      titulo: string;
-      conteudo: string;
-      pacienteId: string;
+    // B1: guarda de objeto/tipo — corpo null ou campo não-string virava 500
+    // em .trim()/.slice() abaixo.
+    const bruto = corpoObjeto(await lerCorpoJson(req));
+    if (!bruto) {
+      return Response.json({ erro: "Corpo da requisição inválido." }, { status: 400 });
+    }
+    const body = {
+      tipo: textoDoCorpo(bruto.tipo) ?? "",
+      titulo: textoDoCorpo(bruto.titulo) ?? "",
+      conteudo: textoDoCorpo(bruto.conteudo) ?? "",
+      pacienteId: textoDoCorpo(bruto.pacienteId) ?? "",
       /** B-12: consulta em que o documento foi emitido (opcional). */
-      consultaId?: string | null;
-      medicamento?: string;
-      posologia?: string;
-      duracao?: string;
-      observacoes?: string;
-      cid?: string;
+      consultaId: textoDoCorpo(bruto.consultaId) ?? null,
+      medicamento: textoDoCorpo(bruto.medicamento),
+      posologia: textoDoCorpo(bruto.posologia),
+      duracao: textoDoCorpo(bruto.duracao),
+      observacoes: textoDoCorpo(bruto.observacoes),
+      cid: textoDoCorpo(bruto.cid),
       /** Receita de controlado: só vale para tipo "receita"; default false. */
-      controlado?: boolean;
+      controlado: bruto.controlado as boolean | undefined,
     };
 
     if (!body.tipo || !body.titulo || !body.conteudo || !body.pacienteId) {

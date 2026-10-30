@@ -170,7 +170,8 @@ igual("detalhe do depois cita 2 horas", /2 horas depois/.test(textoForaDaJanela(
 igual("exibe na espera (conectando)", exibirForaDaJanela({ motivo: "antes" }, "conectando"), true);
 igual("exibe na espera (aguardando)", exibirForaDaJanela({ motivo: "depois" }, "aguardando"), true);
 igual("não exibe com a chamada conectada", exibirForaDaJanela({ motivo: "depois" }, "conectado"), false);
-igual("não exibe reconectando", exibirForaDaJanela({ motivo: "depois" }, "instavel"), false);
+igual("exibe reconectando/instavel (B42: renegociação barrada fora da janela)", exibirForaDaJanela({ motivo: "depois" }, "instavel"), true);
+igual("exibe em 'reconectando'", exibirForaDaJanela({ motivo: "depois" }, "reconectando"), true);
 igual("não exibe negociando", exibirForaDaJanela({ motivo: "depois" }, "conectando-p2p"), false);
 igual("não exibe encerrada", exibirForaDaJanela({ motivo: "depois" }, "encerrada"), false);
 igual("não exibe sem 409", exibirForaDaJanela(null, "aguardando"), false);

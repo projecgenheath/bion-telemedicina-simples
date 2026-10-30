@@ -14,6 +14,7 @@ import {
   type EsperaWire,
   type MedicoLivre,
 } from "./espera-medico-ui";
+import { agoraCalibradoMs, registrarHoraServidor } from "./useRelogioSala";
 
 /**
  * Espera do médico na chamada do PACIENTE (9:16).
@@ -50,15 +51,18 @@ async function chamar<T>(url: string, init?: RequestInit): Promise<Resposta<T>> 
 /** Polling da espera + relógio local de 1 s. */
 function useEsperaMedico(consultaId: string | undefined, ativo: boolean) {
   const [espera, setEspera] = useState<EsperaWire | null>(null);
-  const [agora, setAgora] = useState(() => Date.now());
+  // B41: relógio calibrado pela hora do servidor quando já registrada.
+  const [agora, setAgora] = useState(() => agoraCalibradoMs());
   // M16: 401/402/403 do polling NÃO são "sem espera" — são recusa definitiva
   // (sessão expirada, pagamento, acesso) e a tela mostra o erro em vez de o
   // painel sumir em silêncio. Uma resposta boa limpa o estado.
   const [erroStatus, setErroStatus] = useState<number | null>(null);
   const recarregar = useCallback(async () => {
     if (!consultaId) return;
-    const r = await chamar<{ espera: EsperaWire | null }>(base(consultaId));
+    const r = await chamar<{ espera: EsperaWire | null; agoraServidor?: string }>(base(consultaId));
     if (r.ok) {
+      // B41 (defensivo): se a resposta trouxer a hora do servidor, calibra.
+      registrarHoraServidor(r.dados.agoraServidor);
       setEspera(r.dados.espera);
       setErroStatus(null);
     } else if (r.status === 401 || r.status === 402 || r.status === 403) {
@@ -82,7 +86,7 @@ function useEsperaMedico(consultaId: string | undefined, ativo: boolean) {
 
   useEffect(() => {
     if (!ativo) return;
-    const t = setInterval(() => setAgora(Date.now()), 1000);
+    const t = setInterval(() => setAgora(agoraCalibradoMs()), 1000);
     return () => clearInterval(t);
   }, [ativo]);
 
@@ -98,12 +102,20 @@ type Etapa =
 export function EsperaMedicoPainel({
   consultaId,
   medicoConectado,
+  valorConsultaCentavos,
   onSair,
   onSairDaChamada,
   onResolvida,
 }: {
   consultaId: string | undefined;
   medicoConectado: boolean;
+  /**
+   * B43 (opcional): valor da consulta em centavos. Com valor 0 (retorno
+   * grátis), "remarcar com outro médico" some — o servidor proíbe — e os
+   * textos passam a falar do direito ao retorno. Sem o valor (chamador
+   * antigo), o comportamento é o de antes.
+   */
+  valorConsultaCentavos?: number | null;
   /** Depois do desfecho: volta ao início. */
   onSair: () => void;
   /** Enquanto espera: sai da chamada (o mesmo do botão Sair da barra). */
@@ -111,6 +123,7 @@ export function EsperaMedicoPainel({
   /** Cancelada ou remarcada: o app recarrega o estado (lista de consultas). */
   onResolvida?: () => void;
 }) {
+  const retornoGratis = valorConsultaCentavos !== undefined && valorConsultaCentavos !== null && valorConsultaCentavos <= 0;
   const { espera, setEspera, agora, recarregar, erroStatus } = useEsperaMedico(consultaId, !medicoConectado);
   const [etapa, setEtapa] = useState<Etapa>({ tipo: "inicio" });
   const [enviando, setEnviando] = useState(false);
@@ -240,7 +253,15 @@ export function EsperaMedicoPainel({
     } else tratarFalha(r.falha);
   };
 
-  const status = espera.status === "aguardando" && segundosAte(espera.expiraEm, agora) === 0 ? "expirada" : espera.status;
+  // B40 (leitura local, espelho de statusEfetivo): aguardando vencida e
+  // remarcando com a reserva vencida já contam como expirada, sem
+  // esperar o próximo polling/job — nada de "Pague a diferença — 00:00".
+  const status =
+    espera.status === "aguardando" && segundosAte(espera.expiraEm, agora) === 0
+      ? "expirada"
+      : espera.status === "remarcando" && espera.reservaExpiraEm && segundosAte(espera.reservaExpiraEm, agora) === 0
+        ? "expirada"
+        : espera.status;
   const podeEscolher = espera.podeEscolher || status === "expirada";
 
   let conteudo: React.ReactNode;
@@ -249,7 +270,9 @@ export function EsperaMedicoPainel({
     conteudo = (
       <>
         <Cabecalho refTitulo={tituloRef} icone={<Clock className="size-7" aria-hidden />} titulo="Aguardando o médico entrar">
-          Ele tem até 10 minutos. Se não entrar, você pode cancelar com reembolso integral ou remarcar com outro médico.
+          {retornoGratis
+            ? "Ele tem até 10 minutos. Se não entrar, você pode cancelar — e o seu direito ao retorno grátis volta."
+            : "Ele tem até 10 minutos. Se não entrar, você pode cancelar com reembolso integral ou remarcar com outro médico."}
         </Cabecalho>
         <p className="mt-4 text-4xl font-semibold tabular-nums" aria-hidden>
           {formatarContagem(s)}
@@ -267,7 +290,9 @@ export function EsperaMedicoPainel({
       conteudo = (
         <>
           <Cabecalho refTitulo={tituloRef} icone={<XCircle className="size-7" aria-hidden />} titulo="Cancelar com reembolso?">
-            A consulta será cancelada e o valor pago volta integralmente para você.
+            {retornoGratis
+              ? "A consulta será cancelada e o seu direito ao retorno grátis volta para você usar em outra data."
+              : "A consulta será cancelada e o valor pago volta integralmente para você."}
           </Cabecalho>
           <Acoes>
             <Botao primario onClick={() => void cancelar()} disabled={enviando} carregando={enviando}>
@@ -361,14 +386,23 @@ export function EsperaMedicoPainel({
             <Botao primario onClick={() => setEtapa({ tipo: "confirmar_cancelar" })}>
               Cancelar com reembolso
             </Botao>
-            <Botao
-              onClick={() => {
-                setEtapa({ tipo: "escolher_medico" });
-                void carregarMedicos();
-              }}
-            >
-              Remarcar com outro médico
-            </Botao>
+            {/* B43: retorno grátis (valor 0) NÃO pode remarcar com outro
+                médico (o servidor recusa) — a opção some e o texto
+                explica que cancelar devolve o direito ao retorno. */}
+            {retornoGratis ? (
+              <p className="text-sm text-white/80">
+                Este retorno é gratuito e não pode ser remarcado com outro médico. Se cancelar, o seu direito ao retorno grátis volta.
+              </p>
+            ) : (
+              <Botao
+                onClick={() => {
+                  setEtapa({ tipo: "escolher_medico" });
+                  void carregarMedicos();
+                }}
+              >
+                Remarcar com outro médico
+              </Botao>
+            )}
             <Botao onClick={onSairDaChamada}>Sair da chamada</Botao>
           </Acoes>
         </>

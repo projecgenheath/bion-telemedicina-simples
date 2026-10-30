@@ -3,6 +3,7 @@ import { exigirPapel } from "@/lib/server/auth";
 import {ok, falha, lerCorpoJson} from "@/lib/server/http";
 import { sondaNvidia, ordemCanais, bloqueioGemini } from "@/lib/server/sonda-nvidia";
 import { estadoCanais, diagnosticoGemini, iaPausada, listarModelosGemini, respostaIaPausada, type Msg } from "@/lib/server/llm";
+import { anonimizarMensagensTexto } from "@/lib/server/anonimizar-texto";
 
 /**
  * Diagnóstico dos canais de IA (BION IA) — somente ADMIN.
@@ -66,7 +67,14 @@ export async function POST(req: NextRequest) {
     }
 
     if (mensagens) {
-      const resultado = await diagnosticoGemini(mensagens, 25_000, modelo);
+      // B12: o modo { mensagens } repassava payload arbitrário ao Gemini SEM
+      // a anonimização das rotas do paciente — se o admin colar dados de um
+      // paciente ao reproduzir um bug, CPF/telefone/e-mail/CEP/datas/
+      // endereços iam crus ao provedor. Aplica o mesmo filtro de texto
+      // livre usado no Copilot (anonimizar-texto, padrões genéricos; aqui
+      // não há médico da sessão para resolver nomes conhecidos).
+      const anonimizadas = anonimizarMensagensTexto(mensagens, {});
+      const resultado = await diagnosticoGemini(anonimizadas, 25_000, modelo);
       return ok({
         cenario: "chat-real",
         modelo: modelo ?? "(cadeia configurada)",

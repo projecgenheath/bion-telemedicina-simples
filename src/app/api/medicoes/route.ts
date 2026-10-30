@@ -20,7 +20,9 @@ export async function GET() {
     const usuario = await exigirPapel("PACIENTE");
     const medicoes = await db.medicao.findMany({
       where: { usuarioId: usuario.id },
-      orderBy: { criadoEm: "asc" },
+      // B7: desc — com asc+take 200 o paciente com >200 medições nunca via
+      // as mais recentes.
+      orderBy: { criadoEm: "desc" },
       take: 200,
     });
     return ok({

@@ -51,7 +51,7 @@ export function PassoMedico(p: AgendamentoCorpoProps) {
           Médicos especialistas em <strong className="text-foreground">{especialidade}</strong>:
         </span>
         <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-accent-soft text-emerald-800 dark:text-emerald-200">
-          {medicosFiltrados.length} profissionais online
+          {medicosFiltrados.length === 1 ? "1 profissional disponível" : `${medicosFiltrados.length} profissionais disponíveis`}
         </span>
       </div>
 

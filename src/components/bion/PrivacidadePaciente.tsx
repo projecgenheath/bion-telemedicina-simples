@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Shield, FileText, Check, X, User, Stethoscope, Lock, Clock, KeyRound } from "lucide-react";
+import { Shield, FileText, Check, X, User, Stethoscope, Lock, Clock, KeyRound, Download } from "lucide-react";
 import { toast } from "sonner";
 import { useBion } from "@/lib/bion-store";
 import { apiSaude } from "./paciente/api-saude";
@@ -138,14 +138,41 @@ export function PrivacidadePaciente() {
     },
   ];
 
+  // B13: exportação/portabilidade dos próprios dados (LGPD art. 18, II e V).
+  // O servidor monta o dossiê só da sessão (nunca de parâmetro) e registra
+  // a exportação na auditoria; aqui só baixamos o JSON devolvido.
+  const [exportando, setExportando] = useState(false);
+  const exportarDados = async () => {
+    if (exportando) return;
+    setExportando(true);
+    try {
+      const r = await fetch("/api/paciente/exportacao");
+      if (!r.ok) throw new Error(String(r.status));
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "meus-dados-bion.json";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast.success("Seus dados foram exportados em JSON.");
+    } catch {
+      toast.error("Não foi possível exportar agora. Tente novamente.");
+    } finally {
+      setExportando(false);
+    }
+  };
+
   const submeterSenha = async () => {
     if (trocando) return;
     if (!senhaAtual || !novaSenha) {
       toast.error("Preencha a senha atual e a nova senha.");
       return;
     }
-    if (novaSenha.length < 8 || !/[A-Za-z]/.test(novaSenha) || !/[0-9]/.test(novaSenha)) {
-      toast.error("A nova senha deve ter 8+ caracteres, com letras e números.");
+    if (novaSenha.length < 10 || novaSenha.length > 64 || !/[A-Za-z]/.test(novaSenha) || !/[0-9]/.test(novaSenha)) {
+      toast.error("A nova senha deve ter entre 10 e 64 caracteres, com letras e números.");
       return;
     }
     setTrocando(true);
@@ -187,6 +214,27 @@ export function PrivacidadePaciente() {
           ))}
         </div>
       </section>
+
+      {sessao.role === "paciente" ? (
+        <section className="bg-card border rounded-3xl p-6 space-y-3">
+          <h2 className="font-bold flex items-center gap-2">
+            <Download className="w-4 h-4 text-primary" /> Exportar meus dados
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Baixe uma cópia dos seus dados em JSON (LGPD, art. 18): cadastro, medições, exames,
+            consultas, documentos, mensagens, lembretes e consentimentos. A exportação fica
+            registrada na auditoria da BION.
+          </p>
+          <button
+            type="button"
+            onClick={() => void exportarDados()}
+            disabled={exportando}
+            className="h-10 px-5 rounded-xl bg-primary text-primary-foreground text-sm font-bold shadow-md transition-opacity hover:opacity-90 disabled:opacity-50"
+          >
+            {exportando ? "Gerando..." : "Baixar meus dados (JSON)"}
+          </button>
+        </section>
+      ) : null}
 
       <section className="bg-card border rounded-3xl p-6 space-y-4">
         <h2 className="font-bold flex items-center gap-2">
@@ -384,8 +432,8 @@ export function PrivacidadePaciente() {
             value={novaSenha}
             onChange={(e) => setNovaSenha(e.target.value)}
             autoComplete="new-password"
-            placeholder="Nova senha (8+ caracteres)"
-            aria-label="Nova senha (8+ caracteres)"
+            placeholder="Nova senha (10 a 64 caracteres)"
+            aria-label="Nova senha (10 a 64 caracteres)"
             className="h-11 rounded-xl border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-primary/40"
           />
         </div>

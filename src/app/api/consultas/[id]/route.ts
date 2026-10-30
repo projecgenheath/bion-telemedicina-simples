@@ -22,7 +22,7 @@ import {
   OPCOES_TX_TRAVA,
 } from "@/lib/server/bloqueio-agenda";
 import { criarCobranca, confirmarPagamento, falharPagamento } from "@/lib/server/pagamentos";
-import {ok, falha, lerCorpoJson} from "@/lib/server/http";
+import {ok, falha, lerCorpoJson, textoDoCorpo} from "@/lib/server/http";
 import { desfechoExistente, lerPresencas } from "@/lib/server/presenca-consulta";
 import { pacienteEsteveNaSala } from "@/components/bion/medico/metricas";
 import { consultaJaRepassada, ERRO_CONSULTA_REPASSADA } from "@/lib/server/repasse";
@@ -192,7 +192,9 @@ export async function PATCH(
             reembolso = { valorCentavos: previa.reembolsoCentavos, multaCentavos: previa.multaCentavos, motivo: "pedido_paciente" };
           }
         }
-        data.motivoCancelamento = body.motivo?.trim() || "Não informado";
+        // B8: motivo sem teto era embutido em notificação e auditoria —
+        // agora com slice(0,300) e guarda de tipo (não-string vira vazio).
+        data.motivoCancelamento = textoDoCorpo(body.motivo)?.trim().slice(0, 300) || "Não informado";
         const motivo = data.motivoCancelamento as string;
         const demais = [consulta.pacienteId, consulta.medicoId].filter((u) => u !== usuario.id);
         for (const destino of demais) {
@@ -244,7 +246,8 @@ export async function PATCH(
           }
         }
         data.status = "concluida";
-        if (body.resumo !== undefined) data.resumoMedico = body.resumo;
+        // B8 (análogo ao motivo): resumo com teto e guarda de tipo.
+        if (body.resumo !== undefined) data.resumoMedico = textoDoCorpo(body.resumo)?.slice(0, 300) ?? null;
         eventos.push({
           tipo: "agenda",
           titulo: "Consulta concluída",
@@ -252,7 +255,7 @@ export async function PATCH(
           usuarioId: consulta.pacienteId,
         });
         audit.acao = "CONSULTA_CONCLUIDA";
-        audit.detalhes = `Consulta ${consulta.especialidade} (${quando}) concluída${body.resumo ? ` — Resumo: ${body.resumo.slice(0, 100)}` : ""}`;
+        audit.detalhes = `Consulta ${consulta.especialidade} (${quando}) concluída${textoDoCorpo(body.resumo) ? ` — Resumo: ${textoDoCorpo(body.resumo)!.slice(0, 100)}` : ""}`;
         break;
       }
       case "remarcar": {

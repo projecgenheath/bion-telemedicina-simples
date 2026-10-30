@@ -11,9 +11,13 @@ type Contato = {
   suporte: boolean;
 };
 
+// B33: primeira + última inicial — antes devolvia só a inicial do
+// SEGUNDO nome ("Maria Silva" virava "S").
 const INICIAIS = (nome: string) => {
   const partes = nome.split(" ").filter(Boolean);
-  return partes[1]?.[0] ?? partes[0]?.[0] ?? "?";
+  if (partes.length === 0) return "?";
+  if (partes.length === 1) return partes[0]?.[0] ?? "?";
+  return `${partes[0]?.[0] ?? ""}${partes[partes.length - 1]?.[0] ?? ""}` || "?";
 };
 
 export function Mensagens() {

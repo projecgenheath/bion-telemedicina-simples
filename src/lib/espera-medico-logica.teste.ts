@@ -28,6 +28,11 @@ const exp = t("2026-10-19T18:10:00Z");
 igual("aguardando antes do prazo", statusEfetivo({ status: "aguardando", expiraEm: exp }, t("2026-10-19T18:09:59Z")), "aguardando");
 igual("aguardando no prazo vira expirada", statusEfetivo({ status: "aguardando", expiraEm: exp }, exp), "expirada");
 igual("final não muda", statusEfetivo({ status: "medico_entrou", expiraEm: exp }, t("2026-10-19T19:00:00Z")), "medico_entrou");
+// B40: remarcando com a reserva da diferença vencida lê como expirada
+const reserva = t("2026-10-19T18:20:00Z");
+igual("remarcando antes da reserva vencer", statusEfetivo({ status: "remarcando", expiraEm: exp, reservaExpiraEm: reserva }, t("2026-10-19T18:19:59Z")), "remarcando");
+igual("remarcando com reserva vencida vira expirada", statusEfetivo({ status: "remarcando", expiraEm: exp, reservaExpiraEm: reserva }, reserva), "expirada");
+igual("remarcando sem reserva não vence na leitura", statusEfetivo({ status: "remarcando", expiraEm: exp, reservaExpiraEm: null }, t("2026-10-19T19:00:00Z")), "remarcando");
 igual("segundos restantes", segundosRestantes(exp, t("2026-10-19T18:08:00.500Z")), 120);
 igual("segundos depois do prazo", segundosRestantes(exp, t("2026-10-19T18:20:00Z")), 0);
 

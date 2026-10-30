@@ -25,6 +25,7 @@ import {
   type Qualidade,
   pararTracks,
 } from "@/lib/teleconsulta-logica";
+import { registrarHoraServidor } from "@/components/bion/paciente/useRelogioSala";
 
 /**
  * Motor da chamada de teleconsulta (WebRTC P2P), sem React. O hook
@@ -155,6 +156,8 @@ type RespostaSala = {
   outroOnline: boolean;
   canal?: string;
   sinais: SinalApi[];
+  /** B41: hora do servidor (ISO) para calibrar o relógio do aparelho. */
+  agoraServidor?: string;
 };
 
 /** Envelope dos sinais desta versão (dentro do `payload` JSON). */
@@ -1221,6 +1224,9 @@ export class ChamadaTeleconsulta {
       if (!res.ok) throw new Error(`sala ${res.status}`);
       const dados = (await res.json()) as RespostaSala;
       if (!this.vivo) return;
+      // B41: calibra o relógio do aparelho com a hora do servidor a cada
+      // polling bem-sucedido (offset usado pelas janelas/contagens).
+      registrarHoraServidor(dados.agoraServidor);
       this.entrouNaSala = true;
       // Resposta boa: zera as falhas seguidas e limpa o "conexão instável" (M16).
       this.falhasSeguidasSala = 0;

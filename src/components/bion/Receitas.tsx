@@ -303,6 +303,22 @@ export function Receitas({ perfil }: { perfil: "paciente" | "medico" }) {
 
   const visiveis = useMemo(() => filtrados.slice(0, limite), [filtrados, limite]);
 
+  // B26: abertura ÚNICA do visualizador — corpo do documento e botão de
+  // olho passam por aqui, então o DOCUMENTO_VISUALIZADO é registrado uma
+  // única vez por abertura (antes o corpo abria sem registrar).
+  // O índice é o da lista FILTRADA completa (visiveis é um prefixo dela).
+  const abrirDoc = (d: (typeof filtrados)[number], indiceFiltrados: number) => {
+    setVisualizando(indiceFiltrados);
+    registrarAudit({
+      acao: "DOCUMENTO_VISUALIZADO",
+      categoria: "documento",
+      severidade: "info",
+      entidade: "documento",
+      entidadeId: d.id,
+      detalhes: `Visualização: ${d.titulo} (${d.tipo})`,
+    });
+  };
+
   const limpar = () => {
     setLimite(PAGINA);
     setBusca("");
@@ -628,7 +644,7 @@ export function Receitas({ perfil }: { perfil: "paciente" | "medico" }) {
               <div className="w-11 h-11 rounded-xl bg-primary-soft flex items-center justify-center shrink-0">
                 <Icon className="w-5 h-5 text-primary" />
               </div>
-              <button type="button" onClick={() => setVisualizando(i)} className="flex-1 min-w-0 text-left">
+              <button type="button" onClick={() => abrirDoc(d, i)} className="flex-1 min-w-0 text-left">
                 <div className="font-semibold">{d.titulo}</div>
                 <p className="text-sm text-muted-foreground mt-0.5 line-clamp-2">{d.conteudo}</p>
                 <div className="text-xs text-muted-foreground mt-1.5">
@@ -637,17 +653,7 @@ export function Receitas({ perfil }: { perfil: "paciente" | "medico" }) {
               </button>
               <div className="flex flex-col gap-1 shrink-0">
                 <button type="button"
-                  onClick={() => {
-                    setVisualizando(i);
-                    registrarAudit({
-                      acao: "DOCUMENTO_VISUALIZADO",
-                      categoria: "documento",
-                      severidade: "info",
-                      entidade: "documento",
-                      entidadeId: d.id,
-                      detalhes: `Visualização: ${d.titulo} (${d.tipo})`,
-                    });
-                  }}
+                  onClick={() => abrirDoc(d, i)}
                   className="p-2 rounded-lg hover:bg-muted"
                   title="Visualizar"
                 >
@@ -687,7 +693,7 @@ export function Receitas({ perfil }: { perfil: "paciente" | "medico" }) {
 
       {visualizando !== null && (
         <VisualizadorDoc
-          docs={visiveis}
+          docs={filtrados}
           index={visualizando}
           onIndex={setVisualizando}
           onClose={() => setVisualizando(null)}

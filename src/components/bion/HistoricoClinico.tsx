@@ -114,13 +114,17 @@ function tsDeDataLonga(data: string): number {
 
 function GraficoPressao({ medicoes, carregando }: { medicoes: Medicao[]; carregando?: boolean }) {
   const H = 100;
-  const max = 155;
-  const min = 60;
-  const range = max - min;
   // Medições reais de pressão do paciente, em ordem cronológica.
   const serie = [...medicoes]
     .filter((m) => m.tipo === "pa")
     .sort((a, b) => new Date(a.criadoEm).getTime() - new Date(b.criadoEm).getTime());
+  // B20: escala dinâmica — o teto fixo de 155 mmHg fazia sistólica de
+  // 170–180 sumir da área do gráfico. Piso/teto acompanham os dados, sem
+  // encolher abaixo da faixa de referência (60–155).
+  const valoresPa = serie.flatMap((m) => (m.valor2 !== undefined ? [m.valor1, m.valor2] : [m.valor1]));
+  const max = valoresPa.length ? Math.max(155, Math.ceil((Math.max(...valoresPa) + 10) / 10) * 10) : 155;
+  const min = valoresPa.length ? Math.min(60, Math.floor((Math.min(...valoresPa) - 10) / 10) * 10) : 60;
+  const range = max - min;
   if (serie.length === 0) {
     return (
       <div className="space-y-3">
@@ -405,7 +409,9 @@ export function HistoricoClinico() {
 
   const eventos: EventoTimeline[] = [
     ...consultas
-      .filter((c) => mesmoPaciente(c.pacienteId, c.paciente))
+      // B20: a timeline só traz consultas já realizadas (`concluida`),
+      // como no Prontuário — futuras `confirmada` não são "histórico".
+      .filter((c) => c.status === "concluida" && mesmoPaciente(c.pacienteId, c.paciente))
       .map((c) => ({
         id: c.id,
         tipo: "consulta" as const,

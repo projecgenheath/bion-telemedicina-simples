@@ -44,12 +44,17 @@ export async function uploadDocumento(
   return { path };
 }
 
-/** URL assinada (download temporário). */
-export async function urlAssinadaDocumento(path: string, expiresSec = 3600) {
+/**
+ * URL assinada (download temporário). Com `comoAnexo` (B2), o Storage
+ * devolve Content-Disposition de anexo: o arquivo baixado não é
+ * renderizado inline no navegador, o que importa para uploads de
+ * paciente (exames) servidos ao médico vinculado.
+ */
+export async function urlAssinadaDocumento(path: string, expiresSec = 3600, comoAnexo = false) {
   const admin = createSupabaseAdminClient();
   const { data, error } = await admin.storage
     .from(BUCKET_DOCUMENTOS)
-    .createSignedUrl(path, expiresSec);
+    .createSignedUrl(path, expiresSec, comoAnexo ? { download: true } : undefined);
   if (error) throw error;
   return data.signedUrl;
 }

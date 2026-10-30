@@ -46,8 +46,21 @@ export function DadosPessoaisSheet({ campoInicial, onFechar }: { campoInicial?: 
   });
   const set = (k: keyof typeof form) => (e: { target: { value: string } }) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
+  // B21: fechar por voltar/ESC/arrastar/Cancelar com conteúdo não salvo
+  // pede confirmação — antes o texto digitado era descartado em silêncio.
+  const sujo =
+    form.dataNascimento !== dataNascimento ||
+    form.telefone !== (pacientePerfil?.telefone ?? "") ||
+    form.profissao !== (pacientePerfil?.profissao ?? "") ||
+    form.estadoCivil !== (pacientePerfil?.estadoCivil ?? "") ||
+    form.tipoSanguineo !== (pacientePerfil?.tipoSanguineo ?? "") ||
+    form.alergias !== (pacientePerfil?.alergias ?? []).join(", ") ||
+    form.comorbidades !== (pacientePerfil?.comorbidades ?? []).join(", ");
+
   const fechar = () => {
-    if (!salvando) onFechar();
+    if (salvando) return;
+    if (sujo && !window.confirm("Descartar as alterações não salvas?")) return;
+    onFechar();
   };
   const raizRef = useRef<HTMLDivElement>(null);
   useVoltarFecha(true, fechar);
@@ -160,11 +173,19 @@ export function DadosPessoaisSheet({ campoInicial, onFechar }: { campoInicial?: 
           <label className="block">
             <span className={rotulo}>Tipo sanguíneo</span>
             <select ref={(el) => focarCampo(el, "tipoSanguineo")} value={form.tipoSanguineo} onChange={set("tipoSanguineo")} className={campo}>
-              <option value="">Não sei</option>
+              {/* B22: com tipo salvo, "Não sei" (value="") NÃO é oferecido —
+                  o servidor não aceita remover o tipo e a folha fechava sem
+                  salvar e sem avisar, mantendo o tipo antigo. */}
+              {pacientePerfil?.tipoSanguineo ? null : <option value="">Não sei</option>}
               {TIPOS_SANGUINEOS.map((t) => (
                 <option key={t} value={t}>{t}</option>
               ))}
             </select>
+            {pacientePerfil?.tipoSanguineo ? (
+              <span className="block mt-1 text-xs opacity-75">
+                O tipo sanguíneo salvo não pode ser removido aqui. Para corrigir, escolha outro tipo ou fale com a equipe.
+              </span>
+            ) : null}
           </label>
           <label className="block">
             <span className={rotulo}>Alergias</span>

@@ -26,9 +26,13 @@ export function MinhasAvaliacoes() {
     const media = minhas.length ? minhas.reduce((s, a) => s + a.nota, 0) / minhas.length : 0;
     const dist = [5, 4, 3, 2, 1].map((n) => ({ n, q: minhas.filter((a) => a.nota === n).length }));
 
-    const corte = Date.now() - 30 * DIA;
+    // B32: "Tendência (30 dias)" compara os últimos 30 dias com os 30 dias
+    // ANTERIORES — antes `antigas` reunia TODO o passado.
+    const agora = Date.now();
+    const corte = agora - 30 * DIA;
+    const corteAnterior = agora - 60 * DIA;
     const recentes = minhas.filter((a) => a.ts >= corte);
-    const antigas = minhas.filter((a) => a.ts < corte);
+    const antigas = minhas.filter((a) => a.ts >= corteAnterior && a.ts < corte);
     const mediaRec = recentes.length
       ? recentes.reduce((s, a) => s + a.nota, 0) / recentes.length
       : 0;

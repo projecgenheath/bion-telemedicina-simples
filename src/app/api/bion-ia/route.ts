@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { quandoClinica } from "@/lib/server/fuso";
 import { db } from "@/lib/db";
 import { exigirSessao } from "@/lib/server/auth";
-import {ok, falha, lerCorpoJson} from "@/lib/server/http";
+import {ok, falha, lerCorpoJson, corpoObjeto, textoDoCorpo} from "@/lib/server/http";
 import { chatComFonte, chatStreamComFonte, iaPausada, motivoFalhaIa, novoRequestId, respostaIaPausada } from "@/lib/server/llm";
 import { anonimizarMensagensIa, type IdentificadoresPaciente } from "@/lib/server/anonimizar-ia";
 import { exigirConsentimentoIa } from "@/lib/server/consentimento-ia";
@@ -157,7 +157,21 @@ export async function POST(req: NextRequest) {
     // Portão jurídico: paciente sem o aceite da versão atual (NVIDIA) → 409.
     const pendente = await exigirConsentimentoIa(usuario);
     if (pendente) return pendente;
-    const body = (await lerCorpoJson(req)) as { mensagens?: MsgEntrada[]; stream?: boolean };
+    // B1: guarda de objeto/tipo — corpo null ou texto não-string virava 500
+    // em .trim() no filtro do histórico.
+    const bruto = corpoObjeto(await lerCorpoJson(req));
+    if (!bruto) {
+      return Response.json({ erro: "Corpo da requisição inválido." }, { status: 400 });
+    }
+    const body = {
+      mensagens: Array.isArray(bruto.mensagens)
+        ? bruto.mensagens.map((m) => {
+            const o = corpoObjeto(m);
+            return { remetente: textoDoCorpo(o?.remetente) ?? "", texto: textoDoCorpo(o?.texto) ?? "" } as MsgEntrada;
+          })
+        : undefined,
+      stream: bruto.stream === true,
+    };
     const requestId = novoRequestId();
 
     // M21: NADA de descartar mensagem por tamanho — o filtro antigo

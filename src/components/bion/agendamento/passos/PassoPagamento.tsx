@@ -65,7 +65,8 @@ export function PassoPagamento(p: AgendamentoCorpoProps) {
             <div className="font-bold text-sm">Cartão de crédito</div>
             <p className="text-xs text-muted-foreground">
               Ao confirmar, você vai para a página segura de pagamento do Stripe. A BION não vê nem
-              guarda os dados do seu cartão. A consulta é confirmada assim que o pagamento é aprovado.
+              guarda os dados do seu cartão. Depois que o pagamento é aprovado, a confirmação da
+              consulta é registrada automaticamente — pode levar alguns instantes.
             </p>
           </div>
         </div>

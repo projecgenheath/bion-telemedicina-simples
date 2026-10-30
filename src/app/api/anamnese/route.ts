@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { exigirConsentimentoIa } from "@/lib/server/consentimento-ia";
 import { exigirPapel } from "@/lib/server/auth";
 import { aplicarSideEffects, anamneseWire, consultaWire, perfilPacienteWire } from "@/lib/server/dados";
-import {ok, falha, lerCorpoJson} from "@/lib/server/http";
+import {ok, falha, lerCorpoJson, corpoObjeto, textoDoCorpo} from "@/lib/server/http";
 import { chatComFonte, iaPausada, type AnonNomes, type FonteLlm } from "@/lib/server/llm";
 import {
   turnoMotor,
@@ -437,7 +437,22 @@ function erroPortoesTriagem(consulta: { status: string; pago: boolean; dataInici
 export async function POST(req: NextRequest) {
   try {
     const usuario = await exigirPapel("PACIENTE");
-    const body = (await lerCorpoJson(req)) as { consultaId?: string; mensagem?: string; historico?: MsgEntrada[] };
+    // B1: guarda de objeto/tipo — corpo null quebrava em body.consultaId e
+    // mensagem/historico não-string quebravam em .trim() (500).
+    const brutoPost = corpoObjeto(await lerCorpoJson(req));
+    if (!brutoPost) {
+      return Response.json({ erro: "Corpo da requisição inválido." }, { status: 400 });
+    }
+    const body = {
+      consultaId: textoDoCorpo(brutoPost.consultaId),
+      mensagem: textoDoCorpo(brutoPost.mensagem),
+      historico: Array.isArray(brutoPost.historico)
+        ? brutoPost.historico.map((m) => {
+            const o = corpoObjeto(m);
+            return { remetente: textoDoCorpo(o?.remetente) ?? "", texto: textoDoCorpo(o?.texto) ?? "" } as MsgEntrada;
+          })
+        : undefined,
+    };
 
     if (!body.consultaId) {
       return Response.json({ erro: "Consulta não informada." }, { status: 400 });
@@ -747,10 +762,24 @@ export async function POST(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   try {
     const usuario = await exigirPapel("PACIENTE");
-    const body = (await lerCorpoJson(req)) as {
-      consultaId?: string;
-      acao?: "concluir" | "documento" | "pular";
-      documento?: { nome?: string; tipo?: string; exameImportado?: boolean; resumo?: string };
+    // B1: guarda de objeto/tipo — corpo null quebrava em body.consultaId e
+    // documento.nome/tipo/resumo não-string quebravam em .slice() (500).
+    const brutoPatch = corpoObjeto(await lerCorpoJson(req));
+    if (!brutoPatch) {
+      return Response.json({ erro: "Corpo da requisição inválido." }, { status: 400 });
+    }
+    const docBruto = corpoObjeto(brutoPatch.documento);
+    const body = {
+      consultaId: textoDoCorpo(brutoPatch.consultaId),
+      acao: textoDoCorpo(brutoPatch.acao) as "concluir" | "documento" | "pular" | undefined,
+      documento: docBruto
+        ? {
+            nome: textoDoCorpo(docBruto.nome),
+            tipo: textoDoCorpo(docBruto.tipo),
+            exameImportado: docBruto.exameImportado === true,
+            resumo: textoDoCorpo(docBruto.resumo),
+          }
+        : undefined,
     };
     if (!body.consultaId) {
       return Response.json({ erro: "Consulta não informada." }, { status: 400 });

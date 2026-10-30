@@ -2,7 +2,7 @@ import { NextRequest, after } from "next/server";
 import { db } from "@/lib/db";
 import { exigirSessao } from "@/lib/server/auth";
 import { aplicarSideEffects } from "@/lib/server/dados";
-import {ok, falha, lerCorpoJson} from "@/lib/server/http";
+import {ok, falha, lerCorpoJson, textoDoCorpo} from "@/lib/server/http";
 import { topicoMensagensUsuario } from "@/lib/server/usuario-canal";
 import { limitarAsync, resposta429 } from "@/lib/server/rate-limit";
 import { broadcastCanal } from "@/lib/supabase/broadcast";
@@ -84,7 +84,8 @@ export async function POST(req: NextRequest) {
       return Response.json({ erro: "Corpo da requisição inválido." }, { status: 400 });
     }
 
-    const texto = (body.texto ?? "").trim();
+    // B1: texto não-string (número/objeto) virava 500 em .trim().
+    const texto = (textoDoCorpo(body.texto) ?? "").trim();
     const paraId = idCuid(body.paraId, "Destinatário");
     if (isErro(paraId) || !texto) {
       return Response.json({ erro: "Informe destinatário e mensagem." }, { status: 400 });

@@ -101,6 +101,19 @@ export function mostrarPainelEspera(espera: EsperaWire | null, medicoConectado: 
   return espera.status !== "medico_entrou";
 }
 
+/**
+ * B43: remarcar com outro médico só existe para consulta PAGA (valor > 0).
+ * Retorno grátis (valor 0) o servidor recusa — a opção nem deve aparecer;
+ * para ele, cancelar devolve o direito ao retorno.
+ */
+export function podeRemarcarComOutroMedico(valorCentavos: number | null | undefined): boolean {
+  return typeof valorCentavos === "number" && valorCentavos > 0;
+}
+
+/** Texto próprio do B43 para a recusa de remarcar um retorno grátis. */
+export const TEXTO_ERRO_RETORNO_GRATIS =
+  "Este retorno é gratuito e não pode ser remarcado com outro médico. Cancele, e o seu direito ao retorno grátis volta.";
+
 /** Mensagem para cada `codigo` de falha das rotas da espera. */
 export function mensagemErroEspera(codigo: string | undefined, erro?: string): string {
   switch (codigo) {
@@ -123,7 +136,13 @@ export function mensagemErroEspera(codigo: string | undefined, erro?: string): s
     case "espera_resolvida":
     case "consulta_encerrada":
       return "Esta consulta já foi resolvida.";
+    case "retorno_gratis":
+      return TEXTO_ERRO_RETORNO_GRATIS;
     case "nao_pago":
+      // B43: o servidor usa o MESMO código para o retorno grátis (valor 0),
+      // mas manda o texto próprio dele em `erro` — "não tem pagamento
+      // confirmado" seria falso para quem tem direito ao retorno.
+      if (erro && /retorno/i.test(erro) && /gratu/i.test(erro)) return TEXTO_ERRO_RETORNO_GRATIS;
       return "Esta consulta não tem pagamento confirmado.";
     case "acesso_negado":
       return "Você não tem acesso a esta consulta.";

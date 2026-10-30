@@ -24,7 +24,7 @@ import {
   MessageCircle,
 } from "lucide-react";
 import { useBion } from "@/lib/bion-store";
-import { fmtCurta, fmtHora, fmtTicketData, type Consulta } from "@/lib/bion-tipos";
+import { fmtCurta, fmtHora, fmtTicketData, partesFusoClinica, type Consulta } from "@/lib/bion-tipos";
 import { toast } from "sonner";
 import { calcularImc, lerAlturaCm, lerPesoKg } from "@/lib/medidas-paciente";
 import { MESES_AGENDA } from "./constantes";
@@ -79,9 +79,11 @@ import { MedicamentosEmUso } from "./MedicamentosEmUso";
  * centro e, arrastando de novo, abre Documentos/Mensagens.
  */
 
+// B19: dia/mês no fuso da clínica (America/Sao_Paulo), como o restante do
+// app (partesFusoClinica) — não no fuso do dispositivo.
 const rotuloCurto = (iso: string) => {
-  const d = new Date(iso);
-  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
+  const d = partesFusoClinica(iso);
+  return `${String(d.dia).padStart(2, "0")}/${String(d.mes + 1).padStart(2, "0")}`;
 };
 
 /** Chave de comparação de nomes de analito: sem acento, sem caixa, espaços
@@ -152,6 +154,8 @@ export function PacienteApp() {
     detalhe ||
     reembolsoConsultaId ||
     edicaoPerfil ||
+    // B25: a folha de excluir conta também bloqueia o fundo (inert).
+    excluindoConta ||
     listaCompleta
   );
 
@@ -424,13 +428,16 @@ export function PacienteApp() {
     () =>
       pesos
         .map((p) => {
-          const alturaCm = alturas.filter((a) => a.criadoEm <= p.criadoEm).at(-1)?.valor1 ?? alturaAtual;
+          // B18: só a altura registrada ATÉ a data do peso — sem altura da
+          // época, o ponto é descartado; usar a altura atual recalculava o
+          // passado com a altura de hoje.
+          const alturaCm = alturas.filter((a) => a.criadoEm <= p.criadoEm).at(-1)?.valor1;
           if (!alturaCm) return null;
           return { valor: Math.round((p.valor1 / Math.pow(alturaCm / 100, 2)) * 10) / 10, rotulo: rotuloCurto(p.criadoEm) };
         })
         .filter((x): x is PontoGrafico => x !== null)
         .slice(-10),
-    [pesos, alturas, alturaAtual],
+    [pesos, alturas],
   );
 
   const examesAgrupados = useMemo(() => {
@@ -1122,7 +1129,8 @@ function CardReembolso({ consulta }: { consulta: Consulta }) {
   const { previa } = usePreviaCancelamento(consulta.id, consulta.status);
   const r = previa?.reembolso;
   if (!r) return null;
-  const rotulo = rotuloReembolso(r.status);
+  // B37: com multa descontada, o rótulo diz "parcial", nunca "integral".
+  const rotulo = rotuloReembolso(r.status, r.multaCentavos);
   const cor =
     rotulo.tom === "ok"
       ? "bg-emerald-600/15 text-emerald-800 dark:text-emerald-200"
@@ -1186,7 +1194,7 @@ function CardRemarcacaoPendente({ consulta, onContinuar }: { consulta: Consulta;
       <div className="text-sm opacity-80">com {consulta.medico}</div>
       <p className="text-sm mt-3 leading-relaxed">
         Nova data <strong className="font-bold">{novaData}</strong> reservada, aguardando pagamento da multa de{" "}
-        <strong className="font-bold">{fmtCentavos(r.multaCentavos)}</strong> até {fmtHora(r.expiraEm)}.
+        <strong className="font-bold">{fmtCentavos(r.multaCentavos)}</strong> até {fmtCurta(r.expiraEm)} às {fmtHora(r.expiraEm)}.
       </p>
       <p className="text-xs opacity-80 mt-1 inline-flex items-center gap-1.5">
         <CalendarClock className="w-3.5 h-3.5" /> Vale a data original até o pagamento: {consulta.data} · {consulta.hora}

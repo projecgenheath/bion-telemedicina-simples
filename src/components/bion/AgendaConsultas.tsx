@@ -12,6 +12,7 @@ import {
   buscarPreviaCancelamento,
   fmtCentavos,
   previaCancelamentoMudou,
+  textoIsencao,
   type PreviaCancelamento,
 } from "@/components/bion/paciente/usePreviaCancelamento";
 
@@ -345,6 +346,10 @@ function LinhaConsulta({ c, perfil }: { c: Consulta; perfil: "paciente" | "medic
                             Cancelamentos com {previa.regra.janelaHoras} h ou menos de antecedência
                             têm multa de {previa.regra.multaPct}%. O prazo sem multa terminou em{" "}
                             {previa.cancelar.semMultaAteTexto}.
+                          </p>
+                        ) : textoIsencao(previa.cancelar.isencao) ? (
+                          <p className="text-muted-foreground pt-1">
+                            {textoIsencao(previa.cancelar.isencao)} O reembolso é integral e automático.
                           </p>
                         ) : previa.cancelar.isencao === "fora_da_janela" ? (
                           <p className="text-muted-foreground pt-1">

@@ -35,8 +35,12 @@ export function RenovarReceitaSheet({
   const [enviando, setEnviando] = useState(false);
   // Durante o envio a folha não fecha (padrão de CancelarRemarcarSheet):
   // fechar "às cegas" criaria o pedido + a cobrança sem o paciente saber.
+  // B21: com observação digitada e não enviada, fechar por voltar/ESC/
+  // arrastar pede confirmação — antes o texto era descartado em silêncio.
   const fechar = () => {
-    if (!enviando) onFechar();
+    if (enviando) return;
+    if (obs.trim() && !window.confirm("Descartar a observação digitada?")) return;
+    onFechar();
   };
   useVoltarFecha(true, fechar);
   useFocoDialogo(true, fechar, raizRef);
