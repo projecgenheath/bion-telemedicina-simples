@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarClock, CalendarDays, ChevronDown, Info, RefreshCw, Video, XCircle } from "lucide-react";
+import { CalendarClock, CalendarDays, ChevronDown, Info, ListChecks, MessageCircle, Pill, RefreshCw, Video, XCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { AvisoAtivarToque } from "@/components/bion/AvisoAtivarToque";
 import { ContagemRegressiva } from "../ContagemRegressiva";
@@ -9,18 +9,25 @@ import type { DadosMedico } from "../useDadosMedico";
 
 const primeiroNome = (nome: string) => nome.split(" ").filter(Boolean)[0] ?? "";
 
-/** Tela 1 — saudação + 3 cards (próxima consulta, hoje, remarcadas/canceladas). */
+/** Tela 1 — saudação + pendências (quando há) + 3 cards (próxima consulta, hoje, remarcadas/canceladas). */
 export function TelaInicio({
   dados,
   onAbrirPerfil,
   onAbrirPacientes,
+  onAbrirRenovacoes,
 }: {
   dados: DadosMedico;
   onAbrirPerfil: () => void;
   onAbrirPacientes: () => void;
+  onAbrirRenovacoes: () => void;
 }) {
   const router = useRouter();
-  const { sessao, medico, proxima, hoje, agora, acoesPaciente, acoesPacienteEstado } = dados;
+  const { sessao, medico, proxima, hoje, agora, acoesPaciente, acoesPacienteEstado, naoLidasPorPaciente, renovacoesPendentes } = dados;
+  // Pendências acionáveis: só aparecem com contador > 0 (sem ruído).
+  const totalNaoLidas = [...naoLidasPorPaciente.values()].reduce((a, b) => a + b, 0);
+  const conversasComNaoLidas = naoLidasPorPaciente.size;
+  const temRenovacoes = renovacoesPendentes !== null && renovacoesPendentes > 0;
+  const temPendencias = temRenovacoes || totalNaoLidas > 0;
   const dataHoje = new Intl.DateTimeFormat("pt-BR", {
     timeZone: "America/Sao_Paulo",
     weekday: "long",
@@ -68,6 +75,61 @@ export function TelaInicio({
               : "Nenhum atendimento marcado para hoje."}
         </p>
       </div>
+
+      {/* Pendências: renovações aguardando resposta e mensagens não lidas.
+          Cada linha leva à tela certa; contador zero = linha some (e sem
+          nenhuma pendência o bloco inteiro some). */}
+      {temPendencias ? (
+        <div className="bp-glass p-5 mb-3" role="group" aria-label="Pendências">
+          <span className="text-xs font-bold uppercase tracking-wider text-bion-ink/75 dark:text-bion-paper/75 inline-flex items-center gap-1.5">
+            <ListChecks className="w-4 h-4" aria-hidden /> Pendências
+          </span>
+          <div className="mt-3 space-y-2">
+            {temRenovacoes ? (
+              <button
+                type="button"
+                onClick={onAbrirRenovacoes}
+                aria-label={`Renovações de receita: ${renovacoesPendentes} aguardando sua resposta. Abrir renovações`}
+                className="w-full flex items-center gap-3 rounded-2xl bg-bion-ink/5 dark:bg-white/5 px-4 py-3 text-left"
+              >
+                <Pill className="w-5 h-5 shrink-0 text-bion-sea dark:text-sky-300" aria-hidden />
+                <span className="flex-1 min-w-0">
+                  <span className="block text-sm font-bold">Renovações de receita</span>
+                  <span className="block text-xs text-bion-ink/75 dark:text-bion-paper/75">Aguardando sua resposta</span>
+                </span>
+                <span
+                  className="min-w-6 h-6 px-1.5 rounded-full bg-red-600 text-white text-xs font-bold inline-flex items-center justify-center shrink-0"
+                  aria-hidden
+                >
+                  {renovacoesPendentes}
+                </span>
+              </button>
+            ) : null}
+            {totalNaoLidas > 0 ? (
+              <button
+                type="button"
+                onClick={onAbrirPacientes}
+                aria-label={`Mensagens não lidas: ${totalNaoLidas} em ${conversasComNaoLidas} ${conversasComNaoLidas === 1 ? "conversa" : "conversas"}. Abrir pacientes`}
+                className="w-full flex items-center gap-3 rounded-2xl bg-bion-ink/5 dark:bg-white/5 px-4 py-3 text-left"
+              >
+                <MessageCircle className="w-5 h-5 shrink-0 text-bion-sea dark:text-sky-300" aria-hidden />
+                <span className="flex-1 min-w-0">
+                  <span className="block text-sm font-bold">Mensagens não lidas</span>
+                  <span className="block text-xs text-bion-ink/75 dark:text-bion-paper/75">
+                    Em {conversasComNaoLidas} {conversasComNaoLidas === 1 ? "conversa" : "conversas"}
+                  </span>
+                </span>
+                <span
+                  className="min-w-6 h-6 px-1.5 rounded-full bg-red-600 text-white text-xs font-bold inline-flex items-center justify-center shrink-0"
+                  aria-hidden
+                >
+                  {totalNaoLidas}
+                </span>
+              </button>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
 
       {/* (a) Próxima consulta */}
       <div className="bp-glass p-5">

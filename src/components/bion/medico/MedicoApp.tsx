@@ -248,7 +248,12 @@ export function MedicoApp() {
           aria-label="Início"
           role="region"
         >
-          <TelaInicio dados={dados} onAbrirPerfil={() => irPara(0)} onAbrirPacientes={() => irPara(2)} />
+          <TelaInicio
+            dados={dados}
+            onAbrirPerfil={() => irPara(0)}
+            onAbrirPacientes={() => irPara(2)}
+            onAbrirRenovacoes={() => setSobreposicao({ tipo: "renovacoes" })}
+          />
           <TelaGestao dados={dados} onAbrirPreco={() => abrirSheet("preco")} onAbrirAgenda={() => abrirSheet("agenda")} onAbrirPromocoes={() => abrirSheet("promocoes")} />
           <TelaPerfilPublico dados={dados} onAgendar={() => abrirSheet("preview")} confirmarBio={confirmarBio} />
         </div>

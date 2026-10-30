@@ -124,8 +124,8 @@ export async function POST(req: NextRequest) {
         controlado: body.tipo === "receita" && body.controlado === true,
       },
       include: {
-        medico: { select: { nome: true } },
-        paciente: { select: { nome: true } },
+        medico: { select: { nome: true, perfilMedico: { select: { crm: true } } } },
+        paciente: { select: { nome: true, perfilPaciente: { select: { cpf: true, dataNascimento: true } } } },
       },
     });
 

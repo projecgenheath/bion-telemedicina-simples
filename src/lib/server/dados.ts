@@ -229,7 +229,10 @@ export function consultaWire(c: ConsultaComNomes & { remarcacoes?: ReservaRemarc
 }
 
 export type DocumentoComNomes = Prisma.DocumentoGetPayload<{
-  include: { medico: { select: { nome: true } }; paciente: { select: { nome: true } } };
+  include: {
+    medico: { select: { nome: true; perfilMedico: { select: { crm: true } } } };
+    paciente: { select: { nome: true; perfilPaciente: { select: { cpf: true; dataNascimento: true } } } };
+  };
 }>;
 
 export function documentoWire(d: DocumentoComNomes) {
@@ -240,6 +243,13 @@ export function documentoWire(d: DocumentoComNomes) {
     conteudo: d.conteudo,
     medico: d.medico.nome,
     paciente: d.paciente.nome,
+    // Melhoria nº 6 (auditoria médica): identificação formal para a via
+    // impressa (PDF) — CRM do emissor e CPF/nascimento do paciente, que já
+    // existiam nos cadastros (PerfilMedico.crm, PerfilPaciente) mas não
+    // chegavam ao documento. Vazio/ausente no cadastro = campo omitido.
+    medicoCrm: d.medico.perfilMedico?.crm || undefined,
+    pacienteCpf: d.paciente.perfilPaciente?.cpf || undefined,
+    pacienteNascimento: dataNascimentoParaIso(d.paciente.perfilPaciente?.dataNascimento) ?? undefined,
     // M-9 da auditoria: identificador do paciente no wire — o nome duplicado
     // (homônimos) não pode mais misturar documentos de pessoas diferentes.
     pacienteId: d.pacienteId,
@@ -605,8 +615,8 @@ export async function carregarDados(usuario: UsuarioSessao) {
     db.documento.findMany({
       where: documentoWhere,
       include: {
-        medico: { select: { nome: true } },
-        paciente: { select: { nome: true } },
+        medico: { select: { nome: true, perfilMedico: { select: { crm: true } } } },
+        paciente: { select: { nome: true, perfilPaciente: { select: { cpf: true, dataNascimento: true } } } },
       },
       orderBy: { createdAt: "desc" },
       take: 200,

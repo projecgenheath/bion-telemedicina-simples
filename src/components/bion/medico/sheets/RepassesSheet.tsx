@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { AlertTriangle, ChevronLeft, ChevronRight, ExternalLink, RefreshCw, Wallet } from "lucide-react";
+import { AlertTriangle, ChevronLeft, ChevronRight, Download, ExternalLink, RefreshCw, Wallet } from "lucide-react";
 import { fmtCentavos } from "../metricas";
+import { baixarCsvRepasse, csvDetalheRepasse, csvHistoricoRepasses, previaTemConteudo } from "../repasses-csv";
 import {
   useRepasses,
   type ItemRepasseDetalhe,
@@ -230,6 +231,16 @@ function DetalheView({
         </a>
       ) : null}
 
+      {/* Exportação contábil deste repasse: CSV gerado no cliente com os
+          itens e totais já carregados nesta tela (repasses-csv.ts). */}
+      <button
+        type="button"
+        onClick={() => baixarCsvRepasse(`bion-repasse-${detalhe.competencia}.csv`, csvDetalheRepasse(detalhe))}
+        className="w-full py-3 rounded-2xl border border-bion-ink/15 dark:border-white/15 text-sm font-bold inline-flex items-center justify-center gap-2"
+      >
+        <Download className="w-4 h-4" aria-hidden /> Exportar CSV deste repasse
+      </button>
+
       {detalhe.itens.length > 0 ? (
         <div>
           <div className="text-xs font-bold uppercase tracking-wider text-bion-ink/75 dark:text-bion-paper/75 px-1 mb-2">
@@ -422,15 +433,28 @@ export function RepassesSheet({
                   <div className="text-xs font-bold uppercase tracking-wider text-bion-ink/75 dark:text-bion-paper/75">
                     Histórico
                   </div>
-                  <button
-                    type="button"
-                    onClick={recarregar}
-                    disabled={carregando}
-                    aria-label="Atualizar lista de repasses"
-                    className="p-2 rounded-full bg-bion-ink/8 dark:bg-white/10"
-                  >
-                    <RefreshCw className={`w-4 h-4 ${carregando ? "motion-safe:animate-spin" : ""}`} />
-                  </button>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        baixarCsvRepasse(`bion-repasses-${Date.now()}.csv`, csvHistoricoRepasses(lista.previa, lista.repasses))
+                      }
+                      disabled={lista.repasses.length === 0 && !previaTemConteudo(lista.previa)}
+                      aria-label="Exportar histórico de repasses em CSV"
+                      className="p-2 rounded-full bg-bion-ink/8 dark:bg-white/10 disabled:opacity-50"
+                    >
+                      <Download className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={recarregar}
+                      disabled={carregando}
+                      aria-label="Atualizar lista de repasses"
+                      className="p-2 rounded-full bg-bion-ink/8 dark:bg-white/10"
+                    >
+                      <RefreshCw className={`w-4 h-4 ${carregando ? "motion-safe:animate-spin" : ""}`} />
+                    </button>
+                  </div>
                 </div>
 
                 {lista.repasses.length === 0 ? (

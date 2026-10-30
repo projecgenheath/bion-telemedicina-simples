@@ -9,10 +9,13 @@ import {
   Upload,
   Sparkles,
   Send,
+  TriangleAlert,
 } from "lucide-react";
 import type { AnamneseResumo } from "@/lib/bion-store";
 import { ROTULOS_ANAMNESE } from "@/components/bion/consulta/rotulos-anamnese";
 import { LIMITE_RESUMO_MEDICO } from "@/lib/resumo-medico";
+import type { ResumoClinicoSala } from "@/components/bion/consulta/useSalaConsulta";
+import { BotaoDitado } from "@/components/bion/BotaoDitado";
 
 type Role = "paciente" | "medico" | "admin";
 type Aba = "prontuario" | "anamnese" | "exames" | "chat" | "ia";
@@ -25,6 +28,11 @@ export type ConsultaPainelLateralProps = {
   contraparteNome: string;
   sessaoNome: string;
   dadosPaciente?: { idade?: number | string; dataNascimento?: string | null; genero?: string } | null;
+  /** Resumo clínico (só o médico carrega, via GET da evolução): alergias,
+   *  comorbidades, tipo sanguíneo e medicamentos em uso no cartão. */
+  resumoClinico?: ResumoClinicoSala | null;
+  /** Motivo da consulta declarado no agendamento, quando houver. */
+  motivoConsulta?: string;
   anotacoes: string;
   setAnotacoes: (v: string) => void;
   arquivos: { id?: string; nome: string; tipo?: string; tamanhoKb?: number; enviadoPor?: string; storagePath?: string | null }[];
@@ -45,6 +53,8 @@ export function ConsultaPainelLateral({
   contraparteNome,
   sessaoNome,
   dadosPaciente,
+  resumoClinico,
+  motivoConsulta,
   anotacoes,
   setAnotacoes,
   arquivos,
@@ -131,26 +141,95 @@ export function ConsultaPainelLateral({
                   } • ${dadosPaciente.genero}`
                 : "—"}
             </div>
-            <div className="text-slate-300">
-              Alergias: {dadosPaciente ? "ver prontuário" : "— não exibido nesta tela"}
-            </div>
-            <div className="text-slate-300">
-              Medicamentos: {dadosPaciente ? "ver prontuário" : "— não exibido nesta tela"}
-            </div>
+            {motivoConsulta ? (
+              <div className="text-slate-200">
+                <span className="text-slate-400">Motivo: </span>
+                {motivoConsulta}
+              </div>
+            ) : null}
+            {resumoClinico ? (
+              <>
+                {/* Alergia é a informação de segurança nº 1 da decisão
+                    clínica: com alergia registrada, vira faixa de alerta;
+                    sem, uma linha discreta de "nenhuma". */}
+                {resumoClinico.alergias.length > 0 ? (
+                  <div className="flex items-start gap-2 rounded-xl bg-red-500/15 border border-red-400/40 px-2.5 py-2 text-red-200">
+                    <TriangleAlert className="w-4 h-4 shrink-0 mt-px" />
+                    <span>
+                      <span className="font-bold">Alergias: </span>
+                      {resumoClinico.alergias.join(", ")}
+                    </span>
+                  </div>
+                ) : (
+                  <div className="text-slate-300">Alergias: nenhuma registrada</div>
+                )}
+                <div className="text-slate-300">
+                  Comorbidades:{" "}
+                  <span className="text-slate-200">
+                    {resumoClinico.comorbidades.length > 0
+                      ? resumoClinico.comorbidades.join(", ")
+                      : "nenhuma registrada"}
+                  </span>
+                </div>
+                <div className="text-slate-300">
+                  Medicamentos em uso:
+                  {resumoClinico.medicamentosEmUso.length > 0 ? (
+                    <ul className="mt-1 space-y-0.5 text-slate-200">
+                      {resumoClinico.medicamentosEmUso.map((m) => (
+                        <li key={m.id}>
+                          • {m.nome}
+                          {m.dose ? ` ${m.dose}` : ""}
+                          {m.controlado ? " (controlado)" : ""}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <span className="text-slate-200"> nenhum registrado</span>
+                  )}
+                </div>
+                {resumoClinico.tipoSanguineo ? (
+                  <div className="text-slate-300">
+                    Tipo sanguíneo:{" "}
+                    <span className="text-slate-200">{resumoClinico.tipoSanguineo}</span>
+                  </div>
+                ) : null}
+              </>
+            ) : (
+              <>
+                <div className="text-slate-300">
+                  Alergias: {dadosPaciente ? "ver prontuário" : "— não exibido nesta tela"}
+                </div>
+                <div className="text-slate-300">
+                  Medicamentos: {dadosPaciente ? "ver prontuário" : "— não exibido nesta tela"}
+                </div>
+              </>
+            )}
           </div>
 
           <div className="space-y-2">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
               <span className="font-bold text-slate-300 uppercase tracking-wider text-xs">
                 Evolução Clínica
               </span>
               {role === "medico" && (
-                <button type="button"
-                  onClick={inserirModeloResumo}
-                  className="text-xs font-bold text-primary hover:underline flex items-center gap-1"
-                >
-                  <Sparkles className="w-3.5 h-3.5" /> Inserir modelo de evolução
-                </button>
+                <span className="flex items-center gap-2">
+                  {/* Ditado por voz: o trecho reconhecido é ANEXADO às
+                      anotações (nunca substitui o que já foi escrito). */}
+                  <BotaoDitado
+                    onTexto={(trecho) =>
+                      setAnotacoes(
+                        anotacoes + (anotacoes && !/\s$/.test(anotacoes) ? " " : "") + trecho,
+                      )
+                    }
+                    className="text-slate-200"
+                  />
+                  <button type="button"
+                    onClick={inserirModeloResumo}
+                    className="text-xs font-bold text-primary hover:underline flex items-center gap-1"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" /> Inserir modelo de evolução
+                  </button>
+                </span>
               )}
             </div>
             <textarea

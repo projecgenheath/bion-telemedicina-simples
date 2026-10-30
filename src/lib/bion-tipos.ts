@@ -113,6 +113,13 @@ export type Documento = {
   cid?: string;
   /** Receita de controlado marcada pelo médico (docs antigos: false). */
   controlado?: boolean;
+  /** Identificação formal p/ a via impressa (melhoria nº 6): CRM do médico
+   *  emissor e CPF/nascimento do paciente, vindos dos cadastros via
+   *  documentoWire. Ausentes quando o cadastro não os tem. */
+  medicoCrm?: string;
+  pacienteCpf?: string;
+  /** "YYYY-MM-DD" (dia de calendário) ou ausente. */
+  pacienteNascimento?: string;
 };
 
 export type NotifTipo = "lembrete" | "mensagem" | "receita" | "agenda" | "exame" | "suporte";

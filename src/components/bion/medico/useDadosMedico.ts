@@ -160,6 +160,16 @@ export function useDadosMedico() {
     }),
     [dadosPessoaisRecurso.dados, dadosPessoaisRecurso.carregando, dadosPessoaisRecurso.erro, dadosPessoaisRecurso.recarregar],
   );
+  // Renovações de receita aguardando resposta: MESMO endpoint da tela de
+  // renovações (GET /api/medico/renovacoes; padrão = só pendentes). Só a
+  // CONTAGEM é exposta aqui — a lista completa é da sobreposição de
+  // renovações. null = ainda não carregou (a TelaInicio não mostra a
+  // pendência enquanto não sabe, para não piscar um número errado).
+  const renovacoesRecurso = useRecurso<{ pedidos: readonly unknown[] }>(
+    ehMedico ? "/api/medico/renovacoes" : null,
+    "",
+  );
+  const renovacoesPendentes = renovacoesRecurso.dados ? renovacoesRecurso.dados.pedidos.length : null;
   const atendimentos30d = useMemo(() => concluidas30d(minhas, agora), [minhas, agora]);
   const listaPacientes = useMemo(() => pacientesOrdenados(minhas, pacientes, agora), [minhas, pacientes, agora]);
 
@@ -187,6 +197,8 @@ export function useDadosMedico() {
     receita,
     /** Data de nascimento, sexo, telefone e CNPJ do próprio médico (privados). */
     dadosPessoais,
+    /** Quantos pedidos de renovação aguardam resposta (null = carregando). */
+    renovacoesPendentes,
     atendimentos30d,
     listaPacientes,
     naoLidasPorPaciente,

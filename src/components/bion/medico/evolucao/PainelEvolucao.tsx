@@ -1,8 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { ClipboardList, X, Check, Ruler, Lock } from "lucide-react";
+import { ClipboardList, X, Check, Ruler, Lock, Download, ChevronDown, ChevronRight } from "lucide-react";
+import { useBion } from "@/lib/bion-store";
+import { gerarDocumentoPDF } from "@/lib/receita-pdf";
+import { BotaoDitado } from "@/components/bion/BotaoDitado";
 
 /**
  * Painel da Evolução do médico (Teleconsulta v2). Gaveta que entra pela
@@ -14,11 +17,34 @@ import { ClipboardList, X, Check, Ruler, Lock } from "lucide-react";
  */
 
 type Secao = "dados" | "triagem" | "exames" | "medicamentos" | "conduta";
+/** Item de exame laboratorial como a API devolve (itens do laudo importado). */
+type ItemExamePainel = {
+  nome: string;
+  valor: number | string;
+  unidade?: string;
+  refMin?: number;
+  refMax?: number;
+};
+/** Documento anterior do paciente (metadados do GET da evolução). */
+type DocumentoPainel = {
+  id: string;
+  tipo: string;
+  titulo: string;
+  medicamento: string | null;
+  posologia: string | null;
+  cid: string | null;
+  controlado: boolean;
+  consultaId: string | null;
+  medico: string;
+  createdAt: string;
+  deOutroMedico: boolean;
+};
 type Estado = {
   evolucao: null | { status: "rascunho" | "concluida"; cid: string | null } & Record<Secao, { texto?: string }>;
   paciente: { nome: string; alergias: string[]; comorbidades: string[]; peso: string | null; altura: string | null };
   medicoes: { id: string; tipo: string; valor1: number; valor2: number | null; criadoEm: string }[];
-  exames: { id: string; titulo: string; dataColeta: string }[];
+  exames: { id: string; titulo: string; dataColeta: string; itens: ItemExamePainel[] }[];
+  documentos: DocumentoPainel[];
   medicamentosEmUso: { id: string; nome: string; dose: string | null; controlado: boolean }[];
   pedidosMedicao: { id: string; tipos: string[]; status: string }[];
   historico: {
@@ -27,14 +53,54 @@ type Estado = {
   }[];
 };
 
-const ABAS: { id: Secao | "historico"; rotulo: string }[] = [
+type AbaPainel = Secao | "historico" | "documentos";
+
+const ABAS: { id: AbaPainel; rotulo: string }[] = [
   { id: "dados", rotulo: "Dados" },
   { id: "triagem", rotulo: "Triagem" },
   { id: "exames", rotulo: "Exames" },
+  { id: "documentos", rotulo: "Documentos" },
   { id: "medicamentos", rotulo: "Medicamentos" },
   { id: "conduta", rotulo: "Conduta" },
   { id: "historico", rotulo: "Histórico" },
 ];
+
+/** Os itens chegam como JSON do laudo importado: só vale o que tem nome. */
+function itensValidos(bruto: unknown): ItemExamePainel[] {
+  if (!Array.isArray(bruto)) return [];
+  return bruto.filter(
+    (i): i is ItemExamePainel =>
+      !!i && typeof i === "object" && typeof (i as { nome?: unknown }).nome === "string",
+  );
+}
+
+/** Valor numérico fora da faixa de referência (quando a faixa veio). */
+function foraDaFaixa(it: ItemExamePainel): boolean {
+  if (typeof it.valor !== "number") return false;
+  if (typeof it.refMin === "number" && it.valor < it.refMin) return true;
+  if (typeof it.refMax === "number" && it.valor > it.refMax) return true;
+  return false;
+}
+
+const ROTULO_MEDICAO: Record<string, { rotulo: string; unidade: string }> = {
+  peso: { rotulo: "Peso", unidade: "kg" },
+  altura: { rotulo: "Altura", unidade: "cm" },
+  pressao: { rotulo: "Pressão", unidade: "mmHg" },
+  pa: { rotulo: "Pressão", unidade: "mmHg" },
+};
+
+function textoMedicao(m: { tipo: string; valor1: number; valor2: number | null }): string {
+  const u = ROTULO_MEDICAO[m.tipo]?.unidade ?? "";
+  const base = m.valor2 != null ? `${m.valor1}/${m.valor2}` : `${m.valor1}`;
+  return u ? `${base} ${u}` : base;
+}
+
+const ROTULO_TIPO_DOC: Record<string, string> = {
+  receita: "Receita",
+  atestado: "Atestado",
+  exame: "Exame",
+  exame_solicitado: "Exame solicitado",
+};
 
 export function PainelEvolucao({
   consultaId,
@@ -51,7 +117,17 @@ export function PainelEvolucao({
 }) {
   const base = `/api/medico/consultas/${encodeURIComponent(consultaId)}/evolucao`;
   const [estado, setEstado] = useState<Estado | null>(null);
-  const [aba, setAba] = useState<Secao | "historico">("dados");
+  const [aba, setAba] = useState<AbaPainel>("dados");
+  const [examesAbertos, setExamesAbertos] = useState<ReadonlySet<string>>(new Set());
+  // Documentos completos do store (com conteúdo) para gerar o PDF dos
+  // documentos listados pela API — a API da evolução devolve só os
+  // metadados; sem o documento completo no store, a linha fica sem botão
+  // (nunca um botão que não funciona).
+  const { documentos: documentosStore } = useBion();
+  const documentoCompletoPorId = useMemo(
+    () => new Map(documentosStore.map((d) => [d.id, d])),
+    [documentosStore],
+  );
   const [textos, setTextos] = useState<Record<Secao, string>>({ dados: "", triagem: "", exames: "", medicamentos: "", conduta: "" });
   const [cid, setCid] = useState("");
   const [salvo, setSalvo] = useState<"ok" | "salvando" | "erro">("ok");
@@ -141,6 +217,47 @@ export function PainelEvolucao({
     setTextos(novo);
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => void salvar(novo, cid), 1200);
+  };
+
+  // Ditado por voz na seção aberta: o trecho entra no FIM do texto da
+  // seção (anexa, nunca substitui) e segue o mesmo autosave da digitação.
+  const anexarDitado = (trecho: string) => {
+    if (aba === "historico" || aba === "documentos") return;
+    const atual = textos[aba];
+    editar(aba, atual + (atual && !/\s$/.test(atual) ? " " : "") + trecho);
+  };
+
+  // Exames com itens começam abertos quando a lista é curta (o comum);
+  // recarregar o painel (pedido de medição etc.) não mexe na expansão.
+  const examesIniciados = useRef(false);
+  useEffect(() => {
+    if (!estado || examesIniciados.current) return;
+    examesIniciados.current = true;
+    if (estado.exames.length <= 5) {
+      setExamesAbertos(
+        new Set(estado.exames.filter((e) => itensValidos(e.itens).length > 0).map((e) => e.id)),
+      );
+    }
+  }, [estado]);
+
+  const alternarExame = (id: string) => {
+    setExamesAbertos((atual) => {
+      const novo = new Set(atual);
+      if (novo.has(id)) novo.delete(id);
+      else novo.add(id);
+      return novo;
+    });
+  };
+
+  const baixarDocumento = (id: string) => {
+    const completo = documentoCompletoPorId.get(id);
+    if (!completo) return;
+    try {
+      gerarDocumentoPDF(completo);
+      toast.success("PDF baixado", { description: completo.titulo });
+    } catch {
+      toast.error("Não foi possível gerar o PDF.");
+    }
   };
   const editarCid = (v: string) => {
     setCid(v);
@@ -279,7 +396,31 @@ export function PainelEvolucao({
               <div>Peso: {estado.paciente.peso ?? "—"} · Altura: {estado.paciente.altura ?? "—"}</div>
               <div>Alergias: {estado.paciente.alergias.join(", ") || "nenhuma"}</div>
               <div>Comorbidades: {estado.paciente.comorbidades.join(", ") || "nenhuma"}</div>
-              <div className="text-xs opacity-70">Últimas medições: {estado.medicoes.slice(0, 5).map((m) => `${m.tipo} ${m.valor1}${m.valor2 != null ? `/${m.valor2}` : ""}`).join(" · ") || "nenhuma"}</div>
+              {/* Medições COM data e unidade: a linha corrida antiga
+                  ("peso 80 · pressao 120/80") não dizia quando foi
+                  medido — valor sem data não orienta conduta. */}
+              <div className="space-y-1">
+                <div className="text-xs font-bold uppercase tracking-wide opacity-70">Últimas medições</div>
+                {estado.medicoes.slice(0, 8).map((m) => (
+                  <div key={m.id} className="flex items-baseline justify-between gap-2 text-xs">
+                    <span>
+                      {ROTULO_MEDICAO[m.tipo]?.rotulo ?? m.tipo}{" "}
+                      <span className="opacity-60">
+                        {new Date(m.criadoEm).toLocaleString("pt-BR", {
+                          day: "2-digit",
+                          month: "2-digit",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </span>
+                    </span>
+                    <span className="font-semibold">{textoMedicao(m)}</span>
+                  </div>
+                ))}
+                {estado.medicoes.length === 0 ? (
+                  <div className="text-xs opacity-70">Nenhuma medição registrada.</div>
+                ) : null}
+              </div>
               {!concluida ? (
                 <div className="flex flex-wrap gap-2">
                   {[["peso"], ["altura"], ["pressao"], ["peso", "altura", "pressao"]].map((t) => (
@@ -298,10 +439,100 @@ export function PainelEvolucao({
             </div>
           ) : null}
           {estado && aba === "exames" ? (
-            <ul className="text-xs space-y-1">
-              {estado.exames.map((e) => <li key={e.id}>{e.titulo} — {new Date(e.dataColeta).toLocaleDateString("pt-BR")}</li>)}
-              {estado.exames.length === 0 ? <li className="opacity-70">Nenhum exame.</li> : null}
-            </ul>
+            <div className="space-y-2">
+              {estado.exames.map((e) => {
+                const itens = itensValidos(e.itens);
+                const aberto = examesAbertos.has(e.id);
+                return (
+                  <div key={e.id} className="rounded-2xl border p-3">
+                    <button
+                      type="button"
+                      onClick={() => alternarExame(e.id)}
+                      aria-expanded={aberto}
+                      className="w-full flex items-center justify-between gap-2 text-left"
+                    >
+                      <span className="text-xs font-semibold">
+                        {e.titulo} — {new Date(e.dataColeta).toLocaleDateString("pt-BR")}
+                      </span>
+                      {itens.length > 0 ? (
+                        <span className="text-xs opacity-70 flex items-center gap-1 shrink-0">
+                          {itens.length} {itens.length === 1 ? "item" : "itens"}
+                          {aberto ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                        </span>
+                      ) : null}
+                    </button>
+                    {/* Os VALORES do laudo: a API sempre os devolveu, a
+                        tela é que mostrava só "título — data". Fora da
+                        faixa de referência, o valor ganha destaque. */}
+                    {aberto && itens.length > 0 ? (
+                      <ul className="mt-2 space-y-1 text-xs">
+                        {itens.map((it, i) => (
+                          <li key={`${it.nome}-${i}`} className="flex items-baseline justify-between gap-2">
+                            <span>{it.nome}</span>
+                            <span className={foraDaFaixa(it) ? "font-bold text-destructive" : "font-semibold"}>
+                              {it.valor}
+                              {it.unidade ? ` ${it.unidade}` : ""}
+                              {typeof it.refMin === "number" || typeof it.refMax === "number" ? (
+                                <span className="opacity-60 font-normal">
+                                  {" "}
+                                  (ref {it.refMin ?? "—"}–{it.refMax ?? "—"})
+                                </span>
+                              ) : null}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </div>
+                );
+              })}
+              {estado.exames.length === 0 ? <div className="text-xs opacity-70">Nenhum exame.</div> : null}
+            </div>
+          ) : null}
+          {estado && aba === "documentos" ? (
+            <div className="space-y-2">
+              {/* Documentos que a API já devolvia e o painel descartava
+                  (o tipo Estado nem declarava o campo): receitas,
+                  atestados e pedidos anteriores consultáveis DURANTE a
+                  consulta, sem sair da sala. */}
+              {estado.documentos.map((d) => {
+                const completo = documentoCompletoPorId.get(d.id);
+                return (
+                  <div key={d.id} className="rounded-2xl border p-3 space-y-1">
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="text-xs font-semibold">
+                        {ROTULO_TIPO_DOC[d.tipo] ?? d.tipo} — {d.titulo}
+                      </span>
+                      {completo ? (
+                        <button
+                          type="button"
+                          onClick={() => baixarDocumento(d.id)}
+                          className="flex items-center gap-1 text-xs font-bold underline shrink-0"
+                          aria-label={`Baixar PDF de ${d.titulo}`}
+                        >
+                          <Download className="w-3.5 h-3.5" /> PDF
+                        </button>
+                      ) : null}
+                    </div>
+                    <div className="text-xs opacity-70">
+                      {new Date(d.createdAt).toLocaleDateString("pt-BR")} · {d.medico}
+                      {d.deOutroMedico ? " (outro médico)" : ""}
+                    </div>
+                    {d.medicamento ? (
+                      <div className="text-xs">
+                        {d.medicamento}
+                        {d.posologia ? ` — ${d.posologia}` : ""}
+                        {d.controlado ? " · controlado" : ""}
+                      </div>
+                    ) : null}
+                    {d.cid ? <div className="text-xs opacity-70">CID {d.cid}</div> : null}
+                  </div>
+                );
+              })}
+              {estado.documentos.length === 0 ? (
+                <div className="text-xs opacity-70">Nenhum documento anterior.</div>
+              ) : null}
+            </div>
           ) : null}
           {estado && aba === "medicamentos" ? (
             <ul className="text-xs space-y-1">
@@ -309,16 +540,23 @@ export function PainelEvolucao({
               {estado.medicamentosEmUso.length === 0 ? <li className="opacity-70">Nenhum medicamento em uso.</li> : null}
             </ul>
           ) : null}
-          {aba !== "historico" ? (
-            <textarea
-              value={textos[aba]}
-              onChange={(e) => editar(aba, e.target.value)}
-              readOnly={concluida}
-              rows={8}
-              maxLength={8000}
-              placeholder={`Anotações de ${ABAS.find((a) => a.id === aba)?.rotulo.toLowerCase()}`}
-              className="w-full rounded-2xl border bg-background p-3"
-            />
+          {aba !== "historico" && aba !== "documentos" ? (
+            <>
+              {!concluida ? (
+                <div className="flex justify-end">
+                  <BotaoDitado onTexto={anexarDitado} rotuloParado="Ditar" />
+                </div>
+              ) : null}
+              <textarea
+                value={textos[aba]}
+                onChange={(e) => editar(aba, e.target.value)}
+                readOnly={concluida}
+                rows={8}
+                maxLength={8000}
+                placeholder={`Anotações de ${ABAS.find((a) => a.id === aba)?.rotulo.toLowerCase()}`}
+                className="w-full rounded-2xl border bg-background p-3"
+              />
+            </>
           ) : null}
           {aba === "conduta" ? (
             <input value={cid} onChange={(e) => editarCid(e.target.value)} readOnly={concluida} maxLength={20}

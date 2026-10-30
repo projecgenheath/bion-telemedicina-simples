@@ -46,6 +46,7 @@ export function SalaConsultaTela({
         contraparteDetalhe={sala.contraparteDetalhe}
         role={role}
         tempo={sala.tempo}
+        restanteSlot={sala.restanteSlot}
         statusSala={tele.status}
         iniciais={sala.iniciais}
       />
@@ -104,6 +105,8 @@ export function SalaConsultaTela({
           contraparteNome={sala.contraparteNome}
           sessaoNome={sala.sessao.nome}
           dadosPaciente={sala.dadosPaciente}
+          resumoClinico={sala.resumoClinico}
+          motivoConsulta={sala.consultaAtual?.motivoConsulta}
           anotacoes={sala.anotacoes}
           setAnotacoes={sala.setAnotacoes}
           arquivos={sala.arquivos}

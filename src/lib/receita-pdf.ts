@@ -1,5 +1,14 @@
 import { jsPDF } from "jspdf";
 import type { Documento } from "@/lib/bion-store";
+import { formatarDataNascimento } from "@/lib/idade";
+
+/** CPF p/ a via impressa: 11 dígitos viram 000.000.000-00; outro formato
+ *  cadastrado é impresso como está (não inventa nem descarta o dado). */
+function formatarCpfPdf(cpf: string): string {
+  const d = cpf.replace(/\D/g, "");
+  if (d.length !== 11) return cpf;
+  return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
+}
 
 const AZUL: [number, number, number] = [24, 92, 200];
 const VERDE: [number, number, number] = [16, 185, 129];
@@ -65,9 +74,20 @@ export function gerarDocumentoPDF(d: Documento) {
 
   y = 115;
 
-  // Box de Identificação das Partes
+  // Box de Identificação das Partes.
+  // Melhoria nº 6 (auditoria médica): a via ganha a identificação formal —
+  // CPF/nascimento do paciente e CRM do emissor (documentoWire). Campo
+  // ausente no cadastro simplesmente não aparece; com CRM, a caixa cresce
+  // uma linha e a data de emissão desce (sem CRM, o layout é o de sempre).
+  const identPaciente = [
+    d.pacienteCpf ? `CPF: ${formatarCpfPdf(d.pacienteCpf)}` : null,
+    d.pacienteNascimento ? `Nascimento: ${formatarDataNascimento(d.pacienteNascimento)}` : null,
+  ]
+    .filter(Boolean)
+    .join(" • ");
+  const alturaBox = d.medicoCrm ? 92 : 76;
   doc.setFillColor(...CINZA_CLARO);
-  doc.roundedRect(L, y, W - L * 2, 76, 8, 8, "F");
+  doc.roundedRect(L, y, W - L * 2, alturaBox, 8, 8, "F");
 
   // Paciente
   doc.setFont("helvetica", "bold");
@@ -83,7 +103,7 @@ export function gerarDocumentoPDF(d: Documento) {
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
   doc.setTextColor(...CINZA_MEDIO);
-  doc.text("Documento emitido via plataforma de telemedicina BION", L + 16, y + 54);
+  doc.text(identPaciente || "Documento emitido via plataforma de telemedicina BION", L + 16, y + 54);
 
   // Médico
   const colunaMed = W / 2 + 10;
@@ -100,9 +120,10 @@ export function gerarDocumentoPDF(d: Documento) {
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
   doc.setTextColor(...CINZA_MEDIO);
-  doc.text(`Data de emissão: ${d.data}`, colunaMed, y + 54);
+  if (d.medicoCrm) doc.text(`CRM: ${d.medicoCrm}`, colunaMed, y + 54);
+  doc.text(`Data de emissão: ${d.data}`, colunaMed, y + (d.medicoCrm ? 70 : 54));
 
-  y += 105;
+  y += alturaBox + 29;
 
   // Título do Documento / Medicamento
   doc.setFont("helvetica", "bold");

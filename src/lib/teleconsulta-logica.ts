@@ -12,7 +12,9 @@
  *  - intervaloPolling: cadência do polling da sala;
  *  - lerForaDaJanela / esperaForaDaJanela / textoForaDaJanela /
  *    exibirForaDaJanela: resposta 409 do GET /sala (sala ainda não abriu ou
- *    já fechou) e a mensagem mostrada no lugar da área de espera.
+ *    já fechou) e a mensagem mostrada no lugar da área de espera;
+ *  - restanteDoSlot: tempo que falta para o fim do horário agendado
+ *    (início + duração), exibido ao lado do cronômetro da sala.
  */
 
 import { SALA_ABRE_ANTES_MIN, SALA_FECHA_DEPOIS_MIN } from "@/lib/janela-sala";
@@ -367,6 +369,61 @@ export function restricoesVideoCamera(celular: boolean, camera: CameraEscolhida)
     return { ...base, deviceId: { exact: camera.deviceId } };
   }
   return { ...base, facingMode: camera.facingMode };
+}
+
+/* ------------------------------------------------------------------ */
+/* Tempo restante do slot agendado                                     */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Duração padrão do slot, em minutos. ESPELHA `DURACAO_CONSULTA_MIN` do
+ * servidor (lib/server/bloqueio-agenda.ts): é a duração que a grade de
+ * agendamento usa para montar os horários — não há duração por consulta
+ * no cliente, então o fim do slot é início + este valor.
+ */
+export const DURACAO_SLOT_MIN = 30;
+
+export type RestanteSlot = {
+  /** Minutos inteiros que faltam (0 quando estourou). */
+  minutos: number;
+  /** Minutos inteiros além do fim do slot (0 enquanto não estourou). */
+  estouroMin: number;
+  estourou: boolean;
+  /** Rótulo pronto para a barra da sala: "restam 12 min", "+3 min de estouro"… */
+  rotulo: string;
+};
+
+/**
+ * Quanto falta para o fim do horário agendado (`inicioMs` = dataInicio da
+ * consulta). Antes, o relógio da sala só contava para cima e o médico não
+ * tinha referência do horário contratado para gerir o ritmo da consulta.
+ * Minutos são arredondados para cima enquanto falta (faltando 30 s, ainda
+ * "resta 1 min") e para baixo no estouro (só vira "+1 min" com 1 min cheio
+ * além do fim).
+ */
+export function restanteDoSlot(
+  inicioMs: number,
+  agoraMs: number,
+  duracaoMin: number = DURACAO_SLOT_MIN,
+): RestanteSlot {
+  const fimMs = inicioMs + duracaoMin * 60_000;
+  const faltaMs = fimMs - agoraMs;
+  if (faltaMs > 0) {
+    const minutos = Math.max(1, Math.ceil(faltaMs / 60_000));
+    return {
+      minutos,
+      estouroMin: 0,
+      estourou: false,
+      rotulo: minutos === 1 ? "resta 1 min" : `restam ${minutos} min`,
+    };
+  }
+  const estouroMin = Math.floor((agoraMs - fimMs) / 60_000);
+  return {
+    minutos: 0,
+    estouroMin,
+    estourou: true,
+    rotulo: estouroMin >= 1 ? `+${estouroMin} min de estouro` : "fim do horário",
+  };
 }
 
 /** O mínimo de MediaStream que `pararTracks` usa (permite teste sem navegador). */

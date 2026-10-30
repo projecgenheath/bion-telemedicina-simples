@@ -8,15 +8,54 @@ import { toast } from "sonner";
  * Três respostas: renovar (receita nova, só sem controlado), marcar chamada
  * curta, ou recusar com mensagem. Regras no servidor:
  * POST /api/medico/renovacoes/[id]/responder.
+ * Melhoria nº 4 (auditoria médica): "Renovar sem alterações" responde em
+ * 1 clique com os campos originais, e cada pedido mostra há quanto tempo
+ * espera (criadoEm já vinha no wire da listagem).
  */
 type Pedido = {
   id: string;
   criadoEm: string;
   observacaoPaciente: string | null;
   paciente: { id: string; nome: string };
-  documento: { titulo: string; medicamento: string | null; posologia: string | null; duracao: string | null; conteudo: string; controlado: boolean } | null;
+  documento: { titulo: string; medicamento: string | null; posologia: string | null; duracao: string | null; conteudo: string; cid: string | null; controlado: boolean } | null;
   exigeChamada: boolean;
 };
+
+/** Idade do pedido em texto ("há 3 dias"), a partir do criadoEm do wire. */
+function idadePedido(criadoEm: string, agora: number = Date.now()): string {
+  const ms = agora - new Date(criadoEm).getTime();
+  if (!Number.isFinite(ms) || ms < 60_000) return "agora há pouco";
+  const min = Math.floor(ms / 60_000);
+  if (min < 60) return `há ${min} min`;
+  const horas = Math.floor(min / 60);
+  if (horas < 24) return horas === 1 ? "há 1 hora" : `há ${horas} horas`;
+  const dias = Math.floor(horas / 24);
+  if (dias < 7) return dias === 1 ? "há 1 dia" : `há ${dias} dias`;
+  if (dias < 30) {
+    const semanas = Math.floor(dias / 7);
+    return semanas === 1 ? "há 1 semana" : `há ${semanas} semanas`;
+  }
+  const meses = Math.floor(dias / 30);
+  return meses === 1 ? "há 1 mês" : `há ${meses} meses`;
+}
+
+/**
+ * Renovação direta (1 clique) só quando o documento original está COMPLETO:
+ * a rota trata campo vazio como "herdar o original", então faltando
+ * medicamento/posologia/duração/conteúdo o caminho é o formulário de
+ * resposta, que obriga o médico a preencher — nada de renovar no escuro.
+ */
+function podeRenovarDireto(p: Pedido): boolean {
+  const d = p.documento;
+  return (
+    !p.exigeChamada &&
+    !!d &&
+    !!d.conteudo.trim() &&
+    !!d.medicamento?.trim() &&
+    !!d.posologia?.trim() &&
+    !!d.duracao?.trim()
+  );
+}
 
 export function RenovacoesPendentes() {
   const [pedidos, setPedidos] = useState<Pedido[] | null>(null);
@@ -80,6 +119,46 @@ export function RenovacoesPendentes() {
     }
   };
 
+  /**
+   * Melhoria nº 4: renova com os campos ORIGINAIS, sem abrir o formulário.
+   * O payload espelha o que o formulário enviaria sem edições (a rota
+   * persiste medicamento/posologia/duracao/cid e cai para o original no que
+   * faltar). NÃO leva mensagemMedico: a `mensagem` do estado pertence ao
+   * formulário de resposta de outro pedido que esteja aberto.
+   */
+  const renovarSemAlteracoes = async (p: Pedido) => {
+    const doc = p.documento;
+    if (!doc) return;
+    setEnviando(true);
+    try {
+      const res = await fetch(`/api/medico/renovacoes/${encodeURIComponent(p.id)}/responder`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          acao: "renovar",
+          documento: {
+            conteudo: doc.conteudo,
+            medicamento: doc.medicamento,
+            posologia: doc.posologia,
+            duracao: doc.duracao,
+            ...(doc.cid ? { cid: doc.cid } : {}),
+          },
+        }),
+      });
+      const j = (await res.json().catch(() => ({}))) as { erro?: string; mensagem?: string };
+      if (!res.ok) {
+        toast.error(j.mensagem ?? (j.erro === "pedido_nao_pendente" ? "Esse pedido já foi respondido." : j.erro ?? "Não foi possível responder."));
+        return;
+      }
+      toast.success("Receita renovada e enviada ao paciente");
+      await carregar();
+    } catch {
+      toast.error("Falha de conexão", { description: "Verifique sua internet e tente novamente." });
+    } finally {
+      setEnviando(false);
+    }
+  };
+
   if (!pedidos) {
     if (erroCarga) {
       return (
@@ -101,6 +180,7 @@ export function RenovacoesPendentes() {
       {pedidos.map((p) => (
         <li key={p.id} className="bp-glass p-4 space-y-2">
           <div className="font-bold">{p.paciente.nome}</div>
+          <div className="text-xs opacity-60">Pedido feito {idadePedido(p.criadoEm)}</div>
           <div className="text-sm">{p.documento?.titulo ?? "Receita"}{p.documento?.medicamento ? ` — ${p.documento.medicamento}` : ""}</div>
           {p.documento?.posologia ? <div className="text-xs opacity-75">{p.documento.posologia}</div> : null}
           {p.observacaoPaciente ? <div className="text-xs italic">“{p.observacaoPaciente}”</div> : null}
@@ -134,13 +214,19 @@ export function RenovacoesPendentes() {
               </div>
             </div>
           ) : (
-            <button type="button" className="text-sm underline" onClick={() => {
-              setAberto(p.id);
-              setConteudo(p.documento && !p.exigeChamada ? p.documento.conteudo : "");
-              setMedicamento(p.documento && !p.exigeChamada ? (p.documento.medicamento ?? "") : "");
-              setPosologia(p.documento && !p.exigeChamada ? (p.documento.posologia ?? "") : "");
-              setDuracao(p.documento && !p.exigeChamada ? (p.documento.duracao ?? "") : "");
-            }}>Responder</button>
+            <div className="flex flex-wrap items-center gap-3">
+              {podeRenovarDireto(p) ? (
+                <button type="button" disabled={enviando} className="rounded-full bg-primary text-primary-foreground px-4 py-2 text-sm disabled:opacity-50"
+                  onClick={() => void renovarSemAlteracoes(p)}>Renovar sem alterações</button>
+              ) : null}
+              <button type="button" className="text-sm underline" onClick={() => {
+                setAberto(p.id);
+                setConteudo(p.documento && !p.exigeChamada ? p.documento.conteudo : "");
+                setMedicamento(p.documento && !p.exigeChamada ? (p.documento.medicamento ?? "") : "");
+                setPosologia(p.documento && !p.exigeChamada ? (p.documento.posologia ?? "") : "");
+                setDuracao(p.documento && !p.exigeChamada ? (p.documento.duracao ?? "") : "");
+              }}>Responder</button>
+            </div>
           )}
         </li>
       ))}

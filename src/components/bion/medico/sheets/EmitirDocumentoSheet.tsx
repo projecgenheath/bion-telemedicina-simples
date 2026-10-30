@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useBion, type Documento } from "@/lib/bion-store";
+import { gerarConteudoDocumento } from "@/lib/conteudo-documento";
 import { Campo, SheetMedico } from "./SheetMedico";
 
 export type TipoEmissao = Documento["tipo"] | "arquivo";
@@ -58,6 +59,17 @@ export function EmitirDocumentoSheet({
   const [cid, setCid] = useState(base?.cid ?? "");
   const [duracao, setDuracao] = useState(base?.duracao ?? "");
   const [conteudo, setConteudo] = useState(base?.conteudo ?? "");
+  // Melhoria nº 5 (auditoria médica): o conteúdo nasce dos campos já
+  // preenchidos (lib/conteudo-documento) e é regenerado enquanto o médico
+  // não tocar no texto — a primeira edição manual torna o texto dele e a
+  // geração automática para de sobrescrever. Com `base` (renovação), o
+  // texto pré-preenchido é o documento anterior INTEIRO: nasce protegido
+  // como "manual", senão trocar um campo apagaria o texto herdado.
+  const [conteudoManual, setConteudoManual] = useState(!!base?.conteudo);
+  useEffect(() => {
+    if (conteudoManual || tipo === "arquivo") return;
+    setConteudo(gerarConteudoDocumento({ tipo, titulo, medicamento, posologia, duracao, cid, pacienteNome }));
+  }, [conteudoManual, tipo, titulo, medicamento, posologia, duracao, cid, pacienteNome]);
   const [observacoes, setObservacoes] = useState(base?.observacoes ?? "");
   const [arquivo, setArquivo] = useState<File | null>(null);
   const [nomeArquivo, setNomeArquivo] = useState("");
@@ -266,8 +278,21 @@ export function EmitirDocumentoSheet({
               <input value={duracao} onChange={(e) => setDuracao(e.target.value)} className={entrada} maxLength={80} />
             </Campo>
           ) : null}
-          <Campo rotulo={tipo === "exame_solicitado" ? "Exames e justificativa" : "Conteúdo"} erro={erros.conteudo}>
-            <textarea value={conteudo} onChange={(e) => setConteudo(e.target.value)} rows={4} className={`${entrada} !rounded-2xl`} maxLength={4000} />
+          <Campo
+            rotulo={tipo === "exame_solicitado" ? "Exames e justificativa" : "Conteúdo"}
+            erro={erros.conteudo}
+            ajuda={conteudoManual ? undefined : "Gerado automaticamente a partir dos campos acima — você pode editar."}
+          >
+            <textarea
+              value={conteudo}
+              onChange={(e) => {
+                setConteudo(e.target.value);
+                setConteudoManual(true);
+              }}
+              rows={4}
+              className={`${entrada} !rounded-2xl`}
+              maxLength={4000}
+            />
           </Campo>
           <Campo rotulo="Observações (opcional)" erro={erros.observacoes} ajuda={`${observacoes.length}/500`}>
             <textarea value={observacoes} onChange={(e) => setObservacoes(e.target.value)} rows={2} maxLength={500} className={`${entrada} !rounded-2xl`} />

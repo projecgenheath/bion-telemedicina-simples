@@ -4,9 +4,22 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useBion as useStore, type AnamneseResumo } from "@/lib/bion-store";
 import { useTeleconsulta } from "@/lib/use-teleconsulta";
-import { exibirForaDaJanela } from "@/lib/teleconsulta-logica";
+import { exibirForaDaJanela, restanteDoSlot } from "@/lib/teleconsulta-logica";
 
 export type PapelSala = "paciente" | "medico" | "admin";
+
+/**
+ * Resumo clínico do paciente para o cartão da sala (só o médico carrega):
+ * é o subconjunto de segurança do GET da evolução — alergias em destaque,
+ * comorbidades, tipo sanguíneo e medicamentos em uso. Antes o cartão
+ * mostrava "ver prontuário" justamente na aba Prontuário.
+ */
+export type ResumoClinicoSala = {
+  alergias: string[];
+  comorbidades: string[];
+  tipoSanguineo: string;
+  medicamentosEmUso: { id: string; nome: string; dose: string | null; controlado: boolean }[];
+};
 
 /**
  * Estado e ações COMUNS da sala de teleconsulta (paciente, médico e admin).
@@ -83,6 +96,39 @@ export function useSalaConsulta({
   const idPacienteSala = role === "medico" ? consultaAtual?.pacienteId : sessao.id;
   const dadosPaciente = idPacienteSala ? pacientes.find((p) => p.id === idPacienteSala) : undefined;
 
+  // Cartão clínico da sala (só médico): reaproveita a MESMA chamada do
+  // PainelEvolucao (GET /api/medico/consultas/[id]/evolucao), que já
+  // devolve alergias/comorbidades/tipo sanguíneo e medicamentos em uso —
+  // sem endpoint novo. Falha de rede/permissão deixa o resumo nulo e o
+  // cartão cai para a exibição anterior (nada de erro inventado na sala).
+  const [resumoClinico, setResumoClinico] = useState<ResumoClinicoSala | null>(null);
+  useEffect(() => {
+    if (role !== "medico" || !consultaValida || !idSala) return;
+    let vivo = true;
+    fetch(`/api/medico/consultas/${encodeURIComponent(idSala)}/evolucao`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { paciente?: { alergias?: string[]; comorbidades?: string[]; tipoSanguineo?: string }; medicamentosEmUso?: ResumoClinicoSala["medicamentosEmUso"] } | null) => {
+        if (!vivo || !j?.paciente) return;
+        setResumoClinico({
+          alergias: j.paciente.alergias ?? [],
+          comorbidades: j.paciente.comorbidades ?? [],
+          tipoSanguineo: j.paciente.tipoSanguineo ?? "",
+          medicamentosEmUso: (j.medicamentosEmUso ?? []).map((m) => ({
+            id: m.id,
+            nome: m.nome,
+            dose: m.dose ?? null,
+            controlado: !!m.controlado,
+          })),
+        });
+      })
+      .catch(() => {
+        /* resumo é apoio à decisão: a sala segue sem ele */
+      });
+    return () => {
+      vivo = false;
+    };
+  }, [role, consultaValida, idSala]);
+
   // ── WebRTC REAL (Fase 2): mídia P2P + sinalização via banco ──
   // Bloqueada (sem idSala): o hook do tele devolve o estado inicial, sem
   // polling e sem pedir câmera — nunca "aguardando" uma sala que não existe.
@@ -134,6 +180,14 @@ export function useSalaConsulta({
   }, [naoEncontrada, consultaValida, pagamentoPendente]);
 
   const tempo = `${String(Math.floor(segundos / 60)).padStart(2, "0")}:${String(segundos % 60).padStart(2, "0")}`;
+
+  // Tempo até o fim do slot agendado (dataInicio + duração padrão), ao
+  // lado do cronômetro crescente: referência para gerir o ritmo da
+  // consulta. É derivado de Date.now() a cada render; o intervalo de 1 s
+  // do cronômetro acima garante um render por segundo enquanto a sala
+  // está válida, então o valor não fica velho.
+  const restanteSlot =
+    consultaValida && consultaAtual?.ts ? restanteDoSlot(consultaAtual.ts, Date.now()) : null;
 
   // Wrappers dos controles de mídia do hook (mantêm nomes locais estáveis)
   const toggleMicLocal = () => tele.toggleMic();
@@ -255,6 +309,8 @@ export function useSalaConsulta({
     contraparteDetalhe,
     iniciais,
     dadosPaciente,
+    resumoClinico,
+    restanteSlot,
     tele,
     salaForaDaJanela,
     videoLocalRef,

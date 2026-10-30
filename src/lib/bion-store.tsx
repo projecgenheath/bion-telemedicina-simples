@@ -145,6 +145,7 @@ type EstadoFresco = {
     consultaId?: string | null; // A7: consulta em que o documento foi emitido
     medicamento?: string | null; posologia?: string | null; duracao?: string | null;
     observacoes?: string | null; cid?: string | null; controlado?: boolean; createdAt: string;
+    medicoCrm?: string | null; pacienteCpf?: string | null; pacienteNascimento?: string | null;
   }[];
   arquivos: {
     id: string; nome: string; tipo: string; tamanhoKb: number; enviadoPor: string;
@@ -280,6 +281,9 @@ const mapDocumento = (x: EstadoFresco["documentos"][number]): Documento => ({
   observacoes: x.observacoes ?? undefined,
   cid: x.cid ?? undefined,
   controlado: x.controlado ?? false,
+  medicoCrm: x.medicoCrm ?? undefined, // melhoria nº 6: identificação formal no PDF
+  pacienteCpf: x.pacienteCpf ?? undefined,
+  pacienteNascimento: x.pacienteNascimento ?? undefined,
 });
 
 const mapArquivo = (a: EstadoFresco["arquivos"][number]): Arquivo => ({
