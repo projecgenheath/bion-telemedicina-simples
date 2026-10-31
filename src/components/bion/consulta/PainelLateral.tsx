@@ -35,6 +35,10 @@ export type ConsultaPainelLateralProps = {
   motivoConsulta?: string;
   anotacoes: string;
   setAnotacoes: (v: string) => void;
+  /** Autossalvamento do resumo (item 27): estado exibido sob a caixa. */
+  resumoStatus?: "ok" | "salvando" | "erro";
+  /** Retry imediato quando o autossalvamento falhou. */
+  onTentarSalvarResumo?: () => void;
   arquivos: { id?: string; nome: string; tipo?: string; tamanhoKb?: number; enviadoPor?: string; storagePath?: string | null }[];
   chatMsgs: { id?: string; texto: string; minha?: boolean; hora?: string }[];
   chatInput: string;
@@ -57,6 +61,8 @@ export function ConsultaPainelLateral({
   motivoConsulta,
   anotacoes,
   setAnotacoes,
+  resumoStatus = "ok",
+  onTentarSalvarResumo,
   arquivos,
   chatMsgs,
   chatInput,
@@ -209,7 +215,7 @@ export function ConsultaPainelLateral({
           <div className="space-y-2">
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <span className="font-bold text-slate-300 uppercase tracking-wider text-xs">
-                Evolução Clínica
+                Resumo da consulta
               </span>
               {role === "medico" && (
                 <span className="flex items-center gap-2">
@@ -232,8 +238,19 @@ export function ConsultaPainelLateral({
                 </span>
               )}
             </div>
+            {/* Item 27: os dois textos da sala têm destinos DIFERENTES
+                e o rótulo agora diz isso — este é o resumo final da
+                consulta (vai para o prontuário ao concluir); a evolução
+                estruturada (seções e CID) é o painel "Evolução". */}
+            {role === "medico" && (
+              <p className="text-[11px] leading-relaxed text-slate-400">
+                Resumo final desta consulta: salvo automaticamente e exibido no prontuário ao
+                concluir. A evolução estruturada (seções e CID) fica no painel{" "}
+                <span className="font-bold text-slate-300">Evolução</span>, na borda direita da tela.
+              </p>
+            )}
             <textarea
-            aria-label="Anotações da consulta"
+            aria-label="Resumo da consulta"
               value={anotacoes}
               onChange={(e) => setAnotacoes(e.target.value)}
               rows={8}
@@ -245,10 +262,36 @@ export function ConsultaPainelLateral({
             {/* O2: contador no MESMO teto que o servidor valida ao
                 concluir (lib/resumo-medico) — o médico vê o limite
                 enquanto escreve, em vez de descobrir num erro (ou, antes,
-                num corte silencioso de 300 caracteres). */}
+                num corte silencioso de 300 caracteres).
+                Item 27: à esquerda do contador, o estado do
+                autossalvamento do resumo — mesmo vocabulário do
+                PainelEvolucao ("Salvando…"/"Não salvou" + tentar de
+                novo), para o médico nunca chutar se o texto gravou. */}
             {role === "medico" && (
-              <div className="text-right text-[11px] text-slate-400" aria-live="polite">
-                {anotacoes.length.toLocaleString("pt-BR")} / {LIMITE_RESUMO_MEDICO.toLocaleString("pt-BR")} caracteres
+              <div className="flex items-center justify-between gap-2 text-[11px] text-slate-400">
+                <span aria-live="polite" className="flex items-center gap-2">
+                  {resumoStatus === "erro" ? (
+                    <>
+                      <span className="font-bold text-red-300">Não salvou</span>
+                      {onTentarSalvarResumo && (
+                        <button
+                          type="button"
+                          onClick={onTentarSalvarResumo}
+                          className="font-bold text-primary hover:underline"
+                        >
+                          Tentar de novo
+                        </button>
+                      )}
+                    </>
+                  ) : resumoStatus === "salvando" ? (
+                    <span>Salvando…</span>
+                  ) : anotacoes ? (
+                    <span>Resumo salvo</span>
+                  ) : null}
+                </span>
+                <span aria-live="polite">
+                  {anotacoes.length.toLocaleString("pt-BR")} / {LIMITE_RESUMO_MEDICO.toLocaleString("pt-BR")} caracteres
+                </span>
               </div>
             )}
           </div>

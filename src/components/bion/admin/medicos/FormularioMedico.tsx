@@ -181,7 +181,13 @@ export function FormularioMedico({
             </Campo>
           </div>
           <div className="sm:col-span-2">
-            <Campo id="med-horarios" rotulo="Horários da grade" erro={erros.horarios} dica="A grade vale para todos os dias. Sem atendimento entre 23:00 e 00:00.">
+            <Campo id="med-horarios" rotulo="Horários da grade" erro={erros.horarios} dica="Esta é a grade PADRÃO (vale para todos os dias). Sem atendimento entre 23:00 e 00:00.">
+              {medico && Object.keys(medico.horariosPorDia ?? {}).length > 0 ? (
+                <p className="text-xs ba-texto-2 mt-1">
+                  Este médico tem grade própria em {Object.keys(medico.horariosPorDia).length} dia(s) da semana
+                  (definida por ele no app). Editar aqui muda só o padrão — os dias próprios são preservados.
+                </p>
+              ) : null}
               <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 mt-1" role="group" aria-label="Horários">
                 {opcoes.map((h) => {
                   const vedado = horarioVedado(h);

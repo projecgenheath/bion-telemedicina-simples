@@ -8,6 +8,7 @@ import { chaveDia, dataLonga, hora as horaDe, rotuloDia } from "../tempo";
 import { useRecurso } from "../repasses/recurso";
 import { useAcoesConsulta } from "./acoes";
 import { corpoEdicao, horariosDoDia, podeCancelar, validarHoraManual, type Horario } from "./agenda";
+import { gradeDeCampos, horariosDoDia as gradeDoDia, diaSemanaDeIso } from "@/lib/grade-semana";
 
 const ROTULO_MOTIVO: Record<NonNullable<Horario["motivo"]>, string> = {
   atual: "atual",
@@ -56,7 +57,16 @@ export function EditarConsulta({
   const bloqueios = useRecurso<{ dias: string[] }>(medicoId ? `/api/medicos/${encodeURIComponent(medicoId)}/bloqueios` : null);
   const diaBloqueado = Boolean(bloqueios.dados?.dias.includes(dia));
   const horarios = useMemo(
-    () => horariosDoDia({ grade: medico?.horariosDisponiveis ?? [], dia, medicoId, consultas, consultaId: c.id, agora }),
+    // Grade por dia da semana: a lista oferecida é a do dia editado
+    // (própria ou padrão) — regra única em lib/grade-semana.
+    () =>
+      horariosDoDia({
+        grade: gradeDoDia(
+          gradeDeCampos(medico?.horariosDisponiveis ?? [], medico?.horariosPorDia),
+          diaSemanaDeIso(dia),
+        ),
+        dia, medicoId, consultas, consultaId: c.id, agora,
+      }),
     [medico, dia, medicoId, consultas, c.id, agora],
   );
 

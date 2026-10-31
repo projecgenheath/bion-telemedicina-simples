@@ -341,6 +341,12 @@ export function MedicoPerfilView({ medicoId }: { medicoId?: string }) {
               </span>
             ))}
           </div>
+          {Object.entries(medico.horariosPorDia ?? {}).map(([dia, lista]) => (
+            <p key={dia} className="text-xs text-muted-foreground">
+              <span className="font-bold">{["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"][Number(dia)]}:</span>{" "}
+              {lista.length ? lista.join(" · ") : "sem horários neste dia"}
+            </p>
+          ))}
         </div>
       </div>
 

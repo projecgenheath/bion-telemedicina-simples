@@ -13,6 +13,13 @@ import {
   validarGrade,
   type ParametrosGrade,
 } from "../metricas";
+import {
+  gradeDeCampos,
+  horariosDoDia,
+  gradesIguais,
+  serializarGrade,
+  type GradeSemana,
+} from "@/lib/grade-semana";
 import { Campo, SheetMedico } from "./SheetMedico";
 import { AgendaDoDia } from "./AgendaDoDia";
 import { avisarDadosMedicoAlterados } from "../useDadosMedico";
@@ -337,12 +344,21 @@ function lerParametros(medico: Medico): ParametrosGrade {
   return sugerirParametros(medico.horariosDisponiveis);
 }
 
+const ROTULOS_DIA = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+
+/** Alvo da edição da grade: o padrão (todos os dias) ou um dia da semana. */
+type AlvoGrade = "padrao" | number;
+
 /**
  * Agenda — gera a lista de horários de início (duração + intervalo ≥ 10 min
  * + pausa diária) e grava em PerfilMedico.horariosDisponiveis (único
  * caminho de gravação existente). Os parâmetros da grade ficam só neste
  * aparelho; dias de atendimento e pausas semanais agora vão ao servidor
  * (PATCH /api/medicos/[id] aceita desde a correção P1).
+ * Grade por dia da semana: além do padrão, cada dia pode ter a sua lista
+ * própria (sábado curto, noite estendida…) — regra única em
+ * lib/grade-semana.ts; o PATCH recebe horariosDisponiveis (padrão) e
+ * horariosPorDia (listas próprias) como campos independentes.
  */
 export function AgendaSheet({
   aberto,
@@ -353,12 +369,20 @@ export function AgendaSheet({
   aberto: boolean;
   onFechar: () => void;
   medico: Medico;
-  /** Compara a grade como string "HH:MM,HH:MM,…". */
+  /** Compara a grade pela serialização canônica (lib/grade-semana). */
   confirmar: Confirmar<string>;
 }) {
   const { atualizarMedico } = useBion();
   const [p, setP] = useState<ParametrosGrade>(() => lerParametros(medico));
   const [excluidos, setExcluidos] = useState<Set<string>>(() => new Set());
+  // Grade por dia: `listas` guarda as listas JÁ COMITADAS de cada alvo; o
+  // formulário (p + excluidos) edita o alvo corrente e é comitado ao trocar
+  // de alvo ou ao salvar. `diferente` = o dia corrente tem lista própria.
+  const gradeAtual: GradeSemana = gradeDeCampos(medico.horariosDisponiveis, medico.horariosPorDia);
+  const [alvo, setAlvo] = useState<AlvoGrade>("padrao");
+  const [listas, setListas] = useState<GradeSemana>(() => gradeDeCampos(medico.horariosDisponiveis, medico.horariosPorDia));
+  const [diferente, setDiferente] = useState(false);
+  const [copiarDe, setCopiarDe] = useState<string>("");
   // M-11: o estado inicial vem do que o médico JÁ SALVOU no servidor (o delta
   // do store traz diasAtendimento/pausasSemanais desde a correção P1) — antes
   // era sempre o padrão seg–sex sem pausas, ignorando o que foi gravado.
@@ -379,15 +403,48 @@ export function AgendaSheet({
   const erro = validarGrade(p);
   const gerados = useMemo(() => gerarGrade(p), [p]);
   const finais = gerados.filter((h) => !excluidos.has(h));
-  const atual = [...medico.horariosDisponiveis].sort();
-  const igualAoAtual = finais.join(",") === atual.join(",");
+  const atual = [...gradeAtual.padrao].sort();
+
+  /** Grade com o formulário corrente comitado sobre `base`. */
+  const comitar = (base: GradeSemana): GradeSemana => {
+    if (alvo === "padrao") return { padrao: [...finais], dias: { ...base.dias } };
+    const dias = { ...base.dias };
+    if (diferente) dias[String(alvo)] = [...finais];
+    else delete dias[String(alvo)];
+    return { padrao: [...base.padrao], dias };
+  };
+  const gradeEditada = comitar(listas);
+  /** Lista efetiva de um alvo dentro de uma grade (própria ou padrão). */
+  const listaDe = (g: GradeSemana, a: AlvoGrade): string[] =>
+    a === "padrao" ? [...g.padrao] : horariosDoDia(g, a);
+
+  const trocarAlvo = (novo: AlvoGrade) => {
+    if (novo === alvo) return;
+    const commit = comitar(listas);
+    setListas(commit);
+    setP(sugerirParametros(listaDe(commit, novo)));
+    setExcluidos(new Set());
+    setDiferente(novo !== "padrao" && commit.dias[String(novo)] !== undefined);
+    setCopiarDe("");
+    setAlvo(novo);
+  };
+
+  /** Copia a lista efetiva de outro alvo para o formulário corrente. */
+  const aplicarCopia = () => {
+    if (copiarDe === "") return;
+    const fonte: AlvoGrade = copiarDe === "padrao" ? "padrao" : Number(copiarDe);
+    setP(sugerirParametros(listaDe(gradeEditada, fonte)));
+    setExcluidos(new Set());
+    if (alvo !== "padrao") setDiferente(true);
+  };
+
   // M-11: salva quando QUALQUER parte mudou (grade, dias ou pausas) — antes,
   // mudar só dias/pausas deixava o botão travado em "igual à atual".
   const diasAtual = [...(medico.diasAtendimento ?? [])].sort((a, b) => a - b).join(",");
   const diasNovo = Array.from(diasSemana).sort((a, b) => a - b).join(",");
   const pausasAtual = JSON.stringify([...(medico.pausasSemanais ?? [])].sort((a, b) => a.dia - b.dia || a.inicio.localeCompare(b.inicio)));
   const pausasNovo = JSON.stringify([...pausas].sort((a, b) => a.dia - b.dia || a.inicio.localeCompare(b.inicio)));
-  const nadaMudou = igualAoAtual && diasAtual === diasNovo && pausasAtual === pausasNovo;
+  const nadaMudou = gradesIguais(gradeEditada, gradeAtual) && diasAtual === diasNovo && pausasAtual === pausasNovo;
   // M-11: valida pausas — início antes do fim, sem sobreposição no mesmo dia.
   const erroPausas = useMemo(() => {
     for (const pa of pausas) {
@@ -416,18 +473,26 @@ export function AgendaSheet({
     });
 
   const salvar = async () => {
-    if (erro || erroPausas || finais.length === 0 || salvando) return;
+    if (erro || erroPausas || gradeEditada.padrao.length === 0 || salvando) return;
     setErroSalvar(null);
     setSalvando(true);
     atualizarMedico(medico.id, {
-      horariosDisponiveis: finais,
+      horariosDisponiveis: gradeEditada.padrao,
+      horariosPorDia: gradeEditada.dias,
       diasAtendimento: Array.from(diasSemana).sort((a, b) => a - b),
       pausasSemanais: pausas,
     });
     // Só fecha com a confirmação real (delta do servidor). Sem confirmação
     // em tempo, a folha fica aberta com erro + retry, em vez de fechar
     // fingindo sucesso.
-    const ok = await confirmar(finais.join(","), "Salvando horários…", `Agenda atualizada: ${finais.length} horários por dia`);
+    const qtdDiasProprios = Object.keys(gradeEditada.dias).length;
+    const ok = await confirmar(
+      serializarGrade(gradeEditada),
+      "Salvando horários…",
+      qtdDiasProprios
+        ? `Agenda atualizada: ${gradeEditada.padrao.length} horários no padrão e ${qtdDiasProprios} dia(s) com grade própria`
+        : `Agenda atualizada: ${gradeEditada.padrao.length} horários por dia`,
+    );
     setSalvando(false);
     if (!ok) {
       setErroSalvar("Não foi possível confirmar o salvamento. Verifique sua conexão e toque em Salvar novamente.");
@@ -446,7 +511,7 @@ export function AgendaSheet({
       aberto={aberto}
       onFechar={fechar}
       titulo="Minha agenda"
-      subtitulo="Consultas por dia e grade de horários (vale para todos os dias da semana)."
+      subtitulo="Consultas por dia e grade de horários: um padrão para todos os dias, com dias próprios quando precisar."
     >
       <div className="space-y-5">
         <AgendaDoDia medico={medico} onExecutando={setCancelandoDia} />
@@ -459,7 +524,7 @@ export function AgendaSheet({
 
         <div>
           <div className="text-xs font-bold uppercase tracking-wider text-bion-ink/75 dark:text-bion-paper/75">
-            Horários atuais ({atual.length})
+            Horários atuais — padrão ({atual.length})
           </div>
           {atual.length ? (
             <p className="text-sm mt-1 leading-relaxed">{atual.join(" · ")}</p>
@@ -468,10 +533,87 @@ export function AgendaSheet({
               Nenhum horário cadastrado — os pacientes veem a grade padrão da plataforma.
             </p>
           )}
+          {Object.entries(gradeAtual.dias).map(([dia, lista]) => (
+            <p key={dia} className="text-sm mt-1 leading-relaxed">
+              <span className="font-bold">{ROTULOS_DIA[Number(dia)]} (própria):</span>{" "}
+              {lista.length ? lista.join(" · ") : "sem horários neste dia"}
+            </p>
+          ))}
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <Campo rotulo="Início">
+        <div className="space-y-3">
+          <div className="text-xs font-bold uppercase tracking-wider text-bion-ink/75 dark:text-bion-paper/75">
+            Editando a grade de
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            <button
+              type="button"
+              aria-pressed={alvo === "padrao"}
+              onClick={() => trocarAlvo("padrao")}
+              className={`px-3 py-1.5 rounded-full text-xs font-bold ${alvo === "padrao" ? "bg-bion-sea text-white" : "bg-bion-ink/10 dark:bg-white/10"}`}
+            >
+              Padrão (todos os dias)
+            </button>
+            {ROTULOS_DIA.map((d, i) => {
+              const temPropria = listas.dias[String(i)] !== undefined || (alvo === i && diferente);
+              return (
+                <button
+                  key={d}
+                  type="button"
+                  aria-pressed={alvo === i}
+                  onClick={() => trocarAlvo(i)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-bold ${alvo === i ? "bg-bion-sea text-white" : "bg-bion-ink/10 dark:bg-white/10"}`}
+                >
+                  {d}
+                  {temPropria ? " •" : ""}
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-xs text-bion-ink/70 dark:text-bion-paper/70">
+            O "•" marca dia com grade própria. Sem grade própria, o dia segue o padrão.
+          </p>
+          {alvo !== "padrao" && diferente ? (
+            <div className="flex flex-wrap items-center gap-2 text-sm">
+              <label className="text-xs font-bold" htmlFor="copiar-grade-de">Copiar a grade de</label>
+              <select
+                id="copiar-grade-de"
+                value={copiarDe}
+                onChange={(e) => setCopiarDe(e.target.value)}
+                className="bp-entrada px-2 py-1 text-sm"
+              >
+                <option value="">Escolher…</option>
+                <option value="padrao">Padrão</option>
+                {ROTULOS_DIA.map((d, i) => (i === alvo ? null : <option key={d} value={i}>{d}</option>))}
+              </select>
+              <button
+                type="button"
+                onClick={aplicarCopia}
+                disabled={copiarDe === ""}
+                className="text-xs font-bold text-bion-sea dark:text-sky-300 disabled:opacity-50"
+              >
+                Copiar para {ROTULOS_DIA[alvo as number]}
+              </button>
+            </div>
+          ) : null}
+        </div>
+
+        {alvo === "padrao" || diferente ? (
+          <>
+            {alvo !== "padrao" ? (
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-bold">{ROTULOS_DIA[alvo as number]} tem grade própria.</p>
+                <button
+                  type="button"
+                  onClick={() => setDiferente(false)}
+                  className="text-xs font-bold text-bion-sea dark:text-sky-300"
+                >
+                  Voltar a usar o padrão
+                </button>
+              </div>
+            ) : null}
+            <div className="grid grid-cols-2 gap-3">
+              <Campo rotulo="Início">
             <input type="time" value={p.inicio} onChange={(e) => set("inicio", e.target.value)} className="bp-entrada w-full px-4 py-2.5 text-sm" />
           </Campo>
           <Campo rotulo="Fim">
@@ -514,7 +656,7 @@ export function AgendaSheet({
         ) : (
           <div>
             <div className="text-xs font-bold uppercase tracking-wider text-bion-ink/75 dark:text-bion-paper/75">
-              Nova grade: {finais.length} horários — toque para remover ou devolver
+              Nova grade{alvo === "padrao" ? " (padrão)" : ` (${ROTULOS_DIA[alvo as number]})`}: {finais.length} horários — toque para remover ou devolver
             </div>
             <div className="mt-2 grid grid-cols-4 gap-2">
               {gerados.map((h) => {
@@ -540,10 +682,26 @@ export function AgendaSheet({
           </div>
         )}
 
-        <p className="text-xs text-bion-ink/70 dark:text-bion-paper/70">
-          Os horários de início são gravados no servidor; duração e intervalo ficam salvos neste aparelho. Consultas já marcadas não mudam.
-        </p>
-        <p className="text-xs text-bion-ink/70 dark:text-bion-paper/70">{AVISO_HORARIO_VEDADO}</p>
+            <p className="text-xs text-bion-ink/70 dark:text-bion-paper/70">
+              Os horários de início são gravados no servidor; duração e intervalo ficam salvos neste aparelho. Consultas já marcadas não mudam.
+            </p>
+            <p className="text-xs text-bion-ink/70 dark:text-bion-paper/70">{AVISO_HORARIO_VEDADO}</p>
+          </>
+        ) : (
+          <div className="rounded-xl border border-dashed border-bion-ink/25 dark:border-white/25 p-4 space-y-2">
+            <p className="text-sm leading-relaxed">
+              {ROTULOS_DIA[alvo as number]} usa a grade padrão ({listas.padrao.length} horários). Para um dia
+              mais curto ou mais longo — sábado de manhã, uma noite estendida — crie a grade própria dele.
+            </p>
+            <button
+              type="button"
+              onClick={() => setDiferente(true)}
+              className="text-sm font-bold text-bion-sea dark:text-sky-300"
+            >
+              Usar horários diferentes neste dia
+            </button>
+          </div>
+        )}
 
         {erroPausas ? (
           <p className="text-sm font-semibold text-red-700 dark:text-red-300" role="alert">{erroPausas}</p>
@@ -556,7 +714,7 @@ export function AgendaSheet({
         <button
           type="button"
           onClick={salvar}
-          disabled={Boolean(erro) || Boolean(erroPausas) || finais.length === 0 || nadaMudou || cancelandoDia || salvando}
+          disabled={Boolean(erro) || Boolean(erroPausas) || gradeEditada.padrao.length === 0 || nadaMudou || cancelandoDia || salvando}
           className="bp-acao w-full py-3 text-sm disabled:opacity-50"
         >
           {salvando ? "Salvando…" : nadaMudou ? "Nada para salvar" : "Salvar agenda"}

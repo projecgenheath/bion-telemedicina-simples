@@ -17,6 +17,12 @@ import {
   type ClienteBanco,
 } from "@/lib/server/bloqueio-agenda";
 import { REEMBOLSO_MANUAL_PRAZO_DIAS, parseDataHora, prazoReembolsoManual } from "@/lib/server/dados";
+import {
+  normalizarGrade,
+  horariosDoDia,
+  gradeTotalmenteVazia,
+  type GradeSemana,
+} from "@/lib/grade-semana";
 import { fimDoPrazoEmDiasUteis } from "@/lib/server/dias-uteis";
 import { statusAposFalhaDoMedico } from "@/lib/atendimento-tipo";
 
@@ -964,28 +970,33 @@ export async function falharMultaRemarcacao(remarcacaoId: string, via: "webhook"
   return db.remarcacaoPendente.update({ where: { id: r.id }, data: { status: "falhou", via } });
 }
 
-/** Grade do médico como array (JSON inválido = grade vazia = sem restrição). */
-export function gradeHorarios(perfil: { horariosDisponiveis?: string | null } | null): string[] {
-  if (!perfil) return [];
-  try {
-    const g = JSON.parse(perfil.horariosDisponiveis || "[]") as unknown;
-    return Array.isArray(g) ? (g.filter((h) => typeof h === "string") as string[]) : [];
-  } catch {
-    return [];
-  }
+/**
+ * Grade do médico normalizada (grade-semana.ts é a regra única): a coluna
+ * guarda o array legado (padrão de todos os dias) ou o objeto com dias
+ * próprios. JSON inválido = grade vazia = sem restrição.
+ */
+export function gradeHorarios(perfil: { horariosDisponiveis?: string | null } | null): GradeSemana {
+  if (!perfil) return { padrao: [], dias: {} };
+  return normalizarGrade(perfil.horariosDisponiveis ?? null);
 }
 
 /**
- * A hora de início (HH:MM de São Paulo) faz parte da grade do médico?
- * Grade vazia = sem restrição (médico legado sem grade configurada), mesma
- * regra que validarNovoHorario já usava para a remarcação.
+ * A hora de início (HH:MM de São Paulo) faz parte da grade do médico
+ * NAQUELE dia da semana? Grade totalmente vazia = sem restrição (médico
+ * legado sem grade configurada), mesma regra que validarNovoHorario já
+ * usava para a remarcação. Com grade por dia: vale a lista do dia da
+ * consulta (própria ou padrão); dia com lista própria vazia = sem
+ * horários naquele dia (recusa).
  */
 export function horarioNaGrade(perfil: { horariosDisponiveis?: string | null } | null, dataInicio: Date): boolean {
   const grade = gradeHorarios(perfil);
-  if (!grade.length) return true;
+  if (gradeTotalmenteVazia(grade)) return true;
   const p = partesNoFuso(dataInicio);
+  // Dia da semana pelo calendário civil de São Paulo (0=Dom … 6=Sáb) —
+  // mesma fórmula de conferirDiasEPausas (bloqueio-agenda.ts).
+  const diaSemana = new Date(Date.UTC(p.ano, p.mes - 1, p.dia)).getUTCDay();
   const hhmm = `${String(p.hora).padStart(2, "0")}:${String(p.minuto).padStart(2, "0")}`;
-  return grade.includes(hhmm);
+  return horariosDoDia(grade, diaSemana).includes(hhmm);
 }
 
 /**
@@ -1017,13 +1028,9 @@ export async function validarNovoHorario(
     return { ok: false, erro: "Escolha um horário com pelo menos 20 minutos de antecedência.", status: 400 };
   }
   const perfilMedico = await db.perfilMedico.findUnique({ where: { userId: consulta.medicoId } });
-  let grade: string[] = [];
-  try {
-    grade = JSON.parse(perfilMedico?.horariosDisponiveis || "[]") as string[];
-  } catch {
-    grade = [];
-  }
-  if (grade.length && !grade.includes(hora)) {
+  // Grade por dia da semana: a MESMA regra do agendamento (horarioNaGrade
+  // lê a lista do dia da nova data; grade vazia = sem restrição).
+  if (!horarioNaGrade(perfilMedico, dataInicio)) {
     return { ok: false, erro: "Esse horário não faz parte da agenda do médico.", status: 400 };
   }
   // M-25 da auditoria: remarcação segue a MESMA regra de dias de atendimento

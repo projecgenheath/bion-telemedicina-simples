@@ -6,6 +6,7 @@ import { ClipboardList, X, Check, Ruler, Lock, Download, ChevronDown, ChevronRig
 import { useBion } from "@/lib/bion-store";
 import { gerarDocumentoPDF } from "@/lib/receita-pdf";
 import { BotaoDitado } from "@/components/bion/BotaoDitado";
+import { CampoCidBusca } from "@/components/bion/medico/campo-cid-busca";
 import {
   adicionarModelo,
   carregarModelos,
@@ -738,8 +739,9 @@ export function PainelEvolucao({
             </>
           ) : null}
           {aba === "conduta" ? (
-            <input value={cid} onChange={(e) => editarCid(e.target.value)} readOnly={concluida} maxLength={20}
-              placeholder="CID-10" className="w-full rounded-2xl border bg-background p-3" />
+            <CampoCidBusca valor={cid} onChange={editarCid} readOnly={concluida} maxLength={20}
+              placeholder="CID-10 — digite o código ou o diagnóstico" ariaLabel="CID-10"
+              className="w-full rounded-2xl border bg-background p-3" />
           ) : null}
           {estado && aba === "historico" ? (
             <div className="space-y-2">

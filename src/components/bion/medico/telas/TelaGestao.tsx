@@ -14,6 +14,7 @@ import {
   type RespostaReceita,
 } from "../metricas";
 import type { DadosMedico } from "../useDadosMedico";
+import { gradeDeCampos, horariosDoDia } from "@/lib/grade-semana";
 
 /** Tela 2 — receita líquida (30 dias) + preço/promoções + agenda. */
 export function TelaGestao({
@@ -173,10 +174,15 @@ function PainelGestao({ dados }: { dados: DadosMedico }) {
   const { medico, minhas, agora } = dados;
   const [dias, setDias] = useState<number>(30);
   const janelas = useMemo(() => janelasComparacao(agora, dias), [agora, dias]);
-  const grade = useMemo(
-    () => ({ slotsPorDia: medico?.horariosDisponiveis.length ?? 0, diasAtendimento: medico?.diasAtendimento ?? [] }),
-    [medico?.horariosDisponiveis, medico?.diasAtendimento],
-  );
+  const grade = useMemo(() => {
+    // Grade por dia da semana: a capacidade de cada dia usa a lista daquele
+    // dia (própria ou padrão) — regra única em lib/grade-semana.
+    const g = gradeDeCampos(medico?.horariosDisponiveis ?? [], medico?.horariosPorDia);
+    return {
+      slotsPorDiaSemana: [0, 1, 2, 3, 4, 5, 6].map((d) => horariosDoDia(g, d).length),
+      diasAtendimento: medico?.diasAtendimento ?? [],
+    };
+  }, [medico?.horariosDisponiveis, medico?.horariosPorDia, medico?.diasAtendimento]);
   const atual = useMemo(() => metricasPeriodo(minhas, grade, janelas.atual), [minhas, grade, janelas]);
   const anterior = useMemo(() => metricasPeriodo(minhas, grade, janelas.anterior), [minhas, grade, janelas]);
   const prevista = useMemo(() => receitaPrevista(minhas, agora), [minhas, agora]);

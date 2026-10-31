@@ -1,6 +1,7 @@
 import { MESES_AGENDA } from "./constantes";
 import { diaFusoClinica, instanteFusoClinica, partesFusoClinica } from "@/lib/bion-tipos";
 import type { Consulta, Medico } from "@/lib/bion-tipos";
+import { gradeDeCampos, horariosDoDia, gradeTotalmenteVazia } from "@/lib/grade-semana";
 
 const DIAS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 const HORAS_PADRAO = ["09:00", "10:00", "11:00", "14:00", "15:00", "16:00"];
@@ -108,7 +109,11 @@ export function agendaLivreDoMedico(
     : bloqueados instanceof Set
       ? bloqueados
       : new Set(bloqueados as readonly string[]);
-  const horasBase = medico?.horariosDisponiveis?.length ? medico.horariosDisponiveis : HORAS_PADRAO;
+  // Grade por dia da semana (lib/grade-semana): cada dia da prévia usa a
+  // lista DAQUELE dia (própria ou padrão). Médico sem grade nenhuma segue
+  // na grade padrão da plataforma, como sempre foi.
+  const grade = gradeDeCampos(medico?.horariosDisponiveis ?? [], medico?.horariosPorDia);
+  const semGrade = gradeTotalmenteVazia(grade);
   // B35 — antecedência mínima ÚNICA por fluxo, coerente com o servidor:
   //  - remarcação (há consulta a excluir): 20 min, como validarNovoHorario
   //    (financeiro.ts) — antes o cliente exigia 30 e escondia 10 min de
@@ -151,6 +156,7 @@ export function agendaLivreDoMedico(
       !diasAtendimento.includes(d.semana)
     )
       continue;
+    const horasBase = semGrade ? HORAS_PADRAO : horariosDoDia(grade, d.semana);
     const horarios = horasBase.filter((h) => {
       if (horaVedadaParaPaciente(h)) return false;
       // Pausa semanal do dia: inicio <= hora < fim (mesma regra do

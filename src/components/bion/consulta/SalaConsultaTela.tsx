@@ -109,6 +109,8 @@ export function SalaConsultaTela({
           motivoConsulta={sala.consultaAtual?.motivoConsulta}
           anotacoes={sala.anotacoes}
           setAnotacoes={sala.setAnotacoes}
+          resumoStatus={sala.resumoStatus}
+          onTentarSalvarResumo={sala.tentarSalvarResumoDeNovo}
           arquivos={sala.arquivos}
           chatMsgs={tele.chat}
           chatInput={sala.chatInput}
@@ -122,9 +124,10 @@ export function SalaConsultaTela({
       {children}
 
       {/* O1: inserir o modelo de evolução com anotações já escritas pede
-          confirmação explícita — o texto da sala só é gravado no
-          "concluir", então substituir em silêncio era perda definitiva.
-          Mesmo padrão do modal "sair sem concluir" (ChamadaMedico). */}
+          confirmação explícita — substituir em silêncio apagaria o que o
+          médico escreveu (e a substituição também é autossalvada, item
+          27, então seria definitiva). Mesmo padrão do modal "sair sem
+          concluir" (ChamadaMedico). */}
       <ModalBion
         aberto={sala.confirmarModeloResumo}
         onFechar={sala.cancelarInsercaoModeloResumo}
@@ -136,8 +139,8 @@ export function SalaConsultaTela({
         <div className="bg-card text-foreground border rounded-3xl w-full p-6 shadow-2xl">
           <h3 className="text-base font-bold">Inserir o modelo apaga o texto atual</h3>
           <p className="text-sm text-muted-foreground mt-2">
-            Você já escreveu anotações nesta consulta e elas ainda não foram salvas — só são gravadas
-            ao concluir. Se inserir o modelo de evolução, o texto atual é substituído por ele.
+            Você já escreveu o resumo desta consulta. Se inserir o modelo de evolução, o texto atual
+            é substituído por ele — e a substituição também é salva automaticamente.
           </p>
           <div className="flex gap-2 mt-4">
             <button

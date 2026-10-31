@@ -5,7 +5,7 @@
  * inventa texto e a validação de sempre continua valendo).
  * Rodar: bun src/lib/conteudo-documento.teste.ts
  */
-import { gerarConteudoDocumento } from "./conteudo-documento";
+import { gerarConteudoDocumento, rotuloPeriodoAfastamento } from "./conteudo-documento";
 
 let ok = 0;
 let falhas = 0;
@@ -53,6 +53,55 @@ igual(
 );
 // Atestado sem período não gera.
 igual("atestado sem duração", gerarConteudoDocumento({ tipo: "atestado", pacienteNome: "Maria Silva" }), "");
+
+// ── Atestado estruturado (item 32): tipo + período alimentam o texto ──
+// Afastamento com período completo: o intervalo entra no texto.
+igual(
+  "atestado afastamento com período",
+  gerarConteudoDocumento({
+    tipo: "atestado",
+    tipoAtestado: "afastamento",
+    duracao: "3 dias",
+    dataInicio: "30/10/2026",
+    dataFim: "01/11/2026",
+    cid: "J06.9",
+    pacienteNome: "Maria Silva",
+  }),
+  "Atesto, para os devidos fins, que o(a) paciente Maria Silva necessita de afastamento de suas atividades por 3 dias, no período de 30/10/2026 a 01/11/2026. CID: J06.9.",
+);
+// Afastamento só com data inicial: "a partir de".
+igual(
+  "atestado afastamento só com início",
+  gerarConteudoDocumento({ tipo: "atestado", tipoAtestado: "afastamento", duracao: "2 dias", dataInicio: "30/10/2026" }),
+  "Atesto, para os devidos fins, que o(a) paciente necessita de afastamento de suas atividades por 2 dias, a partir de 30/10/2026.",
+);
+// Afastamento explícito sem datas = texto de antes (retrocompatível).
+igual(
+  "atestado afastamento sem datas",
+  gerarConteudoDocumento({ tipo: "atestado", tipoAtestado: "afastamento", duracao: "1 dia" }),
+  "Atesto, para os devidos fins, que o(a) paciente necessita de afastamento de suas atividades por 1 dia.",
+);
+// Comparecimento: atesta a presença na data, sem duração de afastamento.
+igual(
+  "atestado comparecimento",
+  gerarConteudoDocumento({ tipo: "atestado", tipoAtestado: "comparecimento", dataInicio: "30/10/2026", cid: "Z02.7", pacienteNome: "Maria Silva" }),
+  "Atesto, para os devidos fins, que o(a) paciente Maria Silva compareceu a consulta médica em 30/10/2026. CID: Z02.7.",
+);
+igual(
+  "atestado comparecimento sem CID nem paciente",
+  gerarConteudoDocumento({ tipo: "atestado", tipoAtestado: "comparecimento", dataInicio: "30/10/2026" }),
+  "Atesto, para os devidos fins, que o(a) paciente compareceu a consulta médica em 30/10/2026.",
+);
+// Comparecimento sem data não gera (a data é o fato atestado).
+igual("atestado comparecimento sem data", gerarConteudoDocumento({ tipo: "atestado", tipoAtestado: "comparecimento" }), "");
+
+// ── Período: início + dias − 1, rótulos DD/MM/AAAA ─────────────────────
+igual("período de 1 dia começa e termina no mesmo dia", JSON.stringify(rotuloPeriodoAfastamento("2026-10-30", 1)), JSON.stringify({ inicio: "30/10/2026", fim: "30/10/2026" }));
+igual("período de 3 dias cruzando o mês", JSON.stringify(rotuloPeriodoAfastamento("2026-10-30", 3)), JSON.stringify({ inicio: "30/10/2026", fim: "01/11/2026" }));
+igual("período com data inválida", rotuloPeriodoAfastamento("30/10/2026", 3), null);
+igual("período com dias zero", rotuloPeriodoAfastamento("2026-10-30", 0), null);
+igual("período sem data", rotuloPeriodoAfastamento("", 3), null);
+igual("período com dias fracionados", rotuloPeriodoAfastamento("2026-10-30", 1.5), null);
 
 // Exames: nasce do título, nos dois tipos (legado e atual).
 igual(

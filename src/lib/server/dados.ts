@@ -2,6 +2,7 @@ import "server-only";
 import { adminVeAnamnese, documentoParaPapel } from "@/lib/privacidade-consulta";
 import { instanteNoFuso, partesNoFuso } from "./fuso";
 import { normalizarTipoAtendimento } from "@/lib/bion-tipos";
+import { normalizarGrade } from "@/lib/grade-semana";
 import { broadcastCanal } from "@/lib/supabase/broadcast";
 import { after } from "next/server";
 import { topicoNotificacoesUsuario } from "./usuario-canal";
@@ -12,6 +13,7 @@ import type { UsuarioSessao } from "./auth";
 import { whereArquivosVisiveis } from "./arquivos-acesso";
 import { alturaCanonica, pesoCanonico } from "@/lib/medidas-paciente";
 import { dataNascimentoParaIso, idadeDeNascimento } from "@/lib/idade";
+import { gerarCodigoVerificacao } from "./verificacao-documento";
 
 /* ------------------------------------------------------------------ */
 /* Utilitários de data (rótulos do cliente: "Hoje", "Amanhã", "12 Dez") */
@@ -263,6 +265,11 @@ export function documentoWire(d: DocumentoComNomes) {
     observacoes: d.observacoes,
     cid: d.cid,
     controlado: d.controlado,
+    // Item 26 (auditoria de melhorias): código de verificação pública da
+    // via (id + HMAC do servidor) — impresso nos PDFs e conferido em
+    // /verificar/[codigo] sem expor dado clínico. Calculado na leitura:
+    // documentos antigos ganham código sem migração nenhuma.
+    codigoVerificacao: gerarCodigoVerificacao(d.id),
     createdAt: d.createdAt.toISOString(),
   };
 }
@@ -366,7 +373,11 @@ export function medicoWire(m: PerfilMedicoComUser, nota: { avaliacao: number; nu
     bio: m.bio,
     foto: m.foto ?? undefined,
     status: m.status,
-    horariosDisponiveis: JSON.parse(m.horariosDisponiveis || "[]") as string[],
+    // Grade por dia da semana (lib/grade-semana): horariosDisponiveis segue
+    // sendo o PADRÃO (array, tipo inalterado p/ clientes antigos) e
+    // horariosPorDia traz as listas próprias de cada dia ({} = grade plana).
+    horariosDisponiveis: normalizarGrade(m.horariosDisponiveis).padrao,
+    horariosPorDia: normalizarGrade(m.horariosDisponiveis).dias,
     diasAtendimento: JSON.parse(m.diasAtendimento || "[]") as number[],
     pausasSemanais: JSON.parse(m.pausasSemanais || "[]") as { dia: number; inicio: string; fim: string }[],
   };

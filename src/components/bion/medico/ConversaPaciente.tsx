@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { useBion, type Documento } from "@/lib/bion-store";
 import { formatarDataNascimento, idadeDeNascimento } from "@/lib/idade";
 import { janelaRespostaPaciente, rotuloStatusMedico, type PacienteDoMedico } from "./metricas";
+import { consumirRascunhoRetorno } from "./rascunho-retorno";
 
 const FUSO = "America/Sao_Paulo";
 
@@ -127,6 +128,18 @@ export function ConversaPaciente({
   useEffect(() => {
     if (pid && naoLidas > 0) marcarConversaLida(pid);
   }, [pid, naoLidas]);
+
+  // Item 33 (fidelização): "Propor retorno" na lista de pacientes guarda o
+  // modelo de reativação para ESTA conversa; ele é consumido uma vez ao
+  // abrir e só PREENCHE o campo (como os modelos) — quem envia é o médico,
+  // depois de revisar, no botão de enviar de sempre.
+  const rascunhoAplicadoRef = useRef(false);
+  useEffect(() => {
+    if (rascunhoAplicadoRef.current) return;
+    rascunhoAplicadoRef.current = true;
+    const rascunho = consumirRascunhoRetorno(paciente.chave);
+    if (rascunho) setTexto((t) => (t.trim() ? t : rascunho));
+  }, [paciente.chave]);
 
   useEffect(() => {
     if (aba === "conversa") fimRef.current?.scrollIntoView({ block: "end" });

@@ -4,7 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import { Download, FileText, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import type { Arquivo, Consulta, Documento } from "@/lib/bion-store";
-import { gerarDocumentoPDF } from "@/lib/receita-pdf";
+import { gerarDocumentoPDF, gerarReceitaCombinadaPDF } from "@/lib/receita-pdf";
+import { agruparEmissoes } from "@/lib/documentos-agrupados";
 import { rotuloStatusMedico } from "./metricas";
 
 /* Séries do paciente (item 13 da auditoria de melhorias): o bootstrap só
@@ -181,32 +182,70 @@ export function ProntuarioPaciente({
           <p className="text-sm text-bion-ink/75 dark:text-bion-paper/75">Nenhum documento emitido para este paciente.</p>
         ) : (
           <ul className="space-y-2">
-            {documentos.map((d) => (
-              <li key={d.id} className="bp-glass p-3.5">
-                <div className="flex items-start gap-3">
-                  <FileText className="w-4 h-4 mt-0.5 shrink-0" aria-hidden />
-                  <div className="min-w-0 flex-1">
-                    <div className="text-sm font-bold">{d.titulo}</div>
-                    <div className="text-xs text-bion-ink/75 dark:text-bion-paper/75">
-                      {ROTULO_DOC[d.tipo]} · {d.data} · {d.medico}
+            {/* Item 25: itens de uma mesma emissão agrupada (receita com
+                vários medicamentos) aparecem como UMA receita, com a via
+                combinada; PDF e renovação por item seguem acessíveis. */}
+            {agruparEmissoes(documentos).map((entrada) =>
+              entrada.docs.length > 1 ? (
+                <li key={entrada.chave} className="bp-glass p-3.5">
+                  <div className="flex items-start gap-3">
+                    <FileText className="w-4 h-4 mt-0.5 shrink-0" aria-hidden />
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm font-bold">{entrada.docs[0].titulo}</div>
+                      <div className="text-xs text-bion-ink/75 dark:text-bion-paper/75">
+                        {ROTULO_DOC[entrada.docs[0].tipo]} · {entrada.docs[0].data} · {entrada.docs[0].medico} ·{" "}
+                        {entrada.docs.length} medicamentos
+                      </div>
                     </div>
-                    {d.medicamento ? <div className="text-sm mt-1">{d.medicamento} — {d.posologia}</div> : null}
                   </div>
-                </div>
-                <div className="mt-2 flex gap-2">
-                  {d.tipo !== "exame_solicitado" ? (
-                    <button type="button" onClick={() => baixar(d)} className="text-xs font-bold rounded-full px-3 py-1.5 bg-bion-ink/8 dark:bg-white/10 inline-flex items-center gap-1">
-                      <Download className="w-3.5 h-3.5" /> PDF
+                  <div className="mt-2 space-y-1.5">
+                    {entrada.docs.map((d) => (
+                      <div key={d.id} className="flex items-center gap-2 pl-7">
+                        <span className="text-sm min-w-0 flex-1 truncate">
+                          {d.medicamento} — {d.posologia}
+                        </span>
+                        <button type="button" onClick={() => baixar(d)} className="text-xs font-bold rounded-full px-3 py-1.5 bg-bion-ink/8 dark:bg-white/10 inline-flex items-center gap-1 shrink-0">
+                          <Download className="w-3.5 h-3.5" /> PDF
+                        </button>
+                        <button type="button" onClick={() => onRenovar(d)} className="text-xs font-bold rounded-full px-3 py-1.5 bg-bion-ink/8 dark:bg-white/10 inline-flex items-center gap-1 shrink-0">
+                          <RefreshCw className="w-3.5 h-3.5" /> Renovar
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-2">
+                    <button type="button" onClick={() => gerarReceitaCombinadaPDF(entrada.docs)} className="text-xs font-bold rounded-full px-3 py-1.5 bg-bion-ink/8 dark:bg-white/10 inline-flex items-center gap-1">
+                      <Download className="w-3.5 h-3.5" /> PDF combinado
                     </button>
-                  ) : null}
-                  {d.tipo === "receita" ? (
-                    <button type="button" onClick={() => onRenovar(d)} className="text-xs font-bold rounded-full px-3 py-1.5 bg-bion-ink/8 dark:bg-white/10 inline-flex items-center gap-1">
-                      <RefreshCw className="w-3.5 h-3.5" /> Renovar
-                    </button>
-                  ) : null}
-                </div>
-              </li>
-            ))}
+                  </div>
+                </li>
+              ) : (
+                <li key={entrada.chave} className="bp-glass p-3.5">
+                  <div className="flex items-start gap-3">
+                    <FileText className="w-4 h-4 mt-0.5 shrink-0" aria-hidden />
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm font-bold">{entrada.docs[0].titulo}</div>
+                      <div className="text-xs text-bion-ink/75 dark:text-bion-paper/75">
+                        {ROTULO_DOC[entrada.docs[0].tipo]} · {entrada.docs[0].data} · {entrada.docs[0].medico}
+                      </div>
+                      {entrada.docs[0].medicamento ? <div className="text-sm mt-1">{entrada.docs[0].medicamento} — {entrada.docs[0].posologia}</div> : null}
+                    </div>
+                  </div>
+                  <div className="mt-2 flex gap-2">
+                    {entrada.docs[0].tipo !== "exame_solicitado" ? (
+                      <button type="button" onClick={() => baixar(entrada.docs[0])} className="text-xs font-bold rounded-full px-3 py-1.5 bg-bion-ink/8 dark:bg-white/10 inline-flex items-center gap-1">
+                        <Download className="w-3.5 h-3.5" /> PDF
+                      </button>
+                    ) : null}
+                    {entrada.docs[0].tipo === "receita" ? (
+                      <button type="button" onClick={() => onRenovar(entrada.docs[0])} className="text-xs font-bold rounded-full px-3 py-1.5 bg-bion-ink/8 dark:bg-white/10 inline-flex items-center gap-1">
+                        <RefreshCw className="w-3.5 h-3.5" /> Renovar
+                      </button>
+                    ) : null}
+                  </div>
+                </li>
+              ),
+            )}
           </ul>
         )}
       </section>

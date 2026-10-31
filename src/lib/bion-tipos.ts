@@ -120,6 +120,11 @@ export type Documento = {
   pacienteCpf?: string;
   /** "YYYY-MM-DD" (dia de calendário) ou ausente. */
   pacienteNascimento?: string;
+  /** Código de verificação pública da via (item 26): id + HMAC calculado
+   *  no servidor (documentoWire) e impresso nos PDFs; a conferência em
+   *  /verificar/[codigo] não expõe dado clínico. Ausente em objetos
+   *  montados localmente sem passar pelo wire. */
+  codigoVerificacao?: string;
 };
 
 export type NotifTipo = "lembrete" | "mensagem" | "receita" | "agenda" | "exame" | "suporte";
@@ -165,7 +170,11 @@ export type Medico = {
   // "arquivado" vem do DELETE lógico do admin (usuário inativo + perfil
   // arquivado, histórico preservado); não é status de criação/edição.
   status: "ativo" | "pendente" | "suspenso" | "arquivado";
+  /** Grade PADRÃO de horários (vale para todos os dias sem lista própria). */
   horariosDisponiveis: string[];
+  /** Listas próprias por dia da semana ("0"=Dom … "6"=Sáb) que substituem
+   *  o padrão naquele dia — regra única em lib/grade-semana.ts. */
+  horariosPorDia: Record<string, string[]>;
   /** Dias da semana atendidos (0=Dom … 6=Sáb). Vazio = todos os dias. */
   diasAtendimento: number[];
   /** Pausas semanais fixas (ex.: almoço de terças 12:00–13:00). */

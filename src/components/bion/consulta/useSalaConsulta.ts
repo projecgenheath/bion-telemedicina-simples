@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useBion as useStore, type AnamneseResumo } from "@/lib/bion-store";
 import { useTeleconsulta } from "@/lib/use-teleconsulta";
@@ -36,7 +36,7 @@ export function useSalaConsulta({
   consultaId?: string;
   onEnd: () => void;
 }) {
-  const { arquivos, adicionarArquivo, consultas, registrarAudit, sessao, pacientes, anamneses, carregando } =
+  const { arquivos, adicionarArquivo, consultas, registrarAudit, sessao, pacientes, anamneses, carregando, aplicarDelta } =
     useStore();
 
   // Consulta da sala — ESTRITA, sem adivinhação: a sala é EXATAMENTE a
@@ -158,9 +158,118 @@ export function useSalaConsulta({
     if (videoRemotoRef.current) videoRemotoRef.current.srcObject = streamRemotoRef.current;
   }, [streamRemotoRef, remotoPronto]);
 
-  // Anotações médicas do prontuário — SEMPRE vazias ao iniciar (o resumo
-  // salvo na conclusão é o real da consulta; nada pré-preenchido de demo).
-  const [anotacoes, setAnotacoes] = useState("");
+  // ── Resumo da consulta (painel lateral) com AUTOSSALVAMENTO ──
+  // Item 27 (sala unificada): o texto lateral é o Consulta.resumoMedico —
+  // destino DIFERENTE do rascunho da Evolucao (seções estruturadas que
+  // autossalvam no PUT da evolução). Como os destinos são outros, os
+  // campos não se unificam; o que faltava era o lateral salvar sozinho
+  // como a evolução já salvava — antes ele só era gravado no "concluir"
+  // e se perdia ao sair sem concluir. Autosave com debounce de 1,2 s
+  // (mesmo ritmo do PainelEvolucao) pela ação "salvarResumo" do PATCH
+  // da consulta, que grava SÓ o resumo, sem mudar status.
+  const [anotacoes, setAnotacoesEstado] = useState("");
+  // Estado do salvamento do resumo, no vocabulário do PainelEvolucao:
+  // "salvando" cobre o debounce pendente e o voo da requisição; "erro"
+  // é falha de salvamento (o texto continua NÃO salvo).
+  const [resumoStatus, setResumoStatus] = useState<"ok" | "salvando" | "erro">("ok");
+  const anotacoesRef = useRef("");
+  /** Último texto que o servidor confirmou ter gravado. */
+  const ultimoResumoSalvoRef = useRef("");
+  const timerResumoRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const resumoMontadoRef = useRef(true);
+  // M-8 (mesmo cuidado do PainelEvolucao): o timer do autosave morre na
+  // desmontagem — e respostas tardias não escrevem em tela desmontada.
+  useEffect(() => {
+    resumoMontadoRef.current = true;
+    return () => {
+      resumoMontadoRef.current = false;
+      if (timerResumoRef.current) clearTimeout(timerResumoRef.current);
+    };
+  }, []);
+
+  const salvarResumoAgora = useCallback(
+    async (texto: string) => {
+      if (!idSala) return;
+      setResumoStatus("salvando");
+      const res = await fetch(`/api/consultas/${encodeURIComponent(idSala)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ acao: "salvarResumo", resumo: texto }),
+      }).catch(() => null);
+      if (!resumoMontadoRef.current) return;
+      if (res?.ok) {
+        ultimoResumoSalvoRef.current = texto;
+        // Mantém o store em sincronia (consulta.resumoMedico = o salvo).
+        const json = (await res.json().catch(() => null)) as unknown;
+        if (json && resumoMontadoRef.current) aplicarDelta(json);
+        // Se o texto mudou durante o voo, a digitação já agendou o
+        // próximo salvamento: o status continua "salvando" até lá.
+        if (anotacoesRef.current === texto) setResumoStatus("ok");
+      } else {
+        // 409 de consulta encerrada também cai aqui: o texto não foi
+        // gravado e o indicador mostra "Não salvou", sem esconder.
+        setResumoStatus("erro");
+      }
+    },
+    [idSala, aplicarDelta],
+  );
+
+  const agendarSalvarResumo = useCallback(() => {
+    if (timerResumoRef.current) clearTimeout(timerResumoRef.current);
+    timerResumoRef.current = setTimeout(() => void salvarResumoAgora(anotacoesRef.current), 1200);
+  }, [salvarResumoAgora]);
+
+  /** Retry imediato do indicador de erro (mesmo padrão do PainelEvolucao). */
+  const tentarSalvarResumoDeNovo = useCallback(() => {
+    if (timerResumoRef.current) clearTimeout(timerResumoRef.current);
+    void salvarResumoAgora(anotacoesRef.current);
+  }, [salvarResumoAgora]);
+
+  // Setter público do resumo: TODA escrita (digitação, ditado, modelo)
+  // passa por aqui e agenda o autossalvamento — só para o médico, que é
+  // quem escreve o resumo (o textarea é desabilitado nos demais papéis).
+  const setAnotacoes = useCallback(
+    (v: string) => {
+      anotacoesRef.current = v;
+      setAnotacoesEstado(v);
+      if (role !== "medico" || !idSala || !consultaValida) return;
+      if (v === ultimoResumoSalvoRef.current) {
+        // Voltou exatamente ao texto já salvo: nada pendente.
+        if (timerResumoRef.current) clearTimeout(timerResumoRef.current);
+        setResumoStatus("ok");
+        return;
+      }
+      setResumoStatus("salvando");
+      agendarSalvarResumo();
+    },
+    [role, idSala, consultaValida, agendarSalvarResumo],
+  );
+
+  // Hidratação (item 27): reabrir a sala com resumo já salvo (de uma
+  // entrada anterior) mostra ESSE texto — nunca uma caixa vazia por
+  // cima do que está gravado. O wire já traz resumoMedico na consulta.
+  // Uma vez por consulta; se o médico já digitou algo nesta sala antes
+  // de o store carregar, o texto da tela manda e o autosave o persiste.
+  const resumoHidratadoRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (role !== "medico" || !consultaAtual || resumoHidratadoRef.current === consultaAtual.id) return;
+    resumoHidratadoRef.current = consultaAtual.id;
+    if (anotacoesRef.current !== "") {
+      // Digitou antes da hidratação: persiste o texto da tela.
+      if (anotacoesRef.current !== ultimoResumoSalvoRef.current) {
+        setResumoStatus("salvando");
+        agendarSalvarResumo();
+      }
+      return;
+    }
+    const salvo = consultaAtual.resumoMedico ?? "";
+    ultimoResumoSalvoRef.current = salvo;
+    anotacoesRef.current = salvo;
+    setAnotacoesEstado(salvo);
+  }, [role, consultaAtual, agendarSalvarResumo]);
+
+  /** Há texto do resumo ainda NÃO salvo (debounce pendente ou erro). */
+  const resumoPendente = resumoStatus !== "ok";
 
   // Chat na chamada (REAL — via sinalização WebRTC)
   const [chatInput, setChatInput] = useState("");
@@ -269,11 +378,11 @@ export function useSalaConsulta({
   };
 
   // O1: com texto já digitado, inserir o modelo NÃO substitui em
-  // silêncio — as anotações só são gravadas no "concluir", então trocar
-  // o conteúdo aqui é perda definitiva. Abre a confirmação (modal na
-  // SalaConsultaTela, mesmo padrão do "sair sem concluir") e só aplica
-  // com a ação explícita do médico. Texto vazio (ou só espaços) segue
-  // direto, sem fricção.
+  // silêncio — trocar o conteúdo aqui apaga o que o médico escreveu
+  // (e a substituição também é autossalvada, então seria definitiva).
+  // Abre a confirmação (modal na SalaConsultaTela, mesmo padrão do
+  // "sair sem concluir") e só aplica com a ação explícita do médico.
+  // Texto vazio (ou só espaços) segue direto, sem fricção.
   const [confirmarModeloResumo, setConfirmarModeloResumo] = useState(false);
   const inserirModeloResumo = () => {
     if (anotacoes.trim()) {
@@ -321,6 +430,9 @@ export function useSalaConsulta({
     tempo,
     anotacoes,
     setAnotacoes,
+    resumoStatus,
+    resumoPendente,
+    tentarSalvarResumoDeNovo,
     chatInput,
     setChatInput,
     toggleMicLocal,

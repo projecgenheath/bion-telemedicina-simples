@@ -6,6 +6,7 @@ import { ChamadosSuporte } from "@/components/bion/ChamadosSuporte";
 import { Ajuda } from "@/components/bion/Ajuda";
 import { useDadosMedico } from "./useDadosMedico";
 import { useConfirmarSalvamento } from "./sheets/useConfirmarSalvamento";
+import { gradeDeCampos, serializarGrade } from "@/lib/grade-semana";
 import { TelaInicio } from "./telas/TelaInicio";
 import { TelaGestao } from "./telas/TelaGestao";
 import { TelaPerfilPublico } from "./telas/TelaPerfilPublico";
@@ -78,7 +79,12 @@ export function MedicoApp() {
   // Confirmações vivem aqui (sempre montado), não nos sheets que desmontam.
   const confirmarValor = useConfirmarSalvamento(medico?.valor ?? 0, (a, b) => Math.abs(a - b) < 0.005);
   const confirmarPromocao = useConfirmarSalvamento(medico?.valor ?? 0, (a, b) => Math.abs(a - b) < 0.005);
-  const confirmarHorarios = useConfirmarSalvamento(medico?.horariosDisponiveis.join(",") ?? "", (a, b) => a === b);
+  // A chave da grade é a serialização canônica (padrão + dias próprios):
+  // a confirmação só chega quando o delta do servidor traz a grade nova.
+  const confirmarHorarios = useConfirmarSalvamento(
+    medico ? serializarGrade(gradeDeCampos(medico.horariosDisponiveis, medico.horariosPorDia)) : "",
+    (a, b) => a === b,
+  );
   const confirmarBio = useConfirmarSalvamento(medico?.bio ?? "", (a, b) => a === b);
 
   const bloqueado = sheet !== null || sobreposicao !== null;

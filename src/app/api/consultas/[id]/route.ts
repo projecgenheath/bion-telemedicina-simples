@@ -51,7 +51,7 @@ import {
   travarDias,
 } from "@/lib/server/financeiro";
 
-type Acao = "cancelar" | "concluir" | "remarcar" | "atualizar";
+type Acao = "cancelar" | "concluir" | "remarcar" | "atualizar" | "salvarResumo";
 
 /** O3: evolução iniciada pelo médico sem conduta não vira "concluída" pelo atalho do Encerrar. */
 const ERRO_EVOLUCAO_SEM_CONDUTA =
@@ -118,6 +118,10 @@ async function consultaWire(id: string) {
  * transação da Consulta.
  * - atualizar (admin): medicoId (nunca nome), status com whitelist,
  *   pagamento segue trilha do módulo de pagamentos.
+ * - salvarResumo (médico dono): autossalvamento do resumo da sala —
+ *   grava SÓ o resumoMedico, sem mudar status, sem evento e sem
+ *   notificação. Tratado à parte, antes do switch: nenhuma regra de
+ *   cancelar/concluir/remarcar se aplica a um rascunho.
  *
  * Contrato delta: devolve APENAS a consulta atualizada + efeitos gerados.
  */
@@ -158,6 +162,49 @@ export async function PATCH(
 
     if (!ehDonoPaciente && !ehDonoMedico && !ehAdmin) {
       return Response.json({ erro: "Acesso negado." }, { status: 403 });
+    }
+
+    // Item 27 (sala unificada): autossalvamento do RESUMO da sala — o
+    // texto "Resumo da consulta" do painel lateral, que antes só era
+    // gravado no "concluir" (e se perdia ao sair sem concluir). Grava
+    // SÓ o resumoMedico: não muda status, não gera evento/notificação
+    // e NÃO passa pelo portão do O3 (que é da conclusão — esta ação
+    // nunca conclui nada). O "concluir" relê o resumo do corpo, então
+    // o texto final continua sendo o que o médico vê na tela.
+    if (body.acao === "salvarResumo") {
+      if (!ehDonoMedico) {
+        return Response.json({ erro: "Apenas o médico da consulta pode salvar o resumo." }, { status: 403 });
+      }
+      const textoResumo = textoDoCorpo(body.resumo);
+      if (textoResumo === undefined) {
+        return Response.json({ erro: "Resumo inválido." }, { status: 400 });
+      }
+      // O2 vale aqui também: teto explícito compartilhado, 400 claro,
+      // SEM truncar — resumo cortado em silêncio era o defeito original.
+      if (textoResumo.length > LIMITE_RESUMO_MEDICO) {
+        return Response.json(
+          {
+            erro: `O resumo tem ${textoResumo.length.toLocaleString("pt-BR")} caracteres e passa do limite de ${LIMITE_RESUMO_MEDICO.toLocaleString("pt-BR")}: encurte o texto. Nada foi salvo nem cortado.`,
+          },
+          { status: 400 },
+        );
+      }
+      // Consulta encerrada tem o resumo como registro clínico final:
+      // um salvamento atrasado (o debounce em voo durante a conclusão,
+      // por exemplo) não reescreve o que foi concluído.
+      if (
+        consulta.status === "concluida" ||
+        consulta.status === "cancelada" ||
+        consulta.status === "falta_paciente" ||
+        consulta.status === "aguardando_reagendamento"
+      ) {
+        return Response.json(
+          { erro: "Esta consulta já foi encerrada: o resumo não pode mais ser alterado por aqui." },
+          { status: 409 },
+        );
+      }
+      await db.consulta.update({ where: { id }, data: { resumoMedico: textoResumo } });
+      return ok({ consulta: await consultaWire(id) });
     }
 
     const data: Parameters<typeof db.consulta.update>[0]["data"] = {};

@@ -19,6 +19,7 @@ type MedicoPublico = {
   numAvaliacoes: number;
   foto?: string;
   horariosDisponiveis: string[];
+  horariosPorDia?: Record<string, string[]>;
 };
 
 export default function PerfilPublicoPage() {

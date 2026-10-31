@@ -799,13 +799,16 @@ export type MetricasPeriodo = {
  */
 export function metricasPeriodo(
   consultas: Consulta[],
-  grade: { slotsPorDia: number; diasAtendimento: number[] },
+  /** Grade por dia da semana: slots de cada dia (índice 0=Dom … 6=Sáb, já
+   *  resolvidos pela regra de lib/grade-semana) + dias de atendimento. */
+  grade: { slotsPorDiaSemana: number[]; diasAtendimento: number[] },
   janela: JanelaDias,
 ): MetricasPeriodo {
   let ofertados = 0;
   for (let iso = janela.deISO; iso <= janela.ateISO; iso = somarDiasISO(iso, 1)) {
-    if (grade.diasAtendimento.length === 0 || grade.diasAtendimento.includes(diaSemanaISO(iso))) {
-      ofertados += grade.slotsPorDia;
+    const semana = diaSemanaISO(iso);
+    if (grade.diasAtendimento.length === 0 || grade.diasAtendimento.includes(semana)) {
+      ofertados += grade.slotsPorDiaSemana[semana] ?? 0;
     }
   }
   const naJanela = consultas.filter((c) => {
@@ -910,7 +913,7 @@ export type CompletudePerfil = {
  * nunca qualidade inventada.
  */
 export function completudePerfil(
-  m: Pick<Medico, "foto" | "bio" | "formacao" | "experiencia" | "idiomas" | "subespecialidades" | "horariosDisponiveis">,
+  m: Pick<Medico, "foto" | "bio" | "formacao" | "experiencia" | "idiomas" | "subespecialidades" | "horariosDisponiveis" | "horariosPorDia">,
 ): CompletudePerfil {
   const itens: { rotulo: string; ok: boolean }[] = [
     { rotulo: "foto de perfil", ok: Boolean(m.foto?.trim()) },
@@ -919,7 +922,7 @@ export function completudePerfil(
     { rotulo: "experiência", ok: Boolean(m.experiencia?.trim()) },
     { rotulo: "idiomas", ok: (m.idiomas ?? []).some((i) => i.trim()) },
     { rotulo: "subespecialidades", ok: (m.subespecialidades ?? []).some((s) => s.trim()) },
-    { rotulo: "horários de atendimento", ok: (m.horariosDisponiveis ?? []).length > 0 },
+    { rotulo: "horários de atendimento", ok: (m.horariosDisponiveis ?? []).length > 0 || Object.values(m.horariosPorDia ?? {}).some((l) => l.length > 0) },
   ];
   const preenchidos = itens.filter((i) => i.ok).length;
   return {

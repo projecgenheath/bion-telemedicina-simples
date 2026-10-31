@@ -5,6 +5,7 @@ import { aplicarSideEffects, medicoWire, type EfeitosCriados } from "@/lib/serve
 import { notaReal } from "@/lib/server/notas-medico";
 import {ok, falha, lerCorpoJson} from "@/lib/server/http";
 import { erroGradeVedada, horariosVedadosDaGrade } from "@/lib/server/bloqueio-agenda";
+import { normalizarGrade, serializarGrade, listasDaGrade } from "@/lib/grade-semana";
 
 type MedicoPatch = {
   acao?: "aprovar" | "suspender" | "atualizar";
@@ -18,6 +19,10 @@ type MedicoPatch = {
   idiomas?: string[];
   bio?: string;
   horariosDisponiveis?: string[];
+  /** Grade por dia da semana: listas próprias por dia ("0"=Dom … "6"=Sáb)
+   *  que substituem o padrão naquele dia. Campo independente do padrão:
+   *  enviar só um dos dois preserva o outro (ver gravação, abaixo). */
+  horariosPorDia?: Record<string, string[]>;
   diasAtendimento?: number[];
   pausasSemanais?: {dia: number; inicio: string; fim: string}[];
   foto?: string;
@@ -36,6 +41,7 @@ const CAMPOS_AUTOEDICAO = new Set([
   "subespecialidades",
   "valor",
   "horariosDisponiveis",
+  "horariosPorDia",
   "diasAtendimento",
   "pausasSemanais",
   "foto",
@@ -123,6 +129,21 @@ function validarAutoedicao(
   if (body.horariosDisponiveis?.some((h) => !/^([01]\d|2[0-3]):[0-5]\d$/.test(h))) {
     return "Horários devem estar no formato HH:MM.";
   }
+  if (body.horariosPorDia !== undefined) {
+    const porDia = body.horariosPorDia;
+    if (!porDia || typeof porDia !== "object" || Array.isArray(porDia)) {
+      return "Campo horariosPorDia inválido.";
+    }
+    for (const [dia, lista] of Object.entries(porDia)) {
+      if (!/^[0-6]$/.test(dia)) return "horariosPorDia: dia deve ser de 0 (Dom) a 6 (Sáb).";
+      if (!Array.isArray(lista) || lista.length > 100 || lista.some((x) => typeof x !== "string" || x.length > 60)) {
+        return "Campo horariosPorDia inválido.";
+      }
+      if (lista.some((h) => !/^([01]\d|2[0-3]):[0-5]\d$/.test(h))) {
+        return "Horários devem estar no formato HH:MM.";
+      }
+    }
+  }
   if (body.diasAtendimento !== undefined) {
     if (!Array.isArray(body.diasAtendimento) || body.diasAtendimento.some(d => typeof d !== "number" || d < 0 || d > 6)) {
       return "diasAtendimento deve ser um array de números de 0 (Dom) a 6 (Sáb).";
@@ -191,7 +212,16 @@ export async function PATCH(
     // para o administrador. Horário cuja consulta (DURACAO_CONSULTA_MIN)
     // encosta na janela → 400, nada é gravado.
     if (acao === "atualizar") {
-      const vedados = horariosVedadosDaGrade(body.horariosDisponiveis);
+      // Vedados (23:00–00:00) valem para TODAS as listas da grade: o padrão
+      // e cada lista própria por dia da semana.
+      const vedados = [
+        ...horariosVedadosDaGrade(body.horariosDisponiveis),
+        ...(body.horariosPorDia
+          ? listasDaGrade(normalizarGrade({ padrao: [], dias: body.horariosPorDia })).flatMap((l) =>
+              horariosVedadosDaGrade(l),
+            )
+          : []),
+      ];
       if (vedados.length) return erroHttp(erroGradeVedada(vedados), 400);
       // Pausas: mesma validação da autoedição e da UI (inicio < fim, sem
       // sobreposição no mesmo dia) — antes, o caminho do admin não validava.
@@ -295,8 +325,25 @@ export async function PATCH(
             ...(body.experiencia !== undefined ? { experiencia: body.experiencia } : {}),
             ...(body.idiomas !== undefined ? { idiomas: JSON.stringify(body.idiomas) } : {}),
             ...(body.bio !== undefined ? { bio: body.bio } : {}),
-            ...(body.horariosDisponiveis !== undefined
-              ? { horariosDisponiveis: JSON.stringify(body.horariosDisponiveis) }
+            // Grade por dia da semana: horariosDisponiveis (padrão) e
+            // horariosPorDia (listas próprias) são campos INDEPENDENTES —
+            // quem envia só um preserva o outro como está no banco (o form
+            // do admin e apps antigos enviam só o padrão; a AgendaSheet
+            // envia os dois). A gravação é sempre pela serialização única
+            // (sem dias próprios, volta ao array legado byte a byte).
+            ...(body.horariosDisponiveis !== undefined || body.horariosPorDia !== undefined
+              ? {
+                  horariosDisponiveis: serializarGrade({
+                    padrao:
+                      body.horariosDisponiveis !== undefined
+                        ? normalizarGrade(body.horariosDisponiveis).padrao
+                        : normalizarGrade(medico.perfilMedico.horariosDisponiveis).padrao,
+                    dias:
+                      body.horariosPorDia !== undefined
+                        ? normalizarGrade({ padrao: [], dias: body.horariosPorDia }).dias
+                        : normalizarGrade(medico.perfilMedico.horariosDisponiveis).dias,
+                  }),
+                }
               : {}),
             ...(body.diasAtendimento !== undefined
               ? { diasAtendimento: JSON.stringify(body.diasAtendimento) }

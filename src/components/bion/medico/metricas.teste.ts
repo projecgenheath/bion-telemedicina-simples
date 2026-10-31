@@ -365,9 +365,12 @@ igual("pontos sem resposta", pontosReceita(null), []);
     consulta({ id: "g5", dataISO: HOJE_9H, status: "confirmada", valor: "R$ 150" }),
     consulta({ id: "g6", dataISO: "2026-09-20T12:00:00.000Z", status: "concluida", valor: "R$ 999" }), // fora da janela
   ];
-  const todos = metricasPeriodo(lista, { slotsPorDia: 4, diasAtendimento: [] }, janela);
+  const todos = metricasPeriodo(lista, { slotsPorDiaSemana: [4, 4, 4, 4, 4, 4, 4], diasAtendimento: [] }, janela);
   igual("gestão: ofertados todos os dias", todos.ofertados, 28); // 7 dias × 4
-  igual("gestão: ofertados seg–sex", metricasPeriodo(lista, { slotsPorDia: 4, diasAtendimento: [1, 2, 3, 4, 5] }, janela).ofertados, 20); // sex 25, seg 28–qui 01
+  igual("gestão: ofertados seg–sex", metricasPeriodo(lista, { slotsPorDiaSemana: [4, 4, 4, 4, 4, 4, 4], diasAtendimento: [1, 2, 3, 4, 5] }, janela).ofertados, 20); // sex 25, seg 28–qui 01
+  // Grade por dia da semana: dom sem slots e sáb com 2 — sex 4 + sáb 2 +
+  // dom 0 + seg–qui 4×4 = 22.
+  igual("gestão: ofertados com grade por dia", metricasPeriodo(lista, { slotsPorDiaSemana: [0, 4, 4, 4, 4, 4, 2], diasAtendimento: [] }, janela).ofertados, 22);
   igual("gestão: ocupados", todos.ocupados, 4);
   igual("gestão: ocupação", todos.ocupacao, 4 / 28);
   igual("gestão: atendimentos", todos.atendimentos, 2);
@@ -379,13 +382,13 @@ igual("pontos sem resposta", pontosReceita(null), []);
   igual("gestão: ticket médio", todos.ticketMedio, 162.5);
   igual(
     "gestão: janela vazia",
-    metricasPeriodo([], { slotsPorDia: 0, diasAtendimento: [] }, janela),
+    metricasPeriodo([], { slotsPorDiaSemana: [0, 0, 0, 0, 0, 0, 0], diasAtendimento: [] }, janela),
     { ofertados: 0, ocupados: 0, ocupacao: null, atendimentos: 0, faltas: 0, taxaFalta: null, canceladas: 0, consultasPagas: 0, receitaConsultas: 0, ticketMedio: null },
   );
   // Falta pelo selo `falta` do bootstrap (status já concluída no legado).
   const comSelo = metricasPeriodo(
     [consulta({ id: "g7", dataISO: "2026-09-28T12:00:00.000Z", status: "concluida", falta: true })],
-    { slotsPorDia: 1, diasAtendimento: [] },
+    { slotsPorDiaSemana: [1, 1, 1, 1, 1, 1, 1], diasAtendimento: [] },
     janela,
   );
   igual("gestão: falta pelo selo", [comSelo.faltas, comSelo.ocupados], [1, 1]);

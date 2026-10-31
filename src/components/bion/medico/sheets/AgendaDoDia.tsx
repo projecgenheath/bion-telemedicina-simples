@@ -24,6 +24,7 @@ import {
   type SlotAgenda,
 } from "../metricas";
 import { avisarDadosMedicoAlterados, useBloqueiosAgenda } from "../useDadosMedico";
+import { gradeDeCampos, horariosDoDia, diaSemanaDeIso } from "@/lib/grade-semana";
 
 const DIAS_SEMANA = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 const HORIZONTE_DIAS = 14;
@@ -219,8 +220,17 @@ export function AgendaDoDia({ medico, onExecutando }: { medico: Medico; onExecut
     [minhas, bloqueios.porDia],
   );
   const slots = useMemo(
-    () => agendaDoDia(minhas, dia, medico.horariosDisponiveis, agora, !!bloqueioDia),
-    [minhas, dia, medico.horariosDisponiveis, agora, bloqueioDia],
+    // Grade por dia da semana: os slots são os DAQUELE dia (lista própria
+    // ou padrão) — regra única em lib/grade-semana.
+    () =>
+      agendaDoDia(
+        minhas,
+        dia,
+        horariosDoDia(gradeDeCampos(medico.horariosDisponiveis, medico.horariosPorDia), diaSemanaDeIso(dia)),
+        agora,
+        !!bloqueioDia,
+      ),
+    [minhas, dia, medico.horariosDisponiveis, medico.horariosPorDia, agora, bloqueioDia],
   );
   const cancelaveis = useMemo(() => consultasCancelaveisDoDia(minhas, dia, agora), [minhas, dia, agora]);
   const reservasDia = useMemo(() => reservasNoDia(minhas, dia, agora), [minhas, dia, agora]);

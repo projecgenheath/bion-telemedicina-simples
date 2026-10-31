@@ -14,12 +14,22 @@ import {
   SecaoPacotesExames,
   type DadosSegurancaPaciente,
 } from "@/components/bion/medico/prescricao-assistida";
+import { gerarConteudoDocumento, rotuloPeriodoAfastamento } from "@/lib/conteudo-documento";
+import { CampoCidBusca } from "@/components/bion/medico/campo-cid-busca";
 import { ModalBion } from "@/components/bion/ModalBion";
 import { EncerrarAtendimento, type EscolhaEncerrar } from "@/components/bion/consulta/EncerrarAtendimento";
 import { ConsultaNaoEncontrada, ErroSalaFatal, SalaConsultaTela } from "@/components/bion/consulta/SalaConsultaTela";
 import { useSalaConsulta } from "@/components/bion/consulta/useSalaConsulta";
 import { avisarDadosMedicoAlterados } from "@/components/bion/medico/useDadosMedico";
 import { PainelEvolucao } from "@/components/bion/medico/evolucao/PainelEvolucao";
+
+/** Data de hoje no formato do input type=date ("AAAA-MM-DD"), no fuso local. */
+function hojeIsoLocal(): string {
+  const d = new Date();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${mm}-${dd}`;
+}
 
 /**
  * Sala de teleconsulta do MÉDICO (movida de Consulta.tsx sem mudança visual
@@ -103,7 +113,11 @@ export function ChamadaMedico({ onEnd, consultaId }: { onEnd: () => void; consul
   // curta que o sistema bloqueia para controlados.
   const [recControlado, setRecControlado] = useState(false);
 
-  // Form Atestado
+  // Form Atestado — estruturado (item 32 da auditoria de melhorias):
+  // tipo (afastamento × comparecimento) + data inicial alimentam o texto
+  // gerado; os campos enviados ao servidor continuam os mesmos.
+  const [atestTipo, setAtestTipo] = useState<"afastamento" | "comparecimento">("afastamento");
+  const [atestInicio, setAtestInicio] = useState(hojeIsoLocal);
   const [atestDias, setAtestDias] = useState("");
   const [atestCid, setAtestCid] = useState("");
   const [atestObs, setAtestObs] = useState("");
@@ -122,6 +136,8 @@ export function ChamadaMedico({ onEnd, consultaId }: { onEnd: () => void; consul
     setRecControlado(false);
   };
   const limparAtestado = () => {
+    setAtestTipo("afastamento");
+    setAtestInicio(hojeIsoLocal());
     setAtestDias("");
     setAtestCid("");
     setAtestObs("");
@@ -194,22 +210,40 @@ export function ChamadaMedico({ onEnd, consultaId }: { onEnd: () => void; consul
 
   const salvarAtestado = (e: React.FormEvent) => {
     e.preventDefault();
+    // Atestado estruturado (item 32): afastamento exige dias ≥ 1 e
+    // justificativa (como antes); comparecimento atesta a presença na
+    // data e a observação é opcional. O servidor recebe os MESMOS
+    // campos de sempre — a estrutura vira texto bem formado no conteudo
+    // (gerado no padrão de lib/conteudo-documento) + o CID do catálogo.
+    const ehAfastamento = atestTipo === "afastamento";
     const dias = parseInt(atestDias, 10);
-    if (!Number.isFinite(dias) || dias < 1 || !atestObs.trim()) return;
+    const obs = atestObs.trim();
+    if (ehAfastamento && (!Number.isFinite(dias) || dias < 1 || !obs)) return;
     if (!podeEmitir()) return;
     const cid = atestCid.trim();
-    const obs = atestObs.trim();
-    const rotuloDias = `${dias} ${dias === 1 ? "dia" : "dias"}`;
+    const rotuloDias = ehAfastamento ? `${dias} ${dias === 1 ? "dia" : "dias"}` : "";
+    const periodo = rotuloPeriodoAfastamento(atestInicio, ehAfastamento ? dias : 1);
+    const conteudoBase = gerarConteudoDocumento({
+      tipo: "atestado",
+      tipoAtestado: atestTipo,
+      duracao: rotuloDias || undefined,
+      dataInicio: periodo?.inicio,
+      dataFim: ehAfastamento ? periodo?.fim : undefined,
+      cid: cid || undefined,
+      pacienteNome: contraparteNome,
+    });
+    if (!conteudoBase) return;
     emitirDocumento(
       {
         tipo: "atestado",
-        titulo: `Atestado — ${rotuloDias} de afastamento`,
+        titulo: ehAfastamento ? `Atestado — ${rotuloDias} de afastamento` : "Atestado — Comparecimento",
         medico: sessao.nome,
         paciente: contraparteNome,
         cid: cid || undefined,
-        duracao: rotuloDias,
+        // duracao ("Afastamento:" no PDF) só existe no afastamento.
+        ...(ehAfastamento ? { duracao: rotuloDias } : {}),
         observacoes: obs,
-        conteudo: `Atesto para os devidos fins que o(a) paciente necessita de afastamento por ${rotuloDias}.${cid ? ` CID: ${cid}.` : ""} ${obs}`,
+        conteudo: `${conteudoBase}${obs ? ` ${obs}` : ""}`,
       },
       pacienteIdAtual,
     );
@@ -247,9 +281,10 @@ export function ChamadaMedico({ onEnd, consultaId }: { onEnd: () => void; consul
   // técnica / sair sem concluir). Regras do Alisson (06/10/2026): sem o
   // paciente na sala a consulta NÃO é concluída (o servidor também recusa).
   const [escolhaAberta, setEscolhaAberta] = useState(false);
-  // Sair sem concluir com anotações do prontuário: confirmação explícita de
-  // perda (não há caminho seguro de rascunho para elas — só o "concluir" as
-  // envia como resumo; o rascunho da evolução é outra superfície, autosalva).
+  // Sair sem concluir: o resumo da sala AUTOSSALVA (item 27), então a
+  // confirmação de perda só aparece quando há texto genuinamente NÃO
+  // salvo (debounce pendente ou salvamento em erro — `sala.resumoPendente`).
+  // Tudo salvo → sai direto, sem fricção nem aviso falso.
   const [confirmarSairSemConcluir, setConfirmarSairSemConcluir] = useState(false);
 
 
@@ -265,9 +300,10 @@ export function ChamadaMedico({ onEnd, consultaId }: { onEnd: () => void; consul
   const executarEscolha = async (escolha: EscolhaEncerrar): Promise<string | null> => {
     if (!idSala) return "Nenhuma consulta identificada nesta sala.";
     if (escolha === "sair") {
-      // Anotações do prontuário só são enviadas no "concluir": sair agora as
-      // perde — pede confirmação explícita em vez de descartar em silêncio.
-      if (anotacoes.trim()) {
+      // Item 27: o resumo autossalva — só pede confirmação quando ainda
+      // há texto NÃO salvo (pendente de debounce ou em erro de
+      // salvamento). Resumo já salvo não gera modal: sair é seguro.
+      if (sala.resumoPendente) {
         setEscolhaAberta(false);
         setConfirmarSairSemConcluir(true);
         return null;
@@ -405,8 +441,10 @@ export function ChamadaMedico({ onEnd, consultaId }: { onEnd: () => void; consul
         foraFecha={false}
       >
         <p className="text-sm text-muted-foreground">
-          Suas anotações do prontuário desta sala ainda não foram salvas e serão perdidas se você sair sem
-          concluir. (O rascunho da evolução, se houver, fica salvo à parte.)
+          {sala.resumoStatus === "erro"
+            ? "O salvamento automático do resumo desta sala falhou: o texto mais recente ainda NÃO está salvo no servidor e será perdido se você sair sem concluir."
+            : "O resumo desta sala ainda está sendo salvo automaticamente: os trechos mais recentes podem se perder se você sair agora."}{" "}
+          (O rascunho da evolução, se houver, fica salvo à parte.)
         </p>
         <div className="flex gap-2 mt-4">
           <button
@@ -591,40 +629,91 @@ export function ChamadaMedico({ onEnd, consultaId }: { onEnd: () => void; consul
             </div>
 
             <div className="space-y-3 text-xs">
+              {/* Tipo do atestado (item 32): muda os campos exigidos e o
+                  texto gerado; o documento emitido mantém os mesmos campos. */}
+              <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Tipo de atestado">
+                {(
+                  [
+                    { id: "afastamento", rotulo: "Afastamento" },
+                    { id: "comparecimento", rotulo: "Comparecimento" },
+                  ] as const
+                ).map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={atestTipo === t.id}
+                    onClick={() => setAtestTipo(t.id)}
+                    className={`py-2 rounded-xl border font-bold ${
+                      atestTipo === t.id ? "bg-primary text-primary-foreground" : "bg-background"
+                    }`}
+                  >
+                    {t.rotulo}
+                  </button>
+                ))}
+              </div>
+
               <div className="grid grid-cols-2 gap-2">
+                {atestTipo === "afastamento" && (
+                  <div>
+                    <label className="font-bold block mb-1">Dias de Afastamento</label>
+                    <input
+                    aria-label="Dias de Afastamento"
+                      value={atestDias}
+                      onChange={(e) => setAtestDias(e.target.value)}
+                      type="number"
+                      min="1"
+                      className="w-full px-3 py-2 rounded-xl border bg-background"
+                      required
+                    />
+                  </div>
+                )}
                 <div>
-                  <label className="font-bold block mb-1">Dias de Afastamento</label>
+                  <label className="font-bold block mb-1">
+                    {atestTipo === "afastamento" ? "Início do afastamento" : "Data do atendimento"}
+                  </label>
                   <input
-                  aria-label="Dias de Afastamento"
-                    value={atestDias}
-                    onChange={(e) => setAtestDias(e.target.value)}
-                    type="number"
-                    min="1"
+                    aria-label={atestTipo === "afastamento" ? "Início do afastamento" : "Data do atendimento"}
+                    value={atestInicio}
+                    onChange={(e) => setAtestInicio(e.target.value)}
+                    type="date"
                     className="w-full px-3 py-2 rounded-xl border bg-background"
                     required
                   />
                 </div>
-                <div>
-                  <label className="font-bold block mb-1">CID-10 (opcional)</label>
-                  <input
-                  aria-label="CID-10"
-                    value={atestCid}
-                    onChange={(e) => setAtestCid(e.target.value)}
-                    placeholder="Somente com autorização do paciente"
-                    className="w-full px-3 py-2 rounded-xl border bg-background"
-                  />
-                </div>
+              </div>
+              {atestTipo === "afastamento" &&
+                (() => {
+                  const periodo = rotuloPeriodoAfastamento(atestInicio, parseInt(atestDias, 10) || 0);
+                  return periodo ? (
+                    <p className="opacity-70">
+                      Período do afastamento: {periodo.inicio} a {periodo.fim}
+                    </p>
+                  ) : null;
+                })()}
+
+              <div>
+                <label className="font-bold block mb-1">CID-10 (opcional)</label>
+                <CampoCidBusca
+                  valor={atestCid}
+                  onChange={setAtestCid}
+                  ariaLabel="CID-10"
+                  placeholder="Somente com autorização do paciente"
+                  className="w-full px-3 py-2 rounded-xl border bg-background"
+                />
               </div>
 
               <div>
-                <label className="font-bold block mb-1">Justificativa e Recomendações</label>
+                <label className="font-bold block mb-1">
+                  {atestTipo === "afastamento" ? "Justificativa e Recomendações" : "Observações (opcional)"}
+                </label>
                 <textarea
                   aria-label="Justificativa e Recomendações"
                   value={atestObs}
                   onChange={(e) => setAtestObs(e.target.value)}
                   rows={3}
                   className="w-full px-3 py-2 rounded-xl border bg-background"
-                  required
+                  required={atestTipo === "afastamento"}
                 />
               </div>
             </div>

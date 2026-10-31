@@ -146,6 +146,7 @@ type EstadoFresco = {
     medicamento?: string | null; posologia?: string | null; duracao?: string | null;
     observacoes?: string | null; cid?: string | null; controlado?: boolean; createdAt: string;
     medicoCrm?: string | null; pacienteCpf?: string | null; pacienteNascimento?: string | null;
+    codigoVerificacao?: string | null; // item 26: id + HMAC do servidor p/ a via impressa
   }[];
   arquivos: {
     id: string; nome: string; tipo: string; tamanhoKb: number; enviadoPor: string;
@@ -159,6 +160,7 @@ type EstadoFresco = {
     id: string; nome: string; crm: string; especialidade: string; subespecialidades: string[];
     valor: number; avaliacao: number; numAvaliacoes: number; formacao: string; experiencia: string;
     idiomas: string[]; bio: string; foto?: string; status: string; horariosDisponiveis: string[];
+    horariosPorDia?: Record<string, string[]>;
     diasAtendimento?: number[]; pausasSemanais?: { dia: number; inicio: string; fim: string }[];
   }[];
   pacientes: {
@@ -284,6 +286,7 @@ const mapDocumento = (x: EstadoFresco["documentos"][number]): Documento => ({
   medicoCrm: x.medicoCrm ?? undefined, // melhoria nº 6: identificação formal no PDF
   pacienteCpf: x.pacienteCpf ?? undefined,
   pacienteNascimento: x.pacienteNascimento ?? undefined,
+  codigoVerificacao: x.codigoVerificacao ?? undefined, // item 26: verificação pública da via
 });
 
 const mapArquivo = (a: EstadoFresco["arquivos"][number]): Arquivo => ({
@@ -309,6 +312,7 @@ const mapMedico = (m: EstadoFresco["medicos"][number]): Medico => ({
   numAvaliacoes: m.numAvaliacoes, formacao: m.formacao, experiencia: m.experiencia,
   idiomas: m.idiomas, bio: m.bio, foto: m.foto,
   status: m.status as Medico["status"], horariosDisponiveis: m.horariosDisponiveis,
+  horariosPorDia: m.horariosPorDia ?? {},
   diasAtendimento: m.diasAtendimento ?? [], pausasSemanais: m.pausasSemanais ?? [],
 });
 

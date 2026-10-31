@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { notaReal } from "@/lib/server/notas-medico";
+import { normalizarGrade } from "@/lib/grade-semana";
 import { limitarAsync, obterIp, resposta429 } from "@/lib/server/rate-limit";
 
 /**
@@ -74,7 +75,10 @@ export async function GET(
         avaliacao: nota.avaliacao,
         numAvaliacoes: nota.numAvaliacoes,
         foto: perfil.foto ?? undefined,
-        horariosDisponiveis: JSON.parse(perfil.horariosDisponiveis || "[]") as string[],
+        // Grade por dia da semana (lib/grade-semana): horariosDisponiveis é
+        // o PADRÃO; horariosPorDia traz as listas próprias de cada dia.
+        horariosDisponiveis: normalizarGrade(perfil.horariosDisponiveis).padrao,
+        horariosPorDia: normalizarGrade(perfil.horariosDisponiveis).dias,
       },
       // B11: dados públicos e pouco voláteis — cache compartilhado de 60 s
       // reduz a agregação repetida no banco.
