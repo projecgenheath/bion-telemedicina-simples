@@ -11,7 +11,8 @@ import { dataNascimentoParaIso } from "@/lib/idade";
 import { limitarAsync, resposta429 } from "@/lib/server/rate-limit";
 import { nomesMedicamentosEmUso } from "@/lib/server/medicamentos-legado";
 import { carregarContextoPaciente, promptPaciente, resumoPacienteTexto } from "@/lib/server/bion-ia-contexto";
-import { FiltroAcao, extrairAcao } from "@/lib/bion-ia-acao";
+import { FiltroAcao, extrairAcao, resolverAcaoAgendar, type MedicoCodificado } from "@/lib/bion-ia-acao";
+import { filtrarMensagensDaPaciente } from "@/lib/server/filtro-dados-pessoais";
 
 /**
  * BION IA — assistente clínico (backend apenas).
@@ -159,7 +160,7 @@ export async function POST(req: NextRequest) {
     if (!tetoHora.permitido) return resposta429(tetoHora.restanteSeg);
     // Pausa da BION IA (opt-in, BION_IA_PAUSADA=true): nada vai à IA.
     if (iaPausada()) return respostaIaPausada();
-    // Portão jurídico: paciente sem o aceite da versão atual (NVIDIA) → 409.
+    // Portão jurídico: paciente sem o consentimento atual da IA (NVIDIA) → 403.
     const pendente = await exigirConsentimentoIa(usuario);
     if (pendente) return pendente;
     // B1: guarda de objeto/tipo — corpo null ou texto não-string virava 500
@@ -197,10 +198,17 @@ export async function POST(req: NextRequest) {
     // papel, e o contexto era PULADO em saudações ("Bom dia").
     const ultima = (body.mensagens ?? []).at(-1)?.texto?.trim() ?? "";
     const saudacao = /^(oi|ol[áa]|boa\s+(noite|tarde|dia)|e a[ií]|hey)[\s!.?]*$/i.test(ultima);
-    const instrucoes =
-      usuario.role === "PACIENTE"
-        ? promptPaciente(resumoPacienteTexto(await carregarContextoPaciente(usuario.id)))
-        : instrucoesBase(usuario.role) + (saudacao ? "" : await montarContexto(usuario));
+    // Agendamento: a IA vê só "M1 (Cardiologia)"; o servidor guarda o mapa
+    // código → médico e troca ao montar o card (nome do médico não vai à IA).
+    let medicosCodificados: MedicoCodificado[] = [];
+    let instrucoes: string;
+    if (usuario.role === "PACIENTE") {
+      const dados = await carregarContextoPaciente(usuario.id);
+      medicosCodificados = dados.medicosDisponiveis;
+      instrucoes = promptPaciente(resumoPacienteTexto(dados));
+    } else {
+      instrucoes = instrucoesBase(usuario.role) + (saudacao ? "" : await montarContexto(usuario));
+    }
     // M6: identificadores diretos saem de TODO o texto (prompt + histórico
     // digitado) antes de qualquer canal de IA — em todos os canais.
     const mensagens = anonimizarMensagensIa(
@@ -218,10 +226,14 @@ export async function POST(req: NextRequest) {
     );
     // LGPD: no Copilot do médico, tira também os dados de PACIENTES que ele
     // digitar (nomes conhecidos, CPF, telefone, e-mail, CEP, datas e endereço).
+    // PACIENTE: o que ela digita passa pelo filtro de CPF, telefone, e-mail,
+    // datas, endereço e nomes próprios (dela e de terceiros) antes da IA.
     const mensagensFinais =
       usuario.role === "MEDICO"
         ? anonimizarMensagensTexto(mensagens, { nomesPacientes: await nomesPacientesDoMedico(usuario.id) })
-        : mensagens;
+        : usuario.role === "PACIENTE"
+          ? filtrarMensagensDaPaciente(mensagens, { nomesConhecidos: [usuario.nome], substitutoNome: "o paciente" })
+          : mensagens;
 
     // IA generativa em cadeia (identificadores já removidos acima).
     if (body.stream === true) {
@@ -241,7 +253,8 @@ export async function POST(req: NextRequest) {
               } else if (ev.tipo === "fim") {
                 const resto = filtroAcao.fechar();
                 if (resto.texto) ctrl.enqueue(linha({ tipo: "delta", texto: resto.texto }));
-                if (resto.acao && usuario.role === "PACIENTE") ctrl.enqueue(linha({ tipo: "acao", acao: resto.acao }));
+                if (resto.acao && usuario.role === "PACIENTE")
+                  ctrl.enqueue(linha({ tipo: "acao", acao: resolverAcaoAgendar(resto.acao, medicosCodificados) }));
                 ctrl.enqueue(linha({ tipo: "fim", fonte: ev.fonte, modelo: ev.modelo, requestId }));
               }
               else if (ev.tipo === "raciocinio") ctrl.enqueue(linha({ tipo: "raciocinio", texto: ev.texto }));
@@ -281,7 +294,7 @@ export async function POST(req: NextRequest) {
     if (r.texto) {
       // `raciocinio` separado de `resposta` (a cópia/inserção usa só `resposta`).
       const sep = extrairAcao(r.texto);
-      return ok({ resposta: sep.texto, acao: usuario.role === "PACIENTE" ? sep.acao : null, raciocinio: r.raciocinio ?? null, fonte: r.fonte, modelo: r.modelo, requestId });
+      return ok({ resposta: sep.texto, acao: usuario.role === "PACIENTE" ? resolverAcaoAgendar(sep.acao, medicosCodificados) : null, raciocinio: r.raciocinio ?? null, fonte: r.fonte, modelo: r.modelo, requestId });
     }
     return Response.json(
       {

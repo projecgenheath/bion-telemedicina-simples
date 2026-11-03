@@ -8,6 +8,7 @@ import { apiSaude } from "./paciente/api-saude";
 import { useRecarregarEstado } from "./paciente/useRemarcacaoComMulta";
 import { fmtTicketData } from "@/lib/bion-tipos";
 import type { EstadoConsentimentoIaExame } from "@/lib/consentimento-ia-exame";
+import { revogarConsentimentoIa } from "@/lib/bion-ia-cliente";
 
 export function PrivacidadePaciente() {
   const { pacientePerfil, documentosVisiveis, consentimentosVisiveis, consultas, sessao, trocarSenha } =
@@ -69,6 +70,42 @@ export function PrivacidadePaciente() {
       toast.error("Não foi possível revogar agora. Tente novamente.");
     } finally {
       setRevogando(false);
+    }
+  };
+
+  // Consentimento GERAL da BION IA (NVIDIA, EUA): separado dos Termos,
+  // opcional e revogável aqui. Ativar é só pelo card da BION IA (caixa própria).
+  const [iaGeral, setIaGeral] = useState<{ vigente: boolean; em: string | null } | null>(null);
+  const [iaGeralErro, setIaGeralErro] = useState(false);
+  const [revogandoIaGeral, setRevogandoIaGeral] = useState(false);
+  useEffect(() => {
+    if (sessao.role !== "paciente") return;
+    let vivo = true;
+    fetch("/api/paciente/consentimento-ia", { cache: "no-store" })
+      .then((r) => {
+        if (!r.ok) throw new Error(String(r.status));
+        return r.json();
+      })
+      .then((j: { vigente: boolean; em: string | null }) => {
+        if (vivo) setIaGeral({ vigente: j.vigente === true, em: j.em ?? null });
+      })
+      .catch(() => {
+        if (vivo) setIaGeralErro(true);
+      });
+    return () => {
+      vivo = false;
+    };
+  }, [sessao.role]);
+  const revogarIaGeral = async () => {
+    if (revogandoIaGeral) return;
+    setRevogandoIaGeral(true);
+    const ok = await revogarConsentimentoIa();
+    setRevogandoIaGeral(false);
+    if (ok) {
+      setIaGeral({ vigente: false, em: new Date().toISOString() });
+      toast.success("BION IA desativada. Nada mais será enviado à NVIDIA. O resto do app continua igual.");
+    } else {
+      toast.error("Não foi possível revogar agora. Tente novamente.");
     }
   };
 
@@ -312,6 +349,42 @@ export function PrivacidadePaciente() {
               Tentar de novo
             </button>
           ) : null}
+        </section>
+      ) : null}
+
+      {sessao.role === "paciente" ? (
+        <section className="bg-card border rounded-3xl p-6 space-y-3" aria-labelledby="titulo-ia-geral">
+          <h2 id="titulo-ia-geral" className="font-bold flex items-center gap-2">
+            <Shield className="w-4 h-4 text-primary" /> BION IA (chat, triagem e laudos)
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            A BION IA é opcional. Quando ativada, o que você escreve, inclusive dados sobre a sua saúde, é enviado à
+            NVIDIA Corporation, nos EUA. Sem ela, o app funciona normalmente.
+          </p>
+          <p className="text-sm" aria-live="polite">
+            {iaGeral === null
+              ? iaGeralErro
+                ? "Não foi possível carregar o estado agora. Verifique sua conexão e tente de novo."
+                : "Carregando…"
+              : iaGeral.vigente
+                ? `Ativada${iaGeral.em ? ` em ${fmtTicketData(iaGeral.em)} (horário de Brasília)` : ""}.`
+                : "Desativada. Para ativar, abra a BION IA e marque a autorização."}
+          </p>
+          {iaGeral?.vigente ? (
+            <button
+              type="button"
+              onClick={() => void revogarIaGeral()}
+              disabled={revogandoIaGeral}
+              className="min-h-11 px-4 rounded-full border-2 border-red-600/40 text-red-700 dark:text-red-300 text-sm font-bold disabled:opacity-50"
+            >
+              {revogandoIaGeral ? "Revogando…" : "Revogar e desativar a BION IA"}
+            </button>
+          ) : null}
+          <p className="text-xs text-muted-foreground">
+            Revogar não apaga o que já foi enviado. O que a NVIDIA já recebeu segue os termos da NVIDIA. A BION não guarda
+            as conversas do chat. As triagens ficam no seu prontuário. Para pedir acesso ou exclusão, fale com o
+            Encarregado pelo canal de privacidade do app.
+          </p>
         </section>
       ) : null}
 

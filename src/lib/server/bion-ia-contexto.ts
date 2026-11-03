@@ -11,6 +11,7 @@ import { db } from "@/lib/db";
 import { quandoClinica } from "@/lib/server/fuso";
 import { nomesMedicamentosEmUso } from "@/lib/server/medicamentos-legado";
 import { dataNascimentoParaIso, idadeDeNascimento } from "@/lib/idade";
+import type { MedicoCodificado } from "@/lib/bion-ia-acao";
 
 export type DadosContextoPaciente = {
   idade: number | null;
@@ -18,11 +19,13 @@ export type DadosContextoPaciente = {
   alergias: string[];
   medicamentos: string[];
   condicoes: string[];
-  proximas: { especialidade: string; medico: string; quando: string }[];
+  /** Sem o nome do médico: o nome não vai à IA. */
+  proximas: { especialidade: string; quando: string }[];
   anteriores: { especialidade: string; quando: string; motivo: string | null }[];
   exames: { titulo: string; quando: string }[];
   triagens: { especialidade: string; queixa: string }[];
-  medicosDisponiveis: { especialidade: string; medico: string }[];
+  /** Código interno (M1…) + especialidade vão à IA; id e nome ficam no servidor. */
+  medicosDisponiveis: MedicoCodificado[];
 };
 
 const curto = (t: string, n = 120) => (t.length > n ? `${t.slice(0, n - 1)}…` : t);
@@ -43,13 +46,13 @@ export function resumoPacienteTexto(d: DadosContextoPaciente): string {
   l.push(`Alergias: ${d.alergias.length ? d.alergias.join(", ") : "nenhuma informada"}.`);
   l.push(`Medicamentos em uso: ${d.medicamentos.length ? d.medicamentos.join(", ") : "nenhum informado"}.`);
   if (d.condicoes.length) l.push(`Condições/comorbidades: ${d.condicoes.join(", ")}.`);
-  if (d.proximas.length) l.push(`Próximas consultas: ${d.proximas.map((c) => `${c.especialidade} com ${c.medico} em ${c.quando}`).join("; ")}.`);
+  if (d.proximas.length) l.push(`Próximas consultas: ${d.proximas.map((c) => `${c.especialidade} em ${c.quando}`).join("; ")}.`);
   if (d.anteriores.length)
     l.push(`Consultas anteriores: ${d.anteriores.map((c) => `${c.especialidade} em ${c.quando}${c.motivo ? ` (motivo: ${c.motivo})` : ""}`).join("; ")}.`);
   if (d.exames.length) l.push(`Exames/laudos enviados: ${d.exames.map((e) => `${e.titulo} (${e.quando})`).join("; ")}.`);
   if (d.triagens.length) l.push(`Triagens feitas: ${d.triagens.map((t) => `${t.especialidade}: ${t.queixa}`).join("; ")}.`);
   if (d.medicosDisponiveis.length)
-    l.push(`Médicos do BION disponíveis: ${d.medicosDisponiveis.map((m) => `${m.medico} (${m.especialidade})`).join("; ")}.`);
+    l.push(`Médicos do BION disponíveis (código interno e especialidade): ${d.medicosDisponiveis.map((m) => `${m.codigo} (${m.especialidade})`).join("; ")}.`);
   return l.join("\n");
 }
 
@@ -59,7 +62,7 @@ export function promptPaciente(contexto: string): string {
     "Você é a BION IA, assistente do app de telemedicina BION, falando com a PACIENTE/o PACIENTE em PT-BR, tratando por \"você\".",
     "No app você pode: tirar dúvidas de saúde, explicar exames/laudos que a pessoa enviou, e ajudar a AGENDAR consulta com um médico do BION. A triagem completa é opcional e fica no card da consulta, não aqui.",
     "Use o contexto clínico abaixo (alergias, remédios, condições, consultas, exames e triagens) para personalizar. Não diga que não tem acesso ao histórico. Não invente dados que não estão nele.",
-    "Quando a pessoa relatar um SINTOMA: acolha em 1 frase; faça no máximo 2 perguntas básicas (desde quando, intensidade 0-10, febre ou outro sintoma) levando em conta o histórico; cite sinais de alarme só se pertinentes; e OFEREÇA marcar consulta com um médico do BION. Ao oferecer, termine a resposta com a linha [[AGENDAR: <especialidade>]] usando uma especialidade da lista de médicos disponíveis (ou [[AGENDAR]] se nenhuma servir). Também use o marcador quando a pessoa pedir para marcar/agendar.",
+    "Quando a pessoa relatar um SINTOMA: acolha em 1 frase; faça no máximo 2 perguntas básicas (desde quando, intensidade 0-10, febre ou outro sintoma) levando em conta o histórico; cite sinais de alarme só se pertinentes; e OFEREÇA marcar consulta com um médico do BION. Ao oferecer, termine a resposta com a linha [[AGENDAR: <especialidade> | <código>]] usando uma especialidade e o código (M1, M2…) da lista de médicos disponíveis (ou [[AGENDAR]] se nenhum servir). Nunca escreva o código no texto da resposta; você não sabe o nome dos médicos. Também use o marcador quando a pessoa pedir para marcar/agendar.",
     "Pedido administrativo (receita, documento, remarcar) recebe o caminho prático no app, sem interrogatório de sintomas.",
     "Não prescreva nem dê diagnóstico fechado. Sinais de emergência (dor no peito, falta de ar, desmaio, fraqueza de um lado, rigidez de nuca com febre, sangramento intenso): oriente ligar já para o SAMU 192 ou ir ao pronto-socorro. Urgência: SAMU 192.",
     "Respostas curtas: 2 a 5 frases.",
@@ -77,7 +80,7 @@ export async function carregarContextoPaciente(userId: string): Promise<DadosCon
     }),
     db.consulta.findMany({
       where: { pacienteId: userId, status: "confirmada", dataInicio: { gte: agora } },
-      select: { especialidade: true, dataInicio: true, medico: { select: { nome: true } } },
+      select: { especialidade: true, dataInicio: true },
       orderBy: { dataInicio: "asc" },
       take: 3,
     }),
@@ -101,9 +104,10 @@ export async function carregarContextoPaciente(userId: string): Promise<DadosCon
     }),
     db.perfilMedico.findMany({
       where: { status: "ativo", user: { status: "ativo" } },
-      select: { especialidade: true, user: { select: { nome: true } } },
+      select: { especialidade: true, user: { select: { id: true, nome: true } } },
+      orderBy: { userId: "asc" },
       take: 8,
-    }).catch(() => [] as { especialidade: string; user: { nome: string } }[]),
+    }).catch(() => [] as { especialidade: string; user: { id: string; nome: string } }[]),
   ]);
   const iso = dataNascimentoParaIso(perfil?.dataNascimento);
   const idade = iso ? idadeDeNascimento(iso, agora) : perfil?.idade || null;
@@ -113,7 +117,7 @@ export async function carregarContextoPaciente(userId: string): Promise<DadosCon
     alergias: lista(perfil?.alergias),
     medicamentos: perfil ? (await nomesMedicamentosEmUso(userId, perfil.medicamentos)).map((m) => curto(m, 60)) : [],
     condicoes: lista(perfil?.comorbidades),
-    proximas: proximas.map((c) => ({ especialidade: c.especialidade, medico: c.medico.nome, quando: quandoClinica(c.dataInicio) })),
+    proximas: proximas.map((c) => ({ especialidade: c.especialidade, quando: quandoClinica(c.dataInicio) })),
     anteriores: anteriores.map((c) => ({
       especialidade: c.especialidade,
       quando: quandoClinica(c.dataInicio),
@@ -132,6 +136,11 @@ export async function carregarContextoPaciente(userId: string): Promise<DadosCon
         return { especialidade: t.consulta.especialidade, queixa: curto(queixa.trim(), 100) };
       })
       .filter((t) => t.queixa && t.queixa !== "não informado"),
-    medicosDisponiveis: medicos.map((m) => ({ especialidade: m.especialidade, medico: m.user.nome })),
+    medicosDisponiveis: codificarMedicos(medicos),
   };
+}
+
+/** M1, M2… na ordem recebida (estável por userId). Puro, testável. */
+export function codificarMedicos(medicos: { especialidade: string; user: { id?: string; nome: string } }[]): MedicoCodificado[] {
+  return medicos.map((m, i) => ({ codigo: `M${i + 1}`, id: m.user.id ?? "", nome: m.user.nome, especialidade: m.especialidade }));
 }

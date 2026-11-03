@@ -21,6 +21,7 @@ import { ErroBionIa, perguntarBionIa, textoParaCopiar } from "@/lib/bion-ia-clie
 import { inline } from "@/lib/markdown-simples";
 import { BlocoRaciocinio } from "./BlocoRaciocinio";
 import { ConsentimentoIA } from "./paciente/ConsentimentoIA";
+import { AVISO_DADOS_PESSOAIS_IA } from "@/lib/consentimento-ia";
 // M22: o ConsentimentoIA usa as classes bpp-sheet (tema do app do paciente,
 // escopo .bp-app-paciente em paciente.css). A página clássica importa o CSS
 // e monta a folha dentro de um invólucro .bp-app-paciente — sem isso a folha
@@ -193,7 +194,7 @@ export function BionIA() {
                 setAceitePendente(null);
                 setMensagens((prev) => [
                   ...prev,
-                  { id: `ia-aceite-${Date.now()}`, remetente: "ia", texto: "Obrigado! Aceite registrado.", hora: horaAgora() },
+                  { id: `ia-aceite-${Date.now()}`, remetente: "ia", texto: "BION IA ativada.", hora: horaAgora() },
                 ]);
                 void enviarMensagem(t);
               }}
@@ -204,7 +205,7 @@ export function BionIA() {
                   {
                     id: `ia-recusa-${Date.now()}`,
                     remetente: "ia",
-                    texto: "Tudo bem. Sem o aceite, a BION IA fica pausada para você. O agendamento e as consultas continuam normais.",
+                    texto: "Tudo bem. Sem a BION IA, o resto do app funciona normalmente: agendamento, exames e consultas continuam iguais. Se mudar de ideia, mande uma nova pergunta e ative a IA.",
                     hora: horaAgora(),
                   },
                 ]);
@@ -313,7 +314,12 @@ export function BionIA() {
         </div>
 
         {/* Campo de Entrada */}
-        <div className="p-4 border-t bg-card flex items-center gap-3">
+        {!isMedico ? (
+          <p className="px-4 pt-3 border-t bg-card text-xs text-muted-foreground" role="note">
+            {AVISO_DADOS_PESSOAIS_IA}
+          </p>
+        ) : null}
+        <div className={`p-4 bg-card flex items-center gap-3 ${isMedico ? "border-t" : ""}`}>
           <input
                   aria-label="Sua pergunta para a BION IA"
             value={entrada}

@@ -20,6 +20,7 @@ import { validarTelefone } from "@/lib/server/validar-perfil";
 import { dataNascimentoParaIso, idadeDeNascimento } from "@/lib/idade";
 import { anonimizarMensagensIa } from "@/lib/server/anonimizar-ia";
 import { anonimizarMensagensTexto } from "@/lib/server/anonimizar-texto";
+import { filtrarMensagensDaPaciente } from "@/lib/server/filtro-dados-pessoais";
 import { alturaCanonica, formatarAltura, formatarPeso, lerAlturaCm, lerPesoKg, medidaCanonica, pesoCanonico } from "@/lib/medidas-paciente";
 import { nomesMedicamentosEmUso } from "@/lib/server/medicamentos-legado";
 
@@ -496,7 +497,8 @@ export async function POST(req: NextRequest) {
     const mensagem = (body.mensagem ?? "").trim().slice(0, 4000);
     const historico = (body.historico ?? [])
       .filter((m) => m?.texto?.trim() && ["usuario", "ia"].includes(m.remetente))
-      .slice(-14);
+      // Teto de 12 mensagens para a IA: 11 do histórico + a mensagem atual.
+      .slice(-11);
 
     const perfilDados = await montarPerfilDados(usuario.id);
 
@@ -553,11 +555,12 @@ export async function POST(req: NextRequest) {
     // Pausa da BION IA (opt-in, BION_IA_PAUSADA=true) ou portão jurídico (sem
     // o aceite da versão atual da IA/NVIDIA): a triagem segue SÓ no motor
     // local — nada vai para a IA externa.
-    const tentarLlm =
-      !iaPausada() &&
-      process.env.BION_MOTOR_LOCAL !== "1" &&
-      process.env.BION_ANAMNESE_LLM === "1" &&
-      (await exigirConsentimentoIa(usuario)) === null;
+    const iaLigadaNoServidor =
+      !iaPausada() && process.env.BION_MOTOR_LOCAL !== "1" && process.env.BION_ANAMNESE_LLM === "1";
+    // semIa = a IA estaria ligada, mas falta o consentimento (ausente, v2 ou
+    // revogado): a triagem segue no motor local (sem 403) e o app mostra o aviso.
+    const semIa = iaLigadaNoServidor && (await exigirConsentimentoIa(usuario)) !== null;
+    const tentarLlm = iaLigadaNoServidor && !semIa;
 
     if (tentarLlm && !fugaCurta && (historico.length > 0 || Boolean(mensagem))) {
       const instrucaoAbertura = mensagem
@@ -607,7 +610,9 @@ export async function POST(req: NextRequest) {
           anonimizarMensagensTexto(mensagensIdent, { nomesPacientes: [consulta.medico.nome], substitutoNome: "o médico" }),
           { nomesPacientes: [usuario.nome] },
         );
-        const llmRes = await chatComFonte(mensagensIa, TIMEOUT_LLM_MS, anonNomes(usuario, consulta.medico.nome, perfilDados?.genero ?? ""));
+        // Nomes de terceiros, CPF, telefone e e-mail no que a paciente digitou.
+        const mensagensFiltradas = filtrarMensagensDaPaciente(mensagensIa, { nomesConhecidos: [usuario.nome] });
+        const llmRes = await chatComFonte(mensagensFiltradas, TIMEOUT_LLM_MS, anonNomes(usuario, consulta.medico.nome, perfilDados?.genero ?? ""));
         llmFonte = llmRes.fonte;
         parsed = llmRes.texto ? extrairJson(llmRes.texto) : null;
 
@@ -741,6 +746,7 @@ export async function POST(req: NextRequest) {
 
     return ok({
       texto: textoFinal,
+      semIa,
       etapa: etapaNova,
       etapaAnterior: etapaAtual,
       etapa_concluida: corrigiuPerfil ? false : Boolean(parsed.etapa_concluida) || etapaExaurida,

@@ -1,5 +1,6 @@
 "use client";
 
+import { AVISO_DADOS_PESSOAIS_IA } from "@/lib/consentimento-ia";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useVoltarFecha } from "./useVoltarFecha";
 import { useFocoDialogo } from "./useFocoDialogo";
@@ -7,6 +8,7 @@ import { ArrowLeft, ArrowRight, Check, Sparkles, X } from "lucide-react";
 import { toast } from "sonner";
 import { useBion } from "@/lib/bion-store";
 import { ETAPAS_ANAMNESE, type RespostaAnamnese } from "./chat-bion-types";
+import { AvisoTriagemSemIA, ConsentimentoIA } from "./ConsentimentoIA";
 
 const ATALHOS: Record<string, string[]> = {
   identificacao: ["Está certo", "Preciso atualizar peso", "Preciso atualizar telefone"],
@@ -57,6 +59,9 @@ export function TriagemSlides({
   const [indice, setIndice] = useState(0);
   const [rascunhos, setRascunhos] = useState<Record<string, string>>({});
   const [enviando, setEnviando] = useState(false);
+  // Triagem sem a IA (falta consentimento): aviso + folha de consentimento.
+  const [semIa, setSemIa] = useState(false);
+  const [pedirConsentimento, setPedirConsentimento] = useState(false);
   const [respondidos, setRespondidos] = useState<Record<string, string>>({});
   const [etapaServidor, setEtapaServidor] = useState("identificacao");
   const [pronta, setPronta] = useState(false);
@@ -95,6 +100,7 @@ export function TriagemSlides({
 
   const aplicarRespostaApi = (json: RespostaAnamnese) => {
     aplicarDelta(json);
+    if (typeof json.semIa === "boolean") setSemIa(json.semIa);
     const ana = json.anamnese as { etapa?: string; coleta?: Record<string, Record<string, unknown>>; status?: string } | undefined;
     hidratar(json.etapa ?? ana?.etapa, ana?.coleta, json.concluida || ana?.status === "concluida");
   };
@@ -218,6 +224,16 @@ export function TriagemSlides({
 
   return (
     <div ref={dialogoRef} className="absolute inset-0 z-[70] flex flex-col bpp-sheet" role="dialog" aria-modal="true" aria-label="Triagem">
+      {pedirConsentimento ? (
+        <ConsentimentoIA
+          onAceito={() => {
+            setPedirConsentimento(false);
+            setSemIa(false);
+            toast.success("BION IA ativada. As próximas respostas da triagem já usam a IA.");
+          }}
+          onRecusar={() => setPedirConsentimento(false)}
+        />
+      ) : null}
       <header className="px-4 pt-3 pb-2 flex items-center gap-3">
         <button type="button" onClick={onFechar} className="rounded-full p-2 bpp-sheet-chip" aria-label="Fechar">
           <X className="w-5 h-5" />
@@ -320,13 +336,17 @@ export function TriagemSlides({
                     </button>
                   ))}
                 </div>
+                {semIa ? <div className="mt-4"><AvisoTriagemSemIA onAtivar={() => setPedirConsentimento(true)} /></div> : null}
+                <p className="mt-4 text-xs bpp-sheet-suave" role="note">
+                  {AVISO_DADOS_PESSOAIS_IA}
+                </p>
                 <textarea
                   value={rascunhos[item.id] ?? ""}
                   onChange={(e) => setRascunhos((r) => ({ ...r, [item.id]: e.target.value }))}
                   rows={3}
                   aria-label="Sua resposta"
                   placeholder="Escreva sua resposta aqui…"
-                  className="mt-4 w-full min-h-24 shrink-0 rounded-2xl border bpp-sheet-borda p-3 text-sm bpp-sheet-campo"
+                  className="mt-2 w-full min-h-24 shrink-0 rounded-2xl border bpp-sheet-borda p-3 text-sm bpp-sheet-campo"
                 />
               </>
             ) : null}

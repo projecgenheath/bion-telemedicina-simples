@@ -26,9 +26,10 @@ export type RespostaBionIa = {
 };
 
 function lerAcao(v: unknown): AcaoBionIa | null {
-  const a = v as { tipo?: unknown; especialidade?: unknown } | null;
+  const a = v as { tipo?: unknown; especialidade?: unknown; medicoId?: unknown; medico?: unknown } | null;
   if (!a || a.tipo !== "agendar") return null;
-  return { tipo: "agendar", especialidade: typeof a.especialidade === "string" && a.especialidade.trim() ? a.especialidade.trim() : null };
+  const txt = (x: unknown) => (typeof x === "string" && x.trim() ? x.trim() : null);
+  return { tipo: "agendar", especialidade: txt(a.especialidade), medicoId: txt(a.medicoId), medico: txt(a.medico) };
 }
 
 /** Aviso mostrado na resposta e no bloco "ver como a IA pensou". */
@@ -124,7 +125,8 @@ export async function perguntarBionIa(
       res = await fetch("/api/bion-ia", {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/x-ndjson" },
-        body: JSON.stringify({ mensagens, stream: true }),
+        // Teto de 12 mensagens (o servidor também corta).
+        body: JSON.stringify({ mensagens: mensagens.slice(-12), stream: true }),
         signal: ctrl.signal,
       });
     } catch {
@@ -194,40 +196,86 @@ export async function perguntarBionIa(
   }
 }
 
+/** Estado do portão da IA: consentimento da IA e Termos/Política, separados. */
+export type EstadoPortaoIa = { ia: boolean; termos: boolean };
+
 /**
- * O paciente já aceitou a versão atual da BION IA (NVIDIA)? Falha de rede ou
- * resposta inesperada = false (falha fechada: mostra o card de aceite).
+ * Estado atual (falha de rede ou resposta inesperada = false nos dois: falha
+ * fechada, mostra o card de consentimento).
  */
-export async function consultarConsentimentoIa(): Promise<boolean> {
+export async function consultarEstadoIa(): Promise<EstadoPortaoIa> {
   try {
     const [ia, termos] = await Promise.all([
       fetch("/api/paciente/consentimento-ia", { cache: "no-store" }),
       fetch("/api/paciente/aceite-termos", { cache: "no-store" }),
     ]);
-    if (!ia.ok || !termos.ok) return false;
-    const j = (await ia.json().catch(() => null)) as { vigente?: unknown; versao?: unknown } | null;
-    const t = (await termos.json().catch(() => null)) as { pendente?: unknown } | null;
-    return j?.vigente === true && j.versao === VERSAO_CONSENTIMENTO_IA && t?.pendente === false;
+    const j = ia.ok ? ((await ia.json().catch(() => null)) as { vigente?: unknown; versao?: unknown } | null) : null;
+    const t = termos.ok ? ((await termos.json().catch(() => null)) as { pendente?: unknown } | null) : null;
+    return { ia: j?.vigente === true && j.versao === VERSAO_CONSENTIMENTO_IA, termos: t?.pendente === false };
   } catch {
-    return false;
+    return { ia: false, termos: false };
   }
 }
 
-/** Registra o aceite da versão atual da BION IA (NVIDIA). true = aceito. */
-export async function aceitarConsentimentoIa(): Promise<boolean> {
+/** A IA está liberada (consentimento da IA vigente E Termos vigentes)? */
+export async function consultarConsentimentoIa(): Promise<boolean> {
+  const e = await consultarEstadoIa();
+  return e.ia && e.termos;
+}
+
+/**
+ * Registra o consentimento da IA (versão atual). Os Termos/Política só são
+ * aceitos quando a paciente marcou a caixa PRÓPRIA deles (`aceitarTermos`):
+ * são dois aceites separados, cada um com seu registro. true = tudo gravado.
+ */
+export async function aceitarConsentimentoIa(opcoes: { aceitarTermos?: boolean } = {}): Promise<boolean> {
   try {
-    // Um aceite só (card do chat): Termos + Privacidade vigentes e o aviso da IA.
-    const termos = await fetch("/api/paciente/aceite-termos", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(aceiteTermosPayload("PACIENTE")),
-    });
-    if (!termos.ok) return false;
+    if (opcoes.aceitarTermos) {
+      const termos = await fetch("/api/paciente/aceite-termos", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(aceiteTermosPayload("PACIENTE")),
+      });
+      if (!termos.ok) return false;
+    }
     const r = await fetch("/api/paciente/consentimento-ia", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ versao: VERSAO_CONSENTIMENTO_IA }),
     });
+    return r.ok;
+  } catch {
+    return false;
+  }
+}
+
+/** Grava só o aceite dos Termos/Política vigentes (mesmo endpoint de sempre). */
+export async function aceitarTermosVigentes(): Promise<boolean> {
+  try {
+    const r = await fetch("/api/paciente/aceite-termos", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(aceiteTermosPayload("PACIENTE")),
+    });
+    return r.ok;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * "Usar o app sem a IA": a IA é recusada (nada é gravado para ela); se a
+ * paciente marcou a caixa dos Termos, o aceite deles é gravado. true = pode fechar.
+ */
+export async function recusarIaGuardandoTermos(op: { termosPendentes: boolean; marcouTermos: boolean }): Promise<boolean> {
+  if (!op.termosPendentes || !op.marcouTermos) return true;
+  return aceitarTermosVigentes();
+}
+
+/** Revoga o consentimento da IA (Perfil > Privacidade). true = revogado. */
+export async function revogarConsentimentoIa(): Promise<boolean> {
+  try {
+    const r = await fetch("/api/paciente/consentimento-ia", { method: "DELETE" });
     return r.ok;
   } catch {
     return false;
