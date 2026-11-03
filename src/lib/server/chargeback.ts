@@ -208,7 +208,7 @@ type DisputaStripe = {
 };
 export type EventoDisputa = { id: string; created: number; type: string; data: { object: unknown } };
 
-type CbExistente = { id: string; statusStripe: string; ultimoEventoId: string | null; ultimoEventoEm: Date | null; falhaBion: boolean; medicoId: string | null; taxaDisputaCentavos: number | null };
+type CbExistente = { id: string; statusStripe: string; ultimoEventoId: string | null; ultimoEventoEm: Date | null; falhaBion: boolean; medicoId: string | null; taxaDisputaCentavos: number | null; creditoPendente: boolean; creditoDevolvidoEm: Date | null };
 type TxDisputa = TravaSql & {
   pagamento: {
     findFirst(a: unknown): Promise<{ id: string; consultaId: string | null; consulta: { medicoId: string } | null; pedidoRenovacao: { medicoId: string } | null } | null>;
@@ -258,7 +258,7 @@ export async function registrarDisputaStripe(evento: EventoDisputa, d: DbDisputa
     await travarPorDisputa(tx, disputa.id);
     const atual = await tx.chargeback.findUnique({
       where: { stripeDisputeId: disputa.id },
-      select: { id: true, statusStripe: true, ultimoEventoId: true, ultimoEventoEm: true, falhaBion: true, medicoId: true, taxaDisputaCentavos: true },
+      select: { id: true, statusStripe: true, ultimoEventoId: true, ultimoEventoEm: true, falhaBion: true, medicoId: true, taxaDisputaCentavos: true, creditoPendente: true, creditoDevolvidoEm: true },
     });
     const taxa = taxaDaDisputa(disputa.balance_transactions);
     if (!atual) {
@@ -295,14 +295,18 @@ export async function registrarDisputaStripe(evento: EventoDisputa, d: DbDisputa
     if (atual.ultimoEventoId === evento.id) return "repetido";
     if (atual.ultimoEventoEm && em.getTime() < atual.ultimoEventoEm.getTime()) return "fora_de_ordem";
     if (statusFinal(atual.statusStripe) && !statusFinal(disputa.status)) return "fora_de_ordem";
+    // Crédito ao médico só na PRIMEIRA transição para 'won' e nunca depois de o
+    // admin registrar o crédito devolvido (ex.: funds_reinstated → PIX manual →
+    // closed(won) não pode pedir para pagar de novo).
+    const podeCreditar = atual.statusStripe !== "won" && !atual.creditoPendente && !atual.creditoDevolvidoEm;
     let creditoPendente = false;
     if (disputa.status === "won") {
       const ajuste = await tx.repasseAjuste.findFirst({ where: { chargebackId: atual.id }, select: { id: true, repasseId: true } });
-      if (ajuste?.repasseId) creditoPendente = true;
+      if (ajuste?.repasseId) creditoPendente = podeCreditar;
       else if (ajuste) {
         const r = await tx.repasseAjuste.deleteMany({ where: { id: ajuste.id, chargebackId: atual.id, repasseId: null } });
         // Defesa: 0 apagados = aplicado num repasse depois da leitura → crédito pendente.
-        if (r.count === 0) creditoPendente = true;
+        if (r.count === 0) creditoPendente = podeCreditar;
       }
     }
     await tx.chargeback.update({

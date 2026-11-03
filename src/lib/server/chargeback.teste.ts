@@ -40,7 +40,7 @@ const MOTIVO = "Falha de antifraude da BION liberou a cobrança";
 
 const cbD = (x = {}) => ({ falhaBion: false, medicoId: "m1", statusStripe: "lost", taxaDisputaCentavos: 1500, ...x });
 describe("desconto", () => {
-  test("sem dupla taxa do cartão: só a dispute fee", () => {
+  test("desconto é só a dispute fee (composição)", () => {
     expect(descontoChargebackCentavos(cbD())).toBe(1500);
     expect(composicaoDescontoChargeback(cbD())).toEqual({ taxaDisputaCentavos: 1500, taxaCartaoCentavos: 0, valorDisputadoCentavos: 0, totalCentavos: 1500 });
   });
@@ -138,7 +138,7 @@ function fakeDisputa(e: EstD, corrida = false): DbDisputa {
         remarcacaoPendente: { findFirst: async (a: any) => (e.rem && a.where.gatewayRef === e.rem.gatewayRef ? e.rem : null) },
         chargeback: {
           findUnique: async () => (e.cb ? { ...e.cb } : null),
-          create: async (a: any) => { e.cb = { id: "cb1", falhaBion: false, creditoPendente: false, ...a.data }; return { id: "cb1" }; },
+          create: async (a: any) => { e.cb = { id: "cb1", falhaBion: false, creditoPendente: false, creditoDevolvidoEm: null, ...a.data }; return { id: "cb1" }; },
           update: async (a: any) => { Object.assign(e.cb, a.data); return {}; },
         },
         repasseAjuste: {
@@ -204,6 +204,25 @@ describe("registrarDisputaStripe", () => {
     expect([e.cb.creditoPendente, e.ajuste?.repasseId]).toEqual([true, "rp_corrida"]);
     expect(travas[0]).toContain("FOR UPDATE");
     expect(travas[0]).toContain("dp_1");
+  });
+  test("funds_reinstated(won) → crédito devolvido → closed(won): não pede para pagar de novo", async () => {
+    const e: EstD = { cb: null, ajuste: null, pag: pagC, rem: null };
+    const d = fakeDisputa(e);
+    await registrarDisputaStripe(ev("evt_1", 100, "needs_response"), d);
+    e.ajuste = { id: "aj1", repasseId: "rp1" };
+    await registrarDisputaStripe(ev("evt_2", 200, "won"), d);
+    expect(e.cb.creditoPendente).toBe(true);
+    Object.assign(e.cb, { creditoPendente: false, creditoDevolvidoEm: new Date(), creditoDevolvidoMotivo: "PIX manual 03/11", creditoDevolvidoPorId: "adm1" });
+    expect(await registrarDisputaStripe(ev("evt_3", 300, "won"), d)).toBe("atualizada");
+    expect(e.cb.creditoPendente).toBe(false);
+  });
+  test("won repetido (outro evento) sem crédito devolvido não duplica: só a 1ª transição", async () => {
+    const e: EstD = { cb: null, ajuste: null, pag: pagC, rem: null };
+    const d = fakeDisputa(e);
+    await registrarDisputaStripe(ev("evt_1", 100, "won"), d);
+    e.ajuste = { id: "aj1", repasseId: "rp1" };
+    await registrarDisputaStripe(ev("evt_2", 200, "won"), d);
+    expect(e.cb.creditoPendente).toBe(false);
   });
   test("multa de remarcação: médico pela RemarcacaoPendente", async () => {
     const e: EstD = { cb: null, ajuste: null, pag: null, rem: { gatewayRef: "stripe_pi:pi_1", consultaId: "c9", consulta: { medicoId: "m9" } } };

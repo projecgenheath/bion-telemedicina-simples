@@ -65,6 +65,12 @@ DO $$ BEGIN
   ALTER TABLE public."Chargeback" ADD CONSTRAINT "Chargeback_falhaBionPorId_fkey"
     FOREIGN KEY ("falhaBionPorId") REFERENCES public."User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+-- Colunas de ordem/idempotência e crédito (IF NOT EXISTS: re-execução segura
+-- mesmo se a tabela já existir de uma versão anterior deste rascunho).
+ALTER TABLE public."Chargeback" ADD COLUMN IF NOT EXISTS "ultimoEventoId"  TEXT;
+ALTER TABLE public."Chargeback" ADD COLUMN IF NOT EXISTS "ultimoEventoEm"  TIMESTAMP(3);
+ALTER TABLE public."Chargeback" ADD COLUMN IF NOT EXISTS "creditoPendente" BOOLEAN NOT NULL DEFAULT false;
+
 -- Crédito devolvido ao médico (disputa ganha depois do repasse).
 ALTER TABLE public."Chargeback" ADD COLUMN IF NOT EXISTS "creditoDevolvidoMotivo" TEXT;
 ALTER TABLE public."Chargeback" ADD COLUMN IF NOT EXISTS "creditoDevolvidoPorId"  TEXT;
