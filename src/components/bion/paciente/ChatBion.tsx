@@ -37,7 +37,7 @@ import {
 } from "./chat-bion-types";
 import { ChatListaMensagens } from "./ChatListaMensagens";
 import { ConsentimentoLaudoIA } from "./ConsentimentoLaudoIA";
-import { CardAceiteIA } from "./ConsentimentoIA";
+import { AvisoSemIA, CardAceiteIA } from "./ConsentimentoIA";
 import { CAMPO_CONSENTIMENTO_IA_EXAME, VERSAO_CONSENTIMENTO_IA_EXAME } from "@/lib/consentimento-ia-exame";
 
 /**
@@ -98,6 +98,9 @@ export function ChatBion({
   // Trava do aceite (NVIDIA): null = verificando; false = card de aceite no
   // topo e entrada bloqueada; true = liberado. O servidor também recusa (403).
   const [iaLiberada, setIaLiberada] = useState<boolean | null>(null);
+  // A IA é opcional: a paciente escolheu "Usar o app sem a IA" (só nesta
+  // conversa; o consentimento continua não dado e pode ser ativado depois).
+  const [iaRecusada, setIaRecusada] = useState(false);
   // Card "Agendar consulta" sugerido pela IA (ex.: depois de um sintoma).
   const [ofertaAgendar, setOfertaAgendar] = useState<{ especialidade: string | null } | null>(null);
   // M22: selo do cabeçalho reflete o estado real — vira "pausada" quando o
@@ -501,6 +504,7 @@ export function ChatBion({
         // para a caixa e mostra o card de aceite (entrada bloqueada).
         setMensagens((m) => m.slice(0, emStream ? -2 : -1));
         setEntrada(t);
+        setIaRecusada(false);
         setIaLiberada(false);
         return;
       }
@@ -857,15 +861,22 @@ export function ChatBion({
             </div>
           </section>
         ) : null}
-        {iaLiberada === false && !anamneseAtiva ? (
+        {iaLiberada === false && iaRecusada && !anamneseAtiva ? (
+          <AvisoSemIA onAtivar={() => setIaRecusada(false)} />
+        ) : null}
+        {iaLiberada === false && !iaRecusada && !anamneseAtiva ? (
           <CardAceiteIA
+            onRecusar={() => {
+              setAceiteIaPendente(null);
+              setIaRecusada(true);
+            }}
             onAceito={() => {
               // Atualização funcional: não sobrescreve a lista com estado velho
               // (antes o reenvio apagava o "Aceite registrado").
               const p = aceiteIaPendente;
               setAceiteIaPendente(null);
               setIaLiberada(true);
-              setMensagens((m) => [...m, { remetente: "ia", texto: "Aceite registrado. Pode mandar sua pergunta." }]);
+              setMensagens((m) => [...m, { remetente: "ia", texto: "BION IA ativada. Pode mandar sua pergunta." }]);
               if (p?.arquivo) setLaudoPendente(p.arquivo);
             }}
           />
@@ -1049,9 +1060,9 @@ export function ChatBion({
             <button type="button" onClick={iniciarAgendamento} className="rounded-full bg-bion-sea/10 dark:bg-sky-400/10 border border-bion-sea/25 dark:border-sky-300/25 px-4 py-2.5 text-sm font-semibold text-bion-sea dark:text-sky-300">
               Agendar consulta
             </button>
-            <button type="button" onClick={iniciarExame} className="rounded-full bg-bion-sea/10 dark:bg-sky-400/10 border border-bion-sea/25 dark:border-sky-300/25 px-4 py-2.5 text-sm font-semibold text-bion-sea dark:text-sky-300">
+            {iaLiberada === true ? <button type="button" onClick={iniciarExame} className="rounded-full bg-bion-sea/10 dark:bg-sky-400/10 border border-bion-sea/25 dark:border-sky-300/25 px-4 py-2.5 text-sm font-semibold text-bion-sea dark:text-sky-300">
               Enviar laudo de exame
-            </button>
+            </button> : null}
           </div>
         )}
 
@@ -1070,7 +1081,7 @@ export function ChatBion({
                 enviarComIntencao(entrada);
               }
             }}
-            placeholder={anamneseAtiva ? "Conte com suas palavras…" : "Pergunte à BION IA…"}
+            placeholder={anamneseAtiva ? "Conte com suas palavras…" : iaLiberada === true ? "Pergunte à BION IA…" : "BION IA desativada"}
             aria-label={anamneseAtiva ? "Resposta para a anamnese" : "Mensagem para a BION IA"}
             disabled={pensando || enviandoLaudo || (etapa !== null && !anamneseAtiva) || (!anamneseAtiva && iaLiberada !== true)}
             className="flex-1 bg-transparent outline-none text-sm text-bion-ink dark:text-bion-paper placeholder:text-bion-ink/60 dark:placeholder:text-white/60 disabled:opacity-50"

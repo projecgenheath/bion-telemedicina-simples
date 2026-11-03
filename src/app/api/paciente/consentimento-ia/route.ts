@@ -9,7 +9,6 @@ import {
   VERSAO_CONSENTIMENTO_IA,
   consentimentoIaVigente,
 } from "@/lib/consentimento-ia";
-import { VERSAO_PRIVACIDADE, VERSAO_TERMOS_PACIENTE } from "@/lib/aceite-termos";
 
 /**
  * Consentimento geral da BION IA (provedor NVIDIA).
@@ -39,7 +38,7 @@ export async function POST(req: Request) {
         quem: usuario.nome,
         perfil: "PACIENTE",
         finalidade: FINALIDADE_CONSENTIMENTO_IA,
-        documentos: 2,
+        documentos: 0,
         aceito: true,
       },
     });
@@ -48,7 +47,7 @@ export async function POST(req: Request) {
       categoria: "consentimento",
       entidade: "consentimento",
       entidadeId: VERSAO_CONSENTIMENTO_IA,
-      detalhes: `Aceite da BION IA (NVIDIA), ${VERSAO_PRIVACIDADE} e ${VERSAO_TERMOS_PACIENTE} — versão ${VERSAO_CONSENTIMENTO_IA} em ${registro.createdAt.toISOString()}`,
+      detalhes: `Consentimento específico da BION IA (NVIDIA, EUA), separado dos Termos/Política — versão ${VERSAO_CONSENTIMENTO_IA} em ${registro.createdAt.toISOString()}`,
     });
     if (!audit) {
       // sem trilha de auditoria o aceite não vale: desfaz

@@ -89,11 +89,27 @@ test("aceite de versão antiga → 403 e nenhuma chamada ao LLM", async () => {
   expect(chamadasLlm).toBe(0);
 });
 
+test("clique único antigo (v2, Termos + IA juntos) → 403: precisa do consentimento separado v3", async () => {
+  chamadasLlm = 0;
+  termosAceitos = termosVigentes;
+  registro = {
+    aceito: true,
+    finalidade: "Uso da BION IA: mensagens e laudos enviados à NVIDIA (EUA); aceite de x e y (versão ia-nvidia-v2-2026-10-28)",
+    createdAt: new Date(),
+  };
+  const r = await pedir(false);
+  expect(r.status).toBe(403);
+  expect(((await r.json()) as { termosPendentes: boolean }).termosPendentes).toBe(false);
+  expect(chamadasLlm).toBe(0);
+});
+
 test("aviso da IA aceito mas Termos novos pendentes → 403 e nenhuma chamada ao LLM", async () => {
   chamadasLlm = 0;
   termosAceitos = [];
   registro = { aceito: true, finalidade: FINALIDADE_CONSENTIMENTO_IA, createdAt: new Date() };
-  expect((await pedir(true)).status).toBe(403);
+  const r = await pedir(true);
+  expect(r.status).toBe(403);
+  expect(((await r.json()) as { termosPendentes: boolean }).termosPendentes).toBe(true);
   expect((await pedir(false)).status).toBe(403);
   expect(chamadasLlm).toBe(0);
 });

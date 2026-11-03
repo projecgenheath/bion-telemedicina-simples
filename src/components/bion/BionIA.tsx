@@ -193,7 +193,7 @@ export function BionIA() {
                 setAceitePendente(null);
                 setMensagens((prev) => [
                   ...prev,
-                  { id: `ia-aceite-${Date.now()}`, remetente: "ia", texto: "Obrigado! Aceite registrado.", hora: horaAgora() },
+                  { id: `ia-aceite-${Date.now()}`, remetente: "ia", texto: "BION IA ativada.", hora: horaAgora() },
                 ]);
                 void enviarMensagem(t);
               }}
@@ -204,7 +204,7 @@ export function BionIA() {
                   {
                     id: `ia-recusa-${Date.now()}`,
                     remetente: "ia",
-                    texto: "Tudo bem. Sem o aceite, a BION IA fica pausada para você. O agendamento e as consultas continuam normais.",
+                    texto: "Tudo bem. Sem a BION IA, o resto do app funciona normalmente: agendamento, exames e consultas continuam iguais. Se mudar de ideia, mande uma nova pergunta e ative a IA.",
                     hora: horaAgora(),
                   },
                 ]);

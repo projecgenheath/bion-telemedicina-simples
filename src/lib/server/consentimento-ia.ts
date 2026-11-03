@@ -24,15 +24,20 @@ export async function ultimoConsentimentoIa(pacienteId: string) {
 export async function exigirConsentimentoIa(usuario: { id: string; role: string }): Promise<Response | null> {
   if (usuario.role !== "PACIENTE") return null;
   let vigente = false;
+  let termosPendentes = false;
   try {
     // Precisa dos DOIS: o aviso da IA (NVIDIA) e o aceite dos Termos/Privacidade
     // vigentes. Bug de produção (2026-10-28): só o aviso da IA era checado, e a
     // paciente sem os Termos novos usava o chat livre (só o agendamento travava).
-    vigente =
-      consentimentoIaVigente(await ultimoConsentimentoIa(usuario.id)) &&
-      !(await aceiteVigentePendente(usuario.id, "PACIENTE"));
+    // v3: são dois registros SEPARADOS (Termos/Política e consentimento da IA).
+    const [ia, termos] = await Promise.all([
+      ultimoConsentimentoIa(usuario.id),
+      aceiteVigentePendente(usuario.id, "PACIENTE"),
+    ]);
+    termosPendentes = Boolean(termos);
+    vigente = consentimentoIaVigente(ia) && !termosPendentes;
   } catch {
     vigente = false;
   }
-  return vigente ? null : Response.json(corpoConsentimentoIaPendente(), { status: STATUS_CONSENTIMENTO_IA_PENDENTE });
+  return vigente ? null : Response.json(corpoConsentimentoIaPendente(termosPendentes), { status: STATUS_CONSENTIMENTO_IA_PENDENTE });
 }
