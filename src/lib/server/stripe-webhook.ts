@@ -234,8 +234,9 @@ async function confirmar(
   if (paymentIntentId) {
     await db.pagamento.updateMany({ where: { id: pagamento.id, stripePaymentIntentId: null }, data: { stripePaymentIntentId: paymentIntentId } });
   }
-  // Evento do Connect (event.account) = cobrança direta: grava a conta ANTES de
-  // confirmar (é o que tira o pagamento do repasse PIX).
+  // Fonte da verdade da marca: o evento pago. event.account = cobrança direta
+  // (grava a conta ANTES de confirmar, tira do repasse PIX); null = plataforma
+  // (limpa marca de sessão direta abandonada).
   await gravarContaMedicoDaCobranca({ pagamentoId: pagamento.id }, conta);
   if (cobranca.chargeId) {
     await db.pagamento.updateMany({ where: { id: pagamento.id, stripeChargeId: null }, data: { stripeChargeId: cobranca.chargeId } });
@@ -337,7 +338,8 @@ async function processarMulta(s: Stripe.Checkout.Session, acao: "confirmar" | "f
   }
   // Guarda o PaymentIntent como referência da multa (para devolução, se houver).
   const pi = typeof s.payment_intent === "string" ? s.payment_intent : s.payment_intent?.id ?? null;
-  // Evento do Connect (event.account) = multa cobrada na conta do médico: fora do repasse PIX.
+  // Fonte da verdade: o evento pago. event.account = multa na conta do médico
+  // (fora do repasse PIX); null = plataforma (limpa marca de sessão abandonada).
   await gravarContaMedicoDaCobranca({ remarcacaoId: r.id }, conta);
   const res = await aprovarMultaRemarcacao(r.id, "webhook", pi ? `stripe_pi:${pi}` : undefined);
   if (!res) return { acao: "confirmar", confirmado: false };

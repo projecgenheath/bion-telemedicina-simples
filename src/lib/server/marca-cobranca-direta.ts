@@ -21,17 +21,32 @@ export function contaMedicoDaCobranca(modo: ModoCobranca, connect: { contaMedico
 }
 
 /**
- * Grava a conta no registro cobrado. Chamado no checkout (sessão aberta) e no
- * webhook (confirmação, com `event.account`). conta null = não grava nada
- * (evento sem account nunca apaga a marca do checkout).
+ * Valor da marca a gravar. FONTE DA VERDADE = o evento de pagamento: o
+ * webhook chama com `event.account` (null = cobrança na conta da BION, modo
+ * plataforma) e isso SOBRESCREVE o que o checkout gravou. Assim, sessão
+ * direta abandonada + pagamento depois no modo plataforma deixa a marca null
+ * e o pagamento volta ao repasse PIX. O checkout no modo plataforma também
+ * grava null.
+ */
+export function marcaCobrancaDireta(conta: string | null | undefined): { stripeContaMedico: string | null } {
+  const c = typeof conta === "string" ? conta.trim() : "";
+  return { stripeContaMedico: c || null };
+}
+
+/**
+ * Grava (ou LIMPA, com conta null) a conta no registro cobrado. Chamado no
+ * checkout (sessão aberta) e no webhook (pagamento concluído, com
+ * `event.account` ou null). A última chamada vale.
  */
 export async function gravarContaMedicoDaCobranca(
   alvo: { pagamentoId?: string | null; remarcacaoId?: string | null },
   conta: string | null,
 ): Promise<void> {
-  if (!conta) return;
+  const data = marcaCobrancaDireta(conta);
   void alvo;
-  // TODO(Médicos, PR A): depois da coluna stripeContaMedico (20261103c):
-  //   if (alvo.pagamentoId) await db.pagamento.update({ where: { id: alvo.pagamentoId }, data: { stripeContaMedico: conta } });
-  //   if (alvo.remarcacaoId) await db.remarcacaoPendente.update({ where: { id: alvo.remarcacaoId }, data: { stripeContaMedico: conta } });
+  void data;
+  // TODO(Médicos, PR A): depois da coluna stripeContaMedico (20261103c) — grava
+  // também null (limpa a marca de sessão direta abandonada):
+  //   if (alvo.pagamentoId) await db.pagamento.update({ where: { id: alvo.pagamentoId }, data });
+  //   if (alvo.remarcacaoId) await db.remarcacaoPendente.update({ where: { id: alvo.remarcacaoId }, data });
 }

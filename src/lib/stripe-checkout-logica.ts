@@ -203,7 +203,8 @@ export type { ModoCobranca };
  */
 export function bloqueioChaveLive(modo: ModoCobranca, chave: string | undefined = process.env.STRIPE_SECRET_KEY): boolean {
   void modo;
-  return (chave ?? "").trim().startsWith("sk_live_");
+  const c = (chave ?? "").trim();
+  return c.startsWith("sk_live_") || c.startsWith("rk_live_");
 }
 
 /** Dados do Connect (só nos modos destino/direta). */
