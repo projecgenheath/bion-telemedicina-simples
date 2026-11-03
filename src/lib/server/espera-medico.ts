@@ -27,7 +27,9 @@ import { confirmarPagamento, modoGateway } from "@/lib/server/pagamentos";
 import {
   ANDAMENTO_MIN as CONSULTA_EM_ANDAMENTO_MIN,
   PROXIMA_CONSULTA_MIN as SEM_CONSULTA_PROXIMOS_MIN,
+  modoCobrancaAtual,
 } from "@/lib/server/medico-livre";
+import { medicoPodeSerCobrado } from "@/lib/medico-cobravel";
 import { decisaoCobranca, ERRO_PAGAMENTO_INDISPONIVEL, stripeAtivo } from "@/lib/stripe-checkout-logica";
 import {
   calcularDiferenca,
@@ -425,7 +427,7 @@ export async function cancelarPorEspera(params: { consultaId: string; pacienteId
 /* ---------------- remarcar ---------------- */
 
 /** Confere, na transação, que o médico está livre AGORA (regra do Médicos). Devolve o valor dele em centavos ou null.
- *  Além de ativo/especialidade/recebimento e sem consulta na janela, exige
+ *  Além de ativo/especialidade/conta Stripe cobrável e sem consulta na janela, exige
  *  dia NÃO bloqueado e grade AGORA (dia de atendimento, fora de pausa
  *  semanal) — a consulta imediata da remarcação por espera começa agora,
  *  então a grade vale aqui como no agendamento; não há no código evidência
@@ -435,10 +437,14 @@ export async function medicoLivreAgora(tx: Tx, p: { medicoId: string; especialid
   if (consultaEmHorarioVedado(p.agora)) return null;
   const m = await tx.user.findUnique({
     where: { id: p.medicoId },
-    select: { role: true, status: true, perfilMedico: { select: { especialidade: true, status: true, valor: true, diasAtendimento: true, pausasSemanais: true } }, dadosRecebimento: { select: { id: true } } },
+    select: { role: true, status: true, perfilMedico: { select: { especialidade: true, status: true, valor: true, diasAtendimento: true, pausasSemanais: true, stripeAccountId: true } } },
   });
   if (!m || m.role !== "MEDICO" || m.status !== "ativo" || !m.perfilMedico || m.perfilMedico.status !== "ativo") return null;
-  if (m.perfilMedico.especialidade !== p.especialidade || !m.dadosRecebimento) return null;
+  // Cobrável pelo Stripe (mesma regra do checkout); a chave PIX é só histórico.
+  // Exigido mesmo com diferença zero ou negativa: nos modos direta/destino o
+  // dinheiro da consulta (e qualquer reembolso ou estorno futuro) passa pela
+  // conta conectada do médico NOVO, então ele precisa ter conta Stripe.
+  if (m.perfilMedico.especialidade !== p.especialidade || !medicoPodeSerCobrado(modoCobrancaAtual(), m.perfilMedico.stripeAccountId)) return null;
   if (await diaBloqueado(tx as ClienteBanco, p.medicoId, p.agora)) return null;
   if (conferirDiasEPausas({ diasAtendimento: m.perfilMedico.diasAtendimento, pausasSemanais: m.perfilMedico.pausasSemanais }, p.agora)) return null;
   const ocupado = await tx.consulta.findFirst({

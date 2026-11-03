@@ -6,6 +6,7 @@ import { falha } from "@/lib/server/http";
 import { criarCobranca } from "@/lib/server/pagamentos";
 import { comissaoPlataformaConnect, gatewayCheckout } from "@/lib/server/gateway-pagamento";
 import { modoCobrancaStripe, stripeConnectAtivo } from "@/lib/server/stripe";
+import { contaStripeDoMedico, medicoPodeSerCobrado } from "@/lib/medico-cobravel";
 import {
   avaliarElegibilidade,
   avaliarMulta,
@@ -266,10 +267,16 @@ async function abrirSessao(usuario: Usuario, a: Alvo) {
   let connect: DadosConnect | null = null;
   if (modo !== "plataforma") {
     const medico = await db.perfilMedico.findUnique({ where: { userId: a.medicoId }, select: { stripeAccountId: true } });
-    if (!medico?.stripeAccountId) {
-      return Response.json({ erro: "Pagamento online indisponível para este médico." }, { status: 409 });
+    const contaMedico = contaStripeDoMedico(medico?.stripeAccountId);
+    // `!contaMedico` não é redundante para o TypeScript: estreita para string
+    // (usado em `connect` abaixo); medicoPodeSerCobrado é a regra compartilhada.
+    if (!contaMedico || !medicoPodeSerCobrado(modo, contaMedico)) {
+      return Response.json(
+        { erro: "Este médico ainda não pode receber pagamento online. Escolha outro horário ou outro médico.", codigo: "medico_sem_conta" },
+        { status: 409 },
+      );
     }
-    connect = { contaMedico: medico.stripeAccountId, taxaPlataformaCentavos: comissaoPlataformaConnect(a.tipo, a.valorCentavos) };
+    connect = { contaMedico, taxaPlataformaCentavos: comissaoPlataformaConnect(a.tipo, a.valorCentavos) };
   }
 
   const gateway = gatewayCheckout();
