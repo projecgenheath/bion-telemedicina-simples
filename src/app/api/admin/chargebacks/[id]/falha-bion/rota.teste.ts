@@ -18,6 +18,7 @@ const cb = { id: "cb1", falhaBion: false, medicoId: "m1", statusStripe: "needs_r
   async $transaction(fn: (tx: unknown) => Promise<unknown>) {
     transacoes++;
     return fn({
+      $queryRaw: async () => [],
       chargeback: { findUnique: async () => ({ ...cb }), update: async () => ({}) },
       repasseAjuste: { findFirst: async () => null, deleteMany: async () => ({ count: 0 }) },
       auditLog: { create: async () => ({}) },

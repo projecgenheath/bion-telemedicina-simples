@@ -52,6 +52,7 @@ model User {
   repasseAjustes       RepasseAjuste[] @relation("RepasseAjusteMedico")
   chargebacksMedico    Chargeback[]    @relation("ChargebackMedico")
   chargebacksFalhaBion Chargeback[]    @relation("ChargebackFalhaBionPor")
+  chargebacksCredito   Chargeback[]    @relation("ChargebackCreditoDevolvidoPor")
   dadosRecebimento     DadosRecebimentoMedico?
   bloqueiosAgenda      BloqueioAgenda[] @relation("BloqueioMedico")
   chamadasRecebidas    ChamadaConsulta[] @relation("ChamadaPara") // Admin: toque da consulta
@@ -736,6 +737,10 @@ model Chargeback {
   ultimoEventoId      String? // idempotência/ordem dos eventos charge.dispute.*
   ultimoEventoEm      DateTime?
   creditoPendente     Boolean         @default(false) // ganha depois de o desconto entrar num repasse
+  creditoDevolvidoMotivo String?
+  creditoDevolvidoPorId  String?
+  creditoDevolvidoPor    User?        @relation("ChargebackCreditoDevolvidoPor", fields: [creditoDevolvidoPorId], references: [id], onDelete: Restrict)
+  creditoDevolvidoEm     DateTime?
   falhaBion           Boolean         @default(false)
   falhaBionMotivo     String?
   falhaBionPorId      String?

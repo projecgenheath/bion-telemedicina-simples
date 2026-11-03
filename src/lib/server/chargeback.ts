@@ -88,7 +88,23 @@ type CbLinha = {
 };
 type AjusteLinha = { id: string; repasseId: string | null };
 
-export type TxChargeback = {
+/**
+ * Trava de linha: TODO caminho que muda o desconto de um chargeback (marcação
+ * do admin, eventos do Stripe, crédito devolvido E o fechamento do repasse em
+ * repasse.ts — Médicos) faz, dentro da transação e ANTES de ler o estado,
+ * `SELECT ... FROM "Chargeback" WHERE id = $1 FOR UPDATE`. O repasse, depois
+ * da trava, re-confere `descontoChargebackCentavos(cb)` antes de aplicar o
+ * ajuste (0 = não aplicar). Assim marcar/ganhar e fechar nunca se cruzam.
+ */
+type TravaSql = { $queryRaw(q: TemplateStringsArray, ...v: unknown[]): Promise<unknown> };
+async function travarChargeback(tx: TravaSql, id: string) {
+  await tx.$queryRaw`SELECT "id" FROM "Chargeback" WHERE "id" = ${id} FOR UPDATE`;
+}
+async function travarPorDisputa(tx: TravaSql, stripeDisputeId: string) {
+  await tx.$queryRaw`SELECT "id" FROM "Chargeback" WHERE "stripeDisputeId" = ${stripeDisputeId} FOR UPDATE`;
+}
+
+export type TxChargeback = TravaSql & {
   chargeback: {
     findUnique(a: unknown): Promise<CbLinha | null>;
     update(a: unknown): Promise<unknown>;
@@ -121,6 +137,7 @@ export async function marcarFalhaBion(
   class FalhaAudit extends Error {}
   try {
     return await d.$transaction(async (tx) => {
+      await travarChargeback(tx, p.chargebackId);
       const cb = await tx.chargeback.findUnique({
         where: { id: p.chargebackId },
         select: { id: true, falhaBion: true, medicoId: true, statusStripe: true, taxaDisputaCentavos: true },
@@ -130,18 +147,19 @@ export async function marcarFalhaBion(
         return { ok: true as const, mudou: false, falhaBion: cb.falhaBion, descontoCentavos: descontoChargebackCentavos(cb), ajusteRemovido: false };
       }
       const ajuste = await tx.repasseAjuste.findFirst({ where: { chargebackId: cb.id }, select: { id: true, repasseId: true } });
-      if (ajuste?.repasseId) {
-        return {
-          ok: false as const,
-          status: 409 as const,
-          erro: "O desconto deste chargeback já entrou num repasse fechado. Não dá para mudar a marcação; trate como ajuste manual.",
-          codigo: "repasse_liquidado",
-        };
-      }
+      const liquidado = {
+        ok: false as const,
+        status: 409 as const,
+        erro: "O desconto deste chargeback já entrou num repasse fechado. Não dá para mudar a marcação; trate como ajuste manual.",
+        codigo: "repasse_liquidado",
+      };
+      if (ajuste?.repasseId) return liquidado;
       let ajusteRemovido = false;
       if (p.falhaBion && ajuste) {
         const r = await tx.repasseAjuste.deleteMany({ where: { id: ajuste.id, chargebackId: cb.id, repasseId: null } });
-        ajusteRemovido = r.count > 0;
+        // Defesa: 0 apagados = o ajuste foi aplicado num repasse depois da leitura.
+        if (r.count === 0) return liquidado;
+        ajusteRemovido = true;
       }
       await tx.chargeback.update({
         where: { id: cb.id },
@@ -191,7 +209,7 @@ type DisputaStripe = {
 export type EventoDisputa = { id: string; created: number; type: string; data: { object: unknown } };
 
 type CbExistente = { id: string; statusStripe: string; ultimoEventoId: string | null; ultimoEventoEm: Date | null; falhaBion: boolean; medicoId: string | null; taxaDisputaCentavos: number | null };
-type TxDisputa = {
+type TxDisputa = TravaSql & {
   pagamento: {
     findFirst(a: unknown): Promise<{ id: string; consultaId: string | null; consulta: { medicoId: string } | null; pedidoRenovacao: { medicoId: string } | null } | null>;
   };
@@ -237,6 +255,7 @@ export async function registrarDisputaStripe(evento: EventoDisputa, d: DbDisputa
   if (!disputa?.id || !evento.id) return "invalida";
   const em = new Date((evento.created ?? 0) * 1000);
   return d.$transaction(async (tx) => {
+    await travarPorDisputa(tx, disputa.id);
     const atual = await tx.chargeback.findUnique({
       where: { stripeDisputeId: disputa.id },
       select: { id: true, statusStripe: true, ultimoEventoId: true, ultimoEventoEm: true, falhaBion: true, medicoId: true, taxaDisputaCentavos: true },
@@ -280,7 +299,11 @@ export async function registrarDisputaStripe(evento: EventoDisputa, d: DbDisputa
     if (disputa.status === "won") {
       const ajuste = await tx.repasseAjuste.findFirst({ where: { chargebackId: atual.id }, select: { id: true, repasseId: true } });
       if (ajuste?.repasseId) creditoPendente = true;
-      else if (ajuste) await tx.repasseAjuste.deleteMany({ where: { id: ajuste.id, chargebackId: atual.id, repasseId: null } });
+      else if (ajuste) {
+        const r = await tx.repasseAjuste.deleteMany({ where: { id: ajuste.id, chargebackId: atual.id, repasseId: null } });
+        // Defesa: 0 apagados = aplicado num repasse depois da leitura → crédito pendente.
+        if (r.count === 0) creditoPendente = true;
+      }
     }
     await tx.chargeback.update({
       where: { id: atual.id },
@@ -294,4 +317,82 @@ export async function registrarDisputaStripe(evento: EventoDisputa, d: DbDisputa
     });
     return "atualizada";
   });
+}
+
+// ------------------------------------------------------------ crédito devolvido
+
+export type TxCredito = TravaSql & {
+  chargeback: {
+    findUnique(a: unknown): Promise<{ id: string; creditoPendente: boolean } | null>;
+    update(a: unknown): Promise<unknown>;
+  };
+  auditLog: { create(a: unknown): Promise<unknown> };
+};
+export type DbCredito = { $transaction<T>(fn: (tx: TxCredito) => Promise<T>): Promise<T> };
+
+export type ResultadoCredito =
+  | { ok: true; mudou: boolean }
+  | { ok: false; status: 404 | 409 | 503; erro: string; codigo: string };
+
+/**
+ * Admin registra que devolveu ao médico (fora do sistema, ex.: PIX manual) o
+ * desconto de uma disputa ganha depois do repasse. Limpa creditoPendente e
+ * grava quem/quando/por quê. Auditoria falhou → rollback e 503.
+ * Idempotente: já devolvido → 200 mudou:false. Sem crédito pendente → 409.
+ */
+export async function registrarCreditoDevolvido(
+  p: { chargebackId: string; admin: Admin; motivo: string; agora?: Date },
+  d: DbCredito = db as unknown as DbCredito,
+): Promise<ResultadoCredito> {
+  const agora = p.agora ?? new Date();
+  class FalhaAudit extends Error {}
+  try {
+    return await d.$transaction(async (tx) => {
+      await travarChargeback(tx, p.chargebackId);
+      const cb = await tx.chargeback.findUnique({
+        where: { id: p.chargebackId },
+        select: { id: true, creditoPendente: true, creditoDevolvidoEm: true },
+      }) as { id: string; creditoPendente: boolean; creditoDevolvidoEm?: Date | null } | null;
+      if (!cb) return { ok: false as const, status: 404 as const, erro: "Chargeback não encontrado.", codigo: "nao_encontrado" };
+      if (!cb.creditoPendente) {
+        if (cb.creditoDevolvidoEm) return { ok: true as const, mudou: false };
+        return { ok: false as const, status: 409 as const, erro: "Este chargeback não tem crédito pendente ao médico.", codigo: "sem_credito_pendente" };
+      }
+      await tx.chargeback.update({
+        where: { id: cb.id },
+        data: { creditoPendente: false, creditoDevolvidoMotivo: p.motivo, creditoDevolvidoPorId: p.admin.id, creditoDevolvidoEm: agora },
+      });
+      try {
+        await tx.auditLog.create({
+          data: {
+            acao: "CHARGEBACK_CREDITO_DEVOLVIDO",
+            categoria: "pagamento",
+            severidade: "warning",
+            usuarioId: p.admin.id,
+            usuarioNome: p.admin.nome,
+            role: p.admin.role,
+            entidade: "chargeback",
+            entidadeId: cb.id,
+            detalhes: `Crédito ao médico registrado como devolvido. Motivo: ${p.motivo}`,
+          },
+        });
+      } catch {
+        throw new FalhaAudit();
+      }
+      return { ok: true as const, mudou: true };
+    });
+  } catch (e) {
+    if (e instanceof FalhaAudit) {
+      return { ok: false, status: 503, erro: "Não foi possível registrar a auditoria; nada foi alterado. Tente de novo.", codigo: "auditoria_indisponivel" };
+    }
+    throw e;
+  }
+}
+
+/** Valida { motivo } do crédito devolvido. */
+export function validarMotivo(body: unknown): { ok: true; motivo: string } | { ok: false; erro: string } {
+  const motivo = typeof (body as { motivo?: unknown } | null)?.motivo === "string" ? ((body as { motivo: string }).motivo).trim() : "";
+  if (motivo.length < MOTIVO_MIN) return { ok: false, erro: `Informe o motivo (mínimo ${MOTIVO_MIN} caracteres).` };
+  if (motivo.length > MOTIVO_MAX) return { ok: false, erro: `Motivo longo demais (máximo ${MOTIVO_MAX} caracteres).` };
+  return { ok: true, motivo };
 }

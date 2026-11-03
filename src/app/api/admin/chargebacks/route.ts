@@ -11,7 +11,7 @@ export async function GET() {
       orderBy: { criadoEm: "desc" },
       take: 200,
       select: {
-        id: true, stripeDisputeId: true, consultaId: true, valorCentavos: true, taxaDisputaCentavos: true, medicoId: true, creditoPendente: true,
+        id: true, stripeDisputeId: true, consultaId: true, valorCentavos: true, taxaDisputaCentavos: true, medicoId: true, creditoPendente: true, creditoDevolvidoEm: true, creditoDevolvidoMotivo: true,
         statusStripe: true, motivoStripe: true, falhaBion: true, falhaBionMotivo: true, falhaBionEm: true, criadoEm: true,
         medico: { select: { nome: true } },
         falhaBionPor: { select: { nome: true } },
@@ -27,6 +27,8 @@ export async function GET() {
         valorCentavos: c.valorCentavos,
         semMedico: !c.medicoId,
         creditoPendente: c.creditoPendente,
+        creditoDevolvidoEm: c.creditoDevolvidoEm,
+        creditoDevolvidoMotivo: c.creditoDevolvidoMotivo,
         taxaDisputaCentavos: c.taxaDisputaCentavos,
         descontoCentavos: descontoChargebackCentavos(c),
         statusStripe: c.statusStripe,

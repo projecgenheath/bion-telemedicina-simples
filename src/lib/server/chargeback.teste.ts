@@ -1,6 +1,6 @@
 /** Chargeback + "falha da BION". Rodar: bun --conditions=react-server test ./src/lib/server/chargeback.teste.ts */
 import { describe, expect, test } from "bun:test";
-import { composicaoDescontoChargeback, descontoChargebackCentavos, marcarFalhaBion, registrarDisputaStripe, taxaDaDisputa, validarPedidoFalhaBion, type DbChargeback, type DbDisputa } from "./chargeback";
+import { registrarCreditoDevolvido, type DbCredito, composicaoDescontoChargeback, descontoChargebackCentavos, marcarFalhaBion, registrarDisputaStripe, taxaDaDisputa, validarPedidoFalhaBion, type DbChargeback, type DbDisputa } from "./chargeback";
 
 type Estado = {
   cb: { id: string; falhaBion: boolean; falhaBionMotivo: string | null; falhaBionPorId: string | null; falhaBionEm: Date | null; medicoId: string; statusStripe: string; taxaDisputaCentavos: number | null } | null;
@@ -14,17 +14,19 @@ const novo = (x: Partial<Estado> = {}): Estado => ({
   ...x,
 });
 /** Transação falsa: em erro, volta ao estado anterior (rollback). */
-function fakeDb(e: Estado, auditFalha = false): DbChargeback {
+let travas: string[] = [];
+function fakeDb(e: Estado, auditFalha = false, corrida = false): DbChargeback {
   return {
     async $transaction(fn) {
       const antes = structuredClone(e);
       const tx = {
+        $queryRaw: async (q: TemplateStringsArray, ...v: unknown[]) => { travas.push(`${q.join("?")}|${v.join(",")}`); return []; },
         chargeback: {
           findUnique: async () => (e.cb ? { ...e.cb } : null),
           update: async (a: any) => { Object.assign(e.cb!, a.data); return {}; },
         },
         repasseAjuste: {
-          findFirst: async () => (e.ajuste ? { ...e.ajuste } : null),
+          findFirst: async () => { const r = e.ajuste ? { ...e.ajuste } : null; if (corrida && e.ajuste) e.ajuste.repasseId = "rp_corrida"; return r; },
           deleteMany: async (a: any) => { if (e.ajuste && e.ajuste.id === a.where.id && e.ajuste.repasseId === null) { e.ajuste = null; return { count: 1 }; } return { count: 0 }; },
         },
         auditLog: { create: async (a: any) => { if (auditFalha) throw new Error("db fora"); e.audits.push(a); return {}; } },
@@ -107,6 +109,19 @@ describe("marcarFalhaBion", () => {
     expect(r).toMatchObject({ ok: false, status: 503, codigo: "auditoria_indisponivel" });
     expect([e.cb!.falhaBion, e.cb!.falhaBionMotivo, e.ajuste?.id]).toEqual([false, null, "aj1"]);
   });
+  test("trava a linha do Chargeback FOR UPDATE antes de ler", async () => {
+    travas = [];
+    await marcarFalhaBion({ chargebackId: "cb1", admin, falhaBion: true, motivo: MOTIVO }, fakeDb(novo()));
+    expect(travas.length).toBe(1);
+    expect(travas[0]).toContain("FOR UPDATE");
+    expect(travas[0]).toContain("cb1");
+  });
+  test("corrida: ajuste aplicado entre leitura e delete → 409 e nada muda", async () => {
+    const e = novo();
+    const r = await marcarFalhaBion({ chargebackId: "cb1", admin, falhaBion: true, motivo: MOTIVO }, fakeDb(e, false, true));
+    expect(r).toMatchObject({ ok: false, status: 409, codigo: "repasse_liquidado" });
+    expect([e.cb!.falhaBion, e.audits.length, e.ajuste?.repasseId]).toEqual([false, 0, "rp_corrida"]);
+  });
   test("chargeback inexistente: 404", async () => {
     const r = await marcarFalhaBion({ chargebackId: "x", admin, falhaBion: true, motivo: MOTIVO }, fakeDb(novo({ cb: null })));
     expect(r).toMatchObject({ ok: false, status: 404 });
@@ -114,10 +129,11 @@ describe("marcarFalhaBion", () => {
 });
 
 type EstD = { cb: any; ajuste: { id: string; repasseId: string | null } | null; pag: any; rem: any };
-function fakeDisputa(e: EstD): DbDisputa {
+function fakeDisputa(e: EstD, corrida = false): DbDisputa {
   return {
     async $transaction(fn) {
       return fn({
+        $queryRaw: async (q: TemplateStringsArray, ...v: unknown[]) => { travas.push(`${q.join("?")}|${v.join(",")}`); return []; },
         pagamento: { findFirst: async () => e.pag },
         remarcacaoPendente: { findFirst: async (a: any) => (e.rem && a.where.gatewayRef === e.rem.gatewayRef ? e.rem : null) },
         chargeback: {
@@ -126,7 +142,7 @@ function fakeDisputa(e: EstD): DbDisputa {
           update: async (a: any) => { Object.assign(e.cb, a.data); return {}; },
         },
         repasseAjuste: {
-          findFirst: async () => (e.ajuste ? { ...e.ajuste } : null),
+          findFirst: async () => { const r = e.ajuste ? { ...e.ajuste } : null; if (corrida && e.ajuste) e.ajuste.repasseId = "rp_corrida"; return r; },
           deleteMany: async () => { const n = e.ajuste && !e.ajuste.repasseId ? 1 : 0; if (n) e.ajuste = null; return { count: n }; },
         },
       } as any);
@@ -179,6 +195,16 @@ describe("registrarDisputaStripe", () => {
     await registrarDisputaStripe(ev("evt_2", 200, "won"), d);
     expect([e.cb.creditoPendente, e.ajuste?.id]).toEqual([true, "aj1"]);
   });
+  test("corrida: ganha com ajuste aplicado entre leitura e delete → creditoPendente", async () => {
+    const e: EstD = { cb: null, ajuste: null, pag: pagC, rem: null };
+    await registrarDisputaStripe(ev("evt_1", 100, "needs_response"), fakeDisputa(e));
+    e.ajuste = { id: "aj1", repasseId: null };
+    travas = [];
+    await registrarDisputaStripe(ev("evt_2", 200, "won"), fakeDisputa(e, true));
+    expect([e.cb.creditoPendente, e.ajuste?.repasseId]).toEqual([true, "rp_corrida"]);
+    expect(travas[0]).toContain("FOR UPDATE");
+    expect(travas[0]).toContain("dp_1");
+  });
   test("multa de remarcação: médico pela RemarcacaoPendente", async () => {
     const e: EstD = { cb: null, ajuste: null, pag: null, rem: { gatewayRef: "stripe_pi:pi_1", consultaId: "c9", consulta: { medicoId: "m9" } } };
     await registrarDisputaStripe(ev("evt_1", 100, "needs_response"), fakeDisputa(e));
@@ -197,5 +223,42 @@ describe("registrarDisputaStripe", () => {
     e.cb.falhaBion = true;
     await registrarDisputaStripe(ev("evt_2", 200, "lost"), d);
     expect(e.cb.falhaBion).toBe(true);
+  });
+});
+
+function fakeCredito(cb: any, auditFalha = false): DbCredito & { audits: unknown[] } {
+  const audits: unknown[] = [];
+  return {
+    audits,
+    async $transaction(fn) {
+      const antes = cb ? { ...cb } : null;
+      try {
+        return await fn({
+          $queryRaw: async () => [],
+          chargeback: { findUnique: async () => (cb ? { ...cb } : null), update: async (a: any) => { Object.assign(cb, a.data); return {}; } },
+          auditLog: { create: async (a: unknown) => { if (auditFalha) throw new Error("x"); audits.push(a); return {}; } },
+        } as any);
+      } catch (err) { if (cb && antes) { for (const k of Object.keys(cb)) delete cb[k]; Object.assign(cb, antes); } throw err; }
+    },
+  } as any;
+}
+describe("crédito devolvido", () => {
+  test("limpa creditoPendente, grava quem/quando/por quê e audita", async () => {
+    const cb: any = { id: "cb1", creditoPendente: true, creditoDevolvidoEm: null };
+    const d = fakeCredito(cb);
+    expect(await registrarCreditoDevolvido({ chargebackId: "cb1", admin, motivo: "PIX manual de R$ 15,00 em 03/11" }, d)).toEqual({ ok: true, mudou: true });
+    expect([cb.creditoPendente, cb.creditoDevolvidoPorId, cb.creditoDevolvidoMotivo]).toEqual([false, "adm1", "PIX manual de R$ 15,00 em 03/11"]);
+    expect(d.audits.length).toBe(1);
+    expect(await registrarCreditoDevolvido({ chargebackId: "cb1", admin, motivo: "PIX manual de R$ 15,00 em 03/11" }, d)).toEqual({ ok: true, mudou: false });
+  });
+  test("sem crédito pendente: 409", async () => {
+    const r = await registrarCreditoDevolvido({ chargebackId: "cb1", admin, motivo: "PIX manual de R$ 15,00" }, fakeCredito({ id: "cb1", creditoPendente: false, creditoDevolvidoEm: null }));
+    expect(r).toMatchObject({ ok: false, status: 409, codigo: "sem_credito_pendente" });
+  });
+  test("auditoria falha: rollback e 503", async () => {
+    const cb: any = { id: "cb1", creditoPendente: true, creditoDevolvidoEm: null };
+    const r = await registrarCreditoDevolvido({ chargebackId: "cb1", admin, motivo: "PIX manual de R$ 15,00" }, fakeCredito(cb, true));
+    expect(r).toMatchObject({ ok: false, status: 503 });
+    expect(cb.creditoPendente).toBe(true);
   });
 });

@@ -16,6 +16,8 @@ export type ChargebackLista = {
   valorCentavos: number;
   semMedico: boolean;
   creditoPendente: boolean;
+  creditoDevolvidoEm: string | null;
+  creditoDevolvidoMotivo: string | null;
   taxaDisputaCentavos: number | null;
   descontoCentavos: number;
   statusStripe: string;
@@ -54,14 +56,16 @@ function CardChargeback({ c, onMudou }: { c: ChargebackLista; onMudou: () => voi
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const marcar = !c.falhaBion;
+  const credito = c.creditoPendente;
 
   async function enviar() {
     setEnviando(true);
     setErro(null);
-    const resp = await chamarApi(`/api/admin/chargebacks/${encodeURIComponent(c.id)}/falha-bion`, {
+    const rota = credito ? "credito-devolvido" : "falha-bion";
+    const resp = await chamarApi(`/api/admin/chargebacks/${encodeURIComponent(c.id)}/${rota}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ falhaBion: marcar, motivo }),
+      body: JSON.stringify(credito ? { motivo } : { falhaBion: marcar, motivo }),
     });
     setEnviando(false);
     if (resp.erro) return setErro(resp.erro);
@@ -85,6 +89,7 @@ function CardChargeback({ c, onMudou }: { c: ChargebackLista; onMudou: () => voi
           <>
             Disputa ganha: nada é descontado.
             {c.creditoPendente ? " O desconto já tinha entrado num repasse: falta devolver ao médico (crédito manual)." : ""}
+            {c.creditoDevolvidoEm ? ` Crédito devolvido. Motivo: ${c.creditoDevolvidoMotivo ?? ""}` : ""}
           </>
         ) : c.falhaBion ? (
           <>
@@ -98,12 +103,12 @@ function CardChargeback({ c, onMudou }: { c: ChargebackLista; onMudou: () => voi
           </>
         )}
       </p>
-      {c.semMedico ? null : c.liquidado ? (
+      {c.semMedico ? null : c.liquidado && !credito ? (
         <p className="text-xs ba-texto-2">O desconto já entrou num repasse: a marcação não pode mais mudar.</p>
       ) : aberto ? (
         <div className="space-y-2">
           <label className="block text-sm" htmlFor={`motivo-${c.id}`}>
-            Motivo {marcar ? "da falha da BION" : "para desmarcar"} (mínimo {MOTIVO_MIN} caracteres)
+            Motivo {credito ? "(como o crédito foi devolvido)" : marcar ? "da falha da BION" : "para desmarcar"} (mínimo {MOTIVO_MIN} caracteres)
           </label>
           <textarea
             id={`motivo-${c.id}`}
@@ -120,7 +125,7 @@ function CardChargeback({ c, onMudou }: { c: ChargebackLista; onMudou: () => voi
           ) : null}
           <div className="flex gap-2">
             <button type="button" className="ba-botao" disabled={enviando || motivo.trim().length < MOTIVO_MIN} onClick={() => void enviar()}>
-              {marcar ? "Confirmar falha da BION" : "Confirmar desmarcar"}
+              {credito ? "Confirmar crédito devolvido" : marcar ? "Confirmar falha da BION" : "Confirmar desmarcar"}
             </button>
             <button type="button" className="ba-botao ba-botao-secundario" onClick={() => setAberto(false)}>
               Cancelar
@@ -129,7 +134,7 @@ function CardChargeback({ c, onMudou }: { c: ChargebackLista; onMudou: () => voi
         </div>
       ) : (
         <button type="button" className="ba-botao ba-botao-secundario" onClick={() => setAberto(true)}>
-          {marcar ? "Marcar falha da BION" : "Desmarcar falha da BION"}
+          {credito ? "Registrar crédito devolvido" : marcar ? "Marcar falha da BION" : "Desmarcar falha da BION"}
         </button>
       )}
     </article>

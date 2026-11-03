@@ -65,6 +65,19 @@ DO $$ BEGIN
   ALTER TABLE public."Chargeback" ADD CONSTRAINT "Chargeback_falhaBionPorId_fkey"
     FOREIGN KEY ("falhaBionPorId") REFERENCES public."User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+-- Crédito devolvido ao médico (disputa ganha depois do repasse).
+ALTER TABLE public."Chargeback" ADD COLUMN IF NOT EXISTS "creditoDevolvidoMotivo" TEXT;
+ALTER TABLE public."Chargeback" ADD COLUMN IF NOT EXISTS "creditoDevolvidoPorId"  TEXT;
+ALTER TABLE public."Chargeback" ADD COLUMN IF NOT EXISTS "creditoDevolvidoEm"     TIMESTAMP(3);
+DO $$ BEGIN
+  ALTER TABLE public."Chargeback" ADD CONSTRAINT "Chargeback_creditoDevolvidoPorId_fkey"
+    FOREIGN KEY ("creditoDevolvidoPorId") REFERENCES public."User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  ALTER TABLE public."Chargeback" ADD CONSTRAINT "Chargeback_credito_devolvido_check" CHECK (
+    ("creditoDevolvidoEm" IS NULL AND "creditoDevolvidoMotivo" IS NULL AND "creditoDevolvidoPorId" IS NULL) OR
+    ("creditoDevolvidoEm" IS NOT NULL AND char_length(btrim("creditoDevolvidoMotivo")) >= 10 AND "creditoDevolvidoPorId" IS NOT NULL));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 ALTER TABLE public."Chargeback" ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON TABLE public."Chargeback" FROM anon, authenticated;
 
