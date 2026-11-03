@@ -286,11 +286,11 @@ function DetalheView({
  * Há repasse para o admin pagar (fechado aguardando pagamento, prévia de
  * hoje com líquido, ou saldo positivo)? É a condição REAL do alerta forte
  * de chave PIX: "sem chave o admin não consegue pagar" só é fato quando
- * existe pagamento esperando. Não há como distinguir aqui um eventual
- * "modelo de recebimento" do médico — o Stripe Connect é ligado por
- * configuração do servidor e a conta conectada não vem neste wire (por
- * privacidade, os dados de recebimento não entram no bootstrap) — então
- * o alerta se ancora no que é verificável: dinheiro a receber.
+ * existe pagamento esperando. Médico na cobrança direta (Stripe Connect,
+ * 90% na conta conectada dele): as cobranças com stripeContaMedico ficam fora
+ * da prévia, do saldo e dos repasses PIX (vão só no bloco "Recebido direto no
+ * Stripe"), então o alerta de chave PIX é pulado para ele; só aparece se
+ * ainda houver dinheiro a receber por PIX (ex.: consultas antigas).
  */
 function repasseParaPagar(lista: ListaRepasses): boolean {
   return (

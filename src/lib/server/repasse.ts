@@ -152,7 +152,7 @@ export type CandidatoConsulta = ConsultaReceita & {
   tipoAtendimento?: string | null;
   /** id do Pagamento: trava para o mesmo pagamento nunca ser repassado duas vezes. */
   pagamentoId?: string | null;
-  /** Cobrado direto na conta Stripe do médico (Pagamento.stripeContaDireta): nunca entra no repasse. */
+  /** Cobrado direto na conta Stripe do médico (Pagamento.stripeContaMedico): nunca entra no repasse. */
   cobrancaDireta?: boolean;
 };
 
@@ -224,11 +224,11 @@ export type CandidatoMultaRemarcacao = {
  * Cobrança direta (STRIPE_MODO_COBRANCA=direta): o dinheiro caiu direto na
  * conta Stripe conectada do médico, com a comissão da BION retida como
  * application_fee. Repassar de novo por PIX pagaria o médico duas vezes.
- * A decisão é POR REGISTRO (stripeContaDireta gravado no checkout/webhook),
+ * A decisão é POR REGISTRO (stripeContaMedico gravado no checkout/webhook),
  * nunca pelo env atual: trocar o modo depois não muda o que já foi cobrado.
  */
-export function cobradoDiretoNoStripe(x: { stripeContaDireta?: string | null } | null | undefined): boolean {
-  return !!x?.stripeContaDireta?.trim();
+export function cobradoDiretoNoStripe(x: { stripeContaMedico?: string | null } | null | undefined): boolean {
+  return !!x?.stripeContaMedico?.trim();
 }
 
 export type ItemCalculado = {
@@ -549,7 +549,7 @@ async function carregarCandidatos(c: Cliente, medicoId: string, corte: Date) {
         pago: true,
         tipoAtendimento: true,
         // Taxa real do Stripe (balance_transaction.fee) → pagamento.taxaGatewayCentavos.
-        pagamento: { select: { id: true, status: true, stripeTaxaCentavos: true, stripeContaDireta: true, reembolsos: { select: selReembolso } } },
+        pagamento: { select: { id: true, status: true, stripeTaxaCentavos: true, stripeContaMedico: true, reembolsos: { select: selReembolso } } },
         eventos: { where: { tipo: { in: TIPOS_EVENTO_DESFECHO } }, select: selEventoDesfecho },
       },
     }),
@@ -566,7 +566,7 @@ async function carregarCandidatos(c: Cliente, medicoId: string, corte: Date) {
         consultaId: true,
         em: true,
         multaCentavos: true,
-        consulta: { select: { valor: true, pagamento: { select: { stripeContaDireta: true, reembolsos: { select: selReembolso } } } } },
+        consulta: { select: { valor: true, pagamento: { select: { stripeContaMedico: true, reembolsos: { select: selReembolso } } } } },
       },
     }),
     c.remarcacaoPendente.findMany({
@@ -583,7 +583,7 @@ async function carregarCandidatos(c: Cliente, medicoId: string, corte: Date) {
         aprovadoEm: true,
         criadoEm: true,
         multaCentavos: true,
-        stripeContaDireta: true,
+        stripeContaMedico: true,
         reembolso: { select: selReembolso },
       },
     }),
@@ -605,7 +605,7 @@ async function carregarCandidatos(c: Cliente, medicoId: string, corte: Date) {
       respondidoEm: true,
       valorCentavos: true,
       pagamentoId: true,
-      pagamento: { select: { status: true, stripeTaxaCentavos: true, stripeContaDireta: true, reembolsos: { select: selReembolso } } },
+      pagamento: { select: { status: true, stripeTaxaCentavos: true, stripeContaMedico: true, reembolsos: { select: selReembolso } } },
     },
   });
   // Trava: um pagamento que já entrou num repasse (pela consulta ou pelo
@@ -1137,7 +1137,7 @@ export function totalRecebidoDireto(lista: RecebidoDireto[]): { brutoCentavos: n
 
 /**
  * Cobranças confirmadas que caíram direto na conta Stripe do médico
- * (stripeContaDireta preenchido). Só leitura; o médico já recebeu esse
+ * (stripeContaMedico preenchido). Só leitura; o médico já recebeu esse
  * dinheiro no Stripe (a comissão da BION foi retida lá), então nada disso
  * entra no saldo a receber por PIX.
  */
@@ -1146,7 +1146,7 @@ export async function recebidosDiretoNoStripe(medicoId: string, limite = 50): Pr
     db.pagamento.findMany({
       where: {
         status: "confirmado",
-        stripeContaDireta: { not: null },
+        stripeContaMedico: { not: null },
         OR: [{ consulta: { medicoId } }, { pedidoRenovacao: { medicoId } }],
       },
       orderBy: { confirmadoEm: "desc" },
@@ -1160,7 +1160,7 @@ export async function recebidosDiretoNoStripe(medicoId: string, limite = 50): Pr
       },
     }),
     db.remarcacaoPendente.findMany({
-      where: { consulta: { medicoId }, status: "aprovada", multaCentavos: { gt: 0 }, stripeContaDireta: { not: null } },
+      where: { consulta: { medicoId }, status: "aprovada", multaCentavos: { gt: 0 }, stripeContaMedico: { not: null } },
       orderBy: { criadoEm: "desc" },
       take: limite,
       select: { multaCentavos: true, aprovadoEm: true, criadoEm: true, reembolso: { select: { status: true, valorCentavos: true } } },

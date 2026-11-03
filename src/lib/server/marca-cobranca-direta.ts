@@ -1,3 +1,4 @@
+import { db } from "@/lib/db";
 import type { ModoCobranca } from "@/lib/server/stripe";
 
 /**
@@ -30,8 +31,10 @@ export async function gravarContaMedicoDaCobranca(
   conta: string | null,
 ): Promise<void> {
   if (!conta) return;
-  void alvo;
-  // TODO(Médicos, PR A): depois da coluna stripeContaMedico (20261103c):
-  //   if (alvo.pagamentoId) await db.pagamento.update({ where: { id: alvo.pagamentoId }, data: { stripeContaMedico: conta } });
-  //   if (alvo.remarcacaoId) await db.remarcacaoPendente.update({ where: { id: alvo.remarcacaoId }, data: { stripeContaMedico: conta } });
+  if (alvo.pagamentoId) {
+    await db.pagamento.update({ where: { id: alvo.pagamentoId }, data: { stripeContaMedico: conta } });
+  }
+  if (alvo.remarcacaoId) {
+    await db.remarcacaoPendente.update({ where: { id: alvo.remarcacaoId }, data: { stripeContaMedico: conta } });
+  }
 }
