@@ -51,3 +51,10 @@ test("servidor troca o código pelo médico; código desconhecido fica só a esp
   });
   expect(resolverAcaoAgendar(null, medicos)).toBeNull();
 });
+test("código que aponta para outra especialidade é descartado (cai na busca por especialidade)", () => {
+  const medicos = [{ codigo: "M1", id: "u1", nome: "Dra. Ana", especialidade: "Clínica Médica" }];
+  expect(resolverAcaoAgendar({ tipo: "agendar", especialidade: "Cardiologia", codigo: "M1" }, medicos)).toEqual({
+    tipo: "agendar", especialidade: "Cardiologia", medicoId: null, medico: null,
+  });
+  expect(resolverAcaoAgendar({ tipo: "agendar", especialidade: "clinica medica", codigo: "m1" }, medicos)?.medicoId).toBe("u1");
+});

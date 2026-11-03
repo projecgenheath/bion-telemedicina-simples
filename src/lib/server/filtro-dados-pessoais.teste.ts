@@ -33,8 +33,20 @@ test("não estraga o texto clínico", () => {
 test("só mensagens da paciente (role user); prompt do sistema fica", () => {
   const r = filtrarMensagensDaPaciente([
     { role: "assistant", content: "Você é a BION IA. Médicos: M1 (Clínica Médica)." },
-    { role: "user", content: "Minha mãe Rosa tem pressão alta" },
+    { role: "user", content: "Minha mãe Beatriz tem pressão alta" },
   ]);
   expect(r[0].content).toBe("Você é a BION IA. Médicos: M1 (Clínica Médica).");
   expect(r[1].content).toBe("Minha mãe [nome removido] tem pressão alta");
+});
+test("gatilho seguido de palavra minúscula NÃO remove nada", () => {
+  for (const s of ["minha mãe tem diabetes", "meu filho está com febre", "a dra. falou que é virose", "Minha filha tomou o remédio"])
+    expect(filtrarNomesProprios(s)).toBe(s);
+});
+test("lugares e palavras comuns ficam", () => {
+  for (const s of ["moro em Vitória e tenho asma", "sou de Aparecida", "apareceu uma mancha na pele Rosa", "nasci em Natal"])
+    expect(filtrarNomesProprios(s)).toBe(s);
+});
+test("aviso fixo com o texto do Jurídico", async () => {
+  const { AVISO_DADOS_PESSOAIS_IA } = await import("@/lib/consentimento-ia");
+  expect(AVISO_DADOS_PESSOAIS_IA).toBe("Não escreva nomes, CPF, contatos ou dados de saúde de outras pessoas.");
 });

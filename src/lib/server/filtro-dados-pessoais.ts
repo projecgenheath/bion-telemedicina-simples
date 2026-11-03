@@ -29,6 +29,7 @@ const NAO_NOMES = new Set(
     "bion", "ia", "são", "santa", "santo", "rio", "belo", "horizonte", "porto", "alegre", "grande", "norte", "sul", "samu", "sus", "ubs", "upa", "brasil", "nvidia", "google", "deus", "covid", "aids", "hiv",
     "janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro",
     "segunda", "terça", "quarta", "quinta", "sexta", "sábado", "domingo", "feira",
+    "vitória", "aparecida", "rosa", "natal", "esperança", "glória", "luz", "paz", "graça", "conceição", "lourdes", "belém", "palmas",
     "clínica", "médica", "geral", "pronto", "socorro", "hospital", "dor", "eu", "oi", "olá", "bom", "boa", "dia", "tarde", "noite",
   ].map((p) => p.normalize("NFC")),
 );
@@ -66,11 +67,21 @@ function inicioDeFrase(texto: string, i: number): boolean {
   return antes === "" || /[.!?:\n]$/u.test(antes);
 }
 
+/** "moro em Vitória", "sou de Aparecida", "no Rio": provável lugar, não pessoa. */
+function depoisDeLugar(texto: string, i: number): boolean {
+  return /(?:^|[^\p{L}])(?:em|de|no|na|do|da|nos|nas)\s+$/iu.test(texto.slice(Math.max(0, i - 8), i));
+}
+
 export function filtrarNomesProprios(texto: string): string {
-  let t = texto.replace(RE_GATILHO, (_m, gat: string, nome: string) => (ehNaoNome(nome) ? `${gat}${nome}` : `${gat}${SUBSTITUTO_NOME_TERCEIRO}`));
+  // RE_GATILHO usa "i" para o gatilho ("Minha filha", "DRA."); a palavra
+  // seguinte só conta como nome se REALMENTE começar com maiúscula.
+  let t = texto.replace(RE_GATILHO, (m, gat: string, nome: string) =>
+    !/^\p{Lu}/u.test(nome) || ehNaoNome(nome) ? m : `${gat}${SUBSTITUTO_NOME_TERCEIRO}`,
+  );
   t = t.replace(RE_SEQUENCIA, (seq: string, i: number, todo: string) => {
     const palavras = seq.split(/\s+/u).filter((w) => /^\p{Lu}/u.test(w));
     if (palavras.some(ehNaoNome)) return seq;
+    if (depoisDeLugar(todo, i)) return seq;
     if (inicioDeFrase(todo, i)) {
       // "Ana Paula está com febre": a 1ª palavra pode ser só o começo da frase,
       // mas se for um nome comum a sequência toda é nome.
@@ -78,8 +89,8 @@ export function filtrarNomesProprios(texto: string): string {
     }
     return SUBSTITUTO_NOME_TERCEIRO;
   });
-  t = t.replace(new RegExp(String.raw`(?<![\p{L}\[])(?<!(?:São|Santa|Santo|Rio|Dom|Porto)\s)${PALAVRA_MAIUSC}(?![\p{L}])`, "gu"), (w) =>
-    SET_NOMES_COMUNS.has(w.normalize("NFC")) ? SUBSTITUTO_NOME_TERCEIRO : w,
+  t = t.replace(new RegExp(String.raw`(?<![\p{L}\[])(?<!(?:São|Santa|Santo|Rio|Dom|Porto)\s)${PALAVRA_MAIUSC}(?![\p{L}])`, "gu"), (w, i: number, todo: string) =>
+    SET_NOMES_COMUNS.has(w.normalize("NFC")) && !ehNaoNome(w) && !depoisDeLugar(todo, i) ? SUBSTITUTO_NOME_TERCEIRO : w,
   );
   // "[nome removido] [nome removido]" → um só
   return t.replace(/\[nome removido\](?:\s+\[nome removido\])+/gu, SUBSTITUTO_NOME_TERCEIRO);

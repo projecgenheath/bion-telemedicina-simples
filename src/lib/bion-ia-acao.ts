@@ -24,7 +24,11 @@ export type MedicoCodificado = { codigo: string; id: string; nome: string; espec
  */
 export function resolverAcaoAgendar(acao: AcaoBionIa | null, medicos: MedicoCodificado[]): AcaoBionIa | null {
   if (!acao) return null;
-  const m = acao.codigo ? medicos.find((x) => x.codigo.toUpperCase() === acao.codigo!.toUpperCase()) : undefined;
+  const achado = acao.codigo ? medicos.find((x) => x.codigo.toUpperCase() === acao.codigo!.toUpperCase()) : undefined;
+  // Código velho do histórico pode apontar para outro médico se a lista mudou:
+  // só vale se a especialidade do marcador bater; senão, busca por especialidade.
+  const norm = (t: string) => t.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase().trim();
+  const m = achado && (!acao.especialidade || norm(achado.especialidade) === norm(acao.especialidade)) ? achado : undefined;
   return {
     tipo: "agendar",
     especialidade: acao.especialidade ?? m?.especialidade ?? null,
