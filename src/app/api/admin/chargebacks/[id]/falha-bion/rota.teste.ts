@@ -13,7 +13,7 @@ mock.module("@/lib/server/auth", () => ({
   },
   registrarAudit: async () => ({}),
 }));
-const cb = { id: "cb1", falhaBion: false, medicoId: "m1", valorCentavos: 15000, taxaCartaoCentavos: 600, taxaDisputaCentavos: 1500 };
+const cb = { id: "cb1", falhaBion: false, medicoId: "m1", statusStripe: "needs_response", taxaDisputaCentavos: 1500 };
 (globalThis as unknown as { prisma: unknown }).prisma = {
   async $transaction(fn: (tx: unknown) => Promise<unknown>) {
     transacoes++;

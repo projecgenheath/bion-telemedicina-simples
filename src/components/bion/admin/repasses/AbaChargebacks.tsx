@@ -14,7 +14,8 @@ export type ChargebackLista = {
   consultaId: string | null;
   medico: string | null;
   valorCentavos: number;
-  taxaCartaoCentavos: number | null;
+  semMedico: boolean;
+  creditoPendente: boolean;
   taxaDisputaCentavos: number | null;
   descontoCentavos: number;
   statusStripe: string;
@@ -78,7 +79,14 @@ function CardChargeback({ c, onMudou }: { c: ChargebackLista; onMudou: () => voi
         {c.motivoStripe ? ` · ${c.motivoStripe}` : ""}
       </p>
       <p className="text-sm">
-        {c.falhaBion ? (
+        {c.semMedico ? (
+          <>Sem médico vinculado (ex.: multa só da BION): nada é descontado.</>
+        ) : c.statusStripe === "won" ? (
+          <>
+            Disputa ganha: nada é descontado.
+            {c.creditoPendente ? " O desconto já tinha entrado num repasse: falta devolver ao médico (crédito manual)." : ""}
+          </>
+        ) : c.falhaBion ? (
           <>
             <b>Falha da BION</b>: nada é descontado do médico.
             {c.falhaBionPor ? ` Marcado por ${c.falhaBionPor}.` : ""}
@@ -86,11 +94,11 @@ function CardChargeback({ c, onMudou }: { c: ChargebackLista; onMudou: () => voi
           </>
         ) : (
           <>
-            Desconto no repasse: <b>{brl(c.descontoCentavos)}</b> (taxa do cartão {brl(c.taxaCartaoCentavos ?? 0)} + dispute fee {brl(c.taxaDisputaCentavos ?? 0)}).
+            Desconto no repasse: <b>{brl(c.descontoCentavos)}</b> (dispute fee do Stripe; a taxa do cartão já saiu no repasse).
           </>
         )}
       </p>
-      {c.liquidado ? (
+      {c.semMedico ? null : c.liquidado ? (
         <p className="text-xs ba-texto-2">O desconto já entrou num repasse: a marcação não pode mais mudar.</p>
       ) : aberto ? (
         <div className="space-y-2">

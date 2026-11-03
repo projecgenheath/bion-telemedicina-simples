@@ -3,8 +3,8 @@
 --
 -- NÃO APLICADA. Aplicar só com ok do Alisson (merge pelo Presidente).
 --
--- Regra (decisão 03/11): no modo plataforma o médico arca com a taxa do
--- cartão e a dispute fee do Stripe, descontadas do repasse PIX por um
+-- Regra (decisão 03/11): no modo plataforma o médico arca com a dispute fee
+-- do Stripe (a taxa do cartão já sai no repasse normal), descontada por um
 -- RepasseAjuste (motivo 'chargeback'), SALVO se o admin marcar "falha da
 -- BION": aí nada é descontado do médico.
 --
@@ -31,10 +31,12 @@ CREATE TABLE IF NOT EXISTS public."Chargeback" (
   "consultaId"          TEXT,
   "medicoId"            TEXT,
   "valorCentavos"       INTEGER NOT NULL,          -- valor disputado
-  "taxaDisputaCentavos" INTEGER,                   -- dispute fee do Stripe (soma das balance_transactions)
-  "taxaCartaoCentavos"  INTEGER,                   -- taxa do cartão (Pagamento.stripeTaxaCentavos na criação)
+  "taxaDisputaCentavos" INTEGER,                   -- dispute fee LÍQUIDA do Stripe (soma das balance_transactions, ≥ 0)
   "statusStripe"        TEXT NOT NULL,             -- warning_needs_response | needs_response | under_review | won | lost | ...
   "motivoStripe"        TEXT,                      -- dispute.reason
+  "ultimoEventoId"      TEXT,                      -- último evento charge.dispute.* aplicado (idempotência)
+  "ultimoEventoEm"      TIMESTAMP(3),              -- event.created do último evento aplicado (ordem)
+  "creditoPendente"     BOOLEAN NOT NULL DEFAULT false, -- ganha depois de o desconto entrar num repasse
   "falhaBion"           BOOLEAN NOT NULL DEFAULT false,
   "falhaBionMotivo"     TEXT,
   "falhaBionPorId"      TEXT,
@@ -43,7 +45,7 @@ CREATE TABLE IF NOT EXISTS public."Chargeback" (
   "atualizadoEm"        TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT "Chargeback_pkey" PRIMARY KEY ("id"),
   CONSTRAINT "Chargeback_valores_check" CHECK (
-    "valorCentavos" >= 0 AND COALESCE("taxaDisputaCentavos", 0) >= 0 AND COALESCE("taxaCartaoCentavos", 0) >= 0),
+    "valorCentavos" >= 0 AND COALESCE("taxaDisputaCentavos", 0) >= 0),
   CONSTRAINT "Chargeback_falha_bion_check" CHECK (
     ("falhaBion" = false AND "falhaBionMotivo" IS NULL AND "falhaBionPorId" IS NULL AND "falhaBionEm" IS NULL) OR
     ("falhaBion" = true AND char_length(btrim("falhaBionMotivo")) >= 10 AND "falhaBionPorId" IS NOT NULL AND "falhaBionEm" IS NOT NULL))

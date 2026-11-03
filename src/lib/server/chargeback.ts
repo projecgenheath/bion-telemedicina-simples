@@ -3,36 +3,66 @@ import { db } from "@/lib/db";
 /**
  * Chargeback (disputa do Stripe) no modo plataforma. Dono: Admin. Migração 20261103e.
  *
- * Regra (decisão do Alisson, 03/11): o médico arca com a taxa do cartão e a
- * dispute fee do Stripe, descontadas do repasse PIX por um RepasseAjuste
- * (motivo 'chargeback'), SALVO se a falha for da BION (cláusula 10.13 dos
- * termos do médico). O admin marca "falha da BION" com motivo; marcado, nada
- * é descontado do médico.
+ * Regra (decisão do Alisson, 03/11): o médico arca com as TAXAS do chargeback,
+ * descontadas do repasse PIX por um RepasseAjuste (motivo 'chargeback'),
+ * SALVO se a falha for da BION (cláusula 10.13 dos termos do médico).
+ *
+ * Por que só a dispute fee (e NÃO a taxa do cartão):
+ * - A taxa do cartão já sai do líquido do médico no repasse normal
+ *   (financeiro.ts: TAXA_GATEWAY_NO_LIQUIDO e liquidoDaConsulta, "a taxa REAL
+ *   do gateway sai dos 90% do médico"). Descontá-la de novo seria em dobro.
+ * - A exceção seria o reembolso integral (liquidoComReembolso zera a taxa do
+ *   médico: a BION absorve). Mas uma cobrança em chargeback não foi
+ *   reembolsada pelo app (o Stripe recusa refund de charge disputada e o
+ *   paciente não recebe duas vezes), então o repasse dela já saiu COM a taxa
+ *   descontada. Não há caminho em que a taxa do cartão ficou sem desconto.
+ * - Médicos (03/11): a cláusula 10.13 foi escrita para o Connect e cobra só
+ *   taxas, não o valor disputado; a regra para o PIX vai ao Alisson. Toda a
+ *   composição do desconto está em `composicaoDescontoChargeback` para mudar
+ *   num lugar só.
+ *
+ * Disputa ganha (status 'won'): desconto 0 (o pendente é removido). Se o
+ * desconto já entrou num repasse, grava `creditoPendente` — o RepasseAjuste
+ * só representa desconto (> 0), não há crédito ao médico no modelo atual.
+ *
+ * Multa de remarcação: o médico vem de RemarcacaoPendente.consulta (a multa é
+ * 50/50, então ele tem parte). Sem vínculo: medicoId nulo e nenhum desconto.
  *
  * Gancho para o repasse (repasse.ts, Médicos): `descontoChargebackCentavos(cb)`
- * é o ÚNICO valor a descontar. 0 = não criar ajuste. O ajuste só pode ser
- * criado com `chargebackId` (único), então é idempotente por disputa.
- *
- * Reversível só enquanto o desconto não foi aplicado num repasse
- * (RepasseAjuste.repasseId nulo). Depois disso, marcar ou desmarcar responde
- * 409 `repasse_liquidado`: o RepasseAjuste só representa DESCONTO (> 0), não
- * há crédito ao médico no modelo atual (pendência para o Alisson/Médicos).
+ * é o ÚNICO valor a descontar. 0 = não criar/aplicar ajuste.
  */
 
 export const MOTIVO_MIN = 10;
 export const MOTIVO_MAX = 500;
 
+/** Status finais do Stripe: um evento não-final depois deles não sobrescreve. */
+export const STATUS_FINAIS = ["won", "lost", "warning_closed"] as const;
+export const statusFinal = (s: string | null | undefined) => (STATUS_FINAIS as readonly string[]).includes(s ?? "");
+
 export type ChargebackParaDesconto = {
   falhaBion: boolean;
-  taxaCartaoCentavos: number | null;
+  medicoId: string | null;
+  statusStripe: string;
   taxaDisputaCentavos: number | null;
 };
 
+/**
+ * ÚNICO ponto da composição do desconto ao médico. Hoje: só a dispute fee
+ * líquida do Stripe. Zero quando: falha da BION, disputa ganha ou sem médico.
+ * Valor disputado e taxa do cartão: 0 (ver comentário do módulo).
+ */
+export function composicaoDescontoChargeback(cb: ChargebackParaDesconto) {
+  const isento = cb.falhaBion || cb.statusStripe === "won" || !cb.medicoId;
+  const fee = typeof cb.taxaDisputaCentavos === "number" && Number.isFinite(cb.taxaDisputaCentavos) ? Math.max(0, Math.round(cb.taxaDisputaCentavos)) : 0;
+  const taxaDisputaCentavos = isento ? 0 : fee;
+  const taxaCartaoCentavos = 0; // já descontada no repasse normal
+  const valorDisputadoCentavos = 0; // cláusula 10.13: só taxas (pendente Alisson)
+  return { taxaDisputaCentavos, taxaCartaoCentavos, valorDisputadoCentavos, totalCentavos: taxaDisputaCentavos + taxaCartaoCentavos + valorDisputadoCentavos };
+}
+
 /** Quanto descontar do médico por este chargeback (centavos, ≥ 0). */
 export function descontoChargebackCentavos(cb: ChargebackParaDesconto): number {
-  if (cb.falhaBion) return 0;
-  const n = (v: number | null) => (typeof v === "number" && Number.isFinite(v) && v > 0 ? Math.round(v) : 0);
-  return n(cb.taxaCartaoCentavos) + n(cb.taxaDisputaCentavos);
+  return composicaoDescontoChargeback(cb).totalCentavos;
 }
 
 /** Valida o pedido do admin. */
@@ -53,8 +83,7 @@ type CbLinha = {
   id: string;
   falhaBion: boolean;
   medicoId: string | null;
-  valorCentavos: number;
-  taxaCartaoCentavos: number | null;
+  statusStripe: string;
   taxaDisputaCentavos: number | null;
 };
 type AjusteLinha = { id: string; repasseId: string | null };
@@ -94,7 +123,7 @@ export async function marcarFalhaBion(
     return await d.$transaction(async (tx) => {
       const cb = await tx.chargeback.findUnique({
         where: { id: p.chargebackId },
-        select: { id: true, falhaBion: true, medicoId: true, valorCentavos: true, taxaCartaoCentavos: true, taxaDisputaCentavos: true },
+        select: { id: true, falhaBion: true, medicoId: true, statusStripe: true, taxaDisputaCentavos: true },
       });
       if (!cb) return { ok: false as const, status: 404 as const, erro: "Chargeback não encontrado.", codigo: "nao_encontrado" };
       if (cb.falhaBion === p.falhaBion) {
@@ -159,56 +188,110 @@ type DisputaStripe = {
   payment_intent?: string | { id: string } | null;
   balance_transactions?: { fee?: number | null }[] | null;
 };
+export type EventoDisputa = { id: string; created: number; type: string; data: { object: unknown } };
 
-export type DbDisputa = {
+type CbExistente = { id: string; statusStripe: string; ultimoEventoId: string | null; ultimoEventoEm: Date | null; falhaBion: boolean; medicoId: string | null; taxaDisputaCentavos: number | null };
+type TxDisputa = {
   pagamento: {
-    findFirst(a: unknown): Promise<{ id: string; consultaId: string | null; stripeTaxaCentavos: number | null; consulta: { medicoId: string } | null; pedidoRenovacao: { medicoId: string } | null } | null>;
+    findFirst(a: unknown): Promise<{ id: string; consultaId: string | null; consulta: { medicoId: string } | null; pedidoRenovacao: { medicoId: string } | null } | null>;
   };
-  chargeback: { upsert(a: unknown): Promise<unknown> };
+  remarcacaoPendente: { findFirst(a: unknown): Promise<{ consultaId: string; consulta: { medicoId: string } | null } | null> };
+  chargeback: {
+    findUnique(a: unknown): Promise<CbExistente | null>;
+    create(a: unknown): Promise<{ id: string }>;
+    update(a: unknown): Promise<unknown>;
+  };
+  repasseAjuste: {
+    findFirst(a: unknown): Promise<{ id: string; repasseId: string | null } | null>;
+    deleteMany(a: unknown): Promise<{ count: number }>;
+  };
 };
+export type DbDisputa = { $transaction<T>(fn: (tx: TxDisputa) => Promise<T>): Promise<T> };
 
-/** Soma das taxas (dispute fee) das balance_transactions da disputa. */
+/**
+ * Dispute fee LÍQUIDA: soma das `fee` das balance_transactions da disputa.
+ * Na retirada (funds_withdrawn) a fee é positiva; quando o Stripe devolve
+ * (funds_reinstated / won), vem outra transação com fee negativa. Nunca < 0.
+ */
 export function taxaDaDisputa(bts: DisputaStripe["balance_transactions"]): number | null {
   if (!bts || bts.length === 0) return null;
-  return bts.reduce((s, b) => s + (typeof b.fee === "number" && b.fee > 0 ? b.fee : 0), 0);
+  const soma = bts.reduce((s, b) => s + (typeof b.fee === "number" && Number.isFinite(b.fee) ? b.fee : 0), 0);
+  return Math.max(0, Math.round(soma));
 }
 
 const idDe = (v: string | { id: string } | null | undefined) => (typeof v === "string" ? v : v?.id ?? null);
 
+export type ResultadoDisputa = "criada" | "atualizada" | "repetido" | "fora_de_ordem" | "invalida";
+
 /**
- * charge.dispute.created / updated / closed / funds_withdrawn / funds_reinstated:
- * cria ou atualiza o Chargeback (nunca mexe na marcação "falha da BION").
+ * charge.dispute.created / updated / closed / funds_withdrawn / funds_reinstated.
+ * - Idempotente por event.id (ultimoEventoId) — além do StripeEvento do webhook.
+ * - Ordem: evento com `created` anterior ao último aplicado é ignorado; status
+ *   final (won/lost/warning_closed) nunca volta para não-final.
+ * - Nunca mexe na marcação "falha da BION".
+ * - Ganha (won): apaga o desconto pendente; se já foi aplicado num repasse,
+ *   grava creditoPendente = true (não há ajuste de crédito no modelo).
  */
-export async function registrarDisputaStripe(disputa: DisputaStripe, d: DbDisputa = db as unknown as DbDisputa): Promise<boolean> {
-  if (!disputa?.id) return false;
-  const chargeId = idDe(disputa.charge);
-  const piId = idDe(disputa.payment_intent);
-  const or = [...(chargeId ? [{ stripeChargeId: chargeId }] : []), ...(piId ? [{ stripePaymentIntentId: piId }] : [])];
-  const pag = or.length
-    ? await d.pagamento.findFirst({
-        where: { OR: or },
-        select: { id: true, consultaId: true, stripeTaxaCentavos: true, consulta: { select: { medicoId: true } }, pedidoRenovacao: { select: { medicoId: true } } },
-      })
-    : null;
-  const taxaDisputa = taxaDaDisputa(disputa.balance_transactions);
-  await d.chargeback.upsert({
-    where: { stripeDisputeId: disputa.id },
-    create: {
-      stripeDisputeId: disputa.id,
-      stripeChargeId: chargeId,
-      pagamentoId: pag?.id ?? null,
-      consultaId: pag?.consultaId ?? null,
-      medicoId: pag?.consulta?.medicoId ?? pag?.pedidoRenovacao?.medicoId ?? null,
-      valorCentavos: Math.max(0, disputa.amount ?? 0),
-      taxaDisputaCentavos: taxaDisputa,
-      taxaCartaoCentavos: pag?.stripeTaxaCentavos ?? null,
-      statusStripe: disputa.status,
-      motivoStripe: disputa.reason ?? null,
-    },
-    update: {
-      statusStripe: disputa.status,
-      ...(taxaDisputa !== null ? { taxaDisputaCentavos: taxaDisputa } : {}),
-    },
+export async function registrarDisputaStripe(evento: EventoDisputa, d: DbDisputa = db as unknown as DbDisputa): Promise<ResultadoDisputa> {
+  const disputa = evento?.data?.object as DisputaStripe | undefined;
+  if (!disputa?.id || !evento.id) return "invalida";
+  const em = new Date((evento.created ?? 0) * 1000);
+  return d.$transaction(async (tx) => {
+    const atual = await tx.chargeback.findUnique({
+      where: { stripeDisputeId: disputa.id },
+      select: { id: true, statusStripe: true, ultimoEventoId: true, ultimoEventoEm: true, falhaBion: true, medicoId: true, taxaDisputaCentavos: true },
+    });
+    const taxa = taxaDaDisputa(disputa.balance_transactions);
+    if (!atual) {
+      const chargeId = idDe(disputa.charge);
+      const piId = idDe(disputa.payment_intent);
+      const or = [...(chargeId ? [{ stripeChargeId: chargeId }] : []), ...(piId ? [{ stripePaymentIntentId: piId }] : [])];
+      const pag = or.length
+        ? await tx.pagamento.findFirst({
+            where: { OR: or },
+            select: { id: true, consultaId: true, consulta: { select: { medicoId: true } }, pedidoRenovacao: { select: { medicoId: true } } },
+          })
+        : null;
+      // Multa de remarcação: sem Pagamento; o PI fica em RemarcacaoPendente.gatewayRef 'stripe_pi:<id>'.
+      const multa = !pag && piId
+        ? await tx.remarcacaoPendente.findFirst({ where: { gatewayRef: `stripe_pi:${piId}` }, select: { consultaId: true, consulta: { select: { medicoId: true } } } })
+        : null;
+      await tx.chargeback.create({
+        data: {
+          stripeDisputeId: disputa.id,
+          stripeChargeId: chargeId,
+          pagamentoId: pag?.id ?? null,
+          consultaId: pag?.consultaId ?? multa?.consultaId ?? null,
+          medicoId: pag?.consulta?.medicoId ?? pag?.pedidoRenovacao?.medicoId ?? multa?.consulta?.medicoId ?? null,
+          valorCentavos: Math.max(0, disputa.amount ?? 0),
+          taxaDisputaCentavos: taxa,
+          statusStripe: disputa.status,
+          motivoStripe: disputa.reason ?? null,
+          ultimoEventoId: evento.id,
+          ultimoEventoEm: em,
+        },
+      });
+      return "criada";
+    }
+    if (atual.ultimoEventoId === evento.id) return "repetido";
+    if (atual.ultimoEventoEm && em.getTime() < atual.ultimoEventoEm.getTime()) return "fora_de_ordem";
+    if (statusFinal(atual.statusStripe) && !statusFinal(disputa.status)) return "fora_de_ordem";
+    let creditoPendente = false;
+    if (disputa.status === "won") {
+      const ajuste = await tx.repasseAjuste.findFirst({ where: { chargebackId: atual.id }, select: { id: true, repasseId: true } });
+      if (ajuste?.repasseId) creditoPendente = true;
+      else if (ajuste) await tx.repasseAjuste.deleteMany({ where: { id: ajuste.id, chargebackId: atual.id, repasseId: null } });
+    }
+    await tx.chargeback.update({
+      where: { id: atual.id },
+      data: {
+        statusStripe: disputa.status,
+        ultimoEventoId: evento.id,
+        ultimoEventoEm: em,
+        ...(taxa !== null ? { taxaDisputaCentavos: taxa } : {}),
+        ...(creditoPendente ? { creditoPendente: true } : {}),
+      },
+    });
+    return "atualizada";
   });
-  return true;
 }
