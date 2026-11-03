@@ -1129,7 +1129,7 @@ export async function consultaJaRepassada(consultaId: string, c: Cliente = db): 
 // reexportação `reembolsoEfetivo` (os consumidores importam direto da fonte
 // em receita-servidor.ts) foram removidos.
 
-/* ---------- Recebido direto no Stripe (cobrança direta) -------------- */
+/* ---------- Valor cobrado direto no Stripe (cobrança direta) --------- */
 
 export type RecebidoDireto = {
   tipo: "consulta" | "renovacao" | "multa_remarcacao";

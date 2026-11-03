@@ -400,7 +400,11 @@ export type ListaRepasses = {
   aviso: string;
   previa: PreviaRepasseWire;
   repasses: RepasseResumo[];
-  /** Cobrança direta: já caiu na conta Stripe do médico; NÃO é repasse a receber. */
+  /**
+   * Cobrança direta: valor COBRADO na conta Stripe do médico (bruto −
+   * reembolsos, antes da comissão de 10% e da taxa do Stripe). Não é o valor
+   * recebido nem repasse a receber.
+   */
   recebidoDiretoStripe?: {
     aviso: string;
     totais: { brutoCentavos: number; reembolsosCentavos: number; liquidoCentavos: number };
