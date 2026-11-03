@@ -85,7 +85,7 @@ async function processar(evento: Stripe.Event): Promise<Record<string, unknown>>
   if (acao !== "confirmar" && acao !== "falhar" && acao !== "expirar") return { acao };
 
   const remarcacaoId = multaDaSessao(sessao.metadata);
-  if (remarcacaoId) return processarMulta(sessao, acao, remarcacaoId);
+  if (remarcacaoId) return processarMulta(sessao, acao, remarcacaoId, conta);
 
   const pagamento = await acharPagamento(sessao);
   if (!pagamento) {
@@ -192,6 +192,10 @@ async function confirmar(
   if (paymentIntentId) {
     await db.pagamento.updateMany({ where: { id: pagamento.id, stripePaymentIntentId: null }, data: { stripePaymentIntentId: paymentIntentId } });
   }
+  // Evento do Connect (event.account) = cobrança direta: o médico já recebeu
+  // no Stripe; gravar a conta antes de confirmar tira o pagamento do repasse PIX.
+  // O evento é a fonte da verdade (sem account = cobrança na plataforma).
+  await db.pagamento.update({ where: { id: pagamento.id }, data: { stripeContaDireta: conta } });
   if (cobranca.chargeId) {
     await db.pagamento.updateMany({ where: { id: pagamento.id, stripeChargeId: null }, data: { stripeChargeId: cobranca.chargeId } });
   }
@@ -253,7 +257,7 @@ async function efeitosDaCobranca(pagamentoId: string, consultaId: string | null)
 }
 
 /** Multa da remarcação (sem Pagamento): confirma ou falha a RemarcacaoPendente. */
-async function processarMulta(s: Stripe.Checkout.Session, acao: "confirmar" | "falhar" | "expirar", remarcacaoId: string) {
+async function processarMulta(s: Stripe.Checkout.Session, acao: "confirmar" | "falhar" | "expirar", remarcacaoId: string, conta: string | null = null) {
   const r = await db.remarcacaoPendente.findUnique({ where: { id: remarcacaoId }, select: { id: true, consultaId: true, multaCentavos: true } });
   if (!r || (s.client_reference_id && s.client_reference_id !== `multa:${r.id}`)) {
     await registrarAudit(null, {
@@ -292,6 +296,8 @@ async function processarMulta(s: Stripe.Checkout.Session, acao: "confirmar" | "f
   }
   // Guarda o PaymentIntent como referência da multa (para devolução, se houver).
   const pi = typeof s.payment_intent === "string" ? s.payment_intent : s.payment_intent?.id ?? null;
+  // Evento do Connect (event.account) = multa cobrada direto na conta do médico: fora do repasse PIX.
+  await db.remarcacaoPendente.update({ where: { id: r.id }, data: { stripeContaDireta: conta } });
   const res = await aprovarMultaRemarcacao(r.id, "webhook", pi ? `stripe_pi:${pi}` : undefined);
   if (!res) return { acao: "confirmar", confirmado: false };
   if (!res.jaProcessada) {

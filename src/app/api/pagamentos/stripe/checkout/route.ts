@@ -304,14 +304,20 @@ async function abrirSessao(usuario: Usuario, a: Alvo) {
       // Tentativa nova depois de falha volta a "pendente" (na espera, a falha
       // libera a reserva e o checkout já recusou antes de chegar aqui).
       // Pagamento pendente antigo criado como Pix e reaproveitado aqui passa a cartão.
-      data: { stripeCheckoutSessionId: sessao.id, metodo: "cartao", ...(atual?.status === "falhou" ? { status: "pendente" } : {}) },
+      // Cobrança direta: marca a conta do médico já aqui (o webhook confirma de
+      // novo pelo event.account). É o que tira o pagamento do repasse PIX.
+      data: {
+        stripeCheckoutSessionId: sessao.id, metodo: "cartao",
+        ...(atual?.status === "falhou" ? { status: "pendente" } : {}),
+        stripeContaDireta: contaDireta ?? null,
+      },
     });
   }
   if (a.tipo === "multa" && a.remarcacaoId) {
     // Guarda a sessão aberta (só enquanto pendente; o webhook troca por stripe_pi:).
     await db.remarcacaoPendente.updateMany({
       where: { id: a.remarcacaoId, status: "pendente" },
-      data: { gatewayRef: `${PREFIXO_SESSAO_MULTA}${sessao.id}` },
+      data: { gatewayRef: `${PREFIXO_SESSAO_MULTA}${sessao.id}`, stripeContaDireta: contaDireta ?? null },
     });
   }
   await registrarAudit(usuario, {
