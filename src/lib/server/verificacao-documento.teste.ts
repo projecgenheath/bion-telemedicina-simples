@@ -9,8 +9,13 @@
 import {
   assinarDocumentoId,
   conferirCodigoVerificacao,
+  codigoVerificacaoOuNulo,
   gerarCodigoVerificacao,
+  segredoVerificacao,
+  VerificacaoIndisponivelError,
+  verificacaoDisponivel,
 } from "./verificacao-documento";
+import { crmNumeroUf } from "../medico-exibicao";
 import {
   extrairPartesCodigoVerificacao,
   formatarCodigoVerificacao,
@@ -81,6 +86,34 @@ igual("impressão de código inválido devolve a entrada", formatarCodigoVerific
 // URL pública.
 igual("url com origem", urlVerificacaoDocumento(codigo, "https://exemplo.com.br/"), `https://exemplo.com.br/verificar/${codigo}`);
 igual("url sem origem", urlVerificacaoDocumento(codigo, ""), `/verificar/${codigo}`);
+
+// Falha fechada sem BION_VERIFICACAO_SEGREDO (não existe mais segredo fixo).
+const envOriginal = process.env.BION_VERIFICACAO_SEGREDO;
+delete process.env.BION_VERIFICACAO_SEGREDO;
+verdade("sem segredo: indisponível", !verificacaoDisponivel());
+let lancou: unknown = null;
+try { segredoVerificacao(); } catch (e) { lancou = e; }
+verdade("sem segredo: segredoVerificacao lança", lancou instanceof VerificacaoIndisponivelError);
+lancou = null;
+try { conferirCodigoVerificacao(codigo); } catch (e) { lancou = e; }
+verdade("sem segredo: conferir (sem segredo injetado) lança, nunca aceita", lancou instanceof VerificacaoIndisponivelError);
+igual("sem segredo: wire sai sem código", codigoVerificacaoOuNulo(ID), null);
+process.env.BION_VERIFICACAO_SEGREDO = "   ";
+verdade("segredo só com espaços conta como ausente", !verificacaoDisponivel());
+process.env.BION_VERIFICACAO_SEGREDO = SEGREDO;
+igual("com segredo injetado na env: wire gera o código", codigoVerificacaoOuNulo(ID), codigo);
+igual("com segredo injetado na env: conferir usa a env", conferirCodigoVerificacao(codigo), ID);
+if (envOriginal === undefined) delete process.env.BION_VERIFICACAO_SEGREDO;
+else process.env.BION_VERIFICACAO_SEGREDO = envOriginal;
+
+// CRM no formato nº/UF (página pública).
+igual("crm 'CRM 12345 SP'", crmNumeroUf("CRM 12345 SP"), "CRM 12345/SP");
+igual("crm '12345 sp'", crmNumeroUf("12345 sp"), "CRM 12345/SP");
+igual("crm 'CRM-RJ 23456'", crmNumeroUf("CRM-RJ 23456"), "CRM 23456/RJ");
+igual("crm '12.345/MG'", crmNumeroUf("12.345/MG"), "CRM 12345/MG");
+igual("crm já no formato", crmNumeroUf("CRM 34567/MG"), "CRM 34567/MG");
+igual("crm sem UF cai no rótulo", crmNumeroUf("12345"), "CRM 12345");
+igual("crm vazio", crmNumeroUf(""), "CRM não informado");
 
 console.log(`verificacao-documento: ${ok} ok, ${falhas} falha(s)`);
 if (falhas) process.exit(1);

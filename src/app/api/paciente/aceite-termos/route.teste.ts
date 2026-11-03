@@ -65,7 +65,7 @@ for (const [nome, src] of [["POST /api/consultas", consultas], ["POST /api/renov
   const post = postDe(src);
   const iPortao = post.indexOf("exigirAceiteTermosPaciente(usuario)");
   checa(`${nome} exige o aceite`, iPortao > -1 && post.includes("if (semAceite) return semAceite"));
-  checa(`${nome}: portão antes de ler o corpo e de gravar`, iPortao > -1 && iPortao < post.indexOf("req.json") && (post.indexOf("db.") === -1 || iPortao < post.indexOf("db.")));
+  checa(`${nome}: portão antes de ler o corpo e de gravar`, iPortao > -1 && (() => { const iCorpo = [post.indexOf("lerCorpoJson(req"), post.indexOf("req.json")].filter((i) => i > -1); return iCorpo.length > 0 && iCorpo.every((i) => iPortao < i); })() && (post.indexOf("db.") === -1 || iPortao < post.indexOf("db.")));
 }
 checa("exclusão da conta não depende do aceite", !conta.includes("exigirAceiteTermosPaciente"));
 checa("consultas: portão só no POST (agendar)", (consultas.match(/exigirAceiteTermosPaciente\(usuario\)/g) ?? []).length === 1);

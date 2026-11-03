@@ -85,6 +85,8 @@ export type ReceitaParaRenovar = {
   conteudo?: string | null;
   observacoes?: string | null;
   titulo?: string | null;
+  /** 20261103a: documento cancelado nunca é renovado. */
+  status?: string | null;
   /** Marcado pelo médico (Documento.controlado). Docs antigos ficam false. */
   controlado?: boolean | null;
 };
@@ -102,6 +104,7 @@ export function receitaControlada(d: ReceitaParaRenovar): boolean {
 /** Pode oferecer "Renovar receita"? Só receita, com medicamento informado e não controlada. */
 export function podeRenovarReceita(d: ReceitaParaRenovar): boolean {
   if (d.tipo !== "receita") return false;
+  if (d.status === "cancelado") return false; // 20261103a: cancelado não renova
   if (!d.medicamento?.trim()) return false; // sem nome do remédio não há como checar → não oferece
   return !receitaControlada(d);
 }

@@ -18,14 +18,13 @@ import { TelaSobreposta } from "./TelaSobreposta";
 import { RenovacoesPendentes } from "./evolucao/RenovacoesPendentes";
 import { DicaGestos, IndicadorTelas, useDicaGestos } from "./IndicadorTelas";
 import { PrecoSheet } from "./sheets/PrecoSheet";
-import { PromocoesSheet } from "./sheets/PromocoesSheet";
 import { AgendaSheet } from "./sheets/AgendaSheet";
 import { AgendaPreviewSheet } from "./sheets/AgendaPreviewSheet";
 import type { PacienteDoMedico } from "./metricas";
 import type { NotifTipo } from "@/lib/bion-store";
 import "./medico.css";
 
-type Sheet = "preco" | "agenda" | "preview" | "promocoes" | null;
+type Sheet = "preco" | "agenda" | "preview" | null;
 type Sobreposicao = { tipo: "renovacoes" } | { tipo: "suporte" } | { tipo: "termos" } | { tipo: "notificacoes" } | { tipo: "paciente"; p: PacienteDoMedico } | null;
 
 const EM_CAMPO = ["INPUT", "TEXTAREA", "SELECT"];
@@ -78,7 +77,6 @@ export function MedicoApp() {
 
   // Confirmações vivem aqui (sempre montado), não nos sheets que desmontam.
   const confirmarValor = useConfirmarSalvamento(medico?.valor ?? 0, (a, b) => Math.abs(a - b) < 0.005);
-  const confirmarPromocao = useConfirmarSalvamento(medico?.valor ?? 0, (a, b) => Math.abs(a - b) < 0.005);
   // A chave da grade é a serialização canônica (padrão + dias próprios):
   // a confirmação só chega quando o delta do servidor traz a grade nova.
   const confirmarHorarios = useConfirmarSalvamento(
@@ -282,7 +280,7 @@ export function MedicoApp() {
             onAbrirRenovacoes={() => setSobreposicao({ tipo: "renovacoes" })}
             onAbrirNotificacoes={() => setSobreposicao({ tipo: "notificacoes" })}
           />
-          <TelaGestao dados={dados} onAbrirPreco={() => abrirSheet("preco")} onAbrirAgenda={() => abrirSheet("agenda")} onAbrirPromocoes={() => abrirSheet("promocoes")} />
+          <TelaGestao dados={dados} onAbrirPreco={() => abrirSheet("preco")} onAbrirAgenda={() => abrirSheet("agenda")} />
           <TelaPerfilPublico dados={dados} onAgendar={() => abrirSheet("preview")} confirmarBio={confirmarBio} />
         </div>
 
@@ -302,13 +300,6 @@ export function MedicoApp() {
             onFechar={fecharSheet}
             medico={medico}
             confirmar={confirmarValor}
-          />
-          <PromocoesSheet
-            key={`promocoes-${aberturas}`}
-            aberto={sheet === "promocoes"}
-            onFechar={fecharSheet}
-            medico={medico}
-            confirmar={confirmarPromocao}
           />
           <AgendaSheet
             key={`agenda-${aberturas}`}

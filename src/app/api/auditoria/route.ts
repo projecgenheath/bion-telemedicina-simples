@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { exigirSessao, registrarAudit } from "@/lib/server/auth";
 import {ok, falha, lerCorpoJson} from "@/lib/server/http";
+import { detalheAuditoriaCliente } from "@/lib/auditoria-ia";
 
 /**
  * Registro de eventos de auditoria VINDOS DO CLIENTE — apenas eventos leves
@@ -48,7 +49,8 @@ export async function POST(req: NextRequest) {
       acao: body.acao!,
       categoria: permitido.categoria,
       severidade: permitido.severidade,
-      detalhes: body.detalhes?.slice(0, 300),
+      // LGPD: em IA_CONSULTA_REALIZADA o detalhe do cliente é ignorado (texto fixo).
+      detalhes: detalheAuditoriaCliente(body.acao!, usuario.role, typeof body.detalhes === "string" ? body.detalhes : undefined),
     });
 
     // Contrato delta: devolve APENAS a linha criada (a trilha do admin aplica

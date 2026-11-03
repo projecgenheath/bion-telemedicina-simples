@@ -2,8 +2,8 @@
 
 import { CODIGO_ACEITE_TERMOS_PENDENTE, ERRO_ACEITE_TERMOS_PENDENTE } from "@/lib/aceite-termos";
 import { textoNota } from "@/lib/medico-exibicao";
-import { ErroBionIa, perguntarBionIa } from "@/lib/bion-ia-cliente";
-import { ehConsentimentoIaPendente } from "@/lib/consentimento-ia";
+import { ErroBionIa, consultarConsentimentoIa, perguntarBionIa } from "@/lib/bion-ia-cliente";
+import { AVISO_DADOS_PESSOAIS_IA, ehConsentimentoIaPendente } from "@/lib/consentimento-ia";
 import { useEffect, useRef, useState } from "react";
 import { useVoltarFecha } from "./useVoltarFecha";
 import { useFocoDialogo } from "./useFocoDialogo";
@@ -16,6 +16,7 @@ import {
   FileUp,
   Lock,
   Send,
+  ShieldAlert,
   Sparkles,
   Star,
   Stethoscope,
@@ -37,7 +38,7 @@ import {
 } from "./chat-bion-types";
 import { ChatListaMensagens } from "./ChatListaMensagens";
 import { ConsentimentoLaudoIA } from "./ConsentimentoLaudoIA";
-import { ConsentimentoIA } from "./ConsentimentoIA";
+import { AvisoSemIA, AvisoTriagemSemIA, CardAceiteIA } from "./ConsentimentoIA";
 import { CAMPO_CONSENTIMENTO_IA_EXAME, VERSAO_CONSENTIMENTO_IA_EXAME } from "@/lib/consentimento-ia-exame";
 
 /**
@@ -95,6 +96,17 @@ export function ChatBion({
   const [laudoPendente, setLaudoPendente] = useState<File | null>(null);
   // Novo aceite da IA (NVIDIA) pendente: o que repetir depois do aceite.
   const [aceiteIaPendente, setAceiteIaPendente] = useState<{ texto?: string; arquivo?: File } | null>(null);
+  // Trava do aceite (NVIDIA): null = verificando; false = card de aceite no
+  // topo e entrada bloqueada; true = liberado. O servidor também recusa (403).
+  const [iaLiberada, setIaLiberada] = useState<boolean | null>(null);
+  // A IA é opcional: a paciente escolheu "Usar o app sem a IA" (só nesta
+  // conversa; o consentimento continua não dado e pode ser ativado depois).
+  const [iaRecusada, setIaRecusada] = useState(false);
+  // Triagem no chat sem a IA (servidor mandou semIa): aviso + card sob demanda.
+  const [triagemSemIa, setTriagemSemIa] = useState(false);
+  const [cardTriagemIa, setCardTriagemIa] = useState(false);
+  // Card "Agendar consulta" sugerido pela IA (ex.: depois de um sintoma).
+  const [ofertaAgendar, setOfertaAgendar] = useState<{ especialidade: string | null; medicoId?: string | null; medico?: string | null } | null>(null);
   // M22: selo do cabeçalho reflete o estado real — vira "pausada" quando o
   // servidor responde bion_ia_pausada e volta a "online" no próximo sucesso.
   const [iaPausada, setIaPausada] = useState(false);
@@ -133,6 +145,17 @@ export function ChatBion({
       ]);
     }
   }, [aberto, mensagens.length, sessao.nome]);
+
+  useEffect(() => {
+    if (!aberto || iaLiberada !== null) return;
+    let vivo = true;
+    void consultarConsentimentoIa().then((v) => {
+      if (vivo) setIaLiberada(v);
+    });
+    return () => {
+      vivo = false;
+    };
+  }, [aberto, iaLiberada]);
 
   useEffect(() => {
     fimRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -175,6 +198,7 @@ export function ChatBion({
       setMensagens((m) => [...m, { remetente: "ia", texto, tipo: "anamnese", fonte: json.fonte }]);
       histAnamneseRef.current.push({ remetente: "ia", texto: json.texto });
       setAnamneseAtiva((a) => (a ? { ...a, etapa: json.etapa ?? a.etapa } : a));
+      if (typeof json.semIa === "boolean") setTriagemSemIa(json.semIa);
     } catch {
       setMensagens((m) => [
         ...m,
@@ -235,6 +259,7 @@ export function ChatBion({
       setMensagens((m) => [...m, { remetente: "ia", texto, tipo: "anamnese", fonte: json.fonte }]);
       histAnamneseRef.current.push({ remetente: "ia", texto: json.texto });
       setAnamneseAtiva((a) => (a ? { ...a, etapa: json.etapa ?? a.etapa } : a));
+      if (typeof json.semIa === "boolean") setTriagemSemIa(json.semIa);
     } catch {
       setMensagens((m) => [
         ...m,
@@ -346,8 +371,9 @@ export function ChatBion({
       }
 
       if (ehConsentimentoIaPendente(res.status, json)) {
+        // Nada foi enviado à IA: mostra o card de aceite e reenvia o laudo depois.
         setAceiteIaPendente({ arquivo });
-        setMensagens((m) => [...m, { remetente: "ia", texto: json.erro ?? "Aceite a nova versão para usar a BION IA." }]);
+        setIaLiberada(false);
         return;
       }
       if (json.ok) setIaPausada(false);
@@ -414,6 +440,7 @@ export function ChatBion({
     setEntrada("");
     setPensando(true);
     setUltimaFalha(null);
+    setOfertaAgendar(null);
     setSegundosEspera(0);
     // Stream: a fala da IA aparece conforme chega (raciocínio nunca vem do servidor).
     let emStream = false;
@@ -445,10 +472,10 @@ export function ChatBion({
         // M21: a pergunta atual NUNCA pode ficar fora do payload. O filtro
         // antigo (texto < 500) a excluía em silêncio — ex.: um laudo colado —
         // e a IA respondia a partir de mensagens antigas. Agora valem as
-        // últimas 4 mensagens e textos longos são TRUNCADOS no teto que a
+        // últimas 12 mensagens e textos longos são TRUNCADOS no teto que a
         // rota já usa ao montar o prompt (4000), sem descarte silencioso.
         historico
-          .slice(-4)
+          .slice(-12)
           .map((m) => ({
             remetente: m.remetente === "usuario" ? ("usuario" as const) : ("ia" as const),
             texto: m.texto.replace(/\*\*/g, "").slice(0, 4000),
@@ -456,6 +483,8 @@ export function ChatBion({
         { onDelta: mostrarParcial, onRaciocinio: mostrarRaciocinio },
       );
       setIaPausada(false);
+      if (r.acao?.tipo === "agendar")
+        setOfertaAgendar({ especialidade: r.acao.especialidade, medicoId: r.acao.medicoId ?? null, medico: r.acao.medico ?? null });
       setMensagens((m) => {
         const final = {
           remetente: "ia" as const,
@@ -478,9 +507,12 @@ export function ChatBion({
       }
       if (e instanceof ErroBionIa && e.tipo === "consentimento") {
         // Portão jurídico: nada foi enviado à IA; pede o novo aceite e repete.
-        setAceiteIaPendente({ texto: t });
-        // tira a pergunta da lista: ela é reenviada depois do aceite
-        setMensagens((m) => [...m.slice(0, emStream ? -2 : -1), { remetente: "ia", texto: e.message }]);
+        // Nada foi enviado à IA: tira a pergunta da lista, devolve o texto
+        // para a caixa e mostra o card de aceite (entrada bloqueada).
+        setMensagens((m) => m.slice(0, emStream ? -2 : -1));
+        setEntrada(t);
+        setIaRecusada(false);
+        setIaLiberada(false);
         return;
       }
       const msg = e instanceof Error && e.message
@@ -524,6 +556,32 @@ export function ChatBion({
       return;
     }
     if (!interpretarIntencao(t)) void enviar(t);
+  };
+
+  /** Card da IA: médico disponível da especialidade sugerida (ou o 1º ativo). */
+  const normalizarEsp = (t: string) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+  // O servidor já trocou o código (M1…) pelo médico: procura por id, depois nome.
+  const medicoOferta = ofertaAgendar
+    ? (ofertaAgendar.medicoId ? medicosAtivos.find((m) => m.id === ofertaAgendar.medicoId) : undefined) ??
+      (ofertaAgendar.medico ? medicosAtivos.find((m) => m.nome === ofertaAgendar.medico) : undefined) ??
+      (ofertaAgendar.especialidade
+        ? medicosAtivos.find((m) => normalizarEsp(m.especialidade) === normalizarEsp(ofertaAgendar.especialidade ?? ""))
+        : undefined) ?? medicosAtivos[0]
+    : undefined;
+  const agendarComOferta = () => {
+    const med = medicoOferta;
+    setOfertaAgendar(null);
+    if (!med) {
+      iniciarAgendamento();
+      return;
+    }
+    setEscolha({ especialidade: med.especialidade, medico: med.nome });
+    setMensagens((m) => [
+      ...m,
+      { remetente: "usuario", texto: `Quero agendar com ${med.nome}` },
+      { remetente: "ia", texto: `Ótimo — ${med.especialidade} com ${med.nome}. Escolha o dia:` },
+    ]);
+    setEtapa("dia");
   };
 
   const iniciarAgendamento = () => {
@@ -754,24 +812,6 @@ export function ChatBion({
           if (f) setLaudoPendente(f);
         }}
       />
-      {aceiteIaPendente && (
-        <ConsentimentoIA
-          onAceito={() => {
-            const p = aceiteIaPendente;
-            setAceiteIaPendente(null);
-            setMensagens((m) => [...m, { remetente: "ia", texto: "Obrigado! Aceite registrado." }]);
-            if (p.arquivo) setLaudoPendente(p.arquivo);
-            else if (p.texto) void enviar(p.texto);
-          }}
-          onRecusar={() => {
-            setAceiteIaPendente(null);
-            setMensagens((m) => [
-              ...m,
-              { remetente: "ia", texto: "Tudo bem. Sem o aceite, a BION IA fica pausada para você. O agendamento e as consultas continuam normais." },
-            ]);
-          }}
-        />
-      )}
       {laudoPendente && (
         <ConsentimentoLaudoIA
           nomeArquivo={laudoPendente.name}
@@ -813,6 +853,44 @@ export function ChatBion({
       {/* Mensagens */}
       <div className="flex-1 overflow-y-auto bp-coluna px-5 py-4 space-y-3">
         <ChatListaMensagens mensagens={mensagens} pensando={pensando} segundosEspera={segundosEspera} />
+        {ofertaAgendar && etapa === null && !pensando && !anamneseAtiva ? (
+          <section aria-label="Agendar consulta" className="rounded-2xl border border-bion-sea/40 bp-glass p-4 text-sm text-bion-ink dark:text-bion-paper space-y-2">
+            <p className="font-semibold">Quer falar com um médico do BION?</p>
+            {medicoOferta ? (
+              <p>
+                {medicoOferta.nome} · {medicoOferta.especialidade} · R$ {medicoOferta.valor}
+              </p>
+            ) : null}
+            <div className="flex gap-2">
+              <button type="button" onClick={agendarComOferta} className="bp-acao flex-1 py-2.5 rounded-xl font-bold">
+                Agendar consulta
+              </button>
+              <button type="button" onClick={() => setOfertaAgendar(null)} className="flex-1 py-2.5 rounded-xl border border-bion-ink/15 dark:border-white/15">
+                Agora não
+              </button>
+            </div>
+          </section>
+        ) : null}
+        {iaLiberada === false && iaRecusada && !anamneseAtiva ? (
+          <AvisoSemIA onAtivar={() => setIaRecusada(false)} />
+        ) : null}
+        {iaLiberada === false && !iaRecusada && !anamneseAtiva ? (
+          <CardAceiteIA
+            onRecusar={() => {
+              setAceiteIaPendente(null);
+              setIaRecusada(true);
+            }}
+            onAceito={() => {
+              // Atualização funcional: não sobrescreve a lista com estado velho
+              // (antes o reenvio apagava o "Aceite registrado").
+              const p = aceiteIaPendente;
+              setAceiteIaPendente(null);
+              setIaLiberada(true);
+              setMensagens((m) => [...m, { remetente: "ia", texto: "BION IA ativada. Pode mandar sua pergunta." }]);
+              if (p?.arquivo) setLaudoPendente(p.arquivo);
+            }}
+          />
+        ) : null}
         {ultimaFalha && !pensando ? (
           <button
             type="button"
@@ -992,9 +1070,9 @@ export function ChatBion({
             <button type="button" onClick={iniciarAgendamento} className="rounded-full bg-bion-sea/10 dark:bg-sky-400/10 border border-bion-sea/25 dark:border-sky-300/25 px-4 py-2.5 text-sm font-semibold text-bion-sea dark:text-sky-300">
               Agendar consulta
             </button>
-            <button type="button" onClick={iniciarExame} className="rounded-full bg-bion-sea/10 dark:bg-sky-400/10 border border-bion-sea/25 dark:border-sky-300/25 px-4 py-2.5 text-sm font-semibold text-bion-sea dark:text-sky-300">
+            {iaLiberada === true ? <button type="button" onClick={iniciarExame} className="rounded-full bg-bion-sea/10 dark:bg-sky-400/10 border border-bion-sea/25 dark:border-sky-300/25 px-4 py-2.5 text-sm font-semibold text-bion-sea dark:text-sky-300">
               Enviar laudo de exame
-            </button>
+            </button> : null}
           </div>
         )}
 
@@ -1003,6 +1081,25 @@ export function ChatBion({
 
       {/* Entrada */}
       <div className="px-5 pb-5 bp-safe-bottom">
+        {anamneseAtiva && triagemSemIa ? (
+          <div className="mb-2 space-y-2">
+            {cardTriagemIa ? (
+              <CardAceiteIA
+                onAceito={() => {
+                  setCardTriagemIa(false);
+                  setTriagemSemIa(false);
+                  setIaLiberada(true);
+                }}
+                onRecusar={() => setCardTriagemIa(false)}
+              />
+            ) : (
+              <AvisoTriagemSemIA onAtivar={() => setCardTriagemIa(true)} />
+            )}
+          </div>
+        ) : null}
+        <p className="text-xs text-bion-ink/80 dark:text-bion-paper/80 mb-2 px-2 inline-flex items-center gap-1.5" role="note">
+          <ShieldAlert className="w-3.5 h-3.5 shrink-0" aria-hidden /> {AVISO_DADOS_PESSOAIS_IA}
+        </p>
         <div className="bp-glass flex items-center gap-2 !rounded-full p-2 pl-5">
           <input
             value={entrada}
@@ -1013,15 +1110,15 @@ export function ChatBion({
                 enviarComIntencao(entrada);
               }
             }}
-            placeholder={anamneseAtiva ? "Conte com suas palavras…" : "Pergunte à BION IA…"}
+            placeholder={anamneseAtiva ? "Conte com suas palavras…" : iaLiberada === true ? "Pergunte à BION IA…" : "BION IA desativada"}
             aria-label={anamneseAtiva ? "Resposta para a anamnese" : "Mensagem para a BION IA"}
-            disabled={pensando || enviandoLaudo || (etapa !== null && !anamneseAtiva)}
+            disabled={pensando || enviandoLaudo || (etapa !== null && !anamneseAtiva) || (!anamneseAtiva && iaLiberada !== true)}
             className="flex-1 bg-transparent outline-none text-sm text-bion-ink dark:text-bion-paper placeholder:text-bion-ink/60 dark:placeholder:text-white/60 disabled:opacity-50"
           />
           {!anamneseAtiva && (
             <button type="button"
               onClick={iniciarExame}
-              disabled={enviandoLaudo || etapa !== null}
+              disabled={enviandoLaudo || etapa !== null || iaLiberada !== true}
               aria-label="Anexar laudo de exame"
               className="p-2.5 rounded-full text-bion-ink/75 dark:text-bion-paper/75 hover:bg-bion-ink/5 dark:hover:bg-white/10 disabled:opacity-40"
             >
@@ -1030,7 +1127,7 @@ export function ChatBion({
           )}
           <button type="button"
             onClick={() => enviarComIntencao(entrada)}
-            disabled={!entrada.trim() || pensando || enviandoLaudo || (etapa !== null && !anamneseAtiva)}
+            disabled={!entrada.trim() || pensando || enviandoLaudo || (etapa !== null && !anamneseAtiva) || (!anamneseAtiva && iaLiberada !== true)}
             aria-label="Enviar mensagem"
             className="bp-acao w-11 h-11 inline-flex items-center justify-center disabled:opacity-40"
           >

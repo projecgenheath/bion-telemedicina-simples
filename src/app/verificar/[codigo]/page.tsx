@@ -2,10 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { BadgeCheck, ShieldAlert } from "lucide-react";
+import { BadgeCheck, Ban, ShieldAlert, WifiOff } from "lucide-react";
 
 type ResultadoVerificacao = {
   valido: boolean;
+  cancelado?: boolean;
+  canceladoEm?: string;
+  indisponivel?: boolean;
   tipo?: string;
   emitidoEm?: string;
   medico?: string;
@@ -28,7 +31,11 @@ export default function VerificarDocumentoPage() {
   useEffect(() => {
     if (!codigo) return;
     fetch(`/api/publico/verificar/${encodeURIComponent(codigo)}`)
-      .then((r) => r.json())
+      .then(async (r) => {
+        // 429 (muitas tentativas) e 503 (sem segredo) não são "código inválido".
+        if (r.status === 429 || r.status === 503) return { valido: false, indisponivel: true };
+        return (await r.json()) as ResultadoVerificacao;
+      })
       .then((j: ResultadoVerificacao) => setResultado(j))
       .catch(() => setResultado({ valido: false }))
       .finally(() => setCarregando(false));
@@ -43,6 +50,45 @@ export default function VerificarDocumentoPage() {
 
           {carregando ? (
             <p className="text-sm text-white/80">Conferindo o código…</p>
+          ) : resultado?.indisponivel ? (
+            <div>
+              <p className="flex items-center gap-2 text-lg font-bold text-amber-300">
+                <WifiOff className="w-6 h-6" /> Verificação indisponível
+              </p>
+              <p className="text-sm text-white/85 mt-3">
+                A verificação de documentos está indisponível neste ambiente no momento. Isso não
+                significa que o documento seja inválido. Tente de novo mais tarde.
+              </p>
+            </div>
+          ) : resultado?.cancelado ? (
+            <div>
+              <p className="flex items-center gap-2 text-lg font-bold text-red-300">
+                <Ban className="w-6 h-6" /> Documento cancelado
+              </p>
+              <p className="text-sm text-white/85 mt-3">
+                Este documento foi emitido pela plataforma BION, mas foi CANCELADO pelo médico
+                {resultado.canceladoEm
+                  ? ` em ${new Date(resultado.canceladoEm).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}`
+                  : ""}
+                . Ele não tem mais validade e não deve ser aceito.
+              </p>
+              <dl className="mt-4 space-y-2 text-sm">
+                <div className="flex justify-between gap-4">
+                  <dt className="text-white/70">Tipo</dt>
+                  <dd className="font-bold text-right">{resultado.tipo}</dd>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <dt className="text-white/70">Médico emissor</dt>
+                  <dd className="font-bold text-right">{resultado.medico}</dd>
+                </div>
+                {resultado.crm ? (
+                  <div className="flex justify-between gap-4">
+                    <dt className="text-white/70">CRM</dt>
+                    <dd className="font-bold text-right">{resultado.crm}</dd>
+                  </div>
+                ) : null}
+              </dl>
+            </div>
           ) : resultado?.valido ? (
             <div>
               <p className="flex items-center gap-2 text-lg font-bold text-emerald-300">

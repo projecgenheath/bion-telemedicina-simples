@@ -6,6 +6,7 @@ import { falha } from "@/lib/server/http";
 import { criarCobranca } from "@/lib/server/pagamentos";
 import { comissaoPlataformaConnect, gatewayCheckout } from "@/lib/server/gateway-pagamento";
 import { modoCobrancaStripe, stripeConnectAtivo } from "@/lib/server/stripe";
+import { contaStripeDoMedico, medicoPodeSerCobrado } from "@/lib/medico-cobravel";
 import {
   avaliarElegibilidade,
   avaliarMulta,
@@ -149,7 +150,7 @@ async function checkoutAvulso(usuario: Usuario, pagamentoId: string, base: strin
       status: true,
       valor: true,
       gatewayRef: true,
-      pedidoRenovacao: { select: { pacienteId: true, status: true, medicoId: true } },
+      pedidoRenovacao: { select: { pacienteId: true, status: true, medicoId: true, documento: { select: { status: true } } } },
       consulta: { select: { id: true, pacienteId: true, status: true, medicoId: true, especialidade: true, medico: { select: { nome: true } } } },
     },
   });
@@ -176,6 +177,10 @@ async function checkoutAvulso(usuario: Usuario, pagamentoId: string, base: strin
   );
   if (!eleg.ok) return Response.json({ erro: eleg.erro }, { status: eleg.status });
   const pg = p!;
+  if (eleg.tipo === "renovacao" && pg.pedidoRenovacao?.documento?.status === "cancelado") {
+    // 20261103a: receita cancelada pelo médico → nenhuma cobrança nova.
+    return Response.json({ erro: "Esta receita foi cancelada pelo médico. A renovação não pode mais ser paga." }, { status: 409 });
+  }
   if (eleg.tipo === "renovacao") {
     return abrirSessao(usuario, {
       tipo: "renovacao",
@@ -262,10 +267,16 @@ async function abrirSessao(usuario: Usuario, a: Alvo) {
   let connect: DadosConnect | null = null;
   if (modo !== "plataforma") {
     const medico = await db.perfilMedico.findUnique({ where: { userId: a.medicoId }, select: { stripeAccountId: true } });
-    if (!medico?.stripeAccountId) {
-      return Response.json({ erro: "Pagamento online indisponível para este médico." }, { status: 409 });
+    const contaMedico = contaStripeDoMedico(medico?.stripeAccountId);
+    // `!contaMedico` não é redundante para o TypeScript: estreita para string
+    // (usado em `connect` abaixo); medicoPodeSerCobrado é a regra compartilhada.
+    if (!contaMedico || !medicoPodeSerCobrado(modo, contaMedico)) {
+      return Response.json(
+        { erro: "Este médico ainda não pode receber pagamento online. Escolha outro horário ou outro médico.", codigo: "medico_sem_conta" },
+        { status: 409 },
+      );
     }
-    connect = { contaMedico: medico.stripeAccountId, taxaPlataformaCentavos: comissaoPlataformaConnect(a.tipo, a.valorCentavos) };
+    connect = { contaMedico, taxaPlataformaCentavos: comissaoPlataformaConnect(a.tipo, a.valorCentavos) };
   }
 
   const gateway = gatewayCheckout();

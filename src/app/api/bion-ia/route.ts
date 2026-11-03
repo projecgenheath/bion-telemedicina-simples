@@ -1,15 +1,19 @@
 import { NextRequest } from "next/server";
 import { quandoClinica } from "@/lib/server/fuso";
 import { db } from "@/lib/db";
-import { exigirSessao } from "@/lib/server/auth";
+import { exigirPapel } from "@/lib/server/auth";
 import {ok, falha, lerCorpoJson, corpoObjeto, textoDoCorpo} from "@/lib/server/http";
 import { chatComFonte, chatStreamComFonte, iaPausada, motivoFalhaIa, novoRequestId, respostaIaPausada } from "@/lib/server/llm";
 import { anonimizarMensagensIa, type IdentificadoresPaciente } from "@/lib/server/anonimizar-ia";
 import { exigirConsentimentoIa } from "@/lib/server/consentimento-ia";
+import { exigirAceiteCopilotMedico } from "@/lib/server/aceite-copilot-medico";
 import { anonimizarMensagensTexto } from "@/lib/server/anonimizar-texto";
 import { dataNascimentoParaIso } from "@/lib/idade";
 import { limitarAsync, resposta429 } from "@/lib/server/rate-limit";
 import { nomesMedicamentosEmUso } from "@/lib/server/medicamentos-legado";
+import { carregarContextoPaciente, promptPaciente, resumoPacienteTexto } from "@/lib/server/bion-ia-contexto";
+import { FiltroAcao, extrairAcao, resolverAcaoAgendar, type MedicoCodificado } from "@/lib/bion-ia-acao";
+import { filtrarMensagensDaPaciente } from "@/lib/server/filtro-dados-pessoais";
 
 /**
  * BION IA — assistente clínico (backend apenas).
@@ -17,7 +21,8 @@ import { nomesMedicamentosEmUso } from "@/lib/server/medicamentos-legado";
  * POST { mensagens: { remetente: "usuario" | "ia"; texto: string }[] }
  * → { resposta: string }
  *
- * O histórico vem do cliente (últimas ~12 mensagens). O enriquecimento de
+ * O histórico vem do cliente; o servidor corta em LIMITE_HISTORICO (12) para
+ * todos os papéis, inclusive o Copilot do médico. O enriquecimento de
  * contexto (papel, medicamentos, alergias, próximas consultas) é montado
  * AQUI no servidor a partir do banco — nunca confiar em dados do cliente.
  *
@@ -36,7 +41,10 @@ import { nomesMedicamentosEmUso } from "@/lib/server/medicamentos-legado";
  * (`raciocinio`), nunca dentro de `resposta`/`delta`, e nunca para monitor/log.
  */
 
-const LIMITE_HISTORICO = 4;
+/** Histórico enviado ao modelo (antes 4: a IA "esquecia" a conversa). */
+const LIMITE_HISTORICO = 12;
+/** Teto por mensagem do histórico (antes 500: respostas longas sumiam). */
+const MAX_MSG = 2000;
 /**
  * PRAZO TOTAL DA IA (medido em produção 2026-09-25): o Gemma responde bem em
  * 4-8s (com prefill); quando TRAVA (free tier), não adianta esperar 21s — o
@@ -144,7 +152,10 @@ async function nomesPacientesDoMedico(medicoId: string): Promise<string[]> {
 
 export async function POST(req: NextRequest) {
   try {
-    const usuario = await exigirSessao();
+    // LGPD: o chat geral da BION IA é só de PACIENTE e MEDICO. O ADMIN recebe
+    // 403 antes de ler o corpo e antes de qualquer chamada à IA — ele poderia
+    // colar dados de um paciente sem o consentimento nem o filtro desse paciente.
+    const usuario = await exigirPapel("PACIENTE", "MEDICO");
     // M6 (auditoria): teto por usuário — cada chamada vai a um LLM PAGO, então
     // loop de cliente não pode virar custo ilimitado. 20/min cobre a conversa
     // humana (e o Copilot do médico); 300/h limita o custo acumulado do dia.
@@ -154,9 +165,13 @@ export async function POST(req: NextRequest) {
     if (!tetoHora.permitido) return resposta429(tetoHora.restanteSeg);
     // Pausa da BION IA (opt-in, BION_IA_PAUSADA=true): nada vai à IA.
     if (iaPausada()) return respostaIaPausada();
-    // Portão jurídico: paciente sem o aceite da versão atual (NVIDIA) → 409.
+    // Portão jurídico: paciente sem o consentimento atual da IA (NVIDIA) → 403.
     const pendente = await exigirConsentimentoIa(usuario);
     if (pendente) return pendente;
+    // LGPD (Copilot do médico): sem o aceite da versão atual → 403
+    // aceite_copilot_medico; nada vai à IA (falha fechada em erro de banco).
+    const semAceiteMedico = await exigirAceiteCopilotMedico(usuario);
+    if (semAceiteMedico) return semAceiteMedico;
     // B1: guarda de objeto/tipo — corpo null ou texto não-string virava 500
     // em .trim() no filtro do histórico.
     const bruto = corpoObjeto(await lerCorpoJson(req));
@@ -180,22 +195,36 @@ export async function POST(req: NextRequest) {
     // montar o prompt (slice 0..4000 por mensagem).
     const historico = (body.mensagens ?? [])
       .filter((m) => (m?.texto ?? "").trim() && ["usuario", "ia"].includes(m.remetente))
+      .map((m) => ({ ...m, texto: m.texto.slice(0, MAX_MSG) }))
       .slice(-LIMITE_HISTORICO);
 
     if (!historico.length) {
       return Response.json({ erro: "Nenhuma mensagem recebida." }, { status: 400 });
     }
 
+    // PACIENTE: prompt com o papel da BION IA no app + contexto clínico
+    // (perfil, consultas, exames, triagens). Antes: prompt de 1 linha, sem
+    // papel, e o contexto era PULADO em saudações ("Bom dia").
     const ultima = (body.mensagens ?? []).at(-1)?.texto?.trim() ?? "";
     const saudacao = /^(oi|ol[áa]|boa\s+(noite|tarde|dia)|e a[ií]|hey)[\s!.?]*$/i.test(ultima);
-    const contexto = saudacao ? "" : await montarContexto(usuario);
+    // Agendamento: a IA vê só "M1 (Cardiologia)"; o servidor guarda o mapa
+    // código → médico e troca ao montar o card (nome do médico não vai à IA).
+    let medicosCodificados: MedicoCodificado[] = [];
+    let instrucoes: string;
+    if (usuario.role === "PACIENTE") {
+      const dados = await carregarContextoPaciente(usuario.id);
+      medicosCodificados = dados.medicosDisponiveis;
+      instrucoes = promptPaciente(resumoPacienteTexto(dados));
+    } else {
+      instrucoes = instrucoesBase(usuario.role) + (saudacao ? "" : await montarContexto(usuario));
+    }
     // M6: identificadores diretos saem de TODO o texto (prompt + histórico
     // digitado) antes de qualquer canal de IA — em todos os canais.
     const mensagens = anonimizarMensagensIa(
       [
         {
           role: "assistant" as const,
-          content: instrucoesBase(usuario.role) + contexto,
+          content: instrucoes,
         },
         ...historico.map((m) => ({
           role: m.remetente === "usuario" ? ("user" as const) : ("assistant" as const),
@@ -204,26 +233,42 @@ export async function POST(req: NextRequest) {
       ],
       await identificadoresDoUsuario(usuario),
     );
+    // TODO(#142): quando o #142 entrar, aplicar também `filtrarDadosPessoais`
+    // aqui no texto do médico (além da anonimização abaixo).
     // LGPD: no Copilot do médico, tira também os dados de PACIENTES que ele
     // digitar (nomes conhecidos, CPF, telefone, e-mail, CEP, datas e endereço).
+    // PACIENTE: o que ela digita passa pelo filtro de CPF, telefone, e-mail,
+    // datas, endereço e nomes próprios (dela e de terceiros) antes da IA.
     const mensagensFinais =
       usuario.role === "MEDICO"
         ? anonimizarMensagensTexto(mensagens, { nomesPacientes: await nomesPacientesDoMedico(usuario.id) })
-        : mensagens;
+        : usuario.role === "PACIENTE"
+          ? filtrarMensagensDaPaciente(mensagens, { nomesConhecidos: [usuario.nome], substitutoNome: "o paciente" })
+          : mensagens;
 
     // IA generativa em cadeia (identificadores já removidos acima).
     if (body.stream === true) {
       const enc = new TextEncoder();
       const linha = (o: unknown) => enc.encode(`${JSON.stringify(o)}\n`);
       const gerador = chatStreamComFonte(mensagensFinais, TIMEOUT_MS, { requestId, primeiroTokenMs: PRIMEIRO_TOKEN_MS });
+      // Ação estruturada ([[AGENDAR: …]]): sai do texto e vai em evento próprio.
+      const filtroAcao = new FiltroAcao();
       const corpo = new ReadableStream<Uint8Array>({
         async start(ctrl) {
           ctrl.enqueue(linha({ tipo: "inicio", requestId }));
           try {
             for await (const ev of gerador) {
-              if (ev.tipo === "delta") ctrl.enqueue(linha({ tipo: "delta", texto: ev.texto }));
+              if (ev.tipo === "delta") {
+                const t = filtroAcao.empurrar(ev.texto);
+                if (t) ctrl.enqueue(linha({ tipo: "delta", texto: t }));
+              } else if (ev.tipo === "fim") {
+                const resto = filtroAcao.fechar();
+                if (resto.texto) ctrl.enqueue(linha({ tipo: "delta", texto: resto.texto }));
+                if (resto.acao && usuario.role === "PACIENTE")
+                  ctrl.enqueue(linha({ tipo: "acao", acao: resolverAcaoAgendar(resto.acao, medicosCodificados) }));
+                ctrl.enqueue(linha({ tipo: "fim", fonte: ev.fonte, modelo: ev.modelo, requestId }));
+              }
               else if (ev.tipo === "raciocinio") ctrl.enqueue(linha({ tipo: "raciocinio", texto: ev.texto }));
-              else if (ev.tipo === "fim") ctrl.enqueue(linha({ tipo: "fim", fonte: ev.fonte, modelo: ev.modelo, requestId }));
               else
                 ctrl.enqueue(
                   linha({
@@ -259,7 +304,8 @@ export async function POST(req: NextRequest) {
     });
     if (r.texto) {
       // `raciocinio` separado de `resposta` (a cópia/inserção usa só `resposta`).
-      return ok({ resposta: r.texto, raciocinio: r.raciocinio ?? null, fonte: r.fonte, modelo: r.modelo, requestId });
+      const sep = extrairAcao(r.texto);
+      return ok({ resposta: sep.texto, acao: usuario.role === "PACIENTE" ? resolverAcaoAgendar(sep.acao, medicosCodificados) : null, raciocinio: r.raciocinio ?? null, fonte: r.fonte, modelo: r.modelo, requestId });
     }
     return Response.json(
       {

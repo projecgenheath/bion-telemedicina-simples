@@ -1,3 +1,4 @@
+import { precoConsulta } from "@/lib/preco-consulta";
 import { exigirAceiteTermosPaciente } from "@/lib/server/aceite-termos";
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
@@ -180,7 +181,7 @@ export async function POST(req: NextRequest) {
     // O cliente não manda valor — um paciente malicioso podia agendar com
     // valor 0 e receber consulta confirmada grátis. O perfilMedico do médico
     // já veio carregado acima (valor padrão 150 no schema).
-    const valorMedico = medico.perfilMedico?.valor ?? 150;
+    const valorMedico = precoConsulta(medico.perfilMedico);
 
     const dataInicio = parseDataHora(body.data, body.hora);
 

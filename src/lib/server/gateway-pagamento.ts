@@ -25,6 +25,8 @@ export interface GatewayCheckout {
   criarSessao(e: EntradaSessao, chaveIdempotencia: string): Promise<SessaoCheckout>;
   /** `conta` = acct_ do médico na cobrança direta (Connect); senão omitir. */
   lerSessao(id: string, conta?: string | null): Promise<SessaoCheckout | null>;
+  /** Expira uma sessão ainda aberta (defesa extra). Nunca lança: false em erro. */
+  expirarSessao(id: string, conta?: string | null): Promise<boolean>;
   /** Taxa real do gateway (centavos) e id da cobrança, lidos do PaymentIntent. */
   lerCobranca(paymentIntentId: string, conta?: string | null): Promise<{ chargeId: string | null; taxaCentavos: number | null }>;
   /** Taxa (centavos) de uma balance_transaction; null se não houver. */
@@ -48,6 +50,14 @@ export const gatewayStripe: GatewayCheckout = {
       return paraSessao(await stripe().checkout.sessions.retrieve(id, {}, conta ? { stripeAccount: conta } : {}));
     } catch {
       return null;
+    }
+  },
+  async expirarSessao(id, conta) {
+    try {
+      await stripe().checkout.sessions.expire(id, {}, conta ? { stripeAccount: conta } : {});
+      return true;
+    } catch {
+      return false; // já paga/expirada ou erro de rede: o webhook reembolsa
     }
   },
   async lerCobranca(paymentIntentId, conta) {

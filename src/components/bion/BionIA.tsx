@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Sparkles,
   Send,
@@ -17,10 +17,20 @@ import {
 } from "lucide-react";
 import { useBion } from "@/lib/bion-store";
 import { toast } from "sonner";
-import { ErroBionIa, perguntarBionIa, textoParaCopiar } from "@/lib/bion-ia-cliente";
+import {
+  ErroBionIa,
+  aceitarCopilotMedico,
+  consultarAceiteCopilotMedico,
+  perguntarBionIa,
+  revogarCopilotMedico,
+  textoParaCopiar,
+} from "@/lib/bion-ia-cliente";
+import { detalheConsultaIa } from "@/lib/auditoria-ia";
+import { TEXTO_AVISO_COPILOT_MEDICO, TEXTO_CAIXA_COPILOT_MEDICO } from "@/lib/aceite-copilot-medico";
 import { inline } from "@/lib/markdown-simples";
 import { BlocoRaciocinio } from "./BlocoRaciocinio";
 import { ConsentimentoIA } from "./paciente/ConsentimentoIA";
+import { AVISO_DADOS_PESSOAIS_IA } from "@/lib/consentimento-ia";
 // M22: o ConsentimentoIA usa as classes bpp-sheet (tema do app do paciente,
 // escopo .bp-app-paciente em paciente.css). A página clássica importa o CSS
 // e monta a folha dentro de um invólucro .bp-app-paciente — sem isso a folha
@@ -77,10 +87,34 @@ export function BionIA() {
   // a pergunta que esbarrou no aceite pendente, repetida após o "Li e concordo".
   const [iaPausada, setIaPausada] = useState(false);
   const [aceitePendente, setAceitePendente] = useState<string | null>(null);
+  // LGPD (Copilot do médico): null = verificando; false = falta o aceite.
+  const [aceiteCopilot, setAceiteCopilot] = useState<boolean | null>(isMedico ? null : true);
+  const [caixaCopilot, setCaixaCopilot] = useState(false);
+  const [salvandoAceite, setSalvandoAceite] = useState(false);
+  useEffect(() => {
+    if (!isMedico) return;
+    let vivo = true;
+    void consultarAceiteCopilotMedico().then((v) => {
+      if (vivo) setAceiteCopilot(v);
+    });
+    return () => {
+      vivo = false;
+    };
+  }, [isMedico]);
+  const bloqueadoCopilot = isMedico && aceiteCopilot !== true;
+  const confirmarAceiteCopilot = async () => {
+    if (!caixaCopilot || salvandoAceite) return;
+    setSalvandoAceite(true);
+    const okAceite = await aceitarCopilotMedico();
+    setSalvandoAceite(false);
+    if (okAceite) setAceiteCopilot(true);
+    else toast.error("Não consegui registrar seu aceite agora. Tente novamente.");
+  };
 
   const enviarMensagem = async (textoEnviar?: string) => {
     const txt = (textoEnviar ?? entrada).trim();
     if (!txt || digitando) return;
+    if (bloqueadoCopilot) return;
 
     const novaMsgUsuario: MensagemIA = {
       id: `usr-${Date.now()}`,
@@ -98,7 +132,8 @@ export function BionIA() {
       categoria: "sistema",
       severidade: "info",
       entidade: "bion-ia",
-      detalhes: `Consulta à IA: "${txt.slice(0, 100)}"`,
+      // LGPD: o texto da pergunta NÃO vai para a auditoria (nenhum perfil).
+      detalhes: detalheConsultaIa(isMedico ? "MEDICO" : sessao.role),
     });
 
     let resposta = "";
@@ -120,6 +155,12 @@ export function BionIA() {
         // Pausa da BION IA (opt-in, bion_ia_pausada): aviso amigável, não erro.
         setIaPausada(true);
         resposta = e.message || "A BION IA volta em breve.";
+      } else if (e instanceof ErroBionIa && e.tipo === "aceite_copilot") {
+        // Servidor recusou (aceite ausente/desatualizado): volta a caixa de aceite.
+        setAceiteCopilot(false);
+        setCaixaCopilot(false);
+        tirarPergunta = true;
+        resposta = e.message;
       } else if (e instanceof ErroBionIa && e.tipo === "consentimento") {
         // Portão jurídico (mesmo fluxo do ChatBion): nada foi enviado à IA;
         // abre a folha de aceite e a pergunta é repetida após o aceite.
@@ -184,6 +225,50 @@ export function BionIA() {
           </span>
         </div>
 
+        {/* LGPD: aviso fixo do Copilot do médico (texto do Jurídico) */}
+        {isMedico && (
+          <div role="note" className="px-5 py-3 border-b bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-100 text-xs flex gap-2">
+            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+            <span>{TEXTO_AVISO_COPILOT_MEDICO}</span>
+            {aceiteCopilot === true && (
+              <button
+                type="button"
+                className="ml-auto shrink-0 underline font-semibold"
+                onClick={async () => {
+                  if (await revogarCopilotMedico()) {
+                    setAceiteCopilot(false);
+                    setCaixaCopilot(false);
+                    toast.success("Aceite revogado. O Copilot fica bloqueado até você aceitar de novo.");
+                  } else toast.error("Não consegui revogar agora. Tente novamente.");
+                }}
+              >
+                Revogar aceite
+              </button>
+            )}
+          </div>
+        )}
+        {isMedico && aceiteCopilot === false && (
+          <div className="px-5 py-4 border-b bg-card space-y-3">
+            <label className="flex items-start gap-2 text-sm cursor-pointer">
+              <input
+                type="checkbox"
+                className="mt-1"
+                checked={caixaCopilot}
+                onChange={(e) => setCaixaCopilot(e.target.checked)}
+              />
+              <span>{TEXTO_CAIXA_COPILOT_MEDICO}</span>
+            </label>
+            <button
+              type="button"
+              disabled={!caixaCopilot || salvandoAceite}
+              onClick={() => void confirmarAceiteCopilot()}
+              className="px-4 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-50"
+            >
+              {salvandoAceite ? "Registrando..." : "Confirmar e usar o Copilot"}
+            </button>
+          </div>
+        )}
+
         {/* Portão jurídico da IA (mesmo componente/fluxo do ChatBion) */}
         {aceitePendente !== null && (
           <div className="bp-app-paciente">
@@ -193,7 +278,7 @@ export function BionIA() {
                 setAceitePendente(null);
                 setMensagens((prev) => [
                   ...prev,
-                  { id: `ia-aceite-${Date.now()}`, remetente: "ia", texto: "Obrigado! Aceite registrado.", hora: horaAgora() },
+                  { id: `ia-aceite-${Date.now()}`, remetente: "ia", texto: "BION IA ativada.", hora: horaAgora() },
                 ]);
                 void enviarMensagem(t);
               }}
@@ -204,7 +289,7 @@ export function BionIA() {
                   {
                     id: `ia-recusa-${Date.now()}`,
                     remetente: "ia",
-                    texto: "Tudo bem. Sem o aceite, a BION IA fica pausada para você. O agendamento e as consultas continuam normais.",
+                    texto: "Tudo bem. Sem a BION IA, o resto do app funciona normalmente: agendamento, exames e consultas continuam iguais. Se mudar de ideia, mande uma nova pergunta e ative a IA.",
                     hora: horaAgora(),
                   },
                 ]);
@@ -305,6 +390,7 @@ export function BionIA() {
             <button type="button"
               key={i}
               onClick={() => enviarMensagem(p)}
+              disabled={bloqueadoCopilot}
               className="text-xs px-3 py-1.5 rounded-full bg-card border hover:border-primary hover:text-primary transition shrink-0 whitespace-nowrap"
             >
               {p}
@@ -313,10 +399,16 @@ export function BionIA() {
         </div>
 
         {/* Campo de Entrada */}
-        <div className="p-4 border-t bg-card flex items-center gap-3">
+        {!isMedico ? (
+          <p className="px-4 pt-3 border-t bg-card text-xs text-muted-foreground" role="note">
+            {AVISO_DADOS_PESSOAIS_IA}
+          </p>
+        ) : null}
+        <div className={`p-4 bg-card flex items-center gap-3 ${isMedico ? "border-t" : ""}`}>
           <input
                   aria-label="Sua pergunta para a BION IA"
             value={entrada}
+            disabled={bloqueadoCopilot}
             onChange={(e) => setEntrada(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") enviarMensagem();
@@ -330,7 +422,8 @@ export function BionIA() {
           />
           <button type="button"
             onClick={() => enviarMensagem()}
-            className="w-12 h-12 rounded-2xl bg-primary text-primary-foreground flex items-center justify-center hover:opacity-90 active:scale-95 transition shadow-sm shrink-0"
+            disabled={bloqueadoCopilot}
+            className="disabled:opacity-50 w-12 h-12 rounded-2xl bg-primary text-primary-foreground flex items-center justify-center hover:opacity-90 active:scale-95 transition shadow-sm shrink-0"
           >
             <Send className="w-5 h-5" />
           </button>

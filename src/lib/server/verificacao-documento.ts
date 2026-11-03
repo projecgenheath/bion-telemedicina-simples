@@ -11,10 +11,12 @@
  *
  * Segredo: variável de ambiente **BION_VERIFICACAO_SEGREDO** (qualquer
  * string longa e aleatória; trocá-la invalida os códigos já impressos).
- * Sem a variável, cai num segredo de DESENVOLVIMENTO fixo e documentado
- * aqui — ele existe para o ambiente local/demo não quebrar, e um aviso é
- * logado no servidor. **Produção precisa definir a variável**: com o
- * fallback, qualquer pessoa com acesso ao código-fonte pode assinar ids.
+ * Sem a variável o servidor FALHA FECHADO (VerificacaoIndisponivelError):
+ * não existe mais segredo fixo de desenvolvimento — com ele, qualquer
+ * pessoa com acesso ao código-fonte podia assinar ids. Hoje a variável só
+ * está definida em produção na Vercel; no preview/local a verificação fica
+ * "indisponível" (a rota responde 503 e as vias saem sem código) até a
+ * variável ser definida lá também. Testes passam o segredo explicitamente.
  *
  * Isto NÃO é assinatura digital ICP-Brasil: é uma prova de emissão e de
  * integridade do registro na plataforma. A via impressa continua dizendo
@@ -27,21 +29,23 @@ import {
   TAMANHO_ASSINATURA_VERIFICACAO,
 } from "@/lib/verificacao-documento";
 
-/** Fallback SOMENTE para desenvolvimento/demo local — ver o cabeçalho. */
-const SEGREDO_DESENVOLVIMENTO = "bion-verificacao-desenvolvimento-nao-usar-em-producao";
+/** Segredo ausente: a verificação fica indisponível (falha fechada). */
+export class VerificacaoIndisponivelError extends Error {
+  constructor() {
+    super("BION_VERIFICACAO_SEGREDO ausente: verificação de documentos indisponível neste ambiente.");
+    this.name = "VerificacaoIndisponivelError";
+  }
+}
 
-let avisouFallback = false;
-
+/** Segredo da env; LANÇA VerificacaoIndisponivelError se faltar (sem fallback). */
 export function segredoVerificacao(): string {
   const daEnv = process.env.BION_VERIFICACAO_SEGREDO?.trim();
-  if (daEnv) return daEnv;
-  if (!avisouFallback) {
-    avisouFallback = true;
-    console.warn(
-      "[verificacao-documento] BION_VERIFICACAO_SEGREDO ausente: usando o segredo de DESENVOLVIMENTO. Defina a variável em produção.",
-    );
-  }
-  return SEGREDO_DESENVOLVIMENTO;
+  if (!daEnv) throw new VerificacaoIndisponivelError();
+  return daEnv;
+}
+
+export function verificacaoDisponivel(): boolean {
+  return !!process.env.BION_VERIFICACAO_SEGREDO?.trim();
 }
 
 const contexto = (documentoId: string) => `bion-documento:${documentoId}`;
@@ -57,6 +61,15 @@ export function assinarDocumentoId(documentoId: string, segredo: string): string
 /** Código completo de verificação de um documento (para o wire e a via). */
 export function gerarCodigoVerificacao(documentoId: string, segredo: string = segredoVerificacao()): string {
   return montarCodigoVerificacao(documentoId, assinarDocumentoId(documentoId, segredo));
+}
+
+/**
+ * Código para o wire/via, ou null quando o ambiente não tem o segredo —
+ * a via sai sem código em vez de quebrar a leitura dos documentos.
+ */
+export function codigoVerificacaoOuNulo(documentoId: string): string | null {
+  if (!verificacaoDisponivel()) return null;
+  return gerarCodigoVerificacao(documentoId);
 }
 
 /**

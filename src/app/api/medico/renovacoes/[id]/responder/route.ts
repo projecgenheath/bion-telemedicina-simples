@@ -52,7 +52,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       where: { id, medicoId: medico.id },
       select: {
         id: true, status: true, pacienteId: true, consultaOrigemId: true,
-        documento: { select: { id: true, controlado: true, titulo: true, medicamento: true, posologia: true, duracao: true, cid: true } },
+        documento: { select: { id: true, status: true, controlado: true, titulo: true, medicamento: true, posologia: true, duracao: true, cid: true } },
         consultaOrigem: { select: { especialidade: true } },
       },
     });
@@ -63,6 +63,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const naoPendente = () => erroHttp(409, "pedido_nao_pendente");
 
     if (body.acao === "renovar") {
+      if (pedido.documento?.status === "cancelado") {
+        return Response.json(
+          { erro: "documento_cancelado", mensagem: "Esta receita foi cancelada e não pode ser renovada." },
+          { status: 409 },
+        );
+      }
       if (pedido.documento?.controlado) {
         return Response.json(
           { erro: "controlado_exige_chamada", mensagem: "Receita de controlado: renove só numa chamada." },

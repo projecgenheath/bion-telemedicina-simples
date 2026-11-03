@@ -6,6 +6,7 @@ import {
   CODIGO_CONSENTIMENTO_IA_PENDENTE,
   FINALIDADE_CONSENTIMENTO_IA,
   FINALIDADE_REVOGACAO_IA,
+  TEXTO_CAIXA_CONSENTIMENTO_IA,
   PREFIXO_FINALIDADE_IA,
   VERSAO_CONSENTIMENTO_IA,
   consentimentoIaVigente,
@@ -25,13 +26,29 @@ function igual(nome: string, obtido: unknown, esperado: unknown) {
 }
 
 igual("versões v2.1", [VERSAO_PRIVACIDADE, VERSAO_TERMOS_PACIENTE], ["privacidade-v2.1-2026-11-03", "termos-paciente-v2.1-2026-11-03"]);
-igual("finalidade com prefixo, NVIDIA e versões", [
+igual("finalidade com prefixo e NVIDIA, SEM amarrar Termos/Política (v3: separado)", [
   FINALIDADE_CONSENTIMENTO_IA.startsWith(PREFIXO_FINALIDADE_IA),
   FINALIDADE_CONSENTIMENTO_IA.includes("NVIDIA"),
   FINALIDADE_CONSENTIMENTO_IA.includes(VERSAO_PRIVACIDADE),
   FINALIDADE_CONSENTIMENTO_IA.includes(VERSAO_TERMOS_PACIENTE),
-], [true, true, true, true]);
-igual("versão do consentimento da IA", VERSAO_CONSENTIMENTO_IA, "ia-nvidia-v2-2026-10-28");
+], [true, true, false, false]);
+igual("versão do consentimento da IA", VERSAO_CONSENTIMENTO_IA, "ia-nvidia-v3-2026-11-03");
+igual(
+  "aceite v2 (clique único Termos + IA): pendente, precisa consentir de novo",
+  consentimentoIaVigente({
+    aceito: true,
+    finalidade: `${PREFIXO_FINALIDADE_IA}: mensagens e laudos enviados à NVIDIA (EUA); aceite de x e y (versão ia-nvidia-v2-2026-10-28)`,
+  }),
+  false,
+);
+igual("caixa cita NVIDIA, EUA, saúde e revogação", [
+  TEXTO_CAIXA_CONSENTIMENTO_IA.includes("NVIDIA"),
+  TEXTO_CAIXA_CONSENTIMENTO_IA.includes("EUA"),
+  TEXTO_CAIXA_CONSENTIMENTO_IA.includes("saúde"),
+  TEXTO_CAIXA_CONSENTIMENTO_IA.includes("revogar"),
+  TEXTO_CAIXA_CONSENTIMENTO_IA.includes("opcional"),
+], [true, true, true, true, true]);
+igual("corpo 403 diz se os Termos também faltam", [corpoConsentimentoIaPendente().termosPendentes, corpoConsentimentoIaPendente(true).termosPendentes], [false, true]);
 igual(
   "aceite da v1 (texto anterior): pendente",
   consentimentoIaVigente({ aceito: true, finalidade: `${PREFIXO_FINALIDADE_IA}: NVIDIA (versão ia-nvidia-v1-2026-10-27)` }),
@@ -47,6 +64,7 @@ igual(
 );
 igual("409 reconhecido", ehConsentimentoIaPendente(409, corpoConsentimentoIaPendente()), true);
 igual("409 sem código não", ehConsentimentoIaPendente(409, { erro: "x" }), false);
+igual("403 reconhecido", ehConsentimentoIaPendente(403, corpoConsentimentoIaPendente()), true);
 igual("outro status não", ehConsentimentoIaPendente(400, { codigo: CODIGO_CONSENTIMENTO_IA_PENDENTE }), false);
 igual("corpo traz versão", corpoConsentimentoIaPendente().versao, VERSAO_CONSENTIMENTO_IA);
 
@@ -54,28 +72,34 @@ igual("corpo traz versão", corpoConsentimentoIaPendente().versao, VERSAO_CONSEN
 {
   let registro: { aceito: boolean; finalidade: string; createdAt: Date } | null = null;
   let quebrar = false;
+  const { finalidadePrivacidade, finalidadeTermos } = await import("./aceite-termos");
+  let termos: string[] = [finalidadePrivacidade(VERSAO_PRIVACIDADE), finalidadeTermos(VERSAO_TERMOS_PACIENTE)];
   (globalThis as unknown as { prisma: unknown }).prisma = {
     consentimento: {
       findFirst: async () => {
         if (quebrar) throw new Error("db fora");
         return registro;
       },
+      findMany: async () => termos.map((finalidade) => ({ finalidade })),
     },
   };
   const { exigirConsentimentoIa } = await import("./server/consentimento-ia");
   const pac = { id: "p1", role: "PACIENTE" };
   let r = await exigirConsentimentoIa(pac);
-  igual("portão: sem aceite → 409", r?.status, 409);
+  igual("portão: sem aceite → 403", r?.status, 403);
   igual("portão: código no corpo", ((await r!.json()) as { codigo: string }).codigo, CODIGO_CONSENTIMENTO_IA_PENDENTE);
   registro = { aceito: true, finalidade: FINALIDADE_CONSENTIMENTO_IA, createdAt: new Date() };
   igual("portão: aceite atual passa", await exigirConsentimentoIa(pac), null);
+  termos = [];
+  igual("portão: aviso da IA ok mas Termos pendentes → 403", (await exigirConsentimentoIa(pac))?.status, 403);
+  termos = [finalidadePrivacidade(VERSAO_PRIVACIDADE), finalidadeTermos(VERSAO_TERMOS_PACIENTE)];
   registro = { aceito: false, finalidade: FINALIDADE_REVOGACAO_IA, createdAt: new Date() };
-  igual("portão: revogado → 409", (await exigirConsentimentoIa(pac))?.status, 409);
+  igual("portão: revogado → 403", (await exigirConsentimentoIa(pac))?.status, 403);
   registro = null;
   igual("portão: médico não é afetado", await exigirConsentimentoIa({ id: "m1", role: "MEDICO" }), null);
   quebrar = true;
   r = await exigirConsentimentoIa(pac);
-  igual("portão: erro no banco bloqueia (falha fechada)", r?.status, 409);
+  igual("portão: erro no banco bloqueia (falha fechada)", r?.status, 403);
 }
 
 console.log(`consentimento-ia: ${ok} ok, ${falhas} falha(s)`);

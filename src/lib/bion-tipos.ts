@@ -113,6 +113,9 @@ export type Documento = {
   cid?: string;
   /** Receita de controlado marcada pelo médico (docs antigos: false). */
   controlado?: boolean;
+  /** 20261103a: cancelado pelo médico emissor (continua no histórico). */
+  status?: "emitido" | "cancelado";
+  canceladoEm?: string | null;
   /** Identificação formal p/ a via impressa (melhoria nº 6): CRM do médico
    *  emissor e CPF/nascimento do paciente, vindos dos cadastros via
    *  documentoWire. Ausentes quando o cadastro não os tem. */

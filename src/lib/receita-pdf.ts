@@ -42,6 +42,37 @@ function gerarIdentificadorVia(): string {
   throw new Error("Gerador aleatório seguro indisponível neste navegador.");
 }
 
+/** 20261103a: carimbo "CANCELADO" (diagonal + faixa com a data) em toda
+ *  página de documento cancelado pelo médico. A via continua legível. */
+function dataCancelamento(iso?: string | null): string {
+  if (!iso) return "";
+  const t = new Date(iso);
+  return Number.isNaN(t.getTime()) ? "" : t.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
+}
+function carimbarCancelado(doc: jsPDF, canceladoEm?: string | null) {
+  const W = doc.internal.pageSize.getWidth();
+  const H = doc.internal.pageSize.getHeight();
+  const data = dataCancelamento(canceladoEm);
+  const total = doc.getNumberOfPages();
+  for (let p = 1; p <= total; p++) {
+    doc.setPage(p);
+    doc.setTextColor(220, 38, 38);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(72);
+    doc.text("CANCELADO", W / 2, H / 2, { align: "center", angle: 35 });
+    doc.setFillColor(220, 38, 38);
+    doc.rect(0, 92, W, 22, "F");
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(10);
+    doc.text(
+      `DOCUMENTO CANCELADO PELO MÉDICO EMISSOR${data ? ` EM ${data}` : ""} — SEM VALIDADE`,
+      W / 2,
+      107,
+      { align: "center" },
+    );
+  }
+}
+
 export function gerarDocumentoPDF(d: Documento) {
   const doc = new jsPDF({ unit: "pt", format: "a4" });
   const L = 48;
@@ -314,6 +345,7 @@ export function gerarDocumentoPDF(d: Documento) {
     .trim()
     .replace(/\s+/g, "-")
     .toLowerCase()}.pdf`;
+  if (d.status === "cancelado") carimbarCancelado(doc, d.canceladoEm);
   doc.save(nomeArquivo);
 }
 
@@ -326,8 +358,13 @@ export function gerarDocumentoPDF(d: Documento) {
  * O gerador de documento único (gerarDocumentoPDF) segue intacto.
  */
 export function gerarReceitaCombinadaPDF(documentos: Documento[]) {
-  const itens = documentos.filter((d) => d.tipo === "receita");
-  if (!itens.length) return;
+  const receitas = documentos.filter((d) => d.tipo === "receita");
+  if (!receitas.length) return;
+  // 20261103a: item cancelado sai da via combinada; se TODOS estão
+  // cancelados, a via sai inteira com o carimbo CANCELADO.
+  const ativos = receitas.filter((d) => d.status !== "cancelado");
+  const todosCancelados = ativos.length === 0;
+  const itens = todosCancelados ? receitas : ativos;
   const base = itens[0];
 
   const doc = new jsPDF({ unit: "pt", format: "a4" });
@@ -532,5 +569,6 @@ export function gerarReceitaCombinadaPDF(documentos: Documento[]) {
     doc.text(`${i}/${total}`, W - L, H - 30, { align: "right" });
   }
 
+  if (todosCancelados) carimbarCancelado(doc, itens[0].canceladoEm);
   doc.save(`receita-${base.paciente.toLowerCase().replace(/\s+/g, "-")}-${itens.length}-medicamentos.pdf`);
 }
