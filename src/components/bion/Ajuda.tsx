@@ -55,7 +55,7 @@ const FAQS: Faq[] = [
   {
     pergunta: "Como envio um exame para o médico?",
     resposta:
-      "Durante a consulta, toque no clipe de anexos e selecione o arquivo. Fora da consulta, use a área de Arquivos. O médico vê o histórico completo vinculado ao atendimento.",
+      "Durante a consulta, toque no clipe de anexos e selecione o arquivo. Fora da consulta, abra o chat com a BION IA e anexe o PDF ou a foto do exame: ela lê o documento, confere o seu nome e o deixa disponível para o médico na sua anamnese — se for um laudo laboratorial, os resultados entram na sua linha do tempo de exames.",
     categoria: "Documentos",
     perfis: ["paciente", "medico"],
   },

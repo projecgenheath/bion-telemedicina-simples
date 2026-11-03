@@ -1,6 +1,7 @@
 import "server-only";
 import crypto from "crypto";
 import { db } from "@/lib/db";
+import { registrarAudit } from "@/lib/server/auth";
 
 /* ------------------------------------------------------------------ */
 /* Pagamentos — confirmação EXCLUSIVAMENTE server-side                 */
@@ -64,6 +65,11 @@ export async function confirmarPagamento(pagamentoId: string, via: "webhook" | "
  * Igual a confirmarPagamento, mas diz se ESTA chamada confirmou (`mudou`).
  * A troca para "confirmado" é um updateMany condicional (status ≠ confirmado):
  * com duas chamadas simultâneas só uma tem count === 1 e só ela mexe na consulta.
+ *
+ * Trava do horário (C1): se a consulta é de um horário que já passou, NÃO
+ * confirma — nem o pagamento nem a consulta (sem `pago`, sem promoção a
+ * "confirmada"). Vale para todos os chamadores (webhook Stripe, webhook
+ * HMAC e gateway simulado).
  */
 export async function confirmarPagamentoSeMudou(pagamentoId: string, via: "webhook" | "simulado") {
   const p = await db.pagamento.findUnique({
@@ -72,6 +78,22 @@ export async function confirmarPagamentoSeMudou(pagamentoId: string, via: "webho
   });
   if (!p) return { pagamento: null, mudou: false };
   if (p.status === "confirmado") return { pagamento: p, mudou: false }; // reentrega do webhook: no-op
+  // O dinheiro pode ter sido capturado por uma consulta vencida (ex.: sessão
+  // de checkout aberta antes do horário e paga depois). Como na divergência
+  // de valor do webhook Stripe, nada é confirmado: o pagamento fica
+  // "pendente", a consulta não é promovida, e a divergência fica auditada
+  // como crítica para o financeiro tratar o reembolso — sem fluxo novo aqui.
+  if (p.consulta && p.consulta.dataInicio.getTime() <= Date.now()) {
+    await registrarAudit(null, {
+      acao: "PAGAMENTO_CONSULTA_VENCIDA",
+      categoria: "pagamento",
+      severidade: "critical",
+      entidade: "pagamento",
+      entidadeId: p.id,
+      detalhes: `Pagamento de consulta com horário já passado (${p.consulta.dataInicio.toISOString()}) — não confirmado; reembolso a tratar`,
+    });
+    return { pagamento: p, mudou: false };
+  }
   const statusConsulta: "confirmada" | undefined =
     p.consulta && (p.consulta.status === "em_espera" || p.consulta.status === "pendente_anamnese")
       ? "confirmada"

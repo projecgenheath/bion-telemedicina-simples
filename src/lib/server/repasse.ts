@@ -21,7 +21,6 @@ import {
   multaCancelamentoDevolvida,
   multaRemarcacaoDevolvida,
   REEMBOLSO_STATUS_EFETIVOS,
-  reembolsoEfetivo,
   totalReembolsadoCentavos,
   type ConsultaReceita,
 } from "@/components/bion/medico/receita-servidor";
@@ -55,7 +54,11 @@ import {
 /*   liquido = bruto − comissao − taxas − reembolsos + multas − ajustes */
 /* ------------------------------------------------------------------ */
 
-export const HORA_FECHAMENTO = 23; // o dia de hoje só fecha a partir das 23:00 (SP)
+// B-30: o fechamento passa a valer a partir das 23:30 (SP) — o mesmo prazo
+// final do desfecho (médico marca falta/falha até 23:30), que toda a
+// documentação já prometia. Antes, 23:00: itens decididos na faixa
+// 23:00–23:30 ficavam para o fechamento seguinte.
+export const HORA_FECHAMENTO_MIN = 23 * 60 + 30; // 23:30 de São Paulo
 export const PARTE_MEDICO_CONSULTA_PCT = 100 - COMISSAO_APP_PCT;
 
 export const ERRO_CONSULTA_REPASSADA = "A consulta já entrou num repasse; não dá para trocar o médico.";
@@ -106,19 +109,20 @@ export function corteDaCompetencia(dia: string, agora: Date = new Date()): Date 
   return new Date(Math.min(agora.getTime(), lim.fim.getTime()));
 }
 
-/** Dia que o fechamento pega por padrão: hoje a partir das 23:00 (SP), senão ontem. */
+/** Dia que o fechamento pega por padrão: hoje a partir das 23:30 (SP), senão ontem. */
 export function competenciaPadraoParaFechar(agora: Date = new Date()): string {
-  if (partesNoFuso(agora).hora >= HORA_FECHAMENTO) return dataIsoClinica(agora);
+  const p = partesNoFuso(agora);
+  if (p.hora * 60 + p.minuto >= HORA_FECHAMENTO_MIN) return dataIsoClinica(agora);
   return dataIsoClinica(new Date(agora.getTime() - 24 * 3_600_000));
 }
 
-/** Pode fechar esse dia agora? Dia futuro não; hoje só a partir das 23:00 (SP). */
+/** Pode fechar esse dia agora? Dia futuro não; hoje só a partir das 23:30 (SP). */
 export function validarCompetenciaParaFechar(dia: string, agora: Date = new Date()): string | null {
   if (!limitesDaCompetencia(dia)) return "Use uma data real no formato AAAA-MM-DD.";
   const hoje = dataIsoClinica(agora);
   if (dia > hoje) return "Não dá para fechar um dia que ainda não chegou.";
-  if (dia === hoje && partesNoFuso(agora).hora < HORA_FECHAMENTO) {
-    return `O dia de hoje só pode ser fechado a partir das ${HORA_FECHAMENTO}:00.`;
+  if (dia === hoje && partesNoFuso(agora).hora * 60 + partesNoFuso(agora).minuto < HORA_FECHAMENTO_MIN) {
+    return "O dia de hoje só pode ser fechado a partir das 23:30 (depois do prazo de desfecho).";
   }
   return null;
 }
@@ -330,11 +334,34 @@ export function itensElegiveis(params: {
     const rr = { ...r, valorCentavos: r.valorCentavos, respondidoEm: r.respondidoEm, reembolsos: reembolsosAteOCorte(r.reembolsos, corte) };
     add(itemDaRenovacao(rr), r.pagamentoId);
   }
+  // B-31: uma consulta pode ter MAIS DE UM evento de multa (ciclo de cancela
+  // e reabre). A chave do item é única por consulta (constraint do banco),
+  // então os eventos são SOMADOS num item só — antes, o segundo evento era
+  // descartado em silêncio e o médico não recebia a segunda multa.
+  const multasPorConsulta = new Map<
+    string,
+    { em: Date; multaCentavos: number; valorConsulta: number; reembolsos: ReembolsoMin[] }
+  >();
   for (const m0 of params.multasCancelamento) {
     if (m0.multaCentavos <= 0 || m0.em.getTime() >= corte.getTime()) continue;
     const m = { ...m0, reembolsos: reembolsosAteOCorte(m0.reembolsos, corte) };
     if (multaCancelamentoDevolvida(m)) continue;
-    add(itemDeMulta("multa_cancelamento", m.consultaId, null, m.em, m.multaCentavos));
+    const atual = multasPorConsulta.get(m.consultaId);
+    if (atual) {
+      atual.multaCentavos += m.multaCentavos;
+      // Entra no fechamento do dia da ÚLTIMA multa paga (a que completa o total).
+      if (m.em.getTime() > atual.em.getTime()) atual.em = m.em;
+    } else {
+      multasPorConsulta.set(m.consultaId, {
+        em: m.em,
+        multaCentavos: m.multaCentavos,
+        valorConsulta: m.valorConsulta,
+        reembolsos: m.reembolsos,
+      });
+    }
+  }
+  for (const [consultaId, m] of multasPorConsulta) {
+    add(itemDeMulta("multa_cancelamento", consultaId, null, m.em, m.multaCentavos));
   }
   for (const m0 of params.multasRemarcacao) {
     if (m0.multaCentavos <= 0 || m0.quando.getTime() >= corte.getTime()) continue;
@@ -657,11 +684,12 @@ async function calcularAjustesNovos(c: Cliente, medicoId: string, corte: Date): 
 
   const consultaIds = [...new Set(lista.map((r) => r.consultaId).filter(Boolean))];
   const pedidoIds = [...new Set(lista.map((r) => r.pedidoRenovacaoId).filter((x): x is string => !!x))];
-  const [itens, ajustes, ajustesRenovacao, doPagamento] = await Promise.all([
+  const [itens, ajustes, ajustesRenovacao, doPagamento, eventosMulta] = await Promise.all([
     c.repasseItem.findMany({
       where: { medicoId, OR: [{ consultaId: { in: consultaIds } }, { pedidoRenovacaoId: { in: pedidoIds } }] },
       select: {
         chave: true,
+        consultaId: true, // B-27: ligação com a multa original do evento
         criadoEm: true,
         liquidoCentavos: true,
         multasCentavos: true,
@@ -683,10 +711,28 @@ async function calcularAjustesNovos(c: Cliente, medicoId: string, corte: Date): 
       where: { status: { in: REEMBOLSO_STATUS_EFETIVOS }, pagamento: { consultaId: { in: consultaIds } } },
       select: { id: true, valorCentavos: true, criadoEm: true, decididoEm: true, pagamento: { select: { consultaId: true } } },
     }),
+    // B-27: multa CHEIA original dos eventos (a fonte de verdade), para o
+    // cálculo do ajuste — antes a multa era reconstruída com `parte × 2` e
+    // multa de valor ímpar voltava com um centavo de diferença.
+    c.eventoConsulta.findMany({
+      where: { consultaId: { in: consultaIds }, tipo: "cancelada", por: "paciente", multaCentavos: { gt: 0 } },
+      orderBy: { em: "asc" },
+      select: { consultaId: true, multaCentavos: true },
+    }),
   ]);
+  // Multa cheia por consulta: soma de TODOS os eventos de multa (B-31) ou,
+  // para itens muito antigos sem evento, a reconstrução ×2 como último recurso.
+  const multaOriginalPorConsulta = new Map<string, number>();
+  for (const e of eventosMulta) {
+    if (e.multaCentavos == null) continue;
+    multaOriginalPorConsulta.set(e.consultaId, (multaOriginalPorConsulta.get(e.consultaId) ?? 0) + e.multaCentavos);
+  }
   const mapaItens = new Map<string, ItemGravado>();
   for (const i of itens) {
-    const multaCheia = i.tipo === "multa_cancelamento" ? i.multasCentavos * 2 : undefined; // parte do médico = 50%
+    const multaCheia =
+      i.tipo === "multa_cancelamento"
+        ? multaOriginalPorConsulta.get(i.consultaId ?? "") ?? i.multasCentavos * 2
+        : undefined;
     mapaItens.set(i.chave, {
       chave: i.chave,
       criadoEm: i.criadoEm,
@@ -840,9 +886,6 @@ export async function previaDoDia(medicoId: string, agora: Date = new Date()): P
     ajustesPendentesRestantesCentavos: totalFila - totalCentavos,
   };
 }
-
-/** Alias usado pela rota do admin: prévia de um médico até `corte`. */
-export const calcularRepasse = previaDoDia;
 
 /* ---------- Fechamento (grava) --------------------------------------- */
 
@@ -1043,4 +1086,7 @@ export async function consultaJaRepassada(consultaId: string, c: Cliente = db): 
   return (await c.repasseItem.count({ where: { consultaId } })) > 0;
 }
 
-export { reembolsoEfetivo };
+// P3-2 (capítulo 7 da auditoria): os exports mortos `calcularRepasse` (alias
+// de previaDoDia sem uso — a rota do admin chama previaDoDia direto) e a
+// reexportação `reembolsoEfetivo` (os consumidores importam direto da fonte
+// em receita-servidor.ts) foram removidos.

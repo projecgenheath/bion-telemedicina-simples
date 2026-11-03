@@ -1,6 +1,7 @@
 import { MESES_AGENDA } from "./constantes";
 import { diaFusoClinica, instanteFusoClinica, partesFusoClinica } from "@/lib/bion-tipos";
 import type { Consulta, Medico } from "@/lib/bion-tipos";
+import { gradeDeCampos, horariosDoDia, gradeTotalmenteVazia } from "@/lib/grade-semana";
 
 const DIAS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 const HORAS_PADRAO = ["09:00", "10:00", "11:00", "14:00", "15:00", "16:00"];
@@ -18,8 +19,22 @@ export function isoDia(tsOuIso: number | string) {
   return `${p.ano}-${String(p.mes + 1).padStart(2, "0")}-${String(p.dia).padStart(2, "0")}`;
 }
 
-function chaveSlot(tsOuIso: number | string, hora: string) {
-  return `${isoDia(tsOuIso)}|${hora}`;
+/** Instante (ms) de início de uma consulta conhecida no cliente. */
+function instanteConsulta(c: Consulta): number {
+  const t = c.dataISO ? Date.parse(c.dataISO) : c.ts;
+  return Number.isFinite(t) ? t : NaN;
+}
+
+/**
+ * B34: o servidor bloqueia por SOBREPOSIÇÃO de 30 min (janelaSobreposicao
+ * em financeiro.ts: início em (t−30min, t+30min)), não só o slot exato.
+ * O cliente usa a mesma janela: um horário candidato conflita se alguma
+ * consulta ocupada começa a menos de 30 min dele (grades desalinhadas
+ * não mostram mais "livre" para um envio que levaria 409).
+ */
+export function conflitaComOcupados(candidatoMs: number, ocupadosMs: readonly number[]): boolean {
+  if (!Number.isFinite(candidatoMs)) return false;
+  return ocupadosMs.some((o) => Number.isFinite(o) && Math.abs(candidatoMs - o) < DURACAO_CONSULTA_SERVIDOR_MIN * 60_000);
 }
 
 /** Mesma consulta do médico: por id; nome só para registros antigos sem medicoId. */
@@ -64,6 +79,23 @@ export type DiasBloqueados = ReadonlySet<string> | readonly string[];
  *
  * Horários em 23:00–00:00 (`horaVedadaParaPaciente`) nunca são oferecidos,
  * mesmo que estejam na grade do médico.
+ *
+ * Dias de atendimento e pausas semanais — mesma regra de
+ * `conferirDiasEPausas` (src/lib/server/bloqueio-agenda.ts):
+ * `diasAtendimento` vazio (ou ausente) = todos os dias; se não vazio, só
+ * os dias listados aparecem. Horários dentro de uma pausa semanal do dia
+ * (`inicio <= hora < fim`, "HH:MM" de São Paulo) são removidos.
+ *
+ * Coincidência do dia da semana com o servidor: o servidor calcula o dia
+ * a partir da data civil de São Paulo do instante
+ * (`new Date(Date.UTC(ano, mes - 1, dia)).getUTCDay()`, com `mes` 1–12 de
+ * `partesNoFuso`). Aqui `d` já é a data civil de São Paulo
+ * (`diaFusoClinica`, `partesFusoClinica`, também America/Sao_Paulo) e
+ * `d.semana` usa exatamente a mesma fórmula
+ * (`new Date(Date.UTC(ano, mes, dia)).getUTCDay()`, com `mes` 0–11) —
+ * ou seja, o mesmo dia civil, a mesma convenção 0=Dom … 6=Sáb, e o
+ * mesmo resultado. Nunca se usa `getDay()` do navegador nem o dia UTC
+ * do instante (um slot 22:00 em São Paulo é 01:00Z do dia seguinte).
  */
 export function agendaLivreDoMedico(
   medico: Medico | undefined,
@@ -77,19 +109,38 @@ export function agendaLivreDoMedico(
     : bloqueados instanceof Set
       ? bloqueados
       : new Set(bloqueados as readonly string[]);
-  const horasBase = medico?.horariosDisponiveis?.length ? medico.horariosDisponiveis : HORAS_PADRAO;
-  const agora = Date.now() + 30 * 60_000;
+  // Grade por dia da semana (lib/grade-semana): cada dia da prévia usa a
+  // lista DAQUELE dia (própria ou padrão). Médico sem grade nenhuma segue
+  // na grade padrão da plataforma, como sempre foi.
+  const grade = gradeDeCampos(medico?.horariosDisponiveis ?? [], medico?.horariosPorDia);
+  const semGrade = gradeTotalmenteVazia(grade);
+  // B35 — antecedência mínima ÚNICA por fluxo, coerente com o servidor:
+  //  - remarcação (há consulta a excluir): 20 min, como validarNovoHorario
+  //    (financeiro.ts) — antes o cliente exigia 30 e escondia 10 min de
+  //    horários que o servidor aceita;
+  //  - criação (agendamento novo/retorno): 5 min — o servidor só rejeita
+  //    horário no passado (tolerância de 1 min p/ relógio) e promete
+  //    triagem "até 5 minutos antes"; exigir 30 min escondia horários
+  //    válidos que o servidor aceita e a promessa anuncia.
+  const antecedenciaMin = excluirConsultaId ? 20 : 5;
+  const agora = Date.now() + antecedenciaMin * 60_000;
 
-  const ocupados = new Set(
-    consultas
-      .filter(
-        (c) =>
-          c.id !== excluirConsultaId &&
-          !["cancelada", "concluida", "aguardando_reagendamento"].includes(c.status) &&
-          (medico ? eDoMedico(c, medico) : true),
-      )
-      .map((c) => chaveSlot(c.dataISO ?? c.ts, c.hora)),
-  );
+  // B34: ocupados como INSTANTES (não chave exata dia|hora) — o bloqueio
+  // é por sobreposição de 30 min, igual ao servidor.
+  const ocupadosMs = consultas
+    .filter(
+      (c) =>
+        c.id !== excluirConsultaId &&
+        !["cancelada", "concluida", "aguardando_reagendamento", "falta_paciente"].includes(c.status) &&
+        (medico ? eDoMedico(c, medico) : true),
+    )
+    .map(instanteConsulta)
+    .filter((t) => Number.isFinite(t));
+
+  // Grade semanal do médico (tipo Medico, já parseada pelo wire):
+  // diasAtendimento vazio/ausente = todos os dias (mesma regra do servidor).
+  const diasAtendimento = medico?.diasAtendimento;
+  const pausasSemanais = medico?.pausasSemanais ?? [];
 
   const dias: DiaAgenda[] = [];
   for (let i = 0; i < horizonteDias; i++) {
@@ -97,12 +148,26 @@ export function agendaLivreDoMedico(
     // d.iso é o dia civil de São Paulo: um horário 22:00 (01:00Z do dia
     // seguinte) pertence a este dia, não ao seguinte.
     if (diasBloqueados?.has(d.iso)) continue;
+    // d.semana é o dia da semana da data civil de São Paulo, na mesma
+    // fórmula do servidor (ver comentário acima) — não o dia UTC.
+    if (
+      Array.isArray(diasAtendimento) &&
+      diasAtendimento.length > 0 &&
+      !diasAtendimento.includes(d.semana)
+    )
+      continue;
+    const horasBase = semGrade ? HORAS_PADRAO : horariosDoDia(grade, d.semana);
     const horarios = horasBase.filter((h) => {
       if (horaVedadaParaPaciente(h)) return false;
+      // Pausa semanal do dia: inicio <= hora < fim (mesma regra do
+      // servidor; "HH:MM" com zero à esquerda, então a comparação de
+      // strings equivale à cronológica).
+      if (pausasSemanais.some((p) => p && p.dia === d.semana && h >= p.inicio && h < p.fim))
+        return false;
       const [hh, mm] = h.split(":").map(Number);
       const ts = instanteFusoClinica(d.ano, d.mes, d.dia, hh || 0, mm || 0);
       if (ts < agora) return false;
-      return !ocupados.has(`${d.iso}|${h}`);
+      return !conflitaComOcupados(ts, ocupadosMs);
     });
     if (!horarios.length) continue;
     dias.push({

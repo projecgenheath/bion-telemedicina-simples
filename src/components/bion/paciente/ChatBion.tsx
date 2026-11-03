@@ -98,6 +98,9 @@ export function ChatBion({
   // Trava do aceite (NVIDIA): null = verificando; false = card de aceite no
   // topo e entrada bloqueada; true = liberado. O servidor também recusa (403).
   const [iaLiberada, setIaLiberada] = useState<boolean | null>(null);
+  // M22: selo do cabeçalho reflete o estado real — vira "pausada" quando o
+  // servidor responde bion_ia_pausada e volta a "online" no próximo sucesso.
+  const [iaPausada, setIaPausada] = useState(false);
   const inputArquivoRef = useRef<HTMLInputElement>(null);
   const fimRef = useRef<HTMLDivElement>(null);
   const histAnamneseRef = useRef<{ remetente: "usuario" | "ia"; texto: string }[]>([]);
@@ -351,6 +354,7 @@ export function ChatBion({
       };
       if (res.status === 503 && json.erro === "bion_ia_pausada") {
         // Pausa da BION IA (opt-in, BION_IA_PAUSADA=true): o laudo não é enviado à IA.
+        setIaPausada(true);
         setMensagens((m) => [...m, { remetente: "ia", texto: json.mensagem || "A BION IA volta em breve." }]);
         return;
       }
@@ -361,6 +365,7 @@ export function ChatBion({
         setIaLiberada(false);
         return;
       }
+      if (json.ok) setIaPausada(false);
       if (json.ok && json.examesSalvos?.length) {
         // Laudo pela IA ainda devolve estado fresco (rota pesada rara) —
         // contrato compatível com aplicarEstadoFresco.
@@ -452,12 +457,20 @@ export function ChatBion({
     };
     try {
       const r = await perguntarBionIa(
+        // M21: a pergunta atual NUNCA pode ficar fora do payload. O filtro
+        // antigo (texto < 500) a excluía em silêncio — ex.: um laudo colado —
+        // e a IA respondia a partir de mensagens antigas. Agora valem as
+        // últimas 4 mensagens e textos longos são TRUNCADOS no teto que a
+        // rota já usa ao montar o prompt (4000), sem descarte silencioso.
         historico
-          .filter((m) => m.texto.length < 500)
           .slice(-4)
-          .map((m) => ({ remetente: m.remetente === "usuario" ? ("usuario" as const) : ("ia" as const), texto: m.texto.replace(/\*\*/g, "") })),
+          .map((m) => ({
+            remetente: m.remetente === "usuario" ? ("usuario" as const) : ("ia" as const),
+            texto: m.texto.replace(/\*\*/g, "").slice(0, 4000),
+          })),
         { onDelta: mostrarParcial, onRaciocinio: mostrarRaciocinio },
       );
+      setIaPausada(false);
       setMensagens((m) => {
         const final = {
           remetente: "ia" as const,
@@ -474,6 +487,7 @@ export function ChatBion({
     } catch (e) {
       if (e instanceof ErroBionIa && e.tipo === "pausada") {
         // Pausa da BION IA (opt-in): aviso amigável, sem "Tentar de novo".
+        setIaPausada(true);
         setMensagens((m) => [...(emStream ? m.slice(0, -1) : m), { remetente: "ia", texto: e.message }]);
         return;
       }
@@ -724,7 +738,9 @@ export function ChatBion({
       }
       return {
         titulo: "Horário",
-        opcoes: horarios.slice(0, 12).map((h) => ({ rotulo: h, valor: h })),
+        // B29: todos os horários livres — o slice(0, 12) escondia os
+        // demais sem avisar quantos existiam.
+        opcoes: horarios.map((h) => ({ rotulo: h, valor: h })),
         escolher: (v: string) => {
           setEscolha((c) => ({ ...c, hora: v }));
           setMensagens((m) => [...m, { remetente: "usuario", texto: v }, { remetente: "ia", texto: "Confira os dados e escolha a forma de pagamento:" }]);
@@ -782,8 +798,8 @@ export function ChatBion({
           </div>
           <div className="flex-1 min-w-0">
             <div className="font-bold text-bion-ink dark:text-bion-paper">BION IA</div>
-            <div className="text-xs text-emerald-800 dark:text-emerald-200 font-medium">
-              {pensando || enviandoLaudo || pagando ? "Digitando…" : "Online · responde na hora"}
+            <div className={`text-xs font-medium ${iaPausada ? "text-amber-800 dark:text-amber-200" : "text-emerald-800 dark:text-emerald-200"}`}>
+              {pensando || enviandoLaudo || pagando ? "Digitando…" : iaPausada ? "IA pausada no momento" : "Online · responde na hora"}
             </div>
           </div>
           <button type="button" onClick={onFechar} aria-label="Fechar conversa" className="rounded-full p-2.5 bp-glass text-bion-ink dark:text-bion-paper">

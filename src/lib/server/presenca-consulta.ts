@@ -15,9 +15,14 @@ import { medicoEsperouAteOLimite, SINAL_PARADO_MS, type PresencaRegra } from "@/
 /* /api/telemedicina/[consultaId]/sala) e grava UM EventoConsulta por    */
 /* consulta, com por = "sistema" (mesmo mecanismo de financeiro.ts):     */
 /*  - falta_paciente: o médico esteve na sala e o paciente não entrou.   */
-/*    Status NÃO muda e não há reembolso automático: o paciente pode     */
-/*    pedir o reembolso pelo app em até REEMBOLSO_MANUAL_PRAZO_DIAS e o   */
-/*    admin decide em "Reembolsos".                                      */
+/*    Status TERMINAL "falta_paciente": a consulta sai dos status "ia     */
+/*    acontecer", não volta a ser avaliada e não pode ser concluída,     */
+/*    cancelada ou remarcada (o PATCH de consulta a trata como já        */
+/*    encerrada; só o admin pode corrigir o status pela whitelist). Não  */
+/*    há reembolso automático: o paciente pode pedir o reembolso pelo    */
+/*    app em até REEMBOLSO_MANUAL_PRAZO_DIAS e o admin decide em         */
+/*    "Reembolsos". O rascunho de evolução da consulta, se houver, é     */
+/*    encerrado na mesma transação (não trava o próximo atendimento).   */
 /*  - falha_tecnica (regra do Alisson): SÓ quando alguém que já estava   */
 /*    conectado caiu e a chamada não seguiu. Ninguém entrou → sem       */
 /*    desfecho (fica para o admin; abrir o app NÃO grava sozinho).       */
@@ -199,6 +204,10 @@ function dadosAudit(c: ConsultaAvaliada, tipo: Desfecho, motivo: string, autor: 
  *   (financeiro.ts, do Admin), que tem a própria checagem; a falta do médico
  *   grava evento falha_tecnica com motivo "falta_medico".
  * Devolve o desfecho gravado (e o novo status) ou null se nada foi gravado.
+ * Falta do paciente é terminal: na mesma transação o status vai para
+ * "falta_paciente" e o rascunho de evolução da consulta (se houver) é
+ * encerrado como "concluida" com nota de falta, liberando a trava do
+ * médico — nunca fica um concluído e o outro pendente.
  */
 export async function gravarDesfecho(
   c: ConsultaAvaliada,
@@ -224,10 +233,14 @@ function gravarDesfechoTx(
   motivo: string,
   autor: AutorDesfecho,
 ): Promise<{ tipo: Desfecho; status: string }> {
+  // Estado terminal da falta: sai de "ia acontecer" na mesma transação
+  // que grava o evento. Falha técnica/falta do médico continuam com o
+  // status imposto por aplicarFalhaTecnica abaixo.
+  const novoStatusFalta = tipo === "falta_paciente" ? "falta_paciente" : c.status;
   return db.$transaction(async (tx) => {
     const { count } = await tx.consulta.updateMany({
       where: { id: c.id, status: c.status, updatedAt: c.updatedAt },
-      data: { status: c.status },
+      data: { status: novoStatusFalta },
     });
     if (count === 0) throw new SemAlteracao();
     // Só conta desfecho vigente da data ATUAL (corrigidoEm nulo; depois de
@@ -244,8 +257,24 @@ function gravarDesfechoTx(
     if (jaTem) throw new SemAlteracao();
 
     const atorId = autor.por === "medico" ? autor.id : null;
-    let status = c.status;
+    let status = novoStatusFalta;
     if (tipo === "falta_paciente") {
+      // Mesmo padrão M-22 do cancelamento: rascunho de consulta encerrada
+      // não pode prender a trava do médico. O conteúdo do rascunho é
+      // preservado; só o status vai para "concluida" com nota de falta.
+      const rascunho = await tx.evolucao.findUnique({ where: { consultaId: c.id }, select: { id: true, status: true, rascunho: true } });
+      if (rascunho && rascunho.status === "rascunho") {
+        let nota = {};
+        try { nota = JSON.parse(rascunho.rascunho || "{}") as Record<string, unknown>; } catch { /* rascunho inválido */ }
+        await tx.evolucao.update({
+          where: { id: rascunho.id },
+          data: {
+            status: "concluida",
+            concluidaEm: new Date(),
+            rascunho: JSON.stringify({ ...nota, encerradaPor: "falta_paciente" }),
+          },
+        });
+      }
       await registrarEvento(tx, {
         consultaId: c.id,
         tipo: "falta_paciente",

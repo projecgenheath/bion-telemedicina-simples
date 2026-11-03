@@ -2,12 +2,13 @@ import { NextRequest } from "next/server";
 import { quandoClinica } from "@/lib/server/fuso";
 import { db } from "@/lib/db";
 import { exigirSessao } from "@/lib/server/auth";
-import { ok, falha } from "@/lib/server/http";
+import {ok, falha, lerCorpoJson, corpoObjeto, textoDoCorpo} from "@/lib/server/http";
 import { chatComFonte, chatStreamComFonte, iaPausada, motivoFalhaIa, novoRequestId, respostaIaPausada } from "@/lib/server/llm";
 import { anonimizarMensagensIa, type IdentificadoresPaciente } from "@/lib/server/anonimizar-ia";
 import { exigirConsentimentoIa } from "@/lib/server/consentimento-ia";
 import { anonimizarMensagensTexto } from "@/lib/server/anonimizar-texto";
 import { dataNascimentoParaIso } from "@/lib/idade";
+import { limitarAsync, resposta429 } from "@/lib/server/rate-limit";
 import { nomesMedicamentosEmUso } from "@/lib/server/medicamentos-legado";
 
 /**
@@ -144,17 +145,41 @@ async function nomesPacientesDoMedico(medicoId: string): Promise<string[]> {
 export async function POST(req: NextRequest) {
   try {
     const usuario = await exigirSessao();
+    // M6 (auditoria): teto por usuário — cada chamada vai a um LLM PAGO, então
+    // loop de cliente não pode virar custo ilimitado. 20/min cobre a conversa
+    // humana (e o Copilot do médico); 300/h limita o custo acumulado do dia.
+    const tetoMin = await limitarAsync(`bion-ia:${usuario.id}`, 20, 60_000);
+    if (!tetoMin.permitido) return resposta429(tetoMin.restanteSeg);
+    const tetoHora = await limitarAsync(`bion-ia-hora:${usuario.id}`, 300, 3_600_000);
+    if (!tetoHora.permitido) return resposta429(tetoHora.restanteSeg);
     // Pausa da BION IA (opt-in, BION_IA_PAUSADA=true): nada vai à IA.
     if (iaPausada()) return respostaIaPausada();
     // Portão jurídico: paciente sem o aceite da versão atual (NVIDIA) → 409.
     const pendente = await exigirConsentimentoIa(usuario);
     if (pendente) return pendente;
-    const body = (await req.json()) as { mensagens?: MsgEntrada[]; stream?: boolean };
+    // B1: guarda de objeto/tipo — corpo null ou texto não-string virava 500
+    // em .trim() no filtro do histórico.
+    const bruto = corpoObjeto(await lerCorpoJson(req));
+    if (!bruto) {
+      return Response.json({ erro: "Corpo da requisição inválido." }, { status: 400 });
+    }
+    const body = {
+      mensagens: Array.isArray(bruto.mensagens)
+        ? bruto.mensagens.map((m) => {
+            const o = corpoObjeto(m);
+            return { remetente: textoDoCorpo(o?.remetente) ?? "", texto: textoDoCorpo(o?.texto) ?? "" } as MsgEntrada;
+          })
+        : undefined,
+      stream: bruto.stream === true,
+    };
     const requestId = novoRequestId();
 
+    // M21: NADA de descartar mensagem por tamanho — o filtro antigo
+    // (texto < 500) excluía em silêncio justamente a pergunta atual longa
+    // (ex.: laudo colado). Textos longos são truncados mais abaixo, ao
+    // montar o prompt (slice 0..4000 por mensagem).
     const historico = (body.mensagens ?? [])
       .filter((m) => (m?.texto ?? "").trim() && ["usuario", "ia"].includes(m.remetente))
-      .filter((m) => m.texto.length < 500)
       .slice(-LIMITE_HISTORICO);
 
     if (!historico.length) {

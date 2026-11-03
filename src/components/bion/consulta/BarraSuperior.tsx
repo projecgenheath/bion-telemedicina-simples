@@ -1,6 +1,7 @@
 "use client";
 
-import { Clock, Shield } from "lucide-react";
+import { Clock, Hourglass, Shield } from "lucide-react";
+import type { RestanteSlot } from "@/lib/teleconsulta-logica";
 
 type StatusSala =
   | "conectado"
@@ -16,6 +17,7 @@ export function ConsultaBarraSuperior({
   contraparteDetalhe,
   role,
   tempo,
+  restanteSlot,
   statusSala,
   iniciais,
 }: {
@@ -23,6 +25,8 @@ export function ConsultaBarraSuperior({
   contraparteDetalhe: string;
   role: "paciente" | "medico" | "admin";
   tempo: string;
+  /** Tempo até o fim do slot agendado (null = sem consulta/slot conhecido). */
+  restanteSlot?: RestanteSlot | null;
   statusSala: StatusSala;
   iniciais: (nome: string) => string;
 }) {
@@ -48,6 +52,21 @@ export function ConsultaBarraSuperior({
         <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 font-mono font-bold">
           <Clock className="w-3.5 h-3.5 text-primary" /> {tempo}
         </div>
+        {/* Tempo restante do horário agendado: o cronômetro sozinho só
+            conta para cima; o restante (e o estouro, em âmbar discreto)
+            é a referência para fechar conduta e documentos no ritmo. */}
+        {restanteSlot ? (
+          <div
+            title="Tempo até o fim do horário agendado"
+            className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full border font-semibold ${
+              restanteSlot.estourou
+                ? "bg-amber-500/10 border-amber-500/30 text-amber-600 dark:text-amber-300"
+                : "bg-white/5 border-white/10 text-slate-300"
+            }`}
+          >
+            <Hourglass className="w-3.5 h-3.5" /> {restanteSlot.rotulo}
+          </div>
+        ) : null}
         <div
           className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full border font-semibold ${
             statusSala === "conectado"

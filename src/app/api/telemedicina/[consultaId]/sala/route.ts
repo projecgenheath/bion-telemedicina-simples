@@ -2,7 +2,7 @@ import { NextRequest, NextResponse, after } from "next/server";
 import { db } from "@/lib/db";
 import { exigirSessao, registrarAudit } from "@/lib/server/auth";
 import { evolucaoPendenteDoMedico, garantirEvolucao, respostaEvolucaoPendente } from "@/lib/server/evolucao";
-import { ok, falha } from "@/lib/server/http";
+import {ok, falha, lerCorpoJson} from "@/lib/server/http";
 import { topicoSala } from "@/lib/server/sala-canal";
 import { broadcastCanal } from "@/lib/supabase/broadcast";
 import { entradaAposSinal, limparSala, verificarPresencaConsultaSemFalhar } from "@/lib/server/presenca-consulta";
@@ -42,9 +42,10 @@ import { estadoJanelaSala, janelaSala, SALA_ABRE_ANTES_MIN, SALA_FECHA_DEPOIS_MI
  * Janela (lib/janela-sala.ts): fora de [horário − 30 min, horário + 2 h] o
  * GET normal e o POST de sinais respondem 409. O 409 do GET traz também
  * `motivo` ("antes" | "depois") e `abreEm` ou `fechouEm` (ISO), para a tela
- * mostrar "A sala abre às HH:MM" / "A sala já fechou" (o sinal de controle
- * continua aceito, para quem encerra no limite). O modo espiar funciona a
- * qualquer hora.
+ * mostrar "A sala abre às HH:MM" / "A sala já fechou" (B9: sinais de
+ * controle seguem a mesma janela/status dos demais, exceto um único
+ * "saiu"/"encerrada" por sessão, para quem encerra no limite, com dedup
+ * por consulta/usuário/ação/sessão). O modo espiar funciona a qualquer hora.
  *
  * Verificação automática de falta/falha (presenca-consulta.ts): só pode
  * gravar algo DEPOIS que a sala fecha (CARENCIA_APOS_INICIO_MIN = fim da
@@ -55,7 +56,12 @@ import { estadoJanelaSala, janelaSala, SALA_ABRE_ANTES_MIN, SALA_FECHA_DEPOIS_MI
  *
  * Segurança: apenas o paciente e o médico da consulta acessam a sala (403 para
  * qualquer outro papel, inclusive admin — sala é 1:1). Sinais só são aceitos
- * enquanto a consulta estiver ativa (confirmada | em_espera).
+ * enquanto a consulta estiver ativa (confirmada, ou em_espera já paga).
+ * Consulta em_espera NÃO paga nunca entra na sala: GET normal e POST
+ * respondem 402 { erro, motivo: "pagamento_pendente", acao: "pagar" }.
+ * O modo espiar (?espiar=1) não é entrada — não grava presença, não consome
+ * sinais — por isso não é barrado; ele devolve `pago` para a pré-sala
+ * decidir o que mostrar.
  */
 
 /**
@@ -85,6 +91,7 @@ async function carregarConsultaAutorizada(consultaId: string, usuarioId: string,
     select: {
       id: true,
       status: true,
+      pago: true,
       dataInicio: true,
       especialidade: true,
       pacienteId: true,
@@ -97,6 +104,28 @@ async function carregarConsultaAutorizada(consultaId: string, usuarioId: string,
     throw erroHttp(403, "Acesso negado: você não participa desta consulta.");
   }
   return consulta as typeof consulta & { paciente?: { nome: string }; medico?: { nome: string } };
+}
+
+/**
+ * Barreira de pagamento da sala (402 distinto, com ação para pagar).
+ * Critério exato: status "em_espera" E pago === false. Não atinge o modo
+ * simulado nem o retorno grátis: ambos nascem com pago = true (o simulado
+ * confirma o pagamento na criação; o retorno grátis nasce confirmada e
+ * paga, valor 0). Também não atinge "confirmada" não paga por outro
+ * caminho — esse caso não é deste lote e continua como antes.
+ * A resposta carrega `motivo` + `acao` para a tela oferecer o pagamento
+ * em vez de uma mensagem genérica de erro.
+ */
+const ERRO_PAGAMENTO_PENDENTE =
+  "Pagamento pendente: esta consulta ainda não foi paga, por isso a sala não pode ser aberta. Pague para entrar na sala.";
+function respostaPagamentoPendente(): NextResponse {
+  return NextResponse.json(
+    { erro: ERRO_PAGAMENTO_PENDENTE, motivo: "pagamento_pendente" as const, acao: "pagar" as const },
+    { status: 402, headers: { "Cache-Control": "no-store, private" } },
+  );
+}
+function pagamentoPendente(consulta: { status: string; pago: boolean }): boolean {
+  return consulta.status === "em_espera" && !consulta.pago;
 }
 
 /** 409 fora da janela da sala (antes de abrir ou depois de fechar). */
@@ -190,9 +219,12 @@ export async function GET(
       });
       return ok({
         espiar: true,
+        // B41: hora do servidor (ISO) p/ o cliente calibrar o relógio local.
+        agoraServidor: new Date().toISOString(),
         consulta: {
           id: consulta.id,
           status: consulta.status,
+          pago: consulta.pago,
           especialidade: consulta.especialidade,
           paciente: consulta.paciente?.nome ?? "",
           medico: consulta.medico?.nome ?? "",
@@ -201,6 +233,19 @@ export async function GET(
         outroOnline: online !== null,
         janela: janelaWire(consulta.dataInicio),
       });
+    }
+
+    // M5 — consulta fora de confirmada/em_espera não mantém a sala viva:
+    // sem presença, sem consumo de sinais e sem canal. É o mesmo 409 que o
+    // POST já devolve para status inativo; sem isto, uma consulta
+    // cancelada/concluída dentro da janela seguia com heartbeat e pull de
+    // sinais como se estivesse ativa. (O modo espiar, só leitura, já
+    // retornou acima e não é afetado.)
+    if (!["confirmada", "em_espera"].includes(consulta.status)) {
+      return NextResponse.json(
+        { erro: `Sala fechada: consulta está "${consulta.status}".` },
+        { status: 409, headers: { "Cache-Control": "no-store, private" } },
+      );
     }
 
     // Sala fechada: é só aqui que a verificação automática de falta/falha
@@ -215,13 +260,34 @@ export async function GET(
     const foraDaJanela = respostaForaDaJanela(consulta.dataInicio);
     if (foraDaJanela) return foraDaJanela;
 
+    // Pagamento pendente: 402 distinto, ANTES de qualquer presença,
+    // evolução ou pull de sinais — a permanência na sala também é barrada,
+    // porque o polling volta a cair aqui enquanto não houver pagamento.
+    if (pagamentoPendente(consulta)) return respostaPagamentoPendente();
+
     // Teleconsulta v2 — trava do próximo atendimento (só o MÉDICO): com
     // evolução em rascunho de OUTRA consulta, 409 { erro: "evolucao_pendente" }.
-    // Ao entrar, a evolução desta consulta nasce em rascunho (idempotente).
+    //
+    // B-21 — regra documentada (Decisão do Alisson: a trava BLOQUEIA SEMPRE):
+    // o rascunho desta consulta nasce na PRIMEIRA entrada real do médico
+    // (`criado`, linha abaixo) e não a cada sinal de presença (heartbeat a
+    // cada poucos segundos). Entrar por engano cria a trava — as saídas são
+    // concluir a evolução no app, o cancelamento da consulta (limpa o
+    // rascunho, M-22) e a correção pelo admin. Antes, `garantirEvolucao`
+    // rodava em TODA requisição de presença, mesmo sem primeira entrada.
+    let criado = false;
     if (papel === "MEDICO") {
       const pendente = await evolucaoPendenteDoMedico(usuario.id, consultaId);
       if (pendente) return respostaEvolucaoPendente(pendente);
-      await garantirEvolucao({ id: consultaId, medicoId: consulta.medicoId, pacienteId: consulta.pacienteId });
+      // Primeira entrada nesta consulta? (presença ainda não existe)
+      const presenca = await db.presencaSala.findUnique({
+        where: { consultaId_usuarioId: { consultaId, usuarioId: usuario.id } },
+        select: { usuarioId: true },
+      });
+      criado = presenca === null;
+      if (criado) {
+        await garantirEvolucao({ id: consultaId, medicoId: consulta.medicoId, pacienteId: consulta.pacienteId });
+      }
     }
 
     // Presença dos dois numa consulta só (antes: duas).
@@ -236,7 +302,9 @@ export async function GET(
     // Heartbeat de presença (upsert; "criado" = primeira entrada nesta consulta).
     // "entrouEm" = início da sessão atual: recomeça quando o sinal ficou mais
     // de 30 s parado (prova de quanto tempo a pessoa esperou na sala).
-    const criado = presencaExistente === null;
+    // Para o médico, `criado` já foi conferido acima (B-21); paciente e
+    // admin calculam aqui.
+    if (papel !== "MEDICO") criado = presencaExistente === null;
     const entrouEm = entradaAposSinal(presencaExistente, agoraPing);
     await db.presencaSala.upsert({
       where: { consultaId_usuarioId: { consultaId, usuarioId: usuario.id } },
@@ -278,7 +346,9 @@ export async function GET(
       presencaOutro !== null && agoraPing.getTime() - presencaOutro.ultimoPing.getTime() <= JANELA_ONLINE_MS;
 
     return ok({
-      consulta: { id: consulta.id, status: consulta.status },
+      // B41: hora do servidor (ISO) p/ o cliente calibrar o relógio local.
+      agoraServidor: new Date().toISOString(),
+      consulta: { id: consulta.id, status: consulta.status, pago: consulta.pago },
       eu: { id: usuario.id, papel },
       outroOnline,
       janela: janelaWire(consulta.dataInicio),
@@ -298,7 +368,11 @@ export async function POST(
   try {
     const usuario = await exigirSessao();
     const { consultaId } = await params;
-    const body = (await req.json()) as { acao?: string; tipo?: string; payload?: string; nonce?: string };
+    const body = (await lerCorpoJson(req)) as { acao?: string; tipo?: string; payload?: string; nonce?: string };
+
+    if (!body) {
+      return Response.json({ erro: "Corpo da requisição inválido." }, { status: 400 });
+    }
 
     // Eco: confirma ao cliente que o Realtime privado entrega mensagens a ele.
     if (body.acao === "eco") {
@@ -306,6 +380,7 @@ export async function POST(
         throw erroHttp(400, "nonce inválido.");
       }
       const consulta = await carregarConsultaAutorizada(consultaId, usuario.id);
+      if (pagamentoPendente(consulta)) return respostaPagamentoPendente();
       exigirJanelaAberta(consulta.dataInicio);
       repassarRealtime(consultaId, "eco", { usuarioId: usuario.id, nonce: body.nonce });
       return ok({ ok: true });
@@ -323,16 +398,16 @@ export async function POST(
 
     const consulta = await carregarConsultaAutorizada(consultaId, usuario.id);
     const papel = papelDe(consulta, usuario.id);
-    const ativa = ["confirmada", "em_espera"].includes(consulta.status);
-    if (!ativa && body.tipo !== "controle") {
-      throw erroHttp(409, `Sala fechada: consulta está "${consulta.status}".`);
-    }
-    // Fora da janela da sala, só o controle (ex.: "encerrada" no limite) passa.
-    if (body.tipo !== "controle") exigirJanelaAberta(consulta.dataInicio);
+    // Pagamento pendente barra TODOS os sinais, inclusive controle: uma
+    // sala em_espera não paga nunca começou, então não há "saiu" nem
+    // "encerrada" a registrar nela.
+    if (pagamentoPendente(consulta)) return respostaPagamentoPendente();
 
     // Controle: só ações conhecidas; o paciente não encerra a consulta.
+    // (B9: o parse sobe para ANTES das barreiras — a ação decide a exceção.)
     let payload = body.payload;
     let acaoControle = "";
+    let sessaoControle = "";
     if (body.tipo === "controle") {
       let c: { acao?: unknown; s?: unknown; motivo?: unknown };
       try {
@@ -341,6 +416,7 @@ export async function POST(
         throw erroHttp(400, "Payload de controle não é JSON válido.");
       }
       acaoControle = typeof c.acao === "string" ? c.acao : "";
+      sessaoControle = typeof c.s === "string" ? c.s : "";
       if (!(ACOES_CONTROLE as readonly string[]).includes(acaoControle)) {
         throw erroHttp(400, `Ação de controle inválida: ${acaoControle || "(vazia)"}`);
       }
@@ -351,7 +427,38 @@ export async function POST(
         acaoControle = "saiu";
         payload = JSON.stringify({ acao: "saiu", s: typeof c.s === "string" ? c.s : undefined, motivo: "botao" });
       }
+
+      // B9 — dedup por (consulta, usuário, ação, sessão): repetir o mesmo
+      // sinal de controle na mesma sessão NÃO grava nem faz broadcast de
+      // novo (replay de presença/auditoria falsos). Responde ok idempotente.
+      const anteriores = await db.sinalSala.findMany({
+        where: { consultaId, deUsuarioId: usuario.id, tipo: "controle" },
+        select: { payload: true },
+      });
+      const duplicado = anteriores.some((s) => {
+        try {
+          const p = JSON.parse(s.payload) as { acao?: unknown; s?: unknown };
+          // "encerrada" do paciente é gravada como "saiu" (conversão acima).
+          const acaoGravada = p.acao === "encerrada" && papel === "PACIENTE" ? "saiu" : p.acao;
+          return acaoGravada === acaoControle && (typeof p.s === "string" ? p.s : "") === sessaoControle;
+        } catch {
+          return false;
+        }
+      });
+      if (duplicado) return ok({ ok: true, duplicado: true });
     }
+
+    // A partir daqui, "em_espera" só pode ser a já paga (modo simulado).
+    // B9: controle NÃO é mais isento de status/janela — vale a mesma regra
+    // dos demais sinais, EXCETO um único "saiu"/"encerrada" por sessão
+    // (fechar no limite precisa passar; a dedup acima garante o "único").
+    const ativa = ["confirmada", "em_espera"].includes(consulta.status);
+    const excecaoFecho =
+      body.tipo === "controle" && (acaoControle === "saiu" || acaoControle === "encerrada");
+    if (!ativa && !excecaoFecho) {
+      throw erroHttp(409, `Sala fechada: consulta está "${consulta.status}".`);
+    }
+    if (!excecaoFecho) exigirJanelaAberta(consulta.dataInicio);
 
     // Anti-spam simples: cap de sinais por minuto por usuário
     const recentes = await db.sinalSala.count({

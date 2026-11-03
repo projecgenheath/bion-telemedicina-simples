@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
-import { exigirSessao } from "@/lib/server/auth";
+import { exigirSessao, registrarAudit } from "@/lib/server/auth";
 import { ok, falha } from "@/lib/server/http";
 import { limitar, resposta429 } from "@/lib/server/rate-limit";
 import { configVapid, validarEndpoint, validarInscricao } from "@/lib/server/web-push";
@@ -48,11 +48,28 @@ export async function POST(req: NextRequest) {
     if (!v.ok) return Response.json({ erro: v.erro }, { status: 400 });
     const userAgent = (req.headers.get("user-agent") ?? "").slice(0, 300) || null;
     const dados = { usuarioId: s.id, p256dh: v.p256dh, auth: v.auth, plataforma: v.plataforma, userAgent, falhas: 0 };
+    // B10: se o endpoint já pertencia a OUTRO usuário, o upsert transfere o
+    // dono silenciosamente (aparelho compartilhado) — a vítima para de
+    // receber pushes sem deixar rastro. Agora a transferência é auditada
+    // (sem gravar o endpoint, que é credencial de envio).
+    const anterior = await db.pushInscricao.findUnique({
+      where: { endpoint: v.endpoint },
+      select: { usuarioId: true },
+    });
     await db.pushInscricao.upsert({
       where: { endpoint: v.endpoint },
       create: { endpoint: v.endpoint, ...dados },
       update: dados,
     });
+    if (anterior && anterior.usuarioId !== s.id) {
+      await registrarAudit(s, {
+        acao: "PUSH_INSCRICAO_DONO_TRANSFERIDO",
+        categoria: "sistema",
+        severidade: "warning",
+        entidade: "push_inscricao",
+        detalhes: `Inscrição push transferida do usuário ${anterior.usuarioId} para ${s.id} (mesmo endpoint/aparelho)`,
+      });
+    }
     return ok({ ok: true });
   } catch (erro) {
     return falha(erro);

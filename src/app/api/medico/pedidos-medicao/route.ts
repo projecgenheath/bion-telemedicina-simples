@@ -26,10 +26,13 @@ export async function POST(req: NextRequest) {
     if (typeof body.consultaId !== "string" || !body.consultaId) {
       return Response.json({ erro: "Informe consultaId." }, { status: 400 });
     }
-    const tipos = Array.isArray(body.tipos)
-      ? [...new Set(body.tipos.filter((t): t is string => typeof t === "string" && TIPOS.has(t)))].sort()
-      : [];
-    if (tipos.length === 0 || tipos.length !== (body.tipos as unknown[]).length) {
+    // B-24: validação explícita de lista — o cast forçado comparava
+    // comprimentos de não-listas e só funcionava por coincidência.
+    if (!Array.isArray(body.tipos)) {
+      return Response.json({ erro: "tipos: use peso, altura e/ou pressao." }, { status: 400 });
+    }
+    const tipos = [...new Set(body.tipos.filter((t): t is string => typeof t === "string" && TIPOS.has(t)))].sort();
+    if (tipos.length === 0 || tipos.length !== body.tipos.length) {
       return Response.json({ erro: "tipos: use peso, altura e/ou pressao." }, { status: 400 });
     }
     const consulta = await db.consulta.findFirst({

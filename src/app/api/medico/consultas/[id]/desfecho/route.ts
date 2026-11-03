@@ -30,8 +30,10 @@ import { pacienteEsteveNaSala, podeMarcarFalta, prazoDesfecho } from "@/componen
  * POST /api/medico/consultas/[id]/desfecho   { tipo: "falta_paciente" | "falha_tecnica" }
  *  - falta_paciente: só depois de o médico esperar na sala até o horário +
  *    15 min, sem presença do paciente depois do horário (podeMarcarFalta em
- *    medico/metricas.ts). Status não muda; o médico recebe; o paciente pode
- *    pedir reembolso em 7 dias (fluxo que já existe).
+ *    medico/metricas.ts). Status TERMINAL "falta_paciente" (gravado na
+ *    mesma transação do evento por gravarDesfecho): a consulta não pode
+ *    mais ser concluída, cancelada ou remarcada; o médico recebe; o
+ *    paciente pode pedir reembolso em 7 dias (fluxo que já existe).
  *  - falha_tecnica: a partir do horário marcado. Mesmo fluxo de
  *    aplicarFalhaTecnica: paga → aguardando_reagendamento (o paciente escolhe
  *    remarcar grátis ou reembolso integral); não paga → cancelada; o médico
@@ -150,7 +152,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           ? "Esta consulta já foi concluída."
           : c.status === "cancelada"
             ? "Esta consulta foi cancelada."
-            : "Esta consulta já está aguardando reagendamento.",
+            : c.status === "falta_paciente"
+              ? "Esta consulta já teve falta do paciente registrada."
+              : "Esta consulta já está aguardando reagendamento.",
       );
     }
     if (agora < inicio) return recusa("A consulta ainda não começou.");

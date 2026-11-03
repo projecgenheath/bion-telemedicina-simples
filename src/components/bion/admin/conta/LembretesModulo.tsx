@@ -25,10 +25,13 @@ export function LembretesModulo() {
   const pendentes = lembretes.filter((l) => !l.feito).length;
   const ordenados = [...lembretes].sort((a, b) => Number(a.feito) - Number(b.feito) || a.horario.localeCompare(b.horario));
 
-  const salvar = () => {
+  // A8: sucesso só com a confirmação do servidor — em falha, o formulário
+  // fica aberto com o título preservado (o erro já virou toast no store).
+  const salvar = async () => {
     const t = titulo.trim();
     if (!t) return;
-    adicionarLembrete({ titulo: t, horario, tipo, frequencia });
+    const ok = await adicionarLembrete({ titulo: t, horario, tipo, frequencia });
+    if (!ok) return;
     toast.success("Lembrete criado", { description: `"${t}" às ${horario} · ${frequencia}` });
     setTitulo("");
     setNovo(false);

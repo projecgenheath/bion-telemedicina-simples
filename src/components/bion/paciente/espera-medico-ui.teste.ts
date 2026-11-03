@@ -2,7 +2,7 @@
  * Testes da exibição da espera do médico (paciente).
  * Rodar: bun src/components/bion/paciente/espera-medico-ui.teste.ts
  */
-import { contagemFalada, formatarContagem, mensagemErroEspera, mostrarPainelEspera, segundosAte, textoDiferenca, type EsperaWire } from "./espera-medico-ui";
+import { contagemFalada, formatarContagem, mensagemErroEspera, mostrarPainelEspera, podeRemarcarComOutroMedico, segundosAte, TEXTO_ERRO_RETORNO_GRATIS, textoDiferenca, type EsperaWire } from "./espera-medico-ui";
 
 let ok = 0;
 let falhas = 0;
@@ -46,6 +46,18 @@ igual("painel remarcando", mostrarPainelEspera({ ...base, status: "remarcando" }
 igual("erro conhecido", mensagemErroEspera("medico_indisponivel"), "Esse médico não está mais livre agora. Escolha outro.");
 igual("erro código cru não vaza", mensagemErroEspera(undefined, "preco_mudou_x"), "Não foi possível concluir agora. Tente de novo.");
 igual("erro texto do servidor", mensagemErroEspera(undefined, "Consulta não encontrada."), "Consulta não encontrada.");
+
+// B43: retorno grátis não remarca com outro médico; erro tem texto próprio
+igual("remarcar: pago pode", podeRemarcarComOutroMedico(15000), true);
+igual("remarcar: valor 0 não pode", podeRemarcarComOutroMedico(0), false);
+igual("remarcar: sem valor não pode", podeRemarcarComOutroMedico(null), false);
+igual("erro retorno_gratis", mensagemErroEspera("retorno_gratis"), TEXTO_ERRO_RETORNO_GRATIS);
+igual(
+  "erro nao_pago de retorno grátis (texto do servidor) não vira 'sem pagamento'",
+  mensagemErroEspera("nao_pago", "Este retorno é gratuito e não pode ser remarcado com outro médico. Cancele, e o seu direito ao retorno grátis volta."),
+  TEXTO_ERRO_RETORNO_GRATIS,
+);
+igual("erro nao_pago comum segue o de antes", mensagemErroEspera("nao_pago", "Só dá para remarcar uma consulta paga. Escolha cancelar."), "Esta consulta não tem pagamento confirmado.");
 
 console.log(`espera-medico-ui: ${ok} ok, ${falhas} falha(s)`);
 if (falhas) process.exit(1);

@@ -12,9 +12,9 @@ import { estadoConsulta, estadoReembolso, type Estado } from "../rotulos";
 import { chaveDia, hora as horaDe, limitesDia } from "../tempo";
 
 /** Status que liberam o horário (igual a STATUS_LIBERAM_HORARIO do servidor). */
-export const STATUS_LIBERAM_HORARIO: ApptStatus[] = ["cancelada", "concluida", "aguardando_reagendamento"];
+export const STATUS_LIBERAM_HORARIO: ApptStatus[] = ["cancelada", "concluida", "aguardando_reagendamento", "falta_paciente"];
 /** Ordem dos filtros de status (todos os status que o servidor aceita). */
-export const STATUS_FILTRO: ApptStatus[] = ["confirmada", "pendente_anamnese", "em_espera", "aguardando_reagendamento", "concluida", "cancelada"];
+export const STATUS_FILTRO: ApptStatus[] = ["confirmada", "pendente_anamnese", "em_espera", "aguardando_reagendamento", "concluida", "cancelada", "falta_paciente"];
 /** Sem teleconsulta entre 23:00 e 00:00 (São Paulo) — consultaEmHorarioVedado. */
 export const HORA_VEDADA = 23;
 
@@ -114,7 +114,7 @@ export function resumoAgenda(consultas: Consulta[], agora: number) {
 }
 
 /** O servidor recusa cancelar consulta já cancelada ou concluída (409). */
-export const podeCancelar = (c: Pick<Consulta, "status">) => c.status !== "cancelada" && c.status !== "concluida";
+export const podeCancelar = (c: Pick<Consulta, "status">) => c.status !== "cancelada" && c.status !== "concluida" && c.status !== "falta_paciente";
 
 /** Cancelamento pelo admin: sem multa e reembolso INTEGRAL se a consulta foi paga (regra do servidor). */
 export function reembolsoAoCancelar(c: Pick<Consulta, "pago" | "valor">): number {

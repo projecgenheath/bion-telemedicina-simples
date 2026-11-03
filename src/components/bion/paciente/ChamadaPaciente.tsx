@@ -3,9 +3,9 @@
 import { tipoDaConsulta } from "./tipo-atendimento-ui";
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
-import { ArrowLeft, Clock, MonitorUp, MonitorX, X } from "lucide-react";
+import { ArrowLeft, Clock, MonitorUp, MonitorX, WifiOff, X } from "lucide-react";
 import { textoForaDaJanela } from "@/lib/teleconsulta-logica";
-import { ConsultaNaoEncontrada } from "@/components/bion/consulta/SalaConsultaTela";
+import { ConsultaNaoEncontrada, ErroSalaFatal } from "@/components/bion/consulta/SalaConsultaTela";
 import { ConsultaPainelLateral } from "@/components/bion/consulta/PainelLateral";
 import { AlertaMidia } from "@/components/bion/consulta/AlertaMidia";
 import { useSalaConsulta, type SalaConsulta } from "@/components/bion/consulta/useSalaConsulta";
@@ -17,6 +17,7 @@ import { useCamerasDisponiveis } from "@/components/bion/chamada/useCamerasDispo
 import { PedidosMedicao } from "./PedidosMedicao";
 import { EsperaMedicoPainel } from "./EsperaMedicoPainel";
 import { useRecarregarEstado } from "./useRemarcacaoComMulta";
+import { ModalBion } from "@/components/bion/ModalBion";
 
 /**
  * Sala de teleconsulta do PACIENTE: tela cheia 9:16 estilo ligação.
@@ -34,7 +35,22 @@ export function ChamadaPaciente({
 }) {
   const sala = useSalaConsulta({ role: "paciente", consultaId, onEnd });
   if (sala.tele.naoEncontrada) return <ConsultaNaoEncontrada role="paciente" />;
+  // M16: 401/402/403 no polling — o motor parou; a tela mostra a orientação
+  // (sessão expirada/pagamento) em vez de "o médico vai entrar em instantes".
+  if (sala.tele.erroSala) return <ErroSalaFatal erro={sala.tele.erroSala} onVoltar={onEnd} />;
   return <TelaChamadaPaciente sala={sala} onEnd={onEnd} />;
+}
+
+/**
+ * B43: desfaz o fmtValorBRL do store ("R$ 150" / "R$ 149,90") para
+ * centavos, para o painel de espera saber se é retorno grátis (valor 0).
+ * Se não der para interpretar, devolve undefined e o painel mantém o
+ * comportamento de antes.
+ */
+function valorConsultaCentavosDe(valor: string | undefined): number | undefined {
+  if (!valor) return undefined;
+  const n = Number(valor.replace("R$", "").trim().replace(",", "."));
+  return Number.isFinite(n) ? Math.round(n * 100) : undefined;
 }
 
 /** "MM:SS" (ou "H:MM:SS") desde a primeira vez que a chamada conectou. */
@@ -105,6 +121,7 @@ export function TelaChamadaPaciente({
   const podeCompartilhar = usePodeCompartilharTela();
   const [mensagensAbertas, setMensagensAbertas] = useState(false);
   const [virando, setVirando] = useState(false);
+  const [confirmarSair, setConfirmarSair] = useState(false);
   const [alertaFechado, setAlertaFechado] = useState<string | null>(null);
 
   // Mensagens novas do médico desde a última vez que a folha ficou aberta.
@@ -112,8 +129,13 @@ export function TelaChamadaPaciente({
   const recebidas = useMemo(() => tele.chat.filter((m) => !m.minha).length, [tele.chat]);
   const naoLidas = mensagensAbertas ? 0 : Math.max(0, recebidas - lidasAte);
 
-  // Só áudio (câmera negada ou indisponível): o botão da câmera fica desabilitado.
-  const semCamera = !!tele.erroMidia && !tele.streamLocalRef.current?.getVideoTracks().length;
+  // Só áudio (câmera negada ou indisponível) ou sem mídia nenhuma.
+  // semVideo/semAudio vêm do motor (track caiu ou a captura inicial falhou):
+  // desde o M15 os botões NÃO desabilitam mais neste estado — eles viram a
+  // ação de recaptura ("tentar de novo") do motor. As marcas seguem servindo
+  // para esconder o vídeo local que não existe (VideoChamada916).
+  const semCamera = tele.semVideo || (!!tele.erroMidia && !tele.streamLocalRef.current?.getVideoTracks().length);
+  const semMic = tele.semAudio;
   const atalhos = useAtalhosChamada({
     onMic: sala.toggleMicLocal,
     onCam: sala.toggleCamLocal,
@@ -168,8 +190,17 @@ export function TelaChamadaPaciente({
       overlaysVisiveis={atalhos.visivel}
       handlers={atalhos.handlers}
       avisos={
-        alerta || tele.compartilhando ? (
+        alerta || tele.compartilhando || tele.conexaoInstavel ? (
           <div className="flex flex-col items-start gap-2">
+            {tele.conexaoInstavel ? (
+              <p
+                role="status"
+                aria-live="polite"
+                className="flex items-center gap-2 rounded-full bg-amber-500/90 px-3.5 py-1.5 text-xs font-semibold text-white shadow-lg"
+              >
+                <WifiOff className="size-3.5" aria-hidden /> Conexão instável — a sala não está respondendo. Tentando de novo…
+              </p>
+            ) : null}
             {tele.compartilhando ? (
               <p
                 role="status"
@@ -200,6 +231,7 @@ export function TelaChamadaPaciente({
           micAtivo={tele.micAtivo}
           camAtivo={tele.camAtivo}
           semCamera={semCamera}
+          semMic={semMic}
           onMic={sala.toggleMicLocal}
           onCam={sala.toggleCamLocal}
           podeVirar={qtdCameras > 1 && tele.localPronto && !semCamera}
@@ -208,9 +240,10 @@ export function TelaChamadaPaciente({
           onMensagens={abrirMensagens}
           naoLidas={naoLidas}
           mensagensAbertas={mensagensAbertas}
-          onEncerrar={sala.sairDaSala}
+          onEncerrar={() => setConfirmarSair(true)}
           rotuloEncerrar="Sair"
           ariaEncerrar="Sair da chamada"
+          encerrarAbreDialogo
           extras={
             podeCompartilhar ? (
               <BotaoChamada
@@ -237,6 +270,7 @@ export function TelaChamadaPaciente({
       {/* Espera do médico (10 min): contagem e, se ele não entrar, cancelar ou remarcar. */}
       <EsperaMedicoPainel
         consultaId={sala.consultaAtual?.id}
+        valorConsultaCentavos={valorConsultaCentavosDe(sala.consultaAtual?.valor)}
         medicoConectado={conectado && tele.remotoPronto}
         onSair={onEnd}
         onSairDaChamada={sala.sairDaSala}
@@ -254,6 +288,30 @@ export function TelaChamadaPaciente({
           e.target.value = "";
         }}
       />
+      {/* Sair pede confirmação (como o médico já tem modal de escolha): o toque
+          acidental não derruba a chamada — o médico vê "Paciente saiu" e pode
+          ficar esperando o retorno. */}
+      <ModalBion aberto={confirmarSair} onFechar={() => setConfirmarSair(false)} titulo="Sair da chamada?">
+        <p className="text-sm text-muted-foreground">
+          O médico verá que você saiu da chamada e pode ficar esperando o seu retorno. A consulta continua
+          aberta e você pode voltar enquanto ela durar.
+        </p>
+        <div className="flex gap-2 mt-4">
+          <button type="button" onClick={() => setConfirmarSair(false)} className="px-4 py-3 rounded-2xl border text-sm font-bold flex-1 hover:bg-muted transition">
+            Continuar na chamada
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setConfirmarSair(false);
+              sala.sairDaSala();
+            }}
+            className="px-4 py-3 rounded-2xl bg-primary text-primary-foreground text-sm font-bold flex-1 hover:opacity-90 transition"
+          >
+            Sair da chamada
+          </button>
+        </div>
+      </ModalBion>
       <FolhaMensagens aberta={mensagensAbertas} onFechar={fecharMensagens}>
         <ConsultaPainelLateral
           role="paciente"

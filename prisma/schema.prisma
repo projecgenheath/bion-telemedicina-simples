@@ -92,9 +92,13 @@ model PerfilMedico {
   idiomas             String  @default("[]") // JSON string[]
   bio                 String  @default("")
   foto                String?
-  status              String  @default("ativo") // ativo | pendente | suspenso
+  // ativo | pendente | suspenso | arquivado (B-22: "arquivado" vem do DELETE
+  // lógico do admin — usuário inativo + perfil arquivado, histórico preservado)
+  status              String  @default("ativo")
   stripeAccountId     String? // conta conectada (Stripe Connect), 20261028a
   horariosDisponiveis String  @default("[]") // JSON string[]
+  diasAtendimento     String  @default("[]") // JSON number[] (0=Dom … 6=Sáb). Vazio = todos os dias.
+  pausasSemanais      String  @default("[]") // JSON {dia,inicio,fim}[].
   // Dados pessoais do médico (privados: só o próprio médico lê/edita em
   // /api/medico/perfil — NUNCA entram no diretório público / medicoWire).
   // Migração: supabase/migrations/20261002_perfil_medico_dados_pessoais.sql
@@ -172,7 +176,7 @@ model Consulta {
   medico             User     @relation("ConsultaMedico", fields: [medicoId], references: [id], onDelete: Restrict)
   especialidade      String
   dataInicio         DateTime
-  status             String   @default("confirmada") // confirmada | em_espera | pendente_anamnese (legado) | aguardando_reagendamento | cancelada | concluida
+  status             String   @default("confirmada") // confirmada | em_espera | pendente_anamnese (legado) | aguardando_reagendamento | cancelada | concluida | falta_paciente
   motivoConsulta     String?
   motivoCancelamento String?
   resumoMedico       String?
@@ -431,6 +435,12 @@ model Avaliacao {
   atencao       Int?
   clareza       Int?
   createdAt     DateTime @default(now())
+
+  // M3: uma avaliação por consulta — fecha a corrida de dois POSTs
+  // concorrentes (a rota trata o P2002 como 409). consultaId é opcional:
+  // no Postgres, NULLs não colidem entre si, então avaliações legadas sem
+  // consulta continuam possíveis.
+  @@unique([consultaId])
 }
 
 model Ticket {

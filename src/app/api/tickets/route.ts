@@ -2,20 +2,32 @@ import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { exigirSessao } from "@/lib/server/auth";
 import { aplicarSideEffects, ticketWire } from "@/lib/server/dados";
-import { ok, falha } from "@/lib/server/http";
+import {ok, falha, lerCorpoJson, corpoObjeto, textoDoCorpo} from "@/lib/server/http";
+import { limitarAsync, resposta429 } from "@/lib/server/rate-limit";
 
 /** Abertura de chamado de suporte.
  *  Notificações (autor + administração) e auditoria geradas PELO SERVIDOR. */
 export async function POST(req: NextRequest) {
   try {
     const usuario = await exigirSessao();
-    const body = (await req.json()) as {
-      assunto: string;
-      categoria: string;
-      mensagem: string;
+    // M9 (auditoria): teto por usuário — abrir chamado é raro; 10/h (mesmo
+    // teto do aceite de termos) barra spam ao suporte sem atrapalhar ninguém.
+    const teto = await limitarAsync(`tickets:${usuario.id}`, 10, 3_600_000);
+    if (!teto.permitido) return resposta429(teto.restanteSeg);
+    // B1: guarda de objeto/tipo antes de .trim().
+    const bruto = corpoObjeto(await lerCorpoJson(req));
+    if (!bruto) {
+      return Response.json({ erro: "Corpo da requisição inválido." }, { status: 400 });
+    }
+    const body = {
+      assunto: textoDoCorpo(bruto.assunto),
+      categoria: textoDoCorpo(bruto.categoria),
+      mensagem: textoDoCorpo(bruto.mensagem),
     };
 
-    if (!body.assunto?.trim() || !body.mensagem?.trim()) {
+    const assunto = body.assunto?.trim() ?? "";
+    const mensagem = body.mensagem?.trim() ?? "";
+    if (!assunto || !mensagem) {
       return Response.json({ erro: "Informe assunto e mensagem do chamado." }, { status: 400 });
     }
 
@@ -23,9 +35,9 @@ export async function POST(req: NextRequest) {
       data: {
         usuarioId: usuario.id,
         perfil: usuario.role === "MEDICO" ? "medico" : "paciente",
-        assunto: body.assunto.trim(),
+        assunto,
         categoria: body.categoria || "outro",
-        mensagem: body.mensagem.trim(),
+        mensagem,
       },
       include: { usuario: { select: { nome: true } } },
     });

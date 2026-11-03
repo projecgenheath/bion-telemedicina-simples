@@ -2,6 +2,7 @@ import "server-only";
 import { adminVeAnamnese, documentoParaPapel } from "@/lib/privacidade-consulta";
 import { instanteNoFuso, partesNoFuso } from "./fuso";
 import { normalizarTipoAtendimento } from "@/lib/bion-tipos";
+import { normalizarGrade } from "@/lib/grade-semana";
 import { broadcastCanal } from "@/lib/supabase/broadcast";
 import { after } from "next/server";
 import { topicoNotificacoesUsuario } from "./usuario-canal";
@@ -12,6 +13,7 @@ import type { UsuarioSessao } from "./auth";
 import { whereArquivosVisiveis } from "./arquivos-acesso";
 import { alturaCanonica, pesoCanonico } from "@/lib/medidas-paciente";
 import { dataNascimentoParaIso, idadeDeNascimento } from "@/lib/idade";
+import { gerarCodigoVerificacao } from "./verificacao-documento";
 
 /* ------------------------------------------------------------------ */
 /* Utilitários de data (rótulos do cliente: "Hoje", "Amanhã", "12 Dez") */
@@ -229,7 +231,10 @@ export function consultaWire(c: ConsultaComNomes & { remarcacoes?: ReservaRemarc
 }
 
 export type DocumentoComNomes = Prisma.DocumentoGetPayload<{
-  include: { medico: { select: { nome: true } }; paciente: { select: { nome: true } } };
+  include: {
+    medico: { select: { nome: true; perfilMedico: { select: { crm: true } } } };
+    paciente: { select: { nome: true; perfilPaciente: { select: { cpf: true; dataNascimento: true } } } };
+  };
 }>;
 
 export function documentoWire(d: DocumentoComNomes) {
@@ -240,12 +245,31 @@ export function documentoWire(d: DocumentoComNomes) {
     conteudo: d.conteudo,
     medico: d.medico.nome,
     paciente: d.paciente.nome,
+    // Melhoria nº 6 (auditoria médica): identificação formal para a via
+    // impressa (PDF) — CRM do emissor e CPF/nascimento do paciente, que já
+    // existiam nos cadastros (PerfilMedico.crm, PerfilPaciente) mas não
+    // chegavam ao documento. Vazio/ausente no cadastro = campo omitido.
+    medicoCrm: d.medico.perfilMedico?.crm || undefined,
+    pacienteCpf: d.paciente.perfilPaciente?.cpf || undefined,
+    pacienteNascimento: dataNascimentoParaIso(d.paciente.perfilPaciente?.dataNascimento) ?? undefined,
+    // M-9 da auditoria: identificador do paciente no wire — o nome duplicado
+    // (homônimos) não pode mais misturar documentos de pessoas diferentes.
+    pacienteId: d.pacienteId,
+    // A7 da auditoria do paciente: consulta de emissão (gravada desde o B-12)
+    // — sem ela o cliente atribuía o documento por janela calculada sobre o
+    // texto localizado da data, e ele caía na consulta errada.
+    consultaId: d.consultaId,
     medicamento: d.medicamento,
     posologia: d.posologia,
     duracao: d.duracao,
     observacoes: d.observacoes,
     cid: d.cid,
     controlado: d.controlado,
+    // Item 26 (auditoria de melhorias): código de verificação pública da
+    // via (id + HMAC do servidor) — impresso nos PDFs e conferido em
+    // /verificar/[codigo] sem expor dado clínico. Calculado na leitura:
+    // documentos antigos ganham código sem migração nenhuma.
+    codigoVerificacao: gerarCodigoVerificacao(d.id),
     createdAt: d.createdAt.toISOString(),
   };
 }
@@ -268,8 +292,8 @@ export function arquivoWire(a: ArquivoRow) {
 
 export type AvaliacaoComNomes = Prisma.AvaliacaoGetPayload<{
   include: {
-    paciente: { select: { nome: true } };
-    medico: { select: { nome: true; perfilMedico: { select: { especialidade: true } } } };
+    paciente: { select: { id: true; nome: true } };
+    medico: { select: { id: true; nome: true; perfilMedico: { select: { especialidade: true } } } };
   };
 }>;
 
@@ -277,6 +301,9 @@ export function avaliacaoWire(a: AvaliacaoComNomes) {
   return {
     id: a.id,
     paciente: a.paciente.nome,
+    // B-6: identificadores para filtrar por ID (nunca por nome — homônimos).
+    pacienteId: a.paciente.id,
+    medicoId: a.medico.id,
     medico: a.medico.nome,
     especialidade: a.medico.perfilMedico?.especialidade ?? "",
     nota: a.nota,
@@ -346,7 +373,13 @@ export function medicoWire(m: PerfilMedicoComUser, nota: { avaliacao: number; nu
     bio: m.bio,
     foto: m.foto ?? undefined,
     status: m.status,
-    horariosDisponiveis: JSON.parse(m.horariosDisponiveis || "[]") as string[],
+    // Grade por dia da semana (lib/grade-semana): horariosDisponiveis segue
+    // sendo o PADRÃO (array, tipo inalterado p/ clientes antigos) e
+    // horariosPorDia traz as listas próprias de cada dia ({} = grade plana).
+    horariosDisponiveis: normalizarGrade(m.horariosDisponiveis).padrao,
+    horariosPorDia: normalizarGrade(m.horariosDisponiveis).dias,
+    diasAtendimento: JSON.parse(m.diasAtendimento || "[]") as number[],
+    pausasSemanais: JSON.parse(m.pausasSemanais || "[]") as { dia: number; inicio: string; fim: string }[],
   };
 }
 
@@ -586,42 +619,60 @@ export async function carregarDados(usuario: UsuarioSessao) {
     medicoes,
     exames,
   ] = await Promise.all([
+    // M8 (auditoria): TODAS as coleções do bootstrap têm teto — sem ele, o
+    // endpoint mais chamado do app devolvia o histórico INTEIRO da conta,
+    // crescendo sem limite. 200 mais recentes por coleção (mesmo teto de
+    // medições/exames abaixo), na ordenação que o cliente já consumia.
     db.documento.findMany({
       where: documentoWhere,
       include: {
-        medico: { select: { nome: true } },
-        paciente: { select: { nome: true } },
+        medico: { select: { nome: true, perfilMedico: { select: { crm: true } } } },
+        paciente: { select: { nome: true, perfilPaciente: { select: { cpf: true, dataNascimento: true } } } },
       },
       orderBy: { createdAt: "desc" },
+      take: 200,
     }),
-    db.arquivo.findMany({ where: arquivoWhere, orderBy: { createdAt: "desc" } }),
+    db.arquivo.findMany({ where: arquivoWhere, orderBy: { createdAt: "desc" }, take: 200 }),
     db.notificacao.findMany({
       where: {
-        OR: [{ usuarioId: usuario.id }, { paraRole: usuario.role }, { AND: [{ usuarioId: null }, { paraRole: null }] }],
+        // B4: broadcast por papel EXIGE usuarioId: null — sem isso, uma
+        // notificação DIRIGIDA a outro paciente com paraRole preenchido
+        // vazaria para todos do papel. Alinhado a notificacoes/route.ts.
+        OR: [
+          { usuarioId: usuario.id },
+          { usuarioId: null, paraRole: usuario.role },
+          { AND: [{ usuarioId: null }, { paraRole: null }] },
+        ],
       },
       orderBy: { createdAt: "desc" },
+      take: 200,
     }),
     db.avaliacao.findMany({
       where: avaliacaoWhere,
       include: {
-        paciente: { select: { nome: true } },
-        medico: { select: { nome: true, perfilMedico: { select: { especialidade: true } } } },
+        // B-6: id para o wire filtrar por identificador (nunca por nome)
+        paciente: { select: { id: true, nome: true } },
+        medico: { select: { id: true, nome: true, perfilMedico: { select: { especialidade: true } } } },
       },
       orderBy: { createdAt: "desc" },
+      take: 200,
     }),
     db.ticket.findMany({
       where: souAdmin ? {} : { usuarioId: usuario.id },
       include: { usuario: { select: { nome: true } } },
       orderBy: { createdAt: "desc" },
+      take: 200,
     }),
     db.lembrete.findMany({
       where: { usuarioId: usuario.id },
       orderBy: { horario: "asc" },
+      take: 200,
     }),
     db.consentimento.findMany({
       where: consentimentoWhere,
       include: { paciente: { select: { nome: true } } },
       orderBy: { createdAt: "desc" },
+      take: 200,
     }),
     souAdmin
       ? db.auditLog.findMany({ orderBy: { createdAt: "desc" }, take: 300 })
@@ -632,7 +683,11 @@ export async function carregarDados(usuario: UsuarioSessao) {
         de: { select: { nome: true } },
         para: { select: { nome: true } },
       },
-      orderBy: { createdAt: "asc" },
+      // M8: teto como no GET /api/mensagens (M-16) — busca as 200 mais
+      // recentes (desc) e o array é revertido p/ cronológico logo abaixo;
+      // com asc + take viriam as 200 mais ANTIGAS e as novas sumiriam.
+      orderBy: { createdAt: "desc" },
+      take: 200,
     }),
     db.user.findFirst({
       where: { role: "ADMIN", status: "ativo" },
@@ -648,6 +703,10 @@ export async function carregarDados(usuario: UsuarioSessao) {
       ? db.exameLaboratorial.findMany({ where: { usuarioId: usuario.id }, orderBy: { dataColeta: "asc" }, take: 200 })
       : Promise.resolve([] as Awaited<ReturnType<typeof db.exameLaboratorial.findMany>>),
   ]);
+
+  // M8: mensagens vieram em ordem decrescente (teto nas mais recentes);
+  // o wire consome em ordem cronológica, como antes.
+  mensagensRaw.reverse();
 
   const auditLogs = auditLogsRaw;
 

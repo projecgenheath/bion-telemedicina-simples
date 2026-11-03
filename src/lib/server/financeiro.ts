@@ -1,13 +1,15 @@
 import "server-only";
 import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
-import { partesNoFuso, quandoClinica } from "@/lib/server/fuso";
+import { instanteNoFuso, partesNoFuso, quandoClinica } from "@/lib/server/fuso";
 import {
   chaveTravaDia,
+  conferirDiasEPausas,
   consultaEmHorarioVedado,
   conferirMedicoAtivoNaTransacao,
   diaBloqueado,
   diaIsoSaoPaulo,
+  DURACAO_CONSULTA_MIN,
   ERRO_DIA_BLOQUEADO,
   ERRO_HORARIO_VEDADO,
   OPCOES_TX_TRAVA,
@@ -15,6 +17,12 @@ import {
   type ClienteBanco,
 } from "@/lib/server/bloqueio-agenda";
 import { REEMBOLSO_MANUAL_PRAZO_DIAS, parseDataHora, prazoReembolsoManual } from "@/lib/server/dados";
+import {
+  normalizarGrade,
+  horariosDoDia,
+  gradeTotalmenteVazia,
+  type GradeSemana,
+} from "@/lib/grade-semana";
 import { fimDoPrazoEmDiasUteis } from "@/lib/server/dias-uteis";
 import { statusAposFalhaDoMedico } from "@/lib/atendimento-tipo";
 
@@ -62,7 +70,7 @@ export const MULTA_RECOMECA_APOS_EVENTO_NAO_PACIENTE = true;
 /* ---------- Status ------------------------------------------------- */
 
 /** Status que liberam o horário do médico (não contam como ocupados). */
-export const STATUS_LIBERAM_HORARIO = ["cancelada", "concluida", "aguardando_reagendamento"];
+export const STATUS_LIBERAM_HORARIO = ["cancelada", "concluida", "aguardando_reagendamento", "falta_paciente"];
 /** Status que ficam fora do faturamento líquido. */
 export const STATUS_FORA_DO_FATURAMENTO = ["cancelada", "aguardando_reagendamento"];
 /** Status de reembolso que bloqueiam um novo pedido para o mesmo pagamento. */
@@ -187,15 +195,9 @@ export async function registrarTaxaGateway(pagamentoId: string, taxaCentavos: nu
   return taxa;
 }
 
-/** Competência "AAAA-MM" do mês de Brasília (não o mês em UTC). */
-export function competenciaDe(instante: Date): string {
-  const p = partesNoFuso(instante);
-  return `${p.ano}-${String(p.mes).padStart(2, "0")}`;
-}
-
 /* ---------- Multa -------------------------------------------------- */
 
-type EventoParaMulta = { por: string; em: Date; dataAnterior: Date; motivo?: string };
+type EventoParaMulta = { por: string; em: Date; dataAnterior: Date; motivo?: string; tipo?: string; corrigidoEm?: Date | null };
 
 /**
  * Data que vale para a janela da multa.
@@ -207,7 +209,10 @@ type EventoParaMulta = { por: string; em: Date; dataAnterior: Date; motivo?: str
  */
 export function dataOriginalParaMulta(eventos: EventoParaMulta[], dataAtual: Date): Date {
   if (!MULTA_CONTA_DATA_ORIGINAL) return dataAtual;
-  const ordenados = [...eventos].sort((a, b) => a.em.getTime() - b.em.getTime());
+  // B14: evento corrigido/anulado pelo admin (corrigidoEm) não vale — mesma
+  // regra das demais leituras (calcularMulta e EVENTO_VIGENTE). Sem o filtro,
+  // um evento desfeito reiniciava a "data original" da janela de 24 h.
+  const ordenados = eventos.filter((e) => !e.corrigidoEm).sort((a, b) => a.em.getTime() - b.em.getTime());
   if (!MULTA_RECOMECA_APOS_EVENTO_NAO_PACIENTE) return ordenados[0]?.dataAnterior ?? dataAtual;
   let inicio = 0;
   ordenados.forEach((e, i) => {
@@ -230,7 +235,7 @@ export type PreviaMulta = {
   semMultaAte: string;
   semMultaAteTexto: string;
   /** Motivo da isenção, se houver. */
-  isencao: null | "nao_e_paciente" | "aguardando_reagendamento" | "fora_da_janela";
+  isencao: null | "nao_e_paciente" | "aguardando_reagendamento" | "fora_da_janela" | "falta_do_medico";
 };
 
 /**
@@ -254,6 +259,20 @@ export function calcularMulta(params: {
   if (por !== "paciente") isencao = "nao_e_paciente";
   else if (consulta.status === "aguardando_reagendamento") isencao = "aguardando_reagendamento";
   else if (agora.getTime() < semMultaAte.getTime()) isencao = "fora_da_janela";
+  // M-23 da auditoria: consulta que não ocorreu por FALTA DO MÉDICO (ou
+  // falha técnica registrada) não gera multa ao paciente — mesmo depois do
+  // horário. Antes, cancelamento após o início com falta do médico cobrava
+  // 50% de uma consulta que não aconteceu por culpa do profissional.
+  else if (
+    eventos.some(
+      (e) =>
+        (e.tipo === "falta_medico" || e.tipo === "falha_tecnica") &&
+        !e.corrigidoEm &&
+        e.dataAnterior.getTime() === consulta.dataInicio.getTime(),
+    )
+  ) {
+    isencao = "falta_do_medico";
+  }
 
   // Só há o que cobrar se o paciente pagou: a multa sai do valor devolvido.
   const multaCentavos = isencao || !consulta.pago ? 0 : pct(valorCentavos, MULTA_PCT);
@@ -753,10 +772,13 @@ export async function horarioReservado(
   excetoConsultaId?: string,
   client: ClienteBanco = db,
 ) {
+  // Uma reserva também ocupa 30 min: reserva às 09:15 bloqueia um agendamento
+  // às 09:00–09:30, e vice-versa (mesma janela de sobreposição das consultas).
+  const janela = janelaSobreposicao(dataInicio);
   const r = await client.remarcacaoPendente.findFirst({
     where: {
       ...filtroReservaVigente(),
-      novaData: dataInicio,
+      novaData: { gt: janela.gt, lt: janela.lt },
       consulta: { medicoId, ...(excetoConsultaId ? { id: { not: excetoConsultaId } } : {}) },
     },
     select: { id: true },
@@ -773,11 +795,12 @@ export async function cancelarReservasPendentes(tx: Prisma.TransactionClient, co
   return tx.remarcacaoPendente.updateMany({ where: { consultaId, status: "pendente" }, data: { status: "cancelada" } });
 }
 
-/** Início e fim (exclusivo) do dia civil em São Paulo (UTC-3, sem horário de verão) que contém `d`. */
+/** Início e fim (exclusivo) do dia civil em São Paulo que contém `d`.
+ *  B-29: via API de fuso (partesNoFuso + instanteNoFuso), à prova de horário
+ *  de verão — antes, offset fixo de −3 h como o resto do sistema não usa. */
 export function diaSaoPaulo(d: Date): { inicio: Date; fim: Date } {
-  const OFFSET = 3 * 3600_000;
-  const local = new Date(d.getTime() - OFFSET);
-  const inicio = new Date(Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate()) + OFFSET);
+  const p = partesNoFuso(d);
+  const inicio = instanteNoFuso(p.ano, p.mes, p.dia);
   return { inicio, fim: new Date(inicio.getTime() + 24 * 3600_000) };
 }
 
@@ -948,6 +971,47 @@ export async function falharMultaRemarcacao(remarcacaoId: string, via: "webhook"
 }
 
 /**
+ * Grade do médico normalizada (grade-semana.ts é a regra única): a coluna
+ * guarda o array legado (padrão de todos os dias) ou o objeto com dias
+ * próprios. JSON inválido = grade vazia = sem restrição.
+ */
+export function gradeHorarios(perfil: { horariosDisponiveis?: string | null } | null): GradeSemana {
+  if (!perfil) return { padrao: [], dias: {} };
+  return normalizarGrade(perfil.horariosDisponiveis ?? null);
+}
+
+/**
+ * A hora de início (HH:MM de São Paulo) faz parte da grade do médico
+ * NAQUELE dia da semana? Grade totalmente vazia = sem restrição (médico
+ * legado sem grade configurada), mesma regra que validarNovoHorario já
+ * usava para a remarcação. Com grade por dia: vale a lista do dia da
+ * consulta (própria ou padrão); dia com lista própria vazia = sem
+ * horários naquele dia (recusa).
+ */
+export function horarioNaGrade(perfil: { horariosDisponiveis?: string | null } | null, dataInicio: Date): boolean {
+  const grade = gradeHorarios(perfil);
+  if (gradeTotalmenteVazia(grade)) return true;
+  const p = partesNoFuso(dataInicio);
+  // Dia da semana pelo calendário civil de São Paulo (0=Dom … 6=Sáb) —
+  // mesma fórmula de conferirDiasEPausas (bloqueio-agenda.ts).
+  const diaSemana = new Date(Date.UTC(p.ano, p.mes - 1, p.dia)).getUTCDay();
+  const hhmm = `${String(p.hora).padStart(2, "0")}:${String(p.minuto).padStart(2, "0")}`;
+  return horariosDoDia(grade, diaSemana).includes(hhmm);
+}
+
+/**
+ * Janela de sobreposição de uma consulta que começa em `dataInicio`:
+ * consultas duram DURACAO_CONSULTA_MIN (30 min) e não há dataFim no banco,
+ * então dois atendimentos se sobrepõem quando o início de um cai dentro de
+ * (outro início − 30 min, outro início + 30 min) — encostar (ex.: 09:00 e
+ * 09:30) NÃO é sobreposição.
+ */
+export function janelaSobreposicao(dataInicio: Date): { gt: Date; lt: Date } {
+  const ms = DURACAO_CONSULTA_MIN * 60_000;
+  return { gt: new Date(dataInicio.getTime() - ms), lt: new Date(dataInicio.getTime() + ms) };
+}
+
+/**
  * Valida a nova data/hora de uma remarcação (mesma regra para o PATCH
  * "remarcar" e para a remarcação com multa): antecedência de 20 min, grade do
  * médico, dia bloqueado pelo médico, janela vedada 23:00–00:00 (São Paulo),
@@ -964,14 +1028,17 @@ export async function validarNovoHorario(
     return { ok: false, erro: "Escolha um horário com pelo menos 20 minutos de antecedência.", status: 400 };
   }
   const perfilMedico = await db.perfilMedico.findUnique({ where: { userId: consulta.medicoId } });
-  let grade: string[] = [];
-  try {
-    grade = JSON.parse(perfilMedico?.horariosDisponiveis || "[]") as string[];
-  } catch {
-    grade = [];
-  }
-  if (grade.length && !grade.includes(hora)) {
+  // Grade por dia da semana: a MESMA regra do agendamento (horarioNaGrade
+  // lê a lista do dia da nova data; grade vazia = sem restrição).
+  if (!horarioNaGrade(perfilMedico, dataInicio)) {
     return { ok: false, erro: "Esse horário não faz parte da agenda do médico.", status: 400 };
+  }
+  // M-25 da auditoria: remarcação segue a MESMA regra de dias de atendimento
+  // e pausas semanais do agendamento (agora unificada em conferirDiasEPausas,
+  // usada também por conferirHorarioNaTransacao — a checagem atômica).
+  const erroGrade = conferirDiasEPausas(perfilMedico, dataInicio);
+  if (erroGrade) {
+    return { ok: false, erro: erroGrade, status: 409 };
   }
   // Dia inteiro bloqueado pelo médico (folga/férias) — antes da checagem de conflito.
   if (await diaBloqueado(db, consulta.medicoId, dataInicio)) {
@@ -981,12 +1048,15 @@ export async function validarNovoHorario(
   if (consultaEmHorarioVedado(dataInicio)) {
     return { ok: false, erro: ERRO_HORARIO_VEDADO, status: 409 };
   }
+  // Conflito por SOBREPOSIÇÃO de 30 min (não só início exato): uma consulta
+  // às 09:15 sobre uma das 09:00–09:30 também ocupa o médico.
+  const janela = janelaSobreposicao(dataInicio);
   const conflito = await db.consulta.findFirst({
     where: {
       id: { not: consulta.id },
       medicoId: consulta.medicoId,
       status: { notIn: STATUS_LIBERAM_HORARIO },
-      dataInicio,
+      dataInicio: { gt: janela.gt, lt: janela.lt },
     },
     select: { id: true },
   });
@@ -1050,14 +1120,30 @@ export async function conferirHorarioNaTransacao(
   if (erroMedico) return erroMedico;
   if (await diaBloqueado(tx, p.medicoId, p.dataInicio)) return ERRO_DIA_BLOQUEADO;
   if (consultaEmHorarioVedado(p.dataInicio)) return ERRO_HORARIO_VEDADO;
+  // Dias de atendimento × pausas semanais do médico (grade): a remarcação e o
+  // agendamento seguem a MESMA regra (P1-2/P1-3 da auditoria — antes a
+  // remarcação ignorava a grade e o agendamento lia uma propriedade inexistente).
+  const perfil = await tx.perfilMedico.findUnique({
+    where: { userId: p.medicoId },
+    select: { diasAtendimento: true, pausasSemanais: true, horariosDisponiveis: true },
+  });
+  const erroGrade = conferirDiasEPausas(perfil, p.dataInicio);
+  if (erroGrade) return erroGrade;
+  // Hora na grade do médico: o agendamento passa a exigir o mesmo que a
+  // remarcação já exigia (grade vazia = sem restrição, médico legado).
+  if (!horarioNaGrade(perfil, p.dataInicio)) return "Esse horário não faz parte da agenda do médico.";
+  // Conflito por SOBREPOSIÇÃO de 30 min (não só início exato), para médico
+  // e paciente — vale para criação, remarcação e remarcação com multa, que
+  // todos passam por aqui dentro da transação travada.
+  const janela = janelaSobreposicao(p.dataInicio);
   const choqueMedico = await tx.consulta.findFirst({
-    where: { id: { not: p.consultaId }, medicoId: p.medicoId, dataInicio: p.dataInicio, status: { notIn: STATUS_LIBERAM_HORARIO } },
+    where: { id: { not: p.consultaId }, medicoId: p.medicoId, dataInicio: { gt: janela.gt, lt: janela.lt }, status: { notIn: STATUS_LIBERAM_HORARIO } },
     select: { id: true },
   });
   if (choqueMedico || (await horarioReservado(p.medicoId, p.dataInicio, p.consultaId, tx))) return ERRO_HORARIO_OCUPADO;
   if (p.pacienteId) {
     const choquePaciente = await tx.consulta.findFirst({
-      where: { id: { not: p.consultaId }, pacienteId: p.pacienteId, dataInicio: p.dataInicio, status: { notIn: STATUS_LIBERAM_HORARIO } },
+      where: { id: { not: p.consultaId }, pacienteId: p.pacienteId, dataInicio: { gt: janela.gt, lt: janela.lt }, status: { notIn: STATUS_LIBERAM_HORARIO } },
       select: { id: true },
     });
     if (choquePaciente) return ERRO_PACIENTE_OCUPADO;

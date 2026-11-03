@@ -22,6 +22,11 @@ import { exigirSessao } from "@/lib/server/auth";
  * encerra sem retry (o fallback de polling do cliente assume).
  * Custo: enquanto o stream está aberto, o cliente NÃO faz polling — o tráfego
  * ocioso cai de ~15 req/min por usuário para ~1 reconexão/min.
+ *
+ * B-26: teto de 2 fluxos SIMULTÂNEOS por usuário (multi-aparelho). Cada
+ * fluxo varre o banco a cada 1,5 s; sem teto, o custo cresce sem limite com
+ * abas/aparelhos abertos. O 3º fluxo recebe 429 (o EventSource para de
+ * reconectar e o cliente cai no polling de segurança).
  */
 
 export const maxDuration = 60;
@@ -31,6 +36,23 @@ const INTERVALO_VARREDURA_MS = 1500;
 const INTERVALO_PING_MS = 15_000;
 const VIDA_DO_FLUXO_MS = 50_000;
 const TAKE = 200;
+const FLUXOS_POR_USUARIO = 2;
+
+/** Fluxos abertos por usuário (instância). Limpa na saída de cada fluxo. */
+const fluxosAbertos = new Map<string, number>();
+
+function abrirFluxo(usuarioId: string): boolean {
+  const n = fluxosAbertos.get(usuarioId) ?? 0;
+  if (n >= FLUXOS_POR_USUARIO) return false;
+  fluxosAbertos.set(usuarioId, n + 1);
+  return true;
+}
+
+function fecharFluxo(usuarioId: string): void {
+  const n = fluxosAbertos.get(usuarioId) ?? 0;
+  if (n <= 1) fluxosAbertos.delete(usuarioId);
+  else fluxosAbertos.set(usuarioId, n - 1);
+}
 
 export async function GET() {
   let usuarioId: string;
@@ -40,6 +62,14 @@ export async function GET() {
   } catch {
     // Status errado faz o EventSource falhar sem reconectar — polling assume.
     return new Response("não autorizado", { status: 401 });
+  }
+
+  // B-26: teto por usuário — o 3º fluxo simultâneo cai no polling do cliente.
+  if (!abrirFluxo(usuarioId)) {
+    return new Response("muitos fluxos abertos", {
+      status: 429,
+      headers: { "Retry-After": "30" },
+    });
   }
 
   const codificador = new TextEncoder();
@@ -132,6 +162,7 @@ export async function GET() {
         // de segurança cobre a janela com falhas.
       } finally {
         fechado = true;
+        fecharFluxo(usuarioId);
         try {
           controller.close();
         } catch {
@@ -141,6 +172,7 @@ export async function GET() {
     },
     cancel() {
       fechado = true;
+      fecharFluxo(usuarioId);
     },
   });
 

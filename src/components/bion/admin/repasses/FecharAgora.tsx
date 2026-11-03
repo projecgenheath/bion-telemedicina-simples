@@ -8,7 +8,7 @@ import { partesFusoClinica } from "@/lib/bion-tipos";
 import { SheetAdmin } from "../ui/SheetAdmin";
 import { brl, chaveDia, competenciaCurta, dataLonga } from "../tempo";
 import { chamarApi } from "./recurso";
-import { HORA_FECHAMENTO, resumoFechamento, validarCompetencia } from "./formatos";
+import { HORA_FECHAMENTO_MIN, resumoFechamento, validarCompetencia } from "./formatos";
 import type { RespostaFechamento } from "./tipos";
 
 /**
@@ -30,7 +30,9 @@ export function FecharAgora({
   onFechou: () => void;
 }) {
   const { medicos } = useBion();
-  const padrao = competenciaPadrao ?? chaveDia(agora - (partesFusoClinica(agora).hora < HORA_FECHAMENTO ? 86_400_000 : 0));
+  const padrao =
+    competenciaPadrao ??
+    chaveDia(agora - (partesFusoClinica(agora).hora * 60 + partesFusoClinica(agora).minuto < HORA_FECHAMENTO_MIN ? 86_400_000 : 0));
   const [dia, setDia] = useState(padrao);
   const [medicoId, setMedicoId] = useState("");
   const [entendi, setEntendi] = useState(false);
@@ -49,7 +51,11 @@ export function FecharAgora({
     }
   }
 
-  const invalido = validarCompetencia(dia, chaveDia(agora), partesFusoClinica(agora).hora);
+  const invalido = validarCompetencia(
+    dia,
+    chaveDia(agora),
+    partesFusoClinica(agora).hora * 60 + partesFusoClinica(agora).minuto,
+  );
   const nomeDe = (id: string) => medicos.find((m) => m.id === id)?.nome ?? "Médico";
 
   const fechar = async () => {

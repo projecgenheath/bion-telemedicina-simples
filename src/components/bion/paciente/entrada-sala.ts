@@ -8,6 +8,12 @@
 /*   - "antes"   → aguardar: botão desativado "A sala abre às HH:MM"     */
 /*                 (com a data se for outro dia, horário de São Paulo);  */
 /*   - "fechada" → nenhuma entrada.                                      */
+/* Pagamento (mesmo critério do servidor, sala/route.ts): consulta       */
+/* "em_espera" e não paga NUNCA vira "entrar" — vira "pagamento_pendente"*/
+/* (o botão principal vira "nenhum", sem o rótulo enganoso "a sala já   */
+/* fechou"). Modo simulado e retorno grátis não caem aqui: ambos nascem */
+/* com pago = true. Objetos sem `status` (ex.: o teste do módulo)       */
+/* mantêm o comportamento antigo.                                        */
 /* ==================================================================== */
 
 import { estadoJanelaSala, janelaSala } from "@/lib/janela-sala";
@@ -16,6 +22,7 @@ import { textoForaDaJanela } from "@/lib/teleconsulta-logica";
 export type AcaoSala =
   | { tipo: "entrar"; href: string }
   | { tipo: "aguardar"; abreEm: number; rotulo: string }
+  | { tipo: "pagamento_pendente"; rotulo: string }
   | { tipo: "nenhuma" };
 
 /** Endereço da sala de uma consulta (lido por app/(bion)/(fullscreen)/consulta/page.tsx). */
@@ -29,7 +36,16 @@ export function rotuloAbertura(abreEm: number, agora: number): string {
 }
 
 /** O que a sala oferece ao paciente agora, para uma consulta. */
-export function acaoSalaPaciente(c: { id: string; ts: number }, agora: number): AcaoSala {
+export function acaoSalaPaciente(
+  c: { id: string; ts: number; status?: string; pago?: boolean },
+  agora: number,
+): AcaoSala {
+  // Barreira de pagamento ANTES da janela: sem pagar não há entrada, nem
+  // "aguardar abertura" — o paciente precisa pagar primeiro, em qualquer
+  // instante. Critério idêntico ao do servidor: em_espera && !pago.
+  if (c.status === "em_espera" && c.pago !== true) {
+    return { tipo: "pagamento_pendente", rotulo: "Pagamento pendente — pague para entrar na sala" };
+  }
   const estado = estadoJanelaSala(c.ts, agora);
   if (estado === "aberta") return { tipo: "entrar", href: hrefSala(c.id) };
   if (estado === "antes") {
@@ -44,6 +60,8 @@ export type BotaoPrincipal = "sala" | "triagem" | "aguardar" | "nenhum";
 /**
  * Botão principal do card da próxima consulta. Prioridade:
  * sala aberta → triagem pendente → aguardar a abertura (desativado) → nenhum.
+ * Pagamento pendente nunca vira "sala" (a triagem, se pendente, continua
+ * valendo: só a entrada na sala é barrada, não o resto do card).
  */
 export function botaoPrincipalProxima(acao: AcaoSala, triagemPendente: boolean): BotaoPrincipal {
   if (acao.tipo === "entrar") return "sala";

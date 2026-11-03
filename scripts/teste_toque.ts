@@ -101,7 +101,16 @@ await db.consulta.createMany({
     { id: "c6", pacienteId: "adm", medicoId: "med3", especialidade: "Clínica", dataInicio: T0, status: "confirmada", valor: 150 },
   ],
 });
-await db.presencaSala.create({ data: { consultaId: "c2", usuarioId: "med2", papel: "MEDICO", ultimoPing: em(-1), entrouEm: em(-1) } });
+await db.presencaSala.create({ data: { consultaId: "c2", usuarioId: "med2", papel: "MEDICO", ultimoPing: em(0), entrouEm: em(-1) } });
+// A4: quem está na sala só suprime o toque com sinal FRESCO (≤30 s, como o
+// "médico ocupado"). O médico de c2 entrou 1 min antes e SEGUE na sala o
+// teste inteiro: o sinal dele é renovado antes de cada rodada, como o
+// heartbeat real da sala faria (presença velha não suprime mais o toque).
+const med2SegueNaSala = (t: Date) =>
+  db.presencaSala.update({
+    where: { consultaId_usuarioId: { consultaId: "c2", usuarioId: "med2" } },
+    data: { ultimoPing: new Date(t.getTime() - 5_000) },
+  });
 
 const linhas = async (consultaId: string, usuarioId: string) =>
   db.chamadaConsulta.findMany({ where: { consultaId, paraUsuarioId: usuarioId }, orderBy: { tentativa: "asc" } });
@@ -151,11 +160,13 @@ verifica(l1.length === 1 && l1[0].status === "tocando" && l1[0].pushEnviado && l
 
 /* ---------------- não duplica ---------------- */
 zerar();
+await med2SegueNaSala(em(0.7));
 const r1b = await rodar(em(0.7));
 verifica(r1b.tocadas === 0 && eventos.length === 0, "não duplica: rodar de novo no mesmo minuto não toca", r1b);
 // duas execuções simultâneas com a trava (apaga e corre)
 await db.chamadaConsulta.deleteMany({ where: { consultaId: "c2" } });
 zerar();
+await med2SegueNaSala(em(0.8));
 const [ra, rb] = await Promise.all([rodar(em(0.8)), rodar(em(0.8))]);
 verifica(ra.tocadas + rb.tocadas === 1 && eventos.filter((e) => e.usuarioId === "pac2").length === 1, "duas execuções ao mesmo tempo: um toque só", [ra, rb]);
 
@@ -164,6 +175,7 @@ await db.chamadaConsulta.updateMany({ where: { consultaId: "c6", paraUsuarioId: 
 
 /* ---------------- expira e repete ---------------- */
 zerar();
+await med2SegueNaSala(em(2.3));
 const r2 = await rodar(em(2.3));
 const exp = eventos.find((e) => e.usuarioId === "pac1" && e.evento === "chamada_expirada");
 verifica(r2.expiradas >= 2 && exp?.payload.ultima === false && exp?.payload.tentativa === 1 && exp?.payload.em === em(2.2).toISOString(), "expira a 1ª: chamada_expirada {consultaId, tentativa, em, ultima:false}", exp);
@@ -174,11 +186,14 @@ zerar();
 await rodar(em(2.3));
 verifica(eventos.length === 0, "expirar de novo não repete o evento (idempotente)");
 zerar();
+await med2SegueNaSala(em(4.5));
 await rodar(em(4.5));
 verifica(!eventos.some((e) => e.evento === "chamada_tocando"), "4,5 min: ainda na pausa (não toca)");
 zerar();
+await med2SegueNaSala(em(5.2));
 await rodar(em(5.2));
 verifica(eventos.some((e) => e.usuarioId === "pac1" && e.evento === "chamada_tocando" && e.payload.tentativa === 2), "repete após expirar: 2ª tentativa aos 5 min");
+await med2SegueNaSala(em(5.9));
 await rodar(em(5.9)); // c2 tocou aos 0,8 → 2ª aos 5,8
 
 /* ---------------- não toca para quem atendeu ---------------- */
@@ -188,7 +203,9 @@ await db.chamadaConsulta.updateMany({ where: { consultaId: "c1", paraUsuarioId: 
 await db.chamadaConsulta.updateMany({ where: { consultaId: "c2", paraUsuarioId: "pac2", tentativa: 2 }, data: { status: "recusada", respondidaEm: em(5.6) } });
 
 zerar();
+await med2SegueNaSala(em(7.3));
 await rodar(em(7.3)); // expira a 2ª do paciente de c1
+await med2SegueNaSala(em(10.3));
 await rodar(em(10.3)); // 3ª tentativa
 verifica(eventos.some((e) => e.usuarioId === "pac1" && e.evento === "chamada_tocando" && e.payload.tentativa === 3), "3ª tentativa aos 10 min");
 verifica(!eventos.some((e) => e.usuarioId === "med1"), "não toca para quem atendeu (médico de c1)");
@@ -198,10 +215,12 @@ verifica((await linhas("c6", "med3")).map((l) => `${l.tentativa}:${l.status}`).j
 
 /* ---------------- máx 3 e ultima ---------------- */
 zerar();
+await med2SegueNaSala(em(12.4));
 await rodar(em(12.4));
 const ult = eventos.find((e) => e.usuarioId === "pac1" && e.evento === "chamada_expirada");
 verifica(ult?.payload.tentativa === 3 && ult?.payload.ultima === true, "expira a 3ª e marca ultima: true", ult);
 zerar();
+await med2SegueNaSala(em(15));
 await rodar(em(15));
 verifica(!eventos.some((e) => e.evento === "chamada_tocando"), "máx 3: não abre a 4ª");
 const todas = await linhas("c1", "pac1");

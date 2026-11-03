@@ -78,5 +78,19 @@ const n4 = await push({ consultaId: "c2", tentativa: 1, expiraEm: new Date(Date.
 igual("fecha no expiraEm", n4.fechada, true);
 const n5p = push({ consultaId: "c3", tentativa: 1, expiraEm: new Date(Date.now() + 10 * 60_000).toISOString(), url: "/x", titulo: "T" });
 igual("longe: não espera", (await n5p).fechada, false);
+// item 12: notificação genérica ao médico (tipo "notificacao")
+const nn = await push({ tipo: "notificacao", titulo: "Nova consulta agendada", corpo: "Abra o BION para ver os detalhes.", url: "/medico" });
+igual("notif: titulo do payload", nn.t, "Nova consulta agendada");
+igual("notif: corpo do payload", nn.o.body, "Abra o BION para ver os detalhes.");
+igual("notif: tag própria", nn.o.tag, "bion-notificacao");
+igual("notif: url do payload", (nn.o.data as { url: string }).url, "/medico");
+igual("notif: sem requireInteraction", nn.o.requireInteraction, false);
+const nn2 = await push({ tipo: "notificacao", titulo: "Nova mensagem", corpo: "x", url: "/medico?painel=pacientes" });
+igual("notif msg: url pacientes", (nn2.o.data as { url: string }).url, "/medico?painel=pacientes");
+igual("notif msg: mesma tag substitui", nn.fechada, true);
+const nn3 = await push({ tipo: "notificacao", titulo: "T", corpo: "x", url: "https://mal.example/" });
+igual("notif: url externa cai no padrão seguro", (nn3.o.data as { url: string }).url, "/paciente");
+const nn4 = await push({ tipo: "notificacao" });
+igual("notif sem titulo: padrão BION", nn4.t, "BION");
 console.log(`${ok} ok, ${falhas} falhas`);
 if (falhas) process.exit(1);

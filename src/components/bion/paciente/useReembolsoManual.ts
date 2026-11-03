@@ -8,7 +8,10 @@ import { useCallback, useEffect, useState } from "react";
 /*        409: já existe pedido (inclusive negado) / prazo terminou     */
 /*   GET  /api/consultas/[id]/reembolso → { reembolso | null,           */
 /*        podePedirAte | null }                                         */
-/* A decisão (aprovar/negar) é do admin; negado é definitivo.          */
+/* O pedido já nasce APROVADO pelo sistema (sem etapa de análise);     */
+/* aprovado ≠ dinheiro devolvido: a devolução é processada em seguida. */
+/* Status em_analise/negado são de pedidos antigos, do fluxo anterior   */
+/* com análise do admin (negado era definitivo).                        */
 /* ------------------------------------------------------------------ */
 
 /** Mesmos limites do servidor (JUSTIFICATIVA_MIN/MAX em financeiro.ts), sobre o texto sem espaços nas pontas. */
@@ -42,7 +45,7 @@ export function rotuloReembolsoManual(status: string): { texto: string; tom: "ok
     case "solicitado":
       return { texto: "Reembolso pedido", tom: "andamento" };
     case "aprovado":
-      return { texto: "Aprovado — reembolso integral e imediato", tom: "ok" };
+      return { texto: "Aprovado — reembolso integral, devolução processada em seguida", tom: "ok" };
     case "processado":
       return { texto: "Processado — reembolso concluído", tom: "ok" };
     case "negado":

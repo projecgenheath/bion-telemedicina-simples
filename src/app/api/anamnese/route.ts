@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { exigirConsentimentoIa } from "@/lib/server/consentimento-ia";
 import { exigirPapel } from "@/lib/server/auth";
 import { aplicarSideEffects, anamneseWire, consultaWire, perfilPacienteWire } from "@/lib/server/dados";
-import { ok, falha } from "@/lib/server/http";
+import {ok, falha, lerCorpoJson, corpoObjeto, textoDoCorpo} from "@/lib/server/http";
 import { chatComFonte, iaPausada, type AnonNomes, type FonteLlm } from "@/lib/server/llm";
 import {
   turnoMotor,
@@ -36,6 +36,8 @@ import { nomesMedicamentosEmUso } from "@/lib/server/medicamentos-legado";
  *        Sem mensagem = abertura da etapa atual (ou retomada).
  * PATCH { consultaId, acao: "concluir" }            → conclui a triagem e avisa o médico.
  * PATCH { consultaId, acao: "documento", documento } → registra documento anexado durante a triagem.
+ * POST e PATCH aplicam os MESMOS portões (erroPortoesTriagem): consulta
+ * encerrada (409), pagamento não confirmado (402) e janela fechada (409).
  *
  * Duplo motor:
  *  1. IA generativa em cadeia (llm.ts): credenciais próprias → endpoint
@@ -403,10 +405,54 @@ async function aplicarPerfilAtualizacoes(
 
 export const maxDuration = 60;
 
+/**
+ * Portões da triagem, IMPOSTOS PELO SERVIDOR e idênticos no POST e no PATCH
+ * (A1 da auditoria da área do paciente: o PATCH executava documento/pular/
+ * concluir sem nenhuma destas travas, e a transição legada
+ * pendente_anamnese → confirmada acontecia sem pagamento):
+ *  1. consulta cancelada/concluída não aceita mais triagem (409);
+ *  2. a triagem só libera com o pagamento CONFIRMADO (402);
+ *  3. a janela fecha 5 minutos antes do horário da consulta (409).
+ * Devolve a Response de erro, ou null quando a ação pode prosseguir.
+ */
+function erroPortoesTriagem(consulta: { status: string; pago: boolean; dataInicio: Date }): Response | null {
+  if (consulta.status === "cancelada" || consulta.status === "concluida") {
+    return Response.json({ erro: "Esta consulta não aceita mais triagem." }, { status: 409 });
+  }
+  if (!consulta.pago) {
+    return Response.json(
+      { erro: "O pagamento precisa estar confirmado para liberar sua triagem." },
+      { status: 402 },
+    );
+  }
+  if (Date.now() >= consulta.dataInicio.getTime() - JANELA_TRIAGEM_MS) {
+    return Response.json(
+      { erro: "A triagem fica disponível até 5 minutos antes da consulta — esta janela já foi encerrada." },
+      { status: 409 },
+    );
+  }
+  return null;
+}
+
 export async function POST(req: NextRequest) {
   try {
     const usuario = await exigirPapel("PACIENTE");
-    const body = (await req.json()) as { consultaId?: string; mensagem?: string; historico?: MsgEntrada[] };
+    // B1: guarda de objeto/tipo — corpo null quebrava em body.consultaId e
+    // mensagem/historico não-string quebravam em .trim() (500).
+    const brutoPost = corpoObjeto(await lerCorpoJson(req));
+    if (!brutoPost) {
+      return Response.json({ erro: "Corpo da requisição inválido." }, { status: 400 });
+    }
+    const body = {
+      consultaId: textoDoCorpo(brutoPost.consultaId),
+      mensagem: textoDoCorpo(brutoPost.mensagem),
+      historico: Array.isArray(brutoPost.historico)
+        ? brutoPost.historico.map((m) => {
+            const o = corpoObjeto(m);
+            return { remetente: textoDoCorpo(o?.remetente) ?? "", texto: textoDoCorpo(o?.texto) ?? "" } as MsgEntrada;
+          })
+        : undefined,
+    };
 
     if (!body.consultaId) {
       return Response.json({ erro: "Consulta não informada." }, { status: 400 });
@@ -419,26 +465,11 @@ export async function POST(req: NextRequest) {
     if (!consulta) {
       return Response.json({ erro: "Consulta não encontrada." }, { status: 404 });
     }
-    if (consulta.status === "cancelada" || consulta.status === "concluida") {
-      return Response.json({ erro: "Esta consulta não aceita mais triagem." }, { status: 409 });
-    }
-
-    // Janela da triagem IMPOSTA PELO SERVIDOR:
-    //  1. disponível logo após a CONFIRMAÇÃO (= pagamento aprovado);
-    //  2. fecha 5 minutos antes do horário da consulta.
-    if (!consulta.pago) {
-      return Response.json(
-        { erro: "O pagamento precisa estar confirmado para liberar sua triagem." },
-        { status: 402 },
-      );
-    }
+    // Portões da triagem (status, pagamento e janela), compartilhados com o
+    // PATCH em erroPortoesTriagem.
+    const erroPortoes = erroPortoesTriagem(consulta);
+    if (erroPortoes) return erroPortoes;
     const limiteTriagem = consulta.dataInicio.getTime() - JANELA_TRIAGEM_MS;
-    if (Date.now() >= limiteTriagem) {
-      return Response.json(
-        { erro: "A triagem fica disponível até 5 minutos antes da consulta — esta janela já foi encerrada." },
-        { status: 409 },
-      );
-    }
 
     // Garante o registro da anamnese (idempotente)
     let anamnese = consulta.anamnese;
@@ -731,10 +762,24 @@ export async function POST(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   try {
     const usuario = await exigirPapel("PACIENTE");
-    const body = (await req.json()) as {
-      consultaId?: string;
-      acao?: "concluir" | "documento";
-      documento?: { nome?: string; tipo?: string; exameImportado?: boolean; resumo?: string };
+    // B1: guarda de objeto/tipo — corpo null quebrava em body.consultaId e
+    // documento.nome/tipo/resumo não-string quebravam em .slice() (500).
+    const brutoPatch = corpoObjeto(await lerCorpoJson(req));
+    if (!brutoPatch) {
+      return Response.json({ erro: "Corpo da requisição inválido." }, { status: 400 });
+    }
+    const docBruto = corpoObjeto(brutoPatch.documento);
+    const body = {
+      consultaId: textoDoCorpo(brutoPatch.consultaId),
+      acao: textoDoCorpo(brutoPatch.acao) as "concluir" | "documento" | "pular" | undefined,
+      documento: docBruto
+        ? {
+            nome: textoDoCorpo(docBruto.nome),
+            tipo: textoDoCorpo(docBruto.tipo),
+            exameImportado: docBruto.exameImportado === true,
+            resumo: textoDoCorpo(docBruto.resumo),
+          }
+        : undefined,
     };
     if (!body.consultaId) {
       return Response.json({ erro: "Consulta não informada." }, { status: 400 });
@@ -748,6 +793,14 @@ export async function PATCH(req: NextRequest) {
       return Response.json({ erro: "Anamnese não encontrada." }, { status: 404 });
     }
     const anamnese = consulta.anamnese;
+
+    // Os MESMOS portões do POST, para TODAS as ações (A1 da auditoria da
+    // área do paciente): nenhuma ação roda sobre consulta cancelada/
+    // concluída, não paga ou fora da janela — e a transição legada
+    // pendente_anamnese → confirmada (pular/concluir) só acontece com o
+    // pagamento confirmado, pois o portão de pagamento vem antes dos ramos.
+    const erroPortoes = erroPortoesTriagem(consulta);
+    if (erroPortoes) return erroPortoes;
 
     if (body.acao === "documento") {
       const doc = body.documento;
@@ -824,6 +877,11 @@ export async function PATCH(req: NextRequest) {
     // NÃO altera o status da consulta (o pagamento já a confirmou);
     // apenas o LEGADO "pendente_anamnese" é confirmado aqui, para
     // migrar registros antigos do fluxo anterior.
+    // M-13 da auditoria: ação inválida/ausente NÃO pode cair aqui por
+    // default — antes, um typo no cliente CONCLUÍA a triagem sem querer.
+    if (body.acao !== "concluir") {
+      return Response.json({ erro: "acao inválida (concluir, documento ou pular)." }, { status: 400 });
+    }
     if (anamnese.status === "concluida") {
       const atualizada = await db.anamnese.findUnique({
         where: { id: anamnese.id },

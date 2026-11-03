@@ -13,7 +13,6 @@ import { previaDoDia } from "@/lib/server/repasse";
  * Saldo = soma dos líquidos dos repasses `fechado` + prévia.líquido
  * − ajustes pendentes que não couberam na prévia. Cada repasse fechado é
  * pago inteiro; o restante dos ajustes só desconta dos próximos.
- *
  * Privacidade: sem CPF/contato/chave do item/reembolsoId. A prévia traz
  * só tipo, data e valores (sem nome de paciente — ainda não há consulta
  * ligada na prévia pura). `temChavePix` é booleano (a chave completa
@@ -54,8 +53,11 @@ export async function GET() {
     const somaFechados = rows
       .filter((r) => r.status === "fechado")
       .reduce((s, r) => s + r.liquidoCentavos, 0);
+    // M-15 da auditoria: o comentário promete descontar os ajustes pendentes
+    // que não couberam na prévia, mas o cálculo não descontava — o saldo
+    // superestimava o valor real quando há reembolsos pendentes.
     const saldoCentavos =
-      somaFechados + previa.totais.liquidoCentavos;
+      somaFechados + previa.totais.liquidoCentavos - previa.ajustesPendentesRestantesCentavos;
 
     return ok({
       saldoCentavos,

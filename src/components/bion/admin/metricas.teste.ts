@@ -89,6 +89,7 @@ igual("especialidades vazio", especialidades30d([], AGORA), []);
 const med = (id: string, status: Medico["status"]): Medico => ({
   id, nome: `Dr. ${id}`, crm: `${id}-SP`, especialidade: "Clínica", subespecialidades: [], valor: 0, avaliacao: 0, numAvaliacoes: 0,
   formacao: "", experiencia: "", idiomas: [], bio: "", status, horariosDisponiveis: [],
+  diasAtendimento: [], pausasSemanais: [],
 });
 const medicos = [med("1", "ativo"), med("2", "pendente"), med("3", "suspenso"), med("4", "ativo")];
 igual("resumo médicos", resumoMedicos(medicos), { ativos: 2, validacao: 1, suspensos: 1 });

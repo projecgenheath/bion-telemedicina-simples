@@ -38,6 +38,10 @@ export function ChamadosSuporte() {
   const [novaMensagem, setNovaMensagem] = useState("");
 
   const ticketsFiltrados = tickets.filter((t) => {
+    // A13: o wire do chamado (ticketWire) não expõe o ID do autor — só o
+    // nome; Ticket.usuarioId existe no banco mas não chega ao cliente. O
+    // servidor já escopa a lista por usuarioId no bootstrap; até o wire
+    // expor o ID, esta segunda camada só pode filtrar pelo nome.
     const matchRole = isAdmin ? true : t.usuario === sessao.nome;
     const matchBusca = (t.assunto + t.mensagem + t.usuario)
       .toLowerCase()
@@ -46,20 +50,27 @@ export function ChamadosSuporte() {
     return matchRole && matchBusca && matchStatus;
   });
 
-  const enviarNovoChamado = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!novoAssunto.trim() || !novaMensagem.trim()) return;
+  const [enviandoChamado, setEnviandoChamado] = useState(false);
 
-    adicionarTicket({
+  // A8: sucesso só depois da confirmação do servidor — em falha, o modal
+  // fica aberto com o texto preservado (o erro já virou toast no store).
+  const enviarNovoChamado = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!novoAssunto.trim() || !novaMensagem.trim() || enviandoChamado) return;
+
+    setEnviandoChamado(true);
+    const ok = await adicionarTicket({
       usuario: sessao.nome,
       perfil: sessao.role === "medico" ? "medico" : "paciente",
       assunto: novoAssunto.trim(),
       categoria: novaCategoria,
       mensagem: novaMensagem.trim(),
     });
+    setEnviandoChamado(false);
+    if (!ok) return;
 
     toast.success("Chamado aberto com sucesso", {
-      description: "Nossa equipe responde em até 4 horas úteis.",
+      description: "Nossa equipe responde em até 1 dia útil.",
     });
 
     setNovoAssunto("");
@@ -67,17 +78,17 @@ export function ChamadosSuporte() {
     setModalNovo(false);
   };
 
-  const enviarResposta = (id: string) => {
-    if (!respostaTexto.trim()) return;
-    responderTicket(id, respostaTexto.trim());
+  const enviarResposta = async (id: string) => {
+    const resposta = respostaTexto.trim();
+    if (!resposta) return;
+    const ok = await responderTicket(id, resposta);
+    if (!ok) return; // erro já virou toast; texto e chamado ficam como estavam
     toast.success("Resposta enviada", {
       description: "O chamado foi marcado como resolvido.",
     });
     setRespostaTexto("");
     setTicketSelecionado((prev) =>
-      prev && prev.id === id
-        ? { ...prev, status: "resolvido", resposta: respostaTexto.trim() }
-        : prev,
+      prev && prev.id === id ? { ...prev, status: "resolvido", resposta } : prev,
     );
   };
 
@@ -326,7 +337,7 @@ export function ChamadosSuporte() {
               <div>
                 <h3 className="text-xl font-bold text-foreground">Abrir Novo Chamado de Suporte</h3>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Nossa equipe médica e técnica responde em poucos minutos.
+                  Nossa equipe médica e técnica responde em até 1 dia útil.
                 </p>
               </div>
               <button
@@ -345,7 +356,7 @@ export function ChamadosSuporte() {
                   aria-label="Assunto"
                   value={novoAssunto}
                   onChange={(e) => setNovoAssunto(e.target.value)}
-                  placeholder="Ex: Dúvida com pagamento Pix ou download de receita"
+                  placeholder="Ex: Dúvida com pagamento no cartão ou download de receita"
                   required
                   className="w-full px-4 py-2.5 rounded-xl border text-xs bg-background outline-none focus:ring-2 focus:ring-primary/20"
                 />
@@ -383,10 +394,11 @@ export function ChamadosSuporte() {
 
             <button
               type="submit"
-              className="w-full py-3.5 rounded-2xl text-primary-foreground font-bold text-xs shadow-md hover:opacity-90 transition flex items-center justify-center gap-2"
+              disabled={enviandoChamado}
+              className="w-full py-3.5 rounded-2xl text-primary-foreground font-bold text-xs shadow-md hover:opacity-90 transition flex items-center justify-center gap-2 disabled:opacity-50"
               style={{ backgroundColor: "var(--accent)" }}
             >
-              <Send className="w-4 h-4" /> Enviar Chamado
+              <Send className="w-4 h-4" /> {enviandoChamado ? "Enviando…" : "Enviar Chamado"}
             </button>
           </form>
         </ModalBion>

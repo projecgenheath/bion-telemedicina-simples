@@ -42,7 +42,7 @@ function Shell({
 }: {
   role: Role;
   view: View;
-  setView: (v: View) => void;
+  setView: (v: View, url?: string) => void;
   onLogout: () => void;
   children: React.ReactNode;
 }) {
@@ -51,7 +51,7 @@ function Shell({
 
   const menus: Record<
     Role,
-    { icon: React.ComponentType<{ className?: string }>; label: string; view: View }[]
+    { icon: React.ComponentType<{ className?: string }>; label: string; view: View; url?: string }[]
   > = {
     paciente: [
       { icon: Home, label: "Início", view: "dashboard" },
@@ -70,7 +70,10 @@ function Shell({
     medico: [
       { icon: Home, label: "Início", view: "dashboard" },
       { icon: Calendar, label: "Minha Agenda", view: "consultas" },
-      { icon: Users, label: "Pacientes", view: "medico-pacientes" },
+      // P3-3 (M-12): Pacientes e Perfil apontam para o APP NOVO (/medico) com
+      // o painel de destino — não mais para as páginas clássicas, que seguem
+      // acessíveis pelos endereços antigos com aviso de versão clássica.
+      { icon: Users, label: "Pacientes", view: "medico-pacientes", url: "/medico?painel=pacientes" },
       { icon: Pill, label: "Receitas & Docs", view: "receitas" },
       { icon: ClipboardList, label: "Prontuários", view: "prontuario" },
       { icon: Star, label: "Minhas Avaliações", view: "avaliacoes" },
@@ -78,7 +81,7 @@ function Shell({
       { icon: Bot, label: "BION Copilot IA", view: "bion-ia" },
       { icon: LifeBuoy, label: "Suporte", view: "suporte" },
       { icon: CircleHelp, label: "Ajuda & FAQ", view: "ajuda" },
-      { icon: User, label: "Meu Perfil", view: "medico-perfil" },
+      { icon: User, label: "Meu Perfil", view: "medico-perfil", url: "/medico?painel=perfil" },
     ],
     admin: [
       { icon: Home, label: "Painel Geral", view: "dashboard" },
@@ -161,7 +164,7 @@ function Shell({
               <button
                 type="button"
                 key={m.label}
-                onClick={() => setView(m.view)}
+                onClick={() => setView(m.view, m.url)}
                 className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-xs font-bold transition ${
                   active
                     ? "bg-primary-soft text-primary shadow-xs"
@@ -256,7 +259,7 @@ function Shell({
             <button
               type="button"
               key={m.label}
-              onClick={() => setView(m.view)}
+              onClick={() => setView(m.view, m.url)}
               aria-current={active ? "page" : undefined}
               className={`flex-1 flex flex-col items-center gap-1 py-2 text-xs font-bold transition ${
                 active ? "text-primary" : "text-muted-foreground"
@@ -314,7 +317,7 @@ function Shell({
                   key={m.label}
                   onClick={() => {
                     setMenuMobileAberto(false);
-                    setView(m.view);
+                    setView(m.view, m.url);
                   }}
                   aria-current={active ? "page" : undefined}
                   className={`flex flex-col items-center gap-1.5 p-3 rounded-2xl text-xs font-bold text-center transition ${
@@ -377,7 +380,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     return <>{children}</>;
   }
 
-  const go = (v: View) => router.push(urlDa(v));
+  // url?: sobrescreve a URL da view (deep-links ?painel= do app novo do médico).
+  const go = (v: View, url?: string) => router.push(url ?? urlDa(v));
   const handleLogout = async () => {
     await sair();
     router.replace("/");

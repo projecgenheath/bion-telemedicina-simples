@@ -2,8 +2,10 @@ import { NextRequest, after } from "next/server";
 import { db } from "@/lib/db";
 import { exigirSessao } from "@/lib/server/auth";
 import { aplicarSideEffects } from "@/lib/server/dados";
-import { ok, falha } from "@/lib/server/http";
+import { agendarPushNotificacao } from "@/lib/server/push-notificacao";
+import {ok, falha, lerCorpoJson, textoDoCorpo} from "@/lib/server/http";
 import { topicoMensagensUsuario } from "@/lib/server/usuario-canal";
+import { limitarAsync, resposta429 } from "@/lib/server/rate-limit";
 import { broadcastCanal } from "@/lib/supabase/broadcast";
 import { idCuid, isErro } from "@/lib/server/validar";
 
@@ -42,9 +44,13 @@ export async function GET(req: NextRequest) {
         de: { select: { nome: true } },
         para: { select: { nome: true } },
       },
-      orderBy: { createdAt: "asc" },
-      ...(valido ? { take: 200 } : {}),
+      orderBy: { createdAt: "desc" },
+      // M-16 da auditoria: SEMPRE com teto — antes, sem `desde` o GET devolvia
+      // o histórico INTEIRO do usuário, crescente e sem limite. Pega as 200
+      // mais recentes (desc) e devolve em ordem cronológica (asc).
+      take: 200,
     });
+    mensagens.reverse();
     return ok({
       mensagens: mensagens.map((m) => ({
         id: m.id,
@@ -65,12 +71,22 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const usuario = await exigirSessao();
-    const body = (await req.json()) as {
+    // M9 (auditoria): teto por usuário — cada envio cria Mensagem, broadcast
+    // e Notificacao persistida; chat é frequente, então 60/min (uso humano
+    // intenso cabe; loop de spam, não).
+    const teto = await limitarAsync(`mensagens:${usuario.id}`, 60, 60_000);
+    if (!teto.permitido) return resposta429(teto.restanteSeg);
+    const body = (await lerCorpoJson(req)) as {
       paraId?: string;
       texto?: string;
     };
 
-    const texto = (body.texto ?? "").trim();
+    if (!body) {
+      return Response.json({ erro: "Corpo da requisição inválido." }, { status: 400 });
+    }
+
+    // B1: texto não-string (número/objeto) virava 500 em .trim().
+    const texto = (textoDoCorpo(body.texto) ?? "").trim();
     const paraId = idCuid(body.paraId, "Destinatário");
     if (isErro(paraId) || !texto) {
       return Response.json({ erro: "Informe destinatário e mensagem." }, { status: 400 });
@@ -181,6 +197,13 @@ export async function POST(req: NextRequest) {
       undefined,
     );
 
+    // Item 12: mensagem nova PARA O MÉDICO também vira Web Push. O título
+    // do push é genérico ("Nova mensagem") — o da notificação interna traz
+    // o nome do remetente, que não vai para a tela de bloqueio.
+    if (destinatario.role === "MEDICO") {
+      agendarPushNotificacao(destinatario.id, "Nova mensagem", "/medico?painel=pacientes");
+    }
+
     // Contrato delta: devolve APENAS a mensagem criada (+ efeitos colaterais
     // criados, quando visíveis ao próprio usuário).
     return ok({
@@ -205,9 +228,18 @@ export async function POST(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   try {
     const usuario = await exigirSessao();
-    const body = (await req.json()) as { comUsuarioId?: string; todas?: boolean };
+    const body = (await lerCorpoJson(req)) as { comUsuarioId?: string; todas?: boolean };
 
+    if (!body) {
+      return Response.json({ erro: "Corpo da requisição inválido." }, { status: 400 });
+    }
+
+    // M-16: PATCH valida o identificador igual ao POST (idCuid).
     if (body.comUsuarioId) {
+      const idOk = idCuid(body.comUsuarioId, "Usuário da conversa");
+      if (isErro(idOk)) {
+        return Response.json({ erro: idOk.erro }, { status: 400 });
+      }
       await db.mensagem.updateMany({
         where: { deId: body.comUsuarioId, paraId: usuario.id, lida: false },
         data: { lida: true },

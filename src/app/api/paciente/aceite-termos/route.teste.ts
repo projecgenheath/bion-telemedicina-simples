@@ -43,8 +43,8 @@ checa("rota do paciente usa o handler genérico com PACIENTE", rotaPaciente.incl
 checa("rota exporta GET e POST", /export const \{ GET, POST \}/.test(rotaPaciente));
 
 // (1) Uma tela: Termos v1 + Privacidade v1 juntos, com links
-checa("versão dos termos do paciente é v1", /^termos-paciente-v1-/.test(VERSAO_TERMOS_POR_PERFIL.PACIENTE ?? ""));
-checa("versão da privacidade é v1", /^privacidade-v1-/.test(VERSAO_PRIVACIDADE));
+checa("versão dos termos do paciente é v2", /^termos-paciente-v2-/.test(VERSAO_TERMOS_POR_PERFIL.PACIENTE ?? ""));
+checa("versão da privacidade é v2", /^privacidade-v2-/.test(VERSAO_PRIVACIDADE));
 const p = aceiteTermosPayload("PACIENTE");
 checa("payload leva as duas versões juntas", p.versaoTermos === VERSAO_TERMOS_POR_PERFIL.PACIENTE && p.versaoPrivacidade === VERSAO_PRIVACIDADE && p.aceito === true);
 checa("payload sem marketing no re-aceite", !("marketing" in p) || !p.marketing);
@@ -65,7 +65,7 @@ for (const [nome, src] of [["POST /api/consultas", consultas], ["POST /api/renov
   const post = postDe(src);
   const iPortao = post.indexOf("exigirAceiteTermosPaciente(usuario)");
   checa(`${nome} exige o aceite`, iPortao > -1 && post.includes("if (semAceite) return semAceite"));
-  checa(`${nome}: portão antes de ler o corpo e de gravar`, iPortao > -1 && iPortao < post.indexOf("req.json") && (post.indexOf("db.") === -1 || iPortao < post.indexOf("db.")));
+  checa(`${nome}: portão antes de ler o corpo e de gravar`, iPortao > -1 && (() => { const iCorpo = [post.indexOf("lerCorpoJson(req"), post.indexOf("req.json")].filter((i) => i > -1); return iCorpo.length > 0 && iCorpo.every((i) => iPortao < i); })() && (post.indexOf("db.") === -1 || iPortao < post.indexOf("db.")));
 }
 checa("exclusão da conta não depende do aceite", !conta.includes("exigirAceiteTermosPaciente"));
 checa("consultas: portão só no POST (agendar)", (consultas.match(/exigirAceiteTermosPaciente\(usuario\)/g) ?? []).length === 1);

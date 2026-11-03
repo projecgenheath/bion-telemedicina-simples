@@ -329,6 +329,31 @@ const confirmarNoGateway = (id: string) => db.pagamento.update({ where: { id }, 
 }
 delete process.env.BION_PAGAMENTO_WEBHOOK_SECRET;
 
+// --- entrada DIRETA na sala (sem toque): espera abre pela presença do
+// paciente (A3) e a presença do médico neutraliza (C2: nada de reembolso
+// por falta do médico numa consulta que aconteceu)
+{
+  const { pac, med, c } = await cenario(150);
+  const inicio = new Date(AGORA.getTime() - 15 * 60_000); // = dataInicio do cenário
+  // Paciente esperando na sala desde antes do horário; sem nenhuma chamada.
+  await db.presencaSala.create({ data: { consultaId: c.id, usuarioId: pac.id, papel: "PACIENTE", ultimoPing: new Date(inicio.getTime() + 60_000), entrouEm: new Date(inicio.getTime() - 5 * 60_000) } });
+  const job = await m.rodarEsperaMedico(AGORA);
+  igual("presença: job abre a espera do paciente", job.abertas >= 1, true);
+  const aberta = await db.esperaMedico.findUnique({ where: { consultaId: c.id } });
+  igual("presença: expiraEm = horário + 10 min", aberta?.expiraEm.toISOString(), new Date(inicio.getTime() + 10 * 60_000).toISOString());
+  igual("presença: sem médico, expirada e pode escolher", await m.estadoEsperaDoPaciente(c.id, pac.id, AGORA).then((x) => (x.ok && x.espera ? [x.espera.status, x.espera.podeEscolher] : null)), ["expirada", true]);
+  // O médico entrou direto na sala e atendeu (presença a partir do horário).
+  await db.presencaSala.create({ data: { consultaId: c.id, usuarioId: med.id, papel: "MEDICO", ultimoPing: new Date(inicio.getTime() + 3 * 60_000), entrouEm: new Date(inicio.getTime() + 2 * 60_000) } });
+  igual("presença: GET deriva medico_entrou", await m.estadoEsperaDoPaciente(c.id, pac.id, AGORA).then((x) => (x.ok && x.espera ? [x.espera.status, x.espera.podeEscolher] : null)), ["medico_entrou", false]);
+  const canc = await m.cancelarPorEspera({ consultaId: c.id, pacienteId: pac.id, agora: AGORA });
+  igual("presença: cancelar → 409 medico_entrou", canc.ok ? null : [canc.status, canc.codigo], [409, "medico_entrou"]);
+  igual("presença: espera fechada, consulta segue, sem reembolso", [
+    (await db.esperaMedico.findUnique({ where: { consultaId: c.id } }))?.status,
+    (await db.consulta.findUnique({ where: { id: c.id } }))?.status,
+    await db.reembolso.count({ where: { pagamento: { consultaId: c.id } } }),
+  ], ["medico_entrou", "confirmada", 0]);
+}
+
 // --- job: expira as aguardando vencidas
 {
   const { c } = await cenario();

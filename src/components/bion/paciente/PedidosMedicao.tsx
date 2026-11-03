@@ -19,11 +19,19 @@ export function PedidosMedicao({ consultaId, variante = "app" }: { consultaId?: 
   const { aplicarDelta } = useBion();
   const [pedidos, setPedidos] = useState<PedidoPendente[]>([]);
   const [aberto, setAberto] = useState<string | null>(null);
+  // M19: falha de carga tem estado próprio — antes o componente devolvia
+  // null em silêncio e o pedido do médico "sumia" da tela.
+  const [erroCarga, setErroCarga] = useState(false);
 
   const carregar = useCallback(async () => {
     const q = consultaId ? `?consultaId=${encodeURIComponent(consultaId)}` : "";
     const d = await apiSaude<{ pedidos: PedidoPendente[] }>(`/api/paciente/pedidos-medicao${q}`, undefined, true);
-    if (d) setPedidos(d.pedidos);
+    if (d) {
+      setPedidos(d.pedidos);
+      setErroCarga(false);
+    } else {
+      setErroCarga(true);
+    }
   }, [consultaId]);
 
   useEffect(() => {
@@ -50,7 +58,37 @@ export function PedidosMedicao({ consultaId, variante = "app" }: { consultaId?: 
     };
   }, [carregar, variante]);
 
-  if (!pedidos.length) return null;
+  if (!pedidos.length) {
+    // Sem pedidos E sem erro: some da tela (comportamento normal). Com erro
+    // de carga, mostra o aviso com recarregar — nunca silêncio (M19).
+    if (!erroCarga) return null;
+    const escuroErro = variante === "chamada";
+    return (
+      <div
+        className={
+          escuroErro
+            ? "pointer-events-auto mx-auto w-full max-w-sm rounded-2xl border border-white/15 bg-slate-900/85 p-4 text-white shadow-xl backdrop-blur"
+            : "bp-glass p-5"
+        }
+        role="alert"
+        aria-label="Pedidos de medição do médico"
+      >
+        <p className="text-sm font-bold">Não foi possível carregar os pedidos do médico.</p>
+        <p className={`mt-0.5 text-xs ${escuroErro ? "text-white/75" : "opacity-80"}`}>
+          Pode ser uma falha de conexão — toque para tentar de novo.
+        </p>
+        <button
+          type="button"
+          onClick={() => void carregar()}
+          className={`mt-3 rounded-full px-4 py-2 text-xs font-bold ${
+            escuroErro ? "bg-white text-slate-900" : "bg-bion-ink text-bion-paper dark:bg-bion-paper dark:text-bion-ink"
+          }`}
+        >
+          Tentar de novo
+        </button>
+      </div>
+    );
+  }
 
   const respondido = (id: string, medicoes: unknown[], perfil?: unknown) => {
     for (const m of medicoes) aplicarDelta({ medicao: m });

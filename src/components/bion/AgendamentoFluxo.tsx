@@ -58,9 +58,12 @@ export function AgendamentoFluxo({
   const [motivoTexto, setMotivoTexto] = useState("");
   const [sintomasEscolhidos, setSintomasEscolhidos] = useState<string[]>([]);
   const [arquivosAnexados, setArquivosAnexados] = useState<
-    { nome: string; tamanhoKb: number; tipo: string }[]
+    { nome: string; tamanhoKb: number; tipo: string; file?: File }[]
   >([]);
   const [processandoPagamento, setProcessandoPagamento] = useState(false);
+  // Consulta já criada NESTE fluxo (o checkout falhou no passo de pagamento):
+  // o botão principal vira retry do checkout DELA — nunca uma nova reserva.
+  const [consultaCriadaId, setConsultaCriadaId] = useState<string | null>(null);
   const [medicoModal, setMedicoModal] = useState<Medico | null>(null);
   // Data/hora "congeladas" enquanto o servidor processa e depois de confirmada:
   // a consulta criada passa a ocupar o slot e a seleção derivada ficaria vazia.
@@ -148,10 +151,14 @@ export function AgendamentoFluxo({
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files) return;
+    // O `File` viaja junto com os metadados até a criação da consulta: sem
+    // ele, o store só gravaria nome/tipo/tamanho e o exame nunca chegaria
+    // ao servidor. O tipo declarado (agendamento/types.ts) inclui `file`.
     const novos = Array.from(e.target.files).map((f) => ({
       nome: f.name,
       tamanhoKb: Math.max(1, Math.round(f.size / 1024)),
       tipo: f.type.includes("image") ? "Imagem de exame" : "Documento PDF",
+      file: f,
     }));
     setArquivosAnexados((prev) => [...prev, ...novos]);
     e.target.value = "";
@@ -162,8 +169,36 @@ export function AgendamentoFluxo({
   };
 
 
+  // Abre o checkout Stripe de uma consulta JÁ criada (retry do pagamento,
+  // A2): usado pela ação do toast e pelo botão principal do passo de
+  // pagamento. Nunca cria outra consulta — só reabre o checkout da mesma.
+  const tentarAbrirCheckout = async (consultaId: string) => {
+    const r = await abrirCheckoutStripe({ consultaId });
+    if (r.url) {
+      window.location.assign(r.url);
+      return;
+    }
+    toast.error("Pagamento ainda não abriu", {
+      description: r.erro ?? "Tente pagar em Minhas consultas.",
+    });
+  };
+
   const finalizarAgendamento = async () => {
     if (processandoPagamento) return;
+
+    // Retry (A2): a consulta deste fluxo já foi criada e está reservada —
+    // só o checkout falhou. O botão reabre o checkout DELA. Sem isso, a
+    // revalidação da seleção esbarrava na própria consulta ocupando o slot
+    // e o paciente acabava criando uma SEGUNDA reserva pagável.
+    if (consultaCriadaId) {
+      setProcessandoPagamento(true);
+      try {
+        await tentarAbrirCheckout(consultaCriadaId);
+      } finally {
+        setProcessandoPagamento(false);
+      }
+      return;
+    }
 
     const med = medicoAtual;
     if (!med) {
@@ -200,7 +235,7 @@ export function AgendamentoFluxo({
           data,
           hora,
           motivoConsulta: motivoCompleto,
-          valor: `R$ ${med.valor}`,
+          valor: med.valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }),
         }),
       );
       await proximoCommit();
@@ -227,7 +262,8 @@ export function AgendamentoFluxo({
       return;
     }
 
-    // Salva arquivos anexados no histórico (só com a consulta criada)
+    // Salva arquivos anexados no histórico (só com a consulta criada).
+    // Upload real (FormData) via `file`: sem ele o store só grava metadados.
     arquivosAnexados.forEach((a) => {
       adicionarArquivo({
         nome: a.nome,
@@ -235,6 +271,9 @@ export function AgendamentoFluxo({
         tamanhoKb: a.tamanhoKb,
         enviadoPor: "paciente",
         consulta: `${med.especialidade} — ${med.nome}`,
+        file: a.file,
+        pacienteId: sessao.id,
+        consultaId: criada.id,
       });
     });
 
@@ -247,8 +286,34 @@ export function AgendamentoFluxo({
         window.location.assign(r.url);
         return;
       }
+      // A consulta JÁ foi criada e reservada; só o checkout falhou. Voltar ao
+      // passo de pagamento (PASSOS_AGENDAMENTO: 6 = "Pagamento", 7 =
+      // "Confirmação") — nunca avançar para a confirmação com pagamento
+      // pendente, onde antes aparecia "Pagamento Aprovado" sem pagamento.
+      // A ação do toast tenta abrir o checkout de novo para esta mesma
+      // consulta (sem criar outra); a alternativa é pagar em Minhas consultas.
       toast.error("Consulta reservada, mas o pagamento não abriu", {
         description: r.erro ?? "Tente pagar de novo em Minhas consultas.",
+        action: {
+          label: "Tentar abrir o pagamento",
+          onClick: () => {
+            void tentarAbrirCheckout(criada.id);
+          },
+        },
+      });
+      // Marca a consulta deste fluxo: a partir daqui, o botão principal do
+      // passo de pagamento é retry do checkout dela (ver finalizarAgendamento).
+      setConsultaCriadaId(criada.id);
+      setStep(6);
+      return;
+    }
+
+    if (!criada.pago) {
+      // Reserva existe, mas o pagamento não foi confirmado (ex.: checkout
+      // desligado neste ambiente). Não é "aprovado": o passo de confirmação
+      // mostra o estado honesto de aguardando pagamento.
+      toast("Consulta reservada, aguardando pagamento", {
+        description: `${med.nome} — ${data} às ${hora}. Complete o pagamento em Minhas consultas.`,
       });
       setStep(steps.length - 1);
       return;
@@ -360,7 +425,7 @@ export function AgendamentoFluxo({
             <div className="pt-3 border-t flex items-center justify-between">
               <div>
                 <div className="text-xs text-muted-foreground">Valor por consulta</div>
-                <div className="text-xl font-extrabold text-primary">R$ {medicoModal.valor},00</div>
+                <div className="text-xl font-extrabold text-primary">{medicoModal.valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</div>
               </div>
               <button type="button"
                 onClick={() => {

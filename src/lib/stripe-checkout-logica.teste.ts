@@ -58,6 +58,7 @@ igual("só cartão, sem Pix (Stripe proíbe Pix em telemedicina)", metodosChecko
 // elegibilidade
 const base: ConsultaParaCheckout = {
   id: "c1", pacienteId: "p1", status: "em_espera", pago: false, valor: 150, tipoAtendimento: "padrao",
+  dataInicio: new Date(Date.now() + 24 * 60 * 60 * 1000),
   pagamento: { id: "pg1", status: "pendente", gatewayRef: null },
 };
 igual("ok valor do banco", avaliarElegibilidade(base, "p1"), { ok: true, valorCentavos: 15000 });
@@ -73,6 +74,11 @@ igual("valor zero", avaliarElegibilidade({ ...base, valor: 0 }, "p1").ok, false)
 igual("falhou pode tentar de novo", avaliarElegibilidade({ ...base, pagamento: { id: "pg1", status: "falhou", gatewayRef: null } }, "p1").ok, true);
 igual("sem cobrança ainda", avaliarElegibilidade({ ...base, pagamento: null }, "p1").ok, true);
 igual("espera do médico fica no fluxo atual", avaliarElegibilidade({ ...base, pagamento: { id: "pg1", status: "pendente", gatewayRef: "espera:e1" } }, "p1").ok, false);
+igual("horário já passou 409", (avaliarElegibilidade({ ...base, dataInicio: new Date(Date.now() - 60_000) }, "p1") as { status: number }).status, 409);
+igual("horário já passou: mensagem", (avaliarElegibilidade({ ...base, dataInicio: new Date(0) }, "p1") as { erro: string }).erro, "O horário desta consulta já passou.");
+igual("no horário exato (dataInicio = agora) bloqueia", avaliarElegibilidade(base, "p1", base.dataInicio.getTime()).ok, false);
+igual("um ms antes do horário pode pagar", avaliarElegibilidade(base, "p1", base.dataInicio.getTime() - 1).ok, true);
+igual("já paga tem precedência sobre horário passado", (avaliarElegibilidade({ ...base, pago: true, dataInicio: new Date(0) }, "p1") as { erro: string }).erro, "Esta consulta já está paga.");
 
 // idempotência
 igual("mesma chave sem sessão", chaveIdempotencia("c1", 15000, null), chaveIdempotencia("c1", 15000, null));
@@ -181,6 +187,7 @@ igual("tela de volta não marca pago", /method:\s*"(POST|PATCH)"/.test(sucesso),
 
 igual("confirmação condicional (count === 1)", /updateMany\(\{\s*where: \{ id: p\.id, status: \{ not: "confirmado" \} \}[\s\S]*?r\.count !== 1\) return false/.test(pagamentosTs), true);
 igual("confirmarPagamento delega", pagamentosTs.includes("(await confirmarPagamentoSeMudou(pagamentoId, via)).pagamento"), true);
+igual("confirmação bloqueia consulta vencida (C1)", pagamentosTs.includes("PAGAMENTO_CONSULTA_VENCIDA"), true);
 
 
 // ---- cobranças só com cartão: renovação, diferença da espera, multa ----

@@ -16,8 +16,16 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { useBion } from "@/lib/bion-store";
+import { toast } from "sonner";
 import { ErroBionIa, perguntarBionIa, textoParaCopiar } from "@/lib/bion-ia-cliente";
+import { inline } from "@/lib/markdown-simples";
 import { BlocoRaciocinio } from "./BlocoRaciocinio";
+import { ConsentimentoIA } from "./paciente/ConsentimentoIA";
+// M22: o ConsentimentoIA usa as classes bpp-sheet (tema do app do paciente,
+// escopo .bp-app-paciente em paciente.css). A página clássica importa o CSS
+// e monta a folha dentro de um invólucro .bp-app-paciente — sem isso a folha
+// do aceite abriria sem fundo/botões nesta página.
+import "./paciente/paciente.css";
 
 type MensagemIA = {
   id: string;
@@ -29,51 +37,10 @@ type MensagemIA = {
   raciocinio?: string;
 };
 
-const RESPOSTAS_BASE: Record<string, string> = {
-  losartana: `A **Losartana Potássica** é um medicamento anti-hipertensivo indicado para controle da pressão arterial e proteção renal.
-
-📌 **Orientações Importantes:**
-• **Como tomar:** 1 comprimido pela manhã com um copo de água, com ou sem alimentos.
-• **Regularidade:** Tome todos os dias no mesmo horário para manter o nível estável no organismo.
-• **O que evitar:** Não interrompa o uso por conta própria, mesmo que a pressão esteja normalizada.
-• **Efeitos colaterais comuns:** Tontura leve nas primeiras semanas ao se levantar rapidamente.
-
-⚠️ *Esta orientação é informativa. Siga rigorosamente a prescrição da sua médica.*`,
-
-  jejum: `📋 **Preparo para Exames de Sangue (Hemograma e outros):**
-
-• **Hemograma Completo:** Não exige jejum obrigatório (3 horas de jejum leve são suficientes).
-• **Glicemia de Jejum:** Exige jejum de **8 a 12 horas**.
-• **Perfil Lipídico (Colesterol e Triglicérides):** A maioria dos laboratórios atuais não exige mais 12h de jejum estrito, mas recomenda-se não ingerir alimentos gordurosos 24h antes.
-• **Água:** Beber água pura em quantidade moderada é totalmente liberado e não quebra o jejum!
-
-💡 *Se tiver dúvidas específicas sobre o pedido emitido, fale com o suporte ou envie mensagem para o médico.*`,
-
-  atestado: `📄 **Sobre os atestados na BION:**
-
-• O atestado só é emitido pelo médico, depois de uma teleconsulta, quando ele avalia que é necessário.
-• Este documento ainda não tem assinatura digital ICP-Brasil do médico e pode não ser aceito como atestado ou receita válidos.`,
-
-  icp: `Ainda não. Por enquanto, os documentos do app não têm assinatura ICP-Brasil e podem não ser aceitos como válidos.`,
-
-  dor: `🩺 **Orientações Gerais sobre Cefaleia (Dor de Cabeça):**
-
-• **Medidas imediatas:** Descanse em ambiente escuro e silencioso, hidrate-se bem com água fresca e evite telas brilhantes de celular ou computador.
-• **Medicação:** Utilize apenas analgésicos já prescritos pelo seu médico.
-• **Sinais de Alerta:** Procure atendimento de urgência presencial se a dor for súbita e a mais forte da vida, acompanhada de febre alta, rigidez na nuca ou alterações visuais.`,
-
-  cid: `🔍 **Busca Rápida de Códigos CID-10 Frequentes em Telemedicina:**
-
-• **J00:** Nasofaringite aguda (Resfriado comum)
-• **J06.9:** Infecção aguda das vias aéreas superiores, não especificada
-• **I10:** Hipertensão essencial (primária)
-• **R51:** Cefaleia (Dor de cabeça)
-• **K29.7:** Gastrite não especificada
-• **F41.1:** Ansiedade generalizada
-• **Z76.0:** Emissão de prescrição de repetição (Receita)
-
-Copie e cole o código desejado no campo de emissão de atestado ou prontuário!`,
-};
+/* B27: o motor de respostas fixas (RESPOSTAS_BASE/respostaLocal) foi
+   REMOVIDO — nunca era chamado (a resposta vem de perguntarBionIa) e o
+   texto morto incluía posologia genérica pronta, um risco se um dia fosse
+   religado como fallback. */
 
 export function BionIA() {
   const { sessao, registrarAudit } = useBion();
@@ -105,59 +72,11 @@ export function BionIA() {
   ]);
   const [entrada, setEntrada] = useState("");
   const [digitando, setDigitando] = useState(false);
-
-  const respostaLocal = (txt: string): string => {
-    const lower = txt.toLowerCase();
-
-    if (
-      lower.includes("losartana") ||
-      lower.includes("medicamento") ||
-      lower.includes("remédio") ||
-      lower.includes("tomar")
-    ) {
-      return RESPOSTAS_BASE.losartana!;
-    }
-    if (
-      lower.includes("jejum") ||
-      lower.includes("exame") ||
-      lower.includes("sangue") ||
-      lower.includes("laborat")
-    ) {
-      return RESPOSTAS_BASE.jejum!;
-    }
-    if (
-      lower.includes("icp") ||
-      lower.includes("assinatura")
-    ) {
-      return RESPOSTAS_BASE.icp!;
-    }
-    if (
-      lower.includes("atestado") ||
-      lower.includes("empresa") ||
-      lower.includes("cfm") ||
-      lower.includes("aceit")
-    ) {
-      return RESPOSTAS_BASE.atestado!;
-    }
-    if (
-      lower.includes("cid") ||
-      lower.includes("código") ||
-      lower.includes("diagnóstico")
-    ) {
-      return RESPOSTAS_BASE.cid!;
-    }
-    if (
-      lower.includes("dor") ||
-      lower.includes("cabeça") ||
-      lower.includes("enxaqueca") ||
-      lower.includes("sintoma")
-    ) {
-      return RESPOSTAS_BASE.dor!;
-    }
-    return isMedico
-      ? `Compreendido, Dr(a). Na prática de telemedicina BION, recomenda-se registro detalhado na anamnese, confirmação de consentimento e inclusão de orientações claras com prazo de retorno. Se precisar do código CID ou modelo de prescrição, basta solicitar!`
-      : `Entendido! Para orientações específicas para o seu caso individual, você pode enviar uma mensagem direta para seu médico na aba **Mensagens** ou agendar uma teleconsulta de retorno em poucos minutos. Como posso ajudar com mais alguma dúvida de saúde?`;
-  };
+  // M22: estado real da IA para o selo (pausada quando o servidor responde
+  // bion_ia_pausada; volta a ativa no próximo sucesso) e o portão jurídico —
+  // a pergunta que esbarrou no aceite pendente, repetida após o "Li e concordo".
+  const [iaPausada, setIaPausada] = useState(false);
+  const [aceitePendente, setAceitePendente] = useState<string | null>(null);
 
   const enviarMensagem = async (textoEnviar?: string) => {
     const txt = (textoEnviar ?? entrada).trim();
@@ -184,6 +103,9 @@ export function BionIA() {
 
     let resposta = "";
     let raciocinio = "";
+    // M22 (consentimento): como no ChatBion, a pergunta que esbarrou no
+    // portão sai da lista — ela é reenviada depois do aceite.
+    let tirarPergunta = false;
     try {
       // JSON/NDJSON tratados em perguntarBionIa: AbortController, HTML 504 e
       // falhas de cliente reportadas ao monitor (sem PII). O raciocínio do
@@ -192,10 +114,18 @@ export function BionIA() {
       const r = await perguntarBionIa(historico.map((m) => ({ remetente: m.remetente, texto: m.texto })));
       resposta = r.texto;
       raciocinio = r.raciocinio;
+      setIaPausada(false);
     } catch (e) {
       if (e instanceof ErroBionIa && e.tipo === "pausada") {
         // Pausa da BION IA (opt-in, bion_ia_pausada): aviso amigável, não erro.
+        setIaPausada(true);
         resposta = e.message || "A BION IA volta em breve.";
+      } else if (e instanceof ErroBionIa && e.tipo === "consentimento") {
+        // Portão jurídico (mesmo fluxo do ChatBion): nada foi enviado à IA;
+        // abre a folha de aceite e a pergunta é repetida após o aceite.
+        setAceitePendente(txt);
+        tirarPergunta = true;
+        resposta = e.message;
       } else {
         const aviso =
           e instanceof Error && e.message
@@ -215,9 +145,11 @@ export function BionIA() {
       hora: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
     };
 
-    setMensagens((prev) => [...prev, novaMsgIA]);
+    setMensagens((prev) => [...(tirarPergunta ? prev.slice(0, -1) : prev), novaMsgIA]);
     setDigitando(false);
   };
+
+  const horaAgora = () => new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -240,15 +172,46 @@ export function BionIA() {
       </div>
 
       {/* Caixa do Chat */}
-      <div className="bg-card border rounded-3xl overflow-hidden shadow-sm flex flex-col min-h-[520px]">
+      <div className="relative bg-card border rounded-3xl overflow-hidden shadow-sm flex flex-col min-h-[520px]">
         {/* Banner informativo */}
         <div className="bg-muted/70 px-5 py-2.5 border-b flex items-center justify-between text-xs text-muted-foreground">
           <span className="flex items-center gap-2">
             <Shield className="w-3.5 h-3.5 text-primary" /> Suas interações são confidenciais e
             protegidas pela LGPD.
           </span>
-          <span className="font-semibold text-emerald-700 dark:text-emerald-200">● IA Ativa</span>
+          <span className={`font-semibold ${iaPausada ? "text-amber-700 dark:text-amber-300" : "text-emerald-700 dark:text-emerald-200"}`}>
+            {iaPausada ? "● IA pausada" : "● IA Ativa"}
+          </span>
         </div>
+
+        {/* Portão jurídico da IA (mesmo componente/fluxo do ChatBion) */}
+        {aceitePendente !== null && (
+          <div className="bp-app-paciente">
+            <ConsentimentoIA
+              onAceito={() => {
+                const t = aceitePendente;
+                setAceitePendente(null);
+                setMensagens((prev) => [
+                  ...prev,
+                  { id: `ia-aceite-${Date.now()}`, remetente: "ia", texto: "Obrigado! Aceite registrado.", hora: horaAgora() },
+                ]);
+                void enviarMensagem(t);
+              }}
+              onRecusar={() => {
+                setAceitePendente(null);
+                setMensagens((prev) => [
+                  ...prev,
+                  {
+                    id: `ia-recusa-${Date.now()}`,
+                    remetente: "ia",
+                    texto: "Tudo bem. Sem o aceite, a BION IA fica pausada para você. O agendamento e as consultas continuam normais.",
+                    hora: horaAgora(),
+                  },
+                ]);
+              }}
+            />
+          </div>
+        )}
 
         {/* Mensagens */}
         <div className="flex-1 p-5 md:p-6 space-y-4 overflow-y-auto">
@@ -270,13 +233,28 @@ export function BionIA() {
                     : "bg-muted border text-foreground rounded-tl-sm"
                 }`}
               >
-                <div className="whitespace-pre-wrap">{msg.texto}</div>
+                {/* M22: markdown inline (negrito/itálico/código) em vez de
+                    texto cru — sem isso a saudação e as respostas mostravam
+                    os ** literais. O renderizador de blocos (MarkdownSimples)
+                    é para documentos; na bolha, o `inline` do mesmo módulo
+                    preserva as quebras de linha do chat. */}
+                <div className="whitespace-pre-wrap">{inline(msg.texto, msg.id)}</div>
                 {msg.remetente === "ia" && msg.id !== "ia-intro" && (
                   <>
                     <BlocoRaciocinio raciocinio={msg.raciocinio} />
                     <button
                       type="button"
-                      onClick={() => void navigator.clipboard?.writeText(textoParaCopiar(msg)).catch(() => {})}
+                      onClick={async () => {
+                        // B27: copiar dá feedback — antes a falha era
+                        // engolida em silêncio (catch vazio).
+                        try {
+                          if (!navigator.clipboard) throw new Error("clipboard indisponível");
+                          await navigator.clipboard.writeText(textoParaCopiar(msg));
+                          toast.success("Resposta copiada.");
+                        } catch {
+                          toast.error("Não foi possível copiar a resposta.");
+                        }
+                      }}
                       className="mt-2 text-xs font-semibold underline opacity-80"
                     >
                       {isMedico ? "Copiar resposta (para a evolução)" : "Copiar resposta"}

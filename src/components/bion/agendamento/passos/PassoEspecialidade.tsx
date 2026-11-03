@@ -49,7 +49,7 @@ export function PassoEspecialidade(p: AgendamentoCorpoProps) {
   return (
     <div className="space-y-4">
       <div className="text-sm text-muted-foreground">
-        Selecione a área médica para atendimento imediato ou agendado:
+        Selecione a área médica para agendar seu atendimento:
       </div>
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {ESPECIALIDADES.map((esp) => {

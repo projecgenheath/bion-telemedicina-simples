@@ -1,17 +1,14 @@
 "use client";
 
 import { Suspense, useEffect } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useBion } from "@/lib/bion-store";
 import { CentroComando } from "@/components/bion/admin/comando/CentroComando";
 import { TelaCarregando } from "@/components/bion/brand";
-import { PosConsultaModal } from "@/components/bion/PosConsultaModal";
 
 function ConteudoPainel() {
   const { sessao } = useBion();
   const router = useRouter();
-  const parametros = useSearchParams();
-  const posConsulta = parametros.get("pos-consulta") === "1";
   // Paciente e médico têm app imersivo próprio em fullscreen; o painel
   // clássico do médico foi removido (não há mais ?legado=1).
   const temAppProprio = sessao.role === "paciente" || sessao.role === "medico";
@@ -25,19 +22,12 @@ function ConteudoPainel() {
     return <TelaCarregando texto="Abrindo seu app…" />;
   }
 
-  return (
-    <>
-      {sessao.role === "admin" && <CentroComando />}
-
-      {posConsulta && (
-        <PosConsultaModal
-          medico="Dra. Ana Ribeiro"
-          especialidade="Clínica Geral"
-          onClose={() => router.replace("/painel")}
-        />
-      )}
-    </>
-  );
+  // A14: o antigo modal pós-consulta (?pos-consulta=1) foi removido — era um
+  // fluxo órfão (paciente/médico são redirecionados acima e nenhuma tela
+  // gerava o link) montado com dados fabricados: médica e especialidade
+  // fixas, documentos "da consulta" sem vínculo e retorno inventado de
+  // 30 dias. Um resumo pós-consulta real é decisão de produto nova.
+  return <>{sessao.role === "admin" && <CentroComando />}</>;
 }
 
 export default function PaginaPainel() {

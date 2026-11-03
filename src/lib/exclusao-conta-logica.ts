@@ -4,14 +4,21 @@
  * dados pessoais anonimizados, prontuário guardado sem nome (Lei 13.787/2018).
  *
  * Antes, nada pode estar em aberto: consulta ativa (qualquer status que não
- * seja cancelada/concluída, de qualquer data), reembolso ainda não resolvido
- * ou multa de remarcação pendente. Funções puras, testadas em
- * exclusao-conta-logica.teste.ts.
+ * seja cancelada/concluída/falta do paciente, de qualquer data), reembolso
+ * ainda não resolvido ou multa de remarcação pendente. Funções puras,
+ * testadas em exclusao-conta-logica.teste.ts.
  */
 export const PALAVRA_CONFIRMACAO_EXCLUSAO = "EXCLUIR";
 
-/** Status de consulta que encerram o ciclo (não bloqueiam a exclusão). */
-export const STATUS_CONSULTA_ENCERRADA = ["cancelada", "concluida"] as const;
+/**
+ * Status de consulta que encerram o ciclo (não bloqueiam a exclusão).
+ * "falta_paciente" é terminal em todo o sistema (libera o horário e o PATCH
+ * da consulta o trata como encerrada): sem ele aqui, quem faltou a uma
+ * consulta ficava com uma "consulta ativa" eterna e nunca conseguia excluir
+ * a conta (C3 da auditoria da área do paciente). "aguardando_reagendamento"
+ * NÃO entra: há uma escolha pendente do paciente, então continua bloqueando.
+ */
+export const STATUS_CONSULTA_ENCERRADA = ["cancelada", "concluida", "falta_paciente"] as const;
 /**
  * Status de reembolso ainda em aberto: aprovado = ainda não pago; falhou = o
  * dinheiro continua devido ao paciente (o admin precisa do contato para pagar).

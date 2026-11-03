@@ -13,7 +13,9 @@ export type ApptStatus =
   | "concluida"
   | "em_espera"
   // médico cancelou o dia ou houve falha técnica: o paciente escolhe remarcar ou reembolso integral
-  | "aguardando_reagendamento";
+  | "aguardando_reagendamento"
+  // desfecho terminal: paciente não entrou na sala (médico recebe; reembolso manual em 7 dias)
+  | "falta_paciente";
 
 /** Anamnese guiada pela BION IA (resumo sincronizado com o servidor). */
 export type AnamneseResumo = {
@@ -89,12 +91,21 @@ export type Arquivo = {
 
 export type Documento = {
   id: string;
-  tipo: "receita" | "atestado" | "exame_solicitado";
+  /** "exame" é o tipo legado aceito pelo servidor (B-15); novo documento usa "exame_solicitado". */
+  tipo: "receita" | "atestado" | "exame" | "exame_solicitado";
   titulo: string;
   medico: string;
   paciente: string;
+  /** Identificador do paciente (M-9: filtros usam ID, nunca o nome). */
+  pacienteId?: string;
+  /** Consulta em que o documento foi emitido (A7: vínculo real vindo do
+   *  servidor; null/ausente = sem consulta vinculada, ex.: receita renovada). */
+  consultaId?: string | null;
   conteudo: string;
   data: string;
+  /** Criação em ISO 8601 (createdAt do servidor): data confiável para o
+   *  fallback de documentos sem consultaId. `data` é só texto de exibição. */
+  criadoEm?: string;
   medicamento?: string;
   posologia?: string;
   duracao?: string;
@@ -102,6 +113,18 @@ export type Documento = {
   cid?: string;
   /** Receita de controlado marcada pelo médico (docs antigos: false). */
   controlado?: boolean;
+  /** Identificação formal p/ a via impressa (melhoria nº 6): CRM do médico
+   *  emissor e CPF/nascimento do paciente, vindos dos cadastros via
+   *  documentoWire. Ausentes quando o cadastro não os tem. */
+  medicoCrm?: string;
+  pacienteCpf?: string;
+  /** "YYYY-MM-DD" (dia de calendário) ou ausente. */
+  pacienteNascimento?: string;
+  /** Código de verificação pública da via (item 26): id + HMAC calculado
+   *  no servidor (documentoWire) e impresso nos PDFs; a conferência em
+   *  /verificar/[codigo] não expõe dado clínico. Ausente em objetos
+   *  montados localmente sem passar pelo wire. */
+  codigoVerificacao?: string;
 };
 
 export type NotifTipo = "lembrete" | "mensagem" | "receita" | "agenda" | "exame" | "suporte";
@@ -144,8 +167,18 @@ export type Medico = {
   idiomas: string[];
   bio: string;
   foto?: string;
-  status: "ativo" | "pendente" | "suspenso";
+  // "arquivado" vem do DELETE lógico do admin (usuário inativo + perfil
+  // arquivado, histórico preservado); não é status de criação/edição.
+  status: "ativo" | "pendente" | "suspenso" | "arquivado";
+  /** Grade PADRÃO de horários (vale para todos os dias sem lista própria). */
   horariosDisponiveis: string[];
+  /** Listas próprias por dia da semana ("0"=Dom … "6"=Sáb) que substituem
+   *  o padrão naquele dia — regra única em lib/grade-semana.ts. */
+  horariosPorDia: Record<string, string[]>;
+  /** Dias da semana atendidos (0=Dom … 6=Sáb). Vazio = todos os dias. */
+  diasAtendimento: number[];
+  /** Pausas semanais fixas (ex.: almoço de terças 12:00–13:00). */
+  pausasSemanais: { dia: number; inicio: string; fim: string }[];
 };
 
 export type TicketSuporte = {
@@ -230,7 +263,11 @@ export type Sessao = {
 export type Avaliacao = {
   id: string;
   paciente: string;
+  /** Identificador do paciente (B-6: filtros usam ID, nunca o nome). */
+  pacienteId?: string;
   medico: string;
+  /** Identificador do médico (B-6: filtros usam ID, nunca o nome). */
+  medicoId?: string;
   especialidade: string;
   nota: number; // 1-5
   comentario?: string;

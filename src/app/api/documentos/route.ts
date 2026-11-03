@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { exigirPapel } from "@/lib/server/auth";
 import { aplicarSideEffects, documentoWire } from "@/lib/server/dados";
-import { ok, falha } from "@/lib/server/http";
+import {ok, falha, lerCorpoJson, corpoObjeto, textoDoCorpo} from "@/lib/server/http";
 
 /** Emissão de documento clínico (receita/atestado/exame) — apenas médicos.
  *  Paciente identificado por ID (nunca por nome — homônimos existem).
@@ -16,16 +16,26 @@ const TIPOS_DOCUMENTO = new Set(["receita", "atestado", "exame", "exame_solicita
 export async function POST(req: NextRequest) {
   try {
     const usuario = await exigirPapel("MEDICO");
-    const body = (await req.json()) as {
-      tipo: string;
-      titulo: string;
-      conteudo: string;
-      pacienteId: string;
-      medicamento?: string;
-      posologia?: string;
-      duracao?: string;
-      observacoes?: string;
-      cid?: string;
+    // B1: guarda de objeto/tipo — corpo null ou campo não-string virava 500
+    // em .trim()/.slice() abaixo.
+    const bruto = corpoObjeto(await lerCorpoJson(req));
+    if (!bruto) {
+      return Response.json({ erro: "Corpo da requisição inválido." }, { status: 400 });
+    }
+    const body = {
+      tipo: textoDoCorpo(bruto.tipo) ?? "",
+      titulo: textoDoCorpo(bruto.titulo) ?? "",
+      conteudo: textoDoCorpo(bruto.conteudo) ?? "",
+      pacienteId: textoDoCorpo(bruto.pacienteId) ?? "",
+      /** B-12: consulta em que o documento foi emitido (opcional). */
+      consultaId: textoDoCorpo(bruto.consultaId) ?? null,
+      medicamento: textoDoCorpo(bruto.medicamento),
+      posologia: textoDoCorpo(bruto.posologia),
+      duracao: textoDoCorpo(bruto.duracao),
+      observacoes: textoDoCorpo(bruto.observacoes),
+      cid: textoDoCorpo(bruto.cid),
+      /** Receita de controlado: só vale para tipo "receita"; default false. */
+      controlado: bruto.controlado as boolean | undefined,
     };
 
     if (!body.tipo || !body.titulo || !body.conteudo || !body.pacienteId) {
@@ -37,6 +47,21 @@ export async function POST(req: NextRequest) {
     if (!TIPOS_DOCUMENTO.has(body.tipo)) {
       return Response.json(
         { erro: "Tipo de documento inválido (receita, atestado ou exame)." },
+        { status: 400 },
+      );
+    }
+    if (body.controlado !== undefined && typeof body.controlado !== "boolean") {
+      return Response.json(
+        { erro: "O campo controlado deve ser verdadeiro ou falso." },
+        { status: 400 },
+      );
+    }
+    // Receita sem fármaco/dose não é receita: medicamento e posologia são
+    // obrigatórios para tipo "receita" (antes, nada impedia emitir receita
+    // vazia — medicamento/posologia/duracao são opcionais no schema).
+    if (body.tipo === "receita" && (!body.medicamento?.trim() || !body.posologia?.trim())) {
+      return Response.json(
+        { erro: "Receita precisa de medicamento e posologia." },
         { status: 400 },
       );
     }
@@ -62,6 +87,24 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // B-12: vínculo com a consulta (quando informado) — precisa ser consulta
+    // do PRÓPRIO médico com o MESMO paciente; id fornecido mas inválido (ou
+    // de outro médico/paciente) é 400, não descartado em silêncio para null.
+    let consultaId: string | null = null;
+    if (typeof body.consultaId === "string" && body.consultaId) {
+      const consulta = await db.consulta.findFirst({
+        where: { id: body.consultaId, medicoId: usuario.id, pacienteId: paciente.id },
+        select: { id: true },
+      });
+      if (!consulta) {
+        return Response.json(
+          { erro: "Consulta não encontrada para este médico e paciente." },
+          { status: 400 },
+        );
+      }
+      consultaId = consulta.id;
+    }
+
     const doc = await db.documento.create({
       data: {
         tipo: body.tipo,
@@ -69,15 +112,20 @@ export async function POST(req: NextRequest) {
         conteudo: body.conteudo.slice(0, 6000),
         medicoId: usuario.id,
         pacienteId: paciente.id,
+        consultaId, // B-12: consulta em que o documento foi emitido
         medicamento: body.medicamento?.trim().slice(0, 200) || null,
         posologia: body.posologia?.trim().slice(0, 300) || null,
         duracao: body.duracao?.trim().slice(0, 100) || null,
         observacoes: body.observacoes?.trim().slice(0, 1000) || null,
         cid: body.cid?.trim().slice(0, 20) || null,
+        // Só receita pode nascer sinalizada como controlado; qualquer outro
+        // tipo ignora o flag (default false no schema). É este flag que a
+        // guarda controlado_exige_chamada da renovação passa a ler.
+        controlado: body.tipo === "receita" && body.controlado === true,
       },
       include: {
-        medico: { select: { nome: true } },
-        paciente: { select: { nome: true } },
+        medico: { select: { nome: true, perfilMedico: { select: { crm: true } } } },
+        paciente: { select: { nome: true, perfilPaciente: { select: { cpf: true, dataNascimento: true } } } },
       },
     });
 

@@ -24,7 +24,7 @@ import {
   MessageCircle,
 } from "lucide-react";
 import { useBion } from "@/lib/bion-store";
-import { fmtCurta, fmtHora, fmtTicketData, type Consulta } from "@/lib/bion-tipos";
+import { fmtCurta, fmtHora, fmtTicketData, partesFusoClinica, type Consulta } from "@/lib/bion-tipos";
 import { toast } from "sonner";
 import { calcularImc, lerAlturaCm, lerPesoKg } from "@/lib/medidas-paciente";
 import { MESES_AGENDA } from "./constantes";
@@ -79,10 +79,22 @@ import { MedicamentosEmUso } from "./MedicamentosEmUso";
  * centro e, arrastando de novo, abre Documentos/Mensagens.
  */
 
+// B19: dia/mês no fuso da clínica (America/Sao_Paulo), como o restante do
+// app (partesFusoClinica) — não no fuso do dispositivo.
 const rotuloCurto = (iso: string) => {
-  const d = new Date(iso);
-  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
+  const d = partesFusoClinica(iso);
+  return `${String(d.dia).padStart(2, "0")}/${String(d.mes + 1).padStart(2, "0")}`;
 };
+
+/** Chave de comparação de nomes de analito: sem acento, sem caixa, espaços
+ *  normalizados — a extração por IA não garante grafia idêntica entre coletas. */
+const chaveAnalito = (nome: string) =>
+  nome
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
 
 const EM_CAMPO = ["INPUT", "TEXTAREA", "SELECT"];
 
@@ -142,6 +154,8 @@ export function PacienteApp() {
     detalhe ||
     reembolsoConsultaId ||
     edicaoPerfil ||
+    // B25: a folha de excluir conta também bloqueia o fundo (inert).
+    excluindoConta ||
     listaCompleta
   );
 
@@ -263,12 +277,20 @@ export function PacienteApp() {
 
   /* ------------------------------- dados --------------------------------- */
 
+  // A13: consultas do paciente por pacienteId; o nome é só fallback para
+  // registros legados sem ID — homônimos e grafias não escondem cards.
+  const minhaConsulta = useCallback(
+    (c: Consulta) =>
+      sessao.id ? (c.pacienteId ? c.pacienteId === sessao.id : c.paciente === sessao.nome) : c.paciente === sessao.nome,
+    [sessao],
+  );
+
   const proximas = useMemo(() => {
     const limite = Date.now() - 2 * 3_600_000;
     return consultas
-      .filter((c) => c.paciente === sessao.nome && ["confirmada", "em_espera", "pendente_anamnese"].includes(c.status) && c.ts >= limite)
+      .filter((c) => minhaConsulta(c) && ["confirmada", "em_espera", "pendente_anamnese"].includes(c.status) && c.ts >= limite)
       .sort((a, b) => a.ts - b.ts);
-  }, [consultas, sessao.nome]);
+  }, [consultas, minhaConsulta]);
 
   const proxima = proximas[0];
   const lembretesAgenda = useMemo(
@@ -297,9 +319,9 @@ export function PacienteApp() {
   const aguardandoReagendamento = useMemo(
     () =>
       consultas
-        .filter((c) => c.paciente === sessao.nome && c.status === "aguardando_reagendamento")
+        .filter((c) => minhaConsulta(c) && c.status === "aguardando_reagendamento")
         .sort((a, b) => a.ts - b.ts),
-    [consultas, sessao.nome],
+    [consultas, minhaConsulta],
   );
 
   /** Remarcação com multa reservada (nova data aguardando pagamento; a data original segue valendo). */
@@ -307,11 +329,11 @@ export function PacienteApp() {
     () =>
       consultas.filter(
         (c) =>
-          c.paciente === sessao.nome &&
+          minhaConsulta(c) &&
           c.remarcacaoPendente?.status === "pendente" &&
           new Date(c.remarcacaoPendente.expiraEm).getTime() > Date.now(),
       ),
-    [consultas, sessao.nome],
+    [consultas, minhaConsulta],
   );
 
   /** Canceladas e pagas dos últimos 60 dias: acompanham o status do reembolso (máx. 3). */
@@ -319,19 +341,19 @@ export function PacienteApp() {
   const faltasRecentes = useMemo(() => {
     const limite = Date.now() - 30 * 86_400_000;
     return consultas
-      .filter((c) => c.paciente === sessao.nome && c.falta && c.pago && c.ts >= limite)
+      .filter((c) => minhaConsulta(c) && c.falta && c.pago && c.ts >= limite)
       .sort((a, b) => b.ts - a.ts)
       .slice(0, 3);
-  }, [consultas, sessao.nome]);
+  }, [consultas, minhaConsulta]);
   const consultaReembolso = reembolsoConsultaId ? consultas.find((c) => c.id === reembolsoConsultaId) : undefined;
 
   const canceladasComPagamento = useMemo(() => {
     const limite = Date.now() - 60 * 86_400_000;
     return consultas
-      .filter((c) => c.paciente === sessao.nome && c.status === "cancelada" && c.pago && consultaTemReembolso(c) && c.ts >= limite)
+      .filter((c) => minhaConsulta(c) && c.status === "cancelada" && c.pago && consultaTemReembolso(c) && c.ts >= limite)
       .sort((a, b) => b.ts - a.ts)
       .slice(0, 3);
-  }, [consultas, sessao.nome]);
+  }, [consultas, minhaConsulta]);
 
   const janelaTriagem = (c: { ts: number; pago?: boolean; status: string }) =>
     ["confirmada", "pendente_anamnese"].includes(c.status) &&
@@ -406,13 +428,16 @@ export function PacienteApp() {
     () =>
       pesos
         .map((p) => {
-          const alturaCm = alturas.filter((a) => a.criadoEm <= p.criadoEm).at(-1)?.valor1 ?? alturaAtual;
+          // B18: só a altura registrada ATÉ a data do peso — sem altura da
+          // época, o ponto é descartado; usar a altura atual recalculava o
+          // passado com a altura de hoje.
+          const alturaCm = alturas.filter((a) => a.criadoEm <= p.criadoEm).at(-1)?.valor1;
           if (!alturaCm) return null;
           return { valor: Math.round((p.valor1 / Math.pow(alturaCm / 100, 2)) * 10) / 10, rotulo: rotuloCurto(p.criadoEm) };
         })
         .filter((x): x is PontoGrafico => x !== null)
         .slice(-10),
-    [pesos, alturas, alturaAtual],
+    [pesos, alturas],
   );
 
   const examesAgrupados = useMemo(() => {
@@ -832,7 +857,9 @@ export function PacienteApp() {
                     series={[
                       { pontos: pas.map((p) => ({ valor: p.valor1, rotulo: rotuloCurto(p.criadoEm) })), cor: "var(--bpp-grafico-linha)", area: true },
                       ...(pas.some((p) => p.valor2 !== undefined)
-                        ? [{ pontos: pas.map((p) => ({ valor: p.valor2 ?? p.valor1, rotulo: rotuloCurto(p.criadoEm) })), cor: "var(--bpp-grafico-alerta)" }]
+                        ? // M18: sem valor2 o ponto é omitido (null) — antes a
+                          // diastólica era plotada igual à sistólica.
+                          [{ pontos: pas.map((p) => ({ valor: p.valor2 ?? null, rotulo: rotuloCurto(p.criadoEm) })), cor: "var(--bpp-grafico-alerta)" }]
                         : []),
                     ]}
                     refMin={70}
@@ -880,14 +907,27 @@ export function PacienteApp() {
               <div className="bpp-grade flex flex-col gap-4">
                 {examesAgrupados.map(([titulo, lista]) => {
                   const ultimo = lista.at(-1)!;
-                  const itemDestaque = ultimo.itens[0];
-                  const serieItem: PontoGrafico[] = lista
-                    .map((e) => {
-                      const it = e.itens[0];
-                      return it ? { valor: it.valor, rotulo: rotuloCurto(e.dataColeta) } : null;
-                    })
-                    .filter((x): x is PontoGrafico => x !== null)
-                    .slice(-10);
+                  // M33: a ordem de `itens` vem da extração por IA e pode
+                  // variar entre coletas — a série é de UM analito, casado
+                  // pelo NOME: o primeiro da coleta mais recente que aparece
+                  // em todas as coletas do grupo (se nenhum aparece em
+                  // todas, o primeiro da coleta mais recente, usando só as
+                  // coletas em que ele aparece). Antes era sempre itens[0],
+                  // e o gráfico podia misturar analitos diferentes.
+                  const itemDe = (e: (typeof lista)[number], chave: string) =>
+                    e.itens.find((it) => chaveAnalito(it.nome) === chave);
+                  const chaveSerie =
+                    ultimo.itens.map((it) => chaveAnalito(it.nome)).find((c) => lista.every((e) => itemDe(e, c))) ??
+                    (ultimo.itens[0] ? chaveAnalito(ultimo.itens[0].nome) : undefined);
+                  const itemDestaque = chaveSerie ? itemDe(ultimo, chaveSerie) : undefined;
+                  const serieItem: PontoGrafico[] = (
+                    chaveSerie
+                      ? lista.flatMap((e) => {
+                          const it = itemDe(e, chaveSerie);
+                          return it ? [{ valor: it.valor, rotulo: rotuloCurto(e.dataColeta) }] : [];
+                        })
+                      : []
+                  ).slice(-10);
                   return (
                     <div key={titulo} className="bp-glass-marinho p-5">
                       <div className="flex items-start justify-between gap-3 mb-2">
@@ -907,7 +947,7 @@ export function PacienteApp() {
                       </div>
                       {serieItem.length > 1 && (
                         <GraficoLinha
-                          ariaLabel={`Histórico gráfico de ${titulo}`}
+                          ariaLabel={`Histórico gráfico de ${titulo}${itemDestaque ? ` — ${itemDestaque.nome}` : ""}`}
                           altura={104}
                           corEixo="var(--bpp-grafico-eixo-marinho)"
                           series={[{ pontos: serieItem, cor: "var(--bpp-grafico-linha-marinho)", area: true }]}
@@ -1089,7 +1129,8 @@ function CardReembolso({ consulta }: { consulta: Consulta }) {
   const { previa } = usePreviaCancelamento(consulta.id, consulta.status);
   const r = previa?.reembolso;
   if (!r) return null;
-  const rotulo = rotuloReembolso(r.status);
+  // B37: com multa descontada, o rótulo diz "parcial", nunca "integral".
+  const rotulo = rotuloReembolso(r.status, r.multaCentavos);
   const cor =
     rotulo.tom === "ok"
       ? "bg-emerald-600/15 text-emerald-800 dark:text-emerald-200"
@@ -1153,7 +1194,7 @@ function CardRemarcacaoPendente({ consulta, onContinuar }: { consulta: Consulta;
       <div className="text-sm opacity-80">com {consulta.medico}</div>
       <p className="text-sm mt-3 leading-relaxed">
         Nova data <strong className="font-bold">{novaData}</strong> reservada, aguardando pagamento da multa de{" "}
-        <strong className="font-bold">{fmtCentavos(r.multaCentavos)}</strong> até {fmtHora(r.expiraEm)}.
+        <strong className="font-bold">{fmtCentavos(r.multaCentavos)}</strong> até {fmtCurta(r.expiraEm)} às {fmtHora(r.expiraEm)}.
       </p>
       <p className="text-xs opacity-80 mt-1 inline-flex items-center gap-1.5">
         <CalendarClock className="w-3.5 h-3.5" /> Vale a data original até o pagamento: {consulta.data} · {consulta.hora}
