@@ -131,18 +131,25 @@ async function cenario(valorAntigo = 150) {
   igual("preco_mudou → 409 com diferença atual", mudou.ok ? null : [mudou.status, mudou.erro, mudou.extra], [409, "preco_mudou", { diferencaAtualCentavos: -7950 }]);
   igual("preco_mudou não mexe na consulta", (await db.consulta.findUnique({ where: { id: c.id } }))?.status, "confirmada");
   // Regra de conta Stripe só vale com Connect ligado (modo direta), igual ao checkout.
-  const envAntes = [process.env.STRIPE_CONNECT, process.env.STRIPE_MODO_COBRANCA];
-  process.env.STRIPE_CONNECT = "true";
-  process.env.STRIPE_MODO_COBRANCA = "direta";
-  for (const [nome, id] of [["só com PIX (sem Stripe)", soPix.id], ["com consulta em 40 min", ocupado.id], ["o mesmo médico", med.id]] as const) {
-    const r = await m.remarcarPorEspera({ consultaId: c.id, pacienteId: pac.id, medicoId: id, diferencaEsperadaCentavos: -10000, agora: depois });
-    igual(`médico ${nome} → 409 medico_indisponivel`, r.ok ? null : [r.status, r.erro], [409, "medico_indisponivel"]);
+  const chavesEnv = ["STRIPE_CONNECT", "STRIPE_MODO_COBRANCA", "BION_PAGAMENTO_STRIPE", "STRIPE_SECRET_KEY"] as const;
+  const envAntes = chavesEnv.map((k) => process.env[k]);
+  try {
+    process.env.STRIPE_CONNECT = "true";
+    process.env.STRIPE_MODO_COBRANCA = "direta";
+    process.env.BION_PAGAMENTO_STRIPE = "true";
+    process.env.STRIPE_SECRET_KEY = "sk_test_local_ficticia";
+    for (const [nome, id] of [["só com PIX (sem Stripe)", soPix.id], ["com consulta em 40 min", ocupado.id], ["o mesmo médico", med.id]] as const) {
+      const r = await m.remarcarPorEspera({ consultaId: c.id, pacienteId: pac.id, medicoId: id, diferencaEsperadaCentavos: -10000, agora: depois });
+      igual(`médico ${nome} → 409 medico_indisponivel`, r.ok ? null : [r.status, r.erro], [409, "medico_indisponivel"]);
+    }
+    igual("médico só com Stripe (sem PIX) está livre", (await db.$transaction((tx) => m.medicoLivreAgora(tx, { medicoId: soStripe.id, especialidade: "Clínica", excetoMedicoId: med.id, agora: depois })))?.valorCentavos, 10000);
+    igual("médico só com PIX não está livre", await db.$transaction((tx) => m.medicoLivreAgora(tx, { medicoId: soPix.id, especialidade: "Clínica", excetoMedicoId: med.id, agora: depois })), null);
+  } finally {
+    chavesEnv.forEach((k, i) => {
+      if (envAntes[i] === undefined) delete process.env[k];
+      else process.env[k] = envAntes[i];
+    });
   }
-  igual("médico só com Stripe (sem PIX) está livre", (await db.$transaction((tx) => m.medicoLivreAgora(tx, { medicoId: soStripe.id, especialidade: "Clínica", excetoMedicoId: med.id, agora: depois })))?.valorCentavos, 10000);
-  igual("médico só com PIX não está livre", await db.$transaction((tx) => m.medicoLivreAgora(tx, { medicoId: soPix.id, especialidade: "Clínica", excetoMedicoId: med.id, agora: depois })), null);
-  [process.env.STRIPE_CONNECT, process.env.STRIPE_MODO_COBRANCA] = envAntes;
-  if (envAntes[0] === undefined) delete process.env.STRIPE_CONNECT;
-  if (envAntes[1] === undefined) delete process.env.STRIPE_MODO_COBRANCA;
   const r1 = await m.remarcarPorEspera({ consultaId: c.id, pacienteId: pac.id, medicoId: barato.id, diferencaEsperadaCentavos: -7950, agora: depois });
   const r2 = await m.remarcarPorEspera({ consultaId: c.id, pacienteId: pac.id, medicoId: barato.id, diferencaEsperadaCentavos: -7950, agora: depois });
   igual("remarcar ok", r1.ok && !r1.jaProcessada, true);

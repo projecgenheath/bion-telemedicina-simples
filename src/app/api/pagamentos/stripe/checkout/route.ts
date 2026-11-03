@@ -268,8 +268,13 @@ async function abrirSessao(usuario: Usuario, a: Alvo) {
   if (modo !== "plataforma") {
     const medico = await db.perfilMedico.findUnique({ where: { userId: a.medicoId }, select: { stripeAccountId: true } });
     const contaMedico = contaStripeDoMedico(medico?.stripeAccountId);
+    // `!contaMedico` não é redundante para o TypeScript: estreita para string
+    // (usado em `connect` abaixo); medicoPodeSerCobrado é a regra compartilhada.
     if (!contaMedico || !medicoPodeSerCobrado(modo, contaMedico)) {
-      return Response.json({ erro: "Pagamento online indisponível para este médico." }, { status: 409 });
+      return Response.json(
+        { erro: "Este médico ainda não pode receber pagamento online. Escolha outro horário ou outro médico.", codigo: "medico_sem_conta" },
+        { status: 409 },
+      );
     }
     connect = { contaMedico, taxaPlataformaCentavos: comissaoPlataformaConnect(a.tipo, a.valorCentavos) };
   }

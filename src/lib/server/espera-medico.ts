@@ -441,6 +441,9 @@ export async function medicoLivreAgora(tx: Tx, p: { medicoId: string; especialid
   });
   if (!m || m.role !== "MEDICO" || m.status !== "ativo" || !m.perfilMedico || m.perfilMedico.status !== "ativo") return null;
   // Cobrável pelo Stripe (mesma regra do checkout); a chave PIX é só histórico.
+  // Exigido mesmo com diferença zero ou negativa: nos modos direta/destino o
+  // dinheiro da consulta (e qualquer reembolso ou estorno futuro) passa pela
+  // conta conectada do médico NOVO, então ele precisa ter conta Stripe.
   if (m.perfilMedico.especialidade !== p.especialidade || !medicoPodeSerCobrado(modoCobrancaAtual(), m.perfilMedico.stripeAccountId)) return null;
   if (await diaBloqueado(tx as ClienteBanco, p.medicoId, p.agora)) return null;
   if (conferirDiasEPausas({ diasAtendimento: m.perfilMedico.diasAtendimento, pausasSemanais: m.perfilMedico.pausasSemanais }, p.agora)) return null;

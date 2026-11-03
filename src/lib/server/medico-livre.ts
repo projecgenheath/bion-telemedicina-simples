@@ -13,9 +13,16 @@ import { STATUS_LIBERAM_HORARIO } from "@/lib/server/financeiro";
 import { filtroEvolucaoPendente } from "@/lib/medico-livre-logica";
 import { medicoPodeSerCobrado } from "@/lib/medico-cobravel";
 import { modoCobrancaStripe, stripeConnectAtivo } from "@/lib/server/stripe";
+import { stripeAtivo } from "@/lib/stripe-checkout-logica";
 
-/** Mesmo modo que o checkout Stripe usa (api/pagamentos/stripe/checkout). */
+/**
+ * Mesmo modo que o checkout Stripe usa (api/pagamentos/stripe/checkout).
+ * Com o pagamento por cartão Stripe desligado (stripeAtivo() falso, ex.:
+ * demonstração), a conta Stripe do médico não é exigida: devolve "plataforma"
+ * para não esconder médicos sem Stripe de um fluxo que nem passa pelo Stripe.
+ */
 export function modoCobrancaAtual() {
+  if (!stripeAtivo()) return "plataforma";
   return stripeConnectAtivo() ? modoCobrancaStripe() : "plataforma";
 }
 
