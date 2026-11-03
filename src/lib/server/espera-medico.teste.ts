@@ -30,7 +30,7 @@ async function usuario(role: string, extra: Record<string, unknown> = {}) {
 }
 // Desde 28/10 a regra é a conta Stripe (lib/medico-cobravel.ts); a chave PIX é só histórico.
 async function medico(valor: number, comStripe = true, comPix = false) {
-  const u = await usuario("MEDICO", { perfilMedico: { create: { crm: "1", especialidade: "Clínica", valor, stripeAccountId: comStripe ? `acct_teste_${Math.random().toString(36).slice(2)}` : null } } });
+  const u = await usuario("MEDICO", { perfilMedico: { create: { crm: "1", especialidade: "Clínica", valor, stripeAccountId: comStripe ? `acct_teste_${Math.random().toString(36).slice(2)}` : null, stripeChargesEnabled: comStripe, stripePayoutsEnabled: comStripe } } });
   if (comPix) await db.dadosRecebimentoMedico.create({ data: { medicoId: u.id, pixTipo: "email", pixChave: "a@b.c", titularTipo: "pf", titularNome: "X", titularDocumento: "11111111111" } });
   return u;
 }

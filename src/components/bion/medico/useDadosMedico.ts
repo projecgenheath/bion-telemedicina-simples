@@ -494,3 +494,41 @@ export function useRepasses() {
     limparDetalhe,
   };
 }
+
+/** Status da conta Stripe (Connect) do PRÓPRIO médico (GET /api/medico/stripe/conta). */
+export type ContaStripeWire = {
+  temConta: boolean;
+  chargesEnabled: boolean;
+  payoutsEnabled: boolean;
+  detailsSubmitted: boolean;
+  pronta: boolean;
+  atualizadoEm: string | null;
+  connectAtivo: boolean;
+  tipoConta: "standard" | "express";
+};
+
+/**
+ * Conta Stripe do médico + início/continuação do onboarding. `iniciar` pede o
+ * link (POST /api/medico/stripe/conta/link, cria a conta se faltar) e
+ * redireciona para o Stripe; o retorno volta para ?painel=perfil.
+ */
+export function useContaStripe() {
+  const { sessao } = useBion();
+  const r = useRecurso<ContaStripeWire>(sessao.role === "medico" ? "/api/medico/stripe/conta" : null, "");
+  const [abrindo, setAbrindo] = useState(false);
+  const iniciar = useCallback(async (): Promise<{ ok: boolean; erro?: string }> => {
+    setAbrindo(true);
+    try {
+      const res = await fetch("/api/medico/stripe/conta/link", { method: "POST", headers: { "Content-Type": "application/json" } });
+      const json = (await res.json().catch(() => null)) as { url?: string; erro?: string } | null;
+      if (!res.ok || !json?.url) return { ok: false, erro: json?.erro ?? "Não foi possível abrir o cadastro no Stripe agora." };
+      window.location.assign(json.url);
+      return { ok: true };
+    } catch {
+      return { ok: false, erro: "Falha de conexão com o servidor." };
+    } finally {
+      setAbrindo(false);
+    }
+  }, []);
+  return { conta: r.dados, carregando: r.carregando, erro: r.erro, recarregar: r.recarregar, abrindo, iniciar };
+}

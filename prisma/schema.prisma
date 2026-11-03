@@ -98,7 +98,13 @@ model PerfilMedico {
   // ativo | pendente | suspenso | arquivado (B-22: "arquivado" vem do DELETE
   // lógico do admin — usuário inativo + perfil arquivado, histórico preservado)
   status              String  @default("ativo")
-  stripeAccountId     String? // conta conectada (Stripe Connect), 20261028a
+  stripeAccountId     String? // conta conectada (Stripe Connect, cobrança direta), 20261028a; criada no onboarding do médico
+  // Status do onboarding Stripe (20261103f), gravado no retorno do onboarding e
+  // no webhook account.updated. Cobrável = charges E payouts habilitados.
+  stripeChargesEnabled    Boolean   @default(false)
+  stripePayoutsEnabled    Boolean   @default(false)
+  stripeDetailsSubmitted  Boolean   @default(false)
+  stripeContaAtualizadaEm DateTime?
   horariosDisponiveis String  @default("[]") // JSON string[]
   diasAtendimento     String  @default("[]") // JSON number[] (0=Dom … 6=Sáb). Vazio = todos os dias.
   pausasSemanais      String  @default("[]") // JSON {dia,inicio,fim}[].
@@ -109,6 +115,8 @@ model PerfilMedico {
   genero              String? // Feminino | Masculino | Outro | Prefiro não informar (CHECK no banco)
   telefone            String  @default("")
   cnpj                String  @default("") // 14 caracteres normalizados (numérico ou alfanumérico); "" = não informado
+
+  @@index([stripeAccountId]) // 20261103f: webhook account.updated acha o perfil pela conta
 }
 
 model PerfilPaciente {
