@@ -4,9 +4,7 @@ import { exigirSessao, registrarAudit } from "@/lib/server/auth";
 import { aceiteVigentePendente } from "@/lib/server/aceite-termos";
 import { falha } from "@/lib/server/http";
 import { criarCobranca } from "@/lib/server/pagamentos";
-import { comissaoPlataformaConnect, gatewayCheckout } from "@/lib/server/gateway-pagamento";
-import { modoCobrancaStripe, stripeConnectAtivo } from "@/lib/server/stripe";
-import { contaStripeDoMedico, medicoPodeSerCobrado } from "@/lib/medico-cobravel";
+import { gatewayCheckout } from "@/lib/server/gateway-pagamento";
 import {
   avaliarElegibilidade,
   avaliarMulta,
@@ -19,7 +17,6 @@ import {
   chaveIdempotencia,
   metodosCheckout,
   moedaCheckout,
-  type DadosConnect,
   sessaoReaproveitavel,
   stripeAtivo,
 } from "@/lib/stripe-checkout-logica";
@@ -250,39 +247,22 @@ async function abrirSessao(usuario: Usuario, a: Alvo) {
     : null;
   const sessaoAnterior = a.tipo === "multa" ? a.sessaoMulta ?? null : atual?.stripeCheckoutSessionId ?? null;
 
-  // Modo de cobrança (plataforma por padrão; Connect só com STRIPE_CONNECT=true).
-  const modo = stripeConnectAtivo() ? modoCobrancaStripe() : "plataforma";
-  if (bloqueioChaveLive(modo)) {
+  // Modo único "plataforma" (decisão 03/11 10:49): cobrança na conta da BION.
+  if (bloqueioChaveLive()) {
     await registrarAudit(usuario, {
       acao: "CHECKOUT_STRIPE_BLOQUEADO_CHAVE_LIVE",
       categoria: "pagamento",
       severidade: "critical",
       entidade: a.entidade.tipo,
       entidadeId: a.entidade.id,
-      detalhes: "Modo plataforma com chave live: cobrança recusada (exigência jurídica; use o modo direta)",
+      detalhes: "Modo plataforma com chave live: cobrança recusada (exigência jurídica)",
     });
     console.error("[checkout-stripe] modo plataforma com chave live recusado");
     return Response.json({ erro: "Pagamento online indisponível no momento.", codigo: "pagamento_indisponivel" }, { status: 503 });
   }
-  let connect: DadosConnect | null = null;
-  if (modo !== "plataforma") {
-    const medico = await db.perfilMedico.findUnique({ where: { userId: a.medicoId }, select: { stripeAccountId: true } });
-    const contaMedico = contaStripeDoMedico(medico?.stripeAccountId);
-    // `!contaMedico` não é redundante para o TypeScript: estreita para string
-    // (usado em `connect` abaixo); medicoPodeSerCobrado é a regra compartilhada.
-    if (!contaMedico || !medicoPodeSerCobrado(modo, contaMedico)) {
-      return Response.json(
-        { erro: "Este médico ainda não pode receber pagamento online. Escolha outro horário ou outro médico.", codigo: "medico_sem_conta" },
-        { status: 409 },
-      );
-    }
-    connect = { contaMedico, taxaPlataformaCentavos: comissaoPlataformaConnect(a.tipo, a.valorCentavos) };
-  }
-
   const gateway = gatewayCheckout();
-  const contaDireta = modo === "direta" ? connect?.contaMedico : null;
   if (sessaoAnterior) {
-    const s = await gateway.lerSessao(sessaoAnterior, contaDireta);
+    const s = await gateway.lerSessao(sessaoAnterior);
     if (s && sessaoReaproveitavel(s, a.valorCentavos)) return Response.json({ url: s.url, reaproveitada: true });
   }
 
@@ -300,8 +280,6 @@ async function abrirSessao(usuario: Usuario, a: Alvo) {
       descricao: a.descricao,
       baseUrl: a.base,
       email: usuario.email,
-      modo,
-      connect,
     },
     chaveIdempotencia(a.tipo === "multa" ? `multa-${a.remarcacaoId}` : a.consultaId ?? `pagamento-${a.pagamentoId}`, a.valorCentavos, sessaoAnterior),
   );

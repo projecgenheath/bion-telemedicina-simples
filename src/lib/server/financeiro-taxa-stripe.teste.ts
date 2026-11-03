@@ -1,6 +1,6 @@
-/** Taxa real do gateway e application fee do Connect. Rodar: bun --conditions=react-server test ./src/lib/server/financeiro-taxa-stripe.teste.ts */
+/** Taxa real do gateway. Rodar: bun --conditions=react-server test ./src/lib/server/financeiro-taxa-stripe.teste.ts */
 import { describe, expect, test } from "bun:test";
-import { divisaoDaMulta, liquidoComReembolso, liquidoDaConsulta, taxaGatewayValida, taxaPlataformaConnectCentavos } from "./financeiro";
+import { divisaoDaMulta, liquidoComReembolso, liquidoDaConsulta, taxaGatewayValida } from "./financeiro";
 import { ajustesNovos, itemDaConsulta, itemDaRenovacao, type CandidatoConsulta } from "./repasse";
 
 const consulta = (taxa: number | null, reembolsos: { valorCentavos: number }[] = []): CandidatoConsulta =>
@@ -51,11 +51,4 @@ describe("reembolso: tudo ao paciente, taxa com o app", () => {
     expect(a.map((x) => x.valorCentavos)).toEqual([8601]);
   });
   test("multa 50/50 sem comissão", () => expect(divisaoDaMulta(5000)).toEqual({ medicoCentavos: 2500, appCentavos: 2500 }));
-});
-
-describe("taxaPlataformaConnectCentavos (application_fee_amount)", () => {
-  test("consulta: 10%, sem taxa", () => expect(taxaPlataformaConnectCentavos({ tipo: "consulta", valorCentavos: 10000 })).toBe(1000));
-  test("renovação: 10%", () => expect(taxaPlataformaConnectCentavos({ tipo: "renovacao", valorCentavos: 4999 })).toBe(500));
-  test("multa: parte do app (50%)", () => expect(taxaPlataformaConnectCentavos({ tipo: "multa", multaCentavos: 5001 })).toBe(2500));
-  test("valor negativo = 0", () => expect(taxaPlataformaConnectCentavos({ tipo: "consulta", valorCentavos: -1 })).toBe(0));
 });
