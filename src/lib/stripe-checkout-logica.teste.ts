@@ -105,8 +105,10 @@ igual("cancel_url", p.cancel_url, "https://app.exemplo/pagamento/cancelado?consu
 // modo de cobrança
 igual("live + plataforma bloqueia", bloqueioChaveLive("plataforma", "sk_live_x"), true);
 igual("teste + plataforma passa", bloqueioChaveLive("plataforma", "sk_test_x"), false);
-igual("live + direta passa", bloqueioChaveLive("direta", "sk_live_x"), false);
-igual("live + destino passa", bloqueioChaveLive("destino", "sk_live_x"), false);
+igual("live + direta bloqueia (até o Alisson liberar)", bloqueioChaveLive("direta", "sk_live_x"), true);
+igual("live + destino bloqueia", bloqueioChaveLive("destino", "sk_live_x"), true);
+igual("teste + direta passa", bloqueioChaveLive("direta", "sk_test_x"), false);
+igual("live com espaços bloqueia", bloqueioChaveLive("direta", "  sk_live_x "), true);
 igual("sem chave passa (rota já recusa pela flag)", bloqueioChaveLive("plataforma", undefined), false);
 const cx = { contaMedico: "acct_123", taxaPlataformaCentavos: 1500 };
 igual("plataforma sem divisão", divisaoConnect({ modo: "plataforma", connect: cx, valorCentavos: 15000 }), {});
@@ -165,7 +167,7 @@ const sucesso = readFileSync(new URL("../components/bion/paciente/StatusPagament
 igual("checkout não confirma pagamento", /confirmarPagamento/.test(checkout), false);
 igual("checkout lê valor do banco, não do body", /body\.(valor|amount)/.test(checkout), false);
 igual("checkout exige aceite", checkout.includes("aceiteVigentePendente"), true);
-igual("checkout recusa live em plataforma com 503", /bloqueioChaveLive\(modo\)[\s\S]*?pagamento_indisponivel[\s\S]*?status: 503/.test(checkout), true);
+igual("checkout recusa live (qualquer modo) com 503", /bloqueioChaveLive\(modo\)[\s\S]*?pagamento_indisponivel[\s\S]*?status: 503/.test(checkout), true);
 igual("checkout sem pix", /"pix"/.test(checkout), false);
 igual("checkout reusa o modo do Admin", checkout.includes("stripeConnectAtivo() ? modoCobrancaStripe()"), true);
 igual("checkout atrás da flag", checkout.includes("stripeAtivo()"), true);

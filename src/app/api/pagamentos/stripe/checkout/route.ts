@@ -261,9 +261,9 @@ async function abrirSessao(usuario: Usuario, a: Alvo) {
       severidade: "critical",
       entidade: a.entidade.tipo,
       entidadeId: a.entidade.id,
-      detalhes: "Modo plataforma com chave live: cobrança recusada (exigência jurídica; use o modo direta)",
+      detalhes: `Chave live (modo ${modo}): cobrança recusada (exigência jurídica até o Alisson liberar)`,
     });
-    console.error("[checkout-stripe] modo plataforma com chave live recusado");
+    console.error("[checkout-stripe] chave live recusada (modo", modo + ")");
     return Response.json({ erro: "Pagamento online indisponível no momento.", codigo: "pagamento_indisponivel" }, { status: 503 });
   }
   let connect: DadosConnect | null = null;
