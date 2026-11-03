@@ -15,10 +15,6 @@
     {
       "path": "/api/cron/lgpd-pendencias",
       "schedule": "0 7 * * *"
-    },
-    {
-      "path": "/api/cron/reembolsos-stripe",
-      "schedule": "0 8 * * *"
     }
   ]
 }
