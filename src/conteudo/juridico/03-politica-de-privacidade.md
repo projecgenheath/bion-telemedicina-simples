@@ -1,6 +1,6 @@
 ---
 title: "Política de Privacidade — BION Telemedicina (Pacientes, Médicos e Visitantes)"
-subtitle: "Versão provisória v2 — 28/10/2026"
+subtitle: "Versão provisória v2.1 — 03/11/2026"
 lang: pt-BR
 ---
 

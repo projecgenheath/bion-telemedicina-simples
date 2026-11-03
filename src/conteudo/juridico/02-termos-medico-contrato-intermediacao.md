@@ -1,6 +1,6 @@
 ---
 title: "Termos de Uso e Contrato de Intermediação do Médico — BION Telemedicina"
-subtitle: "Versão provisória v2 — 28/10/2026"
+subtitle: "Versão provisória v2.1 — 03/11/2026"
 lang: pt-BR
 ---
 
