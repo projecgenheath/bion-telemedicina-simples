@@ -85,7 +85,9 @@ for (const [nome, reg] of casos) {
   test(`triagem ${nome} → motor local, nenhuma chamada ao LLM`, async () => {
     chamadasLlm = 0;
     registroIa = reg;
-    await pedir();
+    const r = await pedir();
+    expect(r.status).toBe(200); // sem 403: segue no motor local
+    expect(((await r.json()) as { semIa?: boolean }).semIa).toBe(true);
     expect(chamadasLlm).toBe(0);
   });
 }
@@ -93,6 +95,24 @@ for (const [nome, reg] of casos) {
 test("controle: com consentimento v3 e Termos vigentes o LLM é chamado", async () => {
   chamadasLlm = 0;
   registroIa = { aceito: true, finalidade: FINALIDADE_CONSENTIMENTO_IA, createdAt: new Date() };
-  await pedir();
+  const r = await pedir();
   expect(chamadasLlm).toBeGreaterThan(0);
+  expect(((await r.json()) as { semIa?: boolean }).semIa).toBe(false);
+});
+
+test("IA desligada no servidor (env): sem aviso de consentimento", async () => {
+  process.env.BION_ANAMNESE_LLM = "0";
+  chamadasLlm = 0;
+  registroIa = null;
+  const r = await pedir();
+  expect(((await r.json()) as { semIa?: boolean }).semIa).toBe(false);
+  expect(chamadasLlm).toBe(0);
+  process.env.BION_ANAMNESE_LLM = "1";
+});
+
+test("texto do aviso da triagem (Jurídico)", async () => {
+  const { AVISO_TRIAGEM_SEM_IA } = await import("@/lib/consentimento-ia");
+  expect(AVISO_TRIAGEM_SEM_IA).toBe(
+    "Você está usando a triagem sem a BION IA, com perguntas automáticas básicas. Para ativar a IA, toque em Ativar a BION IA.",
+  );
 });

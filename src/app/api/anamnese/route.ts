@@ -553,11 +553,12 @@ export async function POST(req: NextRequest) {
     // Pausa da BION IA (opt-in, BION_IA_PAUSADA=true) ou portão jurídico (sem
     // o aceite da versão atual da IA/NVIDIA): a triagem segue SÓ no motor
     // local — nada vai para a IA externa.
-    const tentarLlm =
-      !iaPausada() &&
-      process.env.BION_MOTOR_LOCAL !== "1" &&
-      process.env.BION_ANAMNESE_LLM === "1" &&
-      (await exigirConsentimentoIa(usuario)) === null;
+    const iaLigadaNoServidor =
+      !iaPausada() && process.env.BION_MOTOR_LOCAL !== "1" && process.env.BION_ANAMNESE_LLM === "1";
+    // semIa = a IA estaria ligada, mas falta o consentimento (ausente, v2 ou
+    // revogado): a triagem segue no motor local (sem 403) e o app mostra o aviso.
+    const semIa = iaLigadaNoServidor && (await exigirConsentimentoIa(usuario)) !== null;
+    const tentarLlm = iaLigadaNoServidor && !semIa;
 
     if (tentarLlm && !fugaCurta && (historico.length > 0 || Boolean(mensagem))) {
       const instrucaoAbertura = mensagem
@@ -741,6 +742,7 @@ export async function POST(req: NextRequest) {
 
     return ok({
       texto: textoFinal,
+      semIa,
       etapa: etapaNova,
       etapaAnterior: etapaAtual,
       etapa_concluida: corrigiuPerfil ? false : Boolean(parsed.etapa_concluida) || etapaExaurida,
