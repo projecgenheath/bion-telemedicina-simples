@@ -1,7 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { limitarAsync, obterIp, resposta429 } from "@/lib/server/rate-limit";
-import { conferirCodigoVerificacao } from "@/lib/server/verificacao-documento";
+import { conferirCodigoVerificacao, VerificacaoIndisponivelError } from "@/lib/server/verificacao-documento";
+import { crmNumeroUf } from "@/lib/medico-exibicao";
+
+/** Página e API de verificação nunca entram em buscador (também em next.config). */
+const SEM_INDEXAR = { "X-Robots-Tag": "noindex, nofollow" } as const;
+/** Teto por IP: uma farmácia confere poucas vias por minuto; 20/min barra varredura. */
+export const LIMITE_VERIFICAR_IP_POR_MIN = 20;
+
+function json(corpo: unknown, status = 200) {
+  return NextResponse.json(corpo, { status, headers: SEM_INDEXAR });
+}
 
 /**
  * Verificação PÚBLICA de documento clínico (item 26 da auditoria de
@@ -31,18 +41,22 @@ export async function GET(
 ) {
   try {
     // Rota anônima: rate-limit por IP (mesmo padrão de /api/publico/medico).
-    const teto = await limitarAsync(`publico-verificar:ip:${obterIp(req)}`, 60, 60_000);
-    if (!teto.permitido) return resposta429(teto.restanteSeg);
+    const teto = await limitarAsync(`publico-verificar:ip:${obterIp(req)}`, LIMITE_VERIFICAR_IP_POR_MIN, 60_000);
+    if (!teto.permitido) {
+      const r = resposta429(teto.restanteSeg);
+      r.headers.set("X-Robots-Tag", SEM_INDEXAR["X-Robots-Tag"]);
+      return r;
+    }
 
     const { codigo } = await params;
     if (!codigo || codigo.length > 128) {
-      return NextResponse.json({ valido: false }, { status: 400 });
+      return json({ valido: false }, 400);
     }
 
     const documentoId = conferirCodigoVerificacao(codigo);
     if (!documentoId) {
       // Assinatura não bate: não confirma nem nega a existência do id.
-      return NextResponse.json({ valido: false }, { status: 404 });
+      return json({ valido: false }, 404);
     }
 
     const doc = await db.documento.findUnique({
@@ -50,21 +64,31 @@ export async function GET(
       select: {
         tipo: true,
         createdAt: true,
+        status: true,
+        canceladoEm: true,
         medico: { select: { nome: true, perfilMedico: { select: { crm: true } } } },
       },
     });
     if (!doc) {
-      return NextResponse.json({ valido: false }, { status: 404 });
+      return json({ valido: false }, 404);
     }
 
-    return NextResponse.json({
-      valido: true,
+    const cancelado = doc.status === "cancelado";
+    return json({
+      // Cancelado: a emissão é autêntica, mas o documento NÃO vale mais.
+      valido: !cancelado,
+      cancelado,
+      canceladoEm: cancelado && doc.canceladoEm ? doc.canceladoEm.toISOString() : undefined,
       tipo: ROTULO_TIPO[doc.tipo] ?? "Documento clínico",
       emitidoEm: doc.createdAt.toISOString(),
       medico: doc.medico.nome,
-      crm: doc.medico.perfilMedico?.crm || undefined,
+      crm: doc.medico.perfilMedico?.crm ? crmNumeroUf(doc.medico.perfilMedico.crm) : undefined,
     });
-  } catch {
-    return NextResponse.json({ valido: false }, { status: 500 });
+  } catch (e) {
+    if (e instanceof VerificacaoIndisponivelError) {
+      // Falha fechada: sem o segredo neste ambiente não confirmamos nada.
+      return json({ valido: false, indisponivel: true }, 503);
+    }
+    return json({ valido: false }, 500);
   }
 }

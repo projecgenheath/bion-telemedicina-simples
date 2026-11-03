@@ -13,7 +13,7 @@ import type { UsuarioSessao } from "./auth";
 import { whereArquivosVisiveis } from "./arquivos-acesso";
 import { alturaCanonica, pesoCanonico } from "@/lib/medidas-paciente";
 import { dataNascimentoParaIso, idadeDeNascimento } from "@/lib/idade";
-import { gerarCodigoVerificacao } from "./verificacao-documento";
+import { codigoVerificacaoOuNulo } from "./verificacao-documento";
 
 /* ------------------------------------------------------------------ */
 /* Utilitários de data (rótulos do cliente: "Hoje", "Amanhã", "12 Dez") */
@@ -269,7 +269,7 @@ export function documentoWire(d: DocumentoComNomes) {
     // via (id + HMAC do servidor) — impresso nos PDFs e conferido em
     // /verificar/[codigo] sem expor dado clínico. Calculado na leitura:
     // documentos antigos ganham código sem migração nenhuma.
-    codigoVerificacao: gerarCodigoVerificacao(d.id),
+    codigoVerificacao: codigoVerificacaoOuNulo(d.id), // null sem BION_VERIFICACAO_SEGREDO (preview)
     createdAt: d.createdAt.toISOString(),
   };
 }
