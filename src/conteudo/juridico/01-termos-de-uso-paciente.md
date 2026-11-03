@@ -216,7 +216,7 @@ As funcionalidades podem mudar; mudanças relevantes serão informadas (cláusul
 
 15.2. **Forma de pagamento.** O pagamento é feito com cartão de crédito, pela Stripe. Quando houver reembolso, o valor é devolvido no mesmo cartão usado no pagamento. O estorno é pedido na hora, mas pode levar alguns dias, ou até a próxima fatura, para aparecer, conforme o prazo do banco emissor. O valor devolvido é o valor integral devido, sem desconto de taxas.
 
-15.3. **Para quem vai o dinheiro.** O pagamento é processado pela Stripe e vai direto para a conta do médico que atende a consulta. A BION recebe apenas a comissão pela intermediação. O recibo ou a nota fiscal da consulta é emitido pelo médico.
+15.3. **Para quem vai o dinheiro.** O pagamento é feito só com cartão, pela Stripe, e vai direto para a conta Stripe do médico que atende a consulta. A BION recebe apenas a sua comissão de 10% pela intermediação. **Pix não é aceito.** O recibo ou a nota fiscal da consulta é emitido pelo médico.
 
 15.4. **Confirmação.** A consulta só é confirmada depois que o pagamento for confirmado pelo gateway.
 
@@ -231,7 +231,7 @@ Resumo (as regras completas estão na **Política de Cancelamento, Reembolso e R
 | Cancelar ou remarcar com **mais de 24 h** de antecedência | Sem multa. Cancelamento: reembolso integral. |
 | Cancelar ou remarcar com **24 h ou menos** | **Multa de 50%** do valor da consulta. Cancelamento: devolvemos o valor menos a multa. Remarcação: o novo horário fica reservado por **15 minutos** enquanto você paga a multa. |
 | **Falha técnica** ou **falta/atraso do médico** | **Sem multa.** Você escolhe remarcar sem custo ou receber **reembolso integral**, em até **7 dias úteis** (contados do dia seguinte, sem contar feriados nacionais). Sem escolha nesse prazo, o reembolso integral é feito automaticamente. |
-| **Você faltou** | Se você faltar sem cancelar, não há reembolso. Se a consulta não acontecer por falta do médico ou por falha técnica, você pode pedir o reembolso integral em até 7 dias, e ele volta no mesmo cartão. |
+| **Você faltou** | Se a consulta for registrada como falta sua, você pode pedir pelo app o **reembolso integral** em até **7 dias corridos** depois do horário da consulta, com uma justificativa. O pedido é aprovado na hora e o valor volta no mesmo cartão, o que pode levar alguns dias. Sem pedido nesse prazo, não há reembolso. |
 | Renovação de receita **recusada** pelo médico | Reembolso integral. |
 
 16.1. **Como o reembolso é devolvido.** O pagamento é feito com cartão de crédito, pela Stripe. Quando houver reembolso, o valor é devolvido no mesmo cartão usado no pagamento. O estorno é pedido na hora, mas pode levar alguns dias, ou até a próxima fatura, para aparecer, conforme o prazo do banco emissor. O valor devolvido é o valor integral devido, sem desconto de taxas.
@@ -260,7 +260,7 @@ Resumo (as regras completas estão na **Política de Cancelamento, Reembolso e R
 
 # 21. Responsabilidades
 
-21.1. **Da BION:** manter a Plataforma funcionando com diligência; proteger seus dados; conferir o CRM dos médicos no cadastro e periodicamente; processar pagamentos, reembolsos e repasses conforme estes Termos; prestar informação clara; atender suas solicitações.
+21.1. **Da BION:** manter a Plataforma funcionando com diligência; proteger seus dados; conferir o CRM dos médicos no cadastro e periodicamente; processar pagamentos e reembolsos pela Stripe conforme estes Termos; prestar informação clara; atender suas solicitações.
 
 21.2. **Do médico:** o atendimento, o diagnóstico, a prescrição, os documentos, o prontuário e o sigilo profissional, conforme o Código de Ética Médica e as normas do CFM.
 

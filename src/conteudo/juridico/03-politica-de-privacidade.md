@@ -269,7 +269,7 @@ Usamos **apenas cookies essenciais de login** (`bion_sessao` e cookies `sb-*` do
 
 18.1. Os dados dos médicos são tratados para o **contrato** (cadastro, agenda, recebimentos), **obrigações regulatórias** (verificação do CRM), **obrigações fiscais**, **segurança** (alertas de troca de identificador da conta Stripe (e, no histórico anterior a 28/10/2026, a chave PIX) e de CNPJ divergente) e **divulgação do perfil público** (nome, CRM, especialidade, preço, formação, experiência, idiomas, biografia, foto, horários e avaliação média).
 
-18.2. Data de nascimento, sexo, telefone, CNPJ e dados de recebimento **não são públicos**; são vistos só pelo médico e pela administração. **O identificador da conta Stripe (e, no histórico anterior a 28/10/2026, a chave PIX) e o CPF/CNPJ do titular ficam no banco sem criptografia própria no campo**, e uma cópia é registrada em cada repasse como prova do pagamento.
+18.2. Data de nascimento, sexo, telefone, CNPJ e dados de recebimento **não são públicos**; são vistos só pelo médico e pela administração. **O identificador da conta Stripe (e, no histórico anterior a 28/10/2026, a chave PIX) e o CPF/CNPJ do titular ficam no banco sem criptografia própria no campo**, e, no histórico anterior a 28/10/2026, uma cópia foi registrada em cada repasse como prova do pagamento.
 
 18.3. O certificado A1 (recurso futuro) só será tratado com autorização expressa, criptografado, e usado exclusivamente para emitir NFS-e em nome do médico.
 
