@@ -8,6 +8,7 @@ import { avisarPacienteEspera, confirmarRemarcacaoEspera } from "@/lib/server/es
 import { aprovarMultaRemarcacao, falharMultaRemarcacao, registrarTaxaGateway } from "@/lib/server/financeiro";
 import { cancelarRenovacaoPagamentoFalhou, confirmarPagamentoRenovacao } from "@/lib/server/renovacao-pagamento";
 import { gatewayCheckout } from "@/lib/server/gateway-pagamento";
+import { registrarDisputaStripe } from "@/lib/server/chargeback";
 import { liberarEvento, reivindicarEvento, registrarEventoReembolsoStripe, stripe } from "@/lib/server/stripe";
 import { acaoDoEvento, moedaCheckout, moedaConfere, multaDaSessao, referenciaConfere, valorConfere } from "@/lib/stripe-checkout-logica";
 
@@ -78,6 +79,10 @@ async function processar(evento: Stripe.Event): Promise<Record<string, unknown>>
   if (acao === "reembolso") {
     // Reembolsos são do Admin (src/lib/server/stripe.ts).
     return { acao, atualizados: await registrarEventoReembolsoStripe(evento) };
+  }
+  if (acao === "disputa") {
+    // Chargeback (Admin, src/lib/server/chargeback.ts): registra a disputa; o desconto ao médico é do repasse.
+    return { acao, registrada: await registrarDisputaStripe(evento.data.object as unknown as Parameters<typeof registrarDisputaStripe>[0]) };
   }
   if (acao === "taxa") {
     return { acao, preenchida: await preencherTaxaDaCharge(evento.data.object as Stripe.Charge, conta) };

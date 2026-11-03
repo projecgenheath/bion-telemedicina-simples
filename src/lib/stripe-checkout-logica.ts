@@ -318,7 +318,7 @@ export function sessaoReaproveitavel(
 
 /* ----------------------------- webhook ----------------------------- */
 
-export type AcaoWebhook = "confirmar" | "falhar" | "expirar" | "aguardar" | "reembolso" | "taxa" | "ignorar";
+export type AcaoWebhook = "confirmar" | "falhar" | "expirar" | "aguardar" | "reembolso" | "taxa" | "ignorar" | "disputa";
 
 /** O que fazer com cada evento do Stripe. */
 export function acaoDoEvento(tipo: string, paymentStatus?: string | null): AcaoWebhook {
@@ -340,6 +340,12 @@ export function acaoDoEvento(tipo: string, paymentStatus?: string | null): AcaoW
     case "refund.updated":
     case "refund.failed":
       return "reembolso";
+    case "charge.dispute.created":
+    case "charge.dispute.updated":
+    case "charge.dispute.closed":
+    case "charge.dispute.funds_withdrawn":
+    case "charge.dispute.funds_reinstated":
+      return "disputa"; // chargeback (Admin, src/lib/server/chargeback.ts)
     default:
       return "ignorar";
   }
