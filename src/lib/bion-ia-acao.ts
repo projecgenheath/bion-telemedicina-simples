@@ -5,7 +5,33 @@
  * O servidor TIRA o marcador do texto e manda a ação num evento próprio; o
  * chat mostra o card com o botão para agendar. O texto nunca mostra o marcador.
  */
-export type AcaoBionIa = { tipo: "agendar"; especialidade: string | null };
+export type AcaoBionIa = {
+  tipo: "agendar";
+  especialidade: string | null;
+  /** Código interno do médico (M1, M2…) que o modelo escolheu. Só o servidor o resolve. */
+  codigo?: string | null;
+  /** Preenchidos pelo SERVIDOR (resolverAcaoAgendar), nunca vêm do modelo. */
+  medicoId?: string | null;
+  medico?: string | null;
+};
+
+/** Médico disponível como o servidor guarda: o código vai à IA; id e nome, não. */
+export type MedicoCodificado = { codigo: string; id: string; nome: string; especialidade: string };
+
+/**
+ * Troca o código (M1…) pelo médico real ao montar o card. Código desconhecido
+ * é ignorado (fica só a especialidade). O código não sai para o cliente.
+ */
+export function resolverAcaoAgendar(acao: AcaoBionIa | null, medicos: MedicoCodificado[]): AcaoBionIa | null {
+  if (!acao) return null;
+  const m = acao.codigo ? medicos.find((x) => x.codigo.toUpperCase() === acao.codigo!.toUpperCase()) : undefined;
+  return {
+    tipo: "agendar",
+    especialidade: acao.especialidade ?? m?.especialidade ?? null,
+    medicoId: m?.id ?? null,
+    medico: m?.nome ?? null,
+  };
+}
 
 const RE_ACAO = /\[\[\s*AGENDAR\s*(?::\s*([^\]\n]{0,60}))?\]\]/i;
 const RE_TODAS = /\[\[\s*AGENDAR\s*(?::\s*[^\]\n]{0,60})?\]\]/gi;
@@ -23,8 +49,14 @@ function podeSerMarcador(t: string): boolean {
 export function extrairAcao(texto: string): { texto: string; acao: AcaoBionIa | null } {
   const m = RE_ACAO.exec(texto);
   if (!m) return { texto, acao: null };
-  const esp = (m[1] ?? "").trim();
-  return { texto: texto.replace(RE_TODAS, "").replace(/[ \t]+\n/g, "\n").trim(), acao: { tipo: "agendar", especialidade: esp || null } };
+  // "[[AGENDAR: Cardiologia | M2]]", "[[AGENDAR: M2]]" ou "[[AGENDAR: Cardiologia]]"
+  const partes = (m[1] ?? "").split(/[|,;]/).map((x) => x.trim()).filter(Boolean);
+  const codigo = partes.find((x) => /^M\d{1,3}$/i.test(x)) ?? null;
+  const esp = partes.filter((x) => x !== codigo).join(" ").trim();
+  return {
+    texto: texto.replace(RE_TODAS, "").replace(/[ \t]+\n/g, "\n").trim(),
+    acao: { tipo: "agendar", especialidade: esp || null, codigo: codigo ? codigo.toUpperCase() : null },
+  };
 }
 
 /**

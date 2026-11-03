@@ -68,3 +68,6 @@ export function ehConsentimentoIaPendente(status: number, corpo: unknown): boole
     (corpo as { codigo?: unknown }).codigo === CODIGO_CONSENTIMENTO_IA_PENDENTE
   );
 }
+
+/** Aviso fixo acima da triagem e do campo do chat (pedido do Jurídico). */
+export const AVISO_DADOS_PESSOAIS_IA = "Não escreva nomes, CPF ou dados de outras pessoas";

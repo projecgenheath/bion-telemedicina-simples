@@ -3,7 +3,7 @@
 import { CODIGO_ACEITE_TERMOS_PENDENTE, ERRO_ACEITE_TERMOS_PENDENTE } from "@/lib/aceite-termos";
 import { textoNota } from "@/lib/medico-exibicao";
 import { ErroBionIa, consultarConsentimentoIa, perguntarBionIa } from "@/lib/bion-ia-cliente";
-import { ehConsentimentoIaPendente } from "@/lib/consentimento-ia";
+import { AVISO_DADOS_PESSOAIS_IA, ehConsentimentoIaPendente } from "@/lib/consentimento-ia";
 import { useEffect, useRef, useState } from "react";
 import { useVoltarFecha } from "./useVoltarFecha";
 import { useFocoDialogo } from "./useFocoDialogo";
@@ -16,6 +16,7 @@ import {
   FileUp,
   Lock,
   Send,
+  ShieldAlert,
   Sparkles,
   Star,
   Stethoscope,
@@ -102,7 +103,7 @@ export function ChatBion({
   // conversa; o consentimento continua não dado e pode ser ativado depois).
   const [iaRecusada, setIaRecusada] = useState(false);
   // Card "Agendar consulta" sugerido pela IA (ex.: depois de um sintoma).
-  const [ofertaAgendar, setOfertaAgendar] = useState<{ especialidade: string | null } | null>(null);
+  const [ofertaAgendar, setOfertaAgendar] = useState<{ especialidade: string | null; medicoId?: string | null; medico?: string | null } | null>(null);
   // M22: selo do cabeçalho reflete o estado real — vira "pausada" quando o
   // servidor responde bion_ia_pausada e volta a "online" no próximo sucesso.
   const [iaPausada, setIaPausada] = useState(false);
@@ -477,7 +478,8 @@ export function ChatBion({
         { onDelta: mostrarParcial, onRaciocinio: mostrarRaciocinio },
       );
       setIaPausada(false);
-      if (r.acao?.tipo === "agendar") setOfertaAgendar({ especialidade: r.acao.especialidade });
+      if (r.acao?.tipo === "agendar")
+        setOfertaAgendar({ especialidade: r.acao.especialidade, medicoId: r.acao.medicoId ?? null, medico: r.acao.medico ?? null });
       setMensagens((m) => {
         const final = {
           remetente: "ia" as const,
@@ -553,8 +555,11 @@ export function ChatBion({
 
   /** Card da IA: médico disponível da especialidade sugerida (ou o 1º ativo). */
   const normalizarEsp = (t: string) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+  // O servidor já trocou o código (M1…) pelo médico: procura por id, depois nome.
   const medicoOferta = ofertaAgendar
-    ? (ofertaAgendar.especialidade
+    ? (ofertaAgendar.medicoId ? medicosAtivos.find((m) => m.id === ofertaAgendar.medicoId) : undefined) ??
+      (ofertaAgendar.medico ? medicosAtivos.find((m) => m.nome === ofertaAgendar.medico) : undefined) ??
+      (ofertaAgendar.especialidade
         ? medicosAtivos.find((m) => normalizarEsp(m.especialidade) === normalizarEsp(ofertaAgendar.especialidade ?? ""))
         : undefined) ?? medicosAtivos[0]
     : undefined;
@@ -1071,6 +1076,9 @@ export function ChatBion({
 
       {/* Entrada */}
       <div className="px-5 pb-5 bp-safe-bottom">
+        <p className="text-xs text-bion-ink/80 dark:text-bion-paper/80 mb-2 px-2 inline-flex items-center gap-1.5" role="note">
+          <ShieldAlert className="w-3.5 h-3.5 shrink-0" aria-hidden /> {AVISO_DADOS_PESSOAIS_IA}
+        </p>
         <div className="bp-glass flex items-center gap-2 !rounded-full p-2 pl-5">
           <input
             value={entrada}

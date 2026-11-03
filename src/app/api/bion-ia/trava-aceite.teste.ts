@@ -21,7 +21,7 @@ mock.module("@/lib/server/llm", () => ({
   chatComFonte: async (msgs: { role: string; content: string }[]) => {
     chamadasLlm++;
     ultimasMensagens = msgs;
-    return { texto: "Desde quando dói?\n[[AGENDAR: Clínica Médica]]", raciocinio: "", fonte: "nvidia", modelo: "m", registros: [] };
+    return { texto: "Desde quando dói?\n[[AGENDAR: Clínica Médica | M1]]", raciocinio: "", fonte: "nvidia", modelo: "m", registros: [] };
   },
   chatStreamComFonte: async function* () {
     chamadasLlm++;
@@ -40,7 +40,7 @@ mock.module("@/lib/server/llm", () => ({
   consulta: { findMany: async () => [], count: async () => 0 },
   exameLaboratorial: { findMany: async () => [{ titulo: "Hemograma", dataColeta: new Date("2026-10-01T12:00:00Z") }] },
   anamnese: { findMany: async () => [] },
-  perfilMedico: { findMany: async () => [{ especialidade: "Clínica Médica", user: { nome: "Dra. B" } }] },
+  perfilMedico: { findMany: async () => [{ especialidade: "Clínica Médica", user: { id: "med-1", nome: "Dra. B" } }] },
   medicamentoEmUso: { findMany: async () => [] },
 };
 const fetchOriginal = globalThis.fetch;
@@ -124,11 +124,13 @@ test("com os dois aceites atuais → chega ao LLM", async () => {
   // contexto: system com papel + perfil; ação separada do texto
   expect(ultimasMensagens[0].content).toContain("app de telemedicina BION");
   expect(ultimasMensagens[0].content).toContain("dipirona");
-  expect(ultimasMensagens[0].content).toContain("Dra. B (Clínica Médica)");
+  expect(ultimasMensagens[0].content).toContain("M1 (Clínica Médica)");
+  expect(JSON.stringify(ultimasMensagens)).not.toContain("Dra. B");
   expect(ultimasMensagens[0].content).toContain("SAMU 192");
   const j = (await r.json()) as { resposta: string; acao: unknown };
   expect(j.resposta).toBe("Desde quando dói?");
-  expect(j.acao).toEqual({ tipo: "agendar", especialidade: "Clínica Médica" });
+  // o servidor troca M1 pelo médico ao montar o card
+  expect(j.acao).toEqual({ tipo: "agendar", especialidade: "Clínica Médica", medicoId: "med-1", medico: "Dra. B" });
 });
 
 test("saudação ('Bom dia') também leva o contexto e o histórico vai inteiro (até 12)", async () => {
@@ -139,4 +141,25 @@ test("saudação ('Bom dia') também leva o contexto e o histórico vai inteiro 
   expect(ultimasMensagens.length).toBe(13);
   expect(ultimasMensagens.at(-1)?.content).toBe("Bom dia");
   globalThis.fetch = fetchOriginal;
+});
+
+test("paciente: CPF, telefone, e-mail e nomes de terceiros saem antes da IA", async () => {
+  termosAceitos = termosVigentes;
+  registro = { aceito: true, finalidade: FINALIDADE_CONSENTIMENTO_IA, createdAt: new Date() };
+  await POST(
+    new Request("http://teste/api/bion-ia", {
+      method: "POST",
+      body: JSON.stringify({
+        mensagens: [{ remetente: "usuario", texto: "Minha filha Ana Paula tem febre. CPF 123.456.789-09, tel (11) 98765-4321, x@y.com" }],
+      }),
+    }) as never,
+  );
+  const u = ultimasMensagens.at(-1)?.content ?? "";
+  for (const proibido of ["Ana Paula", "123.456.789-09", "98765-4321", "x@y.com"]) expect(u).not.toContain(proibido);
+  expect(u).toContain("febre");
+});
+test("histórico enviado à IA: no máximo 12 mensagens", async () => {
+  const hist = Array.from({ length: 30 }, (_, i) => ({ remetente: i % 2 ? "ia" : "usuario", texto: `m${i}` }));
+  await POST(new Request("http://teste/api/bion-ia", { method: "POST", body: JSON.stringify({ mensagens: hist }) }) as never);
+  expect(ultimasMensagens.length - 1).toBeLessThanOrEqual(12);
 });

@@ -20,6 +20,7 @@ import { validarTelefone } from "@/lib/server/validar-perfil";
 import { dataNascimentoParaIso, idadeDeNascimento } from "@/lib/idade";
 import { anonimizarMensagensIa } from "@/lib/server/anonimizar-ia";
 import { anonimizarMensagensTexto } from "@/lib/server/anonimizar-texto";
+import { filtrarMensagensDaPaciente } from "@/lib/server/filtro-dados-pessoais";
 import { alturaCanonica, formatarAltura, formatarPeso, lerAlturaCm, lerPesoKg, medidaCanonica, pesoCanonico } from "@/lib/medidas-paciente";
 import { nomesMedicamentosEmUso } from "@/lib/server/medicamentos-legado";
 
@@ -496,7 +497,8 @@ export async function POST(req: NextRequest) {
     const mensagem = (body.mensagem ?? "").trim().slice(0, 4000);
     const historico = (body.historico ?? [])
       .filter((m) => m?.texto?.trim() && ["usuario", "ia"].includes(m.remetente))
-      .slice(-14);
+      // Teto de 12 mensagens para a IA: 11 do histórico + a mensagem atual.
+      .slice(-11);
 
     const perfilDados = await montarPerfilDados(usuario.id);
 
@@ -607,7 +609,9 @@ export async function POST(req: NextRequest) {
           anonimizarMensagensTexto(mensagensIdent, { nomesPacientes: [consulta.medico.nome], substitutoNome: "o médico" }),
           { nomesPacientes: [usuario.nome] },
         );
-        const llmRes = await chatComFonte(mensagensIa, TIMEOUT_LLM_MS, anonNomes(usuario, consulta.medico.nome, perfilDados?.genero ?? ""));
+        // Nomes de terceiros, CPF, telefone e e-mail no que a paciente digitou.
+        const mensagensFiltradas = filtrarMensagensDaPaciente(mensagensIa, { nomesConhecidos: [usuario.nome] });
+        const llmRes = await chatComFonte(mensagensFiltradas, TIMEOUT_LLM_MS, anonNomes(usuario, consulta.medico.nome, perfilDados?.genero ?? ""));
         llmFonte = llmRes.fonte;
         parsed = llmRes.texto ? extrairJson(llmRes.texto) : null;
 

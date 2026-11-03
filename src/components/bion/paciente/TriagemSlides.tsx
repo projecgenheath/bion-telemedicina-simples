@@ -1,5 +1,6 @@
 "use client";
 
+import { AVISO_DADOS_PESSOAIS_IA } from "@/lib/consentimento-ia";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useVoltarFecha } from "./useVoltarFecha";
 import { useFocoDialogo } from "./useFocoDialogo";
@@ -320,13 +321,16 @@ export function TriagemSlides({
                     </button>
                   ))}
                 </div>
+                <p className="mt-4 text-xs bpp-sheet-suave" role="note">
+                  {AVISO_DADOS_PESSOAIS_IA}
+                </p>
                 <textarea
                   value={rascunhos[item.id] ?? ""}
                   onChange={(e) => setRascunhos((r) => ({ ...r, [item.id]: e.target.value }))}
                   rows={3}
                   aria-label="Sua resposta"
                   placeholder="Escreva sua resposta aqui…"
-                  className="mt-4 w-full min-h-24 shrink-0 rounded-2xl border bpp-sheet-borda p-3 text-sm bpp-sheet-campo"
+                  className="mt-2 w-full min-h-24 shrink-0 rounded-2xl border bpp-sheet-borda p-3 text-sm bpp-sheet-campo"
                 />
               </>
             ) : null}

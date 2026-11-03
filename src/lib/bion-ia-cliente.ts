@@ -26,9 +26,10 @@ export type RespostaBionIa = {
 };
 
 function lerAcao(v: unknown): AcaoBionIa | null {
-  const a = v as { tipo?: unknown; especialidade?: unknown } | null;
+  const a = v as { tipo?: unknown; especialidade?: unknown; medicoId?: unknown; medico?: unknown } | null;
   if (!a || a.tipo !== "agendar") return null;
-  return { tipo: "agendar", especialidade: typeof a.especialidade === "string" && a.especialidade.trim() ? a.especialidade.trim() : null };
+  const txt = (x: unknown) => (typeof x === "string" && x.trim() ? x.trim() : null);
+  return { tipo: "agendar", especialidade: txt(a.especialidade), medicoId: txt(a.medicoId), medico: txt(a.medico) };
 }
 
 /** Aviso mostrado na resposta e no bloco "ver como a IA pensou". */
@@ -124,7 +125,8 @@ export async function perguntarBionIa(
       res = await fetch("/api/bion-ia", {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/x-ndjson" },
-        body: JSON.stringify({ mensagens, stream: true }),
+        // Teto de 12 mensagens (o servidor também corta).
+        body: JSON.stringify({ mensagens: mensagens.slice(-12), stream: true }),
         signal: ctrl.signal,
       });
     } catch {
