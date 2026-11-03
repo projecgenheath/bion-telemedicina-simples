@@ -27,18 +27,36 @@ const PALAVRA_MAIUSC = String.raw`\p{Lu}[\p{Ll}\p{M}'’-]+`;
 const conjunto = (l: string[]) => new Set(l.map((p) => p.toLowerCase().normalize("NFC")));
 
 /**
- * (a) Instituição/lugar/termo fixo: a partir desta palavra a sequência fica
- * ("Hospital Santa Maria", "São Paulo", "Clínica Médica"). O que vem ANTES
- * dela ainda pode ser nome ("Carla Mendes Hospital" → "[nome removido] Hospital").
+ * (a) INSTITUIÇÕES/LUGARES: a partir desta palavra a sequência fica
+ * ("Hospital Santa Maria", "São Paulo", "Rua Augusta"). O que vem ANTES dela
+ * ainda pode ser nome ("Carla Mendes Hospital" → "[nome removido] Hospital").
  */
-const FIXOS = conjunto([
+const INSTITUICOES = conjunto([
   "hospital", "clínica", "clinica", "casa", "posto", "laboratório", "laboratorio", "farmácia", "farmacia", "unimed", "pronto", "socorro",
   "são", "sao", "santa", "santo", "rio", "belo", "horizonte", "porto", "alegre", "campo", "grande", "norte", "sul", "dom", "brasil",
   "rua", "avenida", "av", "praça", "praca", "alameda", "travessa", "rodovia", "estrada",
   "bion", "ia", "samu", "sus", "ubs", "upa", "nvidia", "google", "deus", "covid", "aids", "hiv",
+]);
+
+/**
+ * Lugares que também viram SOBRENOME ("Maria Santa Souza", "Joana Brasil"):
+ * quando a sequência já é nome, a remoção continua através deles.
+ */
+/** Prefixos de lugar/santo: o nome comum logo depois é parte do lugar. */
+const PREFIXO_LUGAR = conjunto(["são", "sao", "santa", "santo", "dom", "rio", "porto", "belo", "campo", "vila", "jardim"]);
+
+const CONTINUA_NOME = conjunto(["são", "sao", "santa", "santo", "dom", "brasil"]);
+
+/**
+ * SEPARADORES: palavras comuns com maiúscula (saudação, começo de frase,
+ * dias, meses). Saem da sequência e o que vem depois é avaliado como uma
+ * sequência NOVA ("Oi Carla" → "Oi [nome removido]").
+ */
+const SEPARADORES = conjunto([
   "janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro",
   "segunda", "terça", "quarta", "quinta", "sexta", "sábado", "domingo", "feira",
-  "médica", "medica", "geral", "dor", "eu", "oi", "olá", "bom", "boa", "dia", "tarde", "noite",
+  "médica", "medica", "geral", "dor", "eu", "oi", "olá", "ola", "bom", "boa", "dia", "tarde", "noite",
+  "sou", "estou", "moro", "tenho", "hoje", "ontem", "amanhã", "quero", "preciso", "fui", "tomo", "meu", "minha", "obrigado", "obrigada",
 ]);
 
 /**
@@ -68,7 +86,9 @@ export const NOMES_COMUNS_BR = [
 const SET_NOMES_COMUNS = new Set(NOMES_COMUNS_BR.map((n) => n.normalize("NFC")));
 
 const chave = (w: string) => w.toLowerCase().normalize("NFC");
-const ehFixo = (w: string) => FIXOS.has(chave(w));
+const ehInstituicao = (w: string) => INSTITUICOES.has(chave(w));
+const ehSeparador = (w: string) => SEPARADORES.has(chave(w));
+const continuaNome = (w: string) => CONTINUA_NOME.has(chave(w));
 const ehAmbiguo = (w: string) => AMBIGUOS.has(chave(w));
 const ehNomeComum = (w: string) => SET_NOMES_COMUNS.has(w.normalize("NFC")) && !ehAmbiguo(w);
 
@@ -98,49 +118,118 @@ function depoisDeLugar(texto: string, i: number): boolean {
 }
 
 /**
- * Decide, numa sequência capitalizada, de que palavra (índice) começa o nome;
- * -1 = não é nome. `palavras` já exclui a parte fixa (instituição/lugar).
+ * Decide, numa região capitalizada sem instituições nem separadores, de que
+ * palavra (índice) começa o nome; -1 = não é nome.
+ * `iniRegiao` = posição da 1ª palavra no texto (para gatilho/lugar);
+ * `comecoFrase` = a região abre a frase (talvez depois de separadores).
  */
-function inicioDoNome(palavras: string[], antes: string, todo: string, i: number): number {
+function inicioDoNome(palavras: string[], todo: string, iniRegiao: number, comecoFrase: boolean): number {
   if (!palavras.length) return -1;
-  const forte = RE_GATILHO_FORTE.test(antes);
-  if (forte) return 0;
-  const idxComum = palavras.findIndex(ehNomeComum);
+  const antes = todo.slice(Math.max(0, iniRegiao - 40), iniRegiao);
+  if (RE_GATILHO_FORTE.test(antes)) return 0;
+  const lugar = depoisDeLugar(todo, iniRegiao);
   if (palavras.length === 1) {
     const w = palavras[0];
     if (ehNomeComum(w)) return 0;
-    if (ehAmbiguo(w) && RE_GATILHO_FRACO.test(antes)) return 0;
+    if (ehAmbiguo(w) && !lugar && RE_GATILHO_FRACO.test(antes)) return 0;
     return -1; // "Curitiba", "Losartana", "pele Rosa", "moro em Vitória"
   }
   // 2+ palavras
-  if (depoisDeLugar(todo, i) && !ehNomeComum(palavras[0])) return -1; // "nasci em Campo Grande", "em Vitória da Conquista"
-  if (ehNomeComum(palavras[0]) || ehAmbiguo(palavras[0])) return 0; // "Rosa Maria Souza", "Vitória Almeida", "Natal Pereira"
-  if (inicioDeFrase(todo, i)) {
-    // "Hoje Carla Mendes": a 1ª é só o começo da frase; o nome começa no 1º
-    // nome comum/ambíguo. Sem nenhum ("Tomo Losartana Potássica") não é nome.
-    const k = palavras.findIndex((w, j) => j > 0 && (ehNomeComum(w) || ehAmbiguo(w)));
-    return k > 0 ? k : -1;
+  if (lugar && !ehNomeComum(palavras[0])) return -1; // "em Campo Grande", "da Vitória Almeida" (limitação conhecida)
+  if (ehNomeComum(palavras[0]) || ehAmbiguo(palavras[0])) return 0; // "Rosa Maria Souza", "Vitória Almeida"
+  const k = palavras.findIndex((w, j) => j > 0 && (ehNomeComum(w) || ehAmbiguo(w)));
+  if (comecoFrase) return k > 0 ? k : -1; // "Tomo Losartana Potássica" fica
+  return k > 0 ? k : 0; // meio da frase, 2+ maiúsculas: nome
+}
+
+type Palavra = { w: string; k: number; pos: number };
+
+/** Intervalos [de, ate] (índices de `partes`) a trocar numa sequência. */
+function nomesNoSegmento(W: Palavra[], todo: string, comecoFrase: boolean): [number, number][] {
+  if (!W.length) return [];
+  const c = W.findIndex((p) => ehInstituicao(p.w));
+  if (c === 0) {
+    // "a Santa Clara Souza ligou": Santa/São + 2 palavras sem instituição = nome
+    // (fora de contexto de lugar: "moro em São José dos Campos" fica).
+    const antes = todo.slice(Math.max(0, W[0].pos - 40), W[0].pos);
+    if (
+      continuaNome(W[0].w) &&
+      W.length >= 3 &&
+      !W.slice(1).some((p) => ehInstituicao(p.w)) &&
+      !depoisDeLugar(todo, W[0].pos) &&
+      (RE_GATILHO_FORTE.test(antes) || !comecoFrase)
+    )
+      return [[W[0].k, W.at(-1)!.k]];
+    // Depois da instituição: "Hospital Carla Mendes" → "Hospital [nome removido]"
+    // só se a palavra seguinte for nome comum ("Hospital Albert Einstein" fica).
+    let j = 0;
+    while (j < W.length && ehInstituicao(W[j].w)) j++;
+    // Mas "São Paulo", "Santa Maria", "Hospital São Lucas": depois de prefixo de
+    // lugar/santo o nome comum faz parte do nome do lugar e fica.
+    if (j < W.length && ehNomeComum(W[j].w) && !PREFIXO_LUGAR.has(chave(W[j - 1].w))) {
+      let fim = j;
+      while (fim + 1 < W.length && !ehInstituicao(W[fim + 1].w)) fim++;
+      return [[W[j].k, W[fim].k], ...nomesNoSegmento(W.slice(fim + 1), todo, false)];
+    }
+    // pula até a próxima palavra não-instituição e avalia o resto
+    let prox = j;
+    while (prox < W.length && !ehInstituicao(W[prox].w)) prox++;
+    return nomesNoSegmento(W.slice(prox), todo, false);
   }
-  return idxComum >= 0 ? idxComum : 0; // meio da frase, 2+ maiúsculas: nome
+  const fimRegiao = c < 0 ? W.length : c;
+  const regiao = W.slice(0, fimRegiao);
+  const ini = inicioDoNome(regiao.map((p) => p.w), todo, regiao[0].pos, comecoFrase);
+  if (ini < 0) return c < 0 ? [] : nomesNoSegmento(W.slice(c), todo, false);
+  let fim = fimRegiao - 1;
+  // Já é nome: continua por Santa/São/Brasil… e o que vier ("Maria Santa Souza").
+  while (fim + 1 < W.length && continuaNome(W[fim + 1].w)) {
+    fim++;
+    while (fim + 1 < W.length && !ehInstituicao(W[fim + 1].w)) fim++;
+  }
+  return [[regiao[ini].k, W[fim].k], ...nomesNoSegmento(W.slice(fim + 1), todo, false)];
 }
 
 export function filtrarNomesProprios(texto: string): string {
   const t = texto.replace(RE_SEQUENCIA, (seq: string, i: number, todo: string) => {
-    // Tokens alternados: palavra, separador, palavra… (partículas são palavras minúsculas)
+    // Tokens alternados: palavra, separador de espaço, palavra… (partículas são minúsculas)
     const partes = seq.split(/(\s+)/u);
-    const idxPalavras: number[] = [];
-    for (let k = 0; k < partes.length; k += 2) if (/^\p{Lu}/u.test(partes[k])) idxPalavras.push(k);
-    // Corta na 1ª palavra fixa: dali em diante a sequência fica intacta.
-    const corte = idxPalavras.findIndex((k) => ehFixo(partes[k]));
-    const nomeIdx = corte >= 0 ? idxPalavras.slice(0, corte) : idxPalavras;
-    const palavras = nomeIdx.map((k) => partes[k]);
-    const ini = inicioDoNome(palavras, todo.slice(Math.max(0, i - 40), i), todo, i);
-    if (ini < 0) return seq;
-    const de = nomeIdx[ini];
-    const ate = corte >= 0 ? idxPalavras[corte] : partes.length; // exclusivo
-    const antesNome = partes.slice(0, de).join("");
-    const resto = corte >= 0 ? partes.slice(ate - 1).join("") : ""; // inclui o espaço antes do fixo
-    return `${antesNome}${SUBSTITUTO_NOME_TERCEIRO}${resto}`;
+    const pos: number[] = [];
+    let acc = i;
+    for (const p of partes) {
+      pos.push(acc);
+      acc += p.length;
+    }
+    const palavras: Palavra[] = [];
+    for (let k = 0; k < partes.length; k += 2) if (/^\p{Lu}/u.test(partes[k])) palavras.push({ w: partes[k], k, pos: pos[k] });
+    // Separadores quebram a sequência em segmentos independentes.
+    const intervalos: [number, number][] = [];
+    let seg: Palavra[] = [];
+    let frase = inicioDeFrase(todo, i);
+    let fraseDoSeg = frase;
+    const fechar = () => {
+      intervalos.push(...nomesNoSegmento(seg, todo, fraseDoSeg));
+      seg = [];
+    };
+    for (const p of palavras) {
+      if (ehSeparador(p.w)) {
+        fechar();
+        // "Oi Carla": o que vem depois de um separador no começo da frase
+        // ainda conta como começo de frase (só para "Tomo Losartana Potássica").
+        fraseDoSeg = frase;
+        continue;
+      }
+      if (!seg.length) fraseDoSeg = frase;
+      seg.push(p);
+      frase = false;
+    }
+    fechar();
+    if (!intervalos.length) return seq;
+    const out = partes.slice();
+    for (const [de, ate] of intervalos) {
+      out[de] = SUBSTITUTO_NOME_TERCEIRO;
+      for (let x = de + 1; x <= ate; x++) out[x] = "";
+    }
+    return out.join("").replace(/\[nome removido\]\s+(?=\s)/gu, SUBSTITUTO_NOME_TERCEIRO);
   });
   // "[nome removido] [nome removido]" → um só
   return t.replace(/\[nome removido\](?:\s+\[nome removido\])+/gu, SUBSTITUTO_NOME_TERCEIRO);

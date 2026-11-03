@@ -111,3 +111,31 @@ test("ambíguas sozinhas, lugares e instituições continuam", () => {
   ])
     expect(filtrarNomesProprios(s)).toBe(s);
 });
+test("separadores (saudação, dias, 'Eu') não protegem o nome que vem depois", () => {
+  const casos: [string, string][] = [
+    ["Oi Carla, tudo bem", "Oi [nome removido], tudo bem"],
+    ["Eu Maria Souza tenho febre", "Eu [nome removido] tenho febre"],
+    ["Segunda Ana Paula vem", "Segunda [nome removido] vem"],
+  ];
+  for (const [e, s] of casos) expect(filtrarNomesProprios(e)).toBe(s);
+});
+test("sobrenome depois de Santa/São/Brasil continua sendo removido", () => {
+  const casos: [string, string][] = [
+    ["minha filha Maria Santa Souza tem febre", "minha filha [nome removido] tem febre"],
+    ["a Santa Clara Souza ligou", "a [nome removido] ligou"],
+    ["Joana Brasil ligou", "[nome removido] ligou"],
+  ];
+  for (const [e, s] of casos) expect(filtrarNomesProprios(e)).toBe(s);
+});
+test("decisão documentada: instituição + nome comum → 'Hospital [nome removido]'", () => {
+  expect(filtrarNomesProprios("Fui no Hospital Carla Mendes")).toBe("Fui no Hospital [nome removido]");
+  // nome que não está na lista de nomes comuns: fica (pode ser o nome do hospital)
+  expect(filtrarNomesProprios("Fui no Hospital Albert Einstein")).toBe("Fui no Hospital Albert Einstein");
+});
+test("começo de frase com maiúscula + lugar continua intacto", () => {
+  for (const s of ["Sou de Aparecida", "Moro em Vitória", "Moro em São José dos Campos", "Tomo Losartana Potássica.", "Clínica Médica"])
+    expect(filtrarNomesProprios(s)).toBe(s);
+});
+test("limitação conhecida: 'da Vitória Almeida' passa (para manter 'Vitória da Conquista')", () => {
+  expect(filtrarNomesProprios("a consulta da Vitória Almeida")).toBe("a consulta da Vitória Almeida");
+});
