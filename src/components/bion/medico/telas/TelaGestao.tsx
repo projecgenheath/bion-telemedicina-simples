@@ -16,17 +16,15 @@ import {
 import type { DadosMedico } from "../useDadosMedico";
 import { gradeDeCampos, horariosDoDia } from "@/lib/grade-semana";
 
-/** Tela 2 — receita líquida (30 dias) + preço/promoções + agenda. */
+/** Tela 2 — receita líquida (30 dias) + preço + agenda. */
 export function TelaGestao({
   dados,
   onAbrirPreco,
   onAbrirAgenda,
-  onAbrirPromocoes,
 }: {
   dados: DadosMedico;
   onAbrirPreco: () => void;
   onAbrirAgenda: () => void;
-  onAbrirPromocoes: () => void;
 }) {
   const { medico, receita } = dados;
   // medico undefined durante o bootstrap NÃO é "em validação": o
@@ -68,10 +66,6 @@ export function TelaGestao({
               </div>
               <div className="mt-1 text-2xl font-black tabular-nums">{fmtBRL(medico.valor)}</div>
             </button>
-            <div className="mt-2 flex items-center gap-2 text-sm text-bion-ink/75 dark:text-bion-paper/75">
-              {/* Irmão do botão de preço — antes era <button> dentro de <button> (HTML inválido). */}
-              <button type="button" onClick={onAbrirPromocoes} className="text-xs font-bold text-bion-sea dark:text-sky-300">Promoções</button>
-            </div>
           </div>
 
           <button
