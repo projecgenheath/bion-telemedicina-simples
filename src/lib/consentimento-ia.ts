@@ -42,6 +42,10 @@ export function rotuloVersoes(...versoes: string[]): string {
   return datas.length === 1 ? `versão de ${datas[0]}` : `versões de ${datas.join(" e ")}`;
 }
 
+/** Aviso da triagem sem consentimento da IA (texto do Jurídico). */
+export const AVISO_TRIAGEM_SEM_IA =
+  "Você está usando a triagem sem a BION IA, com perguntas automáticas básicas. Para ativar a IA, toque em Ativar a BION IA.";
+
 /** Prefixo comum a aceites e revogações (para achar os registros). */
 export const PREFIXO_FINALIDADE_IA = "Uso da BION IA";
 

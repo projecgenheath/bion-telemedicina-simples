@@ -38,7 +38,7 @@ import {
 } from "./chat-bion-types";
 import { ChatListaMensagens } from "./ChatListaMensagens";
 import { ConsentimentoLaudoIA } from "./ConsentimentoLaudoIA";
-import { AvisoSemIA, CardAceiteIA } from "./ConsentimentoIA";
+import { AvisoSemIA, AvisoTriagemSemIA, CardAceiteIA } from "./ConsentimentoIA";
 import { CAMPO_CONSENTIMENTO_IA_EXAME, VERSAO_CONSENTIMENTO_IA_EXAME } from "@/lib/consentimento-ia-exame";
 
 /**
@@ -102,6 +102,9 @@ export function ChatBion({
   // A IA é opcional: a paciente escolheu "Usar o app sem a IA" (só nesta
   // conversa; o consentimento continua não dado e pode ser ativado depois).
   const [iaRecusada, setIaRecusada] = useState(false);
+  // Triagem no chat sem a IA (servidor mandou semIa): aviso + card sob demanda.
+  const [triagemSemIa, setTriagemSemIa] = useState(false);
+  const [cardTriagemIa, setCardTriagemIa] = useState(false);
   // Card "Agendar consulta" sugerido pela IA (ex.: depois de um sintoma).
   const [ofertaAgendar, setOfertaAgendar] = useState<{ especialidade: string | null; medicoId?: string | null; medico?: string | null } | null>(null);
   // M22: selo do cabeçalho reflete o estado real — vira "pausada" quando o
@@ -195,6 +198,7 @@ export function ChatBion({
       setMensagens((m) => [...m, { remetente: "ia", texto, tipo: "anamnese", fonte: json.fonte }]);
       histAnamneseRef.current.push({ remetente: "ia", texto: json.texto });
       setAnamneseAtiva((a) => (a ? { ...a, etapa: json.etapa ?? a.etapa } : a));
+      if (typeof json.semIa === "boolean") setTriagemSemIa(json.semIa);
     } catch {
       setMensagens((m) => [
         ...m,
@@ -255,6 +259,7 @@ export function ChatBion({
       setMensagens((m) => [...m, { remetente: "ia", texto, tipo: "anamnese", fonte: json.fonte }]);
       histAnamneseRef.current.push({ remetente: "ia", texto: json.texto });
       setAnamneseAtiva((a) => (a ? { ...a, etapa: json.etapa ?? a.etapa } : a));
+      if (typeof json.semIa === "boolean") setTriagemSemIa(json.semIa);
     } catch {
       setMensagens((m) => [
         ...m,
@@ -1076,6 +1081,22 @@ export function ChatBion({
 
       {/* Entrada */}
       <div className="px-5 pb-5 bp-safe-bottom">
+        {anamneseAtiva && triagemSemIa ? (
+          <div className="mb-2 space-y-2">
+            {cardTriagemIa ? (
+              <CardAceiteIA
+                onAceito={() => {
+                  setCardTriagemIa(false);
+                  setTriagemSemIa(false);
+                  setIaLiberada(true);
+                }}
+                onRecusar={() => setCardTriagemIa(false)}
+              />
+            ) : (
+              <AvisoTriagemSemIA onAtivar={() => setCardTriagemIa(true)} />
+            )}
+          </div>
+        ) : null}
         <p className="text-xs text-bion-ink/80 dark:text-bion-paper/80 mb-2 px-2 inline-flex items-center gap-1.5" role="note">
           <ShieldAlert className="w-3.5 h-3.5 shrink-0" aria-hidden /> {AVISO_DADOS_PESSOAIS_IA}
         </p>

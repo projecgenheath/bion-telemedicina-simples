@@ -38,6 +38,8 @@ export type AnamneseAtiva = {
 
 export type RespostaAnamnese = {
   texto?: string;
+  /** Triagem no motor local porque falta o consentimento da BION IA. */
+  semIa?: boolean;
   etapa?: string;
   etapa_concluida?: boolean;
   perfilAtualizado?: string[];

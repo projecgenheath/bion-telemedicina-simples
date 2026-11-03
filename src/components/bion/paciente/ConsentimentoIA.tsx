@@ -5,7 +5,7 @@ import { ShieldAlert } from "lucide-react";
 import { useFocoDialogo } from "./useFocoDialogo";
 import { aceitarConsentimentoIa, consultarEstadoIa, recusarIaGuardandoTermos } from "@/lib/bion-ia-cliente";
 import { VERSAO_PRIVACIDADE, VERSAO_TERMOS_PACIENTE } from "@/lib/aceite-termos";
-import { TEXTO_CAIXA_CONSENTIMENTO_IA, rotuloVersoes } from "@/lib/consentimento-ia";
+import { AVISO_TRIAGEM_SEM_IA, TEXTO_CAIXA_CONSENTIMENTO_IA, rotuloVersoes } from "@/lib/consentimento-ia";
 
 /**
  * Consentimento da BION IA (provedor NVIDIA), v3: SEPARADO dos Termos e da
@@ -205,5 +205,17 @@ export function AvisoSemIA({ onAtivar }: { onAtivar: () => void }) {
         Ativar a BION IA
       </button>
     </section>
+  );
+}
+
+/** Aviso acima do campo da triagem quando ela roda sem a IA (sem consentimento). */
+export function AvisoTriagemSemIA({ onAtivar }: { onAtivar: () => void }) {
+  return (
+    <div role="note" className="rounded-xl border border-amber-500/40 bg-amber-50 dark:bg-amber-950/40 p-3 text-xs text-bion-ink dark:text-bion-paper space-y-2">
+      <p>{AVISO_TRIAGEM_SEM_IA}</p>
+      <button type="button" onClick={onAtivar} className="underline font-semibold">
+        Ativar a BION IA
+      </button>
+    </div>
   );
 }
