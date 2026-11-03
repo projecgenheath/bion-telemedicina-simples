@@ -23,7 +23,9 @@ ALTER TABLE "Documento" ADD COLUMN IF NOT EXISTS "canceladoEm" TIMESTAMP(3);
 DO $$
 BEGIN
   IF NOT EXISTS (
-    SELECT 1 FROM pg_constraint WHERE conname = 'Documento_status_check'
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'Documento_status_check'
+      AND conrelid = '"Documento"'::regclass
   ) THEN
     ALTER TABLE "Documento"
       ADD CONSTRAINT "Documento_status_check" CHECK ("status" IN ('emitido', 'cancelado'));
