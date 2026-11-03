@@ -203,3 +203,23 @@ test("webhook account.updated fora de ordem: relê a conta no Stripe (estado atu
   expect(await h.sincronizarContaDoEvento("acct_estranha")).toBe(false);
   expect(retrieves).toBe(antes + 1);
 });
+
+test("ChaveLiveBloqueadaError lançada dentro do stripe() vira 503 stripe_chave_live_bloqueada", async () => {
+  perfis.push(novo("m6"));
+  sessao = { id: "m6", email: "m6@t.local", role: "MEDICO" };
+  const original = fake.accounts.create;
+  fake.accounts.create = async () => {
+    throw Object.assign(new Error("Chave Stripe live bloqueada"), { name: "ChaveLiveBloqueadaError", codigo: "chave_live_bloqueada" });
+  };
+  try {
+    const conta = await import("@/app/api/medico/stripe/conta/route");
+    const r = await conta.POST();
+    expect(r.status).toBe(503);
+    expect((await r.json()).codigo).toBe("stripe_chave_live_bloqueada");
+    const { NextRequest } = await import("next/server");
+    const link = await import("@/app/api/medico/stripe/conta/link/route");
+    expect((await link.POST(new NextRequest("https://app.test/x", { method: "POST" }))).status).toBe(503);
+  } finally {
+    fake.accounts.create = original;
+  }
+});

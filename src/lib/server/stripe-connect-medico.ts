@@ -91,9 +91,18 @@ export function statusDoPerfil(p: PerfilStatus | null): StatusContaMedico {
 
 /** Resposta 503 com `codigo` para a trava sk_live_; null para outros erros. */
 export function respostaErroConnect(e: unknown): Response | null {
-  const x = e as { codigo?: string; message?: string; status?: number };
-  if (x?.codigo !== CODIGO_CHAVE_LIVE) return null;
-  return Response.json({ erro: x.message, codigo: x.codigo }, { status: x.status ?? 503 });
+  if (!ehChaveLiveBloqueada(e)) return null;
+  return Response.json({ erro: "Cadastro no Stripe indisponível no momento.", codigo: CODIGO_CHAVE_LIVE }, { status: 503 });
+}
+
+/**
+ * Trava live: a nossa (exigirChaveTeste, antes do banco) ou a do cliente
+ * stripe() do Admin (ChaveLiveBloqueadaError, lançada mais fundo). Conferida
+ * pelo nome para não depender da classe (mocks de teste).
+ */
+export function ehChaveLiveBloqueada(e: unknown): boolean {
+  const x = e as { codigo?: string; name?: string } | null;
+  return x?.codigo === CODIGO_CHAVE_LIVE || x?.name === "ChaveLiveBloqueadaError";
 }
 
 function erro(msg: string, status: number) {

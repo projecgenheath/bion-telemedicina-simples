@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { exigirPapel } from "@/lib/server/auth";
-import { CODIGO_CHAVE_LIVE, linkOnboardingMedico, sincronizarContaMedico } from "@/lib/server/stripe-connect-medico";
+import { ehChaveLiveBloqueada, linkOnboardingMedico, sincronizarContaMedico } from "@/lib/server/stripe-connect-medico";
 
 /**
  * GET /api/medico/stripe/conta/retorno — return_url/refresh_url do Account
@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
     const s = await sincronizarContaMedico(medico.id);
     return voltar(s.pronta ? "ok" : "pendente");
   } catch (e) {
-    if ((e as { codigo?: string })?.codigo === CODIGO_CHAVE_LIVE) return voltar("indisponivel");
+    if (ehChaveLiveBloqueada(e)) return voltar("indisponivel");
     console.error("[stripe-conta-retorno]", e instanceof Error ? e.message : e);
     return voltar("erro");
   }
