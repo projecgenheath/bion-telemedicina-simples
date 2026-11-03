@@ -108,6 +108,9 @@ igual("teste + plataforma passa", bloqueioChaveLive("plataforma", "sk_test_x"), 
 igual("live + direta bloqueia (até o Alisson liberar)", bloqueioChaveLive("direta", "sk_live_x"), true);
 igual("live + destino bloqueia", bloqueioChaveLive("destino", "sk_live_x"), true);
 igual("teste + direta passa", bloqueioChaveLive("direta", "sk_test_x"), false);
+igual("restrita live (rk_live_) bloqueia", bloqueioChaveLive("direta", "rk_live_x"), true);
+igual("restrita live na plataforma bloqueia", bloqueioChaveLive("plataforma", " rk_live_x"), true);
+igual("restrita de teste não bloqueia", bloqueioChaveLive("direta", "rk_test_x"), false);
 igual("live com espaços bloqueia", bloqueioChaveLive("direta", "  sk_live_x "), true);
 igual("sem chave passa (rota já recusa pela flag)", bloqueioChaveLive("plataforma", undefined), false);
 const cx = { contaMedico: "acct_123", taxaPlataformaCentavos: 1500 };
