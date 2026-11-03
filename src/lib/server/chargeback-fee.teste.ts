@@ -42,7 +42,8 @@ describe("devolverFeeChargeback", () => {
     const cb = base(); const d = fakeDb(cb); const st = fakeStripe();
     expect(await devolverFeeChargeback("cb1", { d, s: st.s })).toEqual({ enviado: true, refundId: "fr_1", valorCentavos: 1000 });
     expect(st.criados.length).toBe(1);
-    expect(st.criados[0].o).toEqual({ idempotencyKey: chaveIdempotenciaFeeChargeback("cb1") });
+    expect(st.criados[0].o).toEqual({ idempotencyKey: chaveIdempotenciaFeeChargeback("cb1", 1000) });
+    expect(st.criados[0].o.idempotencyKey).toBe("chargeback-fee-refund-cb1-1000");
     expect(st.contas).toEqual(["acct_med"]);
     expect(cb).toMatchObject({ feeRefundStatus: "enviado", feeRefundId: "fr_1", feeRefundCentavos: 1000 });
     expect(d.travas).toBe(1);
@@ -79,7 +80,18 @@ describe("devolverFeeChargeback", () => {
     expect(cb.feeRefundStatus).toBe("falhou");
     expect(await devolverFeeChargeback("cb1", { d, s: st.s })).toMatchObject({ enviado: true, valorCentavos: 1000 });
     expect(st.estado.refunds.length).toBe(1);
-    expect(st.criados[1].o.idempotencyKey).toBe("chargeback-fee-refund-cb1");
+    expect(st.criados[1].o.idempotencyKey).toBe("chargeback-fee-refund-cb1-1000");
+  });
+  test("retry com valor recalculado (fee devolvida em parte no meio): chave nova, um refund só", async () => {
+    const cb = base(); const d = fakeDb(cb); const st = fakeStripe({ falhas: 1 });
+    await expect(devolverFeeChargeback("cb1", { d, s: st.s })).rejects.toThrow();
+    expect(cb.feeRefundCentavos).toBe(1000);
+    st.estado.refunded = 300; // outro refund da fee (ex.: reembolso parcial) entre as tentativas
+    expect(await devolverFeeChargeback("cb1", { d, s: st.s })).toMatchObject({ enviado: true, valorCentavos: 700 });
+    expect(st.criados.map((c) => c.o.idempotencyKey)).toEqual(["chargeback-fee-refund-cb1-1000", "chargeback-fee-refund-cb1-700"]);
+    expect(st.estado.refunds.length).toBe(1);
+    expect(await devolverFeeChargeback("cb1", { d, s: st.s })).toEqual({ enviado: false, motivo: "ja_enviado" });
+    expect(st.estado.refunds.length).toBe(1);
   });
   test.each([
     ["nao_perdida", { statusStripe: "won" }],
