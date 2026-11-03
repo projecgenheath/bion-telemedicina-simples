@@ -86,3 +86,62 @@ export function ConsentimentoIA({ onAceito, onRecusar }: { onAceito: () => void;
     </div>
   );
 }
+
+/**
+ * Card de aceite NO TOPO do chat (antes da 1ª pergunta): substitui o aviso
+ * solto no meio da conversa. Enquanto não aceitar, a entrada fica bloqueada
+ * e o servidor recusa (403) — nada vai à NVIDIA.
+ */
+export function CardAceiteIA({ onAceito }: { onAceito: () => void }) {
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+  const aceitar = async () => {
+    setSalvando(true);
+    setErro(null);
+    const ok = await aceitarConsentimentoIa();
+    setSalvando(false);
+    if (ok) onAceito();
+    else setErro("Não consegui registrar seu aceite agora. Tente novamente.");
+  };
+  return (
+    <section
+      role="region"
+      aria-labelledby="titulo-card-aceite-ia"
+      className="rounded-2xl border border-amber-500/40 bg-amber-50 dark:bg-amber-950/40 p-4 text-sm text-bion-ink dark:text-bion-paper space-y-2"
+    >
+      <h2 id="titulo-card-aceite-ia" className="font-bold inline-flex items-center gap-2">
+        <ShieldAlert className="w-4 h-4" aria-hidden /> Antes de começar
+      </h2>
+      <p>
+        A BION IA agora usa o modelo Nemotron, da <strong>NVIDIA Corporation, nos EUA</strong>. O que você escrever,
+        inclusive sobre a sua saúde, será enviado para lá. Antes do envio, a BION remove seu nome, e-mail, CPF,
+        telefone, CEP e data de nascimento.
+      </p>
+      <p>
+        Leia a{" "}
+        <a href="/politica-de-privacidade" target="_blank" rel="noreferrer" className="underline font-semibold">
+          Política de Privacidade
+        </a>{" "}
+        e os{" "}
+        <a href="/termos-de-uso" target="_blank" rel="noreferrer" className="underline font-semibold">
+          Termos de Uso
+        </a>{" "}
+        ({VERSAO_PRIVACIDADE} · {VERSAO_TERMOS_PACIENTE}). Um aceite só vale para os Termos, a Política e a IA. O chat
+        só começa depois dele.
+      </p>
+      {erro ? (
+        <p className="text-red-600" role="alert">
+          {erro}
+        </p>
+      ) : null}
+      <button
+        type="button"
+        onClick={() => void aceitar()}
+        disabled={salvando}
+        className="bp-acao w-full py-3 rounded-xl font-bold disabled:opacity-50"
+      >
+        {salvando ? "Salvando…" : "Aceitar"}
+      </button>
+    </section>
+  );
+}

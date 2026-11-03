@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { aceiteVigentePendente } from "@/lib/server/aceite-termos";
 import {
   PREFIXO_FINALIDADE_IA,
   STATUS_CONSENTIMENTO_IA_PENDENTE,
@@ -16,7 +17,7 @@ export async function ultimoConsentimentoIa(pacienteId: string) {
 }
 
 /**
- * Portão do servidor: devolve a Response 409 quando o PACIENTE ainda não
+ * Portão do servidor: devolve a Response 403 quando o PACIENTE ainda não
  * aceitou a versão atual (nada é enviado à IA); null = pode seguir.
  * Erro ao consultar o banco também bloqueia (falha fechada).
  */
@@ -24,7 +25,12 @@ export async function exigirConsentimentoIa(usuario: { id: string; role: string 
   if (usuario.role !== "PACIENTE") return null;
   let vigente = false;
   try {
-    vigente = consentimentoIaVigente(await ultimoConsentimentoIa(usuario.id));
+    // Precisa dos DOIS: o aviso da IA (NVIDIA) e o aceite dos Termos/Privacidade
+    // vigentes. Bug de produção (2026-10-28): só o aviso da IA era checado, e a
+    // paciente sem os Termos novos usava o chat livre (só o agendamento travava).
+    vigente =
+      consentimentoIaVigente(await ultimoConsentimentoIa(usuario.id)) &&
+      !(await aceiteVigentePendente(usuario.id, "PACIENTE"));
   } catch {
     vigente = false;
   }
