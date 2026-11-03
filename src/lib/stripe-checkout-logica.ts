@@ -186,8 +186,8 @@ export function chaveIdempotencia(consultaId: string, valorCentavos: number, ses
 /*  direta:    cobrança direta na conta do médico (header Stripe-Account) +   */
 /*             application_fee_amount; o webhook recebe event.account.        */
 /*  STRIPE_MODO_COBRANCA; destino/direta só valem com STRIPE_CONNECT=true.    */
-/*  Produção: o modo RECOMENDADO é "direta". "plataforma" nunca roda com      */
-/*  chave live (exigência do Jurídico; ver bloqueioChaveLive).                */
+/*  Produção: o modo RECOMENDADO é "direta". Chave live BLOQUEADA em TODOS    */
+/*  os modos até o Alisson liberar (Jurídico; ver bloqueioChaveLive).         */
 /*   A comissão vem de   */
 /*  taxaPlataformaConnectCentavos (financeiro.ts) — nunca calculada aqui.     */
 /* ------------------------------------------------------------------------- */
@@ -196,11 +196,14 @@ export function chaveIdempotencia(consultaId: string, valorCentavos: number, ses
 export type { ModoCobranca };
 
 /**
- * Exigência jurídica: o modo "plataforma" (dinheiro só na conta da BION)
- * nunca roda com chave live. true = recusar a cobrança.
+ * Exigência jurídica (03/11): NENHUMA cobrança com chave live, em qualquer
+ * modo (plataforma, direta ou destino), até o Alisson liberar explicitamente.
+ * Faltam o CNPJ, o RT e a conta Stripe live brasileira. true = recusar.
+ * `modo` fica na assinatura só para a auditoria/chamada; não muda o resultado.
  */
 export function bloqueioChaveLive(modo: ModoCobranca, chave: string | undefined = process.env.STRIPE_SECRET_KEY): boolean {
-  return modo === "plataforma" && (chave ?? "").trim().startsWith("sk_live_");
+  void modo;
+  return (chave ?? "").trim().startsWith("sk_live_");
 }
 
 /** Dados do Connect (só nos modos destino/direta). */
