@@ -29,6 +29,19 @@ export const STATUS_CONSENTIMENTO_IA_PENDENTE = 403;
 /** Status antigo, aceito no cliente enquanto houver deploy anterior no ar. */
 const STATUS_CONSENTIMENTO_IA_LEGADO = 409;
 
+/** "termos-paciente-v2-2026-10-28" → "28/10/2026" (null se não tiver data). */
+export function dataDaVersao(versao: string): string | null {
+  const m = /(\d{4})-(\d{2})-(\d{2})$/.exec(versao);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : null;
+}
+
+/** Rótulo para a paciente: "versão de 28/10/2026" (sem códigos internos). */
+export function rotuloVersoes(...versoes: string[]): string {
+  const datas = Array.from(new Set(versoes.map(dataDaVersao).filter((d): d is string => Boolean(d))));
+  if (!datas.length) return "versão atual";
+  return datas.length === 1 ? `versão de ${datas[0]}` : `versões de ${datas.join(" e ")}`;
+}
+
 /** Prefixo comum a aceites e revogações (para achar os registros). */
 export const PREFIXO_FINALIDADE_IA = "Uso da BION IA";
 
