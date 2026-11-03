@@ -6,6 +6,7 @@ import {ok, falha, lerCorpoJson, corpoObjeto, textoDoCorpo} from "@/lib/server/h
 import { chatComFonte, chatStreamComFonte, iaPausada, motivoFalhaIa, novoRequestId, respostaIaPausada } from "@/lib/server/llm";
 import { anonimizarMensagensIa, type IdentificadoresPaciente } from "@/lib/server/anonimizar-ia";
 import { exigirConsentimentoIa } from "@/lib/server/consentimento-ia";
+import { exigirAceiteCopilotMedico } from "@/lib/server/aceite-copilot-medico";
 import { anonimizarMensagensTexto } from "@/lib/server/anonimizar-texto";
 import { dataNascimentoParaIso } from "@/lib/idade";
 import { limitarAsync, resposta429 } from "@/lib/server/rate-limit";
@@ -19,7 +20,8 @@ import { FiltroAcao, extrairAcao } from "@/lib/bion-ia-acao";
  * POST { mensagens: { remetente: "usuario" | "ia"; texto: string }[] }
  * → { resposta: string }
  *
- * O histórico vem do cliente (últimas ~12 mensagens). O enriquecimento de
+ * O histórico vem do cliente; o servidor corta em LIMITE_HISTORICO (12) para
+ * todos os papéis, inclusive o Copilot do médico. O enriquecimento de
  * contexto (papel, medicamentos, alergias, próximas consultas) é montado
  * AQUI no servidor a partir do banco — nunca confiar em dados do cliente.
  *
@@ -162,6 +164,10 @@ export async function POST(req: NextRequest) {
     // Portão jurídico: paciente sem o aceite da versão atual (NVIDIA) → 409.
     const pendente = await exigirConsentimentoIa(usuario);
     if (pendente) return pendente;
+    // LGPD (Copilot do médico): sem o aceite da versão atual → 403
+    // aceite_copilot_medico; nada vai à IA (falha fechada em erro de banco).
+    const semAceiteMedico = await exigirAceiteCopilotMedico(usuario);
+    if (semAceiteMedico) return semAceiteMedico;
     // B1: guarda de objeto/tipo — corpo null ou texto não-string virava 500
     // em .trim() no filtro do histórico.
     const bruto = corpoObjeto(await lerCorpoJson(req));
@@ -216,6 +222,8 @@ export async function POST(req: NextRequest) {
       ],
       await identificadoresDoUsuario(usuario),
     );
+    // TODO(#142): quando o #142 entrar, aplicar também `filtrarDadosPessoais`
+    // aqui no texto do médico (além da anonimização abaixo).
     // LGPD: no Copilot do médico, tira também os dados de PACIENTES que ele
     // digitar (nomes conhecidos, CPF, telefone, e-mail, CEP, datas e endereço).
     const mensagensFinais =

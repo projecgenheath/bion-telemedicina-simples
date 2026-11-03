@@ -1,3 +1,8 @@
+import {
+  MSG_ACEITE_COPILOT_MEDICO_PENDENTE,
+  VERSAO_ACEITE_COPILOT_MEDICO,
+  ehAceiteCopilotMedicoPendente,
+} from "@/lib/aceite-copilot-medico";
 import type { AcaoBionIa } from "@/lib/bion-ia-acao";
 import { aceiteTermosPayload } from "@/lib/aceite-termos";
 import { MSG_CONSENTIMENTO_IA_PENDENTE, VERSAO_CONSENTIMENTO_IA, ehConsentimentoIaPendente } from "@/lib/consentimento-ia";
@@ -38,7 +43,7 @@ export type TipoFalhaCliente = "timeout" | "nao_json" | "rede" | "http" | "strea
 export class ErroBionIa extends Error {
   constructor(
     mensagem: string,
-    public tipo: TipoFalhaCliente | "servidor" | "consentimento" | "pausada",
+    public tipo: TipoFalhaCliente | "servidor" | "consentimento" | "pausada" | "aceite_copilot",
     public parcial = "",
   ) {
     super(mensagem);
@@ -147,6 +152,9 @@ export async function perguntarBionIa(
       if (res.status === 503 && j?.erro === "bion_ia_pausada")
         throw new ErroBionIa(j.mensagem || "A BION IA volta em breve.", "pausada");
       // Portão jurídico: aceite da nova versão (NVIDIA) pendente → tela de aceite.
+      // LGPD: médico sem o aceite do Copilot → caixa de aceite (nada foi à IA).
+      if (ehAceiteCopilotMedicoPendente(res.status, j))
+        throw new ErroBionIa(MSG_ACEITE_COPILOT_MEDICO_PENDENTE, "aceite_copilot");
       if (ehConsentimentoIaPendente(res.status, j)) throw new ErroBionIa(MSG_CONSENTIMENTO_IA_PENDENTE, "consentimento");
       if (!j) return falhar(res.status === 504 ? "timeout" : "nao_json", res.status === 504 ? MSG_TIMEOUT : MSG_NAO_JSON, res.status);
       requestId = j.requestId ?? requestId;
@@ -237,4 +245,30 @@ export async function aceitarConsentimentoIa(): Promise<boolean> {
 /** O que o botão copiar/inserir usa: SÓ a resposta final, nunca o raciocínio. */
 export function textoParaCopiar(msg: { texto: string; raciocinio?: string | null }): string {
   return msg.texto;
+}
+
+/** O médico já aceitou a versão atual do aviso do Copilot? Falha = false (fechada). */
+export async function consultarAceiteCopilotMedico(): Promise<boolean> {
+  try {
+    const r = await fetch("/api/medico/copilot-aceite", { cache: "no-store" });
+    if (!r.ok) return false;
+    const j = (await r.json().catch(() => null)) as { vigente?: unknown; versao?: unknown } | null;
+    return j?.vigente === true && j.versao === VERSAO_ACEITE_COPILOT_MEDICO;
+  } catch {
+    return false;
+  }
+}
+
+/** Registra o aceite do Copilot do médico. true = aceito. */
+export async function aceitarCopilotMedico(): Promise<boolean> {
+  try {
+    const r = await fetch("/api/medico/copilot-aceite", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ versao: VERSAO_ACEITE_COPILOT_MEDICO }),
+    });
+    return r.ok;
+  } catch {
+    return false;
+  }
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Sparkles,
   Send,
@@ -17,7 +17,14 @@ import {
 } from "lucide-react";
 import { useBion } from "@/lib/bion-store";
 import { toast } from "sonner";
-import { ErroBionIa, perguntarBionIa, textoParaCopiar } from "@/lib/bion-ia-cliente";
+import {
+  ErroBionIa,
+  aceitarCopilotMedico,
+  consultarAceiteCopilotMedico,
+  perguntarBionIa,
+  textoParaCopiar,
+} from "@/lib/bion-ia-cliente";
+import { TEXTO_AVISO_COPILOT_MEDICO, TEXTO_CAIXA_COPILOT_MEDICO } from "@/lib/aceite-copilot-medico";
 import { inline } from "@/lib/markdown-simples";
 import { BlocoRaciocinio } from "./BlocoRaciocinio";
 import { ConsentimentoIA } from "./paciente/ConsentimentoIA";
@@ -77,10 +84,34 @@ export function BionIA() {
   // a pergunta que esbarrou no aceite pendente, repetida após o "Li e concordo".
   const [iaPausada, setIaPausada] = useState(false);
   const [aceitePendente, setAceitePendente] = useState<string | null>(null);
+  // LGPD (Copilot do médico): null = verificando; false = falta o aceite.
+  const [aceiteCopilot, setAceiteCopilot] = useState<boolean | null>(isMedico ? null : true);
+  const [caixaCopilot, setCaixaCopilot] = useState(false);
+  const [salvandoAceite, setSalvandoAceite] = useState(false);
+  useEffect(() => {
+    if (!isMedico) return;
+    let vivo = true;
+    void consultarAceiteCopilotMedico().then((v) => {
+      if (vivo) setAceiteCopilot(v);
+    });
+    return () => {
+      vivo = false;
+    };
+  }, [isMedico]);
+  const bloqueadoCopilot = isMedico && aceiteCopilot !== true;
+  const confirmarAceiteCopilot = async () => {
+    if (!caixaCopilot || salvandoAceite) return;
+    setSalvandoAceite(true);
+    const okAceite = await aceitarCopilotMedico();
+    setSalvandoAceite(false);
+    if (okAceite) setAceiteCopilot(true);
+    else toast.error("Não consegui registrar seu aceite agora. Tente novamente.");
+  };
 
   const enviarMensagem = async (textoEnviar?: string) => {
     const txt = (textoEnviar ?? entrada).trim();
     if (!txt || digitando) return;
+    if (bloqueadoCopilot) return;
 
     const novaMsgUsuario: MensagemIA = {
       id: `usr-${Date.now()}`,
@@ -98,7 +129,8 @@ export function BionIA() {
       categoria: "sistema",
       severidade: "info",
       entidade: "bion-ia",
-      detalhes: `Consulta à IA: "${txt.slice(0, 100)}"`,
+      // LGPD: o texto do médico NÃO vai para a auditoria (pode ter dado de paciente).
+      detalhes: isMedico ? "Consulta ao BION Copilot (texto não registrado)" : `Consulta à IA: "${txt.slice(0, 100)}"`,
     });
 
     let resposta = "";
@@ -120,6 +152,12 @@ export function BionIA() {
         // Pausa da BION IA (opt-in, bion_ia_pausada): aviso amigável, não erro.
         setIaPausada(true);
         resposta = e.message || "A BION IA volta em breve.";
+      } else if (e instanceof ErroBionIa && e.tipo === "aceite_copilot") {
+        // Servidor recusou (aceite ausente/desatualizado): volta a caixa de aceite.
+        setAceiteCopilot(false);
+        setCaixaCopilot(false);
+        tirarPergunta = true;
+        resposta = e.message;
       } else if (e instanceof ErroBionIa && e.tipo === "consentimento") {
         // Portão jurídico (mesmo fluxo do ChatBion): nada foi enviado à IA;
         // abre a folha de aceite e a pergunta é repetida após o aceite.
@@ -183,6 +221,35 @@ export function BionIA() {
             {iaPausada ? "● IA pausada" : "● IA Ativa"}
           </span>
         </div>
+
+        {/* LGPD: aviso fixo do Copilot do médico (texto do Jurídico) */}
+        {isMedico && (
+          <div role="note" className="px-5 py-3 border-b bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-100 text-xs flex gap-2">
+            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+            <span>{TEXTO_AVISO_COPILOT_MEDICO}</span>
+          </div>
+        )}
+        {isMedico && aceiteCopilot === false && (
+          <div className="px-5 py-4 border-b bg-card space-y-3">
+            <label className="flex items-start gap-2 text-sm cursor-pointer">
+              <input
+                type="checkbox"
+                className="mt-1"
+                checked={caixaCopilot}
+                onChange={(e) => setCaixaCopilot(e.target.checked)}
+              />
+              <span>{TEXTO_CAIXA_COPILOT_MEDICO}</span>
+            </label>
+            <button
+              type="button"
+              disabled={!caixaCopilot || salvandoAceite}
+              onClick={() => void confirmarAceiteCopilot()}
+              className="px-4 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-50"
+            >
+              {salvandoAceite ? "Registrando..." : "Confirmar e usar o Copilot"}
+            </button>
+          </div>
+        )}
 
         {/* Portão jurídico da IA (mesmo componente/fluxo do ChatBion) */}
         {aceitePendente !== null && (
@@ -305,6 +372,7 @@ export function BionIA() {
             <button type="button"
               key={i}
               onClick={() => enviarMensagem(p)}
+              disabled={bloqueadoCopilot}
               className="text-xs px-3 py-1.5 rounded-full bg-card border hover:border-primary hover:text-primary transition shrink-0 whitespace-nowrap"
             >
               {p}
@@ -317,6 +385,7 @@ export function BionIA() {
           <input
                   aria-label="Sua pergunta para a BION IA"
             value={entrada}
+            disabled={bloqueadoCopilot}
             onChange={(e) => setEntrada(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") enviarMensagem();
@@ -330,7 +399,8 @@ export function BionIA() {
           />
           <button type="button"
             onClick={() => enviarMensagem()}
-            className="w-12 h-12 rounded-2xl bg-primary text-primary-foreground flex items-center justify-center hover:opacity-90 active:scale-95 transition shadow-sm shrink-0"
+            disabled={bloqueadoCopilot}
+            className="disabled:opacity-50 w-12 h-12 rounded-2xl bg-primary text-primary-foreground flex items-center justify-center hover:opacity-90 active:scale-95 transition shadow-sm shrink-0"
           >
             <Send className="w-5 h-5" />
           </button>
