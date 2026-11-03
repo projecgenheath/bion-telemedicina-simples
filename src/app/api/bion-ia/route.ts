@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { quandoClinica } from "@/lib/server/fuso";
 import { db } from "@/lib/db";
-import { exigirSessao } from "@/lib/server/auth";
+import { exigirPapel } from "@/lib/server/auth";
 import {ok, falha, lerCorpoJson, corpoObjeto, textoDoCorpo} from "@/lib/server/http";
 import { chatComFonte, chatStreamComFonte, iaPausada, motivoFalhaIa, novoRequestId, respostaIaPausada } from "@/lib/server/llm";
 import { anonimizarMensagensIa, type IdentificadoresPaciente } from "@/lib/server/anonimizar-ia";
@@ -152,7 +152,10 @@ async function nomesPacientesDoMedico(medicoId: string): Promise<string[]> {
 
 export async function POST(req: NextRequest) {
   try {
-    const usuario = await exigirSessao();
+    // LGPD: o chat geral da BION IA é só de PACIENTE e MEDICO. O ADMIN recebe
+    // 403 antes de ler o corpo e antes de qualquer chamada à IA — ele poderia
+    // colar dados de um paciente sem o consentimento nem o filtro desse paciente.
+    const usuario = await exigirPapel("PACIENTE", "MEDICO");
     // M6 (auditoria): teto por usuário — cada chamada vai a um LLM PAGO, então
     // loop de cliente não pode virar custo ilimitado. 20/min cobre a conversa
     // humana (e o Copilot do médico); 300/h limita o custo acumulado do dia.

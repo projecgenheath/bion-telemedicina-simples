@@ -106,5 +106,6 @@ export const SO_PACIENTE: View[] = [
   "paciente-app",
 ];
 
-/** Clínicas compartilhadas paciente+médico; o administrador não tem negócio nelas. */
-export const SO_CLINICA: View[] = ["consulta", "consultas", "receitas", "prontuario"];
+/** Clínicas compartilhadas paciente+médico; o administrador não tem negócio nelas.
+ * "bion-ia": o chat geral da IA é só de paciente e médico (LGPD; a API responde 403 ao admin). */
+export const SO_CLINICA: View[] = ["consulta", "consultas", "receitas", "prontuario", "bion-ia"];
