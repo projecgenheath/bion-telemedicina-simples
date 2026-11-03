@@ -36,7 +36,8 @@ import {
 /*    repasse seguinte; o que não couber passa adiante (saldo_anterior);*/
 /*  - taxa do gateway: a REAL do pagamento (Stripe balance_transaction */
 /*    .fee em Pagamento.stripeTaxaCentavos) quando houver; senão 0;     */
-/*    no reembolso integral a taxa fica com o app.                      */
+/*    no reembolso integral a BION devolve a taxa do cartão ao médico  */
+/*    por transferência Stripe (#137).                                  */
 /*                                                                      */
 /* "Até o corte": o fechamento pega TUDO o que ficou elegível até a     */
 /* hora do corte e ainda não entrou em nenhum item. Nada se perde se o  */
