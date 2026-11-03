@@ -86,8 +86,10 @@ export async function GET() {
           aplicadoCentavos: a.aplicadoCentavos,
         })),
       },
+      // Valor COBRADO (bruto − reembolsos) direto na conta Stripe do médico,
+      // antes da application fee (10%) e da taxa do Stripe. Não é o recebido.
       recebidoDiretoStripe: {
-        aviso: "Recebido direto na sua conta Stripe. Não entra no repasse por PIX.",
+        aviso: "Valor cobrado direto na sua conta Stripe, antes da comissão da BION (10%) e da taxa do Stripe. Não entra no repasse por PIX.",
         totais: totalRecebidoDireto(diretos),
         itens: diretos,
       },
