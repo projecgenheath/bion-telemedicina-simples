@@ -53,6 +53,15 @@ const nextConfig: NextConfig = {
         source: "/:path*",
         headers: cabecalhosSeguranca,
       },
+      // Verificação pública de documentos: fora de buscadores.
+      {
+        source: "/verificar/:path*",
+        headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }],
+      },
+      {
+        source: "/api/publico/verificar/:path*",
+        headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }],
+      },
     ];
   },
   typescript: {

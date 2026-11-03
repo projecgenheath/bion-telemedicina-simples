@@ -350,7 +350,9 @@ model Documento {
   medicoId    String
   medico      User     @relation("DocumentoMedico", fields: [medicoId], references: [id], onDelete: Restrict)
   pacienteId  String
-  paciente    User     @relation("DocumentoPaciente", fields: [pacienteId], references: [id], onDelete: Cascade)
+  // Restrict (20261103a): o prontuário é guardado por 20 anos (Lei 13.787/2018);
+  // a exclusão de conta ANONIMIZA o paciente (lib/server/lgpd.ts) e o documento fica.
+  paciente    User     @relation("DocumentoPaciente", fields: [pacienteId], references: [id], onDelete: Restrict)
   medicamento String?
   posologia   String?
   duracao     String?
@@ -363,6 +365,9 @@ model Documento {
   controlado  Boolean   @default(false) // receita de controlado (fica fora da renovação curta)
   consultaId  String?   // consulta em que o documento foi emitido
   consulta    Consulta? @relation("DocumentoConsulta", fields: [consultaId], references: [id], onDelete: SetNull)
+  // 20261103a: emitido | cancelado (cancelado continua guardado e aparece como tal na verificação pública)
+  status      String    @default("emitido")
+  canceladoEm DateTime?
 
   @@index([consultaId])
 }
