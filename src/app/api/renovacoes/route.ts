@@ -61,6 +61,9 @@ export async function POST(req: NextRequest) {
     if (!receita || receita.tipo !== "receita") {
       return Response.json({ erro: "Receita não encontrada." }, { status: 404 });
     }
+    if (receita.status === "cancelado") {
+      return Response.json({ erro: "Esta receita foi cancelada pelo médico e não pode ser renovada. Agende uma consulta." }, { status: 409 });
+    }
     // Controlado: nunca (regra do Alisson). A mesma checagem da tela.
     if (!podeRenovarReceita(receita)) {
       return Response.json(

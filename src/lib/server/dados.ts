@@ -270,6 +270,9 @@ export function documentoWire(d: DocumentoComNomes) {
     // /verificar/[codigo] sem expor dado clínico. Calculado na leitura:
     // documentos antigos ganham código sem migração nenhuma.
     codigoVerificacao: codigoVerificacaoOuNulo(d.id), // null sem BION_VERIFICACAO_SEGREDO (preview)
+    // 20261103a: emitido | cancelado (cancelado nunca é apagado).
+    status: d.status === "cancelado" ? ("cancelado" as const) : ("emitido" as const),
+    canceladoEm: d.canceladoEm ? d.canceladoEm.toISOString() : null,
     createdAt: d.createdAt.toISOString(),
   };
 }

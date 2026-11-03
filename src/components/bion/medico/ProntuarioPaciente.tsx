@@ -1,12 +1,24 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Download, FileText, RefreshCw } from "lucide-react";
+import { Ban, Download, FileText, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import type { Arquivo, Consulta, Documento } from "@/lib/bion-store";
 import { gerarDocumentoPDF, gerarReceitaCombinadaPDF } from "@/lib/receita-pdf";
 import { agruparEmissoes } from "@/lib/documentos-agrupados";
 import { rotuloStatusMedico } from "./metricas";
+import { documentoCancelado } from "./cancelar-documento";
+
+/** Selo "Cancelado" (20261103a): o documento continua no prontuário. */
+function SeloCancelado({ d }: { d: Documento }) {
+  if (!documentoCancelado(d)) return null;
+  const data = d.canceladoEm ? new Date(d.canceladoEm).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" }) : "";
+  return (
+    <span className="ml-2 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold bg-red-600/15 text-red-800 dark:text-red-200 align-middle">
+      <Ban className="w-3 h-3" aria-hidden /> Cancelado{data ? ` em ${data}` : ""}
+    </span>
+  );
+}
 
 /* Séries do paciente (item 13 da auditoria de melhorias): o bootstrap só
  * carrega Medicao/ExameLaboratorial para o próprio paciente, então o
@@ -85,6 +97,43 @@ export function ProntuarioPaciente({
   homonimo: boolean;
   onRenovar: (d: Documento) => void;
 }) {
+  // 20261103a: cancelamentos feitos nesta tela (o store só atualiza no
+  // próximo bootstrap). Cancelar nunca apaga: o documento segue listado.
+  const [cancelados, setCancelados] = useState<Record<string, string>>({});
+  const [cancelando, setCancelando] = useState<string | null>(null);
+  const docs: Documento[] = documentos.map((d) =>
+    cancelados[d.id] ? { ...d, status: "cancelado", canceladoEm: cancelados[d.id] } : d,
+  );
+  const cancelar = async (d: Documento) => {
+    if (documentoCancelado(d) || cancelando) return;
+    const confirmou = window.confirm(
+      `Cancelar "${d.titulo}"?\n\nO documento não será apagado: continua no prontuário e na verificação pública marcado como CANCELADO, e não poderá ser renovado. Esta ação não pode ser desfeita.`,
+    );
+    if (!confirmou) return;
+    setCancelando(d.id);
+    try {
+      const res = await fetch(`/api/medico/documentos/${encodeURIComponent(d.id)}/cancelar`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
+      const j = (await res.json().catch(() => null)) as { documento?: { canceladoEm?: string | null }; erro?: string } | null;
+      if (!res.ok) throw new Error(j?.erro ?? "Não foi possível cancelar o documento.");
+      setCancelados((m) => ({ ...m, [d.id]: j?.documento?.canceladoEm ?? new Date().toISOString() }));
+      toast.success("Documento cancelado", { description: d.titulo });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Não foi possível cancelar o documento.");
+    } finally {
+      setCancelando(null);
+    }
+  };
+  const botaoCancelar = (d: Documento) =>
+    documentoCancelado(d) ? null : (
+      <button type="button" disabled={cancelando === d.id} onClick={() => void cancelar(d)} className="text-xs font-bold rounded-full px-3 py-1.5 bg-red-600/10 text-red-800 dark:text-red-200 inline-flex items-center gap-1 shrink-0 disabled:opacity-60">
+        <Ban className="w-3.5 h-3.5" /> {cancelando === d.id ? "Cancelando…" : "Cancelar documento"}
+      </button>
+    );
+
   const baixar = (d: Documento) => {
     try {
       gerarDocumentoPDF(d);
@@ -185,7 +234,7 @@ export function ProntuarioPaciente({
             {/* Item 25: itens de uma mesma emissão agrupada (receita com
                 vários medicamentos) aparecem como UMA receita, com a via
                 combinada; PDF e renovação por item seguem acessíveis. */}
-            {agruparEmissoes(documentos).map((entrada) =>
+            {agruparEmissoes(docs).map((entrada) =>
               entrada.docs.length > 1 ? (
                 <li key={entrada.chave} className="bp-glass p-3.5">
                   <div className="flex items-start gap-3">
@@ -203,13 +252,17 @@ export function ProntuarioPaciente({
                       <div key={d.id} className="flex items-center gap-2 pl-7">
                         <span className="text-sm min-w-0 flex-1 truncate">
                           {d.medicamento} — {d.posologia}
+                          <SeloCancelado d={d} />
                         </span>
                         <button type="button" onClick={() => baixar(d)} className="text-xs font-bold rounded-full px-3 py-1.5 bg-bion-ink/8 dark:bg-white/10 inline-flex items-center gap-1 shrink-0">
                           <Download className="w-3.5 h-3.5" /> PDF
                         </button>
-                        <button type="button" onClick={() => onRenovar(d)} className="text-xs font-bold rounded-full px-3 py-1.5 bg-bion-ink/8 dark:bg-white/10 inline-flex items-center gap-1 shrink-0">
-                          <RefreshCw className="w-3.5 h-3.5" /> Renovar
-                        </button>
+                        {!documentoCancelado(d) ? (
+                          <button type="button" onClick={() => onRenovar(d)} className="text-xs font-bold rounded-full px-3 py-1.5 bg-bion-ink/8 dark:bg-white/10 inline-flex items-center gap-1 shrink-0">
+                            <RefreshCw className="w-3.5 h-3.5" /> Renovar
+                          </button>
+                        ) : null}
+                        {botaoCancelar(d)}
                       </div>
                     ))}
                   </div>
@@ -224,7 +277,7 @@ export function ProntuarioPaciente({
                   <div className="flex items-start gap-3">
                     <FileText className="w-4 h-4 mt-0.5 shrink-0" aria-hidden />
                     <div className="min-w-0 flex-1">
-                      <div className="text-sm font-bold">{entrada.docs[0].titulo}</div>
+                      <div className="text-sm font-bold">{entrada.docs[0].titulo}<SeloCancelado d={entrada.docs[0]} /></div>
                       <div className="text-xs text-bion-ink/75 dark:text-bion-paper/75">
                         {ROTULO_DOC[entrada.docs[0].tipo]} · {entrada.docs[0].data} · {entrada.docs[0].medico}
                       </div>
@@ -237,11 +290,12 @@ export function ProntuarioPaciente({
                         <Download className="w-3.5 h-3.5" /> PDF
                       </button>
                     ) : null}
-                    {entrada.docs[0].tipo === "receita" ? (
+                    {entrada.docs[0].tipo === "receita" && !documentoCancelado(entrada.docs[0]) ? (
                       <button type="button" onClick={() => onRenovar(entrada.docs[0])} className="text-xs font-bold rounded-full px-3 py-1.5 bg-bion-ink/8 dark:bg-white/10 inline-flex items-center gap-1">
                         <RefreshCw className="w-3.5 h-3.5" /> Renovar
                       </button>
                     ) : null}
+                    {botaoCancelar(entrada.docs[0])}
                   </div>
                 </li>
               ),
