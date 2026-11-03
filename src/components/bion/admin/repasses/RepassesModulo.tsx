@@ -10,15 +10,17 @@ import { brl, competenciaCurta } from "../tempo";
 import { CardRepasse, quando, type DadosCard } from "./partes";
 import { DetalheRepasse } from "./DetalheRepasse";
 import { FecharAgora } from "./FecharAgora";
+import { AbaChargebacks } from "./AbaChargebacks";
 import { useRecurso } from "./recurso";
 import { agruparPorCompetencia } from "./formatos";
 import type { RepasseLista, RespostaLista, RespostaPrevia } from "./tipos";
 
-type Aba = "hoje" | "apagar" | "pagos";
+type Aba = "hoje" | "apagar" | "pagos" | "chargebacks";
 const ABAS: { id: Aba; rotulo: string }[] = [
   { id: "hoje", rotulo: "Hoje" },
   { id: "apagar", rotulo: "A pagar" },
   { id: "pagos", rotulo: "Pagos" },
+  { id: "chargebacks", rotulo: "Chargebacks" },
 ];
 
 /**
@@ -31,7 +33,7 @@ export function RepassesModulo() {
   const params = useSearchParams();
   const idAberto = params.get("repasse");
   const { agora, atualizar } = useDadosAdmin();
-  const [aba, setAba] = useState<Aba>(params.get("aba") === "hoje" ? "hoje" : params.get("aba") === "pagos" ? "pagos" : "apagar");
+  const [aba, setAba] = useState<Aba>(params.get("aba") === "hoje" ? "hoje" : params.get("aba") === "pagos" ? "pagos" : params.get("aba") === "chargebacks" ? "chargebacks" : "apagar");
   const [fechando, setFechando] = useState(false);
 
   const fechados = useRecurso<RespostaLista>("/api/admin/repasses?status=fechado");
@@ -117,6 +119,7 @@ export function RepassesModulo() {
         {aba === "hoje" ? <AbaHoje r={previa} agora={agora} /> : null}
         {aba === "apagar" ? <AbaLista r={fechados} agora={agora} tipo="fechado" onAbrir={abrir} /> : null}
         {aba === "pagos" ? <AbaLista r={pagos} agora={agora} tipo="pago" onAbrir={abrir} /> : null}
+        {aba === "chargebacks" ? <AbaChargebacks /> : null}
       </div>
 
       <DetalheRepasse id={idAberto} agora={agora} onFechar={fecharDetalhe} onMudou={recarregarTudo} />

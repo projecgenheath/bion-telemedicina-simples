@@ -8,6 +8,7 @@ import { avisarPacienteEspera, confirmarRemarcacaoEspera } from "@/lib/server/es
 import { aprovarMultaRemarcacao, falharMultaRemarcacao, registrarTaxaGateway } from "@/lib/server/financeiro";
 import { cancelarRenovacaoPagamentoFalhou, confirmarPagamentoRenovacao } from "@/lib/server/renovacao-pagamento";
 import { gatewayCheckout } from "@/lib/server/gateway-pagamento";
+import { registrarDisputaStripe } from "@/lib/server/chargeback";
 import { liberarEvento, reivindicarEvento, registrarEventoReembolsoStripe, stripe } from "@/lib/server/stripe";
 import { acaoDoEvento, moedaCheckout, moedaConfere, multaDaSessao, referenciaConfere, valorConfere } from "@/lib/stripe-checkout-logica";
 
@@ -26,6 +27,13 @@ import { acaoDoEvento, moedaCheckout, moedaConfere, multaDaSessao, referenciaCon
  *   (gatewayRef "espera:" → confirmarRemarcacaoEspera) e a multa da
  *   remarcação (metadata.tipo "multa" → aprovarMultaRemarcacao), com os
  *   mesmos efeitos do webhook HMAC antigo.
+ * - Eventos que o endpoint do Stripe precisa ter habilitados (configurado no
+ *   Dashboard; não há config no código): checkout.session.completed,
+ *   checkout.session.async_payment_succeeded, checkout.session.async_payment_failed,
+ *   checkout.session.expired, charge.updated, charge.refunded, refund.created,
+ *   refund.updated, refund.failed e, para o chargeback (20261103e),
+ *   charge.dispute.created, charge.dispute.updated, charge.dispute.closed,
+ *   charge.dispute.funds_withdrawn, charge.dispute.funds_reinstated.
  * - Não usa a flag BION_PAGAMENTO_STRIPE: sessões já abertas continuam sendo
  *   confirmadas mesmo se a flag for desligada depois.
  */
@@ -74,6 +82,10 @@ async function processar(evento: Stripe.Event): Promise<Record<string, unknown>>
   if (acao === "reembolso") {
     // Reembolsos são do Admin (src/lib/server/stripe.ts).
     return { acao, atualizados: await registrarEventoReembolsoStripe(evento) };
+  }
+  if (acao === "disputa") {
+    // Chargeback (Admin, src/lib/server/chargeback.ts): registra a disputa; o desconto ao médico é do repasse.
+    return { acao, disputa: await registrarDisputaStripe(evento) };
   }
   if (acao === "taxa") {
     return { acao, preenchida: await preencherTaxaDaCharge(evento.data.object as Stripe.Charge) };

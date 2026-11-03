@@ -50,6 +50,9 @@ model User {
   repasses             Repasse[]      @relation("RepasseMedico")
   repassesPagos        Repasse[]      @relation("RepassePagoPor")
   repasseAjustes       RepasseAjuste[] @relation("RepasseAjusteMedico")
+  chargebacksMedico    Chargeback[]    @relation("ChargebackMedico")
+  chargebacksFalhaBion Chargeback[]    @relation("ChargebackFalhaBionPor")
+  chargebacksCredito   Chargeback[]    @relation("ChargebackCreditoDevolvidoPor")
   dadosRecebimento     DadosRecebimentoMedico?
   bloqueiosAgenda      BloqueioAgenda[] @relation("BloqueioMedico")
   chamadasRecebidas    ChamadaConsulta[] @relation("ChamadaPara") // Admin: toque da consulta
@@ -245,6 +248,7 @@ model Pagamento {
 
   reembolsos Reembolso[]
   pedidoRenovacao PedidoRenovacao? @relation("PedidoRenovacaoPagamento")
+  chargebacks Chargeback[]
 }
 
 // Triagem (anamnese) guiada pela BION IA em formato storytelling, feita APÓS o
@@ -694,9 +698,11 @@ model RepasseAjuste {
   medico                User           @relation("RepasseAjusteMedico", fields: [medicoId], references: [id], onDelete: Restrict)
   consultaId            String?
   consulta              Consulta?      @relation(fields: [consultaId, medicoId], references: [id, medicoId], onDelete: Restrict, onUpdate: Restrict)
-  motivo                String // reembolso | saldo_anterior
+  motivo                String // reembolso | saldo_anterior | chargeback (20261103e)
   reembolsoId           String?        @unique
   reembolso             Reembolso?     @relation(fields: [reembolsoId], references: [id], onDelete: Restrict)
+  chargebackId          String?        @unique // 20261103e
+  chargeback            Chargeback?    @relation(fields: [chargebackId], references: [id], onDelete: Restrict)
   origemAjusteId        String?        @unique
   origemAjuste          RepasseAjuste? @relation("AjusteSaldo", fields: [origemAjusteId, medicoId], references: [id, medicoId], onDelete: Restrict, onUpdate: Restrict)
   saldos                RepasseAjuste[] @relation("AjusteSaldo") // no máximo 1 (origemAjusteId @unique)
@@ -710,6 +716,42 @@ model RepasseAjuste {
   @@unique([id, medicoId]) // alvo da FK (origemAjusteId, medicoId): a sobra fica com o mesmo médico
   @@index([medicoId, repasseId])
   @@index([repasseId])
+}
+
+// Chargeback (disputa do Stripe), modo plataforma — 20261103e (Admin).
+// O médico arca com a dispute fee (RepasseAjuste motivo
+// 'chargeback'), salvo se o admin marcar "falha da BION" (cláusula 10.13).
+model Chargeback {
+  id                  String          @id @default(cuid())
+  stripeDisputeId     String          @unique
+  stripeChargeId      String?
+  pagamentoId         String?
+  pagamento           Pagamento?      @relation(fields: [pagamentoId], references: [id], onDelete: Restrict)
+  consultaId          String?
+  medicoId            String?
+  medico              User?           @relation("ChargebackMedico", fields: [medicoId], references: [id], onDelete: Restrict)
+  valorCentavos       Int
+  taxaDisputaCentavos Int? // dispute fee LÍQUIDA (soma das balance_transactions, ≥ 0)
+  statusStripe        String
+  motivoStripe        String?
+  ultimoEventoId      String? // idempotência/ordem dos eventos charge.dispute.*
+  ultimoEventoEm      DateTime?
+  creditoPendente     Boolean         @default(false) // ganha depois de o desconto entrar num repasse
+  creditoDevolvidoMotivo String?
+  creditoDevolvidoPorId  String?
+  creditoDevolvidoPor    User?        @relation("ChargebackCreditoDevolvidoPor", fields: [creditoDevolvidoPorId], references: [id], onDelete: Restrict)
+  creditoDevolvidoEm     DateTime?
+  falhaBion           Boolean         @default(false)
+  falhaBionMotivo     String?
+  falhaBionPorId      String?
+  falhaBionPor        User?           @relation("ChargebackFalhaBionPor", fields: [falhaBionPorId], references: [id], onDelete: Restrict)
+  falhaBionEm         DateTime?
+  criadoEm            DateTime        @default(now())
+  atualizadoEm        DateTime        @default(now()) @updatedAt
+  ajustes             RepasseAjuste[]
+
+  @@index([medicoId])
+  @@index([pagamentoId])
 }
 
 // Chave PIX do médico (privada: só o próprio médico e o admin). O titular é o

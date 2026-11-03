@@ -126,6 +126,8 @@ igual("refund.updated", acaoDoEvento("refund.updated"), "reembolso");
 igual("refund.failed", acaoDoEvento("refund.failed"), "reembolso");
 igual("charge.updated", acaoDoEvento("charge.updated"), "taxa");
 igual("outro", acaoDoEvento("customer.created"), "ignorar");
+igual("dispute.created", acaoDoEvento("charge.dispute.created"), "disputa");
+igual("dispute.closed", acaoDoEvento("charge.dispute.closed"), "disputa");
 igual("valor confere", valorConfere(15000, 150), true);
 igual("moeda confere", moedaConfere("BRL", "brl"), true);
 igual("moeda diverge", moedaConfere("usd", "brl"), false);
