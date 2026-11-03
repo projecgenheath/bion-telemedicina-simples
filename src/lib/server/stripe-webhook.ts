@@ -9,7 +9,7 @@ import { avisarPacienteEspera, confirmarRemarcacaoEspera } from "@/lib/server/es
 import { aprovarMultaRemarcacao, falharMultaRemarcacao, registrarTaxaGateway } from "@/lib/server/financeiro";
 import { cancelarRenovacaoPagamentoFalhou, confirmarPagamentoRenovacao } from "@/lib/server/renovacao-pagamento";
 import { gatewayCheckout } from "@/lib/server/gateway-pagamento";
-import { registrarDisputaStripe } from "@/lib/server/chargeback";
+import { registrarDisputaStripe, transferirFalhaBion } from "@/lib/server/chargeback";
 import { devolverTaxaAoMedico, refundsDoEvento } from "@/lib/server/reembolso-taxa-medico";
 import { liberarEvento, reivindicarEvento, registrarEventoReembolsoStripe, stripe } from "@/lib/server/stripe";
 import { acaoDoEvento, moedaCheckout, moedaConfere, multaDaSessao, referenciaConfere, valorConfere } from "@/lib/stripe-checkout-logica";
@@ -104,7 +104,13 @@ async function processar(evento: Stripe.Event): Promise<Record<string, unknown>>
   }
   if (acao === "disputa") {
     // Chargeback (Admin, src/lib/server/chargeback.ts): registra a disputa; o desconto ao médico é do repasse.
-    return { acao, disputa: await registrarDisputaStripe(evento) };
+    const disputa = await registrarDisputaStripe(evento);
+    // Cobrança direta + falha da BION + disputa perdida: BION transfere ao
+    // médico (idempotente; erro relança → evento liberado e reentregue).
+    const disputeId = (evento.data.object as { id?: string })?.id;
+    const cb = evento.account && disputeId ? await db.chargeback.findUnique({ where: { stripeDisputeId: disputeId }, select: { id: true } }) : null;
+    const transferencia = cb ? await transferirFalhaBion(cb.id) : null;
+    return { acao, disputa, ...(transferencia ? { transferencia: transferencia.enviado ? "enviado" : transferencia.motivo } : {}) };
   }
   if (acao === "taxa") {
     return { acao, preenchida: await preencherTaxaDaCharge(evento.data.object as Stripe.Charge, conta) };

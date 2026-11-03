@@ -767,6 +767,15 @@ model Chargeback {
   falhaBionPorId      String?
   falhaBionPor        User?           @relation("ChargebackFalhaBionPor", fields: [falhaBionPorId], references: [id], onDelete: Restrict)
   falhaBionEm         DateTime?
+  // Cobrança direta (Connect): conta do médico onde a disputa aconteceu
+  // (event.account). Preenchida = sem RepasseAjuste; falha da BION vira
+  // transferência da BION ao médico (20261103g).
+  stripeConta               String?
+  transferFalhaBionStatus   String? // pendente | enviado | falhou
+  transferFalhaBionCentavos Int?
+  transferFalhaBionId       String?
+  transferFalhaBionErro     String?
+  transferFalhaBionEm       DateTime?
   criadoEm            DateTime        @default(now())
   atualizadoEm        DateTime        @default(now()) @updatedAt
   ajustes             RepasseAjuste[]

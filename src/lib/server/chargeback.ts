@@ -44,6 +44,8 @@ export type ChargebackParaDesconto = {
   medicoId: string | null;
   statusStripe: string;
   taxaDisputaCentavos: number | null;
+  /** Conta conectada (event.account) = cobrança DIRETA: nada a descontar do PIX. */
+  stripeConta?: string | null;
 };
 
 /**
@@ -52,7 +54,8 @@ export type ChargebackParaDesconto = {
  * Valor disputado e taxa do cartão: 0 (ver comentário do módulo).
  */
 export function composicaoDescontoChargeback(cb: ChargebackParaDesconto) {
-  const isento = cb.falhaBion || cb.statusStripe === "won" || !cb.medicoId;
+  // Cobrança direta: valor + dispute fee já saíram do saldo do médico no Stripe.
+  const isento = cb.falhaBion || cb.statusStripe === "won" || !cb.medicoId || !!cb.stripeConta;
   const fee = typeof cb.taxaDisputaCentavos === "number" && Number.isFinite(cb.taxaDisputaCentavos) ? Math.max(0, Math.round(cb.taxaDisputaCentavos)) : 0;
   const taxaDisputaCentavos = isento ? 0 : fee;
   const taxaCartaoCentavos = 0; // já descontada no repasse normal
@@ -85,6 +88,8 @@ type CbLinha = {
   medicoId: string | null;
   statusStripe: string;
   taxaDisputaCentavos: number | null;
+  stripeConta?: string | null;
+  transferFalhaBionStatus?: string | null;
 };
 type AjusteLinha = { id: string; repasseId: string | null };
 
@@ -140,9 +145,13 @@ export async function marcarFalhaBion(
       await travarChargeback(tx, p.chargebackId);
       const cb = await tx.chargeback.findUnique({
         where: { id: p.chargebackId },
-        select: { id: true, falhaBion: true, medicoId: true, statusStripe: true, taxaDisputaCentavos: true },
+        select: { id: true, falhaBion: true, medicoId: true, statusStripe: true, taxaDisputaCentavos: true, stripeConta: true, transferFalhaBionStatus: true },
       });
       if (!cb) return { ok: false as const, status: 404 as const, erro: "Chargeback não encontrado.", codigo: "nao_encontrado" };
+      // Cobrança direta: depois de a BION transferir (ou começar a transferir), não dá para desmarcar.
+      if (!p.falhaBion && cb.falhaBion && cb.transferFalhaBionStatus && cb.transferFalhaBionStatus !== "falhou") {
+        return { ok: false as const, status: 409 as const, erro: "A BION já transferiu (ou está transferindo) ao médico por este chargeback. Não dá para desmarcar; trate como ajuste manual.", codigo: "transferencia_enviada" };
+      }
       if (cb.falhaBion === p.falhaBion) {
         return { ok: true as const, mudou: false, falhaBion: cb.falhaBion, descontoCentavos: descontoChargebackCentavos(cb), ajusteRemovido: false };
       }
@@ -206,7 +215,7 @@ type DisputaStripe = {
   payment_intent?: string | { id: string } | null;
   balance_transactions?: { fee?: number | null }[] | null;
 };
-export type EventoDisputa = { id: string; created: number; type: string; data: { object: unknown } };
+export type EventoDisputa = { id: string; created: number; type: string; account?: string | null; data: { object: unknown } };
 
 type CbExistente = { id: string; statusStripe: string; ultimoEventoId: string | null; ultimoEventoEm: Date | null; falhaBion: boolean; medicoId: string | null; taxaDisputaCentavos: number | null; creditoPendente: boolean; creditoDevolvidoEm: Date | null };
 type TxDisputa = TravaSql & {
@@ -288,6 +297,7 @@ export async function registrarDisputaStripe(evento: EventoDisputa, d: DbDisputa
           motivoStripe: disputa.reason ?? null,
           ultimoEventoId: evento.id,
           ultimoEventoEm: em,
+          stripeConta: evento.account ?? null,
         },
       });
       return "criada";
@@ -399,4 +409,120 @@ export function validarMotivo(body: unknown): { ok: true; motivo: string } | { o
   if (motivo.length < MOTIVO_MIN) return { ok: false, erro: `Informe o motivo (mínimo ${MOTIVO_MIN} caracteres).` };
   if (motivo.length > MOTIVO_MAX) return { ok: false, erro: `Motivo longo demais (máximo ${MOTIVO_MAX} caracteres).` };
   return { ok: true, motivo };
+}
+
+// ------------------------------------------------------------ cobrança direta: falha da BION
+
+/**
+ * Cobrança DIRETA (Connect, decisão do Alisson 03/11 12:13). A disputa
+ * acontece na conta do médico: o valor disputado e a dispute fee saem do saldo
+ * dele no Stripe (e o evento chega pelo endpoint Connect com `account`). Não
+ * há RepasseAjuste. "Falha da BION" (cláusula 10.13) passa a significar que a
+ * BION TRANSFERE ao médico a taxa do cartão (Pagamento.stripeTaxaCentavos) +
+ * a dispute fee líquida.
+ *
+ * Quando: só com a disputa PERDIDA ('lost') e marcada falha da BION. Disputa
+ * aberta: espera (se for ganha, o Stripe devolve o valor ao médico e não há o
+ * que transferir). Chamada depois da marcação (rota do admin) e depois de cada
+ * evento de disputa (webhook) — idempotente.
+ *
+ * Idempotência: (1) linha travada (FOR UPDATE) e status 'pendente' gravado
+ * antes do Stripe; (2) transfer_group `chargeback_<id>` consultado antes de
+ * criar (a Idempotency-Key do Stripe expira em 24h); (3) Idempotency-Key
+ * `chargeback-falha-bion-<id>`. 10% de application fee NÃO é devolvido aqui
+ * (decisão pendente do Alisson).
+ */
+export const chaveIdempotenciaFalhaBion = (chargebackId: string) => `chargeback-falha-bion-${chargebackId}`;
+export const grupoFalhaBion = (chargebackId: string) => `chargeback_${chargebackId}`;
+
+type CbTransfer = {
+  id: string;
+  falhaBion: boolean;
+  statusStripe: string;
+  stripeConta: string | null;
+  taxaDisputaCentavos: number | null;
+  transferFalhaBionId: string | null;
+  transferFalhaBionStatus: string | null;
+  transferFalhaBionCentavos: number | null;
+  pagamento: { stripeTaxaCentavos: number | null } | null;
+};
+export type TxTransfer = TravaSql & {
+  chargeback: { findUnique(a: unknown): Promise<CbTransfer | null>; update(a: unknown): Promise<unknown>; updateMany(a: unknown): Promise<{ count: number }> };
+};
+export type DbTransfer = TxTransfer & { $transaction<T>(fn: (tx: TxTransfer) => Promise<T>): Promise<T> };
+export type StripeTransfer = {
+  transfers: {
+    create(p: { amount: number; currency: string; destination: string; transfer_group: string; description: string; metadata: Record<string, string> }, o: { idempotencyKey: string }): Promise<{ id: string }>;
+    list(p: { transfer_group: string; limit: number }): Promise<{ data: { id: string; metadata?: Record<string, string> | null }[] }>;
+  };
+};
+
+export type ResultadoTransferencia =
+  | { enviado: true; transferId: string; valorCentavos: number }
+  | { enviado: false; motivo: "nao_encontrado" | "nao_direta" | "sem_falha_bion" | "aguardando_desfecho" | "ja_enviado" | "valor_zero" };
+
+/** Valor da transferência: taxa do cartão + dispute fee líquida (centavos, ≥ 0). */
+export function valorTransferenciaFalhaBion(cb: Pick<CbTransfer, "taxaDisputaCentavos" | "pagamento">): number {
+  const n = (v: number | null | undefined) => (typeof v === "number" && Number.isFinite(v) ? Math.max(0, Math.round(v)) : 0);
+  return n(cb.pagamento?.stripeTaxaCentavos) + n(cb.taxaDisputaCentavos);
+}
+
+const SEL_TRANSFER = {
+  id: true, falhaBion: true, statusStripe: true, stripeConta: true, taxaDisputaCentavos: true,
+  transferFalhaBionId: true, transferFalhaBionStatus: true, transferFalhaBionCentavos: true,
+  pagamento: { select: { stripeTaxaCentavos: true } },
+} as const;
+
+export async function transferirFalhaBion(
+  chargebackId: string,
+  deps: { d?: DbTransfer; s?: StripeTransfer; moeda?: string; agora?: Date } = {},
+): Promise<ResultadoTransferencia> {
+  const d = deps.d ?? (db as unknown as DbTransfer);
+  type Preparo = { fim: ResultadoTransferencia } | { cb: CbTransfer; valor: number };
+  const preparo = await d.$transaction(async (tx): Promise<Preparo> => {
+    await travarChargeback(tx, chargebackId);
+    const cb = await tx.chargeback.findUnique({ where: { id: chargebackId }, select: SEL_TRANSFER });
+    if (!cb) return { fim: { enviado: false as const, motivo: "nao_encontrado" as const } };
+    if (!cb.stripeConta) return { fim: { enviado: false as const, motivo: "nao_direta" as const } };
+    if (!cb.falhaBion) return { fim: { enviado: false as const, motivo: "sem_falha_bion" as const } };
+    if (cb.statusStripe !== "lost") return { fim: { enviado: false as const, motivo: "aguardando_desfecho" as const } };
+    if (cb.transferFalhaBionStatus === "enviado") return { fim: { enviado: false as const, motivo: "ja_enviado" as const } };
+    // Valor congelado na primeira tentativa (as retentativas mandam o mesmo).
+    const valor = cb.transferFalhaBionCentavos ?? valorTransferenciaFalhaBion(cb);
+    if (valor <= 0) return { fim: { enviado: false as const, motivo: "valor_zero" as const } };
+    await tx.chargeback.update({ where: { id: cb.id }, data: { transferFalhaBionStatus: "pendente", transferFalhaBionCentavos: valor } });
+    return { cb, valor };
+  });
+  if ("fim" in preparo) return preparo.fim;
+  const { cb, valor } = preparo as { cb: CbTransfer; valor: number };
+  const conta = cb.stripeConta as string;
+
+  const s = deps.s ?? ((await import("@/lib/server/stripe")).stripe() as unknown as StripeTransfer);
+  const moeda = deps.moeda ?? (await import("@/lib/stripe-checkout-logica")).moedaCheckout();
+  const grupo = grupoFalhaBion(cb.id);
+  let transfer: { id: string };
+  try {
+    const existentes = await s.transfers.list({ transfer_group: grupo, limit: 10 });
+    const anterior = existentes.data.find((t) => t.metadata?.chargebackId === cb.id && t.metadata?.tipo === "chargeback_falha_bion");
+    transfer = anterior ?? (await s.transfers.create(
+      {
+        amount: valor,
+        currency: moeda,
+        destination: conta,
+        transfer_group: grupo,
+        description: "BION: falha da BION em chargeback (taxa do cartão + taxa da disputa)",
+        metadata: { chargebackId: cb.id, tipo: "chargeback_falha_bion" },
+      },
+      { idempotencyKey: chaveIdempotenciaFalhaBion(cb.id) },
+    ));
+  } catch (e) {
+    const msg = (e instanceof Error ? e.message : "erro").slice(0, 300);
+    await d.chargeback.updateMany({ where: { id: cb.id, transferFalhaBionStatus: { not: "enviado" } }, data: { transferFalhaBionStatus: "falhou", transferFalhaBionErro: msg } });
+    throw e;
+  }
+  await d.chargeback.updateMany({
+    where: { id: cb.id, transferFalhaBionStatus: { not: "enviado" } },
+    data: { transferFalhaBionStatus: "enviado", transferFalhaBionId: transfer.id, transferFalhaBionErro: null, transferFalhaBionEm: deps.agora ?? new Date() },
+  });
+  return { enviado: true, transferId: transfer.id, valorCentavos: valor };
 }
