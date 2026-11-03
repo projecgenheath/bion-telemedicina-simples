@@ -81,7 +81,9 @@ export function filtrarNomesProprios(texto: string): string {
   t = t.replace(RE_SEQUENCIA, (seq: string, i: number, todo: string) => {
     const palavras = seq.split(/\s+/u).filter((w) => /^\p{Lu}/u.test(w));
     if (palavras.some(ehNaoNome)) return seq;
-    if (depoisDeLugar(todo, i)) return seq;
+    // "moro em Curitiba": lugar. Mas "consulta da Ana Souza" é pessoa: a
+    // exceção de lugar não vale quando a 1ª palavra é um nome comum.
+    if (depoisDeLugar(todo, i) && !SET_NOMES_COMUNS.has(palavras[0].normalize("NFC"))) return seq;
     if (inicioDeFrase(todo, i)) {
       // "Ana Paula está com febre": a 1ª palavra pode ser só o começo da frase,
       // mas se for um nome comum a sequência toda é nome.
@@ -89,8 +91,22 @@ export function filtrarNomesProprios(texto: string): string {
     }
     return SUBSTITUTO_NOME_TERCEIRO;
   });
-  t = t.replace(new RegExp(String.raw`(?<![\p{L}\[])(?<!(?:São|Santa|Santo|Rio|Dom|Porto)\s)${PALAVRA_MAIUSC}(?![\p{L}])`, "gu"), (w, i: number, todo: string) =>
-    SET_NOMES_COMUNS.has(w.normalize("NFC")) && !ehNaoNome(w) && !depoisDeLugar(todo, i) ? SUBSTITUTO_NOME_TERCEIRO : w,
+  // Nome comum em qualquer posição (inclusive depois de da/na/em…, porque os
+  // lugares que parecem nome já estão em NAO_NOMES). Se ele estiver no meio de
+  // uma sequência capitalizada ("Hoje Carla Mendes"), sai do nome até o fim
+  // da sequência (sobrenomes e partículas) como um só [nome removido].
+  t = t.replace(
+    new RegExp(String.raw`(?<![\p{L}\[])(?<!(?:São|Santa|Santo|Rio|Dom|Porto)\s)${PALAVRA_MAIUSC}(?:\s+(?:${PARTICULAS}\s+)?${PALAVRA_MAIUSC})*(?![\p{L}])`, "gu"),
+    (seq: string) => {
+      const partes = seq.split(/(\s+)/u);
+      for (let k = 0; k < partes.length; k += 2) {
+        const w = partes[k];
+        if (!/^\p{Lu}/u.test(w)) continue;
+        if (ehNaoNome(w)) return seq;
+        if (SET_NOMES_COMUNS.has(w.normalize("NFC"))) return `${partes.slice(0, k).join("")}${SUBSTITUTO_NOME_TERCEIRO}`;
+      }
+      return seq;
+    },
   );
   // "[nome removido] [nome removido]" → um só
   return t.replace(/\[nome removido\](?:\s+\[nome removido\])+/gu, SUBSTITUTO_NOME_TERCEIRO);

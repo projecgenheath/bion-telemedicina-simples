@@ -50,3 +50,30 @@ test("aviso fixo com o texto do Jurídico", async () => {
   const { AVISO_DADOS_PESSOAIS_IA } = await import("@/lib/consentimento-ia");
   expect(AVISO_DADOS_PESSOAIS_IA).toBe("Não escreva nomes, CPF, contatos ou dados de saúde de outras pessoas.");
 });
+test("nome comum depois de da/na/do/no/de/em sai (não é lugar)", () => {
+  expect(filtrarNomesProprios("Remarquei a consulta da Ana")).toBe("Remarquei a consulta da [nome removido]");
+  expect(filtrarNomesProprios("Ontem levei na Juliana o exame")).toBe("Ontem levei na [nome removido] o exame");
+  expect(filtrarNomesProprios("Falei com o marido da Ana Souza")).toBe("Falei com o marido da [nome removido]");
+});
+test("lugares continuam intactos", () => {
+  for (const s of ["moro em Curitiba", "sou de Aparecida", "nasci em Natal", "moro em Vitória e tenho asma", "moro em São Paulo"])
+    expect(filtrarNomesProprios(s)).toBe(s);
+});
+test("sobrenome não vaza: a sequência inteira vira um só [nome removido]", () => {
+  expect(filtrarNomesProprios("Hoje Carla Mendes ligou")).toBe("Hoje [nome removido] ligou");
+  expect(filtrarNomesProprios("Ontem Maria da Silva Souza passou mal")).toBe("Ontem [nome removido] passou mal");
+});
+test("começo de frase, remédios e hospitais seguem passando", () => {
+  for (const s of [
+    "Hoje acordei com dor.",
+    "Tomo Losartana Potássica de manhã.",
+    "Fui ao Hospital Santa Maria ontem.",
+    "Tomo Dipirona e Paracetamol.",
+    "Quero agendar Clínica Médica.",
+  ])
+    expect(filtrarNomesProprios(s)).toBe(s);
+});
+test("regressões: gatilho com minúscula e palavras comuns", () => {
+  for (const s of ["minha mãe tem diabetes", "meu filho está com febre", "a dra. falou que é virose", "moro em Vitória", "apareceu uma mancha na pele Rosa"])
+    expect(filtrarNomesProprios(s)).toBe(s);
+});
