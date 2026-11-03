@@ -444,7 +444,7 @@ export async function medicoLivreAgora(tx: Tx, p: { medicoId: string; especialid
   // Exigido mesmo com diferença zero ou negativa: nos modos direta/destino o
   // dinheiro da consulta (e qualquer reembolso ou estorno futuro) passa pela
   // conta conectada do médico NOVO, então ele precisa ter conta Stripe.
-  if (m.perfilMedico.especialidade !== p.especialidade || !medicoPodeSerCobrado(modoCobrancaAtual(), m.perfilMedico.stripeAccountId)) return null;
+  if (m.perfilMedico.especialidade !== p.especialidade || !(await medicoPodeSerCobrado(modoCobrancaAtual(), m.perfilMedico.stripeAccountId))) return null;
   if (await diaBloqueado(tx as ClienteBanco, p.medicoId, p.agora)) return null;
   if (conferirDiasEPausas({ diasAtendimento: m.perfilMedico.diasAtendimento, pausasSemanais: m.perfilMedico.pausasSemanais }, p.agora)) return null;
   const ocupado = await tx.consulta.findFirst({

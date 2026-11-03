@@ -41,6 +41,23 @@ export function modoCobrancaStripe(valor = process.env.STRIPE_MODO_COBRANCA): Mo
   return v === "plataforma" || v === "destino" ? v : "direta";
 }
 
+export type TipoContaConnect = "standard" | "express";
+
+/**
+ * STRIPE_CONNECT_TIPO_CONTA: tipo da conta conectada criada no onboarding do
+ * médico (usado pelo onboarding, Médicos PR C). Padrão 'standard'.
+ * - standard: conta Stripe completa do médico (Dashboard próprio); o Stripe
+ *   fala direto com ele (KYC, disputas). É o tipo recomendado pelo Stripe
+ *   para cobrança direta. Onboarding por Account Link (type account_onboarding)
+ *   ou OAuth. Recebe transfers da BION (mesma região, BR→BR).
+ * - express: Dashboard Express; a BION responde por perdas/saldo negativo e
+ *   tem de pedir as capabilities card_payments + transfers. O Stripe não
+ *   recomenda cobrança direta com Express v1 (prefere destination charges).
+ */
+export function tipoContaConnect(valor = process.env.STRIPE_CONNECT_TIPO_CONTA): TipoContaConnect {
+  return (valor ?? "").trim().toLowerCase() === "express" ? "express" : "standard";
+}
+
 // ---------------------------------------------------------------- eventos
 
 type DbEventos = {

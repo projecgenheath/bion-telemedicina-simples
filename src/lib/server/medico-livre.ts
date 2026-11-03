@@ -98,7 +98,7 @@ export async function motivoMedicoOcupado(
     cli.perfilMedico.findUnique({ where: { userId: medicoId }, select: { diasAtendimento: true, pausasSemanais: true, stripeAccountId: true } }),
   ]);
   if (!medico) return "inativo";
-  if (!medicoPodeSerCobrado(modoCobrancaAtual(), perfil?.stripeAccountId)) return "sem_stripe";
+  if (!(await medicoPodeSerCobrado(modoCobrancaAtual(), perfil?.stripeAccountId))) return "sem_stripe";
   if (consulta) return consulta.dataInicio.getTime() > t ? "consulta_proxima" : "em_andamento";
   if (evolucao) return "evolucao_pendente";
   if (diaOff) return "dia_bloqueado";

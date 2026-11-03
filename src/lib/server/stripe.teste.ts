@@ -1,5 +1,5 @@
 /** Base do Stripe (reembolso e eventos). Rodar: npx tsx src/lib/server/stripe.teste.ts */
-import { enviarReembolsoStripe, paymentIntentDoGatewayRef, registrarEventoReembolsoStripe, statusReembolsoDoStripe, stripeConnectAtivo, modoCobrancaStripe, jaProcessado, marcarEvento, reivindicarEvento, liberarEvento, reembolsosStripePendentes } from "./stripe";
+import { enviarReembolsoStripe, paymentIntentDoGatewayRef, registrarEventoReembolsoStripe, statusReembolsoDoStripe, stripeConnectAtivo, modoCobrancaStripe, tipoContaConnect, jaProcessado, marcarEvento, reivindicarEvento, liberarEvento, reembolsosStripePendentes } from "./stripe";
 import { db } from "@/lib/db";
 
 let ok = 0, falhas = 0;
@@ -98,6 +98,9 @@ async function main() {
   igual("modo plataforma explícito", modoCobrancaStripe("plataforma"), "plataforma");
   igual("modo inválido = direta", modoCobrancaStripe("xyz"), "direta");
   igual("modo direta", modoCobrancaStripe(" Direta "), "direta");
+  igual("tipo de conta padrão = standard", tipoContaConnect(undefined), "standard");
+  igual("tipo de conta express", tipoContaConnect(" Express "), "express");
+  igual("tipo de conta inválido = standard", tipoContaConnect("custom"), "standard");
   const comConta = (conta: string | null) => base({ pagamento: { stripePaymentIntentId: "pi_1", consulta: { medico: { perfilMedico: { stripeAccountId: conta } } } } });
   { const d = fakeDb([comConta("acct_1")]); const s = fakeStripe();
     await enviarReembolsoStripe("r1", { d: d as any, s: s as any, connect: true, modo: "plataforma" });

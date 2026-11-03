@@ -4,6 +4,7 @@
  */
 import { readFileSync } from "fs";
 import {
+  descritorSufixo,
   acaoDoEvento,
   avaliarElegibilidade,
   avaliarMulta,
@@ -157,7 +158,8 @@ igual("valor nulo", valorConfere(null, 150), false);
 
 // guardas estáticas das rotas
 const checkout = readFileSync(new URL("../app/api/pagamentos/stripe/checkout/route.ts", import.meta.url), "utf8");
-const webhook = readFileSync(new URL("../app/api/pagamentos/stripe/webhook/route.ts", import.meta.url), "utf8");
+const webhook = readFileSync(new URL("./server/stripe-webhook.ts", import.meta.url), "utf8");
+const webhookConnect = readFileSync(new URL("../app/api/stripe/webhook-connect/route.ts", import.meta.url), "utf8");
 const pagamentosTs = readFileSync(new URL("./server/pagamentos.ts", import.meta.url), "utf8");
 const sucesso = readFileSync(new URL("../components/bion/paciente/StatusPagamentoStripe.tsx", import.meta.url), "utf8");
 igual("checkout não confirma pagamento", /confirmarPagamento/.test(checkout), false);
@@ -168,7 +170,9 @@ igual("checkout sem pix", /"pix"/.test(checkout), false);
 igual("checkout reusa o modo do Admin", checkout.includes("stripeConnectAtivo() ? modoCobrancaStripe()"), true);
 igual("checkout atrás da flag", checkout.includes("stripeAtivo()"), true);
 igual("webhook confere assinatura", webhook.includes("constructEvent(corpo"), true);
-igual("webhook aceita segredo Connect", webhook.includes("STRIPE_CONNECT_WEBHOOK_SECRET"), true);
+igual("endpoint Connect usa o próprio segredo", webhookConnect.includes("STRIPE_WEBHOOK_SECRET_CONNECT"), true);
+igual("cobrança direta: grava a conta do médico no webhook", (webhook.match(/gravarContaMedicoDaCobranca\(/g) ?? []).length, 2);
+igual("checkout recusa onboarding incompleto", checkout.includes("medico_onboarding_incompleto"), true);
 igual("webhook reivindica o evento antes de processar", /reivindicarEvento\(evento\.id[\s\S]*?processar\(evento\)/.test(webhook), true);
 igual("não usa jaProcessado/marcarEvento (deprecated)", /jaProcessado|marcarEvento/.test(webhook), false);
 igual("falha libera o evento e devolve 500", /liberarEvento\(evento\.id\)[\s\S]*?status: 500/.test(webhook), true);
@@ -284,6 +288,13 @@ igual("checkout guarda a sessão da multa", /gatewayRef: `\$\{PREFIXO_SESSAO_MUL
 igual("checkout lê a sessão anterior da multa", /a\.tipo === "multa" \? a\.sessaoMulta/.test(checkout), true);
 
 igual("pagamento Pix pendente reaproveitado vira cartão", /stripeCheckoutSessionId: sessao\.id, metodo: "cartao"/.test(checkout), true);
+
+// descritor na fatura do cartão
+igual("descritor padrão BION", descritorSufixo({}), "BION");
+igual("descritor configurado", descritorSufixo({ STRIPE_DESCRITOR_SUFIXO: " bion saude " }), "BION SAUDE");
+igual("descritor desligado", descritorSufixo({ STRIPE_DESCRITOR_SUFIXO: "off" }), null);
+igual("descritor inválido volta ao padrão", descritorSufixo({ STRIPE_DESCRITOR_SUFIXO: "BION*<x>" }), "BION");
+igual("descritor só números volta ao padrão", descritorSufixo({ STRIPE_DESCRITOR_SUFIXO: "123" }), "BION");
 
 console.log(`${ok} ok, ${falhas} falha(s)`);
 if (falhas) process.exit(1);

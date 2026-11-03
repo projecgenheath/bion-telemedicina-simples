@@ -226,7 +226,26 @@ export type EntradaSessao = {
   email?: string | null;
   modo?: ModoCobranca;
   connect?: DadosConnect | null;
+  /** Sufixo do descritor na fatura do cartão (STRIPE_DESCRITOR_SUFIXO). */
+  descritorSufixo?: string | null;
 };
+
+/**
+ * STRIPE_DESCRITOR_SUFIXO (padrão "BION"): sufixo do texto na fatura do
+ * cartão do paciente. Na cobrança direta o prefixo é o descritor da conta do
+ * MÉDICO (definido no onboarding dele) e a fatura mostra "PREFIXO* SUFIXO".
+ * "0"/"off"/vazio-explícito = não manda sufixo. Regras do Stripe: só letras
+ * latinas, números, espaço e . - ; até 22 caracteres (prefixo + sufixo) e ao
+ * menos uma letra; sem < > \ ' " *. Inválido → padrão.
+ */
+export function descritorSufixo(env: Env = process.env): string | null {
+  const bruto = env.STRIPE_DESCRITOR_SUFIXO;
+  if (bruto === undefined) return "BION";
+  const v = bruto.trim().toUpperCase();
+  if (v === "" || v === "0" || v === "OFF") return null;
+  if (!/^[A-Z0-9 .\-]{1,22}$/.test(v) || !/[A-Z]/.test(v)) return "BION";
+  return v;
+}
 
 /** Parâmetros da sessão de Checkout — ÚNICO lugar que monta a cobrança. */
 export function parametrosSessao(e: EntradaSessao) {
@@ -253,7 +272,7 @@ export function parametrosSessao(e: EntradaSessao) {
         price_data: { currency: e.moeda, unit_amount: e.valorCentavos, product_data: { name: e.descricao } },
       },
     ],
-    payment_intent_data: { metadata, ...divisaoConnect(e) },
+    payment_intent_data: { metadata, ...divisaoConnect(e), ...(e.descritorSufixo ? { statement_descriptor_suffix: e.descritorSufixo } : {}) },
     success_url: `${base}/pagamento/sucesso?${q}`,
     cancel_url: `${base}/pagamento/cancelado?${q}`,
   };

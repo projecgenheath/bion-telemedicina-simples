@@ -7,6 +7,7 @@ import { criarCobranca } from "@/lib/server/pagamentos";
 import { comissaoPlataformaConnect, gatewayCheckout } from "@/lib/server/gateway-pagamento";
 import { modoCobrancaStripe, stripeConnectAtivo } from "@/lib/server/stripe";
 import { contaStripeDoMedico, medicoPodeSerCobrado } from "@/lib/medico-cobravel";
+import { contaMedicoDaCobranca, gravarContaMedicoDaCobranca } from "@/lib/server/marca-cobranca-direta";
 import {
   avaliarElegibilidade,
   avaliarMulta,
@@ -17,6 +18,7 @@ import {
   type TipoCobranca,
   bloqueioChaveLive,
   chaveIdempotencia,
+  descritorSufixo,
   metodosCheckout,
   moedaCheckout,
   type DadosConnect,
@@ -269,10 +271,17 @@ async function abrirSessao(usuario: Usuario, a: Alvo) {
     const medico = await db.perfilMedico.findUnique({ where: { userId: a.medicoId }, select: { stripeAccountId: true } });
     const contaMedico = contaStripeDoMedico(medico?.stripeAccountId);
     // `!contaMedico` não é redundante para o TypeScript: estreita para string
-    // (usado em `connect` abaixo); medicoPodeSerCobrado é a regra compartilhada.
-    if (!contaMedico || !medicoPodeSerCobrado(modo, contaMedico)) {
+    // (usado em `connect` abaixo); medicoPodeSerCobrado é a regra compartilhada
+    // (conta existe E onboarding completo: charges_enabled + payouts_enabled).
+    if (!contaMedico) {
       return Response.json(
         { erro: "Este médico ainda não pode receber pagamento online. Escolha outro horário ou outro médico.", codigo: "medico_sem_conta" },
+        { status: 409 },
+      );
+    }
+    if (!(await medicoPodeSerCobrado(modo, contaMedico))) {
+      return Response.json(
+        { erro: "O cadastro de recebimento deste médico no Stripe ainda não foi concluído. Escolha outro horário ou outro médico.", codigo: "medico_onboarding_incompleto" },
         { status: 409 },
       );
     }
@@ -281,6 +290,9 @@ async function abrirSessao(usuario: Usuario, a: Alvo) {
 
   const gateway = gatewayCheckout();
   const contaDireta = modo === "direta" ? connect?.contaMedico : null;
+  // Conta conectada que recebe esta cobrança (direta/destino) — é a marca que
+  // tira o pagamento do repasse PIX. Ver gravarContaMedicoDaCobranca.
+  const contaMedicoMarca = contaMedicoDaCobranca(modo, connect);
   if (sessaoAnterior) {
     const s = await gateway.lerSessao(sessaoAnterior, contaDireta);
     if (s && sessaoReaproveitavel(s, a.valorCentavos)) return Response.json({ url: s.url, reaproveitada: true });
@@ -302,6 +314,7 @@ async function abrirSessao(usuario: Usuario, a: Alvo) {
       email: usuario.email,
       modo,
       connect,
+      descritorSufixo: descritorSufixo(),
     },
     chaveIdempotencia(a.tipo === "multa" ? `multa-${a.remarcacaoId}` : a.consultaId ?? `pagamento-${a.pagamentoId}`, a.valorCentavos, sessaoAnterior),
   );
@@ -313,6 +326,7 @@ async function abrirSessao(usuario: Usuario, a: Alvo) {
       // Pagamento pendente antigo criado como Pix e reaproveitado aqui passa a cartão.
       data: { stripeCheckoutSessionId: sessao.id, metodo: "cartao", ...(atual?.status === "falhou" ? { status: "pendente" } : {}) },
     });
+    await gravarContaMedicoDaCobranca({ pagamentoId: a.pagamentoId }, contaMedicoMarca);
   }
   if (a.tipo === "multa" && a.remarcacaoId) {
     // Guarda a sessão aberta (só enquanto pendente; o webhook troca por stripe_pi:).
@@ -320,6 +334,7 @@ async function abrirSessao(usuario: Usuario, a: Alvo) {
       where: { id: a.remarcacaoId, status: "pendente" },
       data: { gatewayRef: `${PREFIXO_SESSAO_MULTA}${sessao.id}` },
     });
+    await gravarContaMedicoDaCobranca({ remarcacaoId: a.remarcacaoId }, contaMedicoMarca);
   }
   await registrarAudit(usuario, {
     acao: "CHECKOUT_STRIPE_CRIADO",
