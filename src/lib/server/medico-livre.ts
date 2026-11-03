@@ -11,11 +11,26 @@ import {
 } from "@/lib/server/bloqueio-agenda";
 import { STATUS_LIBERAM_HORARIO } from "@/lib/server/financeiro";
 import { filtroEvolucaoPendente } from "@/lib/medico-livre-logica";
+import { medicoPodeSerCobrado } from "@/lib/medico-cobravel";
+import { modoCobrancaStripe, stripeConnectAtivo } from "@/lib/server/stripe";
+import { stripeAtivo } from "@/lib/stripe-checkout-logica";
+
+/**
+ * Mesmo modo que o checkout Stripe usa (api/pagamentos/stripe/checkout).
+ * Com o pagamento por cartão Stripe desligado (stripeAtivo() falso, ex.:
+ * demonstração), a conta Stripe do médico não é exigida: devolve "plataforma"
+ * para não esconder médicos sem Stripe de um fluxo que nem passa pelo Stripe.
+ */
+export function modoCobrancaAtual() {
+  if (!stripeAtivo()) return "plataforma";
+  return stripeConnectAtivo() ? modoCobrancaStripe() : "plataforma";
+}
 
 /**
  * Teleconsulta v2 — Médicos: "médico livre agora" (remarcação para outro
  * médico da mesma especialidade). Livre = médico ativo (User e PerfilMedico),
- * sem consulta em andamento, sem evolução em
+ * cobrável pelo Stripe (mesma regra do checkout: lib/medico-cobravel.ts;
+ * a chave PIX é só histórico desde 28/10), sem consulta em andamento, sem evolução em
  * rascunho de OUTRA consulta (trava; o rascunho de `excetoConsultaId` não
  * conta, mesmo critério de evolucaoPendenteDoMedico e toque.ts), sem consulta
  * nos próximos 40 min, fora de 23:00–00:00 (São Paulo), sem o dia corrente
@@ -43,6 +58,7 @@ export function foraDoHorarioVedado(agora: Date = new Date()): boolean {
 
 export type MotivoOcupado =
   | "inativo"
+  | "sem_stripe"
   | "em_andamento"
   | "evolucao_pendente"
   | "consulta_proxima"
@@ -79,9 +95,10 @@ export async function motivoMedicoOcupado(
     // M-20: médico com o dia corrente bloqueado (folga/férias) não aparece
     // como livre — antes a lista oferecia quem a remarcação recusava.
     diaBloqueado(cli as ClienteBanco, medicoId, agora),
-    cli.perfilMedico.findUnique({ where: { userId: medicoId }, select: { diasAtendimento: true, pausasSemanais: true } }),
+    cli.perfilMedico.findUnique({ where: { userId: medicoId }, select: { diasAtendimento: true, pausasSemanais: true, stripeAccountId: true } }),
   ]);
   if (!medico) return "inativo";
+  if (!medicoPodeSerCobrado(modoCobrancaAtual(), perfil?.stripeAccountId)) return "sem_stripe";
   if (consulta) return consulta.dataInicio.getTime() > t ? "consulta_proxima" : "em_andamento";
   if (evolucao) return "evolucao_pendente";
   if (diaOff) return "dia_bloqueado";

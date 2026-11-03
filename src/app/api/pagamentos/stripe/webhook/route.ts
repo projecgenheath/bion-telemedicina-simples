@@ -15,13 +15,15 @@ import { acaoDoEvento, moedaCheckout, moedaConfere, multaDaSessao, referenciaCon
 /**
  * Webhook do Stripe (checkout do paciente).
  *
- * - Assinatura conferida sobre o corpo BRUTO com STRIPE_WEBHOOK_SECRET
- *   (só a conta da BION; sem Stripe Connect desde a decisão de 03/11 10:49).
+ * - Assinatura conferida sobre o corpo BRUTO com STRIPE_WEBHOOK_SECRET ou
+ *   STRIPE_CONNECT_WEBHOOK_SECRET (endpoint Connect, modo "direta").
  * - Idempotente pelo id do evento: reserva a linha StripeEvento ANTES de
  *   processar (reivindicarEvento; repetido → 200; falha → liberarEvento e 500). As
  *   funções de pagamento já são idempotentes (reentrega não duplica nada).
  * - Confirma pela MESMA função do fluxo atual (confirmarPagamento), então a
  *   consulta fica paga + confirmada exatamente como no webhook HMAC antigo.
+ * - Aceita eventos do Connect (cobrança direta): `event.account` é a conta do
+ *   médico e é usada para ler o PaymentIntent/taxa nessa conta.
  * - Além da consulta, confirma (cartão) a renovação de receita (Pagamento sem
  *   consulta → confirmarPagamentoRenovacao), a diferença da espera do médico
  *   (gatewayRef "espera:" → confirmarRemarcacaoEspera) e a multa da
@@ -39,8 +41,9 @@ import { acaoDoEvento, moedaCheckout, moedaConfere, multaDaSessao, referenciaCon
  */
 
 export async function POST(req: NextRequest) {
-  // Só a conta da BION (STRIPE_WEBHOOK_SECRET).
-  const segredos = [process.env.STRIPE_WEBHOOK_SECRET]
+  // Conta da BION (STRIPE_WEBHOOK_SECRET) e endpoint Connect das contas dos
+  // médicos no modo "direta" (STRIPE_CONNECT_WEBHOOK_SECRET): aceita os dois.
+  const segredos = [process.env.STRIPE_WEBHOOK_SECRET, process.env.STRIPE_CONNECT_WEBHOOK_SECRET]
     .map((x) => x?.trim())
     .filter((x): x is string => !!x);
   if (!segredos.length || !process.env.STRIPE_SECRET_KEY?.trim()) {
@@ -78,6 +81,7 @@ export async function POST(req: NextRequest) {
 async function processar(evento: Stripe.Event): Promise<Record<string, unknown>> {
   const sessao = evento.data.object as Stripe.Checkout.Session;
   const acao = acaoDoEvento(evento.type, evento.type.startsWith("checkout.session.") ? sessao.payment_status : null);
+  const conta = evento.account ?? null;
 
   if (acao === "reembolso") {
     // Reembolsos são do Admin (src/lib/server/stripe.ts).
@@ -88,7 +92,7 @@ async function processar(evento: Stripe.Event): Promise<Record<string, unknown>>
     return { acao, disputa: await registrarDisputaStripe(evento) };
   }
   if (acao === "taxa") {
-    return { acao, preenchida: await preencherTaxaDaCharge(evento.data.object as Stripe.Charge) };
+    return { acao, preenchida: await preencherTaxaDaCharge(evento.data.object as Stripe.Charge, conta) };
   }
   if (acao !== "confirmar" && acao !== "falhar" && acao !== "expirar") return { acao };
 
@@ -107,7 +111,7 @@ async function processar(evento: Stripe.Event): Promise<Record<string, unknown>>
     });
     return { acao, ignorado: true };
   }
-  if (acao === "confirmar") return confirmar(sessao, pagamento);
+  if (acao === "confirmar") return confirmar(sessao, pagamento, conta);
   if (acao === "falhar") {
     const p = await falharPagamento(pagamento.id, "webhook");
     // Renovação por mensagem: pagamento falho cancela o pedido (igual ao webhook HMAC).
@@ -130,7 +134,7 @@ async function processar(evento: Stripe.Event): Promise<Record<string, unknown>>
  * charge.updated: a balance_transaction costuma chegar depois da confirmação.
  * Preenche Pagamento.stripeTaxaCentavos SÓ se ainda for null (nunca sobrescreve).
  */
-async function preencherTaxaDaCharge(charge: Stripe.Charge): Promise<boolean> {
+async function preencherTaxaDaCharge(charge: Stripe.Charge, conta: string | null): Promise<boolean> {
   const bt = charge.balance_transaction;
   if (!bt) return false;
   const pi = typeof charge.payment_intent === "string" ? charge.payment_intent : charge.payment_intent?.id ?? null;
@@ -139,7 +143,7 @@ async function preencherTaxaDaCharge(charge: Stripe.Charge): Promise<boolean> {
     select: { id: true, stripeTaxaCentavos: true, stripeChargeId: true },
   });
   if (!pagamento || pagamento.stripeTaxaCentavos !== null) return false;
-  const taxa = await gatewayCheckout().lerTaxa(typeof bt === "string" ? bt : bt.id);
+  const taxa = await gatewayCheckout().lerTaxa(typeof bt === "string" ? bt : bt.id, conta);
   if (taxa === null) return false;
   return gravarTaxaSeVazia(pagamento.id, taxa, pagamento.stripeChargeId ? null : charge.id);
 }
@@ -173,6 +177,7 @@ async function acharPagamento(s: Stripe.Checkout.Session) {
 async function confirmar(
   s: Stripe.Checkout.Session,
   pagamento: { id: string; consultaId: string | null; valor: number },
+  conta: string | null,
 ) {
   if (!valorConfere(s.amount_total, pagamento.valor) || !moedaConfere(s.currency, moedaCheckout())) {
     await registrarAudit(null, {
@@ -189,7 +194,7 @@ async function confirmar(
   let cobranca: { chargeId: string | null; taxaCentavos: number | null } = { chargeId: null, taxaCentavos: null };
   if (paymentIntentId) {
     try {
-      cobranca = await gatewayCheckout().lerCobranca(paymentIntentId);
+      cobranca = await gatewayCheckout().lerCobranca(paymentIntentId, conta);
     } catch {
       /* sem taxa agora; o pagamento confirma do mesmo jeito */
     }

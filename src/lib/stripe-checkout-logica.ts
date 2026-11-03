@@ -3,6 +3,8 @@
 /* Testes: bun src/lib/stripe-checkout-logica.teste.ts                  */
 /* ------------------------------------------------------------------ */
 
+import type { ModoCobranca } from "@/lib/server/stripe";
+
 type Env = Record<string, string | undefined>;
 
 /**
@@ -176,21 +178,33 @@ export function chaveIdempotencia(consultaId: string, valorCentavos: number, ses
 }
 
 /* --------------------------- modo de cobrança --------------------------- */
-/*  Único modo: "plataforma" (decisão do Alisson, 03/11 10:49). O Stripe é    */
-/*  só o gateway paciente → BION: cobra na conta da BION, sem divisão; o      */
-/*  médico não tem conta Stripe e recebe por PIX no fim do dia               */
-/*  (financeiro.ts / repasse.ts). Sem Stripe Connect, sem cobrança direta     */
-/*  nem de destino. O paciente paga só com cartão.                            */
-/*  Chave live: bloqueada por exigência do Jurídico (ver bloqueioChaveLive).  */
+/*  plataforma (padrão, Connect desligado): cobra só na conta da BION, sem    */
+/*             divisão; o repasse ao médico é feito fora do Stripe            */
+/*             (financeiro.ts). O paciente paga só com cartão.                */
+/*  destino:   cobrança na plataforma com transfer_data.destination +         */
+/*             on_behalf_of (conta do médico) + application_fee_amount.       */
+/*  direta:    cobrança direta na conta do médico (header Stripe-Account) +   */
+/*             application_fee_amount; o webhook recebe event.account.        */
+/*  STRIPE_MODO_COBRANCA; destino/direta só valem com STRIPE_CONNECT=true.    */
+/*  Produção: o modo RECOMENDADO é "direta". "plataforma" nunca roda com      */
+/*  chave live (exigência do Jurídico; ver bloqueioChaveLive).                */
+/*   A comissão vem de   */
+/*  taxaPlataformaConnectCentavos (financeiro.ts) — nunca calculada aqui.     */
 /* ------------------------------------------------------------------------- */
 
+// Modo lido por stripeConnectAtivo() + modoCobrancaStripe() (src/lib/server/stripe.ts, Admin).
+export type { ModoCobranca };
+
 /**
- * Exigência jurídica: a cobrança na conta da BION (modo "plataforma", hoje o
- * único) nunca roda com chave live. true = recusar a cobrança.
+ * Exigência jurídica: o modo "plataforma" (dinheiro só na conta da BION)
+ * nunca roda com chave live. true = recusar a cobrança.
  */
-export function bloqueioChaveLive(chave: string | undefined = process.env.STRIPE_SECRET_KEY): boolean {
-  return (chave ?? "").trim().startsWith("sk_live_");
+export function bloqueioChaveLive(modo: ModoCobranca, chave: string | undefined = process.env.STRIPE_SECRET_KEY): boolean {
+  return modo === "plataforma" && (chave ?? "").trim().startsWith("sk_live_");
 }
+
+/** Dados do Connect (só nos modos destino/direta). */
+export type DadosConnect = { contaMedico: string; taxaPlataformaCentavos: number };
 
 export type EntradaSessao = {
   /** Consulta cobrada; null na renovação (Pagamento sem consulta) e omitido na multa. */
@@ -210,6 +224,8 @@ export type EntradaSessao = {
   descricao: string;
   baseUrl: string;
   email?: string | null;
+  modo?: ModoCobranca;
+  connect?: DadosConnect | null;
 };
 
 /** Parâmetros da sessão de Checkout — ÚNICO lugar que monta a cobrança. */
@@ -237,7 +253,7 @@ export function parametrosSessao(e: EntradaSessao) {
         price_data: { currency: e.moeda, unit_amount: e.valorCentavos, product_data: { name: e.descricao } },
       },
     ],
-    payment_intent_data: { metadata },
+    payment_intent_data: { metadata, ...divisaoConnect(e) },
     success_url: `${base}/pagamento/sucesso?${q}`,
     cancel_url: `${base}/pagamento/cancelado?${q}`,
   };
@@ -270,6 +286,25 @@ export function sessaoDaMulta(gatewayRef: string | null | undefined): string | n
 /** Expiração da sessão para reservas curtas: o mínimo do Stripe (30 min + folga). */
 export function expiracaoReservaSeg(agoraMs = Date.now()): number {
   return Math.floor(agoraMs / 1000) + 31 * 60;
+}
+
+/** Campos de divisão do PaymentIntent conforme o modo. */
+export function divisaoConnect(e: Pick<EntradaSessao, "modo" | "connect" | "valorCentavos">) {
+  const modo = e.modo ?? "plataforma";
+  if (modo === "plataforma") return {};
+  const c = e.connect;
+  if (!c?.contaMedico?.startsWith("acct_")) throw new Error(`Modo ${modo} exige a conta Stripe do médico.`);
+  const taxa = Math.round(c.taxaPlataformaCentavos);
+  if (!Number.isInteger(taxa) || taxa < 0 || taxa > e.valorCentavos) throw new Error("Comissão da plataforma inválida.");
+  if (modo === "destino") {
+    return { application_fee_amount: taxa, on_behalf_of: c.contaMedico, transfer_data: { destination: c.contaMedico } };
+  }
+  return { application_fee_amount: taxa }; // direta: a conta vai no header Stripe-Account
+}
+
+/** Opções da requisição (header Stripe-Account só na cobrança direta). */
+export function opcoesRequisicao(e: Pick<EntradaSessao, "modo" | "connect">): { stripeAccount?: string } {
+  return e.modo === "direta" && e.connect ? { stripeAccount: e.connect.contaMedico } : {};
 }
 
 /** Sessão salva ainda serve? (aberta, mesmo valor, com folga antes de expirar). */
