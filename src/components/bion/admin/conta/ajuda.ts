@@ -11,7 +11,7 @@ export const FAQ_ADMIN: FaqAdmin[] = [
     categoria: "Centro de Comando",
     pergunta: "O que aparece na Fila do Início?",
     resposta:
-      "A Fila junta o que precisa de você: médicos em validação, chamados abertos, eventos críticos da auditoria, repasses e reembolsos pendentes, pacientes esperando o médico, evoluções pendentes e pedidos de renovação parados há mais de 24 h. Toque no item para ir direto ao lugar certo.",
+      "A Fila junta o que precisa de você: médicos em validação, chamados abertos, eventos críticos da auditoria, reembolsos pendentes, pacientes esperando o médico, evoluções pendentes e pedidos de renovação parados há mais de 24 h. Toque no item para ir direto ao lugar certo.",
     destino: "dashboard",
   },
   {
@@ -22,9 +22,9 @@ export const FAQ_ADMIN: FaqAdmin[] = [
   },
   {
     categoria: "Financeiro",
-    pergunta: "Quando o repasse dos médicos é fechado?",
+    pergunta: "Como o pagamento é dividido entre a BION e o médico?",
     resposta:
-      "Todo dia às 23:30 (horário de Brasília) o sistema fecha o repasse do dia: 90% do valor de cada consulta com desfecho vai para o médico. Consultas sem desfecho ficam de fora e entram no primeiro fechamento depois de ganharem desfecho. Renovações e retornos gratuitos (valor zero) não entram no repasse.",
+      "A Stripe divide cada pagamento na hora: 10% para a BION e o resto para o médico. Não há fechamento diário nem repasse manual.",
     destino: "admin-repasses",
   },
   {
