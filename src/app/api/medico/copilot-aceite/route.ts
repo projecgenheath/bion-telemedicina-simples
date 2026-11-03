@@ -10,6 +10,9 @@ import {
   aceiteCopilotMedicoVigente,
 } from "@/lib/aceite-copilot-medico";
 
+/** 503 quando a auditoria falha: o registro é desfeito (padrão do #141). */
+const CODIGO_AUDITORIA_INDISPONIVEL = "auditoria_indisponivel";
+
 /**
  * Aceite do BION Copilot do médico (LGPD).
  * GET → { vigente, em, versao } · POST { versao } → registra o aceite ·
@@ -34,14 +37,19 @@ export async function POST(req: Request) {
       const rev = await db.consentimento.create({
         data: { pacienteId: medico.id, quem: medico.nome, perfil: "MEDICO", finalidade: FINALIDADE_REVOGACAO_COPILOT_MEDICO, documentos: 0, aceito: false },
       });
-      await registrarAudit(usuarioSemNome(medico), {
+      const auditRev = await registrarAudit(usuarioSemNome(medico), {
         acao: "REVOGACAO_COPILOT_MEDICO",
         categoria: "consentimento",
         severidade: "warning",
         entidade: "consentimento",
         entidadeId: rev.id,
         detalhes: `Revogação do aceite do BION Copilot — versão ${VERSAO_ACEITE_COPILOT_MEDICO} em ${rev.createdAt.toISOString()}`,
-      });
+      }).catch(() => null);
+      if (!auditRev) {
+        // como no #141: sem trilha de auditoria a revogação não vale; desfaz
+        await db.consentimento.delete({ where: { id: rev.id } }).catch(() => undefined);
+        return Response.json({ erro: "Não consegui registrar sua revogação agora. Tente novamente.", codigo: CODIGO_AUDITORIA_INDISPONIVEL }, { status: 503 });
+      }
       return ok({ vigente: false, em: rev.createdAt.toISOString(), versao: VERSAO_ACEITE_COPILOT_MEDICO });
     }
     if (b?.versao !== VERSAO_ACEITE_COPILOT_MEDICO) {
@@ -63,10 +71,10 @@ export async function POST(req: Request) {
       entidade: "consentimento",
       entidadeId: VERSAO_ACEITE_COPILOT_MEDICO,
       detalhes: `Aceite do BION Copilot (NVIDIA, EUA) — versão ${VERSAO_ACEITE_COPILOT_MEDICO} em ${registro.createdAt.toISOString()}`,
-    });
+    }).catch(() => null);
     if (!audit) {
       await db.consentimento.delete({ where: { id: registro.id } }).catch(() => undefined);
-      return Response.json({ erro: "Não consegui registrar seu aceite agora. Tente novamente." }, { status: 503 });
+      return Response.json({ erro: "Não consegui registrar seu aceite agora. Tente novamente.", codigo: CODIGO_AUDITORIA_INDISPONIVEL }, { status: 503 });
     }
     return ok({ vigente: true, em: registro.createdAt.toISOString(), versao: VERSAO_ACEITE_COPILOT_MEDICO });
   } catch (erro) {

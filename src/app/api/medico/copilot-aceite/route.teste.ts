@@ -10,11 +10,13 @@ type Reg = { id: string; pacienteId: string; perfil: string; finalidade: string;
 const registros: Reg[] = [];
 const audits: { acao: string; detalhes?: string }[] = [];
 let chamadasLlm = 0;
+let auditOk = true;
 
 mock.module("@/lib/server/auth", () => ({
   exigirSessao: async () => ({ id: "m1", nome: "Dr. Teste", email: "m@t.local", role: "MEDICO" }),
   exigirPapel: async () => ({ id: "m1", nome: "Dr. Teste", email: "m@t.local", role: "MEDICO" }),
   registrarAudit: async (_u: unknown, a: { acao: string; detalhes?: string }) => {
+    if (!auditOk) return null;
     audits.push(a);
     return { id: `a${audits.length}` };
   },
@@ -41,7 +43,10 @@ let seq = 0;
       registros.push(r);
       return r;
     },
-    delete: async () => undefined,
+    delete: async ({ where }: { where: { id: string } }) => {
+      const i = registros.findIndex((r) => r.id === where.id);
+      if (i >= 0) registros.splice(i, 1);
+    },
     findFirst: async ({ where }: { where: { pacienteId: string; perfil?: string; finalidade: { startsWith: string } } }) =>
       registros
         .filter((r) => r.pacienteId === where.pacienteId && (!where.perfil || r.perfil === where.perfil) && r.finalidade.startsWith(where.finalidade.startsWith))
@@ -98,5 +103,29 @@ test("revoga → registro aceito=false, GET vigente=false, /api/bion-ia 403 de n
 
 test("aceita de novo depois de revogar → vigente", async () => {
   expect((await postAceite({ versao: VERSAO_ACEITE_COPILOT_MEDICO })).status).toBe(200);
+  expect(await vigente()).toBe(true);
+});
+
+test("auditoria falhou no aceite → 503 auditoria_indisponivel e nenhum Consentimento novo", async () => {
+  await postAceite({ aceito: false }); // parte de um estado revogado
+  const antes = registros.length;
+  auditOk = false;
+  const r = await postAceite({ versao: VERSAO_ACEITE_COPILOT_MEDICO });
+  auditOk = true;
+  expect(r.status).toBe(503);
+  expect(((await r.json()) as { codigo: string }).codigo).toBe("auditoria_indisponivel");
+  expect(registros.length).toBe(antes);
+  expect(await vigente()).toBe(false);
+});
+
+test("auditoria falhou na revogação → 503 e o aceite continua vigente", async () => {
+  await postAceite({ versao: VERSAO_ACEITE_COPILOT_MEDICO });
+  const antes = registros.length;
+  auditOk = false;
+  const r = await postAceite({ aceito: false });
+  auditOk = true;
+  expect(r.status).toBe(503);
+  expect(((await r.json()) as { codigo: string }).codigo).toBe("auditoria_indisponivel");
+  expect(registros.length).toBe(antes);
   expect(await vigente()).toBe(true);
 });
