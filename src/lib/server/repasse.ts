@@ -36,7 +36,17 @@ import {
 /*    repasse seguinte; o que não couber passa adiante (saldo_anterior);*/
 /*  - taxa do gateway: a REAL do pagamento (Stripe balance_transaction */
 /*    .fee em Pagamento.stripeTaxaCentavos) quando houver; senão 0;     */
-/*    no reembolso integral a taxa fica com o app.                      */
+/*    no reembolso integral a BION devolve a taxa do cartão ao médico  */
+/*    por transferência Stripe (#137).                                  */
+/*  - chargeback: o repasse PIX NÃO aplica desconto de chargeback       */
+/*    (nenhum RepasseAjuste motivo 'chargeback' é criado aqui). Na      */
+/*    cobrança direta a disputa é debitada na conta Stripe do médico e  */
+/*    `descontoChargebackCentavos(cb)` devolve 0 quando                 */
+/*    Chargeback.stripeConta está preenchido; a "falha da BION" vira    */
+/*    transferência idempotente (chargeback.ts, Admin, #149). Se um dia */
+/*    este arquivo passar a descontar chargeback: travar o Chargeback   */
+/*    (FOR UPDATE) ANTES do RepasseAjuste e reconferir o desconto       */
+/*    (0 = não aplica), e nunca para registro com stripeContaMedico.    */
 /*                                                                      */
 /* "Até o corte": o fechamento pega TUDO o que ficou elegível até a     */
 /* hora do corte e ainda não entrou em nenhum item. Nada se perde se o  */
