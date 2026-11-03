@@ -8,6 +8,7 @@ import {
   Building2,
   CalendarDays,
   Camera,
+  CreditCard,
   ChevronRight,
   CircleUserRound,
   Clock,
@@ -28,7 +29,7 @@ import { DadosPessoaisSheet } from "./sheets/DadosPessoaisSheet";
 import { RepassesSheet } from "./sheets/RepassesSheet";
 import { Campo, SheetMedico } from "./sheets/SheetMedico";
 import { useConfirmarSalvamento } from "./sheets/useConfirmarSalvamento";
-import { useRecebimento, type DadosMedico } from "./useDadosMedico";
+import { useContaStripe, useRecebimento, type ContaStripeWire, type DadosMedico } from "./useDadosMedico";
 import {
   PIX_TIPOS,
   ROTULO_PIX_TIPO,
@@ -61,6 +62,18 @@ function lerDensidade(): Densidade {
   } catch {
     return "confortavel";
   }
+}
+
+/** Texto da linha "Receber pelo Stripe" conforme o status gravado. */
+function detalheContaStripe(c: ContaStripeWire | null, carregando: boolean, erro: string | null): string {
+  if (!c) return carregando ? "Verificando sua conta Stripe…" : erro ?? "Não foi possível ver sua conta Stripe agora.";
+  if (c.pronta) return "Conta Stripe pronta: você recebe as consultas pagas direto nela.";
+  if (!c.temConta) return "Cadastre sua conta Stripe para receber consultas pagas.";
+  const pend = c.pendencias > 0 ? ` ${c.pendencias === 1 ? "1 pendência" : `${c.pendencias} pendências`} no Stripe.` : "";
+  if (!c.detailsSubmitted) return `Cadastro no Stripe incompleto.${pend} Toque para continuar.`;
+  if (pend) return `Pendências no Stripe:${pend.replace(" no Stripe.", "")}. Toque para resolver.`;
+  if (c.motivoBloqueio) return "Conta Stripe bloqueada pelo Stripe. Toque para conferir.";
+  return "Stripe analisando seus dados. Toque para conferir.";
 }
 
 function Linha({
@@ -346,6 +359,7 @@ export function PerfilMedicoPainel({
   const [sheetDados, setSheetDados] = useState(false);
   const [aberturasDados, setAberturasDados] = useState(0);
   const recebimento = useRecebimento();
+  const contaStripe = useContaStripe();
   const [sheetPix, setSheetPix] = useState(false);
   const [aberturasPix, setAberturasPix] = useState(0);
   const [sheetRepasses, setSheetRepasses] = useState(false);
@@ -550,6 +564,26 @@ export function PerfilMedicoPainel({
           Você recebe na sua conta Stripe a cada pagamento, já sem a comissão e a taxa do cartão. A Stripe transfere para o seu banco
           conforme o calendário dela.
         </p>
+        <Linha
+          icone={<CreditCard className="w-4 h-4" />}
+          titulo="Receber pelo Stripe"
+          detalhe={detalheContaStripe(contaStripe.conta, contaStripe.carregando, contaStripe.erro)}
+          onClick={
+            contaStripe.conta?.pronta || contaStripe.abrindo
+              ? undefined
+              : async () => {
+                  const r = await contaStripe.iniciar();
+                  if (!r.ok) toast.error(r.erro ?? "Não foi possível abrir o Stripe agora.");
+                }
+          }
+          direita={
+            contaStripe.conta?.pronta ? (
+              <span className="text-xs font-bold text-emerald-700 dark:text-emerald-400">Ativo</span>
+            ) : contaStripe.abrindo ? (
+              <span className="text-xs font-bold opacity-70">Abrindo…</span>
+            ) : undefined
+          }
+        />
       </section>
 
       {/* Modelo anterior (PIX diário): área LEGADA, explícita. A chave só é
