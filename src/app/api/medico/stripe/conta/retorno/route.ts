@@ -1,11 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { exigirPapel } from "@/lib/server/auth";
-import { linkOnboardingMedico, sincronizarContaMedico } from "@/lib/server/stripe-connect-medico";
+import { CODIGO_CHAVE_LIVE, linkOnboardingMedico, sincronizarContaMedico } from "@/lib/server/stripe-connect-medico";
 
 /**
  * GET /api/medico/stripe/conta/retorno — return_url/refresh_url do Account
  * Link. return: relê a conta no Stripe, grava o status e volta ao perfil do
- * médico. refresh=1 (link expirado): gera um link novo e redireciona.
+ * médico. refresh=1 (link expirado): gera um link novo SÓ se a conta já
+ * existe (nunca cria; sem conta → stripe=sem_conta). Chave live → stripe=indisponivel.
  * Sem sessão de médico: vai para o login.
  */
 export async function GET(req: NextRequest) {
@@ -19,12 +20,14 @@ export async function GET(req: NextRequest) {
   }
   try {
     if (req.nextUrl.searchParams.get("refresh") === "1") {
-      const link = await linkOnboardingMedico({ id: medico.id, email: medico.email }, base);
-      return NextResponse.redirect(link.url, 303);
+      // Refresh NUNCA cria conta (criação só no POST): sem conta volta ao perfil.
+      const link = await linkOnboardingMedico({ id: medico.id, email: medico.email }, base, {}, { criar: false });
+      return link ? NextResponse.redirect(link.url, 303) : voltar("sem_conta");
     }
     const s = await sincronizarContaMedico(medico.id);
     return voltar(s.pronta ? "ok" : "pendente");
   } catch (e) {
+    if ((e as { codigo?: string })?.codigo === CODIGO_CHAVE_LIVE) return voltar("indisponivel");
     console.error("[stripe-conta-retorno]", e instanceof Error ? e.message : e);
     return voltar("erro");
   }

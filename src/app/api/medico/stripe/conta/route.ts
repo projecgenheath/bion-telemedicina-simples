@@ -1,6 +1,6 @@
 import { exigirPapel } from "@/lib/server/auth";
 import { ok, falha } from "@/lib/server/http";
-import { garantirContaMedico, statusContaMedico } from "@/lib/server/stripe-connect-medico";
+import { garantirContaMedico, respostaErroConnect, statusContaMedico } from "@/lib/server/stripe-connect-medico";
 import { stripeConnectAtivo, tipoContaConnect } from "@/lib/server/stripe";
 
 /**
@@ -17,6 +17,8 @@ function wire(s: Awaited<ReturnType<typeof statusContaMedico>>) {
     detailsSubmitted: s.detailsSubmitted,
     pronta: s.pronta,
     atualizadoEm: s.atualizadoEm,
+    motivoBloqueio: s.motivoBloqueio,
+    pendencias: s.pendencias,
     connectAtivo: stripeConnectAtivo(),
     tipoConta: tipoContaConnect(),
   };
@@ -37,6 +39,6 @@ export async function POST() {
     const r = await garantirContaMedico({ id: medico.id, email: medico.email });
     return ok({ ...wire(r.status), criada: r.criada });
   } catch (e) {
-    return falha(e);
+    return respostaErroConnect(e) ?? falha(e);
   }
 }

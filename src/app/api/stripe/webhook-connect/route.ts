@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import type Stripe from "stripe";
 import { receberWebhookStripe } from "@/lib/server/stripe-webhook";
-import { gravarStatusConta } from "@/lib/server/stripe-connect-medico";
+import { sincronizarContaDoEvento } from "@/lib/server/stripe-connect-medico";
 
 /**
  * Webhook Connect do Stripe (endpoint "Connected accounts" no Dashboard,
@@ -17,8 +17,10 @@ import { gravarStatusConta } from "@/lib/server/stripe-connect-medico";
 export async function POST(req: NextRequest) {
   return receberWebhookStripe(req, [process.env.STRIPE_WEBHOOK_SECRET_CONNECT], async (evento: Stripe.Event) => {
     if (evento.type !== "account.updated") return null;
-    // Status do onboarding no PerfilMedico (charges/payouts/details), lido
-    // por medicoPodeSerCobrado. Conta desconhecida: nada é gravado.
-    return { acao: "conta", atualizada: await gravarStatusConta(evento.data.object as Stripe.Account) };
+    // Status do onboarding no PerfilMedico, lido por medicoPodeSerCobrado.
+    // Ordem dos eventos não é garantida: relê a conta no Stripe (estado
+    // atual) em vez de gravar o payload. Conta desconhecida: nada é gravado.
+    const conta = evento.account ?? (evento.data.object as Stripe.Account).id;
+    return { acao: "conta", atualizada: await sincronizarContaDoEvento(conta) };
   });
 }

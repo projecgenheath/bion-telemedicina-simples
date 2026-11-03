@@ -69,8 +69,11 @@ function detalheContaStripe(c: ContaStripeWire | null, carregando: boolean, erro
   if (!c) return carregando ? "Verificando sua conta Stripe…" : erro ?? "Não foi possível ver sua conta Stripe agora.";
   if (c.pronta) return "Conta Stripe pronta: você recebe as consultas pagas direto nela.";
   if (!c.temConta) return "Cadastre sua conta Stripe para receber consultas pagas.";
-  if (!c.detailsSubmitted) return "Cadastro no Stripe incompleto. Toque para continuar.";
-  return "Stripe analisando seus dados. Toque para conferir pendências.";
+  const pend = c.pendencias > 0 ? ` ${c.pendencias === 1 ? "1 pendência" : `${c.pendencias} pendências`} no Stripe.` : "";
+  if (!c.detailsSubmitted) return `Cadastro no Stripe incompleto.${pend} Toque para continuar.`;
+  if (pend) return `Pendências no Stripe:${pend.replace(" no Stripe.", "")}. Toque para resolver.`;
+  if (c.motivoBloqueio) return "Conta Stripe bloqueada pelo Stripe. Toque para conferir.";
+  return "Stripe analisando seus dados. Toque para conferir.";
 }
 
 function Linha({

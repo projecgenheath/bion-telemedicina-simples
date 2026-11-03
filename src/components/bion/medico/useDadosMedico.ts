@@ -507,6 +507,10 @@ export type ContaStripeWire = {
   detailsSubmitted: boolean;
   pronta: boolean;
   atualizadoEm: string | null;
+  /** requirements.disabled_reason do Stripe. */
+  motivoBloqueio: string | null;
+  /** requirements.currently_due.length (pendências no Stripe). */
+  pendencias: number;
   connectAtivo: boolean;
   tipoConta: "standard" | "express";
 };
