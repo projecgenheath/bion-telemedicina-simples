@@ -217,7 +217,7 @@ type DisputaStripe = {
 };
 export type EventoDisputa = { id: string; created: number; type: string; account?: string | null; data: { object: unknown } };
 
-type CbExistente = { id: string; statusStripe: string; ultimoEventoId: string | null; ultimoEventoEm: Date | null; falhaBion: boolean; medicoId: string | null; taxaDisputaCentavos: number | null; creditoPendente: boolean; creditoDevolvidoEm: Date | null };
+type CbExistente = { id: string; statusStripe: string; ultimoEventoId: string | null; ultimoEventoEm: Date | null; falhaBion: boolean; medicoId: string | null; taxaDisputaCentavos: number | null; creditoPendente: boolean; creditoDevolvidoEm: Date | null; stripeConta?: string | null; feeRefundStatus?: string | null };
 type TxDisputa = TravaSql & {
   pagamento: {
     findFirst(a: unknown): Promise<{ id: string; consultaId: string | null; consulta: { medicoId: string } | null; pedidoRenovacao: { medicoId: string } | null } | null>;
@@ -267,7 +267,7 @@ export async function registrarDisputaStripe(evento: EventoDisputa, d: DbDisputa
     await travarPorDisputa(tx, disputa.id);
     const atual = await tx.chargeback.findUnique({
       where: { stripeDisputeId: disputa.id },
-      select: { id: true, statusStripe: true, ultimoEventoId: true, ultimoEventoEm: true, falhaBion: true, medicoId: true, taxaDisputaCentavos: true, creditoPendente: true, creditoDevolvidoEm: true },
+      select: { id: true, statusStripe: true, ultimoEventoId: true, ultimoEventoEm: true, falhaBion: true, medicoId: true, taxaDisputaCentavos: true, creditoPendente: true, creditoDevolvidoEm: true, stripeConta: true, feeRefundStatus: true },
     });
     const taxa = taxaDaDisputa(disputa.balance_transactions);
     if (!atual) {
@@ -298,6 +298,7 @@ export async function registrarDisputaStripe(evento: EventoDisputa, d: DbDisputa
           ultimoEventoId: evento.id,
           ultimoEventoEm: em,
           stripeConta: evento.account ?? null,
+          ...(evento.account && disputa.status === "lost" ? { feeRefundStatus: "pendente" } : {}),
         },
       });
       return "criada";
@@ -327,6 +328,9 @@ export async function registrarDisputaStripe(evento: EventoDisputa, d: DbDisputa
         ultimoEventoEm: em,
         ...(taxa !== null ? { taxaDisputaCentavos: taxa } : {}),
         ...(creditoPendente ? { creditoPendente: true } : {}),
+        // Cobrança direta perdida: marca a devolução dos 10% (decisão 03/11 12:33)
+        // como pendente na mesma transação travada; devolverFeeChargeback executa.
+        ...(disputa.status === "lost" && atual.stripeConta && !atual.feeRefundStatus ? { feeRefundStatus: "pendente" } : {}),
       },
     });
     return "atualizada";
@@ -429,8 +433,8 @@ export function validarMotivo(body: unknown): { ok: true; motivo: string } | { o
  * Idempotência: (1) linha travada (FOR UPDATE) e status 'pendente' gravado
  * antes do Stripe; (2) transfer_group `chargeback_<id>` consultado antes de
  * criar (a Idempotency-Key do Stripe expira em 24h); (3) Idempotency-Key
- * `chargeback-falha-bion-<id>`. 10% de application fee NÃO é devolvido aqui
- * (decisão pendente do Alisson).
+ * `chargeback-falha-bion-<id>`. Os 10% de application fee são devolvidos à
+ * parte, em devolverFeeChargeback (decisão do Alisson 03/11 12:33).
  */
 export const chaveIdempotenciaFalhaBion = (chargebackId: string) => `chargeback-falha-bion-${chargebackId}`;
 export const grupoFalhaBion = (chargebackId: string) => `chargeback_${chargebackId}`;
@@ -525,4 +529,113 @@ export async function transferirFalhaBion(
     data: { transferFalhaBionStatus: "enviado", transferFalhaBionId: transfer.id, transferFalhaBionErro: null, transferFalhaBionEm: deps.agora ?? new Date() },
   });
   return { enviado: true, transferId: transfer.id, valorCentavos: valor };
+}
+
+// ------------------------------------------------------------ cobrança direta: devolução dos 10% na disputa perdida
+
+/**
+ * Decisão do Alisson (03/11 12:33): no chargeback PERDIDO da cobrança direta,
+ * a BION devolve ao médico os 10% de application fee, por reembolso da
+ * application fee (applicationFees.createRefund) — não por transferência.
+ * Independente da "falha da BION" (as duas podem acontecer). Ganha: nada.
+ *
+ * Idempotência: (1) linha travada (FOR UPDATE) e status 'pendente' gravado
+ * antes do Stripe (registrarDisputaStripe já marca 'pendente' na transição
+ * para 'lost'); (2) refunds da fee consultados antes de criar (a
+ * Idempotency-Key expira em 24h): um refund nosso (metadata) é reaproveitado;
+ * (3) Idempotency-Key `chargeback-fee-refund-<id>`; (4) nunca mais que o
+ * saldo não devolvido da fee — fee já toda devolvida (ex.: reembolso integral
+ * com refund_application_fee) = 'ja_devolvida', sem chamada.
+ * Erro do Stripe: grava 'falhou' e relança (webhook reentrega; admin repete).
+ */
+export const chaveIdempotenciaFeeChargeback = (chargebackId: string) => `chargeback-fee-refund-${chargebackId}`;
+
+type CbFee = {
+  id: string;
+  statusStripe: string;
+  stripeConta: string | null;
+  stripeChargeId: string | null;
+  feeRefundStatus: string | null;
+  feeRefundId: string | null;
+  feeRefundCentavos: number | null;
+};
+export type TxFee = TravaSql & {
+  chargeback: { findUnique(a: unknown): Promise<CbFee | null>; update(a: unknown): Promise<unknown>; updateMany(a: unknown): Promise<{ count: number }> };
+};
+export type DbFee = TxFee & { $transaction<T>(fn: (tx: TxFee) => Promise<T>): Promise<T> };
+type FeeRefund = { id: string; amount: number; metadata?: Record<string, string> | null };
+export type StripeFee = {
+  charges: { retrieve(id: string, p: Record<string, never>, o: { stripeAccount: string }): Promise<{ application_fee?: string | { id: string } | null }> };
+  applicationFees: {
+    retrieve(id: string): Promise<{ id: string; amount: number; amount_refunded: number }>;
+    listRefunds(id: string, p: { limit: number }): Promise<{ data: FeeRefund[] }>;
+    createRefund(id: string, p: { amount: number; metadata: Record<string, string> }, o: { idempotencyKey: string }): Promise<FeeRefund>;
+  };
+};
+export type ResultadoFee =
+  | { enviado: true; refundId: string; valorCentavos: number }
+  | { enviado: false; motivo: "nao_encontrado" | "nao_direta" | "nao_perdida" | "ja_enviado" | "ja_devolvida" | "sem_fee" };
+
+const SEL_FEE = { id: true, statusStripe: true, stripeConta: true, stripeChargeId: true, feeRefundStatus: true, feeRefundId: true, feeRefundCentavos: true } as const;
+const FINAL_FEE = ["enviado", "ja_devolvida", "sem_fee"];
+
+export async function devolverFeeChargeback(
+  chargebackId: string,
+  deps: { d?: DbFee; s?: StripeFee; agora?: Date } = {},
+): Promise<ResultadoFee> {
+  const d = deps.d ?? (db as unknown as DbFee);
+  type Preparo = { fim: ResultadoFee } | { cb: CbFee };
+  const preparo = await d.$transaction(async (tx): Promise<Preparo> => {
+    await travarChargeback(tx, chargebackId);
+    const cb = await tx.chargeback.findUnique({ where: { id: chargebackId }, select: SEL_FEE });
+    if (!cb) return { fim: { enviado: false as const, motivo: "nao_encontrado" as const } };
+    if (!cb.stripeConta) return { fim: { enviado: false as const, motivo: "nao_direta" as const } };
+    if (cb.statusStripe !== "lost") return { fim: { enviado: false as const, motivo: "nao_perdida" as const } };
+    if (cb.feeRefundStatus === "enviado") return { fim: { enviado: false as const, motivo: "ja_enviado" as const } };
+    if (cb.feeRefundStatus === "ja_devolvida" || cb.feeRefundStatus === "sem_fee") return { fim: { enviado: false as const, motivo: cb.feeRefundStatus } };
+    if (!cb.stripeChargeId) return { fim: { enviado: false as const, motivo: "sem_fee" as const } };
+    if (cb.feeRefundStatus !== "pendente") await tx.chargeback.update({ where: { id: cb.id }, data: { feeRefundStatus: "pendente" } });
+    return { cb };
+  });
+  if ("fim" in preparo) return preparo.fim;
+  const cb = (preparo as { cb: CbFee }).cb;
+  const s = deps.s ?? ((await import("@/lib/server/stripe")).stripe() as unknown as StripeFee);
+  const naoFinal = { id: cb.id, feeRefundStatus: { notIn: FINAL_FEE } };
+  let refund: FeeRefund | null = null;
+  let valor = 0;
+  try {
+    const charge = await s.charges.retrieve(cb.stripeChargeId as string, {}, { stripeAccount: cb.stripeConta as string });
+    const feeId = idDe(charge.application_fee ?? null);
+    if (!feeId) {
+      await d.chargeback.updateMany({ where: naoFinal, data: { feeRefundStatus: "sem_fee", feeRefundErro: null } });
+      return { enviado: false, motivo: "sem_fee" };
+    }
+    const anteriores = await s.applicationFees.listRefunds(feeId, { limit: 100 });
+    refund = anteriores.data.find((r) => r.metadata?.chargebackId === cb.id && r.metadata?.tipo === "chargeback_fee_refund") ?? null;
+    if (!refund) {
+      const fee = await s.applicationFees.retrieve(feeId);
+      const resta = Math.max(0, fee.amount - fee.amount_refunded);
+      valor = cb.feeRefundCentavos !== null ? Math.min(cb.feeRefundCentavos, resta) : resta;
+      if (valor <= 0) {
+        await d.chargeback.updateMany({ where: naoFinal, data: { feeRefundStatus: "ja_devolvida", feeRefundErro: null } });
+        return { enviado: false, motivo: "ja_devolvida" };
+      }
+      await d.chargeback.updateMany({ where: naoFinal, data: { feeRefundCentavos: valor } });
+      refund = await s.applicationFees.createRefund(
+        feeId,
+        { amount: valor, metadata: { chargebackId: cb.id, tipo: "chargeback_fee_refund" } },
+        { idempotencyKey: chaveIdempotenciaFeeChargeback(cb.id) },
+      );
+    }
+  } catch (e) {
+    const msg = (e instanceof Error ? e.message : "erro").slice(0, 300);
+    await d.chargeback.updateMany({ where: naoFinal, data: { feeRefundStatus: "falhou", feeRefundErro: msg } });
+    throw e;
+  }
+  const r = refund as FeeRefund;
+  await d.chargeback.updateMany({
+    where: naoFinal,
+    data: { feeRefundStatus: "enviado", feeRefundId: r.id, feeRefundCentavos: r.amount, feeRefundErro: null, feeRefundEm: deps.agora ?? new Date() },
+  });
+  return { enviado: true, refundId: r.id, valorCentavos: r.amount };
 }
