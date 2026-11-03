@@ -28,3 +28,17 @@ export function documentoCancelado(d: { status?: string | null } | null | undefi
 export function lerMotivo(v: unknown): string | null {
   return typeof v === "string" && v.trim() ? v.trim().slice(0, MOTIVO_MAX) : null;
 }
+
+/** Tipo de notificação (NotifTipo existente) conforme o tipo do documento.
+ *  Não existe tipo "atestado" em NotifTipo: atestado fica em "receita",
+ *  o grupo de documentos clínicos do sino. */
+export function tipoNotificacaoDocumento(tipoDocumento: string): "receita" | "exame" {
+  return tipoDocumento === "exame" || tipoDocumento === "exame_solicitado" ? "exame" : "receita";
+}
+
+/** Auditoria nunca guarda o texto livre do motivo (pode ter dado clínico). */
+export function detalhesAuditoriaCancelamento(tipoDocumento: string, motivo: string | null, renovacoesRecusadas: number): string {
+  return `tipo=${tipoDocumento} temMotivo=${motivo ? "true" : "false"} renovacoesRecusadas=${renovacoesRecusadas}`;
+}
+
+export const MENSAGEM_RECUSA_CANCELADO = "A receita foi cancelada pelo médico, por isso o pedido de renovação foi recusado. Se já houve pagamento, ele será reembolsado.";

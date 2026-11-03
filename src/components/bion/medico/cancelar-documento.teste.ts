@@ -65,3 +65,38 @@ test("PDF e lista mostram cancelado", () => {
   expect(tela).toContain("<SeloCancelado");
   expect(tela).toContain("window.confirm(");
 });
+
+import { detalhesAuditoriaCancelamento, tipoNotificacaoDocumento } from "./cancelar-documento";
+const checkout = ler("src/app/api/pagamentos/stripe/checkout/route.ts");
+
+test("auditoria não guarda o texto do motivo", () => {
+  const d = detalhesAuditoriaCancelamento("receita", "paciente com CID sensível", 1);
+  expect(d).toBe("tipo=receita temMotivo=true renovacoesRecusadas=1");
+  expect(d).not.toContain("CID");
+  expect(detalhesAuditoriaCancelamento("atestado", null, 0)).toContain("temMotivo=false");
+  expect(rota).not.toMatch(/motivo=\$\{motivo\}/);
+  expect(rota).not.toMatch(/data: \{[^}]*motivo/);
+});
+
+test("pedidos de renovação abertos são recusados e reembolsados no cancelamento", () => {
+  expect(rota).toContain("db.$transaction");
+  expect(rota).toMatch(/documentoId: doc\.id, status: \{ in: \[\.\.\.STATUS_RENOVACAO_ABERTOS\] \}/);
+  expect(rota).toContain('status: "recusada"');
+  expect(rota).toContain("reembolsarPedidoRenovacao(p.id, tx)");
+});
+
+test("checkout da renovação recusa receita cancelada (409, sem cobrança)", () => {
+  expect(checkout).toContain("documento: { select: { status: true } }");
+  const i = checkout.indexOf('pg.pedidoRenovacao?.documento?.status === "cancelado"');
+  expect(i).toBeGreaterThan(-1);
+  expect(checkout.slice(i, i + 300)).toContain("status: 409");
+  expect(i).toBeLessThan(checkout.indexOf("abrirSessao(usuario, {", i));
+});
+
+test("tipo da notificação segue o tipo do documento", () => {
+  expect(tipoNotificacaoDocumento("receita")).toBe("receita");
+  expect(tipoNotificacaoDocumento("exame")).toBe("exame");
+  expect(tipoNotificacaoDocumento("exame_solicitado")).toBe("exame");
+  expect(tipoNotificacaoDocumento("atestado")).toBe("receita");
+  expect(rota).toContain("tipo: tipoNotificacaoDocumento(doc.tipo)");
+});

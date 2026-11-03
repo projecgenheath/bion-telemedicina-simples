@@ -3,7 +3,16 @@ import { db } from "@/lib/db";
 import { exigirPapel } from "@/lib/server/auth";
 import { aplicarSideEffects } from "@/lib/server/dados";
 import { ok, falha, lerCorpoJson, corpoObjeto } from "@/lib/server/http";
-import { decidirCancelamento, lerMotivo, STATUS_DOCUMENTO_CANCELADO } from "@/components/bion/medico/cancelar-documento";
+import { reembolsarPedidoRenovacao } from "@/lib/server/renovacao-reembolso";
+import { STATUS_RENOVACAO_ABERTOS } from "@/lib/atendimento-tipo";
+import {
+  decidirCancelamento,
+  detalhesAuditoriaCancelamento,
+  lerMotivo,
+  MENSAGEM_RECUSA_CANCELADO,
+  STATUS_DOCUMENTO_CANCELADO,
+  tipoNotificacaoDocumento,
+} from "@/components/bion/medico/cancelar-documento";
 
 /** POST /api/medico/documentos/[id]/cancelar — { motivo? }
  *  Só o médico EMISSOR (sessão MEDICO e Documento.medicoId = sessão).
@@ -31,27 +40,49 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     const agora = new Date();
     // updateMany com status no where: duas chamadas simultâneas não gravam duas vezes.
-    const r = await db.documento.updateMany({
-      where: { id: doc.id, medicoId: medico.id, status: { not: STATUS_DOCUMENTO_CANCELADO } },
-      data: { status: STATUS_DOCUMENTO_CANCELADO, canceladoEm: agora },
+    // Mesma transação: cancela o documento e RECUSA os pedidos de renovação
+    // abertos dele (pago → reembolso pelo fluxo da recusa do médico; não
+    // pago → recusado, o checkout não cobra mais). O motivo NÃO é gravado
+    // (Documento não tem coluna e a auditoria só guarda temMotivo).
+    const { count, pedidosRecusados } = await db.$transaction(async (tx) => {
+      const r = await tx.documento.updateMany({
+        where: { id: doc.id, medicoId: medico.id, status: { not: STATUS_DOCUMENTO_CANCELADO } },
+        data: { status: STATUS_DOCUMENTO_CANCELADO, canceladoEm: agora },
+      });
+      if (r.count === 0) return { count: 0, pedidosRecusados: [] as { id: string; pacienteId: string }[] };
+      const abertos = await tx.pedidoRenovacao.findMany({
+        where: { documentoId: doc.id, status: { in: [...STATUS_RENOVACAO_ABERTOS] } },
+        select: { id: true, pacienteId: true },
+      });
+      const recusados: { id: string; pacienteId: string }[] = [];
+      for (const p of abertos) {
+        const u = await tx.pedidoRenovacao.updateMany({
+          where: { id: p.id, status: { in: [...STATUS_RENOVACAO_ABERTOS] } },
+          data: { status: "recusada", mensagemMedico: MENSAGEM_RECUSA_CANCELADO, respondidoEm: agora },
+        });
+        if (u.count === 0) continue;
+        await reembolsarPedidoRenovacao(p.id, tx); // no-op se não houve pagamento confirmado
+        recusados.push(p);
+      }
+      return { count: r.count, pedidosRecusados: recusados };
     });
-    if (r.count === 0) {
+    if (count === 0) {
       const atual = await db.documento.findUnique({ where: { id: doc.id }, select: { canceladoEm: true } });
       return ok({ documento: { id: doc.id, status: STATUS_DOCUMENTO_CANCELADO, canceladoEm: atual?.canceladoEm?.toISOString() ?? null }, jaCancelado: true });
     }
 
     const efeitos = await aplicarSideEffects(
       medico,
-      [{ tipo: "receita", titulo: "Documento cancelado", texto: `${doc.titulo} foi cancelado por ${medico.nome}. Ele continua no seu histórico, marcado como cancelado.`, usuarioId: doc.pacienteId }],
+      [{ tipo: tipoNotificacaoDocumento(doc.tipo), titulo: "Documento cancelado", texto: `${doc.titulo} foi cancelado por ${medico.nome}. Ele continua no seu histórico, marcado como cancelado.`, usuarioId: doc.pacienteId }],
       {
         acao: "DOCUMENTO_CANCELADO",
         categoria: "documento",
         entidade: "documento",
         entidadeId: doc.id,
-        detalhes: `tipo=${doc.tipo}${motivo ? ` motivo=${motivo}` : ""}`,
+        detalhes: detalhesAuditoriaCancelamento(doc.tipo, motivo, pedidosRecusados.length),
       },
     );
-    return ok({ documento: { id: doc.id, status: STATUS_DOCUMENTO_CANCELADO, canceladoEm: agora.toISOString() }, jaCancelado: false, ...efeitos });
+    return ok({ documento: { id: doc.id, status: STATUS_DOCUMENTO_CANCELADO, canceladoEm: agora.toISOString() }, jaCancelado: false, renovacoesRecusadas: pedidosRecusados.map((p) => p.id), ...efeitos });
   } catch (erro) {
     return falha(erro);
   }
