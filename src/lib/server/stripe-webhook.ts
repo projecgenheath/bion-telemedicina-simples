@@ -11,7 +11,7 @@ import { cancelarRenovacaoPagamentoFalhou, confirmarPagamentoRenovacao } from "@
 import { gatewayCheckout } from "@/lib/server/gateway-pagamento";
 import { registrarDisputaStripe } from "@/lib/server/chargeback";
 import { liberarEvento, reivindicarEvento, registrarEventoReembolsoStripe, stripe } from "@/lib/server/stripe";
-import { acaoDoEvento, moedaCheckout, moedaConfere, multaDaSessao, referenciaConfere, valorConfere } from "@/lib/stripe-checkout-logica";
+import { acaoDoEvento, bloqueioChaveLive, moedaCheckout, moedaConfere, multaDaSessao, referenciaConfere, valorConfere } from "@/lib/stripe-checkout-logica";
 
 /**
  * Webhook do Stripe (checkout do paciente).
@@ -57,6 +57,12 @@ export async function receberWebhookStripe(
   const segredos = segredosBrutos.map((x) => x?.trim()).filter((x): x is string => !!x);
   if (!segredos.length || !process.env.STRIPE_SECRET_KEY?.trim()) {
     return Response.json({ erro: "Webhook do Stripe não configurado neste ambiente." }, { status: 503 });
+  }
+  // Chave live bloqueada: falha alto ANTES de reivindicar o evento (nada fica
+  // marcado como processado; o Stripe reentrega quando a chave for de teste).
+  if (bloqueioChaveLive("plataforma")) {
+    console.error("[stripe webhook] chave live bloqueada; evento recusado");
+    return Response.json({ erro: "Chave Stripe live bloqueada.", codigo: "chave_live_bloqueada" }, { status: 503 });
   }
   const corpo = await req.text();
   const assinatura = req.headers.get("stripe-signature") ?? "";

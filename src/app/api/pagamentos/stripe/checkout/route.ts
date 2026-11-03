@@ -5,7 +5,7 @@ import { aceiteVigentePendente } from "@/lib/server/aceite-termos";
 import { falha } from "@/lib/server/http";
 import { criarCobranca } from "@/lib/server/pagamentos";
 import { comissaoPlataformaConnect, gatewayCheckout } from "@/lib/server/gateway-pagamento";
-import { modoCobrancaStripe, stripeConnectAtivo } from "@/lib/server/stripe";
+import { ChaveLiveBloqueadaError, modoCobrancaStripe, stripeConnectAtivo } from "@/lib/server/stripe";
 import { contaStripeDoMedico, medicoPodeSerCobrado } from "@/lib/medico-cobravel";
 import { contaMedicoDaCobranca, gravarContaMedicoDaCobranca } from "@/lib/server/marca-cobranca-direta";
 import {
@@ -17,6 +17,7 @@ import {
   expiracaoReservaSeg,
   type TipoCobranca,
   bloqueioChaveLive,
+  ERRO_PAGAMENTO_INDISPONIVEL,
   chaveIdempotencia,
   descritorSufixo,
   metodosCheckout,
@@ -119,6 +120,8 @@ export async function POST(req: NextRequest) {
       base,
     });
   } catch (erro) {
+    // Chave live barrada na fábrica stripe(): mesma resposta do bloqueio do checkout.
+    if (erro instanceof ChaveLiveBloqueadaError) return Response.json({ erro: ERRO_PAGAMENTO_INDISPONIVEL, codigo: "pagamento_indisponivel" }, { status: 503 });
     return falha(erro);
   }
 }

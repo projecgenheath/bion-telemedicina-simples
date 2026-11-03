@@ -1,5 +1,6 @@
 import Stripe from "stripe";
 import { db } from "@/lib/db";
+import { bloqueioChaveLive } from "@/lib/stripe-checkout-logica";
 
 /**
  * Base do Stripe (modo teste). Dono: Admin. Migração 20261028a.
@@ -15,12 +16,35 @@ import { db } from "@/lib/db";
  */
 
 let cliente: Stripe | null = null;
+let chaveDoCliente: string | null = null;
 
+/**
+ * Chave live (sk_live_ / rk_live_) bloqueada em QUALQUER movimento de dinheiro
+ * (checkout, reembolso, transferência, refund da application fee, leitura)
+ * até o Alisson liberar (Jurídico: faltam CNPJ, RT e conta Stripe live BR).
+ * Lançado por stripe() ANTES de qualquer requisição.
+ */
+export class ChaveLiveBloqueadaError extends Error {
+  readonly codigo = "chave_live_bloqueada" as const;
+  constructor() {
+    super("Chave Stripe live bloqueada: o app só funciona em modo teste até o Alisson liberar.");
+    this.name = "ChaveLiveBloqueadaError";
+  }
+}
+
+/** Lança ChaveLiveBloqueadaError se a chave for live. Use em todo cliente Stripe. */
+export function exigirChaveNaoLive(chave: string | undefined = process.env.STRIPE_SECRET_KEY): void {
+  if (bloqueioChaveLive("plataforma", chave)) throw new ChaveLiveBloqueadaError();
+}
+
+/** Única fábrica do cliente Stripe do app. Confere a chave a cada chamada. */
 export function stripe(): Stripe {
-  if (cliente) return cliente;
   const chave = process.env.STRIPE_SECRET_KEY?.trim();
   if (!chave) throw new Error("STRIPE_SECRET_KEY não configurada.");
+  exigirChaveNaoLive(chave);
+  if (cliente && chaveDoCliente === chave) return cliente;
   cliente = new Stripe(chave);
+  chaveDoCliente = chave;
   return cliente;
 }
 
