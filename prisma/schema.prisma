@@ -780,6 +780,13 @@ model Chargeback {
   transferFalhaBionId       String?
   transferFalhaBionErro     String?
   transferFalhaBionEm       DateTime?
+  // Disputa perdida na cobrança direta: BION devolve os 10% (application fee
+  // refund), decisão 03/11 12:33 (20261103h).
+  feeRefundStatus           String? // pendente | enviado | falhou | ja_devolvida | sem_fee
+  feeRefundId               String?
+  feeRefundCentavos         Int?
+  feeRefundErro             String?
+  feeRefundEm               DateTime?
   criadoEm            DateTime        @default(now())
   atualizadoEm        DateTime        @default(now()) @updatedAt
   ajustes             RepasseAjuste[]
