@@ -9,7 +9,7 @@ lang: pt-BR
 # Resumo em linguagem simples
 
 - **Quem cuida dos seus dados:** a BION (**[A DEFINIR: razão social e CNPJ]**) e, no que é prontuário, o médico que atende você.
-- **Onde ficam:** no **Brasil (São Paulo)**, nos servidores da Supabase e da Vercel. Algumas partes passam pelo exterior: a **IA da NVIDIA** (quando você usa a BION IA), servidores de conexão da chamada (**Cloudflare e Google**, que recebem o seu IP) e os **serviços de notificação** do seu navegador.
+- **Onde ficam:** no **Brasil (São Paulo)**, nos servidores da Supabase e da Vercel. Algumas partes passam pelo exterior: a **IA da NVIDIA** (quando você usa a BION IA ou quando um médico usa o BION Copilot), servidores de conexão da chamada (**Cloudflare e Google**, que recebem o seu IP) e os **serviços de notificação** do seu navegador.
 - **Dados de saúde** são usados para o seu atendimento, por médicos, com sigilo. **A administração da BION não vê o conteúdo clínico, não entra na sala e não lê o chat da consulta**, mas vê seus dados de cadastro (nome, e-mail, telefone, CPF, data de nascimento) para operar a plataforma.
 - **O médico que atende você vê todo o seu histórico na BION**, inclusive com outros médicos. Médicos que nunca atenderam você não veem nada.
 - **A videochamada não é gravada.** O chat da consulta vai para o prontuário.
@@ -151,7 +151,7 @@ Quando a base é o consentimento, você pode **retirá-lo a qualquer momento**, 
 
 7.3. **Leitura de exames.** **Antes de cada envio pedimos a sua autorização específica**, e você pode **recusar**. **A imagem ou o PDF do laudo vai à NVIDIA como está**, sem filtro, inclusive com o seu nome e outros dados impressos, porque a IA precisa ler o documento e conferir se ele é seu. Quando possível, removemos o nome do arquivo e metadados técnicos, **mas não garantimos a anonimização do conteúdo**. O arquivo original não é guardado por essa função; ficam os valores extraídos.
 
-7.4. **Copilot IA do médico.** O texto digitado pelo médico vai à NVIDIA com a especialidade e o CRM dele; os médicos são proibidos de inserir dados identificáveis de pacientes.
+7.4. **BION Copilot dos médicos.** Os médicos podem usar um assistente de IA (NVIDIA, EUA) como apoio. **O sistema não envia dados de pacientes** ao Copilot: vão só o texto digitado pelo médico e dados profissionais dele (especialidade, CRM e fila de atendimento, sem dados de pacientes). Os Termos do Médico **proíbem o médico de inserir dados que identifiquem pacientes**, e um **filtro automático** tenta remover nomes, CPF, contatos, datas e endereço, mas pode falhar.
 
 7.5. **O que a IA não faz.** A IA **não diagnostica, não prescreve e não decide** sobre o seu atendimento. Nenhuma decisão que afete seus interesses é tomada **unicamente** por tratamento automatizado. Você pode pedir **explicação e revisão** de qualquer resultado automatizado (LGPD, art. 20) pelo Encarregado.
 
@@ -183,7 +183,7 @@ Quando a base é o consentimento, você pode **retirá-lo a qualquer momento**, 
 
 9.1. Há transferência internacional para **NVIDIA** (IA), **Stripe** (pagamentos com cartão), **Google** (STUN), **Cloudflare** (STUN/TURN), **serviços de push**, **Vercel** (logs) e, quando houver, **Upstash**.
 
-9.2. Para os demais fornecedores (Stripe, Supabase, Vercel, Google, Cloudflare, serviços de push e, quando houver, Upstash), as transferências ocorrem com base no **art. 33 da LGPD**, nas garantias contratuais oferecidas por cada fornecedor **[A CONFIRMAR: quais fornecedores adotam as cláusulas-padrão da ANPD (Resolução CD/ANPD nº 19/2024)]**. Para a BION IA e a leitura de exames, a transferência à **NVIDIA (EUA)** se baseia **exclusivamente no seu consentimento específico e destacado** (art. 33, VIII, da LGPD). Hoje **não há contrato com cláusulas-padrão com a NVIDIA**, e ela pode guardar e usar o conteúdo conforme os termos dela.
+9.2. Para os demais fornecedores (Stripe, Supabase, Vercel, Google, Cloudflare, serviços de push e, quando houver, Upstash), as transferências ocorrem com base no **art. 33 da LGPD**, nas garantias contratuais oferecidas por cada fornecedor **[A CONFIRMAR: quais fornecedores adotam as cláusulas-padrão da ANPD (Resolução CD/ANPD nº 19/2024)]**. Para a BION IA e a leitura de exames, a transferência à **NVIDIA (EUA)** se baseia **exclusivamente no seu consentimento específico e destacado** (art. 33, VIII, da LGPD). Hoje **não há contrato com cláusulas-padrão com a NVIDIA**, e ela pode guardar e usar o conteúdo conforme os termos dela. Para o BION Copilot, a transferência dos dados profissionais do médico à NVIDIA se baseia no consentimento específico do médico, dado ao ativar o Copilot (art. 33, VIII).
 
 9.3. Você pode pedir informações sobre as garantias de cada transferência ao Encarregado.
 
