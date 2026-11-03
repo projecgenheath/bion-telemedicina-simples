@@ -65,7 +65,7 @@ Aplicam-se as definições dos Termos de Uso do Paciente. Além delas:
 
 3.1. **Objeto.** A BION licencia ao médico o uso da Plataforma e presta serviços de **intermediação tecnológica**: divulgação do perfil, agendamento, sala de teleconsulta, prontuário eletrônico, mensagens, emissão de documentos em PDF, cobrança do paciente pela Stripe **em nome e por conta do médico**, direto na conta Stripe do médico, configuração da comissão da BION em cada pagamento, suporte e ferramentas auxiliares.
 
-3.2. **Mandato de cobrança.** O médico autoriza a BION a **receber do paciente, em nome do médico**, o valor das consultas, renovações e multas, por meio de gateway de pagamento, a reter sua remuneração (cláusula 10) e a repassar o saldo ao médico. Os valores recebidos de pacientes pertencem ao médico, salvo a parte da BION. **[A DEFINIR COM ADVOGADO/CONTADOR: estrutura de recebimento — conta da BION vs. split do gateway — e impactos regulatórios (Lei 12.865/2013, BACEN) e tributários.]**
+3.2. **Mandato de cobrança.** O médico autoriza a BION a configurar, pela Stripe, a **cobrança do paciente direto na conta Stripe do médico**, com a retenção automática da comissão da BION (cláusula 10) no ato do pagamento. Os valores pagos pelos pacientes pertencem ao médico, salvo a comissão da BION, e a BION não os recebe nem os repassa.
 
 3.3. **A BION não presta serviço médico**, não interfere na conduta, no diagnóstico, na prescrição ou no tempo de consulta, e não é empregadora, sócia, operadora de plano de saúde ou cooperativa do médico.
 
