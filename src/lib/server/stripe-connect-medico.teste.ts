@@ -137,6 +137,7 @@ test("trava sk_live_: helper e rotas recusam com 503 + código; nada é criado",
   const antes = criadas.length;
   perfis.push(novo("m3"));
   await expect(h.garantirContaMedico({ id: "m3" }, { chave: "sk_live_x" })).rejects.toMatchObject({ status: 503, codigo: h.CODIGO_CHAVE_LIVE });
+  await expect(h.garantirContaMedico({ id: "m3" }, { chave: "rk_live_x" })).rejects.toMatchObject({ status: 503, codigo: h.CODIGO_CHAVE_LIVE });
   await expect(h.linkOnboardingMedico({ id: "m1" }, "https://app.test", { chave: "sk_live_x" })).rejects.toMatchObject({ codigo: h.CODIGO_CHAVE_LIVE });
   sessao = { id: "m3", email: "m3@t.local", role: "MEDICO" };
   process.env.STRIPE_SECRET_KEY = "sk_live_fake";
