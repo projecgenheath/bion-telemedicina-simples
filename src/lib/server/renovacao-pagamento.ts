@@ -34,6 +34,13 @@ export async function criarCobrancaRenovacao(
   return { pedido, pagamento };
 }
 
+/** Estados finais em que o paciente NÃO recebeu a renovação: pagamento
+ *  que chegar depois disso é sempre reembolsado. */
+export const STATUS_RENOVACAO_ENCERRADA_SEM_ATENDIMENTO = ["cancelado", "recusada"] as const;
+export function renovacaoEncerradaSemAtendimento(status: string): boolean {
+  return (STATUS_RENOVACAO_ENCERRADA_SEM_ATENDIMENTO as readonly string[]).includes(status);
+}
+
 /**
  * Pagamento da renovação CONFIRMADO (webhook ou simulado). Idempotente:
  * aguardando_pagamento → pendente (vai para a fila do médico). Pedido já
@@ -47,9 +54,12 @@ export async function confirmarPagamentoRenovacao(pagamentoId: string, tx: Tx): 
   if (!pedido) return "sem_pedido";
   const pg = await tx.pagamento.findUnique({ where: { id: pagamentoId }, select: { status: true } });
   if (pg?.status !== "confirmado") return "ja_processado";
-  // Confirmação tardia sobre pedido cancelado: devolve o dinheiro na hora.
-  const cancelado = await tx.pedidoRenovacao.findUnique({ where: { id: pedido.id }, select: { status: true } });
-  if (cancelado?.status === "cancelado") {
+  // Confirmação tardia sobre pedido ENCERRADO sem atendimento (cancelado
+  // pelo paciente, ou recusado — inclusive pelo cancelamento do documento
+  // pelo médico enquanto o checkout estava aberto): devolve o dinheiro na
+  // hora. Idempotente: criarReembolsoPorPagamento devolve o reembolso ativo.
+  const atual = await tx.pedidoRenovacao.findUnique({ where: { id: pedido.id }, select: { status: true } });
+  if (atual && renovacaoEncerradaSemAtendimento(atual.status)) {
     await reembolsarPedidoRenovacao(pedido.id, tx);
     return "reembolsado";
   }
