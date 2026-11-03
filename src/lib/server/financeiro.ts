@@ -152,6 +152,33 @@ export function liquidoComReembolso(valorCentavos: number, taxaGatewayCentavos: 
   return { ...l, reembolsosCentavos: reembolsos, liquidoCentavos: antes - reembolsos };
 }
 
+/* ---------- Stripe Connect (preparado, DESLIGADO) ------------------ */
+/*                                                                     */
+/* Com Connect, a cobrança é "destination charge": o dinheiro vai para */
+/* a conta do médico (PerfilMedico.stripeAccountId, migração do Admin) */
+/* e a BION retém só `application_fee_amount`. Nessa modalidade a taxa */
+/* do Stripe é debitada da conta da PLATAFORMA, então a application   */
+/* fee NÃO inclui a taxa: o médico recebe valor − fee, e a taxa sai    */
+/* dos 10% da BION. Isso DIVERGE da regra atual (taxa nos 90% do       */
+/* médico); decisão do Alisson pendente antes de ligar o Connect.      */
+/* Multa: dividida 50/50, sem comissão → fee = 50% da multa.           */
+/* Reembolso: refund com reverse_transfer + refund_application_fee.    */
+/* ------------------------------------------------------------------ */
+
+export type CobrancaConnect =
+  | { tipo: "consulta" | "renovacao"; valorCentavos: number }
+  | { tipo: "multa"; multaCentavos: number };
+
+/**
+ * Ponto ÚNICO do `application_fee_amount` (centavos) de uma cobrança com
+ * destino na conta do médico: 10% da consulta/renovação (COMISSAO_APP_PCT)
+ * ou a parte do app na multa (50%). Nada da taxa do gateway entra aqui.
+ */
+export function taxaPlataformaConnectCentavos(c: CobrancaConnect): number {
+  if (c.tipo === "multa") return divisaoDaMulta(Math.max(0, c.multaCentavos)).appCentavos;
+  return pct(Math.max(0, c.valorCentavos), COMISSAO_APP_PCT);
+}
+
 /**
  * Grava a taxa real do gateway (Stripe `balance_transaction.fee`) no
  * Pagamento, já validada (inteiro ≥ 0, limitada ao valor). O repasse lê

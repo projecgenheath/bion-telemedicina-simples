@@ -4,7 +4,10 @@ import { exigirSessao, registrarAudit } from "@/lib/server/auth";
 import { aceiteVigentePendente } from "@/lib/server/aceite-termos";
 import { falha } from "@/lib/server/http";
 import { criarCobranca } from "@/lib/server/pagamentos";
-import { gatewayCheckout } from "@/lib/server/gateway-pagamento";
+import { comissaoPlataformaConnect, gatewayCheckout } from "@/lib/server/gateway-pagamento";
+import { ChaveLiveBloqueadaError, modoCobrancaStripe, stripeConnectAtivo } from "@/lib/server/stripe";
+import { contaStripeDoMedico, medicoPodeSerCobrado } from "@/lib/medico-cobravel";
+import { contaMedicoDaCobranca, gravarContaMedicoDaCobranca } from "@/lib/server/marca-cobranca-direta";
 import {
   avaliarElegibilidade,
   avaliarMulta,
@@ -14,9 +17,12 @@ import {
   expiracaoReservaSeg,
   type TipoCobranca,
   bloqueioChaveLive,
+  ERRO_PAGAMENTO_INDISPONIVEL,
   chaveIdempotencia,
+  descritorSufixo,
   metodosCheckout,
   moedaCheckout,
+  type DadosConnect,
   sessaoReaproveitavel,
   stripeAtivo,
 } from "@/lib/stripe-checkout-logica";
@@ -114,6 +120,8 @@ export async function POST(req: NextRequest) {
       base,
     });
   } catch (erro) {
+    // Chave live barrada na fábrica stripe(): mesma resposta do bloqueio do checkout.
+    if (erro instanceof ChaveLiveBloqueadaError) return Response.json({ erro: ERRO_PAGAMENTO_INDISPONIVEL, codigo: "pagamento_indisponivel" }, { status: 503 });
     return falha(erro);
   }
 }
@@ -247,22 +255,49 @@ async function abrirSessao(usuario: Usuario, a: Alvo) {
     : null;
   const sessaoAnterior = a.tipo === "multa" ? a.sessaoMulta ?? null : atual?.stripeCheckoutSessionId ?? null;
 
-  // Modo único "plataforma" (decisão 03/11 10:49): cobrança na conta da BION.
-  if (bloqueioChaveLive()) {
+  // Modo de cobrança (plataforma por padrão; Connect só com STRIPE_CONNECT=true).
+  const modo = stripeConnectAtivo() ? modoCobrancaStripe() : "plataforma";
+  if (bloqueioChaveLive(modo)) {
     await registrarAudit(usuario, {
       acao: "CHECKOUT_STRIPE_BLOQUEADO_CHAVE_LIVE",
       categoria: "pagamento",
       severidade: "critical",
       entidade: a.entidade.tipo,
       entidadeId: a.entidade.id,
-      detalhes: "Modo plataforma com chave live: cobrança recusada (exigência jurídica)",
+      detalhes: `Chave live (modo ${modo}): cobrança recusada (exigência jurídica até o Alisson liberar)`,
     });
-    console.error("[checkout-stripe] modo plataforma com chave live recusado");
+    console.error("[checkout-stripe] chave live recusada (modo", modo + ")");
     return Response.json({ erro: "Pagamento online indisponível no momento.", codigo: "pagamento_indisponivel" }, { status: 503 });
   }
+  let connect: DadosConnect | null = null;
+  if (modo !== "plataforma") {
+    const medico = await db.perfilMedico.findUnique({ where: { userId: a.medicoId }, select: { stripeAccountId: true } });
+    const contaMedico = contaStripeDoMedico(medico?.stripeAccountId);
+    // `!contaMedico` não é redundante para o TypeScript: estreita para string
+    // (usado em `connect` abaixo); medicoPodeSerCobrado é a regra compartilhada
+    // (conta existe E onboarding completo: charges_enabled + payouts_enabled).
+    if (!contaMedico) {
+      return Response.json(
+        { erro: "Este médico ainda não pode receber pagamento online. Escolha outro horário ou outro médico.", codigo: "medico_sem_conta" },
+        { status: 409 },
+      );
+    }
+    if (!(await medicoPodeSerCobrado(modo, contaMedico))) {
+      return Response.json(
+        { erro: "O cadastro de recebimento deste médico no Stripe ainda não foi concluído. Escolha outro horário ou outro médico.", codigo: "medico_onboarding_incompleto" },
+        { status: 409 },
+      );
+    }
+    connect = { contaMedico, taxaPlataformaCentavos: comissaoPlataformaConnect(a.tipo, a.valorCentavos) };
+  }
+
   const gateway = gatewayCheckout();
+  const contaDireta = modo === "direta" ? connect?.contaMedico : null;
+  // Conta conectada que recebe esta cobrança (direta/destino) — é a marca que
+  // tira o pagamento do repasse PIX. Ver gravarContaMedicoDaCobranca.
+  const contaMedicoMarca = contaMedicoDaCobranca(modo, connect);
   if (sessaoAnterior) {
-    const s = await gateway.lerSessao(sessaoAnterior);
+    const s = await gateway.lerSessao(sessaoAnterior, contaDireta);
     if (s && sessaoReaproveitavel(s, a.valorCentavos)) return Response.json({ url: s.url, reaproveitada: true });
   }
 
@@ -280,6 +315,9 @@ async function abrirSessao(usuario: Usuario, a: Alvo) {
       descricao: a.descricao,
       baseUrl: a.base,
       email: usuario.email,
+      modo,
+      connect,
+      descritorSufixo: descritorSufixo(),
     },
     chaveIdempotencia(a.tipo === "multa" ? `multa-${a.remarcacaoId}` : a.consultaId ?? `pagamento-${a.pagamentoId}`, a.valorCentavos, sessaoAnterior),
   );
@@ -291,6 +329,7 @@ async function abrirSessao(usuario: Usuario, a: Alvo) {
       // Pagamento pendente antigo criado como Pix e reaproveitado aqui passa a cartão.
       data: { stripeCheckoutSessionId: sessao.id, metodo: "cartao", ...(atual?.status === "falhou" ? { status: "pendente" } : {}) },
     });
+    await gravarContaMedicoDaCobranca({ pagamentoId: a.pagamentoId }, contaMedicoMarca);
   }
   if (a.tipo === "multa" && a.remarcacaoId) {
     // Guarda a sessão aberta (só enquanto pendente; o webhook troca por stripe_pi:).
@@ -298,6 +337,7 @@ async function abrirSessao(usuario: Usuario, a: Alvo) {
       where: { id: a.remarcacaoId, status: "pendente" },
       data: { gatewayRef: `${PREFIXO_SESSAO_MULTA}${sessao.id}` },
     });
+    await gravarContaMedicoDaCobranca({ remarcacaoId: a.remarcacaoId }, contaMedicoMarca);
   }
   await registrarAudit(usuario, {
     acao: "CHECKOUT_STRIPE_CRIADO",
