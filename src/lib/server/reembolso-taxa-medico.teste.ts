@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { chaveIdempotenciaTaxa, devolverTaxaAoMedico, devolucaoTaxaAtiva, refundsDoEvento, type DbTaxa } from "./reembolso-taxa-medico";
+import { retentarTaxaAoMedico, chaveIdempotenciaTaxa, devolverTaxaAoMedico, devolucaoTaxaAtiva, refundsDoEvento, type DbTaxa } from "./reembolso-taxa-medico";
 
 const ENV = { BION_PAGAMENTO_STRIPE: "true", STRIPE_SECRET_KEY: "sk_test_x", STRIPE_CONNECT: "true", STRIPE_MODO_COBRANCA: "direta", STRIPE_MOEDA: "brl" };
 
@@ -33,7 +33,7 @@ function fakeDb(r = reembolso()) {
   return d as typeof d & DbTaxa;
 }
 
-function fakeStripe(falhar = 0) {
+function fakeStripe(falhar = 0, erro: any = new Error("Stripe indisponível"), existentes: any[] = []) {
   const chamadas: any[] = [];
   const porChave = new Map<string, string>();
   return {
@@ -41,10 +41,11 @@ function fakeStripe(falhar = 0) {
     transfers: {
       async create(p: any, o: any) {
         chamadas.push([p, o]);
-        if (falhar-- > 0) throw new Error("Stripe indisponível");
+        if (falhar-- > 0) throw erro;
         if (!porChave.has(o.idempotencyKey)) porChave.set(o.idempotencyKey, "tr_" + porChave.size);
         return { id: porChave.get(o.idempotencyKey)! };
       },
+      async list(p: any) { return { data: existentes.filter((t) => t.transfer_group === p.transfer_group) }; },
     },
     paymentIntents: { async retrieve() { return { latest_charge: { balance_transaction: { fee: 700 } } }; } },
   };
@@ -136,6 +137,41 @@ describe("devolverTaxaAoMedico", () => {
     const s = fakeStripe(); const logs: string[] = [];
     expect(await devolverTaxaAoMedico("re_1", { d: fakeDb(r0), s: s as any, env: ENV, audit: audit(logs) })).toEqual({ enviado: false, motivo: "sem_conta_medico" });
     expect(logs).toEqual(["REEMBOLSO_TAXA_MEDICO_SEM_CONTA"]);
+  });
+
+  test("chave expirada: transferência já existe no transfer_group → marca enviado sem criar outra", async () => {
+    const d = fakeDb();
+    d.linhas.push({ id: "t0", reembolsoId: "rb1", contaStripe: "acct_med", valorCentavos: 649, status: "pendente", tentativas: 1, stripeTransferId: null });
+    const s = fakeStripe(0, undefined, [{ id: "tr_antiga", transfer_group: "reembolso_rb1", metadata: { reembolsoId: "rb1", tipo: "taxa_reembolso_falta" } }]);
+    const logs: string[] = [];
+    const r = await devolverTaxaAoMedico("re_1", { d, s: s as any, env: ENV, audit: audit(logs) });
+    expect(r).toEqual({ enviado: true, transferId: "tr_antiga", valorCentavos: 649 });
+    expect(s.chamadas.length).toBe(0);
+    expect(d.linhas[0].status).toBe("enviado");
+    expect(d.linhas[0].stripeTransferId).toBe("tr_antiga");
+  });
+
+  test("transfer_group com transferência de outro tipo não conta", async () => {
+    const s = fakeStripe(0, undefined, [{ id: "tr_x", transfer_group: "reembolso_rb1", metadata: { tipo: "outro" } }]);
+    const r = await devolverTaxaAoMedico("re_1", { d: fakeDb(), s: s as any, env: ENV, audit: audit([]) });
+    expect(r).toEqual({ enviado: true, transferId: "tr_0", valorCentavos: 649 });
+  });
+
+  test("saldo insuficiente: auditoria própria (critical)", async () => {
+    const d = fakeDb(); const logs: string[] = [];
+    const s = fakeStripe(1, Object.assign(new Error("Insufficient funds"), { code: "balance_insufficient" }));
+    await expect(devolverTaxaAoMedico("re_1", { d, s: s as any, env: ENV, audit: audit(logs) })).rejects.toThrow();
+    expect(logs).toEqual(["REEMBOLSO_TAXA_MEDICO_SALDO_INSUFICIENTE"]);
+    expect(d.linhas[0].status).toBe("falhou");
+  });
+
+  test("retentarTaxaAoMedico: falhou → enviado; depois não faz nada", async () => {
+    const d = fakeDb(); const s = fakeStripe(1);
+    const dbReembolso = { reembolso: { async findUnique(a: any) { return a.where.id === "rb1" ? { stripeRefundId: "re_1" } : null; } } };
+    await expect(devolverTaxaAoMedico("re_1", { d, s: s as any, env: ENV, audit: audit([]) })).rejects.toThrow();
+    expect((await retentarTaxaAoMedico("rb1", { d, s: s as any, env: ENV, audit: audit([]), dbReembolso })).enviado).toBe(true);
+    expect(await retentarTaxaAoMedico("rb1", { d, s: s as any, env: ENV, audit: audit([]), dbReembolso })).toEqual({ enviado: false, motivo: "ja_enviado" });
+    expect(await retentarTaxaAoMedico("x", { d, s: s as any, env: ENV, audit: audit([]), dbReembolso })).toEqual({ enviado: false, motivo: "nao_encontrado" });
   });
 
   test("refundsDoEvento", () => {

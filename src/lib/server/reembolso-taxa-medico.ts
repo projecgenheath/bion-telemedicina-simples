@@ -60,7 +60,10 @@ export type DbTaxa = {
 };
 
 export type StripeTaxa = {
-  transfers: { create(p: Stripe.TransferCreateParams, o?: Stripe.RequestOptions): Promise<{ id: string }> };
+  transfers: {
+    create(p: Stripe.TransferCreateParams, o?: Stripe.RequestOptions): Promise<{ id: string }>;
+    list(p: Stripe.TransferListParams): Promise<{ data: { id: string; destination?: unknown; metadata?: Record<string, string> | null; reversed?: boolean }[] }>;
+  };
   paymentIntents: {
     retrieve(id: string, p?: Stripe.PaymentIntentRetrieveParams, o?: Stripe.RequestOptions): Promise<{
       latest_charge?: string | { balance_transaction?: string | { fee: number } | null } | null;
@@ -85,6 +88,7 @@ const SELECT = {
 } as const;
 
 const codigo = (e: unknown) => (typeof e === "object" && e !== null && "code" in e ? String((e as { code: unknown }).code) : undefined);
+const tipoErro = (e: unknown) => (typeof e === "object" && e !== null && "code" in e ? String((e as { code: unknown }).code) : "");
 const mensagem = (e: unknown) => (e instanceof Error ? e.message : "erro").slice(0, 300);
 
 /** Taxa real: a gravada (veio da balance_transaction) ou lida agora no Stripe, na conta do médico. */
@@ -150,24 +154,32 @@ export async function devolverTaxaAoMedico(
   }
 
   await d.reembolsoTaxaMedico.update({ where: { id: linha.id }, data: { tentativas: { increment: 1 } } });
+  const grupo = `reembolso_${r.id}`;
   let transfer: { id: string };
   try {
-    transfer = await s.transfers.create(
+    // A Idempotency-Key do Stripe expira em 24h. Se uma transferência anterior
+    // saiu mas a linha não chegou a 'enviado', ela está no transfer_group: reaproveita.
+    const existentes = await s.transfers.list({ transfer_group: grupo, limit: 10 });
+    const anterior = existentes.data.find((t) => t.metadata?.reembolsoId === r.id && t.metadata?.tipo === "taxa_reembolso_falta");
+    transfer = anterior ?? (await s.transfers.create(
       {
         amount: linha.valorCentavos,
         currency: moedaCheckout(env),
         destination: linha.contaStripe,
-        transfer_group: `reembolso_${r.id}`,
+        transfer_group: grupo,
         description: "BION: devolução da taxa do cartão (reembolso por falta do paciente)",
         metadata: { reembolsoId: r.id, refundId: stripeRefundId, tipo: "taxa_reembolso_falta" },
       },
       { idempotencyKey: chaveIdempotenciaTaxa(stripeRefundId) },
-    );
+    ));
   } catch (e) {
     const msg = mensagem(e);
-    console.error("[taxa reembolso]", `Reembolso ${r.id}: transferência falhou:`, msg);
+    const semSaldo = tipoErro(e) === "balance_insufficient";
+    console.error("[taxa reembolso]", `Reembolso ${r.id}: transferência falhou${semSaldo ? " (saldo insuficiente na plataforma)" : ""}:`, msg);
     await d.reembolsoTaxaMedico.updateMany({ where: { id: linha.id, status: { not: "enviado" } }, data: { status: "falhou", erro: msg } });
-    await audit(null, { acao: "REEMBOLSO_TAXA_MEDICO_FALHOU", categoria: "pagamento", severidade: "warning", entidade: "reembolso", entidadeId: r.id, detalhes: "Transferência da taxa ao médico falhou; será tentada de novo na reentrega do webhook" });
+    await audit(null, semSaldo
+      ? { acao: "REEMBOLSO_TAXA_MEDICO_SALDO_INSUFICIENTE", categoria: "pagamento", severidade: "critical", entidade: "reembolso", entidadeId: r.id, detalhes: "Saldo da plataforma no Stripe insuficiente para devolver a taxa do cartão ao médico; recarregar o saldo e tentar de novo" }
+      : { acao: "REEMBOLSO_TAXA_MEDICO_FALHOU", categoria: "pagamento", severidade: "warning", entidade: "reembolso", entidadeId: r.id, detalhes: "Transferência da taxa ao médico falhou; será tentada de novo na reentrega do webhook ou pelo admin" });
     throw e;
   }
 
@@ -185,6 +197,21 @@ export async function devolverTaxaAoMedico(
     });
   }
   return { enviado: true, transferId: transfer.id, valorCentavos: linha.valorCentavos };
+}
+
+/**
+ * Nova tentativa pelo admin (linha 'falhou'/'pendente' ou taxa que faltou).
+ * Mesmas travas: flag, modo direta, integral, linha única, transfer_group.
+ */
+export async function retentarTaxaAoMedico(
+  reembolsoId: string,
+  deps: Parameters<typeof devolverTaxaAoMedico>[1] & { dbReembolso?: { reembolso: { findUnique(a: unknown): Promise<{ stripeRefundId: string | null } | null> } } } = {},
+): Promise<ResultadoTaxa> {
+  const d = deps.dbReembolso ?? (db as unknown as { reembolso: { findUnique(a: unknown): Promise<{ stripeRefundId: string | null } | null> } });
+  const r = await d.reembolso.findUnique({ where: { id: reembolsoId }, select: { stripeRefundId: true } });
+  if (!r) return { enviado: false, motivo: "nao_encontrado" };
+  if (!r.stripeRefundId) return { enviado: false, motivo: "sem_refund" };
+  return devolverTaxaAoMedico(r.stripeRefundId, deps);
 }
 
 /** Refund ids de um evento de reembolso do Stripe (refund.* ou charge.refunded). */
