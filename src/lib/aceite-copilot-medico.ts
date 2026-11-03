@@ -27,6 +27,9 @@ export const TEXTO_CAIXA_COPILOT_MEDICO =
 export const FINALIDADE_ACEITE_COPILOT_MEDICO =
   `${PREFIXO_FINALIDADE_COPILOT_MEDICO}: texto livre enviado à NVIDIA (EUA), sem dados que identifiquem pacientes (versão ${VERSAO_ACEITE_COPILOT_MEDICO})`;
 
+export const FINALIDADE_REVOGACAO_COPILOT_MEDICO =
+  `${PREFIXO_FINALIDADE_COPILOT_MEDICO}: aceite revogado pelo médico (versão ${VERSAO_ACEITE_COPILOT_MEDICO})`;
+
 export const MSG_ACEITE_COPILOT_MEDICO_PENDENTE =
   "Antes de usar o BION Copilot, leia o aviso e confirme que entendeu.";
 

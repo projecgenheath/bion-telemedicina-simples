@@ -5,13 +5,15 @@ import { usuarioSemNome } from "@/lib/server/audit-sem-nome";
 import { ultimoAceiteCopilotMedico } from "@/lib/server/aceite-copilot-medico";
 import {
   FINALIDADE_ACEITE_COPILOT_MEDICO,
+  FINALIDADE_REVOGACAO_COPILOT_MEDICO,
   VERSAO_ACEITE_COPILOT_MEDICO,
   aceiteCopilotMedicoVigente,
 } from "@/lib/aceite-copilot-medico";
 
 /**
  * Aceite do BION Copilot do médico (LGPD).
- * GET → { vigente, em, versao } · POST { versao } → registra o aceite.
+ * GET → { vigente, em, versao } · POST { versao } → registra o aceite ·
+ * POST { aceito: false } → revoga (novo registro aceito=false; o Copilot volta a travar).
  * Só MEDICO; o id vem da sessão. Consentimento + AuditLog (sem texto de conversa).
  */
 export async function GET() {
@@ -27,7 +29,21 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const medico = await exigirPapel("MEDICO");
-    const b = (await req.json().catch(() => null)) as { versao?: unknown } | null;
+    const b = (await req.json().catch(() => null)) as { versao?: unknown; aceito?: unknown } | null;
+    if (b?.aceito === false) {
+      const rev = await db.consentimento.create({
+        data: { pacienteId: medico.id, quem: medico.nome, perfil: "MEDICO", finalidade: FINALIDADE_REVOGACAO_COPILOT_MEDICO, documentos: 0, aceito: false },
+      });
+      await registrarAudit(usuarioSemNome(medico), {
+        acao: "REVOGACAO_COPILOT_MEDICO",
+        categoria: "consentimento",
+        severidade: "warning",
+        entidade: "consentimento",
+        entidadeId: rev.id,
+        detalhes: `Revogação do aceite do BION Copilot — versão ${VERSAO_ACEITE_COPILOT_MEDICO} em ${rev.createdAt.toISOString()}`,
+      });
+      return ok({ vigente: false, em: rev.createdAt.toISOString(), versao: VERSAO_ACEITE_COPILOT_MEDICO });
+    }
     if (b?.versao !== VERSAO_ACEITE_COPILOT_MEDICO) {
       return Response.json({ erro: "Versão do aviso desatualizada. Recarregue a página.", versao: VERSAO_ACEITE_COPILOT_MEDICO }, { status: 409 });
     }

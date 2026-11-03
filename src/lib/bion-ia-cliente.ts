@@ -272,3 +272,17 @@ export async function aceitarCopilotMedico(): Promise<boolean> {
     return false;
   }
 }
+
+/** Revoga o aceite do Copilot do médico. true = revogado. */
+export async function revogarCopilotMedico(): Promise<boolean> {
+  try {
+    const r = await fetch("/api/medico/copilot-aceite", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ aceito: false }),
+    });
+    return r.ok;
+  } catch {
+    return false;
+  }
+}

@@ -22,6 +22,7 @@ import {
   aceitarCopilotMedico,
   consultarAceiteCopilotMedico,
   perguntarBionIa,
+  revogarCopilotMedico,
   textoParaCopiar,
 } from "@/lib/bion-ia-cliente";
 import { detalheConsultaIa } from "@/lib/auditoria-ia";
@@ -228,6 +229,21 @@ export function BionIA() {
           <div role="note" className="px-5 py-3 border-b bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-100 text-xs flex gap-2">
             <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
             <span>{TEXTO_AVISO_COPILOT_MEDICO}</span>
+            {aceiteCopilot === true && (
+              <button
+                type="button"
+                className="ml-auto shrink-0 underline font-semibold"
+                onClick={async () => {
+                  if (await revogarCopilotMedico()) {
+                    setAceiteCopilot(false);
+                    setCaixaCopilot(false);
+                    toast.success("Aceite revogado. O Copilot fica bloqueado até você aceitar de novo.");
+                  } else toast.error("Não consegui revogar agora. Tente novamente.");
+                }}
+              >
+                Revogar aceite
+              </button>
+            )}
           </div>
         )}
         {isMedico && aceiteCopilot === false && (
