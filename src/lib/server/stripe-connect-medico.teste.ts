@@ -223,3 +223,19 @@ test("ChaveLiveBloqueadaError lançada dentro do stripe() vira 503 stripe_chave_
     fake.accounts.create = original;
   }
 });
+
+test("STRIPE_CONNECT_PAIS: padrão BR, US quando definido, inválido volta para BR", () => {
+  const antes = process.env.STRIPE_CONNECT_PAIS;
+  try {
+    delete process.env.STRIPE_CONNECT_PAIS;
+    expect(h.paisContaConnect()).toBe("BR");
+    expect(h.parametrosNovaConta("standard", { id: "m" }).country).toBe("BR");
+    process.env.STRIPE_CONNECT_PAIS = " us ";
+    expect(h.paisContaConnect()).toBe("US");
+    expect(h.parametrosNovaConta("express", { id: "m" }).country).toBe("US");
+    for (const ruim of ["USA", "1A", "", "b"]) expect(h.paisContaConnect(ruim)).toBe("BR");
+  } finally {
+    if (antes === undefined) delete process.env.STRIPE_CONNECT_PAIS;
+    else process.env.STRIPE_CONNECT_PAIS = antes;
+  }
+});

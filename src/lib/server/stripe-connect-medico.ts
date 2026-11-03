@@ -119,11 +119,21 @@ export async function statusContaMedico(medicoId: string): Promise<StatusContaMe
   return statusDoPerfil(await perfilDoMedico(medicoId));
 }
 
+/**
+ * País da conta conectada: env STRIPE_CONNECT_PAIS (padrão "BR"). Só aceita
+ * código ISO de 2 letras; qualquer outra coisa volta para "BR". Permite testar
+ * com a plataforma de teste US/USD sem mudar código.
+ */
+export function paisContaConnect(valor: string | undefined = process.env.STRIPE_CONNECT_PAIS): string {
+  const v = (valor ?? "").trim().toUpperCase();
+  return /^[A-Z]{2}$/.test(v) ? v : "BR";
+}
+
 /** Parâmetros de criação conforme o tipo configurado (sem amarrar a nenhum). */
 export function parametrosNovaConta(tipo: TipoContaConnect, medico: { id: string; email?: string | null }): Stripe.AccountCreateParams {
   const base: Stripe.AccountCreateParams = {
     type: tipo,
-    country: "BR",
+    country: paisContaConnect(),
     metadata: { bionMedicoId: medico.id },
     ...(medico.email ? { email: medico.email } : {}),
   };
