@@ -6,7 +6,6 @@ import { ok, falha, lerCorpoJson, corpoObjeto } from "@/lib/server/http";
 import { reembolsarPedidoRenovacao } from "@/lib/server/renovacao-reembolso";
 import { STATUS_RENOVACAO_ABERTOS } from "@/lib/atendimento-tipo";
 import { gatewayCheckout } from "@/lib/server/gateway-pagamento";
-import { modoCobrancaStripe, stripeConnectAtivo } from "@/lib/server/stripe";
 import {
   decidirCancelamento,
   detalhesAuditoriaCancelamento,
@@ -76,7 +75,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     // Defesa extra: expira o checkout Stripe ainda aberto dos pedidos
     // recusados. Se o paciente pagar mesmo assim, o webhook
     // (confirmarPagamentoRenovacao) reembolsa pedido "recusada".
-    await expirarCheckoutsAbertos(pedidosRecusados.map((p) => p.id), medico.id);
+    await expirarCheckoutsAbertos(pedidosRecusados.map((p) => p.id));
 
     const efeitos = await aplicarSideEffects(
       medico,
@@ -95,7 +94,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 }
 
-async function expirarCheckoutsAbertos(pedidoIds: string[], medicoId: string): Promise<void> {
+async function expirarCheckoutsAbertos(pedidoIds: string[]): Promise<void> {
   if (!pedidoIds.length) return;
   try {
     const pedidos = await db.pedidoRenovacao.findMany({
@@ -106,13 +105,8 @@ async function expirarCheckoutsAbertos(pedidoIds: string[], medicoId: string): P
       .map((p) => (p.pagamento?.status === "pendente" ? p.pagamento.stripeCheckoutSessionId : null))
       .filter((s): s is string => !!s);
     if (!sessoes.length) return;
-    let conta: string | null = null;
-    if (stripeConnectAtivo() && modoCobrancaStripe() === "direta") {
-      const perfil = await db.perfilMedico.findUnique({ where: { userId: medicoId }, select: { stripeAccountId: true } });
-      conta = perfil?.stripeAccountId ?? null;
-    }
     const gateway = gatewayCheckout();
-    await Promise.all(sessoes.map((s) => gateway.expirarSessao(s, conta)));
+    await Promise.all(sessoes.map((s) => gateway.expirarSessao(s)));
   } catch {
     // Ignorado de propósito: o reembolso no webhook cobre o pagamento tardio.
   }
