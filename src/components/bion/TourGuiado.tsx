@@ -16,7 +16,8 @@ const passos: Record<Role, Passo[]> = {
   paciente: [
     {
       icon: Sparkles,
-      titulo: "Bem-vinda ao BION",
+      // B28: saudação neutra — antes era feminina fixa para todos.
+      titulo: "Boas-vindas ao BION",
       texto:
         "Em poucos minutos você marca e faz sua consulta por vídeo, sem sair de casa. Vamos ver as telas principais?",
     },
@@ -24,7 +25,8 @@ const passos: Record<Role, Passo[]> = {
       icon: Calendar,
       titulo: "1. Agendar consulta",
       texto:
-        "Toque em Agendar, escolha a especialidade, o médico e o horário. A confirmação é imediata.",
+        // B28: a confirmação NÃO é imediata — ela vem após o pagamento.
+        "Toque em Agendar, escolha a especialidade, o médico e o horário e faça o pagamento — a consulta é confirmada assim que o pagamento é aprovado.",
     },
     {
       icon: Video,
@@ -42,7 +44,8 @@ const passos: Record<Role, Passo[]> = {
   medico: [
     {
       icon: Sparkles,
-      titulo: "Bem-vinda, doutora",
+      // B28: saudação neutra — antes era feminina fixa para todos.
+      titulo: "Boas-vindas",
       texto: "Um tour rápido pelas telas que você mais vai usar no dia a dia de atendimento.",
     },
     {

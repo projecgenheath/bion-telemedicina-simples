@@ -273,9 +273,21 @@ export function EncerrarAtendimento({
         ) : null}
 
         {erro ? (
-          <p className="text-sm font-semibold text-red-700 dark:text-red-400" role="alert">
-            {erro}
-          </p>
+          <>
+            <p className="text-sm font-semibold text-red-700 dark:text-red-400" role="alert">
+              {erro}
+            </p>
+            {/* Falha no GET de desfecho: tentar de novo aqui, sem fechar e reabrir. */}
+            {!carregando && !ocupado ? (
+              <button
+                type="button"
+                onClick={() => void carregar()}
+                className="w-full py-3 rounded-2xl bg-primary text-primary-foreground font-bold text-sm"
+              >
+                Tentar novamente
+              </button>
+            ) : null}
+          </>
         ) : null}
       </div>
     </ModalBion>

@@ -11,7 +11,7 @@ import { GuardaAceiteTermos } from "@/components/bion/GuardaAceiteTermos";
 import { SO_ADMIN, SO_CLINICA, SO_MEDICO, SO_PACIENTE, viewDoPath } from "@/lib/rotas";
 
 export default function LayoutAutenticado({ children }: { children: React.ReactNode }) {
-  const { autenticado, carregando, sessao, precisaTrocarSenha } = useBion();
+  const { autenticado, carregando, sessao, precisaTrocarSenha, erroCarga, tentarNovamenteCarga } = useBion();
   const router = useRouter();
   const pathname = usePathname();
   const path = (pathname || "/").split("?")[0].replace(/\/+$/, "") || "/";
@@ -24,10 +24,11 @@ export default function LayoutAutenticado({ children }: { children: React.ReactN
     path === "/ajuda" ||
     path.startsWith("/consulta/");
 
-  // Sem sessão → tela de entrada
+  // Sem sessão → tela de entrada. B24: erro de carga NÃO redireciona —
+  // sessão válida com falha de rede/servidor não é logout.
   useEffect(() => {
-    if (!carregando && !autenticado) router.replace("/entrar");
-  }, [carregando, autenticado, router]);
+    if (!carregando && !autenticado && !erroCarga) router.replace("/entrar");
+  }, [carregando, autenticado, erroCarga, router]);
 
   const destinoPaciente = sessao.role === "paciente";
   const telaCheiaPaciente = rotaTelaCheia;
@@ -44,6 +45,27 @@ export default function LayoutAutenticado({ children }: { children: React.ReactN
     else if (SO_PACIENTE.includes(view) && sessao.role !== "paciente") router.replace("/painel");
     else if (SO_CLINICA.includes(view) && sessao.role === "admin") router.replace("/painel");
   }, [carregando, autenticado, view, sessao.role, router, destinoPaciente, telaCheiaPaciente]);
+
+  if (erroCarga && !autenticado) {
+    return (
+      <div className="min-h-svh flex items-center justify-center p-6" role="alert">
+        <div className="max-w-sm text-center space-y-4">
+          <h1 className="text-lg font-bold">Não foi possível carregar</h1>
+          <p className="text-sm opacity-80">
+            Houve uma falha ao carregar seus dados. Sua sessão continua ativa — tente novamente.
+          </p>
+          <button
+            type="button"
+            onClick={tentarNovamenteCarga}
+            disabled={carregando}
+            className="px-5 py-3 rounded-2xl bg-primary text-primary-foreground text-sm font-bold disabled:opacity-50"
+          >
+            {carregando ? "Tentando…" : "Tentar novamente"}
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (carregando || !autenticado) return <TelaCarregando comLista />;
 

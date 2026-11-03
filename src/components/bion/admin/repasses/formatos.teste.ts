@@ -110,13 +110,18 @@ igual("503 texto do servidor", explicarErroPagamento(503, "O envio de comprovant
 igual("sem conexão", e(0, "Sem conexão com o servidor."), ["Sem conexão", "nenhuma", false]);
 igual("500", explicarErroPagamento(500, null).texto, "O servidor respondeu 500. Nada foi alterado.");
 
-// Fechar agora (mesma regra do servidor)
-igual("competência ontem", validarCompetencia("2026-10-03", "2026-10-04", 14), null);
-igual("competência hoje antes das 23", validarCompetencia("2026-10-04", "2026-10-04", 22), "O dia de hoje só pode ser fechado a partir das 23:00.");
-igual("competência hoje às 23", validarCompetencia("2026-10-04", "2026-10-04", 23), null);
-igual("competência futura", validarCompetencia("2026-10-05", "2026-10-04", 23), "Não dá para fechar um dia que ainda não chegou.");
-igual("competência inválida", validarCompetencia("2026-13-40", "2026-10-04", 10), "Use uma data real.");
-igual("competência vazia", validarCompetencia("", "2026-10-04", 10), "Use uma data real.");
+// Fechar agora (mesma regra do servidor; minutos desde 00:00 SP — B-30: 23:30)
+igual("competência ontem", validarCompetencia("2026-10-03", "2026-10-04", 14 * 60), null);
+igual(
+  "competência hoje antes das 23:30",
+  validarCompetencia("2026-10-04", "2026-10-04", 22 * 60),
+  "O dia de hoje só pode ser fechado a partir das 23:30 (depois do prazo de desfecho).",
+);
+igual("competência hoje às 23:00 ainda não", validarCompetencia("2026-10-04", "2026-10-04", 23 * 60), "O dia de hoje só pode ser fechado a partir das 23:30 (depois do prazo de desfecho).");
+igual("competência hoje às 23:30", validarCompetencia("2026-10-04", "2026-10-04", 23 * 60 + 30), null);
+igual("competência futura", validarCompetencia("2026-10-05", "2026-10-04", 23 * 60 + 30), "Não dá para fechar um dia que ainda não chegou.");
+igual("competência inválida", validarCompetencia("2026-13-40", "2026-10-04", 10 * 60), "Use uma data real.");
+igual("competência vazia", validarCompetencia("", "2026-10-04", 10 * 60), "Use uma data real.");
 igual(
   "resumo fechamento",
   resumoFechamento([

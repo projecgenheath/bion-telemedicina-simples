@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Shield, FileText, Check, X, User, Stethoscope, Lock, Clock, KeyRound } from "lucide-react";
+import { Shield, FileText, Check, X, User, Stethoscope, Lock, Clock, KeyRound, Download } from "lucide-react";
 import { toast } from "sonner";
 import { useBion } from "@/lib/bion-store";
 import { apiSaude } from "./paciente/api-saude";
@@ -33,18 +33,29 @@ export function PrivacidadePaciente() {
   // Consentimento da leitura de laudo pela BION IA (LGPD art. 8º, § 5º).
   const recarregarEstado = useRecarregarEstado();
   const [consIa, setConsIa] = useState<{ estado: EstadoConsentimentoIaExame; em: string | null } | null>(null);
+  const [consIaErro, setConsIaErro] = useState(false);
+  const [consIaTentativas, setConsIaTentativas] = useState(0);
   const [revogando, setRevogando] = useState(false);
   useEffect(() => {
     if (sessao.role !== "paciente") return;
     let vivo = true;
     fetch("/api/paciente/consentimento-ia-exame")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((j: { estado: EstadoConsentimentoIaExame; em: string | null } | null) => vivo && j && setConsIa(j))
-      .catch(() => {});
+      .then((r) => {
+        if (!r.ok) throw new Error(String(r.status));
+        return r.json();
+      })
+      .then((j: { estado: EstadoConsentimentoIaExame; em: string | null }) => {
+        if (!vivo) return;
+        setConsIa(j);
+        setConsIaErro(false);
+      })
+      .catch(() => {
+        if (vivo) setConsIaErro(true);
+      });
     return () => {
       vivo = false;
     };
-  }, [sessao.role]);
+  }, [sessao.role, consIaTentativas]);
   const revogarConsIa = async () => {
     if (revogando) return;
     setRevogando(true);
@@ -63,18 +74,29 @@ export function PrivacidadePaciente() {
 
   // Opt-in de marketing: desligar/religar com um clique (cada troca = nova linha).
   const [mkt, setMkt] = useState<{ ativo: boolean; em: string | null } | null>(null);
+  const [mktErro, setMktErro] = useState(false);
+  const [mktTentativas, setMktTentativas] = useState(0);
   const [salvandoMkt, setSalvandoMkt] = useState(false);
   useEffect(() => {
     if (sessao.role !== "paciente") return;
     let vivo = true;
     fetch("/api/paciente/marketing")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((j: { ativo: boolean; em: string | null } | null) => vivo && j && setMkt(j))
-      .catch(() => {});
+      .then((r) => {
+        if (!r.ok) throw new Error(String(r.status));
+        return r.json();
+      })
+      .then((j: { ativo: boolean; em: string | null }) => {
+        if (!vivo) return;
+        setMkt(j);
+        setMktErro(false);
+      })
+      .catch(() => {
+        if (vivo) setMktErro(true);
+      });
     return () => {
       vivo = false;
     };
-  }, [sessao.role]);
+  }, [sessao.role, mktTentativas]);
   const alternarMkt = async () => {
     if (salvandoMkt || !mkt) return;
     const novo = !mkt.ativo;
@@ -95,7 +117,10 @@ export function PrivacidadePaciente() {
     }
   };
 
-  const minhasConsultas = consultas.filter((c) => c.paciente === sessao.nome);
+  // A13: por pacienteId; o nome é só fallback para consultas legadas sem ID.
+  const minhasConsultas = consultas.filter((c) =>
+    sessao.id ? (c.pacienteId ? c.pacienteId === sessao.id : c.paciente === sessao.nome) : c.paciente === sessao.nome,
+  );
   const medicosVinculados = Array.from(new Set(minhasConsultas.map((c) => c.medico)));
 
   const dadosColetados = [
@@ -113,14 +138,41 @@ export function PrivacidadePaciente() {
     },
   ];
 
+  // B13: exportação/portabilidade dos próprios dados (LGPD art. 18, II e V).
+  // O servidor monta o dossiê só da sessão (nunca de parâmetro) e registra
+  // a exportação na auditoria; aqui só baixamos o JSON devolvido.
+  const [exportando, setExportando] = useState(false);
+  const exportarDados = async () => {
+    if (exportando) return;
+    setExportando(true);
+    try {
+      const r = await fetch("/api/paciente/exportacao");
+      if (!r.ok) throw new Error(String(r.status));
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "meus-dados-bion.json";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast.success("Seus dados foram exportados em JSON.");
+    } catch {
+      toast.error("Não foi possível exportar agora. Tente novamente.");
+    } finally {
+      setExportando(false);
+    }
+  };
+
   const submeterSenha = async () => {
     if (trocando) return;
     if (!senhaAtual || !novaSenha) {
       toast.error("Preencha a senha atual e a nova senha.");
       return;
     }
-    if (novaSenha.length < 8 || !/[A-Za-z]/.test(novaSenha) || !/[0-9]/.test(novaSenha)) {
-      toast.error("A nova senha deve ter 8+ caracteres, com letras e números.");
+    if (novaSenha.length < 10 || novaSenha.length > 64 || !/[A-Za-z]/.test(novaSenha) || !/[0-9]/.test(novaSenha)) {
+      toast.error("A nova senha deve ter entre 10 e 64 caracteres, com letras e números.");
       return;
     }
     setTrocando(true);
@@ -162,6 +214,27 @@ export function PrivacidadePaciente() {
           ))}
         </div>
       </section>
+
+      {sessao.role === "paciente" ? (
+        <section className="bg-card border rounded-3xl p-6 space-y-3">
+          <h2 className="font-bold flex items-center gap-2">
+            <Download className="w-4 h-4 text-primary" /> Exportar meus dados
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Baixe uma cópia dos seus dados em JSON (LGPD, art. 18): cadastro, medições, exames,
+            consultas, documentos, mensagens, lembretes e consentimentos. A exportação fica
+            registrada na auditoria da BION.
+          </p>
+          <button
+            type="button"
+            onClick={() => void exportarDados()}
+            disabled={exportando}
+            className="h-10 px-5 rounded-xl bg-primary text-primary-foreground text-sm font-bold shadow-md transition-opacity hover:opacity-90 disabled:opacity-50"
+          >
+            {exportando ? "Gerando..." : "Baixar meus dados (JSON)"}
+          </button>
+        </section>
+      ) : null}
 
       <section className="bg-card border rounded-3xl p-6 space-y-4">
         <h2 className="font-bold flex items-center gap-2">
@@ -220,11 +293,25 @@ export function PrivacidadePaciente() {
           </div>
           <p className="text-xs text-muted-foreground" aria-live="polite">
             {mkt === null
-              ? "Carregando…"
+              ? mktErro
+                ? "Não foi possível carregar sua preferência agora. Verifique sua conexão e tente de novo."
+                : "Carregando…"
               : mkt.ativo
                 ? "Ativado. Você pode desligar quando quiser."
                 : "Desativado. A BION não envia novidades nem ofertas para você."}
           </p>
+          {mkt === null && mktErro ? (
+            <button
+              type="button"
+              onClick={() => {
+                setMktErro(false);
+                setMktTentativas((t) => t + 1);
+              }}
+              className="min-h-11 px-4 rounded-full border-2 border-primary/40 text-primary text-sm font-bold"
+            >
+              Tentar de novo
+            </button>
+          ) : null}
         </section>
       ) : null}
 
@@ -239,13 +326,27 @@ export function PrivacidadePaciente() {
           </p>
           <p className="text-sm" aria-live="polite">
             {consIa === null
-              ? "Carregando…"
+              ? consIaErro
+                ? "Não foi possível carregar o estado do seu consentimento agora. Verifique sua conexão e tente de novo."
+                : "Carregando…"
               : consIa.estado === "ativo"
                 ? `Autorizado no último envio${consIa.em ? ` (${fmtTicketData(consIa.em)}, horário de Brasília)` : ""}.`
                 : consIa.estado === "revogado"
                   ? `Revogado${consIa.em ? ` em ${fmtTicketData(consIa.em)} (horário de Brasília)` : ""}. O próximo envio vai pedir sua autorização.`
                   : "Você ainda não autorizou nenhum envio."}
           </p>
+          {consIa === null && consIaErro ? (
+            <button
+              type="button"
+              onClick={() => {
+                setConsIaErro(false);
+                setConsIaTentativas((t) => t + 1);
+              }}
+              className="min-h-11 px-4 rounded-full border-2 border-primary/40 text-primary text-sm font-bold"
+            >
+              Tentar de novo
+            </button>
+          ) : null}
           {consIa?.estado === "ativo" ? (
             <button
               type="button"
@@ -331,8 +432,8 @@ export function PrivacidadePaciente() {
             value={novaSenha}
             onChange={(e) => setNovaSenha(e.target.value)}
             autoComplete="new-password"
-            placeholder="Nova senha (8+ caracteres)"
-            aria-label="Nova senha (8+ caracteres)"
+            placeholder="Nova senha (10 a 64 caracteres)"
+            aria-label="Nova senha (10 a 64 caracteres)"
             className="h-11 rounded-xl border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-primary/40"
           />
         </div>

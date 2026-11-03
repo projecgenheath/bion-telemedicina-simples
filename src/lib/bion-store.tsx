@@ -141,8 +141,12 @@ type EstadoFresco = {
   }[];
   documentos: {
     id: string; tipo: string; titulo: string; conteudo: string; medico: string; paciente: string;
+    pacienteId?: string | null; // M-9: filtro por identificador (homônimos)
+    consultaId?: string | null; // A7: consulta em que o documento foi emitido
     medicamento?: string | null; posologia?: string | null; duracao?: string | null;
     observacoes?: string | null; cid?: string | null; controlado?: boolean; createdAt: string;
+    medicoCrm?: string | null; pacienteCpf?: string | null; pacienteNascimento?: string | null;
+    codigoVerificacao?: string | null; // item 26: id + HMAC do servidor p/ a via impressa
   }[];
   arquivos: {
     id: string; nome: string; tipo: string; tamanhoKb: number; enviadoPor: string;
@@ -156,6 +160,8 @@ type EstadoFresco = {
     id: string; nome: string; crm: string; especialidade: string; subespecialidades: string[];
     valor: number; avaliacao: number; numAvaliacoes: number; formacao: string; experiencia: string;
     idiomas: string[]; bio: string; foto?: string; status: string; horariosDisponiveis: string[];
+    horariosPorDia?: Record<string, string[]>;
+    diasAtendimento?: number[]; pausasSemanais?: { dia: number; inicio: string; fim: string }[];
   }[];
   pacientes: {
     id: string; nome: string; email: string; telefone: string; cpf: string; idade: number;
@@ -173,6 +179,7 @@ type EstadoFresco = {
   }[];
   avaliacoes: {
     id: string; paciente: string; medico: string; especialidade: string; nota: number;
+    pacienteId?: string | null; medicoId?: string | null; // B-6: filtro por identificador
     comentario?: string; pontualidade?: number; atencao?: number; clareza?: number; createdAt: string;
   }[];
   consentimentos: {
@@ -265,14 +272,21 @@ const mapDocumento = (x: EstadoFresco["documentos"][number]): Documento => ({
   titulo: x.titulo,
   medico: x.medico,
   paciente: x.paciente,
+  pacienteId: x.pacienteId ?? undefined, // M-9: filtro por identificador
+  consultaId: x.consultaId ?? undefined, // A7: vínculo com a consulta de emissão
   conteudo: x.conteudo,
   data: fmtLonga(x.createdAt),
+  criadoEm: x.createdAt, // A7: ISO confiável p/ documentos sem consultaId
   medicamento: x.medicamento ?? undefined,
   posologia: x.posologia ?? undefined,
   duracao: x.duracao ?? undefined,
   observacoes: x.observacoes ?? undefined,
   cid: x.cid ?? undefined,
   controlado: x.controlado ?? false,
+  medicoCrm: x.medicoCrm ?? undefined, // melhoria nº 6: identificação formal no PDF
+  pacienteCpf: x.pacienteCpf ?? undefined,
+  pacienteNascimento: x.pacienteNascimento ?? undefined,
+  codigoVerificacao: x.codigoVerificacao ?? undefined, // item 26: verificação pública da via
 });
 
 const mapArquivo = (a: EstadoFresco["arquivos"][number]): Arquivo => ({
@@ -298,6 +312,8 @@ const mapMedico = (m: EstadoFresco["medicos"][number]): Medico => ({
   numAvaliacoes: m.numAvaliacoes, formacao: m.formacao, experiencia: m.experiencia,
   idiomas: m.idiomas, bio: m.bio, foto: m.foto,
   status: m.status as Medico["status"], horariosDisponiveis: m.horariosDisponiveis,
+  horariosPorDia: m.horariosPorDia ?? {},
+  diasAtendimento: m.diasAtendimento ?? [], pausasSemanais: m.pausasSemanais ?? [],
 });
 
 const mapPaciente = (p: EstadoFresco["pacientes"][number]): PacienteRegistro => ({
@@ -323,6 +339,7 @@ const mapLembrete = (l: EstadoFresco["lembretes"][number]): Lembrete => ({
 
 const mapAvaliacao = (a: EstadoFresco["avaliacoes"][number]): Avaliacao => ({
   id: a.id, paciente: a.paciente, medico: a.medico, especialidade: a.especialidade,
+  pacienteId: a.pacienteId ?? undefined, medicoId: a.medicoId ?? undefined, // B-6
   nota: a.nota, comentario: a.comentario, pontualidade: a.pontualidade,
   atencao: a.atencao, clareza: a.clareza, quando: fmtQuando(a.createdAt),
   ts: new Date(a.createdAt).getTime(),
@@ -465,6 +482,11 @@ type Store = {
   sessao: Sessao;
   autenticado: boolean;
   carregando: boolean;
+  /** B24: a carga inicial FALHOU (sessão/bootstrap) — distinto de "não
+   *  autenticado": os layouts mostram erro com "tentar novamente" em vez
+   *  de redirecionar para o login como se fosse logout. */
+  erroCarga: boolean;
+  tentarNovamenteCarga: () => void;
   /** V4 — conta criada pela administração: troca de senha obrigatória. */
   precisaTrocarSenha: boolean;
   trocarSenha: (senhaAtual: string, novaSenha: string) => Promise<RespostaSenha>;
@@ -493,9 +515,10 @@ type Store = {
   mensagens: Mensagem[];
   suporte: { id: string | null; nome: string };
   naoLidasMensagens: number;
-  enviarMensagem: (paraId: string, texto: string) => void;
+  /** Resolve `true` só quando o servidor aceitou (erros já viram toast em `api`). */
+  enviarMensagem: (paraId: string, texto: string) => Promise<boolean>;
   marcarConversaLida: (comUsuarioId: string) => void;
-  emitirDocumento: (d: Omit<Documento, "id" | "data">, pacienteIdExplicito?: string) => void;
+  emitirDocumento: (d: Omit<Documento, "id" | "data"> & { consultaId?: string }, pacienteIdExplicito?: string) => void;
   /** Resolvem `true` só quando o servidor aceitou (erros já viram toast em `api`). */
   cancelarConsulta: (id: string, motivo: string) => Promise<boolean>;
   remarcarConsulta: (id: string, data: string, hora: string) => Promise<boolean>;
@@ -517,12 +540,14 @@ type Store = {
   avaliarConsulta: (a: Omit<Avaliacao, "id" | "quando" | "ts">, medicoIdExplicito?: string) => void;
   consentimentos: Consentimento[];
   consentimentosVisiveis: Consentimento[];
+  /** Resolve `true` só quando o servidor registrou o consentimento (LGPD — o PDF do prontuário aguarda esta confirmação). */
   registrarConsentimento: (
     c: Omit<Consentimento, "id" | "quando" | "quem" | "perfil">,
-  ) => Consentimento;
-  adicionarTicket: (t: Omit<TicketSuporte, "id" | "data" | "status">) => void;
-  responderTicket: (id: string, resposta: string) => void;
-  adicionarLembrete: (l: Omit<Lembrete, "id" | "feito">) => void;
+  ) => Promise<boolean>;
+  /** Resolvem `true` só quando o servidor aceitou (erros já viram toast em `api`). */
+  adicionarTicket: (t: Omit<TicketSuporte, "id" | "data" | "status">) => Promise<boolean>;
+  responderTicket: (id: string, resposta: string) => Promise<boolean>;
+  adicionarLembrete: (l: Omit<Lembrete, "id" | "feito">) => Promise<boolean>;
   alternarLembrete: (id: string) => void;
   removerLembrete: (id: string) => void;
   /** A2: resolve `true` só quando o servidor confirmou (erros já viram toast em `api`). */
@@ -572,6 +597,7 @@ export function BionProvider({ children }: { children: ReactNode }) {
   const [suporte, setSuporte] = useState<{ id: string | null; nome: string }>(SUPORTE_VAZIO);
   const [autenticado, setAutenticado] = useState(false);
   const [carregando, setCarregando] = useState(true);
+  const [erroCarga, setErroCarga] = useState(false);
   const [precisaTrocarSenha, setPrecisaTrocarSenha] = useState(false);
 
   const sessaoRef = useRef(sessao);
@@ -633,15 +659,24 @@ export function BionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   /** Carrega sessão + bootstrap ao montar (single-flight: montagens rápidas
-   *  ou re-montagens do provider não disparam duas cargas completas). */
-  useEffect(() => {
+   *  ou re-montagens do provider não disparam duas cargas completas).
+   *  B24: falha de rede/servidor (api → null) NÃO é "não autenticado" —
+   *  /api/auth/sessao responde 200 { autenticado: false } para quem não
+   *  tem sessão. Falha vira `erroCarga`, com retry por tentarNovamenteCarga. */
+  const carregarInicial = useCallback(async () => {
     if (bootstrapEmAndamentoRef.current) return;
     bootstrapEmAndamentoRef.current = true;
-    (async () => {
+    setCarregando(true);
+    setErroCarga(false);
+    try {
       const s = await api<{ autenticado: boolean; usuario?: { id: string; nome: string; email: string; role: string; precisaTrocarSenha?: boolean } }>(
         "/api/auth/sessao",
       );
-      if (s?.autenticado && s.usuario?.precisaTrocarSenha) {
+      if (!s) {
+        setErroCarga(true);
+        return;
+      }
+      if (s.autenticado && s.usuario?.precisaTrocarSenha) {
         // Auditoria admin (C2): com troca de senha pendente o servidor recusa
         // o bootstrap (403). Abre direto a tela de troca; os dados são
         // carregados em trocarSenha() após o sucesso.
@@ -653,17 +688,33 @@ export function BionProvider({ children }: { children: ReactNode }) {
         });
         setPrecisaTrocarSenha(true);
         setAutenticado(true);
-      } else if (s?.autenticado && s.usuario) {
+      } else if (s.autenticado && s.usuario) {
         const dados = await api<EstadoFresco>("/api/bootstrap");
         if (dados) {
           aplicar(dados);
           setAutenticado(true);
+        } else {
+          // Sessão válida, bootstrap falhou: erro de carga, não logout.
+          setErroCarga(true);
         }
+      } else if (s.autenticado) {
+        // Resposta incoerente (autenticado sem usuário): trata como falha.
+        setErroCarga(true);
       }
+      // s.autenticado === false: não autenticado de verdade — sem erro.
+    } finally {
       setCarregando(false);
       bootstrapEmAndamentoRef.current = false;
-    })();
+    }
   }, [aplicar]);
+
+  useEffect(() => {
+    void carregarInicial();
+  }, [carregarInicial]);
+
+  const tentarNovamenteCarga = useCallback(() => {
+    void carregarInicial();
+  }, [carregarInicial]);
 
   /** Mescla mensagens no estado (novas por id, atualizações de recibo de
    *  leitura) e avança o marcador do polling incremental. */
@@ -765,6 +816,7 @@ export function BionProvider({ children }: { children: ReactNode }) {
       });
       if (!dados) return { ok: false };
       aplicar(dados);
+      setErroCarga(false);
       setAutenticado(true);
       return { ok: true, role: dados.usuario.role.toLowerCase() as Sessao["role"] };
     },
@@ -779,6 +831,7 @@ export function BionProvider({ children }: { children: ReactNode }) {
       });
       if (!dados) return { ok: false };
       aplicar(dados);
+      setErroCarga(false);
       setAutenticado(true);
       return { ok: true, role: dados.usuario.role.toLowerCase() as Sessao["role"] };
     },
@@ -801,6 +854,7 @@ export function BionProvider({ children }: { children: ReactNode }) {
     }
     await inscricao?.unsubscribe().catch(() => false);
     limparSyncPush();
+    setErroCarga(false);
     setAutenticado(false);
     setPrecisaTrocarSenha(false);
     setSessaoState(SESSAO_VAZIA);
@@ -1152,7 +1206,11 @@ export function BionProvider({ children }: { children: ReactNode }) {
   );
 
   const documentosVisiveis = useMemo(() => {
-    if (sessao.role === "paciente") return documentos.filter((d) => d.paciente === sessao.nome);
+    // M-9: paciente filtra pelo IDENTIFICADOR (homônimos); nome é fallback
+    // apenas para documentos legados sem pacienteId.
+    if (sessao.role === "paciente") {
+      return documentos.filter((d) => (d.pacienteId ? d.pacienteId === sessao.id : d.paciente === sessao.nome));
+    }
     if (sessao.role === "medico") {
       const pacientesVinculados = new Set(
         consultas.filter((c) => c.medico === sessao.nome).map((c) => c.paciente),
@@ -1352,7 +1410,7 @@ export function BionProvider({ children }: { children: ReactNode }) {
   );
 
   const emitirDocumento = useCallback(
-    (d: Omit<Documento, "id" | "data">, pacienteIdExplicito?: string) => {
+    (d: Omit<Documento, "id" | "data"> & { consultaId?: string }, pacienteIdExplicito?: string) => {
       // Paciente identificado por ID (nunca por nome — homônimos existem):
       // 1º ID explícito do chamador, depois busca por nome (último recurso).
       const pacienteId =
@@ -1368,11 +1426,16 @@ export function BionProvider({ children }: { children: ReactNode }) {
         titulo: d.titulo,
         conteudo: d.conteudo,
         pacienteId,
+        // B-12: vínculo com a consulta em que o documento foi emitido.
+        consultaId: d.consultaId ?? null,
         medicamento: d.medicamento,
         posologia: d.posologia,
         duracao: d.duracao,
         observacoes: d.observacoes,
         cid: d.cid,
+        // Flag de controlado: repassado à API (undefined é descartado pelo
+        // JSON.stringify; a API só o grava para tipo "receita", default false).
+        controlado: d.controlado,
       });
     },
     [mutar],
@@ -1399,15 +1462,11 @@ export function BionProvider({ children }: { children: ReactNode }) {
   );
 
   const registrarConsentimento = useCallback(
-    (c: Omit<Consentimento, "id" | "quando" | "quem" | "perfil">): Consentimento => {
-      const registro: Consentimento = {
-        ...c,
-        id: `local-${Date.now()}`,
-        quem: sessaoRef.current.nome,
-        perfil: sessaoRef.current.role,
-        quando: new Date().toLocaleString("pt-BR"),
-      };
-      void mutar("/api/consentimentos", "POST", {
+    async (c: Omit<Consentimento, "id" | "quando" | "quem" | "perfil">): Promise<boolean> => {
+      // A9 (LGPD): aguardável de propósito — o PDF do prontuário só é gerado
+      // DEPOIS que o servidor confirma este registro; em falha devolve false
+      // e nenhum arquivo sai sem a trilha de consentimento.
+      return mutar("/api/consentimentos", "POST", {
         finalidade: c.finalidade,
         documentos: c.documentos,
         aceito: c.aceito,
@@ -1415,44 +1474,40 @@ export function BionProvider({ children }: { children: ReactNode }) {
           ? { pacienteId: pacientesRef.current.find((p) => p.nome === c.paciente)?.id }
           : {}),
       });
-      return registro;
     },
     [mutar],
   );
 
   const adicionarTicket = useCallback(
-    (t: Omit<TicketSuporte, "id" | "data" | "status">) => {
-      void mutar("/api/tickets", "POST", {
+    (t: Omit<TicketSuporte, "id" | "data" | "status">) =>
+      mutar("/api/tickets", "POST", {
         assunto: t.assunto,
         categoria: t.categoria,
         mensagem: t.mensagem,
-      });
-    },
+      }),
     [mutar],
   );
 
   const responderTicket = useCallback(
-    (id: string, resposta: string) => {
-      void mutar(`/api/tickets/${id}`, "PATCH", { resposta });
-    },
+    (id: string, resposta: string) => mutar(`/api/tickets/${id}`, "PATCH", { resposta }),
     [mutar],
   );
 
   const adicionarLembrete = useCallback(
-    (l: Omit<Lembrete, "id" | "feito">) => {
-      void (async () => {
-        const d = await api<DeltaWire>("/api/lembretes", {
-          method: "POST",
-          body: JSON.stringify({
-            titulo: l.titulo,
-            horario: l.horario,
-            tipo: l.tipo,
-            frequencia: l.frequencia,
-            medicamento: l.medicamento,
-          }),
-        });
-        if (d) aplicarDelta(d);
-      })();
+    async (l: Omit<Lembrete, "id" | "feito">): Promise<boolean> => {
+      const d = await api<DeltaWire>("/api/lembretes", {
+        method: "POST",
+        body: JSON.stringify({
+          titulo: l.titulo,
+          horario: l.horario,
+          tipo: l.tipo,
+          frequencia: l.frequencia,
+          medicamento: l.medicamento,
+        }),
+      });
+      if (!d) return false;
+      aplicarDelta(d);
+      return true;
     },
     [aplicarDelta],
   );
@@ -1593,14 +1648,18 @@ export function BionProvider({ children }: { children: ReactNode }) {
     [mutarConsultaDelta],
   );
 
-  /** Contrato delta: POST /api/mensagens devolve APENAS a mensagem criada. */
+  /** Contrato delta: POST /api/mensagens devolve APENAS a mensagem criada.
+   *  Resolve `true` só quando o servidor aceitou — quem envia aguarda para
+   *  só limpar o texto digitado com a confirmação (A8). */
   const enviarMensagem = useCallback(
-    async (paraId: string, texto: string) => {
+    async (paraId: string, texto: string): Promise<boolean> => {
       const d = await api<DeltaWire>("/api/mensagens", {
         method: "POST",
         body: JSON.stringify({ paraId, texto }),
       });
+      if (!d) return false;
       aplicarDelta(d);
+      return true;
     },
     [aplicarDelta],
   );
@@ -1703,6 +1762,8 @@ export function BionProvider({ children }: { children: ReactNode }) {
       sessao,
       autenticado,
       carregando,
+      erroCarga,
+      tentarNovamenteCarga,
       precisaTrocarSenha,
       trocarSenha,
       entrar,
@@ -1761,7 +1822,7 @@ export function BionProvider({ children }: { children: ReactNode }) {
       atualizarConsulta,
     }),
     [
-      sessao, autenticado, carregando, precisaTrocarSenha, trocarSenha, entrar, registrar, sair,
+      sessao, autenticado, carregando, erroCarga, tentarNovamenteCarga, precisaTrocarSenha, trocarSenha, entrar, registrar, sair,
       consultas, arquivos, notificacoes, notificacoesVisiveis, documentos, medicos,
       tickets, lembretes, pacientePerfil, documentosVisiveis,
       mensagens, suporte, enviarMensagem, marcarConversaLida,

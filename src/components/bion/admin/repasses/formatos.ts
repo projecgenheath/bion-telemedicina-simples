@@ -8,7 +8,9 @@ import type { RepasseDetalhe, RepasseLista, Recebimento, ResultadoFechamento } f
 
 export const MAX_COMPROVANTE = 10 * 1024 * 1024; // igual ao PATCH
 export const TIPOS_COMPROVANTE = ["application/pdf", "image/png", "image/jpeg"];
-export const HORA_FECHAMENTO = 23; // igual a repasse.ts: hoje só fecha a partir das 23:00 (SP)
+// B-30: igual a repasse.ts (HORA_FECHAMENTO_MIN) — hoje só fecha a partir
+// das 23:30 (SP), depois do prazo final do desfecho (23:30).
+export const HORA_FECHAMENTO_MIN = 23 * 60 + 30; // 23:30
 
 const ROTULO_PIX: Record<string, string> = { cpf: "CPF", cnpj: "CNPJ", email: "E-mail", telefone: "Celular", aleatoria: "Chave aleatória" };
 export const rotuloPixTipo = (t: string | null | undefined) => ROTULO_PIX[String(t ?? "")] ?? "Chave PIX";
@@ -104,11 +106,12 @@ export function explicarErroPagamento(status: number, erroServidor: string | nul
 
 /* ---------------- Fechar agora ---------------- */
 
-/** Mesma regra do servidor (validarCompetenciaParaFechar): dia real, não futuro; hoje só a partir das 23:00 (SP). */
-export function validarCompetencia(dia: string, hojeSP: string, horaSP: number): string | null {
+/** Mesma regra do servidor (validarCompetenciaParaFechar): dia real, não futuro; hoje só a partir das 23:30 (SP). */
+export function validarCompetencia(dia: string, hojeSP: string, minutosSP: number): string | null {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dia) || Number.isNaN(Date.parse(`${dia}T12:00:00Z`))) return "Use uma data real.";
   if (dia > hojeSP) return "Não dá para fechar um dia que ainda não chegou.";
-  if (dia === hojeSP && horaSP < HORA_FECHAMENTO) return `O dia de hoje só pode ser fechado a partir das ${HORA_FECHAMENTO}:00.`;
+  if (dia === hojeSP && minutosSP < HORA_FECHAMENTO_MIN)
+    return "O dia de hoje só pode ser fechado a partir das 23:30 (depois do prazo de desfecho).";
   return null;
 }
 

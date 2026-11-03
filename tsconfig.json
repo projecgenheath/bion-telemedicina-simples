@@ -46,6 +46,9 @@
     "scripts",
     "android",
     "ios",
-    "cap-www"
+    "cap-www",
+    "supabase/functions",
+    "**/*.teste.ts",
+    "**/*.teste.tsx"
   ]
 }

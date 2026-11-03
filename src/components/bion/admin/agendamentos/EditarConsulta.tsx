@@ -7,7 +7,8 @@ import { instanteFusoClinica } from "@/lib/bion-tipos";
 import { chaveDia, dataLonga, hora as horaDe, rotuloDia } from "../tempo";
 import { useRecurso } from "../repasses/recurso";
 import { useAcoesConsulta } from "./acoes";
-import { corpoEdicao, horariosDoDia, validarHoraManual, type Horario } from "./agenda";
+import { corpoEdicao, horariosDoDia, podeCancelar, validarHoraManual, type Horario } from "./agenda";
+import { gradeDeCampos, horariosDoDia as gradeDoDia, diaSemanaDeIso } from "@/lib/grade-semana";
 
 const ROTULO_MOTIVO: Record<NonNullable<Horario["motivo"]>, string> = {
   atual: "atual",
@@ -56,7 +57,16 @@ export function EditarConsulta({
   const bloqueios = useRecurso<{ dias: string[] }>(medicoId ? `/api/medicos/${encodeURIComponent(medicoId)}/bloqueios` : null);
   const diaBloqueado = Boolean(bloqueios.dados?.dias.includes(dia));
   const horarios = useMemo(
-    () => horariosDoDia({ grade: medico?.horariosDisponiveis ?? [], dia, medicoId, consultas, consultaId: c.id, agora }),
+    // Grade por dia da semana: a lista oferecida é a do dia editado
+    // (própria ou padrão) — regra única em lib/grade-semana.
+    () =>
+      horariosDoDia({
+        grade: gradeDoDia(
+          gradeDeCampos(medico?.horariosDisponiveis ?? [], medico?.horariosPorDia),
+          diaSemanaDeIso(dia),
+        ),
+        dia, medicoId, consultas, consultaId: c.id, agora,
+      }),
     [medico, dia, medicoId, consultas, c.id, agora],
   );
 
@@ -88,6 +98,27 @@ export function EditarConsulta({
       onSalvo();
     } else setErro(r.erro);
   };
+
+  // Consulta terminal (concluída, cancelada ou com falta do paciente): edição
+  // travada aqui também, não só no botão Remarcar do detalhe — o servidor é
+  // a última barreira, mas a UI não pode oferecer um salvamento fadado a erro.
+  if (!podeCancelar(c)) {
+    const rotulo = c.status === "concluida" ? "concluída" : c.status === "falta_paciente" ? "com falta do paciente" : "cancelada";
+    return (
+      <div className="space-y-4">
+        <div className="ba-aviso" data-tom="atencao" role="alert">
+          <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5" aria-hidden />
+          <p>
+            Consulta {rotulo}: não dá para remarcar nem editar. Consultas terminais só aceitam correção de desfecho
+            (quando disponível) — os dados desta consulta ficam como registro.
+          </p>
+        </div>
+        <button type="button" onClick={onCancelar} className="ba-botao ba-botao-secundario">
+          Voltar
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">

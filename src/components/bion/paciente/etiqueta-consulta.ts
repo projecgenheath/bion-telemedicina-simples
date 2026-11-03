@@ -59,6 +59,8 @@ export const CLASSE_ETIQUETA: Record<TomEtiqueta, string> = {
  * Rótulo de status para LISTAS (histórico do Perfil, "Ver tudo").
  * Antes, qualquer status fora de concluída/cancelada aparecia como
  * "Confirmada" — inclusive consulta sem pagamento ou sem triagem.
+ * M13: mapa explícito para TODOS os ApptStatus — `falta_paciente` caía no
+ * default "Agendada" e a consulta encerrada por falta parecia futura.
  */
 export function rotuloHistorico(status: string, pago?: boolean): EtiquetaConsulta {
   switch (status) {
@@ -66,6 +68,8 @@ export function rotuloHistorico(status: string, pago?: boolean): EtiquetaConsult
       return { texto: "Realizada", tom: "ok" };
     case "cancelada":
       return { texto: "Cancelada", tom: "neutro" };
+    case "falta_paciente":
+      return { texto: "Falta registrada", tom: "neutro" };
     case "em_espera":
       return { texto: "Aguardando pagamento", tom: "pagamento" };
     case "pendente_anamnese":

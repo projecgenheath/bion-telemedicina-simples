@@ -10,11 +10,12 @@ import {
   type AuditPayload,
 } from "@/lib/server/dados";
 import { criarCobranca, confirmarPagamento, modoGateway, paraWire } from "@/lib/server/pagamentos";
-import { ok, falha } from "@/lib/server/http";
-import { STATUS_LIBERAM_HORARIO, horarioReservado } from "@/lib/server/financeiro";
+import {ok, falha, lerCorpoJson, corpoObjeto, textoDoCorpo} from "@/lib/server/http";
+import { conferirHorarioNaTransacao, ERRO_HORARIO_OCUPADO, ERRO_PACIENTE_OCUPADO, horarioNaGrade } from "@/lib/server/financeiro";
 import { partesNoFuso } from "@/lib/server/fuso";
 import {
   consultaEmHorarioVedado,
+  conferirDiasEPausas,
   criarSeDiaLivre,
   diaBloqueado,
   ERRO_DIA_BLOQUEADO,
@@ -22,6 +23,7 @@ import {
   OPCOES_TX_TRAVA,
 } from "@/lib/server/bloqueio-agenda";
 import { jaUsouRetornoGratis, lerPedidoVinculado, PRAZO_RETORNO_DIAS, retornoEhGratis } from "@/lib/atendimento-tipo";
+import { agendarPushNotificacoes } from "@/lib/server/push-notificacao";
 import { estaAnonimizado } from "@/lib/server/lgpd";
 import { decisaoCobranca, respostaIndisponivel, stripeAtivo } from "@/lib/stripe-checkout-logica";
 
@@ -87,15 +89,29 @@ export async function POST(req: NextRequest) {
     // Termos + privacidade vigentes: sem aceite, nada novo é agendado (403).
     const semAceite = await exigirAceiteTermosPaciente(usuario);
     if (semAceite) return semAceite;
-    const body = (await req.json()) as {
-      medicoId: string;
-      data: string;
-      hora: string;
-      motivoConsulta?: string;
-      tipoAtendimento?: string;
-      consultaOrigemId?: string;
-      documentoOrigemId?: string;
+    // B1: guarda de objeto/tipo — corpo null quebrava em body.medicoId e
+    // data/hora/motivo não-string quebravam em .trim()/.slice() (500).
+    const bruto = corpoObjeto(await lerCorpoJson(req));
+    if (!bruto) {
+      return Response.json({ erro: "Corpo da requisição inválido." }, { status: 400 });
+    }
+    const body = {
+      medicoId: textoDoCorpo(bruto.medicoId) ?? "",
+      data: textoDoCorpo(bruto.data) ?? "",
+      hora: textoDoCorpo(bruto.hora) ?? "",
+      motivoConsulta: textoDoCorpo(bruto.motivoConsulta),
+      tipoAtendimento: textoDoCorpo(bruto.tipoAtendimento),
+      consultaOrigemId: textoDoCorpo(bruto.consultaOrigemId),
+      documentoOrigemId: textoDoCorpo(bruto.documentoOrigemId),
     };
+
+    // M1: medicoId precisa ser uma string presente e sã ANTES de qualquer
+    // query — no Prisma, `undefined` no where é ignorado e o findFirst do
+    // médico devolveria o PRIMEIRO médico do banco (agendamento/pagamento
+    // com um médico que o paciente não escolheu).
+    if (typeof body.medicoId !== "string" || !body.medicoId.trim() || body.medicoId.length > 64) {
+      return Response.json({ erro: "Médico não informado." }, { status: 400 });
+    }
 
     // Retorno (Teleconsulta v2): vínculo com uma consulta CONCLUÍDA do próprio
     // paciente, com o MESMO médico. O cliente não escolhe o médico de outra
@@ -168,12 +184,22 @@ export async function POST(req: NextRequest) {
 
     const dataInicio = parseDataHora(body.data, body.hora);
 
-    // P2 — proibido agendar no passado (tolerância de 1 min). Fuso: dataInicio
-    // já é o instante real (parseDataHora interpreta em São Paulo), então
-    // compara direto com o agora real; sem "agora de parede" falso.
+    // P2 — proibido agendar no passado. B35: a antecedência mínima é UMA
+    // regra só nos dois lados — 5 min na criação, igual ao cliente
+    // (agenda-medico.ts) e à promessa de triagem "até 5 minutos antes"
+    // das notificações abaixo. Antes o servidor só rejeitava o passado
+    // (tolerância de 1 min) e o cliente escondia outro tanto de horários.
+    // Fuso: dataInicio já é o instante real (parseDataHora interpreta em
+    // São Paulo), então compara direto com o agora real.
     if (dataInicio.getTime() < Date.now() - 60_000) {
       return Response.json(
         { erro: "Não é possível agendar no passado — escolha uma data e hora futuras." },
+        { status: 400 },
+      );
+    }
+    if (dataInicio.getTime() < Date.now() + 5 * 60_000) {
+      return Response.json(
+        { erro: "É preciso agendar com pelo menos 5 minutos de antecedência — escolha um horário mais adiante." },
         { status: 400 },
       );
     }
@@ -189,27 +215,19 @@ export async function POST(req: NextRequest) {
       return Response.json({ erro: ERRO_DIA_BLOQUEADO }, { status: 409 });
     }
 
-    // P2 — conflito de horário: mesmo médico (ou mesmo paciente) já possui
-    // consulta que ainda ocupa este exato horário (ver STATUS_LIBERAM_HORARIO).
-    const choqueMedico = await db.consulta.findFirst({
-      where: { medicoId: medico.id, dataInicio, status: { notIn: STATUS_LIBERAM_HORARIO } },
-      select: { id: true },
-    });
-    if (choqueMedico || (await horarioReservado(medico.id, dataInicio))) {
-      return Response.json(
-        { erro: "Este médico já possui uma consulta neste horário. Escolha outro horário." },
-        { status: 409 },
-      );
+    // Dias da semana e pausas semanais (se configurados) — pré-checagem
+    // rápida fora da transação para dar resposta imediata; a checagem que
+    // VALE é a atômica, dentro da transação travada (abaixo), que agora
+    // confere dias, pausas e conflitos de horário (P1-3 e P1-4 da auditoria).
+    const perfilGrade = await db.perfilMedico.findUnique({ where: { userId: medico.id }, select: { diasAtendimento: true, pausasSemanais: true, horariosDisponiveis: true } });
+    const erroGrade = conferirDiasEPausas(perfilGrade, dataInicio);
+    if (erroGrade) {
+      return Response.json({ erro: erroGrade }, { status: 409 });
     }
-    const choquePaciente = await db.consulta.findFirst({
-      where: { pacienteId: usuario.id, dataInicio, status: { notIn: STATUS_LIBERAM_HORARIO } },
-      select: { id: true },
-    });
-    if (choquePaciente) {
-      return Response.json(
-        { erro: "Você já possui uma consulta neste horário. Escolha outro horário." },
-        { status: 409 },
-      );
+    // Hora na grade do médico — pré-checagem rápida; a checagem que VALE é
+    // a atômica, dentro da transação travada (conferirHorarioNaTransacao).
+    if (!horarioNaGrade(perfilGrade, dataInicio)) {
+      return Response.json({ erro: "Esse horário não faz parte da agenda do médico." }, { status: 409 });
     }
 
     // Dia inteiro bloqueado pelo médico (folga/férias): checagem + criação
@@ -223,6 +241,17 @@ export async function POST(req: NextRequest) {
       (tx) =>
         criarSeDiaLivre(tx, medico.id, dataInicio, (t) =>
           (async () => {
+            // P1-4 da auditoria: conflito de horário (médico, reserva de
+            // remarcação e consulta do paciente) refeito DENTRO da transação
+            // travada, reutilizando a mesma função do fluxo de remarcação.
+            // consultaId "novo" não exclui nenhuma consulta existente.
+            const erroConflito = await conferirHorarioNaTransacao(t, {
+              consultaId: "novo",
+              medicoId: medico.id,
+              dataInicio,
+              pacienteId: usuario.id,
+            });
+            if (erroConflito) throw new ConflitoHorario(erroConflito);
             // Retorno grátis (até 30 dias da origem, um por origem): decidido
             // AQUI, dentro da transação e com trava pela consulta de origem,
             // para dois pedidos simultâneos não ganharem dois retornos grátis.
@@ -259,6 +288,9 @@ export async function POST(req: NextRequest) {
       if (e instanceof PagamentoIndisponivel) {
         const r = respostaIndisponivel();
         return Response.json(r.corpo, { status: r.status });
+      }
+      if (e instanceof ConflitoHorario) {
+        return Response.json({ erro: e.erro }, { status: 409 });
       }
       throw e;
     }
@@ -363,6 +395,10 @@ export async function POST(req: NextRequest) {
     }
 
     const efeitos = await aplicarSideEffects(usuario, eventos, audit);
+    // Item 12: a notificação "Nova consulta agendada"/"Retorno agendado" ao
+    // médico também vira Web Push (app fechado ele não via nada). Genérico,
+    // em after(), sem bloquear a resposta — ver lib/server/push-notificacao.
+    agendarPushNotificacoes(eventos, medico.id);
 
     return ok({
       consulta: {
@@ -396,3 +432,10 @@ export async function POST(req: NextRequest) {
 
 /** Retorno pago com o cartão desligado e gateway real: aborta a transação. */
 class PagamentoIndisponivel extends Error {}
+
+/** Conflito de horário detectado dentro da transação travada (409). */
+class ConflitoHorario extends Error {
+  constructor(readonly erro: string) {
+    super(erro);
+  }
+}

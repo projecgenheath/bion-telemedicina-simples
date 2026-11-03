@@ -182,7 +182,7 @@ function Perfil({ medico: m, onArquivar }: { medico: Medico; onArquivar?: () => 
         ) : null}
       </dl>
       <div>
-        <p className="ba-rotulo">Horários da grade (todos os dias)</p>
+        <p className="ba-rotulo">Horários da grade (padrão — todos os dias)</p>
         <div className="flex flex-wrap gap-1.5 mt-1.5">
           {m.horariosDisponiveis.length ? (
             m.horariosDisponiveis.map((h) => (
@@ -194,6 +194,12 @@ function Perfil({ medico: m, onArquivar }: { medico: Medico; onArquivar?: () => 
             <span className="text-sm ba-texto-2">Sem horários na grade.</span>
           )}
         </div>
+        {Object.entries(m.horariosPorDia ?? {}).map(([dia, lista]) => (
+          <p key={dia} className="text-sm mt-1.5">
+            <span className="font-bold">{["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"][Number(dia)]} (grade própria):</span>{" "}
+            {lista.length ? lista.join(" · ") : "sem horários neste dia"}
+          </p>
+        ))}
       </div>
       <p className="text-xs ba-texto-2">CNPJ e chave PIX aparecem na aba Financeiro (vêm dos repasses).</p>
       {onArquivar ? (

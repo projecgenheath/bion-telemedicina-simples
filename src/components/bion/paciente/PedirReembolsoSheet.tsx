@@ -28,6 +28,7 @@ export function PedirReembolsoSheet({ consulta, onFechar }: { consulta: Consulta
   const temPedido = !!consulta.reembolsoManual;
   const recarregarEstado = useRecarregarEstado();
   const [justificativa, setJustificativa] = useState("");
+  const [confirmarDescarte, setConfirmarDescarte] = useState(false);
   const [enviando, setEnviando] = useState(false);
   const [erroEnvio, setErroEnvio] = useState<string | null>(null);
 
@@ -44,7 +45,7 @@ export function PedirReembolsoSheet({ consulta, onFechar }: { consulta: Consulta
     if (r.ok) {
       await recarregarEstado();
       setEnviando(false);
-      toast.success("Pedido de reembolso enviado — você será avisado da decisão");
+      toast.success("Reembolso aprovado na hora — a devolução será processada em seguida");
       onFechar();
       return;
     }
@@ -55,7 +56,15 @@ export function PedirReembolsoSheet({ consulta, onFechar }: { consulta: Consulta
   };
 
   const fechar = () => {
-    if (!enviando) onFechar();
+    if (enviando) return;
+    // B21: fechar (voltar/ESC/arrastar/véu) com justificativa escrita e
+    // não enviada pede confirmação antes de descartar o texto — distinto
+    // de M12 (envio em andamento, que simplesmente não fecha).
+    if (!temPedido && justificativa.trim().length > 0 && !confirmarDescarte) {
+      setConfirmarDescarte(true);
+      return;
+    }
+    onFechar();
   };
   const dialogoRef = useRef<HTMLDivElement>(null);
   useVoltarFecha(true, fechar);
@@ -83,11 +92,12 @@ export function PedirReembolsoSheet({ consulta, onFechar }: { consulta: Consulta
             <div className="mt-4 rounded-2xl border bpp-sheet-borda bpp-sheet-cartao p-4 text-sm bpp-sheet-suave">
               <p>
                 O médico ficou na sala e a consulta foi registrada como <strong className="bpp-sheet-forte">falta</strong>, por isso o reembolso
-                não é feito sozinho: você precisa pedir abaixo. Depois do pedido, o reembolso é integral e imediato.
+                não é feito sozinho: você precisa pedir abaixo. Depois do pedido, o reembolso é aprovado na hora.
               </p>
               <p className="mt-2">
-                Se você teve um motivo, explique abaixo. O reembolso é integral e imediato
-                {consulta.valor ? ` (${consulta.valor})` : ""}, sem etapa de análise.
+                Se você teve um motivo, explique abaixo. O reembolso é integral
+                {consulta.valor ? ` (${consulta.valor})` : ""}, aprovado na hora e sem etapa de análise;
+                a devolução do valor é processada em seguida.
               </p>
               {prazo ? (
                 <p className="mt-2 text-xs bpp-sheet-suave">
@@ -128,6 +138,30 @@ export function PedirReembolsoSheet({ consulta, onFechar }: { consulta: Consulta
               </div>
             ) : null}
 
+            {confirmarDescarte ? (
+              <div className="mt-5 rounded-2xl border border-amber-400/30 bg-amber-500/10 p-4" role="alertdialog" aria-label="Descartar justificativa?">
+                <p className="text-sm font-bold">Descartar a justificativa?</p>
+                <p className="text-sm bpp-sheet-suave mt-1">
+                  O texto que você escreveu ainda não foi enviado e será perdido se fechar agora.
+                </p>
+                <div className="flex gap-2 mt-3">
+                  <button
+                    type="button"
+                    onClick={() => setConfirmarDescarte(false)}
+                    className="bpp-toque flex-1 py-3 rounded-xl bpp-sheet-primario text-sm font-bold"
+                  >
+                    Continuar escrevendo
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onFechar}
+                    className="bpp-toque flex-1 py-3 rounded-xl border bpp-sheet-borda text-sm font-semibold"
+                  >
+                    Descartar e fechar
+                  </button>
+                </div>
+              </div>
+            ) : (
             <div className="flex gap-2 mt-5">
               <button
                 type="button"
@@ -147,6 +181,7 @@ export function PedirReembolsoSheet({ consulta, onFechar }: { consulta: Consulta
                 Enviar pedido
               </button>
             </div>
+            )}
           </>
         )}
       </div>

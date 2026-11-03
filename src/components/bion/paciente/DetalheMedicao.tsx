@@ -18,6 +18,8 @@ import {
 } from "lucide-react";
 import { useBion } from "@/lib/bion-store";
 import { calcularImc, formatarAltura, formatarPeso, lerAlturaCm, lerPesoKg } from "@/lib/medidas-paciente";
+import { FREQUENCIAS_LEMBRETE, HORA, validarResposta } from "@/lib/saude-paciente";
+import { FUSO_CLINICA, partesFusoClinica } from "@/lib/bion-tipos";
 import { GraficoLinha } from "./GraficoLinha";
 
 /**
@@ -29,9 +31,11 @@ import { GraficoLinha } from "./GraficoLinha";
 
 export type Detalhe = "imc" | "pa" | "lembretes" | null;
 
+// B19: dia/mês no fuso da clínica (America/Sao_Paulo), como o restante do
+// app (partesFusoClinica) — não no fuso do dispositivo.
 const rotuloCurto = (iso: string) => {
-  const d = new Date(iso);
-  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
+  const d = partesFusoClinica(iso);
+  return `${String(d.dia).padStart(2, "0")}/${String(d.mes + 1).padStart(2, "0")}`;
 };
 
 function classificarImc(imc: number): { rotulo: string; cor: string } {
@@ -178,15 +182,17 @@ function DetalheImc({ onFechar }: { onFechar: () => void }) {
   const serieImc = useMemo(() => {
     return pesos
       .map((p) => {
-        const alturaCm =
-          alturas.filter((a) => a.criadoEm <= p.criadoEm).at(-1)?.valor1 ?? alturaAtual;
+        // B18: só a altura registrada ATÉ a data do peso — sem altura da
+        // época, o ponto é descartado (a lista ao lado faz o mesmo); usar a
+        // altura atual recalculava o passado com a altura de hoje.
+        const alturaCm = alturas.filter((a) => a.criadoEm <= p.criadoEm).at(-1)?.valor1;
         if (!alturaCm) return null;
         const imc = p.valor1 / Math.pow(alturaCm / 100, 2);
         return { valor: Math.round(imc * 10) / 10, rotulo: rotuloCurto(p.criadoEm) };
       })
       .filter((x): x is { valor: number; rotulo: string } => x !== null)
       .slice(-12);
-  }, [pesos, alturas, alturaAtual]);
+  }, [pesos, alturas]);
 
   const imcAtual = calcularImc(pesoAtual, alturaAtual);
   const classe = imcAtual ? classificarImc(imcAtual) : null;
@@ -280,7 +286,9 @@ function DetalhePa({ onFechar }: { onFechar: () => void }) {
     [medicoes],
   );
   const atual = pas.at(-1);
-  const classe = atual ? classificarPa(atual.valor1, atual.valor2 ?? 0) : null;
+  // M18: sem diastólica a PA está incompleta e NÃO é classificada — antes
+  // `valor2 ?? 0` inventava uma classificação (ex.: 180/0 = "estágio 2").
+  const classe = atual && atual.valor2 !== undefined ? classificarPa(atual.valor1, atual.valor2) : null;
 
   return (
     <Envolver titulo="Pressão Arterial" descricao="Histórico gráfico e registro de novas medições" onFechar={onFechar}>
@@ -293,7 +301,7 @@ function DetalhePa({ onFechar }: { onFechar: () => void }) {
               {atual.valor2 ?? "—"}
             </div>
             <div className="text-sm font-semibold mt-1 text-bion-ink/75 dark:text-bion-paper/75">
-              {classe?.rotulo} · mmHg
+              {classe ? `${classe.rotulo} · mmHg` : "mmHg"}
             </div>
           </>
         ) : (
@@ -313,7 +321,9 @@ function DetalhePa({ onFechar }: { onFechar: () => void }) {
               ...(pas.some((p) => p.valor2 !== undefined)
                 ? [
                     {
-                      pontos: pas.map((p) => ({ valor: p.valor2 ?? p.valor1, rotulo: rotuloCurto(p.criadoEm) })),
+                      // M18: sem valor2 o ponto é omitido (null) — antes a
+                      // diastólica era plotada igual à sistólica.
+                      pontos: pas.map((p) => ({ valor: p.valor2 ?? null, rotulo: rotuloCurto(p.criadoEm) })),
                       cor: "var(--bpp-grafico-alerta)",
                     },
                   ]
@@ -335,6 +345,15 @@ function DetalhePa({ onFechar }: { onFechar: () => void }) {
           { id: "dia", rotulo: "Diastólica (mmHg)", placeholder: atual?.valor2 ? String(atual.valor2) : "80", min: 30, max: 200, passo: 1 },
         ]}
         aoSalvar={async ([sis, dia]) => {
+          // M18: o FormMedicao valida as faixas isoladas; o cruzamento
+          // (diastólica < sistólica) é o de validarResposta — a mesma regra
+          // do fluxo de pedidos do médico e da API /api/medicoes. Sem isso,
+          // uma PA invertida (80/120) era gravada e classificada.
+          const v = validarResposta(["pressao"], { sistolica: sis, diastolica: dia });
+          if (!v.ok) {
+            toast.error(v.erro);
+            return false;
+          }
           setEnviando(true);
           const ok = await registrarMedicao("pa", sis, dia);
           setEnviando(false);
@@ -355,7 +374,8 @@ function DetalhePa({ onFechar }: { onFechar: () => void }) {
                   <Activity className="w-4 h-4 opacity-80" /> {rotuloCurto(p.criadoEm)}
                 </span>
                 <span className="font-semibold">
-                  {p.valor1}/{p.valor2 ?? "—"} mmHg · {classificarPa(p.valor1, p.valor2 ?? 0).rotulo}
+                  {p.valor1}/{p.valor2 ?? "—"} mmHg
+                  {p.valor2 !== undefined ? ` · ${classificarPa(p.valor1, p.valor2).rotulo}` : ""}
                 </span>
               </li>
             ))}
@@ -372,8 +392,12 @@ function DetalheLembretes({ onFechar }: { onFechar: () => void }) {
   const { lembretes, adicionarLembrete, alternarLembrete, removerLembrete } = useBion();
   const [titulo, setTitulo] = useState("");
   const [horario, setHorario] = useState("");
-  const [medicamento, setMedicamento] = useState("");
-  const hoje = new Date().toLocaleDateString("pt-BR", { weekday: "long" });
+  // A15: este campo é a FREQUÊNCIA ("1x ao dia") — o nome do remédio é o
+  // `titulo`. Antes a frequência era gravada também como `medicamento`.
+  const [frequencia, setFrequencia] = useState<string>(FREQUENCIAS_LEMBRETE[0]);
+  const [criando, setCriando] = useState(false);
+  // B19: dia da semana no fuso da clínica, não no do dispositivo.
+  const hoje = new Date().toLocaleDateString("pt-BR", { weekday: "long", timeZone: FUSO_CLINICA });
 
   return (
     <Envolver titulo="Lembretes de medicação" descricao={`Agenda de hoje e rotina completa · ${hoje}`} onFechar={onFechar}>
@@ -396,35 +420,48 @@ function DetalheLembretes({ onFechar }: { onFechar: () => void }) {
             aria-label="Horário do lembrete"
             className="bp-entrada w-full px-4 py-3 text-sm"
           />
-          <input
-            value={medicamento}
-            onChange={(e) => setMedicamento(e.target.value)}
-            placeholder="Frequência (1x ao dia)"
+          <select
+            value={frequencia}
+            onChange={(e) => setFrequencia(e.target.value)}
             aria-label="Frequência do lembrete"
             className="bp-entrada w-full px-4 py-3 text-sm"
-          />
+          >
+            {FREQUENCIAS_LEMBRETE.map((f) => (
+              <option key={f} value={f}>{f}</option>
+            ))}
+          </select>
         </div>
         <button type="button"
-          onClick={() => {
-            if (!titulo.trim() || !/^\d{1,2}:\d{2}$/.test(horario.trim())) {
-              toast.error("Informe o nome e o horário (ex.: 08:00).");
+          disabled={criando}
+          onClick={async () => {
+            // B16: HORA do padrão do app (saude-paciente) — a regex fraca
+            // anterior aceitava "99:99"/"27:70", que nunca disparam.
+            if (!titulo.trim() || !HORA.test(horario.trim())) {
+              toast.error("Informe o nome e o horário válido (ex.: 08:00).");
               return;
             }
-            adicionarLembrete({
+            // A15: `medicamento` é o NOME do remédio (o título) — é por ele
+            // que "Medicamentos em uso" casa o lembrete; a frequência vai
+            // só em `frequencia`. A8: campos só são limpos e o sucesso só
+            // aparece com a confirmação do servidor.
+            setCriando(true);
+            const ok = await adicionarLembrete({
               titulo: titulo.trim(),
               horario: horario.trim(),
               tipo: "Medicação",
-              frequencia: medicamento.trim() || "1x ao dia",
-              medicamento: medicamento.trim() || undefined,
+              frequencia: frequencia || FREQUENCIAS_LEMBRETE[0],
+              medicamento: titulo.trim(),
             });
+            setCriando(false);
+            if (!ok) return;
             setTitulo("");
             setHorario("");
-            setMedicamento("");
+            setFrequencia(FREQUENCIAS_LEMBRETE[0]);
             toast.success("Lembrete criado.");
           }}
-          className="bp-acao w-full py-3 text-sm inline-flex items-center justify-center gap-2"
+          className="bp-acao w-full py-3 text-sm inline-flex items-center justify-center gap-2 disabled:opacity-50"
         >
-          <Plus className="w-4 h-4" /> Criar lembrete
+          <Plus className="w-4 h-4" /> {criando ? "Criando…" : "Criar lembrete"}
         </button>
       </div>
 

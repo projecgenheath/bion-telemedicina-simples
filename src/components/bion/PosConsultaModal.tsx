@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   Check,
@@ -30,7 +30,7 @@ export function PosConsultaModal({
   especialidade?: string;
   onClose: () => void;
 }) {
-  const { documentosVisiveis, avaliarConsulta, sessao } = useBion();
+  const { documentosVisiveis, avaliarConsulta, sessao, avaliacoes } = useBion();
 
   const [nota, setNota] = useState(5);
   const [pontualidade, setPontualidade] = useState(5);
@@ -38,26 +38,66 @@ export function PosConsultaModal({
   const [clareza, setClareza] = useState(5);
   const [comentario, setComentario] = useState("");
   const [avaliado, setAvaliado] = useState(false);
+  // Avaliação confirmada, não "disparada e esquecida": avaliarConsulta não
+  // devolve o resultado (interface void), então a confirmação é a avaliação
+  // nova na lista (delta do servidor). Só aí aparece o "obrigado" — antes,
+  // o sucesso era imediato mesmo com a requisição falhando. Sem confirmação
+  // em tempo, o formulário fica aberto com erro + retry.
+  const [enviando, setEnviando] = useState(false);
+  const [erroEnvio, setErroEnvio] = useState<string | null>(null);
+  const pendenteRef = useRef<{ nota: number; comentario: string; medico: string; antes: Set<string> } | null>(null);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Documentos gerados recentemente para este atendimento
   const docsRecentes = documentosVisiveis.slice(0, 3);
 
   const enviarAvaliacao = () => {
+    if (enviando) return;
+    const comentarioLimpo = comentario.trim();
+    setEnviando(true);
+    setErroEnvio(null);
+    pendenteRef.current = {
+      nota,
+      comentario: comentarioLimpo,
+      medico,
+      antes: new Set(avaliacoes.map((a) => a.id)),
+    };
     avaliarConsulta({
       paciente: sessao.nome,
       medico,
       especialidade,
       nota,
-      comentario: comentario.trim() || undefined,
+      comentario: comentarioLimpo || undefined,
       pontualidade,
       atencao,
       clareza,
     });
-    setAvaliado(true);
-    toast.success("Avaliação enviada!", {
-      description: "Obrigado pelo feedback. Ela ajuda outros pacientes a escolherem bem.",
-    });
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    timeoutRef.current = setTimeout(() => {
+      if (!pendenteRef.current) return;
+      pendenteRef.current = null;
+      setEnviando(false);
+      setErroEnvio("Não foi possível confirmar o envio da avaliação. Verifique sua conexão e toque em Enviar novamente.");
+    }, 12_000);
   };
+
+  useEffect(() => {
+    const p = pendenteRef.current;
+    if (!enviando || !p) return;
+    if (
+      avaliacoes.some(
+        (a) => !p.antes.has(a.id) && a.nota === p.nota && (a.comentario ?? "").trim() === p.comentario && a.medico === p.medico,
+      )
+    ) {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      pendenteRef.current = null;
+      setEnviando(false);
+      setAvaliado(true);
+      toast.success("Avaliação enviada!", {
+        description: "Obrigado pelo feedback. Ela ajuda outros pacientes a escolherem bem.",
+      });
+    }
+  }, [avaliacoes, enviando]);
 
   return (
     <ModalBion
@@ -214,19 +254,26 @@ export function PosConsultaModal({
               className="w-full px-4 py-2.5 rounded-2xl border text-xs bg-background outline-none focus:ring-2 focus:ring-primary/20"
             />
 
+            {erroEnvio ? (
+              <p className="text-xs font-semibold text-red-700 dark:text-red-400" role="alert">
+                {erroEnvio}
+              </p>
+            ) : null}
             <div className="flex gap-3">
               <button type="button"
                 onClick={onClose}
-                className="flex-1 py-3 rounded-xl border text-xs font-bold text-muted-foreground hover:bg-muted transition"
+                disabled={enviando}
+                className="flex-1 py-3 rounded-xl border text-xs font-bold text-muted-foreground hover:bg-muted transition disabled:opacity-50"
               >
                 Avaliar mais tarde
               </button>
               <button type="button"
                 onClick={enviarAvaliacao}
-                className="flex-1 py-3 rounded-xl text-primary-foreground text-xs font-bold shadow-md hover:opacity-90 transition"
+                disabled={enviando}
+                className="flex-1 py-3 rounded-xl text-primary-foreground text-xs font-bold shadow-md hover:opacity-90 transition disabled:opacity-50"
                 style={{ backgroundColor: "var(--accent)" }}
               >
-                Enviar Avaliação
+                {enviando ? "Enviando…" : "Enviar Avaliação"}
               </button>
             </div>
           </div>

@@ -19,6 +19,9 @@ export function ConsultaControlesMidia({
   micAtivo,
   camAtivo,
   compartilhando,
+  semMic = false,
+  semCamera = false,
+  semTela = false,
   onToggleMic,
   onToggleCam,
   onToggleTela,
@@ -34,6 +37,12 @@ export function ConsultaControlesMidia({
   micAtivo: boolean;
   camAtivo: boolean;
   compartilhando: boolean;
+  /** Microfone sem track ao vivo: botão desabilitado com motivo (não um no-op). */
+  semMic?: boolean;
+  /** Câmera sem track ao vivo: idem (a sala do paciente já fazia isso). */
+  semCamera?: boolean;
+  /** Compartilhamento de tela indisponível (sem getDisplayMedia): idem. */
+  semTela?: boolean;
   onToggleMic: () => void;
   onToggleCam: () => void;
   onToggleTela: () => void;
@@ -60,20 +69,20 @@ export function ConsultaControlesMidia({
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       if (emCampoEditavel(e.target)) return;
       const k = e.key.toLowerCase();
-      if (k === "m") {
+      if (k === "m" && !semMic) {
         e.preventDefault();
         onToggleMic();
-      } else if (k === "c") {
+      } else if (k === "c" && !semCamera) {
         e.preventDefault();
         onToggleCam();
-      } else if (k === "s") {
+      } else if (k === "s" && !semTela) {
         e.preventDefault();
         onToggleTela();
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onToggleMic, onToggleCam, onToggleTela]);
+  }, [onToggleMic, onToggleCam, onToggleTela, semMic, semCamera, semTela]);
 
   return (
     <div className="flex flex-col gap-2">
@@ -81,13 +90,16 @@ export function ConsultaControlesMidia({
       <button
         type="button"
         onClick={onToggleMic}
+        disabled={semMic}
         className={`w-12 h-12 shrink-0 rounded-2xl flex items-center justify-center transition shadow-md ${
-          micAtivo
-            ? "bg-white/10 hover:bg-white/20 text-white"
-            : "bg-red-500 dark:bg-red-600 text-white hover:bg-red-600"
+          semMic
+            ? "bg-white/10 text-white/50 cursor-not-allowed"
+            : micAtivo
+              ? "bg-white/10 hover:bg-white/20 text-white"
+              : "bg-red-500 dark:bg-red-600 text-white hover:bg-red-600"
         }`}
-        title={micAtivo ? "Silenciar microfone" : "Ativar microfone"}
-        aria-label={micAtivo ? "Silenciar microfone" : "Ativar microfone"}
+        title={semMic ? "Microfone indisponível" : micAtivo ? "Silenciar microfone" : "Ativar microfone"}
+        aria-label={semMic ? "Microfone indisponível" : micAtivo ? "Silenciar microfone" : "Ativar microfone"}
         aria-pressed={!micAtivo}
       >
         {micAtivo ? <Mic className="w-5 h-5" /> : <MicOff className="w-5 h-5" />}
@@ -96,13 +108,16 @@ export function ConsultaControlesMidia({
       <button
         type="button"
         onClick={onToggleCam}
+        disabled={semCamera}
         className={`w-12 h-12 shrink-0 rounded-2xl flex items-center justify-center transition shadow-md ${
-          camAtivo
-            ? "bg-white/10 hover:bg-white/20 text-white"
-            : "bg-red-500 dark:bg-red-600 text-white hover:bg-red-600"
+          semCamera
+            ? "bg-white/10 text-white/50 cursor-not-allowed"
+            : camAtivo
+              ? "bg-white/10 hover:bg-white/20 text-white"
+              : "bg-red-500 dark:bg-red-600 text-white hover:bg-red-600"
         }`}
-        title={camAtivo ? "Desativar câmera" : "Ativar câmera"}
-        aria-label={camAtivo ? "Desativar câmera" : "Ativar câmera"}
+        title={semCamera ? "Câmera indisponível" : camAtivo ? "Desativar câmera" : "Ativar câmera"}
+        aria-label={semCamera ? "Câmera indisponível" : camAtivo ? "Desativar câmera" : "Ativar câmera"}
         aria-pressed={!camAtivo}
       >
         {camAtivo ? <Camera className="w-5 h-5" /> : <CameraOff className="w-5 h-5" />}
@@ -111,13 +126,16 @@ export function ConsultaControlesMidia({
       <button
         type="button"
         onClick={onToggleTela}
+        disabled={semTela}
         className={`w-12 h-12 shrink-0 rounded-2xl flex items-center justify-center transition shadow-md ${
-          compartilhando
-            ? "bg-primary text-primary-foreground"
-            : "bg-white/10 hover:bg-white/20 text-white"
+          semTela
+            ? "bg-white/10 text-white/50 cursor-not-allowed"
+            : compartilhando
+              ? "bg-primary text-primary-foreground"
+              : "bg-white/10 hover:bg-white/20 text-white"
         }`}
-        title="Compartilhar tela"
-        aria-label="Compartilhar tela"
+        title={semTela ? "Compartilhamento de tela indisponível" : "Compartilhar tela"}
+        aria-label={semTela ? "Compartilhamento de tela indisponível" : "Compartilhar tela"}
       >
         <MonitorUp className="w-5 h-5" />
       </button>

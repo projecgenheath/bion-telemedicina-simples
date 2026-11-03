@@ -1,5 +1,6 @@
-import { isoDia, type DiaAgenda } from "@/components/bion/paciente/agenda-medico";
+import { conflitaComOcupados, type DiaAgenda } from "@/components/bion/paciente/agenda-medico";
 import { MESES_AGENDA } from "@/components/bion/paciente/constantes";
+import { instanteFusoClinica } from "@/lib/bion-tipos";
 import type { Consulta } from "@/lib/bion-tipos";
 
 /**
@@ -29,13 +30,25 @@ export function diasDoAgendamento(
   agenda: DiaAgenda[],
   consultasDoPaciente: Consulta[] = [],
 ): DiaAgendamento[] {
-  const ocupadosPaciente = new Set(
-    consultasDoPaciente
-      .filter((c) => !["cancelada", "concluida", "aguardando_reagendamento"].includes(c.status))
-      .map((c) => `${isoDia(c.dataISO ?? c.ts)}|${c.hora}`),
-  );
+  // B34: o servidor bloqueia o PACIENTE também por sobreposição de 30 min
+  // (janelaSobreposicao em financeiro.ts), não só o horário exato — os
+  // instantes ocupados são comparados com a mesma janela do servidor.
+  const ocupadosPacienteMs = consultasDoPaciente
+    .filter((c) => !["cancelada", "concluida", "aguardando_reagendamento"].includes(c.status))
+    .map((c) => (c.dataISO ? Date.parse(c.dataISO) : c.ts))
+    .filter((t) => Number.isFinite(t));
   return agenda
-    .map((d) => ({ ...d, horarios: d.horarios.filter((h) => !ocupadosPaciente.has(`${d.iso}|${h}`)) }))
+    .map((d) => {
+      const [aa, mm2, dd2] = d.iso.split("-").map(Number);
+      return {
+        ...d,
+        horarios: d.horarios.filter((h) => {
+          const [hh, mi] = h.split(":").map(Number);
+          const ts = instanteFusoClinica(aa, (mm2 ?? 1) - 1, dd2 ?? 1, hh || 0, mi || 0);
+          return !conflitaComOcupados(ts, ocupadosPacienteMs);
+        }),
+      };
+    })
     .filter((d) => d.horarios.length > 0)
     .map((d) => {
       const [, mm, dd] = d.iso.split("-").map(Number);

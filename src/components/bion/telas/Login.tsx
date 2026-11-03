@@ -221,10 +221,14 @@ export function Login() {
               </div>
             ) : (
               <>
+                {/* As abas NÃO escolhem o papel do login (quem define é a
+                    conta, no servidor): elas só preenchem o e-mail da conta
+                    de demonstração. Por isso só aparecem com demo habilitado. */}
+                {DEMO_HABILITADO && (
                 <div
                   className="grid grid-cols-3 gap-2 p-1 bg-muted rounded-2xl"
                   role="tablist"
-                  aria-label="Tipo de conta"
+                  aria-label="Preencher com uma conta de demonstração"
                 >
                   {(["paciente", "medico", "admin"] as Role[]).map((r) => (
                     <button
@@ -243,6 +247,7 @@ export function Login() {
                     </button>
                   ))}
                 </div>
+                )}
 
                 <div className="space-y-3">
                   <div>
@@ -300,11 +305,7 @@ export function Login() {
               disabled={enviando || (modoCadastro && !aceitouTermos)}
               className="w-full py-4 rounded-2xl bg-primary text-primary-foreground font-bold text-sm shadow-md hover:opacity-90 transition active:scale-[0.99] disabled:opacity-60"
             >
-              {enviando
-                ? "Aguarde..."
-                : modoCadastro
-                  ? "Criar minha conta"
-                  : `Entrar como ${tab === "medico" ? "Médico" : tab === "admin" ? "Administrador" : "Paciente"}`}
+              {enviando ? "Aguarde..." : modoCadastro ? "Criar minha conta" : "Entrar"}
             </button>
           </form>
 
@@ -325,18 +326,12 @@ export function Login() {
                 ← Voltar para o login
               </button>
             ) : (
-              <button
-                type="button"
-                onClick={() =>
-                  toast.info("Recuperação de senha", {
-                    description:
-                      "Contate o suporte BION pelo canal suporte@bion.app para redefinir sua senha.",
-                  })
-                }
+              <a
+                href="mailto:suporte@bion.app?subject=Redefini%C3%A7%C3%A3o%20de%20senha%20%E2%80%94%20BION"
                 className="hover:text-primary transition font-medium"
               >
                 Esqueci minha senha
-              </button>
+              </a>
             )}
             {!modoCadastro && (
               <button
@@ -352,6 +347,16 @@ export function Login() {
               </button>
             )}
           </div>
+
+          {!modoCadastro && (
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Esqueceu a senha? Ainda não há redefinição automática: toque em{" "}
+              <strong>“Esqueci minha senha”</strong> para escrever ao suporte (
+              <span className="font-medium">suporte@bion.app</span>) — a equipe confirma sua
+              identidade e orienta a redefinição. Se você já está logado em outro aparelho,
+              troque direto em <strong>Privacidade → Segurança da conta</strong>.
+            </p>
+          )}
 
           {!modoCadastro && DEMO_HABILITADO && (
             <div className="pt-3 border-t space-y-2">

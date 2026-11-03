@@ -1,7 +1,7 @@
 "use client";
 
 import { textoNota } from "@/lib/medico-exibicao";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Star,
   Stethoscope,
@@ -31,15 +31,69 @@ export function MedicoPerfilView({ medicoId }: { medicoId?: string }) {
   const medico =
     medicos.find((m) =>
       medicoId ? m.id === medicoId : sessao.id ? m.id === sessao.id : m.nome === sessao.nome,
-    ) ?? medicos[0];
+    ) ?? undefined; // M-2: sem fallback para medicos[0] — médico pendente/
+  // suspenso não pode ver o perfil de OUTRA pessoa, e lista vazia não pode
+  // quebrar o componente (medico undefined trata abaixo).
 
   const [editando, setEditando] = useState(false);
-  const [valor, setValor] = useState(medico.valor);
-  const [bio, setBio] = useState(medico.bio);
-  const [formacao, setFormacao] = useState(medico.formacao);
-  const [foto, setFoto] = useState(medico.foto ?? "");
+  const [valor, setValor] = useState(medico?.valor ?? 0);
+  const [bio, setBio] = useState(medico?.bio ?? "");
+  const [formacao, setFormacao] = useState(medico?.formacao ?? "");
+  const [foto, setFoto] = useState(medico?.foto ?? "");
+  // Salvar confirmado, não "disparado e esquecido": atualizarMedico não
+  // devolve o resultado (interface void), então a confirmação é o médico
+  // atualizado no store (delta do servidor) com os valores enviados.
+  // Enquanto não chega, o botão fica em "Salvando…" e a edição NÃO fecha —
+  // em falha, ela fica aberta com erro + retry, em vez de fechar fingindo
+  // sucesso (o bug antigo: setEditando(false) imediato).
+  const [salvando, setSalvando] = useState(false);
+  const [erroSalvar, setErroSalvar] = useState<string | null>(null);
+  const pendenteRef = useRef<{ valor: number; bio: string; formacao: string; foto: string } | null>(null);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const avaliacoesDoMedico = avaliacoes.filter((a) => a.medico === medico.nome);
+  // M-5: os estados de edição sincronizam quando o objeto do médico muda
+  // (ex.: salva pela outra página, delta do store chega depois da montagem).
+  useEffect(() => {
+    if (!editando) {
+      setValor(medico?.valor ?? 0);
+      setBio(medico?.bio ?? "");
+      setFormacao(medico?.formacao ?? "");
+      setFoto(medico?.foto ?? "");
+    }
+  }, [medico?.valor, medico?.bio, medico?.formacao, medico?.foto, editando]);
+
+  // Confirmação do salvamento: o médico do store com os valores enviados.
+  useEffect(() => {
+    const p = pendenteRef.current;
+    if (!salvando || !p || !medico) return;
+    // Comparação com trim: o servidor pode normalizar espaços nas pontas e o
+    // salvamento, mesmo bem-sucedido, pareceria não confirmado.
+    if (medico.valor === p.valor && (medico.bio ?? "").trim() === p.bio.trim() && (medico.formacao ?? "").trim() === p.formacao.trim() && medico.foto === p.foto) {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      pendenteRef.current = null;
+      setSalvando(false);
+      setEditando(false);
+      toast.success("Perfil atualizado");
+    }
+  }, [medico, salvando]);
+
+  if (!medico) {
+    return (
+      <div className="max-w-4xl mx-auto bg-card border rounded-3xl p-8 text-center text-muted-foreground">
+        <p className="font-bold text-foreground">Perfil não disponível</p>
+        <p className="text-sm mt-1">
+          Seu cadastro ainda está em validação pela equipe BION. O perfil fica
+          disponível assim que o CRM for aprovado.
+        </p>
+      </div>
+    );
+  }
+
+  // B-6: avaliações do médico pelo IDENTIFICADOR (nunca pelo nome — homônimos);
+  // o nome só cobre registros legados sem identificador.
+  const avaliacoesDoMedico = avaliacoes.filter(
+    (a) => (a.medicoId ? a.medicoId === medico.id : a.medico === medico.nome),
+  );
 
   const lerFoto = (file?: File | null) => {
     if (!file) return;
@@ -59,13 +113,23 @@ export function MedicoPerfilView({ medicoId }: { medicoId?: string }) {
       toast.error("Valor inválido", { description: "Informe um valor entre R$ 1 e R$ 5.000." });
       return;
     }
+    if (salvando) return;
+    setErroSalvar(null);
+    setSalvando(true);
+    pendenteRef.current = { valor, bio, formacao, foto: foto && foto !== medico.foto ? foto : (medico.foto ?? "") };
     atualizarMedico(medico.id, {
       valor,
       bio,
       formacao,
       ...(foto && foto !== medico.foto ? { foto } : {}),
     });
-    setEditando(false);
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    timeoutRef.current = setTimeout(() => {
+      if (!pendenteRef.current) return;
+      pendenteRef.current = null;
+      setSalvando(false);
+      setErroSalvar("Não foi possível confirmar o salvamento. Verifique sua conexão e toque em Salvar novamente.");
+    }, 12_000);
   };
 
   const isProprioMedico =
@@ -73,6 +137,20 @@ export function MedicoPerfilView({ medicoId }: { medicoId?: string }) {
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
+      {/* P3-3 (M-12): aviso de versão clássica — o app novo do médico (/medico)
+          é a porta principal; esta página segue no endereço antigo para a
+          edição de bio/formação até migrar para o app novo. */}
+      <div className="bg-muted/60 border rounded-2xl px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
+        <p className="text-xs text-muted-foreground">
+          Esta é a <strong>versão clássica</strong> do perfil. O app novo do médico tem a mesma área com o design atual.
+        </p>
+        <a
+          href="/medico?painel=perfil"
+          className="text-xs font-bold text-primary underline underline-offset-2"
+        >
+          Abrir o app novo
+        </a>
+      </div>
       {/* Card Principal */}
       <div className="bg-card border rounded-3xl p-6 md:p-8 shadow-sm relative overflow-hidden">
         <div className="flex flex-col md:flex-row items-start md:items-center gap-6">
@@ -151,7 +229,11 @@ export function MedicoPerfilView({ medicoId }: { medicoId?: string }) {
             </div>
 
             <div className="pt-2 flex items-baseline gap-2">
-              <span className="text-2xl font-extrabold text-primary">R$ {medico.valor},00</span>
+              {/* M-3: formatador padrão — antes "R$ {valor},00" exibia 149,9 como
+                  R$ 149.9,00 (centavos duplicados). */}
+              <span className="text-2xl font-extrabold text-primary">
+                {medico.valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+              </span>
               <span className="text-xs text-muted-foreground">/ consulta particular</span>
             </div>
           </div>
@@ -159,12 +241,20 @@ export function MedicoPerfilView({ medicoId }: { medicoId?: string }) {
           {isProprioMedico && (
             <div className="self-start md:self-auto">
               {editando ? (
-                <button type="button"
-                  onClick={salvar}
-                  className="px-5 py-2.5 rounded-xl bg-primary text-primary-foreground font-bold text-xs shadow hover:opacity-90 transition flex items-center gap-1.5"
-                >
-                  <Save className="w-4 h-4" /> Salvar Perfil
-                </button>
+                <>
+                  {erroSalvar ? (
+                    <p className="text-xs font-semibold text-red-700 dark:text-red-400 mb-2" role="alert">
+                      {erroSalvar}
+                    </p>
+                  ) : null}
+                  <button type="button"
+                    onClick={salvar}
+                    disabled={salvando}
+                    className="px-5 py-2.5 rounded-xl bg-primary text-primary-foreground font-bold text-xs shadow hover:opacity-90 transition flex items-center gap-1.5 disabled:opacity-50"
+                  >
+                    <Save className="w-4 h-4" /> {salvando ? "Salvando…" : "Salvar Perfil"}
+                  </button>
+                </>
               ) : (
                 <button type="button"
                   onClick={() => setEditando(true)}
@@ -251,6 +341,12 @@ export function MedicoPerfilView({ medicoId }: { medicoId?: string }) {
               </span>
             ))}
           </div>
+          {Object.entries(medico.horariosPorDia ?? {}).map(([dia, lista]) => (
+            <p key={dia} className="text-xs text-muted-foreground">
+              <span className="font-bold">{["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"][Number(dia)]}:</span>{" "}
+              {lista.length ? lista.join(" · ") : "sem horários neste dia"}
+            </p>
+          ))}
         </div>
       </div>
 
@@ -279,7 +375,7 @@ export function MedicoPerfilView({ medicoId }: { medicoId?: string }) {
                 <div className="flex items-center justify-between">
                   <span className="font-bold text-foreground">{av.paciente}</span>
                   <div className="flex items-center gap-1 text-amber-500 dark:text-amber-400 font-bold">
-                    <Star className="w-3.5 h-3.5 fill-amber-500" /> {av.nota}.0
+                    <Star className="w-3.5 h-3.5 fill-amber-500" /> {av.nota.toFixed(1)}
                   </div>
                 </div>
                 {av.comentario && (

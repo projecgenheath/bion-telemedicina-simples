@@ -1,6 +1,6 @@
 ---
 title: "Política de Privacidade — BION Telemedicina (Pacientes, Médicos e Visitantes)"
-subtitle: "Versão provisória v1 — 27/10/2026"
+subtitle: "Versão provisória v2 — 28/10/2026"
 lang: pt-BR
 ---
 
@@ -57,7 +57,7 @@ Anexo — Mapa de dados por tabela/funcionalidade
 | Prontuário (evolução, CID, conduta, receitas, atestados, triagem, chat da sala, arquivos da consulta) | **Médico** que atendeu | **BION** (e seus suboperadores) | O registro clínico é dever e decisão técnica do médico (CFM; Lei 13.787/2018); a BION guarda e protege seguindo as instruções dele. |
 | Compartilhamento do histórico entre médicos que atendem você | **BION e médicos, em conjunto** | — | A regra de compartilhamento é definida pela BION, com o seu consentimento, para o cuidado da sua saúde. |
 | BION IA, leitura de exames, lembretes, IMC, medições por conta própria | **BION** | NVIDIA (IA), Supabase, Vercel, serviços de push | São funcionalidades oferecidas pela própria BION. |
-| Dados pessoais do médico (cadastro, PIX, repasses) | **BION** | Supabase, Vercel | Necessários ao contrato com o médico. |
+| Dados pessoais do médico (cadastro, conta Stripe conectada, recebimentos) | **BION** | Supabase, Vercel | Necessários ao contrato com o médico. |
 | NFS-e/recibo emitido ao paciente | **Médico** | BION (se autorizada a emitir em nome do médico — recurso futuro) | A obrigação fiscal é do médico. |
 
 # 3. Quais dados tratamos
@@ -77,7 +77,7 @@ Anexo — Mapa de dados por tabela/funcionalidade
 | 🩺 Medicamentos e lembretes | medicamentos em uso (dose, via, posologia, uso contínuo, controlado), lembretes (título, horário, tipo, frequência) |
 | 🩺 Renovação de receita | receita anterior, observação do paciente, resposta do médico, pagamento |
 | Mensagens | mensagens com médicos (🩺 podem conter saúde) e com o suporte |
-| Pagamentos | valor, forma (PIX ou cartão), status, identificador no gateway, reembolsos, multas, justificativas e decisões. **Os dados do cartão não são guardados pela BION** |
+| Pagamentos | valor, forma de pagamento (cartão), status, identificador no gateway, reembolsos, multas, justificativas e decisões. **Os dados do cartão não são guardados pela BION** |
 | Avaliações | nota, critérios e comentário |
 | Suporte | chamados (assunto, categoria, mensagem, resposta) |
 | Consentimentos | finalidade, aceite/recusa, data, quem registrou |
@@ -87,7 +87,7 @@ Anexo — Mapa de dados por tabela/funcionalidade
 
 ## 3.2. Médicos
 
-nome, e-mail, senha (*hash*), CRM/UF, especialidade e subespecialidades, formação, experiência, idiomas, biografia, foto, preço, horários e bloqueios de agenda (com motivo), **data de nascimento, sexo/gênero, telefone, CNPJ (opcional)**, dados de recebimento (**tipo e chave PIX, tipo de titular, nome e CPF/CNPJ do titular**), repasses, itens, ajustes e comprovantes, avaliações recebidas, registros de presença na sala, mensagens, uso do Copilot IA (só metadados), dados técnicos e de segurança e, no futuro e só com autorização expressa, **certificado digital A1** (guardado criptografado).
+nome, e-mail, senha (*hash*), CRM/UF, especialidade e subespecialidades, formação, experiência, idiomas, biografia, foto, preço, horários e bloqueios de agenda (com motivo), **data de nascimento, sexo/gênero, telefone, CNPJ (opcional)**, identificador da conta Stripe conectada do médico, avaliações recebidas, registros de presença na sala, mensagens, uso do Copilot IA (só metadados), dados técnicos e de segurança e, no futuro e só com autorização expressa, **certificado digital A1** (guardado criptografado). Os dados bancários ficam com a Stripe.
 
 ## 3.3. Visitantes
 
@@ -109,7 +109,7 @@ Dados pessoais "comuns" seguem o **art. 7º** da LGPD; **dados de saúde** (sens
 | Leitura de exames pela BION IA | 🩺 laudo completo | **Consentimento específico e destacado, pedido antes de cada envio** (art. 11, I) |
 | Lembretes, IMC, gráficos de medições feitos por você | 🩺 medicamentos, medições | Consentimento (art. 11, I), dado ao ativar a função |
 | Melhorar a BION IA com dados **anonimizados** | 🩺 dados antes de anonimizar | **Consentimento específico** (art. 11, I), revogável a qualquer momento **[ver pendências: opt-in × opt-out]** |
-| Cobrança, reembolso, repasse ao médico | pagamento, PIX do médico | Execução de contrato (art. 7º, V) |
+| Cobrança, reembolso, divisão do pagamento entre o médico e a BION, feita pela Stripe | pagamento, identificador da conta Stripe conectada | Execução de contrato (art. 7º, V) |
 | Emissão de NFS-e/recibo Receita Saúde | nome, CPF, valor | Obrigação legal (art. 7º, II) do médico/BION |
 | Verificar CRM e situação do médico | CRM, nome | Obrigação regulatória (art. 7º, II; Res. CFM 2.314/2022) e legítimo interesse |
 | Guardar registros de acesso (IP, data e hora) | logs | Obrigação legal (art. 7º, II; Marco Civil, art. 15) |
@@ -168,7 +168,7 @@ Quando a base é o consentimento, você pode **retirá-lo a qualquer momento**, 
 | **Cloudflare** | STUN/TURN: conexão e retransmissão da chamada quando a conexão direta falha | **Endereço IP**; áudio e vídeo **criptografados em trânsito** (não acessíveis à Cloudflare, não gravados) | **Global/exterior** 🌐 |
 | **Serviços de push** (Google FCM, Apple, Mozilla etc., conforme o seu navegador) | Entregar notificações | Mensagem **genérica e criptografada**, endereço técnico do aparelho | **Exterior** 🌐 |
 | **Upstash** (quando ativo) | Limitar tentativas (segurança) | **Endereço IP**, por pouco tempo | **[A DEFINIR: região]** 🌐 |
-| **Gateway de pagamento** **[A DEFINIR — previsto Stripe]** | Processar PIX e cartão, reembolsos | Dados de pagamento, nome, e-mail, CPF | **[A DEFINIR]** 🌐 |
+| **Stripe, Inc. e afiliadas (Stripe)** | Processar pagamentos com cartão e reembolsos (operadora dos dados de pagamento; ver 8.3) | Nome, e-mail, dados do cartão e valor da consulta | **Estados Unidos e outros países** 🌐 |
 | **Emissor Nacional da NFS-e** (Receita Federal/Municípios) e **Receita Saúde** | Documentos fiscais | Nome, CPF, valor, descrição do serviço | Brasil (órgão público) |
 | **Médicos** | Atendimento | Conforme a seção 6 | — |
 | **Autoridades** | Ordem judicial, requisição legal, CRM, ANPD | O estritamente exigido | — |
@@ -177,9 +177,11 @@ Quando a base é o consentimento, você pode **retirá-lo a qualquer momento**, 
 
 8.2. Em caso de reorganização societária, os dados podem ser transferidos ao sucessor, que ficará sujeito a esta política.
 
+8.3. Pagamentos. Os pagamentos com cartão são processados pela Stripe, Inc. e por suas afiliadas (Stripe), que atuam como operadoras dos dados de pagamento. A Stripe recebe o seu nome, e-mail, os dados do cartão e o valor da consulta. Os dados completos do cartão vão direto para a Stripe e não ficam guardados na BION. A BION guarda apenas os identificadores da transação, o valor e as taxas. A Stripe pode tratar esses dados nos Estados Unidos e em outros países, com as garantias do art. 33 da LGPD, como as cláusulas contratuais da Stripe. Ela também pode usar os dados para prevenir fraudes e cumprir obrigações legais, conforme a política de privacidade dela.
+
 # 9. Transferência internacional de dados
 
-9.1. Há transferência internacional para **NVIDIA** (IA), **Google** (STUN), **Cloudflare** (STUN/TURN), **serviços de push**, **Vercel** (logs) e, quando houver, **Upstash** e **gateway de pagamento**.
+9.1. Há transferência internacional para **NVIDIA** (IA), **Stripe** (pagamentos com cartão), **Google** (STUN), **Cloudflare** (STUN/TURN), **serviços de push**, **Vercel** (logs) e, quando houver, **Upstash**.
 
 9.2. Essas transferências ocorrem com base no **art. 33 da LGPD**, preferencialmente por **cláusulas-padrão contratuais** aprovadas pela ANPD (**Resolução CD/ANPD nº 19/2024**), incorporadas aos contratos com esses operadores **[A CONFIRMAR: assinatura/aceite das cláusulas com cada fornecedor]**. Para a BION IA e a leitura de exames, além disso, o seu **consentimento específico e destacado** informa que os dados serão tratados no exterior (art. 33, VIII).
 
@@ -192,7 +194,7 @@ Quando a base é o consentimento, você pode **retirá-lo a qualquer momento**, 
 | **Prontuário** (consultas, triagem, evolução, CID, documentos, chat da consulta, arquivos clínicos, exames, medições, medicamentos, mensagens com médicos) | **No mínimo 20 anos a partir do último registro**; depois, eliminação ou anonimização | Lei 13.787/2018, art. 6º; LGPD, art. 16, I |
 | **Identificação de conta excluída** (nome, CPF, data de nascimento no cofre criptografado) | Enquanto durar a guarda do prontuário (20 anos do último registro); depois, eliminação | Lei 13.787/2018; LGPD, art. 16, I |
 | Conta e cadastro (paciente) | Enquanto a conta existir; anonimizados ao excluir a conta | Contrato |
-| Pagamentos, reembolsos, repasses, comprovantes, dados fiscais | **5 anos**, contados do primeiro dia do exercício seguinte | CTN, arts. 173 e 174; legislação fiscal |
+| Registros de pagamentos, recebimentos e, para consultas anteriores a 28/10/2026, repasses e chaves PIX; dados fiscais | **5 anos**, contados do primeiro dia do exercício seguinte | CTN, arts. 173 e 174; legislação fiscal |
 | **Trilha de auditoria administrativa** | **5 anos**; o **nome do paciente no assunto de chamados é pseudonimizado após 6 meses** | CDC, art. 27 (prescrição); exercício regular de direitos |
 | **Registros de acesso** (IP, data e hora) | **6 meses** | Marco Civil, art. 15 |
 | **Monitor de IA** (só metadados, sem conteúdo) | **6 meses** | Legítimo interesse (segurança e qualidade) |
@@ -206,7 +208,6 @@ Quando a base é o consentimento, você pode **retirá-lo a qualquer momento**, 
 | Registros de consentimento | Enquanto vigente + **5 anos** | Prova (LGPD, art. 8º, § 2º) |
 | Avaliações | Nota mantida na média; **comentário apagado** na exclusão da conta | Legítimo interesse |
 | Dados do médico (cadastro) | Contrato + **5 anos** após o término | CDC/Código Civil; defesa de direitos |
-| Chave PIX e titular do médico | Enquanto cadastrada; cópia em cada repasse por **5 anos** | Prova de pagamento; fiscal |
 | Certificado A1 do médico (futuro) | Até a revogação, o vencimento ou o fim do contrato; apagado em **5 dias úteis** | Autorização expressa |
 | Logs da Vercel | Conforme o plano contratado **[A DEFINIR]** | — |
 | Cópias de segurança (*backups*) | **[A DEFINIR]** dias, depois sobrescritas | Segurança |
@@ -266,9 +267,9 @@ Usamos **apenas cookies essenciais de login** (`bion_sessao` e cookies `sb-*` do
 
 # 18. Dados dos médicos
 
-18.1. Os dados dos médicos são tratados para o **contrato** (cadastro, agenda, repasses), **obrigações regulatórias** (verificação do CRM), **obrigações fiscais**, **segurança** (alertas de troca de chave PIX e de CNPJ divergente) e **divulgação do perfil público** (nome, CRM, especialidade, preço, formação, experiência, idiomas, biografia, foto, horários e avaliação média).
+18.1. Os dados dos médicos são tratados para o **contrato** (cadastro, agenda, recebimentos), **obrigações regulatórias** (verificação do CRM), **obrigações fiscais**, **segurança** (alertas de troca de identificador da conta Stripe (e, no histórico anterior a 28/10/2026, a chave PIX) e de CNPJ divergente) e **divulgação do perfil público** (nome, CRM, especialidade, preço, formação, experiência, idiomas, biografia, foto, horários e avaliação média).
 
-18.2. Data de nascimento, sexo, telefone, CNPJ e dados de recebimento **não são públicos**; são vistos só pelo médico e pela administração. **A chave PIX e o CPF/CNPJ do titular ficam no banco sem criptografia própria no campo**, e uma cópia é registrada em cada repasse como prova do pagamento.
+18.2. Data de nascimento, sexo, telefone, CNPJ e dados de recebimento **não são públicos**; são vistos só pelo médico e pela administração. **O identificador da conta Stripe (e, no histórico anterior a 28/10/2026, a chave PIX) e o CPF/CNPJ do titular ficam no banco sem criptografia própria no campo**, e uma cópia é registrada em cada repasse como prova do pagamento.
 
 18.3. O certificado A1 (recurso futuro) só será tratado com autorização expressa, criptografado, e usado exclusivamente para emitir NFS-e em nome do médico.
 
@@ -276,7 +277,7 @@ Usamos **apenas cookies essenciais de login** (`bion_sessao` e cookies `sb-*` do
 
 # 19. Dados de administradores e da equipe
 
-As ações dos administradores (inclusive acessos ao cofre, correções de desfecho, pagamentos de repasse e reembolsos) são registradas em auditoria com nome, papel e data, por 5 anos. A equipe está sujeita a dever de confidencialidade.
+As ações dos administradores (inclusive acessos ao cofre, correções de desfecho, reembolsos e, no histórico anterior a 28/10/2026, pagamentos de repasse) são registradas em auditoria com nome, papel e data, por 5 anos. A equipe está sujeita a dever de confidencialidade.
 
 # 20. Encarregado (DPO) e contato
 
@@ -309,8 +310,11 @@ Podemos atualizar esta política. Mudanças relevantes serão avisadas no app co
 | `ChatConsulta` | paciente/médico | **sim** | paciente, médico; **admin não** | Supabase | prontuário 20 anos (não apagável) |
 | `PresencaSala`, `ChamadaConsulta` | paciente/médico | não | paciente, médico; admin status | Supabase; push | 1 h após desfecho (presença) |
 | `Mensagem` | paciente/médico/suporte | pode ser | participantes | Supabase | com médico: 20 anos; com suporte: até exclusão |
-| `Pagamento`, `Reembolso` | paciente | não | paciente, admin; médico (valor) | gateway (futuro) | 5 anos |
-| `Repasse`, `RepasseItem`, `RepasseAjuste`, `DadosRecebimentoMedico` | médico | não | médico, admin | Supabase | 5 anos |
+| `Pagamento`, `Reembolso` | paciente | não | paciente, admin; médico (valor) | Stripe (operadora de pagamentos, EUA) | 5 anos |
+| `Repasse`, `RepasseItem`, `RepasseAjuste`, `DadosRecebimentoMedico` (histórico de pagamentos anteriores a 28/10/2026, mantido por obrigação fiscal) | médico | não | médico, admin | Supabase | 5 anos |
+| `Pagamento` (colunas `stripeCheckoutSessionId`, `stripePaymentIntentId`, `stripeChargeId`, `stripeTaxaCentavos`), `Reembolso` (coluna `stripeRefundId`) | paciente | não | admin; sistema | Supabase; Stripe 🌐 | 5 anos |
+| `PerfilMedico` (coluna `stripeAccountId`) | médico | não | médico, admin | Supabase; Stripe 🌐 | contrato + 5 anos |
+| `StripeEvento` (identificadores dos avisos da Stripe já processados) | — | não | sistema | Supabase; Stripe 🌐 | 5 anos, por obrigação fiscal e para defesa em contestações |
 | `PerfilMedico` | médico | não | público (perfil); privado: médico e admin | Supabase | contrato + 5 anos |
 | `Avaliacao` | paciente/médico | pode ser | médico, admin; média pública | Supabase | nota mantida; comentário apagado na exclusão |
 | `Ticket` | paciente/médico | pode ser | admin | Supabase | até 5 anos; apagado na exclusão |

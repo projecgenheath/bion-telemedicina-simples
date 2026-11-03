@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { exigirPapel } from "@/lib/server/auth";
 import { aplicarSideEffects } from "@/lib/server/dados";
-import { ok, falha } from "@/lib/server/http";
+import {ok, falha, lerCorpoJson} from "@/lib/server/http";
 import { medidaCanonica } from "@/lib/medidas-paciente";
 import { detalhesAuditoria } from "@/lib/saude-paciente";
 
@@ -20,7 +20,9 @@ export async function GET() {
     const usuario = await exigirPapel("PACIENTE");
     const medicoes = await db.medicao.findMany({
       where: { usuarioId: usuario.id },
-      orderBy: { criadoEm: "asc" },
+      // B7: desc — com asc+take 200 o paciente com >200 medições nunca via
+      // as mais recentes.
+      orderBy: { criadoEm: "desc" },
       take: 200,
     });
     return ok({
@@ -40,11 +42,15 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const usuario = await exigirPapel("PACIENTE");
-    const body = (await req.json()) as {
+    const body = (await lerCorpoJson(req)) as {
       tipo?: string;
       valor1?: number;
       valor2?: number;
     };
+
+    if (!body) {
+      return Response.json({ erro: "Corpo da requisição inválido." }, { status: 400 });
+    }
 
     const tipo = body.tipo ?? "";
     if (!TIPOS.includes(tipo as (typeof TIPOS)[number]) || typeof body.valor1 !== "number" || !Number.isFinite(body.valor1)) {
@@ -58,6 +64,12 @@ export async function POST(req: NextRequest) {
     }
     if (tipo === "pa" && body.valor2 !== undefined && (body.valor2 < 30 || body.valor2 > 200)) {
       return Response.json({ erro: "Pressão diastólica fora do intervalo plausível (30–200)." }, { status: 400 });
+    }
+    // M18: cruzamento que faltava — PA invertida (diastólica >= sistólica)
+    // era gravada e classificada no cliente. Mesma mensagem de
+    // validarResposta (lib/saude-paciente), usada no fluxo de pedidos.
+    if (tipo === "pa" && body.valor2 !== undefined && body.valor2 >= body.valor1) {
+      return Response.json({ erro: "A pressão mínima precisa ser menor que a máxima." }, { status: 400 });
     }
     if (tipo === "peso" && (body.valor1 < 20 || body.valor1 > 400)) {
       return Response.json({ erro: "Peso fora do intervalo plausível (20–400 kg)." }, { status: 400 });

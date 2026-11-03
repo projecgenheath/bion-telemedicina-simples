@@ -2,12 +2,14 @@
 
 import type { ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Clock, SearchX } from "lucide-react";
+import { ArrowLeft, Clock, SearchX, ShieldAlert } from "lucide-react";
 import { rotaInicioPorPapel, textoForaDaJanela } from "@/lib/teleconsulta-logica";
+import type { ErroSala } from "@/lib/teleconsulta-chamada";
 import { ConsultaBarraSuperior } from "@/components/bion/consulta/BarraSuperior";
 import { ConsultaAreaVideo } from "@/components/bion/consulta/AreaVideo";
 import { ConsultaControlesMidia } from "@/components/bion/consulta/ControlesMidia";
 import { ConsultaPainelLateral } from "@/components/bion/consulta/PainelLateral";
+import { ModalBion } from "@/components/bion/ModalBion";
 import type { PapelSala, SalaConsulta } from "@/components/bion/consulta/useSalaConsulta";
 
 const nada = () => {};
@@ -44,6 +46,7 @@ export function SalaConsultaTela({
         contraparteDetalhe={sala.contraparteDetalhe}
         role={role}
         tempo={sala.tempo}
+        restanteSlot={sala.restanteSlot}
         statusSala={tele.status}
         iniciais={sala.iniciais}
       />
@@ -76,6 +79,8 @@ export function SalaConsultaTela({
             role={role}
             micAtivo={tele.micAtivo}
             camAtivo={tele.camAtivo}
+            semMic={tele.semAudio}
+            semCamera={tele.semVideo}
             compartilhando={tele.compartilhando}
             onToggleMic={sala.toggleMicLocal}
             onToggleCam={sala.toggleCamLocal}
@@ -100,8 +105,12 @@ export function SalaConsultaTela({
           contraparteNome={sala.contraparteNome}
           sessaoNome={sala.sessao.nome}
           dadosPaciente={sala.dadosPaciente}
+          resumoClinico={sala.resumoClinico}
+          motivoConsulta={sala.consultaAtual?.motivoConsulta}
           anotacoes={sala.anotacoes}
           setAnotacoes={sala.setAnotacoes}
+          resumoStatus={sala.resumoStatus}
+          onTentarSalvarResumo={sala.tentarSalvarResumoDeNovo}
           arquivos={sala.arquivos}
           chatMsgs={tele.chat}
           chatInput={sala.chatInput}
@@ -113,6 +122,44 @@ export function SalaConsultaTela({
       </div>
 
       {children}
+
+      {/* O1: inserir o modelo de evolução com anotações já escritas pede
+          confirmação explícita — substituir em silêncio apagaria o que o
+          médico escreveu (e a substituição também é autossalvada, item
+          27, então seria definitiva). Mesmo padrão do modal "sair sem
+          concluir" (ChamadaMedico). */}
+      <ModalBion
+        aberto={sala.confirmarModeloResumo}
+        onFechar={sala.cancelarInsercaoModeloResumo}
+        titulo="Substituir suas anotações pelo modelo de evolução?"
+        largura="max-w-md"
+        overlay="bg-black/70 backdrop-blur-sm"
+        foraFecha={false}
+      >
+        <div className="bg-card text-foreground border rounded-3xl w-full p-6 shadow-2xl">
+          <h3 className="text-base font-bold">Inserir o modelo apaga o texto atual</h3>
+          <p className="text-sm text-muted-foreground mt-2">
+            Você já escreveu o resumo desta consulta. Se inserir o modelo de evolução, o texto atual
+            é substituído por ele — e a substituição também é salva automaticamente.
+          </p>
+          <div className="flex gap-2 mt-4">
+            <button
+              type="button"
+              onClick={sala.cancelarInsercaoModeloResumo}
+              className="px-4 py-3 rounded-2xl bg-primary text-primary-foreground text-sm font-bold flex-1 hover:opacity-90 transition"
+            >
+              Manter minhas anotações
+            </button>
+            <button
+              type="button"
+              onClick={sala.confirmarInsercaoModeloResumo}
+              className="px-4 py-3 rounded-2xl border text-sm font-bold flex-1 hover:bg-muted transition"
+            >
+              Substituir pelo modelo
+            </button>
+          </div>
+        </div>
+      </ModalBion>
     </div>
   );
 }
@@ -145,6 +192,51 @@ function AvisoForaDaJanela({
           className="inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/15 border border-white/15 text-sm font-bold transition"
         >
           <ArrowLeft className="w-4 h-4" /> Voltar
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** Textos da recusa definitiva da sala (M16), por tipo de erro do motor. */
+const TEXTOS_ERRO_SALA: Record<ErroSala, { titulo: string; detalhe: string }> = {
+  sessao: {
+    titulo: "Sua sessão expirou",
+    detalhe: "A sala foi fechada porque o seu acesso venceu. Entre de novo no app para voltar à consulta.",
+  },
+  pagamento: {
+    titulo: "Pagamento pendente",
+    detalhe: "Esta consulta ainda não foi paga, por isso a sala não pode continuar. Volte ao início e conclua o pagamento para entrar.",
+  },
+  acesso: {
+    titulo: "Acesso negado",
+    detalhe: "A conta que está aberta não participa desta consulta. Confira se você entrou com a conta certa.",
+  },
+};
+
+/**
+ * GET /sala respondeu 401/402/403 (M16): o motor parou o polling
+ * (`erroSala`) e a tela mostra a orientação — antes o paciente ficava em
+ * "O médico vai entrar em instantes" para sempre, com a presença morta.
+ */
+export function ErroSalaFatal({ erro, onVoltar }: { erro: ErroSala; onVoltar: () => void }) {
+  const textos = TEXTOS_ERRO_SALA[erro];
+  return (
+    <div className="min-h-[100dvh] bg-slate-950 flex items-center justify-center text-white p-6">
+      <div role="alert" className="flex flex-col items-center gap-4 text-center max-w-md">
+        <div className="w-16 h-16 rounded-3xl bg-destructive/20 border-2 border-destructive/40 flex items-center justify-center">
+          <ShieldAlert className="w-7 h-7 text-white" />
+        </div>
+        <div>
+          <h1 className="text-lg font-bold">{textos.titulo}</h1>
+          <p className="text-xs text-slate-300 mt-1 leading-relaxed">{textos.detalhe}</p>
+        </div>
+        <button
+          type="button"
+          onClick={onVoltar}
+          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/15 border border-white/15 text-sm font-bold transition"
+        >
+          <ArrowLeft className="w-4 h-4" /> Voltar ao início
         </button>
       </div>
     </div>

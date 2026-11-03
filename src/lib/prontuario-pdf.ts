@@ -1,6 +1,7 @@
 import { jsPDF } from "jspdf";
 import type { Documento } from "@/lib/bion-store";
 import { formatarDataNascimento, idadeDeNascimento } from "@/lib/idade";
+import { formatarCodigoVerificacao } from "@/lib/verificacao-documento";
 
 export type MedicamentoUso = {
   nome: string;
@@ -136,15 +137,24 @@ export function gerarProntuarioPDF(opts: {
   }
   opts.documentos.forEach((d) => {
     // mantém o bloco do documento inteiro na mesma página
-    espaco(60 + (d.observacoes ? 40 : 0) + (d.posologia ? 26 : 0) + 40);
+    espaco(60 + (d.observacoes ? 40 : 0) + (d.posologia ? 26 : 0) + (d.cid ? 26 : 0) + (d.medicoCrm ? 26 : 0) + (d.codigoVerificacao ? 26 : 0) + 40);
     doc.setFillColor(241, 246, 255);
     doc.roundedRect(L, y - 12, W - L * 2, 4, 2, 2, "F");
-    linha("", `${d.tipo === "receita" ? "Receita" : "Atestado"} • ${d.data}`, true);
+    linha("", `${d.tipo === "receita" ? "Receita" : d.tipo === "exame" || d.tipo === "exame_solicitado" ? "Pedido de exames" : "Atestado"} • ${d.data}`, true);
     linha("", d.titulo);
     linha("Médico", d.medico);
+    // Melhoria nº 6 (auditoria médica): identificação do emissor de cada
+    // documento também na via do prontuário (o cabeçalho é do paciente).
+    if (d.medicoCrm) linha("CRM", d.medicoCrm);
     if (d.medicamento) linha("Medicamento", d.medicamento);
     if (d.posologia) linha("Posologia", d.posologia);
     if (d.duracao) linha("Duração", d.duracao);
+    // P3 (auditoria de melhorias): CID gravado no documento passa a constar
+    // também na via do prontuário (antes nenhum PDF o exibia).
+    if (d.cid) linha("CID", d.cid);
+    // Item 26: código de verificação pública do documento (conferível em
+    // /verificar/[codigo], sem expor dado clínico).
+    if (d.codigoVerificacao) linha("Verificação", formatarCodigoVerificacao(d.codigoVerificacao));
     linha("Descrição", d.conteudo);
     if (d.observacoes) linha("Observações", d.observacoes);
     y += 14;

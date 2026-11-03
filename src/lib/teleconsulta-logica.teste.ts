@@ -25,6 +25,7 @@ import {
   proximaCamera,
   restricoesMidia,
   restricoesVideoCamera,
+  restanteDoSlot,
   rotaInicioPorPapel,
   textoForaDaJanela,
 } from "./teleconsulta-logica";
@@ -170,7 +171,8 @@ igual("detalhe do depois cita 2 horas", /2 horas depois/.test(textoForaDaJanela(
 igual("exibe na espera (conectando)", exibirForaDaJanela({ motivo: "antes" }, "conectando"), true);
 igual("exibe na espera (aguardando)", exibirForaDaJanela({ motivo: "depois" }, "aguardando"), true);
 igual("não exibe com a chamada conectada", exibirForaDaJanela({ motivo: "depois" }, "conectado"), false);
-igual("não exibe reconectando", exibirForaDaJanela({ motivo: "depois" }, "instavel"), false);
+igual("exibe reconectando/instavel (B42: renegociação barrada fora da janela)", exibirForaDaJanela({ motivo: "depois" }, "instavel"), true);
+igual("exibe em 'reconectando'", exibirForaDaJanela({ motivo: "depois" }, "reconectando"), true);
 igual("não exibe negociando", exibirForaDaJanela({ motivo: "depois" }, "conectando-p2p"), false);
 igual("não exibe encerrada", exibirForaDaJanela({ motivo: "depois" }, "encerrada"), false);
 igual("não exibe sem 409", exibirForaDaJanela(null, "aguardando"), false);
@@ -224,6 +226,27 @@ igual("nulos são ignorados", pararTracks(null, undefined), 0);
 igual("sem streams", pararTracks(), 0);
 pararTracks(local);
 igual("chamar de novo não quebra", cam.paradas, 2);
+
+// ── restanteDoSlot: relógio da sala com o fim do horário agendado ──
+const INICIO_SLOT = 1_700_000_000_000;
+igual("slot cheio no início", restanteDoSlot(INICIO_SLOT, INICIO_SLOT), {
+  minutos: 30,
+  estouroMin: 0,
+  estourou: false,
+  rotulo: "restam 30 min",
+});
+igual("meio do slot", restanteDoSlot(INICIO_SLOT, INICIO_SLOT + 18 * 60_000).rotulo, "restam 12 min");
+igual("singular com 1 min", restanteDoSlot(INICIO_SLOT, INICIO_SLOT + 29 * 60_000).rotulo, "resta 1 min");
+igual("30 s finais ainda são 1 min", restanteDoSlot(INICIO_SLOT, INICIO_SLOT + 29 * 60_000 + 30_000).minutos, 1);
+igual("no fim exato vira fim do horário", restanteDoSlot(INICIO_SLOT, INICIO_SLOT + 30 * 60_000), {
+  minutos: 0,
+  estouroMin: 0,
+  estourou: true,
+  rotulo: "fim do horário",
+});
+igual("estouro de 3 min", restanteDoSlot(INICIO_SLOT, INICIO_SLOT + 33 * 60_000).rotulo, "+3 min de estouro");
+igual("duração explícita respeitada", restanteDoSlot(INICIO_SLOT, INICIO_SLOT + 40 * 60_000, 45).rotulo, "restam 5 min");
+igual("antes do início, conta até o fim do slot", restanteDoSlot(INICIO_SLOT, INICIO_SLOT - 10 * 60_000).minutos, 40);
 
 console.log(`teleconsulta-logica: ${ok} ok, ${falhas} falha(s)`);
 if (falhas > 0) process.exit(1);

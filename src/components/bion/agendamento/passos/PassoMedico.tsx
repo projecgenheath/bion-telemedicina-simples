@@ -41,6 +41,7 @@ export function PassoMedico(p: AgendamentoCorpoProps) {
     finalizarAgendamento,
     medicoAtual,
     onDone,
+    irParaPasso,
   } = p;
 
   return (
@@ -50,9 +51,26 @@ export function PassoMedico(p: AgendamentoCorpoProps) {
           Médicos especialistas em <strong className="text-foreground">{especialidade}</strong>:
         </span>
         <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-accent-soft text-emerald-800 dark:text-emerald-200">
-          {medicosFiltrados.length} profissionais online
+          {medicosFiltrados.length === 1 ? "1 profissional disponível" : `${medicosFiltrados.length} profissionais disponíveis`}
         </span>
       </div>
+
+      {medicosFiltrados.length === 0 ? (
+        <div className="bg-card border rounded-3xl p-5 text-center space-y-3 shadow-sm">
+          <p className="font-bold">Nenhum profissional disponível nesta especialidade no momento.</p>
+          <p className="text-sm text-muted-foreground">
+            Escolha outra especialidade ou volte mais tarde.
+          </p>
+          <button
+            type="button"
+            onClick={() => irParaPasso(0)}
+            className="px-4 py-2 rounded-xl text-primary-foreground text-xs font-bold transition shadow-sm hover:opacity-90"
+            style={{ backgroundColor: "var(--accent)" }}
+          >
+            Escolher outra especialidade
+          </button>
+        </div>
+      ) : null}
 
       <div className="space-y-3">
         {medicosFiltrados.map((med) => (
@@ -96,7 +114,7 @@ export function PassoMedico(p: AgendamentoCorpoProps) {
             <div className="flex sm:flex-col items-center sm:items-end justify-between w-full sm:w-auto gap-3 pt-3 sm:pt-0 border-t sm:border-t-0">
               <div className="text-left sm:text-right">
                 <div className="text-xs text-muted-foreground">Consulta particular</div>
-                <div className="text-xl font-extrabold text-primary">R$ {med.valor}</div>
+                <div className="text-xl font-extrabold text-primary">{med.valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</div>
               </div>
               <div className="flex gap-2">
                 <button type="button"

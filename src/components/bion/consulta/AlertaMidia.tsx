@@ -15,8 +15,9 @@ export function AlertaMidia({ mensagem }: { mensagem: string }) {
         <p className="text-xs text-amber-100/90 leading-relaxed">{mensagem}</p>
         <p className="text-xs text-amber-100/80">
           Verifique as permissões do navegador (ícone de cadeado na barra de endereço) e se outro app
-          não está usando o dispositivo. Você pode continuar a consulta e tentar reativar a câmera
-          pelos botões abaixo.
+          não está usando o dispositivo. Você pode continuar a consulta e tocar nos botões de
+          microfone e câmera abaixo para tentar de novo — eles pedem o acesso outra vez, sem precisar
+          sair da sala.
         </p>
       </div>
     </div>

@@ -20,7 +20,7 @@ igual("sem termo devolve tudo", buscarFaq(FAQ_ADMIN, "  ").length, FAQ_ADMIN.len
 igual("busca sem acento", buscarFaq(FAQ_ADMIN, "aprovo medico").map((f) => f.categoria), ["Médicos"]);
 igual("busca em maiúsculas na resposta", buscarFaq(FAQ_ADMIN, "LGPD").some((f) => f.categoria === "Privacidade"), true);
 igual("todas as palavras precisam aparecer", buscarFaq(FAQ_ADMIN, "repasse xyzzy").length, 0);
-igual("regra do repasse: 90%", buscarFaq(FAQ_ADMIN, "90%").map((f) => f.categoria), ["Financeiro"]);
+igual("regra da divisão: 10%", buscarFaq(FAQ_ADMIN, "10%").map((f) => f.categoria), ["Financeiro"]);
 igual("todo destino é uma rota existente", FAQ_ADMIN.every((f) => !f.destino || Boolean(VIEW_TO_PATH[f.destino])), true);
 igual("perguntas únicas", new Set(FAQ_ADMIN.map((f) => f.pergunta)).size, FAQ_ADMIN.length);
 

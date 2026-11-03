@@ -35,13 +35,23 @@ const campo =
 export function MedicamentosEmUso({ onGerenciarLembretes }: { onGerenciarLembretes?: () => void } = {}) {
   const { aplicarDelta, lembretes } = useBion();
   const [lista, setLista] = useState<MedicamentoWire[] | null>(null);
+  // M19: falha de carga tem estado próprio — antes `?? []` transformava
+  // erro (rede/401/5xx) em "Nenhum medicamento em uso", sem retry.
+  const [erroCarga, setErroCarga] = useState(false);
   const [adicionando, setAdicionando] = useState(false);
   const [lembreteDe, setLembreteDe] = useState<string | null>(null);
   const [mostrarSuspensos, setMostrarSuspensos] = useState(false);
 
   const carregar = useCallback(async () => {
     const d = await apiSaude<{ medicamentos: MedicamentoWire[] }>("/api/paciente/medicamentos", undefined, true);
-    setLista(d?.medicamentos ?? []);
+    if (d) {
+      setLista(d.medicamentos);
+      setErroCarga(false);
+    } else {
+      // A lista NÃO é tocada: quem já tinha medicamentos continua vendo-os;
+      // sem lista, a tela mostra o erro com "tentar de novo" (abaixo).
+      setErroCarga(true);
+    }
   }, []);
   useEffect(() => {
     const t = setTimeout(() => void carregar(), 0);
@@ -112,7 +122,17 @@ export function MedicamentosEmUso({ onGerenciarLembretes }: { onGerenciarLembret
       )}
 
       {lista === null ? (
-        <p className="py-2 text-sm opacity-80">Carregando…</p>
+        erroCarga ? (
+          <div className="py-2 text-sm" role="alert">
+            <p className="font-semibold text-red-700 dark:text-red-300">Não foi possível carregar seus medicamentos.</p>
+            <p className="mt-0.5 opacity-80">Pode ser uma falha de conexão — sua lista não está vazia por causa disso.</p>
+            <button type="button" onClick={() => void carregar()} className="mt-2 font-bold underline">
+              Tentar de novo
+            </button>
+          </div>
+        ) : (
+          <p className="py-2 text-sm opacity-80">Carregando…</p>
+        )
       ) : ativos.length === 0 && listaAvulsos.length === 0 ? (
         <p className="text-sm opacity-80">
           Nenhum medicamento em uso. Os da receita do médico aparecem aqui sozinhos; você também pode adicionar.

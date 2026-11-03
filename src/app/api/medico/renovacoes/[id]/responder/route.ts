@@ -5,7 +5,8 @@ import { ok, falha } from "@/lib/server/http";
 import { aplicarSideEffects } from "@/lib/server/dados";
 import { erroHttp } from "@/lib/server/evolucao";
 import { reembolsarPedidoRenovacao } from "@/lib/server/renovacao-reembolso";
-import { conferirMedicoAtivoNaTransacao } from "@/lib/server/bloqueio-agenda";
+import { conferirMedicoAtivoNaTransacao, conferirDiasEPausas, diaBloqueado } from "@/lib/server/bloqueio-agenda";
+import { STATUS_LIBERAM_HORARIO } from "@/lib/server/financeiro";
 
 /**
  * POST /api/medico/renovacoes/[id]/responder — resposta do MÉDICO do pedido.
@@ -108,20 +109,35 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       const inicio = body.dataInicio ? new Date(body.dataInicio) : null;
       if (!inicio || Number.isNaN(inicio.getTime())) return Response.json({ erro: "Informe dataInicio (ISO)." }, { status: 400 });
       if (inicio.getTime() < Date.now() - 60_000) return Response.json({ erro: "O horário da chamada já passou." }, { status: 400 });
-      const conflito = await db.consulta.findFirst({
-        where: {
-          medicoId: medico.id,
-          status: { notIn: ["cancelada", "aguardando_reagendamento"] },
-          dataInicio: { gt: new Date(inicio.getTime() - DURACAO_CHAMADA_MS), lt: new Date(inicio.getTime() + DURACAO_CHAMADA_MS) },
-        },
-        select: { id: true },
-      });
-      if (conflito) return Response.json({ erro: "horario_ocupado" }, { status: 409 });
       const consulta = await db.$transaction(async (tx) => {
         // Médico suspenso/anonimizado/inativo não marca chamada (FOR SHARE: a
         // suspensão no meio do caminho espera esta transação ou a derruba).
         const erroMedico = await conferirMedicoAtivoNaTransacao(tx, medico.id);
         if (erroMedico) throw erroHttp(409, erroMedico);
+        // M-14 da auditoria: checagens DENTRO da transação — antes rodavam
+        // fora, permitindo duas respostas simultâneas criarem consultas
+        // sobrepostas. E agora conferem o mesmo que os demais agendamentos:
+        // dia bloqueado e grade (dias de atendimento/pausas semanais).
+        if (await diaBloqueado(tx, medico.id, inicio)) throw erroHttp(409, "O médico não atende neste dia.");
+        const perfil = await tx.perfilMedico.findUnique({
+          where: { userId: medico.id },
+          select: { diasAtendimento: true, pausasSemanais: true },
+        });
+        const erroGrade = conferirDiasEPausas(perfil, inicio);
+        if (erroGrade) throw erroHttp(409, erroGrade);
+        // Janela de ±30 min em volta do novo horário (mesma DURACAO_CHAMADA);
+        // status que liberam horário usam a lista ÚNICA do financeiro
+        // (antes esquecia "concluida", bloqueando médicos com consultas
+        // encadeadas de 30 min).
+        const conflito = await tx.consulta.findFirst({
+          where: {
+            medicoId: medico.id,
+            status: { notIn: STATUS_LIBERAM_HORARIO },
+            dataInicio: { gt: new Date(inicio.getTime() - DURACAO_CHAMADA_MS), lt: new Date(inicio.getTime() + DURACAO_CHAMADA_MS) },
+          },
+          select: { id: true },
+        });
+        if (conflito) throw erroHttp(409, "horario_ocupado");
         const c = await tx.consulta.create({
           data: {
             pacienteId: pedido.pacienteId,

@@ -6,6 +6,7 @@ import { diaFusoClinica, instanteFusoClinica } from "@/lib/bion-tipos";
 import {
   concluidas30d,
   contarAcoesPacienteHoje,
+  deveVigiarPresenca,
   ehDoMedico,
   pacientesOrdenados,
   pontosReceita,
@@ -82,11 +83,52 @@ export function useAgora(passoMs = 30_000) {
 }
 
 /**
+ * Item 22 — o paciente da consulta já entrou na sala de espera?
+ * Polling leve no modo SÓ LEITURA da sala (`?espiar=1`: não grava presença
+ * nem consome sinais), que devolve `outroOnline` a partir da PresencaSala
+ * com ping fresco (25 s no servidor). Intervalo de 20 s para acompanhar
+ * essa frescura. `consultaId` null = não vigia (fora da janela ou sem
+ * próxima consulta): nenhum pedido é feito. Erro de rede mantém o último
+ * valor conhecido em vez de piscar o aviso.
+ */
+export function usePacienteNaSala(consultaId: string | null): boolean {
+  const [naSala, setNaSala] = useState(false);
+  useEffect(() => {
+    setNaSala(false);
+    if (!consultaId) return;
+    const ctrl = new AbortController();
+    let vivo = true;
+    const vigiar = () => {
+      fetch(`/api/telemedicina/${encodeURIComponent(consultaId)}/sala?espiar=1`, {
+        headers: { "Content-Type": "application/json" },
+        signal: ctrl.signal,
+      })
+        .then(async (res) => {
+          const json = (await res.json().catch(() => null)) as { outroOnline?: boolean } | null;
+          if (!vivo || !res.ok || !json) return;
+          setNaSala(json.outroOnline === true);
+        })
+        .catch(() => {
+          /* rede falhou: mantém o último valor */
+        });
+    };
+    vigiar();
+    const id = setInterval(vigiar, 20_000);
+    return () => {
+      vivo = false;
+      ctrl.abort();
+      clearInterval(id);
+    };
+  }, [consultaId]);
+  return naSala;
+}
+
+/**
  * Junta o store (somente leitura) e as métricas puras do médico.
  * Tudo deriva de dados reais do bootstrap — nenhum valor de reserva.
  */
 export function useDadosMedico() {
-  const { sessao, consultas, medicos, pacientes, avaliacoes, mensagens, anamneses } = useBion();
+  const { sessao, consultas, medicos, pacientes, avaliacoes, mensagens, anamneses, naoLidas } = useBion();
   const agora = useAgora();
 
   const minhas = useMemo(
@@ -101,6 +143,11 @@ export function useDadosMedico() {
   );
 
   const proxima = useMemo(() => proximaConsulta(minhas, agora), [minhas, agora]);
+  // Item 22: presença do paciente na sala da PRÓXIMA consulta — a vigia só
+  // roda com a sala aberta (fora da janela o paciente nem consegue entrar).
+  const pacienteNaSala = usePacienteNaSala(
+    proxima && deveVigiarPresenca(proxima.ts, agora) ? proxima.id : null,
+  );
   const hoje = useMemo(() => resumoHoje(minhas, agora), [minhas, agora]);
   /** Muda quando alguma consulta do médico muda (status/data/reserva): recarrega eventos e receita. */
   const versaoAgenda = useMemo(
@@ -139,6 +186,9 @@ export function useDadosMedico() {
     () => ({
       pontos: pontosReceita(receitaRecurso.dados),
       totais: receitaRecurso.dados?.totais ?? null,
+      // B-3: percentual da regra que o servidor devolve — o rótulo da
+      // comissão não mente se a regra mudar (antes: "10%" fixo no código).
+      comissaoPct: receitaRecurso.dados?.regra.comissaoPct ?? 10,
       carregando: receitaRecurso.carregando,
       erro: receitaRecurso.erro,
       recarregar: receitaRecurso.recarregar,
@@ -157,6 +207,16 @@ export function useDadosMedico() {
     }),
     [dadosPessoaisRecurso.dados, dadosPessoaisRecurso.carregando, dadosPessoaisRecurso.erro, dadosPessoaisRecurso.recarregar],
   );
+  // Renovações de receita aguardando resposta: MESMO endpoint da tela de
+  // renovações (GET /api/medico/renovacoes; padrão = só pendentes). Só a
+  // CONTAGEM é exposta aqui — a lista completa é da sobreposição de
+  // renovações. null = ainda não carregou (a TelaInicio não mostra a
+  // pendência enquanto não sabe, para não piscar um número errado).
+  const renovacoesRecurso = useRecurso<{ pedidos: readonly unknown[] }>(
+    ehMedico ? "/api/medico/renovacoes" : null,
+    "",
+  );
+  const renovacoesPendentes = renovacoesRecurso.dados ? renovacoesRecurso.dados.pedidos.length : null;
   const atendimentos30d = useMemo(() => concluidas30d(minhas, agora), [minhas, agora]);
   const listaPacientes = useMemo(() => pacientesOrdenados(minhas, pacientes, agora), [minhas, pacientes, agora]);
 
@@ -177,6 +237,10 @@ export function useDadosMedico() {
     medico,
     minhas,
     proxima,
+    /** Item 22: o paciente da próxima consulta já está na sala de espera. */
+    pacienteNaSala,
+    /** Não lidas da central de notificações (item 12): selo do sino. */
+    notificacoesNaoLidas: naoLidas,
     hoje,
     /** Remarcadas/canceladas HOJE pelo paciente (null enquanto carrega ou em erro). */
     acoesPaciente,
@@ -184,6 +248,8 @@ export function useDadosMedico() {
     receita,
     /** Data de nascimento, sexo, telefone e CNPJ do próprio médico (privados). */
     dadosPessoais,
+    /** Quantos pedidos de renovação aguardam resposta (null = carregando). */
+    renovacoesPendentes,
     atendimentos30d,
     listaPacientes,
     naoLidasPorPaciente,

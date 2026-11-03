@@ -9,7 +9,9 @@ import {
   LifeBuoy,
   type LucideIcon,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useBion, type NotifTipo } from "@/lib/bion-store";
+import { EstadoVazio } from "@/components/bion/ui/EstadoVazio";
 
 const iconePorTipo: Record<NotifTipo, LucideIcon> = {
   lembrete: Bell,
@@ -29,8 +31,20 @@ const rotulo: Record<NotifTipo, string> = {
   suporte: "Suporte",
 };
 
+/** Seção do app de cada tipo — a Notificacao não carrega o ID da entidade,
+ *  então o clique abre a seção onde ela está (e marca como lida). */
+const destinoPorTipo: Record<NotifTipo, string> = {
+  lembrete: "/lembretes",
+  mensagem: "/mensagens",
+  receita: "/receitas",
+  agenda: "/consultas",
+  exame: "/historico",
+  suporte: "/suporte",
+};
+
 export function Notificacoes() {
-  const { notificacoesVisiveis: notificacoes, naoLidas, marcarLida, marcarTodasLidas } = useBion();
+  const { notificacoesVisiveis: notificacoes, naoLidas, marcarLida, marcarTodasLidas, carregando } = useBion();
+  const router = useRouter();
 
   return (
     <div className="max-w-3xl">
@@ -38,7 +52,11 @@ export function Notificacoes() {
         <div>
           <h1 className="text-3xl font-bold">Notificações</h1>
           <p className="text-muted-foreground mt-1">
-            {naoLidas > 0 ? `${naoLidas} não lida${naoLidas > 1 ? "s" : ""}` : "Tudo em dia"}
+            {carregando
+              ? "Carregando…"
+              : naoLidas > 0
+                ? `${naoLidas} não lida${naoLidas > 1 ? "s" : ""}`
+                : "Tudo em dia"}
           </p>
         </div>
         {naoLidas > 0 && (
@@ -52,12 +70,27 @@ export function Notificacoes() {
       </div>
 
       <div className="mt-6 space-y-2">
-        {notificacoes.map((n) => {
+        {carregando ? (
+          <p role="status" className="text-sm text-muted-foreground py-8 text-center">
+            Carregando suas notificações…
+          </p>
+        ) : notificacoes.length === 0 ? (
+          <EstadoVazio
+            icone={Bell}
+            titulo="Nenhuma notificação"
+            descricao="Quando houver novidades sobre suas consultas, receitas, exames, mensagens e lembretes, elas aparecem aqui."
+          />
+        ) : null}
+        {!carregando &&
+          notificacoes.map((n) => {
           const Icon = iconePorTipo[n.tipo];
           return (
             <button type="button"
               key={n.id}
-              onClick={() => marcarLida(n.id)}
+              onClick={() => {
+                marcarLida(n.id);
+                router.push(destinoPorTipo[n.tipo]);
+              }}
               className={`w-full text-left bg-card border rounded-2xl p-4 flex items-start gap-4 transition hover:border-primary ${n.lida ? "opacity-70" : ""}`}
             >
               <div

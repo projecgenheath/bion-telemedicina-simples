@@ -2,8 +2,9 @@ import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { exigirPapel } from "@/lib/server/auth";
 import { aplicarSideEffects, avaliacaoWire, medicoWire } from "@/lib/server/dados";
+import { agendarPushNotificacao } from "@/lib/server/push-notificacao";
 import { notaReal } from "@/lib/server/notas-medico";
-import { ok, falha } from "@/lib/server/http";
+import {ok, falha, lerCorpoJson} from "@/lib/server/http";
 
 /** Registro de avaliação de consulta (apenas pacientes).
  *  Notificações e auditoria geradas PELO SERVIDOR.
@@ -21,7 +22,7 @@ const clampNota = (v: unknown): number | null => {
 export async function POST(req: NextRequest) {
   try {
     const usuario = await exigirPapel("PACIENTE");
-    const body = (await req.json()) as {
+    const body = (await lerCorpoJson(req)) as {
       consultaId?: string;
       medicoId: string;
       nota: number;
@@ -30,6 +31,18 @@ export async function POST(req: NextRequest) {
       atencao?: number;
       clareza?: number;
     };
+
+    if (!body) {
+      return Response.json({ erro: "Corpo da requisição inválido." }, { status: 400 });
+    }
+
+    // M1: medicoId precisa ser uma string presente e sã ANTES de qualquer
+    // query — no Prisma, `undefined` no where é ignorado e o findFirst
+    // devolveria o PRIMEIRO médico do banco (a prova de atendimento seria
+    // testada contra um médico que o paciente não avaliou).
+    if (typeof body.medicoId !== "string" || !body.medicoId.trim() || body.medicoId.length > 64) {
+      return Response.json({ erro: "Médico não informado." }, { status: 400 });
+    }
 
     const medico = await db.user.findFirst({
       where: { id: body.medicoId, role: "MEDICO" },
@@ -101,22 +114,38 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const avaliacao = await db.avaliacao.create({
-      data: {
-        consultaId: consultaVinculada.id,
-        pacienteId: usuario.id,
-        medicoId: medico.id,
-        nota,
-        comentario: body.comentario?.trim().slice(0, 500) || null,
-        pontualidade: clampNota(body.pontualidade),
-        atencao: clampNota(body.atencao),
-        clareza: clampNota(body.clareza),
-      },
-      include: {
-        paciente: { select: { nome: true } },
-        medico: { select: { nome: true, perfilMedico: { select: { especialidade: true } } } },
-      },
-    });
+    // M3: a checagem de duplicada acima é a primeira camada (mensagem
+    // amigável); a garantia contra corrida é o índice único de
+    // Avaliacao.consultaId no banco — dois POSTs concorrentes fazem o 2º
+    // create bater no P2002, que vira o mesmo 409.
+    const avaliacao = await db.avaliacao
+      .create({
+        data: {
+          consultaId: consultaVinculada.id,
+          pacienteId: usuario.id,
+          medicoId: medico.id,
+          nota,
+          comentario: body.comentario?.trim().slice(0, 500) || null,
+          pontualidade: clampNota(body.pontualidade),
+          atencao: clampNota(body.atencao),
+          clareza: clampNota(body.clareza),
+        },
+        include: {
+          // B-6: id para o wire filtrar por identificador (nunca por nome)
+          paciente: { select: { id: true, nome: true } },
+          medico: { select: { id: true, nome: true, perfilMedico: { select: { especialidade: true } } } },
+        },
+      })
+      .catch((e: unknown) => {
+        if ((e as { code?: string }).code === "P2002") return null;
+        throw e;
+      });
+    if (!avaliacao) {
+      return Response.json(
+        { erro: "Esta consulta já foi avaliada." },
+        { status: 409 },
+      );
+    }
 
     // Média recalculada só com avaliações reais (o perfil podia trazer
     // nota do seed, ex.: 4.9 com 312, que não pode entrar na conta).
@@ -151,6 +180,10 @@ export async function POST(req: NextRequest) {
         detalhes: `Avaliação ${nota} estrela(s) para ${medico.nome}${body.comentario ? ` — "${body.comentario.slice(0, 80)}"` : ""}`,
       },
     );
+
+    // Item 12: a "Nova avaliação recebida" também vira Web Push para o
+    // médico (título genérico, sem nome do paciente nem comentário).
+    agendarPushNotificacao(medico.id, "Nova avaliação recebida", "/medico");
 
     const perfilAtualizado = await db.perfilMedico.findUnique({
       where: { userId: medico.id },

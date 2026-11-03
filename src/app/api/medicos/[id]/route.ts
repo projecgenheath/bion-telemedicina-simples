@@ -3,8 +3,9 @@ import { db } from "@/lib/db";
 import { exigirPapel } from "@/lib/server/auth";
 import { aplicarSideEffects, medicoWire, type EfeitosCriados } from "@/lib/server/dados";
 import { notaReal } from "@/lib/server/notas-medico";
-import { ok, falha } from "@/lib/server/http";
+import {ok, falha, lerCorpoJson} from "@/lib/server/http";
 import { erroGradeVedada, horariosVedadosDaGrade } from "@/lib/server/bloqueio-agenda";
+import { normalizarGrade, serializarGrade, listasDaGrade } from "@/lib/grade-semana";
 
 type MedicoPatch = {
   acao?: "aprovar" | "suspender" | "atualizar";
@@ -18,7 +19,15 @@ type MedicoPatch = {
   idiomas?: string[];
   bio?: string;
   horariosDisponiveis?: string[];
+  /** Grade por dia da semana: listas próprias por dia ("0"=Dom … "6"=Sáb)
+   *  que substituem o padrão naquele dia. Campo independente do padrão:
+   *  enviar só um dos dois preserva o outro (ver gravação, abaixo). */
+  horariosPorDia?: Record<string, string[]>;
+  diasAtendimento?: number[];
+  pausasSemanais?: {dia: number; inicio: string; fim: string}[];
   foto?: string;
+  /** Não é um campo editável: mudar status é "aprovar"/"suspender" (abaixo). */
+  status?: string;
 };
 
 /** Campos que o PRÓPRIO médico pode editar no seu perfil. Nome, CRM,
@@ -32,6 +41,9 @@ const CAMPOS_AUTOEDICAO = new Set([
   "subespecialidades",
   "valor",
   "horariosDisponiveis",
+  "horariosPorDia",
+  "diasAtendimento",
+  "pausasSemanais",
   "foto",
 ]);
 const VALOR_MIN = 1;
@@ -41,6 +53,39 @@ const TAM_MAX_FOTO = 700_000; // data URL (~500 KB de imagem)
 
 function erroHttp(mensagem: string, status: number) {
   return Response.json({ erro: mensagem }, { status });
+}
+
+/**
+ * Valida pausas semanais (mesma regra da UI em AgendaSheet): cada pausa
+ * precisa de dia (0–6) e inicio/fim em HH:MM, com inicio < fim, e pausas do
+ * mesmo dia não podem se sobrepor (inicio < fim da outra e vice-versa).
+ * Devolve mensagem de erro ou null. Usada na autoedição e no PATCH do admin.
+ */
+function validarPausas(pausas: unknown): string | null {
+  if (!Array.isArray(pausas)) return "pausasSemanais deve ser um array.";
+  for (const pa of pausas) {
+    if (
+      !pa || typeof pa !== "object" ||
+      typeof (pa as { dia?: unknown }).dia !== "number" || (pa as { dia: number }).dia < 0 || (pa as { dia: number }).dia > 6 ||
+      typeof (pa as { inicio?: unknown }).inicio !== "string" || !/^([01]\d|2[0-3]):[0-5]\d$/.test((pa as { inicio: string }).inicio) ||
+      typeof (pa as { fim?: unknown }).fim !== "string" || !/^([01]\d|2[0-3]):[0-5]\d$/.test((pa as { fim: string }).fim)
+    ) {
+      return "pausasSemanais inválido. Cada pausa precisa de dia (0-6), inicio e fim (HH:MM).";
+    }
+    if ((pa as { inicio: string }).inicio >= (pa as { fim: string }).fim) {
+      return "A pausa precisa começar antes de terminar.";
+    }
+  }
+  for (let i = 0; i < pausas.length; i++) {
+    for (let j = i + 1; j < pausas.length; j++) {
+      const a = pausas[i] as { dia: number; inicio: string; fim: string };
+      const b = pausas[j] as { dia: number; inicio: string; fim: string };
+      if (a.dia === b.dia && a.inicio < b.fim && b.inicio < a.fim) {
+        return "Duas pausas se sobrepõem no mesmo dia.";
+      }
+    }
+  }
+  return null;
 }
 
 /** Valida o PATCH de autoedição do médico. Devolve mensagem de erro ou null. */
@@ -84,6 +129,30 @@ function validarAutoedicao(
   if (body.horariosDisponiveis?.some((h) => !/^([01]\d|2[0-3]):[0-5]\d$/.test(h))) {
     return "Horários devem estar no formato HH:MM.";
   }
+  if (body.horariosPorDia !== undefined) {
+    const porDia = body.horariosPorDia;
+    if (!porDia || typeof porDia !== "object" || Array.isArray(porDia)) {
+      return "Campo horariosPorDia inválido.";
+    }
+    for (const [dia, lista] of Object.entries(porDia)) {
+      if (!/^[0-6]$/.test(dia)) return "horariosPorDia: dia deve ser de 0 (Dom) a 6 (Sáb).";
+      if (!Array.isArray(lista) || lista.length > 100 || lista.some((x) => typeof x !== "string" || x.length > 60)) {
+        return "Campo horariosPorDia inválido.";
+      }
+      if (lista.some((h) => !/^([01]\d|2[0-3]):[0-5]\d$/.test(h))) {
+        return "Horários devem estar no formato HH:MM.";
+      }
+    }
+  }
+  if (body.diasAtendimento !== undefined) {
+    if (!Array.isArray(body.diasAtendimento) || body.diasAtendimento.some(d => typeof d !== "number" || d < 0 || d > 6)) {
+      return "diasAtendimento deve ser um array de números de 0 (Dom) a 6 (Sáb).";
+    }
+  }
+  if (body.pausasSemanais !== undefined) {
+    const erroPausas = validarPausas(body.pausasSemanais);
+    if (erroPausas) return erroPausas;
+  }
   if (body.foto !== undefined) {
     if (
       typeof body.foto !== "string" ||
@@ -108,7 +177,11 @@ export async function PATCH(
   try {
     const ator = await exigirPapel("ADMIN", "MEDICO");
     const { id } = await params;
-    const body = (await req.json()) as MedicoPatch;
+    const body = (await lerCorpoJson(req)) as MedicoPatch;
+
+    if (!body) {
+      return Response.json({ erro: "Corpo da requisição inválido." }, { status: 400 });
+    }
     // ator = ADMIN (gestão) ou o próprio MÉDICO (autoedição restrita)
     const autoedicao = ator.role === "MEDICO";
 
@@ -139,8 +212,39 @@ export async function PATCH(
     // para o administrador. Horário cuja consulta (DURACAO_CONSULTA_MIN)
     // encosta na janela → 400, nada é gravado.
     if (acao === "atualizar") {
-      const vedados = horariosVedadosDaGrade(body.horariosDisponiveis);
+      // Vedados (23:00–00:00) valem para TODAS as listas da grade: o padrão
+      // e cada lista própria por dia da semana.
+      const vedados = [
+        ...horariosVedadosDaGrade(body.horariosDisponiveis),
+        ...(body.horariosPorDia
+          ? listasDaGrade(normalizarGrade({ padrao: [], dias: body.horariosPorDia })).flatMap((l) =>
+              horariosVedadosDaGrade(l),
+            )
+          : []),
+      ];
       if (vedados.length) return erroHttp(erroGradeVedada(vedados), 400);
+      // Pausas: mesma validação da autoedição e da UI (inicio < fim, sem
+      // sobreposição no mesmo dia) — antes, o caminho do admin não validava.
+      if (body.pausasSemanais !== undefined) {
+        const erroPausas = validarPausas(body.pausasSemanais);
+        if (erroPausas) return erroHttp(erroPausas, 400);
+      }
+      if (!autoedicao) {
+        // Admin em "atualizar": foto e status NÃO são campos desta ação e
+        // antes eram ignorados em silêncio com 200. Foto só muda na
+        // autoedição do próprio médico; status só muda por "aprovar" ou
+        // "suspender". Rejeitar em vez de fingir sucesso.
+        const proibidos: string[] = [];
+        if (body.foto !== undefined) proibidos.push("foto");
+        if (body.status !== undefined) proibidos.push("status");
+        if (proibidos.length) {
+          return erroHttp(
+            `Campo não permitido na ação "atualizar": ${proibidos.join(", ")}. ` +
+              `Foto só pode ser alterada pelo próprio médico; status só muda com "aprovar" ou "suspender".`,
+            400,
+          );
+        }
+      }
     }
     let efeitos: EfeitosCriados = { notificacoes: [], audit: null };
 
@@ -221,8 +325,31 @@ export async function PATCH(
             ...(body.experiencia !== undefined ? { experiencia: body.experiencia } : {}),
             ...(body.idiomas !== undefined ? { idiomas: JSON.stringify(body.idiomas) } : {}),
             ...(body.bio !== undefined ? { bio: body.bio } : {}),
-            ...(body.horariosDisponiveis !== undefined
-              ? { horariosDisponiveis: JSON.stringify(body.horariosDisponiveis) }
+            // Grade por dia da semana: horariosDisponiveis (padrão) e
+            // horariosPorDia (listas próprias) são campos INDEPENDENTES —
+            // quem envia só um preserva o outro como está no banco (o form
+            // do admin e apps antigos enviam só o padrão; a AgendaSheet
+            // envia os dois). A gravação é sempre pela serialização única
+            // (sem dias próprios, volta ao array legado byte a byte).
+            ...(body.horariosDisponiveis !== undefined || body.horariosPorDia !== undefined
+              ? {
+                  horariosDisponiveis: serializarGrade({
+                    padrao:
+                      body.horariosDisponiveis !== undefined
+                        ? normalizarGrade(body.horariosDisponiveis).padrao
+                        : normalizarGrade(medico.perfilMedico.horariosDisponiveis).padrao,
+                    dias:
+                      body.horariosPorDia !== undefined
+                        ? normalizarGrade({ padrao: [], dias: body.horariosPorDia }).dias
+                        : normalizarGrade(medico.perfilMedico.horariosDisponiveis).dias,
+                  }),
+                }
+              : {}),
+            ...(body.diasAtendimento !== undefined
+              ? { diasAtendimento: JSON.stringify(body.diasAtendimento) }
+              : {}),
+            ...(body.pausasSemanais !== undefined
+              ? { pausasSemanais: JSON.stringify(body.pausasSemanais) }
               : {}),
             ...(body.foto !== undefined && autoedicao ? { foto: body.foto || null } : {}),
           },

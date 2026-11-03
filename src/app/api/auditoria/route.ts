@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { exigirSessao, registrarAudit } from "@/lib/server/auth";
-import { ok, falha } from "@/lib/server/http";
+import {ok, falha, lerCorpoJson} from "@/lib/server/http";
 
 /**
  * Registro de eventos de auditoria VINDOS DO CLIENTE — apenas eventos leves
@@ -30,7 +30,11 @@ const EVENTOS_CLIENTE: Record<string, { categoria: string; severidade: "info" | 
 export async function POST(req: NextRequest) {
   try {
     const usuario = await exigirSessao();
-    const body = (await req.json()) as { acao?: string; detalhes?: string };
+    const body = (await lerCorpoJson(req)) as { acao?: string; detalhes?: string };
+
+    if (!body) {
+      return Response.json({ erro: "Corpo da requisição inválido." }, { status: 400 });
+    }
 
     const permitido = body.acao ? EVENTOS_CLIENTE[body.acao] : undefined;
     if (!permitido) {

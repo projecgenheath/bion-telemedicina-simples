@@ -1,11 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { AlertTriangle, ChevronLeft, ChevronRight, ExternalLink, RefreshCw, Wallet } from "lucide-react";
+import { AlertTriangle, ChevronLeft, ChevronRight, Download, ExternalLink, RefreshCw, Wallet } from "lucide-react";
 import { fmtCentavos } from "../metricas";
+import { baixarCsvRepasse, csvDetalheRepasse, csvHistoricoRepasses, previaTemConteudo } from "../repasses-csv";
 import {
   useRepasses,
   type ItemRepasseDetalhe,
+  type ListaRepasses,
   type PreviaRepasseWire,
   type RepasseDetalhe,
   type RepasseResumo,
@@ -229,6 +231,16 @@ function DetalheView({
         </a>
       ) : null}
 
+      {/* Exportação contábil deste repasse: CSV gerado no cliente com os
+          itens e totais já carregados nesta tela (repasses-csv.ts). */}
+      <button
+        type="button"
+        onClick={() => baixarCsvRepasse(`bion-repasse-${detalhe.competencia}.csv`, csvDetalheRepasse(detalhe))}
+        className="w-full py-3 rounded-2xl border border-bion-ink/15 dark:border-white/15 text-sm font-bold inline-flex items-center justify-center gap-2"
+      >
+        <Download className="w-4 h-4" aria-hidden /> Exportar CSV deste repasse
+      </button>
+
       {detalhe.itens.length > 0 ? (
         <div>
           <div className="text-xs font-bold uppercase tracking-wider text-bion-ink/75 dark:text-bion-paper/75 px-1 mb-2">
@@ -267,6 +279,24 @@ function DetalheView({
         </div>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * Há repasse para o admin pagar (fechado aguardando pagamento, prévia de
+ * hoje com líquido, ou saldo positivo)? É a condição REAL do alerta forte
+ * de chave PIX: "sem chave o admin não consegue pagar" só é fato quando
+ * existe pagamento esperando. Não há como distinguir aqui um eventual
+ * "modelo de recebimento" do médico — o Stripe Connect é ligado por
+ * configuração do servidor e a conta conectada não vem neste wire (por
+ * privacidade, os dados de recebimento não entram no bootstrap) — então
+ * o alerta se ancora no que é verificável: dinheiro a receber.
+ */
+function repasseParaPagar(lista: ListaRepasses): boolean {
+  return (
+    lista.saldoCentavos > 0 ||
+    lista.previa.totais.liquidoCentavos > 0 ||
+    lista.repasses.some((r) => r.status === "fechado" && r.liquidoCentavos > 0)
   );
 }
 
@@ -350,13 +380,37 @@ export function RepassesSheet({
                 </p>
               </div>
 
-              {!lista.temChavePix ? (
+              {!lista.temChavePix && repasseParaPagar(lista) ? (
                 <div className="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4 flex gap-3" role="status">
                   <AlertTriangle className="w-5 h-5 shrink-0 text-amber-800 dark:text-amber-200" aria-hidden />
                   <div className="min-w-0">
                     <div className="text-sm font-bold text-amber-900 dark:text-amber-100">Cadastre sua chave PIX</div>
                     <p className="text-xs text-amber-900/80 dark:text-amber-100/80 mt-1">
                       Sem chave cadastrada o admin não consegue pagar o repasse.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onFechar();
+                        onAbrirRecebimento();
+                      }}
+                      className="mt-2 inline-flex items-center gap-1.5 text-sm font-bold text-bion-sea dark:text-sky-300"
+                    >
+                      <Wallet className="w-4 h-4" aria-hidden /> Ir para Recebimento (PIX)
+                    </button>
+                  </div>
+                </div>
+              ) : !lista.temChavePix ? (
+                // Sem repasse esperando pagamento, a falta da chave não
+                // bloqueia nada: nota informativa (sem alarme), com o
+                // atalho para cadastrar quando o médico quiser.
+                <div className="bp-glass p-4 flex gap-3" role="status">
+                  <Wallet className="w-5 h-5 shrink-0 text-bion-sea dark:text-sky-300" aria-hidden />
+                  <div className="min-w-0">
+                    <div className="text-sm font-bold">Chave PIX de recebimento</div>
+                    <p className="text-xs text-bion-ink/75 dark:text-bion-paper/75 mt-1">
+                      Os repasses são pagos na chave PIX cadastrada. No momento você não tem repasse esperando
+                      pagamento, então nada está bloqueado — cadastre a chave quando quiser.
                     </p>
                     <button
                       type="button"
@@ -379,15 +433,28 @@ export function RepassesSheet({
                   <div className="text-xs font-bold uppercase tracking-wider text-bion-ink/75 dark:text-bion-paper/75">
                     Histórico
                   </div>
-                  <button
-                    type="button"
-                    onClick={recarregar}
-                    disabled={carregando}
-                    aria-label="Atualizar lista de repasses"
-                    className="p-2 rounded-full bg-bion-ink/8 dark:bg-white/10"
-                  >
-                    <RefreshCw className={`w-4 h-4 ${carregando ? "motion-safe:animate-spin" : ""}`} />
-                  </button>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        baixarCsvRepasse(`bion-repasses-${Date.now()}.csv`, csvHistoricoRepasses(lista.previa, lista.repasses))
+                      }
+                      disabled={lista.repasses.length === 0 && !previaTemConteudo(lista.previa)}
+                      aria-label="Exportar histórico de repasses em CSV"
+                      className="p-2 rounded-full bg-bion-ink/8 dark:bg-white/10 disabled:opacity-50"
+                    >
+                      <Download className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={recarregar}
+                      disabled={carregando}
+                      aria-label="Atualizar lista de repasses"
+                      className="p-2 rounded-full bg-bion-ink/8 dark:bg-white/10"
+                    >
+                      <RefreshCw className={`w-4 h-4 ${carregando ? "motion-safe:animate-spin" : ""}`} />
+                    </button>
+                  </div>
                 </div>
 
                 {lista.repasses.length === 0 ? (

@@ -21,8 +21,11 @@ import {
   diaParaDate,
   hojeSaoPaulo,
   limparMotivo,
+  listarDiasIntervalo,
+  MAX_DIAS_INTERVALO_BLOQUEIO,
   somarDiasIso,
   validarDiaBloqueio,
+  validarIntervaloBloqueio,
   type ClienteBanco,
 } from "../src/lib/server/bloqueio-agenda";
 import { agendaDoDia, semDiasBloqueados } from "../src/components/bion/medico/metricas";
@@ -96,6 +99,37 @@ igual("23:30 SP: 30/09 é passado", v("2026-09-30", NOITE).startsWith("erro:"), 
 igual("00:30 SP: 01/10 é passado", v("2026-10-01", A("2026-10-02T03:30:00Z")).startsWith("erro:"), true);
 const r = validarDiaBloqueio("2026-10-05", AGORA);
 igual("meio-dia em SP (15:00Z)", r.ok ? r.valor.meioDia.toISOString() : null, "2026-10-05T15:00:00.000Z");
+
+/* ---------- intervalo de bloqueio (férias) ---------- */
+igual("intervalo de 1 dia", listarDiasIntervalo("2026-10-05", "2026-10-05"), ["2026-10-05"]);
+igual("intervalo virada de mês", listarDiasIntervalo("2026-10-30", "2026-11-02"), [
+  "2026-10-30",
+  "2026-10-31",
+  "2026-11-01",
+  "2026-11-02",
+]);
+const iv = (de: unknown, ate: unknown, agora = AGORA) => {
+  const r = validarIntervaloBloqueio(de, ate, agora);
+  return r.ok ? `${r.valor.de}..${r.valor.ate}:${r.valor.dias.length}` : `erro:${r.erro}`;
+};
+igual("intervalo de 15 dias (férias)", iv("2026-10-05", "2026-10-19"), "2026-10-05..2026-10-19:15");
+igual("intervalo de 1 dia vale", iv("2026-10-05", "2026-10-05"), "2026-10-05..2026-10-05:1");
+igual("intervalo começando hoje vale", iv("2026-10-01", "2026-10-03"), "2026-10-01..2026-10-03:3");
+igual("intervalo no passado não", iv("2026-09-28", "2026-10-05").startsWith("erro:"), true);
+igual("fim antes do início não", iv("2026-10-10", "2026-10-05").startsWith("erro:O fim"), true);
+igual("fim além do horizonte não", iv("2026-10-05", "2027-10-02").startsWith("erro:"), true);
+igual("intervalo sem fim não", iv("2026-10-05", undefined).startsWith("erro:Informe"), true);
+igual("intervalo sem início não", iv(undefined, "2026-10-05").startsWith("erro:Informe"), true);
+igual(
+  `intervalo de ${MAX_DIAS_INTERVALO_BLOQUEIO} dias vale`,
+  iv("2026-10-05", somarDiasIso("2026-10-05", MAX_DIAS_INTERVALO_BLOQUEIO - 1)).endsWith(`:${MAX_DIAS_INTERVALO_BLOQUEIO}`),
+  true,
+);
+igual(
+  `intervalo de ${MAX_DIAS_INTERVALO_BLOQUEIO + 1} dias não`,
+  iv("2026-10-05", somarDiasIso("2026-10-05", MAX_DIAS_INTERVALO_BLOQUEIO)).startsWith("erro:Bloqueie no máximo"),
+  true,
+);
 
 /* ---------- limparMotivo ---------- */
 const m = (x: unknown) => {

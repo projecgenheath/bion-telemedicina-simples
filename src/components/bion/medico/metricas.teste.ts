@@ -4,24 +4,35 @@
  * Rodar: bun src/components/bion/medico/metricas.teste.ts
  * (também com TZ=UTC / TZ=Asia/Tokyo: o resultado não pode depender do fuso.)
  */
-import type { Consulta } from "@/lib/bion-tipos";
+import type { Avaliacao, Consulta, Medico } from "@/lib/bion-tipos";
 import {
   agendaDoDia,
+  completudePerfil,
   consultasCancelaveisDoDia,
   contarAcoesPacienteHoje,
+  deveVigiarPresenca,
   diaHoraClinica,
+  diaSemanaISO,
   desfechosSistema,
   ESPERA_FALTA_MIN,
+  faixaPrecosEspecialidade,
+  janelasComparacao,
   medicoEsperouAteOLimite,
+  metricasPeriodo,
+  janelaRespostaPaciente,
   pacienteEsteveNaSala,
   podeMarcarDesfechoNaAgenda,
   podeMarcarFalta,
   prazoDesfecho,
   pontosReceita,
+  receitaPrevista,
   reservaVigente,
   reservasNoDia,
+  resumoAvaliacoes,
   rotuloStatusMedico,
+  somarDiasISO,
   textoReservaPendente,
+  variacaoPct,
   type EventoMedico,
 } from "./metricas";
 
@@ -291,6 +302,180 @@ igual("pontos sem resposta", pontosReceita(null), []);
   igual("agenda: com falta não mostra", podeMarcarDesfechoNaAgenda({ ...c14, falta: true }, m(30)), false);
   igual("agenda: com falha técnica não mostra", podeMarcarDesfechoNaAgenda(c14, m(30), new Map([["a", "falha_tecnica" as const]])), false);
   igual("agenda: concluída não mostra", podeMarcarDesfechoNaAgenda({ ...c14, status: "concluida" }, m(30)), false);
+}
+
+/* ---------- janelaRespostaPaciente (PC2: regra do POST /api/mensagens) ---------- */
+{
+  const DIA = 86_400_000;
+  const resumo = (j: ReturnType<typeof janelaRespostaPaciente>) =>
+    j ? [j.base.id, j.limite, j.diasRestantes, j.encerrada] : null;
+
+  igual("janela: sem consultas = null", janelaRespostaPaciente([], AGORA), null);
+  igual(
+    "janela: só cancelada = null",
+    janelaRespostaPaciente([consulta({ id: "c", dataISO: HOJE_9H, status: "cancelada" })], AGORA),
+    null,
+  );
+  // Base = NÃO cancelada mais recente (a cancelada de 25/09 é ignorada,
+  // mesmo sendo mais nova que a concluída de 20/09) — como o servidor.
+  const base20 = consulta({ id: "base", dataISO: "2026-09-20T12:00:00.000Z", status: "concluida" });
+  const canc25 = consulta({ id: "canc", dataISO: "2026-09-25T12:00:00.000Z", status: "cancelada" });
+  igual("janela: base ignora cancelada mais recente", resumo(janelaRespostaPaciente([canc25, base20], AGORA))?.[0], "base");
+  // Limite = base + 30 dias; em 01/10 faltam 19 dias para 20/10.
+  igual(
+    "janela: limite e dias restantes",
+    resumo(janelaRespostaPaciente([base20], AGORA)),
+    ["base", Date.parse("2026-09-20T12:00:00.000Z") + 30 * DIA, 19, false],
+  );
+  // Fronteira igual à do servidor (bloqueia com agora > limite): no limite
+  // exato ainda está aberta; 1 ms depois, encerrada.
+  const limite = base20.ts + 30 * DIA;
+  igual("janela: no limite exato ainda aberta", janelaRespostaPaciente([base20], limite)?.encerrada, false);
+  igual("janela: 1 ms após o limite, encerrada", resumo(janelaRespostaPaciente([base20], limite + 1)), ["base", limite, 0, true]);
+  // Consulta futura não cancelada vira a base (servidor ordena por
+  // dataInicio desc, sem filtrar passado): janela segue aberta.
+  const futura = consulta({ id: "fut", dataISO: AMANHA_9H, status: "confirmada" });
+  igual(
+    "janela: consulta futura é a base",
+    resumo(janelaRespostaPaciente([base20, futura], AGORA))?.[0],
+    "fut",
+  );
+}
+
+/* ---------- Painel de gestão: janelas e indicadores de período ---------- */
+{
+  igual("somarDiasISO dentro do mês", somarDiasISO("2026-10-01", -6), "2026-09-25");
+  igual("somarDiasISO cruzando o mês", somarDiasISO("2026-09-30", 1), "2026-10-01");
+  igual("somarDiasISO cruzando o ano", somarDiasISO("2026-12-31", 1), "2027-01-01");
+  igual("diaSemanaISO quinta", diaSemanaISO("2026-10-01"), 4);
+  igual("diaSemanaISO domingo", diaSemanaISO("2026-10-04"), 0);
+
+  igual("janelas 7d", janelasComparacao(AGORA, 7), {
+    atual: { deISO: "2026-09-25", ateISO: "2026-10-01" },
+    anterior: { deISO: "2026-09-18", ateISO: "2026-09-24" },
+  });
+  igual("janelas 30d", janelasComparacao(AGORA, 30).atual, { deISO: "2026-09-02", ateISO: "2026-10-01" });
+
+  const janela = { deISO: "2026-09-25", ateISO: "2026-10-01" };
+  const lista: Consulta[] = [
+    consulta({ id: "g1", dataISO: "2026-09-28T12:00:00.000Z", status: "concluida", valor: "R$ 200" }),
+    consulta({ id: "g2", dataISO: "2026-09-29T12:00:00.000Z", status: "concluida", valor: "R$ 100" }),
+    consulta({ id: "g3", dataISO: "2026-09-30T12:00:00.000Z", status: "falta_paciente", valor: "R$ 200" }),
+    consulta({ id: "g4", dataISO: "2026-09-30T15:00:00.000Z", status: "cancelada", pago: false }),
+    consulta({ id: "g5", dataISO: HOJE_9H, status: "confirmada", valor: "R$ 150" }),
+    consulta({ id: "g6", dataISO: "2026-09-20T12:00:00.000Z", status: "concluida", valor: "R$ 999" }), // fora da janela
+  ];
+  const todos = metricasPeriodo(lista, { slotsPorDiaSemana: [4, 4, 4, 4, 4, 4, 4], diasAtendimento: [] }, janela);
+  igual("gestão: ofertados todos os dias", todos.ofertados, 28); // 7 dias × 4
+  igual("gestão: ofertados seg–sex", metricasPeriodo(lista, { slotsPorDiaSemana: [4, 4, 4, 4, 4, 4, 4], diasAtendimento: [1, 2, 3, 4, 5] }, janela).ofertados, 20); // sex 25, seg 28–qui 01
+  // Grade por dia da semana: dom sem slots e sáb com 2 — sex 4 + sáb 2 +
+  // dom 0 + seg–qui 4×4 = 22.
+  igual("gestão: ofertados com grade por dia", metricasPeriodo(lista, { slotsPorDiaSemana: [0, 4, 4, 4, 4, 4, 2], diasAtendimento: [] }, janela).ofertados, 22);
+  igual("gestão: ocupados", todos.ocupados, 4);
+  igual("gestão: ocupação", todos.ocupacao, 4 / 28);
+  igual("gestão: atendimentos", todos.atendimentos, 2);
+  igual("gestão: faltas", todos.faltas, 1);
+  igual("gestão: taxa de falta", todos.taxaFalta, 1 / 3);
+  igual("gestão: canceladas", todos.canceladas, 1);
+  igual("gestão: pagas", todos.consultasPagas, 4);
+  igual("gestão: receita das consultas", todos.receitaConsultas, 650);
+  igual("gestão: ticket médio", todos.ticketMedio, 162.5);
+  igual(
+    "gestão: janela vazia",
+    metricasPeriodo([], { slotsPorDiaSemana: [0, 0, 0, 0, 0, 0, 0], diasAtendimento: [] }, janela),
+    { ofertados: 0, ocupados: 0, ocupacao: null, atendimentos: 0, faltas: 0, taxaFalta: null, canceladas: 0, consultasPagas: 0, receitaConsultas: 0, ticketMedio: null },
+  );
+  // Falta pelo selo `falta` do bootstrap (status já concluída no legado).
+  const comSelo = metricasPeriodo(
+    [consulta({ id: "g7", dataISO: "2026-09-28T12:00:00.000Z", status: "concluida", falta: true })],
+    { slotsPorDiaSemana: [1, 1, 1, 1, 1, 1, 1], diasAtendimento: [] },
+    janela,
+  );
+  igual("gestão: falta pelo selo", [comSelo.faltas, comSelo.ocupados], [1, 1]);
+
+  const futura = consulta({ id: "g8", dataISO: AMANHA_9H, status: "confirmada", valor: "R$ 300" });
+  igual("receita prevista", receitaPrevista([futura, ...lista], AGORA), { total: 300, qtd: 1 });
+  igual("receita prevista vazia", receitaPrevista(lista, AGORA), { total: 0, qtd: 0 });
+
+  igual("variação +50%", variacaoPct(150, 100), 50);
+  igual("variação −50%", variacaoPct(50, 100), -50);
+  igual("variação sem base", variacaoPct(10, 0), null);
+  igual("variação zero/zero", variacaoPct(0, 0), 0);
+}
+
+/* ---------- Avaliações: resumo com sub-notas ---------- */
+{
+  const av = (p: Partial<Avaliacao> & { id: string; nota: number }): Avaliacao => ({
+    paciente: "Paciente",
+    medico: "Dra. Ana",
+    especialidade: "Clínica",
+    quando: "há 1 dia",
+    ts: 0,
+    ...p,
+  });
+  const lista = [
+    av({ id: "a1", nota: 5, pontualidade: 5, atencao: 4, clareza: 5, comentario: "Ótima." }),
+    av({ id: "a2", nota: 4, pontualidade: 4, atencao: 5 }),
+    av({ id: "a3", nota: 3, comentario: "Ok." }),
+  ];
+  const r = resumoAvaliacoes(lista);
+  igual("avaliações: total", r.total, 3);
+  igual("avaliações: média", r.media, 4);
+  igual("avaliações: distribuição", r.distribuicao, [0, 0, 1, 1, 1]);
+  igual("avaliações: pontualidade", r.pontualidade, 4.5);
+  igual("avaliações: atenção", r.atencao, 4.5);
+  igual("avaliações: clareza (só quem avaliou)", r.clareza, 5);
+  igual("avaliações: com comentário", r.comComentario, 2);
+  igual("avaliações: vazio", resumoAvaliacoes([]), {
+    total: 0, media: null, distribuicao: [0, 0, 0, 0, 0], pontualidade: null, atencao: null, clareza: null, comComentario: 0,
+  });
+}
+
+/* ---------- Perfil: completude e faixa de preço ---------- */
+{
+  const base: Pick<Medico, "foto" | "bio" | "formacao" | "experiencia" | "idiomas" | "subespecialidades" | "horariosDisponiveis"> = {
+    foto: "data:image/png;base64,x",
+    bio: "Clínica geral com foco em prevenção.",
+    formacao: "FMUSP",
+    experiencia: "10 anos",
+    idiomas: ["Português"],
+    subespecialidades: ["Check-up"],
+    horariosDisponiveis: ["08:00"],
+  };
+  igual("completude cheia", completudePerfil(base), { percentual: 100, preenchidos: 7, total: 7, faltantes: [] });
+  const parcial = completudePerfil({ ...base, foto: undefined, bio: " ", experiencia: "", idiomas: [] });
+  igual("completude parcial", parcial.percentual, 43);
+  igual("completude faltantes", parcial.faltantes, ["foto de perfil", "apresentação (bio)", "experiência", "idiomas"]);
+
+  const med = (id: string, especialidade: string, valor: number, status: Medico["status"] = "ativo") =>
+    ({ id, especialidade, valor, status }) as Pick<Medico, "id" | "especialidade" | "valor" | "status">;
+  const diretorio = [
+    med("eu", "Clínica", 200),
+    med("m2", "Clínica", 100),
+    med("m3", "Clínica", 150),
+    med("m4", "Clínica", 300),
+    med("m5", "Pediatria", 999),
+    med("m6", "Clínica", 50, "pendente"),
+    med("m7", "Clínica", 0),
+  ];
+  igual("faixa: ímpar", faixaPrecosEspecialidade(diretorio, "Clínica", "eu"), { min: 100, mediana: 150, max: 300, n: 3 });
+  igual(
+    "faixa: par (mediana média dos centrais)",
+    faixaPrecosEspecialidade([...diretorio, med("m8", "Clínica", 200)], "Clínica", "eu"),
+    { min: 100, mediana: 175, max: 300, n: 4 },
+  );
+  igual("faixa: sem pares", faixaPrecosEspecialidade(diretorio, "Dermatologia", "eu"), null);
+  igual("faixa: especialidade case-insensitive", faixaPrecosEspecialidade(diretorio, " clínica ", "eu")?.n, 3);
+}
+
+/* Item 22: a vigia da presença só roda com a sala aberta (30 min antes … 2 h depois). */
+{
+  const inicio = Date.UTC(2026, 9, 30, 17, 0, 0); // instante qualquer; a janela é relativa a ele
+  igual("vigia: 31 min antes não vigia", deveVigiarPresenca(inicio, inicio - 31 * 60_000), false);
+  igual("vigia: 30 min antes vigia (abertura)", deveVigiarPresenca(inicio, inicio - 30 * 60_000), true);
+  igual("vigia: no horário vigia", deveVigiarPresenca(inicio, inicio), true);
+  igual("vigia: 2 h depois vigia (fechamento)", deveVigiarPresenca(inicio, inicio + 120 * 60_000), true);
+  igual("vigia: 2 h e 1 min depois não vigia", deveVigiarPresenca(inicio, inicio + 121 * 60_000), false);
 }
 
 console.log(`\n${ok} ok, ${falhas} falha(s)`);

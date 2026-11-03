@@ -13,6 +13,7 @@ import {
   ChevronRight,
   Eye,
   FileText,
+  ClipboardList,
 } from "lucide-react";
 import { EstadoVazio } from "@/components/bion/ui/EstadoVazio";
 import { useBion, type Documento } from "@/lib/bion-store";
@@ -37,6 +38,13 @@ export function docTexto(d: Documento) {
     "BION — Telemedicina",
   ];
   return linhas.filter((l) => l !== "").join("\n");
+}
+
+/** Ícone pela natureza REAL do documento (A11): pedido de exame não é atestado. */
+export function iconeDocumento(tipo: Documento["tipo"]) {
+  if (tipo === "receita") return Pill;
+  if (tipo === "exame" || tipo === "exame_solicitado") return ClipboardList;
+  return Award;
 }
 
 export function baixarDoc(d: Documento) {
@@ -72,7 +80,7 @@ export function VisualizadorDoc({
 }) {
   const d = docs[index];
   if (!d) return null;
-  const Icon = d.tipo === "receita" ? Pill : Award;
+  const Icon = iconeDocumento(d.tipo);
   return (
     <ModalBion
       aberto
@@ -176,29 +184,78 @@ function Campo({ label, valor }: { label: string; valor: string }) {
 }
 
 const MESES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
-export function dataDoc(d: Documento) {
+/**
+ * Data (meia-noite local) do rótulo do documento; `null` quando o rótulo
+ * não é legível por completo (sem dia/mês/ano). M27: antes, data ilegível
+ * virava "hoje" (e ano ausente virava o ano corrente), então documento
+ * legado entrava nos filtros De/Até como atual e saltava para o topo das
+ * ordenações — data desconhecida agora é explícita, nunca inventada.
+ */
+export function dataDoc(d: Documento): Date | null {
   const m = d.data.toLowerCase().match(/(\d{1,2})\s+([a-zç]{3})[a-zç]*\s*(\d{4})?/);
-  if (!m) return new Date();
+  if (!m || !m[3]) return null;
   const mes = MESES.indexOf(m[2]!.slice(0, 3));
-  return new Date(Number(m[3] ?? new Date().getFullYear()), mes < 0 ? 0 : mes, Number(m[1]));
+  if (mes < 0) return null;
+  return new Date(Number(m[3]), mes, Number(m[1]));
 }
 
 export function Receitas({ perfil }: { perfil: "paciente" | "medico" }) {
-  const { documentosVisiveis: documentos, emitirDocumento, sessao, registrarAudit, pacientes } = useBion();
+  const { documentosVisiveis: documentos, emitirDocumento, sessao, registrarAudit, pacientes, carregando } = useBion();
   const [aberto, setAberto] = useState(false);
   const [tipo, setTipo] = useState<"receita" | "atestado">("receita");
   const [pacienteDoc, setPacienteDoc] = useState("");
   const [titulo, setTitulo] = useState("");
   const [conteudo, setConteudo] = useState("");
   const [medicamento, setMedicamento] = useState("");
+  const [controlado, setControlado] = useState(false);
   const [posologia, setPosologia] = useState("");
   const [duracao, setDuracao] = useState("");
   const [observacoes, setObservacoes] = useState("");
   const [erros, setErros] = useState<Record<string, string>>({});
+  // Emissão pendente de confirmação: o formulário só limpa e fecha quando o
+  // documento emitido aparece de fato na lista (o store aplica o delta do
+  // servidor). Em falha, o formulário fica intacto para tentar de novo —
+  // o erro do servidor já vira toast no store.
+  const [pendente, setPendente] = useState<{ titulo: string; idsAntes: string[] } | null>(null);
+  const [emitindo, setEmitindo] = useState(false);
+
+  useEffect(() => {
+    if (!pendente) return;
+    if (documentos.some((d) => d.titulo === pendente.titulo && !pendente.idsAntes.includes(d.id))) {
+      setPendente(null);
+      setEmitindo(false);
+      setPacienteDoc("");
+      setTitulo("");
+      setConteudo("");
+      setMedicamento("");
+      setControlado(false);
+      setPosologia("");
+      setDuracao("");
+      setObservacoes("");
+      setErros({});
+      setAberto(false);
+      toast.success("Documento emitido", { description: pendente.titulo });
+    }
+  }, [documentos, pendente]);
+
+  // Se a confirmação demorar, libera o botão para tentar de novo (o
+  // formulário continua intacto). A pendência segue valendo: se o documento
+  // aparecer depois, a confirmação acima ainda limpa e fecha o formulário.
+  useEffect(() => {
+    if (!pendente || !emitindo) return;
+    const t = setTimeout(() => {
+      setEmitindo(false);
+      setErros((e) => ({
+        ...e,
+        emissao: "Não foi possível confirmar a emissão. Verifique a mensagem do servidor e tente de novo.",
+      }));
+    }, 15000);
+    return () => clearTimeout(t);
+  }, [pendente, emitindo]);
 
   // filtros
   const [busca, setBusca] = useState("");
-  const [fTipo, setFTipo] = useState<"todos" | "receita" | "atestado">("todos");
+  const [fTipo, setFTipo] = useState<"todos" | "receita" | "atestado" | "exame">("todos");
   const [fMedico, setFMedico] = useState("todos");
   const [de, setDe] = useState("");
   const [ate, setAte] = useState("");
@@ -220,7 +277,10 @@ export function Receitas({ perfil }: { perfil: "paciente" | "medico" }) {
   const filtrados = useMemo(() => {
     const q = busca.trim().toLowerCase();
     return documentos.filter((d) => {
-      if (fTipo !== "todos" && d.tipo !== fTipo) return false;
+      // A11: "exame" no filtro = pedido de exame (tipo atual e o legado).
+      if (fTipo === "exame") {
+        if (d.tipo !== "exame" && d.tipo !== "exame_solicitado") return false;
+      } else if (fTipo !== "todos" && d.tipo !== fTipo) return false;
       if (fMedico !== "todos" && d.medico !== fMedico) return false;
       if (
         q &&
@@ -230,13 +290,34 @@ export function Receitas({ perfil }: { perfil: "paciente" | "medico" }) {
       )
         return false;
       const dt = dataDoc(d);
-      if (de && dt < new Date(`${de}T00:00:00`)) return false;
-      if (ate && dt > new Date(`${ate}T23:59:59`)) return false;
+      if (de || ate) {
+        // M27: sem data legível, o documento fica FORA do filtro de período
+        // (explícito e seguro) — nunca "hoje" disfarçado.
+        if (!dt) return false;
+        if (de && dt < new Date(`${de}T00:00:00`)) return false;
+        if (ate && dt > new Date(`${ate}T23:59:59`)) return false;
+      }
       return true;
     });
   }, [documentos, busca, fTipo, fMedico, de, ate]);
 
   const visiveis = useMemo(() => filtrados.slice(0, limite), [filtrados, limite]);
+
+  // B26: abertura ÚNICA do visualizador — corpo do documento e botão de
+  // olho passam por aqui, então o DOCUMENTO_VISUALIZADO é registrado uma
+  // única vez por abertura (antes o corpo abria sem registrar).
+  // O índice é o da lista FILTRADA completa (visiveis é um prefixo dela).
+  const abrirDoc = (d: (typeof filtrados)[number], indiceFiltrados: number) => {
+    setVisualizando(indiceFiltrados);
+    registrarAudit({
+      acao: "DOCUMENTO_VISUALIZADO",
+      categoria: "documento",
+      severidade: "info",
+      entidade: "documento",
+      entidadeId: d.id,
+      detalhes: `Visualização: ${d.titulo} (${d.tipo})`,
+    });
+  };
 
   const limpar = () => {
     setLimite(PAGINA);
@@ -249,6 +330,13 @@ export function Receitas({ perfil }: { perfil: "paciente" | "medico" }) {
   const filtroAtivo = busca || fTipo !== "todos" || fMedico !== "todos" || de || ate;
 
   const salvar = () => {
+    // Sem médico real na sessão, não se emite com nome inventado: o
+    // formulário fica aberto e explica o problema (antes, caía no fallback
+    // "Dra. Ana Ribeiro" para qualquer sessão não-médica).
+    if (perfil === "medico" && sessao.role !== "medico") {
+      toast.error("Só um médico pode emitir documentos.");
+      return;
+    }
     const e: Record<string, string> = {};
     if (perfil === "medico" && !pacienteDoc)
       e["pacienteDoc"] = "Selecione o paciente do documento.";
@@ -268,27 +356,26 @@ export function Receitas({ perfil }: { perfil: "paciente" | "medico" }) {
     setErros(e);
     if (Object.keys(e).length) return;
 
+    const tituloCompleto = `${tipo === "receita" ? "Receita" : "Atestado"} — ${titulo.trim()}`;
+    // Guarda a lista atual para reconhecer o documento novo quando ele
+    // aparecer (o título sozinho poderia casar com um documento antigo).
+    setPendente({ titulo: tituloCompleto, idsAntes: documentos.map((d) => d.id) });
+    setEmitindo(true);
+    setErros({});
     emitirDocumento({
       tipo,
-      titulo: `${tipo === "receita" ? "Receita" : "Atestado"} — ${titulo.trim()}`,
-      medico: sessao.role === "medico" ? sessao.nome : "Dra. Ana Ribeiro",
+      titulo: tituloCompleto,
+      medico: sessao.nome,
       paciente: perfil === "medico" ? pacienteDoc : sessao.nome,
       conteudo: conteudo.trim(),
       ...(tipo === "receita"
-        ? { medicamento: medicamento.trim(), posologia: posologia.trim() }
+        ? { medicamento: medicamento.trim(), posologia: posologia.trim(), controlado }
         : {}),
       duracao: duracao.trim(),
       ...(observacoes.trim() ? { observacoes: observacoes.trim() } : {}),
     });
-    setPacienteDoc("");
-    setTitulo("");
-    setConteudo("");
-    setMedicamento("");
-    setPosologia("");
-    setDuracao("");
-    setObservacoes("");
-    setErros({});
-    setAberto(false);
+    // NÃO limpa nem fecha aqui: a confirmação (useEffect acima) só roda
+    // quando o documento aparece na lista. Em falha, tudo fica intacto.
   };
 
   return (
@@ -319,7 +406,10 @@ export function Receitas({ perfil }: { perfil: "paciente" | "medico" }) {
             {(["receita", "atestado"] as const).map((t) => (
               <button type="button"
                 key={t}
-                onClick={() => setTipo(t)}
+                onClick={() => {
+                  setTipo(t);
+                  if (t !== "receita") setControlado(false);
+                }}
                 className={`px-4 py-1.5 rounded-lg text-sm font-medium capitalize ${tipo === t ? "bg-card shadow-sm" : "text-muted-foreground"}`}
               >
                 {t}
@@ -357,28 +447,46 @@ export function Receitas({ perfil }: { perfil: "paciente" | "medico" }) {
           </Field>
 
           {tipo === "receita" && (
-            <div className="grid sm:grid-cols-2 gap-3">
-              <Field label="Medicamento" erro={erros["medicamento"]}>
+            <>
+              <div className="grid sm:grid-cols-2 gap-3">
+                <Field label="Medicamento" erro={erros["medicamento"]}>
+                  <input
+                    aria-label="Medicamento e dosagem"
+                    value={medicamento}
+                    onChange={(e) => setMedicamento(e.target.value)}
+                    maxLength={80}
+                    placeholder="Ex.: Losartana 50mg"
+                    className="w-full px-4 py-3 rounded-xl border bg-background"
+                  />
+                </Field>
+                <Field label="Posologia" erro={erros["posologia"]}>
+                  <input
+                    aria-label="Posologia (modo de usar)"
+                    value={posologia}
+                    onChange={(e) => setPosologia(e.target.value)}
+                    maxLength={120}
+                    placeholder="Ex.: 1 comprimido ao dia, pela manhã"
+                    className="w-full px-4 py-3 rounded-xl border bg-background"
+                  />
+                </Field>
+              </div>
+              <label className="flex items-start gap-3 rounded-xl border bg-background px-4 py-3 cursor-pointer">
                 <input
-                  aria-label="Medicamento e dosagem"
-                  value={medicamento}
-                  onChange={(e) => setMedicamento(e.target.value)}
-                  maxLength={80}
-                  placeholder="Ex.: Losartana 50mg"
-                  className="w-full px-4 py-3 rounded-xl border bg-background"
+                  type="checkbox"
+                  aria-label="Medicamento controlado"
+                  checked={controlado}
+                  onChange={(e) => setControlado(e.target.checked)}
+                  className="mt-1 h-4 w-4 shrink-0"
                 />
-              </Field>
-              <Field label="Posologia" erro={erros["posologia"]}>
-                <input
-                  aria-label="Posologia (modo de usar)"
-                  value={posologia}
-                  onChange={(e) => setPosologia(e.target.value)}
-                  maxLength={120}
-                  placeholder="Ex.: 1 comprimido ao dia, pela manhã"
-                  className="w-full px-4 py-3 rounded-xl border bg-background"
-                />
-              </Field>
-            </div>
+                <span>
+                  <span className="block text-sm font-medium">Medicamento controlado</span>
+                  <span className="block text-xs text-muted-foreground mt-0.5">
+                    Receitas de medicamentos controlados só podem ser renovadas numa
+                    chamada com o médico, não pela renovação curta.
+                  </span>
+                </span>
+              </label>
+            </>
           )}
 
           <Field
@@ -419,17 +527,25 @@ export function Receitas({ perfil }: { perfil: "paciente" | "medico" }) {
             />
           </Field>
 
+          {erros["emissao"] && (
+            <p role="alert" className="text-xs text-destructive">
+              {erros["emissao"]}
+            </p>
+          )}
           <div className="flex gap-2 pt-1">
             <button type="button"
               onClick={salvar}
-              className="px-5 py-2.5 rounded-xl bg-primary text-primary-foreground font-semibold"
+              disabled={emitindo}
+              className="px-5 py-2.5 rounded-xl bg-primary text-primary-foreground font-semibold disabled:opacity-50"
             >
-              Emitir
+              {emitindo ? "Emitindo…" : "Emitir"}
             </button>
             <button type="button"
               onClick={() => {
                 setAberto(false);
                 setErros({});
+                setPendente(null);
+                setEmitindo(false);
               }}
               className="px-5 py-2.5 rounded-xl border font-medium"
             >
@@ -461,6 +577,7 @@ export function Receitas({ perfil }: { perfil: "paciente" | "medico" }) {
             <option value="todos">Todos os tipos</option>
             <option value="receita">Somente receitas</option>
             <option value="atestado">Somente atestados</option>
+            <option value="exame">Somente pedidos de exame</option>
           </select>
           <select
             value={fMedico}
@@ -506,20 +623,28 @@ export function Receitas({ perfil }: { perfil: "paciente" | "medico" }) {
       </div>
 
       <div className="mt-4 space-y-2">
-        {filtrados.length === 0 && (
-          <EstadoVazio
-            titulo="Nenhum documento encontrado"
-            descricao="Ajuste os filtros ou aguarde a emissão de receitas, atestados e pedidos de exame após a consulta."
-          />
+        {/* M24: durante o bootstrap do store, lista vazia é carga — o
+            "Nenhum documento" só aparece com a carga concluída. */}
+        {carregando && documentos.length === 0 ? (
+          <div className="bg-card border rounded-2xl p-4 text-sm text-muted-foreground" role="status" aria-live="polite">
+            Carregando documentos…
+          </div>
+        ) : (
+          filtrados.length === 0 && (
+            <EstadoVazio
+              titulo="Nenhum documento encontrado"
+              descricao="Ajuste os filtros ou aguarde a emissão de receitas, atestados e pedidos de exame após a consulta."
+            />
+          )
         )}
         {visiveis.map((d, i) => {
-          const Icon = d.tipo === "receita" ? Pill : Award;
+          const Icon = iconeDocumento(d.tipo);
           return (
             <div key={d.id} className="bg-card border rounded-2xl p-4 flex items-start gap-4">
               <div className="w-11 h-11 rounded-xl bg-primary-soft flex items-center justify-center shrink-0">
                 <Icon className="w-5 h-5 text-primary" />
               </div>
-              <button type="button" onClick={() => setVisualizando(i)} className="flex-1 min-w-0 text-left">
+              <button type="button" onClick={() => abrirDoc(d, i)} className="flex-1 min-w-0 text-left">
                 <div className="font-semibold">{d.titulo}</div>
                 <p className="text-sm text-muted-foreground mt-0.5 line-clamp-2">{d.conteudo}</p>
                 <div className="text-xs text-muted-foreground mt-1.5">
@@ -528,17 +653,7 @@ export function Receitas({ perfil }: { perfil: "paciente" | "medico" }) {
               </button>
               <div className="flex flex-col gap-1 shrink-0">
                 <button type="button"
-                  onClick={() => {
-                    setVisualizando(i);
-                    registrarAudit({
-                      acao: "DOCUMENTO_VISUALIZADO",
-                      categoria: "documento",
-                      severidade: "info",
-                      entidade: "documento",
-                      entidadeId: d.id,
-                      detalhes: `Visualização: ${d.titulo} (${d.tipo})`,
-                    });
-                  }}
+                  onClick={() => abrirDoc(d, i)}
                   className="p-2 rounded-lg hover:bg-muted"
                   title="Visualizar"
                 >
@@ -578,7 +693,7 @@ export function Receitas({ perfil }: { perfil: "paciente" | "medico" }) {
 
       {visualizando !== null && (
         <VisualizadorDoc
-          docs={visiveis}
+          docs={filtrados}
           index={visualizando}
           onIndex={setVisualizando}
           onClose={() => setVisualizando(null)}

@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { exigirPapel } from "@/lib/server/auth";
-import { ok, falha } from "@/lib/server/http";
+import {ok, falha, lerCorpoJson} from "@/lib/server/http";
 
 /** Marca/desmarca conclusão (PATCH) ou remove (DELETE) um lembrete do próprio usuário.
  *  Contrato delta: devolve APENAS o lembrete afetado — sem estado fresco completo. */
@@ -12,7 +12,11 @@ export async function PATCH(
   try {
     const usuario = await exigirPapel("PACIENTE");
     const { id } = await params;
-    const body = (await req.json()) as { feito: boolean };
+    const body = (await lerCorpoJson(req)) as { feito: boolean };
+
+    if (!body) {
+      return Response.json({ erro: "Corpo da requisição inválido." }, { status: 400 });
+    }
 
     const lembrete = await db.lembrete.findUnique({ where: { id } });
     if (!lembrete || lembrete.usuarioId !== usuario.id) {

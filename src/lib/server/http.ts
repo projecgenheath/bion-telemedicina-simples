@@ -1,8 +1,42 @@
 import "server-only";
 import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 
 export function ok<T>(dados: T) {
   return NextResponse.json(dados);
+}
+
+/**
+ * Lê o corpo JSON da requisição SEM estourar 500 em corpo malformado
+ * (M-17 da auditoria). Devolve null quando o corpo não é JSON válido ou a
+ * requisição não tem corpo — a rota devolve 400 com mensagem específica.
+ * Uso: `const body = (await lerCorpoJson(req)) as { ... } | null;`
+ */
+export async function lerCorpoJson(req: NextRequest): Promise<unknown> {
+  try {
+    return await req.json();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * B1 (auditoria da área do paciente): guarda de objeto para o corpo JSON.
+ * `lerCorpoJson` devolve `null` em corpo malformado, mas também pode devolver
+ * array/string/número em corpo JSON válido de tipo errado — cast cego para
+ * `{ campo?: string }` e `.trim()`/`.slice()` sobre campo não-string viravam
+ * 500 em vez de 400. Uso: `const bruto = corpoObjeto(await lerCorpoJson(req));
+ * if (!bruto) return 400;` e ler campos com `textoDoCorpo`.
+ */
+export function corpoObjeto(v: unknown): Record<string, unknown> | null {
+  return v !== null && typeof v === "object" && !Array.isArray(v)
+    ? (v as Record<string, unknown>)
+    : null;
+}
+
+/** Campo de texto do corpo: devolve a string ou `undefined` (nunca lança). */
+export function textoDoCorpo(v: unknown): string | undefined {
+  return typeof v === "string" ? v : undefined;
 }
 
 /** Padrões de falha de infraestrutura de banco (não devem vazar ao usuário). */

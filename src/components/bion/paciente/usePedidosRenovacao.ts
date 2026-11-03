@@ -4,6 +4,28 @@ import { mensagemRecusa } from "@/lib/aceite-termos";
 import { useCallback, useEffect, useState } from "react";
 import { lerPedidoRenovacao, type PedidoRenovacao } from "@/lib/atendimento-tipo";
 
+/** Cobrança criada junto com o pedido (resposta do POST /api/renovacoes).
+ *  `status: "pendente"` = aguardando o pagamento com cartão; só depois dele
+ *  o pedido entra na fila do médico. */
+export type CobrancaRenovacao = {
+  pagamentoId: string;
+  valorCentavos: number;
+  status: "pendente" | "confirmado";
+  pagarComCartao: boolean;
+};
+
+function lerCobrancaRenovacao(v: unknown): CobrancaRenovacao | undefined {
+  if (!v || typeof v !== "object") return undefined;
+  const r = v as Record<string, unknown>;
+  if (typeof r.pagamentoId !== "string" || typeof r.valorCentavos !== "number") return undefined;
+  return {
+    pagamentoId: r.pagamentoId,
+    valorCentavos: r.valorCentavos,
+    status: r.status === "confirmado" ? "confirmado" : "pendente",
+    pagarComCartao: r.pagarComCartao === true,
+  };
+}
+
 /**
  * Pedidos de renovação do paciente (GET/POST /api/renovacoes).
  * `disponivel` só vira true quando o GET responde ok; se a rota falhar, a
@@ -30,7 +52,7 @@ export function usePedidosRenovacao(ativo = true) {
     };
   }, [ativo, versao]);
 
-  const pedir = useCallback(async (documentoId: string, observacaoPaciente: string): Promise<{ ok: boolean; erro?: string }> => {
+  const pedir = useCallback(async (documentoId: string, observacaoPaciente: string): Promise<{ ok: boolean; erro?: string; cobranca?: CobrancaRenovacao }> => {
     try {
       const r = await fetch("/api/renovacoes", {
         method: "POST",
@@ -38,11 +60,11 @@ export function usePedidosRenovacao(ativo = true) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ documentoId, observacaoPaciente }),
       });
-      const j = (await r.json().catch(() => ({}))) as { erro?: string; codigo?: string; pedido?: unknown };
+      const j = (await r.json().catch(() => ({}))) as { erro?: string; codigo?: string; pedido?: unknown; cobranca?: unknown };
       if (!r.ok) return { ok: false, erro: mensagemRecusa(j, "Não foi possível enviar o pedido.") };
       const p = lerPedidoRenovacao(j.pedido);
       if (p) setPedidos((atual) => [p, ...atual]);
-      return { ok: true };
+      return { ok: true, cobranca: lerCobrancaRenovacao(j.cobranca) };
     } catch {
       return { ok: false, erro: "Sem conexão. Tente de novo." };
     }

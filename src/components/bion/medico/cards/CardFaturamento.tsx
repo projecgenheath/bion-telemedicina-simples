@@ -5,19 +5,22 @@ import { fmtCentavos, type PontoReceita, type ReceitaDia } from "../metricas";
 
 /**
  * Receita LÍQUIDA dos últimos 30 dias (GET /api/medico/receita): valor das
- * consultas − comissão de 10% do app − taxa do gateway, mais a parte do
- * médico nas multas pagas pelo paciente. Barras SVG leves (sem dependência)
- * + tabela equivalente só para leitores de tela.
+ * consultas − comissão do app (percentual da regra que o servidor devolve)
+ * − taxa do gateway, mais a parte do médico nas multas pagas pelo paciente.
+ * Barras SVG leves (sem dependência) + tabela equivalente só para leitores de tela.
  */
 export function CardFaturamento({
   pontos,
   totais,
+  comissaoPct = 10,
   carregando,
   erro,
   recarregar,
 }: {
   pontos: PontoReceita[];
   totais: Omit<ReceitaDia, "dia"> | null;
+  /** Percentual vigente devolvido pelo servidor (regra.comissaoPct). */
+  comissaoPct?: number;
   carregando: boolean;
   erro: string | null;
   recarregar: () => void;
@@ -68,7 +71,7 @@ export function CardFaturamento({
                 <dd className="font-bold tabular-nums text-bion-ink dark:text-bion-paper">{fmtCentavos(totais.brutoCentavos)}</dd>
               </div>
               <div>
-                <dt>Comissão (10%)</dt>
+                <dt>Comissão ({comissaoPct}%)</dt>
                 <dd className="font-bold tabular-nums text-bion-ink dark:text-bion-paper">−{fmtCentavos(totais.comissaoCentavos)}</dd>
               </div>
               <div>
@@ -125,7 +128,7 @@ export function CardFaturamento({
         </p>
       ) : null}
       <p className="mt-2 text-xs text-bion-ink/70 dark:text-bion-paper/70">
-        Receita líquida após comissão de 10% e taxa do gateway, pela data da consulta. Consultas canceladas, aguardando
+        Receita líquida após comissão de {comissaoPct}% e taxa do gateway, pela data da consulta. Consultas canceladas, aguardando
         reagendamento ou reembolsadas integralmente não contam; multas pagas pelo paciente entram com a sua parte (50%).
       </p>
     </div>

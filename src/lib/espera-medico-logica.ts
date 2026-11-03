@@ -25,9 +25,18 @@ export function calcularExpiraEm(dataInicio: Date, atendidaPacienteEm: Date): Da
   return new Date(base + ESPERA_MEDICO_MIN * 60_000);
 }
 
-/** Status visto agora: "aguardando" com o prazo vencido já conta como "expirada" (o job grava depois). */
-export function statusEfetivo(e: { status: string; expiraEm: Date }, agora: Date): StatusEspera {
+/**
+ * Status visto agora: prazo vencido já conta como "expirada" na LEITURA
+ * (o job grava depois):
+ *  - "aguardando" com expiraEm vencido → "expirada";
+ *  - B40: "remarcando" com a reserva da diferença (reservaExpiraEm)
+ *    vencida → "expirada" — sem isto, a tela ficava em "Pague a
+ *    diferença — 00:00" até o job liberar a reserva.
+ * Sem reservaExpiraEm (nada a pagar), "remarcando" não vence por aqui.
+ */
+export function statusEfetivo(e: { status: string; expiraEm: Date; reservaExpiraEm?: Date | null }, agora: Date): StatusEspera {
   if (e.status === "aguardando" && agora.getTime() >= e.expiraEm.getTime()) return "expirada";
+  if (e.status === "remarcando" && e.reservaExpiraEm && agora.getTime() >= e.reservaExpiraEm.getTime()) return "expirada";
   return e.status as StatusEspera;
 }
 

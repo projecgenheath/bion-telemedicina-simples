@@ -11,12 +11,14 @@ type Contato = {
   suporte: boolean;
 };
 
+// B33: primeira + última inicial — antes devolvia só a inicial do
+// SEGUNDO nome ("Maria Silva" virava "S").
 const INICIAIS = (nome: string) => {
   const partes = nome.split(" ").filter(Boolean);
-  return partes[1]?.[0] ?? partes[0]?.[0] ?? "?";
+  if (partes.length === 0) return "?";
+  if (partes.length === 1) return partes[0]?.[0] ?? "?";
+  return `${partes[0]?.[0] ?? ""}${partes[partes.length - 1]?.[0] ?? ""}` || "?";
 };
-
-const MINUTOS_ONLINE = 5;
 
 export function Mensagens() {
   const { sessao, consultas, medicos, pacientes, mensagens, suporte, enviarMensagem, marcarConversaLida } =
@@ -25,13 +27,18 @@ export function Mensagens() {
   const [texto, setTexto] = useState("");
   const listaRef = useRef<HTMLDivElement>(null);
 
-  /* Contatos por papel: quem o usuário pode conversar */
+  /* Contatos por papel: quem o usuário pode conversar.
+     Espelha a regra do servidor (POST /api/mensagens): paciente ↔ médico
+     exigem vínculo de consulta — existe ao menos uma consulta do par com
+     status diferente de "cancelada" (agendada ou realizada). Consulta
+     cancelada, sozinha, não libera conversa. */
   const contatos = useMemo<Contato[]>(() => {
     const lista: Contato[] = [];
 
     if (sessao.role === "paciente") {
       const vistos = new Set<string>();
       for (const c of consultas) {
+        if (c.status === "cancelada") continue;
         const id = c.medicoId ?? medicos.find((m) => m.nome === c.medico)?.id;
         if (id && !vistos.has(id)) {
           vistos.add(id);
@@ -41,6 +48,7 @@ export function Mensagens() {
     } else if (sessao.role === "medico") {
       const vistos = new Set<string>();
       for (const c of consultas) {
+        if (c.status === "cancelada") continue;
         if (c.pacienteId && !vistos.has(c.pacienteId)) {
           vistos.add(c.pacienteId);
           lista.push({ id: c.pacienteId, nome: c.paciente, detalhe: "Paciente", suporte: false });
@@ -68,9 +76,7 @@ export function Mensagens() {
       const thread = mensagens.filter((m) => m.deId === c.id || m.paraId === c.id);
       const ultima = thread[thread.length - 1];
       const naoLidas = thread.filter((m) => !m.minha && !m.lida).length;
-      const online =
-        !!ultima && !ultima.minha && Date.now() - ultima.ts < MINUTOS_ONLINE * 60_000;
-      return { contato: c, ultima, naoLidas, online, atividade: ultima?.ts ?? 0 };
+      return { contato: c, ultima, naoLidas, atividade: ultima?.ts ?? 0 };
     });
 
     // Com mensagens primeiro (mais recentes), sem mensagens depois em ordem alfabética
@@ -108,11 +114,13 @@ export function Mensagens() {
     if (el) el.scrollTop = el.scrollHeight;
   }, [threadAtiva.length, ativa?.id]);
 
-  const enviar = useCallback(() => {
+  // A8: o texto só é limpo depois que o servidor confirma o envio — em
+  // falha, ele continua no campo para tentar de novo (erro já virou toast).
+  const enviar = useCallback(async () => {
     const t = texto.trim();
     if (!t || !ativa) return;
-    enviarMensagem(ativa.id, t);
-    setTexto("");
+    const ok = await enviarMensagem(ativa.id, t);
+    if (ok) setTexto("");
   }, [texto, ativa, enviarMensagem]);
 
   /* Estado vazio: nenhum contato disponível ainda */
@@ -130,9 +138,9 @@ export function Mensagens() {
           titulo="Nenhuma conversa disponível"
           descricao={
             sessao.role === "paciente"
-              ? "Após a primeira consulta, você poderá conversar com o médico por aqui."
+              ? "Quando você tiver uma consulta agendada ou realizada com um médico, ele aparece aqui para você conversar."
               : sessao.role === "medico"
-                ? "Seus pacientes aparecerão aqui após o primeiro atendimento."
+                ? "Seus pacientes aparecerão aqui quando tiverem uma consulta agendada ou realizada com você."
                 : "Não há usuários cadastrados para conversar."
           }
         />
@@ -154,7 +162,7 @@ export function Mensagens() {
       <div className="grid md:grid-cols-[280px_1fr] gap-4 min-w-0">
         {/* Lista de conversas */}
         <div className="space-y-2 md:max-h-[560px] md:overflow-y-auto md:pr-1">
-          {conversas.map(({ contato, ultima, naoLidas, online }) => (
+          {conversas.map(({ contato, ultima, naoLidas }) => (
             <button type="button"
               key={contato.id}
               onClick={() => setAtivaId(contato.id)}
@@ -162,16 +170,10 @@ export function Mensagens() {
                 contato.id === c.id ? "border-primary bg-primary-soft" : "hover:border-primary"
               }`}
             >
-              <div className="relative">
+              <div>
                 <div className="w-10 h-10 rounded-xl bg-primary text-primary-foreground flex items-center justify-center font-bold text-xs">
                   {INICIAIS(contato.nome)}
                 </div>
-                {online && (
-                  <span
-                    className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-card"
-                    style={{ backgroundColor: "var(--accent)" }}
-                  />
-                )}
               </div>
               <div className="flex-1 min-w-0">
                 <div className="text-xs font-bold truncate">{contato.nome}</div>
