@@ -1,3 +1,4 @@
+import { db } from "@/lib/db";
 import type { ModoCobranca } from "@/lib/server/stripe";
 
 /**
@@ -43,10 +44,6 @@ export async function gravarContaMedicoDaCobranca(
   conta: string | null,
 ): Promise<void> {
   const data = marcaCobrancaDireta(conta);
-  void alvo;
-  void data;
-  // TODO(Médicos, PR A): depois da coluna stripeContaMedico (20261103c) — grava
-  // também null (limpa a marca de sessão direta abandonada):
-  //   if (alvo.pagamentoId) await db.pagamento.update({ where: { id: alvo.pagamentoId }, data });
-  //   if (alvo.remarcacaoId) await db.remarcacaoPendente.update({ where: { id: alvo.remarcacaoId }, data });
+  if (alvo.pagamentoId) await db.pagamento.update({ where: { id: alvo.pagamentoId }, data });
+  if (alvo.remarcacaoId) await db.remarcacaoPendente.update({ where: { id: alvo.remarcacaoId }, data });
 }
