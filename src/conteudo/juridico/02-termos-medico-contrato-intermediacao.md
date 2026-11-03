@@ -1,16 +1,17 @@
 ---
 title: "Termos de Uso e Contrato de Intermediação do Médico — BION Telemedicina"
-subtitle: "Versão provisória v2 — 28/10/2026"
+subtitle: "Versão provisória v2.1 — 03/11/2026"
 lang: pt-BR
 ---
 
 # Resumo em linguagem simples
 
-- A BION é **intermediadora tecnológica**: fornece a plataforma, agenda, sala de vídeo, prontuário eletrônico, cobrança e repasse. **Você presta o serviço médico em nome próprio**, com **autonomia técnica total**. A BION não pratica ato médico.
+- A BION é **intermediadora tecnológica**: fornece a plataforma, agenda, sala de vídeo, prontuário eletrônico, cobrança pela Stripe direto na sua conta. **Você presta o serviço médico em nome próprio**, com **autonomia técnica total**. A BION não pratica ato médico.
 - **Não há vínculo empregatício**, exclusividade, subordinação ou horário obrigatório. Você define **sua agenda e seu preço** (padrão sugerido R$ 150,00).
 - Exigimos **CRM ativo e regular** o tempo todo. Se o CRM ficar irregular, a conta é suspensa.
-- **Remuneração da BION: 10%** do valor de cada consulta realizada; **você recebe 90%**, menos eventuais taxas do gateway (hoje zero) e ajustes de reembolso.
+- **Remuneração da BION: 10%** do valor de cada consulta realizada; **você recebe 90%**, menos a taxa do cartão cobrada pela Stripe e eventuais reembolsos. No reembolso integral, a BION restitui a você a taxa do cartão; no parcial, a taxa fica com você. Em estorno pelo banco do cartão (chargeback), você arca com a taxa do cartão e com a taxa de contestação da Stripe, salvo falha da BION (cláusula 10.13).
 - **Recebimentos:** Você recebe na sua conta Stripe no momento do pagamento, já descontadas a comissão de 10% da BION e a taxa do cartão. A Stripe transfere o valor para a sua conta bancária conforme o calendário dela.
+- **BION Copilot (opcional):** o que você digita e seus dados profissionais vão à NVIDIA (EUA). **Nunca insira dados que identifiquem pacientes**; o filtro automático pode falhar e a responsabilidade é sua (cláusula 13.1).
 - **Multas de cancelamento/remarcação tardia (≤ 24 h):** 50% do valor, divididas meio a meio entre você e a BION. **Atenção ao risco ético** descrito na cláusula 10.6.
 - **Notas fiscais:** você emite ao paciente (NFS-e se PJ; recibo Receita Saúde se PF). A BION emite a você a NFS-e da comissão dela. Opcionalmente, você pode autorizar a BION a emitir a NFS-e em seu nome, com seu certificado A1 guardado criptografado (**recurso ainda não disponível**).
 - **Proteção de dados:** você é **controlador** do prontuário que produz; a BION é **operadora** dele e **controladora** dos dados da plataforma. Detalhes no Anexo I.
@@ -63,9 +64,9 @@ Aplicam-se as definições dos Termos de Uso do Paciente. Além delas:
 
 # 3. Objeto e natureza da relação
 
-3.1. **Objeto.** A BION licencia ao médico o uso da Plataforma e presta serviços de **intermediação tecnológica**: divulgação do perfil, agendamento, sala de teleconsulta, prontuário eletrônico, mensagens, emissão de documentos em PDF, cobrança do paciente **em nome e por conta do médico**, cálculo e pagamento do repasse, suporte e ferramentas auxiliares.
+3.1. **Objeto.** A BION licencia ao médico o uso da Plataforma e presta serviços de **intermediação tecnológica**: divulgação do perfil, agendamento, sala de teleconsulta, prontuário eletrônico, mensagens, emissão de documentos em PDF, cobrança do paciente pela Stripe **em nome e por conta do médico**, direto na conta Stripe do médico, configuração da comissão da BION em cada pagamento, suporte e ferramentas auxiliares.
 
-3.2. **Mandato de cobrança.** O médico autoriza a BION a **receber do paciente, em nome do médico**, o valor das consultas, renovações e multas, por meio de gateway de pagamento, a reter sua remuneração (cláusula 10) e a repassar o saldo ao médico. Os valores recebidos de pacientes pertencem ao médico, salvo a parte da BION. **[A DEFINIR COM ADVOGADO/CONTADOR: estrutura de recebimento — conta da BION vs. split do gateway — e impactos regulatórios (Lei 12.865/2013, BACEN) e tributários.]**
+3.2. **Mandato de cobrança.** O médico autoriza a BION a configurar, pela Stripe, a **cobrança do paciente direto na conta Stripe do médico**, com a retenção automática da comissão da BION (cláusula 10) no ato do pagamento. Os valores pagos pelos pacientes pertencem ao médico, salvo a comissão da BION, e a BION não os recebe nem os repassa.
 
 3.3. **A BION não presta serviço médico**, não interfere na conduta, no diagnóstico, na prescrição ou no tempo de consulta, e não é empregadora, sócia, operadora de plano de saúde ou cooperativa do médico.
 
@@ -127,7 +128,7 @@ k) **não cobrar do paciente nenhum valor fora da Plataforma** por consultas age
 
 8.4. **CID em atestado** só com autorização expressa do paciente, salvo dever legal (Res. CFM 1.658/2002, art. 5º).
 
-8.5. **Renovação de receita por mensagem.** O paciente pode pedir a renovação ao médico que emitiu a receita, pagando com cartão, dentro do app. O médico deve avaliar com critério clínico e pode renovar, marcar chamada curta, pedir exames ou **recusar** — a recusa gera **reembolso integral** ao paciente, sem repasse. Renovar sem condições clínicas suficientes é responsabilidade do médico (CEM, art. 37).
+8.5. **Renovação de receita por mensagem.** O paciente pode pedir a renovação ao médico que emitiu a receita, pagando com cartão, dentro do app. O médico deve avaliar com critério clínico e pode renovar, marcar chamada curta, pedir exames ou **recusar** — a recusa gera **reembolso integral** ao paciente, e o médico não recebe por ela. Renovar sem condições clínicas suficientes é responsabilidade do médico (CEM, art. 37).
 
 # 9. Agenda, pontualidade, faltas e cancelamentos do médico
 
@@ -135,7 +136,7 @@ k) **não cobrar do paciente nenhum valor fora da Plataforma** por consultas age
 
 9.2. **Tolerância:** se o médico não entrar na sala em até **10 minutos** depois que o paciente atender a chamada, o paciente pode cancelar com reembolso integral ou trocar por outro médico disponível na hora.
 
-9.3. **Falta do médico ou falha técnica do lado do médico:** **não gera repasse**; o paciente escolhe remarcar sem multa ou receber reembolso integral. O registro de presença na sala serve como prova de comparecimento.
+9.3. **Falta do médico ou falha técnica do lado do médico:** **o médico não recebe**; o paciente escolhe remarcar sem multa ou receber reembolso integral no mesmo cartão. Sem escolha em até **7 dias úteis**, o reembolso integral é feito automaticamente, e a parte do médico é revertida pela Stripe na conta dele. O registro de presença na sala serve como prova de comparecimento.
 
 9.4. **Cancelamento do dia pelo médico:** as consultas são canceladas ou oferecidas para remarcação **sem multa ao paciente**, com reembolso integral quando aplicável.
 
@@ -145,25 +146,29 @@ k) **não cobrar do paciente nenhum valor fora da Plataforma** por consultas age
 
 10.1. **Preço.** O médico define livremente o valor da sua consulta (padrão sugerido R$ 150,00), exibido ao paciente antes do pagamento (Res. CFM 2.314/2022, art. 16). Alterações valem para **novos** agendamentos. Não há planos nem pacotes.
 
-10.2. **Remuneração da BION.** Pela intermediação, a BION retém **10% do valor bruto** de cada consulta realizada e de cada renovação atendida. O médico recebe **90%**. Sobre retornos gratuitos não há cobrança nem repasse.
+10.2. **Remuneração da BION.** Pela intermediação, a BION retém **10% do valor bruto** de cada consulta realizada e de cada renovação atendida. O médico recebe **90%**. Sobre retornos gratuitos não há cobrança e o médico não recebe.
 
-10.3. **Recebimento pela Stripe.** O médico recebe os pagamentos numa conta conectada da Stripe, aberta em seu nome com CPF ou CNPJ, e aceita os termos da Stripe Connected Account Agreement. Cada pagamento é dividido no ato: a BION recebe uma comissão de 10% do valor da consulta, e o restante fica com o médico, já descontada a taxa de processamento cobrada pela Stripe. A Stripe transfere o valor para a conta bancária do médico conforme o calendário dela. Em reembolso integral, o médico não recebe a sua parte e a taxa fica com a BION. Em reembolso parcial, o médico devolve a parte proporcional dele e continua responsável pela taxa de processamento. Toda consulta dá ao paciente direito a um retorno grátis em até 30 dias, e o retorno não gera repasse. O médico é responsável por emitir o recibo (Receita Saúde) ou a nota fiscal da consulta ao paciente.
+10.3. **Recebimento pela Stripe.** O médico recebe os pagamentos numa conta conectada da Stripe, aberta em seu nome com CPF ou CNPJ, e aceita os termos da Stripe Connected Account Agreement. Cada pagamento é dividido no ato: a BION recebe uma comissão de 10% do valor da consulta, e o restante fica com o médico, já descontada a taxa de processamento cobrada pela Stripe. A Stripe transfere o valor para a conta bancária do médico conforme o calendário dela. **Reembolso integral:** o paciente recebe de volta o valor cheio no mesmo cartão, a BION devolve a sua comissão de 10% e a parte do médico é revertida pela Stripe na conta dele. A taxa do cartão é custeada pela BION: como, na cobrança direta, a Stripe retém essa taxa da conta do médico e não a devolve no reembolso, a BION restituirá ao médico o valor dessa taxa por meio de transferência para a sua conta de recebimento na Stripe, de modo que o reembolso integral não gere prejuízo ao médico. **Reembolso parcial:** o médico devolve a parte proporcional dele e continua responsável pela taxa do cartão, que não é restituída. Estornos e contestações abertos pelo banco do cartão (chargeback) seguem a cláusula 10.13, e neles a BION não restitui a taxa. Toda consulta dá ao paciente direito a um retorno grátis em até 30 dias, e o retorno não gera pagamento ao médico. O médico é responsável por emitir o recibo (Receita Saúde) ou a nota fiscal da consulta ao paciente.
 
-10.4. **Reembolsos e contestações.** Se um reembolso, estorno ou contestação (chargeback) acontecer depois de a parte do médico já ter caído na conta Stripe dele, a parte proporcional do médico é revertida pela própria Stripe, que a debita do saldo da conta conectada. Se o saldo não for suficiente, o valor pode ser descontado dos próximos recebimentos, conforme as regras da Stripe.
+10.4. **Reembolsos, estornos e contestações.** O paciente sempre recebe de volta, no mesmo cartão, o valor cheio que lhe é devido, sem desconto de taxas. No **reembolso integral**, a BION devolve também a sua comissão de 10% e custeia a taxa do cartão, restituindo ao médico o valor retido pela Stripe (cláusula 10.3). No **reembolso parcial**, o médico arca com a taxa do cartão, sem restituição. Reembolsos, estornos e contestações (chargebacks) são revertidos pela própria Stripe na conta Stripe do médico, que debita o valor do saldo dela. Se o saldo não for suficiente, o valor pode ser descontado dos próximos recebimentos, conforme as regras da Stripe.
 
-10.5. **Multas pagas pelo paciente** (cancelamento ou remarcação com 24 h ou menos de antecedência: 50% do valor da consulta) são divididas **50% para o médico e 50% para a BION**, sem comissão adicional sobre a parte do médico.
+10.5. **Multas pagas pelo paciente** (cancelamento ou remarcação com 24 h ou menos de antecedência: 50% do valor da consulta) são divididas **50% para o médico e 50% para a BION**, sem comissão adicional sobre a parte do médico. A taxa do cartão sai da metade do médico. A diferença de preço paga na sala de espera, quando o paciente troca de médico, segue a divisão normal de 90% para o médico e 10% para a BION.
 
-10.6. **⚠️ Aviso de risco ético ao médico.** Se o paciente faltar à consulta sem cancelar, não há reembolso, e o médico fica com a sua parte, que já foi creditada na conta Stripe dele. Nas multas por cancelamento com 24 horas ou menos de antecedência, o médico recebe metade do valor retido. O CFM entende que o art. 59 do Código de Ética Médica veda ao médico aceitar remuneração por atendimento não prestado, inclusive multa ou taxa por falta ou cancelamento (Despacho CFM SEI nº 102/2025). Há também entendimento de Conselhos Regionais contrário à cobrança de percentual sobre o honorário por empresas de intermediação (CEM, art. 58). O médico declara estar ciente desse risco e **pode optar por não receber a sua parte das multas** na sua área de recebimento **[A DEFINIR: implementar a opção]**. **[DECISÃO PENDENTE DA BION COM ADVOGADO — ver pendências.]**
+10.6. **⚠️ Aviso de risco ético ao médico.** Se o paciente faltar à consulta sem cancelar, o médico fica com a sua parte, que já foi creditada na conta Stripe dele, salvo se o paciente pedir o reembolso integral em até 7 dias corridos depois do horário da consulta, com justificativa (cláusula 10.12). Nesse caso a parte do médico é revertida pela Stripe. Nas multas por cancelamento com 24 horas ou menos de antecedência, o médico recebe metade do valor retido. O CFM entende que o art. 59 do Código de Ética Médica veda ao médico aceitar remuneração por atendimento não prestado, inclusive multa ou taxa por falta ou cancelamento (Despacho CFM SEI nº 102/2025). Há também entendimento de Conselhos Regionais contrário à cobrança de percentual sobre o honorário por empresas de intermediação (CEM, art. 58). O médico declara estar ciente desse risco e **pode optar por não receber a sua parte das multas** na sua área de recebimento **[A DEFINIR: implementar a opção]**. **[DECISÃO PENDENTE DA BION COM ADVOGADO — ver pendências.]**
 
-10.7. **Crédito na conta Stripe.** Os valores do médico são creditados direto na conta Stripe dele no momento do pagamento, já descontadas a comissão da BION e a taxa de processamento. A BION não recebe nem guarda a parte do médico e não faz repasse por PIX.
+10.7. **Crédito na conta Stripe.** Os valores do médico são creditados direto na conta Stripe dele no momento do pagamento, já descontadas a comissão de 10% da BION (application fee) e a taxa do cartão. A BION não recebe, não guarda e não transfere a parte do médico. As únicas transferências da BION ao médico são a restituição da taxa do cartão no reembolso integral (cláusula 10.3) e o ressarcimento das taxas de contestação decorrente de falha da BION (cláusula 10.13). Não há fechamento diário nem pagamento manual. O histórico de repasses anteriores a 28/10/2026 fica guardado por 5 anos, por obrigação fiscal, só como registro.
 
-10.8. **Transferência para o banco.** A transferência do saldo da conta Stripe para a conta bancária do médico segue o calendário e os prazos da Stripe. A BION não controla esses prazos.
+10.8. **Transferência para o banco.** A transferência do saldo da conta Stripe para a conta bancária do médico segue o calendário e os prazos da Stripe. A BION não controla esses prazos. Fora as restituições de taxa previstas nas cláusulas 10.3 e 10.13, a BION não faz transferências ao médico.
 
-10.9. **Acompanhamento e cadastro na Stripe.** No painel, o médico pode acompanhar cada pagamento, a comissão e a taxa descontadas e os reembolsos. Para receber, o médico precisa manter o cadastro da Stripe completo e atualizado, com documento, verificação de identidade e conta bancária. Enquanto o cadastro estiver pendente, ele não pode receber novos agendamentos pagos.
+10.9. **Acompanhamento e cadastro na Stripe.** No painel da BION e no painel da Stripe, o médico pode acompanhar cada pagamento, a comissão e a taxa descontadas, os reembolsos, as restituições de taxa feitas pela BION e as transferências para o banco. Para receber, o médico precisa manter o cadastro da Stripe completo e atualizado, com documento, verificação de identidade e conta bancária. Enquanto o cadastro estiver pendente, ele não pode receber novos agendamentos pagos.
 
-10.10. **Contestação.** O médico pode contestar valores em até **[A DEFINIR: 30] dias** do fechamento, pelo suporte. Correções de desfecho feitas pela administração são registradas em auditoria e informadas ao médico.
+10.10. **Contestação.** O médico pode contestar valores em até **[A DEFINIR: 30] dias** do pagamento, pelo suporte. Correções de desfecho feitas pela administração são registradas em auditoria e informadas ao médico.
 
 10.11. **Retenções legais.** A BION fará retenções tributárias somente quando a lei exigir.
+
+10.12. **Reembolso por falta do paciente.** Se o desfecho registrado for falta do paciente, ele pode pedir pelo app, em até **7 dias corridos** depois do horário da consulta e com uma justificativa, o reembolso **integral** no mesmo cartão. O pedido é aprovado na hora, sem análise. A BION devolve a sua comissão, a parte do médico é revertida pela Stripe na conta dele e, por ser reembolso integral, a BION custeia a taxa do cartão e a restitui ao médico (cláusula 10.3).
+
+10.13. **Estornos pelo banco (chargeback).** Quando o banco ou o emissor do cartão do paciente faz um estorno ou abre uma contestação (chargeback), a Stripe reverte o valor na conta Stripe do médico. Nesses casos, **o médico arca com a taxa do cartão e com a taxa de contestação (dispute fee) cobrada pela Stripe**, e a BION **não** restitui essas taxas. Isso é diferente do reembolso integral feito pela Plataforma (cláusula 10.3), em que a BION restitui a taxa do cartão. **Exceção:** se a contestação decorrer de falha da BION, como falha técnica da Plataforma ou cobrança indevida ou duplicada feita pelo sistema, a BION arca com a taxa do cartão e com a taxa de contestação. O médico pode apresentar documentos, como o registro de presença na sala e o prontuário do atendimento, observado o sigilo médico e o mínimo necessário, para que a disputa seja contestada junto à Stripe. Se a disputa for ganha, os valores revertidos voltam à conta do médico conforme as regras da Stripe.
 
 # 11. Obrigações fiscais e emissão de documentos fiscais
 
@@ -181,7 +186,7 @@ k) **não cobrar do paciente nenhum valor fora da Plataforma** por consultas age
 
 a) **Médico — controlador** dos dados de saúde que coleta e registra no atendimento (evolução, conduta, CID, documentos, prontuário). Justificativa: as decisões sobre a finalidade e o conteúdo do registro clínico são do médico, que tem o dever legal e ético de elaborá-lo e mantê-lo (Res. CFM 1.638/2002 e 2.314/2022; Lei 13.787/2018) e responde pelo sigilo.  
 b) **BION — operadora** desses dados: armazena, protege, disponibiliza e guarda o prontuário pelo prazo legal, **seguindo as instruções do médico** e o Anexo I.  
-c) **BION — controladora** dos dados de cadastro, conta, pagamentos, repasses, segurança, logs, suporte, avaliações e das funcionalidades que ela mesma oferece ao paciente (BION IA, leitura de exames, lembretes, IMC), e dos dados pessoais do próprio médico.  
+c) **BION — controladora** dos dados de cadastro, conta, pagamentos, histórico de repasses anteriores a 28/10/2026, segurança, logs, suporte, avaliações e das funcionalidades que ela mesma oferece ao médico (BION Copilot) e ao paciente (BION IA, leitura de exames, lembretes, IMC), e dos dados pessoais do próprio médico.  
 d) **Compartilhamento do histórico entre médicos:** a regra de que o médico com vínculo assistencial vê o histórico produzido por outros médicos é **definida pela BION**, com consentimento do paciente; por isso, **nesse ponto a BION e os médicos atuam como controladores conjuntos** e a BION responde pela transparência ao paciente. **[Ver pendências: validar com advogado.]**
 
 12.2. O médico só pode usar dados de pacientes **para o atendimento** e para cumprir obrigações legais e fiscais. É vedado exportar, copiar ou usar esses dados para marketing, pesquisa ou qualquer outra finalidade sem base legal própria e sem as autorizações cabíveis.
@@ -192,7 +197,7 @@ d) **Compartilhamento do histórico entre médicos:** a regra de que o médico c
 
 # 13. Ferramentas de apoio e inteligência artificial
 
-13.1. **BION Copilot IA.** O médico pode usar um assistente de IA (Google Gemini) para dúvidas gerais. **O que o médico digita é enviado ao Google sem remoção de dados de pacientes**, junto com a especialidade e o **CRM** do médico (só o nome e o e-mail do médico são removidos). Por isso, **é proibido inserir no Copilot nome, CPF, contato ou qualquer dado que identifique paciente**. A IA não substitui o julgamento clínico; o médico é o único responsável pelas decisões.
+13.1. **BION Copilot.** O BION Copilot é **opcional** e é uma **ferramenta de apoio**: não substitui o julgamento clínico nem a responsabilidade do médico, que continua sendo o único responsável pelas suas decisões (Código de Ética Médica e normas do CFM). Ao usar o Copilot, são enviados à **NVIDIA Corporation (EUA)** o texto que o médico digita e dados profissionais dele: especialidade, CRM e a fila de atendimento, **sem dados de pacientes**. A NVIDIA **pode guardar e usar o conteúdo** conforme os termos dela, e hoje **não há contrato com cláusulas-padrão** com a NVIDIA. O médico **se obriga a não inserir no Copilot dados que identifiquem pacientes** (nome, CPF, contatos, documentos, trechos de prontuário) e a descrever casos apenas de forma anônima. A BION aplica um **filtro automático** que tenta remover nomes de pacientes, CPF, telefone, e-mail, CEP, datas e endereço, mas **esse filtro pode falhar** e não filtra o conteúdo clínico. Se o médico inserir dados identificáveis em descumprimento desta cláusula, **responde por isso perante o paciente e a ANPD**, observado o sigilo médico (Código de Ética Médica). Ao ativar o Copilot, o médico **concorda com o envio dos seus dados profissionais à NVIDIA**, no exterior (LGPD, art. 33, VIII), e pode deixar de usá-lo quando quiser.
 
 13.2. **Evolução.** Nesta versão, **a evolução e os documentos não usam IA**: o botão "Modelo de evolução" insere um modelo de texto padrão, que o médico deve revisar. Se a BION passar a oferecer IA para auxiliar a evolução, isso será informado previamente, com as regras de anonimização e revisão obrigatória pelo médico. **[Ver pendências: a equipe informou que "IA auxilia a evolução", o que não consta no código atual.]**
 
@@ -259,7 +264,7 @@ As comunicações ocorrem pelo app e pelo e-mail cadastrado. Contato da BION: **
 1. **Objeto:** tratamento, pela BION, dos dados de pacientes que integram o prontuário produzido pelo médico, apenas para: armazenar, exibir ao médico e ao paciente, gerar PDFs, compartilhar com outros médicos com vínculo assistencial (cláusula 12.1, d), fazer backup, garantir segurança e guardar pelo prazo legal.
 2. **Instruções:** a BION trata os dados conforme estes Termos e as instruções lícitas do médico (LGPD, art. 39). Instruções ilícitas não serão cumpridas.
 3. **Segurança:** controle de acesso por papel (o administrador da BION **não** acessa conteúdo clínico nem entra na sala); canais em tempo real privados; arquivos clínicos em armazenamento privado com links temporários; tráfego criptografado (HTTPS/TLS; mídia WebRTC criptografada); senhas em hash; trilha de auditoria; limitação de tentativas; dados armazenados no Brasil (São Paulo).
-4. **Suboperadores autorizados:** Supabase (banco, autenticação, arquivos, tempo real — São Paulo), Vercel (hospedagem — São Paulo, com logs de plataforma possivelmente no exterior), Cloudflare (TURN/STUN — global), Google (STUN e, para funcionalidades da BION, IA — exterior), serviços de push dos navegadores, Upstash (limite de tentativas, quando ativo) e o futuro gateway de pagamento. Novos suboperadores serão informados com **15 dias** de antecedência.
+4. **Suboperadores autorizados:** Supabase (banco, autenticação, arquivos, tempo real — São Paulo), Vercel (hospedagem — São Paulo, com logs de plataforma possivelmente no exterior), Cloudflare (TURN/STUN — global), Google (STUN — exterior), NVIDIA (IA: BION IA e BION Copilot — EUA), serviços de push dos navegadores, Upstash (limite de tentativas, quando ativo) e o futuro gateway de pagamento. Novos suboperadores serão informados com **15 dias** de antecedência.
 5. **Transferência internacional:** somente nas hipóteses do art. 33 da LGPD, preferencialmente com cláusulas-padrão contratuais da ANPD (Res. CD/ANPD 19/2024).
 6. **Incidentes:** comunicação ao médico em até **24 horas** após a confirmação.
 7. **Titulares:** a BION auxilia o médico a responder pedidos de pacientes (acesso, cópia, correção).
@@ -281,19 +286,22 @@ As comunicações ocorrem pelo app e pelo e-mail cadastrado. Contato da BION: **
 
 | Evento | Paciente paga | Médico recebe | BION recebe |
 |---|---|---|---|
-| Consulta realizada (valor V) | V | 90% de V (− taxa do gateway, hoje 0) | 10% de V |
+| Consulta realizada (valor V) | V | 90% de V (− taxa do cartão) | 10% de V |
 | Renovação de receita atendida (valor V, cartão, pela Stripe) | V | 90% de V | 10% de V |
-| Renovação recusada pelo médico | reembolso integral | 0 | 0 |
+| Renovação recusada pelo médico | reembolso integral | 0 (taxa do cartão restituída pela BION) | 0 (comissão devolvida; − taxa do cartão) |
 | Retorno grátis (até 30 dias, 1 por consulta) | 0 | 0 | 0 |
 | Retorno pago (31 a 90 dias, ou 2º retorno) | V | 90% de V | 10% de V |
-| Cancelamento com > 24 h | reembolso integral | 0 | 0 |
-| Cancelamento com ≤ 24 h | multa de 50% de V (o paciente recebe 50% de volta no cartão; os outros 50% ficam divididos meio a meio entre o médico e a BION) | 25% de V ⚠️ | 25% de V |
+| Cancelamento com > 24 h | reembolso integral | 0 (taxa do cartão restituída pela BION) | 0 (comissão devolvida; − taxa do cartão) |
+| Cancelamento com ≤ 24 h | multa de 50% de V (o paciente recebe 50% de volta no cartão; os outros 50% ficam divididos meio a meio entre o médico e a BION) | 25% de V ⚠️ (− taxa do cartão) | 25% de V |
 | Remarcação com ≤ 24 h | multa de 50% de V (horário reservado 15 min) | 25% de V ⚠️ + consulta remarcada normalmente | 25% de V |
-| Falta ou atraso > 10 min do médico / falha técnica | remarcação sem custo ou reembolso integral | 0 | 0 |
-| Falta do paciente sem cancelar (desfecho registrado) | V, sem reembolso | 90% de V ⚠️ (sem reembolso; a parte do médico permanece na conta Stripe dele) | 10% de V |
-| Falta do médico ou falha técnica — paciente pede reembolso integral em até 7 dias | reembolso integral | 0 (se já pago, revertidos pela Stripe da conta conectada do médico) | 0 |
+| Falta ou atraso > 10 min do médico / falha técnica | remarcação sem custo ou reembolso integral | 0 (no reembolso, taxa do cartão restituída pela BION) | 0 (no reembolso, comissão devolvida; − taxa do cartão) |
+| Falta do paciente sem cancelar (desfecho registrado), sem pedido de reembolso | V | 90% de V ⚠️ (− taxa do cartão; fica na conta Stripe do médico) | 10% de V |
+| Falta do paciente — paciente pede reembolso integral em até 7 dias corridos, com justificativa | reembolso integral | 0 (revertido pela Stripe da conta do médico; taxa do cartão restituída pela BION) | 0 (comissão devolvida; − taxa do cartão) |
+| Estorno pelo banco do cartão (chargeback) | valor estornado pelo banco | valor revertido pela Stripe da conta do médico; − taxa do cartão e − taxa de contestação, sem restituição (salvo falha da BION, cláusula 10.13) | conforme as regras da Stripe; arca com as taxas só se a contestação decorrer de falha da BION |
+| Falta do médico ou falha técnica sem escolha do paciente em 7 dias úteis | reembolso integral automático | 0 (revertido pela Stripe da conta do médico; taxa do cartão restituída pela BION) | 0 (comissão devolvida; − taxa do cartão) |
 
 - **Divisão:** divisão automática no momento do pagamento; transferência ao banco conforme o calendário da Stripe.
 - **Ajustes:** reembolsos posteriores ao pagamento são revertidos pela Stripe da conta conectada do médico; saldo não compensado é carregado.
+- **Taxa do cartão:** no reembolso integral, custeada pela BION e restituída ao médico por transferência para a conta Stripe dele; no reembolso parcial (como na multa de ≤ 24 h), fica com o médico; no estorno pelo banco (chargeback), o médico arca com a taxa do cartão e com a taxa de contestação, salvo falha da BION (cláusula 10.13).
 
 *Vigente a partir do seu aceite.*

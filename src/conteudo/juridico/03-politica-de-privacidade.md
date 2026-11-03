@@ -1,6 +1,6 @@
 ---
 title: "Política de Privacidade — BION Telemedicina (Pacientes, Médicos e Visitantes)"
-subtitle: "Versão provisória v2 — 28/10/2026"
+subtitle: "Versão provisória v2.1 — 03/11/2026"
 lang: pt-BR
 ---
 
@@ -9,11 +9,11 @@ lang: pt-BR
 # Resumo em linguagem simples
 
 - **Quem cuida dos seus dados:** a BION (**[A DEFINIR: razão social e CNPJ]**) e, no que é prontuário, o médico que atende você.
-- **Onde ficam:** no **Brasil (São Paulo)**, nos servidores da Supabase e da Vercel. Algumas partes passam pelo exterior: a **IA da NVIDIA** (quando você usa a BION IA), servidores de conexão da chamada (**Cloudflare e Google**, que recebem o seu IP) e os **serviços de notificação** do seu navegador.
+- **Onde ficam:** no **Brasil (São Paulo)**, nos servidores da Supabase e da Vercel. Algumas partes passam pelo exterior: a **IA da NVIDIA** (quando você usa a BION IA ou quando um médico usa o BION Copilot), servidores de conexão da chamada (**Cloudflare e Google**, que recebem o seu IP) e os **serviços de notificação** do seu navegador.
 - **Dados de saúde** são usados para o seu atendimento, por médicos, com sigilo. **A administração da BION não vê o conteúdo clínico, não entra na sala e não lê o chat da consulta**, mas vê seus dados de cadastro (nome, e-mail, telefone, CPF, data de nascimento) para operar a plataforma.
 - **O médico que atende você vê todo o seu histórico na BION**, inclusive com outros médicos. Médicos que nunca atenderam você não veem nada.
 - **A videochamada não é gravada.** O chat da consulta vai para o prontuário.
-- **A BION IA** só é usada se você consentir. Tiramos seu nome, e-mail, CPF, telefone, CEP e data de nascimento antes de enviar suas mensagens à NVIDIA. **Laudos de exame** enviados à IA **vão com o conteúdo como está** (inclusive o seu nome impresso) e **sempre pedem o seu consentimento antes de cada envio** — você pode recusar.
+- **A BION IA** só é usada se você consentir. Antes de enviar suas mensagens à NVIDIA, **tentamos remover automaticamente** seu nome, e-mail, CPF, telefone, CEP, datas, endereço e nomes de outras pessoas (**a remoção pode falhar**). Os médicos vão só como código (M1, M2…) e especialidade. **Laudos de exame** enviados à IA **vão com o conteúdo como está** (inclusive o seu nome impresso) e **sempre pedem o seu consentimento antes de cada envio** — você pode recusar.
 - **Não vendemos seus dados. Não usamos rastreadores de publicidade.** Só cookies de login.
 - Você pode **ver, corrigir, baixar e excluir** seus dados. O botão **"Excluir minha conta"** está no seu perfil. O prontuário fica guardado **20 anos** sem o seu nome, porque a lei exige.
 - Encarregado (DPO): **[A DEFINIR: nome] — [A DEFINIR: e-mail do Encarregado]**.
@@ -145,13 +145,13 @@ Quando a base é o consentimento, você pode **retirá-lo a qualquer momento**, 
 
 # 7. Inteligência artificial e decisões automatizadas
 
-7.1. **Provedor.** A BION IA usa o modelo Nemotron, da **NVIDIA Corporation** (EUA), pela API da NVIDIA. Hoje a BION usa essa API na modalidade de avaliação, e nessa modalidade a NVIDIA **pode guardar e usar o conteúdo enviado** conforme os termos dela. Por isso, removemos seus identificadores diretos das mensagens antes do envio. A BION vai migrar para uma contratação que proíba o uso dos dados para treinar modelos, e esta política será atualizada quando isso acontecer. Se a NVIDIA não responder, entram respostas automáticas pré-programadas. A BION não usa outro provedor sem antes avisar você nesta política.
+7.1. **Provedor.** A BION IA usa o modelo Nemotron, da **NVIDIA Corporation** (EUA), pela API da NVIDIA. Hoje a BION usa essa API na modalidade de avaliação, e nessa modalidade a NVIDIA **pode guardar e usar o conteúdo enviado** conforme os termos dela. Por isso, tentamos remover automaticamente seus identificadores diretos das mensagens antes do envio (a remoção pode falhar). A BION vai migrar para uma contratação que proíba o uso dos dados para treinar modelos, e esta política será atualizada quando isso acontecer. Se a NVIDIA não responder, entram respostas automáticas pré-programadas. A BION não usa outro provedor sem antes avisar você nesta política.
 
-7.2. **Chat e triagem com IA.** Antes de enviar ao provedor, removemos **seu nome, e-mail, CPF, telefone, CEP e data de nascimento exata**. Seguem o texto que você digita e um contexto clínico (medicamentos em uso, alergias, convênio e as próximas consultas, com especialidade, **nome do médico** e data). **Endereços e dados de terceiros digitados em texto livre podem não ser detectados** — evite digitá-los. A conversa **não é guardada** pela BION.
+7.2. **Chat e triagem com IA.** A BION IA é **opcional**. Antes do envio, um filtro automático **tenta remover** seu nome, e-mail, CPF, telefone, CEP, datas, endereço e nomes de outras pessoas. **O filtro de nomes é aproximado e pode falhar**, por isso evite digitar dados que identifiquem você ou terceiros. Vão o texto que você digita (no máximo as **12 últimas mensagens**) e um contexto clínico: idade e sexo, medicamentos, alergias, condições, as próximas consultas e as anteriores (com especialidade, data e motivo), os títulos e datas dos exames enviados e a queixa resumida das triagens. Os médicos aparecem só pela especialidade e por um código interno (M1, M2…), **nunca pelo nome**. A conversa do chat **não é guardada** pela BION: fica só na tela do seu aparelho, e guardamos apenas dados técnicos de funcionamento (horário, tempo de resposta, modelo, tamanho do texto e erros), sem o conteúdo. A triagem fica no prontuário. Você pode **revogar o consentimento** a qualquer momento em **Perfil > Privacidade**, e a revogação vale para os envios seguintes.
 
-7.3. **Leitura de exames.** **Antes de cada envio pedimos o seu consentimento específico**, e você pode **recusar**. **O conteúdo do laudo vai à NVIDIA como está**, inclusive com o nome e outros dados impressos, porque a IA precisa ler o documento e conferir se ele é seu. Quando possível, removemos o nome do arquivo e metadados técnicos, **mas não garantimos a anonimização do conteúdo**. O arquivo original não é guardado por essa função; ficam os valores extraídos.
+7.3. **Leitura de exames.** **Antes de cada envio pedimos a sua autorização específica**, e você pode **recusar**. **A imagem ou o PDF do laudo vai à NVIDIA como está**, sem filtro, inclusive com o seu nome e outros dados impressos, porque a IA precisa ler o documento e conferir se ele é seu. Quando possível, removemos o nome do arquivo e metadados técnicos, **mas não garantimos a anonimização do conteúdo**. O arquivo original não é guardado por essa função; ficam os valores extraídos.
 
-7.4. **Copilot IA do médico.** O texto digitado pelo médico vai à NVIDIA com a especialidade e o CRM dele; os médicos são proibidos de inserir dados identificáveis de pacientes.
+7.4. **BION Copilot dos médicos.** Os médicos podem usar, de forma opcional, um assistente de IA (NVIDIA, nos EUA) para apoio ao trabalho. O sistema não envia ao Copilot os seus dados guardados na BION, como prontuário, triagem, exames ou identificação. Os termos dos médicos os proíbem de digitar ou colar no Copilot dados que identifiquem pacientes, e um filtro automático tenta remover nomes, CPF, contatos, datas e endereços, mas pode falhar. Administradores da BION não usam a IA com dados de pacientes.
 
 7.5. **O que a IA não faz.** A IA **não diagnostica, não prescreve e não decide** sobre o seu atendimento. Nenhuma decisão que afete seus interesses é tomada **unicamente** por tratamento automatizado. Você pode pedir **explicação e revisão** de qualquer resultado automatizado (LGPD, art. 20) pelo Encarregado.
 
@@ -183,7 +183,7 @@ Quando a base é o consentimento, você pode **retirá-lo a qualquer momento**, 
 
 9.1. Há transferência internacional para **NVIDIA** (IA), **Stripe** (pagamentos com cartão), **Google** (STUN), **Cloudflare** (STUN/TURN), **serviços de push**, **Vercel** (logs) e, quando houver, **Upstash**.
 
-9.2. Essas transferências ocorrem com base no **art. 33 da LGPD**, preferencialmente por **cláusulas-padrão contratuais** aprovadas pela ANPD (**Resolução CD/ANPD nº 19/2024**), incorporadas aos contratos com esses operadores **[A CONFIRMAR: assinatura/aceite das cláusulas com cada fornecedor]**. Para a BION IA e a leitura de exames, além disso, o seu **consentimento específico e destacado** informa que os dados serão tratados no exterior (art. 33, VIII).
+9.2. Para os demais fornecedores (Stripe, Supabase, Vercel, Google, Cloudflare, serviços de push e, quando houver, Upstash), as transferências ocorrem com base no **art. 33 da LGPD**, nas garantias contratuais oferecidas por cada fornecedor **[A CONFIRMAR: quais fornecedores adotam as cláusulas-padrão da ANPD (Resolução CD/ANPD nº 19/2024)]**. Para a BION IA e a leitura de exames, a transferência à **NVIDIA (EUA)** se baseia **exclusivamente no seu consentimento específico e destacado** (art. 33, VIII, da LGPD). Hoje **não há contrato com cláusulas-padrão com a NVIDIA**, e ela pode guardar e usar o conteúdo conforme os termos dela. Para o BION Copilot, a transferência dos dados profissionais do médico à NVIDIA se baseia no consentimento específico do médico, dado ao ativar o Copilot (art. 33, VIII).
 
 9.3. Você pode pedir informações sobre as garantias de cada transferência ao Encarregado.
 
@@ -269,7 +269,7 @@ Usamos **apenas cookies essenciais de login** (`bion_sessao` e cookies `sb-*` do
 
 18.1. Os dados dos médicos são tratados para o **contrato** (cadastro, agenda, recebimentos), **obrigações regulatórias** (verificação do CRM), **obrigações fiscais**, **segurança** (alertas de troca de identificador da conta Stripe (e, no histórico anterior a 28/10/2026, a chave PIX) e de CNPJ divergente) e **divulgação do perfil público** (nome, CRM, especialidade, preço, formação, experiência, idiomas, biografia, foto, horários e avaliação média).
 
-18.2. Data de nascimento, sexo, telefone, CNPJ e dados de recebimento **não são públicos**; são vistos só pelo médico e pela administração. **O identificador da conta Stripe (e, no histórico anterior a 28/10/2026, a chave PIX) e o CPF/CNPJ do titular ficam no banco sem criptografia própria no campo**, e uma cópia é registrada em cada repasse como prova do pagamento.
+18.2. Data de nascimento, sexo, telefone, CNPJ e dados de recebimento **não são públicos**; são vistos só pelo médico e pela administração. **O identificador da conta Stripe (e, no histórico anterior a 28/10/2026, a chave PIX) e o CPF/CNPJ do titular ficam no banco sem criptografia própria no campo**, e, no histórico anterior a 28/10/2026, uma cópia foi registrada em cada repasse como prova do pagamento.
 
 18.3. O certificado A1 (recurso futuro) só será tratado com autorização expressa, criptografado, e usado exclusivamente para emitir NFS-e em nome do médico.
 

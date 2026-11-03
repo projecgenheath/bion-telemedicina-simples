@@ -1,6 +1,6 @@
 ---
 title: "Termos de Uso do Paciente — BION Telemedicina"
-subtitle: "Versão provisória v2 — 28/10/2026"
+subtitle: "Versão provisória v2.1 — 03/11/2026"
 lang: pt-BR
 ---
 
@@ -73,7 +73,7 @@ lang: pt-BR
 
 # 3. O que a BION faz e o que não faz
 
-3.1. **A BION faz:** oferece a tecnologia para você encontrar médicos, agendar, pagar, fazer a teleconsulta por vídeo, receber documentos, conversar com o médico, organizar seu histórico e usar ferramentas de acompanhamento. A BION também recebe o pagamento em nome do médico e repassa a ele a parte dele.
+3.1. **A BION faz:** oferece a tecnologia para você encontrar médicos, agendar, pagar, fazer a teleconsulta por vídeo, receber documentos, conversar com o médico, organizar seu histórico e usar ferramentas de acompanhamento. O pagamento é feito pela Stripe direto na conta do médico, e a BION fica só com a sua comissão.
 
 3.2. **A BION não faz:**
 
@@ -164,7 +164,7 @@ As funcionalidades podem mudar; mudanças relevantes serão informadas (cláusul
 
 10.2. **O que a IA NÃO faz:** ela **não faz diagnóstico, não prescreve, não indica dose de remédio e não substitui o médico.** As respostas podem conter erros ou ser incompletas. **Não tome decisões de saúde só com base na IA.** Em caso de dúvida, fale com um médico; em emergência, ligue 192.
 
-10.3. **Seus dados e a IA.** Antes de enviar suas mensagens ao provedor, a BION **remove seu nome, e-mail, CPF, telefone, CEP e data de nascimento**. Seguem as informações clínicas necessárias para a resposta (por exemplo, sintomas, medicamentos em uso, alergias, convênio e as próximas consultas, com especialidade, nome do médico e data). **Evite digitar endereço ou dados de outras pessoas.** A conversa com a IA **não é salva** no banco de dados da BION (fica apenas na tela do seu aparelho); guardamos por 6 meses só dados técnicos de funcionamento (horário, tempo de resposta, modelo, tamanho do texto, erros), **sem o conteúdo**. O que já tiver sido enviado ao provedor de IA fica sujeito às regras de retenção desse provedor e não é apagado pela exclusão da sua conta na BION.
+10.3. **Seus dados e a IA.** Antes de enviar suas mensagens ao provedor, um filtro automático da BION **tenta remover** seu nome, e-mail, CPF, telefone, CEP, datas, endereço e nomes de outras pessoas, **e pode falhar**. Seguem as últimas 12 mensagens e as informações clínicas necessárias para a resposta (por exemplo, sintomas, medicamentos em uso, alergias, condições e as consultas, com especialidade e data). Os médicos aparecem só por um código interno (M1, M2…) e pela especialidade, nunca pelo nome. **Evite digitar endereço ou dados de outras pessoas.** A conversa com a IA **não é salva** no banco de dados da BION (fica apenas na tela do seu aparelho); guardamos por 6 meses só dados técnicos de funcionamento (horário, tempo de resposta, modelo, tamanho do texto, erros), **sem o conteúdo**. O que já tiver sido enviado ao provedor de IA fica sujeito às regras de retenção desse provedor e não é apagado pela exclusão da sua conta na BION.
 
 10.4. **Leitura de exames.** Você pode enviar um laudo (PDF ou foto, até 10 MB) para a BION IA organizar os resultados. **Antes de cada envio, a BION pede o seu consentimento específico e destacado**, e você pode **recusar** sem nenhum prejuízo para as suas consultas (você ainda pode anexar o exame à consulta para o médico ver, sem passar pela IA). Atenção: **o conteúdo do laudo é enviado ao provedor de IA (NVIDIA) como está**, inclusive com o seu nome e outros dados impressos no documento, porque a IA precisa ler o laudo e conferir se ele é seu. Quando possível, a BION remove o nome do arquivo e os metadados técnicos antes do envio, mas **não é possível garantir a anonimização do conteúdo do laudo**. Os valores extraídos ficam na sua linha do tempo de exames; o arquivo original não é guardado nessa função. Confira sempre os valores com o laudo original e com o seu médico.
 
@@ -216,7 +216,7 @@ As funcionalidades podem mudar; mudanças relevantes serão informadas (cláusul
 
 15.2. **Forma de pagamento.** O pagamento é feito com cartão de crédito, pela Stripe. Quando houver reembolso, o valor é devolvido no mesmo cartão usado no pagamento. O estorno é pedido na hora, mas pode levar alguns dias, ou até a próxima fatura, para aparecer, conforme o prazo do banco emissor. O valor devolvido é o valor integral devido, sem desconto de taxas.
 
-15.3. **Para quem vai o dinheiro.** O pagamento é processado pela Stripe e vai direto para a conta do médico que atende a consulta. A BION recebe apenas a comissão pela intermediação. O recibo ou a nota fiscal da consulta é emitido pelo médico.
+15.3. **Para quem vai o dinheiro.** O pagamento é feito só com cartão, pela Stripe, e vai direto para a conta Stripe do médico que atende a consulta. A BION recebe apenas a sua comissão de 10% pela intermediação. **Pix não é aceito.** O recibo ou a nota fiscal da consulta é emitido pelo médico.
 
 15.4. **Confirmação.** A consulta só é confirmada depois que o pagamento for confirmado pelo gateway.
 
@@ -231,7 +231,7 @@ Resumo (as regras completas estão na **Política de Cancelamento, Reembolso e R
 | Cancelar ou remarcar com **mais de 24 h** de antecedência | Sem multa. Cancelamento: reembolso integral. |
 | Cancelar ou remarcar com **24 h ou menos** | **Multa de 50%** do valor da consulta. Cancelamento: devolvemos o valor menos a multa. Remarcação: o novo horário fica reservado por **15 minutos** enquanto você paga a multa. |
 | **Falha técnica** ou **falta/atraso do médico** | **Sem multa.** Você escolhe remarcar sem custo ou receber **reembolso integral**, em até **7 dias úteis** (contados do dia seguinte, sem contar feriados nacionais). Sem escolha nesse prazo, o reembolso integral é feito automaticamente. |
-| **Você faltou** | Se você faltar sem cancelar, não há reembolso. Se a consulta não acontecer por falta do médico ou por falha técnica, você pode pedir o reembolso integral em até 7 dias, e ele volta no mesmo cartão. |
+| **Você faltou** | Se a consulta for registrada como falta sua, você pode pedir pelo app o **reembolso integral** em até **7 dias corridos** depois do horário da consulta, com uma justificativa. O pedido é aprovado na hora e o valor volta no mesmo cartão, o que pode levar alguns dias. Sem pedido nesse prazo, não há reembolso. |
 | Renovação de receita **recusada** pelo médico | Reembolso integral. |
 
 16.1. **Como o reembolso é devolvido.** O pagamento é feito com cartão de crédito, pela Stripe. Quando houver reembolso, o valor é devolvido no mesmo cartão usado no pagamento. O estorno é pedido na hora, mas pode levar alguns dias, ou até a próxima fatura, para aparecer, conforme o prazo do banco emissor. O valor devolvido é o valor integral devido, sem desconto de taxas.
@@ -260,7 +260,7 @@ Resumo (as regras completas estão na **Política de Cancelamento, Reembolso e R
 
 # 21. Responsabilidades
 
-21.1. **Da BION:** manter a Plataforma funcionando com diligência; proteger seus dados; conferir o CRM dos médicos no cadastro e periodicamente; processar pagamentos, reembolsos e repasses conforme estes Termos; prestar informação clara; atender suas solicitações.
+21.1. **Da BION:** manter a Plataforma funcionando com diligência; proteger seus dados; conferir o CRM dos médicos no cadastro e periodicamente; processar pagamentos e reembolsos pela Stripe conforme estes Termos; prestar informação clara; atender suas solicitações.
 
 21.2. **Do médico:** o atendimento, o diagnóstico, a prescrição, os documentos, o prontuário e o sigilo profissional, conforme o Código de Ética Médica e as normas do CFM.
 
