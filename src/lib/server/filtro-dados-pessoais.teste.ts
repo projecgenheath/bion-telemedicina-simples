@@ -77,3 +77,37 @@ test("regressões: gatilho com minúscula e palavras comuns", () => {
   for (const s of ["minha mãe tem diabetes", "meu filho está com febre", "a dra. falou que é virose", "moro em Vitória", "apareceu uma mancha na pele Rosa"])
     expect(filtrarNomesProprios(s)).toBe(s);
 });
+test("Admin: palavras ambíguas ao lado de nome ou depois de gatilho viram nome (sequência inteira)", () => {
+  const casos: [string, string][] = [
+    ["Ontem a Rosa Maria Souza ligou", "Ontem a [nome removido] ligou"],
+    ["Rosa Maria Souza ligou", "[nome removido] ligou"],
+    ["Ontem Maria Rosa Souza ligou", "Ontem [nome removido] ligou"],
+    ["Vitória Almeida ligou", "[nome removido] ligou"],
+    ["Falei com Natal Pereira hoje", "Falei com [nome removido] hoje"],
+    ["Consultei a Dra. Rosa ontem", "Consultei a Dra. [nome removido] ontem"],
+    ["Consultei a Dra. Rosa Souza", "Consultei a Dra. [nome removido]"],
+    ["Ontem falei com a Rosa", "Ontem falei com a [nome removido]"],
+    ["minha filha Vitória está com febre", "minha filha [nome removido] está com febre"],
+  ];
+  for (const [entrada, saida] of casos) expect(filtrarNomesProprios(entrada)).toBe(saida);
+});
+test("Admin: instituição depois do nome não é apagada", () => {
+  expect(filtrarNomesProprios("A Carla Mendes Hospital me ligou")).toBe("A [nome removido] Hospital me ligou");
+  expect(filtrarNomesProprios("Fui com Ana Souza ao Hospital São Lucas")).toBe("Fui com [nome removido] ao Hospital São Lucas");
+});
+test("ambíguas sozinhas, lugares e instituições continuam", () => {
+  for (const s of [
+    "moro em Vitória",
+    "moro em Vitória da Conquista",
+    "sou de Aparecida",
+    "nasci em Natal",
+    "Natal foi difícil com a febre.",
+    "apareceu uma mancha na pele Rosa",
+    "Fui ao Hospital Santa Maria ontem.",
+    "Fui na Santa Casa de Misericórdia",
+    "moro em São Paulo",
+    "moro em Curitiba",
+    "nasci em Campo Grande",
+  ])
+    expect(filtrarNomesProprios(s)).toBe(s);
+});
