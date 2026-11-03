@@ -149,7 +149,7 @@ async function checkoutAvulso(usuario: Usuario, pagamentoId: string, base: strin
       status: true,
       valor: true,
       gatewayRef: true,
-      pedidoRenovacao: { select: { pacienteId: true, status: true, medicoId: true } },
+      pedidoRenovacao: { select: { pacienteId: true, status: true, medicoId: true, documento: { select: { status: true } } } },
       consulta: { select: { id: true, pacienteId: true, status: true, medicoId: true, especialidade: true, medico: { select: { nome: true } } } },
     },
   });
@@ -176,6 +176,10 @@ async function checkoutAvulso(usuario: Usuario, pagamentoId: string, base: strin
   );
   if (!eleg.ok) return Response.json({ erro: eleg.erro }, { status: eleg.status });
   const pg = p!;
+  if (eleg.tipo === "renovacao" && pg.pedidoRenovacao?.documento?.status === "cancelado") {
+    // 20261103a: receita cancelada pelo médico → nenhuma cobrança nova.
+    return Response.json({ erro: "Esta receita foi cancelada pelo médico. A renovação não pode mais ser paga." }, { status: 409 });
+  }
   if (eleg.tipo === "renovacao") {
     return abrirSessao(usuario, {
       tipo: "renovacao",
