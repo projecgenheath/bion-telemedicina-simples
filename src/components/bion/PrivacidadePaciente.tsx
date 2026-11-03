@@ -381,7 +381,9 @@ export function PrivacidadePaciente() {
             </button>
           ) : null}
           <p className="text-xs text-muted-foreground">
-            Revogar não apaga o que já foi enviado. O que a NVIDIA já recebeu segue os termos da NVIDIA.
+            Revogar não apaga o que já foi enviado. O que a NVIDIA já recebeu segue os termos da NVIDIA. A BION não guarda
+            as conversas do chat. As triagens ficam no seu prontuário. Para pedir acesso ou exclusão, fale com o
+            Encarregado pelo canal de privacidade do app.
           </p>
         </section>
       ) : null}

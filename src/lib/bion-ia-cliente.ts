@@ -249,6 +249,29 @@ export async function aceitarConsentimentoIa(opcoes: { aceitarTermos?: boolean }
   }
 }
 
+/** Grava só o aceite dos Termos/Política vigentes (mesmo endpoint de sempre). */
+export async function aceitarTermosVigentes(): Promise<boolean> {
+  try {
+    const r = await fetch("/api/paciente/aceite-termos", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(aceiteTermosPayload("PACIENTE")),
+    });
+    return r.ok;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * "Usar o app sem a IA": a IA é recusada (nada é gravado para ela); se a
+ * paciente marcou a caixa dos Termos, o aceite deles é gravado. true = pode fechar.
+ */
+export async function recusarIaGuardandoTermos(op: { termosPendentes: boolean; marcouTermos: boolean }): Promise<boolean> {
+  if (!op.termosPendentes || !op.marcouTermos) return true;
+  return aceitarTermosVigentes();
+}
+
 /** Revoga o consentimento da IA (Perfil > Privacidade). true = revogado. */
 export async function revogarConsentimentoIa(): Promise<boolean> {
   try {

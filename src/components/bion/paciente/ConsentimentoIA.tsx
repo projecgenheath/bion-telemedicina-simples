@@ -3,9 +3,9 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { ShieldAlert } from "lucide-react";
 import { useFocoDialogo } from "./useFocoDialogo";
-import { aceitarConsentimentoIa, consultarEstadoIa } from "@/lib/bion-ia-cliente";
+import { aceitarConsentimentoIa, consultarEstadoIa, recusarIaGuardandoTermos } from "@/lib/bion-ia-cliente";
 import { VERSAO_PRIVACIDADE, VERSAO_TERMOS_PACIENTE } from "@/lib/aceite-termos";
-import { TEXTO_CAIXA_CONSENTIMENTO_IA } from "@/lib/consentimento-ia";
+import { TEXTO_CAIXA_CONSENTIMENTO_IA, rotuloVersoes } from "@/lib/consentimento-ia";
 
 /**
  * Consentimento da BION IA (provedor NVIDIA), v3: SEPARADO dos Termos e da
@@ -58,16 +58,31 @@ function FormConsentimentoIA({
     else setErro("Não consegui registrar sua autorização agora. Tente novamente.");
   };
 
+  // "Usar o app sem a IA": só a IA é recusada. Se a caixa dos Termos foi
+  // marcada, o aceite dos Termos/Política é gravado antes de fechar.
+  const recusar = async () => {
+    setSalvando(true);
+    setErro(null);
+    const ok = await recusarIaGuardandoTermos({ termosPendentes: termosPendentes === true, marcouTermos });
+    setSalvando(false);
+    if (ok) onRecusar();
+    else setErro("Não consegui registrar seu aceite dos Termos agora. Tente novamente.");
+  };
+
   return (
     <div className="space-y-3">
       <p>
         A BION IA é <strong>opcional</strong>. Ela usa o modelo Nemotron, da{" "}
         <strong>NVIDIA Corporation, nos EUA</strong>. Se você ativar, o que escrever no chat, na triagem e nos laudos,{" "}
         <strong>inclusive dados sobre a sua saúde</strong>, será enviado para lá, e a NVIDIA pode guardar e usar esse
-        conteúdo conforme os termos dela. Antes do envio, a BION remove seu nome, e-mail, CPF, telefone, CEP e data de
-        nascimento.
+        conteúdo conforme os termos dela. Antes do envio, a BION tenta remover automaticamente seu nome, e-mail, CPF,
+        telefone, CEP e datas, mas essa remoção pode falhar. Laudos de exame vão como estão, inclusive com o seu nome
+        impresso, e pedem autorização a cada envio. Evite escrever dados que identifiquem você ou outras pessoas.
       </p>
-      <p>Sem a IA, você usa o app normalmente. Você pode revogar quando quiser em Perfil &gt; Privacidade.</p>
+      <p>
+        A BION IA não substitui consulta médica, não faz diagnóstico nem prescreve. Sem a IA, você usa o app normalmente.
+        Você pode revogar quando quiser em Perfil &gt; Privacidade.
+      </p>
       {termosPendentes ? (
         <label htmlFor={`${id}-termos`} className={`flex gap-3 items-start rounded-xl border ${classeBorda} p-3 cursor-pointer`}>
           <input
@@ -86,7 +101,7 @@ function FormConsentimentoIA({
             <a href="/politica-de-privacidade" target="_blank" rel="noreferrer" className="underline font-semibold">
               Política de Privacidade
             </a>{" "}
-            ({VERSAO_TERMOS_PACIENTE} · {VERSAO_PRIVACIDADE}).
+            ({rotuloVersoes(VERSAO_TERMOS_PACIENTE, VERSAO_PRIVACIDADE)}).
           </span>
         </label>
       ) : null}
@@ -114,7 +129,7 @@ function FormConsentimentoIA({
         >
           {salvando ? "Salvando…" : "Ativar a BION IA"}
         </button>
-        <button type="button" onClick={onRecusar} className={`flex-1 py-3 rounded-xl border ${classeBorda} font-semibold`}>
+        <button type="button" onClick={() => void recusar()} disabled={salvando} className={`flex-1 py-3 rounded-xl border ${classeBorda} font-semibold disabled:opacity-50`}>
           Usar o app sem a IA
         </button>
       </div>
