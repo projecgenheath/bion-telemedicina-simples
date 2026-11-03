@@ -159,7 +159,7 @@ export async function POST(req: NextRequest) {
     if (!tetoHora.permitido) return resposta429(tetoHora.restanteSeg);
     // Pausa da BION IA (opt-in, BION_IA_PAUSADA=true): nada vai à IA.
     if (iaPausada()) return respostaIaPausada();
-    // Portão jurídico: paciente sem o aceite da versão atual (NVIDIA) → 409.
+    // Portão jurídico: paciente sem o consentimento atual da IA (NVIDIA) → 403.
     const pendente = await exigirConsentimentoIa(usuario);
     if (pendente) return pendente;
     // B1: guarda de objeto/tipo — corpo null ou texto não-string virava 500
