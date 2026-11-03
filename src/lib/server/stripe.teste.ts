@@ -94,8 +94,9 @@ async function main() {
     igual("list sem account", chamadas[1], [{ charge: "ch_3", limit: 100 }, undefined]);
   }
   // modos de cobrança (Connect)
-  igual("modo padrão", modoCobrancaStripe(undefined), "plataforma");
-  igual("modo inválido", modoCobrancaStripe("xyz"), "plataforma");
+  igual("modo padrão (Connect ligado) = direta", modoCobrancaStripe(undefined), "direta");
+  igual("modo plataforma explícito", modoCobrancaStripe("plataforma"), "plataforma");
+  igual("modo inválido = direta", modoCobrancaStripe("xyz"), "direta");
   igual("modo direta", modoCobrancaStripe(" Direta "), "direta");
   const comConta = (conta: string | null) => base({ pagamento: { stripePaymentIntentId: "pi_1", consulta: { medico: { perfilMedico: { stripeAccountId: conta } } } } });
   { const d = fakeDb([comConta("acct_1")]); const s = fakeStripe();

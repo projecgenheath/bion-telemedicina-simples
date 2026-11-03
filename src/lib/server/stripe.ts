@@ -31,10 +31,14 @@ export function stripeConnectAtivo(valor = process.env.STRIPE_CONNECT): boolean 
 
 export type ModoCobranca = "plataforma" | "direta" | "destino";
 
-/** STRIPE_MODO_COBRANCA: 'plataforma' (padrão) | 'direta' (direct charge) | 'destino' (destination + on_behalf_of). */
+/**
+ * STRIPE_MODO_COBRANCA (só vale com STRIPE_CONNECT ligado): 'direta' (PADRÃO,
+ * decisão do Alisson 03/11 12:13: cobrança direta na conta do médico, 10% de
+ * application fee) | 'destino' | 'plataforma' (só se escrito explicitamente).
+ */
 export function modoCobrancaStripe(valor = process.env.STRIPE_MODO_COBRANCA): ModoCobranca {
   const v = (valor ?? "").trim().toLowerCase();
-  return v === "direta" || v === "destino" ? v : "plataforma";
+  return v === "plataforma" || v === "destino" ? v : "direta";
 }
 
 // ---------------------------------------------------------------- eventos
