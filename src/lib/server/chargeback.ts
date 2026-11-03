@@ -482,6 +482,9 @@ export async function transferirFalhaBion(
   deps: { d?: DbTransfer; s?: StripeTransfer; moeda?: string; agora?: Date } = {},
 ): Promise<ResultadoTransferencia> {
   const d = deps.d ?? (db as unknown as DbTransfer);
+  // Fábrica guardada ANTES de gravar qualquer coisa: chave live lança
+  // ChaveLiveBloqueadaError sem marcar 'pendente'.
+  const s = deps.s ?? ((await import("@/lib/server/stripe")).stripe() as unknown as StripeTransfer);
   type Preparo = { fim: ResultadoTransferencia } | { cb: CbTransfer; valor: number };
   const preparo = await d.$transaction(async (tx): Promise<Preparo> => {
     await travarChargeback(tx, chargebackId);
@@ -501,7 +504,6 @@ export async function transferirFalhaBion(
   const { cb, valor } = preparo as { cb: CbTransfer; valor: number };
   const conta = cb.stripeConta as string;
 
-  const s = deps.s ?? ((await import("@/lib/server/stripe")).stripe() as unknown as StripeTransfer);
   const moeda = deps.moeda ?? (await import("@/lib/stripe-checkout-logica")).moedaCheckout();
   const grupo = grupoFalhaBion(cb.id);
   let transfer: { id: string };
@@ -543,12 +545,13 @@ export async function transferirFalhaBion(
  * antes do Stripe (registrarDisputaStripe já marca 'pendente' na transição
  * para 'lost'); (2) refunds da fee consultados antes de criar (a
  * Idempotency-Key expira em 24h): um refund nosso (metadata) é reaproveitado;
- * (3) Idempotency-Key `chargeback-fee-refund-<id>`; (4) nunca mais que o
+ * (3) Idempotency-Key `chargeback-fee-refund-<id>-<valor>` (valor em centavos:
+ * retentativa com valor recalculado não fica presa num erro de chave reusada); (4) nunca mais que o
  * saldo não devolvido da fee — fee já toda devolvida (ex.: reembolso integral
  * com refund_application_fee) = 'ja_devolvida', sem chamada.
  * Erro do Stripe: grava 'falhou' e relança (webhook reentrega; admin repete).
  */
-export const chaveIdempotenciaFeeChargeback = (chargebackId: string) => `chargeback-fee-refund-${chargebackId}`;
+export const chaveIdempotenciaFeeChargeback = (chargebackId: string, valorCentavos: number) => `chargeback-fee-refund-${chargebackId}-${valorCentavos}`;
 
 type CbFee = {
   id: string;
@@ -584,6 +587,8 @@ export async function devolverFeeChargeback(
   deps: { d?: DbFee; s?: StripeFee; agora?: Date } = {},
 ): Promise<ResultadoFee> {
   const d = deps.d ?? (db as unknown as DbFee);
+  // Fábrica guardada ANTES de gravar qualquer coisa (chave live lança aqui).
+  const s = deps.s ?? ((await import("@/lib/server/stripe")).stripe() as unknown as StripeFee);
   type Preparo = { fim: ResultadoFee } | { cb: CbFee };
   const preparo = await d.$transaction(async (tx): Promise<Preparo> => {
     await travarChargeback(tx, chargebackId);
@@ -599,7 +604,6 @@ export async function devolverFeeChargeback(
   });
   if ("fim" in preparo) return preparo.fim;
   const cb = (preparo as { cb: CbFee }).cb;
-  const s = deps.s ?? ((await import("@/lib/server/stripe")).stripe() as unknown as StripeFee);
   const naoFinal = { id: cb.id, feeRefundStatus: { notIn: FINAL_FEE } };
   let refund: FeeRefund | null = null;
   let valor = 0;
@@ -624,7 +628,7 @@ export async function devolverFeeChargeback(
       refund = await s.applicationFees.createRefund(
         feeId,
         { amount: valor, metadata: { chargebackId: cb.id, tipo: "chargeback_fee_refund" } },
-        { idempotencyKey: chaveIdempotenciaFeeChargeback(cb.id) },
+        { idempotencyKey: chaveIdempotenciaFeeChargeback(cb.id, valor) },
       );
     }
   } catch (e) {
