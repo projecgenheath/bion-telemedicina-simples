@@ -288,8 +288,8 @@ function DetalheView({
  * de chave PIX: "sem chave o admin não consegue pagar" só é fato quando
  * existe pagamento esperando. Médico na cobrança direta (Stripe Connect,
  * 90% na conta conectada dele): as cobranças com stripeContaMedico ficam fora
- * da prévia, do saldo e dos repasses PIX (vão só no bloco "Recebido direto no
- * Stripe"), então o alerta de chave PIX é pulado para ele; só aparece se
+ * da prévia, do saldo e dos repasses PIX (vão só no bloco "Valor cobrado direto
+ * no Stripe"), então o alerta de chave PIX é pulado para ele; só aparece se
  * ainda houver dinheiro a receber por PIX (ex.: consultas antigas).
  */
 function repasseParaPagar(lista: ListaRepasses): boolean {
@@ -506,13 +506,17 @@ export function RepassesSheet({
 
 const ROTULO_DIRETO: Record<string, string> = { consulta: "Consulta", renovacao: "Renovação", multa_remarcacao: "Taxa de remarcação" };
 
-/** Cobranças que caíram direto na conta Stripe do médico: informativo, fora do saldo PIX. */
+/**
+ * Valor COBRADO direto na conta Stripe do médico (bruto do paciente menos
+ * reembolsos; ANTES da application fee de 10% e da taxa do Stripe, que o
+ * Stripe desconta lá). Informativo, fora do saldo PIX. Não é o valor recebido.
+ */
 function RecebidoDiretoBloco({ dados }: { dados: ListaRepasses["recebidoDiretoStripe"] }) {
   if (!dados || dados.itens.length === 0) return null;
   return (
-    <div className="bp-glass p-4" aria-label="Recebido direto no Stripe">
+    <div className="bp-glass p-4" aria-label="Valor cobrado direto no Stripe">
       <div className="text-xs font-bold uppercase tracking-wider text-bion-ink/75 dark:text-bion-paper/75">
-        Recebido direto no Stripe
+        Valor cobrado direto no Stripe
       </div>
       <div className="mt-1 text-xl font-black tabular-nums">{fmtCentavos(dados.totais.liquidoCentavos)}</div>
       <p className="mt-1 text-xs text-bion-ink/75 dark:text-bion-paper/75">{dados.aviso}</p>

@@ -22,19 +22,20 @@ export function contaMedicoDaCobranca(modo: ModoCobranca, connect: { contaMedico
 }
 
 /**
- * Grava a conta no registro cobrado. Chamado no checkout (sessão aberta) e no
- * webhook (confirmação, com `event.account`). conta null = não grava nada
- * (evento sem account nunca apaga a marca do checkout).
+ * Grava a conta no registro cobrado. Chamado no checkout (sessão aberta) e na
+ * confirmação do pagamento no webhook. conta null = LIMPA a marca (cobrança
+ * na plataforma: o registro volta a entrar no repasse PIX); string = grava
+ * (sobrescreve). "" é tratado como null.
  */
 export async function gravarContaMedicoDaCobranca(
   alvo: { pagamentoId?: string | null; remarcacaoId?: string | null },
   conta: string | null,
 ): Promise<void> {
-  if (!conta) return;
+  const valor = conta?.trim() || null;
   if (alvo.pagamentoId) {
-    await db.pagamento.update({ where: { id: alvo.pagamentoId }, data: { stripeContaMedico: conta } });
+    await db.pagamento.update({ where: { id: alvo.pagamentoId }, data: { stripeContaMedico: valor } });
   }
   if (alvo.remarcacaoId) {
-    await db.remarcacaoPendente.update({ where: { id: alvo.remarcacaoId }, data: { stripeContaMedico: conta } });
+    await db.remarcacaoPendente.update({ where: { id: alvo.remarcacaoId }, data: { stripeContaMedico: valor } });
   }
 }
