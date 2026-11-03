@@ -400,6 +400,12 @@ export type ListaRepasses = {
   aviso: string;
   previa: PreviaRepasseWire;
   repasses: RepasseResumo[];
+  /** Cobrança direta: já caiu na conta Stripe do médico; NÃO é repasse a receber. */
+  recebidoDiretoStripe?: {
+    aviso: string;
+    totais: { brutoCentavos: number; reembolsosCentavos: number; liquidoCentavos: number };
+    itens: { tipo: string; data: string; brutoCentavos: number; reembolsosCentavos: number }[];
+  };
 };
 
 export type ItemRepasseDetalhe = {

@@ -428,6 +428,8 @@ export function RepassesSheet({
 
               <PreviaBloco previa={lista.previa} />
 
+              <RecebidoDiretoBloco dados={lista.recebidoDiretoStripe} />
+
               <div>
                 <div className="flex items-center justify-between gap-2 px-1 mb-2">
                   <div className="text-xs font-bold uppercase tracking-wider text-bion-ink/75 dark:text-bion-paper/75">
@@ -499,5 +501,34 @@ export function RepassesSheet({
         </div>
       )}
     </SheetMedico>
+  );
+}
+
+const ROTULO_DIRETO: Record<string, string> = { consulta: "Consulta", renovacao: "Renovação", multa_remarcacao: "Taxa de remarcação" };
+
+/** Cobranças que caíram direto na conta Stripe do médico: informativo, fora do saldo PIX. */
+function RecebidoDiretoBloco({ dados }: { dados: ListaRepasses["recebidoDiretoStripe"] }) {
+  if (!dados || dados.itens.length === 0) return null;
+  return (
+    <div className="bp-glass p-4" aria-label="Recebido direto no Stripe">
+      <div className="text-xs font-bold uppercase tracking-wider text-bion-ink/75 dark:text-bion-paper/75">
+        Recebido direto no Stripe
+      </div>
+      <div className="mt-1 text-xl font-black tabular-nums">{fmtCentavos(dados.totais.liquidoCentavos)}</div>
+      <p className="mt-1 text-xs text-bion-ink/75 dark:text-bion-paper/75">{dados.aviso}</p>
+      <ul className="mt-3 space-y-1 text-sm">
+        {dados.itens.map((i, n) => (
+          <li key={`${i.data}-${n}`} className="flex justify-between gap-2 tabular-nums">
+            <span>
+              {ROTULO_DIRETO[i.tipo] ?? i.tipo} · {fmtDataHora(i.data)}
+            </span>
+            <span>
+              {fmtCentavos(i.brutoCentavos)}
+              {i.reembolsosCentavos > 0 ? ` (−${fmtCentavos(i.reembolsosCentavos)} reembolso)` : ""}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
