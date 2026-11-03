@@ -22,20 +22,28 @@ export function contaMedicoDaCobranca(modo: ModoCobranca, connect: { contaMedico
 }
 
 /**
- * Grava a conta no registro cobrado. Chamado no checkout (sessão aberta) e na
- * confirmação do pagamento no webhook. conta null = LIMPA a marca (cobrança
- * na plataforma: o registro volta a entrar no repasse PIX); string = grava
- * (sobrescreve). "" é tratado como null.
+ * Valor da marca a gravar. FONTE DA VERDADE = o evento de pagamento: o
+ * webhook chama com `event.account` (null = cobrança na conta da BION, modo
+ * plataforma) e isso SOBRESCREVE o que o checkout gravou. Assim, sessão
+ * direta abandonada + pagamento depois no modo plataforma deixa a marca null
+ * e o pagamento volta ao repasse PIX. O checkout no modo plataforma também
+ * grava null.
+ */
+export function marcaCobrancaDireta(conta: string | null | undefined): { stripeContaMedico: string | null } {
+  const c = typeof conta === "string" ? conta.trim() : "";
+  return { stripeContaMedico: c || null };
+}
+
+/**
+ * Grava (ou LIMPA, com conta null) a conta no registro cobrado. Chamado no
+ * checkout (sessão aberta) e no webhook (pagamento concluído, com
+ * `event.account` ou null). A última chamada vale.
  */
 export async function gravarContaMedicoDaCobranca(
   alvo: { pagamentoId?: string | null; remarcacaoId?: string | null },
   conta: string | null,
 ): Promise<void> {
-  const valor = conta?.trim() || null;
-  if (alvo.pagamentoId) {
-    await db.pagamento.update({ where: { id: alvo.pagamentoId }, data: { stripeContaMedico: valor } });
-  }
-  if (alvo.remarcacaoId) {
-    await db.remarcacaoPendente.update({ where: { id: alvo.remarcacaoId }, data: { stripeContaMedico: valor } });
-  }
+  const data = marcaCobrancaDireta(conta);
+  if (alvo.pagamentoId) await db.pagamento.update({ where: { id: alvo.pagamentoId }, data });
+  if (alvo.remarcacaoId) await db.remarcacaoPendente.update({ where: { id: alvo.remarcacaoId }, data });
 }
