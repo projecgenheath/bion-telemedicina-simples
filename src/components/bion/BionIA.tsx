@@ -24,6 +24,7 @@ import {
   perguntarBionIa,
   textoParaCopiar,
 } from "@/lib/bion-ia-cliente";
+import { detalheConsultaIa } from "@/lib/auditoria-ia";
 import { TEXTO_AVISO_COPILOT_MEDICO, TEXTO_CAIXA_COPILOT_MEDICO } from "@/lib/aceite-copilot-medico";
 import { inline } from "@/lib/markdown-simples";
 import { BlocoRaciocinio } from "./BlocoRaciocinio";
@@ -129,8 +130,8 @@ export function BionIA() {
       categoria: "sistema",
       severidade: "info",
       entidade: "bion-ia",
-      // LGPD: o texto do médico NÃO vai para a auditoria (pode ter dado de paciente).
-      detalhes: isMedico ? "Consulta ao BION Copilot (texto não registrado)" : `Consulta à IA: "${txt.slice(0, 100)}"`,
+      // LGPD: o texto da pergunta NÃO vai para a auditoria (nenhum perfil).
+      detalhes: detalheConsultaIa(isMedico ? "MEDICO" : sessao.role),
     });
 
     let resposta = "";
