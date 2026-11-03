@@ -595,10 +595,31 @@ model Reembolso {
   decididoEm    DateTime?
   repasseAjuste RepasseAjuste?
   stripeRefundId String? @unique // preenchido = enviado ao Stripe (20261028a)
+  taxaMedico     ReembolsoTaxaMedico?
 
   @@index([pagamentoId, status])
   @@index([status, criadoEm])
   @@index([origem, status, criadoEm])
+}
+
+// Devolução da taxa do cartão ao médico no reembolso integral por falta do
+// paciente (cobrança direta no Connect). A BION transfere a taxa da charge
+// para a conta do médico. reembolsoId único = no máximo 1 transferência.
+// status: pendente | enviado | falhou. Migração 20261103b.
+model ReembolsoTaxaMedico {
+  id               String    @id @default(cuid())
+  reembolsoId      String    @unique
+  reembolso        Reembolso @relation(fields: [reembolsoId], references: [id], onDelete: Restrict)
+  contaStripe      String
+  valorCentavos    Int
+  status           String    @default("pendente")
+  stripeTransferId String?   @unique
+  tentativas       Int       @default(0)
+  erro             String?
+  criadoEm         DateTime  @default(now())
+  enviadoEm        DateTime?
+
+  @@index([status, criadoEm])
 }
 
 // Repasse DIÁRIO ao médico. Só existe a partir do fechamento (23:30 de São
@@ -746,6 +767,22 @@ model Chargeback {
   falhaBionPorId      String?
   falhaBionPor        User?           @relation("ChargebackFalhaBionPor", fields: [falhaBionPorId], references: [id], onDelete: Restrict)
   falhaBionEm         DateTime?
+  // Cobrança direta (Connect): conta do médico onde a disputa aconteceu
+  // (event.account). Preenchida = sem RepasseAjuste; falha da BION vira
+  // transferência da BION ao médico (20261103g).
+  stripeConta               String?
+  transferFalhaBionStatus   String? // pendente | enviado | falhou
+  transferFalhaBionCentavos Int?
+  transferFalhaBionId       String?
+  transferFalhaBionErro     String?
+  transferFalhaBionEm       DateTime?
+  // Disputa perdida na cobrança direta: BION devolve os 10% (application fee
+  // refund), decisão 03/11 12:33 (20261103h).
+  feeRefundStatus           String? // pendente | enviado | falhou | ja_devolvida | sem_fee
+  feeRefundId               String?
+  feeRefundCentavos         Int?
+  feeRefundErro             String?
+  feeRefundEm               DateTime?
   criadoEm            DateTime        @default(now())
   atualizadoEm        DateTime        @default(now()) @updatedAt
   ajustes             RepasseAjuste[]

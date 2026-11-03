@@ -9,7 +9,8 @@ import { avisarPacienteEspera, confirmarRemarcacaoEspera } from "@/lib/server/es
 import { aprovarMultaRemarcacao, falharMultaRemarcacao, registrarTaxaGateway } from "@/lib/server/financeiro";
 import { cancelarRenovacaoPagamentoFalhou, confirmarPagamentoRenovacao } from "@/lib/server/renovacao-pagamento";
 import { gatewayCheckout } from "@/lib/server/gateway-pagamento";
-import { registrarDisputaStripe } from "@/lib/server/chargeback";
+import { devolverFeeChargeback, registrarDisputaStripe, transferirFalhaBion } from "@/lib/server/chargeback";
+import { devolverTaxaAoMedico, refundsDoEvento } from "@/lib/server/reembolso-taxa-medico";
 import { liberarEvento, reivindicarEvento, registrarEventoReembolsoStripe, stripe } from "@/lib/server/stripe";
 import { acaoDoEvento, bloqueioChaveLive, moedaCheckout, moedaConfere, multaDaSessao, referenciaConfere, valorConfere } from "@/lib/stripe-checkout-logica";
 
@@ -100,11 +101,31 @@ async function processar(evento: Stripe.Event): Promise<Record<string, unknown>>
 
   if (acao === "reembolso") {
     // Reembolsos são do Admin (src/lib/server/stripe.ts).
-    return { acao, atualizados: await registrarEventoReembolsoStripe(evento) };
+    const atualizados = await registrarEventoReembolsoStripe(evento);
+    // Falta do paciente + reembolso integral (cobrança direta): BION devolve a taxa
+    // do cartão ao médico. Idempotente; erro relança → evento liberado e reentregue.
+    const taxas: string[] = [];
+    for (const refundId of refundsDoEvento(evento)) { const t = await devolverTaxaAoMedico(refundId); taxas.push(t.enviado ? "enviado" : t.motivo); }
+    return { acao, atualizados, taxas };
   }
   if (acao === "disputa") {
     // Chargeback (Admin, src/lib/server/chargeback.ts): registra a disputa; o desconto ao médico é do repasse.
-    return { acao, disputa: await registrarDisputaStripe(evento) };
+    const disputa = await registrarDisputaStripe(evento);
+    // Cobrança direta + falha da BION + disputa perdida: BION transfere ao
+    // médico (idempotente; erro relança → evento liberado e reentregue).
+    const disputeId = (evento.data.object as { id?: string })?.id;
+    const cb = evento.account && disputeId ? await db.chargeback.findUnique({ where: { stripeDisputeId: disputeId }, select: { id: true } }) : null;
+    // Perdida: devolve os 10% (independente da falha da BION). As duas rodam
+    // mesmo se uma falhar; o primeiro erro relança (ambas idempotentes).
+    let erro: unknown = null;
+    const feeRefund = cb ? await devolverFeeChargeback(cb.id).catch((e) => { erro = e; return null; }) : null;
+    const transferencia = cb ? await transferirFalhaBion(cb.id).catch((e) => { erro ??= e; return null; }) : null;
+    if (erro) throw erro;
+    return {
+      acao, disputa,
+      ...(transferencia ? { transferencia: transferencia.enviado ? "enviado" : transferencia.motivo } : {}),
+      ...(feeRefund ? { feeRefund: feeRefund.enviado ? "enviado" : feeRefund.motivo } : {}),
+    };
   }
   if (acao === "taxa") {
     return { acao, preenchida: await preencherTaxaDaCharge(evento.data.object as Stripe.Charge, conta) };
