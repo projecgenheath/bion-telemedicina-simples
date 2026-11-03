@@ -273,7 +273,10 @@ async function abrirSessao(usuario: Usuario, a: Alvo) {
   }
 
   const gateway = gatewayCheckout();
+  // Header Stripe-Account só na direta; a marca anti-repasse-duplo vale para direta E destino
+  // (no destino a Stripe transfere ao médico e o evento chega sem event.account).
   const contaDireta = modo === "direta" ? connect?.contaMedico : null;
+  const contaMedicoMarca = modo === "direta" || modo === "destino" ? connect?.contaMedico ?? null : null;
   if (sessaoAnterior) {
     const s = await gateway.lerSessao(sessaoAnterior, contaDireta);
     if (s && sessaoReaproveitavel(s, a.valorCentavos)) return Response.json({ url: s.url, reaproveitada: true });
@@ -304,12 +307,12 @@ async function abrirSessao(usuario: Usuario, a: Alvo) {
       // Tentativa nova depois de falha volta a "pendente" (na espera, a falha
       // libera a reserva e o checkout já recusou antes de chegar aqui).
       // Pagamento pendente antigo criado como Pix e reaproveitado aqui passa a cartão.
-      // Cobrança direta: marca a conta do médico já aqui (o webhook confirma de
+      // Cobrança direta/destino: marca a conta do médico já aqui (o webhook confirma de
       // novo pelo event.account). É o que tira o pagamento do repasse PIX.
       data: {
         stripeCheckoutSessionId: sessao.id, metodo: "cartao",
         ...(atual?.status === "falhou" ? { status: "pendente" } : {}),
-        stripeContaDireta: contaDireta ?? null,
+        stripeContaMedico: contaMedicoMarca,
       },
     });
   }
@@ -317,7 +320,7 @@ async function abrirSessao(usuario: Usuario, a: Alvo) {
     // Guarda a sessão aberta (só enquanto pendente; o webhook troca por stripe_pi:).
     await db.remarcacaoPendente.updateMany({
       where: { id: a.remarcacaoId, status: "pendente" },
-      data: { gatewayRef: `${PREFIXO_SESSAO_MULTA}${sessao.id}`, stripeContaDireta: contaDireta ?? null },
+      data: { gatewayRef: `${PREFIXO_SESSAO_MULTA}${sessao.id}`, stripeContaMedico: contaMedicoMarca },
     });
   }
   await registrarAudit(usuario, {

@@ -17,9 +17,12 @@ const ped = (o: Partial<CandidatoRenovacao> = {}): CandidatoRenovacao => ({
 const run = (x: Partial<Parameters<typeof itensElegiveis>[0]>) =>
   itensElegiveis({ corte, consultas: [], multasCancelamento: [], multasRemarcacao: [], renovacoes: [], ...x });
 
-igual("helper: conta preenchida", cobradoDiretoNoStripe({ stripeContaDireta: "acct_1" }), true);
-igual("helper: nulo", cobradoDiretoNoStripe({ stripeContaDireta: null }), false);
-igual("helper: vazio", cobradoDiretoNoStripe({ stripeContaDireta: "  " }), false);
+igual("helper: conta preenchida", cobradoDiretoNoStripe({ stripeContaMedico: "acct_1" }), true);
+igual("helper: nulo", cobradoDiretoNoStripe({ stripeContaMedico: null }), false);
+igual("helper: vazio", cobradoDiretoNoStripe({ stripeContaMedico: "  " }), false);
+igual("helper: destino (marca do checkout) fora", cobradoDiretoNoStripe({ stripeContaMedico: "acct_dest" }), true);
+igual("consulta destino fora do PIX", run({ consultas: [cons({ cobrancaDireta: cobradoDiretoNoStripe({ stripeContaMedico: "acct_dest" }) })] }).length, 0);
+igual("multa remarcação destino fora", run({ multasRemarcacao: [{ consultaId: "c7", remarcacaoId: "r7", quando: antes, multaCentavos: 2000, reembolso: null, cobrancaDireta: cobradoDiretoNoStripe({ stripeContaMedico: "acct_dest" }) }] }).length, 0);
 igual("helper: sem pagamento", cobradoDiretoNoStripe(null), false);
 
 igual("consulta PIX/plataforma entra", run({ consultas: [cons()] }).length, 1);

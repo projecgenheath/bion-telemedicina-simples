@@ -194,8 +194,9 @@ async function confirmar(
   }
   // Evento do Connect (event.account) = cobrança direta: o médico já recebeu
   // no Stripe; gravar a conta antes de confirmar tira o pagamento do repasse PIX.
-  // O evento é a fonte da verdade (sem account = cobrança na plataforma).
-  await db.pagamento.update({ where: { id: pagamento.id }, data: { stripeContaDireta: conta } });
+  // Sem account (plataforma ou destino) vale a marca do checkout.
+  // Destino: evento da plataforma (sem account) nunca apaga a marca gravada no checkout (conta ?? atual).
+  if (conta) await db.pagamento.update({ where: { id: pagamento.id }, data: { stripeContaMedico: conta } });
   if (cobranca.chargeId) {
     await db.pagamento.updateMany({ where: { id: pagamento.id, stripeChargeId: null }, data: { stripeChargeId: cobranca.chargeId } });
   }
@@ -297,7 +298,8 @@ async function processarMulta(s: Stripe.Checkout.Session, acao: "confirmar" | "f
   // Guarda o PaymentIntent como referência da multa (para devolução, se houver).
   const pi = typeof s.payment_intent === "string" ? s.payment_intent : s.payment_intent?.id ?? null;
   // Evento do Connect (event.account) = multa cobrada direto na conta do médico: fora do repasse PIX.
-  await db.remarcacaoPendente.update({ where: { id: r.id }, data: { stripeContaDireta: conta } });
+  // conta ?? atual: evento sem account (destino/plataforma) não apaga a marca do checkout.
+  if (conta) await db.remarcacaoPendente.update({ where: { id: r.id }, data: { stripeContaMedico: conta } });
   const res = await aprovarMultaRemarcacao(r.id, "webhook", pi ? `stripe_pi:${pi}` : undefined);
   if (!res) return { acao: "confirmar", confirmado: false };
   if (!res.jaProcessada) {

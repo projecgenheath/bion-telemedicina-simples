@@ -245,7 +245,7 @@ model Pagamento {
   // Conta conectada (acct_...) quando a cobrança foi DIRETA na conta do médico
   // (STRIPE_MODO_COBRANCA=direta, migração 20261103c). Preenchido = o médico já
   // recebeu no Stripe; o repasse PIX nunca conta esse pagamento.
-  stripeContaDireta       String?
+  stripeContaMedico       String?
 
   reembolsos Reembolso[]
   pedidoRenovacao PedidoRenovacao? @relation("PedidoRenovacaoPagamento")
@@ -749,7 +749,7 @@ model RemarcacaoPendente {
   metodo        String     @default("pix") // pix | cartao
   via           String?    // webhook | simulado
   gatewayRef    String?
-  stripeContaDireta String? // multa cobrada direto na conta Stripe do médico (20261103c): fora do repasse PIX
+  stripeContaMedico String? // multa cobrada direto na conta Stripe do médico (20261103c): fora do repasse PIX
   solicitadoPor String
   expiraEm      DateTime
   criadoEm      DateTime   @default(now())
