@@ -4,6 +4,11 @@ import { useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useBion } from "@/lib/bion-store";
+import { digitosCpf, formatarCpfExibicao, mascararCpfDigitacao } from "@/lib/cpf";
+// validar-perfil é um módulo PURO (sem "server-only"; deps isomórficas):
+// a mesma validarCpf do servidor valida aqui p/ erro imediato, e o
+// servidor revalida no PATCH /api/perfil (autoritativo).
+import { validarCpf } from "@/lib/server/validar-perfil";
 import { hojeIsoSaoPaulo, type ComDataNascimento } from "@/lib/idade";
 import { useVoltarFecha } from "./useVoltarFecha";
 import { useFocoDialogo } from "./useFocoDialogo";
@@ -17,6 +22,7 @@ import { useArrastarFechar } from "./useArrastarFechar";
  */
 
 export type CampoPerfil =
+  | "cpf"
   | "dataNascimento"
   | "telefone"
   | "profissao"
@@ -34,6 +40,14 @@ const lista = (v: string) => v.split(",").map((s) => s.trim()).filter(Boolean);
 export function DadosPessoaisSheet({ campoInicial, onFechar }: { campoInicial?: CampoPerfil; onFechar: () => void }) {
   const { pacientePerfil, atualizarPacientePerfil } = useBion();
   const dataNascimento = (pacientePerfil as (typeof pacientePerfil & ComDataNascimento) | undefined)?.dataNascimento ?? "";
+  // CPF: espelha a regra do servidor (cpfPodeSerAlterado, M4) — com um CPF
+  // VÁLIDO já gravado, o campo é somente leitura (correção só pelo suporte);
+  // sem CPF ou com valor legado inválido, dá para definir/corrigir aqui.
+  const cpfSalvo = pacientePerfil?.cpf ?? "";
+  const cpfValidoSalvo = validarCpf(cpfSalvo);
+  const cpfTravado = cpfValidoSalvo.ok && cpfValidoSalvo.valor !== "";
+  const cpfInicial = cpfTravado ? "" : mascararCpfDigitacao(cpfSalvo);
+  const [cpf, setCpf] = useState(cpfInicial);
   const [salvando, setSalvando] = useState(false);
   const [form, setForm] = useState({
     dataNascimento,
@@ -49,6 +63,7 @@ export function DadosPessoaisSheet({ campoInicial, onFechar }: { campoInicial?: 
   // B21: fechar por voltar/ESC/arrastar/Cancelar com conteúdo não salvo
   // pede confirmação — antes o texto digitado era descartado em silêncio.
   const sujo =
+    (!cpfTravado && cpf !== cpfInicial) ||
     form.dataNascimento !== dataNascimento ||
     form.telefone !== (pacientePerfil?.telefone ?? "") ||
     form.profissao !== (pacientePerfil?.profissao ?? "") ||
@@ -110,11 +125,27 @@ export function DadosPessoaisSheet({ campoInicial, onFechar }: { campoInicial?: 
     )
       // O servidor não aceita tipo sanguíneo vazio: "Não sei" só não envia.
       .filter((k) => !(k === "tipoSanguineo" && !novo.tipoSanguineo));
-    if (!alterado.length) {
+    // CPF só entra no patch quando o perfil não tem CPF válido e o paciente
+    // digitou um (a partir do vazio ou corrigindo um legado inválido).
+    // Validado aqui com a validarCpf do servidor p/ o erro aparecer na hora;
+    // trava e duplicidade são do servidor (409 vira toast do `api`).
+    let cpfPatch: string | undefined;
+    if (!cpfTravado && digitosCpf(cpf).length > 0) {
+      const r = validarCpf(cpf);
+      if (!r.ok) {
+        toast.error("CPF inválido. Confira os 11 dígitos.");
+        return;
+      }
+      cpfPatch = r.valor;
+    }
+    if (!alterado.length && cpfPatch === undefined) {
       onFechar();
       return;
     }
-    const patch = Object.fromEntries(alterado.map((k) => [k, novo[k]]));
+    const patch = {
+      ...Object.fromEntries(alterado.map((k) => [k, novo[k]])),
+      ...(cpfPatch !== undefined ? { cpf: cpfPatch } : {}),
+    };
     setSalvando(true);
     // Em erro, o toast vem do `api` e a janela continua aberta com o que foi digitado.
     const ok = await atualizarPacientePerfil(patch);
@@ -145,6 +176,19 @@ export function DadosPessoaisSheet({ campoInicial, onFechar }: { campoInicial?: 
 
         <fieldset className="mt-5 space-y-3" disabled={salvando}>
           <legend className="text-xs font-bold uppercase tracking-wider bpp-sheet-suave mb-1">Dados pessoais</legend>
+          <label className="block">
+            <span className={rotulo}>CPF</span>
+            {cpfTravado ? (
+              <>
+                <input value={formatarCpfExibicao(cpfSalvo)} readOnly aria-readonly="true" className={`${campo} opacity-75`} />
+                <span className="block mt-1 text-xs opacity-75">
+                  CPF é seu documento de identificação. Para corrigir, fale com o suporte.
+                </span>
+              </>
+            ) : (
+              <input ref={(el) => focarCampo(el, "cpf")} value={cpf} onChange={(e) => setCpf(mascararCpfDigitacao(e.target.value))} placeholder="000.000.000-00" inputMode="numeric" autoComplete="off" maxLength={14} className={campo} />
+            )}
+          </label>
           <label className="block">
             <span className={rotulo}>Data de nascimento</span>
             <input ref={(el) => focarCampo(el, "dataNascimento")} type="date" value={form.dataNascimento} onChange={set("dataNascimento")} min="1900-01-01" max={hojeIsoSaoPaulo()} autoComplete="bday" className={campo} />

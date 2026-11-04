@@ -10,6 +10,7 @@ import {
   Droplets,
   FileUp,
   HeartCrack,
+  IdCard,
   LifeBuoy,
   LogOut,
   Moon,
@@ -22,6 +23,7 @@ import {
 } from "lucide-react";
 import { useBion } from "@/lib/bion-store";
 import { calcularImc, formatarAltura, formatarPeso, lerAlturaCm, lerPesoKg } from "@/lib/medidas-paciente";
+import { formatarCpfExibicao } from "@/lib/cpf";
 import { formatarDataNascimento, idadeDeNascimento, type ComDataNascimento } from "@/lib/idade";
 import { LinhaConsultaPagamento } from "./LinhaConsultaPagamento";
 import { EstadoVazio } from "./EstadosPaciente";
@@ -320,6 +322,7 @@ export function PerfilPainel({
 
       {/* Dados pessoais: cada linha abre a edição daquele campo */}
       <Grupo titulo="Dados pessoais">
+        <LinhaDado icone={<IdCard className="w-4 h-4" />} rotulo="CPF" valor={formatarCpfExibicao(pacientePerfil?.cpf) || undefined} onClick={() => onEditar("cpf")} />
         <LinhaDado icone={<CalendarDays className="w-4 h-4" />} rotulo="Nascimento" valor={formatarDataNascimento(dataNascimento)} onClick={() => onEditar("dataNascimento")} />
         <LinhaDado icone={<Phone className="w-4 h-4" />} rotulo="Telefone" valor={pacientePerfil?.telefone} onClick={() => onEditar("telefone")} />
         <LinhaDado icone={<Briefcase className="w-4 h-4" />} rotulo="Profissão" valor={pacientePerfil?.profissao} onClick={() => onEditar("profissao")} />
