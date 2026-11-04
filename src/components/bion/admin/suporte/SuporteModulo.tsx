@@ -33,7 +33,8 @@ import {
 import { Conversa, Resposta } from "./Conversa";
 
 const PAGINA = 40;
-const lerStatus = (v: string | null): FiltroStatusChamado => (v === "aberto" || v === "em_andamento" || v === "resolvido" ? v : "todos");
+const lerStatus = (v: string | null): FiltroStatusChamado =>
+  v === "aberto" || v === "em_andamento" || v === "resolvido" || v === "nao_resolvidos" ? v : "todos";
 
 /**
  * Chamados (Suporte) do admin no visual Torre BION: lista → conversa.
@@ -41,7 +42,7 @@ const lerStatus = (v: string | null): FiltroStatusChamado => (v === "aberto" || 
  * ver todos os chamados, buscar, filtrar por status, abrir e responder
  * (a resposta marca como resolvido — PATCH /api/tickets/[id], só ADMIN).
  * Responder notifica a pessoa e não dá para desfazer: pede confirmação.
- * ?chamado=ID abre a conversa; ?status=aberto já filtra.
+ * ?chamado=ID abre a conversa; ?status=aberto|nao_resolvidos já filtra.
  */
 export function SuporteModulo() {
   const router = useRouter();
@@ -172,7 +173,7 @@ export function SuporteModulo() {
                 aria-pressed={filtros.status === f.id}
                 onClick={() => mudar({ status: f.id })}
                 className="ba-filtro shrink-0"
-                data-tom={f.id !== "todos" ? estadoChamado(f.id).tom : undefined}
+                data-tom={f.id === "nao_resolvidos" ? "atencao" : f.id !== "todos" ? estadoChamado(f.id).tom : undefined}
               >
                 {f.id !== "todos" ? <span className="ba-chip-ponto" aria-hidden /> : null}
                 {f.rotulo}

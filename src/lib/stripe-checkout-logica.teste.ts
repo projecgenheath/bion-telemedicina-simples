@@ -4,6 +4,7 @@
  */
 import { readFileSync } from "fs";
 import {
+  descritorSufixo,
   acaoDoEvento,
   avaliarElegibilidade,
   avaliarMulta,
@@ -19,9 +20,11 @@ import {
   bloqueioChaveLive,
   chaveIdempotencia,
   metodosCheckout,
+  divisaoConnect,
   sessaoDaMulta,
   moedaCheckout,
   moedaConfere,
+  opcoesRequisicao,
   parametrosSessao,
   sessaoReaproveitavel,
   stripeAtivo,
@@ -99,12 +102,34 @@ igual("sem transfer_data", "transfer_data" in p.payment_intent_data, false);
 igual("success_url", p.success_url, "https://app.exemplo/pagamento/sucesso?consulta=c1");
 igual("cancel_url", p.cancel_url, "https://app.exemplo/pagamento/cancelado?consulta=c1");
 
-// modo único "plataforma" (decisão 03/11 10:49): chave live continua bloqueada (Jurídico)
-igual("live bloqueia", bloqueioChaveLive("sk_live_x"), true);
-igual("teste passa", bloqueioChaveLive("sk_test_x"), false);
-igual("sem chave passa (rota já recusa pela flag)", bloqueioChaveLive(undefined), false);
-igual("sem on_behalf_of", "on_behalf_of" in p.payment_intent_data, false);
-igual("PaymentIntent só com metadata", p.payment_intent_data, { metadata: { consultaId: "c1", pacienteId: "p1", pagamentoId: "pg1" } });
+// modo de cobrança
+igual("live + plataforma bloqueia", bloqueioChaveLive("plataforma", "sk_live_x"), true);
+igual("teste + plataforma passa", bloqueioChaveLive("plataforma", "sk_test_x"), false);
+igual("live + direta bloqueia (até o Alisson liberar)", bloqueioChaveLive("direta", "sk_live_x"), true);
+igual("live + destino bloqueia", bloqueioChaveLive("destino", "sk_live_x"), true);
+igual("teste + direta passa", bloqueioChaveLive("direta", "sk_test_x"), false);
+igual("restrita live (rk_live_) bloqueia", bloqueioChaveLive("direta", "rk_live_x"), true);
+igual("restrita live na plataforma bloqueia", bloqueioChaveLive("plataforma", " rk_live_x"), true);
+igual("restrita de teste não bloqueia", bloqueioChaveLive("direta", "rk_test_x"), false);
+igual("live com espaços bloqueia", bloqueioChaveLive("direta", "  sk_live_x "), true);
+igual("sem chave passa (rota já recusa pela flag)", bloqueioChaveLive("plataforma", undefined), false);
+const cx = { contaMedico: "acct_123", taxaPlataformaCentavos: 1500 };
+igual("plataforma sem divisão", divisaoConnect({ modo: "plataforma", connect: cx, valorCentavos: 15000 }), {});
+igual("destino", divisaoConnect({ modo: "destino", connect: cx, valorCentavos: 15000 }), {
+  application_fee_amount: 1500, on_behalf_of: "acct_123", transfer_data: { destination: "acct_123" },
+});
+igual("direta", divisaoConnect({ modo: "direta", connect: cx, valorCentavos: 15000 }), { application_fee_amount: 1500 });
+igual("header só na direta", opcoesRequisicao({ modo: "direta", connect: cx }), { stripeAccount: "acct_123" });
+igual("sem header no destino", opcoesRequisicao({ modo: "destino", connect: cx }), {});
+igual("sem header na plataforma", opcoesRequisicao({ modo: "plataforma", connect: null }), {});
+let erroSemConta = false;
+try { divisaoConnect({ modo: "destino", connect: null, valorCentavos: 15000 }); } catch { erroSemConta = true; }
+igual("destino sem conta recusa", erroSemConta, true);
+let erroTaxa = false;
+try { divisaoConnect({ modo: "direta", connect: { ...cx, taxaPlataformaCentavos: 20000 }, valorCentavos: 15000 }); } catch { erroTaxa = true; }
+igual("comissão maior que o valor recusa", erroTaxa, true);
+const pd = parametrosSessao({ consultaId: "c1", pacienteId: "p1", pagamentoId: "pg1", valorCentavos: 15000, moeda: "brl", metodos: ["card"], descricao: "T", baseUrl: "https://a", modo: "destino", connect: cx });
+igual("sessão destino leva divisão", pd.payment_intent_data, { metadata: { consultaId: "c1", pacienteId: "p1", pagamentoId: "pg1" }, application_fee_amount: 1500, on_behalf_of: "acct_123", transfer_data: { destination: "acct_123" } });
 
 // reaproveitar sessão
 const agora = 1_000_000;
@@ -138,18 +163,21 @@ igual("valor nulo", valorConfere(null, 150), false);
 
 // guardas estáticas das rotas
 const checkout = readFileSync(new URL("../app/api/pagamentos/stripe/checkout/route.ts", import.meta.url), "utf8");
-const webhook = readFileSync(new URL("../app/api/pagamentos/stripe/webhook/route.ts", import.meta.url), "utf8");
+const webhook = readFileSync(new URL("./server/stripe-webhook.ts", import.meta.url), "utf8");
+const webhookConnect = readFileSync(new URL("../app/api/stripe/webhook-connect/route.ts", import.meta.url), "utf8");
 const pagamentosTs = readFileSync(new URL("./server/pagamentos.ts", import.meta.url), "utf8");
 const sucesso = readFileSync(new URL("../components/bion/paciente/StatusPagamentoStripe.tsx", import.meta.url), "utf8");
 igual("checkout não confirma pagamento", /confirmarPagamento/.test(checkout), false);
 igual("checkout lê valor do banco, não do body", /body\.(valor|amount)/.test(checkout), false);
 igual("checkout exige aceite", checkout.includes("aceiteVigentePendente"), true);
-igual("checkout recusa live em plataforma com 503", /bloqueioChaveLive\(\)[\s\S]*?pagamento_indisponivel[\s\S]*?status: 503/.test(checkout), true);
+igual("checkout recusa live (qualquer modo) com 503", /bloqueioChaveLive\(modo\)[\s\S]*?pagamento_indisponivel[\s\S]*?status: 503/.test(checkout), true);
 igual("checkout sem pix", /"pix"/.test(checkout), false);
-igual("checkout sem Connect", /stripeAccount|stripeConnectAtivo|modoCobrancaStripe|transfer_data|application_fee/.test(checkout), false);
+igual("checkout reusa o modo do Admin", checkout.includes("stripeConnectAtivo() ? modoCobrancaStripe()"), true);
 igual("checkout atrás da flag", checkout.includes("stripeAtivo()"), true);
 igual("webhook confere assinatura", webhook.includes("constructEvent(corpo"), true);
-igual("webhook só com o segredo da BION", webhook.includes("STRIPE_CONNECT_WEBHOOK_SECRET"), false);
+igual("endpoint Connect usa o próprio segredo", webhookConnect.includes("STRIPE_WEBHOOK_SECRET_CONNECT"), true);
+igual("cobrança direta: grava a conta do médico no webhook", (webhook.match(/gravarContaMedicoDaCobranca\(/g) ?? []).length, 2);
+igual("checkout recusa onboarding incompleto", checkout.includes("medico_onboarding_incompleto"), true);
 igual("webhook reivindica o evento antes de processar", /reivindicarEvento\(evento\.id[\s\S]*?processar\(evento\)/.test(webhook), true);
 igual("não usa jaProcessado/marcarEvento (deprecated)", /jaProcessado|marcarEvento/.test(webhook), false);
 igual("falha libera o evento e devolve 500", /liberarEvento\(evento\.id\)[\s\S]*?status: 500/.test(webhook), true);
@@ -162,7 +190,8 @@ igual("confere moeda", webhook.includes("moedaConfere(s.currency"), true);
 igual("webhook usa corpo bruto", webhook.includes("await req.text()"), true);
 igual("taxa nunca sobrescreve", webhook.includes("where: { id: pagamentoId, stripeTaxaCentavos: null }"), true);
 igual("confirmar não grava taxa direto", /stripeTaxaCentavos: cobranca/.test(webhook), false);
-igual("webhook não usa conta Connect", /evento\.account|conta\)/.test(webhook), false);
+igual("charge.updated usa a conta Connect", /lerTaxa\([^)]*conta\)/.test(webhook), true);
+igual("webhook aceita evento Connect", webhook.includes("evento.account"), true);
 igual("webhook grava taxa", webhook.includes("stripeTaxaCentavos"), true);
 igual("webhook não grava id do Stripe no gatewayRef", /gatewayRef\s*:\s*(s\.|sessao|paymentIntent|cobranca)/.test(webhook + checkout), false);
 igual("tela de volta não marca pago", /method:\s*"(POST|PATCH)"/.test(sucesso), false);
@@ -264,6 +293,13 @@ igual("checkout guarda a sessão da multa", /gatewayRef: `\$\{PREFIXO_SESSAO_MUL
 igual("checkout lê a sessão anterior da multa", /a\.tipo === "multa" \? a\.sessaoMulta/.test(checkout), true);
 
 igual("pagamento Pix pendente reaproveitado vira cartão", /stripeCheckoutSessionId: sessao\.id, metodo: "cartao"/.test(checkout), true);
+
+// descritor na fatura do cartão
+igual("descritor padrão BION", descritorSufixo({}), "BION");
+igual("descritor configurado", descritorSufixo({ STRIPE_DESCRITOR_SUFIXO: " bion saude " }), "BION SAUDE");
+igual("descritor desligado", descritorSufixo({ STRIPE_DESCRITOR_SUFIXO: "off" }), null);
+igual("descritor inválido volta ao padrão", descritorSufixo({ STRIPE_DESCRITOR_SUFIXO: "BION*<x>" }), "BION");
+igual("descritor só números volta ao padrão", descritorSufixo({ STRIPE_DESCRITOR_SUFIXO: "123" }), "BION");
 
 console.log(`${ok} ok, ${falhas} falha(s)`);
 if (falhas) process.exit(1);

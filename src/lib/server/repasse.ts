@@ -36,7 +36,17 @@ import {
 /*    repasse seguinte; o que não couber passa adiante (saldo_anterior);*/
 /*  - taxa do gateway: a REAL do pagamento (Stripe balance_transaction */
 /*    .fee em Pagamento.stripeTaxaCentavos) quando houver; senão 0;     */
-/*    no reembolso integral a taxa fica com o app.                      */
+/*    no reembolso integral a BION devolve a taxa do cartão ao médico  */
+/*    por transferência Stripe (#137).                                  */
+/*  - chargeback: o repasse PIX NÃO aplica desconto de chargeback       */
+/*    (nenhum RepasseAjuste motivo 'chargeback' é criado aqui). Na      */
+/*    cobrança direta a disputa é debitada na conta Stripe do médico e  */
+/*    `descontoChargebackCentavos(cb)` devolve 0 quando                 */
+/*    Chargeback.stripeConta está preenchido; a "falha da BION" vira    */
+/*    transferência idempotente (chargeback.ts, Admin, #149). Se um dia */
+/*    este arquivo passar a descontar chargeback: travar o Chargeback   */
+/*    (FOR UPDATE) ANTES do RepasseAjuste e reconferir o desconto       */
+/*    (0 = não aplica), e nunca para registro com stripeContaMedico.    */
 /*                                                                      */
 /* "Até o corte": o fechamento pega TUDO o que ficou elegível até a     */
 /* hora do corte e ainda não entrou em nenhum item. Nada se perde se o  */
@@ -152,6 +162,8 @@ export type CandidatoConsulta = ConsultaReceita & {
   tipoAtendimento?: string | null;
   /** id do Pagamento: trava para o mesmo pagamento nunca ser repassado duas vezes. */
   pagamentoId?: string | null;
+  /** Cobrado direto na conta Stripe do médico (Pagamento.stripeContaMedico): nunca entra no repasse. */
+  cobrancaDireta?: boolean;
 };
 
 /**
@@ -170,6 +182,8 @@ export type CandidatoRenovacao = {
   /** Taxa REAL do gateway do pagamento (centavos). Ver taxaGatewayValida em financeiro.ts. */
   taxaGatewayCentavos?: number | null;
   reembolsos?: ReembolsoMin[] | null;
+  /** Cobrado direto na conta Stripe do médico: nunca entra no repasse. */
+  cobrancaDireta?: boolean;
 };
 export const STATUS_RENOVACAO_REPASSE = ["renovada", "chamada_marcada"] as const;
 
@@ -203,6 +217,8 @@ export type CandidatoMultaCancelamento = {
   multaCentavos: number;
   valorConsulta: number;
   reembolsos: ReembolsoMin[];
+  /** A multa saiu de um pagamento cobrado direto na conta do médico. */
+  cobrancaDireta?: boolean;
 };
 export type CandidatoMultaRemarcacao = {
   remarcacaoId: string;
@@ -210,7 +226,20 @@ export type CandidatoMultaRemarcacao = {
   quando: Date;
   multaCentavos: number;
   reembolso: ReembolsoMin | null;
+  /** Multa paga direto na conta Stripe do médico. */
+  cobrancaDireta?: boolean;
 };
+
+/**
+ * Cobrança direta (STRIPE_MODO_COBRANCA=direta): o dinheiro caiu direto na
+ * conta Stripe conectada do médico, com a comissão da BION retida como
+ * application_fee. Repassar de novo por PIX pagaria o médico duas vezes.
+ * A decisão é POR REGISTRO (stripeContaMedico gravado no checkout/webhook),
+ * nunca pelo env atual: trocar o modo depois não muda o que já foi cobrado.
+ */
+export function cobradoDiretoNoStripe(x: { stripeContaMedico?: string | null } | null | undefined): boolean {
+  return !!x?.stripeContaMedico?.trim();
+}
 
 export type ItemCalculado = {
   tipo: TipoItem;
@@ -315,6 +344,7 @@ export function itensElegiveis(params: {
     // (pago=true sem Pagamento) ficam fora, por decisão do Alisson.
     // Retorno grátis (valor 0, sem pagamento) já sai aqui.
     if (c0.pagamento?.status !== "confirmado") continue;
+    if (c0.cobrancaDireta) continue; // já recebido direto no Stripe do médico
     // Valor 0 (renovação, retorno grátis ou qualquer outra): fora, sem item de R$ 0.
     if (consultaForaPorValorZero(c0)) continue;
     // Sem desfecho (ninguém concluiu nem marcou falta/falha): fica para o
@@ -329,6 +359,7 @@ export function itensElegiveis(params: {
   for (const r of params.renovacoes ?? []) {
     if (!(STATUS_RENOVACAO_REPASSE as readonly string[]).includes(r.status)) continue;
     if (!r.pagamentoId || r.pagamentoStatus !== "confirmado") continue;
+    if (r.cobrancaDireta) continue;
     if (r.valorCentavos == null || r.valorCentavos <= 0 || !r.respondidoEm) continue;
     if (r.respondidoEm.getTime() >= corte.getTime()) continue;
     const rr = { ...r, valorCentavos: r.valorCentavos, respondidoEm: r.respondidoEm, reembolsos: reembolsosAteOCorte(r.reembolsos, corte) };
@@ -344,6 +375,7 @@ export function itensElegiveis(params: {
   >();
   for (const m0 of params.multasCancelamento) {
     if (m0.multaCentavos <= 0 || m0.em.getTime() >= corte.getTime()) continue;
+    if (m0.cobrancaDireta) continue;
     const m = { ...m0, reembolsos: reembolsosAteOCorte(m0.reembolsos, corte) };
     if (multaCancelamentoDevolvida(m)) continue;
     const atual = multasPorConsulta.get(m.consultaId);
@@ -365,6 +397,7 @@ export function itensElegiveis(params: {
   }
   for (const m0 of params.multasRemarcacao) {
     if (m0.multaCentavos <= 0 || m0.quando.getTime() >= corte.getTime()) continue;
+    if (m0.cobrancaDireta) continue;
     const m = { ...m0, reembolso: reembolsosAteOCorte(m0.reembolso ? [m0.reembolso] : [], corte)[0] ?? null };
     if (multaRemarcacaoDevolvida(m)) continue;
     add(itemDeMulta("multa_remarcacao", m.consultaId, m.remarcacaoId, m.quando, m.multaCentavos));
@@ -526,7 +559,7 @@ async function carregarCandidatos(c: Cliente, medicoId: string, corte: Date) {
         pago: true,
         tipoAtendimento: true,
         // Taxa real do Stripe (balance_transaction.fee) → pagamento.taxaGatewayCentavos.
-        pagamento: { select: { id: true, status: true, stripeTaxaCentavos: true, reembolsos: { select: selReembolso } } },
+        pagamento: { select: { id: true, status: true, stripeTaxaCentavos: true, stripeContaMedico: true, reembolsos: { select: selReembolso } } },
         eventos: { where: { tipo: { in: TIPOS_EVENTO_DESFECHO } }, select: selEventoDesfecho },
       },
     }),
@@ -543,7 +576,7 @@ async function carregarCandidatos(c: Cliente, medicoId: string, corte: Date) {
         consultaId: true,
         em: true,
         multaCentavos: true,
-        consulta: { select: { valor: true, pagamento: { select: { reembolsos: { select: selReembolso } } } } },
+        consulta: { select: { valor: true, pagamento: { select: { stripeContaMedico: true, reembolsos: { select: selReembolso } } } } },
       },
     }),
     c.remarcacaoPendente.findMany({
@@ -560,6 +593,7 @@ async function carregarCandidatos(c: Cliente, medicoId: string, corte: Date) {
         aprovadoEm: true,
         criadoEm: true,
         multaCentavos: true,
+        stripeContaMedico: true,
         reembolso: { select: selReembolso },
       },
     }),
@@ -581,7 +615,7 @@ async function carregarCandidatos(c: Cliente, medicoId: string, corte: Date) {
       respondidoEm: true,
       valorCentavos: true,
       pagamentoId: true,
-      pagamento: { select: { status: true, stripeTaxaCentavos: true, reembolsos: { select: selReembolso } } },
+      pagamento: { select: { status: true, stripeTaxaCentavos: true, stripeContaMedico: true, reembolsos: { select: selReembolso } } },
     },
   });
   // Trava: um pagamento que já entrou num repasse (pela consulta ou pelo
@@ -616,11 +650,13 @@ async function carregarCandidatos(c: Cliente, medicoId: string, corte: Date) {
         pagamentoStatus: p.pagamento?.status ?? null,
         taxaGatewayCentavos: p.pagamento?.stripeTaxaCentavos ?? null,
         reembolsos: (p.pagamento?.reembolsos ?? []).map(comEfetivo),
+        cobrancaDireta: cobradoDiretoNoStripe(p.pagamento),
       }),
     ),
     consultas: consultas.map((c) => ({
       ...c,
       pagamentoId: c.pagamento?.id ?? null,
+      cobrancaDireta: cobradoDiretoNoStripe(c.pagamento),
       pagamento: c.pagamento
         ? { ...c.pagamento, taxaGatewayCentavos: c.pagamento.stripeTaxaCentavos ?? null, reembolsos: c.pagamento.reembolsos.map(comEfetivo) }
         : null,
@@ -631,6 +667,7 @@ async function carregarCandidatos(c: Cliente, medicoId: string, corte: Date) {
       multaCentavos: e.multaCentavos ?? 0,
       valorConsulta: e.consulta.valor,
       reembolsos: (e.consulta.pagamento?.reembolsos ?? []).map(comEfetivo),
+      cobrancaDireta: cobradoDiretoNoStripe(e.consulta.pagamento),
     })),
     multasRemarcacao: remarcacoes.map((r) => ({
       remarcacaoId: r.id,
@@ -638,6 +675,7 @@ async function carregarCandidatos(c: Cliente, medicoId: string, corte: Date) {
       quando: r.aprovadoEm ?? r.criadoEm,
       multaCentavos: r.multaCentavos,
       reembolso: r.reembolso ? comEfetivo(r.reembolso) : null,
+      cobrancaDireta: cobradoDiretoNoStripe(r),
     })),
   };
 }
@@ -1090,3 +1128,68 @@ export async function consultaJaRepassada(consultaId: string, c: Cliente = db): 
 // de previaDoDia sem uso — a rota do admin chama previaDoDia direto) e a
 // reexportação `reembolsoEfetivo` (os consumidores importam direto da fonte
 // em receita-servidor.ts) foram removidos.
+
+/* ---------- Valor cobrado direto no Stripe (cobrança direta) --------- */
+
+export type RecebidoDireto = {
+  tipo: "consulta" | "renovacao" | "multa_remarcacao";
+  data: string; // ISO da confirmação do pagamento
+  brutoCentavos: number;
+  reembolsosCentavos: number;
+};
+
+/** Soma PURA do que caiu direto na conta Stripe do médico (não é repasse a pagar). */
+export function totalRecebidoDireto(lista: RecebidoDireto[]): { brutoCentavos: number; reembolsosCentavos: number; liquidoCentavos: number } {
+  const bruto = lista.reduce((s, r) => s + r.brutoCentavos, 0);
+  const reemb = lista.reduce((s, r) => s + r.reembolsosCentavos, 0);
+  return { brutoCentavos: bruto, reembolsosCentavos: reemb, liquidoCentavos: bruto - reemb };
+}
+
+/**
+ * Cobranças confirmadas que caíram direto na conta Stripe do médico
+ * (stripeContaMedico preenchido). Só leitura; o médico já recebeu esse
+ * dinheiro no Stripe (a comissão da BION foi retida lá), então nada disso
+ * entra no saldo a receber por PIX.
+ */
+export async function recebidosDiretoNoStripe(medicoId: string, limite = 50): Promise<RecebidoDireto[]> {
+  const [pagamentos, multas] = await Promise.all([
+    db.pagamento.findMany({
+      where: {
+        status: "confirmado",
+        stripeContaMedico: { not: null },
+        OR: [{ consulta: { medicoId } }, { pedidoRenovacao: { medicoId } }],
+      },
+      orderBy: { confirmadoEm: "desc" },
+      take: limite,
+      select: {
+        valor: true,
+        consultaId: true,
+        confirmadoEm: true,
+        criadoEm: true,
+        reembolsos: { where: { status: { in: REEMBOLSO_STATUS_EFETIVOS } }, select: { valorCentavos: true } },
+      },
+    }),
+    db.remarcacaoPendente.findMany({
+      where: { consulta: { medicoId }, status: "aprovada", multaCentavos: { gt: 0 }, stripeContaMedico: { not: null } },
+      orderBy: { criadoEm: "desc" },
+      take: limite,
+      select: { multaCentavos: true, aprovadoEm: true, criadoEm: true, reembolso: { select: { status: true, valorCentavos: true } } },
+    }),
+  ]);
+  const lista: RecebidoDireto[] = [
+    ...pagamentos.map((p) => ({
+      tipo: (p.consultaId ? "consulta" : "renovacao") as RecebidoDireto["tipo"],
+      data: (p.confirmadoEm ?? p.criadoEm).toISOString(),
+      brutoCentavos: reaisParaCentavos(p.valor),
+      reembolsosCentavos: p.reembolsos.reduce((s, r) => s + r.valorCentavos, 0),
+    })),
+    ...multas.map((m) => ({
+      tipo: "multa_remarcacao" as const,
+      data: (m.aprovadoEm ?? m.criadoEm).toISOString(),
+      brutoCentavos: m.multaCentavos,
+      reembolsosCentavos:
+        m.reembolso && (REEMBOLSO_STATUS_EFETIVOS as readonly string[]).includes(m.reembolso.status) ? m.reembolso.valorCentavos : 0,
+    })),
+  ];
+  return lista.sort((a, b) => b.data.localeCompare(a.data)).slice(0, limite);
+}

@@ -3,7 +3,7 @@ import { quandoClinica } from "@/lib/server/fuso";
 import { db } from "@/lib/db";
 import { exigirPapel } from "@/lib/server/auth";
 import {ok, falha, lerCorpoJson, corpoObjeto, textoDoCorpo} from "@/lib/server/http";
-import { chatComFonte, chatStreamComFonte, iaPausada, motivoFalhaIa, novoRequestId, respostaIaPausada } from "@/lib/server/llm";
+import { chatComFonte, chatStreamComFonte, iaPausada, mensagemFalhaIaPaciente, motivoFalhaIa, novoRequestId, respostaIaPausada } from "@/lib/server/llm";
 import { anonimizarMensagensIa, type IdentificadoresPaciente } from "@/lib/server/anonimizar-ia";
 import { exigirConsentimentoIa } from "@/lib/server/consentimento-ia";
 import { exigirAceiteCopilotMedico } from "@/lib/server/aceite-copilot-medico";
@@ -269,14 +269,18 @@ export async function POST(req: NextRequest) {
                 ctrl.enqueue(linha({ tipo: "fim", fonte: ev.fonte, modelo: ev.modelo, requestId }));
               }
               else if (ev.tipo === "raciocinio") ctrl.enqueue(linha({ tipo: "raciocinio", texto: ev.texto }));
-              else
+              else {
+                // F4: a bolha do paciente recebe a frase comum; o motivo
+                // técnico (chave/HTTP/cota) fica só no log do servidor.
+                console.error("[BION IA] falha do provedor", { requestId, motivo: motivoFalhaIa(ev.registros) });
                 ctrl.enqueue(
                   linha({
                     tipo: "erro",
-                    erro: `${motivoFalhaIa(ev.registros)} Tente de novo em alguns segundos — este chat não usa resposta local.`,
+                    erro: `${mensagemFalhaIaPaciente(ev.registros)} Tente de novo em alguns segundos.`,
                     requestId,
                   }),
                 );
+              }
             }
           } catch {
             ctrl.enqueue(linha({ tipo: "erro", erro: "A BION IA falhou no meio da resposta. Tente de novo.", requestId }));
@@ -307,9 +311,11 @@ export async function POST(req: NextRequest) {
       const sep = extrairAcao(r.texto);
       return ok({ resposta: sep.texto, acao: usuario.role === "PACIENTE" ? resolverAcaoAgendar(sep.acao, medicosCodificados) : null, raciocinio: r.raciocinio ?? null, fonte: r.fonte, modelo: r.modelo, requestId });
     }
+    // F4: idem ao stream — paciente lê frase comum; técnico vai para o log.
+    console.error("[BION IA] falha do provedor", { requestId, motivo: motivoFalhaIa(r.registros) });
     return Response.json(
       {
-        erro: `${motivoFalhaIa(r.registros)} Tente de novo em alguns segundos — este chat não usa resposta local.`,
+        erro: `${mensagemFalhaIaPaciente(r.registros)} Tente de novo em alguns segundos.`,
         fonte: null,
         requestId,
       },

@@ -105,6 +105,7 @@ export type ResumoHoje = {
   concluidas: number;
   canceladas: number;
   reagendar: number; // aguardando reagendamento
+  faltas: number; // falta_paciente
   aoVivo: Consulta[]; // começaram há até 30 min ou começam em até 30 min
   proximas: Consulta[]; // restantes do dia, em ordem de horário
   pagas: number; // só com valor > 0 (retorno grátis fica de fora)
@@ -122,6 +123,7 @@ export function resumoHoje(consultas: Consulta[], agora: number): ResumoHoje {
     concluidas: hoje.filter((c) => c.status === "concluida").length,
     canceladas: hoje.filter((c) => c.status === "cancelada").length,
     reagendar: hoje.filter((c) => c.status === "aguardando_reagendamento").length,
+    faltas: hoje.filter((c) => c.status === "falta_paciente").length,
     aoVivo: abertas.filter((c) => c.ts >= agora - 30 * MIN && c.ts <= agora + 30 * MIN).sort((a, b) => a.ts - b.ts),
     proximas: abertas.filter((c) => c.ts > agora - 30 * MIN).sort((a, b) => a.ts - b.ts),
     pagas: pagas.length,

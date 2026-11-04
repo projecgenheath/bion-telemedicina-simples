@@ -1083,7 +1083,7 @@ export async function* chatStreamComFonte(
   yield { tipo: "erro", registros, requestId };
 }
 
-export { motivoFalhaIa } from "@/lib/server/llm-nvidia";
+export { mensagemFalhaIaPaciente, motivoFalhaIa } from "@/lib/server/llm-nvidia";
 
 /** Compatibilidade: só o texto (ou null). */
 export async function chatCompleto(mensagens: Msg[], timeoutMs: number, anon?: AnonNomes): Promise<string | null> {

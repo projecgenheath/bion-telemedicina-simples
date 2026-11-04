@@ -25,7 +25,7 @@ import {
 import { useBion, type AnamneseResumo } from "@/lib/bion-store";
 import { diasDoAgendamento } from "@/components/bion/agendamento/horarios";
 import { agendaLivreDoMedico } from "./agenda-medico";
-import { abrirCheckoutStripe } from "./pagamento-stripe-cliente";
+import { abrirCheckoutStripe, checkoutStripeAtivo } from "./pagamento-stripe-cliente";
 import { useDiasBloqueados } from "./useDiasBloqueados";
 import {
   type Msg,
@@ -40,6 +40,17 @@ import { ChatListaMensagens } from "./ChatListaMensagens";
 import { ConsentimentoLaudoIA } from "./ConsentimentoLaudoIA";
 import { AvisoSemIA, AvisoTriagemSemIA, CardAceiteIA } from "./ConsentimentoIA";
 import { CAMPO_CONSENTIMENTO_IA_EXAME, VERSAO_CONSENTIMENTO_IA_EXAME } from "@/lib/consentimento-ia-exame";
+import {
+  TEXTO_ENVIO_LAUDO,
+  deveAbrirWizardAgendamento,
+  mostrarAcaoLaudo,
+  mostrarCartaoLaudo,
+  textoAberturaChat,
+  type IntencaoChat,
+} from "./chat-bion-intencao";
+
+/** Mesmo formato do fluxo principal (PassoPagamento): "R$ 150,00". */
+const fmtBRL = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
 /**
  * BION IA do app do paciente — conversa livre (LLM real) + ações estruturadas:
@@ -56,12 +67,16 @@ export function ChatBion({
   onFechar,
   aoEnviarExame,
   aoAbrirTriagem,
+  intencao,
 }: {
   aberto: boolean;
   onFechar: () => void;
   aoEnviarExame?: () => void;
   aoAbrirTriagem?: (info: { consultaId: string; medico: string; especialidade: string; quando: string }) => void;
+  /** "laudo" = aberto por "Enviar novo laudo": entra direto no envio, sem a saudação genérica. */
+  intencao?: IntencaoChat;
 }) {
+  const modoLaudo = intencao === "laudo";
   const {
     sessao,
     medicos,
@@ -90,6 +105,10 @@ export function ChatBion({
     hora?: string;
   }>({});
   const [pagando, setPagando] = useState(false);
+  // F10: o checkout Stripe está ligado NESTE ambiente? O cartão de
+  // confirmação prometia "página segura do Stripe" mesmo no modo simulado,
+  // em que nenhum cartão é pedido. null = ainda consultando a flag.
+  const [stripeAtivo, setStripeAtivo] = useState<boolean | null>(null);
   const [anamneseAtiva, setAnamneseAtiva] = useState<AnamneseAtiva | null>(null);
   const [enviandoLaudo, setEnviandoLaudo] = useState(false);
   // Laudo escolhido aguardando o aceite do aviso de envio à NVIDIA (LGPD).
@@ -123,8 +142,11 @@ export function ChatBion({
   // bloqueados pelo médico. O servidor continua validando (409).
   const medicoEscolhido = escolha.medico ? medicosAtivos.find((m) => m.nome === escolha.medico) : undefined;
   const { bloqueados, recarregar: recarregarBloqueios } = useDiasBloqueados(medicoEscolhido?.id);
+  // F5: horizonte de 14 dias, o MESMO do fluxo principal (AgendamentoFluxo e
+  // remarcação) — com 7, o chat empurrava para outro médico quem tinha vaga
+  // na semana seguinte com o mesmo profissional.
   const agendaChat = medicoEscolhido
-    ? diasDoAgendamento(agendaLivreDoMedico(medicoEscolhido, consultas, undefined, 7, bloqueados), consultas)
+    ? diasDoAgendamento(agendaLivreDoMedico(medicoEscolhido, consultas, undefined, 14, bloqueados), consultas)
     : [];
 
   // Triagens em andamento de consultas confirmadas dentro da janela (retomada)
@@ -140,11 +162,11 @@ export function ChatBion({
       setMensagens([
         {
           remetente: "ia",
-          texto: `Olá, ${sessao.nome.split(" ")[0]}! Sou a **BION IA**. Posso agendar consulta, ler um laudo (PDF ou foto) e tirar dúvidas de saúde. A **triagem** é opcional e fica no card da consulta, não neste chat. Como posso ajudar?`,
+          texto: textoAberturaChat(intencao, sessao.nome.split(" ")[0]),
         },
       ]);
     }
-  }, [aberto, mensagens.length, sessao.nome]);
+  }, [aberto, mensagens.length, sessao.nome, intencao]);
 
   useEffect(() => {
     if (!aberto || iaLiberada !== null) return;
@@ -160,6 +182,19 @@ export function ChatBion({
   useEffect(() => {
     fimRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [mensagens, etapa, pensando, anamneseAtiva, segundosEspera]);
+
+  // F10: ao chegar na confirmação, resolve a flag do checkout (com cache no
+  // módulo) para o cartão dizer a verdade sobre a forma de pagamento.
+  useEffect(() => {
+    if (etapa !== "confirmar" || stripeAtivo !== null) return;
+    let vivo = true;
+    void checkoutStripeAtivo().then((v) => {
+      if (vivo) setStripeAtivo(v);
+    });
+    return () => {
+      vivo = false;
+    };
+  }, [etapa, stripeAtivo]);
 
   useEffect(() => {
     if (!pensando) {
@@ -529,8 +564,11 @@ export function ChatBion({
   };
 
   const interpretarIntencao = (texto: string) => {
-    const t = texto.toLowerCase();
-    if (/agend|marcar|marcacao|marcação|consulta|disponibilidade|horario|horário/.test(t) && etapa === null && !anamneseAtiva) {
+    // F1: gestão da consulta existente (remarcar/cancelar/que horas é/
+    // quanto custa) NÃO abre o wizard — a mensagem vai à IA, que responde
+    // com o caminho real (deveAbrirWizardAgendamento dá precedência à
+    // gestão; ver chat-bion-intencao.ts).
+    if (deveAbrirWizardAgendamento(texto) && etapa === null && !anamneseAtiva) {
       setMensagens((m) => [
         ...m,
         { remetente: "ia", texto: "Claro! Vou te guiar no agendamento. Escolha a especialidade desejada:" },
@@ -558,20 +596,36 @@ export function ChatBion({
     if (!interpretarIntencao(t)) void enviar(t);
   };
 
-  /** Card da IA: médico disponível da especialidade sugerida (ou o 1º ativo). */
+  /** Card da IA: médico disponível da especialidade sugerida. */
   const normalizarEsp = (t: string) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
   // O servidor já trocou o código (M1…) pelo médico: procura por id, depois nome.
+  // F3: SEM fallback para medicosAtivos[0] — o card oferecia o primeiro médico
+  // ativo de QUALQUER especialidade quando a sugerida não casava com ninguém,
+  // e o paciente agendava com quem não era a sugestão sem perceber a troca.
   const medicoOferta = ofertaAgendar
     ? (ofertaAgendar.medicoId ? medicosAtivos.find((m) => m.id === ofertaAgendar.medicoId) : undefined) ??
       (ofertaAgendar.medico ? medicosAtivos.find((m) => m.nome === ofertaAgendar.medico) : undefined) ??
       (ofertaAgendar.especialidade
         ? medicosAtivos.find((m) => normalizarEsp(m.especialidade) === normalizarEsp(ofertaAgendar.especialidade ?? ""))
-        : undefined) ?? medicosAtivos[0]
+        : undefined)
     : undefined;
   const agendarComOferta = () => {
     const med = medicoOferta;
+    const espSugerida = ofertaAgendar?.especialidade;
     setOfertaAgendar(null);
     if (!med) {
+      // Sem médico da especialidade sugerida: card genérico e wizard na
+      // etapa de especialidade, dizendo que aquela não está disponível.
+      if (espSugerida) {
+        setMensagens((m) => [
+          ...m,
+          { remetente: "usuario", texto: "Quero agendar uma consulta" },
+          { remetente: "ia", texto: `No momento não há profissional de ${espSugerida} disponível. Escolha outra especialidade:` },
+        ]);
+        setEscolha({});
+        setEtapa("especialidade");
+        return;
+      }
       iniciarAgendamento();
       return;
     }
@@ -661,7 +715,12 @@ export function ChatBion({
         ...m,
         {
           remetente: "ia",
-          texto: `Pagamento confirmado. Sua consulta de **${especialidade}** com ${medico} está marcada para ${quando}. A triagem é opcional e abre em cards — fora deste chat.`,
+          // F10: sem Stripe (modo simulado), nada foi cobrado — a mensagem
+          // não pode dizer "Pagamento confirmado".
+          texto:
+            stripeAtivo === false
+              ? `Consulta marcada em modo de demonstração — nenhum valor foi cobrado. Sua consulta de **${especialidade}** com ${medico} está marcada para ${quando}. A triagem é opcional e abre em cards — fora deste chat.`
+              : `Pagamento confirmado. Sua consulta de **${especialidade}** com ${medico} está marcada para ${quando}. A triagem é opcional e abre em cards — fora deste chat.`,
           tipo: "sucesso-agendamento",
         },
       ]);
@@ -715,6 +774,22 @@ export function ChatBion({
 
   const opcoesEtapas = (): OpcoesEtapa | null => {
     if (etapa === "especialidade") {
+      // F13: sem NENHUM médico ativo, a caixa renderizava vazia, sem texto
+      // nem saída. Estado vazio com caminho de volta, como nas outras etapas.
+      if (!medicosAtivos.length) {
+        return {
+          titulo: "Especialidade",
+          opcoes: [{ rotulo: "Nenhum profissional disponível no momento", valor: "" }],
+          escolher: () => {
+            setMensagens((m) => [
+              ...m,
+              { remetente: "ia", texto: "No momento não há profissionais disponíveis para agendar. Tente de novo mais tarde — ou me pergunte outra coisa." },
+            ]);
+            setEscolha({});
+            setEtapa(null);
+          },
+        };
+      }
       return {
         titulo: "Especialidade",
         opcoes: [...new Set(medicosAtivos.map((m) => m.especialidade))].map((e) => ({ rotulo: e, valor: e })),
@@ -726,11 +801,24 @@ export function ChatBion({
       };
     }
     if (etapa === "medico") {
+      const daEspecialidade = medicosAtivos.filter((m) => m.especialidade === escolha.especialidade);
+      // F13 (irmão): especialidade sem profissional (ex.: vinda da oferta da
+      // IA) também ganha estado vazio com saída, não a caixa vazia.
+      if (!daEspecialidade.length) {
+        return {
+          titulo: "Profissional",
+          opcoes: [{ rotulo: "Nenhum profissional desta especialidade no momento", valor: "" }],
+          escolher: () => {
+            setMensagens((m) => [...m, { remetente: "ia", texto: "Escolha outra especialidade, por favor:" }]);
+            setEscolha({});
+            setEtapa("especialidade");
+          },
+        };
+      }
       return {
         titulo: "Profissional",
-        opcoes: medicosAtivos
-          .filter((m) => m.especialidade === escolha.especialidade)
-          .map((m) => ({ rotulo: m.nome, valor: m.nome, sub: `R$ ${m.valor} · ${textoNota(m)}` })),
+        opcoes: daEspecialidade
+          .map((m) => ({ rotulo: m.nome, valor: m.nome, sub: `${fmtBRL(m.valor)} · ${textoNota(m)}` })),
         escolher: (v: string) => {
           setEscolha((c) => ({ ...c, medico: v }));
           setMensagens((m) => [...m, { remetente: "usuario", texto: v }, { remetente: "ia", texto: `Escolha o dia para a consulta com ${v}:` }]);
@@ -739,13 +827,13 @@ export function ChatBion({
       };
     }
     if (etapa === "dia") {
-      // Só dias com horário livre (agenda do médico, próximos 7 dias).
+      // Só dias com horário livre (agenda do médico, próximos 14 dias — F5).
       if (!agendaChat.length) {
         return {
           titulo: "Dia",
-          opcoes: [{ rotulo: "Sem horários livres nos próximos 7 dias", valor: "" }],
+          opcoes: [{ rotulo: "Sem horários livres nos próximos 14 dias", valor: "" }],
           escolher: () => {
-            setMensagens((m) => [...m, { remetente: "ia", texto: "Este profissional não tem horários livres nos próximos 7 dias — escolha outro profissional, por favor." }]);
+            setMensagens((m) => [...m, { remetente: "ia", texto: "Este profissional não tem horários livres nos próximos 14 dias — escolha outro profissional, por favor." }]);
             setEscolha((c) => ({ especialidade: c.especialidade }));
             setEtapa("medico");
           },
@@ -801,7 +889,7 @@ export function ChatBion({
   if (!aberto) return null;
 
   return (
-    <div ref={dialogoRef} className="bpp-sobreposicao absolute inset-0 z-50 flex flex-col bp-painel" role="dialog" aria-modal="true" aria-label="Conversa com a BION IA">
+    <div ref={dialogoRef} className="bpp-sobreposicao absolute inset-0 z-50 flex flex-col bp-painel" role="dialog" aria-modal="true" aria-label={modoLaudo ? "Enviar laudo para a BION IA" : "Conversa com a BION IA"}>
       <input
         ref={inputArquivoRef}
         type="file"
@@ -840,7 +928,9 @@ export function ChatBion({
           <div className="flex-1 min-w-0">
             <div className="font-bold text-bion-ink dark:text-bion-paper">BION IA</div>
             <div className={`text-xs font-medium ${iaPausada ? "text-amber-800 dark:text-amber-200" : "text-emerald-800 dark:text-emerald-200"}`}>
-              {pensando || enviandoLaudo || pagando ? "Digitando…" : iaPausada ? "IA pausada no momento" : "Online · responde na hora"}
+              {/* F11: "responde na hora" prometia instantaneidade que o
+                  backend não promete (respostas típicas de 4–25 s). */}
+              {pensando || enviandoLaudo || pagando ? "Digitando…" : iaPausada ? "IA pausada no momento" : "Online agora"}
             </div>
           </div>
           <button type="button" onClick={onFechar} aria-label="Fechar conversa" className="rounded-full p-2.5 bp-glass text-bion-ink dark:text-bion-paper">
@@ -852,13 +942,30 @@ export function ChatBion({
 
       {/* Mensagens */}
       <div className="flex-1 overflow-y-auto bp-coluna px-5 py-4 space-y-3">
+        {/* Modo laudo com histórico de outra abertura: cartão fixo de envio no
+            topo (a conversa não começou pela mensagem contextual de laudo). */}
+        {mostrarCartaoLaudo(intencao, mensagens) ? (
+          <section aria-label="Enviar laudo" className="bp-glass p-4 text-bion-ink dark:text-bion-paper">
+            <div className="flex items-center gap-2 text-sm font-bold mb-1">
+              <FileUp className="w-4 h-4" /> Enviar laudo
+            </div>
+            <p className="text-sm opacity-90 mb-3">{TEXTO_ENVIO_LAUDO}</p>
+            <button type="button"
+              onClick={iniciarExame}
+              disabled={enviandoLaudo || etapa !== null || iaLiberada !== true}
+              className="bp-acao w-full py-3 text-sm inline-flex items-center justify-center gap-2 disabled:opacity-40"
+            >
+              <FileUp className="w-4 h-4" /> Escolher arquivo do laudo
+            </button>
+          </section>
+        ) : null}
         <ChatListaMensagens mensagens={mensagens} pensando={pensando} segundosEspera={segundosEspera} />
         {ofertaAgendar && etapa === null && !pensando && !anamneseAtiva ? (
           <section aria-label="Agendar consulta" className="rounded-2xl border border-bion-sea/40 bp-glass p-4 text-sm text-bion-ink dark:text-bion-paper space-y-2">
             <p className="font-semibold">Quer falar com um médico do BION?</p>
             {medicoOferta ? (
               <p>
-                {medicoOferta.nome} · {medicoOferta.especialidade} · R$ {medicoOferta.valor}
+                {medicoOferta.nome} · {medicoOferta.especialidade} · {fmtBRL(medicoOferta.valor)}
               </p>
             ) : null}
             <div className="flex gap-2">
@@ -911,13 +1018,17 @@ export function ChatBion({
                 <li><strong>Especialidade:</strong> {escolha.especialidade}</li>
                 <li><strong>Profissional:</strong> {escolha.medico}</li>
                 <li><strong>Data:</strong> {escolha.dia} às {escolha.hora}</li>
-                <li><strong>Valor:</strong> R$ {medicoRegistro?.valor ?? 0}</li>
+                <li><strong>Valor:</strong> {fmtBRL(medicoRegistro?.valor ?? 0)}</li>
               </ul>
               <div className="text-xs font-bold uppercase tracking-wide opacity-80 mb-2 inline-flex items-center gap-1.5">
                 <CreditCard className="w-3.5 h-3.5" /> Forma de pagamento
               </div>
+              {/* F10: o texto acompanha o modo real — Stripe ligado, página
+                  segura; desligado (demonstração), confirmação simulada. */}
               <p className="text-sm mb-3">
-                Cartão de crédito, na página segura do Stripe. Não aceitamos Pix.
+                {stripeAtivo === false
+                  ? "Demonstração: a confirmação é simulada e nenhum cartão é cobrado."
+                  : "Cartão de crédito, na página segura do Stripe. Não aceitamos Pix."}
               </p>
               <div className="flex gap-2">
                 <button type="button"
@@ -925,7 +1036,7 @@ export function ChatBion({
                   disabled={pagando}
                   className="bp-acao flex-1 py-3 text-sm inline-flex items-center justify-center gap-2 disabled:opacity-40"
                 >
-                  <Lock className="w-4 h-4" /> Pagar R$ {medicoRegistro?.valor ?? 0} e agendar
+                  <Lock className="w-4 h-4" /> {stripeAtivo === false ? `Confirmar ${fmtBRL(medicoRegistro?.valor ?? 0)} (demonstração)` : `Pagar ${fmtBRL(medicoRegistro?.valor ?? 0)} e agendar`}
                 </button>
                 <button type="button"
                   onClick={() => {
@@ -1064,8 +1175,8 @@ export function ChatBion({
           </div>
         )}
 
-        {/* Chips iniciais quando só existe a saudação */}
-        {mensagens.length === 1 && etapa === null && !anamneseAtiva && (
+        {/* Chips iniciais quando só existe a saudação (modo geral) */}
+        {mensagens.length === 1 && etapa === null && !anamneseAtiva && !modoLaudo && (
           <div className="flex flex-wrap gap-2">
             <button type="button" onClick={iniciarAgendamento} className="rounded-full bg-bion-sea/10 dark:bg-sky-400/10 border border-bion-sea/25 dark:border-sky-300/25 px-4 py-2.5 text-sm font-semibold text-bion-sea dark:text-sky-300">
               Agendar consulta
@@ -1074,6 +1185,19 @@ export function ChatBion({
               Enviar laudo de exame
             </button> : null}
           </div>
+        )}
+
+        {/* Ação principal do modo laudo: a conversa já abriu com a mensagem
+            contextual — o botão executa o mesmo caminho do chip de laudo
+            (iniciarExame → seletor de arquivo → aceite → upload). */}
+        {mostrarAcaoLaudo(intencao, mensagens) && etapa === null && !anamneseAtiva && (
+          <button type="button"
+            onClick={iniciarExame}
+            disabled={enviandoLaudo || etapa !== null || iaLiberada !== true}
+            className="bp-acao w-full py-3 text-sm inline-flex items-center justify-center gap-2 disabled:opacity-40"
+          >
+            <FileUp className="w-4 h-4" /> Escolher arquivo do laudo
+          </button>
         )}
 
         <div ref={fimRef} />

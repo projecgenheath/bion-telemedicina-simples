@@ -1,14 +1,14 @@
 import Stripe from "stripe";
 import { db } from "@/lib/db";
+import { bloqueioChaveLive } from "@/lib/stripe-checkout-logica";
 
 /**
  * Base do Stripe (modo teste). Dono: Admin. Migração 20261028a.
  *
  * - Cliente lazy via STRIPE_SECRET_KEY (nada é criado no import).
- * - Modo único "plataforma" (decisão do Alisson, 03/11 10:49): o Stripe é só
- *   o gateway paciente → BION. Médico não tem conta Stripe; o repasse é por
- *   PIX no fim do dia (financeiro.ts / repasse.ts). Sem Stripe Connect, sem
- *   cobrança direta nem de destino.
+ * - STRIPE_CONNECT (padrão off): só com "1"/"true" a cobrança usa conta
+ *   conectada do médico (PerfilMedico.stripeAccountId). O cálculo dos 10%
+ *   (application_fee_amount) fica no financeiro.ts (Médicos).
  * - Idempotência do webhook: StripeEvento (id = event.id).
  * - Reembolso: o CHECK "Reembolso_status_check" não tem 'enviado'. Por isso
  *   "enviado" = status 'aprovado' com stripeRefundId preenchido; o evento do
@@ -16,15 +16,71 @@ import { db } from "@/lib/db";
  */
 
 let cliente: Stripe | null = null;
+let chaveDoCliente: string | null = null;
 
+/**
+ * Chave live (sk_live_ / rk_live_) bloqueada em QUALQUER movimento de dinheiro
+ * (checkout, reembolso, transferência, refund da application fee, leitura)
+ * até o Alisson liberar (Jurídico: faltam CNPJ, RT e conta Stripe live BR).
+ * Lançado por stripe() ANTES de qualquer requisição.
+ */
+export class ChaveLiveBloqueadaError extends Error {
+  readonly codigo = "chave_live_bloqueada" as const;
+  constructor() {
+    super("Chave Stripe live bloqueada: o app só funciona em modo teste até o Alisson liberar.");
+    this.name = "ChaveLiveBloqueadaError";
+  }
+}
+
+/** Lança ChaveLiveBloqueadaError se a chave for live. Use em todo cliente Stripe. */
+export function exigirChaveNaoLive(chave: string | undefined = process.env.STRIPE_SECRET_KEY): void {
+  if (bloqueioChaveLive("plataforma", chave)) throw new ChaveLiveBloqueadaError();
+}
+
+/** Única fábrica do cliente Stripe do app. Confere a chave a cada chamada. */
 export function stripe(): Stripe {
-  if (cliente) return cliente;
   const chave = process.env.STRIPE_SECRET_KEY?.trim();
   if (!chave) throw new Error("STRIPE_SECRET_KEY não configurada.");
+  exigirChaveNaoLive(chave);
+  if (cliente && chaveDoCliente === chave) return cliente;
   cliente = new Stripe(chave);
+  chaveDoCliente = chave;
   return cliente;
 }
 
+export function stripeConnectAtivo(valor = process.env.STRIPE_CONNECT): boolean {
+  const v = (valor ?? "").trim().toLowerCase();
+  return v === "1" || v === "true";
+}
+
+export type ModoCobranca = "plataforma" | "direta" | "destino";
+
+/**
+ * STRIPE_MODO_COBRANCA (só vale com STRIPE_CONNECT ligado): 'direta' (PADRÃO,
+ * decisão do Alisson 03/11 12:13: cobrança direta na conta do médico, 10% de
+ * application fee) | 'destino' | 'plataforma' (só se escrito explicitamente).
+ */
+export function modoCobrancaStripe(valor = process.env.STRIPE_MODO_COBRANCA): ModoCobranca {
+  const v = (valor ?? "").trim().toLowerCase();
+  return v === "plataforma" || v === "destino" ? v : "direta";
+}
+
+export type TipoContaConnect = "standard" | "express";
+
+/**
+ * STRIPE_CONNECT_TIPO_CONTA: tipo da conta conectada criada no onboarding do
+ * médico (usado pelo onboarding, Médicos PR C). Padrão 'standard'.
+ * - standard: conta Stripe completa do médico (Dashboard próprio); o Stripe
+ *   fala direto com ele (KYC, disputas). É o tipo recomendado pelo Stripe
+ *   para cobrança direta. Onboarding por Account Link (type account_onboarding)
+ *   ou OAuth. Recebe transfers da BION (mesma região, BR→BR).
+ * - express: Dashboard Express; a BION responde por perdas/saldo negativo e
+ *   tem de pedir as capabilities card_payments + transfers. O Stripe não
+ *   recomenda cobrança direta com Express v1 (prefere destination charges).
+ */
+export function tipoContaConnect(valor = process.env.STRIPE_CONNECT_TIPO_CONTA): TipoContaConnect {
+  return (valor ?? "").trim().toLowerCase() === "express" ? "express" : "standard";
+}
 
 // ---------------------------------------------------------------- eventos
 
@@ -87,6 +143,8 @@ export async function marcarEvento(eventoId: string, tipo: string, d: DbEventos 
 
 // ---------------------------------------------------------------- reembolso
 
+type ContaMedico = { medico?: { perfilMedico?: { stripeAccountId: string | null } | null } | null } | null;
+
 type ReembolsoLinha = {
   id: string;
   status: string;
@@ -94,10 +152,15 @@ type ReembolsoLinha = {
   stripeRefundId: string | null;
   pagamento: {
     stripePaymentIntentId: string | null;
+    consulta?: ContaMedico;
+    /** Renovação de receita: Pagamento sem consulta, médico vem do PedidoRenovacao.medicoId. */
+    pedidoRenovacao?: ContaMedico;
   } | null;
   /** Multa de remarcação: sem Pagamento; o PaymentIntent fica em gatewayRef 'stripe_pi:<id>'. */
-  remarcacao?: { gatewayRef: string | null } | null;
+  remarcacao?: { gatewayRef: string | null; consulta?: ContaMedico } | null;
 };
+
+const SELECT_CONTA = { select: { medico: { select: { perfilMedico: { select: { stripeAccountId: true } } } } } } as const;
 
 /** Extrai o PaymentIntent de um gatewayRef 'stripe_pi:<id>' (null se não for desse formato). */
 export function paymentIntentDoGatewayRef(ref: string | null | undefined): string | null {
@@ -122,7 +185,7 @@ type StripeRefunds = {
 
 export type ResultadoEnvio =
   | { enviado: true; refundId: string; status: string }
-  | { enviado: false; motivo: "nao_encontrado" | "status" | "ja_enviado" | "sem_stripe" | "valor_zero"; erro?: string };
+  | { enviado: false; motivo: "nao_encontrado" | "status" | "ja_enviado" | "sem_stripe" | "valor_zero" | "sem_conta_medico"; erro?: string };
 
 /** Status do refund no Stripe → status do Reembolso (null = ainda pendente). */
 export function statusReembolsoDoStripe(status: string | null | undefined): "processado" | "falhou" | null {
@@ -137,15 +200,15 @@ export function statusReembolsoDoStripe(status: string | null | undefined): "pro
  */
 export async function enviarReembolsoStripe(
   reembolsoId: string,
-  deps: { d?: DbReembolso; s?: StripeRefunds; agora?: Date } = {},
+  deps: { d?: DbReembolso; s?: StripeRefunds; agora?: Date; connect?: boolean; modo?: ModoCobranca } = {},
 ): Promise<ResultadoEnvio> {
   const d = deps.d ?? (db as unknown as DbReembolso);
   const r = await d.reembolso.findUnique({
     where: { id: reembolsoId },
     select: {
       id: true, status: true, valorCentavos: true, stripeRefundId: true,
-      pagamento: { select: { stripePaymentIntentId: true } },
-      remarcacao: { select: { gatewayRef: true } },
+      pagamento: { select: { stripePaymentIntentId: true, consulta: SELECT_CONTA, pedidoRenovacao: SELECT_CONTA } },
+      remarcacao: { select: { gatewayRef: true, consulta: SELECT_CONTA } },
     },
   });
   if (!r) return { enviado: false, motivo: "nao_encontrado" };
@@ -156,8 +219,25 @@ export async function enviarReembolsoStripe(
   if (!pi) return { enviado: false, motivo: "sem_stripe" };
   if (r.valorCentavos <= 0) return { enviado: false, motivo: "valor_zero" };
 
+  const connect = deps.connect ?? stripeConnectAtivo();
+  const modo: ModoCobranca = connect ? (deps.modo ?? modoCobrancaStripe()) : "plataforma";
   const params: Stripe.RefundCreateParams = { payment_intent: pi, amount: r.valorCentavos, metadata: { reembolsoId: r.id } };
   const opcoes: Stripe.RequestOptions = { idempotencyKey: r.id };
+  if (modo === "direta") {
+    const conta = (r.pagamento
+      ? r.pagamento.consulta?.medico?.perfilMedico?.stripeAccountId ?? r.pagamento.pedidoRenovacao?.medico?.perfilMedico?.stripeAccountId
+      : r.remarcacao?.consulta?.medico?.perfilMedico?.stripeAccountId)?.trim();
+    if (!conta) {
+      const erro = `Reembolso ${r.id}: Connect ativo (modo 'direta') mas o médico não tem stripeAccountId; refund não enviado.`;
+      console.error("[stripe reembolso]", erro);
+      return { enviado: false, motivo: "sem_conta_medico", erro };
+    }
+    params.refund_application_fee = true;
+    opcoes.stripeAccount = conta;
+  } else if (modo === "destino") {
+    params.reverse_transfer = true;
+    params.refund_application_fee = true;
+  }
 
   const s = deps.s ?? stripe();
   const refund = await s.refunds.create(params, opcoes);
@@ -169,7 +249,7 @@ export async function enviarReembolsoStripe(
   return { enviado: true, refundId: refund.id, status: refund.status ?? "pending" };
 }
 
-type EventoReembolso = { id: string; type: string; data: { object: unknown } };
+type EventoReembolso = { id: string; type: string; account?: string | null; data: { object: unknown } };
 type RefundEv = { id: string; status: string | null; charge?: unknown };
 type StripeRefundsList = {
   refunds: { list(p: Stripe.RefundListParams, o?: Stripe.RequestOptions): Promise<{ data: RefundEv[] }> };
@@ -178,7 +258,7 @@ type StripeRefundsList = {
 /**
  * Fonte principal: refund.created / refund.updated / refund.failed (objeto refund).
  * charge.refunded é complementar; se refunds.data vier vazio/ausente, busca
- * refunds.list({ charge }).
+ * refunds.list({ charge }) (com stripeAccount se o evento tiver account).
  * Fecha o Reembolso em 'processado' ou 'falhou'. Retorna quantos foram atualizados.
  */
 export async function registrarEventoReembolsoStripe(
@@ -197,7 +277,7 @@ export async function registrarEventoReembolsoStripe(
     refunds = ch.refunds?.data ?? [];
     if (refunds.length === 0 && ch.id) {
       const s = deps.s ?? (stripe() as unknown as StripeRefundsList);
-      const lista = await s.refunds.list({ charge: ch.id, limit: 100 }, undefined);
+      const lista = await s.refunds.list({ charge: ch.id, limit: 100 }, evento.account ? { stripeAccount: evento.account } : undefined);
       refunds = lista.data;
     }
   } else return 0;

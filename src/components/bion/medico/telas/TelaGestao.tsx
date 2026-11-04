@@ -33,6 +33,12 @@ export function TelaGestao({
   // Enquanto carrega, mostramos carregamento, não validação.
   const { carregando } = useBion();
   const horarios = medico ? [...medico.horariosDisponiveis].sort() : [];
+  // Grade por dia da semana: o card resume a grade PADRÃO e nomeia os
+  // dias com grade própria (antes anunciava o padrão como se valesse
+  // para todos os dias — um sábado curto aparecia com a contagem cheia).
+  const grade = medico ? gradeDeCampos(medico.horariosDisponiveis, medico.horariosPorDia) : null;
+  const diasProprios = grade ? Object.entries(grade.dias) : [];
+  const NOMES_DIA = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 
   return (
     <section className="bm-tela bm-tela-2 flex flex-col px-5 pt-10 pb-20" aria-labelledby="bm-t2-titulo">
@@ -72,7 +78,7 @@ export function TelaGestao({
             type="button"
             onClick={onAbrirAgenda}
             className="bp-glass p-5 mt-3 w-full text-left"
-            aria-label={`Agenda: ${horarios.length} horários por dia. Configurar agenda`}
+            aria-label={`Agenda: grade padrão com ${horarios.length} horários por dia${diasProprios.length ? `; ${diasProprios.map(([d]) => NOMES_DIA[Number(d)]).join(", ")} com grade própria` : ""}. Configurar agenda`}
           >
             <div className="flex items-center justify-between gap-3">
               <span className="text-xs font-bold uppercase tracking-wider text-bion-ink/75 dark:text-bion-paper/75 inline-flex items-center gap-1.5">
@@ -84,6 +90,14 @@ export function TelaGestao({
               <>
                 <div className="mt-1 text-lg font-black">
                   {horarios.length} horários por dia · {horarios[0]}–{horarios[horarios.length - 1]}
+                </div>
+                <div className="text-xs text-bion-ink/75 dark:text-bion-paper/75">
+                  Grade padrão
+                  {diasProprios.length
+                    ? ` · com grade própria: ${diasProprios
+                        .map(([d, lista]) => `${NOMES_DIA[Number(d)]} (${lista.length} ${lista.length === 1 ? "horário" : "horários"})`)
+                        .join(", ")}`
+                    : ""}
                 </div>
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   {horarios.slice(0, 8).map((h) => (

@@ -1,16 +1,35 @@
 /* Chamadas do navegador para o checkout Stripe (sem chave, sem valor: o servidor decide). */
 
-let ativoCache: Promise<boolean> | null = null;
+/*
+ * Cache da flag "checkout Stripe ligado": só guarda RESPOSTA do servidor
+ * (por TTL_ATIVO_MS). Falha de rede/HTTP NÃO é cacheada — antes, um único
+ * GET falho fixava `false` na sessão inteira e TODOS os botões de pagar
+ * sumiam até recarregar o app. Com falha, devolve `false` só para aquela
+ * chamada e a próxima montagem de botão tenta de novo.
+ */
+const TTL_ATIVO_MS = 30_000;
+let ativoCache: { valor: boolean; ate: number } | null = null;
+let ativoEmVoo: Promise<boolean> | null = null;
 
 /** O checkout Stripe está ligado neste ambiente? (flag do servidor) */
 export function checkoutStripeAtivo(): Promise<boolean> {
-  if (!ativoCache) {
-    ativoCache = fetch("/api/pagamentos/stripe/checkout", { cache: "no-store" })
-      .then((r) => (r.ok ? r.json() : { ativo: false }))
-      .then((j: { ativo?: boolean }) => j.ativo === true)
-      .catch(() => false);
-  }
-  return ativoCache;
+  if (ativoCache && Date.now() < ativoCache.ate) return Promise.resolve(ativoCache.valor);
+  if (ativoEmVoo) return ativoEmVoo;
+  ativoEmVoo = (async () => {
+    try {
+      const r = await fetch("/api/pagamentos/stripe/checkout", { cache: "no-store" });
+      if (!r.ok) return false; // 5xx/rede: transitório — não cacheia
+      const j = (await r.json()) as { ativo?: boolean };
+      const valor = j.ativo === true;
+      ativoCache = { valor, ate: Date.now() + TTL_ATIVO_MS };
+      return valor;
+    } catch {
+      return false; // sem conexão: transitório — não cacheia
+    } finally {
+      ativoEmVoo = null;
+    }
+  })();
+  return ativoEmVoo;
 }
 
 /**

@@ -4,10 +4,11 @@ import { useMemo, useRef, useState } from "react";
 import { CalendarClock, Loader2, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { useBion } from "@/lib/bion-store";
-import type { Consulta, Medico } from "@/lib/bion-tipos";
+import { fmtValorBRL, type Consulta, type Medico } from "@/lib/bion-tipos";
 import { PRAZO_RETORNO_GRATIS_DIAS, escolherHorarioInicial, fimRetornoGratis, jaUsouRetornoGratis, motivoSugerido, retornoEhGratis, ultimoDiaRetornoGratis } from "@/lib/atendimento-tipo";
 import { agendaLivreDoMedico, type DiaAgenda } from "./agenda-medico";
 import { useDiasBloqueados } from "./useDiasBloqueados";
+import { EstadoCarregando } from "./EstadosPaciente";
 import { useVoltarFecha } from "./useVoltarFecha";
 import { useFocoDialogo } from "./useFocoDialogo";
 import { useArrastarFechar } from "./useArrastarFechar";
@@ -37,7 +38,7 @@ export function MarcarRetornoSheet({
 }) {
   const { medicos, consultas, adicionarConsulta } = useBion();
   const medico = medicos.find((m) => (origem.medicoId ? m.id === origem.medicoId : m.nome === origem.medico));
-  const { bloqueados } = useDiasBloqueados(medico?.id);
+  const { bloqueados, carregando: carregandoBloqueios } = useDiasBloqueados(medico?.id);
   const agenda = useMemo(() => agendaLivreDoMedico(medico, consultas, undefined, 30, bloqueados), [medico, consultas, bloqueados]);
   // Só aviso: quem decide se é grátis é o servidor. Espelha a regra dele
   // (jaUsouRetornoGratis): só consome o grátis um retorno GRATUITO (valor 0)
@@ -53,6 +54,7 @@ export function MarcarRetornoSheet({
       origem={origem}
       medico={medico}
       agenda={agenda}
+      carregandoAgenda={carregandoBloqueios}
       retornoSugeridoEm={retornoSugeridoEm}
       onFechar={onFechar}
       onConfirmar={(m, data, hora, motivo) =>
@@ -74,11 +76,14 @@ export function MarcarRetornoPainel({
   onFechar,
   onConfirmar,
   jaUsouGratis = false,
+  carregandoAgenda = false,
 }: {
   jaUsouGratis?: boolean;
   origem: Consulta;
   medico: Medico | undefined;
   agenda: DiaAgenda[];
+  /** Dias bloqueados ainda carregando: a agenda não é oferecida até saber. */
+  carregandoAgenda?: boolean;
   retornoSugeridoEm?: string | null;
   onFechar: () => void;
   onConfirmar: (medico: Medico, data: string, hora: string, motivo: string) => Promise<boolean>;
@@ -116,7 +121,7 @@ export function MarcarRetornoPainel({
       : Date.now() >= fimRetornoGratis(origemISO).getTime()
         ? `O retorno grátis vale até ${PRAZO_RETORNO_GRATIS_DIAS} dias após a consulta. Este retorno é cobrado.`
         : null;
-  const preco = medico ? `R$ ${medico.valor.toFixed(2).replace(".", ",")}` : null;
+  const preco = medico ? fmtValorBRL(medico.valor) : null;
 
   async function confirmar() {
     if (!medico || !diaSel || !horaSel) return;
@@ -142,6 +147,10 @@ export function MarcarRetornoPainel({
 
         {!medico ? (
           <p className="mt-4 text-sm">Este médico não está mais disponível. Agende uma consulta nova pela BION IA.</p>
+        ) : carregandoAgenda ? (
+          // Sem os dias bloqueados, a agenda ofereceria dias que o servidor
+          // recusa com 409 — segura a interação até carregar.
+          <EstadoCarregando texto="Consultando os dias livres do médico…" superficie="janela" className="mt-4" />
         ) : agenda.length === 0 ? (
           <p className="mt-4 text-sm">{medico.nome} não tem horário livre nos próximos 30 dias. Tente mais tarde ou mande uma mensagem.</p>
         ) : (

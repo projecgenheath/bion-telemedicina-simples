@@ -28,9 +28,9 @@ const sufixo = Date.now().toString(36);
 async function usuario(role: string, extra: Record<string, unknown> = {}) {
   return db.user.create({ data: { nome: `${role} ${sufixo}`, email: `${role}-${Math.random()}@t.local`, senhaHash: "x", role, ...extra } });
 }
-// Sem Stripe Connect (decisão 03/11 10:49): o médico não tem conta Stripe; recebe por PIX.
-async function medico(valor: number, _comStripe = true, comPix = false) {
-  const u = await usuario("MEDICO", { perfilMedico: { create: { crm: "1", especialidade: "Clínica", valor } } });
+// Desde 28/10 a regra é a conta Stripe (lib/medico-cobravel.ts); a chave PIX é só histórico.
+async function medico(valor: number, comStripe = true, comPix = false) {
+  const u = await usuario("MEDICO", { perfilMedico: { create: { crm: "1", especialidade: "Clínica", valor, stripeAccountId: comStripe ? `acct_teste_${Math.random().toString(36).slice(2)}` : null, stripeChargesEnabled: comStripe, stripePayoutsEnabled: comStripe } } });
   if (comPix) await db.dadosRecebimentoMedico.create({ data: { medicoId: u.id, pixTipo: "email", pixChave: "a@b.c", titularTipo: "pf", titularNome: "X", titularDocumento: "11111111111" } });
   return u;
 }
@@ -130,13 +130,26 @@ async function cenario(valorAntigo = 150) {
   const mudou = await m.remarcarPorEspera({ consultaId: c.id, pacienteId: pac.id, medicoId: barato.id, diferencaEsperadaCentavos: -5000, agora: depois });
   igual("preco_mudou → 409 com diferença atual", mudou.ok ? null : [mudou.status, mudou.erro, mudou.extra], [409, "preco_mudou", { diferencaAtualCentavos: -7950 }]);
   igual("preco_mudou não mexe na consulta", (await db.consulta.findUnique({ where: { id: c.id } }))?.status, "confirmada");
-  // Sem Connect: conta Stripe do médico nunca é exigida (só PIX também está livre).
-  for (const [nome, id] of [["com consulta em 40 min", ocupado.id], ["o mesmo médico", med.id]] as const) {
-    const r = await m.remarcarPorEspera({ consultaId: c.id, pacienteId: pac.id, medicoId: id, diferencaEsperadaCentavos: -10000, agora: depois });
-    igual(`médico ${nome} → 409 medico_indisponivel`, r.ok ? null : [r.status, r.erro], [409, "medico_indisponivel"]);
+  // Regra de conta Stripe só vale com Connect ligado (modo direta), igual ao checkout.
+  const chavesEnv = ["STRIPE_CONNECT", "STRIPE_MODO_COBRANCA", "BION_PAGAMENTO_STRIPE", "STRIPE_SECRET_KEY"] as const;
+  const envAntes = chavesEnv.map((k) => process.env[k]);
+  try {
+    process.env.STRIPE_CONNECT = "true";
+    process.env.STRIPE_MODO_COBRANCA = "direta";
+    process.env.BION_PAGAMENTO_STRIPE = "true";
+    process.env.STRIPE_SECRET_KEY = "sk_test_local_ficticia";
+    for (const [nome, id] of [["só com PIX (sem Stripe)", soPix.id], ["com consulta em 40 min", ocupado.id], ["o mesmo médico", med.id]] as const) {
+      const r = await m.remarcarPorEspera({ consultaId: c.id, pacienteId: pac.id, medicoId: id, diferencaEsperadaCentavos: -10000, agora: depois });
+      igual(`médico ${nome} → 409 medico_indisponivel`, r.ok ? null : [r.status, r.erro], [409, "medico_indisponivel"]);
+    }
+    igual("médico só com Stripe (sem PIX) está livre", (await db.$transaction((tx) => m.medicoLivreAgora(tx, { medicoId: soStripe.id, especialidade: "Clínica", excetoMedicoId: med.id, agora: depois })))?.valorCentavos, 10000);
+    igual("médico só com PIX não está livre", await db.$transaction((tx) => m.medicoLivreAgora(tx, { medicoId: soPix.id, especialidade: "Clínica", excetoMedicoId: med.id, agora: depois })), null);
+  } finally {
+    chavesEnv.forEach((k, i) => {
+      if (envAntes[i] === undefined) delete process.env[k];
+      else process.env[k] = envAntes[i];
+    });
   }
-  igual("médico só com PIX está livre", (await db.$transaction((tx) => m.medicoLivreAgora(tx, { medicoId: soPix.id, especialidade: "Clínica", excetoMedicoId: med.id, agora: depois })))?.valorCentavos, 10000);
-  igual("médico sem PIX também está livre", (await db.$transaction((tx) => m.medicoLivreAgora(tx, { medicoId: soStripe.id, especialidade: "Clínica", excetoMedicoId: med.id, agora: depois })))?.valorCentavos, 10000);
   const r1 = await m.remarcarPorEspera({ consultaId: c.id, pacienteId: pac.id, medicoId: barato.id, diferencaEsperadaCentavos: -7950, agora: depois });
   const r2 = await m.remarcarPorEspera({ consultaId: c.id, pacienteId: pac.id, medicoId: barato.id, diferencaEsperadaCentavos: -7950, agora: depois });
   igual("remarcar ok", r1.ok && !r1.jaProcessada, true);

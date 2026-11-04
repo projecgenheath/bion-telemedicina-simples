@@ -4,6 +4,12 @@ import { useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useBion } from "@/lib/bion-store";
+import { digitosCpf, formatarCpfExibicao, mascararCpfDigitacao } from "@/lib/cpf";
+// validar-perfil é um módulo PURO (sem "server-only"; deps isomórficas):
+// a mesma validarCpf do servidor valida aqui p/ erro imediato, e o
+// servidor revalida no PATCH /api/perfil (autoritativo).
+import { validarCpf, validarTelefone } from "@/lib/server/validar-perfil";
+import { mascararTelefoneDigitacao } from "@/lib/telefone";
 import { hojeIsoSaoPaulo, type ComDataNascimento } from "@/lib/idade";
 import { useVoltarFecha } from "./useVoltarFecha";
 import { useFocoDialogo } from "./useFocoDialogo";
@@ -17,15 +23,19 @@ import { useArrastarFechar } from "./useArrastarFechar";
  */
 
 export type CampoPerfil =
+  | "cpf"
   | "dataNascimento"
   | "telefone"
   | "profissao"
   | "estadoCivil"
+  | "genero"
   | "tipoSanguineo"
   | "alergias"
   | "comorbidades";
 
 const ESTADOS_CIVIS = ["Solteiro(a)", "Casado(a)", "Divorciado(a)", "Viúvo(a)", "União estável"];
+/** Mesmos rótulos usados no restante do app (GENEROS_MEDICO, dados-pessoais do médico). */
+const GENEROS = ["Feminino", "Masculino", "Outro", "Prefiro não informar"];
 /** Mesma lista do servidor (lib/server/validar-perfil.ts). */
 const TIPOS_SANGUINEOS = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"];
 
@@ -34,12 +44,23 @@ const lista = (v: string) => v.split(",").map((s) => s.trim()).filter(Boolean);
 export function DadosPessoaisSheet({ campoInicial, onFechar }: { campoInicial?: CampoPerfil; onFechar: () => void }) {
   const { pacientePerfil, atualizarPacientePerfil } = useBion();
   const dataNascimento = (pacientePerfil as (typeof pacientePerfil & ComDataNascimento) | undefined)?.dataNascimento ?? "";
+  // CPF: espelha a regra do servidor (cpfPodeSerAlterado, M4) — com um CPF
+  // VÁLIDO já gravado, o campo é somente leitura (correção só pelo suporte);
+  // sem CPF ou com valor legado inválido, dá para definir/corrigir aqui.
+  const cpfSalvo = pacientePerfil?.cpf ?? "";
+  const cpfValidoSalvo = validarCpf(cpfSalvo);
+  const cpfTravado = cpfValidoSalvo.ok && cpfValidoSalvo.valor !== "";
+  const cpfInicial = cpfTravado ? "" : mascararCpfDigitacao(cpfSalvo);
+  const [cpf, setCpf] = useState(cpfInicial);
   const [salvando, setSalvando] = useState(false);
+  // B18: erro do telefone mora no campo (não só no toast do Salvar).
+  const [erroTelefone, setErroTelefone] = useState("");
   const [form, setForm] = useState({
     dataNascimento,
-    telefone: pacientePerfil?.telefone ?? "",
+    telefone: mascararTelefoneDigitacao(pacientePerfil?.telefone ?? ""),
     profissao: pacientePerfil?.profissao ?? "",
     estadoCivil: pacientePerfil?.estadoCivil ?? "",
+    genero: pacientePerfil?.genero ?? "",
     tipoSanguineo: pacientePerfil?.tipoSanguineo ?? "",
     alergias: (pacientePerfil?.alergias ?? []).join(", "),
     comorbidades: (pacientePerfil?.comorbidades ?? []).join(", "),
@@ -49,10 +70,12 @@ export function DadosPessoaisSheet({ campoInicial, onFechar }: { campoInicial?: 
   // B21: fechar por voltar/ESC/arrastar/Cancelar com conteúdo não salvo
   // pede confirmação — antes o texto digitado era descartado em silêncio.
   const sujo =
+    (!cpfTravado && cpf !== cpfInicial) ||
     form.dataNascimento !== dataNascimento ||
-    form.telefone !== (pacientePerfil?.telefone ?? "") ||
+    form.telefone !== mascararTelefoneDigitacao(pacientePerfil?.telefone ?? "") ||
     form.profissao !== (pacientePerfil?.profissao ?? "") ||
     form.estadoCivil !== (pacientePerfil?.estadoCivil ?? "") ||
+    form.genero !== (pacientePerfil?.genero ?? "") ||
     form.tipoSanguineo !== (pacientePerfil?.tipoSanguineo ?? "") ||
     form.alergias !== (pacientePerfil?.alergias ?? []).join(", ") ||
     form.comorbidades !== (pacientePerfil?.comorbidades ?? []).join(", ");
@@ -87,11 +110,25 @@ export function DadosPessoaisSheet({ campoInicial, onFechar }: { campoInicial?: 
 
   const salvar = async () => {
     if (salvando) return;
+    // B18: telefone inválido é barrado NO CAMPO, antes do patch único —
+    // antes o servidor rejeitava tudo no Salvar com erro genérico e a
+    // edição inteira (nome, profissão…) ficava presa a um telefone errado.
+    // A folha continua aberta com tudo o que foi digitado.
+    if (form.telefone.trim()) {
+      const tel = validarTelefone(form.telefone);
+      if (!tel.ok) {
+        setErroTelefone(tel.erro);
+        toast.error(tel.erro);
+        return;
+      }
+    }
+    setErroTelefone("");
     const novo = {
       dataNascimento: form.dataNascimento || null,
       telefone: form.telefone.trim(),
       profissao: form.profissao.trim(),
       estadoCivil: form.estadoCivil,
+      genero: form.genero,
       tipoSanguineo: form.tipoSanguineo,
       alergias: lista(form.alergias),
       comorbidades: lista(form.comorbidades),
@@ -101,6 +138,7 @@ export function DadosPessoaisSheet({ campoInicial, onFechar }: { campoInicial?: 
       telefone: pacientePerfil?.telefone ?? "",
       profissao: pacientePerfil?.profissao ?? "",
       estadoCivil: pacientePerfil?.estadoCivil ?? "",
+      genero: pacientePerfil?.genero ?? "",
       tipoSanguineo: pacientePerfil?.tipoSanguineo ?? "",
       alergias: pacientePerfil?.alergias ?? [],
       comorbidades: pacientePerfil?.comorbidades ?? [],
@@ -110,11 +148,27 @@ export function DadosPessoaisSheet({ campoInicial, onFechar }: { campoInicial?: 
     )
       // O servidor não aceita tipo sanguíneo vazio: "Não sei" só não envia.
       .filter((k) => !(k === "tipoSanguineo" && !novo.tipoSanguineo));
-    if (!alterado.length) {
+    // CPF só entra no patch quando o perfil não tem CPF válido e o paciente
+    // digitou um (a partir do vazio ou corrigindo um legado inválido).
+    // Validado aqui com a validarCpf do servidor p/ o erro aparecer na hora;
+    // trava e duplicidade são do servidor (409 vira toast do `api`).
+    let cpfPatch: string | undefined;
+    if (!cpfTravado && digitosCpf(cpf).length > 0) {
+      const r = validarCpf(cpf);
+      if (!r.ok) {
+        toast.error("CPF inválido. Confira os 11 dígitos.");
+        return;
+      }
+      cpfPatch = r.valor;
+    }
+    if (!alterado.length && cpfPatch === undefined) {
       onFechar();
       return;
     }
-    const patch = Object.fromEntries(alterado.map((k) => [k, novo[k]]));
+    const patch = {
+      ...Object.fromEntries(alterado.map((k) => [k, novo[k]])),
+      ...(cpfPatch !== undefined ? { cpf: cpfPatch } : {}),
+    };
     setSalvando(true);
     // Em erro, o toast vem do `api` e a janela continua aberta com o que foi digitado.
     const ok = await atualizarPacientePerfil(patch);
@@ -146,12 +200,50 @@ export function DadosPessoaisSheet({ campoInicial, onFechar }: { campoInicial?: 
         <fieldset className="mt-5 space-y-3" disabled={salvando}>
           <legend className="text-xs font-bold uppercase tracking-wider bpp-sheet-suave mb-1">Dados pessoais</legend>
           <label className="block">
+            <span className={rotulo}>CPF</span>
+            {cpfTravado ? (
+              <>
+                <input value={formatarCpfExibicao(cpfSalvo)} readOnly aria-readonly="true" className={`${campo} opacity-75`} />
+                <span className="block mt-1 text-xs opacity-75">
+                  CPF é seu documento de identificação. Para corrigir, fale com o suporte.
+                </span>
+              </>
+            ) : (
+              <input ref={(el) => focarCampo(el, "cpf")} value={cpf} onChange={(e) => setCpf(mascararCpfDigitacao(e.target.value))} placeholder="000.000.000-00" inputMode="numeric" autoComplete="off" maxLength={14} className={campo} />
+            )}
+          </label>
+          <label className="block">
             <span className={rotulo}>Data de nascimento</span>
             <input ref={(el) => focarCampo(el, "dataNascimento")} type="date" value={form.dataNascimento} onChange={set("dataNascimento")} min="1900-01-01" max={hojeIsoSaoPaulo()} autoComplete="bday" className={campo} />
           </label>
           <label className="block">
             <span className={rotulo}>Telefone</span>
-            <input ref={(el) => focarCampo(el, "telefone")} value={form.telefone} onChange={set("telefone")} placeholder="(11) 91234-5678" type="tel" inputMode="tel" autoComplete="tel" maxLength={25} className={campo} />
+            <input
+              ref={(el) => focarCampo(el, "telefone")}
+              value={form.telefone}
+              onChange={(e) => {
+                setForm((f) => ({ ...f, telefone: mascararTelefoneDigitacao(e.target.value) }));
+                if (erroTelefone) setErroTelefone("");
+              }}
+              onBlur={() => {
+                if (!form.telefone.trim()) return setErroTelefone("");
+                const tel = validarTelefone(form.telefone);
+                setErroTelefone(tel.ok ? "" : tel.erro);
+              }}
+              placeholder="(11) 91234-5678"
+              type="tel"
+              inputMode="tel"
+              autoComplete="tel"
+              maxLength={15}
+              aria-invalid={erroTelefone ? true : undefined}
+              aria-describedby={erroTelefone ? "erro-telefone" : undefined}
+              className={campo}
+            />
+            {erroTelefone ? (
+              <span id="erro-telefone" role="alert" className="block mt-1 text-xs font-semibold text-red-700 dark:text-red-300">
+                {erroTelefone}
+              </span>
+            ) : null}
           </label>
           <label className="block">
             <span className={rotulo}>Profissão</span>
@@ -164,6 +256,20 @@ export function DadosPessoaisSheet({ campoInicial, onFechar }: { campoInicial?: 
               {ESTADOS_CIVIS.map((o) => (
                 <option key={o} value={o}>{o}</option>
               ))}
+            </select>
+          </label>
+          <label className="block">
+            <span className={rotulo}>Sexo</span>
+            <select ref={(el) => focarCampo(el, "genero")} value={form.genero} onChange={set("genero")} className={campo}>
+              {/* Como no tipo sanguíneo: com valor salvo, "" não é oferecido
+                  (não dá para "desinformar" por esta folha). */}
+              {pacientePerfil?.genero ? null : <option value="">Prefiro não informar</option>}
+              {GENEROS.map((o) => (
+                <option key={o} value={o}>{o}</option>
+              ))}
+              {pacientePerfil?.genero && !GENEROS.includes(pacientePerfil.genero) ? (
+                <option value={pacientePerfil.genero}>{pacientePerfil.genero}</option>
+              ) : null}
             </select>
           </label>
         </fieldset>

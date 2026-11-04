@@ -98,7 +98,15 @@ model PerfilMedico {
   // ativo | pendente | suspenso | arquivado (B-22: "arquivado" vem do DELETE
   // lógico do admin — usuário inativo + perfil arquivado, histórico preservado)
   status              String  @default("ativo")
-  stripeAccountId     String? // LEGADO, sem uso desde 03/11 (sem Stripe Connect; repasse por PIX). 20261028a
+  stripeAccountId     String? // conta conectada (Stripe Connect, cobrança direta), 20261028a; criada no onboarding do médico
+  // Status do onboarding Stripe (20261103f), gravado no retorno do onboarding e
+  // no webhook account.updated. Cobrável = charges E payouts habilitados.
+  stripeChargesEnabled    Boolean   @default(false)
+  stripePayoutsEnabled    Boolean   @default(false)
+  stripeDetailsSubmitted  Boolean   @default(false)
+  stripeMotivoBloqueio    String? // requirements.disabled_reason
+  stripePendencias        Int       @default(0) // requirements.currently_due.length
+  stripeContaAtualizadaEm DateTime?
   horariosDisponiveis String  @default("[]") // JSON string[]
   diasAtendimento     String  @default("[]") // JSON number[] (0=Dom … 6=Sáb). Vazio = todos os dias.
   pausasSemanais      String  @default("[]") // JSON {dia,inicio,fim}[].
@@ -109,6 +117,9 @@ model PerfilMedico {
   genero              String? // Feminino | Masculino | Outro | Prefiro não informar (CHECK no banco)
   telefone            String  @default("")
   cnpj                String  @default("") // 14 caracteres normalizados (numérico ou alfanumérico); "" = não informado
+
+  // 20261103f: índice ÚNICO parcial em stripeAccountId (NOT NULL e <> ''),
+  // só no SQL (o Prisma não descreve índice parcial).
 }
 
 model PerfilPaciente {
@@ -245,6 +256,10 @@ model Pagamento {
   stripePaymentIntentId   String? @unique
   stripeChargeId          String?
   stripeTaxaCentavos      Int? // taxa real cobrada pelo Stripe (balance_transaction.fee)
+  // Conta conectada (acct_...) quando a cobrança foi DIRETA na conta do médico
+  // (STRIPE_MODO_COBRANCA=direta, migração 20261103c). Preenchido = o médico já
+  // recebeu no Stripe; o repasse PIX nunca conta esse pagamento.
+  stripeContaMedico       String?
 
   reembolsos Reembolso[]
   pedidoRenovacao PedidoRenovacao? @relation("PedidoRenovacaoPagamento")
@@ -595,10 +610,31 @@ model Reembolso {
   decididoEm    DateTime?
   repasseAjuste RepasseAjuste?
   stripeRefundId String? @unique // preenchido = enviado ao Stripe (20261028a)
+  taxaMedico     ReembolsoTaxaMedico?
 
   @@index([pagamentoId, status])
   @@index([status, criadoEm])
   @@index([origem, status, criadoEm])
+}
+
+// Devolução da taxa do cartão ao médico no reembolso integral por falta do
+// paciente (cobrança direta no Connect). A BION transfere a taxa da charge
+// para a conta do médico. reembolsoId único = no máximo 1 transferência.
+// status: pendente | enviado | falhou. Migração 20261103b.
+model ReembolsoTaxaMedico {
+  id               String    @id @default(cuid())
+  reembolsoId      String    @unique
+  reembolso        Reembolso @relation(fields: [reembolsoId], references: [id], onDelete: Restrict)
+  contaStripe      String
+  valorCentavos    Int
+  status           String    @default("pendente")
+  stripeTransferId String?   @unique
+  tentativas       Int       @default(0)
+  erro             String?
+  criadoEm         DateTime  @default(now())
+  enviadoEm        DateTime?
+
+  @@index([status, criadoEm])
 }
 
 // Repasse DIÁRIO ao médico. Só existe a partir do fechamento (23:30 de São
@@ -746,6 +782,22 @@ model Chargeback {
   falhaBionPorId      String?
   falhaBionPor        User?           @relation("ChargebackFalhaBionPor", fields: [falhaBionPorId], references: [id], onDelete: Restrict)
   falhaBionEm         DateTime?
+  // Cobrança direta (Connect): conta do médico onde a disputa aconteceu
+  // (event.account). Preenchida = sem RepasseAjuste; falha da BION vira
+  // transferência da BION ao médico (20261103g).
+  stripeConta               String?
+  transferFalhaBionStatus   String? // pendente | enviado | falhou
+  transferFalhaBionCentavos Int?
+  transferFalhaBionId       String?
+  transferFalhaBionErro     String?
+  transferFalhaBionEm       DateTime?
+  // Disputa perdida na cobrança direta: BION devolve os 10% (application fee
+  // refund), decisão 03/11 12:33 (20261103h).
+  feeRefundStatus           String? // pendente | enviado | falhou | ja_devolvida | sem_fee
+  feeRefundId               String?
+  feeRefundCentavos         Int?
+  feeRefundErro             String?
+  feeRefundEm               DateTime?
   criadoEm            DateTime        @default(now())
   atualizadoEm        DateTime        @default(now()) @updatedAt
   ajustes             RepasseAjuste[]
@@ -787,6 +839,7 @@ model RemarcacaoPendente {
   metodo        String     @default("pix") // pix | cartao
   via           String?    // webhook | simulado
   gatewayRef    String?
+  stripeContaMedico String? // multa cobrada direto na conta Stripe do médico (20261103c): fora do repasse PIX
   solicitadoPor String
   expiraEm      DateTime
   criadoEm      DateTime   @default(now())

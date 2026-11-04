@@ -1,7 +1,8 @@
 import "server-only";
 import type Stripe from "stripe";
 import { stripe } from "@/lib/server/stripe";
-import { parametrosSessao, type EntradaSessao } from "@/lib/stripe-checkout-logica";
+import { opcoesRequisicao, parametrosSessao, type EntradaSessao, type TipoCobranca } from "@/lib/stripe-checkout-logica";
+import { taxaPlataformaConnectCentavos } from "@/lib/server/financeiro";
 
 /* ------------------------------------------------------------------ */
 /* Ponto único de troca de gateway do checkout do paciente.            */
@@ -22,13 +23,14 @@ export type SessaoCheckout = {
 export interface GatewayCheckout {
   nome: "stripe";
   criarSessao(e: EntradaSessao, chaveIdempotencia: string): Promise<SessaoCheckout>;
-  lerSessao(id: string): Promise<SessaoCheckout | null>;
+  /** `conta` = acct_ do médico na cobrança direta (Connect); senão omitir. */
+  lerSessao(id: string, conta?: string | null): Promise<SessaoCheckout | null>;
   /** Expira uma sessão ainda aberta (defesa extra). Nunca lança: false em erro. */
-  expirarSessao(id: string): Promise<boolean>;
+  expirarSessao(id: string, conta?: string | null): Promise<boolean>;
   /** Taxa real do gateway (centavos) e id da cobrança, lidos do PaymentIntent. */
-  lerCobranca(paymentIntentId: string): Promise<{ chargeId: string | null; taxaCentavos: number | null }>;
+  lerCobranca(paymentIntentId: string, conta?: string | null): Promise<{ chargeId: string | null; taxaCentavos: number | null }>;
   /** Taxa (centavos) de uma balance_transaction; null se não houver. */
-  lerTaxa(balanceTransactionId: string): Promise<number | null>;
+  lerTaxa(balanceTransactionId: string, conta?: string | null): Promise<number | null>;
 }
 
 function paraSessao(s: Stripe.Checkout.Session): SessaoCheckout {
@@ -40,29 +42,29 @@ export const gatewayStripe: GatewayCheckout = {
   async criarSessao(e, chave) {
     const params = parametrosSessao(e) as unknown as Stripe.Checkout.SessionCreateParams;
     return paraSessao(
-      await stripe().checkout.sessions.create(params, { idempotencyKey: chave }),
+      await stripe().checkout.sessions.create(params, { idempotencyKey: chave, ...opcoesRequisicao(e) }),
     );
   },
-  async lerSessao(id) {
+  async lerSessao(id, conta) {
     try {
-      return paraSessao(await stripe().checkout.sessions.retrieve(id, {}, {}));
+      return paraSessao(await stripe().checkout.sessions.retrieve(id, {}, conta ? { stripeAccount: conta } : {}));
     } catch {
       return null;
     }
   },
-  async expirarSessao(id) {
+  async expirarSessao(id, conta) {
     try {
-      await stripe().checkout.sessions.expire(id, {}, {});
+      await stripe().checkout.sessions.expire(id, {}, conta ? { stripeAccount: conta } : {});
       return true;
     } catch {
       return false; // já paga/expirada ou erro de rede: o webhook reembolsa
     }
   },
-  async lerCobranca(paymentIntentId) {
+  async lerCobranca(paymentIntentId, conta) {
     const pi = await stripe().paymentIntents.retrieve(
       paymentIntentId,
       { expand: ["latest_charge.balance_transaction"] },
-      {},
+      conta ? { stripeAccount: conta } : {},
     );
     const charge = typeof pi.latest_charge === "object" ? pi.latest_charge : null;
     const bt = charge && typeof charge.balance_transaction === "object" ? charge.balance_transaction : null;
@@ -72,12 +74,24 @@ export const gatewayStripe: GatewayCheckout = {
       taxaCentavos: bt ? bt.fee : null,
     };
   },
-  async lerTaxa(balanceTransactionId) {
-    const bt = await stripe().balanceTransactions.retrieve(balanceTransactionId, {}, {});
+  async lerTaxa(balanceTransactionId, conta) {
+    const bt = await stripe().balanceTransactions.retrieve(balanceTransactionId, {}, conta ? { stripeAccount: conta } : {});
     return typeof bt.fee === "number" ? bt.fee : null;
   },
 };
 
 export function gatewayCheckout(): GatewayCheckout {
   return gatewayStripe;
+}
+
+/**
+ * Comissão da plataforma no Connect (modos destino/direta) = `application_fee_amount`.
+ * Consulta, renovação e diferença da sala de espera: 10% do valor.
+ * Multa de remarcação: `divisaoDaMulta().appCentavos` (50%).
+ * A taxa do cartão NÃO entra aqui: na cobrança direta o Stripe a debita da
+ * conta do médico, ou seja, ela sai da parte do médico.
+ */
+export function comissaoPlataformaConnect(tipo: TipoCobranca, valorCentavos: number): number {
+  if (tipo === "multa") return taxaPlataformaConnectCentavos({ tipo: "multa", multaCentavos: valorCentavos });
+  return taxaPlataformaConnectCentavos({ tipo: "consulta", valorCentavos });
 }

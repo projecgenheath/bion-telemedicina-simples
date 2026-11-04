@@ -123,7 +123,8 @@ export function taxaGatewayValida(taxaCentavos: number | null | undefined, valor
 /**
  * Líquido do médico numa consulta realizada (cobrança normal).
  * Regra (Alisson, 20/10): a taxa REAL do gateway sai dos 90% do médico.
- * No reembolso a taxa fica com o app — ver `liquidoComReembolso`.
+ * No reembolso integral a taxa não fica com o médico: a BION devolve a taxa
+ * do cartão a ele por transferência Stripe (#137) — ver `liquidoComReembolso`.
  */
 export function liquidoDaConsulta(valorCentavos: number, taxaGatewayCentavos: number | null = 0) {
   const comissao = pct(valorCentavos, COMISSAO_APP_PCT);
@@ -138,9 +139,10 @@ export function liquidoDaConsulta(valorCentavos: number, taxaGatewayCentavos: nu
 
 /**
  * Item com reembolso: o paciente recebe de volta o valor reembolsado INTEIRO
- * (o gateway não devolve a taxa; ela fica com o app). Do médico sai a parte
- * dele (90%) do reembolsado. Reembolso integral → a taxa não é cobrada do
- * médico (ele fica com 0 e o app absorve a taxa). Reembolso parcial → o
+ * (o Stripe não devolve a taxa do cartão). Do médico sai a parte dele (90%)
+ * do reembolsado. Reembolso integral → a taxa não fica com o médico: na
+ * cobrança direta ela sai da conta dele, e a BION a devolve por transferência
+ * Stripe (#137); aqui ele fica com 0. Reembolso parcial → o
  * médico paga a taxa da parte que ficou (cobrança normal) e perde 90% do
  * reembolsado, nunca abaixo de 0.
  */
@@ -152,11 +154,39 @@ export function liquidoComReembolso(valorCentavos: number, taxaGatewayCentavos: 
   return { ...l, reembolsosCentavos: reembolsos, liquidoCentavos: antes - reembolsos };
 }
 
+/* ---------- Stripe Connect (preparado, DESLIGADO) ------------------ */
+/*                                                                     */
+/* Pagamento por cartão no Stripe, em cobrança DIRETA na conta do     */
+/* médico (PerfilMedico.stripeAccountId, STRIPE_MODO_COBRANCA=direta). */
+/* A BION retém só `application_fee_amount` (10%); a taxa do Stripe    */
+/* sai da conta do médico, ou seja, dos 90% dele (regra atual).        */
+/* Multa: dividida 50/50, sem comissão → fee = 50% da multa.           */
+/* Reembolso: refund na conta do médico com refund_application_fee; no */
+/* reembolso integral a BION devolve a taxa do cartão ao médico por    */
+/* transferência Stripe (#137). O modo 'destino' (reverse_transfer)    */
+/* segue no código só como alternativa.                                */
+/* ------------------------------------------------------------------ */
+
+export type CobrancaConnect =
+  | { tipo: "consulta" | "renovacao"; valorCentavos: number }
+  | { tipo: "multa"; multaCentavos: number };
+
+/**
+ * Ponto ÚNICO do `application_fee_amount` (centavos) de uma cobrança com
+ * destino na conta do médico: 10% da consulta/renovação (COMISSAO_APP_PCT)
+ * ou a parte do app na multa (50%). Nada da taxa do gateway entra aqui.
+ */
+export function taxaPlataformaConnectCentavos(c: CobrancaConnect): number {
+  if (c.tipo === "multa") return divisaoDaMulta(Math.max(0, c.multaCentavos)).appCentavos;
+  return pct(Math.max(0, c.valorCentavos), COMISSAO_APP_PCT);
+}
+
 /**
  * Grava a taxa real do gateway (Stripe `balance_transaction.fee`) no
  * Pagamento, já validada (inteiro ≥ 0, limitada ao valor). O repasse lê
  * `Pagamento.stripeTaxaCentavos` e a desconta dos 90% do médico; no
- * reembolso integral a taxa fica com o app (`liquidoComReembolso`).
+ * reembolso integral a BION devolve a taxa ao médico por transferência
+ * Stripe (#137; ver `liquidoComReembolso`).
  * null = o Stripe ainda não liquidou; não sobrescreve um valor já gravado.
  */
 export async function registrarTaxaGateway(pagamentoId: string, taxaCentavos: number | null): Promise<number | null> {
@@ -469,9 +499,9 @@ export async function aplicarFalhaTecnica(
 // Regras do Alisson (01/10, revistas em 20/10): na falta o médico recebe; o
 // paciente pode pedir o reembolso em até REEMBOLSO_MANUAL_PRAZO_DIAS com
 // justificativa. Desde 20/10 o pedido é aprovado NA HORA, sem análise do
-// admin, e devolvido por PIX: valor INTEGRAL (a parte do médico, 90%, e a do
-// app, 10%). As taxas do meio de pagamento ficam com o app e não saem do
-// valor do paciente. A consulta sai do repasse; se o repasse já foi fechado,
+// admin, e devolvido no cartão pelo Stripe: valor INTEGRAL (a parte do médico,
+// 90%, e a do app, 10%). A taxa do cartão não sai do valor do paciente, e a
+// BION a devolve ao médico por transferência Stripe (#137). A consulta sai do repasse; se o repasse já foi fechado,
 // a parte do médico vira desconto no próximo (RepasseAjuste, repasse.ts).
 
 /** Até quando o paciente pode pedir reembolso de uma falta. */
@@ -609,8 +639,8 @@ export async function decidirReembolsoManual(params: {
 // integral. Prazo: PRAZO_ESCOLHA_CORRECAO_DIAS_UTEIS dias úteis a partir do
 // dia SEGUINTE à correção (seg–sex, horário de Brasília). Passou do prazo sem
 // escolha: o sistema cancela a consulta e cria o reembolso INTEGRAL (mesmo
-// criarReembolsoSeDevido do cancelamento; status aprovado, via PIX; taxas do
-// meio de pagamento por conta do app). Repasse já fechado: desconto no
+// criarReembolsoSeDevido do cancelamento; status aprovado, devolvido no cartão
+// pelo Stripe; a BION devolve a taxa do cartão ao médico por transferência, #137). Repasse já fechado: desconto no
 // próximo, pelo mecanismo de sempre.
 
 export const PRAZO_ESCOLHA_CORRECAO_DIAS_UTEIS = 7;
@@ -824,7 +854,7 @@ export type ImpedimentoMulta = "medico_suspenso" | "reserva_invalida" | "horario
 /**
  * Confere, DENTRO da transação travada, se a multa paga ainda pode mover a
  * consulta. A 1ª checagem é o médico: suspenso/anonimizado/inativo → a multa
- * não é cobrada e volta integral ao paciente (as taxas ficam com o app), na
+ * não é cobrada e volta integral ao paciente (a BION devolve a taxa do cartão ao médico, #137), na
  * mesma regra de qualquer reembolso. Devolve null quando pode aplicar.
  */
 export async function impedimentoMultaRemarcacao(
