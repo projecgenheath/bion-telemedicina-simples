@@ -312,7 +312,10 @@ export function sugerirParametros(horarios: string[]): ParametrosGrade {
 /* ------------------------------------------------------------------ */
 
 export function saudacao(agora: number) {
+  // Tabela única de saudação (fuso da clínica): 0–4 madrugada,
+  // 5–11 dia, 12–17 tarde, 18–23 noite.
   const h = partesFusoClinica(agora).hora;
+  if (h < 5) return "Boa madrugada";
   if (h < 12) return "Bom dia";
   if (h < 18) return "Boa tarde";
   return "Boa noite";

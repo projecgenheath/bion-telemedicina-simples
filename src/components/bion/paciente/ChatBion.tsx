@@ -40,6 +40,13 @@ import { ChatListaMensagens } from "./ChatListaMensagens";
 import { ConsentimentoLaudoIA } from "./ConsentimentoLaudoIA";
 import { AvisoSemIA, AvisoTriagemSemIA, CardAceiteIA } from "./ConsentimentoIA";
 import { CAMPO_CONSENTIMENTO_IA_EXAME, VERSAO_CONSENTIMENTO_IA_EXAME } from "@/lib/consentimento-ia-exame";
+import {
+  TEXTO_ENVIO_LAUDO,
+  mostrarAcaoLaudo,
+  mostrarCartaoLaudo,
+  textoAberturaChat,
+  type IntencaoChat,
+} from "./chat-bion-intencao";
 
 /**
  * BION IA do app do paciente — conversa livre (LLM real) + ações estruturadas:
@@ -56,12 +63,16 @@ export function ChatBion({
   onFechar,
   aoEnviarExame,
   aoAbrirTriagem,
+  intencao,
 }: {
   aberto: boolean;
   onFechar: () => void;
   aoEnviarExame?: () => void;
   aoAbrirTriagem?: (info: { consultaId: string; medico: string; especialidade: string; quando: string }) => void;
+  /** "laudo" = aberto por "Enviar novo laudo": entra direto no envio, sem a saudação genérica. */
+  intencao?: IntencaoChat;
 }) {
+  const modoLaudo = intencao === "laudo";
   const {
     sessao,
     medicos,
@@ -140,11 +151,11 @@ export function ChatBion({
       setMensagens([
         {
           remetente: "ia",
-          texto: `Olá, ${sessao.nome.split(" ")[0]}! Sou a **BION IA**. Posso agendar consulta, ler um laudo (PDF ou foto) e tirar dúvidas de saúde. A **triagem** é opcional e fica no card da consulta, não neste chat. Como posso ajudar?`,
+          texto: textoAberturaChat(intencao, sessao.nome.split(" ")[0]),
         },
       ]);
     }
-  }, [aberto, mensagens.length, sessao.nome]);
+  }, [aberto, mensagens.length, sessao.nome, intencao]);
 
   useEffect(() => {
     if (!aberto || iaLiberada !== null) return;
@@ -801,7 +812,7 @@ export function ChatBion({
   if (!aberto) return null;
 
   return (
-    <div ref={dialogoRef} className="bpp-sobreposicao absolute inset-0 z-50 flex flex-col bp-painel" role="dialog" aria-modal="true" aria-label="Conversa com a BION IA">
+    <div ref={dialogoRef} className="bpp-sobreposicao absolute inset-0 z-50 flex flex-col bp-painel" role="dialog" aria-modal="true" aria-label={modoLaudo ? "Enviar laudo para a BION IA" : "Conversa com a BION IA"}>
       <input
         ref={inputArquivoRef}
         type="file"
@@ -852,6 +863,23 @@ export function ChatBion({
 
       {/* Mensagens */}
       <div className="flex-1 overflow-y-auto bp-coluna px-5 py-4 space-y-3">
+        {/* Modo laudo com histórico de outra abertura: cartão fixo de envio no
+            topo (a conversa não começou pela mensagem contextual de laudo). */}
+        {mostrarCartaoLaudo(intencao, mensagens) ? (
+          <section aria-label="Enviar laudo" className="bp-glass p-4 text-bion-ink dark:text-bion-paper">
+            <div className="flex items-center gap-2 text-sm font-bold mb-1">
+              <FileUp className="w-4 h-4" /> Enviar laudo
+            </div>
+            <p className="text-sm opacity-90 mb-3">{TEXTO_ENVIO_LAUDO}</p>
+            <button type="button"
+              onClick={iniciarExame}
+              disabled={enviandoLaudo || etapa !== null || iaLiberada !== true}
+              className="bp-acao w-full py-3 text-sm inline-flex items-center justify-center gap-2 disabled:opacity-40"
+            >
+              <FileUp className="w-4 h-4" /> Escolher arquivo do laudo
+            </button>
+          </section>
+        ) : null}
         <ChatListaMensagens mensagens={mensagens} pensando={pensando} segundosEspera={segundosEspera} />
         {ofertaAgendar && etapa === null && !pensando && !anamneseAtiva ? (
           <section aria-label="Agendar consulta" className="rounded-2xl border border-bion-sea/40 bp-glass p-4 text-sm text-bion-ink dark:text-bion-paper space-y-2">
@@ -1064,8 +1092,8 @@ export function ChatBion({
           </div>
         )}
 
-        {/* Chips iniciais quando só existe a saudação */}
-        {mensagens.length === 1 && etapa === null && !anamneseAtiva && (
+        {/* Chips iniciais quando só existe a saudação (modo geral) */}
+        {mensagens.length === 1 && etapa === null && !anamneseAtiva && !modoLaudo && (
           <div className="flex flex-wrap gap-2">
             <button type="button" onClick={iniciarAgendamento} className="rounded-full bg-bion-sea/10 dark:bg-sky-400/10 border border-bion-sea/25 dark:border-sky-300/25 px-4 py-2.5 text-sm font-semibold text-bion-sea dark:text-sky-300">
               Agendar consulta
@@ -1074,6 +1102,19 @@ export function ChatBion({
               Enviar laudo de exame
             </button> : null}
           </div>
+        )}
+
+        {/* Ação principal do modo laudo: a conversa já abriu com a mensagem
+            contextual — o botão executa o mesmo caminho do chip de laudo
+            (iniciarExame → seletor de arquivo → aceite → upload). */}
+        {mostrarAcaoLaudo(intencao, mensagens) && etapa === null && !anamneseAtiva && (
+          <button type="button"
+            onClick={iniciarExame}
+            disabled={enviandoLaudo || etapa !== null || iaLiberada !== true}
+            className="bp-acao w-full py-3 text-sm inline-flex items-center justify-center gap-2 disabled:opacity-40"
+          >
+            <FileUp className="w-4 h-4" /> Escolher arquivo do laudo
+          </button>
         )}
 
         <div ref={fimRef} />

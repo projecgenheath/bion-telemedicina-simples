@@ -17,7 +17,7 @@ import {
   X,
 } from "lucide-react";
 import { useBion } from "@/lib/bion-store";
-import { calcularImc, formatarAltura, formatarPeso, lerAlturaCm, lerPesoKg } from "@/lib/medidas-paciente";
+import { calcularImc, faixaImc, formatarAltura, formatarPeso, lerAlturaCm, lerPesoKg, ROTULO_FAIXA_IMC, type FaixaImc } from "@/lib/medidas-paciente";
 import { FREQUENCIAS_LEMBRETE, HORA, validarResposta } from "@/lib/saude-paciente";
 import { FUSO_CLINICA, partesFusoClinica } from "@/lib/bion-tipos";
 import { GraficoLinha } from "./GraficoLinha";
@@ -38,11 +38,16 @@ const rotuloCurto = (iso: string) => {
   return `${String(d.dia).padStart(2, "0")}/${String(d.mes + 1).padStart(2, "0")}`;
 };
 
+const COR_FAIXA_IMC: Record<FaixaImc, string> = {
+  abaixo: "text-sky-800 dark:text-sky-300",
+  normal: "text-emerald-800 dark:text-emerald-200",
+  sobrepeso: "text-amber-800 dark:text-amber-200",
+  obesidade: "text-red-700 dark:text-red-300",
+};
+
 function classificarImc(imc: number): { rotulo: string; cor: string } {
-  if (imc < 18.5) return { rotulo: "Abaixo do peso", cor: "text-sky-800 dark:text-sky-300" };
-  if (imc < 25) return { rotulo: "Peso normal", cor: "text-emerald-800 dark:text-emerald-200" };
-  if (imc < 30) return { rotulo: "Sobrepeso", cor: "text-amber-800 dark:text-amber-200" };
-  return { rotulo: "Obesidade", cor: "text-red-700 dark:text-red-300" };
+  const faixa = faixaImc(imc);
+  return { rotulo: ROTULO_FAIXA_IMC[faixa], cor: COR_FAIXA_IMC[faixa] };
 }
 
 function classificarPa(sis: number, dia: number): { rotulo: string } {

@@ -1,10 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Bell, BellPlus, Loader2, Pill, Plus, Trash2 } from "lucide-react";
+import { Bell, BellOff, Loader2, Pill, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useBion } from "@/lib/bion-store";
-import { FREQUENCIAS_LEMBRETE, type Posologia } from "@/lib/saude-paciente";
+import {
+  DIAS_SEMANA_CURTOS,
+  OPCOES_FREQUENCIA,
+  descricaoAvisos,
+  horariosSugeridos,
+  type ModoFrequencia,
+  type Posologia,
+} from "@/lib/saude-paciente";
 import { apiSaude } from "./api-saude";
 import type { Lembrete } from "@/lib/bion-tipos";
 
@@ -27,6 +34,105 @@ export type MedicamentoWire = {
 const botaoPrincipal = "bg-bion-ink text-bion-paper dark:bg-bion-paper dark:text-bion-ink";
 const campo =
   "w-full min-w-0 rounded-xl border border-bion-ink/15 bg-white/70 px-3 py-2 text-base text-bion-ink outline-none focus-visible:ring-2 focus-visible:ring-bion-ink/40 dark:border-white/15 dark:bg-white/10 dark:text-bion-paper";
+const chip =
+  "rounded-full bg-bion-ink/8 px-3 py-1.5 text-xs font-bold dark:bg-white/10";
+const chipAtivo = `rounded-full px-3 py-1.5 text-xs font-bold ${botaoPrincipal}`;
+
+/* ---------- Editor de avisos (frequência estruturada + horários) ---------- */
+
+type EstadoAvisos = { modo: ModoFrequencia; horarios: string[]; diaSemana: number };
+
+const estadoNovoAvisos = (): EstadoAvisos => ({ modo: "1x", horarios: ["08:00"], diaSemana: new Date().getDay() });
+
+/** Pré-preenche o editor a partir da posologia e dos lembretes que já tocam. */
+function estadoDeMedicamento(m: MedicamentoWire, atuais: Lembrete[]): EstadoAvisos {
+  const p = m.posologia;
+  const tocando = atuais.map((l) => l.horario).sort();
+  if (typeof p.diaSemana === "number") {
+    return { modo: "semanal", horarios: [tocando[0] ?? p.horarios?.[0] ?? "08:00"], diaSemana: p.diaSemana };
+  }
+  const n = Math.min(4, Math.max(1, p.vezesAoDia ?? (tocando.length || p.horarios?.length || 1)));
+  const base = tocando.length ? tocando : (p.horarios ?? []);
+  const horarios = base.length === n ? base : horariosSugeridos(n, base[0] ?? "08:00");
+  return { modo: `${n}x` as ModoFrequencia, horarios, diaSemana: new Date().getDay() };
+}
+
+/** Corpo p/ as rotas de criar (POST /medicamentos) e substituir (POST .../avisos). */
+function corpoAvisos(e: EstadoAvisos): { horarios: string[]; vezesAoDia?: number; diaSemana?: number } {
+  return e.modo === "semanal"
+    ? { horarios: e.horarios.slice(0, 1), diaSemana: e.diaSemana }
+    : { horarios: e.horarios, vezesAoDia: Number(e.modo[0]) };
+}
+
+function posologiaDoEstado(e: EstadoAvisos): Posologia {
+  return e.modo === "semanal"
+    ? { horarios: e.horarios.slice(0, 1), diaSemana: e.diaSemana }
+    : { horarios: e.horarios, vezesAoDia: Number(e.modo[0]) };
+}
+
+/**
+ * Os campos de "Como você toma?": chips de frequência, dia da semana no modo
+ * semanal, um campo de hora por dose e o resumo ao vivo do que vai tocar.
+ */
+function CamposAvisos({ estado, onMudar }: { estado: EstadoAvisos; onMudar: (e: EstadoAvisos) => void }) {
+  const trocarModo = (modo: ModoFrequencia) => {
+    if (modo === "semanal") onMudar({ ...estado, modo, horarios: [estado.horarios[0] ?? "08:00"] });
+    else onMudar({ ...estado, modo, horarios: horariosSugeridos(Number(modo[0]), estado.horarios[0] ?? "08:00") });
+  };
+  const trocarHorario = (i: number, v: string) =>
+    onMudar({ ...estado, horarios: estado.horarios.map((h, j) => (j === i ? v : h)) });
+  return (
+    <div className="space-y-3">
+      <fieldset>
+        <legend className="text-xs font-semibold">Como você toma?</legend>
+        <div className="mt-1.5 flex flex-wrap gap-1.5">
+          {OPCOES_FREQUENCIA.map((o) => (
+            <button
+              key={o.id}
+              type="button"
+              aria-pressed={estado.modo === o.id}
+              onClick={() => trocarModo(o.id)}
+              className={estado.modo === o.id ? chipAtivo : chip}
+            >
+              {o.rotulo}
+            </button>
+          ))}
+        </div>
+      </fieldset>
+      {estado.modo === "semanal" && (
+        <fieldset>
+          <legend className="text-xs font-semibold">Qual dia da semana?</legend>
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {DIAS_SEMANA_CURTOS.map((d, i) => (
+              <button
+                key={d}
+                type="button"
+                aria-pressed={estado.diaSemana === i}
+                onClick={() => onMudar({ ...estado, diaSemana: i })}
+                className={estado.diaSemana === i ? chipAtivo : chip}
+              >
+                {d}
+              </button>
+            ))}
+          </div>
+        </fieldset>
+      )}
+      <div className="flex flex-wrap gap-2">
+        {estado.horarios.map((h, i) => (
+          <label key={i} className="flex flex-col gap-1 text-xs font-semibold">
+            {estado.horarios.length === 1 ? "Horário" : `Horário ${i + 1}`}
+            <input type="time" required value={h} onChange={(e) => trocarHorario(i, e.target.value)} className={campo} />
+          </label>
+        ))}
+      </div>
+      {descricaoAvisos(posologiaDoEstado(estado)) && (
+        <p className="flex items-center gap-1.5 text-xs font-semibold opacity-90" aria-live="polite">
+          <Bell className="size-3.5 shrink-0" aria-hidden /> Você recebe {descricaoAvisos(posologiaDoEstado(estado))}.
+        </p>
+      )}
+    </div>
+  );
+}
 
 /**
  * Card "Medicamentos em uso" da seção Saúde: os que vieram da receita
@@ -79,10 +185,20 @@ export function MedicamentosEmUso({ onGerenciarLembretes }: { onGerenciarLembret
   // Só lembretes de medicação; consulta/exame/hidratação ficam fora deste card.
   const lembretesMed = lembretes.filter((l) => l.tipo === "Medicação");
   const chave = (s: string | undefined) => (s ?? "").trim().toLowerCase();
-  const horariosDe = (m: MedicamentoWire) =>
-    lembretesMed.filter((l) => chave(l.medicamento) === chave(m.nome)).sort((x, y) => x.horario.localeCompare(y.horario));
+  // O lembrete pode ter sido gravado com "nome + dose" (ex.: "Losartana 50mg")
+  // enquanto o medicamento guarda nome e dose separados — casar das duas formas,
+  // senão o mesmo remédio aparece duas vezes na lista (uma como avulso).
+  const chavesDe = (m: MedicamentoWire) => {
+    const ks = [chave(m.nome)];
+    if (m.dose?.trim()) ks.push(chave(`${m.nome} ${m.dose}`));
+    return ks;
+  };
+  const horariosDe = (m: MedicamentoWire) => {
+    const ks = new Set(chavesDe(m));
+    return lembretesMed.filter((l) => ks.has(chave(l.medicamento))).sort((x, y) => x.horario.localeCompare(y.horario));
+  };
   // Lembretes de medicação sem medicamento correspondente na lista: uma linha por remédio, sem repetir.
-  const nomesAtivos = new Set(ativos.map((m) => chave(m.nome)));
+  const nomesAtivos = new Set(ativos.flatMap(chavesDe));
   const avulsos = new Map<string, { nome: string; lembretes: Lembrete[] }>();
   for (const l of lembretesMed) {
     const nome = l.medicamento?.trim() || l.titulo;
@@ -113,8 +229,9 @@ export function MedicamentosEmUso({ onGerenciarLembretes }: { onGerenciarLembret
       {adicionando && (
         <FormNovo
           onCancelar={() => setAdicionando(false)}
-          onCriado={(m) => {
+          onCriado={(m, novos) => {
             setLista((l) => [m, ...(l ?? [])]);
+            for (const l of novos) aplicarDelta({ lembrete: l });
             setAdicionando(false);
             toast.success("Medicamento adicionado.");
           }}
@@ -146,11 +263,12 @@ export function MedicamentosEmUso({ onGerenciarLembretes }: { onGerenciarLembret
               horarios={horariosDe(m)}
               lembreteAberto={lembreteDe === m.id}
               onLembrete={() => setLembreteDe((v) => (v === m.id ? null : m.id))}
-              onLembreteCriado={(lembrete) => {
-                aplicarDelta({ lembrete });
-                trocar({ ...m, lembretes: m.lembretes + 1 });
+              onAvisosSalvos={(atualizado, criados, removidos) => {
+                for (const id of removidos) aplicarDelta({ lembreteRemovido: id });
+                for (const l of criados) aplicarDelta({ lembrete: l });
+                trocar(atualizado);
                 setLembreteDe(null);
-                toast.success("Lembrete criado.");
+                toast.success("Avisos atualizados.");
               }}
               onSuspender={() => void alternarAtivo(m)}
               onRemover={() => void remover(m)}
@@ -199,7 +317,7 @@ function ItemMedicamento({
   horarios,
   lembreteAberto,
   onLembrete,
-  onLembreteCriado,
+  onAvisosSalvos,
   onSuspender,
   onRemover,
 }: {
@@ -207,7 +325,7 @@ function ItemMedicamento({
   horarios: Lembrete[];
   lembreteAberto: boolean;
   onLembrete: () => void;
-  onLembreteCriado: (lembrete: unknown) => void;
+  onAvisosSalvos: (atualizado: MedicamentoWire, criados: Lembrete[], removidos: string[]) => void;
   onSuspender: () => void;
   onRemover: () => void;
 }) {
@@ -224,20 +342,28 @@ function ItemMedicamento({
             </span>
             {m.usoContinuo && <span className="rounded-full bg-bion-ink/8 px-2 py-0.5 dark:bg-white/10">Uso contínuo</span>}
           </p>
-          <Horarios lembretes={horarios} />
+          {horarios.length > 0 ? (
+            <Horarios lembretes={horarios} />
+          ) : (
+            <p className="mt-1 flex items-center gap-1.5 text-xs font-semibold opacity-70">
+              <BellOff className="size-3.5" aria-hidden /> Sem avisos
+            </p>
+          )}
           {m.posologia.instrucoes && <p className="mt-1 text-xs opacity-80">{m.posologia.instrucoes}</p>}
         </div>
         <button
           type="button"
           onClick={onLembrete}
           aria-expanded={lembreteAberto}
-          aria-label={`Criar lembrete para ${m.nome}`}
-          className="grid size-9 shrink-0 place-items-center rounded-full bg-bion-ink/8 dark:bg-white/10"
+          aria-label={`Avisos de ${m.nome}`}
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-bion-ink/8 px-3 py-2 text-xs font-bold dark:bg-white/10"
         >
-          <BellPlus className="size-4" aria-hidden />
+          <Bell className="size-4" aria-hidden /> Avisos
         </button>
       </div>
-      {lembreteAberto && <FormLembrete m={m} onCriado={onLembreteCriado} />}
+      {lembreteAberto && (
+        <EditorAvisos m={m} atuais={horarios} onSalvo={onAvisosSalvos} onCancelar={onLembrete} />
+      )}
       <div className="mt-2 flex gap-3 text-xs font-semibold opacity-80">
         <button type="button" onClick={onSuspender} className="underline">
           Parei de tomar
@@ -267,47 +393,69 @@ function Horarios({ lembretes }: { lembretes: Lembrete[] }) {
   );
 }
 
-function FormLembrete({ m, onCriado }: { m: MedicamentoWire; onCriado: (lembrete: unknown) => void }) {
-  const [horario, setHorario] = useState(m.posologia.horarios?.[0] ?? "08:00");
-  const [frequencia, setFrequencia] = useState<string>(FREQUENCIAS_LEMBRETE[0]);
+/**
+ * Editor do conjunto de avisos de um medicamento já cadastrado: o mesmo
+ * editor do cadastro novo, salvando pela rota que substitui o conjunto
+ * (POST .../avisos). Desmarcar "Receber avisos" e salvar desliga todos.
+ */
+function EditorAvisos({
+  m,
+  atuais,
+  onSalvo,
+  onCancelar,
+}: {
+  m: MedicamentoWire;
+  atuais: Lembrete[];
+  onSalvo: (atualizado: MedicamentoWire, criados: Lembrete[], removidos: string[]) => void;
+  onCancelar: () => void;
+}) {
+  const [estado, setEstado] = useState<EstadoAvisos>(() => estadoDeMedicamento(m, atuais));
+  const [ligados, setLigados] = useState(true);
   const [enviando, setEnviando] = useState(false);
   return (
     <form
-      className="mt-3 flex flex-wrap items-end gap-2"
+      className="mt-3 space-y-3 rounded-2xl border border-bion-ink/10 p-3 dark:border-white/10"
       onSubmit={async (e) => {
         e.preventDefault();
         setEnviando(true);
-        const d = await apiSaude<{ lembrete: unknown }>(`/api/paciente/medicamentos/${m.id}/lembrete`, {
-          method: "POST",
-          body: JSON.stringify({ horario, frequencia }),
-        });
+        const d = await apiSaude<{ medicamento: MedicamentoWire; lembretes: Lembrete[]; removidos: string[] }>(
+          `/api/paciente/medicamentos/${m.id}/avisos`,
+          { method: "POST", body: JSON.stringify(ligados ? corpoAvisos(estado) : { horarios: [] }) },
+        );
         setEnviando(false);
-        if (d) onCriado(d.lembrete);
+        if (d) onSalvo(d.medicamento, d.lembretes ?? [], d.removidos ?? []);
       }}
     >
-      <label className="flex flex-col gap-1 text-xs font-semibold">
-        Horário
-        <input type="time" required value={horario} onChange={(e) => setHorario(e.target.value)} className={campo} />
+      <label className="flex items-center gap-2 text-xs font-semibold">
+        <input type="checkbox" checked={ligados} onChange={(e) => setLigados(e.target.checked)} /> Receber avisos
       </label>
-      <label className="flex flex-col gap-1 text-xs font-semibold">
-        Frequência
-        <select value={frequencia} onChange={(e) => setFrequencia(e.target.value)} className={campo}>
-          {FREQUENCIAS_LEMBRETE.map((f) => (
-            <option key={f}>{f}</option>
-          ))}
-        </select>
-      </label>
-      <button type="submit" disabled={enviando} className={`inline-flex items-center gap-1.5 rounded-full px-4 py-2.5 text-xs font-bold disabled:opacity-60 ${botaoPrincipal}`}>
-        {enviando && <Loader2 className="size-3.5 animate-spin" aria-hidden />} Criar lembrete
-      </button>
+      {ligados ? (
+        <CamposAvisos estado={estado} onMudar={setEstado} />
+      ) : (
+        <p className="text-xs opacity-80">Sem avisos para este medicamento. Ao salvar, os avisos atuais são apagados.</p>
+      )}
+      <div className="flex justify-end gap-2">
+        <button type="button" onClick={onCancelar} className="rounded-full px-4 py-2 text-xs font-bold opacity-80">
+          Cancelar
+        </button>
+        <button type="submit" disabled={enviando} className={`inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-bold disabled:opacity-60 ${botaoPrincipal}`}>
+          {enviando && <Loader2 className="size-3.5 animate-spin" aria-hidden />} Salvar avisos
+        </button>
+      </div>
     </form>
   );
 }
 
-function FormNovo({ onCancelar, onCriado }: { onCancelar: () => void; onCriado: (m: MedicamentoWire) => void }) {
+function FormNovo({
+  onCancelar,
+  onCriado,
+}: {
+  onCancelar: () => void;
+  onCriado: (m: MedicamentoWire, lembretes: Lembrete[]) => void;
+}) {
   const [nome, setNome] = useState("");
   const [dose, setDose] = useState("");
-  const [frequencia, setFrequencia] = useState("");
+  const [avisos, setAvisos] = useState<EstadoAvisos>(estadoNovoAvisos);
   const [usoContinuo, setUsoContinuo] = useState(false);
   const [enviando, setEnviando] = useState(false);
   return (
@@ -316,28 +464,25 @@ function FormNovo({ onCancelar, onCriado }: { onCancelar: () => void; onCriado: 
       onSubmit={async (e) => {
         e.preventDefault();
         setEnviando(true);
-        const d = await apiSaude<{ medicamento: MedicamentoWire }>("/api/paciente/medicamentos", {
+        const d = await apiSaude<{ medicamento: MedicamentoWire; lembretes?: Lembrete[] }>("/api/paciente/medicamentos", {
           method: "POST",
-          body: JSON.stringify({ nome, dose, frequencia, usoContinuo }),
+          body: JSON.stringify({ nome, dose, usoContinuo, ...corpoAvisos(avisos) }),
         });
         setEnviando(false);
-        if (d) onCriado(d.medicamento);
+        if (d) onCriado(d.medicamento, d.lembretes ?? []);
       }}
     >
-      <label className="flex flex-col gap-1 text-xs font-semibold">
-        Nome
-        <input required minLength={2} maxLength={120} value={nome} onChange={(e) => setNome(e.target.value)} className={campo} placeholder="Ex.: Losartana" />
-      </label>
       <div className="grid grid-cols-2 gap-3">
+        <label className="flex flex-col gap-1 text-xs font-semibold">
+          Nome
+          <input required minLength={2} maxLength={120} value={nome} onChange={(e) => setNome(e.target.value)} className={campo} placeholder="Ex.: Losartana" />
+        </label>
         <label className="flex flex-col gap-1 text-xs font-semibold">
           Dose
           <input maxLength={80} value={dose} onChange={(e) => setDose(e.target.value)} className={campo} placeholder="50 mg" />
         </label>
-        <label className="flex flex-col gap-1 text-xs font-semibold">
-          Como toma
-          <input maxLength={80} value={frequencia} onChange={(e) => setFrequencia(e.target.value)} className={campo} placeholder="1x ao dia" />
-        </label>
       </div>
+      <CamposAvisos estado={avisos} onMudar={setAvisos} />
       <label className="flex items-center gap-2 text-xs font-semibold">
         <input type="checkbox" checked={usoContinuo} onChange={(e) => setUsoContinuo(e.target.checked)} /> Uso contínuo
       </label>
