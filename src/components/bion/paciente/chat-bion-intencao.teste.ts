@@ -4,6 +4,8 @@
  */
 import {
   TEXTO_ENVIO_LAUDO,
+  deveAbrirWizardAgendamento,
+  ehGestaoConsulta,
   mostrarAcaoLaudo,
   mostrarCartaoLaudo,
   primeiraEhContextoLaudo,
@@ -65,6 +67,21 @@ for (const lista of [[], [msg(TEXTO_ENVIO_LAUDO)], [msg(saudacao)], conversaAnti
     false,
   );
 }
+
+// F1: gestão da consulta existente NÃO abre o wizard de novo agendamento
+igual("gestão: remarcar", ehGestaoConsulta("Quero remarcar minha consulta"), true);
+igual("gestão: cancelar", ehGestaoConsulta("como cancelo minha consulta?"), true);
+igual("gestão: que horas", ehGestaoConsulta("minha consulta de amanhã é que horas?"), true);
+igual("gestão: preço", ehGestaoConsulta("quanto custa a consulta?"), true);
+igual("wizard: remarcar não abre", deveAbrirWizardAgendamento("Quero remarcar minha consulta"), false);
+igual("wizard: cancelar não abre", deveAbrirWizardAgendamento("como cancelo minha consulta?"), false);
+igual("wizard: que horas não abre", deveAbrirWizardAgendamento("minha consulta é que horas?"), false);
+igual("wizard: preço não abre", deveAbrirWizardAgendamento("quanto custa a consulta de cardiologia?"), false);
+igual("wizard: agendar abre", deveAbrirWizardAgendamento("quero agendar uma consulta"), true);
+igual("wizard: marcar abre", deveAbrirWizardAgendamento("Quero marcar uma consulta com cardiologista"), true);
+igual("wizard: disponibilidade abre", deveAbrirWizardAgendamento("tem disponibilidade amanhã de manhã?"), true);
+igual("wizard: sintoma não abre", deveAbrirWizardAgendamento("estou com dor de cabeça há 2 dias"), false);
+igual("gestão não captura agendamento novo", ehGestaoConsulta("quero marcar uma consulta"), false);
 
 console.log(`chat-bion-intencao: ${ok} ok, ${falhas} falha(s)`);
 if (falhas) process.exit(1);

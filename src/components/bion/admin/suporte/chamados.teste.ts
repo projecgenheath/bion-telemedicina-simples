@@ -75,7 +75,8 @@ igual("busca pela resposta", ids(filtrarChamados(tickets, { ...FILTROS_CHAMADO_V
 igual("busca pelo usuário", ids(filtrarChamados(tickets, { ...FILTROS_CHAMADO_VAZIOS, busca: "ana lima" }, agora)), ["e1"]);
 igual("busca pela categoria legível", ids(filtrarChamados(tickets, { ...FILTROS_CHAMADO_VAZIOS, busca: "reembolso", status: "em_andamento" }, agora)), ["e1"]);
 igual("filtros ativos", [filtrosChamadoAtivos(FILTROS_CHAMADO_VAZIOS), filtrosChamadoAtivos({ ...FILTROS_CHAMADO_VAZIOS, busca: " x " })], [false, true]);
-igual("contagem", contarChamados(tickets), { todos: 6, aberto: 3, em_andamento: 1, resolvido: 2 });
+igual("contagem", contarChamados(tickets), { todos: 6, nao_resolvidos: 4, aberto: 3, em_andamento: 1, resolvido: 2 });
+igual("status nao_resolvidos (aberto + em atendimento, sem resolvidos)", ids(filtrarChamados(tickets, { ...FILTROS_CHAMADO_VAZIOS, status: "nao_resolvidos" }, agora)), ["a2", "a1", "x1", "e1"]);
 
 /* ---------------- espera ---------------- */
 igual("espera do pendente mais antigo", esperaMaisAntiga(tickets, agora), agora - sp("2026-10-04T08:00:00"));

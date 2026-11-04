@@ -28,6 +28,11 @@ const ROTULO: Record<TipoEmissao, string> = {
   exame_solicitado: "Exame",
   arquivo: "Arquivo",
 };
+/** Opções do seletor: SEM o tipo legado `exame` (B-15) — ele continua
+ *  existindo em ROTULO/PREFIXO para leitura e renovação de documentos
+ *  antigos, mas oferecer os dois "Exame" lado a lado fazia o legado cair
+ *  num formulário errado (sem pacotes, com "Período de afastamento"). */
+const OPCOES_SELETOR: TipoEmissao[] = ["receita", "atestado", "exame_solicitado", "arquivo"];
 const PREFIXO: Record<Documento["tipo"], string> = {
   receita: "Receita",
   atestado: "Atestado",
@@ -441,7 +446,7 @@ export function EmitirDocumentoSheet({
       subtitulo={`Paciente: ${pacienteNome}`}
     >
       <div role="radiogroup" aria-label="Tipo" className="grid grid-cols-4 gap-1 p-1 rounded-2xl bg-bion-ink/8 dark:bg-white/10 mb-4">
-        {(Object.keys(ROTULO) as TipoEmissao[]).map((t) => (
+        {OPCOES_SELETOR.map((t) => (
           <button
             key={t}
             type="button"

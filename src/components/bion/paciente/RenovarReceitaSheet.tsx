@@ -25,7 +25,9 @@ export function RenovarReceitaSheet({
 }: {
   medicamento: string;
   medico: string;
-  /** Preço da consulta do médico (o que a renovação cobra). */
+  /** Preço da consulta do médico (o que a renovação cobra). C17: sem um
+   *  valor válido a folha NÃO deixa criar o pedido — ninguém pede (e paga)
+   *  uma renovação sem ver o preço antes. */
   valor?: number;
   onPedir: (observacao: string) => Promise<{ ok: boolean; erro?: string; cobranca?: CobrancaRenovacao }>;
   onFechar: () => void;
@@ -47,12 +49,20 @@ export function RenovarReceitaSheet({
   const painelRef = useRef<HTMLDivElement>(null);
   useArrastarFechar(painelRef, fechar);
 
+  const valorValido = typeof valor === "number" && Number.isFinite(valor);
+
   async function enviar() {
+    if (!valorValido) return;
     setEnviando(true);
     const r = await onPedir(obs);
     setEnviando(false);
     if (r.ok) {
-      if (r.cobranca?.status === "pendente") {
+      if (r.cobranca?.status === "falhou") {
+        // C19: cobrança falhou/desconhecida — nada de "pague com cartão".
+        toast.error("O pedido foi criado, mas a cobrança não foi confirmada.", {
+          description: "Confira o pedido aqui em Documentos antes de tentar de novo.",
+        });
+      } else if (r.cobranca?.status === "pendente") {
         // Ainda NÃO foi ao médico: só vai depois do pagamento com cartão.
         toast.success(`Pedido criado. Pague ${fmtValorBRL(r.cobranca.valorCentavos / 100)} com cartão para o pedido ir ao médico.`, {
           description: "O botão \"Pagar com cartão\" aparece no pedido, aqui em Documentos.",
@@ -77,11 +87,15 @@ export function RenovarReceitaSheet({
         <p className="mt-4 text-sm leading-relaxed">
           A renovação custa o valor de uma consulta com este médico, pago com cartão. O pedido só vai para o médico depois do pagamento — ele pode renovar por mensagem ou marcar uma chamada curta com você. Você não precisa escolher horário agora.
         </p>
-        {typeof valor === "number" ? (
+        {valorValido ? (
           <p className="mt-3 text-sm font-semibold">
             Valor da renovação: {fmtValorBRL(valor)} <span className="font-normal bpp-sheet-suave">(pago com cartão)</span>
           </p>
-        ) : null}
+        ) : (
+          <p className="mt-3 text-sm font-semibold text-red-700 dark:text-red-300" role="alert">
+            Não consegui carregar o valor da consulta deste médico. Feche e tente de novo — o pedido só é criado com o valor na tela.
+          </p>
+        )}
         <label htmlFor="obs-renovar" className="block mt-4 text-xs font-bold uppercase tracking-wider bpp-sheet-suave">
           Algo mudou? (opcional)
         </label>
@@ -95,7 +109,7 @@ export function RenovarReceitaSheet({
         />
         <button
           type="button"
-          disabled={enviando}
+          disabled={enviando || !valorValido}
           onClick={enviar}
           className="bpp-toque bp-acao mt-5 w-full min-h-12 rounded-full text-sm font-bold inline-flex items-center justify-center gap-2 disabled:opacity-60"
         >

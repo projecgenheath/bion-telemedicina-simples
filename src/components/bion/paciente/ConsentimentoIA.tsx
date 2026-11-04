@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { ShieldAlert } from "lucide-react";
 import { useFocoDialogo } from "./useFocoDialogo";
 import { aceitarConsentimentoIa, consultarEstadoIa, recusarIaGuardandoTermos } from "@/lib/bion-ia-cliente";
@@ -23,11 +23,18 @@ function FormConsentimentoIA({
   onRecusar,
   classeBorda,
   classePrimario,
+  registrarDescarte,
 }: {
   onAceito: () => void;
   onRecusar: () => void;
   classeBorda: string;
   classePrimario: string;
+  /**
+   * A casca (folha modal) registra aqui o que fazer ao descartar por
+   * véu/ESC: deve ser o MESMO caminho do botão "Usar o app sem a IA"
+   * (que grava o aceite dos Termos marcado antes de fechar).
+   */
+  registrarDescarte?: (fn: () => void) => void;
 }) {
   const id = useId();
   const [termosPendentes, setTermosPendentes] = useState<boolean | null>(null);
@@ -61,6 +68,7 @@ function FormConsentimentoIA({
   // "Usar o app sem a IA": só a IA é recusada. Se a caixa dos Termos foi
   // marcada, o aceite dos Termos/Política é gravado antes de fechar.
   const recusar = async () => {
+    if (salvando) return;
     setSalvando(true);
     setErro(null);
     const ok = await recusarIaGuardandoTermos({ termosPendentes: termosPendentes === true, marcouTermos });
@@ -68,6 +76,16 @@ function FormConsentimentoIA({
     if (ok) onRecusar();
     else setErro("Não consegui registrar seu aceite dos Termos agora. Tente novamente.");
   };
+
+  // Véu/ESC da folha chamam ESTA função (registrada na casca), nunca o
+  // onRecusar cru: tocar fora não pode perder o aceite dos Termos marcado.
+  const recusarRef = useRef(recusar);
+  recusarRef.current = recusar;
+  useEffect(() => {
+    registrarDescarte?.(() => {
+      void recusarRef.current();
+    });
+  }, [registrarDescarte]);
 
   return (
     <div className="space-y-3">
@@ -140,7 +158,15 @@ function FormConsentimentoIA({
 /** Folha (modal) do consentimento — página clássica da BION IA. */
 export function ConsentimentoIA({ onAceito, onRecusar }: { onAceito: () => void; onRecusar: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
-  useFocoDialogo(true, onRecusar, ref);
+  // Descartar (véu/ESC) passa pelo caminho registrado pelo formulário —
+  // o mesmo do botão "Usar o app sem a IA", que grava o aceite dos Termos
+  // marcado. Antes, véu/ESC chamavam onRecusar direto e o aceite marcado
+  // se perdia em silêncio.
+  const descarteRef = useRef<(() => void) | null>(null);
+  const descartar = useCallback(() => {
+    (descarteRef.current ?? onRecusar)();
+  }, [onRecusar]);
+  useFocoDialogo(true, descartar, ref);
   return (
     <div
       ref={ref}
@@ -150,7 +176,7 @@ export function ConsentimentoIA({ onAceito, onRecusar }: { onAceito: () => void;
       aria-labelledby="titulo-consentimento-ia"
       aria-describedby="texto-consentimento-ia"
     >
-      <button type="button" className="absolute inset-0 bpp-sheet-veu" aria-label="Usar o app sem a IA" onClick={onRecusar} />
+      <button type="button" className="absolute inset-0 bpp-sheet-veu" aria-label="Usar o app sem a IA" onClick={descartar} />
       <div className="bpp-sheet-painel relative w-full max-w-lg max-h-[92svh] overflow-y-auto rounded-t-3xl bpp-sheet border-t bpp-sheet-borda px-5 pt-3 pb-8 shadow-[0_-12px_40px_rgba(2,8,26,0.35)]">
         <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bpp-sheet-alca" aria-hidden />
         <h2 id="titulo-consentimento-ia" className="text-lg font-bold inline-flex items-center gap-2">
@@ -162,6 +188,9 @@ export function ConsentimentoIA({ onAceito, onRecusar }: { onAceito: () => void;
             onRecusar={onRecusar}
             classeBorda="bpp-sheet-borda"
             classePrimario="bpp-toque bpp-sheet-primario"
+            registrarDescarte={(fn) => {
+              descarteRef.current = fn;
+            }}
           />
         </div>
       </div>

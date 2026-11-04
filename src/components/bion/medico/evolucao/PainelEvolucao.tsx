@@ -320,7 +320,7 @@ export function PainelEvolucao({
     if (
       sobrescreveu &&
       !window.confirm(
-        `A evolução atual já tem conduta e/ou CID digitados. Usar o atendimento de ${new Date(h.dataInicio).toLocaleDateString("pt-BR")} como base vai SUBSTITUIR esses trechos pelo texto daquela consulta. As demais seções não mudam e nada é concluído. Continuar?`,
+        `A evolução atual já tem conduta e/ou CID digitados. Usar o atendimento de ${new Date(h.dataInicio).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })} como base vai SUBSTITUIR esses trechos pelo texto daquela consulta. As demais seções não mudam e nada é concluído. Continuar?`,
       )
     ) {
       return;
@@ -587,6 +587,7 @@ export function PainelEvolucao({
                       {ROTULO_MEDICAO[m.tipo]?.rotulo ?? m.tipo}{" "}
                       <span className="opacity-60">
                         {new Date(m.criadoEm).toLocaleString("pt-BR", {
+                          timeZone: "America/Sao_Paulo",
                           day: "2-digit",
                           month: "2-digit",
                           hour: "2-digit",
@@ -612,7 +613,7 @@ export function PainelEvolucao({
               ) : null}
               {estado.pedidosMedicao.filter((p) => p.status === "pendente").map((p) => (
                 <div key={p.id} className="flex items-center justify-between text-xs bg-muted rounded-xl px-3 py-2">
-                  <span>Aguardando paciente: {p.tipos.join(", ")}</span>
+                  <span>Aguardando paciente: {p.tipos.map((t) => ROTULO_MEDICAO[t]?.rotulo ?? t).join(", ")}</span>
                   {!concluida ? <button type="button" onClick={() => void cancelarPedido(p.id)} className="underline">cancelar</button> : null}
                 </div>
               ))}
@@ -632,7 +633,7 @@ export function PainelEvolucao({
                       className="w-full flex items-center justify-between gap-2 text-left"
                     >
                       <span className="text-xs font-semibold">
-                        {e.titulo} — {new Date(e.dataColeta).toLocaleDateString("pt-BR")}
+                        {e.titulo} — {new Date(e.dataColeta).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })}
                       </span>
                       {itens.length > 0 ? (
                         <span className="text-xs opacity-70 flex items-center gap-1 shrink-0">
@@ -695,7 +696,7 @@ export function PainelEvolucao({
                       ) : null}
                     </div>
                     <div className="text-xs opacity-70">
-                      {new Date(d.createdAt).toLocaleDateString("pt-BR")} · {d.medico}
+                      {new Date(d.createdAt).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })} · {d.medico}
                       {d.deOutroMedico ? " (outro médico)" : ""}
                     </div>
                     {d.medicamento ? (
@@ -748,7 +749,7 @@ export function PainelEvolucao({
               <div className="text-xs opacity-70 flex items-center gap-1"><Lock className="w-3 h-3" /> Somente leitura. O acesso a consultas de outros médicos fica na Auditoria.</div>
               {estado.historico.map((h) => (
                 <div key={h.consultaId} className="rounded-2xl border p-3">
-                  <div className="font-semibold">{new Date(h.dataInicio).toLocaleDateString("pt-BR")} · {h.especialidade}</div>
+                  <div className="font-semibold">{new Date(h.dataInicio).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })} · {h.especialidade}</div>
                   <div className="text-xs opacity-70">{h.medico}{h.deOutroMedico ? " (outro médico)" : ""} · anamnese {h.anamnese?.status ?? "—"}</div>
                   {h.evolucao ? <div className="text-xs mt-1 whitespace-pre-wrap">{h.evolucao.conduta?.texto ?? ""}{h.evolucao.cid ? ` · CID ${h.evolucao.cid}` : ""}</div> : null}
                   {/* Reutilizar o PRÓPRIO atendimento anterior como ponto

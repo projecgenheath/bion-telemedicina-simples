@@ -14,12 +14,15 @@ export function TelaInicio({
   dados,
   onAbrirPerfil,
   onAbrirPacientes,
+  onAbrirAgenda,
   onAbrirRenovacoes,
   onAbrirNotificacoes,
 }: {
   dados: DadosMedico;
   onAbrirPerfil: () => void;
   onAbrirPacientes: () => void;
+  /** Card "Hoje" → a agenda do dia (folha Agenda, que abre no dia de hoje). */
+  onAbrirAgenda: () => void;
   onAbrirRenovacoes: () => void;
   onAbrirNotificacoes: () => void;
 }) {
@@ -215,12 +218,13 @@ export function TelaInicio({
         )}
       </div>
 
-      {/* (b) Hoje */}
+      {/* (b) Hoje — abre a AGENDA do dia (antes abria a lista de
+          pacientes, embora o card só fale do dia). */}
       <button
         type="button"
-        onClick={onAbrirPacientes}
+        onClick={onAbrirAgenda}
         className="bp-glass p-5 mt-3 text-left w-full"
-        aria-label={`Hoje: ${hoje.agendadas.length} consultas agendadas, ${hoje.restantes.length} restantes. Abrir lista de pacientes`}
+        aria-label={`Hoje: ${hoje.agendadas.length} consultas agendadas, ${hoje.restantes.length} restantes. Abrir agenda de hoje`}
       >
         <span className="text-xs font-bold uppercase tracking-wider text-bion-ink/75 dark:text-bion-paper/75 inline-flex items-center gap-1.5">
           <CalendarDays className="w-4 h-4" /> Hoje

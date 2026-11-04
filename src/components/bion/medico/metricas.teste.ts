@@ -25,6 +25,7 @@ import {
   podeMarcarDesfechoNaAgenda,
   podeMarcarFalta,
   prazoDesfecho,
+  primeiroItemFaltante,
   pontosReceita,
   receitaPrevista,
   reservaVigente,
@@ -448,6 +449,10 @@ igual("pontos sem resposta", pontosReceita(null), []);
   const parcial = completudePerfil({ ...base, foto: undefined, bio: " ", experiencia: "", idiomas: [] });
   igual("completude parcial", parcial.percentual, 43);
   igual("completude faltantes", parcial.faltantes, ["foto de perfil", "apresentação (bio)", "experiência", "idiomas"]);
+  igual("primeiro faltante: completo", primeiroItemFaltante(base), null);
+  igual("primeiro faltante: foto primeiro", primeiroItemFaltante({ ...base, foto: undefined, bio: "" }), "foto");
+  igual("primeiro faltante: bio depois da foto", primeiroItemFaltante({ ...base, bio: " " }), "bio");
+  igual("primeiro faltante: horários por último", primeiroItemFaltante({ ...base, horariosDisponiveis: [], horariosPorDia: {} }), "horarios");
 
   const med = (id: string, especialidade: string, valor: number, status: Medico["status"] = "ativo") =>
     ({ id, especialidade, valor, status }) as Pick<Medico, "id" | "especialidade" | "valor" | "status">;

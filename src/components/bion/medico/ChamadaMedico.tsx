@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { FileText, Pill, Award, X } from "lucide-react";
 import { useBion as useStore } from "@/lib/bion-store";
@@ -15,6 +15,7 @@ import {
   type DadosSegurancaPaciente,
 } from "@/components/bion/medico/prescricao-assistida";
 import { gerarConteudoDocumento, rotuloPeriodoAfastamento } from "@/lib/conteudo-documento";
+import { diaFusoClinica } from "@/lib/bion-tipos";
 import { CampoCidBusca } from "@/components/bion/medico/campo-cid-busca";
 import { ModalBion } from "@/components/bion/ModalBion";
 import { EncerrarAtendimento, type EscolhaEncerrar } from "@/components/bion/consulta/EncerrarAtendimento";
@@ -23,13 +24,10 @@ import { useSalaConsulta } from "@/components/bion/consulta/useSalaConsulta";
 import { avisarDadosMedicoAlterados } from "@/components/bion/medico/useDadosMedico";
 import { PainelEvolucao } from "@/components/bion/medico/evolucao/PainelEvolucao";
 
-/** Data de hoje no formato do input type=date ("AAAA-MM-DD"), no fuso local. */
-function hojeIsoLocal(): string {
-  const d = new Date();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${d.getFullYear()}-${mm}-${dd}`;
-}
+/** Data de hoje no formato do input type=date ("AAAA-MM-DD"), no fuso da
+ *  clínica (America/Sao_Paulo) — antes era o relógio do aparelho, e o
+ *  atestado podia nascer com a data de outro dia em relação à clínica. */
+const hojeIsoClinica = () => diaFusoClinica(0).iso;
 
 /**
  * Sala de teleconsulta do MÉDICO (movida de Consulta.tsx sem mudança visual
@@ -112,12 +110,15 @@ export function ChamadaMedico({ onEnd, consultaId }: { onEnd: () => void; consul
   // controlado — nascia controlado=false e ficava elegível à renovação
   // curta que o sistema bloqueia para controlados.
   const [recControlado, setRecControlado] = useState(false);
+  // CID da receita: a folha de emissão tem o campo e o PDF imprime —
+  // a receita da sala nascia sem CID porque o modal não o pedia.
+  const [recCid, setRecCid] = useState("");
 
   // Form Atestado — estruturado (item 32 da auditoria de melhorias):
   // tipo (afastamento × comparecimento) + data inicial alimentam o texto
   // gerado; os campos enviados ao servidor continuam os mesmos.
   const [atestTipo, setAtestTipo] = useState<"afastamento" | "comparecimento">("afastamento");
-  const [atestInicio, setAtestInicio] = useState(hojeIsoLocal);
+  const [atestInicio, setAtestInicio] = useState(hojeIsoClinica);
   const [atestDias, setAtestDias] = useState("");
   const [atestCid, setAtestCid] = useState("");
   const [atestObs, setAtestObs] = useState("");
@@ -134,10 +135,11 @@ export function ChamadaMedico({ onEnd, consultaId }: { onEnd: () => void; consul
     setRecDuracao("");
     setRecObs("");
     setRecControlado(false);
+    setRecCid("");
   };
   const limparAtestado = () => {
     setAtestTipo("afastamento");
-    setAtestInicio(hojeIsoLocal());
+    setAtestInicio(hojeIsoClinica());
     setAtestDias("");
     setAtestCid("");
     setAtestObs("");
@@ -180,32 +182,96 @@ export function ChamadaMedico({ onEnd, consultaId }: { onEnd: () => void; consul
     return true;
   };
 
+  // Emissão CONFIRMADA, como na folha de emissão: emitirDocumento não
+  // devolve resultado (interface void), então a confirmação é o documento
+  // novo no store (delta do servidor). Antes os três modais anunciavam
+  // sucesso e fechavam no mesmo instante do disparo — se a emissão
+  // falhasse (rede, 409, validação), o médico via "emitido", o modal
+  // fechava e o documento não existia. Agora o sucesso (toast + limpar +
+  // fechar) só acontece quando o documento aparece; no timeout, o modal
+  // fica aberto com o erro e o formulário intacto para tentar de novo.
+  type EmissaoSala = { tipo: "receita" | "atestado" | "exame"; titulo: string; antes: Set<string> };
+  const [emissao, setEmissao] = useState<EmissaoSala | null>(null);
+  const [erroEmissao, setErroEmissao] = useState<{ tipo: EmissaoSala["tipo"]; texto: string } | null>(null);
+  const emissaoRef = useRef<EmissaoSala | null>(null);
+  const emissaoTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const dispararEmissao = (tipo: EmissaoSala["tipo"], titulo: string) => {
+    const nova: EmissaoSala = { tipo, titulo, antes: new Set(documentos.map((d) => d.id)) };
+    emissaoRef.current = nova;
+    setEmissao(nova);
+    setErroEmissao(null);
+    if (emissaoTimeoutRef.current) clearTimeout(emissaoTimeoutRef.current);
+    emissaoTimeoutRef.current = setTimeout(() => {
+      if (!emissaoRef.current) return;
+      emissaoRef.current = null;
+      setEmissao(null);
+      setErroEmissao({
+        tipo,
+        texto: "Não foi possível confirmar a emissão. Verifique sua conexão e toque em emitir novamente — o formulário foi mantido.",
+      });
+    }, 12_000);
+  };
+
+  useEffect(() => {
+    const atual = emissao;
+    if (!atual) return;
+    const chegou = documentos.some(
+      (d) =>
+        !atual.antes.has(d.id) &&
+        d.titulo.trim() === atual.titulo.trim() &&
+        (!pacienteIdAtual || d.pacienteId === pacienteIdAtual),
+    );
+    if (!chegou) return;
+    if (emissaoTimeoutRef.current) clearTimeout(emissaoTimeoutRef.current);
+    emissaoRef.current = null;
+    setEmissao(null);
+    if (atual.tipo === "receita") {
+      toast.success("Receita emitida", {
+        description: "Disponível no painel do paciente. Documento sem assinatura digital ICP-Brasil.",
+      });
+      limparReceita();
+      setModalReceita(false);
+    } else if (atual.tipo === "atestado") {
+      toast.success("Atestado emitido", {
+        description: "Disponível no painel do paciente. Documento sem assinatura digital ICP-Brasil.",
+      });
+      limparAtestado();
+      setModalAtestado(false);
+    } else {
+      toast.success("Exame solicitado", {
+        description: "O pedido foi enviado ao painel do paciente.",
+      });
+      limparExame();
+      setModalExame(false);
+    }
+  }, [documentos, emissao, pacienteIdAtual]);
+
   const salvarReceita = (e: React.FormEvent) => {
     e.preventDefault();
+    if (emissao) return;
     if (!recMedicamento.trim() || !recPosologia.trim() || !recDuracao.trim()) return;
     if (!podeEmitir()) return;
     const medicamento = recMedicamento.trim();
     const obs = recObs.trim();
+    const titulo = recTitulo.trim() || `Receita — ${medicamento}`;
     emitirDocumento(
       {
         tipo: "receita",
-        titulo: recTitulo.trim() || `Receita — ${medicamento}`,
+        titulo,
         medico: sessao.nome,
         paciente: contraparteNome,
         medicamento,
         posologia: recPosologia.trim(),
         controlado: recControlado,
+        ...(recCid.trim() ? { cid: recCid.trim() } : {}),
         duracao: recDuracao.trim(),
         observacoes: obs,
         conteudo: `${medicamento} — ${recPosologia.trim()} por ${recDuracao.trim()}.${obs ? ` ${obs}` : ""}`,
       },
       pacienteIdAtual,
     );
-    toast.success("Receita emitida", {
-      description: "Disponível no painel do paciente. Documento sem assinatura digital ICP-Brasil.",
-    });
-    limparReceita();
-    setModalReceita(false);
+    dispararEmissao("receita", titulo);
   };
 
   const salvarAtestado = (e: React.FormEvent) => {
@@ -233,10 +299,12 @@ export function ChamadaMedico({ onEnd, consultaId }: { onEnd: () => void; consul
       pacienteNome: contraparteNome,
     });
     if (!conteudoBase) return;
+    if (emissao) return;
+    const titulo = ehAfastamento ? `Atestado — ${rotuloDias} de afastamento` : "Atestado — Comparecimento";
     emitirDocumento(
       {
         tipo: "atestado",
-        titulo: ehAfastamento ? `Atestado — ${rotuloDias} de afastamento` : "Atestado — Comparecimento",
+        titulo,
         medico: sessao.nome,
         paciente: contraparteNome,
         cid: cid || undefined,
@@ -247,34 +315,31 @@ export function ChamadaMedico({ onEnd, consultaId }: { onEnd: () => void; consul
       },
       pacienteIdAtual,
     );
-    toast.success("Atestado emitido", {
-      description: "Disponível no painel do paciente. Documento sem assinatura digital ICP-Brasil.",
-    });
-    limparAtestado();
-    setModalAtestado(false);
+    dispararEmissao("atestado", titulo);
   };
 
   const salvarExame = (e: React.FormEvent) => {
     e.preventDefault();
+    if (emissao) return;
     if (!exameNome.trim()) return;
     if (!podeEmitir()) return;
+    const titulo = `Solicitação de Exame — ${exameNome.trim()}`;
     emitirDocumento(
       {
         tipo: "exame_solicitado",
-        titulo: `Solicitação de Exame — ${exameNome.trim()}`,
+        titulo,
         medico: sessao.nome,
         paciente: contraparteNome,
-        duracao: exameUrgencia,
+        // A urgência NÃO vai em `duracao`: esse campo é a duração do
+        // tratamento (receita/atestado) e o prontuário em PDF o imprime
+        // como "Duração" — o pedido saía com "Duração: Rotina". A
+        // urgência já consta do conteúdo, abaixo.
         observacoes: exameObs.trim(),
         conteudo: `Solicita-se: ${exameNome.trim()} (urgência: ${exameUrgencia}).${exameObs.trim() ? ` ${exameObs.trim()}` : ""}`,
       },
       pacienteIdAtual,
     );
-    toast.success("Exame solicitado", {
-      description: "O pedido foi enviado ao painel do paciente.",
-    });
-    limparExame();
-    setModalExame(false);
+    dispararEmissao("exame", titulo);
   };
 
   // Médico: "Encerrar" abre a escolha (concluir / falta do paciente / falha
@@ -477,7 +542,9 @@ export function ChamadaMedico({ onEnd, consultaId }: { onEnd: () => void; consul
       {modalReceita && (
         <ModalBion
           aberto
-          onFechar={() => setModalReceita(false)}
+          onFechar={() => {
+            if (emissao?.tipo !== "receita") setModalReceita(false);
+          }}
           titulo="Emitir Receita"
           largura="max-w-lg"
           overlay="bg-black/70 backdrop-blur-sm"
@@ -494,7 +561,9 @@ export function ChamadaMedico({ onEnd, consultaId }: { onEnd: () => void; consul
               </h3>
               <button
                 type="button"
-                onClick={() => setModalReceita(false)}
+                onClick={() => {
+                  if (emissao?.tipo !== "receita") setModalReceita(false);
+                }}
                 className="text-muted-foreground"
               >
                 <X className="w-5 h-5" />
@@ -553,6 +622,17 @@ export function ChamadaMedico({ onEnd, consultaId }: { onEnd: () => void; consul
                 />
               </div>
 
+              <div>
+                <label className="font-bold block mb-1">CID (opcional)</label>
+                <CampoCidBusca
+                  valor={recCid}
+                  onChange={setRecCid}
+                  ariaLabel="CID"
+                  placeholder="Ex.: J30.1 ou “sinusite”"
+                  className="w-full px-3 py-2 rounded-xl border bg-background"
+                />
+              </div>
+
               <AlertasPrescricao medicamento={recMedicamento} dados={dadosSeguranca} />
 
               <label className="flex items-start gap-2 rounded-xl border bg-background px-3 py-2 cursor-pointer">
@@ -590,11 +670,17 @@ export function ChamadaMedico({ onEnd, consultaId }: { onEnd: () => void; consul
               onAplicar={aplicarKitReceita}
             />
 
+            {erroEmissao?.tipo === "receita" ? (
+              <p className="text-sm font-semibold text-red-700 dark:text-red-400" role="alert">
+                {erroEmissao.texto}
+              </p>
+            ) : null}
             <button
               type="submit"
-              className="w-full py-3 rounded-2xl bg-primary text-primary-foreground font-bold text-xs shadow-md"
+              disabled={emissao?.tipo === "receita"}
+              className="w-full py-3 rounded-2xl bg-primary text-primary-foreground font-bold text-xs shadow-md disabled:opacity-50"
             >
-              Emitir e Disponibilizar ao Paciente
+              {emissao?.tipo === "receita" ? "Emitindo…" : "Emitir e Disponibilizar ao Paciente"}
             </button>
           </form>
         </ModalBion>
@@ -604,7 +690,9 @@ export function ChamadaMedico({ onEnd, consultaId }: { onEnd: () => void; consul
       {modalAtestado && (
         <ModalBion
           aberto
-          onFechar={() => setModalAtestado(false)}
+          onFechar={() => {
+            if (emissao?.tipo !== "atestado") setModalAtestado(false);
+          }}
           titulo="Emitir Atestado Médico"
           largura="max-w-lg"
           overlay="bg-black/70 backdrop-blur-sm"
@@ -621,7 +709,9 @@ export function ChamadaMedico({ onEnd, consultaId }: { onEnd: () => void; consul
               </h3>
               <button
                 type="button"
-                onClick={() => setModalAtestado(false)}
+                onClick={() => {
+                  if (emissao?.tipo !== "atestado") setModalAtestado(false);
+                }}
                 className="text-muted-foreground"
               >
                 <X className="w-5 h-5" />
@@ -708,7 +798,7 @@ export function ChamadaMedico({ onEnd, consultaId }: { onEnd: () => void; consul
                   {atestTipo === "afastamento" ? "Justificativa e Recomendações" : "Observações (opcional)"}
                 </label>
                 <textarea
-                  aria-label="Justificativa e Recomendações"
+                  aria-label={atestTipo === "afastamento" ? "Justificativa e Recomendações" : "Observações (opcional)"}
                   value={atestObs}
                   onChange={(e) => setAtestObs(e.target.value)}
                   rows={3}
@@ -718,11 +808,17 @@ export function ChamadaMedico({ onEnd, consultaId }: { onEnd: () => void; consul
               </div>
             </div>
 
+            {erroEmissao?.tipo === "atestado" ? (
+              <p className="text-sm font-semibold text-red-700 dark:text-red-400" role="alert">
+                {erroEmissao.texto}
+              </p>
+            ) : null}
             <button
               type="submit"
-              className="w-full py-3 rounded-2xl bg-primary text-primary-foreground font-bold text-xs shadow-md"
+              disabled={emissao?.tipo === "atestado"}
+              className="w-full py-3 rounded-2xl bg-primary text-primary-foreground font-bold text-xs shadow-md disabled:opacity-50"
             >
-              Emitir Atestado
+              {emissao?.tipo === "atestado" ? "Emitindo…" : "Emitir Atestado"}
             </button>
           </form>
         </ModalBion>
@@ -732,7 +828,9 @@ export function ChamadaMedico({ onEnd, consultaId }: { onEnd: () => void; consul
       {modalExame && (
         <ModalBion
           aberto
-          onFechar={() => setModalExame(false)}
+          onFechar={() => {
+            if (emissao?.tipo !== "exame") setModalExame(false);
+          }}
           titulo="Solicitar Exame Complementar"
           largura="max-w-lg"
           overlay="bg-black/70 backdrop-blur-sm"
@@ -749,7 +847,9 @@ export function ChamadaMedico({ onEnd, consultaId }: { onEnd: () => void; consul
               </h3>
               <button
                 type="button"
-                onClick={() => setModalExame(false)}
+                onClick={() => {
+                  if (emissao?.tipo !== "exame") setModalExame(false);
+                }}
                 className="text-muted-foreground"
               >
                 <X className="w-5 h-5" />
@@ -800,11 +900,17 @@ export function ChamadaMedico({ onEnd, consultaId }: { onEnd: () => void; consul
               </div>
             </div>
 
+            {erroEmissao?.tipo === "exame" ? (
+              <p className="text-sm font-semibold text-red-700 dark:text-red-400" role="alert">
+                {erroEmissao.texto}
+              </p>
+            ) : null}
             <button
               type="submit"
-              className="w-full py-3 rounded-2xl bg-violet-600 dark:bg-violet-500 hover:bg-violet-700 text-white font-bold text-xs shadow-md transition"
+              disabled={emissao?.tipo === "exame"}
+              className="w-full py-3 rounded-2xl bg-violet-600 dark:bg-violet-500 hover:bg-violet-700 text-white font-bold text-xs shadow-md transition disabled:opacity-50"
             >
-              Enviar Solicitação ao Paciente
+              {emissao?.tipo === "exame" ? "Enviando…" : "Enviar Solicitação ao Paciente"}
             </button>
           </form>
         </ModalBion>

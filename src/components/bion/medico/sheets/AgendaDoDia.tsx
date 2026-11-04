@@ -829,7 +829,7 @@ const ROTULO_SLOT: Record<SlotAgenda["estado"], string> = {
   livre: "Livre",
   ocupado: "Ocupado",
   reservado: "Reservado",
-  encerrada: "Liberado",
+  encerrada: "Encerrado",
   bloqueado: "Bloqueado",
 };
 

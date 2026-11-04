@@ -1,5 +1,5 @@
 /** Rodar: bun --conditions=react-server src/lib/saude-paciente.teste.ts */
-import { detalhesAuditoria, lerTiposPedido, validarResposta, lerPosologia, resumoMedicamento, validarMedicamento, dividirMedicamentosLegado, chaveMedicamento, removerPedidoCancelado, horariosSugeridos, descricaoAvisos, resumoAvisos, rotuloFrequenciaPosologia, validarAvisos } from "./saude-paciente";
+import { detalhesAuditoria, lerTiposPedido, validarResposta, lerPosologia, resumoMedicamento, validarMedicamento, dividirMedicamentosLegado, chaveMedicamento, removerPedidoCancelado, horariosSugeridos, descricaoAvisos, resumoAvisos, rotuloFrequenciaPosologia, validarAvisos, normalizarFrequenciaLembrete } from "./saude-paciente";
 
 let ok = 0;
 let falhas = 0;
@@ -135,6 +135,17 @@ igual("avisos semanal com 2 horários = erro", validarAvisos({ horarios: ["08:00
 igual("avisos hora inválida = erro", validarAvisos({ horarios: ["25:00"] }).ok, false);
 igual("avisos 5 horários = erro", validarAvisos({ horarios: ["01:00", "02:00", "03:00", "04:00", "05:00"] }).ok, false);
 igual("avisos não-array = erro", validarAvisos({ horarios: "08:00" }).ok, false);
+// F2: normalização de frequência de lembrete — sem conversão silenciosa.
+igual("freq canônica diária", normalizarFrequenciaLembrete("Todos os dias"), { ok: true, frequencia: "Todos os dias" });
+igual("freq canônica úteis", normalizarFrequenciaLembrete("Dias úteis"), { ok: true, frequencia: "Dias úteis" });
+igual("freq canônica semanal", normalizarFrequenciaLembrete("Semanal"), { ok: true, frequencia: "Semanal" });
+igual("freq alias segunda a sexta", normalizarFrequenciaLembrete("Segunda a Sexta"), { ok: true, frequencia: "Dias úteis" });
+igual("freq alias semanalmente", normalizarFrequenciaLembrete("Semanalmente"), { ok: true, frequencia: "Semanal" });
+igual("freq alias sem acento/caixa", normalizarFrequenciaLembrete("  dias uteis "), { ok: true, frequencia: "Dias úteis" });
+igual("freq ausente = padrão explícito", normalizarFrequenciaLembrete(undefined), { ok: true, frequencia: "Todos os dias" });
+igual("freq intervalo 12h = erro", normalizarFrequenciaLembrete("A cada 12 horas").ok, false);
+igual("freq intervalo 8h = erro", normalizarFrequenciaLembrete("A cada 8 horas").ok, false);
+igual("freq desconhecida = erro", normalizarFrequenciaLembrete("Quando lembrar").ok, false);
 igual("avisos vazio sem permissão = erro", validarAvisos({ horarios: [] }).ok, false);
 igual("avisos vazio com permissão = conjunto vazio", validarAvisos({ horarios: [] }, { permitirVazio: true }), {
   ok: true,

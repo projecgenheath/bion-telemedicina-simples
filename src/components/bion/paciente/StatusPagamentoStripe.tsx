@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { BotaoPagarStripe } from "./BotaoPagarStripe";
 import { lerStatusPagamento } from "./pagamento-stripe-cliente";
+import { textoRetornoStripe } from "./retorno-stripe";
 
 /**
  * Tela de volta do Stripe. SÓ mostra o status: quem confirma é o webhook.
@@ -40,29 +41,13 @@ export function StatusPagamentoStripe({ volta }: { volta: "sucesso" | "cancelado
     };
   }, [consultaId]);
 
-  let titulo: string;
-  let texto: string;
-  if (!consultaId && tipo) {
-    titulo = volta === "cancelado" ? "Pagamento não concluído" : "Pagamento enviado";
-    texto =
-      volta === "cancelado"
-        ? "Nada foi cobrado. Você pode tentar de novo pelo app."
-        : tipo === "renovacao"
-          ? "Assim que o pagamento for confirmado, o pedido de renovação vai para o médico. Você recebe um aviso."
-          : "Assim que o pagamento for confirmado, a nova data é aplicada. Você recebe um aviso.";
-  } else if (estado?.pago) {
-    titulo = "Pagamento confirmado";
-    texto = "Sua consulta está confirmada. Se quiser, faça a triagem com a BION IA até 5 minutos antes do horário.";
-  } else if (volta === "cancelado") {
-    titulo = "Pagamento não concluído";
-    texto = "Nada foi cobrado. A consulta continua aguardando pagamento.";
-  } else if (esgotou) {
-    titulo = "Ainda aguardando a confirmação";
-    texto = "O banco ainda não confirmou. Você recebe um aviso assim que o pagamento for aprovado.";
-  } else {
-    titulo = "Confirmando pagamento…";
-    texto = "Estamos esperando a confirmação do pagamento. Isso costuma levar alguns segundos.";
-  }
+  const { titulo, texto } = textoRetornoStripe({
+    consultaId,
+    tipo,
+    volta,
+    pago: estado?.pago === true,
+    esgotou,
+  });
 
   return (
     <div className="bp-glass p-6 max-w-md mx-auto mt-8 text-center" role="status" aria-live="polite">

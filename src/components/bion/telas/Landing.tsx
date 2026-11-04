@@ -1,5 +1,4 @@
 "use client";
-import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Calendar,
@@ -8,26 +7,12 @@ import {
   Clock,
   ArrowRight,
   Sparkles,
+  Stethoscope,
 } from "lucide-react";
 import { Logo } from "@/components/bion/brand";
 
-// Próximo slot em grade de 30 min — evita dado estático falso na landing
-function calcularProximoSlot(): string {
-  const d = new Date();
-  const hoje = new Date();
-  d.setMinutes(d.getMinutes() + (30 - (d.getMinutes() % 30)), 0, 0);
-  const amanha = d.getDate() !== hoje.getDate();
-  const hhmm = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-  return `${amanha ? "Amanhã" : "Hoje"}, às ${hhmm}`;
-}
-
 export function Landing() {
   const router = useRouter();
-  const [proximoSlot, setProximoSlot] = useState("hoje mesmo");
-  useEffect(() => {
-    const id = requestAnimationFrame(() => setProximoSlot(calcularProximoSlot()));
-    return () => cancelAnimationFrame(id);
-  }, []);
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
       <header className="max-w-6xl mx-auto w-full px-6 py-6 flex items-center justify-between">
@@ -80,26 +65,29 @@ export function Landing() {
           <div className="relative">
             <div className="absolute inset-0 bg-primary/10 blur-3xl rounded-full" />
             <div className="relative bg-card border rounded-3xl p-6 shadow-2xl space-y-5">
+              {/* Cartão genérico e honesto: sem médico fictício, sem CRM de
+                  exemplo e sem "próximo horário" inventado do relógio — a
+                  agenda real só aparece após o login, com médicos de verdade. */}
               <div className="flex items-center gap-3 pb-4 border-b">
-                <div className="w-14 h-14 rounded-2xl bg-primary-soft flex items-center justify-center text-primary font-bold text-xl shadow-sm">
-                  AR
+                <div className="w-14 h-14 rounded-2xl bg-primary-soft flex items-center justify-center text-primary shadow-sm">
+                  <Stethoscope className="w-7 h-7" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="font-bold text-base">Dra. Ana Ribeiro</div>
-                  <div className="text-xs text-muted-foreground">Clínica Geral • CRM 12345 SP</div>
+                  <div className="font-bold text-base">Médicos parceiros</div>
+                  <div className="text-xs text-muted-foreground">Clínica geral e especialidades · atendimento por vídeo</div>
                 </div>
-                <span className="text-xs font-bold px-3 py-1 rounded-full bg-accent-soft text-emerald-800 dark:text-emerald-200">
-                  Disponível Agora
+                <span className="text-xs font-bold px-3 py-1 rounded-full bg-primary-soft text-primary">
+                  100% online
                 </span>
               </div>
 
               <div className="bg-muted/60 p-4 rounded-2xl space-y-2 text-xs">
                 <div className="text-muted-foreground font-medium">
-                  Próximo horário para consulta:
+                  Agenda aberta:
                 </div>
-                <div className="text-2xl font-extrabold text-primary">{proximoSlot}</div>
+                <div className="text-2xl font-extrabold text-primary">Escolha o melhor horário para você</div>
                 <div className="text-muted-foreground flex items-center gap-1">
-                  <Clock className="w-3.5 h-3.5" /> Duração média: 30 minutos
+                  <Clock className="w-3.5 h-3.5" /> Consultas de 30 minutos, por vídeo
                 </div>
               </div>
 
@@ -121,7 +109,7 @@ export function Landing() {
           {
             icon: Calendar,
             t: "Agendamento em 1 Minuto",
-            d: "Escolha especialidade, médico e pague com Pix instantâneo.",
+            d: "Escolha especialidade, médico e horário e pague com cartão, sem sair de casa.",
           },
           {
             icon: Video,

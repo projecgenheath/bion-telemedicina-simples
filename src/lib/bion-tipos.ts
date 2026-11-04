@@ -205,6 +205,9 @@ export type Lembrete = {
   tipo: "Medicação" | "Consulta" | "Exame" | "Hidratação";
   frequencia: string;
   feito: boolean;
+  /** F7: quando o feito foi marcado (ISO). Só existe após a migração
+   *  20261104a; o feito exibido é resolvido por dia em lembrete-ciclo. */
+  feitoEm?: string | null;
   medicamento?: string;
 };
 
@@ -437,8 +440,28 @@ export const fmtDataBR = (iso: string) => {
   return `${dd(d.dia)}/${dd(d.mes + 1)}/${d.ano}`;
 };
 
+const BRL_INTEIRO = new Intl.NumberFormat("pt-BR", {
+  style: "currency",
+  currency: "BRL",
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 0,
+});
+const BRL_CENTAVOS = new Intl.NumberFormat("pt-BR", {
+  style: "currency",
+  currency: "BRL",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+/**
+ * "R$ 150" (inteiro, sem centavos — contrato que telas e parsers já esperam)
+ * ou "R$ 149,90". O agrupamento de milhar vem do Intl ("R$ 1.234,56"; a
+ * fórmula manual antiga saía "R$ 1234,56"). O Intl usa NBSP após o "R$";
+ * normalizamos para o espaço comum para a string ser idêntica à histórica
+ * nos valores < 1000.
+ */
 export const fmtValorBRL = (v: number) =>
-  Number.isInteger(v) ? `R$ ${v}` : `R$ ${v.toFixed(2).replace(".", ",")}`;
+  (Number.isInteger(v) ? BRL_INTEIRO : BRL_CENTAVOS).format(v).replace(/[  ]/g, " ");
 
 /* ==================================================================== */
 /* Constantes vazias e mapeadores compartilhados pelo store              */

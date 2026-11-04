@@ -158,6 +158,10 @@ export function ConversaPaciente({
   const homonimo = listaPacientes.filter((p) => p.nome === atual.nome).length > 1;
 
   const ref = proxima ?? ultima;
+  // A ficha rotula a origem da referência: sem consulta futura, os dados
+  // são da ÚLTIMA consulta — "Pagamento: Pendente" dela não é dívida
+  // atual do paciente, e o rótulo precisa dizer isso.
+  const refEhProxima = Boolean(proxima);
   const anamneseRef = ref ? anamneses.find((a) => a.consultaId === ref.id) : undefined;
   const idade = registro?.dataNascimento ? idadeDeNascimento(registro.dataNascimento) : registro?.idade || null;
   const podeEnviar = Boolean(pid) && consultas.some((c) => c.status !== "cancelada");
@@ -469,8 +473,8 @@ export function ConversaPaciente({
               <p className="text-sm text-bion-ink/75 dark:text-bion-paper/75">Dados cadastrais indisponíveis para este paciente.</p>
             )}
             <dl className="grid grid-cols-2 gap-x-4 gap-y-2 mt-3 pt-3 border-t border-bion-ink/10 dark:border-white/10">
-              <Info r="Consulta" v={ref ? `${ref.data} às ${ref.hora} · ${rotuloStatusMedico(ref)}` : ""} />
-              <Info r="Pagamento" v={ref ? (ref.pago ? "Pago" : "Pendente") : ""} />
+              <Info r={refEhProxima ? "Próxima consulta" : "Última consulta"} v={ref ? `${ref.data} às ${ref.hora} · ${rotuloStatusMedico(ref)}` : ""} />
+              <Info r={refEhProxima ? "Pagamento" : "Pagamento (última consulta)"} v={ref ? (ref.pago ? "Pago" : "Pendente") : ""} />
               <Info r="Triagem" v={anamneseRef ? (anamneseRef.status === "concluida" ? "Concluída" : "Em andamento") : "Não iniciada"} />
               <Info r="Motivo" v={ref?.motivoConsulta ?? ""} />
             </dl>

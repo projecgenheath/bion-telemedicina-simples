@@ -141,6 +141,13 @@ export function DocumentosPainel({
     [consultas, sessao.nome],
   );
 
+  // B10: a aba abria "vazia" — só os chips, nenhum documento à vista.
+  // Pré-seleciona a consulta realizada mais recente (realizadas já vem
+  // ordenada da mais nova para a mais antiga).
+  useEffect(() => {
+    if (!consultaSelecionada && realizadas.length > 0) setConsultaSelecionada(realizadas[0].id);
+  }, [consultaSelecionada, realizadas]);
+
   const documentosDaConsulta = (consultaId: string) => {
     const c = realizadas.find((x) => x.id === consultaId);
     if (!c) return [];
@@ -158,10 +165,23 @@ export function DocumentosPainel({
       const ts = d.criadoEm ? new Date(d.criadoEm).getTime() : NaN;
       return !Number.isNaN(ts) && ts >= ini && ts <= fim;
     });
-    const lista = docs.map((d) => ({
+    const lista = docs.map((d) => {
+      // B11: o título específico era descartado e toda receita/atestado
+      // virava o rótulo genérico do tipo — 2 receitas da mesma consulta
+      // ficavam idênticas na lista. Título = medicamento (receita) ou o
+      // título próprio do documento; o tipo desce para o subtítulo.
+      const rotuloTipo = ROTULO_DOC[d.tipo as keyof typeof ROTULO_DOC] as string | undefined;
+      const detalhe =
+        d.tipo === "receita" && d.medicamento
+          ? d.medicamento
+          : d.titulo && d.titulo !== rotuloTipo
+            ? d.titulo
+            : "";
+      return {
       id: d.id,
       tipo: d.tipo as keyof typeof ICONE_DOC,
-      titulo: ROTULO_DOC[d.tipo as keyof typeof ROTULO_DOC] ?? d.titulo,
+      titulo: detalhe || rotuloTipo || d.titulo,
+      subtitulo: detalhe ? rotuloTipo : undefined,
       data: d.data,
       original: d as (typeof documentos)[number] | undefined,
       corpo: [
@@ -175,13 +195,15 @@ export function DocumentosPainel({
         ``,
         `Dr(a). ${d.medico}`,
       ].filter((l) => l !== ""),
-    }));
+      };
+    });
     if (c.resumoMedico) {
       lista.unshift({
         id: `prontuario-${c.id}`,
         tipo: "prontuario" as const,
         original: undefined,
         titulo: ROTULO_DOC.prontuario,
+        subtitulo: undefined,
         data: c.data,
         corpo: [
           `Consulta: ${c.especialidade} · ${c.data} às ${c.hora}`,
@@ -350,7 +372,7 @@ export function DocumentosPainel({
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-bold text-bion-ink dark:text-bion-paper">{d.titulo}</div>
-                      <div className="text-xs opacity-80">{d.data}</div>
+                      <div className="text-xs opacity-80">{d.subtitulo ? `${d.subtitulo} · ` : ""}{d.data}</div>
                       {(() => {
                         const o = d.original;
                         if (!o || o.tipo !== "receita" || !renovacao.disponivel) return null;
@@ -374,16 +396,16 @@ export function DocumentosPainel({
                                         if (r.ok) toast.success("Pedido de renovação cancelado.");
                                         else toast.error(r.erro ?? "Não foi possível cancelar.");
                                       }}
-                                      className="bpp-toque min-h-9 rounded-full px-3 text-xs font-bold bg-red-600/10 text-red-800 dark:bg-red-400/15 dark:text-red-300"
+                                      className="bpp-toque min-h-11 rounded-full px-3.5 text-xs font-bold bg-red-600/10 text-red-800 dark:bg-red-400/15 dark:text-red-300"
                                     >
                                       Sim, cancelar
                                     </button>
-                                    <button type="button" onClick={() => setCancelandoPedido(null)} className="bpp-toque min-h-9 rounded-full px-3 text-xs font-bold bg-bion-ink/8 dark:bg-white/10">
+                                    <button type="button" onClick={() => setCancelandoPedido(null)} className="bpp-toque min-h-11 rounded-full px-3.5 text-xs font-bold bg-bion-ink/8 dark:bg-white/10">
                                       Voltar
                                     </button>
                                   </div>
                                 ) : (
-                                  <button type="button" onClick={() => setCancelandoPedido(pedido.id)} className="mt-1 block text-xs font-bold underline">
+                                  <button type="button" onClick={() => setCancelandoPedido(pedido.id)} className="bpp-toque mt-0.5 inline-flex items-center min-h-11 px-2 -ml-2 text-xs font-bold underline">
                                     Cancelar pedido
                                   </button>
                                 )
@@ -392,7 +414,7 @@ export function DocumentosPainel({
                                 <BotaoPagarStripe pagamentoId={pedido.pagamentoId} rotulo="Pagar com cartão" className="mt-1.5" />
                               ) : null}
                               {pedido.status !== "pendente" && pedido.status !== "aguardando_pagamento" ? (
-                                <button type="button" onClick={() => setRenovando({ id: o.id, medicamento: o.medicamento ?? "", medico: o.medico })} className="mt-1 block text-xs font-bold underline">
+                                <button type="button" onClick={() => setRenovando({ id: o.id, medicamento: o.medicamento ?? "", medico: o.medico })} className="bpp-toque mt-0.5 inline-flex items-center min-h-11 px-2 -ml-2 text-xs font-bold underline">
                                   Pedir de novo
                                 </button>
                               ) : null}
@@ -406,7 +428,7 @@ export function DocumentosPainel({
                           <button
                             type="button"
                             onClick={() => setRenovando({ id: o.id, medicamento: o.medicamento ?? "", medico: o.medico })}
-                            className="bpp-toque mt-1.5 inline-flex items-center gap-1.5 rounded-full px-3 min-h-9 text-xs font-bold bg-sky-600/15 text-sky-900 dark:text-sky-100"
+                            className="bpp-toque mt-1.5 inline-flex items-center gap-1.5 rounded-full px-3.5 min-h-11 text-xs font-bold bg-sky-600/15 text-sky-900 dark:text-sky-100"
                           >
                             <RotateCcw className="w-3.5 h-3.5" aria-hidden /> Renovar receita
                           </button>

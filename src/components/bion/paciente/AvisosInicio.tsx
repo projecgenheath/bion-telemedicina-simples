@@ -42,6 +42,7 @@ export function AvisoMensagemNova({
   onAbrir,
 }: {
   mensagem: Mensagem;
+  /** Não lidas DESTA conversa — o "+N" é só deste médico (A3). */
   total: number;
   onAbrir: () => void;
 }) {

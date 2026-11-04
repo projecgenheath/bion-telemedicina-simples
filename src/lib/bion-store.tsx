@@ -84,6 +84,7 @@ export type {
 import { normalizarTipoAtendimento } from "./bion-tipos";
 import type { AceiteTermosPayload } from "./aceite-termos";
 import { limparRecusaTermos, mensagemRecusa } from "./aceite-termos";
+import { resolverFeito } from "./lembrete-ciclo";
 
 export {
   fmtCurta,
@@ -334,6 +335,9 @@ const mapTicket = (t: EstadoFresco["tickets"][number]): TicketSuporte => ({
 const mapLembrete = (l: EstadoFresco["lembretes"][number]): Lembrete => ({
   id: l.id, titulo: l.titulo, horario: l.horario,
   tipo: l.tipo as Lembrete["tipo"], frequencia: l.frequencia, feito: l.feito,
+  // F7: feitoEm só vem no wire depois da migração 20261104a — leitura
+  // estrutural para a árvore funcionar antes e depois dela.
+  feitoEm: (l as { feitoEm?: string | null }).feitoEm ?? undefined,
   medicamento: l.medicamento ?? undefined,
 });
 
@@ -1516,9 +1520,12 @@ export function BionProvider({ children }: { children: ReactNode }) {
     (id: string) => {
       const l = lembretesRef.current.find((x) => x.id === id);
       void (async () => {
+        // F7: alterna sobre o feito RESOLVIDO (o de ontem já vale como
+        // pendente hoje) — senão o primeiro toque do dia "desmarcaria"
+        // um feito que a tela já mostra como pendente.
         const d = await api<DeltaWire>(`/api/lembretes/${id}`, {
           method: "PATCH",
-          body: JSON.stringify({ feito: !(l?.feito ?? false) }),
+          body: JSON.stringify({ feito: !(l ? resolverFeito(l) : false) }),
         });
         if (d) aplicarDelta(d);
       })();

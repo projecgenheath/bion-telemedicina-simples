@@ -16,6 +16,7 @@ import { ROTULOS_ANAMNESE } from "@/components/bion/consulta/rotulos-anamnese";
 import { LIMITE_RESUMO_MEDICO } from "@/lib/resumo-medico";
 import type { ResumoClinicoSala } from "@/components/bion/consulta/useSalaConsulta";
 import { BotaoDitado } from "@/components/bion/BotaoDitado";
+import { ehCampoInternoColeta, rotuloCampoColeta, textoValorColeta } from "@/components/bion/medico/triagem-valor";
 
 type Role = "paciente" | "medico" | "admin";
 type Aba = "prontuario" | "anamnese" | "exames" | "chat" | "ia";
@@ -344,11 +345,11 @@ export function ConsultaPainelLateral({
                   {ROTULOS_ANAMNESE[etapa] ?? etapa}
                 </div>
                 {Object.entries(campos)
-                  .filter(([, v]) => v !== null && v !== undefined && v !== "" && !(Array.isArray(v) && v.length === 0))
+                  .filter(([campo, v]) => !ehCampoInternoColeta(campo) && v !== null && v !== undefined && v !== "" && !(Array.isArray(v) && v.length === 0))
                   .map(([campo, v]) => (
                     <div key={campo} className="text-slate-200">
-                      <span className="text-slate-300">{campo.replace(/_/g, " ")}: </span>
-                      {Array.isArray(v) ? v.join(", ") : String(v)}
+                      <span className="text-slate-300">{rotuloCampoColeta(campo)}: </span>
+                      {textoValorColeta(v)}
                     </div>
                   ))}
               </div>
