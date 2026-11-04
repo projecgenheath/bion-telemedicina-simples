@@ -111,13 +111,18 @@ function FormMedicao({
   enviando,
   rotuloBotao,
 }: {
-  campos: { id: string; rotulo: string; placeholder: string; min: number; max: number; passo: number }[];
-  /** M1: devolve true só quando o servidor confirmou — aí o formulário é limpo. */
+  campos: { id: string; rotulo: string; placeholder: string; min: number; max: number; passo: number; valorAtual?: number }[];
+  /** M1: devolve true só quando o servidor confirmou — aí o formulário volta aos valores atuais. */
   aoSalvar: (valores: number[]) => Promise<boolean>;
   enviando: boolean;
   rotuloBotao: string;
 }) {
-  const [valores, setValores] = useState<Record<string, string>>({});
+  // C21: campo com `valorAtual` NASCE preenchido com ele (o valor atual
+  // vale como valor) — antes era só placeholder e, para atualizar só o
+  // peso, o paciente era obrigado a redigitar a altura, e vice-versa.
+  const iniciais = () =>
+    Object.fromEntries(campos.map((c) => [c.id, c.valorAtual !== undefined ? String(c.valorAtual) : ""]));
+  const [valores, setValores] = useState<Record<string, string>>(iniciais);
 
   return (
     <div className="bp-glass p-5">
@@ -153,7 +158,7 @@ function FormMedicao({
             nums.push(n);
           }
           // M1: em falha os valores digitados continuam no formulário.
-          if (await aoSalvar(nums)) setValores({});
+          if (await aoSalvar(nums)) setValores(iniciais());
         }}
         disabled={enviando}
         className="bp-acao w-full mt-4 py-3 text-sm inline-flex items-center justify-center gap-2"
@@ -235,9 +240,12 @@ function DetalheImc({ onFechar }: { onFechar: () => void }) {
       )}
 
       <FormMedicao
+        // Remonta quando os valores atuais mudam (ex.: após salvar), para
+        // o formulário nascer com os atuais mais recentes.
+        key={`${pesoAtual ?? ""}|${alturaAtual ?? ""}`}
         campos={[
-          { id: "peso", rotulo: "Peso (kg)", placeholder: pesoAtual ? String(pesoAtual) : "70", min: 20, max: 400, passo: 0.1 },
-          { id: "altura", rotulo: "Altura (cm)", placeholder: alturaAtual ? String(alturaAtual) : "170", min: 50, max: 250, passo: 1 },
+          { id: "peso", rotulo: "Peso (kg)", placeholder: pesoAtual ? String(pesoAtual) : "70", min: 20, max: 400, passo: 0.1, valorAtual: pesoAtual },
+          { id: "altura", rotulo: "Altura (cm)", placeholder: alturaAtual ? String(alturaAtual) : "170", min: 50, max: 250, passo: 1, valorAtual: alturaAtual },
         ]}
         aoSalvar={async ([peso, altura]) => {
           // M1: sucesso só quando o servidor confirmou as duas medições.

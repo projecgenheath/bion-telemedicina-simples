@@ -5,7 +5,7 @@ import { useState } from "react";
 import { Award, BadgeCheck, Briefcase, CalendarCheck, Copy, Globe, ListChecks, Pencil, Sparkles, Star } from "lucide-react";
 import { toast } from "sonner";
 import { useBion, type Medico } from "@/lib/bion-store";
-import { completudePerfil, fmtBRL, iniciais, nomeAnonimo, resumoAvaliacoes } from "../metricas";
+import { completudePerfil, fmtBRL, iniciais, nomeAnonimo, primeiroItemFaltante, resumoAvaliacoes } from "../metricas";
 import { Campo, SheetMedico } from "../sheets/SheetMedico";
 import { useConfirmarSalvamento, type Confirmar } from "../sheets/useConfirmarSalvamento";
 import type { DadosMedico } from "../useDadosMedico";
@@ -45,10 +45,16 @@ export function TelaPerfilPublico({
   dados,
   onAgendar,
   confirmarBio,
+  onEditarFoto,
+  onEditarHorarios,
 }: {
   dados: DadosMedico;
   onAgendar: () => void;
   confirmarBio: Confirmar<string>;
+  /** "Completar perfil" quando falta a foto: o editor vive no painel Perfil. */
+  onEditarFoto?: () => void;
+  /** "Completar perfil" quando faltam horários: o editor é a Agenda. */
+  onEditarHorarios?: () => void;
 }) {
   const { medico, sessao, avaliacoes, atendimentos30d } = dados;
   // Mesmo cuidado que em TelaGestao: medico undefined durante o
@@ -59,6 +65,26 @@ export function TelaPerfilPublico({
   const [editandoPerfil, setEditandoPerfil] = useState(false);
   const resumo = resumoAvaliacoes(avaliacoes);
   const completude = medico ? completudePerfil(medico) : null;
+  // Nota ÚNICA na tela (cartão de estatísticas e cabeçalho das
+  // avaliações): a fonte é a lista carregada (resumo) — o agregado
+  // gravado (medico.avaliacao) só entra se a lista ainda não carregou —
+  // e o formato é sempre vírgula, como no restante do app (antes o
+  // cartão mostrava "4.8" e o cabeçalho, "4,8", de fontes diferentes).
+  const notaUnica = resumo.media ?? (medico && medico.numAvaliacoes > 0 ? medico.avaliacao : null);
+  const totalUnico = resumo.total > 0 ? resumo.total : (medico?.numAvaliacoes ?? 0);
+  const fmtNota = (n: number) => n.toFixed(1).replace(".", ",");
+  // "Completar perfil" abre o editor do PRIMEIRO item que falta (antes
+  // abria sempre a folha de formação, que não resolve foto, bio nem
+  // horários): bio → editor da bio; foto → painel Perfil; horários →
+  // Agenda; formação/experiência/idiomas/subespecialidades → a folha.
+  const completarPerfil = () => {
+    if (!medico) return;
+    const chave = primeiroItemFaltante(medico);
+    if (chave === "bio") setEditandoBio(true);
+    else if (chave === "foto" && onEditarFoto) onEditarFoto();
+    else if (chave === "horarios" && onEditarHorarios) onEditarHorarios();
+    else setEditandoPerfil(true);
+  };
   // Confirmação do salvamento dos campos do perfil (formação etc.): o hook
   // mora AQUI (componente que continua montado), como o confirmarBio do
   // MedicoApp — a folha só fecha quando o delta do servidor confirma.
@@ -103,7 +129,7 @@ export function TelaPerfilPublico({
             {completude.faltantes.length ? (
               <button
                 type="button"
-                onClick={() => setEditandoPerfil(true)}
+                onClick={completarPerfil}
                 className="text-xs font-bold text-sky-200"
               >
                 Completar perfil
@@ -148,11 +174,11 @@ export function TelaPerfilPublico({
             <dl className="mt-4 grid grid-cols-3 gap-2 text-center">
               <div className="rounded-2xl bg-white/10 py-2.5">
                 <dt className="text-[11px] font-bold uppercase tracking-wider text-white/80">Nota</dt>
-                <dd className="text-lg font-black">{medico.numAvaliacoes > 0 ? medico.avaliacao.toFixed(1) : "—"}</dd>
+                <dd className="text-lg font-black">{notaUnica !== null ? fmtNota(notaUnica) : "—"}</dd>
               </div>
               <div className="rounded-2xl bg-white/10 py-2.5">
                 <dt className="text-[11px] font-bold uppercase tracking-wider text-white/80">Avaliações</dt>
-                <dd className="text-lg font-black">{medico.numAvaliacoes}</dd>
+                <dd className="text-lg font-black">{totalUnico}</dd>
               </div>
               <div className="rounded-2xl bg-white/10 py-2.5">
                 <dt className="text-[11px] font-bold uppercase tracking-wider text-white/80">30 dias</dt>
@@ -251,7 +277,7 @@ export function TelaPerfilPublico({
             <div className="flex items-center justify-between gap-2 mb-2">
               <span className="text-xs font-bold uppercase tracking-wider text-white/80">Suas avaliações</span>
               <span className="text-xs font-bold text-white/80">
-                {resumo.total} recebida(s){resumo.media !== null ? ` · média ${resumo.media.toFixed(1).replace(".", ",")}` : ""}
+                {totalUnico} recebida(s){notaUnica !== null ? ` · média ${fmtNota(notaUnica)}` : ""}
               </span>
             </div>
             {avaliacoes.length === 0 ? (

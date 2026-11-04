@@ -23,10 +23,22 @@ export async function PATCH(
       return Response.json({ erro: "Lembrete não encontrado." }, { status: 404 });
     }
 
+    // F7: grava QUANDO foi marcado (feitoEm) — o feito vale para o dia da
+    // clínica em que foi marcado e volta a pendente no dia seguinte
+    // (regra pura em src/lib/lembrete-ciclo.ts). CAST DE ATIVAÇÃO: a
+    // coluna chega pela migração 20261104a (NÃO APLICADA) e o model
+    // Prisma só a ganha depois dela (convenção do repo: schema não anda
+    // na frente do banco). Se a coluna ainda não existe, o update com o
+    // campo extra falha — por isso ele vai separado e engolido: o toggle
+    // do `feito` (comportamento atual) nunca quebra por causa do F7.
     const atualizado = await db.lembrete.update({
       where: { id },
       data: { feito: !!body.feito },
     });
+    const feitoEm = body.feito ? new Date() : null;
+    await db.lembrete
+      .update({ where: { id }, data: { feitoEm } as Record<string, unknown> })
+      .catch(() => null);
     return ok({
       lembrete: {
         id: atualizado.id,
@@ -35,6 +47,7 @@ export async function PATCH(
         tipo: atualizado.tipo,
         frequencia: atualizado.frequencia,
         feito: atualizado.feito,
+        feitoEm: feitoEm ? feitoEm.toISOString() : null,
         medicamento: atualizado.medicamento,
       },
     });

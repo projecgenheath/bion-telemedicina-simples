@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { BadgeCheck, Ban, ShieldAlert, WifiOff } from "lucide-react";
 
@@ -27,9 +27,16 @@ export default function VerificarDocumentoPage() {
   const codigo = params.codigo as string;
   const [resultado, setResultado] = useState<ResultadoVerificacao | null>(null);
   const [carregando, setCarregando] = useState(true);
+  // Falha de REDE (sem sinal, servidor inacessível, resposta ilegível) NÃO é
+  // veredito sobre o documento: tem estado próprio, distinto de "código não
+  // reconhecido" — quem confere uma receita sem internet não pode receber
+  // "trate como não verificado" por causa da própria conexão.
+  const [falhaConexao, setFalhaConexao] = useState(false);
 
-  useEffect(() => {
+  const verificar = useCallback(() => {
     if (!codigo) return;
+    setCarregando(true);
+    setFalhaConexao(false);
     fetch(`/api/publico/verificar/${encodeURIComponent(codigo)}`)
       .then(async (r) => {
         // 429 (muitas tentativas) e 503 (sem segredo) não são "código inválido".
@@ -37,9 +44,13 @@ export default function VerificarDocumentoPage() {
         return (await r.json()) as ResultadoVerificacao;
       })
       .then((j: ResultadoVerificacao) => setResultado(j))
-      .catch(() => setResultado({ valido: false }))
+      .catch(() => setFalhaConexao(true))
       .finally(() => setCarregando(false));
   }, [codigo]);
+
+  useEffect(() => {
+    verificar();
+  }, [verificar]);
 
   return (
     <div className="min-h-screen bg-[#0a1f44] text-white flex items-center justify-center p-6">
@@ -59,6 +70,23 @@ export default function VerificarDocumentoPage() {
                 A verificação de documentos está indisponível neste ambiente no momento. Isso não
                 significa que o documento seja inválido. Tente de novo mais tarde.
               </p>
+            </div>
+          ) : falhaConexao ? (
+            <div>
+              <p className="flex items-center gap-2 text-lg font-bold text-amber-300">
+                <WifiOff className="w-6 h-6" /> Não foi possível verificar agora
+              </p>
+              <p className="text-sm text-white/85 mt-3">
+                A verificação não respondeu — verifique sua conexão e tente de novo. Isso não
+                significa que o documento seja inválido: nenhum veredito foi emitido.
+              </p>
+              <button
+                type="button"
+                onClick={verificar}
+                className="mt-5 rounded-full bg-white px-5 py-2.5 text-sm font-bold text-[#0a1f44] hover:bg-white/85 transition"
+              >
+                Tentar de novo
+              </button>
             </div>
           ) : resultado?.cancelado ? (
             <div>

@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { exigirPapel } from "@/lib/server/auth";
 import { aplicarSideEffects } from "@/lib/server/dados";
 import {ok, falha, lerCorpoJson, corpoObjeto, textoDoCorpo} from "@/lib/server/http";
-import { detalhesAuditoria, FREQUENCIAS_LEMBRETE, HORA } from "@/lib/saude-paciente";
+import { detalhesAuditoria, HORA, normalizarFrequenciaLembrete } from "@/lib/saude-paciente";
 import { limitarAsync, resposta429 } from "@/lib/server/rate-limit";
 
 /** Criação de lembretes de saúde (apenas pacientes).
@@ -33,17 +33,23 @@ export async function POST(req: NextRequest) {
       return Response.json({ erro: "Informe o título do lembrete." }, { status: 400 });
     }
 
-    // B16 (servidor): horário e frequência validados com as MESMAS regras da
-    // rota irmã paciente/medicamentos/[id]/lembrete (HORA estrita HH:MM
-    // 00:00–23:59 e FREQUENCIAS_LEMBRETE) — antes "99:99" era gravado cru e
-    // nunca disparava. Frequência fora da lista cai no padrão, como lá.
+    // B16 (servidor): horário validado com a MESMA regra da rota irmã
+    // paciente/medicamentos/[id]/lembrete (HORA estrita HH:MM 00:00–23:59)
+    // — antes "99:99" era gravado cru e nunca disparava.
+    // F2 (auditoria de errinhos): a frequência NÃO cai mais no padrão em
+    // silêncio. normalizarFrequenciaLembrete aceita as canônicas e os
+    // sinônimos sem perda ("Segunda a Sexta" → "Dias úteis") e DEVOLVE ERRO
+    // para intervalo ("A cada 12 horas") e para texto desconhecido — o que
+    // a tela anuncia é o que o banco grava.
     const horario = body.horario?.trim() || "08:00";
     if (!HORA.test(horario)) {
       return Response.json({ erro: "Informe o horário no formato HH:MM." }, { status: 400 });
     }
-    const frequencia = (FREQUENCIAS_LEMBRETE as readonly string[]).includes(body.frequencia ?? "")
-      ? (body.frequencia as string)
-      : "Todos os dias";
+    const freqNorm = normalizarFrequenciaLembrete(body.frequencia);
+    if (!freqNorm.ok) {
+      return Response.json({ erro: freqNorm.erro }, { status: 400 });
+    }
+    const frequencia = freqNorm.frequencia;
 
     const lembrete = await db.lembrete.create({
       data: {
@@ -84,6 +90,8 @@ export async function POST(req: NextRequest) {
         tipo: lembrete.tipo,
         frequencia: lembrete.frequencia,
         feito: lembrete.feito,
+        // F7: nasce pendente, sem marcação (a coluna chega na migração 20261104a).
+        feitoEm: null,
         medicamento: lembrete.medicamento,
       },
       ...(efeitos.notificacoes.length ? { notificacoes: efeitos.notificacoes } : {}),

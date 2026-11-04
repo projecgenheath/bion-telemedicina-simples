@@ -124,11 +124,14 @@ export function AgendamentosModulo() {
         ) : (
           <>
             <div className="flex lg:grid lg:grid-cols-5 gap-2 lg:gap-3 overflow-x-auto -mx-1 px-1 pb-1 snap-x" role="list" aria-label="Resumo da agenda">
-              <Kpi rotulo="Hoje" valor={resumo.hoje} tom="sinal" />
-              <Kpi rotulo="Confirmadas" valor={resumo.confirmadas} tom="ok" />
-              <Kpi rotulo="Aguardando" valor={resumo.aguardando} tom={resumo.aguardando ? "atencao" : undefined} titulo="Aguardando reagendamento" />
-              <Kpi rotulo="Concluídas" valor={resumo.concluidas} />
-              <Kpi rotulo="Canceladas" valor={resumo.canceladas} tom={resumo.canceladas ? "critico" : undefined} />
+              {/* Escopos rotulados: "Hoje" é só o dia de hoje (sem canceladas);
+                  os demais somam TODAS as consultas carregadas, de qualquer
+                  data — sem o "(total)", a fileira lia tudo como "de hoje". */}
+              <Kpi rotulo="Hoje" valor={resumo.hoje} tom="sinal" titulo="Só as consultas de hoje, sem as canceladas" />
+              <Kpi rotulo="Confirmadas (total)" valor={resumo.confirmadas} tom="ok" titulo="Todas as carregadas, de qualquer data" />
+              <Kpi rotulo="Aguardando (total)" valor={resumo.aguardando} tom={resumo.aguardando ? "atencao" : undefined} titulo="Aguardando reagendamento — todas as carregadas, de qualquer data" />
+              <Kpi rotulo="Concluídas (total)" valor={resumo.concluidas} titulo="Todas as carregadas, de qualquer data" />
+              <Kpi rotulo="Canceladas (total)" valor={resumo.canceladas} tom={resumo.canceladas ? "critico" : undefined} titulo="Todas as carregadas, de qualquer data" />
             </div>
             {consultas.length >= LIMITE_BOOTSTRAP ? (
               <div className="ba-aviso" data-tom="atencao">

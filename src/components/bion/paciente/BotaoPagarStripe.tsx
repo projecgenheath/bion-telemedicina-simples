@@ -27,9 +27,21 @@ export function BotaoPagarStripe({
   const [abrindo, setAbrindo] = useState(false);
   useEffect(() => {
     let vivo = true;
-    checkoutStripeAtivo().then((a) => vivo && setAtivo(a));
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    checkoutStripeAtivo().then((a) => {
+      if (!vivo) return;
+      setAtivo(a);
+      if (!a) {
+        // `false` pode ser falha de rede transitória (o cliente não cacheia
+        // falha): tenta de novo uma vez, para o botão não sumir pela sessão.
+        timer = setTimeout(() => {
+          checkoutStripeAtivo().then((b) => vivo && setAtivo(b));
+        }, 4000);
+      }
+    });
     return () => {
       vivo = false;
+      if (timer) clearTimeout(timer);
     };
   }, []);
   const alvo: AlvoCheckout | null = remarcacaoId

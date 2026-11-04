@@ -24,6 +24,7 @@ import {
 import { useBion } from "@/lib/bion-store";
 import { calcularImc, formatarAltura, formatarPeso, lerAlturaCm, lerPesoKg } from "@/lib/medidas-paciente";
 import { formatarCpfExibicao } from "@/lib/cpf";
+import { iniciaisNome } from "@/lib/iniciais";
 import { formatarDataNascimento, idadeDeNascimento, type ComDataNascimento } from "@/lib/idade";
 import { LinhaConsultaPagamento } from "./LinhaConsultaPagamento";
 import { EstadoVazio } from "./EstadosPaciente";
@@ -46,13 +47,9 @@ const FOTO_ORIGINAL_MAX_BYTES = 15 * 1024 * 1024;
 /** Quantos itens cada grupo mostra antes do "Ver tudo". */
 const PREVIA = 3;
 
-const INICIAIS = (nome: string) =>
-  nome
-    .split(" ")
-    .filter((p) => p.length > 1)
-    .slice(0, 2)
-    .map((p) => p[0]?.toUpperCase())
-    .join("") || "?";
+// B2: iniciais = primeira + última palavra, sem partículas ("de" não é
+// inicial) — regra compartilhada em lib/iniciais.
+const INICIAIS = iniciaisNome;
 
 function Grupo({ titulo, acao, children }: { titulo: string; acao?: ReactNode; children: ReactNode }) {
   return (
@@ -144,7 +141,11 @@ export function PerfilPainel({
   const inputFotoRef = useRef<HTMLInputElement>(null);
   // M4: data de nascimento ("YYYY-MM-DD" do payload; o tipo do store não a declara).
   const dataNascimento = (pacientePerfil as (typeof pacientePerfil & ComDataNascimento) | undefined)?.dataNascimento ?? "";
-  const idadeExibida = (dataNascimento ? idadeDeNascimento(dataNascimento) : null) ?? pacientePerfil?.idade ?? 0;
+  // B1: idade só existe se alguma fonte devolver um número de verdade —
+  // nascimento inválido/futuro (idadeDeNascimento = null) e perfil sem
+  // idade NÃO viram "0 anos" sob o nome.
+  const idadeCalculada = dataNascimento ? idadeDeNascimento(dataNascimento) : null;
+  const idadeExibida = idadeCalculada ?? (typeof pacientePerfil?.idade === "number" && pacientePerfil.idade > 0 ? pacientePerfil.idade : null);
   const [enviandoFoto, setEnviandoFoto] = useState(false);
   // Tema lido do <html> (segue o celular quando não há escolha salva).
   const tema = useTemaHtml();
@@ -233,7 +234,7 @@ export function PerfilPainel({
     }
   };
 
-  const idadeTexto = dataNascimento || idadeExibida > 0 ? `${idadeExibida} ${idadeExibida === 1 ? "ano" : "anos"}` : "";
+  const idadeTexto = idadeExibida !== null ? `${idadeExibida} ${idadeExibida === 1 ? "ano" : "anos"}` : "";
   const segmento = (ativo: boolean) =>
     `bpp-toque min-h-11 rounded-full text-sm font-semibold inline-flex items-center justify-center gap-2 ${
       ativo ? "bp-acao" : "text-bion-ink dark:text-bion-paper"
@@ -286,7 +287,7 @@ export function PerfilPainel({
       <section aria-label="Cartão de saúde" className="bpp-cartao-saude rounded-3xl p-5">
         <div className="flex items-center justify-between gap-2">
           <span className="text-xs font-bold uppercase tracking-wider text-white/80">Cartão de saúde</span>
-          <button type="button" onClick={() => onEditar("tipoSanguineo")} className="bpp-toque min-h-11 -my-2 -mr-2 px-3 rounded-full text-xs font-bold text-white inline-flex items-center gap-1.5 hover:bg-white/10" aria-label="Editar cartão de saúde">
+          <button type="button" onClick={() => onEditar("tipoSanguineo")} className="bpp-toque min-h-11 -my-2 -mr-2 px-3 rounded-full text-xs font-bold text-white inline-flex items-center gap-1.5 hover:bg-white/10" aria-label="Editar tipo sanguíneo, alergias e comorbidades">
             <Pencil className="w-3.5 h-3.5" aria-hidden /> Editar
           </button>
         </div>
@@ -327,7 +328,7 @@ export function PerfilPainel({
         <LinhaDado icone={<Phone className="w-4 h-4" />} rotulo="Telefone" valor={pacientePerfil?.telefone} onClick={() => onEditar("telefone")} />
         <LinhaDado icone={<Briefcase className="w-4 h-4" />} rotulo="Profissão" valor={pacientePerfil?.profissao} onClick={() => onEditar("profissao")} />
         <LinhaDado icone={<HeartCrack className="w-4 h-4" />} rotulo="Estado civil" valor={pacientePerfil?.estadoCivil} onClick={() => onEditar("estadoCivil")} />
-        <LinhaDado icone={<Users className="w-4 h-4" />} rotulo="Sexo" valor={pacientePerfil?.genero} />
+        <LinhaDado icone={<Users className="w-4 h-4" />} rotulo="Sexo" valor={pacientePerfil?.genero} onClick={() => onEditar("genero")} />
       </Grupo>
 
       {/* Consultas e pagamentos: um card só (antes eram dois com as mesmas consultas) */}
@@ -368,10 +369,10 @@ export function PerfilPainel({
             <div className="text-xs font-semibold text-bion-ink/75 dark:text-bion-paper/75 mb-2" id="rotulo-modo">Modo do app</div>
             <div className="grid grid-cols-2 gap-1.5 rounded-full bg-bion-ink/6 dark:bg-white/8 p-1" role="group" aria-labelledby="rotulo-modo">
               <button type="button" onClick={() => aplicarTema("claro")} aria-pressed={tema === "claro"} className={segmento(tema === "claro")}>
-                <Sun className="w-4 h-4" aria-hidden /> Clean
+                <Sun className="w-4 h-4" aria-hidden /> Claro
               </button>
               <button type="button" onClick={() => aplicarTema("escuro")} aria-pressed={tema === "escuro"} className={segmento(tema === "escuro")}>
-                <Moon className="w-4 h-4" aria-hidden /> Dark
+                <Moon className="w-4 h-4" aria-hidden /> Escuro
               </button>
             </div>
           </div>

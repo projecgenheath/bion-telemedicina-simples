@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { useBion } from "@/lib/bion-store";
 import { ETAPAS_ANAMNESE, type RespostaAnamnese } from "./chat-bion-types";
 import { AvisoTriagemSemIA, ConsentimentoIA } from "./ConsentimentoIA";
+import { acaoRodapeTriagem } from "./triagem-rodape";
 
 const ATALHOS: Record<string, string[]> = {
   identificacao: ["Está certo", "Preciso atualizar peso", "Preciso atualizar telefone"],
@@ -301,7 +302,15 @@ export function TriagemSlides({
           irPara(indice + (dx < 0 ? 1 : -1));
         }}
       >
-        {visiveis.map((item, i) => (
+        {visiveis.map((item, i) => {
+          const acaoRodape = acaoRodapeTriagem({
+            pronta,
+            indiceCard: i,
+            totalEtapas: ETAPAS_ANAMNESE.length,
+            indiceServidor: idxServidor,
+            respondida: !!respondidos[item.id],
+          });
+          return (
           <article
             key={item.id}
             className={`snap-center shrink-0 w-[86vw] max-w-md h-full overflow-y-auto overscroll-contain rounded-3xl border p-5 flex flex-col ${
@@ -355,11 +364,11 @@ export function TriagemSlides({
               <button type="button" disabled={i === 0} onClick={() => irPara(i - 1)} className="rounded-full p-2.5 bpp-sheet-chip disabled:opacity-30" aria-label="Anterior">
                 <ArrowLeft className="w-4 h-4" />
               </button>
-              {pronta || i === ETAPAS_ANAMNESE.length - 1 ? (
+              {acaoRodape === "enviar-medico" ? (
                 <button type="button" onClick={() => void concluir()} className="flex-1 rounded-2xl py-3 text-sm font-bold bg-emerald-400 text-zinc-950">
                   Enviar ao médico
                 </button>
-              ) : i === idxServidor ? (
+              ) : acaoRodape === "continuar" ? (
                 <>
                   <button type="button" onClick={() => void enviar("Pode pular esta etapa.")} className="text-xs font-semibold bpp-sheet-suave px-2">
                     Pular
@@ -378,7 +387,8 @@ export function TriagemSlides({
               </button>
             </div>
           </article>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

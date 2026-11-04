@@ -55,3 +55,34 @@ export function mostrarAcaoLaudo(
 ): boolean {
   return intencao === "laudo" && mensagens.length === 1 && primeiraEhContextoLaudo(mensagens);
 }
+
+/* ------------------------------------------------------------------ */
+/* F1 (auditoria de errinhos): o wizard de NOVO agendamento sequestrava */
+/* qualquer mensagem com "consulta/marcar/horário" — inclusive gestão   */
+/* da consulta que a pessoa JÁ tem ("quero remarcar minha consulta",    */
+/* "como cancelo?", "minha consulta é que horas?"), que caía na         */
+/* escolha de especialidade e a pergunta nunca era respondida.          */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Contexto de GESTÃO da consulta existente: remarcar, cancelar, saber
+ * dia/hora ou preço da consulta. Essas mensagens NÃO abrem o wizard —
+ * vão para a IA, que responde com o caminho real no app (card da
+ * consulta → Remarcar/Cancelar; ver promptPaciente).
+ */
+export function ehGestaoConsulta(texto: string): boolean {
+  const t = texto.toLowerCase();
+  return /remarcar|remarca|desmarcar|cancel|minha consulta|minhas consultas|que horas|a que horas|quando (é|eh|sera|será) |quanto custa|quanto (é|eh) a consulta|preço da consulta|valor da consulta|consulta (já )?(marcada|agendada)/.test(
+    t,
+  );
+}
+
+/**
+ * A mensagem deve abrir o wizard de NOVO agendamento? Só com vocabulário
+ * de agendamento E sem contexto de gestão (a gestão tem precedência:
+ * "quero remarcar" contém "marcar", mas é gestão).
+ */
+export function deveAbrirWizardAgendamento(texto: string): boolean {
+  if (ehGestaoConsulta(texto)) return false;
+  return /agend|marcar|marcacao|marcação|consulta|disponibilidade|horario|horário/.test(texto.toLowerCase());
+}

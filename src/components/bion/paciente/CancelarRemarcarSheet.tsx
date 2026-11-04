@@ -120,9 +120,11 @@ export function CancelarRemarcarSheet({ consulta, acao, medico, consultas, onFec
   // Dias inteiros bloqueados pelo médico saem da agenda (inclusive no
   // "remarcar sem custo" de aguardando_reagendamento). O servidor recusa
   // esses dias com 409 "O médico não atende neste dia." de qualquer forma.
-  const { bloqueados, recarregar: recarregarBloqueios } = useDiasBloqueados(
-    acao === "remarcar" ? medico?.id : null,
-  );
+  const {
+    bloqueados,
+    carregando: carregandoBloqueios,
+    recarregar: recarregarBloqueios,
+  } = useDiasBloqueados(acao === "remarcar" ? medico?.id : null);
   const agendaLivre = useMemo(
     () =>
       acao === "remarcar"
@@ -317,7 +319,11 @@ export function CancelarRemarcarSheet({ consulta, acao, medico, consultas, onFec
 
         {acao === "remarcar" ? (
           permitido ? (
-            agendaLivre.length === 0 ? (
+            carregandoBloqueios ? (
+              // Sem os dias bloqueados, a agenda ofereceria dias que o
+              // servidor recusa com 409 — segura a interação até carregar.
+              <EstadoCarregando texto="Consultando a agenda do médico…" superficie="janela" className="mt-4" />
+            ) : agendaLivre.length === 0 ? (
               <p className="mt-4 text-sm text-amber-800 dark:text-amber-200">Não há vaga na agenda deste médico nos próximos 14 dias.</p>
             ) : (
               <>
@@ -397,6 +403,17 @@ export function CancelarRemarcarSheet({ consulta, acao, medico, consultas, onFec
           </div>
         ) : null}
 
+        {pagamentoIndisponivel ? (
+          <div className="mt-4 rounded-2xl border border-amber-400/30 bg-amber-500/10 p-4 text-sm" role="note">
+            <p className="font-bold text-amber-900 dark:text-amber-100">O pagamento da multa não está disponível nesta tela.</p>
+            <p className="bpp-sheet-suave mt-1">
+              Para confirmar a nova data, é preciso pagar antes a multa de {fmtCentavos(multaRemarcar)} — e esse
+              pagamento não pode ser feito por aqui. Sua consulta continua em {consulta.data} às {consulta.hora}.
+              Para remarcar mesmo assim, fale com o suporte (Perfil → Suporte).
+            </p>
+          </div>
+        ) : null}
+
         <div className="flex gap-2 mt-5">
           <button
             type="button"
@@ -412,6 +429,7 @@ export function CancelarRemarcarSheet({ consulta, acao, medico, consultas, onFec
               disabled={
                 !prontoParaConfirmar ||
                 pagamentoIndisponivel ||
+                carregandoBloqueios ||
                 (exigePagamento && !metodo) ||
                 !dataEscolhida ||
                 !horaEscolhida ||
@@ -422,7 +440,7 @@ export function CancelarRemarcarSheet({ consulta, acao, medico, consultas, onFec
             >
               {enviando ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
               {pagamentoIndisponivel
-                ? "Pagamento da multa pelo app em breve"
+                ? "Pagamento indisponível nesta tela"
                 : exigePagamento
                   ? `Pagar multa de ${fmtCentavos(multaRemarcar)}`
                   : "Confirmar novo horário"}

@@ -44,7 +44,17 @@ export function contagemConsulta(ts: number, agora: number = Date.now()): Contag
     const m = Math.floor((falta % HORA) / MIN);
     return { texto: m && h < 3 ? `Hoje, em ${h} h ${m} min` : `Hoje, em ${h} h`, urgente: false, agora: false };
   }
-  if (dias === 1) return { texto: "Amanhã", urgente: false, agora: false };
+  if (dias === 1) {
+    // A5: faltando menos de 3 h, "Amanhã" sozinho engana — às 23:00, uma
+    // consulta às 00:30 é "amanhã" no calendário, mas falta 1 h 30. O ramo
+    // de horas/minutos vem antes do de dia de calendário.
+    if (falta < 3 * HORA) {
+      const h = Math.floor(falta / HORA);
+      const m = Math.floor((falta % HORA) / MIN);
+      return { texto: m ? `Em ${h} h ${m} min` : `Em ${h} h`, urgente: false, agora: false };
+    }
+    return { texto: "Amanhã", urgente: false, agora: false };
+  }
   return { texto: `Em ${dias} dias`, urgente: false, agora: false };
 }
 

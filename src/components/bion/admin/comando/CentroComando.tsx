@@ -9,6 +9,7 @@ import {
   ChevronRight,
   HeartPulse,
   Inbox,
+  Info,
   LifeBuoy,
   RefreshCw,
   Stethoscope,
@@ -25,6 +26,11 @@ import { especialidades30d, resumoHoje, resumoMedicos, serieDiaria } from "../me
 import { avisosRecebimento, estadoConsulta, type Estado } from "../rotulos";
 import { brl, dataLonga, hora, saudacao } from "../tempo";
 import "../admin.css";
+
+/** Teto do bootstrap do admin (server/dados.ts: take 500 nas consultas).
+ *  Mesmo limite e mesmo aviso do AgendamentosModulo: sem ele, os números
+ *  abaixo subcontam em silêncio quando a carga trunca. */
+const LIMITE_BOOTSTRAP = 500;
 
 /** Ordem de exibição dos avisos de recebimento (mesmos rótulos de avisosRecebimento). */
 const AVISOS_PIX: Estado[] = [
@@ -84,6 +90,13 @@ export function CentroComando() {
         </button>
       </header>
 
+      {consultas.length >= LIMITE_BOOTSTRAP ? (
+        <div className="ba-aviso" data-tom="atencao">
+          <Info className="w-4 h-4 shrink-0 mt-0.5" aria-hidden />
+          <p>O servidor carrega no máximo {LIMITE_BOOTSTRAP} consultas para o admin. Pode haver consultas fora dessa carga que não entram nos números abaixo.</p>
+        </div>
+      ) : null}
+
       {/* ---------------- Agora ---------------- */}
       <section aria-labelledby="cc-agora" className="space-y-3">
         <h2 id="cc-agora" className="ba-rotulo">Agora</h2>
@@ -92,7 +105,11 @@ export function CentroComando() {
             icone={CalendarDays}
             rotulo="Consultas hoje"
             valor={hoje.total - hoje.canceladas}
-            detalhe={`${hoje.agendadas} a realizar · ${hoje.concluidas} concluídas${hoje.canceladas ? ` · ${hoje.canceladas} canceladas` : ""}`}
+            // O detalhe precisa SOMAR o valor: agendadas + concluídas +
+            // reagendar + faltas = total − canceladas (as canceladas ficam
+            // fora do número e do detalhe; antes reagendar/faltas sumiam
+            // da conta e a soma não fechava).
+            detalhe={`${hoje.agendadas} a realizar · ${hoje.concluidas} concluídas${hoje.reagendar ? ` · ${hoje.reagendar} aguardando reagendamento` : ""}${hoje.faltas ? ` · ${hoje.faltas} ${hoje.faltas === 1 ? "falta do paciente" : "faltas do paciente"}` : ""}`}
             onAbrir={() => ir("admin-agendamentos")}
           />
           <KpiAdmin
@@ -215,7 +232,7 @@ export function CentroComando() {
             titulo="Chamados"
             icone={LifeBuoy}
             tom={chamadosAbertos ? "atencao" : undefined}
-            acao={<AbrirModulo onClick={() => ir("suporte", chamadosAbertos ? "status=aberto" : undefined)} rotulo="Abrir Chamados" />}
+            acao={<AbrirModulo onClick={() => ir("suporte", chamadosAbertos ? "status=nao_resolvidos" : undefined)} rotulo="Abrir Chamados" />}
           >
             <div className="ba-numero text-3xl">{chamadosAbertos}</div>
             <p className="text-xs ba-texto-2">{chamadosAbertos === 1 ? "aberto ou em atendimento" : "abertos ou em atendimento"}</p>

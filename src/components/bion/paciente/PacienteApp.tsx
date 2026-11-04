@@ -318,6 +318,11 @@ export function PacienteApp() {
     () => mensagens.filter((m) => !m.minha && !m.lida).sort((a, b) => b.ts - a.ts)[0],
     [mensagens],
   );
+  // A3: o "+N" do aviso é da conversa daquele médico — o total global
+  // (naoLidasMensagens) é só do selo da navegação/Documentos.
+  const naoLidasDoRemetente = ultimaNaoLida
+    ? mensagens.filter((m) => !m.minha && !m.lida && m.deId === ultimaNaoLida.deId).length
+    : 0;
   const abrirConversa = (medicoId: string) => {
     setConversaAtiva(medicoId);
     marcarConversaLida(medicoId);
@@ -563,7 +568,7 @@ export function PacienteApp() {
 
             {/* Aviso de mensagem nova do médico (some quando a conversa é aberta) */}
             {ultimaNaoLida ? (
-              <AvisoMensagemNova mensagem={ultimaNaoLida} total={naoLidasMensagens} onAbrir={() => abrirConversa(ultimaNaoLida.deId)} />
+              <AvisoMensagemNova mensagem={ultimaNaoLida} total={naoLidasDoRemetente} onAbrir={() => abrirConversa(ultimaNaoLida.deId)} />
             ) : null}
 
             {/* Cards: aguardando reagendamento (motivo no cartão) — remarcar ou reembolso integral, sem multa */}
@@ -576,14 +581,20 @@ export function PacienteApp() {
               />
             ))}
 
-            {/* Cards: nova data reservada aguardando pagamento da multa */}
-            {comRemarcacaoPendente.map((c) => (
-              <CardRemarcacaoPendente
-                key={c.id}
-                consulta={c}
-                onContinuar={() => setModalConsulta({ id: c.id, acao: "remarcar" })}
-              />
-            ))}
+            {/* Cards: nova data reservada aguardando pagamento da multa.
+                A1: a consulta que já é a "próxima" NÃO ganha este segundo
+                card — ela aparece no card principal com a etiqueta
+                "Remarcação pendente", e o modal de remarcar dela cobre
+                continuar o pagamento e desistir. */}
+            {comRemarcacaoPendente
+              .filter((c) => c.id !== proxima?.id)
+              .map((c) => (
+                <CardRemarcacaoPendente
+                  key={c.id}
+                  consulta={c}
+                  onContinuar={() => setModalConsulta({ id: c.id, acao: "remarcar" })}
+                />
+              ))}
 
             {/* Card: próxima consulta */}
             {proxima ? (
@@ -744,7 +755,7 @@ export function PacienteApp() {
                     <span className="font-black text-base">BION IA</span>
                     <span className="text-xs font-bold uppercase tracking-wider bg-white/15 rounded-full px-2 py-0.5">Seu agendamento</span>
                   </span>
-                  <span className="block text-xs text-white/85 mt-0.5">Online agora · responde na hora</span>
+                  <span className="block text-xs text-white/85 mt-0.5">Online agora</span>
                 </span>
               </div>
               <p className="relative text-sm text-white/90 mt-3 leading-relaxed">
@@ -1131,7 +1142,7 @@ function CardAguardandoReagendamento({
           <button
             type="button"
             onClick={onReembolso}
-            className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-bold bg-emerald-600/15 text-emerald-800 dark:text-emerald-200"
+            className="inline-flex items-center gap-1.5 rounded-full px-4 min-h-11 text-xs font-bold bg-emerald-600/15 text-emerald-800 dark:text-emerald-200"
           >
             <Undo2 className="w-3.5 h-3.5" /> Reembolso integral
           </button>
@@ -1142,9 +1153,31 @@ function CardAguardandoReagendamento({
 }
 
 function CardReembolso({ consulta }: { consulta: Consulta }) {
-  const { previa } = usePreviaCancelamento(consulta.id, consulta.status);
+  const { previa, erro, recarregar } = usePreviaCancelamento(consulta.id, consulta.status);
   const r = previa?.reembolso;
-  if (!r) return null;
+  if (!r) {
+    // A2: se a busca da prévia falhar, o card NÃO some em silêncio — a
+    // consulta cancelada e paga continua visível, com erro e "tentar de novo".
+    if (erro) {
+      return (
+        <div className="bp-glass mt-3 w-full px-5 py-4" role="alert">
+          <span className="block text-xs font-bold uppercase tracking-wider opacity-80">Consulta cancelada</span>
+          <span className="block text-sm font-bold mt-0.5">
+            {consulta.especialidade} · {consulta.data} {consulta.hora}
+          </span>
+          <p className="text-xs opacity-80 mt-2">Não foi possível carregar o status do reembolso desta consulta.</p>
+          <button
+            type="button"
+            onClick={recarregar}
+            className="bpp-toque mt-2 inline-flex items-center min-h-11 px-4 rounded-full text-xs font-bold bg-bion-ink/8 dark:bg-white/10"
+          >
+            Tentar de novo
+          </button>
+        </div>
+      );
+    }
+    return null;
+  }
   // B37: com multa descontada, o rótulo diz "parcial", nunca "integral".
   const rotulo = rotuloReembolso(r.status, r.multaCentavos);
   const cor =
@@ -1227,7 +1260,7 @@ function CardRemarcacaoPendente({ consulta, onContinuar }: { consulta: Consulta;
           type="button"
           onClick={() => void desistir()}
           disabled={enviando}
-          className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-bold bg-red-600/10 text-red-800 dark:bg-red-400/15 dark:text-red-300 disabled:opacity-40"
+          className="inline-flex items-center gap-1.5 rounded-full px-4 min-h-11 text-xs font-bold bg-red-600/10 text-red-800 dark:bg-red-400/15 dark:text-red-300 disabled:opacity-40"
         >
           <X className="w-3.5 h-3.5" /> {confirmando ? "Confirmar desistência" : "Desistir"}
         </button>
@@ -1268,7 +1301,7 @@ function CardFalta({ consulta, onAbrir }: { consulta: Consulta; onAbrir: () => v
           <button
             type="button"
             onClick={onAbrir}
-            className="mt-3 inline-flex items-center gap-1 rounded-full px-2.5 py-1.5 text-xs font-bold bg-bion-ink/8 dark:bg-white/10"
+            className="mt-3 inline-flex items-center gap-1 rounded-full px-3.5 min-h-11 text-xs font-bold bg-bion-ink/8 dark:bg-white/10"
           >
             <FileText className="w-3 h-3" /> Ver detalhes
           </button>

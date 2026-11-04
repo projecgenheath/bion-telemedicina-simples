@@ -132,6 +132,47 @@ export function validarMedicamento(
 }
 
 export const FREQUENCIAS_LEMBRETE = ["Todos os dias", "Dias úteis", "Semanal"] as const;
+export type FrequenciaLembrete = (typeof FREQUENCIAS_LEMBRETE)[number];
+
+/**
+ * F2 (auditoria de errinhos): a tela de Lembretes oferecia "Segunda a Sexta",
+ * "Semanalmente", "A cada 12 horas" e "A cada 8 horas", e a API convertia
+ * TUDO em silêncio para "Todos os dias" — o toast anunciava a frequência
+ * escolhida e o banco gravava outra. Regra nova: NENHUMA conversão silenciosa.
+ * - Canônicas passam como estão;
+ * - sinônimos sem perda ("Segunda a Sexta", "Semanalmente") são mapeados de
+ *   forma explícita para a canônica de MESMO significado;
+ * - intervalo ("A cada N horas") NÃO cabe num lembrete só → erro claro (a
+ *   tela cria um lembrete por horário derivado, todos "Todos os dias");
+ * - qualquer outra coisa → erro (nada de cair no padrão em silêncio).
+ */
+export function normalizarFrequenciaLembrete(
+  bruta: string | null | undefined,
+): { ok: true; frequencia: FrequenciaLembrete } | { ok: false; erro: string } {
+  const original = (bruta ?? "").trim();
+  if (!original) return { ok: true, frequencia: "Todos os dias" };
+  if ((FREQUENCIAS_LEMBRETE as readonly string[]).includes(original)) {
+    return { ok: true, frequencia: original as FrequenciaLembrete };
+  }
+  const chave = original
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+  if (chave === "segunda a sexta" || chave === "dias uteis") return { ok: true, frequencia: "Dias úteis" };
+  if (chave === "semanalmente" || chave === "semanal") return { ok: true, frequencia: "Semanal" };
+  if (chave === "todos os dias") return { ok: true, frequencia: "Todos os dias" };
+  if (/^a cada \d{1,2} horas?$/.test(chave)) {
+    return {
+      ok: false,
+      erro: "Frequência por intervalo não cabe em um lembrete só: crie um lembrete para cada horário do dia.",
+    };
+  }
+  return {
+    ok: false,
+    erro: `Frequência não reconhecida: "${original}". Use "Todos os dias", "Dias úteis" ou "Semanal".`,
+  };
+}
 
 /* ------------------------------------------------------------------ */
 /* Avisos do medicamento: frequência estruturada → horários → lembretes */

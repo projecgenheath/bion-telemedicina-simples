@@ -117,7 +117,7 @@ export function NavegacaoPaciente({
               onClick={() => irSecao(i)}
               aria-label={`Ir para ${s.rotulo}`}
               aria-current={secao === i ? "true" : undefined}
-              className="px-[3px] py-1"
+              className="min-w-11 min-h-11 inline-flex items-center justify-center"
             >
               <span
                 className={`block w-1.5 rounded-full transition-all ${
@@ -147,7 +147,7 @@ export function NavegacaoPaciente({
               onClick={() => onPainel(idx)}
               aria-label={rotuloAria}
               aria-current={painel === idx ? "page" : undefined}
-              className="relative p-1.5"
+              className="relative min-w-11 min-h-11 inline-flex items-center justify-center"
             >
               <span
                 className={`block h-2 rounded-full transition-all ${

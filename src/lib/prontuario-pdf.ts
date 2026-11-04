@@ -148,7 +148,11 @@ export function gerarProntuarioPDF(opts: {
     if (d.medicoCrm) linha("CRM", d.medicoCrm);
     if (d.medicamento) linha("Medicamento", d.medicamento);
     if (d.posologia) linha("Posologia", d.posologia);
-    if (d.duracao) linha("Duração", d.duracao);
+    // "Duração" é a duração do tratamento (receita) ou do afastamento
+    // (atestado). Pedido de exame não tem duração — a sala gravava a
+    // URGÊNCIA nesse campo e o prontuário saía com "Duração: Rotina";
+    // a origem foi corrigida e aqui o exame nunca imprime a linha.
+    if (d.duracao && (d.tipo === "receita" || d.tipo === "atestado")) linha("Duração", d.duracao);
     // P3 (auditoria de melhorias): CID gravado no documento passa a constar
     // também na via do prontuário (antes nenhum PDF o exibia).
     if (d.cid) linha("CID", d.cid);

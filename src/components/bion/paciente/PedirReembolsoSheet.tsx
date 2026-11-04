@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useVoltarFecha } from "./useVoltarFecha";
 import { useFocoDialogo } from "./useFocoDialogo";
 import { useArrastarFechar } from "./useArrastarFechar";
@@ -36,6 +36,16 @@ export function PedirReembolsoSheet({ consulta, onFechar }: { consulta: Consulta
   const valida = tamanho >= JUSTIFICATIVA_MIN && tamanho <= JUSTIFICATIVA_MAX;
   const prazo = consulta.podePedirAte ?? null;
   const prazoAberto = !!prazo && Date.now() < new Date(prazo).getTime();
+
+  // Sem prazo no retrato local (o servidor calcula `podePedirAte` da falta),
+  // o formulário nasceria travado e MUDO. Tenta uma vez recarregar o estado
+  // ao abrir: se o retrato estava velho, o prazo aparece e o formulário abre.
+  const tentouRecarregar = useRef(false);
+  useEffect(() => {
+    if (temPedido || prazo || tentouRecarregar.current) return;
+    tentouRecarregar.current = true;
+    void recarregarEstado();
+  }, [temPedido, prazo, recarregarEstado]);
 
   const enviar = async () => {
     if (!valida || !prazoAberto || enviando) return;
@@ -99,11 +109,17 @@ export function PedirReembolsoSheet({ consulta, onFechar }: { consulta: Consulta
                 {consulta.valor ? ` (${consulta.valor})` : ""}, aprovado na hora e sem etapa de análise;
                 a devolução do valor é processada em seguida.
               </p>
-              {prazo ? (
+              {!prazo ? (
+                <p className="mt-2 text-xs font-semibold text-amber-800 dark:text-amber-200">
+                  Não encontramos o prazo desta consulta para liberar o pedido — por isso o formulário está travado.
+                  Feche e abra de novo para atualizar; se continuar assim, fale com o suporte (Perfil → Suporte)
+                  informando a data da consulta.
+                </p>
+              ) : (
                 <p className="mt-2 text-xs bpp-sheet-suave">
                   {prazoAberto ? `Prazo para pedir: até ${fmtTicketData(prazo)} (horário de Brasília).` : "O prazo de 7 dias para pedir reembolso já terminou."}
                 </p>
-              ) : null}
+              )}
             </div>
 
             <label htmlFor="justificativa-reembolso" className="block text-xs font-bold mt-4 mb-2 bpp-sheet-suave">
