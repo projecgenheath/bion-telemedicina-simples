@@ -97,3 +97,27 @@ export function calcularImc(pesoKg: number | null | undefined, alturaCm: number 
   if (kg === null || cm === null) return null;
   return kg / Math.pow(cm / 100, 2);
 }
+
+/* ------------------------- Faixas do IMC (OMS) ------------------------- */
+
+export type FaixaImc = "abaixo" | "normal" | "sobrepeso" | "obesidade";
+
+/**
+ * Faixa do IMC pelas faixas usuais da OMS (adultos): abaixo de 18,5 =
+ * abaixo do peso; 18,5–24,9 = peso normal; 25–29,9 = sobrepeso;
+ * 30 ou mais = obesidade. É a regra que o detalhe do IMC já exibia —
+ * centralizada aqui para card e detalhe nunca divergirem.
+ */
+export function faixaImc(imc: number): FaixaImc {
+  if (imc < 18.5) return "abaixo";
+  if (imc < 25) return "normal";
+  if (imc < 30) return "sobrepeso";
+  return "obesidade";
+}
+
+export const ROTULO_FAIXA_IMC: Record<FaixaImc, string> = {
+  abaixo: "Abaixo do peso",
+  normal: "Peso normal",
+  sobrepeso: "Sobrepeso",
+  obesidade: "Obesidade",
+};

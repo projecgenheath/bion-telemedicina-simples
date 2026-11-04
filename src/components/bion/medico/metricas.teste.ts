@@ -5,6 +5,7 @@
  * (também com TZ=UTC / TZ=Asia/Tokyo: o resultado não pode depender do fuso.)
  */
 import type { Avaliacao, Consulta, Medico } from "@/lib/bion-tipos";
+import { instanteFusoClinica } from "@/lib/bion-tipos";
 import {
   agendaDoDia,
   completudePerfil,
@@ -30,6 +31,7 @@ import {
   reservasNoDia,
   resumoAvaliacoes,
   rotuloStatusMedico,
+  saudacao,
   somarDiasISO,
   textoReservaPendente,
   variacaoPct,
@@ -476,6 +478,22 @@ igual("pontos sem resposta", pontosReceita(null), []);
   igual("vigia: no horário vigia", deveVigiarPresenca(inicio, inicio), true);
   igual("vigia: 2 h depois vigia (fechamento)", deveVigiarPresenca(inicio, inicio + 120 * 60_000), true);
   igual("vigia: 2 h e 1 min depois não vigia", deveVigiarPresenca(inicio, inicio + 121 * 60_000), false);
+}
+
+/* Saudação por horário (fuso da clínica): fronteiras da tabela única.
+   Instantes montados com instanteFusoClinica (hora de parede SP), logo o
+   resultado não depende do fuso do processo. */
+{
+  const em = (hora: number, minuto: number) => instanteFusoClinica(2026, 9, 4, hora, minuto); // 04/10/2026 em SP
+  igual("saudação 00:00", saudacao(em(0, 0)), "Boa madrugada");
+  igual("saudação 00:42 (caso do bug)", saudacao(em(0, 42)), "Boa madrugada");
+  igual("saudação 04:59", saudacao(em(4, 59)), "Boa madrugada");
+  igual("saudação 05:00", saudacao(em(5, 0)), "Bom dia");
+  igual("saudação 11:59", saudacao(em(11, 59)), "Bom dia");
+  igual("saudação 12:00", saudacao(em(12, 0)), "Boa tarde");
+  igual("saudação 17:59", saudacao(em(17, 59)), "Boa tarde");
+  igual("saudação 18:00", saudacao(em(18, 0)), "Boa noite");
+  igual("saudação 23:59", saudacao(em(23, 59)), "Boa noite");
 }
 
 console.log(`\n${ok} ok, ${falhas} falha(s)`);
