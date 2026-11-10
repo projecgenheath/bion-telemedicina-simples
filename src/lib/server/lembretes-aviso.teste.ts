@@ -1,7 +1,8 @@
 /**
- * Job de avisos de lembrete: reproduz o PrismaClientValidationError de
- * /api/cron/lembretes (54 vezes, 04/11 a 10/11) e cobre o conserto
- * (leitura/gravação por SQL cru, sem prisma.lembrete.update).
+ * Job de avisos de lembrete, com o model Prisma completo (feitoEm,
+ * ultimoDisparoEm, diaSemana — 20261110a). O #170 gravava por SQL cru
+ * porque o campo estava fora do model e o update gerava
+ * PrismaClientValidationError (54x, 04/11 a 10/11). Agora o update é tipado.
  * Rodar: bun --conditions=react-server test ./src/lib/server/lembretes-aviso.teste.ts
  */
 import { Prisma } from "@prisma/client";
@@ -19,33 +20,17 @@ function igual(nome: string, obtido: unknown, esperado: unknown) {
   }
 }
 
-// Causa do PrismaClientValidationError em produção (54x, 04/11 a 10/11,
-// log: "[Lembretes] falha ao disparar aviso { erro: PrismaClientValidationError }"):
-// o job gravava ultimoDisparoEm com prisma.lembrete.update, mas o campo
-// não existe no model (de propósito, enquanto a 20261104a não está no
-// schema). O client/engine rejeita o argumento. Sem um banco o client 6
-// nem chega a validar (falha de conexão antes); aqui reproduzimos a
-// rejeição pelo DMMF — a mesma regra que gera o ValidationError — e
-// abaixo cobrimos o conserto (SQL cru).
 {
   const campos = Prisma.dmmf.datamodel.models.find((m) => m.name === "Lembrete")!.fields.map((f) => f.name);
-  igual("ultimoDisparoEm fora do model Prisma (causa do erro)", campos.includes("ultimoDisparoEm"), false);
-  igual("feitoEm também fora do model", campos.includes("feitoEm"), false);
-  const conhecidos = new Set(campos);
-  const data = { ultimoDisparoEm: new Date("2026-11-04T14:00:00.000Z") } as Record<string, unknown>;
-  const desconhecidos = Object.keys(data).filter((k) => !conhecidos.has(k));
-  let nome = "sem erro";
-  let msg = "";
-  if (desconhecidos.length) {
-    const err = new Prisma.PrismaClientValidationError(
-      `Invalid \`prisma.lembrete.update()\` invocation:\n\nUnknown argument \`${desconhecidos[0]}\`. Available options are marked with ?.`,
-      { clientVersion: Prisma.prismaVersion.client },
-    );
-    nome = err.name;
-    msg = err.message;
-  }
-  igual("reproduz PrismaClientValidationError do cron", nome, "PrismaClientValidationError");
-  igual("mensagem cita ultimoDisparoEm", msg.includes("ultimoDisparoEm"), true);
+  igual("model declara feitoEm", campos.includes("feitoEm"), true);
+  igual("model declara ultimoDisparoEm", campos.includes("ultimoDisparoEm"), true);
+  igual("model declara diaSemana", campos.includes("diaSemana"), true);
+  const feito = Prisma.dmmf.datamodel.models.find((m) => m.name === "Lembrete")!.fields.find((f) => f.name === "feitoEm");
+  const ultimo = Prisma.dmmf.datamodel.models.find((m) => m.name === "Lembrete")!.fields.find((f) => f.name === "ultimoDisparoEm");
+  const dia = Prisma.dmmf.datamodel.models.find((m) => m.name === "Lembrete")!.fields.find((f) => f.name === "diaSemana");
+  igual("feitoEm é DateTime anulável", [feito?.type, feito?.isRequired], ["DateTime", false]);
+  igual("ultimoDisparoEm é DateTime anulável", [ultimo?.type, ultimo?.isRequired], ["DateTime", false]);
+  igual("diaSemana é Int anulável", [dia?.type, dia?.isRequired], ["Int", false]);
 }
 
 // 04/11/2026 11:00 em America/Sao_Paulo = 14:00 UTC.
@@ -57,21 +42,22 @@ const base = {
   horario: "11:00",
   tipo: "Medicação",
   frequencia: "Todos os dias",
+  feitoEm: null as Date | null,
+  ultimoDisparoEm: null as Date | null,
 };
 
-function bancoMock(opts: {
-  extras?: { id: string; feitoEm: Date | null; ultimoDisparoEm: Date | null }[];
-  lembretes?: typeof base[];
-}) {
-  const executes: unknown[][] = [];
+function bancoMock(opts: { lembretes?: typeof base[] } = {}) {
+  const updates: unknown[] = [];
   const criadas: unknown[] = [];
   return {
-    $queryRaw: async () => opts.extras ?? [{ id: "l1", feitoEm: null, ultimoDisparoEm: null }],
-    $executeRaw: async (...args: unknown[]) => {
-      executes.push(args.slice(1));
-      return 1;
+    $queryRaw: async () => [{ n: 2 }],
+    lembrete: {
+      findMany: async () => opts.lembretes ?? [base],
+      update: async (args: unknown) => {
+        updates.push(args);
+        return {};
+      },
     },
-    lembrete: { findMany: async () => opts.lembretes ?? [base] },
     medicamentoEmUso: { findMany: async () => [] },
     notificacao: {
       create: async (args: unknown) => {
@@ -79,19 +65,19 @@ function bancoMock(opts: {
         return { id: "n1" };
       },
     },
-    executes,
+    updates,
     criadas,
   };
 }
 
 {
-  const b = bancoMock({});
+  const b = bancoMock();
   const r = await rodarAvisosLembretes(AGORA, {
     colunasExistem: async () => true,
     enviarPush: async () => 1,
     db: b as unknown as BancoAvisos,
   });
-  igual("dispara o devido e grava via executeRaw", r, {
+  igual("dispara o devido e grava com update tipado", r, {
     ativo: true,
     examinados: 1,
     disparados: 1,
@@ -100,25 +86,27 @@ function bancoMock(opts: {
     erros: 0,
     incompleto: false,
   });
-  igual("um executeRaw (não prisma.update)", b.executes.length, 1);
+  igual("um prisma.lembrete.update", b.updates.length, 1);
+  const data = (b.updates[0] as { data?: { ultimoDisparoEm?: Date } }).data;
+  igual("update manda ultimoDisparoEm", data?.ultimoDisparoEm?.toISOString(), AGORA.toISOString());
   igual("notificação criada", b.criadas.length, 1);
 }
 
 {
-  const b = bancoMock({ extras: [{ id: "l1", feitoEm: null, ultimoDisparoEm: AGORA }] });
+  const b = bancoMock({ lembretes: [{ ...base, ultimoDisparoEm: AGORA }] });
   const r = await rodarAvisosLembretes(AGORA, {
     colunasExistem: async () => true,
     enviarPush: async () => 1,
     db: b as unknown as BancoAvisos,
   });
-  igual("já disparado nesta ocorrência: não repete (campo veio do SQL cru)", r.disparados, 0);
-  igual("sem executeRaw na repetição", b.executes.length, 0);
+  igual("já disparado nesta ocorrência: não repete", r.disparados, 0);
+  igual("sem update na repetição", b.updates.length, 0);
 }
 
 {
   const r = await rodarAvisosLembretes(AGORA, {
     colunasExistem: async () => false,
-    db: bancoMock({}) as unknown as BancoAvisos,
+    db: bancoMock() as unknown as BancoAvisos,
   });
   igual("sem colunas: inativo", r, {
     ativo: false,
