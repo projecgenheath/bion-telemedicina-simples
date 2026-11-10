@@ -38,13 +38,13 @@ export function TelaListaCompleta({ lista, onFechar, onAgendar }: { lista: Lista
   return (
     <div ref={raizRef} className="bpp-sobreposicao absolute inset-0 z-50 overflow-y-auto bp-coluna" role="dialog" aria-modal="true" aria-label={titulo}>
       <div className="min-h-full bp-painel">
-        <div className="bpp-surgir mx-auto w-full max-w-xl px-5 bp-safe-top pb-16">
+        <div className="bion-surgir mx-auto w-full max-w-xl px-5 bp-safe-top pb-16">
           <div className="flex items-start justify-between gap-4 pt-2">
             <div>
               <h2 className="text-xl font-bold text-bion-ink dark:text-bion-paper">{titulo}</h2>
               <p className="text-sm text-bion-ink/75 dark:text-bion-paper/75">{descricao}</p>
             </div>
-            <button type="button" onClick={onFechar} aria-label="Fechar lista" className="bpp-toque mt-1 w-11 h-11 inline-flex items-center justify-center rounded-full bp-glass text-bion-ink dark:text-bion-paper shrink-0">
+            <button type="button" onClick={onFechar} aria-label="Fechar lista" className="bion-toque mt-1 w-11 h-11 inline-flex items-center justify-center rounded-full bp-glass text-bion-ink dark:text-bion-paper shrink-0">
               <X className="w-5 h-5" />
             </button>
           </div>

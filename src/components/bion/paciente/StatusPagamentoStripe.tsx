@@ -55,7 +55,7 @@ export function StatusPagamentoStripe({ volta }: { volta: "sucesso" | "cancelado
       <p className="text-sm opacity-80 leading-relaxed">{texto}</p>
       <div className="mt-5 flex flex-col gap-2 items-center">
         {!estado?.pago && volta === "cancelado" && consultaId ? <BotaoPagarStripe consultaId={consultaId} /> : null}
-        <Link href="/consultas" className="bpp-toque min-h-11 inline-flex items-center text-sm font-bold underline">
+        <Link href="/consultas" className="bion-toque min-h-11 inline-flex items-center text-sm font-bold underline">
           Ver minhas consultas
         </Link>
       </div>

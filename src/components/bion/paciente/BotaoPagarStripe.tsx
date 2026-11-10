@@ -69,7 +69,7 @@ export function BotaoPagarStripe({
       type="button"
       onClick={pagar}
       disabled={abrindo}
-      className={`bp-acao bpp-toque inline-flex items-center justify-center gap-2 min-h-11 px-4 text-sm disabled:opacity-60 ${className}`}
+      className={`bp-acao bion-toque inline-flex items-center justify-center gap-2 min-h-11 px-4 text-sm disabled:opacity-60 ${className}`}
     >
       <CreditCard className="w-4 h-4" aria-hidden /> {abrindo ? "Abrindo pagamento…" : rotulo}
     </button>

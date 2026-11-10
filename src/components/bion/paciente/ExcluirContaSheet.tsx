@@ -173,7 +173,7 @@ export function ExcluirContaSheet({ onFechar, onExcluida }: { onFechar: () => vo
             type="button"
             onClick={registrado?.tipo === "falha" ? onExcluida : fechar}
             disabled={enviando}
-            className="bpp-toque flex-1 py-3 rounded-xl border bpp-sheet-borda text-sm font-semibold disabled:opacity-40"
+            className="bion-toque flex-1 py-3 rounded-xl border bpp-sheet-borda text-sm font-semibold disabled:opacity-40"
           >
             {registrado?.tipo === "falha" ? "Ir para o login" : registrado ? "Fechar" : "Voltar"}
           </button>
@@ -181,7 +181,7 @@ export function ExcluirContaSheet({ onFechar, onExcluida }: { onFechar: () => vo
             type="button"
             onClick={() => void excluir()}
             disabled={!pode}
-            className="bpp-toque flex-1 py-3 rounded-xl bg-red-700 text-white text-sm font-bold disabled:opacity-40 inline-flex items-center justify-center gap-2"
+            className="bion-toque flex-1 py-3 rounded-xl bg-red-700 text-white text-sm font-bold disabled:opacity-40 inline-flex items-center justify-center gap-2"
           >
             {enviando ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden /> : null}
             {bloqueada ? "Registrar pedido de exclusão" : "Excluir conta"}

@@ -1,7 +1,7 @@
 "use client";
 
 import { AvisoAtivarToque } from "@/components/bion/AvisoAtivarToque";
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import {
   Activity,
@@ -62,7 +62,7 @@ import { AvisoMensagemNova, ContagemConsulta } from "./AvisosInicio";
 import { acaoSalaPaciente, botaoPrincipalProxima, type AcaoSala } from "./entrada-sala";
 import { useRelogioSala } from "./useRelogioSala";
 import { SALA_ABRE_ANTES_MIN, salaAbertaEm } from "@/lib/janela-sala";
-import { EstadoVazio } from "./EstadosPaciente";
+import { Esqueleto, EstadoVazio } from "./EstadosPaciente";
 import { PedidosMedicao } from "./PedidosMedicao";
 import { MedicamentosEmUso } from "./MedicamentosEmUso";
 import type { IntencaoChat } from "./chat-bion-intencao";
@@ -598,7 +598,7 @@ export function PacienteApp() {
 
             {/* Card: próxima consulta */}
             {proxima ? (
-              <div className="bp-glass bpp-surgir p-5 w-full">
+              <div className="bp-glass bion-surgir p-5 w-full">
                 <CabecalhoProxima
                   podeEntrar={acaoProxima?.tipo === "entrar"}
                   onEntrar={() => entrarSala(proxima)}
@@ -635,7 +635,7 @@ export function PacienteApp() {
                 />
               </div>
             ) : (
-              <button type="button" onClick={() => setChatAberto(true)} className="bpp-toque bp-glass p-5 text-left w-full">
+              <button type="button" onClick={() => setChatAberto(true)} className="bion-toque bion-surgir bp-glass p-5 text-left w-full">
                 <div className="text-xs font-bold uppercase tracking-wider text-bion-ink/75 dark:text-bion-paper/75 mb-3">
                   Consultas
                 </div>
@@ -650,7 +650,7 @@ export function PacienteApp() {
               <button
                 type="button"
                 onClick={() => setListaConsultasAberta((v) => !v)}
-                className="bpp-toque bp-glass mt-3 w-full px-5 py-3.5 flex items-center justify-between text-left"
+                className="bion-toque bp-glass mt-3 w-full px-5 py-3.5 flex items-center justify-between text-left"
                 aria-expanded={listaConsultasAberta}
               >
                 <span>
@@ -664,7 +664,7 @@ export function PacienteApp() {
             ) : null}
 
             {listaConsultasAberta ? (
-              <div className="mt-2 space-y-2">
+              <div className="bion-surgir-lista mt-2 space-y-2">
                 {proximas.map((c) => {
                   const st = statusTriagem(c.id);
                   const acao = acaoSala(c);
@@ -684,7 +684,7 @@ export function PacienteApp() {
                     <div key={c.id} className="bp-glass p-4">
                       {/* Fora da janela o item não leva à sala. */}
                       {acao.tipo === "entrar" ? (
-                        <button type="button" onClick={() => entrarSala(c)} className="text-left w-full">
+                        <button type="button" onClick={() => entrarSala(c)} className="bion-toque text-left w-full">
                           {resumo}
                         </button>
                       ) : (
@@ -692,7 +692,7 @@ export function PacienteApp() {
                       )}
                       <div className="mt-3 flex flex-wrap gap-2">
                         {acao.tipo === "entrar" ? (
-                          <button type="button" onClick={() => entrarSala(c)} className="inline-flex items-center gap-1.5 rounded-full px-3 min-h-11 text-xs font-bold bg-emerald-700 text-white">
+                          <button type="button" onClick={() => entrarSala(c)} className="bion-toque inline-flex items-center gap-1.5 rounded-full px-3 min-h-11 text-xs font-bold bg-emerald-700 text-white">
                             <Video className="w-3.5 h-3.5" aria-hidden /> Entrar na sala
                           </button>
                         ) : acao.tipo === "aguardar" ? (
@@ -707,21 +707,21 @@ export function PacienteApp() {
                           </button>
                         ) : null}
                         {st !== "feita" && janelaTriagem(c) ? (
-                          <button type="button" onClick={() => abrirTriagem(c.id)} className="inline-flex items-center gap-1.5 rounded-full px-3 min-h-11 text-xs font-bold bg-sky-600/15">
+                          <button type="button" onClick={() => abrirTriagem(c.id)} className="bion-toque inline-flex items-center gap-1.5 rounded-full px-3 min-h-11 text-xs font-bold bg-sky-600/15">
                             <Sparkles className="w-3.5 h-3.5" /> {st === "andamento" ? "Continuar triagem" : "Fazer triagem"}
                           </button>
                         ) : null}
                         <button
                           type="button"
                           onClick={() => setModalConsulta({ id: c.id, acao: "remarcar" })}
-                          className="inline-flex items-center gap-1.5 rounded-full px-3 min-h-11 text-xs font-bold bg-bion-ink/8 dark:bg-white/10"
+                          className="bion-toque inline-flex items-center gap-1.5 rounded-full px-3 min-h-11 text-xs font-bold bg-bion-ink/8 dark:bg-white/10"
                         >
                           <RefreshCw className="w-3.5 h-3.5" /> Remarcar
                         </button>
                         <button
                           type="button"
                           onClick={() => setModalConsulta({ id: c.id, acao: "cancelar" })}
-                          className="inline-flex items-center gap-1.5 rounded-full px-3 min-h-11 text-xs font-bold bg-red-600/10 text-red-800 dark:bg-red-400/15 dark:text-red-300"
+                          className="bion-toque inline-flex items-center gap-1.5 rounded-full px-3 min-h-11 text-xs font-bold bg-red-600/10 text-red-800 dark:bg-red-400/15 dark:text-red-300"
                         >
                           <X className="w-3.5 h-3.5" /> Cancelar
                         </button>
@@ -743,7 +743,7 @@ export function PacienteApp() {
             ))}
 
             {/* Cartão único da BION IA: agendar (principal) + perguntar */}
-            <div className="bpp-cartao-ia mt-4 w-full rounded-3xl p-5 text-white relative overflow-hidden bg-gradient-to-br from-bion-deep via-bion-sea to-bion-ink">
+            <div style={{ "--bion-i": 1 } as CSSProperties} className="bion-surgir bpp-cartao-ia mt-4 w-full rounded-3xl p-5 text-white relative overflow-hidden bg-gradient-to-br from-bion-deep via-bion-sea to-bion-ink">
               <span aria-hidden className="absolute -right-8 -top-10 w-40 h-40 rounded-full bg-white/10 blur-2xl" />
               <span aria-hidden className="absolute right-10 -bottom-10 w-28 h-28 rounded-full bg-sky-300/15 blur-2xl" />
               <div className="relative flex items-center gap-3">
@@ -764,14 +764,14 @@ export function PacienteApp() {
               <button
                 type="button"
                 onClick={() => setChatAberto(true)}
-                className="bpp-toque relative mt-4 w-full inline-flex items-center justify-center gap-2 rounded-full bg-white text-bion-ink text-sm font-bold px-5 py-3.5 shadow-md hover:shadow-lg"
+                className="bion-toque relative mt-4 w-full inline-flex items-center justify-center gap-2 rounded-full bg-white text-bion-ink text-sm font-bold px-5 py-3.5 shadow-md hover:shadow-lg"
               >
                 <Stethoscope className="w-4 h-4" aria-hidden /> Agendar consulta agora
               </button>
               <button
                 type="button"
                 onClick={() => setChatAberto(true)}
-                className="relative mt-2 w-full flex items-center gap-3 rounded-full bg-white/12 border border-white/25 pl-4 pr-1.5 py-1.5 text-left transition hover:bg-white/18"
+                className="bion-toque relative mt-2 w-full flex items-center gap-3 rounded-full bg-white/12 border border-white/25 pl-4 pr-1.5 py-1.5 text-left transition hover:bg-white/18"
                 aria-label="Perguntar algo à BION IA"
               >
                 <Search className="w-4 h-4 text-white/85 shrink-0" aria-hidden />
@@ -795,7 +795,7 @@ export function PacienteApp() {
               Toque em um card para ver o histórico e atualizar.
             </p>
 
-            <div className="bpp-grade flex flex-col gap-4">
+            <div className="bion-surgir-lista bpp-grade flex flex-col gap-4">
               {/* Pedidos de medição do médico (só aparece se houver pendente) */}
               <PedidosMedicao />
 
@@ -806,7 +806,7 @@ export function PacienteApp() {
               {/* IMC */}
               <button type="button"
                 onClick={() => setDetalhe("imc")}
-                className="bpp-toque bp-glass p-5 w-full text-left"
+                className="bion-toque bp-glass p-5 w-full text-left"
                 aria-label={`IMC: ${imcAtual ? `${imcAtual.toFixed(1)}, ${ROTULO_FAIXA_IMC[faixaImc(imcAtual)]}` : "sem dados"}. ${serieImc.length > 1 ? "Ver gráfico de evolução e atualizar peso e altura" : "Abrir histórico e atualizar peso e altura"}`}
               >
                 <div className="flex items-center justify-between mb-1">
@@ -859,7 +859,7 @@ export function PacienteApp() {
               {/* Pressão arterial */}
               <button type="button"
                 onClick={() => setDetalhe("pa")}
-                className="bpp-toque bp-glass p-5 w-full text-left"
+                className="bion-toque bp-glass p-5 w-full text-left"
                 aria-label={`Pressão arterial: ${pas.at(-1) ? `${pas.at(-1)!.valor1}/${pas.at(-1)!.valor2 ?? "—"}, última medição em ${rotuloCurto(pas.at(-1)!.criadoEm)}` : "sem dados"}. Abrir histórico e registrar`}
               >
                 <div className="flex items-center justify-between mb-1">
@@ -908,7 +908,7 @@ export function PacienteApp() {
 
             <button type="button"
               onClick={() => abrirChat("laudo")}
-              className="bpp-toque bp-glass-marinho w-full p-4 flex items-center gap-3 text-left mb-5"
+              className="bion-toque bp-glass-marinho w-full p-4 flex items-center gap-3 text-left mb-5"
               aria-label="Enviar novo laudo à BION IA"
             >
               <span className="w-11 h-11 rounded-2xl bg-white/15 inline-flex items-center justify-center shrink-0">
@@ -929,7 +929,7 @@ export function PacienteApp() {
                 texto="Envie um laudo pela BION IA e os resultados aparecem aqui automaticamente."
               />
             ) : (
-              <div className="bpp-grade flex flex-col gap-4">
+              <div className="bion-surgir-lista bpp-grade flex flex-col gap-4">
                 {examesAgrupados.map(([titulo, lista]) => {
                   const ultimo = lista.at(-1)!;
                   // M33: a ordem de `itens` vem da extração por IA e pode
@@ -1153,9 +1153,21 @@ function CardAguardandoReagendamento({
 }
 
 function CardReembolso({ consulta }: { consulta: Consulta }) {
-  const { previa, erro, recarregar } = usePreviaCancelamento(consulta.id, consulta.status);
+  const { previa, carregando, erro, recarregar } = usePreviaCancelamento(consulta.id, consulta.status);
   const r = previa?.reembolso;
   if (!r) {
+    // Enquanto a prévia carrega, um esqueleto ocupa o lugar do card (antes
+    // ficava em branco e o card "pulava" na tela ao chegar).
+    if (carregando && !erro) {
+      return (
+        <div className="bp-glass mt-3 w-full px-5 py-4" role="status" aria-live="polite">
+          <span className="sr-only">Carregando o status do reembolso…</span>
+          <Esqueleto className="h-3 w-1/3" />
+          <Esqueleto className="h-4 w-2/3 mt-2" />
+          <Esqueleto className="h-3 w-1/2 mt-3" />
+        </div>
+      );
+    }
     // A2: se a busca da prévia falhar, o card NÃO some em silêncio — a
     // consulta cancelada e paga continua visível, com erro e "tentar de novo".
     if (erro) {
@@ -1169,7 +1181,7 @@ function CardReembolso({ consulta }: { consulta: Consulta }) {
           <button
             type="button"
             onClick={recarregar}
-            className="bpp-toque mt-2 inline-flex items-center min-h-11 px-4 rounded-full text-xs font-bold bg-bion-ink/8 dark:bg-white/10"
+            className="bion-toque mt-2 inline-flex items-center min-h-11 px-4 rounded-full text-xs font-bold bg-bion-ink/8 dark:bg-white/10"
           >
             Tentar de novo
           </button>
@@ -1342,7 +1354,7 @@ function CabecalhoProxima({
 }) {
   if (!podeEntrar) return <div className="w-full">{children}</div>;
   return (
-    <button type="button" onClick={onEntrar} className="bpp-toque text-left w-full rounded-2xl" aria-label={rotulo}>
+    <button type="button" onClick={onEntrar} className="bion-toque text-left w-full rounded-2xl" aria-label={rotulo}>
       {children}
     </button>
   );

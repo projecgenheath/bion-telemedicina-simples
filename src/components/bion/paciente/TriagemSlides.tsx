@@ -246,7 +246,7 @@ export function TriagemSlides({
             {medico} · {quando}
           </div>
         </div>
-        <button type="button" onClick={() => void pularTudo()} disabled={enviando} className="bpp-toque min-h-11 rounded-full px-3 text-xs font-semibold bpp-sheet-suave disabled:opacity-40"
+        <button type="button" onClick={() => void pularTudo()} disabled={enviando} className="bion-toque min-h-11 rounded-full px-3 text-xs font-semibold bpp-sheet-suave disabled:opacity-40"
           aria-label={confirmandoPulo ? "Confirmar: pular a triagem inteira" : "Pular a triagem"}
         >
           {confirmandoPulo ? "Pular tudo?" : "Pular"}
