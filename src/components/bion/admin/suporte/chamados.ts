@@ -33,7 +33,7 @@ export function rotuloCategoriaChamado(c: string): string {
   return CATEGORIAS_CHAMADO.find((x) => x.id === c)?.rotulo ?? (c ? c.charAt(0).toUpperCase() + c.slice(1) : "—");
 }
 
-export const rotuloPerfilChamado = (p: string) => (p === "medico" ? "Médico" : "Paciente");
+export const rotuloPerfilChamado = (p: string) => (p === "medico" ? "Médico" : p === "admin" ? "Administrador" : "Paciente");
 
 /** Tamanho máximo da resposta (o servidor só faz trim; limite de bom senso para a tela). */
 export const RESPOSTA_MAX = 4000;
@@ -153,6 +153,8 @@ export function pessoaDoChamado(
   medicos: { id: string; nome: string }[],
   pacientes: { id: string; nome: string }[],
 ): { destino: string | null; homonimo: boolean } {
+  // Chamado aberto por admin não tem ficha de médico nem de paciente.
+  if (t.perfil === "admin") return { destino: null, homonimo: false };
   const lista = t.perfil === "medico" ? medicos : pacientes;
   const alvo = normalizar(t.usuario);
   const achados = lista.filter((p) => normalizar(p.nome) === alvo);

@@ -24,6 +24,11 @@ export function documentoCancelado(d: { status?: string | null } | null | undefi
   return d?.status === STATUS_DOCUMENTO_CANCELADO;
 }
 
+/** Só o emissor cancela ou renova. Sem medicoId no wire, não oferece a ação. */
+export function documentoEmitidoPor(d: { medicoId?: string | null } | null | undefined, medicoId: string | null | undefined): boolean {
+  return Boolean(medicoId && d?.medicoId && d.medicoId === medicoId);
+}
+
 /** Motivo opcional: texto livre, aparado e limitado; vazio/não-string = null. */
 export function lerMotivo(v: unknown): string | null {
   return typeof v === "string" && v.trim() ? v.trim().slice(0, MOTIVO_MAX) : null;

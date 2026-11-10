@@ -136,12 +136,10 @@ export function DetalheConsulta({ id, agora, modoInicial = "detalhe", onFechar }
                 </dd>
               </>
             ) : null}
-            {c.motivoConsulta ? (
-              <>
-                <dt className="ba-texto-2">Motivo</dt>
-                <dd className="break-words">{c.motivoConsulta}</dd>
-              </>
-            ) : null}
+            {/* Decisão do Alisson (09/11): o motivo informado pelo paciente é
+                conteúdo clínico e não chega mais ao admin (consultaParaPapel). */}
+            <dt className="ba-texto-2">Motivo</dt>
+            <dd className="ba-texto-2">Conteúdo clínico restrito ao médico e ao paciente</dd>
             {c.motivoCancelamento ? (
               <>
                 <dt className="ba-texto-2">Cancelamento</dt>
