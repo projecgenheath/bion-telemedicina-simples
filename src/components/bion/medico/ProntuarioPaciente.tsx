@@ -8,6 +8,8 @@ import { gerarDocumentoPDF, gerarReceitaCombinadaPDF } from "@/lib/receita-pdf";
 import { agruparEmissoes } from "@/lib/documentos-agrupados";
 import { rotuloStatusMedico } from "./metricas";
 import { documentoCancelado, documentoEmitidoPor } from "./cancelar-documento";
+import { AvisoConsentimentoHistorico, CartaoHistoricoClinico } from "./cartao-historico-clinico";
+import { itensDeOutrosProfissionais, lerHistoricoClinico, type ItemHistoricoClinico } from "./historico-outros";
 
 /** Selo "Cancelado" (20261103a): o documento continua no prontuário. */
 function SeloCancelado({ d }: { d: Documento }) {
@@ -84,7 +86,9 @@ function rotuloEmissor(d: Documento, medicoIdAtual: string): string {
 }
 
 /**
- * Histórico do paciente COMIGO: consultas (com resumo), documentos e arquivos.
+ * Histórico do paciente: consultas COMIGO (com resumo), anamneses e
+ * evoluções de outros profissionais (somente leitura, com aviso de
+ * consentimento — a mesma fonte do GET da evolução), documentos e arquivos.
  * Documentos vêm do store filtrados pelo IDENTIFICADOR do paciente (M-9:
  * o wire agora traz pacienteId); o aviso de homônimo cobre apenas
  * documentos legados gravados antes do identificador existir.
@@ -155,17 +159,18 @@ export function ProntuarioPaciente({
   // recente comigo (consultas chegam ordenadas da mais nova para a mais
   // antiga). Falha aqui não derruba o prontuário — vira aviso com retry.
   const consultaRef = consultas[0]?.id;
-  const [series, setSeries] = useState<{ medicoes: MedicaoSerie[]; exames: ExameSerie[] } | null>(null);
+  const [series, setSeries] = useState<{ medicoes: MedicaoSerie[]; exames: ExameSerie[]; historico: ItemHistoricoClinico[] } | null>(null);
   const [erroSeries, setErroSeries] = useState(false);
   const carregarSeries = useCallback(async () => {
     if (!consultaRef) return;
     try {
       const res = await fetch(`/api/medico/consultas/${encodeURIComponent(consultaRef)}/evolucao`, { credentials: "include" });
       if (!res.ok) throw new Error("evolucao");
-      const j = (await res.json()) as { medicoes?: MedicaoSerie[]; exames?: { id: string; titulo: string; dataColeta: string; itens: unknown; origem: string }[] };
+      const j = (await res.json()) as { medicoes?: MedicaoSerie[]; exames?: { id: string; titulo: string; dataColeta: string; itens: unknown; origem: string }[]; historico?: unknown };
       setSeries({
         medicoes: j.medicoes ?? [],
         exames: (j.exames ?? []).map((e) => ({ ...e, itens: itensValidosSerie(e.itens) })),
+        historico: lerHistoricoClinico(j.historico),
       });
       setErroSeries(false);
     } catch {
@@ -231,6 +236,36 @@ export function ProntuarioPaciente({
             </li>
           ))}
         </ul>
+      </section>
+
+      <section>
+        <h3 className={tituloSecao}>
+          Histórico com outros profissionais{series ? ` ({itensDeOutrosProfissionais(series.historico).length})` : ""}
+        </h3>
+        {erroSeries ? (
+          <p className="text-sm text-bion-ink/75 dark:text-bion-paper/75">Não foi possível carregar o histórico agora (use o “Tentar de novo” nas medições).</p>
+        ) : !series ? (
+          consultaRef ? (
+            <p className="text-sm text-bion-ink/75 dark:text-bion-paper/75" role="status">Carregando histórico com outros profissionais…</p>
+          ) : (
+            <p className="text-sm text-bion-ink/75 dark:text-bion-paper/75">Sem consulta com você ainda — o histórico de outros profissionais aparece quando houver vínculo assistencial.</p>
+          )
+        ) : (
+          <>
+            <div className="mb-3">
+              <AvisoConsentimentoHistorico />
+            </div>
+            {itensDeOutrosProfissionais(series.historico).length === 0 ? (
+              <p className="text-sm text-bion-ink/75 dark:text-bion-paper/75">Ainda não há consultas deste paciente com outros profissionais na BION.</p>
+            ) : (
+              <div className="space-y-2">
+                {itensDeOutrosProfissionais(series.historico).map((h) => (
+                  <CartaoHistoricoClinico key={h.consultaId} item={h} />
+                ))}
+              </div>
+            )}
+          </>
+        )}
       </section>
 
       <section>
