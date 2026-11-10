@@ -98,7 +98,13 @@ model PerfilMedico {
   // ativo | pendente | suspenso | arquivado (B-22: "arquivado" vem do DELETE
   // lógico do admin — usuário inativo + perfil arquivado, histórico preservado)
   status              String  @default("ativo")
-  stripeAccountId     String? // conta conectada (Stripe Connect, cobrança direta), 20261028a; criada no onboarding do médico
+  // Conta conectada (Stripe Connect, cobrança direta), 20261028a; criada no onboarding do médico.
+  // NÃO use @unique neste campo: o índice é ÚNICO PARCIAL
+  // (`stripeAccountId IS NOT NULL AND <> ''`), criado só no SQL da migração
+  // 20261103f (supabase/migrations/20261103210000_20261103f_status_conta_stripe_medico.sql).
+  // O Prisma não expressa índice parcial no schema; um @unique geraria índice
+  // NÃO parcial (também em NULL/''). Ver prisma/indices-parciais.md.
+  stripeAccountId     String?
   // Status do onboarding Stripe (20261103f), gravado no retorno do onboarding e
   // no webhook account.updated. Cobrável = charges E payouts habilitados.
   stripeChargesEnabled    Boolean   @default(false)
@@ -119,7 +125,8 @@ model PerfilMedico {
   cnpj                String  @default("") // 14 caracteres normalizados (numérico ou alfanumérico); "" = não informado
 
   // 20261103f: índice ÚNICO parcial em stripeAccountId (NOT NULL e <> ''),
-  // só no SQL (o Prisma não descreve índice parcial).
+  // só no SQL (o Prisma não descreve índice parcial). Não adicionar @@unique
+  // aqui. Ver comentário em stripeAccountId e prisma/indices-parciais.md.
 }
 
 model PerfilPaciente {

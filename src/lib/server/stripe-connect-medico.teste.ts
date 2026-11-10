@@ -4,9 +4,12 @@
  */
 import { expect, mock, test } from "bun:test";
 
-type Perfil = { userId: string; stripeAccountId: string | null; stripeChargesEnabled: boolean; stripePayoutsEnabled: boolean; stripeDetailsSubmitted: boolean; stripeContaAtualizadaEm: Date | null };
+type Perfil = { id: string; userId: string; stripeAccountId: string | null; stripeChargesEnabled: boolean; stripePayoutsEnabled: boolean; stripeDetailsSubmitted: boolean; stripeContaAtualizadaEm: Date | null };
 const perfis: Perfil[] = [];
-const novo = (userId: string): Perfil => ({ userId, stripeAccountId: null, stripeChargesEnabled: false, stripePayoutsEnabled: false, stripeDetailsSubmitted: false, stripeContaAtualizadaEm: null });
+const novo = (userId: string): Perfil => ({ id: `pf-${userId}`, userId, stripeAccountId: null, stripeChargesEnabled: false, stripePayoutsEnabled: false, stripeDetailsSubmitted: false, stripeContaAtualizadaEm: null });
+let falharGravacao = 0;
+/** Se definido, o próximo accounts.create lança StripeIdempotencyError; "achar" grava a conta na lista antes. */
+let falhaIdempotencia: { medicoId: string; modo: "achar" | "vazio" } | null = null;
 const casa = (p: Perfil, w: Record<string, unknown>): boolean =>
   Object.entries(w).every(([k, v]) => (k === "OR" ? (v as Record<string, unknown>[]).some((o) => casa(p, o)) : (p as Record<string, unknown>)[k] === v));
 (globalThis as unknown as { prisma: unknown }).prisma = {
@@ -14,6 +17,10 @@ const casa = (p: Perfil, w: Record<string, unknown>): boolean =>
     findUnique: async ({ where }: { where: { userId: string } }) => perfis.find((p) => p.userId === where.userId) ?? null,
     findFirst: async ({ where }: { where: Record<string, unknown> }) => perfis.find((p) => casa(p, where)) ?? null,
     updateMany: async ({ where, data }: { where: Record<string, unknown>; data: Partial<Perfil> }) => {
+      if (falharGravacao > 0) {
+        falharGravacao--;
+        throw new Error("falha de teste no banco");
+      }
       const alvo = perfis.filter((p) => casa(p, where));
       alvo.forEach((p) => Object.assign(p, data));
       return { count: alvo.length };
@@ -30,18 +37,41 @@ mock.module("@/lib/server/auth", () => ({
   },
 }));
 
-const criadas: { params: Record<string, unknown>; chave?: string }[] = [];
-type ContaFake = { charges_enabled: boolean; payouts_enabled: boolean; details_submitted: boolean; requirements?: { disabled_reason: string | null; currently_due: string[] } };
+const criadas: { params: Record<string, unknown>; chave?: string; id?: string }[] = [];
+type ContaFake = { charges_enabled: boolean; payouts_enabled: boolean; details_submitted: boolean; requirements?: { disabled_reason: string | null; currently_due: string[] }; metadata?: Record<string, string> };
 const contasStripe: Record<string, ContaFake> = {};
 let retrieves = 0;
 const links: Record<string, unknown>[] = [];
 const fake = {
   accounts: {
     create: async (params: Record<string, unknown>, opts?: { idempotencyKey?: string }) => {
-      criadas.push({ params, chave: opts?.idempotencyKey });
-      const id = `acct_${criadas.length}`;
-      contasStripe[id] = { charges_enabled: false, payouts_enabled: false, details_submitted: false };
+      if (falhaIdempotencia) {
+        const { medicoId, modo } = falhaIdempotencia;
+        falhaIdempotencia = null;
+        if (modo === "achar") {
+          const id = `acct_idem_${medicoId}`;
+          contasStripe[id] = {
+            charges_enabled: false,
+            payouts_enabled: false,
+            details_submitted: false,
+            metadata: { perfilMedicoId: `pf-${medicoId}`, medicoId, plataforma: "bion" },
+          };
+        }
+        throw Object.assign(new Error("Keys for idempotent requests can only be used with the same parameters"), {
+          name: "StripeIdempotencyError",
+          type: "idempotency_error",
+          rawType: "idempotency_error",
+        });
+      }
+      const ja = criadas.find((c) => c.chave && opts?.idempotencyKey && c.chave === opts.idempotencyKey);
+      if (ja?.id) return { id: ja.id, ...contasStripe[ja.id] };
+      const id = `acct_${criadas.length + 1}`;
+      criadas.push({ params, chave: opts?.idempotencyKey, id });
+      contasStripe[id] = { charges_enabled: false, payouts_enabled: false, details_submitted: false, metadata: (params.metadata as Record<string, string> | undefined) ?? {} };
       return { id, ...contasStripe[id] };
+    },
+    list: async function* () {
+      for (const [id, c] of Object.entries(contasStripe)) yield { id, ...c };
     },
     retrieve: async (id: string) => {
       retrieves++;
@@ -66,11 +96,12 @@ const h = await import("./stripe-connect-medico");
 const cob = await import("@/lib/medico-cobravel");
 
 test("parâmetros: standard sem capabilities; express pede card_payments + transfers; país BR", () => {
-  const s = h.parametrosNovaConta("standard", { id: "m", email: "a@b" });
+  const s = h.parametrosNovaConta("standard", { id: "m", email: "a@b", perfilMedicoId: "pf-m" });
   expect(s.type).toBe("standard");
   expect(s.country).toBe("BR");
   expect(s.capabilities).toBeUndefined();
-  const e = h.parametrosNovaConta("express", { id: "m" });
+  expect(s.metadata).toEqual({ perfilMedicoId: "pf-m", medicoId: "m", plataforma: "bion" });
+  const e = h.parametrosNovaConta("express", { id: "m", perfilMedicoId: "pf-m" });
   expect(e.capabilities).toEqual({ card_payments: { requested: true }, transfers: { requested: true } });
 });
 
@@ -79,7 +110,9 @@ test("garantirContaMedico é idempotente: nunca cria segunda conta", async () =>
   const a = await h.garantirContaMedico({ id: "m1", email: "m1@t.local" });
   expect(a.criada).toBe(true);
   expect(a.status.conta).toBe("acct_1");
-  expect(criadas[0].chave).toBe("bion-conta-medico-m1-standard");
+  expect(criadas[0].chave).toBe("bion-connect-medico-pf-m1-standard-BR");
+  expect(h.chaveIdempotenciaConta("pf-m1")).toBe("bion-connect-medico-pf-m1-standard-BR");
+  expect(criadas[0].params.metadata).toEqual({ perfilMedicoId: "pf-m1", medicoId: "m1", plataforma: "bion" });
   const b = await h.garantirContaMedico({ id: "m1" });
   expect(b.criada).toBe(false);
   expect(criadas.length).toBe(1);
@@ -229,13 +262,85 @@ test("STRIPE_CONNECT_PAIS: padrão BR, US quando definido, inválido volta para 
   try {
     delete process.env.STRIPE_CONNECT_PAIS;
     expect(h.paisContaConnect()).toBe("BR");
-    expect(h.parametrosNovaConta("standard", { id: "m" }).country).toBe("BR");
+    expect(h.parametrosNovaConta("standard", { id: "m", perfilMedicoId: "pf-m" }).country).toBe("BR");
     process.env.STRIPE_CONNECT_PAIS = " us ";
     expect(h.paisContaConnect()).toBe("US");
-    expect(h.parametrosNovaConta("express", { id: "m" }).country).toBe("US");
+    expect(h.parametrosNovaConta("express", { id: "m", perfilMedicoId: "pf-m" }).country).toBe("US");
     for (const ruim of ["USA", "1A", "", "b"]) expect(h.paisContaConnect(ruim)).toBe("BR");
   } finally {
     if (antes === undefined) delete process.env.STRIPE_CONNECT_PAIS;
     else process.env.STRIPE_CONNECT_PAIS = antes;
   }
+});
+
+test("falha no banco depois do create: o retry reaproveita a conta (não cria segunda)", async () => {
+  const p = novo("m7");
+  perfis.push(p);
+  falharGravacao = 1;
+  const antes = criadas.length;
+  await expect(h.garantirContaMedico({ id: "m7", email: "m7@t.local" })).rejects.toThrow("falha de teste no banco");
+  expect(criadas.length).toBe(antes + 1);
+  expect(p.stripeAccountId).toBeNull();
+  const r = await h.garantirContaMedico({ id: "m7", email: "m7@t.local" });
+  expect(criadas.length).toBe(antes + 1);
+  expect(r.criada).toBe(false);
+  expect(r.status.conta).toBe(criadas[antes]?.id);
+  expect(p.stripeAccountId).toBe(criadas[antes]?.id);
+});
+
+test("conta já existente no Stripe (metadata do médico) é reaproveitada, sem create", async () => {
+  const p = novo("m8");
+  perfis.push(p);
+  contasStripe.acct_ja = {
+    charges_enabled: false,
+    payouts_enabled: false,
+    details_submitted: false,
+    metadata: { perfilMedicoId: "pf-m8", medicoId: "m8", plataforma: "bion" },
+  };
+  const antes = criadas.length;
+  const r = await h.garantirContaMedico({ id: "m8" });
+  expect(criadas.length).toBe(antes);
+  expect(r.criada).toBe(false);
+  expect(r.status.conta).toBe("acct_ja");
+  expect(p.stripeAccountId).toBe("acct_ja");
+});
+
+test("idempotency key inclui perfil, tipo e país, e não o e-mail", () => {
+  expect(h.chaveIdempotenciaConta("pf-abc")).toBe("bion-connect-medico-pf-abc-standard-BR");
+  expect(h.chaveIdempotenciaConta("pf-abc", "express", "US")).toBe("bion-connect-medico-pf-abc-express-US");
+  expect(h.chaveIdempotenciaConta("pf-abc")).toBe(h.chaveIdempotenciaConta("pf-abc"));
+});
+
+test("StripeIdempotencyError: se a conta existir na metadata, reaproveita e grava", async () => {
+  const p = novo("m9");
+  perfis.push(p);
+  falhaIdempotencia = { medicoId: "m9", modo: "achar" };
+  const antes = criadas.length;
+  const r = await h.garantirContaMedico({ id: "m9", email: "m9@t.local" });
+  expect(criadas.length).toBe(antes);
+  expect(r.criada).toBe(false);
+  expect(r.status.conta).toBe("acct_idem_m9");
+  expect(p.stripeAccountId).toBe("acct_idem_m9");
+});
+
+test("StripeIdempotencyError sem conta na metadata: 409 stripe_tente_novamente", async () => {
+  const p = novo("m10");
+  perfis.push(p);
+  falhaIdempotencia = { medicoId: "m10", modo: "vazio" };
+  const antes = criadas.length;
+  await expect(h.garantirContaMedico({ id: "m10", email: "m10@t.local" })).rejects.toMatchObject({
+    status: 409,
+    codigo: "stripe_tente_novamente",
+  });
+  expect(criadas.length).toBe(antes);
+  expect(p.stripeAccountId).toBeNull();
+
+  sessao = { id: "m10", email: "m10@t.local", role: "MEDICO" };
+  falhaIdempotencia = { medicoId: "m10", modo: "vazio" };
+  const conta = await import("@/app/api/medico/stripe/conta/route");
+  const res = await conta.POST();
+  expect(res.status).toBe(409);
+  const body = await res.json();
+  expect(body.codigo).toBe("stripe_tente_novamente");
+  expect(String(body.erro).toLowerCase()).toContain("alguns minutos");
 });
