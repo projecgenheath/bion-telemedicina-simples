@@ -143,17 +143,55 @@
   width: 0.5rem;
   border-radius: 9999px;
   background: rgba(255, 255, 255, 0.5);
-  transition: width 0.2s ease, background-color 0.2s ease;
+  position: relative;
+  z-index: 1;
 }
-.ba-pilula-ponto[data-ativo="true"] { width: 1.5rem; background: #7dd3fc; }
-/* Alvo de toque ≥ 44 px mesmo com o ponto pequeno */
+/* O indicador ciano já marca o item ativo; o ponto cinza por cima sumiria
+   com ele. */
+.ba-pilula-alvo[aria-current="page"] .ba-pilula-ponto {
+  background: transparent;
+}
+/* Indicador deslizante (.bion-indicador no markup). Ciano sobre a cápsula
+   escura (#7dd3fc). Não usar #24058D aqui: o contraste fica ~1,2:1. */
+.ba-pilula-indicador {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1.5rem;
+  height: 0.5rem;
+  border-radius: 9999px;
+  background: #7dd3fc;
+  pointer-events: none;
+  z-index: 0;
+}
+/* Alvo de toque de 44 px sem inflar a cápsula: o ::before transborda e
+   não entra no fluxo (position absolute, centralizado). */
 .ba-pilula-alvo {
-  min-width: 2.75rem;
-  min-height: 2.75rem;
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  width: 1.5rem;
+  height: 0.5rem;
   border-radius: 9999px;
+  z-index: 1;
+}
+.ba-pilula-alvo::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 44px;
+  height: 44px;
+  transform: translate(-50%, -50%);
+}
+/* Botão da busca: ícone de 1 rem, sem a largura reservada do ponto. */
+.ba-pilula-alvo:last-child {
+  width: auto;
+  height: auto;
+  min-width: 1rem;
+  min-height: 1rem;
+  padding: 0.125rem;
 }
 
 /* Desktop / tablet largo: trilho + barra de comando + conteúdo */
@@ -164,17 +202,37 @@
   height: 100%;
 }
 .ba-trilho {
+  position: relative;
   width: 4.5rem;
   height: 100%;
+  overflow-x: hidden;
   overflow-y: auto;
   scrollbar-width: none;
   background: var(--ba-trilho);
   -webkit-backdrop-filter: blur(18px) saturate(1.3);
   backdrop-filter: blur(18px) saturate(1.3);
   border-right: 1px solid var(--ba-borda);
-  transition: width 0.2s ease;
 }
 .ba-trilho[data-aberto="true"] { width: 15rem; }
+/* Cabeçalho do trilho: com o PR #166 entra um Logo de 40 px ao lado do
+   botão de 44 px. Recolhido (~4,5 rem de largura útil), mostra só o
+   botão de expandir — 40+44 px lado a lado estouraria na horizontal. */
+.ba-trilho-cabecalho {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  padding: 0 0.375rem;
+  margin-bottom: 0.5rem;
+  height: 3rem;
+}
+.ba-trilho:not([data-aberto="true"]) .ba-trilho-cabecalho {
+  justify-content: center;
+  padding: 0;
+}
+.ba-trilho:not([data-aberto="true"]) .ba-trilho-cabecalho > :not(button) {
+  display: none;
+}
 .ba-trilho-item {
   position: relative;
   display: flex;
@@ -194,15 +252,16 @@
   background: color-mix(in srgb, var(--ba-sinal) 14%, transparent);
   color: var(--ba-texto);
 }
-.ba-trilho-item[aria-current="page"]::before {
-  content: "";
+/* Traço do item ativo: .ba-trilho-indicador (.bion-indicador) no markup. */
+.ba-trilho-indicador {
   position: absolute;
-  left: -0.5rem;
-  top: 25%;
-  bottom: 25%;
+  left: 0;
+  top: 0;
   width: 3px;
   border-radius: 9999px;
   background: var(--ba-sinal);
+  pointer-events: none;
+  z-index: 2;
 }
 .ba-barra {
   position: sticky;
@@ -658,6 +717,7 @@ button.ba-card:hover, a.ba-card:hover, .ba-card[role="button"]:hover { transform
 }
 @media (prefers-reduced-motion: no-preference) {
   .ba-anel-valor { transition: stroke-dasharray 0.6s ease-out; }
+  .ba-trilho { transition: width 180ms ease-out; }
 }
 
 /* ------------------------------------------------------------------ */

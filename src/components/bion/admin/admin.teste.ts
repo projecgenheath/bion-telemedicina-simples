@@ -175,5 +175,13 @@ for (const f of ["#047857", "#b91c1c", "#92400e", "#123e7d", "#334155"]) {
   verdade(`AA texto branco no fundo do gesto ${f}`, c >= 4.5, c.toFixed(2));
 }
 
+
+/* Pílulas discretas: cápsula sem min 2,75 rem; alvo de 44 px no ::before. */
+verdade("pílula alvo sem min-width 2.75rem", !/\.ba-pilula-alvo\s*\{[^}]*min-width:\s*2\.75rem/.test(css));
+verdade("pílula alvo sem min-height 2.75rem", !/\.ba-pilula-alvo\s*\{[^}]*min-height:\s*2\.75rem/.test(css));
+verdade("pílula alvo ::before tem 44px de largura", /\.ba-pilula-alvo::before\s*\{[^}]*width:\s*44px/.test(css));
+verdade("pílula alvo ::before tem 44px de altura", /\.ba-pilula-alvo::before\s*\{[^}]*height:\s*44px/.test(css));
+verdade("indicador da pílula não usa #24058D", !/\.ba-pilula-indicador\s*\{[^}]*#24058D/i.test(css));
+
 console.log(`${ok} ok, ${falhas} falha(s)`);
 if (falhas) process.exit(1);

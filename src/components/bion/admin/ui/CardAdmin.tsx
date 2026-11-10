@@ -28,7 +28,7 @@ export function CardAdmin({
   children?: ReactNode;
 } & Omit<React.HTMLAttributes<HTMLElement>, "title">) {
   return (
-    <section className={`ba-card ${className}`} data-tom={tom} data-denso={denso || undefined} {...resto}>
+    <section className={`ba-card bion-surgir ${className}`} data-tom={tom} data-denso={denso || undefined} {...resto}>
       {titulo || acao ? (
         <header className="flex items-center justify-between gap-3 mb-3">
           {titulo ? (
@@ -93,13 +93,13 @@ export function KpiAdmin({
   );
   if (onAbrir) {
     return (
-      <button type="button" onClick={onAbrir} className={`ba-card text-left ${className}`} data-tom={tom} data-denso={denso || undefined} aria-busy={carregando}>
+      <button type="button" onClick={onAbrir} className={`ba-card bion-surgir bion-toque text-left ${className}`} data-tom={tom} data-denso={denso || undefined} aria-busy={carregando}>
         {conteudo}
       </button>
     );
   }
   return (
-    <div className={`ba-card ${className}`} data-tom={tom} data-denso={denso || undefined} aria-busy={carregando}>
+    <div className={`ba-card bion-surgir ${className}`} data-tom={tom} data-denso={denso || undefined} aria-busy={carregando}>
       {conteudo}
     </div>
   );
