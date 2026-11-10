@@ -1,6 +1,7 @@
 "use client";
 
 import { AvisoAtivarToque } from "@/components/bion/AvisoAtivarToque";
+import { Logo } from "@/components/bion/brand";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -521,8 +522,11 @@ export function PacienteApp() {
           {/* --- Seção 1: início --- */}
           <section className="bp-secao-1 bpp-secao bpp-tela min-h-[100svh] flex flex-col px-5 bp-safe-top pb-28" aria-label="Página inicial">
             <header className="flex items-center justify-between pt-2">
-              <div className="text-xs font-semibold uppercase tracking-wider text-bion-ink/75 dark:text-bion-paper/75">
-                {hoje}
+              <div className="flex items-center gap-2 min-w-0">
+                <Logo size="sm" />
+                <div className="text-xs font-semibold uppercase tracking-wider text-bion-ink/75 dark:text-bion-paper/75">
+                  {hoje}
+                </div>
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 {naoLidasMensagens > 0 ? (

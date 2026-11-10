@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { ArrowLeft, ChevronRight, Inbox, PanelLeftClose, PanelLeftOpen, Search } from "lucide-react";
+import { Logo } from "@/components/bion/brand";
 import { SheetAdmin } from "./ui/SheetAdmin";
 import { useDensidadeAdmin, useLargo, usePreferenciaBool } from "./ui/preferencias";
 import { useAtalhoBusca } from "./ui/atalho";
@@ -263,6 +264,7 @@ function Trilho({
   return (
     <nav className="ba-trilho flex flex-col p-2" data-aberto={aberto} aria-label="Navegação do administrador">
       <div className="flex items-center gap-2 h-12 px-1.5 mb-2">
+        <Logo size="sm" />
         {aberto ? (
           <div className="flex-1 min-w-0 pl-1">
             <div className="text-sm font-black leading-none">Torre BION</div>
