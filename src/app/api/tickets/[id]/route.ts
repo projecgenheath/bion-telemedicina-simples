@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { exigirPapel } from "@/lib/server/auth";
 import { aplicarSideEffects, ticketWire } from "@/lib/server/dados";
 import {ok, falha, lerCorpoJson, corpoObjeto, textoDoCorpo} from "@/lib/server/http";
+import { validarResposta } from "@/components/bion/admin/suporte/chamados";
 
 /** Resposta a chamado de suporte (apenas admin).
  *  Notificação ao autor do chamado e auditoria geradas PELO SERVIDOR. */
@@ -19,6 +20,13 @@ export async function PATCH(
       return Response.json({ erro: "Corpo da requisição inválido." }, { status: 400 });
     }
     const body = { resposta: textoDoCorpo(bruto.resposta) };
+    // Auditoria admin 09/11: antes uma resposta vazia (ou só espaços)
+    // fechava o chamado como "resolvido" com resposta "" e ainda avisava o
+    // autor "Chamado respondido". Mesma regra da tela (validarResposta).
+    const validacao = validarResposta(body.resposta ?? "");
+    if (!validacao.ok) {
+      return Response.json({ erro: validacao.erro, campo: "resposta" }, { status: 400 });
+    }
 
     const ticket = await db.ticket.findUnique({
       where: { id },

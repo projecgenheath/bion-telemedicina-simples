@@ -53,6 +53,12 @@ export function formatarCodigoVerificacao(codigo: string): string {
   return `${partes.documentoId}-${grupos}`;
 }
 
+
+/** Teto por IP da rota pública /api/publico/verificar/[codigo]: uma farmácia
+ *  confere poucas vias por minuto; 20/min barra varredura. Fora da route.ts
+ *  porque o Next só permite exportar handlers e config da rota. */
+export const LIMITE_VERIFICAR_IP_POR_MIN = 20;
+
 /** URL pública de verificação de um código canônico (origem vazia = só o caminho). */
 export function urlVerificacaoDocumento(codigo: string, origem: string): string {
   const base = origem.replace(/\/+$/, "");

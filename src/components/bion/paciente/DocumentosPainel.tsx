@@ -8,6 +8,7 @@ import {
   ArrowLeft,
   BadgeCheck,
   ClipboardList,
+  Copy,
   FileText,
   FileUp,
   MessageCircle,
@@ -17,6 +18,7 @@ import {
   X,
 } from "lucide-react";
 import { useBion } from "@/lib/bion-store";
+import { useAppNativo } from "@/lib/useAppNativo";
 import { toast } from "sonner";
 import { EstadoVazio } from "./EstadosPaciente";
 import { CalendarPlus, RotateCcw } from "lucide-react";
@@ -67,12 +69,25 @@ function Visualizador({
   const dialogoRef = useRef<HTMLDivElement>(null);
   useVoltarFecha(true, onFechar);
   useFocoDialogo(true, onFechar, dialogoRef);
+  // A WebView do app de loja (Capacitor/Android) ignora window.print(): o botão
+  // não fazia nada. No app, "Imprimir" vira "Copiar" (texto do documento).
+  const noApp = useAppNativo();
+  const copiar = async () => {
+    try {
+      await navigator.clipboard.writeText([titulo, ...corpo].join("\n"));
+      toast.success("Texto do documento copiado.", {
+        description: "Para imprimir ou salvar em PDF, abra o BION pelo navegador.",
+      });
+    } catch {
+      toast.error("Não foi possível copiar. Para imprimir, abra o BION pelo navegador.");
+    }
+  };
   useEffect(() => {
-    if (!imprimir) return;
+    if (!imprimir || noApp) return;
     // Espera o documento pintar (a regra @media print só mostra .bp-impressao).
     const id = window.setTimeout(() => window.print(), 250);
     return () => window.clearTimeout(id);
-  }, [imprimir]);
+  }, [imprimir, noApp]);
 
   return (
     <div ref={dialogoRef} className="absolute inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label={`Documento: ${titulo}`}>
@@ -90,13 +105,23 @@ function Visualizador({
         <div className="flex items-start justify-between gap-3 mb-4">
           <h3 className="text-lg font-bold text-bion-ink dark:text-bion-paper">{titulo}</h3>
           <div className="flex gap-2 shrink-0">
-            <button type="button"
-              onClick={() => window.print()}
-              aria-label="Imprimir documento"
-              className="bion-toque bp-acao px-4 min-h-11 text-xs inline-flex items-center gap-1.5"
-            >
-              <Printer className="w-4 h-4" /> Imprimir
-            </button>
+            {noApp ? (
+              <button type="button"
+                onClick={() => void copiar()}
+                aria-label="Copiar texto do documento"
+                className="bion-toque bp-acao px-4 min-h-11 text-xs inline-flex items-center gap-1.5"
+              >
+                <Copy className="w-4 h-4" /> Copiar
+              </button>
+            ) : (
+              <button type="button"
+                onClick={() => window.print()}
+                aria-label="Imprimir documento"
+                className="bion-toque bp-acao px-4 min-h-11 text-xs inline-flex items-center gap-1.5"
+              >
+                <Printer className="w-4 h-4" /> Imprimir
+              </button>
+            )}
             <button type="button" onClick={onFechar} aria-label="Fechar documento" className="bion-toque w-11 h-11 inline-flex items-center justify-center rounded-full bg-bion-ink/5 dark:bg-white/10 text-bion-ink dark:text-bion-paper">
               <X className="w-4 h-4" />
             </button>
@@ -126,6 +151,7 @@ export function DocumentosPainel({
   const { consultas, documentos, medicos, sessao, mensagens, enviarMensagem, marcarConversaLida, naoLidasMensagens } = useBion();
   const [consultaSelecionada, setConsultaSelecionada] = useState<string | null>(null);
   const [visualizando, setVisualizando] = useState<{ titulo: string; corpo: string[]; imprimir?: boolean } | null>(null);
+  const noApp = useAppNativo();
   const setConversaAtiva = onConversa;
   const [texto, setTexto] = useState("");
   const [retornoDe, setRetornoDe] = useState<string | null>(null);
@@ -441,6 +467,8 @@ export function DocumentosPainel({
                     >
                       Ver
                     </button>
+                    {/* No app a impressão não existe (WebView): fica só o "Ver", que oferece "Copiar". */}
+                    {!noApp && (
                     <button type="button"
                       onClick={() => setVisualizando({ titulo: d.titulo, corpo: d.corpo, imprimir: true })}
                       aria-label={`Imprimir ${d.titulo}`}
@@ -448,6 +476,7 @@ export function DocumentosPainel({
                     >
                       <Printer className="w-4 h-4" />
                     </button>
+                    )}
                   </div>
                 );
               })

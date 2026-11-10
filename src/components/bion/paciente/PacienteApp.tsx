@@ -1,6 +1,7 @@
 "use client";
 
 import { AvisoAtivarToque } from "@/components/bion/AvisoAtivarToque";
+import { Logo } from "@/components/bion/brand";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -521,8 +522,11 @@ export function PacienteApp() {
           {/* --- Seção 1: início --- */}
           <section className="bp-secao-1 bpp-secao bpp-tela min-h-[100svh] flex flex-col px-5 bp-safe-top pb-28" aria-label="Página inicial">
             <header className="flex items-center justify-between pt-2">
-              <div className="text-xs font-semibold uppercase tracking-wider text-bion-ink/75 dark:text-bion-paper/75">
-                {hoje}
+              <div className="flex items-center gap-2 min-w-0">
+                <Logo size="sm" />
+                <div className="text-xs font-semibold uppercase tracking-wider text-bion-ink/75 dark:text-bion-paper/75">
+                  {hoje}
+                </div>
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 {naoLidasMensagens > 0 ? (
@@ -743,7 +747,7 @@ export function PacienteApp() {
             ))}
 
             {/* Cartão único da BION IA: agendar (principal) + perguntar */}
-            <div style={{ "--bion-i": 1 } as CSSProperties} className="bion-surgir bpp-cartao-ia mt-4 w-full rounded-3xl p-5 text-white relative overflow-hidden bg-gradient-to-br from-bion-deep via-bion-sea to-bion-ink">
+            <div style={{ "--bion-i": 1 } as CSSProperties} className="bion-surgir bpp-cartao-ia mt-4 w-full rounded-3xl p-5 text-white relative overflow-hidden">
               <span aria-hidden className="absolute -right-8 -top-10 w-40 h-40 rounded-full bg-white/10 blur-2xl" />
               <span aria-hidden className="absolute right-10 -bottom-10 w-28 h-28 rounded-full bg-sky-300/15 blur-2xl" />
               <div className="relative flex items-center gap-3">

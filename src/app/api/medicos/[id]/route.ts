@@ -3,7 +3,8 @@ import { db } from "@/lib/db";
 import { exigirPapel } from "@/lib/server/auth";
 import { aplicarSideEffects, medicoWire, type EfeitosCriados } from "@/lib/server/dados";
 import { notaReal } from "@/lib/server/notas-medico";
-import {ok, falha, lerCorpoJson} from "@/lib/server/http";
+import { estaAnonimizado } from "@/lib/server/lgpd";
+import {ok, falha, lerCorpoJson, corpoObjeto} from "@/lib/server/http";
 import { erroGradeVedada, horariosVedadosDaGrade } from "@/lib/server/bloqueio-agenda";
 import { normalizarGrade, serializarGrade, listasDaGrade } from "@/lib/grade-semana";
 
@@ -94,6 +95,14 @@ function validarAutoedicao(
   atual: { nome: string; crm: string; especialidade: string },
 ): string | null {
   if (body.acao && body.acao !== "atualizar") return "Ação permitida apenas ao administrador.";
+  // Tipo errado (nome: 5, crm não-texto) quebrava no .trim() e virava 500.
+  // Só o caminho do médico: o admin valida identidade no #161.
+  const rotulosIdentidade = { nome: "Nome", crm: "CRM", especialidade: "Especialidade" } as const;
+  for (const k of ["nome", "crm", "especialidade"] as const) {
+    const v: unknown = body[k];
+    if (v === undefined) continue;
+    if (typeof v !== "string") return `${rotulosIdentidade[k]} deve ser um texto.`;
+  }
   // O cliente pode reenviar nome/CRM/especialidade sem alteração; mudar exige admin.
   if (body.nome !== undefined && body.nome.trim() !== atual.nome) {
     return "Alteração de nome é feita pelo administrador.";
@@ -109,6 +118,32 @@ function validarAutoedicao(
       return `Campo não editável: ${k}.`;
     }
   }
+  return validarCamposComuns(body);
+}
+
+const TAM_MAX_IDENTIDADE = 120;
+
+/**
+ * Valida o "atualizar" do ADMIN (auditoria admin 09/11): antes o admin não
+ * passava por validação nenhuma — valor negativo/zero ou acima do teto era
+ * gravado (o preço que o paciente paga), CRM/especialidade em branco eram
+ * gravados e um tipo errado (valor "150", nome 5) virava 500 no Prisma.
+ * Mesmas regras de valor/grade/textos da autoedição e do POST de criação.
+ * Devolve mensagem de erro ou null.
+ */
+function validarEdicaoAdmin(body: MedicoPatch): string | null {
+  const rotulos = { nome: "Nome", crm: "CRM", especialidade: "Especialidade" } as const;
+  for (const k of ["nome", "crm", "especialidade"] as const) {
+    const v: unknown = body[k];
+    if (v === undefined) continue;
+    if (typeof v !== "string" || !v.trim()) return `${rotulos[k]} não pode ficar em branco.`;
+    if (v.trim().length > TAM_MAX_IDENTIDADE) return `${rotulos[k]} muito longo (máx. ${TAM_MAX_IDENTIDADE} caracteres).`;
+  }
+  return validarCamposComuns(body);
+}
+
+/** Regras de campo comuns à autoedição do médico e à edição do admin. */
+function validarCamposComuns(body: MedicoPatch): string | null {
   if (body.valor !== undefined) {
     if (typeof body.valor !== "number" || !Number.isFinite(body.valor) || body.valor < VALOR_MIN || body.valor > VALOR_MAX) {
       return `Valor da consulta deve estar entre R$ ${VALOR_MIN} e R$ ${VALOR_MAX}.`;
@@ -177,7 +212,9 @@ export async function PATCH(
   try {
     const ator = await exigirPapel("ADMIN", "MEDICO");
     const { id } = await params;
-    const body = (await lerCorpoJson(req)) as MedicoPatch;
+    // Auditoria admin 09/11: lista ou texto no corpo ("[]", "\"x\"") passava
+    // como edição vazia com 200 e auditoria "dados atualizados ()".
+    const body = corpoObjeto(await lerCorpoJson(req)) as MedicoPatch | null;
 
     if (!body) {
       return Response.json({ erro: "Corpo da requisição inválido." }, { status: 400 });
@@ -198,6 +235,24 @@ export async function PATCH(
       return Response.json({ erro: "Médico não encontrado." }, { status: 404 });
     }
 
+    // Auditoria admin 09/11: médico arquivado ou anonimizado (LGPD) não volta
+    // por "aprovar"/"suspender"/"atualizar". Antes o servidor reativava o
+    // login e o perfil de quem foi arquivado (a tela só esconde o botão), e o
+    // "atualizar" podia re-identificar um cadastro anonimizado.
+    if (medico.perfilMedico.status === "arquivado" || estaAnonimizado(medico)) {
+      return erroHttp(
+        estaAnonimizado(medico)
+          ? "Cadastro anonimizado (LGPD): não pode ser reativado nem editado."
+          : "Cadastro arquivado: não pode ser reativado nem editado.",
+        409,
+      );
+    }
+
+    if (!autoedicao && (body.acao ?? "atualizar") === "atualizar") {
+      const erro = validarEdicaoAdmin(body);
+      if (erro) return erroHttp(erro, 400);
+    }
+
     if (autoedicao) {
       const erro = validarAutoedicao(body, {
         nome: medico.nome,
@@ -208,6 +263,9 @@ export async function PATCH(
     }
 
     const acao = body.acao ?? "atualizar";
+    if (acao !== "aprovar" && acao !== "suspender" && acao !== "atualizar") {
+      return erroHttp("Ação inválida: use aprovar, suspender ou atualizar.", 400);
+    }
     // Sem teleconsulta entre 23:00 e 00:00 (São Paulo): vale para o médico e
     // para o administrador. Horário cuja consulta (DURACAO_CONSULTA_MIN)
     // encosta na janela → 400, nada é gravado.
@@ -308,14 +366,14 @@ export async function PATCH(
       await db.$transaction([
         db.user.update({
           where: { id },
-          data: body.nome && !autoedicao ? { nome: body.nome.trim() } : {},
+          data: body.nome !== undefined && !autoedicao ? { nome: body.nome.trim() } : {},
         }),
         db.perfilMedico.update({
           where: { userId: id },
           data: {
-            ...(body.crm !== undefined && !autoedicao ? { crm: body.crm } : {}),
+            ...(body.crm !== undefined && !autoedicao ? { crm: body.crm.trim() } : {}),
             ...(body.especialidade !== undefined && !autoedicao
-              ? { especialidade: body.especialidade }
+              ? { especialidade: body.especialidade.trim() }
               : {}),
             ...(body.subespecialidades !== undefined
               ? { subespecialidades: JSON.stringify(body.subespecialidades) }
