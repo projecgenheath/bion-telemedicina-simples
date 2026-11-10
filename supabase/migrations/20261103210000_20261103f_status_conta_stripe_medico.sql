@@ -27,3 +27,7 @@ DROP INDEX IF EXISTS "PerfilMedico_stripeAccountId_idx";
 CREATE UNIQUE INDEX IF NOT EXISTS "PerfilMedico_stripeAccountId_unico"
   ON "PerfilMedico"("stripeAccountId")
   WHERE "stripeAccountId" IS NOT NULL AND "stripeAccountId" <> '';
+
+-- O índice único parcial NÃO está no schema.prisma (o Prisma não expressa
+-- índice parcial; um @unique geraria índice não-parcial). Ver
+-- prisma/indices-parciais.md e o comentário em PerfilMedico.stripeAccountId.

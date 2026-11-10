@@ -10,9 +10,14 @@ import { bloqueioChaveLive } from "@/lib/stripe-checkout-logica";
  * application fee da BION).
  *
  * - A conta fica em PerfilMedico.stripeAccountId (o checkout e o reembolso já
- *   leem dali). Idempotente: se já existe conta, NUNCA cria outra; criação
- *   concorrente usa a mesma idempotency key no Stripe e o update só grava se a
- *   coluna ainda estiver vazia.
+ *   leem dali). Idempotente: se já existe conta no banco, NUNCA cria outra.
+ *   Antes de criar, lista as contas Connect (auto-paginação) e reaproveita
+ *   qualquer uma cuja metadata aponte para o médico (perfilMedicoId / medicoId,
+ *   plataforma 'bion'). Na criação grava essa metadata e usa a idempotency
+ *   key estável `bion-connect-medico-<perfilMedicoId>` (a do Stripe expira
+ *   em ~24 h e exige os MESMOS parâmetros; por isso a busca por metadata é
+ *   a rede de segurança se a gravação no banco falhar depois do create).
+ *   O update só grava se a coluna ainda estiver vazia (null ou "").
  * - Tipo da conta: tipoContaConnect() (env STRIPE_CONNECT_TIPO_CONTA, padrão
  *   standard). Nada aqui é amarrado a um tipo: Express pede card_payments +
  *   transfers; Standard não aceita capabilities na criação.
@@ -36,7 +41,14 @@ export type StatusContaMedico = {
   pronta: boolean;
 };
 
-type ClienteStripe = Pick<Stripe, "accounts" | "accountLinks">;
+type ListaContas = {
+  list(params?: Stripe.AccountListParams): Promise<{ data: Stripe.Account[]; has_more?: boolean }> | AsyncIterable<Stripe.Account>;
+};
+type ClienteStripe = {
+  accounts: Pick<Stripe["accounts"], "create" | "retrieve"> & Partial<ListaContas>;
+  accountLinks: Stripe["accountLinks"];
+};
+
 export type DepsConnect = { stripe?: () => ClienteStripe; tipo?: TipoContaConnect; agora?: () => Date; chave?: string };
 
 /** Código de erro das rotas de onboarding com chave live (trava do Alisson, 03/11 12:28). */
@@ -54,6 +66,7 @@ export function exigirChaveTeste(chave: string | undefined = process.env.STRIPE_
 }
 
 const SEL = {
+  id: true,
   stripeAccountId: true,
   stripeChargesEnabled: true,
   stripePayoutsEnabled: true,
@@ -64,6 +77,7 @@ const SEL = {
 } as const;
 
 type PerfilStatus = {
+  id: string;
   stripeAccountId: string | null;
   stripeChargesEnabled: boolean;
   stripePayoutsEnabled: boolean;
@@ -129,12 +143,68 @@ export function paisContaConnect(valor: string | undefined = process.env.STRIPE_
   return /^[A-Z]{2}$/.test(v) ? v : "BR";
 }
 
+export type IdsMedicoConnect = { perfilMedicoId: string; medicoId: string };
+
+/** Idempotency key estável por perfil (não inclui o tipo: a mesma conta é reaproveitada). */
+export function chaveIdempotenciaConta(perfilMedicoId: string): string {
+  return `bion-connect-medico-${perfilMedicoId}`;
+}
+
+/** Metadata gravada na criação; a busca posterior filtra por ela (Stripe não tem search de accounts). */
+export function metadataNovaConta(ids: IdsMedicoConnect): { perfilMedicoId: string; medicoId: string; plataforma: "bion" } {
+  return { perfilMedicoId: ids.perfilMedicoId, medicoId: ids.medicoId, plataforma: "bion" };
+}
+
+export function contaComMetadataDoMedico(
+  conta: { metadata?: Stripe.Metadata | null },
+  ids: IdsMedicoConnect,
+): boolean {
+  const m = conta.metadata ?? {};
+  if (m.plataforma && m.plataforma !== "bion") return false;
+  return m.perfilMedicoId === ids.perfilMedicoId || m.medicoId === ids.medicoId || m.bionMedicoId === ids.medicoId;
+}
+
+/**
+ * Lista as contas Connect com auto-paginação e devolve a primeira cuja
+ * metadata aponta para este médico. Sem `accounts.list` (cliente de teste
+ * antigo) = não achou; o create com a idempotency key cobre o buraco.
+ */
+export async function buscarContaPorMetadata(cli: ClienteStripe, ids: IdsMedicoConnect): Promise<Stripe.Account | null> {
+  const listar = cli.accounts.list;
+  if (typeof listar !== "function") return null;
+
+  const combinar = (a: Stripe.Account) => (contaComMetadataDoMedico(a, ids) ? a : null);
+  const res = listar({ limit: 100 });
+  if (res && typeof (res as AsyncIterable<Stripe.Account>)[Symbol.asyncIterator] === "function") {
+    for await (const a of res as AsyncIterable<Stripe.Account>) {
+      const achada = combinar(a);
+      if (achada) return achada;
+    }
+    return null;
+  }
+
+  let startingAfter: string | undefined;
+  let pagina = res as Promise<{ data: Stripe.Account[]; has_more?: boolean }>;
+  for (;;) {
+    const page = await pagina;
+    const data = page?.data ?? [];
+    const achada = data.find((a) => contaComMetadataDoMedico(a, ids));
+    if (achada) return achada;
+    if (!page?.has_more || data.length === 0) return null;
+    startingAfter = data[data.length - 1]?.id;
+    if (!startingAfter) return null;
+    pagina = listar({ limit: 100, starting_after: startingAfter }) as Promise<{ data: Stripe.Account[]; has_more?: boolean }>;
+  }
+}
+
+export type MedicoConnect = { id: string; email?: string | null; perfilMedicoId?: string };
+
 /** Parâmetros de criação conforme o tipo configurado (sem amarrar a nenhum). */
-export function parametrosNovaConta(tipo: TipoContaConnect, medico: { id: string; email?: string | null }): Stripe.AccountCreateParams {
+export function parametrosNovaConta(tipo: TipoContaConnect, medico: MedicoConnect & { perfilMedicoId: string }): Stripe.AccountCreateParams {
   const base: Stripe.AccountCreateParams = {
     type: tipo,
     country: paisContaConnect(),
-    metadata: { bionMedicoId: medico.id },
+    metadata: metadataNovaConta({ perfilMedicoId: medico.perfilMedicoId, medicoId: medico.id }),
     ...(medico.email ? { email: medico.email } : {}),
   };
   if (tipo === "express") {
@@ -143,9 +213,17 @@ export function parametrosNovaConta(tipo: TipoContaConnect, medico: { id: string
   return base;
 }
 
-/** Cria a conta conectada SÓ se ainda não houver uma. Devolve o status. */
+async function gravarContaNoPerfil(medicoId: string, conta: Stripe.Account, agora: Date): Promise<boolean> {
+  const r = await db.perfilMedico.updateMany({
+    where: { userId: medicoId, OR: [{ stripeAccountId: null }, { stripeAccountId: "" }] },
+    data: { stripeAccountId: conta.id, ...dadosStatus(conta), stripeContaAtualizadaEm: agora },
+  });
+  return r.count > 0;
+}
+
+/** Cria a conta conectada SÓ se ainda não houver uma (banco ou metadata no Stripe). */
 export async function garantirContaMedico(
-  medico: { id: string; email?: string | null },
+  medico: MedicoConnect,
   deps: DepsConnect = {},
 ): Promise<{ criada: boolean; status: StatusContaMedico }> {
   const atual = await perfilDoMedico(medico.id);
@@ -154,15 +232,17 @@ export async function garantirContaMedico(
   exigirChaveTeste(deps.chave);
   const cli = (deps.stripe ?? stripe)();
   const tipo = deps.tipo ?? tipoContaConnect();
-  const conta = await cli.accounts.create(parametrosNovaConta(tipo, medico), {
-    idempotencyKey: `bion-conta-medico-${medico.id}-${tipo}`,
-  });
-  // Só grava se a coluna ainda estiver vazia (null ou ""; corrida entre abas).
-  const r = await db.perfilMedico.updateMany({
-    where: { userId: medico.id, OR: [{ stripeAccountId: null }, { stripeAccountId: "" }] },
-    data: { stripeAccountId: conta.id, ...dadosStatus(conta), stripeContaAtualizadaEm: (deps.agora ?? (() => new Date()))() },
-  });
-  return { criada: r.count > 0, status: await statusContaMedico(medico.id) };
+  const ids = { perfilMedicoId: atual.id, medicoId: medico.id };
+  const existente = await buscarContaPorMetadata(cli, ids);
+  let criadaAgora = false;
+  const conta = existente ?? (criadaAgora = true, await cli.accounts.create(parametrosNovaConta(tipo, { ...medico, perfilMedicoId: atual.id }), {
+    idempotencyKey: chaveIdempotenciaConta(atual.id),
+  }));
+  await gravarContaNoPerfil(medico.id, conta, (deps.agora ?? (() => new Date()))());
+  // `criada` = esta chamada pediu accounts.create (conta nova no Stripe).
+  // Reaproveitar metadata ou perder a corrida no updateMany: criada = false.
+  const status = await statusContaMedico(medico.id);
+  return { criada: criadaAgora && !!status.conta, status };
 }
 
 /**
