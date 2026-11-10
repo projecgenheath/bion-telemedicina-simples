@@ -81,11 +81,3 @@ export function Campo({
   );
 }
 
-/** Selo "em breve" para funcionalidades que dependem de fases futuras. */
-export function EmBreve({ texto = "Em breve" }: { texto?: string }) {
-  return (
-    <span className="inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider bg-amber-500/15 text-amber-800 dark:text-amber-200">
-      {texto}
-    </span>
-  );
-}

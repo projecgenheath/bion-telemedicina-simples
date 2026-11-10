@@ -187,7 +187,7 @@ export function ConsentimentoIA({ onAceito, onRecusar }: { onAceito: () => void;
             onAceito={onAceito}
             onRecusar={onRecusar}
             classeBorda="bpp-sheet-borda"
-            classePrimario="bpp-toque bpp-sheet-primario"
+            classePrimario="bion-toque bpp-sheet-primario"
             registrarDescarte={(fn) => {
               descarteRef.current = fn;
             }}

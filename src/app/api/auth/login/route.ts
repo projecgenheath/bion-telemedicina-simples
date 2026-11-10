@@ -122,9 +122,10 @@ export async function POST(req: NextRequest) {
           );
         }
         const admin = supabaseAdminOuNull();
+        let supabaseId = legado.supabaseId;
         if (admin) {
           // Cria no Auth se ainda não existir
-          if (!legado.supabaseId) {
+          if (!supabaseId) {
             const created = await admin.auth.admin.createUser({
               email: emailNormado,
               password: senha,
@@ -132,14 +133,37 @@ export async function POST(req: NextRequest) {
               user_metadata: { nome: legado.nome },
             });
             if (created.data.user) {
+              supabaseId = created.data.user.id;
               await db.user.update({
                 where: { id: legado.id },
-                data: { supabaseId: created.data.user.id },
+                data: { supabaseId },
               });
             }
           }
-          // Sessão no cookie via sign-in
-          await supabase.auth.signInWithPassword({ email: emailNormado, password: senha });
+          // A senha do Prisma já conferiu, mas o Auth pode estar dessincronizado
+          // (a 1ª tentativa de signInWithPassword já falhou). Sem conferir o
+          // resultado, o login devolvia 200 sem cookie e as rotas seguintes
+          // (ex.: consentimento da BION IA) caíam em 401.
+          let { error: erroSessao } = await supabase.auth.signInWithPassword({
+            email: emailNormado,
+            password: senha,
+          });
+          if (erroSessao && supabaseId) {
+            const upd = await admin.auth.admin.updateUserById(supabaseId, {
+              password: senha,
+              email_confirm: true,
+            });
+            if (!upd.error) {
+              ({ error: erroSessao } = await supabase.auth.signInWithPassword({
+                email: emailNormado,
+                password: senha,
+              }));
+            }
+          }
+          if (erroSessao) {
+            console.warn("[auth/login] Auth não abriu sessão após senha legada válida; usando cookie legado");
+            await criarSessaoLegada(legado.id);
+          }
         } else {
           // Sem service role: mantém cookie legado
           await criarSessaoLegada(legado.id);
@@ -151,7 +175,7 @@ export async function POST(req: NextRequest) {
           email: legado.email,
           role: legado.role as "PACIENTE" | "MEDICO" | "ADMIN",
           precisaTrocarSenha: legado.precisaTrocarSenha,
-          supabaseId: legado.supabaseId,
+          supabaseId,
         };
         await registrarAudit(usuario, {
           acao: "LOGIN",

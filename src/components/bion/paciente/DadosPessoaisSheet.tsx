@@ -305,10 +305,10 @@ export function DadosPessoaisSheet({ campoInicial, onFechar }: { campoInicial?: 
         </fieldset>
 
         <div className="flex gap-2 mt-6">
-          <button type="button" onClick={fechar} disabled={salvando} aria-label="Cancelar e fechar" className="bpp-toque flex-1 min-h-12 rounded-xl border bpp-sheet-borda text-sm font-semibold disabled:opacity-40">
+          <button type="button" onClick={fechar} disabled={salvando} aria-label="Cancelar e fechar" className="bion-toque flex-1 min-h-12 rounded-xl border bpp-sheet-borda text-sm font-semibold disabled:opacity-40">
             Cancelar
           </button>
-          <button type="submit" disabled={salvando} className="bpp-toque flex-1 min-h-12 rounded-xl bpp-sheet-primario text-sm font-bold disabled:opacity-40 inline-flex items-center justify-center gap-2">
+          <button type="submit" disabled={salvando} className="bion-toque flex-1 min-h-12 rounded-xl bpp-sheet-primario text-sm font-bold disabled:opacity-40 inline-flex items-center justify-center gap-2">
             {salvando ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden /> : null}
             {salvando ? "Salvando…" : "Salvar"}
           </button>

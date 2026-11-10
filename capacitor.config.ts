@@ -14,8 +14,18 @@ const config: CapacitorConfig = {
   server: {
     url: APP_START_URL,
     androidScheme: "https",
-    allowNavigation: ["bion-telemedicina-simples.vercel.app"],
+    // checkout.stripe.com: o pagamento (cartão, modo da conta Stripe) abre DENTRO do app.
+    // Sem isso o Capacitor mandava o Checkout para o Chrome; a volta (success_url)
+    // caía no navegador, sem a sessão do app, e o paciente ficava sem a confirmação.
+    allowNavigation: ["bion-telemedicina-simples.vercel.app", "checkout.stripe.com"],
     cleartext: false,
+  },
+  android: {
+    // Android 15+ (targetSdk 35) força a tela de ponta a ponta: sem margens, o topo
+    // do app ficava sob a barra de status e os botões de baixo sob a barra de gestos
+    // (a WebView não informa env(safe-area-inset-*) de forma confiável). "auto" só
+    // aplica as margens quando o sistema força o edge-to-edge.
+    adjustMarginsForEdgeToEdge: "auto",
   },
 };
 

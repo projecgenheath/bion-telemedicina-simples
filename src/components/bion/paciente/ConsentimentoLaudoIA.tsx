@@ -50,14 +50,14 @@ export function ConsentimentoLaudoIA({
           <button
             type="button"
             onClick={onCancelar}
-            className="bpp-toque flex-1 py-3 rounded-xl border bpp-sheet-borda text-sm font-semibold"
+            className="bion-toque flex-1 py-3 rounded-xl border bpp-sheet-borda text-sm font-semibold"
           >
             Cancelar
           </button>
           <button
             type="button"
             onClick={onConcordar}
-            className="bpp-toque flex-1 py-3 rounded-xl bpp-sheet-primario text-sm font-bold"
+            className="bion-toque flex-1 py-3 rounded-xl bpp-sheet-primario text-sm font-bold"
           >
             Concordo e enviar
           </button>

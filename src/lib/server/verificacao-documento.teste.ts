@@ -19,6 +19,7 @@ import { crmNumeroUf } from "../medico-exibicao";
 import {
   extrairPartesCodigoVerificacao,
   formatarCodigoVerificacao,
+  LIMITE_VERIFICAR_IP_POR_MIN,
   urlVerificacaoDocumento,
 } from "../verificacao-documento";
 
@@ -114,6 +115,8 @@ igual("crm '12.345/MG'", crmNumeroUf("12.345/MG"), "CRM 12345/MG");
 igual("crm já no formato", crmNumeroUf("CRM 34567/MG"), "CRM 34567/MG");
 igual("crm sem UF cai no rótulo", crmNumeroUf("12345"), "CRM 12345");
 igual("crm vazio", crmNumeroUf(""), "CRM não informado");
+
+igual("limite por IP da verificação pública", LIMITE_VERIFICAR_IP_POR_MIN, 20);
 
 console.log(`verificacao-documento: ${ok} ok, ${falhas} falha(s)`);
 if (falhas) process.exit(1);

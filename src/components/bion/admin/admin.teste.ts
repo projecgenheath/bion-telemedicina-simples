@@ -140,8 +140,8 @@ const css = readFileSync(new URL("./admin.css", import.meta.url), "utf8");
 const TEXTOS = ["--ba-texto", "--ba-texto-2", "--ba-texto-3", "--ba-sinal", "--ba-ok", "--ba-atencao", "--ba-critico", "--ba-dinheiro", "--ba-neutro"];
 // Pior caso do céu sob o card: as duas pontas do degradê de cada modo.
 const CEUS = {
-  claro: { vars: bloco(css, ":root"), fundos: ["#ffffff", "#1d4a8a"] },
-  escuro: { vars: bloco(css, ".dark"), fundos: ["#000000", "#0e2d63"] },
+  claro: { vars: bloco(css, ":root"), fundos: ["#ffffff", "#f7f5fc"] },
+  escuro: { vars: bloco(css, ".dark"), fundos: ["#000000", "#070414"] },
 };
 for (const [modo, { vars, fundos }] of Object.entries(CEUS)) {
   for (const f of fundos) {
@@ -170,10 +170,88 @@ for (const [modo, { vars, fundos }] of Object.entries(CEUS)) {
   }
 }
 // Fundos sólidos do card deslizável: texto branco
-for (const f of ["#047857", "#b91c1c", "#92400e", "#123e7d", "#334155"]) {
+for (const f of ["#047857", "#b91c1c", "#92400e", "#24058D", "#334155"]) {
   const c = contraste(cor("#ffffff"), cor(f));
   verdade(`AA texto branco no fundo do gesto ${f}`, c >= 4.5, c.toFixed(2));
 }
+
+
+/* Pílulas discretas: cápsula sem min 2,75 rem; alvo de 44 px no ::before. */
+verdade("pílula alvo sem min-width 2.75rem", !/\.ba-pilula-alvo\s*\{[^}]*min-width:\s*2\.75rem/.test(css));
+verdade("pílula alvo sem min-height 2.75rem", !/\.ba-pilula-alvo\s*\{[^}]*min-height:\s*2\.75rem/.test(css));
+verdade("pílula alvo ::before tem 44px de largura", /\.ba-pilula-alvo::before\s*\{[^}]*width:\s*44px/.test(css));
+verdade("pílula alvo ::before tem 44px de altura", /\.ba-pilula-alvo::before\s*\{[^}]*height:\s*44px/.test(css));
+verdade("indicador da pílula não usa #24058D", !/\.ba-pilula-indicador\s*\{[^}]*#24058D/i.test(css));
+verdade("indicador da pílula usa #96A5FF", /\.ba-pilula-indicador\s*\{[^}]*#96A5FF/i.test(css));
+
+/* Pares fixos da paleta roxa (texto ≥ 4,5:1; indicador na cápsula ≥ 3:1). */
+const paresFixos: [string, string, string, number][] = [
+  ["botão primário claro: branco em #24058D", "#ffffff", "#24058D", 4.5],
+  ["botão primário claro: branco no fim #160347", "#ffffff", "#160347", 4.5],
+  ["botão primário escuro: #24058D em #96A5FF", "#24058D", "#96A5FF", 4.5],
+  ["aba/filtro claro: branco em #24058D", "#ffffff", "#24058D", 4.5],
+  ["aba/filtro escuro: #24058D em #96A5FF", "#24058D", "#96A5FF", 4.5],
+  ["indicador da pílula: #96A5FF na cápsula #09090b", "#96A5FF", "#09090b", 3],
+  ["bolha do suporte clara: branco em #24058D", "#ffffff", "#24058D", 4.5],
+  ["bolha do suporte escura: #24058D em #96A5FF", "#24058D", "#96A5FF", 4.5],
+];
+for (const [nome, a, b, min] of paresFixos) {
+  const c = contraste(cor(a), cor(b));
+  verdade(`AA ${nome}`, c >= min, c.toFixed(2));
+}
+
+/* Casca do tablet e trilho: cortes distintos da densidade dos módulos.
+   Lê o fonte (não importa o módulo "use client", para o teste rodar também
+   com --conditions=react-server). */
+const prefSrc = readFileSync(new URL("./ui/preferencias.ts", import.meta.url), "utf8");
+const num = (nome) => Number((prefSrc.match(new RegExp(`export const ${nome} = (\\d+)`)) || [])[1]);
+igual("casca larga a partir de 768", num("LARGURA_CASCA"), 768);
+igual("módulos e tabelas continuam em 1024", num("LARGURA_DESKTOP"), 1024);
+igual("trilho abre por padrão a partir de 1280", num("LARGURA_TRILHO_ABERTO"), 1280);
+
+const shellSrc = readFileSync(new URL("./AdminShell.tsx", import.meta.url), "utf8");
+verdade("casca usa useCascaLarga", /const largo = useCascaLarga\(\)/.test(shellSrc));
+{
+  const imp = shellSrc.match(/import \{([^}]+)\} from "\.\/ui\/preferencias"/);
+  verdade("casca não importa useLargo", !!imp && !/\buseLargo\b/.test(imp[1]));
+}
+verdade(
+  "trilho segue o corte 1280 quando não há preferência",
+  /usePreferenciaBool\("bion-admin-trilho", padraoAberto\)/.test(shellSrc)
+  && /useMinLargura\(LARGURA_TRILHO_ABERTO\)/.test(shellSrc),
+);
+verdade("trilho não abre por padrão fixo (true)", !/usePreferenciaBool\("bion-admin-trilho", true\)/.test(shellSrc));
+
+verdade("useLargo ainda mede LARGURA_DESKTOP", /export function useLargo\(\)[\s\S]*LARGURA_DESKTOP/.test(prefSrc));
+verdade("useCascaLarga mede LARGURA_CASCA", /export function useCascaLarga\(\)[\s\S]*LARGURA_CASCA/.test(prefSrc));
+
+verdade("grade de cartões auto-fit em 13.75rem (220px)", /\.ba-grade-cartoes\s*\{[^}]*minmax\(min\(100%, 13\.75rem\)/.test(css));
+
+const centroSrc = readFileSync(new URL("./comando/CentroComando.tsx", import.meta.url), "utf8");
+verdade("Decisões e Repasses ocupam 1 col no tablet", (centroSrc.match(/col-span-2 md:col-span-1/g) || []).length >= 2);
+verdade("agenda e gráfico lado a lado no tablet", /md:grid-cols-3/.test(centroSrc) && /md:col-span-2/.test(centroSrc));
+
+
+const tabelaSrc = readFileSync(new URL("./ui/TabelaAdmin.tsx", import.meta.url), "utf8");
+verdade("coluna secundária some abaixo de 1440", /\.ba-col-secundaria\s*\{[^}]*display:\s*none/.test(css));
+verdade("coluna secundária aparece em 1440", /@media \(min-width: 1440px\)/.test(css) && /\.ba-col-secundaria\s*\{[^}]*display:\s*table-cell/.test(css));
+verdade("TabelaAdmin não usa o xl (1280) para secundária", !/hidden xl:table-cell/.test(tabelaSrc) && /ba-col-secundaria/.test(tabelaSrc));
+
+const agendaSrc = readFileSync(new URL("./agendamentos/AgendamentosModulo.tsx", import.meta.url), "utf8");
+verdade("filtros do celular abrem numa folha", /<SheetAdmin[\s\S]*Filtros da agenda/.test(agendaSrc) && /ListFilter/.test(agendaSrc));
+verdade("alvos de toque dos filtros têm 44px", /ba-aba !min-h-11/.test(agendaSrc) && /ba-botao ba-botao-secundario !min-h-11/.test(agendaSrc));
+verdade("Status e Pago na mesma coluna da agenda", /id: "status"/.test(agendaSrc) && !/id: "pago"/.test(agendaSrc));
+verdade("KPIs da agenda em 2 colunas no celular", /grid grid-cols-2 lg:grid-cols-5/.test(agendaSrc));
+
+
+const relSrc = readFileSync(new URL("./relatorios/RelatoriosModulo.tsx", import.meta.url), "utf8");
+verdade("Relatórios sem texto interno 'como na tela antiga'", !/como na tela antiga/.test(relSrc));
+verdade("Relatórios explica o total da plataforma", /total da plataforma/.test(relSrc));
+
+const estadoSrc = readFileSync(new URL("./ui/Estados.tsx", import.meta.url), "utf8");
+verdade("EstadoVazio tem altura mínima", /min-h-\[min\(22rem,calc\(100dvh-22rem\)\)\]/.test(estadoSrc));
+verdade("céu claro não termina em #24058D", !/\.ba-ceu\s*\{[^}]*#24058D/.test(css));
+verdade("céu claro termina em lilás #f7f5fc", /\.ba-ceu\s*\{[^}]*#f7f5fc 100%/.test(css));
 
 console.log(`${ok} ok, ${falhas} falha(s)`);
 if (falhas) process.exit(1);

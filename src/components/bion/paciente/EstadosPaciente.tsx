@@ -43,7 +43,7 @@ const ICONE: Record<Superficie, string> = {
 };
 
 export function Esqueleto({ className = "" }: { className?: string }) {
-  return <span aria-hidden className={`bpp-esqueleto block ${className}`} />;
+  return <span aria-hidden className={`bion-esqueleto block ${className}`} />;
 }
 
 export function EstadoCarregando({
@@ -100,7 +100,7 @@ export function EstadoVazio({
         <button
           type="button"
           onClick={acao.onClick}
-          className={`bpp-toque mt-4 min-h-11 px-5 rounded-full text-sm font-bold inline-flex items-center justify-center gap-2 ${
+          className={`bion-toque mt-4 min-h-11 px-5 rounded-full text-sm font-bold inline-flex items-center justify-center gap-2 ${
             superficie === "janela" ? "bpp-sheet-primario" : superficie === "marinho" ? "bg-white text-bion-ink" : "bp-acao"
           }`}
         >
@@ -135,7 +135,7 @@ export function EstadoErro({
         <button
           type="button"
           onClick={onTentarDeNovo}
-          className={`bpp-toque mt-3 min-h-11 px-4 rounded-full text-sm font-bold inline-flex items-center gap-2 ${
+          className={`bion-toque mt-3 min-h-11 px-4 rounded-full text-sm font-bold inline-flex items-center gap-2 ${
             superficie === "janela" ? "bpp-sheet-chip bpp-sheet-forte" : "bg-bion-ink/8 text-bion-ink dark:bg-white/10 dark:text-bion-paper"
           }`}
         >

@@ -15,7 +15,7 @@ import { confirmacaoConfere, iniciais } from "../medicos/medicos";
 import { FormularioPaciente } from "./FormularioPaciente";
 import { useAcoesPaciente } from "./acoes";
 import { RevelarDado } from "./RevelarDado";
-import { chamadosDoPaciente, consultasDoPaciente, documentosDoPaciente, estadoPaciente, formatarCpf, idadeExibida, situacaoDe } from "./pacientes";
+import { chamadosDoPaciente, consultasDoPaciente, documentosDoPaciente, estadoDocumento, estadoPaciente, formatarCpf, idadeExibida, rotuloDocumentoAdmin, situacaoDe } from "./pacientes";
 
 export type ModoFichaPaciente = "ficha" | "editar" | "anonimizar";
 type AbaFicha = "dados" | "consultas" | "documentos" | "chamados";
@@ -198,26 +198,24 @@ function Ficha({ paciente: p, agora, onModo }: { paciente: PacienteRegistro; ago
         ) : null}
 
         {aba === "documentos" ? (
-          <>
-            {docs.homonimo ? <AvisoHomonimo /> : null}
-            {docs.lista.length === 0 ? (
-              <p className="text-sm ba-texto-2">Nenhum documento emitido.</p>
-            ) : (
-              <ul className="space-y-1.5">
-                {docs.lista.map((d) => (
-                  <li key={d.id} className="ba-card flex items-center gap-3" data-denso="true">
-                    <ClipboardList className="w-4 h-4 shrink-0" style={{ color: "var(--ba-sinal)" }} aria-hidden />
-                    <span className="flex-1 min-w-0">
-                      <span className="font-semibold block break-words">{d.titulo}</span>
-                      <span className="text-xs ba-texto-2">
-                        {d.medico} · {d.data}
-                      </span>
+          docs.lista.length === 0 ? (
+            <p className="text-sm ba-texto-2">Nenhum documento emitido.</p>
+          ) : (
+            <ul className="space-y-1.5">
+              {docs.lista.map((d) => (
+                <li key={d.id} className="ba-card flex items-center gap-3" data-denso="true">
+                  <ClipboardList className="w-4 h-4 shrink-0" style={{ color: "var(--ba-sinal)" }} aria-hidden />
+                  <span className="flex-1 min-w-0">
+                    <span className="font-semibold block break-words">{rotuloDocumentoAdmin(d)}</span>
+                    <span className="text-xs ba-texto-2">
+                      {d.medico} · {d.data}
                     </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </>
+                  </span>
+                  {d.status === "cancelado" ? <ChipEstado estado={estadoDocumento(d.status)} /> : null}
+                </li>
+              ))}
+            </ul>
+          )
         ) : null}
 
         {aba === "chamados" ? (

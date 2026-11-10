@@ -1,8 +1,8 @@
 /* ==================================================================== */
 /* Torre BION — fundação visual do perfil ADMINISTRATIVO (classes ba-*)  */
 /*                                                                      */
-/* Herda o DNA do app (Inter, bion-ink, degradê branco puro → marinho,  */
-/* preto absoluto → marinho no Dark, vidro líquido) sem alterar         */
+/* Herda o DNA do app (Inter, bion-ink, degradê branco puro → roxo da marca,  */
+/* preto absoluto → roxo no Dark, vidro líquido) sem alterar         */
 /* globals.css, bp-* (paciente) ou bm-* (médico).                       */
 /*                                                                      */
 /* Contraste (WCAG AA): todo par texto/superfície abaixo é conferido    */
@@ -18,11 +18,11 @@
   --ba-texto: #0a1f44;                 /* bion-ink */
   --ba-texto-2: #3b4a66;               /* secundário (≥ 7:1 no card) */
   --ba-texto-3: #52607a;               /* rótulos pequenos (≥ 5:1) */
-  --ba-sinal: #075985;                 /* ciano-torre: ação/foco do admin */
+  --ba-sinal: #24058D;                 /* roxo da marca: ação/foco do admin */
   --ba-ok: #065f46;
   --ba-atencao: #92400e;
   --ba-critico: #991b1b;
-  --ba-dinheiro: #123e7d;              /* bion-sea */
+  --ba-dinheiro: #24058D;              /* roxo da marca (alinhado ao sinal) */
   --ba-neutro: #334155;
   --ba-card: rgba(255, 255, 255, 0.88);
   --ba-card-solido: #ffffff;
@@ -40,11 +40,11 @@
   --ba-texto: #f2f6fc;                 /* bion-paper */
   --ba-texto-2: #c7d2e3;
   --ba-texto-3: #a9b6cb;
-  --ba-sinal: #7dd3fc;
+  --ba-sinal: #96A5FF;
   --ba-ok: #6ee7b7;
   --ba-atencao: #fcd34d;
   --ba-critico: #fca5a5;
-  --ba-dinheiro: #93c5fd;
+  --ba-dinheiro: #96A5FF;
   --ba-neutro: #cbd5e1;
   --ba-card: rgba(12, 16, 28, 0.8);
   --ba-card-solido: #05080f;
@@ -76,22 +76,25 @@
 }
 .ba-app[data-densidade="compacta"] { --ba-pad: 0.875rem; --ba-linha: 2.75rem; }
 
-/* Céu: branco puro → marinho (Clean) / preto absoluto → marinho (Dark).
-   Texto solto só na faixa de cima (0–35%), que é branco/preto puro. */
+/* Céu: branco/preto puro no topo (texto solto só nesta faixa, 0–35%),
+   depois um lilás/noite bem claro. O roxo da marca não chega no rodapé —
+   em telas curtas a poça #24058D / #1a0a4a manchava o fundo vazio. */
 .ba-ceu {
-  background: linear-gradient(180deg, #ffffff 0%, #ffffff 35%, #e6eef9 62%, #a9c0e0 84%, #1d4a8a 100%);
+  background-color: #f7f5fc;
+  background-image: linear-gradient(180deg, #ffffff 0%, #ffffff 35%, #f7f5fc 58%, #f7f5fc 100%);
   background-attachment: fixed;
 }
 .dark .ba-ceu {
-  background: linear-gradient(180deg, #000000 0%, #000000 35%, #030a17 62%, #08204a 86%, #0e2d63 100%);
+  background-color: #070414;
+  background-image: linear-gradient(180deg, #000000 0%, #000000 35%, #070414 58%, #070414 100%);
   background-attachment: fixed;
 }
 /* Painéis laterais (Conta / Fila) e superfícies sobrepostas */
 .ba-painel {
-  background: linear-gradient(180deg, #ffffff 0%, #f6f9fd 60%, #e9f0fa 100%);
+  background: linear-gradient(180deg, #ffffff 0%, #f7f5fc 60%, #eee8f8 100%);
 }
 .dark .ba-painel {
-  background: linear-gradient(180deg, #000000 0%, #02060d 60%, #050f20 100%);
+  background: linear-gradient(180deg, #000000 0%, #060410 60%, #0c0820 100%);
 }
 
 /* Carrossel do celular: Conta ⟷ Centro ⟷ Fila */
@@ -143,17 +146,62 @@
   width: 0.5rem;
   border-radius: 9999px;
   background: rgba(255, 255, 255, 0.5);
-  transition: width 0.2s ease, background-color 0.2s ease;
+  position: relative;
+  z-index: 1;
 }
-.ba-pilula-ponto[data-ativo="true"] { width: 1.5rem; background: #7dd3fc; }
-/* Alvo de toque ≥ 44 px mesmo com o ponto pequeno */
+/* O indicador ciano já marca o item ativo; o ponto cinza por cima sumiria
+   com ele. */
+.ba-pilula-alvo[aria-current="page"] .ba-pilula-ponto {
+  background: transparent;
+}
+/* Indicador deslizante (.bion-indicador no markup). #96A5FF sobre a
+   cápsula escura (contraste ~8,6:1). Não usar #24058D aqui: fica ~1,4:1. */
+.ba-pilula-indicador {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1.5rem;
+  height: 0.5rem;
+  border-radius: 9999px;
+  background: #96A5FF;
+  pointer-events: none;
+  z-index: 0;
+}
+/* Alvo de toque de 44 px sem inflar a cápsula: o ::before transborda e
+   não entra no fluxo (position absolute, centralizado). */
 .ba-pilula-alvo {
-  min-width: 2.75rem;
-  min-height: 2.75rem;
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  width: 1.5rem;
+  height: 0.5rem;
   border-radius: 9999px;
+  z-index: 1;
+}
+.ba-pilula-alvo::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 44px;
+  height: 44px;
+  transform: translate(-50%, -50%);
+}
+/* Botão da busca: ícone de 1 rem, sem a largura reservada do ponto. */
+.ba-pilula-alvo:last-child {
+  width: auto;
+  height: auto;
+  min-width: 1rem;
+  min-height: 1rem;
+  padding: 0.125rem;
+}
+
+/* Cartões da operação: cabem 2+ a partir de ~220 px, sem esticar em coluna única no tablet. */
+.ba-grade-cartoes {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 13.75rem), 1fr));
 }
 
 /* Desktop / tablet largo: trilho + barra de comando + conteúdo */
@@ -164,17 +212,37 @@
   height: 100%;
 }
 .ba-trilho {
+  position: relative;
   width: 4.5rem;
   height: 100%;
+  overflow-x: hidden;
   overflow-y: auto;
   scrollbar-width: none;
   background: var(--ba-trilho);
   -webkit-backdrop-filter: blur(18px) saturate(1.3);
   backdrop-filter: blur(18px) saturate(1.3);
   border-right: 1px solid var(--ba-borda);
-  transition: width 0.2s ease;
 }
 .ba-trilho[data-aberto="true"] { width: 15rem; }
+/* Cabeçalho do trilho: com o PR #166 entra um Logo de 40 px ao lado do
+   botão de 44 px. Recolhido (~4,5 rem de largura útil), mostra só o
+   botão de expandir — 40+44 px lado a lado estouraria na horizontal. */
+.ba-trilho-cabecalho {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  padding: 0 0.375rem;
+  margin-bottom: 0.5rem;
+  height: 3rem;
+}
+.ba-trilho:not([data-aberto="true"]) .ba-trilho-cabecalho {
+  justify-content: center;
+  padding: 0;
+}
+.ba-trilho:not([data-aberto="true"]) .ba-trilho-cabecalho > :not(button) {
+  display: none;
+}
 .ba-trilho-item {
   position: relative;
   display: flex;
@@ -194,15 +262,16 @@
   background: color-mix(in srgb, var(--ba-sinal) 14%, transparent);
   color: var(--ba-texto);
 }
-.ba-trilho-item[aria-current="page"]::before {
-  content: "";
+/* Traço do item ativo: .ba-trilho-indicador (.bion-indicador) no markup. */
+.ba-trilho-indicador {
   position: absolute;
-  left: -0.5rem;
-  top: 25%;
-  bottom: 25%;
+  left: 0;
+  top: 0;
   width: 3px;
   border-radius: 9999px;
   background: var(--ba-sinal);
+  pointer-events: none;
+  z-index: 2;
 }
 .ba-barra {
   position: sticky;
@@ -291,11 +360,11 @@ button.ba-card:hover, a.ba-card:hover, .ba-card[role="button"]:hover { transform
 }
 .ba-botao:disabled { opacity: 0.5; cursor: not-allowed; }
 .ba-botao-primario {
-  background: linear-gradient(135deg, #123e7d 0%, #0a1f44 100%);
+  background: linear-gradient(135deg, #24058D 0%, #160347 100%);
   color: #ffffff;
-  box-shadow: 0 8px 20px -6px rgba(10, 31, 68, 0.45);
+  box-shadow: 0 8px 20px -6px rgba(36, 5, 141, 0.45);
 }
-.dark .ba-botao-primario { background: linear-gradient(135deg, #7dd3fc 0%, #93c5fd 100%); color: #05080f; }
+.dark .ba-botao-primario { background: #96A5FF; color: #24058D; }
 .ba-botao-secundario {
   background: color-mix(in srgb, var(--ba-texto) 7%, transparent);
   color: var(--ba-texto);
@@ -368,7 +437,13 @@ button.ba-card:hover, a.ba-card:hover, .ba-card[role="button"]:hover { transform
 .ba-tabela tbody tr[data-clicavel="true"]:hover td { background: color-mix(in srgb, var(--ba-sinal) 7%, transparent); }
 .ba-tabela tbody tr[aria-selected="true"] td { background: color-mix(in srgb, var(--ba-sinal) 12%, transparent); }
 .ba-tabela tbody tr:focus-visible { outline: 2px solid var(--ba-sinal); outline-offset: -2px; }
-.ba-tabela .ba-num { text-align: right; font-variant-numeric: tabular-nums; }
+.ba-tabela .ba-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* Colunas secundárias (ex.: Especialidade): só a partir de 1440, onde a
+   tabela de Agendamentos não corta o Valor. Não usa o xl do Tailwind (1280). */
+.ba-col-secundaria { display: none; }
+@media (min-width: 1440px) {
+  .ba-col-secundaria { display: table-cell; }
+}
 
 /* ---------- Estados (carregando / vazio / erro) ------------------------ */
 .ba-esqueleto { background: var(--ba-esqueleto); border-radius: 0.75rem; }
@@ -406,7 +481,7 @@ button.ba-card:hover, a.ba-card:hover, .ba-card[role="button"]:hover { transform
 .ba-deslizar-fundo[data-tom="ok"] { background: #047857; }
 .ba-deslizar-fundo[data-tom="critico"] { background: #b91c1c; }
 .ba-deslizar-fundo[data-tom="atencao"] { background: #92400e; }
-.ba-deslizar-fundo[data-tom="dinheiro"], .ba-deslizar-fundo[data-tom="sinal"] { background: #123e7d; }
+.ba-deslizar-fundo[data-tom="dinheiro"], .ba-deslizar-fundo[data-tom="sinal"] { background: #24058D; }
 .ba-deslizar-fundo[data-tom="neutro"] { background: #334155; }
 .ba-deslizar-frente { position: relative; will-change: transform; }
 .ba-deslizar-frente[data-soltando="true"] { transition: transform 0.22s cubic-bezier(0.2, 0.8, 0.2, 1); }
@@ -515,10 +590,10 @@ button.ba-card:hover, a.ba-card:hover, .ba-card[role="button"]:hover { transform
     color: var(--ba-texto-2);
     white-space: nowrap;
   }
-  .ba-aba[aria-selected="true"] { background: #0a1f44; color: #fff; }
-  .ba-aba[aria-pressed="true"] { background: #0a1f44; color: #fff; }
+  .ba-aba[aria-selected="true"] { background: #24058D; color: #fff; }
+  .ba-aba[aria-pressed="true"] { background: #24058D; color: #fff; }
   .dark .ba-aba[aria-selected="true"],
-  .dark .ba-aba[aria-pressed="true"] { background: #7dd3fc; color: #05080f; }
+  .dark .ba-aba[aria-pressed="true"] { background: #96A5FF; color: #24058D; }
   /* Botão-filtro avulso (fora de .ba-abas) */
   .ba-aba-solta { border: 1px solid var(--ba-borda); background: color-mix(in srgb, var(--ba-card-solido) 80%, transparent); }
 
@@ -559,8 +634,8 @@ button.ba-card:hover, a.ba-card:hover, .ba-card[role="button"]:hover { transform
   }
   .ba-slot:disabled { opacity: 0.45; cursor: not-allowed; }
   .ba-slot:disabled > span:first-child { text-decoration: line-through; }
-  .ba-slot[data-escolhido="true"] { background: #0a1f44; border-color: #0a1f44; color: #fff; }
-  .dark .ba-slot[data-escolhido="true"] { background: #7dd3fc; border-color: #7dd3fc; color: #05080f; }
+  .ba-slot[data-escolhido="true"] { background: #24058D; border-color: #24058D; color: #fff; }
+  .dark .ba-slot[data-escolhido="true"] { background: #96A5FF; border-color: #96A5FF; color: #24058D; }
 }
 
 /* ---------- Auditoria, Monitor LLM e Relatórios (PR 6) ----------------- */
@@ -582,8 +657,8 @@ button.ba-card:hover, a.ba-card:hover, .ba-card[role="button"]:hover { transform
     border: 1px solid var(--ba-borda);
   }
   .ba-filtro .ba-chip-ponto { width: 0.5rem; height: 0.5rem; background: var(--ba-tom, currentColor); }
-  .ba-filtro[aria-pressed="true"] { background: #0a1f44; border-color: #0a1f44; color: #fff; }
-  .dark .ba-filtro[aria-pressed="true"] { background: #7dd3fc; border-color: #7dd3fc; color: #05080f; }
+  .ba-filtro[aria-pressed="true"] { background: #24058D; border-color: #24058D; color: #fff; }
+  .dark .ba-filtro[aria-pressed="true"] { background: #96A5FF; border-color: #96A5FF; color: #24058D; }
   .ba-filtro[aria-pressed="true"] .ba-chip-ponto { background: currentColor; }
 
   /* Linha do tempo da auditoria: trilha vertical, marco da hora na cor da pior severidade */
@@ -658,6 +733,7 @@ button.ba-card:hover, a.ba-card:hover, .ba-card[role="button"]:hover { transform
 }
 @media (prefers-reduced-motion: no-preference) {
   .ba-anel-valor { transition: stroke-dasharray 0.6s ease-out; }
+  .ba-trilho { transition: width 180ms ease-out; }
 }
 
 /* ------------------------------------------------------------------ */
@@ -665,7 +741,7 @@ button.ba-card:hover, a.ba-card:hover, .ba-card[role="button"]:hover { transform
 /* ------------------------------------------------------------------ */
 @layer components {
   /* Bolhas da conversa do chamado: a pessoa à esquerda, o suporte à direita.
-     Texto sempre na cor do tema (AA); o lado do suporte usa fundo marinho/ciano sólido. */
+     Texto sempre na cor do tema (AA); o lado do suporte usa o roxo da marca. */
   .ba-bolha {
     display: block;
     max-width: min(36rem, 92%);
@@ -679,11 +755,11 @@ button.ba-card:hover, a.ba-card:hover, .ba-card[role="button"]:hover { transform
   .ba-bolha[data-lado="suporte"] {
     margin-left: auto;
     border-bottom-right-radius: 0.35rem;
-    background: #0a1f44;
-    border-color: #0a1f44;
+    background: #24058D;
+    border-color: #24058D;
     color: #fff;
   }
-  .dark .ba-bolha[data-lado="suporte"] { background: #0c4a6e; border-color: #0e7490; color: #f2f6fc; }
+  .dark .ba-bolha[data-lado="suporte"] { background: #96A5FF; border-color: #96A5FF; color: #24058D; }
   blockquote.ba-bolha { max-width: 100%; margin: 0; }
 
   /* Seções focáveis por âncora: sem anel ao receber foco programático. */

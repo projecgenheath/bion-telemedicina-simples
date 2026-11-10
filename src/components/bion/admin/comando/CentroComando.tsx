@@ -17,6 +17,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { useBion } from "@/lib/bion-store";
+import { Logo } from "@/components/bion/brand";
 import { urlDa, type View } from "@/lib/rotas";
 import { CardAdmin, KpiAdmin } from "../ui/CardAdmin";
 import { ChipEstado } from "../ui/ChipEstado";
@@ -75,8 +76,11 @@ export function CentroComando() {
   return (
     <div className="px-4 lg:px-8 pt-[max(1.25rem,env(safe-area-inset-top))] lg:pt-6 pb-28 lg:pb-10 max-w-[1400px] mx-auto w-full space-y-6">
       <header className="flex items-center gap-3">
-        <span className="ba-estado-icone !w-11 !h-11 shrink-0" data-tom="sinal" aria-hidden>
-          <Activity className="w-5 h-5" />
+        {/* Logo oficial no cabeçalho mobile (e também no desktop).
+            O visual final depende do PR #166: lá o Logo size="sm" vira o
+            círculo de 40 px. Até lá, o monograma atual aparece inteiro. */}
+        <span className="shrink-0 inline-flex items-center justify-center">
+          <Logo size="sm" />
         </span>
         <div className="flex-1 min-w-0">
           <h1 className="text-2xl lg:text-3xl font-black leading-tight break-words">
@@ -100,7 +104,7 @@ export function CentroComando() {
       {/* ---------------- Agora ---------------- */}
       <section aria-labelledby="cc-agora" className="space-y-3">
         <h2 id="cc-agora" className="ba-rotulo">Agora</h2>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 bion-surgir-lista">
           <KpiAdmin
             icone={CalendarDays}
             rotulo="Consultas hoje"
@@ -126,13 +130,13 @@ export function CentroComando() {
             carregando={!filaPronta && fila.length === 0}
             tom={fila.length ? "atencao" : "ok"}
             detalhe={fila.length ? "toque para abrir a Fila" : "tudo em ordem"}
-            className="col-span-2 lg:col-span-1"
+            className="col-span-2 md:col-span-1"
             onAbrir={abrirFila}
           />
           <KpiAdmin
             icone={Wallet}
             rotulo="Repasses a pagar"
-            className="col-span-2 lg:col-span-1"
+            className="col-span-2 md:col-span-1"
             onAbrir={() => ir("admin-repasses")}
             valor={repasses.erro ? "—" : brl(repasses.dados?.totalLiquidoCentavos ?? 0)}
             carregando={repasses.carregando}
@@ -145,9 +149,9 @@ export function CentroComando() {
           />
         </div>
 
-        <div className="grid lg:grid-cols-3 gap-3">
+        <div className="grid md:grid-cols-3 gap-3 bion-surgir-lista">
           <CardAdmin
-            className="lg:col-span-2"
+            className="md:col-span-2"
             titulo="Agenda de hoje"
             icone={CalendarDays}
             acao={
@@ -207,7 +211,7 @@ export function CentroComando() {
       {/* ---------------- Operação ---------------- */}
       <section aria-labelledby="cc-operacao" className="space-y-3">
         <h2 id="cc-operacao" className="ba-rotulo">Operação</h2>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="ba-grade-cartoes bion-surgir-lista">
           <CardAdmin
             titulo="Médicos"
             icone={Stethoscope}
