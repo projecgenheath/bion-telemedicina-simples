@@ -1,4 +1,5 @@
 import "server-only";
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { lerPosologia } from "@/lib/saude-paciente";
 import { lembreteDevido, type LembreteDisparo } from "@/lib/lembrete-ciclo";
@@ -17,11 +18,16 @@ import { payloadPushNotificacao } from "@/lib/server/push-notificacao";
 /* inscritos.                                                          */
 /*                                                                     */
 /* Pré-requisito: migração 20261104a (colunas feitoEm/                 */
-/* ultimoDisparoEm) — NÃO APLICADA. Sem as colunas, `rodarAvisos`      */
-/* responde { ativo: false } e nada quebra (a existência das colunas   */
-/* é verificada antes de rodar; os campos são lidos por tipo           */
-/* estrutural justamente para este arquivo compilar e rodar antes e    */
-/* depois da migração).                                                */
+/* ultimoDisparoEm). Em produção as colunas JÁ existem (aplicadas      */
+/* fora do schema_migrations); o model Prisma de Lembrete NÃO as      */
+/* declara de propósito — se o client passar a SELECIONÁ-las,         */
+/* ambientes sem a migration quebram em TODA leitura de Lembrete.      */
+/*                                                                     */
+/* Por isso este job lê e grava os dois campos por SQL cru             */
+/* ($queryRaw / $executeRaw). Um `db.lembrete.update({ ultimoDisparoEm */
+/* })` é rejeitado pelo client com PrismaClientValidationError         */
+/* (54 falhas em /api/cron/lembretes, 04/11 a 10/11). Sem as           */
+/* colunas, `rodarAvisos` responde { ativo: false } e nada dispara.    */
 /* ------------------------------------------------------------------ */
 
 /** Orçamento da rodada (o pg_net espera 10 s; a rota tem maxDuration 10). */
@@ -44,20 +50,47 @@ export type ResultadoAvisos = {
   incompleto: boolean;
 };
 
+/** Subconjunto do Prisma usado pelo job (injetável nos testes). */
+export type BancoAvisos = {
+  $queryRaw: (typeof db)["$queryRaw"];
+  $executeRaw: (typeof db)["$executeRaw"];
+  lembrete: { findMany: (typeof db)["lembrete"]["findMany"] };
+  medicamentoEmUso: { findMany: (typeof db)["medicamentoEmUso"]["findMany"] };
+  notificacao: { create: (typeof db)["notificacao"]["create"] };
+};
+
 type DependenciasAvisos = {
   colunasExistem?: () => Promise<boolean>;
   enviarPush?: typeof enviarPushParaUsuario;
+  db?: BancoAvisos;
 };
 
-async function colunasExistemPadrao(): Promise<boolean> {
+type CamposDisparo = { id: string; feitoEm: Date | null; ultimoDisparoEm: Date | null };
+
+async function colunasExistemPadrao(banco: BancoAvisos): Promise<boolean> {
   try {
-    const linhas = await db.$queryRaw<{ n: number }[]>`
+    const linhas = await banco.$queryRaw<{ n: number }[]>`
       SELECT COUNT(*)::int AS n FROM information_schema.columns
       WHERE table_name = 'Lembrete' AND column_name IN ('feitoEm', 'ultimoDisparoEm')`;
     return (linhas[0]?.n ?? 0) === 2;
   } catch {
     return false;
   }
+}
+
+/** Lê feitoEm/ultimoDisparoEm por SQL cru — o model Prisma não tem os campos. */
+async function camposDisparoPorId(banco: BancoAvisos, ids: string[]): Promise<Map<string, CamposDisparo>> {
+  const mapa = new Map<string, CamposDisparo>();
+  if (!ids.length) return mapa;
+  const linhas = await banco.$queryRaw<CamposDisparo[]>`
+    SELECT id, "feitoEm", "ultimoDisparoEm" FROM "Lembrete" WHERE id IN (${Prisma.join(ids)})`;
+  for (const l of linhas) mapa.set(l.id, l);
+  return mapa;
+}
+
+/** Grava ultimoDisparoEm sem passar pelo validador do Prisma (campo fora do model). */
+async function marcarUltimoDisparo(banco: BancoAvisos, id: string, agora: Date): Promise<void> {
+  await banco.$executeRaw`UPDATE "Lembrete" SET "ultimoDisparoEm" = ${agora} WHERE "id" = ${id}`;
 }
 
 /**
@@ -69,23 +102,29 @@ export async function rodarAvisosLembretes(
   dep: DependenciasAvisos = {},
 ): Promise<ResultadoAvisos> {
   const r: ResultadoAvisos = { ativo: false, examinados: 0, disparados: 0, pushes: 0, semInscricao: 0, erros: 0, incompleto: false };
-  const colunasExistem = dep.colunasExistem ?? colunasExistemPadrao;
-  if (!(await colunasExistem())) return r; // migração 20261104a não aplicada
+  const banco = dep.db ?? db;
+  const colunasExistem = dep.colunasExistem ?? (() => colunasExistemPadrao(banco));
+  if (!(await colunasExistem())) return r; // migração 20261104a ausente neste ambiente
   r.ativo = true;
   const enviarPush = dep.enviarPush ?? ((u, payload, o) => enviarPushParaUsuario(u, payload, o));
   const prazo = Date.now() + ORCAMENTO_AVISOS_MS;
 
-  const lembretes = (await db.lembrete.findMany({
+  const linhas = await banco.lembrete.findMany({
     orderBy: { horario: "asc" },
     take: MAX_EXAMINADOS,
-  })) as unknown as LembreteDisparo[];
+  });
+  const extras = await camposDisparoPorId(banco, linhas.map((l) => l.id));
+  const lembretes = linhas.map((l) => {
+    const extra = extras.get(l.id);
+    return { ...l, feitoEm: extra?.feitoEm ?? null, ultimoDisparoEm: extra?.ultimoDisparoEm ?? null } as LembreteDisparo;
+  });
   r.examinados = lembretes.length;
 
   // Dia da semana dos lembretes semanais ligados a medicamento (posologia).
   const idsMed = [...new Set(lembretes.map((l) => l.medicamentoEmUsoId).filter((x): x is string => !!x))];
   const diaPorMed = new Map<string, number | null>();
   if (idsMed.length) {
-    const meds = await db.medicamentoEmUso.findMany({
+    const meds = await banco.medicamentoEmUso.findMany({
       where: { id: { in: idsMed } },
       select: { id: true, posologia: true },
     });
@@ -105,11 +144,8 @@ export async function rodarAvisosLembretes(
     }
     try {
       // Marca ANTES de avisar: duas rodadas simultâneas não duplicam.
-      await db.lembrete.update({
-        where: { id: l.id },
-        data: { ultimoDisparoEm: agora } as Record<string, unknown>,
-      });
-      await db.notificacao.create({
+      await marcarUltimoDisparo(banco, l.id, agora);
+      await banco.notificacao.create({
         data: {
           usuarioId: l.usuarioId,
           tipo: "lembrete",
