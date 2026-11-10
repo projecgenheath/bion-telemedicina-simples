@@ -13,6 +13,7 @@ import {
   type AuditPayload,
 } from "@/lib/server/dados";
 import { quandoClinica } from "@/lib/server/fuso";
+import { consultaParaPapel } from "@/lib/privacidade-consulta";
 import { erroHttp } from "@/lib/server/evolucao";
 import { evolucaoImpedeConclusao } from "@/lib/evolucao-logica";
 import { LIMITE_RESUMO_MEDICO } from "@/lib/resumo-medico";
@@ -602,7 +603,8 @@ export async function PATCH(
     const atualizada = await consultaWire(id);
 
     return ok({
-      consulta: atualizada,
+      // Auditoria admin 09/11: o admin não recebe o resumo clínico do médico.
+      consulta: atualizada ? consultaParaPapel(atualizada, usuario.role) : atualizada,
       ...(body.acao === "concluir" ? { evolucaoConcluida: evolucaoEncerrada } : {}),
       ...(efeitos.notificacoes.length ? { notificacoes: efeitos.notificacoes } : {}),
       ...(efeitos.audit ? { audit: efeitos.audit } : {}),

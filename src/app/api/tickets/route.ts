@@ -4,6 +4,7 @@ import { exigirSessao } from "@/lib/server/auth";
 import { aplicarSideEffects, ticketWire } from "@/lib/server/dados";
 import {ok, falha, lerCorpoJson, corpoObjeto, textoDoCorpo} from "@/lib/server/http";
 import { limitarAsync, resposta429 } from "@/lib/server/rate-limit";
+import { perfilDoChamado, validarNovoChamado } from "@/lib/server/chamado-novo";
 
 /** Abertura de chamado de suporte.
  *  Notificações (autor + administração) e auditoria geradas PELO SERVIDOR. */
@@ -25,18 +26,18 @@ export async function POST(req: NextRequest) {
       mensagem: textoDoCorpo(bruto.mensagem),
     };
 
-    const assunto = body.assunto?.trim() ?? "";
-    const mensagem = body.mensagem?.trim() ?? "";
-    if (!assunto || !mensagem) {
-      return Response.json({ erro: "Informe assunto e mensagem do chamado." }, { status: 400 });
+    const validado = validarNovoChamado(body);
+    if (!validado.ok) {
+      return Response.json({ erro: validado.erro, campo: validado.campo }, { status: 400 });
     }
+    const { assunto, mensagem, categoria } = validado;
 
     const ticket = await db.ticket.create({
       data: {
         usuarioId: usuario.id,
-        perfil: usuario.role === "MEDICO" ? "medico" : "paciente",
+        perfil: perfilDoChamado(usuario.role),
         assunto,
-        categoria: body.categoria || "outro",
+        categoria,
         mensagem,
       },
       include: { usuario: { select: { nome: true } } },

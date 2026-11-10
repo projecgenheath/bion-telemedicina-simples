@@ -545,6 +545,7 @@ export function ConversaPaciente({
           documentos={docs}
           arquivos={arqs}
           homonimo={homonimo}
+          medicoIdAtual={sessao.id ?? ""}
           onRenovar={(d) => setEmitir({ base: d })}
         />
       )}

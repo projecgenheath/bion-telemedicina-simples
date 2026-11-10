@@ -16,12 +16,11 @@ import { payloadPushNotificacao } from "@/lib/server/push-notificacao";
 /* na central do paciente e tenta Web Push genérico nos aparelhos      */
 /* inscritos.                                                          */
 /*                                                                     */
-/* Pré-requisito: migração 20261104a (colunas feitoEm/                 */
-/* ultimoDisparoEm) — NÃO APLICADA. Sem as colunas, `rodarAvisos`      */
-/* responde { ativo: false } e nada quebra (a existência das colunas   */
-/* é verificada antes de rodar; os campos são lidos por tipo           */
-/* estrutural justamente para este arquivo compilar e rodar antes e    */
-/* depois da migração).                                                */
+/* Pré-requisito: colunas feitoEm/ultimoDisparoEm no Lembrete          */
+/* (20261104a, e 20261110a com IF NOT EXISTS + diaSemana). Em          */
+/* produção as colunas já existem; o model Prisma agora as declara,    */
+/* então o job lê e grava com o client tipado. Sem as colunas neste    */
+/* ambiente, `rodarAvisos` responde { ativo: false } e nada dispara.   */
 /* ------------------------------------------------------------------ */
 
 /** Orçamento da rodada (o pg_net espera 10 s; a rota tem maxDuration 10). */
@@ -44,14 +43,26 @@ export type ResultadoAvisos = {
   incompleto: boolean;
 };
 
+/** Subconjunto do Prisma usado pelo job (injetável nos testes). */
+export type BancoAvisos = {
+  $queryRaw: (typeof db)["$queryRaw"];
+  lembrete: {
+    findMany: (typeof db)["lembrete"]["findMany"];
+    update: (typeof db)["lembrete"]["update"];
+  };
+  medicamentoEmUso: { findMany: (typeof db)["medicamentoEmUso"]["findMany"] };
+  notificacao: { create: (typeof db)["notificacao"]["create"] };
+};
+
 type DependenciasAvisos = {
   colunasExistem?: () => Promise<boolean>;
   enviarPush?: typeof enviarPushParaUsuario;
+  db?: BancoAvisos;
 };
 
-async function colunasExistemPadrao(): Promise<boolean> {
+async function colunasExistemPadrao(banco: BancoAvisos): Promise<boolean> {
   try {
-    const linhas = await db.$queryRaw<{ n: number }[]>`
+    const linhas = await banco.$queryRaw<{ n: number }[]>`
       SELECT COUNT(*)::int AS n FROM information_schema.columns
       WHERE table_name = 'Lembrete' AND column_name IN ('feitoEm', 'ultimoDisparoEm')`;
     return (linhas[0]?.n ?? 0) === 2;
@@ -69,23 +80,24 @@ export async function rodarAvisosLembretes(
   dep: DependenciasAvisos = {},
 ): Promise<ResultadoAvisos> {
   const r: ResultadoAvisos = { ativo: false, examinados: 0, disparados: 0, pushes: 0, semInscricao: 0, erros: 0, incompleto: false };
-  const colunasExistem = dep.colunasExistem ?? colunasExistemPadrao;
-  if (!(await colunasExistem())) return r; // migração 20261104a não aplicada
+  const banco = dep.db ?? db;
+  const colunasExistem = dep.colunasExistem ?? (() => colunasExistemPadrao(banco));
+  if (!(await colunasExistem())) return r; // migração 20261104a ausente neste ambiente
   r.ativo = true;
   const enviarPush = dep.enviarPush ?? ((u, payload, o) => enviarPushParaUsuario(u, payload, o));
   const prazo = Date.now() + ORCAMENTO_AVISOS_MS;
 
-  const lembretes = (await db.lembrete.findMany({
+  const lembretes = (await banco.lembrete.findMany({
     orderBy: { horario: "asc" },
     take: MAX_EXAMINADOS,
-  })) as unknown as LembreteDisparo[];
+  })) as LembreteDisparo[];
   r.examinados = lembretes.length;
 
   // Dia da semana dos lembretes semanais ligados a medicamento (posologia).
   const idsMed = [...new Set(lembretes.map((l) => l.medicamentoEmUsoId).filter((x): x is string => !!x))];
   const diaPorMed = new Map<string, number | null>();
   if (idsMed.length) {
-    const meds = await db.medicamentoEmUso.findMany({
+    const meds = await banco.medicamentoEmUso.findMany({
       where: { id: { in: idsMed } },
       select: { id: true, posologia: true },
     });
@@ -105,11 +117,11 @@ export async function rodarAvisosLembretes(
     }
     try {
       // Marca ANTES de avisar: duas rodadas simultâneas não duplicam.
-      await db.lembrete.update({
+      await banco.lembrete.update({
         where: { id: l.id },
-        data: { ultimoDisparoEm: agora } as Record<string, unknown>,
+        data: { ultimoDisparoEm: agora },
       });
-      await db.notificacao.create({
+      await banco.notificacao.create({
         data: {
           usuarioId: l.usuarioId,
           tipo: "lembrete",

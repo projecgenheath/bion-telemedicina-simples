@@ -150,10 +150,17 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const admin = await exigirPapel("ADMIN");
-    const body = (await req.json().catch(() => ({}))) as { competencia?: unknown; medicoId?: unknown };
+    // Auditoria admin 09/11: corpo JSON `null` (ou não objeto) virava 500, e
+    // um medicoId que não é de médico "fechava" com 200 e sem_itens.
+    const bruto: unknown = await req.json().catch(() => null);
+    const body = (bruto && typeof bruto === "object" ? bruto : {}) as { competencia?: unknown; medicoId?: unknown };
     const agora = new Date();
     const dia = typeof body.competencia === "string" && body.competencia ? body.competencia : competenciaPadraoParaFechar(agora);
     const medicoIds = typeof body.medicoId === "string" && body.medicoId ? [body.medicoId] : undefined;
+    if (medicoIds) {
+      const medico = await db.user.findFirst({ where: { id: medicoIds[0], role: "MEDICO" }, select: { id: true } });
+      if (!medico) return Response.json({ erro: "Médico não encontrado." }, { status: 404 });
+    }
     const r = await fecharRepasse(dia, { agora, medicoIds });
     const fechados = r.resultados.filter((x) => x.situacao === "fechado").length;
     const erros = r.resultados.filter((x) => x.situacao === "erro").length;
