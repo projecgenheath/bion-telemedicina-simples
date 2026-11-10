@@ -98,10 +98,9 @@ export function Mensagens() {
 
   /* Abre a conversa e marca como lida ao chegar mensagem nova com a conversa aberta */
   const naoLidasAtivas = threadAtiva.filter((m) => !m.minha && !m.lida).length;
-  useEffect(() => {
-    if (!ativa) return;
-    if (!conversas.some((c) => c.contato.id === ativa.id)) setAtivaId(null);
-  }, [conversas, ativa]);
+  // Sem efeito de "limpar ativaId": `ativa` já é derivada de `conversas` (cai na
+  // primeira conversa quando o id some), então o setState no efeito nunca mudava
+  // nada e só violava react-hooks/set-state-in-effect.
 
   useEffect(() => {
     if (ativa && naoLidasAtivas > 0) marcarConversaLida(ativa.id);
