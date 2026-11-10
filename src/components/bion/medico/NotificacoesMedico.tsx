@@ -58,7 +58,7 @@ export function NotificacoesMedico({ onNavegar }: { onNavegar: (tipo: NotifTipo)
           <button
             type="button"
             onClick={marcarTodasLidas}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full border text-xs font-bold"
+            className="bion-toque bion-toque-forte inline-flex items-center gap-1.5 px-3 py-2 rounded-full border text-xs font-bold"
           >
             <CheckCheck className="w-4 h-4" aria-hidden /> Marcar todas como lidas
           </button>
@@ -67,9 +67,12 @@ export function NotificacoesMedico({ onNavegar }: { onNavegar: (tipo: NotifTipo)
 
       <div className="mt-4 space-y-2">
         {carregando ? (
-          <p role="status" className="text-sm text-bion-ink/70 dark:text-bion-paper/70 py-8 text-center">
-            Carregando suas notificações…
-          </p>
+          <div className="space-y-2" role="status">
+            <div className="bion-esqueleto h-16 w-full" aria-hidden="true" />
+            <div className="bion-esqueleto h-16 w-full" aria-hidden="true" />
+            <div className="bion-esqueleto h-16 w-full" aria-hidden="true" />
+            <span className="sr-only">Carregando suas notificações…</span>
+          </div>
         ) : notificacoes.length === 0 ? (
           <div className="bp-glass p-6 text-center">
             <Bell className="w-8 h-8 mx-auto text-bion-ink/50 dark:text-bion-paper/50" aria-hidden />
@@ -80,7 +83,8 @@ export function NotificacoesMedico({ onNavegar }: { onNavegar: (tipo: NotifTipo)
             </p>
           </div>
         ) : (
-          notificacoes.map((n) => {
+          <div className="bion-surgir-lista space-y-2">
+          {notificacoes.map((n) => {
             const Icon = iconePorTipo[n.tipo] ?? Bell;
             const rotulo = rotuloPorTipo[n.tipo] ?? "Aviso";
             return (
@@ -91,7 +95,7 @@ export function NotificacoesMedico({ onNavegar }: { onNavegar: (tipo: NotifTipo)
                   marcarLida(n.id);
                   onNavegar(n.tipo);
                 }}
-                className={`w-full flex items-start gap-3 rounded-2xl bg-bion-ink/5 dark:bg-white/5 px-4 py-3 text-left ${
+                className={`bion-toque w-full flex items-start gap-3 rounded-2xl bg-bion-ink/5 dark:bg-white/5 px-4 py-3 text-left ${
                   n.lida ? "opacity-70" : ""
                 }`}
               >
@@ -122,7 +126,8 @@ export function NotificacoesMedico({ onNavegar }: { onNavegar: (tipo: NotifTipo)
                 )}
               </button>
             );
-          })
+          })}
+          </div>
         )}
       </div>
     </div>

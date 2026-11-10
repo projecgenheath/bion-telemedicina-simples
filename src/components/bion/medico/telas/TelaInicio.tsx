@@ -60,7 +60,7 @@ export function TelaInicio({
                 ? `Notificações: ${notificacoesNaoLidas} não lida${notificacoesNaoLidas > 1 ? "s" : ""}. Abrir notificações`
                 : "Notificações. Abrir notificações"
             }
-            className="relative w-12 h-12 rounded-full bp-glass shrink-0 inline-flex items-center justify-center"
+            className="bion-toque bion-toque-forte relative w-12 h-12 rounded-full bp-glass shrink-0 inline-flex items-center justify-center"
           >
             <Bell className="w-5 h-5" aria-hidden />
             {notificacoesNaoLidas > 0 ? (
@@ -76,7 +76,7 @@ export function TelaInicio({
             type="button"
             onClick={onAbrirPerfil}
             aria-label="Abrir meu perfil"
-            className="w-12 h-12 rounded-full overflow-hidden bp-glass shrink-0"
+            className="bion-toque bion-toque-forte w-12 h-12 rounded-full overflow-hidden bp-glass shrink-0"
           >
             {medico?.foto ? (
               <img src={medico.foto} alt="" className="w-full h-full object-cover" />
@@ -107,6 +107,7 @@ export function TelaInicio({
       {/* Pendências: renovações aguardando resposta e mensagens não lidas.
           Cada linha leva à tela certa; contador zero = linha some (e sem
           nenhuma pendência o bloco inteiro some). */}
+      <div className="bion-surgir-lista flex flex-col">
       {temPendencias ? (
         <div className="bp-glass p-5 mb-3" role="group" aria-label="Pendências">
           <span className="text-xs font-bold uppercase tracking-wider text-bion-ink/75 dark:text-bion-paper/75 inline-flex items-center gap-1.5">
@@ -118,7 +119,7 @@ export function TelaInicio({
                 type="button"
                 onClick={onAbrirRenovacoes}
                 aria-label={`Renovações de receita: ${renovacoesPendentes} aguardando sua resposta. Abrir renovações`}
-                className="w-full flex items-center gap-3 rounded-2xl bg-bion-ink/5 dark:bg-white/5 px-4 py-3 text-left"
+                className="bion-toque w-full flex items-center gap-3 rounded-2xl bg-bion-ink/5 dark:bg-white/5 px-4 py-3 text-left"
               >
                 <Pill className="w-5 h-5 shrink-0 text-bion-sea dark:text-sky-300" aria-hidden />
                 <span className="flex-1 min-w-0">
@@ -138,7 +139,7 @@ export function TelaInicio({
                 type="button"
                 onClick={onAbrirPacientes}
                 aria-label={`Mensagens não lidas: ${totalNaoLidas} em ${conversasComNaoLidas} ${conversasComNaoLidas === 1 ? "conversa" : "conversas"}. Abrir pacientes`}
-                className="w-full flex items-center gap-3 rounded-2xl bg-bion-ink/5 dark:bg-white/5 px-4 py-3 text-left"
+                className="bion-toque w-full flex items-center gap-3 rounded-2xl bg-bion-ink/5 dark:bg-white/5 px-4 py-3 text-left"
               >
                 <MessageCircle className="w-5 h-5 shrink-0 text-bion-sea dark:text-sky-300" aria-hidden />
                 <span className="flex-1 min-w-0">
@@ -206,7 +207,7 @@ export function TelaInicio({
               type="button"
               disabled={!aberta}
               onClick={() => router.push(`/consulta?consulta=${encodeURIComponent(proxima.id)}`)}
-              className="bp-acao mt-4 w-full py-3 text-sm inline-flex items-center justify-center gap-2"
+              className="bion-toque bp-acao mt-4 w-full py-3 text-sm inline-flex items-center justify-center gap-2"
             >
               <Video className="w-4 h-4" /> {aberta ? "Entrar na sala" : "A sala abre 30 min antes"}
             </button>
@@ -223,7 +224,7 @@ export function TelaInicio({
       <button
         type="button"
         onClick={onAbrirAgenda}
-        className="bp-glass p-5 mt-3 text-left w-full"
+        className="bion-toque bp-glass p-5 mt-3 text-left w-full"
         aria-label={`Hoje: ${hoje.agendadas.length} consultas agendadas, ${hoje.restantes.length} restantes. Abrir agenda de hoje`}
       >
         <span className="text-xs font-bold uppercase tracking-wider text-bion-ink/75 dark:text-bion-paper/75 inline-flex items-center gap-1.5">
@@ -276,15 +277,15 @@ export function TelaInicio({
             <button
               type="button"
               onClick={acoesPacienteEstado.recarregar}
-              className="mt-2 text-sm font-bold text-bion-sea dark:text-sky-300 underline underline-offset-2"
+              className="bion-toque mt-2 text-sm font-bold text-bion-sea dark:text-sky-300 underline underline-offset-2"
             >
               Tentar de novo
             </button>
           </div>
         ) : (
           <div role="status" className="grid grid-cols-2 gap-3">
-            <div className="h-14 rounded-xl bg-bion-ink/10 dark:bg-white/10 motion-safe:animate-pulse" aria-hidden />
-            <div className="h-14 rounded-xl bg-bion-ink/10 dark:bg-white/10 motion-safe:animate-pulse" aria-hidden />
+            <div className="bion-esqueleto h-14" aria-hidden="true" />
+            <div className="bion-esqueleto h-14" aria-hidden="true" />
             <span className="sr-only">Carregando remarcadas e canceladas…</span>
           </div>
         )}
@@ -293,6 +294,7 @@ export function TelaInicio({
           Consultas marcadas para hoje que o paciente remarcou ou cancelou. Cancelamentos feitos por você, novas datas
           escolhidas depois de um cancelamento seu e remarcações ainda não pagas não contam.
         </p>
+      </div>
       </div>
 
       <div className="mt-auto pt-8 flex flex-col items-center gap-1 text-white/90" aria-hidden>

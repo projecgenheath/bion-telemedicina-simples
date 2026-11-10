@@ -78,7 +78,7 @@ export function TelaSobreposta({
           type="button"
           onClick={onFechar}
           aria-label="Voltar"
-          className="w-10 h-10 rounded-full inline-flex items-center justify-center bg-bion-ink/8 dark:bg-white/10"
+          className="bion-toque bion-toque-forte w-10 h-10 rounded-full inline-flex items-center justify-center bg-bion-ink/8 dark:bg-white/10"
         >
           <ArrowLeft className="w-5 h-5" />
         </button>

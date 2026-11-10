@@ -100,7 +100,7 @@ function Linha({
     </>
   );
   return onClick ? (
-    <button type="button" onClick={onClick} className="w-full flex items-center gap-3 px-4 py-3">
+    <button type="button" onClick={onClick} className="bion-toque w-full flex items-center gap-3 px-4 py-3">
       {conteudo}
     </button>
   ) : (
@@ -128,7 +128,7 @@ function Segmentado<T extends string>({
           role="radio"
           aria-checked={valor === o.v}
           onClick={() => onMudar(o.v)}
-          className={`py-2 rounded-xl text-xs font-bold inline-flex items-center justify-center gap-1.5 ${
+          className={`bion-toque bion-toque-forte py-2 rounded-xl text-xs font-bold inline-flex items-center justify-center gap-1.5 ${
             valor === o.v ? "bg-white text-bion-ink shadow dark:bg-zinc-800 dark:text-white" : "text-bion-ink/80 dark:text-bion-paper/80"
           }`}
         >
@@ -232,7 +232,7 @@ function RecebimentoSheet({
         setTitularTipo(t);
         limparErro("titularTipo");
       }}
-      className={`py-2 rounded-xl text-xs font-bold disabled:opacity-50 ${
+      className={`bion-toque bion-toque-forte py-2 rounded-xl text-xs font-bold disabled:opacity-50 ${
         titularEfetivo === t ? "bg-white text-bion-ink shadow dark:bg-zinc-800 dark:text-white" : "text-bion-ink/80 dark:text-bion-paper/80"
       }`}
     >
@@ -333,7 +333,7 @@ function RecebimentoSheet({
             <input value={formatarCnpj(cnpjPerfil)} readOnly className={entrada} aria-label="CNPJ do titular" />
           </Campo>
         ) : null}
-        <button type="button" onClick={() => void enviar()} disabled={salvando} className="bp-acao w-full py-3 text-sm">
+        <button type="button" onClick={() => void enviar()} disabled={salvando} className="bion-toque bp-acao w-full py-3 text-sm">
           {salvando ? "Salvando…" : "Salvar chave PIX"}
         </button>
       </div>
@@ -502,7 +502,7 @@ export function PerfilMedicoPainel({
               onClick={() => inputFoto.current?.click()}
               disabled={enviando}
               aria-label="Trocar foto de perfil"
-              className="absolute -bottom-1 -right-1 w-9 h-9 rounded-full bg-white text-bion-ink shadow-lg inline-flex items-center justify-center dark:bg-zinc-800 dark:text-white"
+              className="bion-toque bion-toque-forte absolute -bottom-1 -right-1 w-9 h-9 rounded-full bg-white text-bion-ink shadow-lg inline-flex items-center justify-center dark:bg-zinc-800 dark:text-white"
             >
               <Camera className="w-4 h-4" />
             </button>
@@ -535,7 +535,7 @@ export function PerfilMedicoPainel({
         )}
       </div>
 
-      <section className={`${grupo} mt-6`} aria-labelledby="bm-pf-dados">
+      <section className={`bion-surgir ${grupo} mt-6`} style={{ "--bion-i": 0 } as React.CSSProperties} aria-labelledby="bm-pf-dados">
         <h3 id="bm-pf-dados" className={tituloGrupo}>
           Dados pessoais
         </h3>
@@ -556,7 +556,7 @@ export function PerfilMedicoPainel({
       {/* B-18: recebimento ATUAL (Stripe) separado da área LEGADA (PIX do
           modelo anterior) — antes o cadastro gravável de chave PIX ficava
           misturado com o texto do Stripe, conceitualmente confuso. */}
-      <section className={`${grupo} mt-4`} aria-labelledby="bm-pf-recebimento">
+      <section className={`bion-surgir ${grupo} mt-4`} style={{ "--bion-i": 1 } as React.CSSProperties} aria-labelledby="bm-pf-recebimento">
         <h3 id="bm-pf-recebimento" className={tituloGrupo}>
           Recebimento (Stripe)
         </h3>
@@ -637,7 +637,7 @@ export function PerfilMedicoPainel({
         onAbrirRecebimento={abrirRecebimento}
       />
 
-      <section className={`${grupo} mt-4`} aria-labelledby="bm-pf-conta">
+      <section className={`bion-surgir ${grupo} mt-4`} style={{ "--bion-i": 2 } as React.CSSProperties} aria-labelledby="bm-pf-conta">
         <h3 id="bm-pf-conta" className={tituloGrupo}>
           Conta
         </h3>
@@ -648,7 +648,7 @@ export function PerfilMedicoPainel({
         <Linha icone={<FileText className="w-4 h-4" />} titulo="Termos e ajuda" detalhe="Termos de uso e perguntas frequentes" onClick={onAbrirTermos} />
       </section>
 
-      <section className="bp-glass p-4 pt-3 space-y-3 mt-4" aria-labelledby="bm-pf-aparencia">
+      <section className="bion-surgir bp-glass p-4 pt-3 space-y-3 mt-4" style={{ "--bion-i": 3 } as React.CSSProperties} aria-labelledby="bm-pf-aparencia">
         <h3 id="bm-pf-aparencia" className="text-xs font-bold uppercase tracking-wider text-bion-ink/75 dark:text-bion-paper/75">
           Aparência
         </h3>
@@ -673,8 +673,8 @@ export function PerfilMedicoPainel({
         />
       </section>
 
-      <div className={`${grupo} mt-4`}>
-        <button type="button" onClick={encerrar} className="w-full flex items-center gap-3 px-4 py-3 text-red-700 dark:text-red-300">
+      <div className={`bion-surgir ${grupo} mt-4`} style={{ "--bion-i": 4 } as React.CSSProperties}>
+        <button type="button" onClick={encerrar} className="bion-toque w-full flex items-center gap-3 px-4 py-3 text-red-700 dark:text-red-300">
           <span className="w-9 h-9 rounded-xl inline-flex items-center justify-center bg-red-500/10 shrink-0">
             <LogOut className="w-4 h-4" />
           </span>

@@ -52,9 +52,15 @@ export function AgendaPreviewSheet({
       subtitulo="Horários livres nos próximos 14 dias, como o paciente vê. Nada é agendado aqui."
     >
       {bloqueios.carregando ? (
-        <p className="text-sm text-bion-ink/75 dark:text-bion-paper/75" role="status">
-          Carregando dias bloqueados…
-        </p>
+        <div className="space-y-3" role="status">
+          <div className="bion-esqueleto h-16 w-full" aria-hidden="true" />
+          <div className="flex gap-2">
+            <div className="bion-esqueleto h-14 w-20" aria-hidden="true" />
+            <div className="bion-esqueleto h-14 w-20" aria-hidden="true" />
+            <div className="bion-esqueleto h-14 w-20" aria-hidden="true" />
+          </div>
+          <span className="sr-only">Carregando dias bloqueados…</span>
+        </div>
       ) : bloqueios.erro ? (
         <div className="space-y-3">
           <p className="text-sm text-bion-ink/75 dark:text-bion-paper/75" role="alert">
@@ -63,7 +69,7 @@ export function AgendaPreviewSheet({
           </p>
           <button type="button"
             onClick={() => void bloqueios.recarregar()}
-            className="px-4 py-2 rounded-xl border text-sm font-bold"
+            className="bion-toque px-4 py-2 rounded-xl border text-sm font-bold"
           >
             Tentar de novo
           </button>
@@ -77,7 +83,7 @@ export function AgendaPreviewSheet({
               O dia que você escolheu foi bloqueado ou ficou sem horários; mostrando o primeiro dia livre.
             </p>
           ) : null}
-          <div className="flex gap-2 overflow-x-auto bp-coluna pb-1" role="listbox" aria-label="Datas disponíveis">
+          <div className="bion-surgir-lista flex gap-2 overflow-x-auto bp-coluna pb-1" role="listbox" aria-label="Datas disponíveis">
             {agenda.map((d) => (
               <button
                 key={d.iso}
@@ -85,7 +91,7 @@ export function AgendaPreviewSheet({
                 role="option"
                 aria-selected={d.iso === dia}
                 onClick={() => setDia(d.iso)}
-                className={`shrink-0 rounded-2xl px-3 py-2 text-left border ${
+                className={`bion-toque shrink-0 rounded-2xl px-3 py-2 text-left border ${
                   d.iso === dia
                     ? "border-transparent bg-bion-sea text-white dark:bg-sky-300 dark:text-zinc-950"
                     : "border-bion-ink/15 dark:border-white/15"

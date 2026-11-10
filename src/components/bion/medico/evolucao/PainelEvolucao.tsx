@@ -478,7 +478,7 @@ export function PainelEvolucao({
         </button>
       ) : null}
       <aside
-        className={`fixed inset-y-0 right-0 z-50 w-full max-w-md bg-card text-foreground border-l shadow-2xl flex flex-col transition-transform duration-300 ${aberto ? "translate-x-0" : "translate-x-full"}`}
+        className={`fixed inset-y-0 right-0 z-50 w-full max-w-md bg-card text-foreground border-l shadow-2xl flex flex-col motion-safe:transition-transform motion-safe:duration-200 ${aberto ? "translate-x-0" : "translate-x-full"}`}
         aria-hidden={!aberto}
         inert={!aberto}
         aria-label="Evolução"

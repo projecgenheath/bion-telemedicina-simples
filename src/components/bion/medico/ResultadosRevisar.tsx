@@ -87,14 +87,24 @@ export function ResultadosRevisar({
         <button
           type="button"
           onClick={() => void carregar()}
-          className="text-xs font-bold rounded-full px-3 py-1.5 bg-bion-ink/8 dark:bg-white/10 shrink-0"
+          className="bion-toque bion-toque-forte text-xs font-bold rounded-full px-3 py-1.5 bg-bion-ink/8 dark:bg-white/10 shrink-0"
         >
           Tentar de novo
         </button>
       </div>
     );
   }
-  if (!itens || itens.length === 0) return null;
+  if (!itens) {
+    return (
+      <div className="mb-5 space-y-2" role="status">
+        <div className="bion-esqueleto h-4 w-40" aria-hidden="true" />
+        <div className="bion-esqueleto h-16 w-full" aria-hidden="true" />
+        <div className="bion-esqueleto h-16 w-full" aria-hidden="true" />
+        <span className="sr-only">Carregando resultados para revisar…</span>
+      </div>
+    );
+  }
+  if (itens.length === 0) return null;
 
   return (
     <section aria-labelledby="bm-resultados-titulo" className="mb-5">
@@ -109,13 +119,13 @@ export function ResultadosRevisar({
           </span>
         ) : null}
       </div>
-      <ul className="space-y-2">
+      <ul className="bion-surgir-lista space-y-2">
         {itens.map((it) => (
           <li key={it.id}>
             <button
               type="button"
               onClick={() => onAbrirPaciente(it.pacienteId)}
-              className="bp-glass w-full p-3.5 flex items-start gap-3 text-left"
+              className="bion-toque bp-glass w-full p-3.5 flex items-start gap-3 text-left"
               aria-label={`${it.titulo} de ${it.pacienteNome}. ${it.detalhe}`}
             >
               <span className="w-9 h-9 rounded-xl bg-bion-sea/15 text-bion-sea dark:text-sky-300 inline-flex items-center justify-center shrink-0">
