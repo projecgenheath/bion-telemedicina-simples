@@ -747,7 +747,7 @@ export function PacienteApp() {
             ))}
 
             {/* Cartão único da BION IA: agendar (principal) + perguntar */}
-            <div className="bpp-cartao-ia mt-4 w-full rounded-3xl p-5 text-white relative overflow-hidden bg-gradient-to-br from-bion-deep via-bion-sea to-bion-ink">
+            <div className="bpp-cartao-ia mt-4 w-full rounded-3xl p-5 text-white relative overflow-hidden">
               <span aria-hidden className="absolute -right-8 -top-10 w-40 h-40 rounded-full bg-white/10 blur-2xl" />
               <span aria-hidden className="absolute right-10 -bottom-10 w-28 h-28 rounded-full bg-sky-300/15 blur-2xl" />
               <div className="relative flex items-center gap-3">
