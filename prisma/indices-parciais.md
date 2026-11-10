@@ -7,7 +7,7 @@ existem **só no SQL** das migrações em `supabase/migrations/` e não levam
 
 ## PerfilMedico.stripeAccountId — 20261103f
 
-Migração: `supabase/migrations/20261103210000_20261103f_status_conta_stripe_medico.sql`.
+Migração: `supabase/migrations/20261103210000_20261103f_status_conta_stripe_medico.sql` (já aplicada em 03/11; o arquivo SQL não é alterado neste PR, para não mudar o checksum).
 
 Índice único parcial:
 
