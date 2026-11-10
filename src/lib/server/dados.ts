@@ -245,6 +245,7 @@ export function documentoWire(d: DocumentoComNomes) {
     titulo: d.titulo,
     conteudo: d.conteudo,
     medico: d.medico.nome,
+    medicoId: d.medicoId,
     paciente: d.paciente.nome,
     // Melhoria nº 6 (auditoria médica): identificação formal para a via
     // impressa (PDF) — CRM do emissor e CPF/nascimento do paciente, que já

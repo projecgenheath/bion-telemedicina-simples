@@ -10,6 +10,7 @@ import { fmtTicketData } from "@/lib/bion-tipos";
 import type { EstadoConsentimentoIaExame } from "@/lib/consentimento-ia-exame";
 import { revogarConsentimentoIa } from "@/lib/bion-ia-cliente";
 import { SecaoTermosUso } from "./SecaoTermosUso";
+import { useAppNativo } from "@/lib/useAppNativo";
 
 export function PrivacidadePaciente() {
   const { pacientePerfil, documentosVisiveis, consentimentosVisiveis, consultas, sessao, trocarSenha } =
@@ -181,8 +182,18 @@ export function PrivacidadePaciente() {
   // O servidor monta o dossiê só da sessão (nunca de parâmetro) e registra
   // a exportação na auditoria; aqui só baixamos o JSON devolvido.
   const [exportando, setExportando] = useState(false);
+  const noApp = useAppNativo();
   const exportarDados = async () => {
     if (exportando) return;
+    // A WebView do app (Capacitor) não salva arquivo gerado na página (blob):
+    // o clique "funcionava" e o toast dizia "exportados" sem arquivo nenhum.
+    // No app, orienta a exportar pelo navegador (e nem registra a exportação).
+    if (noApp) {
+      toast.info("No app ainda não dá para salvar arquivos.", {
+        description: "Abra o BION pelo navegador do celular ou do computador, entre na sua conta e toque em Baixar meus dados.",
+      });
+      return;
+    }
     setExportando(true);
     try {
       const r = await fetch("/api/paciente/exportacao");
