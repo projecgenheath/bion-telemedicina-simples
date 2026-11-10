@@ -13,6 +13,7 @@ import {
   corpoDesfazerPaciente,
   corpoEdicaoPaciente,
   documentosDoPaciente,
+  estadoDocumento,
   estadoPaciente,
   estaAnonimizado,
   explicarErroPaciente,
@@ -21,6 +22,7 @@ import {
   formDoPaciente,
   FORM_PACIENTE_VAZIO,
   idadeExibida,
+  rotuloDocumentoAdmin,
   situacaoDe,
   ultimaEProxima,
   validarFormPaciente,
@@ -121,12 +123,26 @@ const up4 = ultimaEProxima(consultas, "p4", AGORA);
 igual("homônimo por id", [up4.ultima, up4.proxima?.id], [null, "c6"]);
 igual("sem consultas", ultimaEProxima(consultas, "p9", AGORA), { ultima: null, proxima: null });
 
-// Documentos e chamados por nome (aviso de homônimo)
-const docs = [{ id: "d1", paciente: "José da Silva" }, { id: "d2", paciente: "jose da silva" }, { id: "d3", paciente: "Bruna Costa" }] as Documento[];
+// Documentos por ID (homônimos não se misturam); cancelado entra na lista
+const docs = [
+  { id: "d1", paciente: "José da Silva", pacienteId: "p1", tipo: "receita", titulo: "Receita de losartana 50mg" },
+  { id: "d2", paciente: "José da Silva", pacienteId: "p4", tipo: "atestado", titulo: "Atestado de 2 dias" },
+  { id: "d3", paciente: "José da Silva", tipo: "receita", titulo: "Receita sem pacienteId" }, // legado sem id: fica de fora
+  { id: "d4", paciente: "Bruna Costa", pacienteId: "p5", tipo: "exame_solicitado", titulo: "Solicitação — Hemograma completo" },
+  { id: "d5", paciente: "José da Silva", pacienteId: "p1", tipo: "receita", titulo: "Receita cancelada de losartana", status: "cancelado", canceladoEm: "2026-11-03T12:00:00.000Z" },
+] as Documento[];
 const dJose = documentosDoPaciente(docs, pacientes[0], pacientes);
-igual("documentos homônimo", [dJose.lista.map((d) => d.id), dJose.homonimo], [["d1", "d2"], true]);
+igual("documentos só do id (homônimo e sem id ficam de fora; cancelado entra)", [dJose.lista.map((d) => d.id), dJose.homonimo], [["d1", "d5"], false]);
+const dHomonimo = documentosDoPaciente(docs, pacientes[3], pacientes);
+igual("homônimo só vê os próprios", dHomonimo.lista.map((d) => d.id), ["d2"]);
 const dBruna = documentosDoPaciente(docs, pacientes[4], pacientes);
-igual("documentos sem homônimo", [dBruna.lista.map((d) => d.id), dBruna.homonimo], [["d3"], false]);
+igual("documentos de quem não tem homônimo", [dBruna.lista.map((d) => d.id), dBruna.homonimo], [["d4"], false]);
+igual("rótulo admin ignora o título clínico", rotuloDocumentoAdmin(docs[0]), "Receita.pdf");
+igual("rótulo de solicitação", rotuloDocumentoAdmin(docs[3]), "Solicitação.pdf");
+igual("rótulo desconhecido", rotuloDocumentoAdmin({ tipo: "outro" }), "Documento.pdf");
+igual("estado cancelado", estadoDocumento("cancelado"), { rotulo: "Cancelado", tom: "critico" });
+igual("estado emitido", estadoDocumento("emitido"), { rotulo: "Emitido", tom: "ok" });
+igual("cancelado na lista com status", dJose.lista.find((d) => d.id === "d5")?.status, "cancelado");
 const tickets = [
   { id: "t1", usuario: "Bruna Costa", perfil: "paciente" },
   { id: "t2", usuario: "Bruna Costa", perfil: "medico" },

@@ -87,8 +87,9 @@ export function ultimaEProxima(consultas: Consulta[], pacienteId: string, agora:
 }
 
 /**
- * Documentos e chamados chegam só com o NOME do paciente. Casamos por nome
- * e avisamos quando há homônimo no cadastro (podem ser de outra pessoa).
+ * Chamados chegam só com o NOME do paciente. Casamos por nome e avisamos
+ * quando há homônimo no cadastro (podem ser de outra pessoa).
+ * Documentos NÃO usam esta função: o vínculo é por pacienteId.
  */
 export function porNome<T>(itens: T[], nomeDe: (t: T) => string, paciente: PacienteRegistro, todos: PacienteRegistro[]): { lista: T[]; homonimo: boolean } {
   const nome = normalizar(paciente.nome);
@@ -96,8 +97,36 @@ export function porNome<T>(itens: T[], nomeDe: (t: T) => string, paciente: Pacie
   return { lista: itens.filter((t) => normalizar(nomeDe(t)) === nome), homonimo };
 }
 
-export function documentosDoPaciente(documentos: Documento[], p: PacienteRegistro, todos: PacienteRegistro[]) {
-  return porNome(documentos, (d) => d.paciente, p, todos);
+const ROTULO_TIPO_DOC: Record<string, string> = {
+  receita: "Receita",
+  atestado: "Atestado",
+  exame: "Exame",
+  exame_solicitado: "Solicitação",
+  laudo: "Laudo",
+};
+
+/**
+ * Rótulo que o admin vê no lugar do título: só o tipo genérico
+ * (ex.: "Receita.pdf"). O título pode trazer conteúdo clínico.
+ */
+export function rotuloDocumentoAdmin(d: { tipo?: string | null }): string {
+  return `${ROTULO_TIPO_DOC[d.tipo ?? ""] ?? "Documento"}.pdf`;
+}
+
+/** Estado do documento na ficha (20261103a: cancelado continua no histórico). */
+export function estadoDocumento(status: string | null | undefined): Estado {
+  if (status === "cancelado") return { rotulo: "Cancelado", tom: "critico" };
+  return { rotulo: "Emitido", tom: "ok" };
+}
+
+/**
+ * Documentos do paciente pelo ID (nunca pelo nome: homônimos misturavam
+ * prontuários). Sem pacienteId, o documento fica de fora. Cancelados entram
+ * na lista (status/canceladoEm da migration 20261103a, já em produção).
+ * O 3º argumento é ignorado (assinatura antiga da ficha).
+ */
+export function documentosDoPaciente(documentos: Documento[], p: PacienteRegistro, _todos?: PacienteRegistro[]) {
+  return { lista: documentos.filter((d) => d.pacienteId === p.id), homonimo: false };
 }
 
 export function chamadosDoPaciente(tickets: TicketSuporte[], p: PacienteRegistro, todos: PacienteRegistro[]) {

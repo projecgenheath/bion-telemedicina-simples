@@ -148,6 +148,10 @@ type EstadoFresco = {
     observacoes?: string | null; cid?: string | null; controlado?: boolean; createdAt: string;
     medicoCrm?: string | null; pacienteCpf?: string | null; pacienteNascimento?: string | null;
     codigoVerificacao?: string | null; // item 26: id + HMAC do servidor p/ a via impressa
+    // 20261103a: o wire já manda status/canceladoEm; sem isso a ficha do admin
+    // não conseguia mostrar o estado Cancelado.
+    status?: "emitido" | "cancelado";
+    canceladoEm?: string | null;
   }[];
   arquivos: {
     id: string; nome: string; tipo: string; tamanhoKb: number; enviadoPor: string;
@@ -288,6 +292,8 @@ const mapDocumento = (x: EstadoFresco["documentos"][number]): Documento => ({
   pacienteCpf: x.pacienteCpf ?? undefined,
   pacienteNascimento: x.pacienteNascimento ?? undefined,
   codigoVerificacao: x.codigoVerificacao ?? undefined, // item 26: verificação pública da via
+  status: x.status === "cancelado" ? "cancelado" : x.status === "emitido" ? "emitido" : undefined,
+  canceladoEm: x.canceladoEm ?? undefined,
 });
 
 const mapArquivo = (a: EstadoFresco["arquivos"][number]): Arquivo => ({
