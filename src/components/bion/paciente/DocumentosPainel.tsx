@@ -367,7 +367,7 @@ export function DocumentosPainel({
                 const Icone = ICONE_DOC[d.tipo] ?? FileText;
                 return (
                   <div key={d.id} className="bp-glass p-4 flex items-center gap-3">
-                    <div className="w-11 h-11 rounded-2xl bg-bion-sea/10 dark:bg-sky-400/10 text-bion-sea dark:text-sky-300 inline-flex items-center justify-center shrink-0">
+                    <div className="w-11 h-11 rounded-2xl bg-bion-sea/10 dark:bg-[#96A5FF]/10 text-bion-sea dark:text-[#96A5FF] inline-flex items-center justify-center shrink-0">
                       <Icone className="w-5 h-5" />
                     </div>
                     <div className="flex-1 min-w-0">
@@ -428,7 +428,7 @@ export function DocumentosPainel({
                           <button
                             type="button"
                             onClick={() => setRenovando({ id: o.id, medicamento: o.medicamento ?? "", medico: o.medico })}
-                            className="bpp-toque mt-1.5 inline-flex items-center gap-1.5 rounded-full px-3.5 min-h-11 text-xs font-bold bg-sky-600/15 text-sky-900 dark:text-sky-100"
+                            className="bpp-toque mt-1.5 inline-flex items-center gap-1.5 rounded-full px-3.5 min-h-11 text-xs font-bold bg-bion-sea/12 text-bion-sea dark:bg-[#96A5FF]/15 dark:text-[#d4d9ff]"
                           >
                             <RotateCcw className="w-3.5 h-3.5" aria-hidden /> Renovar receita
                           </button>
@@ -437,7 +437,7 @@ export function DocumentosPainel({
                     </div>
                     <button type="button"
                       onClick={() => setVisualizando({ titulo: d.titulo, corpo: d.corpo })}
-                      className="bpp-toque min-h-11 rounded-full border border-bion-sea/25 dark:border-sky-300/25 px-4 py-2 text-xs font-bold text-bion-sea dark:text-sky-300"
+                      className="bpp-toque min-h-11 rounded-full border border-bion-sea/25 dark:border-[#96A5FF]/25 px-4 py-2 text-xs font-bold text-bion-sea dark:text-[#96A5FF]"
                     >
                       Ver
                     </button>

@@ -103,7 +103,7 @@ function LinhaLink({ icone, rotulo, onClick }: { icone: ReactNode; rotulo: strin
 function VerTudo({ total, onClick, rotulo }: { total: number; onClick: () => void; rotulo: string }) {
   if (total <= PREVIA) return null;
   return (
-    <button type="button" onClick={onClick} aria-label={`Ver tudo: ${rotulo} (${total})`} className="bpp-toque min-h-11 px-2 -mr-1 text-xs font-bold text-bion-sea dark:text-sky-300 inline-flex items-center gap-0.5">
+    <button type="button" onClick={onClick} aria-label={`Ver tudo: ${rotulo} (${total})`} className="bpp-toque min-h-11 px-2 -mr-1 text-xs font-bold text-bion-sea dark:text-[#96A5FF] inline-flex items-center gap-0.5">
       Ver tudo ({total}) <ChevronRight className="w-3.5 h-3.5" aria-hidden />
     </button>
   );

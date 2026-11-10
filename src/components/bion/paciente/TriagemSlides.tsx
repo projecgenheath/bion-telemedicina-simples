@@ -255,7 +255,7 @@ export function TriagemSlides({
 
       <div className="px-4 pb-2">
         <div className="h-1.5 rounded-full bpp-sheet-chip overflow-hidden">
-          <div className="h-full bg-sky-700 dark:bg-sky-400 transition-all" style={{ width: `${progresso}%` }} />
+          <div className="h-full bg-bion-sea dark:bg-[#96A5FF] transition-all" style={{ width: `${progresso}%` }} />
         </div>
         <div className="mt-1 text-xs bpp-sheet-suave">
           {indice + 1} / {ETAPAS_ANAMNESE.length} · {etapa.rotulo}
@@ -318,7 +318,7 @@ export function TriagemSlides({
             }`}
           >
             <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-bold uppercase tracking-wider text-sky-800 dark:text-sky-300">
+              <span className="text-xs font-bold uppercase tracking-wider text-bion-sea dark:text-[#96A5FF]">
                 {String(i + 1).padStart(2, "0")} · {item.rotulo}
               </span>
               {respondidos[item.id] ? <Check className="w-4 h-4 text-emerald-700 dark:text-emerald-400" /> : <Sparkles className="w-4 h-4 bpp-sheet-suave" />}

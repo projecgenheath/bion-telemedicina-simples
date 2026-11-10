@@ -11,39 +11,51 @@
 
 /* ---------------------------- tokens ------------------------------- */
 .bp-app-paciente {
-  /* Seção 1 — hero: branco → azul muito claro, com um brilho azul
-     suave no canto (o Clean deixa de ser branco/cinza chapado) */
+  /* Paleta roxa do paciente (pedido do Alisson, 10/11): os utilitários
+     text-bion-ink, bg-bion-sea etc. leem var(--bion-*); redefinir aqui
+     troca o azul/marinho pelo roxo da marca SÓ no app do paciente.
+     Médicos e Admin continuam com os valores do globals.css. */
+  --bion-ink: #1a1040;
+  --bion-paper: #f4f1fd;
+  --bion-sea: #24058D;
+  --bion-deep: #3D1AAE;
+  --bion-sky: #c4ccff;
+  --bion-night: #0e0820;
+  /* Destaque no escuro: tint da marca (#96A5FF) */
+  --bpp-realce: #24058D;
+  /* Seção 1 — hero: branco → lavanda muito clara, com um brilho
+     roxo suave no canto */
   --bpp-s1-topo: #ffffff;
-  --bpp-s1-brilho: #dce9fc;
-  --bpp-s1-base: #e6effc;
-  /* Seção 2 — do azul claro ao marinho (texto solto só no topo claro) */
-  --bpp-s2-topo: #e6effc;
-  --bpp-s2-meio: #c9dbf4;
-  --bpp-s2-azul: #5b7fb8;
-  --bpp-s2-base: #1d4a8a;
-  /* Seção 3 — começa já no azul escuro: texto branco ≥ 4,5:1 desde o topo */
-  --bpp-s3-topo: #1d4a8a;
-  --bpp-s3-meio: #163f7a;
-  --bpp-s3-fundo: #10294f;
-  --bpp-s3-base: #0a1f44;
+  --bpp-s1-brilho: #e9e1fb;
+  --bpp-s1-base: #f1ecfb;
+  /* Seção 2 — da lavanda ao roxo da marca (texto solto só no topo claro) */
+  --bpp-s2-topo: #f1ecfb;
+  --bpp-s2-meio: #ddd2f5;
+  --bpp-s2-azul: #6a4fc4;
+  --bpp-s2-base: #2f12a0;
+  /* Seção 3 — começa já no roxo escuro: texto branco ≥ 4,5:1 desde o topo */
+  --bpp-s3-topo: #2f12a0;
+  --bpp-s3-meio: #26088f;
+  --bpp-s3-fundo: #1a0566;
+  --bpp-s3-base: #12034a;
   /* Painéis laterais (perfil / documentos / sobreposições) */
-  --bpp-painel-topo: #fbfdff;
-  --bpp-painel-meio: #ebf2fc;
-  --bpp-painel-base: #dce8f9;
+  --bpp-painel-topo: #fdfcff;
+  --bpp-painel-meio: #f2eefc;
+  --bpp-painel-base: #e8e1f9;
   /* Vidro: mais sólido que o base para o texto não perder contraste
-     quando o cartão passa sobre o azul */
+     quando o cartão passa sobre o roxo */
   --bpp-vidro: rgba(255, 255, 255, 0.84);
   --bpp-vidro-borda: rgba(255, 255, 255, 0.9);
   --bpp-vidro-marinho: rgba(255, 255, 255, 0.08);
   --bpp-vidro-marinho-borda: rgba(255, 255, 255, 0.22);
   /* Gráficos */
-  --bpp-grafico-linha: #123e7d;
+  --bpp-grafico-linha: #24058D;
   --bpp-grafico-alerta: #c2410c;
-  --bpp-grafico-eixo: rgba(10, 31, 68, 0.72);
-  --bpp-grafico-linha-marinho: #9ac1f4;
+  --bpp-grafico-eixo: rgba(26, 16, 64, 0.72);
+  --bpp-grafico-linha-marinho: #c4ccff;
   --bpp-grafico-eixo-marinho: rgba(255, 255, 255, 0.8);
   /* Placeholder de campos */
-  --bpp-placeholder: rgba(10, 31, 68, 0.62);
+  --bpp-placeholder: rgba(26, 16, 64, 0.62);
   /* Cartão da BION IA e botão primário (.bp-acao, só neste app):
      marca oficial #24058D. Branco sobre #24058D: 14,18:1; sobre o
      início do degradê #3D1AAE: 10,73:1. Texto white/85 no cartão:
@@ -60,62 +72,63 @@
   --bpp-ia-brilho: rgba(61, 26, 174, 0.42);
   --bpp-ia-aro: rgba(150, 165, 255, 0.55);
   /* Ações secundárias da próxima consulta */
-  --bpp-sec-fundo: rgba(10, 31, 68, 0.07);
-  --bpp-sec-borda: rgba(10, 31, 68, 0.14);
-  --bpp-sec-texto: #0a1f44;
+  --bpp-sec-fundo: rgba(36, 5, 141, 0.07);
+  --bpp-sec-borda: rgba(36, 5, 141, 0.16);
+  --bpp-sec-texto: #24058D;
   --bpp-cancelar-fundo: rgba(220, 38, 38, 0.06);
   --bpp-cancelar-borda: rgba(185, 28, 28, 0.28);
   --bpp-cancelar-texto: #991b1b;
   /* Fase 3 — janelas (cancelar/remarcar, reembolso, triagem, edição):
-     seguem o tema. Clean = branco com texto marinho. */
+     seguem o tema. Clean = branco com texto roxo-escuro. */
   --bpp-sheet-fundo: #ffffff;
-  --bpp-sheet-cartao: #eef3fa;
-  --bpp-sheet-borda: rgba(10, 31, 68, 0.14);
-  --bpp-sheet-texto: #0a1f44;
-  --bpp-sheet-suave: rgba(10, 31, 68, 0.78);
-  --bpp-sheet-veu: rgba(10, 31, 68, 0.55);
-  --bpp-sheet-alca: rgba(10, 31, 68, 0.22);
-  --bpp-sheet-chip: rgba(10, 31, 68, 0.07);
-  --bpp-sheet-campo: #f7f9fd;
-  --bpp-sheet-primario: #0a1f44;
+  --bpp-sheet-cartao: #f3f0fb;
+  --bpp-sheet-borda: rgba(36, 5, 141, 0.14);
+  --bpp-sheet-texto: #1a1040;
+  --bpp-sheet-suave: rgba(26, 16, 64, 0.78);
+  --bpp-sheet-veu: rgba(18, 3, 74, 0.55);
+  --bpp-sheet-alca: rgba(36, 5, 141, 0.22);
+  --bpp-sheet-chip: rgba(36, 5, 141, 0.07);
+  --bpp-sheet-campo: #f9f8fe;
+  --bpp-sheet-primario: #24058D;
   --bpp-sheet-primario-texto: #ffffff;
-  --bpp-sheet-sel-borda: #1d4a8a;
-  --bpp-sheet-sel-fundo: rgba(29, 74, 138, 0.1);
-  --bpp-sheet-sel-cheio: #1d4a8a;
+  --bpp-sheet-sel-borda: #24058D;
+  --bpp-sheet-sel-fundo: rgba(36, 5, 141, 0.1);
+  --bpp-sheet-sel-cheio: #24058D;
   --bpp-sheet-sel-cheio-texto: #ffffff;
   /* Esqueleto (carregando) */
-  --bpp-esqueleto: rgba(10, 31, 68, 0.09);
+  --bpp-esqueleto: rgba(36, 5, 141, 0.09);
   --bpp-esqueleto-brilho: rgba(255, 255, 255, 0.65);
   /* Contagem regressiva e aviso de mensagem */
-  --bpp-contagem-fundo: rgba(18, 62, 125, 0.08);
-  --bpp-contagem-texto: #123e7d;
+  --bpp-contagem-fundo: rgba(36, 5, 141, 0.08);
+  --bpp-contagem-texto: #24058D;
   --bpp-aviso-ponto: #e11d48;
 }
 .dark .bp-app-paciente {
+  --bpp-realce: #96A5FF;
   --bpp-s1-topo: #000000;
-  --bpp-s1-base: #050c19;
-  --bpp-s2-topo: #050c19;
-  --bpp-s2-meio: #061328;
-  --bpp-s2-azul: #08193a;
-  --bpp-s2-base: #0b2145;
-  --bpp-s3-topo: #0b2145;
-  --bpp-s3-meio: #0d2c5c;
-  --bpp-s3-fundo: #071e42;
-  --bpp-s3-base: #020a1a;
+  --bpp-s1-base: #0a0618;
+  --bpp-s2-topo: #0a0618;
+  --bpp-s2-meio: #100827;
+  --bpp-s2-azul: #170b3a;
+  --bpp-s2-base: #1d0d4a;
+  --bpp-s3-topo: #1d0d4a;
+  --bpp-s3-meio: #220f5a;
+  --bpp-s3-fundo: #170a40;
+  --bpp-s3-base: #0b0420;
   --bpp-painel-topo: #000000;
-  --bpp-painel-meio: #03080f;
-  --bpp-painel-base: #071224;
+  --bpp-painel-meio: #06030f;
+  --bpp-painel-base: #0e0820;
   --bpp-vidro: rgba(255, 255, 255, 0.06);
   --bpp-vidro-borda: rgba(255, 255, 255, 0.12);
   --bpp-vidro-marinho: rgba(255, 255, 255, 0.08);
   --bpp-vidro-marinho-borda: rgba(255, 255, 255, 0.18);
-  --bpp-grafico-linha: #7fb2f0;
+  --bpp-grafico-linha: #96A5FF;
   --bpp-grafico-alerta: #fb923c;
-  --bpp-grafico-eixo: rgba(242, 246, 252, 0.6);
-  --bpp-grafico-linha-marinho: #9ac1f4;
+  --bpp-grafico-eixo: rgba(244, 241, 253, 0.6);
+  --bpp-grafico-linha-marinho: #c4ccff;
   --bpp-grafico-eixo-marinho: rgba(255, 255, 255, 0.8);
-  --bpp-placeholder: rgba(242, 246, 252, 0.62);
-  --bpp-s1-brilho: #03101f;
+  --bpp-placeholder: rgba(244, 241, 253, 0.62);
+  --bpp-s1-brilho: #140a2e;
   /* Superfícies preenchidas herdam o roxo do Clean: branco sobre
      #24058D continua 14,18:1 (AA). Não usamos #96A5FF como fundo —
      branco sobre o tint falha (~2,30:1). Só o brilho acompanha o escuro. */
@@ -123,30 +136,30 @@
   --bpp-ia-aro: rgba(150, 165, 255, 0.40);
   --bpp-sec-fundo: rgba(255, 255, 255, 0.08);
   --bpp-sec-borda: rgba(255, 255, 255, 0.16);
-  --bpp-sec-texto: #f2f6fc;
+  --bpp-sec-texto: #f4f1fd;
   --bpp-cancelar-fundo: rgba(248, 113, 113, 0.1);
   --bpp-cancelar-borda: rgba(252, 165, 165, 0.3);
   --bpp-cancelar-texto: #fca5a5;
-  /* Fase 3 — janelas no Dark: preto com texto claro (como antes) */
-  --bpp-sheet-fundo: #09090b;
-  --bpp-sheet-cartao: #18181b;
+  /* Fase 3 — janelas no Dark: quase preto arroxeado, texto claro, destaque #96A5FF */
+  --bpp-sheet-fundo: #0b0717;
+  --bpp-sheet-cartao: #1a1430;
   --bpp-sheet-borda: rgba(255, 255, 255, 0.14);
   --bpp-sheet-texto: #ffffff;
   --bpp-sheet-suave: rgba(255, 255, 255, 0.72);
   --bpp-sheet-veu: rgba(0, 0, 0, 0.8);
   --bpp-sheet-alca: rgba(255, 255, 255, 0.25);
   --bpp-sheet-chip: rgba(255, 255, 255, 0.1);
-  --bpp-sheet-campo: #18181b;
-  --bpp-sheet-primario: #38bdf8;
-  --bpp-sheet-primario-texto: #09090b;
-  --bpp-sheet-sel-borda: #38bdf8;
-  --bpp-sheet-sel-fundo: rgba(56, 189, 248, 0.15);
-  --bpp-sheet-sel-cheio: #38bdf8;
-  --bpp-sheet-sel-cheio-texto: #09090b;
+  --bpp-sheet-campo: #1a1430;
+  --bpp-sheet-primario: #96A5FF;
+  --bpp-sheet-primario-texto: #12034a;
+  --bpp-sheet-sel-borda: #96A5FF;
+  --bpp-sheet-sel-fundo: rgba(150, 165, 255, 0.15);
+  --bpp-sheet-sel-cheio: #96A5FF;
+  --bpp-sheet-sel-cheio-texto: #12034a;
   --bpp-esqueleto: rgba(255, 255, 255, 0.08);
   --bpp-esqueleto-brilho: rgba(255, 255, 255, 0.12);
-  --bpp-contagem-fundo: rgba(127, 178, 240, 0.12);
-  --bpp-contagem-texto: #bcd7fa;
+  --bpp-contagem-fundo: rgba(150, 165, 255, 0.12);
+  --bpp-contagem-texto: #c4ccff;
   --bpp-aviso-ponto: #fb7185;
 }
 
@@ -249,8 +262,8 @@
 /* Sem backdrop-filter (aparelhos fracos / navegadores antigos): vidro opaco */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .bp-app-paciente .bp-glass { background: rgba(255, 255, 255, 0.94); }
-  .dark .bp-app-paciente .bp-glass { background: rgba(18, 24, 38, 0.95); }
-  .bp-app-paciente .bp-glass-marinho { background: rgba(10, 31, 68, 0.92); }
+  .dark .bp-app-paciente .bp-glass { background: rgba(22, 14, 44, 0.95); }
+  .bp-app-paciente .bp-glass-marinho { background: rgba(26, 8, 90, 0.92); }
 }
 
 /* Menos movimento: sem "pulinho" de hover nem escala ao tocar */
@@ -283,7 +296,7 @@
 /* < 1024 px: carrossel com gestos exatamente como antes.               */
 /* ==================================================================== */
 @media (min-width: 1024px) {
-  html body:has(.bp-app-paciente.bp-shell) { background: #eaf1fc; }
+  html body:has(.bp-app-paciente.bp-shell) { background: #f1ecfb; }
   html.dark body:has(.bp-app-paciente.bp-shell) { background: #000000; }
 
   .bp-app-paciente.bp-shell {
@@ -306,8 +319,8 @@
     flex: none;
     scroll-snap-align: none;
   }
-  .bp-app-paciente .bpp-lateral-esq { border-right: 1px solid rgba(10, 31, 68, 0.1); }
-  .bp-app-paciente .bpp-lateral-dir { border-left: 1px solid rgba(10, 31, 68, 0.1); }
+  .bp-app-paciente .bpp-lateral-esq { border-right: 1px solid rgba(26, 16, 64, 0.1); }
+  .bp-app-paciente .bpp-lateral-dir { border-left: 1px solid rgba(26, 16, 64, 0.1); }
   .dark .bp-app-paciente .bpp-lateral-esq { border-right-color: rgba(255, 255, 255, 0.1); }
   .dark .bp-app-paciente .bpp-lateral-dir { border-left-color: rgba(255, 255, 255, 0.1); }
 
@@ -327,7 +340,7 @@
     right: auto;
     width: min(760px, 100%);
     transform: translateX(-50%);
-    box-shadow: 0 0 0 100vmax rgba(2, 8, 26, 0.55);
+    box-shadow: 0 0 0 100vmax rgba(10, 4, 32, 0.55);
   }
 }
 
@@ -493,21 +506,21 @@
   border-radius: 0.875rem;
   transition: background-color 0.15s ease, transform 0.15s ease;
 }
-.bp-app-paciente button.bpp-linha:hover { background: rgba(10, 31, 68, 0.04); }
+.bp-app-paciente button.bpp-linha:hover { background: rgba(26, 16, 64, 0.04); }
 .dark .bp-app-paciente button.bpp-linha:hover { background: rgba(255, 255, 255, 0.05); }
-.bp-app-paciente .bpp-linha + .bpp-linha { border-top: 1px solid rgba(10, 31, 68, 0.07); }
+.bp-app-paciente .bpp-linha + .bpp-linha { border-top: 1px solid rgba(26, 16, 64, 0.07); }
 .dark .bp-app-paciente .bpp-linha + .bpp-linha { border-top-color: rgba(255, 255, 255, 0.07); }
 
-/* Cartão de saúde: marinho nos dois modos (texto branco ≥ 4,5:1) */
+/* Cartão de saúde: roxo da marca nos dois modos (texto branco ≥ 4,5:1) */
 .bp-app-paciente .bpp-cartao-saude {
   background:
-    radial-gradient(120% 80% at 100% 0%, rgba(125, 175, 240, 0.25) 0%, transparent 60%),
-    linear-gradient(140deg, #14457f 0%, #123e7d 45%, #0a1f44 100%);
+    radial-gradient(120% 80% at 100% 0%, rgba(150, 165, 255, 0.25) 0%, transparent 60%),
+    linear-gradient(140deg, #3D1AAE 0%, #24058D 45%, #1C0470 100%);
   color: #ffffff;
-  box-shadow: 0 14px 34px -14px rgba(10, 31, 68, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.16);
+  box-shadow: 0 14px 34px -14px rgba(26, 16, 64, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.16);
 }
 .dark .bp-app-paciente .bpp-cartao-saude {
-  box-shadow: 0 0 0 1px rgba(147, 197, 253, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  box-shadow: 0 0 0 1px rgba(150, 165, 255, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
 /* ------------------- Início: contagem e aviso ----------------------- */
@@ -542,12 +555,12 @@
 .bp-app-paciente .bpp-toque:active { transform: scale(0.98); }
 .bp-app-paciente .bpp-toque-forte:active { transform: scale(0.95); }
 @media (hover: hover) {
-  .bp-app-paciente .bp-glass.bpp-toque:hover { box-shadow: 0 16px 34px -18px rgba(10, 31, 68, 0.45); }
+  .bp-app-paciente .bp-glass.bpp-toque:hover { box-shadow: 0 16px 34px -18px rgba(26, 16, 64, 0.45); }
 }
 .bp-app-paciente button:focus-visible,
 .bp-app-paciente a:focus-visible,
 .bp-app-paciente [role="button"]:focus-visible {
-  outline: 2px solid #3b82f6;
+  outline: 2px solid var(--bpp-realce);
   outline-offset: 2px;
 }
 
@@ -556,7 +569,7 @@
   .bp-app-paciente .bpp-indicador,
   .bp-app-paciente .bpp-indicador-secao,
   .bp-app-paciente .bpp-dica { background: rgba(9, 9, 11, 0.94); }
-  .bp-app-paciente .bpp-veu-doc { background: rgba(10, 31, 68, 0.82); }
+  .bp-app-paciente .bpp-veu-doc { background: rgba(18, 3, 74, 0.82); }
 }
 
 /* Menos movimento: sem animação de entrada, pulso, brilho nem escala */
@@ -570,4 +583,25 @@
   .bp-app-paciente .bpp-linha { transition: none; }
   .bp-app-paciente .bpp-toque:active,
   .bp-app-paciente .bpp-toque-forte:active { transform: none; }
+}
+
+/* ==================================================================== */
+/* Paleta roxa — ajustes das classes de base SÓ no paciente             */
+/* (globals.css fica intacto para Médicos e Admin).                     */
+/* ==================================================================== */
+@media (min-width: 768px) and (max-width: 1023px) {
+  body:has(.bp-app-paciente.bp-shell) { background: #0b0620; }
+}
+.bp-app-paciente .bp-glass { box-shadow: 0 1px 0 rgba(255, 255, 255, 0.9) inset, 0 12px 32px -8px rgba(26, 16, 64, 0.14); }
+.dark .bp-app-paciente .bp-glass { box-shadow: 0 1px 0 rgba(255, 255, 255, 0.08) inset, 0 12px 32px -8px rgba(0, 0, 0, 0.55); }
+.bp-app-paciente .bp-glass-marinho { box-shadow: 0 1px 0 rgba(255, 255, 255, 0.18) inset, 0 12px 32px -8px rgba(10, 4, 32, 0.5); }
+.bp-app-paciente .bp-entrada { border-color: rgba(36, 5, 141, 0.14); color: var(--bion-ink); }
+.bp-app-paciente .bp-entrada:focus {
+  border-color: rgba(36, 5, 141, 0.55);
+  box-shadow: 0 0 0 3px rgba(36, 5, 141, 0.14);
+}
+.dark .bp-app-paciente .bp-entrada { border-color: rgba(255, 255, 255, 0.14); color: var(--bion-paper); }
+.dark .bp-app-paciente .bp-entrada:focus {
+  border-color: rgba(150, 165, 255, 0.6);
+  box-shadow: 0 0 0 3px rgba(150, 165, 255, 0.18);
 }
