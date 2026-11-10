@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="255.190 255.190 1051.620 1051.620" role="img" aria-label="BION">
   <title>BION</title>
-  <circle cx="781.0" cy="781.0" r="464.420" fill="none" stroke="#24058D" stroke-width="26.780"/>
+  <circle cx="781.0" cy="781.0" r="464.420" fill="none" stroke="#96A5FF" stroke-width="26.780"/>
   <g fill="#FFFFFF" fill-rule="nonzero">
     <path transform="matrix(0.166000 0 0 -0.166000 572.664 838.515)" d="M622 191Q622 103 560.5 51.5Q499 0 389 0H62V702H378Q485 702 545.5 653.0Q606 604 606 520Q606 458 573.5 417.0Q541 376 487 360Q548 347 585.0 299.5Q622 252 622 191ZM233 418H345Q387 418 409.5 436.5Q432 455 432 491Q432 527 409.5 546.0Q387 565 345 565H233ZM449 214Q449 251 424.5 272.0Q400 293 357 293H233V138H359Q402 138 425.5 157.5Q449 177 449 214Z"/>
     <path transform="matrix(0.166000 0 0 -0.166000 683.058 838.515)" d="M233 702V0H62V702Z"/>
