@@ -15,7 +15,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   try {
     const admin = await exigirPapel("ADMIN");
     const { id } = await params;
-    const body = (await req.json().catch(() => ({}))) as { decisao?: unknown; resposta?: unknown };
+    // Auditoria admin 09/11: corpo JSON `null` (ou não objeto) virava 500.
+    const bruto: unknown = await req.json().catch(() => null);
+    const body = (bruto && typeof bruto === "object" ? bruto : {}) as { decisao?: unknown; resposta?: unknown };
     if (body.decisao !== "aprovar" && body.decisao !== "negar") {
       return Response.json({ erro: "Decisão inválida: use aprovar ou negar." }, { status: 400 });
     }

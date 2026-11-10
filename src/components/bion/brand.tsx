@@ -1,30 +1,35 @@
 "use client";
-import {
-  Heart,
-} from "lucide-react";
 
+const TAMANHOS = {
+  sm: "h-10 w-10",
+  md: "h-14 w-14",
+  lg: "h-28 w-28",
+} as const;
+
+/** Marca oficial: círculo #24058D com o wordmark BION. Claro no fundo claro, escuro no fundo escuro. */
 export function Logo({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
-  const sizes = { sm: "text-lg", md: "text-2xl", lg: "text-4xl" };
-  const iconSizes = { sm: "w-6 h-6", md: "w-8 h-8", lg: "w-11 h-11" };
   return (
-    <div className={`font-extrabold tracking-tight ${sizes[size]} flex items-center gap-2.5`}>
-      <div className="relative shrink-0">
-        <div
-          className={`${iconSizes[size]} rounded-2xl bg-primary flex items-center justify-center shadow-md`}
-        >
-          <Heart className="w-4 h-4 text-primary-foreground fill-primary-foreground" />
-        </div>
-        <div className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-accent border-2 border-background" />
-      </div>
-      <div className="flex flex-col leading-none">
-        <span className="text-primary tracking-tight">BION</span>
-        <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">
-          Telemedicina
-        </span>
-      </div>
-    </div>
+    <span
+      className={`relative inline-flex shrink-0 items-center justify-center ${TAMANHOS[size]}`}
+      role="img"
+      aria-label="BION"
+    >
+      <img
+        src="/logo.svg"
+        alt=""
+        className="block h-full w-full dark:hidden"
+        draggable={false}
+      />
+      <img
+        src="/logo-escuro.svg"
+        alt=""
+        className="hidden h-full w-full dark:block"
+        draggable={false}
+      />
+    </span>
   );
 }
+
 export function TelaCarregando({
   texto = "Carregando BION...",
   comLista = false,
@@ -41,8 +46,8 @@ export function TelaCarregando({
       aria-busy="true"
     >
       <div className="flex flex-col items-center gap-4 w-full max-w-md">
-        <div className="w-12 h-12 rounded-2xl bg-primary flex items-center justify-center shadow-md animate-pulse">
-          <Heart className="w-6 h-6 text-primary-foreground fill-primary-foreground" />
+        <div className="animate-pulse">
+          <Logo size="md" />
         </div>
         <div className="text-sm font-bold text-muted-foreground">{texto}</div>
         {comLista ? (

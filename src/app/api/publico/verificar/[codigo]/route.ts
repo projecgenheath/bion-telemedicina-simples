@@ -3,11 +3,10 @@ import { db } from "@/lib/db";
 import { limitarAsync, obterIp, resposta429 } from "@/lib/server/rate-limit";
 import { conferirCodigoVerificacao, VerificacaoIndisponivelError } from "@/lib/server/verificacao-documento";
 import { crmNumeroUf } from "@/lib/medico-exibicao";
+import { LIMITE_VERIFICAR_IP_POR_MIN } from "@/lib/verificacao-documento";
 
 /** Página e API de verificação nunca entram em buscador (também em next.config). */
 const SEM_INDEXAR = { "X-Robots-Tag": "noindex, nofollow" } as const;
-/** Teto por IP: uma farmácia confere poucas vias por minuto; 20/min barra varredura. */
-export const LIMITE_VERIFICAR_IP_POR_MIN = 20;
 
 function json(corpo: unknown, status = 200) {
   return NextResponse.json(corpo, { status, headers: SEM_INDEXAR });

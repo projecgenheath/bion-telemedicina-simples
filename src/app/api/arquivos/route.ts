@@ -9,6 +9,7 @@ import {
   urlAssinadaDocumento,
   garantirBuckets,
 } from "@/lib/supabase/storage";
+import { arquivoParaAdmin } from "@/lib/mascara-admin";
 import { supabaseServiceRoleKey } from "@/lib/supabase/env";
 
 /**
@@ -201,7 +202,8 @@ export async function POST(req: NextRequest) {
       },
     );
 
-    return ok({ arquivo: arquivoWire(arquivo), ...efeitos });
+    const wire = arquivoWire(arquivo);
+    return ok({ arquivo: usuario.role === "ADMIN" ? arquivoParaAdmin(wire) : wire, ...efeitos });
   } catch (erro) {
     return falha(erro);
   }
