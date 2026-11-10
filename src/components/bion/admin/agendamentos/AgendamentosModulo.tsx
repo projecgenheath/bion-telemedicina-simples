@@ -2,13 +2,14 @@
 
 import { useMemo, useState, type KeyboardEvent, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { CalendarDays, CalendarX2, Info, Pencil, Search } from "lucide-react";
+import { CalendarDays, CalendarX2, Info, ListFilter, Pencil, Search } from "lucide-react";
 import { useBion, type Consulta } from "@/lib/bion-store";
 import { TelaModulo } from "../ui/TelaModulo";
 import { TabelaAdmin, type ColunaAdmin } from "../ui/TabelaAdmin";
 import { CardDeslizavel } from "../ui/CardDeslizavel";
 import { ChipEstado } from "../ui/ChipEstado";
 import { EstadoVazio } from "../ui/Estados";
+import { SheetAdmin } from "../ui/SheetAdmin";
 import { useLargo } from "../ui/preferencias";
 import { useDadosAdmin } from "../dados";
 import { estadoConsulta } from "../rotulos";
@@ -123,7 +124,7 @@ export function AgendamentosModulo() {
           <ReembolsosPainel agora={agora} onMudou={() => void atualizar()} />
         ) : (
           <>
-            <div className="flex lg:grid lg:grid-cols-5 gap-2 lg:gap-3 overflow-x-auto -mx-1 px-1 pb-1 snap-x" role="list" aria-label="Resumo da agenda">
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 lg:gap-3" role="list" aria-label="Resumo da agenda">
               {/* Escopos rotulados: "Hoje" é só o dia de hoje (sem canceladas);
                   os demais somam TODAS as consultas carregadas, de qualquer
                   data — sem o "(total)", a fileira lia tudo como "de hoje". */}
@@ -167,7 +168,7 @@ export function AgendamentosModulo() {
 
 function Kpi({ rotulo, valor, tom, titulo }: { rotulo: string; valor: number; tom?: string; titulo?: string }) {
   return (
-    <div role="listitem" title={titulo} className="ba-card shrink-0 min-w-[7.25rem] lg:min-w-0 snap-start" data-tom={tom} data-denso="true">
+    <div role="listitem" title={titulo} className="ba-card min-w-0" data-tom={tom} data-denso="true">
       <p className="ba-rotulo">{rotulo}</p>
       <p className="ba-numero text-2xl lg:text-3xl tabular-nums">{valor}</p>
     </div>
@@ -175,59 +176,90 @@ function Kpi({ rotulo, valor, tom, titulo }: { rotulo: string; valor: number; to
 }
 
 function BarraFiltros({ filtros, onMudar, medicos }: { filtros: Filtros; onMudar: (f: Partial<Filtros>) => void; medicos: { id: string; nome: string }[] }) {
+  const largo = useLargo();
+  const [folha, setFolha] = useState(false);
+  const ativos =
+    Number(filtros.status !== "todos") +
+    Number(filtros.pago !== "todos") +
+    Number(filtros.tipo !== "todos") +
+    Number(Boolean(filtros.medicoId));
+  const seletores = (
+    <>
+      <Seletor rotulo="Status" valor={filtros.status} onMudar={(v) => onMudar({ status: v as Filtros["status"] })}>
+        <option value="todos">Todos os status</option>
+        {STATUS_FILTRO.map((s) => (
+          <option key={s} value={s}>
+            {estadoConsulta(s).rotulo}
+          </option>
+        ))}
+      </Seletor>
+      <Seletor rotulo="Pagamento" valor={filtros.pago} onMudar={(v) => onMudar({ pago: v as Filtros["pago"] })}>
+        <option value="todos">Pagas e não pagas</option>
+        <option value="pago">Só pagas</option>
+        <option value="nao_pago">Só não pagas</option>
+      </Seletor>
+      <Seletor rotulo="Tipo" valor={filtros.tipo} onMudar={(v) => onMudar({ tipo: v as Filtros["tipo"] })}>
+        <option value="todos">Todos os tipos</option>
+        {TIPO_FILTRO.map((t) => (
+          <option key={t} value={t}>
+            {ROTULO_TIPO_ATENDIMENTO[t]}
+          </option>
+        ))}
+      </Seletor>
+      <Seletor rotulo="Médico" valor={filtros.medicoId} onMudar={(v) => onMudar({ medicoId: v })} className="lg:min-w-64">
+        <option value="">Todos os médicos</option>
+        {medicos.map((m) => (
+          <option key={m.id} value={m.id}>
+            {m.nome}
+          </option>
+        ))}
+      </Seletor>
+    </>
+  );
   return (
     <div className="space-y-2">
       <div className="flex flex-col lg:flex-row gap-2">
-        <label className="relative flex-1 min-w-0">
-          <span className="sr-only">Buscar por paciente, médico ou especialidade</span>
-          <Search className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 ba-texto-3" aria-hidden />
-          <input
-            type="search"
-            value={filtros.busca}
-            onChange={(e) => onMudar({ busca: e.target.value })}
-            placeholder="Buscar paciente, médico ou especialidade"
-            className="ba-entrada !pl-10"
-          />
-        </label>
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          <label className="relative flex-1 min-w-0">
+            <span className="sr-only">Buscar por paciente, médico ou especialidade</span>
+            <Search className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 ba-texto-3" aria-hidden />
+            <input
+              type="search"
+              value={filtros.busca}
+              onChange={(e) => onMudar({ busca: e.target.value })}
+              placeholder="Buscar paciente, médico ou especialidade"
+              className="ba-entrada !pl-10"
+            />
+          </label>
+          {!largo ? (
+            <button
+              type="button"
+              onClick={() => setFolha(true)}
+              className="ba-botao ba-botao-secundario !min-h-11 shrink-0"
+              aria-expanded={folha}
+              aria-controls="filtros-agenda"
+            >
+              <ListFilter className="w-4 h-4" aria-hidden />
+              Filtros
+              {ativos ? <span className="tabular-nums">· {ativos}</span> : null}
+            </button>
+          ) : null}
+        </div>
         <div role="group" aria-label="Período" className="ba-abas self-start overflow-x-auto max-w-full">
           {PERIODOS.map((p) => (
-            <button key={p.id} type="button" aria-pressed={filtros.periodo === p.id} onClick={() => onMudar({ periodo: p.id })} className="ba-aba">
+            <button key={p.id} type="button" aria-pressed={filtros.periodo === p.id} onClick={() => onMudar({ periodo: p.id })} className="ba-aba !min-h-11 shrink-0">
               {p.rotulo}
             </button>
           ))}
         </div>
       </div>
-      <div className="grid grid-cols-2 lg:flex gap-2">
-        <Seletor rotulo="Status" valor={filtros.status} onMudar={(v) => onMudar({ status: v as Filtros["status"] })}>
-          <option value="todos">Todos os status</option>
-          {STATUS_FILTRO.map((s) => (
-            <option key={s} value={s}>
-              {estadoConsulta(s).rotulo}
-            </option>
-          ))}
-        </Seletor>
-        <Seletor rotulo="Pagamento" valor={filtros.pago} onMudar={(v) => onMudar({ pago: v as Filtros["pago"] })}>
-          <option value="todos">Pagas e não pagas</option>
-          <option value="pago">Só pagas</option>
-          <option value="nao_pago">Só não pagas</option>
-        </Seletor>
-        <Seletor rotulo="Tipo" valor={filtros.tipo} onMudar={(v) => onMudar({ tipo: v as Filtros["tipo"] })}>
-          <option value="todos">Todos os tipos</option>
-          {TIPO_FILTRO.map((t) => (
-            <option key={t} value={t}>
-              {ROTULO_TIPO_ATENDIMENTO[t]}
-            </option>
-          ))}
-        </Seletor>
-        <Seletor rotulo="Médico" valor={filtros.medicoId} onMudar={(v) => onMudar({ medicoId: v })} className="col-span-2 lg:min-w-64">
-          <option value="">Todos os médicos</option>
-          {medicos.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.nome}
-            </option>
-          ))}
-        </Seletor>
-      </div>
+      {largo ? <div className="flex flex-wrap gap-2">{seletores}</div> : (
+        <SheetAdmin aberto={folha} onFechar={() => setFolha(false)} titulo="Filtros da agenda" descricao="Status, pagamento, tipo e médico.">
+          <div id="filtros-agenda" className="space-y-3 px-5 pb-5">
+            {seletores}
+          </div>
+        </SheetAdmin>
+      )}
     </div>
   );
 }
@@ -316,8 +348,8 @@ function TabelaAgenda({ linhas, agora, selecionada, onAbrir }: { linhas: Consult
         </span>
       ),
     },
-    { id: "paciente", titulo: "Paciente", render: (c) => <span className="font-bold whitespace-nowrap">{c.paciente}</span> },
-    { id: "medico", titulo: "Médico", render: (c) => <span className="whitespace-nowrap">{c.medico}</span> },
+    { id: "paciente", titulo: "Paciente", render: (c) => <span className="font-bold break-words">{c.paciente}</span> },
+    { id: "medico", titulo: "Médico", render: (c) => <span className="break-words">{c.medico}</span> },
     { id: "esp", titulo: "Especialidade", secundaria: true, render: (c) => <span className="ba-texto-2">{c.especialidade}</span> },
     {
       id: "status",
@@ -329,16 +361,11 @@ function TabelaAgenda({ linhas, agora, selecionada, onAbrir }: { linhas: Consult
             .map((e) => (
               <ChipEstado key={e.rotulo} estado={e} />
             ))}
+          {c.status === "cancelada" ? null : <ChipEstado estado={c.pago ? { rotulo: "Pago", tom: "ok" } : { rotulo: "Não pago", tom: "atencao" }} />}
         </span>
       ),
     },
-    {
-      id: "pago",
-      titulo: "Pago",
-      largura: "6.5rem",
-      render: (c) => (c.status === "cancelada" ? <span className="ba-texto-3">—</span> : <ChipEstado estado={c.pago ? { rotulo: "Pago", tom: "ok" } : { rotulo: "Não pago", tom: "atencao" }} />),
-    },
-    { id: "valor", titulo: "Valor", tipo: "num", largura: "7rem", render: (c) => (c.valor ? brl(centavosDoValor(c.valor)) : "—") },
+    { id: "valor", titulo: "Valor", tipo: "num", largura: "7.5rem", render: (c) => (c.valor ? brl(centavosDoValor(c.valor)) : "—") },
   ];
   return <TabelaAdmin rotulo="Consultas" colunas={colunas} linhas={linhas} chave={(c) => c.id} onAbrir={onAbrir} selecionada={selecionada} alturaMax="none" />;
 }

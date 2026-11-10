@@ -434,7 +434,13 @@ button.ba-card:hover, a.ba-card:hover, .ba-card[role="button"]:hover { transform
 .ba-tabela tbody tr[data-clicavel="true"]:hover td { background: color-mix(in srgb, var(--ba-sinal) 7%, transparent); }
 .ba-tabela tbody tr[aria-selected="true"] td { background: color-mix(in srgb, var(--ba-sinal) 12%, transparent); }
 .ba-tabela tbody tr:focus-visible { outline: 2px solid var(--ba-sinal); outline-offset: -2px; }
-.ba-tabela .ba-num { text-align: right; font-variant-numeric: tabular-nums; }
+.ba-tabela .ba-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* Colunas secundárias (ex.: Especialidade): só a partir de 1440, onde a
+   tabela de Agendamentos não corta o Valor. Não usa o xl do Tailwind (1280). */
+.ba-col-secundaria { display: none; }
+@media (min-width: 1440px) {
+  .ba-col-secundaria { display: table-cell; }
+}
 
 /* ---------- Estados (carregando / vazio / erro) ------------------------ */
 .ba-esqueleto { background: var(--ba-esqueleto); border-radius: 0.75rem; }
