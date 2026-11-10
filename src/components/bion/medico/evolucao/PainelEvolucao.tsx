@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { ClipboardList, X, Check, Ruler, Lock, Download, ChevronDown, ChevronRight, Bookmark, Trash2 } from "lucide-react";
+import { ClipboardList, X, Check, Ruler, Download, ChevronDown, ChevronRight, Bookmark, Trash2 } from "lucide-react";
 import { useBion } from "@/lib/bion-store";
 import { gerarDocumentoPDF } from "@/lib/receita-pdf";
 import { BotaoDitado } from "@/components/bion/BotaoDitado";
@@ -18,6 +18,8 @@ import {
   temConteudo,
   type ModeloEvolucao,
 } from "./modelos-evolucao";
+import { lerHistoricoClinico, type ItemHistoricoClinico } from "../historico-outros";
+import { AvisoConsentimentoHistorico, CartaoHistoricoClinico } from "../cartao-historico-clinico";
 
 /**
  * Painel da Evolução do médico (Teleconsulta v2). Gaveta que entra pela
@@ -68,10 +70,7 @@ type Estado = {
   documentos: DocumentoPainel[];
   medicamentosEmUso: { id: string; nome: string; dose: string | null; controlado: boolean }[];
   pedidosMedicao: { id: string; tipos: string[]; status: string }[];
-  historico: {
-    consultaId: string; dataInicio: string; especialidade: string; medico: string; deOutroMedico: boolean;
-    anamnese: { status: string } | null; evolucao: { conduta: { texto?: string }; cid: string | null } | null;
-  }[];
+  historico: ItemHistoricoClinico[];
 };
 
 type AbaPainel = Secao | "historico" | "documentos";
@@ -183,7 +182,7 @@ export function PainelEvolucao({
       return;
     }
     setErroCarga(false);
-    setEstado(j);
+    setEstado({ ...j, historico: lerHistoricoClinico(j.historico) });
     if (j.evolucao) {
       setTextos({
         dados: j.evolucao.dados?.texto ?? "",
@@ -746,27 +745,27 @@ export function PainelEvolucao({
           ) : null}
           {estado && aba === "historico" ? (
             <div className="space-y-2">
-              <div className="text-xs opacity-70 flex items-center gap-1"><Lock className="w-3 h-3" /> Somente leitura. O acesso a consultas de outros médicos fica na Auditoria.</div>
+              <AvisoConsentimentoHistorico />
               {estado.historico.map((h) => (
-                <div key={h.consultaId} className="rounded-2xl border p-3">
-                  <div className="font-semibold">{new Date(h.dataInicio).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })} · {h.especialidade}</div>
-                  <div className="text-xs opacity-70">{h.medico}{h.deOutroMedico ? " (outro médico)" : ""} · anamnese {h.anamnese?.status ?? "—"}</div>
-                  {h.evolucao ? <div className="text-xs mt-1 whitespace-pre-wrap">{h.evolucao.conduta?.texto ?? ""}{h.evolucao.cid ? ` · CID ${h.evolucao.cid}` : ""}</div> : null}
-                  {/* Reutilizar o PRÓPRIO atendimento anterior como ponto
-                      de partida: copia conduta + CID (o que o GET traz
-                      das evoluções anteriores) para o rascunho atual.
-                      Cartão de outro médico NÃO ganha o botão — aquele
-                      histórico é somente leitura. */}
-                  {!concluida && !h.deOutroMedico && fonteDoHistorico(h) ? (
-                    <button
-                      type="button"
-                      onClick={() => usarBaseHistorico(h)}
-                      className="mt-2 px-3 py-1 rounded-full border text-xs font-bold"
-                    >
-                      Usar conduta e CID como base
-                    </button>
-                  ) : null}
-                </div>
+                <CartaoHistoricoClinico
+                  key={h.consultaId}
+                  item={h}
+                  acao={
+                    /* Reutilizar o PRÓPRIO atendimento anterior como ponto
+                       de partida: copia conduta + CID. Cartão de outro
+                       médico NÃO ganha o botão — aquele histórico é
+                       somente leitura. */
+                    !concluida && !h.deOutroMedico && fonteDoHistorico(h) ? (
+                      <button
+                        type="button"
+                        onClick={() => usarBaseHistorico(h)}
+                        className="mt-2 px-3 py-1 rounded-full border text-xs font-bold"
+                      >
+                        Usar conduta e CID como base
+                      </button>
+                    ) : null
+                  }
+                />
               ))}
               {estado.historico.length === 0 ? <div className="text-xs opacity-70">Sem outras consultas.</div> : null}
             </div>
