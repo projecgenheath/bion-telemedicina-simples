@@ -10,6 +10,7 @@ const PUBLICOS: readonly string[] = [
   "/api/auth/logout",
   "/api/pagamentos/webhook",
   "/api/pagamentos/stripe/webhook", // protegido pela assinatura do Stripe (STRIPE_WEBHOOK_SECRET)
+  "/api/stripe/webhook-connect", // eventos das contas Connect; protegido pela assinatura (STRIPE_WEBHOOK_SECRET_CONNECT)
   "/api/cron/fechar-repasses", // protegido pelo Bearer CRON_SECRET na própria rota
   "/api/cron/toque", // idem (pg_cron + pg_net a cada minuto)
   "/api/cron/lembretes", // idem (pg_cron + pg_net a cada minuto)
