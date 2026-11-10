@@ -3,6 +3,7 @@
 /* Testes: bun src/lib/stripe-checkout-logica.teste.ts                  */
 /* ------------------------------------------------------------------ */
 
+import type Stripe from "stripe";
 import type { ModoCobranca } from "@/lib/server/stripe";
 
 type Env = Record<string, string | undefined>;
@@ -224,6 +225,7 @@ export type EntradaSessao = {
   expiraEmSeg?: number | null;
   valorCentavos: number;
   moeda: string;
+  /** Vai em `allowed_payment_method_types` (nunca `payment_method_types`). Sempre metodosCheckout(). */
   metodos: string[];
   descricao: string;
   baseUrl: string;
@@ -265,7 +267,11 @@ export function parametrosSessao(e: EntradaSessao) {
   const q = e.consultaId ? `consulta=${encodeURIComponent(e.consultaId)}` : `tipo=${tipo}`;
   return {
     mode: "payment" as const,
-    payment_method_types: e.metodos,
+    // API 2026-09-30.endive (stripe-node 23): `payment_method_types` virou
+    // erro 400 na criação da sessão. `allowed_payment_method_types` filtra os
+    // métodos ativos no Dashboard (da BION, ou do médico na cobrança direta /
+    // on_behalf_of) e só deixa passar o que está aqui: cartão. Sem Pix.
+    allowed_payment_method_types: e.metodos,
     client_reference_id: referenciaCliente(e),
     metadata,
     ...(e.expiraEmSeg ? { expires_at: e.expiraEmSeg } : {}),
@@ -279,7 +285,7 @@ export function parametrosSessao(e: EntradaSessao) {
     payment_intent_data: { metadata, ...divisaoConnect(e), ...(e.descritorSufixo ? { statement_descriptor_suffix: e.descritorSufixo } : {}) },
     success_url: `${base}/pagamento/sucesso?${q}`,
     cancel_url: `${base}/pagamento/cancelado?${q}`,
-  };
+  } satisfies Stripe.Checkout.SessionCreateParams; // parâmetro removido pelo Stripe = erro no tsc
 }
 
 /** client_reference_id: a consulta; renovação "pagamento:<id>"; multa "multa:<id>". */

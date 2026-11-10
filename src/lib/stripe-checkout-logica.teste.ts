@@ -101,6 +101,13 @@ igual("sem application_fee", "application_fee_amount" in p.payment_intent_data, 
 igual("sem transfer_data", "transfer_data" in p.payment_intent_data, false);
 igual("success_url", p.success_url, "https://app.exemplo/pagamento/sucesso?consulta=c1");
 igual("cancel_url", p.cancel_url, "https://app.exemplo/pagamento/cancelado?consulta=c1");
+// API 2026-09-30.endive (stripe-node 23): payment_method_types na criação da
+// sessão dá 400 ("no longer supported"). Só cartão vai em allowed_payment_method_types.
+igual("só cartão em allowed_payment_method_types", p.allowed_payment_method_types, ["card"]);
+igual("não manda payment_method_types (400 na API endive)", "payment_method_types" in p, false);
+igual("não mistura com payment_method_configuration", "payment_method_configuration" in p, false);
+igual("não mistura com excluded_payment_method_types", "excluded_payment_method_types" in p, false);
+igual("PaymentIntent da sessão sem payment_method_types", "payment_method_types" in p.payment_intent_data, false);
 
 // modo de cobrança
 igual("live + plataforma bloqueia", bloqueioChaveLive("plataforma", "sk_live_x"), true);
@@ -129,6 +136,11 @@ let erroTaxa = false;
 try { divisaoConnect({ modo: "direta", connect: { ...cx, taxaPlataformaCentavos: 20000 }, valorCentavos: 15000 }); } catch { erroTaxa = true; }
 igual("comissão maior que o valor recusa", erroTaxa, true);
 const pd = parametrosSessao({ consultaId: "c1", pacienteId: "p1", pagamentoId: "pg1", valorCentavos: 15000, moeda: "brl", metodos: ["card"], descricao: "T", baseUrl: "https://a", modo: "destino", connect: cx });
+igual("destino (on_behalf_of) também só cartão", pd.allowed_payment_method_types, ["card"]);
+igual("destino sem payment_method_types", "payment_method_types" in pd, false);
+const pDir = parametrosSessao({ consultaId: "c1", pacienteId: "p1", pagamentoId: "pg1", valorCentavos: 15000, moeda: "brl", metodos: metodosCheckout(), descricao: "T", baseUrl: "https://a", modo: "direta", connect: cx });
+igual("direta (conta do médico) também só cartão", pDir.allowed_payment_method_types, ["card"]);
+igual("direta sem payment_method_types", "payment_method_types" in pDir, false);
 igual("sessão destino leva divisão", pd.payment_intent_data, { metadata: { consultaId: "c1", pacienteId: "p1", pagamentoId: "pg1" }, application_fee_amount: 1500, on_behalf_of: "acct_123", transfer_data: { destination: "acct_123" } });
 
 // reaproveitar sessão
@@ -245,7 +257,9 @@ igual("503 pagamento_indisponivel", respostaIndisponivel(), { corpo: { erro: "Pa
 const pRen = parametrosSessao({ consultaId: null, pacienteId: "p1", pagamentoId: "pg9", tipo: "renovacao", valorCentavos: 15000, moeda: "brl", metodos: metodosCheckout(), descricao: "R", baseUrl: "https://a/" });
 igual("renovação: ref pagamento", pRen.client_reference_id, "pagamento:pg9");
 igual("renovação: metadata sem consulta", pRen.metadata, { pacienteId: "p1", pagamentoId: "pg9", tipo: "renovacao" });
-igual("renovação: só cartão", pRen.payment_method_types, ["card"]);
+igual("renovação: só cartão", pRen.allowed_payment_method_types, ["card"]);
+igual("renovação sem payment_method_types", "payment_method_types" in pRen, false);
+igual("multa: só cartão", parametrosSessao({ consultaId: null, pacienteId: "p1", pagamentoId: null, tipo: "multa", remarcacaoId: "rm1", valorCentavos: 3000, moeda: "brl", metodos: metodosCheckout(), descricao: "M", baseUrl: "https://a" }).allowed_payment_method_types, ["card"]);
 igual("renovação: volta com tipo", pRen.success_url, "https://a/pagamento/sucesso?tipo=renovacao");
 const pMul = parametrosSessao({ consultaId: null, pacienteId: "p1", pagamentoId: null, tipo: "multa", remarcacaoId: "rm1", expiraEmSeg: 123, valorCentavos: 3000, moeda: "brl", metodos: ["card"], descricao: "M", baseUrl: "https://a" });
 igual("multa: ref", pMul.client_reference_id, "multa:rm1");
@@ -284,6 +298,15 @@ igual("webhook cancela renovação falha", webhook.includes("cancelarRenovacaoPa
 igual("webhook troca a consulta da espera", webhook.includes("confirmarRemarcacaoEspera(pagamentoId)"), true);
 igual("webhook aplica a multa", /aprovarMultaRemarcacao\(r\.id, "webhook"/.test(webhook), true);
 igual("webhook confere valor da multa", /valorConfere\(s\.amount_total, r\.multaCentavos \/ 100\)/.test(webhook), true);
+
+// guarda estática: nenhuma criação de sessão/PaymentIntent manda payment_method_types
+// (o campo continua LEGÍVEL na resposta do Stripe; só não pode ser enviado).
+const logica = ler("./stripe-checkout-logica.ts");
+const gateway = ler("./server/gateway-pagamento.ts");
+igual("lógica não monta payment_method_types", /^\s*payment_method_types\s*:/m.test(logica), false);
+igual("gateway não monta payment_method_types", /payment_method_types\s*:/.test(gateway), false);
+igual("gateway sem cast que esconde parâmetro removido", /as unknown as Stripe\.Checkout\.SessionCreateParams/.test(gateway), false);
+igual("lógica confere os tipos do SDK (satisfies)", /satisfies Stripe\.Checkout\.SessionCreateParams/.test(logica), true);
 
 // ---- 2º clique na multa reaproveita a sessão aberta ----
 igual("sessão da multa", sessaoDaMulta("stripe_cs:cs_123"), "cs_123");

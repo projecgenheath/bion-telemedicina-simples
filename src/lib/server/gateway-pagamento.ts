@@ -40,7 +40,9 @@ function paraSessao(s: Stripe.Checkout.Session): SessaoCheckout {
 export const gatewayStripe: GatewayCheckout = {
   nome: "stripe",
   async criarSessao(e, chave) {
-    const params = parametrosSessao(e) as unknown as Stripe.Checkout.SessionCreateParams;
+    // Sem cast: parametrosSessao usa `satisfies` com os tipos do SDK, então um
+    // parâmetro removido pelo Stripe (ex.: payment_method_types) quebra o tsc.
+    const params: Stripe.Checkout.SessionCreateParams = parametrosSessao(e);
     return paraSessao(
       await stripe().checkout.sessions.create(params, { idempotencyKey: chave, ...opcoesRequisicao(e) }),
     );
