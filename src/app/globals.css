@@ -62,9 +62,10 @@
   --card-foreground: oklch(0.2 0.04 250);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.2 0.04 250);
-  --primary: oklch(0.55 0.17 250);
-  --primary-foreground: oklch(1 0 0);
-  --primary-soft: oklch(0.96 0.03 245);
+  /* Marca oficial #24058D — branco sobre a cor: 14,18:1; cor sobre branco: 14,18:1 (AA/AAA). */
+  --primary: #24058D;
+  --primary-foreground: #ffffff;
+  --primary-soft: #EDEBF6;
   --secondary: oklch(0.96 0.015 240);
   --secondary-foreground: oklch(0.25 0.05 250);
   --muted: oklch(0.965 0.01 240);
@@ -77,7 +78,7 @@
   --destructive-foreground: oklch(1 0 0);
   --border: oklch(0.92 0.01 240);
   --input: oklch(0.92 0.01 240);
-  --ring: oklch(0.55 0.17 250);
+  --ring: #24058D;
 }
 
 @layer base {
@@ -97,9 +98,11 @@
   --card-foreground: oklch(0.96 0.01 240);
   --popover: oklch(0.23 0.035 250);
   --popover-foreground: oklch(0.96 0.01 240);
-  --primary: oklch(0.7 0.14 250);
-  --primary-foreground: oklch(0.17 0.03 250);
-  --primary-soft: oklch(0.3 0.06 250);
+  /* #24058D no fundo escuro fica em ~1,3:1 (falha AA). Tint oklch(0.75 0.14 276) = #96A5FF:
+     8,00:1 no fundo escuro, 7,32:1 no card; #24058D sobre #96A5FF: 6,16:1. */
+  --primary: #96A5FF;
+  --primary-foreground: #24058D;
+  --primary-soft: #2A2150;
   --secondary: oklch(0.27 0.03 250);
   --secondary-foreground: oklch(0.96 0.01 240);
   --muted: oklch(0.27 0.025 250);
@@ -111,7 +114,7 @@
   --destructive-foreground: oklch(0.98 0 0);
   --border: oklch(0.32 0.025 250);
   --input: oklch(0.32 0.025 250);
-  --ring: oklch(0.7 0.14 250);
+  --ring: #96A5FF;
 }
 
 /* ==================================================================== */
@@ -280,4 +283,97 @@ html.densidade-confortavel {
 }
 html.densidade-grande {
   font-size: 18px;
+}
+
+/* ===================================================================== */
+/* Animações leves compartilhadas (paciente, médico e admin)             */
+/* --------------------------------------------------------------------- */
+/* Só CSS (sem biblioteca). Duração de 150 a 200 ms, ease-out.           */
+/* Todo movimento fica dentro de (prefers-reduced-motion: no-preference): */
+/* com "menos movimento" ligado no sistema, nada se mexe (os elementos    */
+/* aparecem já no lugar e o esqueleto fica parado).                       */
+/*                                                                        */
+/* .bion-toque        botão/cartão "afunda" levemente ao tocar (0.98).    */
+/* .bion-toque-forte  junto com .bion-toque: afunda mais (0.95), para     */
+/*                    botões pequenos (ícones, pílulas).                  */
+/* .bion-surgir       entrada: sobe 6px e aparece em 180 ms.              */
+/*                    Escalonar: style={{ "--bion-i": i }} (0..7), atraso */
+/*                    de i × 40 ms; acima de 7 usa o atraso máximo        */
+/*                    (280 ms). Ou use .bion-surgir-lista no pai.         */
+/* .bion-surgir-lista no contêiner: cada filho direto entra escalonado    */
+/*                    sozinho (até 8 itens; do 9º em diante, 280 ms).     */
+/* .bion-indicador    fundo/sublinhado que desliza numa pílula. Posicione */
+/*                    com transform: translateX(...) e width inline; a    */
+/*                    transição é de 180 ms.                              */
+/* .bion-esqueleto    bloco de carregamento com pulso suave (use          */
+/*                    aria-hidden="true" e dê a altura/largura por        */
+/*                    classes do Tailwind).                               */
+/* As classes antigas .bpp-toque/.bpp-surgir (paciente.css) continuam.    */
+/* ===================================================================== */
+@layer components {
+  .bion-toque {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .bion-indicador {
+    will-change: transform;
+  }
+
+  .bion-esqueleto {
+    border-radius: 0.75rem;
+    background-color: var(--color-muted);
+  }
+  .dark .bion-esqueleto {
+    background-color: oklch(0.3 0.03 250);
+  }
+
+  .bion-surgir-lista > :nth-child(1) { --bion-i: 0; }
+  .bion-surgir-lista > :nth-child(2) { --bion-i: 1; }
+  .bion-surgir-lista > :nth-child(3) { --bion-i: 2; }
+  .bion-surgir-lista > :nth-child(4) { --bion-i: 3; }
+  .bion-surgir-lista > :nth-child(5) { --bion-i: 4; }
+  .bion-surgir-lista > :nth-child(6) { --bion-i: 5; }
+  .bion-surgir-lista > :nth-child(7) { --bion-i: 6; }
+  .bion-surgir-lista > :nth-child(n + 8) { --bion-i: 7; }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .bion-toque {
+      transition:
+        transform 150ms ease-out,
+        box-shadow 180ms ease-out,
+        background-color 150ms ease-out;
+    }
+    .bion-toque:active { transform: scale(0.98); }
+    .bion-toque.bion-toque-forte:active { transform: scale(0.95); }
+
+    .bion-surgir,
+    .bion-surgir-lista > * {
+      /* "backwards" (e não "both"): o estado inicial vale durante o atraso,
+         mas ao terminar a animação solta o transform, e o :active do
+         .bion-toque volta a funcionar no mesmo elemento. */
+      animation: bion-surgir 180ms ease-out backwards;
+      animation-delay: calc(min(var(--bion-i, 0), 7) * 40ms);
+    }
+
+    .bion-indicador {
+      transition:
+        transform 180ms ease-out,
+        width 180ms ease-out,
+        height 180ms ease-out,
+        background-color 180ms ease-out;
+    }
+
+    .bion-esqueleto {
+      animation: bion-esqueleto 1.4s ease-in-out infinite;
+    }
+  }
+}
+
+@keyframes bion-surgir {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes bion-esqueleto {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
 }

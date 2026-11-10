@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MessageSquare, ShieldCheck } from "lucide-react";
 import { EstadoVazio } from "@/components/bion/ui/EstadoVazio";
 import { useBion } from "@/lib/bion-store";
+import { contatosMensagensAdmin } from "@/components/bion/admin/contatos-mensagens";
 
 type Contato = {
   id: string;
@@ -56,13 +57,10 @@ export function Mensagens() {
         }
       }
     } else {
-      // Admin conversa com médicos e pacientes cadastrados
-      for (const m of medicos) {
-        if (m.id !== sessao.id) lista.push({ id: m.id, nome: m.nome, detalhe: m.especialidade, suporte: false });
-      }
-      for (const p of pacientes) {
-        if (p.id !== sessao.id) lista.push({ id: p.id, nome: p.nome, detalhe: "Paciente", suporte: false });
-      }
+      // Admin conversa com médicos e pacientes que podem receber mensagem
+      // (sem arquivados, suspensos, inativos ou anonimizados — ver
+      // admin/contatos-mensagens.ts; auditoria admin 09/11).
+      lista.push(...contatosMensagensAdmin(medicos, pacientes, sessao.id));
     }
 
     if (suporte.id && suporte.id !== sessao.id && !lista.some((c) => c.id === suporte.id)) {
@@ -267,8 +265,9 @@ export function Mensagens() {
   );
 }
 
-/** Subtítulo por papel. Só o caminho do médico é ajustado aqui
- *  (o admin trata o texto dele no #161). */
+/** Subtítulo por papel. Admin (auditoria 09/11, #161) e médico (#162)
+ *  têm texto próprio; os demais seguem com o texto de antes. */
 function subtituloMensagens(role: string): string {
+  if (role === "admin") return "Fale com médicos e pacientes pelo suporte BION.";
   return subtituloMensagensMedico(role) ?? "Fale diretamente com seu médico especialista entre as consultas.";
 }
