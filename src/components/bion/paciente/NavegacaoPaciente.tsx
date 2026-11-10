@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { Hand } from "lucide-react";
 
 const PAINEIS = [
@@ -90,6 +90,24 @@ export function NavegacaoPaciente({
   /** Some quando há sheet/sobreposição aberta. */
   oculto?: boolean;
 }) {
+  // Indicador deslizante da pílula inferior (.bion-indicador): mede o
+  // pontinho ativo e desliza até ele em 180 ms. Só visual — a navegação
+  // continua nos botões. Sem medida (1º quadro), o pontinho ativo pinta-se
+  // sozinho, como antes.
+  const navRef = useRef<HTMLElement>(null);
+  const pontosRef = useRef<(HTMLSpanElement | null)[]>([]);
+  const [indicador, setIndicador] = useState<{ x: number; w: number } | null>(null);
+  useLayoutEffect(() => {
+    if (oculto) return;
+    const nav = navRef.current;
+    const ponto = pontosRef.current[painel];
+    if (!nav || !ponto) return;
+    const rn = nav.getBoundingClientRect();
+    const rp = ponto.getBoundingClientRect();
+    if (!rp.width) return;
+    setIndicador({ x: rp.left - rn.left, w: rp.width });
+  }, [painel, oculto]);
+
   if (oculto) return null;
 
   const irSecao = (i: number) => {
@@ -131,9 +149,17 @@ export function NavegacaoPaciente({
 
       {/* Pontinhos inferiores discretos — Perfil / Início / Documentos */}
       <nav
+        ref={navRef}
         aria-label="Painéis do app"
         className="bpp-indicador absolute bottom-[calc(1rem+env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2 z-20 flex items-center gap-0.5 rounded-full bg-zinc-950/85 text-white backdrop-blur px-1.5 py-1 pointer-events-auto"
       >
+        {indicador ? (
+          <span
+            aria-hidden
+            className="bion-indicador pointer-events-none absolute left-0 top-1/2 -mt-1 h-2 rounded-full bg-sky-300"
+            style={{ width: indicador.w, transform: `translateX(${indicador.x}px)` }}
+          />
+        ) : null}
         {PAINEIS.map(({ idx, rotulo }) => {
           const docs = idx === 2;
           const rotuloAria =
@@ -150,8 +176,11 @@ export function NavegacaoPaciente({
               className="relative min-w-11 min-h-11 inline-flex items-center justify-center"
             >
               <span
-                className={`block h-2 rounded-full transition-all ${
-                  painel === idx ? "w-6 bg-sky-300" : "w-2 bg-white/70"
+                ref={(el) => {
+                  pontosRef.current[idx] = el;
+                }}
+                className={`block h-2 rounded-full ${
+                  painel === idx ? `w-6 ${indicador ? "bg-transparent" : "bg-sky-300"}` : "w-2 bg-white/70"
                 }`}
               />
               {docs && naoLidas > 0 ? (
