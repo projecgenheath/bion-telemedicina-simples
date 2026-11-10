@@ -7,7 +7,7 @@ import type { Arquivo, Consulta, Documento } from "@/lib/bion-store";
 import { gerarDocumentoPDF, gerarReceitaCombinadaPDF } from "@/lib/receita-pdf";
 import { agruparEmissoes } from "@/lib/documentos-agrupados";
 import { rotuloStatusMedico } from "./metricas";
-import { documentoCancelado } from "./cancelar-documento";
+import { documentoCancelado, documentoEmitidoPor } from "./cancelar-documento";
 
 /** Selo "Cancelado" (20261103a): o documento continua no prontuário. */
 function SeloCancelado({ d }: { d: Documento }) {
@@ -78,6 +78,11 @@ const ROTULO_DOC: Record<Documento["tipo"], string> = {
   exame_solicitado: "Exame solicitado",
 };
 
+function rotuloEmissor(d: Documento, medicoIdAtual: string): string {
+  const nome = d.medico || "Médico";
+  return documentoEmitidoPor(d, medicoIdAtual) ? nome : `${nome} (outro médico)`;
+}
+
 /**
  * Histórico do paciente COMIGO: consultas (com resumo), documentos e arquivos.
  * Documentos vêm do store filtrados pelo IDENTIFICADOR do paciente (M-9:
@@ -89,12 +94,15 @@ export function ProntuarioPaciente({
   documentos,
   arquivos,
   homonimo,
+  medicoIdAtual,
   onRenovar,
 }: {
   consultas: Consulta[];
   documentos: Documento[];
   arquivos: Arquivo[];
   homonimo: boolean;
+  /** Médico logado: cancelar/renovar só nos documentos emitidos por ele. */
+  medicoIdAtual: string;
   onRenovar: (d: Documento) => void;
 }) {
   // 20261103a: cancelamentos feitos nesta tela (o store só atualiza no
@@ -128,7 +136,7 @@ export function ProntuarioPaciente({
     }
   };
   const botaoCancelar = (d: Documento) =>
-    documentoCancelado(d) ? null : (
+    documentoCancelado(d) || !documentoEmitidoPor(d, medicoIdAtual) ? null : (
       <button type="button" disabled={cancelando === d.id} onClick={() => void cancelar(d)} className="text-xs font-bold rounded-full px-3 py-1.5 bg-red-600/10 text-red-800 dark:text-red-200 inline-flex items-center gap-1 shrink-0 disabled:opacity-60">
         <Ban className="w-3.5 h-3.5" /> {cancelando === d.id ? "Cancelando…" : "Cancelar documento"}
       </button>
@@ -242,7 +250,7 @@ export function ProntuarioPaciente({
                     <div className="min-w-0 flex-1">
                       <div className="text-sm font-bold">{entrada.docs[0].titulo}</div>
                       <div className="text-xs text-bion-ink/75 dark:text-bion-paper/75">
-                        {ROTULO_DOC[entrada.docs[0].tipo]} · {entrada.docs[0].data} · {entrada.docs[0].medico} ·{" "}
+                        {ROTULO_DOC[entrada.docs[0].tipo]} · {entrada.docs[0].data} · {rotuloEmissor(entrada.docs[0], medicoIdAtual)} ·{" "}
                         {entrada.docs.length} medicamentos
                       </div>
                     </div>
@@ -257,7 +265,7 @@ export function ProntuarioPaciente({
                         <button type="button" onClick={() => baixar(d)} className="text-xs font-bold rounded-full px-3 py-1.5 bg-bion-ink/8 dark:bg-white/10 inline-flex items-center gap-1 shrink-0">
                           <Download className="w-3.5 h-3.5" /> PDF
                         </button>
-                        {!documentoCancelado(d) ? (
+                        {!documentoCancelado(d) && documentoEmitidoPor(d, medicoIdAtual) ? (
                           <button type="button" onClick={() => onRenovar(d)} className="text-xs font-bold rounded-full px-3 py-1.5 bg-bion-ink/8 dark:bg-white/10 inline-flex items-center gap-1 shrink-0">
                             <RefreshCw className="w-3.5 h-3.5" /> Renovar
                           </button>
@@ -279,7 +287,7 @@ export function ProntuarioPaciente({
                     <div className="min-w-0 flex-1">
                       <div className="text-sm font-bold">{entrada.docs[0].titulo}<SeloCancelado d={entrada.docs[0]} /></div>
                       <div className="text-xs text-bion-ink/75 dark:text-bion-paper/75">
-                        {ROTULO_DOC[entrada.docs[0].tipo]} · {entrada.docs[0].data} · {entrada.docs[0].medico}
+                        {ROTULO_DOC[entrada.docs[0].tipo]} · {entrada.docs[0].data} · {rotuloEmissor(entrada.docs[0], medicoIdAtual)}
                       </div>
                       {entrada.docs[0].medicamento ? <div className="text-sm mt-1">{entrada.docs[0].medicamento} — {entrada.docs[0].posologia}</div> : null}
                     </div>
@@ -290,7 +298,7 @@ export function ProntuarioPaciente({
                         <Download className="w-3.5 h-3.5" /> PDF
                       </button>
                     ) : null}
-                    {entrada.docs[0].tipo === "receita" && !documentoCancelado(entrada.docs[0]) ? (
+                    {entrada.docs[0].tipo === "receita" && !documentoCancelado(entrada.docs[0]) && documentoEmitidoPor(entrada.docs[0], medicoIdAtual) ? (
                       <button type="button" onClick={() => onRenovar(entrada.docs[0])} className="text-xs font-bold rounded-full px-3 py-1.5 bg-bion-ink/8 dark:bg-white/10 inline-flex items-center gap-1">
                         <RefreshCw className="w-3.5 h-3.5" /> Renovar
                       </button>
