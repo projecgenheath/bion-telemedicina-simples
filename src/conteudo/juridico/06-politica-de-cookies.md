@@ -63,6 +63,6 @@ e) você poderá mudar sua escolha a qualquer momento.
 
 # 7. Contato
 
-Canal do titular / encarregado: **[E-MAIL DO ENCARREGADO/CANAL DO TITULAR]**. Ver também a Política de Privacidade.
+**Encarregado de dados:** **[NOME DO MANTENEDOR]**, pelo e-mail **oxygenbiomedical@gmail.com**. Ver também a Política de Privacidade.
 
 *Versão provisória v0 — Vigente a partir do seu aceite.*

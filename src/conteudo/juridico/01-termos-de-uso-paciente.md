@@ -18,7 +18,7 @@ lang: pt-BR
 - **A videochamada não é gravada.** O chat da consulta fica guardado no seu prontuário.
 - **Seus dados de saúde são protegidos** pela LGPD e pelo sigilo médico. A administração da BION não acessa o conteúdo clínico das suas consultas.
 - Você pode **excluir sua conta** no seu perfil; seu prontuário, por lei, continua guardado por 20 anos, sem o seu nome.
-- Dúvidas: **[E-MAIL DE CONTATO]**. Para exercer direitos sobre seus dados (LGPD): **[E-MAIL DO ENCARREGADO/CANAL DO TITULAR]**. Correio: **[ENDEREÇO PARA CORRESPONDÊNCIA]**.
+- Dúvidas: **oxygenbiomedical@gmail.com**. Para exercer direitos sobre seus dados (LGPD): **Encarregado de dados:** **[NOME DO MANTENEDOR]**, pelo e-mail **oxygenbiomedical@gmail.com**. Correio: **[ENDEREÇO PARA CORRESPONDÊNCIA]**.
 
 # Sumário
 
@@ -55,11 +55,11 @@ lang: pt-BR
 
 # 1. Quem somos
 
-1.1. A plataforma BION ("**BION**", "**nós**", a "**Plataforma**") é um software de intermediação tecnológica mantido por pessoa física, o mantenedor **[NOME E CPF DO MANTENEDOR]**, com endereço para correspondência em **[ENDEREÇO PARA CORRESPONDÊNCIA]** e contato em **[E-MAIL DE CONTATO]**. O mantenedor é o **controlador** dos dados pessoais tratados pela Plataforma, nos termos da LGPD, ressalvado o prontuário, que tem o médico assistente como controlador (Política de Privacidade). **Não há, nesta versão, pessoa jurídica, CNPJ, razão social, sede de empresa, inscrição em Conselho Regional de Medicina nem médico responsável técnico (diretor técnico / RT).** O mantenedor responde pessoalmente pelas obrigações da Plataforma.
+1.1. A plataforma BION ("**BION**", "**nós**", a "**Plataforma**") é um software de intermediação tecnológica mantido por pessoa física, o mantenedor **[NOME E CPF DO MANTENEDOR]**, com endereço para correspondência em **[ENDEREÇO PARA CORRESPONDÊNCIA]** e contato em **oxygenbiomedical@gmail.com**. O mantenedor é o **controlador** dos dados pessoais tratados pela Plataforma, nos termos da LGPD, ressalvado o prontuário, que tem o médico assistente como controlador (Política de Privacidade). **Não há, nesta versão, pessoa jurídica, CNPJ, razão social, sede de empresa, inscrição em Conselho Regional de Medicina nem médico responsável técnico (diretor técnico / RT).** O mantenedor responde pessoalmente pelas obrigações da Plataforma.
 
 1.2. **Transparência sobre a Resolução CFM nº 2.314/2022, art. 17.** Essa norma exige que empresas de telemedicina se inscrevam no CRM do Estado da sede e indiquem um médico responsável técnico. A BION, nesta versão, **não cumpre esse requisito**, porque é mantida por pessoa física e ainda não tem CNPJ nem RT. Essa informação é prestada de forma clara para que você saiba quem presta o atendimento (o médico que você escolhe) e quem oferece só a tecnologia (o mantenedor). Essa transparência **reduz o risco** de se atribuir à Plataforma um erro médico, **mas não elimina** o risco regulatório de operar uma plataforma de telemedicina sem inscrição no CRM e sem RT. **[VALIDAR COM ADVOGADO.]** Quando o mantenedor constituir pessoa jurídica, obtiver CNPJ e, se for o caso, indicar RT e promover a inscrição no CRM, estes Termos serão atualizados e será pedido **novo aceite** (cláusula 26).
 
-1.3. **Canal do titular / encarregado** pelo tratamento de dados pessoais (LGPD, arts. 18 e 41): **[E-MAIL DO ENCARREGADO/CANAL DO TITULAR]**. O prazo para responder a pedidos de **confirmação de tratamento e de acesso** é de **15 (quinze) dias**. Os demais direitos e o modo de exercê-los estão na Política de Privacidade e na cláusula 24.
+1.3. **Encarregado de dados:** **[NOME DO MANTENEDOR]**, pelo e-mail **oxygenbiomedical@gmail.com** (LGPD, arts. 18 e 41). O encarregado é o próprio mantenedor. O prazo para responder a pedidos de **confirmação de tratamento e de acesso** é de **15 (quinze) dias**. Os demais direitos e o modo de exercê-los estão na Política de Privacidade e na cláusula 24.
 
 # 2. Definições
 
@@ -219,7 +219,7 @@ As funcionalidades podem mudar; mudanças relevantes serão informadas (cláusul
 
 15.2. **Forma de pagamento.** O pagamento é feito com cartão de crédito, pela Stripe. Quando houver reembolso, o valor é devolvido no mesmo cartão usado no pagamento. O estorno é pedido na hora, mas pode levar alguns dias, ou até a próxima fatura, para aparecer, conforme o prazo do banco emissor. O valor devolvido é o valor integral devido, sem desconto de taxas.
 
-15.3. **Para quem vai o dinheiro.** O pagamento é feito só com cartão, pela Stripe, e vai **direto para a conta Stripe conectada do médico** que atende a consulta. A BION recebe apenas **10% do valor**, como remuneração pelo uso do software, pela intermediação tecnológica e pelo processamento do pagamento, e **não como honorário médico**. Na fatura do cartão, a cobrança costuma aparecer com o nome da **conta conectada do médico**; o padrão cadastrado é **"BION" + o nome do médico**. Mesmo assim, é a BION que opera a cobrança e os reembolsos pela Plataforma, e você pode tratar de qualquer cobrança ou reembolso diretamente com o suporte da BION (**[E-MAIL DE CONTATO]**); o médico responde pelo serviço médico, e o médico e o mantenedor respondem perante você nos termos do Código de Defesa do Consumidor. **Pix não é aceito.** O recibo ou a nota fiscal da consulta é emitido pelo médico. **Disponibilidade da Stripe:** a telemedicina é ramo de pagamento restrito, e a conta da plataforma de pessoa física depende de aprovação da Stripe. A BION **não garante** essa aprovação nem a continuidade do processamento. Se a Stripe recusar, limitar ou encerrar o serviço, novas cobranças poderão ser interrompidas, com aviso a você; reembolsos já devidos continuam sendo processados na medida em que o meio de pagamento permitir.
+15.3. **Para quem vai o dinheiro.** O pagamento é feito só com cartão, pela Stripe, e vai **direto para a conta Stripe conectada do médico** que atende a consulta. A BION recebe apenas **10% do valor**, como remuneração pelo uso do software, pela intermediação tecnológica e pelo processamento do pagamento, e **não como honorário médico**. Na fatura do cartão, a cobrança costuma aparecer com o nome da **conta conectada do médico**; o padrão cadastrado é **"BION" + o nome do médico**. Mesmo assim, é a BION que opera a cobrança e os reembolsos pela Plataforma, e você pode tratar de qualquer cobrança ou reembolso diretamente com o suporte da BION (**oxygenbiomedical@gmail.com**); o médico responde pelo serviço médico, e o médico e o mantenedor respondem perante você nos termos do Código de Defesa do Consumidor. **Pix não é aceito.** O recibo ou a nota fiscal da consulta é emitido pelo médico. **Disponibilidade da Stripe:** a telemedicina é ramo de pagamento restrito, e a conta da plataforma de pessoa física depende de aprovação da Stripe. A BION **não garante** essa aprovação nem a continuidade do processamento. Se a Stripe recusar, limitar ou encerrar o serviço, novas cobranças poderão ser interrompidas, com aviso a você; reembolsos já devidos continuam sendo processados na medida em que o meio de pagamento permitir.
 
 15.4. **Confirmação.** A consulta só é confirmada depois que o pagamento for confirmado pelo gateway.
 
@@ -299,9 +299,9 @@ Podemos alterar estes Termos. Mudanças relevantes serão avisadas no app com pe
 
 # 27. Atendimento ao consumidor
 
-27.1. Canal de atendimento ao consumidor: **[E-MAIL DE CONTATO]**, e chamados de suporte pelo próprio app. Responderemos em até **[A DEFINIR: 5 dias úteis]**.
+27.1. Canal de atendimento ao consumidor: **oxygenbiomedical@gmail.com**, e chamados de suporte pelo próprio app. Responderemos em até **[A DEFINIR: 5 dias úteis]**.
 
-27.2. **Canal do titular de dados** (LGPD, arts. 18 e 41): **[E-MAIL DO ENCARREGADO/CANAL DO TITULAR]**. Pedidos de confirmação de tratamento e de acesso serão respondidos em até **15 (quinze) dias**. Correspondência: **[ENDEREÇO PARA CORRESPONDÊNCIA]**.
+27.2. **Encarregado de dados:** **[NOME DO MANTENEDOR]**, pelo e-mail **oxygenbiomedical@gmail.com** (LGPD, arts. 18 e 41). O encarregado é o próprio mantenedor. Pedidos de confirmação de tratamento e de acesso serão respondidos em até **15 (quinze) dias**. Correspondência: **[ENDEREÇO PARA CORRESPONDÊNCIA]**.
 
 27.3. Você também pode recorrer ao **Procon**, ao **consumidor.gov.br** e aos demais órgãos de defesa do consumidor, e à **ANPD** em matéria de proteção de dados.
 
@@ -322,6 +322,6 @@ Se alguma cláusula for considerada inválida, as demais continuam valendo. A to
 - Política de Cancelamento, Reembolso e Retorno  
 - Política de Cookies  
 
-Contato: **[E-MAIL DE CONTATO]** · Canal do titular / encarregado: **[E-MAIL DO ENCARREGADO/CANAL DO TITULAR]** · Correspondência: **[ENDEREÇO PARA CORRESPONDÊNCIA]**
+Contato: **oxygenbiomedical@gmail.com** · **Encarregado de dados:** **[NOME DO MANTENEDOR]**, pelo e-mail **oxygenbiomedical@gmail.com** · Correspondência: **[ENDEREÇO PARA CORRESPONDÊNCIA]**
 
 *Vigente a partir do seu aceite*

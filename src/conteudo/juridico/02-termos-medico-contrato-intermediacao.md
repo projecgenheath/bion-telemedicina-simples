@@ -15,6 +15,7 @@ lang: pt-BR
 - **Multas de cancelamento/remarcação tardia (≤ 24 h):** 50% do valor, divididas meio a meio entre você e a BION. **Atenção ao risco ético** descrito na cláusula 10.6.
 - **Notas fiscais:** você emite ao paciente (NFS-e se PJ; recibo Receita Saúde se PF). Enquanto o mantenedor for pessoa física, o documento da remuneração da BION será emitido na forma permitida para PF (cláusula 11.3), e não como NFS-e de empresa. Opcionalmente, no futuro, você poderá autorizar a emissão da NFS-e em seu nome, com seu certificado A1 (**recurso ainda não disponível**).
 - **Proteção de dados:** você é **controlador** do prontuário que produz; a BION é **operadora** dele e **controladora** dos dados da plataforma. Detalhes no Anexo I.
+- **Canal para médicos interessados em atender:** WhatsApp **(62) 99360-2088** (`https://wa.me/5562993602088`), operado pela Meta/WhatsApp. Envie apenas **nome, CRM e UF**. **Nunca envie documentos ou dados de pacientes** por esse canal; os documentos do cadastro seguem pelo aplicativo.
 
 # Sumário
 
@@ -46,7 +47,7 @@ Anexo III — Tabela de remuneração, multas, recebimentos e ajustes
 
 # 1. Partes e aceite
 
-1.1. **BION / mantenedor:** a plataforma BION é um software de intermediação tecnológica mantido por pessoa física, o mantenedor **[NOME E CPF DO MANTENEDOR]**, com endereço para correspondência em **[ENDEREÇO PARA CORRESPONDÊNCIA]** e contato em **[E-MAIL DE CONTATO]**. O mantenedor é o controlador dos dados pessoais da Plataforma, nos termos da Política de Privacidade, ressalvado o prontuário (você é o controlador dele). **Não há, nesta versão, pessoa jurídica, CNPJ, razão social, sede de empresa, inscrição em Conselho Regional de Medicina nem médico responsável técnico (diretor técnico / RT).** O mantenedor responde pessoalmente pelas obrigações da Plataforma.
+1.1. **BION / mantenedor:** a plataforma BION é um software de intermediação tecnológica mantido por pessoa física, o mantenedor **[NOME E CPF DO MANTENEDOR]**, com endereço para correspondência em **[ENDEREÇO PARA CORRESPONDÊNCIA]** e contato em **oxygenbiomedical@gmail.com**. O mantenedor é o controlador dos dados pessoais da Plataforma, nos termos da Política de Privacidade, ressalvado o prontuário (você é o controlador dele). **Não há, nesta versão, pessoa jurídica, CNPJ, razão social, sede de empresa, inscrição em Conselho Regional de Medicina nem médico responsável técnico (diretor técnico / RT).** O mantenedor responde pessoalmente pelas obrigações da Plataforma.
 
 1.2. **Médico:** a pessoa física com inscrição ativa no CRM que aceita estes Termos, atuando **em nome próprio (PF)** ou **por meio de sua pessoa jurídica (PJ)**, identificada no cadastro. Se atuar por PJ, a PJ e o médico respondem solidariamente pelas obrigações aqui previstas, e o médico declara ter poderes para vincular a PJ. O médico é o **único prestador do serviço médico** e o **único anunciante da sua atividade** (Res. CFM 2.336/2023).
 
@@ -248,7 +249,9 @@ A BION pode alterar estes Termos com aviso de **30 dias**. Alterações de remun
 
 # 21. Comunicações
 
-As comunicações ocorrem pelo app e pelo e-mail cadastrado. Contato da BION: **[E-MAIL DE CONTATO]**. Canal do titular / encarregado (LGPD, arts. 18 e 41): **[E-MAIL DO ENCARREGADO/CANAL DO TITULAR]** (resposta a confirmação e acesso em até **15 dias**). Correspondência: **[ENDEREÇO PARA CORRESPONDÊNCIA]**.
+As comunicações com médicos já cadastrados ocorrem pelo app e pelo e-mail cadastrado. Contato da BION: **oxygenbiomedical@gmail.com**. **Encarregado de dados:** **[NOME DO MANTENEDOR]**, pelo e-mail **oxygenbiomedical@gmail.com** (LGPD, arts. 18 e 41; resposta a confirmação e acesso em até **15 dias**). O encarregado é o próprio mantenedor. Correspondência: **[ENDEREÇO PARA CORRESPONDÊNCIA]**.
+
+**Canal para médicos interessados em atender pela BION:** WhatsApp **(62) 99360-2088** (`https://wa.me/5562993602088`). Esse número é operado pela Meta/WhatsApp. Por esse canal devem ser enviados apenas **nome, CRM e UF**. **Nunca envie documentos ou dados de pacientes** pelo WhatsApp; os documentos do cadastro seguem pelo aplicativo.
 
 # 22. Disposições gerais, anticorrupção e foro
 
