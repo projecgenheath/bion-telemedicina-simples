@@ -1,0 +1,49 @@
+{
+  "reduzir": false,
+  "surgirListaFilho2": {
+    "animationName": "bion-surgir",
+    "animationDuration": "0.18s",
+    "animationDelay": "0.04s",
+    "transitionProperty": "all",
+    "transitionDuration": "0s",
+    "transform": "none"
+  },
+  "surgirListaFilho9": {
+    "animationName": "bion-surgir",
+    "animationDuration": "0.18s",
+    "animationDelay": "0.28s",
+    "transitionProperty": "transform, box-shadow, background-color",
+    "transitionDuration": "0.15s, 0.18s, 0.15s",
+    "transform": "none"
+  },
+  "toque": {
+    "animationName": "none",
+    "animationDuration": "0s",
+    "animationDelay": "0s",
+    "transitionProperty": "transform, box-shadow, opacity",
+    "transitionDuration": "0.15s, 0.15s, 0.15s",
+    "transform": "none"
+  },
+  "indicador": {
+    "animationName": "none",
+    "animationDuration": "0s",
+    "animationDelay": "0s",
+    "transitionProperty": "transform, width, height, background-color",
+    "transitionDuration": "0.18s, 0.18s, 0.18s, 0.18s",
+    "transform": "matrix(1, 0, 0, 1, 34, 0)"
+  },
+  "esqueleto": {
+    "animationName": "bion-esqueleto",
+    "animationDuration": "1.4s",
+    "animationDelay": "0s",
+    "transitionProperty": "all",
+    "transitionDuration": "0s",
+    "transform": "none"
+  },
+  "contagem": {
+    "toque": 30,
+    "surgir": 22,
+    "esqueleto": 2,
+    "indicador": 1
+  }
+}
