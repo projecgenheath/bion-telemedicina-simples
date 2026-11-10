@@ -94,6 +94,14 @@ function validarAutoedicao(
   atual: { nome: string; crm: string; especialidade: string },
 ): string | null {
   if (body.acao && body.acao !== "atualizar") return "Ação permitida apenas ao administrador.";
+  // Tipo errado (nome: 5, crm não-texto) quebrava no .trim() e virava 500.
+  // Só o caminho do médico: o admin valida identidade no #161.
+  const rotulosIdentidade = { nome: "Nome", crm: "CRM", especialidade: "Especialidade" } as const;
+  for (const k of ["nome", "crm", "especialidade"] as const) {
+    const v: unknown = body[k];
+    if (v === undefined) continue;
+    if (typeof v !== "string") return `${rotulosIdentidade[k]} deve ser um texto.`;
+  }
   // O cliente pode reenviar nome/CRM/especialidade sem alteração; mudar exige admin.
   if (body.nome !== undefined && body.nome.trim() !== atual.nome) {
     return "Alteração de nome é feita pelo administrador.";

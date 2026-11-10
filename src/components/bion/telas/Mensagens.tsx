@@ -88,6 +88,12 @@ export function Mensagens() {
     });
   }, [contatos, mensagens]);
 
+  // Se o contato escolhido saiu da lista, volta à seleção automática
+  // (ajuste na renderização, evita setState síncrono no efeito).
+  if (ativaId !== null && !conversas.some((c) => c.contato.id === ativaId)) {
+    setAtivaId(null);
+  }
+
   const ativa = conversas.find((c) => c.contato.id === ativaId)?.contato ?? conversas[0]?.contato ?? null;
 
   const threadAtiva = useMemo(() => {
@@ -99,10 +105,6 @@ export function Mensagens() {
 
   /* Abre a conversa e marca como lida ao chegar mensagem nova com a conversa aberta */
   const naoLidasAtivas = threadAtiva.filter((m) => !m.minha && !m.lida).length;
-  useEffect(() => {
-    if (!ativa) return;
-    if (!conversas.some((c) => c.contato.id === ativa.id)) setAtivaId(null);
-  }, [conversas, ativa]);
 
   useEffect(() => {
     if (ativa && naoLidasAtivas > 0) marcarConversaLida(ativa.id);
@@ -129,9 +131,7 @@ export function Mensagens() {
       <div className="max-w-4xl mx-auto space-y-6">
         <div>
           <h1 className="text-3xl font-extrabold tracking-tight">Mensagens &amp; Orientações</h1>
-          <p className="text-muted-foreground mt-1">
-            Fale diretamente com seu médico especialista entre as consultas.
-          </p>
+          <p className="text-muted-foreground mt-1">{subtituloMensagens(sessao.role)}</p>
         </div>
         <EstadoVazio
           icone={MessageSquare}
@@ -154,9 +154,7 @@ export function Mensagens() {
     <div className="max-w-4xl mx-auto space-y-6">
       <div>
         <h1 className="text-3xl font-extrabold tracking-tight">Mensagens &amp; Orientações</h1>
-        <p className="text-muted-foreground mt-1">
-          Fale diretamente com seu médico especialista entre as consultas.
-        </p>
+        <p className="text-muted-foreground mt-1">{subtituloMensagens(sessao.role)}</p>
       </div>
 
       <div className="grid md:grid-cols-[280px_1fr] gap-4 min-w-0">
@@ -268,4 +266,11 @@ export function Mensagens() {
       </p>
     </div>
   );
+}
+
+/** Subtítulo por papel. Só o caminho do médico é ajustado aqui
+ *  (o admin trata o texto dele no #161). */
+function subtituloMensagens(role: string): string {
+  if (role === "medico") return "Fale com seus pacientes entre as consultas.";
+  return "Fale diretamente com seu médico especialista entre as consultas.";
 }
