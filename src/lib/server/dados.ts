@@ -11,6 +11,7 @@ import { notasReais } from "./notas-medico";
 import type { Prisma } from "@prisma/client";
 import type { UsuarioSessao } from "./auth";
 import { whereArquivosVisiveis } from "./arquivos-acesso";
+import { arquivoParaAdmin, auditoriaParaAdmin } from "@/lib/mascara-admin";
 import { alturaCanonica, pesoCanonico } from "@/lib/medidas-paciente";
 import { dataNascimentoParaIso, idadeDeNascimento } from "@/lib/idade";
 import { codigoVerificacaoOuNulo } from "./verificacao-documento";
@@ -751,7 +752,9 @@ export async function carregarDados(usuario: UsuarioSessao) {
     consultas: consultasRaw.map((c) => consultaParaPapel(consultaWire(c), usuario.role)),
     anamneses: anamnesesRaw.map((a) => anamneseWire(a)),
     documentos: documentos.map((doc) => documentoParaPapel(documentoWire(doc), usuario.role)),
-    arquivos: arquivos.map((a) => arquivoWire(a)),
+    // Decisão do Alisson (09/11): admin vê só "Receita.pdf"/"Exame.jpg"…,
+    // nunca o nome original (mascara-admin.ts). Médico/paciente: sem mudança.
+    arquivos: arquivos.map((a) => (souAdmin ? arquivoParaAdmin(arquivoWire(a)) : arquivoWire(a))),
     notificacoes: notificacoes.map((n) => ({
       ...n,
       lida: n.usuarioId ? n.lida : lidasPorMim.has(n.id),
@@ -762,7 +765,9 @@ export async function carregarDados(usuario: UsuarioSessao) {
     lembretes,
     avaliacoes: avaliacoesRaw.map((a) => avaliacaoWire(a)),
     consentimentos: consentimentos.map((c) => consentimentoWire(c)),
-    auditLogs: auditLogs.map((l) => ({
+    // Auditoria antiga guarda títulos/nomes de arquivo no texto: mascarados
+    // NA LEITURA para o admin (o banco não muda). Só o admin recebe auditLogs.
+    auditLogs: auditLogs.map((l) => auditoriaParaAdmin({
       id: l.id,
       ts: l.createdAt.getTime(),
       acao: l.acao,
@@ -894,7 +899,8 @@ export async function aplicarSideEffects(
     if (row) {
       return {
         notificacoes: criadas,
-        audit: {
+        // Admin que gerou o evento recebe a mesma máscara do bootstrap.
+        audit: (usuario.role === "ADMIN" ? auditoriaParaAdmin : <T,>(l: T) => l)({
           id: row.id,
           ts: row.createdAt.getTime(),
           acao: row.acao,
@@ -905,7 +911,7 @@ export async function aplicarSideEffects(
           entidade: row.entidade ?? undefined,
           entidadeId: row.entidadeId ?? undefined,
           detalhes: row.detalhes ?? undefined,
-        },
+        }),
       };
     }
   }
