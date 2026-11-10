@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { ArrowLeft, ChevronRight, Inbox, PanelLeftClose, PanelLeftOpen, Search } from "lucide-react";
+import { Logo } from "@/components/bion/brand";
 import { SheetAdmin } from "./ui/SheetAdmin";
 import { LARGURA_TRILHO_ABERTO, useCascaLarga, useDensidadeAdmin, useMinLargura, usePreferenciaBool } from "./ui/preferencias";
 import { useAtalhoBusca } from "./ui/atalho";
@@ -315,6 +316,8 @@ function Trilho({
         />
       ) : null}
       <div className="ba-trilho-cabecalho">
+        {/* Recolhido: o trilho tem ~4,5 rem; logo sm (40 px) + botão (44 px) transbordava. Só o botão de expandir. */}
+        {aberto ? <Logo size="sm" /> : null}
         {aberto ? (
           <div className="flex-1 min-w-0 pl-1">
             <div className="text-sm font-black leading-none">Torre BION</div>

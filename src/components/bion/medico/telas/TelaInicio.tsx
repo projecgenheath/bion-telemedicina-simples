@@ -3,6 +3,7 @@
 import { Bell, CalendarClock, CalendarDays, ChevronDown, Info, ListChecks, MessageCircle, Pill, RefreshCw, Video, XCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { AvisoAtivarToque } from "@/components/bion/AvisoAtivarToque";
+import { Logo } from "@/components/bion/brand";
 import { ContagemRegressiva } from "../ContagemRegressiva";
 import { iniciais, reservaVigente, ROTULO_STATUS, salaAberta, saudacao, textoReservaPendente } from "../metricas";
 import type { DadosMedico } from "../useDadosMedico";
@@ -47,8 +48,11 @@ export function TelaInicio({
   return (
     <section className="bm-tela bm-tela-1 flex flex-col px-5 bp-safe-top pb-20" aria-labelledby="bm-t1-titulo">
       <header className="flex items-center justify-between pt-2">
-        <div className="text-xs font-semibold uppercase tracking-wider text-bion-ink/70 dark:text-bion-paper/70 first-letter:uppercase">
-          {dataHoje}
+        <div className="flex items-center gap-2 min-w-0">
+          <Logo size="sm" />
+          <div className="text-xs font-semibold uppercase tracking-wider text-bion-ink/70 dark:text-bion-paper/70 first-letter:uppercase">
+            {dataHoje}
+          </div>
         </div>
         <div className="flex items-center gap-2">
           {/* Item 12: sino da central de notificações (selo = não lidas). */}
