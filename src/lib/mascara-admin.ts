@@ -57,12 +57,6 @@ export function nomesArquivosAdmin(arquivos: { tipo?: string | null; nome?: stri
   });
 }
 
-/** Content-Disposition com o nome neutro (ASCII + filename* UTF-8). */
-export function contentDispositionAdmin(nome: string): string {
-  const ascii = nome.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\w .()-]/g, "_");
-  return `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(nome)}`;
-}
-
 type ArquivoComNome = { nome: string; tipo: string; storagePath?: string | null };
 
 /**

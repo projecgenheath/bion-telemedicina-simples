@@ -8,9 +8,8 @@ import {
   uploadDocumento,
   urlAssinadaDocumento,
   garantirBuckets,
-  baixarDocumento,
 } from "@/lib/supabase/storage";
-import { arquivoParaAdmin, contentDispositionAdmin, extensaoNeutra, nomeArquivoAdmin } from "@/lib/mascara-admin";
+import { arquivoParaAdmin } from "@/lib/mascara-admin";
 import { supabaseServiceRoleKey } from "@/lib/supabase/env";
 
 /**
@@ -43,48 +42,12 @@ export async function GET(req: NextRequest) {
     if (!supabaseServiceRoleKey()) {
       return Response.json({ erro: "Storage não configurado (service role)." }, { status: 503 });
     }
-    if (usuario.role === "ADMIN") return downloadAdmin(req, arquivo.id, arquivo.tipo, arquivo.nome, arquivo.storagePath);
     // B2: download como anexo — upload de paciente nunca renderiza inline.
     const url = await urlAssinadaDocumento(arquivo.storagePath, 600, true);
     return ok({ url, nome: arquivo.nome });
   } catch (erro) {
     return falha(erro);
   }
-}
-
-const MIME_POR_EXTENSAO: Record<string, string> = {
-  pdf: "application/pdf",
-  jpg: "image/jpeg",
-  jpeg: "image/jpeg",
-  png: "image/png",
-  webp: "image/webp",
-  heic: "image/heic",
-  doc: "application/msword",
-  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  txt: "text/plain; charset=utf-8",
-};
-
-/**
- * Download do ADMIN (decisão do Alisson, 09/11): a URL assinada do Storage
- * traz o nome original no caminho, então o admin recebe um link para esta
- * mesma rota (`&baixar=1`), que entrega o arquivo pelo servidor com o nome
- * "Receita.pdf"/"Exame.jpg"… Médico e paciente seguem com a URL assinada.
- */
-async function downloadAdmin(req: NextRequest, id: string, tipo: string, nome: string, storagePath: string) {
-  const nomeAdmin = nomeArquivoAdmin(tipo, nome);
-  if (req.nextUrl.searchParams.get("baixar") !== "1") {
-    return ok({ url: `/api/arquivos?id=${encodeURIComponent(id)}&baixar=1`, nome: nomeAdmin });
-  }
-  const blob = await baixarDocumento(storagePath);
-  const ext = extensaoNeutra(nome);
-  return new Response(blob, {
-    headers: {
-      "Content-Type": MIME_POR_EXTENSAO[ext] ?? "application/octet-stream",
-      "Content-Disposition": contentDispositionAdmin(nomeAdmin),
-      "Cache-Control": "private, no-store",
-      "X-Content-Type-Options": "nosniff",
-    },
-  });
 }
 
 /**

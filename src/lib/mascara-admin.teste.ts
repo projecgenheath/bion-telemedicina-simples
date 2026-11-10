@@ -10,7 +10,6 @@ import type { AuditLog } from "@/lib/bion-tipos";
 import {
   arquivoParaAdmin,
   auditoriaParaAdmin,
-  contentDispositionAdmin,
   detalheAuditoriaAdmin as m,
   extensaoNeutra,
   nomeArquivoAdmin,
@@ -45,9 +44,6 @@ describe("nome de arquivo para o admin", () => {
     const a = { id: "a1", nome: "eletrocardiograma-laudo.pdf", tipo: "Exame cardiológico", storagePath: "u/1-eletrocardiograma-laudo.pdf", tamanhoKb: 3 };
     expect(arquivoParaAdmin(a)).toEqual({ id: "a1", nome: "Exame.pdf", tipo: "Exame", storagePath: "restrito", tamanhoKb: 3 });
     expect(a.nome).toBe("eletrocardiograma-laudo.pdf");
-  });
-  test("Content-Disposition neutro (ASCII + UTF-8)", () => {
-    expect(contentDispositionAdmin("Solicitação.pdf")).toBe(`attachment; filename="Solicitacao.pdf"; filename*=UTF-8''Solicita%C3%A7%C3%A3o.pdf`);
   });
 });
 

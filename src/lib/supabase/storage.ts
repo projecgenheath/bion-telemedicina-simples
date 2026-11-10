@@ -59,18 +59,6 @@ export async function urlAssinadaDocumento(path: string, expiresSec = 3600, como
   return data.signedUrl;
 }
 
-/**
- * Baixa o objeto do bucket privado no servidor. Usado no download do ADMIN,
- * que não pode receber a URL assinada: o caminho dela contém o nome original
- * do arquivo (decisão do Alisson, 09/11 — admin vê só o tipo).
- */
-export async function baixarDocumento(path: string): Promise<Blob> {
-  const admin = createSupabaseAdminClient();
-  const { data, error } = await admin.storage.from(BUCKET_DOCUMENTOS).download(path);
-  if (error) throw error;
-  return data;
-}
-
 /** Remove um arquivo do bucket privado (ex.: comprovante de um pagamento recusado). */
 export async function removerDocumento(path: string) {
   const admin = createSupabaseAdminClient();
