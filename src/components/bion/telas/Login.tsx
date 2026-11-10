@@ -1,5 +1,5 @@
 "use client";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import type { Role } from "@/lib/rotas";
 import { useRouter } from "next/navigation";
 import { Shield } from "lucide-react";
@@ -8,6 +8,7 @@ import { useBion } from "@/lib/bion-store";
 import { Logo } from "@/components/bion/brand";
 import { AceiteTermos } from "@/components/bion/AceiteTermos";
 import { aceiteTermosPayload, ERRO_ACEITE_TERMOS } from "@/lib/aceite-termos";
+import { useAppNativo } from "@/lib/useAppNativo";
 
 // Só os e-mails das contas demo: a senha NUNCA vai para o bundle do cliente
 // (repo público). Ela é definida no seed via SEED_DEMO_PASSWORD/SEED_ADMIN_PASSWORD.
@@ -21,6 +22,8 @@ const CONTAS_DEMO: Record<Role, { email: string }> = {
 const DEMO_HABILITADO =
   process.env.NEXT_PUBLIC_DEMO_LOGINS === "1" ||
   process.env.NODE_ENV === "development";
+
+const CHAVE_RASCUNHO_CADASTRO = "bion-cadastro-rascunho";
 
 export function Login() {
   const router = useRouter();
@@ -37,6 +40,36 @@ export function Login() {
   const [aceitouTermos, setAceitouTermos] = useState(false);
   const [aceitouMarketing, setAceitouMarketing] = useState(false);
   const [formErro, setFormErro] = useState<string | null>(null);
+  // No app de loja "/" volta direto para /entrar: o link da página inicial não leva a nada.
+  const noApp = useAppNativo();
+
+  // No app (WebView), tocar em "Termos de Uso" troca a página (não há nova aba) e,
+  // ao voltar, o cadastro recomeçava do zero. Guardamos só modo, nome e e-mail
+  // nesta aba (sessionStorage) — senha NUNCA é guardada.
+  useEffect(() => {
+    try {
+      const bruto = sessionStorage.getItem(CHAVE_RASCUNHO_CADASTRO);
+      if (!bruto) return;
+      const r = JSON.parse(bruto) as { nome?: unknown; email?: unknown };
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- restauração única do rascunho no cliente
+      setModoCadastro(true);
+      if (typeof r.nome === "string") setNome(r.nome);
+      if (typeof r.email === "string") setIdentificador(r.email);
+    } catch {
+      /* sessionStorage indisponível ou rascunho inválido: segue vazio */
+    }
+  }, []);
+  useEffect(() => {
+    try {
+      if (modoCadastro && (nome || identificador)) {
+        sessionStorage.setItem(CHAVE_RASCUNHO_CADASTRO, JSON.stringify({ nome, email: identificador }));
+      } else if (!modoCadastro) {
+        sessionStorage.removeItem(CHAVE_RASCUNHO_CADASTRO);
+      }
+    } catch {
+      /* sem sessionStorage: nada a guardar */
+    }
+  }, [modoCadastro, nome, identificador]);
 
   const trocarAba = (r: Role) => {
     setTab(r);
@@ -102,6 +135,11 @@ export function Login() {
     const r = await registrar(nome.trim(), identificador.trim(), senha, aceiteTermosPayload("PACIENTE", aceitouMarketing));
     setEnviando(false);
     if (r.ok) {
+      try {
+        sessionStorage.removeItem(CHAVE_RASCUNHO_CADASTRO);
+      } catch {
+        /* ignora */
+      }
       toast.success("Conta criada com sucesso! Bem-vindo(a) ao BION.");
       router.replace(r.role === "paciente" ? "/paciente" : r.role === "medico" ? "/medico" : "/painel");
     } else {
@@ -172,7 +210,9 @@ export function Login() {
                     className="w-full px-4 py-3 rounded-2xl border text-sm bg-background outline-none focus:ring-2 focus:ring-primary/20"
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                {/* Senhas lado a lado só a partir de sm: em 360px cada campo ficava
+                    com ~140px e o aceite dos Termos caía numa coluna só (meia largura). */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label
                       htmlFor="login-senha-cadastro"
@@ -209,6 +249,7 @@ export function Login() {
                       className="w-full px-4 py-3 rounded-2xl border text-sm bg-background outline-none focus:ring-2 focus:ring-primary/20"
                     />
                   </div>
+                  <div className="sm:col-span-2">
                   <AceiteTermos
                     perfil="PACIENTE"
                     aceitouTermos={aceitouTermos}
@@ -217,6 +258,7 @@ export function Login() {
                     onAceitouMarketing={setAceitouMarketing}
                     disabled={enviando}
                   />
+                  </div>
                 </div>
               </div>
             ) : (
@@ -321,14 +363,14 @@ export function Login() {
                     DEMO_HABILITADO ? CONTAS_DEMO[tab].email : "",
                   );
                 }}
-                className="hover:text-primary transition font-medium"
+                className="inline-flex min-h-11 items-center hover:text-primary transition font-medium"
               >
                 ← Voltar para o login
               </button>
             ) : (
               <a
                 href="mailto:suporte@bion.app?subject=Redefini%C3%A7%C3%A3o%20de%20senha%20%E2%80%94%20BION"
-                className="hover:text-primary transition font-medium"
+                className="inline-flex min-h-11 items-center hover:text-primary transition font-medium"
               >
                 Esqueci minha senha
               </a>
@@ -341,7 +383,7 @@ export function Login() {
                   setIdentificador("");
                   setSenha("");
                 }}
-                className="hover:text-primary transition font-medium"
+                className="inline-flex min-h-11 items-center hover:text-primary transition font-medium"
               >
                 Criar nova conta
               </button>
@@ -389,15 +431,17 @@ export function Login() {
             <Shield className="w-3.5 h-3.5 text-primary shrink-0" /> Conexão segura e
             criptografada para proteger seus dados de saúde
           </div>
+          {!noApp && (
           <div className="text-center">
             <button
               type="button"
               onClick={() => router.push("/")}
-              className="text-xs text-muted-foreground hover:text-primary transition font-medium"
+              className="inline-flex min-h-11 items-center text-xs text-muted-foreground hover:text-primary transition font-medium"
             >
               ← Voltar para a página inicial
             </button>
           </div>
+          )}
         </div>
       </div>
     </div>

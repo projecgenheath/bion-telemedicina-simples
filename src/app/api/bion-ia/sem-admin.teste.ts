@@ -36,6 +36,7 @@ mock.module("@/lib/server/llm", () => ({
   },
   iaPausada: () => false,
   motivoFalhaIa: () => "falha",
+  mensagemFalhaIaPaciente: () => "falha",
   novoRequestId: () => "req-teste",
   respostaIaPausada: () => Response.json({ erro: "bion_ia_pausada" }, { status: 503 }),
 }));
