@@ -723,20 +723,37 @@ export function AgendaSheet({
         <div className="space-y-3">
           <div className="text-xs font-bold uppercase tracking-wider text-bion-ink/75 dark:text-bion-paper/75">Dias da semana</div>
           <div className="flex flex-wrap gap-1.5">
-            {["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"].map((d, i) => (
-              <button
-                key={d}
-                type="button"
-                aria-pressed={diasSemana.has(i)}
-                onClick={() => setDiasSemana(s => { const n = new Set(s); if (n.has(i)) n.delete(i); else n.add(i); return n; })}
-                className={`px-3 py-1.5 rounded-full text-xs font-bold ${diasSemana.has(i) ? "bg-bion-sea text-white" : "bg-bion-ink/10 dark:bg-white/10"}`}
-              >
-                {d}
-              </button>
-            ))}
+            {["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"].map((d, i) => {
+              // Vazio no servidor = TODOS os dias: os chips nascem todos
+              // ativos nesse caso (antes apareciam todos apagados, como
+              // se nenhum dia fosse atendido). Tocar num chip com a
+              // lista vazia desmarca só aquele dia.
+              const ativo = diasSemana.size === 0 || diasSemana.has(i);
+              return (
+                <button
+                  key={d}
+                  type="button"
+                  aria-pressed={ativo}
+                  onClick={() =>
+                    setDiasSemana((s) => {
+                      if (s.size === 0) return new Set([0, 1, 2, 3, 4, 5, 6].filter((x) => x !== i));
+                      const n = new Set(s);
+                      if (n.has(i)) n.delete(i);
+                      else n.add(i);
+                      return n;
+                    })
+                  }
+                  className={`px-3 py-1.5 rounded-full text-xs font-bold ${ativo ? "bg-bion-sea text-white" : "bg-bion-ink/10 dark:bg-white/10"}`}
+                >
+                  {d}
+                </button>
+              );
+            })}
           </div>
           <p className="text-xs text-bion-ink/70 dark:text-bion-paper/70">
-            {diasSemana.size === 0 ? "Sem dias marcados: o médico atende todos os dias." : "Gravado no servidor ao salvar — o agendamento respeita."}
+            {diasSemana.size === 0
+              ? "Você atende todos os dias. Toque em um dia para deixar de atender nele."
+              : "Gravado no servidor ao salvar — o agendamento respeita."}
           </p>
         </div>
 

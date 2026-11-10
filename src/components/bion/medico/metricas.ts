@@ -312,7 +312,10 @@ export function sugerirParametros(horarios: string[]): ParametrosGrade {
 /* ------------------------------------------------------------------ */
 
 export function saudacao(agora: number) {
+  // Tabela única de saudação (fuso da clínica): 0–4 madrugada,
+  // 5–11 dia, 12–17 tarde, 18–23 noite.
   const h = partesFusoClinica(agora).hora;
+  if (h < 5) return "Boa madrugada";
   if (h < 12) return "Bom dia";
   if (h < 18) return "Boa tarde";
   return "Boa noite";
@@ -907,23 +910,31 @@ export type CompletudePerfil = {
   faltantes: string[];
 };
 
+/** Item do perfil público que a completude acompanha (chave = editor). */
+export type ChaveCompletude = "foto" | "bio" | "formacao" | "experiencia" | "idiomas" | "subespecialidades" | "horarios";
+
+type CamposCompletude = Pick<
+  Medico,
+  "foto" | "bio" | "formacao" | "experiencia" | "idiomas" | "subespecialidades" | "horariosDisponiveis" | "horariosPorDia"
+>;
+
+const itensCompletude = (m: CamposCompletude): { chave: ChaveCompletude; rotulo: string; ok: boolean }[] => [
+  { chave: "foto", rotulo: "foto de perfil", ok: Boolean(m.foto?.trim()) },
+  { chave: "bio", rotulo: "apresentação (bio)", ok: Boolean(m.bio?.trim()) },
+  { chave: "formacao", rotulo: "formação", ok: Boolean(m.formacao?.trim()) },
+  { chave: "experiencia", rotulo: "experiência", ok: Boolean(m.experiencia?.trim()) },
+  { chave: "idiomas", rotulo: "idiomas", ok: (m.idiomas ?? []).some((i) => i.trim()) },
+  { chave: "subespecialidades", rotulo: "subespecialidades", ok: (m.subespecialidades ?? []).some((s) => s.trim()) },
+  { chave: "horarios", rotulo: "horários de atendimento", ok: (m.horariosDisponiveis ?? []).length > 0 || Object.values(m.horariosPorDia ?? {}).some((l) => l.length > 0) },
+];
+
 /**
  * Quanto do perfil público está preenchido — os mesmos campos que o
  * paciente vê (ou procura) ao escolher um médico. Só presença conta,
  * nunca qualidade inventada.
  */
-export function completudePerfil(
-  m: Pick<Medico, "foto" | "bio" | "formacao" | "experiencia" | "idiomas" | "subespecialidades" | "horariosDisponiveis" | "horariosPorDia">,
-): CompletudePerfil {
-  const itens: { rotulo: string; ok: boolean }[] = [
-    { rotulo: "foto de perfil", ok: Boolean(m.foto?.trim()) },
-    { rotulo: "apresentação (bio)", ok: Boolean(m.bio?.trim()) },
-    { rotulo: "formação", ok: Boolean(m.formacao?.trim()) },
-    { rotulo: "experiência", ok: Boolean(m.experiencia?.trim()) },
-    { rotulo: "idiomas", ok: (m.idiomas ?? []).some((i) => i.trim()) },
-    { rotulo: "subespecialidades", ok: (m.subespecialidades ?? []).some((s) => s.trim()) },
-    { rotulo: "horários de atendimento", ok: (m.horariosDisponiveis ?? []).length > 0 || Object.values(m.horariosPorDia ?? {}).some((l) => l.length > 0) },
-  ];
+export function completudePerfil(m: CamposCompletude): CompletudePerfil {
+  const itens = itensCompletude(m);
   const preenchidos = itens.filter((i) => i.ok).length;
   return {
     percentual: Math.round((preenchidos / itens.length) * 100),
@@ -931,6 +942,15 @@ export function completudePerfil(
     total: itens.length,
     faltantes: itens.filter((i) => !i.ok).map((i) => i.rotulo),
   };
+}
+
+/**
+ * Primeiro item faltante do perfil, na mesma ordem da completude — é o
+ * editor que "Completar perfil" deve abrir (antes a folha de formação
+ * abria sempre, mesmo quando o que faltava era foto, bio ou horários).
+ */
+export function primeiroItemFaltante(m: CamposCompletude): ChaveCompletude | null {
+  return itensCompletude(m).find((i) => !i.ok)?.chave ?? null;
 }
 
 export type FaixaPrecos = { min: number; mediana: number; max: number; n: number };

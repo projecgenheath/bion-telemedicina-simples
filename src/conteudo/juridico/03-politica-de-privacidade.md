@@ -57,7 +57,7 @@ Anexo — Mapa de dados por tabela/funcionalidade
 | Prontuário (evolução, CID, conduta, receitas, atestados, triagem, chat da sala, arquivos da consulta) | **Médico** que atendeu | **BION** (e seus suboperadores) | O registro clínico é dever e decisão técnica do médico (CFM; Lei 13.787/2018); a BION guarda e protege seguindo as instruções dele. |
 | Compartilhamento do histórico entre médicos que atendem você | **BION e médicos, em conjunto** | — | A regra de compartilhamento é definida pela BION, com o seu consentimento, para o cuidado da sua saúde. |
 | BION IA, leitura de exames, lembretes, IMC, medições por conta própria | **BION** | NVIDIA (IA), Supabase, Vercel, serviços de push | São funcionalidades oferecidas pela própria BION. |
-| Dados pessoais do médico (cadastro, conta Stripe conectada, recebimentos) | **BION** | Supabase, Vercel | Necessários ao contrato com o médico. |
+| Dados pessoais do médico (cadastro, conta Stripe conectada, recebimentos) | **BION**; a **Stripe** é controladora própria dos dados de verificação de identidade (KYC) que coleta no cadastro da conta conectada | Supabase, Vercel, Stripe | Necessários ao contrato com o médico. |
 | NFS-e/recibo emitido ao paciente | **Médico** | BION (se autorizada a emitir em nome do médico — recurso futuro) | A obrigação fiscal é do médico. |
 
 # 3. Quais dados tratamos

@@ -9,6 +9,7 @@ import { useRecarregarEstado } from "./paciente/useRemarcacaoComMulta";
 import { fmtTicketData } from "@/lib/bion-tipos";
 import type { EstadoConsentimentoIaExame } from "@/lib/consentimento-ia-exame";
 import { revogarConsentimentoIa } from "@/lib/bion-ia-cliente";
+import { SecaoTermosUso } from "./SecaoTermosUso";
 
 export function PrivacidadePaciente() {
   const { pacientePerfil, documentosVisiveis, consentimentosVisiveis, consultas, sessao, trocarSenha } =
@@ -167,11 +168,12 @@ export function PrivacidadePaciente() {
     { rotulo: "Convênio", valor: pacientePerfil.convenio },
     {
       rotulo: "Dados de saúde",
-      valor: `Tipo sanguíneo ${pacientePerfil.tipoSanguineo}, ${pacientePerfil.alergias.length} alergias, ${qtdMedicamentos} medicamentos em uso`,
+      // T10: singular de verdade — antes saía "1 alergias", "1 medicamentos".
+      valor: `Tipo sanguíneo ${pacientePerfil.tipoSanguineo}, ${pacientePerfil.alergias.length} ${pacientePerfil.alergias.length === 1 ? "alergia" : "alergias"}, ${qtdMedicamentos} ${qtdMedicamentos === 1 ? "medicamento" : "medicamentos"} em uso`,
     },
     {
       rotulo: "Histórico clínico",
-      valor: `${minhasConsultas.length} consultas e ${documentosVisiveis.length} documentos médicos`,
+      valor: `${minhasConsultas.length} ${minhasConsultas.length === 1 ? "consulta" : "consultas"} e ${documentosVisiveis.length} ${documentosVisiveis.length === 1 ? "documento médico" : "documentos médicos"}`,
     },
   ];
 
@@ -235,6 +237,9 @@ export function PrivacidadePaciente() {
           deu.
         </p>
       </div>
+
+      {/* A página se chama "Termos e privacidade": os Termos vêm primeiro. */}
+      <SecaoTermosUso />
 
       <section className="bg-card border rounded-3xl p-6 space-y-4">
         <h2 className="font-bold flex items-center gap-2">

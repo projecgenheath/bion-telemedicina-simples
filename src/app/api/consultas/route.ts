@@ -345,7 +345,7 @@ export async function POST(req: NextRequest) {
       {
         tipo: "agenda",
         titulo: "Consulta reservada",
-        texto: `${consulta.especialidade} com ${medico.nome} — ${body.data} às ${body.hora}. Assim que o pagamento for confirmado, sua consulta entra no agenda e a triagem opcional com a BION IA fica disponível até 5 minutos antes do horário.`,
+        texto: `${consulta.especialidade} com ${medico.nome} — ${body.data} às ${body.hora}. Assim que o pagamento for confirmado, sua consulta entra na agenda e a triagem opcional com a BION IA fica disponível até 5 minutos antes do horário.`,
         usuarioId: usuario.id,
       },
     ];

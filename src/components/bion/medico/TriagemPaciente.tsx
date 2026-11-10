@@ -3,8 +3,7 @@
 import { FileText } from "lucide-react";
 import type { AnamneseResumo, Consulta } from "@/lib/bion-store";
 import { ROTULOS_ANAMNESE } from "@/components/bion/consulta/rotulos-anamnese";
-
-const temValor = (v: unknown) => v !== null && v !== undefined && v !== "" && !(Array.isArray(v) && v.length === 0);
+import { ehCampoInternoColeta, rotuloCampoColeta, textoValorColeta } from "./triagem-valor";
 
 /** Uma anamnese (BION IA) — mesma leitura de `coleta` do PainelLateral. */
 export function BlocoAnamnese({ a, consulta }: { a: AnamneseResumo; consulta?: Consulta }) {
@@ -47,7 +46,13 @@ export function BlocoAnamnese({ a, consulta }: { a: AnamneseResumo; consulta?: C
         </p>
       ) : (
         etapas.map(([etapa, campos]) => {
-          const linhas = Object.entries(campos).filter(([, v]) => temValor(v));
+          // Campos internos do motor (_n) fora; valores formatados como
+          // texto corrido (a coleta do LLM pode trazer objetos/listas —
+          // antes saíam em JSON cru na tela do médico).
+          const linhas = Object.entries(campos)
+            .filter(([campo]) => !ehCampoInternoColeta(campo))
+            .map(([campo, v]) => ({ campo, texto: textoValorColeta(v) }))
+            .filter((l) => l.texto !== "");
           if (!linhas.length) return null;
           return (
             <section key={etapa}>
@@ -55,10 +60,10 @@ export function BlocoAnamnese({ a, consulta }: { a: AnamneseResumo; consulta?: C
                 {ROTULOS_ANAMNESE[etapa] ?? etapa}
               </h4>
               <dl className="mt-1 space-y-0.5 text-sm">
-                {linhas.map(([campo, v]) => (
+                {linhas.map(({ campo, texto }) => (
                   <div key={campo}>
-                    <dt className="inline text-bion-ink/75 dark:text-bion-paper/75">{campo.replace(/_/g, " ")}: </dt>
-                    <dd className="inline">{Array.isArray(v) ? v.join(", ") : typeof v === "object" ? JSON.stringify(v) : String(v)}</dd>
+                    <dt className="inline text-bion-ink/75 dark:text-bion-paper/75">{rotuloCampoColeta(campo)}: </dt>
+                    <dd className="inline">{texto}</dd>
                   </div>
                 ))}
               </dl>

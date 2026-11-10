@@ -11,11 +11,12 @@ import type { Estado } from "../rotulos";
 const D = 86_400_000;
 
 export type StatusChamado = TicketSuporte["status"];
-export type FiltroStatusChamado = "todos" | StatusChamado;
+export type FiltroStatusChamado = "todos" | "nao_resolvidos" | StatusChamado;
 export type FiltroPerfilChamado = "todos" | TicketSuporte["perfil"];
 
 export const FILTROS_STATUS: { id: FiltroStatusChamado; rotulo: string }[] = [
   { id: "todos", rotulo: "Todos" },
+  { id: "nao_resolvidos", rotulo: "Não resolvidos" },
   { id: "aberto", rotulo: "Abertos" },
   { id: "em_andamento", rotulo: "Em atendimento" },
   { id: "resolvido", rotulo: "Resolvidos" },
@@ -76,7 +77,11 @@ export function filtrarChamados(tickets: TicketSuporte[], f: FiltrosChamado, ago
   const ts = new Map(tickets.map((t) => [t.id, tsDoChamado(t.data, agora)]));
   return tickets
     .filter((t) => {
-      if (f.status !== "todos" && t.status !== f.status) return false;
+      // "nao_resolvidos" = aberto + em_andamento (o contador do Centro de
+      // Comando aponta para cá: a lista precisa mostrar exatamente ele).
+      if (f.status === "nao_resolvidos") {
+        if (t.status === "resolvido") return false;
+      } else if (f.status !== "todos" && t.status !== f.status) return false;
       if (f.perfil !== "todos" && t.perfil !== f.perfil) return false;
       if (f.categoria !== "todas" && t.categoria !== f.categoria) return false;
       if (!termo) return true;
@@ -93,8 +98,9 @@ export function filtrarChamados(tickets: TicketSuporte[], f: FiltrosChamado, ago
 }
 
 export function contarChamados(tickets: TicketSuporte[]): Record<FiltroStatusChamado, number> {
-  const c: Record<FiltroStatusChamado, number> = { todos: tickets.length, aberto: 0, em_andamento: 0, resolvido: 0 };
+  const c: Record<FiltroStatusChamado, number> = { todos: tickets.length, nao_resolvidos: 0, aberto: 0, em_andamento: 0, resolvido: 0 };
   for (const t of tickets) if (t.status in c) c[t.status]++;
+  c.nao_resolvidos = c.aberto + c.em_andamento;
   return c;
 }
 

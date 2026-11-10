@@ -465,8 +465,9 @@ export async function visaoNvidia(
 }
 
 /**
- * Mensagem amigável a partir das tentativas DESTA chamada (não de um estado
- * global). Nunca expõe chave nem detalhes internos.
+ * Motivo da falha para o OPERADOR (monitor/admin e log do servidor): pode
+ * falar de chave, cota e HTTP. Nunca expõe o valor da chave nem o corpo da
+ * resposta do provedor.
  */
 export function motivoFalhaIa(registros: { status: number | null; erro: string | null }[] | undefined): string {
   const lista = registros ?? [];
@@ -478,5 +479,23 @@ export function motivoFalhaIa(registros: { status: number | null; erro: string |
   if (ultimo?.status === 401 || ultimo?.status === 403) return "A chave da IA foi recusada.";
   if (ultimo?.status && ultimo.status >= 400) return `A IA devolveu HTTP ${ultimo.status}.`;
   return "A IA não devolveu texto utilizável.";
+}
+
+/**
+ * F4 (auditoria de errinhos): a bolha de erro do PACIENTE recebia o motivo
+ * técnico ("A chave da IA foi recusada.", "A IA devolveu HTTP 503.") mais o
+ * jargão "este chat não usa resposta local". Para o paciente, uma frase só,
+ * em linguagem comum; o detalhe continua em motivoFalhaIa (log/monitor).
+ */
+export function mensagemFalhaIaPaciente(registros: { status: number | null; erro: string | null }[] | undefined): string {
+  const lista = registros ?? [];
+  const ultimo = lista.at(-1);
+  if (!lista.length) return "A BION IA está indisponível no momento.";
+  if (lista.some((r) => r.erro === "timeout") && (!ultimo?.status || ultimo.erro === "timeout"))
+    return "A BION IA demorou demais para responder.";
+  if (ultimo?.status === 429) return "A BION IA está sobrecarregada agora.";
+  if (ultimo?.status === 401 || ultimo?.status === 403) return "A BION IA está indisponível no momento.";
+  if (ultimo?.status && ultimo.status >= 400) return "A BION IA está instável agora.";
+  return "A BION IA não conseguiu responder agora.";
 }
 

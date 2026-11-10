@@ -73,7 +73,7 @@ lang: pt-BR
 
 # 3. O que a BION faz e o que não faz
 
-3.1. **A BION faz:** oferece a tecnologia para você encontrar médicos, agendar, pagar, fazer a teleconsulta por vídeo, receber documentos, conversar com o médico, organizar seu histórico e usar ferramentas de acompanhamento. O pagamento é feito pela Stripe direto na conta do médico, e a BION fica só com a sua comissão.
+3.1. **A BION faz:** oferece a tecnologia para você encontrar médicos, agendar, pagar, fazer a teleconsulta por vídeo, receber documentos, conversar com o médico, organizar seu histórico e usar ferramentas de acompanhamento. **Quem presta o serviço médico é o médico** que atende a consulta, em nome próprio e sob sua responsabilidade técnica. O pagamento é feito pela Stripe direto na conta do médico, e a BION, como intermediadora, fica só com a sua comissão.
 
 3.2. **A BION não faz:**
 
@@ -216,7 +216,7 @@ As funcionalidades podem mudar; mudanças relevantes serão informadas (cláusul
 
 15.2. **Forma de pagamento.** O pagamento é feito com cartão de crédito, pela Stripe. Quando houver reembolso, o valor é devolvido no mesmo cartão usado no pagamento. O estorno é pedido na hora, mas pode levar alguns dias, ou até a próxima fatura, para aparecer, conforme o prazo do banco emissor. O valor devolvido é o valor integral devido, sem desconto de taxas.
 
-15.3. **Para quem vai o dinheiro.** O pagamento é feito só com cartão, pela Stripe, e vai direto para a conta Stripe do médico que atende a consulta. A BION recebe apenas a sua comissão de 10% pela intermediação. **Pix não é aceito.** O recibo ou a nota fiscal da consulta é emitido pelo médico.
+15.3. **Para quem vai o dinheiro.** O pagamento é feito só com cartão, pela Stripe, e vai direto para a conta Stripe do médico que atende a consulta. A BION recebe apenas a sua comissão de 10% pela intermediação. Na fatura do cartão, a cobrança aparece com o nome de cobrança padronizado no cadastro do médico na Stripe: **"BION" + o nome do médico**. Mesmo assim, é a BION que opera a cobrança e os reembolsos pela Plataforma, e você pode tratar de qualquer cobrança ou reembolso diretamente com o suporte da BION; o médico responde pelo serviço médico, e ambos respondem perante você nos termos do Código de Defesa do Consumidor. **Pix não é aceito.** O recibo ou a nota fiscal da consulta é emitido pelo médico.
 
 15.4. **Confirmação.** A consulta só é confirmada depois que o pagamento for confirmado pelo gateway.
 

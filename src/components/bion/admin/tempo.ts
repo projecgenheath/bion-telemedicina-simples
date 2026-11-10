@@ -90,11 +90,12 @@ export function dataLonga(ts: number): string {
   return new Intl.DateTimeFormat("pt-BR", { timeZone: FUSO_CLINICA, weekday: "long", day: "numeric", month: "long" }).format(ts);
 }
 
-/** Saudação pela hora do fuso da clínica. */
+/** Saudação pela hora do fuso da clínica (tabela única: 0–4 madrugada, 5–11 dia, 12–17 tarde, 18–23 noite). */
 export function saudacao(agora: number): string {
   const h = partesFusoClinica(agora).hora;
-  if (h >= 5 && h < 12) return "Bom dia";
-  if (h >= 12 && h < 18) return "Boa tarde";
+  if (h < 5) return "Boa madrugada";
+  if (h < 12) return "Bom dia";
+  if (h < 18) return "Boa tarde";
   return "Boa noite";
 }
 

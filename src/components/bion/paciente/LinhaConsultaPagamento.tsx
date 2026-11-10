@@ -11,7 +11,8 @@ import { BotaoPagarStripe } from "./BotaoPagarStripe";
  * TODO(nota fiscal): o Admin vai criar a tabela NotaFiscal e a rota protegida
  * GET /api/consultas/[id]/nota-fiscal (sessão do paciente, nunca URL pública).
  * Quando existir, o servidor manda `temNotaFiscal: true` e o link aponta para
- * essa rota. Até lá o campo vem ausente e nada é inventado no cliente.
+ * essa rota. Até lá o campo vem ausente e NADA é exibido: mostrar
+ * "Aguardando nota do médico" era promessa eterna de um recurso inexistente.
  */
 export type ConsultaComNota = Consulta & { temNotaFiscal?: boolean };
 
@@ -72,19 +73,15 @@ export function LinhaConsultaPagamento({
       {aguardando && c.status !== "cancelada" && !ehRetornoGratis(c) ? (
         <BotaoPagarStripe consultaId={c.id} className="self-start" />
       ) : null}
-      {mostraNota ? (
-        c.temNotaFiscal === true ? (
-          <a
-            href={rotaNotaFiscal(c.id)}
-            target="_blank"
-            rel="noopener"
-            className="bpp-toque self-start max-w-full inline-flex items-center gap-1.5 min-h-11 text-xs font-bold text-bion-sea dark:text-sky-300 underline"
-          >
-            <FileText className="w-3.5 h-3.5" aria-hidden /> Nota fiscal / recibo do médico
-          </a>
-        ) : (
-          <span className="w-full min-w-0 break-words text-xs text-bion-ink/75 dark:text-bion-paper/75">Nota fiscal / recibo do médico · Aguardando nota do médico</span>
-        )
+      {mostraNota && c.temNotaFiscal === true ? (
+        <a
+          href={rotaNotaFiscal(c.id)}
+          target="_blank"
+          rel="noopener"
+          className="bpp-toque self-start max-w-full inline-flex items-center gap-1.5 min-h-11 text-xs font-bold text-bion-sea dark:text-sky-300 underline"
+        >
+          <FileText className="w-3.5 h-3.5" aria-hidden /> Nota fiscal / recibo do médico
+        </a>
       ) : null}
     </div>
   );

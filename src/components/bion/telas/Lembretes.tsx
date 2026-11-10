@@ -14,7 +14,13 @@ import { EstadoVazio } from "@/components/bion/ui/EstadoVazio";
 import { toast } from "sonner";
 import { useBion } from "@/lib/bion-store";
 import { HORA } from "@/lib/saude-paciente";
+import { resolverFeito } from "@/lib/lembrete-ciclo";
 import { ModalBion } from "@/components/bion/ModalBion";
+
+/** F7: feitoEm chega ao cliente quando a migração 20261104a for aplicada e
+ *  o store repassar o campo; até lá, undefined → resolverFeito cai no
+ *  comportamento resolvido pela data quando houver, sem quebrar. */
+const feitoEmDe = (l: unknown): string | null => (l as { feitoEm?: string | null }).feitoEm ?? null;
 
 /** B16: ícone por tipo de lembrete — antes era sempre `Pill`, mesmo para
  *  consulta, exame e hidratação. */
@@ -51,6 +57,10 @@ export function Lembretes() {
 
   // A8: sucesso só depois da confirmação do servidor — em falha, o modal
   // fica aberto com o título preservado (o erro já virou toast no store).
+  // F2: o toast anuncia o que foi GRAVADO, não o rótulo do formulário.
+  // Intervalo ("A cada 12/8 horas") vira UM LEMBRETE POR HORÁRIO derivado,
+  // todos "Todos os dias" — o modelo interno não tem frequência por
+  // intervalo, e a API não converte mais nada em silêncio.
   const criarLembrete = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!titulo.trim() || criando) return;
@@ -59,33 +69,53 @@ export function Lembretes() {
       toast.error("Informe um horário válido (ex.: 08:00).");
       return;
     }
+    const derivados = horariosDerivados(horario, frequencia);
+    const horarios = [horario, ...derivados];
+    const frequenciaGravada = derivados.length ? "Todos os dias" : frequencia;
     setCriando(true);
-    const ok = await adicionarLembrete({
-      titulo: titulo.trim(),
-      horario,
-      tipo,
-      frequencia,
-    });
+    for (const h of horarios) {
+      const ok = await adicionarLembrete({
+        titulo: titulo.trim(),
+        horario: h,
+        tipo,
+        frequencia: frequenciaGravada,
+      });
+      if (!ok) {
+        setCriando(false);
+        return;
+      }
+    }
     setCriando(false);
-    if (!ok) return;
-    toast.success("Lembrete criado", {
-      description: `"${titulo.trim()}" às ${horario} • ${frequencia}`,
+    const anuncio = derivados.length
+      ? `às ${horarios.join(", ")} • ${frequencia.toLowerCase()}, todos os dias`
+      : `às ${horario} • ${frequencia}`;
+    toast.success(horarios.length > 1 ? "Lembretes criados" : "Lembrete criado", {
+      description: `"${titulo.trim()}" ${anuncio}`,
     });
     setTitulo("");
     setModalNovo(false);
   };
 
-  const pendentes = lembretes.filter((i) => !i.feito).length;
+  // F7: pendente = feito NÃO vigente hoje (o feito de ontem já venceu).
+  const pendentes = lembretes.filter((i) => !resolverFeito({ feito: i.feito, feitoEm: feitoEmDe(i) })).length;
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-extrabold tracking-tight">Lembretes & Alarmes de Saúde</h1>
+          {/* F6: a tela se chamava "Lembretes & Alarmes", mas nada alarmava.
+              Agora o job de avisos existe (pg_cron por minuto, como o toque
+              da consulta): no horário, o lembrete vira notificação na
+              central e push no celular inscrito. O nome para de prometer
+              "alarme" e a linha abaixo diz o que acontece de verdade. */}
+          <h1 className="text-3xl font-extrabold tracking-tight">Lembretes de Saúde</h1>
           <p className="text-muted-foreground mt-1">
             {/* B16: a contagem soma TODOS os pendentes (o lembrete não tem
                 dia próprio) — o texto não promete mais que são "para hoje". */}
             {pendentes} lembrete{pendentes === 1 ? "" : "s"} pendente{pendentes === 1 ? "" : "s"}
+          </p>
+          <p className="text-muted-foreground mt-1 text-sm">
+            No horário marcado, você recebe uma notificação do BION aqui no app — e um aviso no celular, se os avisos do BION estiverem ativados nas configurações do aparelho.
           </p>
         </div>
         <button type="button"
@@ -101,16 +131,18 @@ export function Lembretes() {
         {lembretes.length === 0 && (
           <EstadoVazio
             titulo="Nenhum lembrete ainda"
-            descricao="Crie lembretes de medicamentos, exames ou consultas para não perder o horário."
+            descricao="Crie lembretes de medicamentos, exames ou consultas para não perder o horário. No horário marcado, o BION avisa você com uma notificação."
           />
         )}
         {lembretes.map((l) => {
           const IconeTipo = ICONE_TIPO[l.tipo] ?? Pill;
+          // F7: riscado/opaco só enquanto o feito de HOJE está vigente.
+          const feito = resolverFeito({ feito: l.feito, feitoEm: feitoEmDe(l) });
           return (
           <div
             key={l.id}
             className={`bg-card border rounded-3xl p-4 flex items-center justify-between gap-4 shadow-sm transition ${
-              l.feito ? "opacity-55" : ""
+              feito ? "opacity-55" : ""
             }`}
           >
             <div className="w-11 h-11 rounded-2xl bg-primary-soft flex items-center justify-center text-primary shrink-0">
@@ -118,7 +150,7 @@ export function Lembretes() {
             </div>
 
             <div className="flex-1 min-w-0">
-              <div className={`font-bold text-sm text-foreground ${l.feito ? "line-through" : ""}`}>
+              <div className={`font-bold text-sm text-foreground ${feito ? "line-through" : ""}`}>
                 {l.titulo}
               </div>
               <div className="text-xs text-muted-foreground flex items-center gap-2 mt-0.5">
@@ -137,11 +169,11 @@ export function Lembretes() {
               <button type="button"
                 onClick={() => alternarLembrete(l.id)}
                 className={`w-9 h-9 rounded-xl border flex items-center justify-center transition ${
-                  l.feito
+                  feito
                     ? "bg-emerald-500 dark:bg-emerald-600 text-white border-transparent"
                     : "border-border hover:border-primary"
                 }`}
-                title={l.feito ? "Marcar como pendente" : "Marcar como tomado/concluído"}
+                title={feito ? "Marcar como pendente" : "Marcar como tomado/concluído"}
               >
                 <Check className="w-4 h-4" />
               </button>
@@ -217,22 +249,27 @@ export function Lembretes() {
 
               <div>
                 <label className="font-bold block mb-1">Frequência</label>
+                {/* F2: os valores de dias/semana são as frequências
+                    canônicas que a API grava de verdade (nada de alias
+                    convertido em silêncio); os intervalos viram um
+                    lembrete por horário derivado ao salvar. */}
                 <select
                   value={frequencia}
                   onChange={(e) => setFrequencia(e.target.value)}
                   className="w-full px-3 py-2 rounded-xl border bg-background"
                 >
                   <option value="Todos os dias">Todos os dias</option>
-                  <option value="Segunda a Sexta">Segunda a Sexta</option>
+                  <option value="Dias úteis">Dias úteis (segunda a sexta)</option>
                   <option value="A cada 12 horas">A cada 12 horas</option>
                   <option value="A cada 8 horas">A cada 8 horas</option>
-                  <option value="Semanalmente">Semanalmente</option>
+                  <option value="Semanal">Semanalmente</option>
                 </select>
-                {/* B16: frequência de intervalo com um horário só — mostra
-                    os demais horários derivados do horário inicial. */}
+                {/* B16+F2: frequência de intervalo — mostra os demais
+                    horários derivados e diz o que será criado de verdade:
+                    um lembrete diário para cada horário. */}
                 {horariosDerivados(horario, frequencia).length > 0 && (
                   <p className="mt-1.5 text-muted-foreground">
-                    Também às {horariosDerivados(horario, frequencia).join(", ")} — calculados a partir do horário inicial.
+                    Também às {horariosDerivados(horario, frequencia).join(", ")} — será criado um lembrete diário para cada horário.
                   </p>
                 )}
               </div>

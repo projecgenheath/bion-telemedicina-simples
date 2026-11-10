@@ -208,7 +208,10 @@ export function MedicoApp() {
   // carrega o id da entidade — abre a área onde ela se resolve).
   const navegarNotificacao = useCallback(
     (tipo: NotifTipo) => {
-      if (tipo === "mensagem") {
+      if (tipo === "mensagem" || tipo === "exame") {
+        // Exame/medição nova se resolve na inbox "Resultados para
+        // revisar", que mora no painel Pacientes — antes caía no
+        // Início, que não tem nada de resultados.
         setSobreposicao(null);
         irPara(2);
       } else if (tipo === "receita") {
@@ -277,11 +280,18 @@ export function MedicoApp() {
             dados={dados}
             onAbrirPerfil={() => irPara(0)}
             onAbrirPacientes={() => irPara(2)}
+            onAbrirAgenda={() => abrirSheet("agenda")}
             onAbrirRenovacoes={() => setSobreposicao({ tipo: "renovacoes" })}
             onAbrirNotificacoes={() => setSobreposicao({ tipo: "notificacoes" })}
           />
           <TelaGestao dados={dados} onAbrirPreco={() => abrirSheet("preco")} onAbrirAgenda={() => abrirSheet("agenda")} />
-          <TelaPerfilPublico dados={dados} onAgendar={() => abrirSheet("preview")} confirmarBio={confirmarBio} />
+          <TelaPerfilPublico
+            dados={dados}
+            onAgendar={() => abrirSheet("preview")}
+            confirmarBio={confirmarBio}
+            onEditarFoto={() => irPara(0)}
+            onEditarHorarios={() => abrirSheet("agenda")}
+          />
         </div>
 
         <div className={`${painelCls} bm-lateral-dir`} aria-label="Pacientes" role="region">

@@ -6,11 +6,14 @@ import { lerPedidoRenovacao, type PedidoRenovacao } from "@/lib/atendimento-tipo
 
 /** Cobrança criada junto com o pedido (resposta do POST /api/renovacoes).
  *  `status: "pendente"` = aguardando o pagamento com cartão; só depois dele
- *  o pedido entra na fila do médico. */
+ *  o pedido entra na fila do médico. `"falhou"` = qualquer status que não
+ *  seja pendente/confirmado (falhou, expirado, desconhecido): C19 — antes
+ *  tudo isso era rebaixado a "pendente" e a UI mandava o paciente pagar
+ *  uma cobrança que não existia ou já tinha falhado. */
 export type CobrancaRenovacao = {
   pagamentoId: string;
   valorCentavos: number;
-  status: "pendente" | "confirmado";
+  status: "pendente" | "confirmado" | "falhou";
   pagarComCartao: boolean;
 };
 
@@ -21,7 +24,7 @@ function lerCobrancaRenovacao(v: unknown): CobrancaRenovacao | undefined {
   return {
     pagamentoId: r.pagamentoId,
     valorCentavos: r.valorCentavos,
-    status: r.status === "confirmado" ? "confirmado" : "pendente",
+    status: r.status === "confirmado" ? "confirmado" : r.status === "pendente" ? "pendente" : "falhou",
     pagarComCartao: r.pagarComCartao === true,
   };
 }

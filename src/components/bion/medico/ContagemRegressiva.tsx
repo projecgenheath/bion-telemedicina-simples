@@ -25,7 +25,7 @@ export function ContagemRegressiva({ alvo }: { alvo: number }) {
     [m, "min"],
     [s, "seg"],
   ];
-  const leitura = `${d > 0 ? `${d} ${d === 1 ? "dia" : "dias"}, ` : ""}${h} horas, ${m} minutos`;
+  const leitura = `${d > 0 ? `${d} ${d === 1 ? "dia" : "dias"}, ` : ""}${h} ${h === 1 ? "hora" : "horas"}, ${m} ${m === 1 ? "minuto" : "minutos"}`;
   return (
     <div className="flex items-end gap-3" role="timer" aria-label={`Faltam ${leitura}`}>
       {blocos.map(([v, r]) => (

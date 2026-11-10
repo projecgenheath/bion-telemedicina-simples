@@ -26,7 +26,7 @@ import {
 import { useBion } from "@/lib/bion-store";
 import { fmtCurta, fmtHora, fmtTicketData, partesFusoClinica, type Consulta } from "@/lib/bion-tipos";
 import { toast } from "sonner";
-import { calcularImc, lerAlturaCm, lerPesoKg } from "@/lib/medidas-paciente";
+import { calcularImc, faixaImc, lerAlturaCm, lerPesoKg, ROTULO_FAIXA_IMC } from "@/lib/medidas-paciente";
 import { MESES_AGENDA } from "./constantes";
 import { acharMedicoDaConsulta } from "./agenda-medico";
 import { CancelarRemarcarSheet, type AcaoSheet } from "./CancelarRemarcarSheet";
@@ -65,6 +65,7 @@ import { SALA_ABRE_ANTES_MIN, salaAbertaEm } from "@/lib/janela-sala";
 import { EstadoVazio } from "./EstadosPaciente";
 import { PedidosMedicao } from "./PedidosMedicao";
 import { MedicamentosEmUso } from "./MedicamentosEmUso";
+import type { IntencaoChat } from "./chat-bion-intencao";
 
 /**
  * App imersivo do paciente — fullscreen, sem menu e sem botões de navegação.
@@ -129,6 +130,18 @@ export function PacienteApp() {
   const [secao, setSecao] = useState(0);
   const [detalhe, setDetalhe] = useState<Detalhe>(null);
   const [chatAberto, setChatAberto] = useState(false);
+  // Intenção da abertura do chat: "laudo" quando o paciente toca em
+  // "Enviar novo laudo" (o chat entra direto no envio); "geral" nas
+  // demais aberturas. Volta a "geral" a cada fechamento.
+  const [chatIntencao, setChatIntencao] = useState<IntencaoChat>("geral");
+  const abrirChat = (intencao: IntencaoChat) => {
+    setChatIntencao(intencao);
+    setChatAberto(true);
+  };
+  const fecharChat = () => {
+    setChatAberto(false);
+    setChatIntencao("geral");
+  };
   const [triagemConsultaId, setTriagemConsultaId] = useState<string | null>(null);
   const [triagemSlide, setTriagemSlide] = useState<{
     consultaId: string;
@@ -293,10 +306,6 @@ export function PacienteApp() {
   }, [consultas, minhaConsulta]);
 
   const proxima = proximas[0];
-  const lembretesAgenda = useMemo(
-    () => lembretes.filter((l) => l.tipo !== "Medicação").sort((x, y) => Number(x.feito) - Number(y.feito) || x.horario.localeCompare(y.horario)),
-    [lembretes],
-  );
 
   /* Sala (sem pré-sala): a janela vem de lib/janela-sala.ts, a mesma do servidor.
      O relógio avança sozinho e acerta o instante em que a sala abre ou fecha. */
@@ -309,6 +318,11 @@ export function PacienteApp() {
     () => mensagens.filter((m) => !m.minha && !m.lida).sort((a, b) => b.ts - a.ts)[0],
     [mensagens],
   );
+  // A3: o "+N" do aviso é da conversa daquele médico — o total global
+  // (naoLidasMensagens) é só do selo da navegação/Documentos.
+  const naoLidasDoRemetente = ultimaNaoLida
+    ? mensagens.filter((m) => !m.minha && !m.lida && m.deId === ultimaNaoLida.deId).length
+    : 0;
   const abrirConversa = (medicoId: string) => {
     setConversaAtiva(medicoId);
     marcarConversaLida(medicoId);
@@ -451,7 +465,11 @@ export function PacienteApp() {
   }, [exames]);
 
   const saudacao = (() => {
-    const h = new Date().getHours();
+    // Hora no fuso da clínica (partesFusoClinica), como o restante do app
+    // (B19) — não no fuso do dispositivo. Tabela única de saudação:
+    // 0–4 madrugada, 5–11 dia, 12–17 tarde, 18–23 noite.
+    const h = partesFusoClinica(Date.now()).hora;
+    if (h < 5) return "Boa madrugada";
     if (h < 12) return "Bom dia";
     if (h < 18) return "Boa tarde";
     return "Boa noite";
@@ -550,7 +568,7 @@ export function PacienteApp() {
 
             {/* Aviso de mensagem nova do médico (some quando a conversa é aberta) */}
             {ultimaNaoLida ? (
-              <AvisoMensagemNova mensagem={ultimaNaoLida} total={naoLidasMensagens} onAbrir={() => abrirConversa(ultimaNaoLida.deId)} />
+              <AvisoMensagemNova mensagem={ultimaNaoLida} total={naoLidasDoRemetente} onAbrir={() => abrirConversa(ultimaNaoLida.deId)} />
             ) : null}
 
             {/* Cards: aguardando reagendamento (motivo no cartão) — remarcar ou reembolso integral, sem multa */}
@@ -563,14 +581,20 @@ export function PacienteApp() {
               />
             ))}
 
-            {/* Cards: nova data reservada aguardando pagamento da multa */}
-            {comRemarcacaoPendente.map((c) => (
-              <CardRemarcacaoPendente
-                key={c.id}
-                consulta={c}
-                onContinuar={() => setModalConsulta({ id: c.id, acao: "remarcar" })}
-              />
-            ))}
+            {/* Cards: nova data reservada aguardando pagamento da multa.
+                A1: a consulta que já é a "próxima" NÃO ganha este segundo
+                card — ela aparece no card principal com a etiqueta
+                "Remarcação pendente", e o modal de remarcar dela cobre
+                continuar o pagamento e desistir. */}
+            {comRemarcacaoPendente
+              .filter((c) => c.id !== proxima?.id)
+              .map((c) => (
+                <CardRemarcacaoPendente
+                  key={c.id}
+                  consulta={c}
+                  onContinuar={() => setModalConsulta({ id: c.id, acao: "remarcar" })}
+                />
+              ))}
 
             {/* Card: próxima consulta */}
             {proxima ? (
@@ -708,24 +732,6 @@ export function PacienteApp() {
               </div>
             ) : null}
 
-            {/* Lembretes que não são de medicação (consulta, exame, hidratação) ficam aqui na agenda, com o tipo. */}
-            {lembretesAgenda.length > 0 ? (
-              <ul className="bp-glass mt-3 w-full px-5 py-3 space-y-1.5" aria-label="Lembretes de consulta, exame e hidratação">
-                {lembretesAgenda.map((l) => (
-                  <li key={l.id} className={`flex items-center justify-between gap-2 text-sm ${l.feito ? "opacity-60 line-through" : ""}`}>
-                    <span className="min-w-0 truncate">
-                      <span className="text-xs font-bold uppercase tracking-wider opacity-80 mr-1.5">Lembrete · {l.tipo}</span>
-                      {l.titulo}
-                    </span>
-                    <span className="shrink-0 text-xs font-semibold opacity-80">
-                      {l.horario}
-                      {l.frequencia ? ` · ${l.frequencia}` : ""}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-
             {/* Status do reembolso das consultas canceladas (some se não houver reembolso) */}
             {/* Faltas: pedido manual de reembolso (prazo de 7 dias) e status do pedido */}
             {faltasRecentes.map((c) => (
@@ -749,7 +755,7 @@ export function PacienteApp() {
                     <span className="font-black text-base">BION IA</span>
                     <span className="text-xs font-bold uppercase tracking-wider bg-white/15 rounded-full px-2 py-0.5">Seu agendamento</span>
                   </span>
-                  <span className="block text-xs text-white/85 mt-0.5">Online agora · responde na hora</span>
+                  <span className="block text-xs text-white/85 mt-0.5">Online agora</span>
                 </span>
               </div>
               <p className="relative text-sm text-white/90 mt-3 leading-relaxed">
@@ -801,11 +807,11 @@ export function PacienteApp() {
               <button type="button"
                 onClick={() => setDetalhe("imc")}
                 className="bpp-toque bp-glass p-5 w-full text-left"
-                aria-label={`Índice de massa corporal: ${imcAtual ? imcAtual.toFixed(1) : "sem dados"}. Abrir histórico e atualizar peso e altura`}
+                aria-label={`IMC: ${imcAtual ? `${imcAtual.toFixed(1)}, ${ROTULO_FAIXA_IMC[faixaImc(imcAtual)]}` : "sem dados"}. ${serieImc.length > 1 ? "Ver gráfico de evolução e atualizar peso e altura" : "Abrir histórico e atualizar peso e altura"}`}
               >
                 <div className="flex items-center justify-between mb-1">
                   <span className="inline-flex items-center gap-2 text-sm font-bold">
-                    <Activity className="w-4 h-4" /> Gráfico de IMC
+                    <Activity className="w-4 h-4" /> IMC
                   </span>
                   {imcAtual && (
                     <span className="text-2xl font-black">{imcAtual.toFixed(1)}</span>
@@ -819,11 +825,28 @@ export function PacienteApp() {
                     refMin={18.5}
                     refMax={24.9}
                   />
+                ) : imcAtual ? (
+                  <div className="py-2">
+                    <p className="text-sm font-semibold">{ROTULO_FAIXA_IMC[faixaImc(imcAtual)]}</p>
+                    <p className="text-sm opacity-80 mt-1">
+                      {pesos.length === 0
+                        ? // O número veio do perfil (peso/altura do cadastro),
+                          // NÃO de uma medição datada — a origem é declarada
+                          // em vez de pedir o registro que já existe no topo.
+                          "Pelo peso e altura do seu perfil · atualize registrando uma medição para começar sua evolução."
+                        : serieImc.length === 1
+                          ? `Um registro, em ${serieImc[0].rotulo}. Mais um registro de peso e o gráfico de evolução aparece.`
+                          : // Há peso, mas nenhum ponto válido (B18: sem altura
+                            // registrada até a data do peso). O detalhe salva
+                            // peso + altura como medições e cria o 1º ponto.
+                            "Toque para atualizar peso e altura e começar seu gráfico de evolução."}
+                    </p>
+                  </div>
                 ) : (
                   <p className="text-sm opacity-80 py-4">
                     {pesos.length === 0
                       ? "Registre peso e altura para acompanhar seu IMC."
-                      : "Mais um registro e o gráfico aparece."}
+                      : "Registre sua altura para calcular seu IMC."}
                   </p>
                 )}
                 {imcAtual && (
@@ -837,7 +860,7 @@ export function PacienteApp() {
               <button type="button"
                 onClick={() => setDetalhe("pa")}
                 className="bpp-toque bp-glass p-5 w-full text-left"
-                aria-label={`Pressão arterial: ${pas.at(-1) ? `${pas.at(-1)!.valor1}/${pas.at(-1)!.valor2 ?? "—"}` : "sem dados"}. Abrir histórico e registrar`}
+                aria-label={`Pressão arterial: ${pas.at(-1) ? `${pas.at(-1)!.valor1}/${pas.at(-1)!.valor2 ?? "—"}, última medição em ${rotuloCurto(pas.at(-1)!.criadoEm)}` : "sem dados"}. Abrir histórico e registrar`}
               >
                 <div className="flex items-center justify-between mb-1">
                   <span className="inline-flex items-center gap-2 text-sm font-bold">
@@ -867,7 +890,9 @@ export function PacienteApp() {
                   />
                 ) : (
                   <p className="text-sm opacity-80 py-4">
-                    {pas.length === 0 ? "Registre sua primeira medição." : "Mais um registro e o gráfico aparece."}
+                    {pas.length === 0
+                      ? "Registre sua primeira medição."
+                      : `Última medição em ${rotuloCurto(pas[0].criadoEm)}. Mais uma medição e a evolução aparece aqui.`}
                   </p>
                 )}
               </button>
@@ -882,7 +907,7 @@ export function PacienteApp() {
             </p>
 
             <button type="button"
-              onClick={() => setChatAberto(true)}
+              onClick={() => abrirChat("laudo")}
               className="bpp-toque bp-glass-marinho w-full p-4 flex items-center gap-3 text-left mb-5"
               aria-label="Enviar novo laudo à BION IA"
             >
@@ -1005,9 +1030,11 @@ export function PacienteApp() {
       <DetalheMedicao detalhe={detalhe} onFechar={() => setDetalhe(null)} />
       <ChatBion
         aberto={chatAberto}
-        onFechar={() => setChatAberto(false)}
+        intencao={chatIntencao}
+        onFechar={fecharChat}
         aoAbrirTriagem={(info) => {
           setChatAberto(false);
+          setChatIntencao("geral");
           setTriagemSlide(info);
         }}
       />
@@ -1115,7 +1142,7 @@ function CardAguardandoReagendamento({
           <button
             type="button"
             onClick={onReembolso}
-            className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-bold bg-emerald-600/15 text-emerald-800 dark:text-emerald-200"
+            className="inline-flex items-center gap-1.5 rounded-full px-4 min-h-11 text-xs font-bold bg-emerald-600/15 text-emerald-800 dark:text-emerald-200"
           >
             <Undo2 className="w-3.5 h-3.5" /> Reembolso integral
           </button>
@@ -1126,9 +1153,31 @@ function CardAguardandoReagendamento({
 }
 
 function CardReembolso({ consulta }: { consulta: Consulta }) {
-  const { previa } = usePreviaCancelamento(consulta.id, consulta.status);
+  const { previa, erro, recarregar } = usePreviaCancelamento(consulta.id, consulta.status);
   const r = previa?.reembolso;
-  if (!r) return null;
+  if (!r) {
+    // A2: se a busca da prévia falhar, o card NÃO some em silêncio — a
+    // consulta cancelada e paga continua visível, com erro e "tentar de novo".
+    if (erro) {
+      return (
+        <div className="bp-glass mt-3 w-full px-5 py-4" role="alert">
+          <span className="block text-xs font-bold uppercase tracking-wider opacity-80">Consulta cancelada</span>
+          <span className="block text-sm font-bold mt-0.5">
+            {consulta.especialidade} · {consulta.data} {consulta.hora}
+          </span>
+          <p className="text-xs opacity-80 mt-2">Não foi possível carregar o status do reembolso desta consulta.</p>
+          <button
+            type="button"
+            onClick={recarregar}
+            className="bpp-toque mt-2 inline-flex items-center min-h-11 px-4 rounded-full text-xs font-bold bg-bion-ink/8 dark:bg-white/10"
+          >
+            Tentar de novo
+          </button>
+        </div>
+      );
+    }
+    return null;
+  }
   // B37: com multa descontada, o rótulo diz "parcial", nunca "integral".
   const rotulo = rotuloReembolso(r.status, r.multaCentavos);
   const cor =
@@ -1211,7 +1260,7 @@ function CardRemarcacaoPendente({ consulta, onContinuar }: { consulta: Consulta;
           type="button"
           onClick={() => void desistir()}
           disabled={enviando}
-          className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-bold bg-red-600/10 text-red-800 dark:bg-red-400/15 dark:text-red-300 disabled:opacity-40"
+          className="inline-flex items-center gap-1.5 rounded-full px-4 min-h-11 text-xs font-bold bg-red-600/10 text-red-800 dark:bg-red-400/15 dark:text-red-300 disabled:opacity-40"
         >
           <X className="w-3.5 h-3.5" /> {confirmando ? "Confirmar desistência" : "Desistir"}
         </button>
@@ -1252,7 +1301,7 @@ function CardFalta({ consulta, onAbrir }: { consulta: Consulta; onAbrir: () => v
           <button
             type="button"
             onClick={onAbrir}
-            className="mt-3 inline-flex items-center gap-1 rounded-full px-2.5 py-1.5 text-xs font-bold bg-bion-ink/8 dark:bg-white/10"
+            className="mt-3 inline-flex items-center gap-1 rounded-full px-3.5 min-h-11 text-xs font-bold bg-bion-ink/8 dark:bg-white/10"
           >
             <FileText className="w-3 h-3" /> Ver detalhes
           </button>

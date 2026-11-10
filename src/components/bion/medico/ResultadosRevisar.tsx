@@ -54,13 +54,22 @@ export function ResultadosRevisar({
       setNovos(ids.length);
       if (ids.length && !marcouRef.current) {
         marcouRef.current = true;
-        for (const id of ids) {
-          void fetch("/api/notificacoes", {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ id }),
-          }).catch(() => {});
-        }
+        // O selo acompanha a marcação: antes ele guardava a contagem de
+        // não lidas do instante da carga e seguia exibindo "N novos" a
+        // sessão inteira, com o sino/contadores já zerados.
+        const resultados = await Promise.allSettled(
+          ids.map((id) =>
+            fetch("/api/notificacoes", {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ id }),
+            }).then((r) => {
+              if (!r.ok) throw new Error("patch notificacao");
+            }),
+          ),
+        );
+        const lidas = resultados.filter((r) => r.status === "fulfilled").length;
+        if (lidas) setNovos((n) => Math.max(0, n - lidas));
       }
     } catch {
       setErro(true);

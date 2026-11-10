@@ -41,6 +41,9 @@ export type MedicaoNova = { tipo: "peso" | "altura" | "pa"; valor1: number; valo
 
 const num = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
 
+const inteiroEntre = (v: unknown, min: number, max: number): v is number =>
+  typeof v === "number" && Number.isInteger(v) && v >= min && v <= max;
+
 /** Mesmos intervalos plausíveis de POST /api/medicoes. */
 export function validarResposta(
   tipos: TipoPedido[],
@@ -69,7 +72,16 @@ export function validarResposta(
 }
 
 /** Posologia do MedicamentoEmUso (JSON livre). Campos que o paciente entende. */
-export type Posologia = { frequencia?: string; horarios?: string[]; duracaoDias?: number; instrucoes?: string };
+export type Posologia = {
+  frequencia?: string;
+  horarios?: string[];
+  duracaoDias?: number;
+  instrucoes?: string;
+  /** Doses por dia (1–4) quando a frequência é a diária estruturada. */
+  vezesAoDia?: number;
+  /** Dia da semana (0 = domingo … 6 = sábado) quando a frequência é semanal. */
+  diaSemana?: number;
+};
 
 export function lerPosologia(json: string | null | undefined): Posologia {
   try {
@@ -80,6 +92,8 @@ export function lerPosologia(json: string | null | undefined): Posologia {
     if (Array.isArray(p.horarios)) saida.horarios = p.horarios.filter((h: unknown) => typeof h === "string" && HORA.test(h));
     if (num(p.duracaoDias)) saida.duracaoDias = p.duracaoDias;
     if (typeof p.instrucoes === "string") saida.instrucoes = p.instrucoes;
+    if (inteiroEntre(p.vezesAoDia, 1, 4)) saida.vezesAoDia = p.vezesAoDia;
+    if (inteiroEntre(p.diaSemana, 0, 6)) saida.diaSemana = p.diaSemana;
     return saida;
   } catch {
     return {};
@@ -118,6 +132,188 @@ export function validarMedicamento(
 }
 
 export const FREQUENCIAS_LEMBRETE = ["Todos os dias", "Dias úteis", "Semanal"] as const;
+export type FrequenciaLembrete = (typeof FREQUENCIAS_LEMBRETE)[number];
+
+/**
+ * F2 (auditoria de errinhos): a tela de Lembretes oferecia "Segunda a Sexta",
+ * "Semanalmente", "A cada 12 horas" e "A cada 8 horas", e a API convertia
+ * TUDO em silêncio para "Todos os dias" — o toast anunciava a frequência
+ * escolhida e o banco gravava outra. Regra nova: NENHUMA conversão silenciosa.
+ * - Canônicas passam como estão;
+ * - sinônimos sem perda ("Segunda a Sexta", "Semanalmente") são mapeados de
+ *   forma explícita para a canônica de MESMO significado;
+ * - intervalo ("A cada N horas") NÃO cabe num lembrete só → erro claro (a
+ *   tela cria um lembrete por horário derivado, todos "Todos os dias");
+ * - qualquer outra coisa → erro (nada de cair no padrão em silêncio).
+ */
+export function normalizarFrequenciaLembrete(
+  bruta: string | null | undefined,
+): { ok: true; frequencia: FrequenciaLembrete } | { ok: false; erro: string } {
+  const original = (bruta ?? "").trim();
+  if (!original) return { ok: true, frequencia: "Todos os dias" };
+  if ((FREQUENCIAS_LEMBRETE as readonly string[]).includes(original)) {
+    return { ok: true, frequencia: original as FrequenciaLembrete };
+  }
+  const chave = original
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+  if (chave === "segunda a sexta" || chave === "dias uteis") return { ok: true, frequencia: "Dias úteis" };
+  if (chave === "semanalmente" || chave === "semanal") return { ok: true, frequencia: "Semanal" };
+  if (chave === "todos os dias") return { ok: true, frequencia: "Todos os dias" };
+  if (/^a cada \d{1,2} horas?$/.test(chave)) {
+    return {
+      ok: false,
+      erro: "Frequência por intervalo não cabe em um lembrete só: crie um lembrete para cada horário do dia.",
+    };
+  }
+  return {
+    ok: false,
+    erro: `Frequência não reconhecida: "${original}". Use "Todos os dias", "Dias úteis" ou "Semanal".`,
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/* Avisos do medicamento: frequência estruturada → horários → lembretes */
+/* ------------------------------------------------------------------ */
+
+/** Modos que o paciente escolhe nos chips "Como você toma?". */
+export type ModoFrequencia = "1x" | "2x" | "3x" | "4x" | "semanal";
+
+export const OPCOES_FREQUENCIA: { id: ModoFrequencia; rotulo: string; vezesAoDia?: number }[] = [
+  { id: "1x", rotulo: "1x ao dia", vezesAoDia: 1 },
+  { id: "2x", rotulo: "2x ao dia", vezesAoDia: 2 },
+  { id: "3x", rotulo: "3x ao dia", vezesAoDia: 3 },
+  { id: "4x", rotulo: "4x ao dia", vezesAoDia: 4 },
+  { id: "semanal", rotulo: "1x por semana" },
+];
+
+/** Dias da semana (0 = domingo): forma curta p/ os botões e longa p/ o resumo. */
+export const DIAS_SEMANA_CURTOS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"] as const;
+const DIAS_SEMANA_NOMES = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"] as const;
+
+/** Deslocamentos (em horas) a partir do 1º horário, por vezes ao dia. */
+const DESLOCAMENTOS_HORAS: Record<number, number[]> = { 1: [0], 2: [0, 12], 3: [0, 6, 12], 4: [0, 4, 8, 12] };
+
+/**
+ * Horários sugeridos a partir do primeiro (âncora, padrão 08:00):
+ * 2x ao dia = de 12 em 12h (a expectativa clínica padrão), 3x = a cada 6h
+ * nas horas acordado, 4x = a cada 4h. Gira na virada do dia:
+ * âncora 21:00 no 2x → ["21:00", "09:00"]. Âncora inválida cai para 08:00.
+ */
+export function horariosSugeridos(vezesAoDia: number, ancora = "08:00"): string[] {
+  const des = DESLOCAMENTOS_HORAS[vezesAoDia] ?? DESLOCAMENTOS_HORAS[1];
+  const [h, m] = (HORA.test(ancora) ? ancora : "08:00").split(":").map(Number);
+  return des.map((d) => `${String((h + d) % 24).padStart(2, "0")}:${String(m).padStart(2, "0")}`);
+}
+
+/** "08:00" | "08:00 e 20:00" | "08:00, 14:00 e 20:00". */
+function listarHorarios(horarios: string[]): string {
+  if (horarios.length <= 1) return horarios[0] ?? "";
+  return `${horarios.slice(0, -1).join(", ")} e ${horarios[horarios.length - 1]}`;
+}
+
+/** Rótulo curto da frequência: "2x ao dia" | "1x por semana" (ou o texto legado). */
+export function rotuloFrequenciaPosologia(p: Posologia): string {
+  if (inteiroEntre(p.diaSemana, 0, 6)) return "1x por semana";
+  if (inteiroEntre(p.vezesAoDia, 1, 4)) return `${p.vezesAoDia}x ao dia`;
+  return p.frequencia ?? "";
+}
+
+/**
+ * A parte dos avisos em linguagem simples, p/ completar frases como
+ * "Você recebe …": "avisos às 08:00 e 20:00, todos os dias" |
+ * "um aviso toda segunda às 08:00". "" quando não há horário nenhum.
+ */
+export function descricaoAvisos(p: Posologia): string {
+  const horarios = (p.horarios ?? []).filter((h) => HORA.test(h));
+  if (!horarios.length) return "";
+  if (inteiroEntre(p.diaSemana, 0, 6)) {
+    const artigo = p.diaSemana === 0 || p.diaSemana === 6 ? "todo" : "toda";
+    return `um aviso ${artigo} ${DIAS_SEMANA_NOMES[p.diaSemana]} às ${horarios[0]}`;
+  }
+  const ordenados = [...horarios].sort();
+  return ordenados.length === 1
+    ? `um aviso às ${ordenados[0]}, todos os dias`
+    : `avisos às ${listarHorarios(ordenados)}, todos os dias`;
+}
+
+/** Resumo completo: "2x ao dia · avisos às 08:00 e 20:00, todos os dias". */
+export function resumoAvisos(p: Posologia): string {
+  const desc = descricaoAvisos(p);
+  if (!desc) return "";
+  const rotulo = rotuloFrequenciaPosologia(p);
+  return rotulo ? `${rotulo} · ${desc}` : desc;
+}
+
+export type AvisosValidados = {
+  horarios: string[];
+  semanal: boolean;
+  diaSemana?: number;
+  vezesAoDia?: number;
+  /** Rótulo gerado ("2x ao dia") que vai para posologia.frequencia. */
+  rotulo: string;
+  /** Frequência (dias) gravada em cada Lembrete criado. */
+  frequenciaLembrete: "Todos os dias" | "Semanal";
+  /** Campos estruturados a gravar na posologia (sem instrucoes/duracaoDias). */
+  posologia: Posologia;
+};
+
+/**
+ * Valida o conjunto de avisos { horarios?, vezesAoDia?, diaSemana? }.
+ * `horarios` ausente → avisos: null (caminho legado: nenhum lembrete criado).
+ * Com `permitirVazio`, [] é um conjunto válido (desligar todos os avisos).
+ * Os horários mandam: únicos, ordenados, 1–4; um `vezesAoDia` divergente é
+ * ajustado à contagem deles. Semanal (diaSemana 0–6) exige um único horário.
+ */
+export function validarAvisos(
+  b: { horarios?: unknown; vezesAoDia?: unknown; diaSemana?: unknown },
+  opts?: { permitirVazio?: boolean },
+): { ok: true; avisos: AvisosValidados | null } | { ok: false; erro: string } {
+  if (b.horarios === undefined || b.horarios === null) return { ok: true, avisos: null };
+  if (!Array.isArray(b.horarios)) return { ok: false, erro: "Informe os horários dos avisos." };
+  if (b.horarios.length === 0) {
+    if (!opts?.permitirVazio) return { ok: false, erro: "Informe ao menos um horário para os avisos." };
+    return {
+      ok: true,
+      avisos: { horarios: [], semanal: false, rotulo: "", frequenciaLembrete: "Todos os dias", posologia: { horarios: [] } },
+    };
+  }
+  if (b.horarios.length > 4) return { ok: false, erro: "No máximo 4 horários por medicamento." };
+  for (const h of b.horarios) {
+    if (typeof h !== "string" || !HORA.test(h)) return { ok: false, erro: "Informe os horários no formato HH:MM." };
+  }
+  const horarios = [...new Set(b.horarios as string[])].sort();
+  if (inteiroEntre(b.diaSemana, 0, 6)) {
+    if (horarios.length !== 1) return { ok: false, erro: "No modo semanal, informe um único horário." };
+    const diaSemana = b.diaSemana;
+    return {
+      ok: true,
+      avisos: {
+        horarios,
+        semanal: true,
+        diaSemana,
+        rotulo: "1x por semana",
+        frequenciaLembrete: "Semanal",
+        posologia: { frequencia: "1x por semana", horarios, diaSemana },
+      },
+    };
+  }
+  const vezesAoDia = horarios.length;
+  const rotulo = `${vezesAoDia}x ao dia`;
+  return {
+    ok: true,
+    avisos: {
+      horarios,
+      semanal: false,
+      vezesAoDia,
+      rotulo,
+      frequenciaLembrete: "Todos os dias",
+      posologia: { frequencia: rotulo, horarios, vezesAoDia },
+    },
+  };
+}
 
 /** LGPD: detalhes de auditoria só com ids e tipos — nunca valores de saúde, nomes ou doses. */
 export function detalhesAuditoria(campos: Record<string, string | string[] | null | undefined>): string {

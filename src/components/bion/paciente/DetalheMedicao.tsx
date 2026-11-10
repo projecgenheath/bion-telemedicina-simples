@@ -17,7 +17,7 @@ import {
   X,
 } from "lucide-react";
 import { useBion } from "@/lib/bion-store";
-import { calcularImc, formatarAltura, formatarPeso, lerAlturaCm, lerPesoKg } from "@/lib/medidas-paciente";
+import { calcularImc, faixaImc, formatarAltura, formatarPeso, lerAlturaCm, lerPesoKg, ROTULO_FAIXA_IMC, type FaixaImc } from "@/lib/medidas-paciente";
 import { FREQUENCIAS_LEMBRETE, HORA, validarResposta } from "@/lib/saude-paciente";
 import { FUSO_CLINICA, partesFusoClinica } from "@/lib/bion-tipos";
 import { GraficoLinha } from "./GraficoLinha";
@@ -38,11 +38,16 @@ const rotuloCurto = (iso: string) => {
   return `${String(d.dia).padStart(2, "0")}/${String(d.mes + 1).padStart(2, "0")}`;
 };
 
+const COR_FAIXA_IMC: Record<FaixaImc, string> = {
+  abaixo: "text-sky-800 dark:text-sky-300",
+  normal: "text-emerald-800 dark:text-emerald-200",
+  sobrepeso: "text-amber-800 dark:text-amber-200",
+  obesidade: "text-red-700 dark:text-red-300",
+};
+
 function classificarImc(imc: number): { rotulo: string; cor: string } {
-  if (imc < 18.5) return { rotulo: "Abaixo do peso", cor: "text-sky-800 dark:text-sky-300" };
-  if (imc < 25) return { rotulo: "Peso normal", cor: "text-emerald-800 dark:text-emerald-200" };
-  if (imc < 30) return { rotulo: "Sobrepeso", cor: "text-amber-800 dark:text-amber-200" };
-  return { rotulo: "Obesidade", cor: "text-red-700 dark:text-red-300" };
+  const faixa = faixaImc(imc);
+  return { rotulo: ROTULO_FAIXA_IMC[faixa], cor: COR_FAIXA_IMC[faixa] };
 }
 
 function classificarPa(sis: number, dia: number): { rotulo: string } {
@@ -106,13 +111,18 @@ function FormMedicao({
   enviando,
   rotuloBotao,
 }: {
-  campos: { id: string; rotulo: string; placeholder: string; min: number; max: number; passo: number }[];
-  /** M1: devolve true só quando o servidor confirmou — aí o formulário é limpo. */
+  campos: { id: string; rotulo: string; placeholder: string; min: number; max: number; passo: number; valorAtual?: number }[];
+  /** M1: devolve true só quando o servidor confirmou — aí o formulário volta aos valores atuais. */
   aoSalvar: (valores: number[]) => Promise<boolean>;
   enviando: boolean;
   rotuloBotao: string;
 }) {
-  const [valores, setValores] = useState<Record<string, string>>({});
+  // C21: campo com `valorAtual` NASCE preenchido com ele (o valor atual
+  // vale como valor) — antes era só placeholder e, para atualizar só o
+  // peso, o paciente era obrigado a redigitar a altura, e vice-versa.
+  const iniciais = () =>
+    Object.fromEntries(campos.map((c) => [c.id, c.valorAtual !== undefined ? String(c.valorAtual) : ""]));
+  const [valores, setValores] = useState<Record<string, string>>(iniciais);
 
   return (
     <div className="bp-glass p-5">
@@ -148,7 +158,7 @@ function FormMedicao({
             nums.push(n);
           }
           // M1: em falha os valores digitados continuam no formulário.
-          if (await aoSalvar(nums)) setValores({});
+          if (await aoSalvar(nums)) setValores(iniciais());
         }}
         disabled={enviando}
         className="bp-acao w-full mt-4 py-3 text-sm inline-flex items-center justify-center gap-2"
@@ -230,9 +240,12 @@ function DetalheImc({ onFechar }: { onFechar: () => void }) {
       )}
 
       <FormMedicao
+        // Remonta quando os valores atuais mudam (ex.: após salvar), para
+        // o formulário nascer com os atuais mais recentes.
+        key={`${pesoAtual ?? ""}|${alturaAtual ?? ""}`}
         campos={[
-          { id: "peso", rotulo: "Peso (kg)", placeholder: pesoAtual ? String(pesoAtual) : "70", min: 20, max: 400, passo: 0.1 },
-          { id: "altura", rotulo: "Altura (cm)", placeholder: alturaAtual ? String(alturaAtual) : "170", min: 50, max: 250, passo: 1 },
+          { id: "peso", rotulo: "Peso (kg)", placeholder: pesoAtual ? String(pesoAtual) : "70", min: 20, max: 400, passo: 0.1, valorAtual: pesoAtual },
+          { id: "altura", rotulo: "Altura (cm)", placeholder: alturaAtual ? String(alturaAtual) : "170", min: 50, max: 250, passo: 1, valorAtual: alturaAtual },
         ]}
         aoSalvar={async ([peso, altura]) => {
           // M1: sucesso só quando o servidor confirmou as duas medições.
