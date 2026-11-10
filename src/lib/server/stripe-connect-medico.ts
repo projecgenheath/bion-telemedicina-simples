@@ -14,9 +14,10 @@ import { bloqueioChaveLive } from "@/lib/stripe-checkout-logica";
  *   Antes de criar, lista as contas Connect (auto-paginação) e reaproveita
  *   qualquer uma cuja metadata aponte para o médico (perfilMedicoId / medicoId,
  *   plataforma 'bion'). Na criação grava essa metadata e usa a idempotency
- *   key estável `bion-connect-medico-<perfilMedicoId>` (a do Stripe expira
- *   em ~24 h e exige os MESMOS parâmetros; por isso a busca por metadata é
- *   a rede de segurança se a gravação no banco falhar depois do create).
+ *   key `bion-connect-medico-<perfilMedicoId>-<tipo>-<pais>` (sem o e-mail;
+ *   a do Stripe expira em ~24 h e exige os MESMOS parâmetros). Se o create
+ *   falhar com StripeIdempotencyError, busca de novo pela metadata; se não
+ *   achar a conta, devolve 409 `stripe_tente_novamente`.
  *   O update só grava se a coluna ainda estiver vazia (null ou "").
  * - Tipo da conta: tipoContaConnect() (env STRIPE_CONNECT_TIPO_CONTA, padrão
  *   standard). Nada aqui é amarrado a um tipo: Express pede card_payments +
@@ -53,6 +54,8 @@ export type DepsConnect = { stripe?: () => ClienteStripe; tipo?: TipoContaConnec
 
 /** Código de erro das rotas de onboarding com chave live (trava do Alisson, 03/11 12:28). */
 export const CODIGO_CHAVE_LIVE = "stripe_chave_live_bloqueada";
+export const CODIGO_TENTE_NOVAMENTE = "stripe_tente_novamente";
+export const MSG_TENTE_NOVAMENTE = "Não foi possível concluir o cadastro no Stripe agora. Tente de novo em alguns minutos.";
 
 /**
  * Trava sk_live_ (mesma regra do checkout, bloqueioChaveLive): enquanto o
@@ -103,10 +106,27 @@ export function statusDoPerfil(p: PerfilStatus | null): StatusContaMedico {
   };
 }
 
-/** Resposta 503 com `codigo` para a trava sk_live_; null para outros erros. */
+/** 503 da trava sk_live_ ou 409 de idempotência sem conta para reaproveitar; null para outros erros. */
 export function respostaErroConnect(e: unknown): Response | null {
-  if (!ehChaveLiveBloqueada(e)) return null;
-  return Response.json({ erro: "Cadastro no Stripe indisponível no momento.", codigo: CODIGO_CHAVE_LIVE }, { status: 503 });
+  if (ehChaveLiveBloqueada(e)) {
+    return Response.json({ erro: "Cadastro no Stripe indisponível no momento.", codigo: CODIGO_CHAVE_LIVE }, { status: 503 });
+  }
+  const x = e as { codigo?: string; message?: string; status?: number } | null;
+  if (x?.codigo === CODIGO_TENTE_NOVAMENTE) {
+    return Response.json({ erro: x.message ?? MSG_TENTE_NOVAMENTE, codigo: CODIGO_TENTE_NOVAMENTE }, { status: 409 });
+  }
+  return null;
+}
+
+/** StripeIdempotencyError ou o equivalente (type/rawType idempotency_error), sem depender da classe (mocks). */
+export function ehIdempotenciaStripe(e: unknown): boolean {
+  const x = e as { name?: string; type?: string; rawType?: string; raw?: { type?: string } } | null;
+  return (
+    x?.name === "StripeIdempotencyError" ||
+    x?.type === "idempotency_error" ||
+    x?.rawType === "idempotency_error" ||
+    x?.raw?.type === "idempotency_error"
+  );
 }
 
 /**
@@ -145,9 +165,17 @@ export function paisContaConnect(valor: string | undefined = process.env.STRIPE_
 
 export type IdsMedicoConnect = { perfilMedicoId: string; medicoId: string };
 
-/** Idempotency key estável por perfil (não inclui o tipo: a mesma conta é reaproveitada). */
-export function chaveIdempotenciaConta(perfilMedicoId: string): string {
-  return `bion-connect-medico-${perfilMedicoId}`;
+/**
+ * Idempotency key por perfil + tipo + país (sem o e-mail: o médico pode
+ * corrigir o e-mail sem invalidar a chave). Tipo e país entram para que uma
+ * mudança desses parâmetros não reaproveite uma chave de 24 h com outro body.
+ */
+export function chaveIdempotenciaConta(
+  perfilMedicoId: string,
+  tipo: TipoContaConnect = tipoContaConnect(),
+  pais: string = paisContaConnect(),
+): string {
+  return `bion-connect-medico-${perfilMedicoId}-${tipo}-${pais}`;
 }
 
 /** Metadata gravada na criação; a busca posterior filtra por ela (Stripe não tem search de accounts). */
@@ -168,6 +196,10 @@ export function contaComMetadataDoMedico(
  * Lista as contas Connect com auto-paginação e devolve a primeira cuja
  * metadata aponta para este médico. Sem `accounts.list` (cliente de teste
  * antigo) = não achou; o create com a idempotency key cobre o buraco.
+ *
+ * TODO(Médicos): `accounts.list` lê todas as contas a cada médico novo, o que
+ * pesa no limite de taxa com milhares de médicos. Trocar por uma busca no
+ * banco ou por um índice próprio, quando houver esse volume.
  */
 export async function buscarContaPorMetadata(cli: ClienteStripe, ids: IdsMedicoConnect): Promise<Stripe.Account | null> {
   const listar = cli.accounts.list;
@@ -233,11 +265,26 @@ export async function garantirContaMedico(
   const cli = (deps.stripe ?? stripe)();
   const tipo = deps.tipo ?? tipoContaConnect();
   const ids = { perfilMedicoId: atual.id, medicoId: medico.id };
+  const pais = paisContaConnect();
   const existente = await buscarContaPorMetadata(cli, ids);
+  let conta = existente;
   let criadaAgora = false;
-  const conta = existente ?? (criadaAgora = true, await cli.accounts.create(parametrosNovaConta(tipo, { ...medico, perfilMedicoId: atual.id }), {
-    idempotencyKey: chaveIdempotenciaConta(atual.id),
-  }));
+  if (!conta) {
+    try {
+      conta = await cli.accounts.create(parametrosNovaConta(tipo, { ...medico, perfilMedicoId: atual.id }), {
+        idempotencyKey: chaveIdempotenciaConta(atual.id, tipo, pais),
+      });
+      criadaAgora = true;
+    } catch (e) {
+      // Chave reutilizada com outros parâmetros, ou create anterior falhou na
+      // Stripe e ficou preso na janela de 24 h: tenta reaproveitar a conta.
+      if (!ehIdempotenciaStripe(e)) throw e;
+      conta = await buscarContaPorMetadata(cli, ids);
+      if (!conta) {
+        throw Object.assign(new Error(MSG_TENTE_NOVAMENTE), { status: 409, codigo: CODIGO_TENTE_NOVAMENTE });
+      }
+    }
+  }
   await gravarContaNoPerfil(medico.id, conta, (deps.agora ?? (() => new Date()))());
   // `criada` = esta chamada pediu accounts.create (conta nova no Stripe).
   // Reaproveitar metadata ou perder a corrida no updateMany: criada = false.

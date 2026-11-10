@@ -16,8 +16,8 @@ CREATE UNIQUE INDEX ... ON "PerfilMedico"("stripeAccountId")
   WHERE "stripeAccountId" IS NOT NULL AND "stripeAccountId" <> '';
 ```
 
-Antes de criar o índice, a migração para com erro se já houver contas repetidas
-(precisa do ok do Alisson para conferir em produção).
+Antes de criar o índice, a migração para com erro se já houver contas repetidas.
+Essa checagem já rodou: a 20261103f foi aplicada em 03/11 (segundo o Presidente).
 
 Não rode `prisma migrate dev` / `db push` esperando que este índice apareça a
 partir do schema. A fonte da verdade é o SQL.
