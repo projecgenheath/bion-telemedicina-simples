@@ -130,13 +130,13 @@ export function CentroComando() {
             carregando={!filaPronta && fila.length === 0}
             tom={fila.length ? "atencao" : "ok"}
             detalhe={fila.length ? "toque para abrir a Fila" : "tudo em ordem"}
-            className="col-span-2 lg:col-span-1"
+            className="col-span-2 md:col-span-1"
             onAbrir={abrirFila}
           />
           <KpiAdmin
             icone={Wallet}
             rotulo="Repasses a pagar"
-            className="col-span-2 lg:col-span-1"
+            className="col-span-2 md:col-span-1"
             onAbrir={() => ir("admin-repasses")}
             valor={repasses.erro ? "—" : brl(repasses.dados?.totalLiquidoCentavos ?? 0)}
             carregando={repasses.carregando}
@@ -149,9 +149,9 @@ export function CentroComando() {
           />
         </div>
 
-        <div className="grid lg:grid-cols-3 gap-3 bion-surgir-lista">
+        <div className="grid md:grid-cols-3 gap-3 bion-surgir-lista">
           <CardAdmin
-            className="lg:col-span-2"
+            className="md:col-span-2"
             titulo="Agenda de hoje"
             icone={CalendarDays}
             acao={
@@ -211,7 +211,7 @@ export function CentroComando() {
       {/* ---------------- Operação ---------------- */}
       <section aria-labelledby="cc-operacao" className="space-y-3">
         <h2 id="cc-operacao" className="ba-rotulo">Operação</h2>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 bion-surgir-lista">
+        <div className="ba-grade-cartoes bion-surgir-lista">
           <CardAdmin
             titulo="Médicos"
             icone={Stethoscope}

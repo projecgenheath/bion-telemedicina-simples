@@ -27,7 +27,7 @@ import { FilaPainel } from "./comando/FilaPainel";
 import { ProvedorDadosAdmin, useDadosAdmin } from "./dados";
 import { buscarGlobal } from "./busca";
 import { contarPorCategoria } from "./metricas";
-import { useLargo } from "./ui/preferencias";
+import { useCascaLarga } from "./ui/preferencias";
 import "./admin.css";
 
 type Icone = ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
@@ -76,7 +76,7 @@ function TorreInterna({ children }: { children: ReactNode }) {
   const view: View | undefined = PATH_TO_VIEW[path];
   const { sessao, sair, naoLidas, auditLogs, medicos, pacientes, consultas, tickets } = useBion();
   const { fila, reembolsos, repasses, agora } = useDadosAdmin();
-  const largo = useLargo();
+  const largo = useCascaLarga();
   const naFila = useSyncExternalStore(nada, hashFila, () => false);
 
   const comando = path === "/painel";

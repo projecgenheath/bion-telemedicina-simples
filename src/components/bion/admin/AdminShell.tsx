@@ -3,7 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { ArrowLeft, ChevronRight, Inbox, PanelLeftClose, PanelLeftOpen, Search } from "lucide-react";
 import { SheetAdmin } from "./ui/SheetAdmin";
-import { useDensidadeAdmin, useLargo, usePreferenciaBool } from "./ui/preferencias";
+import { LARGURA_TRILHO_ABERTO, useCascaLarga, useDensidadeAdmin, useMinLargura, usePreferenciaBool } from "./ui/preferencias";
 import { useAtalhoBusca } from "./ui/atalho";
 import { ROTULO_TIPO, casa, type ResultadoBusca, type TipoResultado } from "./busca";
 import type { Tom } from "./rotulos";
@@ -37,13 +37,15 @@ const iniciais = (nome: string) =>
  * Casca da Torre BION — ligada ao layout autenticado só para o papel admin
  * (via TorreAdmin). Nunca usa .bp-shell: sem a moldura de 430 px.
  *
- * Celular / tablet estreito (< 1024 px): tela cheia com carrossel nativo
+ * Celular (< 768 px): tela cheia com carrossel nativo
  *   [Conta] ⟷ [Comando = children] ⟷ [Fila], abrindo no centro; pílula
  *   flutuante com os pontos + botão "Ir para…" (lançador). ←/→ no teclado.
  *   Com `modulo`, o celular mostra o módulo em tela cheia com "Voltar".
- * Largo (≥ 1024 px): largura toda — trilho lateral de vidro (72 px, abre
- *   para 240 px), barra de comando com migalhas, busca (Ctrl K; ⌘K no Mac), Fila
- *   e conta (em painel lateral à direita) e o conteúdo ao lado.
+ * Casca larga (≥ 768 px): trilho + barra. Abaixo de 1280 o trilho começa
+ *   só com ícones (15 rem / ~240 px cortava títulos em 1024–1279); o
+ *   usuário pode abrir. A partir de 1280, abre por padrão. Busca e Fila
+ *   ficam na barra (no tablet a busca vira ícone com aria-label).
+ * Tabelas e densidade dos módulos continuam em useLargo (≥ 1024).
  *
  * Só visual/navegação: quem usa decide o que é cada módulo (o admin tem
  * funções próprias — nada aqui copia telas do paciente ou do médico).
@@ -122,7 +124,7 @@ export function AdminShell({
   buscar?: (termo: string) => ResultadoBusca[];
   children: ReactNode;
 }) {
-  const largo = useLargo();
+  const largo = useCascaLarga();
   const atalho = useAtalhoBusca();
   const irParaPainel = useRef<((i: number) => void) | null>(null);
   const { densidade } = useDensidadeAdmin();
@@ -240,13 +242,14 @@ export function AdminShell({
             <button
               type="button"
               onClick={abrirBusca}
-              className="ba-entrada !w-80 flex items-center gap-2 text-left ba-texto-3"
+              className="ba-entrada !w-11 lg:!w-80 !px-0 lg:!px-3 flex items-center justify-center lg:justify-start gap-2 text-left ba-texto-3"
               aria-label={`Buscar ou ir para (${atalho.falado})`}
               aria-keyshortcuts="Control+K Meta+K"
+              title={`Buscar ou ir para (${atalho.falado})`}
             >
               <Search className="w-4 h-4" aria-hidden />
-              <span className="flex-1">Buscar ou ir para…</span>
-              <kbd className="text-[11px] font-bold rounded-md px-1.5 py-0.5 ba-botao-secundario" aria-hidden>
+              <span className="flex-1 hidden lg:inline">Buscar ou ir para…</span>
+              <kbd className="text-[11px] font-bold rounded-md px-1.5 py-0.5 ba-botao-secundario hidden lg:inline" aria-hidden>
                 {atalho.curto}
               </kbd>
             </button>
@@ -299,7 +302,8 @@ function Trilho({
   usuario: { nome: string; foto?: string | null };
   onConta: () => void;
 }) {
-  const [aberto, setAberto] = usePreferenciaBool("bion-admin-trilho", true);
+  const padraoAberto = useMinLargura(LARGURA_TRILHO_ABERTO);
+  const [aberto, setAberto] = usePreferenciaBool("bion-admin-trilho", padraoAberto);
   const { ref: refTrilho, caixa } = useCaixaDoAtual<HTMLElement>(`${ativo}-${aberto}`);
   return (
     <nav ref={refTrilho} className="ba-trilho flex flex-col p-2" data-aberto={aberto} aria-label="Navegação do administrador">

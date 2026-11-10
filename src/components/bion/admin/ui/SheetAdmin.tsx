@@ -3,13 +3,13 @@
 import { useState, type ReactNode } from "react";
 import { Drawer } from "vaul";
 import { X } from "lucide-react";
-import { useLargo } from "./preferencias";
+import { useCascaLarga } from "./preferencias";
 import "../admin.css";
 
 /**
  * Sheet do admin (vaul, já instalado): arrastável no celular (sobe do
  * rodapé, arrastar para baixo fecha) e painel lateral à direita no layout
- * largo (≥ 1024 px). Foco preso, ESC e "voltar" do overlay vêm do vaul/Radix.
+ * largo (≥ 768 px, a mesma casca do trilho). Foco preso, ESC e "voltar" do overlay vêm do vaul/Radix.
  *
  * `alteracoesPendentes`: enquanto true, arrastar/ESC/clicar fora NÃO fecham;
  * o botão fechar pergunta "Descartar alterações?" antes.
@@ -31,7 +31,7 @@ export function SheetAdmin({
   rodape?: ReactNode;
   children: ReactNode;
 }) {
-  const largo = useLargo();
+  const largo = useCascaLarga();
   const [confirmandoSaida, setConfirmandoSaida] = useState(false);
   // Ao fechar por fora, esquece a pergunta pendente (ajuste durante o render).
   const [abertoAntes, setAbertoAntes] = useState(aberto);

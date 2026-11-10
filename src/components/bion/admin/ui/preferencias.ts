@@ -8,6 +8,13 @@ import { useCallback, useSyncExternalStore } from "react";
  *   e classe .dark no <html> — o script anti-FOUC do RootLayout já a aplica.
  * - Densidade: chave própria do admin ("bion-admin-densidade"); por padrão
  *   compacta no desktop (≥ 1024 px) e confortável no celular.
+ *
+ * Três cortes, de propósito distintos:
+ * - LARGURA_CASCA (768): trilho + barra no lugar do carrossel do celular.
+ * - LARGURA_DESKTOP (1024): tabelas, densidade e layout interno dos módulos.
+ * - LARGURA_TRILHO_ABERTO (1280): o trilho de 15 rem (~240 px) só abre
+ *   sozinho aqui; em 1024–1279 ele cortava os títulos (PACIENT…, CHAMA…).
+ *   Sem preferência salva, segue o viewport; 1/0 no localStorage prevalece.
  */
 export type Tema = "claro" | "escuro";
 export type DensidadeAdmin = "compacta" | "confortavel";
@@ -15,7 +22,9 @@ export type DensidadeAdmin = "compacta" | "confortavel";
 const CHAVE_TEMA = "bion-tema";
 const CHAVE_DENSIDADE = "bion-admin-densidade";
 const EVENTO = "bion-admin-preferencia";
+export const LARGURA_CASCA = 768;
 export const LARGURA_DESKTOP = 1024;
+export const LARGURA_TRILHO_ABERTO = 1280;
 
 function ler(chave: string): string | null {
   try {
@@ -59,19 +68,29 @@ export function useTemaAdmin() {
 }
 
 /* ---------------- largura ---------------- */
-function assinarLargura(cb: () => void) {
-  const mq = window.matchMedia(`(min-width: ${LARGURA_DESKTOP}px)`);
+function assinarMinLargura(px: number, cb: () => void) {
+  const mq = window.matchMedia(`(min-width: ${px}px)`);
   mq.addEventListener("change", cb);
   return () => mq.removeEventListener("change", cb);
 }
 
-/** true a partir de 1024 px (layout largo). No servidor assume celular. */
-export function useLargo(): boolean {
+/** true a partir de `px`. No servidor assume abaixo do corte. */
+export function useMinLargura(px: number): boolean {
   return useSyncExternalStore(
-    assinarLargura,
-    () => window.matchMedia(`(min-width: ${LARGURA_DESKTOP}px)`).matches,
+    (cb) => assinarMinLargura(px, cb),
+    () => window.matchMedia(`(min-width: ${px}px)`).matches,
     () => false,
   );
+}
+
+/** true a partir de 768 px: casca com trilho e barra (não o carrossel). */
+export function useCascaLarga(): boolean {
+  return useMinLargura(LARGURA_CASCA);
+}
+
+/** true a partir de 1024 px (tabelas e densidade dos módulos). No servidor assume celular. */
+export function useLargo(): boolean {
+  return useMinLargura(LARGURA_DESKTOP);
 }
 
 /* ---------------- densidade ---------------- */
