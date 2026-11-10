@@ -43,8 +43,8 @@ checa("rota do paciente usa o handler genérico com PACIENTE", rotaPaciente.incl
 checa("rota exporta GET e POST", /export const \{ GET, POST \}/.test(rotaPaciente));
 
 // (1) Uma tela: Termos v1 + Privacidade v1 juntos, com links
-checa("versão dos termos do paciente é v2.1", /^termos-paciente-v2\.1-/.test(VERSAO_TERMOS_POR_PERFIL.PACIENTE ?? ""));
-checa("versão da privacidade é v2.1", /^privacidade-v2\.1-/.test(VERSAO_PRIVACIDADE));
+checa("versão dos termos do paciente é v3", /^termos-paciente-v3-/.test(VERSAO_TERMOS_POR_PERFIL.PACIENTE ?? ""));
+checa("versão da privacidade é v3", /^privacidade-v3-/.test(VERSAO_PRIVACIDADE));
 const p = aceiteTermosPayload("PACIENTE");
 checa("payload leva as duas versões juntas", p.versaoTermos === VERSAO_TERMOS_POR_PERFIL.PACIENTE && p.versaoPrivacidade === VERSAO_PRIVACIDADE && p.aceito === true);
 checa("payload sem marketing no re-aceite", !("marketing" in p) || !p.marketing);

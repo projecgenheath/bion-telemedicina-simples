@@ -1,19 +1,19 @@
 ---
 title: "Termos de Uso e Contrato de Intermediação do Médico — BION Telemedicina"
-subtitle: "Versão provisória v2.1 — 03/11/2026"
+subtitle: "Versão provisória v3 — 09/11/2026"
 lang: pt-BR
 ---
 
 # Resumo em linguagem simples
 
-- A BION é **intermediadora tecnológica**: fornece a plataforma, agenda, sala de vídeo, prontuário eletrônico, cobrança pela Stripe direto na sua conta. **Você presta o serviço médico em nome próprio**, com **autonomia técnica total**. A BION não pratica ato médico.
+- A BION é uma **plataforma de software** mantida por pessoa física (**[NOME E CPF DO MANTENEDOR]**). Ela é **intermediadora tecnológica**: fornece a plataforma, agenda, sala de vídeo, prontuário eletrônico e a cobrança pela Stripe direto na sua conta. **Não é clínica, não é estabelecimento de saúde, não tem diretor técnico (RT) e não está inscrita em CRM.** **Você é o único prestador do serviço médico e o único anunciante da sua atividade**, em nome próprio, com **autonomia técnica total**. A BION não pratica ato médico.
 - **Não há vínculo empregatício**, exclusividade, subordinação ou horário obrigatório. Você define **sua agenda e seu preço** (padrão sugerido R$ 150,00).
 - Exigimos **CRM ativo e regular** o tempo todo. Se o CRM ficar irregular, a conta é suspensa.
-- **Remuneração da BION: 10%** do valor de cada consulta realizada; **você recebe 90%**, menos a taxa do cartão cobrada pela Stripe e eventuais reembolsos. No reembolso integral, a BION restitui a você a taxa do cartão; no parcial, a taxa fica com você. Em estorno pelo banco do cartão (chargeback), você arca com a taxa do cartão e com a taxa de contestação da Stripe, salvo falha da BION (cláusula 10.13).
+- **Remuneração da BION: 10%** do valor de cada consulta realizada, cobrada como contraprestação pelo **uso do software, pela intermediação tecnológica e pelo processamento do pagamento**, e **não como participação nos seus honorários médicos** (cláusula 10.2). **Você recebe 90%**, menos a taxa do cartão cobrada pela Stripe e eventuais reembolsos. No reembolso integral, a BION restitui a você a taxa do cartão; no parcial, a taxa fica com você. Em estorno pelo banco do cartão (chargeback), você arca com o valor contestado, a taxa do cartão e a taxa de contestação da Stripe, salvo falha da BION (cláusula 10.13).
 - **Recebimentos:** Você recebe na sua conta Stripe no momento do pagamento, já descontadas a comissão de 10% da BION e a taxa do cartão. A Stripe transfere o valor para a sua conta bancária conforme o calendário dela.
 - **BION Copilot (opcional):** o que você digita e seus dados profissionais vão à NVIDIA (EUA). **Nunca insira dados que identifiquem pacientes**; o filtro automático pode falhar e a responsabilidade é sua (cláusula 13.1).
 - **Multas de cancelamento/remarcação tardia (≤ 24 h):** 50% do valor, divididas meio a meio entre você e a BION. **Atenção ao risco ético** descrito na cláusula 10.6.
-- **Notas fiscais:** você emite ao paciente (NFS-e se PJ; recibo Receita Saúde se PF). A BION emite a você a NFS-e da comissão dela. Opcionalmente, você pode autorizar a BION a emitir a NFS-e em seu nome, com seu certificado A1 guardado criptografado (**recurso ainda não disponível**).
+- **Notas fiscais:** você emite ao paciente (NFS-e se PJ; recibo Receita Saúde se PF). Enquanto o mantenedor for pessoa física, o documento da remuneração da BION será emitido na forma permitida para PF (cláusula 11.3), e não como NFS-e de empresa. Opcionalmente, no futuro, você poderá autorizar a emissão da NFS-e em seu nome, com seu certificado A1 (**recurso ainda não disponível**).
 - **Proteção de dados:** você é **controlador** do prontuário que produz; a BION é **operadora** dele e **controladora** dos dados da plataforma. Detalhes no Anexo I.
 
 # Sumário
@@ -46,11 +46,13 @@ Anexo III — Tabela de remuneração, multas, recebimentos e ajustes
 
 # 1. Partes e aceite
 
-1.1. **BION:** **[A DEFINIR: razão social]**, ME/SLU optante pelo Simples Nacional, CNPJ **[A DEFINIR]**, sede em **[A DEFINIR: endereço]**, **[A DEFINIR: cidade/UF]**, CNAE principal 7490-1/04, inscrita no CRM-**[A DEFINIR: UF]** sob o nº **[A DEFINIR]**, com Responsável Técnico médico Dr(a). **[A DEFINIR: nome]**, CRM **[A DEFINIR: nº/UF]** (Res. CFM 2.314/2022, art. 17).
+1.1. **BION / mantenedor:** a plataforma BION é um software de intermediação tecnológica mantido por pessoa física, o mantenedor **[NOME E CPF DO MANTENEDOR]**, com endereço para correspondência em **[ENDEREÇO PARA CORRESPONDÊNCIA]** e contato em **[E-MAIL DE CONTATO]**. O mantenedor é o controlador dos dados pessoais da Plataforma, nos termos da Política de Privacidade, ressalvado o prontuário (você é o controlador dele). **Não há, nesta versão, pessoa jurídica, CNPJ, razão social, sede de empresa, inscrição em Conselho Regional de Medicina nem médico responsável técnico (diretor técnico / RT).** O mantenedor responde pessoalmente pelas obrigações da Plataforma.
 
-1.2. **Médico:** a pessoa física com inscrição ativa no CRM que aceita estes Termos, atuando **em nome próprio (PF)** ou **por meio de sua pessoa jurídica (PJ)**, identificada no cadastro. Se atuar por PJ, a PJ e o médico respondem solidariamente pelas obrigações aqui previstas, e o médico declara ter poderes para vincular a PJ.
+1.2. **Médico:** a pessoa física com inscrição ativa no CRM que aceita estes Termos, atuando **em nome próprio (PF)** ou **por meio de sua pessoa jurídica (PJ)**, identificada no cadastro. Se atuar por PJ, a PJ e o médico respondem solidariamente pelas obrigações aqui previstas, e o médico declara ter poderes para vincular a PJ. O médico é o **único prestador do serviço médico** e o **único anunciante da sua atividade** (Res. CFM 2.336/2023).
 
 1.3. O aceite eletrônico, com registro de data, hora e identificação, tem validade de assinatura (MP 2.200-2/2001, art. 10, § 2º, e Lei 14.063/2020). **[A DEFINIR: se será exigida assinatura eletrônica avançada ou qualificada para o contrato do médico.]**
+
+1.4. **Transparência sobre a Resolução CFM nº 2.314/2022, art. 17, e declaração do médico.** Essa norma exige que empresas de telemedicina se inscrevam no CRM e indiquem um médico responsável técnico. A BION, nesta versão, **não cumpre esse requisito**. Ao aceitar estes Termos, o médico declara: (a) ter **CRM ativo e regular**; (b) **cumprir a Res. CFM 2.314/2022** no que lhe cabe (inclusive informar ao CRM o uso de telemedicina, quando exigido); (c) **conhecer o fato** de a Plataforma não ter inscrição no CRM nem RT; (d) ser o único responsável pelo atendimento, pelo prontuário, pela prescrição e pela própria publicidade. Essa transparência **reduz o risco** de se atribuir à Plataforma um erro médico, **mas não elimina** o risco regulatório de a Plataforma operar sem inscrição no CRM e sem RT, nem o risco ético do médico ao atuar nela. **[VALIDAR COM ADVOGADO.]** Quando o mantenedor constituir pessoa jurídica, obtiver CNPJ e, se for o caso, indicar RT, estes Termos serão atualizados e será pedido **novo aceite** (cláusula 20).
 
 # 2. Definições
 
@@ -64,11 +66,11 @@ Aplicam-se as definições dos Termos de Uso do Paciente. Além delas:
 
 # 3. Objeto e natureza da relação
 
-3.1. **Objeto.** A BION licencia ao médico o uso da Plataforma e presta serviços de **intermediação tecnológica**: divulgação do perfil, agendamento, sala de teleconsulta, prontuário eletrônico, mensagens, emissão de documentos em PDF, cobrança do paciente pela Stripe **em nome e por conta do médico**, direto na conta Stripe do médico, configuração da comissão da BION em cada pagamento, suporte e ferramentas auxiliares.
+3.1. **Objeto.** A BION licencia ao médico o uso do software da Plataforma e presta serviços de **intermediação tecnológica**: divulgação do perfil cadastrado pelo médico, agendamento, sala de teleconsulta, prontuário eletrônico, mensagens, emissão de documentos em PDF, cobrança do paciente pela Stripe **em nome e por conta do médico**, direto na conta Stripe conectada do médico, configuração da remuneração da BION em cada pagamento, suporte e ferramentas auxiliares. A BION **não presta serviço médico** e **não é estabelecimento de saúde**.
 
-3.2. **Mandato de cobrança.** O médico autoriza a BION a configurar, pela Stripe, a **cobrança do paciente direto na conta Stripe do médico**, com a retenção automática da comissão da BION (cláusula 10) no ato do pagamento. Os valores pagos pelos pacientes pertencem ao médico, salvo a comissão da BION, e a BION não os recebe nem os repassa.
+3.2. **Mandato de cobrança.** O médico autoriza a BION a configurar, pela Stripe, a **cobrança do paciente direto na conta Stripe do médico**, com a retenção automática da remuneração da BION (cláusula 10) no ato do pagamento. Os valores pagos pelos pacientes pertencem ao médico, salvo a remuneração da BION, e a BION não os recebe nem os repassa. A disponibilização dessa cobrança **depende de a Stripe aceitar** a conta da plataforma e a conta conectada do médico (cláusula 10.9).
 
-3.3. **A BION não presta serviço médico**, não interfere na conduta, no diagnóstico, na prescrição ou no tempo de consulta, e não é empregadora, sócia, operadora de plano de saúde ou cooperativa do médico.
+3.3. **A BION não presta serviço médico**, não é clínica nem estabelecimento de saúde, **não tem diretor técnico ou RT**, **não indica nem escolhe o médico para o paciente**, não interfere na conduta, no diagnóstico, na prescrição ou no tempo de consulta, e não é empregadora, sócia, operadora de plano de saúde ou cooperativa do médico. A publicidade da atividade médica é de **responsabilidade exclusiva do médico** (Res. CFM 2.336/2023).
 
 3.4. **Sem vínculo empregatício.** Não há pessoalidade, subordinação, habitualidade imposta, controle de jornada, metas ou exclusividade. O médico escolhe se, quando e quanto atende, define seu preço, pode atuar em outras plataformas e consultórios, e assume os riscos de sua atividade. Nada nestes Termos cria vínculo trabalhista, societário, associativo ou de representação além do mandato de cobrança.
 
@@ -82,7 +84,8 @@ c) anunciar especialidade **somente com Registro de Qualificação de Especialis
 d) cumprir o Código de Ética Médica (Res. CFM 2.217/2018), a Res. CFM 2.314/2022, a Lei 14.510/2022 e as demais normas do CFM, do CRM, da ANVISA e do Ministério da Saúde;  
 e) estar regular perante a Receita Federal e o Município, inclusive, se PJ, com CNPJ ativo e CNAE compatível;  
 f) dispor de equipamento, internet e **ambiente reservado** adequados;  
-g) **[RECOMENDADO]** manter seguro de responsabilidade civil profissional.
+g) **[RECOMENDADO]** manter seguro de responsabilidade civil profissional;  
+h) conhecer e aceitar o disposto na cláusula 1.4 (Plataforma mantida por pessoa física, sem inscrição no CRM e sem RT).
 
 4.2. **Verificação.** A BION confere o CRM no cadastro e **periodicamente**, inclusive na base pública do CFM, e pode pedir documentos. O médico deve avisar a BION **em até 24 horas** sobre qualquer suspensão, interdição cautelar, processo ético com restrição ao exercício ou mudança de situação no CRM.
 
@@ -146,7 +149,7 @@ k) **não cobrar do paciente nenhum valor fora da Plataforma** por consultas age
 
 10.1. **Preço.** O médico define livremente o valor da sua consulta (padrão sugerido R$ 150,00), exibido ao paciente antes do pagamento (Res. CFM 2.314/2022, art. 16). Alterações valem para **novos** agendamentos. Não há planos nem pacotes.
 
-10.2. **Remuneração da BION.** Pela intermediação, a BION retém **10% do valor bruto** de cada consulta realizada e de cada renovação atendida. O médico recebe **90%**. Sobre retornos gratuitos não há cobrança e o médico não recebe.
+10.2. **Remuneração da BION.** A BION retém **10% do valor bruto** de cada consulta realizada e de cada renovação atendida, como **remuneração pelo uso do software, pela intermediação tecnológica e pelo processamento do pagamento**. Essa remuneração **não é participação nos honorários médicos**, não torna o mantenedor sócio do ato médico e não confere à BION qualquer ingerência clínica. O médico recebe **90%**. Sobre retornos gratuitos não há cobrança e o médico não recebe. **[VALIDAR COM ADVOGADO.]** O Código de Ética Médica, art. 58, veda ao médico participar de cobrança ou divisão de honorários com quem não é médico. A qualificação desta remuneração como contraprestação pelo software e pela intermediação tecnológica visa a distingui-la de uma partilha de honorários, **mas não elimina o risco** de o CFM ou um CRM entenderem de outro modo.
 
 10.3. **Recebimento pela Stripe.** O médico recebe os pagamentos numa conta conectada da Stripe, aberta em seu nome com CPF ou CNPJ, e aceita os termos da Stripe Connected Account Agreement. Cada pagamento é dividido no ato: a BION recebe uma comissão de 10% do valor da consulta, e o restante fica com o médico, já descontada a taxa de processamento cobrada pela Stripe. A Stripe transfere o valor para a conta bancária do médico conforme o calendário dela. **Reembolso integral:** o paciente recebe de volta o valor cheio no mesmo cartão, a BION devolve a sua comissão de 10% e a parte do médico é revertida pela Stripe na conta dele. A taxa do cartão é custeada pela BION: como, na cobrança direta, a Stripe retém essa taxa da conta do médico e não a devolve no reembolso, a BION restituirá ao médico o valor dessa taxa por meio de transferência para a sua conta de recebimento na Stripe, de modo que o reembolso integral não gere prejuízo ao médico. **Reembolso parcial:** o médico devolve a parte proporcional dele e continua responsável pela taxa do cartão, que não é restituída. Estornos e contestações abertos pelo banco do cartão (chargeback) seguem a cláusula 10.13, e neles a BION não restitui a taxa. Toda consulta dá ao paciente direito a um retorno grátis em até 30 dias, e o retorno não gera pagamento ao médico. O médico é responsável por emitir o recibo (Receita Saúde) ou a nota fiscal da consulta ao paciente.
 
@@ -154,13 +157,13 @@ k) **não cobrar do paciente nenhum valor fora da Plataforma** por consultas age
 
 10.5. **Multas pagas pelo paciente** (cancelamento ou remarcação com 24 h ou menos de antecedência: 50% do valor da consulta) são divididas **50% para o médico e 50% para a BION**, sem comissão adicional sobre a parte do médico. A taxa do cartão sai da metade do médico. A diferença de preço paga na sala de espera, quando o paciente troca de médico, segue a divisão normal de 90% para o médico e 10% para a BION.
 
-10.6. **⚠️ Aviso de risco ético ao médico.** Se o paciente faltar à consulta sem cancelar, o médico fica com a sua parte, que já foi creditada na conta Stripe dele, salvo se o paciente pedir o reembolso integral em até 7 dias corridos depois do horário da consulta, com justificativa (cláusula 10.12). Nesse caso a parte do médico é revertida pela Stripe. Nas multas por cancelamento com 24 horas ou menos de antecedência, o médico recebe metade do valor retido. O CFM entende que o art. 59 do Código de Ética Médica veda ao médico aceitar remuneração por atendimento não prestado, inclusive multa ou taxa por falta ou cancelamento (Despacho CFM SEI nº 102/2025). Há também entendimento de Conselhos Regionais contrário à cobrança de percentual sobre o honorário por empresas de intermediação (CEM, art. 58). O médico declara estar ciente desse risco e **pode optar por não receber a sua parte das multas** na sua área de recebimento **[A DEFINIR: implementar a opção]**. **[DECISÃO PENDENTE DA BION COM ADVOGADO — ver pendências.]**
+10.6. **⚠️ Aviso de risco ético ao médico.** Se o paciente faltar à consulta sem cancelar, o médico fica com a sua parte, que já foi creditada na conta Stripe dele, salvo se o paciente pedir o reembolso integral em até 7 dias corridos depois do horário da consulta, com justificativa (cláusula 10.12). Nesse caso a parte do médico é revertida pela Stripe. Nas multas por cancelamento com 24 horas ou menos de antecedência, o médico recebe metade do valor retido. O CFM entende que o art. 59 do Código de Ética Médica veda ao médico aceitar remuneração por atendimento não prestado, inclusive multa ou taxa por falta ou cancelamento (Despacho CFM SEI nº 102/2025). Há também entendimento de Conselhos Regionais contrário à cobrança de percentual sobre o honorário por plataformas de intermediação (CEM, art. 58); a cláusula 10.2 descreve a remuneração da BION como contraprestação pelo software e pela intermediação, mas **isso não elimina esse risco**. O médico declara estar ciente desses riscos e **pode optar por não receber a sua parte das multas** na sua área de recebimento **[A DEFINIR: implementar a opção]**. **[VALIDAR COM ADVOGADO.]**
 
 10.7. **Crédito na conta Stripe.** Os valores do médico são creditados direto na conta Stripe dele no momento do pagamento, já descontadas a comissão de 10% da BION (application fee) e a taxa do cartão. A BION não recebe, não guarda e não transfere a parte do médico. As únicas transferências da BION ao médico são a restituição da taxa do cartão no reembolso integral (cláusula 10.3) e o ressarcimento das taxas de contestação decorrente de falha da BION (cláusula 10.13). Não há fechamento diário nem pagamento manual. O histórico de repasses anteriores a 28/10/2026 fica guardado por 5 anos, por obrigação fiscal, só como registro.
 
 10.8. **Transferência para o banco.** A transferência do saldo da conta Stripe para a conta bancária do médico segue o calendário e os prazos da Stripe. A BION não controla esses prazos. Fora as restituições de taxa previstas nas cláusulas 10.3 e 10.13, a BION não faz transferências ao médico.
 
-10.9. **Acompanhamento e cadastro na Stripe.** No painel da BION e no painel da Stripe, o médico pode acompanhar cada pagamento, a comissão e a taxa descontadas, os reembolsos, as restituições de taxa feitas pela BION e as transferências para o banco. Para receber, o médico precisa manter o cadastro da Stripe completo e atualizado, com documento, verificação de identidade e conta bancária. Enquanto o cadastro estiver pendente, ele não pode receber novos agendamentos pagos.
+10.9. **Acompanhamento e cadastro na Stripe.** No painel da BION e no painel da Stripe, o médico pode acompanhar cada pagamento, a remuneração e a taxa descontadas, os reembolsos, as restituições de taxa feitas pela BION e as transferências para o banco. Para receber, o médico precisa manter o cadastro da Stripe completo e atualizado, com documento, verificação de identidade (KYC) e conta bancária, em seu CPF ou no CNPJ informado no perfil. Enquanto o cadastro estiver pendente, ele não pode receber novos agendamentos pagos. **A telemedicina é ramo de pagamento restrito**, e a conta da plataforma de pessoa física **depende de aprovação da Stripe**. A BION **não garante** essa aprovação, nem a aceitação da conta conectada do médico, nem a continuidade do processamento. Se a Stripe recusar, limitar ou encerrar o serviço, os agendamentos pagos poderão ser interrompidos, com aviso ao médico e aos pacientes. Não há promessa de prazo ou de aprovação.
 
 10.10. **Contestação.** O médico pode contestar valores em até **[A DEFINIR: 30] dias** do pagamento, pelo suporte. Correções de desfecho feitas pela administração são registradas em auditoria e informadas ao médico.
 
@@ -176,7 +179,7 @@ k) **não cobrar do paciente nenhum valor fora da Plataforma** por consultas age
 
 11.2. **Documento fiscal ao paciente:** depois da **consulta realizada**, o médico **PJ** emite **NFS-e** ao paciente; o médico **PF** emite **recibo pelo Receita Saúde**. A BION fornece os dados do paciente necessários (nome e CPF) somente para esse fim.
 
-11.3. **Documento fiscal da BION:** a BION emite ao médico a **NFS-e da sua remuneração** (comissão e parte das multas), via **API do Emissor Nacional da NFS-e**. **[A DEFINIR COM CONTADOR: base de cálculo e tratamento da parte da BION nas multas.]**
+11.3. **Documento fiscal da remuneração da BION.** Enquanto o mantenedor atuar como **pessoa física, sem CNPJ**, o documento fiscal da remuneração (os 10% e, quando houver, a parte nas multas) será emitido **na forma que a lei tributária permitir para pessoa física** (por exemplo, recibo), e **não como NFS-e de empresa**. **[VALIDAR COM CONTADOR: enquadramento, ISS, carnê-leão, risco de equiparação a pessoa jurídica, base de cálculo e tratamento da parte nas multas, obrigações acessórias.]** Quando houver CNPJ, a BION passará a emitir a NFS-e correspondente, estes Termos serão atualizados e será pedido **novo aceite**.
 
 11.4. **Emissão em nome do médico (opcional, futura).** O médico PJ poderá autorizar a BION a emitir as NFS-e **em nome dele**, pela API do Emissor Nacional, usando seu **certificado digital A1**, nos termos do **Anexo II**. **Este recurso ainda não está disponível**; até lá, o médico emite as próprias notas.
 
@@ -217,7 +220,7 @@ Os pacientes podem avaliar o atendimento; a média é pública. O médico pode p
 
 # 17. Propriedade intelectual
 
-A Plataforma, a marca BION e seus elementos pertencem à BION. O médico autoriza o uso de seu nome, foto, CRM e informações do perfil **apenas** para divulgação do perfil na Plataforma e em materiais da BION, enquanto durar o contrato. O médico mantém os direitos sobre conteúdo próprio que publicar.
+A Plataforma, a marca BION e seus elementos pertencem ao mantenedor da BION. O médico autoriza o uso de seu nome, foto, CRM e informações do perfil **apenas** para divulgação do perfil na Plataforma e em materiais da BION, enquanto durar o contrato. O médico mantém os direitos sobre conteúdo próprio que publicar.
 
 # 18. Responsabilidades, indenidade e limitação
 
@@ -225,7 +228,7 @@ A Plataforma, a marca BION e seus elementos pertencem à BION. O médico autoriz
 
 18.2. A BION responde pela Plataforma, pela segurança dos dados sob sua guarda, pela correção das regras de divisão que ela configura em cada pagamento (comissão, multas e reembolsos) e por atos próprios. O processamento, a custódia e a transferência dos valores são feitos pela Stripe, conforme os termos dela.
 
-18.3. **Limitação.** Salvo dolo, culpa grave, violação de dados pessoais causada pela BION ou valores devidos ao médico por erro nas regras de divisão configuradas pela BION, a responsabilidade total da BION perante o médico fica limitada ao valor da remuneração recebida pela BION do médico nos **12 meses** anteriores ao fato. **[Validar com advogado.]**
+18.3. **Limitação (somente perante o médico).** Salvo dolo, culpa grave, violação de dados pessoais causada pela BION ou valores devidos ao médico por erro nas regras de divisão configuradas pela BION, a responsabilidade total da BION perante o médico fica limitada ao valor da remuneração recebida pela BION do médico nos **12 meses** anteriores ao fato. **Esta limitação aplica-se apenas à relação com o médico e não se aplica ao paciente/consumidor.** Perante o consumidor, nada nestes Termos exclui ou limita direitos ou a responsabilidade da Plataforma ou do mantenedor (CDC, arts. 25 e 51). **[VALIDAR COM ADVOGADO.]**
 
 18.4. Nenhuma parte responde por caso fortuito ou força maior (Código Civil, art. 393).
 
@@ -241,21 +244,21 @@ A Plataforma, a marca BION e seus elementos pertencem à BION. O médico autoriz
 
 # 20. Alterações
 
-A BION pode alterar estes Termos com aviso de **30 dias**. Alterações de remuneração não atingem consultas já pagas. Se discordar, o médico pode rescindir sem ônus.
+A BION pode alterar estes Termos com aviso de **30 dias**. Alterações de remuneração não atingem consultas já pagas. Se discordar, o médico pode rescindir sem ônus. Mudanças materiais, inclusive a constituição de pessoa jurídica, a obtenção de CNPJ ou a indicação de médico responsável técnico, serão objeto de **novo aceite**.
 
 # 21. Comunicações
 
-As comunicações ocorrem pelo app e pelo e-mail cadastrado. Contato da BION: **[A DEFINIR: e-mail]**. Encarregado (DPO): **[A DEFINIR: e-mail do Encarregado]**.
+As comunicações ocorrem pelo app e pelo e-mail cadastrado. Contato da BION: **[E-MAIL DE CONTATO]**. Canal do titular / encarregado (LGPD, arts. 18 e 41): **[E-MAIL DO ENCARREGADO/CANAL DO TITULAR]** (resposta a confirmação e acesso em até **15 dias**). Correspondência: **[ENDEREÇO PARA CORRESPONDÊNCIA]**.
 
 # 22. Disposições gerais, anticorrupção e foro
 
 22.1. As partes cumprem a Lei 12.846/2013 (anticorrupção) e não oferecem vantagens indevidas.
 
-22.2. Cessão do contrato pela BION a sucessora é permitida com aviso; pelo médico, só com autorização.
+22.2. Cessão do contrato pelo mantenedor a sucessor — inclusive à pessoa jurídica que venha a ser constituída para operar a Plataforma — é permitida com aviso; nesse caso os Termos serão atualizados e será pedido **novo aceite**. Pelo médico, a cessão só se faz com autorização.
 
 22.3. Cláusula inválida não afeta as demais. Tolerância não é renúncia.
 
-22.4. **Foro:** fica eleito o foro da comarca de **[A DEFINIR: cidade/UF da sede]**, por se tratar de relação entre profissionais independentes, com renúncia a qualquer outro. **[Validar: risco de o médico PF ser considerado vulnerável/consumidor da plataforma.]**
+22.4. **Foro.** Fica eleito o foro do **domicílio do médico**. Essa escolha evita eleger o foro do mantenedor, que poderia ser considerado abusivo se o médico pessoa física for tido como consumidor do software (CDC, arts. 51, IV, e 101, I). **[VALIDAR COM ADVOGADO: confirmar se o foro deve ser o do domicílio do médico ou o do mantenedor, quando o endereço deste estiver definido.]** Para ações de pacientes/consumidores, prevalece o foro do domicílio do paciente, nos Termos de Uso do Paciente.
 
 ---
 

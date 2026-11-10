@@ -1,14 +1,14 @@
 ---
 title: "Termos de Uso do Paciente — BION Telemedicina"
-subtitle: "Versão provisória v2.1 — 03/11/2026"
+subtitle: "Versão provisória v3 — 09/11/2026"
 lang: pt-BR
 ---
 
-> Os trechos marcados com **[A DEFINIR]** dependem de dados da empresa ainda não constituída ou de decisões de negócio. Veja `pendencias.md`.
+> Os trechos marcados com **[A DEFINIR]**, **[A PREENCHER]** ou **[VALIDAR COM ADVOGADO/CONTADOR]** dependem de dados do mantenedor ou de validação profissional. Esta versão descreve a Plataforma mantida por pessoa física, sem CNPJ e sem médico responsável técnico, até que o mantenedor avise o contrário e peça novo aceite.
 
 # Resumo em linguagem simples (leia antes)
 
-- **A BION é uma plataforma de tecnologia.** Ela conecta você a médicos e médicas independentes. **Quem faz a consulta, o diagnóstico e a prescrição é o médico**, com autonomia e responsabilidade técnica próprias. A BION não pratica ato médico.
+- **A BION é uma plataforma de software** mantida por pessoa física (**[NOME E CPF DO MANTENEDOR]**). Ela oferece a tecnologia para você encontrar e agendar com médicos independentes. **Não é clínica, não é estabelecimento de saúde, não tem diretor técnico e não presta serviço médico.** **Quem faz a consulta, o diagnóstico e a prescrição é o médico** que você escolhe, com autonomia e responsabilidade técnica próprias.
 - **A BION não atende emergências.** Em caso de dor no peito, falta de ar, desmaio, convulsão, sangramento intenso, sinais de AVC, risco de suicídio ou qualquer situação grave, **ligue 192 (SAMU)** ou vá ao pronto-socorro mais próximo. Para apoio emocional: **CVV 188**.
 - **A assistente de IA (ChatBion / BION IA) não faz diagnóstico** e não substitui o médico. Ela orienta, organiza informações e ajuda na triagem.
 - **O preço da consulta é definido por cada médico** (normalmente R$ 150,00) e aparece antes de você pagar. Não há planos nem mensalidade.
@@ -18,7 +18,7 @@ lang: pt-BR
 - **A videochamada não é gravada.** O chat da consulta fica guardado no seu prontuário.
 - **Seus dados de saúde são protegidos** pela LGPD e pelo sigilo médico. A administração da BION não acessa o conteúdo clínico das suas consultas.
 - Você pode **excluir sua conta** no seu perfil; seu prontuário, por lei, continua guardado por 20 anos, sem o seu nome.
-- Dúvidas: **[A DEFINIR: e-mail/canal de atendimento]**.
+- Dúvidas: **[E-MAIL DE CONTATO]**. Para exercer direitos sobre seus dados (LGPD): **[E-MAIL DO ENCARREGADO/CANAL DO TITULAR]**. Correio: **[ENDEREÇO PARA CORRESPONDÊNCIA]**.
 
 # Sumário
 
@@ -55,11 +55,11 @@ lang: pt-BR
 
 # 1. Quem somos
 
-1.1. A plataforma BION ("**BION**", "**nós**") é operada por **[A DEFINIR: razão social]**, empresa (ME/sociedade limitada unipessoal) optante pelo Simples Nacional, inscrita no CNPJ sob o nº **[A DEFINIR]**, com sede em **[A DEFINIR: endereço completo]**, **[A DEFINIR: cidade/UF]**, com atividade principal de intermediação e agenciamento de serviços e negócios (CNAE 7490-1/04).
+1.1. A plataforma BION ("**BION**", "**nós**", a "**Plataforma**") é um software de intermediação tecnológica mantido por pessoa física, o mantenedor **[NOME E CPF DO MANTENEDOR]**, com endereço para correspondência em **[ENDEREÇO PARA CORRESPONDÊNCIA]** e contato em **[E-MAIL DE CONTATO]**. O mantenedor é o **controlador** dos dados pessoais tratados pela Plataforma, nos termos da LGPD, ressalvado o prontuário, que tem o médico assistente como controlador (Política de Privacidade). **Não há, nesta versão, pessoa jurídica, CNPJ, razão social, sede de empresa, inscrição em Conselho Regional de Medicina nem médico responsável técnico (diretor técnico / RT).** O mantenedor responde pessoalmente pelas obrigações da Plataforma.
 
-1.2. Conforme a Resolução CFM nº 2.314/2022 (art. 17), a BION é inscrita no Conselho Regional de Medicina do Estado de sua sede sob o nº **[A DEFINIR]** e tem como **Responsável Técnico médico** o(a) Dr(a). **[A DEFINIR: nome]**, CRM **[A DEFINIR: nº/UF]**.
+1.2. **Transparência sobre a Resolução CFM nº 2.314/2022, art. 17.** Essa norma exige que empresas de telemedicina se inscrevam no CRM do Estado da sede e indiquem um médico responsável técnico. A BION, nesta versão, **não cumpre esse requisito**, porque é mantida por pessoa física e ainda não tem CNPJ nem RT. Essa informação é prestada de forma clara para que você saiba quem presta o atendimento (o médico que você escolhe) e quem oferece só a tecnologia (o mantenedor). Essa transparência **reduz o risco** de se atribuir à Plataforma um erro médico, **mas não elimina** o risco regulatório de operar uma plataforma de telemedicina sem inscrição no CRM e sem RT. **[VALIDAR COM ADVOGADO.]** Quando o mantenedor constituir pessoa jurídica, obtiver CNPJ e, se for o caso, indicar RT e promover a inscrição no CRM, estes Termos serão atualizados e será pedido **novo aceite** (cláusula 26).
 
-1.3. Encarregado(a) pelo tratamento de dados pessoais (DPO): **[A DEFINIR: nome]** — **[A DEFINIR: e-mail do Encarregado]**.
+1.3. **Canal do titular / encarregado** pelo tratamento de dados pessoais (LGPD, arts. 18 e 41): **[E-MAIL DO ENCARREGADO/CANAL DO TITULAR]**. O prazo para responder a pedidos de **confirmação de tratamento e de acesso** é de **15 (quinze) dias**. Os demais direitos e o modo de exercê-los estão na Política de Privacidade e na cláusula 24.
 
 # 2. Definições
 
@@ -73,17 +73,20 @@ lang: pt-BR
 
 # 3. O que a BION faz e o que não faz
 
-3.1. **A BION faz:** oferece a tecnologia para você encontrar médicos, agendar, pagar, fazer a teleconsulta por vídeo, receber documentos, conversar com o médico, organizar seu histórico e usar ferramentas de acompanhamento. **Quem presta o serviço médico é o médico** que atende a consulta, em nome próprio e sob sua responsabilidade técnica. O pagamento é feito pela Stripe direto na conta do médico, e a BION, como intermediadora, fica só com a sua comissão.
+3.1. **A BION faz:** oferece o software e a tecnologia para você encontrar médicos cadastrados, agendar, pagar, fazer a teleconsulta por vídeo, receber documentos, conversar com o médico, organizar seu histórico e usar ferramentas de acompanhamento. **Quem presta o serviço médico é exclusivamente o médico** que atende a consulta, em nome próprio e sob sua responsabilidade técnica. O pagamento é feito pela Stripe **direto na conta conectada do médico**. A BION, como intermediadora tecnológica, recebe apenas **10% do valor** como **remuneração pelo uso do software, pela intermediação tecnológica e pelo processamento do pagamento**, e **não como honorário médico nem como participação nos honorários**.
 
 3.2. **A BION não faz:**
 
-a) **não presta serviço médico**, não diagnostica, não prescreve e não interfere na decisão do médico (autonomia técnica — Código de Ética Médica, Princípios Fundamentais VII e VIII, e Res. CFM 2.314/2022);  
-b) **não é plano de saúde**, operadora ou seguro, e não oferece cobertura, carência ou rede credenciada;  
-c) **não é serviço de urgência ou emergência**;  
-d) **não vende medicamentos** e não indica farmácias;  
-e) não garante resultado de tratamento — a medicina é uma atividade de meio, e não de resultado.
+a) **não presta serviço médico**, não diagnostica, não prescreve e não interfere na conduta, no diagnóstico, na prescrição ou no tempo de consulta do médico (autonomia técnica — Código de Ética Médica, Princípios Fundamentais VII e VIII, e Res. CFM 2.314/2022);  
+b) **não é clínica, consultório, hospital nem estabelecimento de saúde**, e **não tem diretor técnico ou responsável técnico médico**;  
+c) **não indica, não recomenda de forma vinculante e não escolhe o médico por você** — a escolha é só sua, entre os profissionais cadastrados e disponíveis;  
+d) **não é a anunciante do serviço médico**: o perfil e a publicidade de cada médico são de responsabilidade do próprio médico (Res. CFM 2.336/2023); a Plataforma não se apresenta como quem atende;  
+e) **não é plano de saúde**, operadora ou seguro, e não oferece cobertura, carência ou rede credenciada;  
+f) **não é serviço de urgência ou emergência**;  
+g) **não vende medicamentos** e não indica farmácias;  
+h) não garante resultado de tratamento — a medicina é uma atividade de meio, e não de resultado.
 
-3.3. O médico é escolhido **por você**, entre os profissionais disponíveis. O perfil de cada médico mostra nome, CRM, especialidade, formação, idiomas, valor da consulta e avaliações. A BION confere o CRM no cadastro, mas a veracidade das demais informações do perfil é de responsabilidade do próprio médico.
+3.3. O médico é escolhido **por você**, entre os profissionais disponíveis. O perfil de cada médico mostra nome, CRM, especialidade, formação, idiomas, valor da consulta e avaliações. A BION confere o CRM no cadastro, mas a veracidade das demais informações do perfil e o cumprimento das regras de publicidade médica são de responsabilidade do próprio médico.
 
 # 4. Emergências
 
@@ -216,7 +219,7 @@ As funcionalidades podem mudar; mudanças relevantes serão informadas (cláusul
 
 15.2. **Forma de pagamento.** O pagamento é feito com cartão de crédito, pela Stripe. Quando houver reembolso, o valor é devolvido no mesmo cartão usado no pagamento. O estorno é pedido na hora, mas pode levar alguns dias, ou até a próxima fatura, para aparecer, conforme o prazo do banco emissor. O valor devolvido é o valor integral devido, sem desconto de taxas.
 
-15.3. **Para quem vai o dinheiro.** O pagamento é feito só com cartão, pela Stripe, e vai direto para a conta Stripe do médico que atende a consulta. A BION recebe apenas a sua comissão de 10% pela intermediação. Na fatura do cartão, a cobrança aparece com o nome de cobrança padronizado no cadastro do médico na Stripe: **"BION" + o nome do médico**. Mesmo assim, é a BION que opera a cobrança e os reembolsos pela Plataforma, e você pode tratar de qualquer cobrança ou reembolso diretamente com o suporte da BION; o médico responde pelo serviço médico, e ambos respondem perante você nos termos do Código de Defesa do Consumidor. **Pix não é aceito.** O recibo ou a nota fiscal da consulta é emitido pelo médico.
+15.3. **Para quem vai o dinheiro.** O pagamento é feito só com cartão, pela Stripe, e vai **direto para a conta Stripe conectada do médico** que atende a consulta. A BION recebe apenas **10% do valor**, como remuneração pelo uso do software, pela intermediação tecnológica e pelo processamento do pagamento, e **não como honorário médico**. Na fatura do cartão, a cobrança costuma aparecer com o nome da **conta conectada do médico**; o padrão cadastrado é **"BION" + o nome do médico**. Mesmo assim, é a BION que opera a cobrança e os reembolsos pela Plataforma, e você pode tratar de qualquer cobrança ou reembolso diretamente com o suporte da BION (**[E-MAIL DE CONTATO]**); o médico responde pelo serviço médico, e o médico e o mantenedor respondem perante você nos termos do Código de Defesa do Consumidor. **Pix não é aceito.** O recibo ou a nota fiscal da consulta é emitido pelo médico. **Disponibilidade da Stripe:** a telemedicina é ramo de pagamento restrito, e a conta da plataforma de pessoa física depende de aprovação da Stripe. A BION **não garante** essa aprovação nem a continuidade do processamento. Se a Stripe recusar, limitar ou encerrar o serviço, novas cobranças poderão ser interrompidas, com aviso a você; reembolsos já devidos continuam sendo processados na medida em que o meio de pagamento permitir.
 
 15.4. **Confirmação.** A consulta só é confirmada depois que o pagamento for confirmado pelo gateway.
 
@@ -260,13 +263,13 @@ Resumo (as regras completas estão na **Política de Cancelamento, Reembolso e R
 
 # 21. Responsabilidades
 
-21.1. **Da BION:** manter a Plataforma funcionando com diligência; proteger seus dados; conferir o CRM dos médicos no cadastro e periodicamente; processar pagamentos e reembolsos pela Stripe conforme estes Termos; prestar informação clara; atender suas solicitações.
+21.1. **Do mantenedor / da BION:** manter a Plataforma funcionando com diligência; proteger seus dados; conferir o CRM dos médicos no cadastro e periodicamente; processar pagamentos e reembolsos pela Stripe conforme estes Termos, **quando esse processamento estiver disponível**; prestar informação clara; atender suas solicitações e os pedidos da LGPD no prazo da cláusula 1.3.
 
-21.2. **Do médico:** o atendimento, o diagnóstico, a prescrição, os documentos, o prontuário e o sigilo profissional, conforme o Código de Ética Médica e as normas do CFM.
+21.2. **Do médico:** o atendimento, o diagnóstico, a prescrição, os documentos, o prontuário, o sigilo profissional e a própria publicidade, conforme o Código de Ética Médica e as normas do CFM (inclusive as Resoluções CFM 2.314/2022 e 2.336/2023).
 
 21.3. **Sua:** informar dados verdadeiros; seguir as orientações médicas; buscar atendimento presencial ou de emergência quando orientado; manter seu aparelho e sua senha seguros; respeitar estes Termos.
 
-21.4. **Limites.** A BION não responde pelo ato médico praticado pelo profissional, que tem autonomia técnica, nem por falhas causadas exclusivamente por você ou por terceiros (como queda da sua internet ou bloqueio de câmera), **ressalvados os direitos garantidos pelo Código de Defesa do Consumidor**, que não são afastados por estes Termos. Nada aqui limita a responsabilidade da BION por dolo, culpa grave ou por danos que ela mesma causar.
+21.4. **Limites e o que não se limita.** A BION não pratica ato médico e, no que a lei permitir, não responde pelo ato médico praticado pelo profissional, que tem autonomia técnica, nem por falhas causadas exclusivamente por você ou por terceiros (como queda da sua internet ou bloqueio de câmera). **Nada nestes Termos exclui, reduz ou afasta a responsabilidade do mantenedor ou da Plataforma perante você, na qualidade de consumidor** (Código de Defesa do Consumidor, arts. 25 e 51), inclusive por falha na prestação do serviço da Plataforma, na cobrança ou no reembolso que ela opera, por defeito de informação ou por dano que ela mesma causar. Também não se limita a responsabilidade por dolo ou culpa grave.
 
 # 22. Disponibilidade e falhas técnicas
 
@@ -288,23 +291,25 @@ O tratamento dos seus dados segue a **Política de Privacidade** e a **Política
 
 # 25. Propriedade intelectual
 
-A marca BION, o software, o layout, os textos e os demais elementos da Plataforma pertencem à BION ou a seus licenciantes. Você recebe uma licença pessoal, gratuita, não exclusiva e revogável para usar a Plataforma conforme estes Termos. Seus dados e os documentos médicos emitidos para você não são propriedade da BION.
+A marca BION, o software, o layout, os textos e os demais elementos da Plataforma pertencem ao mantenedor da BION ou a seus licenciantes. Você recebe uma licença pessoal, gratuita, não exclusiva e revogável para usar a Plataforma conforme estes Termos. Seus dados e os documentos médicos emitidos para você não são propriedade da BION.
 
 # 26. Alterações destes Termos
 
-Podemos alterar estes Termos. Mudanças relevantes serão avisadas no app com pelo menos **[A DEFINIR: 15] dias** de antecedência, salvo exigência legal. Se você não concordar, pode excluir sua conta. Alterações não atingem consultas já pagas, que seguem as regras vigentes na data do pagamento.
+Podemos alterar estes Termos. Mudanças relevantes serão avisadas no app com pelo menos **[A DEFINIR: 15] dias** de antecedência, salvo exigência legal, e, quando a mudança for material, será pedido **novo aceite**. Se você não concordar, pode excluir sua conta. Alterações não atingem consultas já pagas, que seguem as regras vigentes na data do pagamento. **Transição:** quando o mantenedor constituir pessoa jurídica, obtiver CNPJ ou indicar médico responsável técnico, estes Termos serão atualizados para refletir essa nova realidade e será pedido **novo aceite**.
 
 # 27. Atendimento ao consumidor
 
-27.1. Canal de atendimento: **[A DEFINIR: e-mail / formulário / telefone]**, e chamados de suporte pelo próprio app. Responderemos em até **[A DEFINIR: 5 dias úteis]**.
+27.1. Canal de atendimento ao consumidor: **[E-MAIL DE CONTATO]**, e chamados de suporte pelo próprio app. Responderemos em até **[A DEFINIR: 5 dias úteis]**.
 
-27.2. Você também pode recorrer ao **Procon**, ao **consumidor.gov.br** e aos demais órgãos de defesa do consumidor.
+27.2. **Canal do titular de dados** (LGPD, arts. 18 e 41): **[E-MAIL DO ENCARREGADO/CANAL DO TITULAR]**. Pedidos de confirmação de tratamento e de acesso serão respondidos em até **15 (quinze) dias**. Correspondência: **[ENDEREÇO PARA CORRESPONDÊNCIA]**.
 
-27.3. Questões éticas sobre o atendimento médico podem ser levadas ao **Conselho Regional de Medicina** do seu Estado.
+27.3. Você também pode recorrer ao **Procon**, ao **consumidor.gov.br** e aos demais órgãos de defesa do consumidor, e à **ANPD** em matéria de proteção de dados.
+
+27.4. Questões éticas sobre o atendimento médico podem ser levadas ao **Conselho Regional de Medicina** do seu Estado.
 
 # 28. Lei aplicável e foro
 
-Estes Termos seguem a lei brasileira. Para ações movidas por você ou contra você, como consumidor, é competente o **foro do seu domicílio** (CDC, art. 101, I). Fica eleito o foro da comarca de **[A DEFINIR: cidade/UF da sede]** apenas para os casos em que a lei permitir.
+Estes Termos seguem a lei brasileira. Para ações relacionadas a estes Termos, é competente o **foro do domicílio do paciente**, na qualidade de consumidor (CDC, art. 101, I). **Não se elege outro foro** para afastar esse direito.
 
 # 29. Disposições gerais
 
@@ -317,6 +322,6 @@ Se alguma cláusula for considerada inválida, as demais continuam valendo. A to
 - Política de Cancelamento, Reembolso e Retorno  
 - Política de Cookies  
 
-Contato: **[A DEFINIR: e-mail de atendimento]** · Encarregado (DPO): **[A DEFINIR: e-mail do Encarregado]**
+Contato: **[E-MAIL DE CONTATO]** · Canal do titular / encarregado: **[E-MAIL DO ENCARREGADO/CANAL DO TITULAR]** · Correspondência: **[ENDEREÇO PARA CORRESPONDÊNCIA]**
 
 *Vigente a partir do seu aceite*

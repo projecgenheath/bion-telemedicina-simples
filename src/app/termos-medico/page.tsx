@@ -9,7 +9,7 @@ export default function PaginaTermosMedico() {
   return (
     <PaginaDocumentoJuridico
       versao={VERSAO_TERMOS_MEDICO}
-      data="2026-11-03"
+      data="2026-11-09"
       arquivos={["02-termos-medico-contrato-intermediacao.md"]}
     />
   );

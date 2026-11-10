@@ -63,6 +63,6 @@ e) você poderá mudar sua escolha a qualquer momento.
 
 # 7. Contato
 
-Encarregado (DPO): **[A DEFINIR: e-mail do Encarregado]**. Ver também a Política de Privacidade.
+Canal do titular / encarregado: **[E-MAIL DO ENCARREGADO/CANAL DO TITULAR]**. Ver também a Política de Privacidade.
 
 *Versão provisória v0 — Vigente a partir do seu aceite.*
