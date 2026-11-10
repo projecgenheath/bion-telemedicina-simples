@@ -23,6 +23,8 @@ export function adminBaixaArquivoClinico(role: Papel | string): boolean {
 }
 
 type DocumentoClinico = {
+  tipo?: string;
+  titulo?: string;
   conteudo: string;
   medicamento?: string | null;
   posologia?: string | null;
@@ -42,20 +44,45 @@ export function documentoParaPapel<T extends DocumentoClinico>(doc: T, role: Pap
   // nascimento do paciente EM CLARO (vão no PDF da receita), furando a
   // máscara do painel e o "revelar com motivo" auditado. O admin não gera
   // o PDF: os dois campos saem.
+  // Decisão do Alisson (09/11): o título pode trazer o conteúdo ("Solicitação
+  // — Hemograma completo + PCR"); o admin vê só o rótulo do tipo.
+  if ("titulo" in out) (out as { titulo?: string }).titulo = rotuloTipoDocumento(doc.tipo);
   delete (out as { pacienteCpf?: unknown }).pacienteCpf;
   delete (out as { pacienteNascimento?: unknown }).pacienteNascimento;
   return out;
 }
 
+/** Rótulo genérico do tipo de documento (o que o admin vê no lugar do título). */
+export function rotuloTipoDocumento(tipo: string | null | undefined): string {
+  switch (tipo) {
+    case "receita":
+      return "Receita";
+    case "atestado":
+      return "Atestado";
+    case "exame":
+      return "Exame";
+    case "exame_solicitado":
+      return "Solicitação";
+    case "laudo":
+      return "Laudo";
+    default:
+      return "Documento";
+  }
+}
+
 /**
  * Consulta como o admin vê (auditoria admin 09/11): o resumo do médico
- * ("Resumo da consulta" da sala) é conteúdo clínico e nenhuma tela do admin
- * o usa — sai. Agenda, status, pagamento e o motivo informado no
- * agendamento continuam.
+ * ("Resumo da consulta" da sala) e o motivo informado pelo paciente no
+ * agendamento (decisão do Alisson, 09/11) são conteúdo clínico — saem.
+ * Agenda, status e pagamento continuam.
  */
-export function consultaParaPapel<T extends { resumoMedico?: string | null }>(c: T, role: Papel | string): T {
-  if (role !== "ADMIN" || c.resumoMedico === undefined) return c;
+export function consultaParaPapel<T extends { resumoMedico?: string | null; motivoConsulta?: string | null }>(
+  c: T,
+  role: Papel | string,
+): T {
+  if (role !== "ADMIN") return c;
   const out: T = { ...c };
   delete out.resumoMedico;
+  delete out.motivoConsulta;
   return out;
 }
