@@ -505,6 +505,12 @@ model Lembrete {
   medicamentoEmUsoId String?
   medicamentoEmUso   MedicamentoEmUso? @relation(fields: [medicamentoEmUsoId], references: [id], onDelete: SetNull)
   documentoId        String?
+  // 20261104a / 20261110a: colunas já em produção (timestamp without time zone,
+  // precisão 3, anuláveis — sem @db.Timestamptz). diaSemana (int4 anulável)
+  // também já existe no banco e não estava no model.
+  feitoEm         DateTime?
+  ultimoDisparoEm DateTime?
+  diaSemana       Int?
 
   @@index([medicamentoEmUsoId])
 }

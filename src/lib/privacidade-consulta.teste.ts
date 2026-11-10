@@ -2,7 +2,7 @@
  * Testes da privacidade da consulta (lib/privacidade-consulta.ts).
  * Rodar: npx tsx src/lib/privacidade-consulta.teste.ts
  */
-import { adminBaixaArquivoClinico, adminVeAnamnese, documentoParaPapel } from "./privacidade-consulta";
+import { adminBaixaArquivoClinico, adminVeAnamnese, consultaParaPapel, documentoParaPapel, rotuloTipoDocumento } from "./privacidade-consulta";
 
 let ok = 0;
 let falhas = 0;
@@ -35,6 +35,37 @@ igual("admin: metadados ficam", [doAdmin.id, doAdmin.tipo, doAdmin.titulo, doAdm
 igual("admin: não muta o original", doc.conteudo, "Afastamento por 3 dias");
 igual("médico recebe igual", documentoParaPapel(doc, "MEDICO"), doc);
 igual("paciente recebe igual", documentoParaPapel(doc, "PACIENTE"), doc);
+
+// Auditoria admin 09/11: CPF e nascimento do paciente não vão ao admin pelo documento.
+const docComPii = { ...doc, pacienteCpf: "123.456.789-00", pacienteNascimento: "1994-03-15" };
+const docAdminPii = documentoParaPapel(docComPii, "ADMIN");
+igual("admin: CPF do paciente sai do documento", "pacienteCpf" in docAdminPii, false);
+igual("admin: nascimento do paciente sai do documento", "pacienteNascimento" in docAdminPii, false);
+igual("admin: não muta o original (CPF)", docComPii.pacienteCpf, "123.456.789-00");
+igual("médico recebe CPF/nascimento (PDF da receita)", documentoParaPapel(docComPii, "MEDICO"), docComPii);
+
+const consulta = { id: "c1", status: "concluida", motivoConsulta: "Dor de cabeça", resumoMedico: "Conduta: ..." };
+const consultaAdmin = consultaParaPapel(consulta, "ADMIN");
+igual("admin: resumo do médico sai da consulta", "resumoMedico" in consultaAdmin, false);
+igual("admin: motivo da consulta sai (decisão 09/11)", "motivoConsulta" in consultaAdmin, false);
+igual("admin: id e status ficam", [consultaAdmin.id, consultaAdmin.status], ["c1", "concluida"]);
+igual("admin: consulta sem os campos continua igual", consultaParaPapel({ id: "c2", status: "confirmada" }, "ADMIN"), { id: "c2", status: "confirmada" });
+igual("admin: não muta a consulta original", consulta.resumoMedico, "Conduta: ...");
+igual("médico recebe a consulta igual", consultaParaPapel(consulta, "MEDICO"), consulta);
+igual("paciente recebe a consulta igual", consultaParaPapel(consulta, "PACIENTE"), consulta);
+
+// Decisão do Alisson (09/11): título do documento vira só o rótulo do tipo para o admin.
+const solicitacao = { ...doc, tipo: "exame_solicitado", titulo: "Solicitação — Hemograma completo + PCR" };
+igual("admin: título vira o rótulo do tipo", documentoParaPapel(solicitacao, "ADMIN").titulo, "Solicitação");
+igual("admin: não muta o título original", solicitacao.titulo, "Solicitação — Hemograma completo + PCR");
+igual("médico recebe o título original", documentoParaPapel(solicitacao, "MEDICO").titulo, "Solicitação — Hemograma completo + PCR");
+igual("paciente recebe o título original", documentoParaPapel(solicitacao, "PACIENTE").titulo, "Solicitação — Hemograma completo + PCR");
+igual(
+  "rótulos por tipo",
+  ["receita", "atestado", "exame", "exame_solicitado", "laudo", "outro", undefined].map((t) => rotuloTipoDocumento(t)),
+  ["Receita", "Atestado", "Exame", "Solicitação", "Laudo", "Documento", "Documento"],
+);
+igual("admin: receita com título de remédio vira 'Receita'", documentoParaPapel({ ...doc, tipo: "receita", titulo: "Receita — Losartana 50 mg" }, "ADMIN").titulo, "Receita");
 
 console.log(`\n${ok} ok, ${falhas} falha(s)`);
 process.exit(falhas ? 1 : 0);

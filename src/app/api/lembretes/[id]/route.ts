@@ -37,7 +37,7 @@ export async function PATCH(
     });
     const feitoEm = body.feito ? new Date() : null;
     await db.lembrete
-      .update({ where: { id }, data: { feitoEm } as Record<string, unknown> })
+      .update({ where: { id }, data: { feitoEm } })
       .catch(() => null);
     return ok({
       lembrete: {
