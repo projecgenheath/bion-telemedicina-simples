@@ -91,7 +91,8 @@ export function NavegacaoPaciente({
   oculto?: boolean;
 }) {
   // Indicador deslizante da pílula inferior (.bion-indicador): mede o
-  // pontinho ativo e desliza até ele em 180 ms. Só visual — a navegação
+  // pontinho ativo e desliza até ele em 180 ms, por cima dos pontinhos e
+  // por baixo do contador de não lidas. Só visual — a navegação
   // continua nos botões. Sem medida (1º quadro), o pontinho ativo pinta-se
   // sozinho, como antes.
   const navRef = useRef<HTMLElement>(null);
@@ -156,7 +157,7 @@ export function NavegacaoPaciente({
         {indicador ? (
           <span
             aria-hidden
-            className="bion-indicador pointer-events-none absolute left-0 top-1/2 -mt-1 h-2 rounded-full bg-sky-300"
+            className="bion-indicador pointer-events-none absolute left-0 top-1/2 z-[5] -mt-1 h-2 rounded-full bg-sky-300"
             style={{ width: indicador.w, transform: `translateX(${indicador.x}px)` }}
           />
         ) : null}
@@ -184,7 +185,7 @@ export function NavegacaoPaciente({
                 }`}
               />
               {docs && naoLidas > 0 ? (
-                <span className="absolute -top-1.5 -right-1.5 min-w-5 h-5 px-1 rounded-full bg-rose-600 text-xs font-black leading-5 text-center text-white">
+                <span className="absolute -top-1.5 -right-1.5 z-10 min-w-5 h-5 px-1 rounded-full bg-rose-600 text-xs font-black leading-5 text-center text-white">
                   {naoLidas > 9 ? "9+" : naoLidas}
                 </span>
               ) : null}
