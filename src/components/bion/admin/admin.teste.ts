@@ -231,5 +231,17 @@ const centroSrc = readFileSync(new URL("./comando/CentroComando.tsx", import.met
 verdade("Decisões e Repasses ocupam 1 col no tablet", (centroSrc.match(/col-span-2 md:col-span-1/g) || []).length >= 2);
 verdade("agenda e gráfico lado a lado no tablet", /md:grid-cols-3/.test(centroSrc) && /md:col-span-2/.test(centroSrc));
 
+
+const tabelaSrc = readFileSync(new URL("./ui/TabelaAdmin.tsx", import.meta.url), "utf8");
+verdade("coluna secundária some abaixo de 1440", /\.ba-col-secundaria\s*\{[^}]*display:\s*none/.test(css));
+verdade("coluna secundária aparece em 1440", /@media \(min-width: 1440px\)/.test(css) && /\.ba-col-secundaria\s*\{[^}]*display:\s*table-cell/.test(css));
+verdade("TabelaAdmin não usa o xl (1280) para secundária", !/hidden xl:table-cell/.test(tabelaSrc) && /ba-col-secundaria/.test(tabelaSrc));
+
+const agendaSrc = readFileSync(new URL("./agendamentos/AgendamentosModulo.tsx", import.meta.url), "utf8");
+verdade("filtros do celular abrem numa folha", /<SheetAdmin[\s\S]*Filtros da agenda/.test(agendaSrc) && /ListFilter/.test(agendaSrc));
+verdade("alvos de toque dos filtros têm 44px", /ba-aba !min-h-11/.test(agendaSrc) && /ba-botao ba-botao-secundario !min-h-11/.test(agendaSrc));
+verdade("Status e Pago na mesma coluna da agenda", /id: "status"/.test(agendaSrc) && !/id: "pago"/.test(agendaSrc));
+verdade("KPIs da agenda em 2 colunas no celular", /grid grid-cols-2 lg:grid-cols-5/.test(agendaSrc));
+
 console.log(`${ok} ok, ${falhas} falha(s)`);
 if (falhas) process.exit(1);

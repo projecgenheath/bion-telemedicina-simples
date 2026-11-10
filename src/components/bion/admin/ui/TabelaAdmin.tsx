@@ -10,7 +10,7 @@ export type ColunaAdmin<T> = {
   /** "num" alinha à direita com algarismos tabulares (valores, contagens). */
   tipo?: "texto" | "num";
   largura?: string;
-  /** Esconde a coluna abaixo de 1280 px (tabelas largas no tablet). */
+  /** Esconde a coluna abaixo de 1440 px (em 1280 o Valor da agenda era cortado). */
   secundaria?: boolean;
 };
 
@@ -61,7 +61,7 @@ export function TabelaAdmin<T>({
                 <th
                   key={c.id}
                   scope="col"
-                  className={`${c.tipo === "num" ? "ba-num" : ""} ${c.secundaria ? "hidden xl:table-cell" : ""}`}
+                  className={`${c.tipo === "num" ? "ba-num" : ""} ${c.secundaria ? "ba-col-secundaria" : ""}`}
                   style={c.largura ? { width: c.largura } : undefined}
                 >
                   {c.titulo}
@@ -82,7 +82,7 @@ export function TabelaAdmin<T>({
                   onKeyDown={(e) => aoTeclar(e, l)}
                 >
                   {colunas.map((c) => (
-                    <td key={c.id} className={`${c.tipo === "num" ? "ba-num" : ""} ${c.secundaria ? "hidden xl:table-cell" : ""}`}>
+                    <td key={c.id} className={`${c.tipo === "num" ? "ba-num" : ""} ${c.secundaria ? "ba-col-secundaria" : ""}`}>
                       {c.render(l)}
                     </td>
                   ))}
