@@ -20,7 +20,7 @@ export function ChatListaMensagens({
             className={`max-w-[85%] px-4 py-3 text-sm leading-relaxed whitespace-pre-line ${
               m.remetente === "usuario"
                 ? "bp-acao rounded-3xl rounded-br-md"
-                : `bp-glass rounded-3xl rounded-bl-md text-bion-ink dark:text-bion-paper ${m.tipo === "erro" ? "border-2 border-amber-500/60" : ""} ${m.tipo?.startsWith("sucesso") ? "border-2 border-emerald-500/60" : ""} ${m.tipo === "anamnese" ? "border-l-4 border-l-bion-sea dark:border-l-[#96A5FF]" : ""}`
+                : `bp-glass rounded-3xl rounded-bl-md text-bion-ink dark:text-bion-paper ${m.tipo === "erro" ? "border-2 border-amber-500/60" : ""} ${m.tipo?.startsWith("sucesso") ? "border-2 border-emerald-500/60" : ""} ${m.tipo === "anamnese" ? "border-l-4 border-l-bion-sea dark:border-l-[#C4B5FD]" : ""}`
             }`}
           >
             {m.texto.split("**").map((parte, j) =>

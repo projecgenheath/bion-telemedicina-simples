@@ -49,7 +49,7 @@ export function etiquetaConsulta(e: EntradaEtiqueta): EtiquetaConsulta {
 export const CLASSE_ETIQUETA: Record<TomEtiqueta, string> = {
   pagamento: "bg-amber-500/15 text-amber-800 dark:text-amber-200",
   sala: "bg-emerald-700 text-white",
-  remarcacao: "bg-bion-sea/12 text-bion-sea dark:bg-[#96A5FF]/15 dark:text-[#d4d9ff]",
+  remarcacao: "bg-bion-sea/12 text-bion-sea dark:bg-[#C4B5FD]/15 dark:text-[#DDD6FE]",
   triagem: "bg-amber-500/15 text-amber-800 dark:text-amber-200",
   ok: "bg-emerald-600/15 text-emerald-800 dark:text-emerald-200",
   neutro: "bg-bion-ink/8 text-bion-ink dark:bg-white/10 dark:text-bion-paper",

@@ -67,7 +67,7 @@ export function PedidosMedicao({ consultaId, variante = "app" }: { consultaId?: 
       <div
         className={
           escuroErro
-            ? "pointer-events-auto mx-auto w-full max-w-sm rounded-2xl border border-white/15 bg-slate-900/85 p-4 text-white shadow-xl backdrop-blur"
+            ? "pointer-events-auto mx-auto w-full max-w-sm rounded-2xl border border-white/15 bg-[#160e2c]/85 p-4 text-white shadow-xl backdrop-blur"
             : "bp-glass p-5"
         }
         role="alert"
@@ -81,7 +81,7 @@ export function PedidosMedicao({ consultaId, variante = "app" }: { consultaId?: 
           type="button"
           onClick={() => void carregar()}
           className={`mt-3 rounded-full px-4 py-2 text-xs font-bold ${
-            escuroErro ? "bg-white text-slate-900" : "bg-bion-ink text-bion-paper dark:bg-bion-paper dark:text-bion-ink"
+            escuroErro ? "bg-white text-[#1a1040]" : "bg-bion-ink text-bion-paper dark:bg-bion-paper dark:text-bion-ink"
           }`}
         >
           Tentar de novo
@@ -113,7 +113,7 @@ export function PedidosMedicao({ consultaId, variante = "app" }: { consultaId?: 
           key={p.id}
           className={
             escuro
-              ? "rounded-2xl border border-white/15 bg-slate-900/85 p-4 text-white shadow-xl backdrop-blur"
+              ? "rounded-2xl border border-white/15 bg-[#160e2c]/85 p-4 text-white shadow-xl backdrop-blur"
               : "bp-glass p-5"
           }
         >
@@ -130,7 +130,7 @@ export function PedidosMedicao({ consultaId, variante = "app" }: { consultaId?: 
                 type="button"
                 onClick={() => setAberto(p.id)}
                 className={`shrink-0 rounded-full px-4 py-2 text-xs font-bold ${
-                  escuro ? "bg-white text-slate-900" : "bg-bion-ink text-bion-paper dark:bg-bion-paper dark:text-bion-ink"
+                  escuro ? "bg-white text-[#1a1040]" : "bg-bion-ink text-bion-paper dark:bg-bion-paper dark:text-bion-ink"
                 }`}
               >
                 Informar
@@ -240,7 +240,7 @@ function FormPedido({
           type="submit"
           disabled={enviando}
           className={`inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-bold disabled:opacity-60 ${
-            escuro ? "bg-white text-slate-900" : "bg-bion-ink text-bion-paper dark:bg-bion-paper dark:text-bion-ink"
+            escuro ? "bg-white text-[#1a1040]" : "bg-bion-ink text-bion-paper dark:bg-bion-paper dark:text-bion-ink"
           }`}
         >
           {enviando && <Loader2 className="size-3.5 animate-spin" aria-hidden />} Enviar ao médico

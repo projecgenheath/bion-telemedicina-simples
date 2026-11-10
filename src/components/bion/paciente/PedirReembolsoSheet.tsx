@@ -271,6 +271,6 @@ export function EtiquetaStatus({ status }: { status: string; claro?: boolean }) 
       ? "bg-emerald-600/15 text-emerald-800 dark:text-emerald-200"
       : rotulo.tom === "erro"
         ? "bg-red-600/10 text-red-800 dark:bg-red-400/15 dark:text-red-300"
-        : "bg-bion-sea/12 text-bion-sea dark:bg-[#96A5FF]/15 dark:text-[#d4d9ff]";
+        : "bg-bion-sea/12 text-bion-sea dark:bg-[#C4B5FD]/15 dark:text-[#DDD6FE]";
   return <span className={`text-xs font-bold px-2 py-1 rounded-full text-right ${cor}`}>{rotulo.texto}</span>;
 }

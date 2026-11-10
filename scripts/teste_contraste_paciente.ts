@@ -95,8 +95,8 @@ const PAPER = hex("#f4f1fd"); // --bion-paper (escopo .bp-app-paciente)
 const SEA = hex("#24058D"); // --bion-sea = roxo da marca no paciente
 const DEEP = hex("#3D1AAE"); // --bion-deep (início do degradê)
 const FIM = hex("#1C0470"); // fim do degradê do cartão de saúde
-const LAV = hex("#96A5FF"); // destaque no escuro
-const LAV_TEXTO = hex("#d4d9ff"); // texto de etiqueta roxa no escuro
+const LAV = hex("#C4B5FD"); // destaque no escuro
+const LAV_TEXTO = hex("#DDD6FE"); // texto de etiqueta roxa no escuro
 const TEXTO = 4.5;
 const GRAFICO = 3; // títulos grandes, ícones, linhas de gráfico, pontos de navegação
 
@@ -154,8 +154,8 @@ for (const modo of ["Clean", "Dark"] as const) {
       par(modo, `etiqueta âmbar (${onde})`, tw("amber-200"), chip("amber-500", 0.15));
       par(modo, `etiqueta roxa (${onde})`, LAV_TEXTO, mix(LAV, 0.15, g));
       par(modo, `botão Cancelar (${onde})`, tw("red-300"), chip("red-400", 0.15));
-      par(modo, `link Editar / chips #96A5FF (${onde})`, LAV, g);
-      par(modo, `chip #96A5FF/10 · texto #96A5FF (${onde})`, LAV, mix(LAV, 0.1, g));
+      par(modo, `link Editar / chips #C4B5FD (${onde})`, LAV, g);
+      par(modo, `chip #C4B5FD/10 · texto #C4B5FD (${onde})`, LAV, mix(LAV, 0.1, g));
       par(modo, `chip neutro white/10 (${onde})`, texto, mix(BRANCO, 0.1, g));
     } else {
       par(modo, `etiqueta verde (${onde})`, tw("emerald-800"), chip("emerald-600", 0.15));
@@ -236,7 +236,7 @@ for (const modo of ["Clean", "Dark"] as const) {
   for (const [onde, fundo] of [["fundo claro", cheio("bpp-s1-topo")], ["fundo escuro", cheio("bpp-s3-base")]] as [string, RGB][]) {
     const pilula = mix(tw("zinc-950"), 0.85, fundo);
     par(modo, `pontinhos (${onde}) · ponto inativo white/70`, mix(BRANCO, 0.7, pilula), pilula, GRAFICO);
-    par(modo, `pontinhos (${onde}) · ponto ativo #96A5FF`, LAV, pilula, GRAFICO);
+    par(modo, `pontinhos (${onde}) · ponto ativo #C4B5FD`, LAV, pilula, GRAFICO);
     par(modo, `pontinhos (${onde}) · seta white/70`, mix(BRANCO, 0.7, pilula), pilula, GRAFICO);
   }
 }
@@ -292,7 +292,7 @@ for (const [onde, bg] of [["início", DEEP], ["meio", SEA], ["fim", FIM]] as [st
   const alerta = mix(tw("amber-300"), 0.2, bg);
   par("Ambos", `cartão de saúde (${onde}) · chip de alergia amber-100`, tw("amber-100"), alerta);
   par("Ambos", `cartão de saúde (${onde}) · chip neutro branco sobre white/15`, BRANCO, mix(BRANCO, 0.15, bg));
-  // Reflexo lavanda do canto (rgba(150,165,255,.25)) por cima do degradê
+  // Reflexo lavanda do canto (rgba(196, 181, 253,.25)) por cima do degradê
   const reflexo = mix(LAV, 0.25, bg);
   par("Ambos", `cartão de saúde (${onde}) · texto white/80 sob o reflexo`, mix(BRANCO, 0.8, reflexo), reflexo);
 }
