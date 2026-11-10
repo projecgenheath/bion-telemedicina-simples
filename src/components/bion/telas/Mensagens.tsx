@@ -88,12 +88,6 @@ export function Mensagens() {
     });
   }, [contatos, mensagens]);
 
-  // Se o contato escolhido saiu da lista, volta à seleção automática
-  // (ajuste na renderização, evita setState síncrono no efeito).
-  if (ativaId !== null && !conversas.some((c) => c.contato.id === ativaId)) {
-    setAtivaId(null);
-  }
-
   const ativa = conversas.find((c) => c.contato.id === ativaId)?.contato ?? conversas[0]?.contato ?? null;
 
   const threadAtiva = useMemo(() => {
@@ -105,6 +99,10 @@ export function Mensagens() {
 
   /* Abre a conversa e marca como lida ao chegar mensagem nova com a conversa aberta */
   const naoLidasAtivas = threadAtiva.filter((m) => !m.minha && !m.lida).length;
+  useEffect(() => {
+    if (!ativa) return;
+    if (!conversas.some((c) => c.contato.id === ativa.id)) setAtivaId(null);
+  }, [conversas, ativa]);
 
   useEffect(() => {
     if (ativa && naoLidasAtivas > 0) marcarConversaLida(ativa.id);
