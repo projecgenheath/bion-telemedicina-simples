@@ -345,7 +345,10 @@ html.densidade-grande {
 
     .bion-surgir,
     .bion-surgir-lista > * {
-      animation: bion-surgir 180ms ease-out both;
+      /* "backwards" (e não "both"): o estado inicial vale durante o atraso,
+         mas ao terminar a animação solta o transform, e o :active do
+         .bion-toque volta a funcionar no mesmo elemento. */
+      animation: bion-surgir 180ms ease-out backwards;
       animation-delay: calc(min(var(--bion-i, 0), 7) * 40ms);
     }
 
