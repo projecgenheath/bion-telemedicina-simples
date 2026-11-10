@@ -1,4 +1,5 @@
 "use client";
+import { subtituloMensagensMedico } from "@/components/bion/medico/subtitulo-mensagens";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MessageSquare, ShieldCheck } from "lucide-react";
 import { EstadoVazio } from "@/components/bion/ui/EstadoVazio";
@@ -269,6 +270,5 @@ export function Mensagens() {
 /** Subtítulo por papel. Só o caminho do médico é ajustado aqui
  *  (o admin trata o texto dele no #161). */
 function subtituloMensagens(role: string): string {
-  if (role === "medico") return "Fale com seus pacientes entre as consultas.";
-  return "Fale diretamente com seu médico especialista entre as consultas.";
+  return subtituloMensagensMedico(role) ?? "Fale diretamente com seu médico especialista entre as consultas.";
 }
