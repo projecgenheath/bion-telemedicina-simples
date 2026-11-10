@@ -4,7 +4,15 @@ import { useCallback, useEffect, useState } from "react";
 import { AceiteTermos } from "@/components/bion/AceiteTermos";
 import { TelaCarregando } from "@/components/bion/brand";
 import { useBion } from "@/lib/bion-store";
-import { CHAVE_RECUSA_TERMOS, ERRO_ACEITE_TERMOS_PENDENTE, aceiteTermosPayload, limparRecusaTermos, type PerfilAceite } from "@/lib/aceite-termos";
+import {
+  CHAVE_RECUSA_TERMOS,
+  ERRO_ACEITE_TERMOS_PENDENTE,
+  VERSAO_TERMOS_MEDICO,
+  aceiteTermosPayload,
+  limparRecusaTermos,
+  rotuloVersao,
+  type PerfilAceite,
+} from "@/lib/aceite-termos";
 
 /** Rota do re-aceite por perfil. */
 export const ROTA_ACEITE_POR_PERFIL: Record<PerfilAceite, string> = {
@@ -127,6 +135,13 @@ export function GuardaAceiteTermos({
             <p className="text-sm text-muted-foreground">
               Para continuar usando o app, leia e aceite a versão atual dos Termos de Uso e da Política de Privacidade da BION.
             </p>
+            {perfil === "MEDICO" ? (
+              // Mesmo rótulo e mesma versão da página /termos-medico (PaginaDocumentoJuridico).
+              // Só no médico: as páginas do paciente ainda têm data fixa (ver PR).
+              <p className="text-xs text-muted-foreground" data-versao-termos={VERSAO_TERMOS_MEDICO}>
+                Termos de Uso do Médico {rotuloVersao(VERSAO_TERMOS_MEDICO)}
+              </p>
+            ) : null}
             <AceiteTermos perfil={perfil} aceitouTermos={marcado} onAceitouTermos={setMarcado} mostrarMarketing={false} disabled={enviando} />
             {erro ? <p role="alert" className="text-xs text-destructive">{erro}</p> : null}
             <button
