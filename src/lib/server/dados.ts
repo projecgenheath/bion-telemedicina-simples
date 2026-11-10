@@ -1,5 +1,5 @@
 import "server-only";
-import { adminVeAnamnese, documentoParaPapel } from "@/lib/privacidade-consulta";
+import { adminVeAnamnese, consultaParaPapel, documentoParaPapel } from "@/lib/privacidade-consulta";
 import { instanteNoFuso, partesNoFuso } from "./fuso";
 import { normalizarTipoAtendimento } from "@/lib/bion-tipos";
 import { normalizarGrade } from "@/lib/grade-semana";
@@ -748,7 +748,7 @@ export async function carregarDados(usuario: UsuarioSessao) {
       criadoEm: m.criadoEm.toISOString(),
     })),
     exames: exames.map((e) => exameWire(e)),
-    consultas: consultasRaw.map((c) => consultaWire(c)),
+    consultas: consultasRaw.map((c) => consultaParaPapel(consultaWire(c), usuario.role)),
     anamneses: anamnesesRaw.map((a) => anamneseWire(a)),
     documentos: documentos.map((doc) => documentoParaPapel(documentoWire(doc), usuario.role)),
     arquivos: arquivos.map((a) => arquivoWire(a)),

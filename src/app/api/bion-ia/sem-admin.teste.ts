@@ -35,6 +35,7 @@ mock.module("@/lib/server/llm", () => ({
     yield { tipo: "fim", fonte: "nvidia", modelo: "m" };
   },
   iaPausada: () => false,
+  mensagemFalhaIaPaciente: () => "falha",
   motivoFalhaIa: () => "falha",
   novoRequestId: () => "req-teste",
   respostaIaPausada: () => Response.json({ erro: "bion_ia_pausada" }, { status: 503 }),

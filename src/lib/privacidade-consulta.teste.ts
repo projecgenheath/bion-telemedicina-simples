@@ -2,7 +2,7 @@
  * Testes da privacidade da consulta (lib/privacidade-consulta.ts).
  * Rodar: npx tsx src/lib/privacidade-consulta.teste.ts
  */
-import { adminBaixaArquivoClinico, adminVeAnamnese, documentoParaPapel } from "./privacidade-consulta";
+import { adminBaixaArquivoClinico, adminVeAnamnese, consultaParaPapel, documentoParaPapel } from "./privacidade-consulta";
 
 let ok = 0;
 let falhas = 0;
@@ -35,6 +35,22 @@ igual("admin: metadados ficam", [doAdmin.id, doAdmin.tipo, doAdmin.titulo, doAdm
 igual("admin: não muta o original", doc.conteudo, "Afastamento por 3 dias");
 igual("médico recebe igual", documentoParaPapel(doc, "MEDICO"), doc);
 igual("paciente recebe igual", documentoParaPapel(doc, "PACIENTE"), doc);
+
+// Auditoria admin 09/11: CPF e nascimento do paciente não vão ao admin pelo documento.
+const docComPii = { ...doc, pacienteCpf: "123.456.789-00", pacienteNascimento: "1994-03-15" };
+const docAdminPii = documentoParaPapel(docComPii, "ADMIN");
+igual("admin: CPF do paciente sai do documento", "pacienteCpf" in docAdminPii, false);
+igual("admin: nascimento do paciente sai do documento", "pacienteNascimento" in docAdminPii, false);
+igual("admin: não muta o original (CPF)", docComPii.pacienteCpf, "123.456.789-00");
+igual("médico recebe CPF/nascimento (PDF da receita)", documentoParaPapel(docComPii, "MEDICO"), docComPii);
+
+const consulta = { id: "c1", status: "concluida", motivoConsulta: "Dor de cabeça", resumoMedico: "Conduta: ..." };
+const consultaAdmin = consultaParaPapel(consulta, "ADMIN");
+igual("admin: resumo do médico sai da consulta", "resumoMedico" in consultaAdmin, false);
+igual("admin: motivo e status ficam", [consultaAdmin.id, consultaAdmin.status, consultaAdmin.motivoConsulta], ["c1", "concluida", "Dor de cabeça"]);
+igual("admin: não muta a consulta original", consulta.resumoMedico, "Conduta: ...");
+igual("médico recebe a consulta igual", consultaParaPapel(consulta, "MEDICO"), consulta);
+igual("paciente recebe a consulta igual", consultaParaPapel(consulta, "PACIENTE"), consulta);
 
 console.log(`\n${ok} ok, ${falhas} falha(s)`);
 process.exit(falhas ? 1 : 0);

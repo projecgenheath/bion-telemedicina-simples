@@ -37,5 +37,25 @@ type DocumentoClinico = {
  */
 export function documentoParaPapel<T extends DocumentoClinico>(doc: T, role: Papel | string): T {
   if (role !== "ADMIN") return doc;
-  return { ...doc, conteudo: "", medicamento: null, posologia: null, duracao: null, observacoes: null, cid: null };
+  const out: T = { ...doc, conteudo: "", medicamento: null, posologia: null, duracao: null, observacoes: null, cid: null };
+  // Auditoria admin 09/11: o documento levava ao admin o CPF e a data de
+  // nascimento do paciente EM CLARO (vão no PDF da receita), furando a
+  // máscara do painel e o "revelar com motivo" auditado. O admin não gera
+  // o PDF: os dois campos saem.
+  delete (out as { pacienteCpf?: unknown }).pacienteCpf;
+  delete (out as { pacienteNascimento?: unknown }).pacienteNascimento;
+  return out;
+}
+
+/**
+ * Consulta como o admin vê (auditoria admin 09/11): o resumo do médico
+ * ("Resumo da consulta" da sala) é conteúdo clínico e nenhuma tela do admin
+ * o usa — sai. Agenda, status, pagamento e o motivo informado no
+ * agendamento continuam.
+ */
+export function consultaParaPapel<T extends { resumoMedico?: string | null }>(c: T, role: Papel | string): T {
+  if (role !== "ADMIN" || c.resumoMedico === undefined) return c;
+  const out: T = { ...c };
+  delete out.resumoMedico;
+  return out;
 }

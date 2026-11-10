@@ -129,9 +129,7 @@ export function Mensagens() {
       <div className="max-w-4xl mx-auto space-y-6">
         <div>
           <h1 className="text-3xl font-extrabold tracking-tight">Mensagens &amp; Orientações</h1>
-          <p className="text-muted-foreground mt-1">
-            Fale diretamente com seu médico especialista entre as consultas.
-          </p>
+          <p className="text-muted-foreground mt-1">{subtituloMensagens(sessao.role)}</p>
         </div>
         <EstadoVazio
           icone={MessageSquare}
@@ -154,9 +152,7 @@ export function Mensagens() {
     <div className="max-w-4xl mx-auto space-y-6">
       <div>
         <h1 className="text-3xl font-extrabold tracking-tight">Mensagens &amp; Orientações</h1>
-        <p className="text-muted-foreground mt-1">
-          Fale diretamente com seu médico especialista entre as consultas.
-        </p>
+        <p className="text-muted-foreground mt-1">{subtituloMensagens(sessao.role)}</p>
       </div>
 
       <div className="grid md:grid-cols-[280px_1fr] gap-4 min-w-0">
@@ -268,4 +264,12 @@ export function Mensagens() {
       </p>
     </div>
   );
+}
+
+/** Subtítulo por papel (auditoria admin 09/11: o admin via o texto do
+ *  paciente, "Fale diretamente com seu médico especialista"). Os demais
+ *  papéis seguem com o texto de antes. */
+function subtituloMensagens(role: string): string {
+  if (role === "admin") return "Fale com médicos e pacientes pelo suporte BION.";
+  return "Fale diretamente com seu médico especialista entre as consultas.";
 }
