@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { rotuloTipoDocumento } from "@/lib/privacidade-consulta";
 import { db } from "@/lib/db";
 import { exigirPapel } from "@/lib/server/auth";
 import { aplicarSideEffects } from "@/lib/server/dados";
@@ -87,13 +88,13 @@ export async function POST(req: NextRequest) {
               where: { pacienteId: r.userId },
               orderBy: { createdAt: "desc" },
               take: LIMITE_ITENS_HISTORICO,
-              select: { id: true, tipo: true, titulo: true, createdAt: true },
+              select: { id: true, tipo: true, createdAt: true },
             }),
             db.exameLaboratorial.findMany({
               where: { usuarioId: r.userId },
               orderBy: { dataColeta: "desc" },
               take: LIMITE_ITENS_HISTORICO,
-              select: { id: true, titulo: true, dataColeta: true },
+              select: { id: true, dataColeta: true },
             }),
             db.consulta.count({ where: { pacienteId: r.userId } }),
             db.documento.count({ where: { pacienteId: r.userId } }),
@@ -129,10 +130,11 @@ export async function POST(req: NextRequest) {
             documentos: documentos.map((d) => ({
               id: d.id,
               tipo: d.tipo,
-              titulo: d.titulo,
+              // Decisão do Alisson (09/11): admin vê só o rótulo do tipo.
+              titulo: rotuloTipoDocumento(d.tipo),
               data: d.createdAt.toISOString(),
             })),
-            exames: exames.map((e) => ({ id: e.id, titulo: e.titulo, data: e.dataColeta.toISOString() })),
+            exames: exames.map((e) => ({ id: e.id, titulo: "Exame", data: e.dataColeta.toISOString() })),
           },
         };
       }),

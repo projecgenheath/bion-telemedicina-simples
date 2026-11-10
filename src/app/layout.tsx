@@ -14,6 +14,15 @@ export const metadata: Metadata = {
   description:
     "Agende, entre na sala e faça sua consulta por vídeo, sem sair de casa. Seu histórico de consultas em um só lugar.",
   keywords: ["telemedicina", "consulta online", "BION", "saúde", "médico online"],
+  // Auditoria admin 09/11: sem ícone declarado o navegador pedia
+  // /favicon.ico (que não existe) e cada página registrava um 404 no console.
+  icons: {
+    icon: [
+      { url: "/logo.svg", type: "image/svg+xml" },
+      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+    ],
+    apple: "/icons/icon-192.png",
+  },
   openGraph: {
     title: "BION — Consulta médica por vídeo, sem sair de casa",
     description:

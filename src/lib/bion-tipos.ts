@@ -187,7 +187,8 @@ export type Medico = {
 export type TicketSuporte = {
   id: string;
   usuario: string;
-  perfil: "paciente" | "medico";
+  /** "admin": chamado aberto por um administrador (auditoria admin 09/11). */
+  perfil: "paciente" | "medico" | "admin";
   assunto: string;
   categoria: "tecnico" | "pagamento" | "agendamento" | "outro";
   mensagem: string;
