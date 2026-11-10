@@ -488,7 +488,7 @@ function ShellCelular({
           ))}
           <span className="w-px h-5 bg-white/25 mx-1" aria-hidden />
           <button type="button" onClick={onBuscar} aria-label="Ir para… (busca e módulos)" className="ba-pilula-alvo bion-toque bion-toque-forte">
-            <Search className="w-4 h-4 text-sky-300" aria-hidden />
+            <Search className="w-4 h-4 text-[#96A5FF]" aria-hidden />
           </button>
         </nav>
       ) : null}
