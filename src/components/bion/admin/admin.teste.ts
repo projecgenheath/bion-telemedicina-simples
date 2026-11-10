@@ -140,8 +140,8 @@ const css = readFileSync(new URL("./admin.css", import.meta.url), "utf8");
 const TEXTOS = ["--ba-texto", "--ba-texto-2", "--ba-texto-3", "--ba-sinal", "--ba-ok", "--ba-atencao", "--ba-critico", "--ba-dinheiro", "--ba-neutro"];
 // Pior caso do céu sob o card: as duas pontas do degradê de cada modo.
 const CEUS = {
-  claro: { vars: bloco(css, ":root"), fundos: ["#ffffff", "#24058D"] },
-  escuro: { vars: bloco(css, ".dark"), fundos: ["#000000", "#1a0a4a"] },
+  claro: { vars: bloco(css, ":root"), fundos: ["#ffffff", "#f7f5fc"] },
+  escuro: { vars: bloco(css, ".dark"), fundos: ["#000000", "#070414"] },
 };
 for (const [modo, { vars, fundos }] of Object.entries(CEUS)) {
   for (const f of fundos) {
@@ -242,6 +242,16 @@ verdade("filtros do celular abrem numa folha", /<SheetAdmin[\s\S]*Filtros da age
 verdade("alvos de toque dos filtros têm 44px", /ba-aba !min-h-11/.test(agendaSrc) && /ba-botao ba-botao-secundario !min-h-11/.test(agendaSrc));
 verdade("Status e Pago na mesma coluna da agenda", /id: "status"/.test(agendaSrc) && !/id: "pago"/.test(agendaSrc));
 verdade("KPIs da agenda em 2 colunas no celular", /grid grid-cols-2 lg:grid-cols-5/.test(agendaSrc));
+
+
+const relSrc = readFileSync(new URL("./relatorios/RelatoriosModulo.tsx", import.meta.url), "utf8");
+verdade("Relatórios sem texto interno 'como na tela antiga'", !/como na tela antiga/.test(relSrc));
+verdade("Relatórios explica o total da plataforma", /total da plataforma/.test(relSrc));
+
+const estadoSrc = readFileSync(new URL("./ui/Estados.tsx", import.meta.url), "utf8");
+verdade("EstadoVazio tem altura mínima", /min-h-\[min\(22rem,calc\(100dvh-22rem\)\)\]/.test(estadoSrc));
+verdade("céu claro não termina em #24058D", !/\.ba-ceu\s*\{[^}]*#24058D/.test(css));
+verdade("céu claro termina em lilás #f7f5fc", /\.ba-ceu\s*\{[^}]*#f7f5fc 100%/.test(css));
 
 console.log(`${ok} ok, ${falhas} falha(s)`);
 if (falhas) process.exit(1);

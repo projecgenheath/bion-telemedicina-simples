@@ -76,14 +76,17 @@
 }
 .ba-app[data-densidade="compacta"] { --ba-pad: 0.875rem; --ba-linha: 2.75rem; }
 
-/* Céu: branco puro → roxo da marca (Clean) / preto absoluto → roxo (Dark).
-   Texto solto só na faixa de cima (0–35%), que é branco/preto puro. */
+/* Céu: branco/preto puro no topo (texto solto só nesta faixa, 0–35%),
+   depois um lilás/noite bem claro. O roxo da marca não chega no rodapé —
+   em telas curtas a poça #24058D / #1a0a4a manchava o fundo vazio. */
 .ba-ceu {
-  background: linear-gradient(180deg, #ffffff 0%, #ffffff 35%, #eee8f8 62%, #c5b6e8 84%, #24058D 100%);
+  background-color: #f7f5fc;
+  background-image: linear-gradient(180deg, #ffffff 0%, #ffffff 35%, #f7f5fc 58%, #f7f5fc 100%);
   background-attachment: fixed;
 }
 .dark .ba-ceu {
-  background: linear-gradient(180deg, #000000 0%, #000000 35%, #070414 62%, #12083f 86%, #1a0a4a 100%);
+  background-color: #070414;
+  background-image: linear-gradient(180deg, #000000 0%, #000000 35%, #070414 58%, #070414 100%);
   background-attachment: fixed;
 }
 /* Painéis laterais (Conta / Fila) e superfícies sobrepostas */

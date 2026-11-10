@@ -173,7 +173,7 @@ export function RelatoriosModulo() {
             <Registro icone={Paperclip} valor={arquivos.length} rotulo="Arquivos trocados" detalhe="exames e anexos" />
             <Registro icone={Handshake} valor={consentimentos.length} rotulo="Consentimentos" detalhe="acessos ao PDF" />
           </ul>
-          <p className="text-xs ba-texto-3 mt-3">Total carregado: estes três não seguem os filtros (como na tela antiga).</p>
+          <p className="text-xs ba-texto-3 mt-3">Documentos, arquivos e consentimentos são o total da plataforma — os filtros acima não se aplicam a estes três.</p>
         </CardAdmin>
 
         <div className="grid gap-3 lg:grid-cols-2">
