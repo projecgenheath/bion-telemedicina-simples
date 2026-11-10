@@ -200,5 +200,36 @@ for (const [nome, a, b, min] of paresFixos) {
   verdade(`AA ${nome}`, c >= min, c.toFixed(2));
 }
 
+/* Casca do tablet e trilho: cortes distintos da densidade dos módulos.
+   Lê o fonte (não importa o módulo "use client", para o teste rodar também
+   com --conditions=react-server). */
+const prefSrc = readFileSync(new URL("./ui/preferencias.ts", import.meta.url), "utf8");
+const num = (nome) => Number((prefSrc.match(new RegExp(`export const ${nome} = (\\d+)`)) || [])[1]);
+igual("casca larga a partir de 768", num("LARGURA_CASCA"), 768);
+igual("módulos e tabelas continuam em 1024", num("LARGURA_DESKTOP"), 1024);
+igual("trilho abre por padrão a partir de 1280", num("LARGURA_TRILHO_ABERTO"), 1280);
+
+const shellSrc = readFileSync(new URL("./AdminShell.tsx", import.meta.url), "utf8");
+verdade("casca usa useCascaLarga", /const largo = useCascaLarga\(\)/.test(shellSrc));
+{
+  const imp = shellSrc.match(/import \{([^}]+)\} from "\.\/ui\/preferencias"/);
+  verdade("casca não importa useLargo", !!imp && !/\buseLargo\b/.test(imp[1]));
+}
+verdade(
+  "trilho segue o corte 1280 quando não há preferência",
+  /usePreferenciaBool\("bion-admin-trilho", padraoAberto\)/.test(shellSrc)
+  && /useMinLargura\(LARGURA_TRILHO_ABERTO\)/.test(shellSrc),
+);
+verdade("trilho não abre por padrão fixo (true)", !/usePreferenciaBool\("bion-admin-trilho", true\)/.test(shellSrc));
+
+verdade("useLargo ainda mede LARGURA_DESKTOP", /export function useLargo\(\)[\s\S]*LARGURA_DESKTOP/.test(prefSrc));
+verdade("useCascaLarga mede LARGURA_CASCA", /export function useCascaLarga\(\)[\s\S]*LARGURA_CASCA/.test(prefSrc));
+
+verdade("grade de cartões auto-fit em 13.75rem (220px)", /\.ba-grade-cartoes\s*\{[^}]*minmax\(min\(100%, 13\.75rem\)/.test(css));
+
+const centroSrc = readFileSync(new URL("./comando/CentroComando.tsx", import.meta.url), "utf8");
+verdade("Decisões e Repasses ocupam 1 col no tablet", (centroSrc.match(/col-span-2 md:col-span-1/g) || []).length >= 2);
+verdade("agenda e gráfico lado a lado no tablet", /md:grid-cols-3/.test(centroSrc) && /md:col-span-2/.test(centroSrc));
+
 console.log(`${ok} ok, ${falhas} falha(s)`);
 if (falhas) process.exit(1);
