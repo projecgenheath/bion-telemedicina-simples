@@ -1,4 +1,5 @@
 "use client";
+import { subtituloMensagensMedico } from "@/components/bion/medico/subtitulo-mensagens";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MessageSquare, ShieldCheck } from "lucide-react";
 import { EstadoVazio } from "@/components/bion/ui/EstadoVazio";
@@ -264,10 +265,9 @@ export function Mensagens() {
   );
 }
 
-/** Subtítulo por papel (auditoria admin 09/11: o admin via o texto do
- *  paciente, "Fale diretamente com seu médico especialista"). Os demais
- *  papéis seguem com o texto de antes. */
+/** Subtítulo por papel. Admin (auditoria 09/11, #161) e médico (#162)
+ *  têm texto próprio; os demais seguem com o texto de antes. */
 function subtituloMensagens(role: string): string {
   if (role === "admin") return "Fale com médicos e pacientes pelo suporte BION.";
-  return "Fale diretamente com seu médico especialista entre as consultas.";
+  return subtituloMensagensMedico(role) ?? "Fale diretamente com seu médico especialista entre as consultas.";
 }
