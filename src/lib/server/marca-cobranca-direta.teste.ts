@@ -1,7 +1,27 @@
 /** Marca da cobrança direta. Rodar: bun --conditions=react-server test ./src/lib/server/marca-cobranca-direta.teste.ts */
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
-import { contaMedicoDaCobranca, marcaCobrancaDireta } from "./marca-cobranca-direta";
+
+const pagamentos: Record<string, { stripeContaMedico: string | null }> = {};
+const remarcacoes: Record<string, { stripeContaMedico: string | null }> = {};
+(globalThis as unknown as { prisma: unknown }).prisma = {
+  pagamento: {
+    update: async ({ where, data }: { where: { id: string }; data: { stripeContaMedico: string | null } }) => {
+      const row = pagamentos[where.id] ?? (pagamentos[where.id] = { stripeContaMedico: "acct_inicial" });
+      Object.assign(row, data);
+      return row;
+    },
+  },
+  remarcacaoPendente: {
+    update: async ({ where, data }: { where: { id: string }; data: { stripeContaMedico: string | null } }) => {
+      const row = remarcacoes[where.id] ?? (remarcacoes[where.id] = { stripeContaMedico: "acct_inicial" });
+      Object.assign(row, data);
+      return row;
+    },
+  },
+};
+
+const { contaMedicoDaCobranca, marcaCobrancaDireta, gravarContaMedicoDaCobranca } = await import("./marca-cobranca-direta");
 
 // Simula a coluna: cada chamada do hook (checkout ou webhook) aplica marcaCobrancaDireta.
 function registro() {
@@ -45,5 +65,38 @@ describe("marca da cobrança direta", () => {
     expect(wh).toContain("const conta = evento.account ?? null;");
     expect(wh).toContain("gravarContaMedicoDaCobranca({ pagamentoId: pagamento.id }, conta)");
     expect(wh).toContain("gravarContaMedicoDaCobranca({ remarcacaoId: r.id }, conta)");
+  });
+  test("marcaCobrancaDireta: string grava; null e \"\" viram null", () => {
+    expect(marcaCobrancaDireta("acct_x")).toEqual({ stripeContaMedico: "acct_x" });
+    expect(marcaCobrancaDireta("  acct_x  ")).toEqual({ stripeContaMedico: "acct_x" });
+    expect(marcaCobrancaDireta(null)).toEqual({ stripeContaMedico: null });
+    expect(marcaCobrancaDireta(undefined)).toEqual({ stripeContaMedico: null });
+    expect(marcaCobrancaDireta("")).toEqual({ stripeContaMedico: null });
+    expect(marcaCobrancaDireta("   ")).toEqual({ stripeContaMedico: null });
+  });
+});
+
+describe("gravarContaMedicoDaCobranca (updates do Prisma)", () => {
+  test("conta string grava a marca no Pagamento e na RemarcacaoPendente", async () => {
+    pagamentos.p1 = { stripeContaMedico: null };
+    remarcacoes.r1 = { stripeContaMedico: null };
+    await gravarContaMedicoDaCobranca({ pagamentoId: "p1", remarcacaoId: "r1" }, "acct_med");
+    expect(pagamentos.p1.stripeContaMedico).toBe("acct_med");
+    expect(remarcacoes.r1.stripeContaMedico).toBe("acct_med");
+  });
+  test("conta null limpa a marca (grava null) nos dois registros", async () => {
+    pagamentos.p2 = { stripeContaMedico: "acct_old" };
+    remarcacoes.r2 = { stripeContaMedico: "acct_old" };
+    await gravarContaMedicoDaCobranca({ pagamentoId: "p2", remarcacaoId: "r2" }, null);
+    expect(pagamentos.p2.stripeContaMedico).toBeNull();
+    expect(remarcacoes.r2.stripeContaMedico).toBeNull();
+  });
+  test("string vazia é tratada como null e limpa a marca", async () => {
+    pagamentos.p3 = { stripeContaMedico: "acct_old" };
+    remarcacoes.r3 = { stripeContaMedico: "acct_old" };
+    await gravarContaMedicoDaCobranca({ pagamentoId: "p3" }, "");
+    await gravarContaMedicoDaCobranca({ remarcacaoId: "r3" }, "   ");
+    expect(pagamentos.p3.stripeContaMedico).toBeNull();
+    expect(remarcacoes.r3.stripeContaMedico).toBeNull();
   });
 });
