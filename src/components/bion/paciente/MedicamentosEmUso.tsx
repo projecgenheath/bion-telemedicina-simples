@@ -13,6 +13,7 @@ import {
   type Posologia,
 } from "@/lib/saude-paciente";
 import { apiSaude } from "./api-saude";
+import { Esqueleto } from "./EstadosPaciente";
 import type { Lembrete } from "@/lib/bion-tipos";
 
 export type MedicamentoWire = {
@@ -248,7 +249,11 @@ export function MedicamentosEmUso({ onGerenciarLembretes }: { onGerenciarLembret
             </button>
           </div>
         ) : (
-          <p className="py-2 text-sm opacity-80">Carregando…</p>
+          <div role="status" aria-live="polite" className="py-2 space-y-2">
+            <span className="sr-only">Carregando seus medicamentos…</span>
+            <Esqueleto className="h-4 w-2/3" />
+            <Esqueleto className="h-3 w-1/2" />
+          </div>
         )
       ) : ativos.length === 0 && listaAvulsos.length === 0 ? (
         <p className="text-sm opacity-80">

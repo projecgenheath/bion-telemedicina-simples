@@ -101,7 +101,7 @@ function Visualizador({
         className="bpp-veu-doc absolute inset-0 bg-bion-ink/60 backdrop-blur-sm cursor-default"
         onClick={onFechar}
       />
-      <div className="bpp-surgir relative w-full max-w-lg max-h-[88vh] overflow-y-auto bp-coluna rounded-3xl bg-white dark:bg-bion-night p-6 shadow-2xl">
+      <div className="bion-surgir relative w-full max-w-lg max-h-[88vh] overflow-y-auto bp-coluna rounded-3xl bg-white dark:bg-bion-night p-6 shadow-2xl">
         <div className="flex items-start justify-between gap-3 mb-4">
           <h3 className="text-lg font-bold text-bion-ink dark:text-bion-paper">{titulo}</h3>
           <div className="flex gap-2 shrink-0">
@@ -109,7 +109,7 @@ function Visualizador({
               <button type="button"
                 onClick={() => void copiar()}
                 aria-label="Copiar texto do documento"
-                className="bpp-toque bp-acao px-4 min-h-11 text-xs inline-flex items-center gap-1.5"
+                className="bion-toque bp-acao px-4 min-h-11 text-xs inline-flex items-center gap-1.5"
               >
                 <Copy className="w-4 h-4" /> Copiar
               </button>
@@ -117,12 +117,12 @@ function Visualizador({
               <button type="button"
                 onClick={() => window.print()}
                 aria-label="Imprimir documento"
-                className="bpp-toque bp-acao px-4 min-h-11 text-xs inline-flex items-center gap-1.5"
+                className="bion-toque bp-acao px-4 min-h-11 text-xs inline-flex items-center gap-1.5"
               >
                 <Printer className="w-4 h-4" /> Imprimir
               </button>
             )}
-            <button type="button" onClick={onFechar} aria-label="Fechar documento" className="bpp-toque w-11 h-11 inline-flex items-center justify-center rounded-full bg-bion-ink/5 dark:bg-white/10 text-bion-ink dark:text-bion-paper">
+            <button type="button" onClick={onFechar} aria-label="Fechar documento" className="bion-toque w-11 h-11 inline-flex items-center justify-center rounded-full bg-bion-ink/5 dark:bg-white/10 text-bion-ink dark:text-bion-paper">
               <X className="w-4 h-4" />
             </button>
           </div>
@@ -337,13 +337,13 @@ export function DocumentosPainel({
             acao={{ rotulo: "Agendar consulta", onClick: onAgendar }}
           />
         ) : (
-          <div className="flex gap-2 overflow-x-auto bp-coluna pb-1 -mx-1 px-1">
+          <div className="bion-surgir-lista flex gap-2 overflow-x-auto bp-coluna pb-1 -mx-1 px-1">
             {realizadas.map((c) => (
               <button type="button"
                 key={c.id}
                 onClick={() => setConsultaSelecionada(c.id)}
                 aria-pressed={consultaSelecionada === c.id}
-                className={`bpp-toque shrink-0 rounded-2xl px-4 py-3 text-left transition border ${
+                className={`bion-toque shrink-0 rounded-2xl px-4 py-3 text-left transition border ${
                   consultaSelecionada === c.id
                     ? "bp-acao border-transparent"
                     : "bp-glass border-transparent text-bion-ink dark:text-bion-paper"
@@ -359,7 +359,7 @@ export function DocumentosPainel({
         )}
 
         {consultaSelecionada && (
-          <div className="mt-4 space-y-2">
+          <div className="bion-surgir-lista mt-4 space-y-2">
             {(() => {
               const c = realizadas.find((x) => x.id === consultaSelecionada);
               if (!c) return null;
@@ -378,7 +378,7 @@ export function DocumentosPainel({
                     <button
                       type="button"
                       onClick={() => setRetornoDe(c.id)}
-                      className="bpp-toque bp-acao shrink-0 min-h-11 rounded-full px-4 text-xs font-bold inline-flex items-center gap-1.5"
+                      className="bion-toque bp-acao shrink-0 min-h-11 rounded-full px-4 text-xs font-bold inline-flex items-center gap-1.5"
                     >
                       <CalendarPlus className="w-4 h-4" aria-hidden /> Marcar retorno
                     </button>
@@ -422,16 +422,16 @@ export function DocumentosPainel({
                                         if (r.ok) toast.success("Pedido de renovação cancelado.");
                                         else toast.error(r.erro ?? "Não foi possível cancelar.");
                                       }}
-                                      className="bpp-toque min-h-11 rounded-full px-3.5 text-xs font-bold bg-red-600/10 text-red-800 dark:bg-red-400/15 dark:text-red-300"
+                                      className="bion-toque min-h-11 rounded-full px-3.5 text-xs font-bold bg-red-600/10 text-red-800 dark:bg-red-400/15 dark:text-red-300"
                                     >
                                       Sim, cancelar
                                     </button>
-                                    <button type="button" onClick={() => setCancelandoPedido(null)} className="bpp-toque min-h-11 rounded-full px-3.5 text-xs font-bold bg-bion-ink/8 dark:bg-white/10">
+                                    <button type="button" onClick={() => setCancelandoPedido(null)} className="bion-toque min-h-11 rounded-full px-3.5 text-xs font-bold bg-bion-ink/8 dark:bg-white/10">
                                       Voltar
                                     </button>
                                   </div>
                                 ) : (
-                                  <button type="button" onClick={() => setCancelandoPedido(pedido.id)} className="bpp-toque mt-0.5 inline-flex items-center min-h-11 px-2 -ml-2 text-xs font-bold underline">
+                                  <button type="button" onClick={() => setCancelandoPedido(pedido.id)} className="bion-toque mt-0.5 inline-flex items-center min-h-11 px-2 -ml-2 text-xs font-bold underline">
                                     Cancelar pedido
                                   </button>
                                 )
@@ -440,7 +440,7 @@ export function DocumentosPainel({
                                 <BotaoPagarStripe pagamentoId={pedido.pagamentoId} rotulo="Pagar com cartão" className="mt-1.5" />
                               ) : null}
                               {pedido.status !== "pendente" && pedido.status !== "aguardando_pagamento" ? (
-                                <button type="button" onClick={() => setRenovando({ id: o.id, medicamento: o.medicamento ?? "", medico: o.medico })} className="bpp-toque mt-0.5 inline-flex items-center min-h-11 px-2 -ml-2 text-xs font-bold underline">
+                                <button type="button" onClick={() => setRenovando({ id: o.id, medicamento: o.medicamento ?? "", medico: o.medico })} className="bion-toque mt-0.5 inline-flex items-center min-h-11 px-2 -ml-2 text-xs font-bold underline">
                                   Pedir de novo
                                 </button>
                               ) : null}
@@ -454,7 +454,7 @@ export function DocumentosPainel({
                           <button
                             type="button"
                             onClick={() => setRenovando({ id: o.id, medicamento: o.medicamento ?? "", medico: o.medico })}
-                            className="bpp-toque mt-1.5 inline-flex items-center gap-1.5 rounded-full px-3.5 min-h-11 text-xs font-bold bg-sky-600/15 text-sky-900 dark:text-sky-100"
+                            className="bion-toque mt-1.5 inline-flex items-center gap-1.5 rounded-full px-3.5 min-h-11 text-xs font-bold bg-sky-600/15 text-sky-900 dark:text-sky-100"
                           >
                             <RotateCcw className="w-3.5 h-3.5" aria-hidden /> Renovar receita
                           </button>
@@ -463,7 +463,7 @@ export function DocumentosPainel({
                     </div>
                     <button type="button"
                       onClick={() => setVisualizando({ titulo: d.titulo, corpo: d.corpo })}
-                      className="bpp-toque min-h-11 rounded-full border border-bion-sea/25 dark:border-sky-300/25 px-4 py-2 text-xs font-bold text-bion-sea dark:text-sky-300"
+                      className="bion-toque min-h-11 rounded-full border border-bion-sea/25 dark:border-sky-300/25 px-4 py-2 text-xs font-bold text-bion-sea dark:text-sky-300"
                     >
                       Ver
                     </button>
@@ -472,7 +472,7 @@ export function DocumentosPainel({
                     <button type="button"
                       onClick={() => setVisualizando({ titulo: d.titulo, corpo: d.corpo, imprimir: true })}
                       aria-label={`Imprimir ${d.titulo}`}
-                      className="bpp-toque w-11 h-11 inline-flex items-center justify-center rounded-full bg-bion-ink/5 dark:bg-white/10 text-bion-ink dark:text-bion-paper"
+                      className="bion-toque w-11 h-11 inline-flex items-center justify-center rounded-full bg-bion-ink/5 dark:bg-white/10 text-bion-ink dark:text-bion-paper"
                     >
                       <Printer className="w-4 h-4" />
                     </button>
@@ -517,7 +517,7 @@ export function DocumentosPainel({
                   setConversaAtiva(null);
                 }}
                 aria-label="Voltar para contatos"
-                className="bpp-toque w-11 h-11 inline-flex items-center justify-center rounded-full bg-bion-ink/5 dark:bg-white/10 text-bion-ink dark:text-bion-paper"
+                className="bion-toque w-11 h-11 inline-flex items-center justify-center rounded-full bg-bion-ink/5 dark:bg-white/10 text-bion-ink dark:text-bion-paper"
               >
                 <ArrowLeft className="w-4 h-4" />
               </button>
@@ -587,7 +587,7 @@ export function DocumentosPainel({
             </div>
           </div>
         ) : (
-          <div className="space-y-2">
+          <div className="bion-surgir-lista space-y-2">
             {contatos.length === 0 ? (
               <EstadoVazio
                 icone={<MessageCircle className="w-6 h-6" />}
@@ -602,7 +602,7 @@ export function DocumentosPainel({
                     setConversaAtiva(c.id);
                     marcarConversaLida(c.id);
                   }}
-                  className="bpp-toque w-full bp-glass p-4 flex items-center gap-3 text-left"
+                  className="bion-toque w-full bp-glass p-4 flex items-center gap-3 text-left"
                 >
                   <div className="w-11 h-11 rounded-full bg-gradient-to-br from-bion-sea to-bion-ink text-white inline-flex items-center justify-center text-sm font-bold shrink-0">
                     {c.nome.split(" ").slice(-1)[0][0]}

@@ -166,7 +166,7 @@ export function MarcarRetornoPainel({
                   key={d.iso}
                   onClick={() => setDia(d.iso)}
                   aria-pressed={diaSel?.iso === d.iso}
-                  className={`bpp-toque shrink-0 rounded-2xl px-3 py-2 min-h-11 text-left text-sm font-bold ${diaSel?.iso === d.iso ? "bp-acao" : "bp-glass"}`}
+                  className={`bion-toque shrink-0 rounded-2xl px-3 py-2 min-h-11 text-left text-sm font-bold ${diaSel?.iso === d.iso ? "bp-acao" : "bp-glass"}`}
                 >
                   <span className="block">{d.rotulo}</span>
                   <span className="block text-xs font-semibold opacity-80">{d.sub}</span>
@@ -181,7 +181,7 @@ export function MarcarRetornoPainel({
                   key={h}
                   onClick={() => setHora(h)}
                   aria-pressed={horaSel === h}
-                  className={`bpp-toque rounded-full px-4 min-h-11 text-sm font-bold ${horaSel === h ? "bp-acao" : "bp-glass"}`}
+                  className={`bion-toque rounded-full px-4 min-h-11 text-sm font-bold ${horaSel === h ? "bp-acao" : "bp-glass"}`}
                 >
                   {h}
                 </button>
@@ -215,7 +215,7 @@ export function MarcarRetornoPainel({
               type="button"
               disabled={enviando || !horaSel}
               onClick={confirmar}
-              className="bpp-toque bp-acao mt-5 w-full min-h-12 rounded-full text-sm font-bold inline-flex items-center justify-center gap-2 disabled:opacity-60"
+              className="bion-toque bp-acao mt-5 w-full min-h-12 rounded-full text-sm font-bold inline-flex items-center justify-center gap-2 disabled:opacity-60"
             >
               {enviando ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden /> : null}
               Confirmar retorno{gratis ? " grátis" : ""} · {diaSel?.rotulo} às {horaSel}

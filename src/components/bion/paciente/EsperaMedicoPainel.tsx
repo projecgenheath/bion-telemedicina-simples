@@ -332,7 +332,7 @@ export function EsperaMedicoPainel({
                           setEtapa({ tipo: "confirmar_remarcar", medico: m, diferenca: m.diferencaCentavos ?? 0 });
                         }}
                         aria-label={`${m.nome}, ${dif.curto}`}
-                        className="bpp-toque flex w-full items-center justify-between gap-3 rounded-2xl border border-white/15 bg-white/10 px-4 py-3 transition hover:bg-white/20 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-white/50"
+                        className="bion-toque flex w-full items-center justify-between gap-3 rounded-2xl border border-white/15 bg-white/10 px-4 py-3 transition hover:bg-white/20 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-white/50"
                       >
                         <span className="min-w-0">
                           <span className="block truncate text-sm font-semibold">{m.nome}</span>
@@ -520,7 +520,7 @@ function Botao({
       type="button"
       {...props}
       aria-busy={carregando || undefined}
-      className={`bpp-toque inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-white/50 disabled:opacity-50 ${
+      className={`bion-toque inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-white/50 disabled:opacity-50 ${
         primario ? "bg-white text-bion-night hover:bg-white/90" : "border border-white/25 bg-white/10 hover:bg-white/20"
       }`}
     >

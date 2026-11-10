@@ -542,8 +542,14 @@
 .bp-app-paciente .bpp-toque:active { transform: scale(0.98); }
 .bp-app-paciente .bpp-toque-forte:active { transform: scale(0.95); }
 @media (hover: hover) {
-  .bp-app-paciente .bp-glass.bpp-toque:hover { box-shadow: 0 16px 34px -18px rgba(10, 31, 68, 0.45); }
+  .bp-app-paciente .bp-glass.bpp-toque:hover,
+  .bp-app-paciente .bp-glass.bion-toque:hover { box-shadow: 0 16px 34px -18px rgba(10, 31, 68, 0.45); }
 }
+/* Os componentes do paciente usam agora as classes compartilhadas de     */
+/* globals.css (.bion-toque, .bion-surgir, .bion-esqueleto). As .bpp-*    */
+/* acima ficam só por compatibilidade.                                    */
+/* Esqueleto compartilhado com o tom do app do paciente (claro e escuro).  */
+.bp-app-paciente .bion-esqueleto { background-color: var(--bpp-esqueleto); }
 .bp-app-paciente button:focus-visible,
 .bp-app-paciente a:focus-visible,
 .bp-app-paciente [role="button"]:focus-visible {

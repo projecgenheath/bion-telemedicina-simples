@@ -111,7 +111,7 @@ export function RenovarReceitaSheet({
           type="button"
           disabled={enviando || !valorValido}
           onClick={enviar}
-          className="bpp-toque bp-acao mt-5 w-full min-h-12 rounded-full text-sm font-bold inline-flex items-center justify-center gap-2 disabled:opacity-60"
+          className="bion-toque bp-acao mt-5 w-full min-h-12 rounded-full text-sm font-bold inline-flex items-center justify-center gap-2 disabled:opacity-60"
         >
           {enviando ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden /> : <MessageSquare className="w-4 h-4" aria-hidden />}
           Criar pedido de renovação

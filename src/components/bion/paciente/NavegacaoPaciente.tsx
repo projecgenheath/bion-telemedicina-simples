@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { Hand } from "lucide-react";
 
 const PAINEIS = [
@@ -90,6 +90,25 @@ export function NavegacaoPaciente({
   /** Some quando há sheet/sobreposição aberta. */
   oculto?: boolean;
 }) {
+  // Indicador deslizante da pílula inferior (.bion-indicador): mede o
+  // pontinho ativo e desliza até ele em 180 ms, por cima dos pontinhos e
+  // por baixo do contador de não lidas. Só visual — a navegação
+  // continua nos botões. Sem medida (1º quadro), o pontinho ativo pinta-se
+  // sozinho, como antes.
+  const navRef = useRef<HTMLElement>(null);
+  const pontosRef = useRef<(HTMLSpanElement | null)[]>([]);
+  const [indicador, setIndicador] = useState<{ x: number; w: number } | null>(null);
+  useLayoutEffect(() => {
+    if (oculto) return;
+    const nav = navRef.current;
+    const ponto = pontosRef.current[painel];
+    if (!nav || !ponto) return;
+    const rn = nav.getBoundingClientRect();
+    const rp = ponto.getBoundingClientRect();
+    if (!rp.width) return;
+    setIndicador({ x: rp.left - rn.left, w: rp.width });
+  }, [painel, oculto]);
+
   if (oculto) return null;
 
   const irSecao = (i: number) => {
@@ -131,9 +150,17 @@ export function NavegacaoPaciente({
 
       {/* Pontinhos inferiores discretos — Perfil / Início / Documentos */}
       <nav
+        ref={navRef}
         aria-label="Painéis do app"
         className="bpp-indicador absolute bottom-[calc(1rem+env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2 z-20 flex items-center gap-0.5 rounded-full bg-zinc-950/85 text-white backdrop-blur px-1.5 py-1 pointer-events-auto"
       >
+        {indicador ? (
+          <span
+            aria-hidden
+            className="bion-indicador pointer-events-none absolute left-0 top-1/2 z-[5] -mt-1 h-2 rounded-full bg-sky-300"
+            style={{ width: indicador.w, transform: `translateX(${indicador.x}px)` }}
+          />
+        ) : null}
         {PAINEIS.map(({ idx, rotulo }) => {
           const docs = idx === 2;
           const rotuloAria =
@@ -150,12 +177,15 @@ export function NavegacaoPaciente({
               className="relative p-1.5 before:absolute before:left-1/2 before:top-1/2 before:h-11 before:w-11 before:-translate-x-1/2 before:-translate-y-1/2 before:content-['']"
             >
               <span
-                className={`block h-2 rounded-full transition-all ${
-                  painel === idx ? "w-6 bg-sky-300" : "w-2 bg-white/70"
+                ref={(el) => {
+                  pontosRef.current[idx] = el;
+                }}
+                className={`block h-2 rounded-full ${
+                  painel === idx ? `w-6 ${indicador ? "bg-transparent" : "bg-sky-300"}` : "w-2 bg-white/70"
                 }`}
               />
               {docs && naoLidas > 0 ? (
-                <span className="absolute -top-1.5 -right-1.5 min-w-5 h-5 px-1 rounded-full bg-rose-600 text-xs font-black leading-5 text-center text-white">
+                <span className="absolute -top-1.5 -right-1.5 z-10 min-w-5 h-5 px-1 rounded-full bg-rose-600 text-xs font-black leading-5 text-center text-white">
                   {naoLidas > 9 ? "9+" : naoLidas}
                 </span>
               ) : null}

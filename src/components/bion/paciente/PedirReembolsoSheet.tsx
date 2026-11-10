@@ -164,14 +164,14 @@ export function PedirReembolsoSheet({ consulta, onFechar }: { consulta: Consulta
                   <button
                     type="button"
                     onClick={() => setConfirmarDescarte(false)}
-                    className="bpp-toque flex-1 py-3 rounded-xl bpp-sheet-primario text-sm font-bold"
+                    className="bion-toque flex-1 py-3 rounded-xl bpp-sheet-primario text-sm font-bold"
                   >
                     Continuar escrevendo
                   </button>
                   <button
                     type="button"
                     onClick={onFechar}
-                    className="bpp-toque flex-1 py-3 rounded-xl border bpp-sheet-borda text-sm font-semibold"
+                    className="bion-toque flex-1 py-3 rounded-xl border bpp-sheet-borda text-sm font-semibold"
                   >
                     Descartar e fechar
                   </button>
@@ -183,7 +183,7 @@ export function PedirReembolsoSheet({ consulta, onFechar }: { consulta: Consulta
                 type="button"
                 onClick={fechar}
                 disabled={enviando}
-                className="bpp-toque flex-1 py-3 rounded-xl border bpp-sheet-borda text-sm font-semibold disabled:opacity-40"
+                className="bion-toque flex-1 py-3 rounded-xl border bpp-sheet-borda text-sm font-semibold disabled:opacity-40"
               >
                 Voltar
               </button>
@@ -191,7 +191,7 @@ export function PedirReembolsoSheet({ consulta, onFechar }: { consulta: Consulta
                 type="button"
                 onClick={() => void enviar()}
                 disabled={!valida || !prazoAberto || enviando}
-                className="bpp-toque flex-1 py-3 rounded-xl bpp-sheet-primario text-sm font-bold disabled:opacity-40 inline-flex items-center justify-center gap-2"
+                className="bion-toque flex-1 py-3 rounded-xl bpp-sheet-primario text-sm font-bold disabled:opacity-40 inline-flex items-center justify-center gap-2"
               >
                 {enviando ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                 Enviar pedido
