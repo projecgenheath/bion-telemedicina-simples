@@ -95,6 +95,8 @@ export type Documento = {
   tipo: "receita" | "atestado" | "exame" | "exame_solicitado";
   titulo: string;
   medico: string;
+  /** Identificador do médico emissor (para cancelar/renovar só o próprio). */
+  medicoId?: string;
   paciente: string;
   /** Identificador do paciente (M-9: filtros usam ID, nunca o nome). */
   pacienteId?: string;
@@ -187,7 +189,8 @@ export type Medico = {
 export type TicketSuporte = {
   id: string;
   usuario: string;
-  perfil: "paciente" | "medico";
+  /** "admin": chamado aberto por um administrador (auditoria admin 09/11). */
+  perfil: "paciente" | "medico" | "admin";
   assunto: string;
   categoria: "tecnico" | "pagamento" | "agendamento" | "outro";
   mensagem: string;

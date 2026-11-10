@@ -174,9 +174,12 @@ for (const modo of ["Clean", "Dark"] as const) {
     par(modo, `gráfico: eixo e rótulos (${onde})`, sobre(c("bpp-grafico-eixo"), g), g, TEXTO);
   }
 
-  // Botão principal e etiqueta "Sala aberta"
-  par(modo, "botão principal bp-acao (início do degradê)", BRANCO, SEA);
-  par(modo, "botão principal bp-acao (fim do degradê)", BRANCO, INK);
+  // Botão principal (.bp-acao no app do paciente): degradê da marca
+  const acaoIni = cheio("bpp-acao-inicio");
+  const acaoFim = cheio("bpp-acao-fim");
+  const acaoTexto = sobre(c("bpp-acao-texto"), acaoFim);
+  par(modo, "botão principal bp-acao (início do degradê)", sobre(c("bpp-acao-texto"), acaoIni), acaoIni);
+  par(modo, "botão principal bp-acao (fim do degradê)", acaoTexto, acaoFim);
   par(modo, '"Sala aberta" / "Entrar na sala" (emerald-700)', BRANCO, tw("emerald-700"));
   par(modo, "lembrete marcado (emerald-700)", BRANCO, tw("emerald-700"), GRAFICO);
 
@@ -207,14 +210,19 @@ for (const modo of ["Clean", "Dark"] as const) {
     par(modo, `seção 3 (${onde}) · gráfico eixo e rótulos`, sobre(c("bpp-grafico-eixo-marinho"), gm), gm, TEXTO);
   }
 
-  // Cartão da BION IA (degradê deep → sea → ink, texto branco)
-  for (const [onde, bg] of [["deep", DEEP], ["sea", SEA], ["ink", INK]] as [string, RGB][]) {
+  // Cartão da BION IA (degradê da marca, texto branco / CTA #24058D no branco)
+  const iaStops: [string, RGB][] = [
+    ["início", cheio("bpp-ia-fundo-inicio")],
+    ["meio", cheio("bpp-ia-fundo-meio")],
+    ["fim", cheio("bpp-ia-fundo-fim")],
+  ];
+  for (const [onde, bg] of iaStops) {
     par(modo, `cartão BION IA (${onde}) · texto white/85`, mix(BRANCO, 0.85, bg), bg);
     par(modo, `cartão BION IA (${onde}) · barra "Pergunte" white/85 sobre white/12`, mix(BRANCO, 0.85, mix(BRANCO, 0.12, bg)), mix(BRANCO, 0.12, bg));
   }
-  par(modo, 'cartão BION IA · botão "Agendar" (ink sobre branco)', INK, BRANCO);
+  par(modo, 'cartão BION IA · botão "Agendar" (marca sobre branco)', sobre(c("bpp-ia-cta-texto"), BRANCO), BRANCO);
   // Reflexo que passa uma vez (white/16) por cima do texto do cartão
-  for (const [onde, bg] of [["deep", DEEP], ["sea", SEA]] as [string, RGB][]) {
+  for (const [onde, bg] of iaStops.slice(0, 2)) {
     const reflexo = mix(BRANCO, 0.16, bg);
     par(modo, `cartão BION IA (${onde}) · texto white/85 sob o reflexo`, mix(BRANCO, 0.85, reflexo), reflexo);
   }

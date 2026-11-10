@@ -44,9 +44,21 @@
   --bpp-grafico-eixo-marinho: rgba(255, 255, 255, 0.8);
   /* Placeholder de campos */
   --bpp-placeholder: rgba(10, 31, 68, 0.62);
-  /* Cartão da BION IA: brilho em volta (só decoração, sem texto) */
-  --bpp-ia-brilho: rgba(56, 132, 255, 0.42);
-  --bpp-ia-aro: rgba(147, 197, 253, 0.55);
+  /* Cartão da BION IA e botão primário (.bp-acao, só neste app):
+     marca oficial #24058D. Branco sobre #24058D: 14,18:1; sobre o
+     início do degradê #3D1AAE: 10,73:1. Texto white/85 no cartão:
+     10,34:1 (#24058D) e 8,09:1 (#3D1AAE). O .bp-acao do globals.css
+     (marinho) permanece para Médicos e Admin. */
+  --bpp-acao-inicio: #3D1AAE;
+  --bpp-acao-fim: #24058D;
+  --bpp-acao-texto: #ffffff;
+  --bpp-acao-sombra: rgba(36, 5, 141, 0.45);
+  --bpp-ia-fundo-inicio: #3D1AAE;
+  --bpp-ia-fundo-meio: #24058D;
+  --bpp-ia-fundo-fim: #1C0470;
+  --bpp-ia-cta-texto: #24058D;
+  --bpp-ia-brilho: rgba(61, 26, 174, 0.42);
+  --bpp-ia-aro: rgba(150, 165, 255, 0.55);
   /* Ações secundárias da próxima consulta */
   --bpp-sec-fundo: rgba(10, 31, 68, 0.07);
   --bpp-sec-borda: rgba(10, 31, 68, 0.14);
@@ -104,8 +116,11 @@
   --bpp-grafico-eixo-marinho: rgba(255, 255, 255, 0.8);
   --bpp-placeholder: rgba(242, 246, 252, 0.62);
   --bpp-s1-brilho: #03101f;
-  --bpp-ia-brilho: rgba(59, 130, 246, 0.34);
-  --bpp-ia-aro: rgba(147, 197, 253, 0.35);
+  /* Superfícies preenchidas herdam o roxo do Clean: branco sobre
+     #24058D continua 14,18:1 (AA). Não usamos #96A5FF como fundo —
+     branco sobre o tint falha (~2,30:1). Só o brilho acompanha o escuro. */
+  --bpp-ia-brilho: rgba(150, 165, 255, 0.34);
+  --bpp-ia-aro: rgba(150, 165, 255, 0.40);
   --bpp-sec-fundo: rgba(255, 255, 255, 0.08);
   --bpp-sec-borda: rgba(255, 255, 255, 0.16);
   --bpp-sec-texto: #f2f6fc;
@@ -166,11 +181,27 @@
 
 /* ---------------- cartão da BION IA: o destaque do Início ------------ */
 .bp-app-paciente .bpp-cartao-ia {
+  background: linear-gradient(
+    to bottom right,
+    var(--bpp-ia-fundo-inicio),
+    var(--bpp-ia-fundo-meio),
+    var(--bpp-ia-fundo-fim)
+  );
   box-shadow:
     0 0 0 1px var(--bpp-ia-aro),
     0 14px 36px -10px var(--bpp-ia-brilho),
     0 0 44px -6px var(--bpp-ia-brilho),
     inset 0 1px 0 rgba(255, 255, 255, 0.22);
+}
+.bp-app-paciente .bpp-cartao-ia .bpp-toque {
+  color: var(--bpp-ia-cta-texto);
+}
+
+/* Sobrescreve o .bp-acao marinho do globals.css só no app do paciente. */
+.bp-app-paciente .bp-acao {
+  background: linear-gradient(135deg, var(--bpp-acao-inicio) 0%, var(--bpp-acao-fim) 100%);
+  color: var(--bpp-acao-texto);
+  box-shadow: 0 8px 20px -6px var(--bpp-acao-sombra);
 }
 /* Reflexo que passa uma vez pelo cartão ao abrir o Início */
 .bp-app-paciente .bpp-cartao-ia::after {

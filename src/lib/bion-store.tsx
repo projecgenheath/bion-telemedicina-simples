@@ -141,16 +141,14 @@ type EstadoFresco = {
     consultaOrigemId?: string | null;
   }[];
   documentos: {
-    id: string; tipo: string; titulo: string; conteudo: string; medico: string; paciente: string;
+    id: string; tipo: string; titulo: string; conteudo: string; medico: string; medicoId?: string | null; paciente: string;
     pacienteId?: string | null; // M-9: filtro por identificador (homônimos)
     consultaId?: string | null; // A7: consulta em que o documento foi emitido
     medicamento?: string | null; posologia?: string | null; duracao?: string | null;
     observacoes?: string | null; cid?: string | null; controlado?: boolean; createdAt: string;
     medicoCrm?: string | null; pacienteCpf?: string | null; pacienteNascimento?: string | null;
     codigoVerificacao?: string | null; // item 26: id + HMAC do servidor p/ a via impressa
-    // 20261103a: o wire já manda status/canceladoEm; sem isso a ficha do admin
-    // não conseguia mostrar o estado Cancelado.
-    status?: "emitido" | "cancelado";
+    status?: "emitido" | "cancelado" | string | null;
     canceladoEm?: string | null;
   }[];
   arquivos: {
@@ -276,11 +274,12 @@ const mapDocumento = (x: EstadoFresco["documentos"][number]): Documento => ({
   tipo: x.tipo as Documento["tipo"],
   titulo: x.titulo,
   medico: x.medico,
+  medicoId: x.medicoId ?? undefined,
   paciente: x.paciente,
   pacienteId: x.pacienteId ?? undefined, // M-9: filtro por identificador
   consultaId: x.consultaId ?? undefined, // A7: vínculo com a consulta de emissão
   conteudo: x.conteudo,
-  data: fmtLonga(x.createdAt),
+  data: x.createdAt ? fmtLonga(x.createdAt) : "",
   criadoEm: x.createdAt, // A7: ISO confiável p/ documentos sem consultaId
   medicamento: x.medicamento ?? undefined,
   posologia: x.posologia ?? undefined,
@@ -292,7 +291,7 @@ const mapDocumento = (x: EstadoFresco["documentos"][number]): Documento => ({
   pacienteCpf: x.pacienteCpf ?? undefined,
   pacienteNascimento: x.pacienteNascimento ?? undefined,
   codigoVerificacao: x.codigoVerificacao ?? undefined, // item 26: verificação pública da via
-  status: x.status === "cancelado" ? "cancelado" : x.status === "emitido" ? "emitido" : undefined,
+  status: x.status === "cancelado" ? "cancelado" : "emitido",
   canceladoEm: x.canceladoEm ?? undefined,
 });
 

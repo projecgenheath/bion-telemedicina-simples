@@ -6,7 +6,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { expect, test } from "bun:test";
-import { decidirCancelamento, documentoCancelado, lerMotivo, MOTIVO_MAX } from "./cancelar-documento";
+import { decidirCancelamento, documentoCancelado, documentoEmitidoPor, lerMotivo, MOTIVO_MAX } from "./cancelar-documento";
 import { podeRenovarReceita } from "../../../lib/atendimento-tipo";
 
 const ler = (p: string) => readFileSync(path.join(process.cwd(), p), "utf8");
@@ -56,7 +56,7 @@ test("renovação bloqueada para documento cancelado", () => {
   expect(documentoCancelado({ status: "emitido" })).toBe(false);
   expect(renovPaciente).toMatch(/receita\.status === "cancelado"[\s\S]{0,200}status: 409/);
   expect(renovMedico).toMatch(/pedido\.documento\?\.status === "cancelado"[\s\S]{0,200}status: 409/);
-  expect(tela).toContain('!documentoCancelado(entrada.docs[0])');
+  expect(tela).toContain('!documentoCancelado(entrada.docs[0]) && documentoEmitidoPor(entrada.docs[0], medicoIdAtual)');
 });
 
 test("PDF e lista mostram cancelado", () => {
@@ -99,4 +99,20 @@ test("tipo da notificação segue o tipo do documento", () => {
   expect(tipoNotificacaoDocumento("exame_solicitado")).toBe("exame");
   expect(tipoNotificacaoDocumento("atestado")).toBe("receita");
   expect(rota).toContain("tipo: tipoNotificacaoDocumento(doc.tipo)");
+});
+
+test("prontuário só cancela/renova documento do próprio médico", () => {
+  expect(documentoEmitidoPor({ medicoId: "m1" }, "m1")).toBe(true);
+  expect(documentoEmitidoPor({ medicoId: "m2" }, "m1")).toBe(false);
+  expect(documentoEmitidoPor({ medicoId: undefined }, "m1")).toBe(false);
+  expect(documentoEmitidoPor({ medicoId: "m1" }, "")).toBe(false);
+  expect(tela).toContain("documentoEmitidoPor");
+  expect(tela).toContain("medicoIdAtual");
+  expect(tela).toContain("(outro médico)");
+  const wire = ler("src/lib/server/dados.ts");
+  expect(wire).toContain("medicoId: d.medicoId");
+  const store = ler("src/lib/bion-store.tsx");
+  expect(store).toContain("medicoId: x.medicoId ?? undefined");
+  expect(store).toContain('status: x.status === "cancelado" ? "cancelado" : "emitido"');
+  expect(store).toContain("canceladoEm: x.canceladoEm ?? undefined");
 });
