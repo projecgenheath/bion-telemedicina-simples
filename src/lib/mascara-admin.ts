@@ -3,7 +3,8 @@
  *
  * O admin vê só o TIPO do documento/arquivo, nunca o título nem o nome do
  * arquivo (ex.: "receita-losartana.pdf" → "Receita.pdf"). Funções puras, sem
- * banco: aplicadas no servidor na LEITURA (bootstrap, download, auditoria).
+ * banco: aplicadas no servidor na LEITURA (bootstrap, upload, auditoria). O admin não baixa
+ * arquivos: GET /api/arquivos devolve 403 (decisão do Alisson, 10/11).
  * O banco não é alterado — a trilha de auditoria antiga continua íntegra e
  * só é mascarada ao ser mostrada ao admin.
  */
@@ -63,7 +64,7 @@ type ArquivoComNome = { nome: string; tipo: string; storagePath?: string | null 
  * Arquivo como o ADMIN pode ver: nome = rótulo + extensão neutra; tipo =
  * rótulo (o tipo livre "Exame cardiológico" já diz demais); storagePath
  * (que contém o nome original) vira um marcador — o cliente só usa a
- * presença dele para mostrar o botão de download.
+ * presença dele (e o admin recebe 403 no download).
  */
 export function arquivoParaAdmin<T extends ArquivoComNome>(a: T): T {
   return {
