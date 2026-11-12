@@ -32,7 +32,7 @@ export function ConsentimentoLaudoIA({
       aria-describedby="texto-consentimento-laudo"
     >
       <button type="button" className="absolute inset-0 bpp-sheet-veu" aria-label="Cancelar envio" onClick={onCancelar} />
-      <div className="bpp-sheet-painel relative w-full max-w-lg max-h-[92svh] overflow-y-auto rounded-t-3xl bpp-sheet border-t bpp-sheet-borda px-5 pt-3 pb-8 shadow-[0_-12px_40px_rgba(2,8,26,0.35)]">
+      <div className="bpp-animar bpp-sheet-painel relative w-full max-w-lg max-h-[92svh] overflow-y-auto rounded-t-3xl bpp-sheet border-t bpp-sheet-borda px-5 pt-3 pb-8 shadow-[0_-12px_40px_rgba(2,8,26,0.35)]">
         <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bpp-sheet-alca" aria-hidden />
         <h2 id="titulo-consentimento-laudo" className="text-lg font-bold inline-flex items-center gap-2">
           <ShieldAlert className="w-5 h-5" aria-hidden /> Antes de enviar o laudo

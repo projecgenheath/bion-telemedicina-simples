@@ -38,7 +38,7 @@ export function ChatListaMensagens({
 
       {pensando && (
         <div className="flex justify-start" aria-live="polite" aria-label="BION está digitando">
-          <div className="bp-glass px-4 py-3 rounded-3xl rounded-bl-md">
+          <div className="bp-glass bpp-animar px-4 py-3 rounded-3xl rounded-bl-md">
             <div className="flex items-center gap-3">
               <div className="flex gap-1.5">
                 {[0, 1, 2].map((d) => (

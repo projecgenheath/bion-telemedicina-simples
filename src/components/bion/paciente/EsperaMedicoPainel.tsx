@@ -173,7 +173,7 @@ export function EsperaMedicoPainel({
           ? { titulo: "Acesso negado", detalhe: "A conta que está aberta não participa desta consulta. Confira se você entrou com a conta certa." }
           : { titulo: "Sua sessão expirou", detalhe: "A espera parou de atualizar porque o seu acesso venceu. Entre de novo no app para continuar." };
     return (
-      <div className="absolute inset-0 z-40 grid place-items-center bg-bion-night/80 p-6 text-white backdrop-blur-sm">
+      <div className="bpp-animar absolute inset-0 z-40 grid place-items-center bg-bion-night/80 p-6 text-white backdrop-blur-sm">
         <section aria-labelledby="titulo-espera-medico" className="flex w-full max-w-xs flex-col items-center text-center">
           <Cabecalho refTitulo={tituloRef} icone={<ShieldAlert className="size-7" aria-hidden />} titulo={textos.titulo}>
             {textos.detalhe}

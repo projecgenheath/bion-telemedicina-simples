@@ -125,7 +125,7 @@ function FormMedicao({
   const [valores, setValores] = useState<Record<string, string>>(iniciais);
 
   return (
-    <div className="bp-glass p-5">
+    <div className="bp-glass bpp-animar p-5">
       <div className="grid grid-cols-2 gap-3">
         {campos.map((c) => (
           <label key={c.id} className="block">

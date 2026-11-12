@@ -88,7 +88,7 @@ function FormConsentimentoIA({
   }, [registrarDescarte]);
 
   return (
-    <div className="space-y-3">
+    <div className="bpp-animar space-y-3">
       <p>
         A BION IA é <strong>opcional</strong>. Ela usa o modelo Nemotron, da{" "}
         <strong>NVIDIA Corporation, nos EUA</strong>. Se você ativar, o que escrever no chat, na triagem e nos laudos,{" "}

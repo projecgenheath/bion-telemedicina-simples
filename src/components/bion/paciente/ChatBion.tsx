@@ -980,7 +980,7 @@ export function ChatBion({
         {/* Modo laudo com histórico de outra abertura: cartão fixo de envio no
             topo (a conversa não começou pela mensagem contextual de laudo). */}
         {mostrarCartaoLaudo(intencao, mensagens) ? (
-          <section aria-label="Enviar laudo" className="bp-glass p-4 text-bion-ink dark:text-bion-paper">
+          <section aria-label="Enviar laudo" className="bp-glass bpp-animar p-4 text-bion-ink dark:text-bion-paper">
             <div className="flex items-center gap-2 text-sm font-bold mb-1">
               <FileUp className="w-4 h-4" /> Enviar laudo
             </div>
