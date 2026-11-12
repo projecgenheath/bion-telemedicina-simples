@@ -4,7 +4,7 @@ import { CODIGO_ACEITE_TERMOS_PENDENTE, ERRO_ACEITE_TERMOS_PENDENTE } from "@/li
 import { textoNota } from "@/lib/medico-exibicao";
 import { ErroBionIa, consultarConsentimentoIa, perguntarBionIa } from "@/lib/bion-ia-cliente";
 import { AVISO_DADOS_PESSOAIS_IA, ehConsentimentoIaPendente } from "@/lib/consentimento-ia";
-import { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useVoltarFecha } from "./useVoltarFecha";
 import { useFocoDialogo } from "./useFocoDialogo";
 import { toast } from "sonner";
@@ -61,6 +61,29 @@ const fmtBRL = (v: number) => v.toLocaleString("pt-BR", { style: "currency", cur
  *    → leitura pela IA (laudos laboratoriais são processados e extraídos);
  *  - Enviar laudo avulso: PDF/foto lido com verificação de segurança do nome.
  */
+
+
+/** Mantém o compositor acima do teclado no mobile (visualViewport). */
+function useAcimaDoTeclado(ref: React.RefObject<HTMLElement | null>) {
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || !window.visualViewport) return;
+    const vv = window.visualViewport;
+    const ajustar = () => {
+      const altura = vv.height;
+      const offset = Math.max(0, window.innerHeight - vv.offsetTop - altura);
+      el.style.paddingBottom = offset > 0 ? `${offset}px` : "";
+    };
+    ajustar();
+    vv.addEventListener("resize", ajustar);
+    vv.addEventListener("scroll", ajustar);
+    return () => {
+      vv.removeEventListener("resize", ajustar);
+      vv.removeEventListener("scroll", ajustar);
+      el.style.paddingBottom = "";
+    };
+  }, [ref]);
+}
 
 export function ChatBion({
   aberto,
@@ -883,6 +906,8 @@ export function ChatBion({
   const opcoes = opcoesEtapas();
 
   const dialogoRef = useRef<HTMLDivElement>(null);
+  const compositorRef = useRef<HTMLDivElement>(null);
+  useAcimaDoTeclado(compositorRef);
   useVoltarFecha(aberto, onFechar);
   useFocoDialogo(aberto, onFechar, dialogoRef);
 
@@ -1204,7 +1229,7 @@ export function ChatBion({
       </div>
 
       {/* Entrada */}
-      <div className="px-5 pb-5 bp-safe-bottom">
+      <div ref={compositorRef} className="px-5 pb-5 bp-safe-bottom transition-[padding] duration-200">
         {anamneseAtiva && triagemSemIa ? (
           <div className="mb-2 space-y-2">
             {cardTriagemIa ? (
