@@ -626,7 +626,7 @@ function Lancador({
         {filtrados.map((g) => (
           <div key={g.rotulo}>
             <div className="ba-rotulo mb-2">{g.rotulo}</div>
-            <div className="grid grid-cols-3 gap-2 bion-surgir-lista">
+            <div className="grid grid-cols-3 gap-2 bion-surgir-lista ba-animar">
               {g.itens.map((it) => (
                 <button
                   key={it.id}
