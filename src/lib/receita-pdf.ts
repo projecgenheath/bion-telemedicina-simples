@@ -73,7 +73,7 @@ function carimbarCancelado(doc: jsPDF, canceladoEm?: string | null) {
   }
 }
 
-export function gerarDocumentoPDF(d: Documento) {
+function montarDocumentoPDF(d: Documento): { doc: jsPDF; nomeArquivo: string } {
   const doc = new jsPDF({ unit: "pt", format: "a4" });
   const L = 48;
   const W = doc.internal.pageSize.getWidth();
@@ -346,7 +346,22 @@ export function gerarDocumentoPDF(d: Documento) {
     .replace(/\s+/g, "-")
     .toLowerCase()}.pdf`;
   if (d.status === "cancelado") carimbarCancelado(doc, d.canceladoEm);
+  return { doc, nomeArquivo };
+}
+
+/** Baixa a via timbrada pelo navegador (jsPDF.save). No app Android o
+ *  download por <a download> não salva nada: use documentoPDFBytes +
+ *  salvarPdf/imprimirPdf de "@/lib/nativo/arquivos". */
+export function gerarDocumentoPDF(d: Documento) {
+  const { doc, nomeArquivo } = montarDocumentoPDF(d);
   doc.save(nomeArquivo);
+}
+
+/** A MESMA via timbrada de gerarDocumentoPDF, em bytes + nome sugerido —
+ *  para o helper de arquivos (salvar/compartilhar/imprimir no app e na web). */
+export function documentoPDFBytes(d: Documento): { bytes: Uint8Array; nome: string } {
+  const { doc, nomeArquivo } = montarDocumentoPDF(d);
+  return { bytes: new Uint8Array(doc.output("arraybuffer")), nome: nomeArquivo };
 }
 
 /**

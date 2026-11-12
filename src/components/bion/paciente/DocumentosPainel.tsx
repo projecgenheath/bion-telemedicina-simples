@@ -8,7 +8,7 @@ import {
   ArrowLeft,
   BadgeCheck,
   ClipboardList,
-  Copy,
+  Download,
   FileText,
   FileUp,
   MessageCircle,
@@ -18,7 +18,6 @@ import {
   X,
 } from "lucide-react";
 import { useBion } from "@/lib/bion-store";
-import { useAppNativo } from "@/lib/useAppNativo";
 import { toast } from "sonner";
 import { EstadoVazio } from "./EstadosPaciente";
 import { CalendarPlus, RotateCcw } from "lucide-react";
@@ -28,12 +27,17 @@ import { RenovarReceitaSheet } from "./RenovarReceitaSheet";
 import { usePedidosRenovacao } from "./usePedidosRenovacao";
 import { EtiquetaTipo } from "./tipo-atendimento-ui";
 import { CLASSE_ETIQUETA } from "./etiqueta-consulta";
+import type { Documento } from "@/lib/bion-tipos";
+import { agruparDocumentosPaciente, arquivosDoMedico, ehPdf, nomeComTratamento, seloCancelado } from "./documentos-paciente";
+import { acaoDocumento, baixarArquivoMedico, executar, resumoConsultaPDFBytes, type Acao } from "./acoes-documento";
 
 /**
  * Página 4 do app do paciente (gesto direita → esquerda):
- *  1. Documentos por consulta REALIZADA (status "concluida"; antes entravam
- *     também as confirmadas, ainda por acontecer) — atestados, receitas,
- *     pedidos de exames e prontuário, com visualização e impressão;
+ *  1. Todos os documentos emitidos para o paciente, agrupados pela consulta
+ *     de emissão (inclusive antes de a consulta ser concluída), mais
+ *     "Outros documentos" (sem consulta) e "Arquivos do médico". Ver, Baixar
+ *     PDF e Imprimir usam a via timbrada em PDF pelo helper comum
+ *     (lib/nativo/arquivos): funcionam no navegador e no app Android;
  *  2. Ao rolar para baixo: mensagens com os médicos das consultas — aberta do
  *     agendamento até 30 dias depois da consulta (validado também no servidor).
  */
@@ -54,43 +58,42 @@ const ROTULO_DOC = {
   prontuario: "Prontuário da consulta",
 } as const;
 
+type ItemDoc = {
+  id: string;
+  tipo: keyof typeof ICONE_DOC;
+  titulo: string;
+  subtitulo?: string;
+  data: string;
+  original?: Documento;
+  corpo: string[];
+  selo: string | null;
+  /** Gera o PDF e executa a ação (via timbrada ou resumo da consulta). */
+  acao: (a: Acao) => Promise<boolean>;
+};
+
 function Visualizador({
-  titulo,
-  corpo,
-  imprimir = false,
+  item,
   onFechar,
 }: {
-  titulo: string;
-  corpo: string[];
-  /** Fase 3: o botão de impressora da lista abre o documento JÁ imprimindo. */
-  imprimir?: boolean;
+  item: ItemDoc;
   onFechar: () => void;
 }) {
   const dialogoRef = useRef<HTMLDivElement>(null);
   useVoltarFecha(true, onFechar);
   useFocoDialogo(true, onFechar, dialogoRef);
-  // A WebView do app de loja (Capacitor/Android) ignora window.print(): o botão
-  // não fazia nada. No app, "Imprimir" vira "Copiar" (texto do documento).
-  const noApp = useAppNativo();
-  const copiar = async () => {
+  const [ocupado, setOcupado] = useState<Acao | null>(null);
+  const rodar = async (a: Acao) => {
+    if (ocupado) return;
+    setOcupado(a);
     try {
-      await navigator.clipboard.writeText([titulo, ...corpo].join("\n"));
-      toast.success("Texto do documento copiado.", {
-        description: "Para imprimir ou salvar em PDF, abra o BION pelo navegador.",
-      });
-    } catch {
-      toast.error("Não foi possível copiar. Para imprimir, abra o BION pelo navegador.");
+      await item.acao(a);
+    } finally {
+      setOcupado(null);
     }
   };
-  useEffect(() => {
-    if (!imprimir || noApp) return;
-    // Espera o documento pintar (a regra @media print só mostra .bp-impressao).
-    const id = window.setTimeout(() => window.print(), 250);
-    return () => window.clearTimeout(id);
-  }, [imprimir, noApp]);
 
   return (
-    <div ref={dialogoRef} className="absolute inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label={`Documento: ${titulo}`}>
+    <div ref={dialogoRef} className="absolute inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label={`Documento: ${item.titulo}`}>
       {/* A11Y: fundo clicável agora é button real (tabIndex=-1 o mantém fora
           da ordem de tabulação — fechar por teclado é papel do ESC/botão). */}
       <button
@@ -102,33 +105,33 @@ function Visualizador({
         onClick={onFechar}
       />
       <div className="bpp-surgir relative w-full max-w-lg max-h-[88vh] overflow-y-auto bp-coluna rounded-3xl bg-white dark:bg-bion-night p-6 shadow-2xl">
-        <div className="flex items-start justify-between gap-3 mb-4">
-          <h3 className="text-lg font-bold text-bion-ink dark:text-bion-paper">{titulo}</h3>
-          <div className="flex gap-2 shrink-0">
-            {noApp ? (
-              <button type="button"
-                onClick={() => void copiar()}
-                aria-label="Copiar texto do documento"
-                className="bpp-toque bp-acao px-4 min-h-11 text-xs inline-flex items-center gap-1.5"
-              >
-                <Copy className="w-4 h-4" /> Copiar
-              </button>
-            ) : (
-              <button type="button"
-                onClick={() => window.print()}
-                aria-label="Imprimir documento"
-                className="bpp-toque bp-acao px-4 min-h-11 text-xs inline-flex items-center gap-1.5"
-              >
-                <Printer className="w-4 h-4" /> Imprimir
-              </button>
-            )}
-            <button type="button" onClick={onFechar} aria-label="Fechar documento" className="bpp-toque w-11 h-11 inline-flex items-center justify-center rounded-full bg-bion-ink/5 dark:bg-white/10 text-bion-ink dark:text-bion-paper">
-              <X className="w-4 h-4" />
-            </button>
-          </div>
+        <div className="flex items-start justify-between gap-3 mb-3">
+          <h3 className="text-lg font-bold text-bion-ink dark:text-bion-paper">{item.titulo}</h3>
+          <button type="button" onClick={onFechar} aria-label="Fechar documento" className="bpp-toque shrink-0 w-11 h-11 inline-flex items-center justify-center rounded-full bg-bion-ink/5 dark:bg-white/10 text-bion-ink dark:text-bion-paper">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        {item.selo ? <SeloCancelado texto={item.selo} /> : null}
+        {/* A impressão e o download usam a via timbrada em PDF (iframe na web,
+            folha do sistema no app): a página do app não entra na impressão. */}
+        <div className="flex flex-wrap gap-2 mb-4">
+          <button type="button"
+            onClick={() => void rodar("baixar")}
+            disabled={ocupado !== null}
+            className="bpp-toque bp-acao px-4 min-h-11 text-xs inline-flex items-center gap-1.5 disabled:opacity-60"
+          >
+            <Download className="w-4 h-4" aria-hidden /> {ocupado === "baixar" ? "Gerando…" : "Baixar PDF"}
+          </button>
+          <button type="button"
+            onClick={() => void rodar("imprimir")}
+            disabled={ocupado !== null}
+            className="bpp-toque min-h-11 rounded-full border border-bion-sea/25 dark:border-sky-300/25 px-4 text-xs font-bold inline-flex items-center gap-1.5 text-bion-sea dark:text-sky-300 disabled:opacity-60"
+          >
+            <Printer className="w-4 h-4" aria-hidden /> {ocupado === "imprimir" ? "Abrindo…" : "Imprimir"}
+          </button>
         </div>
         <div className="bp-impressao space-y-2 text-sm leading-relaxed text-bion-ink dark:text-bion-paper whitespace-pre-line border-t border-bion-ink/10 dark:border-white/10 pt-4">
-          {corpo.map((p, i) => (
+          {item.corpo.map((p, i) => (
             <p key={i}>{p}</p>
           ))}
           <p className="pt-4 text-xs opacity-80">Documento sem assinatura digital ICP-Brasil — BION Telemedicina.</p>
@@ -136,6 +139,56 @@ function Visualizador({
       </div>
     </div>
   );
+}
+
+function SeloCancelado({ texto }: { texto: string }) {
+  return (
+    <span className="inline-flex mb-3 text-xs font-bold px-2.5 py-1 rounded-full bg-red-600/10 text-red-800 dark:bg-red-400/15 dark:text-red-300">
+      {texto}
+    </span>
+  );
+}
+
+const ROTULO_STATUS_CONSULTA: Partial<Record<string, string>> = {
+  confirmada: "Agendada",
+  pendente_anamnese: "Agendada",
+  em_espera: "Em andamento",
+  aguardando_reagendamento: "Aguardando nova data",
+  falta_paciente: "Falta registrada",
+  cancelada: "Cancelada",
+};
+
+function itemDeDocumento(d: Documento): ItemDoc {
+  // B11: título = medicamento (receita) ou o título próprio do documento;
+  // o tipo desce para o subtítulo.
+  const rotuloTipo = ROTULO_DOC[d.tipo as keyof typeof ROTULO_DOC] as string | undefined;
+  const detalhe =
+    d.tipo === "receita" && d.medicamento
+      ? d.medicamento
+      : d.titulo && d.titulo !== rotuloTipo
+        ? d.titulo
+        : "";
+  return {
+    id: d.id,
+    tipo: (d.tipo === "exame" ? "exame_solicitado" : d.tipo) as keyof typeof ICONE_DOC,
+    titulo: detalhe || rotuloTipo || d.titulo,
+    subtitulo: detalhe ? rotuloTipo : undefined,
+    data: d.data,
+    original: d,
+    selo: seloCancelado(d),
+    acao: (a) => acaoDocumento(a, d),
+    corpo: [
+      `${d.titulo}`,
+      d.tipo === "receita" && d.medicamento ? `Medicamento: ${d.medicamento}` : "",
+      d.tipo === "receita" && d.posologia ? `Posologia: ${d.posologia}` : "",
+      d.tipo === "receita" && d.duracao ? `Duração: ${d.duracao}` : "",
+      d.cid ? `CID: ${d.cid}` : "",
+      d.conteudo,
+      d.observacoes ? `Observações: ${d.observacoes}` : "",
+      ``,
+      nomeComTratamento(d.medico),
+    ].filter((l) => l !== ""),
+  };
 }
 
 export function DocumentosPainel({
@@ -148,10 +201,10 @@ export function DocumentosPainel({
   onConversa: (medicoId: string | null) => void;
   onAgendar: () => void;
 }) {
-  const { consultas, documentos, medicos, sessao, mensagens, enviarMensagem, marcarConversaLida, naoLidasMensagens } = useBion();
+  const { consultas, documentosVisiveis, arquivos, medicos, sessao, mensagens, enviarMensagem, marcarConversaLida, naoLidasMensagens } = useBion();
   const [consultaSelecionada, setConsultaSelecionada] = useState<string | null>(null);
-  const [visualizando, setVisualizando] = useState<{ titulo: string; corpo: string[]; imprimir?: boolean } | null>(null);
-  const noApp = useAppNativo();
+  const [visualizando, setVisualizando] = useState<ItemDoc | null>(null);
+  const [ocupado, setOcupado] = useState<string | null>(null);
   const setConversaAtiva = onConversa;
   const [texto, setTexto] = useState("");
   const [retornoDe, setRetornoDe] = useState<string | null>(null);
@@ -159,91 +212,57 @@ export function DocumentosPainel({
   const [cancelandoPedido, setCancelandoPedido] = useState<string | null>(null);
   const renovacao = usePedidosRenovacao(sessao.role === "paciente");
 
-  const realizadas = useMemo(
-    () =>
-      consultas
-        .filter((c) => c.paciente === sessao.nome && c.status === "concluida")
-        .sort((a, b) => b.ts - a.ts),
-    [consultas, sessao.nome],
+  // Todos os documentos do paciente, por consulta de emissão + "Outros".
+  const { grupos, outros } = useMemo(
+    () => agruparDocumentosPaciente({ consultas, documentos: documentosVisiveis, pacienteId: sessao.id, pacienteNome: sessao.nome }),
+    [consultas, documentosVisiveis, sessao.id, sessao.nome],
   );
+  const realizadas = useMemo(() => grupos.map((g) => g.consulta).filter((c) => c.status === "concluida"), [grupos]);
+  const doMedico = useMemo(() => arquivosDoMedico(arquivos), [arquivos]);
 
-  // B10: a aba abria "vazia" — só os chips, nenhum documento à vista.
-  // Pré-seleciona a consulta realizada mais recente (realizadas já vem
-  // ordenada da mais nova para a mais antiga).
+  // B10: a aba abria "vazia" — pré-seleciona o grupo mais recente.
   useEffect(() => {
-    if (!consultaSelecionada && realizadas.length > 0) setConsultaSelecionada(realizadas[0].id);
-  }, [consultaSelecionada, realizadas]);
+    if (grupos.length === 0) return;
+    if (!consultaSelecionada || !grupos.some((g) => g.consulta.id === consultaSelecionada)) setConsultaSelecionada(grupos[0].consulta.id);
+  }, [consultaSelecionada, grupos]);
 
-  const documentosDaConsulta = (consultaId: string) => {
-    const c = realizadas.find((x) => x.id === consultaId);
-    if (!c) return [];
-    const ini = c.ts - 2 * 86_400_000;
-    const fim = c.ts + 7 * 86_400_000;
-    const docs = documentos.filter((d) => {
-      // A7: documento COM consulta vinculada pertence a ela — e só a ela.
-      if (d.consultaId) return d.consultaId === c.id;
-      // Sem vínculo (legado, ex.: receita renovada fora de consulta): mantém o
-      // recorte médico/paciente/janela, mas sobre a data ISO de criação —
-      // nunca sobre o texto localizado de exibição (`d.data`): o parse dele
-      // com new Date() dava NaN em 7 dos 12 meses e o documento aparecia sob
-      // qualquer consulta concluída do mesmo médico.
-      if (d.medico !== c.medico || d.paciente !== sessao.nome) return false;
-      const ts = d.criadoEm ? new Date(d.criadoEm).getTime() : NaN;
-      return !Number.isNaN(ts) && ts >= ini && ts <= fim;
-    });
-    const lista = docs.map((d) => {
-      // B11: o título específico era descartado e toda receita/atestado
-      // virava o rótulo genérico do tipo — 2 receitas da mesma consulta
-      // ficavam idênticas na lista. Título = medicamento (receita) ou o
-      // título próprio do documento; o tipo desce para o subtítulo.
-      const rotuloTipo = ROTULO_DOC[d.tipo as keyof typeof ROTULO_DOC] as string | undefined;
-      const detalhe =
-        d.tipo === "receita" && d.medicamento
-          ? d.medicamento
-          : d.titulo && d.titulo !== rotuloTipo
-            ? d.titulo
-            : "";
-      return {
-      id: d.id,
-      tipo: d.tipo as keyof typeof ICONE_DOC,
-      titulo: detalhe || rotuloTipo || d.titulo,
-      subtitulo: detalhe ? rotuloTipo : undefined,
-      data: d.data,
-      original: d as (typeof documentos)[number] | undefined,
-      corpo: [
-        `${d.titulo}`,
-        d.tipo === "receita" && d.medicamento ? `Medicamento: ${d.medicamento}` : "",
-        d.tipo === "receita" && d.posologia ? `Posologia: ${d.posologia}` : "",
-        d.tipo === "receita" && d.duracao ? `Duração: ${d.duracao}` : "",
-        d.cid ? `CID: ${d.cid}` : "",
-        d.conteudo,
-        d.observacoes ? `Observações: ${d.observacoes}` : "",
-        ``,
-        `Dr(a). ${d.medico}`,
-      ].filter((l) => l !== ""),
-      };
-    });
-    if (c.resumoMedico) {
+  const grupoSelecionado = grupos.find((g) => g.consulta.id === consultaSelecionada) ?? null;
+  const docsSelecionados: ItemDoc[] = (() => {
+    if (!grupoSelecionado) return [];
+    const c = grupoSelecionado.consulta;
+    const lista = grupoSelecionado.documentos.map(itemDeDocumento);
+    if (grupoSelecionado.prontuario) {
+      const resumo = grupoSelecionado.prontuario;
       lista.unshift({
         id: `prontuario-${c.id}`,
-        tipo: "prontuario" as const,
-        original: undefined,
+        tipo: "prontuario",
         titulo: ROTULO_DOC.prontuario,
         subtitulo: undefined,
         data: c.data,
-        corpo: [
-          `Consulta: ${c.especialidade} · ${c.data} às ${c.hora}`,
-          `Profissional: ${c.medico}`,
-          ``,
-          c.resumoMedico,
-        ],
+        original: undefined,
+        selo: null,
+        acao: (a) =>
+          executar(
+            a,
+            resumoConsultaPDFBytes({ especialidade: c.especialidade, data: c.data, hora: c.hora, medico: c.medico, resumo, paciente: sessao.nome }),
+            `prontuario-${c.especialidade}-${c.data}`,
+          ),
+        corpo: [`Consulta: ${c.especialidade} · ${c.data} às ${c.hora}`, `Profissional: ${c.medico}`, ``, resumo],
       });
     }
     return lista;
-  };
+  })();
+  const itensOutros = useMemo(() => outros.map(itemDeDocumento), [outros]);
 
-  // Calculado uma vez por render (antes rodava 2 vezes).
-  const docsSelecionados = consultaSelecionada ? documentosDaConsulta(consultaSelecionada) : [];
+  const rodar = async (chave: string, fn: () => Promise<boolean>) => {
+    if (ocupado) return;
+    setOcupado(chave);
+    try {
+      await fn();
+    } finally {
+      setOcupado(null);
+    }
+  };
 
   /* -------------------------- mensagens (30 dias) ------------------------- */
 
@@ -318,90 +337,20 @@ export function DocumentosPainel({
     fimListaRef.current?.scrollIntoView({ block: "end" });
   }, [conversa.length, conversaAtiva, alturaVisivel]);
 
-  return (
-    <div className="px-5 py-6 space-y-4 bp-safe-top pb-24">
-      {visualizando && <Visualizador titulo={visualizando.titulo} corpo={visualizando.corpo} imprimir={visualizando.imprimir} onFechar={() => setVisualizando(null)} />}
-
-      {/* ------------------------------ Documentos ------------------------------ */}
-      <section aria-label="Documentos das consultas">
-        <h2 className="text-2xl font-black text-bion-ink dark:text-bion-paper">Documentos</h2>
-        <p className="text-sm text-bion-ink/75 dark:text-bion-paper/75 mb-4">
-          Escolha uma consulta realizada para ver ou imprimir seus documentos.
-        </p>
-
-        {realizadas.length === 0 ? (
-          <EstadoVazio
-            icone={<FileText className="w-6 h-6" />}
-            titulo="Nenhuma consulta realizada ainda"
-            texto="Depois da sua primeira teleconsulta, receitas, atestados e pedidos de exame aparecem aqui."
-            acao={{ rotulo: "Agendar consulta", onClick: onAgendar }}
-          />
-        ) : (
-          <div className="flex gap-2 overflow-x-auto bp-coluna pb-1 -mx-1 px-1">
-            {realizadas.map((c) => (
-              <button type="button"
-                key={c.id}
-                onClick={() => setConsultaSelecionada(c.id)}
-                aria-pressed={consultaSelecionada === c.id}
-                className={`bpp-toque shrink-0 rounded-2xl px-4 py-3 text-left transition border ${
-                  consultaSelecionada === c.id
-                    ? "bp-acao border-transparent"
-                    : "bp-glass border-transparent text-bion-ink dark:text-bion-paper"
-                }`}
-              >
-                <div className="text-sm font-bold">{c.especialidade}</div>
-                <div className={`text-xs ${consultaSelecionada === c.id ? "opacity-80" : "opacity-80"}`}>
-                  {c.data} · {c.medico.split(" ").slice(-1)[0]}
-                </div>
-              </button>
-            ))}
-          </div>
-        )}
-
-        {consultaSelecionada && (
-          <div className="mt-4 space-y-2">
-            {(() => {
-              const c = realizadas.find((x) => x.id === consultaSelecionada);
-              if (!c) return null;
-              const noPrazo = Date.now() - c.ts <= PRAZO_RETORNO_DIAS * 86_400_000;
-              return (
-                <div className="bp-glass p-4 flex items-center gap-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-bold text-bion-ink dark:text-bion-paper inline-flex items-center gap-2 flex-wrap">
-                      {c.especialidade} · {c.data} <EtiquetaTipo consulta={c} />
-                    </div>
-                    <div className="text-xs opacity-80">
-                      {noPrazo ? `Retorno com ${c.medico}, com a triagem já preenchida.` : `O retorno pode ser marcado até ${PRAZO_RETORNO_DIAS} dias depois da consulta.`}
-                    </div>
-                  </div>
-                  {noPrazo ? (
-                    <button
-                      type="button"
-                      onClick={() => setRetornoDe(c.id)}
-                      className="bpp-toque bp-acao shrink-0 min-h-11 rounded-full px-4 text-xs font-bold inline-flex items-center gap-1.5"
-                    >
-                      <CalendarPlus className="w-4 h-4" aria-hidden /> Marcar retorno
-                    </button>
-                  ) : null}
-                </div>
-              );
-            })()}
-            {docsSelecionados.length === 0 ? (
-              <EstadoVazio icone={<ClipboardList className="w-6 h-6" />} titulo="Nenhum documento nesta consulta" texto="Se o médico emitir algo, aparece aqui." />
-            ) : (
-              docsSelecionados.map((d) => {
-                const Icone = ICONE_DOC[d.tipo] ?? FileText;
+  const linhaDocumento = (d: ItemDoc) => {
+    const Icone = ICONE_DOC[d.tipo] ?? FileText;
                 return (
-                  <div key={d.id} className="bp-glass p-4 flex items-center gap-3">
+                  <div key={d.id} className="bp-glass p-4 flex items-start gap-3">
                     <div className="w-11 h-11 rounded-2xl bg-bion-sea/10 dark:bg-sky-400/10 text-bion-sea dark:text-sky-300 inline-flex items-center justify-center shrink-0">
                       <Icone className="w-5 h-5" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="text-sm font-bold text-bion-ink dark:text-bion-paper">{d.titulo}</div>
+                      <div className="text-sm font-bold text-bion-ink dark:text-bion-paper break-words">{d.titulo}</div>
                       <div className="text-xs opacity-80">{d.subtitulo ? `${d.subtitulo} · ` : ""}{d.data}</div>
+                      {d.selo ? <span className="mt-1 inline-flex text-xs font-bold px-2.5 py-1 rounded-full bg-red-600/10 text-red-800 dark:bg-red-400/15 dark:text-red-300">{d.selo}</span> : null}
                       {(() => {
                         const o = d.original;
-                        if (!o || o.tipo !== "receita" || !renovacao.disponivel) return null;
+                        if (!o || o.tipo !== "receita" || o.status === "cancelado" || !renovacao.disponivel) return null;
                         const pedido = pedidoDaReceita(renovacao.pedidos, o.id);
                         if (pedido) {
                           const r = ROTULO_STATUS_RENOVACAO[pedido.status];
@@ -460,29 +409,156 @@ export function DocumentosPainel({
                           </button>
                         );
                       })()}
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <button type="button"
+                        onClick={() => setVisualizando(d)}
+                        className="bpp-toque shrink-0 min-h-11 rounded-full border border-bion-sea/25 dark:border-sky-300/25 px-4 py-2 text-xs font-bold text-bion-sea dark:text-sky-300"
+                      >
+                        Ver
+                      </button>
+                      <button type="button"
+                        onClick={() => void rodar(`baixar-${d.id}`, () => d.acao("baixar"))}
+                        disabled={ocupado !== null}
+                        aria-label={`Baixar PDF de ${d.titulo}`}
+                        className="bpp-toque shrink-0 min-h-11 px-3.5 inline-flex items-center gap-1.5 rounded-full bg-bion-ink/5 dark:bg-white/10 text-xs font-bold text-bion-ink dark:text-bion-paper disabled:opacity-60"
+                      >
+                        <Download className="w-4 h-4" aria-hidden /> {ocupado === `baixar-${d.id}` ? "Gerando…" : "Baixar PDF"}
+                      </button>
+                      <button type="button"
+                        onClick={() => void rodar(`imprimir-${d.id}`, () => d.acao("imprimir"))}
+                        disabled={ocupado !== null}
+                        aria-label={`Imprimir ${d.titulo}`}
+                        className="bpp-toque shrink-0 w-11 h-11 inline-flex items-center justify-center rounded-full bg-bion-ink/5 dark:bg-white/10 text-bion-ink dark:text-bion-paper disabled:opacity-60"
+                      >
+                        <Printer className="w-4 h-4" aria-hidden />
+                      </button>
+                      </div>
                     </div>
-                    <button type="button"
-                      onClick={() => setVisualizando({ titulo: d.titulo, corpo: d.corpo })}
-                      className="bpp-toque min-h-11 rounded-full border border-bion-sea/25 dark:border-sky-300/25 px-4 py-2 text-xs font-bold text-bion-sea dark:text-sky-300"
-                    >
-                      Ver
-                    </button>
-                    {/* No app a impressão não existe (WebView): fica só o "Ver", que oferece "Copiar". */}
-                    {!noApp && (
-                    <button type="button"
-                      onClick={() => setVisualizando({ titulo: d.titulo, corpo: d.corpo, imprimir: true })}
-                      aria-label={`Imprimir ${d.titulo}`}
-                      className="bpp-toque w-11 h-11 inline-flex items-center justify-center rounded-full bg-bion-ink/5 dark:bg-white/10 text-bion-ink dark:text-bion-paper"
-                    >
-                      <Printer className="w-4 h-4" />
-                    </button>
-                    )}
                   </div>
                 );
-              })
+  };
+  return (
+    <div className="px-5 py-6 space-y-4 bp-safe-top pb-24">
+      {visualizando && <Visualizador item={visualizando} onFechar={() => setVisualizando(null)} />}
+
+      {/* ------------------------------ Documentos ------------------------------ */}
+      <section aria-label="Documentos das consultas">
+        <h2 className="text-2xl font-black text-bion-ink dark:text-bion-paper">Documentos</h2>
+        <p className="text-sm text-bion-ink/75 dark:text-bion-paper/75 mb-4">
+          Receitas, atestados e pedidos de exame que o médico emitiu para você, por consulta. Veja, baixe o PDF ou imprima.
+        </p>
+
+        {grupos.length === 0 && itensOutros.length === 0 && doMedico.length === 0 ? (
+          <EstadoVazio
+            icone={<FileText className="w-6 h-6" />}
+            titulo="Nenhum documento ainda"
+            texto="Quando o médico emitir uma receita, um atestado ou um pedido de exame, ele aparece aqui."
+            acao={{ rotulo: "Agendar consulta", onClick: onAgendar }}
+          />
+        ) : null}
+
+        {grupos.length > 0 ? (
+          <div className="flex gap-2 overflow-x-auto bp-coluna pb-1 -mx-1 px-1" role="group" aria-label="Consultas">
+            {grupos.map(({ consulta: c }) => (
+              <button type="button"
+                key={c.id}
+                onClick={() => setConsultaSelecionada(c.id)}
+                aria-pressed={consultaSelecionada === c.id}
+                className={`bpp-toque shrink-0 rounded-2xl px-4 py-3 text-left transition border ${
+                  consultaSelecionada === c.id
+                    ? "bp-acao border-transparent"
+                    : "bp-glass border-transparent text-bion-ink dark:text-bion-paper"
+                }`}
+              >
+                <div className="text-sm font-bold">{c.especialidade}</div>
+                <div className="text-xs opacity-80">
+                  {c.data} · {c.medico.split(" ").slice(-1)[0]}
+                  {c.status !== "concluida" && ROTULO_STATUS_CONSULTA[c.status] ? ` · ${ROTULO_STATUS_CONSULTA[c.status]}` : ""}
+                </div>
+              </button>
+            ))}
+          </div>
+        ) : null}
+
+        {grupoSelecionado && (
+          <div className="mt-4 space-y-2">
+            {(() => {
+              const c = grupoSelecionado.consulta;
+              if (c.status !== "concluida") {
+                return (
+                  <div className="bp-glass p-4 text-sm font-bold text-bion-ink dark:text-bion-paper inline-flex items-center gap-2 flex-wrap w-full">
+                    {c.especialidade} · {c.data} <EtiquetaTipo consulta={c} />
+                  </div>
+                );
+              }
+              const noPrazo = Date.now() - c.ts <= PRAZO_RETORNO_DIAS * 86_400_000;
+              return (
+                <div className="bp-glass p-4 flex items-center gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-bold text-bion-ink dark:text-bion-paper inline-flex items-center gap-2 flex-wrap">
+                      {c.especialidade} · {c.data} <EtiquetaTipo consulta={c} />
+                    </div>
+                    <div className="text-xs opacity-80">
+                      {noPrazo ? `Retorno com ${c.medico}, com a triagem já preenchida.` : `O retorno pode ser marcado até ${PRAZO_RETORNO_DIAS} dias depois da consulta.`}
+                    </div>
+                  </div>
+                  {noPrazo ? (
+                    <button
+                      type="button"
+                      onClick={() => setRetornoDe(c.id)}
+                      className="bpp-toque bp-acao shrink-0 min-h-11 rounded-full px-4 text-xs font-bold inline-flex items-center gap-1.5"
+                    >
+                      <CalendarPlus className="w-4 h-4" aria-hidden /> Marcar retorno
+                    </button>
+                  ) : null}
+                </div>
+              );
+            })()}
+            {docsSelecionados.length === 0 ? (
+              <EstadoVazio icone={<ClipboardList className="w-6 h-6" />} titulo="Nenhum documento nesta consulta" texto="Se o médico emitir algo, aparece aqui." />
+            ) : (
+              docsSelecionados.map((d) => linhaDocumento(d))
             )}
           </div>
         )}
+
+        {itensOutros.length > 0 ? (
+          <div className="mt-6 space-y-2" role="group" aria-labelledby="docs-outros">
+            <h3 id="docs-outros" className="text-base font-bold text-bion-ink dark:text-bion-paper">Outros documentos</h3>
+            <p className="text-xs opacity-80">Emitidos fora de uma consulta, como uma receita renovada.</p>
+            {itensOutros.map((d) => linhaDocumento(d))}
+          </div>
+        ) : null}
+
+        {doMedico.length > 0 ? (
+          <div className="mt-6 space-y-2" role="group" aria-labelledby="docs-arquivos-medico">
+            <h3 id="docs-arquivos-medico" className="text-base font-bold text-bion-ink dark:text-bion-paper">Arquivos do médico</h3>
+            <p className="text-xs opacity-80">Laudos e arquivos que o médico enviou para você.</p>
+            {doMedico.map((a) => (
+              <div key={a.id} className="bp-glass p-4 flex items-center gap-3">
+                <div className="w-11 h-11 rounded-2xl bg-bion-sea/10 dark:bg-sky-400/10 text-bion-sea dark:text-sky-300 inline-flex items-center justify-center shrink-0">
+                  <FileUp className="w-5 h-5" aria-hidden />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-bold text-bion-ink dark:text-bion-paper break-words">{a.nome}</div>
+                  <div className="text-xs opacity-80">{[a.consulta, a.data].filter(Boolean).join(" · ")}</div>
+                </div>
+                {a.storagePath ? (
+                  <button type="button"
+                    onClick={() => void rodar(`arq-${a.id}`, () => baixarArquivoMedico(a))}
+                    disabled={ocupado !== null}
+                    aria-label={`${ehPdf(a.nome) ? "Baixar PDF" : "Baixar"} ${a.nome}`}
+                    className="bpp-toque shrink-0 w-11 h-11 inline-flex items-center justify-center rounded-full bg-bion-ink/5 dark:bg-white/10 text-bion-ink dark:text-bion-paper disabled:opacity-60"
+                  >
+                    <Download className="w-4 h-4" aria-hidden />
+                  </button>
+                ) : (
+                  <span className="shrink-0 text-xs opacity-80 text-right max-w-[7rem]">Sem cópia para baixar</span>
+                )}
+              </div>
+            ))}
+          </div>
+        ) : null}
       </section>
 
       {/* ------------------------------ Mensagens ------------------------------ */}
