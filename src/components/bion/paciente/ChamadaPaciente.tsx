@@ -172,6 +172,7 @@ export function TelaChamadaPaciente({
   const alerta = tele.erroMidia && alertaFechado !== tele.erroMidia ? tele.erroMidia : null;
 
   return (
+    <div className="bpp-chamada contents">
     <VideoChamada916
       videoRemotoRef={sala.videoRemotoRef}
       videoLocalRef={sala.videoLocalRef}
@@ -333,6 +334,7 @@ export function TelaChamadaPaciente({
         />
       </FolhaMensagens>
     </VideoChamada916>
+    </div>
   );
 }
 
@@ -352,7 +354,7 @@ function FolhaMensagens({
         <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px] data-[state=open]:animate-in data-[state=open]:fade-in-0" />
         <DialogPrimitive.Content
           aria-describedby={undefined}
-          className="fixed inset-x-0 bottom-0 z-50 mx-auto flex max-h-[78dvh] w-full max-w-md flex-col overflow-hidden rounded-t-[1.75rem] border border-b-0 border-white/10 bg-slate-900/95 text-white shadow-2xl outline-none pb-[env(safe-area-inset-bottom)] data-[state=open]:animate-in data-[state=open]:slide-in-from-bottom data-[state=closed]:animate-out data-[state=closed]:slide-out-to-bottom"
+          className="bpp-chamada fixed inset-x-0 bottom-0 z-50 mx-auto flex max-h-[78dvh] w-full max-w-md flex-col overflow-hidden rounded-t-[1.75rem] border border-b-0 border-white/10 bg-[#160e2c]/95 text-white shadow-2xl outline-none pb-[env(safe-area-inset-bottom)] data-[state=open]:animate-in data-[state=open]:slide-in-from-bottom data-[state=closed]:animate-out data-[state=closed]:slide-out-to-bottom"
         >
           <div className="flex items-center justify-between px-4 pb-1 pt-2.5">
             <span aria-hidden className="absolute left-1/2 top-2 h-1 w-10 -translate-x-1/2 rounded-full bg-white/25" />
@@ -382,7 +384,7 @@ function ForaDaJanela916({
   onVoltar: () => void;
 }) {
   return (
-    <div className="fixed inset-0 grid place-items-center bg-[radial-gradient(130%_70%_at_50%_15%,var(--bion-deep)_0%,var(--bion-ink)_55%,var(--bion-night)_100%)] p-6 text-white">
+    <div className="bpp-chamada fixed inset-0 grid place-items-center bg-[radial-gradient(130%_70%_at_50%_15%,var(--bion-deep)_0%,var(--bion-ink)_55%,var(--bion-night)_100%)] p-6 text-white">
       <div role="status" aria-live="polite" className="flex max-w-xs flex-col items-center gap-5 text-center">
         <div className="grid size-20 place-items-center rounded-full border border-white/25 bg-white/10">
           <Clock className="size-8" aria-hidden />

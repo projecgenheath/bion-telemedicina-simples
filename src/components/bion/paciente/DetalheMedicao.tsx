@@ -39,7 +39,7 @@ const rotuloCurto = (iso: string) => {
 };
 
 const COR_FAIXA_IMC: Record<FaixaImc, string> = {
-  abaixo: "text-sky-800 dark:text-sky-300",
+  abaixo: "text-bion-sea dark:text-[#C4B5FD]",
   normal: "text-emerald-800 dark:text-emerald-200",
   sobrepeso: "text-amber-800 dark:text-amber-200",
   obesidade: "text-red-700 dark:text-red-300",

@@ -711,7 +711,7 @@ export function PacienteApp() {
                           </button>
                         ) : null}
                         {st !== "feita" && janelaTriagem(c) ? (
-                          <button type="button" onClick={() => abrirTriagem(c.id)} className="bion-toque inline-flex items-center gap-1.5 rounded-full px-3 min-h-11 text-xs font-bold bg-sky-600/15">
+                          <button type="button" onClick={() => abrirTriagem(c.id)} className="bion-toque inline-flex items-center gap-1.5 rounded-full px-3 min-h-11 text-xs font-bold bg-bion-sea/12 text-bion-sea dark:bg-[#C4B5FD]/15 dark:text-[#DDD6FE]">
                             <Sparkles className="w-3.5 h-3.5" /> {st === "andamento" ? "Continuar triagem" : "Fazer triagem"}
                           </button>
                         ) : null}
@@ -749,7 +749,7 @@ export function PacienteApp() {
             {/* Cartão único da BION IA: agendar (principal) + perguntar */}
             <div style={{ "--bion-i": 1 } as CSSProperties} className="bion-surgir bpp-cartao-ia mt-4 w-full rounded-3xl p-5 text-white relative overflow-hidden">
               <span aria-hidden className="absolute -right-8 -top-10 w-40 h-40 rounded-full bg-white/10 blur-2xl" />
-              <span aria-hidden className="absolute right-10 -bottom-10 w-28 h-28 rounded-full bg-sky-300/15 blur-2xl" />
+              <span aria-hidden className="absolute right-10 -bottom-10 w-28 h-28 rounded-full bg-[#C4B5FD]/20 blur-2xl" />
               <div className="relative flex items-center gap-3">
                 <span className="w-12 h-12 rounded-2xl bg-white/15 inline-flex items-center justify-center shrink-0" aria-hidden>
                   <Sparkles className="w-6 h-6" />
@@ -1201,7 +1201,7 @@ function CardReembolso({ consulta }: { consulta: Consulta }) {
       ? "bg-emerald-600/15 text-emerald-800 dark:text-emerald-200"
       : rotulo.tom === "erro"
         ? "bg-red-600/10 text-red-800 dark:bg-red-400/15 dark:text-red-300"
-        : "bg-sky-500/15 text-sky-800 dark:text-sky-200";
+        : "bg-bion-sea/12 text-bion-sea dark:bg-[#C4B5FD]/15 dark:text-[#DDD6FE]";
   return (
     <div className="bp-glass mt-3 w-full px-5 py-4" aria-label={`Reembolso da consulta de ${consulta.especialidade}: ${rotulo.texto}`}>
       <div className="flex items-start justify-between gap-2">
@@ -1248,10 +1248,10 @@ function CardRemarcacaoPendente({ consulta, onContinuar }: { consulta: Consulta;
   };
 
   return (
-    <div className="bp-glass p-5 w-full mb-3 border border-sky-500/40" role="group" aria-label={`Remarcação de ${consulta.especialidade} aguardando pagamento da multa`}>
+    <div className="bp-glass p-5 w-full mb-3 border border-bion-sea/40 dark:border-[#C4B5FD]/40" role="group" aria-label={`Remarcação de ${consulta.especialidade} aguardando pagamento da multa`}>
       <div className="flex items-center justify-between mb-3">
         <span className="text-xs font-bold uppercase tracking-wider text-bion-ink/75 dark:text-bion-paper/75">Remarcação</span>
-        <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-sky-500/15 text-sky-800 dark:text-sky-200">
+        <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-bion-sea/12 text-bion-sea dark:bg-[#C4B5FD]/15 dark:text-[#DDD6FE]">
           Aguardando pagamento
         </span>
       </div>
