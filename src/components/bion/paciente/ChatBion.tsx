@@ -1204,14 +1204,7 @@ export function ChatBion({
           <div className="bp-glass p-4">
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs font-bold uppercase tracking-wide text-bion-ink/75 dark:text-bion-paper/75">{opcoes.titulo}</span>
-              <div className="flex items-center gap-2">
-                <button type="button"
-                  onClick={() => { setEtapa(null); setEscolha({}); setMensagens((m) => [...m, { remetente: "ia", texto: "Tudo bem, cancelei o agendamento. Como posso ajudar?" }]); }}
-                  className="text-xs font-semibold text-bion-ink/60 dark:text-bion-paper/60"
-                >
-                  Cancelar
-                </button>
-                {etapa !== "especialidade" && (
+              {etapa !== "especialidade" && (
                 <button type="button"
                   onClick={() => {
                     const anterior: Record<string, Etapa> = { medico: "especialidade", dia: "medico", hora: "dia", confirmar: "hora" };
@@ -1225,8 +1218,7 @@ export function ChatBion({
                 >
                   <ArrowLeft className="w-3 h-3" /> voltar
                 </button>
-                )}
-              </div>
+              )}
             </div>
             <div className="grid grid-cols-2 gap-2">
               {opcoes.opcoes.map((o) => (
@@ -1271,7 +1263,14 @@ export function ChatBion({
         <div className="bp-glass flex items-center gap-2 !rounded-full p-2 pl-5">
           <input
             value={entrada}
-            onChange={(e) => setEntrada(e.target.value)}
+            onChange={(e) => {
+              setEntrada(e.target.value);
+              // Digitar sai do wizard — o que o usuário escreve vale mais
+              if (etapa !== null && !anamneseAtiva) {
+                setEtapa(null);
+                setEscolha({});
+              }
+            }}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
