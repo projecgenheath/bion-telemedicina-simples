@@ -94,7 +94,7 @@ export function AgendamentosModulo() {
       erroAtualizar={erroAtualizar}
       onTentarDeNovo={() => void atualizar()}
       ferramentas={
-        <div className="space-y-3">
+        <div className="space-y- ba-animar 3">
           <div role="tablist" aria-label="Agendamentos" className="ba-abas" onKeyDown={teclaAbas}>
             {(["agenda", "reembolsos"] as Aba[]).map((a) => (
               <button

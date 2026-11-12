@@ -128,7 +128,7 @@ export function AuditoriaModulo() {
       atualizando={atualizando}
       acoes={<BotoesExportar n={lista.length} onCsv={exportarCsv} onPdf={exportarPdf} className="hidden sm:flex" />}
       ferramentas={
-        <div className="space-y-2 w-full">
+        <div className="space-y- ba-animar 2 w-full">
           <BotoesExportar n={lista.length} onCsv={exportarCsv} onPdf={exportarPdf} className="grid grid-cols-2 sm:hidden" />
           <div className="flex gap-2">
             <label className="relative flex-1 min-w-0">

@@ -102,7 +102,7 @@ export function PacientesModulo() {
         </div>
       }
     >
-      <div className="space-y-4">
+      <div className="space-y- ba-animar 4">
         {pacientes.length >= LIMITE_BOOTSTRAP ? (
           <div className="ba-aviso" data-tom="atencao">
             <Info className="w-4 h-4 shrink-0 mt-0.5" aria-hidden />
