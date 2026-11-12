@@ -102,7 +102,7 @@ export function CentroComando() {
       ) : null}
 
       {/* ---------------- Agora ---------------- */}
-      <section aria-labelledby="cc-agora" className="space-y-3">
+      <section aria-labelledby="cc-agora" className="space-y- ba-animar 3">
         <h2 id="cc-agora" className="ba-rotulo">Agora</h2>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 bion-surgir-lista">
           <KpiAdmin
