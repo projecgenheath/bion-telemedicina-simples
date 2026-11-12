@@ -29,7 +29,7 @@ export function AjudaModulo() {
         </label>
       }
     >
-      <div className="max-w-3xl space-y-2">
+      <div className="ba-animar max-w-3xl space-y-2">
         {faqs.length === 0 ? (
           <div className="ba-card" data-denso="true">
             <EstadoVazio icone={Search} titulo="Nada encontrado" texto={`Nenhuma resposta para “${busca.trim()}”. Tente outra palavra.`} />

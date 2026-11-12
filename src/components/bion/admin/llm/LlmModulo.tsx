@@ -80,7 +80,7 @@ export function LlmModulo() {
       atualizando={monitor.carregando}
     >
       {primeiraCarga ? (
-        <div className="space-y-3">
+        <div className="ba-animar space-y-3">
           <Esqueleto variante="kpis" quantidade={4} rotulo="Carregando o monitor…" />
           <Esqueleto variante="tabela" quantidade={4} rotulo="Carregando os turnos…" />
         </div>

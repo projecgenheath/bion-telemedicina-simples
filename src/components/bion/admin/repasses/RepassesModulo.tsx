@@ -70,7 +70,7 @@ export function RepassesModulo() {
       onAtualizar={recarregarTudo}
       atualizando={fechados.carregando}
       ferramentas={
-        <div className="space-y-3">
+        <div className="ba-animar space-y-3">
           <div className="ba-card flex flex-wrap items-center gap-3" data-tom="dinheiro" data-denso="true">
             <div className="flex-1 min-w-0">
               <p className="ba-rotulo">A pagar</p>
