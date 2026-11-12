@@ -632,3 +632,80 @@
   --primary-foreground: #12034a;
   --ring: #C4B5FD;
 }
+
+/* ======================== Animações extras (paciente) ======================== */
+/* Entrada escalonada de cards e listas */
+@keyframes bpp-subir-suave {
+  from { opacity: 0; transform: translateY(16px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+.bp-app-paciente .bpp-animar {
+  animation: bpp-subir-suave 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.bp-app-paciente .bpp-animar-d1 { animation-delay: 0.06s; }
+.bp-app-paciente .bpp-animar-d2 { animation-delay: 0.12s; }
+.bp-app-paciente .bpp-animar-d3 { animation-delay: 0.18s; }
+.bp-app-paciente .bpp-animar-d4 { animation-delay: 0.24s; }
+.bp-app-paciente .bpp-animar-d5 { animation-delay: 0.30s; }
+
+/* Micro-interação em cards clicáveis */
+.bp-app-paciente .bp-glass.bion-toque,
+.bp-app-paciente button.bp-glass {
+  transition: transform 0.15s ease, box-shadow 0.2s ease, background-color 0.15s ease;
+}
+.bp-app-paciente .bp-glass.bion-toque:active,
+.bp-app-paciente button.bp-glass:active {
+  transform: scale(0.98);
+}
+@media (hover: hover) {
+  .bp-app-paciente .bp-glass.bion-toque:hover,
+  .bp-app-paciente button.bp-glass:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 8px 24px -8px rgba(36, 5, 141, 0.25);
+  }
+}
+
+/* Indicador de tela com deslize suave */
+.bp-app-paciente .bpp-indicador-barra {
+  transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), width 0.35s ease;
+}
+
+/* Respeita prefers-reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  .bp-app-paciente .bpp-animar,
+  .bp-app-paciente .bpp-sheet-veu,
+  .bp-app-paciente .bpp-sheet-painel,
+  .bp-app-paciente .bpp-surgir {
+    animation: none !important;
+  }
+  .bp-app-paciente .bp-glass.bion-toque,
+  .bp-app-paciente button.bp-glass {
+    transition: none;
+  }
+}
+
+/* Lista e documentos: entrada em cascata */
+.bp-app-paciente .bpp-lista-animar > * {
+  animation: bpp-subir-suave 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.bp-app-paciente .bpp-lista-animar > *:nth-child(1) { animation-delay: 0.04s; }
+.bp-app-paciente .bpp-lista-animar > *:nth-child(2) { animation-delay: 0.08s; }
+.bp-app-paciente .bpp-lista-animar > *:nth-child(3) { animation-delay: 0.12s; }
+.bp-app-paciente .bpp-lista-animar > *:nth-child(4) { animation-delay: 0.16s; }
+.bp-app-paciente .bpp-lista-animar > *:nth-child(5) { animation-delay: 0.20s; }
+.bp-app-paciente .bpp-lista-animar > *:nth-child(n+6) { animation-delay: 0.24s; }
+
+/* Linhas do perfil */
+.bp-app-paciente .bpp-linha {
+  animation: bpp-subir-suave 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.bp-app-paciente .bpp-grupo > .bpp-linha:nth-child(1) { animation-delay: 0.05s; }
+.bp-app-paciente .bpp-grupo > .bpp-linha:nth-child(2) { animation-delay: 0.10s; }
+.bp-app-paciente .bpp-grupo > .bpp-linha:nth-child(3) { animation-delay: 0.15s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .bp-app-paciente .bpp-lista-animar > *,
+  .bp-app-paciente .bpp-linha {
+    animation: none !important;
+  }
+}
