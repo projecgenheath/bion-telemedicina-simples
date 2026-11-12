@@ -771,3 +771,28 @@ button.ba-card:hover, a.ba-card:hover, .ba-card[role="button"]:hover { transform
   .ba-opcao[data-selecionada="true"] { outline: 2px solid var(--ba-sinal); outline-offset: 1px; }
   .ba-opcao:has(input:focus-visible) { outline: 2px solid var(--ba-sinal); outline-offset: 2px; }
 }
+
+/* ===================== Animações do admin ===================== */
+@keyframes ba-subir-suave {
+  from { opacity: 0; transform: translateY(12px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+.ba-app .ba-animar {
+  animation: ba-subir-suave 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.ba-app .ba-animar-d1 { animation-delay: 0.05s; }
+.ba-app .ba-animar-d2 { animation-delay: 0.10s; }
+.ba-app .ba-animar-d3 { animation-delay: 0.15s; }
+
+.ba-app .ba-card,
+.ba-app .ba-botao {
+  transition: transform 0.12s ease, box-shadow 0.2s ease;
+}
+.ba-app .ba-botao:active {
+  transform: scale(0.97);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ba-app .ba-animar { animation: none !important; }
+  .ba-app .ba-botao { transition: none; }
+}
