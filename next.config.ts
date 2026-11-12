@@ -37,6 +37,9 @@ const cabecalhosSeguranca = [
       "font-src 'self' data:",
       "connect-src 'self' ws: wss:",
       "worker-src 'self' blob:",
+      // imprimirPdf (lib/nativo/arquivos) imprime o PDF gerado no aparelho
+      // num iframe oculto com URL blob: — sem isto o default-src bloqueia.
+      "frame-src 'self' blob:",
       "frame-ancestors 'none'",
       "base-uri 'self'",
       "form-action 'self'",

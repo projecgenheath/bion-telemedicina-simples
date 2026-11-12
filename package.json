@@ -20,7 +20,9 @@
   "dependencies": {
     "@capacitor/android": "^7",
     "@capacitor/core": "^7",
+    "@capacitor/filesystem": "^7.1.9",
     "@capacitor/ios": "^7",
+    "@capacitor/share": "^7.0.4",
     "@prisma/client": "^6.11.1",
     "@radix-ui/react-accordion": "^1.2.11",
     "@radix-ui/react-alert-dialog": "^1.1.14",
