@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { exigirConsentimentoIa } from "@/lib/server/consentimento-ia";
 import { exigirPapel } from "@/lib/server/auth";
 import { aplicarSideEffects, anamneseWire, consultaWire, perfilPacienteWire } from "@/lib/server/dados";
+import { consultaParaPapel } from "@/lib/privacidade-consulta";
 import {ok, falha, lerCorpoJson, corpoObjeto, textoDoCorpo} from "@/lib/server/http";
 import { chatComFonte, iaPausada, type AnonNomes, type FonteLlm } from "@/lib/server/llm";
 import {
@@ -874,7 +875,7 @@ export async function PATCH(req: NextRequest) {
       return ok({
         pulada: true,
         ...(atualizada ? { anamnese: anamneseWire(atualizada) } : {}),
-        ...(consultaFresca ? { consulta: consultaWire(consultaFresca) } : {}),
+        ...(consultaFresca ? { consulta: consultaParaPapel(consultaWire(consultaFresca), usuario.role) } : {}),
         ...efeitos,
       });
     }
@@ -945,7 +946,7 @@ export async function PATCH(req: NextRequest) {
 
     return ok({
       ...(atualizada ? { anamnese: anamneseWire(atualizada) } : {}),
-      ...(consultaFresca ? { consulta: consultaWire(consultaFresca) } : {}),
+      ...(consultaFresca ? { consulta: consultaParaPapel(consultaWire(consultaFresca), usuario.role) } : {}),
       ...efeitos,
     });
   } catch (erro) {

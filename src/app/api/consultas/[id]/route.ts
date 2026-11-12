@@ -205,7 +205,7 @@ export async function PATCH(
         );
       }
       await db.consulta.update({ where: { id }, data: { resumoMedico: textoResumo } });
-      return ok({ consulta: await consultaWire(id) });
+      return ok({ consulta: consultaParaPapel(await consultaWire(id), usuario.role) });
     }
 
     const data: Parameters<typeof db.consulta.update>[0]["data"] = {};
