@@ -193,3 +193,48 @@
   .bm-app .bm-carrossel { grid-template-columns: 360px minmax(0, 1fr) 380px; }
   .bm-app .bm-indicador { right: calc(380px + 0.5rem); }
 }
+
+/* ===================== Animações do médico ===================== */
+@keyframes bm-subir-suave {
+  from { opacity: 0; transform: translateY(14px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+.bm-app .bm-animar {
+  animation: bm-subir-suave 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.bm-app .bm-animar-d1 { animation-delay: 0.06s; }
+.bm-app .bm-animar-d2 { animation-delay: 0.12s; }
+.bm-app .bm-animar-d3 { animation-delay: 0.18s; }
+.bm-app .bm-animar-d4 { animation-delay: 0.24s; }
+
+/* Micro-interação em cards e linhas */
+.bm-app .bp-glass.bion-toque,
+.bm-app button.bp-glass,
+.bm-app .bm-linha {
+  transition: transform 0.12s ease, box-shadow 0.2s ease, background-color 0.15s ease;
+}
+.bm-app .bp-glass.bion-toque:active,
+.bm-app button.bp-glass:active {
+  transform: scale(0.98);
+}
+
+/* Lista em cascata */
+.bm-app .bm-lista-animar > * {
+  animation: bm-subir-suave 0.38s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.bm-app .bm-lista-animar > *:nth-child(1) { animation-delay: 0.04s; }
+.bm-app .bm-lista-animar > *:nth-child(2) { animation-delay: 0.08s; }
+.bm-app .bm-lista-animar > *:nth-child(3) { animation-delay: 0.12s; }
+.bm-app .bm-lista-animar > *:nth-child(4) { animation-delay: 0.16s; }
+.bm-app .bm-lista-animar > *:nth-child(n+5) { animation-delay: 0.20s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .bm-app .bm-animar,
+  .bm-app .bm-lista-animar > * {
+    animation: none !important;
+  }
+  .bm-app .bp-glass.bion-toque,
+  .bm-app button.bp-glass {
+    transition: none;
+  }
+}

@@ -535,7 +535,7 @@ export function PerfilMedicoPainel({
         )}
       </div>
 
-      <section className={`${grupo} mt-6`} aria-labelledby="bm-pf-dados">
+      <section className={`${grupo} mt-6 bm-animar`} aria-labelledby="bm-pf-dados">
         <h3 id="bm-pf-dados" className={tituloGrupo}>
           Dados pessoais
         </h3>
@@ -556,7 +556,7 @@ export function PerfilMedicoPainel({
       {/* B-18: recebimento ATUAL (Stripe) separado da área LEGADA (PIX do
           modelo anterior) — antes o cadastro gravável de chave PIX ficava
           misturado com o texto do Stripe, conceitualmente confuso. */}
-      <section className={`${grupo} mt-4`} aria-labelledby="bm-pf-recebimento">
+      <section className={`${grupo} mt-4 bm-animar bm-animar-d1`} aria-labelledby="bm-pf-recebimento">
         <h3 id="bm-pf-recebimento" className={tituloGrupo}>
           Recebimento (Stripe)
         </h3>
@@ -648,7 +648,7 @@ export function PerfilMedicoPainel({
         <Linha icone={<FileText className="w-4 h-4" />} titulo="Termos e ajuda" detalhe="Termos de uso e perguntas frequentes" onClick={onAbrirTermos} />
       </section>
 
-      <section className="bp-glass p-4 pt-3 space-y-3 mt-4" aria-labelledby="bm-pf-aparencia">
+      <section className="bp-glass p-4 pt-3 space-y-3 mt-4 bm-animar bm-animar-d2" aria-labelledby="bm-pf-aparencia">
         <h3 id="bm-pf-aparencia" className="text-xs font-bold uppercase tracking-wider text-bion-ink/75 dark:text-bion-paper/75">
           Aparência
         </h3>
