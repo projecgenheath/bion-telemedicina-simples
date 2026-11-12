@@ -506,7 +506,7 @@ export function PacienteApp() {
             }}
             onEditar={(campo) => setEdicaoPerfil({ campo })}
             onVerTudo={setListaCompleta}
-            onAgendar={() => setChatAberto(true)}
+            onAgendar={() => abrirChat("agendar")}
             onExcluirConta={() => setExcluindoConta(true)}
           />
         </div>
@@ -639,7 +639,7 @@ export function PacienteApp() {
                 />
               </div>
             ) : (
-              <button type="button" onClick={() => setChatAberto(true)} className="bion-toque bion-surgir bp-glass p-5 text-left w-full bpp-animar">
+              <button type="button" onClick={() => abrirChat("agendar")} className="bion-toque bion-surgir bp-glass p-5 text-left w-full bpp-animar">
                 <div className="text-xs font-bold uppercase tracking-wider text-bion-ink/75 dark:text-bion-paper/75 mb-3">
                   Consultas
                 </div>
@@ -767,14 +767,14 @@ export function PacienteApp() {
               </p>
               <button
                 type="button"
-                onClick={() => setChatAberto(true)}
+                onClick={() => abrirChat("agendar")}
                 className="bion-toque relative mt-4 w-full inline-flex items-center justify-center gap-2 rounded-full bg-white text-bion-ink text-sm font-bold px-5 py-3.5 shadow-md hover:shadow-lg"
               >
                 <Stethoscope className="w-4 h-4" aria-hidden /> Agendar consulta agora
               </button>
               <button
                 type="button"
-                onClick={() => setChatAberto(true)}
+                onClick={() => abrirChat("agendar")}
                 className="bion-toque relative mt-2 w-full flex items-center gap-3 rounded-full bg-white/12 border border-white/25 pl-4 pr-1.5 py-1.5 text-left transition hover:bg-white/18"
                 aria-label="Perguntar algo à BION IA"
               >
@@ -1016,7 +1016,7 @@ export function PacienteApp() {
 
         {/* ====================== PÁGINA 4: DOCUMENTOS ======================== */}
         <div className="bpp-lateral bpp-lateral-dir flex-[0_0_100%] w-full min-w-full h-full bp-painel overflow-y-auto bp-coluna" aria-label="Documentos e mensagens">
-          <DocumentosPainel conversaAtiva={conversaAtiva} onConversa={setConversaAtiva} onAgendar={() => setChatAberto(true)} />
+          <DocumentosPainel conversaAtiva={conversaAtiva} onConversa={setConversaAtiva} onAgendar={() => abrirChat("agendar")} />
         </div>
       </div>
 

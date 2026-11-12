@@ -9,7 +9,7 @@
  * "geral": qualquer outra abertura (agendar, perguntar) — comportamento
  * histórico, intocado.
  */
-export type IntencaoChat = "geral" | "laudo";
+export type IntencaoChat = "geral" | "laudo" | "agendar";
 
 /** Mensagem contextual que abre a conversa no modo laudo. */
 export const TEXTO_ENVIO_LAUDO =
