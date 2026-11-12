@@ -9,7 +9,7 @@ import { ehCampoInternoColeta, rotuloCampoColeta, textoValorColeta } from "./tri
 export function BlocoAnamnese({ a, consulta }: { a: AnamneseResumo; consulta?: Consulta }) {
   const etapas = Object.entries(a.coleta);
   return (
-    <article className="bp-glass p-4 space-y-3">
+    <article className="bp-glass bm-animar p-4 space-y-3">
       <header className="flex flex-col items-start gap-1.5">
         <div>
           <div className="text-sm font-black">Anamnese · BION IA</div>
