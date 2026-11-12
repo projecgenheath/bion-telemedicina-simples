@@ -172,7 +172,7 @@ export function TelaChamadaPaciente({
   const alerta = tele.erroMidia && alertaFechado !== tele.erroMidia ? tele.erroMidia : null;
 
   return (
-    <div className="bpp-chamada contents">
+    <div className="bpp-animar bpp-chamada contents">
     <VideoChamada916
       videoRemotoRef={sala.videoRemotoRef}
       videoLocalRef={sala.videoLocalRef}

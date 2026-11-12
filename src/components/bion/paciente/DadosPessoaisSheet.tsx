@@ -193,7 +193,7 @@ export function DadosPessoaisSheet({ campoInicial, onFechar }: { campoInicial?: 
         }}
         className="bpp-sheet-painel relative w-full max-w-lg max-h-[92svh] overflow-y-auto rounded-t-3xl bpp-sheet border-t bpp-sheet-borda px-5 pt-3 pb-8 shadow-[0_-12px_40px_rgba(2,8,26,0.35)]"
       >
-        <div data-arrastar className="-mx-5 -mt-3 mb-1 pt-3 pb-3 touch-none"><div className="mx-auto h-1.5 w-12 rounded-full bpp-sheet-alca" aria-hidden /></div>
+        <div data-arrastar className="-mx-5 -mt-3 mb-1 pt-3 pb-3 touch-none"><div className="bpp-animar mx-auto h-1.5 w-12 rounded-full bpp-sheet-alca" aria-hidden /></div>
         <h2 data-arrastar id="titulo-dados-pessoais" className="text-lg font-bold">Editar meus dados</h2>
         <p className="text-sm bpp-sheet-suave mt-1">Seu médico vê estes dados antes da consulta.</p>
 
