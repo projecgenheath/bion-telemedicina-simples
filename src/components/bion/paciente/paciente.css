@@ -709,3 +709,32 @@
     animation: none !important;
   }
 }
+
+/* ===================== Transição suave entre seções ===================== */
+.bp-app-paciente .bpp-central {
+  scroll-behavior: smooth;
+}
+.bp-app-paciente .bpp-tela {
+  transition: opacity 0.35s ease, transform 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.bp-app-paciente .bpp-tela:not(.bpp-tela-ativa) {
+  opacity: 0.92;
+}
+
+/* Micro-interação extra em botões de ação */
+.bp-app-paciente .bp-acao,
+.bp-app-paciente button.rounded-full {
+  transition: transform 0.12s ease, box-shadow 0.2s ease, background-color 0.15s ease;
+}
+.bp-app-paciente .bp-acao:active,
+.bp-app-paciente button.rounded-full:active {
+  transform: scale(0.97);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bp-app-paciente .bpp-tela,
+  .bp-app-paciente .bp-acao,
+  .bp-app-paciente button.rounded-full {
+    transition: none;
+  }
+}

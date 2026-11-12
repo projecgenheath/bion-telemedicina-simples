@@ -774,8 +774,8 @@ export function PacienteApp() {
               </button>
               <button
                 type="button"
-                onClick={() => abrirChat("agendar")}
-                className="bion-toque relative mt-2 w-full flex items-center gap-3 rounded-full bg-white/12 border border-white/25 pl-4 pr-1.5 py-1.5 text-left transition hover:bg-white/18"
+                onClick={() => abrirChat("geral")}
+                className="bion-toque relative mt-2 w-full flex items-center gap-3 rounded-full bg-white/8 border border-white/15 pl-4 pr-1.5 py-1.5 text-left transition hover:bg-white/12"
                 aria-label="Perguntar algo à BION IA"
               >
                 <Search className="w-4 h-4 text-white/85 shrink-0" aria-hidden />
@@ -794,7 +794,7 @@ export function PacienteApp() {
 
           {/* --- Seção 2: saúde --- */}
           <section className="bp-secao-2 bpp-secao bpp-tela px-5 py-8 pb-28" aria-label="Saúde: medicamentos, IMC e pressão arterial">
-            <h2 className="text-2xl font-black mb-1">Sua saúde</h2>
+            <h2 className="text-2xl font-black mb-1 bpp-animar">Sua saúde</h2>
             <p className="text-sm text-bion-ink/75 dark:text-bion-paper/75 mb-5">
               Toque em um card para ver o histórico e atualizar.
             </p>
