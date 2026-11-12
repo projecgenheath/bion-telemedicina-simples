@@ -58,7 +58,7 @@ function Grupo({ titulo, acao, children }: { titulo: string; acao?: ReactNode; c
         <h3 className="bpp-grupo-titulo text-bion-ink/75 dark:text-bion-paper/75">{titulo}</h3>
         {acao}
       </div>
-      <div className="bp-glass p-2">{children}</div>
+      <div className="bp-glass p-2 bpp-grupo">{children}</div>
     </section>
   );
 }

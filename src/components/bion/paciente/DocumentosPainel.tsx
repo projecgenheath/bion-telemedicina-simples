@@ -392,7 +392,7 @@ export function DocumentosPainel({
               docsSelecionados.map((d) => {
                 const Icone = ICONE_DOC[d.tipo] ?? FileText;
                 return (
-                  <div key={d.id} className="bp-glass p-4 flex items-center gap-3">
+                  <div key={d.id} className="bp-glass p-4 flex items-center gap-3 bpp-animar">
                     <div className="w-11 h-11 rounded-2xl bg-bion-sea/10 dark:bg-[#C4B5FD]/10 text-bion-sea dark:text-[#C4B5FD] inline-flex items-center justify-center shrink-0">
                       <Icone className="w-5 h-5" />
                     </div>
@@ -602,7 +602,7 @@ export function DocumentosPainel({
                     setConversaAtiva(c.id);
                     marcarConversaLida(c.id);
                   }}
-                  className="bion-toque w-full bp-glass p-4 flex items-center gap-3 text-left"
+                  className="bion-toque w-full bp-glass p-4 flex items-center gap-3 text-left bpp-animar"
                 >
                   <div className="w-11 h-11 rounded-full bg-gradient-to-br from-bion-sea to-bion-ink text-white inline-flex items-center justify-center text-sm font-bold shrink-0">
                     {c.nome.split(" ").slice(-1)[0][0]}

@@ -683,3 +683,29 @@
     transition: none;
   }
 }
+
+/* Lista e documentos: entrada em cascata */
+.bp-app-paciente .bpp-lista-animar > * {
+  animation: bpp-subir-suave 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.bp-app-paciente .bpp-lista-animar > *:nth-child(1) { animation-delay: 0.04s; }
+.bp-app-paciente .bpp-lista-animar > *:nth-child(2) { animation-delay: 0.08s; }
+.bp-app-paciente .bpp-lista-animar > *:nth-child(3) { animation-delay: 0.12s; }
+.bp-app-paciente .bpp-lista-animar > *:nth-child(4) { animation-delay: 0.16s; }
+.bp-app-paciente .bpp-lista-animar > *:nth-child(5) { animation-delay: 0.20s; }
+.bp-app-paciente .bpp-lista-animar > *:nth-child(n+6) { animation-delay: 0.24s; }
+
+/* Linhas do perfil */
+.bp-app-paciente .bpp-linha {
+  animation: bpp-subir-suave 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.bp-app-paciente .bpp-grupo > .bpp-linha:nth-child(1) { animation-delay: 0.05s; }
+.bp-app-paciente .bpp-grupo > .bpp-linha:nth-child(2) { animation-delay: 0.10s; }
+.bp-app-paciente .bpp-grupo > .bpp-linha:nth-child(3) { animation-delay: 0.15s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .bp-app-paciente .bpp-lista-animar > *,
+  .bp-app-paciente .bpp-linha {
+    animation: none !important;
+  }
+}
