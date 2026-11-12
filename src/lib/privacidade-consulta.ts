@@ -76,13 +76,21 @@ export function rotuloTipoDocumento(tipo: string | null | undefined): string {
  * agendamento (decisão do Alisson, 09/11) são conteúdo clínico — saem.
  * Agenda, status e pagamento continuam.
  */
-export function consultaParaPapel<T extends { resumoMedico?: string | null; motivoConsulta?: string | null }>(
+export function consultaParaPapel<T extends { resumoMedico?: string | null; motivoConsulta?: string | null; status?: string }>(
   c: T,
   role: Papel | string,
 ): T {
-  if (role !== "ADMIN") return c;
   const out: T = { ...c };
-  delete out.resumoMedico;
-  delete out.motivoConsulta;
+  // Admin nunca vê conteúdo clínico.
+  if (role === "ADMIN") {
+    delete out.resumoMedico;
+    delete out.motivoConsulta;
+    return out;
+  }
+  // Paciente só recebe o resumo do médico depois que a consulta foi concluída.
+  // Durante a chamada o médico autossalva o resumo; ele não deve chegar ao paciente antes do fim.
+  if (role === "PACIENTE" && c.status !== "concluida") {
+    delete out.resumoMedico;
+  }
   return out;
 }
