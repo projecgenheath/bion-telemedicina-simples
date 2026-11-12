@@ -203,7 +203,11 @@ export function ChatBion({
   }, [aberto, iaLiberada]);
 
   useEffect(() => {
-    fimRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    // Pequeno atraso para o layout do wizard/opções ter terminado de renderizar
+    const t = setTimeout(() => {
+      fimRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    }, 50);
+    return () => clearTimeout(t);
   }, [mensagens, etapa, pensando, anamneseAtiva, segundosEspera]);
 
   // F10: ao chegar na confirmação, resolve a flag do checkout (com cache no
@@ -1148,7 +1152,7 @@ export function ChatBion({
 
         {/* Opções da etapa atual do wizard */}
         {opcoes && (
-          <div className="bp-glass p-4">
+          <div className="bp-glass p-4 bpp-animar" style={{ scrollMarginBottom: "80px" }}>
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs font-bold uppercase tracking-wide text-bion-ink/75 dark:text-bion-paper/75">{opcoes.titulo}</span>
               {etapa !== "especialidade" && (
@@ -1200,15 +1204,17 @@ export function ChatBion({
           </div>
         )}
 
-        {/* Chips iniciais quando só existe a saudação (modo geral) */}
-        {mensagens.length === 1 && etapa === null && !anamneseAtiva && !modoLaudo && (
+        {/* Atalho de agendamento sempre visível fora do wizard */}
+        {etapa === null && !anamneseAtiva && !modoLaudo && (
           <div className="flex flex-wrap gap-2">
             <button type="button" onClick={iniciarAgendamento} className="rounded-full bg-bion-sea/10 dark:bg-[#C4B5FD]/10 border border-bion-sea/25 dark:border-[#C4B5FD]/25 px-4 py-2.5 text-sm font-semibold text-bion-sea dark:text-[#C4B5FD]">
               Agendar consulta
             </button>
-            {iaLiberada === true ? <button type="button" onClick={iniciarExame} className="rounded-full bg-bion-sea/10 dark:bg-[#C4B5FD]/10 border border-bion-sea/25 dark:border-[#C4B5FD]/25 px-4 py-2.5 text-sm font-semibold text-bion-sea dark:text-[#C4B5FD]">
-              Enviar laudo de exame
-            </button> : null}
+            {iaLiberada === true && mensagens.length === 1 ? (
+              <button type="button" onClick={iniciarExame} className="rounded-full bg-bion-sea/10 dark:bg-[#C4B5FD]/10 border border-bion-sea/25 dark:border-[#C4B5FD]/25 px-4 py-2.5 text-sm font-semibold text-bion-sea dark:text-[#C4B5FD]">
+                Enviar laudo de exame
+              </button>
+            ) : null}
           </div>
         )}
 
