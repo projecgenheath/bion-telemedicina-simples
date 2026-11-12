@@ -662,6 +662,8 @@ export function ChatBion({
   };
 
   const iniciarAgendamento = () => {
+    // Fecha o teclado para as opções ficarem visíveis
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
     setMensagens((m) => [...m, { remetente: "usuario", texto: "Quero agendar uma consulta" }, { remetente: "ia", texto: "Perfeito! Escolha a especialidade desejada:" }]);
     setEscolha({});
     setEtapa("especialidade");
@@ -1146,45 +1148,6 @@ export function ChatBion({
           </div>
         )}
 
-        {/* Opções da etapa atual do wizard */}
-        {opcoes && (
-          <div className="bp-glass p-4">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-bold uppercase tracking-wide text-bion-ink/75 dark:text-bion-paper/75">{opcoes.titulo}</span>
-              {etapa !== "especialidade" && (
-                <button type="button"
-                  onClick={() => {
-                    const anterior: Record<string, Etapa> = { medico: "especialidade", dia: "medico", hora: "dia", confirmar: "hora" };
-                    const volta = (etapa && anterior[etapa]) || null;
-                    if (volta) {
-                      setEtapa(volta);
-                      setEscolha((c) => (volta === "especialidade" ? {} : volta === "medico" ? { especialidade: c.especialidade } : volta === "dia" ? { especialidade: c.especialidade, medico: c.medico } : { ...c, hora: undefined }));
-                    }
-                  }}
-                  className="text-xs font-semibold text-bion-sea dark:text-[#C4B5FD] inline-flex items-center gap-1"
-                >
-                  <ArrowLeft className="w-3 h-3" /> voltar
-                </button>
-              )}
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              {opcoes.opcoes.map((o) => (
-                <button type="button"
-                  key={o.valor}
-                  onClick={() => opcoes.escolher(o.valor)}
-                  className="text-left rounded-2xl bg-white/60 dark:bg-white/8 border border-bion-ink/10 dark:border-white/10 px-4 py-3 text-sm font-semibold text-bion-ink dark:text-bion-paper hover:border-bion-sea/40 transition"
-                >
-                  <div className="flex items-center justify-between gap-1">
-                    <span className="truncate">{o.rotulo}</span>
-                    {opcoes.titulo === "Profissional" && <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500 shrink-0" />}
-                  </div>
-                  {o.sub && <div className="text-xs font-normal opacity-80 mt-0.5">{o.sub}</div>}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
         {/* Atalhos úteis durante a anamnese */}
         {anamneseAtiva && !pensando && !["documentos", "fechamento"].includes(anamneseAtiva.etapa) && (
           <div className="flex gap-2 overflow-x-auto bp-coluna">
@@ -1227,6 +1190,46 @@ export function ChatBion({
 
         <div ref={fimRef} />
       </div>
+
+        {/* Opções da etapa atual do wizard */}
+        {opcoes && (
+          <div className="bp-glass p-4">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-bold uppercase tracking-wide text-bion-ink/75 dark:text-bion-paper/75">{opcoes.titulo}</span>
+              {etapa !== "especialidade" && (
+                <button type="button"
+                  onClick={() => {
+                    const anterior: Record<string, Etapa> = { medico: "especialidade", dia: "medico", hora: "dia", confirmar: "hora" };
+                    const volta = (etapa && anterior[etapa]) || null;
+                    if (volta) {
+                      setEtapa(volta);
+                      setEscolha((c) => (volta === "especialidade" ? {} : volta === "medico" ? { especialidade: c.especialidade } : volta === "dia" ? { especialidade: c.especialidade, medico: c.medico } : { ...c, hora: undefined }));
+                    }
+                  }}
+                  className="text-xs font-semibold text-bion-sea dark:text-[#C4B5FD] inline-flex items-center gap-1"
+                >
+                  <ArrowLeft className="w-3 h-3" /> voltar
+                </button>
+              )}
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {opcoes.opcoes.map((o) => (
+                <button type="button"
+                  key={o.valor}
+                  onClick={() => opcoes.escolher(o.valor)}
+                  className="text-left rounded-2xl bg-white/60 dark:bg-white/8 border border-bion-ink/10 dark:border-white/10 px-4 py-3 text-sm font-semibold text-bion-ink dark:text-bion-paper hover:border-bion-sea/40 transition"
+                >
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="truncate">{o.rotulo}</span>
+                    {opcoes.titulo === "Profissional" && <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500 shrink-0" />}
+                  </div>
+                  {o.sub && <div className="text-xs font-normal opacity-80 mt-0.5">{o.sub}</div>}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
 
       {/* Entrada */}
       <div ref={compositorRef} className="px-5 pb-5 bp-safe-bottom transition-[padding] duration-200">
