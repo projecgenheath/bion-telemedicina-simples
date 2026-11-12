@@ -354,7 +354,7 @@ export function TelaChamadaRecebida({
       aria-labelledby={titulo}
       className="fixed inset-0 z-[200] flex justify-center bg-[#0b1424] text-white"
     >
-      <div className="relative flex h-full w-full max-w-[min(100vw,calc(100dvh*9/16))] flex-col items-center overflow-hidden bg-gradient-to-b from-[#123e7d] via-[#0a1f44] to-[#0b1424] px-6 pt-[max(3.5rem,env(safe-area-inset-top))] pb-[max(2.5rem,env(safe-area-inset-bottom))] sm:my-6 sm:h-[calc(100%-3rem)] sm:rounded-[2rem] sm:shadow-2xl sm:ring-1 sm:ring-white/10">
+      <div className="bpp-animar relative flex h-full w-full max-w-[min(100vw,calc(100dvh*9/16))] flex-col items-center overflow-hidden bg-gradient-to-b from-[#123e7d] via-[#0a1f44] to-[#0b1424] px-6 pt-[max(3.5rem,env(safe-area-inset-top))] pb-[max(2.5rem,env(safe-area-inset-bottom))] sm:my-6 sm:h-[calc(100%-3rem)] sm:rounded-[2rem] sm:shadow-2xl sm:ring-1 sm:ring-white/10">
         <div aria-hidden className="pointer-events-none absolute -top-32 left-1/2 size-[28rem] -translate-x-1/2 rounded-full bg-[#14457f]/40 blur-3xl" />
 
         <p className="relative flex items-center gap-2 text-sm font-medium text-white/75">

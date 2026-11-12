@@ -82,7 +82,7 @@ export function ResultadosRevisar({
 
   if (erro && !itens) {
     return (
-      <div className="bp-glass p-4 mb-4 flex items-center justify-between gap-3">
+      <div className="bp-glass bm-animar p-4 mb-4 flex items-center justify-between gap-3">
         <p className="text-sm text-bion-ink/75 dark:text-bion-paper/75">Não foi possível carregar os resultados recentes.</p>
         <button
           type="button"

@@ -112,7 +112,7 @@ export function TelaInicio({
           Cada linha leva à tela certa; contador zero = linha some (e sem
           nenhuma pendência o bloco inteiro some). */}
       {temPendencias ? (
-        <div className="bp-glass p-5 mb-3" role="group" aria-label="Pendências">
+        <div className="bp-glass bm-animar p-5 mb-3" role="group" aria-label="Pendências">
           <span className="text-xs font-bold uppercase tracking-wider text-bion-ink/75 dark:text-bion-paper/75 inline-flex items-center gap-1.5">
             <ListChecks className="w-4 h-4" aria-hidden /> Pendências
           </span>

@@ -52,7 +52,7 @@ export function TelaGestao({
       {medico ? <PainelGestao dados={dados} /> : null}
 
       {carregando ? (
-        <div className="bp-glass p-5 mt-3 text-sm text-bion-ink/75 dark:text-bion-paper/75">
+        <div className="bp-glass bm-animar p-5 mt-3 text-sm text-bion-ink/75 dark:text-bion-paper/75">
           Carregando seu cadastro…
         </div>
       ) : medico ? (

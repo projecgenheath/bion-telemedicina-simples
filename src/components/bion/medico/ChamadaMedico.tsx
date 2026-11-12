@@ -431,7 +431,7 @@ export function ChamadaMedico({ onEnd, consultaId }: { onEnd: () => void; consul
 
   if (pendente) {
     return (
-      <div className="min-h-dvh flex flex-col items-center justify-center gap-4 p-6 text-center">
+      <div className="bm-animar min-h-dvh flex flex-col items-center justify-center gap-4 p-6 text-center">
         <p className="text-lg font-bold">Conclua a evolução de {pendente.paciente} para atender o próximo.</p>
         <button type="button" onClick={abrirEvolucao} className="rounded-full bg-primary text-primary-foreground px-6 py-3 font-bold">
           Abrir evolução pendente

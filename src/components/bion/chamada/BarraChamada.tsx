@@ -73,7 +73,7 @@ export function BarraChamada({
         visivel ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-6 opacity-0"
       } ${className}`}
     >
-      <div className="bp-glass-marinho !rounded-[1.75rem] flex items-end justify-around gap-1 px-2 py-3">
+      <div className="bp-glass bpp-animar-marinho !rounded-[1.75rem] flex items-end justify-around gap-1 px-2 py-3">
         <BotaoChamada
           rotulo="Mudo"
           aria={semMic ? "Microfone indisponível: tentar de novo" : micAtivo ? "Silenciar microfone" : "Ativar microfone"}
