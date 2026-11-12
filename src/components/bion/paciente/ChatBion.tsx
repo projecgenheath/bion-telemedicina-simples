@@ -4,7 +4,7 @@ import { CODIGO_ACEITE_TERMOS_PENDENTE, ERRO_ACEITE_TERMOS_PENDENTE } from "@/li
 import { textoNota } from "@/lib/medico-exibicao";
 import { ErroBionIa, consultarConsentimentoIa, perguntarBionIa } from "@/lib/bion-ia-cliente";
 import { AVISO_DADOS_PESSOAIS_IA, ehConsentimentoIaPendente } from "@/lib/consentimento-ia";
-import { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useVoltarFecha } from "./useVoltarFecha";
 import { useFocoDialogo } from "./useFocoDialogo";
 import { toast } from "sonner";
@@ -61,6 +61,29 @@ const fmtBRL = (v: number) => v.toLocaleString("pt-BR", { style: "currency", cur
  *    → leitura pela IA (laudos laboratoriais são processados e extraídos);
  *  - Enviar laudo avulso: PDF/foto lido com verificação de segurança do nome.
  */
+
+
+/** Mantém o compositor acima do teclado no mobile (visualViewport). */
+function useAcimaDoTeclado(ref: React.RefObject<HTMLElement | null>) {
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || !window.visualViewport) return;
+    const vv = window.visualViewport;
+    const ajustar = () => {
+      const altura = vv.height;
+      const offset = Math.max(0, window.innerHeight - vv.offsetTop - altura);
+      el.style.paddingBottom = offset > 0 ? `${offset}px` : "";
+    };
+    ajustar();
+    vv.addEventListener("resize", ajustar);
+    vv.addEventListener("scroll", ajustar);
+    return () => {
+      vv.removeEventListener("resize", ajustar);
+      vv.removeEventListener("scroll", ajustar);
+      el.style.paddingBottom = "";
+    };
+  }, [ref]);
+}
 
 export function ChatBion({
   aberto,
@@ -639,6 +662,8 @@ export function ChatBion({
   };
 
   const iniciarAgendamento = () => {
+    // Fecha o teclado para as opções ficarem visíveis
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
     setMensagens((m) => [...m, { remetente: "usuario", texto: "Quero agendar uma consulta" }, { remetente: "ia", texto: "Perfeito! Escolha a especialidade desejada:" }]);
     setEscolha({});
     setEtapa("especialidade");
@@ -883,6 +908,8 @@ export function ChatBion({
   const opcoes = opcoesEtapas();
 
   const dialogoRef = useRef<HTMLDivElement>(null);
+  const compositorRef = useRef<HTMLDivElement>(null);
+  useAcimaDoTeclado(compositorRef);
   useVoltarFecha(aberto, onFechar);
   useFocoDialogo(aberto, onFechar, dialogoRef);
 
@@ -1121,45 +1148,6 @@ export function ChatBion({
           </div>
         )}
 
-        {/* Opções da etapa atual do wizard */}
-        {opcoes && (
-          <div className="bp-glass p-4">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-bold uppercase tracking-wide text-bion-ink/75 dark:text-bion-paper/75">{opcoes.titulo}</span>
-              {etapa !== "especialidade" && (
-                <button type="button"
-                  onClick={() => {
-                    const anterior: Record<string, Etapa> = { medico: "especialidade", dia: "medico", hora: "dia", confirmar: "hora" };
-                    const volta = (etapa && anterior[etapa]) || null;
-                    if (volta) {
-                      setEtapa(volta);
-                      setEscolha((c) => (volta === "especialidade" ? {} : volta === "medico" ? { especialidade: c.especialidade } : volta === "dia" ? { especialidade: c.especialidade, medico: c.medico } : { ...c, hora: undefined }));
-                    }
-                  }}
-                  className="text-xs font-semibold text-bion-sea dark:text-[#C4B5FD] inline-flex items-center gap-1"
-                >
-                  <ArrowLeft className="w-3 h-3" /> voltar
-                </button>
-              )}
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              {opcoes.opcoes.map((o) => (
-                <button type="button"
-                  key={o.valor}
-                  onClick={() => opcoes.escolher(o.valor)}
-                  className="text-left rounded-2xl bg-white/60 dark:bg-white/8 border border-bion-ink/10 dark:border-white/10 px-4 py-3 text-sm font-semibold text-bion-ink dark:text-bion-paper hover:border-bion-sea/40 transition"
-                >
-                  <div className="flex items-center justify-between gap-1">
-                    <span className="truncate">{o.rotulo}</span>
-                    {opcoes.titulo === "Profissional" && <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500 shrink-0" />}
-                  </div>
-                  {o.sub && <div className="text-xs font-normal opacity-80 mt-0.5">{o.sub}</div>}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
         {/* Atalhos úteis durante a anamnese */}
         {anamneseAtiva && !pensando && !["documentos", "fechamento"].includes(anamneseAtiva.etapa) && (
           <div className="flex gap-2 overflow-x-auto bp-coluna">
@@ -1203,8 +1191,48 @@ export function ChatBion({
         <div ref={fimRef} />
       </div>
 
+        {/* Opções da etapa atual do wizard */}
+        {opcoes && (
+          <div className="bp-glass p-4">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-bold uppercase tracking-wide text-bion-ink/75 dark:text-bion-paper/75">{opcoes.titulo}</span>
+              {etapa !== "especialidade" && (
+                <button type="button"
+                  onClick={() => {
+                    const anterior: Record<string, Etapa> = { medico: "especialidade", dia: "medico", hora: "dia", confirmar: "hora" };
+                    const volta = (etapa && anterior[etapa]) || null;
+                    if (volta) {
+                      setEtapa(volta);
+                      setEscolha((c) => (volta === "especialidade" ? {} : volta === "medico" ? { especialidade: c.especialidade } : volta === "dia" ? { especialidade: c.especialidade, medico: c.medico } : { ...c, hora: undefined }));
+                    }
+                  }}
+                  className="text-xs font-semibold text-bion-sea dark:text-[#C4B5FD] inline-flex items-center gap-1"
+                >
+                  <ArrowLeft className="w-3 h-3" /> voltar
+                </button>
+              )}
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {opcoes.opcoes.map((o) => (
+                <button type="button"
+                  key={o.valor}
+                  onClick={() => opcoes.escolher(o.valor)}
+                  className="text-left rounded-2xl bg-white/60 dark:bg-white/8 border border-bion-ink/10 dark:border-white/10 px-4 py-3 text-sm font-semibold text-bion-ink dark:text-bion-paper hover:border-bion-sea/40 transition"
+                >
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="truncate">{o.rotulo}</span>
+                    {opcoes.titulo === "Profissional" && <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500 shrink-0" />}
+                  </div>
+                  {o.sub && <div className="text-xs font-normal opacity-80 mt-0.5">{o.sub}</div>}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+
       {/* Entrada */}
-      <div className="px-5 pb-5 bp-safe-bottom">
+      <div ref={compositorRef} className="px-5 pb-5 bp-safe-bottom transition-[padding] duration-200">
         {anamneseAtiva && triagemSemIa ? (
           <div className="mb-2 space-y-2">
             {cardTriagemIa ? (
