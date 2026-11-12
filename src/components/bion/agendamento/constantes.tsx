@@ -7,6 +7,10 @@ import {
   UserCheck,
 } from "lucide-react";
 
+/**
+ * Especialidades MÉDICAS do agendamento. Psicologia saiu (decisão de
+ * 10/11/2026): não é especialidade médica e a plataforma é só de médicos.
+ */
 export const ESPECIALIDADES = [
   {
     id: "clinica",
@@ -31,12 +35,6 @@ export const ESPECIALIDADES = [
     nome: "Pediatria",
     desc: "Saúde e desenvolvimento infantil e bebês",
     icone: UserCheck,
-  },
-  {
-    id: "psico",
-    nome: "Psicologia",
-    desc: "Terapia online, ansiedade, estresse e suporte emocional",
-    icone: Stethoscope,
   },
   {
     id: "ortopedia",

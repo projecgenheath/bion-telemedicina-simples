@@ -5,7 +5,7 @@ import type { Metadata } from "next";
  * em buscador (o header X-Robots-Tag também vem do next.config).
  */
 export const metadata: Metadata = {
-  title: "Verificação de documento · BION",
+  title: "Emissão confirmada pela plataforma · BION",
   robots: { index: false, follow: false, nocache: true, googleBot: { index: false, follow: false } },
 };
 
