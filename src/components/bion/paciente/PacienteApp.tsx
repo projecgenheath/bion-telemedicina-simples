@@ -602,7 +602,7 @@ export function PacienteApp() {
 
             {/* Card: próxima consulta */}
             {proxima ? (
-              <div className="bp-glass bion-surgir p-5 w-full">
+              <div className="bp-glass bion-surgir p-5 w-full bpp-animar">
                 <CabecalhoProxima
                   podeEntrar={acaoProxima?.tipo === "entrar"}
                   onEntrar={() => entrarSala(proxima)}
@@ -639,7 +639,7 @@ export function PacienteApp() {
                 />
               </div>
             ) : (
-              <button type="button" onClick={() => setChatAberto(true)} className="bion-toque bion-surgir bp-glass p-5 text-left w-full">
+              <button type="button" onClick={() => setChatAberto(true)} className="bion-toque bion-surgir bp-glass p-5 text-left w-full bpp-animar">
                 <div className="text-xs font-bold uppercase tracking-wider text-bion-ink/75 dark:text-bion-paper/75 mb-3">
                   Consultas
                 </div>
@@ -654,7 +654,7 @@ export function PacienteApp() {
               <button
                 type="button"
                 onClick={() => setListaConsultasAberta((v) => !v)}
-                className="bion-toque bp-glass mt-3 w-full px-5 py-3.5 flex items-center justify-between text-left"
+                className="bion-toque bp-glass mt-3 w-full px-5 py-3.5 flex items-center justify-between text-left bpp-animar bpp-animar-d1"
                 aria-expanded={listaConsultasAberta}
               >
                 <span>
@@ -685,7 +685,7 @@ export function PacienteApp() {
                     </div>
                   );
                   return (
-                    <div key={c.id} className="bp-glass p-4">
+                    <div key={c.id} className="bp-glass p-4 bpp-animar">
                       {/* Fora da janela o item não leva à sala. */}
                       {acao.tipo === "entrar" ? (
                         <button type="button" onClick={() => entrarSala(c)} className="bion-toque text-left w-full">
@@ -810,7 +810,7 @@ export function PacienteApp() {
               {/* IMC */}
               <button type="button"
                 onClick={() => setDetalhe("imc")}
-                className="bion-toque bp-glass p-5 w-full text-left"
+                className="bion-toque bp-glass p-5 w-full text-left bpp-animar"
                 aria-label={`IMC: ${imcAtual ? `${imcAtual.toFixed(1)}, ${ROTULO_FAIXA_IMC[faixaImc(imcAtual)]}` : "sem dados"}. ${serieImc.length > 1 ? "Ver gráfico de evolução e atualizar peso e altura" : "Abrir histórico e atualizar peso e altura"}`}
               >
                 <div className="flex items-center justify-between mb-1">
@@ -863,7 +863,7 @@ export function PacienteApp() {
               {/* Pressão arterial */}
               <button type="button"
                 onClick={() => setDetalhe("pa")}
-                className="bion-toque bp-glass p-5 w-full text-left"
+                className="bion-toque bp-glass p-5 w-full text-left bpp-animar"
                 aria-label={`Pressão arterial: ${pas.at(-1) ? `${pas.at(-1)!.valor1}/${pas.at(-1)!.valor2 ?? "—"}, última medição em ${rotuloCurto(pas.at(-1)!.criadoEm)}` : "sem dados"}. Abrir histórico e registrar`}
               >
                 <div className="flex items-center justify-between mb-1">
