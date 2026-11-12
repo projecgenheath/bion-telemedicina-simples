@@ -53,8 +53,8 @@ igual("marketing sem termos não passa", erro({ marketing: { aceito: true, versa
 igual("estado marketing", [marketingAtivo(null), marketingAtivo({ aceito: true }), marketingAtivo({ aceito: false })], [false, true, false]);
 igual("finalidade marketing", [finalidadeMarketing(true).includes("aceito"), finalidadeMarketing(false).includes("revogado"), finalidadeMarketing(true).includes(VERSAO_MARKETING_OPTIN)], [true, true, true]);
 igual("ignora campos extras", validarAceiteTermos("PACIENTE", { ...aceiteTermosPayload("PACIENTE"), nome: "X" }).ok, true);
-// Médico (termos-medico-v2.1-2026-11-03)
-igual("versão do médico", VERSAO_TERMOS_POR_PERFIL.MEDICO, "termos-medico-v2.1-2026-11-03");
+// Médico (termos-medico-v3-2026-11-09)
+igual("versão do médico", VERSAO_TERMOS_POR_PERFIL.MEDICO, "termos-medico-v3-2026-11-09");
 igual("payload do médico válido", validarAceiteTermos("MEDICO", aceiteTermosPayload("MEDICO")), { ok: true, valor: { versaoTermos: VERSAO_TERMOS_MEDICO, versaoPrivacidade: VERSAO_PRIVACIDADE, marketing: false } });
 igual("médico com termos do paciente é recusado", erro2("MEDICO", aceiteTermosPayload("PACIENTE")), ERRO_VERSAO_TERMOS);
 igual("paciente com termos do médico é recusado", erro2("PACIENTE", aceiteTermosPayload("MEDICO")), ERRO_VERSAO_TERMOS);
@@ -74,7 +74,7 @@ igual("origem com porta", origemConfere("http://localhost:3000/x", "localhost:30
 igual("origem diferente", origemConfere("https://mal.com", "bion.app"), false);
 igual("sem origem", origemConfere(null, "bion.app"), false);
 igual("origem inválida", origemConfere("lixo", "bion.app"), false);
-igual("versões fixas", [VERSAO_TERMOS_PACIENTE, VERSAO_PRIVACIDADE, VERSAO_MARKETING_OPTIN], ["termos-paciente-v2.1-2026-11-03", "privacidade-v2.1-2026-11-03", "marketing-optin-v0-2026-10-21"]);
+igual("versões fixas", [VERSAO_TERMOS_PACIENTE, VERSAO_PRIVACIDADE, VERSAO_MARKETING_OPTIN], ["termos-paciente-v3-2026-11-09", "privacidade-v3-2026-11-09", "marketing-optin-v0-2026-10-21"]);
 igual("finalidades com versão", finalidadeTermos(VERSAO_TERMOS_PACIENTE).includes(VERSAO_TERMOS_PACIENTE) && finalidadePrivacidade(VERSAO_PRIVACIDADE).includes(VERSAO_PRIVACIDADE), true);
 
 console.log(`${ok} ok, ${falhas} falha(s)`);

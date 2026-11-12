@@ -68,7 +68,7 @@ export default function VerificarDocumentoPage() {
               </p>
               <p className="text-sm text-white/85 mt-3">
                 A verificação de documentos está indisponível neste ambiente no momento. Isso não
-                significa que o documento seja inválido. Tente de novo mais tarde.
+                é um veredito sobre a emissão do documento. Tente de novo mais tarde.
               </p>
             </div>
           ) : falhaConexao ? (
@@ -78,7 +78,7 @@ export default function VerificarDocumentoPage() {
               </p>
               <p className="text-sm text-white/85 mt-3">
                 A verificação não respondeu — verifique sua conexão e tente de novo. Isso não
-                significa que o documento seja inválido: nenhum veredito foi emitido.
+                é um veredito sobre a emissão do documento: nenhum veredito foi emitido.
               </p>
               <button
                 type="button"
@@ -98,7 +98,8 @@ export default function VerificarDocumentoPage() {
                 {resultado.canceladoEm
                   ? ` em ${new Date(resultado.canceladoEm).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}`
                   : ""}
-                . Ele não tem mais validade e não deve ser aceito.
+                . A emissão pela plataforma é confirmada, mas o documento foi cancelado e não deve
+                ser aceito.
               </p>
               <dl className="mt-4 space-y-2 text-sm">
                 <div className="flex justify-between gap-4">
@@ -120,7 +121,7 @@ export default function VerificarDocumentoPage() {
           ) : resultado?.valido ? (
             <div>
               <p className="flex items-center gap-2 text-lg font-bold text-emerald-300">
-                <BadgeCheck className="w-6 h-6" /> Documento válido
+                <BadgeCheck className="w-6 h-6" /> Emissão confirmada pela plataforma
               </p>
               <p className="text-sm text-white/85 mt-3">
                 Este código corresponde a um documento emitido pela plataforma BION:
@@ -150,7 +151,8 @@ export default function VerificarDocumentoPage() {
                 ) : null}
               </dl>
               <p className="text-xs text-white/65 mt-6">
-                A verificação confirma a emissão e a integridade do registro na plataforma. Ela não
+                A confirmação indica apenas que o documento foi emitido pela plataforma e que o
+                registro está íntegro. Ela não atesta a validade jurídica do documento, não
                 substitui a assinatura digital qualificada (ICP-Brasil) quando esta for exigida, e,
                 por privacidade, não exibe o conteúdo do documento nem dados do paciente.
               </p>

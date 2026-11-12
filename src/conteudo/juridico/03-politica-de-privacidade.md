@@ -1,14 +1,14 @@
 ---
 title: "Política de Privacidade — BION Telemedicina (Pacientes, Médicos e Visitantes)"
-subtitle: "Versão provisória v2.1 — 03/11/2026"
+subtitle: "Versão provisória v3 — 09/11/2026"
 lang: pt-BR
 ---
 
-> Esta política descreve o funcionamento real da Plataforma na data acima, levantado no código-fonte. Trechos **[A DEFINIR]** ou **[A CONFIRMAR]** precisam ser resolvidos antes da publicação (ver `pendencias.md`).
+> Esta política descreve o funcionamento real da Plataforma na data acima, levantado no código-fonte, e o fato de a BION ser, nesta versão, uma plataforma de software mantida por pessoa física, sem CNPJ e sem médico responsável técnico. Trechos **[A DEFINIR]**, **[A PREENCHER]** ou **[A CONFIRMAR]** precisam ser preenchidos ou validados antes da publicação.
 
 # Resumo em linguagem simples
 
-- **Quem cuida dos seus dados:** a BION (**[A DEFINIR: razão social e CNPJ]**) e, no que é prontuário, o médico que atende você.
+- **Quem cuida dos seus dados:** o mantenedor da BION, pessoa física (**[NOME E CPF DO MANTENEDOR]**), na qualidade de controlador, e, no que é prontuário, o médico que atende você.
 - **Onde ficam:** no **Brasil (São Paulo)**, nos servidores da Supabase e da Vercel. Algumas partes passam pelo exterior: a **IA da NVIDIA** (quando você usa a BION IA ou quando um médico usa o BION Copilot), servidores de conexão da chamada (**Cloudflare e Google**, que recebem o seu IP) e os **serviços de notificação** do seu navegador.
 - **Dados de saúde** são usados para o seu atendimento, por médicos, com sigilo. **A administração da BION não vê o conteúdo clínico, não entra na sala e não lê o chat da consulta**, mas vê seus dados de cadastro (nome, e-mail, telefone, CPF, data de nascimento) para operar a plataforma.
 - **O médico que atende você vê todo o seu histórico na BION**, inclusive com outros médicos. Médicos que nunca atenderam você não veem nada.
@@ -16,7 +16,7 @@ lang: pt-BR
 - **A BION IA** só é usada se você consentir. Antes de enviar suas mensagens à NVIDIA, **tentamos remover automaticamente** seu nome, e-mail, CPF, telefone, CEP, datas, endereço e nomes de outras pessoas (**a remoção pode falhar**). Os médicos vão só como código (M1, M2…) e especialidade. **Laudos de exame** enviados à IA **vão com o conteúdo como está** (inclusive o seu nome impresso) e **sempre pedem o seu consentimento antes de cada envio** — você pode recusar.
 - **Não vendemos seus dados. Não usamos rastreadores de publicidade.** Só cookies de login.
 - Você pode **ver, corrigir, baixar e excluir** seus dados. O botão **"Excluir minha conta"** está no seu perfil. O prontuário fica guardado **20 anos** sem o seu nome, porque a lei exige.
-- Encarregado (DPO): **[A DEFINIR: nome] — [A DEFINIR: e-mail do Encarregado]**.
+- **Encarregado de dados:** **[NOME DO MANTENEDOR]**, pelo e-mail **oxygenbiomedical@gmail.com** (LGPD, arts. 18 e 41; confirmação e acesso em até **15 dias**). O encarregado é o próprio mantenedor. Correspondência: **[ENDEREÇO PARA CORRESPONDÊNCIA]**.
 
 # Sumário
 
@@ -41,11 +41,12 @@ lang: pt-BR
 19. Dados de administradores e da equipe  
 20. Encarregado (DPO) e contato  
 21. Alterações desta política  
+22. Página pública de verificação de documentos  
 Anexo — Mapa de dados por tabela/funcionalidade
 
 # 1. Quem somos e a quem esta política se aplica
 
-1.1. **Controladora:** **[A DEFINIR: razão social]**, CNPJ **[A DEFINIR]**, sede em **[A DEFINIR: endereço, cidade/UF]** ("**BION**"). Inscrição no CRM-**[A DEFINIR]** nº **[A DEFINIR]**; Responsável Técnico médico: Dr(a). **[A DEFINIR]**, CRM **[A DEFINIR]**.
+1.1. **Controlador:** a plataforma BION ("**BION**") é um software mantido por pessoa física, o mantenedor **[NOME E CPF DO MANTENEDOR]**, com endereço para correspondência em **[ENDEREÇO PARA CORRESPONDÊNCIA]** e contato em **oxygenbiomedical@gmail.com**. O mantenedor é o **controlador** dos dados pessoais tratados pela Plataforma (LGPD, art. 5º, VI), ressalvados os papéis da seção 2. **Não há, nesta versão, pessoa jurídica, CNPJ, razão social, sede de empresa, inscrição em Conselho Regional de Medicina nem médico responsável técnico (RT).** Quando o mantenedor constituir pessoa jurídica ou indicar RT, esta política será atualizada e será pedido **novo aceite**.
 
 1.2. Esta política vale para **pacientes** (e seus responsáveis legais), **médicos**, **administradores** e **visitantes** do site e do aplicativo BION. Ela segue a Lei Geral de Proteção de Dados (Lei 13.709/2018 — **LGPD**), o Marco Civil da Internet (Lei 12.965/2014), o Código de Defesa do Consumidor, a Lei 13.787/2018 (prontuário eletrônico), a Lei 14.510/2022 (telessaúde), a Resolução CFM 2.314/2022 e o Código de Ética Médica.
 
@@ -87,11 +88,11 @@ Anexo — Mapa de dados por tabela/funcionalidade
 
 ## 3.2. Médicos
 
-nome, e-mail, senha (*hash*), CRM/UF, especialidade e subespecialidades, formação, experiência, idiomas, biografia, foto, preço, horários e bloqueios de agenda (com motivo), **data de nascimento, sexo/gênero, telefone, CNPJ (opcional)**, identificador da conta Stripe conectada do médico, avaliações recebidas, registros de presença na sala, mensagens, uso do Copilot IA (só metadados), dados técnicos e de segurança e, no futuro e só com autorização expressa, **certificado digital A1** (guardado criptografado). Os dados bancários ficam com a Stripe.
+nome, e-mail, senha (*hash*), CRM/UF, especialidade e subespecialidades, formação, experiência, idiomas, biografia, foto, preço, horários e bloqueios de agenda (com motivo), **data de nascimento, sexo/gênero, telefone, CNPJ (opcional)**, identificador da conta Stripe conectada do médico, avaliações recebidas, registros de presença na sala, mensagens, uso do Copilot IA (só metadados), dados técnicos e de segurança e, no futuro e só com autorização expressa, **certificado digital A1** (guardado criptografado). Os dados bancários ficam com a Stripe. Quando um médico interessado entra em contato pelo canal de WhatsApp da BION, tratamos o **nome, o CRM e a UF** informados para avaliar o cadastro, nos termos da seção 18.5.
 
 ## 3.3. Visitantes
 
-dados técnicos de acesso (IP, data e hora, navegador), preferências de tela salvas no aparelho.
+dados técnicos de acesso (IP, data e hora, navegador), preferências de tela salvas no aparelho. Quem acessa a página pública de verificação de documentos (`/verificar/[codigo]`) tem o **endereço IP** tratado apenas para limitar o número de consultas, nos termos da seção 22.
 
 # 4. Para que usamos e com qual base legal
 
@@ -110,7 +111,7 @@ Dados pessoais "comuns" seguem o **art. 7º** da LGPD; **dados de saúde** (sens
 | Lembretes, IMC, gráficos de medições feitos por você | 🩺 medicamentos, medições | Consentimento (art. 11, I), dado ao ativar a função |
 | Melhorar a BION IA com dados **anonimizados** | 🩺 dados antes de anonimizar | **Consentimento específico** (art. 11, I), revogável a qualquer momento **[ver pendências: opt-in × opt-out]** |
 | Cobrança, reembolso, divisão do pagamento entre o médico e a BION, feita pela Stripe | pagamento, identificador da conta Stripe conectada | Execução de contrato (art. 7º, V) |
-| Emissão de NFS-e/recibo Receita Saúde | nome, CPF, valor | Obrigação legal (art. 7º, II) do médico/BION |
+| Emissão de recibo ou NFS-e da consulta (pelo médico) e do documento fiscal da remuneração da BION | nome, CPF, valor | Obrigação legal (art. 7º, II) do médico e do mantenedor |
 | Verificar CRM e situação do médico | CRM, nome | Obrigação regulatória (art. 7º, II; Res. CFM 2.314/2022) e legítimo interesse |
 | Guardar registros de acesso (IP, data e hora) | logs | Obrigação legal (art. 7º, II; Marco Civil, art. 15) |
 | Auditoria das ações administrativas | trilha de auditoria | Legítimo interesse (art. 7º, IX) e exercício regular de direitos (art. 7º, VI; art. 11, II, "d") |
@@ -118,6 +119,8 @@ Dados pessoais "comuns" seguem o **art. 7º** da LGPD; **dados de saúde** (sens
 | Avaliações | nota, comentário | Legítimo interesse (art. 7º, IX), com opção de não avaliar |
 | Notificações operacionais e push | notificações, inscrição | Execução de contrato; o push depende da sua permissão no navegador |
 | Marketing (e-mail, WhatsApp, push promocional) | e-mail, telefone | **Consentimento separado** (art. 7º, I) — **hoje não fazemos** |
+| Avaliar o cadastro de médico interessado que contatou pelo WhatsApp | nome, CRM e UF informados pelo médico | Procedimentos preliminares à celebração de contrato (art. 7º, V) |
+| Página pública de verificação de documentos (`/verificar/[codigo]`) | tipo do documento, data e hora de emissão, nome e CRM/UF do médico, situação de cancelamento; IP de quem consulta (limite de tentativas) | Legítimo interesse e prevenção a fraude (art. 7º, IX) e cumprimento de obrigação regulatória (art. 7º, II), observados os princípios dos arts. 6º, VI, e 9º. **Não exibe dados do paciente nem dados clínicos** |
 | Defesa em processos e pedidos de autoridades | os necessários | Exercício regular de direitos (art. 7º, VI; art. 11, II, "d") e obrigação legal |
 
 Quando a base é o consentimento, você pode **retirá-lo a qualquer momento**, na Central de Privacidade ou pelo Encarregado, sem prejuízo das consultas médicas. A retirada não afeta o que já foi feito antes.
@@ -171,19 +174,20 @@ Quando a base é o consentimento, você pode **retirá-lo a qualquer momento**, 
 | **Stripe, Inc. e afiliadas (Stripe)** | Processar pagamentos com cartão e reembolsos (operadora dos dados de pagamento; ver 8.3) | Nome, e-mail, dados do cartão e valor da consulta | **Estados Unidos e outros países** 🌐 |
 | **Emissor Nacional da NFS-e** (Receita Federal/Municípios) e **Receita Saúde** | Documentos fiscais | Nome, CPF, valor, descrição do serviço | Brasil (órgão público) |
 | **Médicos** | Atendimento | Conforme a seção 6 | — |
+| **WhatsApp / Meta Platforms, Inc.** | Canal de contato para médicos interessados em atender pela BION | Nome, CRM e UF informados pelo médico | **Exterior — possível transferência internacional** 🌐 |
 | **Autoridades** | Ordem judicial, requisição legal, CRM, ANPD | O estritamente exigido | — |
 
 8.1. **Não usamos** ferramentas de *analytics*, pixels de publicidade (Meta, Google Ads), Sentry ou provedores de e-mail/SMS na data desta versão. O Supabase Auth pode enviar e-mails de conta **[A CONFIRMAR]**. Qualquer novo operador será incluído nesta política antes de começar a ser usado.
 
-8.2. Em caso de reorganização societária, os dados podem ser transferidos ao sucessor, que ficará sujeito a esta política.
+8.2. Se o mantenedor constituir pessoa jurídica ou ceder a operação a um sucessor, os dados poderão ser transferidos a esse sucessor, que ficará sujeito a esta política; a mudança será informada e, quando exigido, será pedido **novo aceite**.
 
 8.3. Pagamentos. Os pagamentos com cartão são processados pela Stripe, Inc. e por suas afiliadas (Stripe), que atuam como operadoras dos dados de pagamento. A Stripe recebe o seu nome, e-mail, os dados do cartão e o valor da consulta. Os dados completos do cartão vão direto para a Stripe e não ficam guardados na BION. A BION guarda apenas os identificadores da transação, o valor e as taxas. A Stripe pode tratar esses dados nos Estados Unidos e em outros países, com as garantias do art. 33 da LGPD, como as cláusulas contratuais da Stripe. Ela também pode usar os dados para prevenir fraudes e cumprir obrigações legais, conforme a política de privacidade dela.
 
 # 9. Transferência internacional de dados
 
-9.1. Há transferência internacional para **NVIDIA** (IA), **Stripe** (pagamentos com cartão), **Google** (STUN), **Cloudflare** (STUN/TURN), **serviços de push**, **Vercel** (logs) e, quando houver, **Upstash**.
+9.1. Há transferência internacional para **NVIDIA** (IA), **Stripe** (pagamentos com cartão), **Google** (STUN), **Cloudflare** (STUN/TURN), **serviços de push**, **Vercel** (logs), **WhatsApp/Meta** (canal de médicos interessados) e, quando houver, **Upstash**.
 
-9.2. Para os demais fornecedores (Stripe, Supabase, Vercel, Google, Cloudflare, serviços de push e, quando houver, Upstash), as transferências ocorrem com base no **art. 33 da LGPD**, nas garantias contratuais oferecidas por cada fornecedor **[A CONFIRMAR: quais fornecedores adotam as cláusulas-padrão da ANPD (Resolução CD/ANPD nº 19/2024)]**. Para a BION IA e a leitura de exames, a transferência à **NVIDIA (EUA)** se baseia **exclusivamente no seu consentimento específico e destacado** (art. 33, VIII, da LGPD). Hoje **não há contrato com cláusulas-padrão com a NVIDIA**, e ela pode guardar e usar o conteúdo conforme os termos dela. Para o BION Copilot, a transferência dos dados profissionais do médico à NVIDIA se baseia no consentimento específico do médico, dado ao ativar o Copilot (art. 33, VIII).
+9.2. Para os demais fornecedores (Stripe, Supabase, Vercel, Google, Cloudflare, serviços de push, WhatsApp/Meta e, quando houver, Upstash), as transferências ocorrem com base no **art. 33 da LGPD**, nas garantias contratuais oferecidas por cada fornecedor **[A CONFIRMAR: quais fornecedores adotam as cláusulas-padrão da ANPD (Resolução CD/ANPD nº 19/2024)]**. Para a BION IA e a leitura de exames, a transferência à **NVIDIA (EUA)** se baseia **exclusivamente no seu consentimento específico e destacado** (art. 33, VIII, da LGPD). Hoje **não há contrato com cláusulas-padrão com a NVIDIA**, e ela pode guardar e usar o conteúdo conforme os termos dela. Para o BION Copilot, a transferência dos dados profissionais do médico à NVIDIA se baseia no consentimento específico do médico, dado ao ativar o Copilot (art. 33, VIII).
 
 9.3. Você pode pedir informações sobre as garantias de cada transferência ao Encarregado.
 
@@ -221,8 +225,8 @@ Você tem direito a (LGPD, art. 18): **(I)** confirmar se tratamos seus dados; *
 **Como pedir:**
 
 - **No app:** Central de Privacidade (ver dados, consentimentos, baixar prontuário em PDF, alterar senha) e **"Excluir minha conta"** no perfil.
-- **Pelo Encarregado:** **[A DEFINIR: e-mail do Encarregado]**. Podemos pedir confirmação de identidade.
-- **Prazo de resposta:** confirmação e acesso simplificado imediatamente quando possível; declaração completa em até **15 dias** (art. 19, II).
+- **Pelo Encarregado de dados:** **[NOME DO MANTENEDOR]**, pelo e-mail **oxygenbiomedical@gmail.com**. Podemos pedir confirmação de identidade.
+- **Prazo de resposta:** confirmação de que tratamos seus dados e o acesso (art. 18, I e II) em até **15 (quinze) dias**; declaração completa também em até **15 dias** (art. 19, II).
 - Você também pode reclamar à **ANPD** (www.gov.br/anpd).
 
 **Correção de prontuário:** informações clínicas registradas pelo médico só podem ser complementadas ou retificadas pelo próprio médico, com registro da alteração.
@@ -275,17 +279,37 @@ Usamos **apenas cookies essenciais de login** (`bion_sessao` e cookies `sb-*` do
 
 18.4. **Encerramento da conta do médico:** feito mediante solicitação; os dados são mantidos pelos prazos da seção 10 e depois eliminados ou anonimizados. **[Ver pendências: rotina de anonimização do médico ainda não existe.]** Evoluções e documentos produzidos pelo médico permanecem nos prontuários dos pacientes.
 
+18.5. **Canal de WhatsApp para médicos interessados.** Médicos que ainda não têm cadastro podem entrar em contato pelo WhatsApp **(62) 99360-2088** (`https://wa.me/5562993602088`), operado pela **Meta/WhatsApp**. Por esse canal devem ser enviados apenas **nome, CRM e UF**. **Não devem ser enviados documentos nem dados de pacientes**; os documentos do cadastro seguem pelo aplicativo. A finalidade do tratamento é **avaliar o cadastro do médico**; a base legal é a de **procedimentos preliminares à celebração de contrato** (LGPD, art. 7º, V). A Meta/WhatsApp atua como **operadora/terceira** e pode realizar **transferência internacional** desses dados, nos termos da seção 9. O nome e o CRM/UF do médico também podem aparecer na página pública de verificação de documentos, nos termos da seção 22.
+
 # 19. Dados de administradores e da equipe
 
 As ações dos administradores (inclusive acessos ao cofre, correções de desfecho, reembolsos e, no histórico anterior a 28/10/2026, pagamentos de repasse) são registradas em auditoria com nome, papel e data, por 5 anos. A equipe está sujeita a dever de confidencialidade.
 
-# 20. Encarregado (DPO) e contato
+# 20. Encarregado (canal do titular) e contato
 
-Encarregado pelo tratamento de dados pessoais: **[A DEFINIR: nome]** — **[A DEFINIR: e-mail do Encarregado]** — **[A DEFINIR: endereço para correspondência]**.
+**Encarregado de dados:** **[NOME DO MANTENEDOR]**, pelo e-mail **oxygenbiomedical@gmail.com**. O encarregado é o próprio mantenedor da Plataforma (LGPD, arts. 18 e 41). Correspondência: **[ENDEREÇO PARA CORRESPONDÊNCIA]**. Contato geral e de suporte da Plataforma: **oxygenbiomedical@gmail.com**.
+
+**Canal para médicos interessados em atender pela BION:** WhatsApp **(62) 99360-2088** (`https://wa.me/5562993602088`). Esse número é operado pela Meta/WhatsApp. Por esse canal devem ser enviados apenas **nome, CRM e UF**. **Nunca envie documentos ou dados de pacientes** pelo WhatsApp; os documentos do cadastro seguem pelo aplicativo. O tratamento desses dados está descrito na seção 18.5.
+
+Pedidos de **confirmação de tratamento** e de **acesso** serão respondidos em até **15 (quinze) dias**. Os direitos dos titulares estão listados na seção 11 (confirmação, acesso, correção, anonimização/bloqueio/eliminação, portabilidade, eliminação de dados tratados com consentimento, informação sobre compartilhamentos, informação sobre a possibilidade de não consentir, revogação do consentimento, revisão de decisões automatizadas e oposição a tratamento irregular).
 
 # 21. Alterações desta política
 
-Podemos atualizar esta política. Mudanças relevantes serão avisadas no app com antecedência razoável e, quando a mudança exigir, pediremos novo consentimento.
+Podemos atualizar esta política. Mudanças relevantes serão avisadas no app com antecedência razoável e, quando a mudança exigir, pediremos **novo aceite** ou novo consentimento. **Transição:** quando o mantenedor constituir pessoa jurídica, obtiver CNPJ ou indicar médico responsável técnico, esta política será atualizada e será pedido **novo aceite**.
+
+# 22. Página pública de verificação de documentos
+
+22.1. As vias em PDF de receitas, atestados e pedidos de exame trazem um código de verificação. Qualquer pessoa com esse código pode conferi-lo na página pública `/verificar/[codigo]`.
+
+22.2. O código impresso é **assinado** (código de autenticação de mensagem, **HMAC**): a assinatura é conferida antes de qualquer leitura no banco de dados, para impedir a consulta a partir de códigos forjados ou adulterados.
+
+22.3. A página mostra somente estes dados, e nenhum outro: o **tipo** do documento; o **nome e o CRM/UF do médico** emissor; a **data e a hora de emissão**, quando a emissão é confirmada e o documento não está cancelado; e, se o documento foi **cancelado**, a data e a hora do cancelamento. **Não mostra dados do paciente nem dados clínicos** (como medicamentos, CID ou o conteúdo da receita, do atestado ou do pedido de exame).
+
+22.4. A página e a API correspondente **não são indexadas por buscadores**. Há um **limite de consultas por endereço IP**, para impedir varredura.
+
+22.5. Os dados do médico exibidos nessa página (nome e CRM/UF) são tratados com base no **legítimo interesse** e na **prevenção a fraude** (LGPD, art. 7º, IX) e no **cumprimento de obrigação regulatória** (art. 7º, II), observados os princípios da **transparência** (art. 6º, VI) e do **art. 9º** da LGPD. O endereço IP de quem consulta é tratado só para aplicar o limite de tentativas (legítimo interesse, art. 7º, IX).
+
+22.6. A confirmação na página indica **apenas** que o documento foi **emitido pela plataforma**. **Não atesta a validade jurídica** do documento e **não substitui** a assinatura digital qualificada (ICP-Brasil) quando esta for exigida.
 
 *Vigente a partir do seu aceite*
 
@@ -323,5 +347,6 @@ Podemos atualizar esta política. Mudanças relevantes serão avisadas no app co
 | `PushInscricao` | todos | não (*user agent*) | sistema | serviços de push | até revogar/falhar |
 | `AuditLog` (inclui monitor de IA `LLM_TURNO`) | todos | pode citar especialidade | admin | Supabase | auditoria 5 anos; IA 6 meses; nome em assunto de chamado pseudonimizado após 6 meses |
 | `IdentificacaoCofre` | paciente excluído | não (identificação) | admin com justificativa | Supabase | 20 anos do último registro do prontuário |
+| Página pública `/verificar/[codigo]` (tipo, data/hora de emissão, nome e CRM/UF do médico, cancelamento; IP de quem consulta) | médico (nome e CRM/UF); visitante (IP) | não | público (só os campos acima; **sem dados do paciente nem dados clínicos**) | — (HMAC conferido no servidor; rate limit por IP, Upstash se ativo) | enquanto o documento existir no prontuário (20 anos); IP: minutos |
 | Rate limit (IP) | todos | não | sistema | Upstash (se ativo) | minutos/horas |
 | Logs Vercel (IP, URL, *user agent*) | todos | não | equipe técnica | Vercel | conforme plano **[A DEFINIR]** |

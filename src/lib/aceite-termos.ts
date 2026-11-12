@@ -9,10 +9,10 @@
 
 export type PerfilAceite = "PACIENTE" | "MEDICO";
 
-export const VERSAO_TERMOS_PACIENTE = "termos-paciente-v2.1-2026-11-03";
+export const VERSAO_TERMOS_PACIENTE = "termos-paciente-v3-2026-11-09";
 /** Termos do médico (src/conteudo/juridico/02-…), rota /termos-medico. */
-export const VERSAO_TERMOS_MEDICO = "termos-medico-v2.1-2026-11-03";
-export const VERSAO_PRIVACIDADE = "privacidade-v2.1-2026-11-03";
+export const VERSAO_TERMOS_MEDICO = "termos-medico-v3-2026-11-09";
+export const VERSAO_PRIVACIDADE = "privacidade-v3-2026-11-09";
 /** Texto provisório (minuta), aguardando revisão jurídica. */
 export const VERSAO_MARKETING_OPTIN = "marketing-optin-v0-2026-10-21";
 
