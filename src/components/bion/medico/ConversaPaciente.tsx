@@ -410,7 +410,7 @@ export function ConversaPaciente({
       {aba === "conversa" ? (
         <div className="px-4 pb-4 space-y-3" role="log" aria-live="polite" aria-label={`Conversa com ${atual.nome}`}>
           {pedidoAberto && consultaAlvoPedido ? (
-            <section className="bp-glass p-4" aria-label="Pedir medição ao paciente">
+            <section className="bp-glass p-4 bm-animar" aria-label="Pedir medição ao paciente">
               <div className="flex items-start justify-between gap-2">
                 <div>
                   <div className="text-sm font-bold">Pedir medição</div>
@@ -458,7 +458,7 @@ export function ConversaPaciente({
             </section>
           ) : null}
 
-          <article className="bp-glass p-4" aria-label="Dados do paciente">
+          <article className="bp-glass p-4 bm-animar" aria-label="Dados do paciente">
             <div className="text-xs font-bold uppercase tracking-wider text-bion-sea dark:text-sky-300 mb-2">Ficha do paciente</div>
             {registro ? (
               <dl className="grid grid-cols-2 gap-x-4 gap-y-2">
