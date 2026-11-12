@@ -103,7 +103,7 @@ export function PrivacidadeModulo() {
         </nav>
       }
     >
-      <div className="space-y-6">
+      <div className="ba-animar space-y-6">
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <KpiAdmin denso icone={Users} rotulo="Pacientes" valor={lista.dados ? total : "—"} carregando={!lista.dados && lista.carregando} detalhe={termo ? "com esta busca" : "cadastrados"} />
           <KpiAdmin denso icone={Stethoscope} rotulo="Médicos" valor={medicos.length} detalhe="cadastrados" />

@@ -51,7 +51,7 @@ export function LembretesModulo() {
       acoes={botaoNovo}
     >
       {ordenados.length === 0 ? (
-        <div className="ba-card" data-denso="true">
+        <div className="ba-animar ba-card" data-denso="true">
           <EstadoVazio icone={BellRing} titulo="Nenhum lembrete ainda" texto="Crie lembretes para não perder horários importantes." acao={botaoNovo} />
         </div>
       ) : (

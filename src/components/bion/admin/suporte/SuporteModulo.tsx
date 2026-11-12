@@ -101,7 +101,7 @@ export function SuporteModulo() {
 
   const listaChamados =
     lista.length === 0 ? (
-      <div className="ba-card" data-denso="true">
+      <div className="ba-animar ba-card" data-denso="true">
         {tickets.length === 0 ? (
           <EstadoVazio icone={LifeBuoy} titulo="Nenhum chamado ainda" texto="Quando um paciente ou médico abrir um chamado, ele aparece aqui." />
         ) : (

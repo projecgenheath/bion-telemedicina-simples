@@ -61,7 +61,7 @@ export function NotificacoesModulo() {
       }
     >
       {lista.length === 0 ? (
-        <div className="ba-card" data-denso="true">
+        <div className="ba-animar ba-card" data-denso="true">
           <EstadoVazio icone={Bell} titulo={soNaoLidas ? "Nenhuma notificação não lida" : "Nenhuma notificação"} texto="Os avisos do app aparecem aqui." />
         </div>
       ) : (

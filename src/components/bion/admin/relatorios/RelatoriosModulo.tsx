@@ -96,7 +96,7 @@ export function RelatoriosModulo() {
       onTentarDeNovo={() => void atualizar()}
       acoes={<BotoesExportar onCsv={exportarCsv} onPdf={exportarPdf} className="hidden sm:flex" />}
       ferramentas={
-        <div className="space-y-2 w-full">
+        <div className="ba-animar space-y-2 w-full">
           <BotoesExportar onCsv={exportarCsv} onPdf={exportarPdf} className="grid grid-cols-2 sm:hidden" />
           <div className="flex flex-wrap items-center gap-2">
             <div role="group" aria-label="Período" className="ba-abas overflow-x-auto max-w-full">
