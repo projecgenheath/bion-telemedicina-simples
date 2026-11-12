@@ -222,7 +222,7 @@ export function ProntuarioPaciente({
         <h3 className={tituloSecao}>Consultas comigo ({consultas.length})</h3>
         <ul className="space-y-2">
           {consultas.map((c) => (
-            <li key={c.id} className="bp-glass p-3.5">
+            <li key={c.id} className="bp-glass p-3.5 bm-animar">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-sm font-bold">
                   {c.data} às {c.hora}
