@@ -71,7 +71,7 @@ export function NotificacoesMedico({ onNavegar }: { onNavegar: (tipo: NotifTipo)
             Carregando suas notificações…
           </p>
         ) : notificacoes.length === 0 ? (
-          <div className="bp-glass p-6 text-center">
+          <div className="bp-glass p-6 text-center bm-animar">
             <Bell className="w-8 h-8 mx-auto text-bion-ink/50 dark:text-bion-paper/50" aria-hidden />
             <p className="mt-2 text-sm font-bold">Nenhuma notificação</p>
             <p className="mt-1 text-sm text-bion-ink/75 dark:text-bion-paper/75">
