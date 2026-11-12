@@ -351,7 +351,7 @@ export function MedicoApp() {
       {sobreposicao?.tipo === "termos" ? (
         <TelaSobreposta titulo="Termos e ajuda" onFechar={fecharSobreposicao}>
           <div className="p-4 space-y-4">
-            <div className="bp-glass p-4 flex items-center justify-between gap-3">
+            <div className="bp-glass p-4 flex items-center justify-between gap-3 bm-animar">
               <div>
                 <div className="text-sm font-bold">Termos de uso do médico</div>
                 <div className="text-xs text-bion-ink/75 dark:text-bion-paper/75">Texto específico para profissionais.</div>

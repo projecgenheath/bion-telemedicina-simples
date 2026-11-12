@@ -146,7 +146,7 @@ export function PacientesPainel({
           }}
         />
         {listaPacientes.length === 0 ? (
-          <div className="bp-glass p-6 text-center mt-4">
+          <div className="bp-glass p-6 text-center mt-4 bm-animar">
             <Users className="w-8 h-8 mx-auto opacity-70" aria-hidden />
             <p className="mt-2 text-sm font-bold">Nenhum paciente ainda</p>
             <p className="text-sm text-bion-ink/75 dark:text-bion-paper/75">Quando alguém agendar com você, aparece aqui.</p>
@@ -172,7 +172,7 @@ export function PacientesPainel({
               const janela = avisoRetorno === p.chave ? janelaRespostaPaciente(p.consultas, Date.now()) : null;
               return (
                 <li key={p.chave}>
-                  <div className="bp-glass w-full p-3.5">
+                  <div className="bp-glass w-full p-3.5 bm-animar">
                     <button
                       type="button"
                       onClick={() => onAbrirPaciente(p)}
