@@ -206,6 +206,14 @@ export function ChatBion({
     fimRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [mensagens, etapa, pensando, anamneseAtiva, segundosEspera]);
 
+
+  // Se abriu com intenção de agendar, entra direto no wizard
+  useEffect(() => {
+    if (aberto && intencao === "agendar" && etapa === null && mensagens.length <= 1) {
+      iniciarAgendamento();
+    }
+  }, [aberto, intencao, etapa, mensagens.length]);
+
   // F10: ao chegar na confirmação, resolve a flag do checkout (com cache no
   // módulo) para o cartão dizer a verdade sobre a forma de pagamento.
   useEffect(() => {
@@ -1196,7 +1204,14 @@ export function ChatBion({
           <div className="bp-glass p-4">
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs font-bold uppercase tracking-wide text-bion-ink/75 dark:text-bion-paper/75">{opcoes.titulo}</span>
-              {etapa !== "especialidade" && (
+              <div className="flex items-center gap-2">
+                <button type="button"
+                  onClick={() => { setEtapa(null); setEscolha({}); setMensagens((m) => [...m, { remetente: "ia", texto: "Tudo bem, cancelei o agendamento. Como posso ajudar?" }]); }}
+                  className="text-xs font-semibold text-bion-ink/60 dark:text-bion-paper/60"
+                >
+                  Cancelar
+                </button>
+                {etapa !== "especialidade" && (
                 <button type="button"
                   onClick={() => {
                     const anterior: Record<string, Etapa> = { medico: "especialidade", dia: "medico", hora: "dia", confirmar: "hora" };
@@ -1210,7 +1225,8 @@ export function ChatBion({
                 >
                   <ArrowLeft className="w-3 h-3" /> voltar
                 </button>
-              )}
+                )}
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-2">
               {opcoes.opcoes.map((o) => (
