@@ -98,10 +98,25 @@
   100% { opacity: 0.35; }
 }
 .bm-indicador { animation: bm-esmaecer 3.5s ease forwards; }
+/* Mesmo efeito com outro nome por seção (são 3): trocar o nome reinicia o
+   esmaecer a cada troca de seção sem remontar o nav, então o marcador
+   .bion-indicador continua deslizando. */
+@keyframes bm-esmaecer-1 {
+  0%, 70% { opacity: 1; }
+  100% { opacity: 0.35; }
+}
+@keyframes bm-esmaecer-2 {
+  0%, 70% { opacity: 1; }
+  100% { opacity: 0.35; }
+}
+.bm-indicador.bm-indicador-1 { animation-name: bm-esmaecer-1; }
+.bm-indicador.bm-indicador-2 { animation-name: bm-esmaecer-2; }
 .bm-indicador:hover,
 .bm-indicador:focus-within { animation: none; opacity: 1; }
 @media (prefers-reduced-motion: reduce) {
-  .bm-indicador { animation: none; opacity: 1; }
+  .bm-indicador,
+  .bm-indicador.bm-indicador-1,
+  .bm-indicador.bm-indicador-2 { animation: none; opacity: 1; }
 }
 
 /* Gráfico: o gesto vertical continua rolando a coluna */

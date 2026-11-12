@@ -192,7 +192,7 @@ function DetalheView({
       <button
         type="button"
         onClick={onVoltar}
-        className="inline-flex items-center gap-1 text-sm font-bold text-bion-sea dark:text-sky-300"
+        className="bion-toque inline-flex items-center gap-1 text-sm font-bold text-bion-sea dark:text-sky-300"
       >
         <ChevronLeft className="w-4 h-4" aria-hidden /> Voltar à lista
       </button>
@@ -225,7 +225,7 @@ function DetalheView({
           href={detalhe.comprovanteUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="bp-acao w-full py-3 text-sm inline-flex items-center justify-center gap-2"
+          className="bion-toque bp-acao w-full py-3 text-sm inline-flex items-center justify-center gap-2"
         >
           Ver comprovante <ExternalLink className="w-4 h-4" aria-hidden />
         </a>
@@ -236,7 +236,7 @@ function DetalheView({
       <button
         type="button"
         onClick={() => baixarCsvRepasse(`bion-repasse-${detalhe.competencia}.csv`, csvDetalheRepasse(detalhe))}
-        className="w-full py-3 rounded-2xl border border-bion-ink/15 dark:border-white/15 text-sm font-bold inline-flex items-center justify-center gap-2"
+        className="bion-toque w-full py-3 rounded-2xl border border-bion-ink/15 dark:border-white/15 text-sm font-bold inline-flex items-center justify-center gap-2"
       >
         <Download className="w-4 h-4" aria-hidden /> Exportar CSV deste repasse
       </button>
@@ -354,8 +354,8 @@ export function RepassesSheet({
 
           {!lista && carregando ? (
             <div className="bp-glass p-5 space-y-3" role="status">
-              <div className="h-8 w-40 rounded-lg bg-bion-ink/10 dark:bg-white/10 motion-safe:animate-pulse" />
-              <div className="h-20 rounded-2xl bg-bion-ink/10 dark:bg-white/10 motion-safe:animate-pulse" />
+              <div className="bion-esqueleto h-8 w-40" aria-hidden="true" />
+              <div className="bion-esqueleto h-20 w-full" aria-hidden="true" />
               <span className="sr-only">Carregando repasses…</span>
             </div>
           ) : !lista && erro ? (
@@ -364,7 +364,7 @@ export function RepassesSheet({
               <button
                 type="button"
                 onClick={recarregar}
-                className="mt-2 inline-flex items-center gap-1.5 text-sm font-bold text-bion-sea dark:text-sky-300 underline underline-offset-2"
+                className="bion-toque mt-2 inline-flex items-center gap-1.5 text-sm font-bold text-bion-sea dark:text-sky-300 underline underline-offset-2"
               >
                 <RefreshCw className="w-4 h-4" aria-hidden /> Tentar de novo
               </button>
@@ -394,7 +394,7 @@ export function RepassesSheet({
                         onFechar();
                         onAbrirRecebimento();
                       }}
-                      className="mt-2 inline-flex items-center gap-1.5 text-sm font-bold text-bion-sea dark:text-sky-300"
+                      className="bion-toque mt-2 inline-flex items-center gap-1.5 text-sm font-bold text-bion-sea dark:text-sky-300"
                     >
                       <Wallet className="w-4 h-4" aria-hidden /> Ir para Recebimento (PIX)
                     </button>
@@ -418,7 +418,7 @@ export function RepassesSheet({
                         onFechar();
                         onAbrirRecebimento();
                       }}
-                      className="mt-2 inline-flex items-center gap-1.5 text-sm font-bold text-bion-sea dark:text-sky-300"
+                      className="bion-toque mt-2 inline-flex items-center gap-1.5 text-sm font-bold text-bion-sea dark:text-sky-300"
                     >
                       <Wallet className="w-4 h-4" aria-hidden /> Ir para Recebimento (PIX)
                     </button>
@@ -443,7 +443,7 @@ export function RepassesSheet({
                       }
                       disabled={lista.repasses.length === 0 && !previaTemConteudo(lista.previa)}
                       aria-label="Exportar histórico de repasses em CSV"
-                      className="p-2 rounded-full bg-bion-ink/8 dark:bg-white/10 disabled:opacity-50"
+                      className="bion-toque bion-toque-forte p-2 rounded-full bg-bion-ink/8 dark:bg-white/10 disabled:opacity-50"
                     >
                       <Download className="w-4 h-4" />
                     </button>
@@ -452,7 +452,7 @@ export function RepassesSheet({
                       onClick={recarregar}
                       disabled={carregando}
                       aria-label="Atualizar lista de repasses"
-                      className="p-2 rounded-full bg-bion-ink/8 dark:bg-white/10"
+                      className="bion-toque bion-toque-forte p-2 rounded-full bg-bion-ink/8 dark:bg-white/10"
                     >
                       <RefreshCw className={`w-4 h-4 ${carregando ? "motion-safe:animate-spin" : ""}`} />
                     </button>
@@ -464,14 +464,14 @@ export function RepassesSheet({
                     Nenhum repasse ainda.
                   </div>
                 ) : (
-                  <ul className="bp-glass divide-y divide-bion-ink/10 dark:divide-white/10 overflow-hidden">
+                  <ul className="bion-surgir-lista bp-glass divide-y divide-bion-ink/10 dark:divide-white/10 overflow-hidden">
                     {lista.repasses.map((r: RepasseResumo) => (
                       <li key={r.id}>
                         <button
                           type="button"
                           onClick={() => void abrirDetalhe(r.id)}
                           disabled={detalheCarregando}
-                          className="w-full flex items-center gap-3 px-4 py-3 text-left"
+                          className="bion-toque w-full flex items-center gap-3 px-4 py-3 text-left"
                         >
                           <span className="flex-1 min-w-0">
                             <span className="flex items-center gap-2 flex-wrap">

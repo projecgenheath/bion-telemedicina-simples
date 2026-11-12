@@ -47,13 +47,17 @@ export function TelaGestao({
       </h2>
       <p className="text-sm text-white/85 mb-5">Receita líquida, preço e agenda.</p>
 
+      <div className="bion-surgir-lista flex flex-col">
       <CardFaturamento {...receita} />
 
       {medico ? <PainelGestao dados={dados} /> : null}
 
       {carregando ? (
-        <div className="bp-glass p-5 mt-3 text-sm text-bion-ink/75 dark:text-bion-paper/75">
-          Carregando seu cadastro…
+        <div className="bp-glass p-5 mt-3 space-y-3" role="status">
+          <div className="bion-esqueleto h-4 w-1/3" aria-hidden="true" />
+          <div className="bion-esqueleto h-10 w-2/3" aria-hidden="true" />
+          <div className="bion-esqueleto h-20 w-full" aria-hidden="true" />
+          <span className="sr-only">Carregando seu cadastro…</span>
         </div>
       ) : medico ? (
         <>
@@ -61,7 +65,7 @@ export function TelaGestao({
             <button
               type="button"
               onClick={onAbrirPreco}
-              className="w-full text-left"
+              className="bion-toque w-full text-left"
               aria-label={`Preço da consulta: ${fmtBRL(medico.valor)}. Alterar preço`}
             >
               <div className="flex items-center justify-between gap-3">
@@ -77,7 +81,7 @@ export function TelaGestao({
           <button
             type="button"
             onClick={onAbrirAgenda}
-            className="bp-glass p-5 mt-3 w-full text-left"
+            className="bion-toque bp-glass p-5 mt-3 w-full text-left"
             aria-label={`Agenda: grade padrão com ${horarios.length} horários por dia${diasProprios.length ? `; ${diasProprios.map(([d]) => NOMES_DIA[Number(d)]).join(", ")} com grade própria` : ""}. Configurar agenda`}
           >
             <div className="flex items-center justify-between gap-3">
@@ -120,6 +124,7 @@ export function TelaGestao({
           Seu cadastro ainda está em validação pela equipe BION. Preço e agenda ficam disponíveis assim que o CRM for aprovado.
         </div>
       )}
+      </div>
 
       <div className="mt-auto pt-8 flex flex-col items-center gap-1 text-white/90" aria-hidden>
         <span className="text-xs font-semibold">Seu perfil público abaixo</span>
@@ -233,7 +238,7 @@ function PainelGestao({ dados }: { dados: DadosMedico }) {
               type="button"
               onClick={() => setDias(p.dias)}
               aria-pressed={dias === p.dias}
-              className={`text-xs font-bold px-2.5 py-1.5 rounded-full ${
+              className={`bion-toque bion-toque-forte text-xs font-bold px-2.5 py-1.5 rounded-full ${
                 dias === p.dias
                   ? "bg-bion-sea text-white dark:bg-sky-400 dark:text-bion-ink"
                   : "bg-bion-ink/8 dark:bg-white/10"

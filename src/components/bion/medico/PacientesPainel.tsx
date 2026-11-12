@@ -124,7 +124,7 @@ export function PacientesPainel({
                 type="button"
                 aria-pressed={ativo}
                 onClick={() => setSegmento(s.id)}
-                className={`rounded-full px-3 py-1.5 text-xs font-bold whitespace-nowrap shrink-0 inline-flex items-center gap-1.5 ${
+                className={`bion-toque bion-toque-forte rounded-full px-3 py-1.5 text-xs font-bold whitespace-nowrap shrink-0 inline-flex items-center gap-1.5 ${
                   ativo
                     ? "bg-bion-sea text-white dark:bg-sky-300 dark:text-zinc-950"
                     : "bg-bion-ink/8 dark:bg-white/10"
@@ -158,7 +158,7 @@ export function PacientesPainel({
               : VAZIO_POR_SEGMENTO[segmento]}
           </p>
         ) : (
-          <ul className="space-y-2">
+          <ul className="bion-surgir-lista space-y-2">
             {filtrados.map(({ paciente: p, segmentos }) => {
               const naoLidas = p.pacienteId ? naoLidasPorPaciente.get(p.pacienteId) ?? 0 : 0;
               const ref = p.proxima ?? p.ultima;
@@ -176,7 +176,7 @@ export function PacientesPainel({
                     <button
                       type="button"
                       onClick={() => onAbrirPaciente(p)}
-                      className="w-full flex items-center gap-3 text-left"
+                      className="bion-toque w-full flex items-center gap-3 text-left"
                       aria-label={`${p.nome}. ${linha}${naoLidas ? `. ${naoLidas} mensagens não lidas` : ""}`}
                     >
                       <span className="w-11 h-11 rounded-2xl bg-bion-sea text-white inline-flex items-center justify-center text-sm font-black shrink-0">
@@ -205,7 +205,7 @@ export function PacientesPainel({
                             <button
                               type="button"
                               onClick={() => proporRetorno(p)}
-                              className="rounded-full px-3 py-1.5 text-xs font-bold bg-bion-sea text-white dark:bg-sky-300 dark:text-zinc-950 inline-flex items-center gap-1"
+                              className="bion-toque bion-toque-forte rounded-full px-3 py-1.5 text-xs font-bold bg-bion-sea text-white dark:bg-sky-300 dark:text-zinc-950 inline-flex items-center gap-1"
                             >
                               <Send className="w-3.5 h-3.5" aria-hidden /> Propor retorno
                             </button>
@@ -226,14 +226,14 @@ export function PacientesPainel({
                               <button
                                 type="button"
                                 onClick={() => abrirComModeloRetorno(p)}
-                                className="rounded-full px-3 py-1.5 text-xs font-bold bg-bion-sea text-white dark:bg-sky-300 dark:text-zinc-950"
+                                className="bion-toque bion-toque-forte rounded-full px-3 py-1.5 text-xs font-bold bg-bion-sea text-white dark:bg-sky-300 dark:text-zinc-950"
                               >
                                 Abrir a conversa mesmo assim
                               </button>
                               <button
                                 type="button"
                                 onClick={() => setAvisoRetorno(null)}
-                                className="rounded-full px-3 py-1.5 text-xs font-bold bg-bion-ink/8 dark:bg-white/10"
+                                className="bion-toque bion-toque-forte rounded-full px-3 py-1.5 text-xs font-bold bg-bion-ink/8 dark:bg-white/10"
                               >
                                 Agora não
                               </button>

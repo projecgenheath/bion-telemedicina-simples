@@ -42,8 +42,9 @@ export function CardFaturamento({
       </div>
 
       {!totais && carregando ? (
-        <div className="mt-2" role="status">
-          <div className="h-9 w-40 rounded-lg bg-bion-ink/10 dark:bg-white/10 motion-safe:animate-pulse" aria-hidden />
+        <div className="mt-2 space-y-2" role="status">
+          <div className="bion-esqueleto h-9 w-40" aria-hidden="true" />
+          <div className="bion-esqueleto h-24 w-full" aria-hidden="true" />
           <span className="sr-only">Carregando receita…</span>
         </div>
       ) : !totais && erro ? (
@@ -52,7 +53,7 @@ export function CardFaturamento({
           <button
             type="button"
             onClick={recarregar}
-            className="mt-2 inline-flex items-center gap-1.5 text-sm font-bold text-bion-sea dark:text-sky-300 underline underline-offset-2"
+            className="bion-toque mt-2 inline-flex items-center gap-1.5 text-sm font-bold text-bion-sea dark:text-sky-300 underline underline-offset-2"
           >
             <RefreshCw className="w-4 h-4" aria-hidden /> Tentar de novo
           </button>

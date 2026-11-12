@@ -114,7 +114,7 @@ export function TelaPerfilPublico({
               });
             }
           }}
-          className="mb-4 text-xs font-bold inline-flex items-center gap-1.5 text-sky-200"
+          className="bion-toque mb-4 text-xs font-bold inline-flex items-center gap-1.5 text-sky-200"
         >
           <Copy className="w-3.5 h-3.5" /> Copiar link do perfil
         </button>
@@ -130,7 +130,7 @@ export function TelaPerfilPublico({
               <button
                 type="button"
                 onClick={completarPerfil}
-                className="text-xs font-bold text-sky-200"
+                className="bion-toque text-xs font-bold text-sky-200"
               >
                 Completar perfil
               </button>
@@ -148,15 +148,18 @@ export function TelaPerfilPublico({
       ) : null}
 
       {carregando ? (
-        <div className="bp-glass-marinho p-5 text-sm text-white/85">
-          Carregando seu cadastro…
+        <div className="bp-glass-marinho p-5 space-y-3" role="status">
+          <div className="bion-esqueleto h-20 w-full" aria-hidden="true" />
+          <div className="bion-esqueleto h-4 w-2/3" aria-hidden="true" />
+          <div className="bion-esqueleto h-24 w-full" aria-hidden="true" />
+          <span className="sr-only">Carregando seu cadastro…</span>
         </div>
       ) : !medico ? (
         <div className="bp-glass-marinho p-5 text-sm text-white/85">
           Seu perfil público aparece aqui quando o cadastro for aprovado pela equipe BION.
         </div>
       ) : (
-        <>
+        <div className="bion-surgir-lista flex flex-col">
           <div className="bp-glass-marinho p-5">
             <div className="flex items-center gap-4">
               <div className="w-20 h-20 rounded-3xl overflow-hidden bg-white/15 shrink-0 inline-flex items-center justify-center text-2xl font-black">
@@ -193,7 +196,7 @@ export function TelaPerfilPublico({
                 <button
                   type="button"
                   onClick={() => setEditandoBio(true)}
-                  className="text-xs font-bold inline-flex items-center gap-1 text-sky-200"
+                  className="bion-toque text-xs font-bold inline-flex items-center gap-1 text-sky-200"
                 >
                   <Pencil className="w-3.5 h-3.5" /> Editar
                 </button>
@@ -210,7 +213,7 @@ export function TelaPerfilPublico({
                   <button
                     type="button"
                     onClick={() => setEditandoPerfil(true)}
-                    className="text-xs font-bold inline-flex items-center gap-1 text-sky-200"
+                    className="bion-toque text-xs font-bold inline-flex items-center gap-1 text-sky-200"
                   >
                     <Pencil className="w-3.5 h-3.5" /> Editar
                   </button>
@@ -252,7 +255,7 @@ export function TelaPerfilPublico({
               <button
                 type="button"
                 onClick={() => setEditandoPerfil(true)}
-                className="mt-4 text-xs font-bold inline-flex items-center gap-1 text-sky-200"
+                className="bion-toque mt-4 text-xs font-bold inline-flex items-center gap-1 text-sky-200"
               >
                 <Pencil className="w-3.5 h-3.5" /> Adicionar formação, experiência, idiomas e subespecialidades
               </button>
@@ -266,7 +269,7 @@ export function TelaPerfilPublico({
               <button
                 type="button"
                 onClick={onAgendar}
-                className="rounded-full bg-white text-bion-ink px-4 py-3 text-sm font-bold inline-flex items-center gap-2 whitespace-nowrap shrink-0"
+                className="bion-toque rounded-full bg-white text-bion-ink px-4 py-3 text-sm font-bold inline-flex items-center gap-2 whitespace-nowrap shrink-0"
               >
                 <CalendarCheck className="w-4 h-4" /> Agendar consulta
               </button>
@@ -336,7 +339,7 @@ export function TelaPerfilPublico({
             )}
             <p className="text-xs text-white/80 mt-3">Lista completa das suas avaliações; na prévia pública, o nome do paciente aparece abreviado.</p>
           </div>
-        </>
+        </div>
       )}
 
       {editandoBio && medico ? (
@@ -468,7 +471,7 @@ function PerfilCompletoSheet({
           type="button"
           onClick={salvar}
           disabled={salvando || !alterado}
-          className="bp-acao w-full py-3 text-sm disabled:opacity-50"
+          className="bion-toque bp-acao w-full py-3 text-sm disabled:opacity-50"
         >
           {salvando ? "Salvando…" : "Salvar perfil"}
         </button>
@@ -528,7 +531,7 @@ function BioSheet({
         type="button"
         onClick={salvar}
         disabled={salvando || texto.trim() === bio.trim()}
-        className="bp-acao w-full py-3 text-sm mt-4 disabled:opacity-50"
+        className="bion-toque bp-acao w-full py-3 text-sm mt-4 disabled:opacity-50"
       >
         {salvando ? "Salvando…" : "Salvar apresentação"}
       </button>

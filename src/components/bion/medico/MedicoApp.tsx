@@ -243,11 +243,11 @@ export function MedicoApp() {
           <span className="flex gap-2">
             <a
               href={`/consulta?consulta=${encodeURIComponent(consultaLink as string)}`}
-              className="px-3 py-1.5 rounded-full bg-primary text-primary-foreground text-xs font-bold"
+              className="bion-toque bion-toque-forte px-3 py-1.5 rounded-full bg-primary text-primary-foreground text-xs font-bold"
             >
               Abrir sala
             </a>
-            <button type="button" onClick={ignorarConsultaLink} className="px-3 py-1.5 rounded-full border text-xs font-bold">
+            <button type="button" onClick={ignorarConsultaLink} className="bion-toque bion-toque-forte px-3 py-1.5 rounded-full border text-xs font-bold">
               Ignorar
             </button>
           </span>
@@ -356,7 +356,7 @@ export function MedicoApp() {
                 <div className="text-sm font-bold">Termos de uso do médico</div>
                 <div className="text-xs text-bion-ink/75 dark:text-bion-paper/75">Texto específico para profissionais.</div>
               </div>
-              <button type="button" onClick={() => window.open("/termos-medico", "_blank", "noopener,noreferrer")} className="text-xs font-bold text-bion-sea dark:text-sky-300">Ler termos</button>
+              <button type="button" onClick={() => window.open("/termos-medico", "_blank", "noopener,noreferrer")} className="bion-toque text-xs font-bold text-bion-sea dark:text-sky-300">Ler termos</button>
             </div>
             <Ajuda perfil="medico" />
           </div>
