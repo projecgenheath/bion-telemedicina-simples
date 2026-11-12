@@ -419,7 +419,7 @@ export function CancelarRemarcarSheet({ consulta, acao, medico, consultas, onFec
             type="button"
             onClick={fechar}
             disabled={enviando}
-            className="bpp-toque flex-1 py-3 rounded-xl border bpp-sheet-borda text-sm font-semibold disabled:opacity-40"
+            className="bion-toque flex-1 py-3 rounded-xl border bpp-sheet-borda text-sm font-semibold disabled:opacity-40"
           >
             Voltar
           </button>
@@ -436,7 +436,7 @@ export function CancelarRemarcarSheet({ consulta, acao, medico, consultas, onFec
                 agendaLivre.length === 0
               }
               onClick={() => void confirmarRemarcacao()}
-              className="bpp-toque flex-1 py-3 rounded-xl bpp-sheet-primario text-sm font-bold disabled:opacity-40 inline-flex items-center justify-center gap-2"
+              className="bion-toque flex-1 py-3 rounded-xl bpp-sheet-primario text-sm font-bold disabled:opacity-40 inline-flex items-center justify-center gap-2"
             >
               {enviando ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
               {pagamentoIndisponivel
@@ -450,7 +450,7 @@ export function CancelarRemarcarSheet({ consulta, acao, medico, consultas, onFec
               type="button"
               disabled={!prontoParaConfirmar}
               onClick={() => void confirmarCancelamento()}
-              className={`bpp-toque flex-1 py-3 rounded-xl text-sm font-semibold disabled:opacity-40 inline-flex items-center justify-center gap-2 ${
+              className={`bion-toque flex-1 py-3 rounded-xl text-sm font-semibold disabled:opacity-40 inline-flex items-center justify-center gap-2 ${
                 acao === "reembolso" ? "bg-emerald-500 text-zinc-950 font-bold" : "bg-red-600 text-white"
               }`}
             >
@@ -499,8 +499,8 @@ function PainelPagamentoMulta({
   if (r.status === "pendente") {
     return (
       <>
-        <div className="mt-4 rounded-2xl border border-sky-400/30 bg-sky-500/10 p-4 text-sm" role="status" aria-live="polite">
-          <p className="font-bold text-sky-900 dark:text-sky-100 inline-flex items-center gap-2">
+        <div className="mt-4 rounded-2xl border border-bion-sea/25 bg-bion-sea/8 dark:border-[#C4B5FD]/30 dark:bg-[#C4B5FD]/10 p-4 text-sm" role="status" aria-live="polite">
+          <p className="font-bold text-bion-sea dark:text-[#DDD6FE] inline-flex items-center gap-2">
             <Loader2 className="w-4 h-4 animate-spin" /> Aguardando o pagamento da multa
           </p>
           <ul className="mt-3 space-y-1.5 bpp-sheet-suave">
@@ -531,7 +531,7 @@ function PainelPagamentoMulta({
             type="button"
             onClick={onDesistir}
             disabled={enviando}
-            className="bpp-toque flex-1 py-3 rounded-xl border border-red-400/40 text-red-700 dark:text-red-200 text-sm font-semibold disabled:opacity-40 inline-flex items-center justify-center gap-2"
+            className="bion-toque flex-1 py-3 rounded-xl border border-red-400/40 text-red-700 dark:text-red-200 text-sm font-semibold disabled:opacity-40 inline-flex items-center justify-center gap-2"
           >
             {enviando ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
             Desistir da remarcação
@@ -540,7 +540,7 @@ function PainelPagamentoMulta({
             type="button"
             onClick={onFechar}
             disabled={enviando}
-            className="bpp-toque flex-1 py-3 rounded-xl border bpp-sheet-borda text-sm font-semibold disabled:opacity-40"
+            className="bion-toque flex-1 py-3 rounded-xl border bpp-sheet-borda text-sm font-semibold disabled:opacity-40"
           >
             Fechar
           </button>
@@ -578,10 +578,10 @@ function PainelPagamentoMulta({
         ) : null}
       </div>
       <div className="flex gap-2 mt-5">
-        <button type="button" onClick={onFechar} className="bpp-toque flex-1 py-3 rounded-xl border bpp-sheet-borda text-sm font-semibold">
+        <button type="button" onClick={onFechar} className="bion-toque flex-1 py-3 rounded-xl border bpp-sheet-borda text-sm font-semibold">
           Fechar
         </button>
-        <button type="button" onClick={onOutroHorario} className="bpp-toque flex-1 py-3 rounded-xl bpp-sheet-primario text-sm font-bold">
+        <button type="button" onClick={onOutroHorario} className="bion-toque flex-1 py-3 rounded-xl bpp-sheet-primario text-sm font-bold">
           Escolher outro horário
         </button>
       </div>

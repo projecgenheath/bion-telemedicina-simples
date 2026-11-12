@@ -75,7 +75,7 @@ export function BionIA() {
       id: "ia-intro",
       remetente: "ia",
       texto: isMedico
-        ? `Olá, **${sessao.nome}**! Sou o **BION Copilot IA**. Posso ajudar com consulta rápida de CID-10, sugestão de condutas clínicas baseadas em diretrizes, modelos de prescrição e resumos de prontuário.`
+        ? `Olá, **${sessao.nome}**! Sou o **BION Copilot IA**, uma ferramenta de apoio opcional. Posso ajudar com consulta rápida de CID-10, informações gerais de diretrizes e rascunhos de texto para você revisar. Não substituo o seu julgamento clínico: você revisa tudo e decide. **Não informe dados que identifiquem pacientes** (nome, CPF, contatos, documentos ou trechos de prontuário); descreva os casos só de forma anônima.`
         : `Olá, **${sessao.nome}**! Sou a **BION Saúde IA**. Estou aqui para esclarecer dúvidas sobre seus remédios, explicar como se preparar para exames laboratoriais e fornecer orientações preventivas em linguagem simples.`,
       hora: "Agora",
     },

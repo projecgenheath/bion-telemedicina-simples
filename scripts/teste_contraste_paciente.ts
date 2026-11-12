@@ -90,10 +90,13 @@ const razao = (a: RGB, b: RGB) => {
 
 const BRANCO = hex("#ffffff");
 const PRETO = hex("#000000");
-const INK = hex("#0a1f44"); // --bion-ink
-const PAPER = hex("#f2f6fc"); // --bion-paper
-const SEA = hex("#123e7d"); // --bion-sea
-const DEEP = hex("#14457f"); // --bion-deep
+const INK = hex("#1a1040"); // --bion-ink (escopo .bp-app-paciente)
+const PAPER = hex("#f4f1fd"); // --bion-paper (escopo .bp-app-paciente)
+const SEA = hex("#24058D"); // --bion-sea = roxo da marca no paciente
+const DEEP = hex("#3D1AAE"); // --bion-deep (início do degradê)
+const FIM = hex("#1C0470"); // fim do degradê do cartão de saúde
+const LAV = hex("#C4B5FD"); // destaque no escuro
+const LAV_TEXTO = hex("#DDD6FE"); // texto de etiqueta roxa no escuro
 const TEXTO = 4.5;
 const GRAFICO = 3; // títulos grandes, ícones, linhas de gráfico, pontos de navegação
 
@@ -116,7 +119,7 @@ for (const modo of ["Clean", "Dark"] as const) {
   // Fundos soltos onde há texto escuro/claro direto (topo das seções e painéis)
   const fundosTexto: [string, RGB][] = [
     ["seção 1 (topo)", cheio("bpp-s1-topo")],
-    ["seção 1 (brilho azul do canto)", cheio("bpp-s1-brilho")],
+    ["seção 1 (brilho roxo do canto)", cheio("bpp-s1-brilho")],
     ["seção 1 (base)", cheio("bpp-s1-base")],
     ["seção 2 (topo, título)", cheio("bpp-s2-topo")],
     ["seção 2 (45%, subtítulo)", cheio("bpp-s2-meio")],
@@ -134,7 +137,7 @@ for (const modo of ["Clean", "Dark"] as const) {
     ["seção 1", cheio("bpp-s1-base")],
     ["seção 1 brilho", cheio("bpp-s1-brilho")],
     ["seção 2 meio", cheio("bpp-s2-meio")],
-    ["seção 2 azul", cheio("bpp-s2-azul")],
+    ["seção 2 roxo", cheio("bpp-s2-azul")],
     ["seção 2 base", cheio("bpp-s2-base")],
     ["painel", cheio("bpp-painel-base")],
     ["painel topo", cheio("bpp-painel-topo")],
@@ -149,17 +152,19 @@ for (const modo of ["Clean", "Dark"] as const) {
     if (escuro) {
       par(modo, `etiqueta verde (${onde})`, tw("emerald-200"), chip("emerald-600", 0.15));
       par(modo, `etiqueta âmbar (${onde})`, tw("amber-200"), chip("amber-500", 0.15));
-      par(modo, `etiqueta azul (${onde})`, tw("sky-200"), chip("sky-500", 0.15));
+      par(modo, `etiqueta roxa (${onde})`, LAV_TEXTO, mix(LAV, 0.15, g));
       par(modo, `botão Cancelar (${onde})`, tw("red-300"), chip("red-400", 0.15));
-      par(modo, `link Editar / chips sky-300 (${onde})`, tw("sky-300"), g);
+      par(modo, `link Editar / chips #C4B5FD (${onde})`, LAV, g);
+      par(modo, `chip #C4B5FD/10 · texto #C4B5FD (${onde})`, LAV, mix(LAV, 0.1, g));
       par(modo, `chip neutro white/10 (${onde})`, texto, mix(BRANCO, 0.1, g));
     } else {
       par(modo, `etiqueta verde (${onde})`, tw("emerald-800"), chip("emerald-600", 0.15));
       par(modo, `etiqueta âmbar (${onde})`, tw("amber-800"), chip("amber-500", 0.15));
-      par(modo, `etiqueta azul (${onde})`, tw("sky-800"), chip("sky-500", 0.15));
+      par(modo, `etiqueta roxa (${onde})`, SEA, mix(SEA, 0.12, g));
       par(modo, `botão Cancelar (${onde})`, tw("red-800"), chip("red-600", 0.1));
       par(modo, `link Editar / chips bion-sea (${onde})`, SEA, g);
-      par(modo, `IMC "Abaixo do peso" sky-800 (${onde})`, tw("sky-800"), g);
+      par(modo, `IMC "Abaixo do peso" roxo (${onde})`, SEA, g);
+      par(modo, `chip bion-sea/10 · texto bion-sea (${onde})`, SEA, mix(SEA, 0.1, g));
       par(modo, `chip neutro bion-ink/8 (${onde})`, texto, mix(INK, 0.08, g));
     }
     // Ações secundárias da próxima consulta (Sala / Remarcar / Cancelar)
@@ -174,9 +179,12 @@ for (const modo of ["Clean", "Dark"] as const) {
     par(modo, `gráfico: eixo e rótulos (${onde})`, sobre(c("bpp-grafico-eixo"), g), g, TEXTO);
   }
 
-  // Botão principal e etiqueta "Sala aberta"
-  par(modo, "botão principal bp-acao (início do degradê)", BRANCO, SEA);
-  par(modo, "botão principal bp-acao (fim do degradê)", BRANCO, INK);
+  // Botão principal (.bp-acao no app do paciente): degradê da marca
+  const acaoIni = cheio("bpp-acao-inicio");
+  const acaoFim = cheio("bpp-acao-fim");
+  const acaoTexto = sobre(c("bpp-acao-texto"), acaoFim);
+  par(modo, "botão principal bp-acao (início do degradê)", sobre(c("bpp-acao-texto"), acaoIni), acaoIni);
+  par(modo, "botão principal bp-acao (fim do degradê)", acaoTexto, acaoFim);
   par(modo, '"Sala aberta" / "Entrar na sala" (emerald-700)', BRANCO, tw("emerald-700"));
   par(modo, "lembrete marcado (emerald-700)", BRANCO, tw("emerald-700"), GRAFICO);
 
@@ -207,14 +215,19 @@ for (const modo of ["Clean", "Dark"] as const) {
     par(modo, `seção 3 (${onde}) · gráfico eixo e rótulos`, sobre(c("bpp-grafico-eixo-marinho"), gm), gm, TEXTO);
   }
 
-  // Cartão da BION IA (degradê deep → sea → ink, texto branco)
-  for (const [onde, bg] of [["deep", DEEP], ["sea", SEA], ["ink", INK]] as [string, RGB][]) {
+  // Cartão da BION IA (degradê da marca, texto branco / CTA #24058D no branco)
+  const iaStops: [string, RGB][] = [
+    ["início", cheio("bpp-ia-fundo-inicio")],
+    ["meio", cheio("bpp-ia-fundo-meio")],
+    ["fim", cheio("bpp-ia-fundo-fim")],
+  ];
+  for (const [onde, bg] of iaStops) {
     par(modo, `cartão BION IA (${onde}) · texto white/85`, mix(BRANCO, 0.85, bg), bg);
     par(modo, `cartão BION IA (${onde}) · barra "Pergunte" white/85 sobre white/12`, mix(BRANCO, 0.85, mix(BRANCO, 0.12, bg)), mix(BRANCO, 0.12, bg));
   }
-  par(modo, 'cartão BION IA · botão "Agendar" (ink sobre branco)', INK, BRANCO);
+  par(modo, 'cartão BION IA · botão "Agendar" (marca sobre branco)', sobre(c("bpp-ia-cta-texto"), BRANCO), BRANCO);
   // Reflexo que passa uma vez (white/16) por cima do texto do cartão
-  for (const [onde, bg] of [["deep", DEEP], ["sea", SEA]] as [string, RGB][]) {
+  for (const [onde, bg] of iaStops.slice(0, 2)) {
     const reflexo = mix(BRANCO, 0.16, bg);
     par(modo, `cartão BION IA (${onde}) · texto white/85 sob o reflexo`, mix(BRANCO, 0.85, reflexo), reflexo);
   }
@@ -223,7 +236,7 @@ for (const modo of ["Clean", "Dark"] as const) {
   for (const [onde, fundo] of [["fundo claro", cheio("bpp-s1-topo")], ["fundo escuro", cheio("bpp-s3-base")]] as [string, RGB][]) {
     const pilula = mix(tw("zinc-950"), 0.85, fundo);
     par(modo, `pontinhos (${onde}) · ponto inativo white/70`, mix(BRANCO, 0.7, pilula), pilula, GRAFICO);
-    par(modo, `pontinhos (${onde}) · ponto ativo sky-300`, tw("sky-300"), pilula, GRAFICO);
+    par(modo, `pontinhos (${onde}) · ponto ativo #C4B5FD`, LAV, pilula, GRAFICO);
     par(modo, `pontinhos (${onde}) · seta white/70`, mix(BRANCO, 0.7, pilula), pilula, GRAFICO);
   }
 }
@@ -249,7 +262,8 @@ for (const modo of ["Clean", "Dark"] as const) {
     par(modo, `janelas · texto (${onde})`, sobre(c("bpp-sheet-texto"), bg), bg);
     par(modo, `janelas · texto suave / placeholder (${onde})`, sobre(c("bpp-sheet-suave"), bg), bg);
     par(modo, `janelas · aviso âmbar (${onde})`, escuro ? tw("amber-200") : tw("amber-800"), bg);
-    par(modo, `janelas · rótulo azul da triagem (${onde})`, escuro ? tw("sky-300") : tw("sky-800"), bg);
+    par(modo, `janelas · rótulo roxo da triagem (${onde})`, escuro ? LAV : SEA, bg);
+    par(modo, `janelas · aviso roxo (${onde})`, escuro ? LAV_TEXTO : SEA, escuro ? mix(LAV, 0.1, bg) : mix(SEA, 0.08, bg));
     par(modo, `janelas · erro vermelho (${onde})`, escuro ? tw("red-200") : tw("red-800"), mix(tw("red-500"), 0.1, bg));
     par(modo, `janelas · ok verde (${onde})`, escuro ? tw("emerald-100") : tw("emerald-900"), mix(tw("emerald-500"), 0.1, bg));
   }
@@ -270,17 +284,27 @@ for (const modo of ["Clean", "Dark"] as const) {
   }
 }
 
-// Cartão de saúde do Perfil: degradê marinho fixo (#14457f → #123e7d → #0a1f44)
-for (const [onde, bg] of [["início", DEEP], ["meio", SEA], ["fim", INK]] as [string, RGB][]) {
+// Cartão de saúde do Perfil: degradê roxo fixo (#3D1AAE → #24058D → #1C0470)
+for (const [onde, bg] of [["início", DEEP], ["meio", SEA], ["fim", FIM]] as [string, RGB][]) {
   const caixa = mix(BRANCO, 0.1, bg);
   par("Ambos", `cartão de saúde (${onde}) · texto white/80`, mix(BRANCO, 0.8, bg), bg);
   par("Ambos", `cartão de saúde (${onde}) · caixinha white/10 · rótulo white/80`, mix(BRANCO, 0.8, caixa), caixa);
   const alerta = mix(tw("amber-300"), 0.2, bg);
   par("Ambos", `cartão de saúde (${onde}) · chip de alergia amber-100`, tw("amber-100"), alerta);
   par("Ambos", `cartão de saúde (${onde}) · chip neutro branco sobre white/15`, BRANCO, mix(BRANCO, 0.15, bg));
-  // Reflexo azul do canto (rgba(125,175,240,.25)) por cima do início do degradê
-  const reflexo = mix(hex("#7dafF0"), 0.25, bg);
+  // Reflexo lavanda do canto (rgba(196, 181, 253,.25)) por cima do degradê
+  const reflexo = mix(LAV, 0.25, bg);
   par("Ambos", `cartão de saúde (${onde}) · texto white/80 sob o reflexo`, mix(BRANCO, 0.8, reflexo), reflexo);
+}
+
+
+// Paleta roxa: foco visível e barra de progresso da triagem
+for (const modo of ["Clean", "Dark"] as const) {
+  const t = modo === "Clean" ? bloco(".bp-app-paciente") : { ...bloco(".bp-app-paciente"), ...bloco(".dark .bp-app-paciente") };
+  const realce = sobre(t["bpp-realce"], PRETO);
+  for (const [onde, n] of [["seção 1", "bpp-s1-base"], ["painel", "bpp-painel-base"], ["janela", "bpp-sheet-fundo"]] as [string, string][]) {
+    par(modo, `anel de foco --bpp-realce (${onde})`, realce, sobre(t[n], PRETO), GRAFICO);
+  }
 }
 
 /* ------------------------- varredura dos .tsx ------------------------- */

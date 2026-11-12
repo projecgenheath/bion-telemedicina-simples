@@ -51,10 +51,10 @@ export function AvisoMensagemNova({
     <button
       type="button"
       onClick={onAbrir}
-      className="bpp-toque bpp-surgir bp-glass w-full mb-3 p-4 flex items-center gap-3 text-left"
+      className="bion-toque bion-surgir bp-glass w-full mb-3 p-4 flex items-center gap-3 text-left"
       aria-label={`Mensagem nova de ${mensagem.de}: ${mensagem.texto}. Abrir conversa`}
     >
-      <span className="relative w-11 h-11 rounded-2xl bg-bion-sea/10 text-bion-sea dark:bg-sky-400/10 dark:text-sky-300 inline-flex items-center justify-center shrink-0" aria-hidden>
+      <span className="relative w-11 h-11 rounded-2xl bg-bion-sea/10 text-bion-sea dark:bg-[#C4B5FD]/10 dark:text-[#C4B5FD] inline-flex items-center justify-center shrink-0" aria-hidden>
         <MessageCircle className="w-5 h-5" />
         <span className="bpp-aviso-ponto bpp-pulsar absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full ring-2 ring-white dark:ring-black" />
       </span>

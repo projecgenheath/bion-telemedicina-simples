@@ -32,6 +32,41 @@ export const URL_TERMOS_POR_PERFIL: Record<PerfilAceite, string> = {
   MEDICO: URL_TERMOS_MEDICO,
 };
 
+/**
+ * Documento oficial dos Termos do médico (src/conteudo/juridico): a página
+ * pública /termos-medico renderiza estes arquivos com VERSAO_TERMOS_MEDICO, e o
+ * portão de aceite (GuardaAceiteTermos) grava essa mesma versão. Uma fonte só:
+ * trocar a constante de versão e o arquivo troca a página e o aceite juntos.
+ */
+export const ARQUIVOS_TERMOS_MEDICO: readonly string[] = ["02-termos-medico-contrato-intermediacao.md"];
+
+/**
+ * Partes do id de versão: "termos-medico-v2.1-2026-11-03" → número "2.1" e
+ * data ISO "2026-11-03". Sem padrão reconhecido: número "0" e data null.
+ */
+export function partesVersao(versao: string): { numero: string; dataIso: string | null } {
+  const m = /-v(\d+(?:\.\d+)*)-(\d{4}-\d{2}-\d{2})$/.exec(versao);
+  if (m) return { numero: m[1], dataIso: m[2] };
+  return { numero: /-v(\d+(?:\.\d+)*)-/.exec(versao)?.[1] ?? "0", dataIso: null };
+}
+
+/** AAAA-MM-DD → DD/MM/AAAA. */
+export function dataBr(iso: string): string {
+  const [a, m, d] = iso.split("-");
+  return `${d}/${m}/${a}`;
+}
+
+/**
+ * Rótulo único de versão, usado na página pública e no portão de aceite:
+ * "v2.1, versão de 03/11/2026". `dataIso` só para documentos cuja data
+ * publicada não está no id (páginas do paciente e da privacidade).
+ */
+export function rotuloVersao(versao: string, dataIso?: string | null): string {
+  const p = partesVersao(versao);
+  const data = dataIso ?? p.dataIso;
+  return data ? `v${p.numero}, versão de ${dataBr(data)}` : `v${p.numero}`;
+}
+
 export const TEXTO_ACEITE_TERMOS = "Li e aceito os Termos de Uso e a Política de Privacidade";
 /** Minuta (provisório) — versão VERSAO_MARKETING_OPTIN. */
 export const TEXTO_MARKETING_OPTIN =

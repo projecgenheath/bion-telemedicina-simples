@@ -93,8 +93,15 @@ export function useAgora(passoMs = 30_000) {
  */
 export function usePacienteNaSala(consultaId: string | null): boolean {
   const [naSala, setNaSala] = useState(false);
-  useEffect(() => {
+  // A consulta vigiada mudou: ajusta o estado na renderização (padrão
+  // recomendado) em vez de setState síncrono dentro do efeito — isso
+  // gerava o lint em useDadosMedico.ts:97.
+  const [idVigiado, setIdVigiado] = useState(consultaId);
+  if (idVigiado !== consultaId) {
+    setIdVigiado(consultaId);
     setNaSala(false);
+  }
+  useEffect(() => {
     if (!consultaId) return;
     const ctrl = new AbortController();
     let vivo = true;

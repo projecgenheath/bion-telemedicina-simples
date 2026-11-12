@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import Link from "next/link";
 import { lerFrontMatter, MarkdownSimples } from "@/lib/markdown-simples";
+import { rotuloVersao } from "@/lib/aceite-termos";
 
 /** Lê uma minuta de src/conteudo/juridico (em build: página estática). */
 export function lerMinuta(arquivo: string) {
@@ -15,14 +16,17 @@ export function PaginaDocumentoJuridico({
   arquivos,
 }: {
   versao: string;
-  /** AAAA-MM-DD, igual ao id da versão. */
-  data: string;
-  arquivos: string[];
+  /**
+   * AAAA-MM-DD. Omitido: sai do próprio id da versão (ex.:
+   * termos-medico-v2.1-2026-11-03 → 03/11/2026), para a página não divergir
+   * da versão que o portão de aceite grava.
+   */
+  data?: string;
+  arquivos: readonly string[];
 }) {
   const docs = arquivos.map(lerMinuta);
-  const [a, m, d] = data.split("-");
-  // Número da versão vem do id (ex.: privacidade-v1-2026-10-27 → v1).
-  const numero = /-v(\d+)-/.exec(versao)?.[1] ?? "0";
+  // Mesmo rótulo do portão de aceite (lib/aceite-termos): "v2.1, versão de 03/11/2026".
+  const rotulo = rotuloVersao(versao, data);
   return (
     <main className="min-h-screen bg-background">
       <div className="mx-auto max-w-3xl px-4 py-8 space-y-6">
@@ -30,7 +34,7 @@ export function PaginaDocumentoJuridico({
           Voltar para a BION
         </Link>
         <div role="note" className="rounded-2xl border-2 border-amber-500/60 bg-amber-500/10 px-4 py-3 text-sm font-bold">
-          Versão provisória v{numero} — {d}/{m}/{a}{" "}
+          Versão provisória {rotulo}{" "}
           <span className="font-normal text-muted-foreground">({versao})</span>
         </div>
         {docs.map((doc, i) => (

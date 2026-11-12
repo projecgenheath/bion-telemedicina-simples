@@ -2,7 +2,7 @@
 /* App do MÉDICO — complementa as classes bp-* do app do paciente        */
 /* (bp-shell, bp-carrossel, bp-glass…) sem alterar globals.css.          */
 /* Contraste: todo texto claro fica sobre fundos com luminância baixa    */
-/* (≥ 4,5:1, WCAG AA); o degradê não passa por azul-claro sob texto      */
+/* (≥ 4,5:1, WCAG AA); o degradê não passa por roxo-claro sob texto      */
 /* branco (diferente da seção 3 do paciente).                            */
 /* ==================================================================== */
 
@@ -26,35 +26,35 @@
 }
 
 /*
- * Coluna central = um degradê contínuo branco → marinho (preto → marinho
- * no dark). Tela 1 sai do branco puro e chega ao marinho no rodapé; telas
- * 2 e 3 continuam do marinho ao marinho profundo. Regras de contraste:
+ * Coluna central = um degradê contínuo branco → roxo da marca (preto → roxo da marca
+ * no dark). Tela 1 sai do branco puro e chega ao roxo da marca no rodapé; telas
+ * 2 e 3 continuam do roxo da marca ao roxo da marca profundo. Regras de contraste:
  *  - texto escuro solto no fundo só no terço superior (zona branca);
  *  - texto solto na metade de baixo / nas telas 2-3 é claro (≥ 5:1);
  *  - cards do app do médico ficam mais opacos (ver .bm-app .bp-glass).
  */
-.bm-tela-1 { background: linear-gradient(180deg, #ffffff 0%, #ffffff 30%, #d5e1f2 52%, #5b7fb8 78%, #1d4a8a 100%); }
-.dark .bm-tela-1 { background: linear-gradient(180deg, #000000 0%, #000000 30%, #020814 52%, #08204a 78%, #0e2d63 100%); }
+.bm-tela-1 { background: linear-gradient(180deg, #ffffff 0%, #ffffff 30%, #e8e0f5 52%, #7c5cbf 78%, #24058D 100%); }
+.dark .bm-tela-1 { background: linear-gradient(180deg, #000000 0%, #000000 30%, #120a1e 52%, #2a1560 78%, #1a0a40 100%); }
 
-.bm-tela-2 { background: linear-gradient(180deg, #1d4a8a 0%, #163f7a 100%); }
-.dark .bm-tela-2 { background: linear-gradient(180deg, #0e2d63 0%, #0a2150 100%); }
+.bm-tela-2 { background: linear-gradient(180deg, #24058D 0%, #1a0470 100%); }
+.dark .bm-tela-2 { background: linear-gradient(180deg, #1a0a40 0%, #120830 100%); }
 
-.bm-tela-3 { background: linear-gradient(180deg, #163f7a 0%, #0f2f62 45%, #0a1f44 100%); }
-.dark .bm-tela-3 { background: linear-gradient(180deg, #0a2150 0%, #071838 45%, #020a1a 100%); }
+.bm-tela-3 { background: linear-gradient(180deg, #1a0470 0%, #14055a 45%, #0c0338 100%); }
+.dark .bm-tela-3 { background: linear-gradient(180deg, #120830 0%, #0c0620 45%, #050210 100%); }
 
-/* Páginas laterais: mesmo branco → marinho; "local" faz o degradê
+/* Páginas laterais: mesmo branco → roxo da marca; "local" faz o degradê
    acompanhar o conteúdo rolável (o perfil é mais alto que a tela). */
 .bm-painel {
-  background: linear-gradient(180deg, #ffffff 0%, #ffffff 30%, #d5e1f2 55%, #5b7fb8 80%, #1d4a8a 100%);
+  background: linear-gradient(180deg, #ffffff 0%, #ffffff 30%, #e8e0f5 55%, #7c5cbf 80%, #24058D 100%);
   background-attachment: local;
 }
 .dark .bm-painel {
-  background: linear-gradient(180deg, #000000 0%, #000000 30%, #020814 55%, #08204a 80%, #0e2d63 100%);
+  background: linear-gradient(180deg, #000000 0%, #000000 30%, #120a1e 55%, #2a1560 80%, #1a0a40 100%);
   background-attachment: local;
 }
 
 /* Cards mais opacos que o .bp-glass do paciente: texto escuro (inclusive
-   /70) mantém ≥ 4,5:1 mesmo quando o card passa sobre o marinho. */
+   /70) mantém ≥ 4,5:1 mesmo quando o card passa sobre o roxo da marca. */
 .bm-app .bp-glass { background: rgba(255, 255, 255, 0.84); }
 .dark .bm-app .bp-glass { background: rgba(12, 16, 28, 0.72); }
 
@@ -63,16 +63,16 @@
    segura (home indicator do iPhone). */
 
 /* Superfície de sobreposição (conversa, suporte, prontuário) */
-.bm-sobreposicao { background: linear-gradient(180deg, #ffffff 0%, #f3f7fd 70%, #e6eef9 100%); }
-.dark .bm-sobreposicao { background: linear-gradient(180deg, #000000 0%, #030913 70%, #061127 100%); }
+.bm-sobreposicao { background: linear-gradient(180deg, #ffffff 0%, #f5f0fa 70%, #ece4f5 100%); }
+.dark .bm-sobreposicao { background: linear-gradient(180deg, #000000 0%, #0a0612 70%, #120a1e 100%); }
 
 /* Bottom sheet do médico */
 .bm-sheet {
   background: #ffffff;
-  color: #0a1f44;
+  color: #1a0a40;
   border-top-left-radius: 1.75rem;
   border-top-right-radius: 1.75rem;
-  box-shadow: 0 -16px 48px rgba(10, 31, 68, 0.25);
+  box-shadow: 0 -16px 48px rgba(36, 5, 141, 0.25);
 }
 .dark .bm-sheet {
   background: #05080f;
@@ -88,7 +88,7 @@
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .bm-app .bp-glass { background: rgba(255, 255, 255, 0.92); }
   .dark .bm-app .bp-glass { background: rgba(18, 24, 38, 0.95); }
-  .bm-app .bp-glass-marinho { background: rgba(10, 31, 68, 0.92); }
+  .bm-app .bp-glass-roxo da marca { background: rgba(36, 5, 141, 0.92); }
 }
 
 /* Indicador discreto: some após inatividade, volta ao interagir */

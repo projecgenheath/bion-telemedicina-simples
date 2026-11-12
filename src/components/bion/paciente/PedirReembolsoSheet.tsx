@@ -164,14 +164,14 @@ export function PedirReembolsoSheet({ consulta, onFechar }: { consulta: Consulta
                   <button
                     type="button"
                     onClick={() => setConfirmarDescarte(false)}
-                    className="bpp-toque flex-1 py-3 rounded-xl bpp-sheet-primario text-sm font-bold"
+                    className="bion-toque flex-1 py-3 rounded-xl bpp-sheet-primario text-sm font-bold"
                   >
                     Continuar escrevendo
                   </button>
                   <button
                     type="button"
                     onClick={onFechar}
-                    className="bpp-toque flex-1 py-3 rounded-xl border bpp-sheet-borda text-sm font-semibold"
+                    className="bion-toque flex-1 py-3 rounded-xl border bpp-sheet-borda text-sm font-semibold"
                   >
                     Descartar e fechar
                   </button>
@@ -183,7 +183,7 @@ export function PedirReembolsoSheet({ consulta, onFechar }: { consulta: Consulta
                 type="button"
                 onClick={fechar}
                 disabled={enviando}
-                className="bpp-toque flex-1 py-3 rounded-xl border bpp-sheet-borda text-sm font-semibold disabled:opacity-40"
+                className="bion-toque flex-1 py-3 rounded-xl border bpp-sheet-borda text-sm font-semibold disabled:opacity-40"
               >
                 Voltar
               </button>
@@ -191,7 +191,7 @@ export function PedirReembolsoSheet({ consulta, onFechar }: { consulta: Consulta
                 type="button"
                 onClick={() => void enviar()}
                 disabled={!valida || !prazoAberto || enviando}
-                className="bpp-toque flex-1 py-3 rounded-xl bpp-sheet-primario text-sm font-bold disabled:opacity-40 inline-flex items-center justify-center gap-2"
+                className="bion-toque flex-1 py-3 rounded-xl bpp-sheet-primario text-sm font-bold disabled:opacity-40 inline-flex items-center justify-center gap-2"
               >
                 {enviando ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                 Enviar pedido
@@ -271,6 +271,6 @@ export function EtiquetaStatus({ status }: { status: string; claro?: boolean }) 
       ? "bg-emerald-600/15 text-emerald-800 dark:text-emerald-200"
       : rotulo.tom === "erro"
         ? "bg-red-600/10 text-red-800 dark:bg-red-400/15 dark:text-red-300"
-        : "bg-sky-500/15 text-sky-800 dark:text-sky-200";
+        : "bg-bion-sea/12 text-bion-sea dark:bg-[#C4B5FD]/15 dark:text-[#DDD6FE]";
   return <span className={`text-xs font-bold px-2 py-1 rounded-full text-right ${cor}`}>{rotulo.texto}</span>;
 }

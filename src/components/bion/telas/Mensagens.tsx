@@ -1,8 +1,10 @@
 "use client";
+import { subtituloMensagensMedico } from "@/components/bion/medico/subtitulo-mensagens";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MessageSquare, ShieldCheck } from "lucide-react";
 import { EstadoVazio } from "@/components/bion/ui/EstadoVazio";
 import { useBion } from "@/lib/bion-store";
+import { contatosMensagensAdmin } from "@/components/bion/admin/contatos-mensagens";
 
 type Contato = {
   id: string;
@@ -55,13 +57,10 @@ export function Mensagens() {
         }
       }
     } else {
-      // Admin conversa com médicos e pacientes cadastrados
-      for (const m of medicos) {
-        if (m.id !== sessao.id) lista.push({ id: m.id, nome: m.nome, detalhe: m.especialidade, suporte: false });
-      }
-      for (const p of pacientes) {
-        if (p.id !== sessao.id) lista.push({ id: p.id, nome: p.nome, detalhe: "Paciente", suporte: false });
-      }
+      // Admin conversa com médicos e pacientes que podem receber mensagem
+      // (sem arquivados, suspensos, inativos ou anonimizados — ver
+      // admin/contatos-mensagens.ts; auditoria admin 09/11).
+      lista.push(...contatosMensagensAdmin(medicos, pacientes, sessao.id));
     }
 
     if (suporte.id && suporte.id !== sessao.id && !lista.some((c) => c.id === suporte.id)) {
@@ -99,10 +98,9 @@ export function Mensagens() {
 
   /* Abre a conversa e marca como lida ao chegar mensagem nova com a conversa aberta */
   const naoLidasAtivas = threadAtiva.filter((m) => !m.minha && !m.lida).length;
-  useEffect(() => {
-    if (!ativa) return;
-    if (!conversas.some((c) => c.contato.id === ativa.id)) setAtivaId(null);
-  }, [conversas, ativa]);
+  // Sem efeito de "limpar ativaId": `ativa` já é derivada de `conversas` (cai na
+  // primeira conversa quando o id some), então o setState no efeito nunca mudava
+  // nada e só violava react-hooks/set-state-in-effect.
 
   useEffect(() => {
     if (ativa && naoLidasAtivas > 0) marcarConversaLida(ativa.id);
@@ -129,9 +127,7 @@ export function Mensagens() {
       <div className="max-w-4xl mx-auto space-y-6">
         <div>
           <h1 className="text-3xl font-extrabold tracking-tight">Mensagens &amp; Orientações</h1>
-          <p className="text-muted-foreground mt-1">
-            Fale diretamente com seu médico especialista entre as consultas.
-          </p>
+          <p className="text-muted-foreground mt-1">{subtituloMensagens(sessao.role)}</p>
         </div>
         <EstadoVazio
           icone={MessageSquare}
@@ -154,9 +150,7 @@ export function Mensagens() {
     <div className="max-w-4xl mx-auto space-y-6">
       <div>
         <h1 className="text-3xl font-extrabold tracking-tight">Mensagens &amp; Orientações</h1>
-        <p className="text-muted-foreground mt-1">
-          Fale diretamente com seu médico especialista entre as consultas.
-        </p>
+        <p className="text-muted-foreground mt-1">{subtituloMensagens(sessao.role)}</p>
       </div>
 
       <div className="grid md:grid-cols-[280px_1fr] gap-4 min-w-0">
@@ -268,4 +262,11 @@ export function Mensagens() {
       </p>
     </div>
   );
+}
+
+/** Subtítulo por papel. Admin (auditoria 09/11, #161) e médico (#162)
+ *  têm texto próprio; os demais seguem com o texto de antes. */
+function subtituloMensagens(role: string): string {
+  if (role === "admin") return "Fale com médicos e pacientes pelo suporte BION.";
+  return subtituloMensagensMedico(role) ?? "Fale diretamente com seu médico especialista entre as consultas.";
 }

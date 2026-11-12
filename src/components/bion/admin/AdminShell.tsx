@@ -1,9 +1,10 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { ArrowLeft, ChevronRight, Inbox, PanelLeftClose, PanelLeftOpen, Search } from "lucide-react";
+import { Logo } from "@/components/bion/brand";
 import { SheetAdmin } from "./ui/SheetAdmin";
-import { useDensidadeAdmin, useLargo, usePreferenciaBool } from "./ui/preferencias";
+import { LARGURA_TRILHO_ABERTO, useCascaLarga, useDensidadeAdmin, useMinLargura, usePreferenciaBool } from "./ui/preferencias";
 import { useAtalhoBusca } from "./ui/atalho";
 import { ROTULO_TIPO, casa, type ResultadoBusca, type TipoResultado } from "./busca";
 import type { Tom } from "./rotulos";
@@ -37,17 +38,59 @@ const iniciais = (nome: string) =>
  * Casca da Torre BION — ligada ao layout autenticado só para o papel admin
  * (via TorreAdmin). Nunca usa .bp-shell: sem a moldura de 430 px.
  *
- * Celular / tablet estreito (< 1024 px): tela cheia com carrossel nativo
+ * Celular (< 768 px): tela cheia com carrossel nativo
  *   [Conta] ⟷ [Comando = children] ⟷ [Fila], abrindo no centro; pílula
  *   flutuante com os pontos + botão "Ir para…" (lançador). ←/→ no teclado.
  *   Com `modulo`, o celular mostra o módulo em tela cheia com "Voltar".
- * Largo (≥ 1024 px): largura toda — trilho lateral de vidro (72 px, abre
- *   para 240 px), barra de comando com migalhas, busca (Ctrl K; ⌘K no Mac), Fila
- *   e conta (em painel lateral à direita) e o conteúdo ao lado.
+ * Casca larga (≥ 768 px): trilho + barra. Abaixo de 1280 o trilho começa
+ *   só com ícones (15 rem / ~240 px cortava títulos em 1024–1279); o
+ *   usuário pode abrir. A partir de 1280, abre por padrão. Busca e Fila
+ *   ficam na barra (no tablet a busca vira ícone com aria-label).
+ * Tabelas e densidade dos módulos continuam em useLargo (≥ 1024).
  *
  * Só visual/navegação: quem usa decide o que é cada módulo (o admin tem
  * funções próprias — nada aqui copia telas do paciente ou do médico).
  */
+
+/** Mede o item [aria-current=page] para posicionar um .bion-indicador. */
+function useCaixaDoAtual<T extends HTMLElement>(chave: unknown) {
+  const ref = useRef<T | null>(null);
+  const [caixa, setCaixa] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+  const medir = useCallback(() => {
+    const pai = ref.current;
+    if (!pai) return;
+    const el = pai.querySelector<HTMLElement>('[aria-current="page"]');
+    if (!el) {
+      setCaixa(null);
+      return;
+    }
+    const pr = pai.getBoundingClientRect();
+    const er = el.getBoundingClientRect();
+    setCaixa({
+      x: er.left - pr.left + pai.scrollLeft,
+      y: er.top - pr.top + pai.scrollTop,
+      w: er.width,
+      h: er.height,
+    });
+  }, []);
+  useLayoutEffect(() => {
+    const pai = ref.current;
+    if (!pai) return;
+    // A primeira medição vem do ResizeObserver (não chama setState no corpo
+    // do efeito — o lint react-hooks/set-state-in-effect reclama).
+    const ro = new ResizeObserver(() => medir());
+    ro.observe(pai);
+    const el = pai.querySelector("[aria-current='page']");
+    if (el) ro.observe(el);
+    pai.addEventListener("scroll", medir, { passive: true });
+    return () => {
+      ro.disconnect();
+      pai.removeEventListener("scroll", medir);
+    };
+  }, [medir, chave]);
+  return { ref, caixa } as const;
+}
+
 export function AdminShell({
   grupos,
   ativo,
@@ -82,7 +125,7 @@ export function AdminShell({
   buscar?: (termo: string) => ResultadoBusca[];
   children: ReactNode;
 }) {
-  const largo = useLargo();
+  const largo = useCascaLarga();
   const atalho = useAtalhoBusca();
   const irParaPainel = useRef<((i: number) => void) | null>(null);
   const { densidade } = useDensidadeAdmin();
@@ -200,13 +243,14 @@ export function AdminShell({
             <button
               type="button"
               onClick={abrirBusca}
-              className="ba-entrada !w-80 flex items-center gap-2 text-left ba-texto-3"
+              className="ba-entrada !w-11 lg:!w-80 !px-0 lg:!px-3 flex items-center justify-center lg:justify-start gap-2 text-left ba-texto-3"
               aria-label={`Buscar ou ir para (${atalho.falado})`}
               aria-keyshortcuts="Control+K Meta+K"
+              title={`Buscar ou ir para (${atalho.falado})`}
             >
               <Search className="w-4 h-4" aria-hidden />
-              <span className="flex-1">Buscar ou ir para…</span>
-              <kbd className="text-[11px] font-bold rounded-md px-1.5 py-0.5 ba-botao-secundario" aria-hidden>
+              <span className="flex-1 hidden lg:inline">Buscar ou ir para…</span>
+              <kbd className="text-[11px] font-bold rounded-md px-1.5 py-0.5 ba-botao-secundario hidden lg:inline" aria-hidden>
                 {atalho.curto}
               </kbd>
             </button>
@@ -259,10 +303,21 @@ function Trilho({
   usuario: { nome: string; foto?: string | null };
   onConta: () => void;
 }) {
-  const [aberto, setAberto] = usePreferenciaBool("bion-admin-trilho", true);
+  const padraoAberto = useMinLargura(LARGURA_TRILHO_ABERTO);
+  const [aberto, setAberto] = usePreferenciaBool("bion-admin-trilho", padraoAberto);
+  const { ref: refTrilho, caixa } = useCaixaDoAtual<HTMLElement>(`${ativo}-${aberto}`);
   return (
-    <nav className="ba-trilho flex flex-col p-2" data-aberto={aberto} aria-label="Navegação do administrador">
-      <div className="flex items-center gap-2 h-12 px-1.5 mb-2">
+    <nav ref={refTrilho} className="ba-trilho flex flex-col p-2" data-aberto={aberto} aria-label="Navegação do administrador">
+      {caixa ? (
+        <span
+          aria-hidden="true"
+          className="bion-indicador ba-trilho-indicador"
+          style={{ height: caixa.h * 0.5, transform: `translate(2px, ${caixa.y + caixa.h * 0.25}px)` }}
+        />
+      ) : null}
+      <div className="ba-trilho-cabecalho">
+        {/* Recolhido: o trilho tem ~4,5 rem; logo sm (40 px) + botão (44 px) transbordava. Só o botão de expandir. */}
+        {aberto ? <Logo size="sm" /> : null}
         {aberto ? (
           <div className="flex-1 min-w-0 pl-1">
             <div className="text-sm font-black leading-none">Torre BION</div>
@@ -292,7 +347,7 @@ function Trilho({
                     aria-current={ativo === it.id ? "page" : undefined}
                     title={aberto ? undefined : it.rotulo}
                     aria-label={!aberto ? `${it.rotulo}${it.selo ? ` (${it.selo})` : ""}` : undefined}
-                    className="ba-trilho-item"
+                    className="ba-trilho-item bion-toque"
                   >
                     <span className="relative inline-flex shrink-0">
                       <it.icone className="w-5 h-5" aria-hidden />
@@ -309,7 +364,7 @@ function Trilho({
           </div>
         ))}
       </div>
-      <button type="button" onClick={onConta} className="ba-trilho-item mt-2" aria-label="Abrir sua conta">
+      <button type="button" onClick={onConta} className="ba-trilho-item bion-toque mt-2" aria-label="Abrir sua conta">
         <Avatar usuario={usuario} tamanho="w-8 h-8" />
         {aberto ? <span className="flex-1 truncate text-left">{usuario.nome}</span> : null}
       </button>
@@ -349,6 +404,7 @@ function ShellCelular({
   const ref = useRef<HTMLDivElement>(null);
   const [painel, setPainel] = useState(abrirNaFila ? 2 : 1);
   const inicial = useRef(abrirNaFila ? 2 : 1);
+  const { ref: refPilula, caixa: caixaPilula } = useCaixaDoAtual<HTMLElement>(painel);
 
   const irPara = useCallback((i: number) => {
     const el = ref.current;
@@ -414,7 +470,14 @@ function ShellCelular({
         {PAINEIS[painel]}
       </span>
       {!bloqueado ? (
-        <nav className="ba-pilula" aria-label="Áreas do painel">
+        <nav ref={refPilula} className="ba-pilula" aria-label="Áreas do painel">
+          {caixaPilula ? (
+            <span
+              aria-hidden="true"
+              className="bion-indicador ba-pilula-indicador"
+              style={{ transform: `translate(${caixaPilula.x + caixaPilula.w / 2}px, ${caixaPilula.y + caixaPilula.h / 2}px) translate(-50%, -50%)` }}
+            />
+          ) : null}
           {PAINEIS.map((p, i) => (
             <button
               key={p}
@@ -422,17 +485,17 @@ function ShellCelular({
               onClick={() => irPara(i)}
               aria-label={`Ir para ${p}${i === 2 && filaContagem ? ` (${filaContagem} pendentes)` : ""}`}
               aria-current={painel === i ? "page" : undefined}
-              className="ba-pilula-alvo relative"
+              className="ba-pilula-alvo bion-toque bion-toque-forte relative"
             >
-              <span className="ba-pilula-ponto" data-ativo={painel === i} />
+              <span className="ba-pilula-ponto" />
               {i === 2 && filaContagem ? (
-                <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-amber-300" aria-hidden />
+                <span className="absolute -top-1 -right-0.5 w-2 h-2 rounded-full bg-amber-300" aria-hidden />
               ) : null}
             </button>
           ))}
           <span className="w-px h-5 bg-white/25 mx-1" aria-hidden />
-          <button type="button" onClick={onBuscar} aria-label="Ir para… (busca e módulos)" className="ba-pilula-alvo">
-            <Search className="w-4 h-4 text-sky-300" aria-hidden />
+          <button type="button" onClick={onBuscar} aria-label="Ir para… (busca e módulos)" className="ba-pilula-alvo bion-toque bion-toque-forte">
+            <Search className="w-4 h-4 text-[#96A5FF]" aria-hidden />
           </button>
         </nav>
       ) : null}
@@ -563,7 +626,7 @@ function Lancador({
         {filtrados.map((g) => (
           <div key={g.rotulo}>
             <div className="ba-rotulo mb-2">{g.rotulo}</div>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-3 gap-2 bion-surgir-lista">
               {g.itens.map((it) => (
                 <button
                   key={it.id}
@@ -571,7 +634,7 @@ function Lancador({
                   data-lancador=""
                   onClick={() => onNavegar(it.id)}
                   aria-current={ativo === it.id ? "page" : undefined}
-                  className={`ba-card !p-3 flex flex-col items-center gap-1.5 text-center ${ativo === it.id ? "ring-2 ring-[var(--ba-sinal)]" : ""}`}
+                  className={`ba-card bion-toque bion-surgir !p-3 flex flex-col items-center gap-1.5 text-center ${ativo === it.id ? "ring-2 ring-[var(--ba-sinal)]" : ""}`}
                   data-denso="true"
                 >
                   <span className="relative inline-flex">
@@ -593,7 +656,7 @@ function Lancador({
             <ul className="space-y-1.5">
               {lista.map((r) => (
                 <li key={r.chave}>
-                  <button type="button" data-lancador="" onClick={() => onNavegar(r.id)} className="ba-card w-full text-left flex items-center gap-3" data-denso="true">
+                  <button type="button" data-lancador="" onClick={() => onNavegar(r.id)} className="ba-card bion-toque w-full text-left flex items-center gap-3" data-denso="true">
                     <span className="flex-1 min-w-0">
                       <span className="font-bold block truncate">{r.rotulo}</span>
                       {r.detalhe ? <span className="text-xs ba-texto-2 block truncate">{r.detalhe}</span> : null}

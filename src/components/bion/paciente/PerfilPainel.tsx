@@ -80,7 +80,7 @@ function LinhaDado({ icone, rotulo, valor, onClick }: { icone: ReactNode; rotulo
     </>
   );
   return onClick ? (
-    <button type="button" onClick={onClick} className="bpp-linha bpp-toque" aria-label={`${rotulo}: ${valor || "não informado"}. Editar`}>
+    <button type="button" onClick={onClick} className="bpp-linha bion-toque" aria-label={`${rotulo}: ${valor || "não informado"}. Editar`}>
       {conteudo}
     </button>
   ) : (
@@ -90,7 +90,7 @@ function LinhaDado({ icone, rotulo, valor, onClick }: { icone: ReactNode; rotulo
 
 function LinhaLink({ icone, rotulo, onClick }: { icone: ReactNode; rotulo: string; onClick: () => void }) {
   return (
-    <button type="button" onClick={onClick} role="link" className="bpp-linha bpp-toque group">
+    <button type="button" onClick={onClick} role="link" className="bpp-linha bion-toque group">
       <span className="w-9 h-9 rounded-xl bg-bion-ink/6 dark:bg-white/8 inline-flex items-center justify-center shrink-0 text-bion-ink dark:text-bion-paper" aria-hidden>
         {icone}
       </span>
@@ -103,7 +103,7 @@ function LinhaLink({ icone, rotulo, onClick }: { icone: ReactNode; rotulo: strin
 function VerTudo({ total, onClick, rotulo }: { total: number; onClick: () => void; rotulo: string }) {
   if (total <= PREVIA) return null;
   return (
-    <button type="button" onClick={onClick} aria-label={`Ver tudo: ${rotulo} (${total})`} className="bpp-toque min-h-11 px-2 -mr-1 text-xs font-bold text-bion-sea dark:text-sky-300 inline-flex items-center gap-0.5">
+    <button type="button" onClick={onClick} aria-label={`Ver tudo: ${rotulo} (${total})`} className="bion-toque min-h-11 px-2 -mr-1 text-xs font-bold text-bion-sea dark:text-[#C4B5FD] inline-flex items-center gap-0.5">
       Ver tudo ({total}) <ChevronRight className="w-3.5 h-3.5" aria-hidden />
     </button>
   );
@@ -236,12 +236,12 @@ export function PerfilPainel({
 
   const idadeTexto = idadeExibida !== null ? `${idadeExibida} ${idadeExibida === 1 ? "ano" : "anos"}` : "";
   const segmento = (ativo: boolean) =>
-    `bpp-toque min-h-11 rounded-full text-sm font-semibold inline-flex items-center justify-center gap-2 ${
+    `bion-toque min-h-11 rounded-full text-sm font-semibold inline-flex items-center justify-center gap-2 ${
       ativo ? "bp-acao" : "text-bion-ink dark:text-bion-paper"
     }`;
 
   return (
-    <div className="px-5 py-6 space-y-6 bp-safe-top pb-24">
+    <div className="bion-surgir-lista px-5 py-6 space-y-6 bp-safe-top pb-24">
       <input
         ref={inputFotoRef}
         type="file"
@@ -271,7 +271,7 @@ export function PerfilPainel({
             disabled={enviandoFoto}
             aria-busy={enviandoFoto}
             aria-label={enviandoFoto ? "Enviando foto de perfil" : "Alterar foto de perfil"}
-            className="bpp-toque-forte absolute -bottom-1 -right-1 bp-acao w-9 h-9 inline-flex items-center justify-center !rounded-full disabled:opacity-60"
+            className="bion-toque bion-toque-forte absolute -bottom-1 -right-1 bp-acao w-9 h-9 inline-flex items-center justify-center !rounded-full disabled:opacity-60"
           >
             <Pencil className="w-4 h-4" />
           </button>
@@ -287,7 +287,7 @@ export function PerfilPainel({
       <section aria-label="Cartão de saúde" className="bpp-cartao-saude rounded-3xl p-5">
         <div className="flex items-center justify-between gap-2">
           <span className="text-xs font-bold uppercase tracking-wider text-white/80">Cartão de saúde</span>
-          <button type="button" onClick={() => onEditar("tipoSanguineo")} className="bpp-toque min-h-11 -my-2 -mr-2 px-3 rounded-full text-xs font-bold text-white inline-flex items-center gap-1.5 hover:bg-white/10" aria-label="Editar tipo sanguíneo, alergias e comorbidades">
+          <button type="button" onClick={() => onEditar("tipoSanguineo")} className="bion-toque min-h-11 -my-2 -mr-2 px-3 rounded-full text-xs font-bold text-white inline-flex items-center gap-1.5 hover:bg-white/10" aria-label="Editar tipo sanguíneo, alergias e comorbidades">
             <Pencil className="w-3.5 h-3.5" aria-hidden /> Editar
           </button>
         </div>
@@ -404,7 +404,7 @@ export function PerfilPainel({
       <button
         type="button"
         onClick={onSair}
-        className="bpp-toque w-full min-h-12 rounded-full border-2 border-red-600/40 text-red-700 dark:border-red-400/40 dark:text-red-300 text-sm font-bold inline-flex items-center justify-center gap-2 hover:bg-red-500/10"
+        className="bion-toque w-full min-h-12 rounded-full border-2 border-red-600/40 text-red-700 dark:border-red-400/40 dark:text-red-300 text-sm font-bold inline-flex items-center justify-center gap-2 hover:bg-red-500/10"
       >
         <LogOut className="w-4 h-4" aria-hidden /> Sair da conta
       </button>
@@ -412,7 +412,7 @@ export function PerfilPainel({
       <button
         type="button"
         onClick={onExcluirConta}
-        className="bpp-toque w-full min-h-11 rounded-full text-red-700 dark:text-red-300 text-sm font-semibold inline-flex items-center justify-center gap-2 hover:bg-red-500/10"
+        className="bion-toque w-full min-h-11 rounded-full text-red-700 dark:text-red-300 text-sm font-semibold inline-flex items-center justify-center gap-2 hover:bg-red-500/10"
       >
         <Trash2 className="w-4 h-4" aria-hidden /> Excluir minha conta
       </button>

@@ -43,7 +43,7 @@ export default function PerfilPublicoPage() {
 
   if (carregando) {
     return (
-      <div className="min-h-screen bg-[#0a1f44] text-white flex items-center justify-center">
+      <div className="min-h-screen bg-[#f1ecfb] text-[#1a1040] dark:bg-[#0a0618] dark:text-[#f4f1fd] flex items-center justify-center">
         <p>Carregando perfil...</p>
       </div>
     );
@@ -51,21 +51,21 @@ export default function PerfilPublicoPage() {
 
   if (erro || !medico) {
     return (
-      <div className="min-h-screen bg-[#0a1f44] text-white flex items-center justify-center p-6">
+      <div className="min-h-screen bg-[#f1ecfb] text-[#1a1040] dark:bg-[#0a0618] dark:text-[#f4f1fd] flex items-center justify-center p-6">
         <div className="text-center">
           <p className="text-lg font-bold">Perfil não encontrado</p>
-          <p className="text-sm text-white/70 mt-2">{erro}</p>
+          <p className="text-sm text-[#1a1040]/80 dark:text-[#f4f1fd]/80 mt-2">{erro}</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#0a1f44] text-white">
+    <div className="min-h-screen bg-[#f1ecfb] text-[#1a1040] dark:bg-[#0a0618] dark:text-[#f4f1fd]">
       <div className="max-w-md mx-auto p-6">
-        <div className="bg-white/10 rounded-3xl p-6">
+        <div className="rounded-3xl p-6 bg-white border border-[#24058D]/10 shadow-[0_12px_32px_-12px_rgba(36,5,141,0.25)] dark:bg-white/[0.06] dark:border-white/10 dark:shadow-none">
           <div className="flex items-center gap-4">
-            <div className="w-20 h-20 rounded-3xl bg-white/15 flex items-center justify-center text-2xl font-black overflow-hidden">
+            <div className="w-20 h-20 rounded-3xl bg-[#24058D] text-white flex items-center justify-center text-2xl font-black overflow-hidden">
               {medico.foto ? (
                 <img src={medico.foto} alt={medico.nome} className="w-full h-full object-cover" />
               ) : (
@@ -74,61 +74,61 @@ export default function PerfilPublicoPage() {
             </div>
             <div>
               <h1 className="text-xl font-black">{medico.nome}</h1>
-              <p className="text-sm text-white/85">{medico.especialidade}</p>
-              <p className="text-xs text-white/70 flex items-center gap-1 mt-1">
+              <p className="text-sm text-[#1a1040]/85 dark:text-[#f4f1fd]/85">{medico.especialidade}</p>
+              <p className="text-xs text-[#1a1040]/80 dark:text-[#f4f1fd]/80 flex items-center gap-1 mt-1">
                 <BadgeCheck className="w-3.5 h-3.5" /> {medico.crm}
               </p>
             </div>
           </div>
 
           <div className="mt-4 grid grid-cols-2 gap-2 text-center">
-            <div className="bg-white/10 rounded-2xl py-3">
-              <div className="text-xs font-bold uppercase text-white/70">Nota</div>
+            <div className="bg-[#24058D]/[0.07] dark:bg-white/10 rounded-2xl py-3">
+              <div className="text-xs font-bold uppercase text-[#1a1040]/80 dark:text-[#f4f1fd]/80">Nota</div>
               <div className="text-lg font-black flex items-center justify-center gap-1">
-                <Star className="w-4 h-4 fill-amber-300 text-amber-300" />
+                <Star className="w-4 h-4 fill-amber-600 text-amber-700 dark:fill-amber-300 dark:text-amber-300" />
                 {medico.numAvaliacoes > 0 ? medico.avaliacao.toFixed(1) : "—"}
               </div>
             </div>
-            <div className="bg-white/10 rounded-2xl py-3">
-              <div className="text-xs font-bold uppercase text-white/70">Avaliações</div>
+            <div className="bg-[#24058D]/[0.07] dark:bg-white/10 rounded-2xl py-3">
+              <div className="text-xs font-bold uppercase text-[#1a1040]/80 dark:text-[#f4f1fd]/80">Avaliações</div>
               <div className="text-lg font-black">{medico.numAvaliacoes}</div>
             </div>
           </div>
 
           {medico.bio && (
             <div className="mt-4">
-              <div className="text-xs font-bold uppercase text-white/70">Sobre</div>
+              <div className="text-xs font-bold uppercase text-[#1a1040]/80 dark:text-[#f4f1fd]/80">Sobre</div>
               <p className="text-sm mt-1 leading-relaxed">{medico.bio}</p>
             </div>
           )}
 
           {medico.formacao?.trim() ? (
             <div className="mt-4">
-              <div className="text-xs font-bold uppercase text-white/70">Formação</div>
+              <div className="text-xs font-bold uppercase text-[#1a1040]/80 dark:text-[#f4f1fd]/80">Formação</div>
               <p className="text-sm mt-1 leading-relaxed whitespace-pre-line">{medico.formacao}</p>
             </div>
           ) : null}
 
           {medico.experiencia?.trim() ? (
             <div className="mt-4">
-              <div className="text-xs font-bold uppercase text-white/70">Experiência</div>
+              <div className="text-xs font-bold uppercase text-[#1a1040]/80 dark:text-[#f4f1fd]/80">Experiência</div>
               <p className="text-sm mt-1 leading-relaxed whitespace-pre-line">{medico.experiencia}</p>
             </div>
           ) : null}
 
           {medico.idiomas?.length ? (
             <div className="mt-4">
-              <div className="text-xs font-bold uppercase text-white/70">Idiomas</div>
+              <div className="text-xs font-bold uppercase text-[#1a1040]/80 dark:text-[#f4f1fd]/80">Idiomas</div>
               <p className="text-sm mt-1">{medico.idiomas.join(", ")}</p>
             </div>
           ) : null}
 
           {medico.subespecialidades?.length ? (
             <div className="mt-4">
-              <div className="text-xs font-bold uppercase text-white/70">Subespecialidades</div>
+              <div className="text-xs font-bold uppercase text-[#1a1040]/80 dark:text-[#f4f1fd]/80">Subespecialidades</div>
               <div className="flex flex-wrap gap-1.5 mt-1.5">
                 {medico.subespecialidades.map((s) => (
-                  <span key={s} className="text-xs font-bold px-2 py-1 rounded-full bg-white/10">
+                  <span key={s} className="text-xs font-bold px-2 py-1 rounded-full bg-[#24058D]/10 text-[#24058D] dark:bg-[#C4B5FD]/15 dark:text-[#DDD6FE]">
                     {s}
                   </span>
                 ))}
@@ -138,21 +138,21 @@ export default function PerfilPublicoPage() {
 
           <div className="mt-4 flex items-center justify-between">
             <div>
-              <div className="text-xs font-bold uppercase text-white/70">Consulta</div>
+              <div className="text-xs font-bold uppercase text-[#1a1040]/80 dark:text-[#f4f1fd]/80">Consulta</div>
               <div className="text-2xl font-black">
                 {medico.valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
               </div>
             </div>
             <a
               href="/"
-              className="rounded-full bg-white text-[#0a1f44] px-4 py-3 text-sm font-bold flex items-center gap-2"
+              className="rounded-full bg-[#24058D] text-white dark:bg-[#C4B5FD] dark:text-[#12034a] px-4 py-3 text-sm font-bold flex items-center gap-2"
             >
               <CalendarCheck className="w-4 h-4" /> Agendar
             </a>
           </div>
         </div>
 
-        <p className="text-center text-xs text-white/60 mt-6">
+        <p className="text-center text-xs text-[#1a1040]/80 dark:text-[#f4f1fd]/80 mt-6">
           Perfil público BION Telemedicina
         </p>
       </div>

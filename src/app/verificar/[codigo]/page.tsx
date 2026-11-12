@@ -57,7 +57,7 @@ export default function VerificarDocumentoPage() {
       <div className="w-full max-w-md">
         <div className="bg-white/10 rounded-3xl p-6">
           <p className="text-2xl font-black">BION</p>
-          <p className="text-sm text-white/80 mb-6">Verificação de documento</p>
+          <h1 className="text-sm text-white/80 mb-6">Emissão confirmada pela plataforma</h1>
 
           {carregando ? (
             <p className="text-sm text-white/80">Conferindo o código…</p>

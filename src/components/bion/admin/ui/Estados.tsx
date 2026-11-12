@@ -20,7 +20,7 @@ export function EstadoVazio({
   tom?: Tom;
 }) {
   return (
-    <div className="flex flex-col items-center text-center px-6 py-10" role="status">
+    <div className="flex flex-col items-center justify-center text-center px-6 py-12 min-h-[min(22rem,calc(100dvh-22rem))]" role="status">
       <span className="ba-estado-icone" data-tom={tom}>
         <IconeVazio className="w-6 h-6" aria-hidden />
       </span>
@@ -42,7 +42,7 @@ export function EstadoErro({
   onTentar?: () => void;
 }) {
   return (
-    <div className="flex flex-col items-center text-center px-6 py-10" role="alert">
+    <div className="flex flex-col items-center justify-center text-center px-6 py-12 min-h-[min(22rem,calc(100dvh-22rem))]" role="alert">
       <span className="ba-estado-icone" data-tom="critico">
         <AlertTriangle className="w-6 h-6" aria-hidden />
       </span>

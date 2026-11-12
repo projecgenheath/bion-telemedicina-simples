@@ -78,7 +78,7 @@ export function LinhaConsultaPagamento({
           href={rotaNotaFiscal(c.id)}
           target="_blank"
           rel="noopener"
-          className="bpp-toque self-start max-w-full inline-flex items-center gap-1.5 min-h-11 text-xs font-bold text-bion-sea dark:text-sky-300 underline"
+          className="bion-toque self-start max-w-full inline-flex items-center gap-1.5 min-h-11 text-xs font-bold text-bion-sea dark:text-[#C4B5FD] underline"
         >
           <FileText className="w-3.5 h-3.5" aria-hidden /> Nota fiscal / recibo do médico
         </a>
