@@ -738,3 +738,59 @@
     transition: none;
   }
 }
+
+/* ======================== Animações visíveis (paciente) ======================== */
+/* Entrada mais pronunciada */
+@keyframes bpp-entrar-visivel {
+  from { opacity: 0; transform: translateY(24px) scale(0.96); }
+  to { opacity: 1; transform: none; }
+}
+
+.bp-app-paciente .bpp-animar {
+  animation: bpp-entrar-visivel 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Cards com hover mais evidente */
+.bp-app-paciente .bp-glass {
+  transition: transform 0.2s ease, box-shadow 0.25s ease;
+}
+@media (hover: hover) {
+  .bp-app-paciente .bp-glass:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(36, 5, 141, 0.12);
+  }
+}
+.bp-app-paciente .bp-glass:active {
+  transform: scale(0.98);
+}
+
+/* Botões com feedback */
+.bp-app-paciente button,
+.bp-app-paciente .bion-toque {
+  transition: transform 0.15s ease, background-color 0.15s ease, box-shadow 0.2s ease;
+}
+.bp-app-paciente button:active,
+.bp-app-paciente .bion-toque:active {
+  transform: scale(0.96);
+}
+
+/* Saudação com entrada */
+.bp-app-paciente h1 {
+  animation: bpp-entrar-visivel 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Lista de consultas com delay escalonado */
+.bp-app-paciente .bion-surgir-lista > * {
+  animation: bpp-entrar-visivel 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.bp-app-paciente .bion-surgir-lista > *:nth-child(1) { animation-delay: 0.05s; }
+.bp-app-paciente .bion-surgir-lista > *:nth-child(2) { animation-delay: 0.1s; }
+.bp-app-paciente .bion-surgir-lista > *:nth-child(3) { animation-delay: 0.15s; }
+.bp-app-paciente .bion-surgir-lista > *:nth-child(4) { animation-delay: 0.2s; }
+.bp-app-paciente .bion-surgir-lista > *:nth-child(5) { animation-delay: 0.25s; }
+.bp-app-paciente .bion-surgir-lista > *:nth-child(n+6) { animation-delay: 0.3s; }
+
+/* Card IA com brilho sutil */
+.bp-app-paciente .bpp-cartao-ia {
+  animation: bpp-entrar-visivel 0.6s cubic-bezier(0.22, 1, 0.36, 1) 0.2s both;
+}
