@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { exigirSessao } from "@/lib/server/auth";
+import { limitarAsync, resposta429 } from "@/lib/server/rate-limit";
 import {
   aplicarSideEffects,
   consultaWire as consultaWireComum,
@@ -224,6 +225,8 @@ export async function PATCH(
 
     switch (body.acao) {
       case "cancelar": {
+        const limite = await limitarAsync(`cancelar:${usuario.id}`, 5, 60_000);
+        if (!limite.permitido) return resposta429(limite.restanteSeg);
         if (consulta.status === "cancelada" || consulta.status === "concluida" || consulta.status === "falta_paciente") {
           return Response.json({ erro: "Esta consulta já foi encerrada." }, { status: 409 });
         }

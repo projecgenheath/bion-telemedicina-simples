@@ -18,8 +18,8 @@ import { AlertTriangle, RefreshCw } from "lucide-react";
 export type Superficie = "vidro" | "marinho" | "janela" | "solto";
 
 const FUNDO: Record<Superficie, string> = {
-  vidro: "bp-glass",
-  marinho: "bp-glass-marinho text-white",
+  vidro: "bp-glass bpp-animar",
+  marinho: "bp-glass-marinho text-white bpp-animar",
   janela: "bpp-sheet-cartao border bpp-sheet-borda",
   solto: "",
 };
