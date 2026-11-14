@@ -788,10 +788,12 @@ export function PacienteApp() {
               <CardReembolso key={c.id} consulta={c} />
             ))}
 
-            {/* Atalhos: descoberta das ações principais e das seções (swipe continua igual) */}
+            {/* Atalhos: descoberta das ações principais e das seções (swipe continua igual).
+                "Agendar" é a ação principal: chip com o degradê da marca; as demais
+                seguem neutras. Entrada em onda (bion-surgir, 40 ms por card). */}
             <div className="relative mt-4 grid grid-cols-2 gap-3 bpp-animar bpp-animar-d3">
-              <button type="button" onClick={() => abrirChat("agendar")} className="bion-toque bp-glass flex items-center gap-3 p-4 text-left">
-                <span aria-hidden className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-bion-sea/10 text-bion-sea dark:bg-[#C4B5FD]/15 dark:text-[#C4B5FD]">
+              <button type="button" onClick={() => abrirChat("agendar")} style={{ "--bion-i": 0 } as CSSProperties} className="bion-toque bion-surgir bp-glass flex items-center gap-3 p-4 text-left">
+                <span aria-hidden className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-[#3D1AAE] to-[#24058D] text-white shadow-md shadow-[#24058D]/25 dark:from-[#C4B5FD] dark:to-[#DDD6FE] dark:text-[#12034a]">
                   <Stethoscope className="h-5 w-5" />
                 </span>
                 <span className="min-w-0">
@@ -799,7 +801,7 @@ export function PacienteApp() {
                   <span className="block text-xs font-semibold opacity-70">com a BION IA</span>
                 </span>
               </button>
-              <button type="button" onClick={() => irSecao(1)} className="bion-toque bp-glass flex items-center gap-3 p-4 text-left">
+              <button type="button" onClick={() => irSecao(1)} style={{ "--bion-i": 1 } as CSSProperties} className="bion-toque bion-surgir bp-glass flex items-center gap-3 p-4 text-left">
                 <span aria-hidden className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-bion-sea/10 text-bion-sea dark:bg-[#C4B5FD]/15 dark:text-[#C4B5FD]">
                   <Activity className="h-5 w-5" />
                 </span>
@@ -808,7 +810,7 @@ export function PacienteApp() {
                   <span className="block text-xs font-semibold opacity-70">remédios, IMC e PA</span>
                 </span>
               </button>
-              <button type="button" onClick={() => irSecao(2)} className="bion-toque bp-glass flex items-center gap-3 p-4 text-left">
+              <button type="button" onClick={() => irSecao(2)} style={{ "--bion-i": 2 } as CSSProperties} className="bion-toque bion-surgir bp-glass flex items-center gap-3 p-4 text-left">
                 <span aria-hidden className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-bion-sea/10 text-bion-sea dark:bg-[#C4B5FD]/15 dark:text-[#C4B5FD]">
                   <ClipboardList className="h-5 w-5" />
                 </span>
@@ -817,7 +819,7 @@ export function PacienteApp() {
                   <span className="block text-xs font-semibold opacity-70">laudos e resultados</span>
                 </span>
               </button>
-              <button type="button" onClick={() => irPara(2)} className="bion-toque bp-glass flex items-center gap-3 p-4 text-left">
+              <button type="button" onClick={() => irPara(2)} style={{ "--bion-i": 3 } as CSSProperties} className="bion-toque bion-surgir bp-glass flex items-center gap-3 p-4 text-left">
                 <span aria-hidden className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-bion-sea/10 text-bion-sea dark:bg-[#C4B5FD]/15 dark:text-[#C4B5FD]">
                   <FileText className="h-5 w-5" />
                 </span>
