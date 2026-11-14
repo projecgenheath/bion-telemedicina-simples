@@ -194,6 +194,14 @@ const paresFixos: [string, string, string, number][] = [
   ["indicador da pílula: #96A5FF na cápsula #09090b", "#96A5FF", "#09090b", 3],
   ["bolha do suporte clara: branco em #24058D", "#ffffff", "#24058D", 4.5],
   ["bolha do suporte escura: #24058D em #96A5FF", "#24058D", "#96A5FF", 4.5],
+  /* Hero do Centro de Comando (fase 5): degradê fixo da marca nos dois modos.
+     Branco total e branco 90% (blend sobre o stop mais claro #3D1AAE). */
+  ["hero: branco no topo #3D1AAE", "#ffffff", "#3D1AAE", 4.5],
+  ["hero: branco no meio #24058D", "#ffffff", "#24058D", 4.5],
+  ["hero: branco no fim #1C0470", "#ffffff", "#1C0470", 4.5],
+  ["hero: branco 90% sobre #3D1AAE", "#ECE9F7", "#3D1AAE", 4.5],
+  ["hero barra clara: #1a1040 sobre o blend #F5F4FB", "#1a1040", "#F5F4FB", 4.5],
+  ["hero barra escura: #ffffff em #1a1430", "#ffffff", "#1a1430", 4.5],
 ];
 for (const [nome, a, b, min] of paresFixos) {
   const c = contraste(cor(a), cor(b));

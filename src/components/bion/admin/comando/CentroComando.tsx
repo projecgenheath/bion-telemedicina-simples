@@ -12,6 +12,7 @@ import {
   Info,
   LifeBuoy,
   RefreshCw,
+  ShieldCheck,
   Stethoscope,
   Undo2,
   Wallet,
@@ -40,11 +41,25 @@ const AVISOS_PIX: Estado[] = [
   { rotulo: "Chave trocada < 24 h", tom: "atencao" },
 ];
 
+const iniciais = (nome: string) =>
+  nome
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((p) => p[0]?.toUpperCase())
+    .join("");
+
 /**
  * Centro de Comando (/painel do admin) — só dados REAIS:
  * store do bootstrap (consultas, médicos, pacientes, chamados) +
  * /api/admin/repasses?status=fechado + /api/admin/reembolsos.
  * "Hoje" = dia no fuso da clínica (America/Sao_Paulo).
+ *
+ * Visual: mesma linguagem imersiva das homes do paciente e do médico —
+ * nome em destaque tipográfico com gradiente da marca, hero "Agora" em
+ * degradê #3D1AAE→#24058D→#1C0470 com auroras e anel pulsante quando há
+ * consulta na janela ±30 min. Navegação da casca (carrossel Conta ⟷
+ * Comando ⟷ Fila, pílula, trilho) permanece intacta.
  */
 export function CentroComando() {
   const router = useRouter();
@@ -73,37 +88,167 @@ export function CentroComando() {
   const maxSerie = Math.max(1, ...serie.map((s) => s.total));
   const totalSerie = serie.reduce((a, s) => a + s.total, 0);
 
+  // Destaque do hero: consulta na janela ±30 min (ao vivo) ou a próxima de hoje.
+  const aoVivo = hoje.aoVivo.length > 0;
+  const destaque = hoje.aoVivo[0] ?? hoje.proximas[0];
+  const contagemHoje = hoje.agendadas + hoje.concluidas + hoje.reagendar + hoje.faltas;
+
   return (
-    <div className="px-4 lg:px-8 pt-[max(1.25rem,env(safe-area-inset-top))] lg:pt-6 pb-28 lg:pb-10 max-w-[1400px] mx-auto w-full space-y-6">
-      <header className="flex items-center gap-3">
-        {/* Logo oficial no cabeçalho mobile (e também no desktop).
-            O visual final depende do PR #166: lá o Logo size="sm" vira o
-            círculo de 40 px. Até lá, o monograma atual aparece inteiro. */}
+    <div className="relative overflow-hidden px-4 lg:px-8 pt-[max(1.25rem,env(safe-area-inset-top))] lg:pt-6 pb-28 lg:pb-10 max-w-[1400px] mx-auto w-full space-y-6">
+      {/* brilhos decorativos da marca (fundo vivo, atrás dos cartões de vidro) */}
+      <span aria-hidden className="ba-glow ba-glow-a" />
+      <span aria-hidden className="ba-glow ba-glow-b" />
+
+      <header className="relative flex items-center gap-3 ba-animar">
         <span className="shrink-0 inline-flex items-center justify-center">
           <Logo size="sm" />
         </span>
-        <div className="flex-1 min-w-0">
-          <h1 className="text-2xl lg:text-3xl font-black leading-tight break-words">
-            {saudacao(agora)}
-            {primeiroNome ? `, ${primeiroNome}` : ""}
-          </h1>
-          <p className="text-sm ba-texto-2 first-letter:uppercase">{dataLonga(agora)} · horário de Brasília</p>
-        </div>
+        <div className="flex-1" />
+        <span className="ba-glass min-w-0 truncate rounded-full px-3 py-1.5 text-xs font-bold uppercase tracking-wider ba-texto-2 first-letter:uppercase">
+          {dataLonga(agora)}
+        </span>
         <button type="button" onClick={() => void atualizar()} disabled={atualizando} className="ba-icone-botao shrink-0" aria-label={atualizando ? "Atualizando…" : "Atualizar dados"}>
           <RefreshCw className={`w-5 h-5 ${atualizando ? "motion-safe:animate-spin" : ""}`} aria-hidden />
         </button>
       </header>
 
+      {/* Saudação: nome do administrador em destaque tipográfico da marca */}
+      <div className="relative ba-animar ba-animar-d1">
+        <p className="text-base font-bold ba-texto-2">{saudacao(agora)},</p>
+        <h1 className="ba-texto-grad mt-0.5 text-5xl leading-[1.05] font-black tracking-tight lg:text-6xl break-words">
+          {primeiroNome || "Torre BION"}
+        </h1>
+        <p className="mt-3 inline-flex items-center gap-2 text-sm font-semibold ba-texto-2">
+          <ShieldCheck className="h-4 w-4 shrink-0" style={{ color: "var(--ba-sinal)" }} aria-hidden />
+          Centro de Comando · horário de Brasília
+        </p>
+      </div>
+
       {consultas.length >= LIMITE_BOOTSTRAP ? (
-        <div className="ba-aviso" data-tom="atencao">
+        <div className="ba-aviso relative" data-tom="atencao">
           <Info className="w-4 h-4 shrink-0 mt-0.5" aria-hidden />
           <p>O servidor carrega no máximo {LIMITE_BOOTSTRAP} consultas para o admin. Pode haver consultas fora dessa carga que não entram nos números abaixo.</p>
         </div>
       ) : null}
 
-      {/* ---------------- Agora ---------------- */}
-      <section aria-labelledby="cc-agora" className="space-y- ba-animar 3">
-        <h2 id="cc-agora" className="ba-rotulo">Agora</h2>
+      {/* ---------------- Agora: hero imersivo + KPIs ---------------- */}
+      <section aria-labelledby="cc-agora" className="relative space-y-3">
+        <h2 id="cc-agora" className="sr-only">Agora</h2>
+
+        {/* Hero: pulso da operação no degradê da marca (mesma linguagem do
+            paciente e do médico: auroras, anel pulsante, barra fria e CTA
+            com brilho). Texto claro só aqui dentro — conferido no teste. */}
+        <div className="ba-hero bion-surgir relative w-full overflow-hidden rounded-[2rem] p-5 text-white lg:p-6 ba-animar ba-animar-d2">
+          <span aria-hidden className="ba-aurora ba-aurora-a" />
+          <span aria-hidden className="ba-aurora ba-aurora-b" />
+          <div className="relative">
+            <div className="mb-4 flex items-center justify-between gap-2">
+              <span className="text-xs font-black uppercase tracking-[0.18em] text-white/75">
+                {aoVivo ? "Ao vivo agora" : destaque ? "Próxima de hoje" : "Agenda de hoje"}
+              </span>
+              {aoVivo ? (
+                <span
+                  className="inline-flex shrink-0 items-center gap-2 rounded-full bg-emerald-500/25 px-2.5 py-1 text-xs font-bold text-emerald-50"
+                  title="Consultas em sala ou prestes a começar (janela de ±30 minutos)"
+                >
+                  <span className="relative flex w-2.5 h-2.5" aria-hidden>
+                    <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60 motion-safe:animate-ping" />
+                    <span className="relative inline-flex rounded-full w-2.5 h-2.5 bg-emerald-400" />
+                  </span>
+                  {hoje.aoVivo.length} na janela ±30 min
+                </span>
+              ) : null}
+            </div>
+
+            {destaque ? (
+              <>
+                <div className="flex items-center gap-4">
+                  <span
+                    aria-hidden
+                    className={`relative grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-white/15 backdrop-blur text-base font-black ${aoVivo ? "ba-vivo-anel" : ""}`}
+                  >
+                    {iniciais(destaque.paciente) || "?"}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-2xl font-black leading-tight truncate">{destaque.paciente}</div>
+                    <div className="mt-0.5 text-sm font-semibold text-white/90 truncate">
+                      {destaque.medico}
+                      {destaque.especialidade ? ` · ${destaque.especialidade}` : ""}
+                    </div>
+                    <span className="mt-1.5 inline-flex rounded-full bg-white/15 px-2.5 py-1 text-xs font-bold text-white sm:hidden">
+                      {estadoConsulta(destaque.status).rotulo}
+                    </span>
+                  </div>
+                  <span className="hidden sm:inline-flex shrink-0 rounded-full bg-white/15 px-2.5 py-1 text-xs font-bold text-white backdrop-blur">
+                    {estadoConsulta(destaque.status).rotulo}
+                  </span>
+                </div>
+
+                {/* Barra fria: horário do destaque + resumo do dia (troca claro/escuro sozinha) */}
+                <div className="ba-hero-barra mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 rounded-2xl px-4 py-3">
+                  <span className="inline-flex items-baseline gap-2">
+                    <span className="text-lg font-black tabular-nums">{hora(destaque.ts)}</span>
+                    <span className="text-xs font-bold uppercase tracking-wide opacity-70">{destaque.data}</span>
+                  </span>
+                  <span className="text-xs font-semibold opacity-80">
+                    {hoje.agendadas} a realizar · {hoje.concluidas} concluídas
+                    {hoje.reagendar ? ` · ${hoje.reagendar} aguardando reagendamento` : ""}
+                    {hoje.faltas ? ` · ${hoje.faltas} ${hoje.faltas === 1 ? "falta do paciente" : "faltas do paciente"}` : ""}
+                  </span>
+                </div>
+              </>
+            ) : (
+              <div aria-label="Nenhuma consulta restante hoje">
+                <div className="text-2xl font-black leading-tight">
+                  {contagemHoje > 0 ? "As consultas de hoje já correram" : "Nenhuma consulta hoje"}
+                </div>
+                <p className="mt-1.5 text-sm font-semibold text-white/90">
+                  {contagemHoje > 0
+                    ? `Foram ${contagemHoje} ao longo do dia. Quando o próximo paciente agendar, o pulso aparece aqui.`
+                    : "Quando o primeiro paciente agendar, o pulso da clínica aparece aqui."}
+                </p>
+                <svg className="ba-ecg mt-5 block h-10 w-full" viewBox="0 0 200 48" fill="none" aria-hidden>
+                  <path
+                    d="M0 24 h16 l3 -3 3 3 5 -15 6 30 5 -15 h10 l4 -3 4 3 h16 l3 -3 3 3 5 -15 6 30 5 -15 h10 l4 -3 4 3 h16 l3 -3 3 3 5 -15 6 30 5 -15 h10 l4 -3 4 3 h28"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinejoin="round"
+                    strokeLinecap="round"
+                  />
+                </svg>
+              </div>
+            )}
+
+            {/* CTAs do hero: Fila (brilho quando há decisões) + Agendamentos */}
+            <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <button
+                type="button"
+                onClick={abrirFila}
+                aria-label={fila.length ? `Abrir a Fila de decisões (${fila.length} pendentes)` : "Abrir a Fila de decisões (vazia)"}
+                className={`bion-toque relative inline-flex items-center justify-center gap-2 rounded-full px-5 py-3.5 text-sm font-bold ${
+                  fila.length
+                    ? "ba-brilho-cta bg-white text-[#24058D] shadow-md hover:shadow-lg"
+                    : "bg-white/10 border border-white/20 text-white/90"
+                }`}
+              >
+                <Inbox className="w-4 h-4" aria-hidden />
+                {fila.length
+                  ? `Abrir a Fila · ${fila.length} ${fila.length === 1 ? "decisão" : "decisões"}`
+                  : "Fila em ordem"}
+              </button>
+              <button
+                type="button"
+                onClick={() => ir("admin-agendamentos")}
+                aria-label="Abrir Agendamentos"
+                className="bion-toque relative inline-flex items-center justify-center gap-2 rounded-full px-5 py-3.5 text-sm font-bold bg-white/10 border border-white/20 text-white/90"
+              >
+                <CalendarDays className="w-4 h-4" aria-hidden /> Agendamentos
+                <ChevronRight className="w-4 h-4 opacity-70" aria-hidden />
+              </button>
+            </div>
+          </div>
+        </div>
+
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 bion-surgir-lista">
           <KpiAdmin
             icone={CalendarDays}
@@ -192,10 +337,13 @@ export function CentroComando() {
               {serie.map((s, i) => (
                 <div key={i} className="flex-1 h-full flex items-end" title={`${s.rotulo}: ${s.total}`}>
                   <div
-                    className="w-full rounded-t-md"
+                    className={`w-full rounded-t-md ba-barra-14d ${i === serie.length - 1 ? "ba-barra-hoje" : ""}`}
                     style={{
                       height: `${s.total ? Math.max(6, (s.total / maxSerie) * 100) : 3}%`,
-                      background: i === serie.length - 1 ? "var(--ba-sinal)" : "color-mix(in srgb, var(--ba-sinal) 45%, transparent)",
+                      animationDelay: `${i * 0.035}s`,
+                      ...(i === serie.length - 1
+                        ? {}
+                        : { background: "color-mix(in srgb, var(--ba-sinal) 45%, transparent)" }),
                     }}
                   />
                 </div>
@@ -209,7 +357,7 @@ export function CentroComando() {
       </section>
 
       {/* ---------------- Operação ---------------- */}
-      <section aria-labelledby="cc-operacao" className="space-y-3">
+      <section aria-labelledby="cc-operacao" className="relative space-y-3">
         <h2 id="cc-operacao" className="ba-rotulo">Operação</h2>
         <div className="ba-grade-cartoes bion-surgir-lista">
           <CardAdmin
@@ -266,7 +414,7 @@ export function CentroComando() {
       </section>
 
       {/* ---------------- Dinheiro ---------------- */}
-      <section aria-labelledby="cc-dinheiro" className="space-y-3">
+      <section aria-labelledby="cc-dinheiro" className="relative space-y-3">
         <h2 id="cc-dinheiro" className="ba-rotulo">Dinheiro</h2>
         <div className="grid sm:grid-cols-3 gap-3">
           <CardAdmin titulo="Pagas hoje" icone={Wallet} tom="dinheiro">
