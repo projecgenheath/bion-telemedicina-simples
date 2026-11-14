@@ -25,13 +25,13 @@
   --bpp-realce: #24058D;
   /* Seção 1 — hero: branco → lavanda muito clara, com um brilho
      roxo suave no canto */
-  --bpp-s1-topo: #0e0820;
-  --bpp-s1-brilho: #1a1040;
-  --bpp-s1-base: #12034a;
+  --bpp-s1-topo: #ffffff;
+  --bpp-s1-brilho: #e9e1fb;
+  --bpp-s1-base: #f1ecfb;
   /* Seção 2 — da lavanda ao roxo da marca (texto solto só no topo claro) */
-  --bpp-s2-topo: #12034a;
-  --bpp-s2-meio: #1a0566;
-  --bpp-s2-azul: #24058D;
+  --bpp-s2-topo: #f1ecfb;
+  --bpp-s2-meio: #ddd2f5;
+  --bpp-s2-azul: #6a4fc4;
   --bpp-s2-base: #2f12a0;
   /* Seção 3 — começa já no roxo escuro: texto branco ≥ 4,5:1 desde o topo */
   --bpp-s3-topo: #2f12a0;
@@ -39,9 +39,9 @@
   --bpp-s3-fundo: #1a0566;
   --bpp-s3-base: #12034a;
   /* Painéis laterais (perfil / documentos / sobreposições) */
-  --bpp-painel-topo: #0e0820;
-  --bpp-painel-meio: #12034a;
-  --bpp-painel-base: #1a0566;
+  --bpp-painel-topo: #fdfcff;
+  --bpp-painel-meio: #f2eefc;
+  --bpp-painel-base: #e8e1f9;
   /* Vidro: mais sólido que o base para o texto não perder contraste
      quando o cartão passa sobre o roxo */
   --bpp-vidro: rgba(255, 255, 255, 0.84);
@@ -737,43 +737,4 @@
   .bp-app-paciente button.rounded-full {
     transition: none;
   }
-}
-
-/* Seção 1 dark: texto claro */
-.bp-app-paciente .bp-secao-1 {
-  color: #f4f1fd;
-}
-.bp-app-paciente .bp-secao-1 h1,
-.bp-app-paciente .bp-secao-1 .text-bion-ink {
-  color: #f4f1fd;
-}
-.bp-app-paciente .bp-secao-1 .text-bion-ink\/75,
-.bp-app-paciente .bp-secao-1 p {
-  color: rgba(244, 241, 253, 0.75);
-}
-
-/* Seções 2 e 3 + painéis: texto claro */
-.bp-app-paciente .bp-secao-2,
-.bp-app-paciente .bp-secao-3,
-.bp-app-paciente .bpp-lateral {
-  color: #f4f1fd;
-}
-.bp-app-paciente .bp-secao-2 h1,
-.bp-app-paciente .bp-secao-2 h2,
-.bp-app-paciente .bp-secao-2 h3,
-.bp-app-paciente .bp-secao-3 h1,
-.bp-app-paciente .bp-secao-3 h2,
-.bp-app-paciente .bp-secao-3 h3,
-.bp-app-paciente .bpp-lateral h1,
-.bp-app-paciente .bpp-lateral h2,
-.bp-app-paciente .bpp-lateral h3 {
-  color: #f4f1fd;
-}
-.bp-app-paciente .bp-secao-2 p,
-.bp-app-paciente .bp-secao-2 span,
-.bp-app-paciente .bp-secao-3 p,
-.bp-app-paciente .bp-secao-3 span,
-.bp-app-paciente .bpp-lateral p,
-.bp-app-paciente .bpp-lateral span {
-  color: rgba(244, 241, 253, 0.75);
 }
