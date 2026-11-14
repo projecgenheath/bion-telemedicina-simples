@@ -1,13 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Hand } from "lucide-react";
 
 const PAINEIS = ["Perfil", "Início", "Pacientes"];
 const SECOES = ["Início", "Gestão", "Perfil público"];
 const CHAVE_DICA = "bion-medico-dica-gestos";
 
-/** Pontos discretos: páginas (pílula flutuante embaixo, igual ao app do paciente) e seções da coluna central (à direita). */
+/** Pontos discretos: páginas (pílula flutuante embaixo, igual ao app do
+ *  paciente) e seções da coluna central (à direita). A pílula de baixo ganhou
+ *  um indicador que desliza até o ponto ativo (mesmo visual do paciente). */
 export function IndicadorTelas({
   painel,
   secao,
@@ -22,13 +24,38 @@ export function IndicadorTelas({
   /** Some quando há sheet/sobreposição aberta, para não cobrir o conteúdo. */
   oculto?: boolean;
 }) {
+  // Indicador deslizante da pílula inferior (.bion-indicador): mede o ponto
+  // ativo e desliza até ele em 180 ms. Só visual — a navegação continua nos
+  // botões. Sem medida (1º quadro), o ponto ativo pinta-se sozinho.
+  const navRef = useRef<HTMLElement>(null);
+  const pontosRef = useRef<(HTMLSpanElement | null)[]>([]);
+  const [indicador, setIndicador] = useState<{ x: number; w: number } | null>(null);
+  useLayoutEffect(() => {
+    if (oculto) return;
+    const nav = navRef.current;
+    const ponto = pontosRef.current[painel];
+    if (!nav || !ponto) return;
+    const rn = nav.getBoundingClientRect();
+    const rp = ponto.getBoundingClientRect();
+    if (!rp.width) return;
+    setIndicador({ x: rp.left - rn.left, w: rp.width });
+  }, [painel, oculto]);
+
   if (oculto) return null;
   return (
     <>
       <nav
+        ref={navRef}
         aria-label="Páginas"
-        className="bm-paginas absolute bottom-[calc(1rem+env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2 z-20 flex items-center gap-1 rounded-full bg-zinc-950/80 px-2 py-1 backdrop-blur"
+        className="bm-paginas absolute bottom-[calc(1rem+env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2 z-20 flex items-center gap-1 rounded-full bg-zinc-950/80 px-1.5 py-1 backdrop-blur"
       >
+        {indicador ? (
+          <span
+            aria-hidden
+            className="bion-indicador pointer-events-none absolute left-0 top-1/2 z-[5] -mt-1 h-2 rounded-full bg-[#C4B5FD]"
+            style={{ width: indicador.w, transform: `translateX(${indicador.x}px)` }}
+          />
+        ) : null}
         {PAINEIS.map((r, i) => (
           <button
             key={r}
@@ -36,9 +63,16 @@ export function IndicadorTelas({
             onClick={() => onPainel(i)}
             aria-label={`Ir para ${r}`}
             aria-current={painel === i ? "page" : undefined}
-            className="p-1.5"
+            className="relative p-1.5"
           >
-            <span className={`block h-2 rounded-full transition-all ${painel === i ? "w-6 bg-sky-300" : "w-2 bg-white/45"}`} />
+            <span
+              ref={(el) => {
+                pontosRef.current[i] = el;
+              }}
+              className={`block h-2 rounded-full transition-all ${
+                painel === i ? `w-6 ${indicador ? "bg-transparent" : "bg-[#C4B5FD]"}` : "w-2 bg-white/45"
+              }`}
+            />
           </button>
         ))}
       </nav>
@@ -57,7 +91,7 @@ export function IndicadorTelas({
               aria-current={secao === i ? "true" : undefined}
               className="px-[3px] py-1"
             >
-              <span className={`block w-1.5 rounded-full transition-all ${secao === i ? "h-5 bg-sky-300" : "h-1.5 bg-white/45"}`} />
+              <span className={`block w-1.5 rounded-full transition-all ${secao === i ? "h-5 bg-[#C4B5FD]" : "h-1.5 bg-white/45"}`} />
             </button>
           ))}
         </nav>

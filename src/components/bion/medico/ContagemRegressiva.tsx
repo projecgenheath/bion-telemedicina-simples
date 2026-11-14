@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 
-/** Contagem regressiva isolada: só este componente re-renderiza a cada 1 s. */
-export function ContagemRegressiva({ alvo }: { alvo: number }) {
+/** Contagem regressiva isolada: só este componente re-renderiza a cada 1 s.
+ *  `hero`: dentro do card degradê da marca — texto claro. */
+export function ContagemRegressiva({ alvo, hero = false }: { alvo: number; hero?: boolean }) {
   const [agora, setAgora] = useState(() => Date.now());
   useEffect(() => {
     const id = setInterval(() => setAgora(Date.now()), 1000);
@@ -12,7 +13,11 @@ export function ContagemRegressiva({ alvo }: { alvo: number }) {
 
   const restante = alvo - agora;
   if (restante <= 0) {
-    return <span className="text-lg font-black text-emerald-700 dark:text-emerald-300">Horário da consulta</span>;
+    return (
+      <span className={`text-lg font-black ${hero ? "text-emerald-300" : "text-emerald-700 dark:text-emerald-300"}`}>
+        Horário da consulta
+      </span>
+    );
   }
   const seg = Math.floor(restante / 1000);
   const d = Math.floor(seg / 86_400);
@@ -30,8 +35,14 @@ export function ContagemRegressiva({ alvo }: { alvo: number }) {
     <div className="flex items-end gap-3" role="timer" aria-label={`Faltam ${leitura}`}>
       {blocos.map(([v, r]) => (
         <div key={r} className="flex flex-col items-center min-w-[3rem]" aria-hidden>
-          <span className="text-3xl font-black tabular-nums leading-none">{String(v).padStart(2, "0")}</span>
-          <span className="text-xs font-bold uppercase tracking-wider text-bion-ink/70 dark:text-bion-paper/70 mt-1">{r}</span>
+          <span className={`text-3xl font-black tabular-nums leading-none ${hero ? "text-white" : ""}`}>{String(v).padStart(2, "0")}</span>
+          <span
+            className={`text-xs font-bold uppercase tracking-wider mt-1 ${
+              hero ? "text-white/75" : "text-bion-ink/70 dark:text-bion-paper/70"
+            }`}
+          >
+            {r}
+          </span>
         </div>
       ))}
     </div>

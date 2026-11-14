@@ -207,6 +207,195 @@
 .bm-app .bm-animar-d3 { animation-delay: 0.18s; }
 .bm-app .bm-animar-d4 { animation-delay: 0.24s; }
 
+/* ============ Fase 4 (nov/2026): início do médico imersivo ============ */
+/* Mesma linguagem da home do paciente: tons da marca #24058D, auroras e
+   microinterações — tudo em escopo .bm-app (não vaza para paciente/admin). */
+.bm-app {
+  --bm-grad-a: #24058D;
+  --bm-grad-b: #3D1AAE;
+  --bm-hero-1: #3D1AAE;
+  --bm-hero-2: #24058D;
+  --bm-hero-3: #1C0470;
+  --bm-glow-a: rgba(196, 181, 253, 0.30);
+  --bm-glow-b: rgba(221, 214, 254, 0.22);
+  --bm-aurora-1: rgba(196, 181, 253, 0.38);
+  --bm-aurora-2: rgba(221, 214, 254, 0.20);
+  --bm-ecg-cor: #DDD6FE;
+  --bm-aro: linear-gradient(140deg, #3D1AAE 0%, #24058D 100%);
+}
+.dark .bm-app {
+  --bm-grad-a: #C4B5FD;
+  --bm-grad-b: #DDD6FE;
+  --bm-glow-a: rgba(196, 181, 253, 0.10);
+  --bm-glow-b: rgba(221, 214, 254, 0.07);
+  --bm-aurora-1: rgba(196, 181, 253, 0.20);
+  --bm-aurora-2: rgba(221, 214, 254, 0.12);
+  --bm-ecg-cor: #C4B5FD;
+  --bm-aro: linear-gradient(140deg, #C4B5FD 0%, #DDD6FE 100%);
+}
+
+/* Nome do médico com gradiente animado da marca (estático em reduce) */
+@keyframes bm-grad-desliza {
+  to { background-position: -220% 0; }
+}
+.bm-app .bm-texto-grad {
+  background: linear-gradient(92deg, var(--bm-grad-a) 0%, var(--bm-grad-b) 50%, var(--bm-grad-a) 100%);
+  background-size: 220% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: bm-grad-desliza 9s linear infinite;
+}
+
+/* Brilhos ao fundo da tela 1 (atrás dos cartões de vidro) */
+@keyframes bm-deriva {
+  0% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(-26px, 20px) scale(1.12); }
+  100% { transform: translate(22px, -16px) scale(0.94); }
+}
+.bm-app .bm-glow {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(64px);
+  pointer-events: none;
+}
+.bm-app .bm-glow-a {
+  width: 280px;
+  height: 280px;
+  right: -90px;
+  top: -70px;
+  background: var(--bm-glow-a);
+  animation: bm-deriva 30s ease-in-out infinite alternate;
+}
+.bm-app .bm-glow-b {
+  width: 230px;
+  height: 230px;
+  left: -100px;
+  top: 34%;
+  background: var(--bm-glow-b);
+  animation: bm-deriva 24s ease-in-out infinite alternate-reverse;
+}
+
+/* Hero da próxima consulta / agenda vazia: degradê da marca + auroras */
+.bm-app .bm-hero {
+  background: linear-gradient(160deg, var(--bm-hero-1) 0%, var(--bm-hero-2) 55%, var(--bm-hero-3) 100%);
+  box-shadow: 0 24px 48px -22px rgba(36, 5, 141, 0.5);
+}
+.dark .bm-app .bm-hero {
+  box-shadow: 0 24px 48px -22px rgba(0, 0, 0, 0.7);
+}
+.bm-app .bm-aurora {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(44px);
+  pointer-events: none;
+}
+.bm-app .bm-aurora-a {
+  width: 190px;
+  height: 190px;
+  right: -46px;
+  top: -52px;
+  background: var(--bm-aurora-1);
+  animation: bm-deriva 26s ease-in-out infinite alternate;
+}
+.bm-app .bm-aurora-b {
+  width: 150px;
+  height: 150px;
+  left: -40px;
+  bottom: -44px;
+  background: var(--bm-aurora-2);
+  animation: bm-deriva 20s ease-in-out infinite alternate-reverse;
+}
+
+/* Barra fria do hero (contagem): clara no Clean, cartão escuro no Dark —
+   os dígitos herdam a cor certa nos dois modos. */
+.bm-app .bm-hero-barra {
+  background: rgba(255, 255, 255, 0.95);
+  color: #1a1040;
+}
+.dark .bm-app .bm-hero-barra {
+  background: #1a1430;
+  color: #ffffff;
+}
+
+/* Anel pulsante no avatar do hero quando a sala abre */
+@keyframes bm-anel-pulso {
+  0% { transform: scale(0.9); opacity: 0.8; }
+  75% { transform: scale(1.35); opacity: 0; }
+  100% { transform: scale(1.35); opacity: 0; }
+}
+.bm-app .bm-anel-ativo::before,
+.bm-app .bm-anel-ativo::after {
+  content: "";
+  position: absolute;
+  inset: -7px;
+  border-radius: 1.4rem;
+  border: 2px solid var(--bm-aurora-1);
+  animation: bm-anel-pulso 2.6s ease-out infinite;
+}
+.bm-app .bm-anel-ativo::after {
+  animation-delay: 1.3s;
+}
+
+/* ECG da agenda vazia */
+@keyframes bm-ecg-corre {
+  to { stroke-dashoffset: -250; }
+}
+.bm-app .bm-ecg {
+  color: var(--bm-ecg-cor);
+}
+.bm-app .bm-ecg path {
+  stroke-dasharray: 70 180;
+  animation: bm-ecg-corre 2.8s linear infinite;
+}
+
+/* Avatar do topo com anel de marca */
+.bm-app .bm-avatar-botao {
+  background: var(--bm-aro);
+  transition: transform 0.15s ease;
+}
+.bm-app .bm-avatar-botao:active {
+  transform: scale(0.93);
+}
+
+/* Brilho que varre o CTA principal do hero */
+@keyframes bm-varre {
+  0% { transform: translateX(-130%) skewX(-12deg); }
+  55%, 100% { transform: translateX(140%) skewX(-12deg); }
+}
+.bm-app .bm-brilho-cta {
+  position: relative;
+  overflow: hidden;
+}
+.bm-app .bm-brilho-cta::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(110deg, transparent 30%, rgba(36, 5, 141, 0.14) 48%, transparent 66%);
+  transform: translateX(-130%) skewX(-12deg);
+  animation: bm-varre 2.6s ease-in-out 0.6s infinite;
+}
+.bm-app .bm-brilho-cta:disabled::after {
+  animation: none;
+  content: none;
+}
+
+/* Respeita prefers-reduced-motion: todas as novas animações param */
+@media (prefers-reduced-motion: reduce) {
+  .bm-app .bm-texto-grad,
+  .bm-app .bm-glow-a,
+  .bm-app .bm-glow-b,
+  .bm-app .bm-aurora-a,
+  .bm-app .bm-aurora-b,
+  .bm-app .bm-anel-ativo::before,
+  .bm-app .bm-anel-ativo::after,
+  .bm-app .bm-ecg path,
+  .bm-app .bm-brilho-cta::after {
+    animation: none !important;
+  }
+}
+
 /* Micro-interação em cards e linhas */
 .bm-app .bp-glass.bion-toque,
 .bm-app button.bp-glass,
