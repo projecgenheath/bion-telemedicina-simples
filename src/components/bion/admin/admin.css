@@ -796,3 +796,215 @@ button.ba-card:hover, a.ba-card:hover, .ba-card[role="button"]:hover { transform
   .ba-app .ba-animar { animation: none !important; }
   .ba-app .ba-botao { transition: none; }
 }
+
+/* ===================== */
+/* Fase 5 (nov/2026): Centro de Comando imersivo */
+/* ===================== */
+/* Mesma linguagem das homes do paciente e do médico: tons da marca #24058D,
+   auroras e microinterações — tudo em escopo .ba-app (não vaza para fora).
+   O texto claro do hero só existe sobre o degradê fixo da marca
+   (branco ≥ 10:1 nos dois modos — pares conferidos no admin.teste.ts). */
+.ba-app {
+  --ba-grad-a: #24058D;
+  --ba-grad-b: #3D1AAE;
+  --ba-hero-1: #3D1AAE;
+  --ba-hero-2: #24058D;
+  --ba-hero-3: #1C0470;
+  --ba-glow-a-cor: rgba(196, 181, 253, 0.30);
+  --ba-glow-b-cor: rgba(221, 214, 254, 0.22);
+  --ba-aurora-1: rgba(196, 181, 253, 0.38);
+  --ba-aurora-2: rgba(221, 214, 254, 0.20);
+  --ba-ecg-cor: #DDD6FE;
+}
+.dark .ba-app {
+  --ba-grad-a: #C4B5FD;
+  --ba-grad-b: #DDD6FE;
+  --ba-glow-a-cor: rgba(196, 181, 253, 0.10);
+  --ba-glow-b-cor: rgba(221, 214, 254, 0.07);
+  --ba-aurora-1: rgba(196, 181, 253, 0.20);
+  --ba-aurora-2: rgba(221, 214, 254, 0.12);
+  --ba-ecg-cor: #C4B5FD;
+}
+
+/* Nome do administrador com gradiente animado da marca (estático em reduce) */
+@keyframes ba-grad-desliza {
+  to { background-position: -220% 0; }
+}
+.ba-app .ba-texto-grad {
+  background: linear-gradient(92deg, var(--ba-grad-a) 0%, var(--ba-grad-b) 50%, var(--ba-grad-a) 100%);
+  background-size: 220% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: ba-grad-desliza 9s linear infinite;
+}
+
+/* Brilhos ao fundo do Centro de Comando (atrás dos cartões de vidro) */
+@keyframes ba-deriva {
+  0% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(-26px, 20px) scale(1.12); }
+  100% { transform: translate(22px, -16px) scale(0.94); }
+}
+.ba-app .ba-glow {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(64px);
+  pointer-events: none;
+}
+.ba-app .ba-glow-a {
+  width: 300px;
+  height: 300px;
+  right: -90px;
+  top: -70px;
+  background: var(--ba-glow-a-cor);
+  animation: ba-deriva 30s ease-in-out infinite alternate;
+}
+.ba-app .ba-glow-b {
+  width: 240px;
+  height: 240px;
+  left: -100px;
+  top: 36%;
+  background: var(--ba-glow-b-cor);
+  animation: ba-deriva 24s ease-in-out infinite alternate-reverse;
+}
+
+/* Hero "Agora" do Centro de Comando: degradê da marca + auroras.
+   Fixo nos dois modos — o texto claro vive só aqui dentro. */
+.ba-app .ba-hero {
+  background: linear-gradient(160deg, var(--ba-hero-1) 0%, var(--ba-hero-2) 55%, var(--ba-hero-3) 100%);
+  box-shadow: 0 24px 48px -22px rgba(36, 5, 141, 0.5);
+}
+.dark .ba-app .ba-hero {
+  box-shadow: 0 24px 48px -22px rgba(0, 0, 0, 0.7);
+}
+.ba-app .ba-aurora {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(44px);
+  pointer-events: none;
+}
+.ba-app .ba-aurora-a {
+  width: 190px;
+  height: 190px;
+  right: -46px;
+  top: -52px;
+  background: var(--ba-aurora-1);
+  animation: ba-deriva 26s ease-in-out infinite alternate;
+}
+.ba-app .ba-aurora-b {
+  width: 150px;
+  height: 150px;
+  left: -40px;
+  bottom: -44px;
+  background: var(--ba-aurora-2);
+  animation: ba-deriva 20s ease-in-out infinite alternate-reverse;
+}
+
+/* Barra fria do hero: clara no Clean, cartão escuro no Dark — os dígitos
+   herdam a cor certa nos dois modos (pares conferidos no teste). */
+.ba-app .ba-hero-barra {
+  background: rgba(255, 255, 255, 0.95);
+  color: #1a1040;
+}
+.dark .ba-app .ba-hero-barra {
+  background: #1a1430;
+  color: #ffffff;
+}
+
+/* Anel pulsante no destaque ao vivo (não confundir com o .ba-anel do
+   Monitor LLM: este é .ba-vivo-anel) */
+@keyframes ba-vivo-pulso {
+  0% { transform: scale(0.9); opacity: 0.8; }
+  75% { transform: scale(1.35); opacity: 0; }
+  100% { transform: scale(1.35); opacity: 0; }
+}
+.ba-app .ba-vivo-anel::before,
+.ba-app .ba-vivo-anel::after {
+  content: "";
+  position: absolute;
+  inset: -7px;
+  border-radius: 1.4rem;
+  border: 2px solid var(--ba-aurora-1);
+  animation: ba-vivo-pulso 2.6s ease-out infinite;
+}
+.ba-app .ba-vivo-anel::after {
+  animation-delay: 1.3s;
+}
+
+/* ECG do estado vazio do hero */
+@keyframes ba-ecg-corre {
+  to { stroke-dashoffset: -250; }
+}
+.ba-app .ba-ecg { color: var(--ba-ecg-cor); }
+.ba-app .ba-ecg path {
+  stroke-dasharray: 70 180;
+  animation: ba-ecg-corre 2.8s linear infinite;
+}
+
+/* Pílula de vidro (data do cabeçalho) */
+.ba-app .ba-glass {
+  background: color-mix(in srgb, var(--ba-texto) 6%, transparent);
+  border: 1px solid var(--ba-borda);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+
+/* Brilho que varre o CTA principal do hero */
+@keyframes ba-varre {
+  0% { transform: translateX(-130%) skewX(-12deg); }
+  55%, 100% { transform: translateX(140%) skewX(-12deg); }
+}
+.ba-app .ba-brilho-cta {
+  position: relative;
+  overflow: hidden;
+}
+.ba-app .ba-brilho-cta::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(110deg, transparent 30%, rgba(36, 5, 141, 0.14) 48%, transparent 66%);
+  transform: translateX(-130%) skewX(-12deg);
+  animation: ba-varre 2.6s ease-in-out 0.6s infinite;
+}
+.ba-app .ba-brilho-cta:disabled::after {
+  animation: none;
+  content: none;
+}
+
+/* Barras dos "Últimos 14 dias" nascem do chão */
+@keyframes ba-barra-cresce {
+  from { transform: scaleY(0); }
+  to { transform: scaleY(1); }
+}
+.ba-app .ba-barra-14d {
+  transform-origin: bottom;
+  animation: ba-barra-cresce 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+/* Barra de "hoje": degradê da marca (no Dark, lilás da marca → roxo) */
+.ba-app .ba-barra-hoje {
+  background: linear-gradient(180deg, #3D1AAE 0%, #24058D 100%);
+}
+.dark .ba-app .ba-barra-hoje {
+  background: linear-gradient(180deg, #96A5FF 0%, #24058D 100%);
+}
+
+/* Escalonamento extra da entrada (d4/d5 continuam a série d1–d3) */
+.ba-app .ba-animar-d4 { animation-delay: 0.20s; }
+.ba-app .ba-animar-d5 { animation-delay: 0.25s; }
+
+/* Respeita prefers-reduced-motion: todas as novas animações param */
+@media (prefers-reduced-motion: reduce) {
+  .ba-app .ba-texto-grad,
+  .ba-app .ba-glow-a,
+  .ba-app .ba-glow-b,
+  .ba-app .ba-aurora-a,
+  .ba-app .ba-aurora-b,
+  .ba-app .ba-vivo-anel::before,
+  .ba-app .ba-vivo-anel::after,
+  .ba-app .ba-ecg path,
+  .ba-app .ba-brilho-cta::after,
+  .ba-app .ba-barra-14d {
+    animation: none !important;
+  }
+}
