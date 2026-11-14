@@ -154,18 +154,19 @@ export function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-primary-soft flex items-center justify-center p-4">
-      <div className="w-full max-w-md space-y-6">
+    <div className="min-h-screen bg-[#070b14] flex items-center justify-center p-4 relative overflow-hidden">
+      <div className="absolute inset-0 pointer-events-none"><div className="absolute top-0 left-1/4 w-[400px] h-[400px] bg-primary/10 rounded-full blur-[100px]" /><div className="absolute bottom-0 right-1/4 w-[300px] h-[300px] bg-accent/10 rounded-full blur-[80px]" /></div>
+      <div className="w-full max-w-md space-y-6 relative z-10">
         <div className="text-center flex justify-center">
           <Logo size="lg" />
         </div>
 
-        <div className="bg-card border rounded-3xl p-6 md:p-8 shadow-xl space-y-6">
+        <div className="bg-white/5 backdrop-blur border border-white/10 rounded-3xl p-6 md:p-8 space-y-6">
           <div>
-            <h2 className="text-2xl font-extrabold text-foreground">
+            <h2 className="text-2xl font-extrabold text-white">
               {modoCadastro ? "Criar sua conta" : "Acesse sua conta"}
             </h2>
-            <p className="text-xs text-muted-foreground mt-1">
+            <p className="text-xs text-white/50 mt-1">
               {modoCadastro
                 ? "Cadastro gratuito para pacientes — comece em menos de 1 minuto."
                 : "Acesse suas consultas, receitas e prontuário em um só lugar."}
@@ -178,7 +179,7 @@ export function Login() {
                 <div>
                   <label
                     htmlFor="login-nome"
-                    className="text-xs font-bold text-muted-foreground block mb-1"
+                    className="text-xs font-bold text-white/60 block mb-1"
                   >
                     Nome completo
                   </label>
@@ -189,13 +190,13 @@ export function Login() {
                     value={nome}
                     onChange={(e) => setNome(e.target.value)}
                     placeholder="Seu nome completo"
-                    className="w-full px-4 py-3 rounded-2xl border text-sm bg-background outline-none focus:ring-2 focus:ring-primary/20"
+                    className="w-full px-4 py-3 rounded-2xl border border-white/10 text-sm bg-white/5 text-white placeholder:text-white/30 outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/50"
                   />
                 </div>
                 <div>
                   <label
                     htmlFor="login-email-cadastro"
-                    className="text-xs font-bold text-muted-foreground block mb-1"
+                    className="text-xs font-bold text-white/60 block mb-1"
                   >
                     E-mail
                   </label>
@@ -207,7 +208,7 @@ export function Login() {
                     value={identificador}
                     onChange={(e) => setIdentificador(e.target.value)}
                     placeholder="seu@email.com"
-                    className="w-full px-4 py-3 rounded-2xl border text-sm bg-background outline-none focus:ring-2 focus:ring-primary/20"
+                    className="w-full px-4 py-3 rounded-2xl border border-white/10 text-sm bg-white/5 text-white placeholder:text-white/30 outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/50"
                   />
                 </div>
                 {/* Senhas lado a lado só a partir de sm: em 360px cada campo ficava
@@ -216,7 +217,7 @@ export function Login() {
                   <div>
                     <label
                       htmlFor="login-senha-cadastro"
-                      className="text-xs font-bold text-muted-foreground block mb-1"
+                      className="text-xs font-bold text-white/60 block mb-1"
                     >
                       Senha
                     </label>
@@ -228,13 +229,13 @@ export function Login() {
                       value={senha}
                       onChange={(e) => setSenha(e.target.value)}
                       placeholder="Mínimo 10 caracteres"
-                      className="w-full px-4 py-3 rounded-2xl border text-sm bg-background outline-none focus:ring-2 focus:ring-primary/20"
+                      className="w-full px-4 py-3 rounded-2xl border border-white/10 text-sm bg-white/5 text-white placeholder:text-white/30 outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/50"
                     />
                   </div>
                   <div>
                     <label
                       htmlFor="login-confirma-senha"
-                      className="text-xs font-bold text-muted-foreground block mb-1"
+                      className="text-xs font-bold text-white/60 block mb-1"
                     >
                       Confirmar senha
                     </label>
@@ -246,7 +247,7 @@ export function Login() {
                       value={confirmaSenha}
                       onChange={(e) => setConfirmaSenha(e.target.value)}
                       placeholder="Repita a senha"
-                      className="w-full px-4 py-3 rounded-2xl border text-sm bg-background outline-none focus:ring-2 focus:ring-primary/20"
+                      className="w-full px-4 py-3 rounded-2xl border border-white/10 text-sm bg-white/5 text-white placeholder:text-white/30 outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/50"
                     />
                   </div>
                   <div className="sm:col-span-2">
@@ -295,7 +296,7 @@ export function Login() {
                   <div>
                     <label
                       htmlFor="login-email"
-                      className="text-xs font-bold text-muted-foreground block mb-1"
+                      className="text-xs font-bold text-white/60 block mb-1"
                     >
                       E-mail
                     </label>
@@ -307,13 +308,13 @@ export function Login() {
                       value={identificador}
                       onChange={(e) => setIdentificador(e.target.value)}
                       placeholder="Seu e-mail"
-                      className="w-full px-4 py-3 rounded-2xl border text-sm bg-background outline-none focus:ring-2 focus:ring-primary/20"
+                      className="w-full px-4 py-3 rounded-2xl border border-white/10 text-sm bg-white/5 text-white placeholder:text-white/30 outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/50"
                     />
                   </div>
                   <div>
                     <label
                       htmlFor="login-senha"
-                      className="text-xs font-bold text-muted-foreground block mb-1"
+                      className="text-xs font-bold text-white/60 block mb-1"
                     >
                       Senha de Acesso
                     </label>
@@ -325,7 +326,7 @@ export function Login() {
                       value={senha}
                       onChange={(e) => setSenha(e.target.value)}
                       placeholder="Digite sua senha"
-                      className="w-full px-4 py-3 rounded-2xl border text-sm bg-background outline-none focus:ring-2 focus:ring-primary/20"
+                      className="w-full px-4 py-3 rounded-2xl border border-white/10 text-sm bg-white/5 text-white placeholder:text-white/30 outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/50"
                     />
                   </div>
                 </div>
@@ -351,7 +352,7 @@ export function Login() {
             </button>
           </form>
 
-          <div className="flex items-center justify-between text-xs text-muted-foreground pt-1">
+          <div className="flex items-center justify-between text-xs text-white/40 pt-1">
             {modoCadastro ? (
               <button
                 type="button"
@@ -391,7 +392,7 @@ export function Login() {
           </div>
 
           {!modoCadastro && (
-            <p className="text-xs text-muted-foreground leading-relaxed">
+            <p className="text-xs text-white/40 leading-relaxed">
               Esqueceu a senha? Ainda não há redefinição automática: toque em{" "}
               <strong>“Esqueci minha senha”</strong> para escrever ao suporte (
               <span className="font-medium">suporte@bion.app</span>) — a equipe confirma sua
@@ -402,7 +403,7 @@ export function Login() {
 
           {!modoCadastro && DEMO_HABILITADO && (
             <div className="pt-3 border-t space-y-2">
-              <div className="text-xs font-bold text-muted-foreground uppercase tracking-wider text-center">
+              <div className="text-xs font-bold text-white/40 uppercase tracking-wider text-center">
                 Contas de demonstração (ambiente de testes)
               </div>
               <div className="grid grid-cols-3 gap-2">
@@ -417,7 +418,7 @@ export function Login() {
                     key={r}
                     type="button"
                     onClick={() => trocarAba(r)}
-                    className="px-2 py-2 rounded-xl border text-xs font-bold text-muted-foreground hover:border-primary hover:text-primary transition truncate"
+                    className="px-2 py-2 rounded-xl border text-xs font-bold text-white/50 hover:border-primary hover:text-primary transition truncate"
                     title={email}
                   >
                     {r === "medico" ? "Médica" : r === "admin" ? "Admin" : "Paciente"}
@@ -427,7 +428,7 @@ export function Login() {
             </div>
           )}
 
-          <div className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground text-center">
+          <div className="flex items-center justify-center gap-1.5 text-xs text-white/40 text-center">
             <Shield className="w-3.5 h-3.5 text-primary shrink-0" /> Conexão segura e
             criptografada para proteger seus dados de saúde
           </div>
@@ -436,7 +437,7 @@ export function Login() {
             <button
               type="button"
               onClick={() => router.push("/")}
-              className="inline-flex min-h-11 items-center text-xs text-muted-foreground hover:text-primary transition font-medium"
+              className="inline-flex min-h-11 items-center text-xs text-white/40 hover:text-primary transition font-medium"
             >
               ← Voltar para a página inicial
             </button>
