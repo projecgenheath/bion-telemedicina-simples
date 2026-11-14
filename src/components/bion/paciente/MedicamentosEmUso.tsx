@@ -341,7 +341,7 @@ function ItemMedicamento({
         <div className="min-w-0">
           <p className="truncate text-sm font-bold">{m.nome}</p>
           {detalhe && <p className="text-xs opacity-80">{detalhe}</p>}
-          <p className="mt-1 flex flex-wrap gap-1.5 text-[11px] font-semibold">
+          <p className="mt-1 flex flex-wrap gap-1.5 text-xs font-semibold">
             <span className="rounded-full bg-bion-ink/8 px-2 py-0.5 dark:bg-white/10">
               {m.origem === "receita" ? "Da receita" : "Adicionado por você"}
             </span>
@@ -390,7 +390,7 @@ function Horarios({ lembretes }: { lembretes: Lembrete[] }) {
     <p className="mt-1 flex flex-wrap items-center gap-1.5 text-xs font-semibold" aria-label={`Lembretes: ${lembretes.map((l) => `${l.horario}${l.feito ? " (feito)" : ""}`).join(", ")}`}>
       <Bell className="size-3.5 opacity-80" aria-hidden />
       {lembretes.map((l) => (
-        <span key={l.id} className={`rounded-full bg-bion-ink/8 px-2 py-0.5 dark:bg-white/10 ${l.feito ? "line-through opacity-60" : ""}`}>
+        <span key={l.id} className={`rounded-full bg-bion-ink/8 px-2 py-0.5 dark:bg-white/10 ${l.feito ? "line-through opacity-80" : ""}`}>
           {l.horario}
         </span>
       ))}

@@ -520,13 +520,16 @@ export function PacienteApp() {
           role="region"
         >
           {/* --- Seção 1: início --- */}
-          <section className="bp-secao-1 bpp-secao bpp-tela min-h-[100svh] flex flex-col px-5 bp-safe-top pb-28" aria-label="Página inicial">
-            <header className="flex items-center justify-between pt-2">
-              <div className="flex items-center gap-2 min-w-0">
+          <section className="bp-secao-1 bpp-secao bpp-tela relative min-h-[100svh] flex flex-col px-5 bp-safe-top pb-28 overflow-hidden" aria-label="Página inicial">
+            {/* brilhos decorativos da marca (fundo vivo, atrás dos cartões) */}
+            <span aria-hidden className="bpp-glow bpp-glow-a" />
+            <span aria-hidden className="bpp-glow bpp-glow-b" />
+            <header className="relative flex items-center justify-between gap-2 pt-2 bpp-animar">
+              <div className="flex min-w-0 items-center gap-2.5">
                 <Logo size="sm" />
-                <div className="text-xs font-semibold uppercase tracking-wider text-bion-ink/75 dark:text-bion-paper/75">
+                <span className="inline-flex min-w-0 items-center truncate rounded-full bp-glass px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-bion-ink/80 dark:text-bion-paper/80">
                   {hoje}
-                </div>
+                </span>
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 {naoLidasMensagens > 0 ? (
@@ -534,7 +537,7 @@ export function PacienteApp() {
                     type="button"
                     onClick={() => irPara(2)}
                     aria-label={`${naoLidasMensagens} mensagem${naoLidasMensagens === 1 ? "" : "ns"} não lida${naoLidasMensagens === 1 ? "" : "s"}`}
-                    className="relative w-11 h-11 rounded-full bp-glass inline-flex items-center justify-center"
+                    className="bpp-avatar-botao relative w-11 h-11 rounded-full bp-glass inline-flex items-center justify-center"
                   >
                     <MessageCircle className="w-5 h-5 text-bion-ink dark:text-bion-paper" aria-hidden />
                     <span className="absolute -top-1 -right-1 min-w-5 h-5 px-1 rounded-full bg-rose-600 text-xs font-black leading-5 text-center text-white">
@@ -545,13 +548,13 @@ export function PacienteApp() {
                 <button type="button"
                   onClick={() => irPara(0)}
                   aria-label="Abrir perfil"
-                  className="w-12 h-12 rounded-full overflow-hidden bp-glass shrink-0"
+                  className="bpp-avatar-botao relative w-12 h-12 rounded-full p-[2.5px] shrink-0"
                 >
                   {pacientePerfil?.foto ? (
                      
-                    <img src={pacientePerfil.foto} alt="Seu perfil" className="w-full h-full object-cover" />
+                    <img src={pacientePerfil.foto} alt="Seu perfil" className="w-full h-full rounded-full object-cover" />
                   ) : (
-                    <span className="w-full h-full inline-flex items-center justify-center text-sm font-black text-bion-ink dark:text-bion-paper">
+                    <span className="w-full h-full inline-flex items-center justify-center rounded-full bg-white text-sm font-black text-bion-sea dark:bg-[#0e0820] dark:text-[#C4B5FD]">
                       {iniciais}
                     </span>
                   )}
@@ -559,11 +562,15 @@ export function PacienteApp() {
               </div>
             </header>
 
-            <div className="mt-8 mb-6">
-              <h1 className="text-3xl font-black leading-tight">
-                {saudacao}, {sessao.nome.split(" ")[0]}
+            <div className="relative mt-10 mb-8 bpp-animar bpp-animar-d1">
+              <p className="text-base font-bold text-bion-ink/70 dark:text-bion-paper/70">
+                {saudacao},
+              </p>
+              <h1 className="bpp-texto-grad mt-0.5 text-5xl leading-[1.05] font-black tracking-tight sm:text-6xl">
+                {sessao.nome.split(" ")[0]}
               </h1>
-              <p className="text-sm text-bion-ink/75 dark:text-bion-paper/75 mt-1">
+              <p className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-bion-ink/75 dark:text-bion-paper/75">
+                <HeartPulse className="h-4 w-4 text-bion-sea dark:text-[#C4B5FD]" aria-hidden />
                 Como você está se sentindo hoje?
               </p>
             </div>
@@ -600,29 +607,48 @@ export function PacienteApp() {
                 />
               ))}
 
-            {/* Card: próxima consulta */}
+            {/* Card: próxima consulta — hero imersivo da marca */}
             {proxima ? (
-              <div className="bp-glass bion-surgir p-5 w-full bpp-animar">
-                <CabecalhoProxima
-                  podeEntrar={acaoProxima?.tipo === "entrar"}
-                  onEntrar={() => entrarSala(proxima)}
-                  rotulo={`Próxima consulta: ${proxima.especialidade} com ${proxima.medico}. Toque para entrar na sala`}
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-xs font-bold uppercase tracking-wider text-bion-ink/75 dark:text-bion-paper/75">
-                      Próxima consulta
-                    </span>
-                    <EtiquetaEstado e={etiquetaDe(proxima)} />
-                  </div>
-                  <div className="text-xl font-bold inline-flex items-center gap-2 flex-wrap">{proxima.especialidade} <EtiquetaTipo consulta={proxima} /></div>
-                  <div className="text-sm opacity-80">com {proxima.medico}</div>
-                  <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2">
-                    <span className="inline-flex items-center gap-2 text-sm font-bold">
-                      <CalendarClock className="w-4 h-4" aria-hidden /> {proxima.data} · {proxima.hora}
-                    </span>
-                    <ContagemConsulta ts={proxima.ts} />
-                  </div>
-                </CabecalhoProxima>
+              <div className="bpp-animar bpp-animar-d2">
+                <div className="bpp-hero bion-surgir relative w-full overflow-hidden rounded-[2rem] p-5 text-white">
+                  <span aria-hidden className="bpp-aurora bpp-aurora-a" />
+                  <span aria-hidden className="bpp-aurora bpp-aurora-b" />
+                  <CabecalhoProxima
+                    podeEntrar={acaoProxima?.tipo === "entrar"}
+                    onEntrar={() => entrarSala(proxima)}
+                    rotulo={`Próxima consulta: ${proxima.especialidade} com ${proxima.medico}. Toque para entrar na sala`}
+                  >
+                    <div className="relative">
+                      <div className="mb-4 flex items-center justify-between gap-2">
+                        <span className="text-xs font-black uppercase tracking-[0.18em] text-white/75">
+                          Próxima consulta
+                        </span>
+                        <span className="bpp-hero-chip rounded-full p-[3px]">
+                          <EtiquetaEstado e={etiquetaDe(proxima)} />
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <span
+                          aria-hidden
+                          className={`bpp-anel relative grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-white/15 backdrop-blur ${acaoProxima?.tipo === "entrar" ? "bpp-anel-ativo" : ""}`}
+                        >
+                          <Stethoscope className="h-7 w-7" />
+                        </span>
+                        <div className="min-w-0">
+                          <div className="text-2xl font-black leading-tight">{proxima.especialidade}</div>
+                          <div className="mt-0.5 text-sm font-semibold text-white/85">com {proxima.medico}</div>
+                        </div>
+                      </div>
+                      <div className="bpp-hero-barra mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl px-4 py-3">
+                        <span className="inline-flex items-center gap-2 text-sm font-bold">
+                          <CalendarClock className="w-4 h-4" aria-hidden /> {proxima.data} · {proxima.hora}
+                        </span>
+                        <EtiquetaTipo consulta={proxima} />
+                        <span className="ml-auto"><ContagemConsulta ts={proxima.ts} /></span>
+                      </div>
+                    </div>
+                  </CabecalhoProxima>
+                </div>
 
                 {etiquetaDe(proxima).texto === "Aguardando pagamento" && !proxima.remarcacaoPendente && !ehRetornoGratis(proxima) ? (
                   <BotaoPagarStripe consultaId={proxima.id} className="w-full mt-3" />
@@ -639,13 +665,29 @@ export function PacienteApp() {
                 />
               </div>
             ) : (
-              <button type="button" onClick={() => abrirChat("agendar")} className="bion-toque bion-surgir bp-glass p-5 text-left w-full bpp-animar">
-                <div className="text-xs font-bold uppercase tracking-wider text-bion-ink/75 dark:text-bion-paper/75 mb-3">
-                  Consultas
-                </div>
-                <div className="text-xl font-bold">Nenhuma consulta agendada</div>
-                <div className="text-sm opacity-80 mt-1 inline-flex items-center gap-1.5">
-                  <Sparkles className="w-4 h-4" /> Toque para agendar com a BION IA
+              <button
+                type="button"
+                onClick={() => abrirChat("agendar")}
+                aria-label="Nenhuma consulta agendada. Toque para agendar com a BION IA"
+                className="bpp-hero bion-toque bion-toque-forte bion-surgir bpp-animar bpp-animar-d2 relative w-full overflow-hidden rounded-[2rem] p-6 text-left text-white"
+              >
+                <span aria-hidden className="bpp-aurora bpp-aurora-a" />
+                <span aria-hidden className="bpp-aurora bpp-aurora-b" />
+                <div className="relative">
+                  <div className="mb-1 text-xs font-black uppercase tracking-[0.18em] text-white/75">Agenda</div>
+                  <div className="text-2xl font-black leading-tight">Nenhuma consulta agendada</div>
+                  <p className="mt-1.5 inline-flex items-center gap-1.5 text-sm font-semibold text-white/85">
+                    <Sparkles className="w-4 h-4" aria-hidden /> Toque para agendar com a BION IA
+                  </p>
+                  <svg className="bpp-ecg mt-5 block h-10 w-full" viewBox="0 0 200 48" fill="none" aria-hidden>
+                    <path
+                      d="M0 24 h16 l3 -3 3 3 5 -15 6 30 5 -15 h10 l4 -3 4 3 h16 l3 -3 3 3 5 -15 6 30 5 -15 h10 l4 -3 4 3 h16 l3 -3 3 3 5 -15 6 30 5 -15 h10 l4 -3 4 3 h28"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      strokeLinejoin="round"
+                      strokeLinecap="round"
+                    />
+                  </svg>
                 </div>
               </button>
             )}
@@ -746,12 +788,52 @@ export function PacienteApp() {
               <CardReembolso key={c.id} consulta={c} />
             ))}
 
+            {/* Atalhos: descoberta das ações principais e das seções (swipe continua igual) */}
+            <div className="relative mt-4 grid grid-cols-2 gap-3 bpp-animar bpp-animar-d3">
+              <button type="button" onClick={() => abrirChat("agendar")} className="bion-toque bp-glass flex items-center gap-3 p-4 text-left">
+                <span aria-hidden className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-bion-sea/10 text-bion-sea dark:bg-[#C4B5FD]/15 dark:text-[#C4B5FD]">
+                  <Stethoscope className="h-5 w-5" />
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-sm font-black">Agendar</span>
+                  <span className="block text-xs font-semibold opacity-70">com a BION IA</span>
+                </span>
+              </button>
+              <button type="button" onClick={() => irSecao(1)} className="bion-toque bp-glass flex items-center gap-3 p-4 text-left">
+                <span aria-hidden className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-bion-sea/10 text-bion-sea dark:bg-[#C4B5FD]/15 dark:text-[#C4B5FD]">
+                  <Activity className="h-5 w-5" />
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-sm font-black">Minha saúde</span>
+                  <span className="block text-xs font-semibold opacity-70">remédios, IMC e PA</span>
+                </span>
+              </button>
+              <button type="button" onClick={() => irSecao(2)} className="bion-toque bp-glass flex items-center gap-3 p-4 text-left">
+                <span aria-hidden className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-bion-sea/10 text-bion-sea dark:bg-[#C4B5FD]/15 dark:text-[#C4B5FD]">
+                  <ClipboardList className="h-5 w-5" />
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-sm font-black">Exames</span>
+                  <span className="block text-xs font-semibold opacity-70">laudos e resultados</span>
+                </span>
+              </button>
+              <button type="button" onClick={() => irPara(2)} className="bion-toque bp-glass flex items-center gap-3 p-4 text-left">
+                <span aria-hidden className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-bion-sea/10 text-bion-sea dark:bg-[#C4B5FD]/15 dark:text-[#C4B5FD]">
+                  <FileText className="h-5 w-5" />
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-sm font-black">Documentos</span>
+                  <span className="block text-xs font-semibold opacity-70">receitas e mensagens</span>
+                </span>
+              </button>
+            </div>
+
             {/* Cartão único da BION IA: agendar (principal) + perguntar */}
             <div style={{ "--bion-i": 1 } as CSSProperties} className="bion-surgir bpp-cartao-ia mt-4 w-full rounded-3xl p-5 text-white relative overflow-hidden">
               <span aria-hidden className="absolute -right-8 -top-10 w-40 h-40 rounded-full bg-white/10 blur-2xl" />
               <span aria-hidden className="absolute right-10 -bottom-10 w-28 h-28 rounded-full bg-[#C4B5FD]/20 blur-2xl" />
               <div className="relative flex items-center gap-3">
-                <span className="w-12 h-12 rounded-2xl bg-white/15 inline-flex items-center justify-center shrink-0" aria-hidden>
+                <span className="bpp-flutuar w-12 h-12 rounded-2xl bg-white/15 inline-flex items-center justify-center shrink-0" aria-hidden>
                   <Sparkles className="w-6 h-6" />
                 </span>
                 <span className="flex-1 min-w-0">
@@ -768,7 +850,7 @@ export function PacienteApp() {
               <button
                 type="button"
                 onClick={() => abrirChat("agendar")}
-                className="bion-toque relative mt-4 w-full inline-flex items-center justify-center gap-2 rounded-full bg-white text-bion-ink text-sm font-bold px-5 py-3.5 shadow-md hover:shadow-lg"
+                className="bion-toque relative mt-4 w-full inline-flex items-center justify-center gap-2 rounded-full bg-white text-bion-ink text-sm font-bold px-5 py-3.5 shadow-md hover:shadow-lg bpp-brilho-cta"
               >
                 <Stethoscope className="w-4 h-4" aria-hidden /> Agendar consulta agora
               </button>
@@ -786,9 +868,19 @@ export function PacienteApp() {
               </button>
             </div>
 
-            <div className="mt-auto pt-10 flex flex-col items-center gap-1 text-bion-ink/75 dark:text-bion-paper/75">
-              <span className="text-xs font-semibold">Saúde e exames abaixo</span>
-              <ChevronDown className="w-5 h-5 motion-safe:animate-bounce" />
+            <div className="relative mt-auto flex flex-col items-center gap-2 pt-10 text-bion-ink/75 dark:text-bion-paper/75 bpp-animar bpp-animar-d4">
+              <div className="flex items-center gap-2">
+                <button type="button" onClick={() => irSecao(1)} className="bion-toque inline-flex items-center gap-1.5 rounded-full bp-glass px-4 py-2 text-xs font-bold">
+                  <Activity className="w-3.5 h-3.5" aria-hidden /> Saúde
+                </button>
+                <button type="button" onClick={() => irSecao(2)} className="bion-toque inline-flex items-center gap-1.5 rounded-full bp-glass px-4 py-2 text-xs font-bold">
+                  <ClipboardList className="w-3.5 h-3.5" aria-hidden /> Exames
+                </button>
+              </div>
+              <span className="inline-flex items-center gap-1.5 text-xs font-semibold">
+                Deslize para baixo
+                <ChevronDown className="w-4 h-4 motion-safe:animate-bounce" aria-hidden />
+              </span>
             </div>
           </section>
 

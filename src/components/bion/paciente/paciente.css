@@ -102,6 +102,17 @@
   --bpp-contagem-fundo: rgba(36, 5, 141, 0.08);
   --bpp-contagem-texto: #24058D;
   --bpp-aviso-ponto: #e11d48;
+  /* Fase 4 (nov/2026) — tela inicial viva: hero e brilhos da marca */
+  --bpp-grad-a: #24058D;
+  --bpp-grad-b: #3D1AAE;
+  --bpp-hero-1: #3D1AAE;
+  --bpp-hero-2: #24058D;
+  --bpp-hero-3: #1C0470;
+  --bpp-glow-a: rgba(196, 181, 253, 0.34);
+  --bpp-glow-b: rgba(221, 214, 254, 0.26);
+  --bpp-aurora-1: rgba(196, 181, 253, 0.4);
+  --bpp-aurora-2: rgba(221, 214, 254, 0.22);
+  --bpp-ecg-cor: #DDD6FE;
 }
 .dark .bp-app-paciente {
   /* Destaque lilás derivado do roxo da marca (sem azul): #C4B5FD, matiz 252°.
@@ -166,6 +177,15 @@
   --bpp-contagem-fundo: rgba(196, 181, 253, 0.12);
   --bpp-contagem-texto: #DDD6FE;
   --bpp-aviso-ponto: #fb7185;
+  /* Fase 4 (nov/2026) — dark: gradiente lilás (AAA sobre o quase preto).
+     O hero mantém os tons de marca (branco continua ≥ 10:1). */
+  --bpp-grad-a: #C4B5FD;
+  --bpp-grad-b: #DDD6FE;
+  --bpp-glow-a: rgba(196, 181, 253, 0.1);
+  --bpp-glow-b: rgba(221, 214, 254, 0.07);
+  --bpp-aurora-1: rgba(196, 181, 253, 0.2);
+  --bpp-aurora-2: rgba(221, 214, 254, 0.12);
+  --bpp-ecg-cor: #C4B5FD;
 }
 
 /* ------------------- fundos (movidos do globals.css) ---------------- */
@@ -670,13 +690,187 @@
   transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), width 0.35s ease;
 }
 
+/* ==================== Fase 4: tela inicial viva (nov/2026) ==================== */
+/* Nome do paciente com gradiente da marca (desliza devagar; estático em reduce) */
+@keyframes bpp-grad-desliza {
+  to { background-position: -220% 0; }
+}
+.bp-app-paciente .bpp-texto-grad {
+  background: linear-gradient(92deg, var(--bpp-grad-a) 0%, var(--bpp-grad-b) 50%, var(--bpp-grad-a) 100%);
+  background-size: 220% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: bpp-grad-desliza 9s linear infinite;
+}
+
+/* Brilhos ao fundo da seção 1 (atrás dos cartões de vidro) */
+@keyframes bpp-deriva {
+  0% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(-26px, 20px) scale(1.12); }
+  100% { transform: translate(22px, -16px) scale(0.94); }
+}
+.bp-app-paciente .bpp-glow {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(64px);
+  pointer-events: none;
+}
+.bp-app-paciente .bpp-glow-a {
+  width: 280px;
+  height: 280px;
+  right: -90px;
+  top: -70px;
+  background: var(--bpp-glow-a);
+  animation: bpp-deriva 30s ease-in-out infinite alternate;
+}
+.bp-app-paciente .bpp-glow-b {
+  width: 230px;
+  height: 230px;
+  left: -100px;
+  top: 34%;
+  background: var(--bpp-glow-b);
+  animation: bpp-deriva 24s ease-in-out infinite alternate-reverse;
+}
+
+/* Hero da próxima consulta / agenda vazia: degradê da marca + auroras */
+.bp-app-paciente .bpp-hero {
+  background: linear-gradient(160deg, var(--bpp-hero-1) 0%, var(--bpp-hero-2) 55%, var(--bpp-hero-3) 100%);
+  box-shadow: 0 24px 48px -22px rgba(36, 5, 141, 0.5);
+}
+.dark .bp-app-paciente .bpp-hero {
+  box-shadow: 0 24px 48px -22px rgba(0, 0, 0, 0.7);
+}
+.bp-app-paciente .bpp-aurora {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(44px);
+  pointer-events: none;
+}
+.bp-app-paciente .bpp-aurora-a {
+  width: 190px;
+  height: 190px;
+  right: -46px;
+  top: -52px;
+  background: var(--bpp-aurora-1);
+  animation: bpp-deriva 26s ease-in-out infinite alternate;
+}
+.bp-app-paciente .bpp-aurora-b {
+  width: 150px;
+  height: 150px;
+  left: -40px;
+  bottom: -44px;
+  background: var(--bpp-aurora-2);
+  animation: bpp-deriva 20s ease-in-out infinite alternate-reverse;
+}
+
+/* Barra fria do hero (data · hora · contagem): clara no Clean, cartão escuro no
+   Dark — as etiquetas internas trocam sozinhas (todas têm variante dark:). */
+.bp-app-paciente .bpp-hero-barra {
+  background: rgba(255, 255, 255, 0.95);
+  color: #1a1040;
+}
+.dark .bp-app-paciente .bpp-hero-barra {
+  background: #1a1430;
+  color: #ffffff;
+}
+.bp-app-paciente .bpp-hero-chip {
+  background: rgba(255, 255, 255, 0.95);
+}
+.dark .bp-app-paciente .bpp-hero-chip {
+  background: #1a1430;
+}
+
+/* Anel pulsante no avatar do hero quando a sala abre */
+@keyframes bpp-anel-pulso {
+  0% { transform: scale(0.9); opacity: 0.8; }
+  75% { transform: scale(1.35); opacity: 0; }
+  100% { transform: scale(1.35); opacity: 0; }
+}
+.bp-app-paciente .bpp-anel-ativo::before,
+.bp-app-paciente .bpp-anel-ativo::after {
+  content: "";
+  position: absolute;
+  inset: -7px;
+  border-radius: 1.4rem;
+  border: 2px solid var(--bpp-aurora-1);
+  animation: bpp-anel-pulso 2.6s ease-out infinite;
+}
+.bp-app-paciente .bpp-anel-ativo::after {
+  animation-delay: 1.3s;
+}
+
+/* ECG da agenda vazia */
+@keyframes bpp-ecg-corre {
+  to { stroke-dashoffset: -250; }
+}
+.bp-app-paciente .bpp-ecg {
+  color: var(--bpp-ecg-cor);
+}
+.bp-app-paciente .bpp-ecg path {
+  stroke-dasharray: 70 180;
+  animation: bpp-ecg-corre 2.8s linear infinite;
+}
+
+/* Ícone flutuante (cartão da BION IA) */
+@keyframes bpp-flutuar {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+.bp-app-paciente .bpp-flutuar {
+  animation: bpp-flutuar 6s ease-in-out infinite;
+}
+
+/* Brilho que varre o CTA principal */
+@keyframes bpp-varre {
+  0% { transform: translateX(-130%) skewX(-12deg); }
+  55%, 100% { transform: translateX(140%) skewX(-12deg); }
+}
+.bp-app-paciente .bpp-brilho-cta {
+  position: relative;
+  overflow: hidden;
+}
+.bp-app-paciente .bpp-brilho-cta::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 38%;
+  background: linear-gradient(105deg, transparent, rgba(255, 255, 255, 0.55), transparent);
+  animation: bpp-varre 3.6s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* Botões do topo (mensagens/avatar): anel de marca + resposta ao toque */
+.bp-app-paciente .bpp-avatar-botao {
+  background: linear-gradient(140deg, #3D1AAE 0%, #24058D 100%);
+  transition: transform 0.15s ease;
+}
+.dark .bp-app-paciente .bpp-avatar-botao {
+  background: linear-gradient(140deg, #C4B5FD 0%, #DDD6FE 100%);
+}
+.bp-app-paciente .bpp-avatar-botao:active {
+  transform: scale(0.93);
+}
+
 /* Respeita prefers-reduced-motion */
 @media (prefers-reduced-motion: reduce) {
   .bp-app-paciente .bpp-animar,
   .bp-app-paciente .bpp-sheet-veu,
   .bp-app-paciente .bpp-sheet-painel,
-  .bp-app-paciente .bpp-surgir {
+  .bp-app-paciente .bpp-surgir,
+  .bp-app-paciente .bpp-texto-grad,
+  .bp-app-paciente .bpp-glow,
+  .bp-app-paciente .bpp-aurora,
+  .bp-app-paciente .bpp-flutuar,
+  .bp-app-paciente .bpp-brilho-cta::after,
+  .bp-app-paciente .bpp-anel-ativo::before,
+  .bp-app-paciente .bpp-anel-ativo::after,
+  .bp-app-paciente .bpp-ecg path {
     animation: none !important;
+  }
+  .bp-app-paciente .bpp-ecg path {
+    stroke-dasharray: none;
   }
   .bp-app-paciente .bp-glass.bion-toque,
   .bp-app-paciente button.bp-glass {
