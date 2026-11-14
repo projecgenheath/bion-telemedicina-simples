@@ -25,9 +25,9 @@
   --bpp-realce: #24058D;
   /* Seção 1 — hero: branco → lavanda muito clara, com um brilho
      roxo suave no canto */
-  --bpp-s1-topo: #ffffff;
-  --bpp-s1-brilho: #e9e1fb;
-  --bpp-s1-base: #f1ecfb;
+  --bpp-s1-topo: #0e0820;
+  --bpp-s1-brilho: #1a1040;
+  --bpp-s1-base: #12034a;
   /* Seção 2 — da lavanda ao roxo da marca (texto solto só no topo claro) */
   --bpp-s2-topo: #f1ecfb;
   --bpp-s2-meio: #ddd2f5;
@@ -737,4 +737,17 @@
   .bp-app-paciente button.rounded-full {
     transition: none;
   }
+}
+
+/* Seção 1 dark: texto claro */
+.bp-app-paciente .bp-secao-1 {
+  color: #f4f1fd;
+}
+.bp-app-paciente .bp-secao-1 h1,
+.bp-app-paciente .bp-secao-1 .text-bion-ink {
+  color: #f4f1fd;
+}
+.bp-app-paciente .bp-secao-1 .text-bion-ink\/75,
+.bp-app-paciente .bp-secao-1 p {
+  color: rgba(244, 241, 253, 0.75);
 }
