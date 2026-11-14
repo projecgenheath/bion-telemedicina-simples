@@ -888,3 +888,119 @@
 .bp-app-paciente .text-3xl {
   animation: bpp-numero 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
+
+/* ======================== Ainda mais animações ======================== */
+/* Shimmer nos cards */
+@keyframes bpp-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.bp-app-paciente .bp-glass::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+  background-size: 200% 100%;
+  animation: bpp-shimmer 3s ease-in-out infinite;
+  pointer-events: none;
+  border-radius: inherit;
+}
+.bp-app-paciente .bp-glass { position: relative; overflow: hidden; }
+
+/* Rotação sutil em ícones de ação */
+@keyframes bpp-rotate-suave {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-5deg); }
+  75% { transform: rotate(5deg); }
+}
+.bp-app-paciente button:hover svg {
+  animation: bpp-rotate-suave 0.4s ease-in-out;
+}
+
+/* Entrada com blur */
+@keyframes bpp-blur-in {
+  from { opacity: 0; filter: blur(8px); transform: scale(0.95); }
+  to { opacity: 1; filter: blur(0); transform: none; }
+}
+.bp-app-paciente .bpp-secao {
+  animation: bpp-blur-in 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.bp-app-paciente .bpp-secao:nth-child(2) { animation-delay: 0.1s; }
+.bp-app-paciente .bpp-secao:nth-child(3) { animation-delay: 0.2s; }
+
+/* Wave nos itens de lista */
+@keyframes bpp-wave {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+.bp-app-paciente .bion-surgir-lista > *:hover {
+  animation: bpp-wave 0.5s ease-in-out;
+}
+
+/* Contador pulsante */
+@keyframes bpp-contador {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+}
+.bp-app-paciente .rounded-full[class*="bg-rose"],
+.bp-app-paciente .rounded-full[class*="bg-red"] {
+  animation: bpp-contador 1.5s ease-in-out infinite;
+}
+
+/* Linha de progresso animada */
+@keyframes bpp-linha {
+  0% { width: 0; }
+  100% { width: 100%; }
+}
+.bp-app-paciente .bp-secao-1::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #24058D, #3D1AAE, #C4B5FD);
+  animation: bpp-linha 1.5s ease-out both;
+}
+.bp-app-paciente .bp-secao-1 { position: relative; }
+
+/* Float nos avatares */
+@keyframes bpp-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+.bp-app-paciente .rounded-full img,
+.bp-app-paciente .w-12.h-12 {
+  animation: bpp-float 3s ease-in-out infinite;
+}
+
+/* Texto com highlight animado */
+@keyframes bpp-highlight {
+  0% { background-size: 0% 100%; }
+  100% { background-size: 100% 100%; }
+}
+.bp-app-paciente h1 span,
+.bp-app-paciente .text-bion-sea {
+  background: linear-gradient(90deg, transparent 50%, rgba(36, 5, 141, 0.1) 50%);
+  background-size: 200% 100%;
+  background-position: 100% 0;
+  animation: bpp-highlight 1s ease-out 0.5s both;
+}
+
+/* Ripple nos botões */
+@keyframes bpp-ripple {
+  0% { transform: scale(0); opacity: 0.5; }
+  100% { transform: scale(2); opacity: 0; }
+}
+.bp-app-paciente button::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle, rgba(255,255,255,0.3) 0%, transparent 70%);
+  border-radius: inherit;
+  transform: scale(0);
+  pointer-events: none;
+}
+.bp-app-paciente button:active::after {
+  animation: bpp-ripple 0.4s ease-out;
+}
+.bp-app-paciente button { position: relative; overflow: hidden; }
