@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { exigirSessao, registrarAudit } from "@/lib/server/auth";
+import { limitarAsync, resposta429 } from "@/lib/server/rate-limit";
 import { ok, falha } from "@/lib/server/http";
 import { quandoClinica } from "@/lib/server/fuso";
 import { pedirReembolsoManual, prazoReembolsoManual, reembolsoManualWire } from "@/lib/server/financeiro";
@@ -62,6 +63,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (usuario.role !== "PACIENTE") {
       return Response.json({ erro: "Só o paciente da consulta pode pedir o reembolso." }, { status: 403 });
     }
+    const limite = await limitarAsync(`reembolso:${usuario.id}`, 3, 60_000);
+    if (!limite.permitido) return resposta429(limite.restanteSeg);
     const body = (await req.json().catch(() => ({}))) as { justificativa?: unknown };
     const res = await pedirReembolsoManual({
       consultaId: id,
