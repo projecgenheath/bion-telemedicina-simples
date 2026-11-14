@@ -2,19 +2,5 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "regions": [
     "gru1"
-  ],
-  "crons": [
-    {
-      "path": "/api/cron/fechar-repasses",
-      "schedule": "30 2 * * *"
-    },
-    {
-      "path": "/api/cron/descarte-retencao",
-      "schedule": "0 6 * * *"
-    },
-    {
-      "path": "/api/cron/lgpd-pendencias",
-      "schedule": "0 7 * * *"
-    }
   ]
 }
