@@ -794,3 +794,97 @@
 .bp-app-paciente .bpp-cartao-ia {
   animation: bpp-entrar-visivel 0.6s cubic-bezier(0.22, 1, 0.36, 1) 0.2s both;
 }
+
+/* ======================== Mais animações ======================== */
+/* Pulse suave em elementos de destaque */
+@keyframes bpp-pulse-suave {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.02); }
+}
+.bp-app-paciente .bpp-cartao-ia {
+  animation: bpp-entrar-visivel 0.6s cubic-bezier(0.22, 1, 0.36, 1) 0.2s both,
+             bpp-pulse-suave 3s ease-in-out 1s infinite;
+}
+
+/* Ícones com bounce sutil */
+@keyframes bpp-bounce-icon {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+.bp-app-paciente .bp-glass svg,
+.bp-app-paciente button svg {
+  animation: bpp-bounce-icon 2s ease-in-out infinite;
+}
+.bp-app-paciente .bp-glass:nth-child(odd) svg { animation-delay: 0.5s; }
+
+/* Fade in para textos */
+@keyframes bpp-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.bp-app-paciente p,
+.bp-app-paciente span {
+  animation: bpp-fade-in 0.4s ease-out both;
+}
+
+/* Botões primários com glow */
+@keyframes bpp-glow {
+  0%, 100% { box-shadow: 0 4px 12px rgba(36, 5, 141, 0.2); }
+  50% { box-shadow: 0 6px 20px rgba(36, 5, 141, 0.35); }
+}
+.bp-app-paciente .bp-acao,
+.bp-app-paciente button[class*="bg-bion-sea"],
+.bp-app-paciente button[class*="bg-primary"] {
+  animation: bpp-glow 2.5s ease-in-out infinite;
+}
+
+/* Cards com entrada lateral alternada */
+@keyframes bpp-slide-esq {
+  from { opacity: 0; transform: translateX(-20px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes bpp-slide-dir {
+  from { opacity: 0; transform: translateX(20px); }
+  to { opacity: 1; transform: none; }
+}
+.bp-app-paciente .bpp-grade > *:nth-child(odd) {
+  animation: bpp-slide-esq 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.bp-app-paciente .bpp-grade > *:nth-child(even) {
+  animation: bpp-slide-dir 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.bp-app-paciente .bpp-grade > *:nth-child(1) { animation-delay: 0.1s; }
+.bp-app-paciente .bpp-grade > *:nth-child(2) { animation-delay: 0.2s; }
+.bp-app-paciente .bpp-grade > *:nth-child(3) { animation-delay: 0.3s; }
+.bp-app-paciente .bpp-grade > *:nth-child(4) { animation-delay: 0.4s; }
+
+/* Etiquetas com pop */
+@keyframes bpp-pop {
+  0% { transform: scale(0.8); opacity: 0; }
+  60% { transform: scale(1.05); }
+  100% { transform: scale(1); opacity: 1; }
+}
+.bp-app-paciente [class*="Etiqueta"],
+.bp-app-paciente .rounded-full {
+  animation: bpp-pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+/* Header com slide down */
+@keyframes bpp-slide-down {
+  from { opacity: 0; transform: translateY(-16px); }
+  to { opacity: 1; transform: none; }
+}
+.bp-app-paciente header {
+  animation: bpp-slide-down 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Números/contadores com count-up visual */
+@keyframes bpp-numero {
+  from { opacity: 0; transform: translateY(8px) scale(0.9); }
+  to { opacity: 1; transform: none; }
+}
+.bp-app-paciente .text-2xl,
+.bp-app-paciente .text-xl,
+.bp-app-paciente .text-3xl {
+  animation: bpp-numero 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
