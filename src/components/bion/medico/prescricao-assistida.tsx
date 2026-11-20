@@ -5,26 +5,23 @@ import { toast } from "sonner";
 import { Plus, Trash2, TriangleAlert } from "lucide-react";
 import {
   alergiasValidas,
+  textoAlertaPrescricao,
   verificarPrescricao,
   type MedicamentoEmUsoResumo,
 } from "@/lib/seguranca-prescricao";
 import { buscarMedicamentos, type SugestaoMedicamento } from "@/lib/catalogo-medicamentos";
 import {
-  chaveKits,
-  gravarBancoKits,
   kitDoFormulario,
   kitsVisiveis,
-  lerBancoKits,
   pacoteDoFormulario,
   pacotesVisiveis,
   removerItemKit,
   salvarKitReceita,
   salvarPacoteExames,
-  type ArmazenamentoKits,
-  type BancoKits,
   type KitReceita,
   type PacoteExames,
 } from "@/lib/kits-prescricao";
+import { useBancoKitsConta } from "./useAtalhosConta";
 
 /**
  * Prescrição assistida (melhorias nº 14–16 da auditoria médica), usada nas
@@ -33,7 +30,7 @@ import {
  *  - dados de segurança do paciente (alergias + medicamentos em uso);
  *  - banner de alergias e alertas textuais NÃO bloqueantes (fase 1);
  *  - campo de medicamento com busca (frequentes do médico + catálogo);
- *  - kits de receita e pacotes de exames salvos NESTE APARELHO.
+ *  - kits de receita e pacotes de exames da conta do médico.
  */
 
 export type DadosSegurancaPaciente = {
@@ -88,7 +85,7 @@ export function BannerAlergias({ alergias }: { alergias: string[] | null | undef
       <TriangleAlert className="w-4 h-4 shrink-0 mt-px" />
       <span>
         <span className="font-bold">Alergias registradas: </span>
-        {validas.join(", ")}
+        {validas.join(", ")}. O aviso compara o nome do remédio com estas alergias e com o que o paciente já usa. Não bloqueia a receita e não consulta interação entre remédios.
       </span>
     </div>
   );
@@ -113,33 +110,27 @@ export function AlertasPrescricao({
   if (!alertas.length) return null;
   return (
     <div className="space-y-2">
-      {alertas.map((a, i) =>
-        a.tipo === "alergia" ? (
+      {alertas.map((a, i) => {
+        const texto = textoAlertaPrescricao(a);
+        const grave = a.tipo === "alergia";
+        return (
           <div
             key={i}
-            className="flex items-start gap-2 rounded-xl bg-red-500/10 border border-red-400/40 px-3 py-2 text-xs text-red-700 dark:text-red-300"
+            className={`flex items-start gap-2 rounded-xl px-3 py-2 text-xs ${
+              grave
+                ? "bg-red-500/10 border border-red-400/40 text-red-700 dark:text-red-300"
+                : "bg-amber-500/10 border border-amber-400/40 text-amber-700 dark:text-amber-300"
+            }`}
             role="alert"
           >
             <TriangleAlert className="w-4 h-4 shrink-0 mt-px" />
             <span>
-              <span className="font-bold">Possível conflito com alergia registrada: </span>
-              {a.referencia}. Confira antes de emitir — este alerta é uma checagem de nome e não bloqueia a emissão.
+              <span className="font-bold">{texto.titulo} </span>
+              {texto.detalhe}
             </span>
           </div>
-        ) : (
-          <div
-            key={i}
-            className="flex items-start gap-2 rounded-xl bg-amber-500/10 border border-amber-400/40 px-3 py-2 text-xs text-amber-700 dark:text-amber-300"
-            role="alert"
-          >
-            <TriangleAlert className="w-4 h-4 shrink-0 mt-px" />
-            <span>
-              <span className="font-bold">Este paciente já usa {a.referencia}. </span>
-              Confira se é duplicidade ou a continuação intencional do tratamento.
-            </span>
-          </div>
-        ),
-      )}
+        );
+      })}
     </div>
   );
 }
@@ -235,34 +226,13 @@ export function CampoMedicamentoBusca({
   );
 }
 
-/** localStorage tolerante (modo privado/SSR): sem ele, os kits somem. */
-const armazenamentoLocal: ArmazenamentoKits = {
-  getItem: (k) => {
-    try {
-      return window.localStorage.getItem(k);
-    } catch {
-      return null;
-    }
-  },
-  setItem: (k, v) => {
-    try {
-      window.localStorage.setItem(k, v);
-    } catch {
-      /* sem persistência neste aparelho */
-    }
-  },
-};
-
 function useBancoKits(medicoId: string) {
-  const [banco, setBanco] = useState<BancoKits>({ kits: [], pacotes: [], exemplosOcultos: [] });
-  useEffect(() => {
-    setBanco(lerBancoKits(armazenamentoLocal, medicoId));
-  }, [medicoId]);
-  const persistir = (novo: BancoKits) => {
-    setBanco(novo);
-    gravarBancoKits(armazenamentoLocal, medicoId, novo);
-  };
-  return { banco, persistir, chave: chaveKits(medicoId) };
+  return useBancoKitsConta(medicoId);
+}
+
+function avisoSalvo(enviou: boolean, oQue: string) {
+  if (enviou) toast.success(`${oQue} salvo na sua conta`);
+  else toast.success(`${oQue} salvo neste aparelho`, { description: "A conta não atualizou agora. Tente de novo com rede." });
 }
 
 function ChipModelo({
@@ -352,7 +322,7 @@ function LinhaSalvarModelo({
   );
 }
 
-const NOTA_APARELHO = "Modelos salvos neste aparelho — não sincronizam entre aparelhos.";
+const NOTA_APARELHO = "Kits e pacotes ficam na sua conta. Sem rede, ficam neste aparelho até sincronizar.";
 
 /** Kits de receita: aplicar com 1 toque e salvar o formulário atual. */
 export function SecaoKitsReceita({
@@ -370,17 +340,17 @@ export function SecaoKitsReceita({
   const [erro, setErro] = useState<string | null>(null);
   const kits = kitsVisiveis(banco);
 
-  const salvar = () => {
+  const salvar = async () => {
     const kit = kitDoFormulario({ nome, ...atual });
     if (!kit) {
       setErro("Preencha medicamento, posologia e duração, e dê um nome ao kit.");
       return;
     }
-    persistir(salvarKitReceita(banco, kit));
+    const enviou = await persistir((atualBanco) => salvarKitReceita(atualBanco, kit));
     setNome("");
     setErro(null);
     setSalvando(false);
-    toast.success("Kit salvo neste aparelho");
+    avisoSalvo(enviou, "Kit");
   };
 
   return (
@@ -409,7 +379,7 @@ export function SecaoKitsReceita({
               detalhe={`${k.medicamento} — ${k.posologia}`}
               exemplo={k.exemplo}
               onAplicar={() => onAplicar(k)}
-              onRemover={() => persistir(removerItemKit(banco, k.id))}
+              onRemover={() => void persistir((atualBanco) => removerItemKit(atualBanco, k.id))}
             />
           ))}
         </div>
@@ -437,17 +407,17 @@ export function SecaoPacotesExames({
   const [erro, setErro] = useState<string | null>(null);
   const pacotes = pacotesVisiveis(banco);
 
-  const salvar = () => {
+  const salvar = async () => {
     const pacote = pacoteDoFormulario({ nome, exames: atualExames });
     if (!pacote) {
       setErro("Preencha a lista de exames e dê um nome ao pacote.");
       return;
     }
-    persistir(salvarPacoteExames(banco, pacote));
+    const enviou = await persistir((atualBanco) => salvarPacoteExames(atualBanco, pacote));
     setNome("");
     setErro(null);
     setSalvando(false);
-    toast.success("Pacote salvo neste aparelho");
+    avisoSalvo(enviou, "Pacote");
   };
 
   return (
@@ -476,7 +446,7 @@ export function SecaoPacotesExames({
               detalhe={p.exames}
               exemplo={p.exemplo}
               onAplicar={() => onAplicar(p)}
-              onRemover={() => persistir(removerItemKit(banco, p.id))}
+              onRemover={() => void persistir((atualBanco) => removerItemKit(atualBanco, p.id))}
             />
           ))}
         </div>

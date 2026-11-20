@@ -61,6 +61,9 @@ export function CardFaturamento({
         <>
           <div className="mt-2 text-3xl font-black tabular-nums">{fmtCentavos(total)}</div>
           <div className="text-sm text-bion-ink/75 dark:text-bion-paper/75">
+            Sua parte: {100 - comissaoPct}% do valor das consultas, menos a taxa do cartão.
+          </div>
+          <div className="text-sm text-bion-ink/75 dark:text-bion-paper/75">
             {qtd === 0 ? "Nenhuma consulta paga realizada no período." : `${qtd} ${qtd === 1 ? "consulta" : "consultas"}`}
             {totais.multasMedicoCentavos > 0 ? ` · inclui ${fmtCentavos(totais.multasMedicoCentavos)} de multas (sua parte)` : ""}
           </div>
@@ -71,11 +74,11 @@ export function CardFaturamento({
                 <dd className="font-bold tabular-nums text-bion-ink dark:text-bion-paper">{fmtCentavos(totais.brutoCentavos)}</dd>
               </div>
               <div>
-                <dt>Comissão ({comissaoPct}%)</dt>
+                <dt>Parte da BION ({comissaoPct}%)</dt>
                 <dd className="font-bold tabular-nums text-bion-ink dark:text-bion-paper">−{fmtCentavos(totais.comissaoCentavos)}</dd>
               </div>
               <div>
-                <dt>Taxa do gateway</dt>
+                <dt>Taxa do cartão</dt>
                 <dd className="font-bold tabular-nums text-bion-ink dark:text-bion-paper">−{fmtCentavos(totais.taxaCentavos)}</dd>
               </div>
             </dl>
@@ -128,8 +131,8 @@ export function CardFaturamento({
         </p>
       ) : null}
       <p className="mt-2 text-xs text-bion-ink/70 dark:text-bion-paper/70">
-        Receita líquida após comissão de {comissaoPct}% e taxa do gateway, pela data da consulta. Consultas canceladas, aguardando
-        reagendamento ou reembolsadas integralmente não contam; multas pagas pelo paciente entram com a sua parte (50%).
+        Receita líquida após a parte da BION ({comissaoPct}%) e a taxa do cartão, pela data da consulta. Consultas canceladas, aguardando
+        reagendamento ou reembolsadas integralmente não contam; multas pagas pelo paciente entram com a sua parte (50%). A cobrança real continua travada.
       </p>
     </div>
   );

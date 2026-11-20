@@ -18,13 +18,14 @@ import { TriagemPaciente } from "./TriagemPaciente";
 import { ProntuarioPaciente } from "./ProntuarioPaciente";
 import { EmitirDocumentoSheet } from "./sheets/EmitirDocumentoSheet";
 import type { DadosMedico } from "./useDadosMedico";
+import { useModelosMensagemConta } from "./useAtalhosConta";
 
 type Aba = "conversa" | "triagem" | "prontuario";
 const MAX_TEXTO = 4000; // limite do POST /api/mensagens
 
 /* Item 23 (melhorias): modelos de mensagem — tocar PREENCHE o campo, nunca
- * envia direto; o médico edita antes de enviar. Os pessoais ficam no
- * aparelho (localStorage), sem migração nem servidor. */
+ * envia direto; o médico edita antes de enviar. Os pessoais ficam na conta
+ * (e neste aparelho se a rede falhar). */
 const MODELOS_PADRAO: { rotulo: string; texto: string }[] = [
   {
     rotulo: "Saudação",
@@ -84,18 +85,9 @@ export function ConversaPaciente({
   const [aba, setAba] = useState<Aba>("conversa");
   const [texto, setTexto] = useState("");
   const [emitir, setEmitir] = useState<{ base?: Documento } | null>(null);
-  // Item 23: modelos pessoais do médico (só neste aparelho) e pedido de
-  // medição a partir da conversa.
-  const chaveModelos = `bion:modelos-medico:${sessao.id}`;
-  const [modelosPessoais, setModelosPessoais] = useState<string[]>(() => {
-    try {
-      const v = window.localStorage.getItem(chaveModelos);
-      const arr = v ? (JSON.parse(v) as unknown) : [];
-      return Array.isArray(arr) ? arr.filter((x): x is string => typeof x === "string" && x.trim().length > 0) : [];
-    } catch {
-      return [];
-    }
-  });
+  // Item 23: modelos pessoais do médico (conta; cópia neste aparelho) e
+  // pedido de medição a partir da conversa.
+  const { lista: modelosPessoais, naConta: modelosNaConta, substituir: substituirModelos } = useModelosMensagemConta(sessao.id);
   const [pedidoAberto, setPedidoAberto] = useState(false);
   const [tiposPedido, setTiposPedido] = useState<string[]>(["pressao"]);
   const [enviandoPedido, setEnviandoPedido] = useState(false);
@@ -176,22 +168,15 @@ export function ConversaPaciente({
   const aplicarModelo = (modelo: string) => {
     setTexto((atual) => (atual.trim() ? `${atual.replace(/\s+$/, "")}\n${modelo}` : modelo));
   };
-  const salvarModeloAtual = () => {
+  const salvarModeloAtual = async () => {
     const t = texto.trim();
     if (!t || modelosPessoais.includes(t)) return;
-    const lista = [...modelosPessoais, t].slice(-12);
-    setModelosPessoais(lista);
-    try {
-      window.localStorage.setItem(chaveModelos, JSON.stringify(lista));
-    } catch {}
-    toast.success("Modelo salvo neste aparelho");
+    const enviou = await substituirModelos([...modelosPessoais, t].slice(-12));
+    if (enviou) toast.success("Modelo salvo na sua conta");
+    else toast.success("Modelo salvo neste aparelho", { description: "A conta não atualizou agora. Tente de novo com rede." });
   };
   const removerModelo = (modelo: string) => {
-    const lista = modelosPessoais.filter((m) => m !== modelo);
-    setModelosPessoais(lista);
-    try {
-      window.localStorage.setItem(chaveModelos, JSON.stringify(lista));
-    } catch {}
+    void substituirModelos(modelosPessoais.filter((m) => m !== modelo));
   };
 
   // Item 23b: "Pedir medição" sem sair da conversa — mesma API que a sala
@@ -350,6 +335,9 @@ export function ConversaPaciente({
                   </button>
                 ) : null}
               </div>
+              <p className="text-[11px] opacity-60">
+                {modelosNaConta ? "Modelos pessoais ficam na sua conta." : "Modelos neste aparelho até a conta responder."}
+              </p>
               <div className="flex items-end gap-2">
               <label className="flex-1">
                 <span className="sr-only">Mensagem para {atual.nome}</span>

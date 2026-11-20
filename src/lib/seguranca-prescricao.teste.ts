@@ -10,6 +10,7 @@ import {
   tokensDoMedicamento,
   tokensSeCorrespondem,
   verificarPrescricao,
+  textoAlertaPrescricao,
 } from "./seguranca-prescricao";
 
 let ok = 0;
@@ -93,6 +94,10 @@ igual(
 // Medicamento ainda vazio/curto demais: nenhum alerta (não assusta à toa).
 igual("medicamento vazio", verificarPrescricao("", ["Dipirona"], [{ nome: "Dipirona" }]), []);
 igual("medicamento só dose", verificarPrescricao("500 mg", ["Dipirona"], []), []);
+const avisoAlergia = textoAlertaPrescricao({ tipo: "alergia", referencia: "Dipirona" });
+igual("aviso de alergia diz que não bloqueia", avisoAlergia.detalhe.includes("Não bloqueia"), true);
+igual("aviso de alergia não promete interação", avisoAlergia.detalhe.includes("Não é uma base de interação"), true);
+igual("aviso de duplicidade cita o remédio em uso", textoAlertaPrescricao({ tipo: "duplicidade", referencia: "Losartana" }).titulo.includes("Losartana"), true);
 
 console.log(`seguranca-prescricao: ${ok} ok, ${falhas} falha(s)`);
 if (falhas) process.exit(1);

@@ -1,9 +1,11 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import {
   Bell,
   CalendarDays,
   ChevronDown,
+  ClipboardList,
   Info,
   ListChecks,
   MessageCircle,
@@ -15,6 +17,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { PainelEvolucao } from "../evolucao/PainelEvolucao";
 import { AvisoAtivarToque } from "@/components/bion/AvisoAtivarToque";
 import { Logo } from "@/components/bion/brand";
 import { ContagemRegressiva } from "../ContagemRegressiva";
@@ -44,6 +47,24 @@ export function TelaInicio({
 }) {
   const router = useRouter();
   const { sessao, medico, proxima, pacienteNaSala, notificacoesNaoLidas, hoje, agora, acoesPaciente, acoesPacienteEstado, naoLidasPorPaciente, renovacoesPendentes } = dados;
+  const [evolucaoPendente, setEvolucaoPendente] = useState<{ consultaId: string; paciente: string } | null>(null);
+  const [evolucaoAberta, setEvolucaoAberta] = useState(false);
+  useEffect(() => {
+    let vivo = true;
+    const buscar = async () => {
+      const res = await fetch("/api/medico/evolucao-pendente", { cache: "no-store" }).catch(() => null);
+      if (!vivo || !res?.ok) return;
+      const json = (await res.json().catch(() => null)) as { pendente?: { consultaId?: string; paciente?: string } | null } | null;
+      const p = json?.pendente;
+      setEvolucaoPendente(p?.consultaId && p.paciente ? { consultaId: p.consultaId, paciente: p.paciente } : null);
+    };
+    void buscar();
+    const id = window.setInterval(() => void buscar(), 30_000);
+    return () => {
+      vivo = false;
+      window.clearInterval(id);
+    };
+  }, []);
   // Pendências acionáveis: só aparecem com contador > 0 (sem ruído).
   const totalNaoLidas = [...naoLidasPorPaciente.values()].reduce((a, b) => a + b, 0);
   const conversasComNaoLidas = naoLidasPorPaciente.size;
@@ -135,6 +156,35 @@ export function TelaInicio({
               : "Nenhum atendimento marcado para hoje."}
         </p>
       </div>
+
+      {evolucaoPendente ? (
+        <div className="relative mb-3 rounded-3xl border border-amber-400/50 bg-amber-50 p-5 text-amber-950 dark:bg-amber-400/10 dark:text-amber-100" role="status">
+          <span className="text-xs font-bold uppercase tracking-wider inline-flex items-center gap-1.5">
+            <ClipboardList className="w-4 h-4" aria-hidden /> Evolução pendente
+          </span>
+          <p className="mt-2 text-sm font-bold">Evolução em rascunho de {evolucaoPendente.paciente}.</p>
+          <p className="mt-1 text-xs">Enquanto ela não for concluída, novos atendimentos ficam segurados.</p>
+          <button
+            type="button"
+            onClick={() => setEvolucaoAberta(true)}
+            className="mt-3 rounded-full bg-amber-600 px-4 py-2 text-sm font-bold text-white"
+          >
+            Concluir evolução
+          </button>
+        </div>
+      ) : null}
+      {evolucaoAberta && evolucaoPendente ? (
+        <PainelEvolucao
+          consultaId={evolucaoPendente.consultaId}
+          aberto
+          onAbrir={() => setEvolucaoAberta(true)}
+          onFechar={() => setEvolucaoAberta(false)}
+          onConcluida={() => {
+            setEvolucaoPendente(null);
+            setEvolucaoAberta(false);
+          }}
+        />
+      ) : null}
 
       {/* Pendências: renovações aguardando resposta e mensagens não lidas.
           Cada linha leva à tela certa; contador zero = linha some (e sem

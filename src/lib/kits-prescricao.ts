@@ -3,11 +3,10 @@
  * médica): modelos reutilizáveis que o médico monta uma vez e reaplica
  * com 1 toque na emissão — em vez de redigitar a mesma combinação.
  *
- * PERSISTÊNCIA NESTE APARELHO (localStorage, chave por médico, mesmo
- * padrão da grade da agenda): NÃO há migração nem sincronização — os kits
- * vivem no aparelho em que foram criados, e a UI diz isso com todas as
- * letras ("Modelos deste aparelho"). Se um dia os kits virarem dado de
- * servidor, a troca é só da camada de leitura/escrita daqui.
+ * A conta do médico (AtalhoMedico, /api/medico/atalhos) é a fonte. Estas
+ * funções continuam no aparelho (localStorage, chave por médico): a tela
+ * copia da conta para cá e sobe o aparelho só quando a conta ainda está
+ * vazia. Sem rede, o kit fica neste aparelho até o próximo envio.
  *
  * Como o Documento guarda UM medicamento, "kit de receita" é um
  * medicamento com posologia/duração (e a flag de controlado); "pacote de
