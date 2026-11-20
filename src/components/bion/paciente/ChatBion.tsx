@@ -427,6 +427,7 @@ export function ChatBion({
         erro?: string;
         nomeVerificado?: string;
         examesSalvos?: { titulo: string; itens: { nome: string; valor: number; unidade?: string }[] }[];
+        leituraFalhou?: boolean;
         dados?: unknown;
       };
       if (res.status === 503 && json.erro === "bion_ia_pausada") {
@@ -443,10 +444,8 @@ export function ChatBion({
         return;
       }
       if (json.ok) setIaPausada(false);
+      if (json.ok && json.dados) aplicarEstadoFresco(json.dados);
       if (json.ok && json.examesSalvos?.length) {
-        // Laudo pela IA ainda devolve estado fresco (rota pesada rara) —
-        // contrato compatível com aplicarEstadoFresco.
-        if (json.dados) aplicarEstadoFresco(json.dados);
         const resumo = json.examesSalvos
           .map((e) => `• **${e.titulo}** — ${e.itens.slice(0, 4).map((i) => `${i.nome} ${i.valor}${i.unidade ?? ""}`).join(", ")}${e.itens.length > 4 ? "…" : ""}`)
           .join("\n");
@@ -475,11 +474,17 @@ export function ChatBion({
           });
           setMensagens((m) => [
             ...m,
-            { remetente: "ia", texto: `${json.mensagem ?? "Documento recebido."}\n\nRegistrei o documento na sua anamnese — o médico terá acesso na consulta.`, tipo: "sucesso-exame" },
+            {
+              remetente: "ia",
+              texto: json.leituraFalhou
+                ? (json.mensagem ?? "Não consegui ler os resultados. O arquivo original continua em Exames.")
+                : `${json.mensagem ?? "Documento recebido."}\n\nRegistrei o documento na sua anamnese — o médico terá acesso na consulta.`,
+              tipo: json.leituraFalhou ? undefined : "sucesso-exame",
+            },
           ]);
           await enviarAnamnese("Pronto, enviei o documento.");
         } else {
-          setMensagens((m) => [...m, { remetente: "ia", texto: json.mensagem ?? "Documento recebido.", tipo: "sucesso-exame" }]);
+          setMensagens((m) => [...m, { remetente: "ia", texto: json.mensagem ?? "Documento recebido.", tipo: json.leituraFalhou ? undefined : "sucesso-exame" }]);
         }
         aoEnviarExame?.();
       } else {

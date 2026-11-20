@@ -1,6 +1,7 @@
 "use client";
 
-import { BotaoPagarStripe } from "./BotaoPagarStripe";
+import { AvisoCartaoIndisponivel, BotaoPagarStripe } from "./BotaoPagarStripe";
+import { situacaoCheckoutStripe, type SituacaoCheckout } from "./pagamento-stripe-cliente";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useVoltarFecha } from "./useVoltarFecha";
 import { EstadoCarregando, EstadoErro } from "./EstadosPaciente";
@@ -93,6 +94,17 @@ export function CancelarRemarcarSheet({ consulta, acao, medico, consultas, onFec
   const [erroRevalidacao, setErroRevalidacao] = useState<string | null>(null);
   // Só cartão: a multa é paga no checkout Stripe (BotaoPagarStripe).
   const [metodo, setMetodo] = useState<MetodoMulta | null>("cartao");
+  const [cartao, setCartao] = useState<SituacaoCheckout | null>(null);
+  useEffect(() => {
+    let vivo = true;
+    situacaoCheckoutStripe().then((s) => {
+      if (vivo) setCartao(s);
+    });
+    return () => {
+      vivo = false;
+    };
+  }, []);
+  const cartaoDesligado = cartao === "desligado";
   const recarregarEstado = useRecarregarEstado();
   const { remarcacao, cobranca, adotar, limpar } = useRemarcacaoComMulta(
     consulta.id,
@@ -361,7 +373,7 @@ export function CancelarRemarcarSheet({ consulta, acao, medico, consultas, onFec
                     </button>
                   ))}
                 </div>
-                {exigePagamento && onPagarMulta ? (
+                {exigePagamento && onPagarMulta && !cartaoDesligado ? (
                   <>
                     <div className="text-xs font-bold mt-4 mb-2 bpp-sheet-suave inline-flex items-center gap-1.5">
                       <CreditCard className="w-3.5 h-3.5" /> Forma de pagamento da multa
@@ -369,6 +381,7 @@ export function CancelarRemarcarSheet({ consulta, acao, medico, consultas, onFec
                     <p className="text-sm bpp-sheet-suave">Cartão de crédito, no pagamento seguro do Stripe.</p>
                   </>
                 ) : null}
+                {exigePagamento && cartaoDesligado ? <AvisoCartaoIndisponivel className="mt-4" /> : null}
               </>
             )
           ) : null
@@ -403,6 +416,10 @@ export function CancelarRemarcarSheet({ consulta, acao, medico, consultas, onFec
           </div>
         ) : null}
 
+        {acao === "cancelar" && previa && previa.cancelar.multaCentavos > 0 && cartaoDesligado ? (
+          <AvisoCartaoIndisponivel className="mt-4" />
+        ) : null}
+
         {pagamentoIndisponivel ? (
           <div className="mt-4 rounded-2xl border border-amber-400/30 bg-amber-500/10 p-4 text-sm" role="note">
             <p className="font-bold text-amber-900 dark:text-amber-100">O pagamento da multa não está disponível nesta tela.</p>
@@ -429,6 +446,7 @@ export function CancelarRemarcarSheet({ consulta, acao, medico, consultas, onFec
               disabled={
                 !prontoParaConfirmar ||
                 pagamentoIndisponivel ||
+                (exigePagamento && cartaoDesligado) ||
                 carregandoBloqueios ||
                 (exigePagamento && !metodo) ||
                 !dataEscolhida ||
@@ -439,11 +457,13 @@ export function CancelarRemarcarSheet({ consulta, acao, medico, consultas, onFec
               className="bion-toque flex-1 py-3 rounded-xl bpp-sheet-primario text-sm font-bold disabled:opacity-40 inline-flex items-center justify-center gap-2"
             >
               {enviando ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-              {pagamentoIndisponivel
-                ? "Pagamento indisponível nesta tela"
-                : exigePagamento
-                  ? `Pagar multa de ${fmtCentavos(multaRemarcar)}`
-                  : "Confirmar novo horário"}
+              {exigePagamento && cartaoDesligado
+                ? "Cartão indisponível"
+                : pagamentoIndisponivel
+                  ? "Pagamento indisponível nesta tela"
+                  : exigePagamento
+                    ? `Pagar multa de ${fmtCentavos(multaRemarcar)}`
+                    : "Confirmar novo horário"}
             </button>
           ) : (
             <button

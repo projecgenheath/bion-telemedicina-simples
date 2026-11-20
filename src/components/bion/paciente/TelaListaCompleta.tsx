@@ -1,8 +1,10 @@
 "use client";
 
-import { useMemo, useRef } from "react";
+import { useMemo, useRef, useState } from "react";
 import { CalendarDays, FileUp, X } from "lucide-react";
+import { toast } from "sonner";
 import { useBion } from "@/lib/bion-store";
+import { abrirArquivoOriginal } from "./laudos-originais";
 import { useVoltarFecha } from "./useVoltarFecha";
 import { useFocoDialogo } from "./useFocoDialogo";
 import { LinhaConsultaPagamento } from "./LinhaConsultaPagamento";
@@ -21,6 +23,7 @@ const TITULO: Record<ListaPerfil, { titulo: string; descricao: string }> = {
 
 export function TelaListaCompleta({ lista, onFechar, onAgendar }: { lista: ListaPerfil; onFechar: () => void; onAgendar: () => void }) {
   const { consultas, sessao, arquivos } = useBion();
+  const [abrindo, setAbrindo] = useState<string | null>(null);
   const raizRef = useRef<HTMLDivElement>(null);
   useVoltarFecha(true, onFechar);
   useFocoDialogo(true, onFechar, raizRef);
@@ -71,6 +74,22 @@ export function TelaListaCompleta({ lista, onFechar, onAgendar }: { lista: Lista
                     <FileUp className="w-4 h-4 shrink-0 text-bion-ink/75 dark:text-bion-paper/75" aria-hidden />
                     <span className="min-w-0 flex-1 text-sm font-semibold text-bion-ink dark:text-bion-paper truncate">{a.nome}</span>
                     <span className="text-xs text-bion-ink/75 dark:text-bion-paper/75 shrink-0">{a.data} · {a.tamanhoKb} KB</span>
+                    {a.storagePath ? (
+                      <button
+                        type="button"
+                        disabled={abrindo === a.id}
+                        onClick={() => {
+                          setAbrindo(a.id);
+                          void abrirArquivoOriginal(a.id, a.nome).then((r) => {
+                            setAbrindo(null);
+                            if (!r.ok) toast.error(r.erro);
+                          });
+                        }}
+                        className="bion-toque shrink-0 min-h-11 rounded-full px-3 text-xs font-bold text-bion-sea dark:text-[#C4B5FD] disabled:opacity-60"
+                      >
+                        {abrindo === a.id ? "Abrindo…" : "Ver arquivo"}
+                      </button>
+                    ) : null}
                   </li>
                 ))}
               </ul>

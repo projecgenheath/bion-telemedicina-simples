@@ -18,6 +18,8 @@ import { notificacaoNovoExame } from "@/lib/server/notificar-resultado";
 import { limitarAsync, resposta429 } from "@/lib/server/rate-limit";
 import { nomeCorresponde } from "@/lib/nome-laudo";
 import { iaPausada, obterLLM, respostaIaPausada, visaoGemini } from "@/lib/server/llm";
+import { supabaseServiceRoleKey } from "@/lib/supabase/env";
+import { garantirBuckets, uploadDocumento } from "@/lib/supabase/storage";
 
 /**
  * BION IA — leitura de laudos de exames (PDF ou foto) para o app do paciente.
@@ -74,6 +76,39 @@ function extrairJson(texto: string): LaudoExtraido | null {
   } catch {
     return null;
   }
+}
+
+/** Guarda o arquivo enviado mesmo quando a leitura dos valores falha, para o
+ *  paciente abrir o original em Exames. Sem Storage, fica só o nome. */
+async function guardarOriginalLaudo(
+  usuarioId: string,
+  arquivo: File,
+  bytes: Buffer,
+  tipoMime: string,
+): Promise<{ id: string; storagePath: string | null }> {
+  let storagePath: string | null = null;
+  if (supabaseServiceRoleKey()) {
+    try {
+      await garantirBuckets();
+      const up = await uploadDocumento(usuarioId, arquivo.name || "laudo", bytes, tipoMime);
+      storagePath = up.path;
+    } catch (e) {
+      console.error("[BION IA exame] não guardei o arquivo original", e);
+    }
+  }
+  const registro = await db.arquivo.create({
+    data: {
+      nome: (arquivo.name || "laudo").slice(0, 200),
+      tipo: tipoMime.slice(0, 60),
+      tamanhoKb: Math.max(1, Math.round(arquivo.size / 1024)),
+      enviadoPor: "paciente",
+      usuarioId,
+      pacienteId: usuarioId,
+      consulta: "BION IA",
+      storagePath,
+    },
+  });
+  return { id: registro.id, storagePath };
 }
 
 export const maxDuration = 60;
@@ -155,26 +190,22 @@ export async function POST(req: NextRequest) {
     const dataUrl = `data:${mime};base64,${bytes.toString("base64")}`;
     const base64Puro = bytes.toString("base64");
 
-    // Sem LLM acessível (produção/Vercel): registra o arquivo no histórico e
-    // avisa com clareza — o documento segue disponível para o médico.
+    const tipoArquivo = ehPdf ? "application/pdf" : mime;
+    const responderSemLeitura = async (mensagem: string) => {
+      const salvo = await guardarOriginalLaudo(usuario.id, arquivo, bytes, tipoArquivo);
+      const dados = await carregarDados(usuario);
+      const texto = salvo.storagePath
+        ? `${mensagem} O arquivo original continua em Exames: toque em Ver arquivo.`
+        : `${mensagem} Não consegui guardar o arquivo agora. Envie de novo.`;
+      return ok({ ok: true, documentoRegistrado: true, leituraFalhou: true, arquivoId: salvo.id, mensagem: texto, dados });
+    };
+
+    // Sem LLM acessível (produção/Vercel): guarda o original e avisa.
     const clienteLlm = await obterLLM();
     if (!clienteLlm) {
-      await db.arquivo.create({
-        data: {
-          nome: arquivo.name || "documento.pdf",
-          tipo: ehPdf ? "application/pdf" : mime,
-          tamanhoKb: Math.max(1, Math.round(arquivo.size / 1024)),
-          enviadoPor: "paciente",
-          usuarioId: usuario.id,
-          pacienteId: usuario.id, // A3: destinatário = o próprio paciente
-          consulta: "BION IA",
-        },
-      });
-      return ok({
-        ok: true,
-        documentoRegistrado: true,
-        mensagem: `Documento **${arquivo.name || "anexo"}** recebido e registrado no seu histórico. Neste momento não consegui processar os valores automaticamente — o médico poderá visualizar o original na consulta. Se for um laudo laboratorial, tente reenviá-lo mais tarde para a extração automática.`,
-      });
+      return responderSemLeitura(
+        `Documento **${arquivo.name || "anexo"}** recebido. Neste momento não consegui processar os valores automaticamente.`,
+      );
     }
 
     const promptExtracao = PROMPT_EXTRACAO.replace("{HOJE}", dataIsoClinica()); // dia em São Paulo, não em UTC
@@ -186,10 +217,7 @@ export async function POST(req: NextRequest) {
     } else {
       const zai = clienteLlm.tipo === "sdk" ? clienteLlm.zai : null;
       if (!zai) {
-        return Response.json(
-          { ok: false, motivo: "extracao_falhou", mensagem: "A leitura automática de laudos não está disponível agora. O documento pode ser anexado durante a anamnese ou enviado ao médico pela consulta." },
-          { status: 200 },
-        );
+        return responderSemLeitura("A leitura automática de laudos não está disponível agora.");
       }
       // O endpoint /chat/completions/vision escolhe o modelo de visão padrão do
       // gateway quando "model" é omitido — comportamento validado em teste real.
@@ -219,10 +247,7 @@ export async function POST(req: NextRequest) {
 
     const laudo = extrairJson(texto);
     if (!laudo || !Array.isArray(laudo.exames)) {
-      return Response.json(
-        { ok: false, motivo: "extracao_falhou", mensagem: "Não consegui ler os resultados deste laudo. Verifique se a foto/PDF está nítido e tente novamente." },
-        { status: 200 },
-      );
+      return responderSemLeitura("Não consegui ler os resultados deste laudo. Verifique se a foto ou o PDF está nítido.");
     }
 
     // ---- Verificação de segurança: o laudo é do paciente autenticado? ----
@@ -248,27 +273,14 @@ export async function POST(req: NextRequest) {
         itens: g.itens!.filter((i) => i?.nome && Number.isFinite(Number(i.valor))).slice(0, 40),
       }));
     if (!grupos.length) {
-      return Response.json(
-        { ok: false, motivo: "sem_resultados", mensagem: "Li o documento, mas não encontrei resultados laboratoriais com valores numéricos. É um laudo de exame?" },
-        { status: 200 },
-      );
+      return responderSemLeitura("Li o documento, mas não encontrei resultados laboratoriais com valores numéricos.");
     }
 
     const dataColeta = laudo.dataColeta ? new Date(`${laudo.dataColeta}T12:00:00`) : new Date();
     const dataValida = Number.isNaN(dataColeta.getTime()) ? new Date() : dataColeta;
 
-    // Registra o upload no histórico (mesmo registro visto no perfil)
-    const arquivoRegistrado = await db.arquivo.create({
-      data: {
-        nome: arquivo.name || "laudo.pdf",
-        tipo: ehPdf ? "application/pdf" : mime,
-        tamanhoKb: Math.max(1, Math.round(arquivo.size / 1024)),
-        enviadoPor: "paciente",
-        usuarioId: usuario.id,
-        pacienteId: usuario.id, // A3: destinatário = o próprio paciente
-        consulta: "BION IA",
-      },
-    });
+    // Registra o upload no histórico (mesmo registro visto no perfil) e guarda o original.
+    const arquivoRegistrado = await guardarOriginalLaudo(usuario.id, arquivo, bytes, tipoArquivo);
 
     const examesSalvos: { titulo: string; itens: ItemExtraido[]; dataColeta: string }[] = [];
     for (const grupo of grupos) {
