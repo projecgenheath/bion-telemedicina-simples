@@ -9,6 +9,7 @@ import {
   BadgeCheck,
   ClipboardList,
   Copy,
+  Download,
   FileText,
   FileUp,
   MessageCircle,
@@ -18,6 +19,8 @@ import {
   X,
 } from "lucide-react";
 import { useBion } from "@/lib/bion-store";
+import type { Documento } from "@/lib/bion-tipos";
+import { gerarDocumentoPDF } from "@/lib/receita-pdf";
 import { useAppNativo } from "@/lib/useAppNativo";
 import { toast } from "sonner";
 import { EstadoVazio } from "./EstadosPaciente";
@@ -54,14 +57,45 @@ const ROTULO_DOC = {
   prontuario: "Prontuário da consulta",
 } as const;
 
+function aceitaPdf(d: Documento | undefined): d is Documento {
+  return !!d && (d.tipo === "receita" || d.tipo === "atestado" || d.tipo === "exame" || d.tipo === "exame_solicitado");
+}
+
+/** Compartilha o PDF quando o celular permite; senão baixa o arquivo. */
+async function entregarPdf(d: Documento) {
+  try {
+    const { nome, blob } = gerarDocumentoPDF(d, "blob");
+    const arquivo = new File([blob], nome, { type: "application/pdf" });
+    const nav = navigator as Navigator & { canShare?: (data?: ShareData) => boolean };
+    if (typeof nav.share === "function" && nav.canShare?.({ files: [arquivo] })) {
+      await nav.share({ files: [arquivo], title: d.titulo });
+      return;
+    }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = nome;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1500);
+    toast.success("PDF pronto para salvar.");
+  } catch (e) {
+    if (e instanceof DOMException && e.name === "AbortError") return;
+    toast.error("Não foi possível gerar o PDF.");
+  }
+}
+
 function Visualizador({
   titulo,
   corpo,
+  documento,
   imprimir = false,
   onFechar,
 }: {
   titulo: string;
   corpo: string[];
+  documento?: Documento;
   /** Fase 3: o botão de impressora da lista abre o documento JÁ imprimindo. */
   imprimir?: boolean;
   onFechar: () => void;
@@ -105,6 +139,15 @@ function Visualizador({
         <div className="flex items-start justify-between gap-3 mb-4">
           <h3 className="text-lg font-bold text-bion-ink dark:text-bion-paper">{titulo}</h3>
           <div className="flex gap-2 shrink-0">
+            {aceitaPdf(documento) ? (
+              <button type="button"
+                onClick={() => void entregarPdf(documento)}
+                aria-label="Baixar ou compartilhar PDF"
+                className="bion-toque bp-acao px-4 min-h-11 text-xs inline-flex items-center gap-1.5"
+              >
+                <Download className="w-4 h-4" /> PDF
+              </button>
+            ) : null}
             {noApp ? (
               <button type="button"
                 onClick={() => void copiar()}
@@ -150,7 +193,7 @@ export function DocumentosPainel({
 }) {
   const { consultas, documentos, medicos, sessao, mensagens, enviarMensagem, marcarConversaLida, naoLidasMensagens } = useBion();
   const [consultaSelecionada, setConsultaSelecionada] = useState<string | null>(null);
-  const [visualizando, setVisualizando] = useState<{ titulo: string; corpo: string[]; imprimir?: boolean } | null>(null);
+  const [visualizando, setVisualizando] = useState<{ titulo: string; corpo: string[]; imprimir?: boolean; documento?: Documento } | null>(null);
   const noApp = useAppNativo();
   const setConversaAtiva = onConversa;
   const [texto, setTexto] = useState("");
@@ -320,13 +363,13 @@ export function DocumentosPainel({
 
   return (
     <div className="px-5 py-6 space-y-4 bp-safe-top pb-24">
-      {visualizando && <Visualizador titulo={visualizando.titulo} corpo={visualizando.corpo} imprimir={visualizando.imprimir} onFechar={() => setVisualizando(null)} />}
+      {visualizando && <Visualizador titulo={visualizando.titulo} corpo={visualizando.corpo} documento={visualizando.documento} imprimir={visualizando.imprimir} onFechar={() => setVisualizando(null)} />}
 
       {/* ------------------------------ Documentos ------------------------------ */}
       <section aria-label="Documentos das consultas">
         <h2 className="text-2xl font-black text-bion-ink dark:text-bion-paper">Documentos</h2>
         <p className="text-sm text-bion-ink/75 dark:text-bion-paper/75 mb-4">
-          Escolha uma consulta realizada para ver ou imprimir seus documentos.
+          Escolha uma consulta realizada para ver, baixar ou compartilhar seus documentos.
         </p>
 
         {realizadas.length === 0 ? (
@@ -391,6 +434,7 @@ export function DocumentosPainel({
             ) : (
               docsSelecionados.map((d) => {
                 const Icone = ICONE_DOC[d.tipo] ?? FileText;
+                const pdf = aceitaPdf(d.original) ? d.original : null;
                 return (
                   <div key={d.id} className="bp-glass p-4 flex items-center gap-3 bpp-animar">
                     <div className="w-11 h-11 rounded-2xl bg-bion-sea/10 dark:bg-[#C4B5FD]/10 text-bion-sea dark:text-[#C4B5FD] inline-flex items-center justify-center shrink-0">
@@ -462,15 +506,24 @@ export function DocumentosPainel({
                       })()}
                     </div>
                     <button type="button"
-                      onClick={() => setVisualizando({ titulo: d.titulo, corpo: d.corpo })}
+                      onClick={() => setVisualizando({ titulo: d.titulo, corpo: d.corpo, documento: pdf ?? undefined })}
                       className="bion-toque min-h-11 rounded-full border border-bion-sea/25 dark:border-[#C4B5FD]/25 px-4 py-2 text-xs font-bold text-bion-sea dark:text-[#C4B5FD]"
                     >
                       Ver
                     </button>
-                    {/* No app a impressão não existe (WebView): fica só o "Ver", que oferece "Copiar". */}
+                    {pdf ? (
+                      <button type="button"
+                        onClick={() => void entregarPdf(pdf)}
+                        aria-label={`Baixar ou compartilhar PDF de ${d.titulo}`}
+                        className="bion-toque min-h-11 rounded-full px-3 text-xs font-bold inline-flex items-center gap-1 bg-bion-ink/5 dark:bg-white/10 text-bion-ink dark:text-bion-paper"
+                      >
+                        <Download className="w-4 h-4" aria-hidden /> PDF
+                      </button>
+                    ) : null}
+                    {/* No app a impressão não existe (WebView): o PDF acima substitui a impressora. */}
                     {!noApp && (
                     <button type="button"
-                      onClick={() => setVisualizando({ titulo: d.titulo, corpo: d.corpo, imprimir: true })}
+                      onClick={() => setVisualizando({ titulo: d.titulo, corpo: d.corpo, documento: pdf ?? undefined, imprimir: true })}
                       aria-label={`Imprimir ${d.titulo}`}
                       className="bion-toque w-11 h-11 inline-flex items-center justify-center rounded-full bg-bion-ink/5 dark:bg-white/10 text-bion-ink dark:text-bion-paper"
                     >

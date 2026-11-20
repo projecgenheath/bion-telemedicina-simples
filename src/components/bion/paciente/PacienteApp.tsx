@@ -64,6 +64,8 @@ import { acaoSalaPaciente, botaoPrincipalProxima, type AcaoSala } from "./entrad
 import { useRelogioSala } from "./useRelogioSala";
 import { SALA_ABRE_ANTES_MIN, salaAbertaEm } from "@/lib/janela-sala";
 import { Esqueleto, EstadoVazio } from "./EstadosPaciente";
+import { LaudosOriginais } from "./LaudosOriginais";
+import { laudosDaIa } from "./laudos-originais";
 import { PedidosMedicao } from "./PedidosMedicao";
 import { MedicamentosEmUso } from "./MedicamentosEmUso";
 import type { IntencaoChat } from "./chat-bion-intencao";
@@ -118,6 +120,7 @@ export function PacienteApp() {
     anamneses,
     medicoes,
     exames,
+    arquivos,
     sair,
     medicos,
     naoLidasMensagens,
@@ -454,6 +457,8 @@ export function PacienteApp() {
         .slice(-10),
     [pesos, alturas],
   );
+
+  const laudosIa = useMemo(() => laudosDaIa(arquivos), [arquivos]);
 
   const examesAgrupados = useMemo(() => {
     const mapa = new Map<string, typeof exames>();
@@ -1001,7 +1006,7 @@ export function PacienteApp() {
           <section className="bp-secao-3 bpp-secao bpp-tela px-5 pt-10 pb-28 text-white" aria-label="Resultados de exames laboratoriais">
             <h2 className="text-2xl font-black mb-1">Exames laboratoriais</h2>
             <p className="text-sm text-white/80 mb-6">
-              Resultados importados automaticamente dos laudos que você envia à BION IA.
+              Resultados lidos dos laudos que você envia. Se a leitura falhar, o arquivo original continua aqui.
             </p>
 
             <button type="button"
@@ -1019,14 +1024,14 @@ export function PacienteApp() {
               <FileText className="w-5 h-5 text-white/80 shrink-0" />
             </button>
 
-            {examesAgrupados.length === 0 ? (
+            {examesAgrupados.length === 0 && laudosIa.length === 0 ? (
               <EstadoVazio
                 superficie="marinho"
                 icone={<FileText className="w-6 h-6" />}
                 titulo="Nenhum resultado ainda"
-                texto="Envie um laudo pela BION IA e os resultados aparecem aqui automaticamente."
+                texto="Envie um laudo pela BION IA. Se a leitura falhar, o arquivo original aparece aqui."
               />
-            ) : (
+            ) : examesAgrupados.length > 0 ? (
               <div className="bion-surgir-lista bpp-grade flex flex-col gap-4">
                 {examesAgrupados.map(([titulo, lista]) => {
                   const ultimo = lista.at(-1)!;
@@ -1104,7 +1109,8 @@ export function PacienteApp() {
                   );
                 })}
               </div>
-            )}
+            ) : null}
+            <LaudosOriginais arquivos={laudosIa} exames={exames} />
           </section>
         </div>
 

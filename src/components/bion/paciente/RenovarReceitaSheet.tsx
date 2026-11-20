@@ -1,12 +1,14 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Loader2, MessageSquare } from "lucide-react";
 import { toast } from "sonner";
 import { fmtValorBRL } from "@/lib/bion-tipos";
 import { useVoltarFecha } from "./useVoltarFecha";
 import { useFocoDialogo } from "./useFocoDialogo";
 import { useArrastarFechar } from "./useArrastarFechar";
+import { AvisoCartaoIndisponivel } from "./BotaoPagarStripe";
+import { situacaoCheckoutStripe, type SituacaoCheckout } from "./pagamento-stripe-cliente";
 import type { CobrancaRenovacao } from "./usePedidosRenovacao";
 
 /**
@@ -35,6 +37,16 @@ export function RenovarReceitaSheet({
   const raizRef = useRef<HTMLDivElement>(null);
   const [obs, setObs] = useState("");
   const [enviando, setEnviando] = useState(false);
+  const [cartao, setCartao] = useState<SituacaoCheckout | null>(null);
+  useEffect(() => {
+    let vivo = true;
+    situacaoCheckoutStripe().then((s) => {
+      if (vivo) setCartao(s);
+    });
+    return () => {
+      vivo = false;
+    };
+  }, []);
   // Durante o envio a folha não fecha (padrão de CancelarRemarcarSheet):
   // fechar "às cegas" criaria o pedido + a cobrança sem o paciente saber.
   // B21: com observação digitada e não enviada, fechar por voltar/ESC/
@@ -61,6 +73,10 @@ export function RenovarReceitaSheet({
         // C19: cobrança falhou/desconhecida — nada de "pague com cartão".
         toast.error("O pedido foi criado, mas a cobrança não foi confirmada.", {
           description: "Confira o pedido aqui em Documentos antes de tentar de novo.",
+        });
+      } else if (r.cobranca?.status === "pendente" && r.cobranca.pagarComCartao === false) {
+        toast.message("Pedido criado. O cartão não está disponível neste ambiente de teste.", {
+          description: "Nenhum valor foi cobrado. O pedido fica em Documentos até o pagamento poder ser feito.",
         });
       } else if (r.cobranca?.status === "pendente") {
         // Ainda NÃO foi ao médico: só vai depois do pagamento com cartão.
@@ -96,6 +112,7 @@ export function RenovarReceitaSheet({
             Não consegui carregar o valor da consulta deste médico. Feche e tente de novo — o pedido só é criado com o valor na tela.
           </p>
         )}
+        {cartao === "desligado" ? <AvisoCartaoIndisponivel className="mt-3" /> : null}
         <label htmlFor="obs-renovar" className="block mt-4 text-xs font-bold uppercase tracking-wider bpp-sheet-suave">
           Algo mudou? (opcional)
         </label>

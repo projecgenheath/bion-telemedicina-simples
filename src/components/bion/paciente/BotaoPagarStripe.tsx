@@ -3,7 +3,16 @@
 import { useEffect, useState } from "react";
 import { CreditCard } from "lucide-react";
 import { toast } from "sonner";
-import { abrirCheckoutStripe, checkoutStripeAtivo, type AlvoCheckout } from "./pagamento-stripe-cliente";
+import { abrirCheckoutStripe, situacaoCheckoutStripe, type AlvoCheckout, type SituacaoCheckout } from "./pagamento-stripe-cliente";
+
+/** Aviso único: o cartão deste ambiente não cobra. Não substitui o botão quando o Stripe está ligado. */
+export function AvisoCartaoIndisponivel({ className = "" }: { className?: string }) {
+  return (
+    <p role="note" className={`text-sm leading-relaxed text-amber-950 dark:text-amber-100 ${className}`}>
+      O cartão não está disponível neste ambiente de teste. Nenhum valor é cobrado.
+    </p>
+  );
+}
 
 /**
  * Botão "Pagar" (cartão, checkout Stripe). Só aparece com a flag ligada.
@@ -23,22 +32,22 @@ export function BotaoPagarStripe({
   rotulo?: string;
   className?: string;
 }) {
-  const [ativo, setAtivo] = useState(false);
+  const [situacao, setSituacao] = useState<SituacaoCheckout | "carregando">("carregando");
   const [abrindo, setAbrindo] = useState(false);
   useEffect(() => {
     let vivo = true;
     let timer: ReturnType<typeof setTimeout> | undefined;
-    checkoutStripeAtivo().then((a) => {
+    const aplicar = (s: SituacaoCheckout) => {
       if (!vivo) return;
-      setAtivo(a);
-      if (!a) {
-        // `false` pode ser falha de rede transitória (o cliente não cacheia
-        // falha): tenta de novo uma vez, para o botão não sumir pela sessão.
+      setSituacao(s);
+      if (s === "incerto") {
+        // Falha de rede não cacheia: tenta de novo uma vez antes de desistir.
         timer = setTimeout(() => {
-          checkoutStripeAtivo().then((b) => vivo && setAtivo(b));
+          situacaoCheckoutStripe().then((b) => vivo && setSituacao(b));
         }, 4000);
       }
-    });
+    };
+    situacaoCheckoutStripe().then(aplicar);
     return () => {
       vivo = false;
       if (timer) clearTimeout(timer);
@@ -51,7 +60,8 @@ export function BotaoPagarStripe({
       : consultaId
         ? { consultaId }
         : null;
-  if (!ativo || !alvo) return null;
+  if (!alvo || situacao === "carregando" || situacao === "incerto") return null;
+  if (situacao === "desligado") return <AvisoCartaoIndisponivel className="mt-2" />;
 
   const pagar = async () => {
     setAbrindo(true);

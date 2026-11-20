@@ -73,7 +73,12 @@ function carimbarCancelado(doc: jsPDF, canceladoEm?: string | null) {
   }
 }
 
-export function gerarDocumentoPDF(d: Documento) {
+/**
+ * `baixar` (padrão) grava o arquivo no aparelho, como o médico já usa.
+ * `blob` só devolve o PDF, para o paciente compartilhar ou salvar no celular
+ * — a WebView do app ignora window.print().
+ */
+export function gerarDocumentoPDF(d: Documento, destino: "baixar" | "blob" = "baixar"): { nome: string; blob: Blob } {
   const doc = new jsPDF({ unit: "pt", format: "a4" });
   const L = 48;
   const W = doc.internal.pageSize.getWidth();
@@ -346,7 +351,9 @@ export function gerarDocumentoPDF(d: Documento) {
     .replace(/\s+/g, "-")
     .toLowerCase()}.pdf`;
   if (d.status === "cancelado") carimbarCancelado(doc, d.canceladoEm);
-  doc.save(nomeArquivo);
+  const blob = doc.output("blob") as Blob;
+  if (destino === "baixar") doc.save(nomeArquivo);
+  return { nome: nomeArquivo, blob };
 }
 
 /**

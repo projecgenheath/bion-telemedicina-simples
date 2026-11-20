@@ -8,28 +8,38 @@
  * chamada e a próxima montagem de botão tenta de novo.
  */
 const TTL_ATIVO_MS = 30_000;
-let ativoCache: { valor: boolean; ate: number } | null = null;
-let ativoEmVoo: Promise<boolean> | null = null;
 
-/** O checkout Stripe está ligado neste ambiente? (flag do servidor) */
-export function checkoutStripeAtivo(): Promise<boolean> {
+/** ligado / desligado vêm da resposta do servidor. incerto = rede ou HTTP
+ *  falhou: não cacheia e não afirma que o cartão está desligado. */
+export type SituacaoCheckout = "ligado" | "desligado" | "incerto";
+
+let ativoCache: { valor: "ligado" | "desligado"; ate: number } | null = null;
+let ativoEmVoo: Promise<SituacaoCheckout> | null = null;
+
+/** O checkout Stripe está ligado, desligado de propósito, ou a consulta falhou? */
+export function situacaoCheckoutStripe(): Promise<SituacaoCheckout> {
   if (ativoCache && Date.now() < ativoCache.ate) return Promise.resolve(ativoCache.valor);
   if (ativoEmVoo) return ativoEmVoo;
   ativoEmVoo = (async () => {
     try {
       const r = await fetch("/api/pagamentos/stripe/checkout", { cache: "no-store" });
-      if (!r.ok) return false; // 5xx/rede: transitório — não cacheia
+      if (!r.ok) return "incerto"; // 5xx/rede: transitório — não cacheia
       const j = (await r.json()) as { ativo?: boolean };
-      const valor = j.ativo === true;
+      const valor = j.ativo === true ? "ligado" : "desligado";
       ativoCache = { valor, ate: Date.now() + TTL_ATIVO_MS };
       return valor;
     } catch {
-      return false; // sem conexão: transitório — não cacheia
+      return "incerto"; // sem conexão: transitório — não cacheia
     } finally {
       ativoEmVoo = null;
     }
   })();
   return ativoEmVoo;
+}
+
+/** O checkout Stripe está ligado neste ambiente? (flag do servidor) */
+export function checkoutStripeAtivo(): Promise<boolean> {
+  return situacaoCheckoutStripe().then((s) => s === "ligado");
 }
 
 /**
