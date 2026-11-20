@@ -238,7 +238,7 @@ export type PreviaMulta = {
   semMultaAte: string;
   semMultaAteTexto: string;
   /** Motivo da isenção, se houver. */
-  isencao: null | "nao_e_paciente" | "aguardando_reagendamento" | "fora_da_janela" | "falta_do_medico";
+  isencao: null | "nao_e_paciente" | "aguardando_reagendamento" | "fora_da_janela" | "falta_do_medico" | "arrependimento_legal";
 };
 
 /**
@@ -247,7 +247,7 @@ export type PreviaMulta = {
  * consulta às 21h de Brasília não "pula" de dia; os textos saem em Brasília.
  */
 export function calcularMulta(params: {
-  consulta: { status: string; dataInicio: Date; valor: number; pago: boolean };
+  consulta: { status: string; dataInicio: Date; valor: number; pago: boolean; createdAt?: Date | string | null };
   eventos: EventoParaMulta[];
   por: PorEvento;
   agora?: Date;
@@ -262,6 +262,15 @@ export function calcularMulta(params: {
   if (por !== "paciente") isencao = "nao_e_paciente";
   else if (consulta.status === "aguardando_reagendamento") isencao = "aguardando_reagendamento";
   else if (agora.getTime() < semMultaAte.getTime()) isencao = "fora_da_janela";
+  // CDC art. 49: direito legal de arrependimento em até 7 dias corridos da contratação
+  // e antes do início da consulta garante reembolso integral de 100% sem multa.
+  else if (
+    consulta.createdAt &&
+    agora.getTime() - new Date(consulta.createdAt).getTime() <= 7 * 86_400_000 &&
+    agora.getTime() < dataOriginal.getTime()
+  ) {
+    isencao = "arrependimento_legal";
+  }
   // M-23 da auditoria: consulta que não ocorreu por FALTA DO MÉDICO (ou
   // falha técnica registrada) não gera multa ao paciente — mesmo depois do
   // horário. Antes, cancelamento após o início com falta do médico cobrava
