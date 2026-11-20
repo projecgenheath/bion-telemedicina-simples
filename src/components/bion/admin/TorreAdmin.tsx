@@ -13,6 +13,7 @@ import {
   Home,
   Inbox,
   LifeBuoy,
+  Lock,
   MessageSquare,
   Shield,
   Stethoscope,
@@ -50,6 +51,7 @@ const MODULOS: Partial<Record<View, { rotulo: string; icone: Icone }>> = {
   lembretes: { rotulo: "Lembretes", icone: BellRing },
   ajuda: { rotulo: "Ajuda", icone: CircleHelp },
   mensagens: { rotulo: "Mensagens", icone: MessageSquare },
+  travas: { rotulo: "Travas", icone: Lock },
 };
 
 const nada = () => () => {};
@@ -95,7 +97,9 @@ function TorreInterna({ children }: { children: ReactNode }) {
     view === "privacidade" ||
     view === "notificacoes" ||
     view === "lembretes" ||
-    view === "ajuda";
+    view === "ajuda" ||
+    view === "mensagens" ||
+    view === "travas";
   const info = view ? MODULOS[view] : undefined;
   const contagem = contarPorCategoria(fila);
   const criticos24h = auditLogs.filter((l) => l.severidade === "critical" && agora - l.ts <= 86_400_000).length;
@@ -130,6 +134,7 @@ function TorreInterna({ children }: { children: ReactNode }) {
         { id: "llm-monitor", rotulo: "Monitor LLM", icone: Gauge, palavras: "ia bion modelo latencia" },
         { id: "suporte", rotulo: "Chamados", icone: LifeBuoy, selo: contagem.chamado || undefined, palavras: "suporte tickets atendimento responder" },
         { id: "privacidade", rotulo: "Privacidade & LGPD", icone: Shield, palavras: "lgpd cofre anonimizar consentimentos titular" },
+        { id: "travas", rotulo: "Travas", icone: Lock, palavras: "cron cobranca stripe live trava segredo comprovante" },
       ],
     },
   ];

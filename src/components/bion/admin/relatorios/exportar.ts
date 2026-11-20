@@ -10,7 +10,7 @@ import { jsPDF } from "jspdf";
 import type { AuditLog, Avaliacao, Consulta } from "@/lib/bion-tipos";
 import { baixarArquivo } from "../auditoria/exportar";
 import { formatarDataAuditoria } from "../auditoria/trilha";
-import { csvRelatorio, notaMedia, rotuloMedico, type DadosRelatorio } from "./relatorio";
+import { csvLinhaRelatorio, csvRelatorio, notaMedia, rotuloMedico, type DadosRelatorio } from "./relatorio";
 
 type Registrar = (log: Omit<AuditLog, "id" | "ts" | "usuario" | "role">) => void;
 export type EntradaExportacao = {
@@ -21,10 +21,14 @@ export type EntradaExportacao = {
   documentos: number;
   arquivos: number;
   consentimentos: number;
+  /** Linha extra só quando a lista do servidor veio cortada. O CSV/PDF sem isto não muda. */
+  aviso?: string;
 };
 
 export function exportarCsvRelatorio(e: EntradaExportacao, registrarAudit: Registrar) {
-  baixarArquivo(`bion-relatorio-${Date.now()}.csv`, csvRelatorio(e), "text/csv;charset=utf-8");
+  const base = csvRelatorio(e);
+  const csv = e.aviso ? `\uFEFF${csvLinhaRelatorio(["Aviso", e.aviso])}\n${base.replace(/^\uFEFF/, "")}` : base;
+  baixarArquivo(`bion-relatorio-${Date.now()}.csv`, csv, "text/csv;charset=utf-8");
   registrarAudit({
     acao: "RELATORIO_CSV_EXPORTADO",
     categoria: "admin",
@@ -56,7 +60,14 @@ export function exportarPdfRelatorio(e: EntradaExportacao, registrarAudit: Regis
   doc.text(filtroTexto, L, y, { maxWidth: larg - L * 2 });
   y += 14;
   doc.text(`Gerado em ${formatarDataAuditoria(agora)}`, L, y);
-  y += 24;
+  y += 16;
+  if (e.aviso) {
+    const linhasAviso = doc.splitTextToSize(e.aviso, larg - L * 2) as string[];
+    doc.text(linhasAviso, L, y);
+    y += linhasAviso.length * 12 + 8;
+  } else {
+    y += 8;
+  }
   doc.setTextColor(20);
 
   const secao = (titulo: string) => {

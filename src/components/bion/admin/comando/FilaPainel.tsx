@@ -1,13 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { AlertTriangle, CheckCircle2, ChevronRight, RefreshCw } from "lucide-react";
-import { ChipEstado } from "../ui/ChipEstado";
+import { AlertTriangle, CheckCircle2, RefreshCw } from "lucide-react";
 import { Esqueleto, EstadoVazio } from "../ui/Estados";
 import { useCamadasAdmin } from "../AdminShell";
 import { useDadosAdmin } from "../dados";
 import { contarPorCategoria, ROTULO_CATEGORIA, type CategoriaFila, type ItemFila } from "../metricas";
-import { relativo } from "../tempo";
+import { ItemResolvivel } from "./AcoesFila";
 
 const ORDEM: CategoriaFila[] = ["validacao", "espera_medico", "evolucao_pendente", "nao_atendida", "desfecho", "renovacao", "reembolso", "repasse", "chamado", "sistema"];
 
@@ -18,8 +17,11 @@ const ORDEM: CategoriaFila[] = ["validacao", "espera_medico", "evolucao_pendente
  * atendidas (toque recusado ou 3 tentativas expiradas, últimas 24 h), consultas sem
  * desfecho há mais de 24 h (abrem o "Corrigir desfecho"), reembolsos em
  * análise, repasses a pagar (com avisos PIX/CNPJ), chamados abertos e
- * eventos críticos de auditoria das últimas 24 h. Tocar abre o módulo.
- * As ações por gesto chegam com cada módulo novo (PRs seguintes).
+ * eventos críticos de auditoria das últimas 24 h. Onde já existe decisão
+ * (aprovar médico, reembolso, chamado, desfecho), o gesto resolve no card.
+ * Pagar repasse não é gesto: o toque abre o módulo. Renovação, espera,
+ * evolução, chamada não atendida e auditoria continuam só informativos
+ * ou abrem o módulo.
  */
 export function FilaPainel({ onAbrir, comTitulo = true }: { onAbrir: (view: string) => void; comTitulo?: boolean }) {
   const { fila, filaPronta, repasses, reembolsos, semDesfecho, naoAtendidas, esperas, evolucaoPendente, renovacoes, agora, atualizar, atualizando } = useDadosAdmin();
@@ -100,7 +102,7 @@ export function FilaPainel({ onAbrir, comTitulo = true }: { onAbrir: (view: stri
         <ul className="space-y-2.5" aria-label="Itens pendentes">
           {visiveis.map((i) => (
             <li key={i.chave}>
-              <ItemDaFila item={i} agora={agora} onAbrir={() => abrir(i)} />
+              <ItemResolvivel item={i} agora={agora} onAbrir={() => abrir(i)} />
             </li>
           ))}
         </ul>
@@ -109,43 +111,3 @@ export function FilaPainel({ onAbrir, comTitulo = true }: { onAbrir: (view: stri
   );
 }
 
-function ItemDaFila({ item, agora, onAbrir }: { item: ItemFila; agora: number; onAbrir: () => void }) {
-  const corpo = (
-    <>
-      <div className="flex items-start gap-2">
-        <div className="flex-1 min-w-0">
-          <p className="ba-rotulo !text-[10px] mb-0.5">{ROTULO_CATEGORIA[item.categoria]}</p>
-          <p className="font-bold leading-snug break-words">{item.titulo}</p>
-        </div>
-        {item.destino ? <ChevronRight className="w-4 h-4 mt-1 shrink-0 ba-texto-3" aria-hidden /> : null}
-      </div>
-      {item.detalhe ? <p className="text-sm ba-texto-2 mt-0.5 break-words">{item.detalhe}</p> : null}
-      <div className="flex flex-wrap items-center gap-1.5 mt-2">
-        {item.chips.map((c) => (
-          <ChipEstado key={c.rotulo} estado={c} />
-        ))}
-        {item.ts ? <span className="text-xs ba-texto-3">{relativo(item.ts, agora)}</span> : null}
-      </div>
-    </>
-  );
-  if (!item.destino) {
-    // Sem destino, não é botão nem link: card informativo, sem chevron e
-    // sem aparência de clicável. A renovação é o único caso atual: não há
-    // módulo de renovações no admin, então o texto diz onde a ação acontece.
-    return (
-      <div className="ba-card cursor-default" data-tom={item.tom} data-denso="true">
-        {corpo}
-        {item.categoria === "renovacao" ? (
-          <p className="text-sm ba-texto-2 mt-2">
-            Sem ação no admin: a resposta (renovar, chamada ou recusa) é do médico, no app dele.
-          </p>
-        ) : null}
-      </div>
-    );
-  }
-  return (
-    <button type="button" onClick={onAbrir} className="ba-card w-full text-left" data-tom={item.tom} data-denso="true">
-      {corpo}
-    </button>
-  );
-}

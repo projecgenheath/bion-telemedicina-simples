@@ -47,6 +47,7 @@ export const ATALHOS: { id: string; rotulo: string; detalhe: string; palavras: s
   { id: "privacidade?secao=lgpd-consentimentos", rotulo: "Consentimentos", detalhe: "Privacidade & LGPD", palavras: "lgpd consentimento autorizacao acesso documentos" },
   { id: "auditoria", rotulo: "Exportar auditoria (CSV ou PDF)", detalhe: "Auditoria", palavras: "csv pdf exportar trilha logs eventos" },
   { id: "relatorios", rotulo: "Gerar relatório (PDF ou CSV)", detalhe: "Relatórios", palavras: "pdf csv exportar indicadores satisfacao cancelamento" },
+  { id: "travas", rotulo: "Travas e tarefas", detalhe: "Só leitura", palavras: "cron cobranca stripe live trava segredo comprovante" },
   { id: "llm-monitor", rotulo: "Saúde da BION IA", detalhe: "Monitor LLM", palavras: "ia llm modelo latencia falhas" },
   { id: "notificacoes", rotulo: "Notificações", detalhe: "Sua conta", palavras: "avisos sino alertas" },
   { id: "lembretes", rotulo: "Lembretes", detalhe: "Sua conta", palavras: "lembrete agenda" },
