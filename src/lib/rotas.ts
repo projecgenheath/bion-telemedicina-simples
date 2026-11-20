@@ -31,6 +31,7 @@ export type View =
   | "admin-medicos"
   | "admin-agendamentos"
   | "admin-repasses"
+  | "travas"
   | "medico-pacientes"
   | "paciente-app";
 
@@ -62,6 +63,7 @@ export const VIEW_TO_PATH: Record<View, string> = {
   "admin-medicos": "/admin-medicos",
   "admin-agendamentos": "/admin-agendamentos",
   "admin-repasses": "/admin-repasses",
+  travas: "/travas",
   "medico-pacientes": "/medico-pacientes",
   "paciente-app": "/paciente",
 };
@@ -93,6 +95,7 @@ export const SO_ADMIN: View[] = [
   "auditoria",
   "llm-monitor",
   "relatorios",
+  "travas",
 ];
 
 /** Exclusivas do médico. */

@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 import { useBion } from "@/lib/bion-store";
+import type { PainelResposta } from "@/lib/painel-forma";
 import { montarFila, type ItemFila, type EsperasMedicoResposta, type EvolucaoPendenteResposta, type NaoAtendidasResposta, type ReembolsosResposta, type RenovacoesPendentesResposta, type RepassesResposta, type SemDesfechoResposta } from "./metricas";
 
 /**
@@ -21,6 +22,8 @@ type DadosAdmin = {
   naoAtendidas: Fonte<NaoAtendidasResposta>;
   esperas: Fonte<EsperasMedicoResposta>;
   evolucaoPendente: Fonte<EvolucaoPendenteResposta>;
+  /** Números do Início calculados no servidor (janela de 30 dias + contagem de pacientes). */
+  painel: Fonte<PainelResposta>;
   fila: ItemFila[];
   /** Fila completa só depois das cinco rotas responderem (com ou sem erro). */
   filaPronta: boolean;
@@ -64,11 +67,12 @@ export function ProvedorDadosAdmin({ children }: { children: ReactNode }) {
   const [esperas, setEsperas] = useState<Fonte<EsperasMedicoResposta>>({ dados: null, erro: null, carregando: true });
   const [evolucaoPendente, setEvolucaoPendente] = useState<Fonte<EvolucaoPendenteResposta>>({ dados: null, erro: null, carregando: true });
   const [renovacoes, setRenovacoes] = useState<Fonte<RenovacoesPendentesResposta>>({ dados: null, erro: null, carregando: true });
+  const [painel, setPainel] = useState<Fonte<PainelResposta>>({ dados: null, erro: null, carregando: true });
   const [atualizando, setAtualizando] = useState(false);
   const [erroAtualizar, setErroAtualizar] = useState<string | null>(null);
 
   const buscarRotas = useCallback(async () => {
-    const [rp, rb, sd, na, es, ep, rn] = await Promise.all([
+    const [rp, rb, sd, na, es, ep, rn, pn] = await Promise.all([
       lerJson<RepassesResposta>("/api/admin/repasses?status=fechado"),
       lerJson<ReembolsosResposta>("/api/admin/reembolsos?status=em_analise"),
       lerJson<SemDesfechoResposta>("/api/admin/consultas/sem-desfecho"),
@@ -76,6 +80,7 @@ export function ProvedorDadosAdmin({ children }: { children: ReactNode }) {
       lerJson<EsperasMedicoResposta>("/api/admin/consultas/esperas-medico"),
       lerJson<EvolucaoPendenteResposta>("/api/admin/consultas/evolucao-pendente"),
       lerJson<RenovacoesPendentesResposta>("/api/admin/renovacoes/pendentes"),
+      lerJson<PainelResposta>("/api/admin/painel"),
     ]);
     setRepasses({ ...rp, carregando: false });
     setReembolsos({ ...rb, carregando: false });
@@ -84,7 +89,8 @@ export function ProvedorDadosAdmin({ children }: { children: ReactNode }) {
     setEsperas({ ...es, carregando: false });
     setEvolucaoPendente({ ...ep, carregando: false });
     setRenovacoes({ ...rn, carregando: false });
-    return [rp, rb, sd, na, es, ep, rn];
+    setPainel({ ...pn, carregando: false });
+    return [rp, rb, sd, na, es, ep, rn, pn];
   }, []);
 
   useEffect(() => {
@@ -141,13 +147,14 @@ export function ProvedorDadosAdmin({ children }: { children: ReactNode }) {
       esperas,
       evolucaoPendente,
       renovacoes,
+      painel,
       fila,
       filaPronta: !repasses.carregando && !reembolsos.carregando && !semDesfecho.carregando && !naoAtendidas.carregando && !esperas.carregando && !evolucaoPendente.carregando && !renovacoes.carregando,
       atualizando,
       atualizar,
       erroAtualizar,
     }),
-    [agora, repasses, reembolsos, semDesfecho, naoAtendidas, esperas, evolucaoPendente, renovacoes, fila, atualizando, atualizar, erroAtualizar],
+    [agora, repasses, reembolsos, semDesfecho, naoAtendidas, esperas, evolucaoPendente, renovacoes, painel, fila, atualizando, atualizar, erroAtualizar],
   );
   return <Ctx.Provider value={valor}>{children}</Ctx.Provider>;
 }

@@ -128,6 +128,12 @@ igual("fila: sem PIX", fila[0].chips.map((c) => c.rotulo), ["A pagar", "Sem chav
 const re = fila.find((i) => i.chave === "reembolso-e1")!;
 igual("fila: reembolso", [re.titulo, re.detalhe, re.destino], ["Reembolso · Paulo", "Dra. A · consulta ontem 10:00 · R$ 150,00", "admin-agendamentos?aba=reembolsos"]);
 igual("fila: médico em validação", [fila[4].titulo, fila[4].detalhe, fila[4].destino], ["Dr. 2", "Clínica · CRM 2-SP", "admin-medicos?aba=validacao&medico=2"]);
+igual("fila: médico, reembolso e chamado têm ref; repasse não", [
+  fila.find((i) => i.chave === "medico-2")?.ref,
+  re.ref,
+  fila.find((i) => i.chave === "chamado-t1")?.ref,
+  rr.ref ?? null,
+], [{ tipo: "medico", id: "2" }, { tipo: "reembolso", id: "e1" }, { tipo: "chamado", id: "t1" }, null]);
 igual("fila: auditoria crítica humanizada", fila[2].titulo, "Login falhou repetido");
 igual("fila: chamado abre a conversa", fila.find((i) => i.chave === "chamado-t1")!.destino, "suporte?chamado=t1");
 igual("humanizar mantém siglas", montarFila({ medicos: [], tickets: [], repasses: null, reembolsos: null, auditLogs: [{ ...logs[0], acao: "LGPD_COFRE_CONSULTADO" }] }, AGORA)[0].titulo, "LGPD cofre consultado");
@@ -153,6 +159,7 @@ igual("fila sem desfecho: chips (pago fica fora do repasse)", [filaD[0].chips.ma
   ["Sem desfecho", "Não pago"],
 ]);
 igual("fila sem desfecho: contagem", contarPorCategoria(filaD).desfecho, 2);
+igual("fila sem desfecho: ref para corrigir no card", filaD[0].ref, { tipo: "desfecho", id: "s1" });
 
 /* ---------- fila: chamada não atendida (toque) ---------- */
 const naoAtendidas: NaoAtendidaWire[] = [

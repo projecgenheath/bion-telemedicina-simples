@@ -1,32 +1,41 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { CalendarCheck, CheckCircle2, ChevronRight, FileDown, FileText, Handshake, Paperclip, Star, Stethoscope, TrendingUp, Users, XCircle } from "lucide-react";
+import { CalendarCheck, CheckCircle2, ChevronRight, FileDown, FileText, Handshake, Info, Paperclip, Star, Stethoscope, TrendingUp, Users, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { useBion, type Avaliacao, type Consulta } from "@/lib/bion-store";
 import { TelaModulo } from "../ui/TelaModulo";
 import { CardAdmin, KpiAdmin } from "../ui/CardAdmin";
 import { ChipEstado } from "../ui/ChipEstado";
-import { EstadoVazio } from "../ui/Estados";
+import { EstadoErro, EstadoVazio, Esqueleto } from "../ui/Estados";
 import { SheetAdmin } from "../ui/SheetAdmin";
 import { useDadosAdmin } from "../dados";
 import { estadoConsulta } from "../rotulos";
 import { hora, rotuloDia } from "../tempo";
+import { useRecurso } from "../repasses/recurso";
 import { exportarCsvRelatorio, exportarPdfRelatorio, type EntradaExportacao } from "./exportar";
 import {
   FILTROS_RELATORIO_PADRAO,
   PERIODOS,
-  calcularRelatorio,
-  filtrarAvaliacoesRelatorio,
-  filtrarConsultasRelatorio,
   notaMedia,
-  opcoesRelatorio,
   pacientesDoRecorte,
   rotuloMedico,
   textoFiltro,
+  type DadosRelatorio,
   type FiltrosRelatorio,
 } from "./relatorio";
+
+type RespostaRelatorio = {
+  completo: boolean;
+  totalConsultas: number;
+  totalAvaliacoes: number;
+  dados: DadosRelatorio;
+  consultas: Consulta[];
+  avaliacoes: Avaliacao[];
+  plataforma: { documentos: number; arquivos: number; consentimentos: number };
+  opcoes: { esp: string[]; med: string[] };
+};
 
 type Drill = null | "consultas" | "concluidas" | "canceladas" | "avaliacoes" | "pacientes";
 const TITULO_DRILL: Record<Exclude<Drill, null>, string> = {
@@ -43,22 +52,29 @@ const PAGINA = 50;
  * filtros (período, especialidade, médico), indicadores com detalhe por
  * trás de cada número, documentos/arquivos/consentimentos, especialidades,
  * desempenho por médico, avaliações recentes e as exportações CSV/PDF com a
- * mesma lógica (e o mesmo registro na auditoria). Dados reais do store.
+ * mesma lógica (e o mesmo registro na auditoria). Os números vêm do banco,
+ * não da carga de 500 do navegador.
  */
 export function RelatoriosModulo() {
   const router = useRouter();
-  const { consultas, documentos, avaliacoes, arquivos, consentimentos, registrarAudit } = useBion();
+  const { registrarAudit } = useBion();
   const { agora, atualizar, atualizando, erroAtualizar } = useDadosAdmin();
   const [filtros, setFiltros] = useState<FiltrosRelatorio>(FILTROS_RELATORIO_PADRAO);
   const [drill, setDrill] = useState<Drill>(null);
-
-  const opcoes = useMemo(() => opcoesRelatorio(consultas, avaliacoes), [consultas, avaliacoes]);
-  const consultasFiltradas = useMemo(() => filtrarConsultasRelatorio(consultas, filtros, agora), [consultas, filtros, agora]);
-  const avaliacoesFiltradas = useMemo(() => filtrarAvaliacoesRelatorio(avaliacoes, filtros, agora), [avaliacoes, filtros, agora]);
-  const dados = useMemo(() => calcularRelatorio(consultasFiltradas, avaliacoesFiltradas), [consultasFiltradas, avaliacoesFiltradas]);
+  const consultaUrl = `/api/admin/relatorios?periodo=${encodeURIComponent(filtros.periodo)}&especialidade=${encodeURIComponent(filtros.especialidade)}&medico=${encodeURIComponent(filtros.medico)}`;
+  const rec = useRecurso<RespostaRelatorio>(consultaUrl);
+  const resp = rec.dados;
+  const consultasFiltradas = resp?.consultas ?? [];
+  const avaliacoesFiltradas = resp?.avaliacoes ?? [];
+  const dados = resp?.dados;
+  const opcoes = resp?.opcoes ?? { esp: [], med: [] };
   const filtroTexto = textoFiltro(filtros);
-  const maxEsp = Math.max(1, ...dados.especialidades.map(([, n]) => n));
+  const maxEsp = Math.max(1, ...(dados?.especialidades ?? []).map(([, n]) => n));
   const padrao = filtros.periodo === "todos" && filtros.especialidade === "todas" && filtros.medico === "todos";
+  const aviso =
+    resp && !resp.completo
+      ? `A lista está cortada: ${resp.consultas.length.toLocaleString("pt-BR")} de ${resp.totalConsultas.toLocaleString("pt-BR")} consultas e ${resp.avaliacoes.length.toLocaleString("pt-BR")} de ${resp.totalAvaliacoes.toLocaleString("pt-BR")} avaliações. Os indicadores são do banco inteiro.`
+      : undefined;
 
   const mudar = (f: Partial<FiltrosRelatorio>) => setFiltros((x) => ({ ...x, ...f }));
   const limpar = () => {
@@ -67,22 +83,31 @@ export function RelatoriosModulo() {
     toast("Filtros limpos", { action: { label: "Desfazer", onClick: () => setFiltros(antes) }, duration: 5000 });
   };
 
-  const entrada: EntradaExportacao = {
-    filtroTexto,
-    dados,
-    consultas: consultasFiltradas,
-    avaliacoes: avaliacoesFiltradas,
-    documentos: documentos.length,
-    arquivos: arquivos.length,
-    consentimentos: consentimentos.length,
-  };
+  const entrada: EntradaExportacao | null = resp && dados
+    ? {
+        filtroTexto,
+        dados,
+        consultas: consultasFiltradas,
+        avaliacoes: avaliacoesFiltradas,
+        documentos: resp.plataforma.documentos,
+        arquivos: resp.plataforma.arquivos,
+        consentimentos: resp.plataforma.consentimentos,
+        aviso,
+      }
+    : null;
   const exportarCsv = () => {
+    if (!entrada) return;
     exportarCsvRelatorio(entrada, registrarAudit);
-    toast.success("Relatório CSV gerado.");
+    toast.success(aviso ? "Relatório CSV gerado. A lista está cortada e o arquivo avisa." : "Relatório CSV gerado.");
   };
   const exportarPdf = () => {
+    if (!entrada) return;
     const paginas = exportarPdfRelatorio(entrada, registrarAudit);
-    toast.success(`Relatório PDF gerado (${paginas} ${paginas === 1 ? "página" : "páginas"}).`);
+    toast.success(`Relatório PDF gerado (${paginas} ${paginas === 1 ? "página" : "páginas"}).${aviso ? " A lista está cortada e o arquivo avisa." : ""}`);
+  };
+  const recarregar = () => {
+    void atualizar();
+    rec.recarregar();
   };
 
   return (
@@ -90,14 +115,14 @@ export function RelatoriosModulo() {
       titulo="Relatórios"
       icone={TrendingUp}
       subtitulo="Indicadores em tempo real. Toque num número para ver o que há por trás dele."
-      onAtualizar={() => void atualizar()}
-      atualizando={atualizando}
+      onAtualizar={recarregar}
+      atualizando={atualizando || rec.carregando}
       erroAtualizar={erroAtualizar}
-      onTentarDeNovo={() => void atualizar()}
-      acoes={<BotoesExportar onCsv={exportarCsv} onPdf={exportarPdf} className="hidden sm:flex" />}
+      onTentarDeNovo={recarregar}
+      acoes={<BotoesExportar onCsv={exportarCsv} onPdf={exportarPdf} className="hidden sm:flex" disabled={!entrada} />}
       ferramentas={
         <div className="ba-animar space-y-2 w-full">
-          <BotoesExportar onCsv={exportarCsv} onPdf={exportarPdf} className="grid grid-cols-2 sm:hidden" />
+          <BotoesExportar onCsv={exportarCsv} onPdf={exportarPdf} className="grid grid-cols-2 sm:hidden" disabled={!entrada} />
           <div className="flex flex-wrap items-center gap-2">
             <div role="group" aria-label="Período" className="ba-abas overflow-x-auto max-w-full">
               {PERIODOS.map((p) => (
@@ -144,6 +169,19 @@ export function RelatoriosModulo() {
           {filtroTexto}
         </p>
 
+        {rec.erro && !resp ? (
+          <EstadoErro titulo="Não foi possível calcular o relatório" mensagem={rec.erro} onTentar={rec.recarregar} />
+        ) : !resp || !dados ? (
+          <Esqueleto variante="kpis" quantidade={5} rotulo="Calculando o relatório no servidor…" />
+        ) : (
+        <>
+        {aviso ? (
+          <div className="ba-aviso" data-tom="atencao" role="status">
+            <Info className="w-4 h-4 shrink-0 mt-0.5" aria-hidden />
+            <p>{aviso}</p>
+          </div>
+        ) : null}
+
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
           <KpiAdmin rotulo="Consultas" icone={CalendarCheck} valor={dados.total} detalhe={`${dados.concluidas} concluída(s)`} onAbrir={() => setDrill("consultas")} denso />
           <KpiAdmin rotulo="Concluídas" icone={CheckCircle2} valor={dados.concluidas} tom={dados.concluidas ? "ok" : undefined} detalhe="consultas realizadas" onAbrir={() => setDrill("concluidas")} denso />
@@ -169,9 +207,9 @@ export function RelatoriosModulo() {
 
         <CardAdmin titulo="Registros da plataforma" icone={FileText} denso>
           <ul className="grid grid-cols-3 gap-2 text-center">
-            <Registro icone={FileText} valor={documentos.length} rotulo="Documentos emitidos" detalhe="receitas e atestados" />
-            <Registro icone={Paperclip} valor={arquivos.length} rotulo="Arquivos trocados" detalhe="exames e anexos" />
-            <Registro icone={Handshake} valor={consentimentos.length} rotulo="Consentimentos" detalhe="acessos ao PDF" />
+            <Registro icone={FileText} valor={resp.plataforma.documentos} rotulo="Documentos emitidos" detalhe="receitas e atestados" />
+            <Registro icone={Paperclip} valor={resp.plataforma.arquivos} rotulo="Arquivos trocados" detalhe="exames e anexos" />
+            <Registro icone={Handshake} valor={resp.plataforma.consentimentos} rotulo="Consentimentos" detalhe="acessos ao PDF" />
           </ul>
           <p className="text-xs ba-texto-3 mt-3">Documentos, arquivos e consentimentos são o total da plataforma — os filtros acima não se aplicam a estes três.</p>
         </CardAdmin>
@@ -279,6 +317,8 @@ export function RelatoriosModulo() {
             <p className="text-xs ba-texto-3 mt-2">Cada exportação fica registrada na Auditoria.</p>
           </CardAdmin>
         </div>
+        </>
+        )}
       </div>
 
       <DetalheDrill
@@ -287,7 +327,7 @@ export function RelatoriosModulo() {
         consultas={consultasFiltradas}
         avaliacoes={avaliacoesFiltradas}
         agora={agora}
-        filtroTexto={filtroTexto}
+        filtroTexto={aviso ? `${filtroTexto} · lista parcial` : filtroTexto}
         onAbrirConsulta={(c) => router.push(`/admin-agendamentos?consulta=${encodeURIComponent(c.id)}`)}
         onAbrirMedico={(id) => router.push(`/admin-medicos?medico=${encodeURIComponent(id)}`)}
       />
@@ -298,13 +338,13 @@ export function RelatoriosModulo() {
 /** Nota com vírgula na tela (o PDF/CSV mantêm o formato antigo). */
 const virgula = (s: string) => s.replace(".", ",");
 
-function BotoesExportar({ onCsv, onPdf, className }: { onCsv: () => void; onPdf: () => void; className: string }) {
+function BotoesExportar({ onCsv, onPdf, className, disabled = false }: { onCsv: () => void; onPdf: () => void; className: string; disabled?: boolean }) {
   return (
     <div className={`gap-2 ${className}`}>
-      <button type="button" onClick={onCsv} className="ba-botao ba-botao-secundario !min-h-11 !px-3" aria-label="Exportar relatório em CSV">
+      <button type="button" onClick={onCsv} disabled={disabled} className="ba-botao ba-botao-secundario !min-h-11 !px-3" aria-label="Exportar relatório em CSV">
         <FileDown className="w-4 h-4" aria-hidden /> CSV
       </button>
-      <button type="button" onClick={onPdf} className="ba-botao ba-botao-primario !min-h-11 !px-3" aria-label="Gerar relatório em PDF">
+      <button type="button" onClick={onPdf} disabled={disabled} className="ba-botao ba-botao-primario !min-h-11 !px-3" aria-label="Gerar relatório em PDF">
         <FileDown className="w-4 h-4" aria-hidden /> PDF
       </button>
     </div>

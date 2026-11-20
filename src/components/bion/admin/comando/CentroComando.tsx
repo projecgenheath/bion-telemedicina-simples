@@ -64,19 +64,28 @@ const iniciais = (nome: string) =>
 export function CentroComando() {
   const router = useRouter();
   const { sessao, consultas, medicos, pacientes, tickets } = useBion();
-  const { agora, fila, filaPronta, repasses, reembolsos, atualizar, atualizando } = useDadosAdmin();
+  const { agora, fila, filaPronta, repasses, reembolsos, painel, atualizar, atualizando } = useDadosAdmin();
   const { fechar, abrirFila } = useCamadasAdmin();
   const ir = (v: View, consulta?: string) => {
     fechar();
     router.push(consulta ? `${urlDa(v)}?${consulta}` : urlDa(v));
   };
 
-  const hoje = useMemo(() => resumoHoje(consultas, agora), [consultas, agora]);
-  const serie = useMemo(() => serieDiaria(consultas, agora, 14), [consultas, agora]);
-  const especialidades = useMemo(() => especialidades30d(consultas, agora), [consultas, agora]);
+  // A carga do navegador (no máximo 500, as mais antigas) só entra se a rota
+  // do painel falhar. Enquanto ela carrega, não mostramos esses números.
+  const hojeLoja = useMemo(() => resumoHoje(consultas, agora), [consultas, agora]);
+  const serieLoja = useMemo(() => serieDiaria(consultas, agora, 14), [consultas, agora]);
+  const especialidadesLoja = useMemo(() => especialidades30d(consultas, agora), [consultas, agora]);
+  const painelDados = painel.erro ? null : painel.dados;
+  const usandoLoja = Boolean(painel.erro);
+  const carregandoNumeros = !painelDados && !usandoLoja;
+  const hoje = painelDados?.hoje ?? (usandoLoja ? hojeLoja : null);
+  const serie = painelDados?.serie ?? (usandoLoja ? serieLoja : []);
+  const especialidades = painelDados?.especialidades ?? (usandoLoja ? especialidadesLoja : []);
   const med = resumoMedicos(medicos);
   const chamadosAbertos = tickets.filter((t) => t.status !== "resolvido").length;
-  const pacientesAtivos = pacientes.filter((p) => p.status === "ativo").length;
+  const pacientesCadastrados = painelDados ? painelDados.pacientesCadastrados : usandoLoja ? pacientes.length : null;
+  const pacientesAtivos = painelDados ? painelDados.pacientesAtivos : usandoLoja ? pacientes.filter((p) => p.status === "ativo").length : null;
   const avisosRepasse = (repasses.dados?.repasses ?? []).reduce(
     (acc, r) => {
       for (const a of avisosRecebimento(r.recebimento)) acc[a.rotulo] = (acc[a.rotulo] ?? 0) + 1;
@@ -89,9 +98,9 @@ export function CentroComando() {
   const totalSerie = serie.reduce((a, s) => a + s.total, 0);
 
   // Destaque do hero: consulta na janela ±30 min (ao vivo) ou a próxima de hoje.
-  const aoVivo = hoje.aoVivo.length > 0;
-  const destaque = hoje.aoVivo[0] ?? hoje.proximas[0];
-  const contagemHoje = hoje.agendadas + hoje.concluidas + hoje.reagendar + hoje.faltas;
+  const aoVivo = (hoje?.aoVivo.length ?? 0) > 0;
+  const destaque = hoje?.aoVivo[0] ?? hoje?.proximas[0];
+  const contagemHoje = hoje ? hoje.agendadas + hoje.concluidas + hoje.reagendar + hoje.faltas : 0;
 
   return (
     <div className="relative overflow-hidden px-4 lg:px-8 pt-[max(1.25rem,env(safe-area-inset-top))] lg:pt-6 pb-28 lg:pb-10 max-w-[1400px] mx-auto w-full space-y-6">
@@ -124,10 +133,22 @@ export function CentroComando() {
         </p>
       </div>
 
-      {consultas.length >= LIMITE_BOOTSTRAP ? (
+      {painel.erro ? (
+        <div className="ba-aviso relative" data-tom="critico" role="alert">
+          <Info className="w-4 h-4 shrink-0 mt-0.5" aria-hidden />
+          <p>Não foi possível calcular os números no servidor ({painel.erro}). Os números abaixo usam a carga do navegador, no máximo {LIMITE_BOOTSTRAP} consultas.</p>
+        </div>
+      ) : null}
+      {usandoLoja && consultas.length >= LIMITE_BOOTSTRAP ? (
         <div className="ba-aviso relative" data-tom="atencao">
           <Info className="w-4 h-4 shrink-0 mt-0.5" aria-hidden />
           <p>O servidor carrega no máximo {LIMITE_BOOTSTRAP} consultas para o admin. Pode haver consultas fora dessa carga que não entram nos números abaixo.</p>
+        </div>
+      ) : null}
+      {painelDados && !painelDados.completo ? (
+        <div className="ba-aviso relative" data-tom="atencao">
+          <Info className="w-4 h-4 shrink-0 mt-0.5" aria-hidden />
+          <p>A janela de 30 dias passou do teto do painel. A contagem de pacientes continua exata. A agenda de hoje e a série podem estar incompletas.</p>
         </div>
       ) : null}
 
@@ -155,12 +176,14 @@ export function CentroComando() {
                     <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60 motion-safe:animate-ping" />
                     <span className="relative inline-flex rounded-full w-2.5 h-2.5 bg-emerald-400" />
                   </span>
-                  {hoje.aoVivo.length} na janela ±30 min
+                  {hoje?.aoVivo.length ?? 0} na janela ±30 min
                 </span>
               ) : null}
             </div>
 
-            {destaque ? (
+            {carregandoNumeros ? (
+              <div className="text-2xl font-black leading-tight" aria-busy="true">Carregando a agenda de hoje…</div>
+            ) : hoje && destaque ? (
               <>
                 <div className="flex items-center gap-4">
                   <span
@@ -253,20 +276,22 @@ export function CentroComando() {
           <KpiAdmin
             icone={CalendarDays}
             rotulo="Consultas hoje"
-            valor={hoje.total - hoje.canceladas}
+            valor={hoje ? hoje.total - hoje.canceladas : 0}
+            carregando={carregandoNumeros}
             // O detalhe precisa SOMAR o valor: agendadas + concluídas +
             // reagendar + faltas = total − canceladas (as canceladas ficam
             // fora do número e do detalhe; antes reagendar/faltas sumiam
             // da conta e a soma não fechava).
-            detalhe={`${hoje.agendadas} a realizar · ${hoje.concluidas} concluídas${hoje.reagendar ? ` · ${hoje.reagendar} aguardando reagendamento` : ""}${hoje.faltas ? ` · ${hoje.faltas} ${hoje.faltas === 1 ? "falta do paciente" : "faltas do paciente"}` : ""}`}
+            detalhe={hoje ? `${hoje.agendadas} a realizar · ${hoje.concluidas} concluídas${hoje.reagendar ? ` · ${hoje.reagendar} aguardando reagendamento` : ""}${hoje.faltas ? ` · ${hoje.faltas} ${hoje.faltas === 1 ? "falta do paciente" : "faltas do paciente"}` : ""}` : "Calculando no servidor"}
             onAbrir={() => ir("admin-agendamentos")}
           />
           <KpiAdmin
             icone={CalendarClock}
             rotulo="Agora ± 30 min"
-            valor={hoje.aoVivo.length}
-            tom={hoje.aoVivo.length ? "sinal" : undefined}
-            detalhe={hoje.aoVivo.length ? "em sala ou prestes a começar" : "nenhuma neste horário"}
+            valor={hoje?.aoVivo.length ?? 0}
+            carregando={carregandoNumeros}
+            tom={hoje?.aoVivo.length ? "sinal" : undefined}
+            detalhe={!hoje ? "Calculando no servidor" : hoje.aoVivo.length ? "em sala ou prestes a começar" : "nenhuma neste horário"}
           />
           <KpiAdmin
             icone={Inbox}
@@ -305,7 +330,9 @@ export function CentroComando() {
               </button>
             }
           >
-            {hoje.proximas.length === 0 ? (
+            {carregandoNumeros || !hoje ? (
+              <p className="text-sm ba-texto-2 py-2">Calculando no servidor.</p>
+            ) : hoje.proximas.length === 0 ? (
               <p className="text-sm ba-texto-2 py-2">Nenhuma consulta restante hoje.</p>
             ) : (
               <ul className="divide-y divide-[color:var(--ba-borda)]">
@@ -325,10 +352,12 @@ export function CentroComando() {
                 ))}
               </ul>
             )}
-            {hoje.proximas.length > 6 ? <p className="text-xs ba-texto-3 mt-2">e mais {hoje.proximas.length - 6} hoje</p> : null}
+            {hoje && hoje.proximas.length > 6 ? <p className="text-xs ba-texto-3 mt-2">e mais {hoje.proximas.length - 6} hoje</p> : null}
           </CardAdmin>
 
           <CardAdmin titulo="Últimos 14 dias" icone={Activity}>
+            {carregandoNumeros ? <p className="text-sm ba-texto-2">Calculando no servidor.</p> : (
+            <>
             <div
               role="img"
               aria-label={`${totalSerie} consultas não canceladas nos últimos 14 dias; hoje: ${serie[serie.length - 1]?.total ?? 0}.`}
@@ -352,6 +381,8 @@ export function CentroComando() {
             <p className="text-xs ba-texto-2 mt-2">
               {totalSerie} consultas no período · hoje {serie[serie.length - 1]?.total ?? 0}
             </p>
+            </>
+            )}
           </CardAdmin>
         </div>
       </section>
@@ -375,9 +406,15 @@ export function CentroComando() {
             </div>
           </CardAdmin>
           <CardAdmin titulo="Pacientes" icone={HeartPulse} acao={<AbrirModulo onClick={() => ir("admin-pacientes")} rotulo="Abrir Pacientes" />}>
-            <div className="ba-numero text-3xl">{pacientes.length}</div>
+            {pacientesCadastrados === null ? (
+              <div className="ba-esqueleto h-9 w-16" aria-hidden />
+            ) : (
+              <div className="ba-numero text-3xl">{pacientesCadastrados}</div>
+            )}
             <p className="text-xs ba-texto-2">
-              cadastrados · {pacientesAtivos} {pacientesAtivos === 1 ? "ativo" : "ativos"}
+              {pacientesAtivos === null
+                ? "contando no banco"
+                : `cadastrados · ${pacientesAtivos} ${pacientesAtivos === 1 ? "ativo" : "ativos"}`}
             </p>
           </CardAdmin>
           <CardAdmin
@@ -390,7 +427,9 @@ export function CentroComando() {
             <p className="text-xs ba-texto-2">{chamadosAbertos === 1 ? "aberto ou em atendimento" : "abertos ou em atendimento"}</p>
           </CardAdmin>
           <CardAdmin titulo="Especialidades · 30 dias" icone={Activity}>
-            {especialidades.length === 0 ? (
+            {carregandoNumeros ? (
+              <p className="text-sm ba-texto-2">Calculando no servidor.</p>
+            ) : especialidades.length === 0 ? (
               <p className="text-sm ba-texto-2">Sem consultas nos últimos 30 dias.</p>
             ) : (
               <ul className="space-y-2">
@@ -418,9 +457,15 @@ export function CentroComando() {
         <h2 id="cc-dinheiro" className="ba-rotulo">Dinheiro</h2>
         <div className="grid sm:grid-cols-3 gap-3">
           <CardAdmin titulo="Pagas hoje" icone={Wallet} tom="dinheiro">
-            <div className="ba-numero text-3xl">{hoje.pagas}</div>
+            {carregandoNumeros || !hoje ? (
+              <div className="ba-esqueleto h-9 w-16" aria-hidden />
+            ) : (
+              <div className="ba-numero text-3xl">{hoje.pagas}</div>
+            )}
             <p className="text-xs ba-texto-2">
-              {brl(hoje.brutoPagoCentavos)} bruto (valor de tabela, antes de taxas e repasse)
+              {carregandoNumeros || !hoje
+                ? "Calculando no servidor."
+                : `${brl(hoje.brutoPagoCentavos)} bruto (valor de tabela, antes de taxas e repasse)`}
             </p>
           </CardAdmin>
           <CardAdmin

@@ -32,6 +32,7 @@ export type ReembolsoWire = {
   status: string;
   valorCentavos: number;
   criadoEm: string;
+  justificativa?: string;
   consulta: { id: string; especialidade: string; dataInicio: string; medico: string; paciente: string } | null;
 };
 export type ReembolsosResposta = { total: number; reembolsos: ReembolsoWire[] };
@@ -195,6 +196,11 @@ export type ItemFila = {
   ts?: number;
   /** View de destino (rotas.ts), com parâmetros opcionais ("admin-repasses?repasse=ID"); null = sem tela. */
   destino: string | null;
+  /**
+   * Decisão que a Fila resolve no próprio card. Sem isto, o toque só abre o módulo.
+   * Repasse não entra: pagar não é gesto.
+   */
+  ref?: { tipo: "medico" | "reembolso" | "chamado" | "desfecho"; id: string };
 };
 
 export function montarFila(
@@ -228,6 +234,7 @@ export function montarFila(
       chips: [{ rotulo: "Sem desfecho", tom: "atencao" }, c.pago ? { rotulo: "Pago · fora do repasse", tom: "dinheiro" } : { rotulo: "Não pago", tom: "neutro" }],
       ts,
       destino: `admin-agendamentos?consulta=${encodeURIComponent(c.id)}&acao=desfecho`,
+      ref: { tipo: "desfecho", id: c.id },
     });
   }
 
@@ -322,6 +329,7 @@ export function montarFila(
       detalhe: [m.especialidade, m.crm ? `CRM ${m.crm}` : ""].filter(Boolean).join(" · "),
       chips: [{ rotulo: "Em validação", tom: "atencao" }],
       destino: `admin-medicos?aba=validacao&medico=${encodeURIComponent(m.id)}`,
+      ref: { tipo: "medico", id: m.id },
     });
   }
 
@@ -340,6 +348,7 @@ export function montarFila(
       chips: [estadoReembolso(r.status)],
       ts: Number.isFinite(ts) ? ts : undefined,
       destino: "admin-agendamentos?aba=reembolsos",
+      ref: { tipo: "reembolso", id: r.id },
     });
   }
 
@@ -370,6 +379,7 @@ export function montarFila(
       detalhe: [t.usuario, t.perfil === "medico" ? "médico" : "paciente", t.data].filter(Boolean).join(" · "),
       chips: [e],
       destino: `suporte?chamado=${encodeURIComponent(t.id)}`,
+      ref: { tipo: "chamado", id: t.id },
     });
   }
 
