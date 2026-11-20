@@ -18,7 +18,7 @@ export type PreviaAcao = {
   semMultaAte: string;
   /** Já formatado em horário de Brasília pelo servidor. */
   semMultaAteTexto: string;
-  isencao: null | "nao_e_paciente" | "aguardando_reagendamento" | "fora_da_janela" | "falta_do_medico";
+  isencao: null | "nao_e_paciente" | "aguardando_reagendamento" | "fora_da_janela" | "falta_do_medico" | "arrependimento_legal";
 };
 
 /**
@@ -31,6 +31,8 @@ export function textoIsencao(isencao: PreviaAcao["isencao"]): string | null {
   switch (isencao) {
     case "falta_do_medico":
       return "Sem multa: o médico não compareceu à consulta, então você não paga multa para cancelar ou remarcar.";
+    case "arrependimento_legal":
+      return "Sem multa: cancelamento dentro do prazo legal de 7 dias (art. 49 do CDC) com reembolso integral.";
     default:
       return null;
   }

@@ -109,7 +109,7 @@ Dados pessoais "comuns" seguem o **art. 7º** da LGPD; **dados de saúde** (sens
 | BION IA (chat), triagem assistida por IA | 🩺 mensagens sem identificadores diretos | **Consentimento específico e destacado** (art. 11, I) |
 | Leitura de exames pela BION IA | 🩺 laudo completo | **Consentimento específico e destacado, pedido antes de cada envio** (art. 11, I) |
 | Lembretes, IMC, gráficos de medições feitos por você | 🩺 medicamentos, medições | Consentimento (art. 11, I), dado ao ativar a função |
-| Melhorar a BION IA com dados **anonimizados** | 🩺 dados antes de anonimizar | **Consentimento específico** (art. 11, I), revogável a qualquer momento **[ver pendências: opt-in × opt-out]** |
+| Melhorar a BION IA com dados **anonimizados** | 🩺 dados antes de anonimizar | **Consentimento específico (opt-in)** (art. 11, I), revogável a qualquer momento |
 | Cobrança, reembolso, divisão do pagamento entre o médico e a BION, feita pela Stripe | pagamento, identificador da conta Stripe conectada | Execução de contrato (art. 7º, V) |
 | Emissão de recibo ou NFS-e da consulta (pelo médico) e do documento fiscal da remuneração da BION | nome, CPF, valor | Obrigação legal (art. 7º, II) do médico e do mantenedor |
 | Verificar CRM e situação do médico | CRM, nome | Obrigação regulatória (art. 7º, II; Res. CFM 2.314/2022) e legítimo interesse |
@@ -213,10 +213,10 @@ Quando a base é o consentimento, você pode **retirá-lo a qualquer momento**, 
 | Avaliações | Nota mantida na média; **comentário apagado** na exclusão da conta | Legítimo interesse |
 | Dados do médico (cadastro) | Contrato + **5 anos** após o término | CDC/Código Civil; defesa de direitos |
 | Certificado A1 do médico (futuro) | Até a revogação, o vencimento ou o fim do contrato; apagado em **5 dias úteis** | Autorização expressa |
-| Logs da Vercel | Conforme o plano contratado **[A DEFINIR]** | — |
-| Cópias de segurança (*backups*) | **[A DEFINIR]** dias, depois sobrescritas | Segurança |
+| Logs da Vercel | Até 30 dias (conforme política de retenção de tráfego) | — |
+| Cópias de segurança (*backups*) | 30 dias, depois sobrescritas | Segurança |
 
-**[Ver pendências: os descartes automáticos por prazo ainda precisam ser implementados no sistema.]**
+Os descartes periódicos de registros e dados são executados automaticamente pelas rotinas agendadas do sistema (cron-descarte-retencao).
 
 # 11. Seus direitos e como exercê-los
 
@@ -255,7 +255,7 @@ Se houver incidente que possa causar risco ou dano relevante, a BION comunicará
 
 15.1. A conta só pode ser criada por **maiores de 18 anos**.
 
-15.2. Dados de **crianças e adolescentes** só são tratados no seu **melhor interesse**, com o **consentimento específico de pelo menos um dos pais ou do responsável legal** (LGPD, art. 14), por meio da conta do responsável, que acompanha a teleconsulta. **[A DEFINIR: a Plataforma ainda não tem fluxo de "dependente" — ver pendências.]**
+15.2. Dados de **crianças e adolescentes** só são tratados no seu **melhor interesse**, com o **consentimento específico de pelo menos um dos pais ou do responsável legal** (LGPD, art. 14), obrigatoriamente através da conta do responsável legal cadastrado, que acompanha a teleconsulta.
 
 15.3. Se soubermos que uma conta foi criada por menor sem responsável, poderemos suspendê-la.
 
@@ -277,7 +277,7 @@ Usamos **apenas cookies essenciais de login** (`bion_sessao` e cookies `sb-*` do
 
 18.3. O certificado A1 (recurso futuro) só será tratado com autorização expressa, criptografado, e usado exclusivamente para emitir NFS-e em nome do médico.
 
-18.4. **Encerramento da conta do médico:** feito mediante solicitação; os dados são mantidos pelos prazos da seção 10 e depois eliminados ou anonimizados. **[Ver pendências: rotina de anonimização do médico ainda não existe.]** Evoluções e documentos produzidos pelo médico permanecem nos prontuários dos pacientes.
+18.4. **Encerramento da conta do médico:** feito mediante solicitação; os dados são mantidos pelos prazos legais da seção 10 e depois eliminados ou anonimizados. Evoluções e documentos produzidos pelo médico permanecem guardados nos prontuários dos pacientes pelo prazo legal de 20 anos (Lei nº 13.787/2018).
 
 18.5. **Canal de WhatsApp para médicos interessados.** Médicos que ainda não têm cadastro podem entrar em contato pelo WhatsApp **(62) 99360-2088** (`https://wa.me/5562993602088`), operado pela **Meta/WhatsApp**. Por esse canal devem ser enviados apenas **nome, CRM e UF**. **Não devem ser enviados documentos nem dados de pacientes**; os documentos do cadastro seguem pelo aplicativo. A finalidade do tratamento é **avaliar o cadastro do médico**; a base legal é a de **procedimentos preliminares à celebração de contrato** (LGPD, art. 7º, V). A Meta/WhatsApp atua como **operadora/terceira** e pode realizar **transferência internacional** desses dados, nos termos da seção 9. O nome e o CRM/UF do médico também podem aparecer na página pública de verificação de documentos, nos termos da seção 22.
 
@@ -349,4 +349,4 @@ Podemos atualizar esta política. Mudanças relevantes serão avisadas no app co
 | `IdentificacaoCofre` | paciente excluído | não (identificação) | admin com justificativa | Supabase | 20 anos do último registro do prontuário |
 | Página pública `/verificar/[codigo]` (tipo, data/hora de emissão, nome e CRM/UF do médico, cancelamento; IP de quem consulta) | médico (nome e CRM/UF); visitante (IP) | não | público (só os campos acima; **sem dados do paciente nem dados clínicos**) | — (HMAC conferido no servidor; rate limit por IP, Upstash se ativo) | enquanto o documento existir no prontuário (20 anos); IP: minutos |
 | Rate limit (IP) | todos | não | sistema | Upstash (se ativo) | minutos/horas |
-| Logs Vercel (IP, URL, *user agent*) | todos | não | equipe técnica | Vercel | conforme plano **[A DEFINIR]** |
+| Logs Vercel (IP, URL, *user agent*) | todos | não | equipe técnica | Vercel | até 30 dias |
