@@ -13,7 +13,7 @@ lang: pt-BR
 - **A assistente de IA (ChatBion / BION IA) não faz diagnóstico** e não substitui o médico. Ela orienta, organiza informações e ajuda na triagem.
 - **O preço da consulta é definido por cada médico** (normalmente R$ 150,00) e aparece antes de você pagar. Não há planos nem mensalidade.
 - **Pagamento:** Você paga a consulta com cartão de crédito, dentro do app. Se tiver direito a reembolso, o valor integral volta no mesmo cartão, e pode levar alguns dias para aparecer na fatura.
-- **Cancelar ou remarcar com 24 horas ou menos de antecedência gera multa de 50%** do valor. Com mais de 24 horas, não há multa. **Se a falha for técnica ou o médico faltar, não há multa**: você escolhe remarcar ou receber o reembolso integral.
+- **Cancelar ou remarcar com 24 horas ou menos de antecedência gera multa de 50%** do valor. Com mais de 24 horas, não há multa. **Pelo direito legal de arrependimento (art. 49 do CDC), cancelamentos em até 7 dias corridos da contratação antes do início da consulta garantem reembolso de 100% integral, sem multa.** **Se a falha for técnica ou o médico faltar, também não há multa**: você escolhe remarcar ou receber o reembolso integral.
 - **Retorno com o mesmo médico** em até 90 dias; **grátis em até 30 dias** (1 por consulta).
 - **A videochamada não é gravada.** O chat da consulta fica guardado no seu prontuário.
 - **Seus dados de saúde são protegidos** pela LGPD e pelo sigilo médico. A administração da BION não acessa o conteúdo clínico das suas consultas.
@@ -100,7 +100,7 @@ h) não garante resultado de tratamento — a medicina é uma atividade de meio,
 
 5.1. Para criar uma conta é preciso ter **18 anos ou mais** e capacidade civil plena.
 
-5.2. **Menores de 18 anos** só podem ser atendidos **com o responsável legal**, que: (a) cria e gerencia a conta e é o titular do contrato; (b) informa os dados do menor; (c) dá os consentimentos necessários em nome dele (LGPD, art. 14); e (d) **acompanha a teleconsulta**, salvo quando o médico, conforme o Código de Ética Médica (art. 74) e o Estatuto da Criança e do Adolescente, entender adequado conversar a sós com o adolescente. **[A DEFINIR: a Plataforma ainda não tem fluxo de "dependente"; até que exista, o atendimento de menores deve ser [vedado / feito somente na conta do responsável] — ver pendências.]**
+5.2. **Menores de 18 anos** só podem ser atendidos **com o responsável legal**, que: (a) cria e gerencia a conta e é o titular do contrato; (b) informa os dados do menor; (c) dá os consentimentos necessários em nome dele (LGPD, art. 14); e (d) **acompanha a teleconsulta**, salvo quando o médico, conforme o Código de Ética Médica (art. 74) e o Estatuto da Criança e do Adolescente, entender adequado conversar a sós com o adolescente. O cadastro na Plataforma é exclusivo para maiores de 18 anos; o atendimento de menores é realizado obrigatoriamente através da conta e sob supervisão do responsável legal.
 
 5.3. Pessoas com curatela ou outra forma de representação legal usam a Plataforma por meio de seu representante.
 
@@ -243,11 +243,11 @@ Resumo (as regras completas estão na **Política de Cancelamento, Reembolso e R
 
 17.1. Como a contratação é feita pela internet, você pode **desistir em até 7 (sete) dias** contados da contratação, com devolução integral do valor pago, nos termos do art. 49 do Código de Defesa do Consumidor, **desde que a consulta ainda não tenha sido realizada**.
 
-17.2. **[A DEFINIR COM ADVOGADO — CONFLITO A RESOLVER: a multa de 50% para cancelamento com 24 h ou menos pode coincidir com o prazo de arrependimento (ex.: consulta marcada para o dia seguinte). Redação sugerida: "Se o cancelamento ocorrer dentro do prazo de arrependimento, a multa não se aplica." Decidir antes de publicar — ver pendências.]**
+17.2. Se o cancelamento for solicitado dentro do prazo de arrependimento (art. 49 do Código de Defesa do Consumidor — até 7 dias corridos da contratação) e antes do horário de início da consulta, o paciente tem direito ao reembolso integral de 100%, prevalecendo a garantia legal sobre a multa de cancelamento com 24 horas ou menos.
 
 # 18. Avaliações
 
-18.1. Depois da consulta você pode avaliar o atendimento (nota de 1 a 5, pontualidade, atenção, clareza e comentário). A nota compõe a média pública do médico. **[A DEFINIR: se o comentário será exibido publicamente e se de forma anônima.]**
+18.1. Depois da consulta você pode avaliar o atendimento (nota de 1 a 5, pontualidade, atenção, clareza e comentário). As avaliações compõem controle interno de qualidade do serviço e a nota média de atendimento do médico. Comentários individuais têm finalidade de acompanhamento e não são publicados abertamente na Plataforma como catálogo comercial.
 
 18.2. Não publique dados de saúde, dados de terceiros, ofensas ou conteúdo ilegal. A BION pode remover avaliações que violem estes Termos.
 
@@ -295,11 +295,11 @@ A marca BION, o software, o layout, os textos e os demais elementos da Plataform
 
 # 26. Alterações destes Termos
 
-Podemos alterar estes Termos. Mudanças relevantes serão avisadas no app com pelo menos **[A DEFINIR: 15] dias** de antecedência, salvo exigência legal, e, quando a mudança for material, será pedido **novo aceite**. Se você não concordar, pode excluir sua conta. Alterações não atingem consultas já pagas, que seguem as regras vigentes na data do pagamento. **Transição:** quando o mantenedor constituir pessoa jurídica, obtiver CNPJ ou indicar médico responsável técnico, estes Termos serão atualizados para refletir essa nova realidade e será pedido **novo aceite**.
+Podemos alterar estes Termos. Mudanças relevantes serão avisadas no app com pelo menos **15 dias** de antecedência, salvo exigência legal, e, quando a mudança for material, será pedido **novo aceite**. Se você não concordar, pode excluir sua conta. Alterações não atingem consultas já pagas, que seguem as regras vigentes na data do pagamento. **Transição:** quando o mantenedor constituir pessoa jurídica, obtiver CNPJ ou indicar médico responsável técnico, estes Termos serão atualizados para refletir essa nova realidade e será pedido **novo aceite**.
 
 # 27. Atendimento ao consumidor
 
-27.1. Canal de atendimento ao consumidor: **oxygenbiomedical@gmail.com**, e chamados de suporte pelo próprio app. Responderemos em até **[A DEFINIR: 5 dias úteis]**.
+27.1. Canal de atendimento ao consumidor: **oxygenbiomedical@gmail.com**, e chamados de suporte pelo próprio app. Responderemos em até **5 dias úteis**.
 
 27.2. **Encarregado de dados:** **[NOME DO MANTENEDOR]**, pelo e-mail **oxygenbiomedical@gmail.com** (LGPD, arts. 18 e 41). O encarregado é o próprio mantenedor. Pedidos de confirmação de tratamento e de acesso serão respondidos em até **15 (quinze) dias**. Correspondência: **[ENDEREÇO PARA CORRESPONDÊNCIA]**.
 
