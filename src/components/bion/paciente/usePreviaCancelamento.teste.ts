@@ -99,12 +99,18 @@ eq("processado não muda", rotuloReembolso("processado", 7500).texto, "Reembolso
 
 /* B39 — isenção falta_do_medico tem tipo e texto próprios. */
 eq("texto da isenção falta_do_medico", /médico não compareceu/.test(textoIsencao("falta_do_medico") ?? ""), true);
+eq("texto da isenção arrependimento_legal", /arrependimento|CDC/.test(textoIsencao("arrependimento_legal") ?? ""), true);
 eq("outras isenções sem texto próprio", textoIsencao("fora_da_janela"), null);
 eq("sem isenção sem texto", textoIsencao(null), null);
 {
   const fresca = clone(base());
   fresca.cancelar.isencao = "falta_do_medico";
   eq("isenção falta_do_medico entra na comparação da prévia", previaCancelamentoMudou(base(), fresca), true);
+}
+{
+  const fresca = clone(base());
+  fresca.cancelar.isencao = "arrependimento_legal";
+  eq("isenção arrependimento_legal entra na comparação da prévia", previaCancelamentoMudou(base(), fresca), true);
 }
 
 console.log(`usePreviaCancelamento: ${ok} ok, ${falhas} falha(s)`);
