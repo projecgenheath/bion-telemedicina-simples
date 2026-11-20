@@ -161,12 +161,15 @@ details[open].ln-faq{border-color:rgba(36,5,141,.35);background:rgba(36,5,141,.0
 }
 `;
 
-const ESPECIALIDADES_MARQUEE = [
-  "Clínica Geral",
-  "Cardiologia",
-  "Dermatologia",
-  "Pediatria",
-  "Ortopedia",
+const DIFERENCIAIS_MARQUEE = [
+  "Atendimento médico por vídeo",
+  "Profissionais com CRM verificado",
+  "Sem mensalidade ou fidelidade",
+  "1 retorno sem custo em até 30 dias",
+  "Privacidade e segurança LGPD",
+  "Receitas e pedidos digitais",
+  "Direto pelo navegador",
+  "Pagamento com cartão via Stripe",
 ];
 
 const PASSOS = [
@@ -175,7 +178,7 @@ const PASSOS = [
     icone: Zap,
     titulo: "Agende",
     texto:
-      "Escolha a especialidade, o médico e o horário. Pagamento com cartão em segundos, sem sair de casa.",
+      "Escolha o médico pelo perfil verificado e o horário conveniente. Pagamento com cartão em segundos, sem sair de casa.",
   },
   {
     n: "02",
@@ -221,7 +224,7 @@ const BENEFICIOS_PACIENTE = [
     icone: CalendarCheck,
     titulo: "Agende em 1 minuto",
     texto:
-      "Especialidade, médico e horário em poucos toques. Pague com cartão e receba a confirmação na hora.",
+      "Médico com CRM verificado e horário em poucos toques. Pague com cartão e receba a confirmação na hora.",
   },
   {
     icone: Video,
@@ -653,9 +656,11 @@ export function Landing() {
                       <Stethoscope className="h-11 w-11" />
                     </div>
                     <div className="text-center">
-                      <div className="text-base font-black text-white">Dra. Ana Beatriz</div>
+                      <div className="text-base font-black text-white">
+                        Dra. Exemplo <span className="ml-1.5 rounded-full bg-amber-400/20 px-2 py-0.5 text-[10px] font-bold text-amber-300">Exemplo</span>
+                      </div>
                       <div className="text-xs font-semibold text-[#9ac1f4]">
-                        Cardiologia • CRM verificado
+                        Médica com CRM verificado • Imagem ilustrativa
                       </div>
                     </div>
                   </div>
@@ -699,11 +704,11 @@ export function Landing() {
           </div>
         </div>
 
-        {/* marquee de especialidades */}
+        {/* marquee de diferenciais e benefícios */}
         <div className="relative border-t border-white/10 bg-[#0b1424]/70 py-5 backdrop-blur">
           <div className="ln-marquee" aria-hidden>
             <div className="ln-marquee-track">
-              {[...ESPECIALIDADES_MARQUEE, ...ESPECIALIDADES_MARQUEE, ...ESPECIALIDADES_MARQUEE, ...ESPECIALIDADES_MARQUEE].map((nome, i) => (
+              {[...DIFERENCIAIS_MARQUEE, ...DIFERENCIAIS_MARQUEE, ...DIFERENCIAIS_MARQUEE, ...DIFERENCIAIS_MARQUEE].map((nome, i) => (
                 <span
                   key={i}
                   className="whitespace-nowrap rounded-full border border-white/10 bg-white/5 px-5 py-2 text-sm font-bold text-white/75"
@@ -715,7 +720,7 @@ export function Landing() {
             </div>
           </div>
           <span className="sr-only">
-            Especialidades disponíveis: {ESPECIALIDADES_MARQUEE.join(", ")}.
+            Diferenciais da BION: {DIFERENCIAIS_MARQUEE.join(", ")}.
           </span>
         </div>
       </section>
@@ -800,8 +805,10 @@ export function Landing() {
                       <span className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-[#24058D] bg-[#16a34a]" aria-hidden />
                     </span>
                     <div>
-                      <div className="text-sm font-black text-white">Dra. Ana Beatriz</div>
-                      <div className="text-[11px] font-semibold text-[#9ac1f4]">Cardiologia • online agora</div>
+                      <div className="text-sm font-black text-white">
+                        Dra. Exemplo <span className="ml-1.5 rounded-full bg-white/20 px-1.5 py-0.5 text-[9px] font-bold text-amber-200">Exemplo</span>
+                      </div>
+                      <div className="text-[11px] font-semibold text-[#9ac1f4]">Médica com CRM verificado • Ilustrativo</div>
                     </div>
                     <Video className="ml-auto h-5 w-5 text-white/70" />
                   </div>
@@ -1114,8 +1121,11 @@ export function Landing() {
             <div>
               <div className="text-sm font-black text-white">BION</div>
               <div className="text-xs font-semibold text-white/50">
-                © 2026 — Telemedicina para pacientes e médicos
+                © 2026 — Plataforma de tecnologia para telemedicina
               </div>
+              <p className="mt-1 max-w-xl text-[11px] leading-relaxed text-white/40">
+                A BION é uma plataforma tecnológica de intermediação. As consultas são realizadas por médicos autônomos com CRM ativo, responsáveis técnicos pelo atendimento. Em caso de urgência ou emergência, ligue 192 (SAMU) ou procure um pronto-socorro.
+              </p>
             </div>
           </div>
           <nav className="flex flex-wrap items-center justify-center gap-x-7 gap-y-2 text-sm font-bold text-white/60" aria-label="Links jurídicos">
