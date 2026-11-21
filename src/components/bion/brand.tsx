@@ -6,7 +6,7 @@ const TAMANHOS = {
   lg: "h-28 w-28",
 } as const;
 
-/** Marca oficial: círculo #24058D com o wordmark BION. Claro no fundo claro, escuro no fundo escuro. */
+/** Marca oficial. Claro: roxo #24058D. Escuro: anel #96A5FF e palavra branca. O roxo some no fundo escuro. */
 export function Logo({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
   return (
     <span
