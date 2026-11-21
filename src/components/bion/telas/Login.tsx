@@ -8,6 +8,7 @@ import { useBion } from "@/lib/bion-store";
 import { Logo } from "@/components/bion/brand";
 import { AceiteTermos } from "@/components/bion/AceiteTermos";
 import { aceiteTermosPayload, ERRO_ACEITE_TERMOS } from "@/lib/aceite-termos";
+import { destinoDepoisDeEntrar } from "@/lib/agendar-publico";
 import { useAppNativo } from "@/lib/useAppNativo";
 
 // Só os e-mails das contas demo: a senha NUNCA vai para o bundle do cliente
@@ -25,7 +26,15 @@ const DEMO_HABILITADO =
 
 const CHAVE_RASCUNHO_CADASTRO = "bion-cadastro-rascunho";
 
-export function Login() {
+export function Login({
+  comecarNoCadastro = false,
+  voltar = null,
+}: {
+  /** Vindo do Agendar do perfil público: o cadastro abre primeiro. */
+  comecarNoCadastro?: boolean;
+  /** Só a agenda /p/[id]/agendar. Outro valor é ignorado. */
+  voltar?: string | null;
+}) {
   const router = useRouter();
   const { entrar, registrar } = useBion();
   const [tab, setTab] = useState<Role>("paciente");
@@ -34,7 +43,7 @@ export function Login() {
   );
   const [senha, setSenha] = useState("");
   const [enviando, setEnviando] = useState(false);
-  const [modoCadastro, setModoCadastro] = useState(false);
+  const [modoCadastro, setModoCadastro] = useState(comecarNoCadastro);
   const [nome, setNome] = useState("");
   const [confirmaSenha, setConfirmaSenha] = useState("");
   const [aceitouTermos, setAceitouTermos] = useState(false);
@@ -93,7 +102,7 @@ export function Login() {
     setEnviando(false);
     if (r.ok) {
       toast.success("Bem-vindo(a) de volta!");
-      router.replace(r.role === "paciente" ? "/paciente" : r.role === "medico" ? "/medico" : "/painel");
+      router.replace(destinoDepoisDeEntrar(r.role, voltar));
     } else {
       setFormErro("Não foi possível entrar. Verifique e-mail e senha.");
     }
@@ -141,7 +150,7 @@ export function Login() {
         /* ignora */
       }
       toast.success("Conta criada com sucesso! Bem-vindo(a) ao BION.");
-      router.replace(r.role === "paciente" ? "/paciente" : r.role === "medico" ? "/medico" : "/painel");
+      router.replace(destinoDepoisDeEntrar(r.role, voltar));
     } else {
       setFormErro("Não foi possível criar a conta. Tente novamente.");
     }

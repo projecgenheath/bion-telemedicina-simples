@@ -144,7 +144,7 @@ export default function PerfilPublicoPage() {
               </div>
             </div>
             <a
-              href="/"
+              href={`/p/${id}/agendar`}
               className="rounded-full bg-[#24058D] text-white dark:bg-[#C4B5FD] dark:text-[#12034a] px-4 py-3 text-sm font-bold flex items-center gap-2"
             >
               <CalendarCheck className="w-4 h-4" /> Agendar
