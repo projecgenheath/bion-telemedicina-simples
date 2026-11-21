@@ -67,12 +67,17 @@ async function gravarConta(corpo: { modelosMensagem?: string[]; bancoKits?: Banc
 }
 
 /** Modelos de mensagem: conta primeiro; aparelho sobe só se a conta está vazia. */
-export function useModelosMensagemConta(medicoId: string) {
-  const chave = `bion:modelos-medico:${medicoId}`;
+export function useModelosMensagemConta(medicoId: string | undefined) {
+  const chave = medicoId ? `bion:modelos-medico:${medicoId}` : "";
   const [lista, setLista] = useState<string[]>([]);
   const [naConta, setNaConta] = useState(false);
 
   useEffect(() => {
+    if (!medicoId || !chave) {
+      setLista([]);
+      setNaConta(false);
+      return;
+    }
     let vivo = true;
     setLista(lerModelosLocal(chave));
     const visto = geracaoModelos;
@@ -101,10 +106,11 @@ export function useModelosMensagemConta(medicoId: string) {
     return () => {
       vivo = false;
     };
-  }, [chave]);
+  }, [chave, medicoId]);
 
   const substituir = useCallback(
     async (nova: string[]) => {
+      if (!medicoId || !chave) return false;
       const limpa = normalizarModelosMensagem(nova);
       geracaoModelos += 1;
       setLista(limpa);
@@ -113,7 +119,7 @@ export function useModelosMensagemConta(medicoId: string) {
       setNaConta(enviou);
       return enviou;
     },
-    [chave],
+    [chave, medicoId],
   );
 
   return { lista, naConta, substituir };
