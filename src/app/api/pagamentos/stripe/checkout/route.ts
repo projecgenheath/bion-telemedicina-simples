@@ -300,7 +300,7 @@ async function abrirSessao(usuario: Usuario, a: Alvo) {
   }
 
   const gateway = gatewayCheckout();
-  const contaDireta = modo === "direta" ? connect?.contaMedico : null;
+  const contaDireta = modo === "direta" && connect ? connect.contaMedico : null;
   // Conta conectada que recebe esta cobrança (direta/destino) — é a marca que
   // tira o pagamento do repasse PIX. Ver gravarContaMedicoDaCobranca.
   const contaMedicoMarca = contaMedicoDaCobranca(modo, connect);
