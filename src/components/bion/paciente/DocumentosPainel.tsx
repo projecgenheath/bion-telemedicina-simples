@@ -366,9 +366,11 @@ export function DocumentosPainel({
       {visualizando && <Visualizador titulo={visualizando.titulo} corpo={visualizando.corpo} documento={visualizando.documento} imprimir={visualizando.imprimir} onFechar={() => setVisualizando(null)} />}
 
       {/* ------------------------------ Documentos ------------------------------ */}
-      <section aria-label="Documentos das consultas">
-        <h2 className="text-2xl font-black text-bion-ink dark:text-bion-paper">Documentos</h2>
-        <p className="text-sm text-bion-ink/75 dark:text-bion-paper/75 mb-4">
+      <section aria-label="Documentos das consultas" className="relative overflow-hidden">
+        <span aria-hidden className="bpp-glow bpp-glow-a" />
+        <span aria-hidden className="bpp-glow bpp-glow-b" />
+        <h2 className="bpp-titulo-secao relative text-2xl font-black text-bion-ink dark:text-bion-paper bpp-animar">Documentos</h2>
+        <p className="relative text-sm text-bion-ink/75 dark:text-bion-paper/75 mb-4 bpp-animar bpp-animar-d1">
           Escolha uma consulta realizada para ver, baixar ou compartilhar seus documentos.
         </p>
 
@@ -539,8 +541,10 @@ export function DocumentosPainel({
       </section>
 
       {/* ------------------------------ Mensagens ------------------------------ */}
-      <section aria-label="Mensagens com médicos" className="pt-2">
-        <h2 className="text-2xl font-black text-bion-ink dark:text-bion-paper inline-flex items-center gap-2">
+      <section aria-label="Mensagens com médicos" className="relative overflow-hidden pt-2">
+        <span aria-hidden className="bpp-glow bpp-glow-a" />
+        <span aria-hidden className="bpp-glow bpp-glow-b" />
+        <h2 className="bpp-titulo-secao relative text-2xl font-black text-bion-ink dark:text-bion-paper inline-flex items-center gap-2 bpp-animar">
           Mensagens
           {naoLidasMensagens > 0 ? (
             <span className="min-w-5 h-5 px-1.5 rounded-full bg-rose-600 text-white text-xs font-black leading-5 text-center">
@@ -640,7 +644,7 @@ export function DocumentosPainel({
             </div>
           </div>
         ) : (
-          <div className="bion-surgir-lista space-y-2">
+          <div className="relative bion-surgir-lista space-y-2">
             {contatos.length === 0 ? (
               <EstadoVazio
                 icone={<MessageCircle className="w-6 h-6" />}

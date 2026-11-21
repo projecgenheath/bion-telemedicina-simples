@@ -984,3 +984,47 @@
     stroke-dasharray: none !important;
   }
 }
+
+/* ==================================================================== */
+/* Telas internas — Perfil, Saúde, Exames e Documentos (nov/2026)        */
+/*                                                                      */
+/* A mesma linguagem da tela inicial, sem criar loops novos: título     */
+/* com gradiente da marca (estático — o nome gigante do Início segue    */
+/* sendo o único gradiente animado), brilhos ao fundo das seções e      */
+/* azulejo de ícone nos cards de saúde. Tudo coberto pela rede de       */
+/* segurança do prefers-reduced-motion acima.                           */
+/* ==================================================================== */
+
+/* Título das telas internas (fundo claro): tinta → roxo da marca */
+.bp-app-paciente .bpp-titulo-secao {
+  background: linear-gradient(92deg, var(--bion-ink) 0%, var(--bion-sea) 78%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.dark .bp-app-paciente .bpp-titulo-secao {
+  background: linear-gradient(92deg, var(--bpp-grad-b) 0%, var(--bpp-grad-a) 78%);
+}
+/* Variante para superfície marinho (Exames): branco → lavanda */
+.bp-app-paciente .bpp-titulo-marinho {
+  background: linear-gradient(92deg, #ffffff 0%, var(--bpp-grad-b) 85%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Brilho branco para o fundo marinho (Exames e cartão de saúde do Perfil):
+   pinta por cima da cor padrão do .bpp-glow-a/.bpp-glow-b. */
+.bp-app-paciente .bpp-glow-m { background: rgba(255, 255, 255, 0.1); }
+.dark .bp-app-paciente .bpp-glow-m { background: rgba(196, 181, 253, 0.12); }
+
+/* Anel de gradiente da foto de perfil (mesmo degradê do hero) */
+.bp-app-paciente .bpp-anel-foto {
+  background: linear-gradient(135deg, var(--bion-deep) 0%, var(--bpp-grad-a) 100%);
+  padding: 3px;
+  border-radius: 9999px;
+  box-shadow: 0 12px 28px -14px rgba(36, 5, 141, 0.55);
+}
+.dark .bp-app-paciente .bpp-anel-foto {
+  box-shadow: 0 12px 28px -14px rgba(0, 0, 0, 0.8);
+}

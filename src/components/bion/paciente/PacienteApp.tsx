@@ -892,13 +892,16 @@ export function PacienteApp() {
           </section>
 
           {/* --- Seção 2: saúde --- */}
-          <section className="bp-secao-2 bpp-secao bpp-tela px-5 py-8 pb-28" aria-label="Saúde: medicamentos, IMC e pressão arterial">
-            <h2 className="text-2xl font-black mb-1 bpp-animar">Sua saúde</h2>
-            <p className="text-sm text-bion-ink/75 dark:text-bion-paper/75 mb-5">
+          <section className="bp-secao-2 bpp-secao bpp-tela relative overflow-hidden px-5 py-8 pb-28" aria-label="Saúde: medicamentos, IMC e pressão arterial">
+            {/* brilhos decorativos da marca (mesmo ambiente vivo do Início) */}
+            <span aria-hidden className="bpp-glow bpp-glow-a" />
+            <span aria-hidden className="bpp-glow bpp-glow-b" />
+            <h2 className="bpp-titulo-secao relative text-2xl font-black mb-1 bpp-animar">Sua saúde</h2>
+            <p className="relative text-sm text-bion-ink/75 dark:text-bion-paper/75 mb-5 bpp-animar bpp-animar-d1">
               Toque em um card para ver o histórico e atualizar.
             </p>
 
-            <div className="bion-surgir-lista bpp-grade flex flex-col gap-4">
+            <div className="relative bion-surgir-lista bpp-grade flex flex-col gap-4">
               {/* Pedidos de medição do médico (só aparece se houver pendente) */}
               <PedidosMedicao />
 
@@ -913,8 +916,11 @@ export function PacienteApp() {
                 aria-label={`IMC: ${imcAtual ? `${imcAtual.toFixed(1)}, ${ROTULO_FAIXA_IMC[faixaImc(imcAtual)]}` : "sem dados"}. ${serieImc.length > 1 ? "Ver gráfico de evolução e atualizar peso e altura" : "Abrir histórico e atualizar peso e altura"}`}
               >
                 <div className="flex items-center justify-between mb-1">
-                  <span className="inline-flex items-center gap-2 text-sm font-bold">
-                    <Activity className="w-4 h-4" /> IMC
+                  <span className="inline-flex items-center gap-2.5 text-sm font-bold">
+                    <span aria-hidden className="grid h-9 w-9 place-items-center rounded-xl bg-bion-sea/10 text-bion-sea dark:bg-[#C4B5FD]/15 dark:text-[#C4B5FD]">
+                      <Activity className="w-4 h-4" />
+                    </span>
+                    IMC
                   </span>
                   {imcAtual && (
                     <span className="text-2xl font-black">{imcAtual.toFixed(1)}</span>
@@ -966,8 +972,11 @@ export function PacienteApp() {
                 aria-label={`Pressão arterial: ${pas.at(-1) ? `${pas.at(-1)!.valor1}/${pas.at(-1)!.valor2 ?? "—"}, última medição em ${rotuloCurto(pas.at(-1)!.criadoEm)}` : "sem dados"}. Abrir histórico e registrar`}
               >
                 <div className="flex items-center justify-between mb-1">
-                  <span className="inline-flex items-center gap-2 text-sm font-bold">
-                    <HeartPulse className="w-4 h-4" /> Pressão arterial
+                  <span className="inline-flex items-center gap-2.5 text-sm font-bold">
+                    <span aria-hidden className="grid h-9 w-9 place-items-center rounded-xl bg-bion-sea/10 text-bion-sea dark:bg-[#C4B5FD]/15 dark:text-[#C4B5FD]">
+                      <HeartPulse className="w-4 h-4" />
+                    </span>
+                    Pressão arterial
                   </span>
                   {pas.at(-1) && (
                     <span className="text-2xl font-black">
@@ -1003,9 +1012,12 @@ export function PacienteApp() {
           </section>
 
           {/* --- Seção 3: exames laboratoriais --- */}
-          <section className="bp-secao-3 bpp-secao bpp-tela px-5 pt-10 pb-28 text-white" aria-label="Resultados de exames laboratoriais">
-            <h2 className="text-2xl font-black mb-1">Exames laboratoriais</h2>
-            <p className="text-sm text-white/80 mb-6">
+          <section className="bp-secao-3 bpp-secao bpp-tela relative overflow-hidden px-5 pt-10 pb-28 text-white" aria-label="Resultados de exames laboratoriais">
+            {/* brilhos brancos suaves sobre o marinho (ambiente vivo) */}
+            <span aria-hidden className="bpp-glow bpp-glow-a bpp-glow-m" />
+            <span aria-hidden className="bpp-glow bpp-glow-b bpp-glow-m" />
+            <h2 className="bpp-titulo-marinho relative text-2xl font-black mb-1 bpp-animar">Exames laboratoriais</h2>
+            <p className="relative text-sm text-white/80 mb-6 bpp-animar bpp-animar-d1">
               Resultados lidos dos laudos que você envia. Se a leitura falhar, o arquivo original continua aqui.
             </p>
 
@@ -1032,7 +1044,7 @@ export function PacienteApp() {
                 texto="Envie um laudo pela BION IA. Se a leitura falhar, o arquivo original aparece aqui."
               />
             ) : examesAgrupados.length > 0 ? (
-              <div className="bion-surgir-lista bpp-grade flex flex-col gap-4">
+              <div className="relative bion-surgir-lista bpp-grade flex flex-col gap-4">
                 {examesAgrupados.map(([titulo, lista]) => {
                   const ultimo = lista.at(-1)!;
                   // M33: a ordem de `itens` vem da extração por IA e pode
