@@ -26,10 +26,18 @@ import {
 } from "@/components/bion/medico/receita-servidor";
 
 /* ------------------------------------------------------------------ */
-/* Repasse DIÁRIO ao médico (fase 2, parte 3).                          */
+/* Repasse ao médico.                                                   */
 /*                                                                      */
-/* Regras aprovadas pelo Alisson (03/10/2026):                          */
-/*  - fechamento diário às 23:30 de São Paulo, PIX feito pelo admin;    */
+/* Desde 21/11/2026 o cron das 23:30 não fecha cobrança nova            */
+/* (FECHAMENTO_PIX_AUTOMATICO = false). O médico recebe na conta        */
+/* conectada da Stripe, com application fee da BION (COMISSAO_APP_PCT). */
+/* A Stripe transfere ao banco no calendário dela. A BION não adianta  */
+/* e não cria outro repasse. Cobrança com stripeContaMedico continua   */
+/* fora do PIX. Histórico de Repasse e chave PIX permanecem.           */
+/* fecharRepasse ainda atende o botão "Fechar agora" e o lote já       */
+/* fechado. HORA_FECHAMENTO_MIN segue o prazo do desfecho.             */
+/*                                                                      */
+/* Regras do cálculo (03/10/2026), no histórico e no fechar manual:    */
 /*  - consulta entra pelas regras da receita (consultaEntraNaReceita);  */
 /*  - a parte do médico (50%) na multa entra no dia em que foi paga;    */
 /*  - reembolso depois do fechamento vira desconto (RepasseAjuste) no   */
@@ -37,7 +45,8 @@ import {
 /*  - taxa do gateway: a REAL do pagamento (Stripe balance_transaction */
 /*    .fee em Pagamento.stripeTaxaCentavos) quando houver; senão 0;     */
 /*    no reembolso integral a BION devolve a taxa do cartão ao médico  */
-/*    por transferência Stripe (#137).                                  */
+/*    por transferência Stripe (#137). Descreve o código atual; a        */
+/*    decisão de 21/11/2026 não muda a taxa nem confirma essa devolução.*/
 /*  - chargeback: o repasse PIX NÃO aplica desconto de chargeback       */
 /*    (nenhum RepasseAjuste motivo 'chargeback' é criado aqui). Na      */
 /*    cobrança direta a disputa é debitada na conta Stripe do médico e  */
@@ -48,9 +57,9 @@ import {
 /*    (FOR UPDATE) ANTES do RepasseAjuste e reconferir o desconto       */
 /*    (0 = não aplica), e nunca para registro com stripeContaMedico.    */
 /*                                                                      */
-/* "Até o corte": o fechamento pega TUDO o que ficou elegível até a     */
-/* hora do corte e ainda não entrou em nenhum item. Nada se perde se o  */
-/* cron atrasar ou falhar: o fechamento seguinte leva junto.            */
+/* "Até o corte": fecharRepasse, quando alguém o chama, pega o que      */
+/* ficou elegível até a hora do corte e ainda não entrou em nenhum     */
+/* item. O cron das 23:30 não chama mais.                               */
 /*                                                                      */
 /* Desfecho (regras do Alisson, 06/10/2026): consulta SEM DESFECHO      */
 /* (status ainda "confirmada"/"em_espera"/"pendente_anamnese" e nenhum  */
@@ -69,6 +78,14 @@ import {
 // documentação já prometia. Antes, 23:00: itens decididos na faixa
 // 23:00–23:30 ficavam para o fechamento seguinte.
 export const HORA_FECHAMENTO_MIN = 23 * 60 + 30; // 23:30 de São Paulo
+/** Cron das 23:30 não cria lote PIX novo. O cálculo e o histórico ficam. */
+export const FECHAMENTO_PIX_AUTOMATICO = false;
+
+/** A rota /api/cron/fechar-repasses só chama fecharRepasse quando isto é true. */
+export function cronFechaRepassePix(): boolean {
+  return FECHAMENTO_PIX_AUTOMATICO;
+}
+
 export const PARTE_MEDICO_CONSULTA_PCT = 100 - COMISSAO_APP_PCT;
 
 export const ERRO_CONSULTA_REPASSADA = "A consulta já entrou num repasse; não dá para trocar o médico.";

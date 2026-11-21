@@ -1,5 +1,6 @@
-/** Cobrança direta fora do repasse PIX. Rodar: bun src/lib/server/repasse-cobranca-direta.teste.ts */
-import { cobradoDiretoNoStripe, itensElegiveis, totalRecebidoDireto, type CandidatoConsulta, type CandidatoRenovacao } from "./repasse";
+/** Cobrança direta fora do repasse PIX. Rodar: bun --conditions=react-server src/lib/server/repasse-cobranca-direta.teste.ts */
+import { readFileSync } from "node:fs";
+import { cobradoDiretoNoStripe, cronFechaRepassePix, itensElegiveis, totalRecebidoDireto, type CandidatoConsulta, type CandidatoRenovacao } from "./repasse";
 
 let ok = 0, falhas = 0;
 const igual = (n: string, a: unknown, b: unknown) => {
@@ -48,6 +49,12 @@ igual(
   ]),
   { brutoCentavos: 12000, reembolsosCentavos: 2000, liquidoCentavos: 10000 },
 );
+
+igual("cron não fecha PIX novo", cronFechaRepassePix(), false);
+const rota = readFileSync(new URL("../../app/api/cron/fechar-repasses/route.ts", import.meta.url), "utf8");
+const interruptor = rota.indexOf("if (!cronFechaRepassePix())");
+const fecha = rota.indexOf("fecharRepasse(");
+igual("rota passa pelo interruptor antes de fechar", interruptor >= 0 && fecha > interruptor, true);
 
 console.log(`${ok} ok, ${falhas} falha(s)`);
 if (falhas) process.exit(1);
