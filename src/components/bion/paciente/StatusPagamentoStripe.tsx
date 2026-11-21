@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { BotaoPagarStripe } from "./BotaoPagarStripe";
 import { lerStatusPagamento } from "./pagamento-stripe-cliente";
 import { textoRetornoStripe } from "./retorno-stripe";
+import { OfertaInstalarApp } from "./OfertaInstalarApp";
 
 /**
  * Tela de volta do Stripe. SÓ mostra o status: quem confirma é o webhook.
@@ -41,13 +42,15 @@ export function StatusPagamentoStripe({ volta }: { volta: "sucesso" | "cancelado
     };
   }, [consultaId]);
 
+  const pago = estado?.pago === true;
   const { titulo, texto } = textoRetornoStripe({
     consultaId,
     tipo,
     volta,
-    pago: estado?.pago === true,
+    pago,
     esgotou,
   });
+  const aguardando = Boolean(consultaId) && volta === "sucesso" && !pago && !esgotou;
 
   return (
     <div className="bp-glass p-6 max-w-md mx-auto mt-8 text-center" role="status" aria-live="polite">
@@ -58,6 +61,7 @@ export function StatusPagamentoStripe({ volta }: { volta: "sucesso" | "cancelado
         <Link href="/consultas" className="bion-toque min-h-11 inline-flex items-center text-sm font-bold underline">
           Ver minhas consultas
         </Link>
+        {aguardando ? null : <OfertaInstalarApp />}
       </div>
     </div>
   );
