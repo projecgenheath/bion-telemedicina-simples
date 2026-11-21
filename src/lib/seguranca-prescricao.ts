@@ -108,3 +108,19 @@ export function verificarPrescricao(
   }
   return alertas;
 }
+
+/** Texto do aviso na sala e na folha. Não bloqueia e não é interação entre remédios. */
+export function textoAlertaPrescricao(alerta: AlertaPrescricao): { titulo: string; detalhe: string } {
+  if (alerta.tipo === "alergia") {
+    return {
+      titulo: `O nome deste remédio parece com a alergia registrada: ${alerta.referencia}.`,
+      detalhe:
+        "A comparação é só pelo nome, com a alergia e com o que o paciente já usa. Não bloqueia a receita. Não é uma base de interação entre remédios.",
+    };
+  }
+  return {
+    titulo: `O paciente já usa ${alerta.referencia}.`,
+    detalhe:
+      "Confira se é o mesmo remédio ou a continuação do tratamento. A comparação é pelo nome. Não bloqueia a receita e não verifica interação entre remédios.",
+  };
+}

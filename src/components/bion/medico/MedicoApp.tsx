@@ -1,7 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useBion } from "@/lib/bion-store";
+import { estadoJanelaSala } from "@/lib/janela-sala";
+import { salaAberta } from "./metricas";
 import { ChamadosSuporte } from "@/components/bion/ChamadosSuporte";
 import { Ajuda } from "@/components/bion/Ajuda";
 import { useDadosMedico } from "./useDadosMedico";
@@ -39,9 +42,13 @@ const FOCAVEL = 'input, button, a[href], select, textarea, [tabindex]:not([tabin
  * Tela larga (≥ 1024 px, ver medico.css): as três colunas ficam lado a lado,
  * sem carrossel; a coluna central rola livre pelas três telas.
  */
+const ID_CONSULTA_URL = /^[A-Za-z0-9_-]{1,64}$/;
+
 export function MedicoApp() {
   const dados = useDadosMedico();
   const { medico, minhas } = dados;
+  const router = useRouter();
+  const { carregando: agendaCarregando } = useBion();
   const carrosselRef = useRef<HTMLDivElement>(null);
   const colunaRef = useRef<HTMLDivElement>(null);
   const parametros = useSearchParams();
@@ -56,13 +63,18 @@ export function MedicoApp() {
   const painelInicialRef = useRef(painel);
   const painelRef = useRef(painel);
   painelRef.current = painel;
-  // ?consulta= NÃO é consumido pelo app do médico: só a rota /consulta o
-  // lê. Se o médico chegar aqui com esse parâmetro (link compartilhado),
-  // mostramos um banner com ação explícita para abrir a sala, em vez de
-  // fingir que o parâmetro faz algo ou de saltar sozinho para a chamada.
+  // ?consulta= abre a sala quando ela já está na janela (30 min antes até
+  // 2 h depois). Fora disso o link só explica, sem entrar na chamada.
   const consultaLink = parametros.get("consulta");
   const [consultaIgnorada, setConsultaIgnorada] = useState(false);
+  const consultaUrlValida = !!consultaLink && ID_CONSULTA_URL.test(consultaLink);
+  const consultaPedida = consultaUrlValida ? minhas.find((c) => c.id === consultaLink) : undefined;
+  const salaDaUrlAberta = consultaPedida ? salaAberta(consultaPedida.ts, dados.agora) : false;
   const mostrarBannerConsulta = !!consultaLink && !consultaIgnorada;
+  useEffect(() => {
+    if (!consultaPedida || consultaIgnorada || !salaDaUrlAberta) return;
+    router.replace(`/consulta?consulta=${encodeURIComponent(consultaPedida.id)}`);
+  }, [consultaPedida, consultaIgnorada, salaDaUrlAberta, router]);
   const ignorarConsultaLink = () => {
     setConsultaIgnorada(true);
     const url = new URL(window.location.href);
@@ -238,15 +250,29 @@ export function MedicoApp() {
   return (
     <div className="bp-shell bm-app flex flex-col text-bion-ink dark:text-bion-paper">
       {mostrarBannerConsulta ? (
-        <div className="mx-4 mt-3 rounded-2xl border bg-card p-3 text-sm flex flex-wrap items-center justify-between gap-2">
-          <span className="font-semibold">Você chegou com uma consulta em link — quer abrir a sala dela?</span>
+        <div className="mx-4 mt-3 rounded-2xl border bg-card p-3 text-sm flex flex-wrap items-center justify-between gap-2" role="status">
+          <span className="font-semibold">
+            {!consultaUrlValida
+              ? "Este link de consulta não é válido."
+              : !consultaPedida && agendaCarregando
+                ? "Procurando a consulta deste link…"
+                : !consultaPedida
+                  ? "Não encontrei essa consulta na sua agenda."
+                  : salaDaUrlAberta
+                    ? `Abrindo a sala de ${consultaPedida.paciente}…`
+                    : estadoJanelaSala(consultaPedida.ts, dados.agora) === "antes"
+                      ? `A sala de ${consultaPedida.paciente} (${consultaPedida.data} · ${consultaPedida.hora}) abre 30 minutos antes do horário.`
+                      : `A sala de ${consultaPedida.paciente} já fechou. Ela fica aberta até 2 horas depois do horário.`}
+          </span>
           <span className="flex gap-2">
-            <a
-              href={`/consulta?consulta=${encodeURIComponent(consultaLink as string)}`}
-              className="px-3 py-1.5 rounded-full bg-primary text-primary-foreground text-xs font-bold"
-            >
-              Abrir sala
-            </a>
+            {consultaPedida && salaDaUrlAberta ? (
+              <a
+                href={`/consulta?consulta=${encodeURIComponent(consultaPedida.id)}`}
+                className="px-3 py-1.5 rounded-full bg-primary text-primary-foreground text-xs font-bold"
+              >
+                Abrir sala
+              </a>
+            ) : null}
             <button type="button" onClick={ignorarConsultaLink} className="px-3 py-1.5 rounded-full border text-xs font-bold">
               Ignorar
             </button>

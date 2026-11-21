@@ -67,6 +67,7 @@ model User {
   pedidosRenovacaoRecebidos  PedidoRenovacao[]  @relation("PedidoRenovacaoMedico")
   evolucoesComoMedico        Evolucao[]         @relation("EvolucaoMedico")
   evolucoesComoPaciente      Evolucao[]         @relation("EvolucaoPaciente")
+  atalhoMedico               AtalhoMedico?
 }
 
 model Sessao {
@@ -127,6 +128,17 @@ model PerfilMedico {
   // 20261103f: índice ÚNICO parcial em stripeAccountId (NOT NULL e <> ''),
   // só no SQL (o Prisma não descreve índice parcial). Não adicionar @@unique
   // aqui. Ver comentário em stripeAccountId e prisma/indices-parciais.md.
+}
+
+/// Modelos de mensagem, kits de receita e pacotes de exame do próprio médico.
+/// JSON em texto, como o restante do schema. Migração 20261120a — não aplicada
+/// até o ok do Alisson.
+model AtalhoMedico {
+  userId          String   @id
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  modelosMensagem String   @default("[]")
+  bancoKits       String   @default("{\"kits\":[],\"pacotes\":[],\"exemplosOcultos\":[]}")
+  atualizadoEm    DateTime @updatedAt
 }
 
 model PerfilPaciente {

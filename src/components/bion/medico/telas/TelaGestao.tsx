@@ -13,8 +13,19 @@ import {
   variacaoPct,
   type RespostaReceita,
 } from "../metricas";
-import type { DadosMedico } from "../useDadosMedico";
+import { partesDaConsulta } from "@/lib/repasse-exibicao";
+import { useContaStripe, type ContaStripeWire, type DadosMedico } from "../useDadosMedico";
 import { gradeDeCampos, horariosDoDia } from "@/lib/grade-semana";
+
+function textoContaStripe(conta: ContaStripeWire | null, carregando: boolean, erro: string | null): string {
+  if (!conta) return carregando ? "Verificando a conta Stripe…" : (erro ?? "Não foi possível ver a conta Stripe agora.");
+  if (conta.pronta) return "Conta Stripe pronta para receber.";
+  if (!conta.temConta) return "Conta Stripe ainda não cadastrada.";
+  if (conta.motivoBloqueio) return "Conta Stripe bloqueada pelo Stripe.";
+  if (!conta.detailsSubmitted) return "Cadastro no Stripe incompleto.";
+  if (conta.pendencias > 0) return `Conta Stripe com ${conta.pendencias === 1 ? "1 pendência" : `${conta.pendencias} pendências`}.`;
+  return "Stripe ainda analisando a conta.";
+}
 
 /** Tela 2 — receita líquida (30 dias) + preço + agenda. */
 export function TelaGestao({
@@ -27,6 +38,8 @@ export function TelaGestao({
   onAbrirAgenda: () => void;
 }) {
   const { medico, receita } = dados;
+  const contaStripe = useContaStripe();
+  const partes = medico ? partesDaConsulta(medico.valor, receita.comissaoPct) : null;
   // medico undefined durante o bootstrap NÃO é "em validação": o
   // diretório só traz médicos ativos, então um médico pendente também
   // aparece como undefined — mas só depois que o carregamento termina.
@@ -72,7 +85,41 @@ export function TelaGestao({
               </div>
               <div className="mt-1 text-2xl font-black tabular-nums">{fmtBRL(medico.valor)}</div>
             </button>
+            {partes ? (
+              <p className="mt-2 text-xs text-bion-ink/75 dark:text-bion-paper/75">
+                Você fica com {fmtCentavos(partes.medicoCentavos)} ({partes.parteMedicoPct}%). A BION fica com {fmtCentavos(partes.bionCentavos)} ({partes.comissaoPct}%).
+              </p>
+            ) : null}
           </div>
+          {partes ? (
+            <div className="bp-glass p-5 mt-3" aria-label="Repasse">
+              <span className="text-xs font-bold uppercase tracking-wider text-bion-ink/75 dark:text-bion-paper/75">Repasse</span>
+              <dl className="mt-3 grid grid-cols-3 gap-2 text-sm">
+                <div>
+                  <dt className="text-xs text-bion-ink/70 dark:text-bion-paper/70">Valor da consulta</dt>
+                  <dd className="font-black tabular-nums">{fmtBRL(medico.valor)}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-bion-ink/70 dark:text-bion-paper/70">Você ({partes.parteMedicoPct}%)</dt>
+                  <dd className="font-black tabular-nums">{fmtCentavos(partes.medicoCentavos)}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-bion-ink/70 dark:text-bion-paper/70">BION ({partes.comissaoPct}%)</dt>
+                  <dd className="font-black tabular-nums">{fmtCentavos(partes.bionCentavos)}</dd>
+                </div>
+              </dl>
+              <p className="mt-3 text-xs text-bion-ink/75 dark:text-bion-paper/75">
+                Nos últimos 30 dias, o que já entrou para você (sua parte, menos a taxa do cartão, mais a sua parte das multas) é{" "}
+                {receita.totais ? fmtCentavos(receita.totais.totalCentavos) : receita.carregando ? "…" : "—"}.
+              </p>
+              <p className="mt-1 text-xs text-bion-ink/75 dark:text-bion-paper/75">
+                {textoContaStripe(contaStripe.conta, contaStripe.carregando, contaStripe.erro)}
+              </p>
+              <p className="mt-1 text-xs text-bion-ink/75 dark:text-bion-paper/75">
+                A cobrança real continua travada. Estes números mostram a regra, sem ligar pagamento.
+              </p>
+            </div>
+          ) : null}
 
           <button
             type="button"

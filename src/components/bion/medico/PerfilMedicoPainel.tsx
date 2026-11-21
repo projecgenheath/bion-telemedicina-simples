@@ -23,7 +23,8 @@ import {
 } from "lucide-react";
 import { useBion } from "@/lib/bion-store";
 import { formatarDataNascimento, idadeDeNascimento } from "@/lib/idade";
-import { iniciais } from "./metricas";
+import { fmtBRL, fmtCentavos, iniciais } from "./metricas";
+import { partesDaConsulta } from "@/lib/repasse-exibicao";
 import { formatarCnpj } from "./dados-pessoais";
 import { DadosPessoaisSheet } from "./sheets/DadosPessoaisSheet";
 import { RepassesSheet } from "./sheets/RepassesSheet";
@@ -561,8 +562,10 @@ export function PerfilMedicoPainel({
           Recebimento (Stripe)
         </h3>
         <p className="px-4 py-3 text-xs text-bion-ink/75 dark:text-bion-paper/75">
-          Você recebe na sua conta Stripe a cada pagamento, já sem a comissão e a taxa do cartão. A Stripe transfere para o seu banco
-          conforme o calendário dela.
+          {medico
+            ? `Cada consulta de ${fmtBRL(medico.valor)} fica ${fmtCentavos(partesDaConsulta(medico.valor).medicoCentavos)} com você (90%) e ${fmtCentavos(partesDaConsulta(medico.valor).bionCentavos)} com a BION (10%). A taxa do cartão sai da sua parte.`
+            : "Cada consulta fica 90% com você e 10% com a BION. A taxa do cartão sai da sua parte."}{" "}
+          O estado da conta Stripe está abaixo. A cobrança real continua travada.
         </p>
         <Linha
           icone={<CreditCard className="w-4 h-4" />}
