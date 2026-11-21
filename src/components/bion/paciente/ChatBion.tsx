@@ -1265,7 +1265,7 @@ export function ChatBion({
         <p className="text-xs text-bion-ink/80 dark:text-bion-paper/80 mb-2 px-2 inline-flex items-center gap-1.5" role="note">
           <ShieldAlert className="w-3.5 h-3.5 shrink-0" aria-hidden /> {AVISO_DADOS_PESSOAIS_IA}
         </p>
-        <div className="bp-glass flex items-center gap-2 !rounded-full p-2 pl-5">
+        <div className="bpp-entrada-chat bp-glass flex items-center gap-2 !rounded-full p-2 pl-5 transition-[border-color,box-shadow] duration-200">
           <input
             value={entrada}
             onChange={(e) => {

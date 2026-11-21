@@ -15,12 +15,12 @@ export function ChatListaMensagens({
   return (
     <>
       {mensagens.map((m, i) => (
-        <div key={i} className={`flex ${m.remetente === "usuario" ? "justify-end" : "justify-start"}`}>
+        <div key={i} className={`bion-surgir flex ${m.remetente === "usuario" ? "justify-end" : "justify-start"}`}>
           <div
             className={`max-w-[85%] px-4 py-3 text-sm leading-relaxed whitespace-pre-line ${
               m.remetente === "usuario"
-                ? "bp-acao rounded-3xl rounded-br-md"
-                : `bp-glass rounded-3xl rounded-bl-md text-bion-ink dark:text-bion-paper ${m.tipo === "erro" ? "border-2 border-amber-500/60" : ""} ${m.tipo?.startsWith("sucesso") ? "border-2 border-emerald-500/60" : ""} ${m.tipo === "anamnese" ? "border-l-4 border-l-bion-sea dark:border-l-[#FFC169]" : ""}`
+                ? "bpp-bolha-eu bp-acao rounded-3xl rounded-br-md"
+                : `bpp-bolha-ia bp-glass rounded-3xl rounded-bl-md text-bion-ink dark:text-bion-paper ${m.tipo === "erro" ? "border-2 border-amber-500/60" : ""} ${m.tipo?.startsWith("sucesso") ? "border-2 border-emerald-500/60" : ""} ${m.tipo === "anamnese" ? "border-l-4 border-l-bion-sea dark:border-l-[#FFC169]" : ""}`
             }`}
           >
             {m.texto.split("**").map((parte, j) =>
@@ -44,7 +44,7 @@ export function ChatListaMensagens({
                 {[0, 1, 2].map((d) => (
                   <span
                     key={d}
-                    className="w-2 h-2 rounded-full bg-bion-ink/40 dark:bg-white/40 motion-safe:animate-bounce"
+                    className="bpp-dot-digitando"
                     style={{ animationDelay: `${d * 0.15}s` }}
                   />
                 ))}
