@@ -2,5 +2,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" role="img" aria-label="BION">
   <title>BION</title>
   <circle cx="100" cy="100" r="90" fill="none" stroke="#24058D" stroke-width="4"/>
-  <text x="100" y="115" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="42" font-weight="900" fill="#24058D">BION</text>
+  <text x="100" y="115" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="42" font-weight="900" fill="#FFFFFF">BION</text>
 </svg>
