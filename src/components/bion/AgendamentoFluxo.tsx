@@ -1,7 +1,7 @@
 "use client";
 
 import { textoNota } from "@/lib/medico-exibicao";
-import { abrirCheckoutStripe, checkoutStripeAtivo } from "@/components/bion/paciente/pagamento-stripe-cliente";
+import { checkoutStripeAtivo } from "@/components/bion/paciente/pagamento-stripe-cliente";
 import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -64,6 +64,7 @@ export function AgendamentoFluxo({
   // Consulta já criada NESTE fluxo (o checkout falhou no passo de pagamento):
   // o botão principal vira retry do checkout DELA — nunca uma nova reserva.
   const [consultaCriadaId, setConsultaCriadaId] = useState<string | null>(null);
+  const [pagamentoNoApp, setPagamentoNoApp] = useState<string | null>(null);
   const [medicoModal, setMedicoModal] = useState<Medico | null>(null);
   // Data/hora "congeladas" enquanto o servidor processa e depois de confirmada:
   // a consulta criada passa a ocupar o slot e a seleção derivada ficaria vazia.
@@ -169,18 +170,11 @@ export function AgendamentoFluxo({
   };
 
 
-  // Abre o checkout Stripe de uma consulta JÁ criada (retry do pagamento,
-  // A2): usado pela ação do toast e pelo botão principal do passo de
-  // pagamento. Nunca cria outra consulta — só reabre o checkout da mesma.
-  const tentarAbrirCheckout = async (consultaId: string) => {
-    const r = await abrirCheckoutStripe({ consultaId });
-    if (r.url) {
-      window.location.assign(r.url);
-      return;
-    }
-    toast.error("Pagamento ainda não abriu", {
-      description: r.erro ?? "Tente pagar em Minhas consultas.",
-    });
+  // Mostra o cartão na própria tela, da consulta JÁ criada (retry do
+  // pagamento). Nunca cria outra consulta.
+  const tentarAbrirCheckout = (consultaId: string) => {
+    setPagamentoNoApp(consultaId);
+    setStep(6);
   };
 
   const finalizarAgendamento = async () => {
@@ -191,12 +185,7 @@ export function AgendamentoFluxo({
     // revalidação da seleção esbarrava na própria consulta ocupando o slot
     // e o paciente acabava criando uma SEGUNDA reserva pagável.
     if (consultaCriadaId) {
-      setProcessandoPagamento(true);
-      try {
-        await tentarAbrirCheckout(consultaCriadaId);
-      } finally {
-        setProcessandoPagamento(false);
-      }
+      tentarAbrirCheckout(consultaCriadaId);
       return;
     }
 
@@ -277,34 +266,12 @@ export function AgendamentoFluxo({
       });
     });
 
-    // Só cartão (checkout Stripe). Consulta ainda não paga e cartão ligado:
-    // vai para a página do Stripe; o webhook confirma. Na demonstração
-    // (gateway simulado) o servidor já confirmou e segue como antes.
+    // Só cartão. Consulta ainda não paga e cartão ligado: o formulário abre
+    // neste passo. O webhook confirma. Na demonstração (gateway simulado) o
+    // servidor já confirmou e segue como antes.
     if (!criada.pago && (await checkoutStripeAtivo())) {
-      const r = await abrirCheckoutStripe({ consultaId: criada.id });
-      if (r.url) {
-        window.location.assign(r.url);
-        return;
-      }
-      // A consulta JÁ foi criada e reservada; só o checkout falhou. Voltar ao
-      // passo de pagamento (PASSOS_AGENDAMENTO: 6 = "Pagamento", 7 =
-      // "Confirmação") — nunca avançar para a confirmação com pagamento
-      // pendente, onde antes aparecia "Pagamento Aprovado" sem pagamento.
-      // A ação do toast tenta abrir o checkout de novo para esta mesma
-      // consulta (sem criar outra); a alternativa é pagar em Minhas consultas.
-      toast.error("Consulta reservada, mas o pagamento não abriu", {
-        description: r.erro ?? "Tente pagar de novo em Minhas consultas.",
-        action: {
-          label: "Tentar abrir o pagamento",
-          onClick: () => {
-            void tentarAbrirCheckout(criada.id);
-          },
-        },
-      });
-      // Marca a consulta deste fluxo: a partir daqui, o botão principal do
-      // passo de pagamento é retry do checkout dela (ver finalizarAgendamento).
       setConsultaCriadaId(criada.id);
-      setStep(6);
+      tentarAbrirCheckout(criada.id);
       return;
     }
 
@@ -356,6 +323,7 @@ export function AgendamentoFluxo({
         removerArquivo={removerArquivo}
         processandoPagamento={processandoPagamento}
         finalizarAgendamento={finalizarAgendamento}
+        pagamentoConsultaId={pagamentoNoApp}
         medicoAtual={medicoAtual}
         onDone={onDone}
       />

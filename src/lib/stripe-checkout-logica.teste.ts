@@ -18,6 +18,7 @@ import {
   tipoPorGatewayRef,
   type PagamentoAvulso,
   bloqueioChaveLive,
+  chavePublicaCartao,
   chaveIdempotencia,
   metodosCheckout,
   divisaoConnect,
@@ -99,8 +100,11 @@ igual("moeda", p.line_items[0].price_data.currency, "usd");
 igual("metadata no PaymentIntent", p.payment_intent_data.metadata.consultaId, "c1");
 igual("sem application_fee", "application_fee_amount" in p.payment_intent_data, false);
 igual("sem transfer_data", "transfer_data" in p.payment_intent_data, false);
-igual("success_url", p.success_url, "https://app.exemplo/pagamento/sucesso?consulta=c1");
-igual("cancel_url", p.cancel_url, "https://app.exemplo/pagamento/cancelado?consulta=c1");
+igual("formulário embutido", p.ui_mode, "embedded_page");
+igual("cartão não troca de página", p.redirect_on_completion, "if_required");
+igual("sem success_url", "success_url" in p, false);
+igual("sem cancel_url", "cancel_url" in p, false);
+igual("volta no app", p.return_url, "https://app.exemplo/pagamento/sucesso?consulta=c1&session_id={CHECKOUT_SESSION_ID}");
 // API 2026-09-30.endive (stripe-node 23): payment_method_types na criação da
 // sessão dá 400 ("no longer supported"). Só cartão vai em allowed_payment_method_types.
 igual("só cartão em allowed_payment_method_types", p.allowed_payment_method_types, ["card"]);
@@ -120,6 +124,11 @@ igual("restrita live na plataforma bloqueia", bloqueioChaveLive("plataforma", " 
 igual("restrita de teste não bloqueia", bloqueioChaveLive("direta", "rk_test_x"), false);
 igual("live com espaços bloqueia", bloqueioChaveLive("direta", "  sk_live_x "), true);
 igual("sem chave passa (rota já recusa pela flag)", bloqueioChaveLive("plataforma", undefined), false);
+igual("chave pública de teste", chavePublicaCartao({ STRIPE_PUBLISHABLE_KEY: "pk_test_abc" }), "pk_test_abc");
+igual("chave pública no nome do navegador", chavePublicaCartao({ NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: " pk_test_xyz " }), "pk_test_xyz");
+igual("chave pública live fica de fora", chavePublicaCartao({ STRIPE_PUBLISHABLE_KEY: "pk_live_abc" }), null);
+igual("chave secreta não serve de pública", chavePublicaCartao({ STRIPE_PUBLISHABLE_KEY: "sk_test_abc" }), null);
+igual("sem chave pública", chavePublicaCartao({}), null);
 const cx = { contaMedico: "acct_123", taxaPlataformaCentavos: 1500 };
 igual("plataforma sem divisão", divisaoConnect({ modo: "plataforma", connect: cx, valorCentavos: 15000 }), {});
 igual("destino", divisaoConnect({ modo: "destino", connect: cx, valorCentavos: 15000 }), {
@@ -145,8 +154,9 @@ igual("sessão destino leva divisão", pd.payment_intent_data, { metadata: { con
 
 // reaproveitar sessão
 const agora = 1_000_000;
-const s = { status: "open", valorCentavos: 15000, expiraEmSeg: agora + 3600, url: "https://checkout" };
+const s = { status: "open", valorCentavos: 15000, expiraEmSeg: agora + 3600, clientSecret: "cs_test_a_secret_b" };
 igual("reaproveita aberta", sessaoReaproveitavel(s, 15000, agora), true);
+igual("não reaproveita página externa", sessaoReaproveitavel({ ...s, clientSecret: null }, 15000, agora), false);
 igual("não reaproveita expirada", sessaoReaproveitavel({ ...s, status: "expired" }, 15000, agora), false);
 igual("não reaproveita valor diferente", sessaoReaproveitavel(s, 16000, agora), false);
 igual("não reaproveita quase expirando", sessaoReaproveitavel({ ...s, expiraEmSeg: agora + 60 }, 15000, agora), false);
@@ -260,7 +270,8 @@ igual("renovação: metadata sem consulta", pRen.metadata, { pacienteId: "p1", p
 igual("renovação: só cartão", pRen.allowed_payment_method_types, ["card"]);
 igual("renovação sem payment_method_types", "payment_method_types" in pRen, false);
 igual("multa: só cartão", parametrosSessao({ consultaId: null, pacienteId: "p1", pagamentoId: null, tipo: "multa", remarcacaoId: "rm1", valorCentavos: 3000, moeda: "brl", metodos: metodosCheckout(), descricao: "M", baseUrl: "https://a" }).allowed_payment_method_types, ["card"]);
-igual("renovação: volta com tipo", pRen.success_url, "https://a/pagamento/sucesso?tipo=renovacao");
+igual("renovação: volta no app", pRen.return_url, "https://a/pagamento/sucesso?tipo=renovacao&session_id={CHECKOUT_SESSION_ID}");
+igual("renovação embutida", pRen.ui_mode, "embedded_page");
 const pMul = parametrosSessao({ consultaId: null, pacienteId: "p1", pagamentoId: null, tipo: "multa", remarcacaoId: "rm1", expiraEmSeg: 123, valorCentavos: 3000, moeda: "brl", metodos: ["card"], descricao: "M", baseUrl: "https://a" });
 igual("multa: ref", pMul.client_reference_id, "multa:rm1");
 igual("multa: metadata", pMul.metadata, { pacienteId: "p1", tipo: "multa", remarcacaoId: "rm1" });
@@ -269,7 +280,7 @@ igual("multa da sessão", multaDaSessao(pMul.metadata), "rm1");
 igual("consulta não é multa", multaDaSessao({ consultaId: "c1" }), null);
 const pEsp = parametrosSessao({ consultaId: "cn1", pacienteId: "p1", pagamentoId: "pg8", tipo: "espera", valorCentavos: 5000, moeda: "brl", metodos: ["card"], descricao: "E", baseUrl: "https://a" });
 igual("espera: ref é a consulta nova", pEsp.client_reference_id, "cn1");
-igual("espera: volta acompanha a consulta nova", pEsp.success_url, "https://a/pagamento/sucesso?consulta=cn1");
+igual("espera: volta acompanha a consulta nova", pEsp.return_url, "https://a/pagamento/sucesso?consulta=cn1&session_id={CHECKOUT_SESSION_ID}");
 igual("consulta sem tipo no metadata (igual ao #119)", parametrosSessao({ consultaId: "c1", pacienteId: "p1", pagamentoId: "pg1", valorCentavos: 1, moeda: "brl", metodos: ["card"], descricao: "T", baseUrl: "https://a" }).metadata, { consultaId: "c1", pacienteId: "p1", pagamentoId: "pg1" });
 igual("consulta sem expires_at", "expires_at" in parametrosSessao({ consultaId: "c1", pacienteId: "p1", pagamentoId: "pg1", valorCentavos: 1, moeda: "brl", metodos: ["card"], descricao: "T", baseUrl: "https://a" }), false);
 igual("ref consulta", referenciaCliente({ consultaId: "c1", pagamentoId: "pg1" }), "c1");
@@ -304,6 +315,10 @@ igual("webhook confere valor da multa", /valorConfere\(s\.amount_total, r\.multa
 const logica = ler("./stripe-checkout-logica.ts");
 const gateway = ler("./server/gateway-pagamento.ts");
 igual("lógica não monta payment_method_types", /^\s*payment_method_types\s*:/m.test(logica), false);
+igual("lógica não monta success_url", /^\s*success_url\s*:/m.test(logica), false);
+igual("lógica não monta cancel_url", /^\s*cancel_url\s*:/m.test(logica), false);
+igual("checkout não devolve página externa", /json\(\{\s*url:/.test(checkout), false);
+igual("checkout devolve o segredo da sessão embutida", checkout.includes("clientSecret: s.clientSecret"), true);
 igual("gateway não monta payment_method_types", /payment_method_types\s*:/.test(gateway), false);
 igual("gateway sem cast que esconde parâmetro removido", /as unknown as Stripe\.Checkout\.SessionCreateParams/.test(gateway), false);
 igual("lógica confere os tipos do SDK (satisfies)", /satisfies Stripe\.Checkout\.SessionCreateParams/.test(logica), true);

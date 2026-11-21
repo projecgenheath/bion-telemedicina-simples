@@ -30,12 +30,15 @@ const cabecalhosSeguranca = [
     key: "Content-Security-Policy",
     value: [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+      // js.stripe.com e o quadro do checkout: o cartão do paciente abre na
+      // própria página. Sem isso o navegador bloqueia o formulário.
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com https://*.js.stripe.com",
       "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' data: blob:",
+      "img-src 'self' data: blob: https://*.stripe.com",
       "media-src 'self' blob:",
       "font-src 'self' data:",
-      "connect-src 'self' ws: wss:",
+      "connect-src 'self' ws: wss: https://api.stripe.com https://checkout.stripe.com",
+      "frame-src https://js.stripe.com https://*.js.stripe.com https://hooks.stripe.com https://checkout.stripe.com",
       "worker-src 'self' blob:",
       "frame-ancestors 'none'",
       "base-uri 'self'",

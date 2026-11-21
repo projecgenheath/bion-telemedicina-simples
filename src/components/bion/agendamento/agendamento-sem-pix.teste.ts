@@ -45,9 +45,11 @@ igual("passo sem Pix/QR/boleto", /QrCode|br\.gov\.bcb\.pix|Boleto|copiarChavePix
 igual("passo não coleta número de cartão", /cc-number|cc-csc/.test(passo), false);
 igual("tipos sem pix", /pix/i.test(tipos), false);
 igual("fluxo sem chave Pix", /pix/i.test(fluxo), false);
-igual("fluxo abre checkout com consultaId", fluxo.includes("abrirCheckoutStripe({ consultaId: criada.id })"), true);
+igual("fluxo abre o cartão na tela da consulta", fluxo.includes("tentarAbrirCheckout(criada.id)") && fluxo.includes("pagamentoConsultaId={pagamentoNoApp}"), true);
+igual("fluxo não manda para outra página", /location\.assign\(/.test(fluxo), false);
 igual("chat sem botão Pix", /id: "pix"|metodo === "pix"/.test(chat), false);
-igual("chat abre checkout quando pagarComCartao", /json\.pagarComCartao === true\)[\s\S]*?abrirCheckoutStripe\(\{ consultaId/.test(chat), true);
+igual("chat abre o cartão na tela quando pagarComCartao", /json\.pagarComCartao === true && json\.consultaCriada[\s\S]*?setPagamentoConsultaId\(json\.consultaCriada\)/.test(chat), true);
+igual("chat não manda para outra página", /location\.assign\(/.test(chat), false);
 
 console.log(`${ok} ok, ${falhas} falha(s)`);
 if (falhas) process.exit(1);

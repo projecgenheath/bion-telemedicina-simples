@@ -48,8 +48,24 @@ export function checkoutStripeAtivo(): Promise<boolean> {
  */
 export type AlvoCheckout = { consultaId: string } | { pagamentoId: string } | { remarcacaoId: string };
 
-/** Abre (ou reaproveita) a sessão e devolve a URL do Stripe. Só cartão. */
-export async function abrirCheckoutStripe(alvo: string | AlvoCheckout): Promise<{ url?: string; erro?: string }> {
+/** O que a tela precisa para montar o cartão aqui. Não há endereço de outra página. */
+export type SessaoNoApp = {
+  clientSecret?: string;
+  chavePublica?: string;
+  conta?: string;
+  erro?: string;
+};
+
+function segredoDeSessao(v: unknown): v is string {
+  return typeof v === "string" && v.startsWith("cs_test_") && v.includes("_secret_") && !v.includes("sk_") && v.length < 500;
+}
+
+function chavePublicaCliente(v: unknown): v is string {
+  return typeof v === "string" && /^pk_test_[A-Za-z0-9]+$/.test(v);
+}
+
+/** Abre (ou reaproveita) a sessão embutida. Só cartão. Não devolve URL. */
+export async function abrirCheckoutStripe(alvo: string | AlvoCheckout): Promise<SessaoNoApp> {
   try {
     const corpo: AlvoCheckout = typeof alvo === "string" ? { consultaId: alvo } : alvo;
     const r = await fetch("/api/pagamentos/stripe/checkout", {
@@ -57,9 +73,16 @@ export async function abrirCheckoutStripe(alvo: string | AlvoCheckout): Promise<
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(corpo),
     });
-    const j = (await r.json().catch(() => ({}))) as { url?: string; erro?: string };
-    if (!r.ok || !j.url) return { erro: j.erro ?? "Não foi possível abrir o pagamento." };
-    return { url: j.url };
+    const j = (await r.json().catch(() => ({}))) as {
+      clientSecret?: unknown;
+      chavePublica?: unknown;
+      conta?: unknown;
+      erro?: unknown;
+    };
+    const erro = typeof j.erro === "string" ? j.erro : "Não foi possível abrir o pagamento.";
+    if (!r.ok || !segredoDeSessao(j.clientSecret) || !chavePublicaCliente(j.chavePublica)) return { erro };
+    const conta = typeof j.conta === "string" && /^acct_[A-Za-z0-9]+$/.test(j.conta) ? j.conta : undefined;
+    return { clientSecret: j.clientSecret, chavePublica: j.chavePublica, conta };
   } catch {
     return { erro: "Sem conexão. Tente de novo." };
   }

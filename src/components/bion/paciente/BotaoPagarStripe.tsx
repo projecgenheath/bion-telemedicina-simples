@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { CreditCard } from "lucide-react";
-import { toast } from "sonner";
-import { abrirCheckoutStripe, situacaoCheckoutStripe, type AlvoCheckout, type SituacaoCheckout } from "./pagamento-stripe-cliente";
+import { PagamentoNoApp } from "./PagamentoNoApp";
+import { situacaoCheckoutStripe, type AlvoCheckout, type SituacaoCheckout } from "./pagamento-stripe-cliente";
 
 /** Aviso único: o cartão deste ambiente não cobra. Não substitui o botão quando o Stripe está ligado. */
 export function AvisoCartaoIndisponivel({ className = "" }: { className?: string }) {
@@ -33,7 +33,7 @@ export function BotaoPagarStripe({
   className?: string;
 }) {
   const [situacao, setSituacao] = useState<SituacaoCheckout | "carregando">("carregando");
-  const [abrindo, setAbrindo] = useState(false);
+  const [aberto, setAberto] = useState(false);
   useEffect(() => {
     let vivo = true;
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -62,26 +62,28 @@ export function BotaoPagarStripe({
         : null;
   if (!alvo || situacao === "carregando" || situacao === "incerto") return null;
   if (situacao === "desligado") return <AvisoCartaoIndisponivel className="mt-2" />;
-
-  const pagar = async () => {
-    setAbrindo(true);
-    const r = await abrirCheckoutStripe(alvo);
-    if (r.url) {
-      window.location.assign(r.url);
-      return;
-    }
-    toast.error(r.erro ?? "Não foi possível abrir o pagamento.");
-    setAbrindo(false);
-  };
+  if (aberto) {
+    return (
+      <div className="space-y-3">
+        <PagamentoNoApp
+          alvo={alvo}
+          consultaIdVolta={consultaId ?? null}
+          tipoVolta={remarcacaoId ? "multa" : "renovacao"}
+        />
+        <button type="button" onClick={() => setAberto(false)} className="text-sm font-bold underline">
+          Agora não
+        </button>
+      </div>
+    );
+  }
 
   return (
     <button
       type="button"
-      onClick={pagar}
-      disabled={abrindo}
-      className={`bp-acao bion-toque inline-flex items-center justify-center gap-2 min-h-11 px-4 text-sm disabled:opacity-60 ${className}`}
+      onClick={() => setAberto(true)}
+      className={`bp-acao bion-toque inline-flex items-center justify-center gap-2 min-h-11 px-4 text-sm ${className}`}
     >
-      <CreditCard className="w-4 h-4" aria-hidden /> {abrindo ? "Abrindo pagamento…" : rotulo}
+      <CreditCard className="w-4 h-4" aria-hidden /> {rotulo}
     </button>
   );
 }

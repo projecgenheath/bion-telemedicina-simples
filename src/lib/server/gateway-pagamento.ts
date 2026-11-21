@@ -14,7 +14,10 @@ import { taxaPlataformaConnectCentavos } from "@/lib/server/financeiro";
 
 export type SessaoCheckout = {
   id: string;
+  /** Página externa. O paciente não é mandado para ela. */
   url: string | null;
+  /** Segredo do formulário embutido na tela da BION. Não é a chave da API. */
+  clientSecret: string | null;
   status: string | null; // open | complete | expired
   valorCentavos: number | null;
   expiraEmSeg: number;
@@ -34,7 +37,14 @@ export interface GatewayCheckout {
 }
 
 function paraSessao(s: Stripe.Checkout.Session): SessaoCheckout {
-  return { id: s.id, url: s.url, status: s.status, valorCentavos: s.amount_total, expiraEmSeg: s.expires_at };
+  return {
+    id: s.id,
+    url: s.url,
+    clientSecret: s.client_secret,
+    status: s.status,
+    valorCentavos: s.amount_total,
+    expiraEmSeg: s.expires_at,
+  };
 }
 
 export const gatewayStripe: GatewayCheckout = {

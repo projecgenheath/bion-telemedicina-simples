@@ -2,6 +2,7 @@
 
 import { CreditCard, ShieldCheck } from "lucide-react";
 import type { AgendamentoCorpoProps } from "@/components/bion/agendamento/types";
+import { PagamentoNoApp } from "@/components/bion/paciente/PagamentoNoApp";
 
 export function PassoPagamento(p: AgendamentoCorpoProps) {
   const {
@@ -27,6 +28,7 @@ export function PassoPagamento(p: AgendamentoCorpoProps) {
     removerArquivo,
     processandoPagamento,
     finalizarAgendamento,
+    pagamentoConsultaId,
     medicoAtual,
     onDone,
   } = p;
@@ -58,19 +60,21 @@ export function PassoPagamento(p: AgendamentoCorpoProps) {
           </div>
         </div>
 
-        {/* Forma de pagamento: só cartão, no checkout seguro do Stripe (sem Pix). */}
+        {/* Forma de pagamento: só cartão, nesta tela (sem Pix e sem outra página). */}
         <div className="p-4 rounded-2xl bg-muted/60 flex items-start gap-3">
           <CreditCard className="w-6 h-6 text-primary shrink-0" aria-hidden />
           <div className="space-y-1">
             <div className="font-bold text-sm">Cartão de crédito</div>
             <p className="text-xs text-muted-foreground">
-              Ao confirmar, você vai para a página segura de pagamento do Stripe. A BION não vê nem
-              guarda os dados do seu cartão. Depois que o pagamento é aprovado, a confirmação da
-              consulta é registrada automaticamente — pode levar alguns instantes.
+              O pagamento abre aqui, nesta tela. A BION não vê nem guarda os dados do seu cartão.
+              A consulta só fica confirmada quando o pagamento é aceito — pode levar alguns instantes.
             </p>
           </div>
         </div>
 
+        {pagamentoConsultaId ? (
+          <PagamentoNoApp alvo={{ consultaId: pagamentoConsultaId }} consultaIdVolta={pagamentoConsultaId} />
+        ) : (
         <button type="button"
           disabled={processandoPagamento}
           onClick={finalizarAgendamento}
@@ -85,6 +89,7 @@ export function PassoPagamento(p: AgendamentoCorpoProps) {
             </>
           )}
         </button>
+        )}
       </div>
     </div>
 

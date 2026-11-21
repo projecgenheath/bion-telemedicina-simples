@@ -34,6 +34,8 @@ export type AgendamentoCorpoProps = {
   removerArquivo: (index: number) => void;
   processandoPagamento: boolean;
   finalizarAgendamento: () => void;
+  /** Consulta já reservada: o cartão abre neste passo, sem sair do app. */
+  pagamentoConsultaId?: string | null;
   medicoAtual: Medico;
   onDone: () => void;
 };

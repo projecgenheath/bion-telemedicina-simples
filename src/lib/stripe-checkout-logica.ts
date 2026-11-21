@@ -208,6 +208,17 @@ export function bloqueioChaveLive(modo: ModoCobranca, chave: string | undefined 
   return c.startsWith("sk_live_") || c.startsWith("rk_live_");
 }
 
+/**
+ * Chave pública do cartão para o formulário dentro do app (pk_test_).
+ * pk_live_ fica de fora, como a chave secreta live. Nunca é a chave secreta.
+ * Sem ela, a tela avisa e nada é cobrado — o paciente não vai para outra página.
+ */
+export function chavePublicaCartao(env: Env = process.env): string | null {
+  const k = (env.STRIPE_PUBLISHABLE_KEY ?? env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? "").trim();
+  if (!/^pk_test_[A-Za-z0-9]+$/.test(k)) return null;
+  return k;
+}
+
 /** Dados do Connect (só nos modos destino/direta). */
 export type DadosConnect = { contaMedico: string; taxaPlataformaCentavos: number };
 
@@ -283,8 +294,11 @@ export function parametrosSessao(e: EntradaSessao) {
       },
     ],
     payment_intent_data: { metadata, ...divisaoConnect(e), ...(e.descritorSufixo ? { statement_descriptor_suffix: e.descritorSufixo } : {}) },
-    success_url: `${base}/pagamento/sucesso?${q}`,
-    cancel_url: `${base}/pagamento/cancelado?${q}`,
+    // Formulário na própria tela da BION. Cartão comum não troca de página
+    // (if_required). success_url/cancel_url não existem neste modo.
+    ui_mode: "embedded_page",
+    redirect_on_completion: "if_required",
+    return_url: `${base}/pagamento/sucesso?${q}&session_id={CHECKOUT_SESSION_ID}`,
   } satisfies Stripe.Checkout.SessionCreateParams; // parâmetro removido pelo Stripe = erro no tsc
 }
 
@@ -336,13 +350,17 @@ export function opcoesRequisicao(e: Pick<EntradaSessao, "modo" | "connect">): { 
   return e.modo === "direta" && e.connect ? { stripeAccount: e.connect.contaMedico } : {};
 }
 
-/** Sessão salva ainda serve? (aberta, mesmo valor, com folga antes de expirar). */
+/**
+ * Sessão salva ainda serve? Aberta, mesmo valor, com folga, e com o segredo
+ * do formulário embutido. Sessão antiga que só tem página externa não serve:
+ * reaproveitar ela mandaria o paciente para fora do app.
+ */
 export function sessaoReaproveitavel(
-  s: { status: string | null; valorCentavos: number | null; expiraEmSeg: number; url: string | null } | null,
+  s: { status: string | null; valorCentavos: number | null; expiraEmSeg: number; clientSecret: string | null } | null,
   valorCentavos: number,
   agoraSeg = Math.floor(Date.now() / 1000),
 ): boolean {
-  return !!s && s.status === "open" && s.valorCentavos === valorCentavos && !!s.url && s.expiraEmSeg - 120 > agoraSeg;
+  return !!s && s.status === "open" && s.valorCentavos === valorCentavos && !!s.clientSecret && s.expiraEmSeg - 120 > agoraSeg;
 }
 
 /* ----------------------------- webhook ----------------------------- */

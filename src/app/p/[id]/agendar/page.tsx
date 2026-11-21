@@ -6,7 +6,8 @@ import { agendaLivreDoMedico } from "@/components/bion/paciente/agenda-medico";
 import { separarPorTurno } from "@/components/bion/agendamento/horarios";
 import { AvisoCartaoIndisponivel } from "@/components/bion/paciente/BotaoPagarStripe";
 import { OfertaInstalarApp } from "@/components/bion/paciente/OfertaInstalarApp";
-import { abrirCheckoutStripe, situacaoCheckoutStripe, type SituacaoCheckout } from "@/components/bion/paciente/pagamento-stripe-cliente";
+import { PagamentoNoApp } from "@/components/bion/paciente/PagamentoNoApp";
+import { situacaoCheckoutStripe, type SituacaoCheckout } from "@/components/bion/paciente/pagamento-stripe-cliente";
 import {
   consultasOcupadas,
   guardarEscolha,
@@ -51,6 +52,7 @@ export default function PaginaAgendarMedica() {
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [avisoPronto, setAvisoPronto] = useState("");
+  const [consultaParaPagar, setConsultaParaPagar] = useState<string | null>(null);
   const [cartao, setCartao] = useState<SituacaoCheckout | "carregando">("carregando");
 
   useEffect(() => {
@@ -204,18 +206,9 @@ export default function PaginaAgendarMedica() {
         setEtapa("pronto");
         return;
       }
-      const checkout = await abrirCheckoutStripe(j.consulta.id);
-      if (checkout.url) {
-        limparEscolha();
-        window.location.assign(checkout.url);
-        return;
-      }
       limparEscolha();
-      setAvisoPronto(
-        checkout.erro ??
-          "O horário ficou reservado, mas o pagamento não abriu. Nada foi cobrado agora. Dá para pagar depois em Minhas consultas.",
-      );
-      setEtapa("pronto");
+      setConsultaParaPagar(j.consulta.id);
+      setEtapa("pagar");
     } catch {
       setErro("Sem conexão. Tente de novo.");
     } finally {
@@ -358,14 +351,18 @@ export default function PaginaAgendarMedica() {
                 {erro}
               </p>
             ) : null}
-            <button
-              type="button"
-              disabled={enviando}
-              onClick={() => void pagar()}
-              className="w-full min-h-11 rounded-full bg-[#24058D] px-4 py-3 text-sm font-bold text-white disabled:opacity-50"
-            >
-              {enviando ? "Aguarde..." : "Pagar a consulta"}
-            </button>
+            {consultaParaPagar ? (
+              <PagamentoNoApp alvo={{ consultaId: consultaParaPagar }} consultaIdVolta={consultaParaPagar} />
+            ) : (
+              <button
+                type="button"
+                disabled={enviando || cartao === "carregando"}
+                onClick={() => void pagar()}
+                className="w-full min-h-11 rounded-full bg-[#24058D] px-4 py-3 text-sm font-bold text-white disabled:opacity-50"
+              >
+                {enviando ? "Aguarde..." : "Pagar a consulta"}
+              </button>
+            )}
             <button
               type="button"
               onClick={() => setEtapa("agenda")}

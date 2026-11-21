@@ -25,7 +25,8 @@ import {
 import { useBion, type AnamneseResumo } from "@/lib/bion-store";
 import { diasDoAgendamento } from "@/components/bion/agendamento/horarios";
 import { agendaLivreDoMedico } from "./agenda-medico";
-import { abrirCheckoutStripe, checkoutStripeAtivo } from "./pagamento-stripe-cliente";
+import { checkoutStripeAtivo } from "./pagamento-stripe-cliente";
+import { PagamentoNoApp } from "./PagamentoNoApp";
 import { useDiasBloqueados } from "./useDiasBloqueados";
 import {
   type Msg,
@@ -128,6 +129,7 @@ export function ChatBion({
     hora?: string;
   }>({});
   const [pagando, setPagando] = useState(false);
+  const [pagamentoConsultaId, setPagamentoConsultaId] = useState<string | null>(null);
   // F10: o checkout Stripe está ligado NESTE ambiente? O cartão de
   // confirmação prometia "página segura do Stripe" mesmo no modo simulado,
   // em que nenhum cartão é pedido. null = ainda consultando a flag.
@@ -731,17 +733,13 @@ export function ChatBion({
       }
       // Contrato delta: resposta contém APENAS a consulta criada (+ anamnese).
       aplicarDelta(json);
-      // Só cartão: com o checkout Stripe ligado, a consulta nasce aguardando
-      // pagamento e o paciente vai para a página do Stripe (o webhook confirma).
-      if (json.pagarComCartao === true) {
-        const r = await abrirCheckoutStripe({ consultaId: json.consultaCriada });
-        if (r.url) {
-          window.location.assign(r.url);
-          return;
-        }
+      // Só cartão: com o checkout ligado, a consulta nasce aguardando
+      // pagamento e o cartão abre nesta tela (o webhook confirma).
+      if (json.pagarComCartao === true && json.consultaCriada) {
+        setPagamentoConsultaId(json.consultaCriada);
         setMensagens((m) => [
           ...m,
-          { remetente: "ia", texto: `Reservei o horário, mas o pagamento não abriu: ${r.erro ?? "tente de novo"}. Você pode pagar em Minhas consultas.`, tipo: "erro" },
+          { remetente: "ia", texto: "Reservei o horário. O cartão abre aqui embaixo, nesta tela. Nada é cobrado até você concluir." },
         ]);
         setEtapa(null);
         setEscolha({});
@@ -1048,6 +1046,25 @@ export function ChatBion({
           </button>
         ) : null}
 
+        {pagamentoConsultaId ? (
+          <section aria-label="Pagamento da consulta" className="bp-glass p-4">
+            <PagamentoNoApp
+              alvo={{ consultaId: pagamentoConsultaId }}
+              consultaIdVolta={pagamentoConsultaId}
+              onConcluido={() => {
+                setMensagens((m) => [
+                  ...m,
+                  {
+                    remetente: "ia",
+                    texto: "O cartão foi enviado nesta tela. A consulta só fica confirmada quando o pagamento for aceito. Acompanhe em Minhas consultas.",
+                  },
+                ]);
+                setPagamentoConsultaId(null);
+              }}
+            />
+          </section>
+        ) : null}
+
         {/* Confirmação + pagamento do agendamento */}
         {etapa === "confirmar" && (() => {
           const medicoRegistro = medicosAtivos.find((m) => m.nome === escolha.medico);
@@ -1068,7 +1085,7 @@ export function ChatBion({
               <p className="text-sm mb-3">
                 {stripeAtivo === false
                   ? "Demonstração: a confirmação é simulada e nenhum cartão é cobrado."
-                  : "Cartão de crédito, na página segura do Stripe. Não aceitamos Pix."}
+                  : "Cartão de crédito, nesta tela. A BION não vê o número. Não aceitamos Pix."}
               </p>
               <div className="flex gap-2">
                 <button type="button"
