@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import { NextRequest } from "next/server";
 import { registrarAudit } from "@/lib/server/auth";
 import { ok, falha } from "@/lib/server/http";
-import { competenciaPadraoParaFechar, fecharRepasse, listarConsultasSemDesfecho } from "@/lib/server/repasse";
+import { competenciaPadraoParaFechar, cronFechaRepassePix, fecharRepasse, listarConsultasSemDesfecho } from "@/lib/server/repasse";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -18,23 +18,28 @@ function autorizado(req: NextRequest): boolean | null {
 }
 
 /**
- * Cron da Vercel (vercel.json, 02:30 UTC = 23:30 em SP): fecha o repasse do
- * dia para todos os médicos. Idempotente: se rodar de novo ou atrasar para
- * depois da meia-noite, fecha a competência certa sem duplicar
- * (corte = mínimo entre agora e o fim do dia em SP).
+ * Não fecha PIX novo. O médico recebe na conta conectada da Stripe; a
+ * Stripe transfere ao banco no calendário dela. A BION não faz outro
+ * repasse. O vercel.json não declara cron. Se algo ainda chamar esta
+ * rota, ela autentica e responde sem criar lote.
  *
- * Desfecho (regras do Alisson, 06/10/2026): consultas SEM DESFECHO (status
- * ainda "ia acontecer" e sem falta/falha técnica vigente) ficam fora do
- * fechamento e entram no primeiro fechamento depois de ganhar desfecho
- * (repasse.ts). O cron NÃO muda status nem roda a verificação de presença:
- * só conta as que ficaram de fora (`semDesfecho`, na auditoria) — a Fila do
- * admin mostra as que estão assim há mais de 24 h.
+ * O corpo antigo só roda se cronFechaRepassePix() voltar a ser true.
+ * Consulta sem desfecho continua fora de fecharRepasse, e esta rota não
+ * muda status nem presença.
  */
 export async function GET(req: NextRequest) {
   try {
     const ok_ = autorizado(req);
     if (ok_ === null) return Response.json({ erro: "CRON_SECRET não configurado." }, { status: 503 });
     if (!ok_) return Response.json({ erro: "Não autorizado." }, { status: 401 });
+
+    if (!cronFechaRepassePix()) {
+      return ok({
+        fechamentoPixAutomatico: false,
+        fechados: 0,
+        motivo: "Fechamento PIX automático desligado. O médico recebe só pela Stripe, na conta conectada.",
+      });
+    }
 
     const agora = new Date();
     // Atrasou para depois da meia-noite: ainda é o dia anterior que precisa fechar.

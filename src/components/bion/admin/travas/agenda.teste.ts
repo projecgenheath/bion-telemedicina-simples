@@ -24,4 +24,9 @@ if (rotas !== esperadas) {
   console.error(`✗ rotas\n   obtido: ${rotas}`);
   process.exit(1);
 }
+const fechar = TAREFAS_AGENDA.find((t) => t.rota === "/api/cron/fechar-repasses");
+if (!fechar || /descreve cron da Vercel às 23:30/.test(fechar.onde) || !/desligado/.test(fechar.onde) || !/Stripe/.test(fechar.onde)) {
+  console.error("✗ a tela não pode dizer que o código ainda fecha PIX às 23:30");
+  process.exit(1);
+}
 console.log("agenda: ok");
