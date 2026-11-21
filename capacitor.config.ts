@@ -14,10 +14,10 @@ const config: CapacitorConfig = {
   server: {
     url: APP_START_URL,
     androidScheme: "https",
-    // checkout.stripe.com: o pagamento (cartão, modo da conta Stripe) abre DENTRO do app.
-    // Sem isso o Capacitor mandava o Checkout para o Chrome; a volta (success_url)
-    // caía no navegador, sem a sessão do app, e o paciente ficava sem a confirmação.
-    allowNavigation: ["bion-telemedicina-simples.vercel.app", "checkout.stripe.com"],
+    // O cartão abre na própria página da BION. Estes domínios só entram se o
+    // banco pedir uma confirmação (3DS): sem isso o Capacitor manda o passo
+    // para o Chrome e a volta perde a sessão do app.
+    allowNavigation: ["bion-telemedicina-simples.vercel.app", "checkout.stripe.com", "js.stripe.com", "hooks.stripe.com"],
     cleartext: false,
   },
   android: {

@@ -17,6 +17,7 @@ import {
   expiracaoReservaSeg,
   type TipoCobranca,
   bloqueioChaveLive,
+  chavePublicaCartao,
   ERRO_PAGAMENTO_INDISPONIVEL,
   chaveIdempotencia,
   descritorSufixo,
@@ -30,8 +31,9 @@ import {
 /**
  * Checkout do paciente (Stripe), atrás da flag BION_PAGAMENTO_STRIPE=true.
  *
- * POST { consultaId } | { pagamentoId } | { remarcacaoId } → { url } da sessão
- *   de Checkout (reaproveita a aberta). Só cartão, nunca Pix:
+ * POST { consultaId } | { pagamentoId } | { remarcacaoId } → { clientSecret, chavePublica }
+ *   da sessão embutida (reaproveita a aberta). O paciente paga na própria tela.
+ *   A resposta não traz URL de outra página. Só cartão, nunca Pix:
  *   - consultaId: a consulta (ou, se for a consulta nova da espera do médico,
  *     a diferença da remarcação);
  *   - pagamentoId: renovação de receita (Pagamento sem consulta,
@@ -269,6 +271,12 @@ async function abrirSessao(usuario: Usuario, a: Alvo) {
     console.error("[checkout-stripe] chave live recusada (modo", modo + ")");
     return Response.json({ erro: "Pagamento online indisponível no momento.", codigo: "pagamento_indisponivel" }, { status: 503 });
   }
+  if (!chavePublicaCartao()) {
+    return Response.json(
+      { erro: "O pagamento no aplicativo ainda não está disponível. Nada foi cobrado.", codigo: "pagamento_indisponivel" },
+      { status: 503 },
+    );
+  }
   let connect: DadosConnect | null = null;
   if (modo !== "plataforma") {
     const medico = await db.perfilMedico.findUnique({ where: { userId: a.medicoId }, select: { stripeAccountId: true } });
@@ -298,7 +306,9 @@ async function abrirSessao(usuario: Usuario, a: Alvo) {
   const contaMedicoMarca = contaMedicoDaCobranca(modo, connect);
   if (sessaoAnterior) {
     const s = await gateway.lerSessao(sessaoAnterior, contaDireta);
-    if (s && sessaoReaproveitavel(s, a.valorCentavos)) return Response.json({ url: s.url, reaproveitada: true });
+    if (s && sessaoReaproveitavel(s, a.valorCentavos)) return respostaNoApp(s, contaDireta);
+    // Sessão antiga de página externa: encerra, para não cobrar duas vezes.
+    if (s?.status === "open") await gateway.expirarSessao(sessaoAnterior, contaDireta);
   }
 
   const sessao = await gateway.criarSessao(
@@ -346,5 +356,21 @@ async function abrirSessao(usuario: Usuario, a: Alvo) {
     entidadeId: a.entidade.id,
     detalhes: `Sessão de checkout aberta (${a.tipo}, ${a.valorCentavos} centavos)`,
   });
-  return Response.json({ url: sessao.url });
+  return respostaNoApp(sessao, contaDireta);
+}
+
+/** O que a tela precisa para montar o cartão aqui. Nunca a URL de outra página. */
+function respostaNoApp(s: { clientSecret: string | null }, conta: string | null) {
+  const chavePublica = chavePublicaCartao();
+  if (!s.clientSecret || !chavePublica) {
+    return Response.json(
+      { erro: "O pagamento no aplicativo ainda não está disponível. Nada foi cobrado.", codigo: "pagamento_indisponivel" },
+      { status: 503 },
+    );
+  }
+  return Response.json({
+    clientSecret: s.clientSecret,
+    chavePublica,
+    ...(conta?.startsWith("acct_") ? { conta } : {}),
+  });
 }
