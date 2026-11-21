@@ -36,10 +36,10 @@ const FORTE: Record<Superficie, string> = {
   solto: "text-bion-ink dark:text-bion-paper",
 };
 const ICONE: Record<Superficie, string> = {
-  vidro: "bg-bion-sea/10 text-bion-sea dark:bg-[#C4B5FD]/10 dark:text-[#C4B5FD]",
+  vidro: "bg-bion-sea/10 text-bion-sea dark:bg-[#FFC169]/10 dark:text-[#FFC169]",
   marinho: "bg-white/15 text-white",
   janela: "bpp-sheet-chip bpp-sheet-forte",
-  solto: "bg-bion-sea/10 text-bion-sea dark:bg-[#C4B5FD]/10 dark:text-[#C4B5FD]",
+  solto: "bg-bion-sea/10 text-bion-sea dark:bg-[#FFC169]/10 dark:text-[#FFC169]",
 };
 
 export function Esqueleto({ className = "" }: { className?: string }) {

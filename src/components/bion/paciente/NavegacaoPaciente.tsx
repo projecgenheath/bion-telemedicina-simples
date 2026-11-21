@@ -45,7 +45,7 @@ export function DicaGestos({ onDispensar }: { onDispensar: () => void }) {
       className="bpp-dica absolute left-4 right-4 bottom-[calc(8rem+env(safe-area-inset-bottom))] z-30 rounded-3xl bg-zinc-950/90 text-white p-4 backdrop-blur shadow-2xl"
     >
       <div className="flex items-start gap-3">
-        <Hand className="w-5 h-5 mt-0.5 shrink-0 text-[#C4B5FD]" aria-hidden />
+        <Hand className="w-5 h-5 mt-0.5 shrink-0 text-[#FFC169]" aria-hidden />
         <div className="text-sm leading-relaxed">
           <p>
             <strong>Para os lados:</strong> perfil (esquerda) e documentos (direita).
@@ -103,7 +103,7 @@ export function NavegacaoPaciente({
 
   const classeNome = (ativo: boolean) =>
     `relative min-h-11 rounded-full px-3 text-xs font-bold ${
-      ativo ? "bg-[#C4B5FD] text-zinc-950" : "text-white/85"
+      ativo ? "bg-[#FFC169] text-zinc-950" : "text-white/85"
     }`;
 
   return (

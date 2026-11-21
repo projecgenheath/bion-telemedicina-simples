@@ -215,7 +215,7 @@ export function MedicamentosEmUso({ onGerenciarLembretes }: { onGerenciarLembret
     <section className="bp-glass p-5 w-full" aria-label="Medicamentos em uso">
       <div className="mb-3 flex items-center justify-between">
         <h3 className="inline-flex items-center gap-2.5 text-sm font-bold">
-          <span aria-hidden className="grid h-9 w-9 place-items-center rounded-xl bg-bion-sea/10 text-bion-sea dark:bg-[#C4B5FD]/15 dark:text-[#C4B5FD]">
+          <span aria-hidden className="grid h-9 w-9 place-items-center rounded-xl bg-bion-sea/10 text-bion-sea dark:bg-[#FFC169]/15 dark:text-[#FFC169]">
             <Pill className="w-4 h-4" />
           </span>
           Medicamentos em uso

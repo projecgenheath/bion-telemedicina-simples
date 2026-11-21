@@ -1,8 +1,8 @@
 /* ==================================================================== */
 /* Torre BION — fundação visual do perfil ADMINISTRATIVO (classes ba-*)  */
 /*                                                                      */
-/* Herda o DNA do app (Inter, bion-ink, degradê branco puro → roxo da marca,  */
-/* preto absoluto → roxo no Dark, vidro líquido) sem alterar         */
+/* Herda o DNA do app (Inter, degradê branco puro → roxo profundo #1D152D, */
+/* preto absoluto → malva no Dark, vidro líquido) sem alterar            */
 /* globals.css, bp-* (paciente) ou bm-* (médico).                       */
 /*                                                                      */
 /* Contraste (WCAG AA): todo par texto/superfície abaixo é conferido    */
@@ -15,14 +15,14 @@
 
 /* ---------- Tokens (em :root porque sheets usam portal fora da casca) */
 :root {
-  --ba-texto: #0a1f44;                 /* bion-ink */
-  --ba-texto-2: #3b4a66;               /* secundário (≥ 7:1 no card) */
-  --ba-texto-3: #52607a;               /* rótulos pequenos (≥ 5:1) */
-  --ba-sinal: #24058D;                 /* roxo da marca: ação/foco do admin */
+  --ba-texto: #241633;                 /* tinta da zona (roxo profundo) */
+  --ba-texto-2: #4A3F5C;               /* secundário (≥ 7:1 no card) */
+  --ba-texto-3: #675878;               /* rótulos pequenos (≥ 5:1) */
+  --ba-sinal: #4A3760;                 /* malva profundo da zona: ação/foco do admin */
   --ba-ok: #065f46;
   --ba-atencao: #92400e;
   --ba-critico: #991b1b;
-  --ba-dinheiro: #24058D;              /* roxo da marca (alinhado ao sinal) */
+  --ba-dinheiro: #4A3760;              /* malva da zona (alinhado ao sinal) */
   --ba-neutro: #334155;
   --ba-card: rgba(255, 255, 255, 0.88);
   --ba-card-solido: #ffffff;
@@ -37,21 +37,21 @@
   --ba-linha: 3.25rem;                 /* altura da linha de tabela */
 }
 .dark {
-  --ba-texto: #f2f6fc;                 /* bion-paper */
-  --ba-texto-2: #c7d2e3;
-  --ba-texto-3: #a9b6cb;
-  --ba-sinal: #96A5FF;
+  --ba-texto: #F2ECF6;                 /* papel lavanda da zona */
+  --ba-texto-2: #CFC4DC;
+  --ba-texto-3: #A99BBB;
+  --ba-sinal: #D4B3E3;
   --ba-ok: #6ee7b7;
   --ba-atencao: #fcd34d;
   --ba-critico: #fca5a5;
-  --ba-dinheiro: #96A5FF;
+  --ba-dinheiro: #D4B3E3;
   --ba-neutro: #cbd5e1;
-  --ba-card: rgba(12, 16, 28, 0.8);
-  --ba-card-solido: #05080f;
+  --ba-card: rgba(20, 15, 30, 0.8);
+  --ba-card-solido: #0B0812;
   --ba-borda: rgba(255, 255, 255, 0.1);
   --ba-realce: rgba(255, 255, 255, 0.07);
   --ba-sombra: 0 12px 32px -10px rgba(0, 0, 0, 0.6);
-  --ba-trilho: rgba(5, 8, 15, 0.78);
+  --ba-trilho: rgba(11, 8, 18, 0.78);
   --ba-esqueleto: rgba(255, 255, 255, 0.08);
 }
 
@@ -77,24 +77,24 @@
 .ba-app[data-densidade="compacta"] { --ba-pad: 0.875rem; --ba-linha: 2.75rem; }
 
 /* Céu: branco/preto puro no topo (texto solto só nesta faixa, 0–35%),
-   depois um lilás/noite bem claro. O roxo da marca não chega no rodapé —
-   em telas curtas a poça #24058D / #1a0a4a manchava o fundo vazio. */
+   depois um malva/noite bem claro. O roxo profundo não chega no rodapé —
+   em telas curtas a poça de cor manchava o fundo vazio. */
 .ba-ceu {
-  background-color: #f7f5fc;
-  background-image: linear-gradient(180deg, #ffffff 0%, #ffffff 35%, #f7f5fc 58%, #f7f5fc 100%);
+  background-color: #F8F5FA;
+  background-image: linear-gradient(180deg, #ffffff 0%, #ffffff 35%, #F8F5FA 58%, #F8F5FA 100%);
   background-attachment: fixed;
 }
 .dark .ba-ceu {
-  background-color: #070414;
-  background-image: linear-gradient(180deg, #000000 0%, #000000 35%, #070414 58%, #070414 100%);
+  background-color: #0C0813;
+  background-image: linear-gradient(180deg, #000000 0%, #000000 35%, #0C0813 58%, #0C0813 100%);
   background-attachment: fixed;
 }
 /* Painéis laterais (Conta / Fila) e superfícies sobrepostas */
 .ba-painel {
-  background: linear-gradient(180deg, #ffffff 0%, #f7f5fc 60%, #eee8f8 100%);
+  background: linear-gradient(180deg, #ffffff 0%, #F8F5FA 60%, #EFE9F3 100%);
 }
 .dark .ba-painel {
-  background: linear-gradient(180deg, #000000 0%, #060410 60%, #0c0820 100%);
+  background: linear-gradient(180deg, #000000 0%, #0A0710 60%, #14101E 100%);
 }
 
 /* Carrossel do celular: Conta ⟷ Centro ⟷ Fila */
@@ -154,8 +154,8 @@
 .ba-pilula-alvo[aria-current="page"] .ba-pilula-ponto {
   background: transparent;
 }
-/* Indicador deslizante (.bion-indicador no markup). #96A5FF sobre a
-   cápsula escura (contraste ~8,6:1). Não usar #24058D aqui: fica ~1,4:1. */
+/* Indicador deslizante (.bion-indicador no markup). #D4B3E3 (malva) sobre
+   a cápsula escura (contraste ~10,8:1). Não usar #4A3760 aqui: fica ~1,5:1. */
 .ba-pilula-indicador {
   position: absolute;
   left: 0;
@@ -163,7 +163,7 @@
   width: 1.5rem;
   height: 0.5rem;
   border-radius: 9999px;
-  background: #96A5FF;
+  background: #D4B3E3;
   pointer-events: none;
   z-index: 0;
 }
@@ -360,11 +360,11 @@ button.ba-card:hover, a.ba-card:hover, .ba-card[role="button"]:hover { transform
 }
 .ba-botao:disabled { opacity: 0.5; cursor: not-allowed; }
 .ba-botao-primario {
-  background: linear-gradient(135deg, #24058D 0%, #160347 100%);
+  background: linear-gradient(135deg, #3A2A4E 0%, #241A35 100%);
   color: #ffffff;
-  box-shadow: 0 8px 20px -6px rgba(36, 5, 141, 0.45);
+  box-shadow: 0 8px 20px -6px rgba(29, 21, 45, 0.45);
 }
-.dark .ba-botao-primario { background: #96A5FF; color: #24058D; }
+.dark .ba-botao-primario { background: #D4B3E3; color: #241633; }
 .ba-botao-secundario {
   background: color-mix(in srgb, var(--ba-texto) 7%, transparent);
   color: var(--ba-texto);
@@ -481,7 +481,7 @@ button.ba-card:hover, a.ba-card:hover, .ba-card[role="button"]:hover { transform
 .ba-deslizar-fundo[data-tom="ok"] { background: #047857; }
 .ba-deslizar-fundo[data-tom="critico"] { background: #b91c1c; }
 .ba-deslizar-fundo[data-tom="atencao"] { background: #92400e; }
-.ba-deslizar-fundo[data-tom="dinheiro"], .ba-deslizar-fundo[data-tom="sinal"] { background: #24058D; }
+.ba-deslizar-fundo[data-tom="dinheiro"], .ba-deslizar-fundo[data-tom="sinal"] { background: #3A2A4E; }
 .ba-deslizar-fundo[data-tom="neutro"] { background: #334155; }
 .ba-deslizar-frente { position: relative; will-change: transform; }
 .ba-deslizar-frente[data-soltando="true"] { transition: transform 0.22s cubic-bezier(0.2, 0.8, 0.2, 1); }
@@ -502,7 +502,7 @@ button.ba-card:hover, a.ba-card:hover, .ba-card[role="button"]:hover { transform
 .ba-sheet {
   background: var(--ba-card-solido);
   color: var(--ba-texto);
-  box-shadow: 0 -16px 48px rgba(10, 31, 68, 0.25);
+  box-shadow: 0 -16px 48px rgba(29, 21, 45, 0.25);
 }
 .dark .ba-sheet { box-shadow: 0 -16px 48px rgba(0, 0, 0, 0.7); border-color: rgba(255, 255, 255, 0.1); }
 
@@ -532,7 +532,7 @@ button.ba-card:hover, a.ba-card:hover, .ba-card[role="button"]:hover { transform
       padding: 2rem;
       border-radius: 1.5rem;
       border: 1px solid var(--ba-borda);
-      box-shadow: 0 18px 48px -24px rgba(10, 31, 68, 0.35);
+      box-shadow: 0 18px 48px -24px rgba(29, 21, 45, 0.35);
     }
   }
 }
@@ -590,10 +590,10 @@ button.ba-card:hover, a.ba-card:hover, .ba-card[role="button"]:hover { transform
     color: var(--ba-texto-2);
     white-space: nowrap;
   }
-  .ba-aba[aria-selected="true"] { background: #24058D; color: #fff; }
-  .ba-aba[aria-pressed="true"] { background: #24058D; color: #fff; }
+  .ba-aba[aria-selected="true"] { background: #3A2A4E; color: #fff; }
+  .ba-aba[aria-pressed="true"] { background: #3A2A4E; color: #fff; }
   .dark .ba-aba[aria-selected="true"],
-  .dark .ba-aba[aria-pressed="true"] { background: #96A5FF; color: #24058D; }
+  .dark .ba-aba[aria-pressed="true"] { background: #D4B3E3; color: #241633; }
   /* Botão-filtro avulso (fora de .ba-abas) */
   .ba-aba-solta { border: 1px solid var(--ba-borda); background: color-mix(in srgb, var(--ba-card-solido) 80%, transparent); }
 
@@ -634,8 +634,8 @@ button.ba-card:hover, a.ba-card:hover, .ba-card[role="button"]:hover { transform
   }
   .ba-slot:disabled { opacity: 0.45; cursor: not-allowed; }
   .ba-slot:disabled > span:first-child { text-decoration: line-through; }
-  .ba-slot[data-escolhido="true"] { background: #24058D; border-color: #24058D; color: #fff; }
-  .dark .ba-slot[data-escolhido="true"] { background: #96A5FF; border-color: #96A5FF; color: #24058D; }
+  .ba-slot[data-escolhido="true"] { background: #3A2A4E; border-color: #3A2A4E; color: #fff; }
+  .dark .ba-slot[data-escolhido="true"] { background: #D4B3E3; border-color: #D4B3E3; color: #241633; }
 }
 
 /* ---------- Auditoria, Monitor LLM e Relatórios (PR 6) ----------------- */
@@ -657,8 +657,8 @@ button.ba-card:hover, a.ba-card:hover, .ba-card[role="button"]:hover { transform
     border: 1px solid var(--ba-borda);
   }
   .ba-filtro .ba-chip-ponto { width: 0.5rem; height: 0.5rem; background: var(--ba-tom, currentColor); }
-  .ba-filtro[aria-pressed="true"] { background: #24058D; border-color: #24058D; color: #fff; }
-  .dark .ba-filtro[aria-pressed="true"] { background: #96A5FF; border-color: #96A5FF; color: #24058D; }
+  .ba-filtro[aria-pressed="true"] { background: #3A2A4E; border-color: #3A2A4E; color: #fff; }
+  .dark .ba-filtro[aria-pressed="true"] { background: #D4B3E3; border-color: #D4B3E3; color: #241633; }
   .ba-filtro[aria-pressed="true"] .ba-chip-ponto { background: currentColor; }
 
   /* Linha do tempo da auditoria: trilha vertical, marco da hora na cor da pior severidade */
@@ -741,7 +741,7 @@ button.ba-card:hover, a.ba-card:hover, .ba-card[role="button"]:hover { transform
 /* ------------------------------------------------------------------ */
 @layer components {
   /* Bolhas da conversa do chamado: a pessoa à esquerda, o suporte à direita.
-     Texto sempre na cor do tema (AA); o lado do suporte usa o roxo da marca. */
+     Texto sempre na cor do tema (AA); o lado do suporte usa o malva da zona. */
   .ba-bolha {
     display: block;
     max-width: min(36rem, 92%);
@@ -755,11 +755,11 @@ button.ba-card:hover, a.ba-card:hover, .ba-card[role="button"]:hover { transform
   .ba-bolha[data-lado="suporte"] {
     margin-left: auto;
     border-bottom-right-radius: 0.35rem;
-    background: #24058D;
-    border-color: #24058D;
+    background: #3A2A4E;
+    border-color: #3A2A4E;
     color: #fff;
   }
-  .dark .ba-bolha[data-lado="suporte"] { background: #96A5FF; border-color: #96A5FF; color: #24058D; }
+  .dark .ba-bolha[data-lado="suporte"] { background: #D4B3E3; border-color: #D4B3E3; color: #241633; }
   blockquote.ba-bolha { max-width: 100%; margin: 0; }
 
   /* Seções focáveis por âncora: sem anel ao receber foco programático. */
@@ -800,30 +800,30 @@ button.ba-card:hover, a.ba-card:hover, .ba-card[role="button"]:hover { transform
 /* ===================== */
 /* Fase 5 (nov/2026): Centro de Comando imersivo */
 /* ===================== */
-/* Mesma linguagem das homes do paciente e do médico: tons da marca #24058D,
+/* Mesma linguagem das homes do paciente e do médico: tons da zona admin
    auroras e microinterações — tudo em escopo .ba-app (não vaza para fora).
    O texto claro do hero só existe sobre o degradê fixo da marca
    (branco ≥ 10:1 nos dois modos — pares conferidos no admin.teste.ts). */
 .ba-app {
-  --ba-grad-a: #24058D;
-  --ba-grad-b: #3D1AAE;
-  --ba-hero-1: #3D1AAE;
-  --ba-hero-2: #24058D;
-  --ba-hero-3: #1C0470;
-  --ba-glow-a-cor: rgba(196, 181, 253, 0.30);
-  --ba-glow-b-cor: rgba(221, 214, 254, 0.22);
-  --ba-aurora-1: rgba(196, 181, 253, 0.38);
-  --ba-aurora-2: rgba(221, 214, 254, 0.20);
-  --ba-ecg-cor: #DDD6FE;
+  --ba-grad-a: #4A3760;
+  --ba-grad-b: #6B5285;
+  --ba-hero-1: #4E3A68;
+  --ba-hero-2: #33254A;
+  --ba-hero-3: #1D152D;
+  --ba-glow-a-cor: rgba(212, 179, 227, 0.30);
+  --ba-glow-b-cor: rgba(235, 223, 240, 0.22);
+  --ba-aurora-1: rgba(212, 179, 227, 0.38);
+  --ba-aurora-2: rgba(229, 184, 216, 0.20);
+  --ba-ecg-cor: #E3CFEA;
 }
 .dark .ba-app {
-  --ba-grad-a: #C4B5FD;
-  --ba-grad-b: #DDD6FE;
-  --ba-glow-a-cor: rgba(196, 181, 253, 0.10);
-  --ba-glow-b-cor: rgba(221, 214, 254, 0.07);
-  --ba-aurora-1: rgba(196, 181, 253, 0.20);
-  --ba-aurora-2: rgba(221, 214, 254, 0.12);
-  --ba-ecg-cor: #C4B5FD;
+  --ba-grad-a: #D4B3E3;
+  --ba-grad-b: #EBDFF0;
+  --ba-glow-a-cor: rgba(212, 179, 227, 0.10);
+  --ba-glow-b-cor: rgba(235, 223, 240, 0.07);
+  --ba-aurora-1: rgba(212, 179, 227, 0.20);
+  --ba-aurora-2: rgba(229, 184, 216, 0.12);
+  --ba-ecg-cor: #D4B3E3;
 }
 
 /* Nome do administrador com gradiente animado da marca (estático em reduce) */
@@ -872,7 +872,7 @@ button.ba-card:hover, a.ba-card:hover, .ba-card[role="button"]:hover { transform
    Fixo nos dois modos — o texto claro vive só aqui dentro. */
 .ba-app .ba-hero {
   background: linear-gradient(160deg, var(--ba-hero-1) 0%, var(--ba-hero-2) 55%, var(--ba-hero-3) 100%);
-  box-shadow: 0 24px 48px -22px rgba(36, 5, 141, 0.5);
+  box-shadow: 0 24px 48px -22px rgba(29, 21, 45, 0.5);
 }
 .dark .ba-app .ba-hero {
   box-shadow: 0 24px 48px -22px rgba(0, 0, 0, 0.7);
@@ -904,10 +904,10 @@ button.ba-card:hover, a.ba-card:hover, .ba-card[role="button"]:hover { transform
    herdam a cor certa nos dois modos (pares conferidos no teste). */
 .ba-app .ba-hero-barra {
   background: rgba(255, 255, 255, 0.95);
-  color: #1a1040;
+  color: #241633;
 }
 .dark .ba-app .ba-hero-barra {
-  background: #1a1430;
+  background: #251C38;
   color: #ffffff;
 }
 
@@ -963,7 +963,7 @@ button.ba-card:hover, a.ba-card:hover, .ba-card[role="button"]:hover { transform
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background: linear-gradient(110deg, transparent 30%, rgba(36, 5, 141, 0.14) 48%, transparent 66%);
+  background: linear-gradient(110deg, transparent 30%, rgba(255, 255, 255, 0.14) 48%, transparent 66%);
   transform: translateX(-130%) skewX(-12deg);
   animation: ba-varre 2.6s ease-in-out 0.6s infinite;
 }
@@ -983,10 +983,10 @@ button.ba-card:hover, a.ba-card:hover, .ba-card[role="button"]:hover { transform
 }
 /* Barra de "hoje": degradê da marca (no Dark, lilás da marca → roxo) */
 .ba-app .ba-barra-hoje {
-  background: linear-gradient(180deg, #3D1AAE 0%, #24058D 100%);
+  background: linear-gradient(180deg, #6B5285 0%, #33254A 100%);
 }
 .dark .ba-app .ba-barra-hoje {
-  background: linear-gradient(180deg, #96A5FF 0%, #24058D 100%);
+  background: linear-gradient(180deg, #D4B3E3 0%, #33254A 100%);
 }
 
 /* Escalonamento extra da entrada (d4/d5 continuam a série d1–d3) */

@@ -1,10 +1,34 @@
 /* ==================================================================== */
 /* App do MÉDICO — complementa as classes bp-* do app do paciente        */
 /* (bp-shell, bp-carrossel, bp-glass…) sem alterar globals.css.          */
+/* Redesign tri-zona (nov/2026): a zona do médico é a mistura do VERDE   */
+/* (#469B72) com o ROXO — degradês branco → verde, auroras verdes com    */
+/* acento roxo e o anel do avatar verde→roxo.                            */
 /* Contraste: todo texto claro fica sobre fundos com luminância baixa    */
-/* (≥ 4,5:1, WCAG AA); o degradê não passa por roxo-claro sob texto      */
-/* branco (diferente da seção 3 do paciente).                            */
+/* (≥ 4,5:1, WCAG AA); o degradê não passa por verde-claro sob texto     */
+/* branco.                                                               */
 /* ==================================================================== */
+
+/* Tokens da zona médico (escopo .bm-app): utilitários bion-* e o         */
+/* --primary global (botões bg-primary) vestem o verde da zona só aqui.  */
+.bm-app {
+  --bion-ink: #0F2E20;
+  --bion-paper: #EDF7F0;
+  --bion-sea: #2F7351;
+  --bion-deep: #256044;
+  --bion-sky: #A9E3C4;
+  --bion-night: #071510;
+  --primary: #2F7351;
+  --primary-foreground: #ffffff;
+  --primary-soft: #E7F3EC;
+  --ring: #2F7351;
+}
+.dark .bm-app {
+  --primary: #7FD3A8;
+  --primary-foreground: #0A1B12;
+  --primary-soft: #12281D;
+  --ring: #7FD3A8;
+}
 
 /* Carrossel horizontal: não deixa o "overscroll" virar voltar/avançar do navegador */
 .bm-carrossel {
@@ -26,57 +50,57 @@
 }
 
 /*
- * Coluna central = um degradê contínuo branco → roxo da marca (preto → roxo da marca
- * no dark). Tela 1 sai do branco puro e chega ao roxo da marca no rodapé; telas
- * 2 e 3 continuam do roxo da marca ao roxo da marca profundo. Regras de contraste:
+ * Coluna central = um degradê contínuo branco → verde da zona (preto → verde
+ * no dark). Tela 1 sai do branco puro e chega ao verde no rodapé; telas
+ * 2 e 3 continuam do verde ao verde profundo. Regras de contraste:
  *  - texto escuro solto no fundo só no terço superior (zona branca);
  *  - texto solto na metade de baixo / nas telas 2-3 é claro (≥ 5:1);
  *  - cards do app do médico ficam mais opacos (ver .bm-app .bp-glass).
  */
-.bm-tela-1 { background: linear-gradient(180deg, #ffffff 0%, #ffffff 30%, #e8e0f5 52%, #7c5cbf 78%, #24058D 100%); }
-.dark .bm-tela-1 { background: linear-gradient(180deg, #000000 0%, #000000 30%, #120a1e 52%, #2a1560 78%, #1a0a40 100%); }
+.bm-tela-1 { background: linear-gradient(180deg, #ffffff 0%, #ffffff 30%, #E9F4EE 52%, #8FBFA3 78%, #2F7351 100%); }
+.dark .bm-tela-1 { background: linear-gradient(180deg, #000000 0%, #000000 30%, #0A1410 52%, #123524 78%, #0D2418 100%); }
 
-.bm-tela-2 { background: linear-gradient(180deg, #24058D 0%, #1a0470 100%); }
-.dark .bm-tela-2 { background: linear-gradient(180deg, #1a0a40 0%, #120830 100%); }
+.bm-tela-2 { background: linear-gradient(180deg, #2F7351 0%, #1E4D38 100%); }
+.dark .bm-tela-2 { background: linear-gradient(180deg, #0D2418 0%, #081811 100%); }
 
-.bm-tela-3 { background: linear-gradient(180deg, #1a0470 0%, #14055a 45%, #0c0338 100%); }
-.dark .bm-tela-3 { background: linear-gradient(180deg, #120830 0%, #0c0620 45%, #050210 100%); }
+.bm-tela-3 { background: linear-gradient(180deg, #1E4D38 0%, #14382A 45%, #0A1C13 100%); }
+.dark .bm-tela-3 { background: linear-gradient(180deg, #081811 0%, #06120C 45%, #030A06 100%); }
 
-/* Páginas laterais: mesmo branco → roxo da marca; "local" faz o degradê
+/* Páginas laterais: mesmo branco → verde; "local" faz o degradê
    acompanhar o conteúdo rolável (o perfil é mais alto que a tela). */
 .bm-painel {
-  background: linear-gradient(180deg, #ffffff 0%, #ffffff 30%, #e8e0f5 55%, #7c5cbf 80%, #24058D 100%);
+  background: linear-gradient(180deg, #ffffff 0%, #ffffff 30%, #E9F4EE 55%, #8FBFA3 80%, #2F7351 100%);
   background-attachment: local;
 }
 .dark .bm-painel {
-  background: linear-gradient(180deg, #000000 0%, #000000 30%, #120a1e 55%, #2a1560 80%, #1a0a40 100%);
+  background: linear-gradient(180deg, #000000 0%, #000000 30%, #0A1410 55%, #123524 80%, #0D2418 100%);
   background-attachment: local;
 }
 
 /* Cards mais opacos que o .bp-glass do paciente: texto escuro (inclusive
-   /70) mantém ≥ 4,5:1 mesmo quando o card passa sobre o roxo da marca. */
+   /70) mantém ≥ 4,5:1 mesmo quando o card passa sobre o verde da zona. */
 .bm-app .bp-glass { background: rgba(255, 255, 255, 0.84); }
-.dark .bm-app .bp-glass { background: rgba(12, 16, 28, 0.72); }
+.dark .bm-app .bp-glass { background: rgba(8, 18, 13, 0.72); }
 
 /* Barra inferior dedicada aos pontos de página: o conteúdo rolável termina
    ACIMA dela, então nada fica escondido sob o indicador. Inclui a área
    segura (home indicator do iPhone). */
 
 /* Superfície de sobreposição (conversa, suporte, prontuário) */
-.bm-sobreposicao { background: linear-gradient(180deg, #ffffff 0%, #f5f0fa 70%, #ece4f5 100%); }
-.dark .bm-sobreposicao { background: linear-gradient(180deg, #000000 0%, #0a0612 70%, #120a1e 100%); }
+.bm-sobreposicao { background: linear-gradient(180deg, #ffffff 0%, #F1F8F4 70%, #E6F1EA 100%); }
+.dark .bm-sobreposicao { background: linear-gradient(180deg, #000000 0%, #081209 70%, #0E1A14 100%); }
 
 /* Bottom sheet do médico */
 .bm-sheet {
   background: #ffffff;
-  color: #1a0a40;
+  color: #123524;
   border-top-left-radius: 1.75rem;
   border-top-right-radius: 1.75rem;
-  box-shadow: 0 -16px 48px rgba(36, 5, 141, 0.25);
+  box-shadow: 0 -16px 48px rgba(24, 68, 45, 0.25);
 }
 .dark .bm-sheet {
-  background: #05080f;
-  color: #f2f6fc;
+  background: #05100B;
+  color: #EDF7F0;
   box-shadow: 0 -16px 48px rgba(0, 0, 0, 0.7);
   border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
@@ -87,8 +111,8 @@
 /* Sem backdrop-filter (aparelhos fracos / navegadores antigos): vidro opaco legível */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .bm-app .bp-glass { background: rgba(255, 255, 255, 0.92); }
-  .dark .bm-app .bp-glass { background: rgba(18, 24, 38, 0.95); }
-  .bm-app .bp-glass-roxo da marca { background: rgba(36, 5, 141, 0.92); }
+  .dark .bm-app .bp-glass { background: rgba(10, 22, 16, 0.95); }
+  .bm-app .bp-glass-verde da zona { background: rgba(24, 68, 45, 0.92); }
 }
 
 /* Indicador discreto: some após inatividade, volta ao interagir */
@@ -144,8 +168,8 @@
     scroll-snap-align: none;
     scroll-snap-stop: normal;
   }
-  .bm-app .bm-lateral-esq { border-right: 1px solid rgba(10, 31, 68, 0.12); }
-  .bm-app .bm-lateral-dir { border-left: 1px solid rgba(10, 31, 68, 0.12); }
+  .bm-app .bm-lateral-esq { border-right: 1px solid rgba(15, 46, 32, 0.12); }
+  .bm-app .bm-lateral-dir { border-left: 1px solid rgba(15, 46, 32, 0.12); }
   .dark .bm-app .bm-lateral-esq { border-right-color: rgba(255, 255, 255, 0.1); }
   .dark .bm-app .bm-lateral-dir { border-left-color: rgba(255, 255, 255, 0.1); }
 
@@ -180,7 +204,7 @@
     right: auto;
     width: min(760px, 100%);
     transform: translateX(-50%);
-    box-shadow: 0 0 0 100vmax rgba(2, 8, 26, 0.55);
+    box-shadow: 0 0 0 100vmax rgba(6, 18, 12, 0.55);
   }
 }
 
@@ -208,30 +232,31 @@
 .bm-app .bm-animar-d4 { animation-delay: 0.24s; }
 
 /* ============ Fase 4 (nov/2026): início do médico imersivo ============ */
-/* Mesma linguagem da home do paciente: tons da marca #24058D, auroras e
-   microinterações — tudo em escopo .bm-app (não vaza para paciente/admin). */
+/* Mesma linguagem das homes: a zona do médico mistura o VERDE com o ROXO
+   — auroras verdes, brilho roxo de apoio e o aro do avatar verde→roxo.
+   Tudo em escopo .bm-app (não vaza para paciente/admin). */
 .bm-app {
-  --bm-grad-a: #24058D;
-  --bm-grad-b: #3D1AAE;
-  --bm-hero-1: #3D1AAE;
-  --bm-hero-2: #24058D;
-  --bm-hero-3: #1C0470;
-  --bm-glow-a: rgba(196, 181, 253, 0.30);
-  --bm-glow-b: rgba(221, 214, 254, 0.22);
-  --bm-aurora-1: rgba(196, 181, 253, 0.38);
-  --bm-aurora-2: rgba(221, 214, 254, 0.20);
-  --bm-ecg-cor: #DDD6FE;
-  --bm-aro: linear-gradient(140deg, #3D1AAE 0%, #24058D 100%);
+  --bm-grad-a: #2F7351;
+  --bm-grad-b: #469B72;
+  --bm-hero-1: #256044;
+  --bm-hero-2: #1E5540;
+  --bm-hero-3: #1B4430;
+  --bm-glow-a: rgba(134, 199, 163, 0.30);
+  --bm-glow-b: rgba(169, 227, 196, 0.22);
+  --bm-aurora-1: rgba(134, 199, 163, 0.38);
+  --bm-aurora-2: rgba(155, 134, 220, 0.20);
+  --bm-ecg-cor: #A9E3C4;
+  --bm-aro: linear-gradient(140deg, #469B72 0%, #6D5BB8 100%);
 }
 .dark .bm-app {
-  --bm-grad-a: #C4B5FD;
-  --bm-grad-b: #DDD6FE;
-  --bm-glow-a: rgba(196, 181, 253, 0.10);
-  --bm-glow-b: rgba(221, 214, 254, 0.07);
-  --bm-aurora-1: rgba(196, 181, 253, 0.20);
-  --bm-aurora-2: rgba(221, 214, 254, 0.12);
-  --bm-ecg-cor: #C4B5FD;
-  --bm-aro: linear-gradient(140deg, #C4B5FD 0%, #DDD6FE 100%);
+  --bm-grad-a: #7FD3A8;
+  --bm-grad-b: #A9E3C4;
+  --bm-glow-a: rgba(134, 199, 163, 0.10);
+  --bm-glow-b: rgba(169, 227, 196, 0.07);
+  --bm-aurora-1: rgba(134, 199, 163, 0.20);
+  --bm-aurora-2: rgba(155, 134, 220, 0.12);
+  --bm-ecg-cor: #7FD3A8;
+  --bm-aro: linear-gradient(140deg, #7FD3A8 0%, #B9A7D8 100%);
 }
 
 /* Nome do médico com gradiente animado da marca (estático em reduce) */
@@ -276,10 +301,10 @@
   animation: bm-deriva 24s ease-in-out infinite alternate-reverse;
 }
 
-/* Hero da próxima consulta / agenda vazia: degradê da marca + auroras */
+/* Hero da próxima consulta / agenda vazia: degradê verde + auroras */
 .bm-app .bm-hero {
   background: linear-gradient(160deg, var(--bm-hero-1) 0%, var(--bm-hero-2) 55%, var(--bm-hero-3) 100%);
-  box-shadow: 0 24px 48px -22px rgba(36, 5, 141, 0.5);
+  box-shadow: 0 24px 48px -22px rgba(24, 68, 45, 0.5);
 }
 .dark .bm-app .bm-hero {
   box-shadow: 0 24px 48px -22px rgba(0, 0, 0, 0.7);
@@ -311,10 +336,10 @@
    os dígitos herdam a cor certa nos dois modos. */
 .bm-app .bm-hero-barra {
   background: rgba(255, 255, 255, 0.95);
-  color: #1a1040;
+  color: #0F2E20;
 }
 .dark .bm-app .bm-hero-barra {
-  background: #1a1430;
+  background: #12241A;
   color: #ffffff;
 }
 
@@ -372,7 +397,7 @@
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background: linear-gradient(110deg, transparent 30%, rgba(36, 5, 141, 0.14) 48%, transparent 66%);
+  background: linear-gradient(110deg, transparent 30%, rgba(255, 255, 255, 0.14) 48%, transparent 66%);
   transform: translateX(-130%) skewX(-12deg);
   animation: bm-varre 2.6s ease-in-out 0.6s infinite;
 }

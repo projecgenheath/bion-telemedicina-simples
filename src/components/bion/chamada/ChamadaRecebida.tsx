@@ -352,10 +352,10 @@ export function TelaChamadaRecebida({
       role="alertdialog"
       aria-modal="true"
       aria-labelledby={titulo}
-      className="fixed inset-0 z-[200] flex justify-center bg-[#0b1424] text-white"
+      className="fixed inset-0 z-[200] flex justify-center bg-[#150F26] text-white"
     >
-      <div className="bpp-animar relative flex h-full w-full max-w-[min(100vw,calc(100dvh*9/16))] flex-col items-center overflow-hidden bg-gradient-to-b from-[#123e7d] via-[#0a1f44] to-[#0b1424] px-6 pt-[max(3.5rem,env(safe-area-inset-top))] pb-[max(2.5rem,env(safe-area-inset-bottom))] sm:my-6 sm:h-[calc(100%-3rem)] sm:rounded-[2rem] sm:shadow-2xl sm:ring-1 sm:ring-white/10">
-        <div aria-hidden className="pointer-events-none absolute -top-32 left-1/2 size-[28rem] -translate-x-1/2 rounded-full bg-[#14457f]/40 blur-3xl" />
+      <div className="bpp-animar relative flex h-full w-full max-w-[min(100vw,calc(100dvh*9/16))] flex-col items-center overflow-hidden bg-gradient-to-b from-[#7A5500] via-[#55400A] to-[#2E2A10] px-6 pt-[max(3.5rem,env(safe-area-inset-top))] pb-[max(2.5rem,env(safe-area-inset-bottom))] sm:my-6 sm:h-[calc(100%-3rem)] sm:rounded-[2rem] sm:shadow-2xl sm:ring-1 sm:ring-white/10">
+        <div aria-hidden className="pointer-events-none absolute -top-32 left-1/2 size-[28rem] -translate-x-1/2 rounded-full bg-[#C89236]/25 blur-3xl" />
 
         <p className="relative flex items-center gap-2 text-sm font-medium text-white/75">
           <Video className="size-4" aria-hidden />
@@ -446,7 +446,7 @@ export function AvisoChamadaRecebida({
       role="dialog"
       aria-labelledby={titulo}
       aria-live="polite"
-      className="fixed inset-x-2 top-[max(0.5rem,env(safe-area-inset-top))] z-[200] mx-auto max-w-md rounded-2xl bg-[#0a1f44]/95 p-3 text-white shadow-2xl ring-1 ring-white/15 backdrop-blur-md motion-safe:animate-in motion-safe:slide-in-from-top-4 motion-safe:fade-in"
+      className="fixed inset-x-2 top-[max(0.5rem,env(safe-area-inset-top))] z-[200] mx-auto max-w-md rounded-2xl bg-[#1C1206]/95 p-3 text-white shadow-2xl ring-1 ring-white/15 backdrop-blur-md motion-safe:animate-in motion-safe:slide-in-from-top-4 motion-safe:fade-in"
     >
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <div className="relative flex size-10 shrink-0 items-center justify-center rounded-full bg-white/15 text-sm font-semibold ring-1 ring-white/25">

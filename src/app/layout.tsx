@@ -33,7 +33,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#24058D",
+  themeColor: "#1D152D",
 };
 
 // Aplica o tema salvo ANTES da primeira pintura para evitar flash branco (FOUC)

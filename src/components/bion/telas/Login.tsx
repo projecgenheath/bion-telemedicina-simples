@@ -26,6 +26,60 @@ const DEMO_HABILITADO =
 
 const CHAVE_RASCUNHO_CADASTRO = "bion-cadastro-rascunho";
 
+/* ============================================================
+   Login BION — tela imersiva com as três zonas da marca em
+   auroras (âmbar · verde · malva) sobre o roxo profundo
+   #1D152D, cartão de vidro e abas de demonstração que vestem
+   a cor de cada papel. CSS puro, sem novas dependências.
+   ============================================================ */
+const LG_CSS = `
+.lg-tela{position:relative;min-height:100dvh;overflow:hidden;display:flex;
+  align-items:center;justify-content:center;padding:1rem;
+  background:linear-gradient(165deg,#150F26 0%,#1D152D 48%,#2A1F42 100%)}
+.lg-aura{position:absolute;border-radius:9999px;filter:blur(90px);pointer-events:none;
+  animation:lg-deriva 26s ease-in-out infinite alternate;will-change:transform}
+@keyframes lg-deriva{
+  0%{transform:translate(0,0) scale(1)}
+  45%{transform:translate(40px,-32px) scale(1.12)}
+  100%{transform:translate(-32px,24px) scale(.94)}}
+.lg-grade{position:absolute;inset:0;pointer-events:none;
+  background-image:linear-gradient(rgba(255,193,105,.06) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(255,193,105,.06) 1px,transparent 1px);
+  background-size:54px 54px;
+  -webkit-mask-image:radial-gradient(ellipse 80% 70% at 50% 40%,#000 25%,transparent 75%);
+  mask-image:radial-gradient(ellipse 80% 70% at 50% 40%,#000 25%,transparent 75%)}
+.lg-selo{display:inline-flex;align-items:center;justify-content:center;
+  width:5.5rem;height:5.5rem;border-radius:1.75rem;
+  background:rgba(255,255,255,.92);-webkit-backdrop-filter:blur(14px);
+  backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.65);
+  box-shadow:0 18px 44px -16px rgba(0,0,0,.55);
+  animation:lg-surgir .6s cubic-bezier(.22,1,.36,1) both}
+.lg-cartao{background:rgba(255,255,255,.9);-webkit-backdrop-filter:blur(24px) saturate(1.5);
+  backdrop-filter:blur(24px) saturate(1.5);border:1px solid rgba(255,255,255,.6);
+  box-shadow:0 1px 0 rgba(255,255,255,.9) inset,0 32px 72px -28px rgba(10,6,20,.6);
+  animation:lg-surgir .6s cubic-bezier(.22,1,.36,1) .08s both}
+.dark .lg-cartao{background:rgba(22,16,34,.78);border-color:rgba(255,255,255,.12);
+  box-shadow:0 1px 0 rgba(255,255,255,.07) inset,0 32px 72px -28px rgba(0,0,0,.75)}
+@keyframes lg-surgir{from{opacity:0;transform:translateY(18px) scale(.98)}
+  to{opacity:1;transform:none}}
+.lg-entrar{background:linear-gradient(135deg,#FFC46B 0%,#F0A32E 100%);color:#2B1A05;
+  box-shadow:0 12px 28px -10px rgba(200,146,54,.55);transition:transform .2s ease,box-shadow .2s ease,opacity .2s ease}
+.lg-entrar:hover:not(:disabled){transform:translateY(-1px);
+  box-shadow:0 18px 36px -12px rgba(200,146,54,.6)}
+.lg-entrar:active:not(:disabled){transform:scale(.99)}
+.lg-entrar:disabled{opacity:.55}
+@media (prefers-reduced-motion:reduce){
+  .lg-aura,.lg-selo,.lg-cartao{animation:none!important}
+}
+`;
+
+/* Abas de demonstração: cada papel veste a cor da sua zona no app. */
+const COR_ZONA: Record<Role, string> = {
+  paciente: "bg-[#FFC46B] text-[#2B1A05]",
+  medico: "bg-[#7FD3A8] text-[#0A1B12]",
+  admin: "bg-[#D4B3E3] text-[#241633]",
+};
+
 export function Login({
   comecarNoCadastro = false,
   voltar = null,
@@ -163,13 +217,22 @@ export function Login({
   };
 
   return (
-    <div className="min-h-screen bg-primary-soft flex items-center justify-center p-4">
-      <div className="w-full max-w-md space-y-6">
-        <div className="text-center flex justify-center">
-          <Logo size="lg" />
+    <div className="lg-tela">
+      <style>{LG_CSS}</style>
+      {/* auroras das três zonas */}
+      <div className="lg-aura" aria-hidden style={{ width: 480, height: 480, left: "-12%", top: "-18%", background: "radial-gradient(circle at 40% 40%, rgba(255,177,92,.5), transparent 66%)", animationDuration: "24s" }} />
+      <div className="lg-aura" aria-hidden style={{ width: 420, height: 420, right: "-10%", top: "-6%", background: "radial-gradient(circle at 55% 45%, rgba(70,155,114,.45), transparent 68%)", animationDuration: "30s", animationDelay: "-8s" }} />
+      <div className="lg-aura" aria-hidden style={{ width: 380, height: 380, right: "14%", bottom: "-20%", background: "radial-gradient(circle at 50% 50%, rgba(212,179,227,.42), transparent 70%)", animationDuration: "20s", animationDelay: "-14s" }} />
+      <div className="lg-grade" aria-hidden />
+
+      <div className="relative w-full max-w-md space-y-6">
+        <div className="flex justify-center">
+          <span className="lg-selo">
+            <Logo size="md" />
+          </span>
         </div>
 
-        <div className="bg-card border rounded-3xl p-6 md:p-8 shadow-xl space-y-6">
+        <div className="lg-cartao rounded-3xl p-6 md:p-8 space-y-6">
           <div>
             <h2 className="text-2xl font-extrabold text-foreground">
               {modoCadastro ? "Criar sua conta" : "Acesse sua conta"}
@@ -290,7 +353,7 @@ export function Login({
                       onClick={() => trocarAba(r)}
                       className={`py-2 rounded-xl text-xs font-bold capitalize transition ${
                         tab === r
-                          ? "bg-card shadow-sm text-foreground"
+                          ? `${COR_ZONA[r]} shadow-sm`
                           : "text-muted-foreground hover:text-foreground"
                       }`}
                     >
@@ -354,7 +417,7 @@ export function Login({
             <button
               type="submit"
               disabled={enviando || (modoCadastro && !aceitouTermos)}
-              className="w-full py-4 rounded-2xl bg-primary text-primary-foreground font-bold text-sm shadow-md hover:opacity-90 transition active:scale-[0.99] disabled:opacity-60"
+              className="lg-entrar w-full py-4 rounded-2xl font-bold text-sm transition active:scale-[0.99] disabled:opacity-60"
             >
               {enviando ? "Aguarde..." : modoCadastro ? "Criar minha conta" : "Entrar"}
             </button>

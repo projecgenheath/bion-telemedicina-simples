@@ -63,9 +63,9 @@ export default function PerfilPublicoPage() {
   return (
     <div className="min-h-screen bg-[#f1ecfb] text-[#1a1040] dark:bg-[#0a0618] dark:text-[#f4f1fd]">
       <div className="max-w-md mx-auto p-6">
-        <div className="rounded-3xl p-6 bg-white border border-[#24058D]/10 shadow-[0_12px_32px_-12px_rgba(36,5,141,0.25)] dark:bg-white/[0.06] dark:border-white/10 dark:shadow-none">
+        <div className="rounded-3xl p-6 bg-white border border-[#7F4B00]/10 shadow-[0_12px_32px_-12px_rgba(127,75,0,0.25)] dark:bg-white/[0.06] dark:border-white/10 dark:shadow-none">
           <div className="flex items-center gap-4">
-            <div className="w-20 h-20 rounded-3xl bg-[#24058D] text-white flex items-center justify-center text-2xl font-black overflow-hidden">
+            <div className="w-20 h-20 rounded-3xl bg-[#7F4B00] text-white flex items-center justify-center text-2xl font-black overflow-hidden">
               {medico.foto ? (
                 <img src={medico.foto} alt={medico.nome} className="w-full h-full object-cover" />
               ) : (
@@ -82,14 +82,14 @@ export default function PerfilPublicoPage() {
           </div>
 
           <div className="mt-4 grid grid-cols-2 gap-2 text-center">
-            <div className="bg-[#24058D]/[0.07] dark:bg-white/10 rounded-2xl py-3">
+            <div className="bg-[#7F4B00]/[0.07] dark:bg-white/10 rounded-2xl py-3">
               <div className="text-xs font-bold uppercase text-[#1a1040]/80 dark:text-[#f4f1fd]/80">Nota</div>
               <div className="text-lg font-black flex items-center justify-center gap-1">
                 <Star className="w-4 h-4 fill-amber-600 text-amber-700 dark:fill-amber-300 dark:text-amber-300" />
                 {medico.numAvaliacoes > 0 ? medico.avaliacao.toFixed(1) : "—"}
               </div>
             </div>
-            <div className="bg-[#24058D]/[0.07] dark:bg-white/10 rounded-2xl py-3">
+            <div className="bg-[#7F4B00]/[0.07] dark:bg-white/10 rounded-2xl py-3">
               <div className="text-xs font-bold uppercase text-[#1a1040]/80 dark:text-[#f4f1fd]/80">Avaliações</div>
               <div className="text-lg font-black">{medico.numAvaliacoes}</div>
             </div>
@@ -128,7 +128,7 @@ export default function PerfilPublicoPage() {
               <div className="text-xs font-bold uppercase text-[#1a1040]/80 dark:text-[#f4f1fd]/80">Subespecialidades</div>
               <div className="flex flex-wrap gap-1.5 mt-1.5">
                 {medico.subespecialidades.map((s) => (
-                  <span key={s} className="text-xs font-bold px-2 py-1 rounded-full bg-[#24058D]/10 text-[#24058D] dark:bg-[#C4B5FD]/15 dark:text-[#DDD6FE]">
+                  <span key={s} className="text-xs font-bold px-2 py-1 rounded-full bg-[#7F4B00]/10 text-[#7F4B00] dark:bg-[#FFC169]/15 dark:text-[#FFE3AE]">
                     {s}
                   </span>
                 ))}
@@ -145,7 +145,7 @@ export default function PerfilPublicoPage() {
             </div>
             <a
               href={`/p/${id}/agendar`}
-              className="rounded-full bg-[#24058D] text-white dark:bg-[#C4B5FD] dark:text-[#12034a] px-4 py-3 text-sm font-bold flex items-center gap-2"
+              className="rounded-full bg-[#7F4B00] text-white dark:bg-[#FFC169] dark:text-[#2B1A05] px-4 py-3 text-sm font-bold flex items-center gap-2"
             >
               <CalendarCheck className="w-4 h-4" /> Agendar
             </a>

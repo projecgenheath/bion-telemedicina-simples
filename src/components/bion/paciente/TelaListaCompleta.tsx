@@ -85,7 +85,7 @@ export function TelaListaCompleta({ lista, onFechar, onAgendar }: { lista: Lista
                             if (!r.ok) toast.error(r.erro);
                           });
                         }}
-                        className="bion-toque shrink-0 min-h-11 rounded-full px-3 text-xs font-bold text-bion-sea dark:text-[#C4B5FD] disabled:opacity-60"
+                        className="bion-toque shrink-0 min-h-11 rounded-full px-3 text-xs font-bold text-bion-sea dark:text-[#FFC169] disabled:opacity-60"
                       >
                         {abrindo === a.id ? "Abrindo…" : "Ver arquivo"}
                       </button>

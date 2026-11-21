@@ -57,7 +57,7 @@ const iniciais = (nome: string) =>
  *
  * Visual: mesma linguagem imersiva das homes do paciente e do médico —
  * nome em destaque tipográfico com gradiente da marca, hero "Agora" em
- * degradê #3D1AAE→#24058D→#1C0470 com auroras e anel pulsante quando há
+ * degradê #4E3A68→#33254A→#1D152D com auroras e anel pulsante quando há
  * consulta na janela ±30 min. Navegação da casca (carrossel Conta ⟷
  * Comando ⟷ Fila, pílula, trilho) permanece intacta.
  */
@@ -250,7 +250,7 @@ export function CentroComando() {
                 aria-label={fila.length ? `Abrir a Fila de decisões (${fila.length} pendentes)` : "Abrir a Fila de decisões (vazia)"}
                 className={`bion-toque relative inline-flex items-center justify-center gap-2 rounded-full px-5 py-3.5 text-sm font-bold ${
                   fila.length
-                    ? "ba-brilho-cta bg-white text-[#24058D] shadow-md hover:shadow-lg"
+                    ? "ba-brilho-cta bg-white text-[#4A3760] shadow-md hover:shadow-lg"
                     : "bg-white/10 border border-white/20 text-white/90"
                 }`}
               >

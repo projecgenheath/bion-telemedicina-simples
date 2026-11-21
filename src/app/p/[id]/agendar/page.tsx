@@ -283,7 +283,7 @@ export default function PaginaAgendarMedica() {
                         setHora("");
                       }}
                       className={`min-w-[4.5rem] rounded-2xl px-3 py-2 text-center ${
-                        d.iso === dia?.iso ? "bg-[#24058D] text-white" : "bg-white dark:bg-white/[0.06]"
+                        d.iso === dia?.iso ? "bg-[#7F4B00] text-white" : "bg-white dark:bg-white/[0.06]"
                       }`}
                     >
                       <span className="block text-[11px] font-bold uppercase opacity-80">{d.sub}</span>
@@ -306,7 +306,7 @@ export default function PaginaAgendarMedica() {
                                 aria-selected={h === horaOk}
                                 onClick={() => setHora(h)}
                                 className={`min-h-11 rounded-full px-4 text-sm font-bold ${
-                                  h === horaOk ? "bg-[#24058D] text-white" : "bg-[#24058D]/10 text-[#24058D] dark:text-[#DDD6FE]"
+                                  h === horaOk ? "bg-[#7F4B00] text-white" : "bg-[#7F4B00]/10 text-[#7F4B00] dark:text-[#FFE3AE]"
                                 }`}
                               >
                                 {h}
@@ -331,7 +331,7 @@ export default function PaginaAgendarMedica() {
               type="button"
               disabled={!dia || !horaOk}
               onClick={() => void continuar()}
-              className="w-full min-h-11 rounded-full bg-[#24058D] px-4 py-3 text-sm font-bold text-white disabled:opacity-50"
+              className="w-full min-h-11 rounded-full bg-[#7F4B00] px-4 py-3 text-sm font-bold text-white disabled:opacity-50"
             >
               Continuar
             </button>
@@ -362,7 +362,7 @@ export default function PaginaAgendarMedica() {
               type="button"
               disabled={enviando}
               onClick={() => void pagar()}
-              className="w-full min-h-11 rounded-full bg-[#24058D] px-4 py-3 text-sm font-bold text-white disabled:opacity-50"
+              className="w-full min-h-11 rounded-full bg-[#7F4B00] px-4 py-3 text-sm font-bold text-white disabled:opacity-50"
             >
               {enviando ? "Aguarde..." : "Pagar a consulta"}
             </button>

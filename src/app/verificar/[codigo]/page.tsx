@@ -53,7 +53,7 @@ export default function VerificarDocumentoPage() {
   }, [verificar]);
 
   return (
-    <div className="min-h-screen bg-[#0a1f44] text-white flex items-center justify-center p-6">
+    <div className="min-h-screen bg-[#1D152D] text-white flex items-center justify-center p-6">
       <div className="w-full max-w-md">
         <div className="bg-white/10 rounded-3xl p-6">
           <p className="text-2xl font-black">BION</p>
@@ -83,7 +83,7 @@ export default function VerificarDocumentoPage() {
               <button
                 type="button"
                 onClick={verificar}
-                className="mt-5 rounded-full bg-white px-5 py-2.5 text-sm font-bold text-[#0a1f44] hover:bg-white/85 transition"
+                className="mt-5 rounded-full bg-white px-5 py-2.5 text-sm font-bold text-[#241633] hover:bg-white/85 transition"
               >
                 Tentar de novo
               </button>

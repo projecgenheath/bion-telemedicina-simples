@@ -559,7 +559,7 @@ export function PacienteApp() {
                      
                     <img src={pacientePerfil.foto} alt="Seu perfil" className="w-full h-full rounded-full object-cover" />
                   ) : (
-                    <span className="w-full h-full inline-flex items-center justify-center rounded-full bg-white text-sm font-black text-bion-sea dark:bg-[#0e0820] dark:text-[#C4B5FD]">
+                    <span className="w-full h-full inline-flex items-center justify-center rounded-full bg-white text-sm font-black text-bion-sea dark:bg-[#1C1206] dark:text-[#FFC169]">
                       {iniciais}
                     </span>
                   )}
@@ -575,7 +575,7 @@ export function PacienteApp() {
                 {sessao.nome.split(" ")[0]}
               </h1>
               <p className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-bion-ink/75 dark:text-bion-paper/75">
-                <HeartPulse className="h-4 w-4 text-bion-sea dark:text-[#C4B5FD]" aria-hidden />
+                <HeartPulse className="h-4 w-4 text-bion-sea dark:text-[#FFC169]" aria-hidden />
                 Como você está se sentindo hoje?
               </p>
             </div>
@@ -758,7 +758,7 @@ export function PacienteApp() {
                           </button>
                         ) : null}
                         {st !== "feita" && janelaTriagem(c) ? (
-                          <button type="button" onClick={() => abrirTriagem(c.id)} className="bion-toque inline-flex items-center gap-1.5 rounded-full px-3 min-h-11 text-xs font-bold bg-bion-sea/12 text-bion-sea dark:bg-[#C4B5FD]/15 dark:text-[#DDD6FE]">
+                          <button type="button" onClick={() => abrirTriagem(c.id)} className="bion-toque inline-flex items-center gap-1.5 rounded-full px-3 min-h-11 text-xs font-bold bg-bion-sea/12 text-bion-sea dark:bg-[#FFC169]/15 dark:text-[#FFE3AE]">
                             <Sparkles className="w-3.5 h-3.5" /> {st === "andamento" ? "Continuar triagem" : "Fazer triagem"}
                           </button>
                         ) : null}
@@ -798,7 +798,7 @@ export function PacienteApp() {
                 seguem neutras. Entrada em onda (bion-surgir, 40 ms por card). */}
             <div className="relative mt-4 grid grid-cols-2 gap-3 bpp-animar bpp-animar-d3">
               <button type="button" onClick={() => abrirChat("agendar")} style={{ "--bion-i": 0 } as CSSProperties} className="bion-toque bion-surgir bp-glass flex items-center gap-3 p-4 text-left">
-                <span aria-hidden className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-[#3D1AAE] to-[#24058D] text-white shadow-md shadow-[#24058D]/25 dark:from-[#C4B5FD] dark:to-[#DDD6FE] dark:text-[#12034a]">
+                <span aria-hidden className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-[#C89236] to-[#7F4B00] text-white shadow-md shadow-[#C89236]/30 dark:from-[#FFC169] dark:to-[#FFE3AE] dark:text-[#2B1A05]">
                   <Stethoscope className="h-5 w-5" />
                 </span>
                 <span className="min-w-0">
@@ -807,7 +807,7 @@ export function PacienteApp() {
                 </span>
               </button>
               <button type="button" onClick={() => irSecao(1)} style={{ "--bion-i": 1 } as CSSProperties} className="bion-toque bion-surgir bp-glass flex items-center gap-3 p-4 text-left">
-                <span aria-hidden className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-bion-sea/10 text-bion-sea dark:bg-[#C4B5FD]/15 dark:text-[#C4B5FD]">
+                <span aria-hidden className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-bion-sea/10 text-bion-sea dark:bg-[#FFC169]/15 dark:text-[#FFC169]">
                   <Activity className="h-5 w-5" />
                 </span>
                 <span className="min-w-0">
@@ -816,7 +816,7 @@ export function PacienteApp() {
                 </span>
               </button>
               <button type="button" onClick={() => irSecao(2)} style={{ "--bion-i": 2 } as CSSProperties} className="bion-toque bion-surgir bp-glass flex items-center gap-3 p-4 text-left">
-                <span aria-hidden className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-bion-sea/10 text-bion-sea dark:bg-[#C4B5FD]/15 dark:text-[#C4B5FD]">
+                <span aria-hidden className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-bion-sea/10 text-bion-sea dark:bg-[#FFC169]/15 dark:text-[#FFC169]">
                   <ClipboardList className="h-5 w-5" />
                 </span>
                 <span className="min-w-0">
@@ -825,7 +825,7 @@ export function PacienteApp() {
                 </span>
               </button>
               <button type="button" onClick={() => irPara(2)} style={{ "--bion-i": 3 } as CSSProperties} className="bion-toque bion-surgir bp-glass flex items-center gap-3 p-4 text-left">
-                <span aria-hidden className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-bion-sea/10 text-bion-sea dark:bg-[#C4B5FD]/15 dark:text-[#C4B5FD]">
+                <span aria-hidden className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-bion-sea/10 text-bion-sea dark:bg-[#FFC169]/15 dark:text-[#FFC169]">
                   <FileText className="h-5 w-5" />
                 </span>
                 <span className="min-w-0">
@@ -838,7 +838,7 @@ export function PacienteApp() {
             {/* Cartão único da BION IA: agendar (principal) + perguntar */}
             <div style={{ "--bion-i": 1 } as CSSProperties} className="bion-surgir bpp-cartao-ia mt-4 w-full rounded-3xl p-5 text-white relative overflow-hidden">
               <span aria-hidden className="absolute -right-8 -top-10 w-40 h-40 rounded-full bg-white/10 blur-2xl" />
-              <span aria-hidden className="absolute right-10 -bottom-10 w-28 h-28 rounded-full bg-[#C4B5FD]/20 blur-2xl" />
+              <span aria-hidden className="absolute right-10 -bottom-10 w-28 h-28 rounded-full bg-[#FFC169]/20 blur-2xl" />
               <div className="relative flex items-center gap-3">
                 <span className="bpp-flutuar w-12 h-12 rounded-2xl bg-white/15 inline-flex items-center justify-center shrink-0" aria-hidden>
                   <Sparkles className="w-6 h-6" />
@@ -917,7 +917,7 @@ export function PacienteApp() {
               >
                 <div className="flex items-center justify-between mb-1">
                   <span className="inline-flex items-center gap-2.5 text-sm font-bold">
-                    <span aria-hidden className="grid h-9 w-9 place-items-center rounded-xl bg-bion-sea/10 text-bion-sea dark:bg-[#C4B5FD]/15 dark:text-[#C4B5FD]">
+                    <span aria-hidden className="grid h-9 w-9 place-items-center rounded-xl bg-bion-sea/10 text-bion-sea dark:bg-[#FFC169]/15 dark:text-[#FFC169]">
                       <Activity className="w-4 h-4" />
                     </span>
                     IMC
@@ -973,7 +973,7 @@ export function PacienteApp() {
               >
                 <div className="flex items-center justify-between mb-1">
                   <span className="inline-flex items-center gap-2.5 text-sm font-bold">
-                    <span aria-hidden className="grid h-9 w-9 place-items-center rounded-xl bg-bion-sea/10 text-bion-sea dark:bg-[#C4B5FD]/15 dark:text-[#C4B5FD]">
+                    <span aria-hidden className="grid h-9 w-9 place-items-center rounded-xl bg-bion-sea/10 text-bion-sea dark:bg-[#FFC169]/15 dark:text-[#FFC169]">
                       <HeartPulse className="w-4 h-4" />
                     </span>
                     Pressão arterial
@@ -1313,7 +1313,7 @@ function CardReembolso({ consulta }: { consulta: Consulta }) {
       ? "bg-emerald-600/15 text-emerald-800 dark:text-emerald-200"
       : rotulo.tom === "erro"
         ? "bg-red-600/10 text-red-800 dark:bg-red-400/15 dark:text-red-300"
-        : "bg-bion-sea/12 text-bion-sea dark:bg-[#C4B5FD]/15 dark:text-[#DDD6FE]";
+        : "bg-bion-sea/12 text-bion-sea dark:bg-[#FFC169]/15 dark:text-[#FFE3AE]";
   return (
     <div className="bp-glass mt-3 w-full px-5 py-4" aria-label={`Reembolso da consulta de ${consulta.especialidade}: ${rotulo.texto}`}>
       <div className="flex items-start justify-between gap-2">
@@ -1360,10 +1360,10 @@ function CardRemarcacaoPendente({ consulta, onContinuar }: { consulta: Consulta;
   };
 
   return (
-    <div className="bp-glass p-5 w-full mb-3 border border-bion-sea/40 dark:border-[#C4B5FD]/40" role="group" aria-label={`Remarcação de ${consulta.especialidade} aguardando pagamento da multa`}>
+    <div className="bp-glass p-5 w-full mb-3 border border-bion-sea/40 dark:border-[#FFC169]/40" role="group" aria-label={`Remarcação de ${consulta.especialidade} aguardando pagamento da multa`}>
       <div className="flex items-center justify-between mb-3">
         <span className="text-xs font-bold uppercase tracking-wider text-bion-ink/75 dark:text-bion-paper/75">Remarcação</span>
-        <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-bion-sea/12 text-bion-sea dark:bg-[#C4B5FD]/15 dark:text-[#DDD6FE]">
+        <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-bion-sea/12 text-bion-sea dark:bg-[#FFC169]/15 dark:text-[#FFE3AE]">
           Aguardando pagamento
         </span>
       </div>

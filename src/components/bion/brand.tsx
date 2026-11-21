@@ -6,7 +6,8 @@ const TAMANHOS = {
   lg: "h-28 w-28",
 } as const;
 
-/** Marca oficial: círculo #24058D com o wordmark BION. Claro no fundo claro, escuro no fundo escuro. */
+/** Marca oficial: selo BION em pontilhado (dot-matrix) dentro do círculo.
+ *  Preto no fundo claro (logo-clean.png), branco no fundo escuro (logo-dark.png). */
 export function Logo({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
   return (
     <span
@@ -15,13 +16,13 @@ export function Logo({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
       aria-label="BION"
     >
       <img
-        src="/logo.svg"
+        src="/logo-clean.png"
         alt=""
         className="block h-full w-full dark:hidden"
         draggable={false}
       />
       <img
-        src="/logo-escuro.svg"
+        src="/logo-dark.png"
         alt=""
         className="hidden h-full w-full dark:block"
         draggable={false}
