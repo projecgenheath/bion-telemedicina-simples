@@ -6,7 +6,7 @@ const TAMANHOS = {
   lg: "h-28 w-28",
 } as const;
 
-/** Marca oficial: círculo #24058D com o wordmark BION. Claro no fundo claro, escuro no fundo escuro. */
+/** Logo enviado pelo Alisson: versão preta no tema claro e branca no tema escuro. */
 export function Logo({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
   return (
     <span
@@ -15,15 +15,15 @@ export function Logo({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
       aria-label="BION"
     >
       <img
-        src="/logo.svg"
+        src="/logo-claro.png"
         alt=""
-        className="block h-full w-full dark:hidden"
+        className="block h-full w-full object-contain dark:hidden"
         draggable={false}
       />
       <img
-        src="/logo-escuro.svg"
+        src="/logo-escuro.png"
         alt=""
-        className="hidden h-full w-full dark:block"
+        className="hidden h-full w-full object-contain dark:block"
         draggable={false}
       />
     </span>
