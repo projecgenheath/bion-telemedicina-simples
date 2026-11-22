@@ -1003,30 +1003,30 @@ export function PacienteApp() {
           </section>
 
           {/* --- Seção 3: exames laboratoriais --- */}
-          <section className="bp-secao-3 bpp-secao bpp-tela px-5 pt-10 pb-28 text-white" aria-label="Resultados de exames laboratoriais">
+          <section className="bp-secao-3 bpp-secao bpp-tela px-5 pt-10 pb-28 text-bion-ink dark:text-bion-paper" aria-label="Resultados de exames laboratoriais">
             <h2 className="text-2xl font-black mb-1">Exames laboratoriais</h2>
-            <p className="text-sm text-white/80 mb-6">
+            <p className="text-sm text-bion-ink/75 dark:text-bion-paper/75 mb-6">
               Resultados lidos dos laudos que você envia. Se a leitura falhar, o arquivo original continua aqui.
             </p>
 
             <button type="button"
               onClick={() => abrirChat("laudo")}
-              className="bion-toque bp-glass-marinho w-full p-4 flex items-center gap-3 text-left mb-5"
+              className="bion-toque bp-glass w-full p-4 flex items-center gap-3 text-left mb-5"
               aria-label="Enviar novo laudo à BION IA"
             >
-              <span className="w-11 h-11 rounded-2xl bg-white/15 inline-flex items-center justify-center shrink-0">
+              <span className="w-11 h-11 rounded-2xl bg-bion-sea/10 text-bion-sea dark:bg-[#C4B5FD]/10 dark:text-[#C4B5FD] inline-flex items-center justify-center shrink-0">
                 <ClipboardList className="w-5 h-5" />
               </span>
               <span className="flex-1">
                 <span className="block text-sm font-bold">Enviar novo laudo</span>
-                <span className="block text-xs text-white/80">PDF ou foto — a IA confere seu nome no documento</span>
+                <span className="block text-xs text-bion-ink/75 dark:text-bion-paper/75">PDF ou foto — a IA confere seu nome no documento</span>
               </span>
-              <FileText className="w-5 h-5 text-white/80 shrink-0" />
+              <FileText className="w-5 h-5 text-bion-ink/75 dark:text-bion-paper/75 shrink-0" />
             </button>
 
             {examesAgrupados.length === 0 && laudosIa.length === 0 ? (
               <EstadoVazio
-                superficie="marinho"
+                superficie="vidro"
                 icone={<FileText className="w-6 h-6" />}
                 titulo="Nenhum resultado ainda"
                 texto="Envie um laudo pela BION IA. Se a leitura falhar, o arquivo original aparece aqui."
@@ -1057,19 +1057,19 @@ export function PacienteApp() {
                       : []
                   ).slice(-10);
                   return (
-                    <div key={titulo} className="bp-glass-marinho p-5">
+                    <div key={titulo} className="bp-glass p-5">
                       <div className="flex items-start justify-between gap-3 mb-2">
                         <div>
                           <div className="font-bold text-sm">{titulo}</div>
-                          <div className="text-xs text-white/80">Última coleta: {rotuloCurto(ultimo.dataColeta)}</div>
+                          <div className="text-xs text-bion-ink/75 dark:text-bion-paper/75">Última coleta: {rotuloCurto(ultimo.dataColeta)}</div>
                         </div>
                         {itemDestaque && (
                           <div className="text-right">
                             <div className="text-xl font-black leading-none">
                               {itemDestaque.valor}
-                              <span className="text-xs font-semibold opacity-80 ml-1">{itemDestaque.unidade}</span>
+                              <span className="text-xs font-semibold text-bion-ink/75 dark:text-bion-paper/75 ml-1">{itemDestaque.unidade}</span>
                             </div>
-                            <div className="text-xs text-white/80 mt-0.5">{itemDestaque.nome}</div>
+                            <div className="text-xs text-bion-ink/75 dark:text-bion-paper/75 mt-0.5">{itemDestaque.nome}</div>
                           </div>
                         )}
                       </div>
@@ -1077,14 +1077,14 @@ export function PacienteApp() {
                         <GraficoLinha
                           ariaLabel={`Histórico gráfico de ${titulo}${itemDestaque ? ` — ${itemDestaque.nome}` : ""}`}
                           altura={104}
-                          corEixo="var(--bpp-grafico-eixo-marinho)"
-                          series={[{ pontos: serieItem, cor: "var(--bpp-grafico-linha-marinho)", area: true }]}
+                          corEixo="var(--bpp-grafico-eixo)"
+                          series={[{ pontos: serieItem, cor: "var(--bpp-grafico-linha)", area: true }]}
                           refMin={itemDestaque?.refMin}
                           refMax={itemDestaque?.refMax}
                         />
                       )}
                       <details className="mt-2 group">
-                        <summary className="text-xs font-semibold text-white/80 cursor-pointer list-none inline-flex items-center gap-1">
+                        <summary className="text-xs font-semibold text-bion-ink/75 dark:text-bion-paper/75 cursor-pointer list-none inline-flex items-center gap-1">
                           <ChevronDown className="w-3.5 h-3.5 group-open:rotate-180 transition" />
                           {ultimo.itens.length} resultado(s) da última coleta
                         </summary>
@@ -1095,8 +1095,8 @@ export function PacienteApp() {
                               (i.refMax !== undefined && i.valor > i.refMax);
                             return (
                               <li key={i.nome} className="flex items-center justify-between text-sm">
-                                <span className="text-white/80">{i.nome}</span>
-                                <span className={`font-semibold ${fora ? "text-amber-300" : "text-white"}`}>
+                                <span className="text-bion-ink/75 dark:text-bion-paper/75">{i.nome}</span>
+                                <span className={`font-semibold ${fora ? "text-amber-700 dark:text-amber-300" : "text-bion-ink dark:text-bion-paper"}`}>
                                   {i.valor} {i.unidade}
                                   {fora && " ⚠"}
                                 </span>

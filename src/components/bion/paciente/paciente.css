@@ -28,16 +28,17 @@
   --bpp-s1-topo: #ffffff;
   --bpp-s1-brilho: #e9e1fb;
   --bpp-s1-base: #f1ecfb;
-  /* Seção 2 — da lavanda ao roxo da marca (texto solto só no topo claro) */
+  /* Seção 2 — da lavanda suave ao lilás delicado (continuidade fluida) */
   --bpp-s2-topo: #f1ecfb;
-  --bpp-s2-meio: #ddd2f5;
-  --bpp-s2-azul: #6a4fc4;
-  --bpp-s2-base: #2f12a0;
-  /* Seção 3 — começa já no roxo escuro: texto branco ≥ 4,5:1 desde o topo */
-  --bpp-s3-topo: #2f12a0;
-  --bpp-s3-meio: #26088f;
-  --bpp-s3-fundo: #1a0566;
-  --bpp-s3-base: #12034a;
+  --bpp-s2-meio: #eae1fb;
+  --bpp-s2-azul: #e3d6f7;
+  --bpp-s2-base: #dccef5;
+  /* Seção 3 — exames: degradê claro e acolhedor com nuances da marca */
+  --bpp-s3-topo: #dccef5;
+  --bpp-s3-meio: #e5dbf8;
+  --bpp-s3-fundo: #eee6fc;
+  --bpp-s3-base: #f7f4fd;
+  --bpp-s3-brilho: #e9e1fb;
   /* Painéis laterais (perfil / documentos / sobreposições) */
   --bpp-painel-topo: #fdfcff;
   --bpp-painel-meio: #f2eefc;
@@ -125,12 +126,13 @@
   --bpp-s1-base: #0a0618;
   --bpp-s2-topo: #0a0618;
   --bpp-s2-meio: #100827;
-  --bpp-s2-azul: #170b3a;
-  --bpp-s2-base: #1d0d4a;
-  --bpp-s3-topo: #1d0d4a;
-  --bpp-s3-meio: #220f5a;
-  --bpp-s3-fundo: #170a40;
-  --bpp-s3-base: #0b0420;
+  --bpp-s2-azul: #150a33;
+  --bpp-s2-base: #1a0d3f;
+  --bpp-s3-topo: #1a0d3f;
+  --bpp-s3-meio: #160a36;
+  --bpp-s3-fundo: #11072a;
+  --bpp-s3-base: #0a0618;
+  --bpp-s3-brilho: #180a3a;
   --bpp-painel-topo: #000000;
   --bpp-painel-meio: #06030f;
   --bpp-painel-base: #0e0820;
@@ -201,7 +203,9 @@
   background: linear-gradient(180deg, var(--bpp-s2-topo) 0%, var(--bpp-s2-meio) 45%, var(--bpp-s2-azul) 80%, var(--bpp-s2-base) 100%);
 }
 .bp-secao-3 {
-  background: linear-gradient(180deg, var(--bpp-s3-topo) 0%, var(--bpp-s3-meio) 35%, var(--bpp-s3-fundo) 70%, var(--bpp-s3-base) 100%);
+  background:
+    radial-gradient(120% 55% at 0% 100%, var(--bpp-s3-brilho, #e9e1fb) 0%, transparent 70%),
+    linear-gradient(180deg, var(--bpp-s3-topo) 0%, var(--bpp-s3-meio) 35%, var(--bpp-s3-fundo) 70%, var(--bpp-s3-base) 100%);
 }
 
 /* --------- ajustes das classes de base, SÓ dentro do paciente ------- */
