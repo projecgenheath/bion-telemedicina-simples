@@ -1,180 +1,193 @@
 /* ==================================================================== */
-/* App do PACIENTE â€” classes exclusivas + ajustes com escopo             */
+/* App do PACIENTE — classes exclusivas + ajustes com escopo             */
 /* (.bp-app-paciente na casca). As classes de base bp-* (bp-glass,       */
 /* bp-shell, bp-carrossel, bp-coluna, bp-acao, bp-entrada, bp-safe-*)    */
-/* continuam no globals.css SEM mudanÃ§a â€” MÃ©dicos e Admin usam.          */
+/* continuam no globals.css SEM mudança — Médicos e Admin usam.          */
 /*                                                                      */
-/* Contraste (WCAG AA): texto â‰¥ 4,5:1; tÃ­tulos grandes, Ã­cones e linhas  */
-/* de grÃ¡fico â‰¥ 3:1, nos modos Clean e Dark. As cores abaixo sÃ£o         */
-/* conferidas por scripts/teste_contraste_paciente.ts (lÃª este arquivo). */
+/* Contraste (WCAG AA): texto ≥ 4,5:1; títulos grandes, ícones e linhas  */
+/* de gráfico ≥ 3:1, nos modos Clean e Dark. As cores abaixo são         */
+/* conferidas por scripts/teste_contraste_paciente.ts (lê este arquivo). */
 /* ==================================================================== */
 
 /* ---------------------------- tokens ------------------------------- */
 .bp-app-paciente {
-  /* Zona PACIENTE: degradÃª dourado/laranja #FFB15C -> verde #469B72.
-     O roxo-escuro #1D152D ancora superfÃ­cies e texto; os utilitÃ¡rios
-     text-bion-* leem var(--bion-*) daqui. MÃ©dico e Admin mantÃªm seus temas. */
-  --bion-ink: #1D152D;
-  --bion-paper: #FBF8F1;
-  --bion-sea: #2E6B47;
-  --bion-deep: #2A5C43;
-  --bion-sky: #E4F0E7;
-  --bion-night: #1D152D;
-  /* Destaque: verde profundo no claro, laranja no escuro */
-  --bpp-realce: #2E6B47;
-  /* SeÃ§Ã£o 1 - branco -> amarelo quente, com brilho laranja visÃ­vel */
-  --bpp-s1-topo: #FFFFFF;
-  --bpp-s1-brilho: #FFE1BC;
-  --bpp-s1-base: #FFF4E6;
-  /* SeÃ§Ã£o 2 - transiÃ§Ã£o deliberada de amarelo para verde */
-  --bpp-s2-topo: #FFF4E6;
-  --bpp-s2-meio: #F6E7D1;
-  --bpp-s2-azul: #E9E8D0;
-  --bpp-s2-base: #DCEAD7;
-  /* SeÃ§Ã£o 3 - exames: verde suave retorna ao papel claro */
-  --bpp-s3-topo: #DCEAD7;
-  --bpp-s3-meio: #E8EEDC;
-  --bpp-s3-fundo: #F4F3EA;
-  --bpp-s3-base: #FAFBF6;
-  --bpp-s3-brilho: #FFE1BC;
-  /* Paineis laterais (perfil / documentos / sobreposicoes) */
-  --bpp-painel-topo: #FFFFFF;
-  --bpp-painel-meio: #FFF2E1;
-  --bpp-painel-base: #E8EFDD;
-  /* Vidro: solido o bastante para o texto nao perder contraste */
+  /* Paleta roxa do paciente (pedido do Alisson, 10/11): os utilitários
+     text-bion-ink, bg-bion-sea etc. leem var(--bion-*); redefinir aqui
+     troca o azul/marinho pelo roxo da marca SÓ no app do paciente.
+     Médicos e Admin continuam com os valores do globals.css. */
+  --bion-ink: #1a1040;
+  --bion-paper: #f4f1fd;
+  --bion-sea: #24058D;
+  --bion-deep: #3D1AAE;
+  --bion-sky: #DDD6FE;
+  --bion-night: #0e0820;
+  /* Destaque no escuro: tint da marca (#C4B5FD) */
+  --bpp-realce: #24058D;
+  /* Seção 1 — hero: branco → lavanda muito clara, com um brilho
+     roxo suave no canto */
+  --bpp-s1-topo: #ffffff;
+  --bpp-s1-brilho: #e9e1fb;
+  --bpp-s1-base: #f1ecfb;
+  /* Seção 2 — da lavanda suave ao lilás delicado (continuidade fluida) */
+  --bpp-s2-topo: #f1ecfb;
+  --bpp-s2-meio: #eae1fb;
+  --bpp-s2-azul: #e3d6f7;
+  --bpp-s2-base: #dccef5;
+  /* Seção 3 — exames: degradê claro e acolhedor com nuances da marca */
+  --bpp-s3-topo: #dccef5;
+  --bpp-s3-meio: #e5dbf8;
+  --bpp-s3-fundo: #eee6fc;
+  --bpp-s3-base: #f7f4fd;
+  --bpp-s3-brilho: #e9e1fb;
+  /* Painéis laterais (perfil / documentos / sobreposições) */
+  --bpp-painel-topo: #fdfcff;
+  --bpp-painel-meio: #f2eefc;
+  --bpp-painel-base: #e8e1f9;
+  /* Vidro: mais sólido que o base para o texto não perder contraste
+     quando o cartão passa sobre o roxo */
   --bpp-vidro: rgba(255, 255, 255, 0.84);
   --bpp-vidro-borda: rgba(255, 255, 255, 0.9);
   --bpp-vidro-marinho: rgba(255, 255, 255, 0.08);
   --bpp-vidro-marinho-borda: rgba(255, 255, 255, 0.22);
-  /* Graficos */
-  --bpp-grafico-linha: #2E6B47;
-  --bpp-grafico-alerta: #B45309;
-  --bpp-grafico-eixo: rgba(29, 21, 45, 0.72);
-  --bpp-grafico-linha-marinho: #B7D9A7;
-  --bpp-grafico-eixo-marinho: rgba(251, 248, 241, 0.8);
+  /* Gráficos */
+  --bpp-grafico-linha: #24058D;
+  --bpp-grafico-alerta: #c2410c;
+  --bpp-grafico-eixo: rgba(26, 16, 64, 0.72);
+  --bpp-grafico-linha-marinho: #DDD6FE;
+  --bpp-grafico-eixo-marinho: rgba(255, 255, 255, 0.8);
   /* Placeholder de campos */
-  --bpp-placeholder: rgba(29, 21, 45, 0.62);
-  /* AÃ§Ã£o principal: endpoints originais; texto escuro mantÃ©m AA
-     (#1D152D sobre #FFB15C = 9,77:1; sobre #469B72 = 5,17:1). */
-  --bpp-acao-inicio: #FFB15C;
-  --bpp-acao-fim: #469B72;
-  --bpp-acao-texto: #1D152D;
-  --bpp-acao-sombra: rgba(46, 107, 71, 0.35);
-  /* CartÃ£o da BION IA: entrada dourada, meio verde profundo e base roxa */
-  --bpp-ia-fundo-inicio: #59402D;
-  --bpp-ia-fundo-meio: #1E4030;
-  --bpp-ia-fundo-fim: #1D152D;
-  --bpp-ia-cta-texto: #1D152D;
-  --bpp-ia-brilho: rgba(70, 155, 114, 0.3);
-  --bpp-ia-aro: rgba(255, 177, 92, 0.5);
-  /* Acoes secundarias da proxima consulta */
-  --bpp-sec-fundo: rgba(46, 107, 71, 0.07);
-  --bpp-sec-borda: rgba(46, 107, 71, 0.16);
-  --bpp-sec-texto: #2E6B47;
+  --bpp-placeholder: rgba(26, 16, 64, 0.62);
+  /* Cartão da BION IA e botão primário (.bp-acao, só neste app):
+     marca oficial #24058D. Branco sobre #24058D: 14,18:1; sobre o
+     início do degradê #3D1AAE: 10,73:1. Texto white/85 no cartão:
+     10,34:1 (#24058D) e 8,09:1 (#3D1AAE). O .bp-acao do globals.css
+     (marinho) permanece para Médicos e Admin. */
+  --bpp-acao-inicio: #3D1AAE;
+  --bpp-acao-fim: #24058D;
+  --bpp-acao-texto: #ffffff;
+  --bpp-acao-sombra: rgba(36, 5, 141, 0.45);
+  --bpp-ia-fundo-inicio: #3D1AAE;
+  --bpp-ia-fundo-meio: #24058D;
+  --bpp-ia-fundo-fim: #1C0470;
+  --bpp-ia-cta-texto: #24058D;
+  --bpp-ia-brilho: rgba(61, 26, 174, 0.42);
+  --bpp-ia-aro: rgba(196, 181, 253, 0.55);
+  /* Ações secundárias da próxima consulta */
+  --bpp-sec-fundo: rgba(36, 5, 141, 0.07);
+  --bpp-sec-borda: rgba(36, 5, 141, 0.16);
+  --bpp-sec-texto: #24058D;
   --bpp-cancelar-fundo: rgba(220, 38, 38, 0.06);
   --bpp-cancelar-borda: rgba(185, 28, 28, 0.28);
   --bpp-cancelar-texto: #991b1b;
-  /* Janelas (cancelar/remarcar, reembolso, triagem, edicao) */
-  --bpp-sheet-fundo: #FFFFFF;
-  --bpp-sheet-cartao: #F6F7EE;
-  --bpp-sheet-borda: rgba(46, 107, 71, 0.14);
-  --bpp-sheet-texto: #1D152D;
-  --bpp-sheet-suave: rgba(29, 21, 45, 0.78);
-  --bpp-sheet-veu: rgba(29, 21, 45, 0.55);
-  --bpp-sheet-alca: rgba(46, 107, 71, 0.22);
-  --bpp-sheet-chip: rgba(46, 107, 71, 0.07);
-  --bpp-sheet-campo: #FBFAF5;
-  --bpp-sheet-primario: #2E6B47;
-  --bpp-sheet-primario-texto: #FFFFFF;
-  --bpp-sheet-sel-borda: #2E6B47;
-  --bpp-sheet-sel-fundo: rgba(46, 107, 71, 0.1);
-  --bpp-sheet-sel-cheio: #2E6B47;
-  --bpp-sheet-sel-cheio-texto: #FFFFFF;
+  /* Fase 3 — janelas (cancelar/remarcar, reembolso, triagem, edição):
+     seguem o tema. Clean = branco com texto roxo-escuro. */
+  --bpp-sheet-fundo: #ffffff;
+  --bpp-sheet-cartao: #f3f0fb;
+  --bpp-sheet-borda: rgba(36, 5, 141, 0.14);
+  --bpp-sheet-texto: #1a1040;
+  --bpp-sheet-suave: rgba(26, 16, 64, 0.78);
+  --bpp-sheet-veu: rgba(18, 3, 74, 0.55);
+  --bpp-sheet-alca: rgba(36, 5, 141, 0.22);
+  --bpp-sheet-chip: rgba(36, 5, 141, 0.07);
+  --bpp-sheet-campo: #f9f8fe;
+  --bpp-sheet-primario: #24058D;
+  --bpp-sheet-primario-texto: #ffffff;
+  --bpp-sheet-sel-borda: #24058D;
+  --bpp-sheet-sel-fundo: rgba(36, 5, 141, 0.1);
+  --bpp-sheet-sel-cheio: #24058D;
+  --bpp-sheet-sel-cheio-texto: #ffffff;
   /* Esqueleto (carregando) */
-  --bpp-esqueleto: rgba(46, 107, 71, 0.09);
+  --bpp-esqueleto: rgba(36, 5, 141, 0.09);
   --bpp-esqueleto-brilho: rgba(255, 255, 255, 0.65);
   /* Contagem regressiva e aviso de mensagem */
-  --bpp-contagem-fundo: rgba(46, 107, 71, 0.08);
-  --bpp-contagem-texto: #2E6B47;
-  --bpp-aviso-ponto: #E11D48;
-  /* TÃ­tulo legÃ­vel em fundo claro e hero equilibrado entre dourado e verde */
-  --bpp-grad-a: #8B5D24;
-  --bpp-grad-b: #2E6B47;
-  --bpp-hero-1: #60442F;
-  --bpp-hero-2: #2B5D42;
-  --bpp-hero-3: #1D152D;
-  --bpp-glow-a: rgba(255, 177, 92, 0.3);
-  --bpp-glow-b: rgba(70, 155, 114, 0.22);
-  --bpp-aurora-1: rgba(255, 177, 92, 0.3);
-  --bpp-aurora-2: rgba(70, 155, 114, 0.22);
-  --bpp-ecg-cor: #B7D9A7;
+  --bpp-contagem-fundo: rgba(36, 5, 141, 0.08);
+  --bpp-contagem-texto: #24058D;
+  --bpp-aviso-ponto: #e11d48;
+  /* Fase 4 (nov/2026) — tela inicial viva: hero e brilhos da marca */
+  --bpp-grad-a: #24058D;
+  --bpp-grad-b: #3D1AAE;
+  --bpp-hero-1: #3D1AAE;
+  --bpp-hero-2: #24058D;
+  --bpp-hero-3: #1C0470;
+  --bpp-glow-a: rgba(196, 181, 253, 0.34);
+  --bpp-glow-b: rgba(221, 214, 254, 0.26);
+  --bpp-aurora-1: rgba(196, 181, 253, 0.4);
+  --bpp-aurora-2: rgba(221, 214, 254, 0.22);
+  --bpp-ecg-cor: #DDD6FE;
 }
 .dark .bp-app-paciente {
-  /* Destaque laranja da marca no escuro; troca --primary/--ring so aqui. */
-  --bpp-realce: #FFB15C;
-  --primary: #FFB15C;
-  --primary-foreground: #1D152D;
-  --ring: #FFB15C;
-  --bpp-s1-topo: #120D1F;
-  --bpp-s1-brilho: #39291E;
-  --bpp-s1-base: #1D152D;
-  --bpp-s2-topo: #35291F;
-  --bpp-s2-meio: #302820;
-  --bpp-s2-azul: #26372D;
-  --bpp-s2-base: #1E2C24;
-  --bpp-s3-topo: #1E2C24;
-  --bpp-s3-meio: #242B23;
-  --bpp-s3-fundo: #1E2421;
-  --bpp-s3-base: #1D152D;
-  --bpp-s3-brilho: #39291E;
-  --bpp-painel-topo: #120D1F;
-  --bpp-painel-meio: #2A241F;
-  --bpp-painel-base: #1D152D;
+  /* Destaque lilás derivado do roxo da marca (sem azul): #C4B5FD, matiz 252°.
+     Também troca o --primary/--ring globais (#C4B5FD, azulado) só aqui. */
+  --bpp-realce: #C4B5FD;
+  --primary: #C4B5FD;
+  --primary-foreground: #12034a;
+  --ring: #C4B5FD;
+  --bpp-s1-topo: #000000;
+  --bpp-s1-base: #0a0618;
+  --bpp-s2-topo: #0a0618;
+  --bpp-s2-meio: #100827;
+  --bpp-s2-azul: #150a33;
+  --bpp-s2-base: #1a0d3f;
+  --bpp-s3-topo: #1a0d3f;
+  --bpp-s3-meio: #160a36;
+  --bpp-s3-fundo: #11072a;
+  --bpp-s3-base: #0a0618;
+  --bpp-s3-brilho: #180a3a;
+  --bpp-painel-topo: #000000;
+  --bpp-painel-meio: #06030f;
+  --bpp-painel-base: #0e0820;
   --bpp-vidro: rgba(255, 255, 255, 0.06);
   --bpp-vidro-borda: rgba(255, 255, 255, 0.12);
   --bpp-vidro-marinho: rgba(255, 255, 255, 0.08);
   --bpp-vidro-marinho-borda: rgba(255, 255, 255, 0.18);
-  --bpp-grafico-linha: #B7D9A7;
-  --bpp-grafico-alerta: #FBBF24;
-  --bpp-grafico-eixo: rgba(251, 248, 241, 0.6);
-  --bpp-grafico-linha-marinho: #B7D9A7;
-  --bpp-grafico-eixo-marinho: rgba(251, 248, 241, 0.8);
-  --bpp-placeholder: rgba(251, 248, 241, 0.62);
-  --bpp-ia-brilho: rgba(70, 155, 114, 0.28);
-  --bpp-ia-aro: rgba(255, 177, 92, 0.4);
+  --bpp-grafico-linha: #C4B5FD;
+  --bpp-grafico-alerta: #fb923c;
+  --bpp-grafico-eixo: rgba(244, 241, 253, 0.6);
+  --bpp-grafico-linha-marinho: #DDD6FE;
+  --bpp-grafico-eixo-marinho: rgba(255, 255, 255, 0.8);
+  --bpp-placeholder: rgba(244, 241, 253, 0.62);
+  --bpp-s1-brilho: #140a2e;
+  /* Superfícies preenchidas herdam o roxo do Clean: branco sobre
+     #24058D continua 14,18:1 (AA). Não usamos o lilás #C4B5FD como fundo com
+     texto branco (falha AA). Só o brilho acompanha o escuro. */
+  --bpp-ia-brilho: rgba(196, 181, 253, 0.34);
+  --bpp-ia-aro: rgba(196, 181, 253, 0.40);
   --bpp-sec-fundo: rgba(255, 255, 255, 0.08);
   --bpp-sec-borda: rgba(255, 255, 255, 0.16);
-  --bpp-sec-texto: #FBF8F1;
+  --bpp-sec-texto: #f4f1fd;
   --bpp-cancelar-fundo: rgba(248, 113, 113, 0.1);
   --bpp-cancelar-borda: rgba(252, 165, 165, 0.3);
-  --bpp-cancelar-texto: #FCA5A5;
-  --bpp-sheet-fundo: #120D1F;
-  --bpp-sheet-cartao: #1D152D;
+  --bpp-cancelar-texto: #fca5a5;
+  /* Fase 3 — janelas no Dark: quase preto arroxeado, texto claro, destaque #C4B5FD */
+  --bpp-sheet-fundo: #0b0717;
+  --bpp-sheet-cartao: #1a1430;
   --bpp-sheet-borda: rgba(255, 255, 255, 0.14);
-  --bpp-sheet-texto: #FFFFFF;
+  --bpp-sheet-texto: #ffffff;
   --bpp-sheet-suave: rgba(255, 255, 255, 0.72);
   --bpp-sheet-veu: rgba(0, 0, 0, 0.8);
   --bpp-sheet-alca: rgba(255, 255, 255, 0.25);
   --bpp-sheet-chip: rgba(255, 255, 255, 0.1);
-  --bpp-sheet-campo: #1D152D;
-  --bpp-sheet-primario: #FFB15C;
-  --bpp-sheet-primario-texto: #1D152D;
-  --bpp-sheet-sel-borda: #FFB15C;
-  --bpp-sheet-sel-fundo: rgba(255, 177, 92, 0.15);
-  --bpp-sheet-sel-cheio: #FFB15C;
-  --bpp-sheet-sel-cheio-texto: #1D152D;
+  --bpp-sheet-campo: #1a1430;
+  --bpp-sheet-primario: #C4B5FD;
+  --bpp-sheet-primario-texto: #12034a;
+  --bpp-sheet-sel-borda: #C4B5FD;
+  --bpp-sheet-sel-fundo: rgba(196, 181, 253, 0.15);
+  --bpp-sheet-sel-cheio: #C4B5FD;
+  --bpp-sheet-sel-cheio-texto: #12034a;
   --bpp-esqueleto: rgba(255, 255, 255, 0.08);
   --bpp-esqueleto-brilho: rgba(255, 255, 255, 0.12);
-  --bpp-contagem-fundo: rgba(255, 177, 92, 0.12);
-  --bpp-contagem-texto: #FFB15C;
-  --bpp-aviso-ponto: #FB7185;
-  --bpp-grad-a: #FFB15C;
-  --bpp-grad-b: #469B72;
-  --bpp-glow-a: rgba(255, 177, 92, 0.2);
-  --bpp-glow-b: rgba(70, 155, 114, 0.16);
-  --bpp-aurora-1: rgba(255, 177, 92, 0.24);
-  --bpp-aurora-2: rgba(70, 155, 114, 0.2);
-  --bpp-ecg-cor: #B7D9A7;
+  --bpp-contagem-fundo: rgba(196, 181, 253, 0.12);
+  --bpp-contagem-texto: #DDD6FE;
+  --bpp-aviso-ponto: #fb7185;
+  /* Fase 4 (nov/2026) — dark: gradiente lilás (AAA sobre o quase preto).
+     O hero mantém os tons de marca (branco continua ≥ 10:1). */
+  --bpp-grad-a: #C4B5FD;
+  --bpp-grad-b: #DDD6FE;
+  --bpp-glow-a: rgba(196, 181, 253, 0.1);
+  --bpp-glow-b: rgba(221, 214, 254, 0.07);
+  --bpp-aurora-1: rgba(196, 181, 253, 0.2);
+  --bpp-aurora-2: rgba(221, 214, 254, 0.12);
+  --bpp-ecg-cor: #C4B5FD;
 }
 
 /* ------------------- fundos (movidos do globals.css) ---------------- */
@@ -195,7 +208,7 @@
     linear-gradient(180deg, var(--bpp-s3-topo) 0%, var(--bpp-s3-meio) 35%, var(--bpp-s3-fundo) 70%, var(--bpp-s3-base) 100%);
 }
 
-/* --------- ajustes das classes de base, SÃ“ dentro do paciente ------- */
+/* --------- ajustes das classes de base, SÓ dentro do paciente ------- */
 .bp-app-paciente .bp-glass {
   background: var(--bpp-vidro);
   border-color: var(--bpp-vidro-borda);
@@ -208,7 +221,7 @@
   color: var(--bpp-placeholder);
 }
 
-/* ---------------- cartÃ£o da BION IA: o destaque do InÃ­cio ------------ */
+/* ---------------- cartão da BION IA: o destaque do Início ------------ */
 .bp-app-paciente .bpp-cartao-ia {
   background: linear-gradient(
     to bottom right,
@@ -226,13 +239,13 @@
   color: var(--bpp-ia-cta-texto);
 }
 
-/* Sobrescreve o .bp-acao marinho do globals.css sÃ³ no app do paciente. */
+/* Sobrescreve o .bp-acao marinho do globals.css só no app do paciente. */
 .bp-app-paciente .bp-acao {
   background: linear-gradient(135deg, var(--bpp-acao-inicio) 0%, var(--bpp-acao-fim) 100%);
   color: var(--bpp-acao-texto);
   box-shadow: 0 8px 20px -6px var(--bpp-acao-sombra);
 }
-/* Reflexo que passa uma vez pelo cartÃ£o ao abrir o InÃ­cio */
+/* Reflexo que passa uma vez pelo cartão ao abrir o Início */
 .bp-app-paciente .bpp-cartao-ia::after {
   content: "";
   position: absolute;
@@ -246,7 +259,7 @@
   to { transform: translateX(120%); }
 }
 
-/* ---------------- aÃ§Ãµes secundÃ¡rias da prÃ³xima consulta ------------- */
+/* ---------------- ações secundárias da próxima consulta ------------- */
 .bp-app-paciente .bpp-acao-sec,
 .bp-app-paciente .bpp-acao-cancelar {
   border: 1px solid;
@@ -266,7 +279,7 @@
 .bp-app-paciente .bpp-acao-cancelar:active {
   transform: scale(0.97);
 }
-/* Com largura sobrando (â‰¥ 480 px), Ã­cone ao lado da palavra */
+/* Com largura sobrando (≥ 480 px), ícone ao lado da palavra */
 @media (min-width: 480px) {
   .bp-app-paciente .bpp-acoes-sec > button {
     flex-direction: row;
@@ -278,8 +291,8 @@
 /* Sem backdrop-filter (aparelhos fracos / navegadores antigos): vidro opaco */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .bp-app-paciente .bp-glass { background: rgba(255, 255, 255, 0.94); }
-  .dark .bp-app-paciente .bp-glass { background: rgba(29, 21, 45, 0.95); }
-  .bp-app-paciente .bp-glass-marinho { background: rgba(29, 21, 45, 0.92); }
+  .dark .bp-app-paciente .bp-glass { background: rgba(22, 14, 44, 0.95); }
+  .bp-app-paciente .bp-glass-marinho { background: rgba(26, 8, 90, 0.92); }
 }
 
 /* Menos movimento: sem "pulinho" de hover nem escala ao tocar */
@@ -295,9 +308,9 @@
   .bp-app-paciente .bpp-cartao-ia::after { animation: none; display: none; }
 }
 
-/* --------------------------- impressÃ£o ----------------------------- */
-/* SÃ³ esconde o resto da pÃ¡gina quando um documento do paciente estÃ¡    */
-/* aberto (antes valia para o app inteiro, inclusive MÃ©dicos/Admin).    */
+/* --------------------------- impressão ----------------------------- */
+/* Só esconde o resto da página quando um documento do paciente está    */
+/* aberto (antes valia para o app inteiro, inclusive Médicos/Admin).    */
 @media print {
   body:has(.bp-impressao) * { visibility: hidden; }
   .bp-impressao,
@@ -306,14 +319,14 @@
 }
 
 /* ==================================================================== */
-/* Tela larga (â‰¥ 1024 px): sem moldura de celular; Perfil | InÃ­cio |    */
-/* Documentos lado a lado, cada coluna com a prÃ³pria rolagem.           */
-/* 768â€“1023 px: mantÃ©m a moldura de 430 px do globals.css.              */
+/* Tela larga (≥ 1024 px): sem moldura de celular; Perfil | Início |    */
+/* Documentos lado a lado, cada coluna com a própria rolagem.           */
+/* 768–1023 px: mantém a moldura de 430 px do globals.css.              */
 /* < 1024 px: carrossel com gestos exatamente como antes.               */
 /* ==================================================================== */
 @media (min-width: 1024px) {
-  html body:has(.bp-app-paciente.bp-shell) { background: #F5EFDC; }
-  html.dark body:has(.bp-app-paciente.bp-shell) { background: #1D152D; }
+  html body:has(.bp-app-paciente.bp-shell) { background: #f1ecfb; }
+  html.dark body:has(.bp-app-paciente.bp-shell) { background: #000000; }
 
   .bp-app-paciente.bp-shell {
     max-width: none;
@@ -335,18 +348,18 @@
     flex: none;
     scroll-snap-align: none;
   }
-  .bp-app-paciente .bpp-lateral-esq { border-right: 1px solid rgba(29, 21, 45, 0.1); }
-  .bp-app-paciente .bpp-lateral-dir { border-left: 1px solid rgba(29, 21, 45, 0.1); }
+  .bp-app-paciente .bpp-lateral-esq { border-right: 1px solid rgba(26, 16, 64, 0.1); }
+  .bp-app-paciente .bpp-lateral-dir { border-left: 1px solid rgba(26, 16, 64, 0.1); }
   .dark .bp-app-paciente .bpp-lateral-esq { border-right-color: rgba(255, 255, 255, 0.1); }
   .dark .bp-app-paciente .bpp-lateral-dir { border-left-color: rgba(255, 255, 255, 0.1); }
 
-  /* ConteÃºdo central com largura confortÃ¡vel; o degradÃª ocupa tudo */
+  /* Conteúdo central com largura confortável; o degradê ocupa tudo */
   .bp-app-paciente .bpp-secao {
     padding-left: max(1.5rem, calc((100% - 760px) / 2));
     padding-right: max(1.5rem, calc((100% - 760px) / 2));
   }
 
-  /* Todos os painÃ©is estÃ£o visÃ­veis: os pontinhos nÃ£o fazem sentido */
+  /* Todos os painéis estão visíveis: os pontinhos não fazem sentido */
   .bp-app-paciente .bpp-indicador { display: none; }
   .bp-app-paciente .bp-secao-3 { padding-bottom: 2.5rem; }
 
@@ -356,7 +369,7 @@
     right: auto;
     width: min(760px, 100%);
     transform: translateX(-50%);
-    box-shadow: 0 0 0 100vmax rgba(29, 21, 45, 0.55);
+    box-shadow: 0 0 0 100vmax rgba(10, 4, 32, 0.55);
   }
 }
 
@@ -364,7 +377,7 @@
   .bp-app-paciente .bpp-carrossel {
     grid-template-columns: 360px minmax(0, 1fr) 380px;
   }
-  /* SaÃºde e exames em 2 colunas quando sobra largura */
+  /* Saúde e exames em 2 colunas quando sobra largura */
   .bp-app-paciente .bpp-grade {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -373,16 +386,16 @@
 }
 
 /* ==================================================================== */
-/* Fase 2 â€” gestos e navegaÃ§Ã£o (sÃ³ no celular; tela larga â‰¥ 1024        */
-/* mantÃ©m o layout lado a lado da fase 1).                               */
+/* Fase 2 — gestos e navegação (só no celular; tela larga ≥ 1024        */
+/* mantém o layout lado a lado da fase 1).                               */
 /* ==================================================================== */
 
-/* Carrossel: nÃ£o deixa o overscroll virar "voltar pÃ¡gina" do navegador */
+/* Carrossel: não deixa o overscroll virar "voltar página" do navegador */
 .bp-app-paciente .bpp-carrossel {
   overscroll-behavior-x: contain;
 }
 
-/* Coluna central: snap vertical entre InÃ­cio â†’ SaÃºde â†’ Exames */
+/* Coluna central: snap vertical entre Início → Saúde → Exames */
 .bp-app-paciente .bpp-snap-y {
   scroll-snap-type: y mandatory;
   overscroll-behavior-y: contain;
@@ -396,7 +409,7 @@
   min-height: 100%;
 }
 
-/* Indicador lateral esmaece depois de uns segundos (como no mÃ©dico) */
+/* Indicador lateral esmaece depois de uns segundos (como no médico) */
 @keyframes bpp-esmaecer {
   0%, 60% { opacity: 1; }
   100% { opacity: 0.25; }
@@ -423,7 +436,7 @@
   }
 }
 
-/* Tela larga: sem pontinhos, sem snap, sem dica â€” layout da fase 1 */
+/* Tela larga: sem pontinhos, sem snap, sem dica — layout da fase 1 */
 @media (min-width: 1024px) {
   .bp-app-paciente .bpp-indicador,
   .bp-app-paciente .bpp-indicador-secao,
@@ -438,16 +451,16 @@
     scroll-snap-stop: normal;
     min-height: 0;
   }
-  /* SeÃ§Ã£o 1 deixa de forÃ§ar 100svh (era para o snap no celular) */
+  /* Seção 1 deixa de forçar 100svh (era para o snap no celular) */
   .bp-app-paciente .bp-secao-1.bpp-tela {
     min-height: auto;
   }
 }
 
 /* ==================================================================== */
-/* Fase 3 â€” Perfil, janelas que seguem o tema, estados e micro-         */
-/* interaÃ§Ãµes. Tudo com escopo .bp-app-paciente (as janelas do paciente */
-/* sÃ£o renderizadas DENTRO da casca, nÃ£o em portal).                    */
+/* Fase 3 — Perfil, janelas que seguem o tema, estados e micro-         */
+/* interações. Tudo com escopo .bp-app-paciente (as janelas do paciente */
+/* são renderizadas DENTRO da casca, não em portal).                    */
 /* ==================================================================== */
 
 /* ------------------------------ janelas ----------------------------- */
@@ -488,7 +501,7 @@
 }
 .bp-app-paciente .bpp-sheet-painel { padding-bottom: max(2rem, env(safe-area-inset-bottom)); }
 
-/* Entrada: o vÃ©u aparece e a janela sobe (some com menos movimento) */
+/* Entrada: o véu aparece e a janela sobe (some com menos movimento) */
 @keyframes bpp-veu-entrar { from { opacity: 0; } to { opacity: 1; } }
 @keyframes bpp-sheet-subir { from { transform: translateY(24px); opacity: 0.6; } to { transform: none; opacity: 1; } }
 @keyframes bpp-surgir { from { transform: translateY(8px); opacity: 0; } to { transform: none; opacity: 1; } }
@@ -496,7 +509,7 @@
 .bp-app-paciente .bpp-sheet-painel { animation: bpp-sheet-subir 0.26s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
 .bp-app-paciente .bpp-surgir { animation: bpp-surgir 0.28s ease-out both; }
 
-/* Tela larga: a janela vira um cartÃ£o centralizado */
+/* Tela larga: a janela vira um cartão centralizado */
 @media (min-width: 1024px) {
   .bp-app-paciente .bpp-sheet-raiz { align-items: center; padding: 2rem; }
   .bp-app-paciente .bpp-sheet-painel { border-radius: 1.5rem; border-top-width: 0; padding-bottom: 2rem; }
@@ -522,24 +535,24 @@
   border-radius: 0.875rem;
   transition: background-color 0.15s ease, transform 0.15s ease;
 }
-.bp-app-paciente button.bpp-linha:hover { background: rgba(29, 21, 45, 0.04); }
+.bp-app-paciente button.bpp-linha:hover { background: rgba(26, 16, 64, 0.04); }
 .dark .bp-app-paciente button.bpp-linha:hover { background: rgba(255, 255, 255, 0.05); }
-.bp-app-paciente .bpp-linha + .bpp-linha { border-top: 1px solid rgba(29, 21, 45, 0.07); }
+.bp-app-paciente .bpp-linha + .bpp-linha { border-top: 1px solid rgba(26, 16, 64, 0.07); }
 .dark .bp-app-paciente .bpp-linha + .bpp-linha { border-top-color: rgba(255, 255, 255, 0.07); }
 
-/* CartÃ£o de saÃºde: dourado quente â†’ verde profundo â†’ roxo, com texto AA. */
+/* Cartão de saúde: roxo da marca nos dois modos (texto branco ≥ 4,5:1) */
 .bp-app-paciente .bpp-cartao-saude {
   background:
-    radial-gradient(120% 80% at 100% 0%, rgba(255, 177, 92, 0.25) 0%, transparent 60%),
-    linear-gradient(140deg, #543A27 0%, #1E4030 48%, #1D152D 100%);
+    radial-gradient(120% 80% at 100% 0%, rgba(196, 181, 253, 0.25) 0%, transparent 60%),
+    linear-gradient(140deg, #3D1AAE 0%, #24058D 45%, #1C0470 100%);
   color: #ffffff;
-  box-shadow: 0 14px 34px -14px rgba(29, 21, 45, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.16);
+  box-shadow: 0 14px 34px -14px rgba(26, 16, 64, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.16);
 }
 .dark .bp-app-paciente .bpp-cartao-saude {
-  box-shadow: 0 0 0 1px rgba(255, 177, 92, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  box-shadow: 0 0 0 1px rgba(196, 181, 253, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
-/* ------------------- InÃ­cio: contagem e aviso ----------------------- */
+/* ------------------- Início: contagem e aviso ----------------------- */
 .bp-app-paciente .bpp-contagem {
   background: var(--bpp-contagem-fundo);
   color: var(--bpp-contagem-texto);
@@ -563,7 +576,7 @@
 }
 
 /* ---------------------- toque com resposta leve --------------------- */
-/* .bpp-toque: botÃµes e cartÃµes "afundam" um pouco ao tocar.            */
+/* .bpp-toque: botões e cartões "afundam" um pouco ao tocar.            */
 .bp-app-paciente .bpp-toque {
   transition: transform 0.14s ease, box-shadow 0.2s ease, background-color 0.15s ease;
   -webkit-tap-highlight-color: transparent;
@@ -572,11 +585,11 @@
 .bp-app-paciente .bpp-toque-forte:active { transform: scale(0.95); }
 @media (hover: hover) {
   .bp-app-paciente .bp-glass.bpp-toque:hover,
-  .bp-app-paciente .bp-glass.bion-toque:hover { box-shadow: 0 16px 34px -18px rgba(29, 21, 45, 0.35); }
+  .bp-app-paciente .bp-glass.bion-toque:hover { box-shadow: 0 16px 34px -18px rgba(26, 16, 64, 0.45); }
 }
 /* Os componentes do paciente usam agora as classes compartilhadas de     */
 /* globals.css (.bion-toque, .bion-surgir, .bion-esqueleto). As .bpp-*    */
-/* acima ficam sÃ³ por compatibilidade.                                    */
+/* acima ficam só por compatibilidade.                                    */
 /* Esqueleto compartilhado com o tom do app do paciente (claro e escuro).  */
 .bp-app-paciente .bion-esqueleto { background-color: var(--bpp-esqueleto); }
 .bp-app-paciente button:focus-visible,
@@ -586,15 +599,15 @@
   outline-offset: 2px;
 }
 
-/* Sem backdrop-filter: pontinhos, dica e vÃ©u do documento ficam opacos */
+/* Sem backdrop-filter: pontinhos, dica e véu do documento ficam opacos */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .bp-app-paciente .bpp-indicador,
   .bp-app-paciente .bpp-indicador-secao,
   .bp-app-paciente .bpp-dica { background: rgba(9, 9, 11, 0.94); }
-  .bp-app-paciente .bpp-veu-doc { background: rgba(29, 21, 45, 0.82); }
+  .bp-app-paciente .bpp-veu-doc { background: rgba(18, 3, 74, 0.82); }
 }
 
-/* Menos movimento: sem animaÃ§Ã£o de entrada, pulso, brilho nem escala */
+/* Menos movimento: sem animação de entrada, pulso, brilho nem escala */
 @media (prefers-reduced-motion: reduce) {
   .bp-app-paciente .bpp-sheet-veu,
   .bp-app-paciente .bpp-sheet-painel,
@@ -608,43 +621,43 @@
 }
 
 /* ==================================================================== */
-/* Paleta da zona paciente â€” ajustes das classes de base SÃ“ no paciente             */
-/* (globals.css fica intacto para MÃ©dicos e Admin).                     */
+/* Paleta roxa — ajustes das classes de base SÓ no paciente             */
+/* (globals.css fica intacto para Médicos e Admin).                     */
 /* ==================================================================== */
 @media (min-width: 768px) and (max-width: 1023px) {
-  body:has(.bp-app-paciente.bp-shell) { background: #1D152D; }
+  body:has(.bp-app-paciente.bp-shell) { background: #0b0620; }
 }
 .bp-app-paciente .bp-glass { box-shadow: 0 1px 0 rgba(255, 255, 255, 0.9) inset, 0 12px 32px -8px rgba(26, 16, 64, 0.14); }
 .dark .bp-app-paciente .bp-glass { box-shadow: 0 1px 0 rgba(255, 255, 255, 0.08) inset, 0 12px 32px -8px rgba(0, 0, 0, 0.55); }
-.bp-app-paciente .bp-glass-marinho { box-shadow: 0 1px 0 rgba(255, 255, 255, 0.18) inset, 0 12px 32px -8px rgba(29, 21, 45, 0.5); }
-.bp-app-paciente .bp-entrada { border-color: rgba(46, 107, 71, 0.14); color: var(--bion-ink); }
+.bp-app-paciente .bp-glass-marinho { box-shadow: 0 1px 0 rgba(255, 255, 255, 0.18) inset, 0 12px 32px -8px rgba(10, 4, 32, 0.5); }
+.bp-app-paciente .bp-entrada { border-color: rgba(36, 5, 141, 0.14); color: var(--bion-ink); }
 .bp-app-paciente .bp-entrada:focus {
-  border-color: rgba(46, 107, 71, 0.55);
-  box-shadow: 0 0 0 3px rgba(46, 107, 71, 0.14);
+  border-color: rgba(36, 5, 141, 0.55);
+  box-shadow: 0 0 0 3px rgba(36, 5, 141, 0.14);
 }
 .dark .bp-app-paciente .bp-entrada { border-color: rgba(255, 255, 255, 0.14); color: var(--bion-paper); }
 .dark .bp-app-paciente .bp-entrada:focus {
-  border-color: rgba(255, 177, 92, 0.6);
-  box-shadow: 0 0 0 3px rgba(255, 177, 92, 0.18);
+  border-color: rgba(196, 181, 253, 0.6);
+  box-shadow: 0 0 0 3px rgba(196, 181, 253, 0.18);
 }
 
-/* Sala de vÃ­deo do paciente (renderizada fora da casca .bp-app-paciente):
-   mesmos tokens da zona, sÃ³ nos elementos do ChamadaPaciente. */
+/* Sala de vídeo do paciente (renderizada fora da casca .bp-app-paciente):
+   mesmos tokens roxos, só nos elementos do ChamadaPaciente. */
 .bpp-chamada {
-  --bion-ink: #1D152D;
-  --bion-paper: #FBF8F1;
-  --bion-sea: #2E6B47;
-  --bion-deep: #2A5C43;
-  --bion-sky: #E4F0E7;
-  --bion-night: #1D152D;
+  --bion-ink: #1a1040;
+  --bion-paper: #f4f1fd;
+  --bion-sea: #24058D;
+  --bion-deep: #3D1AAE;
+  --bion-sky: #DDD6FE;
+  --bion-night: #0e0820;
 }
 .dark .bpp-chamada {
-  --primary: #FFB15C;
-  --primary-foreground: #1D152D;
-  --ring: #FFB15C;
+  --primary: #C4B5FD;
+  --primary-foreground: #12034a;
+  --ring: #C4B5FD;
 }
 
-/* ======================== AnimaÃ§Ãµes extras (paciente) ======================== */
+/* ======================== Animações extras (paciente) ======================== */
 /* Entrada escalonada de cards e listas */
 @keyframes bpp-subir-suave {
   from { opacity: 0; transform: translateY(16px) scale(0.98); }
@@ -659,7 +672,7 @@
 .bp-app-paciente .bpp-animar-d4 { animation-delay: 0.24s; }
 .bp-app-paciente .bpp-animar-d5 { animation-delay: 0.30s; }
 
-/* Micro-interaÃ§Ã£o em cards clicÃ¡veis */
+/* Micro-interação em cards clicáveis */
 .bp-app-paciente .bp-glass.bion-toque,
 .bp-app-paciente button.bp-glass {
   transition: transform 0.15s ease, box-shadow 0.2s ease, background-color 0.15s ease;
@@ -672,7 +685,7 @@
   .bp-app-paciente .bp-glass.bion-toque:hover,
   .bp-app-paciente button.bp-glass:hover {
     transform: translateY(-1px);
-    box-shadow: 0 8px 24px -8px rgba(46, 107, 71, 0.25);
+    box-shadow: 0 8px 24px -8px rgba(36, 5, 141, 0.25);
   }
 }
 
@@ -682,7 +695,7 @@
 }
 
 /* ==================== Fase 4: tela inicial viva (nov/2026) ==================== */
-/* Nome do paciente com gradiente da marca (desliza devagar; estÃ¡tico em reduce) */
+/* Nome do paciente com gradiente da marca (desliza devagar; estático em reduce) */
 @keyframes bpp-grad-desliza {
   to { background-position: -220% 0; }
 }
@@ -695,7 +708,7 @@
   animation: bpp-grad-desliza 9s linear infinite;
 }
 
-/* Brilhos ao fundo da seÃ§Ã£o 1 (atrÃ¡s dos cartÃµes de vidro) */
+/* Brilhos ao fundo da seção 1 (atrás dos cartões de vidro) */
 @keyframes bpp-deriva {
   0% { transform: translate(0, 0) scale(1); }
   50% { transform: translate(-26px, 20px) scale(1.12); }
@@ -724,13 +737,13 @@
   animation: bpp-deriva 24s ease-in-out infinite alternate-reverse;
 }
 
-/* Hero da prÃ³xima consulta / agenda vazia: degradÃª da marca + auroras.
-   Aresta superior de vidro (inset): um fio de luz da marca no degradÃª. */
+/* Hero da próxima consulta / agenda vazia: degradê da marca + auroras.
+   Aresta superior de vidro (inset): um fio de luz da marca no degradê. */
 .bp-app-paciente .bpp-hero {
   background: linear-gradient(160deg, var(--bpp-hero-1) 0%, var(--bpp-hero-2) 55%, var(--bpp-hero-3) 100%);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.16),
-    0 24px 48px -22px rgba(46, 107, 71, 0.5);
+    0 24px 48px -22px rgba(36, 5, 141, 0.5);
 }
 .dark .bp-app-paciente .bpp-hero {
   box-shadow:
@@ -760,21 +773,21 @@
   animation: bpp-deriva 20s ease-in-out infinite alternate-reverse;
 }
 
-/* Barra fria do hero (data Â· hora Â· contagem): clara no Clean, cartÃ£o escuro no
-   Dark â€” as etiquetas internas trocam sozinhas (todas tÃªm variante dark:). */
+/* Barra fria do hero (data · hora · contagem): clara no Clean, cartão escuro no
+   Dark — as etiquetas internas trocam sozinhas (todas têm variante dark:). */
 .bp-app-paciente .bpp-hero-barra {
   background: rgba(255, 255, 255, 0.95);
-  color: #1D152D;
+  color: #1a1040;
 }
 .dark .bp-app-paciente .bpp-hero-barra {
-  background: #1D152D;
+  background: #1a1430;
   color: #ffffff;
 }
 .bp-app-paciente .bpp-hero-chip {
   background: rgba(255, 255, 255, 0.95);
 }
 .dark .bp-app-paciente .bpp-hero-chip {
-  background: #1D152D;
+  background: #1a1430;
 }
 
 /* Anel pulsante no avatar do hero quando a sala abre */
@@ -808,7 +821,7 @@
   animation: bpp-ecg-corre 2.8s linear infinite;
 }
 
-/* Ãcone flutuante (cartÃ£o da BION IA) */
+/* Ícone flutuante (cartão da BION IA) */
 @keyframes bpp-flutuar {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-6px); }
@@ -837,10 +850,13 @@
   pointer-events: none;
 }
 
-/* Avatar: cÃ­rculo da referÃªncia com laranja e verde nos dois temas. */
+/* Botões do topo (mensagens/avatar): anel de marca + resposta ao toque */
 .bp-app-paciente .bpp-avatar-botao {
-  background: linear-gradient(140deg, #FFB15C 0%, #469B72 100%);
+  background: linear-gradient(140deg, #3D1AAE 0%, #24058D 100%);
   transition: transform 0.15s ease;
+}
+.dark .bp-app-paciente .bpp-avatar-botao {
+  background: linear-gradient(140deg, #C4B5FD 0%, #DDD6FE 100%);
 }
 .bp-app-paciente .bpp-avatar-botao:active {
   transform: scale(0.93);
@@ -897,8 +913,8 @@
   }
 }
 
-/* ===================== TransiÃ§Ã£o suave entre seÃ§Ãµes ===================== */
-/* Rolagem suave SÃ“ para quem aceita movimento â€” o scrollTo do JS usa
+/* ===================== Transição suave entre seções ===================== */
+/* Rolagem suave SÓ para quem aceita movimento — o scrollTo do JS usa
    behavior "auto" no reduce, e "auto" delega ao scroll-behavior do CSS:
    sem este guard, quem pede menos movimento ainda rolaria suave. */
 @media (prefers-reduced-motion: no-preference) {
@@ -907,10 +923,10 @@
   }
 }
 /* (Removido: .bpp-tela com transition + :not(.bpp-tela-ativa) em 92% de
-   opacidade â€” a classe "ativa" nunca era aplicada, entÃ£o TODAS as seÃ§Ãµes
+   opacidade — a classe "ativa" nunca era aplicada, então TODAS as seções
    ficavam permanentemente esmaecidas.) */
 
-/* Micro-interaÃ§Ã£o extra em botÃµes de aÃ§Ã£o */
+/* Micro-interação extra em botões de ação */
 .bp-app-paciente .bp-acao,
 .bp-app-paciente button.rounded-full {
   transition: transform 0.12s ease, box-shadow 0.2s ease, background-color 0.15s ease;
@@ -929,36 +945,36 @@
 }
 
 /* ==================================================================== */
-/* Refinamento (nov/2026) â€” sistema de movimento consolidado             */
+/* Refinamento (nov/2026) — sistema de movimento consolidado             */
 /*                                                                      */
 /* Poucos movimentos, todos intencionais:                               */
-/*   ambiente vivo  â†’ auroras/glows (bpp-deriva), gradiente do nome     */
-/*                    (bpp-texto-grad), ECG da agenda vazia, Ã­cone da   */
+/*   ambiente vivo  → auroras/glows (bpp-deriva), gradiente do nome     */
+/*                    (bpp-texto-grad), ECG da agenda vazia, ícone da   */
 /*                    BION IA (bpp-flutuar), varredura do CTA           */
-/*                    (bpp-brilho-cta) e reflexo 1x do cartÃ£o IA.       */
-/*   entrada (1x)   â†’ .bpp-animar (bpp-subir-suave, atrasos d1-d5),     */
+/*                    (bpp-brilho-cta) e reflexo 1x do cartão IA.       */
+/*   entrada (1x)   → .bpp-animar (bpp-subir-suave, atrasos d1-d5),     */
 /*                    .bpp-lista-animar e a cascata .bion-surgir-lista  */
 /*                    do globals.css.                                   */
-/*   resposta       â†’ :active afunda 2-3%; hover levanta 1 px, sÃ³ com   */
+/*   resposta       → :active afunda 2-3%; hover levanta 1 px, só com   */
 /*                    ponteiro de verdade (hover: hover).               */
 /*                                                                      */
 /* Removido o excesso que se acumulou em passadas anteriores: bounce    */
-/* infinito em TODOS os Ã­cones de botÃ£o/vidro (56 de uma vez), fade em  */
+/* infinito em TODOS os ícones de botão/vidro (56 de uma vez), fade em  */
 /* todo <p>/<span>, pop em todo .rounded-full, shimmer infinito em todo */
-/* vidro (com overflow:hidden forÃ§ado), glow pulsante em todo botÃ£o     */
-/* primÃ¡rio, blur-in das seÃ§Ãµes, wave no hover das listas, float em     */
-/* todo avatar, barra de progresso no topo da seÃ§Ã£o 1, ripple com       */
-/* overflow:hidden em TODO botÃ£o â€” que cortava o selo de mensagens     */
-/* nÃ£o lidas (posicionado em -top-1 -right-1) â€” e um "highlight" que    */
-/* ficava PERMANENTE atrÃ¡s de todo .text-bion-sea apÃ³s a animaÃ§Ã£o.      */
+/* vidro (com overflow:hidden forçado), glow pulsante em todo botão     */
+/* primário, blur-in das seções, wave no hover das listas, float em     */
+/* todo avatar, barra de progresso no topo da seção 1, ripple com       */
+/* overflow:hidden em TODO botão — que cortava o selo de mensagens     */
+/* não lidas (posicionado em -top-1 -right-1) — e um "highlight" que    */
+/* ficava PERMANENTE atrás de todo .text-bion-sea após a animação.      */
 /* Com isso, 272 elementos animados e 70 loops infinitos viraram uma    */
-/* tela parada onde sÃ³ o ambiente respira.                              */
+/* tela parada onde só o ambiente respira.                              */
 /* ==================================================================== */
 
-/* CartÃ£o da BION IA: a entrada unica do .bion-surgir (TSX) + o reflexo
-   1x (bpp-reflexo, la em cima) bastam â€” sem pulsacao infinita. */
+/* Cartão da BION IA: a entrada unica do .bion-surgir (TSX) + o reflexo
+   1x (bpp-reflexo, la em cima) bastam — sem pulsacao infinita. */
 
-/* Rede de seguranÃ§a: com "menos movimento" ligado no sistema, NADA se
+/* Rede de segurança: com "menos movimento" ligado no sistema, NADA se
    mexe no app do paciente. Cobertura total (elementos, ::before e
    ::after), vale tambem para classes que vierem a ser adicionadas. */
 @media (prefers-reduced-motion: reduce) {
@@ -975,4 +991,3 @@
     stroke-dasharray: none !important;
   }
 }
-
