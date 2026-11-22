@@ -404,15 +404,18 @@
   scroll-snap-stop: always;
   min-height: 100%;
 }
-@media (max-width: 1023px) {
-  /* Espaço para os dois nomes (seções e painéis) não cobrirem o fim da tela. */
-  .bp-app-paciente .bpp-snap-y > .bpp-tela {
-    padding-bottom: calc(9rem + env(safe-area-inset-bottom));
-  }
-}
 
-/* Nomes das seções ficam legíveis o tempo todo (não esmaecem). */
+/* Indicador lateral esmaece depois de uns segundos (como no médico) */
+@keyframes bpp-esmaecer {
+  0%, 60% { opacity: 1; }
+  100% { opacity: 0.25; }
+}
 .bp-app-paciente .bpp-indicador-secao {
+  animation: bpp-esmaecer 3.5s ease forwards;
+}
+.bp-app-paciente .bpp-indicador-secao:hover,
+.bp-app-paciente .bpp-indicador-secao:focus-within {
+  animation: none;
   opacity: 1;
 }
 
