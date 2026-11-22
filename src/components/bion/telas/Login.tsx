@@ -141,18 +141,29 @@ export function Login({
     }
     setFormErro(null);
     setEnviando(true);
-    const r = await registrar(nome.trim(), identificador.trim(), senha, aceiteTermosPayload("PACIENTE", aceitouMarketing));
-    setEnviando(false);
-    if (r.ok) {
-      try {
-        sessionStorage.removeItem(CHAVE_RASCUNHO_CADASTRO);
-      } catch {
-        /* ignora */
+    try {
+      const r = await registrar(nome.trim(), identificador.trim(), senha, aceiteTermosPayload("PACIENTE", aceitouMarketing));
+      if (r.ok) {
+        try {
+          sessionStorage.removeItem(CHAVE_RASCUNHO_CADASTRO);
+        } catch {
+          /* ignora */
+        }
+        toast.success("Conta criada com sucesso! Bem-vindo(a) ao BION.");
+        router.replace(destinoDepoisDeEntrar(r.role, voltar));
+      } else if (r.precisaConfirmarEmail) {
+        const msg = r.mensagem ?? "Conta criada. Confirme seu e-mail e faça login para entrar.";
+        setFormErro(msg);
+        toast.success("Conta criada. Confirme seu e-mail para entrar.");
+        setModoCadastro(false);
+        setSenha("");
+        setConfirmaSenha("");
+      } else {
+        setFormErro("Não foi possível criar a conta. Tente novamente.");
       }
-      toast.success("Conta criada com sucesso! Bem-vindo(a) ao BION.");
-      router.replace(destinoDepoisDeEntrar(r.role, voltar));
-    } else {
-      setFormErro("Não foi possível criar a conta. Tente novamente.");
+    } finally {
+      // Qualquer falha inesperada nao pode prender o botao em "Aguarde...".
+      setEnviando(false);
     }
   };
 
