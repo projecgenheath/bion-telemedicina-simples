@@ -1,9 +1,10 @@
+successfully downloaded text file (SHA: 10e9f04b83fddd65dafd9cf82031fd7445c93013)
 /* ==================================================================== */
 /* Torre BION — fundação visual do perfil ADMINISTRATIVO (classes ba-*)  */
 /*                                                                      */
 /* Nova gama BION — perfil ADMINISTRATIVO: gradiente roxo+rosa               */
 /* #B597A1 → #604D60 e acento mauve #B597A1 em fundos, cards, botões e       */
-/* navegação. Escopo exclusivo das classes ba-* (não toca bp-*/bm-*/globals). */
+/* navegação. Escopo exclusivo das classes ba-* (não toca as classes bp-, bm- ou globals). */
 /* preto absoluto → roxo no Dark, vidro líquido) sem alterar         */
 /* globals.css, bp-* (paciente) ou bm-* (médico).                       */
 /*                                                                      */
