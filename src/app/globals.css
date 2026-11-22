@@ -31,52 +31,41 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
-  /* Paleta BION (nova gama, tri-zona). Utilitários gerados:
-     text-bion-ink, bg-bion-paper, bg-bion-mar etc. (modificadores de
-     opacidade via color-mix em runtime).
-     Zonas: base laranja/verde/roxo; pacientes amarelo+verde;
-     médicos verde+roxo; administrativo roxo+rosa. */
-  --color-bion-ink: var(--bion-ink);       /* roxo escuro #1D152D */
+  /* FASE 3 (auditoria): identidade de marca do app do paciente — antes
+     espalhada como hex hardcoded em 6 arquivos (244 achados). Utilitários
+     gerados: text-bion-ink, bg-bion-paper, border-bion-sea, etc. (com
+     modificadores de opacidade: color-mix em runtime). */
+  --color-bion-ink: var(--bion-ink);       /* azul-marinho institucional */
   --color-bion-paper: var(--bion-paper);   /* papel claro (texto no dark) */
-  --color-bion-laranja: var(--bion-laranja); /* #FFB15C (acento pacientes) */
-  --color-bion-verde: var(--bion-verde);   /* #469B72 (acento médicos) */
-  --color-bion-mar: var(--bion-mar);       /* início gradiente admin #B597A1 */
-  --color-bion-mar-2: var(--bion-mar-2);   /* fim gradiente admin #604D60 */
-  /* Aliases mantidos: paciente e médico redefinem esses quatro nos CSS
-     próprios; aqui servem de fallback para o resto do app. */
-  --color-bion-sea: var(--bion-sea);
-  --color-bion-deep: var(--bion-deep);
-  --color-bion-sky: var(--bion-sky);
-  --color-bion-night: var(--bion-night);
+  --color-bion-sea: var(--bion-sea);       /* azul-mar gradiente */
+  --color-bion-deep: var(--bion-deep);     /* azul profundo (gradiente) */
+  --color-bion-sky: var(--bion-sky);       /* azul claro (gráficos área) */
+  --color-bion-night: var(--bion-night);   /* fundo escuro de painéis */
   --color-bion-alerta: var(--bion-alerta); /* alerta (diastólica) */
   --font-sans: var(--font-inter), "Inter", ui-sans-serif, system-ui, sans-serif;
 }
 
 :root {
   --radius: 0.875rem;
-  /* Tokens de marca — valores canônicos da nova paleta (JS de gráficos
-     consome via var(--bion-*); classes Tailwind via utilitários bion-*). */
-  --bion-ink: #1D152D;             /* roxo escuro (texto/base) */
-  --bion-paper: #f7f2f5;           /* papel claro (texto no dark) */
-  --bion-laranja: #FFB15C;         /* acento dos pacientes */
-  --bion-verde: #469B72;           /* acento dos médicos */
-  --bion-mar: #B597A1;             /* início do gradiente administrativo */
-  --bion-mar-2: #604D60;           /* fim do gradiente administrativo */
-  --bion-sea: #469B72;             /* fallback (paciente/médico redefinem) */
-  --bion-deep: #3B755D;
-  --bion-sky: #C8AA62;
-  --bion-night: #2A3F42;
-  --bion-alerta: #92400e;
+  /* FASE 3: tokens de marca — valores canônicos (JS de gráficos consome via
+     var(--bion-*); classes Tailwind via utilitários bion-*). Sempre emitidos. */
+  --bion-ink: #0a1f44;
+  --bion-paper: #f2f6fc;
+  --bion-sea: #123e7d;
+  --bion-deep: #14457f;
+  --bion-sky: #9ac1f4;
+  --bion-night: #0b1424;
+  --bion-alerta: #c2410c;
   --background: oklch(0.99 0.005 240);
   --foreground: oklch(0.2 0.04 250);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.2 0.04 250);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.2 0.04 250);
-  /* Roxo escuro #1D152D — branco sobre a cor: 18,4:1 (AA/AAA). */
-  --primary: #1D152D;
+  /* Marca oficial #24058D — branco sobre a cor: 14,18:1; cor sobre branco: 14,18:1 (AA/AAA). */
+  --primary: #24058D;
   --primary-foreground: #ffffff;
-  --primary-soft: #F1E8ED;
+  --primary-soft: #EDEBF6;
   --secondary: oklch(0.96 0.015 240);
   --secondary-foreground: oklch(0.25 0.05 250);
   --muted: oklch(0.965 0.01 240);
@@ -89,7 +78,7 @@
   --destructive-foreground: oklch(1 0 0);
   --border: oklch(0.92 0.01 240);
   --input: oklch(0.92 0.01 240);
-  --ring: #1D152D;
+  --ring: #24058D;
 }
 
 @layer base {
@@ -111,10 +100,9 @@
   --popover-foreground: oklch(0.96 0.01 240);
   /* #24058D no fundo escuro fica em ~1,3:1 (falha AA). Tint oklch(0.75 0.14 276) = #96A5FF:
      8,00:1 no fundo escuro, 7,32:1 no card; #24058D sobre #96A5FF: 6,16:1. */
-  /* Mauve #B597A1: 6,60:1 sobre o roxo escuro; #1D152D sobre ele: 6,60:1. */
-  --primary: #B597A1;
-  --primary-foreground: #1D152D;
-  --primary-soft: #3A2E45;
+  --primary: #96A5FF;
+  --primary-foreground: #24058D;
+  --primary-soft: #2A2150;
   --secondary: oklch(0.27 0.03 250);
   --secondary-foreground: oklch(0.96 0.01 240);
   --muted: oklch(0.27 0.025 250);
@@ -126,7 +114,7 @@
   --destructive-foreground: oklch(0.98 0 0);
   --border: oklch(0.32 0.025 250);
   --input: oklch(0.32 0.025 250);
-  --ring: #B597A1;
+  --ring: #96A5FF;
 }
 
 /* ==================================================================== */

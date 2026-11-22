@@ -140,8 +140,8 @@ const css = readFileSync(new URL("./admin.css", import.meta.url), "utf8");
 const TEXTOS = ["--ba-texto", "--ba-texto-2", "--ba-texto-3", "--ba-sinal", "--ba-ok", "--ba-atencao", "--ba-critico", "--ba-dinheiro", "--ba-neutro"];
 // Pior caso do céu sob o card: as duas pontas do degradê de cada modo.
 const CEUS = {
-  claro: { vars: bloco(css, ":root"), fundos: ["#ffffff", "#f1e8ed"] },
-  escuro: { vars: bloco(css, ".dark"), fundos: ["#000000", "#1D152D"] },
+  claro: { vars: bloco(css, ":root"), fundos: ["#ffffff", "#f7f5fc"] },
+  escuro: { vars: bloco(css, ".dark"), fundos: ["#000000", "#070414"] },
 };
 for (const [modo, { vars, fundos }] of Object.entries(CEUS)) {
   for (const f of fundos) {
@@ -170,7 +170,7 @@ for (const [modo, { vars, fundos }] of Object.entries(CEUS)) {
   }
 }
 // Fundos sólidos do card deslizável: texto branco
-for (const f of ["#047857", "#b91c1c", "#92400e", "#604D60", "#334155"]) {
+for (const f of ["#047857", "#b91c1c", "#92400e", "#24058D", "#334155"]) {
   const c = contraste(cor("#ffffff"), cor(f));
   verdade(`AA texto branco no fundo do gesto ${f}`, c >= 4.5, c.toFixed(2));
 }
@@ -181,27 +181,27 @@ verdade("pílula alvo sem min-width 2.75rem", !/\.ba-pilula-alvo\s*\{[^}]*min-wi
 verdade("pílula alvo sem min-height 2.75rem", !/\.ba-pilula-alvo\s*\{[^}]*min-height:\s*2\.75rem/.test(css));
 verdade("pílula alvo ::before tem 44px de largura", /\.ba-pilula-alvo::before\s*\{[^}]*width:\s*44px/.test(css));
 verdade("pílula alvo ::before tem 44px de altura", /\.ba-pilula-alvo::before\s*\{[^}]*height:\s*44px/.test(css));
-verdade("indicador da pílula não usa #604D60", !/\.ba-pilula-indicador\s*\{[^}]*#604D60/i.test(css));
-verdade("indicador da pílula usa #B597A1", /\.ba-pilula-indicador\s*\{[^}]*#B597A1/i.test(css));
+verdade("indicador da pílula não usa #24058D", !/\.ba-pilula-indicador\s*\{[^}]*#24058D/i.test(css));
+verdade("indicador da pílula usa #96A5FF", /\.ba-pilula-indicador\s*\{[^}]*#96A5FF/i.test(css));
 
-/* Pares fixos da zona administrativa (texto ≥ 4,5:1; indicador ≥ 3:1). */
+/* Pares fixos da paleta roxa (texto ≥ 4,5:1; indicador na cápsula ≥ 3:1). */
 const paresFixos: [string, string, string, number][] = [
-  ["botão primário claro: branco em #6A5268", "#ffffff", "#6A5268", 4.5],
-  ["botão primário claro: branco no fim #604D60", "#ffffff", "#604D60", 4.5],
-  ["botão primário escuro: roxo escuro em #B597A1", "#1D152D", "#B597A1", 4.5],
-  ["aba/filtro claro: branco em #604D60", "#ffffff", "#604D60", 4.5],
-  ["aba/filtro escuro: roxo escuro em #B597A1", "#1D152D", "#B597A1", 4.5],
-  ["indicador da pílula: #B597A1 na cápsula #09090b", "#B597A1", "#09090b", 3],
-  ["bolha do suporte clara: branco em #604D60", "#ffffff", "#604D60", 4.5],
-  ["bolha do suporte escura: roxo escuro em #B597A1", "#1D152D", "#B597A1", 4.5],
-  /* Hero do Centro de Comando: degradê fixo da zona nos dois modos.
-     Branco total e branco 90% (blend sobre o stop mais claro #6A5268). */
-  ["hero: branco no topo #6A5268", "#ffffff", "#6A5268", 4.5],
-  ["hero: branco no meio #604D60", "#ffffff", "#604D60", 4.5],
-  ["hero: branco no fim #3B2E3B", "#ffffff", "#3B2E3B", 4.5],
-  ["hero: branco 90% sobre #6A5268", "#E3D7DE", "#6A5268", 4.5],
-  ["hero barra clara: #1D152D sobre o blend #F5F0F3", "#1D152D", "#F5F0F3", 4.5],
-  ["hero barra escura: #ffffff em #241A30", "#ffffff", "#241A30", 4.5],
+  ["botão primário claro: branco em #24058D", "#ffffff", "#24058D", 4.5],
+  ["botão primário claro: branco no fim #160347", "#ffffff", "#160347", 4.5],
+  ["botão primário escuro: #24058D em #96A5FF", "#24058D", "#96A5FF", 4.5],
+  ["aba/filtro claro: branco em #24058D", "#ffffff", "#24058D", 4.5],
+  ["aba/filtro escuro: #24058D em #96A5FF", "#24058D", "#96A5FF", 4.5],
+  ["indicador da pílula: #96A5FF na cápsula #09090b", "#96A5FF", "#09090b", 3],
+  ["bolha do suporte clara: branco em #24058D", "#ffffff", "#24058D", 4.5],
+  ["bolha do suporte escura: #24058D em #96A5FF", "#24058D", "#96A5FF", 4.5],
+  /* Hero do Centro de Comando (fase 5): degradê fixo da marca nos dois modos.
+     Branco total e branco 90% (blend sobre o stop mais claro #3D1AAE). */
+  ["hero: branco no topo #3D1AAE", "#ffffff", "#3D1AAE", 4.5],
+  ["hero: branco no meio #24058D", "#ffffff", "#24058D", 4.5],
+  ["hero: branco no fim #1C0470", "#ffffff", "#1C0470", 4.5],
+  ["hero: branco 90% sobre #3D1AAE", "#ECE9F7", "#3D1AAE", 4.5],
+  ["hero barra clara: #1a1040 sobre o blend #F5F4FB", "#1a1040", "#F5F4FB", 4.5],
+  ["hero barra escura: #ffffff em #1a1430", "#ffffff", "#1a1430", 4.5],
 ];
 for (const [nome, a, b, min] of paresFixos) {
   const c = contraste(cor(a), cor(b));
@@ -258,8 +258,8 @@ verdade("Relatórios explica o total da plataforma", /total da plataforma/.test(
 
 const estadoSrc = readFileSync(new URL("./ui/Estados.tsx", import.meta.url), "utf8");
 verdade("EstadoVazio tem altura mínima", /min-h-\[min\(22rem,calc\(100dvh-22rem\)\)\]/.test(estadoSrc));
-verdade("céu claro não termina em roxo antigo #24058D", !/\.ba-ceu\s*\{[^}]*#24058D/.test(css));
-verdade("céu claro termina em #604D60", /\.ba-ceu\s*\{[^}]*#604D60 100%/.test(css));
+verdade("céu claro não termina em #24058D", !/\.ba-ceu\s*\{[^}]*#24058D/.test(css));
+verdade("céu claro termina em lilás #f7f5fc", /\.ba-ceu\s*\{[^}]*#f7f5fc 100%/.test(css));
 
 console.log(`${ok} ok, ${falhas} falha(s)`);
 if (falhas) process.exit(1);
