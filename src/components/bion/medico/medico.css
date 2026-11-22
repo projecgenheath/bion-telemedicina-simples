@@ -2,15 +2,15 @@
 /* App do MÉDICO — complementa as classes bp-* do app do paciente        */
 /* (bp-shell, bp-carrossel, bp-glass…) sem alterar globals.css.          */
 /*                                                                      */
-/* Nova gama BION — perfil MÉDICO: gradiente verde+roxo                  */
-/* #3B755D → #2A3F42 e acento verde #469B72 em fundos, cards, botões,    */
+/* Nova gama BION — perfil MÉDICO: gradiente verde #469B72 → roxo #1D152D */
+/* Com sombra verde-escura nos fundos com texto branco, para manter AA.   */
 /* navegação e estados. Escopo exclusivo das classes bm-* (não toca      */
 /* não toca as classes bp-, ba- ou globals.css).                          */
 /*                                                                      */
 /* Contraste (WCAG AA): todo par texto/superfície é conferido em         */
-/* medico.teste.ts (≥ 4,5:1). O acento #469B72 não recebe texto branco   */
-/* (3,39:1): em botões sólidos usa-se #2B6E4E no claro (6,10:1) e o      */
-/* próprio #469B72 com texto #1D152D no escuro (5,17:1). Fora isso o     */
+/* medico.teste.ts (≥ 4,5:1). O verde vivo usa texto roxo escuro        */
+/* (#1D152D sobre #469B72 = 5,17:1); fundos de texto branco usam        */
+/* verde profundo #2B6E4E (5,51:1) e roxo #1D152D.                       */
 /* verde é acento de bordas, brilhos e indicadores (≥ 3:1).              */
 /* Tema: classe .dark no <html> (chave localStorage "bion-tema").        */
 /* ==================================================================== */
@@ -21,22 +21,22 @@
   --bm-texto-2: #33484a;               /* secundário (≥ 7:1 no card) */
   --bm-texto-3: #46605c;               /* rótulos pequenos (≥ 5:1) */
   --bm-verde: #469B72;                 /* acento dos médicos */
-  --bm-verde-forte: #2B6E4E;           /* fundo de botão com texto branco */
-  --bm-grad-a: #3B755D;                /* início do gradiente médico */
-  --bm-grad-b: #2A3F42;                /* fim do gradiente médico */
-  --bm-ceu-claro: #eef5f0;             /* transição clara do céu */
-  --bm-ceu-medio: #d9e9df;             /* meio da transição clara */
+  --bm-verde-forte: #2B6E4E;           /* fundo escuro para texto branco */
+  --bm-grad-a: #2B6E4E;                /* verde profundo: branco 5,51:1 */
+  --bm-grad-b: #1D152D;                /* roxo escuro da paleta original */
+  --bm-ceu-claro: #f3edf5;             /* transição clara malva */
+  --bm-ceu-medio: #e6dce9;             /* meio malva da transição clara */
   --bm-card: rgba(255, 255, 255, 0.86);
   --bm-card-solido: #ffffff;
   --bm-borda: rgba(29, 21, 45, 0.12);
   --bm-realce: rgba(70, 155, 114, 0.14);
-  --bm-sombra: 0 12px 32px -10px rgba(42, 63, 66, 0.28);
+  --bm-sombra: 0 12px 32px -10px rgba(29, 21, 45, 0.28);
   --bm-trilho: rgba(255, 255, 255, 0.86);
   --bm-ok: #065f46;
   --bm-atencao: #92400e;
   --bm-critico: #991b1b;
   --bm-neutro: #33484a;
-  --bm-indicador: #469B72;             /* 5,87:1 na cápsula escura #09090b */
+  --bm-indicador: #469B72;             /* indicador verde da paleta */
 }
 .dark {
   --bm-texto: #f7f2f5;                 /* bion-paper */
@@ -44,21 +44,21 @@
   --bm-texto-3: #bccfc4;
   --bm-verde: #469B72;
   --bm-verde-forte: #469B72;           /* com texto #1D152D: 5,17:1 */
-  --bm-grad-a: #3B755D;
-  --bm-grad-b: #2A3F42;
+  --bm-grad-a: #2B6E4E;
+  --bm-grad-b: #1D152D;
   --bm-ceu-claro: #1D152D;
-  --bm-ceu-medio: #243636;
-  --bm-card: rgba(10, 20, 17, 0.8);
-  --bm-card-solido: #0a1411;
+  --bm-ceu-medio: #2a2234;
+  --bm-card: rgba(20, 15, 32, 0.88);
+  --bm-card-solido: #140f20;
   --bm-borda: rgba(255, 255, 255, 0.1);
   --bm-realce: rgba(70, 155, 114, 0.12);
   --bm-sombra: 0 12px 32px -10px rgba(0, 0, 0, 0.6);
-  --bm-trilho: rgba(10, 20, 17, 0.78);
+  --bm-trilho: rgba(20, 15, 32, 0.84);
   --bm-ok: #6ee7b7;
   --bm-atencao: #fcd34d;
   --bm-critico: #fca5a5;
   --bm-neutro: #bccfc4;
-  --bm-indicador: #469B72;             /* 5,26:1 na cápsula #0a1411 */
+  --bm-indicador: #469B72;             /* indicador verde da paleta */
 }
 
 /* Carrossel horizontal: não deixa o "overscroll" virar voltar/avançar do navegador */
@@ -82,29 +82,30 @@
 
 /*
  * Coluna central = degradê contínuo claro → verde+roxo da zona médica.
- * Tela 1 sai do branco puro (preto no dark) e chega a #3B755D no rodapé;
- * telas 2 e 3 continuam de #3B755D a #2A3F42. Regras de contraste:
+ * O verde profundo preserva contraste com texto branco; o verde vivo
+ * #469B72 aparece nos acentos e em gradientes decorativos da área médica.
+ * Regras de contraste:
  *  - texto escuro solto no fundo só no terço superior (zona branca);
  *  - texto solto na metade de baixo / nas telas 2-3 é claro (≥ 4,8:1);
  *  - cards do app do médico ficam opacos (ver .bm-app .bp-glass).
  */
-.bm-tela-1 { background: linear-gradient(180deg, #ffffff 0%, #ffffff 30%, var(--bm-ceu-medio) 52%, var(--bm-grad-a) 78%, var(--bm-grad-b) 100%); }
-.dark .bm-tela-1 { background: linear-gradient(180deg, #000000 0%, #000000 30%, var(--bm-ceu-claro) 52%, var(--bm-grad-a) 78%, var(--bm-grad-b) 100%); }
+.bm-tela-1 { background: linear-gradient(180deg, #ffffff 0%, #ffffff 26%, var(--bm-ceu-medio) 45%, var(--bm-grad-a) 66%, var(--bm-grad-b) 100%); }
+.dark .bm-tela-1 { background: linear-gradient(180deg, #000000 0%, #000000 26%, var(--bm-ceu-claro) 45%, var(--bm-grad-a) 66%, var(--bm-grad-b) 100%); }
 
 .bm-tela-2 { background: linear-gradient(180deg, var(--bm-grad-a) 0%, var(--bm-grad-b) 100%); }
 .dark .bm-tela-2 { background: linear-gradient(180deg, var(--bm-grad-a) 0%, var(--bm-grad-b) 100%); }
 
-.bm-tela-3 { background: linear-gradient(180deg, var(--bm-grad-b) 0%, #243636 45%, #1b2a2b 100%); }
-.dark .bm-tela-3 { background: linear-gradient(180deg, var(--bm-grad-b) 0%, #1b2a2b 45%, #101b1b 100%); }
+.bm-tela-3 { background: linear-gradient(180deg, var(--bm-grad-b) 0%, #1D152D 100%); }
+.dark .bm-tela-3 { background: linear-gradient(180deg, var(--bm-grad-b) 0%, #1D152D 100%); }
 
 /* Páginas laterais: mesmo claro → verde+roxo; "local" faz o degradê
    acompanhar o conteúdo rolável (o perfil é mais alto que a tela). */
 .bm-painel {
-  background: linear-gradient(180deg, #ffffff 0%, #ffffff 30%, var(--bm-ceu-medio) 55%, var(--bm-grad-a) 80%, var(--bm-grad-b) 100%);
+  background: linear-gradient(180deg, #ffffff 0%, #ffffff 26%, var(--bm-ceu-medio) 45%, var(--bm-grad-a) 66%, var(--bm-grad-b) 100%);
   background-attachment: local;
 }
 .dark .bm-painel {
-  background: linear-gradient(180deg, #000000 0%, #000000 30%, var(--bm-ceu-claro) 55%, var(--bm-grad-a) 80%, var(--bm-grad-b) 100%);
+  background: linear-gradient(180deg, #000000 0%, #000000 26%, var(--bm-ceu-claro) 45%, var(--bm-grad-a) 66%, var(--bm-grad-b) 100%);
   background-attachment: local;
 }
 
@@ -119,7 +120,7 @@
 
 /* Superfície de sobreposição (conversa, suporte, prontuário) */
 .bm-sobreposicao { background: linear-gradient(180deg, #ffffff 0%, var(--bm-ceu-claro) 70%, var(--bm-ceu-medio) 100%); }
-.dark .bm-sobreposicao { background: linear-gradient(180deg, #000000 0%, #101b1b 70%, var(--bm-ceu-claro) 100%); }
+.dark .bm-sobreposicao { background: linear-gradient(180deg, #000000 0%, var(--bm-ceu-claro) 70%, var(--bm-ceu-claro) 100%); }
 
 /* Bottom sheet do médico */
 .bm-sheet {
@@ -142,7 +143,7 @@
 /* Sem backdrop-filter (aparelhos fracos / navegadores antigos): vidro opaco legível */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .bm-app .bp-glass { background: rgba(255, 255, 255, 0.92); }
-  .dark .bm-app .bp-glass { background: rgba(10, 20, 17, 0.95); }
+  .dark .bm-app .bp-glass { background: rgba(20, 15, 32, 0.95); }
   .bm-app .bm-glass-verde { background: var(--bm-grad-a); }
 }
 
@@ -263,12 +264,12 @@
 .bm-app .bm-animar-d4 { animation-delay: 0.24s; }
 
 /* ============ Fase 4 (nov/2026): início do médico imersivo ============ */
-/* Mesma linguagem da home do paciente: tons da zona médica (#3B755D →
-   #2A3F42), auroras e microinterações — tudo em escopo .bm-app (não vaza
+/* Mesma linguagem da home do paciente: tons da zona médica (#2B6E4E →
+   #1D152D), auroras e microinterações — tudo em escopo .bm-app (não vaza
    para paciente/admin). */
 .bm-app .bm-hero {
-  background: linear-gradient(160deg, var(--bm-grad-a) 0%, #2F604D 55%, var(--bm-grad-b) 100%);
-  box-shadow: 0 24px 48px -22px rgba(42, 63, 66, 0.5);
+  background: linear-gradient(160deg, var(--bm-grad-a) 0%, #2D483A 44%, var(--bm-grad-b) 100%);
+  box-shadow: 0 24px 48px -22px rgba(29, 21, 45, 0.5);
 }
 .dark .bm-app .bm-hero {
   box-shadow: 0 24px 48px -22px rgba(0, 0, 0, 0.7);
@@ -303,7 +304,7 @@
   color: var(--bm-texto);
 }
 .dark .bm-app .bm-hero-barra {
-  background: #16241f;
+  background: #20182d;
   color: #ffffff;
 }
 
@@ -385,22 +386,21 @@
 
 /* Avatar do topo com anel de marca */
 .bm-app .bm-avatar-botao {
-  background: linear-gradient(140deg, var(--bm-grad-a) 0%, var(--bm-grad-b) 100%);
+  background: linear-gradient(140deg, var(--bm-verde) 0%, var(--bm-grad-b) 100%);
   transition: transform 0.15s ease;
 }
 .bm-app .bm-avatar-botao:active {
   transform: scale(0.93);
 }
 
-/* Botão primário da zona médica: fundo forte no claro (branco 6,10:1),
-   acento verde com texto roxo escuro no escuro (5,17:1). */
+/* Botão primário da zona médica: verde da paleta com texto roxo (5,17:1). */
 .bm-app .bm-botao-primario {
-  background: var(--bm-verde-forte);
-  color: #ffffff;
+  background: var(--bm-verde);
+  color: #1D152D;
 }
 .dark .bm-app .bm-botao-primario {
   background: var(--bm-verde);
-  color: var(--bm-ink, #1D152D);
+  color: #1D152D;
 }
 
 /* Brilho que varre o CTA principal do hero */

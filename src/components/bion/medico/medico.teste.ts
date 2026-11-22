@@ -65,8 +65,8 @@ const TEXTOS = [
   "--bm-neutro",
 ];
 const CEUS = {
-  claro: { vars: bloco(css, ":root"), fundos: ["#3B755D", "#2A3F42"] },
-  escuro: { vars: bloco(css, ".dark"), fundos: ["#3B755D", "#2A3F42"] },
+  claro: { vars: bloco(css, ":root"), fundos: ["#2B6E4E", "#1D152D"] },
+  escuro: { vars: bloco(css, ".dark"), fundos: ["#2B6E4E", "#1D152D"] },
 };
 for (const [modo, { vars, fundos }] of Object.entries(CEUS)) {
   for (const f of fundos) {
@@ -90,17 +90,17 @@ for (const [modo, { vars, fundos }] of Object.entries(CEUS)) {
 
 /* Pares fixos da zona medica (texto >= 4,5:1; indicador >= 3:1). */
 const paresFixos: [string, string, string, number][] = [
-  ["botao primario claro: branco em #2B6E4E", "#ffffff", "#2B6E4E", 4.5],
+  ["botao primario claro: roxo escuro em #469B72", "#1D152D", "#469B72", 4.5],
   ["botao primario escuro: roxo escuro em #469B72", "#1D152D", "#469B72", 4.5],
   ["indicador da pilula claro: #469B72 na capsula #09090b", "#469B72", "#09090b", 3],
   ["indicador da pilula escuro: #469B72 na capsula #09090b", "#469B72", "#09090b", 3],
-  ["topo do gradiente: paper em #3B755D", "#f7f2f5", "#3B755D", 4.5],
-  ["meio do gradiente: paper em #2F604D", "#f7f2f5", "#2F604D", 4.5],
-  ["fim do gradiente: paper em #2A3F42", "#f7f2f5", "#2A3F42", 4.5],
-  ["faixa clara do ceu: #1D152D em #eef5f0", "#1D152D", "#eef5f0", 4.5],
-  ["faixa clara do ceu: #1D152D em #d9e9df", "#1D152D", "#d9e9df", 4.5],
+  ["topo verde do gradiente: paper em #2B6E4E", "#f7f2f5", "#2B6E4E", 4.5],
+  ["meio do gradiente: paper em #2D483A", "#f7f2f5", "#2D483A", 4.5],
+  ["fim roxo do gradiente: paper em #1D152D", "#f7f2f5", "#1D152D", 4.5],
+  ["faixa clara do ceu: #1D152D em #f3edf5", "#1D152D", "#f3edf5", 4.5],
+  ["faixa clara do ceu: #1D152D em #e6dce9", "#1D152D", "#e6dce9", 4.5],
   ["barra clara do hero: #1D152D em #e3d7de", "#1D152D", "#e3d7de", 4.5],
-  ["barra escura do hero: branco em #16241f", "#ffffff", "#16241f", 4.5],
+  ["barra escura do hero: branco em #20182d", "#ffffff", "#20182d", 4.5],
   ["bolha do suporte clara: branco em #2B6E4E", "#ffffff", "#2B6E4E", 4.5],
   ["bolha do suporte escura: roxo escuro em #469B72", "#1D152D", "#469B72", 4.5],
 ];
@@ -109,12 +109,13 @@ for (const [nome, a, b, min] of paresFixos) {
   verdade(`AA ${nome}`, c >= min, c.toFixed(2));
 }
 
-/* Cor da zona: gradiente medico e acento verde presentes, roxo antigo ausente. */
-verdade("gradiente comeca em #3B755D", /\.bm-tela-2\s*\{[^}]*--bm-grad-a/.test(css));
-verdade("gradiente termina em #2A3F42", /\.bm-tela-2\s*\{[^}]*--bm-grad-b/.test(css));
-verdade("tokens definem #3B755D", /--bm-grad-a:\s*#3B755D/.test(css));
-verdade("tokens definem #2A3F42", /--bm-grad-b:\s*#2A3F42/.test(css));
+/* A zona médica termina no roxo da referência; o verde vivo aparece no gradiente de destaque. */
+verdade("gradiente claro percorre verde profundo ate roxo", /\.bm-tela-2\s*\{[^}]*--bm-grad-a[^}]*--bm-grad-b/.test(css));
+verdade("gradiente escuro percorre verde profundo ate roxo", /\.dark \.bm-tela-2\s*\{[^}]*--bm-grad-a[^}]*--bm-grad-b/.test(css));
+verdade("fundos usam verde profundo #2B6E4E", /--bm-grad-a:\s*#2B6E4E/.test(css));
+verdade("fim do gradiente usa o roxo #1D152D", /--bm-grad-b:\s*#1D152D/.test(css));
 verdade("tokens definem acento #469B72", /--bm-verde:\s*#469B72/.test(css));
+verdade("avatar mostra gradiente #469B72 para roxo", /\.bm-avatar-botao\s*\{[^}]*linear-gradient\(140deg, var\(--bm-verde\) 0%, var\(--bm-grad-b\) 100%\)/.test(css));
 verdade("tela 1 nao usa o roxo antigo #24058D", !/\.bm-tela-1\s*\{[^}]*#24058D/.test(css));
 verdade("tela 2 nao usa o roxo antigo #24058D", !/\.bm-tela-2\s*\{[^}]*#24058D/.test(css));
 verdade("hero nao usa o roxo antigo #24058D", !/\.bm-app \.bm-hero\s*\{[^}]*#24058D/.test(css));
