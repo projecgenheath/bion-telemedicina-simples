@@ -354,7 +354,7 @@ function FolhaMensagens({
         <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px] data-[state=open]:animate-in data-[state=open]:fade-in-0" />
         <DialogPrimitive.Content
           aria-describedby={undefined}
-          className="bpp-chamada fixed inset-x-0 bottom-0 z-50 mx-auto flex max-h-[78dvh] w-full max-w-md flex-col overflow-hidden rounded-t-[1.75rem] border border-b-0 border-white/10 bg-[#1D152D]/95 text-white shadow-2xl outline-none pb-[env(safe-area-inset-bottom)] data-[state=open]:animate-in data-[state=open]:slide-in-from-bottom data-[state=closed]:animate-out data-[state=closed]:slide-out-to-bottom"
+          className="bpp-chamada fixed inset-x-0 bottom-0 z-50 mx-auto flex max-h-[78dvh] w-full max-w-md flex-col overflow-hidden rounded-t-[1.75rem] border border-b-0 border-white/10 bg-[#160e2c]/95 text-white shadow-2xl outline-none pb-[env(safe-area-inset-bottom)] data-[state=open]:animate-in data-[state=open]:slide-in-from-bottom data-[state=closed]:animate-out data-[state=closed]:slide-out-to-bottom"
         >
           <div className="flex items-center justify-between px-4 pb-1 pt-2.5">
             <span aria-hidden className="absolute left-1/2 top-2 h-1 w-10 -translate-x-1/2 rounded-full bg-white/25" />
