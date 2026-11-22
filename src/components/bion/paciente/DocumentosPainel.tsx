@@ -437,7 +437,7 @@ export function DocumentosPainel({
                 const pdf = aceitaPdf(d.original) ? d.original : null;
                 return (
                   <div key={d.id} className="bp-glass p-4 flex items-center gap-3 bpp-animar">
-                    <div className="w-11 h-11 rounded-2xl bg-bion-sea/10 dark:bg-[#FFB15C]/10 text-bion-sea dark:text-[#FFB15C] inline-flex items-center justify-center shrink-0">
+                    <div className="w-11 h-11 rounded-2xl bg-bion-sea/10 dark:bg-[#C4B5FD]/10 text-bion-sea dark:text-[#C4B5FD] inline-flex items-center justify-center shrink-0">
                       <Icone className="w-5 h-5" />
                     </div>
                     <div className="flex-1 min-w-0">
@@ -498,7 +498,7 @@ export function DocumentosPainel({
                           <button
                             type="button"
                             onClick={() => setRenovando({ id: o.id, medicamento: o.medicamento ?? "", medico: o.medico })}
-                            className="bion-toque mt-1.5 inline-flex items-center gap-1.5 rounded-full px-3.5 min-h-11 text-xs font-bold bg-bion-sea/12 text-bion-sea dark:bg-[#FFB15C]/15 dark:text-[#B7D9A7]"
+                            className="bion-toque mt-1.5 inline-flex items-center gap-1.5 rounded-full px-3.5 min-h-11 text-xs font-bold bg-bion-sea/12 text-bion-sea dark:bg-[#C4B5FD]/15 dark:text-[#DDD6FE]"
                           >
                             <RotateCcw className="w-3.5 h-3.5" aria-hidden /> Renovar receita
                           </button>
@@ -507,7 +507,7 @@ export function DocumentosPainel({
                     </div>
                     <button type="button"
                       onClick={() => setVisualizando({ titulo: d.titulo, corpo: d.corpo, documento: pdf ?? undefined })}
-                      className="bion-toque min-h-11 rounded-full border border-bion-sea/25 dark:border-[#FFB15C]/25 px-4 py-2 text-xs font-bold text-bion-sea dark:text-[#FFB15C]"
+                      className="bion-toque min-h-11 rounded-full border border-bion-sea/25 dark:border-[#C4B5FD]/25 px-4 py-2 text-xs font-bold text-bion-sea dark:text-[#C4B5FD]"
                     >
                       Ver
                     </button>
