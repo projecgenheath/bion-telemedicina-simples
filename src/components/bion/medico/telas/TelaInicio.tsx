@@ -128,7 +128,7 @@ export function TelaInicio({
             {medico?.foto ? (
               <img src={medico.foto} alt="" className="w-full h-full rounded-full object-cover" />
             ) : (
-              <span className="w-full h-full inline-flex items-center justify-center rounded-full bg-white text-sm font-black text-bion-sea dark:bg-[#0e0820] dark:text-sky-300">
+              <span className="w-full h-full inline-flex items-center justify-center rounded-full bg-white text-sm font-black text-bion-sea dark:bg-[#16241f] dark:text-sky-300">
                 {iniciais(sessao.nome)}
               </span>
             )}
@@ -304,7 +304,7 @@ export function TelaInicio({
                 onClick={() => router.push(`/consulta?consulta=${encodeURIComponent(proxima.id)}`)}
                 className={`bion-toque bm-brilho-cta relative mt-4 w-full inline-flex items-center justify-center gap-2 rounded-full px-5 py-3.5 text-sm font-bold ${
                   aberta
-                    ? "bg-white text-[#24058D] shadow-md hover:shadow-lg"
+                    ? "bg-white text-[#2B6E4E] shadow-md hover:shadow-lg"
                     : "bg-white/10 border border-white/20 text-white/80"
                 }`}
               >

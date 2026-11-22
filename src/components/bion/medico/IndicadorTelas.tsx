@@ -52,7 +52,7 @@ export function IndicadorTelas({
         {indicador ? (
           <span
             aria-hidden
-            className="bion-indicador pointer-events-none absolute left-0 top-1/2 z-[5] -mt-1 h-2 rounded-full bg-[#C4B5FD]"
+            className="bion-indicador pointer-events-none absolute left-0 top-1/2 z-[5] -mt-1 h-2 rounded-full bg-[#469B72]"
             style={{ width: indicador.w, transform: `translateX(${indicador.x}px)` }}
           />
         ) : null}
@@ -70,7 +70,7 @@ export function IndicadorTelas({
                 pontosRef.current[i] = el;
               }}
               className={`block h-2 rounded-full transition-all ${
-                painel === i ? `w-6 ${indicador ? "bg-transparent" : "bg-[#C4B5FD]"}` : "w-2 bg-white/45"
+                painel === i ? `w-6 ${indicador ? "bg-transparent" : "bg-[#469B72]"}` : "w-2 bg-white/45"
               }`}
             />
           </button>
@@ -91,7 +91,7 @@ export function IndicadorTelas({
               aria-current={secao === i ? "true" : undefined}
               className="px-[3px] py-1"
             >
-              <span className={`block w-1.5 rounded-full transition-all ${secao === i ? "h-5 bg-[#C4B5FD]" : "h-1.5 bg-white/45"}`} />
+              <span className={`block w-1.5 rounded-full transition-all ${secao === i ? "h-5 bg-[#469B72]" : "h-1.5 bg-white/45"}`} />
             </button>
           ))}
         </nav>
