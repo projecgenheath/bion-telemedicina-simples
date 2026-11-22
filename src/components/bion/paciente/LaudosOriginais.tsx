@@ -26,11 +26,11 @@ export function LaudosOriginais({ arquivos, exames }: { arquivos: Arquivo[]; exa
         {arquivos.map((a) => {
           const leu = laudoTemResultado(a.nome, exames);
           return (
-            <li key={a.id} className="bp-glass-marinho p-4 flex items-center gap-3">
-              <FileText className="w-5 h-5 shrink-0 text-white/80" aria-hidden />
+            <li key={a.id} className="bp-glass p-4 flex items-center gap-3">
+              <FileText className="w-5 h-5 shrink-0 text-bion-ink/75 dark:text-bion-paper/75" aria-hidden />
               <span className="min-w-0 flex-1">
-                <span className="block text-sm font-semibold truncate">{a.nome}</span>
-                <span className="block text-xs text-white/75">
+                <span className="block text-sm font-semibold truncate text-bion-ink dark:text-bion-paper">{a.nome}</span>
+                <span className="block text-xs text-bion-ink/75 dark:text-bion-paper/75">
                   {a.storagePath
                     ? leu
                       ? "Resultados acima. O arquivo original continua aqui."
@@ -43,7 +43,7 @@ export function LaudosOriginais({ arquivos, exames }: { arquivos: Arquivo[]; exa
                   type="button"
                   onClick={() => void ver(a)}
                   disabled={abrindo === a.id}
-                  className="bion-toque shrink-0 min-h-11 rounded-full bg-white/15 px-3 text-xs font-bold disabled:opacity-60"
+                  className="bion-toque shrink-0 min-h-11 rounded-full bg-bion-ink/8 dark:bg-white/10 px-3 text-xs font-bold text-bion-ink dark:text-bion-paper disabled:opacity-60"
                 >
                   {abrindo === a.id ? "Abrindo…" : "Ver arquivo"}
                 </button>

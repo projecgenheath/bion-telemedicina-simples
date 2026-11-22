@@ -21,7 +21,7 @@ import { join } from "node:path";
 type RGB = [number, number, number];
 type RGBA = { c: RGB; a: number };
 
-const raiz = join(import.meta.dir, "..");
+const raiz = join(import.meta.dirname ?? (import.meta as { dir?: string }).dir ?? ".", "..");
 const css = readFileSync(join(raiz, "src/components/bion/paciente/paciente.css"), "utf8");
 const tema = readFileSync(join(raiz, "node_modules/tailwindcss/theme.css"), "utf8");
 
@@ -198,7 +198,7 @@ for (const modo of ["Clean", "Dark"] as const) {
   const entrada = escuro ? mix(BRANCO, 0.07, painel) : mix(BRANCO, 0.75, painel);
   par(modo, "placeholder de campo", sobre(c("bpp-placeholder"), entrada), entrada);
 
-  // Seção 3 (exames): texto branco sobre o azul desde o topo
+  // Seção 3 (exames): clareada com nuances de degradê, texto bion-ink / dark:paper
   const s3: [string, RGB][] = [
     ["topo", cheio("bpp-s3-topo")],
     ["35%", cheio("bpp-s3-meio")],
@@ -206,13 +206,14 @@ for (const modo of ["Clean", "Dark"] as const) {
     ["base", cheio("bpp-s3-base")],
   ];
   for (const [onde, bg] of s3) {
-    par(modo, `seção 3 (${onde}) · título branco`, BRANCO, bg);
-    par(modo, `seção 3 (${onde}) · texto white/80`, mix(BRANCO, 0.8, bg), bg);
-    const gm = sobre(c("bpp-vidro-marinho"), bg);
-    par(modo, `seção 3 (${onde}) · cartão marinho · texto white/80`, mix(BRANCO, 0.8, gm), gm);
-    par(modo, `seção 3 (${onde}) · cartão marinho · fora da referência amber-300`, tw("amber-300"), gm);
-    par(modo, `seção 3 (${onde}) · gráfico linha`, sobre(c("bpp-grafico-linha-marinho"), gm), gm, GRAFICO);
-    par(modo, `seção 3 (${onde}) · gráfico eixo e rótulos`, sobre(c("bpp-grafico-eixo-marinho"), gm), gm, TEXTO);
+    par(modo, `seção 3 (${onde}) · título`, texto, bg);
+    par(modo, `seção 3 (${onde}) · texto secundário /75`, suave(bg), bg);
+    const g = sobre(c("bpp-vidro"), bg);
+    par(modo, `seção 3 (${onde}) · cartão vidro · texto`, texto, g);
+    par(modo, `seção 3 (${onde}) · cartão vidro · texto /75`, suave(g), g);
+    par(modo, `seção 3 (${onde}) · cartão vidro · fora da referência`, escuro ? tw("amber-300") : tw("amber-700"), g);
+    par(modo, `seção 3 (${onde}) · gráfico linha`, sobre(c("bpp-grafico-linha"), g), g, GRAFICO);
+    par(modo, `seção 3 (${onde}) · gráfico eixo e rótulos`, sobre(c("bpp-grafico-eixo"), g), g, TEXTO);
   }
 
   // Cartão da BION IA (degradê da marca, texto branco / CTA #24058D no branco)
