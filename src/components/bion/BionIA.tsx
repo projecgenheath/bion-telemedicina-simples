@@ -6,7 +6,6 @@ import {
   Send,
   Bot,
   User,
-  Pill,
   ClipboardList,
   Stethoscope,
   AlertTriangle,

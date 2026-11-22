@@ -8,8 +8,8 @@ import {
   Activity,
   CalendarClock,
   Check,
+  Clock,
   HeartPulse,
-  Pill,
   Plus,
   Scale,
   Trash2,
@@ -416,7 +416,7 @@ function DetalheLembretes({ onFechar }: { onFechar: () => void }) {
     <Envolver titulo="Lembretes de medicação" descricao={`Agenda de hoje e rotina completa · ${hoje}`} onFechar={onFechar}>
       <div className="bp-glass p-5 space-y-3">
         <h3 className="text-sm font-bold text-bion-ink dark:text-bion-paper flex items-center gap-2">
-          <Pill className="w-4 h-4" /> Adicionar lembrete
+          <Clock className="w-4 h-4" /> Adicionar lembrete
         </h3>
         <input
           value={titulo}

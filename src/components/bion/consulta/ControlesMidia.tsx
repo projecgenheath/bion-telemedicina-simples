@@ -9,7 +9,6 @@ import {
   MonitorUp,
   Paperclip,
   PhoneOff,
-  Pill,
   Award,
   FileText,
 } from "lucide-react";
@@ -157,7 +156,7 @@ export function ConsultaControlesMidia({
             onClick={onReceita}
             className="px-4 h-12 shrink-0 rounded-2xl bg-emerald-600/90 hover:bg-emerald-600 text-white text-xs font-bold flex items-center gap-1.5 transition shadow-md"
           >
-            <Pill className="w-4 h-4" /> Prescrever Receita
+            <FileText className="w-4 h-4" /> Prescrever Receita
           </button>
           <button
             type="button"

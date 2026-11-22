@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
-  Pill,
   Award,
   Download,
   Plus,
@@ -42,7 +41,7 @@ export function docTexto(d: Documento) {
 
 /** Ícone pela natureza REAL do documento (A11): pedido de exame não é atestado. */
 export function iconeDocumento(tipo: Documento["tipo"]) {
-  if (tipo === "receita") return Pill;
+  if (tipo === "receita") return FileText;
   if (tipo === "exame" || tipo === "exame_solicitado") return ClipboardList;
   return Award;
 }

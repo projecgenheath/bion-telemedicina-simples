@@ -6,10 +6,10 @@ import {
   CalendarDays,
   ChevronDown,
   ClipboardList,
+  FileText,
   Info,
   ListChecks,
   MessageCircle,
-  Pill,
   RefreshCw,
   Stethoscope,
   Users,
@@ -202,7 +202,7 @@ export function TelaInicio({
                 aria-label={`Renovações de receita: ${renovacoesPendentes} aguardando sua resposta. Abrir renovações`}
                 className="w-full flex items-center gap-3 rounded-2xl bg-bion-ink/5 dark:bg-white/5 px-4 py-3 text-left"
               >
-                <Pill className="w-5 h-5 shrink-0 text-bion-sea dark:text-sky-300" aria-hidden />
+                <FileText className="w-5 h-5 shrink-0 text-bion-sea dark:text-sky-300" aria-hidden />
                 <span className="flex-1 min-w-0">
                   <span className="block text-sm font-bold">Renovações de receita</span>
                   <span className="block text-xs text-bion-ink/75 dark:text-bion-paper/75">Aguardando sua resposta</span>
@@ -447,7 +447,7 @@ export function TelaInicio({
         </button>
         <button type="button" onClick={onAbrirRenovacoes} className="bion-toque bp-glass relative flex items-center gap-3 p-4 text-left">
           <span aria-hidden className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-bion-sea/10 text-bion-sea dark:bg-sky-300/10 dark:text-sky-300">
-            <Pill className="h-5 w-5" />
+            <FileText className="h-5 w-5" />
           </span>
           <span className="min-w-0">
             <span className="block text-sm font-black">Renovações</span>

@@ -6,9 +6,9 @@ import {
   Check,
   CheckCheck,
   ClipboardList,
+  FileText,
   LifeBuoy,
   MessageSquare,
-  Pill,
   type LucideIcon,
 } from "lucide-react";
 import { useBion, type NotifTipo } from "@/lib/bion-store";
@@ -26,7 +26,7 @@ import { useBion, type NotifTipo } from "@/lib/bion-store";
 const iconePorTipo: Partial<Record<NotifTipo, LucideIcon>> = {
   lembrete: Bell,
   mensagem: MessageSquare,
-  receita: Pill,
+  receita: FileText,
   agenda: Calendar,
   exame: ClipboardList,
   suporte: LifeBuoy,

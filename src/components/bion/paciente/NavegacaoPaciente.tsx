@@ -68,11 +68,9 @@ export function DicaGestos({ onDispensar }: { onDispensar: () => void }) {
 }
 
 /**
- * Dock de navegação em vidro de marca (refinamento nov/2026):
- * - casca de vidro âmbar (Clean) / vidro quente escuro (Dark) com blur;
- * - um "thumb" dourado desliza atrás do rótulo ativo (sem remontar nada);
- * - no dock de seções, o thumb amadurece com a jornada: dourado (Início)
- *   → oliva (Saúde) → verde (Exames) — a paleta da zona vira navegação.
+ * Navegação minimalista (modelo zinc discreto, como era antes do dock de
+ * vidro): cápsula escura translúcida com blur e rótulos compactos — o item
+ * ativo ganha o âmbar #FFC169 da zona com texto tinta. Sem thumb deslizante.
  * Nomes das telas, sempre visíveis no celular (não somem depois da dica):
  * - embaixo: Perfil / Início / Documentos
  * - acima, só no painel central: Início / Saúde / Exames
@@ -106,22 +104,25 @@ export function NavegacaoPaciente({
     }
   };
 
+  const classeNome = (ativo: boolean) =>
+    `relative min-h-11 rounded-full px-3 text-xs font-bold transition-colors ${
+      ativo ? "bg-[#FFC169] text-zinc-950" : "text-white/85"
+    }`;
+
   return (
     <>
       {painel === 1 ? (
         <nav
           aria-label="Seções do início"
-          data-idx={secao}
-          className="bpp-dock bpp-dock-secoes bpp-indicador-secao absolute bottom-[calc(4.6rem+env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2 z-20 pointer-events-auto"
+          className="bpp-indicador-secao absolute bottom-[calc(4.6rem+env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2 z-20 flex items-center gap-0.5 rounded-full bg-zinc-950/85 text-white backdrop-blur px-1.5 py-1 pointer-events-auto"
         >
-          <span aria-hidden className="bpp-thumb" style={{ transform: `translateX(${secao * 100}%)` }} />
           {SECOES.map((s, i) => (
             <button
               key={s.id}
               type="button"
               onClick={() => irSecao(i)}
               aria-current={secao === i ? "true" : undefined}
-              className="bpp-dock-item"
+              className={classeNome(secao === i)}
             >
               {s.rotulo}
             </button>
@@ -131,10 +132,8 @@ export function NavegacaoPaciente({
 
       <nav
         aria-label="Painéis do app"
-        data-idx={painel}
-        className="bpp-dock bpp-indicador absolute bottom-[calc(1rem+env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2 z-20 pointer-events-auto"
+        className="bpp-indicador absolute bottom-[calc(1rem+env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2 z-20 flex items-center gap-0.5 rounded-full bg-zinc-950/85 text-white backdrop-blur px-1.5 py-1 pointer-events-auto"
       >
-        <span aria-hidden className="bpp-thumb" style={{ transform: `translateX(${painel * 100}%)` }} />
         {PAINEIS.map(({ idx, rotulo }) => {
           const docs = idx === 2;
           const rotuloAria =
@@ -148,7 +147,7 @@ export function NavegacaoPaciente({
               onClick={() => onPainel(idx)}
               aria-label={rotuloAria}
               aria-current={painel === idx ? "page" : undefined}
-              className="bpp-dock-item"
+              className={classeNome(painel === idx)}
             >
               {rotulo}
               {docs && naoLidas > 0 ? (

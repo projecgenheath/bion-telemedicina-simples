@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Pill,
+  ClipboardList,
   Award,
   Stethoscope,
   FileText,
@@ -31,7 +31,7 @@ type Evento = {
 };
 
 const ICONES = {
-  receita: Pill,
+  receita: ClipboardList,
   atestado: Award,
   consulta: Stethoscope,
   exame: FileText,
@@ -289,7 +289,7 @@ export function Prontuario() {
 
       <div className="mt-6 bg-card border rounded-2xl p-5">
         <div className="font-semibold flex items-center gap-2">
-          <Pill className="w-4 h-4 text-primary" /> Medicamentos em uso
+          <ClipboardList className="w-4 h-4 text-primary" /> Medicamentos em uso
         </div>
         <div className="mt-3 space-y-2">
           {sessao.role === "paciente" && medsErro ? (

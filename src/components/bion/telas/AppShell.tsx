@@ -11,7 +11,7 @@ import {
   Clock,
   Users,
   TrendingUp,
-  Pill,
+  FileText,
   ClipboardList,
   Star,
   Heart,
@@ -57,7 +57,7 @@ function Shell({
       { icon: Home, label: "Início", view: "dashboard" },
       { icon: Calendar, label: "Agendar", view: "agendar" },
       { icon: Clock, label: "Consultas", view: "consultas" },
-      { icon: Pill, label: "Receitas", view: "receitas" },
+      { icon: FileText, label: "Receitas", view: "receitas" },
       { icon: ClipboardList, label: "Prontuário", view: "prontuario" },
       { icon: FolderHeart, label: "Histórico", view: "historico" },
       { icon: MessageSquare, label: "Mensagens", view: "mensagens" },
@@ -74,7 +74,7 @@ function Shell({
       // o painel de destino — não mais para as páginas clássicas, que seguem
       // acessíveis pelos endereços antigos com aviso de versão clássica.
       { icon: Users, label: "Pacientes", view: "medico-pacientes", url: "/medico?painel=pacientes" },
-      { icon: Pill, label: "Receitas & Docs", view: "receitas" },
+      { icon: FileText, label: "Receitas & Docs", view: "receitas" },
       { icon: ClipboardList, label: "Prontuários", view: "prontuario" },
       { icon: Star, label: "Minhas Avaliações", view: "avaliacoes" },
       { icon: MessageSquare, label: "Mensagens", view: "mensagens" },

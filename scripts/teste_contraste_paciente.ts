@@ -233,24 +233,15 @@ for (const modo of ["Clean", "Dark"] as const) {
     par(modo, `cartão BION IA (${onde}) · texto white/85 sob o reflexo`, mix(BRANCO, 0.85, reflexo), reflexo);
   }
 
-  // Dock de navegação (vidro de marca): rótulo inativo sobre o vidro do
-  // dock, nos extremos do fundo por onde ele pode passar (topo e fim da
-  // jornada). O rótulo ativo é sempre tinta #2B1A05 sobre o thumb.
+  // Navegação inferior minimalista (cápsula zinc-950/85 com blur, modelo
+  // discreto): rótulo inativo branco/85 sobre a cápsula composta nos
+  // extremos do fundo por onde ela pode passar (topo e fim da jornada).
+  // O rótulo ativo é opaco: tinta zinc-950 sobre o âmbar #FFC169 da zona.
   for (const [onde, fundo] of [["fundo do topo", cheio("bpp-s1-topo")], ["fundo do fim", cheio("bpp-s3-base")]] as [string, RGB][]) {
-    const dock = sobre(c("bpp-dock-fundo"), fundo);
-    par(modo, `dock (${onde}) · rótulo inativo`, sobre(c("bpp-dock-texto"), dock), dock);
+    const nav = mix(tw("zinc-950"), 0.85, fundo);
+    par(modo, `navegação (${onde}) · rótulo inativo`, mix(BRANCO, 0.85, nav), nav);
   }
-  // Thumbs do dock: painéis sempre dourado; seções amadurecem dourado →
-  // oliva → verde (a jornada da zona vira navegação). Tinta sobre cada
-  // parada dos três degradês.
-  const thumbs: [string, string][] = [
-    ["dourado (início)", "#FFC46B"], ["dourado (fim)", "#F0A32E"],
-    ["oliva (início)", "#E8C458"], ["oliva (fim)", "#A9A83B"],
-    ["verde (início)", "#A6CE9F"], ["verde (fim)", "#5E9E77"],
-  ];
-  for (const [nome, cor] of thumbs) {
-    par(modo, `dock · thumb ${nome} · rótulo ativo (tinta)`, INK, hex(cor));
-  }
+  par(modo, "navegação · rótulo ativo (tinta zinc-950 sobre âmbar)", tw("zinc-950"), hex("#FFC169"));
 }
 
 // Fase 3 — janelas (cancelar/remarcar, reembolso, triagem, edição do perfil)

@@ -2,7 +2,7 @@ import {
   Bell,
   Check,
   MessageSquare,
-  Pill,
+  FileText,
   Calendar,
   ClipboardList,
   CheckCheck,
@@ -16,7 +16,7 @@ import { EstadoVazio } from "@/components/bion/ui/EstadoVazio";
 const iconePorTipo: Record<NotifTipo, LucideIcon> = {
   lembrete: Bell,
   mensagem: MessageSquare,
-  receita: Pill,
+  receita: FileText,
   agenda: Calendar,
   exame: ClipboardList,
   suporte: LifeBuoy,

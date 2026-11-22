@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { FileText, Pill, Award, X } from "lucide-react";
+import { FileText, Award, X } from "lucide-react";
 import { useBion as useStore } from "@/lib/bion-store";
 import { frequentesDoMedico, type SugestaoMedicamento } from "@/lib/catalogo-medicamentos";
 import type { KitReceita, PacoteExames } from "@/lib/kits-prescricao";
@@ -557,7 +557,7 @@ export function ChamadaMedico({ onEnd, consultaId }: { onEnd: () => void; consul
           >
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-bold flex items-center gap-2">
-                <Pill className="w-5 h-5 text-primary" /> Emitir Receita
+                <FileText className="w-5 h-5 text-primary" /> Emitir Receita
               </h3>
               <button
                 type="button"

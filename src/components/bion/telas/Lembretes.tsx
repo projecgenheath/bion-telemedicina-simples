@@ -6,7 +6,6 @@ import {
   Clock,
   Droplets,
   Plus,
-  Pill,
   Check,
   Trash2,
 } from "lucide-react";
@@ -22,10 +21,11 @@ import { ModalBion } from "@/components/bion/ModalBion";
  *  comportamento resolvido pela data quando houver, sem quebrar. */
 const feitoEmDe = (l: unknown): string | null => (l as { feitoEm?: string | null }).feitoEm ?? null;
 
-/** B16: ícone por tipo de lembrete — antes era sempre `Pill`, mesmo para
- *  consulta, exame e hidratação. */
+/** B16: ícone por tipo de lembrete — antes era sempre o mesmo, mesmo para
+ *  consulta, exame e hidratação. Medicação usa Clock (o horário é o que
+ *  importa); sem desenho de remédio. */
 const ICONE_TIPO = {
-  "Medicação": Pill,
+  "Medicação": Clock,
   "Consulta": CalendarClock,
   "Exame": ClipboardList,
   "Hidratação": Droplets,
@@ -135,7 +135,7 @@ export function Lembretes() {
           />
         )}
         {lembretes.map((l) => {
-          const IconeTipo = ICONE_TIPO[l.tipo] ?? Pill;
+          const IconeTipo = ICONE_TIPO[l.tipo] ?? Clock;
           // F7: riscado/opaco só enquanto o feito de HOJE está vigente.
           const feito = resolverFeito({ feito: l.feito, feitoEm: feitoEmDe(l) });
           return (

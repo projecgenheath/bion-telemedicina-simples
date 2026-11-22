@@ -11,9 +11,9 @@ import {
   Copy,
   Download,
   FileText,
+  FilePen,
   FileUp,
   MessageCircle,
-  Pill,
   Printer,
   Send,
   X,
@@ -44,7 +44,7 @@ import { CLASSE_ETIQUETA } from "./etiqueta-consulta";
 const JANELA_DIAS = 30;
 
 const ICONE_DOC = {
-  receita: Pill,
+  receita: FilePen,
   atestado: FileText,
   exame_solicitado: ClipboardList,
   prontuario: BadgeCheck,

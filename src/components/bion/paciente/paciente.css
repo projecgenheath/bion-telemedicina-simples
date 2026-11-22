@@ -104,17 +104,6 @@
   --bpp-contagem-fundo: rgba(127, 75, 0, 0.08);
   --bpp-contagem-texto: #7A4E00;
   --bpp-aviso-ponto: #e11d48;
-  /* ---------------- tokens do dock de navegação (vidro de marca) ------ */
-  /* Refinamento nov/2026: as pílulas zinc deram lugar a um dock de vidro
-     da zona. Thumb dourado = assinatura; no dock de seções ele amadurece
-     dourado → oliva → verde (a jornada vira navegação). Contraste dos
-     pares conferido no scripts/teste_contraste_paciente.ts. */
-  --bpp-dock-fundo: rgba(255, 249, 237, 0.8);
-  --bpp-dock-borda: rgba(255, 255, 255, 0.9);
-  --bpp-dock-texto: #4a3608;
-  --bpp-dock-thumb-a: #ffc46b;
-  --bpp-dock-thumb-b: #f0a32e;
-  --bpp-dock-thumb-sombra: rgba(200, 146, 54, 0.5);
   /* Fase 4 (nov/2026) — tela inicial viva: hero bronze→verde e brilhos
      âmbar da zona */
   --bpp-grad-a: #7F4B00;
@@ -191,13 +180,6 @@
   --bpp-contagem-fundo: rgba(255, 193, 105, 0.12);
   --bpp-contagem-texto: #FFE3AE;
   --bpp-aviso-ponto: #fb7185;
-  /* Dock de navegação no Dark: vidro quente quase preto com brilho âmbar.
-     O thumb continua dourado (texto tinta em cima), então o item ativo
-     brilha sozinho no escuro. */
-  --bpp-dock-fundo: rgba(24, 16, 6, 0.74);
-  --bpp-dock-borda: rgba(255, 193, 105, 0.24);
-  --bpp-dock-texto: rgba(255, 243, 226, 0.85);
-  --bpp-dock-thumb-sombra: rgba(255, 193, 105, 0.32);
   /* Fase 4 (nov/2026) — dark: gradiente âmbar (AAA sobre o quase preto).
      O hero mantém os tons bronze/verde (branco continua ≥ 7,9:1). */
   --bpp-grad-a: #FFC169;
@@ -702,11 +684,6 @@
   }
 }
 
-/* Indicador de tela com deslize suave */
-.bp-app-paciente .bpp-dock .bpp-thumb {
-  transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), background 0.3s ease;
-}
-
 /* ==================== Fase 4: tela inicial viva (nov/2026) ==================== */
 /* Nome do paciente com gradiente da marca (desliza devagar; estático em reduce) */
 @keyframes bpp-grad-desliza {
@@ -1056,82 +1033,6 @@
 }
 .dark .bp-app-paciente .bpp-anel-foto {
   box-shadow: 0 12px 28px -14px rgba(0, 0, 0, 0.8);
-}
-
-/* ==================================================================== */
-/* Dock de navegação — vidro de marca com thumb deslizante (nov/2026)   */
-/*                                                                      */
-/* A casca é vidro âmbar (Clean) / vidro quente escuro (Dark) com blur  */
-/* e aresta de luz; o thumb dourado desliza atrás do rótulo ativo. No   */
-/* dock de seções o thumb amadurece com a jornada da zona:              */
-/* dourado (Início) → oliva (Saúde) → verde (Exames).                   */
-/* Colunas iguais (grid 1fr) = o thumb desliza em passos exatos.        */
-/* ==================================================================== */
-.bp-app-paciente .bpp-dock {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  padding: 0.3125rem; /* 5 px — o thumb calcula com este valor */
-  background: var(--bpp-dock-fundo);
-  border: 1px solid var(--bpp-dock-borda);
-  border-radius: 9999px;
-  backdrop-filter: blur(18px) saturate(1.5);
-  -webkit-backdrop-filter: blur(18px) saturate(1.5);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.55),
-    0 12px 30px -12px rgba(43, 26, 5, 0.35);
-}
-.dark .bp-app-paciente .bpp-dock {
-  box-shadow:
-    inset 0 1px 0 rgba(255, 193, 105, 0.18),
-    0 12px 30px -12px rgba(0, 0, 0, 0.65);
-}
-
-/* Thumb: pílula dourada da assinatura que desliza entre os itens */
-.bp-app-paciente .bpp-thumb {
-  position: absolute;
-  top: 0.3125rem;
-  bottom: 0.3125rem;
-  left: 0.3125rem;
-  width: calc((100% - 0.625rem) / 3);
-  border-radius: 9999px;
-  background: linear-gradient(135deg, var(--bpp-dock-thumb-a) 0%, var(--bpp-dock-thumb-b) 100%);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.55),
-    0 4px 14px -4px var(--bpp-dock-thumb-sombra);
-  z-index: 0;
-}
-
-/* Itens: rótulo por cima do vidro; o ativo vira tinta sobre o thumb */
-.bp-app-paciente .bpp-dock-item {
-  position: relative;
-  z-index: 1;
-  min-height: 2.75rem;
-  padding: 0 0.75rem;
-  border-radius: 9999px;
-  font-size: 0.75rem;
-  font-weight: 700;
-  color: var(--bpp-dock-texto);
-  transition: color 0.2s ease, transform 0.14s ease;
-  -webkit-tap-highlight-color: transparent;
-}
-.bp-app-paciente .bpp-dock-item:active { transform: scale(0.96); }
-.bp-app-paciente .bpp-dock-item[aria-current="page"],
-.bp-app-paciente .bpp-dock-item[aria-current="true"] {
-  color: #2b1a05;
-  font-weight: 800;
-}
-
-/* Jornada no dock de seções: o thumb amadurece dourado → oliva → verde.
-   Tinta #2B1A05 sobre cada par (par a par, AA ≥ 4,5:1):
-   #E8C458/#A9A83B e #A6CE9F/#5E9E77 — conferido no teste de contraste. */
-.bp-app-paciente .bpp-dock-secoes[data-idx="0"] { --bpp-dock-thumb-a: #ffc46b; --bpp-dock-thumb-b: #f0a32e; }
-.bp-app-paciente .bpp-dock-secoes[data-idx="1"] { --bpp-dock-thumb-a: #e8c458; --bpp-dock-thumb-b: #a9a83b; }
-.bp-app-paciente .bpp-dock-secoes[data-idx="2"] { --bpp-dock-thumb-a: #a6ce9f; --bpp-dock-thumb-b: #5e9e77; }
-
-/* Sem backdrop-filter (aparelhos fracos): dock opaco, thumb intacto */
-@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .bp-app-paciente .bpp-dock { background: #FFF7E8; }
-  .dark .bp-app-paciente .bpp-dock { background: #191105; }
 }
 
 /* ==================================================================== */

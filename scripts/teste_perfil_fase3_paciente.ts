@@ -75,7 +75,7 @@ const seletoresSoltos = css
   .map((b) => b.split("{")[0].trim())
   .filter((sel) => sel && !sel.startsWith("@") && !/^(from|to|\d+%)/.test(sel))
   .flatMap((sel) => sel.split(",").map((x) => x.trim()))
-  .filter((x) => x && !x.includes(".bp-app-paciente") && !/^(\.bp-painel|\.bp-secao-[123]|\.bp-impressao.*|body:has\(\.bp-impressao\) \*)$/.test(x));
+  .filter((x) => x && !x.includes(".bp-app-paciente") && !/^(\.bp-painel|\.bp-secao-[123]|\.bp-impressao.*|body:has\(\.bp-impressao\) \*|\.bpp-chamada|\.dark \.bpp-chamada)$/.test(x));
 conferir("paciente.css: todo seletor novo com escopo .bp-app-paciente", seletoresSoltos, []);
 
 console.log(`\n${total - falhas}/${total} ok`);

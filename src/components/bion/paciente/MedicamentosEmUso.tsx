@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Bell, BellOff, Loader2, Pill, Plus, Trash2 } from "lucide-react";
+import { Bell, BellOff, Loader2, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useBion } from "@/lib/bion-store";
 import {
@@ -214,12 +214,7 @@ export function MedicamentosEmUso({ onGerenciarLembretes }: { onGerenciarLembret
   return (
     <section className="bp-glass p-5 w-full" aria-label="Medicamentos em uso">
       <div className="mb-3 flex items-center justify-between">
-        <h3 className="inline-flex items-center gap-2.5 text-sm font-bold">
-          <span aria-hidden className="grid h-9 w-9 place-items-center rounded-xl bg-bion-sea/10 text-bion-sea dark:bg-[#FFC169]/15 dark:text-[#FFC169]">
-            <Pill className="w-4 h-4" />
-          </span>
-          Medicamentos em uso
-        </h3>
+        <h3 className="text-sm font-bold">Medicamentos em uso</h3>
         <button
           type="button"
           onClick={() => setAdicionando((v) => !v)}

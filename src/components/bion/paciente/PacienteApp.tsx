@@ -12,7 +12,6 @@ import {
   ClipboardList,
   FileText,
   HeartPulse,
-  Pill,
   Search,
   Sparkles,
   Stethoscope,
@@ -916,12 +915,7 @@ export function PacienteApp() {
                 aria-label={`IMC: ${imcAtual ? `${imcAtual.toFixed(1)}, ${ROTULO_FAIXA_IMC[faixaImc(imcAtual)]}` : "sem dados"}. ${serieImc.length > 1 ? "Ver gráfico de evolução e atualizar peso e altura" : "Abrir histórico e atualizar peso e altura"}`}
               >
                 <div className="flex items-center justify-between mb-1">
-                  <span className="inline-flex items-center gap-2.5 text-sm font-bold">
-                    <span aria-hidden className="grid h-9 w-9 place-items-center rounded-xl bg-bion-sea/10 text-bion-sea dark:bg-[#FFC169]/15 dark:text-[#FFC169]">
-                      <Activity className="w-4 h-4" />
-                    </span>
-                    IMC
-                  </span>
+                  <span className="text-sm font-bold">IMC</span>
                   {imcAtual && (
                     <span className="text-2xl font-black">{imcAtual.toFixed(1)}</span>
                   )}
@@ -972,12 +966,7 @@ export function PacienteApp() {
                 aria-label={`Pressão arterial: ${pas.at(-1) ? `${pas.at(-1)!.valor1}/${pas.at(-1)!.valor2 ?? "—"}, última medição em ${rotuloCurto(pas.at(-1)!.criadoEm)}` : "sem dados"}. Abrir histórico e registrar`}
               >
                 <div className="flex items-center justify-between mb-1">
-                  <span className="inline-flex items-center gap-2.5 text-sm font-bold">
-                    <span aria-hidden className="grid h-9 w-9 place-items-center rounded-xl bg-bion-sea/10 text-bion-sea dark:bg-[#FFC169]/15 dark:text-[#FFC169]">
-                      <HeartPulse className="w-4 h-4" />
-                    </span>
-                    Pressão arterial
-                  </span>
+                  <span className="text-sm font-bold">Pressão arterial</span>
                   {pas.at(-1) && (
                     <span className="text-2xl font-black">
                       {pas.at(-1)!.valor1}

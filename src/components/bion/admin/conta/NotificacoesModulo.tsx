@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, type ComponentType } from "react";
-import { Bell, Calendar, Check, CheckCheck, ClipboardList, LifeBuoy, MessageSquare, Pill } from "lucide-react";
+import { Bell, Calendar, Check, CheckCheck, ClipboardList, FileText, LifeBuoy, MessageSquare } from "lucide-react";
 import { useBion, type NotifTipo } from "@/lib/bion-store";
 import { TelaModulo } from "../ui/TelaModulo";
 import { ChipEstado } from "../ui/ChipEstado";
@@ -13,7 +13,7 @@ type Icone = ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
 const ICONE: Record<NotifTipo, Icone> = {
   lembrete: Bell,
   mensagem: MessageSquare,
-  receita: Pill,
+  receita: FileText,
   agenda: Calendar,
   exame: ClipboardList,
   suporte: LifeBuoy,

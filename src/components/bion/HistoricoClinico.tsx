@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import {
   Clock,
   FileText,
-  Pill,
+  FilePen,
   Stethoscope,
   Activity,
   Download,
@@ -66,7 +66,7 @@ const CORES: Record<string, { bg: string; text: string }> = {
 const ICONES: Record<string, React.ComponentType<{ className?: string }>> = {
   consulta: Stethoscope,
   exame: FlaskConical,
-  receita: Pill,
+  receita: FilePen,
   atestado: FileText,
   exame_solicitado: ClipboardList,
   evento: Heart,
@@ -599,7 +599,7 @@ export function HistoricoClinico() {
           {
             l: "Receitas",
             v: totais.receitas,
-            I: Pill,
+            I: FilePen,
             c: "text-emerald-800 dark:text-emerald-200",
             bg: "bg-emerald-50 dark:bg-emerald-950/60",
             f: "receitas",

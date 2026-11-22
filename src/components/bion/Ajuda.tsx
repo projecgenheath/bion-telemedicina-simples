@@ -7,7 +7,7 @@ import {
   Rocket,
   Video,
   CalendarCheck,
-  Pill,
+  FileText,
   MessageCircleQuestion,
   ShieldCheck,
   Bell,
@@ -127,7 +127,7 @@ const PASSOS: Record<
     passos: [
       { icone: CalendarCheck, texto: "Confira sua agenda em Minha Agenda e inicie a consulta." },
       { icone: Video, texto: "Atenda por vídeo com chat, anexos e compartilhamento de tela." },
-      { icone: Pill, texto: "Emita receitas e atestados direto da sala de consulta." },
+      { icone: FileText, texto: "Emita receitas e atestados direto da sala de consulta." },
     ],
   },
   admin: {

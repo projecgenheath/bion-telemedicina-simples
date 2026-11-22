@@ -7,7 +7,6 @@ import {
   Star,
   FileText,
   Download,
-  Pill,
   Award,
   ArrowRight,
   ShieldCheck,
@@ -147,7 +146,7 @@ export function PosConsultaModal({
                   <div className="flex items-center gap-2.5 min-w-0">
                     <div className="w-8 h-8 rounded-lg bg-primary-soft flex items-center justify-center text-primary shrink-0">
                       {d.tipo === "receita" ? (
-                        <Pill className="w-4 h-4" />
+                        <FileText className="w-4 h-4" />
                       ) : (
                         <Award className="w-4 h-4" />
                       )}
