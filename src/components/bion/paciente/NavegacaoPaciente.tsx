@@ -42,7 +42,7 @@ export function DicaGestos({ onDispensar }: { onDispensar: () => void }) {
   return (
     <div
       role="status"
-      className="bpp-dica absolute left-4 right-4 bottom-[calc(8rem+env(safe-area-inset-bottom))] z-30 rounded-3xl bg-zinc-950/90 text-white p-4 backdrop-blur shadow-2xl"
+      className="bpp-dica absolute left-4 right-4 bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-30 rounded-3xl bg-zinc-950/90 text-white p-4 backdrop-blur shadow-2xl"
     >
       <div className="flex items-start gap-3">
         <Hand className="w-5 h-5 mt-0.5 shrink-0 text-[#FFC169]" aria-hidden />
@@ -53,7 +53,7 @@ export function DicaGestos({ onDispensar }: { onDispensar: () => void }) {
           <p>
             <strong>Para baixo:</strong> saúde e exames.
           </p>
-          <p className="text-white/80 text-xs mt-1">Os nomes das telas ficam sempre embaixo. No computador: setas do teclado.</p>
+          <p className="text-white/80 text-xs mt-1">No computador: setas do teclado ou os pontinhos na tela.</p>
         </div>
       </div>
       <button
@@ -68,13 +68,12 @@ export function DicaGestos({ onDispensar }: { onDispensar: () => void }) {
 }
 
 /**
- * Navegação minimalista (modelo zinc discreto, como era antes do dock de
- * vidro): cápsula escura translúcida com blur e rótulos compactos — o item
- * ativo ganha o âmbar #FFC169 da zona com texto tinta. Sem thumb deslizante.
- * Nomes das telas, sempre visíveis no celular (não somem depois da dica):
- * - embaixo: Perfil / Início / Documentos
- * - acima, só no painel central: Início / Saúde / Exames
- * Contador de mensagens não lidas em Documentos.
+ * Navegação minimalista (modelo original de pontinhos, sem rótulos):
+ * - lateral direita: pílula vertical com 3 pontinhos — Início / Saúde / Exames
+ *   (só no painel central; esmaece sozinha e volta ao passar o dedo)
+ * - embaixo: pílula com 3 traços — Perfil / Início / Documentos,
+ *   com contador de mensagens não lidas em Documentos
+ * O item ativo usa o âmbar #FFC169 da zona paciente.
  * Some em tela larga (≥ 1024), onde os painéis já ficam lado a lado.
  */
 export function NavegacaoPaciente({
@@ -104,32 +103,35 @@ export function NavegacaoPaciente({
     }
   };
 
-  const classeNome = (ativo: boolean) =>
-    `relative min-h-11 rounded-full px-3 text-xs font-bold transition-colors ${
-      ativo ? "bg-[#FFC169] text-zinc-950" : "text-white/85"
-    }`;
-
   return (
     <>
+      {/* Pontinhos laterais das 3 seções (só no painel central, celular) */}
       {painel === 1 ? (
         <nav
+          key={`s-${secao}`}
           aria-label="Seções do início"
-          className="bpp-indicador-secao absolute bottom-[calc(4.6rem+env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2 z-20 flex items-center gap-0.5 rounded-full bg-zinc-950/85 text-white backdrop-blur px-1.5 py-1 pointer-events-auto"
+          className="bpp-indicador-secao absolute right-1 top-1/2 -translate-y-1/2 z-20 flex flex-col items-center rounded-full bg-zinc-950/60 py-1 backdrop-blur"
         >
           {SECOES.map((s, i) => (
             <button
               key={s.id}
               type="button"
               onClick={() => irSecao(i)}
+              aria-label={`Ir para ${s.rotulo}`}
               aria-current={secao === i ? "true" : undefined}
-              className={classeNome(secao === i)}
+              className="relative px-[3px] py-1 before:absolute before:left-1/2 before:top-1/2 before:h-11 before:w-11 before:-translate-x-1/2 before:-translate-y-1/2 before:content-['']"
             >
-              {s.rotulo}
+              <span
+                className={`block w-1.5 rounded-full transition-all ${
+                  secao === i ? "h-5 bg-[#FFC169]" : "h-1.5 bg-white/45"
+                }`}
+              />
             </button>
           ))}
         </nav>
       ) : null}
 
+      {/* Pontinhos inferiores discretos — Perfil / Início / Documentos */}
       <nav
         aria-label="Painéis do app"
         className="bpp-indicador absolute bottom-[calc(1rem+env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2 z-20 flex items-center gap-0.5 rounded-full bg-zinc-950/85 text-white backdrop-blur px-1.5 py-1 pointer-events-auto"
@@ -139,7 +141,7 @@ export function NavegacaoPaciente({
           const rotuloAria =
             docs && naoLidas > 0
               ? `${rotulo}, ${naoLidas} mensagem${naoLidas === 1 ? "" : "ns"} não lida${naoLidas === 1 ? "" : "s"}`
-              : rotulo;
+              : `Ir para ${rotulo}`;
           return (
             <button
               type="button"
@@ -147,11 +149,15 @@ export function NavegacaoPaciente({
               onClick={() => onPainel(idx)}
               aria-label={rotuloAria}
               aria-current={painel === idx ? "page" : undefined}
-              className={classeNome(painel === idx)}
+              className="relative p-1.5 before:absolute before:left-1/2 before:top-1/2 before:h-11 before:w-11 before:-translate-x-1/2 before:-translate-y-1/2 before:content-['']"
             >
-              {rotulo}
+              <span
+                className={`block h-2 rounded-full transition-all ${
+                  painel === idx ? "w-6 bg-[#FFC169]" : "w-2 bg-white/70"
+                }`}
+              />
               {docs && naoLidas > 0 ? (
-                <span className="absolute -top-1 -right-1 z-10 min-w-5 h-5 px-1 rounded-full bg-rose-600 text-xs font-black leading-5 text-center text-white">
+                <span className="absolute -top-1.5 -right-1.5 min-w-5 h-5 px-1 rounded-full bg-rose-600 text-xs font-black leading-5 text-center text-white">
                   {naoLidas > 9 ? "9+" : naoLidas}
                 </span>
               ) : null}
