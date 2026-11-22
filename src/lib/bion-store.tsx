@@ -483,7 +483,13 @@ async function api<T>(url: string, init?: RequestInit): Promise<T | null> {
   }
 }
 
-type RespostaAuth = { ok: boolean; role?: Sessao["role"] };
+type RespostaAuth = {
+  ok: boolean;
+  role?: Sessao["role"];
+  /** Cadastro criado, mas o Auth exige confirmacao de e-mail: ainda nao ha sessao. */
+  precisaConfirmarEmail?: boolean;
+  mensagem?: string;
+};
 
 type RespostaSenha = { ok: boolean; erro?: string };
 
@@ -834,15 +840,25 @@ export function BionProvider({ children }: { children: ReactNode }) {
 
   const registrar = useCallback(
     async (nome: string, email: string, senha: string, aceiteTermos: AceiteTermosPayload): Promise<RespostaAuth> => {
-      const dados = await api<EstadoFresco>("/api/auth/registro", {
+      // /api/auth/registro responde 201 com { erro, precisaConfirmarEmail: true }
+      // quando o provedor exige confirmacao. 201 e "ok" para api(), mas NAO e
+      // um EstadoFresco: aplicar(dados) leria usuario.id de undefined.
+      const dados = await api<EstadoFresco | { erro?: unknown; precisaConfirmarEmail?: boolean }>("/api/auth/registro", {
         method: "POST",
         body: JSON.stringify({ nome, email, senha, aceiteTermos }),
       });
       if (!dados) return { ok: false };
-      aplicar(dados);
+      if ("precisaConfirmarEmail" in dados && dados.precisaConfirmarEmail) {
+        return {
+          ok: false,
+          precisaConfirmarEmail: true,
+          mensagem: "Conta criada. Confirme seu e-mail e faça login para entrar.",
+        };
+      }
+      aplicar(dados as EstadoFresco);
       setErroCarga(false);
       setAutenticado(true);
-      return { ok: true, role: dados.usuario.role.toLowerCase() as Sessao["role"] };
+      return { ok: true, role: (dados as EstadoFresco).usuario.role.toLowerCase() as Sessao["role"] };
     },
     [aplicar],
   );
