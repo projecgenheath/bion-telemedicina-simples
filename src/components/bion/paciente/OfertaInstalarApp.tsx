@@ -58,7 +58,7 @@ export function OfertaInstalarApp({ mostrarContinuar = true }: { mostrarContinua
             <button
               type="button"
               onClick={() => void baixar()}
-              className="w-full min-h-11 rounded-full bg-[#24058D] px-4 py-3 text-sm font-bold text-white"
+              className="w-full min-h-11 rounded-full bg-[#2E6B47] px-4 py-3 text-sm font-bold text-white"
             >
               Baixar o aplicativo
             </button>
@@ -73,7 +73,7 @@ export function OfertaInstalarApp({ mostrarContinuar = true }: { mostrarContinua
       {mostrarContinuar ? (
         <Link
           href="/paciente"
-          className="flex min-h-11 w-full items-center justify-center rounded-full border border-[#24058D]/30 px-4 py-3 text-sm font-bold"
+          className="flex min-h-11 w-full items-center justify-center rounded-full border border-[#2E6B47]/30 px-4 py-3 text-sm font-bold"
         >
           Continuar no navegador
         </Link>

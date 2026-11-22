@@ -519,8 +519,8 @@ function PainelPagamentoMulta({
   if (r.status === "pendente") {
     return (
       <>
-        <div className="mt-4 rounded-2xl border border-bion-sea/25 bg-bion-sea/8 dark:border-[#C4B5FD]/30 dark:bg-[#C4B5FD]/10 p-4 text-sm" role="status" aria-live="polite">
-          <p className="font-bold text-bion-sea dark:text-[#DDD6FE] inline-flex items-center gap-2">
+        <div className="mt-4 rounded-2xl border border-bion-sea/25 bg-bion-sea/8 dark:border-[#FFB15C]/30 dark:bg-[#FFB15C]/10 p-4 text-sm" role="status" aria-live="polite">
+          <p className="font-bold text-bion-sea dark:text-[#B7D9A7] inline-flex items-center gap-2">
             <Loader2 className="w-4 h-4 animate-spin" /> Aguardando o pagamento da multa
           </p>
           <ul className="mt-3 space-y-1.5 bpp-sheet-suave">

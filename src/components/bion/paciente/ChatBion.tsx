@@ -1168,7 +1168,7 @@ export function ChatBion({
               <button type="button"
                 key={chip}
                 onClick={() => void enviarAnamnese(chip)}
-                className="shrink-0 rounded-full bg-bion-sea/10 dark:bg-[#C4B5FD]/10 border border-bion-sea/25 dark:border-[#C4B5FD]/25 px-4 py-2 text-xs font-semibold text-bion-sea dark:text-[#C4B5FD]"
+                className="shrink-0 rounded-full bg-bion-sea/10 dark:bg-[#FFB15C]/10 border border-bion-sea/25 dark:border-[#FFB15C]/25 px-4 py-2 text-xs font-semibold text-bion-sea dark:text-[#FFB15C]"
               >
                 {chip}
               </button>
@@ -1179,10 +1179,10 @@ export function ChatBion({
         {/* Chips iniciais quando só existe a saudação (modo geral) */}
         {mensagens.length === 1 && etapa === null && !anamneseAtiva && !modoLaudo && (
           <div className="flex flex-wrap gap-2">
-            <button type="button" onClick={iniciarAgendamento} className="rounded-full bg-bion-sea/10 dark:bg-[#C4B5FD]/10 border border-bion-sea/25 dark:border-[#C4B5FD]/25 px-4 py-2.5 text-sm font-semibold text-bion-sea dark:text-[#C4B5FD]">
+            <button type="button" onClick={iniciarAgendamento} className="rounded-full bg-bion-sea/10 dark:bg-[#FFB15C]/10 border border-bion-sea/25 dark:border-[#FFB15C]/25 px-4 py-2.5 text-sm font-semibold text-bion-sea dark:text-[#FFB15C]">
               Agendar consulta
             </button>
-            {iaLiberada === true ? <button type="button" onClick={iniciarExame} className="rounded-full bg-bion-sea/10 dark:bg-[#C4B5FD]/10 border border-bion-sea/25 dark:border-[#C4B5FD]/25 px-4 py-2.5 text-sm font-semibold text-bion-sea dark:text-[#C4B5FD]">
+            {iaLiberada === true ? <button type="button" onClick={iniciarExame} className="rounded-full bg-bion-sea/10 dark:bg-[#FFB15C]/10 border border-bion-sea/25 dark:border-[#FFB15C]/25 px-4 py-2.5 text-sm font-semibold text-bion-sea dark:text-[#FFB15C]">
               Enviar laudo de exame
             </button> : null}
           </div>
@@ -1219,7 +1219,7 @@ export function ChatBion({
                       setEscolha((c) => (volta === "especialidade" ? {} : volta === "medico" ? { especialidade: c.especialidade } : volta === "dia" ? { especialidade: c.especialidade, medico: c.medico } : { ...c, hora: undefined }));
                     }
                   }}
-                  className="text-xs font-semibold text-bion-sea dark:text-[#C4B5FD] inline-flex items-center gap-1"
+                  className="text-xs font-semibold text-bion-sea dark:text-[#FFB15C] inline-flex items-center gap-1"
                 >
                   <ArrowLeft className="w-3 h-3" /> voltar
                 </button>
