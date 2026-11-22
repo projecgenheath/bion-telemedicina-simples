@@ -5,7 +5,7 @@
 /* Nova gama BION — perfil MÉDICO: gradiente verde+roxo                  */
 /* #3B755D → #2A3F42 e acento verde #469B72 em fundos, cards, botões,    */
 /* navegação e estados. Escopo exclusivo das classes bm-* (não toca      */
-/* bp-*/ba-*/globals.css).                                               */
+/* não toca as classes bp-, ba- ou globals.css).                          */
 /*                                                                      */
 /* Contraste (WCAG AA): todo par texto/superfície é conferido em         */
 /* medico.teste.ts (≥ 4,5:1). O acento #469B72 não recebe texto branco   */
