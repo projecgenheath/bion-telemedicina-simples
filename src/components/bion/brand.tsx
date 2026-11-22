@@ -6,7 +6,7 @@ const TAMANHOS = {
   lg: "h-28 w-28",
 } as const;
 
-/** Logo enviado pelo Alisson: versão preta no tema claro e branca no tema escuro. */
+/** Marca enviada pelo Alisson, sem o fundo chapado do arquivo original. */
 export function Logo({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
   return (
     <span
@@ -15,13 +15,13 @@ export function Logo({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
       aria-label="BION"
     >
       <img
-        src="/logo-claro.png"
+        src="/logo-claro-transparente.png"
         alt=""
         className="block h-full w-full object-contain dark:hidden"
         draggable={false}
       />
       <img
-        src="/logo-escuro.png"
+        src="/logo-escuro-transparente.png"
         alt=""
         className="hidden h-full w-full object-contain dark:block"
         draggable={false}
