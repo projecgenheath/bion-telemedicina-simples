@@ -19,7 +19,9 @@ import { diaFusoClinica } from "@/lib/bion-tipos";
 import { CampoCidBusca } from "@/components/bion/medico/campo-cid-busca";
 import { ModalBion } from "@/components/bion/ModalBion";
 import { EncerrarAtendimento, type EscolhaEncerrar } from "@/components/bion/consulta/EncerrarAtendimento";
-import { ConsultaNaoEncontrada, ErroSalaFatal, SalaConsultaTela } from "@/components/bion/consulta/SalaConsultaTela";
+import { ConsultaNaoEncontrada, ErroSalaFatal } from "@/components/bion/consulta/SalaConsultaTela";
+// Etapa 4 (ref. 03): apresentação própria do médico; mesmo `sala`, mesmas ações e filhos.
+import { SalaMedicoTela } from "./sala/SalaMedicoTela";
 import { useSalaConsulta } from "@/components/bion/consulta/useSalaConsulta";
 import { avisarDadosMedicoAlterados } from "@/components/bion/medico/useDadosMedico";
 import { PainelEvolucao } from "@/components/bion/medico/evolucao/PainelEvolucao";
@@ -478,9 +480,8 @@ export function ChamadaMedico({ onEnd, consultaId }: { onEnd: () => void; consul
   }
 
   return (
-    <SalaConsultaTela
+    <SalaMedicoTela
       sala={sala}
-      role={role}
       onEnd={onEnd}
       onEncerrar={encerrar}
       onReceita={() => setModalReceita(true)}
@@ -915,6 +916,6 @@ export function ChamadaMedico({ onEnd, consultaId }: { onEnd: () => void; consul
           </form>
         </ModalBion>
       )}
-    </SalaConsultaTela>
+    </SalaMedicoTela>
   );
 }

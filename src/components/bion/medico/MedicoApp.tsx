@@ -22,6 +22,7 @@ import { RenovacoesPendentes } from "./evolucao/RenovacoesPendentes";
 import { DicaGestos, IndicadorTelas, useDicaGestos } from "./IndicadorTelas";
 import { PrecoSheet } from "./sheets/PrecoSheet";
 import { AgendaSheet } from "./sheets/AgendaSheet";
+import { AgendaSemanal } from "./agenda/AgendaSemanal";
 import { AgendaPreviewSheet } from "./sheets/AgendaPreviewSheet";
 import type { PacienteDoMedico } from "./metricas";
 import type { NotifTipo } from "@/lib/bion-store";
@@ -31,7 +32,13 @@ import { X } from "lucide-react";
 import "./medico.css";
 
 type Sheet = "preco" | "agenda" | "preview" | null;
-type Sobreposicao = { tipo: "renovacoes" } | { tipo: "suporte" } | { tipo: "termos" } | { tipo: "notificacoes" } | { tipo: "paciente"; p: PacienteDoMedico } | null;
+type Sobreposicao =
+  | { tipo: "renovacoes" }
+  | { tipo: "suporte" }
+  | { tipo: "termos" }
+  | { tipo: "notificacoes" }
+  | { tipo: "paciente"; p: PacienteDoMedico }
+  | null;
 
 const EM_CAMPO = ["INPUT", "TEXTAREA", "SELECT"];
 /** Mesmo corte do medico.css: a partir daqui as 3 colunas ficam lado a lado. */
@@ -88,6 +95,18 @@ export function MedicoApp() {
   const [sheet, setSheet] = useState<Sheet>(null);
   const [aberturas, setAberturas] = useState(0);
   const [sobreposicao, setSobreposicao] = useState<Sobreposicao>(null);
+  // Etapa 4: a agenda fica montada por baixo da ficha aberta a partir dela —
+  // fechar a ficha volta à agenda sem trocar a entrada do histórico.
+  const [agendaAberta, setAgendaAberta] = useState(false);
+  const abrirAgenda = () => {
+    setSobreposicao(null);
+    setAgendaAberta(true);
+  };
+  /** Item do menu lateral: sai da agenda antes de navegar. */
+  const doMenu = (f: () => void) => {
+    setAgendaAberta(false);
+    f();
+  };
   const dica = useDicaGestos();
 
   // Confirmações vivem aqui (sempre montado), não nos sheets que desmontam.
@@ -100,7 +119,7 @@ export function MedicoApp() {
   );
   const confirmarBio = useConfirmarSalvamento(medico?.bio ?? "", (a, b) => a === b);
 
-  const bloqueado = sheet !== null || sobreposicao !== null;
+  const bloqueado = sheet !== null || sobreposicao !== null || agendaAberta;
 
   const irPara = useCallback((p: number) => {
     // O painel é estado em qualquer largura: na tela larga o indicador de
@@ -268,21 +287,22 @@ export function MedicoApp() {
       <BarraLateralMedico
         agora={dados.agora}
         painel={painel}
-        onInicio={() => {
+        onInicio={() => doMenu(() => {
           irPara(1);
           irSecao(0);
-        }}
-        onPacientes={() => irPara(2)}
-        onAgenda={() => abrirSheet("agenda")}
-        onRenovacoes={() => setSobreposicao({ tipo: "renovacoes" })}
-        onNotificacoes={() => setSobreposicao({ tipo: "notificacoes" })}
-        onGestao={() => {
+        })}
+        onPacientes={() => doMenu(() => irPara(2))}
+        onAgenda={abrirAgenda}
+        onRenovacoes={() => doMenu(() => setSobreposicao({ tipo: "renovacoes" }))}
+        onNotificacoes={() => doMenu(() => setSobreposicao({ tipo: "notificacoes" }))}
+        onGestao={() => doMenu(() => {
           irPara(1);
           irSecao(1);
-        }}
-        onPerfil={() => irPara(0)}
-        onAjuda={() => setSobreposicao({ tipo: "termos" })}
-        onSuporte={() => setSobreposicao({ tipo: "suporte" })}
+        })}
+        onPerfil={() => doMenu(() => irPara(0))}
+        onAjuda={() => doMenu(() => setSobreposicao({ tipo: "termos" }))}
+        onSuporte={() => doMenu(() => setSobreposicao({ tipo: "suporte" }))}
+        agendaAberta={agendaAberta}
         naoLidas={[...dados.naoLidasPorPaciente.values()].reduce((a, b) => a + b, 0)}
         renovacoes={dados.renovacoesPendentes}
         notificacoes={dados.notificacoesNaoLidas}
@@ -345,7 +365,7 @@ export function MedicoApp() {
             onAbrirPerfil={() => irPara(0)}
             onAbrirPacientes={() => irPara(2)}
             onAbrirPaciente={(p) => setSobreposicao({ tipo: "paciente", p })}
-            onAbrirAgenda={() => abrirSheet("agenda")}
+            onAbrirAgenda={abrirAgenda}
             onAbrirGestao={() => irSecao(1)}
             onAbrirRenovacoes={() => setSobreposicao({ tipo: "renovacoes" })}
             onAbrirNotificacoes={() => setSobreposicao({ tipo: "notificacoes" })}
@@ -408,6 +428,18 @@ export function MedicoApp() {
         </>
       ) : null}
 
+      {agendaAberta ? (
+        <AgendaSemanal
+          dados={dados}
+          onFechar={() => setAgendaAberta(false)}
+          onAbrirPaciente={(p) => setSobreposicao({ tipo: "paciente", p })}
+          onHorarios={() => abrirSheet("agenda")}
+          onAbrirPerfil={() => {
+            setAgendaAberta(false);
+            irPara(0);
+          }}
+        />
+      ) : null}
       {sobreposicao?.tipo === "paciente" ? (
         <ConversaPaciente
           key={sobreposicao.p.chave}
@@ -417,6 +449,7 @@ export function MedicoApp() {
           onAbrirPaciente={(p) => setSobreposicao({ tipo: "paciente", p })}
           onAbrirPerfil={() => {
             setSobreposicao(null);
+            setAgendaAberta(false);
             irPara(0);
           }}
         />

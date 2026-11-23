@@ -34,6 +34,7 @@ export function BarraLateralMedico({
   naoLidas,
   renovacoes,
   notificacoes,
+  agendaAberta = false,
 }: {
   agora: number;
   painel: number;
@@ -49,17 +50,19 @@ export function BarraLateralMedico({
   naoLidas: number;
   renovacoes: number | null;
   notificacoes: number;
+  /** Etapa 4: a agenda semanal está aberta (item fica ativo). */
+  agendaAberta?: boolean;
 }) {
   const principais: Item[] = [
-    { rotulo: "Início", Icone: LayoutGrid, onClick: onInicio, ativo: painel === 1 },
-    { rotulo: "Pacientes e mensagens", Icone: UsersRound, onClick: onPacientes, ativo: painel === 2, selo: naoLidas },
-    { rotulo: "Agenda e horários", Icone: CalendarClock, onClick: onAgenda },
+    { rotulo: "Início", Icone: LayoutGrid, onClick: onInicio, ativo: painel === 1 && !agendaAberta },
+    { rotulo: "Pacientes e mensagens", Icone: UsersRound, onClick: onPacientes, ativo: painel === 2 && !agendaAberta, selo: naoLidas },
+    { rotulo: "Agenda e horários", Icone: CalendarClock, onClick: onAgenda, ativo: agendaAberta },
     { rotulo: "Renovações de receita", Icone: ClipboardPlus, onClick: onRenovacoes, selo: renovacoes },
     { rotulo: "Gestão e receita", Icone: FileChartColumn, onClick: onGestao },
   ];
   const conta: Item[] = [
     { rotulo: "Notificações", Icone: Bell, onClick: onNotificacoes, selo: notificacoes },
-    { rotulo: "Meu perfil", Icone: Settings, onClick: onPerfil, ativo: painel === 0 },
+    { rotulo: "Meu perfil", Icone: Settings, onClick: onPerfil, ativo: painel === 0 && !agendaAberta },
     { rotulo: "Termos e ajuda", Icone: Info, onClick: onAjuda },
     { rotulo: "Suporte", Icone: LifeBuoy, onClick: onSuporte },
   ];
