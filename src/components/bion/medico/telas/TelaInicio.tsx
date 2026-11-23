@@ -38,7 +38,7 @@ import {
 import type { DadosMedico } from "../useDadosMedico";
 
 const primeiroNome = (nome: string) => nome.split(" ").filter(Boolean)[0] ?? "";
-const LIMITE_TABELA = 8;
+const LIMITE_TABELA = 7; // a ref. 12 mostra 7 linhas
 const MAX_CARROSSEL = 5;
 
 /** Classe de cor de texto (AA) para cada tom de situação. */
@@ -58,8 +58,8 @@ const ICONE_TOM: Record<TomSituacao, typeof CircleAlert | null> = {
 };
 
 /** Avatar de iniciais (o app não guarda foto de paciente). */
-function AvatarIniciais({ nome, tamanho = "md" }: { nome: string; tamanho?: "sm" | "md" | "lg" }) {
-  const t = tamanho === "lg" ? "h-12 w-12 text-sm" : tamanho === "sm" ? "h-7 w-7 text-[10px]" : "h-9 w-9 text-xs";
+function AvatarIniciais({ nome, tamanho = "md" }: { nome: string; tamanho?: "sm" | "md" | "lg" | "xl" }) {
+  const t = tamanho === "xl" ? "h-12 w-12 text-sm lg:h-[3.25rem] lg:w-[3.25rem] lg:text-[15px]" : tamanho === "lg" ? "h-12 w-12 text-sm" : tamanho === "sm" ? "h-7 w-7 text-[10px]" : "h-9 w-9 text-xs";
   return (
     <span aria-hidden className={`bm2-avatar ${t} grid shrink-0 place-items-center rounded-full font-medium`}>
       {iniciais(nome)}
@@ -261,7 +261,7 @@ export function TelaInicio({
             ? `Notificações: ${notificacoesNaoLidas} não lida${notificacoesNaoLidas > 1 ? "s" : ""}. Abrir notificações`
             : "Notificações. Abrir notificações"
         }
-        className="bm2-icone-topo relative grid h-11 w-11 shrink-0 place-items-center rounded-full"
+        className="bm2-icone-topo bm2-icone-topo-borda relative grid h-11 w-11 shrink-0 place-items-center rounded-full"
       >
         <Bell className="h-[1.15rem] w-[1.15rem]" aria-hidden />
         {notificacoesNaoLidas > 0 ? <span aria-hidden className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-[#C42B2B]" /> : null}
@@ -270,7 +270,7 @@ export function TelaInicio({
         type="button"
         onClick={onAbrirPacientes}
         aria-label={totalNaoLidas > 0 ? `Mensagens: ${totalNaoLidas} não lidas. Abrir pacientes` : "Mensagens. Abrir pacientes"}
-        className="bm2-icone-topo relative grid h-11 w-11 shrink-0 place-items-center rounded-full lg:hidden"
+        className="bm2-icone-topo bm2-icone-topo-borda relative grid h-11 w-11 shrink-0 place-items-center rounded-full lg:hidden"
       >
         <MessageCircle className="h-[1.15rem] w-[1.15rem]" aria-hidden />
         {totalNaoLidas > 0 ? <span aria-hidden className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-[#C42B2B]" /> : null}
@@ -301,7 +301,7 @@ export function TelaInicio({
         aria-label={`Consulta ${i + 1} de ${slides.length}: ${c.paciente}, ${c.hora}`}
       >
         <div className="flex items-center gap-3">
-          <AvatarIniciais nome={c.paciente} tamanho="lg" />
+          <AvatarIniciais nome={c.paciente} tamanho="xl" />
           <div className="min-w-0">
             {p ? (
               <button type="button" onClick={() => onAbrirPaciente(p)} className="block max-w-full truncate text-left text-[15px] hover:underline" title="Conversa e prontuário">
@@ -314,8 +314,8 @@ export function TelaInicio({
           </div>
         </div>
         <dl className="mt-4 grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-1">
-          <dt className="text-[11px] bm2-destaque-rotulo">Motivo</dt>
-          <dt className="text-[11px] bm2-destaque-rotulo">Horário{c.data !== "Hoje" ? ` · ${c.data}` : ""}</dt>
+          <dt className="text-[11px] bm2-destaque-rotulo lg:text-xs">Motivo</dt>
+          <dt className="text-[11px] bm2-destaque-rotulo lg:text-xs">Horário{c.data !== "Hoje" ? ` · ${c.data}` : ""}</dt>
           <dd className="bm2-destaque-motivo truncate text-[15px]" title={c.motivoConsulta || undefined}>
             {c.motivoConsulta || "Não informado"}
           </dd>
@@ -349,7 +349,7 @@ export function TelaInicio({
             type="button"
             disabled={!abertaC}
             onClick={() => entrarNaSala(c)}
-            className="bm2-botao-azul inline-flex h-11 flex-1 items-center justify-center rounded-[0.6rem] px-4 text-[13px]"
+            className="bm2-botao-azul inline-flex h-11 flex-1 items-center justify-center rounded-[0.6rem] px-4 text-[13px] lg:h-10 lg:rounded-[0.55rem]"
           >
             {abertaC ? "Entrar na sala" : "A sala abre 30 min antes"}
           </button>
@@ -358,7 +358,7 @@ export function TelaInicio({
             onClick={onAbrirAgenda}
             aria-label="Ver agenda e horários de hoje"
             title="Agenda de hoje"
-            className="bm2-botao-relogio grid h-11 w-11 shrink-0 place-items-center rounded-[0.6rem]"
+            className="bm2-botao-relogio grid h-11 w-11 shrink-0 place-items-center rounded-[0.6rem] lg:h-10 lg:w-10 lg:rounded-[0.7rem]"
           >
             <Clock3 className="h-[1.05rem] w-[1.05rem]" aria-hidden />
           </button>
@@ -404,12 +404,12 @@ export function TelaInicio({
     <section className="bm2-hoje flex flex-col bm-animar bm-animar-d1" aria-labelledby="bm2-hoje-titulo">
       <div className="bm2-hoje-cab flex items-start justify-between gap-2">
         <div>
-          <p className="text-[11px] bm2-t-2 first-letter:uppercase">{dataHoje}</p>
+          <p className="text-[11px] bm2-t-2 first-letter:uppercase lg:text-xs">{dataHoje}</p>
           <h2 id="bm2-hoje-titulo" className="mt-0.5 text-base">
             {plural(hoje.agendadas.length, "consulta", "consultas")}
           </h2>
         </div>
-        <button type="button" onClick={onAbrirAgenda} aria-label="Abrir agenda e horários" title="Agenda e horários" className="bm2-mais grid h-9 w-9 place-items-center rounded-full">
+        <button type="button" onClick={onAbrirAgenda} aria-label="Abrir agenda e horários" title="Agenda e horários" className="bm2-mais grid h-9 w-9 place-items-center rounded-full lg:h-10 lg:w-10">
           <Plus className="h-4 w-4" aria-hidden />
         </button>
       </div>
@@ -421,13 +421,13 @@ export function TelaInicio({
             const tipo = normalizarTipoAtendimento(c.tipoAtendimento);
             const conteudo = (
               <>
-                <span className="min-w-0">
-                  <span className="block truncate text-sm">{c.paciente}</span>
-                  <span className={`block text-[11px] ${tipo === "padrao" ? "bm2-t-azul" : "bm2-t-roxo"}`}>{ROTULO_TIPO[tipo]}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="bm2-item-nome block truncate text-sm">{c.paciente}</span>
+                  <span className={`bm2-item-sub block truncate text-[11px] ${tipo === "padrao" ? "bm2-t-azul" : "bm2-t-roxo"}`}>{ROTULO_TIPO[tipo]}</span>
                 </span>
-                <span className="ml-2 min-w-0 shrink text-right">
-                  <span className={`block max-w-[9rem] truncate text-[13px] ${c.status === "em_espera" ? "bm2-t-vermelho" : "bm2-t-laranja"}`}>{c.motivoConsulta || "—"}</span>
-                  <span className={`block text-[11px] tabular-nums ${c.ts <= agora ? "bm2-t-2" : ""}`}>{c.hora}</span>
+                <span className="ml-3 min-w-0 max-w-[48%] shrink-0 text-right">
+                  <span className={`bm2-item-motivo block truncate text-[13px] ${c.status === "em_espera" ? "bm2-t-vermelho" : "bm2-t-laranja"}`}>{c.motivoConsulta || "—"}</span>
+                  <span className={`bm2-item-sub block text-[11px] tabular-nums ${c.ts <= agora ? "bm2-t-2" : ""}`}>{c.hora}</span>
                 </span>
               </>
             );
@@ -495,14 +495,14 @@ export function TelaInicio({
     else onAbrirAgenda();
   };
   const cartoes = (
-    <div className="bm2-cartoes grid grid-cols-2 gap-3 lg:grid-cols-[minmax(0,2.6fr)_minmax(0,1fr)_minmax(0,1fr)] bm-animar bm-animar-d2">
+    <div className="bm2-cartoes grid grid-cols-2 gap-3 lg:grid-cols-[minmax(0,2.75fr)_minmax(0,1fr)_minmax(0,1fr)] lg:gap-5 bm-animar bm-animar-d2">
       <section className="bm2-cor bm2-lavanda col-span-2 lg:col-span-1" aria-labelledby="bm2-alerta-t">
-        <h2 id="bm2-alerta-t" className="text-[11px] bm2-t-cor">Requer sua atenção</h2>
-        <p className="bm2-barra-esq mt-2 max-w-[24rem] text-[15px] leading-[1.35] lg:text-base" role={alerta.tipo === "nada" ? undefined : "status"}>
+        <h2 id="bm2-alerta-t" className="bm2-cor-titulo bm2-t-cor">Requer sua atenção</h2>
+        <p className="bm2-barra-esq bm2-cor-texto mt-2.5 max-w-[24rem] !text-[15px] lg:!text-[15px]" role={alerta.tipo === "nada" ? undefined : "status"}>
           {textoAlerta}
         </p>
         {legendaAlerta ? (
-          <p className="mt-1.5 pl-[0.7rem] text-[11px]">
+          <p className="mt-2 pl-[0.7rem] text-[11px] lg:text-xs">
             <span className="bm2-t-cor">{legendaAlerta.nome}</span>
             <span className="bm2-t-cor"> · </span>
             <span className="bm2-t-alerta">{legendaAlerta.destaque}</span>
@@ -517,12 +517,12 @@ export function TelaInicio({
               aria-label={`Pacientes envolvidos: ${pilha.visiveis.map((p) => p.nome).join(", ")}${pilha.resto ? ` e mais ${pilha.resto}` : ""}. Abrir pacientes`}
             >
               {pilha.visiveis.map((p, i) => (
-                <span key={p.chave} className={`bm2-pilha-item ${i ? "-ml-2" : ""}`}>
+                <span key={p.chave} className={`bm2-pilha-item ${i ? "-ml-2 lg:ml-0" : ""}`}>
                   <AvatarIniciais nome={p.nome} tamanho="sm" />
                 </span>
               ))}
               {pilha.resto > 0 ? (
-                <span aria-hidden className="bm2-pilha-item -ml-2 grid h-7 w-7 place-items-center rounded-full bg-[#242424] text-[10px] font-medium text-white">
+                <span aria-hidden className="bm2-pilha-item -ml-2 lg:ml-0 grid h-7 w-7 place-items-center rounded-full bg-[#242424] text-[10px] font-medium text-white">
                   +{pilha.resto}
                 </span>
               ) : null}
@@ -532,8 +532,8 @@ export function TelaInicio({
         <BotaoSeta rotulo={rotuloAlerta} onClick={acaoAlerta} disabled={alerta.tipo === "na_sala" && !(proxima && salaAberta(proxima.ts, agora))} />
       </section>
       <section className="bm2-cor bm2-azul-suave" aria-labelledby="bm2-msg-t">
-        <h2 id="bm2-msg-t" className="text-[11px] bm2-t-cor">Mensagens</h2>
-        <p className="bm2-barra-esq mt-2 text-[13px] leading-[1.35] lg:text-base">
+        <h2 id="bm2-msg-t" className="bm2-cor-titulo bm2-t-cor">Mensagens</h2>
+        <p className="bm2-barra-esq bm2-cor-texto mt-2.5">
           {totalNaoLidas > 0 ? `Não lidas em ${plural(conversasComNaoLidas, "conversa", "conversas")}` : "Nenhuma mensagem nova"}
         </p>
         <span className="bm2-numero-grande mt-auto pt-3" aria-label={`${totalNaoLidas} mensagens não lidas`}>
@@ -542,8 +542,8 @@ export function TelaInicio({
         <BotaoSeta rotulo="Abrir pacientes e mensagens" onClick={onAbrirPacientes} />
       </section>
       <section className="bm2-cor bm2-pessego" aria-labelledby="bm2-ren-t">
-        <h2 id="bm2-ren-t" className="text-[11px] bm2-t-cor">Renovações de receita</h2>
-        <p className="bm2-barra-esq mt-2 text-[13px] leading-[1.35] lg:text-base">Aguardam sua resposta</p>
+        <h2 id="bm2-ren-t" className="bm2-cor-titulo bm2-t-cor">Renovações de receita</h2>
+        <p className="bm2-barra-esq bm2-cor-texto mt-2.5">Aguardam sua resposta</p>
         <span
           className="bm2-numero-grande mt-auto pt-3"
           aria-label={renovacoesPendentes === null ? "Carregando renovações" : `${renovacoesPendentes} renovações aguardando`}
@@ -566,9 +566,9 @@ export function TelaInicio({
     );
   };
   const tabela = (
-    <section className="bm2-cartao min-w-0 px-4 pb-3 pt-4 lg:px-5 bm-animar bm-animar-d3" aria-labelledby="bm2-pac-t">
-      <div className="mb-2 flex flex-wrap items-center gap-2">
-        <h2 id="bm2-pac-t" className="mr-auto text-[14px]">
+    <section className="bm2-cartao min-w-0 px-4 pb-3 pt-4 lg:px-5 lg:pt-5 bm-animar bm-animar-d3" aria-labelledby="bm2-pac-t">
+      <div className="mb-2 flex flex-wrap items-center gap-2 lg:mb-[1.15rem]">
+        <h2 id="bm2-pac-t" className="mr-auto text-[14px] lg:text-[15px]">
           Meus pacientes <span className="bm2-t-2">· {listaPacientes.length}</span>
         </h2>
         <label className="bm2-busca relative order-last flex w-full items-center sm:order-none sm:w-auto">

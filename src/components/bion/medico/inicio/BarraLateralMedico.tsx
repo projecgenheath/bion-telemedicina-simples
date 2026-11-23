@@ -71,9 +71,9 @@ export function BarraLateralMedico({
         aria-label={it.selo ? `${it.rotulo} (${it.selo})` : it.rotulo}
         aria-current={it.ativo ? "page" : undefined}
         title={it.rotulo}
-        className={`bm2-lateral-item relative grid h-11 w-11 place-items-center rounded-[0.8rem] ${it.ativo ? "bm2-lateral-ativo" : ""}`}
+        className={`bm2-lateral-item relative grid h-10 w-10 place-items-center rounded-[0.65rem] ${it.ativo ? "bm2-lateral-ativo" : ""}`}
       >
-        <it.Icone className="h-[1.15rem] w-[1.15rem]" aria-hidden />
+        <it.Icone className="h-5 w-5" aria-hidden />
         {it.selo ? (
           <span aria-hidden className="absolute right-1 top-1 h-2 w-2 rounded-full bg-[#C42B2B] ring-2 ring-[var(--bm2-fundo)]" />
         ) : null}
@@ -82,15 +82,15 @@ export function BarraLateralMedico({
   );
   return (
     <aside className="bm-v2 bm2-lateral" aria-label="Menu do médico">
-      <div className="mx-3 grid h-[4.5rem] place-items-center border-b border-[var(--bm2-borda)]">
+      <div className="grid h-[5.5rem] place-items-center border-b border-[var(--bm2-divisor)]">
         <Logo size="sm" />
       </div>
       <nav aria-label="Áreas" className="flex flex-1 flex-col items-center">
-        <ul className="mt-5 flex flex-col items-center gap-2">{principais.map(botao)}</ul>
-        <span aria-hidden className="my-6 h-px w-9 bg-[var(--bm2-borda)]" />
-        <ul className="flex flex-col items-center gap-2">{conta.map(botao)}</ul>
+        <ul className="mt-[1.0625rem] flex flex-col items-center gap-[0.8rem]">{principais.map(botao)}</ul>
+        <span aria-hidden className="my-[1.375rem] h-px w-10 bg-[var(--bm2-divisor)]" />
+        <ul className="flex flex-col items-center gap-[0.8rem]">{conta.map(botao)}</ul>
       </nav>
-      <div className="mx-3 border-t border-[var(--bm2-borda)] py-3 text-center text-[11px] text-[var(--bm2-texto-2)] tabular-nums">
+      <div className="mx-3 border-t border-[var(--bm2-divisor)] py-3 text-center text-[11px] text-[var(--bm2-texto-2)] tabular-nums">
         <time aria-label="Hora atual em São Paulo">{fmtHora.format(agora)}</time>
       </div>
     </aside>
