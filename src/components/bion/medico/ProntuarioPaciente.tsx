@@ -217,6 +217,7 @@ export function ProntuarioPaciente({
   onRenovar,
   cabecalho,
   onEmitir,
+  onPedirMedicao,
   onAba,
 }: {
   consultas: Consulta[];
@@ -228,6 +229,8 @@ export function ProntuarioPaciente({
   onRenovar: (d: Documento) => void;
   cabecalho: CabecalhoFicha;
   onEmitir: () => void;
+  /** "Pedir medição" (mesma ação do topo); ausente sem consulta válida. */
+  onPedirMedicao?: () => void;
   onAba: (aba: "conversa" | "triagem") => void;
 }) {
   // 20261103a: cancelamentos feitos nesta tela (o store só atualiza no
@@ -358,6 +361,7 @@ export function ProntuarioPaciente({
   const [busca, setBusca] = useState("");
   const [filtro, setFiltro] = useState<"todos" | "comigo" | "outros">("todos");
   const [filtroAberto, setFiltroAberto] = useState(false);
+  const [novoAberto, setNovoAberto] = useState(false);
   const [linhaAberta, setLinhaAberta] = useState<string | null>(null);
   const [relAberto, setRelAberto] = useState<string | null>(null);
   const agora = Date.now();
@@ -546,7 +550,18 @@ export function ProntuarioPaciente({
         <section className="bm2-cartao bm2-ficha-historico" aria-labelledby="bm2-hist-titulo">
           <div className="bm2-ficha-cab bm2-ficha-cab-hist">
             <h3 id="bm2-hist-titulo" className="bm2-ficha-titulo">Histórico</h3>
-            <div className="bm2-ficha-ferramentas">
+            <div
+              className="bm2-ficha-ferramentas"
+              onKeyDown={(e) => {
+                // Escape fecha só o menu aberto (filtro ou "+"), não a ficha.
+                if (e.key === "Escape" && (filtroAberto || novoAberto)) {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setFiltroAberto(false);
+                  setNovoAberto(false);
+                }
+              }}
+            >
               <label className="bm2-busca bm2-ficha-busca">
                 <Search className="w-4 h-4 bm2-t-2" aria-hidden />
                 <span className="sr-only">Buscar no histórico</span>
@@ -558,7 +573,10 @@ export function ProntuarioPaciente({
                   className={`bm2-redondo ${filtro !== "todos" ? "bm2-redondo-azul" : ""}`}
                   aria-label={`Filtrar histórico: ${filtro === "todos" ? "todos" : filtro === "comigo" ? "comigo" : "outros profissionais"}`}
                   aria-expanded={filtroAberto}
-                  onClick={() => setFiltroAberto((v) => !v)}
+                  onClick={() => {
+                    setNovoAberto(false);
+                    setFiltroAberto((v) => !v);
+                  }}
                 >
                   <ListFilter className="w-4 h-4" aria-hidden />
                 </button>
@@ -586,13 +604,51 @@ export function ProntuarioPaciente({
                   </div>
                 ) : null}
               </div>
+              {/* "+" do histórico (ref. 17): abre as ações REAIS que geram
+                  registro clínico do paciente — emitir documento e pedir
+                  medição. Não existe "novo registro de histórico" avulso
+                  (a evolução só é escrita na sala da consulta). */}
+              <div className="relative">
+                <button
+                  type="button"
+                  className="bm2-redondo bm2-redondo-azul"
+                  aria-label="Novo registro para o paciente"
+                  aria-expanded={novoAberto}
+                  title="Novo registro"
+                  onClick={() => {
+                    setFiltroAberto(false);
+                    setNovoAberto((v) => !v);
+                  }}
+                >
+                  <Plus className="w-4 h-4" aria-hidden />
+                </button>
+                {novoAberto ? (
+                  <div className="bm2-ficha-menu" role="group" aria-label="Novo registro">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNovoAberto(false);
+                        onEmitir();
+                      }}
+                    >
+                      Emitir receita ou documento
+                    </button>
+                    {onPedirMedicao ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setNovoAberto(false);
+                          onPedirMedicao();
+                        }}
+                      >
+                        Pedir medição ao paciente
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
             </div>
           </div>
-          {series ? (
-            <div className="bm2-ficha-consentimento">
-              <AvisoConsentimentoHistorico />
-            </div>
-          ) : null}
           {erroSeries ? (
             <div className="bm2-ficha-erro">
               <p className="bm2-vazio">Não foi possível carregar o histórico com outros profissionais agora.</p>
@@ -623,7 +679,15 @@ export function ProntuarioPaciente({
                   const minha = consultas.find((c) => c.id === l.id);
                   return (
                     <Fragment key={l.id}>
-                      <tr className={aberta ? "bm2-ficha-linha-aberta" : undefined}>
+                      <tr
+                        className={`bm2-ficha-linha ${aberta ? "bm2-ficha-linha-aberta" : ""}`}
+                        onClick={(e) => {
+                          // A linha inteira abre o detalhe (o botão da última
+                          // coluna continua sendo o controle de teclado).
+                          if ((e.target as HTMLElement).closest("button")) return;
+                          setLinhaAberta(aberta ? null : l.id);
+                        }}
+                      >
                         <td data-rotulo="Data" className="whitespace-nowrap" title={l.status ?? undefined}>
                           {dataCurta(l.ts)}
                         </td>
@@ -702,6 +766,13 @@ export function ProntuarioPaciente({
               <p className="bm2-vazio">Sem consulta com você ainda — o histórico de outros profissionais aparece quando houver vínculo assistencial.</p>
             ) : null}
           </div>
+          {/* Aviso de consentimento: discreto, fixo no rodapé do cartão
+              (sempre visível, mesmo com a tabela rolada), com AA. */}
+          {series ? (
+            <div className="bm2-ficha-consentimento">
+              <AvisoConsentimentoHistorico />
+            </div>
+          ) : null}
         </section>
 
         {/* 4 — Exames, documentos e arquivos (lavanda) */}

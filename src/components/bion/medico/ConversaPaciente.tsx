@@ -20,6 +20,7 @@ import { rotuloTipoAtendimento } from "@/lib/atendimento-tipo";
 import { EmitirDocumentoSheet } from "./sheets/EmitirDocumentoSheet";
 import type { DadosMedico } from "./useDadosMedico";
 import { useModelosMensagemConta } from "./useAtalhosConta";
+import { BuscaPacienteTopo, PerfilMedicoTopo } from "./ficha/TopoFicha";
 
 type Aba = "conversa" | "triagem" | "prontuario";
 const MAX_TEXTO = 4000; // limite do POST /api/mensagens
@@ -75,13 +76,19 @@ export function ConversaPaciente({
   paciente,
   dados,
   onFechar,
+  onAbrirPaciente,
+  onAbrirPerfil,
 }: {
   paciente: PacienteDoMedico;
   dados: DadosMedico;
   onFechar: () => void;
+  /** Busca do topo (computador): abre a ficha de outro paciente da lista. */
+  onAbrirPaciente?: (p: PacienteDoMedico) => void;
+  /** Perfil do médico no topo (computador), como no Início. */
+  onAbrirPerfil?: () => void;
 }) {
   const { mensagens, documentos, arquivos, enviarMensagem, marcarConversaLida } = useBion();
-  const { sessao, anamneses, listaPacientes } = dados;
+  const { sessao, anamneses, listaPacientes, medico } = dados;
   const pid = paciente.pacienteId;
   const [aba, setAba] = useState<Aba>("conversa");
   const [texto, setTexto] = useState("");
@@ -267,16 +274,26 @@ export function ConversaPaciente({
     </div>
   );
 
+  // Topo no computador (rodada 2): busca + perfil do médico, como no
+  // Início; no celular ficam escondidos (o topo mostra o paciente).
+  const topoUi = (
+    <>
+      {onAbrirPaciente ? <BuscaPacienteTopo pacientes={listaPacientes} atualChave={atual.chave} onAbrir={onAbrirPaciente} /> : null}
+      {abasUi}
+      <PerfilMedicoTopo nome={sessao.nome} especialidade={medico?.especialidade} foto={medico?.foto} onAbrir={onAbrirPerfil} />
+    </>
+  );
+
   return (
     <TelaSobreposta
-      classe="bm2-ficha bm-v2"
-      extraCabecalho={abasUi}
+      classe={`bm2-ficha bm-v2 bm2-aba-${aba}`}
+      extraCabecalho={topoUi}
       titulo={atual.nome}
       subtitulo={proxima ? `Próxima consulta: ${proxima.data} às ${proxima.hora}` : "Sem consulta futura"}
       onFechar={onFechar}
       acoes={
         pid ? (
-          <div className="flex items-center gap-1.5">
+          <div className="bm2-topo-acoes flex items-center gap-1.5">
             {consultaAlvoPedido ? (
               <button
                 type="button"
@@ -539,6 +556,14 @@ export function ConversaPaciente({
           medicoIdAtual={sessao.id ?? ""}
           onRenovar={(d) => setEmitir({ base: d })}
           onEmitir={() => setEmitir({})}
+          onPedirMedicao={
+            consultaAlvoPedido
+              ? () => {
+                  setAba("conversa");
+                  setPedidoAberto(true);
+                }
+              : undefined
+          }
           onAba={setAba}
           cabecalho={{
             nome: atual.nome,
