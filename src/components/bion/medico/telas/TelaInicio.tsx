@@ -674,7 +674,7 @@ export function TelaInicio({
   );
 
   return (
-    <section className="bm-tela bm-tela-1 bm-v2 relative flex flex-col bp-safe-top pb-24 lg:pb-8" aria-labelledby="bm-t1-titulo">
+    <section className="bm-tela bm-tela-1 bm-v2 relative flex flex-col bp-safe-top pb-[calc(6rem+env(safe-area-inset-bottom))] lg:pb-8" aria-labelledby="bm-t1-titulo">
       <div className="bm2-conteudo mx-auto w-full">
         {topo}
 
