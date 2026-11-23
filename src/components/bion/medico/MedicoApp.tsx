@@ -25,6 +25,9 @@ import { AgendaSheet } from "./sheets/AgendaSheet";
 import { AgendaPreviewSheet } from "./sheets/AgendaPreviewSheet";
 import type { PacienteDoMedico } from "./metricas";
 import type { NotifTipo } from "@/lib/bion-store";
+import { BarraLateralMedico } from "./inicio/BarraLateralMedico";
+import { poppins } from "./inicio/fonte-medico";
+import { X } from "lucide-react";
 import "./medico.css";
 
 type Sheet = "preco" | "agenda" | "preview" | null;
@@ -108,8 +111,10 @@ export function MedicoApp() {
     if (!el) return;
     // Tela larga: as colunas já estão todas visíveis — só leva o foco ao
     // primeiro controle da coluna (ex.: a busca de pacientes).
+    // Redesign azul: na tela larga Perfil e Pacientes abrem como gaveta
+    // (data-gaveta no medico.css); o foco vai para o 1º controle dela.
     if (window.matchMedia(TELA_LARGA).matches) {
-      el.children[p]?.querySelector<HTMLElement>(FOCAVEL)?.focus();
+      requestAnimationFrame(() => el.children[p]?.querySelector<HTMLElement>(FOCAVEL)?.focus());
       return;
     }
     el.scrollTo({ left: p * el.clientWidth, behavior: "smooth" });
@@ -199,7 +204,15 @@ export function MedicoApp() {
     const aoTeclar = (e: KeyboardEvent) => {
       if (bloqueado || e.altKey || e.ctrlKey || e.metaKey) return;
       const alvo = e.target as HTMLElement | null;
+      const larga = window.matchMedia(TELA_LARGA).matches;
+      // Tela larga: Esc fecha a gaveta aberta (perfil/pacientes).
+      if (larga && e.key === "Escape" && painel !== 1) {
+        irPara(1);
+        return;
+      }
       if (alvo && (EM_CAMPO.includes(alvo.tagName) || alvo.isContentEditable)) return;
+      // Tela larga: ←/→ não abrem gavetas (o menu lateral faz isso).
+      if (larga && (e.key === "ArrowRight" || e.key === "ArrowLeft")) return;
       if (e.key === "ArrowRight") irPara(Math.min(2, painel + 1));
       else if (e.key === "ArrowLeft") irPara(Math.max(0, painel - 1));
       else if (painel === 1) {
@@ -248,7 +261,32 @@ export function MedicoApp() {
   const painelCls = "flex-[0_0_100%] w-full min-w-full h-full";
 
   return (
-    <div className="bp-shell bm-app flex flex-col text-bion-ink dark:text-bion-paper">
+    <div
+      className={`bp-shell bm-app ${poppins.variable} flex flex-col text-bion-ink dark:text-bion-paper`}
+      data-gaveta={painel === 0 ? "perfil" : painel === 2 ? "pacientes" : undefined}
+    >
+      <BarraLateralMedico
+        agora={dados.agora}
+        painel={painel}
+        onInicio={() => {
+          irPara(1);
+          irSecao(0);
+        }}
+        onPacientes={() => irPara(2)}
+        onAgenda={() => abrirSheet("agenda")}
+        onRenovacoes={() => setSobreposicao({ tipo: "renovacoes" })}
+        onNotificacoes={() => setSobreposicao({ tipo: "notificacoes" })}
+        onGestao={() => {
+          irPara(1);
+          irSecao(1);
+        }}
+        onPerfil={() => irPara(0)}
+        onAjuda={() => setSobreposicao({ tipo: "termos" })}
+        onSuporte={() => setSobreposicao({ tipo: "suporte" })}
+        naoLidas={[...dados.naoLidasPorPaciente.values()].reduce((a, b) => a + b, 0)}
+        renovacoes={dados.renovacoesPendentes}
+        notificacoes={dados.notificacoesNaoLidas}
+      />
       {mostrarBannerConsulta ? (
         <div className="mx-4 mt-3 rounded-2xl border bg-card p-3 text-sm flex flex-wrap items-center justify-between gap-2" role="status">
           <span className="font-semibold">
@@ -306,7 +344,9 @@ export function MedicoApp() {
             dados={dados}
             onAbrirPerfil={() => irPara(0)}
             onAbrirPacientes={() => irPara(2)}
+            onAbrirPaciente={(p) => setSobreposicao({ tipo: "paciente", p })}
             onAbrirAgenda={() => abrirSheet("agenda")}
+            onAbrirGestao={() => irSecao(1)}
             onAbrirRenovacoes={() => setSobreposicao({ tipo: "renovacoes" })}
             onAbrirNotificacoes={() => setSobreposicao({ tipo: "notificacoes" })}
           />
@@ -325,6 +365,20 @@ export function MedicoApp() {
         </div>
       </div>
 
+      {/* Tela larga: fundo e botão de fechar da gaveta (só aparecem com data-gaveta, ver medico.css) */}
+      {painel !== 1 && !bloqueado ? (
+        <>
+          <button type="button" tabIndex={-1} aria-hidden className="bm2-gaveta-fundo" onClick={() => irPara(1)} />
+          <button
+            type="button"
+            onClick={() => irPara(1)}
+            aria-label={painel === 0 ? "Fechar meu perfil" : "Fechar pacientes"}
+            className="bm2-gaveta-fechar h-10 w-10 place-items-center rounded-full bg-white text-[#242424] shadow-md"
+          >
+            <X className="h-5 w-5" aria-hidden />
+          </button>
+        </>
+      ) : null}
       <IndicadorTelas painel={painel} secao={secao} onPainel={irPara} onSecao={irSecao} oculto={bloqueado} />
       {dica.visivel && !bloqueado ? <DicaGestos onDispensar={dica.dispensar} /> : null}
 
