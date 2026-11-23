@@ -1,6 +1,6 @@
 "use client";
 
-import { BarChart3, Bell, CalendarDays, CircleHelp, LayoutGrid, LifeBuoy, Pill, UserRound, Users } from "lucide-react";
+import { Bell, CalendarClock, ClipboardPlus, FileChartColumn, Info, LayoutGrid, LifeBuoy, Settings, UsersRound } from "lucide-react";
 import type { ComponentType } from "react";
 import { Logo } from "@/components/bion/brand";
 
@@ -52,15 +52,15 @@ export function BarraLateralMedico({
 }) {
   const principais: Item[] = [
     { rotulo: "Início", Icone: LayoutGrid, onClick: onInicio, ativo: painel === 1 },
-    { rotulo: "Pacientes e mensagens", Icone: Users, onClick: onPacientes, ativo: painel === 2, selo: naoLidas },
-    { rotulo: "Agenda e horários", Icone: CalendarDays, onClick: onAgenda },
-    { rotulo: "Renovações de receita", Icone: Pill, onClick: onRenovacoes, selo: renovacoes },
-    { rotulo: "Gestão e receita", Icone: BarChart3, onClick: onGestao },
+    { rotulo: "Pacientes e mensagens", Icone: UsersRound, onClick: onPacientes, ativo: painel === 2, selo: naoLidas },
+    { rotulo: "Agenda e horários", Icone: CalendarClock, onClick: onAgenda },
+    { rotulo: "Renovações de receita", Icone: ClipboardPlus, onClick: onRenovacoes, selo: renovacoes },
+    { rotulo: "Gestão e receita", Icone: FileChartColumn, onClick: onGestao },
   ];
   const conta: Item[] = [
     { rotulo: "Notificações", Icone: Bell, onClick: onNotificacoes, selo: notificacoes },
-    { rotulo: "Meu perfil", Icone: UserRound, onClick: onPerfil, ativo: painel === 0 },
-    { rotulo: "Termos e ajuda", Icone: CircleHelp, onClick: onAjuda },
+    { rotulo: "Meu perfil", Icone: Settings, onClick: onPerfil, ativo: painel === 0 },
+    { rotulo: "Termos e ajuda", Icone: Info, onClick: onAjuda },
     { rotulo: "Suporte", Icone: LifeBuoy, onClick: onSuporte },
   ];
   const botao = (it: Item) => (
@@ -71,7 +71,7 @@ export function BarraLateralMedico({
         aria-label={it.selo ? `${it.rotulo} (${it.selo})` : it.rotulo}
         aria-current={it.ativo ? "page" : undefined}
         title={it.rotulo}
-        className={`bm2-lateral-item relative grid h-11 w-11 place-items-center rounded-xl ${it.ativo ? "bm2-lateral-ativo" : ""}`}
+        className={`bm2-lateral-item relative grid h-11 w-11 place-items-center rounded-[0.8rem] ${it.ativo ? "bm2-lateral-ativo" : ""}`}
       >
         <it.Icone className="h-[1.15rem] w-[1.15rem]" aria-hidden />
         {it.selo ? (
@@ -82,16 +82,16 @@ export function BarraLateralMedico({
   );
   return (
     <aside className="bm-v2 bm2-lateral" aria-label="Menu do médico">
-      <div className="grid h-16 place-items-center">
+      <div className="mx-3 grid h-[4.5rem] place-items-center border-b border-[var(--bm2-borda)]">
         <Logo size="sm" />
       </div>
       <nav aria-label="Áreas" className="flex flex-1 flex-col items-center">
-        <ul className="mt-4 flex flex-col items-center gap-2">{principais.map(botao)}</ul>
-        <span aria-hidden className="my-5 h-px w-8 bg-[var(--bm2-borda)]" />
+        <ul className="mt-5 flex flex-col items-center gap-2">{principais.map(botao)}</ul>
+        <span aria-hidden className="my-6 h-px w-9 bg-[var(--bm2-borda)]" />
         <ul className="flex flex-col items-center gap-2">{conta.map(botao)}</ul>
       </nav>
-      <div className="border-t border-[var(--bm2-borda)] py-3 text-center text-[11px] text-[var(--bm2-texto-2)] tabular-nums">
-        <time aria-label="Hora atual">{fmtHora.format(agora)}</time>
+      <div className="mx-3 border-t border-[var(--bm2-borda)] py-3 text-center text-[11px] text-[var(--bm2-texto-2)] tabular-nums">
+        <time aria-label="Hora atual em São Paulo">{fmtHora.format(agora)}</time>
       </div>
     </aside>
   );

@@ -7,7 +7,7 @@
 
 import type { Avaliacao, Consulta } from "@/lib/bion-tipos";
 import { normalizarTipoAtendimento, ROTULO_TIPO } from "@/lib/atendimento-tipo";
-import { ROTULO_STATUS, STATUS_ATIVOS, type PacienteDoMedico } from "../metricas";
+import { DURACAO_CONSULTA_SERVIDOR, ROTULO_STATUS, STATUS_ATIVOS, type PacienteDoMedico } from "../metricas";
 
 const DIA_MS = 86_400_000;
 
@@ -126,3 +126,28 @@ export function alertaPrioritario(e: {
 
 /** "1 consulta" / "3 consultas". */
 export const plural = (n: number, um: string, varios: string) => `${n} ${n === 1 ? um : varios}`;
+
+/** "10:00 – 10:30": horário da consulta com a duração fixa do servidor (30 min). */
+export function faixaHorario(ts: number, duracaoMin = DURACAO_CONSULTA_SERVIDOR): string {
+  return `${fmtHora.format(ts)} – ${fmtHora.format(ts + duracaoMin * 60_000)}`;
+}
+
+/**
+ * Pilha de avatares do cartão "Requer sua atenção": primeiro os pacientes
+ * envolvidos no alerta, depois quem tem mensagem não lida; sem repetir.
+ * Devolve os `max` primeiros e quantos sobram ("+N").
+ */
+export function pilhaAvatares(
+  envolvidos: { chave: string; nome: string }[],
+  outros: { chave: string; nome: string }[],
+  max = 3,
+): { visiveis: { chave: string; nome: string }[]; resto: number } {
+  const vistos = new Set<string>();
+  const todos: { chave: string; nome: string }[] = [];
+  for (const p of [...envolvidos, ...outros]) {
+    if (vistos.has(p.chave)) continue;
+    vistos.add(p.chave);
+    todos.push(p);
+  }
+  return { visiveis: todos.slice(0, max), resto: Math.max(0, todos.length - max) };
+}

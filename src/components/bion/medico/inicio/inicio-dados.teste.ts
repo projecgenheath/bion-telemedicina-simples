@@ -8,6 +8,8 @@ import {
   alertaPrioritario,
   consultasProximosDias,
   dataHoraClinica,
+  faixaHorario,
+  pilhaAvatares,
   filtrarPacientes,
   linhaPaciente,
   mediaAvaliacoes,
@@ -96,6 +98,15 @@ igual("ações", alertaPrioritario({ ...base, acoes: { remarcadas: 1, canceladas
 igual("reserva antes de ações", alertaPrioritario({ ...base, reservaTexto: "R", acoes: { remarcadas: 1, canceladas: 0 } }).tipo, "reserva");
 igual("na sala antes de reserva", alertaPrioritario({ ...base, pacienteNaSala: "Ana", reservaTexto: "R" }).tipo, "na_sala");
 igual("evolução primeiro", alertaPrioritario({ ...base, evolucaoPaciente: "Bia", pacienteNaSala: "Ana" }), { tipo: "evolucao", paciente: "Bia" });
+
+// Faixa de horário (30 min do servidor).
+igual("faixa", faixaHorario(Date.parse("2026-11-22T12:30:00Z")), "09:30 – 10:00");
+igual("faixa 45", faixaHorario(Date.parse("2026-11-22T12:30:00Z"), 45), "09:30 – 10:15");
+
+// Pilha de avatares.
+const P = (k: string) => ({ chave: k, nome: k });
+igual("pilha envolvidos primeiro", pilhaAvatares([P("a")], [P("b"), P("a"), P("c"), P("d")]), { visiveis: [P("a"), P("b"), P("c")], resto: 1 });
+igual("pilha vazia", pilhaAvatares([], []), { visiveis: [], resto: 0 });
 
 console.log(`${ok} ok, ${falhas} falha(s)`);
 if (falhas) process.exit(1);

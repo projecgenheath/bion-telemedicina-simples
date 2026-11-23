@@ -1,32 +1,37 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowUpRight,
   BarChart3,
   Bell,
   ChevronDown,
+  CircleAlert,
+  CircleCheck,
+  Clock3,
   Info,
   ListFilter,
   MessageCircle,
   MoreVertical,
   Plus,
   Search,
-  Video,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { PainelEvolucao } from "../evolucao/PainelEvolucao";
 import { AvisoAtivarToque } from "@/components/bion/AvisoAtivarToque";
 import { ContagemRegressiva } from "../ContagemRegressiva";
-import { iniciais, reservaVigente, salaAberta, saudacao, textoReservaPendente, type PacienteDoMedico } from "../metricas";
+import { chavePaciente, iniciais, reservaVigente, salaAberta, saudacao, textoReservaPendente, type PacienteDoMedico } from "../metricas";
 import { normalizarTipoAtendimento, ROTULO_TIPO } from "@/lib/atendimento-tipo";
+import type { Consulta } from "@/lib/bion-tipos";
 import {
   alertaPrioritario,
   consultasProximosDias,
   dataHoraClinica,
+  faixaHorario,
   filtrarPacientes,
   linhaPaciente,
   mediaAvaliacoes,
+  pilhaAvatares,
   plural,
   type TomSituacao,
 } from "../inicio/inicio-dados";
@@ -34,6 +39,7 @@ import type { DadosMedico } from "../useDadosMedico";
 
 const primeiroNome = (nome: string) => nome.split(" ").filter(Boolean)[0] ?? "";
 const LIMITE_TABELA = 8;
+const MAX_CARROSSEL = 5;
 
 /** Classe de cor de texto (AA) para cada tom de situação. */
 const COR_TOM: Record<TomSituacao, string> = {
@@ -43,38 +49,45 @@ const COR_TOM: Record<TomSituacao, string> = {
   verde: "bm2-t-verde",
   neutro: "bm2-t-2",
 };
+const ICONE_TOM: Record<TomSituacao, typeof CircleAlert | null> = {
+  azul: Clock3,
+  laranja: CircleAlert,
+  vermelho: CircleAlert,
+  verde: CircleCheck,
+  neutro: null,
+};
 
 /** Avatar de iniciais (o app não guarda foto de paciente). */
 function AvatarIniciais({ nome, tamanho = "md" }: { nome: string; tamanho?: "sm" | "md" | "lg" }) {
   const t = tamanho === "lg" ? "h-12 w-12 text-sm" : tamanho === "sm" ? "h-7 w-7 text-[10px]" : "h-9 w-9 text-xs";
   return (
-    <span aria-hidden className={`bm2-avatar ${t} grid shrink-0 place-items-center rounded-full font-semibold`}>
+    <span aria-hidden className={`bm2-avatar ${t} grid shrink-0 place-items-center rounded-full font-medium`}>
       {iniciais(nome)}
     </span>
   );
 }
 
-/** Botão preto redondo com seta (cartões coloridos do modelo). */
+/** Botão preto redondo com seta, encaixado no recorte do canto do cartão. */
 function BotaoSeta({ rotulo, onClick, disabled = false }: { rotulo: string; onClick: () => void; disabled?: boolean }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      aria-label={rotulo}
-      title={rotulo}
-      className="bm2-seta grid h-9 w-9 shrink-0 place-items-center rounded-full disabled:opacity-40"
-    >
-      <ArrowUpRight className="h-4 w-4" aria-hidden />
-    </button>
+    <span className="bm2-recorte">
+      <button
+        type="button"
+        onClick={onClick}
+        disabled={disabled}
+        aria-label={rotulo}
+        title={rotulo}
+        className="bm2-seta grid h-10 w-10 place-items-center rounded-full disabled:opacity-40"
+      >
+        <ArrowUpRight className="h-4 w-4" aria-hidden />
+      </button>
+    </span>
   );
 }
 
 /**
  * Tela 1 — Início do médico no visual do modelo de referência (etapa 2 do
- * redesign azul): saudação + números do topo, coluna "Hoje" com a próxima
- * consulta em destaque, três cartões coloridos de pendências e a tabela
- * "Meus pacientes". Só dados que o app já tem (ver inicio-dados.ts).
+ * redesign azul). Só dados que o app já tem (ver inicio-dados.ts).
  */
 export function TelaInicio({
   dados,
@@ -89,7 +102,7 @@ export function TelaInicio({
   dados: DadosMedico;
   onAbrirPerfil: () => void;
   onAbrirPacientes: () => void;
-  /** Abre a conversa/prontuário de um paciente (linha da tabela). */
+  /** Abre a conversa/prontuário de um paciente. */
   onAbrirPaciente: (p: PacienteDoMedico) => void;
   /** Agenda do dia (folha Agenda, que abre no dia de hoje). */
   onAbrirAgenda: () => void;
@@ -119,6 +132,8 @@ export function TelaInicio({
   const [evolucaoAberta, setEvolucaoAberta] = useState(false);
   const [busca, setBusca] = useState("");
   const [soComProxima, setSoComProxima] = useState(false);
+  const [slide, setSlide] = useState(0);
+  const carrosselRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     let vivo = true;
     const buscar = async () => {
@@ -141,11 +156,14 @@ export function TelaInicio({
   const dataHoje = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", weekday: "long", day: "numeric", month: "long" }).format(agora);
   const nomeExibicao = sessao.nome.replace(/^(dr|dra)\.?\s+/i, "");
   const tratamento = /^dra\.?\s/i.test(sessao.nome) ? "Dra." : /^dr\.?\s/i.test(sessao.nome) ? "Dr." : "";
-  const aberta = proxima ? salaAberta(proxima.ts, agora) : false;
   const reservaProxima = proxima ? reservaVigente(proxima, agora) : null;
   const semana = useMemo(() => consultasProximosDias(minhas, agora, 7), [minhas, agora]);
   const notas = useMemo(() => mediaAvaliacoes(avaliacoes), [avaliacoes]);
   const outrasHoje = hoje.agendadas.filter((c) => c.id !== proxima?.id);
+  // Carrossel do celular (ref. 03): a próxima consulta e as que ainda faltam hoje.
+  const slides: Consulta[] = proxima
+    ? [proxima, ...hoje.restantes.filter((c) => c.id !== proxima.id)].slice(0, MAX_CARROSSEL)
+    : [];
   const pacientesFiltrados = useMemo(() => filtrarPacientes(listaPacientes, busca, soComProxima), [listaPacientes, busca, soComProxima]);
   const linhas = pacientesFiltrados.slice(0, LIMITE_TABELA).map((p) => linhaPaciente(p, agora));
   const pacientesNaoLidas = listaPacientes.filter((p) => p.pacienteId && naoLidasPorPaciente.has(p.pacienteId));
@@ -155,17 +173,59 @@ export function TelaInicio({
     reservaTexto: reservaProxima ? textoReservaPendente(reservaProxima) : null,
     acoes: acoesPaciente,
   });
-  const entrarNaSala = () => proxima && router.push(`/consulta?consulta=${encodeURIComponent(proxima.id)}`);
-  const pacienteDe = (nome: string, id?: string) =>
-    listaPacientes.find((p) => (id ? p.pacienteId === id : p.nome === nome));
+  const entrarNaSala = (c: Consulta) => router.push(`/consulta?consulta=${encodeURIComponent(c.id)}`);
+  const pacienteDe = (c: Pick<Consulta, "paciente" | "pacienteId">) => listaPacientes.find((p) => p.chave === chavePaciente(c));
 
-  const numeros: { valor: string; rotulo: string; sufixo?: string; titulo: string }[] = [
+  // Pacientes REAIS envolvidos no alerta (evolução: pelo nome que a API devolve).
+  const envolvidos: { chave: string; nome: string }[] =
+    alerta.tipo === "evolucao"
+      ? [listaPacientes.find((p) => p.nome === alerta.paciente) ?? { chave: `nome:${alerta.paciente}`, nome: alerta.paciente }]
+      : (alerta.tipo === "na_sala" || alerta.tipo === "reserva") && proxima
+        ? [{ chave: chavePaciente(proxima), nome: proxima.paciente }]
+        : [];
+  const pilha = pilhaAvatares(envolvidos, pacientesNaoLidas);
+
+  const aoRolarCarrossel = () => {
+    const el = carrosselRef.current;
+    if (!el || !el.clientWidth) return;
+    const i = Math.round(el.scrollLeft / el.clientWidth);
+    if (i !== slide) setSlide(i);
+  };
+  const irSlide = (i: number) => {
+    const el = carrosselRef.current;
+    if (!el) return;
+    const suave = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    el.scrollTo({ left: i * el.clientWidth, behavior: suave ? "smooth" : "auto" });
+    setSlide(i);
+  };
+
+  // Celular: o carrossel acompanha a altura do slide visível (sem vazio abaixo dos slides menores).
+  useEffect(() => {
+    const el = carrosselRef.current;
+    const ativo = el?.children[slide] as HTMLElement | undefined;
+    if (!el || !ativo) return;
+    const mq = window.matchMedia("(min-width: 1024px)");
+    const ajustar = () => {
+      el.style.height = mq.matches ? "" : `${ativo.offsetHeight + 8}px`;
+    };
+    ajustar();
+    const ro = new ResizeObserver(ajustar);
+    ro.observe(ativo);
+    mq.addEventListener("change", ajustar);
+    return () => {
+      ro.disconnect();
+      mq.removeEventListener("change", ajustar);
+    };
+  }, [slide, slides.length]);
+
+  const numeros: { valor: string; rotulo: string; rotuloLargo?: string; sufixo?: string; titulo: string }[] = [
     { valor: String(hoje.agendadas.length), rotulo: "Consultas hoje", titulo: "Consultas marcadas para hoje (sem as canceladas)" },
     { valor: String(semana), rotulo: "Próximos 7 dias", titulo: "Consultas confirmadas ou aguardando pagamento nos próximos 7 dias" },
     {
       valor: notas ? notas.media.toLocaleString("pt-BR", { minimumFractionDigits: 1 }) : "—",
       sufixo: notas ? "/5" : undefined,
       rotulo: "Avaliação",
+      rotuloLargo: "Avaliação dos pacientes",
       titulo: notas
         ? `Média de ${plural(notas.total, "avaliação", "avaliações")} que os pacientes deixaram depois das consultas`
         : "Ainda sem avaliações dos pacientes",
@@ -175,19 +235,13 @@ export function TelaInicio({
   /* ------------------------------ topo ------------------------------ */
   const topo = (
     <header className="bm2-topo flex items-center gap-3 bm-animar">
-      {/* Celular: avatar + nome à esquerda, como no modelo (03) */}
       <button type="button" onClick={onAbrirPerfil} className="flex min-w-0 flex-1 items-center gap-3 text-left lg:hidden" aria-label="Abrir meu perfil">
-        {medico?.foto ? (
-          <img src={medico.foto} alt="" className="h-11 w-11 shrink-0 rounded-full object-cover" />
-        ) : (
-          <AvatarIniciais nome={sessao.nome} tamanho="lg" />
-        )}
+        {medico?.foto ? <img src={medico.foto} alt="" className="h-11 w-11 shrink-0 rounded-full object-cover" /> : <AvatarIniciais nome={sessao.nome} tamanho="lg" />}
         <span className="min-w-0">
           <span className="block truncate text-[15px] font-medium">{sessao.nome}</span>
           <span className="block truncate text-xs bm2-t-2">{medico?.especialidade ?? "Médico(a)"}</span>
         </span>
       </button>
-      {/* Tela larga: busca de pacientes (filtra a tabela abaixo) */}
       <label className="relative hidden min-w-0 flex-1 items-center lg:flex">
         <span className="sr-only">Buscar paciente</span>
         <Search className="pointer-events-none absolute left-0 h-4 w-4 bm2-t-2" aria-hidden />
@@ -196,7 +250,7 @@ export function TelaInicio({
           value={busca}
           onChange={(e) => setBusca(e.target.value)}
           placeholder="Buscar paciente…"
-          className="bm2-busca-topo w-full max-w-md bg-transparent py-2 pl-7 text-sm outline-none"
+          className="bm2-busca-topo w-full max-w-md bg-transparent py-2 pl-7 text-[13px] outline-none"
         />
       </label>
       <button
@@ -207,126 +261,151 @@ export function TelaInicio({
             ? `Notificações: ${notificacoesNaoLidas} não lida${notificacoesNaoLidas > 1 ? "s" : ""}. Abrir notificações`
             : "Notificações. Abrir notificações"
         }
-        className="bm2-icone-redondo relative grid h-11 w-11 shrink-0 place-items-center rounded-full"
+        className="bm2-icone-topo relative grid h-11 w-11 shrink-0 place-items-center rounded-full"
       >
         <Bell className="h-[1.15rem] w-[1.15rem]" aria-hidden />
-        {notificacoesNaoLidas > 0 ? (
-          <span aria-hidden className="absolute -right-0.5 -top-0.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-[#C42B2B] px-1 text-[11px] font-semibold text-white">
-            {notificacoesNaoLidas}
-          </span>
-        ) : null}
+        {notificacoesNaoLidas > 0 ? <span aria-hidden className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-[#C42B2B]" /> : null}
       </button>
       <button
         type="button"
         onClick={onAbrirPacientes}
         aria-label={totalNaoLidas > 0 ? `Mensagens: ${totalNaoLidas} não lidas. Abrir pacientes` : "Mensagens. Abrir pacientes"}
-        className="bm2-icone-redondo relative grid h-11 w-11 shrink-0 place-items-center rounded-full lg:hidden"
+        className="bm2-icone-topo relative grid h-11 w-11 shrink-0 place-items-center rounded-full lg:hidden"
       >
         <MessageCircle className="h-[1.15rem] w-[1.15rem]" aria-hidden />
+        {totalNaoLidas > 0 ? <span aria-hidden className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-[#C42B2B]" /> : null}
       </button>
       <span aria-hidden className="hidden h-8 w-px bg-[var(--bm2-borda)] lg:block" />
       <button type="button" onClick={onAbrirPerfil} aria-label="Abrir meu perfil" className="hidden items-center gap-3 rounded-full py-1 pl-1 pr-2 text-left lg:flex">
-        {medico?.foto ? (
-          <img src={medico.foto} alt="" className="h-10 w-10 shrink-0 rounded-full object-cover" />
-        ) : (
-          <AvatarIniciais nome={sessao.nome} tamanho="lg" />
-        )}
+        {medico?.foto ? <img src={medico.foto} alt="" className="h-10 w-10 shrink-0 rounded-full object-cover" /> : <AvatarIniciais nome={sessao.nome} tamanho="lg" />}
         <span className="min-w-0">
-          <span className="block max-w-[14rem] truncate text-sm font-medium">{sessao.nome}</span>
-          <span className="block max-w-[14rem] truncate text-xs bm2-t-2">{medico?.especialidade ?? "Médico(a)"}</span>
+          <span className="block max-w-[14rem] truncate text-[13px] font-medium">{sessao.nome}</span>
+          <span className="block max-w-[14rem] truncate text-[11px] bm2-t-2">{medico?.especialidade ?? "Médico(a)"}</span>
         </span>
-        <ChevronDown className="ml-3 h-4 w-4 bm2-t-2" aria-hidden />
+        <ChevronDown className="ml-6 h-4 w-4 bm2-t-2" aria-hidden />
       </button>
     </header>
   );
 
-  /* -------------------- próxima consulta (destaque) ------------------- */
-  const destaque = proxima ? (
-    <div className="bm2-destaque rounded-[1.25rem] p-4">
-      <div className="flex items-center gap-3">
-        <AvatarIniciais nome={proxima.paciente} tamanho="lg" />
-        <div className="min-w-0">
-          <div className="truncate text-[15px] font-medium">{proxima.paciente}</div>
-          <div className="bm2-destaque-tipo text-xs font-medium">{ROTULO_TIPO[normalizarTipoAtendimento(proxima.tipoAtendimento)]}</div>
+  /* ---------------- cartão de consulta (destaque/carrossel) ---------------- */
+  const cartaoConsulta = (c: Consulta, i: number) => {
+    const abertaC = salaAberta(c.ts, agora);
+    const ehProxima = c.id === proxima?.id;
+    const p = pacienteDe(c);
+    return (
+      <div
+        key={c.id}
+        className={`bm2-slide bm2-destaque flex flex-col rounded-[0.9rem] p-4 ${i > 0 ? "lg:hidden" : ""}`}
+        role="group"
+        aria-roledescription="slide"
+        aria-label={`Consulta ${i + 1} de ${slides.length}: ${c.paciente}, ${c.hora}`}
+      >
+        <div className="flex items-center gap-3">
+          <AvatarIniciais nome={c.paciente} tamanho="lg" />
+          <div className="min-w-0">
+            {p ? (
+              <button type="button" onClick={() => onAbrirPaciente(p)} className="block max-w-full truncate text-left text-[15px] hover:underline" title="Conversa e prontuário">
+                {c.paciente}
+              </button>
+            ) : (
+              <div className="truncate text-[15px]">{c.paciente}</div>
+            )}
+            <div className="bm2-destaque-tipo text-xs">{ROTULO_TIPO[normalizarTipoAtendimento(c.tipoAtendimento)]}</div>
+          </div>
         </div>
-      </div>
-      <dl className="mt-4 grid grid-cols-2 gap-3">
-        <div className="min-w-0">
+        <dl className="mt-4 grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-1">
           <dt className="text-[11px] bm2-destaque-rotulo">Motivo</dt>
-          <dd className="bm2-destaque-motivo mt-0.5 truncate text-sm font-medium" title={proxima.motivoConsulta || undefined}>
-            {proxima.motivoConsulta || "Não informado"}
+          <dt className="text-[11px] bm2-destaque-rotulo">Horário{c.data !== "Hoje" ? ` · ${c.data}` : ""}</dt>
+          <dd className="bm2-destaque-motivo truncate text-[15px]" title={c.motivoConsulta || undefined}>
+            {c.motivoConsulta || "Não informado"}
           </dd>
-        </div>
-        <div>
-          <dt className="text-[11px] bm2-destaque-rotulo">Horário</dt>
-          <dd className="mt-0.5 text-sm font-medium tabular-nums">
-            {proxima.data === "Hoje" ? proxima.hora : `${proxima.data} · ${proxima.hora}`}
+          <dd className="text-[15px] tabular-nums" title="Duração contada pelo servidor: 30 min">
+            {faixaHorario(c.ts)}
           </dd>
-          {aberta ? (
-            <dd className="mt-1 inline-flex items-center gap-1.5 text-[11px] font-medium">
-              <span aria-hidden className="h-2 w-2 rounded-full bg-[#1e7a34]" />
-              Sala aberta
-            </dd>
-          ) : null}
+        </dl>
+        {abertaC ? (
+          <p className="mt-2 inline-flex items-center gap-1.5 text-[11px] font-medium">
+            <span aria-hidden className="h-2 w-2 rounded-full bg-[#1e7a34]" />
+            Sala aberta
+          </p>
+        ) : null}
+        {ehProxima && reservaProxima ? <p className="bm2-aviso mt-3 rounded-xl px-3 py-2 text-xs font-medium">{textoReservaPendente(reservaProxima)}</p> : null}
+        {ehProxima && pacienteNaSala ? (
+          <p role="status" className="bm2-aviso-verde mt-3 inline-flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium">
+            <span className="relative flex h-2.5 w-2.5 shrink-0" aria-hidden>
+              <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-60 motion-safe:animate-ping" />
+              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-600" />
+            </span>
+            Seu paciente já está na sala de espera.
+          </p>
+        ) : null}
+        {!abertaC ? (
+          <div className="bm2-contagem mt-3 rounded-xl px-3 py-2">
+            <ContagemRegressiva alvo={c.ts} />
+          </div>
+        ) : null}
+        <div className="mt-auto flex items-center gap-2 pt-3">
+          <button
+            type="button"
+            disabled={!abertaC}
+            onClick={() => entrarNaSala(c)}
+            className="bm2-botao-azul inline-flex h-11 flex-1 items-center justify-center rounded-[0.6rem] px-4 text-[13px]"
+          >
+            {abertaC ? "Entrar na sala" : "A sala abre 30 min antes"}
+          </button>
+          <button
+            type="button"
+            onClick={onAbrirAgenda}
+            aria-label="Ver agenda e horários de hoje"
+            title="Agenda de hoje"
+            className="bm2-botao-relogio grid h-11 w-11 shrink-0 place-items-center rounded-[0.6rem]"
+          >
+            <Clock3 className="h-[1.05rem] w-[1.05rem]" aria-hidden />
+          </button>
         </div>
-      </dl>
-      {reservaProxima ? <p className="bm2-aviso mt-3 rounded-xl px-3 py-2 text-xs font-medium">{textoReservaPendente(reservaProxima)}</p> : null}
-      {pacienteNaSala ? (
-        <p role="status" className="bm2-aviso-verde mt-3 inline-flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium">
-          <span className="relative flex h-2.5 w-2.5 shrink-0" aria-hidden>
-            <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-60 motion-safe:animate-ping" />
-            <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-600" />
-          </span>
-          Seu paciente já está na sala de espera.
-        </p>
-      ) : null}
-      {!aberta ? (
-        <div className="bm2-contagem mt-3 rounded-xl px-3 py-2">
-          <ContagemRegressiva alvo={proxima.ts} />
-        </div>
-      ) : null}
-      <div className="mt-3 flex items-center gap-2">
-        <button
-          type="button"
-          disabled={!aberta}
-          onClick={entrarNaSala}
-          className="bm2-botao-azul inline-flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium"
-        >
-          <Video className="h-4 w-4" aria-hidden /> {aberta ? "Entrar na sala" : "A sala abre 30 min antes"}
-        </button>
-        {(() => {
-          const p = pacienteDe(proxima.paciente, proxima.pacienteId);
-          return p ? (
-            <button
-              type="button"
-              onClick={() => onAbrirPaciente(p)}
-              aria-label={`Conversa e prontuário de ${proxima.paciente}`}
-              title="Conversa e prontuário"
-              className="bm2-botao-contorno grid h-10 w-10 shrink-0 place-items-center rounded-xl"
-            >
-              <MessageCircle className="h-4 w-4" aria-hidden />
-            </button>
-          ) : null;
-        })()}
       </div>
-    </div>
-  ) : (
-    <div className="bm2-destaque rounded-[1.25rem] p-4" aria-label="Nenhuma consulta futura na agenda">
-      <div className="text-[15px] font-medium">Nenhuma consulta na agenda</div>
-      <p className="mt-1 text-xs bm2-destaque-rotulo">Quando um paciente agendar, a consulta aparece aqui.</p>
-      <button type="button" onClick={onAbrirAgenda} className="bm2-botao-azul mt-3 w-full rounded-xl px-4 py-2.5 text-sm font-medium">
-        Ver agenda e horários
-      </button>
-    </div>
-  );
+    );
+  };
+  const destaque =
+    slides.length > 0 ? (
+      <div className="bm2-carrossel-area" role="region" aria-roledescription="carrossel" aria-label="Próximas consultas">
+        <div ref={carrosselRef} onScroll={aoRolarCarrossel} className="bm2-carrossel" tabIndex={-1}>
+          {slides.map(cartaoConsulta)}
+        </div>
+        {slides.length > 1 ? (
+          <div className="bm2-pontos mt-3 flex items-center justify-center gap-1.5 lg:hidden">
+            {slides.map((c, i) => (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => irSlide(i)}
+                aria-label={`Mostrar consulta ${i + 1} de ${slides.length}`}
+                aria-current={i === slide ? "true" : undefined}
+                className="grid h-6 w-6 place-items-center"
+              >
+                <span aria-hidden className={`bm2-ponto block rounded-full ${i === slide ? "bm2-ponto-ativo" : ""}`} />
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    ) : (
+      <div className="bm2-destaque rounded-[0.9rem] p-4" aria-label="Nenhuma consulta futura na agenda">
+        <div className="text-[15px]">Nenhuma consulta na agenda</div>
+        <p className="mt-1 text-xs bm2-destaque-rotulo">Quando um paciente agendar, a consulta aparece aqui.</p>
+        <button type="button" onClick={onAbrirAgenda} className="bm2-botao-azul mt-3 h-10 w-full rounded-[0.6rem] px-4 text-[13px]">
+          Ver agenda e horários
+        </button>
+      </div>
+    );
 
   /* --------------------------- coluna Hoje --------------------------- */
   const colunaHoje = (
-    <section className="bm2-cartao flex flex-col p-4 bm-animar bm-animar-d1" aria-labelledby="bm2-hoje-titulo">
-      <div className="mb-3 flex items-start justify-between gap-2">
+    <section className="bm2-hoje flex flex-col bm-animar bm-animar-d1" aria-labelledby="bm2-hoje-titulo">
+      <div className="bm2-hoje-cab flex items-start justify-between gap-2">
         <div>
-          <p className="text-xs bm2-t-2 first-letter:uppercase">{dataHoje}</p>
-          <h2 id="bm2-hoje-titulo" className="text-[15px] font-medium">
+          <p className="text-[11px] bm2-t-2 first-letter:uppercase">{dataHoje}</p>
+          <h2 id="bm2-hoje-titulo" className="mt-0.5 text-base">
             {plural(hoje.agendadas.length, "consulta", "consultas")}
           </h2>
         </div>
@@ -334,42 +413,39 @@ export function TelaInicio({
           <Plus className="h-4 w-4" aria-hidden />
         </button>
       </div>
-      {destaque}
+      <div className="bm2-hoje-destaque">{destaque}</div>
       {outrasHoje.length > 0 ? (
-        <ul className="mt-3 space-y-2 bm-lista-animar" aria-label="Outras consultas de hoje">
+        <ul className="bm2-hoje-lista space-y-2 bm-lista-animar" aria-label="Outras consultas de hoje">
           {outrasHoje.map((c) => {
-            const p = pacienteDe(c.paciente, c.pacienteId);
-            const passou = c.ts <= agora;
+            const p = pacienteDe(c);
+            const tipo = normalizarTipoAtendimento(c.tipoAtendimento);
             const conteudo = (
               <>
                 <span className="min-w-0">
-                  <span className="block truncate text-sm font-medium">{c.paciente}</span>
-                  <span className={`block text-[11px] font-medium ${normalizarTipoAtendimento(c.tipoAtendimento) === "padrao" ? "bm2-t-azul" : "bm2-t-roxo"}`}>
-                    {ROTULO_TIPO[normalizarTipoAtendimento(c.tipoAtendimento)]}
-                  </span>
+                  <span className="block truncate text-sm">{c.paciente}</span>
+                  <span className={`block text-[11px] ${tipo === "padrao" ? "bm2-t-azul" : "bm2-t-roxo"}`}>{ROTULO_TIPO[tipo]}</span>
                 </span>
                 <span className="ml-2 min-w-0 shrink text-right">
-                  <span className="block max-w-[9rem] truncate text-xs font-medium bm2-t-laranja">{c.motivoConsulta || "—"}</span>
-                  <span className={`block text-[11px] tabular-nums ${passou ? "bm2-t-2" : ""}`}>{c.hora}</span>
+                  <span className={`block max-w-[9rem] truncate text-[13px] ${c.status === "em_espera" ? "bm2-t-vermelho" : "bm2-t-laranja"}`}>{c.motivoConsulta || "—"}</span>
+                  <span className={`block text-[11px] tabular-nums ${c.ts <= agora ? "bm2-t-2" : ""}`}>{c.hora}</span>
                 </span>
               </>
             );
             return (
               <li key={c.id}>
                 {p ? (
-                  <button type="button" onClick={() => onAbrirPaciente(p)} className="bm2-linha flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left">
+                  <button type="button" onClick={() => onAbrirPaciente(p)} className="bm2-item flex w-full items-center justify-between rounded-[0.9rem] px-3 py-2.5 text-left">
                     {conteudo}
                   </button>
                 ) : (
-                  <div className="bm2-linha flex items-center justify-between rounded-xl px-3 py-2.5">{conteudo}</div>
+                  <div className="bm2-item flex items-center justify-between rounded-[0.9rem] px-3 py-2.5">{conteudo}</div>
                 )}
               </li>
             );
           })}
         </ul>
       ) : null}
-      {/* Remarcadas/canceladas pelo PACIENTE hoje (GET /api/medico/eventos) */}
-      <div className="mt-auto pt-3 text-[11px] bm2-t-2" aria-busy={acoesPacienteEstado.carregando}>
+      <div className="bm2-hoje-rodape mt-auto pt-3 text-[11px] bm2-t-2" aria-busy={acoesPacienteEstado.carregando}>
         {acoesPaciente ? (
           <p className="inline-flex items-start gap-1.5" title="Consultas de hoje que o paciente remarcou ou cancelou. Cancelamentos feitos por você, novas datas depois de um cancelamento seu e remarcações ainda não pagas não contam.">
             <Info className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />
@@ -394,73 +470,87 @@ export function TelaInicio({
   /* ------------------------ cartões coloridos ------------------------ */
   const textoAlerta =
     alerta.tipo === "evolucao"
-      ? `Evolução em rascunho de ${alerta.paciente}. Novos atendimentos ficam segurados até você concluir.`
+      ? "Evolução em rascunho. Novos atendimentos ficam segurados até você concluir."
       : alerta.tipo === "na_sala"
-        ? `${alerta.paciente} já está na sala de espera.`
+        ? "Seu paciente já entrou na sala de espera."
         : alerta.tipo === "reserva"
           ? alerta.texto
           : alerta.tipo === "acoes"
             ? `Hoje os pacientes remarcaram ${plural(alerta.remarcadas, "consulta", "consultas")} e cancelaram ${alerta.canceladas}.`
             : "Nada precisa da sua atenção agora.";
+  const legendaAlerta: { nome: string; destaque: string } | null =
+    alerta.tipo === "evolucao"
+      ? { nome: alerta.paciente, destaque: "Evolução pendente" }
+      : alerta.tipo === "na_sala"
+        ? { nome: alerta.paciente, destaque: "Na sala de espera" }
+        : alerta.tipo === "reserva" && proxima
+          ? { nome: proxima.paciente, destaque: "Remarcação pendente" }
+          : null;
   const rotuloAlerta =
     alerta.tipo === "evolucao" ? "Concluir evolução" : alerta.tipo === "na_sala" ? "Entrar na sala" : alerta.tipo === "nada" ? "Abrir notificações" : "Abrir agenda";
   const acaoAlerta = () => {
     if (alerta.tipo === "evolucao") setEvolucaoAberta(true);
-    else if (alerta.tipo === "na_sala") entrarNaSala();
+    else if (alerta.tipo === "na_sala" && proxima) entrarNaSala(proxima);
     else if (alerta.tipo === "nada") onAbrirNotificacoes();
     else onAbrirAgenda();
   };
   const cartoes = (
-    <div className="bm2-cartoes grid grid-cols-2 gap-3 lg:grid-cols-[minmax(0,2.15fr)_minmax(0,1fr)_minmax(0,1fr)] bm-animar bm-animar-d2">
-      <section className="bm2-cor bm2-lavanda col-span-2 flex min-h-[9.5rem] flex-col rounded-[1.5rem] p-4 lg:col-span-1 lg:min-h-[11rem]" aria-labelledby="bm2-alerta-t">
+    <div className="bm2-cartoes grid grid-cols-2 gap-3 lg:grid-cols-[minmax(0,2.6fr)_minmax(0,1fr)_minmax(0,1fr)] bm-animar bm-animar-d2">
+      <section className="bm2-cor bm2-lavanda col-span-2 lg:col-span-1" aria-labelledby="bm2-alerta-t">
         <h2 id="bm2-alerta-t" className="text-[11px] bm2-t-cor">Requer sua atenção</h2>
-        <p className="bm2-barra-esq mt-2 max-w-[30rem] text-[15px] leading-snug" role={alerta.tipo === "nada" ? undefined : "status"}>
+        <p className="bm2-barra-esq mt-2 max-w-[24rem] text-[15px] leading-[1.35] lg:text-base" role={alerta.tipo === "nada" ? undefined : "status"}>
           {textoAlerta}
         </p>
-        {alerta.tipo === "evolucao" ? <p className="mt-1 pl-3 text-[11px] bm2-t-cor">Evolução pendente</p> : null}
-        <div className="mt-auto flex items-end justify-between gap-2 pt-3">
-          {pacientesNaoLidas.length > 0 ? (
-            <button type="button" onClick={onAbrirPacientes} className="flex items-center" aria-label={`Mensagens não lidas de ${plural(pacientesNaoLidas.length, "paciente", "pacientes")}. Abrir pacientes`}>
-              {pacientesNaoLidas.slice(0, 3).map((p, i) => (
-                <span key={p.chave} className={i ? "-ml-2" : ""}>
-                  <span className="block rounded-full ring-2 ring-[var(--bm2-lavanda)]">
-                    <AvatarIniciais nome={p.nome} tamanho="sm" />
-                  </span>
+        {legendaAlerta ? (
+          <p className="mt-1.5 pl-[0.7rem] text-[11px]">
+            <span className="bm2-t-cor">{legendaAlerta.nome}</span>
+            <span className="bm2-t-cor"> · </span>
+            <span className="bm2-t-alerta">{legendaAlerta.destaque}</span>
+          </p>
+        ) : null}
+        <div className="mt-auto pt-4">
+          {pilha.visiveis.length > 0 ? (
+            <button
+              type="button"
+              onClick={onAbrirPacientes}
+              className="flex items-center"
+              aria-label={`Pacientes envolvidos: ${pilha.visiveis.map((p) => p.nome).join(", ")}${pilha.resto ? ` e mais ${pilha.resto}` : ""}. Abrir pacientes`}
+            >
+              {pilha.visiveis.map((p, i) => (
+                <span key={p.chave} className={`bm2-pilha-item ${i ? "-ml-2" : ""}`}>
+                  <AvatarIniciais nome={p.nome} tamanho="sm" />
                 </span>
               ))}
-              {pacientesNaoLidas.length > 3 ? (
-                <span className="-ml-2 grid h-7 min-w-7 place-items-center rounded-full bg-[var(--bm2-texto)] px-1 text-[10px] font-semibold text-white ring-2 ring-[var(--bm2-lavanda)]">
-                  +{pacientesNaoLidas.length - 3}
+              {pilha.resto > 0 ? (
+                <span aria-hidden className="bm2-pilha-item -ml-2 grid h-7 w-7 place-items-center rounded-full bg-[#242424] text-[10px] font-medium text-white">
+                  +{pilha.resto}
                 </span>
               ) : null}
             </button>
-          ) : (
-            <span />
-          )}
-          <BotaoSeta rotulo={rotuloAlerta} onClick={acaoAlerta} disabled={alerta.tipo === "na_sala" && !aberta} />
+          ) : null}
         </div>
+        <BotaoSeta rotulo={rotuloAlerta} onClick={acaoAlerta} disabled={alerta.tipo === "na_sala" && !(proxima && salaAberta(proxima.ts, agora))} />
       </section>
-      <section className="bm2-cor bm2-azul-suave flex min-h-[9.5rem] flex-col rounded-[1.5rem] p-4 lg:min-h-[11rem]" aria-labelledby="bm2-msg-t">
+      <section className="bm2-cor bm2-azul-suave" aria-labelledby="bm2-msg-t">
         <h2 id="bm2-msg-t" className="text-[11px] bm2-t-cor">Mensagens</h2>
-        <p className="bm2-barra-esq mt-2 text-[13px] leading-snug lg:text-[15px]">
+        <p className="bm2-barra-esq mt-2 text-[13px] leading-[1.35] lg:text-base">
           {totalNaoLidas > 0 ? `Não lidas em ${plural(conversasComNaoLidas, "conversa", "conversas")}` : "Nenhuma mensagem nova"}
         </p>
-        <div className="mt-auto flex items-end justify-between gap-2 pt-3">
-          <span className="text-[2rem] leading-none tabular-nums lg:text-[2.25rem]" aria-label={`${totalNaoLidas} mensagens não lidas`}>
-            {totalNaoLidas}
-          </span>
-          <BotaoSeta rotulo="Abrir pacientes e mensagens" onClick={onAbrirPacientes} />
-        </div>
+        <span className="bm2-numero-grande mt-auto pt-3" aria-label={`${totalNaoLidas} mensagens não lidas`}>
+          {totalNaoLidas}
+        </span>
+        <BotaoSeta rotulo="Abrir pacientes e mensagens" onClick={onAbrirPacientes} />
       </section>
-      <section className="bm2-cor bm2-pessego flex min-h-[9.5rem] flex-col rounded-[1.5rem] p-4 lg:min-h-[11rem]" aria-labelledby="bm2-ren-t">
+      <section className="bm2-cor bm2-pessego" aria-labelledby="bm2-ren-t">
         <h2 id="bm2-ren-t" className="text-[11px] bm2-t-cor">Renovações de receita</h2>
-        <p className="bm2-barra-esq mt-2 text-[13px] leading-snug lg:text-[15px]">Aguardam sua resposta</p>
-        <div className="mt-auto flex items-end justify-between gap-2 pt-3">
-          <span className="text-[2rem] leading-none tabular-nums lg:text-[2.25rem]" aria-label={renovacoesPendentes === null ? "Carregando renovações" : `${renovacoesPendentes} renovações aguardando`}>
-            {renovacoesPendentes ?? "—"}
-          </span>
-          <BotaoSeta rotulo="Abrir renovações de receita" onClick={onAbrirRenovacoes} />
-        </div>
+        <p className="bm2-barra-esq mt-2 text-[13px] leading-[1.35] lg:text-base">Aguardam sua resposta</p>
+        <span
+          className="bm2-numero-grande mt-auto pt-3"
+          aria-label={renovacoesPendentes === null ? "Carregando renovações" : `${renovacoesPendentes} renovações aguardando`}
+        >
+          {renovacoesPendentes ?? "—"}
+        </span>
+        <BotaoSeta rotulo="Abrir renovações de receita" onClick={onAbrirRenovacoes} />
       </section>
     </div>
   );
@@ -476,9 +566,9 @@ export function TelaInicio({
     );
   };
   const tabela = (
-    <section className="bm2-cartao min-w-0 p-4 lg:p-5 bm-animar bm-animar-d3" aria-labelledby="bm2-pac-t">
-      <div className="mb-3 flex flex-wrap items-center gap-2">
-        <h2 id="bm2-pac-t" className="mr-auto text-[15px] font-medium">
+    <section className="bm2-cartao min-w-0 px-4 pb-3 pt-4 lg:px-5 bm-animar bm-animar-d3" aria-labelledby="bm2-pac-t">
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        <h2 id="bm2-pac-t" className="mr-auto text-[14px]">
           Meus pacientes <span className="bm2-t-2">· {listaPacientes.length}</span>
         </h2>
         <label className="bm2-busca relative order-last flex w-full items-center sm:order-none sm:w-auto">
@@ -512,64 +602,69 @@ export function TelaInicio({
         </p>
       ) : (
         <>
-          {/* Tela larga: tabela como no modelo */}
           <table className="bm2-tabela hidden w-full table-fixed text-left md:table">
             <thead>
               <tr className="text-[11px] bm2-t-2">
-                <th scope="col" className="w-[18%] px-3 pb-2 font-normal">Nome</th>
-                <th scope="col" className="w-[15%] px-3 pb-2 font-normal">Motivo</th>
-                <th scope="col" className="w-[18%] px-3 pb-2 font-normal">Situação</th>
-                <th scope="col" className="w-[17%] px-3 pb-2 font-normal">Última consulta</th>
-                <th scope="col" className="w-[17%] px-3 pb-2 font-normal">Próxima consulta</th>
-                <th scope="col" className="w-[15%] px-3 pb-2 font-normal">Tipo</th>
+                <th scope="col" className="w-[18%] px-3 pb-1.5 font-normal">Nome</th>
+                <th scope="col" className="w-[15%] px-3 pb-1.5 font-normal">Motivo</th>
+                <th scope="col" className="w-[18%] px-3 pb-1.5 font-normal">Situação</th>
+                <th scope="col" className="w-[17%] px-3 pb-1.5 font-normal">Última consulta</th>
+                <th scope="col" className="w-[17%] px-3 pb-1.5 font-normal">Próxima consulta</th>
+                <th scope="col" className="w-[15%] px-3 pb-1.5 font-normal">Tipo</th>
               </tr>
             </thead>
-            <tbody className="text-xs">
-              {linhas.map((l) => (
-                <tr key={l.chave} className="bm2-tr">
-                  <td className="truncate px-3 py-2 rounded-l-xl">
-                    <button type="button" onClick={() => onAbrirPaciente(l.paciente)} className="max-w-full truncate text-left font-medium hover:underline">
-                      {l.nome}
-                    </button>
-                  </td>
-                  <td className="truncate px-3 py-2" title={l.motivo}>{l.motivo}</td>
-                  <td className={`truncate px-3 py-2 font-medium ${COR_TOM[l.tom]}`} title={l.situacao}>
-                    {l.situacao}
-                    {l.tom === "vermelho" ? <Info className="ml-1 inline h-3 w-3 align-[-2px]" aria-hidden /> : null}
-                  </td>
-                  <td className="truncate px-3 py-2">{fmtQuando(l.ultima)}</td>
-                  <td className="truncate px-3 py-2">{fmtQuando(l.proxima)}</td>
-                  <td className="px-3 py-2 rounded-r-xl">
-                    <span className="flex items-center justify-between gap-1">
-                      <span className="truncate">{l.tipo}</span>
-                      <button type="button" onClick={() => onAbrirPaciente(l.paciente)} aria-label={`Abrir ${l.nome}`} className="bm2-kebab grid h-7 w-7 shrink-0 place-items-center rounded-full">
-                        <MoreVertical className="h-3.5 w-3.5" aria-hidden />
+            <tbody className="text-xs xl:text-[13px]">
+              {linhas.map((l, i) => {
+                const Icone = ICONE_TOM[l.tom];
+                return (
+                  <tr key={l.chave} className={`bm2-tr ${i === 0 ? "bm2-tr-destaque" : ""}`}>
+                    <td className="truncate rounded-l-[0.6rem] px-3 py-[0.7rem]">
+                      <button type="button" onClick={() => onAbrirPaciente(l.paciente)} className="max-w-full truncate text-left hover:underline">
+                        {l.nome}
                       </button>
-                    </span>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td className="truncate px-3" title={l.motivo}>{l.motivo}</td>
+                    <td className={`truncate px-3 ${COR_TOM[l.tom]}`} title={l.situacao}>
+                      {l.situacao}
+                      {Icone ? <Icone className="ml-1 inline h-3.5 w-3.5 align-[-3px]" aria-hidden /> : null}
+                    </td>
+                    <td className="truncate px-3">{fmtQuando(l.ultima)}</td>
+                    <td className="truncate px-3">{fmtQuando(l.proxima)}</td>
+                    <td className="rounded-r-[0.6rem] px-3">
+                      <span className="flex items-center justify-between gap-1">
+                        <span className="truncate">{l.tipo}</span>
+                        <button type="button" onClick={() => onAbrirPaciente(l.paciente)} aria-label={`Abrir ${l.nome}`} className="bm2-kebab grid h-7 w-7 shrink-0 place-items-center rounded-full">
+                          <MoreVertical className="h-3.5 w-3.5" aria-hidden />
+                        </button>
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
-          {/* Celular: a mesma informação em linhas */}
           <ul className="space-y-2 md:hidden">
             {linhas.map((l) => (
               <li key={l.chave}>
-                <button type="button" onClick={() => onAbrirPaciente(l.paciente)} className="bm2-linha flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left">
+                <button type="button" onClick={() => onAbrirPaciente(l.paciente)} className="bm2-item flex w-full items-center gap-3 rounded-[0.9rem] px-3 py-2.5 text-left">
                   <AvatarIniciais nome={l.nome} />
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium">{l.nome}</span>
+                    <span className="block truncate text-[13px]">{l.nome}</span>
                     <span className="block truncate text-[11px] bm2-t-2">
-                      {l.proxima !== null ? `Próxima: ${dataHoraClinica(l.proxima).data} às ${dataHoraClinica(l.proxima).hora}` : l.ultima !== null ? `Última: ${dataHoraClinica(l.ultima).data}` : l.tipo}
+                      {l.proxima !== null
+                        ? `Próxima: ${dataHoraClinica(l.proxima).data} às ${dataHoraClinica(l.proxima).hora}`
+                        : l.ultima !== null
+                          ? `Última: ${dataHoraClinica(l.ultima).data}`
+                          : l.tipo}
                     </span>
                   </span>
-                  <span className={`shrink-0 text-[11px] font-medium ${COR_TOM[l.tom]}`}>{l.situacao}</span>
+                  <span className={`shrink-0 text-[11px] ${COR_TOM[l.tom]}`}>{l.situacao}</span>
                 </button>
               </li>
             ))}
           </ul>
           {pacientesFiltrados.length > LIMITE_TABELA ? (
-            <button type="button" onClick={onAbrirPacientes} className="mt-3 text-xs font-medium bm2-t-azul underline underline-offset-2">
+            <button type="button" onClick={onAbrirPacientes} className="mt-2 px-3 text-xs bm2-t-azul underline underline-offset-2">
               Ver todos os {pacientesFiltrados.length} pacientes
             </button>
           ) : null}
@@ -579,47 +674,53 @@ export function TelaInicio({
   );
 
   return (
-    <section className="bm-tela bm-tela-1 bm-v2 relative flex flex-col bp-safe-top pb-24 lg:pb-10" aria-labelledby="bm-t1-titulo">
+    <section className="bm-tela bm-tela-1 bm-v2 relative flex flex-col bp-safe-top pb-24 lg:pb-8" aria-labelledby="bm-t1-titulo">
       <div className="bm2-conteudo mx-auto w-full">
         {topo}
 
-        {/* Toque da consulta no celular do médico (some sem permissão pendente). */}
         <AvisoAtivarToque role={sessao.role} usuarioId={sessao.id} className="relative mt-4" />
 
-        <div className="mt-5 flex flex-col gap-4 lg:mt-7 lg:flex-row lg:items-end lg:justify-between bm-animar bm-animar-d1">
-          <h1 id="bm-t1-titulo" className="text-[1.75rem] font-normal leading-[1.15] tracking-[-0.01em] lg:text-[2.6rem]">
-            {saudacao(agora)},
-            <br />
-            {tratamento ? `${tratamento} ` : ""}
-            {primeiroNome(nomeExibicao)}
+        <div className="bm2-cabecalho flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between bm-animar bm-animar-d1">
+          <h1 id="bm-t1-titulo" className="bm2-saudacao">
+            <span className="bm2-saudacao-1">{saudacao(agora)},</span>
+            <span className="bm2-saudacao-2">
+              {tratamento ? `${tratamento} ` : ""}
+              {primeiroNome(nomeExibicao)}
+            </span>
           </h1>
-          <div className="flex items-end gap-3">
+          <div className="flex items-end gap-4">
             <dl className="bm2-numeros grid flex-1 grid-cols-3 lg:flex lg:flex-none lg:items-end">
               {numeros.map((n) => (
-                <div key={n.rotulo} className="bm2-numero px-3 lg:px-6" title={n.titulo}>
-                  <dt className="text-[11px] leading-tight bm2-t-2">
-                    {n.rotulo}
-                    {n.rotulo === "Avaliação" ? <span className="hidden lg:inline"> média</span> : null}
+                <div key={n.rotulo} className="bm2-numero" title={n.titulo}>
+                  <dt className="bm2-numero-rotulo">
+                    {n.rotuloLargo ? (
+                      <>
+                        <span className="lg:hidden">{n.rotulo}</span>
+                        <span className="hidden lg:inline">{n.rotuloLargo}</span>
+                      </>
+                    ) : (
+                      n.rotulo
+                    )}
                   </dt>
-                  <dd className="mt-1 text-[1.6rem] leading-none tabular-nums lg:text-[1.75rem]">
+                  <dd className="bm2-numero-valor tabular-nums">
                     {n.valor}
-                    {n.sufixo ? <span className="ml-0.5 text-xs bm2-t-2">{n.sufixo}</span> : null}
+                    {n.sufixo ? <span className="bm2-numero-sufixo">{n.sufixo}</span> : null}
                   </dd>
                 </div>
               ))}
             </dl>
-            <div className="hidden gap-2 lg:flex">
-              <button type="button" onClick={onAbrirGestao} aria-label="Ver gestão e receita" title="Gestão e receita" className="bm2-botao-contorno grid h-10 w-10 place-items-center rounded-xl">
+            <div className="hidden gap-2 pb-0.5 lg:flex">
+              <button type="button" onClick={onAbrirGestao} aria-label="Ver gestão e receita" title="Gestão e receita" className="bm2-botao-quadrado grid h-9 w-9 place-items-center rounded-[0.6rem]">
                 <BarChart3 className="h-4 w-4" aria-hidden />
               </button>
-              <button type="button" onClick={onAbrirAgenda} aria-label="Abrir agenda e horários" title="Agenda e horários" className="bm2-mais grid h-10 w-10 place-items-center rounded-xl">
+              <button type="button" onClick={onAbrirAgenda} aria-label="Abrir agenda e horários" title="Agenda e horários" className="bm2-mais grid h-9 w-9 place-items-center rounded-[0.6rem]">
                 <ArrowUpRight className="h-4 w-4" aria-hidden />
               </button>
             </div>
           </div>
         </div>
 
-        <div className="bm2-grade mt-5 lg:mt-6">
+        <div className="bm2-grade">
           <div className="bm2-area-hoje">{colunaHoje}</div>
           <div className="bm2-area-cartoes">{cartoes}</div>
           <div className="bm2-area-tabela min-w-0">{tabela}</div>
