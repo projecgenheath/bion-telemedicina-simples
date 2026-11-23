@@ -43,7 +43,13 @@ export function TelaSobreposta({
   acoes,
   children,
   rodape,
+  classe,
+  extraCabecalho,
 }: {
+  /** Classe extra na camada (ex.: ficha do médico em página inteira). */
+  classe?: string;
+  /** Conteúdo extra no cabeçalho (ex.: abas), abaixo no celular. */
+  extraCabecalho?: ReactNode;
   titulo: string;
   subtitulo?: string;
   onFechar: () => void;
@@ -71,8 +77,8 @@ export function TelaSobreposta({
   }, []);
 
   return (
-    <div className="bm-sobreposicao absolute inset-0 z-40 flex flex-col" role="dialog" aria-modal="true" aria-label={titulo}>
-      <header className="bp-safe-top shrink-0 px-4 pt-3 pb-3 flex items-center gap-3 border-b border-bion-ink/10 dark:border-white/10">
+    <div className={`bm-sobreposicao absolute inset-0 z-40 flex flex-col ${classe ?? ""}`} role="dialog" aria-modal="true" aria-label={titulo}>
+      <header className={`bp-safe-top shrink-0 px-4 pt-3 pb-3 flex items-center gap-3 border-b border-bion-ink/10 dark:border-white/10 ${extraCabecalho ? "flex-wrap bm-sobreposicao-cab" : ""}`}>
         <button
           ref={voltarRef}
           type="button"
@@ -86,6 +92,7 @@ export function TelaSobreposta({
           <h2 className="text-base font-black truncate">{titulo}</h2>
           {subtitulo ? <p className="text-xs text-bion-ink/75 dark:text-bion-paper/75 truncate">{subtitulo}</p> : null}
         </div>
+        {extraCabecalho}
         {acoes}
       </header>
       <div className={`flex-1 overflow-y-auto bp-coluna ${rodape ? "" : "pb-[env(safe-area-inset-bottom)]"}`}>{children}</div>
