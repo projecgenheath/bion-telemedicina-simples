@@ -10,6 +10,7 @@
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { CalendarCog, ChevronLeft, ChevronRight, ListFilter, Search, X } from "lucide-react";
+import { SinoTopo } from "../TopoMedico";
 import { TelaSobreposta } from "../TelaSobreposta";
 import { BuscaPacienteTopo, PerfilMedicoTopo } from "../ficha/TopoFicha";
 import { chavePaciente, rotuloStatusMedico, type PacienteDoMedico } from "../metricas";
@@ -458,10 +459,14 @@ export function AgendaSemanal({
       subtitulo="Suas consultas da semana"
       onFechar={onFechar}
       acoes={
-        <button type="button" onClick={onHorarios} className="bm2-agenda-horarios">
-          <CalendarCog aria-hidden /> Horários e bloqueios
-        </button>
+        <>
+          <button type="button" onClick={onHorarios} className="bm2-agenda-horarios">
+            <CalendarCog aria-hidden /> <span className="max-sm:sr-only">Horários e bloqueios</span>
+          </button>
+          <SinoTopo className="lg:hidden" />
+        </>
       }
+      topoPadrao={false}
     >
       <div className="bm2-agenda-pagina">
         <div className="bm2-agenda-cartao">

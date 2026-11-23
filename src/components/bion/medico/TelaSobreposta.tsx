@@ -1,7 +1,22 @@
 "use client";
 
-import { useEffect, useRef, type ReactNode } from "react";
+import { useContext, useEffect, useRef, type ReactNode } from "react";
 import { ArrowLeft } from "lucide-react";
+import { SinoTopo, TopoMedicoContexto } from "./TopoMedico";
+import { PerfilMedicoTopo } from "./ficha/TopoFicha";
+
+/** Topo padrão das telas do médico (rodada do menu): sino + perfil, como no
+ *  Início. No celular o perfil some (CSS) e o sino fica. */
+function TopoPadrao() {
+  const topo = useContext(TopoMedicoContexto);
+  if (!topo) return null;
+  return (
+    <>
+      <SinoTopo className="lg:hidden" />
+      <PerfilMedicoTopo {...topo.perfil} />
+    </>
+  );
+}
 
 /** Entrada do histórico de uma sobreposição que acabou de desmontar e ainda não voltou (ver useVoltarFecha). */
 let saidaPendente: number | null = null;
@@ -64,7 +79,10 @@ export function TelaSobreposta({
   rodape,
   classe,
   extraCabecalho,
+  topoPadrao = true,
 }: {
+  /** Sino + perfil no fim do topo (desligue quando a tela monta o próprio). */
+  topoPadrao?: boolean;
   /** Classe extra na camada (ex.: ficha do médico em página inteira). */
   classe?: string;
   /** Conteúdo extra no cabeçalho (ex.: abas), abaixo no celular. */
@@ -117,6 +135,7 @@ export function TelaSobreposta({
         </div>
         {extraCabecalho}
         {acoes}
+        {topoPadrao ? <TopoPadrao /> : null}
       </header>
       <div className={`flex-1 overflow-y-auto bp-coluna ${rodape ? "" : "pb-[env(safe-area-inset-bottom)]"}`}>{children}</div>
       {rodape ? <div className="shrink-0 bp-safe-bottom border-t border-bion-ink/10 dark:border-white/10">{rodape}</div> : null}

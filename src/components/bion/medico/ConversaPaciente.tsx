@@ -14,6 +14,7 @@ const FUSO = "America/Sao_Paulo";
 /** "30/11/2026" (fuso da clínica) para um timestamp. */
 const fmtData = (ts: number) =>
   new Date(ts).toLocaleDateString("pt-BR", { timeZone: FUSO, day: "2-digit", month: "2-digit", year: "numeric" });
+import { SinoTopo } from "./TopoMedico";
 import { TelaSobreposta } from "./TelaSobreposta";
 import { TriagemPaciente } from "./TriagemPaciente";
 import { ProntuarioPaciente } from "./ProntuarioPaciente";
@@ -27,7 +28,8 @@ import { ResumoConversa } from "./mensagens/ResumoConversa";
 import { chaveDia, destacarTermos, rotuloDia, termosMedicamentos } from "./mensagens/mensagens-dados";
 import { iniciais, salaAberta } from "./metricas";
 
-type Aba = "conversa" | "triagem" | "prontuario";
+export type AbaPaciente = "conversa" | "triagem" | "prontuario";
+type Aba = AbaPaciente;
 const MAX_TEXTO = 4000; // limite do POST /api/mensagens
 
 /* Item 23 (melhorias): modelos de mensagem — tocar PREENCHE o campo, nunca
@@ -100,6 +102,7 @@ export function ConversaPaciente({
   onFechar,
   onAbrirPaciente,
   onAbrirPerfil,
+  onAba,
 }: {
   paciente: PacienteDoMedico;
   dados: DadosMedico;
@@ -108,11 +111,18 @@ export function ConversaPaciente({
   onAbrirPaciente?: (p: PacienteDoMedico) => void;
   /** Perfil do médico no topo (computador), como no Início. */
   onAbrirPerfil?: () => void;
+  /** Rodada do menu: avisa a aba atual (o menu lateral marca Mensagens na
+   *  conversa e Pacientes na triagem/ficha). Abre sempre na conversa. */
+  onAba?: (aba: AbaPaciente) => void;
 }) {
   const { mensagens, documentos, arquivos, enviarMensagem, marcarConversaLida } = useBion();
   const { sessao, anamneses, listaPacientes, medico, naoLidasPorPaciente, agora } = dados;
   const pid = paciente.pacienteId;
-  const [aba, setAba] = useState<Aba>("conversa");
+  const [aba, setAbaLocal] = useState<Aba>("conversa");
+  const setAba = (a: Aba) => {
+    setAbaLocal(a);
+    onAba?.(a);
+  };
   const largo = useTelaLarga();
   const tres = largo && aba === "conversa";
   const [resumoRecolhido, setResumoRecolhido] = useState(false);
@@ -500,7 +510,7 @@ export function ConversaPaciente({
                 aria-expanded={pedidoAberto}
                 className="rounded-full px-3 py-2 text-xs font-bold bg-bion-ink/8 dark:bg-white/10 inline-flex items-center gap-1"
               >
-                <Ruler className="w-4 h-4" /> Medição
+                <Ruler className="w-4 h-4" aria-hidden /> <span className="max-sm:sr-only">Medição</span>
               </button>
             ) : null}
             <button
@@ -508,11 +518,15 @@ export function ConversaPaciente({
               onClick={() => setEmitir({})}
               className="rounded-full px-3 py-2 text-xs font-bold bg-bion-sea text-white dark:bg-sky-300 dark:text-zinc-950 inline-flex items-center gap-1"
             >
-              <FilePlus2 className="w-4 h-4" /> Emitir
+              <FilePlus2 className="w-4 h-4" aria-hidden /> <span className="max-sm:sr-only">Emitir</span>
             </button>
+            <SinoTopo className="lg:hidden" />
           </div>
-        ) : null
+        ) : (
+          <SinoTopo className="lg:hidden" />
+        )
       }
+      topoPadrao={false}
       rodape={aba === "conversa" && !tres ? compositor : undefined}
     >
       {aba === "conversa" ? (

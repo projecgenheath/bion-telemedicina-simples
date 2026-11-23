@@ -15,7 +15,7 @@ import { TelaGestao } from "./telas/TelaGestao";
 import { TelaPerfilPublico } from "./telas/TelaPerfilPublico";
 import { PerfilMedicoPainel } from "./PerfilMedicoPainel";
 import { PacientesPainel } from "./PacientesPainel";
-import { ConversaPaciente } from "./ConversaPaciente";
+import { ConversaPaciente, type AbaPaciente } from "./ConversaPaciente";
 import { NotificacoesMedico } from "./NotificacoesMedico";
 import { TelaSobreposta } from "./TelaSobreposta";
 import { RenovacoesPendentes } from "./evolucao/RenovacoesPendentes";
@@ -26,7 +26,10 @@ import { AgendaSemanal } from "./agenda/AgendaSemanal";
 import { AgendaPreviewSheet } from "./sheets/AgendaPreviewSheet";
 import type { PacienteDoMedico } from "./metricas";
 import type { NotifTipo } from "@/lib/bion-store";
-import { BarraLateralMedico } from "./inicio/BarraLateralMedico";
+import { BarraLateralMedico, type DestinoMenu } from "./inicio/BarraLateralMedico";
+import { TopoMedicoContexto, type TopoMedico } from "./TopoMedico";
+import { PerfilMedicoTopo } from "./ficha/TopoFicha";
+import { ultimaConversa } from "./mensagens/mensagens-dados";
 import { poppins } from "./inicio/fonte-medico";
 import { X } from "lucide-react";
 import "./medico.css";
@@ -58,7 +61,7 @@ export function MedicoApp() {
   const dados = useDadosMedico();
   const { medico, minhas } = dados;
   const router = useRouter();
-  const { carregando: agendaCarregando } = useBion();
+  const { carregando: agendaCarregando, mensagens } = useBion();
   const carrosselRef = useRef<HTMLDivElement>(null);
   const colunaRef = useRef<HTMLDivElement>(null);
   const parametros = useSearchParams();
@@ -105,9 +108,19 @@ export function MedicoApp() {
   /** Item do menu lateral: sai da agenda antes de navegar. */
   const doMenu = (f: () => void) => {
     setAgendaAberta(false);
+    // Rodada do menu: fecha a gaveta (perfil/pacientes) — a tela nova não
+    // fica coberta por ela e o item ativo corresponde ao que se vê.
+    setPainel(1);
     f();
   };
   const dica = useDicaGestos();
+  // Rodada do menu: aba da ficha aberta (conversa → "Mensagens" ativo;
+  // triagem/ficha → "Pacientes"). Toda ficha abre na conversa.
+  const [abaPaciente, setAbaPaciente] = useState<AbaPaciente>("conversa");
+  const abrirPaciente = (p: PacienteDoMedico) => {
+    setAbaPaciente("conversa");
+    setSobreposicao({ tipo: "paciente", p });
+  };
 
   // Confirmações vivem aqui (sempre montado), não nos sheets que desmontam.
   const confirmarValor = useConfirmarSalvamento(medico?.valor ?? 0, (a, b) => Math.abs(a - b) < 0.005);
@@ -279,212 +292,273 @@ export function MedicoApp() {
 
   const painelCls = "flex-[0_0_100%] w-full min-w-full h-full";
 
+  /** Item "Mensagens": a conversa mais recente (três colunas no computador);
+   *  sem nenhuma conversa ainda, abre a lista de pacientes. Só dados do cliente. */
+  const abrirMensagens = () => {
+    setAgendaAberta(false);
+    const p = ultimaConversa(dados.listaPacientes, mensagens, dados.sessao.id ?? "", dados.naoLidasPorPaciente);
+    if (p) abrirPaciente(p);
+    else {
+      setSobreposicao(null);
+      irPara(2);
+    }
+  };
+  const abrirConfiguracoes = () => {
+    setSobreposicao(null);
+    setAgendaAberta(false);
+    irPara(0);
+  };
+  const totalNaoLidas = [...dados.naoLidasPorPaciente.values()].reduce((a, b) => a + b, 0);
+
+  // Item ativo do menu = tela atual (a camada de cima manda).
+  const destinoAtivo: DestinoMenu | null =
+    sobreposicao?.tipo === "paciente"
+      ? abaPaciente === "conversa"
+        ? "mensagens"
+        : "pacientes"
+      : sobreposicao?.tipo === "renovacoes"
+        ? "documentos"
+        : sobreposicao?.tipo === "termos" || sobreposicao?.tipo === "suporte"
+          ? "ajuda"
+          : sobreposicao?.tipo === "notificacoes"
+            ? null
+            : agendaAberta
+              ? "agenda"
+              : painel === 0
+                ? "configuracoes"
+                : painel === 2
+                  ? "pacientes"
+                  : secao === 1
+                    ? "relatorios"
+                    : secao === 2
+                      ? "configuracoes"
+                      : "inicio";
+
+  // Sino + perfil do topo (todas as telas): contagem real de não lidas.
+  const topo: TopoMedico = {
+    notificacoes: dados.notificacoesNaoLidas,
+    onNotificacoes: () => setSobreposicao({ tipo: "notificacoes" }),
+    notificacoesAbertas: sobreposicao?.tipo === "notificacoes",
+    perfil: { nome: dados.sessao.nome, especialidade: medico?.especialidade, foto: medico?.foto, onAbrir: abrirConfiguracoes },
+  };
+
   return (
-    <div
-      className={`bp-shell bm-app ${poppins.variable} flex flex-col text-bion-ink dark:text-bion-paper`}
-      data-gaveta={painel === 0 ? "perfil" : painel === 2 ? "pacientes" : undefined}
-    >
-      <BarraLateralMedico
-        agora={dados.agora}
-        painel={painel}
-        onInicio={() => doMenu(() => {
-          irPara(1);
-          irSecao(0);
-        })}
-        onPacientes={() => doMenu(() => irPara(2))}
-        onAgenda={abrirAgenda}
-        onRenovacoes={() => doMenu(() => setSobreposicao({ tipo: "renovacoes" }))}
-        onNotificacoes={() => doMenu(() => setSobreposicao({ tipo: "notificacoes" }))}
-        onGestao={() => doMenu(() => {
-          irPara(1);
-          irSecao(1);
-        })}
-        onPerfil={() => doMenu(() => irPara(0))}
-        onAjuda={() => doMenu(() => setSobreposicao({ tipo: "termos" }))}
-        onSuporte={() => doMenu(() => setSobreposicao({ tipo: "suporte" }))}
-        agendaAberta={agendaAberta}
-        naoLidas={[...dados.naoLidasPorPaciente.values()].reduce((a, b) => a + b, 0)}
-        renovacoes={dados.renovacoesPendentes}
-        notificacoes={dados.notificacoesNaoLidas}
-      />
-      {mostrarBannerConsulta ? (
-        <div className="mx-4 mt-3 rounded-2xl border bg-card p-3 text-sm flex flex-wrap items-center justify-between gap-2" role="status">
-          <span className="font-semibold">
-            {!consultaUrlValida
-              ? "Este link de consulta não é válido."
-              : !consultaPedida && agendaCarregando
-                ? "Procurando a consulta deste link…"
-                : !consultaPedida
-                  ? "Não encontrei essa consulta na sua agenda."
-                  : salaDaUrlAberta
-                    ? `Abrindo a sala de ${consultaPedida.paciente}…`
-                    : estadoJanelaSala(consultaPedida.ts, dados.agora) === "antes"
-                      ? `A sala de ${consultaPedida.paciente} (${consultaPedida.data} · ${consultaPedida.hora}) abre 30 minutos antes do horário.`
-                      : `A sala de ${consultaPedida.paciente} já fechou. Ela fica aberta até 2 horas depois do horário.`}
-          </span>
-          <span className="flex gap-2">
-            {consultaPedida && salaDaUrlAberta ? (
-              <a
-                href={`/consulta?consulta=${encodeURIComponent(consultaPedida.id)}`}
-                className="px-3 py-1.5 rounded-full bg-primary text-primary-foreground text-xs font-bold"
-              >
-                Abrir sala
-              </a>
-            ) : null}
-            <button type="button" onClick={ignorarConsultaLink} className="px-3 py-1.5 rounded-full border text-xs font-bold">
-              Ignorar
-            </button>
-          </span>
-        </div>
-      ) : null}
+    <TopoMedicoContexto.Provider value={topo}>
       <div
-        ref={carrosselRef}
-        onScroll={aoRolarCarrossel}
-        inert={bloqueado}
-        className={`bp-carrossel bm-carrossel flex flex-1 min-h-0 overflow-x-auto ${bloqueado ? "pointer-events-none" : ""}`}
-        aria-label="Áreas do app do médico"
+        className={`bp-shell bm-app ${poppins.variable} flex flex-col text-bion-ink dark:text-bion-paper`}
+        data-gaveta={sobreposicao || agendaAberta ? undefined : painel === 0 ? "perfil" : painel === 2 ? "pacientes" : undefined}
       >
-        <div className={`${painelCls} bm-lateral-esq`} aria-label="Meu perfil" role="region">
-          <PerfilMedicoPainel
-            dados={dados}
-            onAbrirSuporte={() => setSobreposicao({ tipo: "suporte" })}
-            onAbrirTermos={() => setSobreposicao({ tipo: "termos" })}
-            onAbrirRenovacoes={() => setSobreposicao({ tipo: "renovacoes" })}
-          />
-        </div>
-
+        <BarraLateralMedico
+          agora={dados.agora}
+          ativo={destinoAtivo}
+          onInicio={() => doMenu(() => {
+            setSobreposicao(null);
+            irPara(1);
+            irSecao(0);
+          })}
+          onPacientes={() => doMenu(() => {
+            setSobreposicao(null);
+            irPara(2);
+          })}
+          onMensagens={() => doMenu(abrirMensagens)}
+          onAgenda={() => doMenu(abrirAgenda)}
+          onRelatorios={() => doMenu(() => {
+            setSobreposicao(null);
+            irPara(1);
+            irSecao(1);
+          })}
+          onDocumentos={() => doMenu(() => setSobreposicao({ tipo: "renovacoes" }))}
+          onConfiguracoes={abrirConfiguracoes}
+          onTermos={() => doMenu(() => setSobreposicao({ tipo: "termos" }))}
+          onSuporte={() => doMenu(() => setSobreposicao({ tipo: "suporte" }))}
+          naoLidas={totalNaoLidas}
+          renovacoes={dados.renovacoesPendentes}
+        />
+        {mostrarBannerConsulta ? (
+          <div className="mx-4 mt-3 rounded-2xl border bg-card p-3 text-sm flex flex-wrap items-center justify-between gap-2" role="status">
+            <span className="font-semibold">
+              {!consultaUrlValida
+                ? "Este link de consulta não é válido."
+                : !consultaPedida && agendaCarregando
+                  ? "Procurando a consulta deste link…"
+                  : !consultaPedida
+                    ? "Não encontrei essa consulta na sua agenda."
+                    : salaDaUrlAberta
+                      ? `Abrindo a sala de ${consultaPedida.paciente}…`
+                      : estadoJanelaSala(consultaPedida.ts, dados.agora) === "antes"
+                        ? `A sala de ${consultaPedida.paciente} (${consultaPedida.data} · ${consultaPedida.hora}) abre 30 minutos antes do horário.`
+                        : `A sala de ${consultaPedida.paciente} já fechou. Ela fica aberta até 2 horas depois do horário.`}
+            </span>
+            <span className="flex gap-2">
+              {consultaPedida && salaDaUrlAberta ? (
+                <a
+                  href={`/consulta?consulta=${encodeURIComponent(consultaPedida.id)}`}
+                  className="px-3 py-1.5 rounded-full bg-primary text-primary-foreground text-xs font-bold"
+                >
+                  Abrir sala
+                </a>
+              ) : null}
+              <button type="button" onClick={ignorarConsultaLink} className="px-3 py-1.5 rounded-full border text-xs font-bold">
+                Ignorar
+              </button>
+            </span>
+          </div>
+        ) : null}
         <div
-          ref={colunaRef}
-          onScroll={aoRolarColuna}
-          className={`${painelCls} overflow-y-auto bp-coluna bm-snap-y bm-centro`}
-          aria-label="Início"
-          role="region"
+          ref={carrosselRef}
+          onScroll={aoRolarCarrossel}
+          inert={bloqueado}
+          className={`bp-carrossel bm-carrossel flex flex-1 min-h-0 overflow-x-auto ${bloqueado ? "pointer-events-none" : ""}`}
+          aria-label="Áreas do app do médico"
         >
-          <TelaInicio
-            dados={dados}
-            onAbrirPerfil={() => irPara(0)}
-            onAbrirPacientes={() => irPara(2)}
-            onAbrirPaciente={(p) => setSobreposicao({ tipo: "paciente", p })}
-            onAbrirAgenda={abrirAgenda}
-            onAbrirGestao={() => irSecao(1)}
-            onAbrirRenovacoes={() => setSobreposicao({ tipo: "renovacoes" })}
-            onAbrirNotificacoes={() => setSobreposicao({ tipo: "notificacoes" })}
-          />
-          <TelaGestao dados={dados} onAbrirPreco={() => abrirSheet("preco")} onAbrirAgenda={() => abrirSheet("agenda")} />
-          <TelaPerfilPublico
-            dados={dados}
-            onAgendar={() => abrirSheet("preview")}
-            confirmarBio={confirmarBio}
-            onEditarFoto={() => irPara(0)}
-            onEditarHorarios={() => abrirSheet("agenda")}
-          />
-        </div>
+          <div className={`${painelCls} bm-lateral-esq`} aria-label="Meu perfil" role="region">
+            <PerfilMedicoPainel
+              dados={dados}
+              onAbrirSuporte={() => setSobreposicao({ tipo: "suporte" })}
+              onAbrirTermos={() => setSobreposicao({ tipo: "termos" })}
+              onAbrirRenovacoes={() => setSobreposicao({ tipo: "renovacoes" })}
+            />
+          </div>
 
-        <div className={`${painelCls} bm-lateral-dir`} aria-label="Pacientes" role="region">
-          <PacientesPainel dados={dados} onAbrirPaciente={(p) => setSobreposicao({ tipo: "paciente", p })} />
-        </div>
-      </div>
-
-      {/* Tela larga: fundo e botão de fechar da gaveta (só aparecem com data-gaveta, ver medico.css) */}
-      {painel !== 1 && !bloqueado ? (
-        <>
-          <button type="button" tabIndex={-1} aria-hidden className="bm2-gaveta-fundo" onClick={() => irPara(1)} />
-          <button
-            type="button"
-            onClick={() => irPara(1)}
-            aria-label={painel === 0 ? "Fechar meu perfil" : "Fechar pacientes"}
-            className="bm2-gaveta-fechar h-10 w-10 place-items-center rounded-full bg-white text-[#242424] shadow-md"
+          <div
+            ref={colunaRef}
+            onScroll={aoRolarColuna}
+            className={`${painelCls} overflow-y-auto bp-coluna bm-snap-y bm-centro`}
+            aria-label="Início"
+            role="region"
           >
-            <X className="h-5 w-5" aria-hidden />
-          </button>
-        </>
+            <TelaInicio
+              dados={dados}
+              onAbrirPerfil={() => irPara(0)}
+              onAbrirPacientes={() => irPara(2)}
+              onAbrirMensagens={abrirMensagens}
+              onAbrirPaciente={(p) => abrirPaciente(p)}
+              onAbrirAgenda={abrirAgenda}
+              onAbrirGestao={() => irSecao(1)}
+              onAbrirRenovacoes={() => setSobreposicao({ tipo: "renovacoes" })}
+              onAbrirNotificacoes={() => setSobreposicao({ tipo: "notificacoes" })}
+            />
+            <TelaGestao dados={dados} onAbrirPreco={() => abrirSheet("preco")} onAbrirAgenda={() => abrirSheet("agenda")} />
+            <TelaPerfilPublico
+              dados={dados}
+              onAgendar={() => abrirSheet("preview")}
+              confirmarBio={confirmarBio}
+              onEditarFoto={() => irPara(0)}
+              onEditarHorarios={() => abrirSheet("agenda")}
+            />
+          </div>
+
+          <div className={`${painelCls} bm-lateral-dir`} aria-label="Pacientes" role="region">
+            <PacientesPainel dados={dados} onAbrirPaciente={(p) => abrirPaciente(p)} />
+          </div>
+        </div>
+
+        {/* Tela larga: fundo e botão de fechar da gaveta (só aparecem com data-gaveta, ver medico.css) */}
+        {painel !== 1 && !bloqueado ? (
+          <>
+            <button type="button" tabIndex={-1} aria-hidden className="bm2-gaveta-fundo" onClick={() => irPara(1)} />
+            <button
+              type="button"
+              onClick={() => irPara(1)}
+              aria-label={painel === 0 ? "Fechar meu perfil" : "Fechar pacientes"}
+              className="bm2-gaveta-fechar h-10 w-10 place-items-center rounded-full bg-white text-[#242424] shadow-md"
+            >
+              <X className="h-5 w-5" aria-hidden />
+            </button>
+          </>
+        ) : null}
+        {/* Rodada do menu (tela larga): na Gestão/Perfil público o topo do
+          Início rolou para fora, e nas gavetas ele fica sob o fundo escuro —
+          sino + perfil ficam fixos no canto, por cima. */}
+      {(painel !== 1 || secao > 0) && !bloqueado ? (
+        <div className="bm-v2 bm2-topo-flutuante">
+          <PerfilMedicoTopo {...topo.perfil} />
+        </div>
       ) : null}
       <IndicadorTelas painel={painel} secao={secao} onPainel={irPara} onSecao={irSecao} oculto={bloqueado} />
-      {dica.visivel && !bloqueado ? <DicaGestos onDispensar={dica.dispensar} /> : null}
+        {dica.visivel && !bloqueado ? <DicaGestos onDispensar={dica.dispensar} /> : null}
 
-      {medico ? (
-        <>
-          <PrecoSheet
-            key={`preco-${aberturas}`}
-            aberto={sheet === "preco"}
-            onFechar={fecharSheet}
-            medico={medico}
-            confirmar={confirmarValor}
-          />
-          <AgendaSheet
-            key={`agenda-${aberturas}`}
-            aberto={sheet === "agenda"}
-            onFechar={fecharSheet}
-            medico={medico}
-            confirmar={confirmarHorarios}
-          />
-          <AgendaPreviewSheet
-            key={`preview-${aberturas}`}
-            aberto={sheet === "preview"}
-            onFechar={fecharSheet}
-            medico={medico}
-            consultas={minhas}
-          />
-        </>
-      ) : null}
+        {medico ? (
+          <>
+            <PrecoSheet
+              key={`preco-${aberturas}`}
+              aberto={sheet === "preco"}
+              onFechar={fecharSheet}
+              medico={medico}
+              confirmar={confirmarValor}
+            />
+            <AgendaSheet
+              key={`agenda-${aberturas}`}
+              aberto={sheet === "agenda"}
+              onFechar={fecharSheet}
+              medico={medico}
+              confirmar={confirmarHorarios}
+            />
+            <AgendaPreviewSheet
+              key={`preview-${aberturas}`}
+              aberto={sheet === "preview"}
+              onFechar={fecharSheet}
+              medico={medico}
+              consultas={minhas}
+            />
+          </>
+        ) : null}
 
-      {agendaAberta ? (
-        <AgendaSemanal
-          dados={dados}
-          onFechar={() => setAgendaAberta(false)}
-          onAbrirPaciente={(p) => setSobreposicao({ tipo: "paciente", p })}
-          onHorarios={() => abrirSheet("agenda")}
-          onAbrirPerfil={() => {
-            setAgendaAberta(false);
-            irPara(0);
-          }}
-        />
-      ) : null}
-      {sobreposicao?.tipo === "paciente" ? (
-        <ConversaPaciente
-          key={sobreposicao.p.chave}
-          paciente={sobreposicao.p}
-          dados={dados}
-          onFechar={fecharSobreposicao}
-          onAbrirPaciente={(p) => setSobreposicao({ tipo: "paciente", p })}
-          onAbrirPerfil={() => {
-            setSobreposicao(null);
-            setAgendaAberta(false);
-            irPara(0);
-          }}
-        />
-      ) : null}
-      {sobreposicao?.tipo === "notificacoes" ? (
-        <TelaSobreposta titulo="Notificações" subtitulo="Novidades das suas consultas, mensagens e avaliações" onFechar={fecharSobreposicao}>
-          <NotificacoesMedico onNavegar={navegarNotificacao} />
-        </TelaSobreposta>
-      ) : null}
-      {sobreposicao?.tipo === "renovacoes" ? (
-        <TelaSobreposta titulo="Renovações de receita" subtitulo="Pedidos pendentes dos seus pacientes" onFechar={fecharSobreposicao}>
-          <RenovacoesPendentes />
-        </TelaSobreposta>
-      ) : null}
-      {sobreposicao?.tipo === "suporte" ? (
-        <TelaSobreposta titulo="Suporte" subtitulo="Chamados com a equipe BION" onFechar={fecharSobreposicao}>
-          <div className="p-4">
-            <ChamadosSuporte />
-          </div>
-        </TelaSobreposta>
-      ) : null}
-      {sobreposicao?.tipo === "termos" ? (
-        <TelaSobreposta titulo="Termos e ajuda" onFechar={fecharSobreposicao}>
-          <div className="p-4 space-y-4">
-            <div className="bp-glass p-4 flex items-center justify-between gap-3 bm-animar">
-              <div>
-                <div className="text-sm font-bold">Termos de uso do médico</div>
-                <div className="text-xs text-bion-ink/75 dark:text-bion-paper/75">Texto específico para profissionais.</div>
-              </div>
-              <button type="button" onClick={() => window.open("/termos-medico", "_blank", "noopener,noreferrer")} className="text-xs font-bold text-bion-sea dark:text-sky-300">Ler termos</button>
+        {agendaAberta ? (
+          <AgendaSemanal
+            dados={dados}
+            onFechar={() => setAgendaAberta(false)}
+            onAbrirPaciente={(p) => abrirPaciente(p)}
+            onHorarios={() => abrirSheet("agenda")}
+            onAbrirPerfil={() => {
+              setAgendaAberta(false);
+              irPara(0);
+            }}
+          />
+        ) : null}
+        {sobreposicao?.tipo === "paciente" ? (
+          <ConversaPaciente
+            key={sobreposicao.p.chave}
+            paciente={sobreposicao.p}
+            dados={dados}
+            onFechar={fecharSobreposicao}
+            onAbrirPaciente={(p) => abrirPaciente(p)}
+            onAbrirPerfil={abrirConfiguracoes}
+            onAba={setAbaPaciente}
+          />
+        ) : null}
+        {sobreposicao?.tipo === "notificacoes" ? (
+          <TelaSobreposta titulo="Notificações" subtitulo="Novidades das suas consultas, mensagens e avaliações" onFechar={fecharSobreposicao}>
+            <NotificacoesMedico onNavegar={navegarNotificacao} />
+          </TelaSobreposta>
+        ) : null}
+        {sobreposicao?.tipo === "renovacoes" ? (
+          <TelaSobreposta titulo="Renovações de receita" subtitulo="Pedidos pendentes dos seus pacientes" onFechar={fecharSobreposicao}>
+            <RenovacoesPendentes />
+          </TelaSobreposta>
+        ) : null}
+        {sobreposicao?.tipo === "suporte" ? (
+          <TelaSobreposta titulo="Suporte" subtitulo="Chamados com a equipe BION" onFechar={fecharSobreposicao}>
+            <div className="p-4">
+              <ChamadosSuporte />
             </div>
-            <Ajuda perfil="medico" />
-          </div>
-        </TelaSobreposta>
-      ) : null}
-    </div>
+          </TelaSobreposta>
+        ) : null}
+        {sobreposicao?.tipo === "termos" ? (
+          <TelaSobreposta titulo="Termos e ajuda" onFechar={fecharSobreposicao}>
+            <div className="p-4 space-y-4">
+              <div className="bp-glass p-4 flex items-center justify-between gap-3 bm-animar">
+                <div>
+                  <div className="text-sm font-bold">Termos de uso do médico</div>
+                  <div className="text-xs text-bion-ink/75 dark:text-bion-paper/75">Texto específico para profissionais.</div>
+                </div>
+                <button type="button" onClick={() => window.open("/termos-medico", "_blank", "noopener,noreferrer")} className="text-xs font-bold text-bion-sea dark:text-sky-300">Ler termos</button>
+              </div>
+              <Ajuda perfil="medico" />
+            </div>
+          </TelaSobreposta>
+        ) : null}
+      </div>
+    </TopoMedicoContexto.Provider>
   );
 }

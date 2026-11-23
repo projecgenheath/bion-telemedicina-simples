@@ -44,6 +44,18 @@ export function conversasDoMedico(
   return itens.sort((a, b) => (b.ultima?.ts ?? Number.MAX_SAFE_INTEGER) - (a.ultima?.ts ?? Number.MAX_SAFE_INTEGER));
 }
 
+/** Item "Mensagens" do menu (rodada do menu): paciente da conversa mais
+ *  recente; null quando o médico ainda não tem nenhuma conversa (abre a lista). */
+export function ultimaConversa(
+  pacientes: PacienteDoMedico[],
+  mensagens: Mensagem[],
+  meuId: string,
+  naoLidasPorPaciente: ReadonlyMap<string, number>,
+): PacienteDoMedico | null {
+  const primeira = conversasDoMedico(pacientes, mensagens, meuId, naoLidasPorPaciente)[0];
+  return primeira?.ultima ? primeira.paciente : null;
+}
+
 export function filtrarConversas(itens: ItemConversa[], busca: string, soNaoLidas: boolean): ItemConversa[] {
   const q = semAcento(busca.trim());
   return itens.filter((i) => (!soNaoLidas || i.naoLidas > 0) && (!q || semAcento(i.paciente.nome).includes(q)));

@@ -40,3 +40,12 @@ console.log("mensagens-dados: ok");
   eq(destacarTermos("losartána", ["Losartana"]).some((x) => x.destaque), true, "sem acento");
   console.log("termos: ok");
 }
+
+// Item "Mensagens" do menu: última conversa deste médico, ou nenhuma (abre a lista)
+{
+  const { ultimaConversa } = await import("./mensagens-dados");
+  assert.equal(ultimaConversa(pacs, msgs, "med", new Map())?.nome, "Bruno");
+  assert.equal(ultimaConversa(pacs, [M("9", "a", "outro-medico", agora)], "med", new Map()), null);
+  assert.equal(ultimaConversa(pacs, [], "med", new Map()), null);
+  console.log("ultimaConversa: ok");
+}

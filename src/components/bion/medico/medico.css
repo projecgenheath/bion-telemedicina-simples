@@ -736,6 +736,31 @@
 .bm-app .bm2-lateral-item:hover { background: var(--bm2-cartao); color: var(--bm2-texto); }
 .bm-app .bm2-lateral-ativo,
 .bm-app .bm2-lateral-ativo:hover { background: var(--bm2-azul-ativo); color: var(--bm2-t-azul); }
+/* Menu lateral (rodada do menu): contador de mensagens não lidas e o menu
+   da Ajuda (Termos e ajuda + Suporte). Branco sobre #C42B2B = 5,6:1 (AA). */
+.bm-app .bm2-contador {
+  position: absolute; top: -3px; right: -5px;
+  min-width: 18px; height: 18px; padding: 0 4px;
+  border-radius: 999px; background: #C42B2B; color: #fff;
+  font-size: 10px; font-weight: 600; line-height: 18px; text-align: center;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 0 0 2px var(--bm2-fundo);
+}
+/* Com o menu da Ajuda aberto, a barra sobe acima das gavetas (z 45). */
+.bm-app .bm2-lateral.bm2-lateral-com-menu { z-index: 50; }
+.bm-app .bm2-lateral-menu {
+  position: absolute; left: calc(100% + 14px); bottom: 0; z-index: 60;
+  min-width: 13rem; padding: 6px; border-radius: 14px;
+  background: var(--bm2-cartao); color: var(--bm2-texto);
+  border: 1px solid var(--bm2-borda);
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.16);
+}
+.bm-app .bm2-lateral-menu button {
+  display: flex; width: 100%; align-items: center; gap: 10px;
+  padding: 9px 12px; border-radius: 10px; font-size: 13px; text-align: left;
+}
+.bm-app .bm2-lateral-menu button:hover,
+.bm-app .bm2-lateral-menu button:focus-visible { background: var(--bm2-azul-ativo); color: var(--bm2-t-azul); }
 
 /* Gavetas (perfil / pacientes) e fundo escurecido — só tela larga */
 .bm-app .bm2-gaveta-fundo,
@@ -1488,4 +1513,24 @@ html:not(.dark) .bm-app .bm2-agenda-fora, html:not(.dark) .bm-app .bm2-agenda-mi
   .bm-app .bm2-msg-tom-cinza { background: #eef0f2; color: #555; }
   .bm-app .bm2-msg-tom-forte { background: #d0e1f5; color: #242424; }
   .bm-app .bm2-msg-registro-texto span:first-child { font-size: 12.5px; font-weight: 500; }
+}
+
+/* Rodada do menu: sino do topo marcado quando a tela é a de notificações. */
+.bm-app .bm2-sino-ativo,
+.bm-app .bm2-sino-ativo:hover { background: var(--bm2-azul-ativo); color: var(--bm2-t-azul); }
+
+/* Topo fixo (sino + perfil) quando o topo do Início rolou para fora (Gestão,
+   Perfil público). Só tela larga; no celular o topo do Início é a entrada. */
+.bm-app .bm2-topo-flutuante { display: none; }
+@media (min-width: 1024px) {
+  .bm-app .bm2-topo-flutuante {
+    display: flex; position: fixed; top: 16px; right: 28px; z-index: 25;
+    padding: 4px; border-radius: 9999px;
+    background: var(--bm2-cartao); color: var(--bm2-texto);
+    box-shadow: 0 6px 20px rgba(15, 23, 42, 0.14);
+  }
+  .bm-app .bm2-topo-flutuante .bm2-topo-divisor { height: 1.75rem; }
+  .bm-app[data-gaveta] .bm2-topo-flutuante { z-index: 46; }
+  /* Gaveta de pacientes à direita: o topo fica à esquerda do botão fechar. */
+  .bm-app[data-gaveta="pacientes"] .bm2-topo-flutuante { top: 0.6rem; right: calc(400px + 0.75rem + 2.5rem + 0.75rem); }
 }
