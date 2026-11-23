@@ -39,7 +39,10 @@ type Vista = "dia" | "semana" | "mes";
  * consultas de 1 h; as reais duram 30 min, então 56 px deixa o bloco com
  * 28 px — o mínimo para nome e horário em duas linhas, como na ref.
  */
-const PX_HORA = 56;
+/** Altura de uma hora na grade. 72 px: a consulta de 30 min fica com 36 px e cabem nome e horário em duas linhas. */
+const PX_HORA = 72;
+/** Altura mínima do bloco (eventos curtos ou cortados em 23:00 continuam legíveis). */
+const MIN_BLOCO = 34;
 const TELA_LARGA = "(min-width: 1024px)";
 const semAcento = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
@@ -232,25 +235,31 @@ export function AgendaSemanal({
 
   const evento = (e: EventoAgenda, pos?: { col: number; de: number }) => {
     const topo = ((e.inicioMin - faixa.inicio * 60) / 60) * PX_HORA;
-    const altura = Math.max(22, ((e.fimMin - e.inicioMin) / 60) * PX_HORA - 2);
+    const altura = Math.max(MIN_BLOCO, ((e.fimMin - e.inicioMin) / 60) * PX_HORA - 3);
     const de = pos?.de ?? 1;
     const col = pos?.col ?? 0;
+    // Sem conflito o bloco ocupa a coluna toda; com conflito divide a coluna e mostra o primeiro nome + início
+    // (o nome completo e o intervalo ficam no rótulo acessível e na dica).
+    const dividido = de > 1;
+    const nome = dividido ? e.consulta.paciente.trim().split(/\s+/)[0] : e.consulta.paciente;
     return (
       <li
         key={e.consulta.id}
         className="bm2-agenda-ev-pos"
-        style={{ top: topo + 1, height: altura, left: `calc(${(col / de) * 100}% + 1px)`, width: `calc(${100 / de}% - 4px)` }}
+        style={{ top: topo + 1, height: altura, left: `calc(${(col / de) * 100}% + 3px)`, width: `calc(${100 / de}% - 6px)` }}
       >
         <button
           type="button"
           onClick={() => abrirConsulta(e)}
           aria-label={rotuloEvento(e)}
-          className={`bm2-agenda-ev ${altura < 24 ? "bm2-agenda-ev-curto" : ""} bm2-agenda-${e.tom} ${e.passada ? "bm2-agenda-passada" : ""} ${combina(e) ? "" : "bm2-agenda-apagado"} ${e.consulta.status === "cancelada" ? "bm2-agenda-cancelada" : ""}`}
+          title={`${e.consulta.paciente} · ${fmtMin(e.inicioMin)} – ${fmtMin(e.fimMin)}`}
+          className={`bm2-agenda-ev ${dividido ? "bm2-agenda-ev-dividido" : ""} bm2-agenda-${e.tom} ${e.passada ? "bm2-agenda-passada" : ""} ${combina(e) ? "" : "bm2-agenda-apagado"} ${e.consulta.status === "cancelada" ? "bm2-agenda-cancelada" : ""}`}
         >
-          <span className="bm2-agenda-ev-nome">{e.consulta.paciente}</span>
-          <span className="bm2-agenda-ev-hora">
-            {fmtMin(e.inicioMin)} – {fmtMin(e.fimMin)}
+          <span className="bm2-agenda-ev-nome">
+            <span className="bm2-agenda-ev-nome-longo">{nome}</span>
+            <span className="bm2-agenda-ev-nome-curto">{e.consulta.paciente.trim().split(/\s+/)[0]}</span>
           </span>
+          <span className="bm2-agenda-ev-hora">{dividido ? fmtMin(e.inicioMin) : `${fmtMin(e.inicioMin)} – ${fmtMin(e.fimMin)}`}</span>
         </button>
       </li>
     );
@@ -281,7 +290,7 @@ export function AgendaSemanal({
         })}
       </div>
       <div ref={rolagemRef} className="bm2-agenda-rolagem">
-        <div className="bm2-agenda-corpo-grade" style={{ height: horas.length * PX_HORA }}>
+        <div className="bm2-agenda-corpo-grade" style={{ height: horas.length * PX_HORA, ["--bm2-px-hora" as string]: `${PX_HORA}px` }}>
           <div className="bm2-agenda-horas" aria-hidden>
             {horas.map((h) => (
               <span key={h} style={{ top: (h - faixa.inicio) * PX_HORA }}>
@@ -306,6 +315,7 @@ export function AgendaSemanal({
           })}
           {linhaAgora ? (
             <div className="bm2-agenda-agora" style={{ top: ((agoraMin - faixa.inicio * 60) / 60) * PX_HORA }} aria-hidden>
+              <span className="bm2-agenda-agora-rotulo">{fmtMin(Math.floor(agoraMin))}</span>
               <span
                 className="bm2-agenda-agora-hoje"
                 style={{

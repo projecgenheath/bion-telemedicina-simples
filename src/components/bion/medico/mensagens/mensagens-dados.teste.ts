@@ -24,3 +24,19 @@ assert.equal(rotuloDia(agora, agora), "Hoje");
 assert.equal(rotuloDia(instanteFusoClinica(2026, 10, 12, 10), agora), "12 de novembro");
 assert.equal(chaveDia(instanteFusoClinica(2026, 10, 25, 0, 5)), chaveDia(instanteFusoClinica(2026, 10, 25, 23, 50)));
 console.log("mensagens-dados: ok");
+
+// Termos em destaque: só nomes que vieram do paciente
+{
+  const { nomeFarmaco, termosMedicamentos, destacarTermos } = await import("./mensagens-dados");
+  const eq = (a: unknown, b: unknown, n: string) => { if (JSON.stringify(a) !== JSON.stringify(b)) throw new Error(`${n}: ${JSON.stringify(a)} ≠ ${JSON.stringify(b)}`); };
+  eq(nomeFarmaco("Amitriptilina 25 mg (controlado)"), "Amitriptilina", "nome com dose");
+  eq(nomeFarmaco("Dipirona sódica 1 g"), "Dipirona sódica", "nome composto");
+  eq(nomeFarmaco("AAS"), "", "curto demais");
+  eq(termosMedicamentos(["Ibuprofeno 400 mg", "ibuprofeno", null, "Losartana 50 mg"]), ["Ibuprofeno", "Losartana"], "sem repetir");
+  const t = destacarTermos("Tomo a amitriptilina e o Ibuprofeno; ibuprofenos não.", ["Amitriptilina", "Ibuprofeno"]);
+  eq(t.filter((x) => x.destaque).map((x) => x.texto), ["amitriptilina", "Ibuprofeno"], "destaca palavra inteira, mantém o texto original");
+  eq(t.map((x) => x.texto).join(""), "Tomo a amitriptilina e o Ibuprofeno; ibuprofenos não.", "texto intacto");
+  eq(destacarTermos("Olá", []), [{ texto: "Olá", destaque: false }], "sem termos");
+  eq(destacarTermos("losartána", ["Losartana"]).some((x) => x.destaque), true, "sem acento");
+  console.log("termos: ok");
+}

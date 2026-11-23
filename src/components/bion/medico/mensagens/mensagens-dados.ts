@@ -75,3 +75,52 @@ export const chaveDia = (ts: number) => {
   const p = partesFusoClinica(ts);
   return `${p.ano}-${p.mes}-${p.dia}`;
 };
+
+/* ---------- Termos em destaque (nomes de remédios do próprio paciente) ---------- */
+
+/**
+ * Nome do fármaco a partir do que o cliente já tem: "Amitriptilina 25 mg (controlado)" → "Amitriptilina";
+ * "Dipirona sódica 1 g" → "Dipirona sódica". Para no primeiro número, parêntese, vírgula ou traço.
+ */
+export function nomeFarmaco(bruto: string | null | undefined): string {
+  if (!bruto) return "";
+  const s = bruto.split(/[\d(,;–—-]/)[0].replace(/\s+/g, " ").trim();
+  return s.length >= 4 ? s : "";
+}
+
+/**
+ * Termos a destacar: nomes dos medicamentos em uso e das receitas do paciente (sem repetir, maiores primeiro).
+ * Nada de lista fixa: sem dado do paciente, nada é destacado.
+ */
+export function termosMedicamentos(fontes: (string | null | undefined)[]): string[] {
+  const vistos = new Map<string, string>();
+  for (const f of fontes) {
+    const n = nomeFarmaco(f);
+    if (n && !vistos.has(semAcento(n))) vistos.set(semAcento(n), n);
+  }
+  return [...vistos.values()].sort((a, b) => b.length - a.length);
+}
+
+export type TrechoMensagem = { texto: string; destaque: boolean };
+
+/** Quebra o texto nos termos (sem diferenciar maiúsculas nem acentos, só palavra inteira). */
+export function destacarTermos(texto: string, termos: string[]): TrechoMensagem[] {
+  if (!texto || termos.length === 0) return [{ texto, destaque: false }];
+  const base = semAcento(texto);
+  const alvos = termos.map(semAcento);
+  const partes: TrechoMensagem[] = [];
+  let i = 0;
+  let ultimo = 0;
+  const letra = (c: string | undefined) => !!c && /[a-z0-9]/.test(c);
+  while (i < base.length) {
+    const t = alvos.find((a) => base.startsWith(a, i) && !letra(base[i - 1]) && !letra(base[i + a.length]));
+    if (t) {
+      if (i > ultimo) partes.push({ texto: texto.slice(ultimo, i), destaque: false });
+      partes.push({ texto: texto.slice(i, i + t.length), destaque: true });
+      i += t.length;
+      ultimo = i;
+    } else i++;
+  }
+  if (ultimo < texto.length) partes.push({ texto: texto.slice(ultimo), destaque: false });
+  return partes;
+}

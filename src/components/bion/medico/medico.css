@@ -1381,3 +1381,111 @@
 }
 /* Dias de outro mês no minicalendário: AA (≈5,3:1 no branco) */
 html:not(.dark) .bm-app .bm2-agenda-fora, html:not(.dark) .bm-app .bm2-agenda-mini-tab button.bm2-agenda-fora { color: #6b6b6b; opacity: 1; }
+
+/* ===== Etapa 4, rodada 2: agenda mais fiel à ref. 07 ===== */
+.bm-app .bm2-agenda .bm2-agenda-corpo-grade { background-image: repeating-linear-gradient(to bottom, var(--bm2-divisor) 0, var(--bm2-divisor) 1px, transparent 1px, transparent var(--bm2-px-hora, 72px)); }
+/* Cabeçalho dos dias: número grande e leve; hoje em azul com sublinhado */
+.bm-app .bm2-agenda .bm2-agenda-dia { padding: 8px 12px 9px; gap: 2px; }
+.bm-app .bm2-agenda .bm2-agenda-dia-nome { font-size: 11px; line-height: 14px; font-weight: 400; }
+.bm-app .bm2-agenda .bm2-agenda-dia-num { font-size: 24px; line-height: 28px; font-weight: 300; letter-spacing: -0.01em; }
+.bm-app .bm2-agenda .bm2-agenda-dia-hoje .bm2-agenda-dia-num { font-weight: 400; }
+.bm-app .bm2-agenda .bm2-agenda-dia-hoje::after { height: 2px; left: 0; right: 0; }
+/* Coluna das horas */
+.bm-app .bm2-agenda .bm2-agenda-horas span { right: 12px; font-size: 11px; line-height: 14px; }
+/* Eventos: bloco largo, borda esquerda colorida, nome legível e horário embaixo */
+.bm-app .bm2-agenda .bm2-agenda-ev { justify-content: flex-start; padding: 5px 8px 4px 10px; border-radius: 6px; border-left-width: 3px; gap: 1px; box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.7); }
+.dark .bm-app .bm2-agenda .bm2-agenda-ev { box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35); }
+.bm-app .bm2-agenda .bm2-agenda-ev-nome { font-size: 13px; line-height: 16px; font-weight: 600; }
+.bm-app .bm2-agenda .bm2-agenda-ev-hora { font-size: 11px; line-height: 14px; font-weight: 400; color: #4a4a4a; }
+.bm-app .bm2-agenda .bm2-agenda-ev-dividido { padding: 5px 5px 4px 7px; }
+.bm-app .bm2-agenda .bm2-agenda-ev-dividido .bm2-agenda-ev-nome { font-size: 12px; }
+/* Linha do agora: fina em toda a semana, forte na coluna de hoje, com a hora na calha */
+.bm-app .bm2-agenda .bm2-agenda-agora { border-top: 1px dashed rgba(36, 36, 36, 0.45); }
+.dark .bm-app .bm2-agenda .bm2-agenda-agora { border-top-color: rgba(255, 255, 255, 0.5); }
+.bm-app .bm2-agenda .bm2-agenda-agora-hoje { top: -1.5px; height: 2px; }
+.bm-app .bm2-agenda .bm2-agenda-agora-hoje::before { left: -4px; top: -3px; width: 8px; height: 8px; }
+.bm-app .bm2-agenda .bm2-agenda-agora-rotulo { position: absolute; right: calc(100% + 6px); top: 0; transform: translateY(-50%); padding: 1px 6px; border-radius: 9999px; background: #76a1f3; color: #242424; font-size: 10px; line-height: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
+/* Consultas de hoje: cartões coloridos como na ref. */
+.bm-app .bm2-agenda .bm2-agenda-hoje-item { padding: 8px 12px; border-radius: 8px; gap: 1px; }
+.bm-app .bm2-agenda .bm2-agenda-hoje-item .bm2-agenda-ev-nome { font-size: 12.5px; line-height: 16px; font-weight: 500; }
+.bm-app .bm2-agenda .bm2-agenda-hoje-item .bm2-agenda-ev-hora { font-size: 11px; line-height: 14px; color: #4a4a4a; }
+.bm-app .bm2-agenda .bm2-agenda-hoje-item.bm2-agenda-azul { background: #e6eefc; }
+.bm-app .bm2-agenda .bm2-agenda-hoje-item.bm2-agenda-lavanda { background: #efeafb; }
+.bm-app .bm2-agenda .bm2-agenda-hoje-item.bm2-agenda-pessego { background: #fde9dd; }
+@media (max-width: 1023px) {
+  .bm-app .bm2-agenda .bm2-agenda-dia { padding: 6px 4px 7px; align-items: center; }
+  .bm-app .bm2-agenda .bm2-agenda-dia-num { font-size: 20px; line-height: 24px; }
+  .bm-app .bm2-agenda .bm2-agenda-agora-rotulo { right: calc(100% + 3px); padding: 1px 4px; font-size: 9.5px; }
+  .bm-app .bm2-agenda:not(:has(.bm2-agenda-grade-dia)) .bm2-agenda-ev { padding: 4px 3px 3px 5px; }
+  .bm-app .bm2-agenda:not(:has(.bm2-agenda-grade-dia)) .bm2-agenda-ev-nome { font-size: 11px; line-height: 14px; text-overflow: clip; }
+  .bm-app .bm2-agenda:not(:has(.bm2-agenda-grade-dia)) .bm2-agenda-ev-hora { font-size: 10px; text-overflow: clip; }
+}
+.bm-app .bm2-agenda .bm2-agenda-ev-nome-curto { display: none; }
+@media (max-width: 1023px) {
+  .bm-app .bm2-agenda:not(:has(.bm2-agenda-grade-dia)) .bm2-agenda-ev-nome-longo { display: none; }
+  .bm-app .bm2-agenda:not(:has(.bm2-agenda-grade-dia)) .bm2-agenda-ev-nome-curto { display: inline; }
+}
+.bm-app .bm2-agenda .bm2-agenda-ev { padding: 5px 4px 4px 8px; }
+.bm-app .bm2-agenda .bm2-agenda-ev-nome { font-size: 12.5px; letter-spacing: -0.005em; }
+@media (max-width: 1023px) {
+  .bm-app .bm2-agenda:not(:has(.bm2-agenda-grade-dia)) .bm2-agenda-ev { padding: 4px 2px 3px 4px; border-left-width: 2px; }
+  .bm-app .bm2-agenda:not(:has(.bm2-agenda-grade-dia)) .bm2-agenda-ev-hora { font-size: 9.5px; letter-spacing: -0.02em; }
+  /* Conflito na semana do celular: a coluna não comporta dois nomes; fica a cor (o nome está no rótulo e na vista Dia) */
+  .bm-app .bm2-agenda:not(:has(.bm2-agenda-grade-dia)) .bm2-agenda-ev-dividido > span { visibility: hidden; }
+}
+.bm-app .bm2-agenda .bm2-agenda-ev-nome { line-height: 17px; padding-bottom: 1px; }
+.bm-app .bm2-agenda .bm2-agenda-ev-nome > span { line-height: inherit; }
+.bm-app .bm2-agenda .bm2-agenda-ev-hora { line-height: 13px; }
+.bm-app .bm2-agenda .bm2-agenda-faixa strong { font-size: 20px; line-height: 24px; font-weight: 300; }
+.bm-app .bm2-agenda .bm2-agenda-faixa button[aria-pressed="true"] strong { font-weight: 400; }
+
+/* ===== Etapa 4, rodada 2: mensagens mais fiéis à ref. 06 ===== */
+.bm-app .bm2-ficha { --bm2-balao-pac: #e8effc; }
+.dark .bm-app .bm2-ficha { --bm2-balao-pac: #23324a; }
+.bm-app .bm2-msg-balao { padding: 10px 15px 11px; border-radius: 12px; font-size: 13px; line-height: 20px; }
+.bm-app .bm2-msg-dele .bm2-msg-balao { border-bottom-left-radius: 12px; border-top-left-radius: 4px; }
+.bm-app .bm2-msg-minha .bm2-msg-balao { border-bottom-right-radius: 12px; border-top-right-radius: 4px; }
+.bm-app .bm2-msg-junta + .bm2-msg-linha .bm2-msg-balao { border-top-left-radius: 12px; border-top-right-radius: 12px; }
+.bm-app .bm2-msg-dele.bm2-msg-junta + .bm2-msg-dele .bm2-msg-balao { border-top-left-radius: 4px; }
+.bm-app .bm2-msg-minha.bm2-msg-junta + .bm2-msg-minha .bm2-msg-balao { border-top-right-radius: 4px; }
+.bm-app .bm2-msg-linha { gap: 4px; }
+.bm-app .bm2-msg-hora { padding: 0 6px; font-size: 10.5px; }
+.bm-app .bm2-msg-dia { padding: 10px 0 4px; }
+/* Remédios do próprio paciente em negrito (no balão do paciente também em azul, como na ref.; AA ≥ 4,5:1) */
+.bm-app .bm2-msg-termo { font-weight: 600; }
+.bm-app .bm2-msg-dele .bm2-msg-termo { color: #2f62c4; }
+.dark .bm-app .bm2-msg-dele .bm2-msg-termo { color: #9dbcf7; }
+@media (min-width: 1024px) {
+  .bm-app .bm2-msg-log { padding: 16px 22px 14px; gap: 14px; }
+  .bm-app .bm2-msg-junta { margin-bottom: -8px; }
+  .bm-app .bm2-msg-balao { max-width: 64%; }
+  /* Lista: separadores finos e destaque claro na conversa aberta */
+  .bm-app .bm2-msg-itens { gap: 0; margin-top: 12px; }
+  .bm-app .bm2-msg-itens > li + li .bm2-msg-item::before { content: ""; position: absolute; left: 66px; right: 10px; top: 0; border-top: 1px solid var(--bm2-divisor); }
+  .bm-app .bm2-msg-item { position: relative; min-height: 64px; padding: 10px 10px; border-radius: 14px; }
+  .bm-app .bm2-msg-item-atual { background: #eef3fd; }
+  .dark .bm-app .bm2-msg-item-atual { background: #1f2a3c; }
+  .bm-app .bm2-msg-item-atual::before { border-top-color: transparent !important; }
+  .bm-app .bm2-msg-itens > li:has(.bm2-msg-item-atual) + li .bm2-msg-item::before { border-top-color: transparent; }
+  .bm-app .bm2-msg-avatar { width: 44px; height: 44px; }
+  .bm-app .bm2-msg-item-atual .bm2-msg-avatar { box-shadow: 0 0 0 2px #eef3fd, 0 0 0 3.5px #76a1f3; }
+  .dark .bm-app .bm2-msg-item-atual .bm2-msg-avatar { box-shadow: 0 0 0 2px #1f2a3c, 0 0 0 3.5px #76a1f3; }
+  .bm-app .bm2-msg-item-atual .bm2-msg-item-nome { font-weight: 600; }
+  /* Resumo: nada encolhe quando o painel rola (corrige o fundo do "Ver menos") */
+  .bm-app .bm2-msg-resumo > * { flex-shrink: 0; }
+  .bm-app .bm2-msg-mais { min-height: 38px; flex-shrink: 0; }
+  .bm-app .bm2-msg-resumo-avatar { width: 112px; height: 112px; font-size: 34px; box-shadow: 0 0 0 5px var(--bm2-cartao), 0 0 0 6px #d0e1f5; }
+  .bm-app .bm2-msg-resumo-pessoa strong { margin-top: 16px; font-size: 14.5px; }
+  .bm-app .bm2-msg-blocos > div { background: #f0f5fe; box-shadow: inset 0 0 0 1px #e1e9f7; border-radius: 14px; padding: 13px 12px 12px; }
+  .dark .bm-app .bm2-msg-blocos > div { background: #dce8f8; box-shadow: none; }
+  .bm-app .bm2-msg-mais { background: #f0f5fe; box-shadow: inset 0 0 0 1px #e1e9f7; border-radius: 14px; }
+  .dark .bm-app .bm2-msg-mais { box-shadow: none; }
+  /* Registros: ícone em quadrado pastel com o traço colorido (ref.) */
+  .bm-app .bm2-msg-registro-icone { border-radius: 11px; }
+  .bm-app .bm2-msg-tom-lavanda { background: #efeafb; color: #6045c2; }
+  .bm-app .bm2-msg-tom-pessego { background: #fdeadf; color: #b4541f; }
+  .bm-app .bm2-msg-tom-azul { background: #e6eefc; color: #2f62c4; }
+  .bm-app .bm2-msg-tom-cinza { background: #eef0f2; color: #555; }
+  .bm-app .bm2-msg-tom-forte { background: #d0e1f5; color: #242424; }
+  .bm-app .bm2-msg-registro-texto span:first-child { font-size: 12.5px; font-weight: 500; }
+}

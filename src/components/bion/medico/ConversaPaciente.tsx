@@ -24,7 +24,7 @@ import { useModelosMensagemConta } from "./useAtalhosConta";
 import { BuscaPacienteTopo, PerfilMedicoTopo } from "./ficha/TopoFicha";
 import { ListaConversas } from "./mensagens/ListaConversas";
 import { ResumoConversa } from "./mensagens/ResumoConversa";
-import { chaveDia, rotuloDia } from "./mensagens/mensagens-dados";
+import { chaveDia, destacarTermos, rotuloDia, termosMedicamentos } from "./mensagens/mensagens-dados";
 import { iniciais, salaAberta } from "./metricas";
 
 type Aba = "conversa" | "triagem" | "prontuario";
@@ -167,9 +167,6 @@ export function ConversaPaciente({
     if (rascunho) setTexto((t) => (t.trim() ? t : rascunho));
   }, [paciente.chave]);
 
-  useEffect(() => {
-    if (aba === "conversa") fimRef.current?.scrollIntoView({ block: "end" });
-  }, [conversa.length, aba]);
 
   // M-9: filtro pelo IDENTIFICADOR do paciente — homônimos não podem misturar
   // documentos. Fallback por nome apenas para documentos legados (sem id).
@@ -184,6 +181,30 @@ export function ConversaPaciente({
   const homonimo = listaPacientes.filter((p) => p.nome === atual.nome).length > 1;
 
   const ref = proxima ?? ultima;
+
+  // Rodada 2: nomes de remédios em negrito, só os do PRÓPRIO paciente — receitas que o cliente já tem e os
+  // medicamentos em uso da mesma leitura que a ficha usa (GET .../evolucao, sem rota nova). Sem dado, nada destaca.
+  const refId = ref?.id;
+  const [medsEmUso, setMedsEmUso] = useState<string[]>([]);
+  useEffect(() => {
+    if (!refId) return;
+    const ctrl = new AbortController();
+    fetch(`/api/medico/consultas/${encodeURIComponent(refId)}/evolucao`, { credentials: "include", signal: ctrl.signal })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { medicamentosEmUso?: unknown } | null) => {
+        const lista = Array.isArray(j?.medicamentosEmUso) ? (j.medicamentosEmUso as { nome?: unknown }[]) : [];
+        setMedsEmUso(lista.map((m) => (typeof m?.nome === "string" ? m.nome : "")).filter(Boolean));
+      })
+      .catch(() => {});
+    return () => ctrl.abort();
+  }, [refId]);
+  const termos = useMemo(
+    () => termosMedicamentos([...medsEmUso, ...docs.filter((d) => d.tipo === "receita").map((d) => d.medicamento)]),
+    [medsEmUso, docs],
+  );
+  useEffect(() => {
+    if (aba === "conversa") fimRef.current?.scrollIntoView({ block: "end" });
+  }, [conversa.length, aba, termos.length]);
   // A ficha rotula a origem da referência: sem consulta futura, os dados
   // são da ÚLTIMA consulta — "Pagamento: Pendente" dela não é dívida
   // atual do paciente, e o rótulo precisa dizer isso.
@@ -334,6 +355,36 @@ export function ConversaPaciente({
   );
   const qConversa = buscaConversa.trim().toLowerCase();
   const conversaVisivel = tres && qConversa ? conversa.filter((m) => m.texto.toLowerCase().includes(qConversa)) : conversa;
+
+  // Balões como na ref. 06: mensagens seguidas da mesma pessoa (até 5 min) ficam juntas e só a última mostra a hora.
+  const linhasConversa = conversaVisivel.map((m, i) => {
+    const minha = m.deId === sessao.id;
+    const ant = conversaVisivel[i - 1];
+    const prox = conversaVisivel[i + 1];
+    const novoDia = i === 0 || chaveDia(ant.ts) !== chaveDia(m.ts);
+    const juntaComProxima = !!prox && prox.deId === m.deId && chaveDia(prox.ts) === chaveDia(m.ts) && prox.ts - m.ts <= 5 * 60_000;
+    return (
+      <Fragment key={m.id}>
+        {novoDia ? (
+          <p className="bm2-msg-dia">
+            <span>{rotuloDia(m.ts, agora)}</span>
+          </p>
+        ) : null}
+        <div className={`bm2-msg-linha ${minha ? "bm2-msg-minha" : "bm2-msg-dele"} ${juntaComProxima ? "bm2-msg-junta" : ""}`}>
+          <div className="bm2-msg-balao">
+            <p className="whitespace-pre-wrap break-words">
+              {destacarTermos(m.texto, termos).map((t, k) => (t.destaque ? <strong key={k} className="bm2-msg-termo">{t.texto}</strong> : <Fragment key={k}>{t.texto}</Fragment>))}
+            </p>
+          </div>
+          <p className={`bm2-msg-hora ${juntaComProxima ? "sr-only" : ""}`}>
+            <span className="sr-only">{m.quando}</span>
+            <span aria-hidden>{fmtHoraMsg(m.ts)}</span>
+            {minha ? (m.lida ? " · lida" : " · enviada") : ""}
+          </p>
+        </div>
+      </Fragment>
+    );
+  });
 
   const compositor = (
           podeEnviar ? (
@@ -582,29 +633,7 @@ export function ConversaPaciente({
               {conversa.length === 0 ? "Nenhuma mensagem ainda." : "Nenhuma mensagem com esse texto."}
             </p>
           ) : (
-            conversaVisivel.map((m, i) => {
-              const minha = m.deId === sessao.id;
-              const novoDia = i === 0 || chaveDia(conversaVisivel[i - 1].ts) !== chaveDia(m.ts);
-              return (
-                <Fragment key={m.id}>
-                  {novoDia ? (
-                    <p className="bm2-msg-dia">
-                      <span>{rotuloDia(m.ts, agora)}</span>
-                    </p>
-                  ) : null}
-                  <div className={`bm2-msg-linha ${minha ? "bm2-msg-minha" : "bm2-msg-dele"}`}>
-                    <div className="bm2-msg-balao">
-                      <p className="whitespace-pre-wrap break-words">{m.texto}</p>
-                    </div>
-                    <p className="bm2-msg-hora">
-                      <span className="sr-only">{m.quando}</span>
-                      <span aria-hidden>{fmtHoraMsg(m.ts)}</span>
-                      {minha ? (m.lida ? " · lida" : " · enviada") : ""}
-                    </p>
-                  </div>
-                </Fragment>
-              );
-            })
+            linhasConversa
           )}
                 <div ref={fimRef} />
               </div>
@@ -718,29 +747,7 @@ export function ConversaPaciente({
               {conversa.length === 0 ? "Nenhuma mensagem ainda." : "Nenhuma mensagem com esse texto."}
             </p>
           ) : (
-            conversaVisivel.map((m, i) => {
-              const minha = m.deId === sessao.id;
-              const novoDia = i === 0 || chaveDia(conversaVisivel[i - 1].ts) !== chaveDia(m.ts);
-              return (
-                <Fragment key={m.id}>
-                  {novoDia ? (
-                    <p className="bm2-msg-dia">
-                      <span>{rotuloDia(m.ts, agora)}</span>
-                    </p>
-                  ) : null}
-                  <div className={`bm2-msg-linha ${minha ? "bm2-msg-minha" : "bm2-msg-dele"}`}>
-                    <div className="bm2-msg-balao">
-                      <p className="whitespace-pre-wrap break-words">{m.texto}</p>
-                    </div>
-                    <p className="bm2-msg-hora">
-                      <span className="sr-only">{m.quando}</span>
-                      <span aria-hidden>{fmtHoraMsg(m.ts)}</span>
-                      {minha ? (m.lida ? " · lida" : " · enviada") : ""}
-                    </p>
-                  </div>
-                </Fragment>
-              );
-            })
+            linhasConversa
           )}
           <div ref={fimRef} />
         </div>

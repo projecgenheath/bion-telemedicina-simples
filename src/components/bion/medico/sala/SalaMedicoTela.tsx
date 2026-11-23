@@ -257,10 +257,10 @@ function AreaVideoMedico({
         <div className="bms-espera">
           <div className="bms-espera-avatar">{iniciais(contraparteNome)}</div>
           <div className="bms-espera-nome">{contraparteNome}</div>
-          <div className="bms-espera-estado">
+          <p className="bms-espera-estado">
             <span aria-hidden className={`bms-ponto ${outroOnline ? "bms-ponto-on" : ""}`} />
             {estado}
-          </div>
+          </p>
         </div>
       )}
 
