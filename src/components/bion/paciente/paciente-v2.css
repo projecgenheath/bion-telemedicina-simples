@@ -1863,3 +1863,51 @@ body:has(.bp2-app) [data-sonner-toast][data-type="error"][data-rich-colors="true
 .bp2-app .bp2-frame-titulo { font-size: 15px; line-height: 20px; font-weight: 500; letter-spacing: -0.005em; color: var(--bp2-texto); }
 .bp2-app .bp2-frame-voltar:focus-visible { outline: 2px solid #2f62c4; outline-offset: 2px; }
 .dark .bp2-app .bp2-frame-voltar:focus-visible { outline-color: #9dbcf7; }
+
+/* ==================================================================== */
+/* Etapa 6 (24/11): tela de status do pagamento (volta do Stripe):      */
+/* confirmado, aguardando e não concluído. Só escopo do paciente.       */
+/* ==================================================================== */
+.bp2-app.bp2-pagto-pagina { --bp2-pagto-falha: #c10007; min-height: 100dvh; background: var(--bp2-fundo); color: var(--bp2-texto); }
+.dark .bp2-app.bp2-pagto-pagina { --bp2-pagto-falha: #ffa2a2; --bp2-anel-azul: #9dbcf7; --bp2-anel-verde: #6fd38a; }
+html body:has(.bp2-pagto-pagina) { background: #eff3f4; }
+html.dark body:has(.bp2-pagto-pagina) { background: #0e1013; }
+.bp2-app .bp2-pagto { min-height: 100dvh; display: flex; align-items: center; justify-content: center; padding: calc(1.25rem + env(safe-area-inset-top)) 1rem calc(1.25rem + env(safe-area-inset-bottom)); }
+.bp2-app .bp2-pagto-cartao {
+  width: 100%; max-width: 26.5rem; padding: 1.25rem; border-radius: 20px; background: var(--bp2-cartao);
+  border: 1px solid var(--bp2-borda); box-shadow: 0 0 0 1px rgba(16, 24, 40, 0.01), 0 1px 3px rgba(16, 24, 40, 0.035);
+  display: flex; flex-direction: column; gap: 0.75rem;
+}
+@media (min-width: 1024px) { .bp2-app .bp2-pagto-cartao { padding: 1.5rem; max-width: 28rem; } }
+.bp2-app .bp2-pagto-cab { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin-bottom: 0.25rem; }
+.bp2-app .bp2-pagto-chip { display: inline-flex; align-items: center; height: 1.75rem; padding: 0 0.75rem; border-radius: 9999px; font-size: 12px; line-height: 16px; font-weight: 600; }
+.bp2-app .bp2-pagto-chip-ok { background: #e3f5e1; color: #1d6b14; }
+.bp2-app .bp2-pagto-chip-pendente { background: #e9f1fb; color: #2148a0; }
+.bp2-app .bp2-pagto-chip-falha { background: #fdeeee; color: #8a0005; }
+.dark .bp2-app .bp2-pagto-chip-ok { background: rgba(15, 195, 0, 0.14); color: #b8f0b0; }
+.dark .bp2-app .bp2-pagto-chip-pendente { background: #23324a; color: #cfe0fb; }
+.dark .bp2-app .bp2-pagto-chip-falha { background: rgba(255, 162, 162, 0.12); color: #ffd6d6; }
+.bp2-app .bp2-pagto-anel .bp2-anel-centro { color: var(--bp2-texto); }
+.bp2-app[data-estado="falha"] .bp2-pagto-anel .bp2-anel-centro { color: var(--bp2-pagto-falha); font-size: 18px; }
+.bp2-app .bp2-pagto-girando .bp2-pagto-arco { transform-origin: 28.5px 28.5px; animation: bp2-pagto-giro 1.2s linear infinite; }
+@keyframes bp2-pagto-giro { from { transform: rotate(-90deg); } to { transform: rotate(270deg); } }
+@media (prefers-reduced-motion: reduce) { .bp2-app .bp2-pagto-girando .bp2-pagto-arco { animation: none; } }
+.bp2-app .bp2-pagto-titulo { font-size: 22px; line-height: 28px; font-weight: 500; letter-spacing: -0.01em; }
+.bp2-app .bp2-pagto-texto { font-size: 14px; line-height: 20px; color: var(--bp2-texto-2); }
+.bp2-app .bp2-pagto-resumo { padding: 0.85rem 1rem; border-radius: 0.75rem; background: var(--bp2-linha); }
+.bp2-app .bp2-pagto-resumo-nome { font-size: 15px; line-height: 20px; font-weight: 500; }
+.bp2-app .bp2-pagto-resumo-info { margin-top: 0.3rem; font-size: 12.5px; line-height: 1.35; color: #5f6368; }
+.dark .bp2-app .bp2-pagto-resumo-info { color: #a9b0ba; }
+.bp2-app .bp2-pagto-acoes { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.25rem; }
+.bp2-app .bp2-pagto-acoes .bp-acao { width: 100%; min-height: 2.75rem; border-radius: 9999px; background: #76a1f3; color: #242424; box-shadow: none; font-weight: 600; }
+.bp2-app .bp2-pagto-link { display: inline-flex; align-items: center; justify-content: center; min-height: 2.75rem; width: 100%; border-radius: 9999px; font-size: 14px; font-weight: 600; text-decoration: none; }
+.bp2-app .bp2-pagto-link:focus-visible, .bp2-app .bp2-pagto-acoes .bp-acao:focus-visible { outline: 2px solid #2f62c4; outline-offset: 2px; }
+.dark .bp2-app .bp2-pagto-link:focus-visible, .dark .bp2-app .bp2-pagto-acoes .bp-acao:focus-visible { outline-color: #9dbcf7; }
+.bp2-app .bp2-pagto-oferta { padding-top: 0.25rem; border-top: 1px solid var(--bp2-divisor); }
+.bp2-app .bp2-pagto-oferta > div { margin-top: 0.75rem; }
+.bp2-app .bp2-pagto-oferta p { font-size: 13px; color: var(--bp2-texto-2); opacity: 1; }
+.bp2-app .bp2-pagto-oferta .bg-\[\#24058D\] { background: #242424; color: #ffffff; font-weight: 600; }
+.dark .bp2-app .bp2-pagto-oferta .bg-\[\#24058D\] { background: #f2f4f7; color: #242424; }
+.bp2-app .bp2-pagto-oferta .border-\[\#24058D\]\/30 { border-color: rgba(36, 36, 36, 0.18); font-weight: 600; }
+.dark .bp2-app .bp2-pagto-oferta .border-\[\#24058D\]\/30 { border-color: rgba(255, 255, 255, 0.2); }
+.bp2-app .bp2-pagto-acoes [role="note"] { color: var(--bp2-texto-2); font-size: 13px; }
