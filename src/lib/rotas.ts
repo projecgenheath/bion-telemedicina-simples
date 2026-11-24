@@ -112,3 +112,62 @@ export const SO_PACIENTE: View[] = [
 /** Clínicas compartilhadas paciente+médico; o administrador não tem negócio nelas.
  * "bion-ia": o chat geral da IA é só de paciente e médico (LGPD; a API responde 403 ao admin). */
 export const SO_CLINICA: View[] = ["consulta", "consultas", "receitas", "prontuario", "bion-ia"];
+
+/* ------------------------------------------------------------------ */
+/* Guarda de papel do layout autenticado (path + redirecionamento)     */
+/* ------------------------------------------------------------------ */
+
+/** Pathname sem query string e sem barra no final. */
+export function pathLimpo(p: string): string {
+  return (p || "/").split("?")[0].replace(/\/+$/, "") || "/";
+}
+
+/**
+ * Rotas em tela cheia que o paciente pode manter (e que dispensam o
+ * AppShell para qualquer papel). O retorno do pagamento NÃO entra
+ * aqui: se o médico abrir essas URLs, ele continua com a mesma casca
+ * de antes.
+ */
+export function ehRotaTelaCheia(path: string): boolean {
+  const p = pathLimpo(path);
+  return (
+    p === "/paciente" ||
+    p === "/consulta" ||
+    p === "/suporte" ||
+    p === "/privacidade" ||
+    p === "/ajuda" ||
+    p.startsWith("/consulta/")
+  );
+}
+
+/** Telas de volta do Stripe Checkout. Só leem o status; não cobram. */
+export function ehRotaRetornoPagamento(path: string): boolean {
+  const p = pathLimpo(path);
+  return p === "/pagamento/sucesso" || p === "/pagamento/cancelado";
+}
+
+/** Rotas em que o paciente autenticado pode permanecer. */
+export function pacientePodeVer(path: string): boolean {
+  return ehRotaTelaCheia(path) || ehRotaRetornoPagamento(path);
+}
+
+/**
+ * Destino da guarda de papel do layout autenticado compartilhado.
+ * `null` = permanece na rota atual.
+ *
+ * A única mudança em relação à lógica anterior (inline no layout) é
+ * que o paciente em `/pagamento/sucesso` ou `/pagamento/cancelado`
+ * agora permanece, para a tela de status aparecer. Os destinos do
+ * médico e do admin não mudam, inclusive nessas duas URLs.
+ */
+export function destinoGuardaPapel(role: Role, path: string): string | null {
+  const p = pathLimpo(path);
+  const view = viewDoPath(p);
+
+  if (role === "paciente" && !pacientePodeVer(p)) return "/paciente";
+  if (SO_ADMIN.includes(view) && role !== "admin") return "/painel";
+  if (SO_MEDICO.includes(view) && role !== "medico") return "/painel";
+  if (SO_PACIENTE.includes(view) && role !== "paciente") return "/painel";
+  if (SO_CLINICA.includes(view) && role === "admin") return "/painel";
+  return null;
+}
