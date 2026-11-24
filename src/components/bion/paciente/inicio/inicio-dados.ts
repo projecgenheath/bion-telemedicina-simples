@@ -97,3 +97,16 @@ export function acaoPrioritaria(e: {
   if (e.mensagemDe) return { tipo: "mensagem", medico: e.mensagemDe, total: Math.max(1, e.mensagensDoRemetente ?? 1) };
   return { tipo: "nada" };
 }
+
+/**
+ * Tempo até a consulta, curto, para o lado do horário no cartão azul
+ * ("em 18 min", "em 2 h 5 min"). Só nas próximas 24 h; depois, nada.
+ */
+export function faltaCurta(ts: number, agora: number): string | null {
+  const min = Math.ceil((ts - agora) / 60_000);
+  if (min <= 0 || min >= 24 * 60) return null;
+  if (min < 60) return `em ${min} min`;
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  return m ? `em ${h} h ${m} min` : `em ${h} h`;
+}

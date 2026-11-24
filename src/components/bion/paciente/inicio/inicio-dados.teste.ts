@@ -3,7 +3,7 @@
  * Rodar: bun src/components/bion/paciente/inicio/inicio-dados.teste.ts
  */
 import type { Consulta } from "@/lib/bion-tipos";
-import { acaoPrioritaria, dataHora, diaPorExtenso, filtrarHistorico, historicoConsultas, iniciaisNome, plural } from "./inicio-dados";
+import { acaoPrioritaria, dataHora, faltaCurta, diaPorExtenso, filtrarHistorico, historicoConsultas, iniciaisNome, plural } from "./inicio-dados";
 
 let ok = 0;
 let falhas = 0;
@@ -52,6 +52,12 @@ igual("triagem antes de mensagem", acaoPrioritaria({ proxima: p, triagemPendente
 igual("pagar antes de triagem", acaoPrioritaria({ proxima: p, proximaAguardandoPagamento: true, triagemPendente: "andamento" }).tipo, "pagar");
 igual("reagendar primeiro", acaoPrioritaria({ aguardandoReagendamento: c("r", agora, "aguardando_reagendamento"), proxima: p, proximaAguardandoPagamento: true }).tipo, "reagendar");
 igual("triagem em andamento", acaoPrioritaria({ proxima: p, triagemPendente: "andamento" }), { tipo: "triagem", medico: "Dra. Helena Exemplo", quando: "Hoje · 10:00", andamento: true });
+
+igual("falta 18 min", faltaCurta(agora + 18 * 60_000, agora), "em 18 min");
+igual("falta 2 h", faltaCurta(agora + 2 * H, agora), "em 2 h");
+igual("falta 2 h 5 min", faltaCurta(agora + 2 * H + 5 * 60_000, agora), "em 2 h 5 min");
+igual("já passou", faltaCurta(agora - 60_000, agora), null);
+igual("amanhã ou depois", faltaCurta(agora + D, agora), null);
 
 console.log(`${ok} ok, ${falhas} falha(s)`);
 if (falhas) process.exit(1);

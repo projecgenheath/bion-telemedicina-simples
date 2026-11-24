@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   ArrowUpRight,
   CalendarClock,
@@ -11,19 +11,17 @@ import {
   HeartPulse,
   MessageCircle,
   Plus,
-  RefreshCw,
   Search,
   Sparkles,
   Video,
-  X,
 } from "lucide-react";
 import type { Consulta } from "@/lib/bion-tipos";
 import { SALA_ABRE_ANTES_MIN } from "@/lib/janela-sala";
 import { botaoPrincipalProxima, type AcaoSala } from "../entrada-sala";
 import type { EtiquetaConsulta, StatusTriagem, TomEtiqueta } from "../etiqueta-consulta";
 import { tipoDaConsulta } from "../tipo-atendimento-ui";
-import { ContagemConsulta } from "../AvisosInicio";
-import { acaoPrioritaria, diaPorExtenso, filtrarHistorico, historicoConsultas, iniciaisNome, plural } from "./inicio-dados";
+import { MenuConsulta } from "./MenuConsulta";
+import { acaoPrioritaria, diaPorExtenso, faltaCurta, filtrarHistorico, historicoConsultas, iniciaisNome, plural } from "./inicio-dados";
 
 const MAX_CARROSSEL = 5;
 const LIMITE_TABELA = 7; // a ref. 12 mostra 7 linhas
@@ -48,7 +46,7 @@ const ICONE_TOM: Record<TomEtiqueta, typeof CircleAlert | null> = {
 
 function Avatar({ nome, foto, tamanho = "md" }: { nome: string; foto?: string | null; tamanho?: "md" | "lg" | "xl" }) {
   const t =
-    tamanho === "xl" ? "h-12 w-12 text-sm lg:h-[3.25rem] lg:w-[3.25rem] lg:text-[15px]" : tamanho === "lg" ? "h-11 w-11 text-[13px]" : "h-9 w-9 text-xs";
+    tamanho === "xl" ? "h-12 w-12 text-sm lg:h-[3.25rem] lg:w-[3.25rem] lg:text-[15px]" : tamanho === "lg" ? "h-12 w-12 text-sm" : "h-9 w-9 text-xs";
   if (foto) return <img src={foto} alt="" className={`${t} shrink-0 rounded-full object-cover`} />;
   return (
     <span aria-hidden className={`bp2-avatar ${t} grid shrink-0 place-items-center rounded-full font-medium`}>
@@ -68,10 +66,10 @@ function BotaoSeta({ rotulo, onClick }: { rotulo: string; onClick: () => void })
   );
 }
 
-function Estado({ e }: { e: EtiquetaConsulta }) {
+function Estado({ e, tamanho = "text-[13px]" }: { e: EtiquetaConsulta; tamanho?: string }) {
   const Icone = ICONE_TOM[e.tom];
   return (
-    <span className={`inline-flex items-center gap-1 whitespace-nowrap text-[13px] ${COR_TOM[e.tom]}`}>
+    <span className={`inline-flex items-center gap-1 whitespace-nowrap ${tamanho} ${COR_TOM[e.tom]}`}>
       {e.texto}
       {Icone ? <Icone className="h-3.5 w-3.5" aria-hidden /> : null}
     </span>
@@ -157,7 +155,44 @@ export function TelaInicioPaciente(p: PropsInicioPaciente) {
     if (!el) return;
     const reduzir = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     el.scrollTo({ left: i * el.clientWidth, behavior: reduzir ? "auto" : "smooth" });
+    setSlide(i);
   };
+  // Celular: o carrossel acompanha a altura do slide visível (sem vazio azul), como no médico.
+  useEffect(() => {
+    const el = carrosselRef.current;
+    const ativo = el?.children[slide] as HTMLElement | undefined;
+    if (!el || !ativo) return;
+    const mq = window.matchMedia("(min-width: 1024px)");
+    const ajustar = () => {
+      el.style.height = mq.matches ? "" : `${ativo.offsetHeight + 8}px`;
+    };
+    ajustar();
+    const ro = new ResizeObserver(ajustar);
+    ro.observe(ativo);
+    mq.addEventListener("change", ajustar);
+    return () => {
+      ro.disconnect();
+      mq.removeEventListener("change", ajustar);
+    };
+  }, [slide, slides.length]);
+
+  // Quantos avisos aparecem de fato abaixo da grade (alguns cartões decidem
+  // sozinhos se aparecem); o cartão lavanda leva até eles.
+  const avisosRef = useRef<HTMLElement>(null);
+  const [qtdAvisos, setQtdAvisos] = useState(0);
+  useEffect(() => {
+    const el = avisosRef.current;
+    if (!el) return;
+    const contar = () => setQtdAvisos(el.childElementCount);
+    contar();
+    const mo = new MutationObserver(contar);
+    mo.observe(el, { childList: true });
+    return () => mo.disconnect();
+  }, []);
+
+  const [menu, setMenu] = useState<{ id: string; ancora: HTMLElement | null } | null>(null);
+  const consultaMenu = menu ? proximas.find((c) => c.id === menu.id) ?? null : null;
+  const abrirMenuDe = (id: string) => setMenu({ id, ancora: document.querySelector<HTMLElement>(`[data-menu-consulta="${CSS.escape(id)}"]`) });
 
   const triagemProxima = proxima ? statusTriagem(proxima.id) : "feita";
   const etiquetaProxima = proxima ? etiquetaDe(proxima) : null;
@@ -216,6 +251,8 @@ export function TelaInicioPaciente(p: PropsInicioPaciente) {
   );
 
   /* ------------------- cartão da consulta (destaque) ------------------- */
+  // Como na ref. 03/12: nome, tipo, Data/Horário, um botão largo e UM quadrado.
+  // O quadrado (relógio, como na ref.) abre o menu com Pagar, Remarcar e Cancelar.
   const cartaoConsulta = (c: Consulta, i: number) => {
     const a = acaoSala(c);
     const st = statusTriagem(c.id);
@@ -223,6 +260,12 @@ export function TelaInicioPaciente(p: PropsInicioPaciente) {
     const principal = botaoPrincipalProxima(a, triagemPendente);
     const etiqueta = etiquetaDe(c);
     const tipo = tipoDaConsulta(c);
+    const falta = faltaCurta(c.ts, agora);
+    const aberta = a.tipo === "entrar";
+    const temPagar = p.botaoPagar(c) != null;
+    // Linha de estado pequena (como o "● Sala aberta" do médico): só quando diz algo útil.
+    const estado = aberta ? "Sala aberta" : etiqueta.tom === "pagamento" || etiqueta.tom === "triagem" || etiqueta.tom === "remarcacao" ? etiqueta.texto : null;
+    const rotuloMenu = `Mais ações da consulta de ${c.data} às ${c.hora}: ${temPagar ? "pagar, " : ""}remarcar ou cancelar`;
     return (
       <div
         key={c.id}
@@ -233,74 +276,68 @@ export function TelaInicioPaciente(p: PropsInicioPaciente) {
       >
         <div className="flex items-center gap-3">
           <Avatar nome={c.medico} tamanho="xl" />
-          <div className="min-w-0 flex-1">
+          <div className="min-w-0">
             <div className="truncate text-[15px]">{c.medico}</div>
             <div className="bp2-destaque-tipo truncate text-xs">
               {c.especialidade}
               {tipo ? ` · ${tipo}` : ""}
             </div>
           </div>
-          <span className="bp2-destaque-etiqueta shrink-0 rounded-full px-2.5 py-1 text-[11px] font-medium">{etiqueta.texto}</span>
         </div>
-        <dl className="mt-4 grid grid-cols-2 gap-3">
-          <div className="min-w-0">
-            <dt className="bp2-destaque-rotulo text-xs">Data</dt>
-            <dd className="mt-0.5 truncate text-[15px]">{c.data}</dd>
-          </div>
-          <div className="min-w-0">
-            <dt className="bp2-destaque-rotulo text-xs">Horário</dt>
-            <dd className="mt-0.5 truncate text-[15px] tabular-nums">{c.hora}</dd>
-          </div>
+        <dl className="mt-4 grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-1">
+          <dt className="bp2-destaque-rotulo text-[11px] lg:text-xs">Data</dt>
+          <dt className="bp2-destaque-rotulo text-[11px] lg:text-xs">Horário</dt>
+          <dd className="truncate text-[15px]">{c.data}</dd>
+          <dd className="text-[15px] tabular-nums">
+            {c.hora}
+            {falta ? <span className="bp2-destaque-rotulo text-xs"> · {falta}</span> : null}
+          </dd>
         </dl>
-        <div className="bp2-contagem mt-3 flex items-center">
-          <ContagemConsulta ts={c.ts} />
-        </div>
-        {/* Slides com alturas iguais: a sobra fica antes dos botões, não abaixo do cartão */}
-        <div className="flex-1" aria-hidden />
-        {p.botaoPagar(c)}
-        <div className="mt-3 flex items-center gap-2" aria-live="polite">
+        {estado ? (
+          <p className="mt-2 inline-flex items-center gap-1.5 text-[11px] font-medium">
+            <span aria-hidden className={`h-2 w-2 rounded-full ${aberta ? "bg-[#1e7a34]" : "bg-[#242424] lg:bg-[var(--bp2-t-laranja)]"}`} />
+            {estado}
+            {st === "feita" && !aberta ? " · triagem enviada" : null}
+          </p>
+        ) : null}
+        <div className="mt-auto flex items-center gap-2 pt-3">
           {principal === "sala" ? (
-            <button type="button" onClick={() => p.onEntrar(c)} className="bp2-botao-azul inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-[0.6rem] px-4 text-[13px] lg:h-10">
-              <Video className="h-4 w-4" aria-hidden /> Entrar na sala
+            <button type="button" onClick={() => p.onEntrar(c)} className="bp2-botao-azul inline-flex h-11 flex-1 items-center justify-center rounded-[0.6rem] px-4 text-[13px] lg:h-10 lg:rounded-[0.55rem]">
+              Entrar na sala
             </button>
           ) : principal === "triagem" ? (
-            <button type="button" onClick={() => p.onTriagem(c.id)} className="bp2-botao-azul inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-[0.6rem] px-4 text-[13px] lg:h-10">
-              <Sparkles className="h-4 w-4" aria-hidden /> {st === "andamento" ? "Continuar triagem" : "Fazer triagem"}
+            <button type="button" onClick={() => p.onTriagem(c.id)} className="bp2-botao-azul inline-flex h-11 flex-1 items-center justify-center rounded-[0.6rem] px-4 text-[13px] lg:h-10 lg:rounded-[0.55rem]">
+              {st === "andamento" ? "Continuar triagem" : "Fazer triagem"}
             </button>
-          ) : principal === "aguardar" && a.tipo === "aguardar" ? (
-            <button type="button" disabled className="bp2-botao-azul inline-flex h-11 flex-1 cursor-not-allowed items-center justify-center gap-2 rounded-[0.6rem] px-4 text-[13px] lg:h-10">
-              <Clock3 className="h-4 w-4" aria-hidden /> {a.rotulo}
+          ) : a.tipo === "pagamento_pendente" && temPagar ? (
+            // Pagamento pendente: o botão largo leva ao pagamento (no menu do quadrado).
+            <button
+              type="button"
+              onClick={(e) => setMenu({ id: c.id, ancora: (e.currentTarget.nextElementSibling as HTMLElement | null) ?? e.currentTarget })}
+              aria-haspopup="dialog"
+              className="bp2-botao-azul inline-flex h-11 flex-1 items-center justify-center rounded-[0.6rem] px-4 text-[13px] lg:h-10 lg:rounded-[0.55rem]"
+            >
+              Pagar e confirmar
             </button>
           ) : (
-            <span className="flex-1 text-xs bp2-destaque-rotulo">{a.tipo === "nenhuma" ? "A sala desta consulta já fechou." : null}</span>
+            <button type="button" disabled className="bp2-botao-azul inline-flex h-11 flex-1 cursor-not-allowed items-center justify-center rounded-[0.6rem] px-4 text-[13px] lg:h-10 lg:rounded-[0.55rem]">
+              {a.tipo === "aguardar" ? a.rotulo : a.tipo === "nenhuma" ? "Sala encerrada" : "Pagamento pendente"}
+            </button>
           )}
           <button
             type="button"
-            onClick={() => p.onRemarcar(c.id)}
-            aria-label={`Remarcar consulta de ${c.data} às ${c.hora}`}
-            title="Remarcar"
-            className="bp2-botao-relogio grid h-11 w-11 shrink-0 place-items-center rounded-[0.6rem] lg:h-10 lg:w-10"
+            onClick={(e) => setMenu({ id: c.id, ancora: e.currentTarget })}
+            aria-label={rotuloMenu}
+            aria-haspopup="dialog"
+            aria-expanded={menu?.id === c.id}
+            title="Pagar, remarcar ou cancelar"
+            data-menu-consulta={c.id}
+            className="bp2-botao-relogio relative grid h-11 w-11 shrink-0 place-items-center rounded-[0.6rem] lg:h-10 lg:w-10 lg:rounded-[0.7rem]"
           >
-            <RefreshCw className="h-4 w-4" aria-hidden />
-          </button>
-          <button
-            type="button"
-            onClick={() => p.onCancelar(c.id)}
-            aria-label={`Cancelar consulta de ${c.data} às ${c.hora}`}
-            title="Cancelar"
-            className="bp2-botao-relogio grid h-11 w-11 shrink-0 place-items-center rounded-[0.6rem] lg:h-10 lg:w-10"
-          >
-            <X className="h-4 w-4" aria-hidden />
+            <Clock3 className="h-[1.05rem] w-[1.05rem]" aria-hidden />
+            {temPagar ? <span aria-hidden className="bp2-botao-ponto" /> : null}
           </button>
         </div>
-        {st === "feita" ? (
-          <p className="bp2-destaque-rotulo mt-2 text-xs">Triagem enviada ao médico.</p>
-        ) : null}
-        {a.tipo === "aguardar" ? (
-          <p className="bp2-destaque-rotulo mt-2 text-xs">
-            {principal === "triagem" ? `${a.rotulo}. ` : null}A sala abre {SALA_ABRE_ANTES_MIN} min antes do horário.
-          </p>
-        ) : null}
       </div>
     );
   };
@@ -342,8 +379,8 @@ export function TelaInicioPaciente(p: PropsInicioPaciente) {
     <section className="bp2-hoje flex flex-col bp2-animar bp2-animar-d1" aria-labelledby="bp2-hoje-titulo">
       <div className="bp2-hoje-cab flex items-start justify-between gap-2">
         <div>
-          <p className="text-xs bp2-t-2">{diaPorExtenso(agora)}</p>
-          <h2 id="bp2-hoje-titulo" className="mt-0.5 text-[15px] font-medium">
+          <p className="text-[11px] bp2-t-2 first-letter:uppercase lg:text-xs">{diaPorExtenso(agora)}</p>
+          <h2 id="bp2-hoje-titulo" className="mt-0.5 text-base">
             {proximas.length ? plural(proximas.length, "consulta agendada", "consultas agendadas") : "Nenhuma consulta agendada"}
           </h2>
         </div>
@@ -361,11 +398,11 @@ export function TelaInicioPaciente(p: PropsInicioPaciente) {
               <>
                 <span className="min-w-0">
                   <span className="bp2-item-nome block truncate text-sm">{c.medico}</span>
-                  <span className="bp2-item-sub block truncate text-xs bp2-t-azul">{c.especialidade}</span>
+                  <span className="bp2-item-sub block truncate text-[11px] bp2-t-azul">{c.especialidade}</span>
                 </span>
-                <span className="flex shrink-0 flex-col items-end">
-                  <Estado e={e} />
-                  <span className="bp2-item-sub text-xs bp2-t-2 tabular-nums">
+                <span className="ml-3 flex min-w-0 max-w-[48%] shrink-0 flex-col items-end text-right">
+                  <span className={`bp2-item-motivo block truncate text-[13px] ${COR_TOM[e.tom]}`}>{e.texto}</span>
+                  <span className="bp2-item-sub block text-[11px] tabular-nums">
                     {c.data} · {c.hora}
                   </span>
                 </span>
@@ -374,11 +411,11 @@ export function TelaInicioPaciente(p: PropsInicioPaciente) {
             return (
               <li key={c.id}>
                 {aberta ? (
-                  <button type="button" onClick={() => p.onEntrar(c)} className="bp2-item flex w-full items-center justify-between gap-3 rounded-[0.9rem] px-3 py-2.5 text-left" aria-label={`Entrar na sala: ${c.especialidade} com ${c.medico}`}>
+                  <button type="button" onClick={() => p.onEntrar(c)} className="bp2-item flex w-full items-center justify-between rounded-[0.9rem] px-3 py-2.5 text-left" aria-label={`Entrar na sala: ${c.especialidade} com ${c.medico}`}>
                     {conteudo}
                   </button>
                 ) : (
-                  <div className="bp2-item flex items-center justify-between gap-3 rounded-[0.9rem] px-3 py-2.5">{conteudo}</div>
+                  <div className="bp2-item flex items-center justify-between rounded-[0.9rem] px-3 py-2.5">{conteudo}</div>
                 )}
               </li>
             );
@@ -392,6 +429,15 @@ export function TelaInicioPaciente(p: PropsInicioPaciente) {
   );
 
   /* ------------------------ cartões coloridos ------------------------ */
+  // Avisos (reagendamento, multa, falta, reembolso…) ficam abaixo da grade, para
+  // não empurrar a grade da ref. 12; o cartão lavanda leva até eles.
+  const irAvisos = () => {
+    const el = document.getElementById("bp2-avisos");
+    if (!el) return;
+    const reduzir = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    el.scrollIntoView({ block: "start", behavior: reduzir ? "auto" : "smooth" });
+    el.focus({ preventScroll: true });
+  };
   const alerta = (() => {
     switch (acao.tipo) {
       case "reagendar":
@@ -403,7 +449,7 @@ export function TelaInicioPaciente(p: PropsInicioPaciente) {
           medico: null as string | null,
         };
       case "pagar":
-        return { texto: "Conclua o pagamento para confirmar sua consulta.", legenda: `${acao.medico} · ${acao.quando}`, rotulo: "Ver a consulta e pagar", onClick: () => document.getElementById("bp2-hoje-titulo")?.scrollIntoView({ block: "start" }), medico: acao.medico };
+        return { texto: "Conclua o pagamento para confirmar sua consulta.", legenda: `${acao.medico} · ${acao.quando}`, rotulo: "Pagar a consulta", onClick: () => proxima && abrirMenuDe(proxima.id), medico: acao.medico };
       case "triagem":
         return {
           texto: acao.andamento ? "Termine a triagem: o médico já te conhece antes da consulta." : "Faça a triagem: uma conversa rápida para o médico te conhecer antes da consulta.",
@@ -421,6 +467,14 @@ export function TelaInicioPaciente(p: PropsInicioPaciente) {
           medico: acao.medico,
         };
       default:
+        if (qtdAvisos > 0)
+          return {
+            texto: `Você tem ${qtdAvisos === 1 ? "um aviso" : `${qtdAvisos} avisos`} logo abaixo.`,
+            legenda: null,
+            rotulo: qtdAvisos === 1 ? "Ver o aviso" : "Ver os avisos",
+            onClick: () => irAvisos(),
+            medico: null,
+          };
         return {
           texto: "Nada pendente agora. Quando precisar, a BION IA agenda sua consulta.",
           legenda: null,
@@ -441,6 +495,11 @@ export function TelaInicioPaciente(p: PropsInicioPaciente) {
           {alerta.texto}
         </p>
         {alerta.legenda ? <p className="mt-2 text-xs bp2-t-cor">{alerta.legenda}</p> : null}
+        {qtdAvisos > 0 && acao.tipo !== "nada" ? (
+          <button type="button" onClick={irAvisos} className="bp2-t-cor mt-2 self-start text-xs underline underline-offset-2">
+            {qtdAvisos === 1 ? "+ 1 aviso abaixo" : `+ ${qtdAvisos} avisos abaixo`}
+          </button>
+        ) : null}
         <div className="mt-auto flex items-center pt-3 pr-14">
           {alerta.medico ? (
             <span className="bp2-pilha-item">
@@ -481,19 +540,19 @@ export function TelaInicioPaciente(p: PropsInicioPaciente) {
   const visiveis = historicoFiltrado.slice(0, LIMITE_TABELA);
   const tabela = (
     <section className="bp2-cartao min-w-0 px-4 pb-3 pt-4 lg:px-5 lg:pt-5 bp2-animar bp2-animar-d3" aria-labelledby="bp2-hist-t">
-      <div className="flex flex-wrap items-center gap-3">
-        <h2 id="bp2-hist-t" className="mr-auto text-[15px] font-medium">
+      <div className="mb-2 flex flex-wrap items-center gap-2 lg:mb-[1.15rem]">
+        <h2 id="bp2-hist-t" className="mr-auto text-[14px] lg:text-[15px]">
           Histórico de consultas <span className="bp2-t-2">· {historico.length}</span>
         </h2>
         <label className="bp2-busca relative order-last flex w-full items-center sm:order-none sm:w-auto">
           <span className="sr-only">Buscar por médico ou especialidade</span>
-          <Search className="pointer-events-none absolute left-3 h-4 w-4 bp2-t-2" aria-hidden />
+          <Search className="pointer-events-none absolute left-3 h-3.5 w-3.5 bp2-t-2" aria-hidden />
           <input
             type="search"
             value={busca}
             onChange={(e) => setBusca(e.target.value)}
             placeholder="Buscar…"
-            className="w-full bg-transparent py-2 pl-9 pr-3 text-[13px] outline-none sm:w-44"
+            className="h-9 w-full rounded-full bg-transparent pl-8 pr-3 text-xs outline-none sm:w-44"
           />
         </label>
         <button type="button" onClick={p.onVerHistorico} aria-label="Ver todas as consultas e pagamentos" title="Ver todas" className="bp2-mais grid h-9 w-9 place-items-center rounded-full">
@@ -506,40 +565,40 @@ export function TelaInicioPaciente(p: PropsInicioPaciente) {
         <p className="py-6 text-center text-[13px] bp2-t-2">Nenhuma consulta encontrada para “{busca}”.</p>
       ) : (
         <>
-          <table className="bp2-tabela mt-3 hidden w-full table-fixed text-left md:table">
+          <table className="bp2-tabela hidden w-full table-fixed text-left md:table">
             <thead>
-              <tr className="text-xs bp2-t-2">
-                <th scope="col" className="w-[24%] px-3 py-2 font-normal">Médico</th>
-                <th scope="col" className="w-[22%] px-3 py-2 font-normal">Especialidade</th>
-                <th scope="col" className="w-[20%] px-3 py-2 font-normal">Situação</th>
-                <th scope="col" className="w-[18%] px-3 py-2 font-normal">Data</th>
-                <th scope="col" className="px-3 py-2 font-normal">Horário</th>
+              <tr className="text-[11px] bp2-t-2">
+                <th scope="col" className="w-[24%] px-3 pb-1.5 font-normal">Médico</th>
+                <th scope="col" className="w-[22%] px-3 pb-1.5 font-normal">Especialidade</th>
+                <th scope="col" className="w-[20%] px-3 pb-1.5 font-normal">Situação</th>
+                <th scope="col" className="w-[18%] px-3 pb-1.5 font-normal">Data</th>
+                <th scope="col" className="px-3 pb-1.5 font-normal">Horário</th>
               </tr>
             </thead>
-            <tbody className="text-[13px]">
+            <tbody className="text-xs xl:text-[13px]">
               {visiveis.map((l, i) => (
                 <tr key={l.id} className={`bp2-tr ${i === 0 ? "bp2-tr-destaque" : ""}`}>
-                  <td className="truncate rounded-l-lg px-3 py-2">{l.medico}</td>
-                  <td className="truncate px-3 py-2">{l.especialidade}</td>
-                  <td className="px-3 py-2">
-                    <Estado e={l.situacao} />
+                  <td className="truncate rounded-l-[0.6rem] px-3 py-[0.7rem]">{l.medico}</td>
+                  <td className="truncate px-3">{l.especialidade}</td>
+                  <td className="px-3">
+                    <Estado e={l.situacao} tamanho="" />
                   </td>
-                  <td className="px-3 py-2 tabular-nums">{l.data}</td>
-                  <td className="rounded-r-lg px-3 py-2 tabular-nums">{l.hora}</td>
+                  <td className="truncate px-3 tabular-nums">{l.data}</td>
+                  <td className="rounded-r-[0.6rem] px-3 tabular-nums">{l.hora}</td>
                 </tr>
               ))}
             </tbody>
           </table>
-          <ul className="mt-3 space-y-2 md:hidden" aria-label="Histórico de consultas">
+          <ul className="space-y-2 md:hidden" aria-label="Histórico de consultas">
             {visiveis.map((l) => (
               <li key={l.id} className="bp2-item flex items-center justify-between gap-3 rounded-[0.9rem] px-3 py-2.5">
                 <span className="min-w-0">
-                  <span className="block truncate text-sm">{l.medico}</span>
-                  <span className="block truncate text-xs bp2-t-2">{l.especialidade}</span>
+                  <span className="block truncate text-[13px]">{l.medico}</span>
+                  <span className="block truncate text-[11px] bp2-t-2">{l.especialidade}</span>
                 </span>
                 <span className="flex shrink-0 flex-col items-end">
-                  <Estado e={l.situacao} />
-                  <span className="text-xs bp2-t-2 tabular-nums">{l.data}</span>
+                  <Estado e={l.situacao} tamanho="text-xs" />
+                  <span className="text-[11px] bp2-t-2 tabular-nums">{l.data}</span>
                 </span>
               </li>
             ))}
@@ -594,13 +653,23 @@ export function TelaInicioPaciente(p: PropsInicioPaciente) {
 
       <div className="bp2-grade">
         <div className="bp2-area-hoje">{colunaProximas}</div>
-        <div className="bp2-area-avisos flex flex-col gap-3">
-          {acao.tipo === "mensagem" ? null : p.avisoMensagem}
-          {p.avisos}
-        </div>
         <div className="bp2-area-cartoes">{cartoes}</div>
         <div className="bp2-area-tabela min-w-0">{tabela}</div>
       </div>
+      <section ref={avisosRef} id="bp2-avisos" tabIndex={-1} aria-label="Avisos das suas consultas" className="bp2-area-avisos flex flex-col gap-3 outline-none">
+          {acao.tipo === "mensagem" ? null : p.avisoMensagem}
+          {p.avisos}
+      </section>
+      {menu && consultaMenu ? (
+        <MenuConsulta
+          consulta={consultaMenu}
+          ancora={menu.ancora}
+          pagar={p.botaoPagar(consultaMenu)}
+          onRemarcar={() => p.onRemarcar(consultaMenu.id)}
+          onCancelar={() => p.onCancelar(consultaMenu.id)}
+          onFechar={() => setMenu(null)}
+        />
+      ) : null}
     </div>
   );
 }
