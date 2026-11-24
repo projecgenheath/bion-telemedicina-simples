@@ -55,6 +55,10 @@ export function DadosPessoaisSheet({ campoInicial, onFechar }: { campoInicial?: 
   const [salvando, setSalvando] = useState(false);
   // B18: erro do telefone mora no campo (não só no toast do Salvar).
   const [erroTelefone, setErroTelefone] = useState("");
+  // CPF inválido: a regra não muda (só salva com CPF válido); o erro passa a
+  // morar no campo, que recebe o foco e entra na tela.
+  const [erroCpf, setErroCpf] = useState("");
+  const cpfRef = useRef<HTMLInputElement | null>(null);
   const [form, setForm] = useState({
     dataNascimento,
     telefone: mascararTelefoneDigitacao(pacientePerfil?.telefone ?? ""),
@@ -156,10 +160,18 @@ export function DadosPessoaisSheet({ campoInicial, onFechar }: { campoInicial?: 
     if (!cpfTravado && digitosCpf(cpf).length > 0) {
       const r = validarCpf(cpf);
       if (!r.ok) {
-        toast.error("CPF inválido. Confira os 11 dígitos.");
+        const msg = "CPF inválido. Confira os 11 dígitos para salvar.";
+        setErroCpf(msg);
+        toast.error(msg);
+        const el = cpfRef.current;
+        if (el) {
+          el.focus({ preventScroll: true });
+          el.scrollIntoView({ block: "center", behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+        }
         return;
       }
       cpfPatch = r.valor;
+      setErroCpf("");
     }
     if (!alterado.length && cpfPatch === undefined) {
       onFechar();
@@ -183,7 +195,7 @@ export function DadosPessoaisSheet({ campoInicial, onFechar }: { campoInicial?: 
   const rotulo = "text-xs font-bold bpp-sheet-suave";
 
   return (
-    <div ref={raizRef} className="bpp-sheet-raiz absolute inset-0 z-[80] flex items-end justify-center" role="dialog" aria-modal="true" aria-labelledby="titulo-dados-pessoais">
+    <div ref={raizRef} className="bpp-sheet-raiz bp2-sheet bp2-v2 absolute inset-0 z-[80] flex items-end justify-center" role="dialog" aria-modal="true" aria-labelledby="titulo-dados-pessoais">
       <button type="button" tabIndex={-1} aria-hidden="true" className="absolute inset-0 bpp-sheet-veu cursor-default" onClick={fechar} />
       <form
         ref={painelRef}
@@ -209,7 +221,31 @@ export function DadosPessoaisSheet({ campoInicial, onFechar }: { campoInicial?: 
                 </span>
               </>
             ) : (
-              <input ref={(el) => focarCampo(el, "cpf")} value={cpf} onChange={(e) => setCpf(mascararCpfDigitacao(e.target.value))} placeholder="000.000.000-00" inputMode="numeric" autoComplete="off" maxLength={14} className={campo} />
+              <>
+                <input
+                  ref={(el) => {
+                    cpfRef.current = el;
+                    focarCampo(el, "cpf");
+                  }}
+                  value={cpf}
+                  onChange={(e) => {
+                    setCpf(mascararCpfDigitacao(e.target.value));
+                    if (erroCpf) setErroCpf("");
+                  }}
+                  placeholder="000.000.000-00"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  maxLength={14}
+                  aria-invalid={erroCpf ? true : undefined}
+                  aria-describedby={erroCpf ? "erro-cpf" : undefined}
+                  className={`${campo} ${erroCpf ? "bp2-campo-erro" : ""}`}
+                />
+                {erroCpf ? (
+                  <span id="erro-cpf" role="alert" className="block mt-1 text-xs font-semibold text-red-700 dark:text-red-300">
+                    {erroCpf}
+                  </span>
+                ) : null}
+              </>
             )}
           </label>
           <label className="block">
@@ -237,7 +273,7 @@ export function DadosPessoaisSheet({ campoInicial, onFechar }: { campoInicial?: 
               maxLength={15}
               aria-invalid={erroTelefone ? true : undefined}
               aria-describedby={erroTelefone ? "erro-telefone" : undefined}
-              className={campo}
+              className={`${campo} ${erroTelefone ? "bp2-campo-erro" : ""}`}
             />
             {erroTelefone ? (
               <span id="erro-telefone" role="alert" className="block mt-1 text-xs font-semibold text-red-700 dark:text-red-300">

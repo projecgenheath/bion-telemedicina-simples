@@ -1,26 +1,21 @@
 "use client";
 
 import { BotaoPagarStripe } from "./BotaoPagarStripe";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useVoltarFecha } from "./useVoltarFecha";
-import { useFocoDialogo } from "./useFocoDialogo";
+import { useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,
   BadgeCheck,
   Ban,
   ClipboardList,
-  Copy,
   Download,
   Eye,
   FileText,
   FileUp,
   Pill,
   Printer,
-  X,
 } from "lucide-react";
 import { useBion } from "@/lib/bion-store";
 import type { Documento } from "@/lib/bion-tipos";
-import { gerarDocumentoPDF } from "@/lib/receita-pdf";
 import { useAppNativo } from "@/lib/useAppNativo";
 import { toast } from "sonner";
 import { CalendarPlus, RotateCcw } from "lucide-react";
@@ -30,6 +25,7 @@ import { RenovarReceitaSheet } from "./RenovarReceitaSheet";
 import { usePedidosRenovacao } from "./usePedidosRenovacao";
 import { tipoDaConsulta } from "./tipo-atendimento-ui";
 import { TelaMensagensPaciente } from "./etapa3/TelaMensagensPaciente";
+import { aceitaPdf, entregarPdf, VisualizadorDocumento, type DadosVisualizador } from "./etapa4/VisualizadorDocumento";
 import { avisoRenovacaoBloqueada, contarDocumentos, dataBR, iniciaisNome, seloCancelado } from "./etapa3/etapa3-dados";
 
 /**
@@ -56,130 +52,6 @@ const ROTULO_DOC = {
   prontuario: "Prontuário da consulta",
 } as const;
 
-function aceitaPdf(d: Documento | undefined): d is Documento {
-  return !!d && (d.tipo === "receita" || d.tipo === "atestado" || d.tipo === "exame" || d.tipo === "exame_solicitado");
-}
-
-/** Compartilha o PDF quando o celular permite; senão baixa o arquivo. */
-async function entregarPdf(d: Documento) {
-  try {
-    const { nome, blob } = gerarDocumentoPDF(d, "blob");
-    const arquivo = new File([blob], nome, { type: "application/pdf" });
-    const nav = navigator as Navigator & { canShare?: (data?: ShareData) => boolean };
-    if (typeof nav.share === "function" && nav.canShare?.({ files: [arquivo] })) {
-      await nav.share({ files: [arquivo], title: d.titulo });
-      return;
-    }
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = nome;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    window.setTimeout(() => URL.revokeObjectURL(url), 1500);
-    toast.success("PDF pronto para salvar.");
-  } catch (e) {
-    if (e instanceof DOMException && e.name === "AbortError") return;
-    toast.error("Não foi possível gerar o PDF.");
-  }
-}
-
-function Visualizador({
-  titulo,
-  corpo,
-  documento,
-  imprimir = false,
-  onFechar,
-}: {
-  titulo: string;
-  corpo: string[];
-  documento?: Documento;
-  /** Fase 3: o botão de impressora da lista abre o documento JÁ imprimindo. */
-  imprimir?: boolean;
-  onFechar: () => void;
-}) {
-  const dialogoRef = useRef<HTMLDivElement>(null);
-  useVoltarFecha(true, onFechar);
-  useFocoDialogo(true, onFechar, dialogoRef);
-  // A WebView do app de loja (Capacitor/Android) ignora window.print(): o botão
-  // não fazia nada. No app, "Imprimir" vira "Copiar" (texto do documento).
-  const noApp = useAppNativo();
-  const copiar = async () => {
-    try {
-      await navigator.clipboard.writeText([titulo, ...corpo].join("\n"));
-      toast.success("Texto do documento copiado.", {
-        description: "Para imprimir ou salvar em PDF, abra o BION pelo navegador.",
-      });
-    } catch {
-      toast.error("Não foi possível copiar. Para imprimir, abra o BION pelo navegador.");
-    }
-  };
-  useEffect(() => {
-    if (!imprimir || noApp) return;
-    // Espera o documento pintar (a regra @media print só mostra .bp-impressao).
-    const id = window.setTimeout(() => window.print(), 250);
-    return () => window.clearTimeout(id);
-  }, [imprimir, noApp]);
-
-  return (
-    <div ref={dialogoRef} className="absolute inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label={`Documento: ${titulo}`}>
-      {/* A11Y: fundo clicável agora é button real (tabIndex=-1 o mantém fora
-          da ordem de tabulação — fechar por teclado é papel do ESC/botão). */}
-      <button
-        type="button"
-        tabIndex={-1}
-        aria-hidden="true"
-        aria-label="Fechar documento"
-        className="bpp-veu-doc absolute inset-0 bg-bion-ink/60 backdrop-blur-sm cursor-default"
-        onClick={onFechar}
-      />
-      <div className="bion-surgir relative w-full max-w-lg max-h-[88vh] overflow-y-auto bp-coluna rounded-3xl bg-white dark:bg-bion-night p-6 shadow-2xl">
-        <div className="flex items-start justify-between gap-3 mb-4">
-          <h3 className="text-lg font-bold text-bion-ink dark:text-bion-paper">{titulo}</h3>
-          <div className="flex gap-2 shrink-0">
-            {aceitaPdf(documento) ? (
-              <button type="button"
-                onClick={() => void entregarPdf(documento)}
-                aria-label="Baixar ou compartilhar PDF"
-                className="bion-toque bp-acao px-4 min-h-11 text-xs inline-flex items-center gap-1.5"
-              >
-                <Download className="w-4 h-4" /> PDF
-              </button>
-            ) : null}
-            {noApp ? (
-              <button type="button"
-                onClick={() => void copiar()}
-                aria-label="Copiar texto do documento"
-                className="bion-toque bp-acao px-4 min-h-11 text-xs inline-flex items-center gap-1.5"
-              >
-                <Copy className="w-4 h-4" /> Copiar
-              </button>
-            ) : (
-              <button type="button"
-                onClick={() => window.print()}
-                aria-label="Imprimir documento"
-                className="bion-toque bp-acao px-4 min-h-11 text-xs inline-flex items-center gap-1.5"
-              >
-                <Printer className="w-4 h-4" /> Imprimir
-              </button>
-            )}
-            <button type="button" onClick={onFechar} aria-label="Fechar documento" className="bion-toque w-11 h-11 inline-flex items-center justify-center rounded-full bg-bion-ink/5 dark:bg-white/10 text-bion-ink dark:text-bion-paper">
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-        <div className="bp-impressao space-y-2 text-sm leading-relaxed text-bion-ink dark:text-bion-paper whitespace-pre-line border-t border-bion-ink/10 dark:border-white/10 pt-4">
-          {corpo.map((p, i) => (
-            <p key={i}>{p}</p>
-          ))}
-          <p className="pt-4 text-xs opacity-80">Documento sem assinatura digital ICP-Brasil — BION Telemedicina.</p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export type VistaDocumentos = "documentos" | "mensagens";
 
 export function DocumentosPainel({
@@ -205,7 +77,7 @@ export function DocumentosPainel({
 }) {
   const { consultas, documentos, medicos, sessao, naoLidasMensagens } = useBion();
   const [consultaSelecionada, setConsultaSelecionada] = useState<string | null>(null);
-  const [visualizando, setVisualizando] = useState<{ titulo: string; corpo: string[]; imprimir?: boolean; documento?: Documento } | null>(null);
+  const [visualizando, setVisualizando] = useState<DadosVisualizador | null>(null);
   const noApp = useAppNativo();
   const [retornoDe, setRetornoDe] = useState<string | null>(null);
   const [renovando, setRenovando] = useState<{ id: string; medicamento: string; medico: string } | null>(null);
@@ -352,6 +224,21 @@ export function DocumentosPainel({
     </header>
   );
 
+  const dadosDoVisualizador = (d: (typeof docsSelecionados)[number], pdf: Documento | null): DadosVisualizador => {
+    const c = realizadas.find((x) => x.id === consultaSelecionada);
+    return {
+      titulo: d.titulo,
+      corpo: d.corpo,
+      documento: pdf ?? undefined,
+      tipo: d.tipo === "receita" || d.tipo === "atestado" || d.tipo === "prontuario" ? d.tipo : "exame_solicitado",
+      rotuloTipo: d.rotuloTipo,
+      emitido: d.original?.criadoEm ? dataBR(d.original.criadoEm) : d.data,
+      medico: d.original?.medico ?? c?.medico ?? "",
+      especialidade: c?.especialidade,
+      selo: seloCancelado(d.original),
+    };
+  };
+
   const acoesDoc = (d: (typeof docsSelecionados)[number]) => {
     const pdf = aceitaPdf(d.original) ? d.original : null;
     return (
@@ -359,7 +246,7 @@ export function DocumentosPainel({
         <button
           type="button"
           data-ver-documento={d.id}
-          onClick={() => setVisualizando({ titulo: d.titulo, corpo: d.corpo, documento: pdf ?? undefined })}
+          onClick={() => setVisualizando(dadosDoVisualizador(d, pdf))}
           className="bp2-docs-ver"
           aria-label={`Ver ${d.titulo}`}
         >
@@ -374,7 +261,7 @@ export function DocumentosPainel({
         {!noApp ? (
           <button
             type="button"
-            onClick={() => setVisualizando({ titulo: d.titulo, corpo: d.corpo, documento: pdf ?? undefined, imprimir: true })}
+            onClick={() => setVisualizando({ ...dadosDoVisualizador(d, pdf), imprimir: true })}
             aria-label={`Imprimir ${d.titulo}`}
             title="Imprimir"
             className="bp2-icone-linha"
@@ -662,7 +549,7 @@ export function DocumentosPainel({
 
   return (
     <div className={`bp2-docs bp2-e3 bp2-v2 ${vista === "mensagens" ? "bp2-docs-vista-msg" : ""}`}>
-      {visualizando && <Visualizador titulo={visualizando.titulo} corpo={visualizando.corpo} documento={visualizando.documento} imprimir={visualizando.imprimir} onFechar={() => setVisualizando(null)} />}
+      {visualizando && <VisualizadorDocumento dados={visualizando} paciente={sessao.nome} onFechar={() => setVisualizando(null)} />}
       {topo}
       <div id="bp2-docs-painel" role="tabpanel" aria-labelledby={`bp2-aba-${vista}`} className="bp2-docs-corpo">
         {vista === "mensagens" ? (
