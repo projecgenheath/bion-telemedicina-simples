@@ -1780,3 +1780,6 @@
 .bp2-app .bp2-vdoc-lado .bp2-vdoc-nota { padding: 0.6rem 0 0.35rem; border-top: 1px solid rgba(36, 36, 36, 0.1); font-size: 12px; line-height: 16px; color: #646464; }
 /* Aviso de erro (sonner richColors, #e60000 sobre #fff0f0 = 4,34:1): só nas telas do paciente, texto AA. */
 body:has(.bp2-app) [data-sonner-toast][data-type="error"][data-rich-colors="true"] { --error-text: #b30000; color: #b30000; }
+/* Selo longo ("Cancelado em …") desce para baixo do nome em vez de espremer o texto. */
+.bp2-app .bp2-vdoc-rel { flex-wrap: wrap; row-gap: 0.4rem; }
+.bp2-app .bp2-vdoc-rel > div { flex: 1 1 8.5rem; }
