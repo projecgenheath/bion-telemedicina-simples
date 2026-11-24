@@ -1105,3 +1105,460 @@
 }
 .bp2-app .bp2-agp-vistas button { color: #6b6b6b; }
 .dark .bp2-app .bp2-agp-vistas button { color: var(--bp2-texto-2); }
+
+/* ==================================================================== */
+/* Etapa 3 (24/11): Mensagens, Documentos, Saúde e Exames no desenho   */
+/* do médico (ref. 06 e medico.css .bm2-msg-*; ficha refs. 15–17 e 08). */
+/* Áreas: .bp2-docs (painel de Documentos/Mensagens), .bp2-saude e      */
+/* .bp2-exames (seções 2 e 3). Escopo só do paciente (.bp2-app).        */
+/* ==================================================================== */
+.bp2-app {
+  --bp2-balao-pac: #e8effc;
+  --bp2-balao-med: #76a1f3;
+}
+.dark .bp2-app { --bp2-balao-pac: #23324a; }
+
+/* Peças antigas dentro das áreas novas: mesmos tokens da etapa 2 */
+.bp2-app :is(.bp2-e3) {
+  --bion-ink: #242424;
+  --bion-paper: #f2f4f7;
+  --bion-sea: #2f62c4;
+  --primary: #2f62c4;
+  --primary-foreground: #ffffff;
+  --ring: #2f62c4;
+  --bpp-vidro: #ffffff;
+  --bpp-vidro-borda: transparent;
+  --bpp-acao-inicio: #76a1f3;
+  --bpp-acao-fim: #76a1f3;
+  --bpp-acao-texto: #242424;
+  --bpp-acao-sombra: transparent;
+  --bpp-grafico-linha: #2f62c4;
+  --bpp-grafico-alerta: #b4500f;
+  --bpp-grafico-eixo: rgba(36, 36, 36, 0.72);
+}
+.dark .bp2-app :is(.bp2-e3) {
+  --bion-sea: #9dbcf7;
+  --primary: #9dbcf7;
+  --primary-foreground: #0e1013;
+  --ring: #9dbcf7;
+  --bpp-vidro: #181b20;
+  --bpp-vidro-borda: rgba(255, 255, 255, 0.08);
+  --bpp-grafico-linha: #9dbcf7;
+  --bpp-grafico-alerta: #f3a56f;
+  --bpp-grafico-eixo: rgba(242, 244, 247, 0.62);
+}
+.bp2-app .bp2-e3 .bp-acao { background: #76a1f3; color: #242424; box-shadow: none; }
+.bp2-app .bp2-e3 .bp-glass { background: var(--bp2-cartao); border: 0; border-radius: 1.25rem; box-shadow: var(--bp2-sombra); backdrop-filter: none; -webkit-backdrop-filter: none; }
+.dark .bp2-app .bp2-e3 .bp-glass { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06); }
+
+/* Foco visível em tudo que é novo */
+.bp2-app :is(.bp2-aba, .bp2-docs-cons, .bp2-docs-ver, .bp2-renov-botao, .bp2-renov-link, .bp2-renov-pedir, .bp2-msg-item, .bp2-msg-icone, .bp2-msg-enviar, .bp2-msg-registros li button, .bp2-msg-log, .bp2-saude-grafico, .bp2-exames-enviar, .bp2-exame):focus-visible { outline: 2px solid #2f62c4; outline-offset: 2px; }
+.dark .bp2-app :is(.bp2-aba, .bp2-docs-cons, .bp2-docs-ver, .bp2-renov-botao, .bp2-renov-link, .bp2-renov-pedir, .bp2-msg-item, .bp2-msg-icone, .bp2-msg-enviar, .bp2-msg-registros li button, .bp2-msg-log, .bp2-saude-grafico, .bp2-exames-enviar, .bp2-exame):focus-visible { outline-color: #9dbcf7; }
+.bp2-app :is(.bp2-msg-lista-busca, .bp2-msg-chat-busca):focus-within { outline: 2px solid #2f62c4; outline-offset: 1px; }
+.dark .bp2-app :is(.bp2-msg-lista-busca, .bp2-msg-chat-busca):focus-within { outline-color: #9dbcf7; }
+.bp2-app .bp2-msg-campo:focus-visible { outline: none; }
+.bp2-app .bp2-exame:focus:not(:focus-visible) { outline: none; }
+
+/* ---------------- Seções 2 e 3 (Saúde e Exames) ---------------- */
+.bp2-app .bp2-secao-e3 { background: var(--bp2-fundo); color: var(--bp2-texto); }
+.bp2-app .bp2-secao-cab { margin-bottom: 1rem; }
+.bp2-app .bp2-secao-titulo { font-size: 1.5rem; line-height: 1.2; font-weight: 400; letter-spacing: -0.01em; }
+.bp2-app .bp2-saude-grade, .bp2-app .bp2-exames-grade { display: flex; flex-direction: column; gap: 0.9rem; }
+.bp2-app .bp2-saude-meds { display: flex; flex-direction: column; gap: 0.9rem; min-width: 0; }
+.bp2-app .bp2-saude-ficha .bp2-ficha-campos dd { overflow: hidden; text-overflow: ellipsis; }
+.bp2-app .bp2-saude-grafico { display: flex; flex-direction: column; gap: 0.5rem; width: 100%; padding: 1.05rem 1.05rem 0.9rem; text-align: left; color: var(--bp2-texto); transition: background-color 0.15s ease; }
+.bp2-app .bp2-saude-grafico:hover { background: color-mix(in srgb, var(--bp2-cartao) 92%, var(--bp2-azul)); }
+.bp2-app .bp2-saude-grafico-cab { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.75rem; }
+.bp2-app .bp2-saude-grafico-rodape { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 12px; color: var(--bp2-t-azul); }
+
+.bp2-app .bp2-exames-lista {
+  border-radius: 1.25rem; background: var(--bp2-lavanda); color: #242424; padding: 1.1rem 0.95rem 0.95rem; display: flex; flex-direction: column; gap: 0.5rem; min-width: 0;
+  --bp2-texto-2: #5c5c5c;
+}
+.bp2-app .bp2-exames-lista .bp2-vazio { color: #5c5c5c; }
+.bp2-app .bp2-exames-sub { font-size: 12px; color: #5c5c5c; padding: 0.15rem 2px 0.25rem; }
+.bp2-app .bp2-exames-lista .bp2-exame-alterado { color: #a3241f; font-weight: 500; }
+.bp2-app .bp2-exames-enviar { margin-top: 0.35rem; display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; height: 2.75rem; border-radius: 0.6rem; background: #ffffff; color: #2f62c4; font-size: 13px; font-weight: 500; }
+.bp2-app .bp2-exames-cartoes { display: flex; flex-direction: column; gap: 0.9rem; min-width: 0; }
+.bp2-app .bp2-exame { padding: 1.05rem 1.05rem 0.85rem; display: flex; flex-direction: column; gap: 0.6rem; scroll-margin-top: 1rem; }
+.bp2-app .bp2-exame-cab { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.75rem; }
+.bp2-app .bp2-exame-alterado { color: var(--bp2-t-vermelho); font-weight: 500; }
+.bp2-app .bp2-exame-normal { color: var(--bp2-t-verde); font-weight: 500; }
+.bp2-app .bp2-exame-tabela { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; }
+.bp2-app .bp2-exame-tabela th { text-align: left; font-weight: 400; font-size: 11.5px; color: var(--bp2-texto-2); padding: 6px 8px; }
+.bp2-app .bp2-exame-tabela td { padding: 8px; border-top: 1px solid var(--bp2-divisor); vertical-align: top; }
+.bp2-app .bp2-exame-tabela th:nth-child(n+2), .bp2-app .bp2-exame-tabela td:nth-child(n+2) { text-align: right; white-space: nowrap; }
+
+@media (min-width: 1024px) {
+  .bp2-app .bpp-secao.bp2-secao-e3 { padding: 1.75rem 1.7rem 2.5rem 1.75rem; }
+  .bp2-app .bp2-secao-e3 > .bp2-e3 { max-width: 1480px; margin: 0 auto; }
+  .bp2-app .bp2-secao-cab { display: flex; align-items: baseline; gap: 1rem; margin-bottom: 1.15rem; }
+  .bp2-app .bp2-saude-grade {
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 360px;
+    grid-template-areas: "ficha ficha meds" "imc pa meds"; gap: 18px 19px; align-items: start;
+  }
+  .bp2-app .bp2-saude-ficha { grid-area: ficha; }
+  .bp2-app .bp2-saude-meds { grid-area: meds; gap: 18px; }
+  .bp2-app .bp2-saude-grafico:nth-of-type(1) { grid-area: imc; }
+  .bp2-app .bp2-saude-grafico:nth-of-type(2) { grid-area: pa; }
+  .bp2-app .bp2-saude-grafico { min-height: 100%; padding: 18px 18px 14px; }
+  .bp2-app .bp2-exames-grade { display: grid; grid-template-columns: minmax(0, 1fr) 313px; grid-template-areas: "cartoes lista"; gap: 18px 19px; align-items: start; }
+  .bp2-app .bp2-exames-lista { grid-area: lista; position: sticky; top: 1rem; padding: 18px 18px 14px; }
+  .bp2-app .bp2-exames-cartoes { grid-area: cartoes; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 360px), 1fr)); gap: 18px; align-items: start; }
+  .bp2-app .bp2-exames-cartoes > section[aria-label="Arquivos originais dos laudos"] { grid-column: 1 / -1; margin-top: 0; }
+  .bp2-app .bp2-exame { padding: 18px 18px 14px; }
+
+  /* Ficha de saúde como a ficha do médico em 1440 */
+  .bp2-app .bp2-saude .bp2-ficha-cartao,
+  .bp2-app .bp2-docs .bp2-ficha-cartao {
+    grid-template-columns: minmax(0, 460px) minmax(0, 1fr);
+    grid-template-rows: auto 1fr auto auto;
+    grid-template-areas: "topo topo" ". pessoa" "campos pessoa" "sinais pessoa";
+    gap: 0 1rem; padding: 18px 14px 14px 18px; min-height: 257px;
+  }
+  .bp2-app :is(.bp2-saude, .bp2-docs) .bp2-ficha-pessoa { flex-direction: column-reverse; align-items: flex-end; justify-content: flex-start; gap: 1.1rem; align-self: end; text-align: right; padding: 0 4px 6px 0; }
+  .bp2-app :is(.bp2-saude, .bp2-docs) .bp2-ficha-avatar { position: absolute; left: 60%; bottom: 30px; width: 120px; height: 120px; font-size: 38px; font-weight: 300; background: rgba(255, 255, 255, 0.34); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.55); }
+  .bp2-app :is(.bp2-saude, .bp2-docs) .bp2-ficha-nome { align-items: flex-end; max-width: 15rem; }
+  .bp2-app :is(.bp2-saude, .bp2-docs) .bp2-ficha-campos { grid-template-columns: 141px 169px minmax(0, 1fr); gap: 0; padding-bottom: 13px; max-width: 418px; width: 100%; border-bottom: 1px solid rgba(36, 36, 36, 0.1); }
+  .bp2-app :is(.bp2-saude, .bp2-docs) .bp2-ficha-campos dd { margin-top: 5px; }
+  .bp2-app :is(.bp2-saude, .bp2-docs) .bp2-ficha-sinais { flex-wrap: nowrap; gap: 30px; padding-top: 17px; border-top: 0; }
+  .bp2-app :is(.bp2-saude, .bp2-docs) .bp2-ficha-sinais dd { margin-top: 6px; }
+  .bp2-app :is(.bp2-saude, .bp2-docs) .bp2-ficha-valor { font-size: 31px; }
+  .bp2-app :is(.bp2-saude, .bp2-docs) .bp2-ficha-valor-texto { font-size: 22px; line-height: 31px; }
+  .bp2-app :is(.bp2-saude, .bp2-docs) .bp2-ficha-unidade { font-size: 20px; }
+  .bp2-app .bp2-docs .bp2-ficha-acao { position: absolute; right: 14px; top: 58px; height: 2.25rem; padding: 0 1rem; }
+}
+@media (min-width: 1024px) and (max-width: 1279px) {
+  .bp2-app .bp2-saude-grade { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 300px; }
+  .bp2-app :is(.bp2-saude, .bp2-docs) .bp2-ficha-avatar { width: 104px; height: 104px; font-size: 32px; left: 52%; }
+}
+
+/* ---------------- Documentos e Mensagens (painel da direita) ---------------- */
+.bp2-app .bp2-docs { min-height: 100%; background: var(--bp2-fundo); color: var(--bp2-texto); }
+.bp2-app .bp2-docs-topo {
+  position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem 0.75rem;
+  padding: calc(0.75rem + env(safe-area-inset-top)) 1rem 0.75rem; background: var(--bp2-fundo); border-bottom: 1px solid var(--bp2-divisor);
+}
+.bp2-app .bp2-docs-titulo { font-size: 15px; line-height: 19px; font-weight: 500; }
+.bp2-app .bp2-abas { display: flex; flex-basis: 100%; gap: 4px; padding: 3px; border-radius: 9999px; background: var(--bp2-cartao); box-shadow: var(--bp2-sombra); }
+.dark .bp2-app .bp2-abas { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08); }
+.bp2-app .bp2-aba { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 0.4rem; height: 2.25rem; padding: 0 1rem; border-radius: 9999px; font-size: 13px; font-weight: 500; color: var(--bp2-texto-2); }
+.bp2-app .bp2-aba:hover { color: var(--bp2-texto); background: var(--bp2-linha); }
+.bp2-app .bp2-aba[aria-selected="true"], .bp2-app .bp2-aba[aria-selected="true"]:hover { background: var(--bp2-azul); color: #242424; }
+.bp2-app .bp2-aba-selo { min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9999px; background: #c42b2b; color: #fff; font-size: 10.5px; font-weight: 500; display: inline-grid; place-items: center; }
+.bp2-app .bp2-docs-corpo { padding: 0.9rem 1rem calc(5.5rem + env(safe-area-inset-bottom)); }
+.bp2-app .bp2-docs-grade { display: flex; flex-direction: column; gap: 0.9rem; }
+.bp2-app .bp2-docs-ficha { order: 1; }
+.bp2-app .bp2-docs-lista { order: 2; }
+.bp2-app .bp2-docs-renov { order: 3; }
+.bp2-app .bp2-docs-consultas { order: 4; }
+
+.bp2-app .bp2-docs-consultas { padding: 1rem 0.75rem 0.6rem; display: flex; flex-direction: column; gap: 0.4rem; min-width: 0; }
+.bp2-app .bp2-docs-consultas > .bp2-ficha-cab { padding: 0 0.4rem; align-items: center; }
+.bp2-app .bp2-docs-conta { font-size: 12px; }
+.bp2-app .bp2-docs-cons-lista { display: flex; flex-direction: column; gap: 2px; }
+.bp2-app .bp2-docs-cons { width: 100%; display: flex; align-items: center; gap: 0.75rem; min-height: 3.5rem; padding: 0.55rem 0.5rem; border-radius: 0.75rem; text-align: left; }
+.bp2-app .bp2-docs-cons:hover { background: var(--bp2-linha); }
+.bp2-app .bp2-docs-cons[aria-pressed="true"] { background: var(--bp2-azul-ativo); }
+.bp2-app .bp2-docs-cons-avatar { display: grid; place-items: center; width: 2.5rem; height: 2.5rem; flex-shrink: 0; border-radius: 9999px; font-size: 12.5px; font-weight: 500; }
+.bp2-app .bp2-docs-cons-nome { font-size: 13.5px; line-height: 17px; font-weight: 500; }
+.bp2-app .bp2-docs-cons-sub { margin-top: 2px; font-size: 11.5px; line-height: 15px; color: var(--bp2-texto-2); }
+
+.bp2-app .bp2-docs-lista { padding: 1rem 0.75rem 0.75rem; display: flex; flex-direction: column; min-width: 0; }
+.bp2-app .bp2-docs-lista > .bp2-ficha-cab { padding: 0 0.4rem; }
+.bp2-app .bp2-docs-tabela { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; --bp2-texto-2: #6e6e6e; }
+.dark .bp2-app .bp2-docs-tabela { --bp2-texto-2: #a9b0ba; }
+.bp2-app .bp2-docs-tabela thead { display: none; }
+/* Celular: cada documento em 3 linhas (documento / tipo · situação / emissão · ações) */
+.bp2-app .bp2-docs-tabela tbody tr {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "doc doc" "tipo sit" "emit acoes";
+  gap: 0.3rem 0.75rem; align-items: center; padding: 0.75rem 0.4rem; border-top: 1px solid var(--bp2-divisor);
+}
+.bp2-app .bp2-docs-tabela tbody tr:first-child { border-top: 0; }
+.bp2-app .bp2-docs-tabela td:nth-child(1) { grid-area: doc; }
+.bp2-app .bp2-docs-tabela td:nth-child(2) { grid-area: tipo; font-size: 12.5px; }
+.bp2-app .bp2-docs-tabela td:nth-child(3) { grid-area: emit; font-size: 12.5px; }
+.bp2-app .bp2-docs-tabela td:nth-child(4) { grid-area: sit; justify-self: end; }
+.bp2-app .bp2-docs-tabela td:nth-child(5) { grid-area: acoes; justify-self: end; }
+.bp2-app .bp2-docs-nome { display: flex; align-items: center; gap: 0.7rem; min-width: 0; }
+.bp2-app .bp2-docs-icone { width: 2.25rem; height: 2.25rem; border-radius: 10px; display: grid; place-items: center; flex-shrink: 0; background: #e6eefc; color: #2f62c4; }
+.bp2-app .bp2-docs-icone-receita { background: #efeafb; color: #6045c2; }
+.bp2-app .bp2-docs-icone-exame, .bp2-app .bp2-docs-icone-exame_solicitado { background: #fdeadf; color: #b4541f; }
+.bp2-app .bp2-docs-icone-atestado { background: #e6eefc; color: #2f62c4; }
+.bp2-app .bp2-docs-icone-prontuario { background: #eef0f2; color: #555555; }
+.bp2-app .bp2-docs-titulo-doc { font-size: 13.5px; line-height: 18px; font-weight: 500; overflow-wrap: anywhere; }
+.bp2-app .bp2-docs-nota { margin-top: 2px; font-size: 11.5px; line-height: 15px; color: var(--bp2-t-laranja); }
+.bp2-app .bp2-docs-cancelado .bp2-docs-titulo-doc { text-decoration: line-through; text-decoration-thickness: 1px; color: var(--bp2-texto-2); }
+.bp2-app .bp2-selo-cancelado, .bp2-app .bp2-selo-valido { display: inline-flex; align-items: center; gap: 0.3rem; height: 1.5rem; padding: 0 0.6rem; border-radius: 9999px; font-size: 11.5px; font-weight: 500; white-space: nowrap; }
+.bp2-app .bp2-selo-cancelado { background: #fde8e8; color: #a3241f; }
+.dark .bp2-app .bp2-selo-cancelado { background: #3a1f22; color: #f6a3a3; }
+.bp2-app .bp2-selo-valido { background: #e3f4e8; color: #1e6b31; }
+.dark .bp2-app .bp2-selo-valido { background: #1d3325; color: #8fdca4; }
+.bp2-app .bp2-docs-acoes { display: inline-flex; align-items: center; gap: 2px; }
+.bp2-app .bp2-docs-ver { display: inline-flex; align-items: center; gap: 0.35rem; height: 2rem; padding: 0 0.75rem; border-radius: 9999px; background: var(--bp2-azul-ativo); color: var(--bp2-t-azul); font-size: 12.5px; font-weight: 500; }
+.bp2-app .bp2-docs-ver:hover { background: var(--bp2-azul-suave); }
+.dark .bp2-app .bp2-docs-ver:hover { background: #2a3a55; }
+.bp2-app .bp2-docs-rodape { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.6rem; padding: 0.7rem 0.4rem 0.1rem; border-top: 1px solid var(--bp2-divisor); font-size: 12px; color: var(--bp2-texto-2); }
+
+.bp2-app .bp2-docs-renov {
+  border-radius: 1.25rem; background: var(--bp2-lavanda); color: #242424; padding: 1.1rem 0.95rem 0.6rem; display: flex; flex-direction: column; gap: 0.4rem; min-width: 0;
+  --bp2-texto-2: #5c5c5c;
+}
+.bp2-app .bp2-docs-renov .bp2-vazio { color: #5c5c5c; }
+.bp2-app .bp2-renov-item { border-top: 1px solid rgba(36, 36, 36, 0.1); padding: 12px 2px 11px; }
+.bp2-app .bp2-renov-corpo { margin-top: 0.45rem; display: flex; flex-direction: column; align-items: flex-start; gap: 0.35rem; font-size: 12.5px; }
+.bp2-app .bp2-renov-estado { display: inline-flex; align-items: center; height: 1.5rem; padding: 0 0.6rem; border-radius: 9999px; font-size: 11.5px; font-weight: 500; background: rgba(255, 255, 255, 0.6); color: #242424; }
+.bp2-app .bp2-renov-pendente { background: #fff3e0; color: #8a3f0c; }
+.bp2-app .bp2-renov-ok { background: #e3f4e8; color: #1e6b31; }
+.bp2-app .bp2-renov-info { background: #e6eefc; color: #234c9a; }
+.bp2-app .bp2-renov-erro { background: #fde8e8; color: #a3241f; }
+.bp2-app .bp2-renov-msg { color: #3d3d3d; font-size: 12.5px; line-height: 17px; }
+.bp2-app .bp2-renov-bloqueio { color: #8a3f0c; font-size: 12.5px; line-height: 17px; font-weight: 500; }
+.bp2-app .bp2-renov-link { display: inline-flex; align-items: center; min-height: 2rem; padding: 0 2px; font-size: 12.5px; font-weight: 500; color: #234c9a; text-decoration: underline; text-underline-offset: 2px; border-radius: 0.4rem; }
+.bp2-app .bp2-renov-pedir { display: inline-flex; align-items: center; gap: 0.4rem; height: 2.25rem; padding: 0 0.9rem; border-radius: 0.6rem; background: #ffffff; color: #2f62c4; font-size: 12.5px; font-weight: 500; }
+.bp2-app .bp2-renov-botao { display: inline-flex; align-items: center; height: 2rem; padding: 0 0.75rem; border-radius: 9999px; font-size: 12px; font-weight: 500; background: #ffffff; color: #242424; }
+.bp2-app .bp2-renov-botao.bp2-renov-perigo { background: #a3241f; color: #ffffff; }
+.bp2-app .bp2-renov-botao:disabled { opacity: 0.6; }
+.bp2-app .bp2-docs-renov :is(.bp2-renov-link, .bp2-renov-pedir, .bp2-renov-botao):focus-visible { outline-color: #2f62c4; }
+
+/* Mensagens dentro do painel (celular: a lista é um cartão; a conversa abre em tela cheia) */
+.bp2-app .bp2-docs-vista-msg .bp2-docs-corpo { padding-top: 0.9rem; }
+.bp2-app .bp2-msg-grade { display: flex; flex-direction: column; gap: 0.9rem; }
+.bp2-app .bp2-msg-lista { display: flex; flex-direction: column; min-height: 0; background: var(--bp2-cartao); border-radius: 20px; box-shadow: var(--bp2-sombra); padding: 1rem 0.5rem 0.5rem; --bp2-texto-2: #6e6e6e; }
+.dark .bp2-app .bp2-msg-lista { --bp2-texto-2: #a9b0ba; }
+.bp2-app .bp2-msg-lista-cab h3 { font-size: 15px; font-weight: 500; }
+.bp2-app .bp2-msg-lista-cab { display: flex; align-items: center; justify-content: space-between; padding: 0 8px 0 10px; min-height: 32px; }
+.bp2-app .bp2-msg-redondos { display: flex; gap: 8px; }
+.bp2-app .bp2-msg-redondos .bp2-redondo { color: var(--bp2-texto); border-color: var(--bp2-borda); }
+.bp2-app .bp2-msg-redondos .bp2-redondo:hover { background: var(--bp2-linha); }
+.bp2-app .bp2-msg-redondos .bp2-redondo[aria-pressed="true"] { background: var(--bp2-azul); color: #242424; border-color: transparent; }
+.bp2-app .bp2-msg-lista-busca { display: flex; align-items: center; gap: 8px; margin: 10px 8px 0; height: 38px; padding: 0 12px; border-radius: 9999px; background: var(--bp2-linha); color: var(--bp2-texto-2); }
+.bp2-app .bp2-msg-lista-busca svg { width: 15px; height: 15px; }
+.bp2-app .bp2-msg-lista-busca input { flex: 1; min-width: 0; background: transparent; outline: none; font-size: 13px; color: var(--bp2-texto); }
+.bp2-app .bp2-msg-lista-busca input::placeholder { color: var(--bp2-texto-2); opacity: 1; }
+.bp2-app .bp2-msg-itens { margin-top: 10px; display: flex; flex-direction: column; gap: 2px; }
+.bp2-app .bp2-msg-item { width: 100%; display: flex; align-items: center; gap: 12px; padding: 9px 10px; min-height: 60px; border-radius: 12px; text-align: left; color: var(--bp2-texto); }
+.bp2-app .bp2-msg-item:hover { background: var(--bp2-linha); }
+.bp2-app .bp2-msg-avatar { display: grid; place-items: center; width: 42px; height: 42px; flex-shrink: 0; border-radius: 9999px; font-size: 13px; font-weight: 500; }
+.bp2-app .bp2-msg-item-texto { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.bp2-app .bp2-msg-item-nome { font-size: 13.5px; line-height: 17px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bp2-app .bp2-msg-item-previa { font-size: 12px; line-height: 15px; color: var(--bp2-texto-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bp2-app .bp2-msg-item-lado { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex-shrink: 0; }
+.bp2-app .bp2-msg-item-hora { font-size: 11px; line-height: 12px; color: var(--bp2-texto-2); font-variant-numeric: tabular-nums; }
+.bp2-app .bp2-msg-selo { min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9999px; background: var(--bp2-azul); color: #242424; font-size: 10.5px; font-weight: 500; display: grid; place-items: center; }
+.bp2-app .bp2-msg-selo-vazio { height: 18px; }
+.bp2-app .bp2-msg-vazio { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 0.5rem; padding: 1.75rem 1rem 1.25rem; }
+.bp2-app .bp2-msg-nota { margin-top: 0.4rem; padding: 0.7rem 10px 0.35rem; border-top: 1px solid var(--bp2-divisor); font-size: 11.5px; line-height: 15px; color: var(--bp2-texto-2); }
+.bp2-app .bp2-msg-primeira { margin: auto; padding: 1.5rem 1rem; font-size: 13px; color: var(--bp2-texto-2); text-align: center; }
+.bp2-app .bp2-msg-chat-vazio { align-items: center; justify-content: center; text-align: center; gap: 0.5rem; padding: 2rem; }
+
+/* Conversa em tela cheia (celular) */
+.bp2-app .bp2-msg-cheia { position: fixed; inset: 0 0 auto 0; z-index: 85; display: flex; flex-direction: column; background: var(--bp2-fundo); color: var(--bp2-texto); }
+.bp2-app .bp2-msg-cheia-topo { display: flex; align-items: center; gap: 0.7rem; padding: calc(0.7rem + env(safe-area-inset-top)) 1rem 0.7rem; background: var(--bp2-cartao); border-bottom: 1px solid var(--bp2-divisor); flex-shrink: 0; --bp2-texto-2: #6e6e6e; }
+.dark .bp2-app .bp2-msg-cheia-topo { --bp2-texto-2: #a9b0ba; }
+.bp2-app .bp2-msg-cheia .bp2-msg-log { flex: 1; min-height: 0; overflow-y: auto; padding: 14px 14px 12px; display: flex; flex-direction: column; gap: 12px; overscroll-behavior: contain; }
+.bp2-app .bp2-msg-chat-avatar { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 9999px; font-size: 11.5px; font-weight: 500; flex-shrink: 0; }
+.bp2-app .bp2-msg-chat-nome { display: block; font-size: 14px; line-height: 17px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bp2-app .bp2-msg-chat-sub { display: block; font-size: 11.5px; line-height: 14px; color: var(--bp2-texto-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Compositor (como o do médico) */
+.bp2-app .bp2-msg-compositor { flex-shrink: 0; display: flex; align-items: flex-end; gap: 0.6rem; margin: 0; padding: 10px 14px calc(12px + env(safe-area-inset-bottom)); background: var(--bp2-cartao); border-top: 1px solid var(--bp2-divisor); }
+.bp2-app .bp2-msg-campo { display: block; width: 100%; min-height: 2.75rem; max-height: 8rem; resize: none; padding: 0.7rem 1rem; border-radius: 1.4rem; background: var(--bp2-linha); color: var(--bp2-texto); font-size: 14px; line-height: 20px; border: 1px solid transparent; }
+.bp2-app .bp2-msg-campo::placeholder { color: var(--bp2-texto-2); opacity: 1; }
+.bp2-app .bp2-msg-campo:focus-visible { border-color: #2f62c4; box-shadow: 0 0 0 1px #2f62c4; }
+.dark .bp2-app .bp2-msg-campo:focus-visible { border-color: #9dbcf7; box-shadow: 0 0 0 1px #9dbcf7; }
+.bp2-app .bp2-msg-compositor:focus-within { outline: none; }
+.bp2-app .bp2-msg-enviar { width: 2.75rem; height: 2.75rem; border-radius: 9999px; display: grid; place-items: center; flex-shrink: 0; background: #242424; color: #ffffff; }
+.bp2-app .bp2-msg-enviar svg { width: 1.05rem; height: 1.05rem; }
+.dark .bp2-app .bp2-msg-enviar { background: #76a1f3; color: #242424; }
+.bp2-app .bp2-msg-enviar:disabled { background: color-mix(in srgb, #242424 30%, var(--bp2-cartao)); color: #ffffff; cursor: default; }
+.dark .bp2-app .bp2-msg-enviar:disabled { background: #2a3a55; color: #c9d6ec; }
+.bp2-app .bp2-msg-encerrada { align-items: center; justify-content: space-between; --bp2-texto-2: #6e6e6e; }
+.dark .bp2-app .bp2-msg-encerrada { --bp2-texto-2: #a9b0ba; }
+
+/* Regras das mensagens trazidas do médico (medico.css .bm2-msg-*), mesmo desenho e medidas */
+.bp2-app .bp2-msg-dia { display: flex; justify-content: center; padding: 6px 0 2px; }
+.bp2-app .bp2-msg-dia span { font-size: 10.5px; line-height: 14px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--bp2-texto-2); }
+.bp2-app .bp2-msg-linha { display: flex; flex-direction: column; gap: 5px; }
+.bp2-app .bp2-msg-minha { align-items: flex-end; }
+.bp2-app .bp2-msg-dele { align-items: flex-start; }
+.bp2-app .bp2-msg-balao { max-width: min(80%, 26rem); padding: 9px 14px 10px; border-radius: 11px; font-size: 13px; line-height: 19px; }
+.bp2-app .bp2-msg-dele .bp2-msg-balao { background: var(--bp2-balao-pac); color: var(--bp2-texto); border-bottom-left-radius: 4px; }
+.bp2-app .bp2-msg-minha .bp2-msg-balao { background: var(--bp2-balao-med); color: #242424; border-bottom-right-radius: 4px; }
+.bp2-app .bp2-msg-hora { font-size: 10.5px; line-height: 13px; color: var(--bp2-texto-2); padding: 0 2px; }
+@media (min-width: 1024px) {
+.bp2-app .bp2-msg-grade { flex: 1; min-height: 0; display: grid; grid-template-columns: 350px minmax(0, 1fr) 268px; gap: 18px; padding: 37px 14px 21px 24px; }
+.bp2-app .bp2-msg-grade.bp2-msg-sem-resumo { grid-template-columns: 350px minmax(0, 1fr); }
+.bp2-app .bp2-msg-lista, .bp2-app .bp2-msg-chat, .bp2-app .bp2-msg-resumo { display: flex; flex-direction: column; min-height: 0; background: var(--bp2-cartao); border-radius: 20px; box-shadow: var(--bp2-sombra); }
+.bp2-app .bp2-msg-lista { padding: 20px 10px 10px; --bp2-texto-2: #6e6e6e; }
+.dark .bp2-app .bp2-msg-lista { --bp2-texto-2: #a9b0ba; }
+.bp2-app .bp2-msg-lista-cab { display: flex; align-items: center; justify-content: space-between; padding: 0 8px 0 10px; height: 32px; }
+.bp2-app .bp2-msg-lista-cab h3 { font-size: 15px; font-weight: 500; }
+.bp2-app .bp2-msg-redondos { display: flex; gap: 8px; }
+.bp2-app .bp2-msg-redondos .bp2-redondo { width: 32px; height: 32px; }
+.bp2-app .bp2-msg-redondos .bp2-redondo svg { width: 15px; height: 15px; }
+.bp2-app .bp2-msg-redondos .bp2-redondo[aria-pressed="true"] { background: var(--bp2-azul); color: #242424; border-color: transparent; }
+.bp2-app .bp2-msg-lista-busca { display: flex; align-items: center; gap: 8px; margin: 10px 8px 0; height: 34px; padding: 0 12px; border-radius: 9999px; background: var(--bp2-linha); color: var(--bp2-texto-2); }
+.bp2-app .bp2-msg-lista-busca svg { width: 15px; height: 15px; }
+.bp2-app .bp2-msg-lista-busca input { flex: 1; min-width: 0; background: transparent; outline: none; font-size: 13px; color: var(--bp2-texto); }
+.bp2-app .bp2-msg-itens { margin-top: 14px; overflow-y: auto; min-height: 0; display: flex; flex-direction: column; gap: 2px; }
+.bp2-app .bp2-msg-item { width: 100%; display: flex; align-items: center; gap: 12px; padding: 9px 10px; min-height: 60px; border-radius: 12px; text-align: left; }
+.bp2-app .bp2-msg-item:hover { background: var(--bp2-linha); }
+.bp2-app .bp2-msg-item-atual { background: var(--bp2-linha-destaque); }
+.bp2-app .bp2-msg-avatar { display: grid; place-items: center; width: 42px; height: 42px; flex-shrink: 0; border-radius: 9999px; font-size: 13px; font-weight: 500; }
+.bp2-app .bp2-msg-item-atual .bp2-msg-avatar { box-shadow: 0 0 0 2px var(--bp2-cartao), 0 0 0 3.5px var(--bp2-azul); }
+.bp2-app .bp2-msg-item-texto { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.bp2-app .bp2-msg-item-nome { font-size: 13px; line-height: 16px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bp2-app .bp2-msg-item-previa { font-size: 11.5px; line-height: 14px; color: var(--bp2-texto-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bp2-app .bp2-msg-item-lado { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex-shrink: 0; }
+.bp2-app .bp2-msg-item-hora { font-size: 10.5px; line-height: 12px; color: var(--bp2-texto-2); font-variant-numeric: tabular-nums; }
+.bp2-app .bp2-msg-selo { min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9999px; background: var(--bp2-azul); color: #242424; font-size: 10.5px; font-weight: 500; display: grid; place-items: center; }
+.bp2-app .bp2-msg-selo-vazio { height: 18px; }
+.bp2-app .bp2-msg-chat { overflow: hidden; }
+.bp2-app .bp2-msg-chat-cab { display: flex; align-items: center; gap: 12px; height: 60px; padding: 0 16px 0 18px; border-bottom: 1px solid var(--bp2-divisor); flex-shrink: 0; }
+.bp2-app .bp2-msg-chat-avatar { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 9999px; font-size: 11.5px; font-weight: 500; flex-shrink: 0; }
+.bp2-app .bp2-msg-chat-nome { display: block; font-size: 14px; line-height: 17px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bp2-app .bp2-msg-chat-sub { display: block; font-size: 11px; line-height: 14px; color: var(--bp2-texto-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bp2-app .bp2-msg-chat-busca { display: flex; align-items: center; gap: 6px; height: 30px; width: 150px; padding: 0 12px; border-radius: 9999px; background: var(--bp2-linha); color: var(--bp2-texto-2); }
+.bp2-app .bp2-msg-chat-busca svg { width: 14px; height: 14px; flex-shrink: 0; }
+.bp2-app .bp2-msg-chat-busca input { min-width: 0; flex: 1; background: transparent; outline: none; font-size: 12px; color: var(--bp2-texto); }
+.bp2-app .bp2-msg-log { flex: 1; min-height: 0; overflow-y: auto; padding: 14px 18px 12px; display: flex; flex-direction: column; gap: 12px; }
+.bp2-app .bp2-msg-log > .bp-glass, .bp2-app .bp2-msg-log > div[role="status"] { flex-shrink: 0; }
+.bp2-app .bp2-msg-balao { max-width: 62%; }
+.bp2-app .bp2-msg-compositor { flex-shrink: 0; border-top: 1px solid var(--bp2-divisor); }
+.bp2-app .bp2-msg-compositor form { padding: 10px 14px 12px; }
+.bp2-app .bp2-msg-resumo { padding: 14px 14px 12px; overflow-y: auto; --bp2-texto-2: #6e6e6e; }
+.dark .bp2-app .bp2-msg-resumo { --bp2-texto-2: #a9b0ba; }
+.bp2-app .bp2-msg-resumo-topo { display: flex; justify-content: space-between; align-items: center; }
+.bp2-app .bp2-msg-icone { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 9999px; border: 1px solid var(--bp2-divisor); color: var(--bp2-texto-2); flex-shrink: 0; }
+.bp2-app .bp2-msg-icone:hover { background: var(--bp2-linha); color: var(--bp2-texto); }
+.bp2-app .bp2-msg-icone svg { width: 15px; height: 15px; }
+.bp2-app .bp2-msg-icone-azul { background: var(--bp2-azul-suave); color: #242424; border-color: transparent; }
+.bp2-app .bp2-msg-resumo-pessoa { display: flex; flex-direction: column; align-items: center; text-align: center; margin-top: 6px; }
+.bp2-app .bp2-msg-resumo-avatar { display: grid; place-items: center; width: 110px; height: 110px; border-radius: 9999px; font-size: 32px; font-weight: 400; box-shadow: 0 0 0 4px var(--bp2-cartao), 0 0 0 5px var(--bp2-divisor); }
+.bp2-app .bp2-msg-resumo-pessoa strong { margin-top: 14px; font-size: 14px; line-height: 18px; font-weight: 500; }
+.bp2-app .bp2-msg-resumo-pessoa span:not(.bp2-avatar) { margin-top: 2px; font-size: 11.5px; line-height: 15px; color: var(--bp2-texto-2); }
+.bp2-app .bp2-msg-blocos { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 18px; }
+.bp2-app .bp2-msg-blocos > div { display: flex; flex-direction: column; justify-content: space-between; gap: 10px; min-height: 112px; padding: 12px 11px 11px; border-radius: 12px; background: #eff4fe; color: #242424; }
+.dark .bp2-app .bp2-msg-blocos > div { background: #dce8f8; }
+.bp2-app .bp2-msg-blocos dd { font-size: 13px; line-height: 17px; font-weight: 500; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; word-break: break-word; }
+.bp2-app .bp2-msg-blocos dt { order: 2; font-size: 10.5px; line-height: 13px; color: #5c5c5c; }
+.bp2-app .bp2-msg-mais { margin-top: 10px; width: 100%; height: 38px; display: inline-flex; align-items: center; justify-content: center; gap: 4px; border-radius: 12px; background: #eff4fe; color: #2f62c4; font-size: 12.5px; font-weight: 500; }
+.dark .bp2-app .bp2-msg-mais { background: #23324a; color: #9dbcf7; }
+.bp2-app .bp2-msg-mais svg { width: 14px; height: 14px; }
+.bp2-app .bp2-msg-detalhes { margin-top: 10px; padding: 12px; border-radius: 12px; background: var(--bp2-linha); }
+.bp2-app .bp2-msg-detalhes dl + dl { margin-top: 10px; padding-top: 10px; }
+.bp2-app .bp2-msg-registros { margin-top: 18px; }
+.bp2-app .bp2-msg-registros h4 { font-size: 11.5px; font-weight: 400; color: var(--bp2-texto-2); padding: 0 2px 6px; }
+.bp2-app .bp2-msg-registros ul { display: flex; flex-direction: column; }
+.bp2-app .bp2-msg-registros li button { width: 100%; display: flex; align-items: center; gap: 11px; min-height: 55px; padding: 6px 2px; border-radius: 10px; text-align: left; }
+.bp2-app .bp2-msg-registros li button:hover { background: var(--bp2-linha); }
+.bp2-app .bp2-msg-registro-icone { width: 39px; height: 39px; border-radius: 10px; display: grid; place-items: center; flex-shrink: 0; color: #242424; }
+.bp2-app .bp2-msg-registro-icone svg { width: 17px; height: 17px; }
+.bp2-app .bp2-msg-tom-lavanda { background: #ede9fd; }
+.bp2-app .bp2-msg-tom-pessego { background: #fadbca; }
+.bp2-app .bp2-msg-tom-azul { background: #d0e1f5; }
+.bp2-app .bp2-msg-tom-cinza { background: #e7e9ec; }
+.bp2-app .bp2-msg-tom-forte { background: #76a1f3; }
+.bp2-app .bp2-msg-registro-texto { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.bp2-app .bp2-msg-registro-texto span:first-child { font-size: 12.5px; line-height: 15px; font-weight: 500; }
+.bp2-app .bp2-msg-registro-texto span:last-child { font-size: 10.5px; line-height: 13px; color: var(--bp2-texto-2); }
+.bp2-app .bp2-msg-seta { width: 15px; height: 15px; color: var(--bp2-texto-2); flex-shrink: 0; }
+}
+.bp2-app .bp2-msg-balao { padding: 10px 15px 11px; border-radius: 12px; font-size: 13px; line-height: 20px; }
+.bp2-app .bp2-msg-dele .bp2-msg-balao { border-bottom-left-radius: 12px; border-top-left-radius: 4px; }
+.bp2-app .bp2-msg-minha .bp2-msg-balao { border-bottom-right-radius: 12px; border-top-right-radius: 4px; }
+.bp2-app .bp2-msg-junta + .bp2-msg-linha .bp2-msg-balao { border-top-left-radius: 12px; border-top-right-radius: 12px; }
+.bp2-app .bp2-msg-dele.bp2-msg-junta + .bp2-msg-dele .bp2-msg-balao { border-top-left-radius: 4px; }
+.bp2-app .bp2-msg-minha.bp2-msg-junta + .bp2-msg-minha .bp2-msg-balao { border-top-right-radius: 4px; }
+.bp2-app .bp2-msg-linha { gap: 4px; }
+.bp2-app .bp2-msg-hora { padding: 0 6px; font-size: 10.5px; }
+.bp2-app .bp2-msg-dia { padding: 10px 0 4px; }
+.bp2-app .bp2-msg-termo { font-weight: 600; }
+.bp2-app .bp2-msg-dele .bp2-msg-termo { color: #2f62c4; }
+.dark .bp2-app .bp2-msg-dele .bp2-msg-termo { color: #9dbcf7; }
+@media (min-width: 1024px) {
+.bp2-app .bp2-msg-log { padding: 16px 22px 14px; gap: 14px; }
+.bp2-app .bp2-msg-junta { margin-bottom: -8px; }
+.bp2-app .bp2-msg-balao { max-width: 64%; }
+.bp2-app .bp2-msg-itens { gap: 0; margin-top: 12px; }
+.bp2-app .bp2-msg-itens > li + li .bp2-msg-item::before { content: ""; position: absolute; left: 66px; right: 10px; top: 0; border-top: 1px solid var(--bp2-divisor); }
+.bp2-app .bp2-msg-item { position: relative; min-height: 64px; padding: 10px 10px; border-radius: 14px; }
+.bp2-app .bp2-msg-item-atual { background: #eef3fd; }
+.dark .bp2-app .bp2-msg-item-atual { background: #1f2a3c; }
+.bp2-app .bp2-msg-item-atual::before { border-top-color: transparent !important; }
+.bp2-app .bp2-msg-itens > li:has(.bp2-msg-item-atual) + li .bp2-msg-item::before { border-top-color: transparent; }
+.bp2-app .bp2-msg-avatar { width: 44px; height: 44px; }
+.bp2-app .bp2-msg-item-atual .bp2-msg-avatar { box-shadow: 0 0 0 2px #eef3fd, 0 0 0 3.5px #76a1f3; }
+.dark .bp2-app .bp2-msg-item-atual .bp2-msg-avatar { box-shadow: 0 0 0 2px #1f2a3c, 0 0 0 3.5px #76a1f3; }
+.bp2-app .bp2-msg-item-atual .bp2-msg-item-nome { font-weight: 600; }
+.bp2-app .bp2-msg-resumo > * { flex-shrink: 0; }
+.bp2-app .bp2-msg-mais { min-height: 38px; flex-shrink: 0; }
+.bp2-app .bp2-msg-resumo-avatar { width: 112px; height: 112px; font-size: 34px; box-shadow: 0 0 0 5px var(--bp2-cartao), 0 0 0 6px #d0e1f5; }
+.bp2-app .bp2-msg-resumo-pessoa strong { margin-top: 16px; font-size: 14.5px; }
+.bp2-app .bp2-msg-blocos > div { background: #f0f5fe; box-shadow: inset 0 0 0 1px #e1e9f7; border-radius: 14px; padding: 13px 12px 12px; }
+.dark .bp2-app .bp2-msg-blocos > div { background: #dce8f8; box-shadow: none; }
+.bp2-app .bp2-msg-mais { background: #f0f5fe; box-shadow: inset 0 0 0 1px #e1e9f7; border-radius: 14px; }
+.dark .bp2-app .bp2-msg-mais { box-shadow: none; }
+.bp2-app .bp2-msg-registro-icone { border-radius: 11px; }
+.bp2-app .bp2-msg-tom-lavanda { background: #efeafb; color: #6045c2; }
+.bp2-app .bp2-msg-tom-pessego { background: #fdeadf; color: #b4541f; }
+.bp2-app .bp2-msg-tom-azul { background: #e6eefc; color: #2f62c4; }
+.bp2-app .bp2-msg-tom-cinza { background: #eef0f2; color: #555; }
+.bp2-app .bp2-msg-tom-forte { background: #d0e1f5; color: #242424; }
+.bp2-app .bp2-msg-registro-texto span:first-child { font-size: 12.5px; font-weight: 500; }
+}
+
+@media (min-width: 1024px) {
+  /* Documentos/Mensagens ocupam a tela (como "Minhas consultas"), sem a gaveta de 400 px */
+  .bp2-app[data-gaveta="documentos"] .bpp-lateral-dir { left: 76px; right: 0; width: auto; box-shadow: none; z-index: 45; }
+  .bp2-app[data-gaveta="documentos"] .bp2-gaveta-fundo,
+  .bp2-app[data-gaveta="documentos"] .bp2-gaveta-fechar { display: none; }
+  .bp2-app .bp2-docs { height: 100%; display: flex; flex-direction: column; }
+  .bp2-app .bp2-docs-topo { flex-wrap: nowrap; height: 75px; padding: 0 1.7rem 0 1.15rem; }
+  .bp2-app .bp2-abas { flex-basis: auto; flex-shrink: 0; }
+  .bp2-app .bp2-aba { flex: none; min-width: 8.5rem; }
+  .bp2-app .bp2-docs-corpo { flex: 1; min-height: 0; padding: 27px 27px 27px 26px; }
+  .bp2-app .bp2-docs-grade {
+    display: grid; grid-template-columns: minmax(0, 1fr) 313px;
+    grid-template-areas: "ficha cons" "lista renov"; gap: 18px 19px; align-items: start;
+  }
+  .bp2-app .bp2-docs-ficha { grid-area: ficha; }
+  .bp2-app .bp2-docs-consultas { grid-area: cons; padding: 18px 12px 10px; max-height: 257px; overflow-y: auto; align-self: stretch; }
+  .bp2-app .bp2-docs-lista { grid-area: lista; padding: 16px 16px 12px 12px; }
+  .bp2-app .bp2-docs-renov { grid-area: renov; padding: 18px 18px 8px; }
+  .bp2-app .bp2-docs-renov > .bp2-ficha-cab { padding-bottom: 8px; }
+
+  /* Tabela de documentos (colunas como a da ficha) */
+  .bp2-app .bp2-docs-tabela { table-layout: fixed; }
+  .bp2-app .bp2-docs-tabela thead { display: table-header-group; }
+  .bp2-app .bp2-docs-tabela th { text-align: left; font-weight: 400; font-size: 12px; color: var(--bp2-texto-2); padding: 12px 10px 6px; }
+  .bp2-app .bp2-docs-tabela th:nth-child(2) { width: 16%; }
+  .bp2-app .bp2-docs-tabela th:nth-child(3) { width: 13%; }
+  .bp2-app .bp2-docs-tabela th:nth-child(4) { width: 22%; }
+  .bp2-app .bp2-docs-tabela th:nth-child(5) { width: 156px; }
+  .bp2-app .bp2-docs-tabela tbody tr { display: table-row; padding: 0; border: 0; }
+  .bp2-app .bp2-docs-tabela td:nth-child(n) { display: table-cell; padding: 9px 10px; vertical-align: middle; font-size: 13px; text-align: left; border-top: 1px solid var(--bp2-divisor); }
+  .bp2-app .bp2-docs-tabela tbody tr:first-child td { border-top: 0; }
+  .bp2-app .bp2-docs-tabela td:nth-child(5) { text-align: right; padding-right: 4px; }
+  .bp2-app .bp2-docs-tabela tbody tr:hover td { background: var(--bp2-linha-destaque); }
+  .bp2-app .bp2-docs-tabela tbody tr:hover td:first-child { border-radius: 8px 0 0 8px; }
+  .bp2-app .bp2-docs-tabela tbody tr:hover td:last-child { border-radius: 0 8px 8px 0; }
+
+  /* Mensagens em três colunas (ref. 06): lista · conversa · resumo do médico */
+  .bp2-app .bp2-docs-vista-msg .bp2-docs-corpo { display: flex; padding: 0; overflow: hidden; }
+  .bp2-app .bp2-docs-vista-msg .bp2-docs-corpo > .bp2-msg-grade { flex: 1; }
+  .bp2-app .bp2-msg-grade.bp2-msg-sem-conversa { grid-template-columns: 350px minmax(0, 1fr); }
+  .bp2-app .bp2-msg-itens { flex: 1; overflow-y: auto; }
+  .bp2-app .bp2-msg-lista { padding: 20px 10px 10px; }
+  .bp2-app .bp2-msg-chat .bp2-msg-compositor { padding-bottom: 12px; }
+  .bp2-app .bp2-msg-chat .bp2-msg-campo { min-height: 2.5rem; padding: 0.55rem 1rem; font-size: 13px; }
+  .bp2-app .bp2-msg-chat .bp2-msg-enviar { width: 2.5rem; height: 2.5rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bp2-app :is(.bp2-saude-grafico, .bp2-docs-cons, .bp2-msg-item, .bp2-aba, .bp2-docs-ver) { transition: none; }
+  .bp2-app[data-gaveta="documentos"] .bpp-lateral-dir { animation: none; }
+}
+.bp2-app .bp2-docs-cons[aria-pressed="true"] { --bp2-texto-2: #4f5866; }
+.dark .bp2-app .bp2-docs-cons[aria-pressed="true"] { --bp2-texto-2: #b7c3d6; }

@@ -4,14 +4,9 @@ import { AvisoAtivarToque } from "@/components/bion/AvisoAtivarToque";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Activity,
   CalendarClock,
-  ChevronDown,
-  ClipboardList,
   FileText,
-  HeartPulse,
   Pill,
-  TrendingUp,
   RefreshCw,
   X,
   Undo2,
@@ -19,7 +14,7 @@ import {
 import { useBion } from "@/lib/bion-store";
 import { fmtCurta, fmtHora, fmtTicketData, partesFusoClinica, type Consulta } from "@/lib/bion-tipos";
 import { toast } from "sonner";
-import { calcularImc, faixaImc, lerAlturaCm, lerPesoKg, ROTULO_FAIXA_IMC } from "@/lib/medidas-paciente";
+import { calcularImc, lerAlturaCm, lerPesoKg } from "@/lib/medidas-paciente";
 import { MESES_AGENDA } from "./constantes";
 import { acharMedicoDaConsulta } from "./agenda-medico";
 import { CancelarRemarcarSheet, type AcaoSheet } from "./CancelarRemarcarSheet";
@@ -28,11 +23,13 @@ import { desistirRemarcacao, iniciarRemarcacaoComMulta, useRecarregarEstado } fr
 import { EtiquetaStatus, PedirReembolsoSheet } from "./PedirReembolsoSheet";
 import { ExcluirContaSheet } from "./ExcluirContaSheet";
 import { consultaTemReembolso } from "./reembolso-visivel";
-import { GraficoLinha, type PontoGrafico } from "./GraficoLinha";
+import type { PontoGrafico } from "./GraficoLinha";
 import { etiquetaConsulta } from "./etiqueta-consulta";
 import { BotaoPagarStripe } from "./BotaoPagarStripe";
 import { ehRetornoGratis } from "./LinhaConsultaPagamento";
 import { DetalheMedicao, type Detalhe } from "./DetalheMedicao";
+import { TelaSaudePaciente } from "./etapa3/TelaSaudePaciente";
+import { TelaExamesPaciente } from "./etapa3/TelaExamesPaciente";
 import dynamic from "next/dynamic";
 import "./paciente.css";
 import "./paciente-v2.css";
@@ -61,11 +58,8 @@ import { AvisoMensagemNova } from "./AvisosInicio";
 import { acaoSalaPaciente, type AcaoSala } from "./entrada-sala";
 import { useRelogioSala } from "./useRelogioSala";
 import { salaAbertaEm } from "@/lib/janela-sala";
-import { Esqueleto, EstadoVazio } from "./EstadosPaciente";
-import { LaudosOriginais } from "./LaudosOriginais";
+import { Esqueleto } from "./EstadosPaciente";
 import { laudosDaIa } from "./laudos-originais";
-import { PedidosMedicao } from "./PedidosMedicao";
-import { MedicamentosEmUso } from "./MedicamentosEmUso";
 import type { IntencaoChat } from "./chat-bion-intencao";
 
 /**
@@ -88,15 +82,6 @@ const rotuloCurto = (iso: string) => {
   return `${String(d.dia).padStart(2, "0")}/${String(d.mes + 1).padStart(2, "0")}`;
 };
 
-/** Chave de comparação de nomes de analito: sem acento, sem caixa, espaços
- *  normalizados — a extração por IA não garante grafia idêntica entre coletas. */
-const chaveAnalito = (nome: string) =>
-  nome
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/\s+/g, " ")
-    .trim();
 
 const EM_CAMPO = ["INPUT", "TEXTAREA", "SELECT"];
 
@@ -242,18 +227,10 @@ export function PacienteApp() {
 
   /** Documentos com a lista de Mensagens à vista (as conversas moram no fim do painel). */
   const irMensagens = useCallback(() => {
+    // Etapa 3: Documentos e Mensagens são abas da mesma tela (antes, uma rolagem até a seção).
     setEmMensagens(true);
     irPara(2);
-    // Dois quadros: na tela larga a gaveta só aparece depois do render.
-    requestAnimationFrame(() =>
-      requestAnimationFrame(() => {
-        const painelDir = painelDirRef.current;
-        const alvo = painelDir?.querySelector<HTMLElement>('[aria-label="Mensagens com médicos"]');
-        if (!painelDir || !alvo) return;
-        const topo = alvo.getBoundingClientRect().top - painelDir.getBoundingClientRect().top + painelDir.scrollTop;
-        painelDir.scrollTo({ top: Math.max(0, topo - 16), behavior: comportamentoScroll() });
-      }),
-    );
+    requestAnimationFrame(() => painelDirRef.current?.scrollTo({ top: 0, behavior: comportamentoScroll() }));
   }, [irPara]);
 
   const irDocumentos = useCallback(() => {
@@ -547,15 +524,6 @@ export function PacienteApp() {
 
   const laudosIa = useMemo(() => laudosDaIa(arquivos), [arquivos]);
 
-  const examesAgrupados = useMemo(() => {
-    const mapa = new Map<string, typeof exames>();
-    for (const e of exames) {
-      const lista = mapa.get(e.titulo) ?? [];
-      lista.push(e);
-      mapa.set(e.titulo, lista);
-    }
-    return [...mapa.entries()];
-  }, [exames]);
 
   const saudacao = (() => {
     // Hora no fuso da clínica (partesFusoClinica), como o restante do app
@@ -712,232 +680,44 @@ export function PacienteApp() {
             />
           </section>
 
-          {/* --- Seção 2: saúde --- */}
-          <section className="bp-secao-2 bpp-secao bpp-tela px-5 py-8 pb-28" aria-label="Saúde: medicamentos, IMC e pressão arterial">
-            <h2 className="text-2xl font-black mb-1 bpp-animar">Sua saúde</h2>
-            <p className="text-sm text-bion-ink/75 dark:text-bion-paper/75 mb-5">
-              Toque em um card para ver o histórico e atualizar.
-            </p>
-
-            <div className="bion-surgir-lista bpp-grade flex flex-col gap-4">
-              {/* Pedidos de medição do médico (só aparece se houver pendente) */}
-              <PedidosMedicao />
-
-              {/* Card único de medicamentos: cada remédio uma vez, com horários e lembrete na própria linha.
-                  Lembretes de consulta não entram aqui. */}
-              <MedicamentosEmUso onGerenciarLembretes={() => setDetalhe("lembretes")} />
-
-              {/* IMC */}
-              <button type="button"
-                onClick={() => setDetalhe("imc")}
-                className="bion-toque bp-glass p-5 w-full text-left bpp-animar"
-                aria-label={`IMC: ${imcAtual ? `${imcAtual.toFixed(1)}, ${ROTULO_FAIXA_IMC[faixaImc(imcAtual)]}` : "sem dados"}. ${serieImc.length > 1 ? "Ver gráfico de evolução e atualizar peso e altura" : "Abrir histórico e atualizar peso e altura"}`}
-              >
-                <div className="flex items-center justify-between mb-1">
-                  <span className="inline-flex items-center gap-2 text-sm font-bold">
-                    <Activity className="w-4 h-4" /> IMC
-                  </span>
-                  {imcAtual && (
-                    <span className="text-2xl font-black">{imcAtual.toFixed(1)}</span>
-                  )}
-                </div>
-                {serieImc.length > 1 ? (
-                  <GraficoLinha
-                    ariaLabel="Evolução do IMC"
-                    altura={110}
-                    series={[{ pontos: serieImc, cor: "var(--bpp-grafico-linha)", area: true }]}
-                    refMin={18.5}
-                    refMax={24.9}
-                  />
-                ) : imcAtual ? (
-                  <div className="py-2">
-                    <p className="text-sm font-semibold">{ROTULO_FAIXA_IMC[faixaImc(imcAtual)]}</p>
-                    <p className="text-sm opacity-80 mt-1">
-                      {pesos.length === 0
-                        ? // O número veio do perfil (peso/altura do cadastro),
-                          // NÃO de uma medição datada — a origem é declarada
-                          // em vez de pedir o registro que já existe no topo.
-                          "Pelo peso e altura do seu perfil · atualize registrando uma medição para começar sua evolução."
-                        : serieImc.length === 1
-                          ? `Um registro, em ${serieImc[0].rotulo}. Mais um registro de peso e o gráfico de evolução aparece.`
-                          : // Há peso, mas nenhum ponto válido (B18: sem altura
-                            // registrada até a data do peso). O detalhe salva
-                            // peso + altura como medições e cria o 1º ponto.
-                            "Toque para atualizar peso e altura e começar seu gráfico de evolução."}
-                    </p>
-                  </div>
-                ) : (
-                  <p className="text-sm opacity-80 py-4">
-                    {pesos.length === 0
-                      ? "Registre peso e altura para acompanhar seu IMC."
-                      : "Registre sua altura para calcular seu IMC."}
-                  </p>
-                )}
-                {imcAtual && (
-                  <span className="text-xs font-semibold inline-flex items-center gap-1 opacity-80">
-                    <TrendingUp className="w-3.5 h-3.5" /> Toque para atualizar peso e altura
-                  </span>
-                )}
-              </button>
-
-              {/* Pressão arterial */}
-              <button type="button"
-                onClick={() => setDetalhe("pa")}
-                className="bion-toque bp-glass p-5 w-full text-left bpp-animar"
-                aria-label={`Pressão arterial: ${pas.at(-1) ? `${pas.at(-1)!.valor1}/${pas.at(-1)!.valor2 ?? "—"}, última medição em ${rotuloCurto(pas.at(-1)!.criadoEm)}` : "sem dados"}. Abrir histórico e registrar`}
-              >
-                <div className="flex items-center justify-between mb-1">
-                  <span className="inline-flex items-center gap-2 text-sm font-bold">
-                    <HeartPulse className="w-4 h-4" /> Pressão arterial
-                  </span>
-                  {pas.at(-1) && (
-                    <span className="text-2xl font-black">
-                      {pas.at(-1)!.valor1}
-                      <span className="text-base opacity-80">/{pas.at(-1)!.valor2 ?? "—"}</span>
-                    </span>
-                  )}
-                </div>
-                {pas.length > 1 ? (
-                  <GraficoLinha
-                    ariaLabel="Evolução da pressão arterial"
-                    altura={110}
-                    series={[
-                      { pontos: pas.map((p) => ({ valor: p.valor1, rotulo: rotuloCurto(p.criadoEm) })), cor: "var(--bpp-grafico-linha)", area: true },
-                      ...(pas.some((p) => p.valor2 !== undefined)
-                        ? // M18: sem valor2 o ponto é omitido (null) — antes a
-                          // diastólica era plotada igual à sistólica.
-                          [{ pontos: pas.map((p) => ({ valor: p.valor2 ?? null, rotulo: rotuloCurto(p.criadoEm) })), cor: "var(--bpp-grafico-alerta)" }]
-                        : []),
-                    ]}
-                    refMin={70}
-                    refMax={120}
-                  />
-                ) : (
-                  <p className="text-sm opacity-80 py-4">
-                    {pas.length === 0
-                      ? "Registre sua primeira medição."
-                      : `Última medição em ${rotuloCurto(pas[0].criadoEm)}. Mais uma medição e a evolução aparece aqui.`}
-                  </p>
-                )}
-              </button>
-            </div>
+          {/* --- Seção 2: saúde (etapa 3: ficha de saúde no desenho do médico) --- */}
+          <section className="bp-secao-2 bpp-secao bpp-tela bp2-secao-e3 px-5 py-8 pb-28" aria-label="Saúde: medicamentos, IMC e pressão arterial">
+            <TelaSaudePaciente
+              nome={pacientePerfil?.nome || sessao?.nome || "Paciente"}
+              perfil={pacientePerfil}
+              pesos={pesos}
+              alturas={alturas}
+              pas={pas}
+              pesoAtual={pesoAtual}
+              alturaAtual={alturaAtual}
+              imcAtual={imcAtual}
+              serieImc={serieImc}
+              onDetalhe={setDetalhe}
+            />
           </section>
 
-          {/* --- Seção 3: exames laboratoriais --- */}
-          <section className="bp-secao-3 bpp-secao bpp-tela px-5 pt-10 pb-28 text-bion-ink dark:text-bion-paper" aria-label="Resultados de exames laboratoriais">
-            <h2 className="text-2xl font-black mb-1">Exames laboratoriais</h2>
-            <p className="text-sm text-bion-ink/75 dark:text-bion-paper/75 mb-6">
-              Resultados lidos dos laudos que você envia. Se a leitura falhar, o arquivo original continua aqui.
-            </p>
-
-            <button type="button"
-              onClick={() => abrirChat("laudo")}
-              className="bion-toque bp-glass w-full p-4 flex items-center gap-3 text-left mb-5"
-              aria-label="Enviar novo laudo à BION IA"
-            >
-              <span className="w-11 h-11 rounded-2xl bg-bion-sea/10 text-bion-sea dark:bg-[#C4B5FD]/10 dark:text-[#C4B5FD] inline-flex items-center justify-center shrink-0">
-                <ClipboardList className="w-5 h-5" />
-              </span>
-              <span className="flex-1">
-                <span className="block text-sm font-bold">Enviar novo laudo</span>
-                <span className="block text-xs text-bion-ink/75 dark:text-bion-paper/75">PDF ou foto — a IA confere seu nome no documento</span>
-              </span>
-              <FileText className="w-5 h-5 text-bion-ink/75 dark:text-bion-paper/75 shrink-0" />
-            </button>
-
-            {examesAgrupados.length === 0 && laudosIa.length === 0 ? (
-              <EstadoVazio
-                superficie="vidro"
-                icone={<FileText className="w-6 h-6" />}
-                titulo="Nenhum resultado ainda"
-                texto="Envie um laudo pela BION IA. Se a leitura falhar, o arquivo original aparece aqui."
-              />
-            ) : examesAgrupados.length > 0 ? (
-              <div className="bion-surgir-lista bpp-grade flex flex-col gap-4">
-                {examesAgrupados.map(([titulo, lista]) => {
-                  const ultimo = lista.at(-1)!;
-                  // M33: a ordem de `itens` vem da extração por IA e pode
-                  // variar entre coletas — a série é de UM analito, casado
-                  // pelo NOME: o primeiro da coleta mais recente que aparece
-                  // em todas as coletas do grupo (se nenhum aparece em
-                  // todas, o primeiro da coleta mais recente, usando só as
-                  // coletas em que ele aparece). Antes era sempre itens[0],
-                  // e o gráfico podia misturar analitos diferentes.
-                  const itemDe = (e: (typeof lista)[number], chave: string) =>
-                    e.itens.find((it) => chaveAnalito(it.nome) === chave);
-                  const chaveSerie =
-                    ultimo.itens.map((it) => chaveAnalito(it.nome)).find((c) => lista.every((e) => itemDe(e, c))) ??
-                    (ultimo.itens[0] ? chaveAnalito(ultimo.itens[0].nome) : undefined);
-                  const itemDestaque = chaveSerie ? itemDe(ultimo, chaveSerie) : undefined;
-                  const serieItem: PontoGrafico[] = (
-                    chaveSerie
-                      ? lista.flatMap((e) => {
-                          const it = itemDe(e, chaveSerie);
-                          return it ? [{ valor: it.valor, rotulo: rotuloCurto(e.dataColeta) }] : [];
-                        })
-                      : []
-                  ).slice(-10);
-                  return (
-                    <div key={titulo} className="bp-glass p-5">
-                      <div className="flex items-start justify-between gap-3 mb-2">
-                        <div>
-                          <div className="font-bold text-sm">{titulo}</div>
-                          <div className="text-xs text-bion-ink/75 dark:text-bion-paper/75">Última coleta: {rotuloCurto(ultimo.dataColeta)}</div>
-                        </div>
-                        {itemDestaque && (
-                          <div className="text-right">
-                            <div className="text-xl font-black leading-none">
-                              {itemDestaque.valor}
-                              <span className="text-xs font-semibold text-bion-ink/75 dark:text-bion-paper/75 ml-1">{itemDestaque.unidade}</span>
-                            </div>
-                            <div className="text-xs text-bion-ink/75 dark:text-bion-paper/75 mt-0.5">{itemDestaque.nome}</div>
-                          </div>
-                        )}
-                      </div>
-                      {serieItem.length > 1 && (
-                        <GraficoLinha
-                          ariaLabel={`Histórico gráfico de ${titulo}${itemDestaque ? ` — ${itemDestaque.nome}` : ""}`}
-                          altura={104}
-                          corEixo="var(--bpp-grafico-eixo)"
-                          series={[{ pontos: serieItem, cor: "var(--bpp-grafico-linha)", area: true }]}
-                          refMin={itemDestaque?.refMin}
-                          refMax={itemDestaque?.refMax}
-                        />
-                      )}
-                      <details className="mt-2 group">
-                        <summary className="text-xs font-semibold text-bion-ink/75 dark:text-bion-paper/75 cursor-pointer list-none inline-flex items-center gap-1">
-                          <ChevronDown className="w-3.5 h-3.5 group-open:rotate-180 transition" />
-                          {ultimo.itens.length} resultado(s) da última coleta
-                        </summary>
-                        <ul className="mt-3 space-y-1.5">
-                          {ultimo.itens.map((i) => {
-                            const fora =
-                              (i.refMin !== undefined && i.valor < i.refMin) ||
-                              (i.refMax !== undefined && i.valor > i.refMax);
-                            return (
-                              <li key={i.nome} className="flex items-center justify-between text-sm">
-                                <span className="text-bion-ink/75 dark:text-bion-paper/75">{i.nome}</span>
-                                <span className={`font-semibold ${fora ? "text-amber-700 dark:text-amber-300" : "text-bion-ink dark:text-bion-paper"}`}>
-                                  {i.valor} {i.unidade}
-                                  {fora && " ⚠"}
-                                </span>
-                              </li>
-                            );
-                          })}
-                        </ul>
-                      </details>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : null}
-            <LaudosOriginais arquivos={laudosIa} exames={exames} />
+          {/* --- Seção 3: exames laboratoriais (etapa 3) --- */}
+          <section className="bp-secao-3 bpp-secao bpp-tela bp2-secao-e3 px-5 pt-10 pb-28" aria-label="Resultados de exames laboratoriais">
+            <TelaExamesPaciente exames={exames} laudosIa={laudosIa} onEnviarLaudo={() => abrirChat("laudo")} />
           </section>
         </div>
 
         {/* ====================== PÁGINA 4: DOCUMENTOS ======================== */}
         <section ref={painelDirRef} className="bpp-lateral bpp-lateral-dir flex-[0_0_100%] w-full min-w-full h-full bp-painel overflow-y-auto bp-coluna" aria-label="Documentos e mensagens">
-          <DocumentosPainel conversaAtiva={conversaAtiva} onConversa={setConversaAtiva} onAgendar={() => abrirChat("agendar")} />
+          <DocumentosPainel
+            conversaAtiva={conversaAtiva}
+            onConversa={setConversaAtiva}
+            onAgendar={() => abrirChat("agendar")}
+            ativo={painel === 2}
+            vista={emMensagens || conversaAtiva ? "mensagens" : "documentos"}
+            onVista={(v) => {
+              if (v === "documentos") {
+                setConversaAtiva(null);
+                irDocumentos();
+              } else irMensagens();
+            }}
+            onFechar={irInicio}
+          />
         </section>
       </div>
 
