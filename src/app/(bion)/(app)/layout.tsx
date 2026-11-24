@@ -8,21 +8,15 @@ import { TorreAdmin } from "@/components/bion/admin/TorreAdmin";
 import { TrocarSenhaObrigatoria } from "@/components/bion/telas/TrocarSenhaObrigatoria";
 import { TelaCarregando } from "@/components/bion/brand";
 import { GuardaAceiteTermos } from "@/components/bion/GuardaAceiteTermos";
-import { SO_ADMIN, SO_CLINICA, SO_MEDICO, SO_PACIENTE, viewDoPath } from "@/lib/rotas";
+import { destinoGuardaPapel, ehRotaTelaCheia, pathLimpo, pacientePodeVer } from "@/lib/rotas";
 
 export default function LayoutAutenticado({ children }: { children: React.ReactNode }) {
   const { autenticado, carregando, sessao, precisaTrocarSenha, erroCarga, tentarNovamenteCarga } = useBion();
   const router = useRouter();
   const pathname = usePathname();
-  const path = (pathname || "/").split("?")[0].replace(/\/+$/, "") || "/";
-  const view = viewDoPath(path);
-  const rotaTelaCheia =
-    path === "/paciente" ||
-    path === "/consulta" ||
-    path === "/suporte" ||
-    path === "/privacidade" ||
-    path === "/ajuda" ||
-    path.startsWith("/consulta/");
+  const path = pathLimpo(pathname || "/");
+  const rotaTelaCheia = ehRotaTelaCheia(path);
+  const telaPermitidaPaciente = pacientePodeVer(path);
 
   // Sem sessão → tela de entrada. B24: erro de carga NÃO redireciona —
   // sessão válida com falha de rede/servidor não é logout.
@@ -31,20 +25,15 @@ export default function LayoutAutenticado({ children }: { children: React.ReactN
   }, [carregando, autenticado, erroCarga, router]);
 
   const destinoPaciente = sessao.role === "paciente";
-  const telaCheiaPaciente = rotaTelaCheia;
 
-  // Guarda de papel: cada tela exclusiva só abre para o papel correto
+  // Guarda de papel: cada tela exclusiva só abre para o papel correto.
+  // Paciente em /pagamento/sucesso|cancelado permanece (tela de status).
+  // Médico e admin seguem com os mesmos destinos de antes.
   useEffect(() => {
     if (carregando || !autenticado) return;
-    if (destinoPaciente && !telaCheiaPaciente) {
-      router.replace("/paciente");
-      return;
-    }
-    if (SO_ADMIN.includes(view) && sessao.role !== "admin") router.replace("/painel");
-    else if (SO_MEDICO.includes(view) && sessao.role !== "medico") router.replace("/painel");
-    else if (SO_PACIENTE.includes(view) && sessao.role !== "paciente") router.replace("/painel");
-    else if (SO_CLINICA.includes(view) && sessao.role === "admin") router.replace("/painel");
-  }, [carregando, autenticado, view, sessao.role, router, destinoPaciente, telaCheiaPaciente]);
+    const destino = destinoGuardaPapel(sessao.role, path);
+    if (destino) router.replace(destino);
+  }, [carregando, autenticado, path, sessao.role, router]);
 
   if (erroCarga && !autenticado) {
     return (
@@ -78,7 +67,7 @@ export default function LayoutAutenticado({ children }: { children: React.ReactN
 
   // Paciente: nunca monta o AppShell antigo (sidebar/abas) — nem por um frame.
   if (destinoPaciente || rotaTelaCheia) {
-    if (telaCheiaPaciente || rotaTelaCheia) {
+    if (telaPermitidaPaciente || rotaTelaCheia) {
       // Paciente: aceite dos Termos v1 + Privacidade v1. Pode recusar e seguir
       // em modo limitado (consultas pagas e exclusão da conta); agendar é
       // bloqueado no servidor (exigirAceiteTermosPaciente).
