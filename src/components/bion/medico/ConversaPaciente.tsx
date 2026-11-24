@@ -147,7 +147,14 @@ export function ConversaPaciente({
       const sec = document.querySelector<HTMLElement>('section[aria-label="Pedir medição ao paciente"]');
       if (!sec) return;
       const reduz = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-      sec.scrollIntoView({ block: "start", behavior: reduz ? "auto" : "smooth" });
+      // Rola só a lista da conversa (scrollIntoView rolava também a página
+      // por trás da sobreposição e deixava uma faixa vazia embaixo).
+      let caixa = sec.parentElement;
+      while (caixa && !(/(auto|scroll)/.test(getComputedStyle(caixa).overflowY) && caixa.scrollHeight > caixa.clientHeight)) caixa = caixa.parentElement;
+      if (caixa) {
+        const topo = caixa.scrollTop + sec.getBoundingClientRect().top - caixa.getBoundingClientRect().top - 8;
+        caixa.scrollTo({ top: Math.max(0, topo), behavior: reduz ? "auto" : "smooth" });
+      }
       sec.querySelector<HTMLElement>("input, button")?.focus({ preventScroll: true });
     }, 450);
     return () => clearTimeout(t);
