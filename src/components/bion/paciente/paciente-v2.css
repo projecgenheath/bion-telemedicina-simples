@@ -1,0 +1,519 @@
+/* ==================================================================== */
+/* Redesign azul do PACIENTE — etapa 1 (24/11): Início + navegação.      */
+/* Mesmo desenho do redesign do médico (medico.css, escopo .bm-app),     */
+/* aqui com escopo próprio .bp2-app (casca do paciente e PacienteFrame). */
+/* Nada aqui vale para médico ou admin; globals.css não muda.            */
+/*                                                                      */
+/* Paleta (ref. 04): #76A1F3 principal, #D0E1F5, #E4DFF5, #FADBCA, texto */
+/* #242424 (texto sobre o azul é SEMPRE #242424), fundo #EFF3F4, Poppins */
+/* (--bp2-fonte). Contrastes conferidos com axe (390 e 1440, claro e     */
+/* escuro): #242424/#76A1F3 5,9:1; #2F62C4/#DEE8F4 4,9:1; #6E6E6E/#EFF3F4 */
+/* 4,56:1; #767676/#FFF 4,54:1. As telas das próximas etapas (Saúde,     */
+/* Exames, Perfil, Documentos) seguem no visual atual por enquanto.      */
+/* ==================================================================== */
+.bp2-app {
+  --bp2-fundo: #eff3f4;
+  --bp2-cartao: #ffffff;
+  --bp2-linha: #f8f8f8;
+  --bp2-linha-destaque: #f6f6f6;
+  --bp2-borda: rgba(36, 36, 36, 0.08);
+  --bp2-divisor: #e6eaeb;
+  --bp2-azul: #76a1f3;
+  --bp2-azul-suave: #d0e1f5;
+  --bp2-azul-ativo: #dee8f4;
+  --bp2-lavanda: #e4dff5;
+  --bp2-pessego: #fadbca;
+  --bp2-texto: #242424;
+  --bp2-texto-2: #6e6e6e;
+  --bp2-saudacao: #737373;
+  --bp2-t-azul: #2f62c4;
+  --bp2-t-laranja: #b4500f;
+  --bp2-t-vermelho: #c42b2b;
+  --bp2-t-verde: #1e7a34;
+  --bp2-sombra: 0 0 0 1px rgba(16, 24, 40, 0.012), 0 1px 3px rgba(16, 24, 40, 0.035);
+  --bp2-avatar-fundo: #d0e1f5;
+  --bp2-avatar-texto: #242424;
+}
+.dark .bp2-app {
+  --bp2-fundo: #0e1013;
+  --bp2-cartao: #181b20;
+  --bp2-linha: #20242a;
+  --bp2-linha-destaque: #23272e;
+  --bp2-borda: rgba(255, 255, 255, 0.1);
+  --bp2-divisor: rgba(255, 255, 255, 0.08);
+  --bp2-azul-ativo: #23324a;
+  --bp2-texto: #f2f4f7;
+  --bp2-texto-2: #a9b0ba;
+  --bp2-saudacao: #a9b0ba;
+  --bp2-t-azul: #9dbcf7;
+  --bp2-t-laranja: #f3a56f;
+  --bp2-t-vermelho: #f38b8b;
+  --bp2-t-verde: #6fd38a;
+  --bp2-sombra: none;
+  --bp2-avatar-fundo: #2a3a55;
+  --bp2-avatar-texto: #e6eefc;
+}
+.bp2-app .bp2-v2 {
+  font-family: var(--bp2-fonte), ui-sans-serif, system-ui, sans-serif;
+  color: var(--bp2-texto);
+}
+.bp2-app .bp2-v2 svg.lucide { stroke-width: 1.5; }
+.bp2-app .bp2-v2 :where(.font-black, .font-extrabold) { font-weight: 600; }
+
+/* ---------------------- Início (seção 1) ---------------------- */
+.bp2-app .bp-secao-1.bp2-inicio,
+.dark .bp2-app .bp-secao-1.bp2-inicio { background: var(--bp2-fundo); }
+.bp2-app .bp2-inicio .bp2-conteudo { padding: 0.5rem 1rem 0; }
+
+/* Peças antigas que continuam no Início (avisos de reagendamento, multa,
+   falta, reembolso, mensagem nova, ativar notificações): tokens do
+   paciente trocados para a paleta nova SÓ dentro do Início. */
+.bp2-app .bp2-inicio {
+  --bion-ink: #242424;
+  --bion-paper: #f2f4f7;
+  --bion-sea: #2f62c4;
+  --primary: #2f62c4;
+  --primary-foreground: #ffffff;
+  --ring: #2f62c4;
+  --bpp-vidro: #ffffff;
+  --bpp-vidro-borda: transparent;
+  --bpp-acao-inicio: #76a1f3;
+  --bpp-acao-fim: #76a1f3;
+  --bpp-acao-texto: #242424;
+  --bpp-acao-sombra: transparent;
+  --bpp-contagem-fundo: #dee8f4;
+  --bpp-contagem-texto: #1f4ea8;
+}
+.dark .bp2-app .bp2-inicio {
+  --bion-sea: #9dbcf7;
+  --primary: #9dbcf7;
+  --primary-foreground: #0e1013;
+  --ring: #9dbcf7;
+  --bpp-vidro: #181b20;
+  --bpp-vidro-borda: rgba(255, 255, 255, 0.08);
+  --bpp-contagem-fundo: #23324a;
+  --bpp-contagem-texto: #c9dafb;
+}
+.bp2-app .bp2-inicio .bp-glass { border-radius: 1.25rem; box-shadow: var(--bp2-sombra); backdrop-filter: none; -webkit-backdrop-filter: none; }
+.bp2-app .bp2-inicio .bp-acao { background: #76a1f3; color: #242424; box-shadow: none; border-radius: 0.6rem; }
+.bp2-app .bp2-inicio .bp2-area-avisos:empty { display: none; }
+.bp2-app .bp2-inicio .bp2-area-avisos > * { margin-top: 0; margin-bottom: 0; }
+.bp2-app .bp2-inicio .bp2-area-avisos:not(:empty) { margin-top: 1rem; }
+
+/* Superfícies */
+.bp2-app .bp2-cartao { background: var(--bp2-cartao); border-radius: 1.25rem; box-shadow: var(--bp2-sombra); --bp2-texto-2: #767676; }
+.dark .bp2-app .bp2-cartao { --bp2-texto-2: #a9b0ba; }
+.bp2-app .bp2-item { background: var(--bp2-linha); --bp2-texto-2: #727272; }
+.dark .bp2-app .bp2-item { --bp2-texto-2: #a9b0ba; }
+.bp2-app .bp2-avatar { background: var(--bp2-avatar-fundo); color: var(--bp2-avatar-texto); }
+
+/* Cores de texto (todas ≥ 4,5:1 nos fundos onde aparecem) */
+.bp2-app .bp2-t-2 { color: var(--bp2-texto-2); }
+.bp2-app .bp2-t-azul { color: var(--bp2-t-azul); }
+.bp2-app .bp2-t-laranja { color: var(--bp2-t-laranja); }
+.bp2-app .bp2-t-vermelho { color: var(--bp2-t-vermelho); }
+.bp2-app .bp2-t-verde { color: var(--bp2-t-verde); }
+
+/* Saudação e números (ref. 12 / ref. 03) */
+.bp2-app .bp2-cabecalho { margin-top: 1.25rem; }
+.bp2-app .bp2-saudacao { display: flex; flex-direction: column; font-size: 1.75rem; line-height: 1.18; letter-spacing: -0.01em; }
+.bp2-app .bp2-saudacao-1 { color: var(--bp2-saudacao); font-weight: 300; }
+.bp2-app .bp2-saudacao-2 { color: var(--bp2-texto); font-weight: 400; }
+.bp2-app .bp2-numeros { background: var(--bp2-cartao); border-radius: 1.25rem; padding: 0.9rem 0.25rem; box-shadow: var(--bp2-sombra); --bp2-texto-2: #767676; }
+.dark .bp2-app .bp2-numeros { --bp2-texto-2: #a9b0ba; }
+.bp2-app .bp2-numero { padding: 0 0.85rem; display: flex; flex-direction: column-reverse; justify-content: flex-end; gap: 0.4rem; }
+.bp2-app .bp2-numero + .bp2-numero { border-left: 1px solid var(--bp2-borda); }
+.bp2-app .bp2-numero-rotulo { font-size: 11px; line-height: 1.25; color: var(--bp2-texto-2); }
+.bp2-app .bp2-numero-valor { font-size: 1.75rem; line-height: 1; font-weight: 300; }
+
+/* Botões */
+.bp2-app .bp2-mais { background: var(--bp2-azul); color: #242424; }
+.bp2-app .bp2-mais:hover { background: #8fb3f6; }
+.bp2-app .bp2-botao-azul { background: var(--bp2-azul); color: #242424; }
+.bp2-app .bp2-botao-azul:disabled { background: color-mix(in srgb, var(--bp2-azul) 45%, var(--bp2-cartao)); color: #242424; }
+.dark .bp2-app .bp2-botao-azul:disabled { color: #f2f4f7; }
+.bp2-app .bp2-botao-quadrado { border: 1px solid #b9cdf3; background: transparent; color: var(--bp2-t-azul); }
+.dark .bp2-app .bp2-botao-quadrado { border-color: rgba(157, 188, 247, 0.45); }
+.bp2-app .bp2-botao-relogio { border: 1px solid var(--bp2-azul); background: var(--bp2-cartao); color: var(--bp2-t-azul); }
+.bp2-app .bp2-icone-topo { color: var(--bp2-texto); }
+.bp2-app .bp2-icone-topo-borda { border: 1px solid #dfe3e6; }
+.dark .bp2-app .bp2-icone-topo-borda { border-color: rgba(255, 255, 255, 0.12); }
+@media (min-width: 1024px) { .bp2-app .bp2-icone-topo-borda { border-color: transparent; } }
+.bp2-app .bp2-busca { background: var(--bp2-fundo); border-radius: 9999px; --bp2-texto-2: #6e6e6e; }
+.dark .bp2-app .bp2-busca { --bp2-texto-2: #a9b0ba; }
+.bp2-app .bp2-busca input::placeholder { color: var(--bp2-texto-2); opacity: 1; }
+.bp2-app .bp2-contador {
+  position: absolute; top: -3px; right: -5px;
+  min-width: 18px; height: 18px; padding: 0 4px;
+  border-radius: 999px; background: #c42b2b; color: #fff;
+  font-size: 10px; font-weight: 600; line-height: 18px; text-align: center;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 0 0 2px var(--bp2-fundo);
+}
+
+/* Cartões coloridos com recorte (ref. 12) */
+.bp2-app .bp2-cor { position: relative; display: flex; flex-direction: column; min-height: 10.5rem; padding: 1rem 1rem 1.1rem; border-radius: 1.5rem; color: #242424; }
+.bp2-app .bp2-lavanda { background: var(--bp2-lavanda); }
+.bp2-app .bp2-azul-suave { background: var(--bp2-azul-suave); }
+.bp2-app .bp2-pessego { background: var(--bp2-pessego); }
+.bp2-app .bp2-cor .bp2-t-cor { color: #636363; }
+.bp2-app .bp2-cor .bp2-avatar { background: #ffffff; color: #242424; }
+.bp2-app .bp2-barra-esq { border-left: 1.5px solid #242424; padding-left: 0.6rem; }
+.bp2-app .bp2-cor-texto { font-size: 13px; line-height: 1.3; }
+.bp2-app .bp2-cor-titulo { font-size: 11px; line-height: 1.3; }
+.bp2-app .bp2-numero-grande { font-size: 2.4rem; line-height: 1; font-weight: 300; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.bp2-app .bp2-pilha-item { display: block; border-radius: 9999px; box-shadow: 0 0 0 2px var(--bp2-lavanda); }
+.bp2-app .bp2-recorte {
+  --r: 1.1rem;
+  position: absolute; right: -1px; bottom: -1px;
+  display: grid; place-items: center;
+  width: 3.4rem; height: 3.4rem; padding: 0.45rem 0 0 0.45rem;
+  background: var(--bp2-fundo);
+  border-top-left-radius: 1.4rem;
+}
+.bp2-app .bp2-recorte::before,
+.bp2-app .bp2-recorte::after {
+  content: ""; position: absolute; width: var(--r); height: var(--r);
+  background: radial-gradient(circle at 0 0, transparent calc(var(--r) - 0.5px), var(--bp2-fundo) var(--r));
+  pointer-events: none;
+}
+.bp2-app .bp2-recorte::before { right: 0; bottom: 100%; }
+.bp2-app .bp2-recorte::after { right: 100%; bottom: 0; }
+.bp2-app .bp2-seta { background: #242424; color: #ffffff; transition: transform 0.2s ease; }
+.dark .bp2-app .bp2-seta { background: #f2f4f7; color: #111111; }
+.bp2-app .bp2-seta:hover { transform: rotate(45deg); }
+.bp2-app .bp2-seta svg.lucide { stroke-width: 2; }
+
+/* Coluna das próximas consultas. Celular (ref. 03): cartão azul em
+   carrossel; depois a data e a lista em linhas brancas soltas no fundo.
+   Tela larga (ref. 12): tudo dentro do cartão branco da coluna. */
+.bp2-app .bp2-hoje { gap: 0.75rem; }
+.bp2-app .bp2-hoje-destaque { order: 1; }
+.bp2-app .bp2-hoje-cab { order: 2; margin-top: 0.25rem; }
+.bp2-app .bp2-hoje-lista { order: 3; }
+.bp2-app .bp2-hoje-rodape { order: 4; }
+.bp2-app .bp2-hoje .bp2-item { background: var(--bp2-cartao); box-shadow: var(--bp2-sombra); --bp2-texto-2: #767676; }
+.dark .bp2-app .bp2-hoje .bp2-item { --bp2-texto-2: #a9b0ba; }
+.bp2-app .bp2-carrossel {
+  display: flex; align-items: flex-start; gap: 0.75rem; /* cada slide com a própria altura (o JS acompanha a do slide visível) */
+  overflow-x: auto; overflow-y: hidden;
+  scroll-snap-type: x mandatory; overscroll-behavior-x: contain; scrollbar-width: none;
+  margin: -0.25rem; padding: 0.25rem;
+}
+.bp2-app .bp2-carrossel::-webkit-scrollbar { display: none; }
+@media (prefers-reduced-motion: no-preference) { .bp2-app .bp2-carrossel { transition: height 0.2s ease; } }
+.bp2-app .bp2-slide { flex: 0 0 100%; scroll-snap-align: center; scroll-snap-stop: always; }
+.bp2-app .bp2-ponto { width: 0.4rem; height: 0.4rem; background: #b9c0c6; transition: width 0.2s ease, background-color 0.2s ease; }
+.bp2-app .bp2-ponto-ativo { width: 1.1rem; background: #242424; }
+.dark .bp2-app .bp2-ponto { background: #4a525c; }
+.dark .bp2-app .bp2-ponto-ativo { background: #f2f4f7; }
+
+/* Cartão azul da próxima consulta: texto sempre #242424 sobre #76A1F3 */
+.bp2-app .bp2-destaque { background: var(--bp2-azul); color: #242424; }
+.bp2-app .bp2-destaque .bp2-avatar { background: rgba(255, 255, 255, 0.7); color: #242424; }
+.bp2-app .bp2-destaque-rotulo,
+.bp2-app .bp2-destaque-tipo { color: #242424; }
+.bp2-app .bp2-destaque-etiqueta { background: rgba(255, 255, 255, 0.7); color: #242424; }
+.bp2-app .bp2-destaque .bp2-botao-azul { background: #ffffff; color: #2f62c4; }
+.bp2-app .bp2-destaque .bp2-botao-azul:disabled { background: rgba(255, 255, 255, 0.6); color: #242424; }
+.bp2-app .bp2-destaque .bp2-botao-relogio { background: rgba(255, 255, 255, 0.35); border-color: rgba(255, 255, 255, 0.9); color: #242424; }
+.bp2-app .bp2-destaque .bpp-contagem { background: rgba(255, 255, 255, 0.55); color: #242424; }
+.bp2-app .bp2-destaque .bp-acao { background: #ffffff; color: #2f62c4; }
+
+@media (min-width: 1024px) {
+  .bp2-app .bp2-hoje { background: var(--bp2-cartao); border-radius: 1.25rem; box-shadow: var(--bp2-sombra); padding: 1.1rem 0.85rem 0.85rem; gap: 0.75rem; --bp2-texto-2: #767676; }
+  .dark .bp2-app .bp2-hoje { --bp2-texto-2: #a9b0ba; }
+  .bp2-app .bp2-hoje-cab { order: 0; margin: 0 0.15rem 0.2rem; }
+  .bp2-app .bp2-hoje-destaque { order: 0; }
+  .bp2-app .bp2-hoje .bp2-item { background: var(--bp2-linha); box-shadow: none; --bp2-texto-2: #727272; min-height: 4.375rem; padding: 0.8rem 1rem; border-radius: 0.75rem; }
+  .dark .bp2-app .bp2-hoje .bp2-item { --bp2-texto-2: #a9b0ba; }
+  .bp2-app .bp2-hoje-lista > li + li { margin-top: 0.8rem; }
+  .bp2-app .bp2-item-nome, .bp2-app .bp2-item-motivo { font-size: 15px; line-height: 1.35; }
+  .bp2-app .bp2-item-sub { font-size: 13px; line-height: 1.4; margin-top: 0.15rem; }
+  .bp2-app .bp2-carrossel { overflow: visible; margin: 0; padding: 0; }
+  /* Na ref. 12 a consulta em destaque é uma linha clara dentro do cartão branco */
+  .bp2-app .bp2-destaque { background: var(--bp2-linha); color: var(--bp2-texto); --bp2-texto-2: #727272; }
+  .dark .bp2-app .bp2-destaque { --bp2-texto-2: #a9b0ba; }
+  .bp2-app .bp2-destaque .bp2-avatar { background: var(--bp2-avatar-fundo); color: var(--bp2-avatar-texto); }
+  .bp2-app .bp2-destaque-rotulo { color: var(--bp2-texto-2); }
+  .bp2-app .bp2-destaque-tipo { color: var(--bp2-t-azul); }
+  .bp2-app .bp2-destaque-etiqueta { background: var(--bp2-azul-ativo); color: var(--bp2-t-azul); }
+  .bp2-app .bp2-destaque .bp2-botao-azul { background: var(--bp2-azul); color: #242424; }
+  .bp2-app .bp2-destaque .bp2-botao-azul:disabled { background: color-mix(in srgb, var(--bp2-azul) 45%, var(--bp2-cartao)); color: #242424; }
+  .dark .bp2-app .bp2-destaque .bp2-botao-azul:disabled { color: #f2f4f7; }
+  .bp2-app .bp2-destaque .bp2-botao-relogio { background: var(--bp2-cartao); border-color: var(--bp2-azul); color: var(--bp2-t-azul); }
+  .bp2-app .bp2-destaque .bpp-contagem { background: var(--bp2-cartao); color: var(--bp2-texto); }
+  .bp2-app .bp2-destaque .bp-acao { background: var(--bp2-azul); color: #242424; }
+}
+
+/* Tabela do histórico */
+.bp2-app .bp2-tr > td { --bp2-texto-2: #727272; }
+.dark .bp2-app .bp2-tr > td { --bp2-texto-2: #a9b0ba; }
+.bp2-app .bp2-tr-destaque > td,
+.bp2-app .bp2-tr:hover > td { background: var(--bp2-linha-destaque); --bp2-texto-2: #6e6e6e; }
+.dark .bp2-app .bp2-tr-destaque > td,
+.dark .bp2-app .bp2-tr:hover > td { --bp2-texto-2: #a9b0ba; }
+
+/* Topo */
+.bp2-app .bp2-topo { min-height: 3.5rem; }
+.bp2-app .bp2-topo-pergunta { align-self: stretch; padding: 0.5rem 0; }
+.bp2-app .bp2-topo-pergunta:hover span { color: var(--bp2-texto); }
+
+/* Grade do Início (celular: próximas, avisos, cartões, histórico) */
+.bp2-app .bp2-grade { display: flex; flex-direction: column; gap: 1rem; margin-top: 1.25rem; }
+
+@media (min-width: 1024px) {
+  .bp2-app .bp2-topo { border-bottom: 1px solid var(--bp2-divisor); padding-bottom: 0.4rem; margin: 0 -1.7rem 0 -1.75rem; padding-left: 1.75rem; padding-right: 1.7rem; }
+  .bp2-app .bp2-cabecalho { margin-top: 2rem; }
+  .bp2-app .bp2-saudacao { font-size: 2.625rem; line-height: 1.1; }
+  .bp2-app .bp2-numeros { background: transparent; box-shadow: none; padding: 0; --bp2-texto-2: #6e6e6e; }
+  .dark .bp2-app .bp2-numeros { --bp2-texto-2: #a9b0ba; }
+  .bp2-app .bp2-numero { padding: 0 1.75rem; flex-direction: column; gap: 0.45rem; }
+  .bp2-app .bp2-numero-rotulo { font-size: 12px; }
+  .bp2-app .bp2-numero-valor { font-size: 2.125rem; }
+  .bp2-app .bp2-cor { min-height: 13rem; padding: 1.1rem 1.1rem 1.05rem; }
+  .bp2-app .bp2-cor-texto { font-size: 15px; line-height: 1.24; }
+  .bp2-app .bp2-cor-titulo { font-size: 12px; }
+  .bp2-app .bp2-numero-grande { font-size: 3.1rem; }
+  .bp2-app .bp2-grade {
+    display: grid;
+    grid-template-columns: minmax(270px, 320px) minmax(0, 1fr);
+    grid-template-areas: "hoje cartoes" "hoje tabela";
+    grid-template-rows: auto 1fr;
+    /* Como na ref. 12: a grade vai até perto da borda de baixo da janela
+       (topo da grade a 245 px em 1440 × 900, folga de 28 px embaixo). */
+    min-height: calc(100svh - 245px - 2.6rem);
+    row-gap: 1.2rem; column-gap: 1.25rem;
+    margin-top: 2.2rem;
+  }
+  .bp2-app .bp2-area-hoje { grid-area: hoje; display: flex; }
+  .bp2-app .bp2-area-hoje > * { flex: 1; }
+  .bp2-app .bp2-area-cartoes { grid-area: cartoes; }
+  .bp2-app .bp2-area-tabela > section { height: 100%; }
+  /* Rodada 2: os avisos saem da grade e ficam logo abaixo dela (a grade fica a da ref. 12) */
+  .bp2-app .bp2-inicio .bp2-area-avisos:not(:empty) { display: grid; grid-template-columns: repeat(auto-fill, minmax(22rem, 1fr)); align-items: start; margin-top: 2.5rem; }
+  .bp2-app .bp2-area-tabela { grid-area: tabela; }
+}
+
+/* ---------------- Menu lateral só com ícones ---------------- */
+.bp2-app .bp2-lateral { display: none; }
+.bp2-app .bp2-lateral-item { color: #5f6368; transition: background-color 0.15s ease, color 0.15s ease; }
+.dark .bp2-app .bp2-lateral-item { color: #a9b0ba; }
+.bp2-app .bp2-lateral-item:hover { background: var(--bp2-cartao); color: var(--bp2-texto); }
+.bp2-app .bp2-lateral-ativo,
+.bp2-app .bp2-lateral-ativo:hover { background: var(--bp2-azul-ativo); color: var(--bp2-t-azul); }
+.bp2-app .bp2-lateral.bp2-lateral-com-menu { z-index: 50; }
+.bp2-app .bp2-lateral-menu {
+  position: absolute; left: calc(100% + 14px); bottom: 0; z-index: 60;
+  min-width: 13rem; padding: 6px; border-radius: 14px;
+  background: var(--bp2-cartao); color: var(--bp2-texto);
+  border: 1px solid var(--bp2-borda);
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.16);
+}
+.bp2-app .bp2-lateral-menu button { display: flex; width: 100%; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 10px; font-size: 13px; text-align: left; }
+.bp2-app .bp2-lateral-menu button:hover,
+.bp2-app .bp2-lateral-menu button:focus-visible { background: var(--bp2-azul-ativo); color: var(--bp2-t-azul); }
+
+/* Gavetas (Perfil / Documentos) — só tela larga */
+.bp2-app .bp2-gaveta-fundo,
+.bp2-app .bp2-gaveta-fechar { display: none; }
+
+@media (min-width: 1024px) {
+  html body:has(.bp-app-paciente.bp2-app) { background: #eff3f4; }
+  html.dark body:has(.bp-app-paciente.bp2-app) { background: #0e1013; }
+  .bp-app-paciente.bp2-app.bp-shell { padding-left: 76px; background: var(--bp2-fundo); }
+
+  .bp2-app .bp2-lateral {
+    display: flex; flex-direction: column;
+    position: fixed; inset: 0 auto 0 0; width: 76px; z-index: 30;
+    background: var(--bp2-fundo);
+    border-right: 1px solid var(--bp2-divisor);
+  }
+
+  /* Uma coluna só: Perfil e Documentos viram gavetas pelo menu lateral */
+  .bp2-app .bpp-carrossel { grid-template-columns: minmax(0, 1fr); }
+  .bp2-app .bpp-lateral-esq,
+  .bp2-app .bpp-lateral-dir { display: none; }
+  .bp2-app[data-gaveta="perfil"] .bpp-lateral-esq,
+  .bp2-app[data-gaveta="documentos"] .bpp-lateral-dir {
+    display: block;
+    position: fixed; top: 0; bottom: 0; width: 400px; z-index: 45;
+    overflow-y: auto; border: 0;
+    box-shadow: 0 24px 60px rgba(16, 24, 40, 0.18);
+    animation: bp2-subir-suave 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .bp2-app[data-gaveta="perfil"] .bpp-lateral-esq { left: 76px; }
+  .bp2-app[data-gaveta="documentos"] .bpp-lateral-dir { right: 0; }
+  .bp2-app[data-gaveta] .bp2-gaveta-fundo { display: block; position: fixed; inset: 0 0 0 76px; z-index: 44; background: rgba(16, 24, 40, 0.28); }
+  .bp2-app[data-gaveta] .bp2-gaveta-fechar { display: grid; position: fixed; top: 1rem; z-index: 46; }
+  .bp2-app[data-gaveta="perfil"] .bp2-gaveta-fechar { left: calc(76px + 400px + 0.75rem); }
+  .bp2-app[data-gaveta="documentos"] .bp2-gaveta-fechar { right: calc(400px + 0.75rem); }
+
+  /* O Início usa a largura toda (Saúde e Exames seguem em 760 px) */
+  .bp2-app .bp-secao-1.bp2-inicio { padding-left: 1.75rem; padding-right: 1.7rem; padding-bottom: 2rem; }
+  .bp2-app .bp2-inicio .bp2-conteudo { max-width: 1480px; padding: 0.4rem 0 0; }
+}
+
+/* ---------------- Barra de baixo do celular (ref. 03) ---------------- */
+.bp2-app .bp2-barra {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 30;
+  height: calc(62px + env(safe-area-inset-bottom));
+  padding-bottom: env(safe-area-inset-bottom);
+  background: rgba(255, 255, 255, 0.88);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  backdrop-filter: blur(14px) saturate(1.2);
+  box-shadow: 0 -8px 24px rgba(16, 24, 40, 0.05);
+}
+.dark .bp2-app .bp2-barra { background: rgba(24, 27, 32, 0.92); box-shadow: 0 -1px 0 rgba(255, 255, 255, 0.08); }
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .bp2-app .bp2-barra { background: #ffffff; }
+  .dark .bp2-app .bp2-barra { background: #181b20; }
+}
+.bp2-app .bp2-barra.bp2-barra-fixa { position: fixed; }
+.bp2-app .bp2-barra ul { height: 62px; display: grid; grid-template-columns: repeat(5, 70px); justify-content: center; align-items: center; justify-items: center; }
+.bp2-app .bp2-barra .bp2-barra-icone { width: 21px; height: 21px; stroke-width: 1.7; }
+.bp2-app .bp2-barra-item {
+  position: relative; display: grid; place-items: center;
+  width: 44px; height: 44px; border-radius: 12px; color: #242424;
+  transition: background-color 0.18s ease, color 0.18s ease, transform 0.12s ease;
+}
+.dark .bp2-app .bp2-barra-item { color: #d5d9df; }
+.bp2-app .bp2-barra-item::before { content: ""; position: absolute; inset: 3px; border-radius: 11px; background: transparent; transition: background-color 0.18s ease; }
+.bp2-app .bp2-barra-item > svg { position: relative; }
+.bp2-app .bp2-barra-item:hover::before { background: var(--bp2-fundo); }
+.bp2-app .bp2-barra-ativo { color: var(--bp2-t-azul); }
+.dark .bp2-app .bp2-barra-ativo { color: var(--bp2-t-azul); }
+.bp2-app .bp2-barra-ativo::before,
+.bp2-app .bp2-barra-ativo:hover::before { background: var(--bp2-azul-ativo); }
+.bp2-app .bp2-barra-ponto { position: absolute; top: 9px; right: 9px; width: 8px; height: 8px; border-radius: 999px; background: #c42b2b; box-shadow: 0 0 0 2px var(--bp2-cartao); }
+.bp2-app .bp2-barra-mais {
+  display: grid; place-items: center;
+  width: 54px; height: 54px; border-radius: 16px;
+  background: #76a1f3; color: #242424;
+  box-shadow: 0 6px 14px rgba(118, 161, 243, 0.35);
+  transition: background-color 0.18s ease, transform 0.12s ease;
+}
+.bp2-app .bp2-barra-mais .bp2-barra-mais-icone { width: 22px; height: 22px; stroke-width: 1.8; }
+.bp2-app .bp2-barra-mais:hover { background: #8fb3f6; }
+.dark .bp2-app .bp2-barra-mais { box-shadow: none; }
+.bp2-app .bp2-barra-item:focus-visible,
+.bp2-app .bp2-barra-mais:focus-visible,
+.bp2-app .bp2-lateral-item:focus-visible { outline: 2px solid #2f62c4; outline-offset: 2px; }
+.dark .bp2-app .bp2-barra-item:focus-visible,
+.dark .bp2-app .bp2-barra-mais:focus-visible,
+.dark .bp2-app .bp2-lateral-item:focus-visible { outline-color: #9dbcf7; }
+@media (min-width: 1024px) { .bp2-app .bp2-barra { display: none; } }
+
+/* Conteúdo das colunas não fica sob a barra (62 px + área segura) */
+@media (max-width: 1023.98px) {
+  .bp2-app .bpp-lateral > *:last-child { padding-bottom: calc(5rem + env(safe-area-inset-bottom)); }
+  .bp2-app .bp-secao-1.bp2-inicio { padding-bottom: calc(5.5rem + env(safe-area-inset-bottom)); }
+  .bp2-app .bpp-dica { bottom: calc(4.75rem + env(safe-area-inset-bottom)); }
+  .bp2-app .bpp-indicador-secao { top: 45%; }
+}
+
+/* ---------------- Páginas fora do app (PacienteFrame) ---------------- */
+@media (min-width: 1024px) {
+  .bp2-app.bp2-moldura { padding-left: 76px; }
+}
+@media (max-width: 1023.98px) {
+  .bp2-app.bp2-moldura { padding-bottom: calc(62px + env(safe-area-inset-bottom)); }
+}
+
+/* ---------------- Animações (com menos movimento: nada) ---------------- */
+@keyframes bp2-subir-suave {
+  from { opacity: 0; transform: translateY(14px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes bp2-esmaecer-in { from { opacity: 0; } to { opacity: 1; } }
+.bp2-app .bp2-animar { animation: bp2-subir-suave 0.42s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.bp2-app .bp2-animar-d1 { animation-delay: 0.06s; }
+.bp2-app .bp2-animar-d2 { animation-delay: 0.12s; }
+.bp2-app .bp2-animar-d3 { animation-delay: 0.18s; }
+.bp2-app .bp2-lista-animar > * { animation: bp2-subir-suave 0.38s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.bp2-app .bp2-lista-animar > *:nth-child(1) { animation-delay: 0.04s; }
+.bp2-app .bp2-lista-animar > *:nth-child(2) { animation-delay: 0.08s; }
+.bp2-app .bp2-lista-animar > *:nth-child(n+3) { animation-delay: 0.12s; }
+.bp2-app .bp2-barra { animation: bp2-esmaecer-in 0.2s ease backwards; }
+.bp2-app .bp2-barra-item:active,
+.bp2-app .bp2-barra-mais:active { transform: scale(0.92); }
+@media (prefers-reduced-motion: reduce) {
+  .bp2-app .bp2-animar,
+  .bp2-app .bp2-lista-animar > *,
+  .bp2-app .bp2-barra,
+  .bp2-app[data-gaveta] .bpp-lateral-esq,
+  .bp2-app[data-gaveta] .bpp-lateral-dir { animation: none !important; }
+  .bp2-app .bp2-seta,
+  .bp2-app .bp2-ponto,
+  .bp2-app .bp2-barra-item,
+  .bp2-app .bp2-barra-mais,
+  .bp2-app .bp2-barra-item::before,
+  .bp2-app .bp2-lateral-item { transition: none; }
+  .bp2-app .bp2-seta:hover { transform: none; }
+  .bp2-app .bp2-barra-item:active,
+  .bp2-app .bp2-barra-mais:active { transform: none; }
+  .bp2-app .bp2-carrossel { scroll-behavior: auto; }
+}
+
+/* Aviso "cartão indisponível" do botão de pagar dentro do cartão azul */
+.bp2-app .bp2-destaque [role="note"] { color: #242424; }
+@media (min-width: 1024px) { .bp2-app .bp2-destaque [role="note"] { color: var(--bp2-texto); } }
+
+/* ---------------- Rodada 2: quadrado do cartão azul e o menu dele ---------------- */
+.bp2-app .bp2-botao-ponto { position: absolute; top: -3px; right: -3px; width: 10px; height: 10px; border-radius: 999px; background: #c42b2b; box-shadow: 0 0 0 2px var(--bp2-azul); }
+@media (min-width: 1024px) { .bp2-app .bp2-botao-ponto { box-shadow: 0 0 0 2px var(--bp2-linha); } }
+.bp2-app .bp2-area-avisos:focus-visible { outline: 2px solid #2f62c4; outline-offset: 4px; border-radius: 1rem; }
+
+/* Menu (portal no body, escopo próprio .bp2-folha-raiz) */
+.bp2-folha-raiz .bp2-folha-fundo { position: fixed; inset: 0; z-index: 60; background: rgba(16, 24, 40, 0.32); }
+.bp2-folha-raiz .bp2-folha {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 61;
+  max-height: 85vh; overflow-y: auto;
+  padding: 0.6rem 1rem calc(1rem + env(safe-area-inset-bottom));
+  border-radius: 1.25rem 1.25rem 0 0;
+  background: var(--bp2-cartao); color: var(--bp2-texto);
+  box-shadow: 0 -12px 32px rgba(16, 24, 40, 0.12);
+  font-family: var(--bp2-fonte), ui-sans-serif, system-ui, sans-serif;
+}
+.bp2-folha-raiz .bp2-folha-alca { display: block; width: 36px; height: 4px; margin: 0 auto 0.75rem; border-radius: 99px; background: #d5dadd; }
+.dark .bp2-folha-raiz .bp2-folha-alca { background: #3a4048; }
+.bp2-folha-raiz .bp2-folha-fechar { color: var(--bp2-texto); background: var(--bp2-fundo); }
+.bp2-folha-raiz .bp2-folha-item {
+  width: 100%; display: flex; align-items: center; gap: 12px;
+  padding: 10px 12px; border-radius: 14px; text-align: left;
+  background: #f5f7f8; color: #242424;
+  transition: background-color 0.15s ease;
+}
+.bp2-folha-raiz .bp2-folha-item:hover { background: #e8eef7; }
+.dark .bp2-folha-raiz .bp2-folha-item { background: #22262d; color: #f2f4f7; }
+.dark .bp2-folha-raiz .bp2-folha-item:hover { background: #2a313c; }
+.bp2-folha-raiz .bp2-folha-item .bp2-t-2 { color: #5f5f5f; }
+.dark .bp2-folha-raiz .bp2-folha-item .bp2-t-2 { color: #b6bcc6; }
+.bp2-folha-raiz .bp2-folha-icone { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 11px; background: #dee8f4; color: #2f62c4; flex-shrink: 0; }
+.dark .bp2-folha-raiz .bp2-folha-icone { background: #23324a; color: #9dbcf7; }
+.bp2-folha-raiz .bp2-folha-icone-perigo { background: #fbe4e4; color: #b42323; }
+.dark .bp2-folha-raiz .bp2-folha-icone-perigo { background: #3a2226; color: #f38b8b; }
+.bp2-folha-raiz .bp2-folha-pagar .bp-acao { margin-top: 0; width: 100%; }
+.bp2-folha-raiz .bp2-folha-item:focus-visible,
+.bp2-folha-raiz .bp2-folha-fechar:focus-visible,
+.bp2-folha-raiz .bp2-folha-pagar button:focus-visible { outline: 2px solid #2f62c4; outline-offset: 2px; }
+.dark .bp2-folha-raiz .bp2-folha-item:focus-visible,
+.dark .bp2-folha-raiz .bp2-folha-fechar:focus-visible { outline-color: #9dbcf7; }
+@media (min-width: 1024px) {
+  .bp2-folha-raiz .bp2-folha-fundo { background: transparent; }
+  .bp2-folha-raiz .bp2-folha { left: auto; bottom: auto; width: 18.5rem; padding: 0.85rem; border-radius: 1rem; box-shadow: 0 12px 32px rgba(16, 24, 40, 0.16), 0 0 0 1px rgba(16, 24, 40, 0.04); }
+  .dark .bp2-folha-raiz .bp2-folha { box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.08); }
+  .bp2-folha-raiz .bp2-folha-alca { display: none; }
+}
+@keyframes bp2-folha-sobe { from { transform: translateY(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes bp2-folha-surge { from { transform: translateY(-4px) scale(0.98); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: no-preference) {
+  .bp2-folha-raiz .bp2-folha { animation: bp2-folha-sobe 0.22s cubic-bezier(0.22, 1, 0.36, 1) both; }
+  .bp2-folha-raiz .bp2-folha-fundo { animation: bp2-esmaecer-in 0.2s ease both; }
+}
+@media (prefers-reduced-motion: no-preference) and (min-width: 1024px) {
+  .bp2-folha-raiz .bp2-folha { animation-name: bp2-folha-surge; animation-duration: 0.16s; }
+}
+.bp2-folha-raiz .bp2-folha-pagar:empty { display: none; }
+.bp2-folha-raiz .bp2-folha-aviso { background: #fdf1e7; color: #7a3a0c; }
+.dark .bp2-folha-raiz .bp2-folha-aviso { background: #3a2a1e; color: #f6c9a4; }

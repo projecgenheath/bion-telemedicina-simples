@@ -81,6 +81,7 @@ export function NavegacaoPaciente({
   onSecao,
   naoLidas = 0,
   oculto = false,
+  pilula = true,
 }: {
   painel: number;
   secao: number;
@@ -89,6 +90,8 @@ export function NavegacaoPaciente({
   naoLidas?: number;
   /** Some quando há sheet/sobreposição aberta. */
   oculto?: boolean;
+  /** Pílula de pontinhos embaixo. O redesign (etapa 1) usa a barra de baixo no lugar dela. */
+  pilula?: boolean;
 }) {
   // Indicador deslizante da pílula inferior (.bion-indicador): mede o
   // pontinho ativo e desliza até ele em 180 ms, por cima dos pontinhos e
@@ -99,7 +102,7 @@ export function NavegacaoPaciente({
   const pontosRef = useRef<(HTMLSpanElement | null)[]>([]);
   const [indicador, setIndicador] = useState<{ x: number; w: number } | null>(null);
   useLayoutEffect(() => {
-    if (oculto) return;
+    if (oculto || !pilula) return;
     const nav = navRef.current;
     const ponto = pontosRef.current[painel];
     if (!nav || !ponto) return;
@@ -107,7 +110,7 @@ export function NavegacaoPaciente({
     const rp = ponto.getBoundingClientRect();
     if (!rp.width) return;
     setIndicador({ x: rp.left - rn.left, w: rp.width });
-  }, [painel, oculto]);
+  }, [painel, oculto, pilula]);
 
   if (oculto) return null;
 
@@ -149,6 +152,7 @@ export function NavegacaoPaciente({
       ) : null}
 
       {/* Pontinhos inferiores discretos — Perfil / Início / Documentos */}
+      {pilula ? (
       <nav
         ref={navRef}
         aria-label="Painéis do app"
@@ -193,6 +197,7 @@ export function NavegacaoPaciente({
           );
         })}
       </nav>
+      ) : null}
     </>
   );
 }

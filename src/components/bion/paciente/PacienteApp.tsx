@@ -1,28 +1,20 @@
 "use client";
 
 import { AvisoAtivarToque } from "@/components/bion/AvisoAtivarToque";
-import { Logo } from "@/components/bion/brand";
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Activity,
   CalendarClock,
   ChevronDown,
-  Clock,
   ClipboardList,
   FileText,
   HeartPulse,
   Pill,
-  Search,
-  Sparkles,
-  Stethoscope,
   TrendingUp,
-  Video,
   RefreshCw,
   X,
-  ChevronUp,
   Undo2,
-  MessageCircle,
 } from "lucide-react";
 import { useBion } from "@/lib/bion-store";
 import { fmtCurta, fmtHora, fmtTicketData, partesFusoClinica, type Consulta } from "@/lib/bion-tipos";
@@ -37,13 +29,18 @@ import { EtiquetaStatus, PedirReembolsoSheet } from "./PedirReembolsoSheet";
 import { ExcluirContaSheet } from "./ExcluirContaSheet";
 import { consultaTemReembolso } from "./reembolso-visivel";
 import { GraficoLinha, type PontoGrafico } from "./GraficoLinha";
-import { EtiquetaTipo } from "./tipo-atendimento-ui";
-import { CLASSE_ETIQUETA, etiquetaConsulta, type EtiquetaConsulta } from "./etiqueta-consulta";
+import { etiquetaConsulta } from "./etiqueta-consulta";
 import { BotaoPagarStripe } from "./BotaoPagarStripe";
 import { ehRetornoGratis } from "./LinhaConsultaPagamento";
 import { DetalheMedicao, type Detalhe } from "./DetalheMedicao";
 import dynamic from "next/dynamic";
 import "./paciente.css";
+import "./paciente-v2.css";
+import { poppinsPaciente } from "./inicio/fonte-paciente";
+import { TelaInicioPaciente } from "./inicio/TelaInicioPaciente";
+import { BarraLateralPaciente } from "./inicio/BarraLateralPaciente";
+import { BarraInferiorPaciente } from "./inicio/BarraInferiorPaciente";
+import { destinoAtivoPaciente, destinoBarraPaciente } from "./inicio/destino";
 
 const ChatBion = dynamic(
   () => import("./ChatBion").then((m) => m.ChatBion),
@@ -59,10 +56,10 @@ import { fraseMotivoReagendamento, rotuloMotivoReagendamento } from "./motivo-re
 import { DicaGestos, NavegacaoPaciente, useDicaGestos } from "./NavegacaoPaciente";
 import { DadosPessoaisSheet, type CampoPerfil } from "./DadosPessoaisSheet";
 import { TelaListaCompleta, type ListaPerfil } from "./TelaListaCompleta";
-import { AvisoMensagemNova, ContagemConsulta } from "./AvisosInicio";
-import { acaoSalaPaciente, botaoPrincipalProxima, type AcaoSala } from "./entrada-sala";
+import { AvisoMensagemNova } from "./AvisosInicio";
+import { acaoSalaPaciente, type AcaoSala } from "./entrada-sala";
 import { useRelogioSala } from "./useRelogioSala";
-import { SALA_ABRE_ANTES_MIN, salaAbertaEm } from "@/lib/janela-sala";
+import { salaAbertaEm } from "@/lib/janela-sala";
 import { Esqueleto, EstadoVazio } from "./EstadosPaciente";
 import { LaudosOriginais } from "./LaudosOriginais";
 import { laudosDaIa } from "./laudos-originais";
@@ -126,6 +123,7 @@ export function PacienteApp() {
     naoLidasMensagens,
     mensagens,
     marcarConversaLida,
+    documentosVisiveis,
   } = useBion();
 
   const carrosselRef = useRef<HTMLDivElement>(null);
@@ -153,7 +151,6 @@ export function PacienteApp() {
     especialidade: string;
     quando: string;
   } | null>(null);
-  const [listaConsultasAberta, setListaConsultasAberta] = useState(false);
   const [modalConsulta, setModalConsulta] = useState<{ id: string; acao: AcaoSheet } | null>(null);
   const [reembolsoConsultaId, setReembolsoConsultaId] = useState<string | null>(null);
   // Fase 3: edição do perfil e "Ver tudo" abrem por cima de tudo (fora do carrossel).
@@ -162,6 +159,10 @@ export function PacienteApp() {
   const [listaCompleta, setListaCompleta] = useState<ListaPerfil | null>(null);
   // Conversa aberta em Documentos (o aviso do Início abre direto nela).
   const [conversaAtiva, setConversaAtiva] = useState<string | null>(null);
+  // Redesign (etapa 1): em Documentos, o paciente está em Mensagens (veio
+  // pelo menu de Mensagens ou abriu uma conversa) — decide o item ativo.
+  const [emMensagens, setEmMensagens] = useState(false);
+  const painelDirRef = useRef<HTMLElement>(null);
   const dica = useDicaGestos();
 
   const bloqueado = !!(
@@ -195,6 +196,28 @@ export function PacienteApp() {
     setSecao(i);
   }, []);
 
+  /** Documentos com a lista de Mensagens à vista (as conversas moram no fim do painel). */
+  const irMensagens = useCallback(() => {
+    setEmMensagens(true);
+    irPara(2);
+    // Dois quadros: na tela larga a gaveta só aparece depois do render.
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        const painelDir = painelDirRef.current;
+        const alvo = painelDir?.querySelector<HTMLElement>('[aria-label="Mensagens com médicos"]');
+        if (!painelDir || !alvo) return;
+        const topo = alvo.getBoundingClientRect().top - painelDir.getBoundingClientRect().top + painelDir.scrollTop;
+        painelDir.scrollTo({ top: Math.max(0, topo - 16), behavior: comportamentoScroll() });
+      }),
+    );
+  }, [irPara]);
+
+  const irDocumentos = useCallback(() => {
+    setEmMensagens(false);
+    irPara(2);
+    requestAnimationFrame(() => painelDirRef.current?.scrollTo({ top: 0, behavior: comportamentoScroll() }));
+  }, [irPara]);
+
   // A página inicial é a SEÇÃO 1 (painel central): posiciona o carrossel já na montagem
   useEffect(() => {
     const el = carrosselRef.current;
@@ -218,7 +241,7 @@ export function PacienteApp() {
     };
   }, []);
 
-  // Deep links: /paciente?tela=perfil|documentos|saude|exames|inicio
+  // Deep links: /paciente?tela=perfil|documentos|mensagens|saude|exames|inicio|agendar
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const tela = (params.get("tela") || "").toLowerCase();
@@ -226,6 +249,12 @@ export function PacienteApp() {
     const aplicar = () => {
       if (tela === "perfil") irPara(0);
       else if (tela === "documentos") irPara(2);
+      else if (tela === "mensagens") irMensagens();
+      else if (tela === "agendar") {
+        irPara(1);
+        setChatIntencao("agendar");
+        setChatAberto(true);
+      }
       else if (tela === "saude") {
         irPara(1);
         requestAnimationFrame(() => irSecao(1));
@@ -244,7 +273,7 @@ export function PacienteApp() {
     // Espera o carrossel posicionar no centro
     const t = window.setTimeout(aplicar, 50);
     return () => window.clearTimeout(t);
-  }, [irPara, irSecao]);
+  }, [irPara, irSecao, irMensagens]);
 
   const aoRolar = () => {
     const el = carrosselRef.current;
@@ -252,6 +281,7 @@ export function PacienteApp() {
     const idx = Math.round(el.scrollLeft / el.clientWidth);
     if (idx !== painel) {
       setPainel(idx);
+      if (idx !== 2) setEmMensagens(false);
       dica.dispensar();
     }
   };
@@ -264,6 +294,9 @@ export function PacienteApp() {
     Array.from(col.children).forEach((c, i) => {
       if ((c as HTMLElement).offsetTop <= meio) idx = i;
     });
+    // No fim da rolagem a última seção é a atual, mesmo curta (tela larga:
+    // Exames não chega ao meio da janela e o menu acendia Saúde).
+    if (col.scrollTop + col.clientHeight >= col.scrollHeight - 2) idx = col.children.length - 1;
     if (idx !== secao) {
       setSecao(idx);
       dica.dispensar();
@@ -275,7 +308,14 @@ export function PacienteApp() {
     const aoTeclar = (e: KeyboardEvent) => {
       if (bloqueado || e.altKey || e.ctrlKey || e.metaKey) return;
       const alvo = e.target as HTMLElement | null;
+      // Tela larga: Esc fecha a gaveta aberta (Perfil/Documentos).
+      if (e.key === "Escape" && painel !== 1 && ehTelaLarga()) {
+        irPara(1);
+        return;
+      }
       if (alvo && (EM_CAMPO.includes(alvo.tagName) || alvo.isContentEditable)) return;
+      // Tela larga: ←/→ não abrem gavetas (o menu lateral faz isso).
+      if ((e.key === "ArrowRight" || e.key === "ArrowLeft") && ehTelaLarga()) return;
       if (e.key === "ArrowRight") irPara(Math.min(2, painel + 1));
       else if (e.key === "ArrowLeft") irPara(Math.max(0, painel - 1));
       else if (painel === 1) {
@@ -301,6 +341,8 @@ export function PacienteApp() {
       sessao.id ? (c.pacienteId ? c.pacienteId === sessao.id : c.paciente === sessao.nome) : c.paciente === sessao.nome,
     [sessao],
   );
+
+  const minhasConsultas = useMemo(() => consultas.filter(minhaConsulta), [consultas, minhaConsulta]);
 
   const proximas = useMemo(() => {
     const limite = Date.now() - 2 * 3_600_000;
@@ -330,7 +372,7 @@ export function PacienteApp() {
   const abrirConversa = (medicoId: string) => {
     setConversaAtiva(medicoId);
     marcarConversaLida(medicoId);
-    irPara(2);
+    irMensagens();
   };
 
   /** Médico cancelou, falha técnica ou o médico não compareceu: o paciente escolhe remarcar ou reembolso integral. */
@@ -384,8 +426,6 @@ export function PacienteApp() {
     if (a?.status === "em_andamento") return "andamento" as const;
     return "nao_iniciada" as const;
   };
-
-  const acaoProxima = proxima ? acaoSala(proxima) : null;
 
   /** Uma etiqueta só, a mais relevante agora (ver etiqueta-consulta.ts). */
   const etiquetaDe = (c: Consulta) =>
@@ -480,22 +520,49 @@ export function PacienteApp() {
     if (h < 18) return "Boa tarde";
     return "Boa noite";
   })();
-  const hoje = new Date().toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long" });
-  const iniciais =
-    sessao.nome
-      .split(" ")
-      .filter((p) => p.length > 1)
-      .slice(0, 2)
-      .map((p) => p[0]?.toUpperCase())
-      .join("") || "?";
 
   /* Arraste com mouse no desktop quebrava clique de botão ao trocar de painel. */
 
+  // Item ativo do menu lateral e da barra de baixo = tela atual (a camada de cima manda).
+  const destinoAtivo = destinoAtivoPaciente({
+    painel,
+    secao,
+    chatAberto,
+    emMensagens: painel === 2 && (emMensagens || !!conversaAtiva),
+  });
+  const irInicio = () => {
+    setEmMensagens(false);
+    irPara(1);
+    requestAnimationFrame(() => irSecao(0));
+  };
+  const irSecaoCentral = (i: number) => {
+    setEmMensagens(false);
+    irPara(1);
+    requestAnimationFrame(() => irSecao(i));
+  };
+
   return (
-    <div className="bp-shell bp-app-paciente text-bion-ink dark:text-bion-paper">
+    <div
+      className={`bp-shell bp-app-paciente bp2-app ${poppinsPaciente.variable} text-bion-ink dark:text-bion-paper`}
+      data-gaveta={bloqueado ? undefined : painel === 0 ? "perfil" : painel === 2 ? "documentos" : undefined}
+    >
+      <BarraLateralPaciente
+        ativo={destinoAtivo}
+        onInicio={irInicio}
+        onMensagens={irMensagens}
+        onSaude={() => irSecaoCentral(1)}
+        onExames={() => irSecaoCentral(2)}
+        onDocumentos={irDocumentos}
+        onAgendar={() => abrirChat("agendar")}
+        onPerfil={() => irPara(0)}
+        onAjuda={() => router.push("/ajuda")}
+        onTermos={() => router.push("/privacidade")}
+        onSuporte={() => router.push("/suporte")}
+        naoLidas={naoLidasMensagens}
+      />
       <div
         ref={carrosselRef}
-        role="group"
+        role="main"
         tabIndex={0}
         onScroll={aoRolar}
         inert={bloqueado}
@@ -503,7 +570,7 @@ export function PacienteApp() {
         aria-label="Painéis do app: perfil, início e documentos (arraste para os lados)"
       >
         {/* ============================== PERFIL ============================== */}
-        <div className="bpp-lateral bpp-lateral-esq flex-[0_0_100%] w-full min-w-full h-full bp-painel overflow-y-auto bp-coluna" aria-label="Perfil">
+        <section className="bpp-lateral bpp-lateral-esq flex-[0_0_100%] w-full min-w-full h-full bp-painel overflow-y-auto bp-coluna" aria-label="Perfil">
           <PerfilPainel
             onSair={async () => {
               await sair();
@@ -514,7 +581,7 @@ export function PacienteApp() {
             onAgendar={() => abrirChat("agendar")}
             onExcluirConta={() => setExcluindoConta(true)}
           />
-        </div>
+        </section>
 
         {/* ============================= PRINCIPAL ============================ */}
         <div
@@ -524,371 +591,77 @@ export function PacienteApp() {
           aria-label="Início, saúde e exames"
           role="region"
         >
-          {/* --- Seção 1: início --- */}
-          <section className="bp-secao-1 bpp-secao bpp-tela relative min-h-[100svh] flex flex-col px-5 bp-safe-top pb-28 overflow-hidden" aria-label="Página inicial">
-            {/* brilhos decorativos da marca (fundo vivo, atrás dos cartões) */}
-            <span aria-hidden className="bpp-glow bpp-glow-a" />
-            <span aria-hidden className="bpp-glow bpp-glow-b" />
-            <header className="relative flex items-center justify-between gap-2 pt-2 bpp-animar">
-              <div className="flex min-w-0 items-center gap-2.5">
-                <Logo size="sm" />
-                <span className="inline-flex min-w-0 items-center truncate rounded-full bp-glass px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-bion-ink/80 dark:text-bion-paper/80">
-                  {hoje}
-                </span>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                {naoLidasMensagens > 0 ? (
-                  <button
-                    type="button"
-                    onClick={() => irPara(2)}
-                    aria-label={`${naoLidasMensagens} mensagem${naoLidasMensagens === 1 ? "" : "ns"} não lida${naoLidasMensagens === 1 ? "" : "s"}`}
-                    className="bpp-avatar-botao relative w-11 h-11 rounded-full bp-glass inline-flex items-center justify-center"
-                  >
-                    <MessageCircle className="w-5 h-5 text-bion-ink dark:text-bion-paper" aria-hidden />
-                    <span className="absolute -top-1 -right-1 min-w-5 h-5 px-1 rounded-full bg-rose-600 text-xs font-black leading-5 text-center text-white">
-                      {naoLidasMensagens > 9 ? "9+" : naoLidasMensagens}
-                    </span>
-                  </button>
-                ) : null}
-                <button type="button"
-                  onClick={() => irPara(0)}
-                  aria-label="Abrir perfil"
-                  className="bpp-avatar-botao relative w-12 h-12 rounded-full p-[2.5px] shrink-0"
-                >
-                  {pacientePerfil?.foto ? (
-                     
-                    <img src={pacientePerfil.foto} alt="Seu perfil" className="w-full h-full rounded-full object-cover" />
-                  ) : (
-                    <span className="w-full h-full inline-flex items-center justify-center rounded-full bg-white text-sm font-black text-bion-sea dark:bg-[#0e0820] dark:text-[#C4B5FD]">
-                      {iniciais}
-                    </span>
-                  )}
-                </button>
-              </div>
-            </header>
-
-            <div className="relative mt-10 mb-8 bpp-animar bpp-animar-d1">
-              <p className="text-base font-bold text-bion-ink/70 dark:text-bion-paper/70">
-                {saudacao},
-              </p>
-              <h1 className="bpp-texto-grad mt-0.5 text-5xl leading-[1.05] font-black tracking-tight sm:text-6xl">
-                {sessao.nome.split(" ")[0]}
-              </h1>
-              <p className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-bion-ink/75 dark:text-bion-paper/75">
-                <HeartPulse className="h-4 w-4 text-bion-sea dark:text-[#C4B5FD]" aria-hidden />
-                Como você está se sentindo hoje?
-              </p>
-            </div>
-
-            <AvisoAtivarToque role={sessao.role} usuarioId={sessao.id} className="mb-4" />
-
-            {/* Aviso de mensagem nova do médico (some quando a conversa é aberta) */}
-            {ultimaNaoLida ? (
-              <AvisoMensagemNova mensagem={ultimaNaoLida} total={naoLidasDoRemetente} onAbrir={() => abrirConversa(ultimaNaoLida.deId)} />
-            ) : null}
-
-            {/* Cards: aguardando reagendamento (motivo no cartão) — remarcar ou reembolso integral, sem multa */}
-            {aguardandoReagendamento.map((c) => (
-              <CardAguardandoReagendamento
-                key={c.id}
-                consulta={c}
-                onRemarcar={() => setModalConsulta({ id: c.id, acao: "remarcar" })}
-                onReembolso={() => setModalConsulta({ id: c.id, acao: "reembolso" })}
-              />
-            ))}
-
-            {/* Cards: nova data reservada aguardando pagamento da multa.
-                A1: a consulta que já é a "próxima" NÃO ganha este segundo
-                card — ela aparece no card principal com a etiqueta
-                "Remarcação pendente", e o modal de remarcar dela cobre
-                continuar o pagamento e desistir. */}
-            {comRemarcacaoPendente
-              .filter((c) => c.id !== proxima?.id)
-              .map((c) => (
-                <CardRemarcacaoPendente
-                  key={c.id}
-                  consulta={c}
-                  onContinuar={() => setModalConsulta({ id: c.id, acao: "remarcar" })}
-                />
-              ))}
-
-            {/* Card: próxima consulta — hero imersivo da marca */}
-            {proxima ? (
-              <div className="bpp-animar bpp-animar-d2">
-                <div className="bpp-hero bion-surgir relative w-full overflow-hidden rounded-[2rem] p-5 text-white">
-                  <span aria-hidden className="bpp-aurora bpp-aurora-a" />
-                  <span aria-hidden className="bpp-aurora bpp-aurora-b" />
-                  <CabecalhoProxima
-                    podeEntrar={acaoProxima?.tipo === "entrar"}
-                    onEntrar={() => entrarSala(proxima)}
-                    rotulo={`Próxima consulta: ${proxima.especialidade} com ${proxima.medico}. Toque para entrar na sala`}
-                  >
-                    <div className="relative">
-                      <div className="mb-4 flex items-center justify-between gap-2">
-                        <span className="text-xs font-black uppercase tracking-[0.18em] text-white/75">
-                          Próxima consulta
-                        </span>
-                        <span className="bpp-hero-chip rounded-full p-[3px]">
-                          <EtiquetaEstado e={etiquetaDe(proxima)} />
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-4">
-                        <span
-                          aria-hidden
-                          className={`bpp-anel relative grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-white/15 backdrop-blur ${acaoProxima?.tipo === "entrar" ? "bpp-anel-ativo" : ""}`}
-                        >
-                          <Stethoscope className="h-7 w-7" />
-                        </span>
-                        <div className="min-w-0">
-                          <div className="text-2xl font-black leading-tight">{proxima.especialidade}</div>
-                          <div className="mt-0.5 text-sm font-semibold text-white/85">com {proxima.medico}</div>
-                        </div>
-                      </div>
-                      <div className="bpp-hero-barra mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl px-4 py-3">
-                        <span className="inline-flex items-center gap-2 text-sm font-bold">
-                          <CalendarClock className="w-4 h-4" aria-hidden /> {proxima.data} · {proxima.hora}
-                        </span>
-                        <EtiquetaTipo consulta={proxima} />
-                        <span className="ml-auto"><ContagemConsulta ts={proxima.ts} /></span>
-                      </div>
-                    </div>
-                  </CabecalhoProxima>
-                </div>
-
-                {etiquetaDe(proxima).texto === "Aguardando pagamento" && !proxima.remarcacaoPendente && !ehRetornoGratis(proxima) ? (
-                  <BotaoPagarStripe consultaId={proxima.id} className="w-full mt-3" />
-                ) : null}
-
-                <AcoesProximaConsulta
-                  acao={acaoProxima ?? { tipo: "nenhuma" }}
-                  triagem={statusTriagem(proxima.id)}
-                  triagemDisponivel={janelaTriagem(proxima)}
-                  onEntrar={() => entrarSala(proxima)}
-                  onTriagem={() => abrirTriagem(proxima.id)}
-                  onRemarcar={() => setModalConsulta({ id: proxima.id, acao: "remarcar" })}
-                  onCancelar={() => setModalConsulta({ id: proxima.id, acao: "cancelar" })}
-                />
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={() => abrirChat("agendar")}
-                aria-label="Nenhuma consulta agendada. Toque para agendar com a BION IA"
-                className="bpp-hero bion-toque bion-toque-forte bion-surgir bpp-animar bpp-animar-d2 relative w-full overflow-hidden rounded-[2rem] p-6 text-left text-white"
-              >
-                <span aria-hidden className="bpp-aurora bpp-aurora-a" />
-                <span aria-hidden className="bpp-aurora bpp-aurora-b" />
-                <div className="relative">
-                  <div className="mb-1 text-xs font-black uppercase tracking-[0.18em] text-white/75">Agenda</div>
-                  <div className="text-2xl font-black leading-tight">Nenhuma consulta agendada</div>
-                  <p className="mt-1.5 inline-flex items-center gap-1.5 text-sm font-semibold text-white/85">
-                    <Sparkles className="w-4 h-4" aria-hidden /> Toque para agendar com a BION IA
-                  </p>
-                  <svg className="bpp-ecg mt-5 block h-10 w-full" viewBox="0 0 200 48" fill="none" aria-hidden>
-                    <path
-                      d="M0 24 h16 l3 -3 3 3 5 -15 6 30 5 -15 h10 l4 -3 4 3 h16 l3 -3 3 3 5 -15 6 30 5 -15 h10 l4 -3 4 3 h16 l3 -3 3 3 5 -15 6 30 5 -15 h10 l4 -3 4 3 h28"
-                      stroke="currentColor"
-                      strokeWidth="2.5"
-                      strokeLinejoin="round"
-                      strokeLinecap="round"
+          {/* --- Seção 1: início (redesign azul, etapa 1 — ver inicio/TelaInicioPaciente) --- */}
+          <section className="bp-secao-1 bp2-inicio bp2-v2 bpp-tela relative min-h-[100svh] flex flex-col bp-safe-top" aria-labelledby="bp2-t1-titulo">
+            <TelaInicioPaciente
+              nome={sessao.nome}
+              foto={pacientePerfil?.foto}
+              saudacao={saudacao}
+              agora={agoraSala}
+              minhas={minhasConsultas}
+              proximas={proximas}
+              etiquetaDe={etiquetaDe}
+              acaoSala={acaoSala}
+              statusTriagem={statusTriagem}
+              janelaTriagem={janelaTriagem}
+              botaoPagar={(c) =>
+                etiquetaDe(c).tom === "pagamento" && !c.remarcacaoPendente && !ehRetornoGratis(c) ? (
+                  <BotaoPagarStripe consultaId={c.id} className="w-full mt-3 !rounded-[0.6rem]" />
+                ) : null
+              }
+              documentos={documentosVisiveis.length}
+              naoLidas={naoLidasMensagens}
+              ultimaNaoLidaDe={ultimaNaoLida ? { medicoId: ultimaNaoLida.deId, nome: ultimaNaoLida.de } : null}
+              naoLidasDoRemetente={naoLidasDoRemetente}
+              aguardandoReagendamento={aguardandoReagendamento[0] ?? null}
+              avisoMensagem={
+                // Aviso de mensagem nova do médico (some quando a conversa é aberta)
+                ultimaNaoLida ? (
+                  <AvisoMensagemNova mensagem={ultimaNaoLida} total={naoLidasDoRemetente} onAbrir={() => abrirConversa(ultimaNaoLida.deId)} />
+                ) : null
+              }
+              avisos={
+                <>
+                  <AvisoAtivarToque role={sessao.role} usuarioId={sessao.id} />
+                  {/* Aguardando reagendamento (motivo no cartão) — remarcar ou reembolso integral, sem multa */}
+                  {aguardandoReagendamento.map((c) => (
+                    <CardAguardandoReagendamento
+                      key={c.id}
+                      consulta={c}
+                      onRemarcar={() => setModalConsulta({ id: c.id, acao: "remarcar" })}
+                      onReembolso={() => setModalConsulta({ id: c.id, acao: "reembolso" })}
                     />
-                  </svg>
-                </div>
-              </button>
-            )}
-
-            {proximas.length > 0 ? (
-              <button
-                type="button"
-                onClick={() => setListaConsultasAberta((v) => !v)}
-                className="bion-toque bp-glass mt-3 w-full px-5 py-3.5 flex items-center justify-between text-left bpp-animar bpp-animar-d1"
-                aria-expanded={listaConsultasAberta}
-              >
-                <span>
-                  <span className="block text-xs font-bold uppercase tracking-wider opacity-80">Agenda</span>
-                  <span className="text-sm font-bold">
-                    {proximas.length === 1 ? "1 consulta agendada" : `${proximas.length} consultas agendadas`}
-                  </span>
-                </span>
-                {listaConsultasAberta ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-              </button>
-            ) : null}
-
-            {listaConsultasAberta ? (
-              <div className="bion-surgir-lista mt-2 space-y-2">
-                {proximas.map((c) => {
-                  const st = statusTriagem(c.id);
-                  const acao = acaoSala(c);
-                  const resumo = (
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <div className="font-bold inline-flex items-center gap-2 flex-wrap">{c.especialidade} <EtiquetaTipo consulta={c} /></div>
-                        <div className="text-xs opacity-80">com {c.medico}</div>
-                        <div className="text-xs font-semibold mt-1">
-                          {c.data} · {c.hora}
-                        </div>
-                      </div>
-                      <EtiquetaEstado e={etiquetaDe(c)} className="shrink-0" />
-                    </div>
-                  );
-                  return (
-                    <div key={c.id} className="bp-glass p-4 bpp-animar">
-                      {/* Fora da janela o item não leva à sala. */}
-                      {acao.tipo === "entrar" ? (
-                        <button type="button" onClick={() => entrarSala(c)} className="bion-toque text-left w-full">
-                          {resumo}
-                        </button>
-                      ) : (
-                        <div>{resumo}</div>
-                      )}
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        {acao.tipo === "entrar" ? (
-                          <button type="button" onClick={() => entrarSala(c)} className="bion-toque inline-flex items-center gap-1.5 rounded-full px-3 min-h-11 text-xs font-bold bg-emerald-700 text-white">
-                            <Video className="w-3.5 h-3.5" aria-hidden /> Entrar na sala
-                          </button>
-                        ) : acao.tipo === "aguardar" ? (
-                          <button
-                            type="button"
-                            disabled
-                            aria-label={`Sala: ${acao.rotulo}`}
-                            title={acao.rotulo}
-                            className="inline-flex items-center gap-1.5 rounded-full px-3 min-h-11 text-xs font-bold bg-bion-ink/8 dark:bg-white/10 opacity-75 cursor-not-allowed"
-                          >
-                            <Video className="w-3.5 h-3.5" aria-hidden /> Sala
-                          </button>
-                        ) : null}
-                        {st !== "feita" && janelaTriagem(c) ? (
-                          <button type="button" onClick={() => abrirTriagem(c.id)} className="bion-toque inline-flex items-center gap-1.5 rounded-full px-3 min-h-11 text-xs font-bold bg-bion-sea/12 text-bion-sea dark:bg-[#C4B5FD]/15 dark:text-[#DDD6FE]">
-                            <Sparkles className="w-3.5 h-3.5" /> {st === "andamento" ? "Continuar triagem" : "Fazer triagem"}
-                          </button>
-                        ) : null}
-                        <button
-                          type="button"
-                          onClick={() => setModalConsulta({ id: c.id, acao: "remarcar" })}
-                          className="bion-toque inline-flex items-center gap-1.5 rounded-full px-3 min-h-11 text-xs font-bold bg-bion-ink/8 dark:bg-white/10"
-                        >
-                          <RefreshCw className="w-3.5 h-3.5" /> Remarcar
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setModalConsulta({ id: c.id, acao: "cancelar" })}
-                          className="bion-toque inline-flex items-center gap-1.5 rounded-full px-3 min-h-11 text-xs font-bold bg-red-600/10 text-red-800 dark:bg-red-400/15 dark:text-red-300"
-                        >
-                          <X className="w-3.5 h-3.5" /> Cancelar
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : null}
-
-            {/* Status do reembolso das consultas canceladas (some se não houver reembolso) */}
-            {/* Faltas: pedido manual de reembolso (prazo de 7 dias) e status do pedido */}
-            {faltasRecentes.map((c) => (
-              <CardFalta key={c.id} consulta={c} onAbrir={() => setReembolsoConsultaId(c.id)} />
-            ))}
-
-            {canceladasComPagamento.map((c) => (
-              <CardReembolso key={c.id} consulta={c} />
-            ))}
-
-            {/* Atalhos: descoberta das ações principais e das seções (swipe continua igual).
-                "Agendar" é a ação principal: chip com o degradê da marca; as demais
-                seguem neutras. Entrada em onda (bion-surgir, 40 ms por card). */}
-            <div className="relative mt-4 grid grid-cols-2 gap-3 bpp-animar bpp-animar-d3">
-              <button type="button" onClick={() => abrirChat("agendar")} style={{ "--bion-i": 0 } as CSSProperties} className="bion-toque bion-surgir bp-glass flex items-center gap-3 p-4 text-left">
-                <span aria-hidden className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-[#3D1AAE] to-[#24058D] text-white shadow-md shadow-[#24058D]/25 dark:from-[#C4B5FD] dark:to-[#DDD6FE] dark:text-[#12034a]">
-                  <Stethoscope className="h-5 w-5" />
-                </span>
-                <span className="min-w-0">
-                  <span className="block text-sm font-black">Agendar</span>
-                  <span className="block text-xs font-semibold opacity-70">com a BION IA</span>
-                </span>
-              </button>
-              <button type="button" onClick={() => irSecao(1)} style={{ "--bion-i": 1 } as CSSProperties} className="bion-toque bion-surgir bp-glass flex items-center gap-3 p-4 text-left">
-                <span aria-hidden className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-bion-sea/10 text-bion-sea dark:bg-[#C4B5FD]/15 dark:text-[#C4B5FD]">
-                  <Activity className="h-5 w-5" />
-                </span>
-                <span className="min-w-0">
-                  <span className="block text-sm font-black">Minha saúde</span>
-                  <span className="block text-xs font-semibold opacity-70">remédios, IMC e PA</span>
-                </span>
-              </button>
-              <button type="button" onClick={() => irSecao(2)} style={{ "--bion-i": 2 } as CSSProperties} className="bion-toque bion-surgir bp-glass flex items-center gap-3 p-4 text-left">
-                <span aria-hidden className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-bion-sea/10 text-bion-sea dark:bg-[#C4B5FD]/15 dark:text-[#C4B5FD]">
-                  <ClipboardList className="h-5 w-5" />
-                </span>
-                <span className="min-w-0">
-                  <span className="block text-sm font-black">Exames</span>
-                  <span className="block text-xs font-semibold opacity-70">laudos e resultados</span>
-                </span>
-              </button>
-              <button type="button" onClick={() => irPara(2)} style={{ "--bion-i": 3 } as CSSProperties} className="bion-toque bion-surgir bp-glass flex items-center gap-3 p-4 text-left">
-                <span aria-hidden className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-bion-sea/10 text-bion-sea dark:bg-[#C4B5FD]/15 dark:text-[#C4B5FD]">
-                  <FileText className="h-5 w-5" />
-                </span>
-                <span className="min-w-0">
-                  <span className="block text-sm font-black">Documentos</span>
-                  <span className="block text-xs font-semibold opacity-70">receitas e mensagens</span>
-                </span>
-              </button>
-            </div>
-
-            {/* Cartão único da BION IA: agendar (principal) + perguntar */}
-            <div style={{ "--bion-i": 1 } as CSSProperties} className="bion-surgir bpp-cartao-ia mt-4 w-full rounded-3xl p-5 text-white relative overflow-hidden">
-              <span aria-hidden className="absolute -right-8 -top-10 w-40 h-40 rounded-full bg-white/10 blur-2xl" />
-              <span aria-hidden className="absolute right-10 -bottom-10 w-28 h-28 rounded-full bg-[#C4B5FD]/20 blur-2xl" />
-              <div className="relative flex items-center gap-3">
-                <span className="bpp-flutuar w-12 h-12 rounded-2xl bg-white/15 inline-flex items-center justify-center shrink-0" aria-hidden>
-                  <Sparkles className="w-6 h-6" />
-                </span>
-                <span className="flex-1 min-w-0">
-                  <span className="flex items-center gap-2 flex-wrap">
-                    <span className="font-black text-base">BION IA</span>
-                    <span className="text-xs font-bold uppercase tracking-wider bg-white/15 rounded-full px-2 py-0.5">Seu agendamento</span>
-                  </span>
-                  <span className="block text-xs text-white/85 mt-0.5">Online agora</span>
-                </span>
-              </div>
-              <p className="relative text-sm text-white/90 mt-3 leading-relaxed">
-                Eu agendo sua consulta, cuido do pagamento e faço sua <strong className="font-bold text-white">triagem</strong> — uma conversa tranquila para o médico já te conhecer antes do atendimento.
-              </p>
-              <button
-                type="button"
-                onClick={() => abrirChat("agendar")}
-                className="bion-toque relative mt-4 w-full inline-flex items-center justify-center gap-2 rounded-full bg-white text-bion-ink text-sm font-bold px-5 py-3.5 shadow-md hover:shadow-lg bpp-brilho-cta"
-              >
-                <Stethoscope className="w-4 h-4" aria-hidden /> Agendar consulta agora
-              </button>
-              <button
-                type="button"
-                onClick={() => abrirChat("geral")}
-                className="bion-toque relative mt-2 w-full flex items-center gap-3 rounded-full bg-white/8 border border-white/15 pl-4 pr-1.5 py-1.5 text-left transition hover:bg-white/12"
-                aria-label="Perguntar algo à BION IA"
-              >
-                <Search className="w-4 h-4 text-white/85 shrink-0" aria-hidden />
-                <span className="flex-1 text-sm text-white/85">Pergunte algo à BION IA…</span>
-                <span className="w-10 h-10 rounded-full bg-white/15 inline-flex items-center justify-center shrink-0" aria-hidden>
-                  <Sparkles className="w-4 h-4" />
-                </span>
-              </button>
-            </div>
-
-            <div className="relative mt-auto flex flex-col items-center gap-2 pt-10 text-bion-ink/75 dark:text-bion-paper/75 bpp-animar bpp-animar-d4">
-              <div className="flex items-center gap-2">
-                <button type="button" onClick={() => irSecao(1)} className="bion-toque inline-flex items-center gap-1.5 rounded-full bp-glass px-4 py-2 text-xs font-bold">
-                  <Activity className="w-3.5 h-3.5" aria-hidden /> Saúde
-                </button>
-                <button type="button" onClick={() => irSecao(2)} className="bion-toque inline-flex items-center gap-1.5 rounded-full bp-glass px-4 py-2 text-xs font-bold">
-                  <ClipboardList className="w-3.5 h-3.5" aria-hidden /> Exames
-                </button>
-              </div>
-              <span className="inline-flex items-center gap-1.5 text-xs font-semibold">
-                Deslize para baixo
-                <ChevronDown className="w-4 h-4 motion-safe:animate-bounce" aria-hidden />
-              </span>
-            </div>
+                  ))}
+                  {/* Nova data reservada aguardando a multa. A1: a próxima consulta não
+                      ganha um segundo card — a etiqueta "Remarcação pendente" fica no destaque. */}
+                  {comRemarcacaoPendente
+                    .filter((c) => c.id !== proxima?.id)
+                    .map((c) => (
+                      <CardRemarcacaoPendente key={c.id} consulta={c} onContinuar={() => setModalConsulta({ id: c.id, acao: "remarcar" })} />
+                    ))}
+                  {/* Faltas: pedido manual de reembolso (prazo de 7 dias) e status do pedido */}
+                  {faltasRecentes.map((c) => (
+                    <CardFalta key={c.id} consulta={c} onAbrir={() => setReembolsoConsultaId(c.id)} />
+                  ))}
+                  {/* Status do reembolso das consultas canceladas */}
+                  {canceladasComPagamento.map((c) => (
+                    <CardReembolso key={c.id} consulta={c} />
+                  ))}
+                </>
+              }
+              onEntrar={entrarSala}
+              onTriagem={abrirTriagem}
+              onRemarcar={(id) => setModalConsulta({ id, acao: "remarcar" })}
+              onCancelar={(id) => setModalConsulta({ id, acao: "cancelar" })}
+              onAgendar={() => abrirChat("agendar")}
+              onPerguntar={() => abrirChat("geral")}
+              onMensagens={irMensagens}
+              onAbrirConversa={abrirConversa}
+              onDocumentos={irDocumentos}
+              onPerfil={() => irPara(0)}
+              onSaude={() => irSecao(1)}
+              onVerHistorico={() => setListaCompleta("consultas")}
+            />
           </section>
 
           {/* --- Seção 2: saúde --- */}
@@ -1115,11 +888,27 @@ export function PacienteApp() {
         </div>
 
         {/* ====================== PÁGINA 4: DOCUMENTOS ======================== */}
-        <div className="bpp-lateral bpp-lateral-dir flex-[0_0_100%] w-full min-w-full h-full bp-painel overflow-y-auto bp-coluna" aria-label="Documentos e mensagens">
+        <section ref={painelDirRef} className="bpp-lateral bpp-lateral-dir flex-[0_0_100%] w-full min-w-full h-full bp-painel overflow-y-auto bp-coluna" aria-label="Documentos e mensagens">
           <DocumentosPainel conversaAtiva={conversaAtiva} onConversa={setConversaAtiva} onAgendar={() => abrirChat("agendar")} />
-        </div>
+        </section>
       </div>
 
+      {/* Tela larga: fundo e botão de fechar da gaveta (só aparecem com data-gaveta, ver paciente-v2.css) */}
+      {painel !== 1 && !bloqueado ? (
+        <>
+          <button type="button" tabIndex={-1} aria-hidden className="bp2-gaveta-fundo" onClick={() => irPara(1)} />
+          <button
+            type="button"
+            onClick={() => irPara(1)}
+            aria-label={painel === 0 ? "Fechar meu perfil" : "Fechar documentos e mensagens"}
+            className="bp2-gaveta-fechar h-10 w-10 place-items-center rounded-full bg-white text-[#242424] shadow-md"
+          >
+            <X className="h-5 w-5" aria-hidden />
+          </button>
+        </>
+      ) : null}
+
+      {/* Pontinhos laterais das seções (celular); a pílula antiga deu lugar à barra de baixo. */}
       <NavegacaoPaciente
         painel={painel}
         secao={secao}
@@ -1127,7 +916,20 @@ export function PacienteApp() {
         onSecao={irSecao}
         naoLidas={naoLidasMensagens}
         oculto={bloqueado}
+        pilula={false}
       />
+      {!bloqueado ? (
+        <BarraInferiorPaciente
+          ativo={destinoBarraPaciente(destinoAtivo)}
+          onInicio={irInicio}
+          onSaude={() => irSecaoCentral(1)}
+          onAgendar={() => abrirChat("agendar")}
+          agendarAberto={chatAberto}
+          onExames={() => irSecaoCentral(2)}
+          onDocumentos={irDocumentos}
+          naoLidas={naoLidasMensagens}
+        />
+      ) : null}
       {dica.visivel && !bloqueado ? <DicaGestos onDispensar={dica.dispensar} /> : null}
 
       {/* Overlays */}
@@ -1438,125 +1240,5 @@ function CardFalta({ consulta, onAbrir }: { consulta: Consulta; onAbrir: () => v
         </>
       )}
     </div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/* Cabeçalho do card da próxima consulta: só é botão com a sala aberta */
-/* ------------------------------------------------------------------ */
-
-function CabecalhoProxima({
-  podeEntrar,
-  onEntrar,
-  rotulo,
-  children,
-}: {
-  podeEntrar: boolean;
-  onEntrar: () => void;
-  rotulo: string;
-  children: ReactNode;
-}) {
-  if (!podeEntrar) return <div className="w-full">{children}</div>;
-  return (
-    <button type="button" onClick={onEntrar} className="bion-toque text-left w-full rounded-2xl" aria-label={rotulo}>
-      {children}
-    </button>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/* Ações da próxima consulta: um botão principal + ações menores       */
-/* ------------------------------------------------------------------ */
-
-function AcoesProximaConsulta({
-  acao,
-  triagem,
-  triagemDisponivel,
-  onEntrar,
-  onTriagem,
-  onRemarcar,
-  onCancelar,
-}: {
-  acao: AcaoSala;
-  triagem: "feita" | "andamento" | "nao_iniciada";
-  triagemDisponivel: boolean;
-  onEntrar: () => void;
-  onTriagem: () => void;
-  onRemarcar: () => void;
-  onCancelar: () => void;
-}) {
-  // Prioridade do botão principal: sala aberta → triagem pendente → "A sala abre às HH:MM" (desativado).
-  // Com a sala já fechada não há entrada.
-  const triagemPendente = triagem !== "feita" && triagemDisponivel;
-  const principal = botaoPrincipalProxima(acao, triagemPendente);
-  const secundario =
-    "min-h-[52px] min-w-0 rounded-2xl px-1 py-2 inline-flex flex-col items-center justify-center gap-1 text-xs font-bold leading-none";
-  const avisoSala = acao.tipo === "aguardar" ? acao.rotulo : acao.tipo === "nenhuma" ? "A sala já fechou" : undefined;
-
-  return (
-    <div className="mt-4">
-      {/* aria-live: avisa quando "A sala abre às HH:MM" vira "Entrar na sala". */}
-      <div aria-live="polite">
-        {principal === "sala" ? (
-          <button type="button" onClick={onEntrar} className="bpp-acao-sala w-full rounded-full py-3 text-sm font-bold inline-flex items-center justify-center gap-2 bg-emerald-700 text-white">
-            <Video className="w-4 h-4" aria-hidden /> Entrar na sala
-          </button>
-        ) : principal === "triagem" ? (
-          <button type="button" onClick={onTriagem} className="bp-acao w-full py-3 text-sm inline-flex items-center justify-center gap-2">
-            <Sparkles className="w-4 h-4" aria-hidden /> {triagem === "andamento" ? "Continuar triagem" : "Fazer triagem"}
-          </button>
-        ) : principal === "aguardar" && acao.tipo === "aguardar" ? (
-          <button
-            type="button"
-            disabled
-            className="bp-acao w-full py-3 text-sm inline-flex items-center justify-center gap-2 opacity-75 cursor-not-allowed"
-          >
-            <Clock className="w-4 h-4" aria-hidden /> {acao.rotulo}
-          </button>
-        ) : null}
-      </div>
-      {/* Ações secundárias: botões iguais numa linha só (ícone em cima + uma palavra), alvo >= 52 px. */}
-      <div className={`bpp-acoes-sec ${principal === "nenhum" ? "" : "mt-2"} grid gap-2 ${principal === "triagem" ? "grid-cols-3" : "grid-cols-2"}`}>
-        {principal === "triagem" ? (
-          <button
-            type="button"
-            onClick={onEntrar}
-            disabled={acao.tipo !== "entrar"}
-            aria-label={avisoSala ? `Sala: ${avisoSala}` : "Entrar na sala"}
-            title={avisoSala}
-            className={`${secundario} bpp-acao-sec disabled:opacity-75 disabled:cursor-not-allowed`}
-          >
-            <Video className="w-4 h-4" aria-hidden /> Sala
-          </button>
-        ) : null}
-        <button type="button" onClick={onRemarcar} aria-label="Remarcar consulta" className={`${secundario} bpp-acao-sec`}>
-          <RefreshCw className="w-4 h-4" aria-hidden /> Remarcar
-        </button>
-        <button type="button" onClick={onCancelar} aria-label="Cancelar consulta" className={`${secundario} bpp-acao-cancelar`}>
-          <X className="w-4 h-4" aria-hidden /> Cancelar
-        </button>
-      </div>
-      {triagem === "feita" ? (
-        <p className="mt-2 text-xs font-semibold text-emerald-800 dark:text-emerald-200">Triagem enviada ao médico</p>
-      ) : null}
-      {acao.tipo === "aguardar" ? (
-        <p className="text-xs opacity-80 mt-3">
-          {/* Com a triagem no botão principal, o horário de abertura aparece aqui. */}
-          {principal === "triagem" ? `${acao.rotulo}. ` : null}A sala abre {SALA_ABRE_ANTES_MIN} min antes do horário. O teste de câmera e
-          microfone é feito dentro da chamada.
-        </p>
-      ) : acao.tipo === "nenhuma" ? (
-        <p className="text-xs opacity-80 mt-3">A sala desta consulta já fechou.</p>
-      ) : null}
-    </div>
-  );
-}
-
-/** Etiqueta única de estado da consulta. */
-function EtiquetaEstado({ e, className = "" }: { e: EtiquetaConsulta; className?: string }) {
-  return (
-    <span className={`text-xs font-bold px-2.5 py-1 rounded-full whitespace-nowrap ${CLASSE_ETIQUETA[e.tom]} ${className}`}>
-      {e.texto}
-    </span>
   );
 }
