@@ -25,7 +25,7 @@ export function ConsentimentoLaudoIA({
   return (
     <div
       ref={ref}
-      className="bpp-sheet-raiz absolute inset-0 z-[90] flex items-end justify-center"
+      className="bpp-sheet-raiz bp2-sheet bp2-sheet-e5 bp2-v2 absolute inset-0 z-[90] flex items-end justify-center"
       role="alertdialog"
       aria-modal="true"
       aria-labelledby="titulo-consentimento-laudo"

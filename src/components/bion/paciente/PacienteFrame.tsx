@@ -44,16 +44,16 @@ export function PacienteFrame({
         onSuporte={() => router.push("/suporte")}
         naoLidas={naoLidasMensagens}
       />
-      <header className="sticky top-0 z-20 px-4 py-3 flex items-center gap-3 border-b border-bion-ink/10 dark:border-white/10 bg-white/85 dark:bg-black/80 backdrop-blur">
+      <header className="bp2-frame-topo sticky top-0 z-20 px-4 py-3 flex items-center gap-3">
         <button
           type="button"
           onClick={() => router.replace("/paciente?tela=perfil")}
-          className="w-11 h-11 inline-flex items-center justify-center rounded-full bg-bion-ink/8 dark:bg-white/10"
+          className="bp2-redondo bp2-redondo-topo bp2-frame-voltar"
           aria-label="Voltar ao perfil"
         >
-          <ArrowLeft className="w-5 h-5" />
+          <ArrowLeft className="w-[18px] h-[18px]" aria-hidden />
         </button>
-        <h1 className="font-bold text-base">{titulo}</h1>
+        <h1 className="bp2-frame-titulo">{titulo}</h1>
       </header>
       <main className="p-4 max-w-2xl mx-auto">{children}</main>
       <BarraInferiorPaciente
