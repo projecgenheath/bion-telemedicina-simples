@@ -1,5 +1,7 @@
 "use client";
 
+import { MensagensTopo, PerfilRedondoTopo, SinoTopo } from "../TopoMedico";
+
 import { crmComRotulo } from "@/lib/medico-exibicao";
 import { useState } from "react";
 import { Award, BadgeCheck, Briefcase, CalendarCheck, Copy, Globe, ListChecks, Pencil, Sparkles, Star } from "lucide-react";
@@ -92,9 +94,16 @@ export function TelaPerfilPublico({
 
   return (
     <section className="bm-tela bm-tela-3 bm-v2 flex flex-col px-5 pt-10 pb-20 text-[#242424] dark:text-[#f2f4f7]" aria-labelledby="bm-t3-titulo">
-      <h2 id="bm-t3-titulo" className="text-2xl font-black">
-        Seu perfil público
-      </h2>
+      <div className="flex items-center justify-between gap-3">
+        <h2 id="bm-t3-titulo" className="min-w-0 text-2xl font-black">
+          Seu perfil público
+        </h2>
+        <div className="flex items-center gap-2 lg:hidden">
+          <MensagensTopo />
+          <SinoTopo />
+          <PerfilRedondoTopo />
+        </div>
+      </div>
       <p className="text-sm text-[#5f5f5f] dark:text-[#b6bcc6] mb-5">Prévia de como os pacientes veem você ao agendar.</p>
 
       {medico && (

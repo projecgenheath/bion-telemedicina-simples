@@ -81,7 +81,7 @@ export function DicaGestos({ onDispensar }: { onDispensar: () => void }) {
   return (
     <div
       role="status"
-      className="bm-dica absolute left-4 right-4 bottom-[calc(6.25rem+env(safe-area-inset-bottom))] z-30 rounded-3xl bg-zinc-950/90 text-white p-4 backdrop-blur shadow-2xl"
+      className="bm-dica absolute left-4 right-4 bottom-[calc(62px+1rem+env(safe-area-inset-bottom))] z-30 rounded-3xl bg-zinc-950/90 text-white p-4 backdrop-blur shadow-2xl"
     >
       <div className="flex items-start gap-3">
         <Hand className="w-5 h-5 mt-0.5 shrink-0 text-[#9dbcf7]" aria-hidden />

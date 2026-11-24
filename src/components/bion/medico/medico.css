@@ -1369,58 +1369,76 @@ html:not(.dark) .bm-app .bm2-agenda-fora, html:not(.dark) .bm-app .bm2-agenda-mi
 }
 
 /* ==================================================================== */
-/* Etapa 5 — barra inferior do celular (ref. 03, telefone da esquerda). */
-/* Cartão branco flutuante, ícones de linha fina sem rótulo, item ativo */
-/* com fundo azul-claro e o "+" azul elevado no meio. Só < 1024 px.     */
-/* Contrastes: ícone #5F6368 / branco 6,1:1; ativo #2F62C4 / #DEE8F4    */
-/* 4,9:1; "+" branco / #3D72D9 4,6:1 (escuro: #A9B0BA / #181B20 8,3:1).  */
+/* Etapa 5 (rodada 2) — barra inferior do celular igual à ref. 03       */
+/* (telefone da esquerda): 5 itens, encostada na borda de baixo, fundo  */
+/* branco com sombra fina para cima. Medidas tiradas da ref. corrigida  */
+/* para 390 px: centros a 70 px, 1º centro a 54 px da borda, faixa de   */
+/* 62 px + área segura, quadrado ativo 38 r11, "+" 54 r16, ícones 20 px */
+/* traço 1,6. Contrastes: ícone #242424 / branco 15,9:1; ativo #2F62C4 / */
+/* #DEE8F4 4,9:1; sinal #242424 / "+" #76A1F3 5,9:1 (não-texto ≥ 3:1).  */
 /* ==================================================================== */
 .bm-app .bm2-barra {
   position: absolute;
-  left: 12px;
-  right: 12px;
-  bottom: calc(12px + env(safe-area-inset-bottom));
+  left: 0;
+  right: 0;
+  bottom: 0;
   z-index: 30;
-  height: 64px;
-  border-radius: 22px;
-  background: var(--bm2-cartao);
-  box-shadow: 0 10px 30px rgba(16, 24, 40, 0.12), 0 1px 3px rgba(16, 24, 40, 0.06);
-  border: 1px solid var(--bm2-borda);
+  height: calc(62px + env(safe-area-inset-bottom));
+  padding-bottom: env(safe-area-inset-bottom);
+  /* Na ref. a lista passa por baixo da barra, que é um branco translúcido. */
+  background: rgba(255, 255, 255, 0.88);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  backdrop-filter: blur(14px) saturate(1.2);
+  box-shadow: 0 -8px 24px rgba(16, 24, 40, 0.05);
 }
-.dark .bm-app .bm2-barra { box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5); }
-.bm-app .bm2-barra ul { height: 100%; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); align-items: center; justify-items: center; padding: 0 4px; }
-.bm-app .bm2-barra svg.lucide { stroke-width: 1.6; }
+.dark .bm-app .bm2-barra { background: rgba(24, 27, 32, 0.92); box-shadow: 0 -1px 0 rgba(255, 255, 255, 0.08); }
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .bm-app .bm2-barra { background: #ffffff; }
+  .dark .bm-app .bm2-barra { background: #181b20; }
+}
+/* Dentro da agenda / notificações: no rodapé da camada (fluxo normal). */
+.bm-app .bm2-barra.bm2-barra-na-tela { position: relative; flex-shrink: 0; z-index: auto; }
+.bm-app .bm2-barra ul {
+  height: 62px; display: grid; grid-template-columns: repeat(5, 70px);
+  justify-content: center; align-items: center; justify-items: center;
+}
+.bm-app .bm2-barra .bm2-barra-icone { width: 21px; height: 21px; stroke-width: 1.7; }
 .bm-app .bm2-barra-item {
-  position: relative; display: grid; place-items: center;
-  width: 44px; height: 44px; border-radius: 14px;
-  color: #5f6368;
+  display: grid; place-items: center;
+  width: 44px; height: 44px; border-radius: 12px;
+  color: #242424;
   transition: background-color 0.18s ease, color 0.18s ease, transform 0.12s ease;
 }
-.dark .bm-app .bm2-barra-item { color: #a9b0ba; }
-.bm-app .bm2-barra-item:hover { color: var(--bm2-texto); background: var(--bm2-fundo); }
-.bm-app .bm2-barra-ativo,
-.bm-app .bm2-barra-ativo:hover { background: var(--bm2-azul-ativo); color: var(--bm2-t-azul); }
-.bm-app .bm2-barra-item .bm2-contador { top: 2px; right: 0; box-shadow: 0 0 0 2px var(--bm2-cartao); }
+.dark .bm-app .bm2-barra-item { color: #d5d9df; }
+/* Quadrado ativo de 38 px (r11), centrado no alvo de toque de 44 px. */
+.bm-app .bm2-barra-item { position: relative; }
+.bm-app .bm2-barra-item::before { content: ""; position: absolute; inset: 3px; border-radius: 11px; background: transparent; transition: background-color 0.18s ease; }
+.bm-app .bm2-barra-item > svg { position: relative; }
+.bm-app .bm2-barra-item:hover::before { background: var(--bm2-fundo); }
+.bm-app .bm2-barra-ativo { color: var(--bm2-t-azul); }
+.bm-app .bm2-barra-ativo::before,
+.bm-app .bm2-barra-ativo:hover::before { background: var(--bm2-azul-ativo); }
 .bm-app .bm2-barra-mais {
   display: grid; place-items: center;
-  width: 52px; height: 52px; margin-top: -26px; border-radius: 17px;
-  background: #3d72d9; color: #ffffff;
-  box-shadow: 0 10px 22px rgba(61, 114, 217, 0.38), 0 0 0 4px var(--bm2-fundo);
-  transition: background-color 0.18s ease, transform 0.12s ease, box-shadow 0.18s ease;
+  width: 54px; height: 54px; border-radius: 16px;
+  background: #76a1f3; color: #242424;
+  box-shadow: 0 6px 14px rgba(118, 161, 243, 0.35);
+  transition: background-color 0.18s ease, transform 0.12s ease;
 }
-.bm-app .bm2-barra-mais:hover { background: #3466c8; }
+.bm-app .bm2-barra-mais .bm2-barra-mais-icone { width: 22px; height: 22px; stroke-width: 1.8; }
+.bm-app .bm2-barra-mais:hover { background: #8fb3f6; }
+.dark .bm-app .bm2-barra-mais { box-shadow: none; }
 .bm-app .bm2-barra-item:focus-visible,
 .bm-app .bm2-barra-mais:focus-visible { outline: 2px solid #2f62c4; outline-offset: 2px; }
 .dark .bm-app .bm2-barra-item:focus-visible,
 .dark .bm-app .bm2-barra-mais:focus-visible { outline-color: #9dbcf7; }
 @media (min-width: 1024px) { .bm-app .bm2-barra { display: none; } }
 
-/* Conteúdo termina ACIMA da barra (64 px + 12 px de margem + área segura
-   + folga): nada fica escondido sob ela. */
+/* Conteúdo termina ACIMA da barra (62 px + área segura + folga). */
 @media (max-width: 1023px) {
   .bm-app .bm-tela,
   .bm-app .bm-lateral-esq > .bm-painel,
-  .bm-app .bm-lateral-dir .bm-painel > .bp-coluna { padding-bottom: calc(6.5rem + env(safe-area-inset-bottom)); }
+  .bm-app .bm-lateral-dir .bm-painel > .bp-coluna { padding-bottom: calc(62px + 1.5rem + env(safe-area-inset-bottom)); }
 }
 
 /* Sheet do "+": linhas de ação e pacientes */

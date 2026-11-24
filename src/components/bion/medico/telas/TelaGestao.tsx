@@ -1,5 +1,7 @@
 "use client";
 
+import { MensagensTopo, PerfilRedondoTopo, SinoTopo } from "../TopoMedico";
+
 import { useEffect, useMemo, useState } from "react";
 import { BarChart3, CalendarRange, ChevronDown, Clock, Tag } from "lucide-react";
 import { useBion } from "@/lib/bion-store";
@@ -55,9 +57,17 @@ export function TelaGestao({
 
   return (
     <section className="bm-tela bm-tela-2 bm-v2 flex flex-col px-5 pt-10 pb-20" aria-labelledby="bm-t2-titulo">
-      <h2 id="bm-t2-titulo" className="text-2xl font-semibold text-[#242424] dark:text-[#f2f4f7]">
-        Gestão
-      </h2>
+      <div className="flex items-center justify-between gap-3">
+        <h2 id="bm-t2-titulo" className="text-2xl font-semibold text-[#242424] dark:text-[#f2f4f7]">
+          Gestão
+        </h2>
+        {/* Rodada 2: Mensagens, sino e perfil nos botões redondos do topo (celular), como na ref. 03. */}
+        <div className="flex items-center gap-2 lg:hidden">
+          <MensagensTopo />
+          <SinoTopo />
+          <PerfilRedondoTopo />
+        </div>
+      </div>
       <p className="text-sm text-[#5f5f5f] dark:text-[#b6bcc6] mb-5">Receita líquida, preço e agenda.</p>
 
       <CardFaturamento {...receita} />

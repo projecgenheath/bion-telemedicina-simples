@@ -15,7 +15,7 @@ import {
 import { definirRascunhoRetorno } from "./rascunho-retorno";
 import { ResultadosRevisar } from "./ResultadosRevisar";
 import type { DadosMedico } from "./useDadosMedico";
-import { SinoTopo } from "./TopoMedico";
+import { MensagensTopo, SinoTopo } from "./TopoMedico";
 
 const normalizar = (s: string) =>
   s
@@ -100,11 +100,13 @@ export function PacientesPainel({
           </h2>
           <div className="flex items-center gap-2">
             {totalNaoLidas > 0 ? (
-              <span className="text-xs font-bold rounded-full px-2.5 py-1 bg-bion-sea text-white dark:bg-[#9dbcf7] dark:text-zinc-950">
+              <span className="max-lg:hidden text-xs font-bold rounded-full px-2.5 py-1 bg-bion-sea text-white dark:bg-[#9dbcf7] dark:text-zinc-950">
                 {totalNaoLidas} não {totalNaoLidas === 1 ? "lida" : "lidas"}
               </span>
             ) : null}
             {/* Rodada do menu: sino no topo também nesta tela (celular; no computador é gaveta e o topo fixo mostra o sino). */}
+            {/* Rodada 2 da etapa 5: Mensagens (contador real) no topo do celular, ao lado do sino. */}
+            <MensagensTopo className="lg:hidden" />
             <SinoTopo className="lg:hidden" />
           </div>
         </div>

@@ -37,7 +37,7 @@ export function SheetMedico({
         <div className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-bion-ink/20 dark:bg-white/25 md:hidden" aria-hidden />
         <div className="flex items-start justify-between gap-3 mb-4">
           <div className="min-w-0">
-            <h2 className="text-lg font-semibold leading-tight">{titulo}</h2>
+            <h2 className="text-[20px] font-medium leading-tight">{titulo}</h2>
             {subtitulo ? <p className="text-sm text-bion-ink/75 dark:text-bion-paper/75 mt-0.5">{subtitulo}</p> : null}
           </div>
           <button

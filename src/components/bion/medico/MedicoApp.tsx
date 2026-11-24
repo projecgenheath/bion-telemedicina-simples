@@ -360,8 +360,36 @@ export function MedicoApp() {
     notificacoes: dados.notificacoesNaoLidas,
     onNotificacoes: () => setSobreposicao({ tipo: "notificacoes" }),
     notificacoesAbertas: sobreposicao?.tipo === "notificacoes",
+    mensagens: totalNaoLidas,
+    onMensagens: abrirMensagens,
     perfil: { nome: dados.sessao.nome, especialidade: medico?.especialidade, foto: medico?.foto, onAbrir: abrirConfiguracoes },
   };
+
+  /** Barra inferior do celular (ref. 03): no app (absoluta) e também dentro
+   *  da agenda e das notificações (no rodapé da camada). */
+  const barraInferior = (naTela: boolean) => (
+    <BarraInferiorMedico
+      naTela={naTela}
+      ativo={destinoAtivo}
+      onInicio={() => doMenu(() => {
+        setSobreposicao(null);
+        irPara(1);
+        irSecao(0);
+      })}
+      onPacientes={() => doMenu(() => {
+        setSobreposicao(null);
+        irPara(2);
+      })}
+      onAcoes={() => abrirSheet("acoes")}
+      acoesAbertas={sheet === "acoes"}
+      onAgenda={abrirAgenda}
+      onRelatorios={() => doMenu(() => {
+        setSobreposicao(null);
+        irPara(1);
+        irSecao(1);
+      })}
+    />
+  );
 
   return (
     <TopoMedicoContexto.Provider value={topo}>
@@ -499,31 +527,7 @@ export function MedicoApp() {
       ) : null}
       <IndicadorTelas painel={painel} secao={secao} onSecao={irSecao} oculto={bloqueado} />
       {/* Etapa 5: barra inferior do celular (some com sheet/sobreposição aberta, como a pílula antiga; a sala de vídeo é outra página e não a tem). */}
-      {!bloqueado ? (
-        <BarraInferiorMedico
-          ativo={destinoAtivo}
-          onInicio={() => doMenu(() => {
-            setSobreposicao(null);
-            irPara(1);
-            irSecao(0);
-          })}
-          onPacientes={() => doMenu(() => {
-            setSobreposicao(null);
-            irPara(2);
-          })}
-          onMensagens={abrirMensagens}
-          onAcoes={() => abrirSheet("acoes")}
-          acoesAbertas={sheet === "acoes"}
-          onAgenda={abrirAgenda}
-          onRelatorios={() => doMenu(() => {
-            setSobreposicao(null);
-            irPara(1);
-            irSecao(1);
-          })}
-          onPerfil={abrirConfiguracoes}
-          naoLidas={totalNaoLidas}
-        />
-      ) : null}
+      {!bloqueado ? barraInferior(false) : null}
         {dica.visivel && !bloqueado ? <DicaGestos onDispensar={dica.dispensar} /> : null}
 
         {medico ? (
@@ -571,6 +575,7 @@ export function MedicoApp() {
             onFechar={() => setAgendaAberta(false)}
             onAbrirPaciente={(p) => abrirPaciente(p)}
             onHorarios={() => abrirSheet("agenda")}
+            barra={barraInferior(true)}
             onAbrirPerfil={() => {
               setAgendaAberta(false);
               irPara(0);
@@ -590,7 +595,7 @@ export function MedicoApp() {
           />
         ) : null}
         {sobreposicao?.tipo === "notificacoes" ? (
-          <TelaSobreposta titulo="Notificações" subtitulo="Novidades das suas consultas, mensagens e avaliações" onFechar={fecharSobreposicao}>
+          <TelaSobreposta titulo="Notificações" subtitulo="Novidades das suas consultas, mensagens e avaliações" onFechar={fecharSobreposicao} barra={barraInferior(true)}>
             <NotificacoesMedico onNavegar={navegarNotificacao} />
           </TelaSobreposta>
         ) : null}

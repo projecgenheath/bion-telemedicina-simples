@@ -28,7 +28,7 @@ import { partesDaConsulta } from "@/lib/repasse-exibicao";
 import { formatarCnpj } from "./dados-pessoais";
 import { DadosPessoaisSheet } from "./sheets/DadosPessoaisSheet";
 import { RepassesSheet } from "./sheets/RepassesSheet";
-import { SinoTopo } from "./TopoMedico";
+import { MensagensTopo, SinoTopo } from "./TopoMedico";
 import { Campo, SheetMedico } from "./sheets/SheetMedico";
 import { useConfirmarSalvamento } from "./sheets/useConfirmarSalvamento";
 import { useContaStripe, useRecebimento, type ContaStripeWire, type DadosMedico } from "./useDadosMedico";
@@ -494,7 +494,8 @@ export function PerfilMedicoPainel({
         Meu perfil
       </h2>
       {/* Rodada do menu: sino no topo também nesta tela (celular). */}
-      <div className="-mt-4 -mb-11 flex justify-end lg:hidden">
+      <div className="-mt-4 -mb-11 flex justify-end gap-2 lg:hidden">
+        <MensagensTopo />
         <SinoTopo />
       </div>
       <div className="flex flex-col items-center text-center">
