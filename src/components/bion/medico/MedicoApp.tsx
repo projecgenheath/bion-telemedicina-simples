@@ -409,7 +409,17 @@ export function MedicoApp() {
       ) : null}
 
       {sobreposicao?.tipo === "paciente" ? (
-        <ConversaPaciente paciente={sobreposicao.p} dados={dados} onFechar={fecharSobreposicao} />
+        <ConversaPaciente
+          key={sobreposicao.p.chave}
+          paciente={sobreposicao.p}
+          dados={dados}
+          onFechar={fecharSobreposicao}
+          onAbrirPaciente={(p) => setSobreposicao({ tipo: "paciente", p })}
+          onAbrirPerfil={() => {
+            setSobreposicao(null);
+            irPara(0);
+          }}
+        />
       ) : null}
       {sobreposicao?.tipo === "notificacoes" ? (
         <TelaSobreposta titulo="Notificações" subtitulo="Novidades das suas consultas, mensagens e avaliações" onFechar={fecharSobreposicao}>

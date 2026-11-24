@@ -16,9 +16,11 @@ const fmtData = (ts: number) =>
 import { TelaSobreposta } from "./TelaSobreposta";
 import { TriagemPaciente } from "./TriagemPaciente";
 import { ProntuarioPaciente } from "./ProntuarioPaciente";
+import { rotuloTipoAtendimento } from "@/lib/atendimento-tipo";
 import { EmitirDocumentoSheet } from "./sheets/EmitirDocumentoSheet";
 import type { DadosMedico } from "./useDadosMedico";
 import { useModelosMensagemConta } from "./useAtalhosConta";
+import { BuscaPacienteTopo, PerfilMedicoTopo } from "./ficha/TopoFicha";
 
 type Aba = "conversa" | "triagem" | "prontuario";
 const MAX_TEXTO = 4000; // limite do POST /api/mensagens
@@ -74,13 +76,19 @@ export function ConversaPaciente({
   paciente,
   dados,
   onFechar,
+  onAbrirPaciente,
+  onAbrirPerfil,
 }: {
   paciente: PacienteDoMedico;
   dados: DadosMedico;
   onFechar: () => void;
+  /** Busca do topo (computador): abre a ficha de outro paciente da lista. */
+  onAbrirPaciente?: (p: PacienteDoMedico) => void;
+  /** Perfil do médico no topo (computador), como no Início. */
+  onAbrirPerfil?: () => void;
 }) {
   const { mensagens, documentos, arquivos, enviarMensagem, marcarConversaLida } = useBion();
-  const { sessao, anamneses, listaPacientes } = dados;
+  const { sessao, anamneses, listaPacientes, medico } = dados;
   const pid = paciente.pacienteId;
   const [aba, setAba] = useState<Aba>("conversa");
   const [texto, setTexto] = useState("");
@@ -246,17 +254,46 @@ export function ConversaPaciente({
   const abas: { id: Aba; r: string }[] = [
     { id: "conversa", r: "Conversa" },
     { id: "triagem", r: "Triagem" },
-    { id: "prontuario", r: "Prontuário" },
+    { id: "prontuario", r: "Ficha" },
   ];
+
+  const abasUi = (
+    <div role="tablist" aria-label="Seções do paciente" className="bm2-abas">
+      {abas.map((a) => (
+        <button
+          key={a.id}
+          type="button"
+          role="tab"
+          aria-selected={aba === a.id}
+          onClick={() => setAba(a.id)}
+          className="bm2-aba"
+        >
+          {a.r}
+        </button>
+      ))}
+    </div>
+  );
+
+  // Topo no computador (rodada 2): busca + perfil do médico, como no
+  // Início; no celular ficam escondidos (o topo mostra o paciente).
+  const topoUi = (
+    <>
+      {onAbrirPaciente ? <BuscaPacienteTopo pacientes={listaPacientes} atualChave={atual.chave} onAbrir={onAbrirPaciente} /> : null}
+      {abasUi}
+      <PerfilMedicoTopo nome={sessao.nome} especialidade={medico?.especialidade} foto={medico?.foto} onAbrir={onAbrirPerfil} />
+    </>
+  );
 
   return (
     <TelaSobreposta
+      classe={`bm2-ficha bm-v2 bm2-aba-${aba}`}
+      extraCabecalho={topoUi}
       titulo={atual.nome}
       subtitulo={proxima ? `Próxima consulta: ${proxima.data} às ${proxima.hora}` : "Sem consulta futura"}
       onFechar={onFechar}
       acoes={
         pid ? (
-          <div className="flex items-center gap-1.5">
+          <div className="bm2-topo-acoes flex items-center gap-1.5">
             {consultaAlvoPedido ? (
               <button
                 type="button"
@@ -376,27 +413,8 @@ export function ConversaPaciente({
         ) : undefined
       }
     >
-      <div role="tablist" aria-label="Seções do paciente" className="sticky top-0 z-10 px-4 pt-3 pb-2 bm-sobreposicao">
-        <div className="grid grid-cols-3 gap-1 p-1 rounded-2xl bg-bion-ink/8 dark:bg-white/10">
-          {abas.map((a) => (
-            <button
-              key={a.id}
-              type="button"
-              role="tab"
-              aria-selected={aba === a.id}
-              onClick={() => setAba(a.id)}
-              className={`py-2 rounded-xl text-xs font-bold ${
-                aba === a.id ? "bg-white text-bion-ink shadow dark:bg-zinc-800 dark:text-white" : "text-bion-ink/80 dark:text-bion-paper/80"
-              }`}
-            >
-              {a.r}
-            </button>
-          ))}
-        </div>
-      </div>
-
       {aba === "conversa" ? (
-        <div className="px-4 pb-4 space-y-3" role="log" aria-live="polite" aria-label={`Conversa com ${atual.nome}`}>
+        <div className="bm2-ficha-estreita px-4 pt-3 pb-4 space-y-3" role="log" aria-live="polite" aria-label={`Conversa com ${atual.nome}`}>
           {pedidoAberto && consultaAlvoPedido ? (
             <section className="bp-glass p-4 bm-animar" aria-label="Pedir medição ao paciente">
               <div className="flex items-start justify-between gap-2">
@@ -447,7 +465,7 @@ export function ConversaPaciente({
           ) : null}
 
           <article className="bp-glass p-4 bm-animar" aria-label="Dados do paciente">
-            <div className="text-xs font-bold uppercase tracking-wider text-bion-sea dark:text-sky-300 mb-2">Ficha do paciente</div>
+            <div className="text-xs font-bold uppercase tracking-wider text-bion-sea dark:text-sky-300 mb-2">Dados do paciente</div>
             {registro ? (
               <dl className="grid grid-cols-2 gap-x-4 gap-y-2">
                 <Info r="Idade" v={idade ? `${idade} anos` : ""} />
@@ -526,7 +544,9 @@ export function ConversaPaciente({
           <div ref={fimRef} />
         </div>
       ) : aba === "triagem" ? (
-        <TriagemPaciente anamneses={anamneses} consultas={consultas} />
+        <div className="bm2-ficha-estreita">
+          <TriagemPaciente anamneses={anamneses} consultas={consultas} />
+        </div>
       ) : (
         <ProntuarioPaciente
           consultas={consultas}
@@ -535,6 +555,30 @@ export function ConversaPaciente({
           homonimo={homonimo}
           medicoIdAtual={sessao.id ?? ""}
           onRenovar={(d) => setEmitir({ base: d })}
+          onEmitir={() => setEmitir({})}
+          onPedirMedicao={
+            consultaAlvoPedido
+              ? () => {
+                  setAba("conversa");
+                  setPedidoAberto(true);
+                }
+              : undefined
+          }
+          onAba={setAba}
+          cabecalho={{
+            nome: atual.nome,
+            idade,
+            genero: registro?.genero ?? "",
+            nomeMedico: sessao.nome,
+            referencia: ref
+              ? {
+                  rotulo: refEhProxima ? "Próxima consulta" : "Última consulta",
+                  quando: `${ref.data} às ${ref.hora}`,
+                  motivo: ref.motivoConsulta ?? "",
+                  atendimento: rotuloTipoAtendimento(ref.tipoAtendimento) ?? "Consulta",
+                }
+              : null,
+          }}
         />
       )}
 
