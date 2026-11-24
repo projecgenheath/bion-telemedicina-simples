@@ -34,7 +34,7 @@ function Estrelas({ nota }: { nota: number }) {
   return (
     <span className="inline-flex" aria-hidden>
       {[1, 2, 3, 4, 5].map((i) => (
-        <Star key={i} className={`w-4 h-4 ${i <= Math.round(nota) ? "fill-amber-300 text-amber-300" : "text-white/40"}`} />
+        <Star key={i} className={`w-4 h-4 ${i <= Math.round(nota) ? "fill-amber-400 text-amber-500" : "text-[#242424]/30 dark:text-white/35"}`} />
       ))}
     </span>
   );
@@ -91,11 +91,11 @@ export function TelaPerfilPublico({
   const confirmarPerfil = useConfirmarSalvamento(medico ? chaveCamposPerfil(medico) : "", (a, b) => a === b);
 
   return (
-    <section className="bm-tela bm-tela-3 flex flex-col px-5 pt-10 pb-20 text-white" aria-labelledby="bm-t3-titulo">
+    <section className="bm-tela bm-tela-3 bm-v2 flex flex-col px-5 pt-10 pb-20 text-[#242424] dark:text-[#f2f4f7]" aria-labelledby="bm-t3-titulo">
       <h2 id="bm-t3-titulo" className="text-2xl font-black">
         Seu perfil público
       </h2>
-      <p className="text-sm text-white/80 mb-5">Prévia de como os pacientes veem você ao agendar.</p>
+      <p className="text-sm text-[#5f5f5f] dark:text-[#b6bcc6] mb-5">Prévia de como os pacientes veem você ao agendar.</p>
 
       {medico && (
         <button
@@ -114,23 +114,23 @@ export function TelaPerfilPublico({
               });
             }
           }}
-          className="mb-4 text-xs font-bold inline-flex items-center gap-1.5 text-sky-200"
+          className="mb-4 text-xs font-bold inline-flex items-center gap-1.5 text-[#2f62c4] dark:text-[#9dbcf7]"
         >
           <Copy className="w-3.5 h-3.5" /> Copiar link do perfil
         </button>
       )}
 
       {medico && completude ? (
-        <div className="bp-glass-marinho p-4 mb-4">
+        <div className="bp-glass p-4 mb-4">
           <div className="flex items-center justify-between gap-3">
-            <span className="text-xs font-bold uppercase tracking-wider text-white/80 inline-flex items-center gap-1.5">
+            <span className="text-xs font-bold uppercase tracking-wider text-[#5f5f5f] dark:text-[#b6bcc6] inline-flex items-center gap-1.5">
               <ListChecks className="w-4 h-4" /> Perfil {completude.percentual}% completo
             </span>
             {completude.faltantes.length ? (
               <button
                 type="button"
                 onClick={completarPerfil}
-                className="text-xs font-bold text-sky-200"
+                className="text-xs font-bold text-[#2f62c4] dark:text-[#9dbcf7]"
               >
                 Completar perfil
               </button>
@@ -138,67 +138,67 @@ export function TelaPerfilPublico({
               <span className="text-xs font-bold text-emerald-300">Completo</span>
             )}
           </div>
-          <div className="mt-2 h-2 rounded-full bg-white/15 overflow-hidden" role="progressbar" aria-valuenow={completude.percentual} aria-valuemin={0} aria-valuemax={100} aria-label={`Perfil ${completude.percentual}% completo`}>
+          <div className="mt-2 h-2 rounded-full bg-[#242424]/[0.06] dark:bg-white/10 overflow-hidden" role="progressbar" aria-valuenow={completude.percentual} aria-valuemin={0} aria-valuemax={100} aria-label={`Perfil ${completude.percentual}% completo`}>
             <div className="h-full bg-emerald-300 rounded-full" style={{ width: `${completude.percentual}%` }} />
           </div>
           {completude.faltantes.length ? (
-            <p className="text-xs text-white/80 mt-2">Falta: {completude.faltantes.join(", ")}.</p>
+            <p className="text-xs text-[#5f5f5f] dark:text-[#b6bcc6] mt-2">Falta: {completude.faltantes.join(", ")}.</p>
           ) : null}
         </div>
       ) : null}
 
       {carregando ? (
-        <div className="bp-glass-marinho p-5 text-sm text-white/85">
+        <div className="bp-glass p-5 text-sm text-[#242424] dark:text-[#e6e9ee]">
           Carregando seu cadastro…
         </div>
       ) : !medico ? (
-        <div className="bp-glass-marinho p-5 text-sm text-white/85">
+        <div className="bp-glass p-5 text-sm text-[#242424] dark:text-[#e6e9ee]">
           Seu perfil público aparece aqui quando o cadastro for aprovado pela equipe BION.
         </div>
       ) : (
         <>
-          <div className="bp-glass-marinho p-5">
+          <div className="bp-glass p-5">
             <div className="flex items-center gap-4">
-              <div className="w-20 h-20 rounded-3xl overflow-hidden bg-white/15 shrink-0 inline-flex items-center justify-center text-2xl font-black">
+              <div className="w-20 h-20 rounded-3xl overflow-hidden bg-[#242424]/[0.06] dark:bg-white/10 shrink-0 inline-flex items-center justify-center text-2xl font-black">
                 {medico.foto ? <img src={medico.foto} alt={`Foto de ${medico.nome}`} className="w-full h-full object-cover" /> : iniciais(medico.nome)}
               </div>
               <div className="min-w-0">
                 <div className="text-lg font-black leading-tight">{medico.nome}</div>
-                <div className="text-sm text-white/85">{medico.especialidade}</div>
-                <div className="text-xs text-white/80 mt-0.5 inline-flex items-center gap-1">
+                <div className="text-sm text-[#242424] dark:text-[#e6e9ee]">{medico.especialidade}</div>
+                <div className="text-xs text-[#5f5f5f] dark:text-[#b6bcc6] mt-0.5 inline-flex items-center gap-1">
                   <BadgeCheck className="w-3.5 h-3.5" /> {crmComRotulo(medico.crm)}
                 </div>
               </div>
             </div>
 
             <dl className="mt-4 grid grid-cols-3 gap-2 text-center">
-              <div className="rounded-2xl bg-white/10 py-2.5">
-                <dt className="text-[11px] font-bold uppercase tracking-wider text-white/80">Nota</dt>
+              <div className="rounded-2xl bg-[#242424]/[0.06] dark:bg-white/10 py-2.5">
+                <dt className="text-[11px] font-bold uppercase tracking-wider text-[#5f5f5f] dark:text-[#b6bcc6]">Nota</dt>
                 <dd className="text-lg font-black">{notaUnica !== null ? fmtNota(notaUnica) : "—"}</dd>
               </div>
-              <div className="rounded-2xl bg-white/10 py-2.5">
-                <dt className="text-[11px] font-bold uppercase tracking-wider text-white/80">Avaliações</dt>
+              <div className="rounded-2xl bg-[#242424]/[0.06] dark:bg-white/10 py-2.5">
+                <dt className="text-[11px] font-bold uppercase tracking-wider text-[#5f5f5f] dark:text-[#b6bcc6]">Avaliações</dt>
                 <dd className="text-lg font-black">{totalUnico}</dd>
               </div>
-              <div className="rounded-2xl bg-white/10 py-2.5">
-                <dt className="text-[11px] font-bold uppercase tracking-wider text-white/80">30 dias</dt>
+              <div className="rounded-2xl bg-[#242424]/[0.06] dark:bg-white/10 py-2.5">
+                <dt className="text-[11px] font-bold uppercase tracking-wider text-[#5f5f5f] dark:text-[#b6bcc6]">30 dias</dt>
                 <dd className="text-lg font-black">{atendimentos30d}</dd>
               </div>
             </dl>
-            <p className="text-xs text-white/80 mt-2">"30 dias" = consultas concluídas por você no período.</p>
+            <p className="text-xs text-[#5f5f5f] dark:text-[#b6bcc6] mt-2">"30 dias" = consultas concluídas por você no período.</p>
 
             <div className="mt-4">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold uppercase tracking-wider text-white/80">Sobre</span>
+                <span className="text-xs font-bold uppercase tracking-wider text-[#5f5f5f] dark:text-[#b6bcc6]">Sobre</span>
                 <button
                   type="button"
                   onClick={() => setEditandoBio(true)}
-                  className="text-xs font-bold inline-flex items-center gap-1 text-sky-200"
+                  className="text-xs font-bold inline-flex items-center gap-1 text-[#2f62c4] dark:text-[#9dbcf7]"
                 >
                   <Pencil className="w-3.5 h-3.5" /> Editar
                 </button>
               </div>
-              <p className="text-sm text-white/90 mt-1 leading-relaxed whitespace-pre-line">
+              <p className="text-sm text-[#242424] dark:text-[#e6e9ee] mt-1 leading-relaxed whitespace-pre-line">
                 {medico.bio?.trim() ? medico.bio : "Você ainda não escreveu sua apresentação."}
               </p>
             </div>
@@ -206,41 +206,41 @@ export function TelaPerfilPublico({
             {(medico.formacao?.trim() || medico.experiencia?.trim() || medico.idiomas.length || medico.subespecialidades.length) ? (
               <div className="mt-4 space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold uppercase tracking-wider text-white/80">Formação e atuação</span>
+                  <span className="text-xs font-bold uppercase tracking-wider text-[#5f5f5f] dark:text-[#b6bcc6]">Formação e atuação</span>
                   <button
                     type="button"
                     onClick={() => setEditandoPerfil(true)}
-                    className="text-xs font-bold inline-flex items-center gap-1 text-sky-200"
+                    className="text-xs font-bold inline-flex items-center gap-1 text-[#2f62c4] dark:text-[#9dbcf7]"
                   >
                     <Pencil className="w-3.5 h-3.5" /> Editar
                   </button>
                 </div>
                 {medico.formacao?.trim() ? (
-                  <p className="text-sm text-white/90 leading-relaxed whitespace-pre-line">
+                  <p className="text-sm text-[#242424] dark:text-[#e6e9ee] leading-relaxed whitespace-pre-line">
                     <Award className="w-4 h-4 inline mr-1.5 -mt-0.5" aria-hidden />
                     {medico.formacao}
                   </p>
                 ) : null}
                 {medico.experiencia?.trim() ? (
-                  <p className="text-sm text-white/90 leading-relaxed whitespace-pre-line">
+                  <p className="text-sm text-[#242424] dark:text-[#e6e9ee] leading-relaxed whitespace-pre-line">
                     <Briefcase className="w-4 h-4 inline mr-1.5 -mt-0.5" aria-hidden />
                     {medico.experiencia}
                   </p>
                 ) : null}
                 {medico.idiomas.length ? (
-                  <p className="text-sm text-white/90">
+                  <p className="text-sm text-[#242424] dark:text-[#e6e9ee]">
                     <Globe className="w-4 h-4 inline mr-1.5 -mt-0.5" aria-hidden />
                     {medico.idiomas.join(", ")}
                   </p>
                 ) : null}
                 {medico.subespecialidades.length ? (
                   <div>
-                    <div className="text-xs font-bold uppercase tracking-wider text-white/80 mb-1.5 inline-flex items-center gap-1">
+                    <div className="text-xs font-bold uppercase tracking-wider text-[#5f5f5f] dark:text-[#b6bcc6] mb-1.5 inline-flex items-center gap-1">
                       <Sparkles className="w-3.5 h-3.5" /> Subespecialidades
                     </div>
                     <div className="flex flex-wrap gap-1.5">
                       {medico.subespecialidades.map((s) => (
-                        <span key={s} className="text-xs font-bold px-2 py-1 rounded-full bg-white/10">
+                        <span key={s} className="text-xs font-bold px-2 py-1 rounded-full bg-[#242424]/[0.06] dark:bg-white/10">
                           {s}
                         </span>
                       ))}
@@ -252,7 +252,7 @@ export function TelaPerfilPublico({
               <button
                 type="button"
                 onClick={() => setEditandoPerfil(true)}
-                className="mt-4 text-xs font-bold inline-flex items-center gap-1 text-sky-200"
+                className="mt-4 text-xs font-bold inline-flex items-center gap-1 text-[#2f62c4] dark:text-[#9dbcf7]"
               >
                 <Pencil className="w-3.5 h-3.5" /> Adicionar formação, experiência, idiomas e subespecialidades
               </button>
@@ -260,28 +260,28 @@ export function TelaPerfilPublico({
 
             <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
               <div>
-                <div className="text-xs font-bold uppercase tracking-wider text-white/80">Consulta</div>
+                <div className="text-xs font-bold uppercase tracking-wider text-[#5f5f5f] dark:text-[#b6bcc6]">Consulta</div>
                 <div className="text-2xl font-black tabular-nums">{fmtBRL(medico.valor)}</div>
               </div>
               <button
                 type="button"
                 onClick={onAgendar}
-                className="rounded-full bg-white text-bion-ink px-4 py-3 text-sm font-bold inline-flex items-center gap-2 whitespace-nowrap shrink-0"
+                className="rounded-full bg-[#2f62c4] text-white dark:bg-[#9dbcf7] dark:text-[#0e1013] px-4 py-3 text-sm font-bold inline-flex items-center gap-2 whitespace-nowrap shrink-0"
               >
                 <CalendarCheck className="w-4 h-4" /> Agendar consulta
               </button>
             </div>
           </div>
 
-          <div className="bp-glass-marinho p-5 mt-3">
+          <div className="bp-glass p-5 mt-3">
             <div className="flex items-center justify-between gap-2 mb-2">
-              <span className="text-xs font-bold uppercase tracking-wider text-white/80">Suas avaliações</span>
-              <span className="text-xs font-bold text-white/80">
+              <span className="text-xs font-bold uppercase tracking-wider text-[#5f5f5f] dark:text-[#b6bcc6]">Suas avaliações</span>
+              <span className="text-xs font-bold text-[#5f5f5f] dark:text-[#b6bcc6]">
                 {totalUnico} recebida(s){notaUnica !== null ? ` · média ${fmtNota(notaUnica)}` : ""}
               </span>
             </div>
             {avaliacoes.length === 0 ? (
-              <p className="text-sm text-white/85">Nenhuma avaliação recebida ainda.</p>
+              <p className="text-sm text-[#242424] dark:text-[#e6e9ee]">Nenhuma avaliação recebida ainda.</p>
             ) : (
               <>
                 {(resumo.pontualidade !== null || resumo.atencao !== null || resumo.clareza !== null) && (
@@ -296,11 +296,11 @@ export function TelaPerfilPublico({
                     .map((n, i) => ({ estrelas: i + 1, n }))
                     .reverse()
                     .map(({ estrelas, n }) => (
-                      <div key={estrelas} className="flex items-center gap-2 text-xs text-white/80">
+                      <div key={estrelas} className="flex items-center gap-2 text-xs text-[#5f5f5f] dark:text-[#b6bcc6]">
                         <span className="w-6 tabular-nums">{estrelas}★</span>
-                        <div className="flex-1 h-1.5 rounded-full bg-white/15 overflow-hidden">
+                        <div className="flex-1 h-1.5 rounded-full bg-[#242424]/[0.06] dark:bg-white/10 overflow-hidden">
                           <div
-                            className="h-full bg-amber-300 rounded-full"
+                            className="h-full bg-amber-400 rounded-full"
                             style={{ width: `${resumo.total ? (n / resumo.total) * 100 : 0}%` }}
                           />
                         </div>
@@ -310,7 +310,7 @@ export function TelaPerfilPublico({
                 </div>
                 <ul className="space-y-3 max-h-96 overflow-y-auto pr-1">
                   {avaliacoes.map((a) => (
-                    <li key={a.id} className="border-t border-white/10 pt-3 first:border-t-0 first:pt-0">
+                    <li key={a.id} className="border-t border-[#242424]/10 dark:border-white/10 pt-3 first:border-t-0 first:pt-0">
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-sm font-bold">{nomeAnonimo(a.paciente)}</span>
                         <span className="inline-flex items-center gap-1">
@@ -326,15 +326,15 @@ export function TelaPerfilPublico({
                         </div>
                       )}
                       {a.comentario?.trim() ? (
-                        <p className="text-sm text-white/90 italic mt-1">“{a.comentario}”</p>
+                        <p className="text-sm text-[#242424] dark:text-[#e6e9ee] italic mt-1">“{a.comentario}”</p>
                       ) : null}
-                      <p className="text-xs text-white/70 mt-1">{a.quando}</p>
+                      <p className="text-xs text-[#5f5f5f] dark:text-[#b6bcc6] mt-1">{a.quando}</p>
                     </li>
                   ))}
                 </ul>
               </>
             )}
-            <p className="text-xs text-white/80 mt-3">Lista completa das suas avaliações; na prévia pública, o nome do paciente aparece abreviado.</p>
+            <p className="text-xs text-[#5f5f5f] dark:text-[#b6bcc6] mt-3">Lista completa das suas avaliações; na prévia pública, o nome do paciente aparece abreviado.</p>
           </div>
         </>
       )}
@@ -364,10 +364,10 @@ export function TelaPerfilPublico({
 function DimensaoAvaliacao({ rotulo, valor }: { rotulo: string; valor: number | null }) {
   if (valor === null) return null;
   return (
-    <div className="flex items-center gap-2 text-xs text-white/85">
+    <div className="flex items-center gap-2 text-xs text-[#242424] dark:text-[#e6e9ee]">
       <span className="w-24">{rotulo}</span>
-      <div className="flex-1 h-1.5 rounded-full bg-white/15 overflow-hidden">
-        <div className="h-full bg-amber-300 rounded-full" style={{ width: `${(valor / 5) * 100}%` }} />
+      <div className="flex-1 h-1.5 rounded-full bg-[#242424]/[0.06] dark:bg-white/10 overflow-hidden">
+        <div className="h-full bg-amber-400 rounded-full" style={{ width: `${(valor / 5) * 100}%` }} />
       </div>
       <span className="w-7 text-right font-bold tabular-nums">{valor.toFixed(1).replace(".", ",")}</span>
     </div>
@@ -376,7 +376,7 @@ function DimensaoAvaliacao({ rotulo, valor }: { rotulo: string; valor: number | 
 
 function Subnota({ rotulo, valor }: { rotulo: string; valor: number }) {
   return (
-    <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-white/10">
+    <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-[#242424]/[0.06] dark:bg-white/10">
       {rotulo} {valor}★
     </span>
   );

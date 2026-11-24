@@ -103,6 +103,7 @@ export function ConversaPaciente({
   onAbrirPaciente,
   onAbrirPerfil,
   onAba,
+  acaoInicial,
 }: {
   paciente: PacienteDoMedico;
   dados: DadosMedico;
@@ -114,6 +115,11 @@ export function ConversaPaciente({
   /** Rodada do menu: avisa a aba atual (o menu lateral marca Mensagens na
    *  conversa e Pacientes na triagem/ficha). Abre sempre na conversa. */
   onAba?: (aba: AbaPaciente) => void;
+  /** Etapa 5: atalho do botão "+" da barra inferior — abre a ficha já com
+   *  "Emitir documento" ou com o pedido de medição aberto. A regra continua
+   *  a da própria ficha (emitir pede pacienteId; medição pede uma consulta
+   *  não cancelada — sem isso nada abre). */
+  acaoInicial?: "emitir" | "medicao";
 }) {
   const { mensagens, documentos, arquivos, enviarMensagem, marcarConversaLida } = useBion();
   const { sessao, anamneses, listaPacientes, medico, naoLidasPorPaciente, agora } = dados;
@@ -128,11 +134,24 @@ export function ConversaPaciente({
   const [resumoRecolhido, setResumoRecolhido] = useState(false);
   const [buscaConversa, setBuscaConversa] = useState("");
   const [texto, setTexto] = useState("");
-  const [emitir, setEmitir] = useState<{ base?: Documento } | null>(null);
+  const [emitir, setEmitir] = useState<{ base?: Documento } | null>(() => (acaoInicial === "emitir" ? {} : null));
   // Item 23: modelos pessoais do médico (conta; cópia neste aparelho) e
   // pedido de medição a partir da conversa.
   const { lista: modelosPessoais, naConta: modelosNaConta, substituir: substituirModelos } = useModelosMensagemConta(sessao.id);
-  const [pedidoAberto, setPedidoAberto] = useState(false);
+  const [pedidoAberto, setPedidoAberto] = useState(acaoInicial === "medicao");
+  // Atalho do "+" (medição): o pedido fica no topo da conversa, e a conversa
+  // rola para o fim ao abrir — traz o pedido para a vista depois disso.
+  useEffect(() => {
+    if (acaoInicial !== "medicao") return;
+    const t = setTimeout(() => {
+      const sec = document.querySelector<HTMLElement>('section[aria-label="Pedir medição ao paciente"]');
+      if (!sec) return;
+      const reduz = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      sec.scrollIntoView({ block: "start", behavior: reduz ? "auto" : "smooth" });
+      sec.querySelector<HTMLElement>("input, button")?.focus({ preventScroll: true });
+    }, 450);
+    return () => clearTimeout(t);
+  }, [acaoInicial]);
   const [tiposPedido, setTiposPedido] = useState<string[]>(["pressao"]);
   const [enviandoPedido, setEnviandoPedido] = useState(false);
   const fimRef = useRef<HTMLDivElement>(null);
@@ -425,7 +444,7 @@ export function ConversaPaciente({
                 {modelosPessoais.map((m) => (
                   <span
                     key={m}
-                    className="inline-flex items-center gap-1 rounded-full pl-2.5 pr-1 py-0.5 text-[11px] font-bold bg-bion-sea/15 text-bion-sea dark:text-sky-300 whitespace-nowrap shrink-0"
+                    className="inline-flex items-center gap-1 rounded-full pl-2.5 pr-1 py-0.5 text-[11px] font-bold bg-bion-sea/15 text-bion-sea dark:text-[#9dbcf7] whitespace-nowrap shrink-0"
                   >
                     <button type="button" onClick={() => aplicarModelo(m)} title={m} className="max-w-40 truncate">
                       {m}
@@ -450,7 +469,7 @@ export function ConversaPaciente({
                   </button>
                 ) : null}
               </div>
-              <p className="text-[11px] opacity-60">
+              <p className="text-[11px] opacity-75">
                 {modelosNaConta ? "Modelos pessoais ficam na sua conta." : "Modelos neste aparelho até a conta responder."}
               </p>
               <div className="flex items-end gap-2">
@@ -475,7 +494,7 @@ export function ConversaPaciente({
                 type="submit"
                 disabled={enviando || !texto.trim()}
                 aria-label={enviando ? "Enviando mensagem…" : "Enviar mensagem"}
-                className="w-11 h-11 rounded-full bg-bion-sea text-white dark:bg-sky-300 dark:text-zinc-950 inline-flex items-center justify-center disabled:opacity-50"
+                className="w-11 h-11 rounded-full bg-bion-sea text-white dark:bg-[#9dbcf7] dark:text-zinc-950 inline-flex items-center justify-center disabled:opacity-50"
               >
                 {enviando ? <span className="text-[10px] font-bold">…</span> : <Send className="w-4 h-4" />}
               </button>
@@ -516,7 +535,7 @@ export function ConversaPaciente({
             <button
               type="button"
               onClick={() => setEmitir({})}
-              className="rounded-full px-3 py-2 text-xs font-bold bg-bion-sea text-white dark:bg-sky-300 dark:text-zinc-950 inline-flex items-center gap-1"
+              className="rounded-full px-3 py-2 text-xs font-bold bg-bion-sea text-white dark:bg-[#9dbcf7] dark:text-zinc-950 inline-flex items-center gap-1"
             >
               <FilePlus2 className="w-4 h-4" aria-hidden /> <span className="max-sm:sr-only">Emitir</span>
             </button>
@@ -591,7 +610,7 @@ export function ConversaPaciente({
                       onClick={() => alternarTipoPedido(t.id)}
                       className={`rounded-full px-3 py-1.5 text-xs font-bold ${
                         ativo
-                          ? "bg-bion-sea text-white dark:bg-sky-300 dark:text-zinc-950"
+                          ? "bg-bion-sea text-white dark:bg-[#9dbcf7] dark:text-zinc-950"
                           : "bg-bion-ink/8 dark:bg-white/10"
                       }`}
                     >
@@ -604,7 +623,7 @@ export function ConversaPaciente({
                 type="button"
                 onClick={() => void enviarPedido()}
                 disabled={enviandoPedido || tiposPedido.length === 0}
-                className="mt-3 w-full rounded-full py-2.5 text-sm font-bold bg-bion-sea text-white dark:bg-sky-300 dark:text-zinc-950 disabled:opacity-50"
+                className="mt-3 w-full rounded-full py-2.5 text-sm font-bold bg-bion-sea text-white dark:bg-[#9dbcf7] dark:text-zinc-950 disabled:opacity-50"
               >
                 {enviandoPedido ? "Enviando…" : "Enviar pedido"}
               </button>
@@ -629,7 +648,7 @@ export function ConversaPaciente({
               </div>
             ) : (
               <div className="bp-glass p-4 flex gap-3" role="status">
-                <InfoIcone className="w-5 h-5 shrink-0 text-bion-sea dark:text-sky-300" aria-hidden />
+                <InfoIcone className="w-5 h-5 shrink-0 text-bion-sea dark:text-[#9dbcf7]" aria-hidden />
                 <div className="min-w-0">
                   <div className="text-sm font-bold">Janela de resposta do paciente: aberta</div>
                   <p className="text-xs text-bion-ink/75 dark:text-bion-paper/75 mt-1">
@@ -700,7 +719,7 @@ export function ConversaPaciente({
                       onClick={() => alternarTipoPedido(t.id)}
                       className={`rounded-full px-3 py-1.5 text-xs font-bold ${
                         ativo
-                          ? "bg-bion-sea text-white dark:bg-sky-300 dark:text-zinc-950"
+                          ? "bg-bion-sea text-white dark:bg-[#9dbcf7] dark:text-zinc-950"
                           : "bg-bion-ink/8 dark:bg-white/10"
                       }`}
                     >
@@ -713,7 +732,7 @@ export function ConversaPaciente({
                 type="button"
                 onClick={() => void enviarPedido()}
                 disabled={enviandoPedido || tiposPedido.length === 0}
-                className="mt-3 w-full rounded-full py-2.5 text-sm font-bold bg-bion-sea text-white dark:bg-sky-300 dark:text-zinc-950 disabled:opacity-50"
+                className="mt-3 w-full rounded-full py-2.5 text-sm font-bold bg-bion-sea text-white dark:bg-[#9dbcf7] dark:text-zinc-950 disabled:opacity-50"
               >
                 {enviandoPedido ? "Enviando…" : "Enviar pedido"}
               </button>
@@ -721,7 +740,7 @@ export function ConversaPaciente({
           ) : null}
 
           <article className="bp-glass p-4 bm-animar" aria-label="Dados do paciente">
-            <div className="text-xs font-bold uppercase tracking-wider text-bion-sea dark:text-sky-300 mb-2">Dados do paciente</div>
+            <div className="text-xs font-bold uppercase tracking-wider text-bion-sea dark:text-[#9dbcf7] mb-2">Dados do paciente</div>
             {detalhesPaciente}
           </article>
 
@@ -743,7 +762,7 @@ export function ConversaPaciente({
               </div>
             ) : (
               <div className="bp-glass p-4 flex gap-3" role="status">
-                <InfoIcone className="w-5 h-5 shrink-0 text-bion-sea dark:text-sky-300" aria-hidden />
+                <InfoIcone className="w-5 h-5 shrink-0 text-bion-sea dark:text-[#9dbcf7]" aria-hidden />
                 <div className="min-w-0">
                   <div className="text-sm font-bold">Janela de resposta do paciente: aberta</div>
                   <p className="text-xs text-bion-ink/75 dark:text-bion-paper/75 mt-1">

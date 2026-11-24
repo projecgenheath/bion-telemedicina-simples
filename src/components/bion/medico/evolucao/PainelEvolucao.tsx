@@ -564,7 +564,7 @@ export function PainelEvolucao({
                 </button>
               </div>
             ) : null}
-            <p className="text-[11px] opacity-60">
+            <p className="text-[11px] opacity-75">
               Modelos são atalhos com o texto das suas seções e ficam salvos apenas neste aparelho — não vão para o servidor.
             </p>
           </div>
@@ -584,7 +584,7 @@ export function PainelEvolucao({
                   <div key={m.id} className="flex items-baseline justify-between gap-2 text-xs">
                     <span>
                       {ROTULO_MEDICAO[m.tipo]?.rotulo ?? m.tipo}{" "}
-                      <span className="opacity-60">
+                      <span className="opacity-75">
                         {new Date(m.criadoEm).toLocaleString("pt-BR", {
                           timeZone: "America/Sao_Paulo",
                           day: "2-digit",
@@ -653,7 +653,7 @@ export function PainelEvolucao({
                               {it.valor}
                               {it.unidade ? ` ${it.unidade}` : ""}
                               {typeof it.refMin === "number" || typeof it.refMax === "number" ? (
-                                <span className="opacity-60 font-normal">
+                                <span className="opacity-75 font-normal">
                                   {" "}
                                   (ref {it.refMin ?? "—"}–{it.refMax ?? "—"})
                                 </span>

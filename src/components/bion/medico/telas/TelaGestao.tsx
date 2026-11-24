@@ -54,11 +54,11 @@ export function TelaGestao({
   const NOMES_DIA = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 
   return (
-    <section className="bm-tela bm-tela-2 flex flex-col px-5 pt-10 pb-20" aria-labelledby="bm-t2-titulo">
-      <h2 id="bm-t2-titulo" className="text-2xl font-black text-white">
+    <section className="bm-tela bm-tela-2 bm-v2 flex flex-col px-5 pt-10 pb-20" aria-labelledby="bm-t2-titulo">
+      <h2 id="bm-t2-titulo" className="text-2xl font-semibold text-[#242424] dark:text-[#f2f4f7]">
         Gestão
       </h2>
-      <p className="text-sm text-white/85 mb-5">Receita líquida, preço e agenda.</p>
+      <p className="text-sm text-[#5f5f5f] dark:text-[#b6bcc6] mb-5">Receita líquida, preço e agenda.</p>
 
       <CardFaturamento {...receita} />
 
@@ -81,7 +81,7 @@ export function TelaGestao({
                 <span className="text-xs font-bold uppercase tracking-wider text-bion-ink/75 dark:text-bion-paper/75 inline-flex items-center gap-1.5">
                   <Tag className="w-4 h-4" /> Preço da consulta
                 </span>
-                <span className="text-xs font-bold text-bion-sea dark:text-sky-300">Alterar</span>
+                <span className="text-xs font-bold text-bion-sea dark:text-[#9dbcf7]">Alterar</span>
               </div>
               <div className="mt-1 text-2xl font-black tabular-nums">{fmtBRL(medico.valor)}</div>
             </button>
@@ -131,7 +131,7 @@ export function TelaGestao({
               <span className="text-xs font-bold uppercase tracking-wider text-bion-ink/75 dark:text-bion-paper/75 inline-flex items-center gap-1.5">
                 <CalendarRange className="w-4 h-4" /> Agenda
               </span>
-              <span className="text-xs font-bold text-bion-sea dark:text-sky-300">Configurar</span>
+              <span className="text-xs font-bold text-bion-sea dark:text-[#9dbcf7]">Configurar</span>
             </div>
             {horarios.length ? (
               <>
@@ -168,7 +168,7 @@ export function TelaGestao({
         </div>
       )}
 
-      <div className="mt-auto pt-8 flex flex-col items-center gap-1 text-white/90" aria-hidden>
+      <div className="mt-auto pt-8 flex flex-col items-center gap-1 text-[#5f5f5f] dark:text-[#b6bcc6]" aria-hidden>
         <span className="text-xs font-semibold">Seu perfil público abaixo</span>
         <ChevronDown className="w-5 h-5 motion-safe:animate-bounce" />
       </div>
@@ -188,10 +188,10 @@ const fmtPct1 = (v: number) => `${(v * 100).toFixed(1).replace(".", ",")}%`;
 /** Variação vs. período anterior: "+12% vs. anterior" / "−8% vs. anterior" / sem base. */
 function Variacao({ atual, anterior }: { atual: number; anterior: number }) {
   const v = variacaoPct(atual, anterior);
-  if (v === null) return <span className="text-xs text-bion-ink/60 dark:text-bion-paper/60">sem base no período anterior</span>;
+  if (v === null) return <span className="text-xs text-bion-ink/75 dark:text-bion-paper/60">sem base no período anterior</span>;
   const sinal = v > 0 ? "+" : v < 0 ? "−" : "";
   return (
-    <span className={`text-xs font-bold ${v > 0 ? "text-emerald-600 dark:text-emerald-300" : v < 0 ? "text-red-600 dark:text-red-300" : "text-bion-ink/60 dark:text-bion-paper/60"}`}>
+    <span className={`text-xs font-bold ${v > 0 ? "text-emerald-700 dark:text-emerald-300" : v < 0 ? "text-red-600 dark:text-red-300" : "text-bion-ink/75 dark:text-bion-paper/60"}`}>
       {sinal}
       {Math.abs(v).toFixed(0)}% vs. anterior
     </span>
@@ -282,7 +282,7 @@ function PainelGestao({ dados }: { dados: DadosMedico }) {
               aria-pressed={dias === p.dias}
               className={`text-xs font-bold px-2.5 py-1.5 rounded-full ${
                 dias === p.dias
-                  ? "bg-bion-sea text-white dark:bg-sky-400 dark:text-bion-ink"
+                  ? "bg-bion-sea text-white dark:bg-[#9dbcf7] dark:text-bion-ink"
                   : "bg-bion-ink/8 dark:bg-white/10"
               }`}
             >
@@ -347,7 +347,7 @@ function PainelGestao({ dados }: { dados: DadosMedico }) {
           }
         />
       </div>
-      <p className="mt-3 text-xs text-bion-ink/60 dark:text-bion-paper/60">
+      <p className="mt-3 text-xs text-bion-ink/75 dark:text-bion-paper/60">
         Ocupação conta os horários da sua grade nos dias de atendimento; cancelamentos não ocupam. A receita
         prevista é o bruto das próximas consultas já pagas (comissão e taxas entram quando a consulta acontece).
       </p>

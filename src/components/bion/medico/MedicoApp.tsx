@@ -27,6 +27,8 @@ import { AgendaPreviewSheet } from "./sheets/AgendaPreviewSheet";
 import type { PacienteDoMedico } from "./metricas";
 import type { NotifTipo } from "@/lib/bion-store";
 import { BarraLateralMedico, type DestinoMenu } from "./inicio/BarraLateralMedico";
+import { BarraInferiorMedico } from "./inicio/BarraInferiorMedico";
+import { AcoesRapidasSheet, type AcaoRapida } from "./sheets/AcoesRapidasSheet";
 import { TopoMedicoContexto, type TopoMedico } from "./TopoMedico";
 import { PerfilMedicoTopo } from "./ficha/TopoFicha";
 import { ultimaConversa } from "./mensagens/mensagens-dados";
@@ -34,13 +36,13 @@ import { poppins } from "./inicio/fonte-medico";
 import { X } from "lucide-react";
 import "./medico.css";
 
-type Sheet = "preco" | "agenda" | "preview" | null;
+type Sheet = "preco" | "agenda" | "preview" | "acoes" | null;
 type Sobreposicao =
   | { tipo: "renovacoes" }
   | { tipo: "suporte" }
   | { tipo: "termos" }
   | { tipo: "notificacoes" }
-  | { tipo: "paciente"; p: PacienteDoMedico }
+  | { tipo: "paciente"; p: PacienteDoMedico; acao?: AcaoRapida }
   | null;
 
 const EM_CAMPO = ["INPUT", "TEXTAREA", "SELECT"];
@@ -134,7 +136,22 @@ export function MedicoApp() {
 
   const bloqueado = sheet !== null || sobreposicao !== null || agendaAberta;
 
+  // Etapa 5: gaveta (tela larga) saindo — mantém a coluna visível por
+  // 200 ms para a animação de fechar; sem movimento reduzido só.
+  const [gavetaSaindo, setGavetaSaindo] = useState<"perfil" | "pacientes" | null>(null);
+  const saidaRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const irPara = useCallback((p: number) => {
+    const deOnde = painelRef.current;
+    if (
+      p === 1 &&
+      deOnde !== 1 &&
+      window.matchMedia(TELA_LARGA).matches &&
+      !window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ) {
+      if (saidaRef.current) clearTimeout(saidaRef.current);
+      setGavetaSaindo(deOnde === 0 ? "perfil" : "pacientes");
+      saidaRef.current = setTimeout(() => setGavetaSaindo(null), 200);
+    }
     // O painel é estado em qualquer largura: na tela larga o indicador de
     // telas (aria-current) e a URL sincronizada abaixo dependem dele, e
     // só o foco/scroll muda com a largura.
@@ -150,6 +167,10 @@ export function MedicoApp() {
       return;
     }
     el.scrollTo({ left: p * el.clientWidth, behavior: "smooth" });
+  }, []);
+
+  useEffect(() => () => {
+    if (saidaRef.current) clearTimeout(saidaRef.current);
   }, []);
 
   const irSecao = useCallback((i: number) => {
@@ -347,6 +368,7 @@ export function MedicoApp() {
       <div
         className={`bp-shell bm-app ${poppins.variable} flex flex-col text-bion-ink dark:text-bion-paper`}
         data-gaveta={sobreposicao || agendaAberta ? undefined : painel === 0 ? "perfil" : painel === 2 ? "pacientes" : undefined}
+        data-gaveta-saindo={gavetaSaindo ?? undefined}
       >
         <BarraLateralMedico
           agora={dados.agora}
@@ -475,7 +497,33 @@ export function MedicoApp() {
           <PerfilMedicoTopo {...topo.perfil} />
         </div>
       ) : null}
-      <IndicadorTelas painel={painel} secao={secao} onPainel={irPara} onSecao={irSecao} oculto={bloqueado} />
+      <IndicadorTelas painel={painel} secao={secao} onSecao={irSecao} oculto={bloqueado} />
+      {/* Etapa 5: barra inferior do celular (some com sheet/sobreposição aberta, como a pílula antiga; a sala de vídeo é outra página e não a tem). */}
+      {!bloqueado ? (
+        <BarraInferiorMedico
+          ativo={destinoAtivo}
+          onInicio={() => doMenu(() => {
+            setSobreposicao(null);
+            irPara(1);
+            irSecao(0);
+          })}
+          onPacientes={() => doMenu(() => {
+            setSobreposicao(null);
+            irPara(2);
+          })}
+          onMensagens={abrirMensagens}
+          onAcoes={() => abrirSheet("acoes")}
+          acoesAbertas={sheet === "acoes"}
+          onAgenda={abrirAgenda}
+          onRelatorios={() => doMenu(() => {
+            setSobreposicao(null);
+            irPara(1);
+            irSecao(1);
+          })}
+          onPerfil={abrirConfiguracoes}
+          naoLidas={totalNaoLidas}
+        />
+      ) : null}
         {dica.visivel && !bloqueado ? <DicaGestos onDispensar={dica.dispensar} /> : null}
 
         {medico ? (
@@ -493,6 +541,19 @@ export function MedicoApp() {
               onFechar={fecharSheet}
               medico={medico}
               confirmar={confirmarHorarios}
+            />
+            <AcoesRapidasSheet
+              key={`acoes-${aberturas}`}
+              aberto={sheet === "acoes"}
+              onFechar={fecharSheet}
+              pacientes={dados.listaPacientes}
+              onAcao={(acao, p) => {
+                setSheet(null);
+                setAgendaAberta(false);
+                setAbaPaciente("conversa");
+                setSobreposicao({ tipo: "paciente", p, acao });
+              }}
+              onHorarios={() => abrirSheet("agenda")}
             />
             <AgendaPreviewSheet
               key={`preview-${aberturas}`}
@@ -518,8 +579,9 @@ export function MedicoApp() {
         ) : null}
         {sobreposicao?.tipo === "paciente" ? (
           <ConversaPaciente
-            key={sobreposicao.p.chave}
+            key={`${sobreposicao.p.chave}-${sobreposicao.acao ?? ""}`}
             paciente={sobreposicao.p}
+            acaoInicial={sobreposicao.acao}
             dados={dados}
             onFechar={fecharSobreposicao}
             onAbrirPaciente={(p) => abrirPaciente(p)}
@@ -552,7 +614,7 @@ export function MedicoApp() {
                   <div className="text-sm font-bold">Termos de uso do médico</div>
                   <div className="text-xs text-bion-ink/75 dark:text-bion-paper/75">Texto específico para profissionais.</div>
                 </div>
-                <button type="button" onClick={() => window.open("/termos-medico", "_blank", "noopener,noreferrer")} className="text-xs font-bold text-bion-sea dark:text-sky-300">Ler termos</button>
+                <button type="button" onClick={() => window.open("/termos-medico", "_blank", "noopener,noreferrer")} className="text-xs font-bold text-bion-sea dark:text-[#9dbcf7]">Ler termos</button>
               </div>
               <Ajuda perfil="medico" />
             </div>

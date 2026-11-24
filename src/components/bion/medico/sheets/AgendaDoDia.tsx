@@ -456,7 +456,7 @@ export function AgendaDoDia({ medico, onExecutando }: { medico: Medico; onExecut
             }}
             className={`shrink-0 rounded-2xl px-3 py-2 text-left border disabled:opacity-60 ${
               d.iso === dia
-                ? "border-transparent bg-bion-sea text-white dark:bg-sky-300 dark:text-zinc-950"
+                ? "border-transparent bg-bion-sea text-white dark:bg-[#9dbcf7] dark:text-zinc-950"
                 : "border-bion-ink/15 dark:border-white/15"
             }`}
           >
@@ -653,7 +653,7 @@ export function AgendaDoDia({ medico, onExecutando }: { medico: Medico; onExecut
                   className={`py-2.5 rounded-xl text-sm font-bold ${
                     cancela
                       ? "bg-red-700 text-white hover:bg-red-800 dark:bg-red-300 dark:text-zinc-950 dark:hover:bg-red-200"
-                      : "bg-bion-sea text-white dark:bg-sky-300 dark:text-zinc-950"
+                      : "bg-bion-sea text-white dark:bg-[#9dbcf7] dark:text-zinc-950"
                   }`}
                 >
                   {cancela ? "Cancelar e bloquear o dia" : "Bloquear o dia"}
@@ -683,7 +683,7 @@ export function AgendaDoDia({ medico, onExecutando }: { medico: Medico; onExecut
             <button
               type="button"
               onClick={() => void executarDesbloqueio()}
-              className="py-2.5 rounded-xl text-sm font-bold bg-bion-sea text-white dark:bg-sky-300 dark:text-zinc-950"
+              className="py-2.5 rounded-xl text-sm font-bold bg-bion-sea text-white dark:bg-[#9dbcf7] dark:text-zinc-950"
             >
               Desbloquear dia
             </button>
@@ -724,7 +724,7 @@ export function AgendaDoDia({ medico, onExecutando }: { medico: Medico; onExecut
           ) : fase.canceladas || fase.reservasLiberadas ? (
             <p className="text-sm text-bion-ink/75 dark:text-bion-paper/75">Os pacientes foram avisados pelo app.</p>
           ) : null}
-          <button type="button" onClick={() => setFase({ tipo: "lista" })} className="text-sm font-bold text-bion-sea dark:text-sky-300 underline underline-offset-2">
+          <button type="button" onClick={() => setFase({ tipo: "lista" })} className="text-sm font-bold text-bion-sea dark:text-[#9dbcf7] underline underline-offset-2">
             Voltar à agenda
           </button>
         </div>
@@ -816,7 +816,7 @@ export function AgendaDoDia({ medico, onExecutando }: { medico: Medico; onExecut
           ) : !fase.erroReservas ? (
             <p className="text-sm text-bion-ink/75 dark:text-bion-paper/75">Os pacientes foram avisados pelo app.</p>
           ) : null}
-          <button type="button" onClick={() => setFase({ tipo: "lista" })} className="text-sm font-bold text-bion-sea dark:text-sky-300 underline underline-offset-2">
+          <button type="button" onClick={() => setFase({ tipo: "lista" })} className="text-sm font-bold text-bion-sea dark:text-[#9dbcf7] underline underline-offset-2">
             {fase.falhas.length || fase.erroReservas ? "Voltar à agenda (tente de novo o que falhou)" : "Voltar à agenda"}
           </button>
         </div>
@@ -879,7 +879,7 @@ function LinhaSlot({
 }) {
   const cor =
     slot.estado === "ocupado"
-      ? "bg-bion-sea text-white dark:bg-sky-300 dark:text-zinc-950"
+      ? "bg-bion-sea text-white dark:bg-[#9dbcf7] dark:text-zinc-950"
       : slot.estado === "reservado"
         ? "bg-amber-500/20 text-amber-900 dark:text-amber-100"
         : "bg-bion-ink/8 dark:bg-white/10";
@@ -945,7 +945,7 @@ function LinhaSlot({
                   className={`py-2 rounded-xl text-sm font-bold inline-flex items-center justify-center gap-1.5 disabled:opacity-60 ${
                     m.tipo === "falha_tecnica"
                       ? "bg-amber-700 text-white dark:bg-amber-300 dark:text-zinc-950"
-                      : "bg-bion-sea text-white dark:bg-sky-300 dark:text-zinc-950"
+                      : "bg-bion-sea text-white dark:bg-[#9dbcf7] dark:text-zinc-950"
                   }`}
                 >
                   {m.etapa === "enviando" ? <Loader2 className="w-4 h-4 motion-safe:animate-spin" aria-hidden /> : null}

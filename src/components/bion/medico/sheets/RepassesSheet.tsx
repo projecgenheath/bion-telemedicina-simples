@@ -192,7 +192,7 @@ function DetalheView({
       <button
         type="button"
         onClick={onVoltar}
-        className="inline-flex items-center gap-1 text-sm font-bold text-bion-sea dark:text-sky-300"
+        className="inline-flex items-center gap-1 text-sm font-bold text-bion-sea dark:text-[#9dbcf7]"
       >
         <ChevronLeft className="w-4 h-4" aria-hidden /> Voltar à lista
       </button>
@@ -364,7 +364,7 @@ export function RepassesSheet({
               <button
                 type="button"
                 onClick={recarregar}
-                className="mt-2 inline-flex items-center gap-1.5 text-sm font-bold text-bion-sea dark:text-sky-300 underline underline-offset-2"
+                className="mt-2 inline-flex items-center gap-1.5 text-sm font-bold text-bion-sea dark:text-[#9dbcf7] underline underline-offset-2"
               >
                 <RefreshCw className="w-4 h-4" aria-hidden /> Tentar de novo
               </button>
@@ -372,9 +372,9 @@ export function RepassesSheet({
           ) : lista ? (
             <>
               <div className="bp-glass-marinho p-5 text-white">
-                <div className="text-xs font-bold uppercase tracking-wider text-white/80">Saldo a receber</div>
+                <div className="text-xs font-bold uppercase tracking-wider text-white/90">Saldo a receber</div>
                 <div className="mt-1 text-3xl font-black tabular-nums">{fmtCentavos(lista.saldoCentavos)}</div>
-                <p className="mt-2 text-xs text-white/80 leading-relaxed">
+                <p className="mt-2 text-xs text-white/90 leading-relaxed">
                   Soma dos repasses já fechados (ainda não pagos) com a prévia de hoje. Cada repasse fechado é pago
                   inteiro; ajustes que ainda restam só saem dos próximos repasses.
                 </p>
@@ -394,7 +394,7 @@ export function RepassesSheet({
                         onFechar();
                         onAbrirRecebimento();
                       }}
-                      className="mt-2 inline-flex items-center gap-1.5 text-sm font-bold text-bion-sea dark:text-sky-300"
+                      className="mt-2 inline-flex items-center gap-1.5 text-sm font-bold text-bion-sea dark:text-[#9dbcf7]"
                     >
                       <Wallet className="w-4 h-4" aria-hidden /> Ir para Recebimento (PIX)
                     </button>
@@ -405,7 +405,7 @@ export function RepassesSheet({
                 // bloqueia nada: nota informativa (sem alarme), com o
                 // atalho para cadastrar quando o médico quiser.
                 <div className="bp-glass p-4 flex gap-3" role="status">
-                  <Wallet className="w-5 h-5 shrink-0 text-bion-sea dark:text-sky-300" aria-hidden />
+                  <Wallet className="w-5 h-5 shrink-0 text-bion-sea dark:text-[#9dbcf7]" aria-hidden />
                   <div className="min-w-0">
                     <div className="text-sm font-bold">Chave PIX de recebimento</div>
                     <p className="text-xs text-bion-ink/75 dark:text-bion-paper/75 mt-1">
@@ -418,7 +418,7 @@ export function RepassesSheet({
                         onFechar();
                         onAbrirRecebimento();
                       }}
-                      className="mt-2 inline-flex items-center gap-1.5 text-sm font-bold text-bion-sea dark:text-sky-300"
+                      className="mt-2 inline-flex items-center gap-1.5 text-sm font-bold text-bion-sea dark:text-[#9dbcf7]"
                     >
                       <Wallet className="w-4 h-4" aria-hidden /> Ir para Recebimento (PIX)
                     </button>

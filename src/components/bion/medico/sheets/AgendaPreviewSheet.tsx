@@ -87,7 +87,7 @@ export function AgendaPreviewSheet({
                 onClick={() => setDia(d.iso)}
                 className={`shrink-0 rounded-2xl px-3 py-2 text-left border ${
                   d.iso === dia
-                    ? "border-transparent bg-bion-sea text-white dark:bg-sky-300 dark:text-zinc-950"
+                    ? "border-transparent bg-bion-sea text-white dark:bg-[#9dbcf7] dark:text-zinc-950"
                     : "border-bion-ink/15 dark:border-white/15"
                 }`}
               >

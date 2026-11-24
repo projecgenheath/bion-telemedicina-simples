@@ -171,3 +171,49 @@
 .bms button[aria-label="Abrir evolução"] { background: #76a1f3; color: #242424; box-shadow: -4px 6px 18px rgba(20, 30, 50, 0.18); }
 .bms button[aria-label="Abrir evolução"]:hover { background: #8fb3f6; }
 .bms button[aria-label="Abrir evolução"]:focus-visible { outline: 3px solid #242424; outline-offset: 2px; }
+
+/* ==================================================================== */
+/* Etapa 5: trava da evolução FORA da sala (/consulta com evolução      */
+/* pendente) e modais da sala (receita, atestado, exame, encerrar).     */
+/* e o painel branco da evolução aberto na sala. Tokens só nesses      */
+/* escopos do médico: o painel lateral escuro da sala                   */
+/* (.bms-painel) NÃO muda (aguarda decisão do Alisson).                 */
+/* ==================================================================== */
+.bms-trava,
+.bms-modal,
+.bms aside[aria-label="Evolução"] {
+  --primary: #2f62c4;
+  --primary-foreground: #ffffff;
+  --ring: #2f62c4;
+  --bion-ink: #242424;
+  --bion-sea: #2f62c4;
+  font-family: var(--bm-fonte), ui-sans-serif, system-ui, sans-serif;
+}
+.dark .bms-trava,
+.dark .bms-modal,
+.dark .bms aside[aria-label="Evolução"] {
+  --primary: #9dbcf7;
+  --primary-foreground: #0e1013;
+  --ring: #9dbcf7;
+}
+.bms-trava { background: linear-gradient(180deg, #eff3f4 0%, #e4ecfa 100%); color: #242424; }
+.dark .bms-trava { background: #0e1013; color: #f2f4f7; }
+.bms-trava-cartao { background: #ffffff; border-radius: 20px; padding: 28px 24px; max-width: 26rem; box-shadow: 0 1px 3px rgba(16, 24, 40, 0.06); display: flex; flex-direction: column; align-items: center; gap: 14px; }
+.dark .bms-trava-cartao { background: #181b20; box-shadow: none; }
+.bms-trava-cartao p { font-weight: 500; }
+.bms-trava-cartao .bms-trava-sub { font-weight: 400; font-size: 13px; color: #5f5f5f; }
+.dark .bms-trava-cartao .bms-trava-sub { color: #b6bcc6; }
+.bms-trava .bms-trava-acao { background: #76a1f3; color: #242424; border-radius: 9999px; padding: 12px 24px; font-weight: 500; transition: background-color 0.15s ease, transform 0.12s ease; }
+.bms-trava .bms-trava-acao:hover { background: #8fb3f6; }
+.bms-trava .bms-trava-acao:active { transform: scale(0.97); }
+.bms-trava .bms-trava-acao:focus-visible { outline: 3px solid #242424; outline-offset: 2px; }
+.dark .bms-trava .bms-trava-acao:focus-visible { outline-color: #f2f4f7; }
+/* A aba "Evolução" (PainelEvolucao, componente só do médico) sai do roxo
+   --primary global para #76A1F3 com texto #242424 (7,0:1), como na sala. */
+.bms-trava button[aria-label="Abrir evolução"] { background: #76a1f3; color: #242424; box-shadow: -4px 6px 18px rgba(20, 30, 50, 0.18); }
+.bms-trava button[aria-label="Abrir evolução"]:hover { background: #8fb3f6; }
+.bms-trava button[aria-label="Abrir evolução"]:focus-visible { outline: 3px solid #242424; outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) {
+  .bms-trava .bms-trava-acao { transition: none; }
+  .bms-trava .bms-trava-acao:active { transform: none; }
+}
