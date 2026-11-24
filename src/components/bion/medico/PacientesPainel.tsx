@@ -15,6 +15,7 @@ import {
 import { definirRascunhoRetorno } from "./rascunho-retorno";
 import { ResultadosRevisar } from "./ResultadosRevisar";
 import type { DadosMedico } from "./useDadosMedico";
+import { SinoTopo } from "./TopoMedico";
 
 const normalizar = (s: string) =>
   s
@@ -97,11 +98,15 @@ export function PacientesPainel({
           <h2 id="bm-pac-titulo" className="text-2xl font-black">
             Pacientes
           </h2>
-          {totalNaoLidas > 0 ? (
-            <span className="text-xs font-bold rounded-full px-2.5 py-1 bg-bion-sea text-white dark:bg-sky-300 dark:text-zinc-950">
-              {totalNaoLidas} não {totalNaoLidas === 1 ? "lida" : "lidas"}
-            </span>
-          ) : null}
+          <div className="flex items-center gap-2">
+            {totalNaoLidas > 0 ? (
+              <span className="text-xs font-bold rounded-full px-2.5 py-1 bg-bion-sea text-white dark:bg-sky-300 dark:text-zinc-950">
+                {totalNaoLidas} não {totalNaoLidas === 1 ? "lida" : "lidas"}
+              </span>
+            ) : null}
+            {/* Rodada do menu: sino no topo também nesta tela (celular; no computador é gaveta e o topo fixo mostra o sino). */}
+            <SinoTopo className="lg:hidden" />
+          </div>
         </div>
         <p className="text-sm text-bion-ink/75 dark:text-bion-paper/75">Ordenados pela próxima consulta.</p>
         <label className="mt-3 relative block">

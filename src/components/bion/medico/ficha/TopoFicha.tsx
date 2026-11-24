@@ -12,6 +12,7 @@ import { useId, useMemo, useRef, useState } from "react";
 import { ChevronDown, Search } from "lucide-react";
 import { filtrarPacientes } from "../inicio/inicio-dados";
 import { iniciais, type PacienteDoMedico } from "../metricas";
+import { SinoTopo } from "../TopoMedico";
 
 const MAX_RESULTADOS = 6;
 
@@ -141,6 +142,8 @@ export function PerfilMedicoTopo({
   );
   return (
     <div className="bm2-topo-perfil">
+      {/* Rodada do menu: o sino fica no topo, ao lado do perfil. */}
+      <SinoTopo />
       <span aria-hidden className="bm2-topo-divisor" />
       {onAbrir ? (
         <button type="button" onClick={onAbrir} aria-label="Abrir meu perfil" className="bm2-topo-perfil-botao">

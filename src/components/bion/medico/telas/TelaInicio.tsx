@@ -4,7 +4,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowUpRight,
   BarChart3,
-  Bell,
   ChevronDown,
   CircleAlert,
   CircleCheck,
@@ -17,6 +16,7 @@ import {
   Search,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { SinoTopo } from "../TopoMedico";
 import { PainelEvolucao } from "../evolucao/PainelEvolucao";
 import { AvisoAtivarToque } from "@/components/bion/AvisoAtivarToque";
 import { ContagemRegressiva } from "../ContagemRegressiva";
@@ -93,6 +93,7 @@ export function TelaInicio({
   dados,
   onAbrirPerfil,
   onAbrirPacientes,
+  onAbrirMensagens,
   onAbrirPaciente,
   onAbrirAgenda,
   onAbrirGestao,
@@ -102,6 +103,8 @@ export function TelaInicio({
   dados: DadosMedico;
   onAbrirPerfil: () => void;
   onAbrirPacientes: () => void;
+  /** Rodada do menu: abre a última conversa (ou a lista, se não houver). */
+  onAbrirMensagens: () => void;
   /** Abre a conversa/prontuário de um paciente. */
   onAbrirPaciente: (p: PacienteDoMedico) => void;
   /** Agenda do dia (folha Agenda, que abre no dia de hoje). */
@@ -118,7 +121,6 @@ export function TelaInicio({
     minhas,
     proxima,
     pacienteNaSala,
-    notificacoesNaoLidas,
     hoje,
     agora,
     acoesPaciente,
@@ -253,27 +255,15 @@ export function TelaInicio({
           className="bm2-busca-topo w-full max-w-md bg-transparent py-2 pl-7 text-[13px] outline-none"
         />
       </label>
+      <SinoTopo />
       <button
         type="button"
-        onClick={onAbrirNotificacoes}
-        aria-label={
-          notificacoesNaoLidas > 0
-            ? `Notificações: ${notificacoesNaoLidas} não lida${notificacoesNaoLidas > 1 ? "s" : ""}. Abrir notificações`
-            : "Notificações. Abrir notificações"
-        }
-        className="bm2-icone-topo bm2-icone-topo-borda relative grid h-11 w-11 shrink-0 place-items-center rounded-full"
-      >
-        <Bell className="h-[1.15rem] w-[1.15rem]" aria-hidden />
-        {notificacoesNaoLidas > 0 ? <span aria-hidden className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-[#C42B2B]" /> : null}
-      </button>
-      <button
-        type="button"
-        onClick={onAbrirPacientes}
-        aria-label={totalNaoLidas > 0 ? `Mensagens: ${totalNaoLidas} não lidas. Abrir pacientes` : "Mensagens. Abrir pacientes"}
+        onClick={onAbrirMensagens}
+        aria-label={totalNaoLidas > 0 ? `Mensagens: ${totalNaoLidas} não lida${totalNaoLidas > 1 ? "s" : ""}. Abrir mensagens` : "Mensagens. Abrir mensagens"}
         className="bm2-icone-topo bm2-icone-topo-borda relative grid h-11 w-11 shrink-0 place-items-center rounded-full lg:hidden"
       >
         <MessageCircle className="h-[1.15rem] w-[1.15rem]" aria-hidden />
-        {totalNaoLidas > 0 ? <span aria-hidden className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-[#C42B2B]" /> : null}
+        {totalNaoLidas > 0 ? <span aria-hidden className="bm2-contador">{totalNaoLidas > 99 ? "99+" : totalNaoLidas}</span> : null}
       </button>
       <span aria-hidden className="hidden h-8 w-px bg-[var(--bm2-borda)] lg:block" />
       <button type="button" onClick={onAbrirPerfil} aria-label="Abrir meu perfil" className="hidden items-center gap-3 rounded-full py-1 pl-1 pr-2 text-left lg:flex">
@@ -539,7 +529,7 @@ export function TelaInicio({
         <span className="bm2-numero-grande mt-auto pt-3" aria-label={`${totalNaoLidas} mensagens não lidas`}>
           {totalNaoLidas}
         </span>
-        <BotaoSeta rotulo="Abrir pacientes e mensagens" onClick={onAbrirPacientes} />
+        <BotaoSeta rotulo="Abrir mensagens" onClick={onAbrirMensagens} />
       </section>
       <section className="bm2-cor bm2-pessego" aria-labelledby="bm2-ren-t">
         <h2 id="bm2-ren-t" className="bm2-cor-titulo bm2-t-cor">Renovações de receita</h2>

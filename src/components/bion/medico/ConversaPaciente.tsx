@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { ChevronsLeft, Search } from "lucide-react";
 import { AlertTriangle, FilePlus2, Info as InfoIcone, Plus, Ruler, Send, X } from "lucide-react";
 import { toast } from "sonner";
 import { useBion, type Documento } from "@/lib/bion-store";
@@ -13,6 +14,7 @@ const FUSO = "America/Sao_Paulo";
 /** "30/11/2026" (fuso da clínica) para um timestamp. */
 const fmtData = (ts: number) =>
   new Date(ts).toLocaleDateString("pt-BR", { timeZone: FUSO, day: "2-digit", month: "2-digit", year: "numeric" });
+import { SinoTopo } from "./TopoMedico";
 import { TelaSobreposta } from "./TelaSobreposta";
 import { TriagemPaciente } from "./TriagemPaciente";
 import { ProntuarioPaciente } from "./ProntuarioPaciente";
@@ -21,8 +23,13 @@ import { EmitirDocumentoSheet } from "./sheets/EmitirDocumentoSheet";
 import type { DadosMedico } from "./useDadosMedico";
 import { useModelosMensagemConta } from "./useAtalhosConta";
 import { BuscaPacienteTopo, PerfilMedicoTopo } from "./ficha/TopoFicha";
+import { ListaConversas } from "./mensagens/ListaConversas";
+import { ResumoConversa } from "./mensagens/ResumoConversa";
+import { chaveDia, destacarTermos, rotuloDia, termosMedicamentos } from "./mensagens/mensagens-dados";
+import { iniciais, salaAberta } from "./metricas";
 
-type Aba = "conversa" | "triagem" | "prontuario";
+export type AbaPaciente = "conversa" | "triagem" | "prontuario";
+type Aba = AbaPaciente;
 const MAX_TEXTO = 4000; // limite do POST /api/mensagens
 
 /* Item 23 (melhorias): modelos de mensagem — tocar PREENCHE o campo, nunca
@@ -62,6 +69,23 @@ const mascararCpf = (cpf: string) => {
   return d.length === 11 ? `***.***.***-${d.slice(9)}` : "—";
 };
 
+/** "09:12" no fuso da clínica (o dia vem do separador acima, como na ref. 06). */
+const fmtHoraMsg = (ts: number) => new Date(ts).toLocaleTimeString("pt-BR", { timeZone: FUSO, hour: "2-digit", minute: "2-digit" });
+
+/** Etapa 4: a partir de 1024 px a conversa vira três colunas (ref. 06). */
+const TELA_LARGA = "(min-width: 1024px)";
+function useTelaLarga() {
+  return useSyncExternalStore(
+    (aviso) => {
+      const mq = window.matchMedia(TELA_LARGA);
+      mq.addEventListener("change", aviso);
+      return () => mq.removeEventListener("change", aviso);
+    },
+    () => window.matchMedia(TELA_LARGA).matches,
+    () => false,
+  );
+}
+
 function Info({ r, v }: { r: string; v: string }) {
   return (
     <div className="min-w-0">
@@ -78,6 +102,7 @@ export function ConversaPaciente({
   onFechar,
   onAbrirPaciente,
   onAbrirPerfil,
+  onAba,
 }: {
   paciente: PacienteDoMedico;
   dados: DadosMedico;
@@ -86,11 +111,22 @@ export function ConversaPaciente({
   onAbrirPaciente?: (p: PacienteDoMedico) => void;
   /** Perfil do médico no topo (computador), como no Início. */
   onAbrirPerfil?: () => void;
+  /** Rodada do menu: avisa a aba atual (o menu lateral marca Mensagens na
+   *  conversa e Pacientes na triagem/ficha). Abre sempre na conversa. */
+  onAba?: (aba: AbaPaciente) => void;
 }) {
   const { mensagens, documentos, arquivos, enviarMensagem, marcarConversaLida } = useBion();
-  const { sessao, anamneses, listaPacientes, medico } = dados;
+  const { sessao, anamneses, listaPacientes, medico, naoLidasPorPaciente, agora } = dados;
   const pid = paciente.pacienteId;
-  const [aba, setAba] = useState<Aba>("conversa");
+  const [aba, setAbaLocal] = useState<Aba>("conversa");
+  const setAba = (a: Aba) => {
+    setAbaLocal(a);
+    onAba?.(a);
+  };
+  const largo = useTelaLarga();
+  const tres = largo && aba === "conversa";
+  const [resumoRecolhido, setResumoRecolhido] = useState(false);
+  const [buscaConversa, setBuscaConversa] = useState("");
   const [texto, setTexto] = useState("");
   const [emitir, setEmitir] = useState<{ base?: Documento } | null>(null);
   // Item 23: modelos pessoais do médico (conta; cópia neste aparelho) e
@@ -141,9 +177,6 @@ export function ConversaPaciente({
     if (rascunho) setTexto((t) => (t.trim() ? t : rascunho));
   }, [paciente.chave]);
 
-  useEffect(() => {
-    if (aba === "conversa") fimRef.current?.scrollIntoView({ block: "end" });
-  }, [conversa.length, aba]);
 
   // M-9: filtro pelo IDENTIFICADOR do paciente — homônimos não podem misturar
   // documentos. Fallback por nome apenas para documentos legados (sem id).
@@ -158,6 +191,30 @@ export function ConversaPaciente({
   const homonimo = listaPacientes.filter((p) => p.nome === atual.nome).length > 1;
 
   const ref = proxima ?? ultima;
+
+  // Rodada 2: nomes de remédios em negrito, só os do PRÓPRIO paciente — receitas que o cliente já tem e os
+  // medicamentos em uso da mesma leitura que a ficha usa (GET .../evolucao, sem rota nova). Sem dado, nada destaca.
+  const refId = ref?.id;
+  const [medsEmUso, setMedsEmUso] = useState<string[]>([]);
+  useEffect(() => {
+    if (!refId) return;
+    const ctrl = new AbortController();
+    fetch(`/api/medico/consultas/${encodeURIComponent(refId)}/evolucao`, { credentials: "include", signal: ctrl.signal })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { medicamentosEmUso?: unknown } | null) => {
+        const lista = Array.isArray(j?.medicamentosEmUso) ? (j.medicamentosEmUso as { nome?: unknown }[]) : [];
+        setMedsEmUso(lista.map((m) => (typeof m?.nome === "string" ? m.nome : "")).filter(Boolean));
+      })
+      .catch(() => {});
+    return () => ctrl.abort();
+  }, [refId]);
+  const termos = useMemo(
+    () => termosMedicamentos([...medsEmUso, ...docs.filter((d) => d.tipo === "receita").map((d) => d.medicamento)]),
+    [medsEmUso, docs],
+  );
+  useEffect(() => {
+    if (aba === "conversa") fimRef.current?.scrollIntoView({ block: "end" });
+  }, [conversa.length, aba, termos.length]);
   // A ficha rotula a origem da referência: sem consulta futura, os dados
   // são da ÚLTIMA consulta — "Pagamento: Pendente" dela não é dívida
   // atual do paciente, e o rótulo precisa dizer isso.
@@ -284,41 +341,62 @@ export function ConversaPaciente({
     </>
   );
 
-  return (
-    <TelaSobreposta
-      classe={`bm2-ficha bm-v2 bm2-aba-${aba}`}
-      extraCabecalho={topoUi}
-      titulo={atual.nome}
-      subtitulo={proxima ? `Próxima consulta: ${proxima.data} às ${proxima.hora}` : "Sem consulta futura"}
-      onFechar={onFechar}
-      acoes={
-        pid ? (
-          <div className="bm2-topo-acoes flex items-center gap-1.5">
-            {consultaAlvoPedido ? (
-              <button
-                type="button"
-                onClick={() => {
-                  setAba("conversa");
-                  setPedidoAberto((v) => !v);
-                }}
-                aria-expanded={pedidoAberto}
-                className="rounded-full px-3 py-2 text-xs font-bold bg-bion-ink/8 dark:bg-white/10 inline-flex items-center gap-1"
-              >
-                <Ruler className="w-4 h-4" /> Medição
-              </button>
-            ) : null}
-            <button
-              type="button"
-              onClick={() => setEmitir({})}
-              className="rounded-full px-3 py-2 text-xs font-bold bg-bion-sea text-white dark:bg-sky-300 dark:text-zinc-950 inline-flex items-center gap-1"
-            >
-              <FilePlus2 className="w-4 h-4" /> Emitir
-            </button>
+  const detalhesPaciente = (
+    <>
+            {registro ? (
+              <dl className="grid grid-cols-2 gap-x-4 gap-y-2">
+                <Info r="Idade" v={idade ? `${idade} anos` : ""} />
+                <Info r="Nascimento" v={formatarDataNascimento(registro.dataNascimento) || "Não informada"} />
+                <Info r="Gênero" v={registro.genero} />
+                <Info r="Convênio" v={registro.convenio} />
+                <Info r="Telefone" v={registro.telefone} />
+                <Info r="CPF" v={mascararCpf(registro.cpf)} />
+              </dl>
+            ) : (
+              <p className="text-sm text-bion-ink/75 dark:text-bion-paper/75">Dados cadastrais indisponíveis para este paciente.</p>
+            )}
+            <dl className="grid grid-cols-2 gap-x-4 gap-y-2 mt-3 pt-3 border-t border-bion-ink/10 dark:border-white/10">
+              <Info r={refEhProxima ? "Próxima consulta" : "Última consulta"} v={ref ? `${ref.data} às ${ref.hora} · ${rotuloStatusMedico(ref)}` : ""} />
+              <Info r={refEhProxima ? "Pagamento" : "Pagamento (última consulta)"} v={ref ? (ref.pago ? "Pago" : "Pendente") : ""} />
+              <Info r="Triagem" v={anamneseRef ? (anamneseRef.status === "concluida" ? "Concluída" : "Em andamento") : "Não iniciada"} />
+              <Info r="Motivo" v={ref?.motivoConsulta ?? ""} />
+            </dl>
+    </>
+  );
+  const qConversa = buscaConversa.trim().toLowerCase();
+  const conversaVisivel = tres && qConversa ? conversa.filter((m) => m.texto.toLowerCase().includes(qConversa)) : conversa;
+
+  // Balões como na ref. 06: mensagens seguidas da mesma pessoa (até 5 min) ficam juntas e só a última mostra a hora.
+  const linhasConversa = conversaVisivel.map((m, i) => {
+    const minha = m.deId === sessao.id;
+    const ant = conversaVisivel[i - 1];
+    const prox = conversaVisivel[i + 1];
+    const novoDia = i === 0 || chaveDia(ant.ts) !== chaveDia(m.ts);
+    const juntaComProxima = !!prox && prox.deId === m.deId && chaveDia(prox.ts) === chaveDia(m.ts) && prox.ts - m.ts <= 5 * 60_000;
+    return (
+      <Fragment key={m.id}>
+        {novoDia ? (
+          <p className="bm2-msg-dia">
+            <span>{rotuloDia(m.ts, agora)}</span>
+          </p>
+        ) : null}
+        <div className={`bm2-msg-linha ${minha ? "bm2-msg-minha" : "bm2-msg-dele"} ${juntaComProxima ? "bm2-msg-junta" : ""}`}>
+          <div className="bm2-msg-balao">
+            <p className="whitespace-pre-wrap break-words">
+              {destacarTermos(m.texto, termos).map((t, k) => (t.destaque ? <strong key={k} className="bm2-msg-termo">{t.texto}</strong> : <Fragment key={k}>{t.texto}</Fragment>))}
+            </p>
           </div>
-        ) : null
-      }
-      rodape={
-        aba === "conversa" ? (
+          <p className={`bm2-msg-hora ${juntaComProxima ? "sr-only" : ""}`}>
+            <span className="sr-only">{m.quando}</span>
+            <span aria-hidden>{fmtHoraMsg(m.ts)}</span>
+            {minha ? (m.lida ? " · lida" : " · enviada") : ""}
+          </p>
+        </div>
+      </Fragment>
+    );
+  });
+
+  const compositor = (
           podeEnviar ? (
             <form
               className="p-3 space-y-2"
@@ -410,11 +488,189 @@ export function ConversaPaciente({
                 : "Consulta antiga sem identificação do paciente — mensagens indisponíveis."}
             </p>
           )
-        ) : undefined
+  );
+
+  return (
+    <TelaSobreposta
+      classe={`bm2-ficha bm-v2 bm2-aba-${aba}${tres ? " bm2-msg3" : ""}`}
+      extraCabecalho={topoUi}
+      titulo={atual.nome}
+      subtitulo={proxima ? `Próxima consulta: ${proxima.data} às ${proxima.hora}` : "Sem consulta futura"}
+      onFechar={onFechar}
+      acoes={
+        pid ? (
+          <div className="bm2-topo-acoes flex items-center gap-1.5">
+            {consultaAlvoPedido ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setAba("conversa");
+                  setPedidoAberto((v) => !v);
+                }}
+                aria-expanded={pedidoAberto}
+                className="rounded-full px-3 py-2 text-xs font-bold bg-bion-ink/8 dark:bg-white/10 inline-flex items-center gap-1"
+              >
+                <Ruler className="w-4 h-4" aria-hidden /> <span className="max-sm:sr-only">Medição</span>
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => setEmitir({})}
+              className="rounded-full px-3 py-2 text-xs font-bold bg-bion-sea text-white dark:bg-sky-300 dark:text-zinc-950 inline-flex items-center gap-1"
+            >
+              <FilePlus2 className="w-4 h-4" aria-hidden /> <span className="max-sm:sr-only">Emitir</span>
+            </button>
+            <SinoTopo className="lg:hidden" />
+          </div>
+        ) : (
+          <SinoTopo className="lg:hidden" />
+        )
       }
+      topoPadrao={false}
+      rodape={aba === "conversa" && !tres ? compositor : undefined}
     >
       {aba === "conversa" ? (
-        <div className="bm2-ficha-estreita px-4 pt-3 pb-4 space-y-3" role="log" aria-live="polite" aria-label={`Conversa com ${atual.nome}`}>
+        tres ? (
+          <div className={`bm2-msg-grade ${resumoRecolhido ? "bm2-msg-sem-resumo" : ""}`}>
+            <ListaConversas
+              pacientes={listaPacientes}
+              mensagens={mensagens}
+              meuId={sessao.id ?? ""}
+              naoLidasPorPaciente={naoLidasPorPaciente}
+              atualChave={atual.chave}
+              agora={agora}
+              onAbrir={onAbrirPaciente}
+            />
+            <section className="bm2-msg-chat" aria-label={`Conversa com ${atual.nome}`}>
+              <div className="bm2-msg-chat-cab">
+                <span aria-hidden className="bm2-avatar bm2-msg-chat-avatar">
+                  {iniciais(atual.nome)}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="bm2-msg-chat-nome">{atual.nome}</span>
+                  <span className="bm2-msg-chat-sub">{proxima ? `Próxima consulta: ${proxima.data} às ${proxima.hora}` : "Sem consulta futura"}</span>
+                </span>
+                <label className="bm2-msg-chat-busca">
+                  <Search aria-hidden />
+                  <span className="sr-only">Buscar nesta conversa</span>
+                  <input type="search" value={buscaConversa} onChange={(e) => setBuscaConversa(e.target.value)} placeholder="Buscar…" autoComplete="off" />
+                </label>
+                {resumoRecolhido ? (
+                  <button type="button" className="bm2-msg-icone" aria-label="Mostrar o resumo do paciente" onClick={() => setResumoRecolhido(false)}>
+                    <ChevronsLeft aria-hidden />
+                  </button>
+                ) : null}
+              </div>
+              <div className="bm2-msg-log" role="log" aria-live="polite" aria-label={`Mensagens com ${atual.nome}`}>
+          {pedidoAberto && consultaAlvoPedido ? (
+            <section className="bp-glass p-4 bm-animar" aria-label="Pedir medição ao paciente">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <div className="text-sm font-bold">Pedir medição</div>
+                  <p className="text-xs text-bion-ink/75 dark:text-bion-paper/75 mt-0.5">
+                    O paciente recebe o pedido no app e responde quando medir. Você é avisado quando ele enviar.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setPedidoAberto(false)}
+                  aria-label="Fechar pedido de medição"
+                  className="w-8 h-8 rounded-full bg-bion-ink/8 dark:bg-white/10 inline-flex items-center justify-center shrink-0"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-1.5 mt-3" role="group" aria-label="Tipos de medição">
+                {TIPOS_MEDICAO_CONVERSA.map((t) => {
+                  const ativo = tiposPedido.includes(t.id);
+                  return (
+                    <button
+                      key={t.id}
+                      type="button"
+                      aria-pressed={ativo}
+                      onClick={() => alternarTipoPedido(t.id)}
+                      className={`rounded-full px-3 py-1.5 text-xs font-bold ${
+                        ativo
+                          ? "bg-bion-sea text-white dark:bg-sky-300 dark:text-zinc-950"
+                          : "bg-bion-ink/8 dark:bg-white/10"
+                      }`}
+                    >
+                      {t.rotulo}
+                    </button>
+                  );
+                })}
+              </div>
+              <button
+                type="button"
+                onClick={() => void enviarPedido()}
+                disabled={enviandoPedido || tiposPedido.length === 0}
+                className="mt-3 w-full rounded-full py-2.5 text-sm font-bold bg-bion-sea text-white dark:bg-sky-300 dark:text-zinc-950 disabled:opacity-50"
+              >
+                {enviandoPedido ? "Enviando…" : "Enviar pedido"}
+              </button>
+            </section>
+          ) : null}
+
+          {janela ? (
+            janela.encerrada ? (
+              <div className="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4 flex gap-3" role="status">
+                <AlertTriangle className="w-5 h-5 shrink-0 text-amber-800 dark:text-amber-200" aria-hidden />
+                <div className="min-w-0">
+                  <div className="text-sm font-bold text-amber-900 dark:text-amber-100">
+                    Janela de resposta do paciente encerrada
+                  </div>
+                  <p className="text-xs text-amber-900/80 dark:text-amber-100/80 mt-1">
+                    Desde {fmtData(janela.limite)} o paciente não consegue mais responder por aqui (a plataforma
+                    aceita respostas só até 30 dias após a consulta mais recente). Se ele não respondeu, pode ter
+                    sido esse bloqueio — não desinteresse. Para retomar a conversa, ele precisa de uma nova
+                    consulta. Você ainda pode enviar mensagens.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="bp-glass p-4 flex gap-3" role="status">
+                <InfoIcone className="w-5 h-5 shrink-0 text-bion-sea dark:text-sky-300" aria-hidden />
+                <div className="min-w-0">
+                  <div className="text-sm font-bold">Janela de resposta do paciente: aberta</div>
+                  <p className="text-xs text-bion-ink/75 dark:text-bion-paper/75 mt-1">
+                    Ele pode responder até {fmtData(janela.limite)} (30 dias após a consulta mais recente
+                    {janela.diasRestantes <= 30 ? ` — restam ${janela.diasRestantes} ${janela.diasRestantes === 1 ? "dia" : "dias"}` : ""}).
+                    Você pode enviar mensagens a qualquer momento.
+                  </p>
+                </div>
+              </div>
+            )
+          ) : null}
+
+          {conversaVisivel.length === 0 ? (
+            <p className="text-sm text-center text-bion-ink/75 dark:text-bion-paper/75 py-4">
+              {conversa.length === 0 ? "Nenhuma mensagem ainda." : "Nenhuma mensagem com esse texto."}
+            </p>
+          ) : (
+            linhasConversa
+          )}
+                <div ref={fimRef} />
+              </div>
+              <div className="bm2-msg-compositor">{compositor}</div>
+            </section>
+            {resumoRecolhido ? null : (
+              <ResumoConversa
+                nome={atual.nome}
+                idade={idade}
+                genero={registro?.genero}
+                motivo={ref?.motivoConsulta ?? ""}
+                referencia={ref ? { rotulo: refEhProxima ? "Próxima consulta" : "Última consulta", quando: `${ref.data} às ${ref.hora}` } : null}
+                documentos={docs}
+                arquivos={arqs}
+                salaHref={proxima && salaAberta(proxima.ts, agora) ? `/consulta?consulta=${encodeURIComponent(proxima.id)}` : null}
+                detalhes={detalhesPaciente}
+                onAbrirFicha={() => setAba("prontuario")}
+                onRecolher={() => setResumoRecolhido(true)}
+              />
+            )}
+          </div>
+        ) : (
+        <div className="bm2-ficha-estreita bm2-msg-log-celular px-4 pt-3 pb-4 space-y-3" role="log" aria-live="polite" aria-label={`Conversa com ${atual.nome}`}>
           {pedidoAberto && consultaAlvoPedido ? (
             <section className="bp-glass p-4 bm-animar" aria-label="Pedir medição ao paciente">
               <div className="flex items-start justify-between gap-2">
@@ -466,24 +722,7 @@ export function ConversaPaciente({
 
           <article className="bp-glass p-4 bm-animar" aria-label="Dados do paciente">
             <div className="text-xs font-bold uppercase tracking-wider text-bion-sea dark:text-sky-300 mb-2">Dados do paciente</div>
-            {registro ? (
-              <dl className="grid grid-cols-2 gap-x-4 gap-y-2">
-                <Info r="Idade" v={idade ? `${idade} anos` : ""} />
-                <Info r="Nascimento" v={formatarDataNascimento(registro.dataNascimento) || "Não informada"} />
-                <Info r="Gênero" v={registro.genero} />
-                <Info r="Convênio" v={registro.convenio} />
-                <Info r="Telefone" v={registro.telefone} />
-                <Info r="CPF" v={mascararCpf(registro.cpf)} />
-              </dl>
-            ) : (
-              <p className="text-sm text-bion-ink/75 dark:text-bion-paper/75">Dados cadastrais indisponíveis para este paciente.</p>
-            )}
-            <dl className="grid grid-cols-2 gap-x-4 gap-y-2 mt-3 pt-3 border-t border-bion-ink/10 dark:border-white/10">
-              <Info r={refEhProxima ? "Próxima consulta" : "Última consulta"} v={ref ? `${ref.data} às ${ref.hora} · ${rotuloStatusMedico(ref)}` : ""} />
-              <Info r={refEhProxima ? "Pagamento" : "Pagamento (última consulta)"} v={ref ? (ref.pago ? "Pago" : "Pendente") : ""} />
-              <Info r="Triagem" v={anamneseRef ? (anamneseRef.status === "concluida" ? "Concluída" : "Em andamento") : "Não iniciada"} />
-              <Info r="Motivo" v={ref?.motivoConsulta ?? ""} />
-            </dl>
+            {detalhesPaciente}
           </article>
 
           {janela ? (
@@ -517,32 +756,16 @@ export function ConversaPaciente({
             )
           ) : null}
 
-          {conversa.length === 0 ? (
-            <p className="text-sm text-center text-bion-ink/75 dark:text-bion-paper/75 py-4">Nenhuma mensagem ainda.</p>
+          {conversaVisivel.length === 0 ? (
+            <p className="text-sm text-center text-bion-ink/75 dark:text-bion-paper/75 py-4">
+              {conversa.length === 0 ? "Nenhuma mensagem ainda." : "Nenhuma mensagem com esse texto."}
+            </p>
           ) : (
-            conversa.map((m) => {
-              const minha = m.deId === sessao.id;
-              return (
-                <div key={m.id} className={`flex ${minha ? "justify-end" : "justify-start"}`}>
-                  <div
-                    className={`max-w-[80%] rounded-2xl px-3.5 py-2.5 text-sm ${
-                      minha
-                        ? "bg-bion-sea text-white rounded-br-md dark:bg-sky-300 dark:text-zinc-950"
-                        : "bp-glass rounded-bl-md"
-                    }`}
-                  >
-                    <p className="whitespace-pre-wrap break-words">{m.texto}</p>
-                    <p className={`text-[11px] mt-1 ${minha ? "text-white/85 dark:text-zinc-800" : "text-bion-ink/70 dark:text-bion-paper/70"}`}>
-                      {m.quando}
-                      {minha ? (m.lida ? " · lida" : " · enviada") : ""}
-                    </p>
-                  </div>
-                </div>
-              );
-            })
+            linhasConversa
           )}
           <div ref={fimRef} />
         </div>
+        )
       ) : aba === "triagem" ? (
         <div className="bm2-ficha-estreita">
           <TriagemPaciente anamneses={anamneses} consultas={consultas} />
