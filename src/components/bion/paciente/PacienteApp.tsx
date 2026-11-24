@@ -52,6 +52,7 @@ import { DocumentosPainel } from "./DocumentosPainel";
 import { fraseMotivoReagendamento, rotuloMotivoReagendamento } from "./motivo-reagendamento";
 import { DicaGestos, NavegacaoPaciente, useDicaGestos } from "./NavegacaoPaciente";
 import { DadosPessoaisSheet, type CampoPerfil } from "./DadosPessoaisSheet";
+import { TELA_CONSULTAS_PACIENTE } from "./destino-status-pagamento";
 import { TelaListaCompleta, type ListaPerfil } from "./TelaListaCompleta";
 import { TelaAgendaPaciente, type InicioAgenda } from "./consultas/TelaAgendaPaciente";
 import { AvisoMensagemNova } from "./AvisosInicio";
@@ -262,7 +263,7 @@ export function PacienteApp() {
     };
   }, []);
 
-  // Deep links: /paciente?tela=perfil|documentos|mensagens|saude|exames|inicio|agendar
+  // Deep links: /paciente?tela=perfil|documentos|mensagens|saude|exames|inicio|agendar|agenda|consultas
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const tela = (params.get("tela") || "").toLowerCase();
@@ -275,6 +276,10 @@ export function PacienteApp() {
         irPara(1);
         setChatIntencao("agendar");
         setChatAberto(true);
+      } else if (tela === TELA_CONSULTAS_PACIENTE) {
+        // Volta da tela de status do pagamento: abre a lista de consultas
+        irPara(1);
+        setListaCompleta("consultas");
       } else if (tela === "agenda") {
         irPara(1);
         setAgenda({});

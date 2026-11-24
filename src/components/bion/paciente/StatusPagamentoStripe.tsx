@@ -7,6 +7,7 @@ import { BotaoPagarStripe } from "./BotaoPagarStripe";
 import { lerStatusPagamento } from "./pagamento-stripe-cliente";
 import { textoRetornoStripe } from "./retorno-stripe";
 import { OfertaInstalarApp } from "./OfertaInstalarApp";
+import { DESTINO_VER_CONSULTAS_PAGAMENTO } from "./destino-status-pagamento";
 import { useBion } from "@/lib/bion-store";
 import { poppinsPaciente } from "./inicio/fonte-paciente";
 import "./paciente.css";
@@ -112,7 +113,7 @@ export function StatusPagamentoStripe({ volta }: { volta: "sucesso" | "cancelado
           ) : null}
           <div className="bp2-pagto-acoes">
             {!estado?.pago && volta === "cancelado" && consultaId ? <BotaoPagarStripe consultaId={consultaId} className="bp2-pagto-pagar" /> : null}
-            <Link href="/consultas" className="bion-toque bp2-botao-contorno bp2-pagto-link">
+            <Link href={DESTINO_VER_CONSULTAS_PAGAMENTO} className="bion-toque bp2-botao-contorno bp2-pagto-link">
               Ver minhas consultas
             </Link>
           </div>
