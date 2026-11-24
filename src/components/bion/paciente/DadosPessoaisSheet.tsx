@@ -183,7 +183,7 @@ export function DadosPessoaisSheet({ campoInicial, onFechar }: { campoInicial?: 
   const rotulo = "text-xs font-bold bpp-sheet-suave";
 
   return (
-    <div ref={raizRef} className="bpp-sheet-raiz absolute inset-0 z-[80] flex items-end justify-center" role="dialog" aria-modal="true" aria-labelledby="titulo-dados-pessoais">
+    <div ref={raizRef} className="bpp-sheet-raiz bp2-sheet bp2-v2 absolute inset-0 z-[80] flex items-end justify-center" role="dialog" aria-modal="true" aria-labelledby="titulo-dados-pessoais">
       <button type="button" tabIndex={-1} aria-hidden="true" className="absolute inset-0 bpp-sheet-veu cursor-default" onClick={fechar} />
       <form
         ref={painelRef}
