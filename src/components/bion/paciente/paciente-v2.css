@@ -1055,8 +1055,8 @@
 @media (prefers-reduced-motion: reduce) {
   .bp2-app :is(.bp2-agp-ev, .bp2-agp-medico, .bp2-agp-faixa button, .bp2-agp-vistas button) { transition: none; }
 }
-/* "+" da barra aceso com a agenda própria aberta */
-.bp2-app .bp2-barra-mais.bp2-barra-mais-ativo { box-shadow: inset 0 0 0 2px #242424; }
+/* "+" da barra com a agenda própria aberta: igual ao "+" do médico, sem contorno.
+   O estado ativo vai por aria-current; o foco do teclado continua no :focus-visible. */
 .bp2-app .bp2-assist-agenda { align-self: flex-start; flex-shrink: 0; }
 /* Resumo: botão de pagar com a altura certa também empilhado (flex-1 zerava a altura) */
 .bp2-app .bp2-resumo-pagar .bp2-botao-azul { flex: 1 1 auto; min-height: 2.75rem; }
