@@ -1783,3 +1783,5 @@ body:has(.bp2-app) [data-sonner-toast][data-type="error"][data-rich-colors="true
 /* Selo longo ("Cancelado em …") desce para baixo do nome em vez de espremer o texto. */
 .bp2-app .bp2-vdoc-rel { flex-wrap: wrap; row-gap: 0.4rem; }
 .bp2-app .bp2-vdoc-rel > div { flex: 1 1 8.5rem; }
+/* Rodada 3: rótulo visível "Tamanho do texto" (detalhe das linhas: 12/16, 75%). */
+.bp2-app .bp2-pf-grupo-aparencia .bp2-pf-ajuste-t { margin: 0 0 0.5rem; font-size: 12px; line-height: 16px; font-weight: 500; color: var(--bp2-pf-t2); }

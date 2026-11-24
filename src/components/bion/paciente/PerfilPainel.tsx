@@ -398,7 +398,7 @@ export function PerfilPainel({
             </div>
           </div>
           <div>
-            <div className="sr-only" id="rotulo-texto">
+            <div className="bp2-pf-ajuste-t" id="rotulo-texto">
               Tamanho do texto
             </div>
             <div className="bp2-pf-segmentos bp2-pf-segmentos-3" role="group" aria-labelledby="rotulo-texto">
