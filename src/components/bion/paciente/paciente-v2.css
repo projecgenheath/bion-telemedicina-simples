@@ -517,3 +517,591 @@
 .bp2-folha-raiz .bp2-folha-pagar:empty { display: none; }
 .bp2-folha-raiz .bp2-folha-aviso { background: #fdf1e7; color: #7a3a0c; }
 .dark .bp2-folha-raiz .bp2-folha-aviso { background: #3a2a1e; color: #f6c9a4; }
+
+/* ==================================================================== */
+/* Etapa 2 (24/11): consultas e agendamento. Mesmo desenho da agenda e  */
+/* da ficha do médico (medico.css: .bm2-agenda-*, .bm2-ficha-*), aqui   */
+/* com escopo próprio. Áreas: .bp2-consultas (Minhas consultas),        */
+/* .bp2-chat (BION IA + assistente de agendamento), .bp2-sheet          */
+/* (remarcar/cancelar e triagem). Nada vale para médico ou admin.       */
+/* ==================================================================== */
+.bp2-app {
+  --bp2-anel-azul: #1200d6;
+  --bp2-anel-verde: #0fc300;
+  --bp2-grad: linear-gradient(90deg, #bdd2ea 0%, #cbdef4 45%, #dcecfe 100%);
+  --bp2-ev-azul: #e9f1fb;
+}
+.dark .bp2-app { --bp2-ev-azul: #dce8f8; }
+
+/* Peças antigas dentro das áreas novas: tokens do paciente na paleta nova */
+.bp2-app :is(.bp2-chat, .bp2-consultas, .bp2-sheet, .bp2-agenda-pac) {
+  --bion-ink: #242424;
+  --bion-paper: #f2f4f7;
+  --bion-sea: #2f62c4;
+  --primary: #2f62c4;
+  --primary-foreground: #ffffff;
+  --ring: #2f62c4;
+  --bpp-vidro: #ffffff;
+  --bpp-vidro-borda: transparent;
+  --bpp-acao-inicio: #76a1f3;
+  --bpp-acao-fim: #76a1f3;
+  --bpp-acao-texto: #242424;
+  --bpp-acao-sombra: transparent;
+}
+.dark .bp2-app :is(.bp2-chat, .bp2-consultas, .bp2-sheet, .bp2-agenda-pac) {
+  --bion-sea: #9dbcf7;
+  --primary: #9dbcf7;
+  --primary-foreground: #0e1013;
+  --ring: #9dbcf7;
+  --bpp-vidro: #181b20;
+  --bpp-vidro-borda: rgba(255, 255, 255, 0.08);
+}
+.bp2-app :is(.bp2-chat, .bp2-consultas, .bp2-sheet, .bp2-agenda-pac) .bp-acao { background: #76a1f3; color: #242424; box-shadow: none; }
+
+/* ---------------- Botões redondos e títulos (como a ficha) ---------------- */
+.bp2-app .bp2-ficha-titulo { font-size: 15px; line-height: 17px; font-weight: 500; letter-spacing: -0.005em; }
+.bp2-app .bp2-ficha-cab { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.75rem; }
+.bp2-app .bp2-ficha-redondos { display: flex; gap: 0.6rem; flex-shrink: 0; }
+.bp2-app .bp2-redondo {
+  width: 2rem; height: 2rem; border-radius: 9999px; display: inline-grid; place-items: center; flex-shrink: 0;
+  border: 1px solid rgba(36, 36, 36, 0.14); background: transparent; color: #242424;
+  transition: background-color 0.15s ease;
+}
+.bp2-app .bp2-redondo:hover { background: rgba(255, 255, 255, 0.55); }
+.bp2-app .bp2-cartao .bp2-redondo, .bp2-app .bp2-redondo-topo { color: var(--bp2-texto); border-color: var(--bp2-borda); }
+.bp2-app .bp2-cartao .bp2-redondo:hover, .bp2-app .bp2-redondo-topo:hover { background: var(--bp2-linha); }
+.bp2-app .bp2-redondo-topo { width: 2.5rem; height: 2.5rem; background: var(--bp2-cartao); }
+.bp2-app .bp2-redondo.bp2-redondo-preto { background: #242424; border-color: transparent; color: #fff; width: 2.125rem; height: 2.125rem; }
+.bp2-app .bp2-icone-linha { width: 2rem; height: 2rem; border-radius: 9999px; display: inline-grid; place-items: center; flex-shrink: 0; color: var(--bp2-texto-2); }
+.bp2-app .bp2-icone-linha:hover { background: var(--bp2-borda); color: var(--bp2-texto); }
+.bp2-app .bp2-vazio { font-size: 13px; color: var(--bp2-texto-2); padding: 0.35rem 0; }
+.bp2-app .bp2-botao-contorno { border: 1px solid rgba(36, 36, 36, 0.18); background: transparent; color: var(--bp2-texto); }
+.bp2-app .bp2-botao-contorno:hover { background: var(--bp2-linha); }
+.dark .bp2-app .bp2-botao-contorno { border-color: rgba(255, 255, 255, 0.2); }
+.bp2-app :is(.bp2-redondo, .bp2-icone-linha, .bp2-botao-contorno, .bp2-botao-azul, .bp2-passos-voltar, .bp2-assist-item, .bp2-assist-vazio, .bp2-mini-tab button, .bp2-slot, .bp2-prox-botao, .bp2-ficha-acao, .bp2-pag-nota, .bp2-agp-ev, .bp2-agp-medico, .bp2-agp-faixa button, .bp2-agp-vistas button, .bp2-agp-navega button, .bp2-agp-chat, .bp2-agp-rolagem):focus-visible { outline: 2px solid #2f62c4; outline-offset: 2px; }
+.dark .bp2-app :is(.bp2-redondo, .bp2-icone-linha, .bp2-botao-contorno, .bp2-botao-azul, .bp2-passos-voltar, .bp2-assist-item, .bp2-assist-vazio, .bp2-mini-tab button, .bp2-slot, .bp2-prox-botao, .bp2-ficha-acao, .bp2-pag-nota, .bp2-agp-ev, .bp2-agp-medico, .bp2-agp-faixa button, .bp2-agp-vistas button, .bp2-agp-navega button, .bp2-agp-chat, .bp2-agp-rolagem):focus-visible { outline-color: #9dbcf7; }
+
+/* ---------------- Cartão em degradê (Ficha do paciente → consulta) ---------------- */
+.bp2-app .bp2-ficha-cartao {
+  position: relative; overflow: hidden;
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "topo topo" "campos pessoa" "sinais sinais";
+  gap: 0.9rem 0.75rem; padding: 1.1rem;
+  border-radius: 1.25rem; background: var(--bp2-grad); color: #242424;
+  --bp2-texto-2: #4c5a6a; /* AA sobre #BDD2EA (4,56:1), como a ficha do médico */
+}
+.bp2-app .bp2-ficha-cartao:focus { outline: none; }
+.bp2-app .bp2-ficha-cartao:focus-visible { outline: 2px solid #2f62c4; outline-offset: 2px; }
+.bp2-app .bp2-ficha-topo { grid-area: topo; display: flex; justify-content: space-between; align-items: flex-start; gap: 0.75rem; }
+.bp2-app .bp2-ficha-pessoa { grid-area: pessoa; display: flex; flex-direction: column; align-items: flex-end; justify-content: flex-end; gap: 0.5rem; text-align: right; }
+.bp2-app .bp2-ficha-avatar {
+  width: 3.5rem; height: 3.5rem; border-radius: 9999px; display: grid; place-items: center; flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.45); color: #242424; font-size: 1.125rem; font-weight: 300; letter-spacing: 0.02em;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.7);
+}
+.bp2-app .bp2-ficha-nome { display: flex; flex-direction: column; align-items: flex-end; min-width: 0; max-width: 9.5rem; }
+.bp2-app .bp2-ficha-nome strong { font-size: 14px; line-height: 18px; font-weight: 500; }
+.bp2-app .bp2-ficha-nome span { margin-top: 2px; font-size: 12px; line-height: 15px; color: var(--bp2-texto-2); }
+.bp2-app .bp2-ficha-campos { grid-area: campos; display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.6rem; align-self: end; }
+.bp2-app .bp2-ficha-campos dt, .bp2-app .bp2-ficha-sinais dt { font-size: 11px; line-height: 14px; font-weight: 400; color: var(--bp2-texto-2); }
+.bp2-app .bp2-ficha-campos dd { margin-top: 3px; font-size: 13px; line-height: 17px; font-weight: 500; }
+.bp2-app .bp2-ficha-sinais { grid-area: sinais; display: flex; flex-wrap: wrap; gap: 0.75rem 1.4rem; padding-top: 0.85rem; border-top: 1px solid rgba(36, 36, 36, 0.1); }
+.bp2-app .bp2-ficha-sinais dd { margin-top: 4px; white-space: nowrap; }
+.bp2-app .bp2-ficha-valor { font-size: 1.5rem; line-height: 1; font-weight: 400; letter-spacing: -0.01em; }
+.bp2-app .bp2-ficha-valor-texto { font-size: 1.125rem; line-height: 1.5rem; }
+.bp2-app .bp2-ficha-unidade { font-size: 13px; font-weight: 300; color: var(--bp2-texto-2); }
+.bp2-app .bp2-ficha-cartao .bp2-redondo { color: #242424; border-color: rgba(36, 36, 36, 0.14); }
+.bp2-app .bp2-ficha-acao {
+  grid-column: 1 / -1; display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
+  height: 2.75rem; border-radius: 0.6rem; background: #ffffff; color: #2f62c4; font-size: 13px; font-weight: 500;
+}
+.bp2-app .bp2-ficha-cartao .bp2-passos { min-width: 8.5rem; }
+.bp2-app .bp2-ficha-cartao .bp2-passos p { color: var(--bp2-texto-2); }
+.bp2-app .bp2-ficha-cartao .bp2-passos-barra li { background: rgba(36, 36, 36, 0.12); }
+.bp2-app .bp2-ficha-cartao .bp2-passos-barra li.bp2-passo-feito { background: rgba(36, 36, 36, 0.5); }
+.bp2-app .bp2-ficha-cartao .bp2-passos-barra li.bp2-passo-atual { background: #242424; }
+.bp2-app .bp2-ficha-cartao .bp2-passos-atual { color: #242424; }
+
+/* Anel (como os de "Medicamentos em uso") */
+.bp2-app .bp2-anel { position: relative; width: 57px; height: 57px; flex-shrink: 0; }
+.bp2-app .bp2-anel-trilho { fill: none; stroke: var(--bp2-divisor); stroke-width: 5; stroke-dasharray: 3 4; }
+.bp2-app .bp2-anel-centro { position: absolute; inset: 0; display: grid; place-items: center; font-size: 15px; font-weight: 500; }
+.bp2-app .bp2-anel-centro-ok { font-size: 20px; font-weight: 400; }
+
+/* ---------------- Minhas consultas ---------------- */
+.bp2-app .bp2-consultas { background: var(--bp2-fundo); color: var(--bp2-texto); }
+.bp2-app .bp2-consultas-topo {
+  position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 0.75rem;
+  padding: calc(0.75rem + env(safe-area-inset-top)) 1rem 0.75rem; background: var(--bp2-fundo); border-bottom: 1px solid var(--bp2-divisor);
+}
+.bp2-app .bp2-consultas-corpo { padding: 0.9rem 1rem calc(1.5rem + env(safe-area-inset-bottom)); }
+.bp2-app .bp2-consultas-grade { display: flex; flex-direction: column; gap: 0.9rem; }
+.bp2-app .bp2-consultas-detalhe { order: 1; }
+.bp2-app .bp2-consultas-pag { order: 2; }
+.bp2-app .bp2-consultas-proximas { order: 3; }
+.bp2-app .bp2-consultas-hist { order: 4; }
+
+.bp2-app .bp2-consultas-pag { padding: 1.1rem 0.75rem 0.75rem; display: flex; flex-direction: column; gap: 0.85rem; }
+.bp2-app .bp2-consultas-pag > .bp2-ficha-cab { padding: 0 0.4rem; }
+.bp2-app .bp2-pag-linha { display: flex; align-items: center; gap: 0.75rem; padding: 0.95rem 0.95rem 0.95rem 1rem; border-radius: 0.75rem; min-height: 5.375rem; }
+.bp2-app .bp2-pag-nome { font-size: 16px; line-height: 1.2; font-weight: 400; }
+.bp2-app .bp2-pag-info { margin-top: 0.4rem; font-size: 12.5px; line-height: 1.3; }
+.bp2-app .bp2-pag-acao { padding: 0 0.25rem; }
+.bp2-app .bp2-pag-acao .bp-acao { width: 100%; border-radius: 0.6rem; }
+.bp2-app .bp2-pag-nota { display: inline-flex; align-items: center; gap: 0.4rem; min-height: 2.75rem; padding: 0 0.4rem; font-size: 12.5px; color: var(--bp2-t-azul); text-decoration: underline; text-underline-offset: 2px; }
+.bp2-app .bp2-pag-rodape { display: flex; align-items: center; gap: 0.6rem; margin-top: auto; padding: 0.7rem 0.4rem 0.1rem; border-top: 1px solid var(--bp2-divisor); }
+.bp2-app .bp2-pag-medico { color: var(--bp2-texto); }
+
+.bp2-app .bp2-consultas-hist { padding: 1rem 0.75rem 0.75rem; display: flex; flex-direction: column; min-width: 0; }
+.bp2-app .bp2-ficha-cab-hist { align-items: center; padding: 0 0.4rem; flex-wrap: wrap; }
+.bp2-app .bp2-ficha-busca { display: flex; align-items: center; gap: 0.45rem; height: 2rem; padding: 0 0.85rem; width: 10rem; }
+.bp2-app .bp2-ficha-busca input { min-width: 0; flex: 1; background: transparent; font-size: 13px; outline: none; }
+.bp2-app .bp2-ficha-busca:focus-within { outline: 2px solid #2f62c4; outline-offset: 1px; }
+.dark .bp2-app .bp2-ficha-busca:focus-within { outline-color: #9dbcf7; }
+.bp2-app .bp2-ficha-rolagem { min-height: 0; margin-top: 0.5rem; }
+.bp2-app .bp2-ficha-tabela { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; --bp2-texto-2: #6e6e6e; }
+.dark .bp2-app .bp2-ficha-tabela { --bp2-texto-2: #a9b0ba; }
+.bp2-app .bp2-ficha-tabela thead { display: none; }
+/* Celular: cada consulta em 3 linhas (data · profissional / especialidade / situação · pagamento) */
+.bp2-app .bp2-ficha-tabela tbody tr {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "data prof acao" "esp esp acao" "sit pag acao";
+  gap: 0.2rem 0.75rem; padding: 0.7rem 0.4rem; border-top: 1px solid var(--bp2-divisor); cursor: pointer;
+}
+.bp2-app .bp2-ficha-tabela tbody tr:first-child { border-top: 0; }
+.bp2-app .bp2-ficha-tabela td:nth-child(1) { grid-area: data; font-size: 12.5px; color: var(--bp2-texto-2); }
+.bp2-app .bp2-ficha-tabela td:nth-child(2) { display: none; }
+.bp2-app .bp2-ficha-tabela td:nth-child(3) { grid-area: esp; font-size: 14px; }
+.bp2-app .bp2-ficha-tabela td:nth-child(4) { grid-area: prof; text-align: right; font-size: 12.5px; color: var(--bp2-texto-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bp2-app .bp2-ficha-tabela td:nth-child(5) { grid-area: sit; }
+.bp2-app .bp2-ficha-tabela td:nth-child(6) { grid-area: pag; text-align: right; font-size: 12.5px; }
+.bp2-app .bp2-ficha-tabela td:nth-child(7) { grid-area: acao; align-self: center; }
+.bp2-app .bp2-ficha-linha-aberta { background: var(--bp2-linha-destaque); border-radius: 0.75rem; }
+
+.bp2-app .bp2-consultas-proximas {
+  border-radius: 1.25rem; background: var(--bp2-lavanda); color: #242424; padding: 1.1rem 0.95rem 0.6rem; display: flex; flex-direction: column; gap: 0.6rem; min-width: 0;
+  --bp2-texto-2: #5c5c5c; /* AA sobre #E4DFF5 */
+}
+.bp2-app .bp2-consultas-proximas .bp2-vazio { color: #5c5c5c; }
+.bp2-app .bp2-prox-item { border-top: 1px solid rgba(36, 36, 36, 0.1); }
+.bp2-app .bp2-prox-botao { width: 100%; display: flex; align-items: center; gap: 0.5rem; padding: 12px 2px 11px; text-align: left; color: #242424; border-radius: 0.5rem; }
+.bp2-app .bp2-prox-botao[aria-pressed="true"] .bp2-prox-nome { text-decoration: underline; text-underline-offset: 3px; }
+.bp2-app .bp2-prox-nome { font-size: 15px; line-height: 20px; font-weight: 500; }
+.bp2-app .bp2-prox-sub { margin-top: 2px; font-size: 12px; line-height: 16px; color: #5c5c5c; }
+
+@media (min-width: 1024px) {
+  .bp2-app .bpp-sobreposicao.bp2-consultas { position: fixed; left: 76px; right: 0; top: 0; bottom: 0; width: auto; transform: none; box-shadow: none; z-index: 50; }
+  .bp2-app .bp2-consultas-topo { height: 75px; padding: 0 1.7rem 0 1.15rem; }
+  .bp2-app .bp2-consultas-corpo { padding: 27px 27px 27px 26px; }
+  .bp2-app .bp2-consultas-grade {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 313px;
+    grid-template-rows: 257px minmax(26rem, calc(100dvh - 75px - 27px - 257px - 18px - 27px));
+    grid-template-areas: "detalhe pag" "hist prox";
+    gap: 18px 19px;
+  }
+  .bp2-app .bp2-consultas-detalhe { grid-area: detalhe; margin-right: calc(424px - 313px); }
+  .bp2-app .bp2-consultas-pag { grid-area: pag; margin-left: calc(313px - 424px - 1px); padding: 18px 12px 12px; gap: 14px; overflow: hidden; }
+  .bp2-app .bp2-consultas-hist { grid-area: hist; padding: 16px 16px 12px 12px; overflow: hidden; }
+  .bp2-app .bp2-consultas-proximas { grid-area: prox; padding: 18px 18px 6px; gap: 0; overflow-y: auto; }
+  .bp2-app .bp2-consultas-proximas > .bp2-ficha-cab { padding-bottom: 14px; }
+  .bp2-app .bp2-prox-botao { padding: 13px 2px 12px; }
+
+  /* Cartão da consulta como o da ficha em 1440 */
+  .bp2-app .bp2-consultas .bp2-ficha-cartao {
+    grid-template-columns: minmax(0, 460px) minmax(0, 1fr);
+    grid-template-rows: auto 1fr auto auto;
+    grid-template-areas: "topo topo" ". pessoa" "campos pessoa" "sinais pessoa";
+    gap: 0 1rem; padding: 18px 14px 14px 18px;
+  }
+  .bp2-app .bp2-consultas .bp2-ficha-pessoa { flex-direction: column-reverse; align-items: flex-end; justify-content: flex-start; gap: 1.1rem; align-self: end; text-align: right; padding: 0 4px 6px 0; }
+  .bp2-app .bp2-consultas .bp2-ficha-avatar { position: absolute; left: 60%; bottom: 30px; width: 120px; height: 120px; font-size: 38px; font-weight: 300; background: rgba(255, 255, 255, 0.34); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.55); }
+  .bp2-app .bp2-consultas .bp2-ficha-nome { align-items: flex-end; max-width: 15rem; }
+  .bp2-app .bp2-consultas .bp2-ficha-campos { grid-template-columns: 141px 169px minmax(0, 1fr); gap: 0; padding-bottom: 13px; max-width: 418px; width: 100%; border-bottom: 1px solid rgba(36, 36, 36, 0.1); }
+  .bp2-app .bp2-consultas .bp2-ficha-campos dd { margin-top: 5px; }
+  .bp2-app .bp2-consultas .bp2-ficha-sinais { flex-wrap: nowrap; gap: 30px; padding-top: 17px; border-top: 0; }
+  .bp2-app .bp2-consultas .bp2-ficha-sinais dd { margin-top: 6px; }
+  .bp2-app .bp2-consultas .bp2-ficha-valor { font-size: 31px; }
+  .bp2-app .bp2-consultas .bp2-ficha-valor-texto { font-size: 22px; line-height: 31px; }
+  .bp2-app .bp2-consultas .bp2-ficha-unidade { font-size: 20px; }
+  .bp2-app .bp2-consultas .bp2-ficha-acao { position: absolute; right: 14px; top: 58px; height: 2.25rem; padding: 0 1rem; }
+  .bp2-app .bp2-pag-linha { min-height: 86px; padding: 14px 15px; }
+  .bp2-app .bp2-pag-nome { font-size: 17px; }
+  .bp2-app .bp2-pag-info { font-size: 13px; line-height: 15px; }
+
+  /* Histórico em tabela (colunas como a da ficha) */
+  .bp2-app .bp2-ficha-cab-hist { padding: 0 0 0 10px; flex-wrap: nowrap; }
+  .bp2-app .bp2-ficha-busca { width: 162px; height: 31px; }
+  .bp2-app .bp2-ficha-rolagem { flex: 1; overflow-y: auto; margin-top: 4px; }
+  .bp2-app .bp2-ficha-tabela { table-layout: fixed; }
+  .bp2-app .bp2-ficha-tabela thead { display: table-header-group; }
+  .bp2-app .bp2-ficha-tabela th { position: sticky; top: 0; background: var(--bp2-cartao); text-align: left; font-weight: 400; font-size: 12px; color: var(--bp2-texto-2); padding: 12px 10px 6px; }
+  .bp2-app .bp2-ficha-tabela th:nth-child(1) { width: 13%; }
+  .bp2-app .bp2-ficha-tabela th:nth-child(2) { width: 10%; }
+  .bp2-app .bp2-ficha-tabela th:nth-child(3) { width: 19%; }
+  .bp2-app .bp2-ficha-tabela th:nth-child(5) { width: 20%; }
+  .bp2-app .bp2-ficha-tabela th:nth-child(6) { width: 15%; }
+  .bp2-app .bp2-ficha-tabela th:nth-child(7) { width: 44px; }
+  .bp2-app .bp2-ficha-tabela tbody tr { display: table-row; padding: 0; border: 0; }
+  .bp2-app .bp2-ficha-tabela td:nth-child(n) { display: table-cell; padding: 8px 10px; height: 37px; vertical-align: middle; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13px; color: inherit; text-align: left; }
+  .bp2-app .bp2-ficha-tabela td:nth-child(6) { color: var(--bp2-texto-2); font-size: 12.5px; }
+  .bp2-app .bp2-ficha-tabela td:first-child { border-radius: 8px 0 0 8px; }
+  .bp2-app .bp2-ficha-tabela td:nth-child(7) { border-radius: 0 8px 8px 0; padding: 0 4px; text-align: right; }
+  .bp2-app .bp2-ficha-linha-aberta { background: none; }
+  .bp2-app .bp2-ficha-tabela tbody tr:hover td,
+  .bp2-app .bp2-ficha-tabela tbody tr.bp2-ficha-linha-aberta td { background: var(--bp2-linha-destaque); }
+  .bp2-app .bp2-ficha-linha .bp2-icone-linha { opacity: 0; transition: opacity 0.12s ease; }
+  .bp2-app .bp2-ficha-linha:hover .bp2-icone-linha,
+  .bp2-app .bp2-ficha-linha:focus-within .bp2-icone-linha,
+  .bp2-app .bp2-ficha-linha-aberta .bp2-icone-linha { opacity: 1; }
+}
+@media (min-width: 1024px) and (max-width: 1279px) {
+  .bp2-app .bp2-consultas-grade { grid-template-columns: minmax(0, 1fr) 300px; }
+  .bp2-app .bp2-consultas-detalhe { margin-right: 0; }
+  .bp2-app .bp2-consultas-pag { margin-left: 0; }
+  .bp2-app .bp2-consultas .bp2-ficha-avatar { width: 104px; height: 104px; font-size: 32px; left: 52%; }
+}
+@media (min-width: 1024px) and (max-height: 760px) {
+  .bp2-app .bp2-consultas-grade { grid-template-rows: 257px 26rem; }
+}
+
+/* ---------------- BION IA + assistente de agendamento ---------------- */
+.bp2-app .bp2-chat.bp-painel { background: var(--bp2-fundo); }
+.bp2-app .bp2-chat > header { background: var(--bp2-cartao); border-color: var(--bp2-divisor); }
+.bp2-app .bp2-chat > header .bg-gradient-to-br { background: var(--bp2-azul); color: #242424; }
+.bp2-app .bp2-chat input { min-width: 0; }
+.bp2-app .bp2-chat .bp-glass { box-shadow: var(--bp2-sombra); backdrop-filter: none; -webkit-backdrop-filter: none; }
+
+.bp2-app .bp2-assist { padding: 1rem 1rem 0.9rem; display: flex; flex-direction: column; gap: 0.7rem; max-height: min(60svh, 36rem); overflow-y: auto; overscroll-behavior: contain; }
+.bp2-app .bp2-assist-cab { display: flex; flex-direction: column; gap: 0.1rem; }
+@media (min-width: 560px) { .bp2-app .bp2-assist-cab { flex-direction: row; align-items: baseline; justify-content: space-between; gap: 0.75rem; } }
+.bp2-app .bp2-assist-titulo { font-size: 15px; line-height: 20px; font-weight: 500; }
+.bp2-app .bp2-assist-resumo { font-size: 12px; color: var(--bp2-texto-2); min-width: 0; }
+.bp2-app .bp2-passos-atual { color: var(--bp2-texto); font-weight: 500; }
+.bp2-app .bp2-passos-voltar { display: inline-flex; align-items: center; gap: 0.3rem; min-height: 2rem; padding: 0 0.6rem; border-radius: 9999px; font-size: 12px; color: var(--bp2-t-azul); }
+.bp2-app .bp2-passos-voltar:hover { background: var(--bp2-linha); }
+.bp2-app .bp2-passos-barra { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; margin-top: 6px; }
+.bp2-app .bp2-passos-barra li { height: 4px; border-radius: 9999px; background: var(--bp2-divisor); }
+.bp2-app .bp2-passos-barra li.bp2-passo-feito { background: var(--bp2-azul); }
+.bp2-app .bp2-passos-barra li.bp2-passo-atual { background: #242424; }
+.dark .bp2-app .bp2-passos-barra li.bp2-passo-atual { background: #f2f4f7; }
+.bp2-app .bp2-assist-corpo { min-width: 0; }
+.bp2-app .bp2-assist-grade { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.5rem; }
+@media (min-width: 480px) { .bp2-app .bp2-assist-grade { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.bp2-app :is(.bp2-assist-item, .bp2-assist-vazio) {
+  width: 100%; display: flex; align-items: center; gap: 0.75rem; min-height: 3.5rem; padding: 0.65rem 0.85rem;
+  border-radius: 0.75rem; background: var(--bp2-linha); color: var(--bp2-texto); text-align: left;
+  transition: background-color 0.15s ease;
+  --bp2-texto-2: #6b6b6b;
+}
+.dark .bp2-app :is(.bp2-assist-item, .bp2-assist-vazio) { --bp2-texto-2: #a9b0ba; }
+.bp2-app :is(.bp2-assist-item, .bp2-assist-vazio):hover { background: var(--bp2-azul-ativo); }
+.bp2-app .bp2-assist-vazio { justify-content: space-between; font-size: 13px; }
+.bp2-app .bp2-assist-medico { min-height: 4.375rem; padding: 0.8rem 1rem; }
+.bp2-app .bp2-assist-icone { display: grid; place-items: center; width: 2.25rem; height: 2.25rem; border-radius: 11px; background: var(--bp2-azul-ativo); color: var(--bp2-t-azul); flex-shrink: 0; }
+.bp2-app .bp2-assist-nome { font-size: 14px; line-height: 1.35; }
+.bp2-app .bp2-assist-sub { font-size: 12px; line-height: 1.4; color: var(--bp2-texto-2); }
+.bp2-app .bp2-assist-sub.bp2-t-azul { color: var(--bp2-t-azul); }
+.bp2-app .bp2-assist-valor { font-size: 14px; font-weight: 500; }
+.bp2-app .bp2-estrela { color: #b45309; fill: #f59e0b; }
+.bp2-app .bp2-assist-dia { display: grid; gap: 0.9rem; }
+@media (min-width: 640px) { .bp2-app .bp2-assist-dia { grid-template-columns: minmax(0, 1fr) 13.5rem; align-items: start; } }
+.bp2-app .bp2-assist-lado { border-radius: 0.9rem; background: var(--bp2-linha); padding: 0.85rem; display: flex; flex-direction: column; gap: 0.8rem; --bp2-texto-2: #6b6b6b; }
+.dark .bp2-app .bp2-assist-lado { --bp2-texto-2: #a9b0ba; }
+.bp2-app .bp2-assist-fatos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.5rem; padding-top: 0.7rem; border-top: 1px solid var(--bp2-divisor); }
+.bp2-app .bp2-assist-fatos dt { font-size: 11px; color: var(--bp2-texto-2); }
+.bp2-app .bp2-assist-fatos dd { margin-top: 2px; font-size: 13px; font-weight: 500; white-space: nowrap; }
+
+/* Minicalendário (como a lateral da agenda do médico) */
+.bp2-app .bp2-mini-cab { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+.bp2-app .bp2-mini-cab h3 { font-size: 14px; font-weight: 500; }
+.bp2-app .bp2-mini-ano { font-weight: 300; color: var(--bp2-texto-2); }
+.bp2-app .bp2-mini-legenda { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 11px; color: var(--bp2-texto-2); }
+.bp2-app .bp2-mini-legenda i { width: 5px; height: 5px; border-radius: 9999px; background: var(--bp2-t-azul); }
+.bp2-app .bp2-mini-tab { width: 100%; margin-top: 8px; border-collapse: collapse; table-layout: fixed; }
+.bp2-app .bp2-mini-tab th { font-size: 11px; font-weight: 400; color: var(--bp2-texto-2); padding-bottom: 4px; }
+.bp2-app .bp2-mini-tab td { text-align: center; padding: 2px 0; }
+.bp2-app .bp2-mini-tab button { position: relative; width: 2.375rem; height: 2.25rem; border-radius: 10px; font-size: 13px; font-weight: 400; font-variant-numeric: tabular-nums; color: var(--bp2-texto); }
+.bp2-app .bp2-mini-tab button:disabled { color: var(--bp2-texto-2); opacity: 0.55; cursor: default; }
+.bp2-app .bp2-mini-tab button.bp2-mini-livre { font-weight: 500; }
+.bp2-app .bp2-mini-tab button.bp2-mini-livre:hover { background: var(--bp2-azul-ativo); }
+.bp2-app .bp2-mini-tab button i { position: absolute; bottom: 4px; left: 50%; width: 4px; height: 4px; margin-left: -2px; border-radius: 9999px; background: var(--bp2-t-azul); }
+.bp2-app .bp2-mini-tab button.bp2-mini-hoje { box-shadow: inset 0 0 0 1.5px #242424; }
+.dark .bp2-app .bp2-mini-tab button.bp2-mini-hoje { box-shadow: inset 0 0 0 1.5px #f2f4f7; }
+.bp2-app .bp2-mini-tab button[aria-pressed="true"],
+.bp2-app .bp2-mini-tab button[aria-pressed="true"]:hover { background: var(--bp2-azul); color: #242424; }
+.bp2-app .bp2-mini-tab button[aria-pressed="true"] i { background: #242424; }
+@media (min-width: 1024px) { .bp2-app .bp2-mini-tab button { width: 2.25rem; height: 2rem; font-size: 12.5px; } }
+
+/* Horários em blocos (como os eventos da grade da agenda) */
+.bp2-app .bp2-horarios { display: flex; flex-direction: column; gap: 0.8rem; }
+.bp2-app .bp2-horarios-periodo { font-size: 12px; font-weight: 500; margin-bottom: 0.4rem; }
+.bp2-app .bp2-horarios-lista { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem; }
+@media (min-width: 560px) { .bp2-app .bp2-horarios-lista { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.bp2-app .bp2-slot {
+  width: 100%; min-height: 2.875rem; display: flex; flex-direction: column; justify-content: center; gap: 1px;
+  padding: 0.4rem 0.6rem 0.4rem 0.7rem; border-radius: 6px; border-left: 3px solid #76a1f3;
+  background: var(--bp2-ev-azul); color: #242424; text-align: left;
+  transition: filter 0.12s ease, background-color 0.12s ease;
+}
+.bp2-app .bp2-slot:hover { filter: brightness(0.97); }
+.bp2-app .bp2-slot[aria-pressed="true"] { background: #76a1f3; border-left-color: #242424; }
+.bp2-app .bp2-slot[aria-pressed="true"] .bp2-slot-fim { color: #242424; }
+.bp2-app .bp2-slot-hora { font-size: 14px; line-height: 16px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.bp2-app .bp2-slot-fim { font-size: 11px; line-height: 13px; color: #4f4f4f; font-variant-numeric: tabular-nums; }
+
+/* Confirmação (cartão em degradê + pagamento) */
+.bp2-app .bp2-resumo { display: flex; flex-direction: column; gap: 0.6rem; }
+.bp2-app .bp2-resumo-pagar { padding: 1rem; color: var(--bp2-texto); }
+.bp2-app .bp2-resumo-rotulo { font-size: 11px; line-height: 14px; font-weight: 500; letter-spacing: 0.02em; color: var(--bp2-texto-2); margin-bottom: 0.3rem; }
+
+/* ---------------- Remarcar / cancelar e triagem (sheets) ---------------- */
+.bp2-app .bp2-sheet {
+  --bpp-sheet-fundo: #ffffff;
+  --bpp-sheet-cartao: #f8f8f8;
+  --bpp-sheet-borda: rgba(36, 36, 36, 0.1);
+  --bpp-sheet-texto: #242424;
+  --bpp-sheet-suave: #5f6368;
+  --bpp-sheet-veu: rgba(16, 24, 40, 0.32);
+  --bpp-sheet-alca: #d5dadd;
+  --bpp-sheet-chip: #eff3f4;
+  --bpp-sheet-campo: #f8f8f8;
+  --bpp-sheet-primario: #76a1f3;
+  --bpp-sheet-primario-texto: #242424;
+  --bpp-sheet-sel-borda: #76a1f3;
+  --bpp-sheet-sel-fundo: #dee8f4;
+  --bpp-sheet-sel-cheio: #76a1f3;
+  --bpp-sheet-sel-cheio-texto: #242424;
+}
+.dark .bp2-app .bp2-sheet {
+  --bpp-sheet-fundo: #181b20;
+  --bpp-sheet-cartao: #20242a;
+  --bpp-sheet-borda: rgba(255, 255, 255, 0.1);
+  --bpp-sheet-texto: #f2f4f7;
+  --bpp-sheet-suave: #a9b0ba;
+  --bpp-sheet-veu: rgba(0, 0, 0, 0.6);
+  --bpp-sheet-alca: #3a4048;
+  --bpp-sheet-chip: #23272e;
+  --bpp-sheet-campo: #20242a;
+  --bpp-sheet-primario: #76a1f3;
+  --bpp-sheet-primario-texto: #242424;
+  --bpp-sheet-sel-borda: #9dbcf7;
+  --bpp-sheet-sel-fundo: #23324a;
+  --bpp-sheet-sel-cheio: #76a1f3;
+  --bpp-sheet-sel-cheio-texto: #242424;
+}
+.bp2-app .bp2-sheet .bpp-sheet-painel { border-radius: 1.25rem 1.25rem 0 0; box-shadow: 0 -12px 32px rgba(16, 24, 40, 0.12); border-top-width: 0; }
+@media (min-width: 1024px) { .bp2-app .bp2-sheet .bpp-sheet-painel { border-radius: 1.25rem; max-width: 34rem; } }
+.bp2-app .bp2-sheet h2 { font-weight: 500; }
+.bp2-app .bp2-sheet .bp2-sheet-secao { margin-top: 1rem; padding: 0.9rem; border-radius: 1rem; background: var(--bp2-linha); --bp2-texto-2: #6b6b6b; }
+.dark .bp2-app .bp2-sheet .bp2-sheet-secao { --bp2-texto-2: #a9b0ba; }
+.bp2-app .bp2-sheet .bp2-sheet-secao .bp2-mini-tab button.bp2-mini-livre:hover { background: var(--bp2-azul-ativo); }
+.bp2-app .bp2-sheet .bp2-sheet-secao .bp2-mini-tab button[aria-pressed="true"]:hover { background: #76a1f3; color: #242424; }
+
+/* Triagem: cartão atual lavanda (ref. 12), demais brancos; texto #242424 nos dois temas */
+.bp2-app .bp2-triagem { background: var(--bp2-fundo); }
+.bp2-app .bp2-triagem .bp2-triagem-barra { background: #76a1f3; }
+.bp2-app .bp2-triagem .bp2-triagem-trilho, .bp2-app .bp2-triagem > header .bpp-sheet-chip { background: var(--bp2-cartao); }
+.bp2-app .bp2-triagem article { border-radius: 1.25rem; box-shadow: var(--bp2-sombra); }
+.bp2-app .bp2-triagem article.bp2-triagem-outro { background: var(--bp2-cartao); border-color: transparent; }
+.bp2-app .bp2-triagem article.bp2-triagem-atual {
+  background: var(--bp2-lavanda); border-color: transparent; color: #242424;
+  --bpp-sheet-texto: #242424; --bpp-sheet-suave: #4f4f4f; --bpp-sheet-chip: rgba(255, 255, 255, 0.7); --bpp-sheet-borda: rgba(36, 36, 36, 0.1);
+  --bpp-sheet-campo: #ffffff; --bion-sea: #2a4f9e; --bion-ink: #242424; --bion-paper: #242424;
+}
+.dark .bp2-app .bp2-triagem article.bp2-triagem-atual { --bion-sea: #2a4f9e; --bion-paper: #242424; }
+.bp2-app .bp2-triagem article.bp2-triagem-atual :is(.text-bion-sea, .dark\:text-\[\#C4B5FD\]) { color: #2a4f9e; }
+.bp2-app .bp2-triagem article.bp2-triagem-atual textarea { color: #242424; }
+.bp2-app .bp2-triagem article.bp2-triagem-atual textarea::placeholder { color: #6b6b6b; }
+.bp2-app .bp2-triagem article.bp2-triagem-atual .text-emerald-700 { color: #1e7a34; }
+.bp2-app .bp2-triagem .bp2-triagem-enviar { background: #76a1f3; color: #242424; }
+
+@media (prefers-reduced-motion: reduce) {
+  .bp2-app :is(.bp2-redondo, .bp2-assist-item, .bp2-assist-vazio, .bp2-slot, .bp2-ficha-linha .bp2-icone-linha) { transition: none; }
+}
+
+/* ==================================================================== */
+/* Etapa 2, rodada 2 — Agenda própria do paciente (ref. 07 e a agenda   */
+/* do médico em main: mesmas medidas da .bm2-agenda). Calha 52/66 px,   */
+/* 56 px por hora, blocos de 30 min como os eventos curtos do médico.   */
+/* ==================================================================== */
+.bp2-app .bp2-agenda-pac {
+  --bp2-agp-calha: 52px; --bp2-ev-lavanda: #f1eefb; --bp2-ev-pessego: #fdeee5; --bp2-fds: #f7f8f9;
+  position: absolute; left: 0; right: 0; top: 0; bottom: calc(62px + env(safe-area-inset-bottom)); z-index: 25;
+  overflow-y: auto; overscroll-behavior: contain; background: var(--bp2-fundo); color: var(--bp2-texto);
+}
+.dark .bp2-app .bp2-agenda-pac { --bp2-ev-lavanda: #e8e3f7; --bp2-ev-pessego: #fbe3d6; --bp2-fds: #1c1f25; }
+.bp2-app .bp2-agp-topo { display: flex; align-items: center; gap: 0.75rem; height: 64px; padding: 0 1rem; border-bottom: 1px solid var(--bp2-divisor); }
+.bp2-app .bp2-agp-titulo { font-size: 17px; line-height: 21px; font-weight: 500; letter-spacing: -0.01em; outline: none; }
+.bp2-app .bp2-agp-sub { font-size: 12px; line-height: 15px; color: var(--bp2-texto-2); }
+.bp2-app .bp2-agp-chat { display: inline-flex; align-items: center; gap: 0.4rem; height: 2.5rem; min-width: 2.5rem; justify-content: center; padding: 0 0.75rem; border-radius: 9999px; font-size: 12.5px; font-weight: 500; background: var(--bp2-cartao); box-shadow: var(--bp2-sombra); white-space: nowrap; color: var(--bp2-texto); }
+.bp2-app .bp2-agp-chat svg { width: 16px; height: 16px; }
+@media (max-width: 639px) { .bp2-app .bp2-agp-chat-texto { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; } .bp2-app .bp2-agp-chat { padding: 0; } }
+
+.bp2-app .bp2-agp-pagina { padding: 0.75rem 0.75rem 1rem; }
+.bp2-app .bp2-agp-cartao { display: flex; flex-direction: column; gap: 1rem; }
+.bp2-app .bp2-agp-principal { background: var(--bp2-cartao); border-radius: 1.25rem; box-shadow: var(--bp2-sombra); padding: 1rem 0.75rem 0.5rem; min-width: 0; display: flex; flex-direction: column; gap: 0.75rem; }
+.bp2-app .bp2-agp-cab { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.6rem 1rem; padding: 0 0.35rem; }
+.bp2-app .bp2-agp-titulo-mes { display: flex; align-items: center; gap: 0.75rem; }
+.bp2-app .bp2-agp-titulo-mes h3 { font-size: 18px; line-height: 22px; font-weight: 500; letter-spacing: -0.01em; white-space: nowrap; }
+.bp2-app .bp2-agp-titulo-mes h3 span { font-weight: 400; color: var(--bp2-texto-2); }
+.bp2-app .bp2-agp-navega { display: flex; align-items: center; gap: 2px; }
+.bp2-app .bp2-agp-navega button { height: 28px; min-width: 28px; border-radius: 9999px; display: grid; place-items: center; color: var(--bp2-texto-2); }
+.bp2-app .bp2-agp-navega button:hover:not(:disabled) { background: var(--bp2-linha); color: var(--bp2-texto); }
+.bp2-app .bp2-agp-navega button:disabled { opacity: 0.4; cursor: default; }
+.bp2-app .bp2-agp-navega svg { width: 16px; height: 16px; }
+.bp2-app .bp2-agp-navega .bp2-agp-hoje { padding: 0 0.6rem; font-size: 12px; font-weight: 500; color: var(--bp2-texto); border: 1px solid var(--bp2-divisor); }
+.bp2-app .bp2-agp-vistas { display: flex; max-width: 100%; overflow-x: auto; scrollbar-width: none; padding: 3px; border-radius: 9999px; background: #f5f5f5; }
+.dark .bp2-app .bp2-agp-vistas { background: var(--bp2-linha); }
+.bp2-app .bp2-agp-vistas button { flex-shrink: 0; height: 23px; min-width: 76px; padding: 0 0.9rem; border-radius: 9999px; font-size: 12px; color: #5c5c5c; white-space: nowrap; }
+.dark .bp2-app .bp2-agp-vistas button { color: var(--bp2-texto-2); }
+.bp2-app .bp2-agp-vistas button[aria-pressed="true"] { background: var(--bp2-cartao); color: var(--bp2-texto); font-weight: 500; box-shadow: 0 1px 3px rgba(16, 24, 40, 0.1); }
+.dark .bp2-app .bp2-agp-vistas button[aria-pressed="true"] { background: #2b3038; }
+@media (max-width: 1023px) { .bp2-app .bp2-agp-vistas button { height: 32px; } }
+
+/* Profissionais: itens como "Consultas de hoje" da agenda do médico */
+.bp2-app .bp2-agp-medico { width: 100%; display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; border-radius: 7px; text-align: left; color: #242424; border-left: 3px solid transparent; }
+.bp2-app .bp2-agp-medico strong { font-size: 12.5px; line-height: 15px; font-weight: 500; }
+.bp2-app .bp2-agp-medico span { font-size: 11px; line-height: 14px; color: #4f4f4f; }
+.bp2-app .bp2-agp-medico:hover { filter: brightness(0.97); }
+.bp2-app .bp2-agp-medico[aria-pressed="true"] { box-shadow: inset 0 0 0 1.5px #242424; }
+.bp2-app .bp2-agp-azul { background: var(--bp2-ev-azul); border-left-color: #76a1f3; }
+.bp2-app .bp2-agp-lavanda { background: var(--bp2-ev-lavanda); border-left-color: #a493df; }
+.bp2-app .bp2-agp-pessego { background: var(--bp2-ev-pessego); border-left-color: #eea27a; }
+.bp2-app .bp2-agp-medico .bp2-avatar { background: rgba(255, 255, 255, 0.7); color: #242424; }
+.bp2-app .bp2-agp-medicos-faixa { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding: 0 0.35rem 2px; }
+.bp2-app .bp2-agp-medicos-faixa li { flex: 0 0 auto; min-width: 11.5rem; }
+.bp2-app .bp2-agp-principal > .bp2-passos { padding: 0 0.35rem; }
+
+/* Faixa da semana (celular) — igual à .bm2-agenda-faixa */
+.bp2-app .bp2-agp-faixa { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; padding: 0 0.1rem; }
+.bp2-app .bp2-agp-faixa button { position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 0 8px; border-radius: 12px; min-height: 44px; }
+.bp2-app .bp2-agp-faixa button:disabled { opacity: 0.55; cursor: default; }
+.bp2-app .bp2-agp-faixa span { font-size: 11px; color: var(--bp2-texto-2); }
+.bp2-app .bp2-agp-faixa strong { font-size: 15px; font-weight: 500; }
+.bp2-app .bp2-agp-faixa i { position: absolute; bottom: 3px; width: 4px; height: 4px; border-radius: 9999px; background: var(--bp2-azul); }
+.bp2-app .bp2-agp-faixa .bp2-agp-faixa-hoje strong { color: var(--bp2-t-azul); }
+.bp2-app .bp2-agp-faixa button[aria-pressed="true"] { background: var(--bp2-azul); }
+.bp2-app .bp2-agp-faixa button[aria-pressed="true"] span, .bp2-app .bp2-agp-faixa button[aria-pressed="true"] strong { color: #242424; }
+.bp2-app .bp2-agp-faixa button[aria-pressed="true"] i { background: #242424; }
+
+/* Grade (celular: um dia; computador: a semana) */
+.bp2-app .bp2-agp-grade { display: flex; flex-direction: column; min-height: 0; }
+.bp2-app .bp2-agp-dias { display: none; }
+.bp2-app .bp2-agp-rolagem { overflow-y: auto; min-height: 0; max-height: 34rem; border-radius: 4px; }
+.bp2-app .bp2-agp-corpo { position: relative; display: grid; grid-template-columns: var(--bp2-agp-calha) minmax(0, 1fr);
+  background-image: repeating-linear-gradient(to bottom, var(--bp2-divisor) 0, var(--bp2-divisor) 1px, transparent 1px, transparent 56px); background-position: var(--bp2-agp-calha) 0; background-size: calc(100% - var(--bp2-agp-calha)) 100%; }
+.bp2-app .bp2-agp-horas { position: relative; }
+.bp2-app .bp2-agp-horas span { position: absolute; right: 14px; transform: translateY(-50%); font-size: 10px; line-height: 12px; color: var(--bp2-texto-2); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.bp2-app .bp2-agp-horas span:first-child { transform: none; top: 2px !important; }
+.bp2-app .bp2-agp-coluna { position: relative; border-left: 1px solid var(--bp2-divisor); list-style: none; display: none; }
+.bp2-app .bp2-agp-coluna.bp2-agp-col-foco { display: block; }
+.bp2-app .bp2-agp-coluna.bp2-agp-fds { background-color: var(--bp2-fds); }
+.bp2-app .bp2-agp-coluna.bp2-agp-sem { background-image: repeating-linear-gradient(135deg, transparent 0 8px, rgba(36, 36, 36, 0.05) 8px 9px); }
+.dark .bp2-app .bp2-agp-coluna.bp2-agp-sem { background-image: repeating-linear-gradient(135deg, transparent 0 8px, rgba(255, 255, 255, 0.05) 8px 9px); }
+.bp2-app .bp2-agp-sem-rotulo { position: sticky; top: 4px; margin: 4px; padding: 2px 6px; border-radius: 6px; font-size: 11px; background: var(--bp2-linha); color: var(--bp2-texto-2); width: fit-content; z-index: 1; }
+.bp2-app .bp2-agp-ev-pos { position: absolute; left: 4px; right: 4px; list-style: none; }
+.bp2-app .bp2-agp-ev { width: 100%; height: 100%; display: flex; flex-direction: row; align-items: center; gap: 6px; padding: 0 6px 0 8px; border-radius: 4px; text-align: left; overflow: hidden; border-left: 3px solid #76a1f3; background: var(--bp2-ev-azul); color: #242424; }
+.bp2-app .bp2-agp-ev:hover { filter: brightness(0.97); }
+.bp2-app .bp2-agp-ev-nome { font-size: 12px; line-height: 13px; font-weight: 500; white-space: nowrap; }
+.bp2-app .bp2-agp-ev-hora { font-size: 10px; line-height: 12px; color: #555; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bp2-app .bp2-agp-ev[aria-pressed="true"], .bp2-app .bp2-agp-ev[aria-pressed="true"]:hover { background: #76a1f3; border-left-color: #242424; filter: none; }
+.bp2-app .bp2-agp-ev[aria-pressed="true"] .bp2-agp-ev-hora { color: #242424; }
+.bp2-app .bp2-agp-agora { position: absolute; left: var(--bp2-agp-calha); right: 0; height: 0; border-top: 1px solid rgba(36, 36, 36, 0.35); pointer-events: none; z-index: 2; }
+.dark .bp2-app .bp2-agp-agora { border-color: rgba(255, 255, 255, 0.4); }
+.bp2-app .bp2-agp-agora-hoje { position: absolute; top: -1.5px; left: 0; width: 100%; height: 2px; background: #242424; }
+.dark .bp2-app .bp2-agp-agora-hoje { background: #f2f4f7; }
+.bp2-app .bp2-agp-agora-hoje::before { content: ""; position: absolute; left: -3px; top: -2px; width: 6px; height: 6px; border-radius: 9999px; background: inherit; }
+.bp2-app .bp2-agp-grade:not([data-foco-hoje]) .bp2-agp-agora { display: none; }
+.bp2-app .bp2-agp-vazio { padding: 2.5rem 1rem; text-align: center; font-size: 13px; color: var(--bp2-texto-2); border-top: 1px solid var(--bp2-divisor); }
+
+/* Lateral */
+.bp2-app .bp2-agp-lado { display: flex; flex-direction: column; gap: 0.9rem; min-width: 0; }
+.bp2-app .bp2-agp-lado > .bp2-mini, .bp2-app .bp2-agp-lista { display: none; }
+.bp2-app .bp2-agp-lista h3 { display: flex; justify-content: space-between; align-items: baseline; font-size: 12.5px; font-weight: 400; color: var(--bp2-texto-2); }
+.bp2-app .bp2-agp-lista h3 strong { font-size: 13px; font-weight: 500; color: var(--bp2-texto); }
+.bp2-app .bp2-agp-lista ul { display: flex; flex-direction: column; gap: 11px; margin-top: 0.7rem; }
+.bp2-app .bp2-agp-lista .bp2-agp-medico { min-height: 42px; }
+.bp2-app .bp2-agp-aviso { padding: 0.7rem 0.85rem; border-radius: 0.75rem; font-size: 12.5px; line-height: 17px; background: #fdecec; color: #8f1d1d; }
+.dark .bp2-app .bp2-agp-aviso { background: #3a1d1f; color: #f8c4c4; }
+.bp2-app .bp2-agp-dica { font-size: 12px; line-height: 16px; color: var(--bp2-texto-2); padding: 0 0.35rem; }
+
+@media (min-width: 1024px) {
+  .bp2-app .bp2-agenda-pac { --bp2-agp-calha: 66px; position: fixed; left: 76px; bottom: 0; z-index: 40; overflow: hidden; display: flex; flex-direction: column; }
+  .bp2-app .bp2-agp-topo { height: 75px; padding: 0 1.7rem 0 1.15rem; flex-shrink: 0; }
+  .bp2-app .bp2-agp-pagina { flex: 1; min-height: 0; padding: 27px 14px 21px 24px; display: flex; }
+  .bp2-app .bp2-agp-cartao { flex: 1; min-height: 0; flex-direction: row; gap: 0; background: var(--bp2-cartao); border-radius: 20px; box-shadow: var(--bp2-sombra); overflow: hidden; }
+  .bp2-app .bp2-agp-principal { flex: 1; border-radius: 0; box-shadow: none; padding: 13px 0 0; gap: 10px; }
+  .bp2-app .bp2-agp-cab { padding: 0 22px 0 16px; flex-wrap: nowrap; }
+  .bp2-app .bp2-agp-principal > .bp2-passos { padding: 0 22px 0 16px; max-width: 30rem; }
+  .bp2-app .bp2-agp-medicos-faixa, .bp2-app .bp2-agp-faixa { display: none; }
+  .bp2-app .bp2-agp-grade { flex: 1; }
+  .bp2-app .bp2-agp-dias { display: grid; grid-template-columns: var(--bp2-agp-calha) repeat(var(--bp2-agp-dias), minmax(0, 1fr)); border-bottom: 1px solid var(--bp2-divisor); }
+  .bp2-app .bp2-agp-dia { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; padding: 7px 11px 6px; border-left: 1px solid var(--bp2-divisor); position: relative; }
+  .bp2-app .bp2-agp-dia.bp2-agp-fds { background-color: var(--bp2-fds); }
+  .bp2-app .bp2-agp-dia-nome { font-size: 11px; line-height: 13px; color: var(--bp2-texto-2); }
+  .bp2-app .bp2-agp-dia-num { font-size: 18px; line-height: 22px; font-weight: 500; }
+  .bp2-app .bp2-agp-dia-hoje .bp2-agp-dia-num, .bp2-app .bp2-agp-dia-hoje .bp2-agp-dia-nome { color: var(--bp2-t-azul); }
+  .bp2-app .bp2-agp-dia-hoje::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: var(--bp2-azul); }
+  .bp2-app .bp2-agp-rolagem { flex: 1; max-height: none; border-radius: 0; }
+  .bp2-app .bp2-agp-corpo { grid-template-columns: var(--bp2-agp-calha) repeat(var(--bp2-agp-dias), minmax(0, 1fr)); }
+  .bp2-app .bp2-agp-coluna { display: block; }
+  .bp2-app .bp2-agp-grade:not([data-foco-hoje]) .bp2-agp-agora { display: block; }
+  .bp2-app .bp2-agp-agora-hoje { left: calc(var(--bp2-agp-col) * 100% / var(--bp2-agp-dias)); width: calc(100% / var(--bp2-agp-dias)); }
+  .bp2-app .bp2-agp-vazio { flex: 1; display: grid; place-items: center; }
+  .bp2-app .bp2-agp-lado { width: 300px; flex-shrink: 0; border-left: 1px solid var(--bp2-divisor); padding: 22px 16px 16px 20px; overflow-y: auto; }
+  .bp2-app .bp2-agp-lado > .bp2-mini { display: block; }
+  .bp2-app .bp2-agp-lista { display: block; border-top: 1px solid var(--bp2-divisor); padding-top: 0.85rem; }
+  .bp2-app .bp2-agp-lado .bp2-resumo .bp2-ficha-cartao { padding: 14px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bp2-app :is(.bp2-agp-ev, .bp2-agp-medico, .bp2-agp-faixa button, .bp2-agp-vistas button) { transition: none; }
+}
+/* "+" da barra com a agenda própria aberta: igual ao "+" do médico, sem contorno.
+   O estado ativo vai por aria-current; o foco do teclado continua no :focus-visible. */
+.bp2-app .bp2-assist-agenda { align-self: flex-start; flex-shrink: 0; }
+/* Resumo: botão de pagar com a altura certa também empilhado (flex-1 zerava a altura) */
+.bp2-app .bp2-resumo-pagar .bp2-botao-azul { flex: 1 1 auto; min-height: 2.75rem; }
+@media (max-width: 1023px) { .bp2-app .bp2-agp-rolagem { max-height: none; overflow: visible; } }
+@media (min-width: 1024px) {
+  .bp2-app .bp2-agp-lado .bp2-mini-legenda { display: none; }
+  .bp2-app .bp2-agp-lado .bp2-mini-cab h3 { font-size: 13px; white-space: nowrap; }
+  .bp2-app .bp2-agp-lado .bp2-resumo-pagar > div { flex-direction: column; }
+  .bp2-app .bp2-agp-lado .bp2-ficha-campos > div:nth-child(3) { display: none; }
+}
+
+/* Rodada 2: medidas que ainda diferiam da ficha do médico (diff-css-medico.py) */
+.bp2-app .bp2-consultas-proximas { --bp2-texto-2: #646464; --bp2-divisor: rgba(36, 36, 36, 0.1); }
+.dark .bp2-app .bp2-consultas-proximas { --bp2-texto-2: #646464; --bp2-divisor: rgba(36, 36, 36, 0.1); }
+.dark .bp2-app .bp2-ficha-cartao { --bp2-texto-2: #4c5a6a; }
+@media (min-width: 1024px) {
+  .bp2-app .bp2-consultas-pag > .bp2-ficha-cab { padding: 0 2px 0 6px; }
+}
+@media (min-width: 1024px) and (max-width: 1279px) {
+  .bp2-app .bp2-consultas-grade { grid-template-columns: minmax(0, 1fr) 300px; }
+  .bp2-app .bp2-consultas-detalhe { margin-right: 0; }
+  .bp2-app .bp2-consultas-pag { margin-left: 0; }
+  .bp2-app .bp2-consultas .bp2-ficha-avatar { width: 104px; height: 104px; font-size: 32px; left: 52%; }
+}
+@media (min-width: 1024px) and (max-height: 760px) {
+  .bp2-app .bp2-consultas-grade { grid-template-rows: 257px 26rem; }
+}
+/* Topo das telas (como o cabeçalho da ficha do médico): voltar 40 px sem fundo, título 15 px no celular */
+.bp2-app .bp2-redondo-topo { background: transparent; }
+.bp2-app .bp2-redondo-topo:hover { background: var(--bp2-cartao); }
+@media (max-width: 1023px) {
+  .bp2-app .bp2-consultas-topo h2, .bp2-app .bp2-agp-titulo { font-size: 15px; line-height: 19px; }
+}
+@media (min-width: 1024px) { .bp2-app .bp2-agp-titulo { font-size: 18px; line-height: 22px; } }
+/* Minicalendário da lateral da agenda: as medidas da lateral da agenda do médico */
+@media (min-width: 1024px) {
+  .bp2-app .bp2-agp-lado .bp2-mini-tab th { font-size: 10px; }
+  .bp2-app .bp2-agp-lado .bp2-mini-tab td { padding: 1px 0; }
+  .bp2-app .bp2-agp-lado .bp2-mini-tab button { width: 27px; height: 25px; border-radius: 8px; font-size: 11.5px; font-weight: 500; }
+  .bp2-app .bp2-agp-lado .bp2-mini-tab button:disabled { font-weight: 400; }
+  .bp2-app .bp2-agp-lado .bp2-mini-tab button i { bottom: 2px; }
+  .bp2-app .bp2-agp-lado .bp2-mini-tab button[aria-pressed="true"],
+  .bp2-app .bp2-agp-lado .bp2-mini-tab button[aria-pressed="true"]:hover { background: var(--bp2-azul-suave); color: #242424; }
+  .dark .bp2-app .bp2-agp-lado .bp2-mini-tab button[aria-pressed="true"],
+  .dark .bp2-app .bp2-agp-lado .bp2-mini-tab button[aria-pressed="true"]:hover { background: #76a1f3; }
+}
+.bp2-app .bp2-agp-vistas button { color: #6b6b6b; }
+.dark .bp2-app .bp2-agp-vistas button { color: var(--bp2-texto-2); }

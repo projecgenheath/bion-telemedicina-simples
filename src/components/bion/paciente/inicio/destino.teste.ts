@@ -31,7 +31,9 @@ igual("barra documentos", destinoBarraPaciente("documentos"), "documentos");
 igual("barra mensagens → documentos", destinoBarraPaciente("mensagens"), "documentos");
 igual("barra perfil", destinoBarraPaciente("perfil"), null);
 igual("barra ajuda", destinoBarraPaciente("ajuda"), null);
-igual("barra agendar", destinoBarraPaciente("agendar"), null);
+igual("barra agendar (+ aceso na agenda)", destinoBarraPaciente("agendar"), "agendar");
+igual("agenda própria", destinoAtivoPaciente({ painel: 1, secao: 2, agendaAberta: true }), "agendar");
+igual("agenda > painel", destinoAtivoPaciente({ painel: 2, secao: 0, emMensagens: true, agendaAberta: true }), "agendar");
 
 console.log(`${ok} ok, ${falhas} falha(s)`);
 if (falhas) process.exit(1);

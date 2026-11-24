@@ -37,7 +37,7 @@ export function PacienteFrame({
         onSaude={() => ir("saude")}
         onExames={() => ir("exames")}
         onDocumentos={() => ir("documentos")}
-        onAgendar={() => ir("agendar")}
+        onAgendar={() => ir("agenda")}
         onPerfil={() => ir("perfil")}
         onAjuda={() => router.push("/ajuda")}
         onTermos={() => router.push("/privacidade")}
@@ -61,7 +61,7 @@ export function PacienteFrame({
         ativo={destinoBarraPaciente(ativo)}
         onInicio={() => ir("inicio")}
         onSaude={() => ir("saude")}
-        onAgendar={() => ir("agendar")}
+        onAgendar={() => ir("agenda")}
         onExames={() => ir("exames")}
         onDocumentos={() => ir("documentos")}
         naoLidas={naoLidasMensagens}

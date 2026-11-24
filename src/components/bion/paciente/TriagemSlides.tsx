@@ -224,7 +224,7 @@ export function TriagemSlides({
   useFocoDialogo(true, onFechar, dialogoRef);
 
   return (
-    <div ref={dialogoRef} className="absolute inset-0 z-[70] flex flex-col bpp-sheet" role="dialog" aria-modal="true" aria-label="Triagem">
+    <div ref={dialogoRef} className="absolute inset-0 z-[70] flex flex-col bpp-sheet bp2-sheet bp2-v2 bp2-triagem" role="dialog" aria-modal="true" aria-label="Triagem">
       {pedirConsentimento ? (
         <ConsentimentoIA
           onAceito={() => {
@@ -254,8 +254,8 @@ export function TriagemSlides({
       </header>
 
       <div className="px-4 pb-2">
-        <div className="h-1.5 rounded-full bpp-sheet-chip overflow-hidden">
-          <div className="h-full bg-bion-sea dark:bg-[#C4B5FD] transition-all" style={{ width: `${progresso}%` }} />
+        <div className="h-1.5 rounded-full bpp-sheet-chip bp2-triagem-trilho overflow-hidden">
+          <div className="h-full bp2-triagem-barra transition-all motion-reduce:transition-none" style={{ width: `${progresso}%` }} />
         </div>
         <div className="mt-1 text-xs bpp-sheet-suave">
           {indice + 1} / {ETAPAS_ANAMNESE.length} · {etapa.rotulo}
@@ -314,7 +314,7 @@ export function TriagemSlides({
           <article
             key={item.id}
             className={`snap-center shrink-0 w-[86vw] max-w-md h-full overflow-y-auto overscroll-contain rounded-3xl border p-5 flex flex-col ${
-              i === indice ? "bpp-sheet-sel bpp-sheet-cartao" : "bpp-sheet-borda bpp-sheet-cartao"
+              i === indice ? "bp2-triagem-atual" : "bp2-triagem-outro"
             }`}
           >
             <div className="flex items-center justify-between mb-3">
@@ -365,7 +365,7 @@ export function TriagemSlides({
                 <ArrowLeft className="w-4 h-4" />
               </button>
               {acaoRodape === "enviar-medico" ? (
-                <button type="button" onClick={() => void concluir()} className="flex-1 rounded-2xl py-3 text-sm font-bold bg-emerald-400 text-zinc-950">
+                <button type="button" onClick={() => void concluir()} className="flex-1 rounded-2xl py-3 text-sm font-bold bp2-triagem-enviar">
                   Enviar ao médico
                 </button>
               ) : acaoRodape === "continuar" ? (

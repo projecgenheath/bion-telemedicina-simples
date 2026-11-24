@@ -56,6 +56,7 @@ import { fraseMotivoReagendamento, rotuloMotivoReagendamento } from "./motivo-re
 import { DicaGestos, NavegacaoPaciente, useDicaGestos } from "./NavegacaoPaciente";
 import { DadosPessoaisSheet, type CampoPerfil } from "./DadosPessoaisSheet";
 import { TelaListaCompleta, type ListaPerfil } from "./TelaListaCompleta";
+import { TelaAgendaPaciente, type InicioAgenda } from "./consultas/TelaAgendaPaciente";
 import { AvisoMensagemNova } from "./AvisosInicio";
 import { acaoSalaPaciente, type AcaoSala } from "./entrada-sala";
 import { useRelogioSala } from "./useRelogioSala";
@@ -143,6 +144,49 @@ export function PacienteApp() {
   const fecharChat = () => {
     setChatAberto(false);
     setChatIntencao("geral");
+  };
+  // Etapa 2, rodada 2: agenda própria do paciente ("+" da barra e "Agendar"
+  // do menu). O menu e a barra continuam à vista; o resto fica inerte.
+  const [agenda, setAgenda] = useState<InicioAgenda | null>(null);
+  /**
+   * Troca de sobreposição (agenda ⇄ chat, agenda/chat → triagem): quem fecha
+   * consome a própria entrada do histórico (useVoltarFecha → history.back);
+   * a próxima só abre depois desse "voltar", senão ele a fecharia junto.
+   */
+  const trocarSobreposicao = (fechar: () => void, abrir: () => void) => {
+    const prof = window.history.state?.bmProfundidade;
+    fechar();
+    if (typeof prof !== "number" || prof <= 0) {
+      abrir();
+      return;
+    }
+    let feito = false;
+    const seguir = () => {
+      if (feito) return;
+      feito = true;
+      window.removeEventListener("popstate", seguir);
+      abrir();
+    };
+    window.addEventListener("popstate", seguir);
+    window.setTimeout(seguir, 400);
+  };
+  const abrirAgenda = (inicio?: InicioAgenda | null) => {
+    if (!chatAberto) {
+      setAgenda(inicio ?? {});
+      return;
+    }
+    trocarSobreposicao(
+      () => {
+        setChatAberto(false);
+        setChatIntencao("geral");
+      },
+      () => setAgenda(inicio ?? {}),
+    );
+  };
+  /** Itens do menu/barra fecham a agenda antes de navegar. */
+  const semAgenda = <A extends unknown[]>(fn: (...a: A) => void) => (...a: A) => {
+    setAgenda(null);
+    fn(...a);
   };
   const [triagemConsultaId, setTriagemConsultaId] = useState<string | null>(null);
   const [triagemSlide, setTriagemSlide] = useState<{
@@ -254,6 +298,9 @@ export function PacienteApp() {
         irPara(1);
         setChatIntencao("agendar");
         setChatAberto(true);
+      } else if (tela === "agenda") {
+        irPara(1);
+        setAgenda({});
       }
       else if (tela === "saude") {
         irPara(1);
@@ -306,7 +353,7 @@ export function PacienteApp() {
   // Teclado: ←/→ trocam de painel; PageUp/PageDown (e ↑/↓ fora de campos) trocam de seção
   useEffect(() => {
     const aoTeclar = (e: KeyboardEvent) => {
-      if (bloqueado || e.altKey || e.ctrlKey || e.metaKey) return;
+      if (bloqueado || agenda || e.altKey || e.ctrlKey || e.metaKey) return;
       const alvo = e.target as HTMLElement | null;
       // Tela larga: Esc fecha a gaveta aberta (Perfil/Documentos).
       if (e.key === "Escape" && painel !== 1 && ehTelaLarga()) {
@@ -330,7 +377,7 @@ export function PacienteApp() {
     };
     window.addEventListener("keydown", aoTeclar);
     return () => window.removeEventListener("keydown", aoTeclar);
-  }, [bloqueado, painel, secao, irPara, irSecao]);
+  }, [bloqueado, agenda, painel, secao, irPara, irSecao]);
 
   /* ------------------------------- dados --------------------------------- */
 
@@ -528,6 +575,7 @@ export function PacienteApp() {
     painel,
     secao,
     chatAberto,
+    agendaAberta: !!agenda,
     emMensagens: painel === 2 && (emMensagens || !!conversaAtiva),
   });
   const irInicio = () => {
@@ -548,13 +596,13 @@ export function PacienteApp() {
     >
       <BarraLateralPaciente
         ativo={destinoAtivo}
-        onInicio={irInicio}
-        onMensagens={irMensagens}
-        onSaude={() => irSecaoCentral(1)}
-        onExames={() => irSecaoCentral(2)}
-        onDocumentos={irDocumentos}
-        onAgendar={() => abrirChat("agendar")}
-        onPerfil={() => irPara(0)}
+        onInicio={semAgenda(irInicio)}
+        onMensagens={semAgenda(irMensagens)}
+        onSaude={semAgenda(() => irSecaoCentral(1))}
+        onExames={semAgenda(() => irSecaoCentral(2))}
+        onDocumentos={semAgenda(irDocumentos)}
+        onAgendar={() => abrirAgenda()}
+        onPerfil={semAgenda(() => irPara(0))}
         onAjuda={() => router.push("/ajuda")}
         onTermos={() => router.push("/privacidade")}
         onSuporte={() => router.push("/suporte")}
@@ -565,8 +613,8 @@ export function PacienteApp() {
         role="main"
         tabIndex={0}
         onScroll={aoRolar}
-        inert={bloqueado}
-        className={`bp-carrossel bpp-carrossel flex h-full overflow-x-auto ${bloqueado ? "pointer-events-none" : ""}`}
+        inert={bloqueado || !!agenda}
+        className={`bp-carrossel bpp-carrossel flex h-full overflow-x-auto ${bloqueado || agenda ? "pointer-events-none" : ""}`}
         aria-label="Painéis do app: perfil, início e documentos (arraste para os lados)"
       >
         {/* ============================== PERFIL ============================== */}
@@ -894,7 +942,7 @@ export function PacienteApp() {
       </div>
 
       {/* Tela larga: fundo e botão de fechar da gaveta (só aparecem com data-gaveta, ver paciente-v2.css) */}
-      {painel !== 1 && !bloqueado ? (
+      {painel !== 1 && !bloqueado && !agenda ? (
         <>
           <button type="button" tabIndex={-1} aria-hidden className="bp2-gaveta-fundo" onClick={() => irPara(1)} />
           <button
@@ -915,34 +963,46 @@ export function PacienteApp() {
         onPainel={irPara}
         onSecao={irSecao}
         naoLidas={naoLidasMensagens}
-        oculto={bloqueado}
+        oculto={bloqueado || !!agenda}
         pilula={false}
       />
       {!bloqueado ? (
         <BarraInferiorPaciente
           ativo={destinoBarraPaciente(destinoAtivo)}
-          onInicio={irInicio}
-          onSaude={() => irSecaoCentral(1)}
-          onAgendar={() => abrirChat("agendar")}
-          agendarAberto={chatAberto}
-          onExames={() => irSecaoCentral(2)}
-          onDocumentos={irDocumentos}
+          onInicio={semAgenda(irInicio)}
+          onSaude={semAgenda(() => irSecaoCentral(1))}
+          onAgendar={() => abrirAgenda()}
+          onExames={semAgenda(() => irSecaoCentral(2))}
+          onDocumentos={semAgenda(irDocumentos)}
           naoLidas={naoLidasMensagens}
         />
       ) : null}
-      {dica.visivel && !bloqueado ? <DicaGestos onDispensar={dica.dispensar} /> : null}
+      {dica.visivel && !bloqueado && !agenda ? <DicaGestos onDispensar={dica.dispensar} /> : null}
 
       {/* Overlays */}
       <DetalheMedicao detalhe={detalhe} onFechar={() => setDetalhe(null)} />
+      {agenda ? (
+        <TelaAgendaPaciente
+          inicial={agenda}
+          onFechar={() => setAgenda(null)}
+          onAbrirChat={() => trocarSobreposicao(() => setAgenda(null), () => abrirChat("agendar"))}
+          onAgendado={(info) => trocarSobreposicao(() => setAgenda(null), () => setTriagemSlide(info))}
+        />
+      ) : null}
       <ChatBion
         aberto={chatAberto}
         intencao={chatIntencao}
         onFechar={fecharChat}
-        aoAbrirTriagem={(info) => {
-          setChatAberto(false);
-          setChatIntencao("geral");
-          setTriagemSlide(info);
-        }}
+        onAbrirAgenda={(inicio) => abrirAgenda(inicio)}
+        aoAbrirTriagem={(info) =>
+          trocarSobreposicao(
+            () => {
+              setChatAberto(false);
+              setChatIntencao("geral");
+            },
+            () => setTriagemSlide(info),
+          )
+        }
       />
       {triagemSlide ? (
         <TriagemSlides
@@ -976,6 +1036,16 @@ export function PacienteApp() {
       {listaCompleta ? (
         <TelaListaCompleta
           lista={listaCompleta}
+          consultas={{
+            onRemarcar: (id) => setModalConsulta({ id, acao: "remarcar" }),
+            onCancelar: (id) => setModalConsulta({ id, acao: "cancelar" }),
+            onTriagem: abrirTriagem,
+            onEntrar: entrarSala,
+            etiquetaDe,
+            janelaTriagem,
+            statusTriagem,
+            acaoSala,
+          }}
           onFechar={() => setListaCompleta(null)}
           onAgendar={() => {
             setListaCompleta(null);

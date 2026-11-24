@@ -27,7 +27,7 @@ const MAX_CARROSSEL = 5;
 const LIMITE_TABELA = 7; // a ref. 12 mostra 7 linhas
 
 /** Cor de texto (AA) do estado da consulta nas listas. */
-const COR_TOM: Record<TomEtiqueta, string> = {
+export const COR_TOM: Record<TomEtiqueta, string> = {
   pagamento: "bp2-t-laranja",
   sala: "bp2-t-verde",
   remarcacao: "bp2-t-azul",
@@ -44,7 +44,7 @@ const ICONE_TOM: Record<TomEtiqueta, typeof CircleAlert | null> = {
   neutro: null,
 };
 
-function Avatar({ nome, foto, tamanho = "md" }: { nome: string; foto?: string | null; tamanho?: "md" | "lg" | "xl" }) {
+export function Avatar({ nome, foto, tamanho = "md" }: { nome: string; foto?: string | null; tamanho?: "md" | "lg" | "xl" }) {
   const t =
     tamanho === "xl" ? "h-12 w-12 text-sm lg:h-[3.25rem] lg:w-[3.25rem] lg:text-[15px]" : tamanho === "lg" ? "h-12 w-12 text-sm" : "h-9 w-9 text-xs";
   if (foto) return <img src={foto} alt="" className={`${t} shrink-0 rounded-full object-cover`} />;
@@ -66,7 +66,7 @@ function BotaoSeta({ rotulo, onClick }: { rotulo: string; onClick: () => void })
   );
 }
 
-function Estado({ e, tamanho = "text-[13px]" }: { e: EtiquetaConsulta; tamanho?: string }) {
+export function Estado({ e, tamanho = "text-[13px]" }: { e: EtiquetaConsulta; tamanho?: string }) {
   const Icone = ICONE_TOM[e.tom];
   return (
     <span className={`inline-flex items-center gap-1 whitespace-nowrap ${tamanho} ${COR_TOM[e.tom]}`}>
