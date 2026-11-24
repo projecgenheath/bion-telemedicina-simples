@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useVoltarFecha } from "./useVoltarFecha";
 import { EstadoCarregando, EstadoErro } from "./EstadosPaciente";
 import { useFocoDialogo } from "./useFocoDialogo";
+import { GradeHorarios, MiniCalendario } from "./consultas/AgendaPecas";
 import { useArrastarFechar } from "./useArrastarFechar";
 import { AlertTriangle, CreditCard, Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -277,7 +278,7 @@ export function CancelarRemarcarSheet({ consulta, acao, medico, consultas, onFec
   useArrastarFechar(painelRef, fechar);
 
   return (
-    <div ref={dialogoRef} className="bpp-sheet-raiz absolute inset-0 z-[80] flex items-end justify-center" role="dialog" aria-modal="true" aria-labelledby="titulo-sheet-consulta">
+    <div ref={dialogoRef} className="bpp-sheet-raiz bp2-sheet bp2-v2 absolute inset-0 z-[80] flex items-end justify-center" role="dialog" aria-modal="true" aria-labelledby="titulo-sheet-consulta">
       <button type="button" className="absolute inset-0 bpp-sheet-veu" aria-label="Fechar" onClick={fechar} />
       <div
         ref={painelRef} className="bpp-sheet-painel relative w-full max-w-lg max-h-[92svh] overflow-y-auto rounded-t-3xl bpp-sheet border-t bpp-sheet-borda px-5 pt-3 pb-8 shadow-[0_-12px_40px_rgba(2,8,26,0.35)]">
@@ -339,39 +340,25 @@ export function CancelarRemarcarSheet({ consulta, acao, medico, consultas, onFec
               <p className="mt-4 text-sm text-amber-800 dark:text-amber-200">Não há vaga na agenda deste médico nos próximos 14 dias.</p>
             ) : (
               <>
-                <label className="block text-xs font-bold mt-4 mb-2 bpp-sheet-suave">Data</label>
-                <div className="flex gap-2 overflow-x-auto pb-1">
-                  {agendaLivre.map((d) => (
-                    <button
-                      key={d.iso}
-                      type="button"
-                      onClick={() => {
-                        setNovaData(d.iso);
-                        setNovaHora(d.horarios.includes(horaEscolhida) ? horaEscolhida : d.horarios[0]);
-                      }}
-                      className={`shrink-0 rounded-2xl px-3 py-2 text-left border ${
-                        dataEscolhida === d.iso ? "bpp-sheet-sel" : "bpp-sheet-borda bpp-sheet-cartao"
-                      }`}
-                    >
-                      <span className="block text-sm font-bold">{d.rotulo}</span>
-                      <span className="block text-xs bpp-sheet-suave">{d.sub}</span>
-                    </button>
-                  ))}
+                <div className="bp2-sheet-secao">
+                  <MiniCalendario
+                    dias={agendaLivre}
+                    selecionado={dataEscolhida}
+                    rotulo="Data: dias com horário livre"
+                    onEscolher={(iso) => {
+                      const d = agendaLivre.find((x) => x.iso === iso);
+                      if (!d) return;
+                      setNovaData(d.iso);
+                      setNovaHora(d.horarios.includes(horaEscolhida) ? horaEscolhida : d.horarios[0]);
+                    }}
+                  />
                 </div>
-                <label className="block text-xs font-bold mt-4 mb-2 bpp-sheet-suave">Horário</label>
-                <div className="grid grid-cols-3 gap-2">
-                  {(diaSelecionado?.horarios ?? []).map((h) => (
-                    <button
-                      key={h}
-                      type="button"
-                      onClick={() => setNovaHora(h)}
-                      className={`py-2.5 rounded-xl text-sm font-semibold border ${
-                        horaEscolhida === h ? "bpp-sheet-sel-cheio" : "bpp-sheet-borda bpp-sheet-cartao"
-                      }`}
-                    >
-                      {h}
-                    </button>
-                  ))}
+                <div className="bp2-sheet-secao">
+                  <p className="mb-2 text-[13px]">
+                    <span className="font-medium">Horário</span>
+                    {diaSelecionado ? <span className="bpp-sheet-suave"> · {diaSelecionado.rotulo}, {diaSelecionado.sub}</span> : null}
+                  </p>
+                  <GradeHorarios horarios={diaSelecionado?.horarios ?? []} selecionado={horaEscolhida} onEscolher={setNovaHora} />
                 </div>
                 {exigePagamento && onPagarMulta && !cartaoDesligado ? (
                   <>

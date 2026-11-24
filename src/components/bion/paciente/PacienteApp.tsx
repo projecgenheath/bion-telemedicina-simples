@@ -976,6 +976,16 @@ export function PacienteApp() {
       {listaCompleta ? (
         <TelaListaCompleta
           lista={listaCompleta}
+          consultas={{
+            onRemarcar: (id) => setModalConsulta({ id, acao: "remarcar" }),
+            onCancelar: (id) => setModalConsulta({ id, acao: "cancelar" }),
+            onTriagem: abrirTriagem,
+            onEntrar: entrarSala,
+            etiquetaDe,
+            janelaTriagem,
+            statusTriagem,
+            acaoSala,
+          }}
           onFechar={() => setListaCompleta(null)}
           onAgendar={() => {
             setListaCompleta(null);

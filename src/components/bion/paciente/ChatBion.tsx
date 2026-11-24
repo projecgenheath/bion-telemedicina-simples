@@ -9,21 +9,18 @@ import { useVoltarFecha } from "./useVoltarFecha";
 import { useFocoDialogo } from "./useFocoDialogo";
 import { toast } from "sonner";
 import {
-  ArrowLeft,
   ArrowUp,
   BadgeCheck,
-  CreditCard,
   FileUp,
-  Lock,
   Send,
   ShieldAlert,
   Sparkles,
-  Star,
   Stethoscope,
   X,
 } from "lucide-react";
 import { useBion, type AnamneseResumo } from "@/lib/bion-store";
 import { diasDoAgendamento } from "@/components/bion/agendamento/horarios";
+import { AssistenteAgendamento, ResumoAgendamento } from "./consultas/AssistenteAgendamento";
 import { agendaLivreDoMedico } from "./agenda-medico";
 import { abrirCheckoutStripe, checkoutStripeAtivo } from "./pagamento-stripe-cliente";
 import { useDiasBloqueados } from "./useDiasBloqueados";
@@ -929,7 +926,7 @@ export function ChatBion({
   if (!aberto) return null;
 
   return (
-    <div ref={dialogoRef} className="bpp-sobreposicao absolute inset-0 z-50 flex flex-col bp-painel" role="dialog" aria-modal="true" aria-label={modoLaudo ? "Enviar laudo para a BION IA" : "Conversa com a BION IA"}>
+    <div ref={dialogoRef} className="bpp-sobreposicao absolute inset-0 z-50 flex flex-col bp-painel bp2-v2 bp2-chat" role="dialog" aria-modal="true" aria-label={modoLaudo ? "Enviar laudo para a BION IA" : "Conversa com a BION IA"}>
       <input
         ref={inputArquivoRef}
         type="file"
@@ -981,7 +978,7 @@ export function ChatBion({
       </header>
 
       {/* Mensagens */}
-      <div className="flex-1 overflow-y-auto bp-coluna px-5 py-4 space-y-3">
+      <div className="flex-1 overflow-y-auto bp-coluna px-5 py-4 space-y-3" tabIndex={0} role="log" aria-label="Conversa com a Bion">
         {/* Modo laudo com histórico de outra abertura: cartão fixo de envio no
             topo (a conversa não começou pela mensagem contextual de laudo). */}
         {mostrarCartaoLaudo(intencao, mensagens) ? (
@@ -1052,45 +1049,19 @@ export function ChatBion({
         {etapa === "confirmar" && (() => {
           const medicoRegistro = medicosAtivos.find((m) => m.nome === escolha.medico);
           return (
-            <div className="bp-glass p-5 text-bion-ink dark:text-bion-paper">
-              <div className="font-bold mb-2">Resumo do agendamento</div>
-              <ul className="text-sm space-y-1 mb-4">
-                <li><strong>Especialidade:</strong> {escolha.especialidade}</li>
-                <li><strong>Profissional:</strong> {escolha.medico}</li>
-                <li><strong>Data:</strong> {escolha.dia} às {escolha.hora}</li>
-                <li><strong>Valor:</strong> {fmtBRL(medicoRegistro?.valor ?? 0)}</li>
-              </ul>
-              <div className="text-xs font-bold uppercase tracking-wide opacity-80 mb-2 inline-flex items-center gap-1.5">
-                <CreditCard className="w-3.5 h-3.5" /> Forma de pagamento
-              </div>
-              {/* F10: o texto acompanha o modo real — Stripe ligado, página
-                  segura; desligado (demonstração), confirmação simulada. */}
-              <p className="text-sm mb-3">
-                {stripeAtivo === false
-                  ? "Demonstração: a confirmação é simulada e nenhum cartão é cobrado."
-                  : "Cartão de crédito, na página segura do Stripe. Não aceitamos Pix."}
-              </p>
-              <div className="flex gap-2">
-                <button type="button"
-                  onClick={() => void pagarEAgendar()}
-                  disabled={pagando}
-                  className="bp-acao flex-1 py-3 text-sm inline-flex items-center justify-center gap-2 disabled:opacity-40"
-                >
-                  <Lock className="w-4 h-4" /> {stripeAtivo === false ? `Confirmar ${fmtBRL(medicoRegistro?.valor ?? 0)} (demonstração)` : `Pagar ${fmtBRL(medicoRegistro?.valor ?? 0)} e agendar`}
-                </button>
-                <button type="button"
-                  onClick={() => {
-                    setEtapa(null);
-                    setEscolha({});
-                    setMensagens((m) => [...m, { remetente: "ia", texto: "Sem problemas — o agendamento foi cancelado, nada foi cobrado. Posso ajudar em outra coisa?" }]);
-                  }}
-                  className="rounded-full border border-bion-ink/20 dark:border-white/20 px-5 py-3 text-sm font-semibold text-bion-ink dark:text-bion-paper"
-                >
-                  Cancelar
-                </button>
-              </div>
-              <p className="text-xs opacity-80 mt-2">O pagamento confirma sua consulta. A triagem é opcional e fica disponível até 5 minutos antes do horário.</p>
-            </div>
+            <ResumoAgendamento
+              escolha={escolha}
+              medico={medicoRegistro}
+              valor={medicoRegistro?.valor ?? 0}
+              stripeAtivo={stripeAtivo}
+              pagando={pagando}
+              onPagar={() => void pagarEAgendar()}
+              onCancelar={() => {
+                setEtapa(null);
+                setEscolha({});
+                setMensagens((m) => [...m, { remetente: "ia", texto: "Sem problemas — o agendamento foi cancelado, nada foi cobrado. Posso ajudar em outra coisa?" }]);
+              }}
+            />
           );
         })()}
 
@@ -1204,42 +1175,28 @@ export function ChatBion({
         <div ref={fimRef} />
       </div>
 
-        {/* Opções da etapa atual do wizard */}
-        {opcoes && (
-          <div className="bp-glass p-4">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-bold uppercase tracking-wide text-bion-ink/75 dark:text-bion-paper/75">{opcoes.titulo}</span>
-              {etapa !== "especialidade" && (
-                <button type="button"
-                  onClick={() => {
-                    const anterior: Record<string, Etapa> = { medico: "especialidade", dia: "medico", hora: "dia", confirmar: "hora" };
-                    const volta = (etapa && anterior[etapa]) || null;
-                    if (volta) {
-                      setEtapa(volta);
-                      setEscolha((c) => (volta === "especialidade" ? {} : volta === "medico" ? { especialidade: c.especialidade } : volta === "dia" ? { especialidade: c.especialidade, medico: c.medico } : { ...c, hora: undefined }));
+        {/* Opções da etapa atual do wizard (desenho da agenda do médico) */}
+        {opcoes && etapa && etapa !== "confirmar" && (
+          <div className="bp2-assist-raiz px-5 pb-2">
+            <AssistenteAgendamento
+              etapa={etapa}
+              opcoes={opcoes}
+              medicos={medicosAtivos}
+              escolha={escolha}
+              agenda={agendaChat}
+              onVoltar={
+                etapa !== "especialidade"
+                  ? () => {
+                      const anterior: Record<string, Etapa> = { medico: "especialidade", dia: "medico", hora: "dia", confirmar: "hora" };
+                      const volta = (etapa && anterior[etapa]) || null;
+                      if (volta) {
+                        setEtapa(volta);
+                        setEscolha((c) => (volta === "especialidade" ? {} : volta === "medico" ? { especialidade: c.especialidade } : volta === "dia" ? { especialidade: c.especialidade, medico: c.medico } : { ...c, hora: undefined }));
+                      }
                     }
-                  }}
-                  className="text-xs font-semibold text-bion-sea dark:text-[#C4B5FD] inline-flex items-center gap-1"
-                >
-                  <ArrowLeft className="w-3 h-3" /> voltar
-                </button>
-              )}
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              {opcoes.opcoes.map((o) => (
-                <button type="button"
-                  key={o.valor}
-                  onClick={() => opcoes.escolher(o.valor)}
-                  className="text-left rounded-2xl bg-white/60 dark:bg-white/8 border border-bion-ink/10 dark:border-white/10 px-4 py-3 text-sm font-semibold text-bion-ink dark:text-bion-paper hover:border-bion-sea/40 transition"
-                >
-                  <div className="flex items-center justify-between gap-1">
-                    <span className="truncate">{o.rotulo}</span>
-                    {opcoes.titulo === "Profissional" && <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500 shrink-0" />}
-                  </div>
-                  {o.sub && <div className="text-xs font-normal opacity-80 mt-0.5">{o.sub}</div>}
-                </button>
-              ))}
-            </div>
+                  : undefined
+              }
+            />
           </div>
         )}
 

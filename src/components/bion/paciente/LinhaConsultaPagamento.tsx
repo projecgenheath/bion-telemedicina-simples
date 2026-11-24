@@ -16,7 +16,7 @@ import { BotaoPagarStripe } from "./BotaoPagarStripe";
  */
 export type ConsultaComNota = Consulta & { temNotaFiscal?: boolean };
 
-const rotaNotaFiscal = (id: string) => `/api/consultas/${encodeURIComponent(id)}/nota-fiscal`;
+export const rotaNotaFiscal = (id: string) => `/api/consultas/${encodeURIComponent(id)}/nota-fiscal`;
 
 /** Retorno sem cobrança (retorno grátis): não tem nota nem pagamento. */
 export function ehRetornoGratis(c: Consulta): boolean {
@@ -26,7 +26,7 @@ export function ehRetornoGratis(c: Consulta): boolean {
 }
 
 /** Texto de pagamento sem repetir o status (ex.: "Aguardando pagamento" já diz que está pendente). */
-function textoPagamento(c: Consulta, aguardandoPagamento: boolean): string | null {
+export function textoPagamento(c: Consulta, aguardandoPagamento: boolean): string | null {
   if (c.status === "cancelada") return null;
   // M13: consulta encerrada por falta não ganha nota de pagamento — o
   // "· Pago · R$…" a fazia parecer uma consulta futura já paga.
