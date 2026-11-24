@@ -382,34 +382,34 @@ export function PerfilPainel({
       </Grupo>
 
       {/* Aparência */}
-      <Grupo titulo="Aparência">
+      <Grupo titulo="Aparência" className="bp2-pf-grupo-aparencia">
         <div className="bp2-pf-ajustes">
           <div>
-            <div className="bp2-pf-ajuste-t" id="rotulo-modo">
+            <div className="sr-only" id="rotulo-modo">
               Modo do app
             </div>
             <div className="bp2-pf-segmentos" role="group" aria-labelledby="rotulo-modo">
               <button type="button" onClick={() => aplicarTema("claro")} aria-pressed={tema === "claro"}>
-                <Sun className="h-4 w-4" aria-hidden /> Claro
+                <Sun className="h-3.5 w-3.5" aria-hidden /> Claro
               </button>
               <button type="button" onClick={() => aplicarTema("escuro")} aria-pressed={tema === "escuro"}>
-                <Moon className="h-4 w-4" aria-hidden /> Escuro
+                <Moon className="h-3.5 w-3.5" aria-hidden /> Escuro
               </button>
             </div>
           </div>
           <div>
-            <div className="bp2-pf-ajuste-t" id="rotulo-texto">
+            <div className="sr-only" id="rotulo-texto">
               Tamanho do texto
             </div>
             <div className="bp2-pf-segmentos bp2-pf-segmentos-3" role="group" aria-labelledby="rotulo-texto">
               {(
                 [
-                  ["compacta", "A−", "Texto menor", "text-xs"],
-                  ["confortavel", "A", "Texto padrão", "text-sm"],
-                  ["grande", "A+", "Texto maior", "text-base"],
+                  ["compacta", "A−", "Texto menor"],
+                  ["confortavel", "A", "Texto padrão"],
+                  ["grande", "A+", "Texto maior"],
                 ] as const
-              ).map(([id, rotulo, nome, tamanho]) => (
-                <button key={id} type="button" onClick={() => aplicarDensidade(id)} aria-pressed={densidade === id} aria-label={nome} className={tamanho}>
+              ).map(([id, rotulo, nome]) => (
+                <button key={id} type="button" onClick={() => aplicarDensidade(id)} aria-pressed={densidade === id} aria-label={nome}>
                   {rotulo}
                 </button>
               ))}

@@ -67,6 +67,16 @@ export type DadosVisualizador = {
   imprimir?: boolean;
 };
 
+/** Iniciais do profissional para o avatar ("Dra. Ana Ribeiro" → "AR"). */
+function iniciaisMedico(nome: string): string {
+  const partes = nome
+    .replace(/^Dr(a)?\.?\s+|^Dr\(a\)\.\s*/i, "")
+    .split(/\s+/)
+    .filter(Boolean);
+  if (!partes.length) return "?";
+  return ((partes[0][0] ?? "") + (partes.length > 1 ? partes[partes.length - 1][0] : "")).toUpperCase();
+}
+
 export function VisualizadorDocumento({ dados, paciente, onFechar }: { dados: DadosVisualizador; paciente: string; onFechar: () => void }) {
   const { titulo, corpo, documento, tipo, rotuloTipo, emitido, medico, especialidade, selo, imprimir = false } = dados;
   const dialogoRef = useRef<HTMLDivElement>(null);
@@ -115,11 +125,6 @@ export function VisualizadorDocumento({ dados, paciente, onFechar }: { dados: Da
             <p className="bp2-vdoc-sub">{sub}</p>
           </div>
           <div className="bp2-vdoc-redondos">
-            {pdf ? (
-              <button type="button" onClick={() => void entregarPdf(pdf)} aria-label="Baixar ou compartilhar PDF" title="Baixar PDF" className="bp2-redondo bp2-vdoc-so-largo">
-                <Download className="h-4 w-4" aria-hidden />
-              </button>
-            ) : null}
             {noApp ? (
               <button type="button" onClick={() => void copiar()} aria-label="Copiar texto do documento" title="Copiar" className="bp2-redondo bp2-vdoc-so-largo">
                 <Copy className="h-4 w-4" aria-hidden />
@@ -169,38 +174,43 @@ export function VisualizadorDocumento({ dados, paciente, onFechar }: { dados: Da
           </article>
 
           {/* Computador: detalhes no cartão lilás (como "Exames e documentos" da ficha) */}
-          <section className="bp2-vdoc-lado" aria-label="Detalhes do documento">
-            <h3 className="bp2-ficha-titulo">
-              Este
-              <br />
-              documento
-            </h3>
-            <dl>
-              <div>
-                <dt>Situação</dt>
-                <dd>
-                  {selo ? (
-                    <span className="bp2-selo-cancelado">
-                      <Ban className="h-3 w-3" aria-hidden /> {selo}
-                    </span>
-                  ) : (
-                    <span className="bp2-selo-valido">{tipo === "prontuario" ? "Disponível" : "Válido"}</span>
-                  )}
-                </dd>
+          <section className="bp2-vdoc-lado" aria-labelledby="bp2-vdoc-lado-t">
+            <div className="bp2-vdoc-lado-cab">
+              <h3 id="bp2-vdoc-lado-t" className="bp2-ficha-titulo">
+                Este
+                <br />
+                documento
+              </h3>
+              {pdf ? (
+                <button type="button" onClick={() => void entregarPdf(pdf)} aria-label="Baixar ou compartilhar PDF" title="Baixar PDF" className="bp2-redondo bp2-redondo-preto">
+                  <Download className="h-4 w-4" aria-hidden />
+                </button>
+              ) : null}
+            </div>
+            <h4 className="bp2-vdoc-subtitulo">Situação</h4>
+            <div className="bp2-vdoc-rel">
+              <div className="min-w-0">
+                <p className="bp2-vdoc-rel-nome">{rotuloTipo}</p>
+                <p className="bp2-vdoc-rel-sub tabular-nums">Emitido em {emitido || "—"}</p>
               </div>
-              <div>
-                <dt>Tipo</dt>
-                <dd>{rotuloTipo}</dd>
-              </div>
-              <div>
-                <dt>Emitido em</dt>
-                <dd className="tabular-nums">{emitido || "—"}</dd>
-              </div>
-              <div>
-                <dt>Profissional</dt>
-                <dd>{medico}</dd>
-              </div>
-            </dl>
+              {selo ? (
+                <span className="bp2-selo-cancelado">
+                  <Ban className="h-3 w-3" aria-hidden /> {selo}
+                </span>
+              ) : (
+                <span className="bp2-selo-valido">{tipo === "prontuario" ? "Disponível" : "Válido"}</span>
+              )}
+            </div>
+            <h4 className="bp2-vdoc-subtitulo">Profissional</h4>
+            <div className="bp2-vdoc-emissor">
+              <span className="bp2-vdoc-emissor-avatar" aria-hidden>
+                {iniciaisMedico(medico)}
+              </span>
+              <span className="min-w-0">
+                <span className="block truncate font-medium">{medico || "—"}</span>
+                {especialidade ? <span className="bp2-vdoc-rel-sub block truncate">{especialidade}</span> : null}
+              </span>
+            </div>
             <p className="bp2-vdoc-nota">
               {pdf ? "O PDF é gerado no seu aparelho, com os dados deste documento." : "O prontuário não tem PDF; use Imprimir para salvar."}
             </p>

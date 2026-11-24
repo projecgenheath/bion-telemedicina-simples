@@ -1705,3 +1705,78 @@
 /* Linhas de consulta/pagamento dentro do grupo do Perfil (gaveta estreita no computador). */
 .bp2-app .bp2-pf-grupo .bpp-linha { padding: 0.75rem 1rem; }
 .bp2-app .bp2-pf-grupo .bpp-linha > div:first-child > div:first-child { flex-basis: 100%; }
+
+/* ==================================================================== */
+/* Etapa 4 · rodada 2 (24/11): medidas tiradas do Perfil do médico na   */
+/* main (PR #242, 83140c6), lidas com getComputedStyle a 1440 e 390 px. */
+/* ==================================================================== */
+.bp2-app .bp2-pf { gap: 1rem; padding: 1.25rem 1.25rem 5.375rem; --bp2-pf-t2: rgba(36, 36, 36, 0.75); --bp2-pf-div: rgba(36, 36, 36, 0.1); }
+.dark .bp2-app .bp2-pf { --bp2-pf-t2: rgba(242, 244, 247, 0.75); --bp2-pf-div: rgba(255, 255, 255, 0.1); }
+@media (max-width: 1023px) { .bp2-app .bp2-pf { padding-top: calc(0.25rem + env(safe-area-inset-top)); padding-bottom: 5.375rem; } }
+@media (min-width: 1024px) { .bp2-app .bp2-pf { padding: 1.25rem 1.25rem 2.5rem; } }
+.bp2-app .bp2-pf-cab { padding-bottom: 0; margin-bottom: 0.5rem; }
+.bp2-app .bp2-pf-avatar { font-size: 30px; line-height: 36px; font-weight: 600; letter-spacing: 0; background: #2f62c4; }
+.dark .bp2-app .bp2-pf-avatar { background: #2f62c4; }
+.bp2-app .bp2-pf-camera { right: -0.25rem; bottom: -0.25rem; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1); }
+.dark .bp2-app .bp2-pf-camera { background: #27272a; color: #ffffff; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1); }
+.bp2-app .bp2-pf-nome { margin-top: 0.75rem; font-size: 20px; line-height: 28px; font-weight: 600; }
+.bp2-app .bp2-pf-email { margin-top: 0; font-size: 14px; line-height: 20px; color: var(--bp2-pf-t2); }
+.bp2-app .bp2-pf-pessoa { margin-top: 0.25rem; font-size: 12px; line-height: 16px; color: var(--bp2-pf-t2); }
+
+.bp2-app .bp2-pf-grupo { border: 1px solid rgba(36, 36, 36, 0.08); border-radius: 20px; box-shadow: 0 0 0 1px rgba(16, 24, 40, 0.01), 0 1px 3px rgba(16, 24, 40, 0.035); --bp2-texto-2: var(--bp2-pf-t2); }
+.dark .bp2-app .bp2-pf-grupo { border-color: rgba(255, 255, 255, 0.1); box-shadow: none; --bp2-texto-2: var(--bp2-pf-t2); }
+.bp2-app .bp2-pf-grupo-cab { min-height: 0; padding: 0.75rem 1rem 0.25rem; border-bottom: 1px solid var(--bp2-pf-div); align-items: center; }
+.bp2-app .bp2-pf-grupo-t { font-size: 12px; line-height: 16px; font-weight: 700; letter-spacing: 0.6px; color: var(--bp2-pf-t2); }
+.bp2-app .bp2-pf-vertudo { min-height: 1.5rem; margin: -0.25rem -0.35rem -0.25rem 0; padding: 0 0.35rem; font-size: 12px; line-height: 16px; font-weight: 700; }
+.bp2-app .bp2-pf-grupo-corpo > * + * { border-top-color: var(--bp2-pf-div); }
+.bp2-app .bp2-pf-linha { min-height: 0; gap: 0.75rem; padding: 0.75rem 1rem; }
+.bp2-app .bp2-pf-linha-simples { min-height: 2.75rem; }
+.bp2-app .bp2-pf-icone { width: 2.25rem; height: 2.25rem; background: rgba(36, 36, 36, 0.08); color: var(--bp2-texto); }
+.dark .bp2-app .bp2-pf-icone { background: rgba(255, 255, 255, 0.1); }
+.bp2-app .bp2-pf-linha-t { font-size: 14px; line-height: 20px; font-weight: 700; }
+.bp2-app .bp2-pf-linha-v { margin-top: 0; font-size: 12px; line-height: 16px; color: var(--bp2-pf-t2); }
+.bp2-app .bp2-pf-seta { color: var(--bp2-texto); opacity: 0.7; }
+.bp2-app .bp2-pf-grupo .bpp-linha { padding: 0.75rem 1rem; }
+
+.bp2-app .bp2-pf-grupo-aparencia .bp2-pf-grupo-cab { border-bottom: 0; padding-bottom: 0; }
+.bp2-app .bp2-pf-grupo-aparencia .bp2-pf-grupo-corpo > * + * { border-top: 0; }
+.bp2-app .bp2-pf-ajustes { gap: 0.75rem; padding: 0.75rem 1rem 1rem; }
+.bp2-app .bp2-pf-segmentos { gap: 4px; padding: 4px; border-radius: 22px; background: rgba(36, 36, 36, 0.08); }
+.dark .bp2-app .bp2-pf-segmentos { background: rgba(255, 255, 255, 0.1); }
+.bp2-app .bp2-pf-segmentos button { min-height: 2rem; padding: 0.5rem 0; gap: 6px; border-radius: 18px; font-size: 12px; line-height: 16px; font-weight: 700; color: rgba(36, 36, 36, 0.8); }
+.dark .bp2-app .bp2-pf-segmentos button { color: rgba(242, 244, 247, 0.8); }
+.bp2-app .bp2-pf-segmentos button:hover { background: rgba(255, 255, 255, 0.6); }
+.dark .bp2-app .bp2-pf-segmentos button:hover { background: rgba(255, 255, 255, 0.06); }
+.bp2-app .bp2-pf-segmentos button[aria-pressed="true"], .bp2-app .bp2-pf-segmentos button[aria-pressed="true"]:hover { background: #ffffff; color: #242424; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1); }
+.dark .bp2-app .bp2-pf-segmentos button[aria-pressed="true"], .dark .bp2-app .bp2-pf-segmentos button[aria-pressed="true"]:hover { background: #27272a; color: #ffffff; }
+
+.bp2-app .bp2-pf-sair { color: #c10007; }
+.dark .bp2-app .bp2-pf-sair { color: #ffa2a2; }
+.bp2-app .bp2-pf-icone-perigo, .dark .bp2-app .bp2-pf-icone-perigo { background: rgba(251, 44, 54, 0.1); color: inherit; }
+.bp2-app .bp2-pf-excluir { font-size: 12px; font-weight: 700; color: #c10007; }
+.dark .bp2-app .bp2-pf-excluir { color: #ffa2a2; }
+
+/* Campo com erro na folha "Editar meus dados" (CPF, telefone) */
+.bp2-app .bp2-sheet .bp2-campo-erro { border-color: #c10007 !important; box-shadow: 0 0 0 1px #c10007; }
+.dark .bp2-app .bp2-sheet .bp2-campo-erro { border-color: #ffa2a2 !important; box-shadow: 0 0 0 1px #ffa2a2; }
+
+/* Visualizador: véu e sombra das gavetas do médico; lateral = "Exames e documentos" da ficha */
+.bp2-app .bp2-vdoc-veu { background: rgba(16, 24, 40, 0.28); }
+@media (min-width: 1024px) {
+  .bp2-app .bp2-vdoc-caixa { box-shadow: 0 24px 60px rgba(16, 24, 40, 0.18); }
+  .bp2-app .bp2-vdoc-lado { gap: 0.6rem; padding: 1.1rem 0.95rem 0.6rem; border-radius: 1.25rem; background: var(--bp2-lavanda); color: #242424; --bp2-texto-2: #646464; }
+}
+.bp2-app .bp2-vdoc-lado-cab { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.5rem; }
+.bp2-app .bp2-vdoc-lado .bp2-ficha-titulo { color: #242424; }
+.bp2-app .bp2-vdoc-lado .bp2-redondo.bp2-redondo-preto, .dark .bp2-app .bp2-vdoc-lado .bp2-redondo.bp2-redondo-preto { background: #242424; color: #ffffff; }
+.bp2-app .bp2-vdoc-lado .bp2-redondo.bp2-redondo-preto:hover { background: #000000; }
+.bp2-app .bp2-vdoc-subtitulo { margin-top: 0.3rem; padding: 0.7rem 0 0.15rem; border-top: 1px solid rgba(36, 36, 36, 0.1); font-size: 11px; line-height: 14px; font-weight: 500; letter-spacing: 0.02em; color: #646464; }
+.bp2-app .bp2-vdoc-rel { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 4px 0 11px; }
+.bp2-app .bp2-vdoc-rel-nome { font-size: 15px; line-height: 20px; font-weight: 500; }
+.bp2-app .bp2-vdoc-rel-sub { margin-top: 2px; font-size: 12px; line-height: 16px; color: #646464; }
+.bp2-app .bp2-vdoc-emissor { display: flex; align-items: center; gap: 0.55rem; padding: 0.45rem 0.6rem; border-radius: 0.75rem; background: #d6d1ea; font-size: 13px; line-height: 17px; color: #242424; margin-bottom: 0.3rem; }
+.bp2-app .bp2-vdoc-emissor .bp2-vdoc-rel-sub { margin-top: 1px; color: #4f4f4f; }
+.bp2-app .bp2-vdoc-emissor-avatar { width: 1.6rem; height: 1.6rem; border-radius: 9999px; display: grid; place-items: center; background: #ffffff; font-size: 11px; font-weight: 500; flex-shrink: 0; }
+.bp2-app .bp2-vdoc-lado .bp2-vdoc-nota { padding: 0.6rem 0 0.35rem; border-top: 1px solid rgba(36, 36, 36, 0.1); font-size: 12px; line-height: 16px; color: #646464; }
+/* Aviso de erro (sonner richColors, #e60000 sobre #fff0f0 = 4,34:1): só nas telas do paciente, texto AA. */
+body:has(.bp2-app) [data-sonner-toast][data-type="error"][data-rich-colors="true"] { --error-text: #b30000; color: #b30000; }
