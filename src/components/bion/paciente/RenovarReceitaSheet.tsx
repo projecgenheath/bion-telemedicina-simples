@@ -93,7 +93,7 @@ export function RenovarReceitaSheet({
   }
 
   return (
-    <div ref={raizRef} className="bpp-sheet-raiz absolute inset-0 z-[90] flex items-end justify-center" role="dialog" aria-modal="true" aria-labelledby="titulo-renovar">
+    <div ref={raizRef} className="bpp-sheet-raiz bp2-sheet bp2-sheet-e5 bp2-v2 absolute inset-0 z-[90] flex items-end justify-center" role="dialog" aria-modal="true" aria-labelledby="titulo-renovar">
       <button type="button" className="absolute inset-0 bpp-sheet-veu" aria-label="Fechar" onClick={fechar} />
       <div
         ref={painelRef} className="bpp-sheet-painel relative w-full max-w-lg max-h-[92svh] overflow-y-auto rounded-t-3xl bpp-sheet border-t bpp-sheet-borda px-5 pt-3 pb-8 shadow-[0_-12px_40px_rgba(2,8,26,0.35)]">

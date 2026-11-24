@@ -49,7 +49,7 @@ function ListaCompletaAntiga({ lista, onFechar, onAgendar }: { lista: ListaPerfi
   const { titulo, descricao } = TITULO[lista];
 
   return (
-    <div ref={raizRef} className="bpp-sobreposicao absolute inset-0 z-50 overflow-y-auto bp-coluna" role="dialog" aria-modal="true" aria-label={titulo}>
+    <div ref={raizRef} className="bp2-detalhe bp2-v2 bpp-sobreposicao absolute inset-0 z-50 overflow-y-auto bp-coluna" role="dialog" aria-modal="true" aria-label={titulo}>
       <div className="min-h-full bp-painel">
         <div className="bion-surgir mx-auto w-full max-w-xl px-5 bp-safe-top pb-16">
           <div className="flex items-start justify-between gap-4 pt-2">

@@ -82,7 +82,7 @@ function Envolver({
   }, []);
 
   return (
-    <div ref={rootRef} className="absolute inset-0 z-50 overflow-y-auto bp-coluna" role="dialog" aria-modal="true" aria-label={titulo}>
+    <div ref={rootRef} className="bp2-detalhe bp2-v2 absolute inset-0 z-50 overflow-y-auto bp-coluna" role="dialog" aria-modal="true" aria-label={titulo}>
       <div className="min-h-full bp-painel">
         <div className="mx-auto w-full max-w-xl px-5 bp-safe-top pb-16">
           <div className="flex items-start justify-between gap-4 pt-2">
