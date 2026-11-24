@@ -189,6 +189,7 @@ export function DocumentosPainel({
   vista = "documentos",
   onVista,
   onFechar,
+  ativo = true,
 }: {
   /** Conversa aberta (id do médico). Fica no PacienteApp para o aviso do Início abrir direto. */
   conversaAtiva: string | null;
@@ -199,6 +200,8 @@ export function DocumentosPainel({
   onVista?: (v: VistaDocumentos) => void;
   /** Volta ao Início (botão do topo). */
   onFechar?: () => void;
+  /** O painel está à vista (no computador a conversa mais recente só abre sozinha com ele aberto). */
+  ativo?: boolean;
 }) {
   const { consultas, documentos, medicos, sessao, naoLidasMensagens } = useBion();
   const [consultaSelecionada, setConsultaSelecionada] = useState<string | null>(null);
@@ -663,7 +666,7 @@ export function DocumentosPainel({
       {topo}
       <div id="bp2-docs-painel" role="tabpanel" aria-labelledby={`bp2-aba-${vista}`} className="bp2-docs-corpo">
         {vista === "mensagens" ? (
-          <TelaMensagensPaciente conversaAtiva={conversaAtiva} onConversa={onConversa} onDocumentos={() => onVista?.("documentos")} onAgendar={onAgendar} />
+          <TelaMensagensPaciente ativo={ativo} conversaAtiva={conversaAtiva} onConversa={onConversa} onDocumentos={() => onVista?.("documentos")} onAgendar={onAgendar} />
         ) : (
           corpoDocumentos
         )}

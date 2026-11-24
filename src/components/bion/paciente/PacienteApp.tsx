@@ -708,6 +708,7 @@ export function PacienteApp() {
             conversaAtiva={conversaAtiva}
             onConversa={setConversaAtiva}
             onAgendar={() => abrirChat("agendar")}
+            ativo={painel === 2}
             vista={emMensagens || conversaAtiva ? "mensagens" : "documentos"}
             onVista={(v) => {
               if (v === "documentos") {

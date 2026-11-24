@@ -36,11 +36,14 @@ function useTelaLarga() {
 const semAcento = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
 export function TelaMensagensPaciente({
+  ativo = true,
   conversaAtiva,
   onConversa,
   onDocumentos,
   onAgendar,
 }: {
+  /** Tela à vista (o painel da direita aberto). */
+  ativo?: boolean;
   conversaAtiva: string | null;
   onConversa: (medicoId: string | null) => void;
   onDocumentos: () => void;
@@ -132,6 +135,15 @@ export function TelaMensagensPaciente({
     onConversa(id);
     marcarConversaLida(id);
   };
+
+  /* No computador (≥ 1024 px), a conversa mais recente abre sozinha e é marcada
+     como lida, como nas mensagens do médico. No celular a lista vem primeiro. */
+  const maisRecente = contatos[0]?.id;
+  useEffect(() => {
+    if (!ativo || !larga || conversaAtiva || !maisRecente) return;
+    onConversa(maisRecente);
+    marcarConversaLida(maisRecente);
+  }, [ativo, larga, conversaAtiva, maisRecente, onConversa, marcarConversaLida]);
 
   const enviar = async () => {
     if (!contatoAtivo || enviando) return;
