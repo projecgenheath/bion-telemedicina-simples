@@ -133,3 +133,40 @@ export function partesValor(valor: string | undefined): { numero: string; moeda:
   if (!m) return { numero: valor.trim(), moeda: "" };
   return { numero: m[2]!.trim(), moeda: m[1]! };
 }
+
+/* ------------------ Agenda própria do paciente (rodada 2) ------------------ */
+
+/** "10:30" → 630 minutos. */
+export function minutosDoHorario(h: string): number {
+  const [hh, mm] = h.split(":").map(Number);
+  return (hh || 0) * 60 + (mm || 0);
+}
+
+/**
+ * Faixa de horas da grade (como a calha da agenda do médico): da hora cheia
+ * do primeiro horário livre até a hora cheia depois do fim do último. Sem
+ * horário, 08:00–18:00. Sempre pelo menos 4 horas.
+ */
+export function faixaDaGrade(horarios: string[], duracaoMin: number): { inicio: number; fim: number } {
+  if (!horarios.length) return { inicio: 8, fim: 18 };
+  const mins = horarios.map(minutosDoHorario);
+  // Janela mínima de 10 h, como a grade 8–18 da agenda do médico: a grade preenche o cartão.
+  let inicio = Math.floor(Math.min(...mins) / 60);
+  const fim = Math.min(24, Math.max(inicio + 10, Math.ceil((Math.max(...mins) + duracaoMin) / 60)));
+  inicio = Math.max(0, Math.min(inicio, fim - 10));
+  return { inicio, fim };
+}
+
+/** Índice da semana (segunda a domingo) que contém o dia; -1 se nenhuma. */
+export function semanaDoDia(semanas: DiaCalendario[][], iso: string): number {
+  return semanas.findIndex((s) => s.some((d) => d.iso === iso));
+}
+
+/** Passo atual do agendamento pela agenda: 1 especialidade … 5 confirmar. */
+export function passoDaAgenda(e: { especialidade?: string; medico?: string; diaIso?: string; hora?: string }): "especialidade" | "medico" | "dia" | "hora" | "confirmar" {
+  if (!e.especialidade) return "especialidade";
+  if (!e.medico) return "medico";
+  if (!e.diaIso) return "dia";
+  if (!e.hora) return "hora";
+  return "confirmar";
+}

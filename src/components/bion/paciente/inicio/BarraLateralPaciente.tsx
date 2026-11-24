@@ -84,7 +84,7 @@ export function BarraLateralPaciente({
     { id: "saude", nome: "Minha saúde: remédios, IMC e pressão", Icone: HeartPulse, onClick: onSaude },
     { id: "exames", nome: "Exames e laudos", Icone: ClipboardList, onClick: onExames },
     { id: "documentos", nome: "Documentos: receitas, atestados e pedidos", Icone: FileText, onClick: onDocumentos },
-    { id: "agendar", nome: "Agendar consulta com a BION IA", Icone: CalendarPlus, onClick: onAgendar },
+    { id: "agendar", nome: "Agendar consulta", Icone: CalendarPlus, onClick: onAgendar },
   ];
   const nomeAcessivel = (it: Item) =>
     it.contador ? `${it.nome}: ${it.contador} não lida${it.contador > 1 ? "s" : ""}` : it.nome;

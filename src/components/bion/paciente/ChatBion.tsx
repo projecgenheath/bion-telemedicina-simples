@@ -1,6 +1,5 @@
 "use client";
 
-import { CODIGO_ACEITE_TERMOS_PENDENTE, ERRO_ACEITE_TERMOS_PENDENTE } from "@/lib/aceite-termos";
 import { textoNota } from "@/lib/medico-exibicao";
 import { ErroBionIa, consultarConsentimentoIa, perguntarBionIa } from "@/lib/bion-ia-cliente";
 import { AVISO_DADOS_PESSOAIS_IA, ehConsentimentoIaPendente } from "@/lib/consentimento-ia";
@@ -19,11 +18,8 @@ import {
   X,
 } from "lucide-react";
 import { useBion, type AnamneseResumo } from "@/lib/bion-store";
-import { diasDoAgendamento } from "@/components/bion/agendamento/horarios";
 import { AssistenteAgendamento, ResumoAgendamento } from "./consultas/AssistenteAgendamento";
-import { agendaLivreDoMedico } from "./agenda-medico";
-import { abrirCheckoutStripe, checkoutStripeAtivo } from "./pagamento-stripe-cliente";
-import { useDiasBloqueados } from "./useDiasBloqueados";
+import { useAgendamentoPaciente } from "./consultas/useAgendamentoPaciente";
 import {
   type Msg,
   type Etapa,
@@ -88,6 +84,7 @@ export function ChatBion({
   aoEnviarExame,
   aoAbrirTriagem,
   intencao,
+  onAbrirAgenda,
 }: {
   aberto: boolean;
   onFechar: () => void;
@@ -95,11 +92,12 @@ export function ChatBion({
   aoAbrirTriagem?: (info: { consultaId: string; medico: string; especialidade: string; quando: string }) => void;
   /** "laudo" = aberto por "Enviar novo laudo": entra direto no envio, sem a saudação genérica. */
   intencao?: IntencaoChat;
+  /** Atalho do assistente para a agenda própria do paciente (mesma lógica de agendamento). */
+  onAbrirAgenda?: (inicio: { especialidade?: string | null; medico?: string | null }) => void;
 }) {
   const modoLaudo = intencao === "laudo";
   const {
     sessao,
-    medicos,
     consultas,
     anamneses,
     aplicarEstadoFresco,
@@ -114,21 +112,18 @@ export function ChatBion({
   const [ultimaFalha, setUltimaFalha] = useState<string | null>(null);
   const [entrada, setEntrada] = useState("");
   const [pensando, setPensando] = useState(false);
-  const [etapa, setEtapa] = useState<Etapa>(null);
-  // dia = rótulo exibido ("Hoje", "Amanhã", "D Mês"); diaIso = chave do dia no
-  // fuso da clínica (o rótulo muda de sentido na virada do dia, o ISO não).
-  const [escolha, setEscolha] = useState<{
-    especialidade?: string;
-    medico?: string;
-    dia?: string;
-    diaIso?: string;
-    hora?: string;
-  }>({});
-  const [pagando, setPagando] = useState(false);
-  // F10: o checkout Stripe está ligado NESTE ambiente? O cartão de
-  // confirmação prometia "página segura do Stripe" mesmo no modo simulado,
-  // em que nenhum cartão é pedido. null = ainda consultando a flag.
-  const [stripeAtivo, setStripeAtivo] = useState<boolean | null>(null);
+  // Agendamento: fonte única compartilhada com a tela de agenda (useAgendamentoPaciente).
+  const {
+    etapa,
+    setEtapa,
+    escolha,
+    setEscolha,
+    pagando,
+    stripeAtivo,
+    medicosAtivos,
+    agenda: agendaChat,
+    pagarEAgendar: pagarEAgendarCompartilhado,
+  } = useAgendamentoPaciente();
   const [anamneseAtiva, setAnamneseAtiva] = useState<AnamneseAtiva | null>(null);
   const [enviandoLaudo, setEnviandoLaudo] = useState(false);
   // Laudo escolhido aguardando o aceite do aviso de envio à NVIDIA (LGPD).
@@ -152,22 +147,6 @@ export function ChatBion({
   const inputArquivoRef = useRef<HTMLInputElement>(null);
   const fimRef = useRef<HTMLDivElement>(null);
   const histAnamneseRef = useRef<{ remetente: "usuario" | "ia"; texto: string }[]>([]);
-
-  const medicosAtivos = medicos.filter((m) => m.status === "ativo");
-
-  // Agenda LIVRE do profissional escolhido — a MESMA do fluxo de agendamento
-  // (AgendamentoFluxo): fuso de São Paulo (não o relógio do navegador), sem
-  // horários passados, sem horários já ocupados por consultas conhecidas, sem
-  // horários em que o próprio paciente já tem consulta e sem os dias inteiros
-  // bloqueados pelo médico. O servidor continua validando (409).
-  const medicoEscolhido = escolha.medico ? medicosAtivos.find((m) => m.nome === escolha.medico) : undefined;
-  const { bloqueados, recarregar: recarregarBloqueios } = useDiasBloqueados(medicoEscolhido?.id);
-  // F5: horizonte de 14 dias, o MESMO do fluxo principal (AgendamentoFluxo e
-  // remarcação) — com 7, o chat empurrava para outro médico quem tinha vaga
-  // na semana seguinte com o mesmo profissional.
-  const agendaChat = medicoEscolhido
-    ? diasDoAgendamento(agendaLivreDoMedico(medicoEscolhido, consultas, undefined, 14, bloqueados), consultas)
-    : [];
 
   // Triagens em andamento de consultas confirmadas dentro da janela (retomada)
   const anamnesesPendentes = anamneses
@@ -210,19 +189,6 @@ export function ChatBion({
       iniciarAgendamento();
     }
   }, [aberto, intencao, etapa, mensagens.length]);
-
-  // F10: ao chegar na confirmação, resolve a flag do checkout (com cache no
-  // módulo) para o cartão dizer a verdade sobre a forma de pagamento.
-  useEffect(() => {
-    if (etapa !== "confirmar" || stripeAtivo !== null) return;
-    let vivo = true;
-    void checkoutStripeAtivo().then((v) => {
-      if (vivo) setStripeAtivo(v);
-    });
-    return () => {
-      vivo = false;
-    };
-  }, [etapa, stripeAtivo]);
 
   useEffect(() => {
     if (!pensando) {
@@ -679,124 +645,17 @@ export function ChatBion({
     setEtapa("especialidade");
   };
 
-  /** Pagamento (simulado) + criação da consulta — o pagamento confirma no agenda. */
+  /** Pagamento + criação da consulta (lógica em useAgendamentoPaciente) — o resultado vira mensagem. */
   const pagarEAgendar = async () => {
-    const { medico, especialidade, diaIso, hora } = escolha;
-    if (!medico || !especialidade || !diaIso || !hora || pagando) return;
-    const medicoRegistro = medicosAtivos.find((m) => m.nome === medico);
-    const medicoId = medicoRegistro?.id;
-    if (!medicoId) {
-      toast.error("Médico não encontrado para o agendamento.");
+    const r = await pagarEAgendarCompartilhado("Agendamento pela BION IA — Cartão");
+    if (!r || r.tipo === "checkout") return;
+    if (r.tipo === "erro") {
+      if (r.texto === "Médico não encontrado para o agendamento.") toast.error(r.texto);
+      else setMensagens((m) => [...m, { remetente: "ia", texto: r.texto, tipo: "erro" }]);
       return;
     }
-    // O horário ainda precisa estar livre (virada do dia, vaga ocupada, dia bloqueado).
-    const diaAtual = agendaChat.find((d) => d.iso === diaIso);
-    if (!diaAtual || !diaAtual.horarios.includes(hora)) {
-      setMensagens((m) => [
-        ...m,
-        { remetente: "ia", texto: "Esse horário não está mais disponível. Escolha outro dia ou horário, por favor.", tipo: "erro" },
-      ]);
-      setEscolha({ especialidade, medico });
-      setEtapa("dia");
-      return;
-    }
-    // Rótulo atual do dia ("Hoje" | "Amanhã" | "D Mês"), formato lido pelo servidor.
-    const dia = diaAtual.rotulo;
-    setPagando(true);
-    // Recusa do servidor (ex.: 409 "O médico não atende neste dia.") — distinta de falha de rede.
-    let recusa: { status: number; erro: string; termos?: boolean } | null = null;
-    try {
-      const res = await fetch("/api/consultas", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          medicoId,
-          data: dia,
-          hora,
-          motivoConsulta: "Agendamento pela BION IA — Cartão",
-          valor: medicoRegistro?.valor ?? 0,
-        }),
-      });
-      const json = ((await res.json().catch(() => null)) ?? {}) as { consultaCriada?: string; erro?: string } & Record<string, unknown>;
-      if (!res.ok || !json.consultaCriada) {
-        recusa = {
-          status: res.status,
-          erro: typeof json.erro === "string" ? json.erro : "",
-          termos: json.codigo === CODIGO_ACEITE_TERMOS_PENDENTE,
-        };
-        throw new Error(recusa.erro || "Falha");
-      }
-      // Contrato delta: resposta contém APENAS a consulta criada (+ anamnese).
-      aplicarDelta(json);
-      // Só cartão: com o checkout Stripe ligado, a consulta nasce aguardando
-      // pagamento e o paciente vai para a página do Stripe (o webhook confirma).
-      if (json.pagarComCartao === true) {
-        const r = await abrirCheckoutStripe({ consultaId: json.consultaCriada });
-        if (r.url) {
-          window.location.assign(r.url);
-          return;
-        }
-        setMensagens((m) => [
-          ...m,
-          { remetente: "ia", texto: `Reservei o horário, mas o pagamento não abriu: ${r.erro ?? "tente de novo"}. Você pode pagar em Minhas consultas.`, tipo: "erro" },
-        ]);
-        setEtapa(null);
-        setEscolha({});
-        return;
-      }
-
-      const quando = rotuloQuando(dia, hora);
-      setMensagens((m) => [
-        ...m,
-        {
-          remetente: "ia",
-          // F10: sem Stripe (modo simulado), nada foi cobrado — a mensagem
-          // não pode dizer "Pagamento confirmado".
-          texto:
-            stripeAtivo === false
-              ? `Consulta marcada em modo de demonstração — nenhum valor foi cobrado. Sua consulta de **${especialidade}** com ${medico} está marcada para ${quando}. A triagem é opcional e abre em cards — fora deste chat.`
-              : `Pagamento confirmado. Sua consulta de **${especialidade}** com ${medico} está marcada para ${quando}. A triagem é opcional e abre em cards — fora deste chat.`,
-          tipo: "sucesso-agendamento",
-        },
-      ]);
-      setEtapa(null);
-      setEscolha({});
-      aoAbrirTriagem?.({
-        consultaId: json.consultaCriada!,
-        medico,
-        especialidade,
-        quando,
-      });
-    } catch {
-      if (recusa?.termos) {
-        // Falta o aceite dos termos vigentes: texto fixo, sem "pagamento"/erro genérico.
-        setMensagens((m) => [...m, { remetente: "ia", texto: ERRO_ACEITE_TERMOS_PENDENTE, tipo: "erro" }]);
-      } else if (recusa?.status === 409) {
-        // Horário/dia recusado (ocupado, dia bloqueado pelo médico…): mostra o
-        // motivo do servidor e volta para a escolha do dia com a agenda atualizada.
-        const motivo = recusa.erro || "Esse horário não está mais disponível.";
-        recarregarBloqueios();
-        setMensagens((m) => [
-          ...m,
-          { remetente: "ia", texto: `${motivo} Escolha outro dia ou horário, por favor — seu pagamento não foi debitado.`, tipo: "erro" },
-        ]);
-        setEscolha({ especialidade, medico });
-        setEtapa("dia");
-      } else if (recusa?.erro) {
-        const motivo = recusa.erro;
-        setMensagens((m) => [
-          ...m,
-          { remetente: "ia", texto: `Não consegui concluir o agendamento: ${motivo} Seu pagamento não foi debitado.`, tipo: "erro" },
-        ]);
-      } else {
-        setMensagens((m) => [
-          ...m,
-          { remetente: "ia", texto: "Não consegui concluir o agendamento agora. Verifique sua conexão e tente novamente — seu pagamento não foi debitado.", tipo: "erro" },
-        ]);
-      }
-    } finally {
-      setPagando(false);
-    }
+    setMensagens((m) => [...m, { remetente: "ia", texto: r.texto, tipo: "sucesso-agendamento" }]);
+    aoAbrirTriagem?.({ consultaId: r.consultaId, medico: r.medico, especialidade: r.especialidade, quando: r.quando });
   };
 
   /* --------------------------- opções do wizard --------------------------- */
@@ -1184,6 +1043,16 @@ export function ChatBion({
               medicos={medicosAtivos}
               escolha={escolha}
               agenda={agendaChat}
+              onAbrirAgenda={
+                onAbrirAgenda
+                  ? () => {
+                      const inicio = { especialidade: escolha.especialidade, medico: escolha.medico };
+                      setEtapa(null);
+                      setEscolha({});
+                      onAbrirAgenda(inicio);
+                    }
+                  : undefined
+              }
               onVoltar={
                 etapa !== "especialidade"
                   ? () => {

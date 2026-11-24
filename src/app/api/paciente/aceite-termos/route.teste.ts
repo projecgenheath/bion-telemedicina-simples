@@ -84,7 +84,10 @@ checa("mensagemRecusa: código → texto fixo", mensagemRecusa({ codigo: CODIGO_
 checa("mensagemRecusa: outro erro mantém o do servidor", mensagemRecusa({ erro: "Horário ocupado." }, "padrão") === "Horário ocupado.");
 checa("mensagemRecusa: sem erro → padrão", mensagemRecusa(null, "padrão") === "padrão");
 const chat = ler("src/components/bion/paciente/ChatBion.tsx");
-checa("chat de agendamento mostra o texto fixo no 403 de termos", /recusa\?\.termos\)[\s\S]{0,250}texto: ERRO_ACEITE_TERMOS_PENDENTE/.test(chat) && chat.includes("json.codigo === CODIGO_ACEITE_TERMOS_PENDENTE"));
+// Etapa 2 (rodada 2): chat e tela de agenda agendam pelo hook único.
+const agendamento = ler("src/components/bion/paciente/consultas/useAgendamentoPaciente.ts");
+checa("chat de agendamento usa o hook compartilhado", chat.includes("useAgendamentoPaciente()"));
+checa("chat de agendamento mostra o texto fixo no 403 de termos", /recusa\?\.termos\)[\s\S]{0,250}texto: ERRO_ACEITE_TERMOS_PENDENTE/.test(agendamento) && agendamento.includes("json.codigo === CODIGO_ACEITE_TERMOS_PENDENTE"));
 checa("agendamento pelo store usa mensagemRecusa", ler("src/lib/bion-store.tsx").includes("mensagemRecusa(json"));
 checa("pedido de renovação usa mensagemRecusa", ler("src/components/bion/paciente/usePedidosRenovacao.ts").includes("mensagemRecusa(j,"));
 checa("faixa do modo limitado usa o texto fixo", guarda.includes("{ERRO_ACEITE_TERMOS_PENDENTE}"));

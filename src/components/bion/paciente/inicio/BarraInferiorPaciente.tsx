@@ -16,7 +16,7 @@ type Item = {
  * Barra de baixo do celular — ref. 03 (telefone da esquerda), igual à do
  * médico: 5 itens encostados na borda (com a área segura), ícones de linha
  * fina sem rótulo e o "+" #76A1F3 com o sinal em #242424 (5,9:1).
- * Paciente: Início, Saúde, "+" (agendar com a BION IA), Exames, Documentos.
+ * Paciente: Início, Saúde, "+" (agenda própria do paciente), Exames, Documentos.
  * Mensagens e Perfil ficam nos botões redondos do topo, como na ref.
  * Só abaixo de 1024 px. `fixa`: nas páginas fora do app (Suporte, Termos,
  * Ajuda) a barra fica presa à janela em vez de absoluta na casca.
@@ -78,10 +78,10 @@ export function BarraInferiorPaciente({
           <button
             type="button"
             onClick={onAgendar}
-            aria-label="Agendar consulta com a BION IA"
-            aria-haspopup="dialog"
-            aria-expanded={agendarAberto}
-            className="bp2-barra-mais"
+            aria-label="Agendar consulta"
+            aria-current={ativo === "agendar" || agendarAberto ? "page" : undefined}
+            data-destino="agendar"
+            className={`bp2-barra-mais ${ativo === "agendar" || agendarAberto ? "bp2-barra-mais-ativo" : ""}`}
           >
             <Plus className="bp2-barra-mais-icone" aria-hidden />
           </button>

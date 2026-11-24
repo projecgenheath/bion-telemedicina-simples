@@ -16,7 +16,7 @@ export type DestinoPaciente =
   | "ajuda";
 
 /** Itens da barra de baixo (celular): Início, Saúde, "+" Agendar, Exames, Documentos. */
-export type DestinoBarra = "inicio" | "saude" | "exames" | "documentos";
+export type DestinoBarra = "inicio" | "saude" | "agendar" | "exames" | "documentos";
 
 export type EstadoTela = {
   /** 0 = Perfil, 1 = Início/Saúde/Exames, 2 = Documentos e mensagens. */
@@ -25,6 +25,8 @@ export type EstadoTela = {
   secao: number;
   /** Conversa com a BION IA (agendar/perguntar) aberta. */
   chatAberto?: boolean;
+  /** Agenda própria do paciente aberta (etapa 2, rodada 2). */
+  agendaAberta?: boolean;
   /** Na tela de Documentos, o paciente está em Mensagens (veio pelo menu ou abriu uma conversa). */
   emMensagens?: boolean;
   /** Página fora do app (Suporte, Termos e privacidade, Ajuda). */
@@ -33,7 +35,7 @@ export type EstadoTela = {
 
 /** Item ativo do menu lateral: a camada de cima manda (chat > página > painel > seção). */
 export function destinoAtivoPaciente(e: EstadoTela): DestinoPaciente {
-  if (e.chatAberto) return "agendar";
+  if (e.chatAberto || e.agendaAberta) return "agendar";
   if (e.pagina === "ajuda") return "ajuda";
   if (e.painel === 0) return "perfil";
   if (e.painel === 2) return e.emMensagens ? "mensagens" : "documentos";
@@ -46,10 +48,11 @@ export function destinoAtivoPaciente(e: EstadoTela): DestinoPaciente {
  * Item ativo da barra de baixo. Mensagens moram dentro de Documentos no
  * celular (mesma tela), então ficam com Documentos aceso. Perfil e Ajuda
  * não têm item na barra (o perfil abre pelo avatar do topo): nada aceso.
- * Com a BION IA aberta a barra some (como as outras janelas).
+ * Com a BION IA aberta a barra some (como as outras janelas). Com a agenda
+ * própria aberta a barra fica, com o "+" aceso (etapa 2, rodada 2).
  */
 export function destinoBarraPaciente(d: DestinoPaciente): DestinoBarra | null {
-  if (d === "inicio" || d === "saude" || d === "exames" || d === "documentos") return d;
+  if (d === "inicio" || d === "saude" || d === "agendar" || d === "exames" || d === "documentos") return d;
   if (d === "mensagens") return "documentos";
   return null;
 }

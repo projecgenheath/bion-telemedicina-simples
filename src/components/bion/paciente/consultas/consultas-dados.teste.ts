@@ -5,6 +5,10 @@
 import type { Consulta } from "@/lib/bion-tipos";
 import {
   agruparHorarios,
+  faixaDaGrade,
+  minutosDoHorario,
+  passoDaAgenda,
+  semanaDoDia,
   consultaEmFoco,
   filtrarConsultas,
   fimDoHorario,
@@ -80,6 +84,23 @@ igual("não mexe aguardando reagendamento", podeMexer(c("e", agora + D, "aguarda
 igual("valor", partesValor("R$ 180,00"), { numero: "180,00", moeda: "R$" });
 igual("valor sem moeda", partesValor("180"), { numero: "180", moeda: "" });
 igual("valor ausente", partesValor(undefined), null);
+
+// Agenda própria do paciente (rodada 2)
+igual("minutos", minutosDoHorario("10:30"), 630);
+igual("faixa vazia", faixaDaGrade([], 30), { inicio: 8, fim: 18 });
+igual("faixa 09:00–17:30", faixaDaGrade(["09:00", "17:30", "11:00"], 30), { inicio: 9, fim: 19 });
+igual("faixa mínima 10 h", faixaDaGrade(["10:00"], 30), { inicio: 10, fim: 20 });
+igual("faixa 07:00–19:30", faixaDaGrade(["07:00", "19:30"], 30), { inicio: 7, fim: 20 });
+igual("faixa até 24 h", faixaDaGrade(["22:30"], 30), { inicio: 14, fim: 24 });
+const sems = semanasDoCalendario("2026-11-24", "2026-12-07");
+igual("semana do dia (1ª)", semanaDoDia(sems, "2026-11-29"), 0);
+igual("semana do dia (2ª)", semanaDoDia(sems, "2026-11-30"), 1);
+igual("semana do dia fora", semanaDoDia(sems, "2027-01-01"), -1);
+igual("passo especialidade", passoDaAgenda({}), "especialidade");
+igual("passo médico", passoDaAgenda({ especialidade: "x" }), "medico");
+igual("passo dia", passoDaAgenda({ especialidade: "x", medico: "y" }), "dia");
+igual("passo hora", passoDaAgenda({ especialidade: "x", medico: "y", diaIso: "2026-11-24" }), "hora");
+igual("passo confirmar", passoDaAgenda({ especialidade: "x", medico: "y", diaIso: "2026-11-24", hora: "10:00" }), "confirmar");
 
 console.log(`${ok} ok, ${falhas} falha(s)`);
 if (falhas) process.exit(1);

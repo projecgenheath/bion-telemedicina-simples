@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, ChevronRight, Lock, Star, Stethoscope } from "lucide-react";
+import { ArrowLeft, CalendarDays, ChevronRight, Lock, Star, Stethoscope } from "lucide-react";
 import type { Medico } from "@/lib/bion-tipos";
 import { textoNota } from "@/lib/medico-exibicao";
 import { DURACAO_SLOT_MIN } from "@/lib/teleconsulta-logica";
@@ -71,6 +71,7 @@ export function AssistenteAgendamento({
   escolha,
   agenda,
   onVoltar,
+  onAbrirAgenda,
 }: {
   etapa: Exclude<EtapaAssistente, "confirmar">;
   opcoes: OpcoesAssistente;
@@ -78,6 +79,8 @@ export function AssistenteAgendamento({
   escolha: EscolhaAssistente;
   agenda: DiaAgendamento[];
   onVoltar?: () => void;
+  /** Atalho: continuar na agenda própria do paciente (mesmas escolhas). */
+  onAbrirAgenda?: () => void;
 }) {
   const vazio = opcoes.opcoes.length === 1 && opcoes.opcoes[0]!.valor === "";
   const medico = escolha.medico ? medicos.find((m) => m.nome === escolha.medico) : undefined;
@@ -91,6 +94,11 @@ export function AssistenteAgendamento({
           {etapa === "especialidade" ? "Qual especialidade?" : etapa === "medico" ? "Com quem?" : etapa === "dia" ? "Qual dia?" : "Qual horário?"}
         </h2>
         {resumo ? <p className="bp2-assist-resumo truncate">{resumo}</p> : null}
+        {onAbrirAgenda ? (
+          <button type="button" onClick={onAbrirAgenda} className="bp2-passos-voltar bp2-assist-agenda" data-abrir-agenda>
+            <CalendarDays className="h-3.5 w-3.5" aria-hidden /> Ver na agenda
+          </button>
+        ) : null}
       </div>
       <PassosAgendamento etapa={etapa} onVoltar={onVoltar} />
 
