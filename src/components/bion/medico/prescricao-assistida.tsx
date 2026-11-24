@@ -386,7 +386,7 @@ export function SecaoKitsReceita({
       ) : (
         <p className="text-xs opacity-70">Nenhum kit. Preencha a receita e salve como kit para reaplicar com 1 toque.</p>
       )}
-      <p className="text-[11px] opacity-60">{NOTA_APARELHO}</p>
+      <p className="text-[11px] opacity-75">{NOTA_APARELHO}</p>
     </div>
   );
 }
@@ -453,7 +453,7 @@ export function SecaoPacotesExames({
       ) : (
         <p className="text-xs opacity-70">Nenhum pacote. Preencha os exames e salve como pacote para reaplicar com 1 toque.</p>
       )}
-      <p className="text-[11px] opacity-60">{NOTA_APARELHO}</p>
+      <p className="text-[11px] opacity-75">{NOTA_APARELHO}</p>
     </div>
   );
 }

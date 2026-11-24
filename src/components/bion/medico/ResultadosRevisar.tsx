@@ -99,7 +99,7 @@ export function ResultadosRevisar({
   return (
     <section aria-labelledby="bm-resultados-titulo" className="mb-5">
       <div className="flex items-center gap-2 mb-2">
-        <Inbox className="w-4 h-4 text-bion-sea dark:text-sky-300" aria-hidden />
+        <Inbox className="w-4 h-4 text-bion-sea dark:text-[#9dbcf7]" aria-hidden />
         <h3 id="bm-resultados-titulo" className="text-xs font-bold uppercase tracking-wider text-bion-ink/75 dark:text-bion-paper/75">
           Resultados para revisar
         </h3>
@@ -118,7 +118,7 @@ export function ResultadosRevisar({
               className="bp-glass w-full p-3.5 flex items-start gap-3 text-left"
               aria-label={`${it.titulo} de ${it.pacienteNome}. ${it.detalhe}`}
             >
-              <span className="w-9 h-9 rounded-xl bg-bion-sea/15 text-bion-sea dark:text-sky-300 inline-flex items-center justify-center shrink-0">
+              <span className="w-9 h-9 rounded-xl bg-bion-sea/15 text-bion-sea dark:text-[#9dbcf7] inline-flex items-center justify-center shrink-0">
                 {it.tipo === "medicao" ? <Ruler className="w-4 h-4" aria-hidden /> : <FlaskConical className="w-4 h-4" aria-hidden />}
               </span>
               <span className="flex-1 min-w-0">
@@ -132,7 +132,7 @@ export function ResultadosRevisar({
                   </span>
                 ) : null}
               </span>
-              <span className="text-[11px] text-bion-ink/60 dark:text-bion-paper/60 shrink-0">{fmtQuando(it.ts)}</span>
+              <span className="text-[11px] text-bion-ink/75 dark:text-bion-paper/60 shrink-0">{fmtQuando(it.ts)}</span>
             </button>
           </li>
         ))}

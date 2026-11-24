@@ -72,7 +72,7 @@ export function NotificacoesMedico({ onNavegar }: { onNavegar: (tipo: NotifTipo)
           </p>
         ) : notificacoes.length === 0 ? (
           <div className="bp-glass p-6 text-center bm-animar">
-            <Bell className="w-8 h-8 mx-auto text-bion-ink/50 dark:text-bion-paper/50" aria-hidden />
+            <Bell className="w-8 h-8 mx-auto text-bion-ink/75 dark:text-bion-paper/50" aria-hidden />
             <p className="mt-2 text-sm font-bold">Nenhuma notificação</p>
             <p className="mt-1 text-sm text-bion-ink/75 dark:text-bion-paper/75">
               Novas consultas, cancelamentos, mensagens e avaliações aparecem aqui — e também chegam por push com o
@@ -97,11 +97,11 @@ export function NotificacoesMedico({ onNavegar }: { onNavegar: (tipo: NotifTipo)
               >
                 <span
                   className={`w-10 h-10 shrink-0 rounded-xl inline-flex items-center justify-center ${
-                    n.lida ? "bg-bion-ink/8 dark:bg-white/10" : "bg-bion-sea/15 dark:bg-sky-400/15"
+                    n.lida ? "bg-bion-ink/8 dark:bg-white/10" : "bg-bion-sea/15 dark:bg-[#9dbcf7]/15"
                   }`}
                 >
                   <Icon
-                    className={`w-5 h-5 ${n.lida ? "" : "text-bion-sea dark:text-sky-300"}`}
+                    className={`w-5 h-5 ${n.lida ? "" : "text-bion-sea dark:text-[#9dbcf7]"}`}
                     aria-hidden
                   />
                 </span>
@@ -113,10 +113,10 @@ export function NotificacoesMedico({ onNavegar }: { onNavegar: (tipo: NotifTipo)
                     </span>
                   </span>
                   <span className="block text-sm text-bion-ink/75 dark:text-bion-paper/75 mt-0.5">{n.texto}</span>
-                  <span className="block text-xs text-bion-ink/60 dark:text-bion-paper/60 mt-1">{n.hora}</span>
+                  <span className="block text-xs text-bion-ink/75 dark:text-bion-paper/60 mt-1">{n.hora}</span>
                 </span>
                 {n.lida ? (
-                  <Check className="w-4 h-4 shrink-0 mt-1 text-bion-ink/50 dark:text-bion-paper/50" aria-hidden />
+                  <Check className="w-4 h-4 shrink-0 mt-1 text-bion-ink/75 dark:text-bion-paper/50" aria-hidden />
                 ) : (
                   <span className="w-2.5 h-2.5 rounded-full bg-red-600 shrink-0 mt-2" aria-label="Não lida" />
                 )}

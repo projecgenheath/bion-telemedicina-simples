@@ -1,9 +1,8 @@
 /* ==================================================================== */
 /* App do MÉDICO — complementa as classes bp-* do app do paciente        */
 /* (bp-shell, bp-carrossel, bp-glass…) sem alterar globals.css.          */
-/* Contraste: todo texto claro fica sobre fundos com luminância baixa    */
-/* (≥ 4,5:1, WCAG AA); o degradê não passa por roxo-claro sob texto      */
-/* branco (diferente da seção 3 do paciente).                            */
+/* Etapa 5: fundo único #EFF3F4 (escuro #0E1013) em todas as telas; o   */
+/* degradê roxo antigo saiu. Texto #242424 / #F2F4F7 (AA).               */
 /* ==================================================================== */
 
 /* Carrossel horizontal: não deixa o "overscroll" virar voltar/avançar do navegador */
@@ -25,70 +24,49 @@
   min-height: 100%;
 }
 
-/*
- * Coluna central = um degradê contínuo branco → roxo da marca (preto → roxo da marca
- * no dark). Tela 1 sai do branco puro e chega ao roxo da marca no rodapé; telas
- * 2 e 3 continuam do roxo da marca ao roxo da marca profundo. Regras de contraste:
- *  - texto escuro solto no fundo só no terço superior (zona branca);
- *  - texto solto na metade de baixo / nas telas 2-3 é claro (≥ 5:1);
- *  - cards do app do médico ficam mais opacos (ver .bm-app .bp-glass).
- */
-.bm-tela-1 { background: linear-gradient(180deg, #ffffff 0%, #ffffff 30%, #e8e0f5 52%, #7c5cbf 78%, #24058D 100%); }
-.dark .bm-tela-1 { background: linear-gradient(180deg, #000000 0%, #000000 30%, #120a1e 52%, #2a1560 78%, #1a0a40 100%); }
+/* Coluna central e páginas laterais: fundo liso do redesign (etapa 5). */
+.bm-tela-1 { background: var(--bm2-fundo); }
 
-.bm-tela-2 { background: linear-gradient(180deg, #24058D 0%, #1a0470 100%); }
-.dark .bm-tela-2 { background: linear-gradient(180deg, #1a0a40 0%, #120830 100%); }
 
-.bm-tela-3 { background: linear-gradient(180deg, #1a0470 0%, #14055a 45%, #0c0338 100%); }
-.dark .bm-tela-3 { background: linear-gradient(180deg, #120830 0%, #0c0620 45%, #050210 100%); }
+.bm-tela-2 { background: var(--bm2-fundo); }
 
-/* Páginas laterais: mesmo branco → roxo da marca; "local" faz o degradê
-   acompanhar o conteúdo rolável (o perfil é mais alto que a tela). */
-.bm-painel {
-  background: linear-gradient(180deg, #ffffff 0%, #ffffff 30%, #e8e0f5 55%, #7c5cbf 80%, #24058D 100%);
-  background-attachment: local;
-}
-.dark .bm-painel {
-  background: linear-gradient(180deg, #000000 0%, #000000 30%, #120a1e 55%, #2a1560 80%, #1a0a40 100%);
-  background-attachment: local;
-}
 
-/* Cards mais opacos que o .bp-glass do paciente: texto escuro (inclusive
-   /70) mantém ≥ 4,5:1 mesmo quando o card passa sobre o roxo da marca. */
-.bm-app .bp-glass { background: rgba(255, 255, 255, 0.84); }
-.dark .bm-app .bp-glass { background: rgba(12, 16, 28, 0.72); }
+.bm-tela-3 { background: var(--bm2-fundo); }
 
-/* Barra inferior dedicada aos pontos de página: o conteúdo rolável termina
-   ACIMA dela, então nada fica escondido sob o indicador. Inclui a área
-   segura (home indicator do iPhone). */
+
+.bm-painel { background: var(--bm2-fundo); }
+
+/* Cartões do médico: branco liso com borda e sombra do redesign. */
+.bm-app .bp-glass { background: var(--bm2-cartao); border-color: var(--bm2-borda); border-radius: 20px; box-shadow: var(--bm2-sombra); backdrop-filter: none; -webkit-backdrop-filter: none; }
+.dark .bm-app .bp-glass { background: var(--bm2-cartao); border-color: var(--bm2-borda); box-shadow: var(--bm2-sombra); }
+
 
 /* Superfície de sobreposição (conversa, suporte, prontuário) */
-.bm-sobreposicao { background: linear-gradient(180deg, #ffffff 0%, #f5f0fa 70%, #ece4f5 100%); }
-.dark .bm-sobreposicao { background: linear-gradient(180deg, #000000 0%, #0a0612 70%, #120a1e 100%); }
+.bm-sobreposicao { background: var(--bm2-fundo); }
+
 
 /* Bottom sheet do médico */
 .bm-sheet {
   background: #ffffff;
-  color: #1a0a40;
-  border-top-left-radius: 1.75rem;
-  border-top-right-radius: 1.75rem;
-  box-shadow: 0 -16px 48px rgba(36, 5, 141, 0.25);
+  color: #242424;
+  border-top-left-radius: 20px;
+  border-top-right-radius: 20px;
+  box-shadow: 0 -16px 48px rgba(16, 24, 40, 0.18);
 }
 .dark .bm-sheet {
-  background: #05080f;
+  background: #181b20;
   color: #f2f6fc;
   box-shadow: 0 -16px 48px rgba(0, 0, 0, 0.7);
   border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 @media (min-width: 768px) {
-  .bm-sheet { border-radius: 1.75rem; }
+  .bm-sheet { border-radius: 20px; }
 }
 
 /* Sem backdrop-filter (aparelhos fracos / navegadores antigos): vidro opaco legível */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .bm-app .bp-glass { background: rgba(255, 255, 255, 0.92); }
   .dark .bm-app .bp-glass { background: rgba(18, 24, 38, 0.95); }
-  .bm-app .bp-glass-roxo da marca { background: rgba(36, 5, 141, 0.92); }
 }
 
 /* Indicador discreto: some após inatividade, volta ao interagir */
@@ -116,8 +94,8 @@
 /* ==================================================================== */
 @media (min-width: 1024px) {
   /* Anula o fundo escuro de body:has(.bp-shell) do globals.css (só médico) */
-  html body:has(.bm-app.bp-shell) { background: #ffffff; }
-  html.dark body:has(.bm-app.bp-shell) { background: #000000; }
+  html body:has(.bm-app.bp-shell) { background: #eff3f4; }
+  html.dark body:has(.bm-app.bp-shell) { background: #0e1013; }
 
   /* Tira a moldura de 430 px */
   .bm-app.bp-shell {
@@ -207,194 +185,8 @@
 .bm-app .bm-animar-d3 { animation-delay: 0.18s; }
 .bm-app .bm-animar-d4 { animation-delay: 0.24s; }
 
-/* ============ Fase 4 (nov/2026): início do médico imersivo ============ */
-/* Mesma linguagem da home do paciente: tons da marca #24058D, auroras e
-   microinterações — tudo em escopo .bm-app (não vaza para paciente/admin). */
-.bm-app {
-  --bm-grad-a: #24058D;
-  --bm-grad-b: #3D1AAE;
-  --bm-hero-1: #3D1AAE;
-  --bm-hero-2: #24058D;
-  --bm-hero-3: #1C0470;
-  --bm-glow-a: rgba(196, 181, 253, 0.30);
-  --bm-glow-b: rgba(221, 214, 254, 0.22);
-  --bm-aurora-1: rgba(196, 181, 253, 0.38);
-  --bm-aurora-2: rgba(221, 214, 254, 0.20);
-  --bm-ecg-cor: #DDD6FE;
-  --bm-aro: linear-gradient(140deg, #3D1AAE 0%, #24058D 100%);
-}
-.dark .bm-app {
-  --bm-grad-a: #C4B5FD;
-  --bm-grad-b: #DDD6FE;
-  --bm-glow-a: rgba(196, 181, 253, 0.10);
-  --bm-glow-b: rgba(221, 214, 254, 0.07);
-  --bm-aurora-1: rgba(196, 181, 253, 0.20);
-  --bm-aurora-2: rgba(221, 214, 254, 0.12);
-  --bm-ecg-cor: #C4B5FD;
-  --bm-aro: linear-gradient(140deg, #C4B5FD 0%, #DDD6FE 100%);
-}
-
-/* Nome do médico com gradiente animado da marca (estático em reduce) */
-@keyframes bm-grad-desliza {
-  to { background-position: -220% 0; }
-}
-.bm-app .bm-texto-grad {
-  background: linear-gradient(92deg, var(--bm-grad-a) 0%, var(--bm-grad-b) 50%, var(--bm-grad-a) 100%);
-  background-size: 220% 100%;
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  animation: bm-grad-desliza 9s linear infinite;
-}
-
-/* Brilhos ao fundo da tela 1 (atrás dos cartões de vidro) */
-@keyframes bm-deriva {
-  0% { transform: translate(0, 0) scale(1); }
-  50% { transform: translate(-26px, 20px) scale(1.12); }
-  100% { transform: translate(22px, -16px) scale(0.94); }
-}
-.bm-app .bm-glow {
-  position: absolute;
-  border-radius: 9999px;
-  filter: blur(64px);
-  pointer-events: none;
-}
-.bm-app .bm-glow-a {
-  width: 280px;
-  height: 280px;
-  right: -90px;
-  top: -70px;
-  background: var(--bm-glow-a);
-  animation: bm-deriva 30s ease-in-out infinite alternate;
-}
-.bm-app .bm-glow-b {
-  width: 230px;
-  height: 230px;
-  left: -100px;
-  top: 34%;
-  background: var(--bm-glow-b);
-  animation: bm-deriva 24s ease-in-out infinite alternate-reverse;
-}
-
-/* Hero da próxima consulta / agenda vazia: degradê da marca + auroras */
-.bm-app .bm-hero {
-  background: linear-gradient(160deg, var(--bm-hero-1) 0%, var(--bm-hero-2) 55%, var(--bm-hero-3) 100%);
-  box-shadow: 0 24px 48px -22px rgba(36, 5, 141, 0.5);
-}
-.dark .bm-app .bm-hero {
-  box-shadow: 0 24px 48px -22px rgba(0, 0, 0, 0.7);
-}
-.bm-app .bm-aurora {
-  position: absolute;
-  border-radius: 9999px;
-  filter: blur(44px);
-  pointer-events: none;
-}
-.bm-app .bm-aurora-a {
-  width: 190px;
-  height: 190px;
-  right: -46px;
-  top: -52px;
-  background: var(--bm-aurora-1);
-  animation: bm-deriva 26s ease-in-out infinite alternate;
-}
-.bm-app .bm-aurora-b {
-  width: 150px;
-  height: 150px;
-  left: -40px;
-  bottom: -44px;
-  background: var(--bm-aurora-2);
-  animation: bm-deriva 20s ease-in-out infinite alternate-reverse;
-}
-
-/* Barra fria do hero (contagem): clara no Clean, cartão escuro no Dark —
-   os dígitos herdam a cor certa nos dois modos. */
-.bm-app .bm-hero-barra {
-  background: rgba(255, 255, 255, 0.95);
-  color: #1a1040;
-}
-.dark .bm-app .bm-hero-barra {
-  background: #1a1430;
-  color: #ffffff;
-}
-
-/* Anel pulsante no avatar do hero quando a sala abre */
-@keyframes bm-anel-pulso {
-  0% { transform: scale(0.9); opacity: 0.8; }
-  75% { transform: scale(1.35); opacity: 0; }
-  100% { transform: scale(1.35); opacity: 0; }
-}
-.bm-app .bm-anel-ativo::before,
-.bm-app .bm-anel-ativo::after {
-  content: "";
-  position: absolute;
-  inset: -7px;
-  border-radius: 1.4rem;
-  border: 2px solid var(--bm-aurora-1);
-  animation: bm-anel-pulso 2.6s ease-out infinite;
-}
-.bm-app .bm-anel-ativo::after {
-  animation-delay: 1.3s;
-}
-
-/* ECG da agenda vazia */
-@keyframes bm-ecg-corre {
-  to { stroke-dashoffset: -250; }
-}
-.bm-app .bm-ecg {
-  color: var(--bm-ecg-cor);
-}
-.bm-app .bm-ecg path {
-  stroke-dasharray: 70 180;
-  animation: bm-ecg-corre 2.8s linear infinite;
-}
-
-/* Avatar do topo com anel de marca */
-.bm-app .bm-avatar-botao {
-  background: var(--bm-aro);
-  transition: transform 0.15s ease;
-}
-.bm-app .bm-avatar-botao:active {
-  transform: scale(0.93);
-}
-
-/* Brilho que varre o CTA principal do hero */
-@keyframes bm-varre {
-  0% { transform: translateX(-130%) skewX(-12deg); }
-  55%, 100% { transform: translateX(140%) skewX(-12deg); }
-}
-.bm-app .bm-brilho-cta {
-  position: relative;
-  overflow: hidden;
-}
-.bm-app .bm-brilho-cta::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: linear-gradient(110deg, transparent 30%, rgba(36, 5, 141, 0.14) 48%, transparent 66%);
-  transform: translateX(-130%) skewX(-12deg);
-  animation: bm-varre 2.6s ease-in-out 0.6s infinite;
-}
-.bm-app .bm-brilho-cta:disabled::after {
-  animation: none;
-  content: none;
-}
-
-/* Respeita prefers-reduced-motion: todas as novas animações param */
-@media (prefers-reduced-motion: reduce) {
-  .bm-app .bm-texto-grad,
-  .bm-app .bm-glow-a,
-  .bm-app .bm-glow-b,
-  .bm-app .bm-aurora-a,
-  .bm-app .bm-aurora-b,
-  .bm-app .bm-anel-ativo::before,
-  .bm-app .bm-anel-ativo::after,
-  .bm-app .bm-ecg path,
-  .bm-app .bm-brilho-cta::after {
-    animation: none !important;
-  }
-}
+/* Etapa 5: o bloco "Fase 4" (auroras, brilhos, gradiente roxo do nome, anel e
+   ECG roxos) saiu — nenhuma tela usava mais essas classes. */
 
 /* Micro-interação em cards e linhas */
 .bm-app .bp-glass.bion-toque,
@@ -490,6 +282,47 @@
   font-family: var(--bm-fonte), ui-sans-serif, system-ui, sans-serif;
   color: var(--bm2-texto);
 }
+/* ---------- Etapa 5: consistência das telas antigas do médico ----------
+   Os tokens globais (--primary #24058D roxo, --bion-ink marinho #0A1F44,
+   --bion-sea) são redefinidos SÓ no escopo do médico (.bm-app e as sheets
+   .bm-sheet, que abrem em portal). Paciente e admin não usam essas classes.
+   Contraste: #2F62C4 com branco = 5,9:1; #9DBCF7 com #0E1013 = 10,4:1. */
+.bm-app,
+.bm-sheet {
+  --primary: #2f62c4;
+  --primary-foreground: #ffffff;
+  --primary-soft: #dee8f4;
+  --ring: #2f62c4;
+  --bion-ink: #242424;
+  --bion-sea: #2f62c4;
+  font-family: var(--bm-fonte), ui-sans-serif, system-ui, sans-serif;
+}
+.dark .bm-app,
+.dark .bm-sheet {
+  --primary: #9dbcf7;
+  --primary-foreground: #0e1013;
+  --primary-soft: #23324a;
+  --ring: #9dbcf7;
+}
+/* Poppins vai até 600: o 800/900 antigo (visual do paciente) vira 600. */
+.bm-app :where(.font-black, .font-extrabold),
+.bm-sheet :where(.font-black, .font-extrabold) { font-weight: 600; }
+/* Botão primário antigo (degradê marinho) e campos: paleta nova. */
+.bm-app .bp-acao,
+.bm-sheet .bp-acao { background: #2f62c4; box-shadow: none; }
+.dark .bm-app .bp-acao,
+.dark .bm-sheet .bp-acao { background: #9dbcf7; color: #0e1013; }
+.bm-app .bp-entrada,
+.bm-sheet .bp-entrada { background: var(--bm2-cartao, #ffffff); border-color: rgba(36, 36, 36, 0.14); color: #242424; }
+.bm-app .bp-entrada:focus,
+.bm-sheet .bp-entrada:focus { border-color: #2f62c4; box-shadow: 0 0 0 3px rgba(47, 98, 196, 0.18); }
+.dark .bm-app .bp-entrada,
+.dark .bm-sheet .bp-entrada { background: rgba(255, 255, 255, 0.06); border-color: rgba(255, 255, 255, 0.16); color: #f2f4f7; }
+/* Cartão de saldo (Repasses): o vidro marinho antigo vira o azul do
+   redesign. Branco/90 sobre #2F62C4 = 5,1:1. */
+.bm-sheet .bp-glass-marinho { background: #2f62c4; border-color: transparent; border-radius: 20px; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
+.dark .bm-sheet .bp-glass-marinho { background: #23324a; }
+
 /* Ícones de linha fina, como no menu da referência */
 .bm-app .bm-v2 svg.lucide { stroke-width: 1.5; }
 .bm-app .bm-tela-1.bm-v2,
@@ -1533,4 +1366,203 @@ html:not(.dark) .bm-app .bm2-agenda-fora, html:not(.dark) .bm-app .bm2-agenda-mi
   .bm-app[data-gaveta] .bm2-topo-flutuante { z-index: 46; }
   /* Gaveta de pacientes à direita: o topo fica à esquerda do botão fechar. */
   .bm-app[data-gaveta="pacientes"] .bm2-topo-flutuante { top: 0.6rem; right: calc(400px + 0.75rem + 2.5rem + 0.75rem); }
+}
+
+/* ==================================================================== */
+/* Etapa 5 (rodada 2) — barra inferior do celular igual à ref. 03       */
+/* (telefone da esquerda): 5 itens, encostada na borda de baixo, fundo  */
+/* branco com sombra fina para cima. Medidas tiradas da ref. corrigida  */
+/* para 390 px: centros a 70 px, 1º centro a 54 px da borda, faixa de   */
+/* 62 px + área segura, quadrado ativo 38 r11, "+" 54 r16, ícones 20 px */
+/* traço 1,6. Contrastes: ícone #242424 / branco 15,9:1; ativo #2F62C4 / */
+/* #DEE8F4 4,9:1; sinal #242424 / "+" #76A1F3 5,9:1 (não-texto ≥ 3:1).  */
+/* ==================================================================== */
+.bm-app .bm2-barra {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 30;
+  height: calc(62px + env(safe-area-inset-bottom));
+  padding-bottom: env(safe-area-inset-bottom);
+  /* Na ref. a lista passa por baixo da barra, que é um branco translúcido. */
+  background: rgba(255, 255, 255, 0.88);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  backdrop-filter: blur(14px) saturate(1.2);
+  box-shadow: 0 -8px 24px rgba(16, 24, 40, 0.05);
+}
+.dark .bm-app .bm2-barra { background: rgba(24, 27, 32, 0.92); box-shadow: 0 -1px 0 rgba(255, 255, 255, 0.08); }
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .bm-app .bm2-barra { background: #ffffff; }
+  .dark .bm-app .bm2-barra { background: #181b20; }
+}
+/* Dentro da agenda / notificações: no rodapé da camada (fluxo normal). */
+.bm-app .bm2-barra.bm2-barra-na-tela { position: relative; flex-shrink: 0; z-index: auto; }
+.bm-app .bm2-barra ul {
+  height: 62px; display: grid; grid-template-columns: repeat(5, 70px);
+  justify-content: center; align-items: center; justify-items: center;
+}
+.bm-app .bm2-barra .bm2-barra-icone { width: 21px; height: 21px; stroke-width: 1.7; }
+.bm-app .bm2-barra-item {
+  display: grid; place-items: center;
+  width: 44px; height: 44px; border-radius: 12px;
+  color: #242424;
+  transition: background-color 0.18s ease, color 0.18s ease, transform 0.12s ease;
+}
+.dark .bm-app .bm2-barra-item { color: #d5d9df; }
+/* Quadrado ativo de 38 px (r11), centrado no alvo de toque de 44 px. */
+.bm-app .bm2-barra-item { position: relative; }
+.bm-app .bm2-barra-item::before { content: ""; position: absolute; inset: 3px; border-radius: 11px; background: transparent; transition: background-color 0.18s ease; }
+.bm-app .bm2-barra-item > svg { position: relative; }
+.bm-app .bm2-barra-item:hover::before { background: var(--bm2-fundo); }
+.bm-app .bm2-barra-ativo { color: var(--bm2-t-azul); }
+.bm-app .bm2-barra-ativo::before,
+.bm-app .bm2-barra-ativo:hover::before { background: var(--bm2-azul-ativo); }
+.bm-app .bm2-barra-mais {
+  display: grid; place-items: center;
+  width: 54px; height: 54px; border-radius: 16px;
+  background: #76a1f3; color: #242424;
+  box-shadow: 0 6px 14px rgba(118, 161, 243, 0.35);
+  transition: background-color 0.18s ease, transform 0.12s ease;
+}
+.bm-app .bm2-barra-mais .bm2-barra-mais-icone { width: 22px; height: 22px; stroke-width: 1.8; }
+.bm-app .bm2-barra-mais:hover { background: #8fb3f6; }
+.dark .bm-app .bm2-barra-mais { box-shadow: none; }
+.bm-app .bm2-barra-item:focus-visible,
+.bm-app .bm2-barra-mais:focus-visible { outline: 2px solid #2f62c4; outline-offset: 2px; }
+.dark .bm-app .bm2-barra-item:focus-visible,
+.dark .bm-app .bm2-barra-mais:focus-visible { outline-color: #9dbcf7; }
+@media (min-width: 1024px) { .bm-app .bm2-barra { display: none; } }
+
+/* Conteúdo termina ACIMA da barra (62 px + área segura + folga). */
+@media (max-width: 1023px) {
+  .bm-app .bm-tela,
+  .bm-app .bm-lateral-esq > .bm-painel,
+  .bm-app .bm-lateral-dir .bm-painel > .bp-coluna { padding-bottom: calc(62px + 1.5rem + env(safe-area-inset-bottom)); }
+}
+
+/* Sheet do "+": linhas de ação e pacientes */
+.bm-sheet .bm2-acao-linha {
+  width: 100%; display: flex; align-items: center; gap: 12px;
+  padding: 12px; border-radius: 16px; text-align: left;
+  background: #f5f7f8; color: #242424;
+  transition: background-color 0.15s ease, transform 0.12s ease;
+}
+.bm-sheet .bm2-acao-linha:hover:not(:disabled) { background: #e8eef7; }
+.bm-sheet .bm2-acao-linha:disabled { opacity: 0.6; cursor: not-allowed; }
+.dark .bm-sheet .bm2-acao-linha { background: #22262d; color: #f2f4f7; }
+.dark .bm-sheet .bm2-acao-linha:hover:not(:disabled) { background: #2a313c; }
+.bm-sheet .bm2-acao-icone { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 12px; background: #dee8f4; color: #2f62c4; flex-shrink: 0; }
+.dark .bm-sheet .bm2-acao-icone { background: #23324a; color: #9dbcf7; }
+.bm-sheet .bm2-acao-avatar { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 9999px; background: #d0e1f5; color: #242424; font-size: 13px; font-weight: 500; flex-shrink: 0; }
+.dark .bm-sheet .bm2-acao-avatar { background: #2a3a55; color: #e6eefc; }
+.bm-sheet .bm2-acao-sub { color: #5f5f5f; }
+.dark .bm-sheet .bm2-acao-sub { color: #b6bcc6; }
+.bm-sheet .bm2-acao-voltar { color: #2f62c4; }
+.dark .bm-sheet .bm2-acao-voltar { color: #9dbcf7; }
+
+/* ==================================================================== */
+/* Etapa 5 — animações sutis (só CSS). Tudo some com                    */
+/* prefers-reduced-motion: reduce (bloco no fim). Nenhuma animação usa  */
+/* :focus, e o contorno de foco continua o mesmo.                        */
+/* ==================================================================== */
+@keyframes bm5-entrar { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes bm5-surgir { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+@keyframes bm5-esmaecer-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes bm5-pop { from { opacity: 0; transform: translateY(-4px) scale(0.97); } to { opacity: 1; transform: none; } }
+@keyframes bm5-sheet-sobe { from { transform: translateY(100%); } to { transform: none; } }
+@keyframes bm5-sheet-desce { from { transform: none; } to { transform: translateY(100%); } }
+@keyframes bm5-modal-entra { from { opacity: 0; transform: scale(0.97); } to { opacity: 1; transform: none; } }
+@keyframes bm5-modal-sai { from { opacity: 1; transform: none; } to { opacity: 0; transform: scale(0.97); } }
+@keyframes bm5-fundo-sai { from { opacity: 1; } to { opacity: 0; } }
+@keyframes bm5-gaveta-esq-entra { from { opacity: 0; transform: translateX(-28px); } to { opacity: 1; transform: none; } }
+@keyframes bm5-gaveta-dir-entra { from { opacity: 0; transform: translateX(28px); } to { opacity: 1; transform: none; } }
+@keyframes bm5-gaveta-esq-sai { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateX(-28px); } }
+@keyframes bm5-gaveta-dir-sai { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateX(28px); } }
+
+@media (prefers-reduced-motion: no-preference) {
+  /* Entrada dos cartões, em cascata curta (fill "backwards": depois de
+     terminar não sobra transform — nada de containing block novo). */
+  .bm-app .bm2-grade > *,
+  .bm-app .bm-tela-2 > *,
+  .bm-app .bm-tela-3 > *,
+  .bm-app .bm-painel > *,
+  .bm-app .bm-sobreposicao .bp-glass { animation: bm5-entrar 0.36s cubic-bezier(0.22, 1, 0.36, 1) backwards; }
+  .bm-app .bm2-grade > *:nth-child(2),
+  .bm-app .bm-tela-2 > *:nth-child(2),
+  .bm-app .bm-tela-3 > *:nth-child(2),
+  .bm-app .bm-painel > *:nth-child(2) { animation-delay: 0.05s; }
+  .bm-app .bm2-grade > *:nth-child(3),
+  .bm-app .bm-tela-2 > *:nth-child(3),
+  .bm-app .bm-tela-3 > *:nth-child(3),
+  .bm-app .bm-painel > *:nth-child(3) { animation-delay: 0.1s; }
+  .bm-app .bm2-grade > *:nth-child(n+4),
+  .bm-app .bm-tela-2 > *:nth-child(n+4),
+  .bm-app .bm-tela-3 > *:nth-child(n+4),
+  .bm-app .bm-painel > *:nth-child(n+4) { animation-delay: 0.15s; }
+
+  /* Troca de tela: sobreposições (agenda, mensagens/ficha, notificações,
+     renovações, suporte) entram com um deslize curto. */
+  .bm-app .bm-sobreposicao { animation: bm5-surgir 0.26s cubic-bezier(0.22, 1, 0.36, 1) backwards; }
+  .bm-app .bm2-barra { animation: bm5-esmaecer-in 0.2s ease backwards; }
+
+  /* Menus: Ajuda (menu lateral) e lista da busca do topo. */
+  .bm-app .bm2-lateral-menu,
+  .bm-app .bm2-busca-topo ul { animation: bm5-pop 0.16s ease-out backwards; transform-origin: top left; }
+
+  /* Hover / toque */
+  .bm-app .bm2-cartoes > *,
+  .bm-app .bm2-grade > .bp-glass { transition: box-shadow 0.2s ease, transform 0.2s ease; }
+  .bm-app .bm2-barra-item:active,
+  .bm-app .bm2-lateral-item:active,
+  .bm-app .bm2-icone-topo:active,
+  .bm-app .bm2-botao-azul:active,
+  .bm-sheet .bm2-acao-linha:active:not(:disabled) { transform: scale(0.94); }
+  .bm-app .bm2-barra-mais:active { transform: scale(0.92); }
+  .bm-app .bm2-botao-azul,
+  .bm-app .bm2-icone-topo { transition: background-color 0.15s ease, transform 0.12s ease; }
+
+  /* Sheets do médico (Radix): abrem e FECHAM animando — o Radix espera o
+     animationend no estado "closed" antes de desmontar. */
+  [role="dialog"]:has(> .bm-sheet)[data-state="open"] { animation: bm5-sheet-sobe 0.28s cubic-bezier(0.22, 1, 0.36, 1); }
+  [role="dialog"]:has(> .bm-sheet)[data-state="closed"] { animation: bm5-sheet-desce 0.2s ease-in forwards; }
+  .bm-sheet-fundo[data-state="open"] { animation: bm5-esmaecer-in 0.22s ease; }
+  .bm-sheet-fundo[data-state="closed"] { animation: bm5-fundo-sai 0.2s ease-in forwards; }
+}
+@media (prefers-reduced-motion: no-preference) and (min-width: 768px) {
+  [role="dialog"]:has(> .bm-sheet)[data-state="open"] { animation: bm5-modal-entra 0.22s cubic-bezier(0.22, 1, 0.36, 1); }
+  [role="dialog"]:has(> .bm-sheet)[data-state="closed"] { animation: bm5-modal-sai 0.16s ease-in forwards; }
+}
+@media (prefers-reduced-motion: no-preference) and (min-width: 1024px) {
+  .bm-app .bm2-cartoes > *:hover,
+  .bm-app .bm2-grade > .bp-glass:hover { box-shadow: 0 8px 24px rgba(16, 24, 40, 0.08); }
+  /* Gavetas: entram pelo lado de onde vêm… */
+  .bm-app[data-gaveta="perfil"] .bm-lateral-esq { animation: bm5-gaveta-esq-entra 0.26s cubic-bezier(0.22, 1, 0.36, 1) both; }
+  .bm-app[data-gaveta="pacientes"] .bm-lateral-dir { animation: bm5-gaveta-dir-entra 0.26s cubic-bezier(0.22, 1, 0.36, 1) both; }
+  .bm-app[data-gaveta] .bm2-gaveta-fundo { animation: bm5-esmaecer-in 0.2s ease; }
+  /* …e saem por ele (data-gaveta-saindo dura 200 ms, só visual: sem clique). */
+  .bm-app[data-gaveta-saindo="perfil"]:not([data-gaveta]) .bm-lateral-esq,
+  .bm-app[data-gaveta-saindo="pacientes"]:not([data-gaveta]) .bm-lateral-dir {
+    display: block; position: fixed; top: 0; bottom: 0; width: 400px; z-index: 45; overflow: hidden;
+    box-shadow: 0 24px 60px rgba(16, 24, 40, 0.18); pointer-events: none;
+  }
+  .bm-app[data-gaveta-saindo="perfil"]:not([data-gaveta]) .bm-lateral-esq { left: 76px; animation: bm5-gaveta-esq-sai 0.2s ease-in forwards; }
+  .bm-app[data-gaveta-saindo="pacientes"]:not([data-gaveta]) .bm-lateral-dir { right: 0; animation: bm5-gaveta-dir-sai 0.2s ease-in forwards; }
+}
+
+/* Movimento reduzido: nenhuma animação nem transição no app do médico
+   (o globals.css já encurta tudo para 0,01 ms; aqui zera de vez, inclusive
+   os deslocamentos de toque). */
+@media (prefers-reduced-motion: reduce) {
+  .bm-app *,
+  .bm-app *::before,
+  .bm-app *::after,
+  .bm-sheet,
+  .bm-sheet *,
+  [role="dialog"]:has(> .bm-sheet),
+  .bm-sheet-fundo { animation: none !important; transition: none !important; }
+  .bm-app .bm2-barra-item:active,
+  .bm-app .bm2-barra-mais:active,
+  .bm-app .bp-glass.bion-toque:active,
+  .bm-app button.bp-glass:active { transform: none !important; }
 }

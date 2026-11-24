@@ -180,11 +180,11 @@ export function RenovacoesPendentes() {
       {pedidos.map((p) => (
         <li key={p.id} className="bp-glass p-4 space-y-2">
           <div className="font-bold">{p.paciente.nome}</div>
-          <div className="text-xs opacity-60">Pedido feito {idadePedido(p.criadoEm)}</div>
+          <div className="text-xs opacity-75">Pedido feito {idadePedido(p.criadoEm)}</div>
           <div className="text-sm">{p.documento?.titulo ?? "Receita"}{p.documento?.medicamento ? ` — ${p.documento.medicamento}` : ""}</div>
           {p.documento?.posologia ? <div className="text-xs opacity-75">{p.documento.posologia}</div> : null}
           {p.observacaoPaciente ? <div className="text-xs italic">“{p.observacaoPaciente}”</div> : null}
-          {p.exigeChamada ? <div className="text-xs font-semibold text-amber-700">Controlado: renovação só por chamada.</div> : null}
+          {p.exigeChamada ? <div className="text-xs font-semibold text-amber-700 dark:text-amber-300">Controlado: renovação só por chamada.</div> : null}
           {aberto === p.id ? (
             <div className="space-y-2">
               <textarea value={mensagem} onChange={(e) => setMensagem(e.target.value)} rows={2} maxLength={1000}

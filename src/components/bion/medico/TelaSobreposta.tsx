@@ -2,7 +2,7 @@
 
 import { useContext, useEffect, useRef, type ReactNode } from "react";
 import { ArrowLeft } from "lucide-react";
-import { SinoTopo, TopoMedicoContexto } from "./TopoMedico";
+import { MensagensTopo, SinoTopo, TopoMedicoContexto } from "./TopoMedico";
 import { PerfilMedicoTopo } from "./ficha/TopoFicha";
 
 /** Topo padrão das telas do médico (rodada do menu): sino + perfil, como no
@@ -12,6 +12,7 @@ function TopoPadrao() {
   if (!topo) return null;
   return (
     <>
+      <MensagensTopo className="lg:hidden" />
       <SinoTopo className="lg:hidden" />
       <PerfilMedicoTopo {...topo.perfil} />
     </>
@@ -80,7 +81,11 @@ export function TelaSobreposta({
   classe,
   extraCabecalho,
   topoPadrao = true,
+  barra,
 }: {
+  /** Etapa 5, rodada 2: barra inferior do celular encostada embaixo, DENTRO
+   *  da camada (faz parte do diálogo; o conteúdo termina acima dela). */
+  barra?: ReactNode;
   /** Sino + perfil no fim do topo (desligue quando a tela monta o próprio). */
   topoPadrao?: boolean;
   /** Classe extra na camada (ex.: ficha do médico em página inteira). */
@@ -137,8 +142,9 @@ export function TelaSobreposta({
         {acoes}
         {topoPadrao ? <TopoPadrao /> : null}
       </header>
-      <div className={`flex-1 overflow-y-auto bp-coluna ${rodape ? "" : "pb-[env(safe-area-inset-bottom)]"}`}>{children}</div>
+      <div className={`flex-1 overflow-y-auto bp-coluna ${rodape || barra ? "" : "pb-[env(safe-area-inset-bottom)]"}`}>{children}</div>
       {rodape ? <div className="shrink-0 bp-safe-bottom border-t border-bion-ink/10 dark:border-white/10">{rodape}</div> : null}
+      {barra}
     </div>
   );
 }

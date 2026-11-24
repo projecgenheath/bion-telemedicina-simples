@@ -160,6 +160,7 @@ export function SalaMedicoTela({
         onFechar={sala.cancelarInsercaoModeloResumo}
         titulo="Substituir suas anotações pelo modelo de evolução?"
         largura="max-w-md"
+        className="bms-modal"
         overlay="bg-black/70 backdrop-blur-sm"
         foraFecha={false}
       >

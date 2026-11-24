@@ -8,9 +8,9 @@
 /* termina às 23:00.                                                    */
 /* ==================================================================== */
 
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { CalendarCog, ChevronLeft, ChevronRight, ListFilter, Search, X } from "lucide-react";
-import { SinoTopo } from "../TopoMedico";
+import { MensagensTopo, SinoTopo } from "../TopoMedico";
 import { TelaSobreposta } from "../TelaSobreposta";
 import { BuscaPacienteTopo, PerfilMedicoTopo } from "../ficha/TopoFicha";
 import { chavePaciente, rotuloStatusMedico, type PacienteDoMedico } from "../metricas";
@@ -56,6 +56,7 @@ export function AgendaSemanal({
   onAbrirPaciente,
   onHorarios,
   onAbrirPerfil,
+  barra,
 }: {
   dados: DadosMedico;
   onFechar: () => void;
@@ -63,6 +64,8 @@ export function AgendaSemanal({
   /** Abre o AgendaSheet (grade de horários, dias bloqueados e ações do dia). */
   onHorarios: () => void;
   onAbrirPerfil?: () => void;
+  /** Etapa 5, rodada 2: barra inferior do celular dentro da agenda. */
+  barra?: ReactNode;
 }) {
   const { minhas, agora, listaPacientes, sessao, medico } = dados;
   const bloqueios = useBloqueiosAgenda();
@@ -463,10 +466,12 @@ export function AgendaSemanal({
           <button type="button" onClick={onHorarios} className="bm2-agenda-horarios">
             <CalendarCog aria-hidden /> <span className="max-sm:sr-only">Horários e bloqueios</span>
           </button>
+          <MensagensTopo className="lg:hidden" />
           <SinoTopo className="lg:hidden" />
         </>
       }
       topoPadrao={false}
+      barra={barra}
     >
       <div className="bm2-agenda-pagina">
         <div className="bm2-agenda-cartao">

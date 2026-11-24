@@ -24,6 +24,7 @@ import { ConsultaNaoEncontrada, ErroSalaFatal } from "@/components/bion/consulta
 import { SalaMedicoTela } from "./sala/SalaMedicoTela";
 import { useSalaConsulta } from "@/components/bion/consulta/useSalaConsulta";
 import { avisarDadosMedicoAlterados } from "@/components/bion/medico/useDadosMedico";
+import { poppins } from "@/components/bion/medico/inicio/fonte-medico";
 import { PainelEvolucao } from "@/components/bion/medico/evolucao/PainelEvolucao";
 
 /** Data de hoje no formato do input type=date ("AAAA-MM-DD"), no fuso da
@@ -433,12 +434,15 @@ export function ChamadaMedico({ onEnd, consultaId }: { onEnd: () => void; consul
 
   if (pendente) {
     return (
-      <div className="bm-animar min-h-dvh flex flex-col items-center justify-center gap-4 p-6 text-center">
-        <p className="text-lg font-bold">Conclua a evolução de {pendente.paciente} para atender o próximo.</p>
-        <button type="button" onClick={abrirEvolucao} className="rounded-full bg-primary text-primary-foreground px-6 py-3 font-bold">
-          Abrir evolução pendente
-        </button>
-        <button type="button" onClick={onEnd} className="underline text-sm">Voltar</button>
+      <div className={`bms-trava ${poppins.variable} min-h-dvh flex flex-col items-center justify-center p-6 text-center`}>
+        <div className="bms-trava-cartao">
+          <p className="text-lg">Conclua a evolução de {pendente.paciente} para atender o próximo.</p>
+          <p className="bms-trava-sub">Novos atendimentos ficam segurados até a evolução ser concluída.</p>
+          <button type="button" onClick={abrirEvolucao} className="bms-trava-acao">
+            Abrir evolução pendente
+          </button>
+          <button type="button" onClick={onEnd} className="underline text-sm">Voltar</button>
+        </div>
         <PainelEvolucao
           consultaId={pendente.consultaId}
           aberto={evolucaoAberta}
@@ -458,13 +462,15 @@ export function ChamadaMedico({ onEnd, consultaId }: { onEnd: () => void; consul
   // (o servidor continua recusando com 409 se houver rascunho pendente).
   if (travaErro) {
     return (
-      <div className="min-h-dvh flex flex-col items-center justify-center gap-4 p-6 text-center">
-        <p className="text-lg font-bold">Não foi possível conferir se você tem evolução pendente.</p>
-        <p className="text-sm text-muted-foreground">Sem essa conferência, a sala não abre. Tente de novo em instantes.</p>
-        <button type="button" onClick={tentarTravaDeNovo} className="rounded-full bg-primary text-primary-foreground px-6 py-3 font-bold">
-          Tentar de novo
-        </button>
-        <button type="button" onClick={onEnd} className="underline text-sm">Voltar</button>
+      <div className={`bms-trava ${poppins.variable} min-h-dvh flex flex-col items-center justify-center p-6 text-center`}>
+        <div className="bms-trava-cartao">
+          <p className="text-lg">Não foi possível conferir se você tem evolução pendente.</p>
+          <p className="bms-trava-sub">Sem essa conferência, a sala não abre. Tente de novo em instantes.</p>
+          <button type="button" onClick={tentarTravaDeNovo} className="bms-trava-acao">
+            Tentar de novo
+          </button>
+          <button type="button" onClick={onEnd} className="underline text-sm">Voltar</button>
+        </div>
       </div>
     );
   }
@@ -503,6 +509,7 @@ export function ChamadaMedico({ onEnd, consultaId }: { onEnd: () => void; consul
         onFechar={() => setConfirmarSairSemConcluir(false)}
         titulo="Sair sem concluir?"
         largura="max-w-md"
+        className="bms-modal"
         overlay="bg-black/70 backdrop-blur-sm"
         foraFecha={false}
       >
@@ -550,7 +557,7 @@ export function ChamadaMedico({ onEnd, consultaId }: { onEnd: () => void; consul
           largura="max-w-lg"
           overlay="bg-black/70 backdrop-blur-sm"
           foraFecha={false}
-          className="py-4"
+          className="py-4 bms-modal"
         >
           <form
             onSubmit={salvarReceita}
@@ -698,7 +705,7 @@ export function ChamadaMedico({ onEnd, consultaId }: { onEnd: () => void; consul
           largura="max-w-lg"
           overlay="bg-black/70 backdrop-blur-sm"
           foraFecha={false}
-          className="py-4"
+          className="py-4 bms-modal"
         >
           <form
             onSubmit={salvarAtestado}
@@ -836,7 +843,7 @@ export function ChamadaMedico({ onEnd, consultaId }: { onEnd: () => void; consul
           largura="max-w-lg"
           overlay="bg-black/70 backdrop-blur-sm"
           foraFecha={false}
-          className="py-4"
+          className="py-4 bms-modal"
         >
           <form
             onSubmit={salvarExame}
@@ -844,7 +851,7 @@ export function ChamadaMedico({ onEnd, consultaId }: { onEnd: () => void; consul
           >
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-bold flex items-center gap-2">
-                <FileText className="w-5 h-5 text-violet-500 dark:text-violet-400" /> Solicitar Exame Complementar
+                <FileText className="w-5 h-5 text-[#2f62c4] dark:text-[#9dbcf7]" /> Solicitar Exame Complementar
               </h3>
               <button
                 type="button"
@@ -880,8 +887,8 @@ export function ChamadaMedico({ onEnd, consultaId }: { onEnd: () => void; consul
                       onClick={() => setExameUrgencia(u)}
                       className={`flex-1 py-2 rounded-xl border font-bold transition ${
                         exameUrgencia === u
-                          ? "bg-violet-600 dark:bg-violet-500 border-violet-600 dark:border-violet-500 text-white"
-                          : "hover:border-violet-500 text-muted-foreground"
+                          ? "bg-[#2f62c4] dark:bg-[#9dbcf7] border-[#2f62c4] dark:border-[#9dbcf7] text-white dark:text-[#0e1013]"
+                          : "hover:border-[#2f62c4] text-muted-foreground"
                       }`}
                     >
                       {u}
@@ -909,7 +916,7 @@ export function ChamadaMedico({ onEnd, consultaId }: { onEnd: () => void; consul
             <button
               type="submit"
               disabled={emissao?.tipo === "exame"}
-              className="w-full py-3 rounded-2xl bg-violet-600 dark:bg-violet-500 hover:bg-violet-700 text-white font-bold text-xs shadow-md transition disabled:opacity-50"
+              className="w-full py-3 rounded-2xl bg-[#2f62c4] dark:bg-[#9dbcf7] hover:bg-[#244f9f] text-white dark:text-[#0e1013] font-bold text-xs shadow-md transition disabled:opacity-50"
             >
               {emissao?.tipo === "exame" ? "Enviando…" : "Enviar Solicitação ao Paciente"}
             </button>
