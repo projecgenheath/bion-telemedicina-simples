@@ -14,12 +14,12 @@ import {
   LifeBuoy,
   Plus,
   RefreshCw,
-  Search,
   Stethoscope,
   Wallet,
 } from "lucide-react";
 import { useBion } from "@/lib/bion-store";
 import { urlDa, type View } from "@/lib/rotas";
+import { CampoBusca } from "../ui/CampoBusca";
 import { CardAdmin } from "../ui/CardAdmin";
 import { ChipEstado } from "../ui/ChipEstado";
 import { useCamadasAdmin } from "../AdminShell";
@@ -205,8 +205,8 @@ export function CentroComando() {
             <div className="flex items-center gap-3">
               <AvatarIniciais nome={destaque.paciente} tamanho="lg" />
               <div className="min-w-0 flex-1">
-                <div className="truncate text-[15px] font-medium">{destaque.paciente}</div>
-                <div className="ba2-destaque-rotulo truncate text-xs">
+                <div className="min-w-0 text-[15px] font-medium">{destaque.paciente}</div>
+                <div className="ba2-destaque-rotulo min-w-0 text-xs">
                   {destaque.medico}
                   {destaque.especialidade ? ` · ${destaque.especialidade}` : ""}
                 </div>
@@ -218,7 +218,7 @@ export function CentroComando() {
               <dt className="text-[11px] ba2-destaque-rotulo lg:text-xs">
                 {aoVivo ? "Ao vivo" : "Horário"}
               </dt>
-              <dd className="truncate text-[14px] font-medium">{estadoConsulta(destaque.status).rotulo}</dd>
+              <dd className="min-w-0 text-[14px] font-medium">{estadoConsulta(destaque.status).rotulo}</dd>
               <dd className="text-[14px] font-medium tabular-nums">
                 {hora(destaque.ts)} · {destaque.data}
               </dd>
@@ -284,8 +284,8 @@ export function CentroComando() {
                   className="ba2-item flex w-full items-center justify-between gap-3 rounded-[0.9rem] px-3 py-2.5 text-left hover:opacity-90 transition-opacity"
                 >
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium">{c.paciente}</span>
-                    <span className="block truncate text-[11px] ba-texto-2">
+                    <span className="block min-w-0 text-sm font-medium">{c.paciente}</span>
+                    <span className="block min-w-0 text-[11px] ba-texto-2">
                       {c.medico}
                       {c.especialidade ? ` · ${c.especialidade}` : ""}
                     </span>
@@ -331,7 +331,7 @@ export function CentroComando() {
             : "Tudo em ordem. Nenhuma decisão pendente na Fila."}
         </p>
         {fila[0] ? (
-          <p className="mt-2 pl-[0.7rem] text-xs ba2-t-cor truncate">
+          <p className="mt-2 pl-[0.7rem] text-xs ba2-t-cor min-w-0">
             Prioridade: <span className="font-medium text-[#242424]">{fila[0].titulo}</span>
           </p>
         ) : null}
@@ -415,17 +415,13 @@ export function CentroComando() {
             </span>
           ) : null}
         </h2>
-        <label className="relative order-last flex w-full items-center sm:order-none sm:w-auto rounded-full px-3 h-9" style={{ background: "var(--ba-fundo)" }}>
-          <span className="sr-only">Buscar médico</span>
-          <Search className="h-3.5 w-3.5 ba-texto-2 shrink-0 mr-2" aria-hidden />
-          <input
-            type="search"
-            value={buscaMed}
-            onChange={(e) => setBuscaMed(e.target.value)}
-            placeholder="Buscar médico ou CRM…"
-            className="w-full bg-transparent text-xs outline-none sm:w-44"
-          />
-        </label>
+        <CampoBusca
+          className="order-last sm:order-none sm:max-w-xs"
+          valor={buscaMed}
+          onChange={setBuscaMed}
+          dica="Buscar médico ou CRM…"
+          rotulo="Buscar médico"
+        />
         <button
           type="button"
           onClick={() => setSoValidacao((v) => !v)}
@@ -477,10 +473,10 @@ export function CentroComando() {
                     onClick={() => ir("admin-medicos", `medico=${encodeURIComponent(m.id)}`)}
                     className={`ba2-tr cursor-pointer ${i === 0 ? "ba2-tr-destaque" : ""}`}
                   >
-                    <td className="truncate rounded-l-[0.6rem] px-3 py-2.5 font-medium">{m.nome}</td>
-                    <td className="truncate px-3 ba-texto-2">{m.especialidade}</td>
-                    <td className="truncate px-3 tabular-nums ba-texto-2">{m.crm}</td>
-                    <td className="truncate px-3">
+                    <td className="min-w-0 rounded-l-[0.6rem] px-3 py-2.5 font-medium">{m.nome}</td>
+                    <td className="min-w-0 px-3 ba-texto-2">{m.especialidade}</td>
+                    <td className="min-w-0 px-3 tabular-nums ba-texto-2">{m.crm}</td>
+                    <td className="min-w-0 px-3">
                       <ChipEstado estado={est} />
                     </td>
                     <td className="rounded-r-[0.6rem] px-3 text-right tabular-nums ba-texto-2">
@@ -504,8 +500,8 @@ export function CentroComando() {
                   >
                     <AvatarIniciais nome={m.nome} />
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[13px] font-medium">{m.nome}</span>
-                      <span className="block truncate text-[11px] ba-texto-2">{m.especialidade} · {m.crm}</span>
+                      <span className="block min-w-0 text-[13px] font-medium">{m.nome}</span>
+                      <span className="block min-w-0 text-[11px] ba-texto-2">{m.especialidade} · {m.crm}</span>
                     </span>
                     <ChipEstado estado={est} />
                   </button>
@@ -632,7 +628,7 @@ export function CentroComando() {
               {especialidades.slice(0, 4).map((e) => (
                 <li key={e.nome}>
                   <div className="flex justify-between gap-2 text-xs">
-                    <span className="font-medium truncate">{e.nome}</span>
+                    <span className="font-medium min-w-0">{e.nome}</span>
                     <span className="ba-texto-2 shrink-0 tabular-nums">
                       {e.total} · {e.pct}%
                     </span>
@@ -656,7 +652,7 @@ export function CentroComando() {
               >
                 <span className="flex items-center gap-2 min-w-0">
                   <CalendarDays className="h-4 w-4 ba-texto-2 shrink-0" aria-hidden />
-                  <span className="truncate">Pagas hoje</span>
+                  <span className="min-w-0">Pagas hoje</span>
                 </span>
                 <span className="font-medium tabular-nums shrink-0">
                   {carregandoNumeros || !hoje ? "—" : `${hoje.pagas} · ${brl(hoje.brutoPagoCentavos)}`}
@@ -671,7 +667,7 @@ export function CentroComando() {
               >
                 <span className="flex items-center gap-2 min-w-0">
                   <HeartPulse className="h-4 w-4 ba-texto-2 shrink-0" aria-hidden />
-                  <span className="truncate">Pacientes ativos</span>
+                  <span className="min-w-0">Pacientes ativos</span>
                 </span>
                 <span className="font-medium tabular-nums shrink-0 inline-flex items-center gap-1">
                   {pacientesAtivos === null ? "—" : `${pacientesAtivos} / ${pacientesCadastrados}`}
@@ -687,7 +683,7 @@ export function CentroComando() {
               >
                 <span className="flex items-center gap-2 min-w-0">
                   <LifeBuoy className="h-4 w-4 ba-texto-2 shrink-0" aria-hidden />
-                  <span className="truncate">Chamados abertos</span>
+                  <span className="min-w-0">Chamados abertos</span>
                 </span>
                 <span className="font-medium tabular-nums shrink-0 inline-flex items-center gap-1">
                   {chamadosAbertos}

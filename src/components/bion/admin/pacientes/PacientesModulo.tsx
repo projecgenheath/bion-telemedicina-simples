@@ -2,8 +2,9 @@
 
 import { useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { HeartPulse, Info, Plus, Search } from "lucide-react";
+import { HeartPulse, Info, Plus } from "lucide-react";
 import { useBion, type PacienteRegistro } from "@/lib/bion-store";
+import { CampoBusca } from "../ui/CampoBusca";
 import { TelaModulo } from "../ui/TelaModulo";
 import { TabelaAdmin, type ColunaAdmin } from "../ui/TabelaAdmin";
 import { ChipEstado } from "../ui/ChipEstado";
@@ -68,20 +69,15 @@ export function PacientesModulo() {
       }
       ferramentas={
         <div className="flex flex-col lg:flex-row gap-2 w-full">
-          <label className="relative flex-1 min-w-0">
-            <span className="sr-only">Buscar por nome, e-mail ou CPF</span>
-            <Search className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 ba-texto-3" aria-hidden />
-            <input
-              type="search"
-              value={busca}
-              onChange={(e) => {
-                setBusca(e.target.value);
-                setLimite(PAGINA);
-              }}
-              placeholder="Buscar nome, e-mail ou CPF"
-              className="ba-entrada !pl-10"
-            />
-          </label>
+          <CampoBusca
+            valor={busca}
+            onChange={(v) => {
+              setBusca(v);
+              setLimite(PAGINA);
+            }}
+            dica="Buscar nome, e-mail ou CPF"
+            rotulo="Buscar por nome, e-mail ou CPF"
+          />
           <div role="group" aria-label="Situação da conta" className="flex flex-wrap gap-2">
             {FILTROS_SITUACAO.map((f) => (
               <button
@@ -174,8 +170,8 @@ function TabelaPacientes({ linhas, agora, selecionado, onAbrir }: { linhas: Paci
         <span className="flex items-center gap-2.5 py-0.5">
           <Avatar iniciais={iniciais(p.nome)} tamanho="w-8 h-8" tom={estadoPaciente(situacaoDe(p)).tom} />
           <span className="min-w-0">
-            <span className="font-bold whitespace-nowrap block">{p.nome}</span>
-            <span className="text-xs ba-texto-2 block truncate max-w-[18rem]">{p.email}</span>
+            <span className="font-bold leading-snug block">{p.nome}</span>
+            <span className="text-xs ba-texto-2 block leading-snug break-words">{p.email}</span>
           </span>
         </span>
       ),

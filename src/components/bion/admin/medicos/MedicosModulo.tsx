@@ -3,8 +3,9 @@
 import { crmComRotulo } from "@/lib/medico-exibicao";
 import { useMemo, useState, type KeyboardEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Ban, CheckCircle2, Info, Plus, RotateCcw, Search, Star, Stethoscope } from "lucide-react";
+import { Ban, CheckCircle2, Info, Plus, RotateCcw, Star, Stethoscope } from "lucide-react";
 import { useBion, type Medico } from "@/lib/bion-store";
+import { CampoBusca } from "../ui/CampoBusca";
 import { TelaModulo } from "../ui/TelaModulo";
 import { TabelaAdmin, type ColunaAdmin } from "../ui/TabelaAdmin";
 import { CardDeslizavel } from "../ui/CardDeslizavel";
@@ -119,20 +120,15 @@ export function MedicosModulo() {
             ))}
           </div>
           <div className="flex flex-col lg:flex-row gap-2">
-            <label className="relative flex-1 min-w-0">
-              <span className="sr-only">Buscar por nome, CRM ou especialidade</span>
-              <Search className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 ba-texto-3" aria-hidden />
-              <input
-                type="search"
-                value={busca}
-                onChange={(e) => {
-                  setBusca(e.target.value);
-                  setLimite(PAGINA);
-                }}
-                placeholder="Buscar nome, CRM ou especialidade"
-                className="ba-entrada !pl-10"
-              />
-            </label>
+            <CampoBusca
+              valor={busca}
+              onChange={(v) => {
+                setBusca(v);
+                setLimite(PAGINA);
+              }}
+              dica="Buscar nome, CRM ou especialidade"
+              rotulo="Buscar por nome, CRM ou especialidade"
+            />
             <label className="lg:w-72">
               <span className="sr-only">Especialidade</span>
               <select value={especialidade} onChange={(e) => setEspecialidade(e.target.value)} className="ba-entrada" aria-label="Especialidade">
@@ -292,12 +288,12 @@ function TabelaMedicos({ linhas, agora, selecionado, onAbrir }: { linhas: Medico
       render: (m) => (
         <span className="flex items-center gap-2.5 py-0.5">
           <Avatar foto={m.foto} iniciais={iniciais(m.nome)} tamanho="w-8 h-8" />
-          <span className="font-bold whitespace-nowrap">{m.nome}</span>
+          <span className="font-bold leading-snug">{m.nome}</span>
         </span>
       ),
     },
     { id: "crm", titulo: "CRM", render: (m) => <span className="whitespace-nowrap tabular-nums">{m.crm}</span> },
-    { id: "esp", titulo: "Especialidade", render: (m) => <span className="ba-texto-2 whitespace-nowrap">{m.especialidade}</span> },
+    { id: "esp", titulo: "Especialidade", render: (m) => <span className="ba-texto-2 leading-snug">{m.especialidade}</span> },
     { id: "nota", titulo: "Nota", tipo: "num", largura: "5.5rem", render: (m) => (m.numAvaliacoes ? `★ ${m.avaliacao.toFixed(1)}` : "—") },
     { id: "c30", titulo: "30 dias", tipo: "num", largura: "6rem", secundaria: true, render: (m) => consultas30d(consultas, m.id, agora) },
     { id: "valor", titulo: "Valor", tipo: "num", largura: "7rem", render: (m) => brl(Math.round(m.valor * 100)) },

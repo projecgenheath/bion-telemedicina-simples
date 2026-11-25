@@ -6,6 +6,7 @@ import { Clock, Inbox, LifeBuoy, Search, Stethoscope, User } from "lucide-react"
 import { toast } from "sonner";
 import { useBion, type TicketSuporte } from "@/lib/bion-store";
 import { urlDa, type View } from "@/lib/rotas";
+import { CampoBusca } from "../ui/CampoBusca";
 import { TelaModulo } from "../ui/TelaModulo";
 import { KpiAdmin } from "../ui/CardAdmin";
 import { ChipEstado } from "../ui/ChipEstado";
@@ -144,11 +145,12 @@ export function SuporteModulo() {
       ferramentas={
         <div className="flex flex-col gap-2 w-full">
           <div className="flex flex-col lg:flex-row gap-2">
-            <label className="relative flex-1 min-w-0">
-              <span className="sr-only">Buscar por assunto, pessoa ou mensagem</span>
-              <Search className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 ba-texto-3" aria-hidden />
-              <input type="search" value={filtros.busca} onChange={(e) => mudar({ busca: e.target.value })} placeholder="Buscar assunto, pessoa ou mensagem" className="ba-entrada !pl-10" />
-            </label>
+            <CampoBusca
+              valor={filtros.busca}
+              onChange={(v) => mudar({ busca: v })}
+              dica="Buscar assunto, pessoa ou mensagem"
+              rotulo="Buscar por assunto, pessoa ou mensagem"
+            />
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:w-[26rem]">
               <select value={filtros.perfil} onChange={(e) => mudar({ perfil: e.target.value as FiltrosChamado["perfil"] })} className="ba-entrada" aria-label="Perfil de quem abriu">
                 <option value="todos">Pacientes e médicos</option>
@@ -274,10 +276,10 @@ function CartaoChamado({ t, agora, selecionado, temRascunho, onAbrir }: { t: Tic
             <span className="font-bold leading-snug break-words flex-1 min-w-0">{t.assunto || "Chamado sem assunto"}</span>
             <span className="text-xs ba-texto-2 shrink-0 tabular-nums">{t.data}</span>
           </span>
-          <span className="text-xs ba-texto-2 block truncate">
+          <span className="text-xs ba-texto-2 block leading-snug">
             {t.usuario} ({rotuloPerfilChamado(t.perfil).toLowerCase()}) · {rotuloCategoriaChamado(t.categoria)}
           </span>
-          <span className="text-sm ba-texto-2 block mt-1 line-clamp-2">{t.mensagem}</span>
+          <span className="text-sm ba-texto-2 block mt-1 leading-snug">{t.mensagem}</span>
           <span className="flex flex-wrap gap-1.5 mt-2">
             <ChipEstado estado={e} />
             {espera ? (

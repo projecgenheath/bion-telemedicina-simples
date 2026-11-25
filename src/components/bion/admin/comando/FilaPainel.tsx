@@ -58,7 +58,7 @@ export function FilaPainel({ onAbrir, comTitulo = true }: { onAbrir: (view: stri
       ) : null}
 
       {fila.length > 0 ? (
-        <div className="flex gap-2 overflow-x-auto pb-2 -mx-1 px-1 mb-2" role="group" aria-label="Filtrar a fila">
+        <div className="flex flex-wrap gap-2 mb-2" role="group" aria-label="Filtrar a fila">
           {(["tudo", ...ORDEM] as const)
             .filter((c) => c === "tudo" || contagem[c] > 0)
             .map((c) => (

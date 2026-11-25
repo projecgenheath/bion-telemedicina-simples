@@ -2,8 +2,9 @@
 
 import { useMemo, useState, type KeyboardEvent, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { CalendarDays, CalendarX2, Info, ListFilter, Pencil, Search } from "lucide-react";
+import { CalendarDays, CalendarX2, Info, ListFilter, Pencil } from "lucide-react";
 import { useBion, type Consulta } from "@/lib/bion-store";
+import { CampoBusca } from "../ui/CampoBusca";
 import { TelaModulo } from "../ui/TelaModulo";
 import { TabelaAdmin, type ColunaAdmin } from "../ui/TabelaAdmin";
 import { CardDeslizavel } from "../ui/CardDeslizavel";
@@ -220,17 +221,12 @@ function BarraFiltros({ filtros, onMudar, medicos }: { filtros: Filtros; onMudar
     <div className="space-y-2">
       <div className="flex flex-col lg:flex-row gap-2">
         <div className="flex flex-col gap-2 min-w-0 flex-1 sm:flex-row sm:items-center">
-          <label className="relative flex-1 min-w-0">
-            <span className="sr-only">Buscar por paciente, médico ou especialidade</span>
-            <Search className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 ba-texto-3" aria-hidden />
-            <input
-              type="search"
-              value={filtros.busca}
-              onChange={(e) => onMudar({ busca: e.target.value })}
-              placeholder="Buscar paciente, médico ou especialidade"
-              className="ba-entrada !pl-10"
-            />
-          </label>
+          <CampoBusca
+            valor={filtros.busca}
+            onChange={(v) => onMudar({ busca: v })}
+            dica="Buscar paciente, médico ou especialidade"
+            rotulo="Buscar por paciente, médico ou especialidade"
+          />
           {!largo ? (
             <button
               type="button"

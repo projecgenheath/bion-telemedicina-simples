@@ -35,6 +35,7 @@ import { useAtalhoBusca } from "./ui/atalho";
 import { poppinsAdmin } from "./fonte-admin";
 import { ROTULO_TIPO, casa, type ResultadoBusca, type TipoResultado } from "./busca";
 import type { Tom } from "./rotulos";
+import { CampoBusca } from "./ui/CampoBusca";
 import "./admin.css";
 
 type Icone = ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
@@ -205,7 +206,7 @@ export function AdminShell({
         />
 
         {/* Topo desktop (≥ 1024 px) — mesmo desenho de Médico e Paciente */}
-        <header className="ba2-topo hidden lg:flex items-center gap-3 px-7 shrink-0">
+        <header className="ba2-topo hidden lg:flex flex-wrap items-center gap-x-3 gap-y-2 px-7 shrink-0">
           {modulo ? (
             <div className="flex items-center gap-2 min-w-0">
               <button
@@ -217,18 +218,18 @@ export function AdminShell({
                 <ArrowLeft className="h-[1.1rem] w-[1.1rem]" aria-hidden />
               </button>
               <nav aria-label="Você está em" className="min-w-0 pr-3 border-r border-[var(--ba-divisor)]">
-                <ol className="flex items-center gap-1.5 text-[13px] min-w-0">
+                <ol className="flex flex-wrap items-center gap-1.5 text-[13px] min-w-0">
                   {migalhas.map((m, i) => {
                     const ultima = i === migalhas.length - 1;
                     return (
                       <li key={`${m.rotulo}-${i}`} className="flex items-center gap-1.5 min-w-0">
                         {i > 0 ? <ChevronRight className="w-3.5 h-3.5 shrink-0 ba-texto-3" aria-hidden /> : null}
                         {m.onClick && !ultima ? (
-                          <button type="button" onClick={m.onClick} className="ba-texto-2 hover:underline truncate">
+                          <button type="button" onClick={m.onClick} className="ba-texto-2 hover:underline text-left leading-snug">
                             {m.rotulo}
                           </button>
                         ) : (
-                          <span className={`truncate ${ultima ? "font-medium" : "ba-texto-2"}`} aria-current={ultima ? "page" : undefined}>
+                          <span className={`leading-snug ${ultima ? "font-medium" : "ba-texto-2"}`} aria-current={ultima ? "page" : undefined}>
                             {m.rotulo}
                           </span>
                         )}
@@ -249,7 +250,7 @@ export function AdminShell({
             title={`Buscar ou ir para (${atalho.falado})`}
           >
             <Search className="h-4 w-4 shrink-0" aria-hidden />
-            <span className="truncate">Buscar módulo, pessoa, consulta…</span>
+            <span className="min-w-0 leading-snug">Buscar módulo, pessoa, consulta…</span>
             <kbd
               className="ml-auto hidden xl:inline-flex items-center rounded-md border px-1.5 py-0.5 text-[11px] font-medium ba-texto-3"
               style={{ borderColor: "var(--ba-borda)", background: "var(--ba-card)" }}
@@ -328,8 +329,8 @@ export function AdminShell({
             >
               <AvatarShell usuario={usuario} tamanho="h-10 w-10" />
               <span className="min-w-0">
-                <span className="block max-w-[12rem] truncate text-[13px] font-medium">{usuario.nome}</span>
-                <span className="block max-w-[12rem] truncate text-[11px] ba-texto-2">Administrador</span>
+                <span className="block max-w-[14rem] text-[13px] font-medium leading-snug">{usuario.nome}</span>
+                <span className="block max-w-[14rem] text-[11px] ba-texto-2 leading-snug">Administrador</span>
               </span>
               <ChevronDown className="ml-2 h-4 w-4 ba-texto-2" aria-hidden />
             </button>
@@ -574,7 +575,7 @@ function BarraLateralAdmin({
                       aria-current={ativo === s.id ? "page" : undefined}
                     >
                       <s.icone className="h-4 w-4 shrink-0" aria-hidden />
-                      <span className="flex-1 truncate">{s.rotulo}</span>
+                      <span className="flex-1 min-w-0 leading-snug">{s.rotulo}</span>
                       {s.selo ? (
                         <span className="rounded-full bg-[#c42b2b] px-1.5 text-[10px] font-semibold text-white tabular-nums">
                           {s.selo}
@@ -749,13 +750,14 @@ function Lancador({
       titulo="Buscar ou ir para…"
       descricao={buscar ? "Módulos, atalhos, pessoas, consultas e chamados" : "Módulos da administração"}
     >
-      <label className="block mb-4">
-        <span className="sr-only">Buscar módulos, pessoas, consultas ou chamados</span>
-        <input
+      <div className="mb-4">
+        <CampoBusca
           autoFocus
-          type="search"
-          value={termo}
-          onChange={(e) => setTermo(e.target.value)}
+          valor={termo}
+          onChange={setTermo}
+          dica={buscar ? "Módulo, pessoa, CRM, e-mail, chamado…" : "Digite o nome do módulo"}
+          rotulo="Buscar módulos, pessoas, consultas ou chamados"
+          describedBy="lancador-dica"
           onKeyDown={(e) => {
             if (e.key === "Enter" && primeiro) onNavegar(primeiro);
             else if (e.key === "ArrowDown") {
@@ -763,14 +765,11 @@ function Lancador({
               focaveis()[0]?.focus();
             }
           }}
-          placeholder={buscar ? "Módulo, pessoa, CRM, e-mail, chamado…" : "Digite o nome do módulo"}
-          className="ba-entrada"
-          aria-describedby="lancador-dica"
         />
         <span id="lancador-dica" className="block text-xs ba-texto-3 mt-1.5 px-1">
           Enter abre o primeiro · ↓ e ↑ andam na lista · Esc fecha
         </span>
-      </label>
+      </div>
       <div ref={listaRef} onKeyDown={aoTeclarLista} className="space-y-5">
         {nada ? (
           <p className="text-sm ba-texto-2 text-center py-6" role="status">
@@ -780,7 +779,7 @@ function Lancador({
         {filtrados.map((g) => (
           <div key={g.rotulo}>
             <div className="ba-rotulo mb-2">{g.rotulo}</div>
-            <div className="grid grid-cols-3 gap-2 ba-animar">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 ba-animar">
               {g.itens.map((it) => (
                 <button
                   key={it.id}
@@ -802,7 +801,7 @@ function Lancador({
                       />
                     ) : null}
                   </span>
-                  <span className="text-xs font-medium leading-tight">{it.rotulo}</span>
+                  <span className="max-w-full text-xs font-medium leading-snug">{it.rotulo}</span>
                   {it.selo ? <span className="sr-only">({it.selo} pendentes)</span> : null}
                 </button>
               ))}
@@ -823,8 +822,8 @@ function Lancador({
                     data-denso="true"
                   >
                     <span className="flex-1 min-w-0">
-                      <span className="font-medium block truncate">{r.rotulo}</span>
-                      {r.detalhe ? <span className="text-xs ba-texto-2 block truncate">{r.detalhe}</span> : null}
+                      <span className="font-medium block leading-snug">{r.rotulo}</span>
+                      {r.detalhe ? <span className="text-xs ba-texto-2 block leading-snug">{r.detalhe}</span> : null}
                     </span>
                     <ChevronRight className="w-4 h-4 ba-texto-3 shrink-0" aria-hidden />
                   </button>

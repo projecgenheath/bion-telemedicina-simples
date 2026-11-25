@@ -229,6 +229,9 @@ verdade("filtros do celular abrem numa folha", /<SheetAdmin[\s\S]*Filtros da age
 verdade("alvos de toque dos filtros têm 44px", /ba-aba !min-h-11/.test(agendaSrc) && /ba-botao ba-botao-secundario !min-h-11/.test(agendaSrc));
 verdade("Status e Pago na mesma coluna da agenda", /id: "status"/.test(agendaSrc) && !/id: "pago"/.test(agendaSrc));
 verdade("KPIs da agenda em 2 colunas no celular", /grid grid-cols-2 lg:grid-cols-5/.test(agendaSrc));
+verdade("busca da agenda mostra a frase inteira", /CampoBusca/.test(agendaSrc) && /Buscar paciente, médico ou especialidade/.test(agendaSrc));
+verdade("dica da busca quebra em palavras inteiras", /\.ba-campo-busca-dica\s*\{[^}]*white-space:\s*normal/.test(css));
+verdade("filtros da auditoria não rolam cortando o chip", !/lg:flex-nowrap lg:overflow-x-auto/.test(readFileSync(new URL("./auditoria/AuditoriaModulo.tsx", import.meta.url), "utf8")));
 
 const relSrc = readFileSync(new URL("./relatorios/RelatoriosModulo.tsx", import.meta.url), "utf8");
 verdade("Relatórios sem texto interno 'como na tela antiga'", !/como na tela antiga/.test(relSrc));

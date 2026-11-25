@@ -105,7 +105,7 @@ export function Conversa({
               <li key={o.id}>
                 <button type="button" onClick={() => onAbrirOutro(o)} className="ba-card w-full text-left flex items-center gap-3" data-denso="true">
                   <span className="flex-1 min-w-0">
-                    <span className="font-semibold block truncate">{o.assunto || "Chamado sem assunto"}</span>
+                    <span className="font-semibold block leading-snug">{o.assunto || "Chamado sem assunto"}</span>
                     <span className="text-xs ba-texto-2">{o.data}</span>
                   </span>
                   <ChipEstado estado={estadoChamado(o.status)} />
