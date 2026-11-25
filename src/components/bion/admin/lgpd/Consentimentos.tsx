@@ -1,8 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Handshake, Search } from "lucide-react";
+import { Handshake } from "lucide-react";
 import { useBion } from "@/lib/bion-store";
+import { CampoBusca } from "../ui/CampoBusca";
 import { CardAdmin } from "../ui/CardAdmin";
 import { ChipEstado } from "../ui/ChipEstado";
 import { filtrarConsentimentos } from "./lgpd";
@@ -28,21 +29,16 @@ export function Consentimentos() {
     <CardAdmin titulo={`Consentimentos · ${consentimentos.length}`} icone={Handshake}>
       <p className="text-sm ba-texto-2">Quem o paciente autorizou a ver os próprios documentos, para quê e quando. Só leitura: quem dá ou revoga é o paciente.</p>
       <div className="mt-3 flex flex-col sm:flex-row gap-2">
-        <label className="relative flex-1 min-w-0">
-          <span className="sr-only">Buscar consentimento por paciente, profissional ou finalidade</span>
-          <Search className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 ba-texto-3" aria-hidden />
-          <input
-            type="search"
-            value={termo}
-            onChange={(e) => {
-              setTermo(e.target.value);
-              setLimite(PAGINA);
-            }}
-            placeholder="Paciente, profissional ou finalidade"
-            className="ba-entrada !pl-10"
-          />
-        </label>
-        <div role="group" aria-label="Situação do consentimento" className="flex gap-2 overflow-x-auto -mx-1 px-1 pb-1 sm:pb-0">
+        <CampoBusca
+          valor={termo}
+          onChange={(v) => {
+            setTermo(v);
+            setLimite(PAGINA);
+          }}
+          dica="Paciente, profissional ou finalidade"
+          rotulo="Buscar consentimento por paciente, profissional ou finalidade"
+        />
+        <div role="group" aria-label="Situação do consentimento" className="flex flex-wrap gap-2">
           {SITUACOES.map((s) => (
             <button
               key={s.id}

@@ -2,9 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Calendar, Database, Handshake, ExternalLink, EyeOff, FileSearch, Info, Lock, Search, Shield, Stethoscope, Trash2, Users } from "lucide-react";
+import { Calendar, Database, Handshake, ExternalLink, EyeOff, FileSearch, Info, Lock, Shield, Stethoscope, Trash2, Users } from "lucide-react";
 import { useBion } from "@/lib/bion-store";
 import { urlDa, type View } from "@/lib/rotas";
+import { CampoBusca } from "../ui/CampoBusca";
 import { TelaModulo } from "../ui/TelaModulo";
 import { CardAdmin, KpiAdmin } from "../ui/CardAdmin";
 import { ChipEstado } from "../ui/ChipEstado";
@@ -94,7 +95,7 @@ export function PrivacidadeModulo() {
       }}
       atualizando={atualizando || lista.carregando}
       ferramentas={
-        <nav aria-label="Seções desta tela" className="flex gap-2 overflow-x-auto -mx-1 px-1 pb-1">
+        <nav aria-label="Seções desta tela" className="flex flex-wrap gap-2">
           {SECOES.map((s) => (
             <button key={s.id} type="button" onClick={() => rolar(s.id)} className="ba-filtro shrink-0">
               <s.icone className="w-4 h-4" aria-hidden /> {s.rotulo}
@@ -116,11 +117,13 @@ export function PrivacidadeModulo() {
             <h2 id="lgpd-pacientes-titulo" className="text-lg font-black flex-1">
               Dados por paciente
             </h2>
-            <label className="relative sm:w-80">
-              <span className="sr-only">Buscar paciente por nome, e-mail ou id</span>
-              <Search className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 ba-texto-3" aria-hidden />
-              <input type="search" value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Nome, e-mail ou id" className="ba-entrada !pl-10" />
-            </label>
+            <CampoBusca
+              className="sm:max-w-sm"
+              valor={busca}
+              onChange={setBusca}
+              dica="Nome, e-mail ou id"
+              rotulo="Buscar paciente por nome, e-mail ou id"
+            />
           </div>
           {lista.erro && !lista.dados ? (
             <div className="ba-card" data-denso="true">
@@ -182,8 +185,8 @@ export function PrivacidadeModulo() {
                     {medicosVisiveis.map((m) => (
                       <li key={m.id} className="py-2 flex items-center gap-3">
                         <span className="flex-1 min-w-0">
-                          <span className="font-bold block truncate">{m.nome}</span>
-                          <span className="text-xs ba-texto-2 block truncate">
+                          <span className="font-bold block leading-snug">{m.nome}</span>
+                          <span className="text-xs ba-texto-2 block leading-snug">
                             {m.especialidade} · {m.crm}
                           </span>
                         </span>
@@ -225,8 +228,8 @@ export function PrivacidadeModulo() {
                         data-tom={l.severidade === "critical" ? "critico" : l.severidade === "warning" ? "atencao" : undefined}
                       >
                         <span className="flex-1 min-w-0">
-                          <span className="font-semibold block truncate">{rotuloAcao(l.acao)}</span>
-                          <span className="text-xs ba-texto-2 block truncate">
+                          <span className="font-semibold block leading-snug">{rotuloAcao(l.acao)}</span>
+                          <span className="text-xs ba-texto-2 block leading-snug">
                             {l.usuario} · {relativo(l.ts, agora)}
                           </span>
                         </span>

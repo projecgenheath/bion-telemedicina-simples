@@ -4,6 +4,7 @@ import { useState, type ReactNode } from "react";
 import { Drawer } from "vaul";
 import { X } from "lucide-react";
 import { useCascaLarga } from "./preferencias";
+import { poppinsAdmin } from "../fonte-admin";
 import "../admin.css";
 
 /**
@@ -58,16 +59,16 @@ export function SheetAdmin({
       <Drawer.Portal>
         <Drawer.Overlay className="fixed inset-0 z-50 bg-black/60" />
         <Drawer.Content
-          className={`ba-escopo ba-sheet fixed z-50 flex flex-col outline-none ${
+          className={`ba-escopo ba-sheet ${poppinsAdmin.variable} fixed z-50 flex flex-col outline-none ${
             largo
               ? "right-0 top-0 bottom-0 w-[480px] max-w-[92vw] border-l"
-              : "inset-x-0 bottom-0 max-h-[92dvh] rounded-t-[1.75rem]"
+              : "inset-x-0 bottom-0 max-h-[92dvh] rounded-t-[20px]"
           }`}
         >
           {!largo ? <Drawer.Handle className="!mt-3 !mb-1 !w-12 !h-1.5 !bg-current opacity-25" /> : null}
           <header className={`flex items-start justify-between gap-3 px-5 ${largo ? "pt-6" : "pt-2"} pb-3`}>
             <div className="min-w-0">
-              <Drawer.Title className="text-lg font-black leading-tight">{titulo}</Drawer.Title>
+              <Drawer.Title className="text-lg font-semibold leading-tight">{titulo}</Drawer.Title>
               {descricao ? (
                 <Drawer.Description className="text-sm ba-texto-2 mt-0.5">{descricao}</Drawer.Description>
               ) : (

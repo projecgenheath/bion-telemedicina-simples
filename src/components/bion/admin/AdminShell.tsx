@@ -1,31 +1,74 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
-import { ArrowLeft, ChevronRight, Inbox, PanelLeftClose, PanelLeftOpen, Search } from "lucide-react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentType,
+  type ReactNode,
+} from "react";
+import {
+  ArrowLeft,
+  Bell,
+  CalendarClock,
+  ChevronDown,
+  ChevronRight,
+  Inbox,
+  Info,
+  LayoutGrid,
+  MessageCircle,
+  Plus,
+  Search,
+  Settings,
+  SlidersHorizontal,
+  Stethoscope,
+  Wallet,
+} from "lucide-react";
 import { Logo } from "@/components/bion/brand";
 import { SheetAdmin } from "./ui/SheetAdmin";
-import { LARGURA_TRILHO_ABERTO, useCascaLarga, useDensidadeAdmin, useMinLargura, usePreferenciaBool } from "./ui/preferencias";
+import { useDensidadeAdmin } from "./ui/preferencias";
 import { useAtalhoBusca } from "./ui/atalho";
+import { poppinsAdmin } from "./fonte-admin";
 import { ROTULO_TIPO, casa, type ResultadoBusca, type TipoResultado } from "./busca";
 import type { Tom } from "./rotulos";
+import { CampoBusca } from "./ui/CampoBusca";
 import "./admin.css";
 
 type Icone = ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
 
-export type ItemNavAdmin = { id: string; rotulo: string; icone: Icone; selo?: number; tomSelo?: Tom; /** Sinônimos para a busca do lançador (ex.: "lgpd cofre"). */ palavras?: string };
+export type ItemNavAdmin = {
+  id: string;
+  rotulo: string;
+  icone: Icone;
+  selo?: number;
+  tomSelo?: Tom;
+  /** Sinônimos para a busca do lançador (ex.: "lgpd cofre"). */
+  palavras?: string;
+};
 export type GrupoNavAdmin = { rotulo: string; itens: ItemNavAdmin[] };
 export type Migalha = { rotulo: string; onClick?: () => void };
-/** Módulo aberto por cima do Comando (no celular vira tela cheia com "Voltar"). */
+/** Módulo aberto (no celular mostra topo com "Voltar"). */
 export type ModuloAberto = { titulo: string; icone?: Icone; onVoltar: () => void };
-/** Id reservado: abre a Fila (painel lateral no desktop, painel da direita no celular). */
+/** Id reservado: abre a Fila (sheet lateral no desktop ou bottom sheet no celular). */
 export const ID_FILA = "fila";
 
-const PAINEIS = ["Conta", "Comando", "Fila"] as const;
+const fmtHora = new Intl.DateTimeFormat("pt-BR", {
+  timeZone: "America/Sao_Paulo",
+  hour: "2-digit",
+  minute: "2-digit",
+});
 
 /** Quem está dentro da casca (Fila, Conta) pode fechar as camadas antes de navegar. */
-const CamadasCtx = createContext<{ fechar: () => void; abrirFila: () => void }>({ fechar: () => {}, abrirFila: () => {} });
+const CamadasCtx = createContext<{ fechar: () => void; abrirFila: () => void }>({
+  fechar: () => {},
+  abrirFila: () => {},
+});
 export const useCamadasAdmin = () => useContext(CamadasCtx);
-const EM_CAMPO = ["INPUT", "TEXTAREA", "SELECT"];
+
 const iniciais = (nome: string) =>
   nome
     .split(" ")
@@ -35,62 +78,13 @@ const iniciais = (nome: string) =>
     .join("");
 
 /**
- * Casca da Torre BION — ligada ao layout autenticado só para o papel admin
- * (via TorreAdmin). Nunca usa .bp-shell: sem a moldura de 430 px.
- *
- * Celular (< 768 px): tela cheia com carrossel nativo
- *   [Conta] ⟷ [Comando = children] ⟷ [Fila], abrindo no centro; pílula
- *   flutuante com os pontos + botão "Ir para…" (lançador). ←/→ no teclado.
- *   Com `modulo`, o celular mostra o módulo em tela cheia com "Voltar".
- * Casca larga (≥ 768 px): trilho + barra. Abaixo de 1280 o trilho começa
- *   só com ícones (15 rem / ~240 px cortava títulos em 1024–1279); o
- *   usuário pode abrir. A partir de 1280, abre por padrão. Busca e Fila
- *   ficam na barra (no tablet a busca vira ícone com aria-label).
- * Tabelas e densidade dos módulos continuam em useLargo (≥ 1024).
- *
- * Só visual/navegação: quem usa decide o que é cada módulo (o admin tem
- * funções próprias — nada aqui copia telas do paciente ou do médico).
+ * Casca da Torre BION — alinhada ao redesign de Médicos e Pacientes:
+ * - Desktop (≥ 1024 px): barra lateral fixa só com ícones (76 px), topo limpo
+ *   com busca (Ctrl K / ⌘K), Fila, Mensagens, Notificações e Perfil.
+ * - Celular / Tablet (< 1024 px): topo limpo + barra inferior fixa de 5 itens
+ *   com botão central azul (#76A1F3) para o lançador de busca e módulos.
+ * - Conta e Fila abrem em drawers/sheets acessíveis (SheetAdmin).
  */
-
-/** Mede o item [aria-current=page] para posicionar um .bion-indicador. */
-function useCaixaDoAtual<T extends HTMLElement>(chave: unknown) {
-  const ref = useRef<T | null>(null);
-  const [caixa, setCaixa] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
-  const medir = useCallback(() => {
-    const pai = ref.current;
-    if (!pai) return;
-    const el = pai.querySelector<HTMLElement>('[aria-current="page"]');
-    if (!el) {
-      setCaixa(null);
-      return;
-    }
-    const pr = pai.getBoundingClientRect();
-    const er = el.getBoundingClientRect();
-    setCaixa({
-      x: er.left - pr.left + pai.scrollLeft,
-      y: er.top - pr.top + pai.scrollTop,
-      w: er.width,
-      h: er.height,
-    });
-  }, []);
-  useLayoutEffect(() => {
-    const pai = ref.current;
-    if (!pai) return;
-    // A primeira medição vem do ResizeObserver (não chama setState no corpo
-    // do efeito — o lint react-hooks/set-state-in-effect reclama).
-    const ro = new ResizeObserver(() => medir());
-    ro.observe(pai);
-    const el = pai.querySelector("[aria-current='page']");
-    if (el) ro.observe(el);
-    pai.addEventListener("scroll", medir, { passive: true });
-    return () => {
-      ro.disconnect();
-      pai.removeEventListener("scroll", medir);
-    };
-  }, [medir, chave]);
-  return { ref, caixa } as const;
-}
-
 export function AdminShell({
   grupos,
   ativo,
@@ -100,6 +94,10 @@ export function AdminShell({
   conta,
   fila,
   filaContagem = 0,
+  notificacoesNaoLidas = 0,
+  mensagensNaoLidas = 0,
+  onNotificacoes,
+  onMensagens,
   onBuscar,
   acoesBarra,
   modulo,
@@ -115,42 +113,41 @@ export function AdminShell({
   conta: ReactNode;
   fila: ReactNode;
   filaContagem?: number;
-  /** Substitui o lançador embutido (ex.: futura busca de pessoas e consultas). */
+  notificacoesNaoLidas?: number;
+  mensagensNaoLidas?: number;
+  onNotificacoes?: () => void;
+  onMensagens?: () => void;
   onBuscar?: () => void;
   acoesBarra?: ReactNode;
   modulo?: ModuloAberto;
-  /** Celular: abre já no painel da Fila (ex.: veio de um módulo pelo lançador). */
   abrirNaFila?: boolean;
-  /** Busca global do lançador (pessoas, consultas, chamados, atalhos). */
   buscar?: (termo: string) => ResultadoBusca[];
   children: ReactNode;
 }) {
-  const largo = useCascaLarga();
   const atalho = useAtalhoBusca();
-  const irParaPainel = useRef<((i: number) => void) | null>(null);
   const { densidade } = useDensidadeAdmin();
-  const [lateral, setLateral] = useState<"conta" | "fila" | null>(null);
+  const [lateral, setLateral] = useState<"conta" | "fila" | null>(abrirNaFila ? "fila" : null);
   const [lancador, setLancador] = useState(false);
 
-  // Trocou de módulo: fecha painel lateral e lançador (ajuste durante o render, sem efeito).
+  // Trocou de módulo: fecha painel lateral e lançador (ajuste durante o render).
   const [ativoAntes, setAtivoAntes] = useState(ativo);
   if (ativo !== ativoAntes) {
     setAtivoAntes(ativo);
     setLateral(null);
     setLancador(false);
   }
+
   const fecharCamadas = useCallback(() => {
     setLateral(null);
     setLancador(false);
   }, []);
+
   const abrirFila = useCallback(() => {
     setLancador(false);
-    if (largo) setLateral("fila");
-    else if (irParaPainel.current) irParaPainel.current(2);
-    else onNavegar(ID_FILA); // celular dentro de um módulo: quem usa leva ao Comando já na Fila
-  }, [largo, onNavegar]);
-  const camadas = useMemo(() => ({ fechar: fecharCamadas, abrirFila }), [fecharCamadas, abrirFila]);
+    setLateral("fila");
+  }, []);
 
+  const camadas = useMemo(() => ({ fechar: fecharCamadas, abrirFila }), [fecharCamadas, abrirFila]);
   const abrirBusca = useCallback(() => (onBuscar ? onBuscar() : setLancador(true)), [onBuscar]);
 
   // ⌘K / Ctrl K abre a busca em qualquer tamanho de tela.
@@ -165,385 +162,538 @@ export function AdminShell({
     return () => window.removeEventListener("keydown", aoTeclar);
   }, [abrirBusca]);
 
-  const navegar = (id: string) => {
-    setLancador(false);
-    if (id === ID_FILA) abrirFila();
-    else onNavegar(id);
-  };
-
-  const lancadorSheet = (
-    <Lancador aberto={lancador} onFechar={() => setLancador(false)} grupos={grupos} ativo={ativo} onNavegar={navegar} buscar={buscar} />
+  const navegar = useCallback(
+    (id: string) => {
+      setLancador(false);
+      if (id === ID_FILA) abrirFila();
+      else onNavegar(id);
+    },
+    [abrirFila, onNavegar],
   );
 
-  if (!largo && modulo) {
-    return (
-      <CamadasCtx.Provider value={camadas}>
-        <ModuloCelular modulo={modulo} densidade={densidade} onBuscar={abrirBusca} bloqueado={lancador}>
-          {children}
-        </ModuloCelular>
-        {lancadorSheet}
-      </CamadasCtx.Provider>
-    );
-  }
+  // Separa os itens principais (Operação/Dinheiro/Comando) dos de Sistema para o trilho lateral.
+  const principais = useMemo(
+    () =>
+      grupos
+        .filter((g) => g.rotulo !== "Sistema")
+        .flatMap((g) => g.itens)
+        .filter((it) => it.id !== ID_FILA),
+    [grupos],
+  );
+  const sistemaItens = useMemo(
+    () => grupos.find((g) => g.rotulo === "Sistema")?.itens ?? [],
+    [grupos],
+  );
 
-  if (!largo) {
-    return (
-      <CamadasCtx.Provider value={camadas}>
-        <ShellCelular
-          densidade={densidade}
-          conta={conta}
-          fila={fila}
-          filaContagem={filaContagem}
-          bloqueado={lancador}
-          onBuscar={abrirBusca}
-          controleRef={irParaPainel}
-          abrirNaFila={abrirNaFila}
-        >
-          {children}
-        </ShellCelular>
-        {lancadorSheet}
-      </CamadasCtx.Provider>
-    );
-  }
+
 
   return (
     <CamadasCtx.Provider value={camadas}>
-    <div className="ba-app ba-ceu" data-densidade={densidade}>
-      <a
-        href="#ba-conteudo"
-        className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[100] ba-botao ba-botao-primario"
-      >
-        Pular para o conteúdo
-      </a>
-      <div className="ba-desk">
-        <Trilho grupos={grupos} ativo={ativo} onNavegar={navegar} usuario={usuario} onConta={() => setLateral("conta")} />
-        <div className="flex flex-col min-w-0 h-full">
-          <header className="ba-barra h-16 shrink-0 flex items-center gap-3 px-6">
-            <nav aria-label="Você está em" className="min-w-0 flex-1">
-              <ol className="flex items-center gap-1.5 text-sm min-w-0">
-                {migalhas.map((m, i) => {
-                  const ultima = i === migalhas.length - 1;
-                  return (
-                    <li key={`${m.rotulo}-${i}`} className="flex items-center gap-1.5 min-w-0">
-                      {i > 0 ? <ChevronRight className="w-4 h-4 shrink-0 ba-texto-3" aria-hidden /> : null}
-                      {m.onClick && !ultima ? (
-                        <button type="button" onClick={m.onClick} className="ba-texto-2 hover:underline truncate font-semibold">
-                          {m.rotulo}
-                        </button>
-                      ) : (
-                        <span className={`truncate ${ultima ? "font-bold" : "ba-texto-2 font-semibold"}`} aria-current={ultima ? "page" : undefined}>
-                          {m.rotulo}
-                        </span>
-                      )}
-                    </li>
-                  );
-                })}
-              </ol>
-            </nav>
-            <button
-              type="button"
-              onClick={abrirBusca}
-              className="ba-entrada !w-11 lg:!w-80 !px-0 lg:!px-3 flex items-center justify-center lg:justify-start gap-2 text-left ba-texto-3"
-              aria-label={`Buscar ou ir para (${atalho.falado})`}
-              aria-keyshortcuts="Control+K Meta+K"
-              title={`Buscar ou ir para (${atalho.falado})`}
+      <div className={`ba-app ${poppinsAdmin.variable}`} data-densidade={densidade}>
+        <a
+          href="#ba-conteudo"
+          className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[100] ba-botao ba-botao-primario"
+        >
+          Pular para o conteúdo
+        </a>
+
+        <BarraLateralAdmin
+          principais={principais}
+          sistema={sistemaItens}
+          ativo={ativo}
+          onNavegar={navegar}
+          onConta={() => setLateral("conta")}
+        />
+
+        {/* Topo desktop (≥ 1024 px) — mesmo desenho de Médico e Paciente */}
+        <header className="ba2-topo hidden lg:flex flex-wrap items-center gap-x-3 gap-y-2 px-7 shrink-0">
+          {modulo ? (
+            <div className="flex items-center gap-2 min-w-0">
+              <button
+                type="button"
+                onClick={modulo.onVoltar}
+                aria-label="Voltar ao início"
+                className="ba2-icone-topo ba2-icone-topo-borda grid h-10 w-10 shrink-0 place-items-center rounded-full"
+              >
+                <ArrowLeft className="h-[1.1rem] w-[1.1rem]" aria-hidden />
+              </button>
+              <nav aria-label="Você está em" className="min-w-0 pr-3 border-r border-[var(--ba-divisor)]">
+                <ol className="flex flex-wrap items-center gap-1.5 text-[13px] min-w-0">
+                  {migalhas.map((m, i) => {
+                    const ultima = i === migalhas.length - 1;
+                    return (
+                      <li key={`${m.rotulo}-${i}`} className="flex items-center gap-1.5 min-w-0">
+                        {i > 0 ? <ChevronRight className="w-3.5 h-3.5 shrink-0 ba-texto-3" aria-hidden /> : null}
+                        {m.onClick && !ultima ? (
+                          <button type="button" onClick={m.onClick} className="ba-texto-2 hover:underline text-left leading-snug">
+                            {m.rotulo}
+                          </button>
+                        ) : (
+                          <span className={`leading-snug ${ultima ? "font-medium" : "ba-texto-2"}`} aria-current={ultima ? "page" : undefined}>
+                            {m.rotulo}
+                          </span>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ol>
+              </nav>
+            </div>
+          ) : null}
+
+          <button
+            type="button"
+            onClick={abrirBusca}
+            className="flex min-w-0 flex-1 max-w-md items-center gap-2.5 py-2 text-left text-[13px] ba-texto-2 hover:text-[var(--ba-texto)]"
+            aria-label={`Buscar ou ir para (${atalho.falado})`}
+            aria-keyshortcuts="Control+K Meta+K"
+            title={`Buscar ou ir para (${atalho.falado})`}
+          >
+            <Search className="h-4 w-4 shrink-0" aria-hidden />
+            <span className="min-w-0 leading-snug">Buscar módulo, pessoa, consulta…</span>
+            <kbd
+              className="ml-auto hidden xl:inline-flex items-center rounded-md border px-1.5 py-0.5 text-[11px] font-medium ba-texto-3"
+              style={{ borderColor: "var(--ba-borda)", background: "var(--ba-card)" }}
+              aria-hidden
             >
-              <Search className="w-4 h-4" aria-hidden />
-              <span className="flex-1 hidden lg:inline">Buscar ou ir para…</span>
-              <kbd className="text-[11px] font-bold rounded-md px-1.5 py-0.5 ba-botao-secundario hidden lg:inline" aria-hidden>
-                {atalho.curto}
-              </kbd>
-            </button>
+              {atalho.curto}
+            </kbd>
+          </button>
+
+          <div className="ml-auto flex items-center gap-2">
             <button
               type="button"
               onClick={() => setLateral("fila")}
-              className="ba-botao ba-botao-secundario"
+              className="inline-flex h-10 items-center gap-2 rounded-full px-3.5 text-[13px] font-medium transition-colors"
+              style={{
+                background: filaContagem > 0 ? "var(--ba-azul-ativo)" : "var(--ba-card)",
+                color: filaContagem > 0 ? "var(--ba-sinal)" : "var(--ba-texto)",
+                border: "1px solid var(--ba-borda)",
+              }}
               aria-label={`Fila de decisões${filaContagem ? ` (${filaContagem})` : ""}`}
             >
-              <Inbox className="w-4 h-4" aria-hidden /> Fila
-              {filaContagem ? <SeloContagem n={filaContagem} tom="atencao" /> : null}
+              <Inbox className="h-4 w-4" aria-hidden />
+              <span>Fila</span>
+              {filaContagem > 0 ? (
+                <span className="inline-flex min-w-5 h-5 items-center justify-center rounded-full bg-[#c42b2b] px-1.5 text-[11px] font-semibold text-white tabular-nums">
+                  {filaContagem > 99 ? "99+" : filaContagem}
+                </span>
+              ) : null}
             </button>
-            {acoesBarra}
-          </header>
-          <main id="ba-conteudo" tabIndex={-1} className="flex-1 min-h-0 overflow-y-auto ba-coluna outline-none">
-            {children}
-          </main>
-        </div>
+
+            {onMensagens ? (
+              <button
+                type="button"
+                onClick={onMensagens}
+                aria-label={
+                  mensagensNaoLidas > 0
+                    ? `Mensagens: ${mensagensNaoLidas} não lida${mensagensNaoLidas > 1 ? "s" : ""}`
+                    : "Mensagens"
+                }
+                aria-current={ativo === "mensagens" ? "page" : undefined}
+                className="ba2-icone-topo ba2-icone-topo-borda relative grid h-10 w-10 shrink-0 place-items-center rounded-full"
+              >
+                <MessageCircle className="h-[1.1rem] w-[1.1rem]" aria-hidden />
+                {mensagensNaoLidas > 0 ? (
+                  <span aria-hidden className="ba2-contador">
+                    {mensagensNaoLidas > 99 ? "99+" : mensagensNaoLidas}
+                  </span>
+                ) : null}
+              </button>
+            ) : null}
+
+            {onNotificacoes ? (
+              <button
+                type="button"
+                onClick={onNotificacoes}
+                aria-label={`Notificações${notificacoesNaoLidas ? ` (${notificacoesNaoLidas} não lidas)` : ""}`}
+                aria-current={ativo === "notificacoes" ? "page" : undefined}
+                className="ba2-icone-topo ba2-icone-topo-borda relative grid h-10 w-10 shrink-0 place-items-center rounded-full"
+              >
+                <Bell className="h-[1.1rem] w-[1.1rem]" aria-hidden />
+                {notificacoesNaoLidas > 0 ? (
+                  <span aria-hidden className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-[#c42b2b]" />
+                ) : null}
+              </button>
+            ) : (
+              acoesBarra
+            )}
+
+            <span aria-hidden className="h-8 w-px bg-[var(--ba-borda)] mx-1" />
+
+            <button
+              type="button"
+              onClick={() => setLateral("conta")}
+              aria-label="Abrir sua conta e aparência"
+              className="flex items-center gap-3 rounded-full py-1 pl-1 pr-2 text-left hover:bg-[var(--ba-card)] transition-colors"
+            >
+              <AvatarShell usuario={usuario} tamanho="h-10 w-10" />
+              <span className="min-w-0">
+                <span className="block max-w-[14rem] text-[13px] font-medium leading-snug">{usuario.nome}</span>
+                <span className="block max-w-[14rem] text-[11px] ba-texto-2 leading-snug">Administrador</span>
+              </span>
+              <ChevronDown className="ml-2 h-4 w-4 ba-texto-2" aria-hidden />
+            </button>
+          </div>
+        </header>
+
+        {/* Topo celular / tablet (< 1024 px): ícones numa linha, título inteiro na de baixo. */}
+        <header className="ba2-topo flex lg:hidden flex-col gap-2 px-4 pt-[max(0.5rem,env(safe-area-inset-top))] pb-2.5">
+          <div className="flex items-center gap-2">
+            {modulo ? (
+              <button
+                type="button"
+                onClick={modulo.onVoltar}
+                className="ba2-icone-topo ba2-icone-topo-borda mr-auto grid h-11 w-11 shrink-0 place-items-center rounded-full"
+                aria-label="Voltar ao início"
+              >
+                <ArrowLeft className="h-[1.15rem] w-[1.15rem]" aria-hidden />
+              </button>
+            ) : (
+              <span className="mr-auto" />
+            )}
+
+          <button
+            type="button"
+            onClick={abrirBusca}
+            aria-label="Buscar ou ir para…"
+            className="ba2-icone-topo ba2-icone-topo-borda grid h-11 w-11 shrink-0 place-items-center rounded-full"
+          >
+            <Search className="h-[1.1rem] w-[1.1rem]" aria-hidden />
+          </button>
+
+          {onMensagens ? (
+            <button
+              type="button"
+              onClick={onMensagens}
+              aria-label={mensagensNaoLidas > 0 ? `Mensagens: ${mensagensNaoLidas} não lidas` : "Mensagens"}
+              className="ba2-icone-topo ba2-icone-topo-borda relative grid h-11 w-11 shrink-0 place-items-center rounded-full"
+            >
+              <MessageCircle className="h-[1.1rem] w-[1.1rem]" aria-hidden />
+              {mensagensNaoLidas > 0 ? (
+                <span aria-hidden className="ba2-contador">
+                  {mensagensNaoLidas > 99 ? "99+" : mensagensNaoLidas}
+                </span>
+              ) : null}
+            </button>
+          ) : null}
+
+          {onNotificacoes ? (
+            <button
+              type="button"
+              onClick={onNotificacoes}
+              aria-label={`Notificações${notificacoesNaoLidas ? ` (${notificacoesNaoLidas} não lidas)` : ""}`}
+              className="ba2-icone-topo ba2-icone-topo-borda relative grid h-11 w-11 shrink-0 place-items-center rounded-full"
+            >
+              <Bell className="h-[1.1rem] w-[1.1rem]" aria-hidden />
+              {notificacoesNaoLidas > 0 ? (
+                <span aria-hidden className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-[#c42b2b]" />
+              ) : null}
+            </button>
+          ) : null}
+
+          <button
+            type="button"
+            onClick={() => setLateral("fila")}
+            aria-label={`Fila de decisões${filaContagem ? ` (${filaContagem})` : ""}`}
+            className="ba2-icone-topo ba2-icone-topo-borda relative grid h-11 w-11 shrink-0 place-items-center rounded-full"
+          >
+            <Inbox className="h-[1.1rem] w-[1.1rem]" aria-hidden />
+            {filaContagem > 0 ? (
+              <span aria-hidden className="ba2-contador">
+                {filaContagem > 99 ? "99+" : filaContagem}
+              </span>
+            ) : null}
+          </button>
+          </div>
+          {modulo ? (
+            <h1 className="text-xl font-medium leading-snug">{modulo.titulo}</h1>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setLateral("conta")}
+              className="flex items-center gap-3 text-left"
+              aria-label="Abrir sua conta"
+            >
+              <AvatarShell usuario={usuario} tamanho="h-11 w-11" />
+              <span>
+                <span className="block text-[15px] font-medium">{usuario.nome}</span>
+                <span className="block text-xs ba-texto-2">Torre BION · Admin</span>
+              </span>
+            </button>
+          )}
+        </header>
+
+        <main id="ba-conteudo" tabIndex={-1} className="flex-1 min-h-0 overflow-y-auto ba-coluna outline-none">
+          {children}
+        </main>
+
+        <BarraInferiorAdmin ativo={ativo} lancadorAberto={lancador} onNavegar={navegar} onAbrirLancador={abrirBusca} />
+
+        <SheetAdmin aberto={lateral === "conta"} onFechar={() => setLateral(null)} titulo="Sua conta">
+          {conta}
+        </SheetAdmin>
+        <SheetAdmin
+          aberto={lateral === "fila"}
+          onFechar={() => setLateral(null)}
+          titulo="Fila de decisões"
+          descricao="Tudo o que espera uma decisão sua."
+        >
+          {fila}
+        </SheetAdmin>
+        <Lancador
+          aberto={lancador}
+          onFechar={() => setLancador(false)}
+          grupos={grupos}
+          ativo={ativo}
+          onNavegar={navegar}
+          buscar={buscar}
+        />
       </div>
-      <SheetAdmin aberto={lateral === "conta"} onFechar={() => setLateral(null)} titulo="Sua conta">
-        {conta}
-      </SheetAdmin>
-      <SheetAdmin aberto={lateral === "fila"} onFechar={() => setLateral(null)} titulo="Fila de decisões" descricao="Tudo o que espera uma decisão sua.">
-        {fila}
-      </SheetAdmin>
-      {lancadorSheet}
-    </div>
     </CamadasCtx.Provider>
   );
 }
 
-function SeloContagem({ n, tom = "sinal" }: { n: number; tom?: Tom }) {
+/** Barra lateral fixa só com ícones (≥ 1024 px), no mesmo desenho de Médico e Paciente. */
+function BarraLateralAdmin({
+  principais,
+  sistema,
+  ativo,
+  onNavegar,
+  onConta,
+}: {
+  principais: ItemNavAdmin[];
+  sistema: ItemNavAdmin[];
+  ativo: string;
+  onNavegar: (id: string) => void;
+  onConta: () => void;
+}) {
+  const [agora, setAgora] = useState(() => Date.now());
+  useEffect(() => {
+    const id = window.setInterval(() => setAgora(Date.now()), 30_000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  const [menuSistema, setMenuSistema] = useState(false);
+  const sistemaRef = useRef<HTMLLIElement>(null);
+  const botaoSistemaRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!menuSistema) return;
+    const fora = (e: PointerEvent) => {
+      if (!sistemaRef.current?.contains(e.target as Node)) setMenuSistema(false);
+    };
+    const tecla = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.stopPropagation();
+      setMenuSistema(false);
+      botaoSistemaRef.current?.focus();
+    };
+    document.addEventListener("pointerdown", fora);
+    window.addEventListener("keydown", tecla, true);
+    return () => {
+      document.removeEventListener("pointerdown", fora);
+      window.removeEventListener("keydown", tecla, true);
+    };
+  }, [menuSistema]);
+
+  const sistemaAtivo = sistema.some((s) => s.id === ativo);
+  const sistemaSelos = sistema.reduce((a, s) => a + (s.selo ?? 0), 0);
+
   return (
-    <span className="ba-chip !px-1.5 !py-0 min-w-5 justify-center" data-tom={tom}>
-      {n > 99 ? "99+" : n}
-    </span>
+    <aside
+      className={`ba2-lateral ${menuSistema ? "ba2-lateral-com-menu" : ""}`}
+      aria-label="Menu do administrador"
+    >
+      <div className="grid h-[75px] place-items-center border-b border-[var(--ba-divisor)] shrink-0">
+        <button
+          type="button"
+          onClick={() => onNavegar("dashboard")}
+          aria-label="Torre BION — Início"
+          className="rounded-xl p-1"
+        >
+          <Logo size="sm" />
+        </button>
+      </div>
+
+      <nav aria-label="Áreas" className="ba2-lateral-nav flex flex-1 flex-col items-center overflow-y-auto py-3">
+        <ul className="flex flex-col items-center gap-2.5">
+          {principais.map((it) => {
+            const aqui = ativo === it.id;
+            return (
+              <li key={it.id}>
+                <button
+                  type="button"
+                  onClick={() => onNavegar(it.id)}
+                  aria-label={`${it.rotulo}${it.selo ? ` (${it.selo})` : ""}`}
+                  aria-current={aqui ? "page" : undefined}
+                  title={it.rotulo}
+                  className={`ba2-lateral-item relative grid h-10 w-10 place-items-center rounded-[0.65rem] ${aqui ? "ba2-lateral-ativo" : ""}`}
+                >
+                  <it.icone className="h-5 w-5" aria-hidden />
+                  {it.selo ? (
+                    <span
+                      aria-hidden
+                      className="ba2-lateral-ponto"
+                      data-tom={it.tomSelo ?? "critico"}
+                    />
+                  ) : null}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+
+        <span aria-hidden className="my-4 h-px w-10 shrink-0 bg-[var(--ba-divisor)]" />
+
+        <ul className="flex flex-col items-center gap-2.5">
+          <li ref={sistemaRef} className="relative">
+            <button
+              ref={botaoSistemaRef}
+              type="button"
+              onClick={() => setMenuSistema((v) => !v)}
+              aria-label={`Sistema: auditoria, IA, LGPD e travas${sistemaSelos ? ` (${sistemaSelos} alertas)` : ""}`}
+              aria-haspopup="true"
+              aria-expanded={menuSistema}
+              aria-controls="ba2-menu-sistema"
+              title="Sistema: auditoria, IA, LGPD e travas"
+              className={`ba2-lateral-item relative grid h-10 w-10 place-items-center rounded-[0.65rem] ${sistemaAtivo || menuSistema ? "ba2-lateral-ativo" : ""}`}
+            >
+              <SlidersHorizontal className="h-5 w-5" aria-hidden />
+              {sistemaSelos ? <span aria-hidden className="ba2-lateral-ponto" data-tom="critico" /> : null}
+            </button>
+            {menuSistema ? (
+              <ul id="ba2-menu-sistema" aria-label="Sistema" className="ba2-lateral-menu">
+                {sistema.map((s) => (
+                  <li key={s.id}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMenuSistema(false);
+                        onNavegar(s.id);
+                      }}
+                      aria-current={ativo === s.id ? "page" : undefined}
+                    >
+                      <s.icone className="h-4 w-4 shrink-0" aria-hidden />
+                      <span className="flex-1 min-w-0 leading-snug">{s.rotulo}</span>
+                      {s.selo ? (
+                        <span className="rounded-full bg-[#c42b2b] px-1.5 text-[10px] font-semibold text-white tabular-nums">
+                          {s.selo}
+                        </span>
+                      ) : null}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </li>
+
+          <li>
+            <button
+              type="button"
+              onClick={onConta}
+              aria-label="Sua conta e aparência"
+              title="Sua conta e aparência"
+              className="ba2-lateral-item relative grid h-10 w-10 place-items-center rounded-[0.65rem]"
+            >
+              <Settings className="h-5 w-5" aria-hidden />
+            </button>
+          </li>
+
+          <li>
+            <button
+              type="button"
+              onClick={() => onNavegar("ajuda")}
+              aria-label="Ajuda"
+              aria-current={ativo === "ajuda" ? "page" : undefined}
+              title="Ajuda"
+              className={`ba2-lateral-item relative grid h-10 w-10 place-items-center rounded-[0.65rem] ${ativo === "ajuda" ? "ba2-lateral-ativo" : ""}`}
+            >
+              <Info className="h-5 w-5" aria-hidden />
+            </button>
+          </li>
+        </ul>
+      </nav>
+
+      <div className="mx-3 border-t border-[var(--ba-divisor)] py-3 text-center text-[11px] ba-texto-2 tabular-nums shrink-0">
+        <time aria-label="Hora atual em São Paulo" suppressHydrationWarning>
+          {fmtHora.format(agora)}
+        </time>
+      </div>
+    </aside>
   );
 }
 
-function Trilho({
-  grupos,
+/** Barra inferior fixa no celular (< 1024 px): 5 itens no mesmo desenho de Médico e Paciente. */
+function BarraInferiorAdmin({
   ativo,
+  lancadorAberto,
   onNavegar,
-  usuario,
-  onConta,
+  onAbrirLancador,
 }: {
-  grupos: GrupoNavAdmin[];
   ativo: string;
+  lancadorAberto: boolean;
   onNavegar: (id: string) => void;
-  usuario: { nome: string; foto?: string | null };
-  onConta: () => void;
+  onAbrirLancador: () => void;
 }) {
-  const padraoAberto = useMinLargura(LARGURA_TRILHO_ABERTO);
-  const [aberto, setAberto] = usePreferenciaBool("bion-admin-trilho", padraoAberto);
-  const { ref: refTrilho, caixa } = useCaixaDoAtual<HTMLElement>(`${ativo}-${aberto}`);
-  return (
-    <nav ref={refTrilho} className="ba-trilho flex flex-col p-2" data-aberto={aberto} aria-label="Navegação do administrador">
-      {caixa ? (
-        <span
-          aria-hidden="true"
-          className="bion-indicador ba-trilho-indicador"
-          style={{ height: caixa.h * 0.5, transform: `translate(2px, ${caixa.y + caixa.h * 0.25}px)` }}
-        />
-      ) : null}
-      <div className="ba-trilho-cabecalho">
-        {/* Recolhido: o trilho tem ~4,5 rem; logo sm (40 px) + botão (44 px) transbordava. Só o botão de expandir. */}
-        {aberto ? <Logo size="sm" /> : null}
-        {aberto ? (
-          <div className="flex-1 min-w-0 pl-1">
-            <div className="text-sm font-black leading-none">Torre BION</div>
-            <div className="text-[11px] font-bold uppercase tracking-wider ba-texto-3 mt-1">Administração</div>
-          </div>
-        ) : null}
+  const esquerda = [
+    { id: "dashboard", nome: "Início", Icone: LayoutGrid },
+    { id: "admin-agendamentos", nome: "Agendamentos", Icone: CalendarClock },
+  ];
+  const direita = [
+    { id: "admin-medicos", nome: "Médicos", Icone: Stethoscope },
+    { id: "admin-repasses", nome: "Repasses", Icone: Wallet },
+  ];
+
+  const botao = (it: { id: string; nome: string; Icone: Icone }) => {
+    const aqui = ativo === it.id;
+    return (
+      <li key={it.id}>
         <button
           type="button"
-          onClick={() => setAberto(!aberto)}
-          aria-label={aberto ? "Recolher menu" : "Expandir menu"}
-          aria-expanded={aberto}
-          className="ba-icone-botao shrink-0 !bg-transparent"
+          onClick={() => onNavegar(it.id)}
+          aria-label={it.nome}
+          aria-current={aqui ? "page" : undefined}
+          className={`ba2-barra-item ${aqui ? "ba2-barra-ativo" : ""}`}
         >
-          {aberto ? <PanelLeftClose className="w-5 h-5" aria-hidden /> : <PanelLeftOpen className="w-5 h-5" aria-hidden />}
+          <it.Icone className="ba2-barra-icone" aria-hidden />
         </button>
-      </div>
-      <div className="flex-1 space-y-4">
-        {grupos.map((g) => (
-          <div key={g.rotulo}>
-            <div className={aberto ? "ba-rotulo px-3.5 mb-1" : "sr-only"}>{g.rotulo}</div>
-            <ul className="space-y-0.5">
-              {g.itens.map((it) => (
-                <li key={it.id}>
-                  <button
-                    type="button"
-                    onClick={() => onNavegar(it.id)}
-                    aria-current={ativo === it.id ? "page" : undefined}
-                    title={aberto ? undefined : it.rotulo}
-                    aria-label={!aberto ? `${it.rotulo}${it.selo ? ` (${it.selo})` : ""}` : undefined}
-                    className="ba-trilho-item bion-toque"
-                  >
-                    <span className="relative inline-flex shrink-0">
-                      <it.icone className="w-5 h-5" aria-hidden />
-                      {it.selo && !aberto ? (
-                        <span className="absolute -top-1 -right-1.5 w-2.5 h-2.5 rounded-full" data-tom={it.tomSelo ?? "atencao"} style={{ background: "var(--ba-tom)" }} aria-hidden />
-                      ) : null}
-                    </span>
-                    {aberto ? <span className="flex-1 truncate text-left">{it.rotulo}</span> : null}
-                    {aberto && it.selo ? <SeloContagem n={it.selo} tom={it.tomSelo ?? "atencao"} /> : null}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ))}
-      </div>
-      <button type="button" onClick={onConta} className="ba-trilho-item bion-toque mt-2" aria-label="Abrir sua conta">
-        <Avatar usuario={usuario} tamanho="w-8 h-8" />
-        {aberto ? <span className="flex-1 truncate text-left">{usuario.nome}</span> : null}
-      </button>
+      </li>
+    );
+  };
+
+  return (
+    <nav aria-label="Navegação principal" className="ba2-barra">
+      <ul>
+        {esquerda.map(botao)}
+        <li>
+          <button
+            type="button"
+            onClick={onAbrirLancador}
+            aria-label="Ir para módulo ou buscar"
+            aria-haspopup="dialog"
+            aria-expanded={lancadorAberto}
+            className="ba2-barra-mais"
+          >
+            <Plus className="ba2-barra-mais-icone" aria-hidden />
+          </button>
+        </li>
+        {direita.map(botao)}
+      </ul>
     </nav>
   );
 }
 
-function Avatar({ usuario, tamanho = "w-10 h-10" }: { usuario: { nome: string; foto?: string | null }; tamanho?: string }) {
+function AvatarShell({ usuario, tamanho = "h-10 w-10" }: { usuario: { nome: string; foto?: string | null }; tamanho?: string }) {
   return (
-    <span className={`${tamanho} shrink-0 rounded-full overflow-hidden inline-flex items-center justify-center text-xs font-black ba-botao-secundario`} aria-hidden>
+    <span className={`${tamanho} ba2-avatar shrink-0 rounded-full overflow-hidden inline-flex items-center justify-center text-xs font-medium`} aria-hidden>
       {usuario.foto ? <img src={usuario.foto} alt="" className="w-full h-full object-cover" /> : iniciais(usuario.nome)}
     </span>
   );
 }
 
-function ShellCelular({
-  densidade,
-  conta,
-  fila,
-  filaContagem,
-  bloqueado,
-  onBuscar,
-  controleRef,
-  abrirNaFila,
-  children,
-}: {
-  densidade: string;
-  conta: ReactNode;
-  fila: ReactNode;
-  filaContagem: number;
-  bloqueado: boolean;
-  onBuscar: () => void;
-  controleRef: React.RefObject<((i: number) => void) | null>;
-  abrirNaFila: boolean;
-  children: ReactNode;
-}) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [painel, setPainel] = useState(abrirNaFila ? 2 : 1);
-  const inicial = useRef(abrirNaFila ? 2 : 1);
-  const { ref: refPilula, caixa: caixaPilula } = useCaixaDoAtual<HTMLElement>(painel);
-
-  const irPara = useCallback((i: number) => {
-    const el = ref.current;
-    if (el) el.scrollTo({ left: i * el.clientWidth, behavior: "smooth" });
-  }, []);
-
-  useEffect(() => {
-    controleRef.current = irPara;
-    return () => {
-      controleRef.current = null;
-    };
-  }, [controleRef, irPara]);
-
-  // Abre no centro (Comando), como os apps do paciente e do médico (ou na Fila, se pedido).
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const pos = () => el.scrollTo({ left: inicial.current * el.clientWidth, behavior: "instant" as ScrollBehavior });
-    pos();
-    const raf = requestAnimationFrame(pos);
-    return () => cancelAnimationFrame(raf);
-  }, []);
-
-  useEffect(() => {
-    const aoTeclar = (e: KeyboardEvent) => {
-      if (bloqueado || e.altKey || e.ctrlKey || e.metaKey) return;
-      const alvo = e.target as HTMLElement | null;
-      if (alvo && (EM_CAMPO.includes(alvo.tagName) || alvo.isContentEditable)) return;
-      if (document.querySelector('[role="dialog"]')) return;
-      if (e.key === "ArrowRight") irPara(Math.min(2, painel + 1));
-      else if (e.key === "ArrowLeft") irPara(Math.max(0, painel - 1));
-    };
-    window.addEventListener("keydown", aoTeclar);
-    return () => window.removeEventListener("keydown", aoTeclar);
-  }, [bloqueado, painel, irPara]);
-
-  const aoRolar = () => {
-    const el = ref.current;
-    if (!el || !el.clientWidth) return;
-    const i = Math.round(el.scrollLeft / el.clientWidth);
-    if (i !== painel) setPainel(i);
-  };
-
-  const regioes = useMemo(
-    () => [
-      { rotulo: "Sua conta", conteudo: conta, cls: "ba-painel" },
-      { rotulo: "Comando", conteudo: children, cls: "" },
-      { rotulo: "Fila de decisões", conteudo: fila, cls: "ba-painel" },
-    ],
-    [conta, children, fila],
-  );
-
-  return (
-    <div className="ba-app ba-ceu" data-densidade={densidade}>
-      <div ref={ref} onScroll={aoRolar} className="ba-carrossel" aria-label="Áreas do painel (deslize para os lados)" inert={bloqueado}>
-        {regioes.map((r, i) => (
-          <div key={r.rotulo} role="region" aria-label={r.rotulo} className={`ba-coluna ${r.cls}`} id={i === 1 ? "ba-conteudo" : undefined}>
-            {r.conteudo}
-          </div>
-        ))}
-      </div>
-      <span className="sr-only" aria-live="polite">
-        {PAINEIS[painel]}
-      </span>
-      {!bloqueado ? (
-        <nav ref={refPilula} className="ba-pilula" aria-label="Áreas do painel">
-          {caixaPilula ? (
-            <span
-              aria-hidden="true"
-              className="bion-indicador ba-pilula-indicador"
-              style={{ transform: `translate(${caixaPilula.x + caixaPilula.w / 2}px, ${caixaPilula.y + caixaPilula.h / 2}px) translate(-50%, -50%)` }}
-            />
-          ) : null}
-          {PAINEIS.map((p, i) => (
-            <button
-              key={p}
-              type="button"
-              onClick={() => irPara(i)}
-              aria-label={`Ir para ${p}${i === 2 && filaContagem ? ` (${filaContagem} pendentes)` : ""}`}
-              aria-current={painel === i ? "page" : undefined}
-              className="ba-pilula-alvo bion-toque bion-toque-forte relative"
-            >
-              <span className="ba-pilula-ponto" />
-              {i === 2 && filaContagem ? (
-                <span className="absolute -top-1 -right-0.5 w-2 h-2 rounded-full bg-amber-300" aria-hidden />
-              ) : null}
-            </button>
-          ))}
-          <span className="w-px h-5 bg-white/25 mx-1" aria-hidden />
-          <button type="button" onClick={onBuscar} aria-label="Ir para… (busca e módulos)" className="ba-pilula-alvo bion-toque bion-toque-forte">
-            <Search className="w-4 h-4 text-[#96A5FF]" aria-hidden />
-          </button>
-        </nav>
-      ) : null}
-    </div>
-  );
-}
-
-/** Celular: módulo em tela cheia por cima do Comando, com "Voltar" e "Ir para…". */
-function ModuloCelular({
-  modulo,
-  densidade,
-  onBuscar,
-  bloqueado,
-  children,
-}: {
-  modulo: ModuloAberto;
-  densidade: string;
-  onBuscar: () => void;
-  bloqueado: boolean;
-  children: ReactNode;
-}) {
-  const Icone = modulo.icone;
-  return (
-    <div className="ba-app ba-ceu" data-densidade={densidade}>
-      <div className="ba-coluna h-full flex flex-col" inert={bloqueado}>
-        <header className="ba-barra sticky top-0 z-20 flex items-center gap-2 px-3 pt-[max(0.5rem,env(safe-area-inset-top))] pb-2">
-          <button type="button" onClick={modulo.onVoltar} className="ba-icone-botao shrink-0" aria-label="Voltar ao Comando">
-            <ArrowLeft className="w-5 h-5" aria-hidden />
-          </button>
-          {Icone ? <Icone className="w-5 h-5 shrink-0 ba-texto-2" aria-hidden /> : null}
-          <h1 className="flex-1 min-w-0 text-base font-black truncate">{modulo.titulo}</h1>
-          <button type="button" onClick={onBuscar} className="ba-icone-botao shrink-0" aria-label="Ir para… (busca e módulos)">
-            <Search className="w-5 h-5" aria-hidden />
-          </button>
-        </header>
-        <main id="ba-conteudo" tabIndex={-1} className="flex-1 outline-none">
-          {children}
-        </main>
-      </div>
-    </div>
-  );
-}
-
 /**
- * Lançador (Ctrl K / ⌘K, pílula ou barra): módulos (nome e palavras-chave)
- * e, com `buscar`, atalhos, pessoas, consultas e chamados. Sem acento.
- * Enter abre o primeiro resultado; ↓ sai do campo para a lista e ↑/↓
- * andam entre os resultados; Esc fecha.
+ * Lançador (Ctrl K / ⌘K, botão "+" do celular ou busca do topo).
  */
 function Lancador({
   aberto,
@@ -594,14 +744,20 @@ function Lancador({
   };
 
   return (
-    <SheetAdmin aberto={aberto} onFechar={onFechar} titulo="Buscar ou ir para…" descricao={buscar ? "Módulos, atalhos, pessoas, consultas e chamados" : "Módulos da administração"}>
-      <label className="block mb-4">
-        <span className="sr-only">Buscar módulos, pessoas, consultas ou chamados</span>
-        <input
+    <SheetAdmin
+      aberto={aberto}
+      onFechar={onFechar}
+      titulo="Buscar ou ir para…"
+      descricao={buscar ? "Módulos, atalhos, pessoas, consultas e chamados" : "Módulos da administração"}
+    >
+      <div className="mb-4">
+        <CampoBusca
           autoFocus
-          type="search"
-          value={termo}
-          onChange={(e) => setTermo(e.target.value)}
+          valor={termo}
+          onChange={setTermo}
+          dica={buscar ? "Módulo, pessoa, CRM, e-mail, chamado…" : "Digite o nome do módulo"}
+          rotulo="Buscar módulos, pessoas, consultas ou chamados"
+          describedBy="lancador-dica"
           onKeyDown={(e) => {
             if (e.key === "Enter" && primeiro) onNavegar(primeiro);
             else if (e.key === "ArrowDown") {
@@ -609,14 +765,11 @@ function Lancador({
               focaveis()[0]?.focus();
             }
           }}
-          placeholder={buscar ? "Módulo, pessoa, CRM, e-mail, chamado…" : "Digite o nome do módulo"}
-          className="ba-entrada"
-          aria-describedby="lancador-dica"
         />
         <span id="lancador-dica" className="block text-xs ba-texto-3 mt-1.5 px-1">
           Enter abre o primeiro · ↓ e ↑ andam na lista · Esc fecha
         </span>
-      </label>
+      </div>
       <div ref={listaRef} onKeyDown={aoTeclarLista} className="space-y-5">
         {nada ? (
           <p className="text-sm ba-texto-2 text-center py-6" role="status">
@@ -626,7 +779,7 @@ function Lancador({
         {filtrados.map((g) => (
           <div key={g.rotulo}>
             <div className="ba-rotulo mb-2">{g.rotulo}</div>
-            <div className="grid grid-cols-3 gap-2 bion-surgir-lista ba-animar">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 ba-animar">
               {g.itens.map((it) => (
                 <button
                   key={it.id}
@@ -634,16 +787,21 @@ function Lancador({
                   data-lancador=""
                   onClick={() => onNavegar(it.id)}
                   aria-current={ativo === it.id ? "page" : undefined}
-                  className={`ba-card bion-toque bion-surgir !p-3 flex flex-col items-center gap-1.5 text-center ${ativo === it.id ? "ring-2 ring-[var(--ba-sinal)]" : ""}`}
+                  className={`ba-card bion-toque !p-3 flex flex-col items-center gap-1.5 text-center ${ativo === it.id ? "ring-2 ring-[var(--ba-sinal)]" : ""}`}
                   data-denso="true"
                 >
                   <span className="relative inline-flex">
                     <it.icone className="w-5 h-5" aria-hidden />
                     {it.selo ? (
-                      <span className="absolute -top-1 -right-2 w-2.5 h-2.5 rounded-full" data-tom={it.tomSelo ?? "atencao"} style={{ background: "var(--ba-tom)" }} aria-hidden />
+                      <span
+                        className="absolute -top-1 -right-2 w-2.5 h-2.5 rounded-full"
+                        data-tom={it.tomSelo ?? "atencao"}
+                        style={{ background: "var(--ba-tom)" }}
+                        aria-hidden
+                      />
                     ) : null}
                   </span>
-                  <span className="text-xs font-bold leading-tight">{it.rotulo}</span>
+                  <span className="max-w-full text-xs font-medium leading-snug">{it.rotulo}</span>
                   {it.selo ? <span className="sr-only">({it.selo} pendentes)</span> : null}
                 </button>
               ))}
@@ -656,10 +814,16 @@ function Lancador({
             <ul className="space-y-1.5">
               {lista.map((r) => (
                 <li key={r.chave}>
-                  <button type="button" data-lancador="" onClick={() => onNavegar(r.id)} className="ba-card bion-toque w-full text-left flex items-center gap-3" data-denso="true">
+                  <button
+                    type="button"
+                    data-lancador=""
+                    onClick={() => onNavegar(r.id)}
+                    className="ba-card bion-toque w-full text-left flex items-center gap-3"
+                    data-denso="true"
+                  >
                     <span className="flex-1 min-w-0">
-                      <span className="font-bold block truncate">{r.rotulo}</span>
-                      {r.detalhe ? <span className="text-xs ba-texto-2 block truncate">{r.detalhe}</span> : null}
+                      <span className="font-medium block leading-snug">{r.rotulo}</span>
+                      {r.detalhe ? <span className="text-xs ba-texto-2 block leading-snug">{r.detalhe}</span> : null}
                     </span>
                     <ChevronRight className="w-4 h-4 ba-texto-3 shrink-0" aria-hidden />
                   </button>

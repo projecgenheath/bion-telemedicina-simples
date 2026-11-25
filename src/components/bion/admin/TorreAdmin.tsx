@@ -5,19 +5,19 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   Bell,
   BellRing,
-  CalendarDays,
+  CalendarClock,
   CircleHelp,
+  FileChartColumn,
   FileSearch,
   Gauge,
   HeartPulse,
-  Home,
   Inbox,
+  LayoutGrid,
   LifeBuoy,
   Lock,
   MessageSquare,
   Shield,
   Stethoscope,
-  TrendingUp,
   Wallet,
 } from "lucide-react";
 import { useBion } from "@/lib/bion-store";
@@ -33,16 +33,14 @@ import "./admin.css";
 
 type Icone = ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
 
-/** Título e ícone de cada rota que o admin pode abrir (as antigas seguem com o visual antigo). */
 const MODULOS: Partial<Record<View, { rotulo: string; icone: Icone }>> = {
-  dashboard: { rotulo: "Início", icone: Home },
-  "admin-agendamentos": { rotulo: "Agendamentos", icone: CalendarDays },
+  dashboard: { rotulo: "Início", icone: LayoutGrid },
+  "admin-agendamentos": { rotulo: "Agendamentos", icone: CalendarClock },
   "admin-medicos": { rotulo: "Médicos", icone: Stethoscope },
   "admin-pacientes": { rotulo: "Pacientes", icone: HeartPulse },
-  // /usuarios (antiga "Usuários & CRM", que era de mentira) só redireciona para Médicos › Em validação.
   usuarios: { rotulo: "Médicos", icone: Stethoscope },
   "admin-repasses": { rotulo: "Repasses", icone: Wallet },
-  relatorios: { rotulo: "Relatórios", icone: TrendingUp },
+  relatorios: { rotulo: "Relatórios", icone: FileChartColumn },
   auditoria: { rotulo: "Auditoria", icone: FileSearch },
   "llm-monitor": { rotulo: "Monitor LLM", icone: Gauge },
   suporte: { rotulo: "Chamados", icone: LifeBuoy },
@@ -59,9 +57,6 @@ const hashFila = () => window.location.hash === "#fila";
 
 /**
  * Casca do administrador ligada ao layout autenticado (só papel admin).
- * /painel = Centro de Comando (novo). As demais rotas do admin continuam
- * com as telas atuais, dentro de uma "folha" sólida (legibilidade sobre o
- * céu) até serem redesenhadas nos PRs seguintes.
  */
 export function TorreAdmin({ children }: { children: ReactNode }) {
   return (
@@ -76,13 +71,12 @@ function TorreInterna({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const path = (pathname || "/").split("?")[0].replace(/\/+$/, "") || "/";
   const view: View | undefined = PATH_TO_VIEW[path];
-  const { sessao, sair, naoLidas, auditLogs, medicos, pacientes, consultas, tickets } = useBion();
+  const { sessao, sair, naoLidas, naoLidasMensagens, auditLogs, medicos, pacientes, consultas, tickets } = useBion();
   const { fila, reembolsos, repasses, agora } = useDadosAdmin();
   const largo = useCascaLarga();
   const naFila = useSyncExternalStore(nada, hashFila, () => false);
 
   const comando = path === "/painel";
-  // Telas já redesenhadas no visual Torre não usam a "folha" das telas antigas.
   const redesenhada =
     comando ||
     view === "admin-repasses" ||
@@ -108,14 +102,14 @@ function TorreInterna({ children }: { children: ReactNode }) {
     {
       rotulo: "Comando",
       itens: [
-        { id: "dashboard", rotulo: "Início", icone: Home, palavras: "comando painel agora hoje" },
+        { id: "dashboard", rotulo: "Início", icone: LayoutGrid, palavras: "comando painel agora hoje" },
         { id: ID_FILA, rotulo: "Fila", icone: Inbox, selo: fila.length || undefined, palavras: "decisoes pendencias caixa" },
       ],
     },
     {
       rotulo: "Operação",
       itens: [
-        { id: "admin-agendamentos", rotulo: "Agendamentos", icone: CalendarDays, selo: reembolsos.dados?.total || undefined, palavras: "consultas agenda remarcar cancelar reembolsos" },
+        { id: "admin-agendamentos", rotulo: "Agendamentos", icone: CalendarClock, selo: reembolsos.dados?.total || undefined, palavras: "consultas agenda remarcar cancelar reembolsos" },
         { id: "admin-medicos", rotulo: "Médicos", icone: Stethoscope, selo: contagem.validacao || undefined, palavras: "crm validacao aprovar suspender" },
         { id: "admin-pacientes", rotulo: "Pacientes", icone: HeartPulse, palavras: "cpf cadastro senha" },
       ],
@@ -124,7 +118,13 @@ function TorreInterna({ children }: { children: ReactNode }) {
       rotulo: "Dinheiro",
       itens: [
         { id: "admin-repasses", rotulo: "Repasses", icone: Wallet, selo: repasses.dados?.total || undefined, palavras: "pix pagar dinheiro" },
-        { id: "relatorios", rotulo: "Relatórios", icone: TrendingUp, palavras: "pdf csv indicadores exportar" },
+        { id: "relatorios", rotulo: "Relatórios", icone: FileChartColumn, palavras: "pdf csv indicadores exportar" },
+      ],
+    },
+    {
+      rotulo: "Atendimento",
+      itens: [
+        { id: "suporte", rotulo: "Chamados", icone: LifeBuoy, selo: contagem.chamado || undefined, palavras: "suporte tickets atendimento responder" },
       ],
     },
     {
@@ -132,17 +132,18 @@ function TorreInterna({ children }: { children: ReactNode }) {
       itens: [
         { id: "auditoria", rotulo: "Auditoria", icone: FileSearch, selo: criticos24h || undefined, tomSelo: "critico", palavras: "logs trilha eventos csv pdf" },
         { id: "llm-monitor", rotulo: "Monitor LLM", icone: Gauge, palavras: "ia bion modelo latencia" },
-        { id: "suporte", rotulo: "Chamados", icone: LifeBuoy, selo: contagem.chamado || undefined, palavras: "suporte tickets atendimento responder" },
         { id: "privacidade", rotulo: "Privacidade & LGPD", icone: Shield, palavras: "lgpd cofre anonimizar consentimentos titular" },
         { id: "travas", rotulo: "Travas", icone: Lock, palavras: "cron cobranca stripe live trava segredo comprovante" },
+        { id: "mensagens", rotulo: "Mensagens", icone: MessageSquare, selo: naoLidasMensagens || undefined, palavras: "conversas chat" },
+        { id: "notificacoes", rotulo: "Notificações", icone: Bell, selo: naoLidas || undefined, palavras: "avisos alertas" },
+        { id: "lembretes", rotulo: "Lembretes", icone: BellRing, palavras: "horarios" },
+        { id: "ajuda", rotulo: "Ajuda", icone: CircleHelp, palavras: "faq duvidas" },
       ],
     },
   ];
 
   const navegar = (id: string) => {
-    // Só chega aqui "fila" quando o celular está dentro de um módulo: volta ao Comando já na Fila.
     if (id === ID_FILA) return router.push("/painel#fila");
-    // Itens da Fila podem levar parâmetros (ex.: "admin-repasses?repasse=ID").
     const [destino, consulta] = id.split("?");
     router.push(consulta ? `${urlDa(destino as View)}?${consulta}` : urlDa(destino as View));
   };
@@ -168,20 +169,13 @@ function TorreInterna({ children }: { children: ReactNode }) {
       conta={<ContaPainel onAbrir={navegar} onSair={() => void sairDaConta()} comTitulo={!largo} />}
       fila={<FilaPainel onAbrir={navegar} comTitulo={!largo} />}
       filaContagem={fila.length}
+      notificacoesNaoLidas={naoLidas}
+      mensagensNaoLidas={naoLidasMensagens}
+      onNotificacoes={() => router.push(urlDa("notificacoes"))}
+      onMensagens={() => router.push(urlDa("mensagens"))}
       abrirNaFila={comando && naFila}
       buscar={buscar}
       modulo={comando ? undefined : { titulo: info?.rotulo ?? "Página", icone: info?.icone, onVoltar: () => router.push("/painel") }}
-      acoesBarra={
-        <button
-          type="button"
-          onClick={() => router.push(urlDa("notificacoes"))}
-          className="ba-icone-botao relative"
-          aria-label={`Notificações${naoLidas ? ` (${naoLidas} não lidas)` : ""}`}
-        >
-          <Bell className="w-5 h-5" aria-hidden />
-          {naoLidas ? <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 rounded-full" data-tom="atencao" style={{ background: "var(--ba-tom)" }} aria-hidden /> : null}
-        </button>
-      }
     >
       {redesenhada ? children : <div className="ba-folha">{children}</div>}
     </AdminShell>

@@ -5,6 +5,7 @@ import { ArrowLeft, MessageSquare, Send, ShieldCheck } from "lucide-react";
 import { useBion } from "@/lib/bion-store";
 import { contatosMensagensAdmin } from "../contatos-mensagens";
 import { EstadoVazio } from "../ui/Estados";
+import { CampoBusca } from "../ui/CampoBusca";
 import { TelaModulo } from "../ui/TelaModulo";
 import { useLargo } from "../ui/preferencias";
 
@@ -88,14 +89,7 @@ export function MensagensModulo() {
         <div className={largo ? "grid grid-cols-[280px_1fr] gap-4 min-h-[28rem]" : "min-h-[24rem]"}>
           {mostrarLista ? (
             <div className="space-y-2 min-w-0">
-              <input
-                type="search"
-                value={busca}
-                onChange={(e) => setBusca(e.target.value)}
-                placeholder="Buscar nome"
-                className="ba-entrada w-full"
-                aria-label="Buscar conversa"
-              />
+              <CampoBusca valor={busca} onChange={setBusca} dica="Buscar nome" rotulo="Buscar conversa" />
               {conversas.length === 0 ? (
                 <p className="text-sm ba-texto-2 px-1">Ninguém com esse nome.</p>
               ) : (
@@ -111,12 +105,12 @@ export function MensagensModulo() {
                         data-tom={ativa?.id === contato.id ? "sinal" : undefined}
                       >
                         <span className="flex items-center gap-3">
-                          <span className="grid w-10 h-10 shrink-0 place-items-center rounded-xl font-bold text-xs" style={{ background: "var(--ba-sinal)", color: "white" }}>
+                          <span className="ba2-avatar grid w-10 h-10 shrink-0 place-items-center rounded-full font-medium text-xs">
                             {iniciais(contato.nome)}
                           </span>
                           <span className="flex-1 min-w-0">
-                            <span className="block text-sm font-bold truncate">{contato.nome}</span>
-                            <span className="block text-xs ba-texto-2 truncate">
+                            <span className="block text-sm font-bold leading-snug">{contato.nome}</span>
+                            <span className="block text-xs ba-texto-2 leading-snug">
                               {ultima ? ultima.texto : "Comece a conversa"}
                             </span>
                           </span>
@@ -146,8 +140,8 @@ export function MensagensModulo() {
                   {iniciais(ativa.nome)}
                 </span>
                 <span className="min-w-0">
-                  <span className="block text-sm font-bold truncate">{ativa.nome}</span>
-                  <span className="block text-xs ba-texto-2 truncate">{ativa.detalhe}</span>
+                  <span className="block text-sm font-bold leading-snug">{ativa.nome}</span>
+                  <span className="block text-xs ba-texto-2 leading-snug">{ativa.detalhe}</span>
                 </span>
               </div>
               <div ref={listaRef} className="flex-1 p-4 space-y-3 overflow-y-auto" aria-live="polite">
@@ -174,19 +168,20 @@ export function MensagensModulo() {
                 )}
               </div>
               <form
-                className="p-3 border-t border-[color:var(--ba-borda)] flex items-center gap-2"
+                className="p-3 border-t border-[color:var(--ba-borda)] flex items-end gap-2"
                 onSubmit={(e) => {
                   e.preventDefault();
                   void enviar();
                 }}
               >
-                <input
-                  aria-label="Mensagem"
-                  value={texto}
-                  onChange={(e) => setTexto(e.target.value)}
+                <CampoBusca
+                  icone={false}
+                  className="flex-1"
+                  valor={texto}
+                  onChange={setTexto}
+                  dica={`Mensagem para ${ativa.nome}`}
+                  rotulo="Mensagem"
                   maxLength={4000}
-                  placeholder={`Mensagem para ${ativa.nome}`}
-                  className="ba-entrada flex-1"
                 />
                 <button type="submit" disabled={!texto.trim()} className="ba-botao ba-botao-primario !px-4" aria-label="Enviar mensagem">
                   <Send className="w-4 h-4" aria-hidden />

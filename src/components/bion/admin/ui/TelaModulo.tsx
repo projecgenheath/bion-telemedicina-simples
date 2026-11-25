@@ -40,7 +40,8 @@ export function TelaModulo({
 }) {
   return (
     <div className="px-4 lg:px-8 pt-[max(1rem,env(safe-area-inset-top))] lg:pt-6 pb-28 lg:pb-10 max-w-[1400px] mx-auto w-full">
-      <header className="flex flex-wrap items-center gap-3">
+      <header className="flex flex-col items-stretch gap-3 lg:flex-row lg:flex-wrap lg:items-center">
+        <div className="flex min-w-0 flex-1 items-center gap-3">
         {onVoltar ? (
           <button type="button" onClick={onVoltar} aria-label="Voltar" className="ba-icone-botao shrink-0">
             <ArrowLeft className="w-5 h-5" aria-hidden />
@@ -52,10 +53,11 @@ export function TelaModulo({
           </span>
         ) : null}
         <div className="min-w-0 flex-1">
-          <h1 className="text-2xl lg:text-3xl font-black leading-tight break-words">{titulo}</h1>
-          {subtitulo ? <p className="text-sm ba-texto-2 truncate">{subtitulo}</p> : null}
+          <h1 className="text-2xl lg:text-3xl font-medium leading-tight">{titulo}</h1>
+          {subtitulo ? <p className="text-sm ba-texto-2">{subtitulo}</p> : null}
         </div>
-        <div className="flex items-center gap-2">
+        </div>
+        <div className="flex items-center gap-2 self-start lg:self-center">
           {onAtualizar ? (
             <button
               type="button"
