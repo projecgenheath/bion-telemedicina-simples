@@ -50,7 +50,7 @@ export function FilaPainel({ onAbrir, comTitulo = true }: { onAbrir: (view: stri
     <div className="px-4 lg:px-0 pt-[max(1.25rem,env(safe-area-inset-top))] lg:pt-0 pb-28 lg:pb-4">
       {comTitulo ? (
         <div className="flex items-center gap-2 mb-4">
-          <h2 className="text-2xl font-black flex-1">Fila de decisões</h2>
+          <h2 className="text-xl font-semibold flex-1">Fila de decisões</h2>
           <button type="button" onClick={() => void atualizar()} disabled={atualizando} className="ba-icone-botao" aria-label={atualizando ? "Atualizando…" : "Atualizar a fila"}>
             <RefreshCw className={`w-5 h-5 ${atualizando ? "motion-safe:animate-spin" : ""}`} aria-hidden />
           </button>

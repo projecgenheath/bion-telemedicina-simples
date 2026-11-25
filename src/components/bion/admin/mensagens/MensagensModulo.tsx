@@ -111,7 +111,7 @@ export function MensagensModulo() {
                         data-tom={ativa?.id === contato.id ? "sinal" : undefined}
                       >
                         <span className="flex items-center gap-3">
-                          <span className="grid w-10 h-10 shrink-0 place-items-center rounded-xl font-bold text-xs" style={{ background: "var(--ba-sinal)", color: "white" }}>
+                          <span className="ba2-avatar grid w-10 h-10 shrink-0 place-items-center rounded-full font-medium text-xs">
                             {iniciais(contato.nome)}
                           </span>
                           <span className="flex-1 min-w-0">

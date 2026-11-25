@@ -73,7 +73,7 @@ export function Avatar({ foto, iniciais, tamanho = "w-12 h-12", tom = "sinal" }:
     return <img src={foto} alt="" className={`${tamanho} rounded-full object-cover shrink-0 border`} style={{ borderColor: "var(--ba-borda)" }} />;
   }
   return (
-    <span className={`ba-estado-icone ${tamanho} !text-base font-black shrink-0`} data-tom={tom} aria-hidden>
+    <span className={`ba2-avatar rounded-full inline-flex items-center justify-center ${tamanho} text-sm font-medium shrink-0`} aria-hidden>
       {iniciais}
     </span>
   );

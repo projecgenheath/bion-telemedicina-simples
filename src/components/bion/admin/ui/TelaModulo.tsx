@@ -52,7 +52,7 @@ export function TelaModulo({
           </span>
         ) : null}
         <div className="min-w-0 flex-1">
-          <h1 className="text-2xl lg:text-3xl font-black leading-tight break-words">{titulo}</h1>
+          <h1 className="text-2xl lg:text-3xl font-medium leading-tight break-words">{titulo}</h1>
           {subtitulo ? <p className="text-sm ba-texto-2 truncate">{subtitulo}</p> : null}
         </div>
         <div className="flex items-center gap-2">

@@ -17,7 +17,7 @@ export function ContaPainel({ onAbrir, onSair, comTitulo = true }: { onAbrir: (v
   ];
   return (
     <div className="px-4 lg:px-0 pt-[max(1.25rem,env(safe-area-inset-top))] lg:pt-0 pb-28 lg:pb-4 space-y-3">
-      {comTitulo ? <h2 className="text-2xl font-black mb-1">Sua conta</h2> : null}
+      {comTitulo ? <h2 className="text-xl font-semibold mb-1">Sua conta</h2> : null}
       <section className="ba-card">
         <p className="font-bold break-words">{sessao.nome}</p>
         {sessao.email ? <p className="text-sm ba-texto-2 break-all">{sessao.email}</p> : null}
