@@ -94,7 +94,7 @@ export function PrivacidadeModulo() {
       }}
       atualizando={atualizando || lista.carregando}
       ferramentas={
-        <nav aria-label="Seções desta tela" className="flex gap-2 overflow-x-auto -mx-1 px-1 pb-1">
+        <nav aria-label="Seções desta tela" className="flex flex-wrap gap-2">
           {SECOES.map((s) => (
             <button key={s.id} type="button" onClick={() => rolar(s.id)} className="ba-filtro shrink-0">
               <s.icone className="w-4 h-4" aria-hidden /> {s.rotulo}

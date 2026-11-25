@@ -219,7 +219,7 @@ function BarraFiltros({ filtros, onMudar, medicos }: { filtros: Filtros; onMudar
   return (
     <div className="space-y-2">
       <div className="flex flex-col lg:flex-row gap-2">
-        <div className="flex items-center gap-2 min-w-0 flex-1">
+        <div className="flex flex-col gap-2 min-w-0 flex-1 sm:flex-row sm:items-center">
           <label className="relative flex-1 min-w-0">
             <span className="sr-only">Buscar por paciente, médico ou especialidade</span>
             <Search className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 ba-texto-3" aria-hidden />
@@ -245,7 +245,7 @@ function BarraFiltros({ filtros, onMudar, medicos }: { filtros: Filtros; onMudar
             </button>
           ) : null}
         </div>
-        <div role="group" aria-label="Período" className="ba-abas self-start overflow-x-auto max-w-full">
+        <div role="group" aria-label="Período" className="ba-abas self-start max-w-full">
           {PERIODOS.map((p) => (
             <button key={p.id} type="button" aria-pressed={filtros.periodo === p.id} onClick={() => onMudar({ periodo: p.id })} className="ba-aba !min-h-11 shrink-0">
               {p.rotulo}

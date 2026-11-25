@@ -42,7 +42,7 @@ export function Consentimentos() {
             className="ba-entrada !pl-10"
           />
         </label>
-        <div role="group" aria-label="Situação do consentimento" className="flex gap-2 overflow-x-auto -mx-1 px-1 pb-1 sm:pb-0">
+        <div role="group" aria-label="Situação do consentimento" className="flex flex-wrap gap-2">
           {SITUACOES.map((s) => (
             <button
               key={s.id}

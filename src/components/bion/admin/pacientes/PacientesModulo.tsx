@@ -82,7 +82,7 @@ export function PacientesModulo() {
               className="ba-entrada !pl-10"
             />
           </label>
-          <div role="group" aria-label="Situação da conta" className="flex gap-2 overflow-x-auto -mx-1 px-1 pb-1">
+          <div role="group" aria-label="Situação da conta" className="flex flex-wrap gap-2">
             {FILTROS_SITUACAO.map((f) => (
               <button
                 key={f.id}
@@ -92,7 +92,7 @@ export function PacientesModulo() {
                   setSituacao(f.id);
                   setLimite(PAGINA);
                 }}
-                className="ba-aba ba-aba-solta shrink-0"
+                className="ba-aba ba-aba-solta"
               >
                 {f.rotulo}
                 <span className="ml-1 tabular-nums opacity-80">· {contagem[f.id]}</span>
@@ -102,7 +102,7 @@ export function PacientesModulo() {
         </div>
       }
     >
-      <div className="space-y- ba-animar 4">
+      <div className="ba-animar space-y-4">
         {pacientes.length >= LIMITE_BOOTSTRAP ? (
           <div className="ba-aviso" data-tom="atencao">
             <Info className="w-4 h-4 shrink-0 mt-0.5" aria-hidden />

@@ -128,9 +128,9 @@ export function AuditoriaModulo() {
       atualizando={atualizando}
       acoes={<BotoesExportar n={lista.length} onCsv={exportarCsv} onPdf={exportarPdf} className="hidden sm:flex" />}
       ferramentas={
-        <div className="space-y- ba-animar 2 w-full">
+        <div className="ba-animar space-y-2 w-full">
           <BotoesExportar n={lista.length} onCsv={exportarCsv} onPdf={exportarPdf} className="grid grid-cols-2 sm:hidden" />
-          <div className="flex gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row">
             <label className="relative flex-1 min-w-0">
               <span className="sr-only">Pesquisar ações, usuários, entidades e detalhes</span>
               <Search className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 ba-texto-3" aria-hidden />
@@ -148,7 +148,7 @@ export function AuditoriaModulo() {
               {nAtivos ? <span className="tabular-nums">· {nAtivos}</span> : null}
             </button>
           </div>
-          <div role="group" aria-label="Severidade" className="flex gap-1.5 overflow-x-auto -mx-1 px-1 pb-1">
+          <div role="group" aria-label="Severidade" className="flex flex-wrap gap-1.5 lg:flex-nowrap lg:overflow-x-auto">
             <ChipFiltro ativo={filtros.severidade === "todas"} onClick={() => mudar({ severidade: "todas" })}>
               Todas as severidades
             </ChipFiltro>
@@ -158,7 +158,7 @@ export function AuditoriaModulo() {
               </ChipFiltro>
             ))}
           </div>
-          <div role="group" aria-label="Categoria" className="flex gap-1.5 overflow-x-auto -mx-1 px-1 pb-1">
+          <div role="group" aria-label="Categoria" className="flex flex-wrap gap-1.5 lg:flex-nowrap lg:overflow-x-auto">
             {CATEGORIAS.map((c) => {
               const Ic = ICONE_CATEGORIA[c.k] ?? Info;
               return (
@@ -172,7 +172,7 @@ export function AuditoriaModulo() {
       }
     >
       <div className="space-y-4">
-        <div className="flex lg:grid lg:grid-cols-4 gap-2 lg:gap-3 overflow-x-auto -mx-1 px-1 pb-1" role="list" aria-label="Resumo da auditoria">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 lg:gap-3" role="list" aria-label="Resumo da auditoria">
           <Kpi rotulo="Na seleção" valor={lista.length} detalhe={lista.length === auditLogs.length ? "todos os carregados" : `de ${auditLogs.length}`} />
           <Kpi rotulo="Críticos · 24 h" valor={r24.criticos} tom={r24.criticos ? "critico" : undefined} onClick={() => mudar({ severidade: "critical" })} />
           <Kpi rotulo="Atenção · 24 h" valor={r24.avisos} tom={r24.avisos ? "atencao" : undefined} onClick={() => mudar({ severidade: "warning" })} />
@@ -275,9 +275,9 @@ function Kpi({ rotulo, valor, detalhe, tom, onClick }: { rotulo: string; valor: 
       {detalhe ? <p className="text-xs ba-texto-2">{detalhe}</p> : null}
     </>
   );
-  const cls = "ba-card shrink-0 min-w-[8rem] lg:min-w-0";
+  const cls = "ba-card min-w-0 w-full";
   return onClick ? (
-    <div role="listitem" className="shrink-0 min-w-[8rem] lg:min-w-0">
+    <div role="listitem" className="min-w-0">
       <button type="button" onClick={onClick} className={`${cls} h-full`} data-tom={tom} data-denso="true" aria-label={`${rotulo}: ${valor}. Filtrar`}>
         {conteudo}
       </button>

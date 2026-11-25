@@ -149,7 +149,7 @@ export function SuporteModulo() {
               <Search className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 ba-texto-3" aria-hidden />
               <input type="search" value={filtros.busca} onChange={(e) => mudar({ busca: e.target.value })} placeholder="Buscar assunto, pessoa ou mensagem" className="ba-entrada !pl-10" />
             </label>
-            <div className="grid grid-cols-2 gap-2 lg:w-[26rem]">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:w-[26rem]">
               <select value={filtros.perfil} onChange={(e) => mudar({ perfil: e.target.value as FiltrosChamado["perfil"] })} className="ba-entrada" aria-label="Perfil de quem abriu">
                 <option value="todos">Pacientes e médicos</option>
                 <option value="paciente">Só pacientes</option>
@@ -165,14 +165,14 @@ export function SuporteModulo() {
               </select>
             </div>
           </div>
-          <div className="flex items-center gap-2 overflow-x-auto -mx-1 px-1 pb-1" role="group" aria-label="Status do chamado">
+          <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Status do chamado">
             {FILTROS_STATUS.map((f) => (
               <button
                 key={f.id}
                 type="button"
                 aria-pressed={filtros.status === f.id}
                 onClick={() => mudar({ status: f.id })}
-                className="ba-filtro shrink-0"
+                className="ba-filtro"
                 data-tom={f.id === "nao_resolvidos" ? "atencao" : f.id !== "todos" ? estadoChamado(f.id).tom : undefined}
               >
                 {f.id !== "todos" ? <span className="ba-chip-ponto" aria-hidden /> : null}

@@ -46,7 +46,7 @@ export function AbasFicha<T extends string>({ abas, ativa, onMudar, rotulo }: { 
     document.getElementById(`ficha-aba-${nova}`)?.focus();
   };
   return (
-    <div role="tablist" aria-label={rotulo} className="ba-abas max-w-full overflow-x-auto" onKeyDown={tecla}>
+    <div role="tablist" aria-label={rotulo} className="ba-abas max-w-full" onKeyDown={tecla}>
       {abas.map((a) => (
         <button
           key={a.id}

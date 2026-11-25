@@ -184,7 +184,7 @@ export function AdminShell({
     [grupos],
   );
 
-  const IconeModulo = modulo?.icone;
+
 
   return (
     <CamadasCtx.Provider value={camadas}>
@@ -336,35 +336,21 @@ export function AdminShell({
           </div>
         </header>
 
-        {/* Topo celular / tablet (< 1024 px) */}
-        <header className="ba2-topo flex lg:hidden items-center gap-2.5 px-4 pt-[max(0.5rem,env(safe-area-inset-top))] pb-2">
-          {modulo ? (
-            <>
+        {/* Topo celular / tablet (< 1024 px): ícones numa linha, título inteiro na de baixo. */}
+        <header className="ba2-topo flex lg:hidden flex-col gap-2 px-4 pt-[max(0.5rem,env(safe-area-inset-top))] pb-2.5">
+          <div className="flex items-center gap-2">
+            {modulo ? (
               <button
                 type="button"
                 onClick={modulo.onVoltar}
-                className="ba2-icone-topo ba2-icone-topo-borda grid h-11 w-11 shrink-0 place-items-center rounded-full"
+                className="ba2-icone-topo ba2-icone-topo-borda mr-auto grid h-11 w-11 shrink-0 place-items-center rounded-full"
                 aria-label="Voltar ao início"
               >
                 <ArrowLeft className="h-[1.15rem] w-[1.15rem]" aria-hidden />
               </button>
-              {IconeModulo ? <IconeModulo className="h-5 w-5 shrink-0 ba-texto-2" aria-hidden /> : null}
-              <h1 className="flex-1 min-w-0 text-[15px] font-medium truncate">{modulo.titulo}</h1>
-            </>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setLateral("conta")}
-              className="flex min-w-0 flex-1 items-center gap-3 text-left"
-              aria-label="Abrir sua conta"
-            >
-              <AvatarShell usuario={usuario} tamanho="h-11 w-11" />
-              <span className="min-w-0">
-                <span className="block truncate text-[15px] font-medium">{usuario.nome}</span>
-                <span className="block truncate text-xs ba-texto-2">Torre BION · Admin</span>
-              </span>
-            </button>
-          )}
+            ) : (
+              <span className="mr-auto" />
+            )}
 
           <button
             type="button"
@@ -418,6 +404,23 @@ export function AdminShell({
               </span>
             ) : null}
           </button>
+          </div>
+          {modulo ? (
+            <h1 className="text-xl font-medium leading-snug">{modulo.titulo}</h1>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setLateral("conta")}
+              className="flex items-center gap-3 text-left"
+              aria-label="Abrir sua conta"
+            >
+              <AvatarShell usuario={usuario} tamanho="h-11 w-11" />
+              <span>
+                <span className="block text-[15px] font-medium">{usuario.nome}</span>
+                <span className="block text-xs ba-texto-2">Torre BION · Admin</span>
+              </span>
+            </button>
+          )}
         </header>
 
         <main id="ba-conteudo" tabIndex={-1} className="flex-1 min-h-0 overflow-y-auto ba-coluna outline-none">

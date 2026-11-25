@@ -97,7 +97,7 @@ export function MedicosModulo() {
       }
       ferramentas={
         <div className="ba-animar space-y-3 w-full">
-          <div role="tablist" aria-label="Situação dos médicos" className="ba-abas max-w-full overflow-x-auto" onKeyDown={teclaAbas}>
+          <div role="tablist" aria-label="Situação dos médicos" className="ba-abas max-w-full" onKeyDown={teclaAbas}>
             {ABAS_MEDICOS.map((a) => (
               <button
                 key={a.id}

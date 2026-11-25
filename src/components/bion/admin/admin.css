@@ -859,6 +859,25 @@ button.ba-card:hover, a.ba-card:hover, .ba-card[role="button"]:hover {
   border: 1px solid var(--ba-borda);
   box-shadow: var(--ba-sombra);
 }
+/* No celular a pílula quebra em linhas, em vez de cortar o rótulo. */
+@media (max-width: 1023px) {
+  .ba-abas {
+    display: flex;
+    flex-wrap: wrap;
+    width: 100%;
+    max-width: 100%;
+    border-radius: 1.15rem;
+    overflow: visible;
+  }
+  .ba-aba {
+    white-space: normal;
+    text-align: center;
+    line-height: 1.25;
+    height: auto;
+    padding-top: 0.4rem;
+    padding-bottom: 0.4rem;
+  }
+}
 .ba-aba {
   min-height: 2.35rem;
   padding: 0 1rem;
