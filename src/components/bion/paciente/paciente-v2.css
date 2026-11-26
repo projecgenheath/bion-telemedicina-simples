@@ -1025,7 +1025,8 @@
 .bp2-app .bp2-agp-dica { font-size: 12px; line-height: 16px; color: var(--bp2-texto-2); padding: 0 0.35rem; }
 
 @media (min-width: 1024px) {
-  .bp2-app .bp2-agenda-pac { --bp2-agp-calha: 66px; position: fixed; left: 76px; bottom: 0; z-index: 40; overflow: hidden; display: flex; flex-direction: column; }
+  /* Acima de Documentos (z-index 45). Sem isso a agenda abre por baixo e o clique parece morto. */
+  .bp2-app .bp2-agenda-pac { --bp2-agp-calha: 66px; position: fixed; left: 76px; bottom: 0; z-index: 48; overflow: hidden; display: flex; flex-direction: column; }
   .bp2-app .bp2-agp-topo { height: 75px; padding: 0 1.7rem 0 1.15rem; flex-shrink: 0; }
   .bp2-app .bp2-agp-pagina { flex: 1; min-height: 0; padding: 27px 14px 21px 24px; display: flex; }
   .bp2-app .bp2-agp-cartao { flex: 1; min-height: 0; flex-direction: row; gap: 0; background: var(--bp2-cartao); border-radius: 20px; box-shadow: var(--bp2-sombra); overflow: hidden; }
