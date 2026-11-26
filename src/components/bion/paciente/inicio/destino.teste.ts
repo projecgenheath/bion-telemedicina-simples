@@ -2,7 +2,7 @@
  * Testes do item ativo da navegação do paciente (redesign, etapa 1).
  * Rodar: bun src/components/bion/paciente/inicio/destino.teste.ts
  */
-import { destinoAtivoPaciente, destinoBarraPaciente } from "./destino";
+import { destinoAtivoPaciente, destinoBarraPaciente, gavetaPaciente } from "./destino";
 
 let ok = 0;
 let falhas = 0;
@@ -34,6 +34,12 @@ igual("barra ajuda", destinoBarraPaciente("ajuda"), null);
 igual("barra agendar (+ aceso na agenda)", destinoBarraPaciente("agendar"), "agendar");
 igual("agenda própria", destinoAtivoPaciente({ painel: 1, secao: 2, agendaAberta: true }), "agendar");
 igual("agenda > painel", destinoAtivoPaciente({ painel: 2, secao: 0, emMensagens: true, agendaAberta: true }), "agendar");
+
+igual("gaveta documentos", gavetaPaciente(2, false), "documentos");
+igual("gaveta perfil", gavetaPaciente(0, false), "perfil");
+igual("gaveta início", gavetaPaciente(1, false), undefined);
+igual("agenda cobre documentos", gavetaPaciente(2, true), undefined);
+igual("agenda cobre perfil", gavetaPaciente(0, true), undefined);
 
 console.log(`${ok} ok, ${falhas} falha(s)`);
 if (falhas) process.exit(1);

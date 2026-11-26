@@ -37,7 +37,7 @@ import { poppinsPaciente } from "./inicio/fonte-paciente";
 import { TelaInicioPaciente } from "./inicio/TelaInicioPaciente";
 import { BarraLateralPaciente } from "./inicio/BarraLateralPaciente";
 import { BarraInferiorPaciente } from "./inicio/BarraInferiorPaciente";
-import { destinoAtivoPaciente, destinoBarraPaciente } from "./inicio/destino";
+import { destinoAtivoPaciente, destinoBarraPaciente, gavetaPaciente } from "./inicio/destino";
 
 const ChatBion = dynamic(
   () => import("./ChatBion").then((m) => m.ChatBion),
@@ -565,7 +565,7 @@ export function PacienteApp() {
   return (
     <div
       className={`bp-shell bp-app-paciente bp2-app ${poppinsPaciente.variable} text-bion-ink dark:text-bion-paper`}
-      data-gaveta={bloqueado ? undefined : painel === 0 ? "perfil" : painel === 2 ? "documentos" : undefined}
+      data-gaveta={gavetaPaciente(painel, bloqueado || !!agenda)}
     >
       <BarraLateralPaciente
         ativo={destinoAtivo}

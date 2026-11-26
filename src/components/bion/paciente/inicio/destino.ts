@@ -33,6 +33,21 @@ export type EstadoTela = {
   pagina?: "ajuda" | null;
 };
 
+/**
+ * Gaveta da tela larga (Perfil ou Documentos). Some quando chat, agenda ou
+ * outra camada cobre o app: no computador Documentos fica por cima da agenda
+ * (a gaveta é fixa e mais alta na pilha) e o clique parecia não trocar a tela.
+ */
+export function gavetaPaciente(
+  painel: number,
+  coberto: boolean,
+): "perfil" | "documentos" | undefined {
+  if (coberto) return undefined;
+  if (painel === 0) return "perfil";
+  if (painel === 2) return "documentos";
+  return undefined;
+}
+
 /** Item ativo do menu lateral: a camada de cima manda (chat > página > painel > seção). */
 export function destinoAtivoPaciente(e: EstadoTela): DestinoPaciente {
   if (e.chatAberto || e.agendaAberta) return "agendar";
