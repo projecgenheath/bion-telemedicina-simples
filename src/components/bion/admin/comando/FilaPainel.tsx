@@ -96,7 +96,7 @@ export function FilaPainel({ onAbrir, comTitulo = true }: { onAbrir: (view: stri
         <Esqueleto variante="lista" quantidade={3} rotulo="Carregando a fila…" />
       ) : visiveis.length === 0 ? (
         errosFonte.length ? null : (
-          <EstadoVazio icone={CheckCircle2} tom="ok" titulo="Tudo em ordem por aqui" texto="Nenhuma decisão pendente agora." />
+          <EstadoVazio faixa icone={CheckCircle2} tom="ok" titulo="Tudo em ordem por aqui" texto="Nenhuma decisão pendente agora." />
         )
       ) : (
         <ul className="space-y-2.5" aria-label="Itens pendentes">

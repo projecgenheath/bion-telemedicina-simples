@@ -238,7 +238,14 @@ verdade("Relatórios sem texto interno 'como na tela antiga'", !/como na tela an
 verdade("Relatórios explica o total da plataforma", /total da plataforma/.test(relSrc));
 
 const estadoSrc = readFileSync(new URL("./ui/Estados.tsx", import.meta.url), "utf8");
-verdade("EstadoVazio tem altura mínima", /min-h-\[min\(22rem,calc\(100dvh-22rem\)\)\]/.test(estadoSrc));
+verdade("vazio do módulo é cartão com a entrada do Início", /className="ba-vazio ba-animar"/.test(estadoSrc));
+verdade("faixa alta do vazio fica só na Fila", /if \(faixa\)[\s\S]*min-h-\[min\(22rem,calc\(100dvh-22rem\)\)\]/.test(estadoSrc));
+verdade("módulos usam a família do Início", /\.ba-modulo \.ba-card[\s\S]*--ba-lavanda/.test(css) && /\.ba-modulo \.ba-card[\s\S]*--ba-azul-suave/.test(css) && /\.ba-modulo \.ba-card[\s\S]*--ba-pessego/.test(css));
+verdade("entrada dos módulos sobe 14px em 0,42s", /ba-subir-suave 0\.42s cubic-bezier\(0\.22, 1, 0\.36, 1\)/.test(css));
+verdade("menos movimento desliga a entrada dos módulos", /prefers-reduced-motion: reduce[\s\S]*\.ba-modulo \.ba-card/.test(css));
+const telaSrc = readFileSync(new URL("./ui/TelaModulo.tsx", import.meta.url), "utf8");
+verdade("TelaModulo usa a entrada do Início", /ba-modulo[\s\S]*ba-animar/.test(telaSrc));
+verdade("Centro de Comando não recebe a classe dos módulos", !/ba-modulo/.test(centroSrc));
 
 console.log(`${ok} ok, ${falhas} falha(s)`);
 if (falhas) process.exit(1);

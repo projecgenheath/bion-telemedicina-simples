@@ -177,7 +177,7 @@ function TorreInterna({ children }: { children: ReactNode }) {
       buscar={buscar}
       modulo={comando ? undefined : { titulo: info?.rotulo ?? "Página", icone: info?.icone, onVoltar: () => router.push("/painel") }}
     >
-      {redesenhada ? children : <div className="ba-folha">{children}</div>}
+      {redesenhada ? children : <div className="ba-folha ba-modulo ba-animar">{children}</div>}
     </AdminShell>
   );
 }

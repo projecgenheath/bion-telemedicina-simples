@@ -23,6 +23,8 @@ export function SheetAdmin({
   alteracoesPendentes = false,
   rodape,
   children,
+  /** Cor e entrada do Início. A Fila e a conta do Centro de Comando ficam de fora. */
+  familia = true,
 }: {
   aberto: boolean;
   onFechar: () => void;
@@ -31,6 +33,7 @@ export function SheetAdmin({
   alteracoesPendentes?: boolean;
   rodape?: ReactNode;
   children: ReactNode;
+  familia?: boolean;
 }) {
   const largo = useCascaLarga();
   const [confirmandoSaida, setConfirmandoSaida] = useState(false);
@@ -59,14 +62,14 @@ export function SheetAdmin({
       <Drawer.Portal>
         <Drawer.Overlay className="fixed inset-0 z-50 bg-black/60" />
         <Drawer.Content
-          className={`ba-escopo ba-sheet ${poppinsAdmin.variable} fixed z-50 flex flex-col outline-none ${
+          className={`ba-escopo ba-sheet ${familia ? "ba-folha-cor" : ""} ${poppinsAdmin.variable} fixed z-50 flex flex-col outline-none ${
             largo
               ? "right-0 top-0 bottom-0 w-[480px] max-w-[92vw] border-l"
               : "inset-x-0 bottom-0 max-h-[92dvh] rounded-t-[20px]"
           }`}
         >
           {!largo ? <Drawer.Handle className="!mt-3 !mb-1 !w-12 !h-1.5 !bg-current opacity-25" /> : null}
-          <header className={`flex items-start justify-between gap-3 px-5 ${largo ? "pt-6" : "pt-2"} pb-3`}>
+          <header className={`flex items-start justify-between gap-3 ${familia ? "ba-folha-cab ba-animar mx-3 mt-3" : `px-5 ${largo ? "pt-6" : "pt-2"} pb-3`}`}>
             <div className="min-w-0">
               <Drawer.Title className="text-lg font-semibold leading-tight">{titulo}</Drawer.Title>
               {descricao ? (
@@ -102,7 +105,7 @@ export function SheetAdmin({
             </div>
           ) : null}
 
-          <div className="flex-1 overflow-y-auto ba-coluna px-5 pb-5">{children}</div>
+          <div className={`flex-1 overflow-y-auto ba-coluna px-5 pb-5 ${familia ? "ba-animar ba-animar-d1" : ""}`}>{children}</div>
           {rodape ? (
             <footer className="shrink-0 px-5 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] border-t" style={{ borderColor: "var(--ba-borda)" }}>
               {rodape}

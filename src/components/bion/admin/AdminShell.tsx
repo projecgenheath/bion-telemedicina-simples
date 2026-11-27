@@ -430,7 +430,7 @@ export function AdminShell({
 
         <BarraInferiorAdmin ativo={ativo} lancadorAberto={lancador} onNavegar={navegar} onAbrirLancador={abrirBusca} />
 
-        <SheetAdmin aberto={lateral === "conta"} onFechar={() => setLateral(null)} titulo="Sua conta">
+        <SheetAdmin aberto={lateral === "conta"} onFechar={() => setLateral(null)} titulo="Sua conta" familia={false}>
           {conta}
         </SheetAdmin>
         <SheetAdmin
@@ -438,6 +438,7 @@ export function AdminShell({
           onFechar={() => setLateral(null)}
           titulo="Fila de decisões"
           descricao="Tudo o que espera uma decisão sua."
+          familia={false}
         >
           {fila}
         </SheetAdmin>
@@ -749,6 +750,7 @@ function Lancador({
       onFechar={onFechar}
       titulo="Buscar ou ir para…"
       descricao={buscar ? "Módulos, atalhos, pessoas, consultas e chamados" : "Módulos da administração"}
+      familia={false}
     >
       <div className="mb-4">
         <CampoBusca

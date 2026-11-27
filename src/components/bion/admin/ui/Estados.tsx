@@ -12,21 +12,36 @@ export function EstadoVazio({
   texto,
   acao,
   tom = "sinal",
+  /** Faixa alta, só na Fila do Centro de Comando. Nas outras telas o vazio é um cartão. */
+  faixa = false,
 }: {
   icone?: Icone;
   titulo: string;
   texto?: ReactNode;
   acao?: ReactNode;
   tom?: Tom;
+  faixa?: boolean;
 }) {
+  if (faixa) {
+    return (
+      <div className="flex flex-col items-center justify-center text-center px-6 py-12 min-h-[min(22rem,calc(100dvh-22rem))]" role="status">
+        <span className="ba-estado-icone" data-tom={tom}>
+          <IconeVazio className="w-6 h-6" aria-hidden />
+        </span>
+        <p className="mt-4 text-base font-bold">{titulo}</p>
+        {texto ? <p className="mt-1 text-sm ba-texto-2 max-w-sm">{texto}</p> : null}
+        {acao ? <div className="mt-4">{acao}</div> : null}
+      </div>
+    );
+  }
   return (
-    <div className="flex flex-col items-center justify-center text-center px-6 py-12 min-h-[min(22rem,calc(100dvh-22rem))]" role="status">
+    <div className="ba-vazio ba-animar" role="status">
       <span className="ba-estado-icone" data-tom={tom}>
         <IconeVazio className="w-6 h-6" aria-hidden />
       </span>
-      <p className="mt-4 text-base font-bold">{titulo}</p>
-      {texto ? <p className="mt-1 text-sm ba-texto-2 max-w-sm">{texto}</p> : null}
-      {acao ? <div className="mt-4">{acao}</div> : null}
+      <p className="mt-3 text-base font-medium">{titulo}</p>
+      {texto ? <p className="mt-1 text-sm ba-texto-2">{texto}</p> : null}
+      {acao ? <div className="mt-3">{acao}</div> : null}
     </div>
   );
 }
@@ -42,7 +57,7 @@ export function EstadoErro({
   onTentar?: () => void;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center text-center px-6 py-12 min-h-[min(22rem,calc(100dvh-22rem))]" role="alert">
+    <div className="ba-vazio ba-vazio-erro ba-animar" role="alert">
       <span className="ba-estado-icone" data-tom="critico">
         <AlertTriangle className="w-6 h-6" aria-hidden />
       </span>

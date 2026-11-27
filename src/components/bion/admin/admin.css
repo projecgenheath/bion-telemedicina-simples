@@ -1212,6 +1212,227 @@ section[tabindex="-1"]:focus { outline: none; }
   background: var(--ba-azul);
 }
 
+/* Telas fora do Centro de Comando.
+   Mesma família do Início (lavanda, azul-suave, pêssego e o azul do bloco
+   de hoje). No escuro o par é o do Início: o pastel continua claro e o
+   texto fica #242424. Sem aurora, brilho ou degradê. A barra de 14 dias
+   não entra aqui. */
+.ba-modulo-cab,
+.dark .ba-modulo-cab,
+.ba-folha-cab,
+.dark .ba-folha-cab {
+  background: var(--ba-azul);
+  color: #242424;
+  border-radius: 1.25rem;
+  padding: 1rem 1.1rem;
+}
+.ba-modulo-cab .ba-texto-2,
+.dark .ba-modulo-cab .ba-texto-2,
+.ba-folha-cab .ba-texto-2,
+.dark .ba-folha-cab .ba-texto-2 {
+  color: #242424;
+  opacity: 0.85;
+}
+.ba-modulo-cab .ba-icone-botao,
+.ba-modulo-cab .ba-estado-icone,
+.dark .ba-modulo-cab .ba-icone-botao,
+.dark .ba-modulo-cab .ba-estado-icone,
+.ba-folha-cab .ba-icone-botao,
+.dark .ba-folha-cab .ba-icone-botao {
+  background: #ffffff;
+  color: #242424;
+  border-color: transparent;
+}
+.ba-modulo .ba-abas,
+.dark .ba-modulo .ba-abas {
+  background: var(--ba-azul-suave);
+  border-color: transparent;
+}
+.ba-modulo .ba-aba,
+.dark .ba-modulo .ba-aba { color: #242424; }
+.ba-modulo .ba-aba[aria-selected="true"],
+.ba-modulo .ba-aba[aria-pressed="true"],
+.dark .ba-modulo .ba-aba[aria-selected="true"],
+.dark .ba-modulo .ba-aba[aria-pressed="true"] {
+  background: var(--ba-azul);
+  color: #242424;
+}
+
+.ba-modulo .ba-card,
+.ba-folha-cor .ba-card,
+.dark .ba-modulo .ba-card,
+.dark .ba-folha-cor .ba-card {
+  --ba-familia: var(--ba-lavanda);
+  --ba-texto: #242424;
+  --ba-texto-2: #636363;
+  --ba-texto-3: #636363;
+  --ba-critico: #c42b2b;
+  --ba-ok: #1e7a34;
+  --ba-atencao: #9a3f0a;
+  --ba-sinal: #2f62c4;
+  --ba-dinheiro: #2f62c4;
+  --ba-neutro: #525a66;
+  background: var(--ba-familia);
+  color: #242424;
+  border-color: transparent;
+}
+.ba-modulo .ba-card:nth-child(3n+2),
+.ba-folha-cor .ba-card:nth-child(3n+2),
+.dark .ba-modulo .ba-card:nth-child(3n+2),
+.dark .ba-folha-cor .ba-card:nth-child(3n+2) {
+  --ba-familia: var(--ba-azul-suave);
+  background: var(--ba-familia);
+}
+.ba-modulo .ba-card:nth-child(3n),
+.ba-folha-cor .ba-card:nth-child(3n),
+.dark .ba-modulo .ba-card:nth-child(3n),
+.dark .ba-folha-cor .ba-card:nth-child(3n) {
+  --ba-familia: var(--ba-pessego);
+  background: var(--ba-familia);
+}
+.ba-modulo li:nth-child(3n+1) > .ba-card,
+.ba-modulo li:nth-child(3n+1) > * > .ba-card,
+.ba-folha-cor li:nth-child(3n+1) > .ba-card,
+.ba-folha-cor li:nth-child(3n+1) > * > .ba-card {
+  --ba-familia: var(--ba-lavanda);
+  background: var(--ba-familia);
+}
+.ba-modulo li:nth-child(3n+2) > .ba-card,
+.ba-modulo li:nth-child(3n+2) > * > .ba-card,
+.ba-folha-cor li:nth-child(3n+2) > .ba-card,
+.ba-folha-cor li:nth-child(3n+2) > * > .ba-card {
+  --ba-familia: var(--ba-azul-suave);
+  background: var(--ba-familia);
+}
+.ba-modulo li:nth-child(3n) > .ba-card,
+.ba-modulo li:nth-child(3n) > * > .ba-card,
+.ba-folha-cor li:nth-child(3n) > .ba-card,
+.ba-folha-cor li:nth-child(3n) > * > .ba-card,
+.ba-modulo .grid > :nth-child(3n) .ba-card,
+.ba-modulo .space-y-2 > :nth-child(3n) .ba-card,
+.ba-modulo .space-y-3 > :nth-child(3n) .ba-card,
+.ba-modulo .space-y-4 > :nth-child(3n) .ba-card,
+.ba-folha-cor .grid > :nth-child(3n) .ba-card,
+.ba-folha-cor .space-y-2 > :nth-child(3n) .ba-card,
+.ba-folha-cor .space-y-3 > :nth-child(3n) .ba-card,
+.ba-folha-cor .space-y-4 > :nth-child(3n) .ba-card {
+  --ba-familia: var(--ba-pessego);
+  background: var(--ba-familia);
+}
+.ba-modulo .grid > :nth-child(3n+1) .ba-card,
+.ba-modulo .space-y-2 > :nth-child(3n+1) .ba-card,
+.ba-modulo .space-y-3 > :nth-child(3n+1) .ba-card,
+.ba-modulo .space-y-4 > :nth-child(3n+1) .ba-card,
+.ba-folha-cor .grid > :nth-child(3n+1) .ba-card,
+.ba-folha-cor .space-y-2 > :nth-child(3n+1) .ba-card,
+.ba-folha-cor .space-y-3 > :nth-child(3n+1) .ba-card,
+.ba-folha-cor .space-y-4 > :nth-child(3n+1) .ba-card {
+  --ba-familia: var(--ba-lavanda);
+  background: var(--ba-familia);
+}
+.ba-modulo .grid > :nth-child(3n+2) .ba-card,
+.ba-modulo .space-y-2 > :nth-child(3n+2) .ba-card,
+.ba-modulo .space-y-3 > :nth-child(3n+2) .ba-card,
+.ba-modulo .space-y-4 > :nth-child(3n+2) .ba-card,
+.ba-folha-cor .grid > :nth-child(3n+2) .ba-card,
+.ba-folha-cor .space-y-2 > :nth-child(3n+2) .ba-card,
+.ba-folha-cor .space-y-3 > :nth-child(3n+2) .ba-card,
+.ba-folha-cor .space-y-4 > :nth-child(3n+2) .ba-card {
+  --ba-familia: var(--ba-azul-suave);
+  background: var(--ba-familia);
+}
+.ba-modulo button.ba-card:hover,
+.ba-modulo a.ba-card:hover,
+.ba-modulo .ba-card[role="button"]:hover,
+.ba-folha-cor button.ba-card:hover,
+.ba-folha-cor a.ba-card:hover,
+.ba-folha-cor .ba-card[role="button"]:hover {
+  background: color-mix(in srgb, #242424 6%, var(--ba-familia));
+}
+.ba-modulo .ba-card:has(> .ba-vazio),
+.ba-folha-cor .ba-card:has(> .ba-vazio) {
+  background-color: transparent;
+  border: 0;
+  box-shadow: none;
+  padding: 0;
+  width: min(100%, 20rem);
+  min-height: 0;
+  align-self: start;
+}
+.ba-modulo .ba-card .ba-tabela th,
+.ba-folha-cor .ba-card .ba-tabela th,
+.dark .ba-modulo .ba-card .ba-tabela th,
+.dark .ba-folha-cor .ba-card .ba-tabela th {
+  background: var(--ba-familia);
+  color: #636363;
+}
+.ba-modulo .ba-card .ba-tabela td,
+.ba-folha-cor .ba-card .ba-tabela td,
+.dark .ba-modulo .ba-card .ba-tabela td,
+.dark .ba-folha-cor .ba-card .ba-tabela td {
+  color: #242424;
+  background: transparent;
+  border-bottom-color: rgba(36, 36, 36, 0.08);
+}
+.ba-modulo .ba-card .ba-tabela tbody tr[data-clicavel="true"]:hover td,
+.ba-folha-cor .ba-card .ba-tabela tbody tr[data-clicavel="true"]:hover td,
+.dark .ba-modulo .ba-card .ba-tabela tbody tr[data-clicavel="true"]:hover td,
+.dark .ba-folha-cor .ba-card .ba-tabela tbody tr[data-clicavel="true"]:hover td {
+  background: color-mix(in srgb, #242424 7%, var(--ba-familia));
+  color: #242424;
+}
+.dark .ba-modulo .ba-card .ba-tabela tbody tr[aria-selected="true"] td,
+.dark .ba-folha-cor .ba-card .ba-tabela tbody tr[aria-selected="true"] td {
+  background: var(--ba-azul);
+  color: #242424;
+}
+.ba-modulo .ba-card .ba-entrada,
+.ba-folha-cor .ba-entrada,
+.dark .ba-modulo .ba-card .ba-entrada,
+.dark .ba-folha-cor .ba-entrada {
+  background: #ffffff;
+  color: #242424;
+  border-color: rgba(36, 36, 36, 0.12);
+}
+.ba-vazio {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: min(100%, 20rem);
+  min-height: 10.75rem;
+  padding: 1rem 1.1rem 1.05rem;
+  border-radius: 1.5rem;
+  background: var(--ba-pessego);
+  color: #242424;
+  text-align: left;
+}
+.ba-vazio-erro { background: var(--ba-azul-suave); }
+@media (min-width: 1024px) {
+  .ba-vazio { min-height: 13rem; }
+}
+.dark .ba-vazio { color: #242424; }
+.ba-vazio .ba-texto-2,
+.dark .ba-vazio .ba-texto-2 { color: #636363; }
+.ba-sheet.ba-folha-cor,
+.dark .ba-sheet.ba-folha-cor {
+  --ba-texto: #242424;
+  --ba-texto-2: #636363;
+  --ba-texto-3: #636363;
+  background: var(--ba-lavanda);
+  color: #242424;
+}
+.ba-folha-cor .ba-icone-botao,
+.dark .ba-folha-cor .ba-icone-botao {
+  background: #ffffff;
+  color: #242424;
+  border-color: transparent;
+}
+.ba-folha.ba-modulo,
+.dark .ba-folha.ba-modulo {
+  background: var(--ba-lavanda);
+  color: #242424;
+}
+
 } /* @layer components */
 
 /* ===================== Animações do admin (Poppins / Redesign) ===================== */
@@ -1219,12 +1440,18 @@ section[tabindex="-1"]:focus { outline: none; }
   from { opacity: 0; transform: translateY(14px) scale(0.98); }
   to { opacity: 1; transform: none; }
 }
-.ba-app .ba-animar { animation: ba-subir-suave 0.42s cubic-bezier(0.22, 1, 0.36, 1) both; }
-.ba-app .ba-animar-d1 { animation-delay: 0.06s; }
-.ba-app .ba-animar-d2 { animation-delay: 0.12s; }
-.ba-app .ba-animar-d3 { animation-delay: 0.18s; }
-.ba-app .ba-animar-d4 { animation-delay: 0.24s; }
-.ba-app .ba-animar-d5 { animation-delay: 0.30s; }
+.ba-app .ba-animar,
+.ba-folha-cor .ba-animar { animation: ba-subir-suave 0.42s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.ba-app .ba-animar-d1,
+.ba-folha-cor .ba-animar-d1 { animation-delay: 0.06s; }
+.ba-app .ba-animar-d2,
+.ba-folha-cor .ba-animar-d2 { animation-delay: 0.12s; }
+.ba-app .ba-animar-d3,
+.ba-folha-cor .ba-animar-d3 { animation-delay: 0.18s; }
+.ba-app .ba-animar-d4,
+.ba-folha-cor .ba-animar-d4 { animation-delay: 0.24s; }
+.ba-app .ba-animar-d5,
+.ba-folha-cor .ba-animar-d5 { animation-delay: 0.30s; }
 
 @keyframes ba-barra-cresce {
   from { transform: scaleY(0); }
@@ -1241,9 +1468,52 @@ section[tabindex="-1"]:focus { outline: none; }
 }
 .ba-app .ba-botao:active { transform: scale(0.97); }
 
+/* Entrada das telas fora do Início: a mesma subida do Centro de Comando.
+   "backwards" no cartão solta o transform no fim, e o toque continua. */
+@media (prefers-reduced-motion: no-preference) {
+  .ba-app .ba-modulo .ba-card,
+  .ba-folha-cor .ba-card,
+  .ba-app .ba-vazio {
+    animation: ba-subir-suave 0.42s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  }
+  .ba-app .ba-modulo .ba-card:nth-child(2),
+  .ba-folha-cor .ba-card:nth-child(2),
+  .ba-app .ba-modulo li:nth-child(2) .ba-card,
+  .ba-folha-cor li:nth-child(2) .ba-card { animation-delay: 0.06s; }
+  .ba-app .ba-modulo .ba-card:nth-child(3),
+  .ba-folha-cor .ba-card:nth-child(3),
+  .ba-app .ba-modulo li:nth-child(3) .ba-card,
+  .ba-folha-cor li:nth-child(3) .ba-card { animation-delay: 0.12s; }
+  .ba-app .ba-modulo .ba-card:nth-child(4),
+  .ba-folha-cor .ba-card:nth-child(4),
+  .ba-app .ba-modulo li:nth-child(4) .ba-card,
+  .ba-folha-cor li:nth-child(4) .ba-card { animation-delay: 0.18s; }
+  .ba-app .ba-modulo .ba-card:nth-child(5),
+  .ba-folha-cor .ba-card:nth-child(5),
+  .ba-app .ba-modulo li:nth-child(5) .ba-card,
+  .ba-folha-cor li:nth-child(5) .ba-card { animation-delay: 0.24s; }
+  .ba-app .ba-modulo .ba-card:nth-child(n+6),
+  .ba-folha-cor .ba-card:nth-child(n+6),
+  .ba-app .ba-modulo li:nth-child(n+6) .ba-card,
+  .ba-folha-cor li:nth-child(n+6) .ba-card { animation-delay: 0.30s; }
+  .ba-app .ba-modulo button.ba-card:active,
+  .ba-app .ba-modulo a.ba-card:active,
+  .ba-app .ba-modulo .ba-card[role="button"]:active,
+  .ba-folha-cor button.ba-card:active,
+  .ba-folha-cor a.ba-card:active,
+  .ba-folha-cor .ba-card[role="button"]:active {
+    transform: scale(0.98);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .ba-app .ba-animar,
-  .ba-app .ba-barra-14d { animation: none !important; }
+  .ba-folha-cor .ba-animar,
+  .ba-app .ba-barra-14d,
+  .ba-app .ba-modulo .ba-card,
+  .ba-folha-cor .ba-card,
+  .ba-app .ba-vazio,
+  .ba-folha-cor .ba-vazio { animation: none !important; }
   .ba-app .ba-botao,
   .ba-app .ba2-seta,
   .ba-app .ba2-barra-item,

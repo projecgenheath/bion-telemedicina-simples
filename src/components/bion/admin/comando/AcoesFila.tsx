@@ -135,7 +135,7 @@ export function ItemResolvivel({ item, agora, onAbrir }: { item: ItemFila; agora
       ) : null}
 
       {folha === "desfecho" && ref.tipo === "desfecho" ? (
-        <SheetAdmin aberto onFechar={() => setFolha(null)} titulo="Corrigir desfecho" descricao={item.titulo}>
+        <SheetAdmin aberto onFechar={() => setFolha(null)} titulo="Corrigir desfecho" descricao={item.titulo} familia={false}>
           <CorrigirDesfecho
             consultaId={ref.id}
             onVoltar={() => setFolha(null)}
@@ -194,6 +194,7 @@ function DecidirReembolso({
       titulo={aprovar ? "Aprovar reembolso" : "Negar reembolso"}
       descricao={pedido?.consulta ? `${pedido.consulta.paciente} · pedido ${relativo(Date.parse(pedido.criadoEm), agora)}` : "Pedido de reembolso"}
       alteracoesPendentes={Boolean(resposta.trim()) || entendi}
+      familia={false}
     >
       {!pedido ? (
         <p className="text-sm ba-texto-2">Este pedido não está mais na lista. Atualize a fila.</p>
@@ -284,7 +285,7 @@ function ResponderChamado({
   };
 
   return (
-    <SheetAdmin aberto onFechar={onFechar} titulo="Responder chamado" descricao={assunto} alteracoesPendentes={Boolean(resposta.trim())}>
+    <SheetAdmin aberto onFechar={onFechar} titulo="Responder chamado" descricao={assunto} alteracoesPendentes={Boolean(resposta.trim())} familia={false}>
       <div className="space-y-4">
         <label className="block">
           <span className="ba-rotulo">Resposta e solução</span>
