@@ -390,8 +390,10 @@ export function RepassesSheet({
               ) : null}
 
               {lista.retido ? <RetidoPlataformaBloco dados={lista.retido} /> : null}
-              {lista.transferencias.length > 0 ? <TransferenciasBloco itens={lista.transferencias} /> : null}
-              {lista.reembolsos.length > 0 ? <ReembolsosBloco itens={lista.reembolsos} /> : null}
+              {lista.transferencias && lista.transferencias.length > 0 ? (
+                <TransferenciasBloco itens={lista.transferencias} />
+              ) : null}
+              {lista.reembolsos && lista.reembolsos.length > 0 ? <ReembolsosBloco itens={lista.reembolsos} /> : null}
 
               {temModeloAnterior(lista) && !lista.temChavePix && repasseParaPagar(lista) ? (
                 <div className="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4 flex gap-3" role="status">

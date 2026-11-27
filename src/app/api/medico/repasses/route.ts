@@ -2,43 +2,27 @@ import { db } from "@/lib/db";
 import { exigirPapel } from "@/lib/server/auth";
 import { ok, falha } from "@/lib/server/http";
 import { previaDoDia, recebidosDiretoNoStripe, totalRecebidoDireto } from "@/lib/server/repasse";
-import { retidoNaPlataforma } from "@/lib/server/retido-plataforma";
-import { AVISO_GERAL_RECEBIMENTO, TOTAIS_ZERO } from "@/lib/recebimento-modelo";
 
 /**
  * GET /api/medico/repasses — SOMENTE LEITURA.
  *
- * Contrato-api-pagamento-2111.md, seção 2 (emenda de 27/11):
- * `BION_PAGAMENTO_RETIDO === "1"` (chave de SERVIDOR) escolhe o formato.
- * Sem a chave, `modelo: "legado"` e a resposta é exatamente a da main, mais
- * o campo `modelo`: o médico continua vendo o que tem a receber por PIX.
- * Com a chave, `modelo: "plataforma"` e o valor retido/transferências/
- * reembolsos do modelo novo. Nenhum dos dois formatos inventa número.
+ * Lista os repasses do PRÓPRIO médico (fechados e pagos), a prévia de hoje
+ * (ainda não fechada) e o saldo a receber. O médicoId vem só da sessão
+ * (`exigirPapel("MEDICO")`); nunca de query/corpo.
  *
- * `medicoId` vem só da sessão (`exigirPapel("MEDICO")`), nunca de query/corpo.
- * Privacidade: sem CPF/contato/chave do item/reembolsoId.
+ * Saldo = soma dos líquidos dos repasses `fechado` + prévia.líquido
+ * − ajustes pendentes que não couberam na prévia. Cada repasse fechado é
+ * pago inteiro; o restante dos ajustes só desconta dos próximos.
+ * Privacidade: sem CPF/contato/chave do item/reembolsoId. A prévia traz
+ * só tipo, data e valores (sem nome de paciente — ainda não há consulta
+ * ligada na prévia pura). `temChavePix` é booleano (a chave completa
+ * fica em /api/medico/recebimento, mascarada).
  */
 export async function GET() {
   try {
     const medico = await exigirPapel("MEDICO");
-    const plataforma = process.env.BION_PAGAMENTO_RETIDO === "1";
-
-    if (plataforma) {
-      // Modelo novo: valor pago que fica na plataforma até a consulta terminar.
-      const retido = await retidoNaPlataforma(medico.id);
-      return ok({
-        modelo: "plataforma" as const,
-        retido,
-        transferencias: [],
-        reembolsos: [],
-        totais: TOTAIS_ZERO,
-        aviso: AVISO_GERAL_RECEBIMENTO,
-      });
-    }
-
-    // Modelo atual da main (PIX diário + cobrança direta), preservado até o
-    // Admin virar a cobrança para a plataforma.
     const agora = new Date();
+
     const [rows, previa, pix, diretos] = await Promise.all([
       db.repasse.findMany({
         where: { medicoId: medico.id },
@@ -78,7 +62,6 @@ export async function GET() {
       somaFechados + previa.totais.liquidoCentavos - previa.ajustesPendentesRestantesCentavos;
 
     return ok({
-      modelo: "legado" as const,
       saldoCentavos,
       temChavePix: !!pix,
       aviso:

@@ -405,15 +405,18 @@ export type PreviaRepasseWire = {
 export type ListaRepasses = {
   /**
    * Modelo novo — contrato-api-pagamento-2111.md, seção 2. `modelo` diz qual
-   * modelo o servidor está usando; o cliente lê `retido`, `transferencias`,
-   * `reembolsos` e `totais` e não depende mais dos campos antigos.
+   * modelo o servidor está usando. Todos os campos abaixo são opcionais: a
+   * rota legada (main, sem BION_PAGAMENTO_RETIDO=1) não os devolve, e o cliente
+   * precisa abrir o histórico mesmo assim. Com a chave ligada o servidor do
+   * Admin (#259) passa a devolver `retido`, `transferencias`, `reembolsos` e
+   * `totais`; sem dado, o bloco fica escondido. Nenhum número é inventado.
    */
-  modelo: ModeloPagamentoWire;
-  retido: RetidoWire;
-  transferencias: TransferenciaWire[];
-  reembolsos: ReembolsoWire[];
-  totais: TotaisWire;
-  /** Aviso geral do modelo novo (regras 2, 6 e 8). */
+  modelo?: ModeloPagamentoWire;
+  retido?: RetidoWire;
+  transferencias?: TransferenciaWire[];
+  reembolsos?: ReembolsoWire[];
+  totais?: TotaisWire;
+  /** Aviso geral (presente nos dois modelos). */
   aviso: string;
   /** Nota do bloco legado; os campos abaixo somem quando o Admin ligar o novo. */
   avisoModeloAnterior?: string;
