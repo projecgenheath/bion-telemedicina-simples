@@ -641,6 +641,11 @@ model Reembolso {
   decididoEm    DateTime?
   repasseAjuste RepasseAjuste?
   stripeRefundId String? @unique // preenchido = enviado ao Stripe (20261028a)
+  // Reversão da TransferenciaMedico no reembolso do modelo plataforma
+  // (20261127b): preenchido = a parte do médico foi revertida no Stripe.
+  // Valor em centavos, proporcional ao reembolso, limitado ao líquido.
+  stripeReversalId String? @unique
+  stripeReversalValorCentavos Int?
   taxaMedico     ReembolsoTaxaMedico?
 
   @@index([pagamentoId, status])

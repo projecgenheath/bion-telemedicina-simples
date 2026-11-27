@@ -1,6 +1,7 @@
 import Stripe from "stripe";
 import { db } from "@/lib/db";
-import { bloqueioChaveLive } from "@/lib/stripe-checkout-logica";
+import { registrarAudit } from "@/lib/server/auth";
+import { bloqueioChaveLive, parteReembolsoSobreMulta, valorReversaoProporcional } from "@/lib/stripe-checkout-logica";
 
 /**
  * Base do Stripe (modo teste). Dono: Admin. Migração 20261028a.
@@ -13,6 +14,11 @@ import { bloqueioChaveLive } from "@/lib/stripe-checkout-logica";
  * - Reembolso: o CHECK "Reembolso_status_check" não tem 'enviado'. Por isso
  *   "enviado" = status 'aprovado' com stripeRefundId preenchido; o evento do
  *   Stripe fecha em 'processado' ou 'falhou'.
+ * - Modelo 21/11 (20261127b): no modo plataforma, reembolsar a cobrança NÃO
+ *   desfaz a TransferenciaMedico já enviada; o envio do refund reverte a
+ *   parte do médico com transfers.createReversal proporcional (idempotente,
+ *   chave derivada do reembolso.id). A reversão nunca bloqueia o reembolso
+ *   do paciente: falhou = auditoria critical para conciliação manual.
  */
 
 let cliente: Stripe | null = null;
@@ -150,15 +156,19 @@ type ReembolsoLinha = {
   id: string;
   status: string;
   valorCentavos: number;
+  multaCentavos: number;
   stripeRefundId: string | null;
   pagamento: {
+    id: string;
+    /** Valor total da cobrança em reais (base da reversão proporcional). */
+    valor: number;
     stripePaymentIntentId: string | null;
     consulta?: ContaMedico;
     /** Renovação de receita: Pagamento sem consulta, médico vem do PedidoRenovacao.medicoId. */
     pedidoRenovacao?: ContaMedico;
   } | null;
   /** Multa de remarcação: sem Pagamento; o PaymentIntent fica em gatewayRef 'stripe_pi:<id>'. */
-  remarcacao?: { gatewayRef: string | null; consulta?: ContaMedico } | null;
+  remarcacao?: { id: string; multaCentavos: number; gatewayRef: string | null; consulta?: ContaMedico } | null;
 };
 
 const SELECT_CONTA = { select: { medico: { select: { perfilMedico: { select: { stripeAccountId: true } } } } } } as const;
@@ -173,8 +183,18 @@ type DbReembolso = {
   reembolso: {
     findUnique(a: unknown): Promise<ReembolsoLinha | null>;
     findFirst(a: unknown): Promise<{ id: string; status: string } | null>;
+    findMany(a: unknown): Promise<{ stripeReversalValorCentavos: number | null }[]>;
     update(a: unknown): Promise<unknown>;
     updateMany(a: unknown): Promise<{ count: number }>;
+  };
+  transferenciaMedico: {
+    findFirst(a: unknown): Promise<{
+      id: string;
+      tipo: string;
+      liquidoCentavos: number;
+      multasCentavos: number;
+      stripeTransferId: string | null;
+    } | null>;
   };
 };
 
@@ -182,10 +202,23 @@ type StripeRefunds = {
   refunds: {
     create(p: Stripe.RefundCreateParams, o?: Stripe.RequestOptions): Promise<{ id: string; status: string | null }>;
   };
+  transfers: {
+    createReversal(
+      transferId: string,
+      p: { amount: number; metadata?: Record<string, string> },
+      o?: { idempotencyKey?: string },
+    ): Promise<{ id: string }>;
+  };
 };
 
 export type ResultadoEnvio =
-  | { enviado: true; refundId: string; status: string }
+  | {
+      enviado: true;
+      refundId: string;
+      status: string;
+      /** Só no modo plataforma com TransferenciaMedico enviada (modelo 21/11). */
+      reversao?: { ok: true; reversalId: string; valorCentavos: number } | { ok: false; erro: string };
+    }
   | { enviado: false; motivo: "nao_encontrado" | "status" | "ja_enviado" | "sem_stripe" | "valor_zero" | "sem_conta_medico"; erro?: string };
 
 /** Status do refund no Stripe → status do Reembolso (null = ainda pendente). */
@@ -198,18 +231,27 @@ export function statusReembolsoDoStripe(status: string | null | undefined): "pro
 /**
  * Envia ao Stripe um Reembolso 'aprovado' de pagamento Stripe.
  * Idempotency-Key = reembolso.id: repetir nunca cria dois refunds.
+ *
+ * Modelo 21/11 (modo plataforma): depois do refund, se existe
+ * TransferenciaMedico ENVIADA da mesma cobrança/multa, reverte a parte do
+ * médico com transfers.createReversal proporcional ao valor reembolsado
+ * (Idempotency-Key derivada do reembolso.id; o id e o valor da reversão
+ * ficam no Reembolso, migração 20261127b). O reembolso ao paciente nunca
+ * espera a reversão: se ela falhar (ex.: médico já sacou e o Stripe não
+ * consegue debitar), o refund segue enviado e a falha vira auditoria
+ * critical para conciliação manual.
  */
 export async function enviarReembolsoStripe(
   reembolsoId: string,
-  deps: { d?: DbReembolso; s?: StripeRefunds; agora?: Date; connect?: boolean; modo?: ModoCobranca } = {},
+  deps: { d?: DbReembolso; s?: StripeRefunds; agora?: Date; connect?: boolean; modo?: ModoCobranca; audit?: typeof registrarAudit } = {},
 ): Promise<ResultadoEnvio> {
   const d = deps.d ?? (db as unknown as DbReembolso);
   const r = await d.reembolso.findUnique({
     where: { id: reembolsoId },
     select: {
-      id: true, status: true, valorCentavos: true, stripeRefundId: true,
-      pagamento: { select: { stripePaymentIntentId: true, consulta: SELECT_CONTA, pedidoRenovacao: SELECT_CONTA } },
-      remarcacao: { select: { gatewayRef: true, consulta: SELECT_CONTA } },
+      id: true, status: true, valorCentavos: true, multaCentavos: true, stripeRefundId: true,
+      pagamento: { select: { id: true, valor: true, stripePaymentIntentId: true, consulta: SELECT_CONTA, pedidoRenovacao: SELECT_CONTA } },
+      remarcacao: { select: { id: true, multaCentavos: true, gatewayRef: true, consulta: SELECT_CONTA } },
     },
   });
   if (!r) return { enviado: false, motivo: "nao_encontrado" };
@@ -247,7 +289,98 @@ export async function enviarReembolsoStripe(
     where: { id: r.id },
     data: { stripeRefundId: refund.id, gatewayRef: refund.id, ...(final ? { status: final, processadoEm: deps.agora ?? new Date() } : {}) },
   });
-  return { enviado: true, refundId: refund.id, status: refund.status ?? "pending" };
+  const resultado = { enviado: true as const, refundId: refund.id, status: refund.status ?? "pending" };
+  if (modo !== "plataforma") return resultado;
+
+  // Reversão da parte do médico (modelo 21/11): a cobrança nasceu na conta
+  // da plataforma e reembolsar a cobrança NÃO desfaz a TransferenciaMedico
+  // já enviada. Sem a reversão o médico fica com o dinheiro e a plataforma
+  // absorve o reembolso inteiro (os termos 9.3/10.3/10.12 prometem a
+  // reversão). Proporcional ao valor reembolsado, idempotente pela chave
+  // derivada do reembolso.id. O refund do paciente já foi gravado acima:
+  // a reversão nunca o bloqueia nem o desfaz.
+  const t = await d.transferenciaMedico.findFirst({
+    where: {
+      status: "enviada",
+      OR: [
+        ...(r.pagamento ? [{ pagamentoId: r.pagamento.id }] : []),
+        ...(r.remarcacao ? [{ remarcacaoId: r.remarcacao.id }] : []),
+      ],
+    },
+    select: { id: true, tipo: true, liquidoCentavos: true, multasCentavos: true, stripeTransferId: true },
+  });
+  if (!t?.stripeTransferId) return resultado;
+
+  // Base da proporção: o pagamento inteiro (consulta/multa de cancelamento)
+  // ou a multa cobrada (multa de remarcação, sem Pagamento).
+  const base = r.pagamento ? Math.round((r.pagamento.valor ?? 0) * 100) : (r.remarcacao?.multaCentavos ?? 0);
+  let valorSobre = r.valorCentavos;
+  let baseProporcional = base;
+  if (t.tipo === "multa_cancelamento") {
+    // A transferência nasceu da multa RETIDA, não da parte devolvida ao
+    // paciente no cancelamento (regra 7): o reembolso automático do
+    // cancelamento não reverte nada; só o que consome a multa reverte.
+    // multaCentavos do próprio reembolso é exato; sem ele (reembolso
+    // posterior), reconstrói pela metade do médico (±1 centavo em multa
+    // ímpar, arredondamento do divisaoDaMulta).
+    const multaTotal = r.multaCentavos > 0 ? r.multaCentavos : 2 * t.multasCentavos;
+    valorSobre = parteReembolsoSobreMulta({ valorReembolsoCentavos: r.valorCentavos, valorBaseCentavos: base, multaCentavos: multaTotal });
+    baseProporcional = multaTotal;
+  }
+  // Reembolsos anteriores da mesma cobrança/multa já revertidos: a soma
+  // limita a reversão ao líquido que ainda está com o médico.
+  const irmaos = await d.reembolso.findMany({
+    where: {
+      id: { not: r.id },
+      stripeReversalValorCentavos: { not: null },
+      ...(r.pagamento ? { pagamentoId: r.pagamento.id } : { remarcacaoId: r.remarcacao?.id }),
+    },
+    select: { stripeReversalValorCentavos: true },
+  });
+  const jaRevertido = irmaos.reduce((soma, x) => soma + (x.stripeReversalValorCentavos ?? 0), 0);
+  const valor = valorReversaoProporcional({
+    liquidoCentavos: t.liquidoCentavos,
+    valorReembolsoCentavos: valorSobre,
+    valorBaseCentavos: baseProporcional,
+    jaRevertidoCentavos: jaRevertido,
+  });
+  if (valor <= 0) return resultado;
+
+  const audit = deps.audit ?? registrarAudit;
+  try {
+    const reversao = await s.transfers.createReversal(
+      t.stripeTransferId,
+      { amount: valor, metadata: { reembolsoId: r.id, transferenciaMedicoId: t.id } },
+      { idempotencyKey: `reversao-reembolso-${r.id}` },
+    );
+    await d.reembolso.update({
+      where: { id: r.id },
+      data: { stripeReversalId: reversao.id, stripeReversalValorCentavos: valor },
+    });
+    await audit(null, {
+      acao: "REEMBOLSO_REVERSAO_ENVIADA",
+      categoria: "pagamento",
+      entidade: "reembolso",
+      entidadeId: r.id,
+      detalhes: `Reversão de ${valor} centavos da transferência ${t.stripeTransferId} (${reversao.id}) no reembolso ${refund.id}`,
+    });
+    return { ...resultado, reversao: { ok: true, reversalId: reversao.id, valorCentavos: valor } };
+  } catch (e) {
+    // Ex.: médico já sacou; saldo negativo na conta conectada ou reversão
+    // recusada. O paciente já foi reembolsado: a perda fica na plataforma
+    // até conciliação manual (auditoria critical).
+    const msg = (e instanceof Error ? e.message : "erro").slice(0, 300);
+    console.error("[stripe reembolso] reversão da transferência falhou:", msg);
+    await audit(null, {
+      acao: "REEMBOLSO_REVERSAO_FALHOU",
+      categoria: "pagamento",
+      severidade: "critical",
+      entidade: "reembolso",
+      entidadeId: r.id,
+      detalhes: `Reembolso ${refund.id} enviado ao paciente, mas a reversão da transferência ${t.stripeTransferId} falhou: ${msg}. Conciliação manual necessária.`,
+    });
+    return { ...resultado, reversao: { ok: false, erro: msg } };
+  }
 }
 
 type EventoReembolso = { id: string; type: string; account?: string | null; data: { object: unknown } };

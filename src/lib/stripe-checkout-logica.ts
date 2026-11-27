@@ -389,3 +389,42 @@ export function moedaConfere(paga: string | null | undefined, esperada: string):
 export function valorConfere(pagoCentavos: number | null | undefined, bancoReais: number): boolean {
   return pagoCentavos === Math.round(bancoReais * 100);
 }
+
+/* ------ Reversão da transferência no reembolso (modelo 21/11, 20261127b) ------ */
+
+/**
+ * Parte do reembolso que consome a multa RETIDA no cancelamento ≤ 24 h.
+ * O reembolso automático do cancelamento devolve só a parte do paciente
+ * (valor − multa): essa parte não toca a metade do médico (regra 7), que
+ * nasceu da multa. Só o que passa da parte do paciente consome a multa.
+ */
+export function parteReembolsoSobreMulta(params: {
+  valorReembolsoCentavos: number;
+  valorBaseCentavos: number;
+  multaCentavos: number;
+}): number {
+  const multa = Math.max(0, Math.floor(params.multaCentavos));
+  const partePaciente = Math.max(0, Math.floor(params.valorBaseCentavos) - multa);
+  return Math.min(multa, Math.max(0, Math.floor(params.valorReembolsoCentavos) - partePaciente));
+}
+
+/**
+ * Reversão proporcional da TransferenciaMedico: a fração reembolsada da base
+ * (pagamento inteiro, ou a multa na remarcação) volta do líquido do médico,
+ * limitada ao que ainda não foi revertido em reembolsos anteriores. Centavos
+ * inteiros, arredondando para baixo; nada negativo.
+ */
+export function valorReversaoProporcional(params: {
+  liquidoCentavos: number;
+  valorReembolsoCentavos: number;
+  valorBaseCentavos: number;
+  jaRevertidoCentavos?: number;
+}): number {
+  const liquido = Math.max(0, Math.floor(params.liquidoCentavos));
+  const base = Math.max(0, Math.floor(params.valorBaseCentavos));
+  const valor = Math.max(0, Math.floor(params.valorReembolsoCentavos));
+  const ja = Math.max(0, Math.floor(params.jaRevertidoCentavos ?? 0));
+  if (liquido <= 0 || base <= 0 || valor <= 0) return 0;
+  const proporcional = Math.floor((liquido * Math.min(valor, base)) / base);
+  return Math.max(0, Math.min(proporcional, liquido - ja));
+}
