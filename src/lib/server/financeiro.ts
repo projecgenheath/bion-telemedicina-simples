@@ -609,9 +609,11 @@ export async function aplicarFalhaTecnica(
 // Regras do Alisson (21/11/2026): na falta do paciente o médico NÃO recebe.
 // Sem remarcação em 7 dias corridos, o reembolso INTEGRAL é automático e a
 // compra é cancelada, sem pedido nem justificativa (cron espera-medico,
-// Consulta.reembolsoAutomaticoEm). O pedido manual com justificativa continua
-// existindo dentro do mesmo prazo (REEMBOLSO_MANUAL_PRAZO_DIAS), aprovado na
-// hora, devolvido no cartão pelo Stripe: valor INTEGRAL. A taxa do cartão
+// Consulta.reembolsoAutomaticoEm). Com esse prazo aberto, o pedido manual é
+// barrado com 409 e texto próprio (decisão do Presidente de 27/11, contrato
+// seção 3.1). Sem o campo preenchido, o pedido manual com justificativa
+// continua existindo dentro do prazo (REEMBOLSO_MANUAL_PRAZO_DIAS), aprovado
+// na hora, devolvido no cartão pelo Stripe: valor INTEGRAL. A taxa do cartão
 // nunca é devolvida ao médico (regra 6; o #137 saiu deste modelo).
 
 /** Até quando o paciente pode pedir reembolso de uma falta. */
@@ -639,7 +641,15 @@ export function reembolsoManualWire(r: ReembolsoManualRow) {
   };
 }
 
-type Falha = { ok: false; erro: string; status: number };
+type Falha = {
+  ok: false;
+  erro: string;
+  status: number;
+  // Decisão do Presidente (27/11, contrato seção 3.1): o 409 do reembolso
+  // automático leva motivo e o bloco automatico para o cliente explicar.
+  motivo?: string;
+  automatico?: { processadoEm: string | null; previstoPara: string | null };
+};
 
 /** Paciente pede reembolso de uma consulta marcada como falta. */
 export async function pedirReembolsoManual(params: {
@@ -666,6 +676,29 @@ export async function pedirReembolsoManual(params: {
   });
   if (!consulta) return { ok: false, erro: "Consulta não encontrada.", status: 404 };
   if (consulta.pacienteId !== params.pacienteId) return { ok: false, erro: "Acesso negado.", status: 403 };
+  // Decisão do Presidente (27/11, contrato seção 3.1): com prazo de reembolso
+  // automático aberto, o pedido manual é barrado com 409 e texto próprio.
+  // A checagem vem ANTES da de desfecho: a falta do médico/falha técnica também
+  // tem reembolso automático e não pode cair no "só para consultas marcadas
+  // como falta". Sem o campo preenchido (chave desligada), nada muda.
+  if (consulta.reembolsoAutomaticoEm) {
+    const automatico = consulta.pagamento
+      ? await db.reembolso.findFirst({
+          where: { pagamentoId: consulta.pagamento.id, origem: "automatico", status: { in: REEMBOLSO_STATUS_ATIVOS } },
+          select: { processadoEm: true },
+        })
+      : null;
+    return {
+      ok: false,
+      erro: "O reembolso desta consulta é automático — você não precisa pedir. Ele é processado no mesmo cartão.",
+      status: 409,
+      motivo: "reembolso_automatico",
+      automatico: {
+        processadoEm: automatico?.processadoEm?.toISOString() ?? null,
+        previstoPara: consulta.reembolsoAutomaticoEm.toISOString(),
+      },
+    };
+  }
   // Só a falta VIGENTE da data atual (a corrigida pelo admin não vale).
   if (desfechoDaConsulta(consulta) !== "falta_paciente") {
     return { ok: false, erro: "O reembolso pelo app é só para consultas marcadas como falta.", status: 409 };
