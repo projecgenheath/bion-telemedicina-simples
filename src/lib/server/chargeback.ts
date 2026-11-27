@@ -482,10 +482,13 @@ export async function transferirFalhaBion(
   deps: { d?: DbTransfer; s?: StripeTransfer; moeda?: string; agora?: Date } = {},
 ): Promise<ResultadoTransferencia> {
   const d = deps.d ?? (db as unknown as DbTransfer);
-  // Fábrica guardada ANTES de gravar qualquer coisa: chave live lança
-  // ChaveLiveBloqueadaError sem marcar 'pendente'.
-  const s = deps.s ?? ((await import("@/lib/server/stripe")).stripe() as unknown as StripeTransfer);
-  type Preparo = { fim: ResultadoTransferencia } | { cb: CbTransfer; valor: number };
+  // Chave live barrada ANTES de qualquer leitura/escrita (invariante do teste
+  // chave-live-dinheiro: zero acessos ao banco). A fábrica stripe() em si só
+  // roda quando a transferência vai ser tentada: chargeback sem cobrança
+  // direta ou aguardando desfecho devolve motivo sem exigir STRIPE_SECRET_KEY
+  // (a marcação da falha da BION funciona sem chave; antes isto virava 502).
+  if (!deps.s) (await import("@/lib/server/stripe")).exigirChaveNaoLive();
+  type Preparo = { fim: ResultadoTransferencia } | { cb: CbTransfer; valor: number; s: StripeTransfer };
   const preparo = await d.$transaction(async (tx): Promise<Preparo> => {
     await travarChargeback(tx, chargebackId);
     const cb = await tx.chargeback.findUnique({ where: { id: chargebackId }, select: SEL_TRANSFER });
@@ -497,11 +500,14 @@ export async function transferirFalhaBion(
     // Valor congelado na primeira tentativa (as retentativas mandam o mesmo).
     const valor = cb.transferFalhaBionCentavos ?? valorTransferenciaFalhaBion(cb);
     if (valor <= 0) return { fim: { enviado: false as const, motivo: "valor_zero" as const } };
+    // Fábrica guardada ANTES de marcar 'pendente': sem chave configurada nada
+    // é gravado (a repetição do POST tenta de novo do zero).
+    const s = deps.s ?? ((await import("@/lib/server/stripe")).stripe() as unknown as StripeTransfer);
     await tx.chargeback.update({ where: { id: cb.id }, data: { transferFalhaBionStatus: "pendente", transferFalhaBionCentavos: valor } });
-    return { cb, valor };
+    return { cb, valor, s };
   });
   if ("fim" in preparo) return preparo.fim;
-  const { cb, valor } = preparo as { cb: CbTransfer; valor: number };
+  const { cb, valor, s } = preparo as { cb: CbTransfer; valor: number; s: StripeTransfer };
   const conta = cb.stripeConta as string;
 
   const moeda = deps.moeda ?? (await import("@/lib/stripe-checkout-logica")).moedaCheckout();
