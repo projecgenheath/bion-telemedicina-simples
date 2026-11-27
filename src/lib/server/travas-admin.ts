@@ -10,8 +10,8 @@ export type EstadoTravas = {
   cobrancaLiveBloqueada: boolean;
   /** BION_PAGAMENTO_STRIPE=true e existe alguma chave. Não significa cobrança live. */
   stripeLigado: boolean;
-  /** Valor reconhecido, "padrao_direta" se a variável está vazia, ou "nao_reconhecido". */
-  modoCobranca: "plataforma" | "destino" | "direta" | "padrao_direta" | "nao_reconhecido";
+  /** Valor reconhecido, "padrao_plataforma" se a variável está vazia (modelo 21/11), ou "nao_reconhecido". */
+  modoCobranca: "plataforma" | "destino" | "direta" | "padrao_plataforma" | "nao_reconhecido";
   cronSecretConfigurado: boolean;
   comprovanteConfigurado: boolean;
 };
@@ -34,7 +34,7 @@ export function estadoTravas(env: Env): EstadoTravas {
       ? bruto
       : bruto
         ? "nao_reconhecido"
-        : "padrao_direta";
+        : "padrao_plataforma";
   return {
     classeChave,
     cobrancaLiveBloqueada: classeChave === "live",

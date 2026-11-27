@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import { NextRequest } from "next/server";
 import { registrarAudit } from "@/lib/server/auth";
 import { ok, falha } from "@/lib/server/http";
-import { competenciaPadraoParaFechar, fecharRepasse, listarConsultasSemDesfecho } from "@/lib/server/repasse";
+import { competenciaPadraoParaFechar, cronFechaRepassePix, fecharRepasse, listarConsultasSemDesfecho } from "@/lib/server/repasse";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -35,6 +35,14 @@ export async function GET(req: NextRequest) {
     const ok_ = autorizado(req);
     if (ok_ === null) return Response.json({ erro: "CRON_SECRET não configurado." }, { status: 503 });
     if (!ok_) return Response.json({ erro: "Não autorizado." }, { status: 401 });
+
+    if (!cronFechaRepassePix()) {
+      return ok({
+        fechamentoPixAutomatico: false,
+        fechados: 0,
+        motivo: "Fechamento PIX automático desligado. Desde 21/11 o médico recebe por transferência Stripe após a consulta realizada; o PIX fica só no histórico.",
+      });
+    }
 
     const agora = new Date();
     // Atrasou para depois da meia-noite: ainda é o dia anterior que precisa fechar.

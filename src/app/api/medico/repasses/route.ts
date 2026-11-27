@@ -1,113 +1,173 @@
 import { db } from "@/lib/db";
 import { exigirPapel } from "@/lib/server/auth";
 import { ok, falha } from "@/lib/server/http";
-import { previaDoDia, recebidosDiretoNoStripe, totalRecebidoDireto } from "@/lib/server/repasse";
+import { EVENTO_VIGENTE, TIPOS_EVENTO_DESFECHO, desfechoDaConsulta, liquidoDaConsulta, liquidoComReembolso, reaisParaCentavos } from "@/lib/server/financeiro";
 
 /**
- * GET /api/medico/repasses — SOMENTE LEITURA.
+ * GET /api/medico/repasses — SOMENTE LEITURA (modelo de 21/11/2026).
  *
- * Lista os repasses do PRÓPRIO médico (fechados e pagos), a prévia de hoje
- * (ainda não fechada) e o saldo a receber. O médicoId vem só da sessão
- * (`exigirPapel("MEDICO")`); nunca de query/corpo.
+ * O médicoId vem só da sessão (`exigirPapel("MEDICO")`). Contrato em
+ * C:\Users\Alisson\OpenBot\Shared\contrato-api-pagamento-2111.md:
+ * { modelo, retido{aviso,totalCentavos,itens}, transferencias[], reembolsos[],
+ *   totais, aviso }. Os campos do modelo antigo (saldoCentavos, temChavePix,
+ * previa, repasses, recebidoDiretoStripe) SAIRAM da resposta.
  *
- * Saldo = soma dos líquidos dos repasses `fechado` + prévia.líquido
- * − ajustes pendentes que não couberam na prévia. Cada repasse fechado é
- * pago inteiro; o restante dos ajustes só desconta dos próximos.
- * Privacidade: sem CPF/contato/chave do item/reembolsoId. A prévia traz
- * só tipo, data e valores (sem nome de paciente — ainda não há consulta
- * ligada na prévia pura). `temChavePix` é booleano (a chave completa
- * fica em /api/medico/recebimento, mascarada).
+ * Privacidade: sem CPF, sem chave PIX, sem nome de paciente e sem repasseId.
+ * Nada é escrito; a cobrança fica retida na plataforma até a consulta ser
+ * realizada, quando nasce a TransferenciaMedico.
  */
 export async function GET() {
   try {
     const medico = await exigirPapel("MEDICO");
-    const agora = new Date();
 
-    const [rows, previa, pix, diretos] = await Promise.all([
-      db.repasse.findMany({
-        where: { medicoId: medico.id },
-        orderBy: [{ competencia: "desc" }, { fechadoEm: "desc" }],
+    const [consultas, transferencias] = await Promise.all([
+      db.consulta.findMany({
+        where: { medicoId: medico.id, pago: true, pagamento: { status: "confirmado" } },
         select: {
           id: true,
-          competencia: true,
+          dataInicio: true,
+          valor: true,
+          status: true,
+          eventos: {
+            where: { tipo: { in: TIPOS_EVENTO_DESFECHO }, ...EVENTO_VIGENTE },
+            select: { tipo: true, motivo: true, dataAnterior: true },
+          },
+          pagamento: {
+            select: {
+              stripeTaxaCentavos: true,
+              transferencias: { select: { id: true }, take: 1 },
+              reembolsos: {
+                select: {
+                  id: true,
+                  valorCentavos: true,
+                  status: true,
+                  motivo: true,
+                  criadoEm: true,
+                  processadoEm: true,
+                  repasseAjuste: { select: { valorAplicadoCentavos: true } },
+                },
+                orderBy: { criadoEm: "desc" as const },
+              },
+            },
+          },
+        },
+        orderBy: { dataInicio: "desc" as const },
+        take: 200,
+      }),
+      db.transferenciaMedico.findMany({
+        where: { medicoId: medico.id },
+        select: {
+          id: true,
+          tipo: true,
+          consultaId: true,
+          remarcacaoId: true,
           status: true,
           brutoCentavos: true,
           comissaoCentavos: true,
           taxasCentavos: true,
-          reembolsosCentavos: true,
           multasCentavos: true,
-          ajustesCentavos: true,
           liquidoCentavos: true,
-          fechadoEm: true,
-          pagoEm: true,
-          _count: { select: { itens: true } },
+          criadaEm: true,
+          enviadaEm: true,
         },
+        orderBy: { criadaEm: "desc" as const },
+        take: 200,
       }),
-      previaDoDia(medico.id, agora),
-      db.dadosRecebimentoMedico.findUnique({
-        where: { medicoId: medico.id },
-        select: { medicoId: true },
-      }),
-      // Cobrança direta: já caiu na conta Stripe do médico; fora do saldo PIX.
-      recebidosDiretoNoStripe(medico.id),
     ]);
 
-    const somaFechados = rows
-      .filter((r) => r.status === "fechado")
-      .reduce((s, r) => s + r.liquidoCentavos, 0);
-    // M-15 da auditoria: o comentário promete descontar os ajustes pendentes
-    // que não couberam na prévia, mas o cálculo não descontava — o saldo
-    // superestimava o valor real quando há reembolsos pendentes.
-    const saldoCentavos =
-      somaFechados + previa.totais.liquidoCentavos - previa.ajustesPendentesRestantesCentavos;
+    const itens: {
+      consultaId: string;
+      dataInicio: string;
+      valorCentavos: number;
+      comissaoCentavos: number;
+      taxaCentavos: number | null;
+      previstoCentavos: number;
+      desfecho: string;
+    }[] = [];
+    const reembolsos: {
+      consultaId: string;
+      valorCentavos: number;
+      taxaNaoDevolvidaCentavos: number;
+      descontadoDoMedicoCentavos: number;
+      motivo: string;
+      processadoEm: string | null;
+    }[] = [];
+
+    for (const c of consultas) {
+      const bruto = reaisParaCentavos(c.valor);
+      const taxa = c.pagamento?.stripeTaxaCentavos ?? null;
+      const v = liquidoDaConsulta(bruto, taxa);
+      const rs = c.pagamento?.reembolsos ?? [];
+      // Já transferido ou estornado: o valor não está mais retido na BION.
+      const jaTransferido = (c.pagamento?.transferencias?.length ?? 0) > 0;
+      const jaReembolsado = rs.some((r) => ["aprovado", "processado"].includes(r.status));
+      if (!jaTransferido && !jaReembolsado) {
+        itens.push({
+          consultaId: c.id,
+          dataInicio: c.dataInicio.toISOString(),
+          valorCentavos: v.brutoCentavos,
+          comissaoCentavos: v.comissaoCentavos,
+          taxaCentavos: taxa,
+          previstoCentavos: v.brutoCentavos - v.comissaoCentavos - v.taxaCentavos,
+          desfecho: desfechoDaConsulta({ status: c.status, dataInicio: c.dataInicio, eventos: c.eventos }),
+        });
+      }
+      for (const r of rs) {
+        if (!["aprovado", "processado"].includes(r.status)) continue;
+        reembolsos.push({
+          consultaId: c.id,
+          valorCentavos: r.valorCentavos,
+          taxaNaoDevolvidaCentavos: c.pagamento?.stripeTaxaCentavos ?? 0,
+          descontadoDoMedicoCentavos: r.repasseAjuste?.valorAplicadoCentavos ?? 0,
+          motivo: r.motivo,
+          processadoEm: r.processadoEm?.toISOString() ?? null,
+        });
+      }
+    }
+
+    const soma = (k: "brutoCentavos" | "comissaoCentavos" | "taxasCentavos" | "multasCentavos" | "liquidoCentavos") =>
+      transferencias.reduce((s, t) => s + t[k], 0);
+    const reembolsosCentavos = reembolsos.reduce((s, r) => {
+      const c = consultas.find((x) => x.id === r.consultaId);
+      const bruto = reaisParaCentavos(c?.valor ?? 0);
+      const taxa = c?.pagamento?.stripeTaxaCentavos ?? null;
+      return s + liquidoComReembolso(bruto, taxa, r.valorCentavos).reembolsosCentavos;
+    }, 0);
 
     return ok({
-      saldoCentavos,
-      temChavePix: !!pix,
-      aviso:
-        "Cada repasse fechado é pago inteiro. O restante dos ajustes (reembolsos depois do fechamento) só desconta dos próximos repasses.",
-      previa: {
-        competencia: previa.competencia,
-        corte: previa.corte,
-        totais: previa.totais,
-        ajustesPendentesRestantesCentavos: previa.ajustesPendentesRestantesCentavos,
-        itens: previa.itens.map((i) => ({
-          tipo: i.tipo,
-          data: i.quando,
-          brutoCentavos: i.brutoCentavos,
-          comissaoCentavos: i.comissaoCentavos,
-          taxasCentavos: i.taxasCentavos,
-          reembolsosCentavos: i.reembolsosCentavos,
-          multasCentavos: i.multasCentavos,
-          liquidoCentavos: i.liquidoCentavos,
-        })),
-        ajustes: previa.ajustes.map((a) => ({
-          valorCentavos: a.valorCentavos,
-          aplicadoCentavos: a.aplicadoCentavos,
-        })),
+      modelo: "plataforma",
+      retido: {
+        aviso: "O valor é cobrado na marcação e fica na conta da BION até a consulta ser realizada.",
+        totalCentavos: itens.reduce((s, i) => s + i.previstoCentavos, 0),
+        itens,
       },
-      // Valor COBRADO (bruto − reembolsos) direto na conta Stripe do médico,
-      // antes da application fee (10%) e da taxa do Stripe. Não é o recebido.
-      recebidoDiretoStripe: {
-        aviso: "Valor cobrado direto na sua conta Stripe, antes da comissão da BION (10%) e da taxa do Stripe. Não entra no repasse por PIX.",
-        totais: totalRecebidoDireto(diretos),
-        itens: diretos,
-      },
-      repasses: rows.map((r) => ({
-        id: r.id,
-        competencia: r.competencia,
-        status: r.status,
-        brutoCentavos: r.brutoCentavos,
-        comissaoCentavos: r.comissaoCentavos,
-        taxasCentavos: r.taxasCentavos,
-        reembolsosCentavos: r.reembolsosCentavos,
-        multasCentavos: r.multasCentavos,
-        ajustesCentavos: r.ajustesCentavos,
-        liquidoCentavos: r.liquidoCentavos,
-        itens: r._count.itens,
-        fechadoEm: r.fechadoEm?.toISOString() ?? null,
-        pagoEm: r.pagoEm?.toISOString() ?? null,
+      // `previsaoBanco` fica null: a data de disponibilidade depende do
+      // calendário de payout da Stripe e não é gravada no banco. Não inventar.
+      transferencias: transferencias.map((t) => ({
+        id: t.id,
+        tipo: t.tipo,
+        consultaId: t.consultaId,
+        remarcacaoId: t.remarcacaoId,
+        status: t.status,
+        brutoCentavos: t.brutoCentavos,
+        comissaoCentavos: t.comissaoCentavos,
+        taxasCentavos: t.taxasCentavos,
+        multasCentavos: t.multasCentavos,
+        liquidoCentavos: t.liquidoCentavos,
+        criadaEm: t.criadaEm.toISOString(),
+        enviadaEm: t.enviadaEm?.toISOString() ?? null,
+        previsaoBanco: null,
       })),
+      reembolsos,
+      totais: {
+        brutoCentavos: soma("brutoCentavos"),
+        comissaoCentavos: soma("comissaoCentavos"),
+        taxasCentavos: soma("taxasCentavos"),
+        multasCentavos: soma("multasCentavos"),
+        reembolsosCentavos,
+        liquidoCentavos: soma("liquidoCentavos") - reembolsosCentavos,
+      },
+      aviso: "A BION fica com 10%. A taxa do cartão sai do médico, inclusive no reembolso. O depósito no banco segue o calendário da Stripe.",
     });
   } catch (erro) {
     return falha(erro);

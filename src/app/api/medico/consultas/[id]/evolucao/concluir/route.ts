@@ -1,6 +1,7 @@
 import { NextRequest, after } from "next/server";
 import { db } from "@/lib/db";
 import { exigirPapel, registrarAudit } from "@/lib/server/auth";
+import { criarTransferenciaConsultaSeDevido } from "@/lib/server/financeiro";
 import { ok, falha } from "@/lib/server/http";
 import { broadcastCanal } from "@/lib/supabase/broadcast";
 import { topicoSala } from "@/lib/server/sala-canal";
@@ -77,6 +78,9 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
           if (upd.count > 0) {
             consultaConcluidaAgora = true;
             consultaStatus = "concluida";
+            // Modelo 21/11: concluir pela evolução também conclui a consulta;
+            // a transferência nasce aqui, na mesma transação.
+            await criarTransferenciaConsultaSeDevido(tx, id);
           }
         }
       }

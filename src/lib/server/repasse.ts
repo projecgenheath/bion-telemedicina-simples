@@ -69,6 +69,14 @@ import {
 // documentação já prometia. Antes, 23:00: itens decididos na faixa
 // 23:00–23:30 ficavam para o fechamento seguinte.
 export const HORA_FECHAMENTO_MIN = 23 * 60 + 30; // 23:30 de São Paulo
+/** Desde 21/11/2026 nenhum lote PIX novo é fechado automaticamente. */
+export const FECHAMENTO_PIX_AUTOMATICO = false;
+
+/** A rota /api/cron/fechar-repasses só chama fecharRepasse quando isto é true. */
+export function cronFechaRepassePix(): boolean {
+  return FECHAMENTO_PIX_AUTOMATICO;
+}
+
 export const PARTE_MEDICO_CONSULTA_PCT = 100 - COMISSAO_APP_PCT;
 
 export const ERRO_CONSULTA_REPASSADA = "A consulta já entrou num repasse; não dá para trocar o médico.";
@@ -560,6 +568,8 @@ async function carregarCandidatos(c: Cliente, medicoId: string, corte: Date) {
         tipoAtendimento: true,
         // Taxa real do Stripe (balance_transaction.fee) → pagamento.taxaGatewayCentavos.
         pagamento: { select: { id: true, status: true, stripeTaxaCentavos: true, stripeContaMedico: true, reembolsos: { select: selReembolso } } },
+        // Modelo 21/11: se já virou TransferenciaMedico, nunca entra no PIX.
+        transferencias: { select: { id: true }, take: 1 },
         eventos: { where: { tipo: { in: TIPOS_EVENTO_DESFECHO } }, select: selEventoDesfecho },
       },
     }),
@@ -656,7 +666,7 @@ async function carregarCandidatos(c: Cliente, medicoId: string, corte: Date) {
     consultas: consultas.map((c) => ({
       ...c,
       pagamentoId: c.pagamento?.id ?? null,
-      cobrancaDireta: cobradoDiretoNoStripe(c.pagamento),
+      cobrancaDireta: cobradoDiretoNoStripe(c.pagamento) || (c.transferencias?.length ?? 0) > 0,
       pagamento: c.pagamento
         ? { ...c.pagamento, taxaGatewayCentavos: c.pagamento.stripeTaxaCentavos ?? null, reembolsos: c.pagamento.reembolsos.map(comEfetivo) }
         : null,

@@ -45,7 +45,7 @@ igual("estado teste", estado, {
   classeChave: "teste",
   cobrancaLiveBloqueada: false,
   stripeLigado: true,
-  modoCobranca: "padrao_direta",
+  modoCobranca: "padrao_plataforma",
   cronSecretConfigurado: true,
   comprovanteConfigurado: true,
 });
