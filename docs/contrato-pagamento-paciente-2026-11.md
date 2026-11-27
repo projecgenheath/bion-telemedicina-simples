@@ -31,12 +31,36 @@ promete o modelo novo.
   /api/telemedicina/[consultaId]/espera/remarcar` cobra a diferença de preço
   (`diferencaEsperadaCentavos`). No modelo novo:
   - `diferencaCentavos` de `GET /api/medicos/livres-agora?consultaId=…` deve vir `0`
-    para consulta em falta do médico;
-  - `POST .../espera/remarcar` não cria cobrança nem reembolso de diferença: só troca o
-    médico da consulta e mantém a data;
+    para TODOS os médicos da lista quando a consulta está em falta do médico
+    (alinha com o Admin em 27/11); `valorConsultaCentavos` e os demais campos ficam;
+  - `POST .../espera/remarcar` não cria cobrança nem reembolso de diferença: a troca é
+    NA MESMA consulta (decisão 3.2 do Presidente, 27/11) — `medicoId` passa ao novo
+    médico e `dataInicio` vai para o novo horário (agora, arredondado para o minuto,
+    como no fluxo atual de livres-agora). Consulta nova com pagamento carregado fica
+    descartada. Resposta: o mesmo wire de espera, com `consultaNovaId = null`,
+    `cobranca = null`, `reembolsoId = null` e `diferencaCentavos = 0`;
   - `POST .../espera/cancelar` continua criando o reembolso integral automático.
-- O médico que atende a remarcação recebe ao fim da consulta dele (regra 2), sobre o
-  valor original, sem segunda taxa de processamento.
+- O novo médico recebe ao fim da consulta dele (desfecho `realizada`): 90% do bruto
+  ORIGINAL menos a taxa do cartão, sem segunda taxa de processamento nem segunda
+  comissão. O primeiro médico não recebe nada.
+- A tela do paciente não guarda a data antiga: quando a espera resolve, o app recarrega
+  o estado via `/api/bootstrap` (`onResolvida` → `useRecarregarEstado`), e o cartão da
+  consulta mostra o médico e o horário novos vindos do servidor. Esclarecimento do
+  Presidente (27/11): o que "mantém a data" é o PAGAMENTO — mesmo registro, mesma data
+  de pagamento, mesmo valor; a consulta vai para o novo horário.
+- **Estado da espera depois da troca (conferido no commit 0657c5d do Admin):** a espera
+  fica `remarcada` na MESMA consulta (`consultaNovaId = null`). Como a consulta continua
+  aberta, o paciente que volta ao início e entra de novo na sala recebia o painel de
+  sucesso outra vez, em loop. Mitigação no cliente (este PR, atrás da chave): o sucesso
+  diz "Aguarde o novo médico entrar nesta mesma chamada" (sem "Volte ao início"), o
+  botão vira "Sair da chamada" opcional, e o estado é recarregado após a troca para o
+  cabeçalho mostrar o médico novo. Quando o novo médico entra, o painel some sozinho.
+- **Lacuna restante no servidor (proposta ao Admin, 27/11):** se o novo médico também
+  não entrar, não há nova janela de espera — o registro está `remarcada`, então
+  `POST .../espera/cancelar` recusa (`espera_resolvida`) e o paciente fica sem o caminho
+  de reembolso integral pela espera. Proposta: depois da troca, a espera renasce
+  `aguardando` para o novo médico (nova janela de 10 minutos) e o POST devolve esse
+  wire; o cliente já trata esse formato (a contagem recomeça na mesma sala).
 
 ## 3. Falta do paciente — reembolso automático em 7 dias
 

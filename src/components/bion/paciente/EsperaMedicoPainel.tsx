@@ -15,7 +15,13 @@ import {
   type MedicoLivre,
 } from "./espera-medico-ui";
 import { agoraCalibradoMs, registrarHoraServidor } from "./useRelogioSala";
-import { MODELO_PAGAMENTO_RETIDO, TEXTO_FALTA_MEDICO_NA_ESPERA } from "@/lib/pagamento-paciente";
+import {
+  MODELO_PAGAMENTO_RETIDO,
+  TEXTO_ESCOLHER_MEDICO_SEM_COBRANCA,
+  TEXTO_FALTA_MEDICO_NA_ESPERA,
+  TEXTO_REMARCADA_MESMA_CONSULTA,
+  textoConfirmarTrocaMedico,
+} from "@/lib/pagamento-paciente";
 
 /**
  * Espera do médico na chamada do PACIENTE (9:16).
@@ -223,6 +229,9 @@ export function EsperaMedicoPainel({
       setDevolucao(diferenca < 0 ? -diferenca : null);
       setEspera(r.dados.espera);
       setEtapa({ tipo: "inicio" });
+      // Modelo novo: a troca é na mesma consulta; recarrega o estado para o
+      // cabeçalho da chamada mostrar o médico novo (o wire pode seguir aguardando).
+      if (MODELO_PAGAMENTO_RETIDO) onResolvida?.();
       return;
     }
     const f = r.falha;
@@ -311,7 +320,9 @@ export function EsperaMedicoPainel({
       conteudo = (
         <>
           <Cabecalho refTitulo={tituloRef} icone={<UserRound className="size-7" aria-hidden />} titulo="Escolha outro médico">
-            Médicos da mesma especialidade livres agora. A diferença de preço aparece antes de confirmar.
+            {MODELO_PAGAMENTO_RETIDO
+              ? TEXTO_ESCOLHER_MEDICO_SEM_COBRANCA
+              : "Médicos da mesma especialidade livres agora. A diferença de preço aparece antes de confirmar."}
           </Cabecalho>
           <div className="mt-4 w-full">
             {carregandoMedicos || medicos === null ? (
@@ -362,7 +373,9 @@ export function EsperaMedicoPainel({
       conteudo = (
         <>
           <Cabecalho refTitulo={tituloRef} icone={<UserRound className="size-7" aria-hidden />} titulo="Confirmar remarcação">
-            Nova consulta agora com {etapa.medico.nome}.
+            {MODELO_PAGAMENTO_RETIDO
+              ? textoConfirmarTrocaMedico(etapa.medico.nome)
+              : `Nova consulta agora com ${etapa.medico.nome}.`}
           </Cabecalho>
           <div className="mt-4 w-full rounded-2xl border border-white/15 bg-white/10 p-4 text-left">
             <p className="text-xs uppercase tracking-wide text-white/70">Diferença</p>
@@ -459,12 +472,20 @@ export function EsperaMedicoPainel({
     conteudo = (
       <>
         <Cabecalho refTitulo={tituloRef} icone={<Check className="size-7" aria-hidden />} titulo="Consulta remarcada">
-          {devolucao ? `A nova consulta já está marcada. A diferença de ${textoDiferenca(-devolucao).curto.replace("− ", "")} volta para você.` : "A nova consulta já está marcada. Volte ao início para entrar nela."}
+          {devolucao
+            ? `A nova consulta já está marcada. A diferença de ${textoDiferenca(-devolucao).curto.replace("− ", "")} volta para você.`
+            : MODELO_PAGAMENTO_RETIDO
+              ? TEXTO_REMARCADA_MESMA_CONSULTA
+              : "A nova consulta já está marcada. Volte ao início para entrar nela."}
         </Cabecalho>
         <Acoes>
-          <Botao primario onClick={onSair}>
-            <ArrowLeft className="size-4" aria-hidden /> Voltar ao início
-          </Botao>
+          {MODELO_PAGAMENTO_RETIDO ? (
+            <Botao onClick={onSairDaChamada}>Sair da chamada</Botao>
+          ) : (
+            <Botao primario onClick={onSair}>
+              <ArrowLeft className="size-4" aria-hidden /> Voltar ao início
+            </Botao>
+          )}
         </Acoes>
       </>
     );

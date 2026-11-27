@@ -55,3 +55,20 @@ export function textoFaltaPacienteAutomatica(prazo: Date, formatarData: (d: Date
 export const TEXTO_FALTA_MEDICO_NA_ESPERA =
   `Ele tem até ${MINUTOS_ESPERA_MEDICO} minutos. Se não entrar, você pode remarcar com outro médico ` +
   "sem nova cobrança e sem diferença de preço, ou receber o reembolso integral.";
+
+/**
+ * Remarcação com outro médico no modelo novo (decisão 3.2 do Presidente, 27/11):
+ * a troca é NA MESMA consulta — mesmo pagamento, mesmo valor, sem consulta nova.
+ * Os textos abaixo não prometem "nova consulta".
+ */
+export const TEXTO_ESCOLHER_MEDICO_SEM_COBRANCA =
+  "Médicos da mesma especialidade livres agora. A troca não tem nova cobrança nem diferença de preço.";
+
+/** Confirmação da troca: a consulta passa ao novo médico, agora, sem cobrança. */
+export function textoConfirmarTrocaMedico(nomeMedico: string): string {
+  return `A sua consulta passa para ${nomeMedico} agora, sem nova cobrança e sem diferença de preço.`;
+}
+
+/** Sucesso da troca na mesma consulta: o paciente já está na chamada certa. */
+export const TEXTO_REMARCADA_MESMA_CONSULTA =
+  "A consulta segue com outro médico, sem nova cobrança. Aguarde o novo médico entrar nesta mesma chamada.";

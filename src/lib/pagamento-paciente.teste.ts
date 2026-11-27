@@ -1,9 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import {
   DIAS_REEMBOLSO_FALTA_PACIENTE,
+  TEXTO_ESCOLHER_MEDICO_SEM_COBRANCA,
   TEXTO_FALTA_MEDICO_NA_ESPERA,
+  TEXTO_REMARCADA_MESMA_CONSULTA,
   prazoReembolsoFaltaPaciente,
   reembolsoAutomaticoNoPrazo,
+  textoConfirmarTrocaMedico,
   textoFaltaPacienteAutomatica,
 } from "./pagamento-paciente";
 
@@ -44,5 +47,27 @@ describe("textos do modelo novo", () => {
     expect(TEXTO_FALTA_MEDICO_NA_ESPERA).toContain("sem nova cobrança");
     expect(TEXTO_FALTA_MEDICO_NA_ESPERA).toContain("sem diferença de preço");
     expect(TEXTO_FALTA_MEDICO_NA_ESPERA).not.toContain("aurora");
+  });
+});
+
+describe("troca de médico na mesma consulta (decisão 3.2)", () => {
+  test("a confirmação não promete consulta nova", () => {
+    const texto = textoConfirmarTrocaMedico("Dra. Ana");
+    expect(texto).toContain("Dra. Ana");
+    expect(texto).toContain("sem nova cobrança");
+    expect(texto).not.toContain("nova consulta");
+  });
+
+  test("o sucesso da troca não fala em consulta nova e manda aguardar na mesma chamada", () => {
+    expect(TEXTO_REMARCADA_MESMA_CONSULTA).toContain("sem nova cobrança");
+    expect(TEXTO_REMARCADA_MESMA_CONSULTA).toContain("Aguarde o novo médico entrar");
+    expect(TEXTO_REMARCADA_MESMA_CONSULTA).not.toContain("nova consulta");
+    expect(TEXTO_REMARCADA_MESMA_CONSULTA).not.toContain("Volte ao início");
+  });
+
+  test("a lista de médicos não promete diferença a pagar", () => {
+    expect(TEXTO_ESCOLHER_MEDICO_SEM_COBRANCA).toContain("livres agora");
+    expect(TEXTO_ESCOLHER_MEDICO_SEM_COBRANCA).toContain("nova cobrança");
+    expect(TEXTO_ESCOLHER_MEDICO_SEM_COBRANCA).not.toContain("aparece antes de confirmar");
   });
 });
