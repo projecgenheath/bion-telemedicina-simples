@@ -126,6 +126,43 @@ describe("marcarFalhaBion", () => {
     const r = await marcarFalhaBion({ chargebackId: "x", admin, falhaBion: true, motivo: MOTIVO }, fakeDb(novo({ cb: null })));
     expect(r).toMatchObject({ ok: false, status: 404 });
   });
+  test("taxas já cobradas no modo plataforma: 409 e nada muda", async () => {
+    const e = novo();
+    Object.assign(e.cb!, { taxasPlataformaStatus: "quitado", taxasPlataformaReversalCentavos: 1500, taxasPlataformaDescontadoCentavos: 0 });
+    const r = await marcarFalhaBion({ chargebackId: "cb1", admin, falhaBion: true, motivo: MOTIVO }, fakeDb(e));
+    expect(r).toMatchObject({ ok: false, status: 409, codigo: "taxas_ja_cobradas" });
+    expect([e.cb!.falhaBion, e.audits.length]).toEqual([false, 0]);
+  });
+  test("cobrança em andamento (pendente): 409 para tentar de novo", async () => {
+    const e = novo();
+    Object.assign(e.cb!, { taxasPlataformaStatus: "pendente" });
+    const r = await marcarFalhaBion({ chargebackId: "cb1", admin, falhaBion: true, motivo: MOTIVO }, fakeDb(e));
+    expect(r).toMatchObject({ ok: false, status: 409, codigo: "cobranca_em_andamento" });
+    expect(e.cb!.falhaBion).toBe(false);
+  });
+  test("dívida ainda não cobrada: marcar cancela o desconto futuro", async () => {
+    const e = novo({ ajuste: null });
+    Object.assign(e.cb!, { taxasPlataformaStatus: "aguardando_desconto", taxasPlataformaCentavos: 1500, taxasPlataformaDescontadoCentavos: 0 });
+    const r = await marcarFalhaBion({ chargebackId: "cb1", admin, falhaBion: true, motivo: MOTIVO }, fakeDb(e));
+    expect(r).toMatchObject({ ok: true, mudou: true });
+    expect(e.cb!.taxasPlataformaStatus).toBe("cancelado");
+    expect(String(e.audits[0].data.detalhes)).toContain("dívida de taxas do modo plataforma cancelada");
+  });
+  test("desmarcar reativa a dívida cancelada (disputa segue perdida, nada cobrado)", async () => {
+    const e = novo({ ajuste: null });
+    Object.assign(e.cb!, { falhaBion: true, falhaBionMotivo: MOTIVO, statusStripe: "lost", taxasPlataformaStatus: "cancelado", taxasPlataformaCentavos: 1500, taxasPlataformaDescontadoCentavos: 0 });
+    const r = await marcarFalhaBion({ chargebackId: "cb1", admin, falhaBion: false, motivo: "Marcado por engano no chargeback" }, fakeDb(e));
+    expect(r).toMatchObject({ ok: true, mudou: true });
+    expect(e.cb!.taxasPlataformaStatus).toBe("aguardando_desconto");
+    expect(String(e.audits[0].data.detalhes)).toContain("dívida de taxas do modo plataforma reativada");
+  });
+  test("desmarcar com disputa ganha NÃO reativa a dívida", async () => {
+    const e = novo({ ajuste: null });
+    Object.assign(e.cb!, { falhaBion: true, falhaBionMotivo: MOTIVO, statusStripe: "won", taxasPlataformaStatus: "cancelado", taxasPlataformaCentavos: 1500, taxasPlataformaDescontadoCentavos: 0 });
+    const r = await marcarFalhaBion({ chargebackId: "cb1", admin, falhaBion: false, motivo: "Marcado por engano no chargeback" }, fakeDb(e));
+    expect(r).toMatchObject({ ok: true, mudou: true });
+    expect(e.cb!.taxasPlataformaStatus).toBe("cancelado");
+  });
 });
 
 type EstD = { cb: any; ajuste: { id: string; repasseId: string | null } | null; pag: any; rem: any };
@@ -225,9 +262,9 @@ describe("registrarDisputaStripe", () => {
     expect(e.cb.creditoPendente).toBe(false);
   });
   test("multa de remarcação: médico pela RemarcacaoPendente", async () => {
-    const e: EstD = { cb: null, ajuste: null, pag: null, rem: { gatewayRef: "stripe_pi:pi_1", consultaId: "c9", consulta: { medicoId: "m9" } } };
+    const e: EstD = { cb: null, ajuste: null, pag: null, rem: { id: "rem1", gatewayRef: "stripe_pi:pi_1", consultaId: "c9", consulta: { medicoId: "m9" } } };
     await registrarDisputaStripe(ev("evt_1", 100, "needs_response"), fakeDisputa(e));
-    expect([e.cb.medicoId, e.cb.consultaId, e.cb.pagamentoId]).toEqual(["m9", "c9", null]);
+    expect([e.cb.medicoId, e.cb.consultaId, e.cb.pagamentoId, e.cb.remarcacaoId]).toEqual(["m9", "c9", null, "rem1"]);
   });
   test("multa sem médico: medicoId nulo e nenhum desconto", async () => {
     const e: EstD = { cb: null, ajuste: null, pag: null, rem: null };
@@ -242,6 +279,23 @@ describe("registrarDisputaStripe", () => {
     e.cb.falhaBion = true;
     await registrarDisputaStripe(ev("evt_2", 200, "lost"), d);
     expect(e.cb.falhaBion).toBe(true);
+  });
+  test("ganha depois de taxas cobradas no modo plataforma: creditoPendente", async () => {
+    const e: EstD = { cb: null, ajuste: null, pag: pagC, rem: null };
+    const d = fakeDisputa(e);
+    await registrarDisputaStripe(ev("evt_1", 100, "needs_response"), d);
+    Object.assign(e.cb, { taxasPlataformaStatus: "quitado", taxasPlataformaCentavos: 1500, taxasPlataformaReversalCentavos: 1000, taxasPlataformaDescontadoCentavos: 500 });
+    await registrarDisputaStripe(ev("evt_2", 200, "won"), d);
+    expect(e.cb.creditoPendente).toBe(true);
+    expect(e.cb.taxasPlataformaStatus).toBe("quitado"); // já cobrado não se desfaz: devolução manual
+  });
+  test("ganha com dívida ainda não cobrada: cancela o desconto futuro", async () => {
+    const e: EstD = { cb: null, ajuste: null, pag: pagC, rem: null };
+    const d = fakeDisputa(e);
+    await registrarDisputaStripe(ev("evt_1", 100, "needs_response"), d);
+    Object.assign(e.cb, { taxasPlataformaStatus: "aguardando_desconto", taxasPlataformaCentavos: 1500, taxasPlataformaDescontadoCentavos: 0 });
+    await registrarDisputaStripe(ev("evt_2", 200, "won"), d);
+    expect([e.cb.creditoPendente, e.cb.taxasPlataformaStatus]).toEqual([false, "cancelado"]);
   });
 });
 

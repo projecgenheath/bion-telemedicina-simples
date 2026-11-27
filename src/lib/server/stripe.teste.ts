@@ -7,13 +7,15 @@ const igual = (n: string, a: unknown, b: unknown) => {
   if (JSON.stringify(a) === JSON.stringify(b)) ok++; else { falhas++; console.error(`✗ ${n}\n  obtido ${JSON.stringify(a)}\n  esperado ${JSON.stringify(b)}`); }
 };
 
-type R = { id: string; status: string; valorCentavos: number; stripeRefundId: string | null; pagamento: any; remarcacao?: any; processadoEm?: Date };
-function fakeDb(linhas: R[]) {
+type R = { id: string; status: string; valorCentavos: number; multaCentavos?: number; stripeRefundId: string | null; pagamento: any; remarcacao?: any; processadoEm?: Date; stripeReversalId?: string | null; stripeReversalValorCentavos?: number | null };
+type T = { id: string; tipo: string; status: string; liquidoCentavos: number; multasCentavos: number; stripeTransferId: string | null; pagamentoId?: string | null; remarcacaoId?: string | null };
+function fakeDb(linhas: R[], transferencias: T[] = [], reversoesIrmas: { stripeReversalValorCentavos: number | null }[] = []) {
   return {
     linhas,
     reembolso: {
       async findUnique(a: any) { return linhas.find((l) => l.id === a.where.id) ?? null; },
       async findFirst() { return null; },
+      async findMany() { return reversoesIrmas; },
       async update(a: any) { Object.assign(linhas.find((l) => l.id === a.where.id)!, a.data); return {}; },
       async updateMany(a: any) {
         let count = 0;
@@ -21,11 +23,32 @@ function fakeDb(linhas: R[]) {
         return { count };
       },
     },
+    transferenciaMedico: {
+      async findFirst(a: any) {
+        return transferencias.find((t) =>
+          t.status === a.where.status &&
+          a.where.OR.some((o: any) =>
+            (o.pagamentoId != null && o.pagamentoId === t.pagamentoId) ||
+            (o.remarcacaoId != null && o.remarcacaoId === t.remarcacaoId))) ?? null;
+      },
+    },
   };
 }
-function fakeStripe(status = "pending") {
+function fakeStripe(status = "pending", falharReversao: string | null = null) {
   const chamadas: any[] = [];
-  return { chamadas, refunds: { async create(p: any, o: any) { chamadas.push([p, o]); return { id: "re_" + o.idempotencyKey, status }; } } };
+  const reversoes: any[] = [];
+  return {
+    chamadas,
+    reversoes,
+    refunds: { async create(p: any, o: any) { chamadas.push([p, o]); return { id: "re_" + o.idempotencyKey, status }; } },
+    transfers: {
+      async createReversal(transferId: string, p: any, o: any) {
+        reversoes.push([transferId, p, o]);
+        if (falharReversao) throw Object.assign(new Error(falharReversao), { code: "balance_insufficient" });
+        return { id: "trr_" + o.idempotencyKey };
+      },
+    },
+  };
 }
 const base = (x: Partial<R> = {}): R => ({ id: "r1", status: "aprovado", valorCentavos: 15000, stripeRefundId: null, pagamento: { stripePaymentIntentId: "pi_1" }, ...x });
 
@@ -200,6 +223,85 @@ async function main() {
       await enviarReembolsoStripe("rr", { d: d as any, s: s as any, connect: true, modo });
       igual(`renovação parcial (${modo}): params`, s.chamadas[0], [{ payment_intent: "pi_r", amount: 1234, metadata: { reembolsoId: "rr" }, ...extra }, { idempotencyKey: "rr", ...(modo === "direta" ? { stripeAccount: "acct_r" } : {}) }]);
     }
+  }
+  // ---- Reversão da TransferenciaMedico no reembolso plataforma (20261127b) ----
+  const tran = (x: Partial<T> = {}): T => ({ id: "t1", tipo: "consulta", status: "enviada", liquidoCentavos: 13000, multasCentavos: 0, stripeTransferId: "tr_1", pagamentoId: "p1", remarcacaoId: null, ...x });
+  const pagComValor = (x: Partial<R> = {}): R => ({ id: "r1", status: "aprovado", valorCentavos: 15000, multaCentavos: 0, stripeRefundId: null, pagamento: { id: "p1", valor: 150, stripePaymentIntentId: "pi_1" }, ...x });
+  const auditFake = () => { const logs: any[] = []; return { logs, fn: async (_u: any, l: any) => { logs.push(l); return null; } }; };
+  const semAudit = (async () => null) as any;
+  { const d = fakeDb([pagComValor()], [tran()]); const s = fakeStripe(); const a = auditFake();
+    const r = await enviarReembolsoStripe("r1", { d: d as any, s: s as any, connect: true, modo: "plataforma", audit: a.fn as any });
+    igual("reversão: refund enviado", r.enviado, true);
+    igual("reversão: chamada proporcional integral", s.reversoes[0], ["tr_1", { amount: 13000, metadata: { reembolsoId: "r1", transferenciaMedicoId: "t1" } }, { idempotencyKey: "reversao-reembolso-r1" }]);
+    igual("reversão: id e valor gravados", [d.linhas[0].stripeReversalId, d.linhas[0].stripeReversalValorCentavos], ["trr_reversao-reembolso-r1", 13000]);
+    igual("reversão: resultado", (r as any).reversao, { ok: true, reversalId: "trr_reversao-reembolso-r1", valorCentavos: 13000 });
+    igual("reversão: auditoria", a.logs[0].acao, "REEMBOLSO_REVERSAO_ENVIADA");
+    igual("reversão: não reenvia", await enviarReembolsoStripe("r1", { d: d as any, s: s as any, connect: true, modo: "plataforma" }), { enviado: false, motivo: "ja_enviado" });
+    igual("reversão: uma chamada só", s.reversoes.length, 1);
+  }
+  { const d = fakeDb([pagComValor({ valorCentavos: 5000 })], [tran()]); const s = fakeStripe();
+    const r = await enviarReembolsoStripe("r1", { d: d as any, s: s as any, connect: true, modo: "plataforma", audit: semAudit });
+    igual("reversão parcial: 13000×5000/15000 arredonda para baixo", s.reversoes[0][1].amount, 4333);
+    igual("reversão parcial: resultado", (r as any).reversao.valorCentavos, 4333);
+  }
+  { const d = fakeDb([pagComValor()], [tran()]); const s = fakeStripe("pending", "saldo insuficiente na conta conectada"); const a = auditFake();
+    const err = console.error; console.error = () => {};
+    const r = await enviarReembolsoStripe("r1", { d: d as any, s: s as any, connect: true, modo: "plataforma", audit: a.fn as any });
+    console.error = err;
+    igual("reversão falha: refund enviado mesmo assim", [r.enviado, d.linhas[0].stripeRefundId], [true, "re_r1"]);
+    igual("reversão falha: nada gravado", [d.linhas[0].stripeReversalId ?? null, d.linhas[0].stripeReversalValorCentavos ?? null], [null, null]);
+    igual("reversão falha: resultado", (r as any).reversao, { ok: false, erro: "saldo insuficiente na conta conectada" });
+    igual("reversão falha: auditoria critical", [a.logs[0].acao, a.logs[0].severidade], ["REEMBOLSO_REVERSAO_FALHOU", "critical"]);
+  }
+  { const d = fakeDb([pagComValor()], [tran()]); const s = fakeStripe(); const a = auditFake();
+    const origUpdate = d.reembolso.update; let n = 0;
+    d.reembolso.update = async (arg: any) => { n++; if (n === 2) throw new Error("coluna stripeReversalId ausente"); return origUpdate(arg); };
+    const err = console.error; console.error = () => {};
+    const r = await enviarReembolsoStripe("r1", { d: d as any, s: s as any, connect: true, modo: "plataforma", audit: a.fn as any });
+    console.error = err;
+    igual("gravação falha: reversão aconteceu (ok true)", (r as any).reversao, { ok: true, reversalId: "trr_reversao-reembolso-r1", valorCentavos: 13000 });
+    igual("gravação falha: refund gravado", d.linhas[0].stripeRefundId, "re_r1");
+    igual("gravação falha: auditoria critical própria", [a.logs[0].acao, a.logs[0].severidade], ["REEMBOLSO_REVERSAO_GRAVACAO_FALHOU", "critical"]);
+  }
+  { const d = fakeDb([pagComValor()]); const s = fakeStripe();
+    igual("sem transferência: resultado intacto", await enviarReembolsoStripe("r1", { d: d as any, s: s as any, connect: true, modo: "plataforma" }), { enviado: true, refundId: "re_r1", status: "pending" });
+    igual("sem transferência: nenhuma reversão", s.reversoes.length, 0);
+  }
+  { const d = fakeDb([pagComValor()], [tran({ status: "pendente", stripeTransferId: null })]); const s = fakeStripe();
+    await enviarReembolsoStripe("r1", { d: d as any, s: s as any, connect: true, modo: "plataforma" });
+    igual("transferência pendente: não reverte", s.reversoes.length, 0);
+  }
+  { const d = fakeDb([pagComValor({ valorCentavos: 7500, multaCentavos: 7500 })], [tran({ tipo: "multa_cancelamento", liquidoCentavos: 3500, multasCentavos: 3750 })]); const s = fakeStripe();
+    const r = await enviarReembolsoStripe("r1", { d: d as any, s: s as any, connect: true, modo: "plataforma" });
+    igual("cancelamento: parte do paciente não reverte (regra 7)", s.reversoes.length, 0);
+    igual("cancelamento: resultado sem reversão", r, { enviado: true, refundId: "re_r1", status: "pending" });
+  }
+  { const d = fakeDb([pagComValor()], [tran({ tipo: "multa_cancelamento", liquidoCentavos: 3500, multasCentavos: 3750 })]); const s = fakeStripe();
+    await enviarReembolsoStripe("r1", { d: d as any, s: s as any, connect: true, modo: "plataforma", audit: semAudit });
+    igual("cancelamento: reembolso posterior integral reverte a multa toda", s.reversoes[0][1].amount, 3500);
+  }
+  { const d = fakeDb([pagComValor({ id: "rm", valorCentavos: 5000, pagamento: null, remarcacao: { id: "rem1", multaCentavos: 5000, gatewayRef: "stripe_pi:pi_m" } })], [tran({ id: "t2", tipo: "multa_remarcacao", liquidoCentavos: 2300, multasCentavos: 2500, stripeTransferId: "tr_2", pagamentoId: null, remarcacaoId: "rem1" })]); const s = fakeStripe();
+    await enviarReembolsoStripe("rm", { d: d as any, s: s as any, connect: true, modo: "plataforma", audit: semAudit });
+    igual("multa de remarcação: reverte pelo id da remarcação", s.reversoes[0][0], "tr_2");
+    igual("multa de remarcação: integral", s.reversoes[0][1].amount, 2300);
+  }
+  { const d = fakeDb([pagComValor()], [tran()], [{ stripeReversalValorCentavos: 10000 }]); const s = fakeStripe();
+    await enviarReembolsoStripe("r1", { d: d as any, s: s as any, connect: true, modo: "plataforma", audit: semAudit });
+    igual("reembolsos anteriores limitam a reversão ao que resta", s.reversoes[0][1].amount, 3000);
+  }
+  { const d = fakeDb([pagComValor()], [tran()], [{ stripeReversalValorCentavos: 13000 }]); const s = fakeStripe();
+    const r = await enviarReembolsoStripe("r1", { d: d as any, s: s as any, connect: true, modo: "plataforma" });
+    igual("nada resta: não chama o Stripe", s.reversoes.length, 0);
+    igual("nada resta: resultado sem reversão", r, { enviado: true, refundId: "re_r1", status: "pending" });
+  }
+  for (const modo of ["direta", "destino"] as const) {
+    const d = fakeDb([pagComValor({ pagamento: { id: "p1", valor: 150, stripePaymentIntentId: "pi_1", consulta: { medico: { perfilMedico: { stripeAccountId: "acct_1" } } } } })], [tran()]); const s = fakeStripe();
+    await enviarReembolsoStripe("r1", { d: d as any, s: s as any, connect: true, modo });
+    igual(`${modo}: não reverte transferência (legado)`, s.reversoes.length, 0);
+  }
+  { const d = fakeDb([pagComValor()], [tran({ liquidoCentavos: 0 })]); const s = fakeStripe();
+    await enviarReembolsoStripe("r1", { d: d as any, s: s as any, connect: true, modo: "plataforma" });
+    igual("líquido zero: não chama reversão", s.reversoes.length, 0);
   }
   // filtro do cron (reembolsosStripePendentes): avalia o where contra linhas em memória
   { type L = { id: string; criadoEm: number; status: string; stripeRefundId: string | null; pagamentoId: string | null; pagamento: { stripePaymentIntentId: string | null } | null; remarcacao: { gatewayRef: string | null } | null };

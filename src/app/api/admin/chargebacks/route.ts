@@ -13,6 +13,7 @@ export async function GET() {
       select: {
         id: true, stripeDisputeId: true, consultaId: true, valorCentavos: true, taxaDisputaCentavos: true, medicoId: true, creditoPendente: true, creditoDevolvidoEm: true, creditoDevolvidoMotivo: true,
         statusStripe: true, motivoStripe: true, falhaBion: true, falhaBionMotivo: true, falhaBionEm: true, criadoEm: true,
+        stripeConta: true, taxasPlataformaStatus: true, taxasPlataformaCentavos: true, taxasPlataformaReversalCentavos: true, taxasPlataformaDescontadoCentavos: true, taxasPlataformaErro: true,
         medico: { select: { nome: true } },
         falhaBionPor: { select: { nome: true } },
         ajustes: { select: { valorCentavos: true, repasseId: true } },
@@ -38,6 +39,15 @@ export async function GET() {
         falhaBionPor: c.falhaBionPor?.nome ?? null,
         falhaBionEm: c.falhaBionEm,
         liquidado: c.ajustes.some((a) => a.repasseId !== null),
+        // Modo plataforma (20261127c): cobrança das taxas por reversão/desconto
+        // em recebimentos; null na cobrança direta (legado).
+        taxasPlataforma: c.stripeConta ? null : {
+          status: c.taxasPlataformaStatus,
+          valorCentavos: c.taxasPlataformaCentavos,
+          reversaoCentavos: c.taxasPlataformaReversalCentavos ?? 0,
+          descontadoCentavos: c.taxasPlataformaDescontadoCentavos,
+          erro: c.taxasPlataformaErro,
+        },
         criadoEm: c.criadoEm,
       })),
     });

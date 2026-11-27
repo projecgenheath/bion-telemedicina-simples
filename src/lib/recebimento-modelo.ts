@@ -96,7 +96,8 @@ export type RetidoWire = {
 };
 
 export type TipoTransferenciaWire = "consulta" | "multa_cancelamento" | "multa_remarcacao";
-export type StatusTransferenciaWire = "pendente" | "enviada" | "falhou";
+/** 'descontada' (20261127c): líquido todo consumido por taxas de chargeback; nada foi transferido. */
+export type StatusTransferenciaWire = "pendente" | "enviada" | "falhou" | "descontada";
 
 export type TransferenciaWire = {
   id: string;
@@ -109,6 +110,8 @@ export type TransferenciaWire = {
   taxasCentavos: number;
   multasCentavos: number;
   liquidoCentavos: number;
+  /** Taxas de chargeback abatidas antes do envio (alternativa B de 27/11). Valor enviado = liquido − desconto. */
+  descontoChargebackCentavos: number;
   criadaEm: string;
   /** `null` se pendente ou falhou. */
   enviadaEm: string | null;

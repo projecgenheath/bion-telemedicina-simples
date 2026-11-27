@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { registrarAudit } from "@/lib/server/auth";
 
 /**
  * Chargeback (disputa do Stripe) no modo plataforma. Dono: Admin. Migração 20261103e.
@@ -6,6 +7,15 @@ import { db } from "@/lib/db";
  * Regra (decisão do Alisson, 03/11): o médico arca com as TAXAS do chargeback,
  * descontadas do repasse PIX por um RepasseAjuste (motivo 'chargeback'),
  * SALVO se a falha for da BION (cláusula 10.13 dos termos do médico).
+ *
+ * Decisão do Alisson de 27/11 (alternativa B da 10.13): o médico arca só com
+ * a taxa do cartão e a taxa de contestação; o valor contestado devolvido ao
+ * paciente fica com a plataforma (valorDisputadoCentavos = 0, definitivo).
+ * No modo plataforma o RepasseAjuste não alcança o modelo novo (repasse.ts):
+ * a taxa de contestação é cobrada por `cobrarTaxasChargebackPlataforma`
+ * (reversão da TransferenciaMedico enviada, ou desconto em recebimentos
+ * futuros — migração 20261127c). A taxa do cartão já sai no líquido da
+ * transferência; cobrá-la de novo seria em dobro.
  *
  * Por que só a dispute fee (e NÃO a taxa do cartão):
  * - A taxa do cartão já sai do líquido do médico no repasse normal
@@ -59,7 +69,7 @@ export function composicaoDescontoChargeback(cb: ChargebackParaDesconto) {
   const fee = typeof cb.taxaDisputaCentavos === "number" && Number.isFinite(cb.taxaDisputaCentavos) ? Math.max(0, Math.round(cb.taxaDisputaCentavos)) : 0;
   const taxaDisputaCentavos = isento ? 0 : fee;
   const taxaCartaoCentavos = 0; // já descontada no repasse normal
-  const valorDisputadoCentavos = 0; // cláusula 10.13: só taxas (pendente Alisson)
+  const valorDisputadoCentavos = 0; // decisão do Alisson de 27/11: alternativa B — valor contestado fica com a plataforma
   return { taxaDisputaCentavos, taxaCartaoCentavos, valorDisputadoCentavos, totalCentavos: taxaDisputaCentavos + taxaCartaoCentavos + valorDisputadoCentavos };
 }
 
@@ -90,6 +100,9 @@ type CbLinha = {
   taxaDisputaCentavos: number | null;
   stripeConta?: string | null;
   transferFalhaBionStatus?: string | null;
+  taxasPlataformaStatus?: string | null;
+  taxasPlataformaReversalCentavos?: number | null;
+  taxasPlataformaDescontadoCentavos?: number | null;
 };
 type AjusteLinha = { id: string; repasseId: string | null };
 
@@ -145,7 +158,7 @@ export async function marcarFalhaBion(
       await travarChargeback(tx, p.chargebackId);
       const cb = await tx.chargeback.findUnique({
         where: { id: p.chargebackId },
-        select: { id: true, falhaBion: true, medicoId: true, statusStripe: true, taxaDisputaCentavos: true, stripeConta: true, transferFalhaBionStatus: true },
+        select: { id: true, falhaBion: true, medicoId: true, statusStripe: true, taxaDisputaCentavos: true, stripeConta: true, transferFalhaBionStatus: true, taxasPlataformaStatus: true, taxasPlataformaReversalCentavos: true, taxasPlataformaDescontadoCentavos: true },
       });
       if (!cb) return { ok: false as const, status: 404 as const, erro: "Chargeback não encontrado.", codigo: "nao_encontrado" };
       // Cobrança direta: depois de a BION transferir (ou começar a transferir), não dá para desmarcar.
@@ -163,6 +176,20 @@ export async function marcarFalhaBion(
         codigo: "repasse_liquidado",
       };
       if (ajuste?.repasseId) return liquidado;
+      // Modo plataforma (20261127c): taxas já cobradas do médico (reversão ou
+      // desconto em recebimento) não se desfazem com a marcação — ajuste
+      // manual. Dívida ainda não cobrada é cancelada junto com a marcação.
+      const recuperadoPlataforma = (cb.taxasPlataformaReversalCentavos ?? 0) + (cb.taxasPlataformaDescontadoCentavos ?? 0);
+      if (p.falhaBion && recuperadoPlataforma > 0) {
+        return { ok: false as const, status: 409 as const, erro: "As taxas deste chargeback já foram cobradas do médico (reversão ou desconto em recebimento). Não dá para mudar a marcação; trate como ajuste manual.", codigo: "taxas_ja_cobradas" };
+      }
+      if (p.falhaBion && cb.taxasPlataformaStatus === "pendente") {
+        return { ok: false as const, status: 409 as const, erro: "A cobrança das taxas ao médico está em andamento. Tente de novo em instantes.", codigo: "cobranca_em_andamento" };
+      }
+      const cancelarDebitoPlataforma = p.falhaBion && (cb.taxasPlataformaStatus === "aguardando_desconto" || cb.taxasPlataformaStatus === "falhou");
+      // Desmarcar devolve a dívida cancelada pela marcação — só se a disputa
+      // segue perdida e nada foi cobrado (ganha/cobrado = crédito manual).
+      const reativarDebitoPlataforma = !p.falhaBion && cb.taxasPlataformaStatus === "cancelado" && cb.statusStripe === "lost" && recuperadoPlataforma === 0;
       let ajusteRemovido = false;
       if (p.falhaBion && ajuste) {
         const r = await tx.repasseAjuste.deleteMany({ where: { id: ajuste.id, chargebackId: cb.id, repasseId: null } });
@@ -172,9 +199,13 @@ export async function marcarFalhaBion(
       }
       await tx.chargeback.update({
         where: { id: cb.id },
-        data: p.falhaBion
-          ? { falhaBion: true, falhaBionMotivo: p.motivo, falhaBionPorId: p.admin.id, falhaBionEm: agora }
-          : { falhaBion: false, falhaBionMotivo: null, falhaBionPorId: null, falhaBionEm: null },
+        data: {
+          ...(p.falhaBion
+            ? { falhaBion: true, falhaBionMotivo: p.motivo, falhaBionPorId: p.admin.id, falhaBionEm: agora }
+            : { falhaBion: false, falhaBionMotivo: null, falhaBionPorId: null, falhaBionEm: null }),
+          ...(cancelarDebitoPlataforma ? { taxasPlataformaStatus: "cancelado", taxasPlataformaErro: null } : {}),
+          ...(reativarDebitoPlataforma ? { taxasPlataformaStatus: "aguardando_desconto" } : {}),
+        },
       });
       try {
         await tx.auditLog.create({
@@ -187,7 +218,7 @@ export async function marcarFalhaBion(
             role: p.admin.role,
             entidade: "chargeback",
             entidadeId: cb.id,
-            detalhes: `${p.falhaBion ? "Marcado" : "Desmarcado"} falha da BION (cláusula 10.13)${ajusteRemovido ? "; desconto pendente removido" : ""}. Motivo: ${p.motivo}`,
+            detalhes: `${p.falhaBion ? "Marcado" : "Desmarcado"} falha da BION (cláusula 10.13)${ajusteRemovido ? "; desconto pendente removido" : ""}${cancelarDebitoPlataforma ? "; dívida de taxas do modo plataforma cancelada" : ""}${reativarDebitoPlataforma ? "; dívida de taxas do modo plataforma reativada" : ""}. Motivo: ${p.motivo}`,
           },
         });
       } catch {
@@ -217,12 +248,12 @@ type DisputaStripe = {
 };
 export type EventoDisputa = { id: string; created: number; type: string; account?: string | null; data: { object: unknown } };
 
-type CbExistente = { id: string; statusStripe: string; ultimoEventoId: string | null; ultimoEventoEm: Date | null; falhaBion: boolean; medicoId: string | null; taxaDisputaCentavos: number | null; creditoPendente: boolean; creditoDevolvidoEm: Date | null; stripeConta?: string | null; feeRefundStatus?: string | null };
+type CbExistente = { id: string; statusStripe: string; ultimoEventoId: string | null; ultimoEventoEm: Date | null; falhaBion: boolean; medicoId: string | null; taxaDisputaCentavos: number | null; creditoPendente: boolean; creditoDevolvidoEm: Date | null; stripeConta?: string | null; feeRefundStatus?: string | null; taxasPlataformaStatus?: string | null; taxasPlataformaReversalCentavos?: number | null; taxasPlataformaDescontadoCentavos?: number | null };
 type TxDisputa = TravaSql & {
   pagamento: {
     findFirst(a: unknown): Promise<{ id: string; consultaId: string | null; consulta: { medicoId: string } | null; pedidoRenovacao: { medicoId: string } | null } | null>;
   };
-  remarcacaoPendente: { findFirst(a: unknown): Promise<{ consultaId: string; consulta: { medicoId: string } | null } | null> };
+  remarcacaoPendente: { findFirst(a: unknown): Promise<{ id: string; consultaId: string; consulta: { medicoId: string } | null } | null> };
   chargeback: {
     findUnique(a: unknown): Promise<CbExistente | null>;
     create(a: unknown): Promise<{ id: string }>;
@@ -267,7 +298,7 @@ export async function registrarDisputaStripe(evento: EventoDisputa, d: DbDisputa
     await travarPorDisputa(tx, disputa.id);
     const atual = await tx.chargeback.findUnique({
       where: { stripeDisputeId: disputa.id },
-      select: { id: true, statusStripe: true, ultimoEventoId: true, ultimoEventoEm: true, falhaBion: true, medicoId: true, taxaDisputaCentavos: true, creditoPendente: true, creditoDevolvidoEm: true, stripeConta: true, feeRefundStatus: true },
+      select: { id: true, statusStripe: true, ultimoEventoId: true, ultimoEventoEm: true, falhaBion: true, medicoId: true, taxaDisputaCentavos: true, creditoPendente: true, creditoDevolvidoEm: true, stripeConta: true, feeRefundStatus: true, taxasPlataformaStatus: true, taxasPlataformaReversalCentavos: true, taxasPlataformaDescontadoCentavos: true },
     });
     const taxa = taxaDaDisputa(disputa.balance_transactions);
     if (!atual) {
@@ -282,13 +313,14 @@ export async function registrarDisputaStripe(evento: EventoDisputa, d: DbDisputa
         : null;
       // Multa de remarcação: sem Pagamento; o PI fica em RemarcacaoPendente.gatewayRef 'stripe_pi:<id>'.
       const multa = !pag && piId
-        ? await tx.remarcacaoPendente.findFirst({ where: { gatewayRef: `stripe_pi:${piId}` }, select: { consultaId: true, consulta: { select: { medicoId: true } } } })
+        ? await tx.remarcacaoPendente.findFirst({ where: { gatewayRef: `stripe_pi:${piId}` }, select: { id: true, consultaId: true, consulta: { select: { medicoId: true } } } })
         : null;
       await tx.chargeback.create({
         data: {
           stripeDisputeId: disputa.id,
           stripeChargeId: chargeId,
           pagamentoId: pag?.id ?? null,
+          remarcacaoId: multa?.id ?? null,
           consultaId: pag?.consultaId ?? multa?.consultaId ?? null,
           medicoId: pag?.consulta?.medicoId ?? pag?.pedidoRenovacao?.medicoId ?? multa?.consulta?.medicoId ?? null,
           valorCentavos: Math.max(0, disputa.amount ?? 0),
@@ -319,6 +351,11 @@ export async function registrarDisputaStripe(evento: EventoDisputa, d: DbDisputa
         // Defesa: 0 apagados = aplicado num repasse depois da leitura → crédito pendente.
         if (r.count === 0) creditoPendente = podeCreditar;
       }
+      // Modo plataforma (20261127c): taxas já cobradas do médico (reversão ou
+      // desconto em recebimento) viram crédito pendente — devolução manual,
+      // mesmo fluxo do repasse. Dívida ainda não cobrada é cancelada abaixo.
+      const recuperadoPlataforma = (atual.taxasPlataformaReversalCentavos ?? 0) + (atual.taxasPlataformaDescontadoCentavos ?? 0);
+      if (recuperadoPlataforma > 0) creditoPendente = podeCreditar;
     }
     await tx.chargeback.update({
       where: { id: atual.id },
@@ -331,6 +368,10 @@ export async function registrarDisputaStripe(evento: EventoDisputa, d: DbDisputa
         // Cobrança direta perdida: marca a devolução dos 10% (decisão 03/11 12:33)
         // como pendente na mesma transação travada; devolverFeeChargeback executa.
         ...(disputa.status === "lost" && atual.stripeConta && !atual.feeRefundStatus ? { feeRefundStatus: "pendente" } : {}),
+        // Modo plataforma: disputa ganha cancela a dívida de taxas ainda não
+        // cobrada (a já cobrada virou creditoPendente acima).
+        ...(disputa.status === "won" && (atual.taxasPlataformaStatus === "aguardando_desconto" || atual.taxasPlataformaStatus === "falhou")
+          ? { taxasPlataformaStatus: "cancelado", taxasPlataformaErro: null } : {}),
       },
     });
     return "atualizada";
@@ -648,4 +689,339 @@ export async function devolverFeeChargeback(
     data: { feeRefundStatus: "enviado", feeRefundId: r.id, feeRefundCentavos: r.amount, feeRefundErro: null, feeRefundEm: deps.agora ?? new Date() },
   });
   return { enviado: true, refundId: r.id, valorCentavos: r.amount };
+}
+
+// ------------------------------------------------------------ cobrança plataforma: taxas do chargeback (alternativa B, 27/11)
+
+/**
+ * Decisão do Alisson de 27/11 (alternativa B da cláusula 10.13): no modo
+ * plataforma o médico arca com a taxa do cartão e a taxa de contestação; o
+ * valor contestado fica com a plataforma. A taxa do cartão JÁ sai no líquido
+ * da TransferenciaMedico (financeiro.ts, TAXA_GATEWAY_NO_LIQUIDO) — cobrá-la
+ * de novo seria em dobro. Aqui cobra-se a taxa de contestação, só com a
+ * disputa PERDIDA ('lost'), sem falha da BION e com médico:
+ *
+ * - TransferenciaMedico já ENVIADA da mesma cobrança/multa: reversão no valor
+ *   das taxas, limitada ao que ainda dá para reverter (líquido − desconto já
+ *   aplicado − reversões de reembolso − reversões de outros chargebacks).
+ *   transfers.createReversal com Idempotency-Key `chargeback-taxas-<id>-<valor>`
+ *   e busca prévia em listReversals (a chave expira em 24 h). O que não couber
+ *   na reversão vira dívida em recebimentos futuros.
+ * - Sem transferência enviada: a dívida inteira fica registrada e é abatida
+ *   no envio das próximas TransferenciaMedico do médico
+ *   (ajustarDescontoChargeback, chamada por enviarTransferencia).
+ *
+ * Idempotência: linha travada (FOR UPDATE), 'pendente' gravado antes do
+ * Stripe; 'quitado'/'sem_taxa' não repetem; 'falhou' tenta de novo só o que
+ * resta (o já descontado em recebimentos não é cobrado duas vezes). Erro do
+ * Stripe: grava 'falhou' e relança (webhook reentrega; admin repete no POST
+ * cobrar-taxas). A dívida continua descontável de recebimentos futuros.
+ *
+ * Ganha depois de cobrado: creditoPendente (devolução manual, fluxo já
+ * existente); dívida não cobrada é cancelada em registrarDisputaStripe e
+ * marcarFalhaBion. Migração 20261127c.
+ */
+export const chaveIdempotenciaTaxasPlataforma = (chargebackId: string, valorCentavos: number) => `chargeback-taxas-${chargebackId}-${valorCentavos}`;
+
+type CbTaxas = {
+  id: string;
+  falhaBion: boolean;
+  medicoId: string | null;
+  statusStripe: string;
+  stripeConta: string | null;
+  taxaDisputaCentavos: number | null;
+  pagamentoId: string | null;
+  remarcacaoId: string | null;
+  taxasPlataformaStatus: string | null;
+  taxasPlataformaCentavos: number | null;
+  taxasPlataformaReversalCentavos: number | null;
+  taxasPlataformaDescontadoCentavos: number;
+  creditoDevolvidoEm: Date | null;
+};
+type TxTaxas = TravaSql & {
+  chargeback: {
+    findUnique(a: unknown): Promise<CbTaxas | null>;
+    findMany(a: unknown): Promise<{ taxasPlataformaReversalCentavos: number | null }[]>;
+    update(a: unknown): Promise<unknown>;
+    updateMany(a: unknown): Promise<{ count: number }>;
+  };
+  transferenciaMedico: {
+    findFirst(a: unknown): Promise<{ id: string; liquidoCentavos: number; descontoChargebackCentavos: number; stripeTransferId: string | null } | null>;
+  };
+  reembolso: { findMany(a: unknown): Promise<{ stripeReversalValorCentavos: number | null }[]> };
+};
+export type DbTaxas = TxTaxas & { $transaction<T>(fn: (tx: TxTaxas) => Promise<T>): Promise<T> };
+export type StripeTaxas = {
+  transfers: {
+    createReversal(transferId: string, p: { amount: number; metadata: Record<string, string> }, o: { idempotencyKey: string }): Promise<{ id: string; amount: number }>;
+    listReversals(transferId: string, p: { limit: number }): Promise<{ data: { id: string; amount: number; metadata?: Record<string, string> | null }[] }>;
+  };
+};
+
+export type ResultadoTaxasPlataforma =
+  | { cobrado: true; via: "reversao"; reversalId: string; valorCentavos: number; restanteCentavos: number }
+  | { cobrado: true; via: "desconto_futuro"; valorCentavos: number }
+  | { cobrado: false; motivo: "nao_encontrado" | "nao_plataforma" | "sem_medico" | "falha_bion" | "aguardando_desfecho" | "ja_cobrado" | "sem_taxa" | "em_andamento" | "cancelado" };
+
+const SEL_TAXAS = {
+  id: true, falhaBion: true, medicoId: true, statusStripe: true, stripeConta: true,
+  taxaDisputaCentavos: true, pagamentoId: true, remarcacaoId: true,
+  taxasPlataformaStatus: true, taxasPlataformaCentavos: true,
+  taxasPlataformaReversalCentavos: true, taxasPlataformaDescontadoCentavos: true,
+  creditoDevolvidoEm: true,
+} as const;
+
+export async function cobrarTaxasChargebackPlataforma(
+  chargebackId: string,
+  deps: { d?: DbTaxas; s?: StripeTaxas; agora?: Date; audit?: typeof registrarAudit } = {},
+): Promise<ResultadoTaxasPlataforma> {
+  const d = deps.d ?? (db as unknown as DbTaxas);
+  // Chave live barrada ANTES de qualquer leitura/escrita (invariante do teste
+  // chave-live-dinheiro: zero acessos ao banco).
+  if (!deps.s) (await import("@/lib/server/stripe")).exigirChaveNaoLive();
+  type Preparo =
+    | { fim: ResultadoTaxasPlataforma }
+    | { cb: CbTaxas; divida: number; valor: number; transferId: string; s: StripeTaxas }
+    | { cb: CbTaxas; divida: number; debito: true };
+  const preparo = await d.$transaction(async (tx): Promise<Preparo> => {
+    await travarChargeback(tx, chargebackId);
+    const cb = await tx.chargeback.findUnique({ where: { id: chargebackId }, select: SEL_TAXAS });
+    if (!cb) return { fim: { cobrado: false as const, motivo: "nao_encontrado" as const } };
+    if (cb.stripeConta) return { fim: { cobrado: false as const, motivo: "nao_plataforma" as const } };
+    if (!cb.medicoId) return { fim: { cobrado: false as const, motivo: "sem_medico" as const } };
+    if (cb.falhaBion) return { fim: { cobrado: false as const, motivo: "falha_bion" as const } };
+    if (cb.statusStripe !== "lost") return { fim: { cobrado: false as const, motivo: "aguardando_desfecho" as const } };
+    if (cb.taxasPlataformaStatus === "quitado") return { fim: { cobrado: false as const, motivo: "ja_cobrado" as const } };
+    if (cb.taxasPlataformaStatus === "sem_taxa") return { fim: { cobrado: false as const, motivo: "sem_taxa" as const } };
+    if (cb.taxasPlataformaStatus === "pendente") return { fim: { cobrado: false as const, motivo: "em_andamento" as const } };
+    if (cb.taxasPlataformaStatus === "cancelado") return { fim: { cobrado: false as const, motivo: "cancelado" as const } };
+    // Dívida congelada na primeira tentativa (as retentativas usam a mesma).
+    const fee = cb.taxasPlataformaCentavos
+      ?? (typeof cb.taxaDisputaCentavos === "number" && Number.isFinite(cb.taxaDisputaCentavos) ? Math.max(0, Math.round(cb.taxaDisputaCentavos)) : 0);
+    if (fee <= 0) {
+      await tx.chargeback.update({ where: { id: cb.id }, data: { taxasPlataformaStatus: "sem_taxa", taxasPlataformaCentavos: 0 } });
+      return { fim: { cobrado: false as const, motivo: "sem_taxa" as const } };
+    }
+    const divida = Math.max(0, fee - (cb.taxasPlataformaReversalCentavos ?? 0) - cb.taxasPlataformaDescontadoCentavos);
+    if (divida <= 0) {
+      await tx.chargeback.update({ where: { id: cb.id }, data: { taxasPlataformaStatus: "quitado" } });
+      return { fim: { cobrado: false as const, motivo: "ja_cobrado" as const } };
+    }
+    const or = [
+      ...(cb.pagamentoId ? [{ pagamentoId: cb.pagamentoId }] : []),
+      ...(cb.remarcacaoId ? [{ remarcacaoId: cb.remarcacaoId }] : []),
+    ];
+    const t = or.length
+      ? await tx.transferenciaMedico.findFirst({ where: { status: "enviada", OR: or }, select: { id: true, liquidoCentavos: true, descontoChargebackCentavos: true, stripeTransferId: true } })
+      : null;
+    if (t?.stripeTransferId) {
+      const irmaos = await tx.reembolso.findMany({
+        where: { stripeReversalValorCentavos: { not: null }, ...(cb.pagamentoId ? { pagamentoId: cb.pagamentoId } : { remarcacaoId: cb.remarcacaoId }) },
+        select: { stripeReversalValorCentavos: true },
+      });
+      const jaRevertidoReembolsos = irmaos.reduce((s, x) => s + (x.stripeReversalValorCentavos ?? 0), 0);
+      const outrosChargebacks = await tx.chargeback.findMany({
+        where: { taxasPlataformaReversalCentavos: { not: null }, OR: or },
+        select: { taxasPlataformaReversalCentavos: true },
+      });
+      const jaRevertidoChargebacks = outrosChargebacks.reduce((s, x) => s + (x.taxasPlataformaReversalCentavos ?? 0), 0);
+      const resta = Math.max(0, t.liquidoCentavos - t.descontoChargebackCentavos - jaRevertidoReembolsos - jaRevertidoChargebacks);
+      const valor = Math.min(divida, resta);
+      if (valor > 0) {
+        // Fábrica guardada ANTES de marcar 'pendente': sem chave configurada
+        // nada é gravado (a repetição tenta de novo do zero).
+        const s = deps.s ?? ((await import("@/lib/server/stripe")).stripe() as unknown as StripeTaxas);
+        await tx.chargeback.update({ where: { id: cb.id }, data: { taxasPlataformaStatus: "pendente", taxasPlataformaCentavos: fee, taxasPlataformaErro: null } });
+        return { cb, divida, valor, transferId: t.stripeTransferId, s };
+      }
+    }
+    // Sem transferência enviada (ou nada resta para reverter): dívida em
+    // recebimentos futuros, abatida no envio das próximas transferências.
+    await tx.chargeback.update({
+      where: { id: cb.id },
+      data: { taxasPlataformaStatus: "aguardando_desconto", taxasPlataformaCentavos: fee, taxasPlataformaErro: null, taxasPlataformaEm: deps.agora ?? new Date() },
+    });
+    return { cb, divida, debito: true };
+  });
+  if ("fim" in preparo) return preparo.fim;
+  const audit = deps.audit ?? registrarAudit;
+  if ("debito" in preparo) {
+    const { cb, divida } = preparo;
+    await audit(null, {
+      acao: "CHARGEBACK_TAXAS_DESCONTO_REGISTRADO",
+      categoria: "pagamento",
+      entidade: "chargeback",
+      entidadeId: cb.id,
+      detalhes: `Taxa de contestação de ${divida} centavos registrada para desconto em recebimentos futuros do médico (disputa perdida; alternativa B de 27/11)`,
+    });
+    return { cobrado: true, via: "desconto_futuro", valorCentavos: divida };
+  }
+  const { cb, divida, valor, transferId, s } = preparo;
+  let reversao: { id: string; amount: number };
+  try {
+    const anteriores = await s.transfers.listReversals(transferId, { limit: 100 });
+    reversao = anteriores.data.find((r) => r.metadata?.chargebackId === cb.id && r.metadata?.tipo === "chargeback_taxas_plataforma")
+      ?? (await s.transfers.createReversal(
+        transferId,
+        { amount: valor, metadata: { chargebackId: cb.id, tipo: "chargeback_taxas_plataforma" } },
+        { idempotencyKey: chaveIdempotenciaTaxasPlataforma(cb.id, valor) },
+      ));
+  } catch (e) {
+    const msg = (e instanceof Error ? e.message : "erro").slice(0, 300);
+    // 'cancelado' (disputa ganha/falha da BION no meio do caminho) não vira 'falhou'.
+    await d.chargeback.updateMany({ where: { id: cb.id, taxasPlataformaStatus: { notIn: ["quitado", "cancelado"] } }, data: { taxasPlataformaStatus: "falhou", taxasPlataformaErro: msg } });
+    await audit(null, {
+      acao: "CHARGEBACK_TAXAS_REVERSAO_FALHOU",
+      categoria: "pagamento",
+      severidade: "critical",
+      entidade: "chargeback",
+      entidadeId: cb.id,
+      detalhes: `Reversão de ${valor} centavos da transferência ${transferId} falhou: ${msg}. A dívida segue descontável de recebimentos futuros; conciliação manual se necessário.`,
+    });
+    throw e;
+  }
+  const restante = Math.max(0, divida - reversao.amount);
+  // Travada de novo: a disputa pode ter virado 'won' (ou falha da BION marcada)
+  // enquanto o Stripe respondia. O dinheiro já foi revertido → creditoPendente
+  // (devolução manual) e nada mais é cobrado em recebimentos futuros.
+  await d.$transaction(async (tx) => {
+    await travarChargeback(tx, cb.id);
+    const atual = await tx.chargeback.findUnique({ where: { id: cb.id }, select: SEL_TAXAS });
+    const encerrou = atual?.statusStripe === "won" || atual?.falhaBion === true;
+    await tx.chargeback.updateMany({
+      where: { id: cb.id, taxasPlataformaStatus: { notIn: ["quitado", "cancelado"] } },
+      data: {
+        taxasPlataformaStatus: encerrou ? "cancelado" : restante <= 0 ? "quitado" : "aguardando_desconto",
+        taxasPlataformaReversalId: reversao.id,
+        taxasPlataformaReversalCentavos: reversao.amount,
+        taxasPlataformaErro: null,
+        taxasPlataformaEm: deps.agora ?? new Date(),
+        ...(encerrou && !atual?.creditoDevolvidoEm ? { creditoPendente: true } : {}),
+      },
+    });
+  });
+  await audit(null, {
+    acao: "CHARGEBACK_TAXAS_REVERTIDAS",
+    categoria: "pagamento",
+    entidade: "chargeback",
+    entidadeId: cb.id,
+    detalhes: `Reversão de ${reversao.amount} centavos da transferência ${transferId} (${reversao.id}) pelas taxas do chargeback; restante para recebimentos futuros: ${restante}`,
+  });
+  return { cobrado: true, via: "reversao", reversalId: reversao.id, valorCentavos: reversao.amount, restanteCentavos: restante };
+}
+
+// ------------------------------------------------------------ dívida de taxas: consumo no envio da transferência
+
+type CbDebito = {
+  id: string;
+  statusStripe: string;
+  falhaBion: boolean;
+  taxasPlataformaStatus: string | null;
+  taxasPlataformaCentavos: number | null;
+  taxasPlataformaReversalCentavos: number | null;
+  taxasPlataformaDescontadoCentavos: number;
+};
+const SEL_DEBITO = { id: true, statusStripe: true, falhaBion: true, taxasPlataformaStatus: true, taxasPlataformaCentavos: true, taxasPlataformaReversalCentavos: true, taxasPlataformaDescontadoCentavos: true } as const;
+const restaDebito = (cb: CbDebito) => Math.max(0, (cb.taxasPlataformaCentavos ?? 0) - (cb.taxasPlataformaReversalCentavos ?? 0) - cb.taxasPlataformaDescontadoCentavos);
+
+export type TxDesconto = TravaSql & {
+  transferenciaMedico: {
+    findUnique(a: unknown): Promise<{ id: string; descontoChargebackCentavos: number } | null>;
+    update(a: unknown): Promise<unknown>;
+  };
+  chargeback: {
+    findUnique(a: unknown): Promise<CbDebito | null>;
+    findMany(a: unknown): Promise<{ id: string }[]>;
+    update(a: unknown): Promise<unknown>;
+  };
+};
+export type DbDesconto = { $transaction<T>(fn: (tx: TxDesconto) => Promise<T>): Promise<T> };
+
+async function travarTransferencia(tx: TravaSql, id: string) {
+  await tx.$queryRaw`SELECT "id" FROM "TransferenciaMedico" WHERE "id" = ${id} FOR UPDATE`;
+}
+
+/** Devolve `centavos` de dívida já descontada aos chargebacks do médico (mais recentes primeiro). */
+async function devolverDesconto(tx: TxDesconto, medicoId: string, centavos: number) {
+  let resto = Math.max(0, Math.floor(centavos));
+  if (resto <= 0) return;
+  const cbs = await tx.chargeback.findMany({
+    where: { medicoId, taxasPlataformaDescontadoCentavos: { gt: 0 } },
+    orderBy: { criadoEm: "desc" },
+    select: { id: true },
+  });
+  for (const { id } of cbs) {
+    if (resto <= 0) break;
+    await travarChargeback(tx, id);
+    const cb = await tx.chargeback.findUnique({ where: { id }, select: SEL_DEBITO });
+    if (!cb || cb.taxasPlataformaDescontadoCentavos <= 0) continue;
+    const devolver = Math.min(resto, cb.taxasPlataformaDescontadoCentavos);
+    const novoDescontado = cb.taxasPlataformaDescontadoCentavos - devolver;
+    // Reabre a dívida só se ainda cabe cobrar: disputa ganha ou falha da BION
+    // encerram a cobrança (o já cobrado vira crédito manual, creditoPendente).
+    const reabrir = cb.taxasPlataformaStatus === "quitado" && cb.statusStripe !== "won" && !cb.falhaBion
+      && novoDescontado + (cb.taxasPlataformaReversalCentavos ?? 0) < (cb.taxasPlataformaCentavos ?? 0);
+    await tx.chargeback.update({ where: { id: cb.id }, data: { taxasPlataformaDescontadoCentavos: novoDescontado, ...(reabrir ? { taxasPlataformaStatus: "aguardando_desconto" } : {}) } });
+    resto -= devolver;
+  }
+}
+
+/**
+ * Consumo da dívida de taxas no envio da TransferenciaMedico (chamada por
+ * enviarTransferencia). Transação única com travas: o desconto já gravado na
+ * linha é reaproveitado (retentativa depois de crash não desconta duas vezes);
+ * dívidas do médico em ordem de criação são abatidas até o líquido; se o
+ * líquido caiu abaixo do desconto gravado (taxa real chegou depois,
+ * financeiro.ts), o excesso volta aos chargebacks. Devolve o desconto a usar.
+ */
+export async function ajustarDescontoChargeback(
+  transferenciaId: string,
+  medicoId: string,
+  liquidoCentavos: number,
+  deps: { d?: DbDesconto } = {},
+): Promise<number> {
+  const d = deps.d ?? (db as unknown as DbDesconto);
+  return d.$transaction(async (tx) => {
+    await travarTransferencia(tx, transferenciaId);
+    const t = await tx.transferenciaMedico.findUnique({ where: { id: transferenciaId }, select: { id: true, descontoChargebackCentavos: true } });
+    if (!t) return 0;
+    const liquido = Math.max(0, Math.floor(liquidoCentavos));
+    if (t.descontoChargebackCentavos > liquido) {
+      await devolverDesconto(tx, medicoId, t.descontoChargebackCentavos - liquido);
+      await tx.transferenciaMedico.update({ where: { id: transferenciaId }, data: { descontoChargebackCentavos: liquido } });
+      return liquido;
+    }
+    if (t.descontoChargebackCentavos > 0) return t.descontoChargebackCentavos;
+    let disponivel = liquido;
+    let total = 0;
+    const cbs = await tx.chargeback.findMany({
+      where: { medicoId, taxasPlataformaStatus: { in: ["aguardando_desconto", "falhou"] }, taxasPlataformaCentavos: { not: null } },
+      orderBy: { criadoEm: "asc" },
+      select: { id: true },
+    });
+    for (const { id } of cbs) {
+      if (disponivel <= 0) break;
+      await travarChargeback(tx, id);
+      const cb = await tx.chargeback.findUnique({ where: { id }, select: SEL_DEBITO });
+      if (!cb || (cb.taxasPlataformaStatus !== "aguardando_desconto" && cb.taxasPlataformaStatus !== "falhou")) continue;
+      const take = Math.min(restaDebito(cb), disponivel);
+      if (take <= 0) continue;
+      const novo = cb.taxasPlataformaDescontadoCentavos + take;
+      const quitado = novo + (cb.taxasPlataformaReversalCentavos ?? 0) >= (cb.taxasPlataformaCentavos ?? 0);
+      await tx.chargeback.update({ where: { id: cb.id }, data: { taxasPlataformaDescontadoCentavos: novo, ...(quitado ? { taxasPlataformaStatus: "quitado" } : {}) } });
+      disponivel -= take;
+      total += take;
+    }
+    if (total > 0) await tx.transferenciaMedico.update({ where: { id: transferenciaId }, data: { descontoChargebackCentavos: total } });
+    return total;
+  });
+}
+
+/**
+ * Devolve aos chargebacks o desconto consumido por uma transferência que vai
+ * ser REMOVIDA (correção de desfecho, financeiro.ts). Chamar dentro da mesma
+ * transação, ANTES do delete.
+ */
+export async function estornarDescontoChargeback(tx: TxDesconto, medicoId: string, centavos: number): Promise<void> {
+  await devolverDesconto(tx, medicoId, centavos);
 }

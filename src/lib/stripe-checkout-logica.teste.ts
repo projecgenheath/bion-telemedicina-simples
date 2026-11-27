@@ -26,9 +26,11 @@ import {
   moedaConfere,
   opcoesRequisicao,
   parametrosSessao,
+  parteReembolsoSobreMulta,
   sessaoReaproveitavel,
   stripeAtivo,
   valorConfere,
+  valorReversaoProporcional,
   type ConsultaParaCheckout,
 } from "./stripe-checkout-logica";
 
@@ -323,6 +325,25 @@ igual("descritor configurado", descritorSufixo({ STRIPE_DESCRITOR_SUFIXO: " bion
 igual("descritor desligado", descritorSufixo({ STRIPE_DESCRITOR_SUFIXO: "off" }), null);
 igual("descritor inválido volta ao padrão", descritorSufixo({ STRIPE_DESCRITOR_SUFIXO: "BION*<x>" }), "BION");
 igual("descritor só números volta ao padrão", descritorSufixo({ STRIPE_DESCRITOR_SUFIXO: "123" }), "BION");
+
+// ---- Reversão proporcional da transferência no reembolso (20261127b) ----
+igual("reversão integral", valorReversaoProporcional({ liquidoCentavos: 13000, valorReembolsoCentavos: 15000, valorBaseCentavos: 15000 }), 13000);
+igual("reversão parcial arredonda para baixo", valorReversaoProporcional({ liquidoCentavos: 13000, valorReembolsoCentavos: 5000, valorBaseCentavos: 15000 }), 4333);
+igual("reversão limitada ao que resta", valorReversaoProporcional({ liquidoCentavos: 13000, valorReembolsoCentavos: 15000, valorBaseCentavos: 15000, jaRevertidoCentavos: 10000 }), 3000);
+igual("reversão nada resta", valorReversaoProporcional({ liquidoCentavos: 13000, valorReembolsoCentavos: 15000, valorBaseCentavos: 15000, jaRevertidoCentavos: 13000 }), 0);
+igual("reversão já revertido maior que o líquido", valorReversaoProporcional({ liquidoCentavos: 13000, valorReembolsoCentavos: 15000, valorBaseCentavos: 15000, jaRevertidoCentavos: 20000 }), 0);
+igual("reversão base zero", valorReversaoProporcional({ liquidoCentavos: 13000, valorReembolsoCentavos: 15000, valorBaseCentavos: 0 }), 0);
+igual("reversão líquido zero", valorReversaoProporcional({ liquidoCentavos: 0, valorReembolsoCentavos: 15000, valorBaseCentavos: 15000 }), 0);
+igual("reversão reembolso zero", valorReversaoProporcional({ liquidoCentavos: 13000, valorReembolsoCentavos: 0, valorBaseCentavos: 15000 }), 0);
+igual("reversão reembolso maior que a base limita ao líquido", valorReversaoProporcional({ liquidoCentavos: 13000, valorReembolsoCentavos: 20000, valorBaseCentavos: 15000 }), 13000);
+igual("reversão negativos viram zero", valorReversaoProporcional({ liquidoCentavos: -5, valorReembolsoCentavos: -1, valorBaseCentavos: -1 }), 0);
+igual("reversão 1 centavo de líquido", valorReversaoProporcional({ liquidoCentavos: 1, valorReembolsoCentavos: 15000, valorBaseCentavos: 15000 }), 1);
+// parte do reembolso que consome a multa retida (regra 7: a parte do paciente não toca a metade do médico)
+igual("cancelamento: parte do paciente não toca a multa", parteReembolsoSobreMulta({ valorReembolsoCentavos: 7500, valorBaseCentavos: 15000, multaCentavos: 7500 }), 0);
+igual("cancelamento: reembolso integral consome a multa toda", parteReembolsoSobreMulta({ valorReembolsoCentavos: 15000, valorBaseCentavos: 15000, multaCentavos: 7500 }), 7500);
+igual("cancelamento: só o excedente da parte do paciente", parteReembolsoSobreMulta({ valorReembolsoCentavos: 9000, valorBaseCentavos: 15000, multaCentavos: 7500 }), 1500);
+igual("cancelamento: limita à multa", parteReembolsoSobreMulta({ valorReembolsoCentavos: 30000, valorBaseCentavos: 15000, multaCentavos: 7500 }), 7500);
+igual("cancelamento: sem multa nada a consumir", parteReembolsoSobreMulta({ valorReembolsoCentavos: 15000, valorBaseCentavos: 15000, multaCentavos: 0 }), 0);
 
 console.log(`${ok} ok, ${falhas} falha(s)`);
 if (falhas) process.exit(1);

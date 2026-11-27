@@ -9,7 +9,7 @@ import { avisarPacienteEspera, confirmarRemarcacaoEspera } from "@/lib/server/es
 import { aprovarMultaRemarcacao, falharMultaRemarcacao, registrarTaxaGateway } from "@/lib/server/financeiro";
 import { cancelarRenovacaoPagamentoFalhou, confirmarPagamentoRenovacao } from "@/lib/server/renovacao-pagamento";
 import { gatewayCheckout } from "@/lib/server/gateway-pagamento";
-import { devolverFeeChargeback, registrarDisputaStripe, transferirFalhaBion } from "@/lib/server/chargeback";
+import { cobrarTaxasChargebackPlataforma, devolverFeeChargeback, registrarDisputaStripe, transferirFalhaBion } from "@/lib/server/chargeback";
 import { liberarEvento, reivindicarEvento, registrarEventoReembolsoStripe, stripe } from "@/lib/server/stripe";
 import { acaoDoEvento, bloqueioChaveLive, moedaCheckout, moedaConfere, multaDaSessao, referenciaConfere, valorConfere } from "@/lib/stripe-checkout-logica";
 
@@ -107,20 +107,29 @@ async function processar(evento: Stripe.Event): Promise<Record<string, unknown>>
   if (acao === "disputa") {
     // Chargeback (Admin, src/lib/server/chargeback.ts): registra a disputa; o desconto ao médico é do repasse.
     const disputa = await registrarDisputaStripe(evento);
+    const disputeId = (evento.data.object as { id?: string })?.id;
+    let erro: unknown = null;
     // Cobrança direta + falha da BION + disputa perdida: BION transfere ao
     // médico (idempotente; erro relança → evento liberado e reentregue).
-    const disputeId = (evento.data.object as { id?: string })?.id;
     const cb = evento.account && disputeId ? await db.chargeback.findUnique({ where: { stripeDisputeId: disputeId }, select: { id: true } }) : null;
     // Perdida: devolve os 10% (independente da falha da BION). As duas rodam
     // mesmo se uma falhar; o primeiro erro relança (ambas idempotentes).
-    let erro: unknown = null;
     const feeRefund = cb ? await devolverFeeChargeback(cb.id).catch((e) => { erro = e; return null; }) : null;
     const transferencia = cb ? await transferirFalhaBion(cb.id).catch((e) => { erro ??= e; return null; }) : null;
+    // Modo plataforma (alternativa B de 27/11, 20261127c): disputa perdida sem
+    // conta Connect → cobra a taxa de contestação do médico (reversão da
+    // transferência enviada ou desconto em recebimentos futuros). Idempotente;
+    // erro relança junto com os demais (reentrega do webhook tenta de novo).
+    const cbPlataforma = !evento.account && disputeId ? await db.chargeback.findUnique({ where: { stripeDisputeId: disputeId }, select: { id: true } }) : null;
+    const taxasPlataforma = cbPlataforma && (evento.data.object as Stripe.Dispute).status === "lost"
+      ? await cobrarTaxasChargebackPlataforma(cbPlataforma.id).catch((e) => { erro ??= e; return null; })
+      : null;
     if (erro) throw erro;
     return {
       acao, disputa,
       ...(transferencia ? { transferencia: transferencia.enviado ? "enviado" : transferencia.motivo } : {}),
       ...(feeRefund ? { feeRefund: feeRefund.enviado ? "enviado" : feeRefund.motivo } : {}),
+      ...(taxasPlataforma ? { taxasPlataforma: taxasPlataforma.cobrado ? taxasPlataforma.via : taxasPlataforma.motivo } : {}),
     };
   }
   if (acao === "taxa") {

@@ -25,6 +25,7 @@ import {
 } from "@/lib/grade-semana";
 import { statusAposFalhaDoMedico } from "@/lib/atendimento-tipo";
 import { REMARCACAO_PLATAFORMA_DIFERENCA_CENTAVOS } from "@/lib/espera-medico-logica";
+import { estornarDescontoChargeback, type TxDesconto } from "@/lib/server/chargeback";
 
 /* ------------------------------------------------------------------ */
 /* Fase financeira: regras ÚNICAS de multa, reembolso e repasse.       */
@@ -503,7 +504,7 @@ export async function blocoFinanceiroDesfecho(consultaId: string) {
           stripeTaxaCentavos: true,
           transferencias: {
             where: { tipo: "consulta" },
-            select: { status: true, liquidoCentavos: true, enviadaEm: true },
+            select: { status: true, liquidoCentavos: true, descontoChargebackCentavos: true, enviadaEm: true },
             take: 1,
           },
           reembolsos: {
@@ -525,8 +526,8 @@ export async function blocoFinanceiroDesfecho(consultaId: string) {
     ? "sem_pagamento"
     : r && ["aprovado", "processado"].includes(r.status)
       ? "reembolsado"
-      : t?.status === "enviada"
-        ? "transferido"
+      : t?.status === "enviada" || t?.status === "descontada"
+        ? "transferido" // 'descontada' = líquido todo consumido por taxas de chargeback (20261127c); nada mais a pagar
         : "retido";
   return {
     estado,
@@ -535,7 +536,7 @@ export async function blocoFinanceiroDesfecho(consultaId: string) {
     taxaCentavos: c?.pagamento?.stripeTaxaCentavos ?? null,
     liquidoPrevistoCentavos: antes,
     transferencia: t
-      ? { status: t.status, liquidoCentavos: t.liquidoCentavos, enviadaEm: t.enviadaEm?.toISOString() ?? null }
+      ? { status: t.status, liquidoCentavos: t.liquidoCentavos, descontoChargebackCentavos: t.descontoChargebackCentavos, enviadaEm: t.enviadaEm?.toISOString() ?? null }
       : null,
     reembolso: r
       ? {
@@ -788,7 +789,12 @@ export async function decidirReembolsoManual(params: {
 
 export const PRAZO_REEMBOLSO_AUTOMATICO_DIAS = 7;
 
-/** Até quando a remarcação evita o reembolso automático: 7 dias corridos (PURA). */
+/**
+ * Até quando a remarcação evita o reembolso automático: 7 dias corridos (PURA).
+ * Regras 4 e 5 — decisão do Alisson de 27/11/2026 (confirmada, não suposição):
+ * falta do médico sem remarcação e falta do paciente sem remarcação usam o
+ * mesmo prazo de 7 dias corridos.
+ */
 export function prazoReembolsoAutomatico(em: Date): Date {
   return new Date(em.getTime() + PRAZO_REEMBOLSO_AUTOMATICO_DIAS * 86_400_000);
 }
@@ -917,6 +923,19 @@ export async function vencerReembolsosAutomaticos(agora: Date = new Date()): Pro
 // transferencia-medico.ts. Uma linha por alvo: consultaId único na consulta
 // realizada e no cancelamento com multa; remarcacaoId único na multa de
 // remarcação. Repetição devolve a linha existente (idempotente).
+
+/**
+ * Antes de REMOVER transferências pendentes (correção de desfecho), devolve
+ * aos chargebacks o desconto de taxas já consumido por elas — senão a dívida
+ * sumiria junto com a linha (20261127c). Mesma transação do delete.
+ */
+async function estornarDescontosAntesDeRemover(tx: Prisma.TransactionClient, where: { consultaId: string; status: string; tipo?: string }) {
+  const comDesconto = await tx.transferenciaMedico.findMany({
+    where: { ...where, descontoChargebackCentavos: { gt: 0 } },
+    select: { medicoId: true, descontoChargebackCentavos: true },
+  });
+  for (const t of comDesconto) await estornarDescontoChargeback(tx as unknown as TxDesconto, t.medicoId, t.descontoChargebackCentavos);
+}
 
 /**
  * Transferência da consulta REALIZADA (regra 2): 90% menos a taxa real do
@@ -1910,11 +1929,14 @@ export async function corrigirDesfecho(params: {
         // Modelo 21/11: a transferência nasce no desfecho "realizada"; sair
         // dele remove a transferência ainda pendente (uma já enviada fica
         // registrada para conciliação). Entrando em "realizada", a multa de
-        // cancelamento pendente deixa de valer.
+        // cancelamento pendente deixa de valer. Desconto de chargeback já
+        // consumido pela linha removida volta aos chargebacks (20261127c).
         if (plano.atual === "realizada" && plano.novo !== "realizada") {
+          await estornarDescontosAntesDeRemover(tx, { consultaId: c.id, status: "pendente" });
           await tx.transferenciaMedico.deleteMany({ where: { consultaId: c.id, status: "pendente" } });
         }
         if (plano.novo === "realizada") {
+          await estornarDescontosAntesDeRemover(tx, { consultaId: c.id, tipo: "multa_cancelamento", status: "pendente" });
           await tx.transferenciaMedico.deleteMany({ where: { consultaId: c.id, tipo: "multa_cancelamento", status: "pendente" } });
           await criarTransferenciaConsultaSeDevido(tx, c.id);
         }

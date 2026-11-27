@@ -11,7 +11,7 @@ const ENV = {
 };
 
 type Linha = {
-  id: string; tipo: string; status: string; liquidoCentavos: number;
+  id: string; tipo: string; status: string; liquidoCentavos: number; descontoChargebackCentavos: number;
   medicoId: string; consultaId: string | null; remarcacaoId: string | null;
   pagamento: { stripeChargeId: string | null; stripePaymentIntentId: string | null } | null;
   remarcacao: { gatewayRef: string | null } | null;
@@ -19,7 +19,7 @@ type Linha = {
 };
 
 const linha = (o: Partial<Linha> = {}): Linha => ({
-  id: "t1", tipo: "consulta", status: "pendente", liquidoCentavos: 17300,
+  id: "t1", tipo: "consulta", status: "pendente", liquidoCentavos: 17300, descontoChargebackCentavos: 0,
   medicoId: "m1", consultaId: "c1", remarcacaoId: null,
   pagamento: { stripeChargeId: "ch_1", stripePaymentIntentId: "pi_1" },
   remarcacao: null,
@@ -59,6 +59,9 @@ function fakeStripe(o: { existentes?: { id: string; metadata?: Record<string, st
 }
 
 const audit = (async () => undefined) as never;
+// Sem dívida de chargeback por padrão; o consumo real é testado em
+// chargeback-taxas.teste.ts (ajustarDescontoChargeback).
+const semDesconto = async () => 0;
 
 describe("transferenciaAtiva", () => {
   test("plataforma ligada: ativa", () => expect(transferenciaAtiva(ENV)).toBe(true));
@@ -80,7 +83,7 @@ describe("enviarTransferencia", () => {
     const l = linha();
     const { d, chamadas } = fakeDb(l);
     const { s, chamadas: sc } = fakeStripe();
-    const r = await enviarTransferencia("t1", { d, s, env: ENV, audit, agora: new Date("2026-11-27T12:00:00Z") });
+    const r = await enviarTransferencia("t1", { d, s, env: ENV, audit, agora: new Date("2026-11-27T12:00:00Z"), ajustarDesconto: semDesconto });
     expect(r).toEqual({ enviado: true, transferId: "tr_1", valorCentavos: 17300 });
     const create = sc.find((c) => c.metodo === "create")?.args;
     expect((create?.[0] as { source_transaction?: string }).source_transaction).toBe("ch_1");
@@ -93,7 +96,7 @@ describe("enviarTransferencia", () => {
   test("transferência anterior no group é reaproveitada", async () => {
     const { d } = fakeDb(linha());
     const { s, chamadas } = fakeStripe({ existentes: [{ id: "tr_antigo", metadata: { transferenciaMedicoId: "t1" } }] });
-    const r = await enviarTransferencia("t1", { d, s, env: ENV, audit });
+    const r = await enviarTransferencia("t1", { d, s, env: ENV, audit, ajustarDesconto: semDesconto });
     expect(r.enviado).toBe(true);
     expect(r.enviado && r.transferId).toBe("tr_antigo");
     expect(chamadas.some((c) => c.metodo === "create")).toBe(false);
@@ -102,7 +105,7 @@ describe("enviarTransferencia", () => {
   test("sem charge e sem PI: não envia", async () => {
     const { d } = fakeDb(linha({ pagamento: { stripeChargeId: null, stripePaymentIntentId: null } }));
     const { s, chamadas } = fakeStripe();
-    const r = await enviarTransferencia("t1", { d, s, env: ENV, audit });
+    const r = await enviarTransferencia("t1", { d, s, env: ENV, audit, ajustarDesconto: semDesconto });
     expect(r).toEqual({ enviado: false, motivo: "sem_charge" });
     expect(chamadas.some((c) => c.metodo === "create")).toBe(false);
   });
@@ -111,10 +114,29 @@ describe("enviarTransferencia", () => {
     const l = linha();
     const { d, chamadas } = fakeDb(l);
     const { s } = fakeStripe({ erro: new Error("saldo insuficiente") });
-    const r = await enviarTransferencia("t1", { d, s, env: ENV, audit });
+    const r = await enviarTransferencia("t1", { d, s, env: ENV, audit, ajustarDesconto: semDesconto });
     expect(r).toEqual({ enviado: false, motivo: "saldo insuficiente" });
     const upd = chamadas.find((c) => c.metodo === "updateMany")?.args;
     expect(upd.data.status).toBe("falhou");
     expect(upd.data.erro).toBe("saldo insuficiente");
+  });
+
+  test("dívida de chargeback parcial: envia líquido − desconto", async () => {
+    const { d } = fakeDb(linha());
+    const { s, chamadas: sc } = fakeStripe();
+    const r = await enviarTransferencia("t1", { d, s, env: ENV, audit, ajustarDesconto: async () => 1500 });
+    expect(r).toEqual({ enviado: true, transferId: "tr_1", valorCentavos: 15800 });
+    const create = sc.find((c) => c.metodo === "create")?.args;
+    expect((create?.[0] as { amount: number }).amount).toBe(15800);
+  });
+
+  test("dívida consome o líquido todo: status descontada, nada no Stripe", async () => {
+    const { d, chamadas } = fakeDb(linha());
+    const { s, chamadas: sc } = fakeStripe();
+    const r = await enviarTransferencia("t1", { d, s, env: ENV, audit, agora: new Date("2026-11-27T12:00:00Z"), ajustarDesconto: async () => 17300 });
+    expect(r).toEqual({ enviado: false, motivo: "zero" });
+    expect(sc.length).toBe(0);
+    const upd = chamadas.find((c) => c.metodo === "updateMany")?.args;
+    expect([upd.data.status, upd.data.enviadaEm]).toEqual(["descontada", new Date("2026-11-27T12:00:00Z")]);
   });
 });

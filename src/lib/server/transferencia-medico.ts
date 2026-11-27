@@ -1,6 +1,7 @@
 import "server-only";
 import { db } from "@/lib/db";
 import { registrarAudit } from "@/lib/server/auth";
+import { ajustarDescontoChargeback } from "@/lib/server/chargeback";
 import { modoCobrancaStripe, paymentIntentDoGatewayRef, stripe, stripeConnectAtivo } from "@/lib/server/stripe";
 import { moedaCheckout, bloqueioChaveLive, stripeAtivo } from "@/lib/stripe-checkout-logica";
 
@@ -23,6 +24,10 @@ import { moedaCheckout, bloqueioChaveLive, stripeAtivo } from "@/lib/stripe-chec
  *   transferência saiu e a linha não chegou a "enviada", reaproveita);
  * - erro do Stripe: grava "falhou" com a mensagem, conta a tentativa e segue;
  *   o cron tenta de novo (até 10 tentativas).
+ * - taxas de chargeback (alternativa B de 27/11, 20261127c): dívidas do médico
+ *   em disputas perdidas são abatidas aqui antes do envio
+ *   (ajustarDescontoChargeback); líquido todo consumido = status "descontada",
+ *   sem transferência no Stripe.
  *
  * Chave live: a fábrica `stripe()` lança ChaveLiveBloqueadaError; aqui o erro é
  * convertido em "não enviado" para o cron não quebrar. Nada é enviado com
@@ -46,6 +51,7 @@ type LinhaTransferencia = {
   tipo: string;
   status: string;
   liquidoCentavos: number;
+  descontoChargebackCentavos: number;
   medicoId: string;
   consultaId: string | null;
   remarcacaoId: string | null;
@@ -99,6 +105,7 @@ const SELECT = {
   tipo: true,
   status: true,
   liquidoCentavos: true,
+  descontoChargebackCentavos: true,
   medicoId: true,
   consultaId: true,
   remarcacaoId: true,
@@ -125,7 +132,7 @@ async function chargeDaOrigem(l: LinhaTransferencia, s: StripeTransferencia): Pr
  */
 export async function enviarTransferencia(
   linhaId: string,
-  deps: { d?: DbTransferencia; s?: StripeTransferencia; env?: Env; agora?: Date; audit?: Audit } = {},
+  deps: { d?: DbTransferencia; s?: StripeTransferencia; env?: Env; agora?: Date; audit?: Audit; ajustarDesconto?: typeof ajustarDescontoChargeback } = {},
 ): Promise<ResultadoTransferencia> {
   const env = deps.env ?? process.env;
   if (!transferenciaAtiva(env)) return { enviado: false, motivo: "desligado" };
@@ -162,8 +169,28 @@ export async function enviarTransferencia(
     return { enviado: false, motivo: mensagem(e) };
   }
 
-  const grupo = `transferencia_${l.id}`;
+  // Taxas de chargeback (alternativa B de 27/11): abate as dívidas do médico
+  // ANTES do envio; o desconto fica gravado na linha (retentativa não desconta
+  // duas vezes). Líquido todo consumido = nada a transferir ("descontada").
+  const desconto = await (deps.ajustarDesconto ?? ajustarDescontoChargeback)(l.id, l.medicoId, l.liquidoCentavos);
+  const valorEnviar = l.liquidoCentavos - desconto;
   const agora = deps.agora ?? new Date();
+  if (valorEnviar <= 0) {
+    await d.transferenciaMedico.updateMany({
+      where: { id: l.id, status: { not: "enviada" } },
+      data: { status: "descontada", enviadaEm: agora, erro: null },
+    });
+    await audit(null, {
+      acao: "TRANSFERENCIA_MEDICO_DESCONTADA",
+      categoria: "pagamento",
+      entidade: "transferencia_medico",
+      entidadeId: l.id,
+      detalhes: `Líquido de ${l.liquidoCentavos} centavos todo consumido por taxas de chargeback; nada a transferir`,
+    });
+    return { enviado: false, motivo: "zero" };
+  }
+
+  const grupo = `transferencia_${l.id}`;
   await d.transferenciaMedico.update({ where: { id: l.id }, data: { tentativas: { increment: 1 } } });
 
   let transfer: { id: string };
@@ -191,7 +218,7 @@ export async function enviarTransferencia(
       }
       transfer = await s.transfers.create(
         {
-          amount: l.liquidoCentavos,
+          amount: valorEnviar,
           currency: moedaCheckout(env),
           destination: conta,
           transfer_group: grupo,
@@ -237,10 +264,10 @@ export async function enviarTransferencia(
       categoria: "pagamento",
       entidade: "transferencia_medico",
       entidadeId: l.id,
-      detalhes: `Transferência de ${l.liquidoCentavos} centavos enviada ao médico (${transfer.id})`,
+      detalhes: `Transferência de ${valorEnviar} centavos enviada ao médico (${transfer.id})${desconto > 0 ? `; desconto de taxas de chargeback: ${desconto}` : ""}`,
     });
   }
-  return { enviado: true, transferId: transfer.id, valorCentavos: l.liquidoCentavos };
+  return { enviado: true, transferId: transfer.id, valorCentavos: valorEnviar };
 }
 
 /**

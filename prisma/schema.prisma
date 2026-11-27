@@ -641,6 +641,11 @@ model Reembolso {
   decididoEm    DateTime?
   repasseAjuste RepasseAjuste?
   stripeRefundId String? @unique // preenchido = enviado ao Stripe (20261028a)
+  // Reversão da TransferenciaMedico no reembolso do modelo plataforma
+  // (20261127b): preenchido = a parte do médico foi revertida no Stripe.
+  // Valor em centavos, proporcional ao reembolso, limitado ao líquido.
+  stripeReversalId String? @unique
+  stripeReversalValorCentavos Int?
   taxaMedico     ReembolsoTaxaMedico?
 
   @@index([pagamentoId, status])
@@ -675,7 +680,9 @@ model ReembolsoTaxaMedico {
 // multa_cancelamento/multa_remarcacao: bruto = comissão = 0, multas = metade
 // do médico, liquido = multas − taxa). consultaId/remarcacaoId únicos =
 // repetição nunca cria duas transferências. status: pendente | enviada |
-// falhou; stripeTransferId preenchido = enviada. O envio usa
+// falhou | descontada (20261127c: líquido todo consumido por taxas de
+// chargeback; sem transferência no Stripe). stripeTransferId preenchido =
+// enviada. O envio usa
 // source_transaction (obrigatório no Brasil): o saldo fica pending na conta
 // do médico até a charge ficar disponível (~30 dias corridos). CHECKs no
 // banco: valores >= 0, liquido = bruto − comissão − taxas + multas, origem
@@ -696,7 +703,10 @@ model TransferenciaMedico {
   taxasCentavos    Int                 @default(0)
   multasCentavos   Int                 @default(0)
   liquidoCentavos  Int
-  status           String              @default("pendente") // pendente | enviada | falhou
+  // Taxas de chargeback (alternativa B, 27/11) descontadas DESTA transferência
+  // antes do envio (20261127c). O valor enviado = liquido − desconto.
+  descontoChargebackCentavos Int      @default(0)
+  status           String              @default("pendente") // pendente | enviada | falhou | descontada (líquido todo consumido por chargeback)
   stripeTransferId String?             @unique
   criadaEm         DateTime            @default(now())
   enviadaEm        DateTime?
@@ -871,6 +881,20 @@ model Chargeback {
   feeRefundCentavos         Int?
   feeRefundErro             String?
   feeRefundEm               DateTime?
+  // Modo plataforma (20261127c): taxas do chargeback a cargo do médico —
+  // decisão do Alisson de 27/11, alternativa B da cláusula 10.13 (o valor
+  // contestado fica com a plataforma). A taxa do cartão JÁ sai no líquido da
+  // TransferenciaMedico; aqui cobra-se a taxa de contestação: reversão da
+  // transferência enviada ou desconto em recebimentos futuros.
+  // status: pendente | falhou | aguardando_desconto | quitado | sem_taxa | cancelado
+  remarcacaoId                    String? // multa de remarcação: sem Pagamento; elo com a transferência da multa
+  taxasPlataformaStatus           String?
+  taxasPlataformaCentavos         Int? // dívida total congelada na primeira tentativa
+  taxasPlataformaReversalId       String? @unique
+  taxasPlataformaReversalCentavos Int?
+  taxasPlataformaDescontadoCentavos Int   @default(0) // já abatido em recebimentos futuros
+  taxasPlataformaErro             String?
+  taxasPlataformaEm               DateTime?
   criadoEm            DateTime        @default(now())
   atualizadoEm        DateTime        @default(now()) @updatedAt
   ajustes             RepasseAjuste[]

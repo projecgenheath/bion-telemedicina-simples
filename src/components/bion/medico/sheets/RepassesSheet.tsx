@@ -584,6 +584,7 @@ const ROTULO_STATUS_TRANSFERENCIA: Record<string, string> = {
   pendente: "pendente",
   enviada: "enviada",
   falhou: "falhou",
+  descontada: "descontada (taxas de chargeback)",
 };
 
 /** Transferências do modelo novo (parte do Admin; vazio enquanto a tabela não existir). */
@@ -599,8 +600,9 @@ function TransferenciasBloco({ itens }: { itens: TransferenciaWire[] }) {
             <span>
               {ROTULO_TIPO_TRANSFERENCIA[t.tipo] ?? t.tipo} · {fmtDataHora(t.criadaEm)} ·{" "}
               {ROTULO_STATUS_TRANSFERENCIA[t.status] ?? t.status}
+              {t.descontoChargebackCentavos > 0 ? ` · desconto chargeback (${fmtCentavos(t.descontoChargebackCentavos)})` : ""}
             </span>
-            <span>{fmtCentavos(t.liquidoCentavos)}</span>
+            <span>{fmtCentavos(t.liquidoCentavos - t.descontoChargebackCentavos)}</span>
           </li>
         ))}
       </ul>
