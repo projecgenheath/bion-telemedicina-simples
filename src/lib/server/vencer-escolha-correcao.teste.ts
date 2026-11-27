@@ -95,6 +95,14 @@ igual("texto sem PIX", /PIX/.test(f.textoReembolsoAutomatico("Clínica", "19/11"
   const r2 = await f.pedirReembolsoManual({ consultaId: c.id, pacienteId: pac.id, justificativa: "Tive um imprevisto no trabalho", agora });
   igual("manual: segundo pedido barrado", r2.ok ? "ok" : r2.status, 409);
 }
+// Seção 3.1: prazo de reembolso automático aberto → pedido manual é 409 com
+// motivo próprio, mesmo com desfecho de falha técnica (checagem antes do desfecho).
+{
+  const c = await cenario();
+  const r = await f.pedirReembolsoManual({ consultaId: c.id, pacienteId: c.pacienteId, justificativa: "Tive um imprevisto no trabalho" });
+  igual("automático aberto: 409 com motivo", r.ok ? "ok" : [r.status, r.motivo], [409, "reembolso_automatico"]);
+  igual("automático aberto: previstoPara", r.ok ? null : r.automatico?.previstoPara, VENCIMENTO.toISOString());
+}
 
 await db.$disconnect();
 console.log(`reembolso-automatico: ${ok} ok, ${falhas} falhas`);
