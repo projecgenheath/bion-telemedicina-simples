@@ -253,6 +253,16 @@ async function main() {
     igual("reversão falha: resultado", (r as any).reversao, { ok: false, erro: "saldo insuficiente na conta conectada" });
     igual("reversão falha: auditoria critical", [a.logs[0].acao, a.logs[0].severidade], ["REEMBOLSO_REVERSAO_FALHOU", "critical"]);
   }
+  { const d = fakeDb([pagComValor()], [tran()]); const s = fakeStripe(); const a = auditFake();
+    const origUpdate = d.reembolso.update; let n = 0;
+    d.reembolso.update = async (arg: any) => { n++; if (n === 2) throw new Error("coluna stripeReversalId ausente"); return origUpdate(arg); };
+    const err = console.error; console.error = () => {};
+    const r = await enviarReembolsoStripe("r1", { d: d as any, s: s as any, connect: true, modo: "plataforma", audit: a.fn as any });
+    console.error = err;
+    igual("gravação falha: reversão aconteceu (ok true)", (r as any).reversao, { ok: true, reversalId: "trr_reversao-reembolso-r1", valorCentavos: 13000 });
+    igual("gravação falha: refund gravado", d.linhas[0].stripeRefundId, "re_r1");
+    igual("gravação falha: auditoria critical própria", [a.logs[0].acao, a.logs[0].severidade], ["REEMBOLSO_REVERSAO_GRAVACAO_FALHOU", "critical"]);
+  }
   { const d = fakeDb([pagComValor()]); const s = fakeStripe();
     igual("sem transferência: resultado intacto", await enviarReembolsoStripe("r1", { d: d as any, s: s as any, connect: true, modo: "plataforma" }), { enviado: true, refundId: "re_r1", status: "pending" });
     igual("sem transferência: nenhuma reversão", s.reversoes.length, 0);

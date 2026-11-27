@@ -353,10 +353,28 @@ export async function enviarReembolsoStripe(
       { amount: valor, metadata: { reembolsoId: r.id, transferenciaMedicoId: t.id } },
       { idempotencyKey: `reversao-reembolso-${r.id}` },
     );
-    await d.reembolso.update({
-      where: { id: r.id },
-      data: { stripeReversalId: reversao.id, stripeReversalValorCentavos: valor },
-    });
+    try {
+      await d.reembolso.update({
+        where: { id: r.id },
+        data: { stripeReversalId: reversao.id, stripeReversalValorCentavos: valor },
+      });
+    } catch (e) {
+      // A reversão JÁ aconteceu no Stripe; só a gravação falhou (ex.: a
+      // migração 20261127b ainda não foi aplicada). Nunca reportar como
+      // "reversão falhou": o dinheiro andou. Auditoria critical com o id
+      // para conciliação. Ordem de deploy: migração ANTES deste código.
+      const msgGravacao = (e instanceof Error ? e.message : "erro").slice(0, 300);
+      console.error("[stripe reembolso] reversão criada mas não gravada:", msgGravacao);
+      await audit(null, {
+        acao: "REEMBOLSO_REVERSAO_GRAVACAO_FALHOU",
+        categoria: "pagamento",
+        severidade: "critical",
+        entidade: "reembolso",
+        entidadeId: r.id,
+        detalhes: `Reversão ${reversao.id} (${valor} centavos) da transferência ${t.stripeTransferId} criada no Stripe, mas não gravada no Reembolso ${r.id}: ${msgGravacao}. Aplicar a migração 20261127b e conciliar.`,
+      });
+      return { ...resultado, reversao: { ok: true, reversalId: reversao.id, valorCentavos: valor } };
+    }
     await audit(null, {
       acao: "REEMBOLSO_REVERSAO_ENVIADA",
       categoria: "pagamento",
