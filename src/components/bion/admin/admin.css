@@ -1248,14 +1248,11 @@ section[tabindex="-1"]:focus { outline: none; }
   background: var(--ba-azul-suave);
   border-color: transparent;
 }
-.ba-modulo .ba-aba,
-.dark .ba-modulo .ba-aba { color: #242424; }
-.ba-modulo .ba-aba[aria-selected="true"],
-.ba-modulo .ba-aba[aria-pressed="true"],
-.dark .ba-modulo .ba-aba[aria-selected="true"],
-.dark .ba-modulo .ba-aba[aria-pressed="true"] {
-  background: var(--ba-azul);
-  color: #242424;
+.ba-modulo .ba-abas .ba-aba,
+.dark .ba-modulo .ba-abas .ba-aba { color: #242424; }
+.ba-modulo .ba-abas .ba-aba:hover:not([aria-selected="true"]):not([aria-pressed="true"]),
+.dark .ba-modulo .ba-abas .ba-aba:hover:not([aria-selected="true"]):not([aria-pressed="true"]) {
+  background: rgba(36, 36, 36, 0.08);
 }
 
 .ba-modulo .ba-card,
@@ -1275,6 +1272,19 @@ section[tabindex="-1"]:focus { outline: none; }
   background: var(--ba-familia);
   color: #242424;
   border-color: transparent;
+}
+/* No escuro o card pastel continua claro: as superfícies internas (botão
+   secundário, entrada, hover, esqueleto) ficam claras para par com #242424. */
+.dark .ba-modulo .ba-card,
+.dark .ba-folha-cor .ba-card {
+  --ba-linha: #ffffff;
+  --ba-card: #ffffff;
+  --ba-card-solido: #ffffff;
+  --ba-borda: rgba(36, 36, 36, 0.12);
+  --ba-divisor: rgba(36, 36, 36, 0.1);
+  --ba-realce: rgba(36, 36, 36, 0.05);
+  --ba-esqueleto: rgba(36, 36, 36, 0.08);
+  --ba-azul-ativo: #dee8f4;
 }
 .ba-modulo .ba-card:nth-child(3n+2),
 .ba-folha-cor .ba-card:nth-child(3n+2),
