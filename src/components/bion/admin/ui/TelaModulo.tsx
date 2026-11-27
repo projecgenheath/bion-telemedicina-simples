@@ -11,6 +11,10 @@ type Icone = ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
  * cabeçalho com voltar opcional, ícone, título, subtítulo, "Atualizar"
  * (alternativa por botão ao puxar-para-atualizar) e ações; barra de
  * ferramentas (busca/filtros) e conteúdo.
+ *
+ * Visual: mesma linguagem do Centro de Comando — brilhos decorativos
+ * (ba-glow) no fundo, entrada animada (ba-animar) no cabeçalho e
+ * conteúdo com surgimento (bion-surgir).
  */
 export function TelaModulo({
   titulo,
@@ -39,9 +43,12 @@ export function TelaModulo({
   children: ReactNode;
 }) {
   return (
-    <div className="px-4 lg:px-8 pt-[max(1rem,env(safe-area-inset-top))] lg:pt-6 pb-28 lg:pb-10 max-w-[1400px] mx-auto w-full">
-      <header className="flex flex-col items-stretch gap-3 lg:flex-row lg:flex-wrap lg:items-center">
-        <div className="flex min-w-0 flex-1 items-center gap-3">
+    <div className="relative overflow-hidden px-4 lg:px-8 pt-[max(1rem,env(safe-area-inset-top))] lg:pt-6 pb-28 lg:pb-10 max-w-[1400px] mx-auto w-full">
+      {/* brilhos decorativos da marca (mesmos do Centro de Comando) */}
+      <span aria-hidden className="ba-glow ba-glow-a" />
+      <span aria-hidden className="ba-glow ba-glow-b" />
+
+      <header className="relative flex flex-wrap items-center gap-3 ba-animar">
         {onVoltar ? (
           <button type="button" onClick={onVoltar} aria-label="Voltar" className="ba-icone-botao shrink-0">
             <ArrowLeft className="w-5 h-5" aria-hidden />
@@ -53,11 +60,10 @@ export function TelaModulo({
           </span>
         ) : null}
         <div className="min-w-0 flex-1">
-          <h1 className="text-2xl lg:text-3xl font-medium leading-tight">{titulo}</h1>
-          {subtitulo ? <p className="text-sm ba-texto-2">{subtitulo}</p> : null}
+          <h1 className="text-2xl lg:text-3xl font-black leading-tight break-words">{titulo}</h1>
+          {subtitulo ? <p className="text-sm ba-texto-2 truncate">{subtitulo}</p> : null}
         </div>
-        </div>
-        <div className="flex items-center gap-2 self-start lg:self-center">
+        <div className="flex items-center gap-2">
           {onAtualizar ? (
             <button
               type="button"
@@ -73,7 +79,7 @@ export function TelaModulo({
         </div>
       </header>
       {erroAtualizar ? (
-        <div className="ba-aviso mt-4 flex flex-wrap items-center justify-between gap-2" data-tom="critico" role="alert">
+        <div className="ba-aviso mt-4 flex flex-wrap items-center justify-between gap-2 ba-animar ba-animar-d1" data-tom="critico" role="alert">
           <p>{erroAtualizar}</p>
           {onTentarDeNovo ? (
             <button type="button" onClick={onTentarDeNovo} disabled={atualizando} className="ba-botao ba-botao-secundario shrink-0">
@@ -82,8 +88,8 @@ export function TelaModulo({
           ) : null}
         </div>
       ) : null}
-      {ferramentas ? <div className="mt-4 flex flex-col lg:flex-row gap-2 lg:items-center">{ferramentas}</div> : null}
-      <div className="mt-5">{children}</div>
+      {ferramentas ? <div className="mt-4 flex flex-col lg:flex-row gap-2 lg:items-center ba-animar ba-animar-d1">{ferramentas}</div> : null}
+      <div className="mt-5 bion-surgir ba-animar ba-animar-d2">{children}</div>
     </div>
   );
 }
