@@ -1,0 +1,4 @@
+# Markdown sempre com LF no checkout, inclusive em Windows com
+# core.autocrlf=true. O parser de front matter (lerFrontMatter) e os
+# testes de documento jurídico leem o arquivo com regex sensível a \n.
+*.md text eol=lf
