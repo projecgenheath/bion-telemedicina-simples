@@ -9,7 +9,7 @@ import {
   type EventoDesfechoMin,
 } from "@/lib/server/financeiro";
 import { REEMBOLSO_STATUS_EFETIVOS, totalReembolsadoCentavos } from "@/components/bion/medico/receita-servidor";
-import { AVISO_RETIDO_PLATAFORMA, type RetidoPlataformaWire } from "@/lib/recebimento-modelo";
+import { AVISO_RETIDO_PLATAFORMA, itemRetidoDaConsulta, type DesfechoWire, type RetidoWire } from "@/lib/recebimento-modelo";
 
 /**
  * Valor RETIDO na conta Stripe da plataforma (modelo novo, decisão do
@@ -68,8 +68,9 @@ const selEventoDesfecho = { id: true, tipo: true, motivo: true, em: true, dataAn
 /**
  * Lê as consultas do PRÓPRIO médico com valor retido na plataforma.
  * `medicoId` vem da sessão na rota; nunca de query/corpo.
+ * Formato de cada item: contrato-api-pagamento-2111.md, seção 2.
  */
-export async function retidoNaPlataforma(medicoId: string, limite = 50): Promise<RetidoPlataformaWire> {
+export async function retidoNaPlataforma(medicoId: string, limite = 50): Promise<RetidoWire> {
   const rows = await db.consulta.findMany({
     where: {
       medicoId,
@@ -99,12 +100,17 @@ export async function retidoNaPlataforma(medicoId: string, limite = 50): Promise
     .map((c) => ({ consulta: c, valorCentavos: valorRetidoDaConsulta(c) }))
     .filter((x) => x.valorCentavos > 0)
     .slice(0, limite)
-    .map((x) => ({
-      consultaId: x.consulta.id,
-      dataInicio: x.consulta.dataInicio.toISOString(),
-      valorCentavos: x.valorCentavos,
-      situacao: "aguardando_consulta" as const,
-    }));
+    .map((x) =>
+      itemRetidoDaConsulta(
+        x.consulta.id,
+        x.consulta.dataInicio,
+        x.valorCentavos,
+        // O schema atual não guarda a taxa do Stripe no Pagamento: null até o
+        // Admin gravar (contrato diz "null até o webhook informar").
+        null,
+        desfechoDaConsulta(x.consulta) as DesfechoWire,
+      ),
+    );
   return {
     aviso: AVISO_RETIDO_PLATAFORMA,
     totalCentavos: itens.reduce((s, i) => s + i.valorCentavos, 0),

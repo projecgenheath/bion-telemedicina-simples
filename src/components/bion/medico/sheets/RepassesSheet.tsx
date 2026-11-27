@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { AlertTriangle, ChevronLeft, ChevronRight, Download, ExternalLink, RefreshCw, Wallet } from "lucide-react";
-import type { RetidoPlataformaWire } from "@/lib/recebimento-modelo";
+import type { ReembolsoWire, RetidoWire, TransferenciaWire } from "@/lib/recebimento-modelo";
 import { fmtCentavos } from "../metricas";
 import { baixarCsvRepasse, csvDetalheRepasse, csvHistoricoRepasses, previaTemConteudo } from "../repasses-csv";
 import {
@@ -382,7 +382,9 @@ export function RepassesSheet({
                 </p>
               </div>
 
-              {lista.retidoPlataforma ? <RetidoPlataformaBloco dados={lista.retidoPlataforma} /> : null}
+              {lista.retido ? <RetidoPlataformaBloco dados={lista.retido} /> : null}
+              {lista.transferencias.length > 0 ? <TransferenciasBloco itens={lista.transferencias} /> : null}
+              {lista.reembolsos.length > 0 ? <ReembolsosBloco itens={lista.reembolsos} /> : null}
 
               {!lista.temChavePix && repasseParaPagar(lista) ? (
                 <div className="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4 flex gap-3" role="status">
@@ -517,7 +519,7 @@ const ROTULO_DIRETO: Record<string, string> = { consulta: "Consulta", renovacao:
  * cartão vai para a conta Stripe do médico. Mesmo desenho do bloco de
  * cobrança direta abaixo — só dados e textos novos.
  */
-function RetidoPlataformaBloco({ dados }: { dados: RetidoPlataformaWire }) {
+function RetidoPlataformaBloco({ dados }: { dados: RetidoWire }) {
   return (
     <div className="bp-glass p-4" aria-label="Valor retido na plataforma">
       <div className="text-xs font-bold uppercase tracking-wider text-bion-ink/75 dark:text-bion-paper/75">
@@ -530,9 +532,15 @@ function RetidoPlataformaBloco({ dados }: { dados: RetidoPlataformaWire }) {
           {dados.itens.map((i) => (
             <li key={i.consultaId} className="flex justify-between gap-2 tabular-nums">
               <span>
-                Consulta · {fmtDataHora(i.dataInicio)} · aguardando a consulta
+                Consulta · {fmtDataHora(i.dataInicio)} · {ROTULO_DESFECHO_DADOS[i.desfecho] ?? i.desfecho}
               </span>
-              <span>{fmtCentavos(i.valorCentavos)}</span>
+              <span className="text-right">
+                <span className="block">{fmtCentavos(i.valorCentavos)}</span>
+                <span className="block text-xs text-bion-ink/60 dark:text-bion-paper/60">
+                  previsto {fmtCentavos(i.previstoCentavos)}
+                  {i.taxaCentavos === null ? " (taxa do cartão ainda não informada)" : ""}
+                </span>
+              </span>
             </li>
           ))}
         </ul>
@@ -541,6 +549,74 @@ function RetidoPlataformaBloco({ dados }: { dados: RetidoPlataformaWire }) {
           Nenhuma consulta paga aguardando atendimento na plataforma agora.
         </p>
       )}
+    </div>
+  );
+}
+
+/** Rótulos do desfecho que vem no bloco `retido` (contrato, seção 2). */
+const ROTULO_DESFECHO_DADOS: Record<string, string> = {
+  sem_desfecho: "aguardando a consulta",
+  realizada: "realizada",
+  falta_paciente: "falta do paciente",
+  falha_tecnica: "falha técnica",
+  falta_medico: "falta do médico",
+  encerrada: "cancelada/remarcada",
+};
+
+const ROTULO_TIPO_TRANSFERENCIA: Record<string, string> = {
+  consulta: "Consulta",
+  multa_cancelamento: "Multa de cancelamento",
+  multa_remarcacao: "Multa de remarcação",
+};
+
+const ROTULO_STATUS_TRANSFERENCIA: Record<string, string> = {
+  pendente: "pendente",
+  enviada: "enviada",
+  falhou: "falhou",
+};
+
+/** Transferências do modelo novo (parte do Admin; vazio enquanto a tabela não existir). */
+function TransferenciasBloco({ itens }: { itens: TransferenciaWire[] }) {
+  return (
+    <div className="bp-glass p-4" aria-label="Transferências do modelo novo">
+      <div className="text-xs font-bold uppercase tracking-wider text-bion-ink/75 dark:text-bion-paper/75">
+        Transferências (modelo novo)
+      </div>
+      <ul className="mt-2 space-y-1 text-sm">
+        {itens.map((t) => (
+          <li key={t.id} className="flex justify-between gap-2 tabular-nums">
+            <span>
+              {ROTULO_TIPO_TRANSFERENCIA[t.tipo] ?? t.tipo} · {fmtDataHora(t.criadaEm)} ·{" "}
+              {ROTULO_STATUS_TRANSFERENCIA[t.status] ?? t.status}
+            </span>
+            <span>{fmtCentavos(t.liquidoCentavos)}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/** Reembolsos do modelo novo: a taxa do cartão nunca volta e sai do médico. */
+function ReembolsosBloco({ itens }: { itens: ReembolsoWire[] }) {
+  return (
+    <div className="bp-glass p-4" aria-label="Reembolsos do modelo novo">
+      <div className="text-xs font-bold uppercase tracking-wider text-bion-ink/75 dark:text-bion-paper/75">
+        Reembolsos (modelo novo)
+      </div>
+      <ul className="mt-2 space-y-1 text-sm">
+        {itens.map((r) => (
+          <li key={`${r.consultaId}-${r.processadoEm}`} className="flex justify-between gap-2 tabular-nums">
+            <span>
+              Reembolso · {fmtDataHora(r.processadoEm)}
+              {r.taxaNaoDevolvidaCentavos > 0
+                ? ` · taxa do cartão não devolvida (${fmtCentavos(r.taxaNaoDevolvidaCentavos)})`
+                : ""}
+            </span>
+            <span>{fmtCentavos(r.valorCentavos)}</span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

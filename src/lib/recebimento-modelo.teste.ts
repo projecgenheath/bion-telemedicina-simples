@@ -4,6 +4,7 @@
  * Regras: decisão do Alisson de 21/11/2026 (regras-pagamento-bion-2026-11.md).
  */
 import {
+  AVISO_GERAL_RECEBIMENTO,
   AVISO_RETIDO_PLATAFORMA,
   TEXTO_COBRANCA_RETIDA,
   TEXTO_FALTA_MEDICO,
@@ -11,6 +12,8 @@ import {
   TEXTO_PRAZO_BANCO,
   TEXTO_REEMBOLSOS,
   TEXTO_TRANSFERENCIA,
+  TOTAIS_ZERO,
+  itemRetidoDaConsulta,
   transferenciaAposConsulta,
 } from "./recebimento-modelo";
 
@@ -68,6 +71,31 @@ igual("comissão personalizada 20%", transferenciaAposConsulta(15000, 500, 20), 
   parteMedicoPct: 80,
 });
 igual("comissão inválida cai no padrão 10%", transferenciaAposConsulta(15000, 0, Number.NaN).comissaoPct, 10);
+
+/* ---------- item do bloco `retido` (contrato, seção 2) ---------- */
+const DATA_ITEM = new Date("2026-11-28T18:00:00.000Z");
+igual("item retido: 20000 com taxa desconhecida", itemRetidoDaConsulta("c1", DATA_ITEM, 20000, null, "sem_desfecho"), {
+  consultaId: "c1",
+  dataInicio: "2026-11-28T18:00:00.000Z",
+  valorCentavos: 20000,
+  comissaoCentavos: 2000,
+  taxaCentavos: null,
+  previstoCentavos: 18000,
+  desfecho: "sem_desfecho",
+});
+igual("item retido: taxa 700 informada", itemRetidoDaConsulta("c2", DATA_ITEM, 20000, 700, "realizada"), {
+  consultaId: "c2",
+  dataInicio: "2026-11-28T18:00:00.000Z",
+  valorCentavos: 20000,
+  comissaoCentavos: 2000,
+  taxaCentavos: 700,
+  previstoCentavos: 17300,
+  desfecho: "realizada",
+});
+igual("item retido: valor negativo vira zero", itemRetidoDaConsulta("c3", DATA_ITEM, -500, null, "sem_desfecho").previstoCentavos, 0);
+igual("totais zero: nada negativo", TOTAIS_ZERO.liquidoCentavos, 0);
+contem("aviso geral: BION 10%", AVISO_GERAL_RECEBIMENTO, "A BION fica com 10%");
+contem("aviso geral: taxa no reembolso", AVISO_GERAL_RECEBIMENTO, "inclusive no reembolso");
 
 /* ---------- textos das regras 1 a 8 ---------- */
 contem("regra 1: cobrado na marcação", TEXTO_COBRANCA_RETIDA, "cobrado na marcação");

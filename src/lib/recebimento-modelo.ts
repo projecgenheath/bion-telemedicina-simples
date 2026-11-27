@@ -40,27 +40,127 @@ export const TEXTO_PRAZO_BANCO =
 export const AVISO_RETIDO_PLATAFORMA =
   "Valor pago pelo paciente que fica na conta da plataforma até a consulta terminar. Depois da consulta realizada, 90% menos a taxa do cartão vai para a sua conta Stripe; o depósito no banco segue o calendário da Stripe.";
 
-/**
- * Contrato de dados PROPOSTO ao Admin para o valor retido na plataforma.
- * Hoje a rota /api/medico/repasses já devolve este formato com o que dá para
- * ler do banco (consultas pagas na plataforma, ainda sem desfecho). Quando a
- * transferência pós-consulta entrar (parte do Admin), o mesmo campo passa a
- * refletir também o que aguarda transferência após o desfecho "realizada".
+/** Aviso geral da resposta do modelo novo (contrato, seção 2). */
+export const AVISO_GERAL_RECEBIMENTO =
+  "A BION fica com 10%. A taxa do cartão sai do médico, inclusive no reembolso. O depósito no banco segue o calendário da Stripe.";
+
+/*
+ * Contrato de dados do modelo novo — o fechado com o Presidente/Admin em
+ * C:\Users\Alisson\OpenBot\Shared\contrato-api-pagamento-2111.md (seção 2).
+ * O cliente lê `modelo` e não depende mais dos campos antigos (saldo PIX,
+ * prévia, repasses), que continuam na resposta só enquanto o Admin não liga
+ * o modelo novo. Nada aqui cobra, transfere ou grava.
  */
-export type ItemRetidoPlataforma = {
+
+/** `legado` = main de hoje (cobrança direta/PIX). `plataforma` = modelo novo. */
+export type ModeloPagamentoWire = "plataforma" | "legado";
+
+export type DesfechoWire = "sem_desfecho" | "realizada" | "falta_paciente" | "falha_tecnica" | "falta_medico" | "encerrada";
+
+export type ItemRetidoWire = {
   consultaId: string;
   /** ISO do início da consulta. */
   dataInicio: string;
   /** Valor ainda retido: bruto − reembolsos efetivos. */
   valorCentavos: number;
-  situacao: "aguardando_consulta";
+  /** 10% da BION (Math.round, como financeiro.ts). */
+  comissaoCentavos: number;
+  /** Taxa real do Stripe; `null` até o webhook informar. */
+  taxaCentavos: number | null;
+  /** bruto − comissão − taxa (taxa `null` conta como 0). */
+  previstoCentavos: number;
+  desfecho: DesfechoWire;
 };
 
-export type RetidoPlataformaWire = {
+export type RetidoWire = {
   aviso: string;
   totalCentavos: number;
-  itens: ItemRetidoPlataforma[];
+  itens: ItemRetidoWire[];
 };
+
+export type TipoTransferenciaWire = "consulta" | "multa_cancelamento" | "multa_remarcacao";
+export type StatusTransferenciaWire = "pendente" | "enviada" | "falhou";
+
+export type TransferenciaWire = {
+  id: string;
+  tipo: TipoTransferenciaWire;
+  consultaId: string | null;
+  remarcacaoId: string | null;
+  status: StatusTransferenciaWire;
+  brutoCentavos: number;
+  comissaoCentavos: number;
+  taxasCentavos: number;
+  multasCentavos: number;
+  liquidoCentavos: number;
+  criadaEm: string;
+  /** `null` se pendente ou falhou. */
+  enviadaEm: string | null;
+  /** Calendário da Stripe; `null` se ainda não enviada. */
+  previsaoBanco: string | null;
+};
+
+export type ReembolsoWire = {
+  consultaId: string;
+  valorCentavos: number;
+  taxaNaoDevolvidaCentavos: number;
+  /** > 0 quando a taxa foi descontada de recebimento futuro. */
+  descontadoDoMedicoCentavos: number;
+  motivo: string;
+  processadoEm: string;
+};
+
+export type TotaisWire = {
+  brutoCentavos: number;
+  comissaoCentavos: number;
+  taxasCentavos: number;
+  multasCentavos: number;
+  reembolsosCentavos: number;
+  liquidoCentavos: number;
+};
+
+/** Bloco do modelo novo em GET /api/medico/repasses (contrato, seção 2). */
+export type RespostaModeloNovoWire = {
+  modelo: ModeloPagamentoWire;
+  retido: RetidoWire;
+  transferencias: TransferenciaWire[];
+  reembolsos: ReembolsoWire[];
+  totais: TotaisWire;
+  aviso: string;
+};
+
+export const TOTAIS_ZERO: TotaisWire = {
+  brutoCentavos: 0,
+  comissaoCentavos: 0,
+  taxasCentavos: 0,
+  multasCentavos: 0,
+  reembolsosCentavos: 0,
+  liquidoCentavos: 0,
+};
+
+/**
+ * Monta um item de `retido` a partir do que o banco já tem (PURA).
+ * `taxaCentavos` fica `null` enquanto o webhook do Stripe não informar.
+ * `desfecho` vem de `desfechoDaConsulta` (server); aqui não se inventa.
+ */
+export function itemRetidoDaConsulta(
+  consultaId: string,
+  dataInicio: Date,
+  valorCentavos: number,
+  taxaCentavos: number | null,
+  desfecho: DesfechoWire,
+  comissaoPct = 10,
+): ItemRetidoWire {
+  const previsto = transferenciaAposConsulta(valorCentavos, taxaCentavos, comissaoPct);
+  return {
+    consultaId,
+    dataInicio: dataInicio.toISOString(),
+    valorCentavos: previsto.brutoCentavos,
+    comissaoCentavos: previsto.comissaoCentavos,
+    taxaCentavos: taxaCentavos === null ? null : previsto.taxaCentavos,
+    previstoCentavos: previsto.medicoCentavos,
+    desfecho,
+  };
+}
 
 /**
  * Transferência PREVISTA ao médico após a consulta realizada (exibição).

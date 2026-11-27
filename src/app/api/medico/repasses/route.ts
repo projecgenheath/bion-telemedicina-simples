@@ -3,6 +3,7 @@ import { exigirPapel } from "@/lib/server/auth";
 import { ok, falha } from "@/lib/server/http";
 import { previaDoDia, recebidosDiretoNoStripe, totalRecebidoDireto } from "@/lib/server/repasse";
 import { retidoNaPlataforma } from "@/lib/server/retido-plataforma";
+import { AVISO_GERAL_RECEBIMENTO, TOTAIS_ZERO } from "@/lib/recebimento-modelo";
 
 /**
  * GET /api/medico/repasses — SOMENTE LEITURA.
@@ -72,11 +73,23 @@ export async function GET() {
       somaFechados + previa.totais.liquidoCentavos - previa.ajustesPendentesRestantesCentavos;
 
     return ok({
+      /**
+       * Modelo novo (contrato-api-pagamento-2111.md, seção 2). `modelo` fica
+       * "legado" enquanto o Admin não ligar a cobrança na plataforma; aí ele
+       * vira "plataforma". `transferencias` e `reembolsos` saem vazios porque a
+       * tabela TransferenciaMedico ainda não existe (parte do Admin).
+       */
+      modelo: "legado" as const,
+      retido,
+      transferencias: [],
+      reembolsos: [],
+      totais: TOTAIS_ZERO,
+      aviso: AVISO_GERAL_RECEBIMENTO,
+      // ---- Campos do modelo ANTERIOR: mantidos até o Admin ligar o novo. ----
       saldoCentavos,
       temChavePix: !!pix,
-      aviso:
+      avisoModeloAnterior:
         "Os repasses, a prévia e o saldo abaixo são do modelo anterior (PIX), com fechamento diário às 23:30. Cada repasse fechado é pago inteiro; o restante dos ajustes (reembolsos depois do fechamento) só desconta dos próximos repasses. No modelo novo, o valor fica na plataforma até a consulta terminar e o repasse (90% menos a taxa do cartão) vai para a sua conta Stripe depois da consulta realizada.",
-      retidoPlataforma: retido,
       previa: {
         competencia: previa.competencia,
         corte: previa.corte,

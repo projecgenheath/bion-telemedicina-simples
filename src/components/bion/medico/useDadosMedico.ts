@@ -17,7 +17,7 @@ import {
 } from "./metricas";
 import type { DadosPessoaisMedico } from "./dados-pessoais";
 import type { CampoRecebimento, PixTipo, RecebimentoWire, TitularTipo } from "@/lib/server/recebimento";
-import type { RetidoPlataformaWire } from "@/lib/recebimento-modelo";
+import type { RetidoWire, ReembolsoWire, TransferenciaWire, TotaisWire, ModeloPagamentoWire } from "@/lib/recebimento-modelo";
 
 /** Evento de janela: algo mudou na agenda do médico (ex.: "Cancelar agenda do dia"). */
 export const EVENTO_DADOS_MEDICO = "bion-medico:dados-alterados";
@@ -403,17 +403,24 @@ export type PreviaRepasseWire = {
 };
 
 export type ListaRepasses = {
+  /**
+   * Modelo novo — contrato-api-pagamento-2111.md, seção 2. `modelo` diz qual
+   * modelo o servidor está usando; o cliente lê `retido`, `transferencias`,
+   * `reembolsos` e `totais` e não depende mais dos campos antigos.
+   */
+  modelo: ModeloPagamentoWire;
+  retido: RetidoWire;
+  transferencias: TransferenciaWire[];
+  reembolsos: ReembolsoWire[];
+  totais: TotaisWire;
+  /** Aviso geral do modelo novo (regras 2, 6 e 8). */
+  aviso: string;
+  /** Nota do bloco legado; os campos abaixo somem quando o Admin ligar o novo. */
+  avisoModeloAnterior?: string;
   saldoCentavos: number;
   temChavePix: boolean;
-  aviso: string;
   previa: PreviaRepasseWire;
   repasses: RepasseResumo[];
-  /**
-   * Modelo novo (decisão de 21/11/2026): valor pago que fica na conta da
-   * plataforma até a consulta terminar. A transferência de 90% menos a taxa
-   * do cartão após a consulta realizada é parte do Admin.
-   */
-  retidoPlataforma?: RetidoPlataformaWire;
   /**
    * Cobrança direta (modelo anterior): valor COBRADO na conta Stripe do
    * médico (bruto − reembolsos, antes da comissão de 10% e da taxa do
