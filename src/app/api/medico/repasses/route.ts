@@ -17,9 +17,10 @@ import { AVISO_GERAL_RECEBIMENTO, TOTAIS_ZERO } from "@/lib/recebimento-modelo";
  * pago inteiro; o restante dos ajustes só desconta dos próximos.
  * Esse saldo/prévia/fechamento das 23:30 é do modelo ANTERIOR (PIX).
  *
- * Modelo NOVO (decisão do Alisson de 21/11/2026): `retidoPlataforma` traz
- * o valor pago que fica na conta da plataforma até a consulta terminar;
- * a transferência de 90% menos a taxa do cartão após o desfecho "realizada"
+ * Modelo NOVO (decisão do Alisson de 21/11/2026, contrato-api-pagamento-2111.md):
+ * `retido` traz o valor pago que fica na conta da plataforma até a consulta
+ * terminar; `transferencias`, `reembolsos` e `totais` completam o contrato.
+ * A transferência de 90% menos a taxa do cartão após o desfecho "realizada"
  * é parte do Admin. Ver src/lib/server/retido-plataforma.ts.
  *
  * Privacidade: sem CPF/contato/chave do item/reembolsoId. A prévia traz
