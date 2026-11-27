@@ -15,6 +15,7 @@ import {
   type MedicoLivre,
 } from "./espera-medico-ui";
 import { agoraCalibradoMs, registrarHoraServidor } from "./useRelogioSala";
+import { MODELO_PAGAMENTO_RETIDO, TEXTO_FALTA_MEDICO_NA_ESPERA } from "@/lib/pagamento-paciente";
 
 /**
  * Espera do médico na chamada do PACIENTE (9:16).
@@ -272,7 +273,9 @@ export function EsperaMedicoPainel({
         <Cabecalho refTitulo={tituloRef} icone={<Clock className="size-7" aria-hidden />} titulo="Aguardando o médico entrar">
           {retornoGratis
             ? "Ele tem até 10 minutos. Se não entrar, você pode cancelar — e o seu direito ao retorno grátis volta."
-            : "Ele tem até 10 minutos. Se não entrar, você pode cancelar com reembolso integral ou remarcar com outro médico."}
+            : MODELO_PAGAMENTO_RETIDO
+              ? TEXTO_FALTA_MEDICO_NA_ESPERA
+              : "Ele tem até 10 minutos. Se não entrar, você pode cancelar com reembolso integral ou remarcar com outro médico."}
         </Cabecalho>
         <p className="mt-4 text-4xl font-semibold tabular-nums" aria-hidden>
           {formatarContagem(s)}
