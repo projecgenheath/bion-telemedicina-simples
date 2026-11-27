@@ -44,6 +44,23 @@ export const AVISO_RETIDO_PLATAFORMA =
 export const AVISO_GERAL_RECEBIMENTO =
   "A BION fica com 10%. A taxa do cartão sai do médico, inclusive no reembolso. O depósito no banco segue o calendário da Stripe.";
 
+/**
+ * Falta do paciente no modelo plataforma: o médico NÃO recebe (regra 5 de
+ * 21/11; contrato, seção 3). Sem remarcação em 7 dias corridos, reembolso
+ * integral automático. No legado, cada tela mantém o texto de hoje.
+ */
+export const TEXTO_FALTA_PACIENTE_PLATAFORMA =
+  "O paciente é avisado e tem 7 dias para remarcar sem custo; sem remarcação, o valor é reembolsado e você não recebe por esta consulta.";
+
+/**
+ * Efeito da falta do paciente conforme o `modelo` que o servidor devolve no
+ * desfecho (emenda de 27/11 no contrato). Sem o campo (servidor antigo),
+ * vale o texto legado da própria tela — nada muda antes da hora.
+ */
+export function efeitoFaltaPaciente(modelo: ModeloPagamentoWire | null | undefined, textoLegado: string): string {
+  return modelo === "plataforma" ? TEXTO_FALTA_PACIENTE_PLATAFORMA : textoLegado;
+}
+
 /*
  * Contrato de dados do modelo novo — o fechado com o Presidente/Admin em
  * C:\Users\Alisson\OpenBot\Shared\contrato-api-pagamento-2111.md (seção 2).

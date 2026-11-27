@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
-import { blocoFinanceiroDesfecho } from "@/lib/server/financeiro";
+import { blocoFinanceiroDesfecho, modeloPlataformaAtivo } from "@/lib/server/financeiro";
 import { exigirPapel } from "@/lib/server/auth";
 import { ok, falha } from "@/lib/server/http";
 import {
@@ -112,6 +112,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       desfecho: ev ? { tipo: ev.tipo, motivo: ev.motivo, por: ev.por } : null,
       // Modelo 21/11: o que aconteceu com o dinheiro desta consulta.
       financeiro: await blocoFinanceiroDesfecho(c.id),
+      // Emenda 27/11: o bloco financeiro existe nos dois modelos; `modelo` diz
+      // qual está ativo para a tela escolher o texto certo (falta do paciente).
+      modelo: modeloPlataformaAtivo() ? "plataforma" : "legado",
     });
   } catch (erro) {
     return falha(erro);
@@ -127,6 +130,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (!tipo || !TIPOS.includes(tipo)) {
       return Response.json({ erro: 'Informe tipo: "falta_paciente" ou "falha_tecnica".' }, { status: 400 });
     }
+    /** Emenda 27/11: a tela lê `modelo` para escolher o texto do desfecho. */
+    const modelo = modeloPlataformaAtivo() ? "plataforma" : "legado";
     const r = await consultaDoMedico(id, medico.id);
     if ("erro" in r) return r.erro;
     const c: ConsultaAvaliada = r.c;
@@ -135,7 +140,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const repeticao = async () => {
       const ev = await desfechoExistente(c.id);
       if (ev && ev.por === "medico" && ev.atorId === medico.id && ev.tipo === tipo && (tipo !== "falha_tecnica" || ev.motivo === "falha_tecnica")) {
-        return ok({ consulta: { ...(await wire(c.id)), financeiro: await blocoFinanceiroDesfecho(c.id) }, desfecho: tipo, jaRegistrado: true });
+        return ok({ consulta: { ...(await wire(c.id)), financeiro: await blocoFinanceiroDesfecho(c.id) }, desfecho: tipo, jaRegistrado: true, modelo });
       }
       if (ev) return recusa(`Esta consulta já tem desfecho registrado (${rotuloDesfecho(ev)}).`, { desfecho: ev.tipo });
       return null;
@@ -185,7 +190,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       if (depois) return depois;
       return recusa("A consulta mudou enquanto o pedido era processado. Atualize a tela e tente de novo.");
     }
-    return ok({ consulta: { ...(await wire(c.id)), financeiro: await blocoFinanceiroDesfecho(c.id) }, desfecho: tipo, status: gravado.status });
+    return ok({ consulta: { ...(await wire(c.id)), financeiro: await blocoFinanceiroDesfecho(c.id) }, desfecho: tipo, status: gravado.status, modelo });
   } catch (erro) {
     return falha(erro);
   }

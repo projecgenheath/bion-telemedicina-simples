@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CheckCircle2, Clock, Loader2, LogOut, UserX, WifiOff, X } from "lucide-react";
 import { ModalBion } from "@/components/bion/ModalBion";
+import { efeitoFaltaPaciente, type ModeloPagamentoWire } from "@/lib/recebimento-modelo";
 
 /** Estado vindo de GET /api/medico/consultas/[id]/desfecho. */
 export type EstadoDesfecho = {
@@ -15,6 +16,8 @@ export type EstadoDesfecho = {
   medicoEntrouEm: string | null;
   falta: { pode: boolean; liberaEm: string | null; mensagem: string | null };
   desfecho: { tipo: string; motivo: string; por: string } | null;
+  /** Emenda 27/11: qual modelo de pagamento está ativo; ausente no servidor antigo. */
+  modelo?: ModeloPagamentoWire;
 };
 
 export type EscolhaEncerrar = "concluir" | "falta_paciente" | "falha_tecnica" | "sair";
@@ -214,7 +217,7 @@ export function EncerrarAtendimento({
                     </span>
                     <span id="bm-falta-ajuda" className="block text-xs text-muted-foreground mt-0.5">
                       {estado.falta.pode
-                        ? "Você recebe normalmente. O paciente pode pedir reembolso em até 7 dias."
+                        ? efeitoFaltaPaciente(estado.modelo, "Você recebe normalmente. O paciente pode pedir reembolso em até 7 dias.")
                         : liberaEm !== null && faltaMs > 0
                           ? `Disponível às ${fmtHora.format(liberaEm)}, 15 min depois do horário.`
                           : (estado.falta.mensagem ?? "Ainda não disponível.")}

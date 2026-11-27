@@ -8,11 +8,13 @@ import {
   AVISO_RETIDO_PLATAFORMA,
   TEXTO_COBRANCA_RETIDA,
   TEXTO_FALTA_MEDICO,
+  TEXTO_FALTA_PACIENTE_PLATAFORMA,
   TEXTO_MULTAS,
   TEXTO_PRAZO_BANCO,
   TEXTO_REEMBOLSOS,
   TEXTO_TRANSFERENCIA,
   TOTAIS_ZERO,
+  efeitoFaltaPaciente,
   itemRetidoDaConsulta,
   transferenciaAposConsulta,
 } from "./recebimento-modelo";
@@ -122,6 +124,16 @@ const todos = [TEXTO_COBRANCA_RETIDA, TEXTO_TRANSFERENCIA, TEXTO_FALTA_MEDICO, T
 igual("não promete depósito no dia da consulta", todos.includes("depósito no dia"), false);
 igual("não promete crédito na hora do pagamento", todos.includes("cai na hora"), false);
 igual("não promete devolução da taxa pela BION", todos.includes("BION devolve a taxa"), false);
+
+/* ---------- falta do paciente por modelo (contrato, seção 3 + emenda 27/11) ---------- */
+contem("falta plataforma: médico não recebe", TEXTO_FALTA_PACIENTE_PLATAFORMA, "você não recebe por esta consulta");
+contem("falta plataforma: 7 dias para remarcar sem custo", TEXTO_FALTA_PACIENTE_PLATAFORMA, "7 dias para remarcar sem custo");
+contem("falta plataforma: reembolso sem remarcação", TEXTO_FALTA_PACIENTE_PLATAFORMA, "sem remarcação, o valor é reembolsado");
+igual("falta plataforma: não promete recebimento", TEXTO_FALTA_PACIENTE_PLATAFORMA.includes("recebe normalmente"), false);
+igual("plataforma troca o texto legado", efeitoFaltaPaciente("plataforma", "Você recebe normalmente."), TEXTO_FALTA_PACIENTE_PLATAFORMA);
+igual("legado mantém o texto da tela", efeitoFaltaPaciente("legado", "Você recebe normalmente."), "Você recebe normalmente.");
+igual("sem modelo (servidor antigo) mantém o texto da tela", efeitoFaltaPaciente(undefined, "Você recebe normalmente."), "Você recebe normalmente.");
+igual("modelo nulo mantém o texto da tela", efeitoFaltaPaciente(null, "Você recebe normalmente."), "Você recebe normalmente.");
 
 console.log(`recebimento-modelo: ${ok} ok, ${falhas} falhas`);
 if (falhas > 0) process.exit(1);
