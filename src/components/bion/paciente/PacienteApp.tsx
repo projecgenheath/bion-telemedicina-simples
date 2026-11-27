@@ -21,6 +21,7 @@ import { CancelarRemarcarSheet, type AcaoSheet } from "./CancelarRemarcarSheet";
 import { fmtCentavos, rotuloReembolso, usePreviaCancelamento } from "./usePreviaCancelamento";
 import { desistirRemarcacao, iniciarRemarcacaoComMulta, useRecarregarEstado } from "./useRemarcacaoComMulta";
 import { EtiquetaStatus, PedirReembolsoSheet } from "./PedirReembolsoSheet";
+import { useReembolsoManual } from "./useReembolsoManual";
 import { ExcluirContaSheet } from "./ExcluirContaSheet";
 import { consultaTemReembolso } from "./reembolso-visivel";
 import {
@@ -1053,12 +1054,17 @@ function CardFalta({ consulta, onAbrir }: { consulta: Consulta; onAbrir: () => v
   const prazo = consulta.podePedirAte;
   const prazoAberto = !!prazo && Date.now() < new Date(prazo).getTime();
   // Modelo novo (21/11): falta do paciente tem reembolso automático, sem
-  // pedido. A chave só liga depois do motor de pagamento do Admin.
-  const automatico = MODELO_PAGAMENTO_RETIDO && !pedido && consultaTemReembolso(consulta);
-  const prazoAutomatico = prazoReembolsoFaltaPaciente(consulta.ts);
+  // pedido. A chave só liga depois do motor de pagamento do Admin; o GET
+  // `/api/consultas/[id]/reembolso` é a fonte do prazo quando existir.
+  const { automatico: blocoAutomatico } = useReembolsoManual(MODELO_PAGAMENTO_RETIDO ? consulta.id : null);
+  const ativo = blocoAutomatico?.ativo === true;
+  const exibirAutomatico = MODELO_PAGAMENTO_RETIDO && !pedido && (ativo || consultaTemReembolso(consulta));
+  const prazoAutomatico = blocoAutomatico?.prazo
+    ? new Date(blocoAutomatico.prazo)
+    : prazoReembolsoFaltaPaciente(consulta.ts);
   const automaticoNoPrazo = reembolsoAutomaticoNoPrazo(consulta.ts);
   // Sem pedido e fora do prazo: nada a fazer — o card some.
-  if (!pedido && !automatico && !prazoAberto) return null;
+  if (!pedido && !exibirAutomatico && !prazoAberto) return null;
   // Retorno grátis (valor 0): não há o que reembolsar.
   if (!pedido && !consultaTemReembolso(consulta)) return null;
 
@@ -1067,7 +1073,7 @@ function CardFalta({ consulta, onAbrir }: { consulta: Consulta; onAbrir: () => v
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <span className="block text-xs font-bold uppercase tracking-wider opacity-80">
-            {pedido ? "Pedido de reembolso" : automatico ? "Reembolso automático" : "Consulta não realizada"}
+            {pedido ? "Pedido de reembolso" : exibirAutomatico ? "Reembolso automático" : "Consulta não realizada"}
           </span>
           <span className="block text-sm font-bold truncate">
             {consulta.especialidade} · {consulta.data} {consulta.hora}
@@ -1090,7 +1096,7 @@ function CardFalta({ consulta, onAbrir }: { consulta: Consulta; onAbrir: () => v
             <FileText className="w-3 h-3" /> Ver detalhes
           </button>
         </>
-      ) : automatico ? (
+      ) : exibirAutomatico ? (
         <p className="text-sm mt-2 leading-relaxed">
           {automaticoNoPrazo
             ? textoFaltaPacienteAutomatica(prazoAutomatico, (d) => fmtTicketData(d.toISOString()))

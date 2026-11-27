@@ -50,9 +50,23 @@ promete o modelo novo.
   `{ automatico: { ativo: boolean; prazo: string } }`, lido de
   `Consulta.reembolsoAutomaticoEm`. A tela usa esse bloco quando a chave estiver ligada;
   com ele, o cartão de falta não pede justificativa ao paciente.
-- **Decisão pendente do Presidente:** o que `POST /api/consultas/[id]/reembolso` deve
-  responder quando a consulta já tem reembolso automático (o Admin não muda o 409 sem ok).
-  Enquanto não há decisão, a tela não muda esse POST.
+- **Decisão do Presidente (27/11) sobre `POST /api/consultas/[id]/reembolso`:**
+  - com reembolso automático, continua **409** (não vira 200 nem 422), com texto exato:
+    "O reembolso desta consulta é automático — você não precisa pedir. Ele é processado no mesmo cartão."
+    e corpo com `motivo: "reembolso_automatico"` e
+    `automatico: { processadoEm: ISO | null, previstoPara: ISO | null }`.
+  - sem reembolso automático, o texto atual fica exatamente como está
+    ("Já existe um pedido de reembolso para esta consulta.").
+  - a checagem do automático entra em `pedirReembolsoManual` **antes** da checagem de
+    desfecho, logo depois da checagem de dono (na falta do médico o desfecho não é
+    `falta_paciente`; sem isso a rota responderia "O reembolso pelo app é só para
+    consultas marcadas como falta", o que é mentira quando o reembolso é automático).
+    Gatilho único: `Consulta.reembolsoAutomaticoEm` preenchido.
+  - como o campo só é preenchido pelo servidor novo, com a chave desligada o
+    comportamento é idêntico ao de hoje; sem flag extra nessa rota.
+  - `GET /api/consultas/[id]/reembolso` devolve `automatico: { ativo, prazo }`, com
+    `ativo = reembolsoAutomaticoEm != null` e `prazo` = data de processamento quando
+    houver. A tela usa isso para trocar o botão por texto de acompanhamento, sem redesenho.
 
 ## 4. O que a área do paciente já entrega neste PR
 
