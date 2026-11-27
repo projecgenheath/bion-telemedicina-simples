@@ -56,13 +56,14 @@ export function stripeConnectAtivo(valor = process.env.STRIPE_CONNECT): boolean 
 export type ModoCobranca = "plataforma" | "direta" | "destino";
 
 /**
- * STRIPE_MODO_COBRANCA (só vale com STRIPE_CONNECT ligado): 'direta' (PADRÃO,
- * decisão do Alisson 03/11 12:13: cobrança direta na conta do médico, 10% de
- * application fee) | 'destino' | 'plataforma' (só se escrito explicitamente).
+ * STRIPE_MODO_COBRANCA (só vale com STRIPE_CONNECT ligado): 'plataforma'
+ * (PADRÃO do modelo de 21/11/2026: cobrança na conta da BION e transferência
+ * ao médico só depois da consulta realizada) | 'direta' (LEGADO: cobrança na
+ * conta do médico com 10% de application fee) | 'destino' (LEGADO).
  */
 export function modoCobrancaStripe(valor = process.env.STRIPE_MODO_COBRANCA): ModoCobranca {
   const v = (valor ?? "").trim().toLowerCase();
-  return v === "plataforma" || v === "destino" ? v : "direta";
+  return v === "direta" || v === "destino" ? v : "plataforma";
 }
 
 export type TipoContaConnect = "standard" | "express";

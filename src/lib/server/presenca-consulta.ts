@@ -2,7 +2,7 @@ import "server-only";
 import { db } from "@/lib/db";
 import { guardarChatSala, guardarChatSalaSemFalhar } from "@/lib/server/chat-consulta";
 import { quandoClinica } from "@/lib/server/fuso";
-import { aplicarFalhaTecnica, prazoEscolhaCorrecao, registrarEvento } from "@/lib/server/financeiro";
+import { aplicarFalhaTecnica, prazoReembolsoAutomatico, registrarEvento } from "@/lib/server/financeiro";
 import { REEMBOLSO_MANUAL_PRAZO_DIAS } from "@/lib/server/dados";
 import { SALA_FECHA_DEPOIS_MIN } from "@/lib/janela-sala";
 import { medicoEsperouAteOLimite, SINAL_PARADO_MS, type PresencaRegra } from "@/components/bion/medico/metricas";
@@ -240,7 +240,12 @@ function gravarDesfechoTx(
   return db.$transaction(async (tx) => {
     const { count } = await tx.consulta.updateMany({
       where: { id: c.id, status: c.status, updatedAt: c.updatedAt },
-      data: { status: novoStatusFalta },
+      data: {
+        status: novoStatusFalta,
+        // Regra 5 (21/11): falta do paciente paga → prazo de 7 dias corridos
+        // para remarcar; venceu sem remarcação → reembolso integral automático.
+        ...(tipo === "falta_paciente" && c.pago ? { reembolsoAutomaticoEm: prazoReembolsoAutomatico(new Date()) } : {}),
+      },
     });
     if (count === 0) throw new SemAlteracao();
     // Só conta desfecho vigente da data ATUAL (corrigidoEm nulo; depois de
@@ -288,7 +293,7 @@ function gravarDesfechoTx(
         data: {
           tipo: "agenda",
           titulo: "Falta registrada",
-          texto: `Você não entrou na sala da consulta de ${c.especialidade} (${quandoClinica(c.dataInicio)}). Se teve um imprevisto, peça o reembolso pelo app em até ${REEMBOLSO_MANUAL_PRAZO_DIAS} dias.`,
+          texto: `Você não entrou na sala da consulta de ${c.especialidade} (${quandoClinica(c.dataInicio)}). Remarque em até ${REEMBOLSO_MANUAL_PRAZO_DIAS} dias corridos sem custo; sem remarcação até lá, o reembolso integral é automático.`,
           usuarioId: c.pacienteId,
         },
       });
@@ -307,7 +312,7 @@ function gravarDesfechoTx(
           titulo: faltaMedico ? "O médico não compareceu" : "Falha técnica na consulta",
           texto:
             r.status === "aguardando_reagendamento"
-              ? `A consulta de ${c.especialidade} (${quandoClinica(c.dataInicio)}) não pôde acontecer ${causa}. ${autor.por === "sistema" ? `Escolha no app até ${quandoClinica(prazoEscolhaCorrecao(r.evento.em))}: remarcar sem custo ou reembolso integral. Se você não escolher até lá, a consulta é cancelada com reembolso integral automático.` : "Escolha no app: remarcar sem custo ou reembolso integral."}`
+              ? `A consulta de ${c.especialidade} (${quandoClinica(c.dataInicio)}) não pôde acontecer ${causa}. Remarque no app em até 7 dias corridos sem custo (até ${quandoClinica(prazoReembolsoAutomatico(r.evento.em))}). Sem remarcação até lá, a consulta é cancelada com reembolso integral automático.`
               : `A consulta de ${c.especialidade} (${quandoClinica(c.dataInicio)}) não pôde acontecer ${causa} e foi cancelada, sem custo.`,
           usuarioId: c.pacienteId,
         },

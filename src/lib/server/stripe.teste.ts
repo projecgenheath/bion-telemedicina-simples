@@ -94,9 +94,9 @@ async function main() {
     igual("list sem account", chamadas[1], [{ charge: "ch_3", limit: 100 }, undefined]);
   }
   // modos de cobrança (Connect)
-  igual("modo padrão (Connect ligado) = direta", modoCobrancaStripe(undefined), "direta");
+  igual("modo padrão (Connect ligado) = plataforma (21/11)", modoCobrancaStripe(undefined), "plataforma");
   igual("modo plataforma explícito", modoCobrancaStripe("plataforma"), "plataforma");
-  igual("modo inválido = direta", modoCobrancaStripe("xyz"), "direta");
+  igual("modo inválido = plataforma", modoCobrancaStripe("xyz"), "plataforma");
   igual("modo direta", modoCobrancaStripe(" Direta "), "direta");
   igual("tipo de conta padrão = standard", tipoContaConnect(undefined), "standard");
   igual("tipo de conta express", tipoContaConnect(" Express "), "express");

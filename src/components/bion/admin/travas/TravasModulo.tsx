@@ -20,7 +20,7 @@ const MODO: Record<EstadoTravas["modoCobranca"], string> = {
   plataforma: "Plataforma: cobra na conta da BION, sem divisão no Stripe.",
   destino: "Destino: cobra na plataforma e transfere para a conta do médico.",
   direta: "Direta: cobra na conta do médico.",
-  padrao_direta: "Variável vazia: o código trata como cobrança direta.",
+  padrao_plataforma: "Variável vazia: o código trata como cobrança na plataforma (modelo 21/11).",
   nao_reconhecido: "Valor da variável não reconhecido. O código trata como cobrança direta.",
 };
 

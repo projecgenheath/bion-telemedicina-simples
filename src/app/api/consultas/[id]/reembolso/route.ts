@@ -36,6 +36,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
         // falta já corrigida pelo admin (ou de uma data antiga) e o POST
         // respondia 409.
         eventos: { where: { tipo: "falta_paciente", corrigidoEm: null }, select: { id: true, dataAnterior: true } },
+        // Modelo 21/11 (regras 4 e 5): prazo do reembolso automático, sem pedido.
+        reembolsoAutomaticoEm: true,
         pagamento: {
           select: { reembolsos: { where: { origem: "manual" }, orderBy: { criadoEm: "desc" }, take: 1 } },
         },
@@ -50,6 +52,10 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     return ok({
       reembolso: r ? reembolsoManualWire(r) : null,
       podePedirAte: faltaVigente ? prazoReembolsoManual(consulta.dataInicio).toISOString() : null,
+      automatico: {
+        ativo: !!consulta.reembolsoAutomaticoEm,
+        prazo: consulta.reembolsoAutomaticoEm?.toISOString() ?? "",
+      },
     });
   } catch (erro) {
     return falha(erro);

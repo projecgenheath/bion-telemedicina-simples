@@ -37,6 +37,9 @@ import {
   cancelarReservasDoDia,
   cancelarReservasPendentes,
   criarReembolsoSeDevido,
+  criarTransferenciaConsultaSeDevido,
+  criarTransferenciaMultaCancelamento,
+  prazoReembolsoAutomatico,
   horarioReservado,
   reaisParaCentavos,
   registrarEvento,
@@ -255,6 +258,8 @@ export async function PATCH(
         // B8: motivo sem teto era embutido em notificação e auditoria —
         // agora com slice(0,300) e guarda de tipo (não-string vira vazio).
         data.motivoCancelamento = textoDoCorpo(body.motivo)?.trim().slice(0, 300) || "Não informado";
+        // Sem prazo de reembolso automático: a consulta foi cancelada por outra via.
+        data.reembolsoAutomaticoEm = null;
         const motivo = data.motivoCancelamento as string;
         const demais = [consulta.pacienteId, consulta.medicoId].filter((u) => u !== usuario.id);
         for (const destino of demais) {
@@ -360,6 +365,8 @@ export async function PATCH(
         // quem confirma é o pagamento (confirmarPagamento). Legado
         // "pendente_anamnese" permanece até a trilha de pagamento resolver.
         data.remarcada = true;
+        // Remarcou: o prazo do reembolso automático perde o efeito (regras 4 e 5).
+        data.reembolsoAutomaticoEm = null;
         if (consulta.status === "cancelada" || consulta.status === "concluida" || consulta.status === "falta_paciente") {
           return Response.json({ erro: "Esta consulta já foi encerrada." }, { status: 409 });
         }
@@ -489,6 +496,11 @@ export async function PATCH(
           if (body.status === "cancelada" && consulta.status !== "cancelada") {
             evento = { tipo: "cancelada", por: "admin", motivo: "admin", dataAnterior: consulta.dataInicio, multaCentavos: 0 };
           }
+          // Modelo 21/11: falta do paciente paga começa a contar 7 dias
+          // corridos para o reembolso automático; qualquer outro status
+          // resultante cancela um prazo antes aberto.
+          data.reembolsoAutomaticoEm =
+            body.status === "falta_paciente" && consulta.pago ? prazoReembolsoAutomatico(new Date()) : null;
         }
         if (body.valor !== undefined) data.valor = parseValor(body.valor);
         if (body.pago !== undefined) {
@@ -553,6 +565,9 @@ export async function PATCH(
           if (erro) throw new HorarioIndisponivel(erro);
         }
         await tx.consulta.update({ where: { id }, data });
+        // Modelo 21/11: a transferência nasce no desfecho "realizada" (status
+        // concluida). Idempotente: um clique duplo não cria outra linha.
+        if (data.status === "concluida") await criarTransferenciaConsultaSeDevido(tx, id);
         // M-22 da auditoria, estendido ao "concluir": consulta encerrada
         // não pode deixar rascunho de evolução prendendo a trava do médico
         // para sempre. O rascunho é ENCERRADO na mesma transação
@@ -593,7 +608,12 @@ export async function PATCH(
         if (por === "medico" && body.acao === "cancelar" && body.cancelarDia) {
           await cancelarReservasDoDia(tx, consulta.medicoId, consulta.dataInicio);
         }
-        if (re) await criarReembolsoSeDevido(tx, { consultaId: id, solicitadoPor: usuario.id, ...re });
+        if (re) {
+          await criarReembolsoSeDevido(tx, { consultaId: id, solicitadoPor: usuario.id, ...re });
+          // Regra 7: a metade do médico na multa de cancelamento é
+          // transferida quando a multa é aplicada (taxa sai dessa metade).
+          if (re.multaCentavos > 0) await criarTransferenciaMultaCancelamento(tx, id, re.multaCentavos);
+        }
       }, alvo ? OPCOES_TX_TRAVA : undefined);
     } catch (e) {
       if (e instanceof HorarioIndisponivel) return Response.json({ erro: e.message }, { status: e.status });

@@ -185,7 +185,7 @@ const plano = (efeito: PlanoWire["dinheiro"]["efeito"], extra: Partial<PlanoWire
   dinheiro: { efeito, pagoConfirmado: true, valorCentavos: 20000, liquidoMedicoCentavos: 18000, medicoRecebiaAntes: false, medicoRecebeDepois: true, repasse: null },
   ...extra,
 });
-igual("prévia: entra no repasse", destaqueDinheiro(plano("entra_no_proximo_repasse").dinheiro), { valor: "+ R$ 180,00", legenda: "para o médico no próximo fechamento (23:30)", tom: "dinheiro" });
+igual("prévia: entra no repasse", destaqueDinheiro(plano("entra_no_proximo_repasse").dinheiro), { valor: "+ R$ 180,00", legenda: "para o médico na transferência após a consulta (90% menos a taxa do cartão)", tom: "dinheiro" });
 igual("prévia: sai do repasse", destaqueDinheiro(plano("sai_do_repasse").dinheiro).valor, "− R$ 180,00");
 igual("prévia: repasse fechado (desconto só com reembolso)", destaqueDinheiro(plano("desconto_se_reembolso").dinheiro), { valor: "até − R$ 180,00", legenda: "desconto no próximo repasse, só se o paciente escolher o reembolso", tom: "atencao" });
 igual("prévia: sem pagamento", destaqueDinheiro(plano("sem_pagamento").dinheiro).valor, "—");

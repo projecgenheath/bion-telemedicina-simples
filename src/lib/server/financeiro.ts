@@ -23,7 +23,6 @@ import {
   gradeTotalmenteVazia,
   type GradeSemana,
 } from "@/lib/grade-semana";
-import { fimDoPrazoEmDiasUteis } from "@/lib/server/dias-uteis";
 import { statusAposFalhaDoMedico } from "@/lib/atendimento-tipo";
 
 /* ------------------------------------------------------------------ */
@@ -122,9 +121,11 @@ export function taxaGatewayValida(taxaCentavos: number | null | undefined, valor
 
 /**
  * Líquido do médico numa consulta realizada (cobrança normal).
- * Regra (Alisson, 20/10): a taxa REAL do gateway sai dos 90% do médico.
- * No reembolso integral a taxa não fica com o médico: a BION devolve a taxa
- * do cartão a ele por transferência Stripe (#137) — ver `liquidoComReembolso`.
+ * Regra (Alisson, 20/10, mantida em 21/11): a taxa REAL do gateway sai dos
+ * 90% do médico. No modelo de 21/11 a cobrança nasce na conta da plataforma
+ * e este líquido é o valor da TransferenciaMedico criada no desfecho
+ * "realizada" (90% menos a taxa). A taxa NUNCA é devolvida ao médico em
+ * reembolso (regra 6; o #137 saiu deste modelo).
  */
 export function liquidoDaConsulta(valorCentavos: number, taxaGatewayCentavos: number | null = 0) {
   const comissao = pct(valorCentavos, COMISSAO_APP_PCT);
@@ -140,31 +141,32 @@ export function liquidoDaConsulta(valorCentavos: number, taxaGatewayCentavos: nu
 /**
  * Item com reembolso: o paciente recebe de volta o valor reembolsado INTEIRO
  * (o Stripe não devolve a taxa do cartão). Do médico sai a parte dele (90%)
- * do reembolsado. Reembolso integral → a taxa não fica com o médico: na
- * cobrança direta ela sai da conta dele, e a BION a devolve por transferência
- * Stripe (#137); aqui ele fica com 0. Reembolso parcial → o
- * médico paga a taxa da parte que ficou (cobrança normal) e perde 90% do
+ * do reembolsado. A taxa do cartão sai SEMPRE do médico, inclusive no
+ * reembolso integral (regra 6 de 21/11/2026): ele fica com 0 e a taxa fica
+ * no saldo da plataforma, descontável de recebimento futuro do médico
+ * daquela consulta (RepasseAjuste motivo 'taxa_reembolso'). O #137 (BION
+ * devolvendo a taxa por transferência) foi REMOVIDO deste modelo.
+ * Reembolso parcial → o médico paga a taxa inteira e perde 90% do
  * reembolsado, nunca abaixo de 0.
  */
 export function liquidoComReembolso(valorCentavos: number, taxaGatewayCentavos: number | null, reembolsadoCentavos: number) {
-  const integral = valorCentavos > 0 && reembolsadoCentavos >= valorCentavos;
-  const l = liquidoDaConsulta(valorCentavos, integral ? 0 : taxaGatewayCentavos);
+  const l = liquidoDaConsulta(valorCentavos, taxaGatewayCentavos);
   const antes = l.brutoCentavos - l.comissaoCentavos - l.taxaCentavos;
   const reembolsos = Math.min(antes, pct(Math.max(0, reembolsadoCentavos), 100 - COMISSAO_APP_PCT));
   return { ...l, reembolsosCentavos: reembolsos, liquidoCentavos: antes - reembolsos };
 }
 
-/* ---------- Stripe Connect (preparado, DESLIGADO) ------------------ */
+/* ---------- Stripe Connect (modelo de 21/11/2026) ------------------ */
 /*                                                                     */
-/* Pagamento por cartão no Stripe, em cobrança DIRETA na conta do     */
-/* médico (PerfilMedico.stripeAccountId, STRIPE_MODO_COBRANCA=direta). */
-/* A BION retém só `application_fee_amount` (10%); a taxa do Stripe    */
-/* sai da conta do médico, ou seja, dos 90% dele (regra atual).        */
-/* Multa: dividida 50/50, sem comissão → fee = 50% da multa.           */
-/* Reembolso: refund na conta do médico com refund_application_fee; no */
-/* reembolso integral a BION devolve a taxa do cartão ao médico por    */
-/* transferência Stripe (#137). O modo 'destino' (reverse_transfer)    */
-/* segue no código só como alternativa.                                */
+/* Cobrança na conta da PLATAFORMA no ato da marcação (regra 1). Nada  */
+/* é creditado ao médico no pagamento. A transferência (90% menos a    */
+/* taxa real do cartão) nasce no desfecho "realizada" — ver            */
+/* TransferenciaMedico e transferencia-medico.ts. Multa ≤ 24 h: a      */
+/* metade do médico é transferida quando a multa é aplicada, e a taxa  */
+/* sai dessa metade (regra 7). Reembolso: integral automático nas      */
+/* regras 4 e 5; a taxa nunca volta ao médico (regra 6). Os modos      */
+/* 'direta' e 'destino' (application_fee_amount, cobrança na conta do  */
+/* médico) ficam no código só como LEGADO do modelo anterior.          */
 /* ------------------------------------------------------------------ */
 
 export type CobrancaConnect =
@@ -183,10 +185,9 @@ export function taxaPlataformaConnectCentavos(c: CobrancaConnect): number {
 
 /**
  * Grava a taxa real do gateway (Stripe `balance_transaction.fee`) no
- * Pagamento, já validada (inteiro ≥ 0, limitada ao valor). O repasse lê
- * `Pagamento.stripeTaxaCentavos` e a desconta dos 90% do médico; no
- * reembolso integral a BION devolve a taxa ao médico por transferência
- * Stripe (#137; ver `liquidoComReembolso`).
+ * Pagamento, já validada (inteiro ≥ 0, limitada ao valor). A transferência
+ * ao médico (TransferenciaMedico) desconta essa taxa dos 90% dele; no
+ * reembolso a taxa NÃO é devolvida (regra 6 de 21/11; o #137 saiu).
  * null = o Stripe ainda não liquidou; não sobrescreve um valor já gravado.
  */
 export async function registrarTaxaGateway(pagamentoId: string, taxaCentavos: number | null): Promise<number | null> {
@@ -195,6 +196,25 @@ export async function registrarTaxaGateway(pagamentoId: string, taxaCentavos: nu
   if (!p) return null;
   const taxa = taxaGatewayValida(taxaCentavos, Math.round(p.valor * 100));
   if (p.stripeTaxaCentavos !== taxa) await db.pagamento.update({ where: { id: pagamentoId }, data: { stripeTaxaCentavos: taxa } });
+  // A taxa costuma chegar depois do desfecho (charge.updated). Se a
+  // TransferenciaMedico ainda não foi enviada, recalcula o líquido com a taxa
+  // real; uma transferência já enviada fica registrada para conciliação.
+  const pendentes = await db.transferenciaMedico.findMany({
+    where: { pagamentoId, status: "pendente" },
+    select: { id: true, tipo: true, brutoCentavos: true, comissaoCentavos: true, multasCentavos: true },
+  });
+  for (const l of pendentes) {
+    const base = l.brutoCentavos + l.multasCentavos;
+    const taxaLinha =
+      l.tipo === "consulta" ? Math.min(taxa, Math.max(0, l.brutoCentavos - l.comissaoCentavos)) : taxaGatewayValida(taxa, base);
+    await db.transferenciaMedico.update({
+      where: { id: l.id },
+      data: {
+        taxasCentavos: taxaLinha,
+        liquidoCentavos: Math.max(0, l.brutoCentavos - l.comissaoCentavos - taxaLinha + l.multasCentavos),
+      },
+    });
+  }
   return taxa;
 }
 
@@ -376,12 +396,13 @@ export async function criarReembolsoPorPagamento(
   });
 }
 
-/* ---------- Falha técnica (detectada pelo sistema) ---------------- */
-// Regra do Alisson: falha técnica não tem multa e segue o mesmo caminho do
-// cancelamento pelo médico. Consulta paga vai para "aguardando_reagendamento"
-// (o paciente escolhe reembolso integral ou remarcar sem multa); sem
-// pagamento confirmado, vai para "cancelada". Nenhum reembolso é criado aqui:
-// ele nasce quando o paciente escolhe "Reembolso integral" no cartão.
+/* ---------- Falha técnica / falta do médico (regra 4, 21/11) -------- */
+// Regra do Alisson: falha técnica e falta do médico não têm multa e seguem o
+// mesmo caminho. Consulta paga vai para "aguardando_reagendamento" com prazo
+// de 7 dias corridos para remarcar sem custo (reembolsoAutomaticoEm); sem
+// remarcação até o prazo, o reembolso INTEGRAL é automático e a compra é
+// cancelada (vencerReembolsosAutomaticos). Sem pagamento confirmado, vai para
+// "cancelada". O médico não recebe.
 
 /* ---------- Desfecho da consulta (a consulta aconteceu?) ----------- */
 // "Desfecho" é o que a sala/agenda do médico (feat/medico-falta-falha-sala),
@@ -447,8 +468,83 @@ export function desfechoDaConsulta(c: { status: string; dataInicio: Date; evento
   return "encerrada";
 }
 
-/** O médico recebe por este desfecho (consulta paga)? Realizada e falta do paciente: sim. */
-export const medicoRecebe = (d: DesfechoAtual) => d === "realizada" || d === "falta_paciente";
+/**
+ * O médico recebe por este desfecho (consulta paga)? Só "realizada"
+ * (regra 2 de 21/11/2026). Falta do paciente NÃO paga mais o médico:
+ * sem remarcação em 7 dias corridos, reembolso integral automático
+ * (regra 5). Falta do médico/falha técnica: reembolso automático se não
+ * houver remarcação (regra 4).
+ */
+export const medicoRecebe = (d: DesfechoAtual) => d === "realizada";
+
+/** O motor do modelo novo só age quando a chave de servidor foi ligada. */
+export const modeloPlataformaAtivo = () => process.env.BION_PAGAMENTO_RETIDO === "1";
+
+/**
+ * Bloco `financeiro` do desfecho (contrato 21/11, GET e POST
+ * /api/medico/consultas/[id]/desfecho). Só leitura; sem nome de paciente, CPF
+ * ou chave PIX. Estado: sem_pagamento → retido → transferido → reembolsado.
+ */
+export async function blocoFinanceiroDesfecho(consultaId: string) {
+  const c = await db.consulta.findUnique({
+    where: { id: consultaId },
+    select: {
+      status: true,
+      pago: true,
+      valor: true,
+      eventos: {
+        where: { tipo: { in: TIPOS_EVENTO_DESFECHO }, ...EVENTO_VIGENTE },
+        select: { tipo: true, motivo: true, dataAnterior: true },
+      },
+      pagamento: {
+        select: {
+          status: true,
+          stripeTaxaCentavos: true,
+          transferencias: {
+            where: { tipo: "consulta" },
+            select: { status: true, liquidoCentavos: true, enviadaEm: true },
+            take: 1,
+          },
+          reembolsos: {
+            select: { valorCentavos: true, status: true, processadoEm: true, criadoEm: true },
+            orderBy: { criadoEm: "desc" as const },
+            take: 1,
+          },
+        },
+      },
+    },
+  });
+  const bruto = reaisParaCentavos(c?.valor ?? 0);
+  const { brutoCentavos, comissaoCentavos, taxaCentavos } = liquidoDaConsulta(bruto, c?.pagamento?.stripeTaxaCentavos ?? null);
+  const antes = brutoCentavos - comissaoCentavos - taxaCentavos;
+  const t = c?.pagamento?.transferencias?.[0] ?? null;
+  const r = c?.pagamento?.reembolsos?.[0] ?? null;
+  const semPagamento = !c?.pago || !c.pagamento || c.pagamento.status !== "confirmado";
+  const estado = semPagamento
+    ? "sem_pagamento"
+    : r && ["aprovado", "processado"].includes(r.status)
+      ? "reembolsado"
+      : t?.status === "enviada"
+        ? "transferido"
+        : "retido";
+  return {
+    estado,
+    valorCentavos: brutoCentavos,
+    comissaoCentavos,
+    taxaCentavos: c?.pagamento?.stripeTaxaCentavos ?? null,
+    liquidoPrevistoCentavos: antes,
+    transferencia: t
+      ? { status: t.status, liquidoCentavos: t.liquidoCentavos, enviadaEm: t.enviadaEm?.toISOString() ?? null }
+      : null,
+    reembolso: r
+      ? {
+          valorCentavos: r.valorCentavos,
+          taxaNaoDevolvidaCentavos: c?.pagamento?.stripeTaxaCentavos ?? 0,
+          processadoEm: r.processadoEm?.toISOString() ?? null,
+        }
+      : null,
+  };
+}
 
 /**
  * Falha técnica (ou falta do médico, com `motivo: "falta_medico"`): paga vai
@@ -486,9 +582,14 @@ export async function aplicarFalhaTecnica(
   const motivoTexto =
     motivo === "falta_medico" ? "O médico não compareceu à consulta" : "Falha técnica: a consulta não aconteceu";
   // Atômico: se outra requisição encerrou a consulta no meio, não faz nada.
+  // Paga: prazo de 7 dias corridos para remarcar; venceu sem remarcação →
+  // reembolso integral automático (regra 4).
   const { count } = await tx.consulta.updateMany({
     where: { id: consultaId, status: { notIn: ["cancelada", "concluida", "aguardando_reagendamento"] } },
-    data: novoStatus === "cancelada" ? { status: novoStatus, motivoCancelamento: motivoTexto } : { status: novoStatus },
+    data:
+      novoStatus === "cancelada"
+        ? { status: novoStatus, motivoCancelamento: motivoTexto }
+        : { status: novoStatus, reembolsoAutomaticoEm: prazoReembolsoAutomatico(new Date()) },
   });
   if (count === 0) return null;
   const evento = await registrarEvento(tx, {
@@ -504,14 +605,14 @@ export async function aplicarFalhaTecnica(
   return { status: novoStatus, evento };
 }
 
-/* ---------- Reembolso manual (falta do paciente) ------------------- */
-// Regras do Alisson (01/10, revistas em 20/10): na falta o médico recebe; o
-// paciente pode pedir o reembolso em até REEMBOLSO_MANUAL_PRAZO_DIAS com
-// justificativa. Desde 20/10 o pedido é aprovado NA HORA, sem análise do
-// admin, e devolvido no cartão pelo Stripe: valor INTEGRAL (a parte do médico,
-// 90%, e a do app, 10%). A taxa do cartão não sai do valor do paciente, e a
-// BION a devolve ao médico por transferência Stripe (#137). A consulta sai do repasse; se o repasse já foi fechado,
-// a parte do médico vira desconto no próximo (RepasseAjuste, repasse.ts).
+/* ---------- Reembolso na falta do paciente (regra 5, 21/11) --------- */
+// Regras do Alisson (21/11/2026): na falta do paciente o médico NÃO recebe.
+// Sem remarcação em 7 dias corridos, o reembolso INTEGRAL é automático e a
+// compra é cancelada, sem pedido nem justificativa (cron espera-medico,
+// Consulta.reembolsoAutomaticoEm). O pedido manual com justificativa continua
+// existindo dentro do mesmo prazo (REEMBOLSO_MANUAL_PRAZO_DIAS), aprovado na
+// hora, devolvido no cartão pelo Stripe: valor INTEGRAL. A taxa do cartão
+// nunca é devolvida ao médico (regra 6; o #137 saiu deste modelo).
 
 /** Até quando o paciente pode pedir reembolso de uma falta. */
 export { prazoReembolsoManual };
@@ -641,80 +742,75 @@ export async function decidirReembolsoManual(params: {
   return { ok: true, reembolso: r };
 }
 
-/* ---------- Prazo de escolha depois de uma correção ---------------- */
-// Regras do Alisson (20/10/2026): quando o admin corrige o desfecho para
-// falha técnica ou falta do médico e a consulta está paga, ela fica em
-// "aguardando_reagendamento" e o paciente escolhe remarcar ou o reembolso
-// integral. Prazo: PRAZO_ESCOLHA_CORRECAO_DIAS_UTEIS dias úteis a partir do
-// dia SEGUINTE à correção (seg–sex, horário de Brasília). Passou do prazo sem
-// escolha: o sistema cancela a consulta e cria o reembolso INTEGRAL (mesmo
-// criarReembolsoSeDevido do cancelamento; status aprovado, devolvido no cartão
-// pelo Stripe; a BION devolve a taxa do cartão ao médico por transferência, #137). Repasse já fechado: desconto no
-// próximo, pelo mecanismo de sempre.
+/* ---------- Reembolso integral automático (regras 4 e 5, 21/11) ----- */
+// Falta do médico sem remarcação (regra 4) e falta do paciente sem
+// remarcação em 7 dias corridos (regra 5): reembolso INTEGRAL automático
+// no mesmo cartão + cancelamento da compra, sem pedido nem justificativa.
+// O prazo vive em Consulta.reembolsoAutomaticoEm, gravado quando o desfecho
+// é registrado (presenca-consulta.ts / aplicarFalhaTecnica / correção do
+// admin). Remarcação dentro do prazo limpa o campo. O cron espera-medico
+// varre o campo vencido (vencerReembolsosAutomaticos). A taxa do cartão
+// nunca é devolvida ao médico (regra 6).
 
-export const PRAZO_ESCOLHA_CORRECAO_DIAS_UTEIS = 7;
-/** 7 dias úteis contados do dia seguinte nunca vencem antes de 9 dias corridos (filtro do cron). */
-export const DIAS_CORRIDOS_MINIMOS_ESCOLHA = 9;
+export const PRAZO_REEMBOLSO_AUTOMATICO_DIAS = 7;
 
-/** Até quando o paciente pode escolher depois da correção feita em `corrigidoEm`. */
-export function prazoEscolhaCorrecao(corrigidoEm: Date): Date {
-  return fimDoPrazoEmDiasUteis(corrigidoEm, PRAZO_ESCOLHA_CORRECAO_DIAS_UTEIS);
+/** Até quando a remarcação evita o reembolso automático: 7 dias corridos (PURA). */
+export function prazoReembolsoAutomatico(em: Date): Date {
+  return new Date(em.getTime() + PRAZO_REEMBOLSO_AUTOMATICO_DIAS * 86_400_000);
 }
 
-/** O prazo da escolha venceu? (PURA) */
-export function escolhaCorrecaoVencida(corrigidoEm: Date, agora: Date): boolean {
-  return agora.getTime() > prazoEscolhaCorrecao(corrigidoEm).getTime();
-}
+export const MOTIVO_CANCELAMENTO_REEMBOLSO_AUTOMATICO =
+  "Prazo de 7 dias corridos sem remarcação terminou: reembolso integral automático";
 
-export const MOTIVO_CANCELAMENTO_PRAZO_ESCOLHA =
-  "Prazo de 7 dias úteis para escolher entre remarcar e o reembolso terminou: reembolso integral automático";
-
-/**
- * Job: reembolsa automaticamente as consultas cujo prazo de escolha depois da
- * correção venceu. Idempotente (updateMany com status no where e o índice de
- * um reembolso ativo por pagamento). Roda no cron da espera do médico.
- */
-/** Notificação do vencimento do prazo. Sem reembolso (valor 0, retorno grátis): cancelada sem custo. (PURA) */
-export function textoVencimentoEscolha(especialidade: string, quando: string, comReembolso: boolean): { titulo: string; texto: string } {
-  const base = `O prazo para escolher entre remarcar e o reembolso da consulta de ${especialidade} de ${quando} terminou.`;
+/** Notificação do vencimento. Sem reembolso (valor 0): cancelada sem custo. (PURA) */
+export function textoReembolsoAutomatico(especialidade: string, quando: string, comReembolso: boolean): { titulo: string; texto: string } {
+  const base = `O prazo de 7 dias corridos para remarcar a consulta de ${especialidade} de ${quando} terminou.`;
   return comReembolso
     ? { titulo: "Reembolso automático", texto: `${base} O reembolso integral foi aprovado automaticamente, sem custo para você.` }
     : { titulo: "Consulta cancelada", texto: `${base} A consulta foi cancelada sem custo, e o seu direito ao retorno grátis volta.` };
 }
 
-export async function vencerEscolhasCorrecao(agora: Date = new Date()): Promise<{ vencidas: number; reembolsadas: number }> {
-  // 7 dias úteis a partir do dia seguinte são sempre mais de 9 dias corridos:
-  // o banco já descarta o que não pode ter vencido. Mais antigos primeiro.
-  const limite = new Date(agora.getTime() - DIAS_CORRIDOS_MINIMOS_ESCOLHA * 86_400_000);
-  const eventos = await db.eventoConsulta.findMany({
+/**
+ * Job: reembolsa e cancela as consultas cujo prazo de remarcação venceu
+ * (Consulta.reembolsoAutomaticoEm). Idempotente (updateMany com status no
+ * where + um reembolso ativo por pagamento). Roda no cron espera-medico.
+ */
+export async function vencerReembolsosAutomaticos(agora: Date = new Date()): Promise<{ vencidas: number; reembolsadas: number }> {
+  if (!modeloPlataformaAtivo()) return { vencidas: 0, reembolsadas: 0 };
+  const consultas = await db.consulta.findMany({
     where: {
-      tipo: "falha_tecnica",
-      por: { in: ["admin", "sistema"] },
-      ...EVENTO_VIGENTE,
-      em: { lte: limite },
-      consulta: { status: "aguardando_reagendamento", pago: true },
+      reembolsoAutomaticoEm: { lte: agora },
+      pago: true,
+      status: { in: ["falta_paciente", "aguardando_reagendamento"] },
     },
     select: {
-      em: true,
-      motivo: true,
-      dataAnterior: true,
-      consulta: { select: { id: true, medicoId: true, pacienteId: true, especialidade: true, dataInicio: true, valor: true } },
+      id: true,
+      medicoId: true,
+      pacienteId: true,
+      especialidade: true,
+      dataInicio: true,
+      valor: true,
+      status: true,
+      eventos: {
+        where: { tipo: { in: TIPOS_EVENTO_DESFECHO }, ...EVENTO_VIGENTE },
+        select: { tipo: true, motivo: true, dataAnterior: true },
+      },
     },
-    orderBy: { em: "asc" },
+    orderBy: { reembolsoAutomaticoEm: "asc" },
     take: 50,
   });
-  const candidatas = eventos.map((e) => ({ ...e.consulta, eventos: [{ em: e.em, motivo: e.motivo, dataAnterior: e.dataAnterior }] }));
   let vencidas = 0;
   let reembolsadas = 0;
-  for (const c of candidatas) {
-    const ev = c.eventos.find((e) => e.dataAnterior.getTime() === c.dataInicio.getTime());
-    if (!ev || !escolhaCorrecaoVencida(ev.em, agora)) continue;
+  for (const c of consultas) {
+    const ev = eventoDesfechoVigente(c.dataInicio, c.eventos);
+    const motivo: MotivoEvento =
+      c.status === "falta_paciente" ? "falta_paciente" : ev?.motivo === "falta_medico" ? "falta_medico" : "falha_tecnica";
     const r = await db.$transaction(async (tx) => {
       // Mesma trava do fechamento do repasse e da correção.
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${"repasse:" + c.medicoId}))`;
       const { count } = await tx.consulta.updateMany({
-        where: { id: c.id, status: "aguardando_reagendamento", dataInicio: c.dataInicio },
-        data: { status: "cancelada", motivoCancelamento: MOTIVO_CANCELAMENTO_PRAZO_ESCOLHA },
+        where: { id: c.id, status: c.status, reembolsoAutomaticoEm: { lte: agora } },
+        data: { status: "cancelada", motivoCancelamento: MOTIVO_CANCELAMENTO_REEMBOLSO_AUTOMATICO, reembolsoAutomaticoEm: null },
       });
       if (count === 0) return null;
       await registrarEvento(tx, {
@@ -722,14 +818,14 @@ export async function vencerEscolhasCorrecao(agora: Date = new Date()): Promise<
         tipo: "cancelada",
         por: "sistema",
         dataAnterior: c.dataInicio,
-        motivo: ev.motivo === "falta_medico" ? "falta_medico" : "falha_tecnica",
+        motivo,
         multaCentavos: 0,
       });
       const reembolso = await criarReembolsoSeDevido(tx, {
         consultaId: c.id,
         valorCentavos: reaisParaCentavos(c.valor),
         multaCentavos: 0,
-        motivo: ev.motivo === "falta_medico" ? "falta_medico" : "falha_tecnica",
+        motivo,
         solicitadoPor: "sistema",
       });
       await cancelarReservasPendentes(tx, c.id);
@@ -737,19 +833,19 @@ export async function vencerEscolhasCorrecao(agora: Date = new Date()): Promise<
         data: {
           usuarioId: c.pacienteId,
           tipo: "agenda",
-          ...textoVencimentoEscolha(c.especialidade, quandoClinica(c.dataInicio, { day: "2-digit", month: "2-digit" }), !!reembolso),
+          ...textoReembolsoAutomatico(c.especialidade, quandoClinica(c.dataInicio, { day: "2-digit", month: "2-digit" }), !!reembolso),
         },
       });
       await tx.auditLog.create({
         data: {
-          acao: "REEMBOLSO_AUTOMATICO_PRAZO_ESCOLHA",
+          acao: "REEMBOLSO_AUTOMATICO_PRAZO",
           categoria: "pagamento",
           severidade: "warning",
           usuarioNome: "Sistema",
           role: "SISTEMA",
           entidade: "consulta",
           entidadeId: c.id,
-          detalhes: JSON.stringify({ consultaId: c.id, reembolsoId: reembolso?.id ?? null, corrigidoEm: ev.em.toISOString() }),
+          detalhes: JSON.stringify({ consultaId: c.id, reembolsoId: reembolso?.id ?? null, motivo }),
         },
       });
       return { reembolso };
@@ -758,6 +854,134 @@ export async function vencerEscolhasCorrecao(agora: Date = new Date()): Promise<
     if (r?.reembolso) reembolsadas++;
   }
   return { vencidas, reembolsadas };
+}
+
+/* ---------- Transferência ao médico (modelo 21/11) ------------------ */
+// A cobrança nasce na plataforma; nada é creditado no pagamento. Estas
+// funções criam a linha TransferenciaMedico (status "pendente"); o envio
+// ao Stripe (source_transaction, obrigatório no BR) fica em
+// transferencia-medico.ts. Uma linha por alvo: consultaId único na consulta
+// realizada e no cancelamento com multa; remarcacaoId único na multa de
+// remarcação. Repetição devolve a linha existente (idempotente).
+
+/**
+ * Transferência da consulta REALIZADA (regra 2): 90% menos a taxa real do
+ * cartão. Só com status "concluida" e pagamento confirmado.
+ */
+export async function criarTransferenciaConsultaSeDevido(tx: Prisma.TransactionClient, consultaId: string) {
+  if (!modeloPlataformaAtivo()) return null;
+  const c = await tx.consulta.findUnique({
+    where: { id: consultaId },
+    select: {
+      id: true,
+      status: true,
+      pago: true,
+      valor: true,
+      medicoId: true,
+      pagamento: { select: { id: true, status: true, stripeTaxaCentavos: true } },
+    },
+  });
+  if (!c || c.status !== "concluida" || !c.pago || !c.pagamento || c.pagamento.status !== "confirmado") return null;
+  const existente = await tx.transferenciaMedico.findUnique({ where: { consultaId } });
+  if (existente) return existente;
+  const v = liquidoDaConsulta(reaisParaCentavos(c.valor), c.pagamento.stripeTaxaCentavos);
+  return tx.transferenciaMedico
+    .create({
+      data: {
+        consultaId,
+        medicoId: c.medicoId,
+        pagamentoId: c.pagamento.id,
+        tipo: "consulta",
+        brutoCentavos: v.brutoCentavos,
+        comissaoCentavos: v.comissaoCentavos,
+        taxasCentavos: v.taxaCentavos,
+        multasCentavos: 0,
+        liquidoCentavos: v.liquidoCentavos,
+      },
+    })
+    .catch((e: unknown) => {
+      // Clique duplo / correção concorrente: o índice único barra a 2ª linha.
+      if ((e as { code?: string }).code === "P2002") return tx.transferenciaMedico.findUnique({ where: { consultaId } });
+      throw e;
+    });
+}
+
+/**
+ * Metade do médico na multa de CANCELAMENTO ≤ 24 h (regra 7): transferida
+ * quando a multa é aplicada. A taxa do cartão (da cobrança original) sai
+ * dessa metade. bruto = comissão = 0.
+ */
+export async function criarTransferenciaMultaCancelamento(tx: Prisma.TransactionClient, consultaId: string, multaCentavos: number) {
+  if (!modeloPlataformaAtivo() || multaCentavos <= 0) return null;
+  const c = await tx.consulta.findUnique({
+    where: { id: consultaId },
+    select: { medicoId: true, pagamento: { select: { id: true, stripeTaxaCentavos: true } } },
+  });
+  if (!c) return null;
+  const existente = await tx.transferenciaMedico.findUnique({ where: { consultaId } });
+  if (existente) return existente;
+  const { medicoCentavos } = divisaoDaMulta(multaCentavos);
+  const taxa = taxaGatewayValida(c.pagamento?.stripeTaxaCentavos, medicoCentavos);
+  return tx.transferenciaMedico
+    .create({
+      data: {
+        consultaId,
+        medicoId: c.medicoId,
+        pagamentoId: c.pagamento?.id ?? null,
+        tipo: "multa_cancelamento",
+        brutoCentavos: 0,
+        comissaoCentavos: 0,
+        taxasCentavos: taxa,
+        multasCentavos: medicoCentavos,
+        liquidoCentavos: medicoCentavos - taxa,
+      },
+    })
+    .catch((e: unknown) => {
+      if ((e as { code?: string }).code === "P2002") return tx.transferenciaMedico.findUnique({ where: { consultaId } });
+      throw e;
+    });
+}
+
+/**
+ * Metade do médico na multa de REMARCAÇÃO ≤ 24 h (regra 7): transferida
+ * quando a multa é aplicada (aprovarMultaRemarcacao). A taxa da cobrança da
+ * multa (RemarcacaoPendente.stripeTaxaCentavos) sai dessa metade.
+ */
+export async function criarTransferenciaMultaRemarcacao(tx: Prisma.TransactionClient, remarcacaoId: string) {
+  if (!modeloPlataformaAtivo()) return null;
+  const r = await tx.remarcacaoPendente.findUnique({
+    where: { id: remarcacaoId },
+    select: {
+      id: true,
+      multaCentavos: true,
+      status: true,
+      stripeTaxaCentavos: true,
+      consulta: { select: { medicoId: true } },
+    },
+  });
+  if (!r || r.status !== "aprovada" || r.multaCentavos <= 0) return null;
+  const existente = await tx.transferenciaMedico.findUnique({ where: { remarcacaoId } });
+  if (existente) return existente;
+  const { medicoCentavos } = divisaoDaMulta(r.multaCentavos);
+  const taxa = taxaGatewayValida(r.stripeTaxaCentavos, medicoCentavos);
+  return tx.transferenciaMedico
+    .create({
+      data: {
+        remarcacaoId,
+        medicoId: r.consulta.medicoId,
+        pagamentoId: null,
+        tipo: "multa_remarcacao",
+        brutoCentavos: 0,
+        comissaoCentavos: 0,
+        taxasCentavos: taxa,
+        multasCentavos: medicoCentavos,
+        liquidoCentavos: medicoCentavos - taxa,
+      },
+    })
+    .catch((e: unknown) => {
+      if ((e as { code?: string }).code === "P2002") return tx.transferenciaMedico.findUnique({ where: { remarcacaoId } });
+      throw e;
+    });
 }
 
 /* ---------- Remarcação com multa (reserva + cobrança) -------------- */
@@ -930,7 +1154,8 @@ export async function aprovarMultaRemarcacao(remarcacaoId: string, via: "webhook
     });
 
     if (!impedimento) {
-      await tx.consulta.update({ where: { id: c.id }, data: { dataInicio: r.novaData, remarcada: true } });
+      // Remarcação aplicada: o prazo do reembolso automático perde o efeito.
+      await tx.consulta.update({ where: { id: c.id }, data: { dataInicio: r.novaData, remarcada: true, reembolsoAutomaticoEm: null } });
       await registrarEvento(tx, {
         consultaId: c.id,
         tipo: "remarcada",
@@ -945,6 +1170,8 @@ export async function aprovarMultaRemarcacao(remarcacaoId: string, via: "webhook
         where: { id: r.id },
         data: { status: "aprovada", aprovadoEm: agora, via, gatewayRef: gatewayRef ?? r.gatewayRef },
       });
+      // Regra 7: a metade do médico na multa é transferida na aplicação.
+      await criarTransferenciaMultaRemarcacao(tx, r.id);
       return { remarcacao: atual, aplicada: true, jaProcessada: false };
     }
 
@@ -1171,10 +1398,10 @@ export async function conferirHorarioNaTransacao(
 /*  - o evento antigo NÃO é apagado: fica marcado como corrigido         */
 /*    (corrigidoEm, corrigidoPorId, motivoCorrecao) e deixa de valer;    */
 /*  - o desfecho novo é gravado com por = "admin";                       */
-/*  - repasse fechado/pago NÃO reabre: o que o médico recebeu a mais vira */
-/*    desconto no próximo repasse pelo mecanismo de sempre (reembolso    */
-/*    efetivo depois do item → RepasseAjuste); o que ele passa a receber */
-/*    entra no próximo fechamento (a consulta ainda não tem item);       */
+/*  - modelo 21/11: o que o médico passa a receber vira TransferenciaMedico */
+/*    no desfecho "realizada" (90% menos a taxa); o que ele deixa de receber */
+/*    remove a transferência pendente (já enviada fica para conciliação);   */
+/*    repasse fechado/pago é LEGADO e não reabre;                          */
 /*  - reembolso pendente (em_analise/solicitado) é encerrado (status     */
 /*    "negado" com a explicação — a trava do banco não tem "cancelado"); */
 /*    reembolso aprovado/processado → recusa (o dinheiro já voltou);     */
@@ -1324,8 +1551,8 @@ export function planejarCorrecaoDesfecho(e: EstadoCorrecao, novo: Desfecho, agor
     efeito = antes ? "nenhum" : "entra_no_proximo_repasse";
     efeitos.push(
       antes
-        ? `O médico continua recebendo ${brlCentavos(liquido)} no próximo fechamento (23:30).`
-        : `O médico passa a receber ${brlCentavos(liquido)}: a consulta entra no próximo fechamento (23:30).`,
+        ? `O médico continua recebendo ${brlCentavos(liquido)} na transferência após a consulta (90% menos a taxa do cartão).`
+        : `O médico passa a receber ${brlCentavos(liquido)}: a transferência é criada no desfecho "realizada" (90% menos a taxa do cartão).`,
     );
   } else if (rep) {
     efeito = "desconto_se_reembolso";
@@ -1334,22 +1561,19 @@ export function planejarCorrecaoDesfecho(e: EstadoCorrecao, novo: Desfecho, agor
     );
   } else {
     efeito = antes ? "sai_do_repasse" : "nenhum";
-    efeitos.push(antes ? `Sai do próximo fechamento: o médico deixa de receber ${brlCentavos(liquido)}.` : "O médico não recebe por esta consulta.");
+    efeitos.push(antes ? `O médico deixa de receber ${brlCentavos(liquido)}: a transferência pendente é removida; uma transferência já enviada fica registrada para conciliação.` : "O médico não recebe por esta consulta.");
   }
 
   if (novo === "falha_tecnica" || novo === "falta_medico") {
     efeitos.push(
       c.pago
-        ? `Status: aguardando reagendamento. O paciente escolhe no app: remarcar sem custo ou reembolso integral de ${brlCentavos(valorCentavos)}.`
+        ? `Status: aguardando reagendamento. O paciente pode remarcar sem custo em até 7 dias corridos; sem remarcação, o reembolso integral de ${brlCentavos(valorCentavos)} é automático e a consulta é cancelada.`
         : "Status: cancelada, sem custo para o paciente.",
     );
   } else if (novo === "falta_paciente") {
-    const prazo = prazoReembolsoManual(c.dataInicio);
     if (pagoConfirmado) {
       efeitos.push(
-        agora.getTime() <= prazo.getTime()
-          ? `O paciente pode pedir reembolso pelo app até ${quandoClinica(prazo)}.`
-          : `O prazo de ${REEMBOLSO_MANUAL_PRAZO_DIAS} dias para o paciente pedir reembolso já terminou.`,
+        `O médico não recebe. Sem remarcação em 7 dias corridos (até ${quandoClinica(prazoReembolsoAutomatico(agora))}), o reembolso integral de ${brlCentavos(valorCentavos)} é automático e a consulta é cancelada. O paciente também pode pedir pelo app dentro do prazo.`,
       );
     }
   } else {
@@ -1474,15 +1698,12 @@ export function textosNotificacaoCorrecao(
     if (plano.novo === "falha_tecnica" || plano.novo === "falta_medico") {
       partes.push(
         c.pago
-          ? `Escolha no app até ${diaHora(prazoEscolhaCorrecao(agora))}: remarcar sem custo ou receber o reembolso integral. Se você não escolher até lá, o reembolso é integral e automático.`
+          ? `Remarque no app até ${diaHora(prazoReembolsoAutomatico(agora))} sem custo. Sem remarcação até lá, o reembolso é integral e automático.`
           : "A consulta foi cancelada, sem custo para você.",
       );
     } else if (plano.novo === "falta_paciente" && plano.dinheiro.pagoConfirmado) {
-      const prazo = prazoReembolsoManual(c.dataInicio);
       partes.push(
-        agora.getTime() <= prazo.getTime()
-          ? `Se você teve um imprevisto, pode pedir o reembolso pelo app até ${diaHora(prazo)}; o reembolso é integral e automático.`
-          : `O prazo de ${REEMBOLSO_MANUAL_PRAZO_DIAS} dias para pedir o reembolso desta consulta já terminou.`,
+        `Sem remarcação em 7 dias corridos (até ${diaHora(prazoReembolsoAutomatico(agora))}), o reembolso integral é automático. Você também pode pedir pelo app dentro do prazo.`,
       );
     }
     if (plano.reembolsosEncerrados.length) partes.push("Seu pedido de reembolso desta consulta foi encerrado por causa desta correção.");
@@ -1499,9 +1720,9 @@ export function textosNotificacaoCorrecao(
       : `A administração registrou a ${consulta} como ${ROTULO_DESFECHO_MEDICO[plano.novo]}.`;
     const efeito =
       d.efeito === "entra_no_proximo_repasse"
-        ? `Os ${valor} desta consulta entram no seu próximo repasse.`
+        ? `Os ${valor} desta consulta serão transferidos à sua conta Stripe (90% menos a taxa do cartão).`
         : d.efeito === "sai_do_repasse"
-          ? `Os ${valor} desta consulta saem do seu próximo repasse.`
+          ? `Os ${valor} desta consulta não serão mais transferidos: a transferência pendente é removida.`
           : `O repasse de ${diaBr(d.repasse?.competencia ?? "")} não muda. Se o paciente escolher o reembolso integral, ${valor} serão descontados do seu próximo repasse.`;
     medico = { usuarioId: c.medicoId, tipo: "agenda", titulo: "Desfecho corrigido pela administração", texto: `${inicio} ${efeito}` };
   }
@@ -1598,7 +1819,13 @@ export async function corrigirDesfecho(params: {
         if (plano.novo === "realizada" || plano.novo === "falta_paciente") {
           await tx.consulta.update({
             where: { id: c.id },
-            data: { status: plano.statusDepois, ...(deFalha ? { motivoCancelamento: null } : {}) },
+            data: {
+              status: plano.statusDepois,
+              // Falta do paciente paga: prazo de 7 dias corridos para
+              // remarcar; venceu sem remarcação → reembolso automático.
+              reembolsoAutomaticoEm: plano.novo === "falta_paciente" && c.pago ? prazoReembolsoAutomatico(agora) : null,
+              ...(deFalha ? { motivoCancelamento: null } : {}),
+            },
           });
           if (plano.novo === "falta_paciente") {
             await registrarEvento(tx, {
@@ -1615,7 +1842,7 @@ export async function corrigirDesfecho(params: {
         } else {
           // aplicarFalhaTecnica só age em consulta "aberta": abre de novo, na mesma transação.
           if (!STATUS_ABERTOS.includes(c.status)) {
-            await tx.consulta.update({ where: { id: c.id }, data: { status: "confirmada", motivoCancelamento: null } });
+            await tx.consulta.update({ where: { id: c.id }, data: { status: "confirmada", motivoCancelamento: null, reembolsoAutomaticoEm: null } });
           }
           const r = await aplicarFalhaTecnica(tx, c.id, {
             motivo: plano.novo === "falta_medico" ? "falta_medico" : "falha_tecnica",
@@ -1624,6 +1851,18 @@ export async function corrigirDesfecho(params: {
           });
           if (!r) throw new ConflitoCorrecao();
           statusFinal = r.status;
+        }
+
+        // Modelo 21/11: a transferência nasce no desfecho "realizada"; sair
+        // dele remove a transferência ainda pendente (uma já enviada fica
+        // registrada para conciliação). Entrando em "realizada", a multa de
+        // cancelamento pendente deixa de valer.
+        if (plano.atual === "realizada" && plano.novo !== "realizada") {
+          await tx.transferenciaMedico.deleteMany({ where: { consultaId: c.id, status: "pendente" } });
+        }
+        if (plano.novo === "realizada") {
+          await tx.transferenciaMedico.deleteMany({ where: { consultaId: c.id, tipo: "multa_cancelamento", status: "pendente" } });
+          await criarTransferenciaConsultaSeDevido(tx, c.id);
         }
 
         const notif = textosNotificacaoCorrecao(e, plano, motivo, agora);
