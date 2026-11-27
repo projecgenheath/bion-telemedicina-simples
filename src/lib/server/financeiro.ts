@@ -477,6 +477,9 @@ export function desfechoDaConsulta(c: { status: string; dataInicio: Date; evento
  */
 export const medicoRecebe = (d: DesfechoAtual) => d === "realizada";
 
+/** O motor do modelo novo só age quando a chave de servidor foi ligada. */
+export const modeloPlataformaAtivo = () => process.env.BION_PAGAMENTO_RETIDO === "1";
+
 /**
  * Bloco `financeiro` do desfecho (contrato 21/11, GET e POST
  * /api/medico/consultas/[id]/desfecho). Só leitura; sem nome de paciente, CPF
@@ -773,6 +776,7 @@ export function textoReembolsoAutomatico(especialidade: string, quando: string, 
  * where + um reembolso ativo por pagamento). Roda no cron espera-medico.
  */
 export async function vencerReembolsosAutomaticos(agora: Date = new Date()): Promise<{ vencidas: number; reembolsadas: number }> {
+  if (!modeloPlataformaAtivo()) return { vencidas: 0, reembolsadas: 0 };
   const consultas = await db.consulta.findMany({
     where: {
       reembolsoAutomaticoEm: { lte: agora },
@@ -865,6 +869,7 @@ export async function vencerReembolsosAutomaticos(agora: Date = new Date()): Pro
  * cartão. Só com status "concluida" e pagamento confirmado.
  */
 export async function criarTransferenciaConsultaSeDevido(tx: Prisma.TransactionClient, consultaId: string) {
+  if (!modeloPlataformaAtivo()) return null;
   const c = await tx.consulta.findUnique({
     where: { id: consultaId },
     select: {
@@ -907,7 +912,7 @@ export async function criarTransferenciaConsultaSeDevido(tx: Prisma.TransactionC
  * dessa metade. bruto = comissão = 0.
  */
 export async function criarTransferenciaMultaCancelamento(tx: Prisma.TransactionClient, consultaId: string, multaCentavos: number) {
-  if (multaCentavos <= 0) return null;
+  if (!modeloPlataformaAtivo() || multaCentavos <= 0) return null;
   const c = await tx.consulta.findUnique({
     where: { id: consultaId },
     select: { medicoId: true, pagamento: { select: { id: true, stripeTaxaCentavos: true } } },
@@ -943,6 +948,7 @@ export async function criarTransferenciaMultaCancelamento(tx: Prisma.Transaction
  * multa (RemarcacaoPendente.stripeTaxaCentavos) sai dessa metade.
  */
 export async function criarTransferenciaMultaRemarcacao(tx: Prisma.TransactionClient, remarcacaoId: string) {
+  if (!modeloPlataformaAtivo()) return null;
   const r = await tx.remarcacaoPendente.findUnique({
     where: { id: remarcacaoId },
     select: {

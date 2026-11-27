@@ -36,6 +36,7 @@ export function transferenciaAtiva(env: Env = process.env): boolean {
     stripeAtivo(env) &&
     stripeConnectAtivo(env.STRIPE_CONNECT) &&
     modoCobrancaStripe(env.STRIPE_MODO_COBRANCA) === "plataforma" &&
+    env.BION_PAGAMENTO_RETIDO === "1" &&
     !bloqueioChaveLive("plataforma", env.STRIPE_SECRET_KEY)
   );
 }

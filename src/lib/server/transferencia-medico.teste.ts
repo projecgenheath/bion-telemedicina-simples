@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { enviarTransferencia, transferenciaAtiva, type DbTransferencia, type StripeTransferencia } from "./transferencia-medico";
 
 const ENV = {
+  BION_PAGAMENTO_RETIDO: "1",
   BION_PAGAMENTO_STRIPE: "true",
   STRIPE_SECRET_KEY: "sk_test_x",
   STRIPE_CONNECT: "true",
@@ -62,6 +63,7 @@ const audit = (async () => undefined) as never;
 describe("transferenciaAtiva", () => {
   test("plataforma ligada: ativa", () => expect(transferenciaAtiva(ENV)).toBe(true));
   test("modo direta legado: desligada (não pagar em dobro)", () => expect(transferenciaAtiva({ ...ENV, STRIPE_MODO_COBRANCA: "direta" })).toBe(false));
+  test("chave do modelo desligada: não envia", () => expect(transferenciaAtiva({ ...ENV, BION_PAGAMENTO_RETIDO: "0" })).toBe(false));
   test("chave live: desligada", () => expect(transferenciaAtiva({ ...ENV, STRIPE_SECRET_KEY: "sk_live_x" })).toBe(false));
   test("sem Stripe: desligada", () => expect(transferenciaAtiva({ ...ENV, BION_PAGAMENTO_STRIPE: "false" })).toBe(false));
 });
