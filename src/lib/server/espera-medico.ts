@@ -13,6 +13,7 @@ import {
 import {
   cancelarReservasPendentes,
   criarReembolsoSeDevido,
+  modeloPlataformaAtivo,
   REEMBOLSO_STATUS_ATIVOS,
   reaisParaCentavos,
   registrarEvento,
@@ -32,10 +33,13 @@ import {
 import { medicoPodeSerCobrado } from "@/lib/medico-cobravel";
 import { decisaoCobranca, ERRO_PAGAMENTO_INDISPONIVEL, stripeAtivo } from "@/lib/stripe-checkout-logica";
 import {
+  brutoRepasseRemarcacaoPlataforma,
   calcularDiferenca,
+  conferirDiferencaEsperada,
+  conferirDiferencaPlataforma,
   RESERVA_DIFERENCA_MIN,
   calcularExpiraEm,
-  conferirDiferencaEsperada,
+  REMARCACAO_PLATAFORMA_DIFERENCA_CENTAVOS,
   segundosRestantes,
   statusEfetivo,
   transicaoPermitida,
@@ -496,6 +500,63 @@ export async function remarcarPorEspera(params: {
     if (await conferirMedicoAtivoNaTransacao(tx, params.medicoId)) return falhar(409, "medico_indisponivel", "medico_indisponivel");
     const livre = await medicoLivreAgora(tx, { medicoId: params.medicoId, especialidade: consulta.especialidade, excetoMedicoId: consulta.medicoId, agora });
     if (!livre) return falhar(409, "medico_indisponivel", "medico_indisponivel");
+
+    // Modelo de 21/11 (regra 3): troca NA MESMA consulta. Mesmo Pagamento,
+    // mesmo valor original, sem consulta nova, sem cobrança, sem reembolso e
+    // sem diferença. O bruto original segue intacto para o repasse ao médico
+    // novo no desfecho `realizada` (90% menos a taxa do cartão, uma só vez).
+    if (modeloPlataformaAtivo()) {
+      if (!conferirDiferencaPlataforma(params.diferencaEsperadaCentavos)) {
+        return falhar(409, "preco_mudou", "Nesta remarcação não há diferença de preço.", { diferencaAtualCentavos: REMARCACAO_PLATAFORMA_DIFERENCA_CENTAVOS });
+      }
+      const brutoOriginalCentavos = brutoRepasseRemarcacaoPlataforma(reaisParaCentavos(consulta.valor));
+      const medicoAnteriorId = consulta.medicoId;
+      const dataAnterior = consulta.dataInicio;
+      const { count } = await tx.consulta.updateMany({
+        where: { id: consulta.id, status: { in: STATUS_ABERTOS } },
+        data: { medicoId: params.medicoId, dataInicio: inicio, remarcada: true },
+      });
+      if (count === 0) return falhar(409, "consulta_encerrada", "A consulta já foi encerrada.");
+      await registrarEvento(tx, { consultaId: consulta.id, tipo: "remarcada", por: "sistema", dataAnterior, dataNova: inicio, motivo: "falta_medico", multaCentavos: 0 });
+      const atual = await tx.esperaMedico.update({
+        where: { id: espera.id },
+        data: {
+          status: "remarcada",
+          resolvidoEm: agora,
+          reservaExpiraEm: null,
+          consultaNovaId: null,
+          valorAntigoCentavos: brutoOriginalCentavos,
+          valorNovoCentavos: brutoOriginalCentavos,
+          diferencaCentavos: REMARCACAO_PLATAFORMA_DIFERENCA_CENTAVOS,
+          reembolsoId: null,
+        },
+      });
+      await auditar(tx, "ESPERA_MEDICO_REMARCADA", {
+        usuarioId: params.pacienteId,
+        role: "PACIENTE",
+        consultaId: consulta.id,
+        detalhes: JSON.stringify({
+          consultaId: consulta.id,
+          consultaNovaId: null,
+          esperaId: espera.id,
+          medicoAnteriorId,
+          medicoNovoId: params.medicoId,
+          pagamentoId: consulta.pagamento?.id ?? null,
+          valorOriginalCentavos: brutoOriginalCentavos,
+          diferencaCentavos: REMARCACAO_PLATAFORMA_DIFERENCA_CENTAVOS,
+          modelo: "plataforma",
+        }),
+      });
+      return {
+        ok: true as const,
+        jaProcessada: false,
+        espera: esperaWire(atual, agora),
+        consultaNovaId: null,
+        cobranca: null as CobrancaEspera | null,
+        reembolsoId: null,
+      };
+    }
+
     const dif = calcularDiferenca(reaisParaCentavos(consulta.valor), livre.valorCentavos);
     const conf = conferirDiferencaEsperada(params.diferencaEsperadaCentavos, dif.diferencaCentavos);
     if (!conf.ok) return falhar(409, "preco_mudou", conf.erro, { diferencaAtualCentavos: conf.diferencaAtualCentavos });
