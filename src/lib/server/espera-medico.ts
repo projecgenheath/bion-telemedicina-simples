@@ -14,6 +14,7 @@ import {
   cancelarReservasPendentes,
   criarReembolsoSeDevido,
   modeloPlataformaAtivo,
+  prazoReembolsoAutomatico,
   REEMBOLSO_STATUS_ATIVOS,
   reaisParaCentavos,
   registrarEvento,
@@ -37,6 +38,7 @@ import {
   calcularDiferenca,
   conferirDiferencaEsperada,
   conferirDiferencaPlataforma,
+  esperaRenascidaPlataforma,
   RESERVA_DIFERENCA_MIN,
   calcularExpiraEm,
   REMARCACAO_PLATAFORMA_DIFERENCA_CENTAVOS,
@@ -194,7 +196,15 @@ export async function fecharEsperaMedicoEntrou(consultaId: string, em: Date = ne
     where: { consultaId, status: { in: ["aguardando", "expirada"] } },
     data: { status: "medico_entrou", resolvidoEm: em },
   });
-  if (count > 0) return { resultado: "fechada" };
+  if (count > 0) {
+    // Regra 3.3: o médico entrou (pode ser o NOVO, depois da troca, até após
+    // o vencimento da janela renascida): a consulta vai acontecer — o prazo
+    // de reembolso automático da nova falta, se aberto, deixa de correr.
+    if (modeloPlataformaAtivo()) {
+      await tx.consulta.updateMany({ where: { id: consultaId, reembolsoAutomaticoEm: { not: null } }, data: { reembolsoAutomaticoEm: null } });
+    }
+    return { resultado: "fechada" };
+  }
   const desfecho = await esperaEncerrada(consultaId, tx);
   return desfecho ? { resultado: "espera_encerrada", desfecho } : { resultado: "ja_fechada" };
 }
@@ -207,7 +217,7 @@ export async function esperaEncerrada(consultaId: string, tx: Cliente = db): Pro
 
 /* ---------------- job ---------------- */
 
-export type ResultadoJobEspera = { abertas: number; medicoEntrou: number; expiradas: number; reservasExpiradas: number; remarcadasNoJob: number };
+export type ResultadoJobEspera = { abertas: number; medicoEntrou: number; expiradas: number; reservasExpiradas: number; remarcadasNoJob: number; faltasRenascidas: number };
 
 /**
  * Rodada do job (/api/cron/espera-medico). Idempotente:
@@ -297,6 +307,27 @@ export async function rodarEsperaMedico(agora: Date = new Date()): Promise<Resul
     where: { status: "aguardando", expiraEm: { lte: agora } },
     data: { status: "expirada" },
   });
+  // 3b) Regra 3.3 (modelo plataforma): a espera RENASCIDA pela troca da regra 3
+  //     venceu — o médico novo também faltou. Abre o prazo de 7 dias corridos
+  //     da NOVA falta (regra 4); sem remarcação, vencerReembolsosAutomaticos
+  //     reembolsa e cancela. Cada nova troca limpa o prazo; cada nova falta o
+  //     reinicia. Com a chave desligada nada aqui roda (fluxo antigo intacto).
+  let faltasRenascidas = 0;
+  if (modeloPlataformaAtivo()) {
+    const renascidas = await db.esperaMedico.findMany({
+      where: {
+        status: "expirada",
+        diferencaCentavos: REMARCACAO_PLATAFORMA_DIFERENCA_CENTAVOS,
+        valorAntigoCentavos: { not: null },
+        consulta: { status: "confirmada", pago: true, reembolsoAutomaticoEm: null },
+      },
+      select: { consultaId: true },
+      take: 200,
+    });
+    for (const e of renascidas) {
+      if (await registrarNovaFaltaRenascida(e.consultaId)) faltasRenascidas++;
+    }
+  }
   // 4) remarcando com a reserva de 10 min vencida: pagou no limite → troca;
   //    senão cancela a cobrança e a consulta nova e volta para expirada.
   const vencidas = await db.esperaMedico.findMany({ where: { status: "remarcando", reservaExpiraEm: { lte: agora } }, select: { consultaId: true }, take: 200 });
@@ -307,7 +338,35 @@ export async function rodarEsperaMedico(agora: Date = new Date()): Promise<Resul
     if (r === "expirada") reservasExpiradas++;
     if (r === "remarcada") remarcadasNoJob++;
   }
-  return { abertas, medicoEntrou, expiradas, reservasExpiradas, remarcadasNoJob };
+  return { abertas, medicoEntrou, expiradas, reservasExpiradas, remarcadasNoJob, faltasRenascidas };
+}
+
+/**
+ * Regra 3.3: a janela de 10 min do médico NOVO (espera renascida pela troca)
+ * venceu sem ele entrar. Grava o prazo de 7 dias corridos a partir da NOVA
+ * falta — o expiraEm da espera, não o instante do cron. Idempotente: trava a
+ * linha da espera (serializa com a escolha do paciente) e exige consulta
+ * confirmada com prazo ainda null; troca nova limpa o prazo, cancelamento
+ * encerra a consulta, e a rodada seguinte não regrava.
+ */
+async function registrarNovaFaltaRenascida(consultaId: string): Promise<boolean> {
+  return db.$transaction(async (tx) => {
+    const espera = await travarEspera(tx, consultaId);
+    if (!espera || espera.status !== "expirada" || !esperaRenascidaPlataforma(espera)) return false;
+    const prazoEm = prazoReembolsoAutomatico(espera.expiraEm);
+    const { count } = await tx.consulta.updateMany({
+      where: { id: consultaId, status: "confirmada", pago: true, reembolsoAutomaticoEm: null },
+      data: { reembolsoAutomaticoEm: prazoEm },
+    });
+    if (count === 0) return false;
+    await auditar(tx, "ESPERA_MEDICO_NOVA_FALTA", {
+      usuarioId: null,
+      role: "SISTEMA",
+      consultaId,
+      detalhes: JSON.stringify({ consultaId, esperaId: espera.id, prazoEm: prazoEm.toISOString() }),
+    });
+    return true;
+  }, OPCOES_TX_TRAVA);
 }
 
 /* ---------------- leitura do paciente ---------------- */
@@ -402,7 +461,9 @@ export async function cancelarPorEspera(params: { consultaId: string; pacienteId
 
     const { count } = await tx.consulta.updateMany({
       where: { id: consulta.id, status: { in: STATUS_ABERTOS } },
-      data: { status: "cancelada", motivoCancelamento: MOTIVO_CANCELAMENTO },
+      // Cancelar encerra a consulta: o prazo de reembolso automático, se
+      // aberto (regra 3.3), deixa de correr — o reembolso sai agora.
+      data: { status: "cancelada", motivoCancelamento: MOTIVO_CANCELAMENTO, reembolsoAutomaticoEm: null },
     });
     if (count === 0) return falhar(409, "consulta_encerrada", "A consulta já foi encerrada.");
     await registrarEvento(tx, { consultaId: consulta.id, tipo: "cancelada", por: "sistema", dataAnterior: consulta.dataInicio, motivo: "falta_medico", multaCentavos: 0 });
@@ -501,10 +562,14 @@ export async function remarcarPorEspera(params: {
     const livre = await medicoLivreAgora(tx, { medicoId: params.medicoId, especialidade: consulta.especialidade, excetoMedicoId: consulta.medicoId, agora });
     if (!livre) return falhar(409, "medico_indisponivel", "medico_indisponivel");
 
-    // Modelo de 21/11 (regra 3): troca NA MESMA consulta. Mesmo Pagamento,
-    // mesmo valor original, sem consulta nova, sem cobrança, sem reembolso e
-    // sem diferença. O bruto original segue intacto para o repasse ao médico
-    // novo no desfecho `realizada` (90% menos a taxa do cartão, uma só vez).
+    // Modelo de 21/11 (regras 3 e 3.3): troca NA MESMA consulta. Mesmo
+    // Pagamento, mesmo valor original, sem consulta nova, sem cobrança, sem
+    // reembolso e sem diferença. O bruto original segue intacto para o
+    // repasse ao médico novo no desfecho `realizada` (90% menos a taxa do
+    // cartão, uma só vez). A espera RENASCE "aguardando" com nova janela de
+    // 10 min para o médico novo (decisão 3.3 do Presidente, 27/11): se ele
+    // também faltar, o paciente pode cancelar ou trocar de novo, e cada nova
+    // falta reinicia o prazo de 7 dias do reembolso automático (regra 4).
     if (modeloPlataformaAtivo()) {
       if (!conferirDiferencaPlataforma(params.diferencaEsperadaCentavos)) {
         return falhar(409, "preco_mudou", "Nesta remarcação não há diferença de preço.", { diferencaAtualCentavos: REMARCACAO_PLATAFORMA_DIFERENCA_CENTAVOS });
@@ -514,15 +579,19 @@ export async function remarcarPorEspera(params: {
       const dataAnterior = consulta.dataInicio;
       const { count } = await tx.consulta.updateMany({
         where: { id: consulta.id, status: { in: STATUS_ABERTOS } },
-        data: { medicoId: params.medicoId, dataInicio: inicio, remarcada: true },
+        // Remarcação dentro do prazo limpa o reembolso automático (como no
+        // reagendamento comum); a próxima falta, se houver, reinicia o prazo.
+        data: { medicoId: params.medicoId, dataInicio: inicio, remarcada: true, reembolsoAutomaticoEm: null },
       });
       if (count === 0) return falhar(409, "consulta_encerrada", "A consulta já foi encerrada.");
       await registrarEvento(tx, { consultaId: consulta.id, tipo: "remarcada", por: "sistema", dataAnterior, dataNova: inicio, motivo: "falta_medico", multaCentavos: 0 });
       const atual = await tx.esperaMedico.update({
         where: { id: espera.id },
         data: {
-          status: "remarcada",
-          resolvidoEm: agora,
+          status: "aguardando",
+          iniciadaEm: agora,
+          expiraEm: calcularExpiraEm(inicio, agora),
+          resolvidoEm: null,
           reservaExpiraEm: null,
           consultaNovaId: null,
           valorAntigoCentavos: brutoOriginalCentavos,
@@ -545,6 +614,7 @@ export async function remarcarPorEspera(params: {
           valorOriginalCentavos: brutoOriginalCentavos,
           diferencaCentavos: REMARCACAO_PLATAFORMA_DIFERENCA_CENTAVOS,
           modelo: "plataforma",
+          esperaRenascida: true,
         }),
       });
       return {

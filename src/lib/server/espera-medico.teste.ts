@@ -14,6 +14,7 @@ if (/supabase\.(co|com)/.test(process.env.DATABASE_URL ?? "")) throw new Error("
 
 const { db } = await import("@/lib/db");
 const m = await import("./espera-medico");
+const fin = await import("./financeiro");
 
 let ok = 0;
 let falhas = 0;
@@ -381,6 +382,109 @@ delete process.env.BION_PAGAMENTO_WEBHOOK_SECRET;
   igual("job conta", r.expiradas >= 1, true);
   const fila = await m.listarEsperasFila(AGORA);
   igual("fila mostra a expirada", fila.some((x) => x.consultaId === c.id && x.status === "expirada"), true);
+}
+
+// --- regra 3.3 (modelo plataforma): falta do SEGUNDO médico — espera renasce
+// "aguardando" na mesma consulta; cada nova falta reinicia o prazo de 7 dias;
+// sem escolha, reembolso integral automático no vencimento (decisão 3.3).
+const chaveAntes = process.env.BION_PAGAMENTO_RETIDO;
+process.env.BION_PAGAMENTO_RETIDO = "1";
+{
+  // Cadeia completa: troca → segunda falta → prazo → reembolso automático.
+  const { pac, c } = await cenario(150);
+  const med2 = await medico(200); // mais caro: no plataforma não há diferença
+  await m.abrirEspera(c.id, new Date(AGORA.getTime() - 15 * 60_000));
+  const r1 = await m.remarcarPorEspera({ consultaId: c.id, pacienteId: pac.id, medicoId: med2.id, diferencaEsperadaCentavos: 0, agora: AGORA });
+  igual("3.3 troca ok", r1.ok && !r1.jaProcessada, true);
+  igual("3.3 espera RENASCE aguardando", r1.ok ? [r1.espera.status, r1.espera.segundosRestantes, r1.espera.podeEscolher, r1.espera.resolvidoEm] : null, ["aguardando", 600, false, null]);
+  igual("3.3 wire sem consulta nova/cobrança/reembolso", r1.ok ? [r1.consultaNovaId, r1.cobranca, r1.reembolsoId, r1.espera.consultaNovaId, r1.espera.diferencaCentavos] : null, [null, null, null, null, 0]);
+  const cApos = await db.consulta.findUnique({ where: { id: c.id }, include: { pagamento: true } });
+  igual("3.3 mesma consulta, médico novo, horário novo", [cApos?.id === c.id, cApos?.medicoId, cApos?.dataInicio.toISOString(), cApos?.status, cApos?.valor], [true, med2.id, AGORA.toISOString(), "confirmada", 150]);
+  igual("3.3 mesmo pagamento, sem cobrança nova", [cApos?.pagamento?.valor, cApos?.pagamento?.status, await db.pagamento.count({ where: { consultaId: c.id } })], [150, "confirmado", 1]);
+  igual("3.3 troca registrada nos eventos", await db.eventoConsulta.count({ where: { consultaId: c.id, tipo: "remarcada", motivo: "falta_medico" } }), 1);
+  // Retry dentro da nova janela: 409 espera_nao_expirada (wire alinhado com Pacientes).
+  const retry = await m.remarcarPorEspera({ consultaId: c.id, pacienteId: pac.id, medicoId: med2.id, diferencaEsperadaCentavos: 0, agora: new Date(AGORA.getTime() + 60_000) });
+  igual("3.3 retry na janela → 409 espera_nao_expirada", retry.ok ? null : [retry.status, retry.codigo], [409, "espera_nao_expirada"]);
+  // Segunda falta: a janela renascida vence; o cron abre o prazo de 7 dias.
+  const venc2 = new Date(AGORA.getTime() + 11 * 60_000);
+  const job = await m.rodarEsperaMedico(venc2);
+  igual("3.3 cron conta a nova falta", job.faltasRenascidas >= 1, true);
+  const cPrazo = await db.consulta.findUnique({ where: { id: c.id } });
+  igual("3.3 prazo = nova falta (expiraEm) + 7 dias", cPrazo?.reembolsoAutomaticoEm?.toISOString(), new Date(AGORA.getTime() + 10 * 60_000 + 7 * 86_400_000).toISOString());
+  igual("3.3 paciente volta a poder escolher", await m.estadoEsperaDoPaciente(c.id, pac.id, venc2).then((x) => (x.ok && x.espera ? [x.espera.status, x.espera.podeEscolher] : null)), ["expirada", true]);
+  const job2 = await m.rodarEsperaMedico(venc2);
+  igual("3.3 cron idempotente (não regrava prazo)", [job2.faltasRenascidas, (await db.consulta.findUnique({ where: { id: c.id } }))?.reembolsoAutomaticoEm?.toISOString()], [0, cPrazo?.reembolsoAutomaticoEm?.toISOString()]);
+  // Sem escolha no prazo: reembolso integral automático + cancelamento.
+  const vencPrazo = new Date(AGORA.getTime() + 10 * 60_000 + 7 * 86_400_000 + 60_000);
+  const auto = await fin.vencerReembolsosAutomaticos(vencPrazo);
+  igual("3.3 reembolso automático roda", auto.reembolsadas >= 1, true);
+  const cFinal = await db.consulta.findUnique({ where: { id: c.id } });
+  igual("3.3 consulta cancelada pelo prazo", [cFinal?.status, cFinal?.reembolsoAutomaticoEm, cFinal?.motivoCancelamento], ["cancelada", null, fin.MOTIVO_CANCELAMENTO_REEMBOLSO_AUTOMATICO]);
+  igual("3.3 um reembolso integral sem multa, motivo falta_medico", await db.reembolso.findMany({ where: { pagamento: { consultaId: c.id } } }).then((xs) => xs.map((x) => [x.valorCentavos, x.multaCentavos, x.motivo, x.status])), [[15000, 0, "falta_medico", "aprovado"]]);
+  igual("3.3 espera resolvida como cancelada", await db.esperaMedico.findUnique({ where: { consultaId: c.id } }).then((e) => e?.status), "cancelada");
+  igual("3.3 médicos que faltaram não recebem", await db.transferenciaMedico.count({ where: { consultaId: c.id } }), 0);
+}
+{
+  // Segunda falta → paciente CANCELA pela espera: reembolso na hora, prazo limpo.
+  const { pac, c } = await cenario(150);
+  const med2 = await medico(150);
+  await m.abrirEspera(c.id, new Date(AGORA.getTime() - 15 * 60_000));
+  await m.remarcarPorEspera({ consultaId: c.id, pacienteId: pac.id, medicoId: med2.id, diferencaEsperadaCentavos: 0, agora: AGORA });
+  await m.rodarEsperaMedico(new Date(AGORA.getTime() + 11 * 60_000));
+  igual("3.3 cancelar: prazo aberto antes", (await db.consulta.findUnique({ where: { id: c.id } }))?.reembolsoAutomaticoEm !== null, true);
+  const canc = await m.cancelarPorEspera({ consultaId: c.id, pacienteId: pac.id, agora: new Date(AGORA.getTime() + 12 * 60_000) });
+  igual("3.3 cancelar depois da segunda falta ok", canc.ok && !canc.jaProcessada, true);
+  const cCanc = await db.consulta.findUnique({ where: { id: c.id } });
+  igual("3.3 cancelar limpa o prazo", [cCanc?.status, cCanc?.reembolsoAutomaticoEm], ["cancelada", null]);
+  await fin.vencerReembolsosAutomaticos(new Date(AGORA.getTime() + 8 * 86_400_000));
+  igual("3.3 sem reembolso em dobro", await db.reembolso.count({ where: { pagamento: { consultaId: c.id } } }), 1);
+}
+{
+  // Segunda falta → TROCA DE NOVO (terceiro médico): prazo limpo, janela nova;
+  // a falta seguinte reinicia o prazo a partir da NOVA falta. Sem limite.
+  const { pac, c } = await cenario(150);
+  const med2 = await medico(150);
+  const med3 = await medico(180);
+  await m.abrirEspera(c.id, new Date(AGORA.getTime() - 15 * 60_000));
+  await m.remarcarPorEspera({ consultaId: c.id, pacienteId: pac.id, medicoId: med2.id, diferencaEsperadaCentavos: 0, agora: AGORA });
+  await m.rodarEsperaMedico(new Date(AGORA.getTime() + 11 * 60_000));
+  const prazo1 = (await db.consulta.findUnique({ where: { id: c.id } }))?.reembolsoAutomaticoEm;
+  const troca2Em = new Date(AGORA.getTime() + 12 * 60_000);
+  const r2 = await m.remarcarPorEspera({ consultaId: c.id, pacienteId: pac.id, medicoId: med3.id, diferencaEsperadaCentavos: 0, agora: troca2Em });
+  igual("3.3 segunda troca ok", r2.ok && !r2.jaProcessada, true);
+  igual("3.3 segunda troca renasce de novo", r2.ok ? [r2.espera.status, r2.espera.expiraEm] : null, ["aguardando", new Date(troca2Em.getTime() + 10 * 60_000).toISOString()]);
+  const cTroca2 = await db.consulta.findUnique({ where: { id: c.id } });
+  igual("3.3 troca limpa o prazo e segue na mesma consulta", [cTroca2?.medicoId, cTroca2?.reembolsoAutomaticoEm, cTroca2?.status, await db.pagamento.count({ where: { consultaId: c.id } })], [med3.id, null, "confirmada", 1]);
+  await m.rodarEsperaMedico(new Date(AGORA.getTime() + 23 * 60_000));
+  const prazo2 = (await db.consulta.findUnique({ where: { id: c.id } }))?.reembolsoAutomaticoEm;
+  igual("3.3 nova falta reinicia o prazo da NOVA falta", prazo2?.toISOString(), new Date(troca2Em.getTime() + 10 * 60_000 + 7 * 86_400_000).toISOString());
+  igual("3.3 prazo reiniciado ≠ prazo anterior", prazo2?.getTime() !== prazo1?.getTime(), true);
+  igual("3.3 cada troca nos eventos", await db.eventoConsulta.count({ where: { consultaId: c.id, tipo: "remarcada", motivo: "falta_medico" } }), 2);
+}
+{
+  // Médico NOVO entra depois do vencimento: espera fecha, prazo limpo, sem reembolso.
+  const { pac, c } = await cenario(150);
+  const med2 = await medico(150);
+  await m.abrirEspera(c.id, new Date(AGORA.getTime() - 15 * 60_000));
+  await m.remarcarPorEspera({ consultaId: c.id, pacienteId: pac.id, medicoId: med2.id, diferencaEsperadaCentavos: 0, agora: AGORA });
+  await m.rodarEsperaMedico(new Date(AGORA.getTime() + 11 * 60_000));
+  igual("3.3 entrada tardia: prazo aberto antes", (await db.consulta.findUnique({ where: { id: c.id } }))?.reembolsoAutomaticoEm !== null, true);
+  igual("3.3 médico novo entra → fechada", await m.fecharEsperaMedicoEntrou(c.id, new Date(AGORA.getTime() + 12 * 60_000)), { resultado: "fechada" });
+  const cEntrou = await db.consulta.findUnique({ where: { id: c.id } });
+  igual("3.3 entrada limpa o prazo", [cEntrou?.reembolsoAutomaticoEm, cEntrou?.status], [null, "confirmada"]);
+  await fin.vencerReembolsosAutomaticos(new Date(AGORA.getTime() + 8 * 86_400_000));
+  igual("3.3 consulta que aconteceu não é reembolsada", [await db.reembolso.count({ where: { pagamento: { consultaId: c.id } } }), (await db.consulta.findUnique({ where: { id: c.id } }))?.status], [0, "confirmada"]);
+}
+// Chave desligada: o fluxo antigo NÃO muda (espera "remarcada" + consulta nova).
+if (chaveAntes === undefined) delete process.env.BION_PAGAMENTO_RETIDO;
+else process.env.BION_PAGAMENTO_RETIDO = chaveAntes;
+{
+  const { pac, c } = await cenario(150);
+  const med2 = await medico(150);
+  await m.abrirEspera(c.id, new Date(AGORA.getTime() - 15 * 60_000));
+  const r = await m.remarcarPorEspera({ consultaId: c.id, pacienteId: pac.id, medicoId: med2.id, diferencaEsperadaCentavos: 0, agora: AGORA });
+  igual("3.3 chave off: espera remarcada (legado)", r.ok ? [r.espera.status, r.consultaNovaId !== null] : null, ["remarcada", true]);
+  igual("3.3 chave off: consulta antiga cancelada", (await db.consulta.findUnique({ where: { id: c.id } }))?.status, "cancelada");
 }
 
 await db.$disconnect();

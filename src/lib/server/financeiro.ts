@@ -24,6 +24,7 @@ import {
   type GradeSemana,
 } from "@/lib/grade-semana";
 import { statusAposFalhaDoMedico } from "@/lib/atendimento-tipo";
+import { REMARCACAO_PLATAFORMA_DIFERENCA_CENTAVOS } from "@/lib/espera-medico-logica";
 
 /* ------------------------------------------------------------------ */
 /* Fase financeira: regras ÚNICAS de multa, reembolso e repasse.       */
@@ -814,7 +815,17 @@ export async function vencerReembolsosAutomaticos(agora: Date = new Date()): Pro
     where: {
       reembolsoAutomaticoEm: { lte: agora },
       pago: true,
-      status: { in: ["falta_paciente", "aguardando_reagendamento"] },
+      OR: [
+        { status: { in: ["falta_paciente", "aguardando_reagendamento"] } },
+        // Regra 3.3: nova falta do médico depois da troca NA MESMA consulta
+        // (espera renascida vencida; a consulta segue confirmada até o
+        // paciente escolher). O marcador da espera renascida evita pegar uma
+        // consulta confirmada comum.
+        {
+          status: "confirmada",
+          esperaMedico: { status: "expirada", diferencaCentavos: REMARCACAO_PLATAFORMA_DIFERENCA_CENTAVOS, valorAntigoCentavos: { not: null } },
+        },
+      ],
     },
     select: {
       id: true,
@@ -837,7 +848,9 @@ export async function vencerReembolsosAutomaticos(agora: Date = new Date()): Pro
   for (const c of consultas) {
     const ev = eventoDesfechoVigente(c.dataInicio, c.eventos);
     const motivo: MotivoEvento =
-      c.status === "falta_paciente" ? "falta_paciente" : ev?.motivo === "falta_medico" ? "falta_medico" : "falha_tecnica";
+      c.status === "falta_paciente" ? "falta_paciente"
+        : c.status === "confirmada" ? "falta_medico" // regra 3.3: espera renascida vencida, sem desfecho gravado
+        : ev?.motivo === "falta_medico" ? "falta_medico" : "falha_tecnica";
     const r = await db.$transaction(async (tx) => {
       // Mesma trava do fechamento do repasse e da correção.
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${"repasse:" + c.medicoId}))`;
@@ -862,6 +875,14 @@ export async function vencerReembolsosAutomaticos(agora: Date = new Date()): Pro
         solicitadoPor: "sistema",
       });
       await cancelarReservasPendentes(tx, c.id);
+      // Regra 3.3: a espera renascida fica resolvida como cancelada — a
+      // consulta foi cancelada pelo prazo e o paciente não escolhe mais.
+      if (c.status === "confirmada") {
+        await tx.esperaMedico.updateMany({
+          where: { consultaId: c.id, status: { in: ["aguardando", "expirada"] } },
+          data: { status: "cancelada", resolvidoEm: agora, reembolsoId: reembolso?.id ?? null },
+        });
+      }
       await tx.notificacao.create({
         data: {
           usuarioId: c.pacienteId,

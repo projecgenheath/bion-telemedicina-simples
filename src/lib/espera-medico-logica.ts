@@ -117,3 +117,25 @@ export function conferirDiferencaPlataforma(esperada: number): boolean {
 export function brutoRepasseRemarcacaoPlataforma(valorOriginalCentavos: number): number {
   return Math.max(0, Math.round(valorOriginalCentavos));
 }
+
+/* ---------------- modelo de 21/11 (regra 3.3: falta em cadeia) ---------------- */
+
+/**
+ * Espera RENASCIDA pela troca da regra 3 (decisão 3.3 do Presidente, 27/11):
+ * depois da troca NA MESMA consulta, a espera volta a "aguardando" com nova
+ * janela de 10 min para o médico novo. Se ele também faltar, a falta é uma
+ * NOVA falta: reinicia o prazo de 7 dias do reembolso automático (regra 4).
+ *
+ * Marcador da linha renascida: é a ÚNICA que fica aguardando/expirada com
+ * diferencaCentavos = 0 e valorAntigoCentavos gravado — a espera inicial nasce
+ * com esses campos null (INSERT só grava id/consultaId/datas/status), e o
+ * legado zera tudo ao liberar a reserva da diferença (liberarReserva). Sem
+ * coluna nova no schema: o estado que a troca grava já distingue a linha.
+ */
+export function esperaRenascidaPlataforma(e: { status: string; diferencaCentavos: number | null; valorAntigoCentavos: number | null }): boolean {
+  return (
+    (e.status === "aguardando" || e.status === "expirada") &&
+    e.diferencaCentavos === REMARCACAO_PLATAFORMA_DIFERENCA_CENTAVOS &&
+    e.valorAntigoCentavos !== null
+  );
+}
