@@ -17,6 +17,7 @@ import {
 } from "./metricas";
 import type { DadosPessoaisMedico } from "./dados-pessoais";
 import type { CampoRecebimento, PixTipo, RecebimentoWire, TitularTipo } from "@/lib/server/recebimento";
+import type { RetidoWire, ReembolsoWire, TransferenciaWire, TotaisWire, ModeloPagamentoWire } from "@/lib/recebimento-modelo";
 
 /** Evento de janela: algo mudou na agenda do médico (ex.: "Cancelar agenda do dia"). */
 export const EVENTO_DADOS_MEDICO = "bion-medico:dados-alterados";
@@ -402,15 +403,32 @@ export type PreviaRepasseWire = {
 };
 
 export type ListaRepasses = {
-  saldoCentavos: number;
-  temChavePix: boolean;
-  aviso: string;
-  previa: PreviaRepasseWire;
-  repasses: RepasseResumo[];
   /**
-   * Cobrança direta: valor COBRADO na conta Stripe do médico (bruto −
-   * reembolsos, antes da comissão de 10% e da taxa do Stripe). Não é o valor
-   * recebido nem repasse a receber.
+   * Modelo novo — contrato-api-pagamento-2111.md, seção 2. `modelo` diz qual
+   * modelo o servidor está usando. Todos os campos abaixo são opcionais: a
+   * rota legada (main, sem BION_PAGAMENTO_RETIDO=1) não os devolve, e o cliente
+   * precisa abrir o histórico mesmo assim. Com a chave ligada o servidor do
+   * Admin (#259) passa a devolver `retido`, `transferencias`, `reembolsos` e
+   * `totais`; sem dado, o bloco fica escondido. Nenhum número é inventado.
+   */
+  modelo?: ModeloPagamentoWire;
+  retido?: RetidoWire;
+  transferencias?: TransferenciaWire[];
+  reembolsos?: ReembolsoWire[];
+  totais?: TotaisWire;
+  /** Aviso geral (presente nos dois modelos). */
+  aviso: string;
+  /** Nota do bloco legado; os campos abaixo somem quando o Admin ligar o novo. */
+  avisoModeloAnterior?: string;
+  /** Campos do modelo anterior (PIX): presentes só em `modelo: "legado"`. */
+  saldoCentavos?: number;
+  temChavePix?: boolean;
+  previa?: PreviaRepasseWire;
+  repasses?: RepasseResumo[];
+  /**
+   * Cobrança direta (modelo anterior): valor COBRADO na conta Stripe do
+   * médico (bruto − reembolsos, antes da comissão de 10% e da taxa do
+   * Stripe). Não é o valor recebido nem repasse a receber.
    */
   recebidoDiretoStripe?: {
     aviso: string;

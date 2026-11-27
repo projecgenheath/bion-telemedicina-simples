@@ -25,6 +25,7 @@ import {
 } from "../metricas";
 import { avisarDadosMedicoAlterados, useBloqueiosAgenda } from "../useDadosMedico";
 import { gradeDeCampos, horariosDoDia, diaSemanaDeIso } from "@/lib/grade-semana";
+import { TEXTO_FALTA_PACIENTE_PLATAFORMA, type ModeloPagamentoWire } from "@/lib/recebimento-modelo";
 
 const DIAS_SEMANA = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 const HORIZONTE_DIAS = 14;
@@ -40,7 +41,7 @@ const MOTIVO_BLOQUEIO_MAX = 120;
 type Falha = { consulta: Consulta; erro: string };
 /** Desfecho marcado pela agenda (regras do Alisson, 06/10/2026). */
 type TipoDesfecho = "falta_paciente" | "falha_tecnica";
-type Marcacao = { consultaId: string; tipo: TipoDesfecho; etapa: "confirmar" | "enviando" | "erro" | "feito"; erro?: string };
+type Marcacao = { consultaId: string; tipo: TipoDesfecho; etapa: "confirmar" | "enviando" | "erro" | "feito"; erro?: string; modelo?: ModeloPagamentoWire };
 /** Cancelamento de UMA consulta pelo médico (mesmo PATCH do fluxo do dia, sem a bandeira do dia). */
 type Cancelamento = { consultaId: string; motivo: string; etapa: "confirmar" | "enviando" | "erro" | "feito"; erro?: string };
 type Fase =
@@ -309,6 +310,23 @@ export function AgendaDoDia({ medico, onExecutando }: { medico: Medico; onExecut
   const [marcacao, setMarcacao] = useState<Marcacao | null>(null);
   const [cancelamento, setCancelamento] = useState<Cancelamento | null>(null);
 
+  /** GET /api/medico/consultas/[id]/desfecho antes da confirmação: o `modelo` do
+   *  servidor decide o texto (no plataforma a falta do paciente não paga o médico).
+   *  Sem o campo ou sem conexão, abre com o texto legado; o POST confere tudo de novo. */
+  const pedirDesfecho = async (consultaId: string, tipo: TipoDesfecho) => {
+    let modelo: ModeloPagamentoWire | undefined;
+    try {
+      const res = await fetch(`/api/medico/consultas/${encodeURIComponent(consultaId)}/desfecho`, {
+        headers: { "Content-Type": "application/json" },
+      });
+      const json = (await res.json().catch(() => null)) as { modelo?: ModeloPagamentoWire } | null;
+      if (res.ok && json?.modelo) modelo = json.modelo;
+    } catch {
+      /* mantém o texto legado */
+    }
+    setMarcacao({ consultaId, tipo, etapa: "confirmar", modelo });
+  };
+
   /** POST /api/medico/consultas/[id]/desfecho — o servidor confere presença, prazo e desfecho. */
   const marcarDesfecho = async (m: Marcacao) => {
     if (rodando.current) return;
@@ -539,7 +557,7 @@ export function AgendaDoDia({ medico, onExecutando }: { medico: Medico; onExecut
               marcacao={marcacao}
               cancelamento={cancelamento}
               ocupado={ocupado || marcacao?.etapa === "enviando" || cancelamento?.etapa === "enviando"}
-              onPedir={(consultaId, tipo) => setMarcacao({ consultaId, tipo, etapa: "confirmar" })}
+              onPedir={(consultaId, tipo) => void pedirDesfecho(consultaId, tipo)}
               onConfirmar={(m) => void marcarDesfecho(m)}
               onFechar={() => setMarcacao(null)}
               onPedirCancelar={(consulta) => setCancelamento({ consultaId: consulta.id, motivo: "", etapa: "confirmar" })}
@@ -833,11 +851,14 @@ const ROTULO_SLOT: Record<SlotAgenda["estado"], string> = {
   bloqueado: "Bloqueado",
 };
 
+/** Quando a falta do paciente pode ser registrada (não muda entre modelos). */
+const VALIDADE_FALTA = "Vale se você esperou na sala até 15 min depois do horário e o paciente não entrou.";
+
 const TEXTO_DESFECHO: Record<TipoDesfecho, { titulo: string; pergunta: string; efeito: string; feito: string }> = {
   falta_paciente: {
     titulo: "Paciente não compareceu",
     pergunta: "Registrar que o paciente não compareceu?",
-    efeito: "Vale se você esperou na sala até 15 min depois do horário e o paciente não entrou. Você recebe normalmente; o paciente é avisado e pode pedir reembolso em até 7 dias.",
+    efeito: `${VALIDADE_FALTA} Você recebe normalmente; o paciente é avisado e pode pedir reembolso em até 7 dias.`,
     feito: "Falta do paciente registrada. O paciente foi avisado.",
   },
   falha_tecnica: {
@@ -912,6 +933,10 @@ function LinhaSlot({
         // código morto dentro da expressão.
         if (m && (m.etapa === "confirmar" || m.etapa === "enviando" || m.etapa === "erro")) {
           const t = TEXTO_DESFECHO[m.tipo];
+          // Modelo plataforma: a falta do paciente não paga o médico (regra 5 de 21/11).
+          const efeito = m.tipo === "falta_paciente" && m.modelo === "plataforma"
+            ? `${VALIDADE_FALTA} ${TEXTO_FALTA_PACIENTE_PLATAFORMA}`
+            : t.efeito;
           return (
             <div
               key={c.id}
@@ -924,7 +949,7 @@ function LinhaSlot({
                 {t.pergunta} <span className="font-semibold">({c.paciente}, {horaClinica(c.dataISO ?? c.ts)})</span>
               </p>
               <p id={`bm-desfecho-texto-${c.id}`} className="text-xs text-bion-ink/75 dark:text-bion-paper/75">
-                {t.efeito} Não dá para desfazer.
+                {efeito} Não dá para desfazer.
               </p>
               {m.etapa === "erro" ? (
                 <p className="text-xs font-semibold text-red-700 dark:text-red-300" role="alert">{m.erro}</p>

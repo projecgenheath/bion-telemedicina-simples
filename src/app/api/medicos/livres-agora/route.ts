@@ -4,6 +4,8 @@ import { exigirSessao } from "@/lib/server/auth";
 import { ok, falha } from "@/lib/server/http";
 import { foraDoHorarioVedado, medicoLivreAgora, reaisParaCentavos } from "@/lib/server/medico-livre";
 import { notaReal } from "@/lib/server/notas-medico";
+import { modeloPlataformaAtivo } from "@/lib/server/financeiro";
+import { diferencaParaListaLivresAgora } from "@/lib/espera-medico-logica";
 
 /**
  * GET /api/medicos/livres-agora?especialidade=...&consultaId=...
@@ -11,8 +13,10 @@ import { notaReal } from "@/lib/server/notas-medico";
  * Com consultaId (do paciente da sessão, ou qualquer uma para ADMIN): a
  * especialidade padrão é a da consulta, o médico original fica de fora e
  * cada item traz diferencaCentavos = valorConsultaCentavos − valor original
- * (positiva: o paciente paga; negativa: recebe de volta). Sem consultaId,
- * diferencaCentavos = null. Inteiros, em centavos.
+ * (positiva: o paciente paga; negativa: recebe de volta). Com a chave de
+ * servidor BION_PAGAMENTO_RETIDO=1 (modelo de 21/11), a diferença é 0 para
+ * todos: a remarcação por falta do médico é na mesma consulta, sem cobrança.
+ * Sem consultaId, diferencaCentavos = null. Inteiros, em centavos.
  * → { medicos: [{ id, nome, especialidade, foto, avaliacao, valorConsultaCentavos, diferencaCentavos }] }
  */
 const LOTE = 5;
@@ -66,6 +70,10 @@ export async function GET(req: NextRequest) {
     const notas = new Map(
       await Promise.all(livresFiltrados.map(async (m) => [m.userId, await notaReal(m.userId)] as const)),
     );
+    // Modelo de 21/11 (regra 3): na falta do médico a remarcação é na mesma
+    // consulta, sem nova cobrança. Com a chave ligada, todo médico livre
+    // aparece com diferença 0; com ela desligada, segue o cálculo antigo.
+    const plataforma = modeloPlataformaAtivo();
     return ok({
       medicos: livresFiltrados.map((m) => {
           const valorConsultaCentavos = reaisParaCentavos(m.valor);
@@ -78,7 +86,9 @@ export async function GET(req: NextRequest) {
             avaliacao: nota.avaliacao,
             numAvaliacoes: nota.numAvaliacoes,
             valorConsultaCentavos,
-            diferencaCentavos: original ? valorConsultaCentavos - original.valorCentavos : null,
+            diferencaCentavos: original
+              ? diferencaParaListaLivresAgora({ plataforma, valorMedicoCentavos: valorConsultaCentavos, valorOriginalCentavos: original.valorCentavos })
+              : null,
           };
         }),
     });

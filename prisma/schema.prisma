@@ -50,6 +50,7 @@ model User {
   repasses             Repasse[]      @relation("RepasseMedico")
   repassesPagos        Repasse[]      @relation("RepassePagoPor")
   repasseAjustes       RepasseAjuste[] @relation("RepasseAjusteMedico")
+  transferenciasMedico TransferenciaMedico[] @relation("TransferenciaMedicoMedico")
   chargebacksMedico    Chargeback[]    @relation("ChargebackMedico")
   chargebacksFalhaBion Chargeback[]    @relation("ChargebackFalhaBionPor")
   chargebacksCredito   Chargeback[]    @relation("ChargebackCreditoDevolvidoPor")
@@ -218,6 +219,9 @@ model Consulta {
   remarcada          Boolean  @default(false)
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
+  // Modelo 21/11 (20261127a): prazo do reembolso integral automático +
+  // cancelamento (regras 4 e 5). Nulo = sem prazo ativo; remarcação limpa.
+  reembolsoAutomaticoEm DateTime?
 
   // Teleconsulta v2: tipo do atendimento e consulta de origem (renovação,
   // retorno, segunda opinião). Trava no banco: Consulta_tipoAtendimento_check.
@@ -246,6 +250,7 @@ model Consulta {
   eventos     EventoConsulta[]
   repasseItens RepasseItem[]
   repasseAjustes RepasseAjuste[]
+  transferencias TransferenciaMedico[] // modelo 21/11: no máximo 1 (consultaId @unique)
   remarcacoes RemarcacaoPendente[]
   chamadas    ChamadaConsulta[] // Admin: toque da consulta
   evolucao    Evolucao?         // Teleconsulta v2 — Médicos: evolução (1 por consulta)
@@ -283,6 +288,7 @@ model Pagamento {
   reembolsos Reembolso[]
   pedidoRenovacao PedidoRenovacao? @relation("PedidoRenovacaoPagamento")
   chargebacks Chargeback[]
+  transferencias TransferenciaMedico[] // modelo 21/11: origem do valor transferido
 }
 
 // Triagem (anamnese) guiada pela BION IA em formato storytelling, feita APÓS o
@@ -642,10 +648,10 @@ model Reembolso {
   @@index([origem, status, criadoEm])
 }
 
-// Devolução da taxa do cartão ao médico no reembolso integral por falta do
-// paciente (cobrança direta no Connect). A BION transfere a taxa da charge
-// para a conta do médico. reembolsoId único = no máximo 1 transferência.
-// status: pendente | enviado | falhou. Migração 20261103b.
+// LEGADO (#137, cobrança direta). Devolução da taxa do cartão ao médico no
+// reembolso integral por falta do paciente. O modelo de 21/11/2026 REMOVEU
+// essa devolução: a taxa nunca volta ao médico (regra 6). A tabela fica só
+// para o histórico; nenhum código novo cria linhas aqui. Migração 20261103b.
 model ReembolsoTaxaMedico {
   id               String    @id @default(cuid())
   reembolsoId      String    @unique
@@ -662,7 +668,46 @@ model ReembolsoTaxaMedico {
   @@index([status, criadoEm])
 }
 
-// Repasse DIÁRIO ao médico. Só existe a partir do fechamento (23:30 de São
+// Transferência ao médico no modelo de 21/11/2026 (migração 20261127a).
+// A cobrança nasce na conta da PLATAFORMA; nada é creditado no pagamento.
+// Uma linha por consulta, criada no desfecho "realizada" (tipo consulta:
+// liquido = 90% − taxa real do cartão) e por multa aplicada (tipos
+// multa_cancelamento/multa_remarcacao: bruto = comissão = 0, multas = metade
+// do médico, liquido = multas − taxa). consultaId/remarcacaoId únicos =
+// repetição nunca cria duas transferências. status: pendente | enviada |
+// falhou; stripeTransferId preenchido = enviada. O envio usa
+// source_transaction (obrigatório no Brasil): o saldo fica pending na conta
+// do médico até a charge ficar disponível (~30 dias corridos). CHECKs no
+// banco: valores >= 0, liquido = bruto − comissão − taxas + multas, origem
+// por tipo, enviada = id + data.
+model TransferenciaMedico {
+  id               String              @id @default(cuid())
+  consultaId       String?             @unique // nulo só em multa de remarcação
+  consulta         Consulta?           @relation(fields: [consultaId], references: [id], onDelete: Restrict)
+  remarcacaoId     String?             @unique
+  remarcacao       RemarcacaoPendente? @relation(fields: [remarcacaoId], references: [id], onDelete: Restrict)
+  medicoId         String
+  medico           User                @relation("TransferenciaMedicoMedico", fields: [medicoId], references: [id], onDelete: Restrict)
+  pagamentoId      String?
+  pagamento        Pagamento?          @relation(fields: [pagamentoId], references: [id], onDelete: Restrict)
+  tipo             String // consulta | multa_cancelamento | multa_remarcacao
+  brutoCentavos    Int                 @default(0)
+  comissaoCentavos Int                 @default(0)
+  taxasCentavos    Int                 @default(0)
+  multasCentavos   Int                 @default(0)
+  liquidoCentavos  Int
+  status           String              @default("pendente") // pendente | enviada | falhou
+  stripeTransferId String?             @unique
+  criadaEm         DateTime            @default(now())
+  enviadaEm        DateTime?
+  tentativas       Int                 @default(0)
+  erro             String?
+
+  @@index([medicoId])
+  @@index([status])
+}
+
+// Repasse DIÁRIO ao médico (LEGADO do modelo anterior ao de 21/11/2026).
 // Paulo, consultas do dia): não há linha "aberta"; a prévia é calculada na hora.
 // competencia: "AAAA-MM-DD" (dia em São Paulo; CHECK no banco, data real).
 // status: fechado | pago. Pago exige pagoEm, pagoPorId, comprovante e a cópia
@@ -748,6 +793,9 @@ model RepasseItem {
 //   reembolsoId único: desconta uma vez só).
 // motivo "saldo_anterior": resto de um ajuste aplicado em parte
 //   (origemAjusteId único; consulta opcional).
+// motivo "taxa_reembolso" (20261127a): taxa do cartão retida no reembolso
+//   (nunca devolvida ao médico, regra 6 de 21/11), descontável de recebimento
+//   futuro do médico daquela consulta (reembolsoId + consultaId obrigatórios).
 // Pendente: repasseId/aplicadoEm nulos e valorAplicado = 0. Aplicado:
 //   0 < valorAplicado ≤ valor; se menor, o resto vira um "saldo_anterior".
 // (repasseId, medicoId) → Repasse(id, medicoId): não cai no repasse de outro.
@@ -759,7 +807,7 @@ model RepasseAjuste {
   medico                User           @relation("RepasseAjusteMedico", fields: [medicoId], references: [id], onDelete: Restrict)
   consultaId            String?
   consulta              Consulta?      @relation(fields: [consultaId, medicoId], references: [id, medicoId], onDelete: Restrict, onUpdate: Restrict)
-  motivo                String // reembolso | saldo_anterior | chargeback (20261103e)
+  motivo                String // reembolso | saldo_anterior | chargeback (20261103e) | taxa_reembolso (20261127a)
   reembolsoId           String?        @unique
   reembolso             Reembolso?     @relation(fields: [reembolsoId], references: [id], onDelete: Restrict)
   chargebackId          String?        @unique // 20261103e
@@ -864,13 +912,15 @@ model RemarcacaoPendente {
   metodo        String     @default("pix") // pix | cartao
   via           String?    // webhook | simulado
   gatewayRef    String?
-  stripeContaMedico String? // multa cobrada direto na conta Stripe do médico (20261103c): fora do repasse PIX
+  stripeContaMedico String? // multa cobrada direto na conta Stripe do médico (20261103c, legado): fora do repasse PIX
+  stripeTaxaCentavos Int? // taxa real da cobrança da multa (modelo 21/11, 20261127a); sai da metade do médico
   solicitadoPor String
   expiraEm      DateTime
   criadoEm      DateTime   @default(now())
   aprovadoEm    DateTime?
   reembolso     Reembolso?
   repasseItens  RepasseItem[] // no máximo 1 (remarcacaoId @unique)
+  transferencia TransferenciaMedico? // modelo 21/11: metade do médico, no máximo 1 (remarcacaoId @unique)
 
   @@unique([id, consultaId]) // alvo da FK (remarcacaoId, consultaId) do RepasseItem
   @@index([consultaId, status])

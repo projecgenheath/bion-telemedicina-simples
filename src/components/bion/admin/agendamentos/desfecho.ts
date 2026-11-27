@@ -72,9 +72,9 @@ export function destaqueDinheiro(d: PlanoWire["dinheiro"]): { valor: string; leg
   const v = brl(d.liquidoMedicoCentavos);
   switch (d.efeito) {
     case "entra_no_proximo_repasse":
-      return { valor: `+ ${v}`, legenda: "para o médico no próximo fechamento (23:30)", tom: "dinheiro" };
+      return { valor: `+ ${v}`, legenda: "para o médico na transferência após a consulta (90% menos a taxa do cartão)", tom: "dinheiro" };
     case "sai_do_repasse":
-      return { valor: `− ${v}`, legenda: "sai do próximo fechamento do médico", tom: "critico" };
+      return { valor: `− ${v}`, legenda: "sai da transferência pendente do médico", tom: "critico" };
     case "desconto_se_reembolso":
       return { valor: `até − ${v}`, legenda: "desconto no próximo repasse, só se o paciente escolher o reembolso", tom: "atencao" };
     case "sem_pagamento":

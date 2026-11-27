@@ -15,7 +15,11 @@ import { pedirReembolsoManual, prazoReembolsoManual, reembolsoManualWire } from 
  *      Só com evento falta_paciente, pagamento confirmado e dentro de
  *      REEMBOLSO_MANUAL_PRAZO_DIAS depois da consulta. Um pedido por
  *      pagamento: se já houver (inclusive negado) → 409.
- * GET  → { reembolso | null, podePedirAte | null } para o paciente dono ou admin.
+ *      Modelo 21/11 (seção 3.1): com reembolso automático aberto
+ *      (Consulta.reembolsoAutomaticoEm) → 409 com motivo
+ *      "reembolso_automatico" e automatico { processadoEm, previstoPara }.
+ * GET  → { reembolso | null, podePedirAte | null, automatico { ativo, prazo } }
+ *      para o paciente dono ou admin.
  *
  * PATCH /api/admin/reembolsos/[id] continua para pedidos antigos em_analise.
  */
@@ -36,6 +40,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
         // falta já corrigida pelo admin (ou de uma data antiga) e o POST
         // respondia 409.
         eventos: { where: { tipo: "falta_paciente", corrigidoEm: null }, select: { id: true, dataAnterior: true } },
+        // Modelo 21/11 (regras 4 e 5): prazo do reembolso automático, sem pedido.
+        reembolsoAutomaticoEm: true,
         pagamento: {
           select: { reembolsos: { where: { origem: "manual" }, orderBy: { criadoEm: "desc" }, take: 1 } },
         },
@@ -50,6 +56,10 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     return ok({
       reembolso: r ? reembolsoManualWire(r) : null,
       podePedirAte: faltaVigente ? prazoReembolsoManual(consulta.dataInicio).toISOString() : null,
+      automatico: {
+        ativo: !!consulta.reembolsoAutomaticoEm,
+        prazo: consulta.reembolsoAutomaticoEm?.toISOString() ?? "",
+      },
     });
   } catch (erro) {
     return falha(erro);
@@ -71,7 +81,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       pacienteId: usuario.id,
       justificativa: typeof body.justificativa === "string" ? body.justificativa : "",
     });
-    if (!res.ok) return Response.json({ erro: res.erro }, { status: res.status });
+    if (!res.ok) {
+      // Seção 3.1 do contrato: o 409 do automático leva motivo + bloco automatico.
+      const corpo: Record<string, unknown> = { erro: res.erro };
+      if (res.motivo) corpo.motivo = res.motivo;
+      if (res.automatico) corpo.automatico = res.automatico;
+      return Response.json(corpo, { status: res.status });
+    }
 
     const consulta = await db.consulta.findUnique({ where: { id }, select: { especialidade: true, dataInicio: true } });
     const quando = consulta ? quandoClinica(consulta.dataInicio) : "";

@@ -85,7 +85,7 @@ export function FecharAgora({
       aberto={aberto}
       onFechar={onFechar}
       titulo={resultado ? "Fechamento concluído" : "Fechar repasses agora"}
-      descricao={resultado ? `Competência ${competenciaCurta(resultado.competencia, agora)}` : "Antes do fechamento automático das 23:00"}
+      descricao={resultado ? `Competência ${competenciaCurta(resultado.competencia, agora)}` : "Só para o histórico do modelo PIX: o fechamento automático está desligado"}
       alteracoesPendentes={!resultado && entendi}
     >
       {resultado && resumo ? (

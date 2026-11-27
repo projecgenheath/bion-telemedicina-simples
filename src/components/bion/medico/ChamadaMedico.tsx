@@ -24,6 +24,7 @@ import { ConsultaNaoEncontrada, ErroSalaFatal } from "@/components/bion/consulta
 import { SalaMedicoTela } from "./sala/SalaMedicoTela";
 import { useSalaConsulta } from "@/components/bion/consulta/useSalaConsulta";
 import { avisarDadosMedicoAlterados } from "@/components/bion/medico/useDadosMedico";
+import { efeitoFaltaPaciente, type ModeloPagamentoWire } from "@/lib/recebimento-modelo";
 import { poppins } from "@/components/bion/medico/inicio/fonte-medico";
 import { PainelEvolucao } from "@/components/bion/medico/evolucao/PainelEvolucao";
 
@@ -402,7 +403,7 @@ export function ChamadaMedico({ onEnd, consultaId }: { onEnd: () => void; consul
     } catch {
       return "Falha de conexão com o servidor.";
     }
-    const json = (await res.json().catch(() => null)) as ({ erro?: string; evolucaoConcluida?: boolean } & Record<string, unknown>) | null;
+    const json = (await res.json().catch(() => null)) as ({ erro?: string; evolucaoConcluida?: boolean; modelo?: ModeloPagamentoWire } & Record<string, unknown>) | null;
     if (!res.ok) return json?.erro ?? `Não foi possível concluir a operação (erro ${res.status}).`;
     // Ato único, sem segundo POST: o PATCH "concluir" encerra o rascunho
     // de evolução desta consulta na mesma transação — se a resposta é ok,
@@ -415,7 +416,7 @@ export function ChamadaMedico({ onEnd, consultaId }: { onEnd: () => void; consul
       toast.success(json?.evolucaoConcluida ? "Consulta e evolução concluídas" : "Consulta concluída");
     } else if (escolha === "falta_paciente") {
       toast.success("Falta do paciente registrada", {
-        description: "A consulta foi encerrada como falta do paciente. Você recebe normalmente. O paciente foi avisado e pode pedir reembolso em até 7 dias.",
+        description: `A consulta foi encerrada como falta do paciente. ${efeitoFaltaPaciente(json?.modelo, "Você recebe normalmente. O paciente foi avisado e pode pedir reembolso em até 7 dias.")}`,
       });
     } else {
       toast.success("Falha técnica registrada", {

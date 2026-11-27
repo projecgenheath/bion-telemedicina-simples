@@ -28,10 +28,10 @@ describe("taxa real do gateway na cobrança normal", () => {
   });
 });
 
-describe("reembolso: tudo ao paciente, taxa com o app", () => {
-  test("integral: médico 0 e taxa não cobrada dele", () => {
+describe("reembolso: paciente recebe integral, taxa nunca volta ao médico (regra 6 de 21/11)", () => {
+  test("integral: médico 0 e taxa fica com a plataforma", () => {
     const l = liquidoComReembolso(10000, 399, 10000);
-    expect([l.taxaCentavos, l.reembolsosCentavos, l.liquidoCentavos]).toEqual([0, 9000, 0]);
+    expect([l.taxaCentavos, l.reembolsosCentavos, l.liquidoCentavos]).toEqual([399, 8601, 0]);
   });
   test("parcial: taxa da parte mantida fica no médico, sai 90% do reembolsado", () => {
     const l = liquidoComReembolso(10000, 399, 5000);
@@ -39,7 +39,7 @@ describe("reembolso: tudo ao paciente, taxa com o app", () => {
   });
   test("item da consulta com reembolso integral antes do fechamento", () => {
     const i = itemDaConsulta(consulta(399, [{ valorCentavos: 10000 }]));
-    expect([i.taxasCentavos, i.liquidoCentavos]).toEqual([0, 0]);
+    expect([i.taxasCentavos, i.liquidoCentavos]).toEqual([399, 0]);
   });
   test("reembolso depois do fechamento: desconta no repasse seguinte, até o líquido pago", () => {
     const fechado = new Date("2026-10-20T23:30:00-03:00");

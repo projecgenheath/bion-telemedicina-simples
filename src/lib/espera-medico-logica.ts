@@ -90,3 +90,52 @@ export function lerPedidoRemarcar(b: unknown): { medicoId: string; diferencaEspe
   if (typeof o.diferencaEsperadaCentavos !== "number" || !Number.isInteger(o.diferencaEsperadaCentavos)) return null;
   return { medicoId: o.medicoId.trim(), diferencaEsperadaCentavos: o.diferencaEsperadaCentavos };
 }
+
+/* ---------------- modelo de 21/11 (regra 3) ---------------- */
+
+/**
+ * Regra 3 no modelo plataforma: falta do médico + remarcação com outro médico
+ * acontece NA MESMA consulta, com o mesmo Pagamento e o valor original.
+ * Não há nova cobrança, nem diferença a pagar/devolver, nem segunda taxa ou
+ * comissão: o médico novo recebe no desfecho `realizada` sobre o bruto
+ * original. A chave de servidor BION_PAGAMENTO_RETIDO é lida no servidor
+ * (`modeloPlataformaAtivo`); estas funções são puras para teste.
+ */
+export const REMARCACAO_PLATAFORMA_DIFERENCA_CENTAVOS = 0;
+
+/** `livres-agora`: diferença 0 no modelo plataforma; cálculo atual no legado. */
+export function diferencaParaListaLivresAgora(params: { plataforma: boolean; valorMedicoCentavos: number; valorOriginalCentavos: number }): number {
+  return params.plataforma ? REMARCACAO_PLATAFORMA_DIFERENCA_CENTAVOS : params.valorMedicoCentavos - params.valorOriginalCentavos;
+}
+
+/** A diferença que o cliente enviou no POST vale no modelo plataforma? Só 0. */
+export function conferirDiferencaPlataforma(esperada: number): boolean {
+  return esperada === REMARCACAO_PLATAFORMA_DIFERENCA_CENTAVOS;
+}
+
+/** Bruto sobre o qual o médico novo recebe: o ORIGINAL, não o preço dele. */
+export function brutoRepasseRemarcacaoPlataforma(valorOriginalCentavos: number): number {
+  return Math.max(0, Math.round(valorOriginalCentavos));
+}
+
+/* ---------------- modelo de 21/11 (regra 3.3: falta em cadeia) ---------------- */
+
+/**
+ * Espera RENASCIDA pela troca da regra 3 (decisão 3.3 do Presidente, 27/11):
+ * depois da troca NA MESMA consulta, a espera volta a "aguardando" com nova
+ * janela de 10 min para o médico novo. Se ele também faltar, a falta é uma
+ * NOVA falta: reinicia o prazo de 7 dias do reembolso automático (regra 4).
+ *
+ * Marcador da linha renascida: é a ÚNICA que fica aguardando/expirada com
+ * diferencaCentavos = 0 e valorAntigoCentavos gravado — a espera inicial nasce
+ * com esses campos null (INSERT só grava id/consultaId/datas/status), e o
+ * legado zera tudo ao liberar a reserva da diferença (liberarReserva). Sem
+ * coluna nova no schema: o estado que a troca grava já distingue a linha.
+ */
+export function esperaRenascidaPlataforma(e: { status: string; diferencaCentavos: number | null; valorAntigoCentavos: number | null }): boolean {
+  return (
+    (e.status === "aguardando" || e.status === "expirada") &&
+    e.diferencaCentavos === REMARCACAO_PLATAFORMA_DIFERENCA_CENTAVOS &&
+    e.valorAntigoCentavos !== null
+  );
+}

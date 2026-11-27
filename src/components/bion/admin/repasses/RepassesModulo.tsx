@@ -154,7 +154,7 @@ function AbaHoje({ r, agora }: { r: Recurso<RespostaPrevia>; agora: number }) {
         <Eye className="w-4 h-4 shrink-0 mt-0.5" aria-hidden />
         <p>
           <b>Prévia: nada foi fechado.</b> É o que entraria se o dia fosse fechado agora ({brl(soma)} em {previas.length}{" "}
-          {previas.length === 1 ? "médico" : "médicos"}). O fechamento automático é às 23:00; até lá os valores podem mudar.
+          {previas.length === 1 ? "médico" : "médicos"}).Esta é a prévia do modelo PIX antigo: desde 21/11 o médico recebe por transferência Stripe após a consulta realizada.
         </p>
       </div>
       {previas.length === 0 ? (

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { AlertTriangle, ChevronLeft, ChevronRight, Download, ExternalLink, RefreshCw, Wallet } from "lucide-react";
+import type { ReembolsoWire, RetidoWire, TransferenciaWire } from "@/lib/recebimento-modelo";
 import { fmtCentavos } from "../metricas";
 import { baixarCsvRepasse, csvDetalheRepasse, csvHistoricoRepasses, previaTemConteudo } from "../repasses-csv";
 import {
@@ -156,7 +157,8 @@ function PreviaBloco({ previa }: { previa: PreviaRepasseWire }) {
   if (vazia && previa.totais.liquidoCentavos === 0 && previa.ajustesPendentesRestantesCentavos === 0) {
     return (
       <div className="bp-glass p-4 text-sm text-bion-ink/75 dark:text-bion-paper/75">
-        Nada a fechar hoje ainda. Consultas pagas de hoje entram no fechamento das 23:30 (horário de Brasília).
+        Nada a fechar hoje ainda. No modelo anterior (PIX), consultas pagas com desfecho entram no fechamento das 23:30
+        (horário de Brasília). No modelo novo, o repasse vai para a sua conta Stripe depois da consulta realizada.
       </div>
     );
   }
@@ -294,10 +296,15 @@ function DetalheView({
  */
 function repasseParaPagar(lista: ListaRepasses): boolean {
   return (
-    lista.saldoCentavos > 0 ||
-    lista.previa.totais.liquidoCentavos > 0 ||
-    lista.repasses.some((r) => r.status === "fechado" && r.liquidoCentavos > 0)
+    (lista.saldoCentavos ?? 0) > 0 ||
+    (lista.previa?.totais.liquidoCentavos ?? 0) > 0 ||
+    (lista.repasses ?? []).some((r) => r.status === "fechado" && r.liquidoCentavos > 0)
   );
+}
+
+/** Há dados do modelo anterior para mostrar? No contrato novo esses campos saem. */
+function temModeloAnterior(lista: ListaRepasses): boolean {
+  return lista.modelo === "legado" || Boolean(lista.avisoModeloAnterior || lista.repasses?.length || lista.recebidoDiretoStripe);
 }
 
 /**
@@ -342,7 +349,7 @@ export function RepassesSheet({
       aberto={aberto}
       onFechar={onFechar}
       titulo="Histórico de repasses"
-      subtitulo="Fechamento diário às 23:30 (horário de Brasília)"
+      subtitulo="Modelo anterior (PIX): fechamento diário às 23:30. Modelo novo: repasse após a consulta realizada."
     >
       {vista === "detalhe" && detalhe ? (
         <DetalheView detalhe={detalhe} onVoltar={voltar} />
@@ -371,16 +378,24 @@ export function RepassesSheet({
             </div>
           ) : lista ? (
             <>
-              <div className="bp-glass-marinho p-5 text-white">
-                <div className="text-xs font-bold uppercase tracking-wider text-white/90">Saldo a receber</div>
-                <div className="mt-1 text-3xl font-black tabular-nums">{fmtCentavos(lista.saldoCentavos)}</div>
-                <p className="mt-2 text-xs text-white/90 leading-relaxed">
-                  Soma dos repasses já fechados (ainda não pagos) com a prévia de hoje. Cada repasse fechado é pago
-                  inteiro; ajustes que ainda restam só saem dos próximos repasses.
-                </p>
-              </div>
+              {temModeloAnterior(lista) ? (
+                <div className="bp-glass-marinho p-5 text-white">
+                  <div className="text-xs font-bold uppercase tracking-wider text-white/90">Saldo a receber (modelo anterior)</div>
+                  <div className="mt-1 text-3xl font-black tabular-nums">{fmtCentavos(lista.saldoCentavos ?? 0)}</div>
+                  <p className="mt-2 text-xs text-white/90 leading-relaxed">
+                    Modelo anterior (PIX): soma dos repasses já fechados (ainda não pagos) com a prévia de hoje. Cada repasse
+                    fechado é pago inteiro; ajustes que ainda restam só saem dos próximos repasses.
+                  </p>
+                </div>
+              ) : null}
 
-              {!lista.temChavePix && repasseParaPagar(lista) ? (
+              {lista.retido ? <RetidoPlataformaBloco dados={lista.retido} /> : null}
+              {lista.transferencias && lista.transferencias.length > 0 ? (
+                <TransferenciasBloco itens={lista.transferencias} />
+              ) : null}
+              {lista.reembolsos && lista.reembolsos.length > 0 ? <ReembolsosBloco itens={lista.reembolsos} /> : null}
+
+              {temModeloAnterior(lista) && !lista.temChavePix && repasseParaPagar(lista) ? (
                 <div className="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4 flex gap-3" role="status">
                   <AlertTriangle className="w-5 h-5 shrink-0 text-amber-800 dark:text-amber-200" aria-hidden />
                   <div className="min-w-0">
@@ -400,7 +415,7 @@ export function RepassesSheet({
                     </button>
                   </div>
                 </div>
-              ) : !lista.temChavePix ? (
+              ) : temModeloAnterior(lista) && !lista.temChavePix ? (
                 // Sem repasse esperando pagamento, a falta da chave não
                 // bloqueia nada: nota informativa (sem alarme), com o
                 // atalho para cadastrar quando o médico quiser.
@@ -426,10 +441,11 @@ export function RepassesSheet({
                 </div>
               ) : null}
 
-              <PreviaBloco previa={lista.previa} />
+              {lista.previa ? <PreviaBloco previa={lista.previa} /> : null}
 
               <RecebidoDiretoBloco dados={lista.recebidoDiretoStripe} />
 
+              {temModeloAnterior(lista) ? (
               <div>
                 <div className="flex items-center justify-between gap-2 px-1 mb-2">
                   <div className="text-xs font-bold uppercase tracking-wider text-bion-ink/75 dark:text-bion-paper/75">
@@ -439,9 +455,9 @@ export function RepassesSheet({
                     <button
                       type="button"
                       onClick={() =>
-                        baixarCsvRepasse(`bion-repasses-${Date.now()}.csv`, csvHistoricoRepasses(lista.previa, lista.repasses))
+                        baixarCsvRepasse(`bion-repasses-${Date.now()}.csv`, csvHistoricoRepasses(lista.previa!, lista.repasses ?? []))
                       }
-                      disabled={lista.repasses.length === 0 && !previaTemConteudo(lista.previa)}
+                      disabled={(lista.repasses ?? []).length === 0 && !lista.previa}
                       aria-label="Exportar histórico de repasses em CSV"
                       className="p-2 rounded-full bg-bion-ink/8 dark:bg-white/10 disabled:opacity-50"
                     >
@@ -459,13 +475,13 @@ export function RepassesSheet({
                   </div>
                 </div>
 
-                {lista.repasses.length === 0 ? (
+                {(lista.repasses ?? []).length === 0 ? (
                   <div className="bp-glass p-5 text-sm text-bion-ink/75 dark:text-bion-paper/75 text-center">
                     Nenhum repasse ainda.
                   </div>
                 ) : (
                   <ul className="bp-glass divide-y divide-bion-ink/10 dark:divide-white/10 overflow-hidden">
-                    {lista.repasses.map((r: RepasseResumo) => (
+                    {(lista.repasses ?? []).map((r: RepasseResumo) => (
                       <li key={r.id}>
                         <button
                           type="button"
@@ -496,6 +512,7 @@ export function RepassesSheet({
                   </p>
                 ) : null}
               </div>
+              ) : null}
             </>
           ) : null}
         </div>
@@ -505,6 +522,115 @@ export function RepassesSheet({
 }
 
 const ROTULO_DIRETO: Record<string, string> = { consulta: "Consulta", renovacao: "Renovação", multa_remarcacao: "Taxa de remarcação" };
+
+/**
+ * Valor RETIDO na conta da plataforma (modelo novo, decisão do Alisson de
+ * 21/11/2026): o paciente paga na marcação e o dinheiro fica na plataforma
+ * até a consulta terminar; depois da consulta realizada, 90% menos a taxa do
+ * cartão vai para a conta Stripe do médico. Mesmo desenho do bloco de
+ * cobrança direta abaixo — só dados e textos novos.
+ */
+function RetidoPlataformaBloco({ dados }: { dados: RetidoWire }) {
+  return (
+    <div className="bp-glass p-4" aria-label="Valor retido na plataforma">
+      <div className="text-xs font-bold uppercase tracking-wider text-bion-ink/75 dark:text-bion-paper/75">
+        Retido na plataforma (modelo novo)
+      </div>
+      <div className="mt-1 text-xl font-black tabular-nums">{fmtCentavos(dados.totalCentavos)}</div>
+      <p className="mt-1 text-xs text-bion-ink/75 dark:text-bion-paper/75">{dados.aviso}</p>
+      {dados.itens.length > 0 ? (
+        <ul className="mt-3 space-y-1 text-sm">
+          {dados.itens.map((i) => (
+            <li key={i.consultaId} className="flex justify-between gap-2 tabular-nums">
+              <span>
+                Consulta · {fmtDataHora(i.dataInicio)} · {ROTULO_DESFECHO_DADOS[i.desfecho] ?? i.desfecho}
+              </span>
+              <span className="text-right">
+                <span className="block">{fmtCentavos(i.valorCentavos)}</span>
+                <span className="block text-xs text-bion-ink/60 dark:text-bion-paper/60">
+                  previsto {fmtCentavos(i.previstoCentavos)}
+                  {i.taxaCentavos === null ? " (taxa do cartão ainda não informada)" : ""}
+                </span>
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-2 text-xs text-bion-ink/70 dark:text-bion-paper/70">
+          Nenhuma consulta paga aguardando atendimento na plataforma agora.
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** Rótulos do desfecho que vem no bloco `retido` (contrato, seção 2). */
+const ROTULO_DESFECHO_DADOS: Record<string, string> = {
+  sem_desfecho: "aguardando a consulta",
+  realizada: "realizada",
+  falta_paciente: "falta do paciente",
+  falha_tecnica: "falha técnica",
+  falta_medico: "falta do médico",
+  encerrada: "cancelada/remarcada",
+};
+
+const ROTULO_TIPO_TRANSFERENCIA: Record<string, string> = {
+  consulta: "Consulta",
+  multa_cancelamento: "Multa de cancelamento",
+  multa_remarcacao: "Multa de remarcação",
+};
+
+const ROTULO_STATUS_TRANSFERENCIA: Record<string, string> = {
+  pendente: "pendente",
+  enviada: "enviada",
+  falhou: "falhou",
+};
+
+/** Transferências do modelo novo (parte do Admin; vazio enquanto a tabela não existir). */
+function TransferenciasBloco({ itens }: { itens: TransferenciaWire[] }) {
+  return (
+    <div className="bp-glass p-4" aria-label="Transferências do modelo novo">
+      <div className="text-xs font-bold uppercase tracking-wider text-bion-ink/75 dark:text-bion-paper/75">
+        Transferências (modelo novo)
+      </div>
+      <ul className="mt-2 space-y-1 text-sm">
+        {itens.map((t) => (
+          <li key={t.id} className="flex justify-between gap-2 tabular-nums">
+            <span>
+              {ROTULO_TIPO_TRANSFERENCIA[t.tipo] ?? t.tipo} · {fmtDataHora(t.criadaEm)} ·{" "}
+              {ROTULO_STATUS_TRANSFERENCIA[t.status] ?? t.status}
+            </span>
+            <span>{fmtCentavos(t.liquidoCentavos)}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/** Reembolsos do modelo novo: a taxa do cartão nunca volta e sai do médico. */
+function ReembolsosBloco({ itens }: { itens: ReembolsoWire[] }) {
+  return (
+    <div className="bp-glass p-4" aria-label="Reembolsos do modelo novo">
+      <div className="text-xs font-bold uppercase tracking-wider text-bion-ink/75 dark:text-bion-paper/75">
+        Reembolsos (modelo novo)
+      </div>
+      <ul className="mt-2 space-y-1 text-sm">
+        {itens.map((r) => (
+          <li key={`${r.consultaId}-${r.processadoEm}`} className="flex justify-between gap-2 tabular-nums">
+            <span>
+              Reembolso · {fmtDataHora(r.processadoEm)}
+              {r.taxaNaoDevolvidaCentavos > 0
+                ? ` · taxa do cartão não devolvida (${fmtCentavos(r.taxaNaoDevolvidaCentavos)})`
+                : ""}
+            </span>
+            <span>{fmtCentavos(r.valorCentavos)}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
 
 /**
  * Valor COBRADO direto na conta Stripe do médico (bruto do paciente menos

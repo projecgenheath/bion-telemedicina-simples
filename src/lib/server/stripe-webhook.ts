@@ -10,7 +10,6 @@ import { aprovarMultaRemarcacao, falharMultaRemarcacao, registrarTaxaGateway } f
 import { cancelarRenovacaoPagamentoFalhou, confirmarPagamentoRenovacao } from "@/lib/server/renovacao-pagamento";
 import { gatewayCheckout } from "@/lib/server/gateway-pagamento";
 import { devolverFeeChargeback, registrarDisputaStripe, transferirFalhaBion } from "@/lib/server/chargeback";
-import { devolverTaxaAoMedico, refundsDoEvento } from "@/lib/server/reembolso-taxa-medico";
 import { liberarEvento, reivindicarEvento, registrarEventoReembolsoStripe, stripe } from "@/lib/server/stripe";
 import { acaoDoEvento, bloqueioChaveLive, moedaCheckout, moedaConfere, multaDaSessao, referenciaConfere, valorConfere } from "@/lib/stripe-checkout-logica";
 
@@ -100,13 +99,10 @@ async function processar(evento: Stripe.Event): Promise<Record<string, unknown>>
   const conta = evento.account ?? null;
 
   if (acao === "reembolso") {
-    // Reembolsos são do Admin (src/lib/server/stripe.ts).
+    // Reembolsos são do Admin (src/lib/server/stripe.ts). Modelo 21/11: a taxa
+    // do cartão NUNCA volta ao médico (regra 6); o #137 saiu do código.
     const atualizados = await registrarEventoReembolsoStripe(evento);
-    // Falta do paciente + reembolso integral (cobrança direta): BION devolve a taxa
-    // do cartão ao médico. Idempotente; erro relança → evento liberado e reentregue.
-    const taxas: string[] = [];
-    for (const refundId of refundsDoEvento(evento)) { const t = await devolverTaxaAoMedico(refundId); taxas.push(t.enviado ? "enviado" : t.motivo); }
-    return { acao, atualizados, taxas };
+    return { acao, atualizados };
   }
   if (acao === "disputa") {
     // Chargeback (Admin, src/lib/server/chargeback.ts): registra a disputa; o desconto ao médico é do repasse.

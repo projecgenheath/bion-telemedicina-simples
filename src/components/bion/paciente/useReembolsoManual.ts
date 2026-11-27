@@ -7,7 +7,7 @@ import { useCallback, useEffect, useState } from "react";
 /*   POST /api/consultas/[id]/reembolso { justificativa } → 201         */
 /*        409: já existe pedido (inclusive negado) / prazo terminou     */
 /*   GET  /api/consultas/[id]/reembolso → { reembolso | null,           */
-/*        podePedirAte | null }                                         */
+/*        podePedirAte | null, automatico?: { ativo, prazo } }            */
 /* O pedido já nasce APROVADO pelo sistema (sem etapa de análise);     */
 /* aprovado ≠ dinheiro devolvido: a devolução é processada em seguida. */
 /* Status em_analise/negado são de pedidos antigos, do fluxo anterior   */
@@ -32,7 +32,10 @@ export type ReembolsoManual = {
 
 export type RespostaPedido =
   | { ok: true; reembolso: ReembolsoManual }
-  | { ok: false; status: number; erro: string };
+  | { ok: false; status: number; erro: string; motivo?: string; automatico?: { processadoEm: string | null; previstoPara: string | null } };
+
+/** Bloco do reembolso automático devolvido pelo GET (modelo novo). */
+export type AutomaticoReembolso = { ativo: boolean; prazo: string | null };
 
 const url = (consultaId: string) => `/api/consultas/${encodeURIComponent(consultaId)}/reembolso`;
 
@@ -65,9 +68,12 @@ export async function pedirReembolsoManual(consultaId: string, justificativa: st
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ justificativa: justificativa.trim() }),
     });
-    const json = (await res.json().catch(() => null)) as { reembolso?: ReembolsoManual; erro?: string } | null;
+    const json = (await res.json().catch(() => null)) as {
+      reembolso?: ReembolsoManual; erro?: string; motivo?: string;
+      automatico?: { processadoEm: string | null; previstoPara: string | null };
+    } | null;
     if (res.ok && json?.reembolso) return { ok: true, reembolso: json.reembolso };
-    return { ok: false, status: res.status, erro: json?.erro ?? "Não foi possível enviar o pedido de reembolso." };
+    return { ok: false, status: res.status, erro: json?.erro ?? "Não foi possível enviar o pedido de reembolso.", motivo: json?.motivo, automatico: json?.automatico };
   } catch {
     return { ok: false, status: 0, erro: "Falha de conexão com o servidor." };
   }
@@ -80,6 +86,7 @@ export function useReembolsoManual(consultaId: string | null) {
     req: string;
     reembolso: ReembolsoManual | null;
     podePedirAte: string | null;
+    automatico: AutomaticoReembolso | null;
     erro: string | null;
   } | null>(null);
   const recarregar = useCallback(() => setVersao((v) => v + 1), []);
@@ -91,15 +98,15 @@ export function useReembolsoManual(consultaId: string | null) {
     fetch(url(consultaId), { headers: { "Content-Type": "application/json" }, signal: ctrl.signal })
       .then(async (res) => {
         const json = (await res.json().catch(() => null)) as
-          | { reembolso?: ReembolsoManual | null; podePedirAte?: string | null; erro?: string }
+          | { reembolso?: ReembolsoManual | null; podePedirAte?: string | null; automatico?: AutomaticoReembolso | null; erro?: string }
           | null;
         if (!res.ok) throw new Error(json?.erro ?? "Não foi possível carregar o pedido de reembolso.");
-        setResultado({ req, reembolso: json?.reembolso ?? null, podePedirAte: json?.podePedirAte ?? null, erro: null });
+        setResultado({ req, reembolso: json?.reembolso ?? null, podePedirAte: json?.podePedirAte ?? null, automatico: json?.automatico ?? null, erro: null });
       })
       .catch((e: unknown) => {
         if (ctrl.signal.aborted) return;
         const erro = e instanceof TypeError ? "Falha de conexão com o servidor." : (e as Error).message;
-        setResultado({ req, reembolso: null, podePedirAte: null, erro });
+        setResultado({ req, reembolso: null, podePedirAte: null, automatico: null, erro });
       });
     return () => ctrl.abort();
   }, [req, consultaId]);
@@ -108,6 +115,7 @@ export function useReembolsoManual(consultaId: string | null) {
   return {
     reembolso: atual?.reembolso ?? null,
     podePedirAte: atual?.podePedirAte ?? null,
+    automatico: atual?.automatico ?? null,
     carregando: !!req && !atual,
     erro: atual?.erro ?? null,
     recarregar,

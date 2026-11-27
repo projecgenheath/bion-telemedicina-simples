@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
+import { blocoFinanceiroDesfecho, modeloPlataformaAtivo } from "@/lib/server/financeiro";
 import { exigirPapel } from "@/lib/server/auth";
 import { ok, falha } from "@/lib/server/http";
 import {
@@ -31,13 +32,13 @@ import { pacienteEsteveNaSala, podeMarcarFalta, prazoDesfecho } from "@/componen
  *  - falta_paciente: só depois de o médico esperar na sala até o horário +
  *    15 min, sem presença do paciente depois do horário (podeMarcarFalta em
  *    medico/metricas.ts). Status TERMINAL "falta_paciente" (gravado na
- *    mesma transação do evento por gravarDesfecho): a consulta não pode
- *    mais ser concluída, cancelada ou remarcada; o médico recebe; o
- *    paciente pode pedir reembolso em 7 dias (fluxo que já existe).
+ *    mesma transação do evento por gravarDesfecho). O médico NÃO recebe:
+ *    sem remarcação em 7 dias corridos o reembolso é integral automático
+ *    (regra 5 de 21/11).
  *  - falha_tecnica: a partir do horário marcado. Mesmo fluxo de
- *    aplicarFalhaTecnica: paga → aguardando_reagendamento (o paciente escolhe
- *    remarcar grátis ou reembolso integral); não paga → cancelada; o médico
- *    não recebe.
+ *    aplicarFalhaTecnica: paga → aguardando_reagendamento, com prazo de
+ *    7 dias corridos para remarcar sem custo; sem remarcação, reembolso
+ *    integral automático (regra 4); não paga → cancelada; o médico não recebe.
  *  - Até 23:30 (São Paulo) do dia da consulta; recusa consulta concluída,
  *    cancelada, aguardando reagendamento, já repassada ou com desfecho (de
  *    quem for: o médico não corrige o que o sistema registrou).
@@ -109,6 +110,11 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
         mensagem: falta.pode ? null : falta.mensagem,
       },
       desfecho: ev ? { tipo: ev.tipo, motivo: ev.motivo, por: ev.por } : null,
+      // Modelo 21/11: o que aconteceu com o dinheiro desta consulta.
+      financeiro: await blocoFinanceiroDesfecho(c.id),
+      // Emenda 27/11: o bloco financeiro existe nos dois modelos; `modelo` diz
+      // qual está ativo para a tela escolher o texto certo (falta do paciente).
+      modelo: modeloPlataformaAtivo() ? "plataforma" : "legado",
     });
   } catch (erro) {
     return falha(erro);
@@ -124,6 +130,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (!tipo || !TIPOS.includes(tipo)) {
       return Response.json({ erro: 'Informe tipo: "falta_paciente" ou "falha_tecnica".' }, { status: 400 });
     }
+    /** Emenda 27/11: a tela lê `modelo` para escolher o texto do desfecho. */
+    const modelo = modeloPlataformaAtivo() ? "plataforma" : "legado";
     const r = await consultaDoMedico(id, medico.id);
     if ("erro" in r) return r.erro;
     const c: ConsultaAvaliada = r.c;
@@ -132,7 +140,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const repeticao = async () => {
       const ev = await desfechoExistente(c.id);
       if (ev && ev.por === "medico" && ev.atorId === medico.id && ev.tipo === tipo && (tipo !== "falha_tecnica" || ev.motivo === "falha_tecnica")) {
-        return ok({ consulta: await wire(c.id), desfecho: tipo, jaRegistrado: true });
+        return ok({ consulta: { ...(await wire(c.id)), financeiro: await blocoFinanceiroDesfecho(c.id) }, desfecho: tipo, jaRegistrado: true, modelo });
       }
       if (ev) return recusa(`Esta consulta já tem desfecho registrado (${rotuloDesfecho(ev)}).`, { desfecho: ev.tipo });
       return null;
@@ -182,7 +190,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       if (depois) return depois;
       return recusa("A consulta mudou enquanto o pedido era processado. Atualize a tela e tente de novo.");
     }
-    return ok({ consulta: await wire(c.id), desfecho: tipo, status: gravado.status });
+    return ok({ consulta: { ...(await wire(c.id)), financeiro: await blocoFinanceiroDesfecho(c.id) }, desfecho: tipo, status: gravado.status, modelo });
   } catch (erro) {
     return falha(erro);
   }
