@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { AlertTriangle, ChevronLeft, ChevronRight, Download, ExternalLink, RefreshCw, Wallet } from "lucide-react";
+import type { RetidoPlataformaWire } from "@/lib/recebimento-modelo";
 import { fmtCentavos } from "../metricas";
 import { baixarCsvRepasse, csvDetalheRepasse, csvHistoricoRepasses, previaTemConteudo } from "../repasses-csv";
 import {
@@ -156,7 +157,8 @@ function PreviaBloco({ previa }: { previa: PreviaRepasseWire }) {
   if (vazia && previa.totais.liquidoCentavos === 0 && previa.ajustesPendentesRestantesCentavos === 0) {
     return (
       <div className="bp-glass p-4 text-sm text-bion-ink/75 dark:text-bion-paper/75">
-        Nada a fechar hoje ainda. Consultas pagas de hoje entram no fechamento das 23:30 (horário de Brasília).
+        Nada a fechar hoje ainda. No modelo anterior (PIX), consultas pagas com desfecho entram no fechamento das 23:30
+        (horário de Brasília). No modelo novo, o repasse vai para a sua conta Stripe depois da consulta realizada.
       </div>
     );
   }
@@ -342,7 +344,7 @@ export function RepassesSheet({
       aberto={aberto}
       onFechar={onFechar}
       titulo="Histórico de repasses"
-      subtitulo="Fechamento diário às 23:30 (horário de Brasília)"
+      subtitulo="Modelo anterior (PIX): fechamento diário às 23:30. Modelo novo: repasse após a consulta realizada."
     >
       {vista === "detalhe" && detalhe ? (
         <DetalheView detalhe={detalhe} onVoltar={voltar} />
@@ -372,13 +374,15 @@ export function RepassesSheet({
           ) : lista ? (
             <>
               <div className="bp-glass-marinho p-5 text-white">
-                <div className="text-xs font-bold uppercase tracking-wider text-white/90">Saldo a receber</div>
+                <div className="text-xs font-bold uppercase tracking-wider text-white/90">Saldo a receber (modelo anterior)</div>
                 <div className="mt-1 text-3xl font-black tabular-nums">{fmtCentavos(lista.saldoCentavos)}</div>
                 <p className="mt-2 text-xs text-white/90 leading-relaxed">
-                  Soma dos repasses já fechados (ainda não pagos) com a prévia de hoje. Cada repasse fechado é pago
-                  inteiro; ajustes que ainda restam só saem dos próximos repasses.
+                  Modelo anterior (PIX): soma dos repasses já fechados (ainda não pagos) com a prévia de hoje. Cada repasse
+                  fechado é pago inteiro; ajustes que ainda restam só saem dos próximos repasses.
                 </p>
               </div>
+
+              {lista.retidoPlataforma ? <RetidoPlataformaBloco dados={lista.retidoPlataforma} /> : null}
 
               {!lista.temChavePix && repasseParaPagar(lista) ? (
                 <div className="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4 flex gap-3" role="status">
@@ -505,6 +509,41 @@ export function RepassesSheet({
 }
 
 const ROTULO_DIRETO: Record<string, string> = { consulta: "Consulta", renovacao: "Renovação", multa_remarcacao: "Taxa de remarcação" };
+
+/**
+ * Valor RETIDO na conta da plataforma (modelo novo, decisão do Alisson de
+ * 21/11/2026): o paciente paga na marcação e o dinheiro fica na plataforma
+ * até a consulta terminar; depois da consulta realizada, 90% menos a taxa do
+ * cartão vai para a conta Stripe do médico. Mesmo desenho do bloco de
+ * cobrança direta abaixo — só dados e textos novos.
+ */
+function RetidoPlataformaBloco({ dados }: { dados: RetidoPlataformaWire }) {
+  return (
+    <div className="bp-glass p-4" aria-label="Valor retido na plataforma">
+      <div className="text-xs font-bold uppercase tracking-wider text-bion-ink/75 dark:text-bion-paper/75">
+        Retido na plataforma (modelo novo)
+      </div>
+      <div className="mt-1 text-xl font-black tabular-nums">{fmtCentavos(dados.totalCentavos)}</div>
+      <p className="mt-1 text-xs text-bion-ink/75 dark:text-bion-paper/75">{dados.aviso}</p>
+      {dados.itens.length > 0 ? (
+        <ul className="mt-3 space-y-1 text-sm">
+          {dados.itens.map((i) => (
+            <li key={i.consultaId} className="flex justify-between gap-2 tabular-nums">
+              <span>
+                Consulta · {fmtDataHora(i.dataInicio)} · aguardando a consulta
+              </span>
+              <span>{fmtCentavos(i.valorCentavos)}</span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-2 text-xs text-bion-ink/70 dark:text-bion-paper/70">
+          Nenhuma consulta paga aguardando atendimento na plataforma agora.
+        </p>
+      )}
+    </div>
+  );
+}
 
 /**
  * Valor COBRADO direto na conta Stripe do médico (bruto do paciente menos

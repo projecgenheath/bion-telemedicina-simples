@@ -17,6 +17,7 @@ import {
 } from "./metricas";
 import type { DadosPessoaisMedico } from "./dados-pessoais";
 import type { CampoRecebimento, PixTipo, RecebimentoWire, TitularTipo } from "@/lib/server/recebimento";
+import type { RetidoPlataformaWire } from "@/lib/recebimento-modelo";
 
 /** Evento de janela: algo mudou na agenda do médico (ex.: "Cancelar agenda do dia"). */
 export const EVENTO_DADOS_MEDICO = "bion-medico:dados-alterados";
@@ -408,9 +409,15 @@ export type ListaRepasses = {
   previa: PreviaRepasseWire;
   repasses: RepasseResumo[];
   /**
-   * Cobrança direta: valor COBRADO na conta Stripe do médico (bruto −
-   * reembolsos, antes da comissão de 10% e da taxa do Stripe). Não é o valor
-   * recebido nem repasse a receber.
+   * Modelo novo (decisão de 21/11/2026): valor pago que fica na conta da
+   * plataforma até a consulta terminar. A transferência de 90% menos a taxa
+   * do cartão após a consulta realizada é parte do Admin.
+   */
+  retidoPlataforma?: RetidoPlataformaWire;
+  /**
+   * Cobrança direta (modelo anterior): valor COBRADO na conta Stripe do
+   * médico (bruto − reembolsos, antes da comissão de 10% e da taxa do
+   * Stripe). Não é o valor recebido nem repasse a receber.
    */
   recebidoDiretoStripe?: {
     aviso: string;

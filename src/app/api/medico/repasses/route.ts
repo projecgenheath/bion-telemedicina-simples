@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { exigirPapel } from "@/lib/server/auth";
 import { ok, falha } from "@/lib/server/http";
 import { previaDoDia, recebidosDiretoNoStripe, totalRecebidoDireto } from "@/lib/server/repasse";
+import { retidoNaPlataforma } from "@/lib/server/retido-plataforma";
 
 /**
  * GET /api/medico/repasses — SOMENTE LEITURA.
@@ -13,6 +14,13 @@ import { previaDoDia, recebidosDiretoNoStripe, totalRecebidoDireto } from "@/lib
  * Saldo = soma dos líquidos dos repasses `fechado` + prévia.líquido
  * − ajustes pendentes que não couberam na prévia. Cada repasse fechado é
  * pago inteiro; o restante dos ajustes só desconta dos próximos.
+ * Esse saldo/prévia/fechamento das 23:30 é do modelo ANTERIOR (PIX).
+ *
+ * Modelo NOVO (decisão do Alisson de 21/11/2026): `retidoPlataforma` traz
+ * o valor pago que fica na conta da plataforma até a consulta terminar;
+ * a transferência de 90% menos a taxa do cartão após o desfecho "realizada"
+ * é parte do Admin. Ver src/lib/server/retido-plataforma.ts.
+ *
  * Privacidade: sem CPF/contato/chave do item/reembolsoId. A prévia traz
  * só tipo, data e valores (sem nome de paciente — ainda não há consulta
  * ligada na prévia pura). `temChavePix` é booleano (a chave completa
@@ -23,7 +31,7 @@ export async function GET() {
     const medico = await exigirPapel("MEDICO");
     const agora = new Date();
 
-    const [rows, previa, pix, diretos] = await Promise.all([
+    const [rows, previa, pix, diretos, retido] = await Promise.all([
       db.repasse.findMany({
         where: { medicoId: medico.id },
         orderBy: [{ competencia: "desc" }, { fechadoEm: "desc" }],
@@ -48,8 +56,10 @@ export async function GET() {
         where: { medicoId: medico.id },
         select: { medicoId: true },
       }),
-      // Cobrança direta: já caiu na conta Stripe do médico; fora do saldo PIX.
+      // Cobrança direta (modelo anterior): já caiu na conta Stripe do médico; fora do saldo PIX.
       recebidosDiretoNoStripe(medico.id),
+      // Modelo novo: valor pago que fica na plataforma até a consulta terminar.
+      retidoNaPlataforma(medico.id),
     ]);
 
     const somaFechados = rows
@@ -65,7 +75,8 @@ export async function GET() {
       saldoCentavos,
       temChavePix: !!pix,
       aviso:
-        "Cada repasse fechado é pago inteiro. O restante dos ajustes (reembolsos depois do fechamento) só desconta dos próximos repasses.",
+        "Os repasses, a prévia e o saldo abaixo são do modelo anterior (PIX), com fechamento diário às 23:30. Cada repasse fechado é pago inteiro; o restante dos ajustes (reembolsos depois do fechamento) só desconta dos próximos repasses. No modelo novo, o valor fica na plataforma até a consulta terminar e o repasse (90% menos a taxa do cartão) vai para a sua conta Stripe depois da consulta realizada.",
+      retidoPlataforma: retido,
       previa: {
         competencia: previa.competencia,
         corte: previa.corte,
@@ -86,10 +97,11 @@ export async function GET() {
           aplicadoCentavos: a.aplicadoCentavos,
         })),
       },
-      // Valor COBRADO (bruto − reembolsos) direto na conta Stripe do médico,
-      // antes da application fee (10%) e da taxa do Stripe. Não é o recebido.
+      // Modelo ANTERIOR: valor COBRADO (bruto − reembolsos) direto na conta
+      // Stripe do médico, antes da application fee (10%) e da taxa do Stripe.
+      // Não é o recebido. No modelo novo a cobrança é na conta da plataforma.
       recebidoDiretoStripe: {
-        aviso: "Valor cobrado direto na sua conta Stripe, antes da comissão da BION (10%) e da taxa do Stripe. Não entra no repasse por PIX.",
+        aviso: "Modelo anterior: valor cobrado direto na sua conta Stripe, antes da comissão da BION (10%) e da taxa do Stripe. Não entra no repasse por PIX.",
         totais: totalRecebidoDireto(diretos),
         itens: diretos,
       },

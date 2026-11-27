@@ -16,6 +16,7 @@ import {
   type RespostaReceita,
 } from "../metricas";
 import { partesDaConsulta } from "@/lib/repasse-exibicao";
+import { TEXTO_COBRANCA_RETIDA, TEXTO_TRANSFERENCIA } from "@/lib/recebimento-modelo";
 import { useContaStripe, type ContaStripeWire, type DadosMedico } from "../useDadosMedico";
 import { gradeDeCampos, horariosDoDia } from "@/lib/grade-semana";
 
@@ -121,6 +122,9 @@ export function TelaGestao({
               <p className="mt-3 text-xs text-bion-ink/75 dark:text-bion-paper/75">
                 Nos últimos 30 dias, o que já entrou para você (sua parte, menos a taxa do cartão, mais a sua parte das multas) é{" "}
                 {receita.totais ? fmtCentavos(receita.totais.totalCentavos) : receita.carregando ? "…" : "—"}.
+              </p>
+              <p className="mt-1 text-xs text-bion-ink/75 dark:text-bion-paper/75">
+                {TEXTO_COBRANCA_RETIDA} {TEXTO_TRANSFERENCIA}
               </p>
               <p className="mt-1 text-xs text-bion-ink/75 dark:text-bion-paper/75">
                 {textoContaStripe(contaStripe.conta, contaStripe.carregando, contaStripe.erro)}

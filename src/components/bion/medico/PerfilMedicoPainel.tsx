@@ -25,6 +25,13 @@ import { useBion } from "@/lib/bion-store";
 import { formatarDataNascimento, idadeDeNascimento } from "@/lib/idade";
 import { fmtBRL, fmtCentavos, iniciais } from "./metricas";
 import { partesDaConsulta } from "@/lib/repasse-exibicao";
+import {
+  TEXTO_COBRANCA_RETIDA,
+  TEXTO_FALTA_MEDICO,
+  TEXTO_MULTAS,
+  TEXTO_PRAZO_BANCO,
+  TEXTO_REEMBOLSOS,
+} from "@/lib/recebimento-modelo";
 import { formatarCnpj } from "./dados-pessoais";
 import { DadosPessoaisSheet } from "./sheets/DadosPessoaisSheet";
 import { RepassesSheet } from "./sheets/RepassesSheet";
@@ -69,8 +76,8 @@ function lerDensidade(): Densidade {
 /** Texto da linha "Receber pelo Stripe" conforme o status gravado. */
 function detalheContaStripe(c: ContaStripeWire | null, carregando: boolean, erro: string | null): string {
   if (!c) return carregando ? "Verificando sua conta Stripe…" : erro ?? "Não foi possível ver sua conta Stripe agora.";
-  if (c.pronta) return "Conta Stripe pronta: você recebe as consultas pagas direto nela.";
-  if (!c.temConta) return "Cadastre sua conta Stripe para receber consultas pagas.";
+  if (c.pronta) return "Conta Stripe pronta: o repasse das consultas realizadas cai nela.";
+  if (!c.temConta) return "Cadastre sua conta Stripe para receber o repasse das consultas.";
   const pend = c.pendencias > 0 ? ` ${c.pendencias === 1 ? "1 pendência" : `${c.pendencias} pendências`} no Stripe.` : "";
   if (!c.detailsSubmitted) return `Cadastro no Stripe incompleto.${pend} Toque para continuar.`;
   if (pend) return `Pendências no Stripe:${pend.replace(" no Stripe.", "")}. Toque para resolver.`;
@@ -251,7 +258,7 @@ function RecebimentoSheet({
       subtitulo={
         atual
           ? `Atual: ${ROTULO_PIX_TIPO[atual.pixTipo]} ${atual.chaveMascarada}. Por segurança, digite a chave completa de novo.`
-          : "Modelo anterior de repasse por PIX. Hoje você recebe pela sua conta Stripe."
+          : "Modelo anterior de repasse por PIX. No modelo novo, o repasse vai para a sua conta Stripe depois da consulta realizada."
       }
     >
       <div className="space-y-4">
@@ -572,7 +579,13 @@ export function PerfilMedicoPainel({
           {medico
             ? `Cada consulta de ${fmtBRL(medico.valor)} fica ${fmtCentavos(partesDaConsulta(medico.valor).medicoCentavos)} com você (90%) e ${fmtCentavos(partesDaConsulta(medico.valor).bionCentavos)} com a BION (10%). A taxa do cartão sai da sua parte.`
             : "Cada consulta fica 90% com você e 10% com a BION. A taxa do cartão sai da sua parte."}{" "}
-          O estado da conta Stripe está abaixo. A cobrança real continua travada.
+          {TEXTO_COBRANCA_RETIDA} O estado da conta Stripe está abaixo. A cobrança real continua travada.
+        </p>
+        <p className="px-4 py-3 text-xs text-bion-ink/75 dark:text-bion-paper/75">
+          {TEXTO_FALTA_MEDICO} {TEXTO_REEMBOLSOS}
+        </p>
+        <p className="px-4 py-3 text-xs text-bion-ink/75 dark:text-bion-paper/75">
+          {TEXTO_MULTAS} {TEXTO_PRAZO_BANCO}
         </p>
         <Linha
           icone={<CreditCard className="w-4 h-4" />}
@@ -621,7 +634,7 @@ export function PerfilMedicoPainel({
         <Linha
           icone={<Receipt className="w-4 h-4" />}
           titulo="Histórico de repasses"
-          detalhe="Registro dos repasses por PIX do modelo anterior"
+          detalhe="Repasses do modelo anterior (PIX) e valor retido na plataforma no modelo novo"
           onClick={() => {
             setAberturasRepasses((n) => n + 1);
             setSheetRepasses(true);
