@@ -27,6 +27,13 @@ export type ChargebackLista = {
   falhaBionPor: string | null;
   falhaBionEm: string | null;
   liquidado: boolean;
+  taxasPlataforma: {
+    status: string | null;
+    valorCentavos: number | null;
+    reversaoCentavos: number;
+    descontadoCentavos: number;
+    erro: string | null;
+  } | null;
   criadoEm: string;
 };
 
@@ -57,6 +64,18 @@ function CardChargeback({ c, onMudou }: { c: ChargebackLista; onMudou: () => voi
   const [erro, setErro] = useState<string | null>(null);
   const marcar = !c.falhaBion;
   const credito = c.creditoPendente;
+  const tp = c.taxasPlataforma;
+  const recuperado = tp ? tp.reversaoCentavos + tp.descontadoCentavos : 0;
+  const podeCobrar = !!tp && !c.falhaBion && !credito && c.statusStripe === "lost" && (tp.status === null || tp.status === "falhou");
+
+  async function cobrarTaxas() {
+    setEnviando(true);
+    setErro(null);
+    const resp = await chamarApi(`/api/admin/chargebacks/${encodeURIComponent(c.id)}/cobrar-taxas`, { method: "POST" });
+    setEnviando(false);
+    if (resp.erro) return setErro(resp.erro);
+    onMudou();
+  }
 
   async function enviar() {
     setEnviando(true);
@@ -97,14 +116,53 @@ function CardChargeback({ c, onMudou }: { c: ChargebackLista; onMudou: () => voi
             {c.falhaBionPor ? ` Marcado por ${c.falhaBionPor}.` : ""}
             {c.falhaBionMotivo ? ` Motivo: ${c.falhaBionMotivo}` : ""}
           </>
+        ) : tp ? (
+          <>
+            Taxas do chargeback: <b>{brl(tp.valorCentavos ?? c.taxaDisputaCentavos ?? 0)}</b> (a taxa do cartão já saiu na transferência; decisão de 27/11, alternativa B).{" "}
+            {tp.status === "quitado"
+              ? "Cobradas do médico."
+              : tp.status === "aguardando_desconto"
+                ? "Aguardando desconto nos próximos recebimentos do médico."
+                : tp.status === "falhou"
+                  ? `A cobrança falhou: ${tp.erro ?? "erro no Stripe"}.`
+                  : tp.status === "cancelado"
+                    ? "Cobrança cancelada (disputa ganha ou falha da BION)."
+                    : tp.status === "sem_taxa"
+                      ? "Sem taxa de contestação a cobrar."
+                      : tp.status === "pendente"
+                        ? "Cobrança em andamento."
+                        : "Cobrança ainda não tentada."}
+          </>
         ) : (
           <>
             Desconto no repasse: <b>{brl(c.descontoCentavos)}</b> (dispute fee do Stripe; a taxa do cartão já saiu no repasse).
           </>
         )}
       </p>
-      {c.semMedico ? null : c.liquidado && !credito ? (
-        <p className="text-xs ba-texto-2">O desconto já entrou num repasse: a marcação não pode mais mudar.</p>
+      {tp && recuperado > 0 ? (
+        <p className="text-xs ba-texto-2">
+          Já recuperado do médico: {brl(recuperado)}
+          {tp.reversaoCentavos > 0 ? ` (reversão: ${brl(tp.reversaoCentavos)})` : ""}
+          {tp.descontadoCentavos > 0 ? ` (desconto em recebimentos: ${brl(tp.descontadoCentavos)})` : ""}
+          {credito ? " — falta devolver ao médico (crédito manual)." : ""}
+        </p>
+      ) : null}
+      {erro && !aberto ? (
+        <p className="text-sm" role="alert">
+          {erro}
+        </p>
+      ) : null}
+      {podeCobrar ? (
+        <button type="button" className="ba-botao" disabled={enviando} onClick={() => void cobrarTaxas()}>
+          {tp?.status === "falhou" ? "Tentar cobrar taxas de novo" : "Cobrar taxas do médico"}
+        </button>
+      ) : null}
+      {c.semMedico ? null : (c.liquidado || recuperado > 0) && !credito ? (
+        <p className="text-xs ba-texto-2">
+          {recuperado > 0
+            ? "As taxas já foram cobradas do médico: a marcação não pode mais mudar (ajuste manual)."
+            : "O desconto já entrou num repasse: a marcação não pode mais mudar."}
+        </p>
       ) : aberto ? (
         <div className="space-y-2">
           <label className="block text-sm" htmlFor={`motivo-${c.id}`}>

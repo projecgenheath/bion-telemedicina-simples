@@ -1,7 +1,7 @@
 /** Chave live barrada em todo movimento de dinheiro (fábrica stripe()). Rodar: bun --conditions=react-server test ./src/lib/server/chave-live-dinheiro.teste.ts */
 import { afterEach, describe, expect, test } from "bun:test";
 import { ChaveLiveBloqueadaError } from "./stripe";
-import { devolverFeeChargeback, transferirFalhaBion, type DbFee, type DbTransfer } from "./chargeback";
+import { cobrarTaxasChargebackPlataforma, devolverFeeChargeback, transferirFalhaBion, type DbFee, type DbTaxas, type DbTransfer } from "./chargeback";
 import { enviarTransferencia, type DbTransferencia } from "./transferencia-medico";
 
 const original = process.env.STRIPE_SECRET_KEY;
@@ -25,6 +25,11 @@ describe.each(["sk_live_x", "rk_live_x"])("chave %p", (chave) => {
   test("refund da application fee lança antes de tudo", async () => {
     process.env.STRIPE_SECRET_KEY = chave; const { d, n } = dbEspiao();
     await expect(devolverFeeChargeback("cb1", { d: d as DbFee })).rejects.toBeInstanceOf(ChaveLiveBloqueadaError);
+    expect(n.acessos).toBe(0);
+  });
+  test("cobrança das taxas do chargeback (plataforma) lança antes de tudo", async () => {
+    process.env.STRIPE_SECRET_KEY = chave; const { d, n } = dbEspiao();
+    await expect(cobrarTaxasChargebackPlataforma("cb1", { d: d as unknown as DbTaxas })).rejects.toBeInstanceOf(ChaveLiveBloqueadaError);
     expect(n.acessos).toBe(0);
   });
   test("transferência ao médico fica desligada e não toca no banco", async () => {
