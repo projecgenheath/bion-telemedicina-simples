@@ -2,6 +2,7 @@
 
 import { CreditCard, ShieldCheck } from "lucide-react";
 import type { AgendamentoCorpoProps } from "@/components/bion/agendamento/types";
+import { MODELO_PAGAMENTO_RETIDO, TEXTO_RETENCAO_NA_MARCACAO } from "@/lib/pagamento-paciente";
 
 export function PassoPagamento(p: AgendamentoCorpoProps) {
   const {
@@ -70,6 +71,14 @@ export function PassoPagamento(p: AgendamentoCorpoProps) {
             </p>
           </div>
         </div>
+
+        {/* Modelo novo (21/11): valor retido na plataforma até a consulta. */}
+        {MODELO_PAGAMENTO_RETIDO ? (
+          <div className="p-4 rounded-2xl bg-muted/60 text-xs text-muted-foreground">
+            <div className="font-bold text-sm text-foreground mb-1">Quando o médico recebe</div>
+            {TEXTO_RETENCAO_NA_MARCACAO}
+          </div>
+        ) : null}
 
         <button type="button"
           disabled={processandoPagamento}
