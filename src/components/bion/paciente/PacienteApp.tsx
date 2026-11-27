@@ -572,7 +572,7 @@ export function PacienteApp() {
   return (
     <div
       className={`bp-shell bp-app-paciente bp2-app ${poppinsPaciente.variable} text-bion-ink dark:text-bion-paper`}
-      data-gaveta={bloqueado ? undefined : painel === 0 ? "perfil" : painel === 2 ? "documentos" : undefined}
+      data-gaveta={bloqueado || agenda ? undefined : painel === 0 ? "perfil" : painel === 2 ? "documentos" : undefined}
     >
       <BarraLateralPaciente
         ativo={destinoAtivo}

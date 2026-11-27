@@ -378,7 +378,7 @@ export function Login({
               </button>
             ) : (
               <a
-                href="mailto:suporte@bion.app?subject=Redefini%C3%A7%C3%A3o%20de%20senha%20%E2%80%94%20BION"
+                href="mailto:oxygenbiomedical@gmail.com?subject=Redefini%C3%A7%C3%A3o%20de%20senha%20%E2%80%94%20BION"
                 className="inline-flex min-h-11 items-center hover:text-primary transition font-medium"
               >
                 Esqueci minha senha
@@ -403,7 +403,7 @@ export function Login({
             <p className="text-xs text-muted-foreground leading-relaxed">
               Esqueceu a senha? Ainda não há redefinição automática: toque em{" "}
               <strong>“Esqueci minha senha”</strong> para escrever ao suporte (
-              <span className="font-medium">suporte@bion.app</span>) — a equipe confirma sua
+              <span className="font-medium">oxygenbiomedical@gmail.com</span>) — a equipe confirma sua
               identidade e orienta a redefinição. Se você já está logado em outro aparelho,
               troque direto em <strong>Privacidade → Segurança da conta</strong>.
             </p>
