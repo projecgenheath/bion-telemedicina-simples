@@ -296,10 +296,15 @@ function DetalheView({
  */
 function repasseParaPagar(lista: ListaRepasses): boolean {
   return (
-    lista.saldoCentavos > 0 ||
-    lista.previa.totais.liquidoCentavos > 0 ||
-    lista.repasses.some((r) => r.status === "fechado" && r.liquidoCentavos > 0)
+    (lista.saldoCentavos ?? 0) > 0 ||
+    (lista.previa?.totais.liquidoCentavos ?? 0) > 0 ||
+    (lista.repasses ?? []).some((r) => r.status === "fechado" && r.liquidoCentavos > 0)
   );
+}
+
+/** Há dados do modelo anterior para mostrar? No contrato novo esses campos saem. */
+function temModeloAnterior(lista: ListaRepasses): boolean {
+  return lista.modelo === "legado" || Boolean(lista.avisoModeloAnterior || lista.repasses?.length || lista.recebidoDiretoStripe);
 }
 
 /**
@@ -373,20 +378,22 @@ export function RepassesSheet({
             </div>
           ) : lista ? (
             <>
-              <div className="bp-glass-marinho p-5 text-white">
-                <div className="text-xs font-bold uppercase tracking-wider text-white/90">Saldo a receber (modelo anterior)</div>
-                <div className="mt-1 text-3xl font-black tabular-nums">{fmtCentavos(lista.saldoCentavos)}</div>
-                <p className="mt-2 text-xs text-white/90 leading-relaxed">
-                  Modelo anterior (PIX): soma dos repasses já fechados (ainda não pagos) com a prévia de hoje. Cada repasse
-                  fechado é pago inteiro; ajustes que ainda restam só saem dos próximos repasses.
-                </p>
-              </div>
+              {temModeloAnterior(lista) ? (
+                <div className="bp-glass-marinho p-5 text-white">
+                  <div className="text-xs font-bold uppercase tracking-wider text-white/90">Saldo a receber (modelo anterior)</div>
+                  <div className="mt-1 text-3xl font-black tabular-nums">{fmtCentavos(lista.saldoCentavos ?? 0)}</div>
+                  <p className="mt-2 text-xs text-white/90 leading-relaxed">
+                    Modelo anterior (PIX): soma dos repasses já fechados (ainda não pagos) com a prévia de hoje. Cada repasse
+                    fechado é pago inteiro; ajustes que ainda restam só saem dos próximos repasses.
+                  </p>
+                </div>
+              ) : null}
 
               {lista.retido ? <RetidoPlataformaBloco dados={lista.retido} /> : null}
               {lista.transferencias.length > 0 ? <TransferenciasBloco itens={lista.transferencias} /> : null}
               {lista.reembolsos.length > 0 ? <ReembolsosBloco itens={lista.reembolsos} /> : null}
 
-              {!lista.temChavePix && repasseParaPagar(lista) ? (
+              {temModeloAnterior(lista) && !lista.temChavePix && repasseParaPagar(lista) ? (
                 <div className="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4 flex gap-3" role="status">
                   <AlertTriangle className="w-5 h-5 shrink-0 text-amber-800 dark:text-amber-200" aria-hidden />
                   <div className="min-w-0">
@@ -406,7 +413,7 @@ export function RepassesSheet({
                     </button>
                   </div>
                 </div>
-              ) : !lista.temChavePix ? (
+              ) : temModeloAnterior(lista) && !lista.temChavePix ? (
                 // Sem repasse esperando pagamento, a falta da chave não
                 // bloqueia nada: nota informativa (sem alarme), com o
                 // atalho para cadastrar quando o médico quiser.
@@ -432,10 +439,11 @@ export function RepassesSheet({
                 </div>
               ) : null}
 
-              <PreviaBloco previa={lista.previa} />
+              {lista.previa ? <PreviaBloco previa={lista.previa} /> : null}
 
               <RecebidoDiretoBloco dados={lista.recebidoDiretoStripe} />
 
+              {temModeloAnterior(lista) ? (
               <div>
                 <div className="flex items-center justify-between gap-2 px-1 mb-2">
                   <div className="text-xs font-bold uppercase tracking-wider text-bion-ink/75 dark:text-bion-paper/75">
@@ -445,9 +453,9 @@ export function RepassesSheet({
                     <button
                       type="button"
                       onClick={() =>
-                        baixarCsvRepasse(`bion-repasses-${Date.now()}.csv`, csvHistoricoRepasses(lista.previa, lista.repasses))
+                        baixarCsvRepasse(`bion-repasses-${Date.now()}.csv`, csvHistoricoRepasses(lista.previa!, lista.repasses ?? []))
                       }
-                      disabled={lista.repasses.length === 0 && !previaTemConteudo(lista.previa)}
+                      disabled={(lista.repasses ?? []).length === 0 && !lista.previa}
                       aria-label="Exportar histórico de repasses em CSV"
                       className="p-2 rounded-full bg-bion-ink/8 dark:bg-white/10 disabled:opacity-50"
                     >
@@ -465,13 +473,13 @@ export function RepassesSheet({
                   </div>
                 </div>
 
-                {lista.repasses.length === 0 ? (
+                {(lista.repasses ?? []).length === 0 ? (
                   <div className="bp-glass p-5 text-sm text-bion-ink/75 dark:text-bion-paper/75 text-center">
                     Nenhum repasse ainda.
                   </div>
                 ) : (
                   <ul className="bp-glass divide-y divide-bion-ink/10 dark:divide-white/10 overflow-hidden">
-                    {lista.repasses.map((r: RepasseResumo) => (
+                    {(lista.repasses ?? []).map((r: RepasseResumo) => (
                       <li key={r.id}>
                         <button
                           type="button"
@@ -502,6 +510,7 @@ export function RepassesSheet({
                   </p>
                 ) : null}
               </div>
+              ) : null}
             </>
           ) : null}
         </div>

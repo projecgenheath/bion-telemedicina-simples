@@ -417,10 +417,11 @@ export type ListaRepasses = {
   aviso: string;
   /** Nota do bloco legado; os campos abaixo somem quando o Admin ligar o novo. */
   avisoModeloAnterior?: string;
-  saldoCentavos: number;
-  temChavePix: boolean;
-  previa: PreviaRepasseWire;
-  repasses: RepasseResumo[];
+  /** Campos do modelo anterior (PIX): ausentes na resposta do modelo novo. */
+  saldoCentavos?: number;
+  temChavePix?: boolean;
+  previa?: PreviaRepasseWire;
+  repasses?: RepasseResumo[];
   /**
    * Cobrança direta (modelo anterior): valor COBRADO na conta Stripe do
    * médico (bruto − reembolsos, antes da comissão de 10% e da taxa do
