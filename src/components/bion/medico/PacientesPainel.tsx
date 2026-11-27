@@ -15,6 +15,7 @@ import {
 import { definirRascunhoRetorno } from "./rascunho-retorno";
 import { ResultadosRevisar } from "./ResultadosRevisar";
 import type { DadosMedico } from "./useDadosMedico";
+import { MensagensTopo, SinoTopo } from "./TopoMedico";
 
 const normalizar = (s: string) =>
   s
@@ -97,11 +98,17 @@ export function PacientesPainel({
           <h2 id="bm-pac-titulo" className="text-2xl font-black">
             Pacientes
           </h2>
-          {totalNaoLidas > 0 ? (
-            <span className="text-xs font-bold rounded-full px-2.5 py-1 bg-bion-sea text-white dark:bg-sky-300 dark:text-zinc-950">
-              {totalNaoLidas} não {totalNaoLidas === 1 ? "lida" : "lidas"}
-            </span>
-          ) : null}
+          <div className="flex items-center gap-2">
+            {totalNaoLidas > 0 ? (
+              <span className="max-lg:hidden text-xs font-bold rounded-full px-2.5 py-1 bg-bion-sea text-white dark:bg-[#9dbcf7] dark:text-zinc-950">
+                {totalNaoLidas} não {totalNaoLidas === 1 ? "lida" : "lidas"}
+              </span>
+            ) : null}
+            {/* Rodada do menu: sino no topo também nesta tela (celular; no computador é gaveta e o topo fixo mostra o sino). */}
+            {/* Rodada 2 da etapa 5: Mensagens (contador real) no topo do celular, ao lado do sino. */}
+            <MensagensTopo className="lg:hidden" />
+            <SinoTopo className="lg:hidden" />
+          </div>
         </div>
         <p className="text-sm text-bion-ink/75 dark:text-bion-paper/75">Ordenados pela próxima consulta.</p>
         <label className="mt-3 relative block">
@@ -126,12 +133,12 @@ export function PacientesPainel({
                 onClick={() => setSegmento(s.id)}
                 className={`rounded-full px-3 py-1.5 text-xs font-bold whitespace-nowrap shrink-0 inline-flex items-center gap-1.5 ${
                   ativo
-                    ? "bg-bion-sea text-white dark:bg-sky-300 dark:text-zinc-950"
+                    ? "bg-bion-sea text-white dark:bg-[#9dbcf7] dark:text-zinc-950"
                     : "bg-bion-ink/8 dark:bg-white/10"
                 }`}
               >
                 {s.rotulo}
-                <span className={ativo ? "opacity-85" : "opacity-60"}>{contagens[s.id]}</span>
+                <span className={ativo ? "opacity-90" : "opacity-80"}>{contagens[s.id]}</span>
               </button>
             );
           })}
@@ -205,7 +212,7 @@ export function PacientesPainel({
                             <button
                               type="button"
                               onClick={() => proporRetorno(p)}
-                              className="rounded-full px-3 py-1.5 text-xs font-bold bg-bion-sea text-white dark:bg-sky-300 dark:text-zinc-950 inline-flex items-center gap-1"
+                              className="rounded-full px-3 py-1.5 text-xs font-bold bg-bion-sea text-white dark:bg-[#9dbcf7] dark:text-zinc-950 inline-flex items-center gap-1"
                             >
                               <Send className="w-3.5 h-3.5" aria-hidden /> Propor retorno
                             </button>
@@ -226,7 +233,7 @@ export function PacientesPainel({
                               <button
                                 type="button"
                                 onClick={() => abrirComModeloRetorno(p)}
-                                className="rounded-full px-3 py-1.5 text-xs font-bold bg-bion-sea text-white dark:bg-sky-300 dark:text-zinc-950"
+                                className="rounded-full px-3 py-1.5 text-xs font-bold bg-bion-sea text-white dark:bg-[#9dbcf7] dark:text-zinc-950"
                               >
                                 Abrir a conversa mesmo assim
                               </button>

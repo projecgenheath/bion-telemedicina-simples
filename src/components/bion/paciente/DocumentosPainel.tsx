@@ -1,47 +1,42 @@
 "use client";
 
 import { BotaoPagarStripe } from "./BotaoPagarStripe";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useVoltarFecha } from "./useVoltarFecha";
-import { useFocoDialogo } from "./useFocoDialogo";
+import { useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,
   BadgeCheck,
+  Ban,
   ClipboardList,
-  Copy,
   Download,
+  Eye,
   FileText,
   FileUp,
-  MessageCircle,
   Pill,
   Printer,
-  Send,
-  X,
 } from "lucide-react";
 import { useBion } from "@/lib/bion-store";
 import type { Documento } from "@/lib/bion-tipos";
-import { gerarDocumentoPDF } from "@/lib/receita-pdf";
 import { useAppNativo } from "@/lib/useAppNativo";
 import { toast } from "sonner";
-import { EstadoVazio } from "./EstadosPaciente";
 import { CalendarPlus, RotateCcw } from "lucide-react";
-import { podeRenovarReceita, pedidoDaReceita, PRAZO_RETORNO_DIAS, ROTULO_STATUS_RENOVACAO } from "@/lib/atendimento-tipo";
+import { pedidoDaReceita, PRAZO_RETORNO_DIAS, ROTULO_STATUS_RENOVACAO } from "@/lib/atendimento-tipo";
 import { MarcarRetornoSheet } from "./MarcarRetornoSheet";
 import { RenovarReceitaSheet } from "./RenovarReceitaSheet";
 import { usePedidosRenovacao } from "./usePedidosRenovacao";
-import { EtiquetaTipo } from "./tipo-atendimento-ui";
-import { CLASSE_ETIQUETA } from "./etiqueta-consulta";
+import { tipoDaConsulta } from "./tipo-atendimento-ui";
+import { TelaMensagensPaciente } from "./etapa3/TelaMensagensPaciente";
+import { aceitaPdf, entregarPdf, VisualizadorDocumento, type DadosVisualizador } from "./etapa4/VisualizadorDocumento";
+import { avisoRenovacaoBloqueada, contarDocumentos, dataBR, iniciaisNome, seloCancelado } from "./etapa3/etapa3-dados";
 
 /**
- * Página 4 do app do paciente (gesto direita → esquerda):
- *  1. Documentos por consulta REALIZADA (status "concluida"; antes entravam
- *     também as confirmadas, ainda por acontecer) — atestados, receitas,
- *     pedidos de exames e prontuário, com visualização e impressão;
- *  2. Ao rolar para baixo: mensagens com os médicos das consultas — aberta do
- *     agendamento até 30 dias depois da consulta (validado também no servidor).
+ * Página 4 do app do paciente (gesto direita → esquerda), etapa 3 do
+ * redesign (desenho da ficha e das mensagens do médico), com duas abas:
+ *  1. Documentos por consulta REALIZADA (status "concluida") — atestados,
+ *     receitas, pedidos de exames e prontuário, com visualização, PDF e
+ *     impressão; selo "Cancelado em dd/mm/aaaa" e aviso de renovação
+ *     bloqueada vindos do documento (status/canceladoEm do servidor);
+ *  2. Mensagens com os médicos das consultas (etapa3/TelaMensagensPaciente).
  */
-
-const JANELA_DIAS = 30;
 
 const ICONE_DOC = {
   receita: Pill,
@@ -57,146 +52,33 @@ const ROTULO_DOC = {
   prontuario: "Prontuário da consulta",
 } as const;
 
-function aceitaPdf(d: Documento | undefined): d is Documento {
-  return !!d && (d.tipo === "receita" || d.tipo === "atestado" || d.tipo === "exame" || d.tipo === "exame_solicitado");
-}
-
-/** Compartilha o PDF quando o celular permite; senão baixa o arquivo. */
-async function entregarPdf(d: Documento) {
-  try {
-    const { nome, blob } = gerarDocumentoPDF(d, "blob");
-    const arquivo = new File([blob], nome, { type: "application/pdf" });
-    const nav = navigator as Navigator & { canShare?: (data?: ShareData) => boolean };
-    if (typeof nav.share === "function" && nav.canShare?.({ files: [arquivo] })) {
-      await nav.share({ files: [arquivo], title: d.titulo });
-      return;
-    }
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = nome;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    window.setTimeout(() => URL.revokeObjectURL(url), 1500);
-    toast.success("PDF pronto para salvar.");
-  } catch (e) {
-    if (e instanceof DOMException && e.name === "AbortError") return;
-    toast.error("Não foi possível gerar o PDF.");
-  }
-}
-
-function Visualizador({
-  titulo,
-  corpo,
-  documento,
-  imprimir = false,
-  onFechar,
-}: {
-  titulo: string;
-  corpo: string[];
-  documento?: Documento;
-  /** Fase 3: o botão de impressora da lista abre o documento JÁ imprimindo. */
-  imprimir?: boolean;
-  onFechar: () => void;
-}) {
-  const dialogoRef = useRef<HTMLDivElement>(null);
-  useVoltarFecha(true, onFechar);
-  useFocoDialogo(true, onFechar, dialogoRef);
-  // A WebView do app de loja (Capacitor/Android) ignora window.print(): o botão
-  // não fazia nada. No app, "Imprimir" vira "Copiar" (texto do documento).
-  const noApp = useAppNativo();
-  const copiar = async () => {
-    try {
-      await navigator.clipboard.writeText([titulo, ...corpo].join("\n"));
-      toast.success("Texto do documento copiado.", {
-        description: "Para imprimir ou salvar em PDF, abra o BION pelo navegador.",
-      });
-    } catch {
-      toast.error("Não foi possível copiar. Para imprimir, abra o BION pelo navegador.");
-    }
-  };
-  useEffect(() => {
-    if (!imprimir || noApp) return;
-    // Espera o documento pintar (a regra @media print só mostra .bp-impressao).
-    const id = window.setTimeout(() => window.print(), 250);
-    return () => window.clearTimeout(id);
-  }, [imprimir, noApp]);
-
-  return (
-    <div ref={dialogoRef} className="absolute inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label={`Documento: ${titulo}`}>
-      {/* A11Y: fundo clicável agora é button real (tabIndex=-1 o mantém fora
-          da ordem de tabulação — fechar por teclado é papel do ESC/botão). */}
-      <button
-        type="button"
-        tabIndex={-1}
-        aria-hidden="true"
-        aria-label="Fechar documento"
-        className="bpp-veu-doc absolute inset-0 bg-bion-ink/60 backdrop-blur-sm cursor-default"
-        onClick={onFechar}
-      />
-      <div className="bion-surgir relative w-full max-w-lg max-h-[88vh] overflow-y-auto bp-coluna rounded-3xl bg-white dark:bg-bion-night p-6 shadow-2xl">
-        <div className="flex items-start justify-between gap-3 mb-4">
-          <h3 className="text-lg font-bold text-bion-ink dark:text-bion-paper">{titulo}</h3>
-          <div className="flex gap-2 shrink-0">
-            {aceitaPdf(documento) ? (
-              <button type="button"
-                onClick={() => void entregarPdf(documento)}
-                aria-label="Baixar ou compartilhar PDF"
-                className="bion-toque bp-acao px-4 min-h-11 text-xs inline-flex items-center gap-1.5"
-              >
-                <Download className="w-4 h-4" /> PDF
-              </button>
-            ) : null}
-            {noApp ? (
-              <button type="button"
-                onClick={() => void copiar()}
-                aria-label="Copiar texto do documento"
-                className="bion-toque bp-acao px-4 min-h-11 text-xs inline-flex items-center gap-1.5"
-              >
-                <Copy className="w-4 h-4" /> Copiar
-              </button>
-            ) : (
-              <button type="button"
-                onClick={() => window.print()}
-                aria-label="Imprimir documento"
-                className="bion-toque bp-acao px-4 min-h-11 text-xs inline-flex items-center gap-1.5"
-              >
-                <Printer className="w-4 h-4" /> Imprimir
-              </button>
-            )}
-            <button type="button" onClick={onFechar} aria-label="Fechar documento" className="bion-toque w-11 h-11 inline-flex items-center justify-center rounded-full bg-bion-ink/5 dark:bg-white/10 text-bion-ink dark:text-bion-paper">
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-        <div className="bp-impressao space-y-2 text-sm leading-relaxed text-bion-ink dark:text-bion-paper whitespace-pre-line border-t border-bion-ink/10 dark:border-white/10 pt-4">
-          {corpo.map((p, i) => (
-            <p key={i}>{p}</p>
-          ))}
-          <p className="pt-4 text-xs opacity-80">Documento sem assinatura digital ICP-Brasil — BION Telemedicina.</p>
-        </div>
-      </div>
-    </div>
-  );
-}
+export type VistaDocumentos = "documentos" | "mensagens";
 
 export function DocumentosPainel({
   conversaAtiva,
   onConversa,
   onAgendar,
+  vista = "documentos",
+  onVista,
+  onFechar,
+  ativo = true,
 }: {
   /** Conversa aberta (id do médico). Fica no PacienteApp para o aviso do Início abrir direto. */
   conversaAtiva: string | null;
   onConversa: (medicoId: string | null) => void;
   onAgendar: () => void;
+  /** Aba aberta: Documentos ou Mensagens (o PacienteApp guarda, a navegação acende o item certo). */
+  vista?: VistaDocumentos;
+  onVista?: (v: VistaDocumentos) => void;
+  /** Volta ao Início (botão do topo). */
+  onFechar?: () => void;
+  /** O painel está à vista (no computador a conversa mais recente só abre sozinha com ele aberto). */
+  ativo?: boolean;
 }) {
-  const { consultas, documentos, medicos, sessao, mensagens, enviarMensagem, marcarConversaLida, naoLidasMensagens } = useBion();
+  const { consultas, documentos, medicos, sessao, naoLidasMensagens } = useBion();
   const [consultaSelecionada, setConsultaSelecionada] = useState<string | null>(null);
-  const [visualizando, setVisualizando] = useState<{ titulo: string; corpo: string[]; imprimir?: boolean; documento?: Documento } | null>(null);
+  const [visualizando, setVisualizando] = useState<DadosVisualizador | null>(null);
   const noApp = useAppNativo();
-  const setConversaAtiva = onConversa;
-  const [texto, setTexto] = useState("");
   const [retornoDe, setRetornoDe] = useState<string | null>(null);
   const [renovando, setRenovando] = useState<{ id: string; medicamento: string; medico: string } | null>(null);
   const [cancelandoPedido, setCancelandoPedido] = useState<string | null>(null);
@@ -251,6 +133,7 @@ export function DocumentosPainel({
       tipo: d.tipo as keyof typeof ICONE_DOC,
       titulo: detalhe || rotuloTipo || d.titulo,
       subtitulo: detalhe ? rotuloTipo : undefined,
+      rotuloTipo: rotuloTipo ?? d.titulo,
       data: d.data,
       original: d as (typeof documentos)[number] | undefined,
       corpo: [
@@ -261,9 +144,10 @@ export function DocumentosPainel({
         d.cid ? `CID: ${d.cid}` : "",
         d.conteudo,
         d.observacoes ? `Observações: ${d.observacoes}` : "",
+        seloCancelado(d) ? `${seloCancelado(d)} pelo médico.` : "",
         ``,
         `Dr(a). ${d.medico}`,
-      ].filter((l) => l !== ""),
+      ].filter((l, i, arr) => l !== "" || (i > 0 && arr[i - 1] !== "")),
       };
     });
     if (c.resumoMedico) {
@@ -273,7 +157,8 @@ export function DocumentosPainel({
         original: undefined,
         titulo: ROTULO_DOC.prontuario,
         subtitulo: undefined,
-        data: c.data,
+        rotuloTipo: "Resumo",
+        data: dataBR(c.ts) || c.data,
         corpo: [
           `Consulta: ${c.especialidade} · ${c.data} às ${c.hora}`,
           `Profissional: ${c.medico}`,
@@ -287,400 +172,392 @@ export function DocumentosPainel({
 
   // Calculado uma vez por render (antes rodava 2 vezes).
   const docsSelecionados = consultaSelecionada ? documentosDaConsulta(consultaSelecionada) : [];
+  const consulta = realizadas.find((x) => x.id === consultaSelecionada) ?? null;
+  const originais = docsSelecionados.flatMap((d) => (d.original ? [d.original] : []));
+  const contagem = contarDocumentos(originais);
+  const receitas = originais.filter((d) => d.tipo === "receita");
+  // Só o que aparece nas consultas realizadas (o prontuário não conta como documento emitido).
+  const totalDocumentos = realizadas.reduce((n, c) => n + documentosDaConsulta(c.id).filter((d) => d.tipo !== "prontuario").length, 0);
 
-  /* -------------------------- mensagens (30 dias) ------------------------- */
+  const titulo = vista === "mensagens" ? "Mensagens" : "Documentos";
+  const sub =
+    vista === "mensagens"
+      ? naoLidasMensagens > 0
+        ? `${naoLidasMensagens} não lida${naoLidasMensagens > 1 ? "s" : ""}`
+        : "Converse com o médico da sua consulta"
+      : `${realizadas.length} consulta${realizadas.length === 1 ? "" : "s"} realizada${realizadas.length === 1 ? "" : "s"} · ${totalDocumentos} documento${totalDocumentos === 1 ? "" : "s"}`;
 
-  const contatos = useMemo(() => {
-    const porMedico = new Map<string, { id: string; nome: string; ultima: number }>();
-    for (const c of consultas.filter((x) => x.paciente === sessao.nome && x.status !== "cancelada")) {
-      if (!c.medicoId) continue;
-      const atual = porMedico.get(c.medicoId);
-      if (!atual || c.ts > atual.ultima) porMedico.set(c.medicoId, { id: c.medicoId, nome: c.medico, ultima: c.ts });
-    }
-    return [...porMedico.values()]
-      .map((m) => {
-        const fim = m.ultima + JANELA_DIAS * 86_400_000;
-        return {
-          ...m,
-          aberta: Date.now() <= fim,
-          fimDias: Math.max(0, Math.ceil((fim - Date.now()) / 86_400_000)),
-          naoLidas: mensagens.filter((msg) => msg.deId === m.id && msg.paraId === sessao.id && !msg.lida).length,
-        };
-      })
-      .sort((a, b) => b.ultima - a.ultima);
-  }, [consultas, sessao.nome, sessao.id, mensagens]);
+  const topo = (
+    <header className="bp2-docs-topo">
+      {onFechar ? (
+        <button type="button" onClick={onFechar} aria-label="Voltar ao início" title="Voltar" className="bp2-redondo bp2-redondo-topo">
+          <ArrowLeft className="h-[1.05rem] w-[1.05rem]" aria-hidden />
+        </button>
+      ) : null}
+      <div className="min-w-0 flex-1">
+        <h2 id="bp2-docs-t" className="bp2-docs-titulo truncate">
+          {titulo}
+        </h2>
+        <p className="truncate text-[12px] bp2-t-2">{sub}</p>
+      </div>
+      <div role="tablist" aria-label="Documentos e mensagens" className="bp2-abas">
+        {(["documentos", "mensagens"] as const).map((v) => (
+          <button
+            key={v}
+            type="button"
+            role="tab"
+            id={`bp2-aba-${v}`}
+            aria-selected={vista === v}
+            aria-controls="bp2-docs-painel"
+            onClick={() => onVista?.(v)}
+            className="bp2-aba"
+          >
+            {v === "documentos" ? "Documentos" : "Mensagens"}
+            {v === "mensagens" && naoLidasMensagens > 0 ? (
+              <span className="bp2-aba-selo" aria-label={`${naoLidasMensagens} não lida${naoLidasMensagens > 1 ? "s" : ""}`}>
+                {naoLidasMensagens > 9 ? "9+" : naoLidasMensagens}
+              </span>
+            ) : null}
+          </button>
+        ))}
+      </div>
+    </header>
+  );
 
-  const conversa = useMemo(() => {
-    if (!conversaAtiva) return [];
-    return mensagens
-      .filter(
-        (m) =>
-          (m.deId === conversaAtiva && m.paraId === sessao.id) ||
-          (m.deId === sessao.id && m.paraId === conversaAtiva),
-      )
-      .sort((a, b) => a.ts - b.ts);
-  }, [mensagens, conversaAtiva, sessao.id]);
-
-  const contatoAtivo = contatos.find((c) => c.id === conversaAtiva);
-
-  // Conversa em tela cheia no celular (< 768px): trava a rolagem da página,
-  // acompanha o teclado (visualViewport) e fecha com o "voltar" do Android.
-  const conversaAberta = Boolean(conversaAtiva && contatoAtivo);
-  const [celular, setCelular] = useState(false);
-  const [alturaVisivel, setAlturaVisivel] = useState<number | null>(null);
-  useEffect(() => {
-    const mq = window.matchMedia("(max-width: 767px)");
-    const atualizar = () => setCelular(mq.matches);
-    atualizar();
-    mq.addEventListener("change", atualizar);
-    return () => mq.removeEventListener("change", atualizar);
-  }, []);
-  useVoltarFecha(conversaAberta, () => setConversaAtiva(null));
-  const telaCheia = conversaAberta && celular;
-  useEffect(() => {
-    if (!telaCheia) return;
-    const html = document.documentElement;
-    const antes = { body: document.body.style.overflow, html: html.style.overflow };
-    document.body.style.overflow = "hidden";
-    html.style.overflow = "hidden";
-    const vv = window.visualViewport;
-    const ajustar = () => setAlturaVisivel(vv ? vv.height : null);
-    ajustar();
-    vv?.addEventListener("resize", ajustar);
-    vv?.addEventListener("scroll", ajustar);
-    return () => {
-      document.body.style.overflow = antes.body;
-      html.style.overflow = antes.html;
-      vv?.removeEventListener("resize", ajustar);
-      vv?.removeEventListener("scroll", ajustar);
-      setAlturaVisivel(null);
+  const dadosDoVisualizador = (d: (typeof docsSelecionados)[number], pdf: Documento | null): DadosVisualizador => {
+    const c = realizadas.find((x) => x.id === consultaSelecionada);
+    return {
+      titulo: d.titulo,
+      corpo: d.corpo,
+      documento: pdf ?? undefined,
+      tipo: d.tipo === "receita" || d.tipo === "atestado" || d.tipo === "prontuario" ? d.tipo : "exame_solicitado",
+      rotuloTipo: d.rotuloTipo,
+      emitido: d.original?.criadoEm ? dataBR(d.original.criadoEm) : d.data,
+      medico: d.original?.medico ?? c?.medico ?? "",
+      especialidade: c?.especialidade,
+      selo: seloCancelado(d.original),
     };
-  }, [telaCheia]);
-  const fimListaRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    fimListaRef.current?.scrollIntoView({ block: "end" });
-  }, [conversa.length, conversaAtiva, alturaVisivel]);
+  };
+
+  const acoesDoc = (d: (typeof docsSelecionados)[number]) => {
+    const pdf = aceitaPdf(d.original) ? d.original : null;
+    return (
+      <div className="bp2-docs-acoes">
+        <button
+          type="button"
+          data-ver-documento={d.id}
+          onClick={() => setVisualizando(dadosDoVisualizador(d, pdf))}
+          className="bp2-docs-ver"
+          aria-label={`Ver ${d.titulo}`}
+        >
+          <Eye className="h-4 w-4" aria-hidden /> <span>Ver</span>
+        </button>
+        {pdf ? (
+          <button type="button" onClick={() => void entregarPdf(pdf)} aria-label={`Baixar ou compartilhar PDF de ${d.titulo}`} title="PDF" className="bp2-icone-linha">
+            <Download className="h-4 w-4" aria-hidden />
+          </button>
+        ) : null}
+        {/* No app a impressão não existe (WebView): o PDF acima substitui a impressora. */}
+        {!noApp ? (
+          <button
+            type="button"
+            onClick={() => setVisualizando({ ...dadosDoVisualizador(d, pdf), imprimir: true })}
+            aria-label={`Imprimir ${d.titulo}`}
+            title="Imprimir"
+            className="bp2-icone-linha"
+          >
+            <Printer className="h-4 w-4" aria-hidden />
+          </button>
+        ) : null}
+      </div>
+    );
+  };
+
+  /* Renovação de uma receita: pedido em andamento, bloqueio ou botão para pedir. */
+  const renovacaoDa = (o: Documento) => {
+    const bloqueio = avisoRenovacaoBloqueada(o);
+    const pedido = renovacao.disponivel ? pedidoDaReceita(renovacao.pedidos, o.id) : null;
+    if (pedido) {
+      const r = ROTULO_STATUS_RENOVACAO[pedido.status];
+      return (
+        <>
+          <span className={`bp2-renov-estado bp2-renov-${r.tom}`}>Renovação: {r.texto}</span>
+          {pedido.mensagemMedico ? <p className="bp2-renov-msg">{pedido.mensagemMedico}</p> : null}
+          {bloqueio && pedido.status !== "pendente" && pedido.status !== "aguardando_pagamento" ? <p className="bp2-renov-bloqueio">{bloqueio}</p> : null}
+          {pedido.status === "pendente" || pedido.status === "aguardando_pagamento" ? (
+            cancelandoPedido === pedido.id ? (
+              <div className="mt-1.5 flex flex-wrap items-center gap-2" role="group" aria-label="Confirmar cancelamento">
+                <span className="text-[12px] font-medium">Cancelar este pedido?</span>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const res = await renovacao.cancelar(pedido.id);
+                    setCancelandoPedido(null);
+                    if (res.ok) toast.success("Pedido de renovação cancelado.");
+                    else toast.error(res.erro ?? "Não foi possível cancelar.");
+                  }}
+                  className="bp2-renov-botao bp2-renov-perigo"
+                >
+                  Sim, cancelar
+                </button>
+                <button type="button" onClick={() => setCancelandoPedido(null)} className="bp2-renov-botao">
+                  Voltar
+                </button>
+              </div>
+            ) : (
+              <button type="button" onClick={() => setCancelandoPedido(pedido.id)} className="bp2-renov-link">
+                Cancelar pedido
+              </button>
+            )
+          ) : null}
+          {pedido.status === "aguardando_pagamento" && pedido.pagamentoId ? (
+            <BotaoPagarStripe pagamentoId={pedido.pagamentoId} rotulo="Pagar com cartão" className="mt-1.5" />
+          ) : null}
+          {pedido.status !== "pendente" && pedido.status !== "aguardando_pagamento" && !bloqueio ? (
+            <button type="button" onClick={() => setRenovando({ id: o.id, medicamento: o.medicamento ?? "", medico: o.medico })} className="bp2-renov-link">
+              Pedir de novo
+            </button>
+          ) : null}
+        </>
+      );
+    }
+    if (bloqueio) return <p className="bp2-renov-bloqueio">{bloqueio}</p>;
+    if (!renovacao.disponivel) return <p className="bp2-renov-msg">Renovação por mensagem indisponível agora.</p>;
+    return (
+      <button type="button" onClick={() => setRenovando({ id: o.id, medicamento: o.medicamento ?? "", medico: o.medico })} className="bp2-renov-pedir">
+        <RotateCcw className="h-3.5 w-3.5" aria-hidden /> Renovar receita
+      </button>
+    );
+  };
+
+  const corpoDocumentos =
+    realizadas.length === 0 || !consulta ? (
+      <section className="bp2-cartao flex flex-col items-center gap-3 px-6 py-12 text-center">
+        <span className="bp2-assist-icone" aria-hidden>
+          <FileText className="h-5 w-5" />
+        </span>
+        <h3 className="text-[15px] font-medium">Nenhuma consulta realizada ainda</h3>
+        <p className="max-w-xs text-[13px] bp2-t-2">Depois da sua primeira teleconsulta, receitas, atestados e pedidos de exame aparecem aqui.</p>
+        <button type="button" onClick={onAgendar} className="bp2-botao-azul mt-1 inline-flex h-11 items-center rounded-[0.6rem] px-5 text-[13px] font-medium">
+          Agendar consulta
+        </button>
+      </section>
+    ) : (
+      (() => {
+        const c = consulta;
+        const noPrazo = Date.now() - c.ts <= PRAZO_RETORNO_DIAS * 86_400_000;
+        const tipo = tipoDaConsulta(c) ?? "Consulta";
+        return (
+          <div className="bp2-docs-grade">
+            {/* Cartão em degradê da consulta escolhida (desenho da "Ficha do paciente") */}
+            <section className="bp2-ficha-cartao bp2-docs-ficha bp2-animar" aria-labelledby="bp2-docs-ficha-t" aria-live="polite">
+              <div className="bp2-ficha-topo">
+                <h3 id="bp2-docs-ficha-t" className="bp2-ficha-titulo">
+                  Documentos
+                  <br />
+                  da consulta
+                </h3>
+              </div>
+              <div className="bp2-ficha-pessoa">
+                <span className="bp2-ficha-avatar" aria-hidden>
+                  {iniciaisNome(c.medico)}
+                </span>
+                <div className="bp2-ficha-nome">
+                  <strong>{c.medico}</strong>
+                  <span>{c.especialidade}</span>
+                </div>
+              </div>
+              <dl className="bp2-ficha-campos">
+                <div>
+                  <dt>Data</dt>
+                  <dd className="tabular-nums">{dataBR(c.ts)}</dd>
+                </div>
+                <div>
+                  <dt>Atendimento</dt>
+                  <dd>{tipo}</dd>
+                </div>
+                <div>
+                  <dt>Retorno</dt>
+                  <dd>{noPrazo ? `Até ${dataBR(c.ts + PRAZO_RETORNO_DIAS * 86_400_000)}` : "Prazo encerrado"}</dd>
+                </div>
+              </dl>
+              <dl className="bp2-ficha-sinais">
+                <div>
+                  <dt>Receitas</dt>
+                  <dd>
+                    <span className="bp2-ficha-valor tabular-nums">{contagem.receitas}</span>
+                  </dd>
+                </div>
+                <div>
+                  <dt>Atestados</dt>
+                  <dd>
+                    <span className="bp2-ficha-valor tabular-nums">{contagem.atestados}</span>
+                  </dd>
+                </div>
+                <div>
+                  <dt>Pedidos de exame</dt>
+                  <dd>
+                    <span className="bp2-ficha-valor tabular-nums">{contagem.pedidos}</span>
+                  </dd>
+                </div>
+              </dl>
+              {noPrazo ? (
+                <button type="button" onClick={() => setRetornoDe(c.id)} className="bp2-ficha-acao" aria-label={`Marcar retorno com ${c.medico}, com a triagem já preenchida`}>
+                  <CalendarPlus className="h-4 w-4" aria-hidden /> Marcar retorno
+                </button>
+              ) : null}
+            </section>
+
+            {/* Consultas realizadas (escolha) */}
+            <section className="bp2-cartao bp2-docs-consultas bp2-animar bp2-animar-d1" aria-labelledby="bp2-docs-cons-t">
+              <div className="bp2-ficha-cab">
+                <h3 id="bp2-docs-cons-t" className="bp2-ficha-titulo">
+                  Consultas
+                  <br />
+                  realizadas
+                </h3>
+                <span className="bp2-docs-conta bp2-t-2">{realizadas.length}</span>
+              </div>
+              <ul className="bp2-docs-cons-lista">
+                {realizadas.map((x) => {
+                  const ativa = x.id === consultaSelecionada;
+                  return (
+                    <li key={x.id}>
+                      <button
+                        type="button"
+                        aria-pressed={ativa}
+                        onClick={() => setConsultaSelecionada(x.id)}
+                        className="bp2-docs-cons"
+                        aria-label={`${x.especialidade} com ${x.medico}, ${dataBR(x.ts)}`}
+                      >
+                        <span aria-hidden className="bp2-avatar bp2-docs-cons-avatar">
+                          {iniciaisNome(x.medico)}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate bp2-docs-cons-nome">{x.especialidade}</span>
+                          <span className="block truncate bp2-docs-cons-sub">
+                            {dataBR(x.ts)} · {x.medico}
+                          </span>
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+
+            {/* Documentos da consulta: tabela no computador, lista no celular */}
+            <section className="bp2-cartao bp2-docs-lista bp2-animar bp2-animar-d2" aria-labelledby="bp2-docs-lista-t">
+              <div className="bp2-ficha-cab bp2-ficha-cab-hist">
+                <h3 id="bp2-docs-lista-t" className="bp2-ficha-titulo">
+                  Documentos <span className="bp2-t-2">· {docsSelecionados.length}</span>
+                </h3>
+              </div>
+              {docsSelecionados.length === 0 ? (
+                <p className="px-2 py-6 text-center text-[13px] bp2-t-2">Nenhum documento nesta consulta. Se o médico emitir algo, aparece aqui.</p>
+              ) : (
+                <div className="bp2-ficha-rolagem">
+                  <table className="bp2-docs-tabela">
+                    <caption className="sr-only">Documentos da consulta de {c.especialidade} em {dataBR(c.ts)}</caption>
+                    <thead>
+                      <tr>
+                        <th scope="col">Documento</th>
+                        <th scope="col">Tipo</th>
+                        <th scope="col">Emitido em</th>
+                        <th scope="col">Situação</th>
+                        <th scope="col">
+                          <span className="sr-only">Ações</span>
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {docsSelecionados.map((d) => {
+                        const Icone = ICONE_DOC[d.tipo] ?? FileText;
+                        const selo = seloCancelado(d.original);
+                        const bloqueio = d.original ? avisoRenovacaoBloqueada(d.original) : null;
+                        const emitido = d.original?.criadoEm ? dataBR(d.original.criadoEm) : d.data;
+                        return (
+                          <tr key={d.id} className={selo ? "bp2-docs-cancelado" : undefined} data-documento={d.id}>
+                            <td>
+                              <span className="bp2-docs-nome">
+                                <span aria-hidden className={`bp2-docs-icone bp2-docs-icone-${d.tipo}`}>
+                                  <Icone />
+                                </span>
+                                <span className="min-w-0">
+                                  <span className="block bp2-docs-titulo-doc">{d.titulo}</span>
+                                  {bloqueio && d.tipo === "receita" ? <span className="block bp2-docs-nota">{bloqueio}</span> : null}
+                                </span>
+                              </span>
+                            </td>
+                            <td className="bp2-t-2">{d.rotuloTipo}</td>
+                            <td className="tabular-nums bp2-t-2">{emitido}</td>
+                            <td>
+                              {selo ? (
+                                <span className="bp2-selo-cancelado">
+                                  <Ban className="h-3 w-3" aria-hidden /> {selo}
+                                </span>
+                              ) : (
+                                <span className="bp2-selo-valido">{d.tipo === "prontuario" ? "Disponível" : "Válido"}</span>
+                              )}
+                            </td>
+                            <td>{acoesDoc(d)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              <p className="bp2-docs-rodape">
+                <FileUp className="h-3.5 w-3.5 shrink-0" aria-hidden /> Laudos enviados pela BION IA também aparecem no seu histórico de uploads.
+              </p>
+            </section>
+
+            {/* Renovação de receitas (lavanda, como "Exames e documentos" da ficha) */}
+            <section className="bp2-docs-renov bp2-animar bp2-animar-d3" aria-labelledby="bp2-docs-renov-t">
+              <div className="bp2-ficha-cab">
+                <h3 id="bp2-docs-renov-t" className="bp2-ficha-titulo">
+                  Renovação
+                  <br />
+                  de receitas
+                </h3>
+              </div>
+              {receitas.length === 0 ? (
+                <p className="bp2-vazio">Nenhuma receita nesta consulta.</p>
+              ) : (
+                <ul>
+                  {receitas.map((o) => (
+                    <li key={o.id} className="bp2-renov-item">
+                      <span className="block bp2-prox-nome">
+                        <Pill className="mr-1.5 inline h-3.5 w-3.5 align-[-2px]" aria-hidden />
+                        {o.medicamento || o.titulo}
+                      </span>
+                      <span className="block bp2-prox-sub">
+                        {dataBR(o.criadoEm ?? null) || o.data}
+                        {seloCancelado(o) ? ` · ${seloCancelado(o)}` : ""}
+                      </span>
+                      <div className="bp2-renov-corpo">{renovacaoDa(o)}</div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          </div>
+        );
+      })()
+    );
 
   return (
-    <div className="px-5 py-6 space-y-4 bp-safe-top pb-24">
-      {visualizando && <Visualizador titulo={visualizando.titulo} corpo={visualizando.corpo} documento={visualizando.documento} imprimir={visualizando.imprimir} onFechar={() => setVisualizando(null)} />}
-
-      {/* ------------------------------ Documentos ------------------------------ */}
-      <section aria-label="Documentos das consultas">
-        <h2 className="text-2xl font-black text-bion-ink dark:text-bion-paper">Documentos</h2>
-        <p className="text-sm text-bion-ink/75 dark:text-bion-paper/75 mb-4">
-          Escolha uma consulta realizada para ver, baixar ou compartilhar seus documentos.
-        </p>
-
-        {realizadas.length === 0 ? (
-          <EstadoVazio
-            icone={<FileText className="w-6 h-6" />}
-            titulo="Nenhuma consulta realizada ainda"
-            texto="Depois da sua primeira teleconsulta, receitas, atestados e pedidos de exame aparecem aqui."
-            acao={{ rotulo: "Agendar consulta", onClick: onAgendar }}
-          />
+    <div className={`bp2-docs bp2-e3 bp2-v2 ${vista === "mensagens" ? "bp2-docs-vista-msg" : ""}`}>
+      {visualizando && <VisualizadorDocumento dados={visualizando} paciente={sessao.nome} onFechar={() => setVisualizando(null)} />}
+      {topo}
+      <div id="bp2-docs-painel" role="tabpanel" aria-labelledby={`bp2-aba-${vista}`} className="bp2-docs-corpo">
+        {vista === "mensagens" ? (
+          <TelaMensagensPaciente ativo={ativo} conversaAtiva={conversaAtiva} onConversa={onConversa} onDocumentos={() => onVista?.("documentos")} onAgendar={onAgendar} />
         ) : (
-          <div className="bion-surgir-lista flex gap-2 overflow-x-auto bp-coluna pb-1 -mx-1 px-1">
-            {realizadas.map((c) => (
-              <button type="button"
-                key={c.id}
-                onClick={() => setConsultaSelecionada(c.id)}
-                aria-pressed={consultaSelecionada === c.id}
-                className={`bion-toque shrink-0 rounded-2xl px-4 py-3 text-left transition border ${
-                  consultaSelecionada === c.id
-                    ? "bp-acao border-transparent"
-                    : "bp-glass border-transparent text-bion-ink dark:text-bion-paper"
-                }`}
-              >
-                <div className="text-sm font-bold">{c.especialidade}</div>
-                <div className={`text-xs ${consultaSelecionada === c.id ? "opacity-80" : "opacity-80"}`}>
-                  {c.data} · {c.medico.split(" ").slice(-1)[0]}
-                </div>
-              </button>
-            ))}
-          </div>
+          corpoDocumentos
         )}
-
-        {consultaSelecionada && (
-          <div className="bion-surgir-lista mt-4 space-y-2">
-            {(() => {
-              const c = realizadas.find((x) => x.id === consultaSelecionada);
-              if (!c) return null;
-              const noPrazo = Date.now() - c.ts <= PRAZO_RETORNO_DIAS * 86_400_000;
-              return (
-                <div className="bp-glass p-4 flex items-center gap-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-bold text-bion-ink dark:text-bion-paper inline-flex items-center gap-2 flex-wrap">
-                      {c.especialidade} · {c.data} <EtiquetaTipo consulta={c} />
-                    </div>
-                    <div className="text-xs opacity-80">
-                      {noPrazo ? `Retorno com ${c.medico}, com a triagem já preenchida.` : `O retorno pode ser marcado até ${PRAZO_RETORNO_DIAS} dias depois da consulta.`}
-                    </div>
-                  </div>
-                  {noPrazo ? (
-                    <button
-                      type="button"
-                      onClick={() => setRetornoDe(c.id)}
-                      className="bion-toque bp-acao shrink-0 min-h-11 rounded-full px-4 text-xs font-bold inline-flex items-center gap-1.5"
-                    >
-                      <CalendarPlus className="w-4 h-4" aria-hidden /> Marcar retorno
-                    </button>
-                  ) : null}
-                </div>
-              );
-            })()}
-            {docsSelecionados.length === 0 ? (
-              <EstadoVazio icone={<ClipboardList className="w-6 h-6" />} titulo="Nenhum documento nesta consulta" texto="Se o médico emitir algo, aparece aqui." />
-            ) : (
-              docsSelecionados.map((d) => {
-                const Icone = ICONE_DOC[d.tipo] ?? FileText;
-                const pdf = aceitaPdf(d.original) ? d.original : null;
-                return (
-                  <div key={d.id} className="bp-glass p-4 flex items-center gap-3 bpp-animar">
-                    <div className="w-11 h-11 rounded-2xl bg-bion-sea/10 dark:bg-[#C4B5FD]/10 text-bion-sea dark:text-[#C4B5FD] inline-flex items-center justify-center shrink-0">
-                      <Icone className="w-5 h-5" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-bold text-bion-ink dark:text-bion-paper">{d.titulo}</div>
-                      <div className="text-xs opacity-80">{d.subtitulo ? `${d.subtitulo} · ` : ""}{d.data}</div>
-                      {(() => {
-                        const o = d.original;
-                        if (!o || o.tipo !== "receita" || !renovacao.disponivel) return null;
-                        const pedido = pedidoDaReceita(renovacao.pedidos, o.id);
-                        if (pedido) {
-                          const r = ROTULO_STATUS_RENOVACAO[pedido.status];
-                          const classe = r.tom === "ok" ? CLASSE_ETIQUETA.ok : r.tom === "pendente" ? CLASSE_ETIQUETA.pagamento : r.tom === "info" ? CLASSE_ETIQUETA.remarcacao : CLASSE_ETIQUETA.neutro;
-                          return (
-                            <div className="mt-1.5">
-                              <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${classe}`}>Renovação: {r.texto}</span>
-                              {pedido.mensagemMedico ? <p className="mt-1 text-xs opacity-80">{pedido.mensagemMedico}</p> : null}
-                              {pedido.status === "pendente" || pedido.status === "aguardando_pagamento" ? (
-                                cancelandoPedido === pedido.id ? (
-                                  <div className="mt-1.5 flex flex-wrap items-center gap-2" role="group" aria-label="Confirmar cancelamento">
-                                    <span className="text-xs font-semibold">Cancelar este pedido?</span>
-                                    <button
-                                      type="button"
-                                      onClick={async () => {
-                                        const r = await renovacao.cancelar(pedido.id);
-                                        setCancelandoPedido(null);
-                                        if (r.ok) toast.success("Pedido de renovação cancelado.");
-                                        else toast.error(r.erro ?? "Não foi possível cancelar.");
-                                      }}
-                                      className="bion-toque min-h-11 rounded-full px-3.5 text-xs font-bold bg-red-600/10 text-red-800 dark:bg-red-400/15 dark:text-red-300"
-                                    >
-                                      Sim, cancelar
-                                    </button>
-                                    <button type="button" onClick={() => setCancelandoPedido(null)} className="bion-toque min-h-11 rounded-full px-3.5 text-xs font-bold bg-bion-ink/8 dark:bg-white/10">
-                                      Voltar
-                                    </button>
-                                  </div>
-                                ) : (
-                                  <button type="button" onClick={() => setCancelandoPedido(pedido.id)} className="bion-toque mt-0.5 inline-flex items-center min-h-11 px-2 -ml-2 text-xs font-bold underline">
-                                    Cancelar pedido
-                                  </button>
-                                )
-                              ) : null}
-                              {pedido.status === "aguardando_pagamento" && pedido.pagamentoId ? (
-                                <BotaoPagarStripe pagamentoId={pedido.pagamentoId} rotulo="Pagar com cartão" className="mt-1.5" />
-                              ) : null}
-                              {pedido.status !== "pendente" && pedido.status !== "aguardando_pagamento" ? (
-                                <button type="button" onClick={() => setRenovando({ id: o.id, medicamento: o.medicamento ?? "", medico: o.medico })} className="bion-toque mt-0.5 inline-flex items-center min-h-11 px-2 -ml-2 text-xs font-bold underline">
-                                  Pedir de novo
-                                </button>
-                              ) : null}
-                            </div>
-                          );
-                        }
-                        if (!podeRenovarReceita(o)) {
-                          return <div className="mt-1 text-xs opacity-80">Renovação só em consulta (medicamento controlado ou sem nome).</div>;
-                        }
-                        return (
-                          <button
-                            type="button"
-                            onClick={() => setRenovando({ id: o.id, medicamento: o.medicamento ?? "", medico: o.medico })}
-                            className="bion-toque mt-1.5 inline-flex items-center gap-1.5 rounded-full px-3.5 min-h-11 text-xs font-bold bg-bion-sea/12 text-bion-sea dark:bg-[#C4B5FD]/15 dark:text-[#DDD6FE]"
-                          >
-                            <RotateCcw className="w-3.5 h-3.5" aria-hidden /> Renovar receita
-                          </button>
-                        );
-                      })()}
-                    </div>
-                    <button type="button"
-                      onClick={() => setVisualizando({ titulo: d.titulo, corpo: d.corpo, documento: pdf ?? undefined })}
-                      className="bion-toque min-h-11 rounded-full border border-bion-sea/25 dark:border-[#C4B5FD]/25 px-4 py-2 text-xs font-bold text-bion-sea dark:text-[#C4B5FD]"
-                    >
-                      Ver
-                    </button>
-                    {pdf ? (
-                      <button type="button"
-                        onClick={() => void entregarPdf(pdf)}
-                        aria-label={`Baixar ou compartilhar PDF de ${d.titulo}`}
-                        className="bion-toque min-h-11 rounded-full px-3 text-xs font-bold inline-flex items-center gap-1 bg-bion-ink/5 dark:bg-white/10 text-bion-ink dark:text-bion-paper"
-                      >
-                        <Download className="w-4 h-4" aria-hidden /> PDF
-                      </button>
-                    ) : null}
-                    {/* No app a impressão não existe (WebView): o PDF acima substitui a impressora. */}
-                    {!noApp && (
-                    <button type="button"
-                      onClick={() => setVisualizando({ titulo: d.titulo, corpo: d.corpo, documento: pdf ?? undefined, imprimir: true })}
-                      aria-label={`Imprimir ${d.titulo}`}
-                      className="bion-toque w-11 h-11 inline-flex items-center justify-center rounded-full bg-bion-ink/5 dark:bg-white/10 text-bion-ink dark:text-bion-paper"
-                    >
-                      <Printer className="w-4 h-4" />
-                    </button>
-                    )}
-                  </div>
-                );
-              })
-            )}
-          </div>
-        )}
-      </section>
-
-      {/* ------------------------------ Mensagens ------------------------------ */}
-      <section aria-label="Mensagens com médicos" className="pt-2">
-        <h2 className="text-2xl font-black text-bion-ink dark:text-bion-paper inline-flex items-center gap-2">
-          Mensagens
-          {naoLidasMensagens > 0 ? (
-            <span className="min-w-5 h-5 px-1.5 rounded-full bg-rose-600 text-white text-xs font-black leading-5 text-center">
-              {naoLidasMensagens > 9 ? "9+" : naoLidasMensagens}
-            </span>
-          ) : null}
-        </h2>
-        <p className="text-sm text-bion-ink/75 dark:text-bion-paper/75 mb-4">
-          Converse com o médico da sua consulta — do agendamento até 30 dias depois dela.
-        </p>
-
-        {conversaAtiva && contatoAtivo ? (
-          <div
-            role={telaCheia ? "dialog" : undefined}
-            aria-modal={telaCheia ? true : undefined}
-            aria-label={telaCheia ? `Conversa com ${contatoAtivo.nome}` : undefined}
-            style={telaCheia ? { height: alturaVisivel ? `${alturaVisivel}px` : "100dvh" } : undefined}
-            className={
-              telaCheia
-                ? "fixed inset-x-0 top-0 z-[85] flex flex-col overflow-hidden bg-bion-paper dark:bg-[#0b0717]"
-                : "bp-glass overflow-hidden flex flex-col min-h-[60vh] max-h-[80vh]"
-            }
-          >
-            <div className="shrink-0 flex items-center gap-3 px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] border-b border-bion-ink/8 dark:border-white/10">
-              <button type="button"
-                onClick={() => {
-                  setConversaAtiva(null);
-                }}
-                aria-label="Voltar para contatos"
-                className="bion-toque w-11 h-11 inline-flex items-center justify-center rounded-full bg-bion-ink/5 dark:bg-white/10 text-bion-ink dark:text-bion-paper"
-              >
-                <ArrowLeft className="w-4 h-4" />
-              </button>
-              <div className="flex-1 min-w-0">
-                <div className="text-sm font-bold text-bion-ink dark:text-bion-paper truncate">{contatoAtivo.nome}</div>
-                <div className="text-xs opacity-80">{contatoAtivo.aberta ? `Conversa aberta por ${contatoAtivo.fimDias} dia(s)` : "Janela encerrada"}</div>
-              </div>
-            </div>
-
-            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain bp-coluna px-4 py-3 space-y-2">
-              {conversa.length === 0 ? (
-                <p className="text-sm opacity-80 text-center pt-16">Envie a primeira mensagem para {contatoAtivo.nome.replace(/\.$/, "")}.</p>
-              ) : (
-                conversa.map((m) => (
-                  <div key={m.id} className={`flex ${m.minha ? "justify-end" : "justify-start"}`}>
-                    <div className={`max-w-[80%] px-4 py-2.5 text-sm ${m.minha ? "bp-acao rounded-3xl rounded-br-md" : "bg-white/60 dark:bg-white/10 text-bion-ink dark:text-bion-paper rounded-3xl rounded-bl-md"}`}>
-                      {m.texto}
-                      <div className={`text-xs mt-1 ${m.minha ? "opacity-80" : "opacity-80"}`}>{m.quando}</div>
-                    </div>
-                  </div>
-                ))
-              )}
-              <div ref={fimListaRef} />
-            </div>
-
-            <div className="shrink-0 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] flex gap-2 border-t border-bion-ink/8 dark:border-white/10">
-              <input
-                value={texto}
-                onChange={(e) => setTexto(e.target.value)}
-                onKeyDown={async (e) => {
-                  if (e.key === "Enter") {
-                    if (!contatoAtivo.aberta) {
-                      toast.error("A janela de 30 dias desta conversa já encerrou.");
-                      return;
-                    }
-                    // A8: só limpa o campo com a confirmação do servidor;
-                    // em falha, o texto fica para tentar de novo.
-                    if (texto.trim()) {
-                      const ok = await enviarMensagem(contatoAtivo.id, texto.trim());
-                      if (ok) setTexto("");
-                    }
-                  }
-                }}
-                disabled={!contatoAtivo.aberta}
-                placeholder={contatoAtivo.aberta ? "Escreva sua mensagem…" : "Janela de 30 dias encerrada"}
-                aria-label="Nova mensagem"
-                className="bp-entrada flex-1 px-4 py-3 text-sm disabled:opacity-50"
-              />
-              <button type="button"
-                onClick={async () => {
-                  if (!contatoAtivo.aberta) {
-                    toast.error("A janela de 30 dias desta conversa já encerrou.");
-                    return;
-                  }
-                  // A8: idem Enter — texto preservado se o envio falhar.
-                  if (texto.trim()) {
-                    const ok = await enviarMensagem(contatoAtivo.id, texto.trim());
-                    if (ok) setTexto("");
-                  }
-                }}
-                disabled={!contatoAtivo.aberta || !texto.trim()}
-                aria-label="Enviar mensagem"
-                className="bp-acao w-12 h-12 inline-flex items-center justify-center disabled:opacity-40"
-              >
-                <Send className="w-5 h-5" />
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div className="bion-surgir-lista space-y-2">
-            {contatos.length === 0 ? (
-              <EstadoVazio
-                icone={<MessageCircle className="w-6 h-6" />}
-                titulo="Nenhuma conversa ainda"
-                texto="Ao agendar uma consulta, você pode falar com o médico por aqui até 30 dias depois dela."
-              />
-            ) : (
-              contatos.map((c) => (
-                <button type="button"
-                  key={c.id}
-                  onClick={() => {
-                    setConversaAtiva(c.id);
-                    marcarConversaLida(c.id);
-                  }}
-                  className="bion-toque w-full bp-glass p-4 flex items-center gap-3 text-left bpp-animar"
-                >
-                  <div className="w-11 h-11 rounded-full bg-gradient-to-br from-bion-sea to-bion-ink text-white inline-flex items-center justify-center text-sm font-bold shrink-0">
-                    {c.nome.split(" ").slice(-1)[0][0]}
-                    {c.nome[0]}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-bold text-bion-ink dark:text-bion-paper truncate">{c.nome}</div>
-                    <div className="text-xs opacity-80 flex items-center gap-1">
-                      <MessageCircle className="w-3 h-3" /> {c.aberta ? "Conversa disponível" : "Janela de 30 dias encerrada"}
-                    </div>
-                  </div>
-                  {c.naoLidas > 0 && (
-                    <span className="shrink-0 min-w-6 h-6 px-2 rounded-full bg-bion-sea text-white text-xs font-bold inline-flex items-center justify-center">
-                      {c.naoLidas}
-                    </span>
-                  )}
-                </button>
-              ))
-            )}
-            <p className="text-xs opacity-80 flex items-center gap-1.5 pt-1">
-              <FileUp className="w-3.5 h-3.5" /> Laudos enviados pela BION IA também aparecem no seu histórico de uploads.
-            </p>
-          </div>
-        )}
-      </section>
+      </div>
 
       {retornoDe && realizadas.find((c) => c.id === retornoDe) ? (
         <MarcarRetornoSheet origem={realizadas.find((c) => c.id === retornoDe)!} retornoSugeridoEm={realizadas.find((c) => c.id === retornoDe)!.retornoSugeridoEm ?? null} onFechar={() => setRetornoDe(null)} />

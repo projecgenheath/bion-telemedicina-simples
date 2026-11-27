@@ -9,6 +9,7 @@ import { useVoltarFecha } from "./useVoltarFecha";
 import { useFocoDialogo } from "./useFocoDialogo";
 import { LinhaConsultaPagamento } from "./LinhaConsultaPagamento";
 import { EstadoVazio } from "./EstadosPaciente";
+import { TelaConsultasPaciente, type PropsTelaConsultas } from "./consultas/TelaConsultasPaciente";
 
 /**
  * "Ver tudo" do Perfil (fase 3): consultas e pagamentos (lista única) ou
@@ -21,7 +22,16 @@ const TITULO: Record<ListaPerfil, { titulo: string; descricao: string }> = {
   uploads: { titulo: "Uploads na BION IA", descricao: "Laudos e exames que você enviou." },
 };
 
-export function TelaListaCompleta({ lista, onFechar, onAgendar }: { lista: ListaPerfil; onFechar: () => void; onAgendar: () => void }) {
+export function TelaListaCompleta(props: { lista: ListaPerfil; onFechar: () => void; onAgendar: () => void; consultas?: Omit<PropsTelaConsultas, "onFechar" | "onAgendar"> }) {
+  // Etapa 2 do redesign: "Consultas e pagamentos" vira "Minhas consultas"
+  // (desenho da ficha do médico). Uploads seguem nesta tela por enquanto.
+  if (props.lista === "consultas" && props.consultas) {
+    return <TelaConsultasPaciente onFechar={props.onFechar} onAgendar={props.onAgendar} {...props.consultas} />;
+  }
+  return <ListaCompletaAntiga {...props} />;
+}
+
+function ListaCompletaAntiga({ lista, onFechar, onAgendar }: { lista: ListaPerfil; onFechar: () => void; onAgendar: () => void }) {
   const { consultas, sessao, arquivos } = useBion();
   const [abrindo, setAbrindo] = useState<string | null>(null);
   const raizRef = useRef<HTMLDivElement>(null);
@@ -39,7 +49,7 @@ export function TelaListaCompleta({ lista, onFechar, onAgendar }: { lista: Lista
   const { titulo, descricao } = TITULO[lista];
 
   return (
-    <div ref={raizRef} className="bpp-sobreposicao absolute inset-0 z-50 overflow-y-auto bp-coluna" role="dialog" aria-modal="true" aria-label={titulo}>
+    <div ref={raizRef} className="bp2-detalhe bp2-v2 bpp-sobreposicao absolute inset-0 z-50 overflow-y-auto bp-coluna" role="dialog" aria-modal="true" aria-label={titulo}>
       <div className="min-h-full bp-painel">
         <div className="bion-surgir mx-auto w-full max-w-xl px-5 bp-safe-top pb-16">
           <div className="flex items-start justify-between gap-4 pt-2">

@@ -124,7 +124,7 @@ export function RelatoriosModulo() {
         <div className="ba-animar space-y-2 w-full">
           <BotoesExportar onCsv={exportarCsv} onPdf={exportarPdf} className="grid grid-cols-2 sm:hidden" disabled={!entrada} />
           <div className="flex flex-wrap items-center gap-2">
-            <div role="group" aria-label="Período" className="ba-abas overflow-x-auto max-w-full">
+            <div role="group" aria-label="Período" className="ba-abas max-w-full">
               {PERIODOS.map((p) => (
                 <button key={p.k} type="button" aria-pressed={filtros.periodo === p.k} onClick={() => mudar({ periodo: p.k })} className="ba-aba">
                   {p.label}
@@ -232,7 +232,7 @@ export function RelatoriosModulo() {
                       aria-label={`${esp}: ${n} consultas. Filtrar e ver`}
                     >
                       <div className="flex justify-between gap-2 text-sm">
-                        <span className="font-bold truncate">{esp}</span>
+                        <span className="font-bold min-w-0 leading-snug">{esp}</span>
                         <span className="ba-texto-2 tabular-nums shrink-0">
                           {n} · {Math.round((n / Math.max(1, dados.total)) * 100)}%
                         </span>
@@ -266,7 +266,7 @@ export function RelatoriosModulo() {
                       aria-label={`${rotulo}: ${v.total} consultas, nota ${virgula(notaMedia(v))}. Filtrar e ver`}
                     >
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-bold truncate">{rotulo}</p>
+                        <p className="text-sm font-bold leading-snug">{rotulo}</p>
                         <p className="text-xs ba-texto-2">{v.total} consulta(s)</p>
                       </div>
                       <span className="inline-flex items-center gap-1 text-sm font-bold tabular-nums shrink-0">

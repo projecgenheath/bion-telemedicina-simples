@@ -319,7 +319,7 @@ function BloqueioPeriodo({ onExecutando }: { onExecutando: (rodando: boolean) =>
           <button
             type="button"
             onClick={() => setFase({ tipo: "form" })}
-            className="text-sm font-bold text-bion-sea dark:text-sky-300 underline underline-offset-2"
+            className="text-sm font-bold text-bion-sea dark:text-[#9dbcf7] underline underline-offset-2"
           >
             Bloquear outro período
           </button>
@@ -590,7 +590,7 @@ export function AgendaSheet({
                 type="button"
                 onClick={aplicarCopia}
                 disabled={copiarDe === ""}
-                className="text-xs font-bold text-bion-sea dark:text-sky-300 disabled:opacity-50"
+                className="text-xs font-bold text-bion-sea dark:text-[#9dbcf7] disabled:opacity-50"
               >
                 Copiar para {ROTULOS_DIA[alvo as number]}
               </button>
@@ -606,7 +606,7 @@ export function AgendaSheet({
                 <button
                   type="button"
                   onClick={() => setDiferente(false)}
-                  className="text-xs font-bold text-bion-sea dark:text-sky-300"
+                  className="text-xs font-bold text-bion-sea dark:text-[#9dbcf7]"
                 >
                   Voltar a usar o padrão
                 </button>
@@ -670,8 +670,8 @@ export function AgendaSheet({
                     aria-label={`${h} ${fora ? "removido" : "incluído"}`}
                     className={`py-2 rounded-xl text-sm font-bold tabular-nums border ${
                       fora
-                        ? "border-dashed border-bion-ink/30 dark:border-white/30 text-bion-ink/60 dark:text-bion-paper/60 line-through"
-                        : "border-transparent bg-bion-sea text-white dark:bg-sky-300 dark:text-zinc-950"
+                        ? "border-dashed border-bion-ink/30 dark:border-white/30 text-bion-ink/75 dark:text-bion-paper/60 line-through"
+                        : "border-transparent bg-bion-sea text-white dark:bg-[#9dbcf7] dark:text-zinc-950"
                     }`}
                   >
                     {h}
@@ -696,7 +696,7 @@ export function AgendaSheet({
             <button
               type="button"
               onClick={() => setDiferente(true)}
-              className="text-sm font-bold text-bion-sea dark:text-sky-300"
+              className="text-sm font-bold text-bion-sea dark:text-[#9dbcf7]"
             >
               Usar horários diferentes neste dia
             </button>
@@ -778,7 +778,7 @@ export function AgendaSheet({
           <button
             type="button"
             onClick={() => setPausas(p => [...p, {dia: 1, inicio: "12:00", fim: "13:00"}])}
-            className="text-xs font-bold text-bion-sea dark:text-sky-300"
+            className="text-xs font-bold text-bion-sea dark:text-[#9dbcf7]"
           >
             + Adicionar pausa
           </button>

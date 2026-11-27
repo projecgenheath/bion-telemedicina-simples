@@ -47,7 +47,12 @@ igual("tipos sem pix", /pix/i.test(tipos), false);
 igual("fluxo sem chave Pix", /pix/i.test(fluxo), false);
 igual("fluxo abre checkout com consultaId", fluxo.includes("abrirCheckoutStripe({ consultaId: criada.id })"), true);
 igual("chat sem botão Pix", /id: "pix"|metodo === "pix"/.test(chat), false);
-igual("chat abre checkout quando pagarComCartao", /json\.pagarComCartao === true\)[\s\S]*?abrirCheckoutStripe\(\{ consultaId/.test(chat), true);
+// Etapa 2 (rodada 2): o agendamento do chat e da tela de agenda mora num hook único.
+const agendamento = ler("../paciente/consultas/useAgendamentoPaciente.ts");
+igual("chat usa o agendamento compartilhado", chat.includes("useAgendamentoPaciente()"), true);
+igual("agenda do paciente usa o agendamento compartilhado", ler("../paciente/consultas/TelaAgendaPaciente.tsx").includes("useAgendamentoPaciente()"), true);
+igual("chat abre checkout quando pagarComCartao", /json\.pagarComCartao === true\)[\s\S]*?abrirCheckoutStripe\(\{ consultaId/.test(agendamento), true);
+igual("agenda do paciente sem Pix", /pix/i.test(ler("../paciente/consultas/TelaAgendaPaciente.tsx")), false);
 
 console.log(`${ok} ok, ${falhas} falha(s)`);
 if (falhas) process.exit(1);

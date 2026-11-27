@@ -2,6 +2,7 @@
 
 import { useMemo, useState, type ComponentType, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { CampoBusca } from "../ui/CampoBusca";
 import {
   CalendarDays,
   ClipboardList,
@@ -13,7 +14,6 @@ import {
   Info,
   KeyRound,
   LifeBuoy,
-  Search,
   ShieldCheck,
   SlidersHorizontal,
   UserRound,
@@ -128,27 +128,22 @@ export function AuditoriaModulo() {
       atualizando={atualizando}
       acoes={<BotoesExportar n={lista.length} onCsv={exportarCsv} onPdf={exportarPdf} className="hidden sm:flex" />}
       ferramentas={
-        <div className="space-y- ba-animar 2 w-full">
+        <div className="ba-animar space-y-2 w-full">
           <BotoesExportar n={lista.length} onCsv={exportarCsv} onPdf={exportarPdf} className="grid grid-cols-2 sm:hidden" />
-          <div className="flex gap-2">
-            <label className="relative flex-1 min-w-0">
-              <span className="sr-only">Pesquisar ações, usuários, entidades e detalhes</span>
-              <Search className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 ba-texto-3" aria-hidden />
-              <input
-                type="search"
-                value={filtros.busca}
-                onChange={(e) => mudar({ busca: e.target.value })}
-                placeholder="Pesquisar ações, usuários, detalhes…"
-                className="ba-entrada !pl-10"
-              />
-            </label>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <CampoBusca
+              valor={filtros.busca}
+              onChange={(v) => mudar({ busca: v })}
+              dica="Pesquisar ações, usuários, detalhes…"
+              rotulo="Pesquisar ações, usuários, entidades e detalhes"
+            />
             <button type="button" onClick={() => setSheetFiltros(true)} className="ba-botao ba-botao-secundario shrink-0" aria-label={`Filtros${nAtivos ? ` (${nAtivos} ligados)` : ""}`}>
               <SlidersHorizontal className="w-4 h-4" aria-hidden />
               <span className="hidden sm:inline">Filtros</span>
               {nAtivos ? <span className="tabular-nums">· {nAtivos}</span> : null}
             </button>
           </div>
-          <div role="group" aria-label="Severidade" className="flex gap-1.5 overflow-x-auto -mx-1 px-1 pb-1">
+          <div role="group" aria-label="Severidade" className="flex flex-wrap gap-1.5">
             <ChipFiltro ativo={filtros.severidade === "todas"} onClick={() => mudar({ severidade: "todas" })}>
               Todas as severidades
             </ChipFiltro>
@@ -158,7 +153,7 @@ export function AuditoriaModulo() {
               </ChipFiltro>
             ))}
           </div>
-          <div role="group" aria-label="Categoria" className="flex gap-1.5 overflow-x-auto -mx-1 px-1 pb-1">
+          <div role="group" aria-label="Categoria" className="flex flex-wrap gap-1.5">
             {CATEGORIAS.map((c) => {
               const Ic = ICONE_CATEGORIA[c.k] ?? Info;
               return (
@@ -172,7 +167,7 @@ export function AuditoriaModulo() {
       }
     >
       <div className="space-y-4">
-        <div className="flex lg:grid lg:grid-cols-4 gap-2 lg:gap-3 overflow-x-auto -mx-1 px-1 pb-1" role="list" aria-label="Resumo da auditoria">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 lg:gap-3" role="list" aria-label="Resumo da auditoria">
           <Kpi rotulo="Na seleção" valor={lista.length} detalhe={lista.length === auditLogs.length ? "todos os carregados" : `de ${auditLogs.length}`} />
           <Kpi rotulo="Críticos · 24 h" valor={r24.criticos} tom={r24.criticos ? "critico" : undefined} onClick={() => mudar({ severidade: "critical" })} />
           <Kpi rotulo="Atenção · 24 h" valor={r24.avisos} tom={r24.avisos ? "atencao" : undefined} onClick={() => mudar({ severidade: "warning" })} />
@@ -275,9 +270,9 @@ function Kpi({ rotulo, valor, detalhe, tom, onClick }: { rotulo: string; valor: 
       {detalhe ? <p className="text-xs ba-texto-2">{detalhe}</p> : null}
     </>
   );
-  const cls = "ba-card shrink-0 min-w-[8rem] lg:min-w-0";
+  const cls = "ba-card min-w-0 w-full";
   return onClick ? (
-    <div role="listitem" className="shrink-0 min-w-[8rem] lg:min-w-0">
+    <div role="listitem" className="min-w-0">
       <button type="button" onClick={onClick} className={`${cls} h-full`} data-tom={tom} data-denso="true" aria-label={`${rotulo}: ${valor}. Filtrar`}>
         {conteudo}
       </button>
@@ -314,7 +309,7 @@ function ResumoFiltros({ filtros: f, onMudar, onLimpar }: { filtros: FiltrosAudi
     <div className="flex flex-wrap items-center gap-1.5" aria-label="Filtros ligados">
       {itens.map((i) => (
         <button key={i.rotulo} type="button" onClick={() => onMudar(i.tirar)} className="ba-filtro" aria-pressed="true" aria-label={`Tirar filtro ${i.rotulo}`}>
-          <span className="truncate max-w-[14rem]">{i.rotulo}</span>
+          <span className="min-w-0 leading-snug">{i.rotulo}</span>
           <X className="w-3.5 h-3.5" aria-hidden />
         </button>
       ))}
@@ -401,7 +396,7 @@ function CartaoEvento({ l, selecionado, onAbrir }: { l: AuditLog; selecionado: b
             ) : null}
           </p>
           {l.detalhes ? (
-            <p className="text-xs ba-texto-2 mt-1 line-clamp-2 break-words">{json ? "Detalhes técnicos (JSON) — toque para ver" : l.detalhes}</p>
+            <p className="text-xs ba-texto-2 mt-1 leading-snug">{json ? "Detalhes técnicos (JSON) — toque para ver" : l.detalhes}</p>
           ) : null}
           <div className="flex flex-wrap gap-1.5 mt-1.5">
             <ChipEstado estado={sev} />

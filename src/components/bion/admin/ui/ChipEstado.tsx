@@ -22,7 +22,7 @@ export function ChipEstado({
   return (
     <span className={`ba-chip ${className}`} data-tom={t}>
       {ponto ? <span className="ba-chip-ponto" aria-hidden /> : null}
-      <span className="truncate">{children ?? estado?.rotulo}</span>
+      <span className="leading-snug">{children ?? estado?.rotulo}</span>
     </span>
   );
 }

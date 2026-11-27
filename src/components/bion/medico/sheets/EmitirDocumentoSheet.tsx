@@ -581,7 +581,7 @@ export function EmitirDocumentoSheet({
                     className="rounded-2xl border border-bion-ink/10 dark:border-white/10 px-4 py-3 space-y-3"
                   >
                     <div className="flex items-center justify-between">
-                      <p className="text-xs font-black uppercase tracking-wide opacity-60">
+                      <p className="text-xs font-black uppercase tracking-wide opacity-75">
                         Medicamento {i + 1}
                       </p>
                       {linhas.length > 1 && !grupo ? (

@@ -94,7 +94,7 @@ export function DetalheEvento({
               </button>
             ) : null}
             <button type="button" onClick={() => onFiltrarUsuario(l.usuario)} className="ba-botao ba-botao-secundario">
-              <Filter className="w-4 h-4 shrink-0" aria-hidden /> <span className="truncate">Eventos de {l.usuario}</span>
+              <Filter className="w-4 h-4 shrink-0" aria-hidden /> <span className="leading-snug">Eventos de {l.usuario}</span>
             </button>
           </div>
 

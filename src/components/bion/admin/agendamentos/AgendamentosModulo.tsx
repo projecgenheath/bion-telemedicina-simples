@@ -2,8 +2,9 @@
 
 import { useMemo, useState, type KeyboardEvent, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { CalendarDays, CalendarX2, Info, ListFilter, Pencil, Search } from "lucide-react";
+import { CalendarDays, CalendarX2, Info, ListFilter, Pencil } from "lucide-react";
 import { useBion, type Consulta } from "@/lib/bion-store";
+import { CampoBusca } from "../ui/CampoBusca";
 import { TelaModulo } from "../ui/TelaModulo";
 import { TabelaAdmin, type ColunaAdmin } from "../ui/TabelaAdmin";
 import { CardDeslizavel } from "../ui/CardDeslizavel";
@@ -94,7 +95,7 @@ export function AgendamentosModulo() {
       erroAtualizar={erroAtualizar}
       onTentarDeNovo={() => void atualizar()}
       ferramentas={
-        <div className="space-y- ba-animar 3">
+        <div className="ba-animar space-y-3">
           <div role="tablist" aria-label="Agendamentos" className="ba-abas" onKeyDown={teclaAbas}>
             {(["agenda", "reembolsos"] as Aba[]).map((a) => (
               <button
@@ -219,18 +220,13 @@ function BarraFiltros({ filtros, onMudar, medicos }: { filtros: Filtros; onMudar
   return (
     <div className="space-y-2">
       <div className="flex flex-col lg:flex-row gap-2">
-        <div className="flex items-center gap-2 min-w-0 flex-1">
-          <label className="relative flex-1 min-w-0">
-            <span className="sr-only">Buscar por paciente, médico ou especialidade</span>
-            <Search className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 ba-texto-3" aria-hidden />
-            <input
-              type="search"
-              value={filtros.busca}
-              onChange={(e) => onMudar({ busca: e.target.value })}
-              placeholder="Buscar paciente, médico ou especialidade"
-              className="ba-entrada !pl-10"
-            />
-          </label>
+        <div className="flex flex-col gap-2 min-w-0 flex-1 sm:flex-row sm:items-center">
+          <CampoBusca
+            valor={filtros.busca}
+            onChange={(v) => onMudar({ busca: v })}
+            dica="Buscar paciente, médico ou especialidade"
+            rotulo="Buscar por paciente, médico ou especialidade"
+          />
           {!largo ? (
             <button
               type="button"
@@ -245,7 +241,7 @@ function BarraFiltros({ filtros, onMudar, medicos }: { filtros: Filtros; onMudar
             </button>
           ) : null}
         </div>
-        <div role="group" aria-label="Período" className="ba-abas self-start overflow-x-auto max-w-full">
+        <div role="group" aria-label="Período" className="ba-abas self-start max-w-full">
           {PERIODOS.map((p) => (
             <button key={p.id} type="button" aria-pressed={filtros.periodo === p.id} onClick={() => onMudar({ periodo: p.id })} className="ba-aba !min-h-11 shrink-0">
               {p.rotulo}

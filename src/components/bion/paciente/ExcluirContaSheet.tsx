@@ -78,11 +78,11 @@ export function ExcluirContaSheet({ onFechar, onExcluida }: { onFechar: () => vo
   useFocoDialogo(true, fechar, ref);
 
   return (
-    <div ref={ref} className="bpp-sheet-raiz absolute inset-0 z-[80] flex items-end justify-center" role="dialog" aria-modal="true" aria-labelledby="titulo-excluir-conta">
+    <div ref={ref} className="bpp-sheet-raiz bp2-sheet bp2-sheet-e5 bp2-v2 absolute inset-0 z-[80] flex items-end justify-center" role="dialog" aria-modal="true" aria-labelledby="titulo-excluir-conta">
       <button type="button" className="absolute inset-0 bpp-sheet-veu" aria-label="Fechar" onClick={fechar} />
       <div className="bpp-animar bpp-sheet-painel relative w-full max-w-lg max-h-[92svh] overflow-y-auto rounded-t-3xl bpp-sheet border-t bpp-sheet-borda px-5 pt-3 pb-8 shadow-[0_-12px_40px_rgba(2,8,26,0.35)]">
         <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bpp-sheet-alca" aria-hidden />
-        <h2 id="titulo-excluir-conta" className="text-lg font-bold text-red-700 dark:text-red-300">Excluir minha conta</h2>
+        <h2 id="titulo-excluir-conta" className="text-lg font-bold bp2-perigo-t">Excluir minha conta</h2>
 
         <div className="mt-4 rounded-2xl border bpp-sheet-borda bpp-sheet-cartao p-4 text-sm bpp-sheet-suave space-y-2">
           <p>
@@ -181,7 +181,7 @@ export function ExcluirContaSheet({ onFechar, onExcluida }: { onFechar: () => vo
             type="button"
             onClick={() => void excluir()}
             disabled={!pode}
-            className="bion-toque flex-1 py-3 rounded-xl bg-red-700 text-white text-sm font-bold disabled:opacity-40 inline-flex items-center justify-center gap-2"
+            className="bion-toque flex-1 py-3 rounded-xl bp2-botao-perigo text-sm font-bold disabled:opacity-40 inline-flex items-center justify-center gap-2"
           >
             {enviando ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden /> : null}
             {bloqueada ? "Registrar pedido de exclusão" : "Excluir conta"}

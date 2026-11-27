@@ -52,7 +52,7 @@ export function CardFaturamento({
           <button
             type="button"
             onClick={recarregar}
-            className="mt-2 inline-flex items-center gap-1.5 text-sm font-bold text-bion-sea dark:text-sky-300 underline underline-offset-2"
+            className="mt-2 inline-flex items-center gap-1.5 text-sm font-bold text-bion-sea dark:text-[#9dbcf7] underline underline-offset-2"
           >
             <RefreshCw className="w-4 h-4" aria-hidden /> Tentar de novo
           </button>
@@ -89,7 +89,7 @@ export function CardFaturamento({
       {max > 0 ? (
         <svg
           viewBox={`0 0 ${W} ${H + 16}`}
-          className="bm-grafico w-full mt-3 text-bion-sea dark:text-sky-300"
+          className="bm-grafico w-full mt-3 text-bion-sea dark:text-[#9dbcf7]"
           role="img"
           aria-label={`Receita líquida por dia nos últimos 30 dias, total ${fmtCentavos(total)}`}
         >

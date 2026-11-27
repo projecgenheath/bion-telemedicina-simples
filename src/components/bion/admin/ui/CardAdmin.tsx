@@ -30,11 +30,11 @@ export function CardAdmin({
   return (
     <section className={`ba-card bion-surgir ${className}`} data-tom={tom} data-denso={denso || undefined} {...resto}>
       {titulo || acao ? (
-        <header className="flex items-center justify-between gap-3 mb-3">
+        <header className="flex items-start justify-between gap-3 mb-3">
           {titulo ? (
-            <h3 className="ba-rotulo inline-flex items-center gap-1.5 min-w-0">
+            <h3 className="ba-rotulo inline-flex items-start gap-1.5 min-w-0">
               {IconeTitulo ? <IconeTitulo className="w-4 h-4 shrink-0" aria-hidden /> : null}
-              <span className="truncate">{titulo}</span>
+              <span className="leading-snug">{titulo}</span>
             </h3>
           ) : (
             <span />

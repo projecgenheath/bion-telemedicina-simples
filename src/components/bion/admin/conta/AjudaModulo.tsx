@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, ChevronDown, CircleHelp, LifeBuoy, Search } from "lucide-react";
 import { urlDa } from "@/lib/rotas";
+import { CampoBusca } from "../ui/CampoBusca";
 import { TelaModulo } from "../ui/TelaModulo";
 import { ChipEstado } from "../ui/ChipEstado";
 import { EstadoVazio } from "../ui/Estados";
@@ -22,11 +23,13 @@ export function AjudaModulo() {
       icone={CircleHelp}
       subtitulo="Respostas rápidas sobre a gestão do app"
       ferramentas={
-        <label className="relative flex-1 min-w-0 max-w-2xl">
-          <span className="sr-only">Buscar na ajuda</span>
-          <Search className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 ba-texto-3" aria-hidden />
-          <input type="search" value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Busque por repasse, médico, LGPD…" className="ba-entrada !pl-10" />
-        </label>
+        <CampoBusca
+          className="max-w-2xl"
+          valor={busca}
+          onChange={setBusca}
+          dica="Busque por repasse, médico, LGPD…"
+          rotulo="Buscar na ajuda"
+        />
       }
     >
       <div className="ba-animar max-w-3xl space-y-2">

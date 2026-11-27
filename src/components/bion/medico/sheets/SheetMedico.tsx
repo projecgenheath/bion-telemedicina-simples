@@ -2,6 +2,7 @@
 
 import { X } from "lucide-react";
 import { ModalBion } from "@/components/bion/ModalBion";
+import { poppins } from "../inicio/fonte-medico";
 
 /**
  * Bottom sheet do app do médico (Radix via ModalBion: foco preso, ESC,
@@ -30,13 +31,13 @@ export function SheetMedico({
       sheet
       sheetAte="md"
       largura="md:max-w-[430px]"
-      overlay="bg-black/70"
+      overlay="bg-black/70 bm-sheet-fundo"
     >
-      <div className="bm-sheet max-h-[88dvh] overflow-y-auto bp-coluna px-5 pt-3 pb-[calc(1.5rem+env(safe-area-inset-bottom))]">
+      <div className={`bm-sheet ${poppins.variable} max-h-[88dvh] overflow-y-auto bp-coluna px-5 pt-3 pb-[calc(1.5rem+env(safe-area-inset-bottom))]`}>
         <div className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-bion-ink/20 dark:bg-white/25 md:hidden" aria-hidden />
         <div className="flex items-start justify-between gap-3 mb-4">
           <div className="min-w-0">
-            <h2 className="text-lg font-black leading-tight">{titulo}</h2>
+            <h2 className="text-[20px] font-medium leading-tight">{titulo}</h2>
             {subtitulo ? <p className="text-sm text-bion-ink/75 dark:text-bion-paper/75 mt-0.5">{subtitulo}</p> : null}
           </div>
           <button
