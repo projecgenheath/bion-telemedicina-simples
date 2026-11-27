@@ -417,7 +417,7 @@ export type ListaRepasses = {
   aviso: string;
   /** Nota do bloco legado; os campos abaixo somem quando o Admin ligar o novo. */
   avisoModeloAnterior?: string;
-  /** Campos do modelo anterior (PIX): ausentes na resposta do modelo novo. */
+  /** Campos do modelo anterior (PIX): presentes só em `modelo: "legado"`. */
   saldoCentavos?: number;
   temChavePix?: boolean;
   previa?: PreviaRepasseWire;
